@@ -176,7 +176,7 @@ def workload_lag_static(desc: dict) -> int | None:
     return v_bind if v_bind is not None else v_ids
 
 
-def relocate_components(derived: dict, artifact_path: str) -> dict:
+def relocate_components(derived: dict | None, artifact_path: str) -> dict:
     """Resolve GP-01's component dirs (`inputs.derived`: "lp,t" -> derive_step dir) beside the artifact when the recorded absolute
     paths do not exist here.
 
@@ -199,6 +199,14 @@ def relocate_components(derived: dict, artifact_path: str) -> dict:
                 d = cand
         out[k] = d
     return {"derived": out, "relocated": relocated, "base": base}
+
+
+def relocated_components(gp: dict | None) -> dict:
+    """The component dirs a Build recorded on another host and `from_gprog` resolved beside its artifact ("lp,t" -> {from, to}): empty
+    where none moved, and for a declaration that was not read from a Build artifact."""
+    built = gp.get("gprog_artifact") if gp else None
+    moved = built.get("relocated_components") if built else None
+    return moved if moved else {}
 
 
 def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
@@ -226,24 +234,25 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
             raise ValueError(f"{artifact_path}: workload_digest {str(art.get('workload_digest'))[:16]} != the digest of the descriptor beside it "
                              f"{recomputed[:16]} (descriptor.json.gz): the Build artifact is not the Program it names")
         dsha = hashlib.sha256(canonical_json(desc)).hexdigest()
-        declared_sha = (art.get("descriptor") or {}).get("sha256")
+        descriptor = art.get("descriptor")   # the artifact's own record of the descriptor file; one that carries none claims no sha256
+        declared_sha = descriptor.get("sha256") if descriptor else None
         if declared_sha and declared_sha != dsha:
             raise ValueError(f"{artifact_path}: descriptor.sha256 {declared_sha[:16]} != the descriptor file's {dsha[:16]}")
         digest_verification = {"verified": True, "recomputed_from": dpath, "descriptor_sha256": dsha}
         # the artifact's `lag` block is a CLAIM beside the Program: the Program's own `lag` static (inside the digest just verified)
         # must carry the same value -- an edited block cannot make G6 consume another lag than the Program's
         static_lag = workload_lag_static(desc)
-        claimed = (art.get("lag") or {}).get("value") if isinstance(art.get("lag"), dict) else None
+        claimed = art["lag"].get("value") if isinstance(art.get("lag"), dict) else None
         if static_lag is not None or claimed is not None:
             if static_lag is None or claimed is None or int(static_lag) != int(claimed):
                 raise ValueError(f"{artifact_path}: lag.value {claimed!r} != the Program's Workload_v1 `lag` static {static_lag!r} (descriptor "
                                  f"program_fn {str(desc.get('program_fn'))[:40]}...{str(desc.get('program_fn'))[-24:]}, root "
                                  f"{str(desc.get('root'))[:32]}...{str(desc.get('root'))[-24:]}): the artifact's lag declaration is not the Program's")
             digest_verification["lag_static"] = int(static_lag)
-    derived = (art.get("inputs") or {}).get("derived") or {}
-    relocation = relocate_components(derived, artifact_path)
+    inputs = art.get("inputs")   # what the Build read: its components by shape (`derived`) and its manifest; an artifact without it names neither
+    relocation = relocate_components(inputs.get("derived") if inputs else None, artifact_path)
     derived = relocation["derived"]
-    wl_path = workload_path or (art.get("inputs") or {}).get("manifest")
+    wl_path = workload_path or (inputs.get("manifest") if inputs else None)
     wl = Workload.load(wl_path) if wl_path and workload_file(wl_path).is_file() else None
     declared = () if wl is None else wl.requests
     for i, q in enumerate(declared):
@@ -252,8 +261,10 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
     # prompts by manifest POSITION (the Program's r<k>); the manifest's own request_id is the workload (UUID) id
     prompts = {request_id_of(i): list(q.prompt_token_ids) for i, q in enumerate(declared) if q.prompt_token_ids is not None}
     wl_uuids = {request_id_of(i): q.request_id for i, q in enumerate(declared)}
-    amap = {r["request_id"]: r for r in (art.get("address_map") or {}).get("requests", [])}
-    chron = {r["request_id"]: r for r in (art.get("chronology") or {}).get("requests", [])}
+    # the Build's address map and chronology, each by request; an artifact without the block states none, and a request's entry is then None
+    address_map, chronology = art.get("address_map"), art.get("chronology")
+    amap = {r["request_id"]: r for r in address_map.get("requests", [])} if address_map else {}
+    chron = {r["request_id"]: r for r in chronology.get("requests", [])} if chronology else {}
     plan = PP.plan(wl.dump()) if wl is not None else None
     reqs = []
     for r in art["requests"]:
@@ -272,13 +283,14 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
                              f"{p!r} (program.prefix_plan)")
         C = int((pfx or {}).get("rows") or 0)
         d = derived.get(PP.shape_key(PP.shape(lp, cap - 1, C)))
+        built = r.get("component")   # the Build's claim of the request's component (its digest, its specialization); None on an artifact without it
         reqs.append({"index": r["index"], "request_id": rid, "workload_request_id": wrid, "prompt_len": lp, "max_tokens": cap, "T_bound": cap - 1,
                      "arrive_step": int(r["arrive_step"]), **({"prefix": pfx} if pfx else {}),
                      "prompt_sha256": hashlib.sha256(json.dumps(prompts[rid]).encode()).hexdigest()[:16] if rid in prompts else None,
-                     "component": {"dir": d, "LP": lp, "T": cap - 1, **({"C": C} if C else {}), "program_digest": (r.get("component") or {}).get("program_digest"),
-                                   "specialization": (r.get("component") or {}).get("specialization")},
+                     "component": {"dir": d, "LP": lp, "T": cap - 1, **({"C": C} if C else {}), "program_digest": built.get("program_digest") if built else None,
+                                   "specialization": built.get("specialization") if built else None},
                      "global_address": {k: amap[rid].get(k) for k in ("root_node", "gates", "n_instances", "rule")} if rid in amap else None,
-                     "programmed_steps": (chron.get(rid) or {}).get("programmed_steps"),
+                     "programmed_steps": chron[rid].get("programmed_steps") if rid in chron else None,
                      "output_interface": {"unit": "engine_step", "max_events": cap, "event": "TokenSelect over the request's logits row"}})
     return {"schema": GP_SCHEMA, "builder": f"gprog GP-01 {art.get('schema')} workload_fn={art.get('workload_fn')}", "workload_digest": art.get("workload_digest"),
             "workload": {"path": wl_path, "sha256": art.get("manifest_digest"), "n_requests": len(reqs)},
@@ -310,14 +322,14 @@ def eos_lag_rows(facts: dict) -> tuple[int | None, str]:
     OWN attestation (RunHeader.profile.engine_kwargs / RunHeader.engine_kwargs / capture/versions.json, all locations agreeing)
     -- never guessed: a lag-0 record must carry the flag too, else it is indistinguishable from a lag-1 record with a deleted
     step. Returns (rows, source) with rows None when the record does not attest the flag (GM-01 refuses by name)."""
-    vals = (facts.get("values") or {}).get("async_scheduling")
+    vals = facts["values"].get("async_scheduling")
     if not vals:
         return None, "not attested"
     v = vals[0]
     if isinstance(v, bool):
-        return (1 if v else 0), f"async_scheduling={v!r} ({', '.join((facts.get('sources') or {}).get('async_scheduling', []))})"
+        return (1 if v else 0), f"async_scheduling={v!r} ({', '.join(facts['sources']['async_scheduling'])})"
     if isinstance(v, str) and v.strip().lower() in ("true", "false"):
-        return (1 if v.strip().lower() == "true" else 0), f"async_scheduling={v!r} ({', '.join((facts.get('sources') or {}).get('async_scheduling', []))})"
+        return (1 if v.strip().lower() == "true" else 0), f"async_scheduling={v!r} ({', '.join(facts['sources']['async_scheduling'])})"
     return None, f"async_scheduling={v!r} is not a boolean"
 
 
@@ -439,7 +451,9 @@ def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, orac
     """The engine and compilation conditions the record attests, against the Program's declared applicability; returns the facts."""
     # the Program declares the execution profile + engine conditions it models (GP-01 applicability); the record's
     # RunHeader carries the EFFECTIVE engine kwargs -- a run outside the declaration is not a Match for this Program (named)
-    app = gp.get("applicability") or {}
+    app = gp.get("applicability")
+    if not app:
+        app = {}   # a declaration without the block (an older artifact's) declares nothing, and fails below by name on its absent engine conditions
     # the recorder (vllm_adapter build_manifest -> RunHeader.profile) nests the
     # effective engine kwargs and the compilation facts under RunHeader.profile.*; read EVERY location the record may attest them
     # (profile.*, top level, capture/versions.json), require the locations to agree, and FAIL CLOSED when the record attests nothing
@@ -461,7 +475,7 @@ def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, orac
                                                                      "decide (MOE-01 ids = indexed-read); nothing declared, nothing assumed"})
     for k, (a, b, sa, sb) in facts["disagreements"].items():
         c.fail(f"the record's own sources disagree on {k}: {a!r} ({sa}) vs {b!r} ({sb}) -- the record does not attest one execution")
-    for src, err in (facts.get("unreadable") or {}).items():
+    for src, err in facts.get("unreadable", {}).items():   # stated only when a location is there and cannot be read
         c.fail(f"the record's {src} is present but unreadable ({err}): its engine conditions cannot be read, fail closed")
     if not app.get("engine"):
         c.fail("the workload Program declares no applicability.engine (an older artifact): the record's engine conditions cannot be "
@@ -484,7 +498,7 @@ def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, orac
     # (RunHeader.profile.compilation / .compilation / engine_kwargs.compilation_config); a compiled Program against a header without them
     # FAILS (fail closed).  An EAGER Program against a record whose compilation facts attest cudagraphs / torch.compile FAILS too.
     from verity_vllm.pipeline.global_program import compilation_facts
-    decl_comp = (app.get("engine") or {}).get("compilation") if app.get("engine") else None
+    decl_comp = app["engine"].get("compilation") if app.get("engine") else None
     if decl_comp is not None:
         decl = compilation_facts(decl_comp)
         res["execution"]["declared_compilation"] = decl
@@ -513,7 +527,8 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
     """The workload manifest against the Program (ids, per-request fields, sha256) and the record header (the manifest the run was
     captured with, seeds, sampling).  Returns the manifest, or None when the Program names none that exists here or it is not a
     workload record (named)."""
-    wl_path = (gp.get("workload") or {}).get("path")
+    named = gp.get("workload")   # the manifest the Program was built from, by path and sha256; a declaration without the block names none
+    wl_path = named.get("path") if named else None
     wl = None
     if wl_path and workload_file(wl_path).is_file():
         try:
@@ -536,7 +551,7 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
                                  ("arrive_step", wl.arrive_step(i), g.get("arrive_step"))):
                 if wv is not None and gv is not None and int(wv) != int(gv):
                     c.fail(f"{request_id_of(i)}: manifest {name}={int(wv)} != the Program's declared {name}={int(gv)} (manifest edited after the Build)")
-        want = (gp.get("workload") or {}).get("sha256")
+        want = named.get("sha256") if named else None
         have = sha256_file(wl_path)
         c.info["workload_sha256"] = have
         if want and want != have:
@@ -544,7 +559,8 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
         # the manifest of record must be the manifest the RUN was captured with: the driver records its sha256 in
         # RunHeader.workload.sha256 -- a manifest edited after the run (seeds swapped, a seed deleted) composes the same Program and
         # passed G1 by ids/prompts/caps/arrivals alone; and per request the header's sampling fields are compared with the manifest's
-        hw = (header.get("workload") or {}).get("sha256")
+        served = header.get("workload")   # the driver's record of the manifest it served (its sha256, its sampling); None on a header without it
+        hw = served.get("sha256") if served else None
         # the driver (vllm_adapter.load_workload) hashes the manifest DOCUMENT canonically (sort_keys, compact separators), not the file
         have_doc = wl.doc_sha256
         c.info["header_workload_sha256"] = hw
@@ -566,10 +582,11 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
                 c.fail(f"{request_id_of(i)}: manifest declares seed={ws} but the run header records no seed")
             elif ws is not None and hs is not None and int(ws) != int(hs):
                 c.fail(f"{request_id_of(i)}: manifest declares seed={ws} but the run header records seed={hs}")
-        m_s, h_s = manifest_sampling(wl), dict((header.get("workload") or {}).get("sampling") or {})
+        served_sampling = served.get("sampling") if served else None
+        m_s, h_s = manifest_sampling(wl), (dict(served_sampling) if served_sampling else {})
         c.info["sampling"] = {"manifest": m_s, "header": {k: h_s.get(k) for k in ("variant", "temperature", "top_p", "top_k") if k in h_s}}
         # the manifest's own sources (variants table = the driver's, label, explicit fields) must agree: fail closed
-        for conf in m_s.get("conflict") or []:
+        for conf in m_s.get("conflict", []):   # stated only when the manifest's sources disagree
             c.fail(f"manifest of record is not one sampling declaration -- {conf}")
         for k in ("variant", "temperature", "top_p", "top_k"):
             mv, hv = m_s.get(k), h_s.get(k)
@@ -585,7 +602,7 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
             if h is None or (rv is None and h.get("variant") is None):
                 continue
             r_s = manifest_sampling(wl, variant=rv) if rv is not None else m_s
-            for conf in (r_s.get("conflict") or []) if rv is not None else []:
+            for conf in r_s.get("conflict", []) if rv is not None else []:
                 c.fail(f"{request_id_of(i)}: manifest variant {rv!r} is not one declaration -- {conf}")
             # a manifest that pins a per-request variant against a header WITHOUT a per-request sampling
             # record is not agreement: the run was not pinned (mirror of the seed rule above) -- a pin added after the run fails closed

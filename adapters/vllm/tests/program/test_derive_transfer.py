@@ -37,6 +37,8 @@ else:
 
 from verity.circuits import program_digest
 from verity.circuits.evaluation import MissingValue, evaluate_region
+from verity.circuits.types import Array, RecordType, Value
+from verity.circuits.types import Tuple as TupleT
 
 from tests.program.test_derive_negative import (
     _DERIVE,
@@ -294,8 +296,6 @@ def _input_map(out: Outcome, module: nn.Module, inputs: tuple) -> list[tuple[str
 
 def _flatten_like(t: Any, T) -> list[tuple[torch.Tensor, int]]:
     """Leaf tensors of a (possibly record) argument, paired with the width of the corresponding type leaves."""
-    from verity.circuits.types import Array, RecordType, Value
-    from verity.circuits.types import Tuple as TupleT
     if isinstance(t, torch.Tensor):
         tt = T
         while isinstance(tt, Array):

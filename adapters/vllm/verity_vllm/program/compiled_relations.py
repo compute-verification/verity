@@ -18,8 +18,13 @@ the wrapper `call()` signatures of the same artifacts.
 from __future__ import annotations
 
 import importlib.util
+import re
+from typing import TYPE_CHECKING
 
 from verity_vllm.program.compiled_norm_literal import literal_variants
+
+if TYPE_CHECKING:
+    import torch
 
 # hook/wrapper argument index -> committed member name (roles), per kernel-name prefix; registered weights are not committed.
 # a kernel NAME does not fix its argument list: Inductor names pointwise kernels `triton_poi_fused_<n>` in both the
@@ -63,8 +68,6 @@ def kernel_key(kernel: str) -> str | None:
 def pointer_arity(signature: list[str] | None) -> int | None:
     """Number of pointer parameters of a generated kernel's `def` (Inductor's in_ptr*/out_ptr*/in_out_ptr*, the GEMM's a_ptr/b_ptr/c_ptr);
     None when no signature is known."""
-    import re
-
     global _PTR_PARAM_RE
     if signature is None:
         return None

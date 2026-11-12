@@ -6,37 +6,39 @@ from __future__ import annotations
 
 import gzip
 import json
+import tarfile
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
-
 from research.store.local import LocalStore
 from verity.circuits import encode_program, program_digest
 from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation.reference import evaluate
+
+from tests.program.test_running_example import make_program
 from verity_vllm import glue
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.config import WORKLOADS, RowId, UsageError
-from verity_vllm.pipeline import circuit_db
+from verity_vllm.pipeline import circuit_db, cli, epoch
 from verity_vllm.pipeline import config_record as CR
-from verity_vllm.pipeline import epoch
 from verity_vllm.pipeline import research_outputs as ro
 from verity_vllm.pipeline import row_records as RR
 from verity_vllm.properties.record import REGISTRY, seal
-
-from tests.program.test_running_example import make_program
 
 ROW = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
 REPO = "meta-llama/Llama-3.2-1B"
 PARTS = ("build_step", "build_request_LP9_T2", "build_workload")
 PROP = "glm53_bf16_gemm_capture"
-SUMMARY = {"schema": "verity/commit-integ/delta-tp/v1", "pass": True, "pairs": 1, "commit_pass": [True], "tp_run_roots": ["ab" * 32],
-           "per_rank_roots": [{"0": "c0" * 32, "1": "c1" * 32}], "openings": 64, "weights_pin": {"result": True},
-           "value_check": {"verdict": "PASS"}, "match_oracle": {"0": {"verdict": "PASS"}, "1": {"verdict": "PASS"}},
-           "required_manifest": {"manifest_digest": "mm", "identities": 7},
-           "sampled_replay": {"result": True, "sample": {"picked": 4, "evaluated": 4, "equal": 4, "mismatch_n": 0},
-                              "per_rank": {"0": {"result": True, "grade": "complete"}, "1": {"result": True, "grade": "complete"}}},
-           "served": {"schema": "verity-vllm/served-switches/v1", "ok": True, "problems": []}}
+SUMMARY: dict[str, Any] = {
+    "schema": "verity/commit-integ/delta-tp/v1", "pass": True, "pairs": 1, "commit_pass": [True], "tp_run_roots": ["ab" * 32],
+    "per_rank_roots": [{"0": "c0" * 32, "1": "c1" * 32}], "openings": 64, "weights_pin": {"result": True},
+    "value_check": {"verdict": "PASS"}, "match_oracle": {"0": {"verdict": "PASS"}, "1": {"verdict": "PASS"}},
+    "required_manifest": {"manifest_digest": "mm", "identities": 7},
+    "sampled_replay": {"result": True, "sample": {"picked": 4, "evaluated": 4, "equal": 4, "mismatch_n": 0},
+                       "per_rank": {"0": {"result": True, "grade": "complete"}, "1": {"result": True, "grade": "complete"}}},
+    "served": {"schema": "verity-vllm/served-switches/v1", "ok": True, "problems": []}}
 
 
 def test_index_names_rows_of_record():
@@ -481,3 +483,60 @@ def test_a_job_reads_the_programs_from_a_bundle_with_no_store(tmp_path, store, m
     with pytest.raises(RuntimeError, match=r"no remote configured.*a research run job has no store.*records fetch ROW --to FILE.*"
                                            r"--send FILE.*--bundle"):
         circuit_db.fetch(build)
+
+
+def test_a_bundle_whose_record_is_not_a_file_is_refused(tmp_path):
+    b = tmp_path / "job.tar"
+    with tarfile.open(b, "w") as tf:
+        member = tarfile.TarInfo(CR.NAME)
+        member.type = tarfile.DIRTYPE
+        tf.addfile(member)
+    with pytest.raises(UsageError, match=f"its {CR.NAME} is not a file"):
+        circuit_db.record(ROW, b)
+
+
+def test_each_records_subcommand_runs_its_own_function_with_its_options(tmp_path, monkeypatch, capsys):
+    """`records SUBCOMMAND ...`, parsed as the command line parses it, reaches that subcommand's function and no other."""
+    cmp = tmp_path / "comparison.json"
+    _w(cmp, {"row": ROW})
+    calls: list[tuple] = []
+
+    def stand_in(name, result):
+        def call(*args, **kw):
+            calls.append((name, args, kw))
+            return result
+        monkeypatch.setattr(circuit_db, name, call)
+
+    ev, tar = {"build": "art:b"}, tmp_path / "job.tar"
+    for name, result in (("switch", {"aot": {"run": "r1"}}), ("evidence_of", ev), ("publish", "art:rec"), ("pull", ROW),
+                         ("capture", {PROP: "art:p"}), ("record", {"config": {"row": ROW}}), ("index", {ROW: {"record": "art:rec"}}),
+                         ("bundle", tar), ("staged", "staged\n"), ("parts", {1: {"workload": "ab" * 32}}),
+                         ("programs", {1: {"workload": SimpleNamespace(gates=7, defs={"Mul16_v1": None})}})):
+        stand_in(name, result)
+    cases = [
+        (["switch", ROW, "--comparison", str(cmp), "--run", "r1", "--trace", "art:t"],
+         [("switch", (ROW, {"row": ROW}), {"run": "r1", "trace": "art:t", "tier": None})], '{"run": "r1"}'),
+        (["publish", "DIR", ROW, "--build", "art:b", "--tree", "x@1", "--by", "circuits", "--gap", f"{PROP}=no capture yet"],
+         [("evidence_of", ("art:b",), {"manifest": None, "match": None, "match_run": None, "commit": None, "commit_run": None,
+                                       "conformance": {}, "gaps": {PROP: "no capture yet"}}),
+          ("publish", ("DIR", ROW), {"evidence": ev, "tree": "x@1", "by": "circuits", "summary": None, "tier": None, "newest": False})],
+         "art:rec"),
+        (["pull", "art:1", "art:2", "--tier", "fast"], [("pull", ("art:1", "fast"), {}), ("pull", ("art:2", "fast"), {})],
+         f"{ROW} art:1\n{ROW} art:2"),
+        (["capture", "r1", "--property", PROP], [("capture", ("r1", [PROP]), {})], f"{PROP}=art:p"),
+        (["show"], [("index", (), {})], json.dumps({ROW: "art:rec"}, indent=1, sort_keys=True)),
+        (["show", ROW], [("record", (ROW,), {})], json.dumps({"config": {"row": ROW}}, indent=1, sort_keys=True)),
+        (["fetch", ROW, "--to", str(tar), "--rank", "1"], [("bundle", (ROW, tar, [1]), {"part": None})], str(tar)),
+        (["staged", REPO, "abc", "--at", "2026-01-01T00:00:00Z", "--ref", "r1", "--by", "circuits"],
+         [("staged", (REPO, "abc"), {"at": "2026-01-01T00:00:00Z", "ref": "r1", "by": "circuits"})], "staged"),
+        (["programs", ROW, "--part", "workload", "--bundle", str(tar)],
+         [("record", (ROW, tar), {}), ("parts", ({"config": {"row": ROW}},), {}),
+          ("programs", (ROW, [1]), {"part": ["workload"], "bundle": tar})],
+         f"rank 1  {'workload':28s} {'ab' * 8}  gates 7  definitions 1"),
+    ]
+    assert {c[0][0] for c in cases} == set(circuit_db.COMMANDS)
+    for argv, want, printed in cases:
+        calls.clear()
+        assert circuit_db.main(cli.parse("records", argv, {})) == 0
+        assert calls == want, argv
+        assert capsys.readouterr().out.rstrip("\n") == printed, argv

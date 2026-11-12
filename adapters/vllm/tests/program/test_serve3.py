@@ -27,9 +27,9 @@ from verity.definitions.numerics import serve3_reference as ref
 from verity.definitions.registry import b1, serve3
 from verity.definitions.registry.b1 import weights_type
 
-TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
-        "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 16, "BIAS": True,
-        "tie_word_embeddings": True, "profile": {}}
+TINY: dict = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
+              "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 16, "BIAS": True,
+              "tie_word_embeddings": True, "profile": {}}
 LP, D_MAX = 4, 8
 #: raw greedy samples of `Serve_v1{TINY, LP=4, STEPS=8}` on the fixture inputs (pinned; y[3]=17 is fresh)
 Y_RAW = [15, 23, 26, 17, 26, 17, 26, 17, 26]

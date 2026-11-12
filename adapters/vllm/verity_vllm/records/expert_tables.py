@@ -13,6 +13,8 @@ from typing import Any
 
 from verity_vllm.records.fields import RecordError, only, required
 
+__all__ = ["ExpertTables", "SCHEMA"]
+
 SCHEMA = "verity-vllm/expert-tables/v1"
 #: an entry's fields: core's `registered.Registered.entry()` (``word_bits`` where its words are not 16-bit)
 ENTRY = ("value", "root", "leaves", "words", "word_bits", "domain")

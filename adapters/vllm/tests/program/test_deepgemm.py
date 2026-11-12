@@ -174,13 +174,13 @@ def _rcp(x: int) -> int:
 
 
 def _fi_group_model(x: list[int]) -> tuple[list[int], int]:
-    """One group as the warp runs it: lane l's four elements, the shfl.down tree (lane t reads t + o, a lane past 31 its own), lane 0's
+    """One group as the warp runs it: each lane's four elements, the shfl.down tree (lane t reads t + o, a lane past 31 its own), lane 0's
     amax, then the scale, the words and the stored scale."""
     f = [w << 16 for w in x]
     v = []
-    for l in range(32):
+    for lane in range(32):
         acc = 0
-        for i in (2 * l, 2 * l + 1, 64 + 2 * l, 65 + 2 * l):
+        for i in (2 * lane, 2 * lane + 1, 64 + 2 * lane, 65 + 2 * lane):
             acc = _max_bf16(acc, f[i] & 0x7FFFFFFF)
         v.append(acc)
     for o in (16, 8, 4, 2, 1):
@@ -342,6 +342,7 @@ def test_boolean_versions_agree_with_their_word_views(target) -> None:
         assert not bad.size, f"{target.id}: {bad.size} of {len(r)} instances differ from {word.id}, first {bad[:5]}"
 
 
+@pytest.mark.slow
 def test_flashinfer_group_on_bits_at_its_guards() -> None:
     rng = np.random.default_rng(7)
     rows = np.stack(_guard_rows(rng, 128))
