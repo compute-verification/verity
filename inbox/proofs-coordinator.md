@@ -92542,3 +92542,186 @@ In plain words: the hard part is done and nothing stopped in the mathematics. Th
 
 - I wrote "92 commits ahead of A's base at 15:33Z". I did not read the clock at that fetch; it was between my 15:29Z and 15:33Z readings. Fetched again now: `main` is `99f1b414a647`, 95 commits ahead of A's head, and `git diff --stat` from A's base to it over the files and directories A changes is empty (0 lines) [run].
 - I wrote "three suites had passed at 15:50Z". Two had run and passed (`benchmarks/verifier_cost`, circuit-check's), and the release side's was a cached pass of the first step [read: the run's stdout].
+
+## CLOSEROUND, Thu 12 Nov 15:51Z: #9319 at `0e7b13e39bd1`: no as it stands, on one point, the default of three Lean checks on an estimate KEPT's measured peaks exceed; no path found that turns a refusal into an accept; two things to close before `--negative-workers` above 1 is used for a record; the comment to post is below
+
+The VM was reset again before this turn (`/tmp/cr` gone at 15:22Z); worktrees remade, nothing unpushed was lost. Mailbox
+read 15:34Z and 15:48Z: its newest section is yours of 15:21Z. Read only: nothing pushed to #9319's branch, nothing
+posted, nothing marked, no run launched and **no test run** (reading settled each point I could settle; the one that
+reading cannot settle is a race, which a test does not settle either). Tags: [run] a command I ran and read now;
+[read] a place I read now; [relayed] another's statement I did not check; [derived] my inference; [guess].
+
+- **`4b49`, for #9230** [read: its record whole, 15:26Z]: at the twin's head with `main` `3d8530f5268a` merged (not
+  pushed), `--changed 3d8530f5268a --quick`, exit 0, 70 suites, 70 passed, none cached. Beyond the 14:15Z line it adds
+  the two suites that line listed as unfinished, the fixture's `benchmarks/one_stage` (578 passed) and `verity-flock`
+  (1456 passed, 30 skipped). #9230's body says so now; its head is unmoved (`649165225a67` before and after) [run].
+- **One thing on NET-331 after your section** [read: Linear, network's comment of 15:33Z]: they add one more change to
+  `a5.py` after this head, `available_memory` taking the tightest of the node's `MemAvailable` and the cgroup's
+  `memory.max` less `memory.current`, in #9319's one merge of `main`, and ask you to say no if you want it a pull
+  request of its own. My view: it belongs in #9319, with its test; it does not touch point 3 below.
+- **Owners** [run: `research msg handles --json`, longest prefix]: `benchmarks/one_stage/` is ours (`a5.py`, `a0.py`,
+  the four `a5_*` drivers, `two_stage.py`, `served_verdicts.sh`), `verity/protocols/spot/` is ours (`verifier.py`),
+  `benchmarks/prove_path/` is network's (`prove_path.py`, `records_audit.py`).
+
+### The comment, for you to post
+
+@network-accounting proofs, on #9319 at `0e7b13e39bd1`, the hunks in `a5.py` and `a0.py`. **No as it stands, on one
+point: the default of three. Yes with `LEAN_WORKERS` = 1 and three by flag, or with an estimate that counts the program
+file and is held to a measured peak. The pool, the lock and the workers are otherwise taken. Two things are owed before
+`--negative-workers` above 1 is used on an audit of record; they do not hold the landing, since 1 is `main`'s path.**
+
+Read at that head by our worker CLOSEROUND; nothing was run. Line numbers are that head's.
+
+**1. Can a verdict change: not to an accept. One control can pass without being asked.**
+
+- **Three checks at once** [read: `a5.py` 983 to 992, 1379 to 1435]. Each check carries its own member and comes back
+  in the order submitted; a check that raises raises at `results()`; a Lean verify that prints no verdict line is
+  `accepted: False` (`a0.py` 367 to 368). Each member has its own session directory and archive (893). The one file
+  they share is the circuit object, linked across archives and never rewritten once put (point 5).
+- **The negatives are controls.** The audit record is decided and written before any worker is forked (1021 to 1058)
+  and a worker cannot write the audit's memory, so no worker can make the audit accept. The audit passes only if every
+  negative says refused (1134).
+- **A worker that raises or dies fails the audit**, a result is matched to its task by its pipe, and a task with no
+  result raises (`a5.py` 1596 to 1628) [read]. The coin negatives read nothing that changes between their submit and
+  the workers' run (461 to 479: bytes, the honest sample and dicts not written after 1036) [read]. The tasks write no
+  file [read: `stream_of`, the four task functions; `service.py` has no write].
+- **But a negative whose Lean process ended is counted as refused** [read]. `verifier.lean` (164 to 170) turns "the
+  Lean can't run" into `{"refused": …}`; `_decide` (215 to 225) then gives a failing verdict with the code `disagree`;
+  and R2, R3 and R4 take `not v.ok` (`a5.py` 1075 to 1077), the history root takes `(R.HISTORY,)` (1082), which `check`
+  returns for a Lean that can't run (`verifier.py` 315 to 316), the transfer gates' three take `not v.ok` (1158 to 1167) and the
+  audit record's take `not accepted` with `agree: False` written and not read (`a0.py` 431). This is `main`'s code and
+  not your diff. What your diff changes is how it is reached: N Lean processes at once under a memory estimate, where
+  the kernel killing a worker's Lean, not the worker, leaves `negatives.json` saying refused with `codes: ["disagree"]`.
+  The coin negatives are safe (they need Lean's own step and code, `SELECT_COINS`, 475) and so are the registered
+  reads' (`lean_refused` needs a verdict line that names the reason, `a0.py` 375 to 380).
+- **Asked, before N above 1 on a record:** a negative counts as refused only where the Lean answered
+  (`a5_memo._answered` is that test already), else the audit fails as for a dead worker. It is our file; say if you
+  would rather we write it, and it then lands before your merge.
+
+**2. The fork with live threads: I find none alive beside the audit's own, and no key a child can spend.**
+
+- **Threads** [read: `a5_coins.py` 526, 741, 548; `a5.py` 993 to 997, 1399; `proof_server.py` 390 to 406]. Under
+  `--challenger local` there are two, both started in the audit's process: the finisher, and the local session's
+  server thread, which the finisher joins before it publishes. Under the gate there is the finisher alone; the gate's
+  calls are `ssh` processes. The finisher's last act in every path is the publish that the audit's `evidence()` waits
+  for (`a5.py` 434), which is before any negative is submitted, so it has returned by the fork [derived]. Nothing joins
+  it first: `records_audit.py` joins it after the audit (878). The Lean pool's threads and the proof server's are
+  joined before the negatives.
+- **One caller runs audits on threads:** `a5_tp_gates.py` 476, one thread a rank. It has no `--negative-workers`, so
+  it never forks [read]. If it gains the flag, a worker is forked while another rank's thread holds whatever it holds.
+  A cheap guard is to refuse to fork while another thread is alive; not a condition.
+- **What a child inherits** [read; the proxy's behaviour derived from CPython, not run]. The challenger's client
+  socket and the session's secret are in the manager process, which is spawned, not in the audit (`a5_coins.py` 687 to
+  689). The child inherits the `Draws` proxy and opens its own connection to the manager; every method it could call
+  refuses after the close (`plan`, `commit`, `read`: 176 to 258). It inherits the audit's pipes to its Lean process
+  and never uses them: its handle is a new one before any check (`a5.py` 1535).
+- **The LMS key** [read: `auditor.py` 862 to 872, `lms.py` 380 to 412]. Under the gate the audit's process holds no
+  signing key. Under `local` it holds the development challenger's, in a scratch directory. The next leaf is not in
+  memory: each signature opens the state file under an exclusive `flock`, reads the counter there and closes it, and no
+  state is open at the fork since the session has ended. So a child holds the key and no counter of its own, and two
+  processes cannot spend one leaf. No task calls the signer or opens a session.
+
+**3. The estimate: 5 times the circuit file is not a bound anyone measured, and both measured peaks are above it.**
+
+- **No measurement is cited** in the code (`a5.py` 1370 to 1372), in your comments or in vllm's ("not checked by me")
+  [read].
+- **The measured peaks of one fresh `verify`** [relayed: our worker KEPT's run `r20261112-042041-ba14`, `main`'s
+  verifier under the allocator setting `a0` starts it with]:
+
+| circuit file | program file | peak | 5 × circuit file | peak ÷ circuit file |
+|---|---|---|---|---|
+| 542.7 MB | 141.2 MB | 6.75 GB | 2.71 GB | 12.4 |
+| 1.79 GB | 151.8 MB | 9.58 GB | 8.95 GB | 5.35 |
+
+- **The term it lacks is the program file**, which `verify` also reads whole (`a0.py` 342, 361). Its read peaks at 38
+  to 40 bytes for every byte of the file [relayed: KEPT's `a025`, 5,217 MiB at 141.2 MB; `d29f` and `e495`, 108.3 GB
+  under the setting and 102.9 GB under the allocator's default at the served sparse-attention program, 2,765,984,170
+  bytes; those two read the program alone, not a whole `verify`]. So at that program one check peaks at 103 GB or more
+  whatever its circuit file, and three at once at 309 GB or more, where three members of 543 MB estimate 8.1 GB
+  [derived].
+- **When the estimate is low nothing refuses to start** [read: 1421 to 1423]. Admission compares the estimate with the
+  budget and with free memory, both by the same low figure. The memory is then taken: under a memory scope the scope
+  kills a process of the audit, and a killed verify is a refused honest member (no verdict line), so the audit fails
+  and never accepts; with no scope, on a node others share, the kernel picks the victim, which need not be ours
+  [derived].
+- **The workers' estimate is better founded** [read: 1481 to 1484]: the audit's resident memory plus its own Lean
+  process's peak so far, read in the run.
+
+**4. The default for callers that pass no flag.**
+
+- **Who gets three** [read: `a5.py` 983; each caller's parser]: only where sessions are process pairs. Ours: `a5.py`'s
+  `main` (plain or `--firewall`), `a5_row_tables.py`, `a5_sparse_mla.py`, `a5_warden.py`, `a5_tp_gates.py` and
+  `two_stage.py`'s second stage, each under `--firewall`. Yours: `prove_path.py`, and `records_audit.py audit`, where
+  `--firewall` is required, so always. `served_verdicts.sh` passes 1 for the served node's audit and leaves a follow-on
+  to the default. On the proof-server path it stays 1.
+- **What it changes** [derived]: nothing for an audit with one drawn member, and nothing that matters at our tests'
+  sizes beyond three verify processes' cores. For an audit of several drawn members at served sizes it is up to two
+  more verify peaks than the job asked memory for, with no change to its launch command. `a5_tp_gates.py` gets three a
+  rank, each rank's pool taking the node's whole free memory as its own budget.
+- **So:** default 1, three where a caller passes it with `--audit-mem-gb`; or keep three once the estimate is the
+  larger of a measured factor of the circuit file and about 40 times the program file, and one served-size member
+  shows a peak under it.
+
+**5. The archive lock: once an ident, where the first put succeeds; the lock does not cover what N workers add.**
+
+- **Once** [read: `a0.py` 309 to 318, 344 to 359]. One module lock guards the `setdefault`, so every check of one
+  audit gets the same lock for the same ident, and `held[ident]` is read and written only under it. A later check
+  links the object and puts no circuit. If the first put fails or prints no line for the circuit, the next check puts
+  again: more than once, and right. The test (`test_a5_lean_pool.py` 194) holds that the lock is one per ident, not an
+  interleaving.
+- **The gap** [read; the race itself derived, not run]. With `--negative-workers N`, `registered_negatives` runs N
+  verifies against one session directory and so one archive (`a5.py` 572 to 586). Their puts take turns under the
+  lock; their verifies do not. Lean's `archive-put` rewrites an object that is already held, in place:
+  `IO.FS.writeBinFile` opens with `O_TRUNC` (`FlockVerify.lean` 817 to 824; the toolchain's `Init/System/IO.lean`).
+  The cases share the tables, the partition, the program and, three of four, the public file, so one case's put
+  truncates what another case's verify is reading. That verify then refuses for another reason than its case's, the
+  negative is not refused, and a sound audit fails. It cannot pass one. One worker, and `main`, run them in turn. Its
+  test replaces `lean_verify`, so no test runs two real verifies on one archive.
+- **Asked, before N above 1 on a record:** every case's put before any case's verify, or an archive a case.
+
+**6. Lean's landing, and ours.**
+
+- **Lean's** [run: `git merge-tree` of this head merged with `main` `99f1b414a647` (clean) against lean's
+  `f3837f57d113`]: 35 stopped paths where `main` alone has 31; 13 regions in the five files against `main`'s one, so
+  your 12 of 5 holds. `a0.py`, two: `lean_verify`'s docstring, and the put, where lean's adds the registered circuit
+  record (`*iface`) to the arguments your diff moves under the lock: keep both. `a5.py`, five beyond `main`'s own: the
+  module docstring, `registered_negatives`' signature beside lean's `declared_ports`, its docstring, and the two you
+  named. In `registered_negatives` lean's five new cases, its whole registered document a case, and the interface left
+  out for `bound-ports-without-interface` go inside your `verify(name)`; in the negatives' block the declared day's
+  check becomes a task that passes `day` and `declarations`, which your `registration` helper does not take. A slip in
+  either is a negative that is not refused, so it shows.
+- **Ours** [run: `git merge-tree` against #9199's head `7a528d6b1c01`, marked, which lands before you]: one region,
+  the members' loop in `a5.py`; the other five files merge. Take your pool with our closing round:
+  `s = closed(member_session(i, s))` inside `lean.session`, then `lean.submit`. The closing round stays in the audit's
+  thread before the next session, and Lean's checks read archives only. Dropping `closed` shows: the release log
+  refuses the audit.
+
+**Not established:**
+
+- Anything by a run. No audit ran from this head, by me or by anyone; none with `--negative-workers` above 1 on a real
+  window.
+- The peak of a whole `verify` at a served window's member. KEPT's two rows are one block type at two widths with small
+  programs; the 103 GB is the program's read alone.
+- The 20 times for a session: I found no measurement of it and made none.
+- Whether a worker's Lean process stays under the audit's own Lean process's peak.
+- That the finisher has returned at the fork is argued from the order of calls, not held by a join or seen in a log;
+  the proxy's behaviour in a forked child is CPython's as I know it, not run here.
+- How often the archive race is hit. The second case's put starts as the first case's verify starts, every time, so
+  the two overlap in their first seconds; how often a read lands inside a rewrite I cannot say [guess: not rare at
+  served sizes, where the program's rewrite alone takes seconds].
+- `a5_coins.py`'s loopback session and `tp()`'s several ranks in one process: not read to the end.
+- Your next head: the merge with lean's landing and the `available_memory` change are not in what was read.
+
+### For you, not for the comment
+
+- **Why no and not yes with conditions.** The default changes every multi-member process-pair audit's memory without
+  a change to its command, on an estimate that is low by 2.5 times at one of the two measured points and has no term
+  for the file whose read is the peak. Everything else is opt-in or equal to `main`. If you would rather say yes, the
+  same three asks stand as conditions; the facts do not change.
+- **The dead-Lean control is ours on `main` today** whoever lands first: `a5.py` 1075 to 1082 and `a0.py` 431, with
+  `verifier.py` unchanged. It is a choice of what a negative's "refused" means in harness code, not in anything the
+  Lean verifier accepts; I write nothing until you say whose it is. A change would be about ten lines in `a5.py` and
+  `a0.py` and one test that replaces `V.lean` with a refusal and expects each of the five kinds to fail the audit.
+- **#9199 and #9230** are untouched by this read. `git merge-tree` of #9319's head against the twin's head and
+  #9237's `9d4aec0111fb` stops in the same one region of `a5.py` [run].
+- Checkpoint note: `20261112T1526Z-report-closeround.md`, to be replaced by one written after this entry.
