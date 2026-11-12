@@ -267,11 +267,12 @@ ELSEWHERE = {**REST_POD, "publicIp": B[0], "portMappings": {"22": B[1]}}
 
 
 @pytest.fixture
-def pod(monkeypatch):
+def pod(monkeypatch, tmp_path):
     """RunPod as `runpod.get` sees it, and the hosts as ssh does. `answer` is what RunPod gives next (a pod, or an error to raise)
     and `asked` counts the calls. `hosts` is the host key of whoever is at each address, `recorded` the key known_hosts holds for
     each, and `ran` every command `runpod` ran about a host's key. `ssh` is OpenSSH's client on a command built here: what it says
-    on stderr, having recorded a new host's key unless told to be strict, and refused a changed one unless told to check none."""
+    on stderr, having recorded a new host's key unless told to be strict, and refused a changed one unless told to check none.
+    `writable` is whether known_hosts can be written: where it can't, ssh records no key and goes on as it would have."""
     class Pod:
         answer: object = dict(REST_POD)
         asked = 0
@@ -280,6 +281,7 @@ def pod(monkeypatch):
         recorded: dict = {}
         ran: list = []
         keygen_exits = 0
+        writable = True
 
         @staticmethod
         def ssh(argv: list[str]) -> str:
@@ -291,7 +293,8 @@ def pod(monkeypatch):
                 return ANOTHER_KEY.format(*at)
             if checking == "yes" and at not in Pod.recorded:
                 return NO_KEY_RECORDED.format(*at)
-            Pod.recorded.setdefault(at, Pod.hosts[at])      # checking none, a changed key is warned of and left as recorded
+            if Pod.writable:
+                Pod.recorded.setdefault(at, Pod.hosts[at])  # checking none, a changed key is warned of and left as recorded
             return f"root@{host}: Permission denied (publickey).\r\n" if "PreferredAuthentications=none" in argv else ""
 
         @staticmethod
@@ -323,7 +326,8 @@ def pod(monkeypatch):
 
     monkeypatch.setattr(runpod, "get", get)
     monkeypatch.setattr(runpod, "run", run)
-    monkeypatch.setattr(runpod, "KNOWN_HOSTS", Path("/nonexistent/known_hosts"))
+    # known_hosts() is then a file of the test's own state directory, made here for a record to be dropped from (`drop_key`)
+    monkeypatch.setattr(runpod, "KNOWN_HOSTS", tmp_path / "absent" / "known_hosts")
     runpod.known_hosts().touch()
     monkeypatch.setattr(runpod, "clock", lambda: Pod.clock)
     monkeypatch.setattr(remote, "utc_now_ms", lambda: f"read-{Pod.asked}")      # a target says which read of RunPod it is
@@ -565,6 +569,35 @@ def test_a_host_holds_its_recorded_key_only_when_ssh_checked_the_key_and_got_as_
     for argv, kwargs in ran:
         assert argv[-2:] == ["root@203.0.113.7", "true"] and argv[argv.index("-p") + 1] == "40123"
         assert kwargs == {"stdin": subprocess.DEVNULL, "capture_output": True, "text": True, "timeout": runpod.HOST_KEY_S}
+
+
+def test_known_hosts_is_the_configured_file_where_its_directory_exists_and_else_a_file_of_the_state_directory(monkeypatch, tmp_path):
+    """`known_hosts()` names the file ssh is to use and writes none itself: ssh and ssh-keygen do."""
+    monkeypatch.setattr(runpod, "KNOWN_HOSTS", tmp_path / "absent" / "known_hosts")
+    state = runpod._env_dir()
+    assert not state.exists()
+    assert runpod.known_hosts() == state / "known_hosts" and list(state.iterdir()) == [] and not (tmp_path / "absent").exists()
+    assert f"UserKnownHostsFile={state / 'known_hosts'}" in runpod.ssh_command(*A)
+
+    (tmp_path / "ssh").mkdir()
+    monkeypatch.setattr(runpod, "KNOWN_HOSTS", tmp_path / "ssh" / "known_hosts")
+    assert runpod.known_hosts() == tmp_path / "ssh" / "known_hosts" and list((tmp_path / "ssh").iterdir()) == []
+    assert f"UserKnownHostsFile={tmp_path / 'ssh' / 'known_hosts'}" in runpod.ssh_command(*A)
+
+
+def test_where_known_hosts_cannot_be_written_no_kept_address_stands_and_runpod_is_asked_at_each_call(pod, monkeypatch, tmp_path, capsys):
+    """The configured file's directory exists and nothing can be written there. `research` writes nothing to it, so nothing
+    here raises: ssh records no key and connects on RunPod's word as ever. With no key recorded no kept address stands, so
+    RunPod is asked at each call, as it was before addresses were kept, and no host is dialled on a kept address."""
+    (tmp_path / "ssh").mkdir()
+    monkeypatch.setattr(runpod, "KNOWN_HOSTS", tmp_path / "ssh" / "known_hosts")
+    pod.hosts, pod.writable = {A: "the pod's key"}, False
+    for asked in (1, 2, 3):
+        target = remote.pod_target(MACHINE)
+        assert "kept" not in target and pod.asked == asked and checks(runpod.ssh_command(*A)) == "no" and pod.logs_in(target)
+    assert pod.handshakes() == [(AT_A, "accept-new"), (AT_A, "yes"), (AT_A, "accept-new"), (AT_A, "yes"), (AT_A, "accept-new")]
+    assert all(f"UserKnownHostsFile={tmp_path / 'ssh' / 'known_hosts'}" in command for command in pod.ran)
+    assert pod.recorded == {} and list((tmp_path / "ssh").iterdir()) == [] and capsys.readouterr().err == ""
 
 
 def test_a_pod_that_is_gone_or_stopped_is_refused_and_its_address_forgotten(pod):
