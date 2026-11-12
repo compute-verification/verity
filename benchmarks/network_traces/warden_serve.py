@@ -119,7 +119,13 @@ connection rows to a registration that verifies and whose head is the tables lai
 `--lengths 2` every execution phase of the run ends, its last at the run's last close: in its head, or in the network
 certifier's signed word that it has none, a line of `rows.jsonl` too, and `check` holds each to the one that is due.
 The network certifier then admits nothing in the run's last `WardenParams.span` buckets, so `rehearse` runs long
-enough for its last request to be admitted before them (`closing_windows`).
+enough for its last request to be admitted before them (`closing_windows`). With `--head-offset N --head-wait W`
+beside `--lengths` (`warden`'s "The head's tick") the publisher process writes no line: it hands each one back,
+and the network certifier's tick appends it to `rows.jsonl` at the tick the schedule gives it, N buckets after
+the close that handed its execution phase or up to W ticks later, with that tick. A line not back by then is
+never written, and the tick writes its note that the line missed. The run ticks on past its last window until
+its last line has left or missed, `warden.json` lists each execution phase's tick (`heads`), and `check` holds
+each line to its ticks and counts the late and the missed.
 """
 
 from __future__ import annotations
