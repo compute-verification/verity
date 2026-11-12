@@ -150,8 +150,8 @@ def DeviceFigures.bounding (est : DeviceEstimate) (d : DeviceFigures) : DeviceFi
   peakRate c := Figure.max (d.peakRate c) (est.figures.peakRate c)
 
 /-- A sheet, a card: the figures the prover states for an SKU. Its compute figures (`figures`), and its memory figures
-in the device model's terms: bits read from or written to device memory a second (`bw`), bits of on-chip state (`chip`) and
-bytes of device memory (`mem`). -/
+in the device model's terms: bits read from or written to device memory a second (`bw`), bits of on-chip state
+(`chip`) and bytes of device memory (`mem`). -/
 structure Sheet where
   figures : DeviceFigures
   bw : Nat

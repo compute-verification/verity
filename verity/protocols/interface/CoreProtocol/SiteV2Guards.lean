@@ -38,13 +38,14 @@ private def entry (xs : List Loc) : Entry := { locs := [root, host, gpu] ++ xs }
 #guard !decide (Entry.Rates auditor empty (entry [dram (some 6554) 1]))
 #guard !decide (Entry.Rates auditor empty (entry [hbm (some 3200)]))
 #guard !decide (Entry.Rates { auditor with memory := [] } empty (entry [dram (some 6554)]))
-#guard !decide (Entry.Rates { auditor with memory := [("dram0", ⟨"node0", 0, 1 <<< 31⟩)] } empty (entry [dram (some 0)]))
+#guard !decide (Entry.Rates { auditor with memory := [("dram0", ⟨"node0", 0, 1 <<< 31⟩)] } empty
+  (entry [dram (some 0)]))
 -- the JSON round trip, with and without a rate
 #guard [dram (some 6554), hbm none].all fun x => (Loc.ofJson x.toJson).toOption == some x
 #guard (dram (some 6554)).toJson.compress ==
-  "{\"bw\":6554,\"bytes\":2147483648,\"chip\":null,\"drift\":null,\"id\":\"dram0\",\"key\":\"\",\"kind\":\"memory\",\"owner\":\"prover\"," ++
-  "\"parent\":\"node0\",\"scheme\":\"\",\"shared\":[],\"sheet\":\"\",\"tier\":\"dram\",\"time_unit\":null," ++
-  "\"timebase\":null}"
+  "{\"bw\":6554,\"bytes\":2147483648,\"chip\":null,\"drift\":null,\"id\":\"dram0\",\"key\":\"\",\"kind\":\"memory\"," ++
+  "\"owner\":\"prover\",\"parent\":\"node0\",\"scheme\":\"\",\"shared\":[],\"sheet\":\"\",\"tier\":\"dram\"," ++
+  "\"time_unit\":null,\"timebase\":null}"
 private def auditorJson : Json :=
   Json.mkObj [("drift", .arr #[Json.mkObj [("drift", "3/5000"), ("id", "vm0")]]),
     ("hosts", .arr #[Json.mkObj [("cards", .arr #[Json.mkObj [("count", (8 : Nat)), ("sku", "k")]]),
@@ -59,7 +60,8 @@ private def auditorJson : Json :=
 #guard ((Registration.Auditor.ofJson auditorJson).toOption.map fun A => (A.memory, A.hosts)) ==
   some ([("dram0", ⟨"node0", 6554, 2147483648⟩)],
     [("node0", ⟨8002732032, [("k", 8)], [(.disk, 50)], [("node0/eth0", some 400000000000), ("node0/eth1", none)]⟩)])
-#guard ((Registration.Auditor.ofJson auditorJson).toOption.map fun A => (A.key "cert0", A.scheme "cert0", A.scheme "x")) ==
+#guard ((Registration.Auditor.ofJson auditorJson).toOption.map fun A =>
+    (A.key "cert0", A.scheme "cert0", A.scheme "x")) ==
   some (some "k0", some "lms-sha512/n64-w1-h20/v0", none)
 #guard ((Registration.Auditor.ofJson auditorJson).toOption.map fun A => A.drift.map fun d => (d.1, toString d.2.1)) ==
   some [("vm0", "3/5000")]
@@ -121,7 +123,8 @@ private def unrated (why : Option String) : Link := { bare why with β := none }
 -- the auditor's inventory, of a whole Site: every memory leaf it has figures for under a host is registered under it,
 -- and every card it lists for the host; not with the disk left out, with the leaf under a device, or with a card short
 private def D : Registration.Digests := ⟨fun k => k.sku, fun _ => "", fun _ => ""⟩
-private def card : Sheet := { figures := ⟨"k", ⟨0, by decide⟩, fun _ => ⟨0, by decide⟩⟩, bw := 1, chip := 1, mem := 1 <<< 30 }
+private def card : Sheet :=
+  { figures := ⟨"k", ⟨0, by decide⟩, fun _ => ⟨0, by decide⟩⟩, bw := 1, chip := 1, mem := 1 <<< 30 }
 private def gpus (n : Nat) : List Loc :=
   (List.range n).map fun i => { id := s!"gpu{i}", kind := .device, parent := some "node0", sheet := "k" }
 private def node (xs : List Loc) : Site := empty.add { sheets := [card], locs := [root, host] ++ xs }
@@ -141,7 +144,8 @@ private def listed (n : Nat) : Registration.Auditor :=
 -- whether or not its leaf is among them; a host states the auditor's shared rates
 private def disks (shared : List (Tier × Nat)) : Site :=
   ⟨[], [root, { host with shared }, dram (some 6554)] ++ (List.range 3).map fun i =>
-    { id := s!"disk{i}", kind := .memory, parent := some "node0", tier := some .disk, bytes := 1 <<< 40, bw := some 28 },
+    { id := s!"disk{i}", kind := .memory, parent := some "node0", tier := some .disk, bytes := 1 <<< 40,
+      bw := some 28 },
    []⟩
 #guard (disks []).readRate (fun _ => "") ["disk0", "disk1", "disk2"] == some (84 + 6554)
 #guard (disks [(.disk, 50)]).readRate (fun _ => "") ["disk0", "disk1", "disk2"] == some (50 + 6554)
@@ -173,13 +177,14 @@ private def keyed : Registration.Auditor := keyedAt root2
 #guard !decide (Entry.Owners (keyedAt "lms-sha512/n64-w1-h20/v0") { locs := [root, cert] })
 #guard !decide (Entry.Owners (keyedAt "x") { locs := [root, { cert with scheme := "x" }] })
 #guard !decide (Entry.Owners keyed { locs := [root, { host with scheme := root2 }] })
-#guard (Loc.ofJson ({ host with shared := [(.disk, 50)] } : Loc).toJson).toOption == some { host with shared := [(.disk, 50)] }
+#guard (Loc.ofJson ({ host with shared := [(.disk, 50)] } : Loc).toJson).toOption ==
+  some { host with shared := [(.disk, 50)] }
 -- the JSON of a location that states the unit of time and of a link that says why it is not split
 #guard [root, host].all fun x => (Loc.ofJson x.toJson).toOption == some x
 #guard root.toJson.compress ==
-  "{\"bw\":null,\"bytes\":0,\"chip\":null,\"drift\":null,\"id\":\"site0\",\"key\":\"\",\"kind\":\"site\",\"owner\":\"prover\"," ++
-  "\"parent\":null,\"scheme\":\"\",\"shared\":[],\"sheet\":\"\",\"tier\":null,\"time_unit\":\"1/1000000000\"," ++
-  "\"timebase\":null}"
+  "{\"bw\":null,\"bytes\":0,\"chip\":null,\"drift\":null,\"id\":\"site0\",\"key\":\"\",\"kind\":\"site\"," ++
+  "\"owner\":\"prover\",\"parent\":null,\"scheme\":\"\",\"shared\":[],\"sheet\":\"\",\"tier\":null," ++
+  "\"time_unit\":\"1/1000000000\",\"timebase\":null}"
 #guard [bare none, bare (some "a stand-in"), unrated (some "a stand-in")].all fun k =>
   (Link.ofJson k.toJson).toOption == some k
 #guard (unrated (some "a stand-in")).toJson.compress ==
