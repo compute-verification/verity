@@ -62,8 +62,10 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``canonical-topk``: ``compiled`` with the canonical DSA top-k (`benchmarks/dsa_topk`'s vLLM plugin, `TOPK`), which
   rewrites only the indexer's rows of more than 2,048 keys, so it acts on long contexts alone;
 - ``two-stage``: the two-stage serve's launch line, everything its engine turns on over stock: ``boundary-rows``, the
-  canonical DSA top-k and one attention layer's latent history tables in the boundary commitment (`TABLES`). The line
-  is this arm's data and is stated nowhere else: a job that serves the two-stage audit serves this arm.
+  canonical DSA top-k and one attention layer's latent history tables in the boundary commitment (`TABLES`), with
+  prefix caching off: a table holds its request's rows from position 0, and a request served from the cache computes
+  none before its hit's end (`BoundaryWindows.install` refuses the pair). The line is this arm's data and is stated
+  nowhere else: a job that serves the two-stage audit serves this arm.
 - ``two-stage-tick``: that launch line admitting on the certified tick, as ``tick`` does: the arm whose schedule is a
   function of the certified arrivals, so its windows' advice holds no decision. It is made of ``two-stage``'s data,
   and like every tick arm the corpus's client serves it, standing in for the certifier.
@@ -237,7 +239,8 @@ ARMS = {
     "canonical-topk": Arm("compiled", "+ the canonical DSA top-k (dsa_topk's plugin, VERITY_DSA_TOPK=canonical)",
                           env=TOPK_ENV, general=TOPK),
     "two-stage": Arm("boundary-rows", "the two-stage serve's launch line: + the canonical DSA top-k and one attention "
-                     "layer's history tables in the boundary commitment",
+                     "layer's history tables in the boundary commitment, prefix caching off",
+                     ("--no-enable-prefix-caching",),
                      plugin=("record", "boundary_rows"), env=TOPK_ENV, general=TOPK, rows={**ROWS, "tables": TABLES}),
 }
 ARMS["two-stage-tick"] = replace(ARMS["two-stage"], parent="two-stage", what="+ admission on the certified tick", tick=True)

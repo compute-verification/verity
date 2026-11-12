@@ -598,7 +598,13 @@ class BoundaryWindows:
         """Wrap ``sched``'s ``add_request``, ``update_from_output``, ``finish_requests`` and ``schedule`` through ``hooks``
         (an `engine.hooks.Hooks`), and stop at the process's exit: at exit and at a `multiprocessing` child's, which runs
         no `atexit` hook (vLLM's engine core is one). A scheduler that caches prefixes commits the same rows: a span's
-        boundary is its own prompt ids and the ids it was served, whichever KV pages its prefill read."""
+        boundary is its own prompt ids and the ids it was served, whichever KV pages its prefill read. With history
+        tables it is refused: a table holds its request's latent rows from position 0 (`boundary_tables.Latents`), and
+        a request served from the cache computes none before its hit's end."""
+        if self.tables is not None and getattr(getattr(sched, "cache_config", None), "enable_prefix_caching", False):
+            raise ValueError("the boundary commitment's history tables need prefix caching off "
+                             "(--no-enable-prefix-caching): a table holds its request's latent rows from position 0, "
+                             "and a request served from the cache computes none before its hit's end")
 
         def add_request(orig: Callable[..., Any]) -> Callable[..., Any]:
             def wrapped(request: Any, *a: Any, **kw: Any) -> Any:
