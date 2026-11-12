@@ -248,8 +248,6 @@
         "benchmarks/numerical/",
         "benchmarks/ppl/",
         "verity/protocols/inference_only/nci/",
-        "benchmarks/int8_class_rate/",
-        "benchmarks/tensor_duty/",
         "benchmarks/unit_lowering/",
         "benchmarks/compute/",
         ".agents/skills/kernel-engineering/",
@@ -303,7 +301,6 @@
       "branch_suffixes": [
         "e3fa",
         "e9ac",
-        "ea24",
         "1de3"
       ],
       "examples": [
@@ -323,7 +320,22 @@
       "linear": "CMP",
       "linear_label": "lane:compute-research",
       "owns": [
-        "verity/hardware/"
+        "verity/hardware/",
+        "benchmarks/pouw/tensor_kinds/",
+        "benchmarks/pouw/opcode_probe/",
+        "benchmarks/pouw/sass_census/",
+        "benchmarks/pouw/facet_break/",
+        "benchmarks/pouw/dc/",
+        "benchmarks/pouw/theory/",
+        "benchmarks/pouw/lean_headline.py",
+        "benchmarks/pouw/lean_headline_dc.py",
+        "benchmarks/pouw/tests/test_lean_headline.py",
+        "benchmarks/pouw/tests/test_lean_headline_dc.py",
+        "benchmarks/tensor_duty/",
+        "benchmarks/int8_class_rate/"
+      ],
+      "branch_suffixes": [
+        "ea24"
       ]
     },
     {
@@ -651,6 +663,7 @@
         "benchmarks/prove/",
         "benchmarks/recursion_e2e/",
         "benchmarks/recursion_figures/",
+        "benchmarks/exfiltration/",
         "benchmarks/specs/",
         "infra/cluster/kinds/benchmarks.toml",
         "benchmarks/judge.py",
