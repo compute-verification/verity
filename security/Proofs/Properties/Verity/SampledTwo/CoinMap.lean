@@ -28,16 +28,14 @@ states its law.
   shortfall below uniform (`Verity.Game.shortfall`, the one-stage leg's `openGap` at each node) plus the chance its class
   at the run's uniform elements is empty. A fresh coin's write costs nothing: its 512 bits are the coin's 4 elements one
   for one.
-* **The law** (`LawAt`, `Agrees`, `ElemAgrees`, `CoinMapLawB`, `CoinMapHolds`): the period's play is at most as likely,
-  at every event, as the frame's play at a uniform tape and uniform run coins plus the hiding term (`LawAt`,
-  `CoinMapLaw`'s first clause); and `CoinMapLawB`, the law with an agreement read in the event, at the coin map's
-  (`ElemAgrees`): on the frame's plays counted, the coin `dev` reads for each read round has the run's coin's elements
-  below what its releases carry. `CoinMapLaw`'s second clause (the agreement at every tape and coins) fails at an
-  opening whose class at the run's elements is empty: the device releases the tree's own round there, whose bits are
-  not the run's, and the log does not show the run's coins.
-* **To the reading's agreement** (`AgreeCovers`, `agrees_of_elem`): where the form's parse's `agree` holds of coins
-  with the same released elements (on the plays it accepts whose log it read is the device's), `ElemAgrees` gives
-  `Agrees`.
+* **The law** (`LawAt`, `Agrees`, `ElemAgrees`, `CoinMapHolds`): the period's play is at most as likely, at every
+  event, as the frame's play at a uniform tape and uniform run coins plus the hiding term (`LawAt`); and `CoinMapLaw`
+  at the coin map's agreement (`ElemAgrees`): on the frame's plays counted, the coin `dev` reads for each read round has
+  the run's coin's elements below what its releases carry. The agreement holds only in the event: at an opening whose
+  class at the run's elements is empty the device releases the tree's own round, whose bits are not the run's.
+* **To the reading's agreement** (`AgreeCovers`, `agrees_of_elem`, `devAgrees_of_cover`): where the form's parse's
+  `agree` holds of coins with the same released elements (on the plays it accepts whose log it read is the device's),
+  `ElemAgrees` gives `Agrees`, and so `DevAgrees` at `ElemAgrees`.
 
 Statements and definitions: `LawAt`'s and `CoinMapHolds`' proofs are to come. Nothing imports this module.
 -/
@@ -427,16 +425,6 @@ def ElemAgrees (L : Locate) (A : Live₂) (x : Msg) (reads : ℕ → Prop) (o : 
   ∀ i : Fin (A.L.V.k x), reads i.val → ∀ c, dev L o.log i.val = some c →
     ∀ j : Fin 65536, j.val < usedOf L i.val [] o.log → c j = r i j
 
-/-- **The coin map's law, the agreement read in the event** (the change `CoinMapLaw` needs): the period's play is at
-most as likely, at every event, as the frame's play at a uniform tape and uniform run coins on which the agreement `Ag`
-holds, plus `hide`. -/
-def CoinMapLawB (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ) (Ag : Verity.Exchange → Coins A x → Prop)
-    (hide : ℝ≥0∞) : Prop :=
-  ∀ E : Verity.Exchange → Prop, Verity.Game.prob E (V.game θ F c) σ ≤
-    ENNReal.ofReal (Claims.Pr fun s : TapeOf V θ F c σ × Coins A x => E (Fr.out s.1 s.2) ∧ Ag (Fr.out s.1 s.2) s.2) +
-      hide
-
 /-- **The parse's agreement covers the released elements on the plays `Q`** (the form's parse's, at `Q` the plays it
 accepts whose log it read is the device's): there, a coin read at round `i` agrees with a run's coin wherever the two
 have the same elements below what the locator's releases for round `i` carry. -/
@@ -445,12 +433,12 @@ def AgreeCovers (L : Locate) {A : Live₂} (Rd : Reading A) (Q : Verity.Exchange
     (∀ j : Fin 65536, j.val < usedOf L i [] o.log → c j = c' j) → Rd.agree o i c c'
 
 /-- **The coin map's law holds** at every vocabulary, statement, strategy, locator, prover and set of read rounds:
-`CoinMapLawB` at the frame of `L` and the agreement `ElemAgrees`, with `hide` the hiding term (`gapOf`: the written
+`CoinMapLaw` at the frame of `L` and the agreement `ElemAgrees`, with `hide` the hiding term (`gapOf`: the written
 openings' shortfalls and empty classes along the frame's play). -/
 def CoinMapHolds : Prop :=
   ∀ (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Strategy (V.game θ F c)) (L : Locate) (P : Claims.Prover (TapeOf V θ F c σ)) (reads : ℕ → Prop),
-    CoinMapLawB V A x θ F c σ (frame V A x θ F c σ L P) (ElemAgrees L A x reads) (gapOf V θ F c σ L (A.L.V.k x))
+    CoinMapLaw V A x θ F c σ (frame V A x θ F c σ L P) (ElemAgrees L A x reads) (gapOf V θ F c σ L (A.L.V.k x))
 
 /-- **The coin map's agreement is the reading's** on the plays `Q` where the parse's agreement covers the released
 elements, at a reading whose `dev` is the locator's. -/
@@ -460,6 +448,13 @@ theorem agrees_of_elem {L : Locate} {A : Live₂} {x : Msg} {Rd : Reading A} {Q 
   intro i hi c hc
   rw [hdev] at hc
   exact hcov o hQ i.val c (r i) (h i hi c hc)
+
+/-- **`DevAgrees` at the coin map's agreement**, from the parse's covering it on accepted plays whose log is the
+device's, at a reading whose `dev` is the locator's. -/
+theorem devAgrees_of_cover {L : Locate} {A : Live₂} {x : Msg} {Rd : Reading A} {Acc Good : Verity.Exchange → Prop}
+    (hdev : Rd.dev = dev L) (hcov : AgreeCovers L Rd fun o => Acc o ∧ Good o) :
+    DevAgrees A x Rd Acc Good (ElemAgrees L A x Rd.reads) := fun _ hA hG _ h =>
+  agrees_of_elem hdev hcov ⟨hA, hG⟩ h
 
 /-! ## Probes -/
 
