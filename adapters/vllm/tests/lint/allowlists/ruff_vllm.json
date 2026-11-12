@@ -1163,7 +1163,6 @@
     {"file": "verity_vllm/check/match/rank_match.py", "kind": "I001", "symbol": "own_producers_from_record", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/check/match/sampler_geometry.py", "kind": "I001", "symbol": "sampler_geometry_check", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/check/match/xrank_collectives.py", "kind": "I001", "symbol": "check_picks", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/check/oracle_compare.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/check/replay/compiled_kernel_check.py", "kind": "B023", "symbol": "CompiledKernelCheck.run._got", "detail": "Function definition does not bind loop variable `memo`", "count": 3},
     {"file": "verity_vllm/check/replay/compiled_kernel_check.py", "kind": "E702", "symbol": "CompiledKernelCheck._check_launch", "detail": "Multiple statements on one line (semicolon)"},
     {"file": "verity_vllm/check/replay/compiled_kernel_check.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
