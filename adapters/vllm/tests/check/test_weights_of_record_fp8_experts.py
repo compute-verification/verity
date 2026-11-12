@@ -14,6 +14,7 @@ and TP16 refines twice as far (g = 32):
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Callable
 from types import SimpleNamespace
 
@@ -196,7 +197,6 @@ def _loaded(m, world: int, rank: int, *, refine: Callable, load_w13: Callable, l
 
 def _restated_refine(config, weight_block_size):
     """`refine_fp8_moe_block_shape`, fused_moe/oracle/fp8.py:272."""
-    import math
     block_n, block_k = weight_block_size
     ispp = config.intermediate_size_per_partition
     if ispp % block_n == 0 and (config.tp_size == 1 or ispp % block_k == 0):

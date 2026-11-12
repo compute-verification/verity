@@ -6,7 +6,9 @@ tests/program/test_derived_rows_fp8.py); negatives: a flipped output word, a per
 field (refused by name, never a silent cast)."""
 from __future__ import annotations
 
+import hashlib
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -216,8 +218,6 @@ def test_honest_fp8_program_replays_bit_exactly_the_gemm_rows_are_vus_the_quant_
     assert rep["evaluators"]["ScaledMmFp8BlockSharedScale_v1"].startswith("verity.definitions.numerics.derived_rows.scaled_mm_fp8_block_row")
     assert rep["evaluators"]["Fp8GroupQuant_v1"].startswith("verity.definitions.numerics.derived_rows.fp8_group_quant_row")
     # the twins name what pinned them: fixture sha256 (the file in the tree), kernels, device, date, tests
-    import hashlib
-    from pathlib import Path
     prov = rep["evaluator_provenance"]
     assert set(prov) == {"Fp8GroupQuant_v1", "ScaledMmFp8BlockSharedScale_v1"}
     npz = Path(__file__).resolve().parents[2] / prov["ScaledMmFp8BlockSharedScale_v1"]["fixture"]

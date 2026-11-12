@@ -13,7 +13,8 @@ from verity_vllm.check.match import batch_decomp as bd
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.observe.fold.fold import fold
-from verity_vllm.pipeline.match import persist_program
+from verity_vllm.observe.fold.supplied import program_registered_values
+from verity_vllm.pipeline.match import Plan, persist_program
 
 
 def _oracle(tmp_path, name, registered):
@@ -73,9 +74,7 @@ def _build_dir(tmp_path, name, registered):
 def test_the_match_folds_under_registered_values_when_the_builds_programs_register_them(tmp_path):
     """The Match's folds bind the value-input Definitions exactly when the Build's Programs register their values (`result.json`
     `program.supplied`), so a `registered_values` row compares like with like; Programs that disagree are refused by name."""
-    from verity_vllm.observe.fold.supplied import program_registered_values
     from verity_vllm.pipeline import cli
-    from verity_vllm.pipeline.match import Plan
     reg, const = _build_dir(tmp_path, "reg", True), _build_dir(tmp_path, "const", False)
     assert program_registered_values([reg]) and not program_registered_values([const]) and not program_registered_values([])
     with pytest.raises(SystemExit, match="some Programs register"):

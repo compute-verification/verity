@@ -23,12 +23,15 @@ equal-result-but-wrong-producer -- as mutations of the RECORD (the rank's log or
 from __future__ import annotations
 
 import gzip
+import hashlib
 import itertools
 import json
 import threading
 from dataclasses import dataclass
+from pathlib import Path as _P
 
 import pytest
+from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, array_of, concat, runs
@@ -49,7 +52,7 @@ from verity_vllm.observe.events import (
     TritonLaunch,
     ViewDesc,
 )
-from verity_vllm.observe.fold.fold import fold
+from verity_vllm.observe.fold.fold import fold, summarize
 from verity_vllm.observe.fold.patterns.collectives import TpCollective
 from verity_vllm.observe.fold.resolver import (
     Compute,
@@ -59,6 +62,7 @@ from verity_vllm.observe.fold.resolver import (
     Shared,
     Transparent,
 )
+from verity_vllm.observe.log import dumps as dump_events
 from verity_vllm.pipeline import cli
 
 BF16, I32 = Value(16), Value(32)
@@ -378,8 +382,6 @@ def rank_program(rank: int, *, swap_parts: bool = False, peer_of: dict[int, int]
 def write_derived(d, spec: SpecializedDefinition, rank: int, *, links_mut: dict | None = None, spec_histogram: dict | None = None):
     """descriptor.json.gz + derive-report.json + tp_links.json + result.json as derive_step writes them (the fields cb_a.compare and the
     fold's construction read)."""
-    from verity.circuits import codec
-
     from verity_vllm.pipeline.build import _spec_histogram
     prog = Program(spec)
     desc = codec.encode_program(prog)
@@ -696,9 +698,6 @@ def test_swapped_rank_header_fails_the_compare(tmp_path):
 def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provenance=True, links_mut=None, recorder_mut=None, gprog=True,
          provenance_of_other_run=False, provenance_digest_mismatch=False, rank_workers=0, fold_workers=0, wrap=None, spec_histogram=None,
          folded_under=None):
-    import hashlib
-
-    from verity_vllm.observe.fold.fold import summarize
     from verity_vllm.pipeline.tp import fold_match as FM
     tmp_path = tmp_path / f"case{len(list(tmp_path.iterdir()))}"
     tmp_path.mkdir()
@@ -835,8 +834,6 @@ def test_fold_match_entry_point_passes_on_the_fixture(tmp_path, monkeypatch):
                                                  "value", "provenance", "links", "complete"]
     assert len(xr["peer_binding"]) == 12 and res["cross_rank"]["peer_binding_n"] == 12
     # the record names the tp2_match.json it consumed, by digest, and the recorder digests that record was bound to
-    import hashlib
-    from pathlib import Path as _P
     assert res["tp2_match"]["sha256"] == hashlib.sha256(_P(res["tp2_match"]["path"]).read_bytes()).hexdigest()
     assert res["tp2_match"]["recorder_sha256"] == {str(r): hashlib.sha256((_P(res["capture"]) / f"coll.rank{r}.jsonl").read_bytes()).hexdigest() for r in (0, 1)}
     # the TP1 Match-dir layout per rank, for the checker of record and the fast path (mfast): capture/log.jsonl.gz + program.json + instances.jsonl
@@ -999,7 +996,6 @@ def _segments(r):
 
 def _decompose_b2(tmp_path, rank: int, r, *, tag: str):
     from verity_vllm.check.match import batch_decomp as BD
-    from verity_vllm.observe.log import dumps as dump_events
     od, dd = tmp_path / f"oracle_{tag}_r{rank}", tmp_path / f"derived_{tag}_r{rank}"
     (od / "capture").mkdir(parents=True)
     dd.mkdir()

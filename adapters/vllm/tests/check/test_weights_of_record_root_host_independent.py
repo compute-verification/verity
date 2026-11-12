@@ -13,10 +13,12 @@ by the reader (records are never hand-edited: the row_pod reuse rule re-derives 
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from tests.check.test_weights_of_record import PREFIX, _program, checkpoint  # noqa: F401  (fixture)
 from verity_vllm.check import weights_of_record as WR
@@ -73,7 +75,6 @@ def test_the_root_moves_with_the_analytic_inputs_and_with_the_checkpoint_bytes(c
     e1 = {f["field"]: f for f in rec_theta["fields"]}[FIELD]["analytic"]
     assert e1["inputs_sha256"] != e0["inputs_sha256"] and e1["C"]["ROPE_THETA"] == 20000.0 and rec_theta["root_of_record"] != rec["root_of_record"]
     # the key is exactly the sha256 of the canonical JSON of (table, expected_shape, C): recomputable from the record alone
-    import hashlib
     key = hashlib.sha256(json.dumps({"table": "cos_sin", "expected_shape": e0["expected_shape"], "C": e0["C"]}, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     assert key == e0["inputs_sha256"]
     # a byte of the checkpoint (the norm) changed: the root moves through the field digest (unchanged v1 behaviour)
@@ -104,7 +105,6 @@ def test_a_v1_record_is_read_as_it_is_and_the_checker_still_pins_by_field(checkp
     cfg = json.loads((d / "config.json").read_text())
     C, _ = analytic.config_of(cfg)
     norm = WR.to_served(t["model.norm.weight"][1], t["model.norm.weight"][0], 16)[0]
-    import hashlib
     live = {"params": {"model.layers.0.self_attn.rotary_emb.cos_sin_cache": {"digest": "x", "dtype": "bfloat16", "shape": list(analytic.cos_sin_table(C).shape)},
                        "model.norm.weight": {"digest": hashlib.sha256(np.ascontiguousarray(norm).tobytes()).hexdigest(), "dtype": "bfloat16", "shape": [8]}},
             "raw": {"model.layers.0.self_attn.rotary_emb.cos_sin_cache": analytic.cos_sin_table(C)}}
@@ -162,7 +162,6 @@ def test_reroot_and_diff_are_readers_that_name_host_only_differences_apart_from_
     assert "DIFFER model.model.norm.weight: digest" in capsys.readouterr().out
     assert {p.name: p.stat().st_mtime_ns for p in (pa, pb, pc)} == before
     # deriving still needs --checkpoint-dir (a manual check now that --diff exists without one)
-    import pytest
     with pytest.raises(SystemExit):
         cli.main(["weights-of-record", "--program-dir", str(tmp_path)])
     assert "--checkpoint-dir is required" in capsys.readouterr().err

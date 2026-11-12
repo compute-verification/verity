@@ -286,7 +286,6 @@ def test_b2_attribution_ambiguous_when_two_requests_share_ids_on_an_unsnapshotte
     committed[(1, "model.embed_tokens/in")] = np.array([777, 777], dtype="<i4").tobytes()
     committed[(1, "runner.sampler/sampled_token_ids")] = np.array([1, 1], dtype="<i8").tobytes()
     # the log's step-1 samples are [1, 2]: make them equal too so the step is fully ambiguous
-    import gzip
     p = os.path.join(d, "capture", "log.jsonl.gz")
     with gzip.open(p, "rt") as fh:
         lines = fh.read().splitlines()
@@ -578,9 +577,6 @@ def test_f_r16_24_the_oracle_provenance_carries_the_tie_facts_of_the_match_recor
     """The oracle is 'this attempt's Match' by FACT, not by presence: provenance.tie carries sha256 of the Match
     record's fold_summary.json / instances.jsonl / RunHeader line so the finalizer ties it to the Match stage of record without reading the
     fold; a missing file is None, never a placeholder; another Match dir (same workload, different fold) has different digests."""
-    import gzip
-    import hashlib
-    import os
     d, _vals = make_match(str(tmp_path))
     pv = OC.MatchOracle(d).provenance()
     tie = pv["tie"]
@@ -601,7 +597,6 @@ def test_f_r16_24_the_oracle_provenance_carries_the_tie_facts_of_the_match_recor
 def test_an_unreadable_run_header_is_named_in_the_tie_facts_not_passed_off_as_an_absent_log(tmp_path):
     """A capture/log.jsonl.gz that is there but isn't gzip has no RunHeader digest; the tie facts say it was unreadable and why, so the
     record doesn't read as a Match stage that wrote no log."""
-    import os
     d, _vals = make_match(str(tmp_path))
     Path(os.path.join(d, "capture", "log.jsonl.gz")).write_bytes(b'{"$e": "RunHeader"}\n')
     tie = OC.oracle_tie_facts(d)

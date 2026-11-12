@@ -8,6 +8,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from verity.definitions.numerics.deepgemm_rows import deepgemm_linear
+from verity.definitions.numerics.glm53_rows import fp8_group_quant_ue8m0
 
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import opening as OP
@@ -164,7 +165,6 @@ def _plane_store(q, s, flip=None):
 
 @pytest.fixture
 def quant(monkeypatch):
-    from verity.definitions.numerics.glm53_rows import fp8_group_quant_ue8m0
     x = _operands(np.random.default_rng(5))[0]
     got = fp8_group_quant_ue8m0({"K": K, "G": 128}, [x])
     monkeypatch.setattr(EV, "_evaluate_row", lambda *a, **k: fp8_group_quant_ue8m0({"K": K, "G": 128}, [x]))

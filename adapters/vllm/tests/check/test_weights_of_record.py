@@ -2,11 +2,14 @@
 engine; a served model that differs from the checkpoint in ONE element fails the Commit by name."""
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import logging
 import re
 import struct
+import subprocess
+import types
 from pathlib import Path
 from typing import Any
 
@@ -695,7 +698,6 @@ def test_cli_writes_the_record_beside_the_program(checkpoint, tmp_path, caplog):
     caplog.set_level(logging.INFO, logger="verity_vllm")
     d, man, t = checkpoint
     prog, fields = _program()
-    import gzip
     pd = tmp_path / "build_request"
     pd.mkdir()
     with gzip.open(pd / "instances.json.gz", "wt") as f:
@@ -710,7 +712,6 @@ def test_cli_writes_the_record_beside_the_program(checkpoint, tmp_path, caplog):
 
 
 def _write_program(d, prog, digest, LP, T, extra_field=None):
-    import gzip
     d.mkdir(parents=True)
     inst = json.loads(json.dumps(prog["instances"]))
     inst["digest"] = digest
@@ -825,9 +826,6 @@ def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersed
 def test_provenance_names_why_the_code_is_null_or_came_from_the_git_fallback(tmp_path, monkeypatch):
     """When code_version raises, derived.code_source says so: next to the git HEAD that replaced it, or, when git fails too, as the
     reason code is null, rather than a null that reads like a tree with neither EXPORT.json nor .git."""
-    import subprocess
-    import types
-
     import verity_vllm.pipeline.experiment as EX
 
     def broken(_root):

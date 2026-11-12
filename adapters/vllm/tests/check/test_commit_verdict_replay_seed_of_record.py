@@ -13,6 +13,7 @@ is the one it had before the seed rule."""
 from __future__ import annotations
 
 import hashlib
+import inspect
 from pathlib import Path
 from typing import Any
 
@@ -86,7 +87,6 @@ def test_the_verifier_challenge_form_is_recomputed_from_the_recorded_challenge_a
     assert ok is False and "does not name the recorded challenge" in why
     assert _replay_seed_of_record(_sr_chal(seed, src, "audit-2026-09-20"), None)[0] is False   # no run root to recompute from
     # the record shape: sampled_replay writes sample.challenge ONLY under the challenge form (root-form records are byte-identical)
-    import inspect
 
     from verity_vllm.check.replay import driver as SR
     assert "seed_challenge" in inspect.signature(SR.sampled_replay).parameters

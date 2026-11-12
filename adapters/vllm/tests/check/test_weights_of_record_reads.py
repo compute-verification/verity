@@ -22,6 +22,7 @@ from tests.check.test_weights_of_record import write_safetensors
 from verity_vllm import config
 from verity_vllm.check import checkpoint_index as CI
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.query.manifest import format as MF
 
 H, INTER, HQ, HKV, D, V, E, G = 128, 128, 4, 2, 16, 16, 2, 64
 WORLDS = ((1, 0), (2, 0), (2, 1), (4, 0), (4, 1), (4, 2), (4, 3))
@@ -256,7 +257,6 @@ def test_the_default_manifest_is_the_trees_pins_whatever_the_working_directory(t
 
 
 def test_program_head_is_the_loaded_program_with_its_rows_as_stored(tmp_path):
-    from verity_vllm.query.manifest import format as MF
     pdir = write_program_dir(tmp_path, 2, 1)
     full, head = MF.load_program(pdir), WR.load_program_head(pdir)
     assert {k: v for k, v in head["instances"].items() if k != "rows"} == {k: v for k, v in full["instances"].items() if k != "rows"}

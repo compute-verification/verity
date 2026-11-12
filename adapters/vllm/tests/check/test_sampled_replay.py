@@ -1,14 +1,24 @@
 """Sampled exact VU replay (C2 of record) -- positive on a tiny honest Program, targeted negatives named."""
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pytest
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.reference import evaluate
+from verity.circuits.program import Program
+from verity.definitions.numerics import derived_rows as D
 from verity.definitions.numerics import rows as RK
+from verity.definitions.registry import b1
+from verity.definitions.registry import moe as R
+from verity.definitions.registry import prims as P
+from verity.definitions.registry.hopper import HopperBF16WgmmaDot16
 
 from verity_vllm.check.replay import compare as CMP
 from verity_vllm.check.replay import coverage as COV
@@ -20,8 +30,11 @@ from verity_vllm.check.replay import opening as OP
 from verity_vllm.check.replay import population as POP
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay import sample as SM
+from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.query import program_view as PV
 from verity_vllm.query.manifest import format as RM
-from verity_vllm.query.required import Q_MODULE_BODY_ID
+from verity_vllm.query.program_view import from_instances
+from verity_vllm.query.required import Q_MODULE_BODY_ID, request_manifest
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 V, H, I, LP, T = 8, 16, 16, 2, 2          # vocab, hidden, intermediate, prompt len, decode steps (steps = LP-prefill + T decode = 1 + T)
@@ -40,10 +53,7 @@ def _under_module_body():
 def v2_manifest(inst: dict, request_ids=("r0",), *, digest: str = "t" * 64) -> dict:
     """The required-value manifest of record (`verity_vllm.query`) of `inst` for each request id: one request manifest, or (several requests of
     the same Program, arriving together at engine step 0) their global composition, as `query.cli build-global` writes it."""
-    from verity_vllm.correspondence.reader_for_query import Correspondence
     from verity_vllm.query.compose import compose_global
-    from verity_vllm.query.program_view import from_instances
-    from verity_vllm.query.required import request_manifest
     res = {"program": {"digest": digest, "function": "Derived[vLLMRequest[Test]]"}, "wrapper": "request", "LP": LP, "T": T,
            "target": {"declared": {"compute_capability": [8, 9]}}}
     P = from_instances(inst)
@@ -621,9 +631,6 @@ def test_partial_replay_with_named_gaps_is_covered_by_a_complete_form_b_coord_m0
 def test_token_select_first_max_tie_rule():
     logits: np.ndarray = np.asarray([0x3F80, 0x4000, 0x4000, 0x3F00], dtype=np.uint16)   # 1.0, 2.0, 2.0, 0.5 -> index 1
     assert RK.token_select_first_max(logits) == 1
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation.reference import evaluate
-    from verity.definitions.registry import b1
 
     nan = [[0x7FC0, 0x3F80], [0x3F80, 0x7FC0, 0x4000], [0xFF80, 0x7FC0]]   # NaN never wins a comparison, so a NaN logits[0] is the token
     assert [RK.token_select_first_max(np.asarray(r, dtype=np.uint16)) for r in nan] == [0, 2, 0]
@@ -734,7 +741,6 @@ def test_biasadd_over_an_interior_gemm_without_evaluator_is_not_evaluable_by_nam
     BiasAdd rows are VUs and replay exact.  Gemm_v2 (the Hopper GEMM this finding was measured on) now HAS an evaluator -- see the Hopper
     tests below -- so the rule is exercised here with a synthetic GEMM version the query models (its ports are Gemm_v1's) and the
     evaluator table does not know (`Gemm_v9`): the same code path, the same names."""
-    from verity_vllm.query import program_view as PV
     inst = json.loads(json.dumps(biased_world.inst))
     pi1 = IX.ProgramIndex(inst)
     vus1, ne1, nef1 = POP.population(pi1, "r0")
@@ -807,7 +813,6 @@ def hopper_worlds():
 
 
 def test_hopper_gemm_v2_is_registered_and_dispatches_on_the_dot_static():
-    from verity.definitions.numerics import derived_rows as D
     assert "Gemm_v2" in RK.EVALUATORS and "Gemm_v2" not in RC.NOT_YET and SR._FAMILY_LIBS["Gemm_v2"] == ()
     assert "dot_bf16_for" in RK.EVALUATORS["Gemm_v2"] and "HopperBF16WgmmaDot16_v1" in RK.EVALUATORS["Gemm_v2"]
     assert RK.gemm_dot_prim({"K": 16, "N": 32, "DOT": '{"fn":"HopperBF16WgmmaDot16_v1"}'}) == "HopperBF16WgmmaDot16_v1"
@@ -825,8 +830,6 @@ def test_hopper_gemm_v2_evaluator_is_the_registered_wgmma_chain_not_the_ampere_o
     """Word for word against the registered scalar primitive (`hopper.HopperBF16WgmmaDot16`, pinned on the H100) on random finite lanes,
     and on an adversarial lane where the 26-bit and 25-bit adders round to DIFFERENT bf16 words: evaluate('Gemm_v2', Hopper DOT) returns
     the wgmma word, evaluate('Gemm_v1') / ('Gemm_v2', Ampere DOT) the mma.sync word."""
-    from verity.definitions.numerics import derived_rows as D
-    from verity.definitions.registry.hopper import HopperBF16WgmmaDot16
     rng = np.random.default_rng(1701)
     K, N = 64, 8
     x = _bf16(rng, K, 1.0)
@@ -1077,7 +1080,6 @@ def test_rope_v1_wrong_cache_row_is_a_mismatch_the_position_is_the_programs_slic
 
 def test_rope_v1_evaluator_equals_the_registered_prims_on_the_replays_own_rows(rope_world):
     """The replay's RoPE_v1 branch == prims.RopeOut / RopeOutAdd per coordinate on the honest Program's own committed q / k words."""
-    from verity.definitions.registry import prims as P
     pi = rope_world.pi
     r = next(x for x in pi.rows if x["spec"].startswith("RoPE_v1") and "/query" in x["name"])
     d = pi.describe(r)
@@ -1305,7 +1307,6 @@ def test_attention_v2_statics_resolve_the_hopper_twins_by_name_and_an_unknown_id
     assert np.array_equal(v3, attn_world.values[("r0", r["i"])])
     st = dict(d["statics"], DOT='{"fn":"AmpereBF16TcDot16_v2"}', INV='{"fn":"Fa2InvSum_v1"}')
     assert np.array_equal(EV.evaluate("Attention_v2", st, inputs, [None] * 3)["out"], v3)
-    from verity.definitions.numerics import derived_rows as D
     st = dict(d["statics"], DOT='{"fn":"HopperBF16WgmmaDot16_v1"}', INV='{"fn":"Fa3InvSum_v1"}')
     got = EV.evaluate("Attention_v2", st, inputs, [None] * 3)["out"]
     q = np.asarray(inputs[0][0], dtype=np.uint16).reshape(NH, DH)
@@ -1368,7 +1369,6 @@ def test_device_retained_store_is_replayed_serially_and_a_child_device_fault_fal
     """A DEVICE-retained committed store cannot be read by forked children (CUDA after fork): (a) the caller's
     retention='device' runs the replay serial in the parent (named in the record); (b) without the hint, a child that hits the device is a
     POOL failure -> serial fallback in the parent -- the honest row PASSES either way instead of failing closed on 'not evaluated'."""
-    import os
     bmap, committed = world.bmap_and_reader()
     parent = os.getpid()
     calls = {"child": 0, "parent": 0}
@@ -1721,10 +1721,7 @@ def test_moe_evaluators_equal_the_registered_definitions():
     """The numpy / scalar-primitive evaluators of the MoE families are the registered `verity.definitions.registry.moe`
     Definitions (the bodies moe_kernel_xcheck checked against the real kernels): bit-equal to the reference evaluator on random
     words -- router (renormalize False / True, a tie), sum, up and down expert GEMMs (the gather by the committed expert id)."""
-    from verity.circuits.defs import bind
-    from verity.circuits.program import Program
     from verity.definitions.numerics.serve3_reference import materialize
-    from verity.definitions.registry import moe as R
 
     def ref(fn, inputs):
         P = Program(fn)
@@ -1762,7 +1759,6 @@ def test_jit_twin_library_build_is_atomic_and_serialised_across_concurrent_first
     and serialises builders on a lock: N concurrent builders yield exactly one compile, every observer sees a complete file, and a
     fresh library is not rebuilt.  The parent prewarms the evaluators' libraries before forking (`_prewarm_evaluators`).  The race
     is staged: the first builder stops half-way through its write until five more have found the library missing and reached its lock."""
-    import contextlib
     import multiprocessing as mp
 
     from verity.definitions.numerics import _jit
@@ -1836,7 +1832,6 @@ def test_moe_plane_naming_on_real_programs_dense_zero_moe_nonzero_rev_cb_m0733()
     """The named-not-evaluable MoE set is derived from Program rows alone, so it must be EMPTY on
     every dense Program and non-empty on every MoE Program: pins that the naming cannot grow silently onto dense rows.  Opt-in on real
     Programs (laptop: the Llama-3.2-1B B8 components; the OLMoE B1 Program)."""
-    from verity_vllm.query.manifest import format as RM
     dense = [d for d in os.environ.get("VERITY_DENSE_PROGRAM_DIRS", "").split(":") if d]
     moe = [d for d in os.environ.get("VERITY_MOE_PROGRAM_DIRS", "").split(":") if d]
     for d in dense:
@@ -2007,10 +2002,6 @@ def test_population_stamps_on_every_reason_the_code_its_text_decodes_to(moe_worl
     """Every not-evaluable reason population() counts carries its structured code (`population.not_evaluable_codes`, what the verdict
     reads), and on every site that code is the one a record written before the codes decodes its text to (`replay_codes`): a new record
     and a record of record grade alike."""
-    from collections import Counter
-
-    from verity_vllm.check.replay import replay_codes as RC
-
     monkeypatch.delitem(RK.EVALUATORS, "RMSNormFusedCuda_v2")                  # direct no-evaluator gaps
     monkeypatch.delitem(RK.EVALUATORS, "MoeRouterTopK_v1")                     # a plane producer without an evaluator (plane-fed)
     monkeypatch.delitem(RK.EVALUATORS, "Gemm_v1")                              # BiasAdd over an interior Gemm (interior-composed) + direct Gemm gaps

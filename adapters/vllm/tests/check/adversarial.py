@@ -9,12 +9,15 @@ often it fired.
 """
 from __future__ import annotations
 
+import copy
 import dataclasses
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from verity.circuits.defs import bind, composite
+from verity.circuits.layout import FunctionCall
 from verity.circuits.refs import Coll as _Coll
 from verity.circuits.refs import concat
 from verity.circuits.types import Array
@@ -129,7 +132,6 @@ def spec_name(spec) -> str:
 
 
 def layer_of(hint: str) -> int | None:
-    import re
     m = re.search(r"layers\.(\d+)\.", hint or "")
     return int(m.group(1)) if m else None
 
@@ -403,7 +405,6 @@ class ToyRecord:
         t = _evaluate_program(r, weights)
         snapdir.mkdir(parents=True, exist_ok=True)
         _write_snapshots(r, t, snapdir)
-        import copy
 
         from verity_vllm.check.fold_compare import SnapshotStore
         self.genuine, self.weights, self.transcript = r, weights, t
@@ -447,7 +448,6 @@ class ToyRecord:
                 BAKED[int(m["event"])] = tuple(int(w) for w in call_outs)
 
     def _returns(self, node: int):
-        from verity.circuits.layout import FunctionCall
         circuit = self.genuine.program.circuit
         n_in = len(self.genuine.program.root.body.nodes) - len(self.genuine.body.nodes)
         return FunctionCall(circuit, circuit.root_scope, n_in + node).returns

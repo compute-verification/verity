@@ -16,6 +16,9 @@ the GEMMs read).  Both the batched record and the B=1 components are folded unde
 
 from __future__ import annotations
 
+import gzip
+import json
+
 import pytest
 from verity.circuits.types import Array, RecordType, Value
 
@@ -98,8 +101,6 @@ def test_gm01_multi_node_weights_keep_the_mutations_failing(memory, inhomogeneou
 def test_header_and_program_input_layout_disagreement_is_named(memory, inhomogeneous_weights, tmp_path):
     # the fold's layout is prompts, seeds, then weights: a header claiming MORE requests than the Program has prompt nodes is refused by name
     # (X-09 raises; GM-01 fails G5 by name and every weight read becomes a cross-request read -- never a guessed boundary)
-    import gzip
-    import json
     gp, oracle = T.assemble([T.R0, T.R1], tmp_path)
     comps = [g["component"]["dir"] for g in gp["requests"]]
     log = f"{oracle}/capture/log.jsonl.gz"
