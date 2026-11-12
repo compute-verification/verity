@@ -24,12 +24,6 @@ the other's argument. Fold semantics belong to the receipt-fold module. MMA sema
   - `nullspace(rows, n)`, `span`, `kernel(rows, n)` and `dot`.
   - `from_matrix`, `to_matrix` and `transpose`.
   - `alternating(n, pairs)`, `wedge(n, a, b)` and `xor_rows` for bilinear forms.
-- `exact_kit.fp`: the same over F_p on int lists: `rref`, `rank`, `nullspace`, `span`, `kernel`, `normal` (projective)
-  and `lines`.
-- `exact_kit.cube`: functions on {0,1}^n, indexed by sum x_i 2^i.
-  - `mobius(values, n, bits=None)` gives the coefficients exactly over Z, or in Z/2^bits. `evaluate` is its inverse.
-  - `quadratic_rows(coeff, n, plane)` gives the degree-2 part as an F_2 matrix.
-  - Also `points`, `bit`, `degree` and `popcount`.
 - `exact_kit.wrap`: `u` and `s` (k-bit unsigned and two's complement), `u32` and `s32`, `rotl`, `rotr` and `v2`, on ints
   and numpy arrays.
 - `exact_kit.search`: exact kernel searches over a packed domain. Probes only prune; every result is checked on the whole
@@ -45,7 +39,7 @@ the other's argument. Fold semantics belong to the receipt-fold module. MMA sema
   - Solving: `solve`, `models(over, limit)` and `count`.
 
 Every primitive is cross-checked in `tests/`, against brute force on small cases and against sympy's linear algebra over
-GF(p). Run them from the repository root, with `uv run tools/verity/check/suites.py exact_kit`. Inside this directory uv
+GF(2). Run them from the repository root, with `uv run tools/verity/check/suites.py exact_kit`. Inside this directory uv
 stops at `benchmarks/pouw`'s project, takes the kit for a workspace of its own, and builds it a separate `.venv` and
 `uv.lock`.
 
