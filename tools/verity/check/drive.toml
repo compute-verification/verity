@@ -56,7 +56,7 @@ bottom_wait_min = 30
 restack_jobs = 3
 # the low-risk lane: the verified queue takes a ready PR on its ready mark alone (no land verdict) when it isn't held and
 # its change, against its merge base with `main`, touches nothing `lowrisk_excludes` names, or it is a move's PR, whatever
-# it touches, whose map, from `main`, is certified rerun on its batch's tip; under `signed_verdicts`, no move changing
+# it touches, whose map, from `main`, is certified rerun on its batch's tip; with `signed_verdicts` true, no move changing
 # `SIGNED_GUARDS` (`World.ready`). false: no PR is taken without a land verdict, its own or one the verdict carry carries. `lowrisk_per_tick` is parsed
 # (`DriveFlags`) and read by no other code
 lowrisk_lane = true

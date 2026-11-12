@@ -79,7 +79,7 @@ run names one and bundles the branch into its outputs, and the lead pushes it fr
 A move's PR, whose body says `Move: tools/move/NAME.toml`, lands on its ready mark alone, with no land verdict, whatever
 it touches: the verified queue reruns the map, from `main`, on its batch's tip, over whatever landed since, and takes it
 once `move_check.py` certifies that run (the team skill's "Landing"). It needs a land verdict while drive.toml's
-`lowrisk_lane` is off, and under `signed_verdicts` when it changes a `SIGNED_GUARDS` file. Once it lands, each open branch
+`lowrisk_lane` is off, and with `signed_verdicts` true when it changes a `SIGNED_GUARDS` file. Once it lands, each open branch
 crosses it with `restack.py`.
 
 Where a `[[words_in]]` row renames a Lean declaration that a file outside the row still spells, `move_check.py`

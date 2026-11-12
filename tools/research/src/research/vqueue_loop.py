@@ -790,7 +790,7 @@ class Judged:
 
 def _off_mark(files: Iterable[str], flags: DriveFlags) -> str:
     """Why drive.toml (``flags``, `DriveFlags`) keeps a move PR changing ``files`` off its ready mark alone, however certified
-    its move: "" when it doesn't.  With `lowrisk_lane` off no PR lands without a land verdict, and under `signed_verdicts` a
+    its move: "" when it doesn't.  With `lowrisk_lane` off no PR lands without a land verdict, and with `signed_verdicts` "on" a
     change to `SIGNED_GUARDS`, a move's renames too, could change who holds a handle or how a label is judged."""
     if not flags.lowrisk_lane:
         return "drive.toml's `lowrisk_lane` is off, so a move lands only with one"
