@@ -201,7 +201,6 @@
     {"file": "verity_vllm/pipeline/serving_rows.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/serving-rows/partition/v1"},
     {"file": "verity_vllm/pipeline/serving_rows.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/admission-plan/v1"},
-    {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 5},
     {"file": "verity_vllm/pipeline/timeline.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/timeline/v1"},
     {"file": "verity_vllm/pipeline/tp/c2.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/tp-replay-deferred/v1"},
     {"file": "verity_vllm/pipeline/tp/c2.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 57},
