@@ -1,5 +1,18 @@
-/-
-What a protocol accounts for, and the rows an auditor reads.
+module
+
+public import CoreProtocol.Example
+public import CoreProtocol.Protocol
+public import CoreProtocol.Ratio
+public import CoreProtocol.Registration
+public import CoreProtocol.Site
+meta import CoreProtocol.Example
+meta import CoreProtocol.Protocol
+meta import CoreProtocol.Ratio
+meta import CoreProtocol.Registration
+meta import CoreProtocol.Site
+
+/-!
+# What a protocol accounts for, and the rows an auditor reads
 
 A protocol's check (`Core.Protocol`) publishes its amounts under its own keys and in its own units. An `Account` is a
 value beside a protocol, never a field of it: for each amount the protocol publishes (`Account.Amount`) it states
@@ -30,18 +43,6 @@ and the other, which follows.
 
 The comparison of the rows with what an auditor states it accepts is not here.
 -/
-module
-
-public import CoreProtocol.Example
-public import CoreProtocol.Protocol
-public import CoreProtocol.Ratio
-public import CoreProtocol.Registration
-public import CoreProtocol.Site
-meta import CoreProtocol.Example
-meta import CoreProtocol.Protocol
-meta import CoreProtocol.Ratio
-meta import CoreProtocol.Registration
-meta import CoreProtocol.Site
 
 @[expose] public section
 set_option backward.privateInPublic true
