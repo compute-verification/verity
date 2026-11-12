@@ -4,20 +4,18 @@ statement's are the rows the harness built itself before core produced them, and
 from __future__ import annotations
 
 import dataclasses
-import importlib.util
 import random
-import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
+from conftest import load
 
-from verity.protocols.pouw.verifier import leaf_lanes as LL
 from verity.protocols.pouw.prover.circuit import seeds as SD
+from verity.protocols.pouw.verifier import leaf_lanes as LL
 
-_spec = importlib.util.spec_from_file_location("h1_lanes_run", Path(__file__).resolve().parents[1] / "h1_lanes" / "run.py")
-RN = sys.modules[_spec.name] = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(RN)
+#: by `load`: h1_prove holds a ``run.py`` too, and its scripts put their own directory first on the path
+RN = load("h1_lanes/run.py")
 U = RN.U
 
 
