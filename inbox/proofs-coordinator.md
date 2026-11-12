@@ -105978,3 +105978,97 @@ The property in section 2 is the base for all three, and it needs no change.
 - On the new row (replayed earlier signature), for soundness: "Read of the code and the model. The compiled check excludes an earlier session's record, close, log and coins: the ledger opens a root once (`verifyLedger`), the session's files are the ones its end sealed (`sessionNamed`), the coins are the ones released after this registration (`challengerStream`), and the window is the verifier's parameter. `DrawnByDevice` is proved at any history, so it is the base. The leg's `dev` holds one play, so the hole is also at every honest audit on a ledger that is not new, since the check requires the ledger from line 0. Three pieces to close: the history with earlier runs and lines (and `Q` over the key's life), `PrintsLog` at the window's run, one line a `seq`."
 - For the goal's clause 3, until it is closed: "the theorem covers an audit on a challenger key and ledger made for that audit; an audit on the auditor host's standing ledger is outside it".
 - A question for the lead of the first accept of record and of Friday's runs: is the challenger's key and ledger made for the run, or the auditor host's?
+
+## STOPS, Thu 12 Nov 22:34Z: the probe passed for all 20 members (each statement staged at its 2 sampled slots of 8, every unit sampled, the Lean verifier accepting every session, 18 of 18 negatives refused); round 2's rule for such a statement is on my branch in Lean and Python and the Lean builds; the difftest is in line; STOP RULE inside; the one item the plan needs from circuits first
+
+**In plain words, for Daniel.** The form you asked for next, a statement that holds only the blocks the second draw picks, now runs end to end on the rehearsal. After the draw each of the 20 statements was rebuilt to hold just its 2 sampled blocks out of 8, with tables of 2 rows in place of 8, each row carrying its path to the tree registered before the draw. The prover proved all 20, the proof system's Lean verifier accepted all 20 sessions, and all 18 tampered variants were refused, among them a row that does not open the registered tree and a block pointed at another row. The proof system needed no change at all. The second round's checker needed one new rule: a statement may list exactly the sampled blocks of its kind, and is then held to the same checks as before, block by block. That rule is written in Lean and in its Python copy; the Lean builds, and the old rule and every theorem about it are untouched. Three things are not done. The test that holds the Lean rule and its Python copy to each other is waiting for a machine, so in this run the second round's verdict is the Python copy's. The new rule has no proof. And the form stays switched off: the verifier still refuses every two-round audit at its last step, exactly as before. On cost: what the verifier reads for a statement is now in proportion to the sampled blocks, with two passes left that are as long as the kind (one before the draw, one a list of numbers); both are named below and matter only at a whole request's size. Last, the circuits team's answers move the plan in one place: the request's program is today cut into about ten million calls, each about a thousand proof blocks, and nothing yet builds a request in the cut the second round takes. That is the one item the plan needs from circuits first.
+
+Clock: `date -u` read 22:34Z before the push. Mailbox read at 22:34Z (newest section 22:20Z, circuits' answers; taken). `main` is `783b526ab6f5` and my branch holds it. Tags: [run] a command of mine and its output; [read] a file I read; [derived]; [relayed]; [guess]. Nothing here is a run of record: made-up logits, no engine, local challenger sessions, the form's switch off.
+
+### 1. The probe's result (your 21:50Z decision 2)
+
+Run `r20261112-221849-db0f` (vy-nebius-cpu-8, 24 GB, from `cursor/proofs-stops-drawn-7b3e` at `3d4cdde257a2`), the small rehearsal with `second --sampled-only`: ended rc 0, `SMALL {"before_draw": true, "pins": true, "lean_verdicts": true, "negatives": true, "round_two": true, "outcome": true}` [run].
+
+- [run] The second draw took 40 of 160 slots, 2 of each template's 8. `second/statements.json`: all 20 statements have `instances` 2, two `units.indices` (member 0: `[0, 6]`; the combine: `[154, 158]`), `range` `[0, 2]`, `shared_rows` 2 a port, and the session's draw `{"law": "subset", "population": 2, "k": 2, "units": [0, 1]}`.
+- [run] `lean-verify` 20 of 20, `lean-draw` 20 of 20, the Python verifier 20 of 20; `registered_reads` true.
+- [run] Negatives 18 of 18 refused. The four on the registered reads were made on a restaged statement and Lean refused each for its own reason: "table row 0 does not open logits's registered root at position 0"; "unit 0 reads position 0, and the verifier's program reads 1"; no `--registered` given; a port left out of the verifier's reads ("its rows would be committed afresh").
+- [run] Round 2 with the form allowed: `{"ok": true, "codes": []}`. This is the Python mirror (`two_stage.py:780`, `SS.check(True, ...)`). The stream's outcome with the form off: `interior ["statements"]`, `statements ["two-stage-form"]`, `replay_sample []`.
+- [run] The public file: member 0's 16,427 B at 8 slots, 5,515 B at its 2; the combine's 107,544 B, 35,662 B.
+- [run] The audit record's checks are the ones the whole-cells run `1667` had, code for code (`draw` and `proved` hold; `registered` is the one-stage record's refusal of opened ports, the same in both; `verifiers` agree).
+- [derived] No file under `verity/protocols/flock/` differs from `main` on the branch (`git diff --stat origin/main HEAD -- verity/protocols/flock` is empty). So Flock's prover and `flock-verify` take a statement staged at sampled slots as they are.
+- `r20261112-214547-af5e` (the two-member probe, 45 minutes in cpu-10's line, its check never started): cancelled by me at 22:31Z. `db0f` answers its question for all 20 members, so it only held a place.
+
+### 2. What is on the branch
+
+`cursor/proofs-stops-drawn-7b3e` at `3d4cdde257a2` (pushed; no pull request; `origin/main` merged in, no force).
+
+- [read] `Spot/SecondStage.lean`: `sampledSlots`, `sampledOk`, `sampledOnly`, `rowsRead`, `atSampled`, `sampledHeaderOk`, `wholeDraw` (`:822-878`); `sampledCodes` (`:1069`); `anySampled`, `sampledFailures`, `failuresSampled`, `checkAny` (`:1235-1268`). `stmtCodes`, `stmtFailures`, `failures`, `check` and every theorem are byte for byte as they were.
+- **The rule.** A statement has one of two shapes: every slot of its part (`populationOk`, as today), or exactly its part's slots among the second draw's units, in the draw's order (`sampledOk`: `0 < m`, `m == slots.size`, `indices == slots`). A sampled-only statement is held to `sampledCodes`: `second-header` (the template's reference, placed in the run, then at K: `range` `[0, K]`, the first K `units.classes`, each port's `shared_rows` the count of distinct rows its registered read gives the slots; equal but for the run's fields), `second-population` (`sampledOk`), `second-sample` (the session's draw is every one of its K units), and `second-verified`, `second-tables`, `second-roots`, `second-read`, `second-refs`, `second-values` as they are.
+- [read] `Run.interiorAudit` (`Spot/Run.lean:258`) and `Pieces.secondStatements` (`Spot/Pieces.lean:808`) call `checkAny`, which is `check` unless the design is in order and some statement is sampled-only.
+- [read] The mirror: `second_stage.py` (`sampled_slots`, `_sampled_ok`, `sampled_only`, `_rows_read`, `at_sampled`, `_sampled_header_ok`, `whole_draw`, `_sampled_codes`). The difftest: `test_round_two_takes_a_statement_of_only_its_sampled_blocks` (17 cases) and two changes at the head of `SECOND_CHANGES`.
+- [read] The driver: `two_stage.py second --sampled-only`; `a5.sampled_only` restages a member after the sample (`two_stage_drawn.restage`), and refuses to go on if a restaged table is not under its header's root; `two_stage_small_sampled.sh` is the rehearsal with it.
+- [run] The Lean builds: `Build completed successfully (483 jobs)` in `db0f`, the only warnings the two `if_neg`/`if_pos` deprecations that `main` has at the same proof.
+- [run, a probe on the VM, not a run of record] The Python rule gives the expected codes on the 17 cases.
+
+### STOP RULE
+
+This is the before and after of what your 21:50Z decision 2 ordered on a branch of my own. Nothing of it is on `main`, on the shared base or in a pull request.
+
+- **Before** (`main`, Friday's tree): round 2 holds every second-stage statement to `second-population` as "every slot of its part". A statement of the part's sampled slots raises `second-header`, `second-population`, `second-sample` [run on the VM: the difftest's refusal cases, Python]. `Run.interiorAudit` calls `SecondStage.check`.
+- **After** (my branch): `Run.interiorAudit` calls `SecondStage.checkAny`, and round 2 raises no code on a statement of exactly its part's sampled slots that passes `sampledCodes`. A form round 2 refuses today is one it would take.
+- **What does not change.** `FORM := false` (`:154`): every two-round audit is still refused by `two-stage-form`, so the compiled verifier accepts nothing it refused. `check`, `check_ok` and its four corollaries, `stmtCodes_nil`: untouched. No statement or named assumption in a `lean-audit.json` is edited. [derived, no lock regenerated] `security/lean-audit.json` names 103 `Spot.SecondStage.*` declarations and none of `check`, `Run.interiorAudit`, `Pieces.secondStatements` or the new names, so I expect no record to move; a regenerated lock would say.
+- **What it would break if it landed as it is.** The two-round theorem's code model reads `stmtCodes` (`security/Proofs/Flock/SpotFlock/Code.lean:504-510`) and the facts `stmtCodes_nil` gives (`EntriesAt.lean:556`, `:596`, `WireMap.lean:556`, `Depths.lean:186`). No theorem is about `checkAny`. With the form's switch on, a compiled accept of a sampled-only statement would be an accept the theorem does not cover. So this lands only with its proof (section 4), or not at all.
+
+### 3. Three things the run shows about the driver
+
+- **The pass before the draw is still there.** The registration in `db0f` has its `leaf_layer`, and the verifier's side builds every member's whole public file before the draw to hold it (`a5.py:765-791`); the R4 negative is about that file. For the rehearsal that is 20 small files; it is the first of the four passes of a member's size my 21:51Z section 3 lists, and the next step removes it (a registration with no leaf layer: the Lean registration check takes a record whose `leaf_layer` is null when the verifier's own is none, `Spot/Registration.lean:569` [read]).
+- **The reads list is still as long as the part.** The verifier's `--registered` file for a restaged statement is the member's own dense one (8 entries a port here). Numbers, no hash. For a whole request it is the sparse list of my 21:51Z section 3, a change in Flock's reader.
+- **The audit record's `roots` check reads only what the driver hands it** [read: `one_stage/audit.py:135-139`, `Spot/Record.lean:111-121`]. A restaged statement's roots are those of its K-row tables, which no registration holds, so the driver hands none and the check is skipped. What ties a restaged row to the registration is Flock's check of each table row's path against the verifier's registered root, and `second-read`. The per-member case (`case-v2-members.json`) is not written for such an audit: it names each member's public file as staged before the sample, and the driver writes the reason in its place.
+- [run] Not mine, seen in both `db0f` and `1667`: `audit.json`'s `checks_before_draw` holds the text `<Future ... returned dict>` twenty times, not the checks. The summary's `before_draw` is computed elsewhere and is true.
+
+### 4. What the proof of this form takes
+
+[derived from the files; nothing here is written in Lean.]
+
+- **In SPOT's Lean** (`Spot/SecondStage.lean`): `sampledCodes_nil` beside `stmtCodes_nil`, and `checkAny_ok` beside `check_ok` (`:1422-1525`) with its four corollaries: each is the existing proof with a second case. A first lemma, cheap and worth having whatever else happens: `checkAny = check` where no statement is sampled-only, so every existing theorem reads on.
+- **In the two-round proofs** (`security/Proofs/Flock/SpotFlock/`, 13,832 lines): only four files read the rules that differ: `Code.lean` (the model, one place), `Depths.lean` (`populationOk_le`: here the count is `slots.size`, at most the draw's), `EntriesAt.lean` and `WireMap.lean` (through `stmtCodes_nil`). `Depths.rootedDepthsAt` speaks of ports no registered read names; a sampled-only statement has none (`second-roots` holds roots only outside the registered reads, so every port must be read registered, and `db0f`'s are).
+- **For ADDRROW, the slot-to-instance map of this form**: σ(u) is u's rank in `sampledSlots q p own.drawn` (`own.drawn.filter (p.holds q)`), and the count is its size. What round 2 gives the row fact is the same four things as today with σ in place of `u - p.lo`: `indices[σ(u)] = u` (the list equality in `sampledOk`), the count, `second-read` (unchanged: the verifier's read at unit u is the layout's row for u), and Flock's `badInstance` (`reg.readAt (indices[i]) = some (some (positions[ref i]))`). One thing is simpler than today: the session's sample is every unit, so every instance is a checked one and the "always-checked unit needn't have a rank" case of `SlotsAt.lean:47-49` cannot arise.
+- **Files of FRAME's I would need changed and did not touch**: `SpotFlock/Code.lean` (the model's second shape). The rest is new text beside old.
+- [guess] Size: `sampledCodes_nil` and `checkAny_ok` a few hundred lines; the model's second case and its four readers a few hundred more; no new premise. A day I would hold goes in the plan at 03:00Z, after circuits' list.
+
+### 5. Circuits' answers: the one item first (your 22:20Z, by 00:00Z)
+
+**The item: a builder that emits the request's Program as its serving cut, with its window (templates, cuts, wires) passing `check_proof_block` and `check_wires`, at the smallest class that keeps every Definition; made-up values are enough.**
+
+- [read] Why it is first. Round 2's unit is a proof block Flock's composer takes: at most 256 rows, one past 111 bytes, the rows within a block of 2^27 bits (`verity/commitments/windows/interface.py:322-344`). Circuits says a unit of the Program as built is a call of about 1,063 proof blocks, and that no builder on `main` emits a request as its cut [relayed]. Until one does there is no part and no slot for a second draw to pick, whatever the staging.
+- [derived] What I do with it, with no proving: run the sampled-only staging and round 2's `second-read` over the request's real wiring, which shows whether every port of every template is a registered read (the condition of section 4), and which of circuits' two exceptions (a row gathered from many writers; a split that ends in a unit writing its output whole) needs a rule of its own in round 2 and which the wire cut and the gather unit already carry (`interface.py:38-45`).
+- [derived] What the answers change in the plan, in short (the whole at 03:00Z). The count of statements a request needs is the count of templates of the cut Program, not 629 or 330. The partials being wires of one Definition is the case that needs no new rule (my 21:51Z section 6). The Program not being in the registered form (622 templates a rank against 330, `TokenSelect_v1` against `v4` with `StopCheck_v1`) is circuits' to close and sits before everything of mine. The reads list's length is per call or per proof block according to the cut, which decides how soon the sparse list is needed.
+
+### To post
+
+- Your NET-390 correction: the condition was that `af5e` ends; `db0f` shows the same on all 20 members and I cancelled `af5e`. The line stands as written: "for the select the proof system is unchanged; the change is in SPOT's round-2 check and in what is staged, and the registration is held to its roots alone; for a whole request the verifier's list of reads also becomes sparse." One caution on its middle clause: "held to its roots alone" is the design; in `db0f` the registration still carries its leaf layer (section 3).
+
+### Runs
+
+| run | node | what | state |
+| --- | --- | --- | --- |
+| `r20261112-221849-db0f` | cpu-8 | the rehearsal, sampled-only, from `3d4cdde257a2` | rc 0, every expectation true |
+| `r20261112-221914-4a29` | cpu-12 | the difftest (Lean against Python on round 2), from `3d4cdde257a2` | waiting since 22:19Z, 6 checks ahead at 22:34Z; cpu-8 has a line of its own now, so it stays |
+| `r20261112-214547-af5e` | cpu-10 | the two-member probe | cancelled by me 22:31Z, never started |
+| `r20261112-220624-7fe4`, `-221142-9ce1`, `-221444-f214` | | earlier tries of the two above | cancelled by me: they shipped a Lean that did not build (the dispatch inside `stmtFailures` broke `check_ok`; fixed by `checkAny`) |
+
+### Next
+
+1. The difftest's verdict, and a fix if Lean and Python differ.
+2. The Lean round 2 on the run's own statements (today only the mirror reads them): one step in the driver that hands `second/statements.json` to the compiled `second_statements` piece and compares.
+3. The registration with no leaf layer, so no pass of a member's size is left before the draw.
+4. The plan, whole, by 03:00Z, read against circuits' list (01:30Z) and date (02:00Z).
+
+### Not established
+
+- That the compiled Lean round 2 gives the mirror's verdicts on sampled-only statements (`4a29`), and what it says on `db0f`'s own statements.
+- Any proof of the new rule; that a regenerated lock moves no record.
+- That `own.drawn` is strictly ascending wherever round 2 reads it (the rule takes its order as given).
+- A law whose proved slots exceed its drawn ones (a work sample's closure): the driver stages at the proved slots and the rule is worded on the drawn; in `db0f` they are the same 40. Such a run would be refused by `second-population`, a visible refusal, until the rule reads the proved set.
+- The form at any size but 2 of 8; under a rate law, where K varies; with a port that is not read registered.
+- A request Program in the cut round 2 takes, at any size.
