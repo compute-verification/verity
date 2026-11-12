@@ -30,8 +30,8 @@ default:
   - a record with no such trace rows: refused unless `--partial` says the ask: `none` (every call asks for all three)
     or SUBSET:CALLS (CALLS calls a step ask for the gradients of SUBSET alone, of the letters q, k, v).
 
-A wrong ask is not on the safe side. Asking for more than the step did over-counts |C|: the record's slowdown errs low and p high by the
-same factor, so S is unchanged where products bind and errs high where no term binds.
+A wrong ask is not on the safe side. Asking for more than the step did over-counts |C|: the record's slowdown errs low
+and p high by the same factor, so S is unchanged where products bind and errs high where no term binds.
 
 A rewritten record says so in its `provenance`. A fused row that isn't self-attention of one shape, a trace whose
 backward is no one subset's, an ask of more calls than a row holds, and one of fewer than it holds over several rows

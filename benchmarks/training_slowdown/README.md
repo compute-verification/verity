@@ -3,10 +3,10 @@
 The slowdown of a training run: how much more compute the run needs when every block of its circuit holds at most c
 gates and reads at most k bits beyond the registered weights θ. The package `training_slowdown` counts a run's circuit
 |C| in Boolean gates, traces one training step to measure what the training formalism reads (the update's dependence,
-the cuts, the step's matrix products), and gives a record's slowdown at a policy (c, k): Fit's c/(c − d) where the training fits in a
-block, else the one bound's products term (the theorem of record on M, the products whose two operands both depend on
-the update, given (H) and (E)), with Slowdown's token form and the sensitivities beside it. A change to what it
-measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record carries.
+the cuts, the step's matrix products), and gives a record's slowdown at a policy (c, k): Fit's c/(c − d) where the
+training fits in a block, else the one bound's products term (the theorem of record on M, the products whose two
+operands both depend on the update, given (H) and (E)), with Slowdown's token form and the sensitivities beside it. A
+change to what it measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record carries.
 
 ## Modules
 
@@ -322,19 +322,20 @@ reads no file of a served run. It prints one block and writes `OUT/slowdown.json
 - **H**, the least counted |C| reaching the target gain: over the honest config's records, and over every config's
   given (`--also` adds configs at the same start and gain);
 - **p**, the attack's |C| over H, against the honest route and against any route, each with its range over the seeds;
-- **the record's slowdown**, the attack's own cost at the config's policy: `formalism.published` at (c, k) on the search record, read
-  with its `trace`, whose raw product rows are priced with `capture.products.priced` (the grade holds no price);
-  where Fit fails it is the one entry point's slowdown on those products;
-- **the sensitivities** beside the record's slowdown and never in it, reduction and update, from the trace's `circuit`, and the version
-  of the code that took the trace. A record whose trace has no `circuit` or no `capture_code` still grades: the record's slowdown reads
-  the rows either way (the circuit's τ stands in for a stub, which moves the record's slowdown only where it changes how many steps a
-  block's inputs cover), and the block says which of these figures are blank, why, and how the trace is taken again;
+- **the record's slowdown**, the attack's own cost at the config's policy: `formalism.published` at (c, k) on the search
+  record, read with its `trace`, whose raw product rows are priced with `capture.products.priced` (the grade holds no
+  price); where Fit fails it is the one entry point's slowdown on those products;
+- **the sensitivities** beside the record's slowdown and never in it, reduction and update, from the trace's `circuit`,
+  and the version of the code that took the trace. A record whose trace has no `circuit` or no `capture_code` still
+  grades: the record's slowdown reads the rows either way (the circuit's τ stands in for a stub, which moves the
+  record's slowdown only where it changes how many steps a block's inputs cover), and the block says which of these
+  figures are blank, why, and how the trace is taken again;
 - **S**, p times the record's slowdown, with what each factor rests on, and each seed beside it: whether it reaches
   the gain, and its |C|;
 - **the bound of record** at the same policy: the least slowdown of any partition of the attack's traced circuit, by
   the theorem's count solved for the fewest blocks, times c/|C| (the calculator's `min_cut.bound`, the `bound` of
-  `calculator.slowdown`'s result). The products term of the record's slowdown is this bound, so where products bind the record's slowdown is it and S is p times
-  it. It is "not available", with what is missing, where the search record
+  `calculator.slowdown`'s result). The products term of the record's slowdown is this bound, so where products bind the
+  record's slowdown is it and S is p times it. It is "not available", with what is missing, where the search record
   gives the bound no traced step to read;
 - **per period**: the run's AND gates at S and their share of one datacenter's and of the world's compute over a
   window, a week, a month and a year, with the measured, proved and scaled parts named.
@@ -347,8 +348,8 @@ record, else on the search split, and the block says which. A search record with
 refused, or with one of a capture version the tree's `priced` doesn't read has no slowdown, and then there is no S: the
 reason names the job that takes the trace again at the record's commit and `config.text` (`--retrace`, above, which
 takes it with the capture of the tree it runs in), or says the record has no config to re-trace from. A record
-whose trace was not taken (`trace.failed`) has none either, and its slowdown is "unmeasured", not "refused", with why the
-trace failed and the same job: the step was not refused, the process that traced it ended or raised. A record's
+whose trace was not taken (`trace.failed`) has none either, and its slowdown is "unmeasured", not "refused", with why
+the trace failed and the same job: the step was not refused, the process that traced it ended or raised. A record's
 `provenance`, where it has one (no job writes it), is passed on unread, beside the record and in what S rests on.
 
 ## Limits of the count
@@ -359,9 +360,10 @@ trace failed and the same job: the step was not refused, the process that traced
 - The measured quantities are one traced step's: a record's updated steps take its representative step's structure,
   scaled to their tokens. A cut counts a value at its dtype's width, and values are whole tensors.
 - A job traces one step, one that reads an update. The steps before the run's first update read θ alone and are not
-  traced, so they have no Δ_grad and Fit's check on the training holds at no (c, k): the record's slowdown in a grade is never Fit's.
-  It is the products term where that exceeds 1, else 1. The reduction and update sensitivities sum the steps that
-  have the traced step's cuts, and the block says so where an untraced step's token work fills two blocks or more.
+  traced, so they have no Δ_grad and Fit's check on the training holds at no (c, k): the record's slowdown in a grade is
+  never Fit's. It is the products term where that exceeds 1, else 1. The reduction and update sensitivities sum the
+  steps that have the traced step's cuts, and the block says so where an untraced step's token work fills two blocks or
+  more.
 - Bit-for-bit rebuilds need the run's kernels: families are checked on the run's device, right after it trains.
 
 The suite: `uv run tools/verity/check/suites.py benchmarks/training_slowdown`.

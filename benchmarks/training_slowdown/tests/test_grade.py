@@ -1,6 +1,6 @@
-"""training_slowdown.grade on synthetic records and on a job's own: the fit, the seeds, H and p both ways, the search record's
-slowdown from its trace at a named policy, the sensitivities and the code version from the trace's circuit and what is
-blank without them, S and what it refuses, the bound of record beside it, the periods, and the command."""
+"""training_slowdown.grade on synthetic records and on a job's own: the fit, the seeds, H and p both ways, the search
+record's slowdown from its trace at a named policy, the sensitivities and the code version from the trace's circuit and
+what is blank without them, S and what it refuses, the bound of record beside it, the periods, and the command."""
 import copy
 import json
 import math
@@ -166,8 +166,8 @@ def test_the_range_of_p_is_least_c_over_greatest_h_to_greatest_c_over_least_h():
 
 
 def test_the_runs_gates_at_s_read_the_mean_of_c_over_seeds_that_differ():
-    """The run at S is the mean |C| over the final seeds times the record's slowdown: not their least, their greatest, or the search
-    record's |C| that its slowdown was read at."""
+    """The run at S is the mean |C| over the final seeds times the record's slowdown: not their least, their greatest,
+    or the search record's |C| that its slowdown was read at."""
     s = graded([reach(5, 0), reach(7, 1), traced([OVER, UNDER, UNDER])], [reach(2, 0), reach(4, 1)])
     C, slowdown = s["attack"]["splits"]["final"]["C"], s["rho"]["rho"]
     assert C["min"] < C["mean"] < C["max"] and slowdown > 1
@@ -179,8 +179,8 @@ def test_the_runs_gates_at_s_read_the_mean_of_c_over_seeds_that_differ():
 
 
 def test_the_records_slowdown_reads_the_first_planned_search_seed():
-    """With two search records, the record's slowdown is read on the seed the config's `seeds.search` names first, whatever order the
-    records come in."""
+    """With two search records, the record's slowdown is read on the seed the config's `seeds.search` names first,
+    whatever order the records come in."""
     early, late = traced([OVER, UNDER, UNDER]), traced([OVER, OVER, OVER, UNDER], seed=1)
     runs, ref = [reach(5, 0), reach(7, 1), early, late], [reach(2, 0)]
     first = graded(runs, ref, CONFIG | {"seeds": {"search": [0, 1], "final": [0, 1]}})
@@ -269,9 +269,9 @@ def test_the_records_slowdown_is_the_traced_search_records_at_the_policy_and_s_i
 
 
 def test_the_trace_is_priced_by_the_capture_over_the_steps_after_the_first_update():
-    """What a record's slowdown reads of its trace: each raw row priced by `capture.products.priced`, which gives back the row
-    the capture states, at the rows' k and at each k of the dial; over the steps through the checkpoint that read a
-    changed weight, by their tokens over the traced step's. The grade holds no price: the products are the
+    """What a record's slowdown reads of its trace: each raw row priced by `capture.products.priced`, which gives back
+    the row the capture states, at the rows' k and at each k of the dial; over the steps through the checkpoint that
+    read a changed weight, by their tokens over the traced step's. The grade holds no price: the products are the
     formalism's of the stated rows."""
     rec = traced([OVER, UNDER])["record"]
     row = G.traced(rec, G.rows_of(rec)[1])["formalism"]
@@ -335,10 +335,9 @@ def test_the_traces_circuit_gives_the_parts_their_structure_and_both_sensitiviti
 
 
 def test_a_trace_without_its_circuit_or_code_version_still_grades_and_says_what_is_blank():
-    """A record whose trace has only what its slowdown reads grades at the slowdown and S of the same record with its circuit. The
-    figures that read what it lacks are blank, each with why and with how the trace is taken again: both
-    sensitivities without the circuit, the code version without its own. One that lacks only one has only that
-    blank."""
+    """A record whose trace has only what its slowdown reads grades at the slowdown and S of the same record with its
+    circuit. The figures that read what it lacks are blank, each with why and with how the trace is taken again: both
+    sensitivities without the circuit, the code version without its own. One that lacks only one has only that blank."""
     ref, final = [job([UNDER])], job([OVER, UNDER], 0)
     full = graded([final, heavy(traced([OVER, UNDER], circuit=CIRCUIT, capture_code="9.9"))], ref)
     here = {"config": {"text": 'start = "s"\n'}, "commit": "c0ffee"}
@@ -383,10 +382,10 @@ def test_a_step_is_after_the_first_update_when_it_reads_a_changed_weight():
 
 
 def test_no_slowdown_from_a_trace_the_grade_cannot_read_and_the_reason_says_how_it_is_taken_again():
-    """p reads the count alone, so it stands where the record's slowdown has no trace to read: a record with none, one whose step the
-    capture refused, one of another capture version, or one without a key its slowdown reads. The reason names the job that
-    re-traces the record at its commit and config.text; a record without them is told it has no config to re-trace
-    from, and no command."""
+    """p reads the count alone, so it stands where the record's slowdown has no trace to read: a record with none, one
+    whose step the capture refused, one of another capture version, or one without a key its slowdown reads. The reason
+    names the job that re-traces the record at its commit and config.text; a record without them is told it has no
+    config to re-trace from, and no command."""
     ref = [job([UNDER])]
     assert "no search record" in graded([job([UNDER])], ref)["S"]["why"]
 
@@ -453,7 +452,8 @@ def test_no_slowdown_from_a_step_the_formalism_refuses_or_a_prefix_no_update_pre
 
 def test_a_records_provenance_is_passed_on_and_never_read():
     """A record that says where it came from is graded as the same record that doesn't: its `provenance` goes, as it
-    is, beside the record in `records` and, for the record whose slowdown it read, into what S rests on and the block's lines."""
+    is, beside the record in `records` and, for the record whose slowdown it read, into what S rests on and the block's
+    lines."""
     said = {"converted_from": "another schema", "by": "a script"}
     plain, marked = traced([OVER, UNDER]), traced([OVER, UNDER])
     marked["record"]["provenance"] = said
@@ -542,9 +542,9 @@ def test_p_reads_one_split_and_a_record_out_of_place_is_refused():
 
 
 def test_the_records_slowdown_is_the_bound_of_record_where_products_bind():
-    """The products term of the record's slowdown is the bound of record: the calculator's count solved for the fewest blocks
-    (`min_cut.blocks_at_least`) times c/|C|, on the traced step's N, O, β_w, β_x, b_y and F. So where products bind, the
-    record's slowdown is the bound's and S is p times it, and the block says so under the bound."""
+    """The products term of the record's slowdown is the bound of record: the calculator's count solved for the fewest
+    blocks (`min_cut.blocks_at_least`) times c/|C|, on the traced step's N, O, β_w, β_x, b_y and F. So where products
+    bind, the record's slowdown is the bound's and S is p times it, and the block says so under the bound."""
     s = graded([job([OVER, UNDER], 0), traced([OVER, UNDER])], [job([UNDER])])
     w, got = s["rho"]["work"], s["bound_of_record"]
     c, k = policy.CONSOLE
@@ -559,9 +559,10 @@ def test_the_records_slowdown_is_the_bound_of_record_where_products_bind():
 
 def test_the_bound_of_record_is_the_calculators_and_the_records_slowdown_follows_it(monkeypatch):
     """The bound of record is the calculator's `min_cut.bound` at the policy's (c, k) on the traced step's N, O, β_w,
-    β_x, b_y, F and |C|, with no n, and the products term of the record's slowdown is its blocks times c/|C|: with the calculator's `bound`
-    replaced, each choice of the work is scored by it, and the record's slowdown and S follow it. Without a traced step, or on one whose
-    M is empty (no operand holds a bit, so there is no β to hand over), it is not available, with the reason."""
+    β_x, b_y, F and |C|, with no n, and the products term of the record's slowdown is its blocks times c/|C|: with the
+    calculator's `bound` replaced, each choice of the work is scored by it, and the record's slowdown and S follow it.
+    Without a traced step, or on one whose M is empty (no operand holds a bit, so there is no β to hand over), it is not
+    available, with the reason."""
     runs, ref = [job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])]
     calls = []
 
@@ -618,8 +619,8 @@ def test_the_grades_slowdown_is_the_entry_points(monkeypatch):
 
 def test_the_bound_call_fits_the_calculator_as_it_is():
     """On the calculator as the tree has it, the grade's own call gives a slowdown of at least 1 under one of the two
-    statements the calculator's `min_cut` names, the first of them the one the grade says the products term of the record's slowdown solves
-    the count of."""
+    statements the calculator's `min_cut` names, the first of them the one the grade says the products term of the
+    record's slowdown solves the count of."""
     s = graded([job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])])
     got, mod = s["bound_of_record"], calculator._min_cut()
     assert got["available"] and got["slowdown"] >= 1
