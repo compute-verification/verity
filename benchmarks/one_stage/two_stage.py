@@ -191,6 +191,10 @@ class Recorded(CC.ChallengerCoins):
     def __init__(self, coins: CC.ChallengerCoins) -> None:
         self.coins, self.read = coins, bytearray()
 
+    @property
+    def label(self) -> str | None:
+        return self.coins.label
+
     def commit(self, after: bytes) -> Any:
         return self.coins.commit(after)
 
@@ -201,11 +205,16 @@ class Recorded(CC.ChallengerCoins):
 
 
 class Staged(CC.ChallengerCoins):
-    """The first stage's bytes read again, in order; then, once committed (`commit`, to the interior registration's
-    digest), ``then``'s: the second stage's live coins."""
+    """The first stage's bytes read again, in order, as coins of the family the first stage read them from
+    (``label``); then, once committed (`commit`, to the interior registration's digest), ``then``'s: the second stage's
+    live coins, of its own family."""
 
-    def __init__(self, read: bytes, then: CC.ChallengerCoins | None = None) -> None:
-        self._read, self._at, self.then, self.live = bytes(read), 0, then, False
+    def __init__(self, read: bytes, then: CC.ChallengerCoins | None = None, label: str | None = None) -> None:
+        self._read, self._at, self.then, self.live, self._label = bytes(read), 0, then, False, label
+
+    @property
+    def label(self) -> str | None:
+        return self.then.label if self.live else self._label
 
     def commit(self, after: bytes) -> Any:
         if self._at != len(self._read):
@@ -244,7 +253,8 @@ class First:
         """``stage1.json``: what `resume` and the replay side read."""
         return {"format": FORMAT, "commit": self.pub, "rule": self.rule.to_json(), "spec": self.stream.spec.digest(),
                 "record": self.record, "registration": self.registration.digest, "receipt": dict(self.registration.receipt),
-                "draw": self.draw.draw, "units": list(self.draw.units), "read": self.read.hex(), **self.extra}
+                "draw": self.draw.draw, "units": list(self.draw.units), "read": self.read.hex(),
+                "family": self.stream.family(self.draw), **self.extra}
 
     def second(self, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]],
                **kwargs: Any) -> tuple[S.WindowCommitmentRecord, S.Draw]:
@@ -291,7 +301,7 @@ def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, then: CC.Cha
         raise ValueError(f"not a {FORMAT} hand-off")
     pub, rule = stage1["commit"], Rule.from_json(stage1["rule"])
     layout = BR.layout_of(pub, check)
-    coins = Staged(bytes.fromhex(stage1["read"]), then)
+    coins = Staged(bytes.fromhex(stage1["read"]), then, stage1.get("family"))
     stream = stream_of(layout, rule, coins, delta=delta, **kwargs)
     if stream.spec.digest() != stage1["spec"]:
         raise ValueError("the class's Spec isn't the one its first stage ran under")
