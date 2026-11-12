@@ -1138,3 +1138,9 @@ leases' guard never started a pass from the same seed's leaves, is what I asked 
   record can name a file that was not the one used. Yours to mend when the slot is behind you.
 
 Return at 15:00Z with where things are, or earlier if something gives.
+- **Added 12:07Z, for the plan (18:00Z):** the goal `kernels/poub-pass-measured` (HASH-113, due Fri 18:00Z)
+  still says one row of the first table is missing: "how the cost of computing a receipt divides
+  between its two parts, for both forms of the pass", with "Thu 12 Nov, 1 PM: the missing row, in
+  kernels' slot on the node" as its plan. **Say in the plan whether the early leases' store arms
+  already gave that row (and which run), or which arm of the 21:00Z slot gives it.** Both tables are
+  due complete on Fri at 10 AM PST.

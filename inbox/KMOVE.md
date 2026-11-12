@@ -1314,3 +1314,8 @@ pull request changes before I mark it; I did not ask for it on #9077.**
 
 Also for your Thursday screen: #9077 is on `main`, so the screen's tree can be `main` at or after
 `5a6330f1a4`; say at the 15:25Z go which commit it runs.
+- **Added 12:07Z, for #8671's rebuild tonight:** #9260 (KSLICE's deletion of kernels' 35 unused files,
+  marked 11:48Z, in the queue) deletes six files of `benchmarks/hash/exactlin`: `percall_diag.py`,
+  `probe.sh`, `pyproject.toml`, `tensor_util.py`, `tests/test_tensor_util.py`, `zybench.py`. If
+  #8671 needs any of them (the suite's `pyproject.toml` above all), say so before you rebuild. lean
+  writes its last merge after 16:00Z today (LEAN-249); I name the head at the 15:25Z go or after.
