@@ -18,8 +18,12 @@ the wrapper `call()` signatures of the same artifacts.
 from __future__ import annotations
 
 import importlib.util
+from typing import TYPE_CHECKING
 
 from verity_vllm.program.compiled_norm_literal import literal_variants
+
+if TYPE_CHECKING:
+    import torch
 
 # hook/wrapper argument index -> committed member name (roles), per kernel-name prefix; registered weights are not committed.
 # a kernel NAME does not fix its argument list: Inductor names pointwise kernels `triton_poi_fused_<n>` in both the
