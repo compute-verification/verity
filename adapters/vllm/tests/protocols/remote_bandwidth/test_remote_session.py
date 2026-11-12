@@ -32,8 +32,8 @@ from verity.protocols.poub.verifier import codec as rcodec
 from verity.protocols.poub.verifier import receipts as rb
 from verity.protocols.poub.verifier.session import verifier, wire
 
+from verity_vllm.protocols.remote_bandwidth import binder, remote
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
-from verity_vllm.protocols.remote_bandwidth import remote
 from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
 from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, NodeMemory
 
@@ -384,6 +384,151 @@ def test_the_commits_session_refuses_engines_it_does_not_serve_and_sets_the_rest
         with pytest.raises(Exception, match=err):
             remote.CommitSession("127.0.0.1:7781", **kw)
     assert 1 <= len(cs.node.encode()) <= audit.NODE_BYTES
+
+
+def test_the_phases_summary_is_each_phases_quantiles_over_the_closed_intervals_in_ms():
+    """`Phases.summary` over the closed intervals: a phase an interval didn't run counts 0 there, the quantile at q is
+    the sorted list's entry at ⌊q·n⌋ (its last at 1.0), the mean is over every interval, all in ms to 3 places, and the
+    phases come sorted by name."""
+    phases = remote.Phases()
+    assert phases.summary() == {}
+    phases.closed = [{"encode": 2_000_000, "wall": 10_000_000, "other": 8_000_000}, {"wall": 4_000_000, "other": 4_000_000},
+                     {"encode": 1_500_000, "send": 500_000, "wall": 6_000_000, "other": 4_000_000}]
+    assert list(phases.summary()) == ["encode", "other", "send", "wall"]
+    assert phases.summary() == {"encode": {"p50": 1.5, "p99": 2.0, "max": 2.0, "mean": 1.167},
+                                "other": {"p50": 4.0, "p99": 8.0, "max": 8.0, "mean": 5.333},
+                                "send": {"p50": 0.0, "p99": 0.5, "max": 0.5, "mean": 0.167},
+                                "wall": {"p50": 6.0, "p99": 10.0, "max": 10.0, "mean": 6.667}}
+    phases.closed = [{"wall": 1_234_567}]
+    assert phases.summary() == {"wall": {"p50": 1.235, "p99": 1.235, "max": 1.235, "mean": 1.235}}
+
+
+def test_a_prover_that_fails_closes_its_connection_even_when_the_shutdown_fails(monkeypatch):
+    """`prove` drops the connection of a prover that fails, so the verifier sees the session end there: it shuts the
+    socket down both ways and closes it, closes it all the same when the shutdown raises ``OSError`` (a peer already
+    gone), and raises the prover's own exception either way."""
+    done: list[Any] = []
+
+    class Sock:
+        def __init__(self, gone: bool) -> None:
+            self.gone = gone
+
+        def shutdown(self, how: int) -> None:
+            done.append(("shutdown", how))
+            if self.gone:
+                raise OSError("not connected")
+
+        def close(self) -> None:
+            done.append("close")
+
+    class Wire:
+        def __init__(self, gone: bool) -> None:
+            self.gone = gone
+
+        def connect(self, host: str, port: int) -> Any:
+            done.append(("connect", host, port))
+            return type("Conn", (), {"sock": Sock(self.gone)})()
+
+    def prover_side(conn, backend, node, plan, log, **kw):
+        raise ValueError(f"deliberate: {node!r} {plan!r} {kw!r}")
+
+    for gone in (False, True):
+        del done[:]
+        wire_ = Wire(gone)
+        side = type("Prover", (), {"wire": wire_, "ProverSide": staticmethod(prover_side),
+                                   "parse_plan": staticmethod(lambda plan: [(plan, None)])})()
+        monkeypatch.setattr(remote, "session_module", lambda name, side=side: {"prover": side}[name])
+        with pytest.raises(ValueError, match=r"deliberate: b'n' \[\('serve', None\)\] \{'windows': 2\}"):
+            remote.prove(object(), "10.0.0.7:7781", node=b"n", windows=2)
+        assert done == [("connect", "10.0.0.7", 7781), ("shutdown", socket.SHUT_RDWR), "close"]
+
+
+class Binding:
+    """A stand-in for the store's `Binder` that records how the Commit's session makes and uses it."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self.made = (args, kwargs)
+        self.calls: list[Any] = []
+
+    def install(self) -> Binding:
+        self.calls.append("install")
+        return self
+
+    def register_filler(self, nbytes: int, device: Any) -> None:
+        self.calls.append(("register_filler", nbytes, device))
+
+    def stats(self) -> dict[str, Any]:
+        self.calls.append("stats")
+        return {"weights": 3}
+
+
+def test_the_commits_session_installs_a_binder_of_its_store_before_the_build(monkeypatch):
+    """`CommitSession.install` makes the store's binder with no passes of its own and the KV outside the store, over
+    the session's store and its ``weight_blocks``, and keeps what its `install` returns; `before_build` sets the engine
+    arguments, checks the target and installs, in that order, and installs nothing for a target it refuses."""
+    monkeypatch.setattr(binder, "Binder", Binding)
+    cs = remote.CommitSession("127.0.0.1:7781", kv_pages=8, weight_blocks=5)
+    assert cs.binder is None
+    cs.install()
+    assert isinstance(cs.binder, Binding) and cs.binder.calls == ["install"]
+    assert cs.binder.made == ((cs.store,), {"passes": False, "weight_blocks": 5, "kv": False})
+
+    cs = remote.CommitSession("127.0.0.1:7781", kv_pages=None)
+    ekw = {"engine_args": {"max_model_len": 128}, "target": type("T", (), {"async_scheduling": False})()}
+    cs.before_build(ekw)
+    assert ekw["engine_args"] == {"max_model_len": 128, "async_scheduling": False, "enable_prefix_caching": False}
+    assert isinstance(cs.binder, Binding) and cs.binder.made == ((cs.store,), {"passes": False, "weight_blocks": None, "kv": False})
+
+    cs = remote.CommitSession("127.0.0.1:7781")
+    with pytest.raises(SystemExit, match="declare \"async_scheduling\": false"):
+        cs.before_build({"engine_args": {}, "target": None})
+    assert cs.binder is None
+
+
+def built(core: Any = True, asynchronous: bool = False, prefix: bool = False, tp: int = 1, client: bool = True) -> Any:
+    """A stand-in for a built engine as `CommitSession.check` reads it: the engine's client of its core (none without
+    ``client``) with the core it holds in this process (``core``, None when it runs in another), and the scheduler's,
+    the cache's and the parallel configuration's one field each."""
+    def names(**kw: Any) -> Any:
+        return type("N", (), kw)()
+
+    config = names(scheduler_config=names(async_scheduling=asynchronous), cache_config=names(enable_prefix_caching=prefix),
+                   parallel_config=names(tensor_parallel_size=tp))
+    return names(llm_engine=names(vllm_config=config, **({"engine_core": names(engine_core=core)} if client else {})))
+
+
+def test_the_commits_session_checks_the_built_engine_and_registers_its_filler():
+    """`CommitSession.check` after the build: it refuses, with every reason in order, an engine whose core is in
+    another process, that schedules asynchronously, caches prefixes or runs tensor parallel, and a store that
+    registered a KV pool; else it registers ``filler_gib`` GiB of filler on the runner's device (none at 0), logs the
+    binder's stats and returns them."""
+    said: list[str] = []
+    cs = remote.CommitSession("127.0.0.1:7781", filler_gib=0.5, log=said.append)
+    cs.binder = Binding()
+    runner = type("Runner", (), {"device": "cuda:0"})()
+    assert cs.check(built(), runner) == {"weights": 3}
+    assert cs.binder.calls == [("register_filler", 1 << 29, "cuda:0"), "stats"]
+    assert said == ["[delta] remote session: the store binder on the engine, {'weights': 3}"]
+
+    cs = remote.CommitSession("127.0.0.1:7781", log=said.append)
+    cs.binder = Binding()
+    assert cs.check(built(), runner) == {"weights": 3} and cs.binder.calls == ["stats"] and len(said) == 2
+
+    head = "--remote-verifier: the engine is not one the session serves: "
+    whys = [("the engine core in another process", built(core=None)), ("the engine core in another process", built(client=False)),
+            ("async scheduling resolved on", built(asynchronous=True)), ("prefix caching on", built(prefix=True)),
+            ("tensor parallel size 2", built(tp=2)),
+            ("the engine core in another process; async scheduling resolved on; prefix caching on; tensor parallel size 4",
+             built(core=None, asynchronous=True, prefix=True, tp=4))]
+    for why, llm in whys:
+        with pytest.raises(SystemExit) as e:
+            cs.check(llm, runner)
+        assert str(e.value) == head + why
+    cs.store = store()
+    with pytest.raises(SystemExit) as e:
+        cs.check(built(), runner)
+    assert str(e.value) == head + "a KV pool registered (served writes stay outside the registration)"
+    assert cs.binder.calls == ["stats"] and len(said) == 2
 
 
 class Stats:
