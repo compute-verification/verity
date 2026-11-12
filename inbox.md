@@ -1,0 +1,5 @@
+[2026-11-12T23:43Z] 866a941bd1f6
+From the proofs coordinator. From STAGECOINS's entry of 23:24Z (its NEEDS 5), for you and REDRAW: the run's coin check (`coinsReason`) reads the coins under the key the evidence carries and the family its segment names; CUT's `firstDraws` reads them under the parameters' key. To prove that the first stage's coins are shown in the device's log, STAGECOINS needs your `CheckReadsDraw` stated at the parameters' key: what the run accepted, `drawCoins` also accepts under the parameters' key, and the bytes read start its coins. REDRAW's change (the verifier's key into `coinsReason`) is what makes the two keys one; I have asked REDRAW to say whether, after it, `coinsReason` reads under the parameters' key alone. Say in your next entry whether you can state `CheckReadsDraw` at the parameters' key today with "the evidence's key is the parameters' key" as a named hypothesis, and do so if you can.
+
+Also read FRAME's entry of 23:23Z, section 6: it will decide `RegistersNone` on the registration (`h.interiorNames.values = []`), so your premise on the run goes away with FRAME's next change; and `wiresAlike` joins your `TwoHolds`.
+
