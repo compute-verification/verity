@@ -431,7 +431,7 @@ def selection() -> dict[str, Any]:
 
     wkey, akey = _keys()
     backend, cls = select_fp8_moe_backend(config=moe_config(256), weight_key=wkey, activation_key=akey, allow_vllm_cutlass=False)
-    rec = {"moe": {"backend": getattr(backend, "name", str(backend)), "experts": getattr(cls, "__name__", None)}}
+    rec: dict[str, Any] = {"moe": {"backend": getattr(backend, "name", str(backend)), "experts": getattr(cls, "__name__", None)}}
     rec["moe_ok"] = rec["moe"]["backend"] == "TRITON" and rec["moe"]["experts"] == "TritonExperts"
     return rec
 
@@ -626,7 +626,7 @@ def moe_launches(work: Path, phase: str, name: str, inter: int, M: int, hot: int
     ids_flat = ids.cpu().numpy().astype(np.int64).reshape(-1)
     tw_flat = _u32(tw).reshape(-1)
     used = np.unique(ids_flat)
-    umap = np.full(NUM_EXPERTS, -1, dtype=np.int64)
+    umap: np.ndarray = np.full(NUM_EXPERTS, -1, dtype=np.int64)
     umap[used] = np.arange(used.size)
     launches, jobs = [chain], []
     for kind, L, twin in (("w13", w13, w13b), ("w2", w2l, w2b)):

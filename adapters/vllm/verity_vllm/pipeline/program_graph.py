@@ -49,6 +49,8 @@ from verity_vllm.query.program_view import (
     spec_statics,
 )
 
+__all__ = ["Options", "main"]
+
 SCHEMA = "vllm-program-graph/v1"
 VARYING_MAX = 8
 
@@ -627,6 +629,12 @@ def _full_roots(x: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
+def _definition_ids(x: dict[str, Any]) -> list[str | None]:
+    """A group's representative Definition ids; a group that states none indexes no Definition."""
+    ids = x.get("definition_ids")
+    return ids if ids else []
+
+
 def catalog(graph_dir: str | Path) -> dict[str, Any]:
     """Every distinct specialization of every `*.program.json` under `graph_dir`, de-duplicated across rows by digest:
     `definitions/<digest[:2]>.json.gz` shards ({digest: {id, definition}}) and `definitions/index.json` ({id: {digest, rows}});
@@ -658,10 +666,11 @@ def catalog(graph_dir: str | Path) -> dict[str, Any]:
         ops = []
         for x, lo, n in spans:
             ks = ids[lo:lo + n]
+            varying = x.get("varying")   # the statics that differ over the group's specializations; a group of one states none
             ops.append({"module": x["module"], "group": x["id"], "definition": x["definition"], "calls": x["calls"], "template": x["template"],
-                        "specs_recorded": x.get("specs"), "specs_enumerated": n, "varying": x.get("varying") or {},
+                        "specs_recorded": x.get("specs"), "specs_enumerated": n, "varying": varying if varying else {},
                         "definitions": [{"id": k, "digest": dig.get(k) if k is not None else None} for k in ks]})
-        g["definitions_index"] = {k: dig.get(k) for x in g["groups"] for k in x.get("definition_ids") or [] if k}
+        g["definitions_index"] = {k: dig.get(k) for x in g["groups"] for k in _definition_ids(x) if k}
         f.write_text(json.dumps(g, separators=(",", ":"), default=str) + "\n")
         (root / f"{row}.ops.json").write_text(json.dumps({"schema": f"{SCHEMA}/ops", "row": row, "ops": ops}, separators=(",", ":")) + "\n")
     for p2, m in sorted(shards.items()):
@@ -692,7 +701,9 @@ def main(a: Options) -> int:
     strata = None
     if a.strata:
         rec = json.loads(Path(a.strata).read_text())
-        strata = (rec.get("sampled_replay") or (rec.get("replay_partition") or {})).get("strata")
+        # a replay record states its strata under `sampled_replay`, a regression record under `replay_partition`; else the run has no units
+        partition = rec.get("sampled_replay") or rec.get("replay_partition")
+        strata = partition.get("strata") if partition else None
     g = program_graph(a.instances, row=json.loads(a.row) if a.row else None, strata=strata, vus_jsonl=a.vus,
                       request_programs=request_programs_of(a.store) if a.store else None)
     if a.word:
@@ -705,5 +716,6 @@ def request_programs_of(store: str | Path) -> dict[str, str]:
     """request -> Build dir of its Program, from a VU store's `programs/*/program.json`."""
     out: dict[str, str] = {}
     for p in Path(store).glob("programs/*/program.json"):
-        out.update({r: d for r, d in (json.loads(p.read_text()).get("build_dirs") or {}).items() if d})
+        build_dirs = json.loads(p.read_text()).get("build_dirs")   # a stored Program that states none places no request
+        out.update({r: d for r, d in build_dirs.items() if d} if build_dirs else {})
     return out

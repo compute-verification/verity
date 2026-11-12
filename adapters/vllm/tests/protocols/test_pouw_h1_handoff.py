@@ -6,10 +6,12 @@ from __future__ import annotations
 import json
 import os
 import pickle
+import re
 import shlex
 import socket
 import subprocess
 import sys
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -176,6 +178,39 @@ def test_a_gate_verb_reaches_the_gate_over_ssh_word_for_word():
     got = GPU.gate_argv(ssh, verb)
     assert got[:len(ssh)] == ssh and shlex.split(" ".join(got[len(ssh):])) == verb
     assert GPU.gate_argv(["python", "-I", "local_gate.py", "d"], verb) == ["python", "-I", "local_gate.py", "d", *verb]
+
+
+def test_the_harness_gate_runs_each_verb_as_its_command_and_reads_what_the_gate_answers(monkeypatch):
+    """`pouw_h1_gpu.gate_command` over a stand-in command. An open whose answer has no commitment yet reads it from the
+    challenge phase's status, and a withheld open must say withheld and signed and carry none. A reserve names the scheme
+    and the families of its rounds, withheld when it has no rounds, and raises on a refusal or on a withheld one the gate
+    reserved plain. ``ended`` is the status that has its end entry."""
+    answers = {"open": {"session": "s0", "commitment": None}, "reserve": {"session": "s1"},
+               "status": {"commitment": "c0", "open": {}, "end": {"rc": 0}}}
+    ran: list[list[str]] = []
+
+    def run(argv, **_kw):
+        ran.append(argv)
+        return SimpleNamespace(returncode=0, stdout=json.dumps(answers[argv[1]]), stderr="")
+
+    monkeypatch.setattr(GPU.subprocess, "run", run)
+    gate = GPU.gate_command(["gate"])
+    assert gate.argv == ["gate"]
+    assert gate("s0", "aa") == {"session": "s0", "commitment": "c0"}
+    assert ran == [["gate", "open", "--session", "s0", "--root", "aa"], ["gate", "status", "s0"]]
+    assert gate.ended("s0") == answers["status"]
+    with pytest.raises(ValueError, match=re.escape(f"the gate's open of s0: {PHW.WITHHELD_OPEN}")):
+        gate("s0", "aa", withhold=True)
+    answers["open"] = {"session": "s0", "withheld": True, "signed": True}
+    assert gate("s0", "aa", withhold=True) == answers["open"]
+    assert gate.reserve("peer", 3) == {"session": "s1"}
+    assert ran[-1] == ["gate", "reserve", "--peer", "peer", "--scheme", PHC.SCHEME, "--families", PHC.families(3)]
+    with pytest.raises(ValueError, match=re.escape(f"s1 plain: {PHW.WITHHELD_OPEN}")):
+        gate.reserve("peer", None)
+    assert ran[-1][-2] != PHC.families(3) and ran[-1][-1] == "--withhold"
+    answers["reserve"] = {"refused": "no slot"}
+    with pytest.raises(ValueError, match=r"the gate refused the reserve \(exit 0\)"):
+        gate.reserve("peer", 3)
 
 
 def test_the_stream_outlives_the_process_that_handed_it_over(tmp_path):

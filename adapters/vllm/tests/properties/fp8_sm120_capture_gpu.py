@@ -531,7 +531,7 @@ def moe_launches(work: Path, name: str, M: int, hot: int, seed: int) -> tuple[li
     qruns = {lab: [q for q in quants if q["label"] == lab] for lab in ("run1", "run2")}
     ids_flat = ids.cpu().numpy().astype(np.int64).reshape(-1)
     used = np.unique(ids_flat)
-    umap = np.full(E, -1, dtype=np.int64)
+    umap: np.ndarray = np.full(E, -1, dtype=np.int64)
     umap[used] = np.arange(used.size)
     q_ok = all(len(qruns[lab]) == 2 and [q["G"] for q in qruns[lab]] == [Gm, Gm] for lab in qruns)
     launches, jobs = [], []
