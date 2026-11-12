@@ -53,7 +53,7 @@ def test_the_whole_store_reference_is_the_reference_receipters(k):
 
 def test_a_row_keeps_each_slow_pass_with_every_gpus_part():
     observed = [0, 10, 20, 35, 45, 55, 66]   # ns: the fourth interval is 1.5 medians, the last exactly 1.1
-    trace = [{"launch": [at, 0, 0, 0, 0, 0, at, at, at, at, 0, 0, 0, 0, 0], "wait": [at, at], "gpu_ms": 1.0 + i,
+    trace = [{"launch": [at, 0, 0, 0, 0, 0, at, at, at, at, 2_000_000, 0, 0, 0, 0], "wait": [at, at], "gpu_ms": 1.0 + i,
               "part_ms": [0.5 + i], "host_ms": []} for i, at in enumerate(observed)]
     report = rows.device.stall_report(observed, trace, None, (0, 0), [])
     assert rows.slow(report) == {"over_median": 1.1, "passes": [3], "each": [
@@ -70,9 +70,12 @@ def test_a_row_keeps_each_slow_pass_with_every_gpus_part():
     host = rows.device.host_side(trace, [1_000_000 * x for x in observed])
     assert host["launch_ms"] == [[0.0] * 4, [0.0] * 4, None, [0.0] * 4, [0.0] * 4, [0.0] * 4, [0.0] * 4]
     assert host["launch_at_ms"][2] is None and host["launch_at_ms"][0] == 0.0
+    assert host["launch_cpu_ms"] == [2.0, 2.0, None, 2.0, 2.0, 2.0, 2.0]
     assert host["root_at_ms"] == [0.0, 10.0, 20.0, 35.0, 45.0, 55.0, 66.0]
-    kept = rows.every(report, {**parts, **host, "offload_ms": [0.25] * 7})
+    leader = {"join_ms": [0.5] * 7, "top_ms": [0.125] * 7, "free_ms": [0.0] * 7, "offload_copy_ms": [0.125] * 7}
+    kept = rows.every(report, {**parts, **host, **leader, "offload_ms": [0.25] * 7})
     assert kept["launch_ms"] == host["launch_ms"] and kept["root_at_ms"][3] == 35.0 and kept["offload_ms"] == [0.25] * 7
+    assert kept["launch_cpu_ms"] == host["launch_cpu_ms"] and all(kept[k] == v for k, v in leader.items())
     assert set(rows.every(report, parts)) == {"interval_ms", "gpu_ms", "part_ms"}
 
 

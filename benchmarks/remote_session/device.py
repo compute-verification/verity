@@ -211,15 +211,17 @@ def stall_report(observed: list, trace: list, history, clock0: tuple, stats: lis
 def host_side(trace: list, observed: list) -> dict:
     """Every traced pass's host side, in ms: when its launch began and when its root reached the host, both from the
     first pass's launch (`launch_at_ms`, `root_at_ms`); and from its own launch's start, each GPU's two stamps in turn
-    (before its kernels are queued, after), the top's and the launch's end (`launch_ms`). None for a pass with no
-    launch trace."""
+    (before its kernels are queued, after), the top's and the launch's end (`launch_ms`); and the launching thread's CPU
+    time over its launch (`launch_cpu_ms`: a launch far longer than it waited, on a slot or off the CPU). None for a
+    pass with no launch trace."""
     first = next((t["launch"][0] for t in trace if t["launch"]), None)
     at, stamps = [], []
     for t in trace:
         la = t["launch"]
         at.append(round((la[0] - first) / 1e6, 3) if la else None)
         stamps.append([round((x - la[0]) / 1e6, 3) for x in la[6:len(la) - 5]] if la else None)
-    return {"launch_at_ms": at, "launch_ms": stamps,
+    cpu = [round((t["launch"][-5] - t["launch"][1]) / 1e6, 3) if t["launch"] else None for t in trace]
+    return {"launch_at_ms": at, "launch_ms": stamps, "launch_cpu_ms": cpu,
             "root_at_ms": [None if first is None else round((x - first) / 1e6, 3) for x in observed]}
 
 
@@ -514,6 +516,7 @@ class DeviceStore:
             self.root_host = torch.empty((SLOTS, 8), dtype=torch.int64, pin_memory=True)
         self.started = [torch.cuda.Event(enable_timing=True) for _ in range(SLOTS)]
         self.top_done = [torch.cuda.Event(enable_timing=True) for _ in range(SLOTS)]
+        self.joined = [torch.cuda.Event(enable_timing=True) for _ in range(SLOTS)]
         self.root_ready = [torch.cuda.Event() for _ in range(SLOTS)]
         self.began = [[torch.cuda.Event(enable_timing=True) for _ in range(SLOTS)] for _ in gpus]
         self.ended = [[torch.cuda.Event(enable_timing=True) for _ in range(SLOTS)] for _ in gpus]
@@ -526,7 +529,9 @@ class DeviceStore:
         self.poison = False
         self.trace: list | None = None
         self._launch_trace: dict = {}
+        self._launch_freed: dict = {}
         self.offload_ns: list[int] = []
+        self.offload_copy_ns: list[int] = []
         self.offload_jobs: queue.Queue = queue.Queue()
         threading.Thread(target=self._offload, daemon=True).start()
         self.ring = None
@@ -757,6 +762,7 @@ class DeviceStore:
         # The offloader has copied this slot's last pass out of the pinned ring, so its copies on every GPU are done.
         self.free[slot].wait()
         self.free[slot].clear()
+        freed = time.perf_counter_ns()
         prev = SLOTS if after is None else after.slot
         head = stream_head(seed, self.rows) if seed is not None else None
         lc = self.chunk // PER_LEAF
@@ -820,6 +826,7 @@ class DeviceStore:
         with self.on(leader) as s:
             for g in range(1, G):
                 s.wait_event(self.ended[g][slot])
+            self.joined[slot].record(s)
             top = self.ring[0]["top"][slot]
             if tr is not None:
                 tr.append(time.perf_counter_ns())
@@ -845,6 +852,7 @@ class DeviceStore:
         self.offload_jobs.put((slot, seed, handle))
         if tr is not None:
             self._launch_trace[slot] = tr + [time.perf_counter_ns(), time.thread_time_ns(), *_faults()]
+            self._launch_freed[slot] = freed - tr[0]
         return Ticket(slot, handle)
 
     def _offload(self) -> None:
@@ -855,10 +863,11 @@ class DeviceStore:
                 self.offload_jobs.task_done()
                 return
             slot, seed, handle = job
-            t0 = time.perf_counter_ns()
+            t0 = c0 = time.perf_counter_ns()
             try:
                 for g in range(len(self.gpus)):
                     self.copied[g][slot].synchronize()
+                c0 = time.perf_counter_ns()
                 host = self.ring[0]["host"]
                 handle.value = (seed if seed is not None else bytes(host["seeds"][slot].numpy()),
                                 host["pks"][slot].clone(), [x["host"][slot].clone() for x in self.seg_ring],
@@ -868,7 +877,9 @@ class DeviceStore:
             finally:
                 self.free[slot].set()
                 handle.done.set()
-                self.offload_ns.append(time.perf_counter_ns() - t0)
+                t1 = time.perf_counter_ns()
+                self.offload_ns.append(t1 - t0)
+                self.offload_copy_ns.append(t1 - c0)
                 self.offload_jobs.task_done()
 
     @staticmethod
@@ -897,7 +908,9 @@ class DeviceStore:
         if self.trace is not None:
             self.trace.append({"launch": self._launch_trace.pop(k, None), "wait": [w0, w1], "gpu_ms": self.pass_gpu_ms[-1],
                                "part_ms": [self.began[g][k].elapsed_time(self.ended[g][k]) for g in range(len(self.gpus))],
-                               "host_ms": host})
+                               "join_ms": self.ended[0][k].elapsed_time(self.joined[k]),
+                               "top_ms": self.joined[k].elapsed_time(self.top_done[k]),
+                               "free_ms": self._launch_freed.pop(k, 0) / 1e6, "host_ms": host})
         return root, ticket.handle
 
     def receipts(self) -> list[bytes]:
@@ -1349,7 +1362,7 @@ class GpuBackend:
         s.start_chain(challenge, prev)
         observed, gaps, kept, first = [], [], [], None
         g0 = len(s.pass_gpu_ms)
-        f0 = len(s.offload_ns)
+        f0, c0 = len(s.offload_ns), len(s.offload_copy_ns)
         for i, root, handle, at in s.chain(self.calibration_passes):
             if first is None:
                 first = (rb.seed(challenge, 0, prev), root, handle)
@@ -1358,8 +1371,11 @@ class GpuBackend:
             observed.append(at)
             gaps.append(time.perf_counter_ns() - at)
         trace, s.trace = s.trace, None
-        # every pass's time by the device's events and each GPU's own part of it, in ms, in the passes' order
+        # every pass's time by the device's events and each GPU's own part of it, in ms, in the passes' order; then on
+        # the leader, from its own part's end to the last GPU's (`join_ms`) and from there to the top's end (`top_ms`),
+        # and how long the launch waited for its slot (`free_ms`)
         self.calibration_parts = {"gpu_ms": [t["gpu_ms"] for t in trace], "part_ms": [t["part_ms"] for t in trace],
+                                  **{k: [round(t[k], 3) for t in trace] for k in ("join_ms", "top_ms", "free_ms")},
                                   **host_side(trace, observed)}
         gc.enable()
         gc.unfreeze()
@@ -1390,8 +1406,10 @@ class GpuBackend:
         s.open_window([(kept[i], [p for k, p in draws if k == i]) for i in sorted({i for i, _ in draws})])
         open_ns = time.perf_counter_ns() - o0
         del kept
-        # the offloader's time on each of those passes, in their order: it takes them one at a time, as they are queued
+        # the offloader's time on each of those passes, in their order: it takes them one at a time, as they are queued;
+        # and of it, its own copy once every GPU's copies are done
         self.calibration_parts["offload_ms"] = [round(x / 1e6, 3) for x in s.offload_ns[f0:f0 + len(trace)]]
+        self.calibration_parts["offload_copy_ms"] = [round(x / 1e6, 3) for x in s.offload_copy_ns[c0:c0 + len(trace)]]
         host_ms = sorted(s.pass_host_ms[1:])
         s.pass_gpu_ms.clear()
         s.pass_host_ms.clear()
