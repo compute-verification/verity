@@ -40,7 +40,7 @@ its own generation config to a request that omits them. `rehearse --ids` sends t
 at the same sampling when given): network-certifier-form id requests (`active.id_request`, offset 0), each answered by
 the fake endpoint as an id-form response (`id_response`: one `io_tie.id_event` cell an output id, then `io_tie.TRAILER`,
 at most `egress_cells` − 1 ids), what `scan_zk.py prove --warden-run` proves; the gate's `warden-rehearse --scan` sends
-it to the peer's endpoint, at scan_zk's schedule. Request i's `user` is ``user-<i>``, or ``<--users>-<i>``. `--prompts FILE` (with `--ids`) gives the id requests' prompts instead
+it to the peer's endpoint, at scan_zk's schedule. `--prompts FILE` (with `--ids`) gives the id requests' prompts instead
 (`read_prompts`, `prompt_traffic`: request j's the (j mod n)-th, each with exactly `--max-tokens`), and
 `--window-per-group` sends them in groups of the n, group g's half a bucket into execution phase g·G (`group_windows`),
 so that group g's cells are exactly windows g·G … (g+1)·G − 1 (`groups.json`), and the run is exactly those windows: a
@@ -1220,8 +1220,7 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--prompt-max", type=int, default=1024, help="the most prompt tokens a request samples")
         q.add_argument("--temperature", type=float, help="every request's temperature (default: sampled, 0, 0.7 or 1)")
         q.add_argument("--top-p", type=float, help="every request's top_p (default: none sent, the endpoint's own)")
-        q.add_argument("--users", default="user", help="the id requests' `user` names, request i's USERS-i: a server's "
-                                                       "record names a request by it (default: user)")
+        q.add_argument("--users", default="user", help="the id requests' `user` names: request i's is USERS-i")
     t.set_defaults(model="model")
     for q in (f, s):
         q.add_argument("--listen", required=True, type=cs._address, help="HOST:PORT (port 0: any)")
