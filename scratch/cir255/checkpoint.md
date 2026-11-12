@@ -1,1 +1,1 @@
-2026-11-12T14:51Z CHECKTIME: Part C A/B run r20261112-142212-2090 on cpu-1 r12 (took 14:35:47Z); --ranges DsaPositionsMerge_v1 holds, 431.1 s wall; branch suites running since 14:43:00Z.
+2026-11-12T15:20Z CHECKTIME: A/B r20261112-142212-2090 done rc=0, but its base half reused cpu-1's records (no build apart) while the branch built apart; relaunched as r20261112-151952-8384 with an empty HOME for both halves.
