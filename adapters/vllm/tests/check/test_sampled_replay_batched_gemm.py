@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 import torch
 import torch.nn as nn
-from verity.circuits.defs import bind
+from verity.circuits.defs import bind, conformance_label
 from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import batched_gemm_rows, rows
 from verity.definitions.numerics.batched_gemm_rows import batched_gemm
@@ -27,6 +27,9 @@ from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import opening as OP
 from verity_vllm.program import compact as CP
+from verity_vllm.program.frontend.derive import derive_report
+from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
+from verity_vllm.query.manifest import format as RM
 
 HOP = '{"fn":"HopperBF16WgmmaDot16_v1"}'
 
@@ -65,8 +68,6 @@ def test_the_evaluator_cites_the_h200_capture_at_every_shape_and_m_the_capture_r
     """The replay record's `evaluator_provenance` for BatchedGemm_v1 is the capture run that held cuBLAS's bmm to `bmm_rows`: GO in
     both configurations at every (K, N) and M the capture script runs, among them the TP8 Commit's prefill (256) and decode (1) M; and
     the Definition's conformance cites the same record."""
-    from verity.circuits.defs import conformance_label
-
     from tests.properties import glm53_bf16_gemm_capture_gpu as X
 
     p = rows.EVALUATOR_PROVENANCE["BatchedGemm_v1"]
@@ -219,7 +220,8 @@ def test_the_first_progressions_weight_is_read_too(world):
 
 
 def test_a_weight_operand_across_two_fields_is_not_evaluated_by_name(world):
-    rec, reads = _replay(*world, items=_w_items(base=PRE - 4))
+    table, planes = world
+    rec, reads = _replay(table, planes, items=_w_items(base=PRE - 4))
     assert rec["result"] is None and "spans fields" in rec["why"] and reads == []
 
 
@@ -252,8 +254,6 @@ def test_the_builds_stored_weight_operand_gathers_the_definitions_w(served):
     """Every BatchedGemm row the Build derives stores W^T as "P" progressions; read by the replay's own provider over the module's
     parameters, the gather is the Definition's ``w[b][n][k]``, and the row kernel on it is `bmm_rows` of torch's operands."""
     from verity_vllm.pipeline.build import _instance_rows
-    from verity_vllm.program.frontend.derive import derive_report
-    from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 
     m = _Absorbs()
     assert m.W_UK_T.stride() == (P + V, 1, NH * (P + V)) and m.W_UV.stride() == (P + V, NH * (P + V), 1)
@@ -291,5 +291,4 @@ def test_the_builds_stored_weight_operand_gathers_the_definitions_w(served):
 
 
 def RM_statics(spec: str) -> dict:
-    from verity_vllm.query.manifest import format as RM
     return RM.spec_statics(spec)

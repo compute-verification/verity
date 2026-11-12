@@ -13,6 +13,9 @@ is the one it had before the seed rule."""
 from __future__ import annotations
 
 import hashlib
+import inspect
+from pathlib import Path
+from typing import Any
 
 from verity_vllm.check.c2_rules import _replay_seed_of_record
 from verity_vllm.check.commit_pass import commit_verdict
@@ -23,11 +26,11 @@ RUN_ROOT = "71f69377" + "ab" * 28
 SEED_ROOT = int.from_bytes(bytes.fromhex(RUN_ROOT)[:8], "big")
 ROOT_FORM = "run root (first 8 bytes, after commitment)"
 
-BASE = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "run_root": RUN_ROOT,
-        "binding": {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 1}},
-        "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True},
-        "boundary_linkage": {"result": True, "pairs": 32, "linked": 32, "unlinked_n": 0},
-        "weights_pin": {"result": True, "compared": 163, "mismatched": [], "missing": []}}
+BASE: dict[str, Any] = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "run_root": RUN_ROOT,
+                        "binding": {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 1}},
+                        "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True},
+                        "boundary_linkage": {"result": True, "pairs": 32, "linked": 32, "unlinked_n": 0},
+                        "weights_pin": {"result": True, "compared": 163, "mismatched": [], "missing": []}}
 K_ROPE = "no derived_rows evaluator for RoPE_v1 yet (v2)"
 K_PLANE = "fed by moe_block_stream planes (SiluMul_v1@experts): row -> plane mapping not in this replay (MAN-06f, v2)"
 
@@ -84,13 +87,12 @@ def test_the_verifier_challenge_form_is_recomputed_from_the_recorded_challenge_a
     assert ok is False and "does not name the recorded challenge" in why
     assert _replay_seed_of_record(_sr_chal(seed, src, "audit-2026-09-20"), None)[0] is False   # no run root to recompute from
     # the record shape: sampled_replay writes sample.challenge ONLY under the challenge form (root-form records are byte-identical)
-    import inspect
 
     from verity_vllm.check.replay import driver as SR
     assert "seed_challenge" in inspect.signature(SR.sampled_replay).parameters
     src_txt = inspect.getsource(SR.sampled_replay)
     assert '**({"challenge": str(seed_challenge)} if seed_challenge is not None else {})' in src_txt
-    cd = "".join(open(__file__.rsplit("/tests/", 1)[0] + f"/verity_vllm/pipeline/{m}.py").read() for m in ("commit", "c2_replay"))
+    cd = "".join(Path(__file__.rsplit("/tests/", 1)[0] + f"/verity_vllm/pipeline/{m}.py").read_text() for m in ("commit", "c2_replay"))
     assert "_seed_chal = str(args.replay_challenge)" in cd and "seed_challenge=_seed_chal" in cd
     ok, why = _replay_seed_of_record(_sr(7, "--replay-seed (targeted)"), RUN_ROOT)
     assert ok is False and "prover-chosen" in why and "not a C2 of record" in why
@@ -134,9 +136,9 @@ def test_f_r16_26_the_f_r16_13_fault_rule_runs_before_the_mechanism_lift_whateve
     unevaluated stratum -> _partial_replay_named_gap names no gap) fails closed under the root form -- and must fail the SAME way
     under a prover-chosen / non-post-commitment seed: form (B) stands in for a NAMED gap, never for a fault.  (A pod gate caught the
     lift passing it: test_sampled_replay line 1085 with seed_source 'caller'.)"""
-    fault = {"result": None, "grade": "partial", "why": "1 pick(s) not evaluated inside evaluated strata (missing-input x 1) -- run-time fault, not a gap on the record: "
-                                                        "committed bytes not retained for (r0, step 0, x/out) [0, 16)",
-             "strata_unevaluated": [], "sample": {"seed": 7, "seed_source": "caller", "evaluated": 9, "equal": 9, "mismatch_n": 0, "not_evaluated_n": 1, "picked": 10}}
+    fault: dict[str, Any] = {"result": None, "grade": "partial", "why": "1 pick(s) not evaluated inside evaluated strata (missing-input x 1) -- run-time fault, not a gap on the record: "
+                                                                        "committed bytes not retained for (r0, step 0, x/out) [0, 16)",
+                             "strata_unevaluated": [], "sample": {"seed": 7, "seed_source": "caller", "evaluated": 9, "equal": 9, "mismatch_n": 0, "not_evaluated_n": 1, "picked": 10}}
     for src in ("caller", "--replay-seed (targeted)"):
         ok, why = commit_verdict({**BASE, "sampled_replay": {**fault, "sample": {**fault["sample"], "seed_source": src}}, "oracle_compare": OC_COMPLETE}, True, min_openings=64)
         assert not ok and why.startswith("C2 of record not established: sampled replay partial") and "run-time fault" in why, (src, why)

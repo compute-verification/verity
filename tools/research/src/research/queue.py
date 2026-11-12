@@ -63,7 +63,9 @@ candidate and those above it are built again without them in the same tick.
                                                    without N: the open PRs onto `main` marked at their head and not on `main`
                                                    that no land verdict there lands, oldest mark first, those the verified
                                                    queue waits on a reviewer for (number, head, owner, mark time, files, whether
-                                                   it is a Lean change: `lean_change`); with N: a reviewer's verdict, a `reviewed` label on
+                                                   it is a Lean change: `lean_change`, and why: a hold, no land verdict, or
+                                                   `low-risk: lands on its mark` for a head the loop's low-risk rule takes on
+                                                   its mark alone, `lands_on_mark`); with N: a reviewer's verdict, a `reviewed` label on
                                                    `pr:N@HEAD` (its head, or --sha, a full or short SHA), which the verified
                                                    queue counts unless LANE is the PR's owner, its handle or its ready mark's
                                                    author, refused here; without --sha, refused when GitHub has another head
@@ -700,7 +702,7 @@ LANDINGS = ("review",)
 #: a landing or warn gate's path (`DriveFlags.landing_gates`, `DriveFlags.warn_gates`)
 GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
 #: the steps of a check (`tools/verity/check/check.py`), of which `DriveFlags.warn_steps` names some
-CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-changed", "flock-circuit-build", "lean-build",
+CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "flock-circuit-build", "lean-build",
                "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests",
                "ratchet-gate")
 #: an entry of `DriveFlags.lowrisk_excludes`: a directory from the repository's root ending in `/`, or a file name glob
@@ -1193,6 +1195,24 @@ def lowrisk(files: Iterable[str], excludes: Iterable[str]) -> bool:
     files = list(files)
     return bool(files and (dirs or names)) and not any(
         f.startswith(tuple(dirs)) or any(fnmatch.fnmatchcase(PurePosixPath(f).name, n) for n in names) for f in files)
+
+
+#: what a row of `research queue review` says of a head the verified queue's loop takes on its ready mark alone (`lands_on_mark`)
+LOWRISK_ROW = "low-risk: lands on its mark"
+
+
+def own_files(repo: Path, main: str, head: str) -> frozenset[str]:
+    """The files ``head`` changes against its merge base with ``main``: the change the low-risk rule reads (`lands_on_mark`)."""
+    return frozenset(_out(repo, "diff", "--name-only", "--no-renames", f"{main}...{head}").splitlines())
+
+
+def lands_on_mark(flags: DriveFlags, pr: PR, why: str | None, files: Iterable[str]) -> bool:
+    """Whether the verified queue's loop takes ``pr``, marked ready at its head, on that mark alone (`vqueue_loop.World.ready`,
+    and `research queue review`'s rows): the low-risk lane, while ``flags`` (drive.toml's at `main`: `flags_at`) have it on,
+    when ``files`` (`own_files`) are `lowrisk` under their `lowrisk_excludes`.  Never a move PR, which lands only with a land
+    verdict, nor one ``why`` (`unreviewed`'s word on its head) says is held."""
+    return (flags.lowrisk_lane and not pr.move and not (why or "").startswith("held")
+            and lowrisk(files, flags.lowrisk_excludes))
 
 
 #: the listings and GETs `StoreLabels.prefetch` makes at once: a fresh VM's store lacks every label of `next`'s ~500 members
@@ -6037,8 +6057,9 @@ def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
 def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | None, ref: str | None, by: str | None,
            sha: str | None = None, as_json: bool = False) -> int:
     """`research queue review`: without ``pr``, list the open PRs onto `main` marked ready at their head and not on `main` that no
-    land verdict at their head lands (`unreviewed`), oldest mark first: those the verified queue waits on a reviewer for (a
-    low-risk one lands on its mark alone, so its row says it); with it, write ``verdict`` (`land` or `hold`, ``ref`` its note or
+    land verdict at their head lands (`unreviewed`), oldest mark first: those the verified queue waits on a reviewer for, but
+    for one its loop takes on its mark alone, whose row says so (`LOWRISK_ROW`, by the loop's rule: `lands_on_mark` under
+    drive.toml at `main`, of the files its row lists); with it, write ``verdict`` (`land` or `hold`, ``ref`` its note or
     reason) by ``by`` on the PR's head on `next` (or ``sha``, or its open head when it isn't on `next`), refusing its owner.  Under
     `land_into = "main"` written in drive.toml no `next` is read (`land_into_key`): the head is its open one, or ``sha``.  Without
     ``sha`` it refuses when GitHub has a head other than `next`'s, as the reviewer may have read either; a short ``sha`` is the
@@ -6054,6 +6075,7 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
         q.fetch(onto)
         q.unlock()
         main = _out(q.workdir, "rev-parse", "refs/remotes/origin/main")
+        flags = flags_at(q.workdir, main)
         here = [p for p in onto if not _git(q.workdir, "cat-file", "-e", f"{p.head}^{{commit}}", check=False).returncode
                 and _git(q.workdir, "merge-base", "--is-ancestor", p.head, main, check=False).returncode]
         labels.prefetch([(p.number, p.head) for p in here])
@@ -6063,11 +6085,14 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
                 continue
             if (why := unreviewed(labels.reviews(p.number, p.head), review_owners(q, labels, p.number, p.head, p.owner, opened))) is None:
                 continue
+            files = own_files(q.workdir, main, p.head)
+            if lands_on_mark(flags, p, why, files):
+                why = LOWRISK_ROW
             if refused := labels.refusals(p.number, p.head, vocab.REVIEWED):
                 why += f"; not authenticated: {'; '.join(refused)}"
             base = _out(q.workdir, "merge-base", main, p.head)
             rows.append({"pr": p.number, "head": p.head, "owner": p.owner, "lean": lean_change(q.workdir, p.head, base),
-                         "files": sorted(changed(q.workdir, base, p.head)), "why": why,
+                         "files": sorted(files), "why": why,
                          "marked": q.marked_at(p.number, p.head) if q.marked_at else None})
         rows.sort(key=lambda r: (r["marked"] or "", r["pr"]))
         if as_json:

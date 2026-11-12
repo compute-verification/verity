@@ -28,8 +28,9 @@ from typing import Any
 from verity_vllm.check import gates as G
 from verity_vllm.check.gates import GateResult, RunArtifacts
 from verity_vllm.config import RowEngine
+from verity_vllm.records.schema_ids import CONFIGURATION_CARD_SCHEMA
 
-CARD_SCHEMA = "verity-gen/card/v1"
+CARD_SCHEMA = CONFIGURATION_CARD_SCHEMA
 
 #: `C` fields the profile derives from others (never read from the HF config).
 DERIVED_FIELDS = ("QKV", "GU", "BN")
