@@ -62,3 +62,31 @@ lines (where y's buffers are made, what `launch` gains, what the gate, the poiso
 gain, what the control is); what is built and pushed (the head); what a CPU node has shown, by run id;
 what is not shown; and whether "the three conditions hold off a card by Sat 14 Nov 18:00Z" stands, or
 the date that does. End your turn done or blocked, never on a plan. I resume you.
+
+## Thu 12 Nov 19:07Z: KMOVE's handoff for you is written: read it before you go further
+
+It is at the top of `~/.research/notes/lanes/kernels/20261110T0806Z-report-kmove.md` (after
+`research notes sync --path lanes/kernels`): ten points with every line number (at #9375's
+`238ad6621c27`; the arm's lines are four further down from `e209a56847d4`) and the run table.
+What matters most for your design, as KMOVE gives it (relayed; check each in the source):
+1. **The wide path in `run.py`:** the bounds and table `:347-351`, `rs_refusal` `:405`; the header
+   states `rs_heads_w` are made in `Pipeline.__init__` `:648-652`, only when `sha` is `fast`, a
+   `segdig_*` buffer exists and k/256 > 128; the launches are in `row_digests` `:760-782` and need
+   scratch.
+2. **`served_y.py`:** `_pipe` `:94-100` gets the states through its `segdig_b` key; `_tree`
+   `:102-125` allocates tree, digests and scratch with torch on every call (the arm's `launch` may
+   not: its buffers are made in `prepare`). y's rows are n words, so the segment count is n/256.
+3. **Widths:** gate_up's n = 57,344 is 224 segments, so its y tree needs the wide launches even at
+   the four linears' shapes. The cubin pinned in `overhead_arm.json` (`cdf0e443…`) has no wide
+   kernel; `5a6d7461…` has (built at `main` today with both gates passing).
+4. **`main` changed the arm:** #9247 renamed `arm.Gate` to `arm.GateResult` and typed its methods;
+   #9375 holds it from `e209a56847d4`.
+5. **The stand-in dry run and the host twin**, the tests that hold y's tree
+   (`test_pearl_c_hash_wide.py:152` is the form to copy), the job files under
+   `kmove-jobs/hash111/` with the launch form, and five traps (node A's Python 3.11; the lint
+   counts the word "cap"; build tests skip without `VERITY_POUW_NVCC`; the device sources include
+   `verity/definitions/kernels/sha512.cuh`; the guard refuses a ref passed through a shell
+   variable).
+Not covered by any test, KMOVE says: `DeviceTrees` on sm_90's runner past 128 segments.
+Also: `main` moved `benchmarks/specs/` to `benchmarks/harness/specs/` today (#9189, a certified
+move); #9375 takes it at its next merge.
