@@ -51,7 +51,7 @@ def test_a_blocks_output_bits_are_veritys_and_no_file_restates_them(tmp_path):
 
 def test_what_another_file_states_is_read_from_it_and_no_file_restates_it(tmp_path):
     """Each parameter of `params.sourced` is the value its source states: core's monitoring periods, per-window δ (once
-    for a window's coins and for SPOT's sample, twice for the window's cryptography) and reporting δs; the
+    for a window's coins and for SPOT's sample, twice, assumed, for the window's cryptography) and reporting δs; the
     calibrations' `K`, `Γ`, and the least and greatest `K` as the range. A file under `data/` that sets one of their
     keys is refused. The session policy's `K` is its layer's, held to the calibration's, with the same range read: a
     file that gives it a range is refused.

@@ -1,0 +1,16 @@
+# The honest config at this start and gain: every block and the final gain trained in full with Muon, the embedding
+# frozen; E is the trained tensors.
+start = "s-t20"
+route = "subset"
+target = { gain = 1.1 }
+budget = { steps = 838, batch = 64 }
+seeds = { search = [0], final = [0, 101, 102] }
+policy = "console"
+
+[dials]
+trainable = "blocks.*,norm"
+opt = "muon"
+lr = 1.5e-3
+weight_decay = 0.05
+warmup = 0.02
+decay = 0.4

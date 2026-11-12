@@ -677,8 +677,8 @@ def post(url: str, data: bytes, headers: dict[str, str], timeout: float = 30) ->
         return json.load(r)
 
 
-# The Cursor identity socket, as verity-github.py (https://website-docs-sage.vercel.app/agent-tools/verity-github.py, sha256
-# 34ea37fb0126e20a22160649e502565d7b443d6bfd9feb438528bff3163a7886) reads it in `oidc_token()`.
+# The Cursor identity socket, as verity-github.py (https://website-docs-sage.vercel.app/agent-tools/verity-github.py) reads it
+# in `oidc_token()`.
 class _UnixHTTP(http.client.HTTPConnection):
     def __init__(self, path: str):
         super().__init__("cursor-agent", timeout=10)
@@ -1306,10 +1306,10 @@ def vercel_oidc_token() -> str | None:
 def notes_token(now: float | None = None) -> str | None:
     """A token for the private notes repository.  Where there is a Vercel OIDC identity (`vercel_oidc_token`, as the Slack events
     service has it), the one the broker mints for it (`NOTES_TOKEN_URL`, scope `notes`), kept until shortly before it
-    expires; else, or when the broker refuses (said on stderr), `notes_sync.notes_token`'s: $RESEARCH_NOTES_TOKEN when set by
-    hand, else on a Cursor agent the one the agents' GitHub broker mints for its Cursor identity.  None when there is none of
-    them, so a read goes unauthenticated and a private file answers 404.  `notes_token_source` says which one it was, and
-    why."""
+    expires; else, or when the broker refuses (said on stderr), `notes_sync.notes_token`'s: on a Cursor agent the one the
+    agents' GitHub broker mints for its Cursor identity, and $RESEARCH_NOTES_TOKEN where that broker gives none.  None when
+    there is none of them, so a read goes unauthenticated and a private file answers 404.  `notes_token_source` says which one
+    it was, and why."""
     _notes_token.pop("why", None)
     oidc = vercel_oidc_token()
     if oidc and (token := _broker_notes_token(oidc, time.time() if now is None else now)):
@@ -2043,8 +2043,20 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
     if ns.worker and (ns.verb != "comment" or ns.handle):
         raise SlackError("--worker goes with `comment` alone, never with --as: --as HANDLE is for the handle's holder, "
                          "--worker NAME for a lane's worker, which holds no handle")
-    if ns.worker and not WORKER_RE.fullmatch(ns.worker):
-        raise SlackError(f"--worker {ns.worker!r}: a name of letters, digits, `.`, `_` and `-`, at most 40 (e.g. LINTOOLS)")
+    worker_lane, worker_name = (ns.worker.split("/", 1) if ns.worker and "/" in ns.worker else (None, ns.worker))
+    if ns.worker and not WORKER_RE.fullmatch(worker_name):
+        raise SlackError(f"--worker {ns.worker!r}: a name of letters, digits, `.`, `_` and `-`, at most 40 (e.g. LINTOOLS, "
+                         "or proofs/LINTOOLS to sign as your own lane)")
+    if worker_lane:
+        handles = {h["handle"]: h for h in reg["handles"]}
+        if worker_lane.lstrip("@") not in handles:
+            raise SlackError(f"--worker {ns.worker}: @{worker_lane.lstrip('@')} is no handle in the registry")
+        worker_lane = worker_lane.lstrip("@")
+        owner = next((h["handle"] for h in reg["handles"] if (sfx := _branch_suffix()) and sfx in h.get("branch_suffixes", [])),
+                     None)
+        if owner and owner != worker_lane:
+            raise SlackError(f"--worker {ns.worker}: this checkout's branch ends in @{owner}'s suffix, so its worker signs as "
+                             f"{owner}/{worker_name}")
     if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment", "create"):
         raise SlackError(f"linear {ns.verb} has no --dry-run (it would write): leave it off, or try `edit`, `state`, "
                          "`place` or `comment`, which have one")
@@ -2163,11 +2175,11 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             warn_unrouted(text, reg, author)
         info = lin.gql("query($id: String!) { issue(id: $id) { id identifier url team { key } } }", {"id": issue})["issue"]
         if ns.worker:
-            lane = linear.owners(reg).get(info["team"]["key"])
+            lane = worker_lane or linear.owners(reg).get(info["team"]["key"])
             if not lane:
                 raise SlackError(f"--worker: {issue}'s team {info['team']['key']} has no handle in the registry, so there is "
-                                 "no lane to comment as")
-            author = f"{lane}/{ns.worker}"
+                                 "no lane to comment as: sign as your own, --worker LANE/NAME")
+            author = f"{lane}/{worker_name}"
         if ns.dry_run:
             print(f"dry-run: would comment on {issue} as {author}: {text}")
             return 0
@@ -2544,9 +2556,23 @@ def publish_route(root: Path, r: dict, message: str, where: str = ROUTES_DIR, na
     return line
 
 
-def notes_api(method: str, rel: str, body: dict | None = None) -> Any:
+def _given_token_refused() -> bool:
+    """GitHub refused the notes token and it was $RESEARCH_NOTES_TOKEN as given: where `notes_sync` is (never where this file
+    is deployed alone), it says so and asks the agents' GitHub broker (`notes_sync.refused_given`); whether that gave a token to
+    ask GitHub again with."""
+    if _notes_token.get("source") != "env":
+        return False
+    try:
+        from . import notes_sync
+    except ImportError:
+        return False
+    return notes_sync.refused_given()
+
+
+def notes_api(method: str, rel: str, body: dict | None = None, again: bool = True) -> Any:
     """GitHub's contents API on the notes repository, with the notes token (`notes_token`), for a caller with no clone (the
-    Slack events service): the JSON answer, or None for a GET of a path that isn't there."""
+    Slack events service): the JSON answer, or None for a GET of a path that isn't there.  A $RESEARCH_NOTES_TOKEN GitHub
+    refuses (401 or 403) is replaced once by the agents' GitHub broker's token, where there is one (`_given_token_refused`)."""
     if not (token := notes_token()):
         raise SlackError("no notes token: set RESEARCH_NOTES_TOKEN, or run where the broker mints one (VERCEL_OIDC_TOKEN); "
                          "without a notes clone, the notes are read and written with it")
@@ -2560,6 +2586,8 @@ def notes_api(method: str, rel: str, body: dict | None = None) -> Any:
     except urllib.error.HTTPError as e:
         if e.code == 404 and method == "GET":
             return None
+        if e.code in (401, 403) and again and _given_token_refused():
+            return notes_api(method, rel, body, again=False)
         raise SlackError(f"notes: GitHub {method} {rel}: HTTP {e.code}") from None
     except (urllib.error.URLError, OSError, ValueError) as e:
         raise SlackError(f"notes: GitHub {method} {rel}: {getattr(e, 'reason', e)}") from None
@@ -3871,6 +3899,12 @@ def notion_error(what: str, e: urllib.error.HTTPError) -> str:
     return f"{what}: Notion answered {why}"
 
 
+class NotionError(SlackError):
+    def __init__(self, message: str, status: int):
+        super().__init__(message)
+        self.status = status
+
+
 class Notion:
     """The Asks for Daniel database through Notion's API, with $NOTION_API_KEY: a Notion connection's token, shared on the
     database. $RESEARCH_NOTION_URL points it at another server (the tests' fake)."""
@@ -3890,7 +3924,7 @@ class Notion:
         try:
             out = http_json(method, self.base + path, data, headers)
         except urllib.error.HTTPError as e:
-            raise SlackError(notion_error(what, e)) from None
+            raise NotionError(notion_error(what, e), e.code) from None
         except (urllib.error.URLError, OSError, ValueError) as e:
             raise SlackError(f"{what}: Notion is unreachable: {getattr(e, 'reason', e)}") from None
         if not isinstance(out, dict):
@@ -3957,14 +3991,25 @@ def cmd_pages(ns: argparse.Namespace, reg: dict) -> int:
         print(f"dry-run: POST {NOTION_API}/data_sources/{db['data_source']}/query {json.dumps(query, sort_keys=True)}", file=sys.stderr)
         return 0
     notion = Notion()
-    rows = []
+    rows, readable = [], True
     for p in notion.call("POST", f"/data_sources/{db['data_source']}/query", query).get("results", []):
         props = p.get("properties", {})
-        comments = notion.call("GET", f"/comments?block_id={urllib.parse.quote(p['id'])}&page_size=100").get("results", [])
+        comments: list = []
+        if readable:
+            try:
+                comments = notion.call("GET", f"/comments?block_id={urllib.parse.quote(p['id'])}&page_size=100").get("results", [])
+            except NotionError as e:
+                if e.status != 403:
+                    raise
+                readable = False
+                print(f"ask-daniel pages: {e}: the pages are listed without their comments. The Notion connection behind "
+                      "$NOTION_API_KEY lacks the Read comments capability (Notion's integration settings, the connection, "
+                      "Capabilities); until its owner turns it on, read a page's comments in Notion or with the Notion MCP",
+                      file=sys.stderr)
         newest = comments[-1] if comments else None
         rows.append({"url": p.get("url"), "edited": p.get("last_edited_time"),
                      **{k.lower().replace(" ", "_"): prop_text(props.get(k)) for k in ("Ask", "Lane", "Status", "Decision", "Card ID", "Deadline")},
-                     "comments": len(comments),
+                     "comments": len(comments) if readable else None,
                      "newest_comment": newest and {"at": newest.get("created_time"), "text": prop_text({"type": "rich_text", "rich_text": newest.get("rich_text")})}})
     if ns.json:
         print(json.dumps(rows, indent=2, ensure_ascii=False))
@@ -4431,8 +4476,9 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                    help="comment: its sender, a handle you hold (or --worker); audit --close-strays: the closing comments' "
                         "sender; check: the test issue's sender (default comms)")
     p.add_argument("--worker", default=None, metavar="NAME",
-                   help="comment: for a lane's workers, agents that hold no handle (never with --as): it shows as LANE/NAME, "
-                        "LANE the handle of the issue's team, and rings no one")
+                   help="comment: for a lane's workers, agents that hold no handle (never with --as): it shows as LANE/NAME "
+                        "and rings no one. Give LANE/NAME to sign as your own lane on another lane's issue; with NAME "
+                        "alone, LANE is the handle of the issue's team")
     p.add_argument("--title", default=None, metavar="T", help="edit: the issue's new title")
     p.add_argument("--due", default=None, metavar="YYYY-MM-DD", help="edit: its due date (`none` clears it)")
     p.add_argument("--file", "--body-file", "--description-file", dest="file", default=None, metavar="F.md",

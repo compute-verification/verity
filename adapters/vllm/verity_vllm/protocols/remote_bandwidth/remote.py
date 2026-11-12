@@ -75,8 +75,8 @@ def address(value: str) -> tuple[str, int]:
 
 
 def session_module(name: str, directory: str | Path = config.REMOTE_SESSION) -> ModuleType:
-    """``benchmarks/remote_session``'s module ``name`` (``prover``, ``device``, ``inplace``), loaded once from its file,
-    as its own scripts import it."""
+    """``benchmarks/remote_session``'s module ``name`` (``prover``, ``device``), loaded once from its file, as its own
+    scripts import it."""
     if name in sys.modules:
         return sys.modules[name]
     spec = importlib.util.spec_from_file_location(name, Path(directory) / f"{name}.py")
@@ -203,8 +203,8 @@ class Serving:
         self.map.complete()
         for kind, *ev in self._events:
             if kind == "append":
-                first, slots, digests, payloads = ev
-                a = self.backend.append(payloads, self.backend.append_salts(first, len(payloads)), slots)
+                first, _, digests, payloads = ev
+                a = self.backend.append(payloads, self.backend.append_salts(first, len(payloads)))
                 if a.first != first or a.digests != digests:
                     raise AssertionError("the store's append is not its memory map's: a completed block's bytes "
                                          "changed between its digest and its append")
@@ -307,7 +307,7 @@ class StoreBackend:
         """The payload salts of an append's blocks ``first`` …, hiding each digest in its tree."""
         return [self.randbytes(rb.SALT_BYTES) for _ in range(count)]
 
-    def append(self, payloads, salts, slots=()) -> audit.Append:
+    def append(self, payloads, salts) -> audit.Append:
         return self.audit.append(payloads, salts)
 
     def encode_append(self, first: int, coin: bytes) -> None:
@@ -409,12 +409,12 @@ class KvDevice:
         if self.paged.K.token_layer_words(self.field) != codec.field.block_words:
             raise ValueError("kv.cu's bound offsets are a token-layer's: build it with a token-layer of one 4 KiB block")
 
-    def set_key(self, key: rcodec.Key, lib: Any = None) -> None:
-        """``key`` on kv.cu's build, or on ``lib`` (another build at the codec's field, paged.cu's)."""
+    def set_key(self, key: rcodec.Key) -> None:
+        """``key`` on kv.cu's build."""
         k = self.paged.K.key(self.field.name, key.seed, key.codec.rounds, mask=key.codec.masked)
         if (k.c, k.tau, k.mask) != (key.c, key.tau, key.mask):
             raise RuntimeError("kv.py's key is not the registration's codec key")
-        self.paged.KB.set_key(self.lib if lib is None else lib, k)
+        self.paged.KB.set_key(self.lib, k)
 
     def encode(self, payloads: Sequence[bytes], first: int, offsets: Sequence[int] | None = None) -> list[bytes]:
         """Blocks ``first`` … of ``payloads``: under the seed's key, or each under its bound offset."""
@@ -433,27 +433,6 @@ class KvDevice:
             raw = e.cpu().numpy().tobytes()
             out.extend(raw[i * rcodec.BLOCK_BYTES:(i + 1) * rcodec.BLOCK_BYTES] for i in range(len(part)))
         return out
-
-    def encode_in_place(self, data: Any, first: int, offsets: Sequence[int] | None = None) -> None:
-        """Blocks ``first`` … held contiguously on the GPU at ``data`` (a uint8 tensor of whole blocks), encoded where
-        they are: under the seed's key, or each under its bound offset."""
-        torch, w, k = self.torch, self.codec.field.block_words, self.codec.rounds
-        stream, n = torch.cuda.current_stream().cuda_stream, data.numel() // rcodec.BLOCK_BYTES
-        if not data.is_contiguous() or data.numel() != n * rcodec.BLOCK_BYTES:
-            raise ValueError("an in-place encode is of whole blocks held contiguously")
-        for u in range(0, n, self.CHUNK):
-            ptr, c = data.data_ptr() + u * rcodec.BLOCK_BYTES, min(self.CHUNK, n - u)
-            if offsets is None:
-                self.lib.call("kv_encode", ptr, ptr, c * w, (first + u) * w, k, 0, stream)
-            else:
-                b = self.paged.offsets(torch, list(offsets[u:u + c]), self.field)
-                self.lib.call("kv_encode_bound", ptr, ptr, c * w, (first + u) * w, k, b.data_ptr(), 0, stream)
-
-    def decode(self, src: int, dst: int, blocks: int, first: int) -> None:
-        """``blocks`` blocks at device address ``src``, the store's blocks ``first`` … encoded under the seed's key,
-        decoded to ``dst`` (which may be ``src``) on the current stream."""
-        w, stream = self.codec.field.block_words, self.torch.cuda.current_stream().cuda_stream
-        self.lib.call("kv_decode", src, dst, blocks * w, first * w, self.codec.rounds, 0, None, stream)
 
 
 class DeviceEncoded(audit.Store):
@@ -623,9 +602,7 @@ class CommitSession:
                  ``filler_gib`` GiB of zeros on the engine's GPU registered as the store's filler (`Binder.register_filler`)
     begin        before the Commit's first instrumented run: the session on its own thread, registered before the run
                  goes on, and its first window armed once the run's first step has run (`Serving.ready`).  Its
-                 backend is ``backend_of(session, path)``'s (the store read where the engine holds it,
-                 `in_place.InPlaceBackend.for_commit`, kv.cu at ``kv_lib`` encoding it in place) or, without one, a host mirror encoded by kv.cu at ``kv_lib`` (`KvDevice`) or
-                 on the CPU
+                 backend is a host mirror encoded by kv.cu at ``kv_lib`` (`KvDevice`) or on the CPU
     (the run)    each of its engine steps through the returned `Lockstep`: a pass's step while the session lasts, so the
                  memory map, recorded against the registration's digest beside the Commit (``out``), is of the run's
                  steps from its first (a header and no line: no step writes the store); the steps after it unaudited
@@ -643,7 +620,6 @@ class CommitSession:
 
     def __init__(self, verifier: str, *, plan: str = "serve", kv_pages: int | None = 32,
                  weight_blocks: int | None = None, kv_lib: str | None = None,
-                 backend_of: Callable[[CommitSession, Path | None], StoreBackend] | None = None,
                  out: str | Path | None = None, node: str | None = None, codec: rcodec.Codec = rcodec.DEFAULT,
                  step_ms: float = 0.0, filler_gib: float = 0.0, log: Callable[[str], None] = print) -> None:
         address(verifier)
@@ -658,10 +634,8 @@ class CommitSession:
             raise ValueError(f"the Commit's session is serve, not {plan!r}: its store (weights and filler) appends nothing")
         if kv_pages is not None and kv_pages < 1:
             raise ValueError("the session's KV pool is at least a page (None: the engine's own)")
-        if backend_of is not None and kv_lib is None:
-            raise ValueError("a store read in place is encoded in place by kv.cu: give kv_lib with backend_of")
         self.verifier, self.plan, self.kv_pages, self.weight_blocks = verifier, plan, kv_pages, weight_blocks
-        self.kv_lib, self.backend_of, self.step_ms, self.filler_gib = kv_lib, backend_of, step_ms, filler_gib
+        self.kv_lib, self.step_ms, self.filler_gib = kv_lib, step_ms, filler_gib
         self.out, self.node, self.codec, self.log = None if out is None else Path(out), node, codec, log
         self.store, self.binder = NodeMemory(), None
         self.lockstep: Lockstep | None = None
@@ -726,11 +700,8 @@ class CommitSession:
             raise RuntimeError("a store serves one session: the Commit's session audits one run")
         self.lockstep = Lockstep()
         path = None if self.out is None else self.out / "memory_map.jsonl"
-        if self.backend_of is not None:
-            self.backend = self.backend_of(self, path)
-        else:
-            device = None if self.kv_lib is None else KvDevice(self.kv_lib, self.codec)
-            self.backend = StoreBackend(self.store, self.lockstep, path=path, device=device)
+        device = None if self.kv_lib is None else KvDevice(self.kv_lib, self.codec)
+        self.backend = StoreBackend(self.store, self.lockstep, path=path, device=device)
         self.backend.step_ns = round(self.step_ms * 1e6)
         self._thread = threading.Thread(target=self._session, name="remote-session", daemon=True)
         self._thread.start()
@@ -740,13 +711,11 @@ class CommitSession:
     def _session(self) -> None:
         backend, error, result, agree = self.backend, None, {}, {}
         try:
-            (result,) = prove(backend, self.verifier, self.plan, node=self.node.encode(), codec=self.codec, log=self.log,
-                              warmup_ns=round(getattr(backend, "warmup_ms", 0.0) * 1e6))
+            (result,) = prove(backend, self.verifier, self.plan, node=self.node.encode(), codec=self.codec, log=self.log)
             agree = store_map.agreement(backend)
         except Exception as e:  # noqa: BLE001  -- recorded: a session that fails is rejected, and the Commit's verdict still written
             error = f"{type(e).__name__}: {e}"
         try:
-            getattr(backend, "close", lambda: None)()
             trace = backend.trace
             steps = result.get("pass_steps") or []
             self.record = {
@@ -755,8 +724,7 @@ class CommitSession:
                 "store": self.binder.stats() if self.binder is not None else None, "layout": backend.layout(),
                 "kv_pages": self.kv_pages, "weight_blocks": self.weight_blocks, "step_ms": self.step_ms,
                 "filler_gib": self.filler_gib,
-                "encode": ("kv.cu in place" if self.backend_of else "kv.cu") if backend.device is not None else "cpu",
-                "gates": backend.gates, "device": getattr(backend, "session_stats", dict)(),
+                "encode": "kv.cu" if backend.device is not None else "cpu", "gates": backend.gates,
                 "memory_map": None if trace is None else {
                     "path": None if backend.path is None else str(backend.path),
                     "registration": backend.registration.digest.hex(), "first_step": trace.first, "steps": trace.steps,

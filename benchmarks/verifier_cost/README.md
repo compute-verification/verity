@@ -191,6 +191,26 @@ research run --as proofs --on auto --cpus 16 --mem-gb 64 --max-min 150 --cwd sou
   env FM_MEM_GB=64 bash benchmarks/verifier_cost/flock_members.sh
 ~~~
 
+`flock_sessions.sh census:NAME [N...]` measures the Lean verifier's seconds on a served block type's sessions, on one
+core, against the statement's blocks. `flock_sessions.py stage` stages the type's flat statement at `full` as
+`served_units/stage.py` stages a census type, and from the same lowering its first N blocks for each N. Per N, the CPU
+prover proves one loopback `--zk` session sampling all N blocks, and `verify --zk` checks it as the proof server's
+verdict pool calls it, pinned to one core; for the first N one more call takes two sessions of it. A proof server's
+saved sessions of the full statement, sent as `sessions.tar` (one directory a session), are handed to one `verify`
+together. `verify` reads the statement once a call
+(its `inputs:` line) and then sets up and checks each session it was handed, so `summary.json`
+(`verity/flock-sessions/v1`) splits a call into the read, paid once a circuit, and each session's seconds, with their
+median at each block count and the line through them: the seconds a session pays whatever its blocks, and the seconds
+a block. `phases.jsonl` is `flock_read/Main.lean`'s phases of the read, and `perf-symbols.txt` one call's profile. A
+census statement binds no Program, so every session here is refused for want of `--program` once every check has
+passed.
+
+~~~sh
+research run --as proofs --project verity --on auto --mem-gb 48 --source . --cwd source --declared-output 'out/*' \
+  [--send sessions.tar] -- env FS_MEM_GB=48 bash benchmarks/verifier_cost/flock_sessions.sh \
+  'census:ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}' 1 16 256
+~~~
+
 `table_root/table_root.sh` measures the Lean verifier's SHA-512 rate and what a history table's root costs it at the
 pinned capacity (`Spot.HistoryTable.CAPACITY`, `2^17` ranks): `table_root/Main.lean`, built in a scratch Lake package
 against the checkout's verifier, times `Flock.Sha512.hash` at the message lengths the verifier hashes and at 1 MiB, the

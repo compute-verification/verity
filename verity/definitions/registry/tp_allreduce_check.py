@@ -56,11 +56,18 @@ def _butterfly0(v: np.ndarray) -> np.ndarray:
 def mnnvl_norm_rows(parts: np.ndarray, res: np.ndarray, w: np.ndarray, shot: int, cluster: int, eps: float,
                     fma: bool) -> tuple[np.ndarray, np.ndarray]:
     """(normed, residual') bf16 words (M, N) of `trtllm_allreduce_fusion(kARResidualRMSNorm)` on the MNNVL backend."""
-    parts, res, w = np.asarray(parts, np.uint16), np.asarray(res, np.uint16), np.asarray(w, np.uint16)
-    M, N = res.shape
-    block = N // (8 * cluster)
+    parts, res = np.asarray(parts, np.uint16), np.asarray(res, np.uint16)
     a = mnnvl_rows(parts, shot)
     r = DR.f2fp_bf16(DR.add_rn(_widen(a), _widen(res)))
+    return mnnvl_norm_of(r, w, shot, cluster, eps, fma)[0], r
+
+
+def mnnvl_norm_of(r: np.ndarray, w: np.ndarray, shot: int, cluster: int, eps: float, fma: bool) -> tuple[np.ndarray, np.ndarray]:
+    """(normed bf16 words (M, N), the scale rs's f32 words (M,)) of `RmsNormMnnvl_v1` on the residual rows ``r``: the norm half
+    of `mnnvl_norm_rows`, its scale `RmsNormMnnvlSumSq_v1`'s."""
+    r, w = np.asarray(r, np.uint16), np.asarray(w, np.uint16)
+    M, N = r.shape
+    block = N // (8 * cluster)
     rf = _widen(r)
     if shot == 1:
         sq = _widen(DR.f2fp_bf16(DR.mul_rn(rf, rf))).reshape(M, cluster, block, 8)
@@ -84,10 +91,10 @@ def mnnvl_norm_rows(parts: np.ndarray, res: np.ndarray, w: np.ndarray, shot: int
     rcp = DR.mufu_rcp_ftz(np.array([np.float32(N)]).view(U32))[0]
     e = U32(T.eps_bits(eps))
     arg = DR.fma_ftz(total, rcp, e) if fma else DR.add_ftz(DR.mul_ftz(total, rcp), e)
-    rs = DR.rsqrt_approx(arg)[:, None]
+    rs = DR.rsqrt_approx(arg)
     g = DR.add_ftz(np.zeros(N, U32), _widen(w))[None, :]
-    y = DR.mul_ftz(DR.mul_ftz(rf, rs), g) if shot == 1 else DR.mul_ftz(DR.mul_ftz(g, rf), rs)
-    return DR.f2fp_bf16(y), r
+    y = DR.mul_ftz(DR.mul_ftz(rf, rs[:, None]), g) if shot == 1 else DR.mul_ftz(DR.mul_ftz(g, rf), rs[:, None])
+    return DR.f2fp_bf16(y), rs
 
 
 def custom_rows(parts: np.ndarray, stage: int) -> np.ndarray:

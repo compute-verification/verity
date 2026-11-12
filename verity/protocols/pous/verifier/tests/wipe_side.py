@@ -47,6 +47,12 @@ class LeafZero:
         return lms.sign_at(self.key, 0, lms.memory_challenger_message(self.key.I, session, record)).encode()
 
 
+def key_sha512() -> str:
+    """The SHA-512, in hex, of the public key this side signs every session under: what a verifier of its sessions pins
+    (`period.json`'s `wipe.trusted_sha512`)."""
+    return hashlib.sha512(LeafZero().public_key).hexdigest()
+
+
 def main() -> int:
     device = Path(sys.argv[1])
     request = json.loads(sys.stdin.readline())

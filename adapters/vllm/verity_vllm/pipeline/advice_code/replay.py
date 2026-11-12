@@ -14,15 +14,18 @@ pin, d9105ea80) decides those rows deterministically from:
   in-flight tokens and output placeholders, and the KV block pool (`pool.BlockPool`: its free count, and with caching its LRU
   free queue and hash map);
 - one timing input: the engine step each request is first visible at (the engine core adds every request that arrived
-  before it calls `schedule`).
+  before it calls `schedule`), and under async scheduling how many of that step's `schedule` calls came first: with a
+  step in flight the engine core can call `schedule` again at the same step count and schedule nothing (when every
+  running request's last token is in flight, say), and a request added before that call meets blocks the step in
+  flight still holds.
 
 `replay` is that model: the served subset of `Scheduler.schedule` and `update_from_output`, `AsyncScheduler`, and the
 engine core's two loops (`EngineCore.step`, `step_with_batch_queue`), over the block pool. It refuses what it doesn't
 model (priority policy, spec decode, KV connectors, multimodal, LoRA, structured output, aborts and stop strings) rather
-than guess. It takes the timing input as each request's admission step (`admit`), or as `decide`, asked only at an
-*open* step, one whose waiting loop reached the queue's end with room to admit the next request, whether that request
-had arrived: at every other step it would be blocked whether it had arrived or not, and an arrival into a quiet engine
-starts the next step. `compare` matches two schedules step by step.
+than guess. It takes the timing input as each request's admission step and calls passed (`admit`, `passed`), or as
+`decide`, asked only at an *open* step, one whose waiting loop reached the queue's end with room to admit the next
+request, whether that request had arrived: at every other step it would be blocked whether it had arrived or not, and an
+arrival into a quiet engine starts the next step. `compare` matches two schedules step by step.
 
 **The certified tick** (``--admit tick``, `verity_vllm.pipeline.serve_admit.TickGate`) removes the timing input: the engine
 adds a request when a logical clock T has passed the close of its network-certifier release bucket, and T is a function of
@@ -317,8 +320,10 @@ class Replay:
     steps: list[Step]
     finish: list[str | None]
     admitted: list[int | None]      # the executed step each request was first visible at
+    passed: list[int]               # the `schedule` calls already made at that step when it became visible
     forced: list[bool]              # it arrived into a quiet engine
     asked: list[list[int]]          # the open steps it was asked about, its admission last
+    clock: list[int]                # under the certified tick, T after each executed step (µs); else empty
 
 
 Emitted = list[dict[int, int]]     # per executed step, in order: request -> the index of the output it emitted there
@@ -399,37 +404,47 @@ def _whatif(s: Scheduler, queue: Queue, p: _Pass, i: int, now: bool, want: int) 
 
 
 def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int] | None = None,
-           decide: Decide | None = None, tick: Tick | None = None, released: Sequence[int] | None = None,
-           max_steps: int | None = None) -> Replay:
+           passed: Sequence[int] | None = None, decide: Decide | None = None, tick: Tick | None = None,
+           released: Sequence[int] | None = None, max_steps: int | None = None) -> Replay:
     """Run the scheduler over `requests` (in the order they reached the engine) and return the executed steps.
 
     Exactly one of: `admit`, each request's `before_step` (it is added before the first `schedule` after `admit[i]`
-    executed steps, as the engine core adds it); `decide(i, k, open)`, asked at each open step k whether the next
-    request i has arrived (an arrival into a quiet engine is added without asking); or `tick` with `released`, each
-    request's certified release bucket (the requests in release order, so nondecreasing), added by the certified tick.
+    executed steps once `passed[i]` calls have been made at that step count, as the engine core adds it; `passed`
+    defaults to all 0, and `replay(admit=r.admitted, passed=r.passed)` reproduces any run `r`, which `admitted` alone
+    can't under async scheduling); `decide(i, k, open)`, asked at each open step k whether the next request i has
+    arrived (an arrival into a quiet engine is added without asking); or `tick` with `released`, each request's
+    certified release bucket (the requests in release order, so nondecreasing), added by the certified tick.
     Under the tick, T starts at 0; before each iteration of the engine core's loop, when nothing is running or waiting T
     jumps to the next request's bucket close, and every request whose bucket has closed by T ((a + 1)·τ_b ≤ T) is added,
     except at an iteration that only frees finished requests (nothing running or waiting), which adds none; after each
-    step that schedules a token, T advances by τ_sat if the waiting queue is nonempty and by τ_free if it is empty."""
+    step that schedules a token, T advances by τ_sat if the waiting queue is nonempty and by τ_free if it is empty
+    (`Replay.clock` keeps T after each such step)."""
     n = len(requests)
     if (admit is not None) + (decide is not None) + (tick is not None) != 1:
         raise ValueError("give exactly one of admit, decide and tick")
     if (tick is None) != (released is None):
         raise ValueError("give the release buckets with the tick, and only with it")
+    if passed is not None and admit is None:
+        raise ValueError("give passed only with admit")
     if admit is not None:
         if len(admit) != n:
             raise ValueError(f"{len(admit)} admission steps for {n} requests")
-        if any(admit[k] > admit[k + 1] for k in range(n - 1)):
-            raise ValueError("admission steps must be nondecreasing in arrival order (FCFS)")
+        passed = [0] * n if passed is None else passed
+        if len(passed) != n or any(type(c) is not int or c < 0 for c in passed):
+            raise ValueError(f"give one int ≥ 0 of passed per request ({len(passed)} for {n} requests)")
+        if any((admit[k], passed[k]) > (admit[k + 1], passed[k + 1]) for k in range(n - 1)):
+            raise ValueError("admission steps, then passed, must be nondecreasing in arrival order (FCFS)")
     if released is not None:
         if len(released) != n:
             raise ValueError(f"{len(released)} release buckets for {n} requests")
         if any(type(a) is not int or a < 0 for a in released) or any(released[k] > released[k + 1] for k in range(n - 1)):
             raise ValueError("release buckets are ints ≥ 0, nondecreasing in release order")
     s = Scheduler(engine, requests)
-    out = Replay(steps=[], finish=[None] * n, admitted=[None] * n, forced=[False] * n, asked=[[] for _ in range(n)])
+    out = Replay(steps=[], finish=[None] * n, admitted=[None] * n, forced=[False] * n, asked=[[] for _ in range(n)],
+                 clock=[], passed=[0] * n)
     nxt = 0
     T = 0
+    here = 0                        # the `schedule` calls made since the last step with rows
     queue: Queue = deque()
     limit = max_steps if max_steps is not None else 4 * (sum(r.prompt_len + r.output_len for r in requests) + n) + 64
 
@@ -437,6 +452,7 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
         nonlocal nxt
         s.add(nxt)
         out.admitted[nxt] = len(out.steps)
+        out.passed[nxt] = here
         out.forced[nxt] = forced
         nxt += 1
 
@@ -453,8 +469,8 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
 
     def top() -> bool:
         nonlocal T
-        if admit is not None:
-            while nxt < n and admit[nxt] <= len(out.steps):
+        if admit is not None and passed is not None:
+            while nxt < n and (admit[nxt], passed[nxt]) <= (len(out.steps), here):
                 add(s.quiet())
         elif tick is not None and released is not None:
             if not (s.quiet() and s.finished_ids):
@@ -474,12 +490,15 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
         return True
 
     def schedule() -> tuple[Step, dict[int, bool]]:
-        nonlocal T
+        nonlocal T, here
         step, samples = s.schedule(on_open if decide is not None else None)
+        here += 1
         if step.rows:
             out.steps.append(step)
+            here = 0
             if tick is not None:
                 T += tick.sat_us if (s.waiting or s.skipped) else tick.free_us
+                out.clock.append(T)
         return step, samples
 
     def executed(step: Step, samples: dict[int, bool]) -> None:

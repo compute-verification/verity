@@ -83,10 +83,7 @@ def test_the_remote_options_parse_into_their_group_and_are_refused_before_the_mo
     assert refusal(opts) is None and SR.session_of(parse(), "/tmp") is None and SR.accepted(None)
     assert "HOST:PORT" in refusal(parse("--remote-verifier", "nohost"))
     assert "is serve" in refusal(parse(*VERIFIER, "--remote-plan", "servedrop:1"))
-    assert "kv_lib" in refusal(parse(*VERIFIER, "--remote-session-lib", "session.so"))
     assert "--prefix-caching" in refusal(parse(*VERIFIER, "--prefix-caching"))
-    h1 = parse(*VERIFIER, "--remote-session-lib", "session.so", "--remote-kv-lib", "kv.so", "--protocols", "pouw:eps1-sm120-h1fx1")
-    assert "host mirror" in SR.refusal(h1)
     assert SR.refusal(parse(*VERIFIER, "--remote-kv-lib", "kv.so", "--protocols", "pouw:eps1-sm120-h1fx1")) is None
 
 

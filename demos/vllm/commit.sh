@@ -10,20 +10,24 @@
 # commit/replay_bundle_p0/, named in commit/verdict.json's replay_deferred (a TP Commit's are replay_bundle_p0_rank<r>/ and
 # replay_deferred.json). The CPU replay deletes a full bundle once it leaves its slim keep (row_config.replay), so the sealed bundle
 # is hard-linked aside first and put back after it. The workload dir stays on the node under `research keep`, the only copy of
-# its bundle and its slim keep, and nothing stores it. $OUT is published as the run's record, so it keeps the workload's
-# top-level records and logs and match/'s top-level files, and no file of commit/: the Commit's records there hold values (the
-# token record tokens_p<pair>.json, the sampled replays' served lists), and so do the bundle and the keep (the committed store
-# with its salts, the weights key, the opened weights, the requests and served tokens).
+# its bundle and its slim keep, and nothing stores it. $OUT is published as the run's record, so it holds only the files
+# published.sh lists, each with the reason it holds nothing of a request: this script's own machine.txt, steps.txt,
+# verdicts.txt and bundle.sha256, and the row's records listed there. Every other file stays on the node and the run names
+# it: the row dir's (match/spec.json holds the prompts, commit/ the token record, the bundle and the keep; stages.txt, row.log
+# and the stages' logs can quote a served token on a FAIL), and under KEPT, beside the row dir, each stage's output, the
+# row dir's sizes and what `row run` writes for a research run (result.json and its evidence/ copies of the row's records:
+# the stages get KEPT as their run dir, never the published one).
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
+. "$(dirname "${BASH_SOURCE[0]}")/published.sh" || exit 2
 for v in ROW ROLE REPO REV VENV CUDA_HOME HF_HOME LLAMA_ROOT; do
   [ -n "${!v:-}" ] || { echo "commit.sh: no $v: start it with \`verity demo vllm commit\` (demos/vllm/run.sh)"; exit 2; }
 done
 TREE=$PWD
 ROOT=$LLAMA_ROOT
 BASE=$ROOT/${RESEARCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}
-D=$BASE/$ROW
-mkdir -p "$D" "$ROOT/cache" "$BASE/sealed"
+D=$BASE/$ROW KEPT=$BASE/unpublished
+mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$KEPT"
 export PY=$VENV/bin/python PY312=$VENV/bin/python HF_HOME HF_HUB_OFFLINE=1
 export CUDA_HOME TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions
 export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
@@ -38,22 +42,21 @@ rs() { "$PY" -m research "$@" 2>&1 || research "$@" 2>&1; }
 rs keep "$ROOT" --owner @vllm --expires 14d --priority high \
   --why "PROVE-PATH: Llama-3.2-1B TP1 Commits of record with their sealed replay bundles, Builds and Matches" | tail -2
 
-row() {  # NAME ARGS...: one `verity-vllm row run` of the workload dir, its output in $OUT/NAME.out
+row() {  # NAME ARGS...: one `verity-vllm row run` of the workload dir, its output in KEPT/NAME.out; prints its stages' verdict words
   local name=$1; shift
   echo "$(date -u +%H:%M:%SZ) $name: $*" | tee -a "$OUT/steps.txt"
-  (cd "$TREE/adapters/vllm" && "$PY" -m verity_vllm.pipeline.cli row run "$ROW" "$ROLE" "$REPO" "$REV" --sweep-dir "$BASE" "$@") \
-    > "$OUT/$name.out" 2>&1
+  (cd "$TREE/adapters/vllm" && "$PY" -m verity_vllm.pipeline.cli row run "$ROW" "$ROLE" "$REPO" "$REV" --sweep-dir "$BASE" \
+     --research-run-dir "$KEPT" "$@") > "$KEPT/$name.out" 2>&1
   local rc=$?
   echo "$(date -u +%H:%M:%SZ) $name rc=$rc" | tee -a "$OUT/steps.txt"
-  tail -5 "$OUT/$name.out"
+  verdicts "$D/stages.txt" "$OUT"
   return $rc
 }
-records() {  # the workload's records into $OUT, which the run publishes: never a file of commit/ (values), nor the capture
-  for f in stages.txt row.log verdict.json build_summary.json manifest.json config_record.json strict_word.json target_family.json \
-    gpu_lease.json effective_config.json commit.log match.log build.log replay.log manifest.log; do cp "$D/$f" "$OUT/" 2>/dev/null; done
-  mkdir -p "$OUT/match"
-  find "$D/match" -maxdepth 1 -type f -size -50M -exec cp {} "$OUT/match/" \; 2>/dev/null
-  du -sh "$D" "$D"/* 2>/dev/null > "$OUT/sizes.txt"
+records() {  # the workload's records into $OUT, which the run publishes: only the files published.sh lists, and $OUT holds no other
+  publish "$D" "$OUT"
+  verdicts "$D/stages.txt" "$OUT" > /dev/null
+  du -sh "$D" "$D"/* 2>/dev/null > "$KEPT/sizes.txt"
+  hold "$OUT" "$KEPT/out"
 }
 stop() { records; echo "STOPPED at $1"; exit "$2"; }
 
@@ -68,5 +71,4 @@ row replay --stages replay --config-run 1 --replay-k 460; rr=$?
 [ -d "$B" ] || cp -al "$BASE/sealed/replay_bundle_p0" "$D/commit/" || stop "restoring the sealed bundle" 15
 (cd "$B" && sha256sum MANIFEST.json) | tee "$OUT/bundle.sha256"
 records
-tail -8 "$OUT/stages.txt" 2>/dev/null
 exit $(( rr != 0 ? 16 : 0 ))

@@ -26,7 +26,9 @@ operand of at least eps >= 2^-126 (`dsa.check_eps`'s reason).  kv_cache_dtype "a
 
 Registered: `DsaRMSNorm_v1{N, EPS}` (x: N bf16, w: N bf16) -> N bf16, one token's row; `boolean_dsa_norm.DsaRMSNorm_v2` on bits.  N is
 a power of two from 256: at N = 128 a thread holds one element and the compiler contracts the first butterfly level instead (as
-`dsa.DsaIndexerKRow_v1`'s variance), which this body does not state.  `DsaLatentRow_v1{KVL, R, EPS}` (kv: KVL + R bf16, w: KVL bf16,
+`dsa.DsaIndexerKRow_v1`'s variance), which this body does not state.  `DsaRMSNormSumSq_v1{N, EPS}` (x) -> f32 and
+`DsaRMSNormApply_v1{G}` (x: G bf16, w: G bf16, r: f32) -> G bf16 are that row cut at its scale r, the one word every output
+element reads, so that no unit returns a whole row; `boolean_dsa_norm` has their `_v2`s.  `DsaLatentRow_v1{KVL, R, EPS}` (kv: KVL + R bf16, w: KVL bf16,
 cs: R bf16) -> KVL + R bf16 is program 1's whole row, the cache's [kv_c | k_pe]: `DsaRMSNorm_v1{KVL, EPS}` of kv's first KVL words,
 then `boolean_rope.RoPEHeadGptJ_v2{R}` of its last R; `boolean_dsa_norm.DsaLatentRow_v2` on bits.
 
@@ -59,7 +61,7 @@ from verity.definitions.evidence import EVIDENCE
 from verity.definitions.registry import dsa as D
 from verity.definitions.registry import prims as P
 from verity.definitions.registry.boolean_rope import RoPEHeadGptJV2
-from verity.definitions.registry.prims import BF16
+from verity.definitions.registry.prims import BF16, F32
 
 THREADS, WARP = 128, 32
 _CONF = ("model-untested: read from the Triton kernel and its PTX at the commits the module docstring pins; "
@@ -107,6 +109,12 @@ def rms_norm(o: D.Ops, S, x, w, to_bf16, t=BF16, threads: int = THREADS, block: 
     if block is None:
         check_statics(S.N, S.EPS)
     xf = [o.cvt(x[i]) for i in range(S.N)]
+    return rms_apply(o, rms_scale(o, S, xf, threads, block, fused_eps=fused_eps), xf, w, to_bf16, t)
+
+
+def rms_scale(o: D.Ops, S, xf: list, threads: int = THREADS, block: int | None = None, *, fused_eps: bool = False):
+    """`rms_norm`'s ``r`` from the row's f32 words ``xf``: each thread's FMA chain, the warps' butterflies and their halving tree,
+    then rsqrt of eps plus the mean."""
     zeros: list = []
 
     def zero():
@@ -130,12 +138,27 @@ def rms_norm(o: D.Ops, S, x, w, to_bf16, t=BF16, threads: int = THREADS, block: 
     total = D.halving_tree([D.halving_tree(lanes[WARP * g:WARP * g + WARP], add) for g in range(threads // WARP)], add)
     n = o.word(D.f32_bits(S.N))
     if fused_eps:
-        r = o.rsqrt(o.fma(o.scale_a(total, n), o.rcp(n), o.word(D.f32_bits(S.EPS))))
-    else:
-        mean = o.mul(o.scale_a(total, n), o.rcp(n))
-        r = o.rsqrt(o.add(o.word(D.f32_bits(S.EPS)), mean))
-    y = [o.B.call(to_bf16, o.mul(o.mul(r, xf[i]), o.cvt(w[i]))) for i in range(S.N)]
-    return Coll(Array(S.N, t), concat([v.refs for v in y]))
+        return o.rsqrt(o.fma(o.scale_a(total, n), o.rcp(n), o.word(D.f32_bits(S.EPS))))
+    mean = o.mul(o.scale_a(total, n), o.rcp(n))
+    return o.rsqrt(o.add(o.word(D.f32_bits(S.EPS)), mean))
+
+
+def rms_apply(o: D.Ops, r, xf: list, w, to_bf16, t=BF16) -> Coll:
+    """`rms_norm`'s output words from its scale ``r`` and the f32 words ``xf``: ``bf16(r * x * f32(w))``, the products in that
+    order."""
+    y = [o.B.call(to_bf16, o.mul(o.mul(r, xf[i]), o.cvt(w[i]))) for i in range(len(xf))]
+    return Coll(Array(len(xf), t), concat([v.refs for v in y]))
+
+
+def sum_sq(o: D.Ops, S, x):
+    """`DsaRMSNormSumSq`'s body: `DsaRMSNorm`'s ``r`` of the row x."""
+    check_statics(S.N, S.EPS)
+    return rms_scale(o, S, [o.cvt(x[i]) for i in range(S.N)])
+
+
+def apply(o: D.Ops, G: int, x, w, r, to_bf16, t=BF16) -> Coll:
+    """`DsaRMSNormApply`'s body: `DsaRMSNorm`'s output words for G elements x of its row, from its scale r."""
+    return rms_apply(o, r, [o.cvt(x[i]) for i in range(G)], w, to_bf16, t)
 
 
 @composite("DsaRMSNorm", 1, ["N", "EPS"], lambda S: ((("x", Array(S.N, BF16)), ("w", Array(S.N, BF16))), Array(S.N, BF16)),
@@ -145,6 +168,25 @@ def DsaRMSNorm(B, S, x, w):
     the sum of squares each thread's FMA chain over its `layout` registers, each warp's butterfly, then `(w0 + w2) + (w1 + w3)`;
     `r = rsqrt.approx.ftz(eps + div.full(sum, N))`; `y = bf16(r * x * f32(w))`, the products in that order."""
     return rms_norm(D.word_ops(B), S, x, w, P.F2fpBf16)
+
+
+_SPLIT_CONF = ("model-untested: `DsaRMSNorm_v1` cut at its scale; the scale and N / G apply units return its words "
+               "(`verity/definitions/tests/test_mnnvl_and_dsa_norm_splits.py`)")
+
+
+@composite("DsaRMSNormSumSq", 1, ["N", "EPS"], lambda S: ((("x", Array(S.N, BF16)),), F32), conformance=_SPLIT_CONF)
+def DsaRMSNormSumSq(B, S, x):
+    """`DsaRMSNorm_v1`'s scale on its own: ``r = rsqrt.approx.ftz(eps + div.full(sum, N))``, the one f32 word each output element
+    reads."""
+    return sum_sq(D.word_ops(B), S, x)
+
+
+@composite("DsaRMSNormApply", 1, ["G"],
+           lambda S: ((("x", Array(S.G, BF16)), ("w", Array(S.G, BF16)), ("r", F32)), Array(S.G, BF16)), conformance=_SPLIT_CONF)
+def DsaRMSNormApply(B, S, x, w, r):
+    """`DsaRMSNorm_v1`'s output elements from its scale r, element by element: G columns of the row are this Definition at width
+    G on those columns of x and w."""
+    return apply(D.word_ops(B), S.G, x, w, r, P.F2fpBf16)
 
 
 def block_rms_norm(o: D.Ops, S, x, w, to_bf16, t=BF16) -> Coll:
@@ -177,4 +219,4 @@ def DsaLatentRow(B, S, kv, w, cs):
     return Coll(Array(S.KVL + S.R, BF16), concat([kvc.refs, kpe.refs]))
 
 
-DSA_NORM_COMPOSITES = [DsaRMSNorm, TritonBlockRMSNorm, DsaLatentRow]
+DSA_NORM_COMPOSITES = [DsaRMSNorm, DsaRMSNormSumSq, DsaRMSNormApply, TritonBlockRMSNorm, DsaLatentRow]

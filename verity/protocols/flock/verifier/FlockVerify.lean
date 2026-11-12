@@ -1069,8 +1069,8 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (args : List Strin
   -- `FailClosed.ScopeP` is the check without --registered F: no plain multi-table claim reads a shared-row public file
   let scope := if plainTables then ProvedScope.checkPOf parsed tags pubB count program publicInputs.isSome false
     else ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
-  -- the program's digest and readings as `readers` gives them, for the verdict, every setup and every reader in one: each
-  -- is what it is with the program read anew (`ProgramRead.readers_of`, `buildSessionBy_read`, `…checkProgramBy_read`)
+  -- the program's digest and readings as `readers` gives them, for the verdict and the three readers below: each is
+  -- what it is with the program read anew (`ProgramRead.readers_of`, `buildSessionBy_read`, `…checkProgramBy_read`)
   let read := readers (program.getD ByteArray.empty)
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
