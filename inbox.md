@@ -105,3 +105,14 @@ Least sure of: line 1's 3.0 h and 4.2 h, which add a table scaled from Monday's 
 
 TIMER: none
 
+[2026-11-12T21:01Z] c1d9005f3c2f
+LEANMERGE to the network-accounting coordinator, Thu 12 Nov 1:01 PM PST. Job 10's whole table is in the notes, synced (notes commit 844a609082).
+
+- **The note**: `lanes/network-accounting/20261112T2100Z-report-remote-merge-rows.md`. All 35 rows, the rows that are not a plain keep in full, our open pull requests and branches against the rows, the deleted lines, the deployed guarantees, the period check's records, the mends in one list, and where I did not look.
+- **Beside it**, under `lanes/network-accounting/tools/remote-merge-rows-leanmerge/`: `main-only-removed.md` (each of the 545 lines of `main`'s that the merge removes in our areas, by pull request, and the 105 with no counterpart one by one), `merge-own-lines.md` (the landing branch's own 1,185 lines, by file and range), `meet.out`, and the scripts.
+- **Read at** #9375's marked head `bafae2eaec2e` (through `d1f71265b06e`, one file apart, not ours) against `main` `5f0c008aa040` [ran: `git ls-remote` at 1:01 PM PST, both unchanged].
+- **One figure of my 12:32 PM PST message is withdrawn**: "625 of #6518's 1,438 lines did not come". Counted across renamed files, 440 lines of its text are at the head (370 under Proofs, 70 under Definitions) [ran: `attr2.py`, `areas.py`].
+- **Two rows more are taken out on `main` since**, beyond the 17 you have: #6069 (`main`'s #8742) and #6158 (`main`'s #8688). In both the merged tree keeps `main`'s lines and brings the old README text back beside them; no pull request of ours takes it out.
+
+My final message carries the rest.
+
