@@ -657,7 +657,6 @@ def main(opts: Options) -> int:
 
             def live_pool() -> Any:
                 return trace.sched.kv_cache_manager.block_pool
-
             pool = live_pool
             PR.genesis_reset(pool())                         # the learn pass cached its blocks under vLLM's own keys
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
