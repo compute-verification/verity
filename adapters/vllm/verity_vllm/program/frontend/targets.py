@@ -229,14 +229,6 @@ def moe_expert_fp8_launch_dot(profile, bm: int, bn: int, warps: int, swap: bool)
     return dot
 
 
-def wgmma_tile(config: dict, swap: bool) -> bool:
-    """Whether Triton 3.7.1 lowers a `fused_moe_kernel` launch's `tl.dot` to wgmma (MMAv3): the dot's M (BLOCK_SIZE_N under
-    SWAP_AB, else BLOCK_SIZE_M) is a multiple of 64 over a multiple of 4 warps and its N a multiple of 16.  Other registered
-    cc 9.0 tiles take MMAv2 (`fp8_moe.sm90_dot`)."""
-    m, n = (config["BLOCK_SIZE_N"], config["BLOCK_SIZE_M"]) if swap else (config["BLOCK_SIZE_M"], config["BLOCK_SIZE_N"])
-    return config.get("num_warps", 4) % 4 == 0 and m % 64 == 0 and n % 16 == 0
-
-
 def moe_fp8_tuned_tile_refusal(profile, bm: Any, bn: Any, kb: Any, warps: Any, swap: Any) -> str | None:
     """None when a tuned (not batch-invariant) block-FP8 `fused_moe_kernel` tile is one the Definitions model on the declared target:
     cc 9.0, SWAP_AB = `enable_swap_ab` (BLOCK_SIZE_M < 64 and BLOCK_SIZE_N >= 64, vLLM d9105ea80 fused_moe/utils.py:628-633), BLOCK_SIZE_K
