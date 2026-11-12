@@ -90194,3 +90194,75 @@ The kept drafts' row and the message for Daniel of my 13:31Z revision stand unch
 7. **For you, not mine:** #9080's head is now `04f1d735ac9d` and it adds two entries to the same list, one site each (`AddressesWired.lean` 125 and `RevealsWired.lean` 353: the verifier's field `read.draw`, a Lean name too) [read]. The candidate that lands it will be reported the same way unless two other counts fall with it. After #9307 the list has room of eight below 107,113, but the gate judges each change against its own base, so that room does not cover it [derived].
 8. **Pull request 3:** `cursor/proofs-wired-9d3e` at `1f8137c50bac` (the fast-forward, `main` merged at `57d5b5bb7717`, the restatement as one commit), pushed, not opened [run]. In flight on it, both launched 13:32Z on vy-nebius-cpu-1: the records run with `--update`, `r20261112-133217-29e3` (about 35 minutes once it has a slot [guess]), and the tries with `--siblings`, `r20261112-133218-ae4d`; both read as running at 13:43Z [run]. #9043's body sentence naming `Spot.Bits.check` was mended at 13:12Z; its head did not move [run].
 9. **Your 13:45Z section is read.** Next, in this order: the three questions as one entry by 16:30Z; then the text changes of its part A, with the lock commit when the records run ends. I mark nothing.
+
+## OUTBITS, Thu 12 Nov 13:52Z: PRF-594, first step, no code: counting a returned input moves 3 of the 105 served templates (2 change class), refusing stops those 3; but the gap is wider than returned inputs: 49 templates return one gate on several leaves, and 32 of them are sized at half the row they commit; the proofs already bound a block by its row (16 bits an output leaf, at each session), so I lean to sizing a block by the row it commits, with one question for the lean lane first; yours to choose
+
+Your 13:26Z is read. Its sentence is in #9282's body since 13:48Z, as the first bullet under "How a reader of the residual add's output reads it"; the head is unchanged at `520a40377d41` and the pull request is unmarked [run].
+
+Tags: [run] I ran it, [read] I read it, [relayed] another's claim I did not check, [derived] computed from those, [guess]. Runs are `research run --on auto` on CPU nodes, on `main` at `71a2afe671aa`, unless they say local. No Lean was built and no code is changed.
+
+**What I need from you**
+
+1. The way. The issue names two; I set a third beside them because the data asks for it. I lean to the third: a block's size is the row it commits, every leaf of its return. The leaning rests on one thing I did not trace ("What would change it", below). The choice is yours, and it may be Daniel's, since it changes which public size class 34 served templates are in.
+2. Whether circuits should be told now that the long row's pick returns input bits (8, 16 and 24 at rounds 1, 2 and 3; the pick CIR-251's switch serves does too). Under "refuse" they would have to change it.
+
+**The three sizes a template's block has today** [read]
+
+- The partition's, at registration: `_template_bits` (`verity/protocols/spot/verifier/one_stage/partition.py:111`) and Lean's `Spot.Partition.templateBits` (`verity/protocols/spot/verifier/lean/Spot/Partition.lean:107`). Each sums the return's leaf widths over the distinct gates the template returns that are gates of its own activation. A returned input bit is left out. A gate returned on several leaves counts once. `_check_units` and `checkTemplates` refuse a template with no gate or with more bits than the widest class.
+- The session's, at each proof: `OneStageZk.returnedBits`, 16 bits for every output leaf of the circuit file, held to 262,144 by `OneStageZk.templateOk` (`Spot/OneStageZk.lean:153` to 159). Every leaf counts, an input's and a repeated one's too.
+- The planner's: `benchmarks/one_stage/block_census.py` sums the signature's output bits (lines 59, 90, 138).
+- What the proofs use is the session's. `security/Proofs/Flock/Bridge/SlotsKey.lean` gets "a unit commits at most 16 values per output leaf" from `OneStageZk.templateOk`, and `Bridge/Slots.lean` takes a block's bound as a hypothesis. No `.lean` file outside `Spot/Partition.lean` names `templateBits` or `checkTemplates`; the two locks do [run: `git grep`].
+- The weight a figure gives a wrong proof block is the partition's: `prove_path.template_bits` (`benchmarks/prove_path/prove_path.py:1140`) and `scan_zk.py:1428` hand `_template_bits` to the harm bound, which takes each template's weight as a parameter (`profile.harm_bound`, Lean's `Spot/Bound.lean`).
+
+**What the served templates do** [run: `r20261112-130020-3bb7` (first 34, then cancelled, see the end) and `r20261112-133251-374d` (the other 69 and two stand-ins); script and rows in `/opt/cursor/artifacts/prf594-*`]
+
+The set is the 105 templates `adapters/vllm/tools/description_sizes.py` calls served: those the partition files name and the long row's units. 103 are sized at their own statics. The two `SparseMlaHeadBlock_v2` are sized at NVIS = 1 and 2 in place of 16 and 64.
+
+- 3 return input bits: `DsaTopKDigitPick_v1{M=8,K=1,TOPK=2048}` 8 bits, `{K=2}` 16, `{K=3}` 24. They are the earlier rounds' digits, handed on [read: `dsa_topk_mask_cut.py`, `_pick`]. `DsaTopKDigitPick_v2`, which CIR-251's switch serves in its place, returns the same 16 and 24 at K=2 and 3 [run: local, on #9282's tree].
+- 49 of the 103 return one gate on several leaves, the 3 above among them (the two stand-ins do too, 96 bits each). By family: 32 `DsaTopKDigitCount_v1` (4,096 of each one's 8,192 returned bits), 9 `DsaMaskPositions_v1` (15 or 16 bits), 4 `Fp8GroupQuantUe8m0_v2` (44 to 1,056 bits), 4 `DsaTopKDigitPick_v1` (3 to 31 bits). In the two Definitions I read, the repeated gate is the constant 0 that pads a value to its leaf's width [read].
+- None returns only its input. The partition's count is 0 for none of them.
+- Widest row: 98,304 bits (`ResidualAdd_v2{N=6144}`), so no way below refuses a served template for width.
+
+**The ways, side by side**
+
+| | Count a returned input bit | Refuse a returned bit that is not the template's own gate | Size by the row: every returned leaf |
+|---|---|---|---|
+| Python | `_template_bits`: drop the test that a returned gate is the template's own. Two lines, and two docstrings that say the count is the activation's committed bits. | `_check_units`: a new refusal, its message saying to give each returned input a gate. About six lines. | `_template_bits` becomes the sum of the return's leaf widths, which is what it already returns for a primitive. Shorter than today. |
+| Lean | `templateBits`: drop the same guard. One line. | `checkTemplates`: the same refusal. | `templateBits` becomes the fold it already has for a primitive. |
+| Difftest (`verity/protocols/spot/verifier/lean/tests/test_difftest.py`) | Its members are five small templates, none returning an input beside a gate. The count shows only as a refusal past 262,144 bits, so it needs one population that wide. | One small member that returns an input: refused on both sides with the same words. The cheapest of the three to hold. | As the first column: a small member with an input and a repeated leaf, and one wide population. |
+| Python test | `test_one_stage.py`'s test of the two refusals gains a template that returns its input, held to its row's size. | The same test gains the refusal. | As the first column. |
+| Lock records | `Spot.Partition.templateBits`' digest and the module's, in `security/lean-audit.json` and `security/Properties/lean-audit.json`. | `checkTemplates`' digest and the module's, in the same two. | As the first column. |
+| Served templates on `main` | 3 counts rise (by 8, 16, 24 bits). 2 change class: the pick at round 2 from 32 to 64 bits, at round 3 from 128 to 256. None refused. | The 3 picks are refused until circuits gives each handed-on bit a gate. So is #9254's writer. | 49 counts rise (and the two head blocks', if the full ones are as their stand-ins). 34 change class: the 32 digit counts from 4,096 to 8,192 bits, and the same 2 picks. None refused. |
+| What a wrong block weighs in a figure | Its distinct gates, inputs included. A digit count's block still weighs 4,096 bits for a row of 8,192. | As today. | Its row. |
+| Against the session's check and the planner | Closer, not equal. | Not equal. | The same rule as both. |
+
+In every column: no guarantee's statement changes its text. The statements of the properties tree that read the partition read it through `Spot.Partition.units`, `strata`, `evaluate` and `Spot.Slots.layout` (`Properties/Spot.lean:85`, `Properties/Spot/Draw.lean:85`, `Properties/Accounting/Served.lean:96`, `99`, `119`, `Properties/Accounting/Compose.lean:93`, `102`), so each one's recorded unfolding moves with either definition [read]. How many guarantees that is I did not count: it takes a records run, which the change's own check does.
+
+**The wire from the residual add to the all-reduce's operands, for whoever builds it** (your 13:26Z; not in #9282)
+
+No served window makes this wire today. Two things stand between it and the census's widths, and this issue's choice sizes one of them.
+
+- `adapters/vllm/verity_vllm/pipeline/tp/grain.py`, `_producer` (line 116): the circuit that wires a combine to its producers takes a partial at one of two grains, a coordinate's one-element output or one whole output field of the producer's Definition. A residual add proved in blocks of 384 columns is neither: its row of 6,144 columns is 16 blocks' output rows. A served wire needs a third grain there, a run of column blocks [read].
+- 96 against 384 columns: the census names the add `ResidualAdd_v2{N=384}` and the all-reduce's part `AllReduceResidualMnnvl_v1{WORLD=8,N=96,SHOT=1}`. A wire hands its reader the writer's whole output row, so a reader of 96 columns cannot take a row of 384 [read]. Either both are named at one width, or `RowChunks_v1{N=384,C=96}` stands between them.
+- `RowChunks_v1` is this issue's case with nothing else in it: a copy with no gate, every returned bit its input's (`verity/definitions/registry/tp_combine.py:97`). As a template the partition refuses it today for having no gate [read; not run]. None of the three ways lifts that refusal, and I would not lift it here: the statement's partition needs every block non-empty (`partitions_slots`' first hypothesis, `Bridge/Slots.lean:116`), and the partition's layout gives an instance only its own gates [read]. Given a gate for each bit, a block of it would weigh 6,144 bits by its row, in four rows of 1,536 [derived].
+- So the wire that needs nothing new is one width for both: the add at 96 columns (64 blocks a row where #9282 has 16) or the all-reduce's part at 384. That is a choice for the census's owner, not made here [derived].
+
+**My leaning, the case against it, and what would change it**
+
+- For the row: what a wrong block controls is the row it commits, leaf by leaf. In a block that is not sampled nothing holds two leaves of one gate equal, or a padding leaf at 0; the block's proof is what would show that. So the row is the count that holds whatever a reader does with those bits. It is the same argument as for #9254's writer, whose row of 65,536 bits weighs 0 today [derived; I ran no audit in which a reader takes such a bit].
+- For the row: it is a bound the proofs already use (16 bits an output leaf, from the session's check), it is the planner's rule, it needs nothing from circuits and it removes code. "Refuse" needs a new version of the pick, with its pins, and of every later template that hands an input on.
+- Against the row: the long row's readers ignore padding ("A writer sets the bits past its value's to 0 and a reader ignores them", `dsa_topk_mask_cut.py`'s docstring), so in the 32 digit counts the other 4,096 bits reach nothing, and weighing them doubles those blocks' weight in a figure for no harm. The partition does not check that convention. How far a figure moves I did not measure [read; not measured].
+- Against the row: 34 served templates move up one public size class, a change to what is public about them. Counting only inputs moves 2.
+- What would change it: the statement's own size is in gates (`Claims.Sampling.committed`: the distinct gates on a block's boundary; a constant is in no block), and the proofs bound it by the row. If the statement's model already forbids a wrong block to set two leaves of one gate apart, the distinct count is the exact weight, the row only a bound, and counting a returned input is enough. If it does not, the row is the weight. I did not trace which holds; it is one question for the lean lane, and I would ask it before any code [not traced].
+
+**Not checked**
+
+- No Lean was built. That the Lean edit is as small as the table says is from reading.
+- The two head blocks at NVIS = 16 and 64. At NVIS = 1 and 2 each returns no input and 96 bits on repeated leaves; I take the larger ones to be the same shape [guess].
+- Templates no served partition names (tests', benchmarks') are not sized.
+- `Spot.Slots`, the layout the properties tree reads the partition through, gives an instance only its own gates, so there a returned input bit is in no instance's block; the proofs' program is the circuit file's, where the bound is by output leaf. I did not trace which of the two a deployed guarantee's weight reads [read, both; not traced].
+- A question beside this one, not answered. In the two-stage scope a member's block holds the input gates it owns as well as its own (`Bits.blockOf`), and `Boundary` commits an input gate, so `SpotFlock.partitionsOk` asks that a block's inputs and outputs together fit the widest class [read]. 51 of the 103 pass 262,144 bits that way, `ResidualAdd_v2{N=6144}` and `MoeSum_v3{TOPK=8,H=3072}` among them (the census's widths of #9282 do not) [run]. Whether any served window is checked under that scope I did not look at [not checked].
+
+**A run that went over its memory**
+
+- `r20261112-130020-3bb7`: I asked for 64 GB and it peaked at 151.3 GiB, binding `SparseMlaHeadBlock_v2` at NVIS = 64. `description_sizes.json` lists that template at 150.94 GB, and I had not read it before launching. I cancelled the run at 13:31Z, 31 minutes in, when I saw the peak. I did not look at whether another run on that node suffered [not checked]. Its first 34 rows are kept. `r20261112-133251-374d` asked for 96 GB, left the two head blocks out at full size, and peaked at 31.2 GiB.
