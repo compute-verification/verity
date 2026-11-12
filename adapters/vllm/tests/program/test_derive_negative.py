@@ -15,26 +15,28 @@ The importer (XFER may not edit importer code) is `verity_vllm.program.frontend.
 from __future__ import annotations
 
 import inspect
-import json
 import warnings
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+pytest.importorskip("torch")
 
-from verity.circuits import Program, bind, program_digest  # noqa: E402
-from tests.program.capture_check import LazyTranscript, Segments, check_call  # noqa: E402
-from verity.circuits.evaluation import evaluate_region  # noqa: E402
-from verity_vllm.program.frontend import FrontendError  # noqa: E402
-from verity_vllm.program.frontend import derive as _D  # noqa: E402
-from verity_vllm.program.frontend.provenance import registry_version  # noqa: E402
-from verity.definitions.registry import b1  # noqa: E402
-from verity.definitions.registry.prims import BF16, I32  # noqa: E402
-from verity.circuits.refs import Coll, concat  # noqa: E402
-from verity.circuits.types import Array  # noqa: E402
+import torch
+from verity.circuits import Program, bind, program_digest
+from verity.circuits.evaluation import evaluate_region
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array
+from verity.definitions.registry import b1
+from verity.definitions.registry.prims import BF16, I32
+
+from tests.program.capture_check import LazyTranscript, Segments, check_call
+from verity_vllm.program.frontend import FrontendError
+from verity_vllm.program.frontend import derive as _D
+from verity_vllm.program.frontend.provenance import registry_version
 
 # ---------------------------------------------------------------------------------------------------------
 # importer adapter: derive_report(...); one normalised Outcome
@@ -278,6 +280,7 @@ def test_rank_mismatch_is_refused_or_batched_exactly():
         pytest.skip(f"importer does not derive ResMLP ({single}); nothing to compare")
     out = run_importer(ResMLP(), (meta(3, H),))
     if out.kind == "program":
+        assert out.program is not None and single.program is not None
         assert out.program.gates > single.program.gates, "a [3,H] input derived to the same gate count as [H]: rows were dropped"
         assert out.program.input_gates == single.program.input_gates + 2 * H
     else:
@@ -448,6 +451,7 @@ def test_tied_parameter_stays_one_input():
     if out.kind != "program":
         pytest.skip(f"importer does not derive TiedEmbeddingLM yet ({out}); sharing cannot be checked. Filed as a gap.")
     P = out.program
+    assert P is not None
     assert P.input_gates == n_distinct + 1, (f"input gates {P.input_gates} != distinct parameter leaves {n_distinct} + 1 token: "
                                              f"tied table exported as two inputs ({n_naive + 1}) or a leaf lost")
     # the V*H table gates feed two distinct root-level consumers: the embedding gather and the LM-head gemm
@@ -492,6 +496,7 @@ def test_shared_block_twice_is_one_weight_two_calls():
     if out.kind != "program":
         pytest.skip(f"importer does not derive SharedBlockTwice yet ({out}). Filed as a gap.")
     P = out.program
+    assert P is not None
     assert P.input_gates == H + H * H + H, "the shared block's weights must appear once"
     # the weight leaves are whatever input gates are not the H activation gates (the importer may pack weight+bias
     # into one Input record); they must be read by gates in two disjoint root-call regions (two applications)
@@ -513,8 +518,10 @@ def test_shared_block_twice_is_one_weight_two_calls():
 
 # -- cache ownership: K/V rows an attention call reads must be produced by THIS request at positions <= t --
 
-TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
-        "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
+TINY: dict[str, Any] = {
+    "model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
+    "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {},
+}
 
 
 _LOS_CACHE: dict[int, list[int]] = {}
@@ -547,11 +554,10 @@ def check_cache_ownership(P: Program) -> list[str]:
         t, L, r = int(m["t"]), int(m["L"]), m["r"]
         prefix = f"r={r}/" if r else ""
         args = call.args
-        S = call.fn.S() if hasattr(call.fn, "S") else None
         nq = call.arg_types()[0].leaves
         kv = args[nq:]
         T = call.fn.bindings.get("T") if hasattr(call.fn, "bindings") else None
-        if T is not None and T != t + 1:
+        if T is not None and t + 1 != T:
             bad.append(f"{name}: attends over T={T} rows at position t={t} (expected t+1={t + 1})")
         owners = set()
         for g in kv:
@@ -580,8 +586,13 @@ def _miswired_serve(kind: str):
     L+1), `future` (the row this position itself produces is replaced by the next step's row), `stale` (a
     position is dropped)."""
     from verity.circuits.defs import CompositeDefinition
-    from verity.definitions.registry.b1 import Embedding, Final, LayerPost, LayerPre, kv_type
-    from verity.circuits.refs import tuple_of  # noqa: F401
+    from verity.definitions.registry.b1 import (
+        Embedding,
+        Final,
+        LayerPost,
+        LayerPre,
+        kv_type,
+    )
     C, LP = TINY, 2
 
     def body(B, S, prompt, weights):
@@ -858,6 +869,7 @@ def test_early_exit_on_eos_is_not_specialised_on_observed_tokens():
     m = GreedyDecodeEarlyExit()
     out = run_importer(m, (torch.tensor(3, dtype=torch.int64),))  # CPU values on purpose: the observed run exits at step 0
     if out.kind == "program":
+        assert out.program is not None
         n_argmax = sum(1 for c in out.program.circuit.root_calls() if "TokenSelect" in c.id or "Argmax" in c.id)
         root_out = out.program.circuit.root_outputs()
         assert len(root_out) == m.STEPS, (f"the derived program returns {len(root_out)} token(s) for STEPS={m.STEPS}: "
@@ -1006,6 +1018,7 @@ def test_repeated_return_and_returned_input_preserved_derived():
     if out.kind != "program":
         pytest.skip(f"importer does not derive RepeatedReturnTorch yet ({out}). Filed as a gap.")
     P = out.program
+    assert P is not None
     ro = P.circuit.root_outputs()
     assert len(ro) == 3 * H
     assert ro[:H] == ro[2 * H:], "y returned twice must be the same gates, not a duplicated computation"

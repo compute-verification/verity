@@ -26,8 +26,6 @@
     {"file": "tests/program/crosscheck.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.circuits.refs.Coll` imported but unused"},
     {"file": "tests/program/crosscheck.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.circuits.types.Array` imported but unused"},
     {"file": "tests/program/crosscheck.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.circuits.types.RecordType` imported but unused"},
-    {"file": "tests/program/test_derive_negative.py", "kind": "F401", "symbol": "<module>", "detail": "`json` imported but unused"},
-    {"file": "tests/program/test_derive_negative.py", "kind": "F841", "symbol": "check_cache_ownership", "detail": "Local variable `S` is assigned to but never used"},
     {"file": "tests/program/test_dsa_derive.py", "kind": "S102", "symbol": "test_the_shims_leave_a_model_without_their_layers_unchanged", "detail": "Use of `exec` detected"},
     {"file": "tests/program/test_fp8.py", "kind": "F841", "symbol": "test_scaled_mm_fp8_matches_cutlass", "detail": "Local variable `N` is assigned to but never used"},
     {"file": "tests/properties/dsv4_indexer_capture_gpu.py", "kind": "F821", "symbol": "gpu", "detail": "Undefined name `o`", "count": 4},

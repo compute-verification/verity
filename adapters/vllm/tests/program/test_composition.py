@@ -13,36 +13,30 @@ Everything runs without torch in well under a minute.
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
+from verity.circuits import Program, bind
+from verity.definitions.registry import b1
+from verity.definitions.registry import hopper as H
+from verity.definitions.registry import prims as P
+
+from verity_vllm.program.frontend.correspond import correspond, correspond_rebound
 
 REPO = Path(__file__).resolve().parents[2]
-for p in (REPO / "vllm-poc", REPO / "src"):
-    if str(p) not in sys.path:
-        sys.path.insert(0, str(p))
 
-from verity.circuits import Program, bind  # noqa: E402
-from verity_vllm.program.frontend.correspond import correspond, correspond_rebound  # noqa: E402
-from verity.definitions.registry import b1, hopper as H, prims as P  # noqa: E402
-
-TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
-        "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
+TINY: dict[str, Any] = {
+    "model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
+    "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {},
+}
 SHAPES = [("TINY", TINY, 3, 2), ("B0", b1.B0_CONFIG, 4, 2), ("B1", b1.B1_CONFIG, 2, 1)]  # never B1 at LP=512: small specialisations only
 
 
 def _hp_config() -> dict:
-    """HP's port configuration (`vllm-poc/profiles/b1-hopper/static_config.py`: B1_CONFIG with the H100 profile record)."""
-    path = REPO / "vllm-poc" / "profiles" / "b1-hopper" / "static_config.py"
-    if not path.exists():
-        return {**b1.B1_CONFIG, "profile": {**b1.B1_CONFIG["profile"], "hardware": "H100 (sm_90)"}}
-    spec = importlib.util.spec_from_file_location("hp_static_config", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod.CONFIG
+    """HP's port configuration: B1_CONFIG with the H100 profile record."""
+    return {**b1.B1_CONFIG, "profile": {**b1.B1_CONFIG["profile"], "hardware": "H100 (sm_90)"}}
 
 
 # =====================================================================================================================
@@ -131,9 +125,9 @@ def test_two_records_differ_in_gemm_and_attention_only():
     differ = {k for k in b1.ServeV2.statics if a.bindings[k] != h.bindings[k]}
     assert differ == {"GEMM", "ATTENTION"}
     assert a.bindings["NORM"] == h.bindings["NORM"]  # TA1's norms on both (the H100 runs the same kernels)
-    assert b1.GEMM_AMPERE == {"DOT": P.AmpereBF16TcDot16} and H.GEMM_HOPPER == {"DOT": H.HopperBF16WgmmaDot16}
-    assert b1.ATTENTION_FA2 == {"BN": 64, "DOT": P.AmpereBF16TcDot16, "INV": P.Fa2InvSum}
-    assert H.ATTENTION_FA3 == {"BN": 128, "DOT": H.HopperBF16WgmmaDot16, "INV": H.Fa3InvSum}
+    assert {"DOT": P.AmpereBF16TcDot16} == b1.GEMM_AMPERE and {"DOT": H.HopperBF16WgmmaDot16} == H.GEMM_HOPPER
+    assert {"BN": 64, "DOT": P.AmpereBF16TcDot16, "INV": P.Fa2InvSum} == b1.ATTENTION_FA2
+    assert {"BN": 128, "DOT": H.HopperBF16WgmmaDot16, "INV": H.Fa3InvSum} == H.ATTENTION_FA3
     assert H._BoundPrims._over == {"AmpereBF16TcDot16": H.HopperBF16WgmmaDot16, "Fa2InvSum": H.Fa3InvSum} and H.KBLOCK_N_FA3 == 128
 
 
@@ -165,7 +159,7 @@ def test_fa2_kblock_n_is_the_pinned_kernels_align_rule():
     """vllm-flash-attn 506341a `flash_fwd_launch_template.h` `run_mha_fwd_splitkv_align`: kBlockN = Headdim <= 64 ? 128 : 64."""
     assert b1.fa2_kblock_n(32) == 128 and b1.fa2_kblock_n(64) == 128 and b1.fa2_kblock_n(96) == 64 and b1.fa2_kblock_n(128) == 64
     assert b1.BN == 64 == b1.fa2_kblock_n(128)  # the v1 constant IS the head-dim-128 value (W11's measured trait)
-    assert b1.ATTENTION_FA2 == b1.attention_fa2(128) and b1.attention_fa2(64)["BN"] == 128
+    assert b1.attention_fa2(128) == b1.ATTENTION_FA2 and b1.attention_fa2(64)["BN"] == 128
 
 
 def test_serve_v1_is_untouched_and_serve_v4_is_registered_beside_it():
