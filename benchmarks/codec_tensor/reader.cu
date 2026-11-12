@@ -930,14 +930,18 @@ int rb_sketch64_receipts(const void *data, const void *zs, uint64_t j0, uint64_t
                          uint64_t *ys, int ctas, cudaStream_t s) {
   if (!data || !signs || !ys || n < 1 || ctas < 0) return 1;
   const auto k = zs ? sketch64_receipts_kernel<true> : sketch64_receipts_kernel<false>;
-  static bool opted[2];
-  if (!opted[zs != nullptr]) {
+  // The opt-in to more than the default shared memory is a device's, not the process's: a flag a kernel a device.
+  constexpr int DEVICES = 64;
+  static bool opted[2][DEVICES];
+  int dev;
+  if (cudaGetDevice(&dev) || dev < 0 || dev >= DEVICES) return 4;
+  if (!opted[zs != nullptr][dev]) {
     if (cudaFuncSetAttribute(k, cudaFuncAttributeMaxDynamicSharedMemorySize, SK64R_SMEM)) return 4;
-    opted[zs != nullptr] = true;
+    opted[zs != nullptr][dev] = true;
   }
   if (!ctas) {
-    int dev, sms, per;
-    if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) ||
+    int sms, per;
+    if (cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) ||
         cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per, k, 32 * SK64R_WARPS, SK64R_SMEM))
       return 4;
     ctas = sms * per;

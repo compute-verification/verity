@@ -3,8 +3,8 @@
 `verity bench overhead` is the one front door for an overhead measurement: a scheme's prover overhead γ over stock, at a
 card's operating points, from labelled runs of record alone. Its code is `verity-bench`'s (`benchmarks/harness`:
 `verity_bench/overhead.py` holds the rules, `overhead_node.py` and `overhead_node.sh` the node side, `overhead_records.py`
-the store side and the table, and `kit.py`, the harness's kit, the run's lease and γ's pairing); this directory holds its
-runner.
+the store side and the table, and `kit.py`, the harness's kit, the run's lease, γ's pairing and the result's measurements
+with their host stamp); this directory holds its runner.
 
 ```text
 verity bench overhead points [--card h200] [--on NODE]       sweep m on one GPU of NODE for C and L (a research run)

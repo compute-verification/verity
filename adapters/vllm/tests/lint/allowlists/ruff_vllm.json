@@ -517,9 +517,6 @@
     {"file": "verity_vllm/engine/run_facts.py", "kind": "ISC002", "symbol": "profile_manifest", "detail": "Implicitly concatenated string literals over multiple lines", "count": 2},
     {"file": "verity_vllm/engine/vllm_adapter.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/glue.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
-    {"file": "verity_vllm/observe/capture.py", "kind": "E741", "symbol": "Capture._emit_step", "detail": "Ambiguous variable name: `l`"},
-    {"file": "verity_vllm/observe/capture.py", "kind": "E741", "symbol": "Capture._snap_tensor", "detail": "Ambiguous variable name: `l`"},
-    {"file": "verity_vllm/observe/capture.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/observe/capture.py", "kind": "ISC002", "symbol": "make_header", "detail": "Implicitly concatenated string literals over multiple lines", "count": 2},
     {"file": "verity_vllm/observe/fold/patterns/attention.py", "kind": "SIM102", "symbol": "AttentionScope.match", "detail": "Use a single `if` statement instead of nested `if` statements"},
     {"file": "verity_vllm/observe/fold/patterns/dsa.py", "kind": "SIM300", "symbol": "DsaSparseMla.match", "detail": "Yoda condition detected"},
@@ -820,7 +817,6 @@
     {"file": "verity_vllm/program/frontend/seed_rule.circuit-check.py", "kind": "I001", "symbol": "_by_calls_roots", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/seed_rule.circuit-check.py", "kind": "I001", "symbol": "_model_roots", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/seed_rule.circuit-check.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`"},
-    {"file": "verity_vllm/program/frontend/serve_families.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "I001", "symbol": "TargetProfile.tuned_gemm_arch_family", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/triton_capture.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
@@ -935,6 +931,7 @@
     {"file": "verity_vllm/pipeline/build.py", "kind": "I001", "symbol": "_write_program", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/build.py", "kind": "I001", "symbol": "applicability_conditions", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/build.py", "kind": "I001", "symbol": "sampler_geometry", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/program/predict/model_shape.py", "kind": "E741", "symbol": "ModelShape", "detail": "Ambiguous variable name: `I`"}
+    {"file": "verity_vllm/program/predict/model_shape.py", "kind": "E741", "symbol": "ModelShape", "detail": "Ambiguous variable name: `I`"},
+    {"file": "tests/check/capture_map_check.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"}
   ]
 }
