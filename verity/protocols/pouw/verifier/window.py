@@ -42,7 +42,9 @@ sides and the range [N_real, N).  `tile_at` maps a sampled index to its entry an
 statement (L4) in Python over the entry rows: the rows are entry rows, the ranges tile [0, N) in order, each call's range
 is its tiles, the filler covers the rest, every call's -h3 root is the pass's, the calls' pass tiles are ordered and
 disjoint, and the registered level is `bucket` of the real tiles; given the records and the side rows' indices it also
-holds those to the entries.  It is not proved yet: no Program states it.
+holds those to the entries.  Its part on the entry rows is a public Program's one unit
+(`verity.protocols.pouw.prover.circuit.window_statement`, `PouwWindowStatement`, the level and the pass's -h3 root public);
+the records' and indices' part no Program states.  It is not proved yet: no verifier requires that Program's proof.
 
 **The layout for gates** is the Lean's (`PouwWindow.Entry`, `PouwWindow.Side`, `PouwWindow.Inputs`): the entry row (`Entry`, 336 bytes), the side rows (`side_row`), the dense side trees of 2^D
 leaves (`DEPTHS`) padded with frame-v3's pad leaf under the execution phase's side domains (`side_domain`, `side_levels`,
