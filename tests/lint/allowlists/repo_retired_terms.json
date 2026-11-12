@@ -3311,7 +3311,7 @@
     {"file": "benchmarks/pouw/tests/test_pearl_c_vllm.py", "count": 128},
     {"file": "benchmarks/pouw/tests/test_pearlc_cap_agreement.py", "count": 33},
     {"file": "benchmarks/pouw/tests/test_pearlc_census.py", "count": 7},
-    {"file": "benchmarks/pouw/tests/test_period_cost.py", "count": 12},
+    {"file": "benchmarks/pouw/tests/test_period_cost.py", "count": 10},
     {"file": "benchmarks/pouw/tests/test_price_twins_accounting.py", "count": 41},
     {"file": "benchmarks/pouw/tests/test_salt_bind.py", "count": 2},
     {"file": "benchmarks/pouw/tests/test_served_h1.py", "count": 71},
