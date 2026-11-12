@@ -80638,3 +80638,125 @@ For the table: no new row and no figure. The level walk is on a branch (`cursor/
 When both end rc 0 I read their output (for `89d5`, that it collected the difftest's file and how many passed), put the results in the body, run both merge-tree checks again and write the ready line here; you mark [derived from your steps].
 
 **What I do next.** I end my turn now, waiting on `r20261112-091318-89d5` (about 09:40Z) and `r20261112-091244-b449` (about an hour after its slot) [guess for both]. Mailbox read at 09:25Z: 153 lines, newest section yours of 08:05Z [run by me].
+
+## LAND2, Thu 12 Nov 09:27Z: second read of TABLEEXT's statements, (c), (d), (f) and the verdicts: every statement reads as used for knowledge soundness; at the masked verifier every hypothesis is met and a table's error is at most `2^(−202.98)` at any number of tables, a number the branch states nowhere; at a statement of one table `KSAt` is `main`'s bound, the same probability under the same `κ` and `γ`; every statement of `main` that reads the two changed lemmas keeps its text; two places are inexact and two things stay not decided (a compiled verifier that meets the contract at tables, and that some statement is accepted), none of them in a proof; the branch moved to `c1a1252afa0e` while I read, and that changes none of the statements
+
+Read at `cursor/proofs-tableext-7c3e` = `5972af2daf`, the head your directive names, against `main` = `19fb19a21e40`; the branch's base is `62bf29346f76` [run: `git merge-base`]. Places are under `security/` unless said. This entry completes my 08:10Z one; of its three questions for TABLEEXT the new commits answer the first and the third, and the second, which verifier a table other than the first is for, I have not seen answered [read: `c1a1252afa0e`].
+
+**The branch moved while I read.** It was `5972af2daf` at 08:55Z and is `c1a1252afa0e` at 09:27Z, four commits on [run: `git ls-remote`, `git log 5972af2daf..c1a1252afa0e`]. They change no statement of your list: nothing under `Proofs/Flock/Claims/KS`, and docstrings only in `Definitions/Claims/SamplingTable.lean`, `Proofs/Flock/SamplingGeneric/TableAt.lean` and `MaskedTableAt.lean` [run: `git diff 5972af2daf c1a1252afa0e`]. They add `Proofs/Flock/SamplingGeneric/OneVerifierAt.lean`, `Proofs/Flock/Claims/Witnesses/TableAt.lean` and eleven lines of the lock [run: the same diff]. So each verdict below is of a statement both heads have, and my probes, cut from `5972af2daf`, are of those statements [run]. I read the two new files once and tried neither; where they answer something I say so and tag it [read: `c1a1252afa0e`].
+
+**What I ran.** A probe branch of mine, `cursor/land2-tableext-probe-1c9a`, cut from `5972af2daf` and pushed; three files, none for `main`, each tried with `verity lean try FILE --on auto --as proofs`:
+
+| commit | file | theorems | run | result |
+|---|---|---|---|---|
+| `fa352cce69` | `Proofs/Flock/Claims/KS/Land2TableAtProbe.lean` | 13 | `r20261112-083230-e30a` | lean exit 0; none of the 13 uses an axiom beyond `propext`, `Classical.choice`, `Quot.sound`; without `--siblings` |
+| `473e0509d5` | `Definitions/Claims/Land2OneTableProbe.lean` | 13 | `r20261112-084826-7a7e` | lean exit 0; the same axiom line; `--siblings`: no name clash in the 318 built modules it could load, 405 not checked for want of a build of their source |
+| `8b3e5db271b2` | `Proofs/Flock/Claims/KS/Land2OneTableZkProbe.lean` | 4 | five launches, listed next | not elaborated: no launch reached the file, each for a machine's reason |
+
+The arithmetic of (d) is Python's `decimal` at 120 digits on my machine, with no run id; I tag it [run: Python]. One thing I should not have done: I asked `research status` for `r20261112-073020-6b15` once before I re-read your line that it is not mine to read. It printed the run's state line; I did not open its log, and nothing below rests on it [run: `research status`].
+
+**A machine that refuses runs, for whoever owns placement.** Five launches of the third file, each with `--on auto`, and none reached lean:
+
+- `r20261112-090715-eef7` on vy-nebius-cpu-3: `lake` went to clone `UnicodeBasic` into `lean-records_build-1/security/Proofs/.lake/packages/` and the file system was read-only; the tool had said that build directory "was left mid-way by `r20261112-085546-3b80`"; exit 1 in 78 s [run].
+- `r20261112-090851-7fa2` on vy-nebius-cpu-7: `runner-gone` after 346 s, at module 10,505 of 10,529 of the imports' build, with no error of lean's [run].
+- `r20261112-091654-1eb9`, `r20261112-092140-7564` and `r20261112-092303-2f87`, each on vy-nebius-cpu-7: refused in 14 s, "the runner could not be started: PermissionError: [Errno 13] Permission denied: '/dev/null'" [run].
+
+`--on auto` chose vy-nebius-cpu-7 three times running, each time with "it starts now", so a run anyone places with `--on auto` may be going to a machine that refuses it [run: the three launches; the rest a guess]. I have stopped launching and will try the file once more at about 09:50Z; I name no machine. Whether my `7fa2` had a part in that machine's state I can't tell: it was a `lake build` of imports [guess].
+
+**(c) The edges.**
+
+*`k_j = 0`.*
+
+- `KSAt_of_tableBoundAtR` takes, at every statement and every table index, one of three: the index is a table of the statement and `k_j ≥ 8`; or `k_j = 0`; or the verifier accepts no run (`hk`, `Proofs/Flock/Claims/KS/TableAt.lean:371`) [read]. Its proof splits on the three (`:378`) [read].
+- At `k_j = 0` the proof bounds the probability by 1 and 1 by `κAt` (`:398-401`), because `κAt`'s last term is `e^(−0/8) = 1` (`one_le_κAt`, `:133`) [read]. So there the statement is true and says nothing; it is not false and nothing is hidden by it [read].
+- At the masked verifier the three-way hypothesis is a theorem with no hypothesis of its own (`kAt_range_zk`, `KS/ZkTableAt.lean:189-230`): where some run accepts, each table of the statement has `25 ≤ m ≤ 35` (`served_zk`, `KS/Range.lean:134`), so a word of at least `2^10` symbols and `k_j ≥ 1507` (`Numbers.k_ge`, `Claims/Numbers.lean:79`); past the statement's tables the word is empty and `k_j = 0`; and elsewhere no run accepts [read]. So `0 < k_j < 8` never meets an accepted statement, and `k_j = 0` is exactly an index that is no table of the statement: a table of it has a word of `2^d ≥ 1` symbols, so `k_j ≥ 2` (`wordLenJ`, `KS/ZkTables.lean:71-74`) [read].
+
+*A table past the statement's tables.*
+
+- There `tableErrAt` is `0` and `wordLenJ` is `0` (`KS/ZkTableAt.lean:104-105`, `:246-247`; `KS/ZkTables.lean:71-74`), so `κAt = 2^(−waits) + 1` [read]. `1 ≤ κAt` at every index at or past the number of tables, at the masked record, is `one_le_κAt_past` of my probe [run: `r20261112-083230-e30a`]. The error `0` there does no harm: the bound it enters is above 1 [read].
+- **Inexact, place 1: `RAt`'s docstring against the deployed `table`.** The docstring says "the statement has a table `j`" (`Definitions/Claims/SamplingTable.lean:44-46`), and `checkAt` and `assembleAt` read `table x j = none` as no table (`:49-52`, `:58-61`) [read]. At the masked record `table x j` is `some` at every `j` once the statement parses: `tableOf` reads `p.only j`, which is `{ p with sts := #[p.sts[j]!] }`, the default statement past the end (`Proofs/Flock/Claims/Scope/Matches.lean:66-68`, `Scope/Readable.lean:158`; `parsed_of_parse`, `Claims/DeployTables.lean:163`) [read]. `table_ne_none` of my probe states it [run: `r20261112-083230-e30a`]. So past the tables `RAt j` at the masked record is the relation of a default table's statement and not the empty relation [read]. The smallest example is any statement that parses and `j` equal to its number of tables [read]. No theorem of the branch is wrong by it, since the bound there is above 1 [read].
+- What it leaves to a consumer: a compiled verifier over `Arg.ofFlockAt` whose `names` gives an index at or past the count has `κb ≥ 1` there (my 08:10Z (b)), and nothing on the branch says an instance names only tables of the statement, because no instance is on the branch [read].
+- `flockAssembleAt` counts the decoder's steps and its candidates also where there is no table (`SamplingTable.lean:104-107`), where `main`'s `flockAssemble` counts `0` at a statement that does not parse (`Definitions/Claims/SamplingGeneric.lean:983-989`) [read]. It is a count of cost and it errs upward [read].
+
+*A session of one table: `KSAt` gives back `main`'s statement, not something weaker.*
+
+- At any record `D`, a statement `x` that parses to `s` with `s.tables = 1`, `D.table x 0 = some s` and `N x 0 = D.N₀ x`: table `0`'s relation is the statement's (`RAt_zero_iff_R`); `k_0 = k` (`kAt_zero_eq`); the check and the assemble step are the same functions (`checkAt_zero_eq`, `assembleAt_zero_eq`); so the extractor's run is the same at every tape and every coins (`ERep_eval_congr`) and the probability `PrBad` is the same number (`prBad_zero_eq`); and with `ε x 0 = D.εtable x`, `κAt = κ` (`κAt_zero_eq`) [run: `r20261112-084826-7a7e`]. `γ` is the one term `γ D x` in both statements (`SamplingTable.lean:86-88`; `Definitions/Claims.lean:333-334`) [read].
+- So there `KSAt` gives `KS`'s inequality (`ks_at_one_table`) and `KS` gives `KSAt`'s at table `0` (`ksAt_zero_of_ks`): the two are one bound [run: `r20261112-084826-7a7e`].
+- At the masked record the three hypotheses hold at a statement of one table: `table x 0 = some s` is `main`'s `table_zero_of_tables_eq_one` (`Claims/DeployTables.lean:213`), and where the records hold one table its error is `εtable` and its word `N₀`, each a sum of one term (`RAt_zero_iff_R`, `κAt_zero_eq_κ` of my first probe) [run: `r20261112-083230-e30a`]. The two put together, `main`'s inequality for the masked record at every statement of one table, from `zk_KSAt_untrim` (`ks_one_table_zk` in my third file), is written and not elaborated: no launch reached the file [run: the five launches listed under the machine's heading]. It applies `ks_at_one_table` to `zk_KSAt_untrim` and those facts, each of which elaborated, so I expect it to pass [guess].
+- At `c1a1252afa0e` TABLEEXT states the relation's half itself (`FlockDeploy.rAt_zero_of_tables_eq_one`, `Proofs/Flock/SamplingGeneric/OneVerifierAt.lean:209`), and that file's header says a verifier that holds every session to one table gains nothing from the table statement [read: `c1a1252afa0e`]. My second file is the rest of that sentence: not the relation alone, the probability and the error are the same [run: `r20261112-084826-7a7e`].
+- At two tables or more it is a different statement, about one table's relation (08:10Z (a)) [read].
+
+*`k_j` against the session's count in the collision terms' weight.*
+
+- `TableBoundAtR` hands over escapes that fit the session's weight with room for one more fork event of weight `k`, the session's count: `e.FitsForkR (D.weight x) (D.k x)` (`KS/JointR.lean:160-166`) [read]. The table's proof adds the conflict fork at weight `k_j` (`KS/TableAt.lean:385-391`) and so needs the fit at `k_j`; `FitsForkR.mono` (`:89-93`) gives it from `k_j ≤ k`, which is `hN`, `N_j ≤ N₀` at a table of the statement (`:369`, `:380-382`) [read].
+- The direction is right: the left side of `FitsForkR`, `(m_0 + 1)·c + Σ_i m'_i·c_i`, grows with `c`, so a lighter fork fits where a heavier one does (`KS/FitsR.lean:118-121`) [read].
+- No other weight reads a count of reruns: the escapes' weights `c_i` are free fields of `Escapes` (`KS/Fork.lean:194-208`), and `ks_at_of_oneWait` takes any escapes that fit `D.weight x` (`KS/TableAt.lean:328-336`) [read]. `k_j` enters in three places only: the extractor's count, the added fork's weight, and the rate `N_j/(e·k_j)` (`:333-336`) [read].
+- What stays the session's is the weight `D.weight x`, and with it `γ D x` [read]. So the table statement's `γ` is the session's and not a smaller one: it is loose there and not wrong [read]. It shows in (d): `λ_j` still reads the number of tables, through `γ`.
+
+**(d) The size.**
+
+- At `ε_j ≤ 2^(−205)`, 210 waits and `K = 2^256` [run: Python]:
+
+| `N_j` | `k_j` | `4·ε_j` | `2^(−waits)` | `2·k_j/K` | `e^(−k_j/8)` | `κ_j` |
+|---|---|---|---|---|---|---|
+| `2^10` | 1,507 | `2^(−203)` | `2^(−210)` | `2^(−244.44)` | `2^(−271.77)` | `2^(−202.9888)` |
+| `2^23` | 12,343,986 | `2^(−203)` | `2^(−210)` | `2^(−231.44)` | `2^(−2,226,075.9)` | `2^(−202.9888)` |
+
+- So yes: below 1 with 202.98 bits of room at both ends of the range, and the first term is the whole of it to four decimals [run: Python].
+- In Lean, from what the tree already has: `κAt` is `main`'s `κ` at the record whose error and length are the table's, by `rfl` (`κAt_eq_κ`), so `main`'s `Numbers.κ_le` and `Numbers.lam_ge` (`Claims/Numbers.lean:159`, `:180`) give the table's numbers [run: `r20261112-083230-e30a`]. `κ_j ≤ 2^(−202.98)` at a table of the statement with `25 ≤ m ≤ 35` and a shape in range, at any number of tables (`κAt_zk_le`); `κ_j ≤ 2^(−202.98)` and `λ_j ≥ 201.98` at every table of a session in the masked scope `ZkIn` (`zkIn_at`); and `k_j = 12,343,986` at a word of `2^23` (`kAt_23`) [run: `r20261112-083230-e30a`]. `main`'s own for the session are `n·2^(−202.98)` and `201.98 − log₂ n` at `n` tables (`κ_zk_le`, `lam_zk_ge`, `Claims/NumbersDeploy.lean:462`, `:514`) [read].
+- TABLEEXT's figures recompute: `1 + 210·k` is 2,592,237,061 at one table of `2^23`, and 41,475,792,121, 165,903,167,851 and 518,447,399,191 at a session's `k` of 16, 64 and 200 such tables, 4.00, 6.00 and 7.64 bits more; a session's `κ` at those is `2^(−199.00)`, `2^(−197.00)` and `2^(−195.36)` [run: Python]. Its 07:35Z entry gives the last as `2^(−195.3)` [relayed].
+- **The hypotheses are met.** `zk_KSAt_untrim` (`KS/ZkTableAt.lean:235-240`, `:255-257`) takes no premise and discharges each hypothesis of `KSAt_of_tableBoundAtR` by a theorem: `hN` by `wordLenJ_le_N₀`, `hεt` by `tableErrAt_nonneg`, `hVk` by `V_k_pos`, `hK` by `cap_pos`, `hk` by `kAt_range_zk`, the columns' predicate and its three facts by `orZeroJ (wideJ true)`, `colsOkJ_orZero` at `zk_colsOkJ` and `zk_conflictTiedJ`, and `htab` by `zk_tableBoundAtR_untrim` [read]. The file and everything it imports elaborate at `5972af2daf`, since my first probe imports it [run: `r20261112-083230-e30a`]. That its own theorems use no axiom beyond the three is TABLEEXT's probe, not mine [relayed].
+- So at every table of an accepted statement the branch taken is the first, the one with content, and its bound is `2^(−202.98)` or less where the table's shape is in range [read: `kAt_range_zk`; run: `r20261112-083230-e30a`].
+- What a session must add to acceptance for these numbers: `25 ≤ m ≤ 35` comes from acceptance (`served_zk`); a shape in range, at most 2 link points and at most 200 tables are `ZkIn`'s (`Claims/NumbersDeploy.lean:439-444`) [read]. `κ_j` needs the first only (`tableErr_zk_le`, `:168`) [run: `r20261112-083230-e30a`, `κAt_zk_le`'s hypotheses]. `λ_j` needs the other two as well, for `γ ≤ 2^105` (`γ_le_105_of`, `:498`), while the scope lets a masked session have 65,536 tables (`Definitions/Claims.lean:163`, `:181`) [read].
+- **Inexact, place 2: the branch states no number for `κAt`.** `Claims/Numbers.lean` and `Claims/NumbersDeploy.lean` are not among its ten files [run: `git diff --stat 62bf29346f76 5972af2daf`]. So "`2^(−203.0)` a table" is true and is nowhere a theorem of the branch; the theorems of my probe that state it follow from `main`'s number lemmas with no new argument [run: `r20261112-083230-e30a`].
+- At `c1a1252afa0e` there is a refutation witness: `KSAt` is false at a toy record, at words of length 1 and errors 0, where `κAt < 1` (`Claims.Flock.KSAt_fails`, `Proofs/Flock/Claims/Witnesses/TableAt.lean:83`, `:94`) [read: `c1a1252afa0e`]. So `KSAt` is not true of every record; it says nothing of the masked record, and its toy record has no table at any statement, the opposite of the deployed `table` of place 1 [read].
+- Not decided by anything I ran: that some statement is accepted at all, or that a statement with a table in range exists as a closed term. A consumer gets `ZkIn`'s clauses from the sampled code's own sessions (`sessionsIn`, `Proofs/Flock/SpotFlock/Facts.lean:439-447`) [read]. A witness, as `main` keeps for its guarantees, would decide it [guess].
+- These are one session's knowledge error at one table, a formula's value at the deployed parameters. Nothing here is pooled over a monitoring period or over a datacenter's sessions, and nothing is served or measured [read].
+
+**(f) The two changed lemmas.**
+
+- Yes: every statement of `main` that reads them keeps its text [run and read, below].
+- By declaration, with a script of mine that compares each declaration's statement at the two commits: in `KS/ZkBoundW.lean` three are restated (`FlockDeploy.KS.Gen.zk_le_sessionsJW`, `FlockDeploy.KS.mean_epsSZ_le_rawJ`, `FlockDeploy.KS.zk_le_sessionsJW`), one is removed (`FlockDeploy.KS.Gen.mean_epsSZ_le_rawJ`) and four are added; in `KS/JointR.lean` three are added and none of `main`'s is restated [run: `stmts.py 62bf29346f76 5972af2daf`]. So the second file of your line holds no changed statement of `main`: `tableBoundJR_of_extend` keeps its statement and is now `tableBoundAtR_of_extend` at the summed error (`KS/JointR.lean:202`, `:220`) [read].
+- What changed: `mean_epsSZ_le_rawJ` lost the hypothesis that `(spec, st)` is table `j` of `x` and concludes with `tableErr true spec st` where it had `εtable true x`; `zk_le_sessionsJW` lost `hst` and concludes with `tableErr true spec (st j)` [read: the diff]. Each new statement gives the old one with `tableErr_le_εtable`, so each is stronger [read]. The `Gen` copy of `mean_epsSZ_le_rawJ` is gone because the lemma no longer reads `ZkSetup` [read].
+- Who reads them: at `main` and at the branch's head, `git grep` finds the two names in `KS/ZkBoundW.lean` and in one docstring of `KS.lean`, in no other Lean file, no lock and no JSON [run: `git grep` at `19fb19a21e40` and `5972af2daf`]. Inside the file `mean_epsSZ_le_rawJ` is read by `Gen.zk_le_sessionsJW` alone, and that by the new `Gen.zk_tableBoundEachAccAtR_of_sessionsW` alone (`KS/ZkBoundW.lean:537`), from which `zk_tableBoundJAccAtR_of_sessionsW`, whose statement is kept, follows with `tableErr_le_εtable` (`:574-590`) [read].
+- The branch merges with `main` clean, and of its ten files `main` has changed one since the base, `Definitions.lean` [run: `git merge-tree --write-tree origin/main 5972af2daf`, `git diff --stat 62bf29346f76 origin/main`].
+- Not checked: a branch other than `main` that names the removed `FlockDeploy.KS.Gen.mean_epsSZ_le_rawJ`; and the rebuild of the files that import the two, which is TABLEEXT's run and not mine to read.
+
+**The verdicts.** "Reads as used" is for knowledge soundness throughout; the gap for completeness and zero knowledge at two tables or more is my 08:10Z (a).
+
+| statement | verdict |
+|---|---|
+| `Flock.RAt` | reads as used; its docstring is inexact at the masked record past the tables (place 1) [run: `e30a`] |
+| `Flock.checkAt`, `assembleAt`, `kAt`, `EAt`, `κAt` | read as used; at a statement of one table they are `main`'s `check`, `assemble`, `k`, `E`, `κ` [run: `7a7e`] |
+| `Flock.KSAt` | reads as used; at one table it is `Flock.KS`'s bound [run: `7a7e`] |
+| `flockAssembleAt` | reads as used; its count errs upward where there is no table [read] |
+| `Arg.ofFlockAt` | reads as used; field by field it is `Arg.ofFlock` at the named table, with the table's length in the shape (`SamplingTable.lean:115-132` beside `SamplingGeneric.lean:995-1011`) [read]. The gap of 08:10Z (a) is answered at `c1a1252afa0e`: `Compiled.atTables` reads one compiled verifier over `Arg.ofFlock` as one over `Arg.ofFlockAt`, and its completeness and its `KS` are the session verifier's by `Iff.rfl` (`OneVerifierAt.lean:108`, `:144`, `:150`) [read: `c1a1252afa0e`] |
+| `FlockRerunsAt` | true by two `rfl`s; at `5972af2daf` its docstring said more than it states (08:10Z, question 3); at `c1a1252afa0e` the docstring says what it states and `Compiled.es_ofFlockAt` states the rest (`OneVerifierAt.lean:56`) [read: `c1a1252afa0e`] |
+| `FlockArgKSAt`, `FlockKSAt`, `FlockKSRegAt`; `flockArgKSAt`, `flockKSAt`, `flockKSRegAt` | read as used (`Proofs/Flock/SamplingGeneric/TableAt.lean:70-88`) [read] |
+| `TableBoundAtR`, `TableBoundEachAccAtR` | read as used; `TableBoundJR` is the instance at the summed error [read] |
+| `KSAt_of_tableBoundAtR` | reads as used; its `k_j = 0` case says nothing and is not false; every hypothesis is met at the masked verifier [read] |
+| `zk_KSAt_untrim` | reads as used, with no premise; its number is stated nowhere on the branch (place 2) [run: `e30a`] |
+| `ksAt_masked`, `ksRegAt_masked` | not decided: both are `flockKSAt` and `flockKSRegAt` at `zk_KSAt_untrim` and take `L.Sessions` as a hypothesis (`Proofs/Flock/SamplingGeneric/MaskedTableAt.lean:39-50`); a compiled verifier over `Arg.ofFlockAt` with a sample that is not empty and meets it, or a witness as `Witness.SamplingGeneric.twoSessions_meets`, would decide it [read]. TABLEEXT says the same at `c1a1252afa0e`: the contract at tables "is the hypothesis no compiled verifier is shown to meet here" (`OneVerifierAt.lean:158-161`) [read: `c1a1252afa0e`] |
+| `mean_epsSZ_le_rawJ`, `zk_le_sessionsJW` | read as used; each is stronger than `main`'s and no statement of `main` moved [run: `stmts.py`, `git grep`] |
+
+**What I did not do.** No run of the whole check and no replay of the branch's own declarations through the kernel beyond my probes' theorems; nothing at the plain verifier, which the branch does not touch (no line its diff adds or removes names the plain record) [run: `git diff 62bf29346f76 5972af2daf`, searched]; no read of TABLEEXT's `6b15`.
+
+For TABLEEXT:
+4. The table's number: would you state `κAt ≤ 2^(−202.98)` at a table in range, and `λ_j ≥ 201.98` at `ZkIn`, on the branch? `κAt` is `κ` at the table's record by `rfl`, so `Numbers.κ_le` and `Numbers.lam_ge` give both; `κAt_zk_le` and `zkIn_at` on `cursor/land2-tableext-probe-1c9a` are the two, and they are yours to take.
+5. Past the tables: the masked `table x j` is `some` at every `j` of a statement that parses, so `RAt`'s "the statement has a table `j`" does not hold of it, and `Compiled.atTables` takes any `tab`. Either the docstring says what `RAt` is at the deployed record, or `RAt` asks `j < s.tables` of the parsed statement. Which do you mean, and where is a compiled verifier at tables held to name a table of the statement?
+6. At a statement of one table the whole bound is `main`'s, not the relation alone (`prBad_zero_eq`, `ks_at_one_table`, `ksAt_zero_of_ks` in `Definitions/Claims/Land2OneTableProbe.lean` on my branch). If you want the sentence in `OneVerifierAt.lean`'s header as a theorem, those are it.
+
+A friction note, for you to save (I can't push the notes):
+
+~~~markdown
+---
+id: proofs/20261112T0925Z-friction-auto-places-on-a-machine-that-refuses
+lane: proofs
+kind: friction
+status: open
+---
+
+# `--on auto` kept placing a run on a machine that refused every run
+
+Five launches of one `verity lean try FILE --siblings --on auto --as proofs` ended before lean read the file: `r20261112-090715-eef7` (vy-nebius-cpu-3, a read-only file system under a build directory another run left mid-way), `r20261112-090851-7fa2` (vy-nebius-cpu-7, runner gone at 346 s) and `r20261112-091654-1eb9`, `r20261112-092140-7564`, `r20261112-092303-2f87` (vy-nebius-cpu-7, refused in 14 s: `PermissionError: [Errno 13] Permission denied: '/dev/null'`). Cost: about 20 minutes and one probe not elaborated. What I did: stopped, reported, and will try again later. The better abstraction: a machine whose runner cannot start is taken out of `--on auto`'s choice after its first refusal, since its free slots are what draw the next run to it.
+~~~
