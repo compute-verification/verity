@@ -26,7 +26,7 @@ SEED = "5eed" * 8
 """`--seed` for the `V3` arm's `verity/protocols/pous/device/timed_audit.py` and the `MC` arm's `memory_challenger/live.py`:
 an audit's challenges, and so its controls' verdicts, are fixed."""
 MC_CHANGED = [9, 8]
-"""Of the 105 blocks each of the `MC` arm's two sessions draws under `SEED` from the small case's 192, those whose index is a
+"""Of the 105 blocks each of the `MC` arm's two sessions samples under `SEED` from the small case's 192, those whose index is a
 multiple of 10: the blocks its value and tampered controls change."""
 
 
