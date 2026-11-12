@@ -176,17 +176,17 @@ def _static(desc: dict[str, Any], v: Any, registry: Any, ours: dict[str, Any]) -
 
 
 def _differs(desc: dict[str, Any], fn: Any, seen: dict[str, str | None]) -> list[str]:
-    """Each Definition ``fn`` reaches in this tree whose entry is not the Build's descriptor's, named."""
-    from verity.circuits.codec import definition_digest, encode_program
+    """Each Definition ``fn`` reaches in this tree whose entry is not the Build's descriptor's, named.  ``seen`` keeps each
+    Definition's answer, so one that many specializations reach is encoded once."""
+    from verity.circuits.codec import definition_digest, definition_entry, definitions
 
-    # encode_program reads a program's root, fn and annotations: here the specialization alone, in the Build's schema
-    mine = encode_program(SimpleNamespace(root=fn, fn=fn, annotations={}), desc["schema"])
     out = []
-    for g in mine["definitions"]:
+    # definitions reads a program's root and fn: here the specialization alone
+    for g, d in definitions(SimpleNamespace(root=fn, fn=fn)).items():
         if g not in seen:
             if g not in desc["definitions"]:
                 seen[g] = f"this tree's reaches {g}, which the Build's descriptor does not hold"
-            elif (ours := definition_digest(mine["definitions"][g], mine)) != (theirs := definition_digest(desc["definitions"][g], desc)):
+            elif (ours := definition_digest(definition_entry(d))) != (theirs := definition_digest(desc["definitions"][g], desc)):
                 seen[g] = f"{g} is not the Definition the Build bound (entry {ours[:16]}, the Build's {theirs[:16]})"
             else:
                 seen[g] = None
