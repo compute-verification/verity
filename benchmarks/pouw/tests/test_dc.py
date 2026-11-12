@@ -1,6 +1,6 @@
-"""dc: wgmma.cuh is gen_wgmma.py's output, the receipt twin (dgemm_ref.py) against a per-word loop and against
-dgemm.cu's host reference (pinned), and analyze.py's slot arithmetic and pass lines on synthetic rows. The kernels
-themselves need an H200 or a B200 (dgemm gate, run.sh)."""
+"""dc: wgmma.cuh is gen_wgmma.py's output and probes/sm90_jbreak.inc gen_jbreak.py's, the receipt twin (dgemm_ref.py)
+against a per-word loop and against dgemm.cu's host reference (pinned), and analyze.py's slot arithmetic and pass lines
+on synthetic rows. The kernels themselves need an H200 or a B200 (dgemm gate, run.sh)."""
 from __future__ import annotations
 
 import csv
@@ -30,6 +30,12 @@ def _load(name: str):
 def test_wgmma_header_is_current():
     gen = _load("gen_wgmma")
     assert (DC / "wgmma.cuh").read_text() == gen.render(), "run python benchmarks/pouw/dc/gen_wgmma.py"
+
+
+def test_jbreak_probe_list_is_current():
+    gen = _load("gen_jbreak")
+    inc = DC / "probes" / "sm90_jbreak.inc"
+    assert inc.read_text() == gen.render(), "run python benchmarks/pouw/dc/gen_jbreak.py"
 
 
 def _loop_receipts(X, W, seed, bn, L=32):
