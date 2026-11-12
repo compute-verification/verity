@@ -3,8 +3,9 @@
 # engine): flock-circuit, flock-verify and SPOT's Lean verifier built from this tree as the toy's audit.sh builds them,
 # then `first` (the boundary registration and the first stage on a local challenger session) and `second` (the interior,
 # the second stage on a session of its own, a --zk session per member, Lean's verdicts, round 2 and the stream's outcome).
-# Exit 0 when the second stage is what today's record gives (two_stage_small.py expect): round 1 commits no port for the
-# block's return, so everything holds but the return's read. Records under $OUT (never a circuit, a prover file, a
+# Exit 0 when the second stage is what today's record gives (two_stage_small.py expect): the token select's logits are a
+# value the prover registers after the first stage's sample and round 1 commits no port for the block's return, so
+# everything holds but round 2's second-inputs and the return's read. Records under $OUT (never a circuit, a prover file, a
 # private body or salts, or a challenger's key or secret); a record over 63 MiB (a served vocabulary's public bodies and
 # written window, a challenger host's ledger) is not kept, and large.txt lists its SHA-512, size and path.
 #   research run --on auto --cwd clone --cpus 16 --mem-gb 64 --max-min 120 -- bash benchmarks/one_stage/two_stage_small.sh

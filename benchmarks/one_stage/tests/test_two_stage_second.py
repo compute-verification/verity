@@ -239,6 +239,22 @@ def test_a_second_stage_whose_interior_gives_a_replay_block_an_input_never_held(
     assert not TS.held(s, {"ok": True, "codes": [TS.INPUTS_REFUSED]}, {**o, "accepted": True, "statements": []}, files)
 
 
+def test_the_small_rehearsal_expects_the_inputs_code_of_a_linked_run_and_not_of_an_unlinked_one():
+    """`two_stage_small.expect`: a linked run's round 2 refuses by ``second-inputs``, then the return's read, and by
+    neither alone; an unlinked run links no parameter, registers no value, and is refused by its wires alone."""
+    def summary(codes: list[str]) -> dict:
+        return {"audit": {"checks_before_draw": {"registered": True}, "negatives": {"wrong-root": True},
+                          "audit": {"verdicts": {"m0": True}}},
+                "pins": {TID: True}, "round_two": {"ok": False, "codes": codes},
+                "outcome": {"accepted": False, "interior": ["statements"], "statements": codes, "replay_sample": []}}
+    assert all(SM.expect(summary([SM.INPUTS, SM.UNHELD])).values())
+    for codes in ([SM.UNHELD], [SM.INPUTS], [SM.UNHELD, SM.INPUTS]):
+        assert SM.expect(summary(codes)) == {"before_draw": True, "pins": True, "lean_verdicts": True, "negatives": True,
+                                             "round_two": False, "outcome": False}
+    assert all(SM.expect(summary([SM.UNWIRED]), SM.UNWIRED).values())
+    assert not SM.expect(summary([SM.INPUTS, SM.UNWIRED]), SM.UNWIRED)["round_two"]
+
+
 @pytest.mark.slow
 def test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses_its_wires(tmp_path):
     """A class as a served vocabulary's is, its replay block the check's body inlined (chunks and a combine a token; a
