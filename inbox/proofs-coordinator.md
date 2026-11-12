@@ -108636,3 +108636,47 @@ Nothing of mine has compiled. Whether `Projection.lean` at `506b009d58` parses i
 | `r20261112-214205-9e10` | the two-stage toy | `bdf9fd1086` | cpu-10 | waiting |
 
 **Next.** `92eb`'s tests at about 23:45Z; `9585` and `7b1c` when the line lets them start; the last three commits of the serve's branch into the second try's branch; `b876` at 00:30Z; VLLM-300 at 01:00Z.
+
+## FIRSTACCEPT, Thu 23:28Z: `r20261112-224340-7cc7` (cpu-8, `55978f017b`): the slice change compiles: the spot package with its new `#guard`s, `Credited.lean` and `Held.lean` (axiom probe clean), and all of `security/Proofs` (14,452 jobs); difftest 8 passed
+
+Read: the mailbox (23:07Z) and the resume message (23:14Z). This VM came back fresh. I rebuilt the worktrees from origin; nothing was lost, as both branches were pushed.
+
+**Shown by `r20261112-224340-7cc7`** (started on cpu-8 at 22:56:38Z, so it stayed there as ruled; done rc 0) [run]:
+- `lake build` of the spot package: 522 jobs, success. This includes `OneStageZk.lean`'s new `#guard`s:
+  - the one-member and bare records are accepted;
+  - swapped or prefixed public ports give "roots, domains";
+  - two chunks of one template, two templates, bare beside member, and member beside row table each give `NOT_ONE_MEMBER`.
+- `lake build Proofs.Properties.Spot.Credited Proofs.Properties.Verity.Sampled.Held`: 10,829 jobs, success.
+- `verity lean try` on `Credited.lean` and on `Held.lean`. Axiom probes: none of their 27 and 46 theorems uses an axiom beyond propext, Classical.choice and Quot.sound.
+- `lake build` of all of `security/Proofs`: 14,452 jobs, success. So every importer of `OneStageZk` compiles over the change, including soundness's `Sampled/` and `Moves.lean`.
+- Difftest `-k "public_ports or matches_public or v2"`: 8 passed. The log doesn't list the test ids; the next run prints them (`-v`).
+- `test_composite.py`: 18 passed (A2 directly; as a suite, see 4e37 below).
+- `test_audit_one_member.py`: skipped. My script never built `flock-verify`, which is my omission, not a refusal.
+
+**Point 2: the first accept is aimed at `subset:1`** [run, `git push`]. Commit `ac9df926ef` on `cursor/proofs-firstaccept-5a1c`:
+- `test_audit_one_member` now runs two instances under `subset:1`, set by `monkeypatch` so `test_audit_two_members`' `stratified:1` is untouched.
+- It asserts the drawn unit is `[0]` or `[1]` (the coins are live), and that the check's drawn equals proved equals the audit's draw.
+- This is the law probe 871c showed accepting (bound 1). I haven't touched the `stratified:1` case, so `paramsOfJson`'s coming refusal breaks no test of mine.
+
+**Point 4: merge with WINDOWAT** [run]. `git merge-tree --write-tree origin/cursor/proofs-firstaccept-5a1c origin/cursor/proofs-windowat-undrawn-5e4b` (its `cc35d5892178`) exits 0, tree `935bb1989172`, no conflict. That checks the text only; nothing has built the merged tree.
+
+**Runs**
+- `r20261112-232620-4e37` (vy-nebius-2, `ac9df926ef`): launched 23:26Z. It builds Flock's verifier, its circuit binaries and the spot package, then runs:
+  - the difftest `-v`;
+  - `test_audit_one_member` with its case kept under `$OUT/t`;
+  - `suites.py one_stage` on `test_composite` and `test_audit_one_member` (A2 as a suite);
+  - `composite.provenance("remote", the v2 executable, the tree)`, giving the commit, clean, SHA-512, the cited `remote_soundness_deployedReady` and the lock's listing;
+  - a replay of the check on the kept case.
+- `r20261112-231328-8e65` (vy-nebius-2): cancelled before it started. It waited 12 minutes for a proofs check slot (1 to 2 ahead), and 7cc7 had already built the same files.
+
+**Lock records** [derived]: not yet run. Next is a `lean_changed.py --records` run on the security package, which says whether any record moves with `publicHeld`'s body.
+
+**Expected** [guess]: 4e37 reports the accept within about 30 minutes of taking a slot.
+
+**Not established**
+- The accept under the real change (only 871c's scratch patch has shown it).
+- That the difftest ran `public_ports`.
+- The lock records.
+- That the merged tree with WINDOWAT builds.
+
+**NEEDS**: none new. **To post**: none.
