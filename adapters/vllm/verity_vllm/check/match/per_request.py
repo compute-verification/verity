@@ -324,15 +324,15 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
         fails.append((SUBCIRCUITS, f"{rid}: executed {n_exec} local steps but the bounded component has {len(A.steps)} (output interface exceeded)"))
     cmp = ops.compare_steps(A, P, unfold_a=False)
     exec_steps = cmp["steps"][:n_exec]
-    # a step whose spec sequences are equal is wired (`compare_steps`); one whose sequences do not align is compared no further
-    bad_seq = [s for s in exec_steps if not s["spec_seq_equal"] or s["wiring"]["operands_different"]]
+    # a step whose spec sequences are equal is wired (`compare_steps`); one whose sequences do not align is compared no further and has no wiring
+    bad_seq = [s for s in exec_steps if not s["spec_seq_equal"] or (s["wiring"].get("operands_different") if s.get("wiring") else None)]
     tail = cmp["steps"][n_exec:]
     ent["eos_truncated"] = bool(tail)
     ent["unexecuted_steps"] = len(tail)
     out["unexercised"] = sum(len(A.steps[s]) for s in range(n_exec, len(A.steps)))
     ent["sequence_equal_steps"] = n_exec - len(bad_seq)
-    wired = [s["wiring"] for s in exec_steps if "wiring" in s]
-    ent["operands"] = {"equal": sum(w["operands_equal"] for w in wired), "different": sum(w["operands_different"] for w in wired)}
+    wired = [s["wiring"] for s in exec_steps if s.get("wiring")]
+    ent["operands"] = {"equal": sum(w.get("operands_equal", 0) for w in wired), "different": sum(w.get("operands_different", 0) for w in wired)}
     # canonical address of every executed fold instance: (rid, s, j) with j the COMPONENT's index of the corresponding instance.
     #   sequence: j = emission position (X-09 sequence criterion: the fold's order IS the component's order, else G3 fails);
     #   dag:      j = the index of the structurally identical component instance (equal Merkle DAG hash: spec, form, out type,
@@ -402,7 +402,7 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
         ent["criterion"] = "sequence (X-09) over executed steps" + (" of the bounded component (eos-truncated)" if tail else "")
         if bad:
             ent["first_divergence"] = {"step": bad[0]["step"], "n_a": bad[0]["n_a"], "n_b": bad[0]["n_b"], "spec_seq_equal": bad[0]["spec_seq_equal"],
-                                       "wiring_examples": bad[0]["wiring"]["examples"][:3] if "wiring" in bad[0] else []}
+                                       "wiring_examples": bad[0]["wiring"].get("examples", [])[:3] if bad[0].get("wiring") else []}
             fails.append((SUBCIRCUITS, f"{rid}: {len(bad)} of {n_exec} executed steps not canonical-equal (first: local step {bad[0]['step']})"))
             if fast and perm_eligible(A, P, bad[0]["step"]):   # G8 names the first divergence: its matching, computed here
                 s0 = bad[0]["step"]

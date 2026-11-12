@@ -1,6 +1,6 @@
-"""`verity_vllm.records.runtime_tree`: the runtime's module tree reads back what `save` wrote, refuses a field its writer
-writes and the document lacks, by name, and is the one type the observation and the acquisition's reader hand on; and the
-tree the observation makes of a model on the meta device (`verity_vllm.observe.runtime_tree.meta_runtime_tree`)."""
+"""`verity_vllm.records.runtime_tree`: the runtime's module tree reads back what `save` wrote, reads a field the document
+leaves out as empty, refuses another schema, and is the one type the observation and the acquisition's reader hand on; and
+the tree the observation makes of a model on the meta device (`verity_vllm.observe.runtime_tree.meta_runtime_tree`)."""
 from __future__ import annotations
 
 import json
@@ -9,7 +9,6 @@ import pytest
 
 from verity_vllm.correspondence import reader_for_acquire
 from verity_vllm.observe import runtime_tree as observed
-from verity_vllm.records.fields import MissingField, RecordError
 from verity_vllm.records.runtime_tree import (
     RUNNER_PATH,
     SCHEMA,
@@ -20,6 +19,7 @@ from verity_vllm.records.runtime_tree import (
 )
 
 FIELDS = ("schema", "source", "runner", "modules", "buffers")
+EMPTY: tuple[object, ...] = (None, 0, "", False, [], {})
 
 
 def a_tree() -> RuntimeTree:
@@ -44,29 +44,32 @@ def test_a_tree_reads_back_as_it_was_saved(tmp_path):
     assert RuntimeTree.from_json(RuntimeTree().to_json()) == RuntimeTree()        # an empty tree is a tree: no field is missing
 
 
-@pytest.mark.parametrize("field", FIELDS)
-def test_a_missing_field_is_refused_by_name_with_the_file(tmp_path, field):
-    doc, path = a_tree().to_json(), tmp_path / "runtime_tree.json"
-    del doc[field]
-    path.write_text(json.dumps(doc))
-    with pytest.raises(MissingField) as e:
-        RuntimeTree.load(path)
-    assert e.value.field == field and e.value.where == str(path) and isinstance(e.value, ValueError)
-    with pytest.raises(MissingField, match="the runtime tree"):
-        RuntimeTree.from_json(doc)
-    with pytest.raises(MissingField):
-        RuntimeTree.from_json({**doc, field: None})
+@pytest.mark.parametrize("field", FIELDS[1:])
+def test_a_field_the_document_leaves_out_or_holds_as_null_or_empty_reads_as_empty(tmp_path, field):
+    whole, path = a_tree().to_json(), tmp_path / "runtime_tree.json"
+    want = {**whole, field: RuntimeTree().to_json()[field]}
+    path.write_text(json.dumps({k: v for k, v in whole.items() if k != field}))
+    assert RuntimeTree.load(path).to_json() == want
+    for value in EMPTY:
+        assert RuntimeTree.from_json({**whole, field: value}).to_json() == want
 
 
-def test_another_schema_and_a_field_of_another_type_are_refused():
+def test_a_document_that_names_no_schema_is_read_and_one_that_names_another_is_refused():
     doc = a_tree().to_json()
-    with pytest.raises(RecordError, match="verity-vllm/runtime-tree/v0") as e:
-        RuntimeTree.from_json({**doc, "schema": "verity-vllm/runtime-tree/v0"})
-    assert e.value.field == "schema"
-    for field, wrong in (("modules", []), ("buffers", {}), ("runner", []), ("source", 3)):
-        with pytest.raises(RecordError) as e:
+    for unnamed in ({k: v for k, v in doc.items() if k != "schema"}, {**doc, "schema": None}):
+        assert RuntimeTree.from_json(unnamed).to_json() == doc
+    for other in ("verity-vllm/runtime-tree/v0", *EMPTY[1:]):
+        with pytest.raises(ValueError) as e:
+            RuntimeTree.from_json({**doc, "schema": other})
+        assert type(e.value) is ValueError and str(e.value) == f"runtime tree schema {other!r} != verity-vllm/runtime-tree/v1"
+
+
+def test_a_field_of_another_type_is_read_as_its_expression_reads_it():
+    doc = a_tree().to_json()
+    assert RuntimeTree.from_json({**doc, "source": 3}).source == "3"
+    for field, wrong, error in (("modules", ["x"], AttributeError), ("buffers", 1, TypeError), ("runner", 1, TypeError)):
+        with pytest.raises(error):
             RuntimeTree.from_json({**doc, field: wrong})
-        assert e.value.field == field
 
 
 def test_the_tree_of_a_model_names_every_module_and_buffer_and_states_the_runner():
