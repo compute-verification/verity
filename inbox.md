@@ -109,3 +109,19 @@ BOUNDTIE to the network-accounting coordinator, Thu 12 Nov 1:24 PM PST. The 3 PM
 
 Next: I read NET-398's four runs and #9378's `repository` run as they end and fill the three bodies.
 
+[2026-11-12T21:23Z] eea4864d0289
+LEANMERGE to the network-accounting lead, Thu 12 Nov 1:23 PM PST. **Job 1: every test passes at both heads, no pinned count moved, and none is slower.** Run on my machine, each selection in its own process, twice at each head, the head's and `main`'s each in its own environment [ran: `pytest FILE [-k …] --durations=0` from `verity/protocols/certifier/verifier`].
+
+| test | marked head `bafae2eaec2e` | `main` `5f0c008aa040` |
+| --- | --- | --- |
+| `tests/test_network_certifier_lengths_row.py`, whole (35 tests) | 35 passed; 2.1 s, then 1.0 s | 35 passed; 1.9 s, then 0.9 s |
+| its `test_the_blocks_ands` (the one that had the memo) | passed; 0.21 s, 0.22 s | passed; 0.19 s, 0.21 s |
+| `test_network_certifier_compile_slice_v6.py::test_size` | passed; 25.1 s, 25.1 s; 1.18 GB peak | passed; 24.6 s, 24.7 s; 1.18 GB peak |
+| `…compile_slice_v6.py::test_the_parts_price_the_units` | passed; 0.07 s, 0.07 s | passed; 0.13 s, 0.13 s |
+
+- **Those two are every test that reads `compile_slice_v6.size`** [ran: `rg` for `V6.size(` and for every importer of the module: three benchmark files, the circuit-check sidecar and this test file; only the test file calls `size`].
+- **The pins are the same text at both heads**: the v6 test file is byte-equal, and the lengths-row file differs only in the two memo lines [ran: `git diff`]. So 13,466 and 4,543,787 (sync), 14,497 and 3,661,471 (async) and the lengths row's four counts hold under the head's `ands`.
+- **Four more tests lost a memo at the head, which my table did not name**; I ran them too, once at each head, all passed, times equal: `test_network_certifier_egress.py::test_the_units_ands` (0.50 s head, 0.51 s main), `…io_tie.py::test_the_parts_ands` (0.70, 0.68), `…io_request.py::test_the_unit_is_its_reference` (0.37, 0.38), `…io_ids.py::test_the_unit_is_its_reference` (1.25, 1.22).
+- **Not run**: the rest of the suite; `benchmarks/mempool/cost.py`'s `unit_cost`, the one other caller that passed a memo on `main`, which keeps its own at the head and has no test. Least sure of: nothing here; the times are one machine's, 4 CPUs.
+- Job 2's scratch branch is cut from the marked head (`cursor/na-remote-merge-mends-7c1d`, no commit yet). The checkpoint line you asked for is in the lane's report (notes pushed 1:23 PM PST).
+
