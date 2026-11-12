@@ -251,12 +251,6 @@ def admission_lag(wl: dict) -> int:
     return int(_GP.workload_target(wl.get("target")).lag())
 
 
-def engine_async_scheduling(versions: dict) -> Any:
-    """The engine's resolved `async_scheduling` as the versions record it; None where they record no engine arguments."""
-    kwargs = versions.get("engine_kwargs")
-    return kwargs.get("async_scheduling") if kwargs else None
-
-
 def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
     """the Program's DECLARED stop rule, read ONCE for every Commit consumer (required
     population, composition, boundary linkage, sampled-replay population): `eos` = global_program.stop_rule's eos_token_ids over the pinned
@@ -275,9 +269,9 @@ def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
         out["srule"] = {k: _srule.get(k) for k in ("eos_token_ids", "source", "refusal") if k in _srule}
         out["eos"] = None if _srule.get("refusal") else _srule.get("eos_token_ids")
         _decl_lag = _GP.workload_target(wl.get("target")).lag()
-        _eng_async = engine_async_scheduling(versions)
+        _eng_async = (versions.get("engine_kwargs") or {}).get("async_scheduling")
         # one field, one reader: GP-01's eos_lag_rows_declared over the engine's resolved read-back
-        _eng_lag = eos_lag_rows_declared({"async_scheduling": _eng_async})
+        _eng_lag = eos_lag_rows_declared({"async_scheduling": (versions.get("engine_kwargs") or {}).get("async_scheduling")})
         out["declared_lag"], out["engine_lag"], out["async_scheduling"] = _decl_lag, _eng_lag, _eng_async
         if _eng_lag is None:
             out["notes"].append(f"the Program declares LAG {_decl_lag} but this engine does not attest async_scheduling: EOS stops fail by name")
