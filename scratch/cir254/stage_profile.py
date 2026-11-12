@@ -3,7 +3,7 @@ circuit written to a file, no instance staged), in the order CIR-215's figures s
 block, then the stager), with the process's memory read at every phase boundary.  Nothing of the tree is edited: the boundaries
 are wrappers set on the modules' functions for this process.
 
-    python stage_profile.py one CASE [--trace F] [--cap-gb G] [--fix NAME]   one case: $OUT/CASE.marks.jsonl, CASE.json
+    python stage_profile.py one CASE [--trace F] [--cap-gb G] [--fix NAME] [--instance]   one case: $OUT/CASE.marks.jsonl, CASE.json
     python stage_profile.py all [-j N] [flags] CASE[@FIX]...                  each case in a process of its own, then figures.json
 
 A case is KIND.N[.kK][.atA]: ``positions`` (`DsaMaskPositions_v2{N,AT,K}`), ``block`` (`DsaTopKMaskBlock_v2{N,AT,TOPK}`),
@@ -19,7 +19,7 @@ and a snapshot is taken at the marks `SNAP` names (CASE.trace.json: the sites by
 
 At the end of the lowering's gates the forms the stager holds are counted where they stand (``wires``: every returned gate's
 linear form; the circuit's AND operands), and each builder-lowered activation's new forms are added up by Definition as it
-ends (``by_definition``).
+ends (``by_definition``).  ``--instance`` stages one instance after, on zero rows (`UnitStager.stage`).
 """
 from __future__ import annotations
 
@@ -433,6 +433,9 @@ def install(M: Marks, rec: dict, fix: str | None) -> None:
     span(FC, "_file_digests")
     span(FC, "compose_to")
     span(FC, "meta_of")
+    span(IL.Lowering, "evaluate")
+    span(CS.UnitStager, "reference_check")
+    span(FC, "write")
     if fix:
         import fixes
 
@@ -490,6 +493,25 @@ def one(case: str, M: Marks, fix: str | None, rec: dict) -> dict:
         rec["pin"], rec["class_sha512"] = st.pin, st.class_sha512
         rec["circuit_bytes"] = (d / "circuit.txt").stat().st_size
         M.mark("meta")
+        if M.instance:
+            # one instance on zero rows, as a round stages it (`UnitStager.stage`): the rows evaluated, the outputs held to the
+            # Definition's reference, inst.bin and pub.bin written
+            import numpy as np
+
+            rows = {p: np.zeros((1, -(-bits // 16)), dtype=np.uint16) for p, _sch, bits, _ps in in_rows}
+            M.armed = True
+            M.mark("> stage")
+            try:
+                got = st.stage(rows, d / "round", bytes(32), indices=[0])
+                rec["instance"] = {"ands": int(got["ands"]), "unit_nnz": int(got["unit_nnz"]),
+                                   "outs_nonzero": int(sum(int(np.count_nonzero(v)) for v in got["outs"].values())),
+                                   "files": {f.name: f.stat().st_size for f in sorted((d / "round").iterdir())}}
+                del got
+            except Exception as e:  # noqa: BLE001
+                rec["instance"] = {"error": f"{type(e).__name__}: {e}"[:600], "traceback": traceback.format_exc()[-2500:]}
+            M.mark("< stage")
+            M.armed = False
+            del rows
         rec["ks_form_why"] = ks_form_why(d / "circuit.txt", d / "pub.bin")
         M.mark("ks_form_why")
         del st, m
@@ -519,6 +541,7 @@ def run_one(argv: list[str]) -> int:
     marks.unlink(missing_ok=True)
     stop = argv[argv.index("--stop-after") + 1] if "--stop-after" in argv else None
     M = Marks(marks, cap, trace, detail="--no-detail" not in argv, count="--no-count" not in argv, stop_after=stop)
+    M.instance = "--instance" in argv
     rec: dict = {}
     try:
         one(case, M, fix, rec)

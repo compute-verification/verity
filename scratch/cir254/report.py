@@ -27,11 +27,15 @@ PHASES = [
     ("lay out the rows", "`ir_lower.layout`: rows A and B as lists of columns, beside the circuit", ("< layout",)),
     ("drop the circuit", "`unit_lowering` returns: the lowered circuit freed, the layout kept", ("< unit_lowering",)),
     ("slot circuits", "`cache_slot_circuits`: sha512x3 and hm96, the same for every unit", ("cache_slot_circuits", "layout#", "live#")),
-    ("zero instance", "`circuit._dummy`: the laid-out rows run on the all-zero instance", ("> compose_to", "> compose", "> _dummy", "< _dummy")),
+    ("zero instance", "`circuit._dummy`: the laid-out rows run on the all-zero instance", ("> compose_to", "> compose", "> _dummy", "> evaluate", "< evaluate", "< _dummy")),
     ("write the circuit", "`circuit._write_netlist` and the rest of `compose`: the file, 1,024 rows at a time",
      ("> _write_netlist", "< _write_netlist", "< compose")),
     ("read it back", "`circuit._file_digests`: the pin and the class digest", ("> _file_digests", "< _file_digests", "< compose_to")),
     ("meta", "`meta_of`, the nets' counts, `ks_form_why`", ("meta_of", "< stager", "meta", "ks_form_why")),
+    ("one instance: run the rows", "`UnitStager.stage` on zero rows (`--instance`): `Lowering.evaluate` over the laid-out rows",
+     ("> stage", "> evaluate#2", "< evaluate#2")),
+    ("one instance: the reference", "`UnitStager.reference_check`: the outputs held to the Definition's", ("> reference_check", "< reference_check")),
+    ("one instance: write it", "`circuit.write`: `inst.bin` and `pub.bin`", ("> write", "< write", "< stage")),
     ("drop the stager", "the stager and its layout freed", ("del stager", "end")),
 ]
 SKIP = ("count wires", "count layout")
