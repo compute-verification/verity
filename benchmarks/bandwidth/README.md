@@ -35,3 +35,15 @@ control that writes nothing rejected).
   constants come back from; the constant cache, the TLBs, L1 and L2 retention; and how many uniform registers a warp
   has (`chip_ur.py` rewrites a cubin's uniform-register fields past what ptxas allocates). `run_chip.sh` is one
   Attempt, and it refuses any cubin whose SASS doesn't hold the code that its sweep says it does.
+
+## A node's own report
+
+A node file (`verity/hardware/nodes/`) states what a node's registration does and no card states. `node.py` reads two
+of those on the node, in one Attempt that writes nothing to a device:
+
+- the interfaces that carry traffic off the node, each with its line rate: every interface's own report, `ethtool`
+  and the routes, and which interfaces the routes send packets out of (`net.json`, `net.txt`);
+- what each NVIDIA card's firmware says it gives a program: the usable-memory register and the MMU's local memory
+  range, read over BAR0 at the addresses of NVIDIA's open kernel modules, beside `nvidia-smi -q` (`regs.json`).
+
+Its docstring has the command line, how it decides that an interface leaves the node, and each register's header.
