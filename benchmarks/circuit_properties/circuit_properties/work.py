@@ -99,8 +99,9 @@ are distinct, wherever the point (`points.check`) doesn't make two of them equal
 weight or cancels it for a reason the constant test doesn't see (W plus z plus -1 times z is θ′), where one word that
 every member of every enclosing batch reads multiplies it and is 0 (a learning rate, a decay, an input's or computed
 from inputs, taken as nonzero), where the inputs are fitted to the weights, where the circuit tests its own weights
-against a stated constant, and where two nodes compute rows one to one from one array's words into two arrays (b
-added to each of two rows, carried apart, whose products by W are charged). The reading refuses a circuit
+against a stated constant, where the rows are equal only where an input's word is negative, and where two nodes
+compute rows one to one from one array's words into two arrays (b added to each of two rows, carried apart, whose
+products by W are charged). The reading refuses a circuit
 (`RepeatedRows`) where a charged operand whose rows only these rules show distinct holds two equal rows at the point:
 a weight combined with its own words, cancelled against itself (M plus -1 times M; W times v plus -1 times v) or
 times its own rows in another order (M times swap(M)), whose rows are equal whatever the weight, and a weight times a
@@ -225,9 +226,9 @@ class RepeatedRows(ValueError):
         elif nan is not None:
             what = (f"holds a NaN in {nan[0]} of its {nan[1]} rows at the point"
                     + (f" in member {member}" if member is not None else "")
-                    + ", which leaves them uncompared; fix: keep its values finite at the point's words (`points`): a "
-                    "NaN there is an invalid operation (a square root or a logarithm of a negative, inf minus inf, 0 "
-                    "times inf) or an overflow")
+                    + ", which leaves them uncompared; fix: keep its values finite at the point, whose weights and "
+                    "registered values take every sign and whose inputs are positive: square a weight or a registered "
+                    "value before a square root or a logarithm reads it, or carry it in as an input")
         else:
             what = (f"holds rows {rows[0]} and {rows[1]} equal at the point"
                     + (f" in member {member}" if member is not None else "")

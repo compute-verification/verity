@@ -5,10 +5,14 @@ specific: `claims`) is claimed to have no two equal rows of its contraction's K
 words, for generic weights. `check` evaluates the Program once at a point and refuses it (`work.RepeatedRows`) where
 two rows of such an operand are equal there, naming the Definition, the node, the operand and the two rows. The point
 is the claim's own worst case: whoever submits the circuit also picks the data. So every word of an input
-(`Input<w>`) is one word, sampled generic and nonzero, repeated through every array it fills (all tokens are one
-token), and every word of `θ` and of a registered input is sampled on its own: a finite float at its width (four
+(`Input<w>`) is one word, sampled generic, nonzero and, as a float, positive, repeated through every array it fills
+(all tokens are one token), and every word of `θ` and of a registered input is sampled on its own: a finite float at its width (four
 binades about 1, every sign and mantissa; `held` the bits that leaves it), or any nonzero word at a width no float
-has. The sample is seeded by SHA-512 of the Program's digest, with no other randomness, so two reads agree.
+has. An input's word is positive because an input is data or a state the step carries in, which an honest step
+reads under a square root, a logarithm or a divide: a positive word is inside each such domain, and one word repeated
+says nothing about rows by its sign. `θ` keeps every sign, the generic part of the point. A NaN and equal rows are
+refused, so the sign passes no claim; it decides only which honest circuits pass. The sample is seeded by SHA-512 of
+the Program's digest, with no other randomness, so two reads agree.
 
 Rows are equal only where they agree at `points` points, enough to hold 64 sampled bits a row: P = ceil(64 / (K b)),
 b the bits its words hold at the point (`held`), at most those of the narrowest `θ` or registered input and of the
@@ -34,7 +38,7 @@ out of range).
 
 What the point doesn't meet stays a premise (`work`'s docstring): rows equal only at values the sample never takes (W
 plus z plus -1 times z, a one-word multiplier that is 0, inputs fitted to the weights, a circuit that tests its own
-weights against a stated constant).
+weights against a stated constant, rows equal only where an input's word is negative).
 """
 from __future__ import annotations
 
@@ -71,9 +75,9 @@ def points(K: int, b: int) -> int:
     return max(1, math.ceil(ROW_BITS / (K * b)))
 
 
-def sample(rng: np.random.Generator, w: int, shape) -> np.ndarray:
+def sample(rng: np.random.Generator, w: int, shape, positive: bool = False) -> np.ndarray:
     """Words of width ``w``, each generic and nonzero: a finite float of four binades about 1 at 32, 16 and 8 bits
-    (f32, bf16, e4m3), any nonzero word at every other width."""
+    (f32, bf16, e4m3), of every sign unless ``positive``, any nonzero word at every other width."""
     def bits(n: int) -> np.ndarray:
         return rng.integers(0, 1 << n, size=shape, dtype=np.uint64)
 
@@ -81,7 +85,8 @@ def sample(rng: np.random.Generator, w: int, shape) -> np.ndarray:
     if w in floats:
         e, m, lo = floats[w]
         exp = rng.integers(lo, lo + 4, size=shape, dtype=np.uint64)
-        return (bits(1) << np.uint64(e + m)) | (exp << np.uint64(m)) | bits(m)
+        sign = bits(1) * np.uint64(not positive)
+        return (sign << np.uint64(e + m)) | (exp << np.uint64(m)) | bits(m)
     return rng.integers(1, (1 << w) if w < 64 else (1 << 64) - 1, size=shape, dtype=np.uint64)
 
 
@@ -303,7 +308,7 @@ class Walk:
                 if is_registered(nd.fn) or k in theta:
                     env["n", k] = sample(rng, w, (self.P, nd.out.leaves))
                 else:
-                    env["n", k] = np.repeat(sample(rng, w, (self.P, 1)), nd.out.leaves, axis=1)
+                    env["n", k] = np.repeat(sample(rng, w, (self.P, 1), positive=True), nd.out.leaves, axis=1)
         return env
 
     def run(self) -> Tally:

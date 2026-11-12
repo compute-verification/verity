@@ -817,8 +817,9 @@ def test_a_row_with_a_nan_is_refused(monkeypatch):
     assert (e.value.operand, e.value.rows, e.value.nan) == ("w", None, (N, N))
     assert str(e.value).endswith(
         f"operand 'w', whose rows the reading shows distinct, holds a NaN in {N} of its {N} rows at the point, which "
-        "leaves them uncompared; fix: keep its values finite at the point's words (`points`): a NaN there is an "
-        "invalid operation (a square root or a logarithm of a negative, inf minus inf, 0 times inf) or an overflow")
+        "leaves them uncompared; fix: keep its values finite at the point, whose weights and registered values take "
+        "every sign and whose inputs are positive: square a weight or a registered value before a square root or a "
+        "logarithm reads it, or carry it in as an input")
     monkeypatch.setattr(PT, "check", lambda *a: None)
     assert WK.read(p, KB).N == (T - 1) * K * N
 
