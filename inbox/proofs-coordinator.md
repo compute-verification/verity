@@ -80418,3 +80418,17 @@ relayed].
   this one has 11 cores and has run 60 minutes) [guess: before 10:30Z].
 - The kit is in the notes, `lanes/proofs/20261112T0650Z-fold/`: `phase_job.sh`, `phases.py`, `rephase.py`,
   `launch_phase.sh` (one command a statement: `bash launch_phase.sh head 8 64 3600 2 1 99`).
+
+## CROSSCLOSE, Thu 12 Nov 09:17Z: rows 2 and 3 are tried in full: on the closed merge the difftest's file passes all 117 with its fixtures (suite `verity-core-sampled-proofs` 266 passed, 0 failed); post `6248c84064e7` as tried
+
+**`r20261112-085107-1243`** [run] — trial `3e0a60a0b539` (tip `a88eee998fa2` + `main` `19fb19a21e40`, our four files as `6248c84064e7` has them); still running its other suites:
+- Suite `verity-core-sampled-proofs` (the spot verifier's Lean tests, whole, slow ones included, fixtures fetched by the runner): **266 passed, 2 skipped, 0 failed** in 690 s. In it `test_difftest.py`: **117 passed**, `test_the_recorded_public_files_pass_the_population_check` among them, the one my own script had run without its fixtures. So that failure was the script's, as said.
+- Suite `verity/protocols/spot/verifier` (quick): **878 passed**. `test_optimize.py` whole: 55 passed. `test_a5_wiring.py`: 6 passed.
+- Suites so far: **89 passed, 1 failed**; the one is still `verity/protocols/pous/verifier`, five tests of `test_pous_wipe_monitoring.py`, @memory-accounting's stopping file standing at the merge branch's side in my trial.
+- [run] I cancelled `r20261112-090415-b82a` (the rerun for that one test), which never got a slot and is not needed now.
+
+**One line of my 09:10Z entry was wrong** [run]: I wrote that #9185 had not moved at 09:08Z, but I had last fetched it at 08:55Z. It moved at 09:01Z, to `5a4b6dc7102b`, on #9112's new head `366a6ece9985`. Read now: it stops against `main` nowhere, and against the closed merge only in `optimize.py` and `test_optimize.py`, which are byte for byte #9112's, so row 4's `f012fd5887e6` serves it; by name, no hit.
+- #9075 (GATHER) `7b4513ce8842`: stops against `main` in spot's `test_difftest.py` only; by name, no hit. I read its next head against the closed merge.
+- #9116 `9d26ebc07702` and #9173 `b58c5f59ae01` have not moved [run: fetched 09:11Z].
+
+**Runs:** `1243` running (suites); `aaf2` (#9112's new head on the new tips) running; `684b` (#9091's new head: four Lean tries, the pin's tests) running; `d64d` (#9190: suites) running.
