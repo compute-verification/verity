@@ -225,8 +225,9 @@ statement whose circuit is the scope check's (`accepted_check`), the pinned stat
 `xS₀ t`'s (`stmt_of_pin`), and that is member `t`'s; at the placement the layout gives, the unit's gates and constants
 hold (`embeds_unitPlace`). -/
 theorem embeds_of_placesAt {L : SpotFlock.Layout}
-    (hL : ∀ x s (m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) u, parse h x = some s → stmtOk h x m₁ m₂ c₀ c₁ = true →
-      u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) → PlacesAt h L x m₁ (unitStmt h m₂ u) u) :
+    (hL : ∀ x s (m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) u, parse h x = some s →
+      stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁) →
+      PlacesAt h L x m₁ (unitStmt h m₂ u) u) :
     Embeds h L := by
   intro x s Pt d m₁ m₂ c₀ c₁ u b ρ rb S hx hP h2 hin hok hu hS hb hρ hrb
   have hT := fun t (ht : t < h.ms.length) => templateOk_facts h (templateOk_of_two h h2 ht) ht

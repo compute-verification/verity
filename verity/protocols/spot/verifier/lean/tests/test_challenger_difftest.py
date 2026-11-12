@@ -1746,12 +1746,13 @@ class Drawn:
     or two reads of random lengths.  The ledger opens the session withheld unless `withheld` is false.  The challenger
     samples and opens `trees` coin trees too (`TreeSession` on `tables`, its link opened after `keys`; sampled, by
     default), their lines among the others in `order` (`_release_log`; the sample, then the link, then the other rounds,
-    by default).  Its key is the key of `seed` at one of `params`."""
+    by default).  Its key is the key of `seed` at one of `params`.  The session's window is `window` (sampled, unless
+    given)."""
 
     def __init__(self, rng: random.Random, before: bool = False, after: bytes | None = None,
                  reads: Callable[[Callable[[int], bytes]], bytes] | None = None, withheld: bool = True,
                  trees: int | None = None, tables: list[str] | None = None, keys: list[str] | None = None,
-                 params=LEDGER_PARAMS, seed: int = 0, order: str = "honest") -> None:
+                 params=LEDGER_PARAMS, seed: int = 0, order: str = "honest", window: dict | None = None) -> None:
         s = self.s = _ledger_session(rng, params=params, seed=seed)
         s.ch = _challenger(rng, [("other", 2), ("draw", 12)])
         s.ch.sign_record(s.host, s.pub, lambda m: lms.sign_at(s.k, s.q, m).encode())
@@ -1779,7 +1780,7 @@ class Drawn:
                       for _ in range(rng.choice([0, 0, 1, 2]) if trees is None else trees)]
         s.lines = _release_log(rng, s.lines, cut, [t.lines for t in self.trees], order)
         s.close = s.signed(None)
-        self.ledger = Ledger(rng, s, withheld=withheld)
+        self.ledger = Ledger(rng, s, withheld=withheld, window=window)
         self.pins, self.main = _pinned(rng, self.ledger, "honest")
 
     def _step(self, label: str, f):

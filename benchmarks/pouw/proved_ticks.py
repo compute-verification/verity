@@ -1,11 +1,12 @@
-"""`proved_ticks`: PoUW's proved block-ticks for a window's declared work, the figure network accounting's joint ledger
-credits as a block's `compute` with basis "proved" (`benchmarks/datacenter`: `Placed.public(plan, ticks=...)`, where
-`tests/test_proved_ticks_placed.py` places PoUW's compiled Program on a block).
+"""`proved_ticks`: PoUW's proved block-ticks for the work of a window's registered circuit, the figure network
+accounting's joint ledger credits as a block's `compute` with basis "proved" (`benchmarks/datacenter`:
+`Placed.public(plan, ticks=...)`, where `tests/test_proved_ticks_placed.py` places PoUW's compiled Program on a block).
 
     uv run python benchmarks/pouw/proved_ticks.py     the hand-checked point: H1 + fx1 on DS-120
 
-For a census W of a window's declared work on a block of G GPUs of one device, at its data-sheet reading (`placed`
-reads W off a block where the datacenter places a Program `SCHEME` or its one stream `SCHEME_V3` compiled):
+For a census W of the work of a window's registered circuit on a block of G GPUs of one device, at its data-sheet
+reading (`placed` reads W off a block where the datacenter places a Program `SCHEME` or its one stream `SCHEME_V3`
+compiled):
 
     ticks(W) = (1 − ε) · U(W) · B_♭ / (4 · SMs · f_max) / G / tick_seconds
 
@@ -14,7 +15,7 @@ reads W off a block where the datacenter places a Program `SCHEME` or its one st
   committed words a transcript word for its noise (`eps_budget.FLOOR_WORDS`: H1's cohalf QKᵀ at 1.25), as
   `eps_budget.floor_skip` counts them.
 - B_♭, the floor program ♭'s bound a unit in SMSP-cycles on the sheet's machine: `eps_budget.prices`' ♭ (the tensor
-  route at the operand floor φ_del and the fold, no filler) with ε_skip's skippable work in it, B_♭ = B/(1 − ε_skip),
+  route at the operand floor φ_del and the fold, no filler) with ε_skip's free compute in it, B_♭ = B/(1 − ε_skip),
   ε_skip `eps_budget.design_skip` at the sheet's vector, as Lean's ♭ (`Accounting.TS.Headline.Sm120.flat`) is.
   For H1 + fx1 on DS-120, ♭ binds DS_issue alone: an IMMA.16832, 0.025641 LDSM_X4 and fx1's 8 ALU and 8 IMAD warp
   instructions, 17.025641, and 0.4207% skippable, so B_♭ = 17.097571.
@@ -98,7 +99,7 @@ def sheet(family: str = "sm_120") -> Sheet:
 
 
 def unit_cycles(s: Sheet) -> float:
-    """B_♭: ♭'s bound a unit of honest work on one SMSP, in SMSP-cycles, with ε_skip's skippable work in it."""
+    """B_♭: ♭'s bound a unit of honest work on one SMSP, in SMSP-cycles, with ε_skip's free compute in it."""
     data = device(s.family)
     d = design(s.design, data)
     return EB.prices(d.name, data, s.vector).mma / (1 - EB.design_skip(d, data=data, vector=s.vector).eps_time)

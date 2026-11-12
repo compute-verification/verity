@@ -145,6 +145,32 @@ def test_token_commit_commits_each_window_prompt_and_sampled_ids_in_order():
     assert seen[0] == bytes([5, 0, 0, 0, 6, 0, 0, 0, 7, 0, 0, 0, 8, 0, 0, 0])
 
 
+def test_served_ids_keeps_each_finished_requests_prompt_ids_and_served_ids(tmp_path, monkeypatch):
+    class Serving(Scheduler):
+        def update_from_output(self, so, mro):
+            return {0: NS(outputs=mro)}
+
+    got: list = []
+    monkeypatch.setattr(P, "_lines_behind", lambda path: (got.append(path.name), got.append)[1])
+    sched = Serving()
+    done = P.install(sched, {"out": str(tmp_path), "ids": True})
+    assert got == [f"ids.{P.os.getpid()}.jsonl"] and not list(tmp_path.iterdir())
+    a, b, c = eid("agentic@2-r1-u0", 0), eid("agentic@2-r1-u1", 0), eid("agentic@2-r1-u1", 1)
+    for rid, prompt in ((a, [5, 6, 7]), (b, [8]), (c, [9, 9])):
+        sched.add_request(Request(rid, prompt))
+    out = lambda rid, ids, reason=None: NS(request_id=rid, new_token_ids=ids, finish_reason=reason)   # noqa: E731
+    sched.update_from_output(None, [out(a, [1, 2]), out(b, [3])])                # a step's tokens, drafts kept among them
+    sched.update_from_output(None, [out(b, [], 1), out(a, [4]), out("other", [0], 1)])
+    assert got[1:] == [{"id": b, "prompt_ids": [8], "output_ids": [3]}]
+    assert sched.finish_requests([c], "aborted") and c not in done[0].open       # an aborted request leaves no line
+    sched.update_from_output(None, [out(a, [5, 6], 0)])
+    assert got[2:] == [{"id": a, "prompt_ids": [5, 6, 7], "output_ids": [1, 2, 4, 5, 6]}] and not done[0].open
+    assert list(got[2]) == ["id", "prompt_ids", "output_ids"]                    # a line opens with its request's id
+    done[-1].uninstall()
+    sched.add_request(Request(eid("agentic@2-r2-u0", 0), [1]))
+    assert not done[0].open
+
+
 def test_kv_edge_starts_at_the_first_step_with_a_kv_cache_outside_a_capture():
     ticks, capturing = [], [False]
 
@@ -197,6 +223,62 @@ def test_history_tables_start_on_rank_0_at_the_first_step_with_a_kv_cache_outsid
     other = P._tables_runner(lambda self, so, **kw: None, {"out": "."}, capturing=lambda: False, rank=lambda: 1)
     other(runner, 5), other(runner, 6)
     assert other.state == {"hook": None} and steps == [3, 4] and len(made) == 2
+
+
+def test_tables_that_cant_start_fail_every_step_and_a_refused_cache_stops_the_engine_as_it_binds_its_caches(monkeypatch):
+    """A step whose tables can't start raises, and so does every step after it: none is served with the tables off. The
+    guard itself (the step hook's construction, stood in for here) runs on rank 0 as Model Runner V2 binds its caches,
+    so an engine whose cache the tables can't read never serves a step."""
+    import pytest
+
+    def refuse(runner, cfg):
+        raise ValueError("serve with --kv-cache-dtype auto")
+
+    monkeypatch.setattr(P, "rank0_tables", refuse)
+    run = P._tables_runner(lambda self, so, **kw: "out", {"out": "."}, capturing=lambda: False, rank=lambda: 0)
+    runner = NS(kv_caches=["kv"])
+    for step in range(3):
+        with pytest.raises(ValueError, match="--kv-cache-dtype auto"):
+            run(runner, step)
+    assert run.state == {}
+
+    class Channel:
+        def start(self, builder):
+            raise RuntimeError("no thread")
+
+    monkeypatch.setattr(P, "rank0_tables", lambda runner, cfg: ("hook", Channel(), "b"))
+    for step in range(2):
+        with pytest.raises(RuntimeError, match="no thread"):
+            run(runner, step)
+    assert run.state == {}
+
+    hooks, bound = [], []
+
+    def step_hook(model, layers):
+        hooks.append((model, layers))
+        if model == "fp8":
+            raise ValueError("its cache doesn't hold DsaLatentRow_v1's 576 bf16 words a row; serve with --kv-cache-dtype auto")
+
+    tables = types.ModuleType("verity_vllm.pipeline.boundary_tables")
+    tables.StepHook, tables.layers_of = step_hook, lambda spec: tuple(range(spec))
+    monkeypatch.setitem(sys.modules, tables.__name__, tables)
+    if "verity_vllm.pipeline" in sys.modules:
+        monkeypatch.setattr(sys.modules["verity_vllm.pipeline"], "boundary_tables", tables, raising=False)
+    cfg = {"boundary_rows": {"tables": {"layers": 2}}}
+
+    def initialize(self, config, is_profiling=False):
+        bound.append(config)
+        self.kv_caches = ["kv"]
+        return "bound"
+
+    guard = P._tables_guard(initialize, cfg, rank=lambda: 0)
+    assert guard(NS(model="bf16"), "c", is_profiling=False) == "bound" and hooks == [("bf16", (0, 1))]
+    with pytest.raises(ValueError, match="DsaLatentRow_v1.*serve with --kv-cache-dtype auto"):
+        guard(NS(model="fp8"), "c")
+    # another rank reads no rows, and a runner that bound no cache has none to refuse
+    assert P._tables_guard(initialize, cfg, rank=lambda: 1)(NS(model="fp8"), "c") == "bound"
+    assert P._tables_guard(lambda self, c: "none", cfg, rank=lambda: 0)(NS(model="fp8"), "c") == "none"
+    assert len(bound) == 3 and len(hooks) == 2
 
 
 class RankExecutor:

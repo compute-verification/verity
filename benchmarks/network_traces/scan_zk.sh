@@ -20,6 +20,9 @@
 #      the lane's gate key)
 #      SC_RSS=1 (each flock-circuit process's own peak RSS, its command and wall, a line each in $OUT/rss.jsonl: a8's
 #      max_child_rss_gb is the largest of every session's so far)
+#      SC_LEAN_ONE=1 (the Lean verifier on one core: each of its processes is pinned to the lowest core
+#      the job has, with its command, the session archive it verifies, that core, its wall and CPU seconds and its
+#      peak RSS a line in $OUT/lean.jsonl)
 #      SC_PORT (`prove --port`, the sessions' first loopback port: by default 7811 + 16 × the lowest core the slot
 #      pins the job to, so that runs in two slots of one machine never share a session's port)
 # Kept in $OUT/sczk: the driver's summary and logs and everything the verifier received; never a prover's file (inst-*)
@@ -53,6 +56,25 @@ sys.exit(rc)
 EOF
   chmod +x "$W/flock-circuit-rss"
   BIN=$W/flock-circuit-rss
+fi
+if [ -n "${SC_LEAN_ONE:-}" ]; then
+  cat > "$W/lean-verifier-one" <<EOF
+#!$PY
+import json, os, resource, subprocess, sys, time
+core, args = min(os.sched_getaffinity(0)), sys.argv[1:]
+archive = args[args.index("--archive") + 1] if "--archive" in args[:-1] else None
+t = time.monotonic()
+rc = subprocess.call(["$LEAN", *args], preexec_fn=lambda: os.sched_setaffinity(0, {core}))
+used = resource.getrusage(resource.RUSAGE_CHILDREN)
+with open("$OUT/lean.jsonl", "a") as f:
+    f.write(json.dumps({"command": args[:1], "archive": archive and os.path.relpath(archive, "$W"), "core": core,
+                        "rc": rc, "wall_s": round(time.monotonic() - t, 2),
+                        "cpu_s": round(used.ru_utime + used.ru_stime, 2),
+                        "peak_gb": round(used.ru_maxrss / 2 ** 20, 2)}) + "\n")
+sys.exit(rc)
+EOF
+  chmod +x "$W/lean-verifier-one"
+  LEAN=$W/lean-verifier-one
 fi
 
 if [ -n "${SC_REHEARSE:-}" ]; then
