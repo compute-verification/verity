@@ -231,7 +231,6 @@
     {"file": "verity_vllm/program/compiled_norm_literal.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "schema-literal", "symbol": "main", "detail": "verity-ir/descriptor-equivalence/v0"},
     {"file": "verity_vllm/program/frontend/provenance.py", "kind": "schema-literal", "symbol": "registry_version", "detail": "verity-ir/registry-version/v0"},
-    {"file": "verity_vllm/program/frontend/rules/patterns.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/program/frontend/rules/vllm_bindings/int8.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/program/frontend/rules/vllm_bindings/kv_prefix.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/program/frontend/rules/vllm_bindings/norm_chain.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
