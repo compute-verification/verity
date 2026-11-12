@@ -416,6 +416,22 @@ def test_row_ii_at_the_control_s_table_on_the_served_cut_prices_the_units_at_the
 
 
 @pytest.mark.slow
+def test_the_rows_command_takes_another_cut_by_name(tmp_path, capsys):
+    """`rows --partition ''` (about 6 s) writes rows on the `workload` card's own cut, which name no cut and count the
+    whole head blocks; by default the rows name the served cut and print its label."""
+    args = ["rows", "--rows", "(i) honest", "--scopes", "world year", "--betas", "0.4", "1.0"]
+    assert H.main([*args, "--out", str(tmp_path / "own"), "--partition", ""]) == 0
+    assert "cut by the partition card" not in capsys.readouterr().out
+    assert H.main([*args, "--out", str(tmp_path / "served")]) == 0
+    assert f"cut by the partition card {H.PARTITION}" in capsys.readouterr().out
+    own, served = ([json.loads(x) for x in (tmp_path / d / "rows.jsonl").read_text().splitlines()] for d in ("own", "served"))
+    assert [r["case"]["partition"] for r in own + served] == ["", "", H.PARTITION, H.PARTITION]
+    assert "cut" not in own[0] and served[0]["cut"]["name"] == H.PARTITION
+    assert any(b.startswith("SparseMlaHeadBlock_v1{") for b in own[0]["volume"])
+    assert not any(b.startswith("SparseMlaHeadBlock_v1{") for b in served[0]["volume"])
+
+
+@pytest.mark.slow
 def test_a_planner_row_is_priced_at_a_steady_row_through_its_map(tmp_path):
     """Two rows on the planner (about 12 s): with a steady-state row mapped to the 64-key scores unit, the planner
     prices that block at the row (the row's seconds a block and the measured verifier's, in statements of the row's

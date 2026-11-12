@@ -3,11 +3,11 @@ reaches 10% of its compute, and a row's sampling plan, from one entry point at a
 
     python -m benchmarks.spot_figures.breakeven.headline rows --out DIR [--rows ROW ...] [--scopes SCOPE ...]
         [--betas BETA ...] [--workers N]      # DIR/rows.jsonl, one row a (row, scope, beta), and DIR/figure.json
-        [--steady ROWS.json [--steady-map MAP.json] | --prices [TABLE.json]]
+        [--steady ROWS.json [--steady-map MAP.json] | --prices [TABLE.json]] [--partition NAME]
     python -m benchmarks.spot_figures.breakeven.headline read ROWS.jsonl ...
     python -m benchmarks.spot_figures.breakeven.headline plan --row ROW --scope SCOPE --beta BETA --out DIR
         [--types MIX.json]                    # DIR/mix.json: the row's plan, block by block
-        [--steady ROWS.json [--steady-map MAP.json] | --prices [TABLE.json]]
+        [--steady ROWS.json [--steady-map MAP.json] | --prices [TABLE.json]] [--partition NAME]
     python -m benchmarks.spot_figures.breakeven.headline plan --row "(ii) honest" --scope "world year" \
         --beta 0.05544106123672309 --prices --out DIR    # row (ii) at its plan's budget, at today's table
 
@@ -16,7 +16,7 @@ from the repository's root. A row (`ROWS`) is the proof server's line at its las
 every sparse-MLA head's blocks as served (`PARTITION`: the `partition` card that cuts each head's key block into its
 scores unit and its values units, beside the line's own cut; `volume`: the cut `workload` card's sparse-MLA blocks
 counted over the serve plan's requests, `mla128`), its verification phase a datacenter's window. A row names its cut
-and the cut's label (`cut`). `price` prices its strata: the planner's per-type pricing, the quant types' host walk, the Lean verifier
+and the cut's label (`cut`); `--partition` names another card, or with '' none, the `workload` card's own cut. `price` prices its strata: the planner's per-type pricing, the quant types' host walk, the Lean verifier
 as measured and the row's scale. `evaluate` charges it: the carried pool's pages recommitted at each edge
 (a copy stratum and the kv arm's hash tax), a request cut at the edge recomputed, its prefix hits reproved, B128's
 wait at paced egress, the pool's AND gates when only replays read it, and a replay block served at most trace128's
@@ -703,10 +703,10 @@ def _row(args: tuple) -> dict:
 
 
 def rows(names=("(i) honest",), scopes=SCOPES, betas=BETAS, workers: int = 1, steady: dict | None = None,
-         prices: dict | None = None):
+         prices: dict | None = None, partition: str | None = None):
     """Every (row, scope, beta)'s row, in that order, `workers` at a time over the planner imported once."""
     P = planner()
-    jobs = [(r, s, b, None, steady, prices) for r in names for s in scopes for b in betas]
+    jobs = [(r, s, b, None, steady, prices, partition) for r in names for s in scopes for b in betas]
     if workers <= 1:
         yield from (run(spec_of(*j), P=P)[0] for j in jobs)
         return
@@ -840,6 +840,9 @@ def main(argv=None) -> int:
                          help="price at `verity bench prove --json`'s table: the file, or with no file the evidence "
                               "store's table read now (kept as DIR/prices.json); a block of the line whose row is its "
                               "own or its family's steady-state row is priced at it")
+        cmd.add_argument("--partition", metavar="NAME",
+                         help=f"the partition card that cuts every row's line (default the served cut, `{PARTITION}`; "
+                              "'' the workload card's own cut)")
     a = ap.parse_args(argv)
     if a.cmd != "read" and a.steady_map and not a.steady:
         ap.error("--steady-map maps the rows of --steady")
@@ -854,7 +857,7 @@ def main(argv=None) -> int:
         a.out.mkdir(parents=True, exist_ok=True)
         got = []
         with open(a.out / "rows.jsonl", "w") as f:
-            for row in rows(a.rows, a.scopes, a.betas, a.workers, measured, table):
+            for row in rows(a.rows, a.scopes, a.betas, a.workers, measured, table, a.partition):
                 f.write(json.dumps(row) + "\n")
                 f.flush()
                 got.append(row)
@@ -870,7 +873,7 @@ def main(argv=None) -> int:
     else:
         known = ({c["block"]: c["type"] for c in json.loads(a.types.read_text())["cells"] if c.get("type")}
                  if a.types else {})
-        row, mix = run(spec_of(a.row, a.scope, a.beta, steady=measured, prices=table), known)
+        row, mix = run(spec_of(a.row, a.scope, a.beta, steady=measured, prices=table, partition=a.partition), known)
         tree = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True).stdout
         a.out.mkdir(parents=True, exist_ok=True)
         (a.out / "mix.json").write_text(json.dumps(mix | {"planner": tree.strip()}, indent=1, default=str) + "\n")
