@@ -16,10 +16,11 @@
 #   SMALL_ARGS="--inline --units 20 --v 2560" runs the class inlined as the greedy select in 20 units
 #   (GreedySelect_v1{V, N=V / 20}: 20 templates, one unit of each a token), which round 2 derives its wires and its
 #   return link from: `second` runs it linked, and exit 0 is the first line's, as for the class of whole instances
-#   SMALL_GPU=1 builds flock-circuit with its device prover (the node's CUDA toolkit: CUDA_TK, else /usr/local/cuda-13.3,
-#   else the newest /usr/local/cuda-13*) and runs `second` with --devices, so its sessions prove on a card: the cards the
-#   run already holds (the indices in CUDA_VISIBLE_DEVICES, as research run --gpus N sets them), else one that gpu-lease
-#   hands `second` alone, for at most SMALL_LEASE_MIN minutes (30), so the builds and the first stage hold none
+#   SMALL_GPU=1 builds flock-circuit with its device prover (on CUDA 13.3's toolkit: CUDA_TK, the node's own, or the one
+#   verity/protocols/flock/pod/cuda-13.3.sh finds or unpacks beside flock-circuit's build) and runs `second` with
+#   --devices, so its sessions prove on a card: the cards the run already holds (the indices in CUDA_VISIBLE_DEVICES, as
+#   research run --gpus N sets them), else one that gpu-lease hands `second` alone, for at most SMALL_LEASE_MIN minutes
+#   (30), so the builds and the first stage hold none
 # On a challenger host's gate, from one of its peers: G="--challenger gate:USER@HOST --peer NODE --challenger-key
 # RECORD --ssh-key KEY" as both SMALL_FIRST and SMALL_SECOND (the last --challenger given is the one taken), and
 # SMALL_ARGS="--serve NONCE" with a nonce no run has used: the gate opens a run's root once, ever.
@@ -40,11 +41,14 @@ mkdir -p "$O/m0-build"
 FW=${SMALL_FLOCK_WORK:-$W}
 GPU=0; ON_CARDS=()
 if [ -n "${SMALL_GPU:-}" ]; then
+  # the unpacking runs in a subshell, under its own shell options; sourced again, the script only names the toolkit it
+  # finds. With the toolkit named, the build installs nothing on the node, and the prover finds its runtime beside it
+  ( set +euo pipefail; FLOCK_WORK=$FW . verity/protocols/flock/pod/cuda-13.3.sh ) > "$O/cuda.log" 2>&1 \
+    || { tail -20 "$O/cuda.log"; echo "SMALL_GPU=1: the node has no CUDA 13.3 toolkit and none could be unpacked" >&2; exit 8; }
+  set +euo pipefail; FLOCK_WORK=$FW . verity/protocols/flock/pod/cuda-13.3.sh >> "$O/cuda.log" 2>&1; set -euo pipefail
   TK=${CUDA_TK:-/usr/local/cuda-13.3}
-  [ -x "$TK/bin/nvcc" ] || { TK=$(ls -d /usr/local/cuda-13*/bin/nvcc 2>/dev/null | sort -V | tail -1) || true; TK=${TK%/bin/nvcc}; }
-  [ -n "$TK" ] || { echo "SMALL_GPU=1: no CUDA 13 toolkit under /usr/local (CUDA_TK names one)" >&2; exit 8; }
-  # a toolkit named here is the node's own: the build installs none, and the prover finds its runtime beside it
-  export CUDA_TK=$TK LD_LIBRARY_PATH=$TK/lib64:${LD_LIBRARY_PATH:-}
+  [ -x "$TK/bin/nvcc" ] || { echo "SMALL_GPU=1: no nvcc under $TK" >&2; exit 8; }
+  export CUDA_TK=$TK LD_LIBRARY_PATH=$TK/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
   # `second` is told its cards as whoever holds them names them: this run's, else a lease's taken for it alone
   GPU=1; ON_CARDS=(bash -c 'echo "cards $CUDA_VISIBLE_DEVICES ${GPU_LEASE_UUID:-}" >&2; exec "$@" --devices "$CUDA_VISIBLE_DEVICES"' _)
   if [ -z "${CUDA_VISIBLE_DEVICES:-}" ]; then
