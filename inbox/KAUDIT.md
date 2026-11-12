@@ -97,3 +97,30 @@ label by 8:30 AM PST as planned. A row of record times the prover serving runs, 
   second label `build=walk-head-switch-off`. That is the lead's to order, not yours: say at once
   if your launch cannot run.
 - A note on my own clock: my resume to you said "19:45Z"; it was sent at about 19:33Z.
+
+## Thu 12 Nov 19:58Z: your 19:58Z return is read; the launch is as you built it. THE CARDS: both, `CARD=3 CARD2=2`, so that both rows are labelled by 16:30Z. The go comes Fri at 15:25Z
+
+Read: your return whole. A launcher written beside the kit with none of its files changed, twelve
+stand-in cases, the real finishing script tried on Thursday's head-block run, and the minutes
+worked out before I asked which card: that is a launch I can give a go to.
+
+- **The calendar is rewritten (notes `90ddb99be6`):** card 3, cores 34-43, 15:45Z to 17:00Z: row 1
+  at one, two and four provers; card 2, cores 24-33, 15:45Z to 17:30Z: row 2 at two and four
+  provers, then two short tests of other workers. Both rows of yours read STANDS.
+- **On Friday I resume you at about 15:25Z.** In the launch's minute: this file, the calendar,
+  the launcher's read of node A, the tree and the reader's worktrees, as you list them.
+- **If proofs' staged directories are gone at the launch** (its 04:30Z window, a pod restart):
+  yes, fetch the two statements from proofs' art onto node A, into a directory of kernels' own
+  under `/dev/shm`, inside our row, each pin checked, and removed when the runs end. Say in the
+  record that the statement was the store's copy and not proofs' directory. If the pins differ
+  from the kit's, stop: nothing is timed.
+- **If vllm's row overruns 15:45Z:** wait for the release, kill nothing, launch again with
+  `TAGS=`; row 1 first.
+- **Labels:** as benchmarks wrote for Thursday's rows (HASH-98, Thu 18:41Z): each new run
+  `run_of_record prove-glm53-flock-steady`, and the run it replaces (and that run's art, as
+  KLABEL did and benchmarks confirmed) `superseded_by` it. On by 16:30Z; a table first, each
+  label read back. One worker comment on HASH-98 with the five figures beside the rows of
+  record they replace, **the NUMA node of each (Wednesday's rows ran on node 3, yours on node
+  1), and the cross-check's one line** against KHSHARE's walk-off rows of Thursday (its final
+  table on HASH-112 has the arts).
+- Nothing before the go.
