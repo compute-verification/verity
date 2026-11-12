@@ -53,7 +53,6 @@ public import Definitions.Accounting.Guarantees.RemoteSketchP2
 public import Definitions.Accounting.Guarantees.Requirement
 public import Definitions.Accounting.Guarantees.Sketch
 public import Definitions.Accounting.Guarantees.Stacking
-public import Definitions.Accounting.Guarantees.Tag
 public import Definitions.Accounting.Guarantees.TS
 public import Definitions.Accounting.Guarantees.Sheet
 public import Definitions.Accounting.Guarantees.TS.Stages
@@ -73,7 +72,7 @@ composed guarantee for the remote bandwidth audit as deployed and its deployed i
 bandwidth audit's conservation and node-level guarantees on the actual-circuit model, the actual circuit's capacity
 theorem, runtime corollary, memory cap over threads with its rate, dark gates and the compute dampener's windows,
 localization, composition and fit, compute additivity's capacity from the machine model 𝓜,
-the obligations B1, B2 and B4, the tag and sketch guarantees, Lemma B with (H-μ⁺) derived from fresh coins and Lemma B′
+the obligations B1, B2 and B4, the sketch guarantees, Lemma B with (H-μ⁺) derived from fresh coins and Lemma B′
 for a persistent pattern, the view independence the Build's coin rules give it, co-location and the link relay for
 receipts bound to the matmul, what a relay of the deployed bound receipt's sketch must exchange, PoUB's per-pass lemma
 (the bandwidth audit's guarantee), their per-run forms, PoUW's work lower bound on an isolated node, PoUW's credit on an

@@ -77,7 +77,6 @@ public import Proofs.Accounting.Stacking
 public import Proofs.Accounting.RegisteredCircuit.Witness
 public import Proofs.Accounting.RegisteredCircuit.WitnessPrefill
 public import Proofs.Accounting.Sketch
-public import Proofs.Accounting.Tag
 public import Proofs.Accounting.TS
 public import Proofs.Accounting.TS.Stages
 public import Proofs.Accounting.TS.Steer

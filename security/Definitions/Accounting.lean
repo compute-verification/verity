@@ -139,7 +139,7 @@ This module imports the area's definitions; the lock's `layers` lists what they 
 * The capacity audit: `Capacity`, `Memory` and `Responder`.
 * The bandwidth audit. `Bandwidth` is its game in the random-oracle model, and `BandwidthAudit` that game as the
   bandwidth audit of a joint run. `RateAudit` and the modules named after it are the rate audit's games. `Tag` is the
-  block tags, `Schedule` a deterministic schedule and `Carrier` device memory whose contents are a circuit's values.
+  block tag, `Schedule` a deterministic schedule and `Carrier` device memory whose contents are a circuit's values.
   `Remote` is PoUB's vocabulary: the node, its parameters, a run and its routes.
 * The overhead lower bound's inputs. `Slowdown` is tasks, classes, thresholds and slowdown, and `ServingBlocks` server
   blocks and a training class's counts.

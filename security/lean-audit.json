@@ -10612,97 +10612,6 @@
    },
    "type_hash": "9eb1993b8b572a50b8618a175ce013cc2296b4a4695af3bfec3de6ae607ef5aa"
   },
-  "Accounting.SecurityProofs.Tag.DigestNonCollision": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.Tag.DigestNonCollision : Accounting.Guarantees.Tag.DigestNonCollision"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "a5885b18cdc13950f3c4fc02f5c781a957dd2052abf4391c6b55a518ad2f19f5",
-   "unfolded_hash": "9c2ef6610a26f27a4a2bf806a819bf54ba559531793bc4162ab3b1adcfea52b8"
-  },
-  "Accounting.SecurityProofs.Tag.FoldNonCollision": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.Tag.FoldNonCollision : Accounting.Guarantees.Tag.FoldNonCollision"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "79612cf8b8ff82de4c0a82bfddf5723de71efbdc8cb5219aec9a866c5fcb6876",
-   "unfolded_hash": "a2764e7edd2b0a17bbd197be6654243383e06432c2aba23d250c37719f3a08ab"
-  },
-  "Accounting.SecurityProofs.Tag.HornerIsBlockHash": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.Tag.HornerIsBlockHash : Accounting.Guarantees.Tag.HornerIsBlockHash"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "fad930b61c45eb758145c976bd5544c44efb5cba4dcc55342e5dfe5865f76b63",
-   "unfolded_hash": "684eb2c46ae76c0b24b803db7c9a375c0c8a738778489547731629a03d857f3a"
-  },
-  "Accounting.SecurityProofs.Tag.PartialReadGuess": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.Tag.PartialReadGuess : Accounting.Guarantees.Tag.PartialReadGuess"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "a699a385085916af1e166ba392545ca8d2ebe459f68e867c508db72f919f6803",
-   "unfolded_hash": "bf0b50e910c6de4e1240c69a89b8f7d304abcf36c926a6611277d01944957f18"
-  },
-  "Accounting.SecurityProofs.Tag.PolyNonCollision": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.Tag.PolyNonCollision : Accounting.Guarantees.Tag.PolyNonCollision"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "7b0f647827cedcc43c3c71d20282fe6947495ea846027d4268fddc1dfbc468f1",
-   "unfolded_hash": "2e3a45d22326e90e2227a215324d5980418b232ee96f907579ee201f33792b92"
-  },
-  "Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed : Accounting.Guarantees.Tag.PolyNonCollisionKeyed"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "c6ca9b886962d17559eb99064498a277a8c46edf712e5c11a84d8542bbda4fee",
-   "unfolded_hash": "3898ed6b1852fa74022addfab0f400b0970e2bac8de7697a8f69b924a2cfc024"
-  },
-  "Accounting.SecurityProofs.Tag.PolyUnpredictable": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.Tag.PolyUnpredictable : Accounting.Guarantees.Tag.PolyUnpredictable"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "67b1fadb363e69e86a6d5bd4f1470fc59a8c75d8d3422ec50bd514d9437b7035",
-   "unfolded_hash": "c8de82d578c7417ca97a3a512ad758506cdff5525562eedc5baca40120052254"
-  },
   "Accounting.SecurityProofs.TileUnpredictableMono": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.TileUnpredictableMono : Accounting.Guarantees.TileUnpredictableMono"],
@@ -27405,34 +27314,6 @@
    "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": {
     "function": ["Flock.Stmt.setupTables", "Flock.verify", "Flock.Zk.verify", "Flock.ProvedScope.check"],
     "outcome": "accept"
-   },
-   "Accounting.SecurityProofs.Tag.PolyNonCollision": {
-    "function": "Accounting.Tag.blockHash",
-    "outcome": "none"
-   },
-   "Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed": {
-    "function": "Accounting.Tag.blockHash",
-    "outcome": "none"
-   },
-   "Accounting.SecurityProofs.Tag.PolyUnpredictable": {
-    "function": "Accounting.Tag.blockHash",
-    "outcome": "none"
-   },
-   "Accounting.SecurityProofs.Tag.PartialReadGuess": {
-    "function": "Accounting.Tag.wordGuess",
-    "outcome": "none"
-   },
-   "Accounting.SecurityProofs.Tag.FoldNonCollision": {
-    "function": "Accounting.Tag.fold",
-    "outcome": "none"
-   },
-   "Accounting.SecurityProofs.Tag.DigestNonCollision": {
-    "function": "Accounting.Tag.digest",
-    "outcome": "none"
-   },
-   "Accounting.SecurityProofs.Tag.HornerIsBlockHash": {
-    "function": "Accounting.Tag.hornerHash",
-    "outcome": "none"
    },
    "Accounting.SecurityProofs.Sketch.NonCollision": {
     "function": "Accounting.Tag.project",
