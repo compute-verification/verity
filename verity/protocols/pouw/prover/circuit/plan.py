@@ -34,11 +34,11 @@ the unsound work at δ (Lean `audit_closure`, `accountable_compute`).
 """
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import ROUND_CEILING, Decimal, localcontext
 from fractions import Fraction
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from verity.commitments import domains
 from verity.commitments.randomness import Key
@@ -49,6 +49,9 @@ from verity.protocols.pouw.verifier.protocol import DomainError
 from ..schemes.ncp import FORM_UNITS
 from .ncp2 import D, Shape, rfc6962
 from .partition import ProofBlock, units
+
+if TYPE_CHECKING:
+    from . import pc4, pc8
 
 DRAW_DOMAIN = domains.POUW_CLOSURE_SAMPLING
 
@@ -271,7 +274,7 @@ def layout(shape: Shape, kind: str = "shift24") -> Layout:
     return Layout(shape, us, template_strata(us, Layout(shape, us, (), {}).tile_work()), closure, y_strip)
 
 
-def tile_layout(shape, w_ref: int) -> Layout:
+def tile_layout(shape: pc4.Shape | pc8.Shape, w_ref: int) -> Layout:
     """A tile check's layout (`pc4.Shape` or `pc8.Shape`), from the shape alone: the call's units and strata, each
     tile's closure (itself, then its rows of A's units: TM, or a short last tile row's r; and under pc8's inert-work
     bound, on whole tiles only, its strip, its TM·TN word units row by row, its TM rows' digest and tally units and its
@@ -375,7 +378,7 @@ def design_object(lay: Layout, law: WorkLaw) -> dict:
                                                "floor": table[s.name]["floor"], "k": sizes[s.name]} for s in lay.strata]}
 
 
-def openings(lay: Layout, proved, proved_y=()) -> tuple[tuple[str, int], ...]:
+def openings(lay: Layout, proved: Iterable[int], proved_y: Iterable[int] = ()) -> tuple[tuple[str, int], ...]:
     """The leaves a plan opens: a digest or X unit's strip's 16 A rows, one leaf per row; a Y unit's (the weight Program's,
     by column strip) 16 weight rows; and at each such column strip, ("y", strip), the call's Y and c₀ input there and the
     weight Program's output there, which the verifier compares (`Traced.check_link`)."""
