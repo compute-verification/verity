@@ -13,10 +13,12 @@ A recorded check that runs circuit-check's step or the suite (`check.builds_reco
   parallel, at most `FETCH_BYTES` of them in at most `FETCH_S`.  A record is held to its name: one the store lacks, whose bytes
   aren't its name's, or past either bound is left out, as is an entry any record it needs is missing for, so circuit-check
   builds the binding.  A record is a cache, never a verdict: nothing a fetch does fails the check or enters a step's key.
-- Each time it writes its verdict pack (`check.Packs`), it names the binding records whose files changed since its steps began
-  (`Publisher`: those it built, and those circuit-check counted, which it touches), with what they need; puts each one the store
-  doesn't hold yet (`ON_STORE` remembers, for the node, what is there already, so nothing is uploaded twice); lists every one on
-  the store in the pack's `MANIFEST`; and leaves those out of the pack, which then carries only records the store lacks.
+- Each time it writes its verdict pack (`check.Packs`), it names the binding records its circuit-check runs took or built, as
+  their manifests in its out dir list them (`run_records`: the step's `--records-manifest`, a session's `SESSION_ENV`), or,
+  from a circuit-check that writes none, those whose files changed since its steps began (`Publisher`), with what they need;
+  puts each one the store doesn't hold yet (`ON_STORE` remembers, for the node, what is there already, so nothing is uploaded
+  twice); lists every one on the store in the pack's `MANIFEST`; and leaves those out of the pack, which then carries only
+  records the store lacks.
 """
 from __future__ import annotations
 
@@ -55,6 +57,32 @@ FETCH_S = 300.0
 PUBLISH_S = 300.0
 #: the requests in flight at once, fetching or putting
 JOBS = 32
+#: what circuit-check writes in a check's out dir once its catalog is made, one file a run (the step, each of its shards, and a
+#: session, through `SESSION_ENV`): every binding record the catalog took or built (`records[].record`) and the read records
+#: they reach (`needs`)
+RUN_MANIFESTS = "circuit-records.*.json"
+RUN_SCHEMA = "circuit-check-records/v1"
+SESSION_ENV = "CIRCUIT_CHECK_RECORDS_MANIFEST"
+
+
+def run_records(out: Path) -> list[str] | None:
+    """The binding records the manifests circuit-check wrote in ``out`` list (`RUN_MANIFESTS`); None when it wrote none."""
+    files = sorted(out.glob(RUN_MANIFESTS))
+    if not files:
+        return None
+    got: list[str] = []
+    for f in files:
+        try:
+            doc = json.loads(f.read_text())
+        except (OSError, ValueError) as e:
+            print(f"check: circuit records: {f.name} can't be read ({type(e).__name__}); none it lists is named", flush=True)
+            continue
+        if not isinstance(doc, dict) or doc.get("schema") != RUN_SCHEMA or not isinstance(doc.get("records"), list):
+            print(f"check: circuit records: {f.name} is no {RUN_SCHEMA} manifest; none it lists is named", flush=True)
+            continue
+        got += [r["record"] for r in doc["records"] if isinstance(r, dict) and isinstance(r.get("record"), str)
+                and named(r["record"])]
+    return got
 
 
 def named(rel: str) -> bool:
@@ -249,13 +277,15 @@ def fetch_line(got: dict) -> str:
 
 class Publisher:
     """The records one check names in its verdict pack: each binding record in ``d`` (circuit-check's cache, of pack path ``at``)
-    whose file changed at or after ``since_ns`` (the start of its steps) and whose bytes are its name's, with every record it
-    needs, each put on the store with ``put`` unless ``base``'s `ON_STORE` lists it.  An entry a record it needs is missing or
-    corrupt for is named by none: it can't count anywhere.  A file is read once while its size and mtime stay."""
+    that the manifests circuit-check wrote in ``out`` list (`run_records`), else, while it wrote none, each whose file changed at
+    or after ``since_ns`` (the start of its steps); each whose bytes are its name's, with every record it needs, put on the store
+    with ``put`` unless ``base``'s `ON_STORE` lists it.  An entry a record it needs is missing or corrupt for is named by none: it
+    can't count anywhere.  A file is read once while its size and mtime stay."""
 
     def __init__(self, d: Path, at: str, since_ns: int, put: Callable[[str, Path], str] | None, base: Path,
-                 clock: Callable[[], float] = time.monotonic, jobs: int = JOBS):
+                 clock: Callable[[], float] = time.monotonic, jobs: int = JOBS, out: Path | None = None):
         self.d, self.at, self.since_ns, self.put, self.base, self.clock, self.jobs = d, at, since_ns, put, base, clock, jobs
+        self.out = out
         self.on_store = _on_store(base)
         self.read: dict[str, tuple] = {}
         self.lock = threading.Lock()
@@ -295,8 +325,7 @@ class Publisher:
         memo[rel] = out
         return out
 
-    def produced(self) -> dict[str, int]:
-        """`{name: bytes}` of the records named now."""
+    def _changed(self) -> list[str]:
         roots: list[str] = []
         for version in _listed(self.d):
             if version.name.startswith(".") or not version.is_dir(follow_symlinks=False):
@@ -309,6 +338,11 @@ class Publisher:
                     if named(rel) and not isinstance(st := _stat(f.path), str) and stat.S_ISREG(st.st_mode) \
                             and st.st_mtime_ns >= self.since_ns and self._file(rel, st)[0]:
                         roots.append(rel)
+        return roots
+
+    def produced(self) -> dict[str, int]:
+        """`{name: bytes}` of the records named now."""
+        roots = listed if self.out is not None and (listed := run_records(self.out)) is not None else self._changed()
         sizes: dict[str, int] = {}
         memo: dict[str, set[str] | None] = {}
         for rel in roots:

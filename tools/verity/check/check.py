@@ -1662,6 +1662,13 @@ def builds_records(only: list[str] | None) -> bool:
                for p in only)
 
 
+def cc_manifests() -> bool:
+    """Whether this tree's circuit-check writes the manifest of the records its catalog took or built (`records.RUN_MANIFESTS`:
+    the step's `--records-manifest`, a session's `records.SESSION_ENV`); a tree whose circuit-check predates it is checked too."""
+    cli = ROOT / CIRCUIT_SUITE / "src" / "circuit_check" / "cli.py"
+    return cli.is_file() and "--records-manifest" in cli.read_text()
+
+
 def store_remote():
     """The store's remote through the run's custody key (`custody_dir`), else None, with the reason printed."""
     if (custody := custody_dir()) is None:
@@ -1998,12 +2005,18 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
               *after_lean, *tail]
     if cold:
         pytest = ["bash", "-c", then_opt_in(pytest, out, "pytest" if len(lean) > 1 else "all", tail)]
-    cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
-          *(["--cache", str(cache_dir() / "circuit-check"), "--catalog-units"] if circuit_cache else []),
-          *(["--mem-gb", str(cc_mem_gb(slot_gb, beside, with_lean))] if slot_gb is not None else []),
-          *(["--mem-gb-file", str(out / CC_GRANT)] if slot_gb is not None and beside else [])]
+    manifests = circuit_cache and cc_manifests()
+
+    def cc_argv(tag: str) -> list[str]:
+        return [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
+                *(["--cache", str(cache_dir() / "circuit-check"), "--catalog-units"] if circuit_cache else []),
+                *(["--records-manifest", str(out / f"circuit-records.{tag}.json")] if manifests else []),
+                *(["--mem-gb", str(cc_mem_gb(slot_gb, beside, with_lean))] if slot_gb is not None else []),
+                *(["--mem-gb-file", str(out / CC_GRANT)] if slot_gb is not None and beside else [])]
+    cc = cc_argv("step")
     if held := circuit_shards(only):
-        each = [[*cc, "--shard", s, "--shard-dir", str(out / CC_SHARDS / s.partition("/")[0])] for s in held]
+        each = [[*cc_argv(f"step-{s.partition('/')[0]}"), "--shard", s, "--shard-dir", str(out / CC_SHARDS / s.partition("/")[0])]
+                for s in held]
         cc = each[0] if len(each) == 1 else ["bash", "-c", "rc=0; " + "; ".join(f"{shlex.join(c)} || rc=$?" for c in each) + "; exit $rc"]
     build = ["bash", str(ROOT / "verity" / "protocols" / "flock" / "prover" / "check_build.sh")]
     rust = ["env", f"CARGO_BUILD_JOBS={b}", f"RUST_TEST_THREADS={b}", *build, "test"]
@@ -3047,6 +3060,8 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
     t0 = time.monotonic()
     hit = None
     key = STEP_KEYS[name](e) if cache and name in STEP_KEYS else None
+    if name == "pytest" and cc_manifests():
+        e = e | {RECORDS.SESSION_ENV: str(out / "circuit-records.session.json")}
     if key:
         entry = cache_dir() / name / f"{key}.json"
         if entry.exists():
@@ -3483,7 +3498,7 @@ def main(argv: list[str], script: bool = False) -> int:
     main_thread = threading.current_thread() is threading.main_thread()
     prior = signal.signal(signal.SIGTERM, _terminated) if main_thread else None
     publisher = (RECORDS.Publisher(cache_dir() / "circuit-check", CIRCUIT_ENTRIES, time.time_ns(), RECORDS.putter(cc_remote),
-                                   cache_dir()) if cc_remote is not None and before is not None else None)
+                                   cache_dir(), out=out) if cc_remote is not None and before is not None else None)
     packs = Packs(run_dir / "verdicts.tar.gz", before, publisher) if before is not None else None
     reused = Reused(run_dir, before, None if cache else CIRCUIT_ENTRIES) if before is not None else None
     live = live_record(out, run_dir, sharded, picked)

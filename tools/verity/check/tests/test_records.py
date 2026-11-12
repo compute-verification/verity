@@ -252,6 +252,46 @@ def test_a_pack_that_names_records_wrongly_names_none(tmp_path):
         assert R.named_in(pack) == {}
 
 
+def test_a_pack_names_what_circuit_checks_manifests_list_once_it_writes_them(tmp_path, monkeypatch):
+    """Once circuit-check lists the records its catalog took or built, a pack names those, an old one it took included, and
+    none another check on the node wrote meanwhile; a manifest of another schema lists nothing."""
+    d = _machine(tmp_path, monkeypatch, "a")
+    taken, other = _binding(d, "taken"), _binding(d, "other")
+    (out := tmp_path / "out").mkdir()
+    (out / "circuit-records.step.json").write_text(json.dumps(
+        {"schema": R.RUN_SCHEMA, "records": [{"binding": "taken", "record": taken["entry"], "built": False}]}))
+    (out / "circuit-records.session.json").write_text(json.dumps({"schema": "v0", "records": [{"record": other["entry"]}]}))
+    p = R.Publisher(d, "check/circuit-check/", 0, None, d.parent, out=out)
+    assert p.produced() == {rel: (d / rel).stat().st_size for rel in taken.values()}
+    assert R.run_records(tmp_path / "none") is None
+
+
+def test_the_step_and_the_session_are_told_where_to_list_their_records_once_circuit_check_can(tmp_path, monkeypatch):
+    """circuit-check's step gets a manifest of its own (each shard of it one), and the pytest step, whose circuit-check suite's
+    session builds records too, the variable naming its own; neither while this tree's circuit-check writes none, and no
+    step's key reads either."""
+    def argv(only=None):
+        return {name: a for g in CHECK.groups(tmp_path, 8, only=only) for name, a, _ in g}["circuit-check"]
+
+    class Steps:
+        why = "a test's"
+
+        def start(self, name, argv, cwd, e, f):
+            self.env = e
+
+        def end(self, rec):
+            return rec
+
+    for can in (False, True):
+        monkeypatch.setattr(CHECK, "cc_manifests", lambda: can)
+        assert ("--records-manifest" in argv()) is can
+        CHECK._step("pytest", ["true"], tmp_path, tmp_path, True, steps := Steps())
+        assert steps.env.get(R.SESSION_ENV) == (str(tmp_path / "circuit-records.session.json") if can else None)
+    assert str(tmp_path / "circuit-records.step.json") in argv()
+    sharded = " ".join(argv(["circuit-check:1/4", "circuit-check:3/4"]))
+    assert str(tmp_path / "circuit-records.step-1.json") in sharded and str(tmp_path / "circuit-records.step-3.json") in sharded
+
+
 @pytest.mark.parametrize("parts, builds", [(None, True), (["pytest"], True), (["circuit-check:2/4"], True),
                                            (["lean-audit:security", "ratchet-gate"], False)])
 def test_only_a_check_that_runs_circuit_check_fetches(parts, builds):
