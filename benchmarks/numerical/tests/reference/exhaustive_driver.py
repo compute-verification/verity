@@ -131,6 +131,15 @@ def adapter_shard(spec: tuple[int, int, int]) -> tuple[int, int]:
 # --- steps ----------------------------------------------------------------------------------------------------------------------
 
 
+def _takes(evaluate, refusal: type[Exception], *operands) -> bool:
+    """Whether ``evaluate`` gives a value on ``operands``; False where it raises its ``refusal``."""
+    try:
+        evaluate(*operands)
+    except refusal:
+        return False
+    return True
+
+
 def step_a() -> dict:
     finite = nonfinite = mismatches = 0
     for word in range(1 << 16):
@@ -141,16 +150,8 @@ def step_a() -> dict:
                     mismatches += 1
         else:
             nonfinite += 1
-            try:
-                T.bf16_product(word, 0x3F80)
-                mismatches += 1
-            except InvalidArtifact:
-                pass
-            try:
-                H.tc_dot16(0, [word] + [0] * 15, [0x3F80] * 16)
-                mismatches += 1
-            except H.NonFinite:
-                pass
+            mismatches += _takes(T.bf16_product, InvalidArtifact, word, 0x3F80)
+            mismatches += _takes(H.tc_dot16, H.NonFinite, 0, [word] + [0] * 15, [0x3F80] * 16)
     return {"encodings": 1 << 16, "finite": finite, "non_finite": nonfinite, "comparisons": 3 * finite + 2 * nonfinite, "mismatches": mismatches}
 
 
