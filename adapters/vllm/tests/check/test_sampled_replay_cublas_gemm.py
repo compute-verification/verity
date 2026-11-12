@@ -11,7 +11,7 @@ import re
 
 import numpy as np
 import pytest
-from verity.circuits.defs import bind
+from verity.circuits.defs import bind, conformance_label
 from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import cublas_gemm_rows as C
 from verity.definitions.numerics import rows
@@ -86,8 +86,6 @@ def test_row_kernels_are_the_capture_models_at_glm53s_shapes(name):
 def test_the_evaluator_cites_the_h200_capture_and_agrees_with_the_route_table():
     """The provenance's split counts are the route table's at every (shape, M) the capture ran (the scan maps the same routes),
     and the Definitions' conformance cites the same record."""
-    from verity.circuits.defs import conformance_label
-
     from tests.properties import glm53_bf16_gemm_capture_gpu as X
 
     p = C.PROVENANCE

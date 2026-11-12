@@ -1,5 +1,5 @@
 """The Commit verdict's names: the seven named checks (`GROUPS`: each group's claim and the v1 fields it was read under) and the
-v1 -> v2 name table (`OLD_TO_NEW`, rendered by `mapping_markdown`)."""
+v1 -> v2 name table (`OLD_TO_NEW`)."""
 
 from __future__ import annotations
 
@@ -106,13 +106,3 @@ OLD_TO_NEW: list[dict[str, str]] = [
     {"old": "declaration_*.json", "where": "commit/ (commit_integ.api.declaration)", "new": "required_value_coverage/required_classes (inputs)"},
     {"old": "sampled_replay_p*.json", "where": "commit/", "new": "local_replay/* (inputs: file sha256s under verdict.inputs)"},
 ]
-
-
-def mapping_markdown() -> str:
-    lines = ["| old (v1 field) | where | new (v2 check / field) |", "|---|---|---|"]
-    for m in OLD_TO_NEW:
-        lines.append(f"| `{m['old']}` | {m['where']} | {m['new']} |")
-    lines += ["", "| check | claim |", "|---|---|"]
-    for g, spec in GROUPS.items():
-        lines.append(f"| `{g}` | {spec['claim']} |")
-    return "\n".join(lines) + "\n"

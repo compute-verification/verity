@@ -14,8 +14,9 @@ and TP16 refines twice as far (g = 32):
 from __future__ import annotations
 
 import json
+import math
+from collections.abc import Callable
 from types import SimpleNamespace
-from typing import Callable
 
 import numpy as np
 import pytest
@@ -23,7 +24,7 @@ import pytest
 from tests.check.test_weights_of_record import live_digests, write_safetensors
 from verity_vllm.check import weights_of_record as WR
 
-G, I, H, E = 128, 1536, 256, 2
+G, INTER, H, E = 128, 1536, 256, 2
 CONTAINER = "model.layers.0.mlp.experts"
 SERVED = {n: f"{CONTAINER}.routed_experts.{n}" for n in ("w13_weight", "w13_weight_scale_inv", "w2_weight", "w2_weight_scale_inv")}
 PARTS = {"w1": "gate_proj", "w3": "up_proj", "w2": "down_proj"}
@@ -40,11 +41,11 @@ def _ty(shape, bits):
 
 def _block(world: int) -> int:
     from verity_vllm.program.model import fp8_moe_block
-    return fp8_moe_block(G, I // world, H)
+    return fp8_moe_block(G, INTER // world, H)
 
 
 def _fields(world: int) -> list[tuple[str, list[int], int]]:
-    I_r = I // world
+    I_r = INTER // world
     g = _block(world)
     return [("model." + SERVED["w13_weight"], [E, 2 * I_r, H], 8), ("model." + SERVED["w13_weight_scale_inv"], [E, 2 * I_r // g, H // g], 32),
             ("model." + SERVED["w2_weight"], [E, H, I_r], 8), ("model." + SERVED["w2_weight_scale_inv"], [E, H // g, I_r // g], 32)]
@@ -63,7 +64,7 @@ def ckpt(tmp_path_factory):
     rng = np.random.default_rng(5)
     t: dict[str, tuple[str, np.ndarray]] = {}
     for e in range(E):
-        for part, (n, k) in (("gate_proj", (I, H)), ("up_proj", (I, H)), ("down_proj", (H, I))):
+        for part, (n, k) in (("gate_proj", (INTER, H)), ("up_proj", (INTER, H)), ("down_proj", (H, INTER))):
             name = f"{CONTAINER}.{e}.{part}"
             t[name + ".weight"] = ("F8_E4M3", rng.integers(0, 256, size=(n, k), dtype=np.uint8))
             base = 1.0 + 1000.0 * (3 * e + ("gate_proj", "up_proj", "down_proj").index(part))
@@ -71,7 +72,7 @@ def ckpt(tmp_path_factory):
     d = tmp_path_factory.mktemp("fp8moe") / "snap"
     d.mkdir()
     write_safetensors(str(d / "model.safetensors"), t)
-    cfg = {"hidden_size": H, "moe_intermediate_size": I, "num_experts": E, "tie_word_embeddings": False,
+    cfg = {"hidden_size": H, "moe_intermediate_size": INTER, "num_experts": E, "tie_word_embeddings": False,
            "quantization_config": {"quant_method": "fp8", "fmt": "e4m3", "activation_scheme": "dynamic", "weight_block_size": [G, G]}}
     (d / "config.json").write_text(json.dumps(cfg))
     man = d.parent / "checkpoints.json"
@@ -97,10 +98,10 @@ def _src(m, e: int, shard_id: str, suffix: str) -> np.ndarray:
 
 def _by_index_map(m, world: int, rank: int) -> dict[str, np.ndarray]:
     """The served tensors at (world, rank) word by word: weights sliced, scales through the index map."""
-    I_r, g = I // world, _block(world)
+    I_r, g = INTER // world, _block(world)
     f, off = G // g, rank * I_r // g
-    w13_ws = np.empty((E, 2 * I_r // g, H // g), dtype=np.float32)
-    w2_ws = np.empty((E, H // g, I_r // g), dtype=np.float32)
+    w13_ws: np.ndarray = np.empty((E, 2 * I_r // g, H // g), dtype=np.float32)
+    w2_ws: np.ndarray = np.empty((E, H // g, I_r // g), dtype=np.float32)
     for e in range(E):
         for h, sid in enumerate(("w1", "w3")):
             src = _src(m, e, sid, "weight_scale_inv")
@@ -153,7 +154,7 @@ def test_a_scale_grid_that_is_not_vllms_fails_by_name(ckpt):
     scale fields alone."""
     rec = WR.weights_of_record(_program(8, 5), _ck(ckpt), prefix="model.")
     honest = {SERVED[n]: a for n, a in _by_index_map(ckpt, 8, 5).items()}
-    I_r = I // 8
+    I_r = INTER // 8
 
     def tiled(sid, e):
         return np.tile(_src(ckpt, e, sid, "weight_scale_inv"), (2, 2))
@@ -172,7 +173,7 @@ def _loaded(m, world: int, rank: int, *, refine: Callable, load_w13: Callable, l
     the scales on `refine`'s block, `RoutedExperts.weight_loader` repeats a BLOCK scale `G // g` times along N and K, then `_load_w13`
     (gate as `w1`, up as `w3`, shard dim 0) or `_load_w2` (shard dim 1) cuts the rank's slice into one expert's parameter."""
     torch = pytest.importorskip("torch")
-    I_r = I // world
+    I_r = INTER // world
     shape = refine(SimpleNamespace(intermediate_size_per_partition=I_r, tp_size=world, hidden_dim=H), [G, G])
     if shape is None and I_r % G:
         raise ValueError(f"I_r = {I_r}: vLLM refines no grid and create_weights raises")
@@ -196,7 +197,6 @@ def _loaded(m, world: int, rank: int, *, refine: Callable, load_w13: Callable, l
 
 def _restated_refine(config, weight_block_size):
     """`refine_fp8_moe_block_shape`, fused_moe/oracle/fp8.py:272."""
-    import math
     block_n, block_k = weight_block_size
     ispp = config.intermediate_size_per_partition
     if ispp % block_n == 0 and (config.tp_size == 1 or ispp % block_k == 0):

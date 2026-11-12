@@ -2034,6 +2034,39 @@ def test_the_review_listing_names_the_marked_prs_onto_main_not_on_it_lacking_a_l
     assert out.index("#5 ") < out.index("#1 ") and "2 marked PR(s) not on `main` lack a land verdict" in out, out
 
 
+def test_the_review_listing_says_low_risk_of_a_head_the_loops_rule_lands_on_its_mark_and_never_of_a_move_or_held_pr(world, capsys):
+    """The verified queue's loop takes a marked head on its mark alone when drive.toml at `main` excludes none of its files
+    (`lands_on_mark`), so its row says so instead of waiting on a reviewer: one whose owner's own land verdict doesn't count
+    too, but not a head touching an excluded path, a move PR or a held PR, nor any once `main` turns the lane off.  A head a
+    reviewer's land verdict lands is no row."""
+    from research.queue import StoreLabels
+
+    world.with_store_remote()
+    _move_main(world, {DRIVE_FLAGS: 'lowrisk_excludes = ["*.lean", "core/"]\n'})
+    world.gh.put(1, world.change({"docs/a.md": "x\n"}))
+    world.gh.put(2, world.change({"docs/b.md": "x\n", "core/v.py": "x\n"}))
+    world.gh.put(3, world.change({"docs/c.md": "x\n", "pkg/T.lean": "x\n"}))
+    world.gh.put(4, world.change({"c.txt": None, "moved/c.txt": "c\n"}), body="Lane `lane-4`.\nMove: tools/move/x_map.toml\n")
+    for n in (5, 6, 7):
+        world.gh.put(n, world.change({f"docs/{n}.md": "x\n"}))
+    for n, verdict, by in ((5, "hold", "reviewer"), (6, "land", "lane-6"), (7, "land", "reviewer")):
+        world.store.add_label(label_target(n, world.gh.prs[n].head), vocab.REVIEWED, verdict, by,
+                              ref="wait" if verdict == "hold" else None, ts="2026-11-09T12:00:00Z")
+    q, labels = world.queue(), StoreLabels(world.store, log=lambda s: None)
+    assert Q.review(q, world.store, labels, None, None, None, None, as_json=True) == 0
+    rows = {r["pr"]: r for r in json.loads(capsys.readouterr().out)}
+    assert {n: r["why"] for n, r in rows.items()} == {
+        1: "low-risk: lands on its mark", 2: "no land verdict", 3: "no land verdict", 4: "no land verdict",
+        5: "held by reviewer (wait)", 6: "low-risk: lands on its mark"}, rows
+    assert rows[1]["files"] == ["docs/a.md"] and rows[4]["files"] == ["c.txt", "moved/c.txt"], rows
+    assert Q.review(q, world.store, labels, None, None, None, None) == 0
+    out = capsys.readouterr().out
+    assert f"#1 {world.gh.prs[1].head[:12]} lane-1 Lean change: no, marked ?: low-risk: lands on its mark\n" in out, out
+    _move_main(world, {DRIVE_FLAGS: 'lowrisk_lane = false\nlowrisk_excludes = ["*.lean", "core/"]\n'})
+    assert Q.review(q, world.store, labels, None, None, None, None, as_json=True) == 0
+    assert {r["pr"]: r["why"] for r in json.loads(capsys.readouterr().out)}[1] == "no land verdict"
+
+
 def test_review_records_a_verdict_at_an_open_prs_head_and_refuses_its_owner_and_its_ready_marks_author_whatever_the_case(
         world):
     """`research queue review N`: a PR the queue's branch doesn't hold takes the verdict at its head on GitHub, or at the head

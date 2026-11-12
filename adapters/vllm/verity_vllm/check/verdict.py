@@ -2,7 +2,6 @@
 it established and what it found -- ONE document (`<row>/verdict.json`) beside the files it is derived from.
 
     verity-vllm verdict from-record <row_dir> [--out PATH]      rebuild the record from a row's evidence
-    verity-vllm verdict mapping                                  the old -> new check-name table (markdown)
 
 WHY.  The v1 Commit records its decision three times over: `commit/verdict.json` (`commit_pass`, one `first_fail_reason` string: the FIRST
 rule that failed, the others silent), `commit/runs.jsonl` (per instrumented run, every rule's own block under `commit.*`, the check
@@ -44,9 +43,10 @@ import hashlib
 import json
 import os
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from verity_vllm.check import c2_rules as C2
 from verity_vllm.check import commit_rules as CR
@@ -59,7 +59,7 @@ from verity_vllm.check.commit_pass import (  # noqa: F401
     commit_verdict,
 )
 from verity_vllm.check.commit_rules import (
-    REQUIRED_CLASSES_DEFAULT,  # noqa: F401
+    REQUIRED_CLASSES_DEFAULT,
     _d,
     _int,
 )
@@ -77,6 +77,8 @@ from verity_vllm.properties.record import citations
 from verity_vllm.records.build_summary import BuildSummary
 from verity_vllm.records.commit_run import CommitRun
 from verity_vllm.records.fields import RecordError
+
+__all__ = ["REQUIRED_CLASSES_DEFAULT", "commit_verdict", "from_record"]
 
 SCHEMA = "vllm-verdict/v1"
 
@@ -122,11 +124,12 @@ class CommitChecks:
         return d
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "CommitChecks":
+    def from_dict(cls, d: dict[str, Any]) -> CommitChecks:
         if d.get("schema") not in (None, SCHEMA):
             raise ValueError(f"not a {SCHEMA} document: schema {d.get('schema')!r}")
         kw = {k: d.get(k) for k in cls.__dataclass_fields__ if k in d and k != "checks"}
-        return cls(checks=[CheckResult.from_dict(c, CR.reject_of(c)) for c in d.get("checks") or []], **kw)  # type: ignore[arg-type]
+        checks = d.get("checks")   # a document that lists none reads as no checks
+        return cls(checks=[CheckResult.from_dict(c, CR.reject_of(c)) for c in checks] if checks else [], **kw)  # type: ignore[arg-type]
 
     def dumps(self) -> str:
         return json.dumps(self.to_dict(), indent=1, sort_keys=False, default=str) + "\n"
@@ -137,7 +140,7 @@ class CommitChecks:
         return p
 
     @classmethod
-    def load(cls, path: str | os.PathLike) -> "CommitChecks":
+    def load(cls, path: str | os.PathLike) -> CommitChecks:
         with open(path) as f:
             return cls.from_dict(json.load(f))
 
@@ -268,7 +271,8 @@ def correspondence_of_build(build_summary: BuildSummary | Mapping[str, Any] | No
         source = "build_summary.json"
     else:
         for w, r in (result_jsons or {}).items():
-            d = ((r or {}).get("program") or {}).get("correspondence_digest")
+            program = r.get("program") if r else None   # a wrapper whose result.json has no Program block states no digest
+            d = program.get("correspondence_digest") if program else None
             if d:
                 digests[w] = str(d)
         if digests:
@@ -292,12 +296,13 @@ def execution_of_record(row_dir: str | os.PathLike) -> dict:
     written; the harness keeps a reader for old records); verdict.json `execution` is the record."""
     d = Path(row_dir)
     out: dict = {}
-    s = json.load(open(d / "commit" / "summary.json")) if (d / "commit" / "summary.json").is_file() else {}
+    s = json.loads((d / "commit" / "summary.json").read_text()) if (d / "commit" / "summary.json").is_file() else {}
     runs = CommitRun.load_lines(d / "commit" / "runs.jsonl") if (d / "commit" / "runs.jsonl").is_file() else []
     trt = [r for r in runs if not (r.arm == "control" or r.committer in (None, "control"))]
     cmd = None
     if (d / "commit.log").is_file():
-        first = open(d / "commit.log", encoding="utf-8", errors="replace").readline().strip()
+        with open(d / "commit.log", encoding="utf-8", errors="replace") as log:
+            first = log.readline().strip()
         if first.startswith("$ "):
             cmd = first[2:]
     out["cmd"] = cmd
@@ -355,20 +360,19 @@ def build(rows: Sequence[CommitRun | Mapping[str, Any]], verdict_doc: dict | Non
     manifest_digest = rm.get("manifest_digest")
     query_id = _d(rm.get("query")).get("query_id")
     runs = [CommitRun.of(r, f"runs.jsonl[{i}]") for i, r in enumerate(rows)]
-    treatment = [r for r in runs if r.arm != "control" and r.committer not in (None, "control") and r.commit is not None]
+    treatment = [(r, r.commit) for r in runs if r.arm != "control" and r.committer not in (None, "control") and r.commit is not None]
     if not treatment:
-        treatment = [r for r in runs if r.arm != "control" and r.commit is not None]
+        treatment = [(r, r.commit) for r in runs if r.arm != "control" and r.commit is not None]
     if min_openings is None:
         es = _d(execution.get("engine_settings"))
         min_openings = min(64, int(es["openings"])) if es.get("openings") is not None else 64
-    ctx = {"program_digest": program_digest, "manifest_digest": manifest_digest, "required_classes_source": vd.get("required_classes_source"),
-           "manifest_verify": manifest_verify, "file_digests": dict(file_digests or {}), "replay_cache": vd.get("replay_cache")}
+    ctx: dict[str, Any] = {"program_digest": program_digest, "manifest_digest": manifest_digest, "required_classes_source": vd.get("required_classes_source"),
+                           "manifest_verify": manifest_verify, "file_digests": dict(file_digests or {}), "replay_cache": vd.get("replay_cache")}
     required_classes = vd.get("required_classes")
     per_run: list[tuple[int | None, list[CheckResult]]] = []
     recorded: list[tuple[int | None, bool | None, str | None]] = []
     mismatches = []
-    for r in treatment:
-        c = r.commit
+    for r, c in treatment:
         if not program_digest:
             ctx["program_digest"] = c.binding_program_digest or c.weights_pin_program_digest
         if not manifest_digest:
@@ -400,7 +404,7 @@ def build(rows: Sequence[CommitRun | Mapping[str, Any]], verdict_doc: dict | Non
         notes.append(f"commit_delta exited rc={rc_v}: the stage did not close although every graded rule passed (crash / timeout / verify)")
     commit_pass = vd.get("commit_pass")
     if commit_pass is None and treatment:
-        passes = [r.commit.commit_pass for r in treatment]
+        passes = [c.commit_pass for _, c in treatment]
         commit_pass = all(passes) if None not in passes else None
     if commit_pass is not None and treatment and (outcome == PASS) != bool(commit_pass) and not (rc_v is not None and _int(rc_v) != 0):
         notes.append(f"RECONSTRUCTION MISMATCH: recorded commit_pass={commit_pass} but the rule-by-rule outcome is {outcome}; the recorded decision stands")
@@ -416,7 +420,7 @@ def build(rows: Sequence[CommitRun | Mapping[str, Any]], verdict_doc: dict | Non
     if vd.get("compilation") is not None:
         execution["compilation"] = vd.get("compilation")
     if treatment:
-        execution["rules_version"] = treatment[0].commit.rules_version
+        execution["rules_version"] = treatment[0][1].rules_version
     compat = {"commit_pass": commit_pass, "first_fail_reason": vd.get("first_fail_reason"), "runs_failed": vd.get("runs_failed"),
               "rc": rc_v, "commit_summary_pass": sums.get("pass") if summary else None,
               "commit_summary_deprecated": "commit_summary.json is no longer written (its pass was rc == 0 and tokens_equal); this verdict is the record",
@@ -427,7 +431,7 @@ def build(rows: Sequence[CommitRun | Mapping[str, Any]], verdict_doc: dict | Non
     cdig, csrc, cdigs = correspondence_of_build(build_summary, result_jsons=build_results)
     return CommitChecks(checks=groups + rules, outcome=outcome, program_digest=ctx.get("program_digest"), manifest_digest=ctx.get("manifest_digest"), query_id=query_id,
                         correspondence_digest=cdig, correspondence_digest_source=csrc, correspondence_digests=cdigs,
-                        row=row, run_roots=list(dict.fromkeys(str(x) for x in (vd.get("run_roots") or [r.commit.run_root for r in treatment]) if x)),
+                        row=row, run_roots=list(dict.fromkeys(str(x) for x in (vd.get("run_roots") or [c.run_root for _, c in treatment]) if x)),
                         runs=runs_, inputs=dict(file_digests or {}), execution=execution, compat=compat, notes=notes)
 
 
@@ -452,9 +456,9 @@ def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: 
         if p.is_file():
             digests[rel] = _sha256(p)
     rows = CommitRun.load_lines(d / "commit" / "runs.jsonl") if (d / "commit" / "runs.jsonl").is_file() else []
-    vd = json.load(open(d / "commit" / "verdict.json")) if (d / "commit" / "verdict.json").is_file() else None
-    summ = json.load(open(d / "commit_summary.json")) if (d / "commit_summary.json").is_file() else None
-    mv = json.load(open(d / "commit" / "manifest_verify.json")) if (d / "commit" / "manifest_verify.json").is_file() else None
+    vd = json.loads((d / "commit" / "verdict.json").read_text()) if (d / "commit" / "verdict.json").is_file() else None
+    summ = json.loads((d / "commit_summary.json").read_text()) if (d / "commit_summary.json").is_file() else None
+    mv = json.loads((d / "commit" / "manifest_verify.json").read_text()) if (d / "commit" / "manifest_verify.json").is_file() else None
     bs: BuildSummary | None = None
     refused = None
     if (d / "build_summary.json").is_file():
@@ -465,12 +469,12 @@ def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: 
     results: dict[str, dict] = {}
     unreadable: list[str] = []
     if bs is None:                                    # no build.summary on the row: the wrappers' own result.json (build_step/, build_request*/)
-        for p in sorted(glob.glob(str(d / "build_*" / "result.json"))):
-            w = os.path.basename(os.path.dirname(p))
+        for path in sorted(glob.glob(str(d / "build_*" / "result.json"))):
+            w = os.path.basename(os.path.dirname(path))
             try:
-                results[{"build_step": "step", "build_request": "request"}.get(w, w)] = json.load(open(p))
+                results[{"build_step": "step", "build_request": "request"}.get(w, w)] = json.loads(Path(path).read_text())
             except (OSError, ValueError) as e:
-                unreadable.append(f"{os.path.relpath(p, d)} ({e!r:.200})")
+                unreadable.append(f"{os.path.relpath(path, d)} ({e!r:.200})")
     v = build(rows, vd, summary=summ, manifest_verify=mv, file_digests=digests, row=d.name, rc=rc, build_summary=bs, build_results=results,
               execution=execution_of_record(d))
     if refused:
