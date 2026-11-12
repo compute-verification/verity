@@ -76191,3 +76191,245 @@ Your 07:21Z section is read; I act on it (the one_stage change waits for the mer
 **3. A correction to item 8 of my 07:15Z entry (the reader's verdict).** ci wrote on MEM-279 at 06:12Z that #9133 makes a certified move land on its mark alone, regenerated on its batch's tip. #9133 is open and marked, not on `main` [run: `gh pr view 9133`, 07:21Z]. So: a reader's `--land` is needed while the live loop lacks #9133; after it is live, the mark and the certificate are enough.
 
 **4. Smaller corrections.** My 07:15Z entry was pushed at 07:14Z. Its item 9 says the id order is guarded at `CoreOnsite.lean:95`; the ids' guard is `:96-97` and `:95` is the order's guard [read].
+
+## MEMBERS, Thu 12 Nov 07:33Z: (i-a) is stated on `cursor/proofs-ia-statement-42e4` at `3daad2acc3`; its first try failed to parse, the fix's try is running; its proof is written, not yet tried; the 15 proofs and S6a's merge are below
+
+Task 2. **The statement has not compiled yet**, so this is not the entry you post from: it carries everything that
+does not wait on the compile (the statement's text, its hypotheses against `ClaimTransfers`, the choices, S4, the 15
+proofs, S6a's merge). The PRF-490 comment comes in the next entry, with the sha that compiled.
+
+**What exists.**
+- Branch `cursor/proofs-ia-statement-42e4`, cut from soundness's `cursor/soundness-multileg-8fb2` at `c7e54ba54c`,
+  pushed at `3daad2acc3f4fde6d9068957d3e151c342a6ce00`: one new file,
+  `Security/Proofs/Properties/Verity/Sampled/Window/Unbound.lean`, and its root in `Security/Proofs/lakefile.toml`.
+  Statements only, each a `Prop`, no `sorry`. [run]
+- **First try, failed.** `verity lean try …/Window/Unbound.lean --on auto --as proofs` from the worktree at
+  `7ef9807725`, run `r20261112-063916-def8` on vy-nebius-cpu-10. Old paths, so the package is `security_proofs`
+  (`srcDir = ".."`): `lake build +Proofs.Properties.Verity.Sampled.Window.Unbound:deps`, then `lake env lean` on the
+  file with the axiom probe. No node had the tree built, so it cost a cold build: 12 min waiting for a check slot,
+  then 1934 s in the try, 11557 jobs, all dependencies green. The file then failed on one thing: **`X` is a token
+  where the file's namespaces are open**, so every binder and field I had named `X` was a parse error ("unexpected
+  token 'X'; expected '_' or identifier"), and what followed them fell with them. Everything before the first `X`
+  elaborated (`fileRead`, `Cc`, `Lm`, `rows`, `roots`, `Cd`, `κ`, `stmt`, `blocks`), and `canon_eq := rfl` passed
+  with axioms `propext`, `Classical.choice`, `Quot.sound`. [run]
+- **The fix**, `3daad2acc3`: the member's Boolean trace is `Xv`, a seat's field `Xv`, the files' trace `tr`. Nothing
+  else changed. Its try is run `r20261112-072634-5e93` on vy-nebius-cpu-9, launched 07:26Z, at job 10435 of 11557 at 07:32Z. [run]
+- **The proof is written, not yet elaborated**, local at `354001af85` (not pushed until it compiles): two more files
+  beside the statement, with their roots. `Window/UnboundMember.lean` (122 lines): `MemberV5.unboundFaulty :
+  m.UnboundFaulty` (step 1) and `MemberV5.faultyWrong : m.FaultyWrong` (step 2). `Window/UnboundLaid.lean` (144
+  lines): `JointAuditV5.unboundWrong : w.UnboundWrong` (step 3) and `Window.unboundWrong (W) : W.UnboundWrong`. None
+  of the three steps reads anything S4 adds. Its try is run `r20261112-072634-4f53` on vy-nebius-cpu-9 (it builds
+  the statement and the member file as dependencies), at job 10435 of 11559 at 07:32Z. [derived]
+- Both tries build the last 1100 jobs on 22 cores each. The cold run did the same stretch in 25 min on 30 cores, so
+  I expect both near 08:05Z [guess].
+- Sizes, in place of a date: step 1 is 60 lines with its three bridging lemmas, step 2 is 20, step 3 is 90. What is
+  left is whatever the two tries report, which I fix on the same branch; nothing waits on another lane. [run] for
+  the counts, [guess] that the fixes are local.
+
+### 1. The statement, in full (docstrings left out; the file has one on every declaration)
+
+File `Security/Proofs/Properties/Verity/Sampled/Window/Unbound.lean`, module
+`Proofs.Properties.Verity.Sampled.Window.Unbound`, package `security_proofs` (a new root in
+`Security/Proofs/lakefile.toml`). It imports `Window.Instance`, `Proofs.Properties.Verity.WindowFiles` and
+`Joint.V5.Layout`. In the first try every name up to `blocks` resolved against `c7e54ba54c` [run]; the declarations
+after it have not been elaborated yet, so the text below is what is pushed, not what is known to compile.
+
+A member's own names, each a definition of `MemberV5 Reg nJ` that the old one-statement `Live` already has under the
+same name: `fileRead` (its statement's tags, circuit file, tables and public file as a `Verity.FileRead`), `Cc` (its
+key program's circuit), `Lm` (`LeafMap.ofPublic` of its public file), `rows`, `roots`, `Cd` (the deployed commitment
+`commitDepL` at them), `κ` (`constsOfP`), `stmt` and `blocks` (its sampling statement and partition, `stmtOf` and
+`partOf` at one stratum `[m.n]`), `wit Xv`, `faulty Xv`, `transcript Xv`, `wrongAt R Xv` (`wrongRegZc` at a registration
+`R` and a trace `Xv`), `Xr L hL τ` (the trace V5's extractor gives it), with `wrongSet_eq : m.wrongSet L hL τ =
+m.wrongAt (reg (m.sim L hL τ)) (m.Xr L hL τ) := rfl`.
+
+```lean
+structure MemberV5.Checked : Prop where
+  noPublic : m.pi = ({} : HmIn.Ports)
+  parsed : Flock.Bridge.parsedOf (zkTags m.I) m.I.circuitFile m.I.tables m.I.publicFile = some ⟨m.D, m.hU, m.n⟩
+  distinct : Flock.PortRoots.dupId m.D.unroll m.pub = false
+  fixes : Flock.Bridge.RootFixesDomainL m.D.unroll m.Lm
+
+def MemberV5.OpensUnder (r : Verity.FileRead) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) : Prop :=
+  ∀ (h : r.circuit.N = m.Cc.N) (g : Fin r.circuit.N) (b : Bool) (d : Claims.Msg), r.consts g = none →
+    m.Cd.Opens Claims.Sampling.sha512Msg m.roots ⟨Flock.Bridge.posOf m.Cc (Fin.cast h g), b, d⟩ = true →
+      ∀ v : BitVec (r.circuit.w g), v.getLsbD 0 = b → op g v
+
+structure MemberV5.ReadAt (r : Verity.FileRead) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop)
+    (tr : r.circuit.Trace) (Xv : Fin m.Cc.N → Bool) : Prop where
+  checked : m.Checked
+  read : r = m.fileRead
+  opens : m.OpensUnder r op
+  consts : Verity.Sampled.ConstsOpen r op
+  trace : HEq tr (m.transcript Xv)
+
+def MemberV5.UnboundFaulty : Prop :=
+  ∀ (r : Verity.FileRead) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) (tr : r.circuit.Trace)
+    (Xv : Fin m.Cc.N → Bool), m.ReadAt r op tr Xv → (Accounting.unbound r.parts op tr).image Fin.val ⊆ m.faulty Xv
+
+def MemberV5.FaultyWrong : Prop :=
+  m.Checked → ∀ (R : Reg) (Xv : Fin m.Cc.N → Bool) (u : Fin m.n), u.val ∈ m.faulty Xv → u ∈ m.wrongAt R Xv
+
+structure Seat (Reg : Type) (nJ : ℕ) where
+  m : MemberV5 Reg nJ
+  Xv : Fin m.Cc.N → Bool
+
+def ReadsWith {Reg : Type} {nJ : ℕ} : (r : Verity.FileRead) → (rs : List Verity.FileRead) →
+    ((g : Fin (Verity.FileRead.circuitWith r rs).N) → BitVec ((Verity.FileRead.circuitWith r rs).w g) → Prop) →
+    (Verity.FileRead.circuitWith r rs).Trace → List (Seat Reg nJ) → Prop
+  | r, [], op, tr, ss => ∃ s, ss = [s] ∧ s.m.ReadAt r op tr s.Xv
+  | r, r' :: rs, op, tr, ss => ∃ s ss', ss = s :: ss' ∧
+      s.m.ReadAt r
+        (fun i v => op (Fin.castAdd (Verity.FileRead.circuitWith r' rs).N i)
+          (v.cast (Verity.Circuit.besideW_left r.circuit (Verity.FileRead.circuitWith r' rs) i).symm))
+        (Verity.Circuit.traceLeft tr) s.Xv ∧
+      ReadsWith r' rs
+        (fun j v => op (Fin.natAdd r.circuit.N j)
+          (v.cast (Verity.Circuit.besideW_right r.circuit (Verity.FileRead.circuitWith r' rs) j).symm))
+        (Verity.Circuit.traceRight tr) ss'
+
+noncomputable def JointAuditV5.memberX (τ : Strategy w.game) (k : Fin w.ms.length) : Fin (w.ms.get k).Cc.N → Bool :=
+  (w.ms.get k).Xr (w.memberLaw τ k) (w.oneClass_memberLaw τ k) (w.memberStrat τ k)
+
+noncomputable def JointAuditV5.seats (τ : Strategy w.game) : List (Seat w.Reg w.nJ) :=
+  List.ofFn fun k : Fin w.ms.length => (⟨w.ms.get k, w.memberX τ k⟩ : Seat w.Reg w.nJ)
+
+def JointAuditV5.ReadsAt (R : Verity.WindowFiles) (op : (g : Fin R.circuit.N) → BitVec (R.circuit.w g) → Prop)
+    (tr : R.circuit.Trace) (τ : Strategy w.game) : Prop :=
+  ReadsWith R.first R.rest op tr (w.seats τ)
+
+def JointAuditV5.UnboundWrong : Prop :=
+  w.Laid → ∀ (R : Verity.WindowFiles) (op : (g : Fin R.circuit.N) → BitVec (R.circuit.w g) → Prop)
+    (tr : R.circuit.Trace) (τ : Strategy w.game), w.ReadsAt R op tr τ →
+      (Accounting.unbound R.parts op tr).image Fin.val ⊆ (w.wrongSet τ).image Fin.val
+
+theorem JointAuditV5.UnboundWrong.card_le (h : w.UnboundWrong) (hl : w.Laid) (R : Verity.WindowFiles)
+    (op : (g : Fin R.circuit.N) → BitVec (R.circuit.w g) → Prop) (tr : R.circuit.Trace) (τ : Strategy w.game)
+    (hr : w.ReadsAt R op tr τ) : (Accounting.unbound R.parts op tr).card ≤ (w.wrongSet τ).card
+
+def Verity.Sampled.Window.UnboundWrong (W : Window) : Prop := ∀ t : ℕ, (W.joint t).UnboundWrong
+```
+
+The chain is unbound ⊆ faulty (`UnboundFaulty`, per member) ⊆ incorrect (`FaultyWrong`, per member) ⊆
+`JointAuditV5.wrongSet` at the window's read (`UnboundWrong`, across members).
+
+### 2. Each hypothesis and where `ClaimTransfers` (`Window/Instance.lean:328`) consumes it [derived]
+
+`ClaimTransfers` asks, from `¬ IntegrityHolds (partsOf θ F) (Opens θ F c) (extract θ F c σ) (certOf θ).ε`, that
+`ε · nJ < card wrongSet` at `w := (K.live W θ F c σ).joint (I.base.cost θ F c σ)` and `τ := K.project W θ F c σ`.
+`¬ IntegrityHolds` is `(certOf θ).ε · units < card unbound`, so `UnboundWrong.card_le` at that `w` and `τ`, with
+`op := I.base.Opens θ F c` and `tr := I.base.extract θ F c σ`, closes it. What it takes, and from where:
+
+| Hypothesis | What it says | What consumes it | Where soundness gets it |
+|---|---|---|---|
+| `w.Laid` | the members' counts sum to `nJ`; member `k`'s block `v` is the population's `base k + v` | step 3: a member's incorrect block is the window's at its place (`Laid.mem_wrongSet`) | `Window.Laid W` is `(W.joint 0).Laid`; at the live window and at cost `t` by `Laid.extend` (`Members/Widen.lean:69`), their (i-b) |
+| `R : WindowFiles` | the window's read: the members' reads, in order | `R.parts` is `partsOf θ F` | S4: `Vocab.read` returns it. Today `partsOf θ F = (read θ F).parts`, which is `(WindowFiles.one (read θ F)).parts` by definition |
+| `ReadAt.read` | the read at seat `k` is member `k`'s `fileRead` | steps 1 and 3: the member's units, circuit and partition are the read's | how `I.windows` builds `W`'s members from the bytes `read θ F` reads (`SetsUp.read` at one statement) |
+| `ReadAt.checked.parsed`, `.noPublic` | the member's files parse to `⟨D, hU, n⟩`; no public input ports | step 1: the read's circuit, partition and constants are V5's (`Cc_eq`, `P_heq`, `consts_eq`); step 3: `units = n` | at one statement `Live.parsed_eq` proves `parsed` from `Live`'s `hD`, `hpubO`, `hnO`, fields `Member` doesn't have; `Live` is at `{}` by construction. From `SetsUp` at a window, or fields added to `Member` |
+| `ReadAt.checked.distinct`, `.fixes` | `dupId = false`; `RootFixesDomainL` at the public file's leaf map | step 2: the roots are distinct (`rootsDistinctL_of_fixes`), which `transports_shapedP` needs to carry a canonical registered opening to the deployed commitment | `v5Files_of_checks` gives both from `PortRoots.checkOf` passing. At one statement the bound pays for them with the roots finder's `ecr/sha-512` term (`Live.rootsErr`); `Window.sessionDelta` has no such term. See question 1 |
+| `ReadAt.opens` (`OpensUnder`) | where the member's deployed commitment opens a non-constant gate to bit `b`, `Opens θ F c` holds of a value with that bit, at the member's gates | step 1 (`unbound_subset_of_parsed`'s `hopen`) | `Vocab.Opens`'s `none` branch at `place` = the member's `placeOfRead`: at one statement `Instance.opensAt_of_sessions` from `OpensReady` (`Sampled/OpensAt.lean:115,261`) |
+| `ReadAt.consts` (`ConstsOpen`) | `Opens θ F c` holds of a constant gate's constant | step 1 (`hconst`) | `Vocab.Opens`'s `some b` branch, at `R.consts = constsWith` |
+| `ReadAt.trace` | member `k`'s part of `extract θ F c σ` (`traceLeft`, `traceRight`) is `HEq` to `(w.ms.get k).transcript (w.memberX τ k)` | step 1 (`htr`) | S4's definition of `extract` at a window: the members' transcripts side by side |
+| (outside the statement) | `(certOf θ).ε = (K.live …).ε` and `R.units = (K.live …).nJ` | the last line of `ClaimTransfers` | `SetsUp`, as at one statement |
+
+### 3. What I chose where `c7e54ba54c` left a choice, and why [derived]
+
+1. **Stated at any `w : JointAuditV5`**, with `Window.UnboundWrong W := ∀ t, (W.joint t).UnboundWrong` beside it.
+   `ClaimTransfers` reads `(K.live W θ F c σ).joint (cost …)`, a window other than `W` at a cost that depends on the
+   strategy, so a statement about `W.joint 0` would not apply.
+2. **The place is each member's public file's** (the deployed commitment at `LeafMap.ofPublic`), members' roots only,
+   as the 06:16Z mailbox section asked. The statement never reads `c` or the registration's record, so a root that is
+   the registration's own is not covered and not needed.
+3. **The conclusion is an inclusion of sets of numbers** (`.image Fin.val` on both sides), so nothing is cast along
+   `R.units = w.nJ`; `card_le` is the count, proved in the statement's file.
+4. **The trace is tied by `HEq`**, per member through `Circuit.traceLeft` and `traceRight`. S4 may then define `extract`
+   with any constructor it likes; it owes only that each member's part is the member's transcript.
+5. **`Checked` is a hypothesis, per member**, because `Member` lacks `Live`'s `pubO`, `hpubO`, `hdup`, `hn`, `hnO`
+   and `Window.delta` has no roots finder term. The alternative, putting the roots guard in the bound, changes δ.
+6. **The member's sampling statement is at the design `.all`, no descriptor, the query `⟨"", 0, []⟩` and one stratum
+   `[m.n]`.** `Wit.val` and `faulty` read none of the design, the descriptor or the query, so any choice gives the
+   same set; this one needs no hypothesis on the strata.
+7. **Step 2 is at every registration `R` and every trace `Xv`**, not at the extractor's. The transport reads the
+   registration only through `vb.cs R`, so no strategy is needed and the window's step 3 instantiates it.
+8. **`ReadsWith` copies `unboundWith`'s recursion** (`Proofs/Properties/Verity/WindowFiles.lean:478`), so
+   `unbound_beside` applies at each step without a cast.
+
+### 4. What changes when soundness's S4 lands [derived]
+
+Nothing in the statement: it is already over `WindowFiles` and `Circuit.beside`. In `ClaimTransfers`, `partsOf θ F`
+becomes `(read θ F).parts` with `read θ F : WindowFiles`, and today's one-statement `ClaimTransfers` is the case
+`WindowFiles.one r` (`ReadsWith r [] …` is `∃ s, seats = [s] ∧ s.m.ReadAt r op tr s.Xv`). S4's worker owes
+`w.ReadsAt (read θ F) (Opens θ F c) (extract θ F c σ) (K.project W θ F c σ)` at the live window, which by the table is:
+`read` and `trace` by S4's definitions of `Vocab.read` and `extract`; `opens` and `consts` by the window form of
+`opensAt_of_sessions` (`place` = each member's `placeOfRead`); `checked` by `SetsUp` or the answer to question 1.
+If S4 names the window's circuit other than `FileRead.circuitWith first rest`, only `ReadsWith`'s two casts
+(`besideW_left`, `besideW_right`) follow it.
+
+### 5. The 15 proofs through `checkBlobsAt_accept`, each one's per-member case sized by read
+
+Read on `origin/main` at `d6075b75d289`. Each does `replace h := (checkBlobsAt_accept h).1` and then unfolds
+`checkOneAt`. While `checkMembersAt` refuses, none of them changes. When the refusal lifts, `checkBlobsAt_accept` gains
+a second case and each proof needs it. None of the 15 names is in any of the 20 `lean-audit.json` files on main (0
+matches each): **none is a guarantee in a lock**, each is a lemma. [run] Sizes are [guess] by read of what
+`membersRun` runs; none has been written.
+
+**Follow as today (5)**: the conclusion names only `OneStage.checkAt` or a step `membersRun` runs with the same
+arguments, so the per-member case is a second walk of a `do` block, 8 to 12 lines each, the statement unchanged.
+
+| # | Theorem | File on main | Concludes | Callers |
+|---|---|---|---|---|
+| 1 | `stage_zk_at` | `Remote.lean:299` | `∃ r, OneStage.checkAt … {verdicts := r.out} = accept` | `stage_zk_registered` |
+| 6 | `checkBlobsAt_popHeld` | `Verity/Sampled/Event.lean:145` | `popHeld … = .ok ()` | `Event.lean:227` |
+| 8 | `checkBlobsAt_orderHeld` | `Sampled/LinkFirst.lean:43` | `orderHeld p c e = .ok ()` | `LinkFirst.lean:141` |
+| 13 | `checkBlobsAt_checkAt` | `Verity/SampledDraw.lean:353` | `∃ out pub' prof', OneStage.checkAt … = accept` | `Held.lean:914`, `SampledDraw.lean:498` |
+| 14 | `popHeld_of_checkBlobsAt` | `Verity/SampledRead.lean:866` | `popHeld … = .ok ()` | `SampledRead.lean:928` |
+
+**Do not (10)**: the conclusion names the one statement's session, files or `p.own`, which a window doesn't have, so
+the statement is restated per sampled member and proved through `membersHeld`, `membersTreesHeld`, `runMembers` and
+`Member.statement`.
+
+| # | Theorem | File on main | Why it doesn't follow | Per-member case | Size |
+|---|---|---|---|---|---|
+| 7, 12, 15 | `checkBlobsAt_trees`, `accepted_trees`, `trees_of_checkBlobsAt` | `Sampled/Link.lean:113`, `Sampled/Trees.lean:375`, `SampledRead.lean:1243` | `treesHeld p.own ts e bs` reads `p.own` | one statement, so one lemma through `membersTreesHeld` serves the three | 40 to 60 lines once, then 5 a caller |
+| 9 | `checkBlobsAt_run` | `Sampled/Moves.lean:367` | `e.sessions.size = 1 ∧ publicHeld ∧ run p.own …` | `runMembers` returns one result a statement; its callers (`Event.lean:226`, `Held.lean:112,889`, `Moves.lean:446`) read the one session | 100 to 200 lines with the callers, the largest |
+| 5 | `checkBlobsAt_run` | `Spot/Tables.lean:74` | `∃ r, run p.own e.sessions … = .ok r` | proves the locked `Properties.Spot.TablesRegistered`, whose second conjunct reads `HoldsRegisteredTables p.own bs`: restated for every sampled member, **a lock record changes** | 40 lines and the record |
+| 2 | `credited_of_checkBlobsAt` | `Spot/Credited.lean:240` | `e.sessions = #[s]` | the `provedUnits_of_checkAt` half follows; the session half needs `runMembers` and `provedHeld` per member | 60 to 100 lines |
+| 3 | `population_of_checkBlobsAt` | `Credited.lean:427` | the record's population is `p.own.pub`'s | `laidHeld` and each member's population at its place | 60 to 120 lines |
+| 4 | `units_of_checkBlobsAt` | `Credited.lean:512` | the public file's `units.indices = range n` | each member's units are its `[lo, hi)` ranges | 60 to 120 lines |
+| 10 | `verdict_of_accepts` | `Sampled/Record/Accepts.lean:257` | one session's `verdictOf` at `A`'s inputs | one a statement, at the member's `Live` | 60 to 100 lines |
+| 11 | `lengths_of_accepts` | `Record/Accepts.lean:347` | `fitsWhy`'s lengths from `run` | the same from `runMembers` | 40 to 60 lines |
+
+Locked statements downstream of the 10: `Properties.Spot.TablesRegistered` (through #5) and the deployed
+`Verity.remote_soundness_of_subprotocols` (through the `Sampled` lemmas). What each waits on: all 15 wait on the
+refusal lifting, which waits on the guarantee for one sample over several members being in the lock; #10 and #11
+are stated at one `Live` (`Names A o p bs`), so their per-member form also waits on soundness's per-member `Live`.
+
+### 6. The held branch (S6a): what its merge with `main` needs, so that another worker could take it [read]
+
+`cursor/proofs-v2-members-held-9810` at `01d759cdbb4d`, 4 commits, one file
+(`verity/protocols/spot/verifier/lean/Spot/OneStageZk.lean`, +229 −41), merge base `23e96bd37477`. Main changed the
+same file in two commits since (`58a3e8b90f`, `b8201dc046`, +59 −20). `git merge-tree` with main at `d6075b75d289`
+gives 3 conflicts, all in that file, each resolved by taking one side whole:
+
+1. the module docstring's **per member** bullet: take main's (it names `paramsOfJson_members`,
+   `evidenceOf_statements`, `checkBlobsAt_parsed`, `live_checkAt_parsed`; the branch changed only "drawn" to
+   "sampled", which main did too);
+2. the docstring sentence on `classHeld` right after it: take the branch's (it adds that a port of a value the
+   registration registers is its entry there);
+3. `classStep` and `classHeld` with their docstrings: take the branch's (`classPort entries m.name`,
+   `classHeld ms rec`; main changed only "drawn" to "sampled" in the docstring).
+
+Then: build `Spot.OneStageZk` and what imports it, since main's four new theorems were never built over the branch's
+`membersRun` (they are about the one statement's parsers, so I expect them to hold, not checked [guess]). No Lean
+file on main outside `OneStageZk.lean` names `classHeld`, `classPort`, `classStep` or `membersRun`; the two locks
+that record their hashes (`security/Properties/lean-audit.json`, `security/lean-audit.json`) are regenerated by the
+records run. `checkMembersAt` still refuses on the branch (`MULTI_REFUSED`), so what the verifier accepts does not
+change with it. Not checked by me: whether a Python mirror or a difftest of `classHeld` exists that must follow
+the new `rec` argument (`git grep classHeld` on main finds none outside the Lean file and the locks, so I expect not).
+
+### 7. One line on the mailbox
+
+The section "Coordinator, Thu 12 Nov 06:16Z" reached me through the shell hook, not as a turn. I read it as
+context consistent with your 05:58Z order and used it for three things: the entry with the PRF-490 comment is
+written when the statement compiles, not at 12:00Z; the statement covers members' roots only; and the 15 proofs
+carry whether each is a guarantee in a lock. Where it asks for a date for (i-a)'s proof I give sizes and what each step waits on instead: I
+do not estimate calendar time.
