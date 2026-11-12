@@ -405,9 +405,9 @@ def test_a_run_that_pins_its_own_key_is_accepted_and_still_a_rehearsal(tmp_path,
     the verifier accepts its session; the challenger's host is not one `AUDITOR_KEYS` pins that key for, so the record
     says rehearsal, no bound, and leaves the key custody out of the bound."""
     period = _side(tmp_path, monkeypatch, {})
-    answer = W.leg(period, "n0", tmp_path / "out")
-    assert answer["verdict"] == "accept", answer
+    assert W.main(["--period", str(period), "--out", str(tmp_path / "out"), "--node", "n0"]) == 0
     record = json.loads((tmp_path / "out" / "wipe.json").read_text())
+    answer = record["answer"]
     assert record["report"]["key_pinned"] is True and record["report"]["key_sha512"] == wipe_side.key_sha512()
     where = record["placement"]
     assert answer["profile"]["placement"] == where and where["kind"] == "own-host" and not WP.holds(where)

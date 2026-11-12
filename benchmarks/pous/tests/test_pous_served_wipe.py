@@ -15,6 +15,7 @@ import json
 import os
 import runpy
 import shlex
+import shutil
 import socket
 import stat
 import subprocess
@@ -343,8 +344,7 @@ def test_demo_sh_on_a_host_with_no_ip_says_what_is_missing(tmp_path) -> None:
     bin_ = tmp_path / "bin"
     bin_.mkdir()
     for tool in ("dirname", "basename", "mkdir", "hostname"):
-        (bin_ / tool).symlink_to(next(Path(d) / tool for d in os.environ["PATH"].split(os.pathsep)
-                                      if (Path(d) / tool).is_file()))
+        (bin_ / tool).symlink_to(shutil.which(tool))
     r = subprocess.run(["/bin/bash", str(DEMO), "--no-lean"], env={"PATH": str(bin_), "OUT": str(tmp_path / "out")},
                        capture_output=True, text=True)
     assert r.returncode == 3 and r.stdout == "", r.stdout + r.stderr
