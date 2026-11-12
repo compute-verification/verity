@@ -114,8 +114,8 @@ def test_a_held_run_table_resolves_into_a_reads_root_and_domain():
     """A history table of one held run (the strings a window publishes for it, no writer units) is held to its registered
     root by `checkAt`, and its root and domain id fill the reads' `hist` rows as `Digest`s: the rows a reader's `root`
     and `domain` ports hold. The prover's commitment of those rows passes in both verifiers. Rows in `bytes_leaves`'
-    order, or a domain id of another table, are `R7-supplied`; a held string moved or a root that is not the table's is
-    `R7-history`; in both verifiers."""
+    order, or a domain id of another table, are `R7-supplied`; a held string moved or dropped, or a root that is not the
+    table's, is `R7-history`, each verifier's outcome that refusal and the two reasons one; in both verifiers."""
     rec, check, hist, root, dom = _case()
     assert [list(r) for r in hist.rows] == [digest_bits(root), digest_bits(dom.domain_id)]
     assert R.check(rec, **check).ok
@@ -139,7 +139,42 @@ def test_a_held_run_table_resolves_into_a_reads_root_and_domain():
             R.check(rec, **args)
         got = V.check(rec, **args)
         assert not got.ok and got.codes == (R.HISTORY,), got
-        assert got.verifiers["lean"].keys() == {"refused"} and got.verifiers["python"].keys() == {"refused"}
+        assert got.verifiers["lean"] == got.verifiers["python"] == {"ok": False, "codes": [R.HISTORY]}, got
+        assert got.detail[R.HISTORY]["lean"] == got.detail[R.HISTORY]["python"], got
+
+
+def test_a_history_table_is_r7_history_only_where_the_lean_itself_gave_the_pythons_reason(monkeypatch):
+    """A history table the Python refuses is `R7-history` only where the Lean's own answer is a refusal for the Python's
+    reason. A Lean that can't run, whatever its error says, one that refuses for another reason and one that accepts
+    each disagree, and what stood in the Lean's place is recorded: a named refusal is never one side's alone."""
+    rec, check, _, _, _ = _case()
+    args = {**check, "history": {**check["history"], "registered": {TABLE_NAME: "00" * 64}}}
+    with pytest.raises(R.HistoryRefused) as refused:
+        R.check(rec, **args)
+    why = str(refused.value)
+    got = V.check(rec, **args)
+    assert got.codes == (R.HISTORY,) and got.detail == {R.HISTORY: {"lean": why, "python": why}}, got
+
+    def answers(answer):
+        def call(fn, value):
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
+        monkeypatch.setattr(V._server, "call", call)
+        return V.check(rec, **args)
+
+    for error in ("the Lean cannot run", why):
+        got = answers(V.LeanError(error))
+        assert not got.ok and got.codes == (V.DISAGREE,), got
+        assert got.verifiers == {"of_record": V.RECORD_VERDICT, "lean": {"refused": error}, "python": {"refused": why}}
+        assert got.detail[V.DISAGREE]["lean"] == {"refused": error, "answered": False}, got
+    got = answers(("reject", "the keys of the parameters are not the ones the Lean reads"))
+    assert not got.ok and got.codes == (V.DISAGREE,) and got.verifiers["lean"].keys() == {"refused"}, got
+    assert "answered" not in got.detail[V.DISAGREE]["lean"], got
+    got = answers(("output", {"codes": []}))
+    assert not got.ok and got.codes == (V.DISAGREE,) and got.verifiers["lean"] == {"ok": True, "codes": []}, got
+    got = answers(("reject", why))
+    assert got.codes == (R.HISTORY,) and got.verifiers["lean"] == {"ok": False, "codes": [R.HISTORY]}, got
 
 
 def vector() -> dict:

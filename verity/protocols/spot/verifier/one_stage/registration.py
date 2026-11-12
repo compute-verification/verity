@@ -217,7 +217,8 @@ def receipt(rec: Mapping[str, Any], verifier: str, received: str | None = None) 
 
 
 HISTORY = "R7-history"
-"""The verifier's code for a registration whose history tables both its verifiers refuse (`verifier.check`)."""
+"""The verifier's code for a registration whose history tables both its verifiers refuse for one reason
+(`verifier.check`)."""
 
 
 class HistoryRefused(ValueError):
@@ -271,7 +272,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     and held to the root the window registers for it, which needs `leaf_layer`; a supplied value's source
     ``{"history": "H/root"}`` or ``{"history": "H/domain"}`` is then the bytes of the root or domain id it computed for
     table ``H`` (`history.resolve`).  History tables it can't read or hold to their roots raise `HistoryRefused`, which
-    the verifier reports as `HISTORY` where its Lean refuses them too.  R3
+    the verifier reports as `HISTORY` where its Lean refuses them for the same reason.  R3
     reads `ports` by name, so its codes come in the ports' sorted order whatever order the mapping has, as the Lean port
     reads them.  Under a template query R8 refuses a run Input node the proof blocks don't each read alone, unless it
     is a parameter's that `registered` names (`partition.shared_inputs`) or one of `tied`'s, and the verdict carries the

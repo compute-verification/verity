@@ -298,7 +298,7 @@ def test_lean_that_cannot_run_fails_closed(monkeypatch):
     assert v.codes == (V.DISAGREE,) and v.verifiers["lean"] == {"refused": "lake is not on the PATH"}
     rec = V.audit_record(**_args(reg, draw))
     assert not rec["accepted"] and rec["verifiers"]["lean"] == {"refused": "lake is not on the PATH"}
-    assert rec["checks"]["verifiers"]["detail"]["lean"] == {"refused": "lake is not on the PATH"}
+    assert rec["checks"]["verifiers"]["detail"]["lean"] == {"refused": "lake is not on the PATH", "answered": False}
 
 
 def test_floats_reach_the_lean_as_python_wrote_them():

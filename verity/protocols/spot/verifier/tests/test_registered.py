@@ -915,7 +915,8 @@ def test_a_history_source_is_the_root_the_verifier_computes():
     public bodies the leaf layer binds (`history.roots_of`, the Lean's `HistoryTable.rootsOf`): where the served port x's
     root is that root, it fills the rows `{"port": "x"}` fills, in both verifiers. A body the leaf layer doesn't bind, a
     registered root that is not the one computed, a table or field the verifier computed none of, or a `history`
-    without the verifier's leaf layer refuses the parameters in both, and the verifier's verdict is `R7-history`."""
+    without the verifier's leaf layer refuses the parameters in both for one reason, and the verifier's verdict is
+    `R7-history`."""
     hist, leaf, root = _history()
     rec, check, _, _ = _seeded_case(x_root=root, leaf_layer=leaf)
     check = {**check, "leaf_layer": leaf}
@@ -949,7 +950,8 @@ def test_a_history_source_is_the_root_the_verifier_computes():
         assert "refused" in lean(**change), change
         got = V.check(rec, **args)
         assert not got.ok and got.codes == (R.HISTORY,), (change, got)
-        assert got.verifiers["lean"].keys() == {"refused"} and got.verifiers["python"].keys() == {"refused"}
+        assert got.verifiers["lean"] == got.verifiers["python"] == {"ok": False, "codes": [R.HISTORY]}, (change, got)
+        assert got.detail[R.HISTORY]["lean"] == got.detail[R.HISTORY]["python"], (change, got)
 
 
 def test_the_run_of_record_takes_each_registrations_history_tables(monkeypatch):
