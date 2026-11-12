@@ -309,7 +309,8 @@ def _target_facts(header: RunHeader | None, results: list[StepResult]) -> dict:
     """[X-01] The target the resolver pinned the persistent GEMM against: the header's GPU document (the capture host's device query,
     `TargetProfile.from_gpu_document`) and the per-run total of GEMM launches checked against that target's `NUM_SMS` (0 launches /
     `target_profile` None when the header carried no device: the profile default was the pin)."""
-    gpu = ((header.profile if header else None) or {}).get("gpu") or {}
+    device = ((header.profile if header else None) or {}).get("gpu")
+    gpu = device if device else {}
     tp = TargetProfile.from_gpu_document(gpu) if gpu else None
     acc = [sr.target for sr in results if sr.target]
     out: dict = {"host_gpu": {"name": gpu.get("name"), "compute_capability": gpu.get("compute_capability", gpu.get("cc")),
