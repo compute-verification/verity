@@ -4773,7 +4773,7 @@
     {"file": "verity/protocols/pous/verifier/tests/test_pous_public_encoder.py", "count": 1},
     {"file": "verity/protocols/pous/verifier/tests/test_pous_run.py", "count": 2},
     {"file": "verity/protocols/pous/verifier/tests/test_pous_verdict_circuit.py", "count": 1},
-    {"file": "verity/protocols/pous/verifier/tests/test_pous_wipe_monitoring.py", "count": 1},
+    {"file": "verity/protocols/pous/verifier/tests/test_pous_wipe_monitoring.py", "count": 4},
     {"file": "verity/protocols/pous/verifier/tests/test_pous_wipe_parties.py", "count": 2},
     {"file": "verity/protocols/pous/verifier/tests/test_pous_wipe_period.py", "count": 8},
     {"file": "verity/protocols/pous/verifier/tests/test_pous_wipe_store.py", "count": 16},
