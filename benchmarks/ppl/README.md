@@ -114,7 +114,7 @@ what it is.
 
 `specs/` holds the three plain int8 arms, the adopted design (`adopted`) with its halves (`adopted-linears`,
 `adopted-attention`) and `adopted-no-smooth`, and the variants measured against them. A design in the design registry
-(`benchmarks/pouw/machine_model/data/designs/`) names its arm as `ppl`. `attention.int8`'s `softmax = "lut"` is the
+(`benchmarks/machine_model/data/designs/`) names its arm as `ppl`. `attention.int8`'s `softmax = "lut"` is the
 integer softmax of `benchmarks/pouw/edited_gemm/fattn.cu`, which `steps.lut_softmax` states. `dither_plot.py` samples
 perplexity against the dither's size per side choice, and `frontier_plot.py` perplexity against core ε
 (`machine-model eps --checking full`) under each reading of the table route, each with its table. A SPEC is an arm's

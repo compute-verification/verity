@@ -80,10 +80,12 @@ follows.
 | `slot.py`, `lean_slot.py` | a command in one of a node's merge-check or Lean check slots |
 | `train.sh` | the verified queue's recorded check of a candidate, and its records run |
 | `post_train.py` | the vLLM reference regression's manifest rebuilds and the fast rows of record's neutrality after a landing |
+| `lean_prebuild.py` | a Lean change built before the candidate that holds it: the audit of a ready mark's merge (`tools/verity/lean/warm.py`) as a `research run` in a machine's research pool, off the check slots |
 | `drive.toml`, `queue.toml` | the merge queue's flags and its admission rules |
 | `gates/markdown_caps.py` | the warn gate naming a change that puts a Markdown file over its cap |
 | `move_check.py`, `anchors.py` | the certificate of a pure move, and that every path a file reaches from its own place survives it |
 | `merge_map.py` | git's merge driver for `fixtures/artifacts.json` |
+| `merge_rows.py` | git's merge driver for Markdown: two changes to one table's rows merge row by row |
 | `pins.py` | every file that records a Lean source's digest, with the command that regenerates it |
 | `mutants.py` | deletes each check a verifier source runs, one at a time, and names each deletion its tests miss |
 
@@ -203,7 +205,8 @@ moves `main` only to a candidate with no new failure, each gating task passed or
 then runs the vLLM regression's rebuilds and fast neutrality tier. A failure the candidate's base shares blames no PR; any
 other's suspects are the PRs whose change touches what it names: a lone one is ejected, several are bisected. A red job off
 the gate holds nothing. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its
-body) lands as any PR does, on a land verdict; `move_check.py` certifies a pure move (`verity check move BASE HEAD`).
+body) lands on its ready mark alone once the queue's rerun of its map is certified (`tools/move/README.md`);
+`move_check.py` certifies a pure move (`verity check move BASE HEAD`).
 
 ## The public boundary
 
@@ -211,8 +214,11 @@ The public monorepo is exported one way from this repository. `public_boundary.t
 `public_boundary.py` reads what each public file needs (Lean imports, Lake requires, Python imports and dependencies, anchored
 paths, commands) and fails on an edge into a file the export doesn't copy that `public_boundary_allowed.txt` doesn't list; the
 list only shrinks (`tests/test_public_boundary.py`). `public_export.py DEST` is the export's dry run: the public set as one
-commit of fresh history, its manifests pruned to what it copies, the leftovers a public reader shouldn't meet counted by area,
-and the third-party pins; with `--build` (a node's work: `research run`), each Lake package's `lake build`, the workspace's
+commit of fresh history, its manifests pruned to what it copies, each Lean lock stating only what it copies
+(`tools/verity/lean/public_lock.py`), the leftovers a public reader shouldn't meet counted by area, and the third-party pins. It
+never rewords a lock: one whose kept text holds lane text, or names a declaration, a module or a path it leaves out, refuses
+the export by file, section and entry until the lock is reworded, unless the boundary lists it as known residue
+(`[[residue]]`); with `--build` (a node's work: `research run`), each Lake package's `lake build`, the workspace's
 `uv sync` and the licenses of what they fetched. It publishes nothing.
 
 ## Settings

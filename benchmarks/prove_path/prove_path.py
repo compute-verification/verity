@@ -254,8 +254,8 @@ class I2Compiler:
     window's and a served one's alike, names its name, its code (``code``: a single-GPU window's I2 runs this tree's,
     `code_identity`, ``verity`` and ``verity_vllm`` as git lists them, so a node's ignored build outputs don't move it; a
     served window's, the server's registered compiler, `served_identity`), everything ``registered`` holds that I2 reads (φ:
-    the model, its revision and config, the target and the execution; the default seed; ℓ; the served model name, where it
-    names one) and that list. So a served window's ``serve.json`` is bound before the sample with the code: one that differs
+    the model, its revision and config, the target, the execution, and a served engine's world and engine args; the default
+    seed; ℓ; the served model name, where it names one) and that list. So a served window's ``serve.json`` is bound before the sample with the code: one that differs
     from the one its advice was registered under names another compiler."""
 
     registered: Any
@@ -563,13 +563,16 @@ def serve_ingress(requests: list[Mapping[str, Any]]) -> dict[str, dict]:
 
 
 def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target: str | None = None) -> Any:
-    """φ of a served engine as vllm's registered compiler registers it (the formula its Build compiles the request Programs under):
-    the pinned model (``serve.json``'s ``model`` and ``revision``, and the checkpoint's ``config.json``: ``hf_config``, else the
-    pin's config of record, as `advice_compile` reads it (`dense_generic.pinned_hf_config`), else for a model no manifest pins
-    unsloth/Llama-3.2-1B's), the serving device's target profile (``serve.json``'s ``target``, the int8 scope its layers ran
-    included, else the file ``target``) and the engine's execution label (``execution``, else ``engine.execution``); no workload."""
+    """φ of a served engine as vllm's registered compiler registers it (`predict.phi.served_phi`, the one formula: `advice_compile`
+    compiles the row dir's Builds under it too, so they hold the Programs I2 compiles): the pinned model (``serve.json``'s
+    ``model`` and ``revision``, and the checkpoint's ``config.json``: ``hf_config``, else the pin's config of record, as
+    `advice_compile` reads it (`dense_generic.pinned_hf_config`), else for a model no manifest pins unsloth/Llama-3.2-1B's), the
+    serving device's target profile (``serve.json``'s ``target``, the int8 scope its layers ran included, else the file
+    ``target``), the engine's execution label (``execution``, else ``engine.execution``), and from its engine record
+    (``engine``) its tensor-parallel world and the engine args class G states, ``max_model_len`` among them, which each
+    request Program's length rule reads; no workload. A ``serve.json`` with no engine record states none of those args."""
     from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
-    from verity_vllm.program.predict.phi import Phi
+    from verity_vllm.program.predict.phi import served_phi
 
     prof = json.loads(Path(target).read_text()) if target else serve.get("target")
     if not isinstance(prof, Mapping):
@@ -579,7 +582,9 @@ def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target:
     if not isinstance(execution, str) or not execution:
         raise ValueError("serve.json records no execution label (execution, engine.execution), so φ can't be read")
     hf = json.loads(Path(hf_config or pinned_hf_config(serve["model"], serve["revision"]) or LLAMA32_1B_CONFIG).read_text())
-    return Phi(model={"repo": serve["model"], "revision": serve["revision"], "hf_config": hf}, target=dict(prof), execution=execution)
+    engine = serve.get("engine")
+    return served_phi({"model": serve["model"], "revision": serve["revision"], "target": prof, "execution": execution,
+                       "engine_record": engine if isinstance(engine, Mapping) else None}, hf)
 
 
 def registered_seed(serve: Mapping[str, Any]) -> int:
