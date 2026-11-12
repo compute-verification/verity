@@ -36,12 +36,42 @@ from verity_vllm.pipeline.boundary_stop import Stop, filed
 
 #: vLLM's RequestStatus names (past ``finished_``) for a `FINISH` name; its FinishReason names are `FINISH`'s own
 _STATUS = {"stopped": "stop", "length_capped": "length", "aborted": "abort"}
+#: the most instances of the check template the replay blocks one serve keeps hold in all, and the most counts of spans
+#: one of them keeps its programs for (`_built`)
+KEEP, COUNTS = 1 << 12, 64
+#: the parts of a `Layout` that read its replay block and its count of spans alone, and a stop class's more of them
+_PARTS, _STOP_PARTS = ("program", "grain", "partition"), ("stop_program", "stop_query", "stop_partition")
 
 
 def _finish(reason: Any) -> str:
     name = str(getattr(reason, "name", reason)).lower().removeprefix("finished_")
     name = _STATUS.get(name, name)
     return name if name in FINISH else "error"
+
+
+def _built(layout: Layout, kept: dict[int, tuple[SpecializedDefinition, dict[int, dict[str, Any]]]]) -> Layout:
+    """``layout`` holding the parts of it that read no run, from ``kept`` where an earlier layout built them: its replay
+    block, which reads its class through ``n_rho`` alone, by ``n_rho``; and its program, grain and partition, and in a
+    stop class its stop population's, by that and its count of spans. So only the run and what binds it (each value's
+    domain) are a window's own. ``kept`` is one serve's, whose layouts differ in class, whether it is a stop class,
+    spans and run alone: its stop rule is one, and so is what its classes commit of their blocks' return. It holds
+    the replay blocks used last whose instances sum to `KEEP` at most, the least recently used leaving first, and for
+    each its programs at the `COUNTS` counts of spans used last; a replay block of more than `KEEP` instances is built
+    for its layout alone."""
+    if layout.n_rho > KEEP:
+        return layout
+    replay, counts = kept.pop(layout.n_rho, None) or (layout.replay, {})
+    kept[layout.n_rho] = replay, counts
+    while sum(kept) > KEEP:
+        del kept[next(iter(kept))]
+    vars(layout)["replay"] = replay
+    names = _PARTS + _STOP_PARTS if layout.stopped else _PARTS
+    parts = counts.pop(layout.spans, None) or {}
+    vars(layout).update({k: parts[k] for k in names if k in parts})
+    counts[layout.spans] = parts | {k: getattr(layout, k) for k in names}
+    while len(counts) > COUNTS:
+        del counts[next(iter(counts))]
+    return layout
 
 
 class BoundaryWindows:
@@ -165,6 +195,7 @@ class BoundaryWindows:
         self.thread.join()
 
     def _run(self) -> None:
+        kept: dict = {}
         while (job := self.jobs.get()) is not None:
             window, opened, closed, carried, spans = job
             rule = self.stop_rule
@@ -174,9 +205,9 @@ class BoundaryWindows:
             for (p, o, held), mine in classes.items():
                 unheld = rule is not None and not held
                 try:
-                    layout = Layout(self.check, self.per_prompt, self.per_output, p, o, len(mine),
-                                    run_root(self.serve, window), self.inline, self.layers, self.capacity, stop=rule,
-                                    held=held, verdicts=self.verdicts, ids=self.ids)
+                    layout = _built(Layout(self.check, self.per_prompt, self.per_output, p, o, len(mine),
+                                           run_root(self.serve, window), self.inline, self.layers, self.capacity,
+                                           stop=rule, held=held, verdicts=self.verdicts, ids=self.ids), kept)
                     c = commit(mine, layout, window, tables=self._tables(window, layout, mine))
                     write(c, self.out / f"w{window}" / f"p{p}-o{o}{'-nostop' if unheld else ''}")
                     line = {**c.public(), "serve": self.serve, "open_s": opened, "close_s": closed, "carried": carried,
