@@ -271,7 +271,7 @@ def binding(record: audit.Record, node: Node) -> float:
 @dataclass(frozen=True, slots=True)
 class SamplingTerms:
     """`PooledSample`'s terms beyond its δ, each by name: the rejection (`rejection`) and the receipts' binding term
-    (`binding`), what reading the record's openings as the deployed draw over receipts its roots hold costs.  `total`
+    (`binding`), what reading the record's openings as the deployed sample over receipts its roots hold costs.  `total`
     is their sum.  The windows' PRF advantages Σ_t adv_t are the third term, which nothing prices and no guarantee
     assumes (`PRF_CLAIM`): `to_json` names it (`NAMED_TERMS`), and `total` holds none of it."""
 
