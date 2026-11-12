@@ -7,6 +7,7 @@ from typing import Any
 import torch
 
 from verity_vllm import settings
+from verity_vllm.engine import handle
 
 
 def compile_settings(llm: Any = None, runner: Any = None) -> dict[str, Any]:
@@ -14,17 +15,13 @@ def compile_settings(llm: Any = None, runner: Any = None) -> dict[str, Any]:
     partition, enforce_eager.  Recorded for every attempt (control and treatment must agree)."""
     out: dict[str, Any] = {}
     try:
-        vc = None
-        eng = getattr(llm, "llm_engine", None)
-        vc = getattr(eng, "vllm_config", None)
+        vc = getattr(handle.engine_of(llm), "vllm_config", None)
         if vc is None and runner is not None:
             vc = getattr(runner, "vllm_config", None)
         if vc is None and llm is not None:
             try:
-                from verity_vllm.engine import handle
-
                 vc = getattr(handle.model_runner(llm), "vllm_config", None)
-            except Exception:  # noqa: BLE001
+            except RuntimeError:
                 vc = None
         if vc is not None:
             cfg = vc.compilation_config

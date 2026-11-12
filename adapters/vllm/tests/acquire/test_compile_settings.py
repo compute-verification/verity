@@ -41,7 +41,7 @@ def _in_process(config: Any, **own: Any) -> Any:
 
 
 class _CoreRaises:
-    """An engine whose core cannot be read, for a reason that is not the handle's own."""
+    """An engine whose core cannot be read, for a reason that is not the handle's own refusal of a core in another process."""
 
     @property
     def engine_core(self) -> Any:
@@ -102,13 +102,14 @@ def test_an_engine_that_states_no_configuration_in_this_process_is_recorded_by_t
     assert compile_settings(llm, runner) == NOTHING
 
 
-def test_an_engine_that_is_no_built_engine_is_read_at_its_in_process_runner_not_at_itself() -> None:
-    assert compile_settings(_in_process(_config(3), vllm_config=_config(1))) == _stated(3)
-    assert compile_settings(ns(vllm=_engine(_config(1)))) == NOTHING
+def test_an_engine_is_found_as_the_handle_finds_it() -> None:
+    """`verity_vllm.engine.handle.engine_of`: the `LLMEngine` itself, and the engine under a wrapper's `vllm`."""
+    assert compile_settings(_in_process(_config(3), vllm_config=_config(1))) == _stated(1)
+    assert compile_settings(ns(vllm=_engine(_config(1)))) == _stated(1)
 
 
-def test_a_core_that_cannot_be_read_is_recorded_as_no_configuration() -> None:
-    assert compile_settings(_CoreRaises()) == NOTHING
+def test_a_core_that_cannot_be_read_is_recorded_as_the_error() -> None:
+    assert compile_settings(_CoreRaises()) == {"error": "ValueError('no core')", "compile_cache_disabled": False}
 
 
 def test_a_configuration_that_cannot_be_read_is_recorded_as_the_error() -> None:
