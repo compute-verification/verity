@@ -97066,3 +97066,78 @@ def CertifiedHeld (rec : Json) (v : Registration.Verifier) : Prop :=
 **Meanwhile**, since none of it depends on the statement's final wording: the tests (`test_registered.py`, the Lean difftest's vectors, the stream test in the form of `test_service_outputs.py:159-170`, `register_interiors` refusing). For network's file list: `verity/protocols/spot/verifier/lean/Spot/Pieces.lean` is now among the files.
 
 For the table: R7 | `cursor/proofs-r7-certified-b6a0` at `20f5c21dfe37` | statement change written out above, waiting for your word before the records run and the PR | tries `e348` (about 20:15Z) and `ea04` (about 20:45Z) queued | next checkpoint by 20:20Z.
+
+## DUPNAMES, Thu 12 Nov 19:22Z: `6a0f`'s one failure was this change's (a size lint on `derive.py`), fixed at 359dd99f07; the quick suites are rerunning as `r20261112-191457-d910`, due by 21:00Z; not ready until it ends rc 0
+
+Pull request [9376](https://github.com/compute-verification/verity/pull/9376) is now at head `359dd99f073c12e90afdec78d77e1bd880fa78e8`, unmarked, and it is **not ready yet**: the quick suites at that head, `r20261112-191457-d910` (cpu-14), were waiting for a slot at 19:20Z and I expect them to end between 20:30Z and 21:00Z (1:00 PM PST) [guess: a slot in about 29 min by the launcher's estimate, then 45 to 73 min as the last two quick runs took]. Resume me at 21:00Z.
+
+**The ready line it will be, if `d910` ends rc 0:** `research queue ready 9376 --mark --by proofs` at `359dd99f073c12e90afdec78d77e1bd880fa78e8`. Read point 4 before marking: it holds only while lean's merge is not yet on `main`.
+
+**1. The two runs at 168d446be3, read whole.**
+
+- `r20261112-172443-1bfe` (records, `--update`): **done rc 0**. All six packages `pass` with the committed locks: `verity/circuits/lean`, Flock's verifier, the certifier's Lean, `security`, `security/Proofs`, `security/Properties`. No lock was regenerated: the run kept no `lean-audit/record/` [read: its result.json, `outcome: pass`; its stdout's six `AUDIT ... PASS` lines]. It is the fast path, as its own result says: no kernel replay, no Lean tests, "not a Lean verdict, and no merge accepts it".
+- `r20261112-172408-6a0f` (quick suites): **rc 1**. 88 suites: 87 passed, `verity-vllm` failed with 14,320 passed and 1 failed [read: its stdout :158, :183-184, and its last line]. The test: `adapters/vllm/tests/lint/test_p10_size.py::test_no_new_or_grown_offenders`. The run's stdout keeps only the test's name, so I ran that one file here at the same head [run: pytest tests/lint/test_p10_size.py]: `verity_vllm/program/frontend/derive.py [module] <module>: 1025 lines, above its recorded 972 + 48`.
+
+**It is this change's, not `main`'s and not the node's.** `derive.py` is 1020 lines on `main` at be9a3d5669, at 6d95fcc68d and at 0582899c43 [run: git show REV:... | wc -l, each]. 1020 is exactly the lint's limit for it: its recorded 972 plus a slack of 48 [read: tests/lint/test_p10_size.py:27-29, :59-67; allowlists/p10_size.json:30]. The names check I added in d48b9780b9 was five lines, so 1025. A rerun at the same head would have failed the same way.
+
+My miss: this lint never ran with the names check in the tree. I added the check after the quick run `fd67`, the run after it was cancelled before its slot, and here I ran only the tests I had named. I should have run the adapter's lint files then, as I did this time.
+
+**2. The fix, commit 359dd99f07** ("The derive frontend's weights record and its check of the parameter names move to registration.py"). The lint says to split and not to raise the recorded size, so I raised nothing:
+
+- `adapters/vllm/verity_vllm/program/frontend/registration.py` gains one function, `declare_weights` (:19-28). It appends the `weights` record and refuses an input named as a parameter that follows the inputs. That module already holds the other two things the frontend adds after the inputs (`RunInputs`, `RegisteredInputs`), and its docstring already describes `weights` as the last parameter.
+- `derive.py` calls it (:727) where it appended `weights` and had the five lines. It is now 1019 lines, one fewer than `main`'s.
+- The refusal's text and its reason (`shape`) are unchanged, and so is the test.
+
+**For vllm, when you tell them their files:** this is a fourth file of theirs, `registration.py` (119 lines, was 105), beside `derive.py` and the two tests. And `derive.py` on `main` sits exactly at that lint's limit, so any pull request that adds one net line to it fails the same test.
+
+What I ran on it here, at 359dd99f07 [run, each]:
+
+- The lint files of `adapters/vllm/tests/lint` by name, `test_p10_size.py` among them, and `tests/program/test_derive_negative.py` whole: rc 0. All but `test_mypy.py`, which runs only in the suite's environment; the frontend is not one of its clean directories, so a new type error there would warn, not fail [read: test_mypy.py:42-48].
+- The ruff lint gives the same 13 warnings with and without the fix, none in a file of this change.
+- `-k "marlin or named_as_the_weights or weights"` over `test_dsv4_derive.py` and `test_derive_negative.py`: 11 passed.
+- `python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD`: 0 failed.
+
+The rest of `verity-vllm` and the other 87 suites at this head are `d910`'s to say.
+
+**3. `main`: not merged in again.** Against `main` at `0582899c4392` this head has no stop [run: git merge-tree --write-tree HEAD origin/main, exit 0], and `main` moved none of its files: since 6d95fcc68d it changed only the three locks among them, which the lock driver merges [run: git diff --name-status 6d95fcc68d origin/main over the change's files]. It did not touch the adapter's frontend or its lint lists either.
+
+**4. Yes, it changes Lean files and locks, so it waits behind [9375](https://github.com/compute-verification/verity/pull/9375).**
+
+- Lean files, two: `verity/circuits/lean/Circuits/Program.lean` (the refusal, in `paramsOf`) and `verity/protocols/flock/verifier/Flock/Test/RegTwoParams.lean` (new).
+- Locks, three: `security/lean-audit.json` and `security/Properties/lean-audit.json` (two values each: `Circuits.Program`'s digest and `paramsOf`'s hash), and `verity/protocols/flock/verifier/lean-audit.json` (one root, the new test). No statement's record changes.
+
+**Against `origin/cursor/lean-remote-merge-onmain-fc8d` at `e209a56847d4`** (9375's head when I read it) [run: git merge-tree --write-tree HEAD that-branch, exit 1, one file]:
+
+- **One stop:** `verity/circuits/tests/test_format_spec.py:18`, the import line from `verity.circuits.defs`. Lean's side renames `Registry` to `DefinitionTable` there; this side adds `Body, Builder`. The close is both: `from verity.circuits.defs import Body, Builder, CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind`.
+- **One break with no stop:** `verity/protocols/spot/verifier/tests/test_registered.py:19` and `:431`, in the test this change adds, name `Registry`, and lean's `defs.py` keeps no such name [run: git grep on that branch]. It merges and then fails at import. The close is `DefinitionTable` at those two lines.
+- Nothing else. The three locks merge by the driver. Lean's branch changes neither of the two Lean files, nor `Flock/Test/RegComplete.lean` that the new test imports, nor any file of the adapter that this change touches [run: git diff --stat origin/main...that-branch over those paths]. Its other rename in `defs.py`, `Node` to `BodyNode`, meets no line of mine [run: grep of the change's added lines]. I built nothing against that branch [not run].
+
+So the mark has an order in it, and it is yours to choose:
+
+- **9375 first, as you said.** Once it is on `main` this pull request stops against `main`. I then merge `main`, make the two closes (three lines in two test files), rerun the quick suites, and write a new ready line at the new head. Resume me when 9375 lands.
+- **This one first.** At 359dd99f07 nothing stops it against `main` today. Lean's branch then takes the two closes; the second it would only see when the test fails.
+
+For your information, not mine to act on: 9375 itself stops against `main` at 0582899c43 in three files, none of this change's (`pyproject.toml` and two files under `benchmarks/harness/specs/`) [run: git merge-tree origin/main that-branch; `gh pr view 9375` says CONFLICTING].
+
+**5. What the ready line will have, and what it will not.**
+
+Has:
+
+- The records fast path, rc 0, at 168d446be3. The two heads differ only in `derive.py` and `registration.py` [run: git diff --name-only 168d446be3 359dd99f07], so every Lean package's inputs are the same [derived].
+- The quick suites at 359dd99f07, if `d910` ends rc 0; and at 168d446be3, 87 of 88 with the one failure above.
+- The ratchet gate, 0 failed.
+
+Has not:
+
+- The slow tier at any head; the train's check runs it.
+- The kernel replay and the Lean tests of the touched packages: the records run is the fast path only.
+- A build of the Lean against lean's merge.
+- A whole `verify` on the two-`w` template before the change: only Flock's seven registered-reads checks were run on it, and they accepted it (`r20261112-031600-0b62`).
+
+**6. A sentence for the Goals page** (no ids or paths in it, as the page wants):
+
+> A circuit whose Definition gives two of its parameters the same name is now refused by Flock's decoder in Lean, by the Python decoder and builders, and by name in the vLLM adapter's frontend; not covered are PoUW's Python credit check, which reads a circuit's description without decoding it (its Lean version refuses), and a Definition that nothing in the program reaches, which neither decoder reads.
+
+Where it stands, in the page's words: in review, waiting to merge behind lean's merge.
+
+Nothing marked; nothing written to Linear or Slack. The pull request's body is brought up to this head. Mailbox `inbox/dupnames.md`: nothing at 19:20Z.
