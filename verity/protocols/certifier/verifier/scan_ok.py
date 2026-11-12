@@ -5,7 +5,9 @@ bucket held. The bit is worth what binds it. A member's ``o0`` rows are committe
 row's by its index in the member's tree, so the tree of a member whose every proof block is ok is one anyone computes:
 its n rows `OK_ROW` under salts 0 … n − 1, at the member's ``o0`` frame domain (`binding`), which is its template's
 and its proof blocks' count's and names no run, round or execution phase. One execution phase's scan has the members
-`members` gives, a function of the schedule's T alone, so the roots are constants of T (`constants`).
+`members` gives, a function of the schedule's T alone, so the roots are constants of T (`constants`). A scan has at
+least two ticks: at T = 1 its one bucket would be its first and its last, a member no scan is staged with, so
+`constants` refuses a T below 2 (`FewTicks`).
 
 The period check (its rows form's `okChecks`; Lean `NetworkCheck.ScanOk`, which this mirrors) computes them
 once a period, from T, and holds every execution phase's scan's registration to them by comparison alone (`held`): its
@@ -29,8 +31,8 @@ from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.commitments.rowleaf import bit_row
 
-__all__ = ["OK_ROW", "PORT", "SALT_BYTES", "SALT_TAG", "WORD_BITS", "Constant", "binding", "committed", "constants",
-           "held", "known", "members", "ok_port", "salt", "set_of"]
+__all__ = ["OK_ROW", "PORT", "SALT_BYTES", "SALT_TAG", "WORD_BITS", "Constant", "FewTicks", "binding", "committed",
+           "constants", "held", "known", "members", "ok_port", "salt", "set_of"]
 
 #: the ok row the verifier accepts: a proof block's one output bit, 1, in its one word
 OK_ROW = (1,)
@@ -72,7 +74,8 @@ def binding(template: str, n: int) -> bytes:
 def members(T: int) -> tuple[tuple[str, str, int], ...]:
     """One execution phase's scan's members, (name, template, proof blocks), in its Program's order: bucket 0's
     ``first``; ``ingress-0``, buckets 1 … T − 2, and ``last``, bucket T − 1, whose next state no state leaf holds,
-    so it is a member of its own; and ``egress-0``, the T egress buckets. 2T proof blocks."""
+    so it is a member of its own; and ``egress-0``, the T egress buckets. 2T proof blocks. Read at T ≥ 2, where
+    bucket 0 is not bucket T − 1 (`constants`)."""
     T = int(T)
     return (("first", "first", 1), *((("ingress-0", "ingress", T - 2),) if T >= 3 else ()),
             *((("last", "ingress", 1),) if T >= 2 else ()), ("egress-0", "egress", T))
@@ -94,8 +97,19 @@ class Constant:
     root: str
 
 
+class FewTicks(ValueError):
+    """A schedule of fewer than two ticks has no constants: `ScanOk.consts`'s refusal, in its words."""
+
+    def __init__(self, T: int):
+        super().__init__(f"T = {T}: a scan has at least two ticks, its first bucket and its last")
+
+
 def constants(T: int) -> tuple[Constant, ...]:
-    """Each member's constant at the schedule's `T` (`members`), in order: what one period check computes once."""
+    """Each member's constant at the schedule's `T` (`members`), in order: what one period check computes once. A
+    `T` below 2 is refused (`FewTicks`): its bucket 0 would be the scan's first and its last, and no scan is staged
+    with such a member."""
+    if int(T) < 2:
+        raise FewTicks(int(T))
     out = []
     for name, template, n in members(T):
         tree = committed(template, n)
