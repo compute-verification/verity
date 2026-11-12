@@ -99470,3 +99470,62 @@ A correction first: the heading of my last entry says 20:06Z; I pushed it at 20:
 - It is one run and not a duplicate of STOPS' pair. Tell me if you would rather it did not hold the node and I cancel it.
 
 **Next.** I end my turn on the runs: `df04` and `86b4` (STOPS', running since 20:02Z), `5a5c`, `c30d`, `2608`, `be5a` (mine, waiting), `8a02` (the driver's suite, running).
+
+## COUNT, Thu 12 Nov 20:13Z: the reader of a served run's files is written and pushed; it fills none of the audit's four parts today, and as `main` runs the audit a session holds no GPU at all; the security level's branch took `main`; both wait for a check slot
+
+The piece that turns a served two-stage run's files into the object the benchmark computes its share of compute from is written, tested on my machine and pushed. Today it can fill only the sessions' seconds: the audit does not write how many GPUs a session held, and writes no time at all for the staging, the replay or the interior commitment, so the benchmark claims no share and names each missing part. Writing it turned up something larger: the audit as it stands on `main` proves its sample on the CPU, not on GPUs, so a served run has no GPU proving time to measure until that changes. The security level's branch had to take `main` again, and its figures did not move. Neither is in a pull request yet: both wait for a machine to run their suites. Nothing here changes the benchmark's figure.
+
+### The reader (gap 7)
+
+- **Branch `cursor/proofs-count-9fb0`, head `b93ac2591439`**: `main` `0582899c4392`, then a merge of the share-of-compute change's head `45f6e5fb2f23` (#9421), then two commits over three files: `benchmarks/harness/verity_bench/served_record.py` (167 lines), `benchmarks/harness/tests/test_served_record.py` (5 tests) and a paragraph of `benchmarks/exfiltration/README.md` [local].
+- **What it returns** is exactly benchmarks' dict and no other name: `run`, `prove`, `staging`, `replay`, `interior`, `serving`, `stock`, and `serving_cost` with `serving_cost_source` only where no stock serve is given. `python -m verity_bench.served_record --second DIR [--run ID] [--serving META] [--stock META]` prints it as JSON, which `--served-run FILE` takes. It computes nothing [local].
+- **What a record fills today**, against `main`'s field names [read: `benchmarks/one_stage/two_stage.py:797`, `a5.py:781, 905, 970`]:
+
+| part | where the reader reads it | today |
+| -- | -- | -- |
+| `prove`, seconds | `audit.timing[member].session_s`, or `.timing.prove_total_s` with `--seconds prove_total_s` | written |
+| `prove`, GPUs | `audit.timing[member].gpus` | not written |
+| `staging` | `audit.staging`: `before_draw_s`, `drawn_s`, `gpus` | timed by the one-stage audit in its own summary; the two-stage summary keeps `timing` and not `staging`; no count of GPUs |
+| `replay` | `replay`: `seconds`, `gpus` | not written; the two-stage audit reads no clock |
+| `interior` | `interior_commit`: `seconds`, `gpus` | not written; the same |
+| `serving`, `stock` | a load's `meta.json` of `verity bench serve_tax`: `wall_s`, `gpu.gpus` | written by the serve's own run, not in the audit's files |
+
+- **So of the four lists, none today.** `prove` lacks only `gpus`. The reader names six: `prove.gpus`, `staging`, `replay`, `interior`, `serving`, `stock`. A test hands its record to `served_share` and checks that the command names the same six and claims no share; another builds a record that holds every field and checks the share the command then gives, marked measured [local: `tests/test_served_record.py`, 5 of 5; 26 with `tests/test_exfiltration.py`; ruff clean].
+- **Found while writing it, and it is not the reader's to fix: as `main` runs the audit, a session holds no GPU.** This is of the program whose summary I was asked to read, `benchmarks/one_stage/two_stage.py`'s second stage; if a served run of GLM-5.3 proves its sample some other way, say so and I read that instead. The one-stage audit it calls makes its proof server with no devices, and a proof server with none proves on the CPU [read: `benchmarks/one_stage/a5.py:1401-1412`; `verity_flock/proof_server.py:283, 495`, "`devices`: the GPUs to prove on (None: the CPU)", `--gpu` passed only with a device; `two_stage.py`, `a5.py` and `a0.py` name no GPU, CUDA or device]. Staging is CPU work as well. Benchmarks' command takes an entry only on 1 GPU or more and refuses 0 [read: `_gpu_s` at #9421's head]. So gap 8 is more than writing four fields: for a served run's `prove` to be GPU-seconds the audit has to prove on cards, or the record needs a way to hold core-seconds. Until one of those, a share "measured on a served run" has no proving term to measure, and the plan's proving price (GPU provers, timed alone) is the only one there is. This is for vllm and benchmarks; I have changed nothing for it.
+- **`session_s` is not what I called it at 19:53Z.** On the audit's proof server it runs from the statement's submission to both of its records, so it counts the session's wait behind the other sessions of its prover [read: `proof_server.py:78, 512`]. Summed over sessions it can count a prover's time more than once. `timing.prove_total_s` is the prover's own timer over its tables and leaves out the witness, the round trips and the wait for coins. So neither is the time a prover was busy: one is at least it, the other at most. The reader carries both (`--seconds`), defaults to `session_s` because it cannot read low, and decides neither. That is the sentence you rule on.
+- **Two things in it are my choice and need a word:**
+  1. The names it expects for what no run writes yet (the middle column's `gpus`, `audit.staging`, `replay`, `interior_commit`). The summary's top-level `interior` is already the interior commitment's description, so its time cannot go there. Whoever writes gap 8 uses these names or changes the reader in the same change.
+  2. For `serving` and `stock` it reads `wall_s` as the seconds and `gpu.gpus` as the GPUs (the cards the engine saw), which makes the GPU-seconds the time the cards were held. If benchmarks meant the busy seconds (`gpu.busy_gpu_s`, utilization times time), it is a one-line change; say which.
+- **Suites:** `r20261112-201105-df56`, launched 20:11Z at the head above, waiting for a check slot [run: `research fetch`]. The branch merges with `main` `5f0c008aa040` cleanly, and against lean's remote merge branch (`f3ffe4e2bbcb`) it stops only where `main` itself does, the same 10 files [local: `git merge-tree`, at the first commit; the second changes a docstring and the README].
+
+### The security level (gap 6)
+
+- **Head now `067486626b07`** on `cursor/proofs-count-70d5`: `main` `5f0c008aa040` merged in. `main`'s planner gained tests and my branch stopped against it in one place, the import lines of `benchmarks/spot_figures/tests/test_headline.py`; both sides are kept. The command, its tests, its README and `binding.py` are unchanged by the merge [local: `git diff --stat 4e37472f6988 067486626b07`].
+- **Its figures did not move.** The command at this head on the planner run's rows prints the same 137 lines as before, byte for byte: over one verification phase at most 2^-101.08 counted in calls and 2^-92.08 in compressions; over a world-year of 197,078,976 phases at most 2^-73.53 and 2^-64.52; Lean "not proved at these sizes"; 4,887 GB [local: `diff` of the two prints; run: `r20261112-192309-c065`, the planner at `e440f30c5ad0`, at an assumed cache factor of 0.1]. Modeled, not run on a served engine.
+- **One thing to know:** the planner ran before this merge. `main`'s change to the planner adds a pricing of the second row from `verity bench prove`'s table; whether it changes what the planner writes with no table given I have not run [guess: no, it is behind an option]. Say if you want the planner run again at this head before any label.
+- Locally at this head: `test_binding.py` 63, `test_headline.py` 18, `test_exfiltration.py` 22 [local]. **Suites:** `r20261112-200346-7fa0`, launched 20:03Z; the launch said about 25 minutes to a slot, five ahead of it [run]. The earlier run at the old head, `r20261112-194655-5b81`, waited 16 minutes without starting and is cancelled.
+- The pull request opens when the suites pass; its body is written.
+
+### What every figure carries (your 19:40Z)
+
+- No figure in this entry was measured on a served engine. `main` at `5f0c008aa040` holds neither `VERITY_ROPE_CACHE_FUSED` nor `VERITY_INT8_FUSED_PRODUCERS` in `adapters/vllm/verity_vllm/settings.py`, and #9375 is open [local: `git grep`, `gh`].
+- The 4,887 GB is the rows of record's, which read Wednesday's timing of the head block, about 10% high [relayed: your section]. The security level reads no timing.
+
+### The map file (gap 2), ahead of the final units file
+
+- The overhead run's 36 block types, by the name each statement's `stage.json` gives as `word` [read: `types.tsv` in the notes; derived, no `stage.json` read], each price a block of the planner's line with no map entry: 34 by their own name, and the two fused MoE reads (36.66% of the ranked proving time of 98.19%) as the line's fused block, which the planner now does by itself [local: `headline.fused_block` and the 193 blocks of the control's plan, `tests/fixtures/control/plan_inputs.json` at `main`].
+- So on the fused line the map file is empty. On the unfused line (the planner's row `(i) honest`) the two fused types have no block and would be refused unless mapped to null, and one map serves one run. I will check both against the rehearsal's own `stage.json` files once it ends (about 21:50Z) and say then whether the file is empty, or two files.
+
+### Open, with heads
+
+| gap | state | branch and head |
+| -- | -- | -- |
+| 1, the reader of tonight's file | [#9418](https://github.com/compute-verification/verity/pull/9418) open, suites pass, ready for your mark | `cursor/proofs-count-e41c` `3dc5aae4d904` |
+| 4, the mark | [#9446](https://github.com/compute-verification/verity/pull/9446) open, suites pass; waits for benchmarks' word | `cursor/proofs-count-e290` `819334aea90d` |
+| 6, the security level | pushed; suites waiting; no pull request yet | `cursor/proofs-count-70d5` `067486626b07` |
+| 7, the reader of a served run's files | pushed; suites waiting; no pull request yet | `cursor/proofs-count-9fb0` `b93ac2591439` |
+| 5, the simulated mark | pushed on my branch, not on network's; waits for your word (my 19:53Z) | `cursor/proofs-count-5c1a` `8955166a052c` |
+| 2, the map file | waits for the rehearsal's end; likely empty | none |
+| 3, the planner on tonight's table | waits for the table | none |
+
+Asked of you: the word on network's branch (19:53Z), the two choices in the reader above, whether the planner runs again at the merged head, and who takes the audit's CPU proving to vllm and benchmarks.
