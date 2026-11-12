@@ -702,9 +702,10 @@ def _interface(made: dict):
     except malformed:
         return "inputs", None
     try:
-        blocks, _ = IF.Blocks.of(doc["blocks"], units, "")
+        got = IF.Blocks.of(doc["blocks"], units, "")
     except malformed:
         return "blocks", None
+    blocks = got if isinstance(got, IF.Blocks) else got[0]  # the blocks alone, or first of a pair
     return None, (lays, units, blocks, doc)
 
 
