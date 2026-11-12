@@ -6,9 +6,10 @@ pythonpath = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# a test file that starts a program the read guard can't trace (bash, around the queued job's script): keyed on the
-# suite's whole tree
-untraced = ["tests/test_job_shell.py"]
+# test files that start a program the read guard can't trace (bash, around the queued job's script; git, for the run's
+# commit): keyed on the suite's whole tree
+untraced = ["tests/test_command.py", "tests/test_grade.py", "tests/test_job_shell.py", "tests/test_resume.py", "tests/test_routes.py",
+            "tests/test_run.py", "tests/test_sandbox.py", "tests/test_windows.py"]
 # `verity`: the circuits' Definitions the gate prices compile and the Boolean gather the counter's tests price; the lf
 # model (`train_step_lf.py`), loaded by path, whose shapes the policy states; the slowdown calculator
 # (`verity/protocols/inference_only/rho`), whose registry, fleets, periods and min-cut module (the bound and its rows
