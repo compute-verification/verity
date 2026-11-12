@@ -690,6 +690,7 @@
     {"file": "security/Proofs/Flock/Claims/Bridge/Returns.lean", "count": 59},
     {"file": "security/Proofs/Flock/Claims/Bridge/Transport.lean", "count": 2},
     {"file": "security/Proofs/Flock/Claims/CanonEq.lean", "count": 6},
+    {"file": "security/Proofs/Flock/Claims/ChargeOnce.lean", "count": 5},
     {"file": "security/Proofs/Flock/Claims/Complete/Count.lean", "count": 2},
     {"file": "security/Proofs/Flock/Claims/Complete/Files.lean", "count": 25},
     {"file": "security/Proofs/Flock/Claims/Complete/Json.lean", "count": 1},
@@ -5626,7 +5627,6 @@
     {"file": "security/Proofs/Flock/SpotFlock/WireMap.lean", "count": 3},
     {"file": "adapters/vllm/verity_vllm/pipeline/advice_code/by_class.py", "count": 13},
     {"file": "benchmarks/network_e2e/encodings/by_class.py", "count": 7},
-    {"file": "benchmarks/network_e2e/encodings/tests/test_by_class.py", "count": 18},
-    {"file": "security/Proofs/Flock/Claims/ChargeOnce.lean", "count": 5}
+    {"file": "benchmarks/network_e2e/encodings/tests/test_by_class.py", "count": 18}
   ]
 }
