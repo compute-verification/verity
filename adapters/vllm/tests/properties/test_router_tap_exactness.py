@@ -72,6 +72,7 @@ def test_the_verify_cli(tmp_path):
     from pathlib import Path
 
     spec = importlib.util.spec_from_file_location("rte_gpu", Path(__file__).with_name("router_tap_exactness_gpu.py"))
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     p = tmp_path / X.RECORD

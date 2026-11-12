@@ -312,7 +312,7 @@ def test_a_relabel_that_raises_leaves_its_rank_to_a_full_derive(tmp_path):
             raise RuntimeError(f"emit of rank {rank} failed")
         return broken if REQ in out else write
 
-    row, t = _Row(tmp_path, W, hook=hook), RB.template_rank(W)
+    row = _Row(tmp_path, W, hook=hook)
     RB.derive(row, row.todo(), 4)
     g = json.load(open(f"{row.bdir}/relabel_check/guard.json"))
     assert g["requests"][REQ]["emit_failed"] == {str(r): f"RuntimeError: emit of rank {r} failed" for r in (0, 2, 3)}

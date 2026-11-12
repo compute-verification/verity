@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.program import Program
 from verity.definitions.registry import b1

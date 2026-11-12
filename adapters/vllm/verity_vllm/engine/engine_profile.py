@@ -18,6 +18,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.engine import env, handle
 
 DECLARED_ENV = env.ENGINE
@@ -269,7 +270,7 @@ def breakable_cudagraph() -> bool:
 
 
 def effective_compilation(llm: Any) -> dict[str, Any]:
-    vc = llm.llm_engine.vllm_config
+    vc = handle.engine_of(llm).vllm_config
     cc = vc.compilation_config
     return {
         "mode": str(getattr(cc, "mode", None)),
@@ -286,14 +287,15 @@ def effective_compilation(llm: Any) -> dict[str, Any]:
 def cache_info(llm: Any) -> dict[str, Any]:
     """Effective KV-cache flags (§15.8: 'prefix caching enabled' is recorded as the effective
     value, and whether the recorded workload hit it is in production/workload_exercised.json)."""
-    cc = llm.llm_engine.vllm_config.cache_config
+    vc = handle.engine_of(llm).vllm_config
+    cc = vc.cache_config
     return {
         "enable_prefix_caching": bool(cc.enable_prefix_caching),
         "block_size": int(cc.block_size),
         "kv_cache_dtype": str(getattr(cc, "cache_dtype", "auto")),
-        "enable_chunked_prefill": bool(getattr(llm.llm_engine.vllm_config.scheduler_config, "enable_chunked_prefill", False)),
-        "max_num_seqs": int(getattr(llm.llm_engine.vllm_config.scheduler_config, "max_num_seqs", 0)),
-        "max_num_batched_tokens": int(getattr(llm.llm_engine.vllm_config.scheduler_config, "max_num_batched_tokens", 0)),
+        "enable_chunked_prefill": bool(getattr(vc.scheduler_config, "enable_chunked_prefill", False)),
+        "max_num_seqs": int(getattr(vc.scheduler_config, "max_num_seqs", 0)),
+        "max_num_batched_tokens": int(getattr(vc.scheduler_config, "max_num_batched_tokens", 0)),
     }
 
 
@@ -307,7 +309,7 @@ def _backends_of_runner(runner: Any) -> dict[str, Any]:
             break
     out["linear"] = (
         "vllm.model_executor.determinism.batch_invariant.linear_batch_invariant (triton matmul_persistent)"
-        if os.environ.get("VLLM_BATCH_INVARIANT") == "1"
+        if settings.raw("VLLM_BATCH_INVARIANT") == "1"
         else "UnquantizedLinearMethod._gemm_impl"
     )
     sampler = getattr(runner, "sampler", None)
@@ -346,7 +348,7 @@ def _backends_probe(worker: Any) -> dict[str, Any]:
 def backends_info(llm: Any) -> dict[str, Any]:
     out: dict[str, Any] = {"attention": None, "linear": None, "moe": None, "sampler": None}
     try:
-        tp = int(llm.llm_engine.vllm_config.parallel_config.tensor_parallel_size)
+        tp = int(handle.engine_of(llm).vllm_config.parallel_config.tensor_parallel_size)
         if tp > 1:
             # the model lives in the worker processes: ask rank 0 (all ranks run the same classes)
             per_rank = llm.collective_rpc(_backends_probe)
