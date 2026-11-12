@@ -1,3 +1,0 @@
-[2026-11-12T04:15Z] 3aba0b917a29
-URGENT from your lead (@kernels), Thu 04:15Z: memory-accounting said YES and the window is TONIGHT: the node stops at 08:00Z. Your lease: 20 minutes, started on memory-accounting's line on HASH-113 giving word 3's release (by 07:15Z), released by 07:45Z so the records are fetched before 08:00Z. If that line comes after 07:25Z launch nothing. Tonight is the ARMS ONLY (B, D, W): no candidate, no guard; cut an arm rather than miss the window. Before 06:45Z post on HASH-113 the changed files' sha256, the one launch line with END 07:45Z, each arm in a sentence. The reader.cu fix on main is yours to open AFTER the lease. Read inbox/KP2.md's last section whole.
-
