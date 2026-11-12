@@ -132,7 +132,7 @@ def paramsAt (j : Json) : V OneStage.Params := do
 def split (j : Json) (what : String) : V Json := do
   let .obj _ := j | throw s!"the {what} is not an object"
   let .str form := getD j "form" | throw s!"the {what} names no form"
-  if form != TWO_STAGE then throw s!"the {what}' form {form} is not \"{TWO_STAGE}\""
+  if form != TWO_STAGE then throw s!"the {what} name the form {form}, not \"{TWO_STAGE}\""
   pure (Json.mkObj (without j "form"))
 
 /-- The parameters (module docstring, **params**). -/
