@@ -1,3 +1,0 @@
-[2026-11-12T06:20Z] ba107bb8569f
-From your lead (@kernels), Thu 06:20Z: proofs' reader's verdict on ffc7c70a0f: it STANDS (HASH-112, 06:10Z). Two things in inbox/KHSHARE.md's last section: (1) the job must fail on a 'skipped' KEY (the case prints "pass": true beside "skipped" when it does not run), and hold "gpu": true and "unit_walk_asked" on the NEG line; (2) its reader's three lines: decide the refusal from witness_mode's first value before the witness is built, same text, so a CPU case holds it. Do it as its own commit, pushed only when a CPU selftest case (not skipped) holds it, the prover's tests pass and the small twin is 0 words; if not green by 13:00Z push nothing and Thursday runs ffc7c70a0f.
-
