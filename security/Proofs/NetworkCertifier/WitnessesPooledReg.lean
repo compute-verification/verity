@@ -36,11 +36,14 @@ open Claims.Witness.SamplingGeneric (twoA twoL twoStmt twoPart leakL notStmt not
 
 local notation "shaD" => FlockDeploy.sha512
 
-/-! The honest instance: one execution phase, its coins a tape of no bit and two coins (`Ω₂`); `twoL` at every
-statement (`D₂`); the empty bytes as its statement (`x₂`); the prover that sends nothing (`P₂`); both input gates
-registered open at `true` (`ops₂`); one step's record over no egress link (`obs₂`); and the instance's own error
-(`e₂`). -/
+/-! The honest instance: a layout of no egress link whose ingress at every step is the input gate `0` (`twoLay`); one
+step's record over no egress link, jitter class `0`, every status complete (`twoObs`); one execution phase, its coins
+a tape of no bit and two coins (`Ω₂`); `twoL` at every statement (`D₂`); the empty bytes as its statement (`x₂`); the
+prover that sends nothing (`P₂`); both input gates registered open at `true` (`ops₂`); that one record (`obs₂`); and
+the instance's own error (`e₂`). -/
 
+local notation "twoLay" => (BoundaryGates.mk (fun _ ℓ _ => Fin.elim0 ℓ) (fun _ => [0]) : BoundaryGates 0 1)
+local notation "twoObs" => (Obs.mk (fun ℓ => Fin.elim0 ℓ) 0 (fun _ => Status.complete) : Obs 0 1 1)
 local notation "Ω₂" => (Fin 1 → Unit × (Fin 2 → Bool))
 local notation "D₂" => (fun _ => twoL Bool : Msg → Compiled Bool (twoA Bool))
 local notation "x₂" => (fun _ _ _ => [] : Unit → Ω₂ → Fin 1 → Msg)
@@ -52,9 +55,9 @@ local notation "e₂" =>
     Finder.Pr shaD (BopsX shaD (twoL Bool) (fun _ => certOps) Unit silentP []) : Fin 1 → ℝ)
 
 /-- `twoLay` fits the program of two inputs over one step: it has no egress gate, and its ingress is an input. -/
-theorem twoLay_fits : twoLay.Fits twoStmt.prog 1 := by
+theorem twoLay_fits : (twoLay).Fits twoStmt.prog 1 := by
   refine ⟨fun t _ ℓ => ℓ.elim0, fun t _ g hg => ?_, fun t _ t' _ htt' => absurd htt' (by omega)⟩
-  simp [twoLay] at hg
+  simp at hg
   subst hg
   rfl
 
@@ -67,10 +70,10 @@ theorem twoLay_registers :
     rcases hq with rfl | rfl <;> rfl
   · obtain rfl : t = 0 := by omega
     refine ⟨fun ℓ => ℓ.elim0, fun g hg => ?_, Nat.one_pos, fun ℓ => ℓ.elim0, ?_⟩
-    · simp [twoLay] at hg
+    · simp at hg
       subst hg
       exact ⟨⟨0, true, []⟩, by simp [certOps], rfl⟩
-    · simp [twoLay, certifierVal, certOps]
+    · simp [certifierVal, certOps]
 
 /-- At the honest instance the phase is registered as the period's: its statement parses to `twoStmt` with the
 partition `twoPart`, and the registered openings hold `true` at the registered input, the gate `1`. -/
@@ -102,7 +105,7 @@ theorem PooledLeakRegistered_honest :
       PhasesAdaptive x₂ P₂ ops₂ ∧
       (∀ s, (twoL Bool).parse [] = some s → RegOpens shaD (twoL Bool).commit s {1} certOps) ∧
       (∀ s Pt, (twoL Bool).parse [] = some s → (twoL Bool).partition s = some Pt → RateAt s Pt 1) ∧
-      PhaseErrors shaD D₂ Set.univ x₂ P₂ ops₂ e₂ ∧ twoLay.Fits twoStmt.prog 1 ∧
+      PhaseErrors shaD D₂ Set.univ x₂ P₂ ops₂ e₂ ∧ (twoLay).Fits twoStmt.prog 1 ∧
       (∀ s, (twoL Bool).parse [] = some s →
         CertifierRegisters shaD (twoL Bool).commit twoLay 1 (fun _ _ => [true]) s certOps [twoObs]) := by
   obtain ⟨hA, hb, hS, -⟩ := twoSessions_meets (Coin := Bool) shaD
