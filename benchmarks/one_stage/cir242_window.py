@@ -447,7 +447,8 @@ def main() -> int:
         if a.probe_gateless:
             P._check_units = real
         v = V.check(rec, w.program, w.query, w.law, CS.SCHEME, CS.expected_ports(w), leaf_layer=CS.leaf_layer(publics))
-        emit(fact="verifier of record (registration: Python and Lean), the record made under the probe, the probe removed",
+        emit(fact="verifier of record (registration: Python and Lean)" + (
+            ", the record made under the probe, the probe removed" if a.probe_gateless else ", nothing set aside"),
              verdict=v.to_json())
         if a.probe_gateless:
             probe_gateless()
