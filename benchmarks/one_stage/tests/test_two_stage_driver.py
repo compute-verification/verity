@@ -119,7 +119,9 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
     ``stage1.json`` to the replay side's stream. A file is read alone or as a counts record's ``k``; one that names a
     template twice, gives a count that is no whole number of at least one, misses one of the check's templates or names
     another is refused by name, and the command refuses it, and a class that is not the check's, before it opens a
-    challenger session."""
+    challenger session. The command lays each class out under the verifier's own stop rule (``--stop``) as it holds
+    the counts to it: a stop class's counts are held to its check's templates, and without the rule it is refused by
+    name."""
     c, (pair, swap) = _class(BOTH, inline=True), (P.template_id(t) for t in (PAIR, SWAP))
     ks = {pair: 3, swap: 1}
 
@@ -170,6 +172,24 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
             TS.main(["first", "--boundary", str(tmp_path / "p4-o4"), "--check", P.template_id(BOTH), "--replay", RULE.replay,
                      "--k", file(text), "--challenger", "local", "--main", str(tmp_path / "main"), "--out", str(tmp_path)])
         assert why in capsys.readouterr().err
+
+    (tmp_path / "stopped").mkdir()
+    (tmp_path / "stopped" / BR.COMMIT).write_text(json.dumps(_stop_class().public()))
+    monkeypatch.setattr(TS, "template_fn", lambda t: PAIR)
+
+    def stopped(text: str, *given: str) -> int:
+        return TS.main(["first", "--boundary", str(tmp_path / "stopped"), "--check", pair, "--replay", RULE.replay, "--k",
+                        file(text), *given, "--challenger", "local", "--main", str(tmp_path / "main"), "--out", str(tmp_path)])
+    held = ("--stop", json.dumps(STOP.to_json()))
+    for given, why in ((held, f"class stopped: the counts name each of the check's templates once: {swap} is no template"),
+                       ((), f"class stopped: a {BR.FORMAT} commitment under the stop rule")):
+        with pytest.raises(SystemExit):
+            stopped(json.dumps(ks), *given)
+        assert why in capsys.readouterr().err
+    reached: list = []
+    monkeypatch.setattr(TS, "_first_all", lambda a, pubs, check, rule, window, stop: reached.append((a.k, stop)) or [
+        {"commit": pubs[0]}])
+    assert stopped(json.dumps({pair: 2}), *held) == 0 and reached == [({pair: 2}, STOP)]
 
 
 def test_resume_refuses_another_rule_registration_or_sample():

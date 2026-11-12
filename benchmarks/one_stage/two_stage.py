@@ -1129,15 +1129,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     if len({(p["run"], p["window"]) for p in pubs}) != 1:
         ap.error("--boundary: every class of one window (one run and window index)")
     window = {"binding": json.loads(Path(a.advice).read_text())["binding"]} if a.advice else None
-    check = template_fn(a.check)
+    check, stop = template_fn(a.check), _stop(a.stop)
     try:
         a.k = counts(a.k)
     except (ValueError, OSError) as e:
         ap.error(f"--k: {e}")
     for d, pub in zip(a.boundary, pubs, strict=True) if isinstance(a.k, Mapping) else ():
         try:
-            why = counts_refused(a.k, BR.layout_of(pub, check).templates)
-        except ValueError as e:  # no class of this check: the counts name no template of it
+            why = counts_refused(a.k, BR.layout_of(pub, check, stop).templates)
+        except ValueError as e:  # no class of this check and stop rule: the counts name no template of it
             why = str(e)
         if why:
             ap.error(f"--k: class {Path(d).name}: {why}")
@@ -1145,7 +1145,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         a.replay, a.k, tuple((str(n), str(s)) for n, s in json.loads(Path(a.interior).read_text())),
         a.proof_deadline, _span_values(json.loads(Path(a.span_values).read_text())) if a.span_values else ())
     out = Path(a.out)
-    for d, s in zip(a.boundary, _first_all(a, pubs, check, rule, window, _stop(a.stop)), strict=True):
+    for d, s in zip(a.boundary, _first_all(a, pubs, check, rule, window, stop), strict=True):
         dest = out / Path(d).name
         dest.mkdir(parents=True, exist_ok=True)
         (dest / STAGE1).write_text(json.dumps(s, indent=1) + "\n")
