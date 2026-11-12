@@ -86,7 +86,8 @@ def expect(summary: Mapping[str, Any], code: str | None = None) -> dict[str, boo
     outcome are the run's. For a record of round 1 that commits the block's return (``code`` None): round 2 accepts
     the statements with no code, and the outcome is accepted, or refused by its interior record's statements check
     with the two-stage form's code alone (`FORM`), and the one-stage audit's own record of the interior, which holds no
-    check of round 2's, fails none of its own (``record``). For an unlinked run (``code`` `UNWIRED`): round 2 refuses
+    check of round 2's, is accepted, taking the sessions' reads of the interior's own ports as the stream's records do
+    (``record``: accepted, ``own_reads``, no failed check). For an unlinked run (``code`` `UNWIRED`): round 2 refuses
     the statements by that code alone, and so does the outcome. Either way its replay sample's record fails nothing."""
     audit, o, r2 = summary.get("audit") or {}, summary.get("outcome") or {}, summary.get("round_two") or {}
     inner = audit.get("audit") or {}
@@ -95,7 +96,7 @@ def expect(summary: Mapping[str, Any], code: str | None = None) -> dict[str, boo
     if code is None:
         r2_ok = r2.get("ok") is True and r2.get("codes") == []
         o_ok = (o.get("accepted") is True and o.get("statements") == []) or (refused and o.get("statements") == [FORM])
-        record_ok = (summary.get("record") or {}).get("failed") == []
+        record_ok = summary.get("record") == {"accepted": True, "own_reads": True, "failed": []}
     else:
         r2_ok, o_ok, record_ok = r2.get("codes") == [code], refused and o.get("statements") == [code], True
     return {"before_draw": bool(audit.get("checks_before_draw")) and all(audit["checks_before_draw"].values()),
