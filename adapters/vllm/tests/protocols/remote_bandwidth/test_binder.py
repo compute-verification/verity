@@ -13,6 +13,9 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
+from verity.protocols.poub.verifier import audit, codec, memory_map
+from verity.protocols.poub.verifier import receipts as rb
+
 from verity_vllm.protocols.remote_bandwidth.binder import (
     KERNEL_BLOCK_SIZES,
     Binder,
@@ -24,7 +27,12 @@ from verity_vllm.protocols.remote_bandwidth.binder import (
     storage_bytes,
 )
 from verity_vllm.protocols.remote_bandwidth.interface import Append, WindowRecord
-from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
+from verity_vllm.protocols.remote_bandwidth.registry import (
+    NodeMemory,
+    RemoteBandwidthReceipt,
+    chain,
+)
+from verity_vllm.protocols.remote_bandwidth.verify import verify_opening
 
 PAGES, SLOTS, HEADS, DIM = 6, 16, 2, 32          # a slot is 2 x 32 bf16 = 128 bytes; a plane-page 2 KiB
 
@@ -204,7 +212,6 @@ def test_with_kv_off_the_registered_store_is_the_weights_and_filler_and_no_step_
 
 
 def memory_map_lines(m) -> list:
-    from verity.protocols.poub.verifier import memory_map
     return list(memory_map.parse(m.text().splitlines(keepends=True))[1])
 
 
@@ -246,7 +253,6 @@ EMPTY = SimpleNamespace(kv_cache_manager=SimpleNamespace(coordinator=SimpleNames
 
 
 def test_steps_run_in_chained_windows_with_the_readers_roots():
-    from verity_vllm.protocols.remote_bandwidth.registry import chain
     s = NodeMemory()
     recs: list[WindowRecord] = []
     sigma = [bytes([t]) * 32 for t in range(3)]
@@ -268,7 +274,6 @@ def test_steps_run_in_chained_windows_with_the_readers_roots():
 def test_windows_end_on_the_verifiers_messages_and_the_first_chains_from_the_registration():
     """The verifier's message ends the window at the next pass's start, however many passes it held; chal_0's window
     chains from the registration digest the binder was given."""
-    from verity.protocols.poub.verifier import receipts as rb
     s, inbox = NodeMemory(), Inbox()
     recs: list[WindowRecord] = []
     digest = bytes(range(64))
@@ -304,8 +309,6 @@ def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote(passes):
     that (a finished request's, in `update_from_output`) frees its appended blocks at the same step, whose line closes
     when the next step opens, and leaves its untouched filler resident; each pass names the step it covers.  Without passes (a remote session runs them), the map is the
     same."""
-    from verity.protocols.poub.verifier import codec, memory_map
-
     s = NodeMemory()
     b = Binder(s, passes=passes)
     r = runner()
@@ -343,12 +346,6 @@ def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_it
     """Each receipt bound to the tile output before its block (`NoiseTiles`, PoUW's stub), under the driver's own
     receipt: the pass's root is the driver's `Prover`'s over the same blocks, and an opening, made after the next pass,
     verifies with the tile's z."""
-    from verity.protocols.poub.verifier import audit
-    from verity.protocols.poub.verifier import receipts as rb
-
-    from verity_vllm.protocols.remote_bandwidth.registry import RemoteBandwidthReceipt
-    from verity_vllm.protocols.remote_bandwidth.verify import verify_opening
-
     s, tiles = NodeMemory(salt_key=bytes(32)), audit.NoiseTiles()
     recs: list[WindowRecord] = []
     b = Binder(s, messages=Every(2, lambda t: bytes([t]) * 32, windows=1), on_window=recs.append, tiles=tiles)

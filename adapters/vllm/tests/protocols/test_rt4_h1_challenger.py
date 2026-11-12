@@ -41,6 +41,7 @@ else:
 from verity.commitments.crypto import lms
 from verity.protocols.pouw.verifier import salt as PS
 from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.verifier.audit import salt_of
 from verity.protocols.spot.device import challenger as LC
 from verity.protocols.spot.device import remote as R
 from verity.protocols.spot.device.challenger import LiveCommitment, record_message
@@ -888,7 +889,6 @@ class _NcpLinear:
 def test_ncp_v2s_salt_is_the_auditor_hosts_salt_coin_after_the_weights_root(tmp_path, monkeypatch):
     """ncp-v2 under the setting ``challenger`` takes its epoch's salt from the auditor host's salt coin, opened
     after the weights' root, carries its challenge phase, and closes the challenge phase at release."""
-    from verity.protocols.pouw.verifier.audit import salt_of
     host = _Session(tmp_path, monkeypatch, "auditor", leaf=1, seed=18)
     monkeypatch.setattr(pouw, "linear_types", lambda: (_NcpLinear,))
     w = (torch.randn(32, 64, generator=torch.Generator().manual_seed(3))).bfloat16().float()
