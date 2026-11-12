@@ -85,8 +85,11 @@ def statement(tmp_path: Path, pin: str) -> Statement:
                      public=d / "pub-4.bin")
 
 
-def draw(units: list[int]) -> dict:
+def sample(units: list[int]) -> dict:
     return {"law": "subset", "population": 4, "k": len(units), "units": units}
+
+
+draw = sample  # the name the other tests call it by
 
 
 def record(s) -> dict:
@@ -257,7 +260,7 @@ def test_the_wide_leaf_is_carried_by_both_sides_or_by_neither(binary, tmp_path):
     and on neither of any other's."""
     for wide in (True, False):
         with ProofServer(binary, tmp_path / f"ps-{wide}", wide_leaf=wide) as ps:
-            r = record(ps.submit(statement(tmp_path, "ab" * 64), draw([1]), "s").result())
+            r = record(ps.submit(statement(tmp_path, "ab" * 64), sample([1]), "s").result())
         sides = (r["argv"], r["proved"]["argv"])
         assert [a.count("--wide-leaf") for a in sides] == [int(wide)] * 2 and all("--zk" in a for a in sides)
         assert [a[0] for a in sides] == ["serve", "prove"]
