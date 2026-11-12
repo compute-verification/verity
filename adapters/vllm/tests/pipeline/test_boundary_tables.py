@@ -429,7 +429,7 @@ def test_a_serve_of_ids_commits_the_ids_served_as_its_blocks_return_beside_its_t
         d, run = tmp_path / "w0" / f"p{p}-o{o}", BR.run_root("s", 0)
         pub = json.loads((d / BR.COMMIT).read_text())
         mine, names = BR.layout_of(pub, check), [BT.name(run, p, o, 0, x) for x in (0, 3)]
-        assert pub["ids"] is True and pub["inline"] is True and pub["tables"] == {"layers": [0, 3], "capacity": CAP}
+        assert pub["ids"] is True and pub["inline"] is True and pub["tables"] == {"layers": [0, 3], "capacity": bw.capacity}
         name = f"{P.template_id(mine.replay)}/{BR.RETURN}"
         assert list(pub["values"]) == [*BR.PORTS, name, *names] == list(mine.ports())
         assert mine.return_rows == (o, 32) and pub["values"][name]["leaves"] == o
