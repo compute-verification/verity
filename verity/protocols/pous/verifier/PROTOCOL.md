@@ -468,7 +468,8 @@ commitment = the WipeCommitment header as JSON, keys sorted, separators "," and 
 start      = SHA-512("verity-pous/streamed-wipe/start/v1\0" ‖ u64be len(commitment) ‖ commitment)
 start_mark = SHA-512(start certificate), 64 bytes; empty with no mark source
 header     = the commitment's fields with ended, start_mark, fill_start_ns, fill_end_ns and batches,
-             as JSON likewise (16 keys, no egress count); start_mark is 128 lowercase hex digits, or ""
+             as JSON likewise (16 keys, no egress count); start_mark is 128 lowercase hex digits, or "";
+             clock is "CLOCK_MONOTONIC_RAW ns", the clock every time in the session is read on
 message    = SHA-512("verity-pous/streamed-wipe/session/v2\0" ‖ u64be len(header) ‖ header ‖ records root)
 end        = SHA-512("verity-pous/streamed-wipe/end/v1\0" ‖ u64be len(message) ‖ message
                      ‖ u64be len(signature) ‖ signature)
@@ -486,8 +487,9 @@ signed under a trusted key and its header is the published commitment, its batch
 covers), every batch is present in order, none has a wrong answer, each is within `limit_ns` on the challenger's clock,
 and the first was sent after the fill ended. It returns accept and its reasons, and no amount. The format is
 `verity-pous/streamed-wipe/v2`: the readers
-(`wipe_party.signed_of`, the Lean judge) refuse a session of another version, and a start mark that is neither empty nor
-128 lowercase hex digits; the Lean judge refuses a signed session that names an egress.
+(`wipe_party.signed_of`, the Lean judge) refuse a session of another version, a session whose header names another
+clock than `CLOCK_MONOTONIC_RAW ns` (`CLOCK_MONOTONIC ns`, the memory challenger's, among them), and a start mark that
+is neither empty nor 128 lowercase hex digits; the Lean judge refuses a signed session that names an egress.
 
 **The egress.** The session signs no egress count. `verity/wipe/v0`'s check takes one as evidence beside the signed
 session: `{"egress_mib": N | null, "signed": …}`, `N` in whole MiB as `egress_units` gives them (rounded up,
@@ -507,9 +509,12 @@ the two differ on in any field rejected as a disagreement) or `python` (no Lean)
 label, a late or early answer, an untrusted signer, a wrong count, a batch dropped or added, a start mark changed, a
 field past its width), JSON the Lean must refuse, and named negative controls.
 
-**Batches and deadlines.** A batch's deadline runs from its send to its receipt on the challenger's monotonic clock, at
-a resolution of at most `memory_challenger.CLOCK_RESOLUTION_NS`. It is to be set below the challenger's round trip to
-the server plus the fastest fetch from outside the boundary, so that an answer fetched from a store outside, counted or
+**Batches and deadlines.** A batch's deadline runs from its send to its receipt on the challenger's raw monotonic
+clock (`CLOCK_MONOTONIC_RAW`, read by `streamed_wipe.raw_clock_ns`), at a resolution of at most
+`memory_challenger.CLOCK_RESOLUTION_NS`. The header names that clock. Time synchronisation slews `CLOCK_MONOTONIC`, so
+an interval on that clock states no rate; the raw clock is never adjusted. The session signs no rate for its clock,
+and the verdict compares the readings as they are signed. The deadline is to be set below the challenger's round trip
+to the server plus the fastest fetch from outside the boundary, so that an answer fetched from a store outside, counted or
 not, is late. The bound doesn't read the deadline: in the game, without `K`, nothing computes a label at any speed, and
 what the outside holds is charged as egress. The deadline is what keeps C5 and C6 checkable during the challenges.
 The guarantee covers the sequential reveal, batch size 1 (`WipeParams.covered`), where each answer reads only the
