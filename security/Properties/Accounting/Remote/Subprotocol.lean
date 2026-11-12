@@ -6,7 +6,8 @@ public import Properties.Accounting.Remote.Line
 /-!
 # The bandwidth component accepts only what the memory line is stated on (`RemoteAudit.Protocol`)
 
-Onsite's bandwidth component is `RemoteAudit.Protocol.protocol` (`verity/remote-bandwidth/v0`): its check replays the
+The bandwidth component here is `RemoteAudit.Protocol.protocol` (`verity/remote-bandwidth/v0`), which no composite
+lists: onsite's is `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`). Its check replays the
 verifier's log of a session through `Shared.run g` at the session's windows a draw g (`groups_per_coin`; `Session.run`
 at g = 1) and accepts once the session does, publishing `certify` of the run's record at the session's parameters and
 g. The composition reads of it that the check accepts three byte strings (`Properties.Composition.DecodedAccepted` at
