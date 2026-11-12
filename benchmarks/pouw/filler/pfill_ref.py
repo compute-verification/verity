@@ -28,6 +28,8 @@ for _name, _path in (("dfill_ref", Path(__file__).with_name("dfill_ref.py")),
 smix, dseed = sys.modules["dfill_ref"].smix, sys.modules["dfill_ref"].dseed
 RF = sys.modules["receipt_folds"]  # the receipts reference: the folds' steps, key rules and pfill's lane starts
 
+#: a uint32 word, or an array of them
+U32 = np.ndarray | int
 W, TN = 8, 1024
 DOM = 0x5046494C4C2D7631  # "PFILL-v1": the s8 tile
 DOM4 = 0x5046494C4C2D6634  # "PFILL-f4": the e2m1 tile
@@ -88,7 +90,8 @@ def keys(rows: np.ndarray, r9: bool = False) -> tuple[int, int, int, int]:
     return RF.pfill_keys(rows, r9)
 
 
-def absorb(nc: int, y, z, d0, d1, d2, d3, a0, a1, k0, k1):
+def absorb(nc: int, y: U32, z: U32, d0: U32, d1: U32, d2: U32, d3: U32, a0: U32, a1: U32, k0: U32,
+           k1: U32) -> tuple[U32, U32]:
     """One MMA's step of a lane's chain, (y, z) from its words (d0, d1, d2, d3) = rows (g, g + 8) x columns (2t, 2t + 1),
     by the receipts reference's steps; every argument uint32 (arrays or scalars)."""
     if nc == RAM:

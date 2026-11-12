@@ -145,7 +145,7 @@ def test_a_point_with_both_a_fused_step_and_a_phase_filler_is_refused():
         F.drivers(arm, S.points())
 
 
-# ---- the directory's runner ---------------------------------------------------------------------------------------------
+# ---- the directory's runner ------------------------------------------------------------------------------------------
 
 
 def test_run_sh_names_every_job_of_the_directory_and_the_readme_lists_them():
