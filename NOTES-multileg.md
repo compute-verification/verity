@@ -17,7 +17,7 @@ theorem remote_soundness_window (I : WindowInstance d α) (K₀ : WindowConstruc
     (filesDec : Claims.Msg → Array ByteArray)
     (record₀ : Window → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Window → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
-    (hC : I.ClaimTransfers (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest))
+    (hC : I.ClaimReads (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest))
     (hRg : I.RegisteredFiles) (hWa : I.WindowAt .remote) (hWR : I.WindowReads .remote ev filesDec)
     (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
     (I.vocab (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest)).SoundnessAt .remote
@@ -27,7 +27,8 @@ Same shape as the one-member `remote_soundness_deployedAt` (`Sampled/Instance.le
 (`remote_soundness_of_subprotocols`) with its sampled leg `WindowInstance.spotSound`, which is
 `windowSpotSound_sessions` at the deployed vocabulary. The sampled leg's error at a window is `Window.delta`:
 `W.drawMiss + (W.joint t).eps` (`JointShareV5`: the one sample's own miss and `Σ_k (ε_ks,k + ε_bind,k)` at member
-`k`'s part of the one sample), one two-continuation term per round of every member's session
+`k`'s part of the one sample), each member's roots term (`Window.rootsErr`: `ecrBound` at the member's
+`rootsFinderL`, one a member, drawn or not), one two-continuation term per round of every member's session
 (`W.rounds = Σ_m m.rounds`, each member's closing round among them: 1026 a member at the deployed table), the
 record's, the bound digests', the hiding term, and the read finder's bound.
 
@@ -85,7 +86,7 @@ Left as hypotheses of `remote_soundness_window`:
 | `hWR : I.WindowReads .remote ev filesDec` | at each play the sampled verdict accepts on files the verifier sets one of the windows up on (and (a), (a') hold): `WindowRead`, i.e. every release of the sample's family precedes every opening, and where the play's coins of that family are the window's bytes at `ω`, `WindowSessions` at the window's sample at `ω`: the log opens at most as many trees as drawn members, each naming its streams once, an opening of a tree opened before is of the last tree opened, and each drawn member has a `SessionVerdict` at a statement that is its own (`StatesMember`) whose record carries the member's part of the sample, is the record sent for its session, decodes to what the verifier's read holds the log to (`SessionRead`), on a tree the log opens, with proof files decoded from the evidence its closing round reveals | the per-member verifier's (the port, PRF-371): what `membersRun`'s acceptance gives of a play. Not provable on this base: v2 here is `oneSession` |
 | `hWa : I.WindowAt .remote` | committed files that name the registered circuit and public files and that some play's sampled verdict accepts are files the verifier sets the window up on (the one-member `SessionAt`'s shape) | the port's, with `SetsUp` |
 | `hRg : I.RegisteredFiles` | the registered files pass the file check wherever some files do | the registration's (the one-member form takes the same; `registeredFiles_of` proves it at `registeredOf`) |
-| `hC : I.ClaimTransfers …` | `WindowDeployed.claim`: where the extracted transcript fails the claim on the committed files at the published share, more than the window's `ε` share of its population's proof blocks is incorrect at the projected strategy (`JointAuditV5.wrongSet`) | **open**: shape (i) ruled; waits on proofs' several-member assembly (i-a), then LEG's (i-b) (below) |
+| `hC : I.ClaimReads …` | what the claim's transfer reads of the window: `laid` (`Window.Laid`, the members in unit order), `share` (`(certOf θ).ε = W.ε`), `units` (`units θ F = W.nJ`), and, under `Window.RootsFix`, `reads` (`JointAuditV5.ReadsAt`: the vocabulary's read is the members' files in order, each member's files pass the files check, the openings hold where a member's commitment opens, the extracted transcript is each member's at `memberX`) | **open**: the per-member verifier's, with `SetsUp`. `ClaimTransfers` itself is proved from it (`WindowInstance.claimTransfers`, on `UnboundWrong.card_le`) |
 | `hW`, `hI` | PoUW's and the inference-only policy's targets at the base | the other legs' (as in the one-member form) |
 
 Trust base when those close: SHA512CR, uniform randomness, the honest verifier server's log premises;
@@ -93,45 +94,25 @@ LmsUnforgeable remote only. Nothing else is introduced.
 
 ## What is left
 
-1. **The claim's transfer (`ClaimTransfers`).** Soundness ruled shape (i), one circuit for the window (04:43Z
-   Nov 11): the claim stays what it is at one member, over a bigger circuit. The pieces:
-   - **The read's statement (LEG, written):** `security/Properties/Verity/WindowFiles.lean`. `Circuit.beside` (two
-     circuits side by side: `C`'s gates then `D`'s, no wire between them, reducible), `Partition.beside` (`P`'s
-     units then `Q`'s), `FileRead.circuitWith`/`unitsWith`/`partsWith`/`constsWith` (a first member and the rest,
-     so a window has at least one member), `WindowFiles` (`first`, `rest`; `circuit`, `units`, `parts`, `consts`,
-     `one r` the one-member window, whose four are the member's by `rfl`; `base k` where member `k`'s units
-     start). `Game.lean` is untouched: `Vocab.read` is to return `WindowFiles` once lean has read the statement
-     (posted on PRF-490). Open in the statement: how `programDigest`/`publicDigest`/`Registered` read at a window
-     (soundness: the window's, from the record's `window.circuit` binding); whether `beside` belongs in
-     `Definitions/Core` (it is in the one Properties file so the lock's `layers` stay as they are).
-   - **Its lemmas (LEG, written):** `security/Proofs/Properties/Verity/WindowFiles.lean`. `run_beside_left/right`,
-     `localEval_beside_left/right`, `mem_committed_beside_left/right`, `mem_io_beside_left/right`,
-     `correct_beside_left/right`, `wrong_beside`, `unbound_beside`, `card_unbound_beside`: the units a trace of two
-     circuits side by side doesn't bind are `C`'s at `C`'s part of the trace (`traceLeft`), then `D`'s at `D`'s, so
-     the counts add. This is the "once per member and then a union" step of (i-b) at two circuits; the form over
-     `WindowFiles`' list is an induction on it, to be stated once (i-a)'s shape is known.
-   - **(i-a), proofs':** the several-member assembly of the knowledge-soundness route (across members,
-     unbound ⊆ faulty ⊆ `wrongRegZc` at the window's read). Not started; doesn't wait on the rows link.
-   - **(i-b), LEG's:** `ClaimTransfers` discharged from (i-a) and the lemmas above, after `Vocab.read` is the
-     window's. Until then it stays the named hypothesis of `remote_soundness_window`.
-2. **`WindowReads` and `WindowAt` from the per-member verifier** (the port, PRF-371; done-when 2). On this base v2
-   is `Spot.OneStageZk.oneSession`; the port's `membersRun` (`heldStep`, `laidHeld`, `membersTreesHeld`,
-   `sessionEvidence`) still refuses (`checkMembersAt_refuses`, `MULTI_REFUSED`). The gate is lifted there, for the
-   per-member form only, with `WindowReads` proved of its acceptance. `WindowSessions`' shape matches the port's
-   form at `ad6e765e05`: one session per drawn member, in the members' order, the closing round's evidence the
-   proof files' bytes. The Python mirror and difftest change with the gate, there.
-3. **The window's own class** (`row-table` roots and `registered` values): proofs chose (a) (04:41Z Nov 11): the
-   port accepts members with registered reads on v2's refusals, refuses two members' ports of one value at two
-   roots, and at `ad6e765e05` still refuses a window with row tables and two-stage's shared rows; the rows link
-   (Flock's several-member `EndToEndRegisteredRows`, proofs' piece (1)) is named open. Nothing changes in
-   `MemberSteps`.
-4. **Records.** `security/Proofs` passes at `a1f057c487`; `security/Properties` and `security` fail on the base's
-   own guarantees (the runs table), which the port fixes when the one-member guarantee's definitions move to the
-   definitions tree and its records are regenerated. Nothing of this branch is in a lock: the window's guarantee
-   enters with the port.
-5. `Window.hcls` stays a field of `Window` (`JointAuditV5.hcls_of_bounds` discharges it from bounds).
-6. Bookkeeping: `tests/test_lean_vocabulary.py` warns that `Verity.Sampled.Window` declares `Window` again
-   (`Accounting.Window` is the device model's); a rename is the port's to choose.
+1. **`ClaimReads` from the per-member verifier.** `laid` from `laidHeld`; `share` and `units` from the parameters
+   and the committed files; `reads` from the files check on every member, drawn or not. That check is not in the
+   verifier: `runMembers` checks only the members a statement names. It goes in `Spot.OneStageZk.membersRun`, after
+   `rootsOf` and before `runMembers`, over every member of `ms` (`m.statement`, then its `ksFiles` and
+   `population`), public files only, O(descriptor). The δ already pays its roots clause (`Window.rootsErr`).
+2. **`WindowReads` and `WindowAt` from the per-member verifier** (the port). `WindowSessions` now takes
+   `members : MemberForm.Accepted x.log` (the log is the read of lines `membersTreeReason` accepts) in place of
+   `order` and `specs`, which are theorems (`Accepted.opensLast`, `Accepted.specs`). The several-member path still
+   refuses (`checkMembersAt_refuses`, `MULTI_REFUSED`).
+3. **A `coin-tree` line is not ordered.** `membersOrder` reads `tree-open` lines only; member k+1's `coin-tree`
+   line before member k's closing round is accepted, and `OpensInOrder` says nothing of it.
+4. **The roots term's form.** `ecrBound` at `rootsFinderL` (the one-statement leg's), not a `FinderSpec` through
+   `finderPr_le_crBound`: `Verity.sha512Msg` and `Claims.Sampling.sha512Msg` have no proved equality.
+5. **The window's own class** (`row-table` roots and `registered` values): refused in the per-member form; the
+   rows link is proofs'.
+6. `Window.hcls` stays a field of `Window` (`JointAuditV5.hcls_of_bounds` discharges it from bounds).
+7. Bookkeeping: `tests/test_lean_vocabulary.py` warns that `Verity.Sampled.Window` declares `Window` again.
+8. `Proofs/Properties/Verity/WindowFiles.lean` marks `Circuit.append` locally reducible under
+   `allowUnsafeReducibility` (an elaborator guard); the alternative is `@[reducible]` at its definition.
 
 ## Rulings in force (PRF-490)
 
@@ -146,6 +127,9 @@ LmsUnforgeable remote only. Nothing else is introduced.
   statement before the shared vocabulary (`Game.lean`'s `FileRead`) is touched. (ii), a member at a time, is out.
 - 04:13Z Nov 11 (soundness): write to Linear only with `research msg linear comment ... --worker LEG`.
 - The guarantee enters the lock with the port onto main's v2 (PRF-371), not from this branch.
+- Nov 12 (soundness, the WINDOW brief): `Circuit.beside` from `Circuit.append`; the place at a window is each
+  member's `placeOfRead`, members' roots only; the files check runs on every member, drawn or not, and the window's
+  δ pays a roots finder a member; the member-order refusal is the check's, and its acceptance gives `OpensInOrder`.
 
 ## Runs
 
@@ -166,6 +150,8 @@ LmsUnforgeable remote only. Nothing else is introduced.
 | `r20261111-052756-d9a8` | `Properties/Verity/WindowFiles.lean` | `55b900da74` | 0 | 4 theorems, standard axioms |
 | `r20261111-052756-c92d` | `Proofs/Properties/Verity/WindowFiles.lean` | `55b900da74` | 2 | infra: no dependencies on the node, nothing ran |
 | `r20261111-053108-072a` | `Proofs/Properties/Verity/WindowFiles.lean` | `a1f057c487` | 0 | 34 theorems, standard axioms |
+| `r20261112-095016-237c` | `Window/Instance.lean` | head `7c5571d97e` less six reflowed lines | 0 | 21 theorems, standard axioms (`remote_soundness_window` among them) |
+| `r20261112-095017-87ae` | `Sampled/OpensAt.lean` | the same | 0 | 15 theorems, standard axioms |
 
 Records (`lean_changed.py --records security/Properties --update`, the fast path: no kernel replay):
 
@@ -173,6 +159,16 @@ Records (`lean_changed.py --records security/Properties --update`, the fast path
 |---|---|---|---|
 | `r20261110-191204-f7c8` | `ece623c082` | 1 | `security/Proofs` pass; the base's own failures elsewhere |
 | `r20261111-053739-8e18` | `a1f057c487` | 1 | `security/Proofs` **pass** (193583 declarations in 3823 modules, standard axioms, the package's roots built: no name clash). `security/Properties` fail: its build passes; the 4 findings are `trees:` on the base's `remote_soundness_deployedReady` and `_honest`, whose statements read `Proofs.Properties.Verity.Sampled*` definitions. `security` fail: the base's `Flock.SecurityProofs.SampledKSLive*` records (`guarantees:` restated, `witnesses:`). No finding names a module of this branch; against the base branch this branch changes only `Properties/Verity/WindowFiles.lean` and the two root lists outside `security/Proofs`. No record was kept, so there is none to commit. |
+| `r20261112-102444-bf1e` | `7c5571d97e` | 1 | `verity/protocols/spot/verifier/lean` **pass** (5629 declarations in 50 modules); its requirers failed on the lock (next rows) |
+| `r20261112-102444-788a` | `7c5571d97e` | 1 | `security/Proofs` **pass** (197575 declarations in 3930 modules). `security/Properties` fail: `layers` (Game imports WindowFiles, WindowFiles imports `Definitions.Core.Compiler`). `security` fail: `reads` (WindowFiles outside `meaning`) and record differences |
+| `r20261112-111216-22a7` | `503ea26f8a` (the lock's layer and meaning) | 0 | `security/Proofs` pass; `security/Properties` pass, record regenerated; `security` record regenerated (every failure a record difference). Committed in `ae16d2211c` |
+
+Suites (`suites.py --changed BASE --quick`), at `7c5571d97e`:
+
+| Run | Base | Verdict |
+|---|---|---|
+| `r20261112-102450-4e71` | `1a3eadc9c5` (the merge base with main) | 73 suites: 73 passed, 0 failed |
+| `r20261112-103631-4015` | `e67c8c956f` (the branch before this work) | 68 suites: 68 passed, 0 failed |
 
 Earlier rows (the layers up to `Window/Assembled.lean`, and the failed tries fixed forward) are in the git history of
 this file.
