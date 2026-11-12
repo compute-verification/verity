@@ -26,6 +26,8 @@ from verity.commitments.crypto import lms
 EPS = ["1", "1/2", "1/3", "2/3", "1/10", "1/20", "3/4"]
 DELTA = ["1/2", "1/10", "1/100", "1/1000", "1/65536", "1/1048576", "3/7"]
 TEMPLATES = sorted(CC.TILES)
+#: a bernoulli rate in lowest terms whose numerator has 4,301 digits and denominator 5,001, past `int`'s default limit
+LONG_P = "1" + "0" * 4300 + "/" + "1" + "0" * 4999 + "1"
 
 
 def _hex(rng: random.Random, n: int = 64) -> str:
@@ -207,6 +209,8 @@ MUTATIONS = [
     ("answer-public-bernoulli", "answer", "public.draw", None),
     ("answer-public-bernoulli-unreduced", "answer", "public.draw", None),
     ("answer-public-bernoulli-padded", "answer", "public.draw", None),
+    ("answer-public-bernoulli-long", "answer", "public.draw", None),
+    ("answer-public-bernoulli-long-padded", "answer", "public.draw", None),
     ("answer-public-stratified", "answer", "public.draw", None), ("answer-public-work", "answer", "public.draw", None),
     ("answer-public-work-bare", "answer", "public.draw", None),
     ("answer-public-law-other", "answer", "public.draw.law", "uniform"),
@@ -361,6 +365,10 @@ def _derived(name: str, case: dict, rng: random.Random):
         return {"law": "bernoulli", "p": "2/4", "population": n, "units": units}
     if name == "answer-public-bernoulli-padded":
         return {"law": "bernoulli", "p": "01/2", "population": n, "units": units}
+    if name == "answer-public-bernoulli-long":
+        return {"law": "bernoulli", "p": LONG_P, "population": n, "units": units}
+    if name == "answer-public-bernoulli-long-padded":
+        return {"law": "bernoulli", "p": "0" + LONG_P, "population": n, "units": units}
     if name == "answer-public-p-type":
         return {"law": "bernoulli", "p": 1, "population": n, "units": units}
     if name == "answer-public-stratified":
