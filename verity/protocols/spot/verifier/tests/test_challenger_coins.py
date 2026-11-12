@@ -11,6 +11,7 @@ back from the challenger's log (`coins.seed_salt_of`), refusing a second coin, a
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import itertools
 import re
 
@@ -323,6 +324,58 @@ def test_the_lean_run_accepts_a_draw_whose_session_released_its_coins_in_several
     after = bytes.fromhex(reg.digest)
     assert T.coins_reason(evidence, window, after, read, lms_verify) is None
     assert "coin opening is malformed" in T.coins_reason({**evidence, "segment": raw}, window, after, read, lms_verify)
+    assert stream.deliver(draw, [SESSION]) is None
+    out = stream.outcome(draw, _lean(), {"statement": "stub"}, coins=evidence)
+    assert out.accepted and "run" not in stream.records[-1]["audit"]["checks"], stream.records[-1]["audit"]["checks"]
+
+
+def test_a_registration_made_after_an_earlier_ones_sample_is_read_is_accepted_on_its_own_evidence(
+        tmp_path, signer, monkeypatch):
+    """What both verifiers do today with a second registration in one family of one window's withheld session. The
+    session's client registers six proof blocks, commits the family's coins to that registration's digest and reads
+    its sample: a withheld session answers each open with the coin's raw bytes, so the client holds the sample before
+    it sends anything more. It then registers the same six proof blocks again, each time on a stream of its own with
+    an empty log and under roots of other bytes (a fresh commitment's), so under another digest, and commits the
+    family's next coins to that digest, until a sample leaves out a proof block of the first one. The verifier is
+    handed the last registration alone: its record, its segment and the session's signed files, whose log lists every
+    earlier digest's coins before its own. `coins_reason` passes that evidence and the outcome is accepted with the
+    Lean run (`Run.run`) agreeing: the coins after the last digest are consecutive in the family and all read, and
+    neither verifier reads the family's other roots."""
+    import test_remote
+    from test_challenger import lms_verify
+    from test_service import SESSION, _lean, _ports, _record, _stream
+
+    def record(i: int) -> dict:
+        return _record(roots=[{"port": p, "root": hashlib.sha512(f"{i}/{p}".encode()).hexdigest(), **layout}
+                              for p, layout in _ports(6).items()])
+
+    monkeypatch.setattr(test_remote, "FAMILIES", [("positions", 64), ("replay", 2)])
+    host = Host(tmp_path, signer, withhold=True)
+    client = R.RemoteChallenger.connect(host.address)
+    coins = T.ChallengerCoins(C.LiveRecord(client, "positions", itertools.count().__next__))
+    window = test_remote.WINDOW["root"]
+    tries = []
+    for i in range(16):
+        stream = _stream(coins=coins)
+        reg = stream.register(record(i), _ports(6), window_root=window)
+        segment = coins.commit(bytes.fromhex(reg.digest))
+        tries.append((stream, reg, segment, stream.select(reg)))
+        if i and tries[0][3].units[0] not in tries[-1][3].units:
+            break
+    client.close()
+    assert host.ended() is None
+    coins.settle()
+    stream, reg, segment, draw = tries[-1]
+    assert len(tries) > 1 and tries[0][3].units[0] not in draw.units, [t[3].units for t in tries]
+    assert len({t[1].digest for t in tries}) == len(tries) and all(len(t[0]._entries) == 1 for t in tries)
+    _, roots = host.trusted()
+    assert list(dict.fromkeys(r.hex() for r in roots["positions"])) == [t[1].digest for t in tries]
+    assert segment.start == sum(len(t[2].openings) for t in tries[:-1]) > 0
+    read = stream._entries[reg.order].read
+    evidence = {"key": test_remote.pinned_key().to_json(), "ledger": R.ledger_lines(host.ledger.path),
+                "main": test_remote.MAIN, "pins": test_remote.HOST_PINS, "segment": segment.to_json(),
+                "session": R.session_files(host.directory)}
+    assert T.coins_reason(evidence, window, bytes.fromhex(reg.digest), read, lms_verify) is None
     assert stream.deliver(draw, [SESSION]) is None
     out = stream.outcome(draw, _lean(), {"statement": "stub"}, coins=evidence)
     assert out.accepted and "run" not in stream.records[-1]["audit"]["checks"], stream.records[-1]["audit"]["checks"]
