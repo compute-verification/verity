@@ -24,7 +24,10 @@ what the layout's design has and the tree does not.
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which no unit rule reads yet:
     `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `poub/verifier/remote_session/`,
     `inference_only/nci/` and `inference_only/rho/`.
-  - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). `verity/definitions/`: the circuits
+  - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
+    verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
+    parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
+    sampling of units). `verity/definitions/`: the circuits
     written in it: `ops` (the primitive circuits' Definitions), `silicon` (the GPUs' exact semantics), `kernels`,
     `private_circuits` (the universal circuit), the served workloads' Definitions, and the evaluator and a circuit's
     requirement in Lean (`evaluate`, `requirement`). Target, not yet: `verity/circuits/` also holds the circuits a
@@ -69,6 +72,8 @@ only shrinks; `PLACE` gives the first two a few files outside those directories 
 affect soundness. ml never imports core (`ML_IMPORTS_CORE` names the exceptions). Inside `verity` each unit imports only
 what `ALLOWED` lists, and `verity` imports no other distribution of the workspace. Nothing outside `infra/` imports it
 (`INFRA_IMPORTERS`), and nothing under `verity/` imports an adapter (`KNOWN` in `tests/test_integration_boundaries.py`).
+A Lean package requires Flock's verifier only while `REQUIRES_FLOCK_VERIFIER` lists it, and the three base packages
+require nothing above them (`BASE_LEAN`).
 `benchmarks/` is measurement only: nothing outside it imports its code, by package name or by a path put on `sys.path`
 or loaded by file (`BENCHMARKS_IMPORTERS` names today's importers); a number a protocol uses reaches it through a card
 file citing an `art:` id. Target, not yet enforced: the layout's own rules. The runtime imports no protocol, and no
@@ -212,24 +217,31 @@ module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), w
 There is no GitHub Actions CI. `check` (`verity check`, `tools/verity/check/check.py`) is the one check: every suite,
 `circuit-check --all`, Flock's Rust build and tests, the Lean verifier's build and partition check, the Lean check, and
 `lean-agreement` (against upstream's Rust verifier) when Flock or its Lean verifier changes. The runners report facts: each
-suite, test, target and step's real verdict. What gates, what may stay red and what a red triggers is drive's config,
+suite, test, target and step's real verdict. What gates and what may stay red is the landing policy,
 `tools/verity/check/policy.toml`: its `off_gate` jobs, and its allowances, each an id, an owner, a UTC expiry and a reason, under
-which drive takes a failure as not red until it expires. `circuit-check` is off the merge gate until `circuit-check --all`
-fits inside the rest of the check: a recorded check, `research merge` and the move of `main` leave it out, and it runs after
-landing on `checked`'s tip, where a red holds the PRs touching its inputs until it passes.
+which the verified queue takes a failure as not red until it expires. `circuit-check` is off the merge gate until
+`circuit-check --all` fits inside the rest of the check: a recorded check, `research merge` and the move of `main` leave it
+out; a candidate's check still runs it, and its red there holds nothing.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged.
 
 A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
 docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
-only fully checked commits: drive lands each marked PR on `checked` once it is reviewed or low-risk, runs the full check on
-its tip, and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate. A red's
-culprit is the one landing whose change touches what its failure names (its files, the files declaring a Lean declaration
-it names, else the failed suite's or step's declared inputs), never found by bisecting: its lane fixes it forward, or drive
-reverts it on `checked`. What drive.toml lets warn (its `warn_gates` and `warn_steps`) and a lock's bookkeeping never
-revert: drive tells the owner, who fixes it in their next PR. How a PR lands, from its ready mark to `main`, and drive's
-rule for each case: the team skill's Landing.
+only fully checked commits: the verified queue's loop (`research queue vqueue`, ci's) merges the marked PRs that have a land
+verdict, or are low-risk, onto `main` as a candidate, checks it (by default graph2's tasks, with lean-agreement and
+ratchet-gate run beside them; under `--gate check`, every job in shards), and fast-forwards `main` only to a candidate with
+no new failure: each gating task passed, failed only where an unexpired allowance of policy.toml at its base covers, or
+fails on its base too. A failure the candidate's base shares blames none of its PRs;
+any other's suspects are the PRs whose change touches what it names (its files, the files declaring a Lean declaration it
+names), every PR when none does: a lone suspect is ejected, several are bisected, and in the same tick the candidate and
+those above it are rebuilt without them. A candidate holding a Lean, lock or spec change runs lean-audit alone first (its records run) and is checked on the
+commit of the lock records it regenerated, so `main` moves only to regenerated records. What drive.toml lets warn (its
+`warn_gates` and `warn_steps`), a step off the gate and a lock's bookkeeping hold nothing, and the owner fixes it in their
+next PR: a warn gate's failure is printed at the ready mark, a red off the gate that its base's run doesn't share is rung to
+who acts on it under the loop's `--gate check` (to no one under graph2), and a lock's bookkeeping is told to `lean` and each
+owner a warning names. How a PR lands, from its ready mark to `main`, and the loop's rule for each case: the team skill's
+Landing.
 
 ## Lean
 
@@ -270,9 +282,10 @@ rule for each case: the team skill's Landing.
   (`trust.extra`, each with its reason), only on the premises its `trust_gap` entry lists, which `--update` never adds
   to; the check prints each one's gap, the number Daniel drives to zero.
 - **The lock.** Each package's `lean-audit.json` lists its guarantees, and `check.py --update` records each one's
-  statement, the definitions it reads and the premises it takes, so a changed statement is a changed record.
+  statement, the definitions it reads and the premises it takes, so a changed statement is a changed record, which a PR's
+  own check regenerates rather than fails on and a candidate's records commit carries (`vqueue_records`).
   A guarantee that only moved keeps its record (`--update --moved MOVES.json`). Bookkeeping warns rather than fails
-  after a landing. A PR's own check still fails on it. Drive's lock run repairs it in its lock commit and
+  in a candidate's records run. A PR's own check still fails on it. The records run repairs it in its records commit and
   warns, naming each entry's owner, and the next PR fixes it. Bookkeeping is an unlisted or misfiled premise, a guarantee
   the witnesses rule holds to missing witnesses, a stale entry, a premise a `trust_gap` entry lists that its guarantee
   no longer rests on, a missing owner, or a cap of `unread-caps.json` or
@@ -335,4 +348,5 @@ and its parameters). What a run measured, what happened and who decided live out
 call something served, end to end, proved or credited), `writing-runs` (a job for `research run`), `friction` (when
 something is in your way, and the standing rulings), `process-design` and `authoring-skills` (at most 16 KB a skill).
 The team's own agents start with `team` (machines, landing, lanes, and where work, notes and evidence live), then
-`coordinating`, `using-slack`, `asking-daniel` and `writing-goals` (your goals in the plan Daniel reads).
+`coordinating`, `using-slack`, `asking-daniel`, `writing-goals` (your goals in the plan Daniel reads) and `team-shapes`
+(which team a piece of work gets, each shape with what its uses measured, and how any agent tries a different practice).

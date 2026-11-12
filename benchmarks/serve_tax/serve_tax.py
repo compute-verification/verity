@@ -56,8 +56,9 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``boundary-rows``: ``record`` with prefix caching off and the two-stage audit's boundary commitment at serve, each
   window's finished requests committed by size class (`verity_vllm.pipeline.boundary_rows`), its object the two-stage
   serve's (`ROWS`, with the model's check template, `Model.check`) or ``--boundary-rows``'s JSON instead (``check``,
-  ``per_prompt``, ``per_output``, ``drained``, ``inline``), at ``--window-s``; the server is held after its loads
-  until its windows' commits account for every finished request (`await_commits`).
+  ``per_prompt``, ``per_output``, ``drained``, ``inline``, ``tables`` for each span's latent history tables
+  (`servetax_plugin`) or ``stop``, the serve's stop rule, which has no tables), at ``--window-s``; the server is held
+  after its loads until its windows' commits account for every finished request (`await_commits`).
 - ``canonical-topk``: ``compiled`` with the canonical DSA top-k (`benchmarks/dsa_topk`'s vLLM plugin, `TOPK`), which
   rewrites only the indexer's rows of more than 2,048 keys, so it acts on long contexts alone;
 - ``two-stage``: the two-stage serve's launch line, everything its engine turns on over stock: ``boundary-rows``, the
@@ -192,8 +193,8 @@ PRIVATE = "{private}"
 #: counters kept on the node
 TOPK = (("verity_dsa_topk = dsa_topk:register", "benchmarks/dsa_topk"),)
 TOPK_ENV = {"VERITY_DSA_TOPK": "canonical", "VERITY_DSA_TOPK_LOG": f"{PRIVATE}/topk-log"}
-#: the boundary commitment's object (`verity_vllm.pipeline.boundary_rows.BoundaryWindows.of`): a replay block of one
-#: check a served id with the check template's body in place, a window closed when it drains
+#: the boundary commitment's object (`verity_vllm.pipeline.boundary_windows.BoundaryWindows.of`): a replay block of
+#: one check a served id with the check template's body in place, a window closed when it drains
 ROWS = {"inline": True, "per_prompt": 0, "per_output": 1, "drained": True}
 #: one attention layer's latent history tables in the boundary commitment (its ``tables``): the first layer's, their
 #: rows and salts kept on the node
@@ -962,13 +963,36 @@ def passes_of(loads: dict[str, tuple[int, ...]],
     return {n: (ARRIVING,) if n in lines and n in datasets else rungs for n, rungs in loads.items()}, lines
 
 
-def pass_prompts(load: Load, rung: int, lines: Sequence[dict] | None, warm_s: float | None = None) -> int:
-    """The prompts a pass of ``load`` at ``rung`` sends: the load's, or every line of its file where they leave as
-    they arrive (`ARRIVING`). A warm-up (``warm_s``) sends two for each request held in flight, or the lines that
-    arrive in its first ``warm_s`` seconds, one at least."""
+def pass_prompts(load: Load, rung: int, lines: Sequence[dict] | None, warm_s: float | None = None,
+                 prompts: int | None = None) -> int:
+    """The prompts a pass of ``load`` at ``rung`` sends: ``prompts`` (``--pass-prompts``, `parse_pass_prompts`) or the
+    load's, the same at every rung, or every line of its file where they leave as they arrive (`ARRIVING`). A warm-up
+    (``warm_s``) sends two for each request held in flight, the load's own prompts at most, or the lines that arrive
+    in its first ``warm_s`` seconds, one at least."""
     if rung == ARRIVING:
         return len(lines) if warm_s is None else max(1, sum(x["timestamp"] <= warm_s for x in lines))
-    return load.prompts if warm_s is None else min(load.prompts, 2 * rung)
+    return (prompts or load.prompts) if warm_s is None else min(load.prompts, prompts or load.prompts, 2 * rung)
+
+
+def parse_pass_prompts(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict[str, int]:
+    """``NAME=N,...`` (``--pass-prompts``): the prompts a pass of load NAME sends, in place of the load's own, at
+    every rung alike. A load's own prompts are few for a high rung: the client starts a pass with ``rung`` requests
+    and ends it with its last ones draining a few at a time, so 200 prompts at rung 96 hold 96 for part of the pass
+    only, and no rung shows more than the load's prompts in flight. A ladder that climbs past them needs longer
+    passes, and the same length at every rung: the draining end is a smaller share of a longer pass, so passes of two
+    sizes differ in tokens a second by their size alone. Refused for a load that is not of ``loads`` or that is sent
+    as planned, whose passes are its plan's."""
+    out: dict[str, int] = {}
+    for part in filter(None, (p.strip() for p in (text or "").split(","))):
+        name, _, n = part.partition("=")
+        if name not in loads:
+            raise SystemExit(f"--pass-prompts: {name!r} is not a load of --loads ({', '.join(loads)})")
+        if LOADS[name].plan:
+            raise SystemExit(f"--pass-prompts: {name}'s requests are sent as planned: a pass of it is its plan's")
+        if not n.isdigit() or int(n) < 1:
+            raise SystemExit(f"--pass-prompts: {part!r}: NAME=N, the prompts a pass of the load sends, 1 or more")
+        out[name] = int(n)
+    return out
 
 
 def context_of(loads: dict[str, tuple[int, ...]], given: int | None) -> int | None:
@@ -1219,6 +1243,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
             raise SystemExit(f"--client {BENCH} serves --loads NAME[=RUNG+RUNG...],... ({', '.join(sorted(LOADS))})")
         loads = parse_loads(a.loads)
         datasets = parse_datasets(a.dataset, loads)
+        sizes = parse_pass_prompts(a.pass_prompts, loads)
         loads, lines = passes_of(loads, datasets)
         traces = {n: write_trace(out / f"{n}.trace.jsonl", x) for n, x in lines.items()}
         sent = client_files(datasets, traces)
@@ -1228,7 +1253,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     else:
         if not a.rates or not a.c4:
             raise SystemExit(f"--client {CORPUS} serves --rates NAME=REQ_PER_S,... of the --c4 shard's plan")
-        passes, context, traces, lines, sent = {}, a.max_model_len, {}, {}, {}
+        passes, context, traces, lines, sent, sizes = {}, a.max_model_len, {}, {}, {}, {}
         rates = parse_rates(a.rates)
         t = time.monotonic()
         plan = plan_of(Path(a.plan) if a.plan else out / "plan.jsonl", Path(a.c4), checkpoint,
@@ -1259,6 +1284,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
             "boundary_rows": ({"window_s": a.window_s, "check": model.check, **(a.boundary_rows or arm.rows)}
                               if "boundary_rows" in arm.plugin else None),
             "client": a.client, "passes": {k: {"load": n, "concurrency": c} for k, (n, c) in passes.items()},
+            "pass_prompts": sizes,
             "datasets": {n: {"file": f, "sha512": LOADS[n].file.sha512, "repo": LOADS[n].file.repo,
                              "revision": LOADS[n].file.revision}
                          for n, f in (datasets if bench else {}).items() if LOADS[n].file},
@@ -1288,7 +1314,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
                                   None if warm else a.requests, arm.sampling, busy)
             n, c = passes[name]
             return drive_bench(port, model, checkpoint, LOADS[n], c, tag, d, sent.get(n), a.seed, busy,
-                               pass_prompts(LOADS[n], c, lines.get(n), a.warm_s if warm else None))
+                               pass_prompts(LOADS[n], c, lines.get(n), a.warm_s if warm else None, sizes.get(n)))
 
         if a.warm_s > 0:
             w = send(next(iter(passes or rates)), "warm", out / "warm", None, warm=True)
@@ -1744,7 +1770,8 @@ def serving_cost(ref: dict, arm: dict, load: str, rung: int | None = None) -> di
     served. ``saturated`` says whether the reference's own rungs show it saturated at that rung, and ``peak`` the rung
     where it served the most (`peak`). No SLO enters it: ``within`` is the same traffic's cost within the SLO
     (`within_slo`), which is this cost only where both sides meet the SLO for every request. None where the arms share
-    no rung of the load, or no rep at the rung."""
+    no rung of the load, or no rep at the rung. Refused where a rep's two passes sent different numbers of prompts
+    (``--pass-prompts`` on one side alone): they are not the same requests."""
     a, b = bench_rungs(ref, load), bench_rungs(arm, load)
     c = saturated(ref, arm, load) if rung is None else rung
     if c is None or c not in a or c not in b:
@@ -1753,6 +1780,11 @@ def serving_cost(ref: dict, arm: dict, load: str, rung: int | None = None) -> di
     reps = sorted(set(ra) & set(rb))
     if not reps:
         return None
+    for k in reps:
+        if ra[k].get("sent") != rb[k].get("sent"):
+            raise SystemExit(f"cost: {ref['arm']} and {arm['arm']} sent passes of different sizes at load {load}, "
+                             f"{at_rung(c)} ({ra[k].get('sent')} and {rb[k].get('sent')} prompts in rep {k}; "
+                             "--pass-prompts): a cost is of the same requests on both sides")
 
     def side(x: dict, by: dict[int, dict]) -> tuple[dict, list[float]]:
         tok = [by[k].get("output_tok_per_s") or 0.0 for k in reps]
@@ -2428,6 +2460,9 @@ def main(argv: list[str] | None = None) -> int:
                    help=f"vLLM's client: the loads ({', '.join(sorted(LOADS))}) in the order each rep serves them, each at "
                         "its rungs (concurrencies) or the ones given")
     r.add_argument("--dataset", action="append", metavar="NAME=FILE", help="vLLM's client: a load's dataset file")
+    r.add_argument("--pass-prompts", metavar="NAME=N,...",
+                   help="vLLM's client: the prompts a pass of a load sends at every rung, in place of the load's own "
+                        "(parse_pass_prompts)")
     r.add_argument("--reps", type=int, default=3)
     r.add_argument("--span-s", type=float, default=90.0, help="each load's arrivals span")
     r.add_argument("--requests", type=int, help="each load's request count instead of --span-s's")
@@ -2441,7 +2476,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--kv-window-s", type=float, default=600.0, help="the window edge the kv arm hashes the KV cache at")
     r.add_argument("--boundary-rows", type=json.loads, metavar="JSON",
                    help="a boundary commitment's object in place of the arm's own: check, per_prompt, per_output, "
-                        "drained, inline, tables")
+                        "drained, inline, tables, stop (the serve's stop rule: ids, max_model_len, outputs)")
     r.add_argument("--private", metavar="DIR",
                    help="where the arm keeps what never leaves the node (a boundary commitment's classes, history tables' "
                         "rows and salts, the top-k's counters), outside every run's directory (under vLLM's client "
@@ -2479,6 +2514,7 @@ def main(argv: list[str] | None = None) -> int:
                                        "checked, before any GPU is held")
     ps.add_argument("--loads", required=True)
     ps.add_argument("--dataset", action="append")
+    ps.add_argument("--pass-prompts", metavar="NAME=N,...")
     ps.add_argument("--fetch", action="store_true", help="download a pinned dataset file the node's cache doesn't hold")
     ps.add_argument("--arms", default="", help="the arms that will serve them, each checked against --model-id")
     ps.add_argument("--model-id", choices=sorted(MODELS))
@@ -2556,6 +2592,7 @@ def main(argv: list[str] | None = None) -> int:
                                  "with check")
         context_of(loads, a.max_model_len)
         files = parse_datasets(a.dataset, loads, a.fetch)
+        sizes = parse_pass_prompts(a.pass_prompts, loads)
         loads, lines = passes_of(loads, files)
         for n, rungs in loads.items():
             plan = planned(lines[n]) if n in lines else None
@@ -2563,8 +2600,9 @@ def main(argv: list[str] | None = None) -> int:
             digest = (None if n not in files else f"SHA-512 {LOADS[n].file.sha512[:16]}" if LOADS[n].file else
                       f"SHA-256 {file_digest(Path(files[n]))[:16]}")
             print(f"[serve-tax] load {n}: {GIVEN if arriving else LOADS[n].what}; "
-                  f"{pass_prompts(LOADS[n], rungs[0], lines.get(n)):,} prompts a pass "
+                  f"{pass_prompts(LOADS[n], rungs[0], lines.get(n), prompts=sizes.get(n)):,} prompts a pass "
                   f"{at_rung(ARRIVING) if arriving else 'at concurrency ' + ', '.join(map(str, rungs))}"
+                  + (f" (--pass-prompts: the load's own are {LOADS[n].prompts:,})" if n in sizes else "")
                   + (f", from {files[n]} ({digest}...)" if digest else "")
                   + (f", {plan['repeated_tokens']:,} of their {plan['prompt_tokens']:,} prompt tokens repeated"
                      if plan else "")

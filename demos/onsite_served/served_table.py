@@ -250,7 +250,7 @@ def _pous_piece(cfg, params, bound):
 
 def _wipe_piece(cfg, params, bound):
     return {"WIPE_CMD": f'bash {WIPE_PIECE} "$1" "$2" "$3"', "WIPE_CHALLENGER": bound["host"],
-            "WIPE_ADDRESS": bound["address"], "WIPE_COMMAND": bound["command"]}
+            "WIPE_ADDRESS": bound["address"], "WIPE_COMMAND": bound["command"], "WIPE_KEY_SHA512": bound["key-sha512"]}
 
 
 def _poub_session(cfg, params, bound):
@@ -320,8 +320,9 @@ PARTIES: dict[str, dict[str, Piece]] = {
     },
     "wipe": {
         PROVER: Piece("wipe", PROVER, SERVED_WINDOW, "the streamed wipe of the card before its engine loads, under the "
-                      "serve's lease", scripts=(WIPE_PIECE,), reaches=MEMORY_CHALLENGER,
-                      binds=("host", "address", "command"), hooks=_wipe_piece),
+                      "serve's lease, its session trusted only under the memory challenger's pinned key",
+                      scripts=(WIPE_PIECE,), reaches=MEMORY_CHALLENGER,
+                      binds=("host", "address", "command", "key-sha512"), hooks=_wipe_piece),
         MEMORY_CHALLENGER: Piece("wipe", MEMORY_CHALLENGER, GATE, "the wipe's memory challenger, on its own coins and "
                                  "clock, signing the session"),
         VERIFIER: Piece("wipe", VERIFIER, CHECK, "the wipe's row"),

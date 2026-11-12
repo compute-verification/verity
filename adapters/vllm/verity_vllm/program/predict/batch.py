@@ -15,11 +15,13 @@ request's Program is built at its launch context, which the advice fixes, and th
 
 `check_compiled` refuses (`BatchDependent`), deterministically:
 
-- R2: a request whose unit (LP, T, policy, seed, id, C, prefill chunks, carried out, edge), rows or discarded rows differ when its advice is compiled
+- R2: a request whose unit (LP, T, policy, seed, id, C, recomputed, prefill chunks, carried out, edge), rows or discarded rows differ when its advice is compiled
   alone (its rows renumbered; release buckets, which no plan reads, 0): planning reads no batch-mate, whatever path a later change adds. A prefix-cache hit on
   another request's KV is kept when its tokens are checked equal (through each run, the source's certified prompt equals the
   request's), since that KV is then a function of the request's own prompt, given (a) and (b) on the units that computed it.
-  Alone, a stand-in computes it from the request's own tokens. Any other hit on another request's KV is refused. In class G a
+  Alone, a stand-in computes it from the request's own tokens; a hit the request's Program recomputes (`steps.plan_steps`'
+  ``recompute_hits``) in class G, in the chunks the producers' rows ran it in, which are its launch context. Any other hit on
+  another request's KV is refused. In class G a
   unit also holds its launch context, the advice's schedule of the steps its rows ran in, never a batch-mate's value: R2 is then
   the request compiled alone at the same launch context, so the unit is compared apart from its launch (alone each row is a launch
   of its own), with its prefill chunks, its rows (each chunk one) and its discarded rows. A request a Commit window carries in
@@ -226,12 +228,14 @@ def _row(row: Any, request: int, sources: tuple) -> WA.Row:
     return WA.Row(request, row.kind, row.start, row.n, row.cache_hit, row.preempted, sources)
 
 
-def _solo(advice: Any, ingress: Mapping[str, Any], r: int) -> tuple[WA.Advice, dict, int]:
+def _solo(advice: Any, ingress: Mapping[str, Any], r: int, chunks: tuple[int, ...] = ()) -> tuple[WA.Advice, dict, int]:
     """``advice`` and ``ingress`` with request ``r`` alone, and r's index there: its record and body, each of its rows in a step of
     its own, and the state a Commit window carries it in with (`pipeline.window_advice`), rebuilt from the fields the compiler
     reads (`reads.READS`), its release buckets 0, which no plan reads. A hit on another request's KV (`_check_hit`) holds the KV
     of r's first C tokens, so alone a stand-in computes it: a greedy request of those C tokens with one output, admitted just
-    before r in r's first step. Such a hit on a later row (a resume, or any row of a carried request) has no solo form."""
+    before r in r's first step, or, given the hit's prefill ``chunks`` (a class G hit its Program recomputes, whose chunks are
+    its launch's), prefilled in them, a step each, before r's first. Such a hit on a later row (a resume, or any row of a
+    carried request) has no solo form."""
     q = advice.requests[r]
     carried = getattr(advice, "carried", ())
     rows = [(s, row) for s, step in enumerate(advice.steps) for row in step.rows if row.request == r]
@@ -248,13 +252,18 @@ def _solo(advice: Any, ingress: Mapping[str, Any], r: int) -> tuple[WA.Advice, d
         C, stand = rows[0][1].cache_hit, f"{q.id} (prefix)"
         requests, own = (WA.RequestAdvice(stand, C, 1, "length"), *requests), own + 1
         bodies[stand] = {"prompt": list(_prompt(ingress[q.id])[:C]), "max_tokens": 1, "temperature": 0}
-        steps[0] = WA.StepAdvice((WA.Row(0, "prefill", 0, C), _row(rows[0][1], 1, (WA.Source(0, C),))))
+        first = _row(rows[0][1], 1, (WA.Source(0, C),))
+        if sum(chunks) not in (0, C):
+            raise BatchDependent(f"request {r}: its hit's chunks {list(chunks)} don't sum to its hit of {C} tokens")
+        ends = [sum(chunks[:j + 1]) for j in range(len(chunks))]
+        steps = ([WA.StepAdvice((WA.Row(0, "prefill", end - n, n),)) for end, n in zip(ends, chunks)] + [WA.StepAdvice((first,)), *steps[1:]]
+                 if chunks else [WA.StepAdvice((WA.Row(0, "prefill", 0, C), first)), *steps[1:]])
     carry = tuple(WA.Carried(c.C, c.computed, c.kept, c.made) for c in carried[r:r + 1])
     return WA.Advice(requests, tuple(steps), (0,) * own, carry), bodies, k
 
 
 def _unit(u: Any) -> tuple:
-    return (u.LP, u.T, u.policy, u.seed, u.id, u.C, u.chunks, u.carried_out, u.edge)
+    return (u.LP, u.T, u.policy, u.seed, u.id, u.C, u.recomputed, u.chunks, u.carried_out, u.edge)
 
 
 def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], compiled: Any,
@@ -274,7 +283,7 @@ def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], com
         if u is None:
             continue
         try:
-            solo, bodies, k = _solo(advice, ingress, r)
+            solo, bodies, k = _solo(advice, ingress, r, u.chunks[:len(u.hit_steps)])
             alone = plan(registered, solo, bodies)
         except BatchDependent:
             raise
@@ -284,7 +293,7 @@ def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], com
             checked.add(r)
         a = alone.requests[k]
         if _unit(a) != _unit(u):
-            raise BatchDependent(f"request {r}: compiled alone it's (LP, T, policy, seed, id, C, chunks, carried out, edge) = {_unit(a)}, "
+            raise BatchDependent(f"request {r}: compiled alone it's (LP, T, policy, seed, id, C, recomputed, chunks, carried out, edge) = {_unit(a)}, "
                                  f"in its batch {_unit(u)}")
         mine = [(rr.start, rr.n, rr.samples) for rows in compiled.steps for rr in rows if rr.request == r]
         theirs = [(start, n, m) for rows in alone.steps for req, start, n, m in rows if req == k]

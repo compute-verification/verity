@@ -217,6 +217,51 @@ def test_runs_whose_sender_no_handle_owns_are_one_post_that_rings_infra(relay):
     assert [r["thread_ts"] for r in rings(relay)] == [INFRA_INBOX["inbox_ts"]] * 2
 
 
+def test_a_worker_the_watch_cant_place_rings_infra_once_and_what_follows_rings_no_one(relay):
+    """A worker whose launcher the watch couldn't find came as infra's own ("of lane infra ...; resume it with Task"), each
+    time it stopped, and each run of a sender no handle owned rang infra again. The watch's one `unplaced` record rings infra
+    and says why; the worker's alerts and its later runs, which the watch marks quiet, are posted with no handle and ring no
+    one, and none names a lane."""
+    infra = relay.slack.tag(relay.slack.entry(relay.REG, "infra"))
+    kid, other, p = ("bc-22222222-2222-2222-2222-222222222222", "bc-33333333-3333-3333-3333-333333333333",
+                     "bc-99999999-9999-9999-9999-999999999999")
+    link = f"<https://cursor.com/agents/{kid}|{kid}>"
+    run = {"run": "r20261019-052718-24a9", "node": "vy-nebius-2", "sender": f"https://cursor.com/agents/{kid}",
+           "what": "python -m bench", "rc": 0, "state": "done", "after": "6 s", "at": "2026-10-19T05:28:12Z"}
+    relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
+        {"kind": "unplaced", "agent": kid, "name": "review-9", "run": "", "role": "worker", "lane": "", "status": "ACTIVE",
+         "parent": p},
+        {"kind": "worker_idle", "agent": kid, "name": "review-9", "run": "", "lane": "", "quiet": True,
+         "at": "2026-10-19T19:22:00Z", "since": "2026-10-19T19:22:00Z"},
+        {"kind": "worker_long", "agent": kid, "name": "review-9", "run": "", "lane": "", "quiet": True,
+         "since": "2026-10-19T13:22:00Z", "hours": 6},
+        {"kind": "workers_failed", "agent": p, "name": "", "run": "", "role": "workers", "lane": "", "quiet": True, "minutes": 4,
+         "members": [{"kind": "worker_idle", "agent": kid, "name": "review-9", "at": "2026-10-19T19:22:00Z", "quiet": True},
+                     {"kind": "worker_idle", "agent": other, "name": "review-10", "at": "2026-10-19T19:25:00Z", "quiet": True}]},
+        {"kind": "run_ended", "agent": "", "name": "", "run": run["run"], "handle": None, "role": "unknown", "count": 1,
+         "runs": [run], "quiet": True}]) + "\n"
+    relay.once()
+    assert relay.posts[0] == (
+        f"{infra} *Agent watch:* worker review-9 ({link}) is under no lane: the watch saw no Task call for it by an agent a "
+        "handle owns, and no workers.d entry or note names its launcher or a lane. The Task call it saw came from "
+        f"<https://cursor.com/agents/{p}|bc-99999999>, which no handle owns. @infra is rung this once, to find its launcher: "
+        "until a Task call the watch sees, a workers.d entry or a note places it (or, at the end of a run it sent, its "
+        "name), its alerts are posted and ring no one.")
+    assert relay.posts[1] == (
+        f"*Agent watch:* worker review-9 ({link}) went idle at 2026-10-19T19:22:00Z; if it didn't report back, resume it with "
+        "Task. The watch knows no lane for it and rang @infra once to say so: nobody is rung.")
+    assert relay.posts[2].startswith(f"*Agent watch:* worker review-9 ({link}) has been ACTIVE since 2026-10-19T13:22:00Z (6 h)")
+    assert relay.posts[3].startswith("*Agent watch:* 2 workers of the coordinator") and relay.posts[3].endswith(
+        "The watch knows no lane for them and rang @infra once to say so: nobody is rung.")
+    assert relay.posts[4] == (
+        "*Agent watch:* 1 research run ended whose sender no handle owns (not a coordinator, a worker the watch knows, its "
+        "parent, or a lane): r20261019-052718-24a9 on vy-nebius-2 (python -m bench, done rc=0) sent by "
+        "<https://cursor.com/agents/bc-22222222-2222-2222-2222-222222222222|bc-22222222>. @infra was rung for each of these "
+        "senders at an earlier run of its, so nobody is rung.")
+    assert not [post for post in relay.posts if "of lane" in post], "no lane is made up for it"
+    assert [r["thread_ts"] for r in rings(relay)] == [INFRA_INBOX["inbox_ts"]], "the one ring"
+
+
 def test_a_wake_cursor_refuses_with_409_posts_nothing(relay):
     """Cursor answers 409 for an agent waiting on background work, every hour the watch tries; the post would say nothing new."""
     relay.log_text["text"] = "\n".join([
@@ -494,6 +539,65 @@ def test_a_listed_workers_run_end_says_the_watch_resumes_it(relay):
     relay.log_text["text"] += json.dumps(rec) + "\n"
     relay.once()
     assert relay.ring_runs[0][-2:] == ["--to", "@proofs"], "a worker's failed run still rings its lane"
+
+
+def test_the_run_that_placed_its_sender_by_its_name_rings_that_lane_and_says_how_it_was_found(relay):
+    """A sender the watch placed by its name's issue key was infra's to place by hand. Its lane is rung at the placing run
+    whatever its result and its sender's status, so a wrong placement shows where it rings; its later runs are a worker's."""
+    kernels = relay.slack.tag(relay.slack.entry(relay.REG, "kernels"))
+    w = "bc-36363636-3636-3636-3636-363636363636"
+    rec = {"kind": "run_ended", "agent": w, "name": "HASH-7 KFLAGS: the committer's flag", "run": "r20261110-020000-aa00",
+           "handle": "kernels", "role": "worker", "lane": "kernels", "node": "vy-nebius-2", "what": "bench", "rc": 0,
+           "state": "done", "after": "12 min", "sender_status": "IDLE", "placed_by": "name", "issue": "HASH-7"}
+    relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
+        rec, {**rec, "run": "r20261110-030000-aa01", "sender_status": "ACTIVE", "rc": 1, "state": "failed"},
+        {**rec, "run": "r20261110-030000-aa02", "listed": True},
+        {**rec, "run": "r20261110-030000-aa03", "quiet": True, "cancelled_by": "ubuntu", "cancel_reason": "superseded"},
+        {k: v for k, v in rec.items() if k not in ("placed_by", "issue")} | {"run": "r20261110-040000-bb04"}]) + "\n"
+    relay.once()
+    how = (" No handle owned this worker until now: the watch placed it under @kernels by its name's issue key HASH-7 (if it "
+           "is another lane's, tell @infra).")
+    head = "*Agent watch:* run {} (bench) of worker HASH-7 KFLAGS: the committer's flag (<https://cursor.com/agents/{}|{}>) ended"
+    assert relay.posts == [
+        f"{kernels} {head.format('r20261110-020000-aa00', w, w)} rc=0 after 12 min on vy-nebius-2; resume HASH-7 KFLAGS: the "
+        f"committer's flag with Task.{how}",
+        f"{kernels} {head.format('r20261110-030000-aa01', w, w)} rc=1 after 12 min on vy-nebius-2; its sender is in a turn, so "
+        f"nothing is to resume.{how}",
+        f"{kernels} {head.format('r20261110-030000-aa02', w, w)} rc=0 after 12 min on vy-nebius-2; the watch starts a run on it "
+        f"with the result if it is still idle in 10 min.{how}",
+        f"{head.format('r20261110-030000-aa03', w, w)} rc=0 after 12 min on vy-nebius-2, cancelled by "
+        f"its own lane (ubuntu: \u201csuperseded\u201d): nothing to resume.{how}",
+        f"{kernels} {head.format('r20261110-040000-bb04', w, w)} rc=0 after 12 min on vy-nebius-2; resume HASH-7 KFLAGS: the "
+        "committer's flag with Task."]
+    assert [(a[a.index("--run") + 1], a[-2:]) for a in relay.ring_runs] == [
+        (f"r20261110-{r}", ["--to", "@kernels"]) for r in ("020000-aa00", "030000-aa01", "030000-aa02")], \
+        "the placing run rings its lane at rc 0 and with its sender in a turn; a quiet one and a later rc 0 run ring no one"
+    assert relay.ring_runs[0][relay.ring_runs[0].index("--text") + 1] == (
+        "bench done after 12 min on vy-nebius-2; its sender placed under @kernels by its name's issue key HASH-7: "
+        + relay.slack.permalink(relay.REG, relay.ALERTS, "17600001.0"))
+    assert rings(relay) == []
+
+
+def test_a_placing_run_says_which_part_of_the_name_placed_its_sender(relay):
+    """A name places its sender by its leading handle, or by an issue key and the one handle it names: the post and the
+    doorbell say which, so the lane can tell a wrong placement from how it was made."""
+    kernels = relay.slack.tag(relay.slack.entry(relay.REG, "kernels"))
+    w = "bc-37373737-3737-3737-3737-373737373737"
+    rec = {"kind": "run_ended", "agent": w, "name": "kernels-fold: one row", "run": "r20261110-020000-cc00",
+           "handle": "kernels", "role": "worker", "lane": "kernels", "node": "vy-nebius-2", "what": "bench", "rc": 0,
+           "state": "done", "after": "12 min", "sender_status": "IDLE", "placed_by": "handle"}
+    relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
+        rec, {**rec, "run": "r20261110-030000-cc01", "placed_by": "name", "issue": "HASH-7", "named": "kernels"}]) + "\n"
+    relay.once()
+    said = " No handle owned this worker until now: the watch placed it under @kernels {} (if it is another lane's, tell @infra)."
+    assert [p[p.index(" No handle owned"):] for p in relay.posts] == [
+        said.format("by its name's leading handle"), said.format("by its name's issue key HASH-7 and the handle it names")]
+    assert all(p.startswith(f"{kernels} ") for p in relay.posts)
+    assert [a[a.index("--text") + 1].split(": ")[0] for a in relay.ring_runs] == [
+        "bench done after 12 min on vy-nebius-2; its sender placed under @kernels by its name's leading handle",
+        "bench done after 12 min on vy-nebius-2; its sender placed under @kernels by its name's issue key HASH-7 and the handle "
+        "it names"]
+    assert [a[-2:] for a in relay.ring_runs] == [["--to", "@kernels"]] * 2
 
 
 def test_a_restart_never_posts_a_line_again_even_with_its_offset_lost(relay):

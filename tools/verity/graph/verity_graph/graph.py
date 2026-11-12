@@ -10,6 +10,7 @@ import json
 import operator
 import subprocess
 import tomllib
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 
 from . import contract, families
@@ -353,14 +354,17 @@ def part(doc: dict, task_id: str, by: dict | None = None) -> dict:
 
 
 def given(root: Path, path: Path, task_id: str) -> dict:
-    """The graph/v2 at ``path`` (`verity graph run --graph`): the listing an executor made once, or its `part` for ``task_id``,
-    so that no lister runs.  Taken when it holds the task, the outputs the task reads and its env, and each file the task's key
-    reads (its inputs and its env's spec) has the digest it names here, so that no result is keyed from another tree's bytes."""
+    """The graph/v2 at ``path`` (`verity graph run --graph`): the listing an executor made once, packed or not (`unpack`), or
+    its `part` for ``task_id``, so that no lister runs.  Taken when it holds the task, the outputs the task reads and its env,
+    and each file the task's key reads (its inputs and its env's spec) has the digest it names here, so that no result is
+    keyed from another tree's bytes."""
     try:
         doc = json.loads(Path(path).read_bytes())
     except (OSError, ValueError) as e:
         raise GraphError(f"--graph {path}: {e}") from e
     try:
+        if doc["schema"] == contract.SCHEMA_PACKED:
+            doc = unpack(doc)
         if doc["schema"] != contract.SCHEMA_GRAPH:
             raise ValueError(f"schema {doc['schema']!r}")
         by = {t["id"]: t for t in doc["tasks"]}
@@ -384,6 +388,66 @@ def given(root: Path, path: Path, task_id: str) -> dict:
     if env != contract.env_digest(spec, named):
         raise GraphError(f"--graph {path}: env {task['env']}'s digest isn't the one its spec files give")
     return doc
+
+
+def _runs(indices: Iterable[int]) -> list[int]:
+    """Increasing ``indices`` as runs of consecutive ones, two integers a run: how far past the previous run's end it starts
+    (the first, past 0), and its length."""
+    out: list[int] = []
+    end = 0
+    for i in indices:
+        if out and i == end:
+            out[-1] += 1
+        else:
+            out += [i - end, 1]
+        end = i + 1
+    return out
+
+
+def _indices(runs: object) -> Iterator[int]:
+    """The indices `_runs` gave as ``runs``; ValueError on what it never gives."""
+    if not isinstance(runs, list) or len(runs) % 2 or not all(type(x) is int for x in runs):
+        raise ValueError(f"runs {str(runs)[:40]} aren't pairs of integers")
+    end = 0
+    for gap, n in zip(runs[::2], runs[1::2]):
+        if gap < 0 or n < 1:
+            raise ValueError(f"a run starts {gap} past the last and is {n} long")
+        yield from range(end + gap, end + gap + n)
+        end += gap + n
+
+
+def pack(doc: dict) -> dict:
+    """The listing ``doc`` packed (`contract.SCHEMA_PACKED`), which `unpack` makes ``doc`` again: each task's `inputs` as runs
+    of indices into `files`' paths in order (`_runs`), and its `reads` as {output name: runs of indices into `tasks`}.  A
+    suite's test files share most of their thousands of inputs, and a Lean module reads two outputs of each of the hundreds
+    of modules its compile loads: graph/v2 spells out each path and task id, where here an input or a read is a few bytes,
+    most of them in runs of neighbours."""
+    at = {p: i for i, p in enumerate(sorted(doc["files"]))}
+    of = {t["id"]: i for i, t in enumerate(doc["tasks"])}
+    tasks = []
+    for t in doc["tasks"]:
+        if t["inputs"] != sorted(set(t["inputs"])) or list(map(_read, t["reads"])) != sorted(set(map(_read, t["reads"]))):
+            raise GraphError(f"{t['id']}: its inputs and its reads aren't graph/v2's, sorted and each once")
+        reads: dict[str, list[int]] = {}
+        for r in t["reads"]:
+            reads.setdefault(r["output"], []).append(of[r["task"]])
+        tasks.append({**t, "inputs": _runs(at[p] for p in t["inputs"]),
+                      "reads": {o: _runs(ix) for o, ix in sorted(reads.items())}})
+    return {**doc, "schema": contract.SCHEMA_PACKED, "tasks": tasks}
+
+
+def unpack(doc: dict) -> dict:
+    """The listing `pack` packed as ``doc``, graph/v2 again; GraphError when ``doc`` is no packed listing."""
+    try:
+        if doc["schema"] != contract.SCHEMA_PACKED:
+            raise ValueError(f"schema {doc['schema']!r}")
+        paths, ids = sorted(doc["files"]), [t["id"] for t in doc["tasks"]]
+        tasks = [{**t, "inputs": [paths[i] for i in _indices(t["inputs"])],
+                  "reads": sorted(({"task": ids[i], "output": o} for o, runs in t["reads"].items() for i in _indices(runs)),
+                                  key=_read)} for t in doc["tasks"]]
+    except (KeyError, TypeError, AttributeError, IndexError, ValueError) as e:
+        raise GraphError(f"no packed listing ({type(e).__name__}: {e})") from e
+    return {**doc, "schema": contract.SCHEMA_GRAPH, "tasks": tasks}
 
 
 def _document(root: Path, s: dict, files: list[str], ts: list[dict], at: str | None) -> dict:

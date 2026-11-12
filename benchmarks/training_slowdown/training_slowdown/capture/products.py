@@ -1,5 +1,5 @@
 """A captured step's matrix products as the products term reads them (training_slowdown.formalism), for a step captured
-by capture_step or capture_fn as well as a program recorded from its start (`Capture.region`).
+by capture_step as well as a program recorded from its start (`Capture.region`).
 
 Each GEMM of the measured step is a row (`rows`): its dims and token dims, whether each operand depends on θ′, the
 width each operand is passed at (`_passed_width`), the bits a block pays an entry of it at policy k (`_rates`), whether
@@ -10,13 +10,17 @@ token-specific (`gathered`, `_gathered`), which M leaves out. The block's `p_mat
 multiplication and a sum, or a gather, a multiplication and a sum by index), which no row is, so M leaves them out.
 Identical rows of the step (a layer's GEMMs repeated over the layers) are one row with their count, so `gathered` puts
 layer 0's products of the embedding's rows in rows of their own. A trace keeps the rows at each k of the console's dial
-too (`rows_on_dial`, `DIAL_K`), since a row's rates and kind move with k.
+too (`raw_on_dial`, `DIAL_K`), since a row's rates and kind move with k.
+
+What the capture measures and what a price adds are apart: `raw_on_dial` gives the rows with their operands' dtypes
+and no price, as a job's record keeps them, and `priced` makes a raw row the row `rows` states, so a record's rows are
+priced where they are read.
 
 A recorded program reads θ′ through storage versions: a weight's view in the measured step reads the version the
 previous step's optimizer wrote, not the attribute's entry value. So the rates here are keyed by the capture's values
 (`training_slowdown.capture.structure._Flow`), and every value the measured step reads from an earlier step that
 depends on θ′ (θ′ itself, the optimizer's state) is read at its width, as an updated parameter or state is in a step
-captured by capture_step or capture_fn.
+captured by capture_step.
 
 The summation order of a GEMM's partial sums is its kernel's, which no ATen graph shows (a GEMM is one op), so `order`
 is ``unknown`` here."""
@@ -27,16 +31,14 @@ import operator
 
 import torch
 
-from training_slowdown.capture.structure import _GATHERS, _WALK, _closure, _dtype_name, _Flow, _gemms, _macs, _phases, _pk, _shape
-from training_slowdown.formalism import is_paid
+from training_slowdown.capture.structure import (
+    _GATHERS, _WALK, _closure, _dtype_name, _Flow, _gemms, _macs, _past, _phases, _pk, _shape, _slots)
+from training_slowdown.work import is_paid
 from training_slowdown.policy import CONSOLE
 
 #: the capture's version of these rows (training_slowdown's VERSION when they were last changed), so a trace that has
 #: them is distinguishable from one traced before them
 CAPTURE = "4.12.9"
-#: the torch the frozen capture traces under, the trace job's (``torch==2.15.0+cpu``): a step's graph, and so what the
-#: capture counts on it, moves with torch's version
-TORCH = "2.15.0"
 ORDER = "unknown"
 #: the console's dial's k levels in bits: each of its block sizes, the reference's, the served demo's block and the
 #: console's default
@@ -124,7 +126,7 @@ def _gemm_price(phase: str, op: str, dtype: str | None, gemm_dtype: str | None) 
 
 
 def step_gates(graph, gemm_dtype: str | None = None) -> float:
-    """The step's |C| in gates for a step captured by capture_step or capture_fn, each counted op at
+    """The step's |C| in gates for a step captured by capture_step, each counted op at
     training_slowdown.gates' price for its dtype as training_slowdown.capture.structure prices it: GEMMs (`_gemm_price`),
     elementwise multiplications and dense linear algebra (`_other_macs`), and the forward's other ops that combine an
     activation with an updated parameter (a gather of an updated table by token data at the circuit's gather, any other
@@ -166,7 +168,7 @@ def step_gates(graph, gemm_dtype: str | None = None) -> float:
 
 class _Values:
     """The measured step's dataflow: the capture's values (`_Flow`), which depend on θ′ (`dep`), and the step whose
-    GEMMs are rows (`region`; None: a step captured by capture_step or capture_fn, whose values depend on θ′ from the
+    GEMMs are rows (`region`; None: a step captured by capture_step, whose values depend on θ′ from the
     updated parameters and the state slots the step writes)."""
 
     def __init__(self, graph) -> None:
@@ -190,17 +192,11 @@ class _Values:
             return s is not None and any(vshape(n, idx, vs) != s for vs in vnodes)
 
         flow = self.flow = _Flow(gm, _phases(gm), tok)
+        entry, writes, before = _slots(base, flow)
         if self.region is not None:
-            past = {v for v, k in flow.source.items() if k[0] == "input" and flow.step[v] < self.region}
-            self.dep = _closure(flow, past.__contains__)
+            self.dep = _closure(flow, _past(flow, self.region, entry, before).__contains__)
             return
         params = {t: v for t, v in base.attrs.items() if v[0] == "parameter"}
-        entry = {key: v for v, key in flow.source.items() if key[0] == "attr"}
-        writes: dict = {}
-        for key, v, _ in flow.writes:
-            if key[0] == "attr":
-                writes.setdefault(key, []).append(v)
-        before = {("attr", t) for t in base.written_before if ("attr", t) in entry}
         seeded = {key for key in entry if key[1] in params and params[key[1]][1] in graph.updated}
         slots = {key for key in set(writes) | before if key[1] not in params}
         while True:
@@ -758,38 +754,82 @@ def rows(graph, k: float = CONSOLE[1], gemm_dtype: str | None = "bfloat16") -> d
     "rows", "p_match", "elementwise_products"}, each row {"count", "phase", "op", "dims", "token_dims", "macs",
     "outputs", "affected", "widths", "rates", "paid", "self", "b_c", "gates_per_mac", "cell_gates", "gathered"} (MACs
     and outputs over its count; `gathered` whether each operand reads a gather's rows before any op makes them
-    token-specific), `gates` the step's |C| (`step_gates`) for a step captured by capture_step or capture_fn, else
+    token-specific), `gates` the step's |C| (`step_gates`) for a step captured by capture_step, else
     None (the circuit's count is the trace's), `p_match` [{"op", "fan_out", "count"}] the ops that break P-match
     (`_p_match`), and `elementwise_products` the matrix products the step writes with elementwise ops
-    (`_elementwise_products`)."""
+    (`_elementwise_products`). The rows are the raw rows at k (`raw_on_dial`), each priced (`priced`)."""
     vs = _Values(graph)
     made = _made(vs)
-    return _rows(vs, graph, k, gemm_dtype, made, _gathered(vs, made)) | {"elementwise_products": _elementwise_products(vs)}
+    block = _raw(vs, graph, k, made, _gathered(vs, made))
+    return _priced_block(block, gemm_dtype) | {"gates": _gates(vs, graph, gemm_dtype),
+                                               "elementwise_products": _elementwise_products(vs)}
 
 
-def rows_on_dial(graph, gemm_dtype: str | None = "bfloat16") -> dict:
-    """`rows` at the console's k, and under "at" each other k of the console's dial (`DIAL_K`, by its integer as a
-    string) the rows and P-match check there ({"k", "rows", "p_match"}): a product's rates and kind move with k (a
-    block of k bits pays a GEMM output at 4K²·b²/k), so the dial's term at a k reads that k's rows, which only the
-    captured step gives. A trace keeps these so the dial needs no retrace."""
-    vs = _Values(graph)
+def raw_on_dial(graph) -> dict:
+    """The measured step's products as the capture measures them, with no price: {"capture", "k", "order", "tokens",
+    "rows", "p_match", "elementwise_products", "at"} at the console's k, and under "at" each other k of the console's
+    dial (`DIAL_K`, by its integer as a string) the rows and P-match check there ({"k", "rows", "p_match"}): a
+    product's rates move with k (a block of k bits pays a GEMM output at 4K²·b²/k), which only the captured step
+    gives. A raw row is {"count", "phase", "op", "dims", "token_dims", "dtypes", "affected", "widths", "self",
+    "gathered", "rates"}: `dtypes` its two operands' (A first, as `_dtype_name` names them), from which `priced`
+    takes its price. A job's record keeps these (its `trace`), so neither the dial nor a new price needs a retrace."""
+    return _raw_on_dial(_Values(graph), graph)
+
+
+def priced(row: dict, gemm_dtype: str | None = "bfloat16") -> dict:
+    """A raw row (`raw_on_dial`'s, a job's trace's) as `rows` states it: its `dtypes` replaced by what they price.
+    `macs` and `outputs` are its dims' (one GEMM's of its count), `paid` whether each operand is paid at its passed
+    width (`is_paid` of its rate), `b_c` the partial sums' width (`ACC_BITS`), and `gates_per_mac` and `cell_gates`
+    its price (`_gemm_price` of its phase, its op and operand A's dtype, at `gemm_dtype`)."""
+    d = row["dims"]
+    gpm, cell = _gemm_price(row["phase"], row["op"], row["dtypes"][0], gemm_dtype)
+    return {"count": row["count"], "phase": row["phase"], "op": row["op"], "dims": dict(d),
+            "token_dims": list(row["token_dims"]), "macs": _macs(d), "outputs": d["batch"] * d["m"] * d["n"],
+            "affected": list(row["affected"]), "widths": list(row["widths"]), "rates": list(row["rates"]),
+            "paid": [is_paid(r, w) for r, w in zip(row["rates"], row["widths"])], "self": row["self"],
+            "b_c": ACC_BITS, "gates_per_mac": gpm, "cell_gates": cell, "gathered": list(row["gathered"])}
+
+
+def _raw_on_dial(vs: _Values, graph) -> dict:
     made = _made(vs)
     gathered = _gathered(vs, made)
-    out = _rows(vs, graph, CONSOLE[1], gemm_dtype, made, gathered)
+    out = _raw(vs, graph, CONSOLE[1], made, gathered)
     out["elementwise_products"] = _elementwise_products(vs)
     out["at"] = {}
     for k in DIAL_K:
         if k != CONSOLE[1]:
-            b = _rows(vs, graph, float(k), gemm_dtype, made, gathered, gates=False)
+            b = _raw(vs, graph, float(k), made, gathered)
             out["at"][str(k)] = {x: b[x] for x in ("k", "rows", "p_match")}
     return out
 
 
-def _rows(vs: _Values, graph, k: float, gemm_dtype, made: dict, gathered: set, gates: bool = True) -> dict:
+def _merged(rows: list[dict]) -> list[dict]:
+    """`rows` with those that agree in everything but their count made one, their counts summed."""
+    merged: dict = {}
+    for row in rows:
+        key = repr(sorted((k, v) for k, v in row.items() if k != "count"))
+        if key in merged:
+            merged[key]["count"] += row["count"]
+        else:
+            merged[key] = dict(row)
+    return list(merged.values())
+
+
+def _priced_block(block: dict, gemm_dtype) -> dict:
+    """A raw block ({"k", "rows", "p_match"}, with the capture's header when it has one) with its rows priced: rows
+    that differ only in a dtype their price doesn't read are one row."""
+    return block | {"rows": _merged([priced(r, gemm_dtype) for r in block["rows"]])}
+
+
+def _gates(vs: _Values, graph, gemm_dtype) -> float | None:
+    return step_gates(graph, gemm_dtype) if vs.region is None else (graph.formalism or {}).get("gates")
+
+
+def _raw(vs: _Values, graph, k: float, made: dict, gathered: set) -> dict:
     rate, made_by = _rates(vs, k)
     broken = _p_match(vs, made, made_by, rate)
     by_name = {n.name: n for n in vs.nodes}
-    merged: dict = {}
+    found = []
     for m in graph.matmuls:
         n = by_name[m.node]
         g = next(x for x in _gemms(n) if x.part == m.part)
@@ -800,22 +840,13 @@ def _rows(vs: _Values, graph, k: float, gemm_dtype, made: dict, gathered: set, g
             return max((rate.get(x, 0.0) for x in _reads(vs, n, a)), default=0.0)
 
         rates = (got(A) if aff[0] else 0.0, got(B) if aff[1] else 0.0)
-        widths = (_passed_width(vs, n, A), _passed_width(vs, n, B))
-        gpm, cell = _gemm_price(m.phase, _pk(n.target), _dtype_name(A), gemm_dtype)
         d = g.dims
-        row = {"phase": m.phase, "op": _pk(n.target), "dims": {x: d[x] for x in ("batch", "m", "k", "n")},
-               "token_dims": sorted(m.token_dims), "macs": _macs(d), "outputs": d["batch"] * d["m"] * d["n"],
-               "affected": list(aff), "widths": list(widths), "rates": [round(r, 6) for r in rates],
-               "paid": [is_paid(r, w) for r, w in zip(rates, widths)],
-               "self": _root(A, scale=True) is _root(B, scale=True), "b_c": ACC_BITS, "gates_per_mac": gpm,
-               "cell_gates": cell, "gathered": [any(x in gathered for x in _reads(vs, n, a)) for a in (A, B)]}
-        key = repr(sorted(row.items()))
-        if key in merged:
-            merged[key]["count"] += 1
-        else:
-            merged[key] = {"count": 1} | row
-    gates = None if not gates else step_gates(graph, gemm_dtype) if vs.region is None else \
-        (graph.formalism or {}).get("gates")
-    return {"capture": CAPTURE, "k": k, "order": ORDER, "tokens": graph.tokens, "gates": gates,
-            "rows": list(merged.values()),
+        found.append({"count": 1, "phase": m.phase, "op": _pk(n.target),
+                      "dims": {x: d[x] for x in ("batch", "m", "k", "n")}, "token_dims": sorted(m.token_dims),
+                      "dtypes": [_dtype_name(A), _dtype_name(B)], "affected": list(aff),
+                      "widths": [_passed_width(vs, n, A), _passed_width(vs, n, B)],
+                      "self": _root(A, scale=True) is _root(B, scale=True),
+                      "gathered": [any(x in gathered for x in _reads(vs, n, a)) for a in (A, B)],
+                      "rates": [round(r, 6) for r in rates]})
+    return {"capture": CAPTURE, "k": k, "order": ORDER, "tokens": graph.tokens, "rows": _merged(found),
             "p_match": [{"op": op, "fan_out": round(f, 6), "count": c} for op, (f, c) in sorted(broken.items())]}

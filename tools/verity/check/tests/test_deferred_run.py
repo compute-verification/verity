@@ -49,14 +49,14 @@ def test_a_deferred_run_runs_only_its_steps_and_what_they_need_inside_a_recorded
 
 
 def test_a_recorded_check_runs_every_job_on_the_gate_and_passes_without_circuit_check(monkeypatch, tmp_path):
-    """circuit-check and ratchet-gate are off the gate (policy.toml's `off_gate`): a recorded check (`--record`, the declared
-    command in a run) leaves them out, and its `check/v1` passes on the jobs on the gate alone."""
+    """circuit-check, lean-changed and ratchet-gate are off the gate (policy.toml's `off_gate`): a recorded check (`--record`,
+    the declared command in a run) leaves them out, and its `check/v1` passes on the jobs on the gate alone."""
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache" / "check"))
     monkeypatch.setenv("VERITY_TEST_CACHE", str(tmp_path / "cache" / "tests"))
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     rc, only = _main(monkeypatch, run_dir, ["--keep-going"])
-    off = {"circuit-check", "ratchet-gate"}
+    off = {"circuit-check", "lean-changed", "ratchet-gate"}
     assert rc == 0 and only == [p for p in CHECK.shard_parts() if p.partition(":")[0] not in off] == CHECK.gated_parts()
     assert {p.partition(":")[0] for p in only} == {j.name for j in CHECK.JOBS} - off
     doc = json.loads((run_dir / "result.json").read_text())
@@ -115,12 +115,13 @@ def test_a_sharded_deferred_run_runs_those_steps_parts_in_its_shard_alone(monkey
     assert rc == 0 and {p.partition(":")[0] for p in only} == {"pytest"}
 
 
-def test_the_shards_of_a_deferred_run_together_run_every_part_ratchet_gate_in_the_last():
+def test_the_shards_of_a_deferred_run_together_run_every_part_but_lean_changed_s_ratchet_gate_in_the_last():
     """ratchet-gate is in no shard of ci.toml's plans: drive's sharded after-landing run never ran it, so drive took each passing
-    run as one that passed without ratchet-gate, verified nothing and ended no red record, while `main` moved on its gate."""
+    run as one that passed without ratchet-gate, verified nothing and ended no red record, while `main` moved on its gate.
+    lean-changed, which `--deferred` names too, no shard runs (`shards.NO_SHARD`)."""
     for n in CHECK.DECLARATION.plans():
         got = [CHECK.shard(f"{k}/{n}", gated=False)["parts"] for k in range(1, n + 1)]
-        assert sorted(p for s in got for p in s) == sorted(CHECK.shard_parts()), n
+        assert sorted(p for s in got for p in s) == sorted(p for p in CHECK.shard_parts() if p != "lean-changed"), n
         assert "ratchet-gate" in got[-1] and all("ratchet-gate" not in CHECK.shard(f"{k}/{n}")["parts"] for k in range(1, n + 1))
 
 
@@ -140,7 +141,7 @@ def test_record_of_a_deferred_run_launches_it_without_the_check_tool_and_without
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: (_ for _ in ()).throw(AssertionError("Lean dependencies sent")))
     monkeypatch.setattr(CHECK, "landable", lambda base: True)
     monkeypatch.setattr(CHECK, "slot_wrap", lambda priority: ["slot", *(["--priority"] if priority else [])])
-    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--priority", "--keep-going", "--deferred", "pytest,circuit-check"]) == 0
     [cmd] = launched
     head, tail = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
@@ -171,9 +172,10 @@ def _pack(tmp_path: Path, monkeypatch) -> Path:
 @pytest.mark.parametrize("circuit_cache", [False, True])
 def test_the_after_landing_run_reuses_circuit_checks_passes_alone(monkeypatch, tmp_path, circuit_cache, sent, capsys):
     """Drive's after-landing run (`train.sh --deferred STEPS --no-cache --circuit-cache`): its suites, Lean and steps reuse no
-    pass, and circuit-check its per-target ones, imported from the recorded checks' packs sent or a pack given (their entries
-    alone) and packed again as the run stores them; `--no-cache` alone, the nightly `audit-main`, imports and packs nothing.
-    The packs' URLs leave its inputs either way, and a run sent none fetches none and says nothing of them."""
+    pass, and circuit-check its per-target ones, imported from the recorded checks' packs sent or a pack given (their entries,
+    beside the suites' passes its fresh suites are compared with) and packed again as the run stores them; `--no-cache` alone,
+    the nightly `audit-main`, imports only the suites' passes and packs nothing.  The packs' URLs leave its inputs either way,
+    and a run sent none fetches none and says nothing of them."""
     pack = _pack(tmp_path, monkeypatch)
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "here" / "check"))
     monkeypatch.setenv("VERITY_TEST_CACHE", str(tmp_path / "here" / "tests"))
@@ -198,7 +200,8 @@ def test_the_after_landing_run_reuses_circuit_checks_passes_alone(monkeypatch, t
             "--no-regenerate", *([] if sent else ["--verdicts-in", str(pack)])]
     assert CHECK.main(argv) == 0
     assert got == {"cache": False, "circuit_cache": circuit_cache, "packs": circuit_cache, "reused": circuit_cache}
-    assert sorted(CHECK.VERDICTS.entries()) == (["check/circuit-check/v1/d/t.json"] if circuit_cache else [])
+    assert sorted(CHECK.VERDICTS.entries()) == [*(["check/circuit-check/v1/d/t.json"] if circuit_cache else []), "tests/suite/k.json"]
     doc = json.loads((run_dir / "result.json").read_text())
-    assert [x.get("only") for x in (doc.get("verdicts") or {}).get("in", [])] == [CHECK.CIRCUIT_ENTRIES] * circuit_cache
-    assert not urls.exists() and ("recorded checks' packs" in capsys.readouterr().out) == (sent and circuit_cache)
+    only = [CHECK.CIRCUIT_ENTRIES, CHECK.COMPARED] if circuit_cache else CHECK.COMPARED
+    assert [x.get("only") for x in doc["verdicts"]["in"]] == [only]
+    assert not urls.exists() and ("recorded checks' packs" in capsys.readouterr().out) == sent

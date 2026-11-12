@@ -31,6 +31,9 @@ public import Proofs.Flock.Bridge.BitsRowMap
 public import Proofs.Flock.Bridge.V5
 public import Proofs.Flock.Bridge.LeafSeg
 public import Proofs.Flock.Bridge.Public
+public import Proofs.Flock.Bridge.QsRows
+public import Proofs.Flock.Bridge.PublicRows
+public import Proofs.Flock.Bridge.QsRows.FirstReads
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
 of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,

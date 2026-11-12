@@ -14,10 +14,12 @@ constant folding and the free XORs the unrolled lowering does across a call boun
 the callee's inputs and its own columns, committed by the callee past ``support`` too, and (``gather``) whenever it
 reads two bits one of which is its own column; a returned column nothing else in the callee reads is laid out last, in
 return order, so a caller binds a copy's returns as one run. Primitive gates are lowered by
-:data:`ir_lower.PIECES` and a Boolean Definition by its builder, as :func:`ir_lower.lower_gates` lowers them; the members
-of a batched primitive node are calls too. So a Definition's template rows are its own gates, never its callees', and
-consecutive copies of one pattern whose inputs step by a fixed amount per copy are one ``CALL`` line, its runs of
-segments a fixed stride apart one two-level segment each (:func:`tmpl.pack`).
+:data:`ir_lower.PIECES` and a Boolean Definition by its builder, as :func:`ir_lower.lower_gates` lowers them. A primitive
+node whose piece is at least ``prim_calls`` ANDs (`PRIM_CALL_ANDS`) is a call, as the members of a batched primitive node
+are, so its piece is lowered once per pattern however many nodes call it. So a Definition's template rows are its own
+small primitives' gates, never its callees' or a large primitive's, its rows and calls O(its nodes), and consecutive copies
+of one pattern whose inputs step by a fixed amount per copy are one ``CALL`` line, its runs of segments a fixed stride
+apart one two-level segment each (:func:`tmpl.pack`).
 
 A table read (``forms.Circuit.lookup``) is laid out as the flat layout lays it out (``ir_lower._Read``'s plain rows, placed
 at its first live value bit, a library table's constant bits folded into the constant), so it is ordered as any AND is. A
@@ -59,6 +61,8 @@ SUPPORT = 8
 #: a Definition of at least FOLD_GATES gates gets FOLD_CAP specializations with its constant arguments folded in; its
 #: later calls share one in which each constant argument bit is an input
 FOLD_CAP, FOLD_GATES = 4, 1000
+#: a primitive node whose piece is at least this many ANDs is a call, lowered once per pattern of its arguments
+PRIM_CALL_ANDS = 256
 ZERO, ONE_REF = -1, -2  # a caller "bit" an input is bound to: the caller's zero column, or the unit's constant
 #: a call variable's data is one int, its copy's index above COL_BITS and its column in that copy below (not a tuple of two
 #: ints, which cost a 32 × 32 tile's 15.8M call variables a gigabyte); a copy's labels are 32-bit
@@ -82,6 +86,35 @@ class Spec:
     reads: int = 0
     copies: list = field(default_factory=list)
     index: int = -1
+    #: its table reads as `Site`s, for a lowering that lays them out in lookup slots (`struct_slots`)
+    sites: list = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class Site:
+    """A table read in a Definition's rows: its table, each index bit's references and the value's width, each live value
+    bit not constant over the table with the column holding it, and the read's columns ``[lo, hi)``: its inline rows, or
+    (``slot``) only its value bits, which a lookup slot gives."""
+
+    table: str
+    idx: tuple[tuple[int, ...], ...]
+    width: int
+    vals: tuple[tuple[int, int], ...]
+    lo: int
+    hi: int
+    slot: bool
+
+
+class _SlotRead:
+    """A read whose value a lookup slot gives (`struct_slots`): only its live value bits' columns, which no row writes, and
+    a library table's bits constant over the table folded, as `ir_lower._Read` folds them."""
+
+    def __init__(self, C: Circuit, g: int, bits: list[int], at: int):
+        self.table, self.idx, _w = C.lookups[g]
+        self.const_bits = IL.table_const_bits(self.table, bits)
+        self.bits = [j for j in bits if j not in self.const_bits]
+        self.at, self.rows = at, len(self.bits)
+        self.out_col = {j: at + t for t, j in enumerate(self.bits)}
 
 
 @dataclass(slots=True)
@@ -191,30 +224,44 @@ def _operand_bits(C: Circuit, words: list[list[L]]) -> tuple[tuple, list[int]]:
 
 class _Lowerer:
     def __init__(self, circuit, support: int = SUPPORT, fold_cap: int = FOLD_CAP, fold_gates: int = FOLD_GATES,
-                 column_order: bool = True, gather: bool = True):
+                 column_order: bool = True, gather: bool = True, prim_calls: int | None = PRIM_CALL_ANDS,
+                 slots: dict[str, tuple[int, int]] | None = None):
         self.circuit = circuit
+        self.slots = slots or {}
         self.in_column_order = column_order
         self.gather = gather
         self.support = support
         self.fold_cap, self.fold_gates = fold_cap, fold_gates
+        self.prim_calls = prim_calls
         self.folded: dict[str, int] = {}
         self.specs: dict[tuple, Spec] = {}
         self.order: list[Spec] = []
         self.totals: dict[tuple, dict] = {}
-        self.reading: dict[str, bool] = {}
+        self.pieces: dict[str, tuple[bool, int]] = {}
 
-    def reads_table(self, fn, words: list[list[L]]) -> bool:
-        """Whether primitive ``fn`` on operand ``words``, not all constant, lowers to a table read: its piece lowered once on
-        fresh inputs of the operands' widths."""
+    def _piece(self, fn, words: list[list[L]]) -> tuple[bool, int] | None:
+        """Primitive ``fn``'s piece on operand ``words`` lowered once on fresh inputs of the operands' widths: whether it
+        reads a table, and its ANDs; None when every operand is constant, which the piece folds."""
         if all(IL._is_const(w) for w in words):
-            return False
-        r = self.reading.get(fn.id)
+            return None
+        r = self.pieces.get(fn.id)
         if r is None:
             S = Circuit()
             ins = [S.input(f"i{j}", len(w)) for j, w in enumerate(words)]
             IL.lower_gates(S, [IL._PrimGate(fn, len(ins))], {-(j + 1): w for j, w in enumerate(ins)})
-            r = self.reading[fn.id] = bool(S.lookups)
+            r = self.pieces[fn.id] = (bool(S.lookups), sum(k == "and" for k in S.kind))
         return r
+
+    def reads_table(self, fn, words: list[list[L]]) -> bool:
+        """Whether primitive ``fn`` on operand ``words``, not all constant, lowers to a table read."""
+        r = self._piece(fn, words)
+        return r is not None and r[0]
+
+    def is_call(self, fn, words: list[list[L]]) -> bool:
+        """Whether a primitive node of ``fn`` on operand ``words`` is a call: its piece reads a table, or is at least
+        ``prim_calls`` ANDs; operands all constant, it is lowered in place, where it folds."""
+        r = self._piece(fn, words)
+        return r is not None and (r[0] or (self.prim_calls is not None and r[1] >= self.prim_calls))
 
     def call(self, C: Circuit, fc: FunctionCall, wires: dict) -> tuple:
         """Lower call ``fc`` of the Definition being lowered on C: its specialization once per pattern, one placed copy,
@@ -323,7 +370,7 @@ class _Lowerer:
                 for k, node in enumerate(body.nodes):
                     if isinstance(node.fn, PrimitiveDefinition) and node.form == "primitive":
                         lo = sc.offset + body.offsets[k]
-                        if self.reads_table(node.fn, [wires[o] for o in self.circuit.gate(lo).operands]):
+                        if self.is_call(node.fn, [wires[o] for o in self.circuit.gate(lo).operands]):
                             self.call(C, FunctionCall(self.circuit, sc, k, 0), wires)
                         else:
                             IL.lower_gates(C, Region(self.circuit, lo, lo + node.gates), wires)
@@ -410,7 +457,10 @@ class _Lowerer:
             else:
                 g, j = data[v]
                 if g not in reads:
-                    reads[g] = IL._Read(C, g, sorted(value_bits[g]), n)
+                    t, idx, w = C.lookups[g]
+                    slot = self.slots.get(t)
+                    Rd = _SlotRead if slot is not None and slot[0] == len(idx) and w <= slot[1] else IL._Read
+                    reads[g] = Rd(C, g, sorted(value_bits[g]), n)
                     n += reads[g].rows
                 if j in reads[g].const_bits:
                     const_bit[v] = reads[g].const_bits[j]
@@ -455,6 +505,8 @@ class _Lowerer:
             sp.rows.sort(key=lambda r: r[0])
             sp.refs += nrefs
         sp.reads = len(reads)
+        sp.sites = [Site(r.table, tuple(refs(f) for f in r.idx), C.lookups[g][2], tuple((j, r.out_col[j]) for j in r.bits),
+                         r.at, r.at + r.rows, isinstance(r, _SlotRead)) for g, r in reads.items()]
 
         def ret(t: tuple) -> tuple:
             if t[0] == "c":
@@ -499,6 +551,8 @@ def _read_rows(reads: dict, refs, K: int) -> tuple[list, int]:
     list of ints, so a read's tens of millions of references share 2^lo int objects."""
     out, nrefs = [], 0
     for r in reads.values():
+        if isinstance(r, _SlotRead):
+            continue
         ra: dict[int, list] = {}
         rb: dict[int, list] = {}
         r.fill(ra, rb, lambda f: list(refs(f)))
@@ -576,13 +630,16 @@ class Ports:
 
 def lower(target, support: int = SUPPORT, name: str = "unit", fold_cap: int = FOLD_CAP,
           fold_gates: int = FOLD_GATES, column_order: bool = True, gather: bool = True,
-          ports: Ports | None = None) -> tuple[T.Tmpl, _Lowerer, Spec]:
+          ports: Ports | None = None, prim_calls: int | None = PRIM_CALL_ANDS,
+          slots: dict[str, tuple[int, int]] | None = None) -> tuple[T.Tmpl, _Lowerer, Spec]:
     """``target`` (a bound composite) as a templated unit: one input group, its root's copy, one output group, the constant
     last (``ir_lower.layout``'s order). The input group is the argument leaves and the output group one port of the return
-    leaves, or ``ports``' ports."""
+    leaves, or ``ports``' ports. ``prim_calls``: a primitive node whose piece is at least this many ANDs is a call (None: only
+    a table read is). ``slots``: a read of a table it maps to ``(index bits, most value bits)``, at those widths, is a
+    `_SlotRead`, its value columns written by no row, for `struct_slots` to split out (each Definition's `Spec.sites`)."""
     sys.setrecursionlimit(100000)
     _prog, root = IL.standalone(target)
-    lw = _Lowerer(root.circuit, support, fold_cap, fold_gates, column_order, gather)
+    lw = _Lowerer(root.circuit, support, fold_cap, fold_gates, column_order, gather, prim_calls, slots)
     args = list(dict.fromkeys(root.args))
     widths = [IL._width(root.circuit.gate(a).prim) for a in args]
     C = Circuit()

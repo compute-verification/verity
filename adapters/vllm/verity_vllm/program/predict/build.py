@@ -20,9 +20,6 @@ token select: greedy TokenSelect, or the seeded temperature + top-p GumbelTopPTo
 count among them, the registered S). Anything φ asks for outside it raises `Unexpressible` naming the fact (a result, never a
 silent approximation).
 
-Restored lineage: `verity_capture.experimental.aot.build` (`aot-build/eager/v8`, deleted in 528f9d21f) built the capture fold's
-`Captured_v1{PROFILE, WORKLOAD}` Program; the Build of record now derives `Derived[vLLM*]` Programs, so the emitter targets those.
-
 This module is NEVER on a record path: a predicted Program is not written into a Build row, not published as a Build Attempt and
 not read by the Build, Match or Commit (`program.frontend.inputs_trace` lists `verity_vllm/program/predict/` as a forbidden input).
 """
@@ -681,9 +678,9 @@ class _Decoder:
         return _Model(B, self.specs, W, self.specs.C, peers)
 
 
-def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
-                  with_desc: bool = True, C: int = 0, dead_free: bool = False, batched: bool = False, finish: Callable | None = None,
-                  batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = (), stop: dict | None = None) -> BuildResult:
+def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8, with_desc: bool = True,
+                  C: int = 0, dead_free: bool = False, batched: bool = False, table_reads: bool = False, finish: Callable | None = None,
+                  batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = (), stop: dict | None = None, entries: tuple[int, ...] = ()) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples). `C` > 0: the
     request's first C positions are a history it reads and doesn't compute, every layer's rows of them Inputs after its own
@@ -694,16 +691,18 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     before the prefill's last, which no sample reads. A stochastic request takes its seed rule's `seed_rule.PARAMS` after its
     seed, at its policy's ``rid``, and checks the rule (`seed_rule.check`); `stop`: its length rule, the last check (`stop_rule`).
     `dead_free`: a tensor-parallel rank's request too (the Build's `--dead-free`), each dead collective's peer rows then unread.
-    `batched`: that form batched (`prune.batched_form`, the Build's `--batched`): class G's request Programs.
+    `batched`: that form batched (`prune.batched_form`, the Build's `--batched`): class G's request Programs. `table_reads`: in that
+    form, DSA's rows past INDEX_TOPK keys by table reads (`Registered.dsa_table_reads`, the Build's `--dsa-table-reads`).
     `finish`: the body's last step in place of that drop, (body, decoder, parameters) -> (body, what it says beside the Program,
     `BuildResult.named`), as `naming.named_program` names a request Program. `batch`: the request's launch batch (`common._Launch`,
     the Build's `--launch-context '{"batch": ...}'`) in place of the one φ's workload gives it (`launch_batch`). `chunks`: a
     request's prefill as the engine ran it, in launches of these rows in turn (the chunked request wrapper), where its kernels read
     the launch: per chunk one forward at its own step of `batch` (its chunks, then its T decodes), the sample after the last chunk,
     a chunk that leaves the prompt incomplete sampling nothing (vLLM discards that sample); the SRC config is `{"chunks": [...]}`
-    (its wrapper's class unchanged); one chunk is the request wrapper. `edge`: the history groups (`dsa.Net.edge_groups`) a request
-    a Commit window leaves at position LP + T (inside its prompt too: T < 0, sampling nothing) returns after its samples and checks,
-    every layer's rows [0, LP + T) of each as `prefix_params(LP + T)` lays them out (`common.with_edge`); its SRC config holds them."""
+    (its wrapper's class unchanged); one chunk is the request wrapper. `entries`: per chunk, its sequence's rows in that launch, of
+    which it computes the first (`steps`' ``recompute_hits``), in the SRC config. `edge`: the history groups (`dsa.Net.edge_groups`)
+    a request a Commit window leaves at position LP + T (inside its prompt too: T < 0, sampling nothing) returns after its samples
+    and checks, every layer's rows [0, LP + T) of each as `prefix_params(LP + T)` lays them out (`common.with_edge`), in its SRC config."""
     from verity_vllm.program.frontend import seed_rule as SEED
     t0 = time.time()
     net = decoder(phi, M, pos0 + M if wrapper == "step" else int(LP) + int(T))
@@ -711,8 +710,9 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     if (wrapper, kind) not in WRAPPERS:
         raise Unexpressible(f"wrapper {wrapper!r} (have {sorted({w for w, _ in WRAPPERS})})")
     world, rank, C = int(phi.tp.get("world", 1)), int(phi.tp.get("rank", 0)), int(C)
-    if batched and (finish is not None or wrapper != "request" or not (world == 1 or dead_free)):
-        raise ValueError("batched is a request's registered compiler's form (dead_free at a tensor-parallel rank), without finish")
+    if (table_reads and not batched) or batched and (finish is not None or wrapper != "request" or not (world == 1 or dead_free)):
+        raise ValueError("batched is a request's registered compiler's form (dead_free at a tensor-parallel rank), without finish; "
+                         "table_reads is the batched form's (DSA's long rows by table reads)")
     dense = type(net) is _Decoder
     if C and (wrapper != "request" or not hasattr(net, "prefix_params") or (dense and (kind, world) != ("greedy", 1))):
         raise Unexpressible(f"vocabulary cannot express: a cached prefix on a {kind} {wrapper} at TP{world} of the {net.model_class} decoder "
@@ -748,9 +748,9 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
                              top_p_bits=f32_bits(s.get("top_p", 1.0)))
     model = net.model(B, W, peers)
     if batched and hasattr(model, "batched"):
-        model.batched = True
+        model.batched, model.table_reads = True, table_reads
     batch = (launch_batch(phi, LP, T) if batch is None else batch) if wrapper == "request" else None
-    in_launch(model, batch, net.model_class, chunks, T)
+    in_launch(model, batch, net.model_class, chunks, T, entries=tuple(entries))
     if wrapper == "request" and isinstance(model, _Model):
         model.ctx = launch_rows(phi, LP, T, C)
     if C:
@@ -776,7 +776,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     name = f"{derive_name}[{net.model_class}]"
     src_static = {"class": src_class, "mode": "profile", "profile": phi.profile,
                   "inputs": [list(_arr_shape(t)) for _, t in params[:-1]],
-                  "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}), **edge_config(edge),
+                  "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}),
+                                                                  **({"entries": list(entries)} if entries else {}), **edge_config(edge),
                                                                   **({"history": C} if C and not dense else {}), **({"stop": stop} if stop else {})})).hexdigest()[:16]}
     from verity.definitions.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),

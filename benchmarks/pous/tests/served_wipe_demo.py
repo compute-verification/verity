@@ -1,9 +1,11 @@
 """A stand-in for `streamed_wipe/demo.sh` in `test_pous_served_wipe`, taking its options and writing its outputs under
 `$OUT` (period.json, wipe.json, wipe.case.json, summary.json) with its exit: one 32 MiB segment kept in host memory
 (`wipe_store.HostMemory`, period.json's `wipe.store` `host`) in place of the card, against `wipe_side.py`, the challenger's
-stand-in on a host of its own, in place of the side `--challenger-command` starts on `--challenger`. The challenger
-period.json names is `wipe_party.side_of`'s, written to `$OUT/party.json` before the stand-in replaces it; the arguments
-and the lease it ran under go to `$OUT/demo-argv.json`. The Python judges alone: a `--wipe-protocol` is only recorded.
+stand-in on a host of its own, in place of the side `--challenger-command` starts on `--challenger`, its key trusted
+only when it is the one `--trusted-sha512` pins (period.json's `wipe.trusted_sha512`), as demo.sh has it. The
+challenger period.json names is `wipe_party.side_of`'s, written to `$OUT/party.json` before the stand-in replaces it;
+the arguments and the lease it ran under go to `$OUT/demo-argv.json`. The Python judges alone: a `--wipe-protocol` is
+only recorded.
 `python served_wipe_demo.py OUT LEASE [DEMO_OPTIONS]`: the test's shim passes `$OUT` and `$GPU_LEASE_UUID`."""
 
 from __future__ import annotations
@@ -26,7 +28,8 @@ SIDE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pous" / "
 def main(argv: list[str]) -> int:
     out, lease, *argv = argv
     ap = argparse.ArgumentParser()
-    for o in ("--node", "--challenger", "--challenger-address", "--challenger-command", "--reads", "--wipe-protocol"):
+    for o in ("--node", "--challenger", "--challenger-address", "--challenger-command", "--trusted-sha512", "--reads",
+              "--wipe-protocol"):
         ap.add_argument(o)
     ap.add_argument("--no-lean", action="store_true")
     a = ap.parse_args(argv)
@@ -34,7 +37,7 @@ def main(argv: list[str]) -> int:
     (out / "demo-argv.json").write_text(json.dumps({"argv": argv, "lease": lease or None}))
     doc = {"tools": {}, "challenger_host": a.challenger,
            "challenger": {"wipe": {"command": shlex.split(a.challenger_command), "address": a.challenger_address}},
-           "wipe": {"store": "host", "reads": int(a.reads)}}
+           "wipe": {"store": "host", "reads": int(a.reads), "trusted_sha512": a.trusted_sha512}}
     of = WP.side_of
 
     def stand_in(period, node, device, extra=()):
