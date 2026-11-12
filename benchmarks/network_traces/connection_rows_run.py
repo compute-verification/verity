@@ -39,14 +39,16 @@ counting it at an execution phase that isn't complete.
 
 **The cost** of a close, for a schedule and its classes:
 
-    python connection_rows_run.py cost --out FILE [--classes P,O,ROWS ...] [--load grid|rows] [--phases 5]
-        [--cell-bytes 512] [--slots 8] [--lanes 16] [--window 600] [--every 1] [--delay 30] [--ingress-cells 96]
-        [--egress-cells 4097] [--height 10]
+    python connection_rows_run.py cost --out FILE [--lengths 1|2] [--classes P,O[,ROWS] ...] [--load grid|rows]
+        [--phases 5] [--cell-bytes 512] [--slots 8] [--lanes 16] [--window 600] [--every 1] [--delay 30]
+        [--ingress-cells 96] [--egress-cells 4097] [--height 10]
 
 It loads an execution phase (`loaded`): with `--load grid`, releases of each class in turn, each of its class's
 longest request and most ids, until the classes' rows, the lengths table's slots or the cells the schedule's grids
 carry in an execution phase are used up; with `--load rows`, every row of every class, whether or not a grid carries
-that much. It then times, over `--phases` execution phases: the device's own hand of it to `warden_serve`'s publisher
+that much. `--lengths` is the lengths rows' form, 1 by default. Under 2 the classes are `P,O`, the default ones the
+same sizes, and the rows to use up are the execution phase's, R = `WardenParams.phase_releases` over all the
+classes. It then times, over `--phases` execution phases: the device's own hand of it to `warden_serve`'s publisher
 process (`Warden._emit_lengths`, what the ticker does at the close: `hand_ms`), the pickling of the queue's items,
 which the queue's thread does in the ticker's process (`pickle_ms`, and the longest item's), and, in the publisher's
 process, the build, the commit and the signature (`rows.jsonl`'s cost). The result is `--out`'s JSON.
@@ -318,14 +320,18 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Recor
 
 def loaded(params: WardenParams, load: str) -> list[tuple[int, int]]:
     """An execution phase's releases for the cost, in release order: each one's (request bytes, ids), the longest
-    request and the most ids its class holds in the schedule (the module docstring's "The cost")."""
+    request and the most ids its class holds in the schedule (the module docstring's "The cost"). Where a class's
+    rows are a count (`content_rows.counted`) they are at most the execution phase's, `phase_releases` in all."""
     if params.content is None or load not in ("grid", "rows"):
         raise ValueError("the cost is of a schedule with content rows, loaded to its grid or to its rows")
     B, slots = params.cell_bytes, CR.strides_of(params) * params.stride_releases
+    if CT.counted(params):
+        slots = min(slots, params.phase_releases)
     cells = params.slots * params.lanes * params.window
+    listed = CT.sized(params)
     sizes = [(min(CT.request_room(B, p), params.ingress_cells * params.payload), min(o, params.egress_cells - 1))
-             for p, o, _ in params.content]
-    left = [rows for _, _, rows in params.content]
+             for p, o, _ in listed]
+    left = [rows for _, _, rows in listed]
     out: list[tuple[int, int]] = []
     request_cells = ids = 0
     while len(out) < slots and any(left):
@@ -345,8 +351,9 @@ def loaded(params: WardenParams, load: str) -> list[tuple[int, int]]:
 
 def _device(params: WardenParams, releases: Sequence[tuple[int, int]], lengths) -> Warden:
     """A network certifier at the close of execution phase 1 with `releases` as execution phase 0's, each ended in
-    its `END`, laid in its slot strides in order."""
-    device = Warden(params, None, origin=0.0, windows=2, lengths=lengths)
+    its `END`, laid in its slot strides in order. Under form 2 its run goes on past execution phase 1, so that
+    close hands execution phase 0's rows and ends no other."""
+    device = Warden(params, None, origin=0.0, windows=3 if params.closes else 2, lengths=lengths)
     K = params.stride_releases
     made = [_Connection(n + 1, None, None, None, 0, release=n, bytes_in=size, egress_cells=ids + 1, ended=0,
                         request=bytes([n % 251 + 1]) * size, ids=bytearray((n % 251 + 1).to_bytes(4, "little") * ids))
@@ -403,7 +410,10 @@ def parser() -> argparse.ArgumentParser:
     sub = ap.add_subparsers(dest="command", required=True)
     c = sub.add_parser("cost", help="the cost of a close: the hand, the build, the commit and the signature")
     c.add_argument("--out", required=True, type=Path)
-    c.add_argument("--classes", type=_class, nargs="+", default=list(CLASSES), metavar="P,O,ROWS")
+    c.add_argument("--lengths", type=int, choices=LENGTHS_FORMS, default=1, help="the lengths rows' form")
+    c.add_argument("--classes", type=_class, nargs="+", default=None, metavar="P,O[,ROWS]",
+                   help="the content rows' classes: P,O,ROWS under --lengths 1 and P,O under --lengths 2 (default: "
+                        "six classes a power of four apart, of 16 rows each under --lengths 1)")
     c.add_argument("--load", choices=("grid", "rows"), default="grid")
     c.add_argument("--phases", type=int, default=5)
     c.add_argument("--height", type=int, default=cs.HEIGHT, help="the LMS key's tree height")
@@ -413,12 +423,18 @@ def parser() -> argparse.ArgumentParser:
     return ap
 
 
+def costed(args: argparse.Namespace) -> WardenParams:
+    """The schedule the `cost` command's flags name."""
+    classes = args.classes or (CLASSES if args.lengths == 1 else [c[:2] for c in CLASSES])
+    return WardenParams(cell_bytes=args.cell_bytes, slots=args.slots, lanes=args.lanes, window=args.window,
+                        every=args.every, delay=args.delay, ingress_buckets=args.delay,
+                        ingress_cells=args.ingress_cells, egress_cells=args.egress_cells, lengths=args.lengths,
+                        content=tuple(classes))
+
+
 def main(argv=None) -> int:
     args = parser().parse_args(argv)
-    params = WardenParams(cell_bytes=args.cell_bytes, slots=args.slots, lanes=args.lanes, window=args.window,
-                          every=args.every, delay=args.delay, ingress_buckets=args.delay,
-                          ingress_cells=args.ingress_cells, egress_cells=args.egress_cells, lengths=1,
-                          content=tuple(args.classes))
+    params = costed(args)
     result = cost(params, args.load, args.phases, args.height)
     args.out.write_text(json.dumps(result, indent=1) + "\n")
     print(json.dumps(result))

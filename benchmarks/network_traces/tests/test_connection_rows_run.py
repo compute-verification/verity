@@ -468,6 +468,11 @@ def test_a_run_without_lengths_rows_writes_and_checks_what_it_did(tmp_path):
     assert crr.check(out, {}, PLAIN, [], [], [], ws.LINK) == (None, [])
 
 
+#: the cost command's flags of a small schedule
+SMALL_COST = ["--slots", "2", "--lanes", "2", "--window", "32", "--every", "2", "--delay", "5", "--ingress-cells", "4",
+              "--egress-cells", "9"]
+
+
 def test_the_costs_load_is_the_classes_rows_or_what_the_grids_carry_and_its_close_is_measured(tmp_path):
     """`loaded`: with `rows`, every row of every class, each release its class's longest request and most ids, filed
     in its class by the network certifier's rule; with `grid`, no more than an execution phase's grids carry; a
@@ -494,6 +499,47 @@ def test_the_costs_load_is_the_classes_rows_or_what_the_grids_carry_and_its_clos
                                   "sign_ms")} == {2}
     out = tmp_path / "cost.json"
     assert crr.main(["cost", "--out", str(out), "--classes", "4,4,2", "128,8,3", "--load", "rows", "--phases", "1",
-                     "--height", "4", "--slots", "2", "--lanes", "2", "--window", "32", "--every", "2", "--delay", "5",
-                     "--ingress-cells", "4", "--egress-cells", "9"]) == 0
+                     "--height", "4", *SMALL_COST]) == 0
     assert json.loads(out.read_text())["releases"] == 5
+
+
+#: pinned from the runner before it took `--lengths`: the digest of the schedule the cost command measures by
+#: default, and its load's releases and handed bytes, to the grid and to the rows
+COSTED_DIGEST = ("a45d70304d29e91ffab9df9860e7fb57fb63454452add2369af50be06d8ff1bebbf3d9828fa4d1bea82d48f0716592e9"
+                 "51cf58267774e62a6a05f35b35c2b64b")
+COSTED_LOADS = {"grid": (90, 1195378), "rows": (96, 1360768)}
+
+
+def test_the_cost_is_of_form_1_by_default_and_of_form_2_a_classes_rows_are_the_execution_phases(tmp_path):
+    """Without `--lengths` the cost command measures the schedule and the load it measured before it took the flag,
+    held to that digest and those loads. With `--lengths 2` the default classes are the same sizes, each (P, O), the
+    schedule another, and the load is at most R = `phase_releases` releases over all the classes, which is more than
+    form 1's rows held. At a small schedule the form-2 load is R releases, the classes in turn, the close hands
+    execution phase 0 alone, and its tables are the lengths and fails tables' and each class's releases three
+    times; a class of the other form's numbers is refused by the schedule."""
+    default = crr.costed(crr.parser().parse_args(["cost", "--out", "x"]))
+    assert (default.lengths, default.content, default.digest.hex()) == (1, crr.CLASSES, COSTED_DIGEST)
+    for load, (releases, handed) in COSTED_LOADS.items():
+        got = crr.loaded(default, load)
+        assert (len(got), sum(size + 4 * n for size, n in got)) == (releases, handed)
+    held = crr.costed(crr.parser().parse_args(["cost", "--out", "x", "--lengths", "2"]))
+    assert (held.lengths, held.content) == (2, tuple(c[:2] for c in crr.CLASSES)) and held.digest != default.digest
+    assert COSTED_LOADS["rows"][0] < len(crr.loaded(held, "rows")) <= held.phase_releases
+    small = crr.costed(crr.parser().parse_args(["cost", "--out", "x", "--lengths", "2", "--classes", "4,4", "128,8",
+                                                *SMALL_COST]))
+    R = small.phase_releases
+    rows = crr.loaded(small, "rows")
+    filed = [CT.file(small, Released(0, size, n, False, bytes(size), bytes(4 * n))) for size, n in rows]
+    assert (R, len(rows), filed) == (12, R, [0, 1] * (R // 2))
+    out = tmp_path / "cost.json"
+    assert crr.main(["cost", "--out", str(out), "--lengths", "2", "--classes", "4,4", "128,8", "--load", "rows",
+                     "--phases", "2", "--height", "4", *SMALL_COST]) == 0
+    got = json.loads(out.read_text())
+    slots = sum(n for _, n, _ in CR.tables_of(small)[:2])
+    assert (got["parameters"], got["classes"]) == (small.digest.hex(), [[4, 4], [128, 8]])
+    assert (got["releases"], got["tables"], got["rows"]) == (R, 8, slots + 3 * R)
+    assert {got[k]["n"] for k in ("hand_ms", "pickle_ms", "build_ms", "commit_ms", "sign_ms")} == {2}
+    for form, numbers, fix in (("2", "4,4,2", "drop its third number"),
+                               ("1", "4,4", "give the rows of each of its tables")):
+        with pytest.raises(ValueError, match=fix):
+            crr.main(["cost", "--out", str(out), "--lengths", form, "--classes", numbers, *SMALL_COST])
