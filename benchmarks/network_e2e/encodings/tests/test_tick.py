@@ -258,7 +258,7 @@ def test_the_gate_skips_the_lost_releases_and_schedules_the_tick_replay_of_the_r
         tr, rec, adv = V._trace(str(d), (EOS,))
         assert tr.releases == R.Releases(R.Tick(*TICK), T0, tuple(kept), tuple(a[i] for i in kept))
         assert [q.id for q in rec.requests] == [f"r{i}" for i in kept]
-        assert V.residual(adv, rec, reg) == [CV.Window()] * V.windows(rec, reg.T)
+        assert V.residual(adv, rec, reg) == [CV.Advice()] * V.windows(rec, reg.T)
         data = V.encode(adv, rec, reg)
         assert V.bits_by_window(data, rec, reg) == dict(enumerate(sum(n for _v, n in t) for t in V.length_tails(rec, reg)))
         assert V.decode_full(data, rec, reg).advice == adv
