@@ -175,3 +175,67 @@ with file and line, and the measured serving cost of each where the lane's servi
   state, and does the MTP method hand draft logits to the sampler or only draft tokens?
 - **network-accounting:** under paced egress on the certified tick, does the number of tokens released at a tick
   depend on how many the engine produced that step?
+
+## Entry 2, Thu 12 Nov 02:35Z: your 02:00Z and 02:22Z sections read; two corrections to what Daniel was told; first prices
+
+**First line, as you asked.** What you told Daniel at 6:00 PM PST is right in two parts: it is not the proof system
+(Flock and the sampling take no notice of the cache), and the demo's choice, caching off, does not extrapolate to agent
+traffic. Two things to correct to him:
+
+1. **Item 1 is not open. The Lean decides it, and the answer is no:** a pool committed once an execution phase does
+   not leave every replay block closed. A request reads a proof block when one of its served outputs reads a value that
+   block commits (`blocksTo`, `security/Definitions/Claims/SamplingServed.lean:33-36` [code, in part]). A cached page
+   is the committed output of the block that computed it, in another request. Committing the pool fixes the page before
+   the coins; it does not change who computed it. The patterns' form, which the figure of record uses, requires that no
+   two requests read one proof block and that each request reads in one replay block (`RequestsCover`,
+   `security/Properties/Spot/TwoStageCheck.lean:53-62` [code, whole file]); its theorem is proved
+   (`twoStageCheckPatternsSound`, `security/Proofs/Properties/Spot/TwoStageCheck.lean:308` [code, in part]). The cost
+   model's pool unit (`CacheStep_v3` on `MemCheck_v1` and `BlockKey_v1`) proves which blocks hit, not what the pages
+   hold, so it does not close a reader either.
+2. **The figure of record does not extrapolate either,** and that is neither the demo nor the proof system. It keeps
+   every replay block closed by having each sampled replay prove the cached prefix again (entry 1). That costs proving
+   in proportion to 1 plus hits over computed. At AgentX's reuse the same budget buys a figure 44 to 57 times larger
+   (table below). So the honest sentence for Daniel is: **not the proof system, not the demo's size in machines, but
+   the traffic's shape acting on how the sampling design accounts for shared values; and one design already stated and
+   proved on `main` avoids it.**
+
+**The design that avoids it: make the cache's sharing group the replay block.** If the cache is keyed by session
+(vLLM's own `cache_salt` request field [memory of vLLM's API; I will check it at the pin]) and a session is the replay
+block, every page a request reads was computed inside its own replay block. The block is closed, nothing is proved
+twice, and the patterns' form on `main` covers it with the served cap read as the session's (the merged request serves
+G·S bits, `N` = 1). The model puts it at about 1.2 to 1.4 times the figure for 4 to 86 requests a session.
+
+**First prices** [modeled: `headline.py rows` on `main` at `be9a3d5669`, row (i), world year, the GB at which the
+total is 10% of compute, times 1.05; runs `r20261112-020726-bb59` and `r20261112-020801-9d1e`; only the three values
+named in entry 1 were changed from outside; every other input is the plan's]:
+
+| Case | GB a world year | Against no cached reads |
+|---|---:|---:|
+| No cached reads proved again (r = 0), S = 28,000 bits | 12,552 | 1 |
+| **Replays prove hits again, the figure of record: our plan (r = 0.1386)** | 14,229 | 1.13 |
+| … at the Moonshot conversation trace's reuse (r = 0.57) | 19,446 | 1.55 |
+| … at GitHub Copilot's (r = 5.9) | 83,834 | 6.7 |
+| … at AgentX's (r = 45 and 58.2) | about 552,000 and 710,000 [arithmetic from the rows at 9.95% total; the reader failed on a datacenter's week, where the bound is everything served] | 44 and 57 |
+| **Session as the replay block**, G = 4 / 16 / 86 requests (tokens, replay and S each × G; a rough stand-in) | 14,767 / 15,595 / 17,787 | 1.18 / 1.24 / 1.42 |
+| Patterns' form with S read as F·S, F = 2 / 4 / 8 / 16 / 86 / 252 / 10,000 (**no statement on `main` covers this for F > 1**; I have a proof sketch only) | 14,043 / 14,801 / 15,289 / 15,857 / 19,039 / 24,882 / 99,039 | 1.12 / 1.18 / 1.22 / 1.26 / 1.52 / 1.98 / 7.9 |
+| Capped sets' form, which `main` does state for F > 1 (`N` = F), F = 1 to 10,000 | 24.4 million, flat in F | 1,945 |
+
+The datacenter's year is within 4% of the world's in every row, and a week or a month within 2% of the year: at a
+fixed share of compute the bound is nearly the same total over any period [modeled, run A, all six scopes for the
+first six rows]. The bound falls as 1 over the audit budget in every row (fitted slope −1.0000).
+
+What the table says:
+
+- **Line 4 of your five is half right, and I was too quick in entry 1.** A single incorrect block is charged its own
+  committed bits whoever reads it. But a replay block that is incorrect wholesale was charged what it serves, S, and
+  with F readers it is charged what they all serve, F·S. That is the growth with F, and in the patterns' form it is mild
+  (1.5 times at F = 86), because a wholesale-incorrect block is also the easiest to catch.
+- **The capped sets' form is no use here:** it is about 1,900 times the patterns' form before any sharing.
+- **Caching off** stays at the first row's figure per request, and pays 1 + r in serving compute: 1.14, 1.57, 6.9, 46
+  to 59 times [arithmetic].
+
+**What changes in the final** (your 02:22Z order: 1, 3, 2, 5, 4): caching off priced once; the routes with the
+cache on (session as the replay block; pages read as committed inputs under a new statement; prove again) each with
+what serving commits against 1% of serving time and what the replay reads; speculative decoding on; AgentX first;
+one recommended route with its changes by lane. Still to read: vLLM's `cache_salt` at the pin, the serving notes'
+measured rows for the commitment, AgentX's session lengths against a cap.
