@@ -93829,3 +93829,142 @@ Branches: `cursor/proofs-landing-closes-99d1` at `826cea0776932dff8b9890eb77f045
 - **Where I would push on it** [guess]: the work form's `AtRate` says only `1 ≤ K ≤ n`, with the rate held by the table's floors; the Bernoulli text stays itself; and the property holds only where `Rule.over` gives a rule, so a population it refuses (0, I believe) is outside it.
 - I marked nothing and wrote nothing on Linear or Slack. The open command linked the pull request to PRF-590 through the Linear app, as the command you gave does [run: its output].
 - Nothing is running. #9237 is untouched at `9d4aec0111fb`.
+
+## COUNT, Thu 12 Nov 17:30Z: the control is one command on three files of the store and prints 2,635.9 GB at `main` `4520abe708b0`; it holds only with the price file of 11 Nov (the store's table of today gives 2,670.3 GB); your answer on PRF-456 is right but for one word; 10 pieces another lane can take; the two-point split is done as arithmetic, its rows need a run and two decisions of yours (all modeled)
+
+Read only: no `research run`, no branch moved, nothing written to Linear or Slack. [local] below is my VM, a detached worktree of `main` at `4520abe708b0` (fetched 17:14Z), the planner alone, 2 to 7 seconds a command. Mailbox read 17:29Z: 38 sections, none newer than yours of 13:29Z. Nothing here ran on the served engine.
+
+**1. For benchmarks' worker: the control** (written to be relayed as it is)
+
+The command, from the root of `main` after `uv sync --all-packages --extra torch-cpu`:
+
+```
+research data fetch art:587e1d67419b246527f700f7e0e59091b99435c4af7d972021b9edf31c95347e --to D \
+  --path inputs/count_card_control.py --path inputs/bench_prices.json --path inputs/plan_inputs.json
+.venv/bin/python D/inputs/count_card_control.py - D/inputs/bench_prices.json D/inputs/plan_inputs.json OUT.json
+```
+
+- [local, 17:27Z: the fetch as written and the script from a worktree at `4520abe708b0`, with my checkout's `.venv`; run `r20261112-140527-dc31` at `3d8530f5268a`] It prints `bound GB 2635.9320571029266 x1.05 2767.728659958073 plan cells 193 design cells 193`, further down `fields differing by more than 1e-9: 0`, and exits 0 in about 2 seconds.
+- [read: the script] It exits 1 when a planner input of any of the 193 block types (its count, output bits, stratum, proving seconds a block, fixed seconds, statement size, committed bytes) differs from the plan of record's by more than 1e-9, or a block type is on one side only.
+- [read: the script] What it is: 94 lines of scratch, not in the tree. It calls the driver's own functions (`benchmarks/spot_figures/breakeven/headline.py`: `spec_of("(ii) honest", "world year", 0.05544106123672309)`, `evaluate`, `plan`, `assemble`) on the tree's `workload` card and the tree's lever (the first argument, `-`), with one function replaced, `headline.pricing`, which hands the prices in.
+- [local] sha256: the script `0614efc60a4a1cb8c4ba4e88cc991e1b690a60aeea124f55e8b55e6bb0478020`, the prices `f2badd5ecdf36530b918b34782fec63466b8586cd6df55e46c43af442af9604c`, the plan of record's planner inputs `cb8f1733d189228657f96342c359a8b230078c8760066b443559862bd44d0c80`.
+
+What "benchmarks' prices handed in" are:
+
+- [read: the file's fields] A file, `bench_prices.json`: 192 cells keyed by the block names of the planner's line. It is `verity bench prove`'s table for GLM-5.3 as it read the store on 11 Nov, one cell a block type: `source` (`steady` 63, `family` 115, `single` 4, `k_log` 10), `seconds` (GPU-seconds a block at a full statement, one prover) and `record` (the steady-state row's artifact). Its `reader` field names commit `693fc39a2afe` of `main`; its `inputs` name the census `art:471350fa6bf2…`, the partition `art:2d327277e283…` and 261 steady-state rows, the newest `r20261111-024327-fbdc`.
+- [read: the store] Where: `inputs/bench_prices.json` of the run record above; the same bytes are `inputs/bench_prices.json` of the pricing run `r20261111-163515-2cd7` (`art:1492fccdb9b7…`). Whose: proofs' scratch. It is not on `main`.
+- [read: the script, lines 19 to 48] The rule that hands them in: a block type takes its cell only where the `source` is `steady` (its own steady-state row) or `family` (the row of its Definition at the same static `K`, at 2^Δk). The planner's own price of the type is then multiplied by one factor, the cell's seconds over the planner's seconds a block at a full statement: the prover's fixed seconds and its seconds a block alike, the Lean verifier's seconds left as they are. The other 14 block types keep the planner's price.
+- [run `dc31`: `out/plan10.txt`] Of the row's proving seconds 99.54% are then own steady rows, 0.45% family rows and 0.014% the planner's own price.
+- [read: `out/prices.txt` of `dc31`; derived from the file: seconds a block times blocks a token] Two rows of the table are named otherwise than the line's blocks, and they carry 56.0% and 21.8% of a served token's prover seconds in the file (48.0% and 18.7% in today's table): the table's `MoeExpertFp8ReadGemm_v1{READ=…}` and `MoeExpertFp8ReadGemmW_v1{READ=…}` are the line's `Fused[EmbeddingRead_v1{…} + MoeExpertFp8BlockGemm_v4{…}]` and `Fused[EmbeddingRead_v1{…} + MoeExpertFp8BlockGemmW_v4{…}]`.
+- [read: `headline.py` lines 22 to 31 at `main`] The driver's own flag on `main`, `--steady ROWS.json`, is another rule: it takes a row only for the block of its own name (no family rows), and prices the block at the statement's GPU-seconds over its blocks, where the control keeps the planner's proportion between fixed seconds and a block. [guess] So `--steady` as it stands will not print 2,635.9 GB. I have not run it against the control.
+- [run `dc31`; the table itself read on my VM at 13:54Z, local] **The control holds with that file and not with the store as it is today.** `verity bench prove --system flock --workload glm53 --json` now prices 88 of the 192 block types otherwise: 32 types' own steady rows are now the ones timed on 10 host cores a card, where the file's were timed on 24. With today's table the same row at the same budget reads 2,670.3 GB (2,803.9 with the 1.05). A control that refuses to move has to pin the file by its sha256.
+- [read: benchmarks' offer on PRF-456, 9:10 AM PST] The offer calls the control the figure "with no measured rows". It is the other way: 2,635.9 GB is the row with benchmarks' rows of 11 Nov handed in; with none it is 4,612.4 GB at the same budget (the table below).
+
+What the same row reads. Every figure is the driver's second row at the scope `world year`, over a datacenter's 600 s verification phase (12,500 machines, 90,237,980 replay blocks), modeled:
+
+| prices | the budget it is read at | the row's total there | GB (with the 1.05) | sampled replay blocks | source |
+|---|---|---|---|---|---|
+| the file handed in | the plan of record's: the audit at 0.05544106123672309 of the compute it covers | 10.086% | **2,635.9 (2,767.7)** | 27 | [local at `4520abe708b0`; run `dc31`] |
+| the file handed in | `main`'s 10% point: the audit at 0.0543938 | 10.000% | 2,698.8 (2,833.7) | 94 | [local; run `dc31`] |
+| the tree's own price tables | the plan of record's budget | 10.094% | 4,612.4 (4,843.0) | 55 | [local; run `r20261112-124742-a3fe`'s pinned row at 0.055 has the same figure and count] |
+| the tree's own price tables | `main`'s 10% point: the audit at 0.0545053 | 10.000% | 4,697.8 (4,932.7) | 54 | [local] |
+| the tree's own price tables | the driver's own reading, `headline rows --scopes "world year" --rows "(ii) honest"`: log-log between its pinned budgets, where the total is 10% | 10% | 4,654.4 (4,887.1) | not one design | [run `a3fe` at `1885cf1fe08c`; local at `4520abe708b0`, the same figure] |
+
+- [derived; read: `git show 9fa7b98c26`] The total at the plan of record's budget is 10.086% on `main`, not 10%, because the `serve_tax` card's token tax rose from 2.0393% to 2.1199% after the plan was made. The plan of record's figure is quoted at its own budget.
+- [local] With the tree's own tables 95.39% of the row's proving seconds are at the planner's assumed default price (`reprice.DEFAULT`).
+- [local; run `dc31`] Each design of the table's first four lines prints the driver's limit: "its largest session in tables is 4 of its type, past the GPU prover's 1".
+
+The measured card's blocks that do not meet the workload card by name. The command, from the root of `main`:
+
+```
+python3 - <<'EOF'
+import json
+c = "benchmarks/spot_figures/cards/"
+po = json.load(open(c + "proof_overhead.glm-5.3.json"))["value"]["blocks"]
+wl = {x["block"] for x in json.load(open(c + "workload.glm-5.3.json"))["value"]["strata"]}
+for i, x in enumerate(po):
+    if x["block"] not in wl:
+        print(i, x["block"])
+EOF
+```
+
+- [local at `4520abe708b0`] 103 blocks; 79 meet a block type of the workload card by name; 24 do not: entries 0, 2 to 6, 9, 77 to 87, 91, 92, 97, 98, 101 and 102.
+- [read: the two cards] By Definition:
+  - 4 scaled matmuls at `N=1`: `ScaledMmFp8BlockSharedScale_v1{K=6144|2048|256|1536,N=1,G=128}` (entries 2, 3, 6, 97). The workload card holds `N=4` at `K` 6144, 2048 and 256, and `N=8` at 1536.
+  - 4 types the workload card holds as column blocks and the measured card whole: `MoeSum_v1{TOPK=8,H=3072}` (9; the workload card's is `H=96`), `ResidualAdd_v1{N=6144}` (87; `N=384`), `AllReduceMultimem_v1{WORLD=8,SIZE=3072,…}` (86; `SIZE=96`), `AllReduceResidualMnnvl_v1{WORLD=8,N=3072,SHOT=1}` (92; `N=96`).
+  - the combine `SparseMlaCombine_v1{NSPLIT=5,DV=512,…}` (91; the workload card's is `DV=64`).
+  - 8 MoE blocks of other partitions: `MoeExpertFp8CoordinateChunk_v1{…}` (0, 4, 5), `MoeExpertFp8BlockCoordinate_v1{K=6144,…}` (77), `MoeExpertFp8BlockCoordinateW_v1{K=256,…}` (78), `MoeExpertFp8BlockGemm_v4{K=6144,N=1,…}` (82), `MoeExpertFp8BlockGemmW_v4{K=256,N=32,…}` (85) and `MoeExpertFp8GemmW_v1{…,SWAP=true,DOT=…MmaV2Dot32_v1}` (102). The workload card holds `MoeExpertFp8BlockGemm_v3` and `MoeExpertFp8GemmW_v1` at other statics.
+  - 4 reads, `EmbeddingRead_v1{V=256,H=3072|96|4096|4}` (80, 81, 83, 84): the workload card has no block of that name.
+  - the router `MoeRouterSigmoidBiasSlots_v2{…}` (79; the workload card's is `MoeRouterSigmoidBias_v1`).
+  - 2 linears, `FlashInferFp8Linear_v1{K=256|2048,N=1}` (98, 101): the workload card holds `FlashInferFp8Quant1x128_v1` and the scaled matmul in their place.
+
+**2. Your answer on PRF-456, sentence by sentence**
+
+- **The card: right but for "bytes".** [local] The file on `main` is the card the pricing run was given, byte for byte, plus one last key, `art`, which `cards.py fetch` adds: less that key and written as `workload_card.py` writes it, its sha256 is that card's (`b1aa9e8fb02e…`), and the two `value`s are equal. `art:be39ec1ff595…` is the card's own id. `workload_card.py` writes it [read: its line 72].
+- **The lever: right.** [local] `mla128.volume` at eight heads against the plan of record's lever file: 84 block types on each side, none on one side only, the largest relative difference 1.85e-16 (65 head blocks, 9 whole splits, 8 column ends, the combine, the head's end).
+- **The column split: right.** [read: the card; `benchmarks/one_stage/block_census.py`; `breakeven/sweep.py` line 408] The card holds the three all-reduces at 96 columns, `MoeSum_v1{TOPK=8,H=96}` and `ResidualAdd_v1{N=384}`. The census partitions them and the card holds the result; the sweep has no step for it. No separate tool carries it.
+- **The three rows and their shares: right, and they hold at today's `main`.** [run `a3fe` at `1885cf1fe08c`] 6,770.4, 4,887.1 and 1,452.5 GB; the planner's assumed default prices 97.86%, 95.39% and 87.48% of their proving seconds, the same at every pinned budget. [local at `4520abe708b0`, 17:18Z] The driver's command prints the same three figures.
+- **A session of 4 tables: right, and not the first row's alone.** [run `a3fe`; local] All three rows print the limit, and so does the control's design. The plan of record's 2,635.9 GB carries it too.
+- **"79 of the measured card's 103 blocks are on the new card": right.** [local] The 24 others are listed above.
+- **Two things I would add to it**, both in section 1: the control's price file is pinned, and the store's table of today moves the figure to 2,670.3 GB; and the control is with benchmarks' rows, not with none.
+
+**3. Pieces another lane can take**
+
+Each piece's done-condition, lane and "safe or your decision first" are my proposals [guess]; each fact in a piece carries its own tag.
+
+1. **The repricing on `main`** (benchmarks; taken).
+   - Done when: a command of the tree, given the price file (sha256 `f2badd5e…`), prints 2,635.9 GB at the audit's 0.05544106123672309 with the 193 block types' planner inputs equal to `plan_inputs.json`'s to 1e-9, with no scratch file, and a test under `benchmarks/spot_figures/tests/` holds it.
+   - Needs from us: the three files of section 1.
+   - Your decision first: which rule the driver takes (family rows and the planner's proportion, as the control does; or `--steady`'s), and whether it reads the pinned file or the store (2,670.3 GB today).
+2. **The store's table read inside a run.** [run `dc31`: `out/steps.txt`] `verity bench prove` fails on a run's node: "the evidence store has no remote here".
+   - Done when: on a run's node (`research run --on auto --cwd source`, after its `uv sync`) `.venv/bin/verity bench prove --system flock --workload glm53 --json` exits 0 with 192 rows.
+   - Lane: infra, or benchmarks, whose command it is. Safe to hand over as it is.
+3. **Seven block types still priced from steady rows timed on 12 or 24 host cores.** [read: `out/bench_prove.json` of `dc31`] `SparseMlaHeadBlock_v1{…,NVIS=59,FIRST=true,…}` (12 cores), the same at `NVIS` 60 to 63, `DsaIndexerKRow_v1{…}` and `DsaTopKShortRow_v1{TOPK=2048}` (24 cores); 0.027% of a served token's prover seconds.
+   - Done when: the table's `cores` is 10 on all 64 steady rows.
+   - Lane: kernels, whose steady rows they are; a card of node A. Safe to hand over as it is, and small.
+4. **Is 10 host cores a card the host a datacenter's prover has?** [read: `prove_records.py` line 727; `verity/hardware/cards/xeon-platinum-8468-2s.toml` lines 14 to 18] It is `verity bench prove`'s `--cores` default, "a stated input". The H200 nodes' host card gives 2 sockets of 48 cores, and 8 cores a GPU on the nodes' VM.
+   - Done when: the default names its source on a hardware card, or is changed to it, and the second row is printed at that count.
+   - Lane: benchmarks. Your decision first: the count moves the rows C by 4.0% to 5.6% (my 14:14Z entry).
+5. **The two workload cards' `source` text.** Not started. [read at `main`] `workload_card.py` line 47 writes "ANDs the estimator's upper bound", and `tests/test_workload_card.py` line 44 asserts that phrase. The card is a store artifact kept with its id, so its sentence changes only in a new card under a new id. Nothing else holds its bytes: `git grep be39ec1ff595` finds the card's own file alone.
+   - Done when: the generator's sentence and the test say what #9227 says (the estimate counts each leaf's ANDs lowered alone, times how often the Definition holds it, table reads apart); both cards are written again with `value` equal to today's; they are fetched with `--replaces`; the control still exits 0; the suite of `benchmarks/spot_figures` passes.
+   - Lane: circuits, whose sentence it is, or benchmarks.
+   - Your decision first: a new id for a change of words moves what names `art:be39ec1ff595…` (your PRF-456 comment, #9185's body, the label of my 09:59Z entry). The other way is the generator and the test now, and the next card carries the sentence.
+   - [not read] Whether a generator writes the DeepSeek card's sentence.
+6. **The class's counts file.** Not started; it waits on the class's name.
+   - [read: VLLM-367's last four comments, the newest 02:28Z Thu] None names the class or the check Friday's second pass runs.
+   - [read: `total_cost.py` lines 1441 to 1449 at `main`] `total_cost.py counts` takes `--model`, `--line`, `--scope`, `--beta`, `--serving` and `--out`. It has no argument for a class's check templates, so the piece is that argument and then the file.
+   - Done when: `two_stage.py first --k COUNTS.json` on the named class is not refused (the file names each of the check's templates exactly once, #9095's rule), and each count is the design's at the stated budget.
+   - Lane: vllm, who know the class's templates, their sizes and their count a replay block. Needs from us: the file's schema (`spot-two-stage-counts/v1`) or the argument.
+   - Your decision first: who writes it, and the date (yours was Fri 13 Nov 04:00Z).
+7. **The two-point split's rows** (section 4).
+   - Done when: the seven rows of my 14:14Z entry and the cell at 291.3 GB are printed again with the head's prover seconds split 0.751 fixed, by one `research run` of the kit (its files are `inputs/` of `dc31`'s run record).
+   - Lane: ours, or benchmarks' worker after piece 1. Your decision first, two things, in section 4.
+8. **A four-prover timing of the head at two sizes.** [relayed: FIXEDCOST 17:17Z, sections 3 and 7] The run has none: in each four-process cell three provers filed while the fourth was starting.
+   - Done when: 64 and 256 blocks are timed with four provers filing in every window (FIXEDCOST's `provers.py` prints it); about 25 minutes of a card.
+   - Lane: kernels. It is an ask of yours to make.
+9. **The Lean verifier timed on the head's statement in the templated form.** [relayed: your 04:19Z ruling] The plan of record's figure is quoted with "assumed 60.56 s"; 3,504.8 GB is the reading if the templated check costs what the units-as-stated check does.
+   - Done when: one run times it and the figure is quoted with the timing in place of "assumed".
+   - Lane: lean, whose verifier it is, on kernels' staged statement. Safe to hand over as it is.
+10. **PRF-577's follow-up, its changes 4 and 5.** [read: PRF-577] The `verifier_cost` card and `reprice.py` hold the read, the setup and the check apart; `total_cost.py`, `figure1.py`, `headline.py` and their tests carry the two parts and print rows A to C. All of it is under `benchmarks/spot_figures/`.
+    - Done when: PRF-577's own condition holds, with two anchors anyone can check. At the defaults no test of `test_total_cost.py`, `test_figure1.py` or `test_headline.py` changes and the control exits 0. And the rows printed equal the kit's at `main` to 0.1%: 9,395.6, 10,147.3, 3,833.5, 4,080.8, 935.3, 710.8 and 683.5 GB (`out/rows_read.txt` of `dc31`, the prices of 11 Nov).
+    - Lane: benchmarks, after changes 1 to 3 (`verity/protocols/spot/optimize.py`), which I would keep with us.
+    - Your decision first: the defaults, that is which of rows A to C `main` runs. [read: `gh pr view 9253`, 17:29Z] #9253, which keeps one circuit file's reading across a process's members, is open and not on `main`.
+
+**4. The two-point split**
+
+- [relayed: FIXEDCOST 17:17Z, sections 1 and 6] One prover on card 7 of node A, ten cores, run `r20261112-110333-4c33`: the head's statement took 2.0888 GPU-seconds at 64 blocks and 2.5685 at 256. The run has no four-prover pair.
+- [derived; FIXEDCOST's figures to the last digit's rounding] The rule (a block (T_full − T_q) / 192, fixed (4·T_q − T_full) / 3) gives 0.002498 s a block and 1.9289 s fixed: a fixed share of 0.751, where the kit's computed share is 0.7115 (my 10:00Z entry).
+- [derived] Scaled to benchmarks' row of the head (2.8555 s a full statement, one prover), the head's cell becomes 2.1444 s fixed and 0.7111 s for its 256 blocks (0.002778 a block), where the kit has 2.0316 and 0.8239 (0.003218): fixed +5.6%, a block −13.7%, a full statement the same.
+- [derived] What that changes: a full table costs the same; a quarter-full table costs 0.813 of a full one where the kit said 0.784, so 3.8% more. Rows whose sessions hold full tables do not move.
+- [relayed: FIXEDCOST, section 6] Against the line (a fixed share of 0.634) the timed share is over it at one prover. I print no GB for it: that takes the planner.
+- **Not done as rows, by your rule.** It is a run, and over half an hour with the two decisions it waits on:
+  - The run: the kit prices the head's cell from `plan_inputs.json` and has no argument for the head's split, so the cell is replaced and the planner run again (`research run`, minutes).
+  - Decision (a): the pair is one prover on ten cores, and its 1.93 s fixed is the host's witness build in one call, not the card's proving [relayed: FIXEDCOST, section 2]. The planner's price is for four provers a card. Is the one-prover share put on it?
+  - Decision (b): the run timed the whole 64-key head block (`SparseMlaHeadBlock_v2`, `FIRST=false`, `k_log` 27). The card holds 65 head block types at other key counts. Do all take 0.751, or the timed one alone?
+
+**Not established**
+
+- [not run] `--steady` on `main` against the control.
+- The store's table of today is the one read at 13:54Z. I did not read it again this hour.
+- The script that put the table into `bench_prices.json` on 11 Nov: I did not look for it this hour; the file's fields are the table's [read].
+- Three older items of mine are not in the list because I did not read their state again this hour: the row for several verification phases in `total_cost.py`, the split head's column, and the function for the binding error printed beside each figure.
