@@ -191,6 +191,30 @@ def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path)
         sz.link(tmp_path / "none", setup=sz.TEST, group=0)
 
 
+def test_every_rounds_members_frame_domains_are_one_set_their_templates_and_counts(tmp_path):
+    """A scan member's statement's input set is its template's (`scan_zk.set_of`), naming no round and no execution
+    phase, so its o0's frame domain (`scan_zk.frame_domain`, which `stage` holds the staged one to) is a function of
+    its template and its unit count: the domains computed once from the honest round's members are those of every
+    round's, an execution phase's member's those of the next's, and the unread round's one unit's the last ingress
+    unit's. The block's set is its run's (`block_set`), so its o0's domain, the `prog` tree's, is no other run's."""
+    G, T = 2, sz.TEST.params.window
+    h = sz.host(tmp_path / "a", setup=sz.TEST, group=G)
+    honest = {m.name: m for m in h.rounds["honest"]}
+    once = {(m.template, m.n): sz.frame_domain(sz.set_of(m.template), m.n) for m in honest.values()}
+    assert sorted(once) == [("egress", T), ("first", 1), ("ingress", 1), ("ingress", T - 1)]
+    assert len(set(once.values())) == len(once)
+    assert [(k, m.n) for k, m in honest.items() if m.template == "ingress"] == [
+        ("ingress-0", T - 1), ("ingress-1", T - 1), ("last", 1)]
+    for name in ("honest", "chain", "tampered", "unread"):
+        ms = h.rounds[name]
+        assert ms and all(m.set_name == sz.set_of(m.template) for m in ms), name
+        assert all(sz.frame_domain(m.set_name, m.n) == once[m.template, m.n] for m in ms), name
+    assert [(m.template, m.n) for m in h.rounds["unread"]] == [("ingress", 1)]
+    (blk,), (other,) = h.rounds["block"], sz.host(tmp_path / "b", setup=sz.TEST, group=G).rounds["block"]
+    assert blk.set_name == h.at.block_set != other.set_name and blk.n == other.n
+    assert sz.frame_domain(blk.set_name, blk.n).hex() == blk.ports["o0"]["domain"] != other.ports["o0"]["domain"]
+
+
 XOR8 = PrimitiveDefinition("ScanZkTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
 
