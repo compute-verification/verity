@@ -9,6 +9,7 @@ unit = "percent of stock's serving compute"
 better = "lower"
 command = "research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model glm53"
 every = "7d"
+goal = "vllm/serving-cost-benchmark"
 
 [[metric]]
 id = "network-accounting/scan-proving-cost"
