@@ -2,9 +2,10 @@
 (`TP2CaptureWorkerExtension.tp2_coll_install` and `tp2_coll_close`).  Between the two, every collective the rank issues is
 one record in call order: the model forward it belongs to, its place in that forward, its kind, the module it is issued
 from, and the shape, dtype and SHA-256 of its partial and of what the rank received.  The values of the first steps are
-kept for the cross-rank check, and the run computes what it would without the recorder.  CPU-only: vLLM is
-`tests.fake_vllm`, whose three layer modules and MoE runner module hold the collectives the test gives them, the model's
-modules carry the class names the recorder hooks by, and the test sets the rank and `torch.cuda.synchronize`."""
+kept for the cross-rank check, and the run computes what it would without the recorder.  On a rank whose `tp2_install`
+put an observer on the same run, the observer is off for the recorder's own copies.  CPU-only: vLLM is `tests.fake_vllm`,
+whose three layer modules and MoE runner module hold the collectives the test gives them, the model's modules carry the
+class names the recorder hooks by, and the test sets the rank and `torch.cuda.synchronize`."""
 from __future__ import annotations
 
 import hashlib
@@ -21,6 +22,10 @@ import torch
 
 from tests import fake_vllm
 from verity_vllm.acquire.sources import moe_align_source
+from verity_vllm.engine import vllm_adapter as va
+from verity_vllm.observe import capture
+from verity_vllm.observe.events import RunHeader
+from verity_vllm.pipeline import m1_capture
 from verity_vllm.pipeline.tp import rank_worker as RW
 from verity_vllm.pipeline.tp.rank_worker import TP2CaptureWorkerExtension
 
@@ -153,7 +158,7 @@ class _Rank(TP2CaptureWorkerExtension):
     """A rank's worker as far as the recorder reads it: the model its runner holds."""
 
     def __init__(self, model: torch.nn.Module) -> None:
-        self.model_runner = SimpleNamespace(get_model=lambda: model)
+        self.model_runner, self.vllm_config = SimpleNamespace(get_model=lambda: model), SimpleNamespace()
 
 
 @pytest.fixture
@@ -273,8 +278,8 @@ def test_an_moe_module_is_one_that_imports_and_holds_the_all_reduce(vllm):
     assert RW._moe_collective_modules() == []
 
 
-class _Observer:
-    """The run's aten observer's recorder: it says each time it is switched."""
+class _Recorder:
+    """The recorder of the run's aten observer: it says each time it is switched."""
 
     def __init__(self) -> None:
         self.switched: list[bool] = []
@@ -290,17 +295,29 @@ class _Observer:
         self._active = value
 
 
-def test_the_runs_observer_is_off_for_the_recorders_own_copies_and_on_for_the_collective(vllm, tmp_path):
-    rec, seen = _Observer(), []
+def _observed(monkeypatch, w: _Rank, out: Path) -> _Recorder:
+    """The recorder of the observer that `tp2_install` puts on rank ``w`` before the collectives' recorder, as `tp-capture` does."""
+    rec = _Recorder()
+    header = RunHeader("log/v1", "2026-01-01T00:00:00Z", "id", {}, {}, {})
+    monkeypatch.setattr(capture, "make_header", lambda engine, workload, **kw: header)
+    monkeypatch.setattr(capture, "Capture", lambda engine, **kw: SimpleNamespace(rec=rec, roots=[], install=lambda: None))
+    monkeypatch.setattr(m1_capture, "dump_cos_sin", lambda engine, rank_dir: None)
+    monkeypatch.setattr(va, "versions_doc", lambda engine: {})
+    w.tp2_install(out_dir=str(out), workload={}, case="C", cp={}, engine_kwargs={}, env_flags={}, snapshot_steps=[], snapshot_max_bytes=0,
+                  adapter_revision="r", wheel_sha256=None, vllm_commit=None)
+    return rec
+
+
+def test_the_runs_observer_is_off_for_the_recorders_own_copies_and_on_for_the_collective(vllm, monkeypatch, tmp_path):
+    model = _Model(vllm)
+    w = _Rank(model)
+    rec, seen = _observed(monkeypatch, w, tmp_path), []
 
     def observed(x: torch.Tensor) -> torch.Tensor:
         seen.append(rec.active)
         return all_reduce(x)
 
     setattr(vllm[EMBEDDING], ALL_REDUCE, observed)
-    model = _Model(vllm)
-    w = _Rank(model)
-    w._tp2 = {"cap": SimpleNamespace(rec=rec)}
     w.tp2_coll_install(out_dir=str(tmp_path))
     model.step(_x())
     w.tp2_coll_close()
