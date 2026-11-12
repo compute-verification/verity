@@ -198,6 +198,32 @@ def one(run: str, name: str, res) -> dict:
             line["tests_started_rss_sum"] = round(v / G, 2)
             line["tests_started_at_once"] = n
             line["tests_started_pss"] = round(pss_at_once(pss, sub, ta, tb)[0] / G, 2)
+            during = lambda when: next((t["test"] for t in tests if t["t0"] - 1 <= when <= t["t0"] + t["s"] + 2), None)
+            # the largest single process it started, in its tests, by the high-water mark the sampler read of it
+            big = max(((max(s[2] for s in procs[k]["s"] if ta <= s[0] <= tb), k) for k in sub
+                       if any(ta <= s[0] <= tb for s in procs[k]["s"])), default=(0, None))
+            line["tests_largest_started"] = round(big[0] / G, 2)
+            line["tests_largest_started_in"] = big[1] and during(next(s[0] for s in procs[big[1]]["s"] if ta <= s[0] <= tb))
+            # its resident set and that of all it started, added up at each sample: no less than what they held (a shared page
+            # counts once a process)
+            tot, cnt, own = collections.Counter(), collections.Counter(), {}
+            for k in [key, *sub]:
+                for s in procs[k]["s"]:
+                    if ta <= s[0] <= tb:
+                        tot[int(s[0])] += s[1]
+                        if k == key:
+                            own[int(s[0])] = s[1]
+                        else:
+                            cnt[int(s[0])] += 1
+            if tot:
+                when = max(tot, key=tot.get)
+                mine = {key, *sub}
+                near = [(round(t - when, 1), round(sum(v[0] if v[0] is not None else (v[1] or 0) for k, v in got.items() if k in mine) / G, 2),
+                         sum(1 for k, v in got.items() if k in mine and v[0] is None)) for t, got in pss if abs(t - when) <= 6]
+                line["tests_rss_added"] = {"at_most": round(tot[when] / G, 2), "at": hms(when), "own": round(own.get(when, 0) / G, 2),
+                                           "started": cnt.get(when, 0), "during": during(when),
+                                           "seconds_over_8": sum(1 for t in tot if tot[t] > 8 * G),
+                                           "pss_rounds_within_6s": [{"dt": a, "at_most": b, "unread": c} for a, b, c in near]}
         out["workers"].append(line)
     if build is not None and build["key"] is not None:
         sub = subtree(kids, build["key"])
@@ -252,13 +278,19 @@ def one(run: str, name: str, res) -> dict:
 
 
 def table(o: dict) -> str:
-    head = ("| worker | catalog | own peak (VmHWM) | of which by the catalog | own peak set by | largest process it started (waited-for maxrss) "
-            "| set by | it and all it started at once, PSS | tests | test s |\n|---|---|---|---|---|---|---|---|---|---|\n")
+    """GiB.  Own peak: the worker's VmHWM as its last row has it.  The largest process it started: in its tests, the high-water
+    mark the run's sampler read (once a second; `getrusage`'s figure for waited-for children is no use here: a child started
+    by vfork and exec carries its parent's high-water mark).  At once: the worker and all it started, by the sampler's PSS
+    rounds (every 5 s; a process a round did not read counted at its resident set)."""
+    head = ("| worker | catalog | own peak | when the catalog was made | the test that set its peak | largest process it started in tests "
+            "| it and all it started at once, in tests | tests |\n|---|---|---|---|---|---|---|---|\n")
     body = ""
     for w in o["workers"]:
-        short = lambda s: (s or "?").split("::")[-1][:70]
-        body += (f"| {w['worker']} | {w['how']} | {w['own_hwm']} | {w['own_hwm_at_catalog']} | {short(w['own_hwm_set_by'])} | {w['kids_maxrss']} "
-                 f"| {short(w['kids_maxrss_set_by'])} | {w.get('tests_pss_with_started', '?')} | {w['tests']} | {w['test_s']} |\n")
+        short = lambda s: (s or "?").split("::")[-1][:80]
+        how = (w["how"] or "?")
+        how = "built apart" if how.startswith("built apart") else how.split(",")[0].split(":")[0] if not how.startswith("from records") else how.split(",")[0]
+        body += (f"| {w['worker']} | {how} | {w['own_hwm']} | {w['own_hwm_at_catalog']} | {short(w['own_hwm_set_by'])} "
+                 f"| {w.get('tests_largest_started', '?')} | {w.get('tests_pss_with_started', '?')} | {w['tests']} |\n")
     return head + body
 
 
@@ -282,6 +314,8 @@ def main() -> None:
                   f"RSS sum {w.get('tests_started_rss_sum')}, at once {w.get('tests_started_at_once')}; slot in tests {w['slot_env_in_tests']}; "
                   f"rss at catalog {w['own_rss_at_catalog']}, at end {w['own_rss_at_end']}; ended {w['ended']}; PSS rounds {w.get('pss_rounds')}, "
                   f"{w.get('pss_rounds_unread')} with a process not read (without those: {w.get('tests_pss_with_started_lo')})")
+            print(f"      waited-for maxrss {w['kids_maxrss']} (set by {w['kids_maxrss_set_by']}); the largest process it started in tests "
+                  f"{w.get('tests_largest_started')} in {w.get('tests_largest_started_in')}; resident sets added up: {json.dumps(w.get('tests_rss_added'))}")
             for r in w["own_rises"]:
                 print(f"      own peak rose by {r['by']} to {r['to']}: {r['test']}")
             for r in w["kids_rises"]:
