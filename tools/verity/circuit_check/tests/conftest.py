@@ -141,7 +141,7 @@ def _counted(lookup: Callable, cache: Path, repo: Path, e: UN.Entry) -> Any:
 
 def _from_records(cache: Path) -> tuple[UN.Plan | None, str | None]:
     """The catalog's plan from the bindings' records (`units.plan`) when every binding's counts; else None and why: there is
-    no record of this version, one doesn't count or one is stale.  Either way before any binding they miss is built here:
+    no record under this process's keys, one doesn't count or one is stale.  Either way before any binding they miss is built here:
     `units.plan` builds such a binding in the process that calls it, which under xdist is every worker of the session at once,
     each holding what the heaviest binding's build holds.  So the first record that doesn't count ends the plan (`_counted`),
     and the one build the session shares (`_recorded`) makes them all.  A target is taken as its record describes it, as
@@ -154,7 +154,8 @@ def _from_records(cache: Path) -> tuple[UN.Plan | None, str | None]:
         mp.setattr(UN, "_lookup", functools.partial(_counted, UN._lookup))
         try:
             plan = UN.plan(cache, cli.REPO)
-            return plan, None if plan is not None else f"{cache} holds no record of this circuit-check's version (`cache.version`)"
+            return plan, None if plan is not None else (f"{cache} holds no record under this process's keys (this "
+                                                        "circuit-check's version, `cache.version`, and its keyed variables)")
         except (UN.Stale, _Missed) as e:
             TG.BINDINGS.clear()
             return None, str(e)
@@ -298,13 +299,14 @@ def _listed(cache: Path, plan: UN.Plan) -> dict:
 
 
 def _how(got: dict) -> str:
-    """The catalog's line for what the session's records gave (`_recorded`'s report, or `_listed`'s)."""
+    """The catalog's line for what the session's records gave (`_recorded`'s report, or `_listed`'s), with the names of the
+    variables the build's keys hold when it took no record though there were some (`units.untaken_note`)."""
     built, skipped = got["rebuilt"], got.get("skipped", [])
     how = f"from records: {got['reused']} of {got['reused'] + len(built)} bindings reused, {len(built)} built"
     if not built:
         return how
     return (f"{how} and stored in {got.get('seconds', '?')}s by one process for the session ({len(skipped)} of them held a "
-            f"record that did not count): {', '.join(built[:3])}{', ...' if len(built) > 3 else ''}")
+            f"record that did not count): {', '.join(built[:3])}{', ...' if len(built) > 3 else ''}{UN.untaken_note(got)}")
 
 
 def _taken(cache: Path, shared: Path | None, jobs: int) -> Catalog:

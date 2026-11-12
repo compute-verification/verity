@@ -1193,8 +1193,8 @@ print(json.dumps({"how": built.how, "builds": len(ran), "targets": {fid: CC.desc
 """
 
 
-def _session(root: Path, listed: Path | None = None) -> dict:
-    env = {k: v for k, v in os.environ.items() if not k.startswith("CIRCUIT_CHECK_RECORDS")}
+def _session(root: Path, listed: Path | None = None, env: dict[str, str] | None = None) -> dict:
+    env = {**{k: v for k, v in os.environ.items() if not k.startswith("CIRCUIT_CHECK_RECORDS")}, **(env or {})}
     r = subprocess.run([sys.executable, "-c", SESSION, str(root), str(REPO), str(Path(__file__).parent), RECORDS_MAIN],
                        capture_output=True, text=True, cwd=REPO,
                        env={**env, "PYTHONDONTWRITEBYTECODE": "1",
@@ -1330,6 +1330,57 @@ def test_two_runs_that_differ_only_in_where_they_list_their_records_make_the_sam
     again = _run(root, HARNESS.replace("units=True)", step.format(str(tmp_path / "two" / "step-other.json"))))
     assert again["hits"] == sorted(again["values"]) == sorted(ran["values"]) and _keys(root) == keys
     assert again["stats"]["units"] == ran["stats"]["units"] and _listed(root, tmp_path / "two" / "step-other.json") == rows
+
+
+@pytest.mark.slow
+def test_a_run_that_takes_none_of_the_records_there_names_the_variables_its_keys_hold_and_no_value(tmp_path, capsys):
+    """A process with one keyed variable more than the one that stored the records finds none of them under its keys and
+    builds every binding: its report and its line then name the variables its keys hold, never what they are set to, and so
+    do the session's line and a ``--catalog-units`` run's report, forked or not, which its line on the bindings ends with.
+    A run that takes a record names none, nor does one whose cache held no record."""
+    root = _tree(tmp_path / "t")
+    _bindings(root, *BINDINGS)
+    note = ("; no record was taken though the cache holds records of this version: one counts only under the same keyed "
+            "variables, set alike, and this process's are ")
+    first, line = _records_main(root, tmp_path / "out.json")
+    assert len(first["rebuilt"]) == 5 and "keyed" not in first and note not in line
+    again, line = _records_main(root, tmp_path / "out.json")
+    assert again["reused"] == 5 and "keyed" not in again and note not in line
+
+    def keyed(env: dict[str, str]) -> list[str]:
+        return sorted(k for k in {**os.environ, **env} if k.startswith(("VERITY_", "CIRCUIT_CHECK_")) and k not in CC.UNKEYED
+                      and not k.startswith(CC.UNKEYED_PREFIXES))
+
+    env = {"VERITY_ONE_MORE": "a-value-no-line-shows"}
+    assert "VERITY_ONE_MORE" in keyed(env)
+    other, line = _records_main(root, tmp_path / "out.json", tmp_path / "listed.json", env=env)
+    assert other["reused"] == 0 and len(other["rebuilt"]) == 5 and other["keyed"] == keyed(env) and "skipped" not in other, other
+    assert line.endswith(note + ", ".join(keyed(env))), line
+    listed = (tmp_path / "listed.json").read_text()
+    assert json.loads(listed)["environment"] == keyed(env)
+    # the next run with that variable takes the records the last one stored, and says nothing
+    again, line = _records_main(root, tmp_path / "out.json", env=env)
+    assert again["reused"] == 5 and "keyed" not in again and note not in line
+
+    env["VERITY_TWO_MORE"] = "a-value-no-line-shows"
+    how = _session(root, env=env)["how"]
+    assert "0 of 5 bindings reused, 5 built and stored in " in how and how.endswith(note + ", ".join(keyed(env))), how
+    env["VERITY_THREE_MORE"] = "a-value-no-line-shows"
+    forked = _run(root, FORKED, env=env)["stats"]["units"]
+    assert forked["reused"] == 0 and len(forked["rebuilt"]) == 5 and forked["keyed"] == keyed(env) and forked["stored"] == 5
+    env["VERITY_FOUR_MORE"] = "a-value-no-line-shows"
+    here = _run(root, HARNESS, env=env)["stats"]["units"]
+    assert here == {"keyed": keyed(env), "stored": 5}
+    from circuit_check import cli
+
+    capsys.readouterr()
+    for u in (forked, here):
+        cli._cache_lines({"cache": {"units": u, "hits": 0, "stored": 0, "untraced": [], "errors": [], "changed": []}, "targets": []})
+    lines = [ln for ln in capsys.readouterr().out.splitlines() if ln.startswith("circuit-check: catalog bindings: ")]
+    assert len(lines) == 2, lines
+    assert lines[0].endswith(note + ", ".join(forked["keyed"])) and lines[1].endswith(note + ", ".join(here["keyed"])), lines
+    assert not [text for text in (line, json.dumps(other), listed, how, json.dumps([forked, here]), *lines)
+                if "a-value-no-line-shows" in text]
 
 
 def test_no_key_holds_the_variables_that_say_where_records_are_or_how_a_suite_runs(monkeypatch):

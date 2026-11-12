@@ -50,7 +50,9 @@ reached (`_by_id`).  Its xdist workers share that as JSON (`manifest`, `from_man
 A run can list the records its catalog rests on (`listing`, ``--records-manifest FILE``; the suite's session where
 ``CIRCUIT_CHECK_RECORDS_MANIFEST`` names a file): each binding's record, taken or built, by its path in the cache, with the
 read records those entries need.  Every such path ends in the digest of its file's bytes, so a store that carries the files
-to another run's cache under those paths hands it the records, and that run takes each one only as it takes its own.
+to another run's cache under those paths hands it the records, and that run takes each one only as it takes its own.  A
+record is looked for under its key, which holds the process's keyed variables (`cache.key`): a run that takes none of the
+records its cache holds of this version says so and names the variables its own keys hold, never their values (`untaken`).
 
 A ``--catalog-units`` run that forks its targets' processes (`cli.run` with ``--jobs``) builds its bindings so too: each
 binding whose record doesn't count, and every one when none does or there are none, is built in a process forked for it alone
@@ -1066,8 +1068,9 @@ def listing(cache: Path, entries: list[Entry], roots: tuple[str | None, bool] | 
     name, the record's path from ``cache`` and whether this run built it; the catalog's roots record ``roots``
     (`store_roots`'s: its entry id and whether this run stored it) after them, as `ROOTS`' name, when the run has one;
     ``needs``, every read record those entries are read with (`cache.closure`), each once, by its path from ``cache``;
-    ``unstored``, the bindings built whose record was not stored; and the checker's version and the keyed environment every
-    one of those records' keys holds (`cache.key`), which a run must share to take them.  Every path ends in the SHA-512 of
+    ``unstored``, the bindings built whose record was not stored; and the checker's version and, as ``environment``, the
+    names of the variables every one of those records' keys holds (`cache.key`; their values are in the records' keys alone),
+    which a run must share to take them.  Every path ends in the SHA-512 of
     its file's bytes, so a file a store holds under that path is the one listed, and a fetch that checks the name fetched it
     whole."""
     top = Path(os.path.normpath(cache))
@@ -1082,7 +1085,7 @@ def listing(cache: Path, entries: list[Entry], roots: tuple[str | None, bool] | 
         paths.append(Path(os.path.normpath(CC._dir(top, key(ROOTS, 0)) / f"{roots[0]}.json")))
         rows.append({"binding": ROOTS[0], "record": paths[-1].relative_to(top).as_posix(), "built": roots[1]})
     k = key(REGISTERED, 0)
-    return {"schema": LISTING, "version": k["version"], "environment": k["environment"], "records": rows,
+    return {"schema": LISTING, "version": k["version"], "environment": sorted(k["environment"]), "records": rows,
             "needs": sorted(p.relative_to(top).as_posix() for p in CC.closure(paths) - set(paths)), "unstored": unstored}
 
 
@@ -1094,6 +1097,39 @@ def write_listing(path: Path, doc: dict) -> None:
         tmp = path.with_name(f".{path.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp")
         tmp.write_text(json.dumps(doc, indent=1) + "\n")
         os.replace(tmp, path)
+
+
+def untaken(cache: Path | None, entries: list[Entry]) -> dict:
+    """``{"keyed": names}`` when the run took the record of none of ``entries`` though ``cache`` holds a binding's record of
+    this checker's version, under any key; else ``{}``.  The names are those of the variables this process's keys hold
+    (`cache.key`'s environment), never their values.  A record is looked for under its key, so a process with one keyed
+    variable more or fewer than the one that stored the records, or one set otherwise, finds none of them and builds every
+    binding, and its count of the reused alone says nothing of it.  Asked before the run stores what it built."""
+    if cache is None or not entries or any(e.reused for e in entries):
+        return {}
+    k = key(REGISTERED, 0)
+    with CC.internal():
+        try:
+            dirs = sorted(d for d in (Path(cache) / k["version"]).iterdir() if d.name != CC.READS)
+        except OSError:
+            return {}
+        for d in dirs:
+            try:
+                # every entry of a directory has its key: the first says whether they are bindings' records
+                if json.loads(min(d.glob("*.json")).read_bytes())["key"]["request"]["target"][0] == REQUEST:
+                    return {"keyed": sorted(k["environment"])}
+            except (OSError, ValueError, KeyError, TypeError, IndexError):
+                continue
+    return {}
+
+
+def untaken_note(stats: dict) -> str:
+    """What a run's line on its bindings ends with when no record was taken though there were some (`untaken`'s finding in
+    ``stats``); else nothing."""
+    if "keyed" not in stats:
+        return ""
+    return ("; no record was taken though the cache holds records of this version: one counts only under the same keyed "
+            f"variables, set alike, and this process's are {', '.join(stats['keyed']) or 'none'}")
 
 
 def made_entries() -> list[Entry]:

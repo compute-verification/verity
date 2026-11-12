@@ -369,7 +369,9 @@ def _planned(plan: UN.Plan, opts: CK.Options, cache: Path, forked: bool = False,
 def _record_units(cache: Path, opts: CK.Options, tasks: list[tuple], keys: list[dict], manifest: Path | None = None) -> dict:
     """After a full build: every binding's record (`units.store`), once the suite its records give (`units.derive`) is this
     run's, target for target, with each one's units, whether it is a Call and its key; else why none was stored.  With
-    ``manifest``, the records stored are listed there (`units.listing`)."""
+    ``manifest``, the records stored are listed there (`units.listing`).  Where ``cache`` held bindings' records of this
+    version before, of which a full build takes none, the names of the variables this process's keys hold (``keyed``,
+    `units.untaken`)."""
     entries = UN.built_entries()
     if entries is None:
         return {"stored": 0, "why": "the registry grew while the catalog was built"}
@@ -390,10 +392,11 @@ def _record_units(cache: Path, opts: CK.Options, tasks: list[tuple], keys: list[
         what = "target" if g is None or w is None or g[0] != w[0] else \
             next(n for n, a, b in zip(("target", "as_call", "units", "key"), g, w) if a != b)
         return {"stored": 0, "why": f"the records give another task list: its {what} at {(g or w)[0]} differs"}
+    noted = UN.untaken(cache, entries)
     stored = UN.store(cache, REPO, entries, only_rebuilt=False)
     if manifest is not None:
         UN.write_listing(manifest, UN.listing(cache, entries))
-    return {"stored": stored}
+    return {**noted, "stored": stored}
 
 
 def _calls(specs: list[str]) -> None:
@@ -870,7 +873,8 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     rep["prologue_s"] = round(prologue, 1)
     if units and not CC.untraced():
         if planned is not None:
-            rep["cache"]["units"] = {**plan.stats(), "stored": UN.store(cache, REPO, plan.entries, only_rebuilt=True)}
+            noted = UN.untaken(cache, plan.entries)
+            rep["cache"]["units"] = {**plan.stats(), **noted, "stored": UN.store(cache, REPO, plan.entries, only_rebuilt=True)}
             if manifest is not None and sliced is None:
                 UN.write_listing(manifest, UN.listing(cache, plan.entries))
         else:
@@ -931,7 +935,8 @@ def records(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None,
     the report says why; a run from the cache builds each binding it misses, as it would with no records.  Beside them the
     catalog's roots record (`units.store_roots`), from which a ``--binding`` run makes only its binding's roots.  The report: the
     bindings reused and built (`units.Plan.stats`), those built whose key held a record that did not count (``skipped``, when
-    there are any), the most bytes their builds' results held on disk at once (``scratch_bytes``, `units.built_apart`), the
+    there are any), the names of the variables this process's keys hold when it took no record though ``cache`` held some of
+    this version (``keyed``, `units.untaken`), the most bytes their builds' results held on disk at once (``scratch_bytes``, `units.built_apart`), the
     records stored and the bytes every binding's records and the roots record take in ``cache`` (``bytes``), and why none
     were stored.  With ``slices`` (``--slices DIR``), each binding's slice and the
     part they share there too (`units.slices`, `units.write_slices`), from which a ``--binding --slice`` run reads no other
@@ -944,7 +949,7 @@ def records(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None,
         plan = UN.plan(cache, REPO, log, (max(1, jobs), budget_gb(mem_gb), heavy()))
     except UN.Stale as e:
         return {"stored": 0, "why": f"a record disagrees with what was built ({e})"}
-    out = {**plan.stats(), "scratch_bytes": plan.scratch}
+    out = {**plan.stats(), **UN.untaken(cache, plan.entries), "scratch_bytes": plan.scratch}
     if skipped := [e.name for e in plan.entries if not e.reused and e.skipped]:
         out["skipped"] = skipped
     if why := CC.untraced():
@@ -1574,7 +1579,8 @@ def _records_main(a: argparse.Namespace, cache: Path, jobs: int) -> int:
           + (f" ({rep['bytes']} bytes of records; the builds' results at most {rep['scratch_bytes']} bytes at once)"
              if "bytes" in rep else "")
           + (f"; {rep['slices']['bindings']} bindings' slices in {a.slices} ({rep['slices']['bytes']} bytes, the shared part "
-             f"{rep['slices']['shared_bytes']})" if "slices" in rep else "") + (f"; {rep['why']}" if "why" in rep else ""))
+             f"{rep['slices']['shared_bytes']})" if "slices" in rep else "") + (f"; {rep['why']}" if "why" in rep else "")
+          + UN.untaken_note(rep))
     return 1 if "why" in rep else 0
 
 
@@ -1597,12 +1603,13 @@ def _combine_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
 
 
 def _cache_lines(rep: dict) -> None:
-    """What the run reused: its catalog bindings' records, and its targets' cache entries."""
+    """What the run reused: its catalog bindings' records (and, when it took none of those the cache held, the names of the
+    variables its keys hold, `units.untaken_note`), and its targets' cache entries."""
     if u := (rep.get("cache") or {}).get("units"):
         print("circuit-check: catalog bindings: " + (f"{u['reused']} reused, {len(u['rebuilt'])} built ({', '.join(u['rebuilt'][:8])}"
               f"{', ...' if len(u['rebuilt']) > 8 else ''}), " if "reused" in u else "whole catalog built, ")
               + f"{u['stored']} records stored" + (f" ({u['why']})" if u.get("why") else "")
-              + (f"; records stale ({u['stale']})" if u.get("stale") else ""))
+              + (f"; records stale ({u['stale']})" if u.get("stale") else "") + UN.untaken_note(u))
     if c := rep.get("cache"):
         print(f"circuit-check: {c['hits']} of {len(rep['targets'])} targets reused (every file, listing, probe, catalog unit and pin their checks read or resolved is "
               f"unchanged), {c['stored']} stored, {len(c['untraced'])} not cacheable (the tracer could not see what they read), "
