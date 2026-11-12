@@ -806,7 +806,7 @@ DC_DEV void li_until_mma(const OpArgs& a) {
   OP_SINK(v ^ threadIdx.x)
 }
 // li_until_mma's lane warps with no MMA (warps 0-3 idle), fixed iterations: the most these lanes reach when the MMA's
-// work is removed, which caps what any MMA schedule beside them can give the lanes.
+// work is removed, which bounds what any MMA schedule beside them can give the lanes.
 template <int C, int LW, bool FILL = false>
 DC_DEV void li_alone(const OpArgs& a) {
   __shared__ __align__(1024) Smem s;
