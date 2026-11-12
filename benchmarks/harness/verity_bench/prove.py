@@ -146,7 +146,8 @@ class Cost:
     `missing`), the run or art that holds it, the staged type that measured it as its record names it (a sampling plan
     names its cells' the same way), the same block at the steady-state types' median seconds a witness bit (the range's
     other end; None for a type measured at steady state), the verifier's seconds and the proof's bytes where a record
-    holds them, and the prover count and the host CPU cores a card a steady-state figure was measured at."""
+    holds them, and the prover count, the host CPU cores a card and the blocks a statement held that a steady-state
+    figure was measured at."""
 
     source: str
     seconds: float | None = None
@@ -158,6 +159,7 @@ class Cost:
     proof_bytes: float | None = None
     provers: int | None = None
     cores: int | None = None
+    blocks: int | None = None
 
 
 @dataclass(frozen=True)
@@ -353,6 +355,9 @@ class Flock:
     name: str = "flock"
     provers: int = 1
     cores: int = HOST_CORES
+    #: (staged Definition, staged type) of superseded rows: they price nothing, but a plan's cell may still name a type
+    #: by the staged type only they were staged as
+    aliases: Sequence[tuple[str, str]] = ()
 
     def table(self, census: Census) -> Table:
         measured: dict[str, Steady] = {}
@@ -362,6 +367,9 @@ class Flock:
         held = {definition_id(b.name) for b in census.blocks}
         unread = []
         names: dict[str, set[str]] = {}
+        for definition, type_ in self.aliases:
+            if definition in held:
+                names.setdefault(definition, set()).add(type_)
         for s in self.steady:
             if s.definition not in held:
                 unread.append(s)
@@ -391,7 +399,7 @@ class Flock:
                 cost = Cost(STEADY, s.gpu_seconds / s.blocks, s.record,
                             f"`{s.type}`, {s.at}, {s.fill} ({where}){_above(s, self.cores)}", s.type,
                             verifier_seconds=None if s.verifier_seconds is None else s.verifier_seconds / s.blocks,
-                            provers=s.provers, cores=s.cores)
+                            provers=s.provers, cores=s.cores, blocks=s.blocks)
             else:
                 kin = families.get(_family(spelled), [])
                 cost = _kin(b, kin, self.cores) if kin else single(b)
@@ -517,7 +525,7 @@ class Spot:
             raise ValueError(
                 f"the sampling plan {self.plan.record} and the census don't cover each other: the plan has no cell for "
                 f"{len(bare)} block type(s){_some(bare)}, and the census no block type for {len(unread)} cell(s)"
-                f"{_some(unread)}. It is another census's or cut's plan, or no steady-state row of record names "
+                f"{_some(unread)}. It is another census's or cut's plan, or no labelled steady-state row names "
                 "those cells' staged types")
         return Table(f"{self.name}[{inner.system}]", tuple(rows), inner.range_basis, inner.verifier_basis, inner.unread,
                      inner.cores)
@@ -550,7 +558,7 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
 
     rows = [{"block": r.block, "k_log": r.k_log, "per_token": r.per_token, "seconds": r.cost.seconds,
              "planned_seconds": r.planned, "source": r.cost.source, "record": r.cost.record, "provers": r.cost.provers,
-             "cores": r.cost.cores, "note": r.cost.note,
+             "cores": r.cost.cores, "statement_blocks": r.cost.blocks, "note": r.cost.note,
              "verifier_seconds": r.cost.verifier_seconds, "proof_bytes": r.cost.proof_bytes,
              "time_share": None if r.cost.seconds is None else share(r.per_token * r.cost.seconds, total)}
             for r in table.rows]
@@ -591,6 +599,18 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
             "planned": _planned(table, serving_seconds),
         },
     }
+
+
+def steady_rows(doc: Mapping[str, Any]) -> dict[str, Any]:
+    """A report's block types measured at steady state, a row each as the break-even planner reads a steady-state row
+    (`benchmarks/spot_figures/breakeven/reprice.py`'s `steady`): the block type by its census name, a statement's
+    GPU-seconds, the blocks it held, its provers, their cores and the run or art that holds the measurement. A type
+    priced any other way (its family's row, a single session, the k_log model) is no measurement of it and gets no
+    row."""
+
+    return {"rows": [{"block": r["block"], "statement_seconds": r["seconds"] * r["statement_blocks"],
+                      "blocks": r["statement_blocks"], "provers": r["provers"], "cores": r["cores"], "record": r["record"]}
+                     for r in doc["rows"] if r["source"] == STEADY]}
 
 
 def _above_cores(table: Table) -> dict[str, Any] | None:
