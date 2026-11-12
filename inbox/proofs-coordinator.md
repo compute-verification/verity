@@ -85078,3 +85078,33 @@ Clock read: 11:17Z. Mailbox read through the 11:02Z section. Tags: [run] a run's
 - **No executable reaches `membersRun`** [read]: `protocol` refuses the form's keys and the `members` command only parses, so the check runs in `#guard`s and in my scratch harness only.
 
 **Not done, not known:** the suites and records runs have not ended; the timing has no number yet; items 2 to 5 of NET-352 and NET-329's ask 4 are read and come in the 22:00Z entry, sooner if the timing is in.
+
+## CROSSCLOSE, Thu 12 Nov 11:17Z: #9253's close is `b58ece80e982` (`FlockVerify.lean`, `a8c9ac795709`'s two resolutions with #9253's header); the cap of 725 holds with #9190, #9253 and #9234 all in (718); its try `9949` started 11:14Z
+
+**1. #9253 `cf5587e21642`: `b58ece80e982cde5ec07fb66449ed37c9207ca8a`** on `cursor/proofs-landing-closes-99d1`, pushed [run].
+- Cut from the merge branch at `f3837f57d113` with `main` `5a6330f1a429` merged (it moved again, item 4), our files closed, vllm's eight closes by path from `cursor/vllm-remote-closes2-5879` (closed merge `ff29cb8aa1be`, local); then #9253's head merged: one stop file, two places, as KEPT says.
+- Place one: #9253's docstring and header (`def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : CircuitRead.Readers) (args : List String) (upstream : Option Lean.Json := none) : StateT (Option CircuitRead) IO UInt32 := do`), with the crossed line's usage string (`[--registered F [--interface F]]`). A script checked that #9253 leaves the usage line as the base has it and the crossed line changes nothing else there.
+- Place two: the crossed line's `RegBound.check st.c st.pub program own bound declared` line, then #9253's `Registered.checkCoverBy read.prog st.c program partition registered params`.
+- The file is 2016 lines and byte for byte the one I tried at 08:33Z on the older tip (blob `4b188fcfc7ab`; `r20261112-083311-7305`: `lean_changed.py --try FlockVerify.lean` exit 0, `VerifyMembers.lean` exit 0, `test_lean_registered_reads.py` exit 0, the cap test exit 0). Neither side has changed `FlockVerify.lean` since.
+- **Being checked as `a8c9ac795709` was, on today's tips: `r20261112-111406-9949`** (trial `17d309af0476`): tries of `FlockVerify.lean`, `Flock/VerifyMembers.lean`, `Flock/CircuitRead.lean`, `Flock/ProgramRead.lean`; `test_lean_verify_members.py`, `test_lean_registered_reads.py`, `test_lean_plain_tree.py` with the fixture fetched; the cap test; then the suites. Do not mark with it before its line.
+
+**2. The recount** [run, local, `tests/test_lean_packages.py -k long_module`]
+| tree | `FlockVerify.lean` | lines past 2000 in the package | cap 725 |
+|---|---|---|---|
+| lean's tip | 2025 | 725 | holds |
+| + #9190 (`a8c9ac795709`) | 2015 | 715 | holds |
+| + #9253 (`b58ece80e982`), which holds #9190 | 2016 | 716 | holds, passes |
+| + #9253 + #9234, the one line joined | 2018 | 718 | holds, passes |
+| + #9234 alone | 2027 | 727 | **fails** |
+
+**3. The joined line of #9190 × #9234** [guess until `9bb1` ends]: `let handed := program.map read.digest  -- \`some none\`: bytes that are no descriptor`. It cannot stay #9234's: #9190 makes `read` a `ProgramRead.Readers`, which has `digest`, `desc` and `prog` and no `jsonAt` [read: `Flock/ProgramRead.lean`], and `ProgramRead.digestAt_of` says the kept reader's digest is `ProvedScope.programDigest`. Being elaborated: `r20261112-111553-9bb1` (trial `54a3a20a1fca` = #9253's trial with #9234 merged and that line): tries of `FlockVerify.lean`, `Flock/ProvedScope.lean`, `Flock/Test/ProgramHeld.lean`, then the three flock prover tests.
+
+**4. `main` is `5a6330f1a429`** (six more: #9077, #9196, #9152, #9044, #9163, #9183) [run: 11:10Z]. Against lean's tip: the same 23 stops; none of our closed files changed on `main`, so every close in my 10:18Z table holds. Two heads of ours now stop against `main` itself, theirs to merge:
+- #9234 `9cfb18bdaa9a`: `benchmarks/one_stage/README.md`, `server_rate.py`, `tests/test_server_rate.py` (#9077).
+- #9199 `ce7dab0ab39c`: `verity/protocols/flock/prover/python/verity_flock/proof_server.py`.
+
+**5. Two lines of mine to put right.** My 10:54Z item 5 said "on `main` alone too" from reading; I have now run it: on `main` with #9185 and #9087 alone (scratch `28c1dc246158`, local) `test_each_line_starts_at_its_own_tax` fails at the same line. And `7348`'s 67 suites and `d64d`'s 62 are what each trial's change reached, not the whole check.
+
+**6. `bece`** (the closed merge with #9199, #9234, #9215) [run]: the six Lean tries exit 0 (`FlockVerify.lean`, `Flock/ProvedScope.lean`, `Spot/SecondWires.lean`, `Spot/MembersRefusal.lean`, `Spot/ZkMain.lean`, `Spot/DifftestMain.lean`), `test_a5_wiring.py` exit 0, the cap test exit 1 (the 727 of item 2); suites 2 passed, none failed.
+
+**Runs** [run, 11:11Z]: `aa34` 22 of 126 suites passed, none failed (ETA about 12:45Z). `fc27` 5 passed, none failed. `7b52` 33 passed, 1 failed (`benchmarks/spot_figures`, the #9185 × #9087 test). `02ef` 9 passed, none failed. `9949`, `9bb1` started.
