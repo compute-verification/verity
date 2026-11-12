@@ -12,6 +12,7 @@ import sys
 
 import pytest
 
+from verity_vllm.check.replay import driver as DR
 from verity_vllm.check.replay import fork as FK
 from verity_vllm.check.replay.fork import die_with_parent, fork_pool
 
@@ -138,9 +139,9 @@ def test_a_replacement_worker_sets_no_signal_and_the_pool_terminates():
         assert second != first and sig == 0
 
 
-def test_oom_kills_is_the_cgroups_count_and_none_only_where_no_cgroup_counts(tmp_path, monkeypatch):
-    """None says no cgroup counts OOM kills here, so a dead worker is named without the OOM half; a count that is there and
-    cannot be read is never taken for that."""
+def test_oom_kills_is_the_cgroups_count_and_none_where_none_is_read(tmp_path, monkeypatch):
+    """None says no count of OOM kills is read here, so a dead worker is named without the OOM half: no cgroup counts them, or
+    its count is no integer or cannot be read."""
     events = tmp_path / "memory.events"
     monkeypatch.setattr(FK, "CGROUP_MEMORY_EVENTS", str(events))
     assert FK.oom_kills() is None                                               # no cgroup v2 memory controller
@@ -148,6 +149,24 @@ def test_oom_kills_is_the_cgroups_count_and_none_only_where_no_cgroup_counts(tmp
     assert FK.oom_kills() == 2
     events.write_text("low 0\nhigh 0\n")
     assert FK.oom_kills() is None                                               # a controller that writes no such line
-    events.write_text("oom_kill many\n")
-    with pytest.raises(ValueError):
-        FK.oom_kills()
+    for text in ("oom_kill many\n", "oom_kill\n", "oom_kill many\noom_kill 2\n"):  # the first such line is the one read
+        events.write_text(text)
+        assert FK.oom_kills() is None
+    events.unlink()
+    events.mkdir()                                                              # there, and not a file that opens
+    assert FK.oom_kills() is None
+
+
+def test_the_cgroups_memory_is_none_where_it_states_no_limit_or_a_file_of_it_does_not_open(tmp_path, monkeypatch):
+    lim, cur = tmp_path / "memory.max", tmp_path / "memory.current"
+    monkeypatch.setattr(DR, "CGROUP_MEMORY", (str(lim), str(cur)))
+    assert DR._cgroup_memory() is None                                          # no cgroup v2 memory controller
+    lim.write_text("1000\n")
+    assert DR._cgroup_memory() is None                                          # one of the two files
+    cur.write_text("400\n")
+    assert DR._cgroup_memory() == (1000, 400)
+    lim.write_text("max\n")
+    assert DR._cgroup_memory() is None
+    cur.unlink()
+    cur.mkdir()                                                                 # there, and not a file that opens
+    assert DR._cgroup_memory() is None

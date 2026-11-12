@@ -299,10 +299,11 @@ def _not_executed_without_rows(non_row_idents: list[Mapping[str, Any]], executed
     batch_slots_req: Counter = Counter()
     for ident in non_row_idents:
         fam = str(ident.get("family"))
-        rid, st = ident.get("request_id"), ident.get("step")
+        rid = ident.get("request_id")
+        st: Any = ident.get("step")                                                # None where the identity states no step
         if rid != "*" and st != "*":
             kind_by_family.setdefault(fam, "named-input" if fam == "input_token_ids" else "per-request")
-            step = int(ident["step"])
+            step = int(st)
             ep = executed_prefix.get(str(rid))
             if ep is not None and not ep.get("faults") and step >= int(ep["n_exec"]):
                 not_exec[fam] += 1
@@ -459,9 +460,10 @@ def _guard_line(man: RequiredManifest | None, refused: RecordError | None) -> st
     # the one-release cross-check (traversal of record, inventory beside it) travels onto the record and the scope line
     cc = man.cross_check if man is not None else None
     if cc is not None:
+        counted = cc.get("identities")                         # each engine's count of identities; a cross-check that states none counts neither
         guard_line += ("; cross-check " + ("AGREED" if cc.get("agree") else "DISAGREED") +
-                       f" ({cc.get('primary_engine')} vs {cc.get('other_engine')}: {(cc.get('identities') or {}).get(cc.get('primary_engine'))} / "
-                       f"{(cc.get('identities') or {}).get(cc.get('other_engine'))} identities)")
+                       f" ({cc.get('primary_engine')} vs {cc.get('other_engine')}: {(counted if counted else {}).get(cc.get('primary_engine'))} / "
+                       f"{(counted if counted else {}).get(cc.get('other_engine'))} identities)")
     elif man is not None:
         guard_line += f"; no cross-check on the manifest (one engine asked for by name: {_manifest_engine_name(man)})"
     return guard_line
