@@ -122,6 +122,22 @@ its record's) and the number of tables it set the session up as (`session_tables
 caller holds a statement of the session to the files, sample and tables that were checked, never to ones the prover
 names.
 
+`verify-members [--archive DIR] --program F` is `verify` for each member of a run in one process, the run's program
+read once (`Flock.VerifyMembers`, whose module text is its contract). Standard input holds a line a member, the JSON
+array of `verify`'s arguments for it. For each, in order, it prints the lines `verify` prints for that member alone,
+byte for byte, then `MEMBER {"exit", "index"}` with the exit status `verify` ends with on those arguments, and reads the
+next line only then. Standard error is flushed before a member's `MEMBER` line is written, so a caller that writes a
+line only once the one before it is answered finds there, at each `MEMBER` line, what `verify` writes for that member
+after what it wrote for the members before.
+
+A member's check is `verify` (`verifyMember_eq`), and nothing crosses from one member to the next
+but the kept program's digest and readings, which a member receives only where its own `--program` holds the kept
+bytes: another program is read anew. It exits 0 iff every member's status is 0, and 2 before any member without a
+program it can read. A caller takes as refused every session of a member with no `MEMBER` line, and every session of
+an answered member with no `VERDICT` line of its own. The process opens no connection and writes no file, so it may be
+started before a member's session exists and kept while later sessions run
+(`verity/protocols/flock/prover/tests/test_lean_verify_members.py`).
+
 A recursive statement is one `verify --zk` per V* part, and no part sees another. Each part's `VERDICT` names its part
 (`rec_part`), the SHA-512 of the shared rows file it checked (`rec_rows_sha512`), of the inner shape file it read
 (`rec_inner_sha512`), of the inner session's record and its transcript (`rec_inner_session_sha512`,
