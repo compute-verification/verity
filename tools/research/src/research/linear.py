@@ -45,6 +45,7 @@ QUIET_H = 24                                                     # In Progress w
 STALE_D = 7                                                      # Todo not updated or commented on for this long
 ORPHAN_H = 48                                                    # filed this long ago, it is in a project
 UNLINKED_H = 24                                                  # In Review this long, it has an attached open PR
+UNHEARD_H = 2                                                    # a person's new issue with no answer this long rings its lane
 STRAY_H = 48                                                     # an ask in another lane's team untouched this long is closed
 FROM_LABEL = "from:"                                             # the handle that filed an ask: `from:top`
 STRAY_NOTE = (f"Canceled by the Linear audit's stray rule: an ask filed in another lane's team that nobody took up (a project "
@@ -64,8 +65,8 @@ POSTMORTEM_RE = re.compile(SENDER + r"postmortem\b", re.I)      # a comment answ
 SLIP_RE = re.compile(SENDER + r"slip\b", re.I)                  # a comment answering the slips up to it
 ASKER_RE = re.compile(r"[a-z][a-z0-9-]{0,30}")
 ASK_KINDS = ("parked", "unstaffed", "slipped", "repeated")
-AUDIT_KINDS = ("orphan", "milestone", "lapsed", "undated", "overdue", "quiet", "stale", "title", "landed", "unlinked", "stray",
-               "lane", *ASK_KINDS)
+AUDIT_KINDS = ("unheard", "orphan", "milestone", "lapsed", "undated", "overdue", "quiet", "stale", "title", "landed", "unlinked",
+               "stray", "lane", *ASK_KINDS)
 RING_TAGS_RE = re.compile(r"(?:(?:<!subteam\^[A-Z0-9]+(?:\|[^>]*)?>|<@[A-Z0-9]+(?:\|[^>]*)?>|<!(?:here|channel)>"
                           r"|@[a-z0-9][a-z0-9._-]*)[\s,:;]*)+")
 PAREN = r"(?:\s*\([^()\n]{1,30}\))?"                              # `(URGENT)`, `(sent 01:48Z)`
@@ -575,6 +576,8 @@ class Linear:
         - stray: labelled `from:<handle>` in another lane's team (the team has a handle, and the issue's lane isn't that one),
           not a person's ask, nobody took it up (it isn't started, and lacks a project or a due date) and nothing touched it
           (an update, a comment, a child's) for STRAY_H.  `close_strays` closes these; the audit only reports them.
+        - unheard: filed by a person (a creator and no bot), not yet started, with no comment UNHEARD_H after it was filed.
+          The sweep rings its lane for it, so no lane subscribes to its team's issue events, which wake it for its own.
         The rest hold on open issues (OPEN_TYPES), Backlog being where an issue that serves no goal waits:
         - orphan: in no project, ORPHAN_H after it was filed.  milestone: in a project with milestones, with none set.
         - undated: Todo, In Progress or In Review with no due date.  overdue: due before today (UTC).
@@ -601,7 +604,8 @@ class Linear:
         f: dict = {"state": {"type": {"in": list(LIVE_TYPES)}}}
         if teams:
             f["team"] = _team_filter(teams)
-        issues = self._paged("id identifier title url dueDate startedAt updatedAt createdAt state { name type } team { key } "
+        issues = self._paged("id identifier title url dueDate startedAt updatedAt createdAt creator { name } botActor { name } "
+                             "state { name type } team { key } "
                              "project { id name } projectMilestone { id name targetDate } labels { nodes { name } } "
                              "comments(first: 1, orderBy: createdAt) { nodes { createdAt } } "
                              f"attachments {{ nodes {{ url sourceType metadata }} }} children(first: {AUDIT_CHILDREN}, orderBy: updatedAt) "
@@ -636,7 +640,12 @@ class Linear:
             entered = reviewed.get(i["id"]) or _epoch(i.get("startedAt")) or _epoch(i["createdAt"])
             landed = (state in ("In Progress", "In Review") and prs and all(p["status"] in ("merged", "closed") for p in prs)
                       and not (last and closed and last > closed))
+            person = (i.get("creator") or {}).get("name") if not i.get("botActor") else None
             found = {
+                "unheard": bool(person) and i["state"]["type"] in ("triage", "backlog", "unstarted") and not last
+                and now - _epoch(i["createdAt"]) > UNHEARD_H * 3600
+                and f"filed by {person} {(now - _epoch(i['createdAt'])) / 3600:.0f} h ago with no answer: take it up (a comment "
+                    f"and a state, `research msg linear comment {ident} TEXT --as LANE`), or say there why not",
                 "orphan": live and not project and now - _epoch(i["createdAt"]) > ORPHAN_H * 3600
                 and f"filed {(now - _epoch(i['createdAt'])) / 3600:.0f} h ago and in no project: put it in its project and "
                     f"milestone (`research msg linear place {ident} PROJECT --milestone M`), or move it to Backlog",
