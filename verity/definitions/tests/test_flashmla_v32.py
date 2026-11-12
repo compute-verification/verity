@@ -2,10 +2,14 @@
 
 * the row on vectors worked by hand: an f32 scale is rounded to bf16 (ties to even) before it multiplies, so the row is not
   the E4M3 value times the f32 scale; an invalid row is the zero row;
+* a split's end, the weights and the weighing on vectors worked by hand;
 * a token on vectors worked by hand: under a zero query every valid row weighs the same, so one valid row comes back whole,
   through one split or through the combine, and no valid row gives +0;
 * validity is the index alone, and no byte of an invalid row reaches an output;
-* a head is the registered split and combine at the key's width on a sink of -inf, cut to the value's width;
+* the units are the registered arithmetic: a block is the registered block's first DV columns, the weights and the weighing
+  in column blocks the registered combine on a sink of -inf, and a head the registered head at the key's width on a sink of
+  -inf, cut to the value's width;
+* a head's and a token's bodies hold their cut's calls and nothing else;
 * the twin (the arithmetic over numpy words) word for word against the reference on every binding it registers;
 * the splits a step's token count gives a token's 32 blocks.
 """
@@ -26,6 +30,9 @@ DEFS = {d.id: d for d in V.FLASHMLA_V32_COMPOSITES}
 TWIN_TARGETS = [t for family in TV.KERNELS for t in TV._targets(DEFS, family)]
 DOT = V.FLASHMLA_GLM53["DOT"]
 NINF = 0xFF800000
+#: an index that is not -1
+ROW = [7]
+GONE = [0xFFFFFFFF]
 #: small statics: a 48-word key whose first 32 words are the value, 16-row blocks
 SMALL = dict(DN=32, DR=16, QT=16, BN=16, DOT=DOT, SCALE=0.25)
 HEAD = dict(DK=48, DV=32, BN=16, DOT=DOT, SCALE=0.25)
@@ -33,6 +40,10 @@ HEAD = dict(DK=48, DV=32, BN=16, DOT=DOT, SCALE=0.25)
 
 def _ev(target, *args) -> np.ndarray:
     return np.asarray(evaluate(target, *[np.asarray(a).reshape(-1) for a in args])).reshape(-1)
+
+
+def _f(*x) -> np.ndarray:
+    return np.array(x, dtype=np.float32).view(U32)
 
 
 def _is_nan16(w) -> np.ndarray:
@@ -60,13 +71,15 @@ def test_a_row_by_hand():
 
     and the bf16 product is rounded once: 1.75 (1 + 2^-7) = 1 + 97.75 / 128 -> 1 + 98 / 128 = 0x3FE2; 1.75 x 1 = 0x3FE0;
     1.75 (1 + 2^-6) = 1 + 99.5 / 128, a tie -> 1 + 100 / 128 = 0x3FE4.  (The E4M3 value times the f32 scale 0x3F808008,
-    rounded once, is 1 + 96.875 / 128 -> 0x3FE1: the other read of the same row.)  The RoPE words pass as stored."""
+    rounded once, is 1 + 96.875 / 128 -> 0x3FE1: the other read of the same row.)  The RoPE words pass as stored, and the
+    last word out is the row's validity."""
     row = bind(V.FlashMlaV32KvRow, DN=6, DR=2, QT=2)
     nope = np.array([0x3E, 0xBE, 0x3E, 0x3E, 0x3E, 0x00], dtype=U8)
     scale = np.array([0x3F808008, 0x3F808000, 0x3F818000], dtype=U32)
     rope = np.array([0x1234, 0xFFC0], dtype=U16)
-    assert _ev(row, nope, scale, rope, [1]).tolist() == [0x3FE2, 0xBFE2, 0x3FE0, 0x3FE0, 0x3FE4, 0x0000, 0x1234, 0xFFC0]
-    assert _ev(row, nope, scale, rope, [0]).tolist() == [0] * 8
+    assert _ev(row, nope, scale, rope, ROW).tolist() == [0x3FE2, 0xBFE2, 0x3FE0, 0x3FE0, 0x3FE4, 0x0000, 0x1234, 0xFFC0, 1]
+    assert _ev(row, nope, scale, rope, [0]).tolist() == [0x3FE2, 0xBFE2, 0x3FE0, 0x3FE0, 0x3FE4, 0x0000, 0x1234, 0xFFC0, 1]
+    assert _ev(row, nope, scale, rope, GONE).tolist() == [0] * 9
     assert TV.kv_rows(nope[None], scale[None], rope[None], [True], 2).reshape(-1).tolist() == [
         0x3FE2, 0xBFE2, 0x3FE0, 0x3FE0, 0x3FE4, 0x0000, 0x1234, 0xFFC0]
 
@@ -79,11 +92,11 @@ def test_a_rows_scales_at_their_ends_by_hand():
     row = bind(V.FlashMlaV32KvRow, DN=8, DR=1, QT=1)
     nope = np.array([0x3E, 0x3E, 0x3E, 0x3E, 0x3E, 0x7F, 0x00, 0x80], dtype=U8)
     scale = np.array([0x7F7FFFFF, 0x00800000, 0x00000001, 0x00008000, 0x00018000, 0x3F800000, 0x7F800000, 0xFF800000], dtype=U32)
-    out = _ev(row, nope, scale, [0x8000], [1])
+    out = _ev(row, nope, scale, [0x8000], ROW)
     assert out[:5].tolist() == [0x7F80, 0x00E0, 0x0000, 0x0000, 0x0004]
     assert _is_nan16(out[5:8]).all()
-    assert out[8] == 0x8000
-    assert np.array_equal(out, TV.kv_rows(nope[None], scale[None], np.array([[0x8000]], dtype=U16), [True], 1).reshape(-1))
+    assert out[8:].tolist() == [0x8000, 1]
+    assert np.array_equal(out[:9], TV.kv_rows(nope[None], scale[None], np.array([[0x8000]], dtype=U16), [True], 1).reshape(-1))
 
 
 def test_the_rows_statics():
@@ -91,8 +104,49 @@ def test_the_rows_statics():
         _ = bind(V.FlashMlaV32KvRow, DN=8, DR=1, QT=3).body
     with pytest.raises(ValueError, match="first DV=64 of DK=48"):
         _ = bind(V.FlashMlaV32DecodeHead, SPLITS=(0, 1), **{**HEAD, "DV": 64}).body
+    with pytest.raises(ValueError, match="first DV=64 of DK=48"):
+        _ = bind(V.FlashMlaV32Block, FIRST=True, **{**HEAD, "DV": 64}).body
     with pytest.raises(ValueError, match="SPLITS"):
         _ = bind(V.FlashMlaV32DecodeHead, SPLITS=(0, 2, 2), **HEAD).body
+    with pytest.raises(ValueError, match="NS=1 splits"):
+        _ = bind(V.FlashMlaV32CombineWeights, NS=1).body
+    with pytest.raises(ValueError, match="NS=1 splits"):
+        _ = bind(V.FlashMlaV32CombineValues, NS=1, G=4).body
+    with pytest.raises(ValueError, match="DV=384 must be a multiple of 256"):
+        V.combine_columns(384)
+    assert [V.combine_columns(dv) for dv in (1, 32, 256, 512, 768)] == [1, 32, 256, 256, 256]
+
+
+# --- a split's end and the combine -------------------------------------------------------------------------------------------
+
+def test_a_splits_end_by_hand():
+    """The state is -m, the four threads' sums and O.  With sums 0.5, 0.25, 0.25 and 1 the total is 2: a partial is O / 2 and
+    its lse log2f(2) + m = 1 + 3 = 4 at m = 3 (-m = -3); the only split's output is O / (2 + exp2f(-inf - 3)) = O / 2 in bf16.
+    With every sum 0 (no valid row) O is multiplied by +0, so each word is a zero of O's sign, and the partial's lse is -inf."""
+    part, whole = bind(V.FlashMlaV32SplitEnd, DV=4, PARTIAL=True), bind(V.FlashMlaV32SplitEnd, DV=4, PARTIAL=False)
+    l, o = _f(0.5, 0.25, 0.25, 1.0), _f(1.0, -3.0, 0.0, 2.5)
+    assert _ev(part, _f(-3.0), l, o).tolist() == _f(0.5, -1.5, 0.0, 1.25, 4.0).tolist()
+    assert _ev(whole, _f(-3.0), l, o).tolist() == [0x3F00, 0xBFC0, 0x0000, 0x3FA0]
+    assert _ev(part, _f(-3.0), _f(0, 0, 0, 0), o).tolist() == [0, 0x80000000, 0, 0, NINF]
+    assert _ev(whole, _f(-3.0), _f(0, 0, 0, 0), o).tolist() == [0, 0x8000, 0, 0]
+
+
+def test_the_combines_weights_by_hand():
+    """Two splits of lse 0: the max is 0, each exp2f(0 - 0) = 1, the sum 2 and g = log2f(2) + 0 = 1, so each weighs
+    exp2f(0 - 1) = 1/2.  An empty split (lse -inf) beside one of lse 3 weighs exp2f(-inf) = 0 and the other exp2f(3 - 3) = 1.
+    With every split empty the max is taken as 0, the sum is 0, g is +inf and every weight exp2f(-inf) = 0."""
+    two, three = bind(V.FlashMlaV32CombineWeights, NS=2), bind(V.FlashMlaV32CombineWeights, NS=3)
+    assert _ev(two, _f(0.0, 0.0)).tolist() == _f(0.5, 0.5).tolist()
+    assert _ev(two, [NINF, _f(3.0)[0]]).tolist() == _f(0.0, 1.0).tolist()
+    assert _ev(three, [NINF, NINF, NINF]).tolist() == [0, 0, 0]
+    assert _ev(three, _f(5.0, 5.0, 4.0)).tolist() == _f(0.4, 0.4, 0.2).tolist()
+
+
+def test_the_combines_values_by_hand():
+    """From +0, one FFMA a split: 1/2 x 1 + 0 = 1/2 then 1/2 x 2 + 1/2 = 3/2; 1/2 x 3 then 1/2 x -3 + 3/2 = +0."""
+    values = bind(V.FlashMlaV32CombineValues, NS=2, G=2)
+    assert _ev(values, _f(0.5, 0.5), _f(1.0, 3.0, 2.0, -3.0)).tolist() == [0x3FC0, 0x0000]
+    assert _ev(values, _f(0.0, 0.0), _f(1.0, 3.0, 2.0, -3.0)).tolist() == [0, 0]
 
 
 # --- a token ---------------------------------------------------------------------------------------------------------------------
@@ -157,6 +211,33 @@ def test_validity_is_the_index_alone():
     assert not np.array_equal(_ev(dec, zero, nope, scale, rope, dropped), _ev(dec, zero, nope, scale, rope, idx))
 
 
+# --- the units against the registered arithmetic -----------------------------------------------------------------------------
+
+@pytest.mark.parametrize("first", [True, False])
+def test_a_block_is_the_registered_block_on_the_values_columns(first):
+    """`FlashMlaV32Block_v1` is `FlashMlaBlock_v1` at D = DK with O's last DK - DV columns left out: the max, the four sums and
+    the first DV columns of O are the registered block's, whatever its other columns of O held before."""
+    rng = np.random.default_rng(3 + first)
+    mine = bind(V.FlashMlaV32Block, FIRST=first, **HEAD)
+    theirs = bind(F.FlashMlaBlock, D=48, BN=16, FIRST=first, DOT=DOT, SCALE=0.25)
+    for args in zip(*TV._sample_block(rng, 6, None, FIRST=first, **HEAD)):
+        wide = list(args[:2]) if first else [*args[:4], np.concatenate([args[4], T._f32(rng, (16,))])]
+        assert np.array_equal(_ev(mine, *args), _ev(theirs, *wide)[:5 + 32])
+
+
+@pytest.mark.parametrize("ns, g", [(2, 32), (3, 16), (33, 8)])
+def test_the_weights_and_the_weighing_are_the_registered_combine_on_no_sink(ns, g):
+    """`FlashMlaV32CombineValues_v1` on each block of G columns, over `FlashMlaV32CombineWeights_v1`'s weights, side by side:
+    `FlashMlaCombine_v1` at D = 32 on a sink of -inf, word for word."""
+    rng = np.random.default_rng(ns)
+    weights, values = bind(V.FlashMlaV32CombineWeights, NS=ns), bind(V.FlashMlaV32CombineValues, NS=ns, G=g)
+    theirs = bind(F.FlashMlaCombine, NS=ns, D=32)
+    for lse, oacc, _ in zip(*T._sample_combine(rng, 8, None, NS=ns, D=32)):
+        w = _ev(weights, lse)
+        got = np.concatenate([_ev(values, w, oacc[:, c:c + g]) for c in range(0, 32, g)])
+        assert np.array_equal(got, _ev(theirs, lse, oacc, [NINF]))
+
+
 @pytest.mark.parametrize("splits", [(0, 2), (0, 1, 2), (0, 2, 3, 4)])
 def test_a_head_is_the_registered_head_on_no_sink_cut_to_the_value(splits):
     """`FlashMlaV32DecodeHead_v1` is `FlashMlaDecodeHead_v1` at D = DK on a sink of -inf, its first DV words: the registered
@@ -166,6 +247,66 @@ def test_a_head_is_the_registered_head_on_no_sink_cut_to_the_value(splits):
     theirs = bind(F.FlashMlaDecodeHead, SPLITS=splits, D=48, BN=16, DOT=DOT, SCALE=0.25)
     for q, k in zip(*TV._sample_head(rng, 6, None, SPLITS=splits, **HEAD)):
         assert np.array_equal(_ev(mine, q, k), _ev(theirs, q, k, [NINF])[:32])
+
+
+def test_a_head_past_the_combines_columns_is_weighed_in_blocks_of_them():
+    """A head 512 words wide leaves the weighing to two units of `COMBINE_G` columns: the words are the twin's."""
+    rng = np.random.default_rng(5)
+    wide = dict(DK=528, DV=512, BN=16, DOT=DOT, SCALE=0.0625)
+    head = bind(V.FlashMlaV32DecodeHead, SPLITS=(0, 1, 2), **wide)
+    assert dict((u.id, n) for u, n in V.head_cut(head))["FlashMlaV32CombineValues_v1{NS=2,G=256}"] == 2
+    q, k = (a[0] for a in TV._sample_head(rng, 1, None, SPLITS=(0, 1, 2), **wide))
+    assert np.array_equal(_ev(head, q, k), TV._head_fn(q, k, SPLITS=(0, 1, 2), **wide))
+
+
+# --- the cut -----------------------------------------------------------------------------------------------------------------
+
+def _calls(target) -> dict:
+    """The Definitions ``target``'s body calls, each with how many times."""
+    out: dict = {}
+    for node in target.body.nodes:
+        out[node.fn.id] = out.get(node.fn.id, 0) + node.n
+    return out
+
+
+@pytest.mark.parametrize("splits", [(0, 4), (0, 1, 2), (0, 2, 3, 4), (0, 1, 2, 3, 4)])
+def test_a_heads_body_is_its_cut(splits):
+    """A head's body holds one call for each unit of `head_cut` and no gate of its own, so the units are the head."""
+    head = bind(V.FlashMlaV32DecodeHead, SPLITS=splits, **HEAD)
+    cut = {u.id: n for u, n in V.head_cut(head)}
+    assert _calls(head) == cut
+    ns = len(splits) - 1
+    blk = "FlashMlaV32Block_v1{DK=48,DV=32,BN=16,FIRST=%s,DOT=HopperBF16WgmmaDot16_v1,SCALE=0.25}"
+    want = {blk % True: ns, "FlashMlaV32SplitEnd_v1{DV=32,PARTIAL=%s}" % (ns > 1): ns}
+    if splits[-1] > ns:
+        want[blk % False] = splits[-1] - ns
+    if ns > 1:
+        want |= {"FlashMlaV32CombineWeights_v1{NS=%d}" % ns: 1, "FlashMlaV32CombineValues_v1{NS=%d,G=32}" % ns: 1}
+    assert cut == want
+
+
+def test_a_tokens_body_is_its_cut():
+    """A token's body is its rows and its heads; its cut is the rows and each head's cut.  At GLM-5.3's statics a step of up to
+    three tokens cuts a token into 2048 rows and, for each of 8 heads, 32 one-block splits, their ends, the weights and two
+    blocks of 256 columns."""
+    dec = bind(V.FlashMlaV32Decode, NH=2, SPLITS=(0, 2, 3), **SMALL)
+    assert _calls(dec) == {"FlashMlaV32KvRow_v1{DN=32,DR=16,QT=16}": 48,
+                           "FlashMlaV32DecodeHead_v1{SPLITS=(0,2,3),DK=48,DV=32,BN=16,DOT=HopperBF16WgmmaDot16_v1,SCALE=0.25}": 2}
+    head = bind(V.FlashMlaV32DecodeHead, SPLITS=(0, 2, 3), **HEAD)
+    assert V.decode_cut(dec) == [(bind(V.FlashMlaV32KvRow, DN=32, DR=16, QT=16), 48)] + [(u, 2 * n) for u, n in V.head_cut(head)]
+    glm = bind(V.FlashMlaV32Decode, **{**V.FLASHMLA_GLM53, "SPLITS": TV.step_splits(1, topk=V.GLM53_TOPK)})
+    blk = "FlashMlaV32Block_v1{DK=576,DV=512,BN=64,FIRST=True,DOT=HopperBF16WgmmaDot16_v1,SCALE=0.0625}"
+    assert [(u.id, n) for u, n in V.decode_cut(glm)] == [
+        ("FlashMlaV32KvRow_v1{DN=512,DR=64,QT=128}", 2048), (blk, 256), ("FlashMlaV32SplitEnd_v1{DV=512,PARTIAL=True}", 256),
+        ("FlashMlaV32CombineWeights_v1{NS=32}", 8), ("FlashMlaV32CombineValues_v1{NS=32,G=256}", 16)]
+    one = bind(V.FlashMlaV32Decode, **{**V.FLASHMLA_GLM53, "SPLITS": TV.step_splits(67, topk=V.GLM53_TOPK)})
+    assert [(u.id, n) for u, n in V.decode_cut(one)] == [
+        ("FlashMlaV32KvRow_v1{DN=512,DR=64,QT=128}", 2048), (blk, 8), (blk.replace("FIRST=True", "FIRST=False"), 248),
+        ("FlashMlaV32SplitEnd_v1{DV=512,PARTIAL=False}", 8)]
+    with pytest.raises(ValueError, match="head_cut cuts"):
+        V.head_cut(dec)
+    with pytest.raises(ValueError, match="decode_cut cuts"):
+        V.decode_cut(head)
 
 
 # --- the twin and the schedule -----------------------------------------------------------------------------------------------
