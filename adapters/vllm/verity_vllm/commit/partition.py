@@ -27,7 +27,8 @@ def program_digests(*roots: str | None) -> set[str]:
             continue
         for p in glob.glob(os.path.join(root, "**", "result.json"), recursive=True):
             with contextlib.suppress(Exception), open(p) as f:
-                s = (json.load(f).get("program") or {}).get("digest")
+                program = json.load(f).get("program")   # the Build's record of its Program; a result without the block names none
+                s = program.get("digest") if program else None
                 if isinstance(s, str) and s:
                     out.add(s)
     return out
@@ -40,14 +41,22 @@ def _by_part(x: Any, leaf: str, field: str, noun: str, at: str = "") -> dict[str
     if isinstance(x, dict) and any(k in x for k in ("by_component", "by_rank")):
         out: dict[str, dict[str, Any]] = {}
         for k in ("by_component", "by_rank"):
-            for i, v in sorted((x.get(k) or {}).items()):
-                out.update(_by_part(v, leaf, field, noun, f"{at}/{k}/{i}".lstrip("/")))
+            parts = x.get(k)   # a composition names its parts under one of the two keys, or under both
+            if parts:
+                for i, v in sorted(parts.items()):
+                    out.update(_by_part(v, leaf, field, noun, f"{at}/{k}/{i}".lstrip("/")))
         return out
     raise SystemExit(f"[delta] REFUSED: query.{field} {at or '(top)'} is neither {noun} nor a composition of them")
 
 
 def _partitions(part: Any) -> dict[str, dict[str, Any]]:
     return {k or "partition": v for k, v in _by_part(part, "object", "partition", "a partition").items()}
+
+
+def _query_header(man: dict[str, Any]) -> dict[str, Any]:
+    """The manifest's `query` header: empty for a manifest that carries none, which names no query and so is not of the query of record."""
+    q = man.get("query")
+    return q if q else {}
 
 
 def partition_of_record(man: dict[str, Any], programs: set[str] | None = None) -> dict[str, Any]:
@@ -60,7 +69,7 @@ def partition_of_record(man: dict[str, Any], programs: set[str] | None = None) -
 
     from verity_vllm.query.required import Q_WORD_ID
 
-    q = man.get("query") or {}
+    q = _query_header(man)
     if q.get("query_id") != Q_WORD_ID:
         return {"query": q.get("query_id"), "checked": False, "why": "not the query of record: no partition to bind"}
     part = q.get("partition")
@@ -103,7 +112,7 @@ def require_partition(man: dict[str, Any], programs_root: str | None, program_di
     """`partition_of_record` over the Programs the Builds under `programs_root` / `program_dir` recorded and, under the query of record,
     a passing word check for every part (`word_check_refusal`; SystemExit naming what is missing); logs what it checked and returns `man`."""
     rec = partition_of_record(man, program_digests(programs_root, program_dir))
-    why = word_check_refusal(man.get("query") or {}) if rec["checked"] else None
+    why = word_check_refusal(_query_header(man)) if rec["checked"] else None
     if why:
         raise SystemExit(f"[delta] REFUSED: {why}; rebuild the manifest (verity-vllm manifest build / build-global, --word-check 16/32)")
     logger.info("[delta] partition of record: %s%s", rec, " (word check recorded and passed)" if rec["checked"] else "")
@@ -112,5 +121,5 @@ def require_partition(man: dict[str, Any], programs_root: str | None, program_di
 
 def partition_entry(man: dict[str, Any] | None) -> dict[str, Any]:
     """The binding map's `partition` entry: the manifest's partition of record, or nothing (no manifest, or not the query of record)."""
-    part = ((man or {}).get("query") or {}).get("partition")
+    part = _query_header(man).get("partition") if man else None
     return {"partition": part} if part else {}

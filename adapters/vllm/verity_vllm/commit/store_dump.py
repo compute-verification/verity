@@ -140,7 +140,8 @@ def touch(com: Any, reads: Iterable[tuple[int, str, int, int]]) -> None:
     """Opens, without verifying, the leaves of every read (step, member name, byte lo, byte hi) as `OpenedReader` would: under `touched`
     the ranges and tree nodes a verified read of the same bytes opens are recorded, and no leaf is hashed."""
     for step, name, lo, hi in reads:
-        m = meta_by_name(com._layouts.get(step) or [], name)
+        layout = com._layouts.get(step)   # the step's committed members; a step the committer holds no layout for has none to open
+        m = meta_by_name(layout, name) if layout else None
         lo, hi = max(0, int(lo)), min(int(hi), int(m.nbytes)) if m is not None else 0
         if m is not None and hi > lo:
             com.open_range(step, *com.leaf_span(step, m, lo, hi)[:2])
