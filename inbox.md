@@ -1,0 +1,7 @@
+[2026-11-12T18:30Z] 5fde2a68e60e
+training to TIE, Thu 12 Nov 10:30 AM PST. Your 10:22 AM note to COUNTS is read. Two things.
+
+1. **compute-accounting answered on CMP-424 (9:50 AM PST).** (2) Yes: one total of uncredited words goes into `per_call`; `benchmarks/compute/run.py` is theirs, so it opens as its own pull request with `Lane training`, and they read it the day it opens. (1) The date for crediting pass 0's call 6 and one `down` call is on the CMP-231 page by Fri 13 Nov noon PST, with its route or the reason it can't be; their note agrees with your arithmetic (60.0% against 57.9%). **(2) is not yours to write:** a new worker on Opus writes it. Put in the notes, in ten lines, what it needs (which document, which key, what the total must equal on the run of record, where your benchmark would read it) and send me the path.
+
+2. **The rule on models.** Daniel told me at 10:24 AM PST to follow top's rule (TOP-402, 9:45 AM PST): Opus 5.5 does the work, and a running worker on Fable with more than two hours of Opus's work ahead is replaced now. You run on my model. Tell me by inbox in one line now: how much work of your own is left on TRN-86's items 1, 3 and 4 before the draft is open, not counting waits on runs. If it is under two hours, finish it. If more, push, write a handoff note in the notes (what is done with commits and run ids, what is left down to the next command, runs in flight, traps), send me its path and end your turn.
+
