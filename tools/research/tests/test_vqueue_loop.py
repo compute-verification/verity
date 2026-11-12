@@ -1980,6 +1980,20 @@ def test_a_ready_pr_left_out_of_the_ticks_builds_is_logged_once_for_each_head_an
     assert leaves()[3:] == [(3, [h3b], "held")]
 
 
+def test_a_tick_whose_leave_lines_fail_has_still_written_its_state_file(env):
+    """The `leave` lines come last: a `left_out` that raises fails the tick only once its actions are logged and its state
+    file written (`Loop.keep`)."""
+    env.put(1, {"a.txt": "1\n"})
+
+    def broken(s: Snapshot) -> list:
+        raise RuntimeError("left_out broke")
+
+    loop = env.loop(policy, state=(state := env.tmp / "vqueue" / "state.json"), left_out=broken)
+    with pytest.raises(RuntimeError, match="left_out broke"):
+        loop.tick()
+    assert json.loads(state.read_text())["tick"] == 1 and _acts(env.lines()) == ["build"], env.lines()
+
+
 def test_a_failure_s_tests_are_read_beside_its_base_s_and_one_whose_tests_the_base_fails_too_is_inherited(env):
     main = env.main()
     env.put(1, {"a.txt": "1\n"})

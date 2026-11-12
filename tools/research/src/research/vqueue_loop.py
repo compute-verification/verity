@@ -2719,11 +2719,6 @@ class Loop:
                     self.write(rec)
                     logged.append(rec)
                 steps.lap("on_main")
-        if not stopped and self.left_out is not None:
-            for rec in self._leaves(t):
-                self.write(rec)
-                logged.append(rec)
-            steps.lap("leave")
         for sha, j in t.judged.items():
             if j.note:
                 self.out(f"research queue vqueue: tick {t.n}: {sha[:12]} {j.verdict.state}: {j.note}")
@@ -2738,6 +2733,11 @@ class Loop:
         except (QueueError, OSError, subprocess.SubprocessError) as e:
             self.out(f"research queue vqueue: tick {t.n}: mapping old heads across `main`'s moves failed: {e}")
         steps.lap("mapped")
+        if not stopped and self.left_out is not None:       # last: a failure here skips none of the tick's bookkeeping
+            for rec in self._leaves(t):
+                self.write(rec)
+                logged.append(rec)
+            steps.lap("leave")
         return logged
 
     def keep(self, t: Tick) -> None:
