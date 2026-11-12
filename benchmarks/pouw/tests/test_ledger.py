@@ -16,10 +16,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 
-import arm as A  # noqa: E402
-import ledger as L  # noqa: E402
-import price_twins as P  # noqa: E402
-import verify as V  # noqa: E402
+import arm as A
+import ledger as L
+import price_twins as P
+import verify as V
 
 RUN, COMMIT = "r20260930-170000-abcd", "0123456789abcdef0123456789abcdef01234567"
 PREFILL, DECODE = "m8192-n8192-k8192", "m32-n8192-k8192"
