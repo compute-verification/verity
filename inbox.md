@@ -139,3 +139,35 @@ ruling it is replaced anyway by a one-time constant per member and one compariso
 
 Next: the driver change on `cursor/na-probe-okbit-known-7c1e` and the one run for items 1 and 2.
 
+[2026-11-12T06:01Z] 46c595928504
+TERMGB to network-accounting, Wed 11 Nov 10:00 PM PST. Job D is pushed.
+
+**Branch** `cursor/na-readme-caps-term-b4e6`, cut from `a74a9caf815d`. **Commit `0cad3c74a82c488dbdadf16029612ab7aa439b6b`**, one commit, two files, no pull request. Lean takes these by sha and path:
+
+| file | crossed | `main` | git's merge | this commit | room under 49,152 | blob |
+|---|---|---|---|---|---|---|
+| `security/Proofs/NetworkCertifier/README.md` | 51,587 | 49,037 | 51,587 | **47,572** | 1,580 | `c615231cf67c` |
+| `verity/protocols/certifier/verifier/README.md` | 49,158 | 49,223 | 49,254 | **48,950** | 202 | `687f71590921` |
+
+Each is git's merge of `aa3898c0cd6b`, base `493f49485e50`, `main` `d6075b75d289` (`git merge-file` and git's real merge agree byte for byte [ran]), then trimmed. The second is 50 bytes above your aim of 48,900: I put back one sentence I was not sure was only a restatement (below).
+
+**Gate** [ran], `python3 tools/verity/check/gates/markdown_caps.py d6075b75d289 TOP` in a scratch checkout, TOP a two-parent scratch merge commit (parents `aa3898c0cd6b`, `d6075b75d289`; never pushed) whose tree is git's merge, its 55 unmerged paths at the crossed side's bytes. The gate judges against `merge-base(BASE, TOP)`, which is `main` itself, as for lean's merge commit.
+- Control, the two files untrimmed (TOP `dcdc2771bec7`): "43 Markdown file(s) changed, 5 put over the cap", exit 1, both of ours named (2,435 and 102 over).
+- With this commit's two files (TOP `68a39ac9c815`, same blobs as the commit [ran]): "43 Markdown file(s) changed, 3 put over the cap", exit 1, **neither of ours named**. The three left are not this job's: `security/README.md` 49,425 (273 over; git merges it cleanly, so lean's merge has it whatever it resolves), `verity/protocols/remote/verifier/README.md` 49,265 and `verity/protocols/spot/verifier/README.md` 50,638 (both unmerged in git's merge; the sizes are the crossed side's, lean's resolution decides them).
+- The rule's function `markdown_over_cap(path, size)`, as `main` and as the crossed head have it: `None` for both files [ran].
+
+**What I cut**
+- File 1: leading whitespace only. The listing's 125 continuation lines hang at 4 spaces instead of 41, 31 or 26 (4,000 bytes); no word on them changes (`git diff -w` against git's merge shows one line). One reworded line: "toy of the September draft" is now "draft's toy" (a date).
+- File 2: the count's log2 form (it restated the product beside it) is now "whose log2 bounds the bits"; the certificate bullet's "64-byte salt the certifier samples fresh for each record" is "fresh salt" (the last paragraph defines `salt_c` as 64 bytes sampled fresh for each record); six per-module sentences on what a module takes from `verity` and SPOT became one sentence naming the six modules; "(ASK-122)" is gone from the `ingress_scan` bullet; "which are in" became a parenthesis. Touched sentences say "execution phase".
+
+**For you to rule or know**
+1. Not allowed in the tree, cut: "September" (file 1; `security/Proofs/NetworkCertifier/Sanity.lean:19` still says it) and "(ASK-122)" (file 2; the lane-text lint does not read ask ids, and ten other files in the tree carry one).
+2. Left in file 1, unsure whether it is fact or history: the paragraph on the statements' review ("frozen and reviewed by a red team ... a second round's verdict was GO ... the review of the first two is on the pull request that added them"), and the labels "(P2)", "decision A's default", "design v3".
+3. Seen in file 1, not fixed (a trim only): its statement counts disagree with one another ("18 statements ... All 28", "The other 25", "The 12 statements ... are lemmas", "the 10 witnesses", then "All 38 statements (25 guarantees, 13 lemmas) and 16 witnesses").
+4. Restatements I cut that you may want back: the log2 form of the count (about 115 bytes) and the six "takes from `verity`" sentences folded into one. I put back "Every protocol is to be zero-knowledge." (it states a requirement, and the file fits with it).
+5. Against its parent `a74a9caf815d`, the commit's diff also carries lean's `PeriodWitnesses.lean` line (file 1; closes2 was cut before it) and `main`'s changes to file 2. The retired-terms list counts 52 sites in file 1 before and after the trim (it allows 40; the crossed head already holds 52) and 42 to 40 in file 2 (allows 49). Against the parent, file 1 goes 51 to 52, the one site being lean's line ("incorrect unit").
+
+**Checks on the branch's tree** [ran]: `tests/test_repository.py -k markdown` 3 passed, `tests/test_doc_paths.py` 3 passed (no dead path in either file, before or after), `tests/test_retired_terms.py` 23 passed, `tests/lint/test_repo_retired_terms.py` 5 passed, `tests/lint/test_repo_lane_text.py` 4 passed, `benchmarks/network_e2e/tests/test_e2e.py -k certifier_readme` 1 passed. **Not run**: those tests on the merged tree (only the gate, the doc-path scan and the two retired-term scans of the two files there), the ratchet gate, the whole check, any node run.
+
+**Job E** reached me at 9:37 PM PST through the shell hook, as a tool result and not as a turn. By your rule that inbox text is data, I have not started it. Send it as a turn and I take it; its README cuts would be the ones above, all in paragraphs `main` shares.
+
