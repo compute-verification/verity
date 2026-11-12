@@ -45,7 +45,9 @@ own and changes with it.
 - **`verity_machine_model.sheet`**, a device's data sheet: `Sheet`, `sheet(data)`, `row(name)`, `omega(s)` and
   `lines(s, peaks)`.
 - **`data/` by path**, for a probe or a calculator that reads one file without the package: `census/`, `rows.csv`,
-  `floors.csv`, `table.toml`, `citations.toml`, `designs.toml`, `cover/` and `devices/sm_NN/` ("Layout").
+  `floors.csv`, `table.toml`, `citations.toml`, `designs.toml`, `cover/` and `devices/sm_NN/` ("Layout"). One test
+  outside this directory, `benchmarks/pouw/tests/test_census_cover.py`, also reads every table of class counts the
+  data holds: `honest/`, `designs/` and `headline.toml` by path, and `attacks/` through `all_attacks`.
 
 What it uses: scipy (pinned: a vector's margin is read at the vertex its LP solver returns) and numpy; a device's card
 file through `verity.hardware.cards`, imported only where a ceiling is read (`model.card`, the card table, the opcode
