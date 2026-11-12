@@ -71,9 +71,11 @@ run names one and bundles the branch into its outputs, and the lead pushes it fr
         --bundle "$OUT/move.bundle" --certificate "$OUT/cert.json"'
     research fetch RUN --all && git fetch ~/.research/runs/RUN/out/move.bundle BRANCH:BRANCH && git push -u origin BRANCH
 
-If `main` moves before the move lands, the lead stages it again on the new `main`: the map reruns over whatever landed
-since. A move's PR, whose body says `Move: tools/move/NAME.toml`, goes through the queue as any PR does, on a land
-verdict (the team skill's "Landing"); once it lands, each open branch crosses it with `restack.py`.
+A move's PR, whose body says `Move: tools/move/NAME.toml`, lands on its ready mark alone, with no land verdict, whatever
+it touches: the verified queue reruns the map, from `main`, on its batch's tip, over whatever landed since, and takes it
+once `move_check.py` certifies that run (the team skill's "Landing"). It needs a land verdict while drive.toml's
+`lowrisk_lane` is off, and under `signed_verdicts` when it changes a `SIGNED_GUARDS` file. Once it lands, each open branch
+crosses it with `restack.py`.
 
 `stage.py` refuses (exit 1) a map outside this directory or missing at the commit it would run on, a map with both
 `[words]` and `[paths]` or neither (a move that needs both stages two maps), a map with `[[words_in]]` and no `[words]`
