@@ -871,7 +871,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         """Staged member ``s``'s (`staged`) `--zk` session: submitted to the audit's proof server, Lean's verify its verdict
         of record (the window's kept verifier's, where there is one, comes from `member_checks`), else (`proof_server`) on
         port ``port + i`` (``i`` its place among the members with proved units, `port_refusal`), behind the ZK server
-        under ``--firewall``; `member_checks` adds Lean's verdicts on it."""
+        where the audit is; `member_checks` adds Lean's verdicts on it."""
         mm, local, sdir, session_draw, session_law = s["mm"], s["local"], s["sdir"], s["session_draw"], s["session_law"]
         m = mm["m"]
         if server is not None:
@@ -1320,17 +1320,18 @@ def plain(a: argparse.Namespace) -> bool:
 def proof_server(a: argparse.Namespace, out: Path, sts: Sequence[dict] = ()) -> ProofServer | None:
     """SPOT's proof server for an audit's sessions (`verity_flock.proof_server`, its processes' logs under
     ``out/proof-server``): one CPU prover and one verifier a template, each verifier on a challenger of its own under
-    FLOCK_CHALLENGER=1, a templated statement's unit (`--tmpl-unit`) handed to both. Under ``--firewall`` its prover is
-    behind the ZK server: one `prove --zk --stream` process that starts a Lean session loop for each session at the
-    session's turn, one session at a time (``verify_ahead=0``), each loop's `Hello` set up as the process's environment
-    says (`a0.prover_env`), so only where the sampled members' statements ``sts`` agree on it. None where a session is one
-    it doesn't prove (plain, or members that don't agree): each session is then a process pair of its own (`a0.session`)."""
+    FLOCK_CHALLENGER=1, a templated statement's unit (`--tmpl-unit`) handed to both. Where the audit's sessions are behind
+    the ZK server so is its prover: one `prove --zk --stream` process that starts a Lean session loop for each session at
+    the session's turn, one session at a time (``verify_ahead=0``), each loop's `Hello` set up as the process's
+    environment says (`a0.prover_env`), so only where the sampled members' statements ``sts`` agree on it. None where a
+    session is one it doesn't prove (plain, or members that don't agree): each session is then a process pair of its own
+    (`a0.session`)."""
     if plain(a):
         return None
-    challenger = a0.own_challenger(zk=True)
-    if not a.firewall:
+    challenger, zk_server = a0.own_challenger(zk=True), a.firewall
+    if not zk_server:
         return ProofServer(a.bin, out / "proof-server", env=a0.DIRECT, challenger=challenger)
-    envs = [a0.prover_env(a.firewall, st) for st in sts]
+    envs = [a0.prover_env(zk_server, st) for st in sts]
     if not envs or any(e != envs[0] for e in envs):
         return None
     return ProofServer(a.bin, out / "proof-server", env=envs[0], challenger=challenger, verify_ahead=0)

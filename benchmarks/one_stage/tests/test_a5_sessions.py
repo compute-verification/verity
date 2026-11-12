@@ -26,22 +26,30 @@ def test_session_jobs_refuses_anything_else_naming_the_rule(jobs):
         a5.one_session(jobs)
 
 
+def args(loop: str | None, **more) -> argparse.Namespace:
+    """An audit's arguments: ``loop``, the ZK server's Lean loop its sessions run behind, or None for none."""
+    return argparse.Namespace(bin="flock-circuit", firewall=loop, **more)
+
+
 def test_behind_the_zk_server_the_proof_server_proves_one_session_at_a_time_on_the_members_one_environment(tmp_path):
-    a = argparse.Namespace(bin="flock-circuit", firewall="flock-firewall")
+    a = args("loop")
     window = {"partition_file": tmp_path / "partition.json", "program_file": tmp_path / "program.json"}
     server = a5.proof_server(a, tmp_path, [dict(window), dict(window)])
     assert server.verify_ahead == 0 and server.zk and server.out == tmp_path / "proof-server"
-    want = {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": "flock-firewall", "FC_FIREWALL_STATEMENT": "verity/flock-circuit",
-            "FC_FIREWALL_HELLO_ARGS": f"--partition {tmp_path / 'partition.json'} --program {tmp_path / 'program.json'}"}
-    assert {k: server._env[k] for k in want} == want
+    # the environment a member's own prover would run in (`a0.prover_env`), which names the loop and the window's files
+    want = a5.a0.prover_env("loop", window)
+    assert "loop" in want.values() and any(str(tmp_path / "program.json") in v for v in want.values())
+    assert {k: server._env[k] for k in want} == want and want != a5.a0.DIRECT
     server.close()
     # members that would set their loops up differently are not one stream's: each is a process pair, as a plain audit's is
     assert a5.proof_server(a, tmp_path, [dict(window), {**window, "statement": "verity/flock-circuit/tmpl"}]) is None
     assert a5.proof_server(a, tmp_path, []) is None
-    assert a5.proof_server(argparse.Namespace(bin="flock-circuit", firewall="flock-firewall", plain=True), tmp_path, [window]) is None
+    assert a5.proof_server(args("loop", plain=True), tmp_path, [window]) is None
 
 
 def test_with_no_zk_server_the_proof_server_is_spot_flocks(tmp_path):
-    server = a5.proof_server(argparse.Namespace(bin="flock-circuit", firewall=None), tmp_path, [{}])
-    assert server.verify_ahead == 2 and server._env["FC_FIREWALL"] == "0" and "FC_HOST_WITNESS" not in server._env
+    server = a5.proof_server(args(None), tmp_path, [{}])
+    # SPOT[Flock]'s own environment (`a0.DIRECT`), where a name whose value is None is unset
+    direct = a5.a0.DIRECT
+    assert server.verify_ahead == 2 and all(server._env.get(k) == v for k, v in direct.items()) and None in direct.values()
     server.close()
