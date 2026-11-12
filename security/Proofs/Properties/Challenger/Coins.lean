@@ -13,7 +13,8 @@ the run's release log shows them, released after `after`, every one of those roo
 run's (`s.commitment`, `releasedRootsOf`), the stream is `Run.released`, the run's own coins at those indices
 (`stream_released`), or the fixed finder outputs a break. `drawCoins` reads the stream under the commitment and roots
 of the session the ledger opens (`drawCoins_ok`), and that commitment is its record's (`trustedSession_record`), so the
-coins a sample reads are any such run's released coins, or a break (`drawn_released`). `drawCoins` compares the segment's
+coins a sample reads are any such run's released coins, or a break (`drawn_released`). `coinsReason` runs the same
+four checks under the key its evidence names, then holds the bytes read to the start of the stream (`coinsReason_none`). `drawCoins` compares the segment's
 label by `jsonStrIs`, a match the kernel reduces, so its check gives the label (`jsonStrIs_eq`).
 
 Each opening `liveReason` accepts climbs its path to the commitment's root (`Coin.reason_ok`). The run's root is
@@ -626,6 +627,47 @@ theorem drawCoins_ok {window : String} {after ξ : ByteArray} (h : drawCoins key
         · cases h
       · cases h
   · cases h
+
+/-- What `coinsReason` reads when it gives no reason: the key its evidence names, the session the ledger opens on
+`window` under that key, a withheld one, a segment of family `label`, the stream of its openings under that session's
+commitment and `label`'s roots, and `read` the start of that stream, ending inside its last coin. `drawCoins_ok`'s
+four checks, under the evidence's key. -/
+theorem coinsReason_none {window : String} {after read : ByteArray}
+    (h : coinsReason coins window label after read = none) :
+    ∃ k c roots ξ, ChallengerKey.ofJson (getD coins "key") = .ok k ∧
+      trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) k
+        (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, roots) ∧
+      withheldOn (getD coins "ledger") window = true ∧
+      getD (getD coins "segment") "label" = Json.str label ∧
+      challengerStream c (getD coins "segment") after
+        (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ ∧
+      ξ.extract 0 read.size = read ∧ (read.size + COIN_BYTES - 1) / COIN_BYTES = ξ.size / COIN_BYTES := by
+  unfold coinsReason at h
+  split at h
+  · cases h
+  · simp only [] at h
+    split at h
+    · cases h
+    · rename_i c roots heq
+      obtain ⟨k, hk, ht⟩ := bind_ok.1 heq
+      split at h
+      · cases h
+      · rename_i hw
+        split at h
+        · cases h
+        · rename_i hl
+          unfold readReason at h
+          split at h
+          · cases h
+          · rename_i ξ hst
+            split at h
+            · cases h
+            · rename_i hpre
+              split at h
+              · cases h
+              · rename_i hall
+                exact ⟨k, c, roots, ξ, hk, ht, by simpa using hw, jsonStrIs_eq (by simpa using hl), hst,
+                  by simpa using hpre, by simpa using hall⟩
 
 /-- **The coins a sample reads are the ones its session released**: when `drawCoins` reads `ξ` from a segment of family
 `label`, `ξ` is the coins of `label` released after `after` by any run of the key's device whose commitment and roots

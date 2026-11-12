@@ -19,6 +19,7 @@ what that record shows, for every input: the coins the challenger device drew, o
   `drawnByDevice_nontrivial` (security_proofs) shows it false for a reader that accepts every record.
 * `FamilyOneCommitment`: that run's own log shows every coin of the family released after `after`, so the coins read
   are every coin the family released, from its first, and no other root stands in the family.
+  `FamilyOneCommitmentRead` is the same of the bytes `Challenger.coinsReason` passes, the reader of a stream's run.
 
 **The device's history** (`History`) is the proof system's challenger as `challenger.py` runs it. Under its key it runs
 sessions, each a run (`Run`): it flips each coin and its salt by position, commits to the frame-v3 root over their live
@@ -421,6 +422,24 @@ That the digest is fixed before the family's first coin exists is then the devic
 it: the challenger flips a coin only after the 64 bytes it answers are recorded (`flips-after-recorded`, of the device
 on `trusted-host`), which a statement over the plays takes by that name. -/
 def FamilyOneCommitment : Prop := FamilyOneCommitmentAt drawCoins
+
+/-- **`FamilyOneCommitment` of the bytes a stream's run read.** `Spot.Run.run` holds a sample's coins through
+`Challenger.coinsReason`, whose evidence carries the key beside what `drawCoins` reads
+(`{key, ledger, main, pins, segment, session}`). For every challenger device, if `coinsReason coins w label after read`
+gives no reason, then `coins`' `key` is a challenger key, and a run of the device under it, which its own ledger opens
+withheld on `w`, released coins of `label` after `after` that `read` is the start of, with every coin read (`read`
+ends inside the last), and every root that run's own log shows a coin of `label` released after is `after`; or the
+fixed finder outputs a break from the run. The key is the one the evidence names: this reader takes none from the
+verifier, and what holds the evidence's to the verifier's is its caller. -/
+def FamilyOneCommitmentRead : Prop :=
+  ∀ (dev : History) (w label : String) (after read : ByteArray) (coins : Json),
+    coinsReason coins w label after read = none →
+      ∃ key, ChallengerKey.ofJson (getD coins "key") = .ok key ∧
+        ((∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧
+            (s.released label after).extract 0 read.size = read ∧
+            (read.size + COIN_BYTES - 1) / COIN_BYTES = (s.released label after).size / COIN_BYTES ∧
+            ∀ r ∈ s.roots label, r = after) ∨
+          Break dev key label coins)
 
 /-! ## The target: a component's coins, from the device's log -/
 
