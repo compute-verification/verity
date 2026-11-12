@@ -151,10 +151,10 @@ Protocols and claims:
 
 - Credit and every report of computation are in AND gates (tentative). 𝓜's resources appear only inside
   exclusion, which reports in AND gates. Whoever finds a reason this is wrong floats it at once.
-- Credit of declared size, values certified, is a statement about values (sampled proofs'). Compute credit (Dither's)
-  also needs values that read live noise and SAK's lower bound, so SAK is a premise of compute credit as well as of
-  exclusion. SAK is over noised operands only, never prover-chosen ones (pinned weights, served activations, un-noised
-  outputs), and an un-noised call earns no compute credit.
+- Credit of declared size, values certified, is a statement about values (sampled proofs'). Compute credit (Dither's;
+  PoUW's bar is T1–T3) also needs values that read live noise and SAK's lower bound, so SAK is a premise of compute
+  credit as well as of exclusion. SAK is over noised operands only, never prover-chosen ones (pinned weights,
+  served activations, un-noised outputs), and an un-noised call earns no compute credit.
 - A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
   every scale; workloads compose, and "row" never names one.
 - A demo shows that the code works, so it runs fast: it samples one or two proof blocks, or whatever keeps it quick.
@@ -189,7 +189,6 @@ Protocols and claims:
   are for the whole node. PoUB treats the developer's resources as one pool (conservation, no identity
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
-- PoUW's bar is T1–T3, not Dither or SAK; the lead (`verity/pouw/v2`) is next (`verity/protocols/pouw/verifier/README.md`).
 - PoUW's guarantees, and only PoUW's, may rest on random-oracle assumptions for SHA-512
   (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. Flock's
   knowledge soundness keeps the collision form.
