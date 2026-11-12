@@ -35,7 +35,9 @@ and `RowsStateTied`, and what it publishes of one sampled in part is `RowsTiedCh
 no link-window whose scan's `prog` is not a compute audit's slot entries, a lane's tree the entries port of its chunk
 of a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's own Program. `RowsStateTied` says it accepts no
 link-window whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
-alters one of the scan's transitions is no Program's input. `RowsTiedCharged` says the public it accepts with supplies
+alters one of the scan's transitions is no Program's input. `RowsStateEmpty` says it accepts none whose scan's
+registration does not open row 0 of that state to the empty state, the one row no unit of the scan computes.
+`RowsTiedCharged` says the public it accepts with supplies
 the charge itself: `charged` is the facts of each tied audit sampled in part (`drawn < units`), each once, so each
 one's δ is in `eps` (`Public.eps` sums the terms' facts' and `charged`'s, and nothing else), and where such an audit's
 bound is at least one incorrect proof block, the term of every link-window whose scan's `prog` is its output has every
@@ -135,6 +137,28 @@ refused. -/
 def RowsStateTied : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsStateTiedAt p c
+
+/-- What `RowsStateEmpty` says of a period its check accepted: in the rows form, each link-window's scan's
+registration opens row 0 of its state to the empty state (`stateEmpty`). -/
+def RowsStateEmptyAt (p : Params) (c : Commitment) : Prop :=
+  ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+    ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → stateEmpty s reg = true
+
+/-- `RowsStateEmpty` of the period check `chk`: `RowsStateEmptyAt` of every period `chk` accepts. -/
+def RowsStateEmptyOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    chk p c e = .accept pub prof → RowsStateEmptyAt p c
+
+/-- **The rows form accepts no link-window whose scan's state's row 0 is not the empty state.** If the check accepts
+a period in the rows form, each link-window's scan's registration opens leaf 0 of its state, its first state entry's
+root and domain, to a row of zero u16 words under the salt and the path it states (`stateEmpty`). With
+`RowsStateTied`, whose `stateTied` holds the scan's units' reads of that state to the chain (`stateRead`: unit `t`
+reads row `t` and registers row `t + 1`), every row a slot's Program reads is the empty state or one the scan's
+transition computed from the row before it: row 0, which no unit computes and the Programs anchored at bucket 0
+read, is not the prover's word. -/
+def RowsStateEmpty : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → RowsStateEmptyAt p c
 
 /-- Audit `i`'s answer gives the facts `f`: one-stage accepted its window record `reg` with a profile of one level,
 sampled `subset:k` or stratified, and `f` is what the check reads of that profile and its public (`answered`,
