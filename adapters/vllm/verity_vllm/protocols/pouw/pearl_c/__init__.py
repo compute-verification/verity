@@ -57,6 +57,7 @@ lines, the leaves and the records, for the time split.  ``hashing`` may change b
 from __future__ import annotations
 
 import itertools
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -64,11 +65,12 @@ from typing import Any
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c_work as PW  # noqa: F401 - kept importable here, as the tests read it
 from verity.protocols.pouw.prover.schemes.pearl_c_device import (
+    DEVICES,
     H100,
     SM120,
     SM120_UNPROMOTED,
 )
-from verity.protocols.pouw.verifier.audit import Workload, rows_domain
+from verity.protocols.pouw.verifier.audit import Workload, rows_domain, weight_binding
 from verity.protocols.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.pouw.verifier.serving import (
     SERIAL,
@@ -99,10 +101,10 @@ from verity_vllm.protocols.pouw.pearl_c.host import (
     _Uploads,
     _write,  # noqa: F401 - kept importable here, as the tests read it
     _zeros,
-    call_keys,  # noqa: F401 - kept importable here, as the tests read it
+    call_keys,
     epoch_of,
     memmove,
-    write_manifest,  # noqa: F401 - kept importable here, as the tests read it
+    write_manifest,
 )
 from verity_vllm.protocols.pouw.pearl_c.kernel import (
     Kernel,
@@ -137,6 +139,11 @@ from verity_vllm.protocols.pouw.pearl_c.screen import (
     screen_into,
 )
 
+__all__ = ["CALL_CAPACITY", "CALL_STEPS", "EPOCH_STEPS", "FLAG_ROWS", "GRAPH_ROWS", "JOB_STEPS", "Kernel",
+           "LEAF_CAPACITY", "PearlCDeviceRun", "PearlCExecutor", "ROW_ALIGN", "SCHEDULES", "SCHEMES", "SERIAL",
+           "call_index", "call_keys", "epoch_of", "excluded", "manifest_epoch", "manifest_schema", "new_salt_key",
+           "refusals", "rotated", "schedule_of", "scheme_of", "screen_into", "splits", "weight_roots", "write_manifest"]
+
 #: the Pearl-C schemes this device path runs, by name (`verity.protocols.pouw.verifier.serving.SchemeId`: forming, device record, hashing format);
 #: the device record is GPU 1's pipeline variant too.  v1 is ``sm120`` (G = 4, the panel's ``pearl-c-sm120`` v1); v2 is
 #: ``sm120-unpromoted`` (no promotion, the panel's v2, counted once the theory and Lean lanes restate it); ``h100`` (G = 4,
@@ -170,7 +177,6 @@ HASH_STEPS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", 
 
 def scheme_of(name: str, **instance: Any) -> C.PearlC:
     """The scheme `name` names (`SCHEMES`); `instance` (``k_min``, ``tile``) makes a test instance."""
-    from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES
     if name not in SCHEMES:
         raise KeyError(f"{name!r}: this device path runs {', '.join(SCHEMES)}")
     sid = SchemeId.parse(name)
@@ -246,7 +252,7 @@ def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[
         size = R.Pipeline.sizes(R.BM, n, k, R.BM)
         b = {name: _zeros(size[name], weight.device) for name in ("tree_b", "faT32", "fbT32", "fbT128", "rowdig_b", "segdig_b")}
         keys, const = _zeros(128, weight.device), _constants(s, weight.device, salt_key)
-        _put(keys[64:], rows_domain(_weight_binding(w), -2, n, hash).domain_id)
+        _put(keys[64:], rows_domain(weight_binding(w), -2, n, hash).domain_id)
         xb = weight.to(torch.float32).contiguous()
         pipe = _pipeline(kernel, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0}, xb.data_ptr(),
                          {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 64, **_constant_keys(const)},
@@ -258,14 +264,8 @@ def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[
 
 def new_salt_key(scheme: str) -> bytes:
     """A fresh prover hm96 salt key for `scheme`'s trees (their salts, kept by the prover and never in a record)."""
-    import os
     scheme_of(scheme)
     return os.urandom(32)
-
-
-def _weight_binding(w: int) -> bytes:
-    from verity.protocols.pouw.verifier.audit import weight_binding
-    return weight_binding(w)
 
 
 def _pipeline(kernel: Kernel, m: int, n: int, k: int, bufs: dict[str, int], xb: int, keys: dict[str, int], xa: int = 0,
