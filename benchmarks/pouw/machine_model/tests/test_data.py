@@ -217,7 +217,10 @@ def test_every_kind_is_a_copy_route_or_writes_memory_only():
 def test_adopted_lines_are_faster():
     """Each line adopted from a probe at an epoch is cheaper than the line it closed at the epoch before."""
     lines = census_lines(M)
-    u = lambda d: u_of(M.cycle_u, d["rate"], d["noise"], d["cycles"], d["u"])
+
+    def u(d):
+        return u_of(M.cycle_u, d["rate"], d["noise"], d["cycles"], d["u"])
+
     for epoch, before, run in [("VF3k-16", "VF3j-8", "r20261016-183617-3914"),
                                ("VF3l-16", "VF3k-16", "r20261016-210926-d856"),
                                ("VF3m-16", "VF3l-16", "r20261017-034149-3f95"),

@@ -50,8 +50,10 @@ def skip_at(d: Design, vector: str, data: Path) -> float:
 
 def _sibling(d: Design, p1: Design) -> None:
     """`p1` must be `d` with every filler at p = 1 and no luck: what else differs is its name and ε_skip."""
-    free = lambda x: replace(x, name="", title="", summary="", aliases=(), base="", skip={},
-                             filler=tuple(replace(f, p=1.0, luck="", source="") for f in x.filler))
+    def free(x: Design) -> Design:
+        return replace(x, name="", title="", summary="", aliases=(), base="", skip={},
+                       filler=tuple(replace(f, p=1.0, luck="", source="") for f in x.filler))
+
     if not d.filler or free(d) != free(p1) or any(f.p < 1 for f in p1.filler):
         raise SystemExit(f"{p1.name}: a family's p1 design is its design ({d.name}) with every filler at p = 1, no "
                          "luck; only its name, title, summary and ε_skip differ")

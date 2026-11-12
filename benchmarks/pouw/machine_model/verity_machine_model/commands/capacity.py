@@ -37,8 +37,8 @@ def run(args) -> int:
     for (w, g), h in zip(x.groups, x.parts):
         print(f"  {w:.4g} of the cell: {g.name}: σ {1 - h.hidden / x.empty:.4f} placed, B {h.credit():.4f}, tensor "
               f"{g.tensor_share():.3f}" + (f", OVER on {', '.join(h.over)}" if h.over else ""))
-    print(f"  pooled load: " + ", ".join(f"{k} {v:.4g}" for k, v in sorted(p.work.n.items())) + " warp instructions a "
-          f"SMSP-cycle; rows " + ", ".join(f"{r} {v:.3f}" for r, v in sorted(p.load.items(), key=lambda kv: -kv[1])[:5]))
+    print("  pooled load: " + ", ".join(f"{k} {v:.4g}" for k, v in sorted(p.work.n.items())) + " warp instructions a "
+          "SMSP-cycle; rows " + ", ".join(f"{r} {v:.3f}" for r, v in sorted(p.load.items(), key=lambda kv: -kv[1])[:5]))
     if p.over:
         print(f"  OVER on {', '.join(p.over)}: the certified load alone exceeds Π (a miscount or a model violation)")
     print(f"  hidden: {p.hidden:.5f} slots a SMSP-cycle, " + (", ".join(f"{k} {v:.4g}" for k, v in p.mix.items())

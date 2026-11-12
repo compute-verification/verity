@@ -53,7 +53,10 @@ def adopt(path: Path, epoch: str, data: Path = DATA) -> list[Adoption]:
     prev, known = m.epochs[-2], rows(data)
     files = {p: _read(p) for p in census_files(m, data)}
     lines, new = [d for ds in files.values() for d in ds], _read(path)
-    u = lambda d: u_of(m.cycle_u, d["rate"], d["noise"], d["cycles"], d["u"])
+
+    def u(d: dict[str, str]) -> float:
+        return u_of(m.cycle_u, d["rate"], d["noise"], d["cycles"], d["u"])
+
     out: list[Adoption] = []
     adopted: list[dict[str, str]] = []
     closed: set[Path] = set()

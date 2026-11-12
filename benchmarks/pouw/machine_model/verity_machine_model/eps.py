@@ -452,7 +452,9 @@ def adapts(data: Path = DATA) -> list[str]:
 
 def designs(data: Path = DATA) -> list[str]:
     """The design names, their numbers in numeric order (dither-1s-l32 before dither-1s-l128)."""
-    key = lambda n: [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", n)]
+    def key(n: str) -> list[int | str]:
+        return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", n)]
+
     return sorted((p.stem for p in (data / "designs").glob("*.toml")), key=key)
 
 
@@ -898,7 +900,10 @@ def eps(d: Design, pi: Machine, q: float, data: Path = DATA, *, operands: str = 
 def threshold(s: Setup, hi: float = 64.0, tol: float = 1e-9, **routes) -> float | None:
     """The least q* at which ε_machine reaches its floor (to 1e-6), or None when it hasn't at q* = hi."""
     floor = s.floor()
-    f = lambda q: s.machine_eps(q, **routes) - floor
+
+    def f(q: float) -> float:
+        return s.machine_eps(q, **routes) - floor
+
     if f(hi) > tol:
         return None
     lo = 0.0
