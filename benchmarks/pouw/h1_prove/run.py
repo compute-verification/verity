@@ -1015,5 +1015,9 @@ def main(argv: list[str] | None = None) -> int:
     return {"prepare": cmd_prepare, "summarize": cmd_summarize}[a.cmd](a)
 
 
+__all__ = ["check_opening", "check_registration", "credit_descriptor", "credit_registration", "findings_of", "forge",
+           "ok_known_root", "ok_registration", "program_of", "registered_file", "registered_opens", "unrooted",
+           "unrooted_ok", "z_only"]
+
 if __name__ == "__main__":
     raise SystemExit(main())

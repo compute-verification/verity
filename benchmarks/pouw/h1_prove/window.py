@@ -518,5 +518,7 @@ def main(argv: list[str] | None = None) -> int:
     return {"commit": cmd_commit, "serve": cmd_serve, "tamper": cmd_tamper, "open": cmd_open}[a.cmd](a)
 
 
+__all__ = ["tile_of", "unit_of"]
+
 if __name__ == "__main__":
     raise SystemExit(main())

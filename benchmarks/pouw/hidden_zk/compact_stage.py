@@ -580,3 +580,6 @@ def layout(C: CompactCircuit, in_names: Sequence[str], out_names: Sequence[str],
                   "out_words": lay.out_words, "nnz_a": nnz[0], "nnz_b": nnz[1], "reads": 0, "read_rows": 0, "read_nnz_a": 0}
     C._kinds = None
     return lay
+
+
+__all__ = ["CompactCircuit", "CompactLayout", "cleanup", "layout", "lower", "render", "set_root"]

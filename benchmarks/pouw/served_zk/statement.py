@@ -203,3 +203,6 @@ class Statement:
         ok = (all(res["honest"]["roots_equal"]) and res["honest"]["staged_rows_equal"] and res["control"]["staged_rows_equal"]
               and not any(res["control"]["roots_equal"]))
         return {"check": "statement", "cubin_sha256": self.cubin_sha256, "calls": len(calls), "rows": rows, **res, "ok": ok}
+
+
+__all__ = ["Statement", "slots_of"]

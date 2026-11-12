@@ -23,3 +23,6 @@ def e2m1(C: forms.Circuit, x: list) -> list:
 PIECES = {"BitAnd_v1": lambda C, a, b: [C.AND(a[0], b[0])],
           "E4m3ToF32_v1": lambda C, a: fp.lookup(C, list(a), E4M3_TABLE, 32),
           "F32ToE2m1Sat_v1": e2m1}
+
+
+__all__ = ["PIECES"]

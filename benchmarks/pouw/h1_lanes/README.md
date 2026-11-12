@@ -25,6 +25,7 @@ research run --on MACHINE --pool proofs --project verity --source . --cwd source
 
 ## The Python modules
 
-`run.py` holds the leaf's protocol and its negatives, and the verifier's `verity/protocols/pouw/verifier/leaf_lanes.py`,
-the Lean window's tests and `benchmarks/unit_lowering/` name it by its path; `j10r.py` is the same protocol for a J10-R
+`run.py` holds the leaf's protocol and its negatives, and the verifier's `verity/protocols/pouw/verifier/leaf_lanes.py`
+names it by its path, while the Lean window's tests and `benchmarks/unit_lowering/` load it, reading the names its
+`__all__` lists; `j10r.py` is the same protocol for a J10-R
 leaf; `served.py` is the served unit's extract, prepare and summary. Their test is `benchmarks/pouw/tests/test_h1_lanes.py`.
