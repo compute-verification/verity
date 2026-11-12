@@ -1,4 +1,4 @@
-"""The CPU gate and the committer adapter on a tiny module tree: the gate's plan and plan-vs-plan comparison, the REAL committer taking
+"""The CPU gate and the committer adapter on a tiny module tree: the gate's plan, the REAL committer taking
 its selection from the plan (`apply_plan_to_committer`), and VERITY_SKIP on that selection."""
 from __future__ import annotations
 
@@ -96,19 +96,18 @@ def offline_committer(model, runner, acquire_inputs=None):
     return c
 
 
-def test_gate_plan_and_plan_compare():
+def test_gate_plan():
     model, runner = Model(), Runner()
     rt = runtime_tree_of(model, runner, source="test")
     plan = G.run(manifest(rows_matching_v1()), rt)
     assert plan.complete and not plan.unsupported
     kinds = {k: len({m for m, _k, _s in v}) for k, v in plan.sites_by_kind().items()}
     assert kinds == {"producer_output": 11, "consumer_input": 1, "runner_return": 1, "registered_input": 1}
-    doc = plan.to_json()
-    assert G.compare_plans(doc, doc)["identical"]
     rows = [r for r in rows_matching_v1() if r["op_path"] != "norm"]
-    other = G.run(manifest(rows), rt).to_json()
-    cmp = G.compare_plans(doc, other)
-    assert not cmp["identical"] and cmp["only_a"] == ["norm/out"] and not cmp["differing"]
+    other = G.run(manifest(rows), rt)
+    assert other.complete and other.digest != plan.digest
+    assert {v.value_id for v in plan.values} - {v.value_id for v in other.values} == {"norm/out"}
+    assert {v.value_id for v in other.values} <= {v.value_id for v in plan.values}
 
 
 def test_apply_plan_to_committer_replaces_the_class_tables():

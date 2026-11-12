@@ -186,7 +186,7 @@
     {"file": "verity_vllm/acquire/fa3_tap_src/build_fa3_ext.py", "kind": "E401", "symbol": "<module>", "detail": "Multiple imports on one line"},
     {"file": "verity_vllm/acquire/fa3_tap_src/build_fa3_ext.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/acquire/fa3_tap_src/build_fa3_ext.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
-    {"file": "verity_vllm/acquire/gate.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 8},
+    {"file": "verity_vllm/acquire/gate.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "verity_vllm/acquire/norm_tap_src/build_ext.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/acquire/router_tap_src/build_ext.py", "kind": "ISC004", "symbol": "<module>", "detail": "Unparenthesized implicit string concatenation in collection", "count": 7},
     {"file": "verity_vllm/acquire/router_tap_src/build_ext.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
