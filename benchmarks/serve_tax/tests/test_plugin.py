@@ -204,7 +204,6 @@ def test_tables_that_cant_start_fail_every_step_and_a_refused_cache_stops_the_en
     guard itself (the step hook's construction, stood in for here) runs on rank 0 as Model Runner V2 binds its caches,
     so an engine whose cache the tables can't read never serves a step."""
     import pytest
-    import verity_vllm.pipeline
 
     def refuse(runner, cfg):
         raise ValueError("serve with --kv-cache-dtype auto")
@@ -237,7 +236,8 @@ def test_tables_that_cant_start_fail_every_step_and_a_refused_cache_stops_the_en
     tables = types.ModuleType("verity_vllm.pipeline.boundary_tables")
     tables.StepHook, tables.layers_of = step_hook, lambda spec: tuple(range(spec))
     monkeypatch.setitem(sys.modules, tables.__name__, tables)
-    monkeypatch.setattr(verity_vllm.pipeline, "boundary_tables", tables, raising=False)
+    if "verity_vllm.pipeline" in sys.modules:
+        monkeypatch.setattr(sys.modules["verity_vllm.pipeline"], "boundary_tables", tables, raising=False)
     cfg = {"boundary_rows": {"tables": {"layers": 2}}}
 
     def initialize(self, config, is_profiling=False):
