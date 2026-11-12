@@ -798,6 +798,51 @@ def test_a_red_of_the_sources_ends_a_build_run_before_setup_and_a_real_build_giv
     assert "sources.graph" not in [f.code for f in late]
 
 
+def built_with(tmp_path: Path, name: str, text: str) -> tuple[Path, dict[str, list[str]], dict]:
+    """A real build of the control fixture with one more module under its root, `Control.<name>` with ``text``: the
+    package, the import graph read from its headers, and the facts `Facts.lean` reports of the build."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control" / f"{name}.lean").write_text(text)
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + f"import Control.{name}\n")
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    graph, cut = A.source_graph(pkg, ["Control"])
+    assert cut == []
+    return pkg, graph, A.facts_of(pkg, A.load(pkg), tmp_path)
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_plain_header_s_imports_read_from_the_source_are_the_build_s(tmp_path):
+    """A header with neither `module` nor `prelude`, which every file of the control fixture has and one more here: the
+    build reports `Init` and the header's own imports for each, and the graph read from the sources holds the same
+    modules with the same imports, so the audit's comparison passes; a header import the build lacks fails it."""
+    pkg, graph, f = built_with(tmp_path, "Plain", "import Control.Defs\nimport Control.Assumptions\n\n"
+                                                  "def Control.four : Nat := 4\n")
+    assert graph["Control.Plain"] == ["Init", "Control.Defs", "Control.Assumptions"]
+    assert set(f["imports"]["Control.Plain"]) == {"Init", "Control.Defs", "Control.Assumptions"}
+    assert set(f["modules"]) == set(graph) == {"Control", *(f"Control.{m}" for m in ("Assumptions", "Defs", "Thms", "Plain"))}
+    assert {m: set(f["imports"][m]) for m in f["modules"]} == {m: set(i) for m, i in graph.items()}
+    assert A.source_graph_failures(pkg, A.load(pkg), f) == []
+    (pkg / "Control" / "Plain.lean").write_text("import Control.Thms\n" + (pkg / "Control" / "Plain.lean").read_text())
+    (fail,) = A.source_graph_failures(pkg, A.load(pkg), f)
+    assert fail.code == "sources.graph" and "Control.Plain (it imports Control.Thms only in the sources)" in fail
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_prelude_header_s_imports_read_from_the_source_are_the_build_s(tmp_path):
+    """A `prelude` header: the build reports no import for the module, not `Init` either, and the graph read from the
+    sources gives it none, so the audit's comparison passes; read as a header without `prelude`, it fails on `Init`."""
+    text = "prelude\n-- a module that imports nothing, `Init` included\n"
+    pkg, graph, f = built_with(tmp_path, "Bare", text)
+    assert graph["Control.Bare"] == [] == f["imports"]["Control.Bare"]
+    assert "Control.Bare" in f["modules"] and "Control.Bare" in f["imports"]["Control"]
+    assert {m: set(f["imports"][m]) for m in f["modules"]} == {m: set(i) for m, i in graph.items()}
+    assert A.source_graph_failures(pkg, A.load(pkg), f) == []
+    (pkg / "Control" / "Bare.lean").write_text(text.removeprefix("prelude\n"))
+    (fail,) = A.source_graph_failures(pkg, A.load(pkg), f)
+    assert fail.code == "sources.graph" and "Control.Bare (it imports Init only in the sources)" in fail
+
+
 TREES = {"P.Defs": "definitions", "P.Assumptions": "definitions", "P.Props": "properties", "P.Thms": "proofs",
          "P.Props.Proofs": "proofs"}
 AUX = [{"name": "P.aux", "module": "P.Thms", "kind": "def", "hash": "5" * 32, "own": ["P.aux.match_1"]},
