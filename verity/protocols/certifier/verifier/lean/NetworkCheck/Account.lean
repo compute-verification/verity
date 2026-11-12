@@ -31,7 +31,8 @@ the period check writes both the link's row reads "not audited: charged at capac
 The answer states its span as a count of execution phases, neither their length nor which they are. The length is a
 parameter here: `Schedule.phaseSeconds` in the rows form. A count alone shows no two spans disjoint, so of two
 certification periods on one link only the longer covers its ticks; `accountNamed` is the account once the period
-check publishes the index of its first execution phase.
+check publishes the certifier session and the session's index of its first execution phase, which its parameters hold
+(`session`, `first`) and its public output does not.
 -/
 
 @[expose] public section
@@ -58,12 +59,15 @@ def account (seconds : Core.Ratio) : Core.Account :=
                   unpriced := ["each sampled audit's knowledge soundness error", "the commitment's binding",
                                "the network certifier's openings"] }] }
 
-/-- The account once an answer names its span by the session's index of its first execution phase (the parameter
-`first`, under the key `first`) and their count: two certification periods of one session that share no execution
-phase then both cover their ticks. -/
+/-- The account once an answer names its span, by two keys more of its public output: the certifier session its
+execution phases are counted in (the parameter `session`, under `session`) and the session's index of the first (the
+parameter `first`, under `first`), beside their count. Two certification periods of one session that share no
+execution phase then both cover their ticks. The network certifier counts each session's execution phases from that
+session's start, so of two sessions on one link the one that covers more covers its ticks alone. -/
 def accountNamed (seconds : Core.Ratio) : Core.Account :=
   { account seconds with amounts := (account seconds).amounts.map fun m =>
-      { m with time := .steps (.run (.published "first") (.published "windows")) seconds } }
+      { m with time := .steps (.run (.published "first") (.published "windows")) seconds,
+               series := some (.published "session") } }
 
 /-! ## The rows of one link -/
 
@@ -96,6 +100,10 @@ private def answer (link : String) (published profile : List (String × Json) :=
 
 private def registered : List (String × Json) := [("registration", .str "h")]
 
+/-- A certified answer on `up0` that names its span: its first execution phase's index, in `session`. -/
+private def named (first : Nat) (session : String := "s0") : Core.Answer :=
+  answer "up0" [("certified", .bool true), ("first", toJson first), ("session", .str session)] registered
+
 /-- The account without its flag: the form of an answer that certifies its amount whenever it accepts. -/
 private def unflagged (c : Core.Account) : Core.Account :=
   { c with amounts := c.amounts.map fun m => { m with uncertified := .refused } }
@@ -122,7 +130,7 @@ private def notAudited : List (String × String × String × Option Nat × Optio
   [some (.str "up0"), some (toJson (1 : Nat))]
 -- and those it does not write yet, in neither. `certified` goes into the public output in the change after which the
 -- one-stage answers the period check reads are verified, and in no other: this guard then goes with it
-#guard ["certified", "first", "registration"].all fun k =>
+#guard ["certified", "first", "registration", "session"].all fun k =>
   ((publicJson pub).getObjVal? k).toOption.isNone && ((profileJson prof).getObjVal? k).toOption.isNone
 -- so the answer as the period check writes it counts for nothing, flagged or not: it names no registration's head
 #guard linkRows (account minute) [] == notAudited
@@ -146,17 +154,21 @@ private def notAudited : List (String × String × String × Option Nat × Optio
 #guard linkRows (account minute) [answer "up0" [("certified", .bool false)] registered] ==
   [("K", "up0", "certified", some 360000000, some 0, some 360000000, "1/100", 1)]
 #guard linkRows (account minute) [answer "up0" [("certified", .str "answers read as given")] registered] == notAudited
--- spans named by their first execution phase: two that share none both cover their ticks, two of one span cover it
--- once, and an answer that names no first execution phase covers no tick
-#guard linkRows (accountNamed minute)
-    [answer "up0" [("certified", .bool true), ("first", toJson (0 : Nat))] registered,
-     answer "up0" [("certified", .bool true), ("first", toJson (1 : Nat))] registered] ==
+-- spans named by their session and first execution phase: two of one session that share no execution phase both
+-- cover their ticks, and two of one span cover it once
+#guard linkRows (accountNamed minute) [named 0, named 1] ==
   [("K", "up0", "certified", some 360000000, some 11981824, some 348018176, "1/50", 2)]
-#guard linkRows (accountNamed minute)
-    [answer "up0" [("certified", .bool true), ("first", toJson (0 : Nat))] registered,
-     answer "up0" [("certified", .bool true), ("first", toJson (0 : Nat))] registered] ==
+#guard linkRows (accountNamed minute) [named 0, named 0] ==
   [("K", "up0", "certified", some 360000000, some 5981824, some 354018176, "1/50", 2)]
-#guard linkRows (accountNamed minute) [answer "up0" [("certified", .bool true)] registered] ==
+-- two sessions' execution phases are counted from each one's own start, so no two of their spans are shown disjoint:
+-- both `K` count, and one session's span alone covers its ticks
+#guard linkRows (accountNamed minute) [named 0, named 1 "s1"] ==
+  [("K", "up0", "certified", some 360000000, some 5981824, some 354018176, "1/50", 2)]
+-- an answer that names no first execution phase, or no session, covers no tick
+#guard linkRows (accountNamed minute) [answer "up0" [("certified", .bool true), ("session", .str "s0")] registered] ==
+  [("K", "up0", "certified", some 360000000, some 0, some 360000000, "1/100", 1)]
+#guard linkRows (accountNamed minute)
+    [answer "up0" [("certified", .bool true), ("first", toJson (0 : Nat))] registered] ==
   [("K", "up0", "certified", some 360000000, some 0, some 360000000, "1/100", 1)]
 
 end AccountExample
