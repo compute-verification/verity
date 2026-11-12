@@ -24,7 +24,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 HERE = Path(__file__).resolve().parent
 VECTORS = HERE / "vectors.json"
@@ -242,7 +245,7 @@ def _keyargs(fold: str, keys: dict) -> list[int]:
     return [u(keys[k]) for k in F.FOLDS[fold]["keys"]]
 
 
-def check_steps(impl: dict, v: dict | None = None, cast=int) -> int:
+def check_steps(impl: dict, v: dict | None = None, cast: Callable[[int], Any] = int) -> int:
     """impl: fold -> step with receipt_folds' signature; `cast` wraps each argument (np.uint32 for numpy steps). Returns
     the steps checked."""
     v = v or load()
@@ -377,7 +380,7 @@ def check_reference(v: dict | None = None) -> int:
 
 # ---- the existing implementations ---------------------------------------------------------------------------------------
 
-def p2ff_r9(rf, v: dict | None = None) -> int:
+def p2ff_r9(rf: ModuleType, v: dict | None = None) -> int:
     """The r9 twin (receipt_folds_r9.py): its key rules and its two steps (numpy)."""
     import numpy as np
 
@@ -388,7 +391,7 @@ def p2ff_r9(rf, v: dict | None = None) -> int:
     return n
 
 
-def pfill_ref(pr, v: dict | None = None) -> int:
+def pfill_ref(pr: ModuleType, v: dict | None = None) -> int:
     """pfill_ref.py (pfill.cuh's twin): its key rules, `keys` and `absorb` at each NC its builds run. An older copy is
     checked on what it has: no `absorb` (steps inline in its `fold`), no r9 rule, XIN (rotl 7) in place of XIN13."""
     import numpy as np
@@ -535,7 +538,7 @@ def pfill_cuh(path: Path | str, compiler: str = "g++", v: dict | None = None) ->
     return n
 
 
-def egemm_ref(er, v: dict | None = None) -> int:
+def egemm_ref(er: ModuleType, v: dict | None = None) -> int:
     """egemm_ref.py: xin_keys, xin13_receipts and the duo tile_receipts on one whole tile (TILE_TAG's rule), every thread
     against receipt_folds' egemm-xin13 and served-duo schedules."""
     import numpy as np
@@ -565,7 +568,7 @@ def egemm_ref(er, v: dict | None = None) -> int:
     return n
 
 
-def e2e_segment(sg, v: dict | None = None) -> int:
+def e2e_segment(sg: ModuleType, v: dict | None = None) -> int:
     """E2E's segment.py (PouwSegCheck's word twins): its constants, key rule, init and both folds' absorb and final."""
     v = v or load()
     sc = v["served_constants"]
@@ -595,7 +598,7 @@ def e2e_segment(sg, v: dict | None = None) -> int:
     return n
 
 
-def e2e_definitions(sg, v: dict | None = None) -> int:
+def e2e_definitions(sg: ModuleType, v: dict | None = None) -> int:
     """E2E's Boolean Definitions themselves (PouwDuoAbsorb_v2, PouwXinAbsorb_v2 and their finals, `segment.FOLDS`),
     evaluated on bits over the served-duo and e2e-xin vectors."""
     import numpy as np
@@ -645,7 +648,7 @@ def scorer_folds(folds: dict, tags: dict) -> int:
     return len(folds)
 
 
-def _load(path: str, name: str):
+def _load(path: str, name: str) -> ModuleType:
     spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[name] = mod

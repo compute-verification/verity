@@ -616,7 +616,7 @@ def p_a(m: int) -> bytes:
 class PearlKW:
     """Pearl's certificate-v4 FP8 scheme on one device: ``ada`` for the RTX 4090 (the default), or Pearl's ``h100``, ``b200``."""
 
-    def __init__(self, device: str = "ada"):
+    def __init__(self, device: str = "ada") -> None:
         self.device = DEVICES[device]
         self.name = NAME
         #: the frame hash of the protocol's trees that replace Pearl's (`HASH_ID`): SHA-256, since its tile digests are

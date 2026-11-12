@@ -139,6 +139,7 @@ from verity.protocols.pouw.verifier.registration import (  # noqa: F401 - re-exp
 from . import pearl_c as C
 from . import pearl_c4_c_L as CL
 from . import pearl_kw as P
+from .pearl_c_work import UnitRecord
 
 R = 32
 ATOM = 64
@@ -197,7 +198,7 @@ class Fmt:
     block: int
     one: int
 
-    def __reduce__(self):
+    def __reduce__(self) -> tuple[Callable[[str], Fmt], tuple[str]]:
         return _format, (self.name,)
 
 
@@ -1115,7 +1116,7 @@ class PearlC4:
     cap = CAP
 
     def __init__(self, fmt: str = "nvfp4", k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE),
-                 f1: RowF1 | None = None, n_min: int = B_OVF_MIN_N, hashing: str = "h3"):
+                 f1: RowF1 | None = None, n_min: int = B_OVF_MIN_N, hashing: str = "h3") -> None:
         if fmt not in FORMATS:
             raise ValueError(f"format {fmt!r}: one of {', '.join(FORMATS)}")
         if hashing not in HASHINGS:
@@ -1232,7 +1233,7 @@ class PearlC4:
     def row_passes(self, words: Sequence[int]) -> bool:
         return row_passes(self.fmt, words)
 
-    def tile_cap(self, record, ops: C.Ops, rows: Sequence[int], cols: Sequence[int]) -> tuple[Fraction, Fraction]:
+    def tile_cap(self, record: UnitRecord, ops: C.Ops, rows: Sequence[int], cols: Sequence[int]) -> tuple[Fraction, Fraction]:
         """(inert work, its bound) over the credited words at tile positions rows x cols: `tile_debit`'s total, and ρ times
         the credited cells' share of creditOf (each row's `credit_of` at |K|, over n).  The breakdown stays in
         `last_debit`."""
@@ -1252,7 +1253,7 @@ class PearlC4:
     def _r1_cap(self, k_kept: int, n: int) -> Fraction:
         return CAP * Fraction(self.credit_of(Shape(1, k_kept, n)), n)
 
-    def row_debit_ratio(self, record, ops: C.Ops, side: str, pos: int) -> Fraction:
+    def row_debit_ratio(self, record: UnitRecord, ops: C.Ops, side: str, pos: int) -> Fraction:
         """R1's reading: the F1′ per word of the row at
         tile position `pos` of A′ ("A") or B̃ ("B"), over ρ·(its cell credit).  Over 1 the row must be declared
         excluded; `clear_work.check_opened` allows either declaration within `R1_TOLERANCE` of 1.  An excluded row is
@@ -1261,7 +1262,7 @@ class PearlC4:
         units = row_terms(self.fmt, self._memo(ops), side, formed, e_rows, pos, self.f1)[1]
         return units / self._r1_cap(record.k_kept, record.matmul.shape.n)
 
-    def row_over_debit(self, record, ops: C.Ops, side: str, pos: int) -> bool:
+    def row_over_debit(self, record: UnitRecord, ops: C.Ops, side: str, pos: int) -> bool:
         """Whether R1 requires the row excluded (its ratio over 1)."""
         return self.row_debit_ratio(record, ops, side, pos) > 1
 
