@@ -112,7 +112,9 @@ class FakeVllm:
 
 
 def install(monkeypatch: pytest.MonkeyPatch, *, extra: Iterable[str] = ()) -> FakeVllm:
-    """Make the stand-in the only vLLM in ``sys.modules`` until ``monkeypatch`` undoes it."""
+    """Make a new stand-in the only vLLM in ``sys.modules`` until ``monkeypatch`` undoes it.  Each call starts over, an
+    earlier stand-in's modules among what it takes out: a helper takes the stand-in its test installed, and an install under
+    ``monkeypatch.context()`` gives way to the outer one at the context's end."""
     fake = FakeVllm([*SURFACE, *extra])
     for name in [n for n in sys.modules if n.split(".")[0] == "vllm"]:
         monkeypatch.delitem(sys.modules, name)

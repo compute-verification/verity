@@ -65,6 +65,17 @@ def test_vllm_is_as_it_was_once_the_test_is_over():
     assert _vllm_modules() == before
 
 
+def test_an_install_inside_a_context_starts_over_and_gives_way_to_the_outer_one(monkeypatch):
+    outer = fake_vllm.install(monkeypatch)
+    outer["vllm.envs"].VLLM_BATCH_INVARIANT = False
+    with monkeypatch.context() as mp:
+        inner = fake_vllm.install(mp)
+        assert _vllm_modules() == inner.modules and not hasattr(inner["vllm.envs"], "VLLM_BATCH_INVARIANT")
+    from vllm import envs
+
+    assert _vllm_modules() == outer.modules and envs is outer["vllm.envs"] and envs.VLLM_BATCH_INVARIANT is False
+
+
 def test_an_import_the_surface_lacks_fails_as_where_vllm_is_absent(monkeypatch):
     fake_vllm.install(monkeypatch)
     with pytest.raises(ModuleNotFoundError, match="vllm.no_such_module"):
