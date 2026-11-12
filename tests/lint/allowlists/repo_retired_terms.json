@@ -3174,7 +3174,6 @@
     {"file": "benchmarks/pouw/period_cost.py", "count": 33},
     {"file": "benchmarks/pouw/pyproject.toml", "count": 7},
     {"file": "benchmarks/pouw/sass_census/multimem.cu", "count": 1},
-    {"file": "benchmarks/pouw/sass_census/rates.sh", "count": 3},
     {"file": "benchmarks/pouw/served_h1/arch.sh", "count": 3},
     {"file": "benchmarks/pouw/served_h1/coins.py", "count": 100},
     {"file": "benchmarks/pouw/served_h1/commit_legs.sh", "count": 54},
