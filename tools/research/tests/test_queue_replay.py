@@ -15,7 +15,7 @@ CHAIN = [r for r in qr.RULES if not r.side and not r.first]
 
 
 @pytest.fixture(scope="module")
-def tr() -> qr.Trace:
+def tr() -> qr.History:
     return qr.trace(DOC)
 
 
@@ -23,7 +23,7 @@ def rule(start: str) -> qr.Rule:
     return next(r for r in qr.RULES if r.name.startswith(start))
 
 
-def walk(tr: qr.Trace, r: qr.Rule, seed: int = 0):
+def walk(tr: qr.History, r: qr.Rule, seed: int = 0):
     """The replay after each tick."""
     run = qr.Replay(tr, r, seed)
     for t in tr.ticks:

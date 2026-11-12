@@ -21,7 +21,7 @@ a change fails every check that holds it if a real check failed on it, and each 
 first check started after it; a conflict with `main` is found when it was; places are not rationed, their peak is reported.
 
 `collect` does the reading; everything below it is a pure function of the document, so a saved document replays the same
-way every time (the draws are seeded).  Stdlib only."""
+way every time (its random choices are seeded).  Stdlib only."""
 from __future__ import annotations
 
 import argparse
@@ -49,7 +49,7 @@ LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "la
 LEAN_LOCK, LEAN_PROOFS_TREE = "lean-audit.json", "security/"
 LEAN_SPEC = ("security/Definitions/", "security/Definitions.lean", "security/lakefile.toml", "security/lake-manifest.json",
              "security/lean-toolchain")
-#: how many of the real checks nearest in time a replayed check's length is drawn from
+#: how many of the real checks nearest in time a replayed check's length is picked from
 NEAREST = 8
 #: how long after a real candidate's drop its Lean members still count as pinned, in seconds: the loop builds them again at once
 PIN_GRACE_S = 600.0
@@ -131,10 +131,7 @@ def soundness_paths() -> list[str]:
     for node in tree.body:
         target = node.targets[0] if isinstance(node, ast.Assign) else node.target if isinstance(node, ast.AnnAssign) else None
         if isinstance(target, ast.Name) and target.id in ("SOUNDNESS_PATH", "PLACE") and node.value is not None:
-            try:
-                found[target.id] = ast.literal_eval(node.value)
-            except ValueError:
-                pass
+            found[target.id] = ast.literal_eval(node.value)
     place = found.get("PLACE") or {}
     return sorted({f"verity/{p}" for unit in found.get("SOUNDNESS_PATH") or () for p in place.get(unit, ())})
 
@@ -146,7 +143,9 @@ def head_files(head: str) -> list[str] | None:
         p = subprocess.run(["gh", "api", f"repos/{qt.REPO}/compare/main...{head}", "--jq", "[.files[].filename]"],
                            capture_output=True, text=True, timeout=90)
         got = json.loads(p.stdout)
-    except (OSError, ValueError, subprocess.SubprocessError):
+    except (OSError, ValueError, subprocess.SubprocessError) as e:
+        print(f"queue-replay: no files for {head[:12]} ({type(e).__name__}): its change counts as one of unknown files",
+              file=sys.stderr)
         return None
     return got if isinstance(got, list) and all(isinstance(f, str) for f in got) else None
 
@@ -359,7 +358,7 @@ class Fault:
 
 
 @dataclass
-class Trace:
+class History:
     start: float
     end: float
     ticks: list[float]
@@ -373,7 +372,7 @@ class Trace:
     records_from: float | None           # when the loop first ran a Lean batch's records before its check
     blame_from: float | None             # when the loop first ejected one member for a failure
     mixed_until: float                   # the loop's last batch that mixed Lean changes with others
-    capped: float                        # when its flags first took no Lean change into a batch (`--lean 0`): from then
+    lean_off: float                        # when its flags first took no Lean change into a batch (`--lean 0`): from then
                                          # until `mixed_until`, the ones it mixed in were those pinned
     flakes: list[float]                  # each real check that failed with no change at fault: when it was built
     wide: frozenset[int]
@@ -459,7 +458,7 @@ class Suites:
         return None if s is None else frozenset() if "." in s["inputs"] else frozenset(s["inputs"])
 
 
-def trace(doc: dict) -> Trace:
+def trace(doc: dict) -> History:
     """The replay's input from a collected document (`collect`)."""
     rep = doc.get("replay") or {}
     decisions = [r for r in doc["control"].get("decisions") or [] if not r.get("shadow")]
@@ -646,7 +645,7 @@ def trace(doc: dict) -> Trace:
                if r["action"] == "regenerate" and r["why"] == "judged pass" and r["sha"] in began]
     first_records = [qt.ts(r["at"]) for r in lines if r.get("records_first")]
     stamped = [(at, _flags(text)) for at, text in sorted(rep.get("flags") or [], key=lambda x: x[0])]
-    capped = min((at for at, f in stamped if f.get("lean") == 0 and at >= start), default=end)
+    lean_off = min((at for at, f in stamped if f.get("lean") == 0 and at >= start), default=end)
     mixes = [qt.ts(r["at"]) for r in decisions if r["action"] == "build" and start <= qt.ts(r["at"])
              and 0 < sum(changes[k].lean for k in members_of[(r.get("sha") or "")[:12]] if k in changes) < len(r.get("members") or [])]
     launch = qt.pct([max(s["took"] for s in c["shards"]) - c["build"] for c in cands
@@ -660,13 +659,13 @@ def trace(doc: dict) -> Trace:
     measured = {"landed": len(parts), "minutes": sorted(p["total"] for p in parts), "lost": lost,
                 "built": sum(1 for c in cands if c["build"] >= start), "moves": sum(1 for m in moved if start <= m <= end),
                 "reds": sum(1 for c in cands if c["build"] >= start and c["outcome"] == "red")}
-    return Trace(start, end, [t for t in map(qt.ts, doc["control"].get("ticks") or []) if start <= t <= end], changes, faults,
+    return History(start, end, [t for t in map(qt.ts, doc["control"].get("ticks") or []) if start <= t <= end], changes, faults,
                  stamped, [(c["dropped"], frozenset(c["members"])) for c in cands if c.get("cause") == "by hand" and c["dropped"] >= start],
                  passes, fails, records, min(first_records, default=None), min((when for when, _ in ejects), default=None),
-                 max(mixes, default=start), capped, sorted(clean), frozenset(rep.get("wide") or ()), Suites(rep, launch, plain), measured)
+                 max(mixes, default=start), lean_off, sorted(clean), frozenset(rep.get("wide") or ()), Suites(rep, launch, plain), measured)
 
 
-def gated(tr: Trace, f: Fault) -> bool:
+def gated(tr: History, f: Fault) -> bool:
     """Whether a run of the suites each blamed change reruns would have shown the failure ``f`` before the mark: the suite
     that failed first is known and reads files of every change blamed.  (Not known from the record: whether it fails without
     the other members of its candidate.)"""
@@ -731,9 +730,9 @@ class _Cand:
 
 
 class Replay:
-    """One run of the queue over a trace under a rule; ``seed`` fixes its draws."""
+    """One run of the queue over a trace under a rule; ``seed`` fixes its random choices."""
 
-    def __init__(self, tr: Trace, rule: Rule, seed: int = 0):
+    def __init__(self, tr: History, rule: Rule, seed: int = 0):
         self.tr, self.rule, self.rng = tr, rule, random.Random(seed)
         self.t = tr.start
         self.main = "main"
@@ -809,7 +808,7 @@ class Replay:
         ended = [(b, why) for _, b, why in ch.spans if b is not None and b <= self.t]
         return max(ended)[1] if ended else "owner"
 
-    def _draw(self, rows: list[tuple], at: float) -> float:
+    def _pick(self, rows: list[tuple], at: float) -> float:
         near = sorted(rows, key=lambda x: abs(x[0] - at))[:NEAREST]
         return self.rng.choice(near)[-1] if near else 3600.0
 
@@ -841,10 +840,10 @@ class Replay:
         order = sorted((ch for ch in ready.values() if ch.pr not in busy), key=lambda ch: (ch.rank, ch.pr))
         mixed = self.rule.recorded and self.t <= self.tr.mixed_until
         if mixed:
-            # the loop then took Lean changes into any batch, as changes with none: up to its cap, the first so many in
-            # order; once the cap was none, those pinned then
+            # the loop then took Lean changes into any batch, as changes with none: up to its limit, the first so many in
+            # order; once the limit was none, those pinned then
             over = [ch for ch in order if ch.lean and ch.key not in held]
-            over = over[f["lean"]:] if self.t < self.tr.capped else [ch for ch in over if not any(a <= self.t < b for a, b in ch.pins)]
+            over = over[f["lean"]:] if self.t < self.tr.lean_off else [ch for ch in over if not any(a <= self.t < b for a, b in ch.pins)]
             order, pins = [ch for ch in order if ch not in over], False
         rd = tuple(vq.Ready(ch.pr, ch.head, self._files(ch), ch.lean and not mixed, i,
                             ch.key not in held and any(a <= self.t < b for a, b in ch.conflicts)) for i, ch in enumerate(order))
@@ -874,11 +873,11 @@ class Replay:
         """Start ``c``'s check: it fails if it holds a change at fault, or if it is the first check started since a real
         check failed with nobody at fault."""
         c.start = self.t if at is None else at
-        c.pass_at = c.start + self._draw(self.passes[any(ch.audit for ch in c.changes)], c.start)
+        c.pass_at = c.start + self._pick(self.passes[any(ch.audit for ch in c.changes)], c.start)
         c.faults = {ch.fault for ch in c.changes if ch.fault is not None}
         if not c.faults and self.flakes and self.flakes[0] <= c.start:
             c.faults, c.flake = {f"flake-{c.sha}"}, self.flakes.pop(0)
-        c.fail_at = c.start + min(self._draw(self.fails, c.start), c.pass_at - c.start) if c.faults else None
+        c.fail_at = c.start + min(self._pick(self.fails, c.start), c.pass_at - c.start) if c.faults else None
 
     def _new(self, changes: list[Change], base: str) -> _Cand:
         self.n += 1
@@ -1015,7 +1014,7 @@ class Replay:
                     self._use(c.twin[0], min(self.t, c.twin[1]), SHARDS)
                     c.twin = None
                     if self._busy() + SHARDS <= PLACES:
-                        c.twin = (self.t, self.t + self._draw(self.passes[any(ch.audit for ch in c.changes)], self.t), self.main)
+                        c.twin = (self.t, self.t + self._pick(self.passes[any(ch.audit for ch in c.changes)], self.t), self.main)
 
     def _recheck(self, f: _Cand, culprits: set[tuple[int, str]], cause: str) -> set[str]:
         """The candidate ``f`` without ``culprits`` (the changes at fault, or those taken from the queue), and each candidate
@@ -1076,7 +1075,8 @@ class Replay:
                 for c in reversed(self._above(hit.sha)):
                     self._leave(c, "dropped base")
                 self._leave(hit, "by hand")
-            # the loop records a drop by hand as an undecided outcome of its members, newer than any failure that capped them
+            # the loop records a drop by hand as an undecided outcome of its members, newer than any failure that
+            # halved their batches
             held = [ch for ch in self.tr.changes.values() if ch.pr in members]
             self.history.append(vq.Outcome(tuple(ch.pr for ch in held), tuple(ch.head for ch in held), vq.PENDING))
         if self.rule.first:
@@ -1201,13 +1201,13 @@ class Replay:
         if self.on_main and len(self.post) < self.rule.after:
             changes = [ch for _, ch in self.on_main]
             self.on_main = []
-            took = self._draw(self.passes[False], self.t)
+            took = self._pick(self.passes[False], self.t)
             flake = not any(ch.fault is not None for ch in changes) and bool(self.flakes) and self.flakes[0] <= self.t
             if flake:
                 self.flakes.pop(0)
             fails = any(ch.fault is not None for ch in changes) or flake
             self.post.append({"start": self.t, "changes": changes, "pass_at": self.t + took, "flake": flake,
-                              "fail_at": self.t + min(self._draw(self.fails, self.t), took) if fails else None})
+                              "fail_at": self.t + min(self._pick(self.fails, self.t), took) if fails else None})
 
     def run(self) -> "Replay":
         for t in self.tr.ticks:
@@ -1242,7 +1242,7 @@ def peak(places: list[tuple[float, float, int]], start: float, end: float) -> di
     return {"peak": most, "p90_places": p90, "over": sum(v for n, v in held.items() if n > PLACES) / total}
 
 
-def measure(tr: Trace, run: Replay) -> dict:
+def measure(tr: History, run: Replay) -> dict:
     """One run's numbers, over the changes that really landed in the window: minutes from the mark to `main` (a change
     the run did not land by the window's end has none)."""
     who = [ch for ch in tr.changes.values() if ch.landed is not None and ch.mark is not None and tr.start <= ch.landed <= tr.end]
@@ -1267,7 +1267,7 @@ def measure(tr: Trace, run: Replay) -> dict:
             "union_min": (qt.pct(run.union_s, .5) or 0.0) / 60}
 
 
-def measured(tr: Trace) -> dict:
+def measured(tr: History) -> dict:
     """What really happened over the replay's window, in `measure`'s terms."""
     m = tr.measured
     minutes = m["minutes"]
@@ -1282,7 +1282,7 @@ def measured(tr: Trace) -> dict:
             "within_new": sum(new) / len(new) if new else 0.0, "n_new": len(new)}
 
 
-def row(tr: Trace, rule: Rule, seeds: int) -> dict:
+def row(tr: History, rule: Rule, seeds: int) -> dict:
     """``rule`` over ``seeds`` runs: each number's mean, and the least and most of the share within two hours."""
     runs = [measure(tr, Replay(tr, rule, seed).run()) for seed in range(seeds)]
     out: dict = {"rule": rule.name, "backtrack": rule.backtrack, "seeds": seeds}
@@ -1296,7 +1296,7 @@ def row(tr: Trace, rule: Rule, seeds: int) -> dict:
     return out
 
 
-def pairs(tr: Trace, doc: dict) -> dict:
+def pairs(tr: History, doc: dict) -> dict:
     """Of each two real batches built one after the other with a known suite map: how often they share no suite but those
     that read the whole tree, and the seconds a check of the suites they do share takes."""
     decisions = [r for r in doc["control"].get("decisions") or [] if r["action"] == "build" and not r.get("shadow")
@@ -1317,7 +1317,7 @@ def pairs(tr: Trace, doc: dict) -> dict:
             "whole_min": tr.suites.wall(whole) / 60}
 
 
-def lean_first(tr: Trace, doc: dict) -> list[dict]:
+def lean_first(tr: History, doc: dict) -> list[dict]:
     """Each time the loop built a Lean batch whose records run comes first: how many other candidates were in the queue then
     and how many changes they held, whether a drop came in the five minutes before, how many plain changes the queue could
     take that were in no candidate, and the minutes until the loop next built a batch with a plain change (to the window's
@@ -1396,7 +1396,7 @@ ASSUMPTIONS = (
     "Owners mark when they did; a change at fault is fixed as long after it leaves the queue as it really was.",
     "The queue can take a change from its mark and its land verdict on, or from when the loop first built it if that was "
     "sooner (a change admitted with no verdict), while it was not held and its mark stood.",
-    "A check takes as long as one of the real checks of its kind (Lean change or not) built nearest that time, drawn at "
+    "A check takes as long as one of the real checks of its kind (Lean change or not) built nearest that time, picked at "
     "random; a failing one shows as soon as one of the real failed checks nearest that time did; a records run takes as long "
     "as one of the real ones that passed.",
     "A change a real check failed on fails every check that holds it; no other change fails.  Each real check that failed "
@@ -1415,7 +1415,7 @@ ASSUMPTIONS = (
 )
 
 
-def render(tr: Trace, rows: list[dict], extra: dict, held: list[dict]) -> str:
+def render(tr: History, rows: list[dict], extra: dict, held: list[dict]) -> str:
     m = measured(tr)
     span = (tr.end - tr.start) / 3600
 
@@ -1466,7 +1466,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--doc", type=Path, help="a saved document (`--save`); without it the records are read now")
     ap.add_argument("--save", type=Path, help="write the document read to this file; one already there says each PR's files")
     ap.add_argument("--hours", type=float, default=72.0, help="how far back the records are read")
-    ap.add_argument("--seeds", type=int, default=5, help="runs of each rule, each with its own draws")
+    ap.add_argument("--seeds", type=int, default=5, help="runs of each rule, each with its own random choices")
     ap.add_argument("--rules", default="", help="the rows to print, by the start of their names, comma-separated (default: all)")
     ap.add_argument("--json", action="store_true", help="print the rows as JSON")
     ap.add_argument("--cut", type=Path, help="write the document cut to its last `--hours`, small, to this file and stop")
