@@ -186,7 +186,9 @@ def gpu_info() -> dict[str, Any]:
 
 def _tuned_gemm_arch_family(major: int, minor: int):
     try:
-        from vllm.model_executor.determinism.batch_invariant_configs import _get_tuned_matmul_arch_family
+        from vllm.model_executor.determinism.batch_invariant_configs import (
+            _get_tuned_matmul_arch_family,
+        )
         from vllm.platforms.interface import DeviceCapability
 
         return _get_tuned_matmul_arch_family(DeviceCapability(int(major), int(minor)))

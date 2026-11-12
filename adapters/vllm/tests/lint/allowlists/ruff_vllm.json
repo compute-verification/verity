@@ -676,7 +676,6 @@
     {"file": "verity_vllm/engine/code_identity.py", "kind": "SIM115", "symbol": "_triton_cache_files", "detail": "Use a context manager for opening files", "count": 3},
     {"file": "verity_vllm/engine/code_identity.py", "kind": "UP037", "symbol": "_split_path_strings._sub", "detail": "Remove quotes from type annotation"},
     {"file": "verity_vllm/engine/collectives/all_reduce.py", "kind": "I001", "symbol": "AllReduceSeam._install", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/engine/engine_profile.py", "kind": "I001", "symbol": "_tuned_gemm_arch_family", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/engine/fp8_checkpoint.py", "kind": "T201", "symbol": "run", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/engine/int8_attention_vllm.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/engine/int8_attention_vllm.py", "kind": "I001", "symbol": "tp_rank", "detail": "Import block is un-sorted or un-formatted"},
