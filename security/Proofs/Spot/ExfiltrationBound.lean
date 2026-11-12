@@ -17,12 +17,12 @@ meta import Lean.Meta.Tactic.NormCast
 # Exfiltration before detection: from the sample and the population to the probability of theft
 
 * `indepSample_acceptCoins`: the sample that catches unit `u` independently, when its coin `p u` comes up `true`, lets the
-  wrong set `B` escape with probability exactly `Π_{u ∈ B} P(p u = false)`.
+  incorrect set `B` escape with probability exactly `Π_{u ∈ B} P(p u = false)`.
 * `pressure_of_sample`, `pressure_indepSample`: **detection pressure from the sample and the cone.** A window whose leak is at
   most its incorrect proof blocks' cone egress `Σ_{u ∈ B} E(u)`, under a sample that catches `u` with probability
   at least `κ E(u)`, meets `DetectionPressure κ`.
 * `Dataflow.card_changed_le`: **a checked population is cone-local.** The egress slots where an assignment differs from
-  the honest one, with the same inputs, number at most `Σ_{u ∈ wrong} E(u)` (POP1's `eq_off_cone`, `card_coneEgress_le`).
+  the honest one, with the same inputs, number at most `Σ_{u ∈ incorrect} E(u)` (POP1's `eq_off_cone`, `card_coneEgress_le`).
 * `guess_le`: **bits to probability.** A view that is a deviation `d ∈ 𝓓` applied to the honest view gives up the target
   with probability at most `Pr[d ∉ 𝓓] + #𝓓 · g`, when the honest view alone gives it with probability at most `g`.
 * `card_devBall_le`: the deviations that change at most `K` of `m` slots number at most `Σ_{j ≤ K} C(m, j) · |V| ^ K`.
@@ -32,8 +32,8 @@ meta import Lean.Meta.Tactic.NormCast
   with probability at most `exp (-κ (K - Δ - ℓ)) + Σ_{j ≤ K} C(m, j) · |V| ^ K · |Y| · g`, for every `K`.
 * `card_changedThrough_le`, `exfiltration_bound_windows`: **over a deployment's windows.** The slots the windows change
   through the first detection number at most `cum`, so the deviation-size premise holds whenever each window's egress
-  differs from honest only on the slots it changes (`Dataflow.card_changed_le` bounds those by its incorrect proof blocks'
-  cone egress), plus at most `Δ` slots after the detection. The count is over the deployment's `n · |O|` slots.
+  differs from honest only on the slots it changes (`Dataflow.card_changed_le` bounds those by its incorrect proof
+  blocks' cone egress), plus at most `Δ` slots after the detection. The count is over the deployment's `n · |O|` slots.
 -/
 
 @[expose] public section
@@ -56,7 +56,7 @@ theorem toReal_true_le_one (q : PMF Bool) : (q true).toReal ≤ 1 := by
   rw [Fintype.sum_bool] at h
   linarith [ENNReal.toReal_nonneg (a := q false)]
 
-/-- **The independent sample's acceptance probability**: the wrong set `B` escapes with probability
+/-- **The independent sample's acceptance probability**: the incorrect set `B` escapes with probability
 `Π_{u ∈ B} P(p u = false)`. -/
 theorem indepSample_acceptCoins {U : Type} [Fintype U] [DecidableEq U] (p : U → PMF Bool) (B : Finset U) :
     Verity.Game.prPMFReal (indepSample p) (· ∈ acceptCoins B) = ∏ u ∈ B, (p u false).toReal := by
@@ -99,7 +99,7 @@ theorem pressure_of_sample {Ω U : Type} {μ : PMF Ω} {κ : ℝ} (hκ : 0 ≤ �
   have h2 : κ * A.leak h ≤ κ * ∑ u ∈ B h, E u := mul_le_mul_of_nonneg_left (hleak h) hκ
   linarith
 
-/-- **The independent sample gives detection pressure**: a strategy whose window escapes exactly when its wrong set `B h`
+/-- **The independent sample gives detection pressure**: a strategy whose window escapes exactly when its incorrect set `B h`
 does, and leaks at most `Σ_{u ∈ B h} E(u)`, meets detection pressure `κ` under the sample catching `u` with probability
 `P(p u = true) ≥ κ E(u)`. -/
 theorem pressure_indepSample {U : Type} [Fintype U] [DecidableEq U] {κ : ℝ} (hκ : 0 ≤ κ) (E : U → ℝ)
@@ -283,14 +283,14 @@ open Finset
 variable {U S : Type} (P : Dataflow U S)
 
 /-- **A checked population is cone-local**: an assignment that holds the honest run's inputs differs from it on at most
-`Σ_{u ∈ wrong} E(u)` egress slots, `E(u) = |coneEgress O {u}|`. -/
+`Σ_{u ∈ incorrect} E(u)` egress slots, `E(u) = |coneEgress O {u}|`. -/
 theorem card_changed_le [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [DecidableEq V] (f : P.Fns V)
     (O : Finset S) {σ honest : S → V} (hin : ∀ t ∈ P.input, σ t = honest t) (hh : ∀ u, P.Correct f honest u) :
-    (O.filter fun s => σ s ≠ honest s).card ≤ ∑ u ∈ P.wrong f σ, (P.coneEgress O {u}).card := by
-  refine (card_le_card fun s hs => ?_).trans (P.card_coneEgress_le O (P.wrong f σ))
+    (O.filter fun s => σ s ≠ honest s).card ≤ ∑ u ∈ P.incorrect f σ, (P.coneEgress O {u}).card := by
+  refine (card_le_card fun s hs => ?_).trans (P.card_coneEgress_le O (P.incorrect f σ))
   obtain ⟨hsO, hne⟩ := mem_filter.1 hs
   refine P.mem_coneEgress.2 ⟨hsO, ?_⟩
   by_contra hw
-  exact hne (P.eq_off_cone hc ha f hin le_rfl (by simp [P.wrong_eq_empty hh]) hw)
+  exact hne (P.eq_off_cone hc ha f hin le_rfl (by simp [P.incorrect_eq_empty hh]) hw)
 
 end Population.Dataflow

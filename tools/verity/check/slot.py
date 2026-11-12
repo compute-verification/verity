@@ -311,6 +311,21 @@ def memory_gb(root: Path = Path("/")) -> int:
 ENDED = ("done", "failed", "cancelled")
 
 
+def _run_gone(run_dir: object) -> bool:
+    """Whether a reservation that names no pid names a run directory that isn't there (research.mem's `_gone`): nothing holds
+    it, so `reserved_gb` leaves it out. research.mem writes a run's reservation with no pid once the launch has made that
+    directory, names the runner's pid as soon as it has started it, and at no point of a launch removes the directory, so a
+    run that is starting is never read as this. A directory that can't be read is there, as is a path that isn't absolute,
+    and a reservation that names no directory (one written by hand) counts as before."""
+    if not run_dir or not os.path.isabs(str(run_dir)):
+        return False
+    try:
+        os.stat(str(run_dir))
+    except (OSError, ValueError) as e:
+        return isinstance(e, (FileNotFoundError, NotADirectoryError))
+    return False
+
+
 def _rss_tree(pid: int, proc: Path) -> int | None:
     """Resident bytes of ``pid`` and its descendants, or None when it isn't in ``proc`` (research.mem's `_rss_tree`)."""
     parent, rss = {}, {}
@@ -357,6 +372,8 @@ def reserved_gb(proc: Path = Path("/proc"), priority: bool = False, peaks: int |
             pass
         pid = doc.get("pid") if isinstance(doc.get("pid"), int) else None
         if pid is not None and not (proc / str(pid)).exists():
+            continue
+        if pid is None and _run_gone(doc.get("run_dir")):
             continue
         used = _rss_tree(pid, proc) if pid is not None else None
         key = doc.get("run_id") or f.name

@@ -80,8 +80,9 @@ def discard_bundles(row: Any) -> list[str]:
 
 
 def replay(row: Any) -> None:
-    """The deferred C2 of the config run's Commit, on CPU (`commit-replay`), from the one bundle the Commit sealed: the Build's Programs
-    of this row dir, the checkpoint of record opened against the committed weights root.  Its exit decides the stage."""
+    """The deferred C2 of the config run's Commit, on CPU (`commit-replay`, the prover's pre-flight check), from the one bundle the Commit
+    sealed: the Build's Programs of this row dir, the checkpoint of record opened against the committed weights root.  Its exit decides
+    the stage."""
     bundles = ((R.load_json(f"{row.d}/commit/verdict.json") or {}).get("replay_deferred") or {}).get("bundles") or []
     row.tl("stage.replay", "start")
     why = ("the replay stage decides a config run's deferred Commit (--config-run 1)" if not row.config_run else

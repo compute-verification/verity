@@ -2,6 +2,7 @@ module
 
 public import CoreComposites
 public import Properties.Composition
+public import Properties.Pouw.PearlPlus
 public import Properties.Flock.Circuit.CircuitOf
 public import Definitions.Accounting.JointLive
 public import Definitions.Core.Blocks
@@ -21,15 +22,17 @@ public import Properties.Verity.Sha512
 
 The verifier is one compiled Lean function per composite (`Verity.Registration.Composite`), the `answer` of
 the composite `Core.Composites.composites` lists for it (`verifier`): onsite's `Core.Onsite.protocol`
-(`verity/onsite/v0`, `Core.Composition.tiedSameB`) and remote's `Core.Remote.protocol` (`verity/remote/v0`,
-`Core.Composition.tiedSameB`), each composing its subprotocols over the blobs the prover sent. Onsite has seven
+(`verity/onsite/v0`, `Core.Composition.tiedSameB`) and remote's composite of record `Core.Remote.V1.protocol`
+(`verity/remote/v1`, `Core.Composition.tiedSameB`), each composing its subprotocols over the blobs the prover sent.
+Remote's development composite, `Core.Remote.protocol` (`verity/remote/v0`, H1's period as its work), is no
+composite's verifier, and `Core.Composites.ofIds` refuses its subprotocols. Onsite has seven
 subprotocols and remote three of them, each subprotocol at the compiled check its composite names for it (`component`);
 the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAudit`):
 
 | subprotocol | `Audit` | onsite's compiled check | remote's compiled check |
 | --- | --- | --- | --- |
 | SPOT | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit; one-stage v1 and the recursive audit refused) | the same |
-| PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | the same |
+| PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) |
 | the inference-only policy | | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | the same |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` | |
 | PoUB-P2 | `.poub` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | |
@@ -91,11 +94,16 @@ The statement's form is the causal game, the committed files, one fixed extracto
 * **Each compiled check's acceptance in what the prover sent.** Subprotocol `a`'s verdict at composite `k` (`Verdict`) is the
   file check, the composite's own acceptance as a `same` composition (`SameAccepts`: an accepted composition of its
   subprotocols whose record subprotocols committed to one record, `Properties.Composition.AcceptSame`'s conclusion, and
-  every window of PoUW's period on the record and at onsite PoUS and PoUB-P2 on one store, `AcceptTied`'s),
+  at onsite every window of PoUW's period on the record and PoUS and PoUB-P2 on one store and at remote Pearl+'s run on
+  the policy's record, `AcceptTied`'s),
   and `a`'s compiled check's acceptance of its own case. The device's log as each compiled check read it
   (`coinsRead`) is the targets' to bind to the device's whole log (`Logged`).
-* **PoUW counts gates** of the committed circuit the play computed after their window's coin, over the period's windows
-  (`computed`), with no pricing.
+* **PoUW counts gates at onsite and MACs at remote.** At onsite, gates of the committed circuit the play computed after
+  their window's coin, over the period's windows (`computed`), with no pricing. At remote, Pearl+'s claim reads the
+  credit its compiled check publishes on its case (`PearlPlusCredits`): the play computed at least `(1 − ρ)(1 − ε) · W`
+  MACs on the served run's matmul tiles after the run's coin, each tile that passes Pearl+'s rule at its credited
+  cells' MACs (`macs`), for the run's claimed MACs `W`, the cap's share `ρ` and the draw's `ε` it published: the
+  tolerant audit's event (`Pouw.GγSampledTol`) with no drawn tile credited nothing.
 
 Each subprotocol's target (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
 `NetworkCertifierSound`, `WipeSound`) is `Target k a`: at every `θ`, `F`, `c` and strategy, the probability that `a`'s
@@ -104,7 +112,7 @@ verdict at `k` accepts while its claim fails is at most its error there. `Verity
 
 The names a subprotocol defines are `Vocab`'s fields: `read` (v2's reading of the committed files), `place`,
 `programDigest`, `publicDigest` and `registered`, `families`, `signer` and `coinsRead`, `extract`, the finders and the
-forgers, `computed`, `world` (the runs PoUS, PoUB-P2 and the network certifier realize), the declaration's registered
+forgers, `computed` and `macs`, `world` (the runs PoUS, PoUB-P2 and the network certifier realize), the declaration's registered
 inputs and the policy's budgets, the wipe at the period's boundary and the run read as its game, and `certOf`,
 `foreignBits`, `signatures`, `delta`, `epsForge` and `loss` (what the composite publishes, functions of the parameters
 alone).
@@ -150,23 +158,23 @@ def Subprotocol.ofAudit : Audit → Subprotocol
 /-- The compiled verifier of composite `k`. -/
 def verifier : Verity.Registration.Composite → BlobProtocol
   | .onsite => Onsite.protocol
-  | .remote => Remote.protocol
+  | .remote => Remote.V1.protocol
 
 /-- Composite `k`'s subprotocols, as its verifier composes them, in the order of their ids. -/
 def componentsOf : Verity.Registration.Composite → List BlobProtocol
   | .onsite => Onsite.components
-  | .remote => Remote.components
+  | .remote => Remote.V1.components
 
 /-- The subprotocols of composite `k` that must commit to one record. -/
 def tied : Verity.Registration.Composite → List String
   | .onsite => Onsite.tied
-  | .remote => Remote.tied
+  | .remote => Remote.V1.tied
 
-/-- The ties of composite `k`: at both, every window of PoUW's period on the policy's record; at onsite, also PoUS and
-PoUB-P2 on one store. -/
+/-- The ties of composite `k`: at onsite, every window of PoUW's period on the policy's record, and PoUS and PoUB-P2 on
+one store; at remote, Pearl+'s run on the policy's record. -/
 def ties : Verity.Registration.Composite → List Composition.Tie
   | .onsite => Onsite.ties
-  | .remote => [Remote.windows]
+  | .remote => Remote.V1.ties
 
 /-- **The compiled check of composite `k` that decides subprotocol `a`**; `none` when `k` has no such
 subprotocol. -/
@@ -179,7 +187,7 @@ def component : Verity.Registration.Composite → Subprotocol → Option BlobPro
   | .onsite, .network => some NetworkCheck.Period.protocol
   | .onsite, .wipe => some MemoryChallenger.WipeProtocol.protocol
   | .remote, .sampled => some VStar.Recursive.Sampled.protocol
-  | .remote, .pouw => some PouwCheck.Period.protocol
+  | .remote, .pouw => some PouwCheck.PearlPlus.Protocol.protocol
   | .remote, .inferenceOnly => some NciCheck.Protocol.protocol
   | .remote, _ => none
 
@@ -221,10 +229,22 @@ def CaseAccepts (k : Verity.Registration.Composite) (P : BlobProtocol) (s : Sent
 def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : Sent) : Prop :=
   ∃ P, component k a = some P ∧ CaseAccepts k P s
 
+/-- **The credit Pearl+'s check publishes in what the prover sent remote**: the three byte strings decode, Pearl+'s
+case decodes under the parameters remote names for it, and Pearl+'s check on the blobs sent accepts it with the credit
+`w` (`PouwCheck.PearlPlus.Protocol.checkBlobs`), whose `macs`, `rho` and `epsilon` its answer publishes. -/
+def PearlPlusCredits (s : Sent) (w : PouwCheck.PearlPlus.Credit) : Prop :=
+  ∃ ps c ev, Decoded s ps c ev ∧ ∃ x ∈ Properties.Composition.triples (s.components .remote) ps ev,
+    x.2.2.id = PouwCheck.PearlPlus.Protocol.protocolId ∧ ∃ p cm e prof,
+      (canonicalJson x.2.1.params.toUTF8 >>= PouwCheck.PearlPlus.Protocol.paramsOf) = .ok p ∧
+      PouwCheck.PearlPlus.Protocol.commitmentOf x.2.2.commitment = .ok cm ∧
+      PouwCheck.PearlPlus.Protocol.evidenceOf x.2.2.evidence = .ok e ∧
+      PouwCheck.PearlPlus.Protocol.checkBlobs p cm e (Blobs.ofArray s.blobs) = .accept w prof
+
 /-- **Composite `k` accepted what the prover sent as a `same` composition**: the three byte strings decode to an
 accepted composition of `k`'s subprotocols on the blobs sent, whose record subprotocols (`tied k`) committed to one
-record (`Properties.Composition.SameAccepted`), and whose ties (`ties k`: at both, every window of PoUW's period on the
-policy's record; at onsite, also PoUS and PoUB-P2 on one store) each named one value (`Properties.Composition.Tied`). -/
+record (`Properties.Composition.SameAccepted`), and whose ties (`ties k`: at onsite, every window of PoUW's period on
+the policy's record, and PoUS and PoUB-P2 on one store; at remote, Pearl+'s run on the policy's record) each named one
+value (`Properties.Composition.Tied`). -/
 def SameAccepts (k : Verity.Registration.Composite) (s : Sent) : Prop :=
   ∃ ps c ev, Decoded s ps c ev ∧ ∃ pub prof,
     Properties.Composition.SameAccepted (verifier k).id (tied k) (s.components k) ps c ev pub prof ∧
@@ -684,6 +704,10 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   forger_signed : ∀ a θ F c σ (x : (forger a θ F c σ).S), ((forger a θ F c σ).signed x).length ≤ signatures θ
   computed : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Game.Strategy (play (families θ) (signer θ) θ F c) → Exchange → Finset (Fin (read θ F).circuit.N)
+  /-- the MACs the play computed on the served run's matmul tiles after the run's coin, each tile that passes Pearl+'s
+  rule at its credited cells' MACs (Pearl's Assumption 1) -/
+  macs : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
+    Game.Strategy (play (families θ) (signer θ) θ F c) → Exchange → ℕ
   world : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Game.Strategy (play (families θ) (signer θ) θ F c) → Exchange → World d α
   /-- the window PoUS's and PoUB-P2's claims read, fixed by the parameters before any coin -/
@@ -792,17 +816,24 @@ noncomputable def live (k : Verity.Registration.Composite) (θ : ByteArray) (F :
 
 /-- **The claim subprotocol `a` certifies** in the play of `σ` that ended with `o`. The five period claims are
 `Accounting.PeriodLive.Holds` at the period and the published certificates: sampled proofs' on the extractor's
-transcript at `σ` (at most an `ε` share of the units unbound in it under the commitment's openings), PoUW's in gates (at
-least `W` gates of the committed circuit computed after their window's coin), and the others' on the world the play
+transcript at `σ` (at most an `ε` share of the units unbound in it under the commitment's openings), PoUW's at onsite in
+gates (at least `W` gates of the committed circuit computed after their window's coin), and the others' on the world the play
 realized (at least `S` bits of device memory held on average, at least `Q` bits read, at most `K` bits through the
 network certifiers), whose window and capacity account are the parameters' (`world_window`, `world_capacity`), so PoUS's
 own coins choose neither. The inference-only policy's: the declaration complies with `Nci.CompliesRate` at the published `Γ` and
 `α`. The wipe's: the play, read at the wipe's boundary as the wipe's game, doesn't keep foreign content past the
-published survivor threshold (`Verity.Wipe.OfRun.Kept`). -/
+published survivor threshold (`Verity.Wipe.OfRun.Kept`). PoUW's at remote is Pearl+'s, in MACs, not a period claim: a
+credit `w` Pearl+'s check published on the blobs sent (`PearlPlusCredits`), with the play computing at least
+`(1 − ρ)(1 − ε) · W` MACs on the run's tiles (`macs`), where `W` is the credit's `macs` (the MACs of the cells its passes
+credit), `ρ` its cap share `rho` and `ε` its `epsilon`, the miss table's value at `X_O`, the draws that landed on tiles over
+their inert-work bound (credited nothing under `over_cap` `uncredited`; `X_O = 0` in a run `reject` accepts). -/
 def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) :
     Subprotocol → Exchange → Prop
   | .sampled, o => (V.live k θ F c).Holds (V.certOf θ) σ .sampled o
-  | .pouw, o => (V.live k θ F c).Holds (V.certOf θ) σ .pouw o
+  | .pouw, o => match k with
+    | .onsite => (V.live .onsite θ F c).Holds (V.certOf θ) σ .pouw o
+    | .remote => ∃ w, PearlPlusCredits o.sent w ∧
+        (1 - (w.rho : ℝ)) * (1 - (w.epsilon : ℝ)) * w.macs ≤ V.macs θ F c σ o
   | .pous, o => (V.live k θ F c).Holds (V.certOf θ) σ .pous o
   | .poub, o => (V.live k θ F c).Holds (V.certOf θ) σ .poub o
   | .network, o => (V.live k θ F c).Holds (V.certOf θ) σ .network o
@@ -886,7 +917,8 @@ def SoundnessAt (k : Verity.Registration.Composite) : Prop := V.SoundnessFor k (
 
 /-- **Subprotocol `a`'s target at composite `k`**: at all `θ`, `F` and `c`, for every strategy, the probability that
 `a`'s verdict at `k` accepts while its claim fails is at most its error at that strategy. For a subprotocol that decides
-`Audit` `b` it is the per-period guarantee `Accounting.PeriodLive.Sound` at `live` (`Vocab.target_audit`). -/
+`Audit` `b` it is the per-period guarantee `Accounting.PeriodLive.Sound` at `live` (`Vocab.target_audit`), except PoUW's
+at remote, Pearl+'s claim in MACs. -/
 def Target (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
   ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
     Game.prob (fun o => V.Verdict k a o ∧ ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ ≤ V.error a θ F c σ
@@ -894,7 +926,8 @@ def Target (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
 /-- **Sampled proofs' target**: at most an `ε` share of the units unbound in the extractor's transcript. -/
 def SpotSound (k : Verity.Registration.Composite) : Prop := V.Target k .sampled
 
-/-- **PoUW's target**: at least `W` gates of the committed circuit computed after their window's coin. -/
+/-- **PoUW's target**: at onsite, at least `W` gates of the committed circuit computed after their window's coin; at
+remote, Pearl+'s, at least `(1 − ρ)(1 − ε) · W` MACs computed on the run's tiles at the credit its check published. -/
 def PouwSound (k : Verity.Registration.Composite) : Prop := V.Target k .pouw
 
 /-- **The inference-only policy's target**: the declaration over the committed circuit complies with `Nci.CompliesRate`

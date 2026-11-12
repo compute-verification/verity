@@ -234,7 +234,7 @@ def checksFast (reg receipt draw law : Json) (units : Array Int) (provedUnits : 
   simp only [checks, checksFast, find?_byPort]
 
 /-- The profile's sample of the sampling design a sample names (`audit.profile`): a work sampling design is the stratified sampling design at its sizes. -/
-def profileDraw (law : Json) : Option Core.Draw :=
+def profileDraw (law : Json) : Option Core.SamplingDesign :=
   match getD law "law" with
   | .str "subset" => (nat? (getD law "k")).map .subset
   | .str "bernoulli" => do

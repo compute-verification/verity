@@ -35,7 +35,7 @@ open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions
 
 /-- **The no-fold protocol is `(1 − ε)`-work-sound over a monitoring period on the card table `c` at the open parameters
 `x`**. For every period's devices `D` (`n` cards pooled, at the table's rates, and the other devices), every
-sampling-block protocol `P` and layout `L`, every accelerator `G` of the machine model 𝓜 that is `D` at `x` under the
+sampling-block protocol `P` and round plan `L`, every accelerator `G` of the machine model 𝓜 that is `D` at `x` under the
 resource match `e` (`OnCard`) whose oracle-call step is a public compression on the card (`CallsAtPub`), every number
 `nsb` of sampling blocks, every sampling block's set `Reg b` of registrable instances, every service verdict on the
 transcript and the devices' readings `dev`, and every period `Pd` with its dual price `μ` at the sampling blocks' honest
@@ -97,7 +97,7 @@ read here. `Q` calls use at least the capacity of one card resource `r` a public
 Like `WorkSound`, it is stated over any round protocol, and the only ones the Lean defines are the no-fold round's,
 so it doesn't cover Dither v3.2's proof block, which no guarantee states yet. -/
 def WorkSoundAtX (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Verity.Accel.Open) : Prop :=
-  ∀ (D : Devices c) (P : RoundProto) (L : Layout (D.machine x) P) (G : Accel)
+  ∀ (D : Devices c) (P : RoundProto) (L : RoundPlan (D.machine x) P) (G : Accel)
     (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res), OnCard G c x D P L e → HostsCounted D hr → CallsAtPub G e pb →
   ∀ (nsb : ℕ) (Reg : Fin nsb → Set P.Inst) (Obs : Type) (verdict : Verdict P nsb Obs)
     (dev : Readings G P nsb Obs) (Pd : Period G) (μ : G.Res → ℝ) (Wmm Wsha Wans macs comps : Fin nsb → ℝ)

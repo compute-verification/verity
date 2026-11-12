@@ -52,6 +52,7 @@ from verity_difftest import settings as opt
 from verity.configuration.deploy import config as K
 from verity.protocols.spot.verifier import parties as SPP
 from verity.circuits.types import Array, Value
+from verity.settings import REGISTRY as VERITY_SETTINGS
 
 ROOT = Path(__file__).resolve().parents[6]
 ONSITE_PACKAGE, REMOTE_PACKAGE = ROOT / "verity/protocols/onsite/verifier", ROOT / "verity/protocols/remote/verifier"
@@ -328,13 +329,13 @@ BINDING = ["binding", "binding-id", "commitment-size"]
 
 
 @st.composite
-def composite(draw, product: R.Product) -> dict:
+def composite(draw, product: R.Product, mutation: str | None = None) -> dict:
     """One case of `product`: its subprotocols' cases (one time in six every one aimed at acceptance, one in six the same
     but for one of those that can be undecided, when one can, aimed at undecided, so that a product of seven reaches its
     binding breaks with a subprotocol undecided, and each at any verdict otherwise), the subprotocols it ties recommitted
     to one record (`one_record`) two times in three when they are aimed at acceptance and one in three otherwise, then
     at most one break of the composition's own inputs (half the time a break of the commitment alone, `BINDING`, when
-    every case is aimed at acceptance)."""
+    every case is aimed at acceptance), or the break `mutation`, one of `MUTATIONS`, when given."""
     mode = draw(st.integers(0, 5))
     undecided = [j for j, C in enumerate(product.components) if R.UNDECIDED in kinds(C)]
     pending = draw(st.sampled_from(undecided)) if undecided else None
@@ -348,7 +349,7 @@ def composite(draw, product: R.Product) -> dict:
                for c in cases]
     commitment = R.bind(product.id, [(c["id"], c["digest"]) for c in cases])
     params: object = {"components": named}
-    m = draw(st.sampled_from(BINDING if mode <= 1 and draw(st.booleans()) else MUTATIONS))
+    m = mutation or draw(st.sampled_from(BINDING if mode <= 1 and draw(st.booleans()) else MUTATIONS))
     i = draw(st.integers(0, len(cases) - 1))
     which = named if m and m.endswith("-param") or m in ("swap-params", "repeat-param") else entries
     if m in ("drop-param", "drop-case"):
@@ -452,13 +453,13 @@ def ids(product: R.Product) -> str:
 SEEN = {"onsite": collections.Counter(), "remote": collections.Counter()}
 ONSITE = port("onsite", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE)
 REMOTE = port("remote", R.REMOTE, SEEN["remote"], REMOTE_PACKAGE)
-#: `product IDS serve` over each composite's subprotocols, which `verity run`'s verifier runs
-PRODUCT = {p.id: port("product", p, SEEN[n], ONSITE_PACKAGE, serve=(ids(p), "serve"))
-           for n, p in (("onsite", R.ONSITE), ("remote", R.REMOTE))}
+#: `product IDS serve` over onsite's subprotocols, which `verity run`'s verifier runs (remote v1's Pearl+ run has a
+#: reference case only on a served run, `test_remote_v1_on_a_served_pearl_plus_run`, and H1's development composite is
+#: no product)
+PRODUCT = {R.ONSITE.id: port("product", R.ONSITE, SEEN["onsite"], ONSITE_PACKAGE, serve=(ids(R.ONSITE), "serve"))}
 onsite_server = D.server_fixture(ONSITE)
 remote_server = D.server_fixture(REMOTE)
 product_onsite_server = D.server_fixture(PRODUCT[R.ONSITE.id])
-product_remote_server = D.server_fixture(PRODUCT[R.REMOTE.id])
 
 
 @pytest.fixture(scope="module")
@@ -699,6 +700,182 @@ def test_remote_on_one_record_that_reuses_the_windows_registration(remote_server
     assert python["verdict"] == R.REJECT and lean["reason"] == f"{R.SAMPLED_PROOFS.id} reject: {NO_SESSION}", lean
 
 
+def test_remote_v1_ties_pearl_plus_run_to_the_policys_record():
+    """Remote v1's `run` tie, as `Core.Remote.V1`'s guards state it: a Pearl+ run naming the digest of the policy's
+    record holds, one naming another record's is a stray naming both, and a run whose commitment doesn't decode (an
+    extra key, a short digest, none) leaves Pearl+ to refuse it."""
+    assert R.REMOTE_V1.ties == (R.RUN, R.WINDOW) and [s for s, _ in R.RUN.names] == [R.INFERENCE_ONLY.id, R.PEARL_PLUS.id]
+
+    def record(n: int) -> bytes:
+        return canonical({"format": "verity/registration/v2", "n": n, "registered": []}).encode()
+
+    def digest(n: int) -> bytes:
+        return R.policy_record(record(n), b"")[0]
+
+    def run(on: bytes, **extra) -> bytes:
+        window = {"dropped": [], "record": json.loads(record(9)), "rounds": None}
+        return canonical({"manifests": [{}], "record": on.hex(), "window": window, **extra}).encode()
+
+    def strays(policy: int, commitment: bytes) -> str | None:
+        return R.RUN.strays([(R.INFERENCE_ONLY.id, "{}", record(policy), b""),
+                             (R.PEARL_PLUS.id, "{}", commitment, b"")])
+
+    assert len(digest(0)) == 64 and R.run_record(run(digest(0)), b"") == [digest(0)]
+    assert strays(0, run(digest(0))) is None
+    assert strays(1, run(digest(0))) == (f"record: {R.INFERENCE_ONLY.id} committed {digest(1).hex()}, "
+                                         f"{R.PEARL_PLUS.id} committed {digest(0).hex()}")
+    for undecoded in (b"", run(digest(0), x=1), run(digest(0)[:32]),
+                      canonical({"manifests": [], "record": digest(0).hex()}).encode(),
+                      canonical({"manifests": [{}], "record": digest(0).hex()}).encode()):
+        assert not isinstance(R.run_record(undecoded, b""), list) and strays(1, undecoded) is None, undecoded
+
+
+def test_remote_v1_ties_pearl_plus_window_record_to_the_one_the_policys_record_is_chained_after():
+    """Remote v1's `window` tie, as `Core.Remote.V1`'s guards state it: the policy's record chained right after the
+    window record W Pearl+'s check holds the passes to holds; one chained after another record, or after none, is a
+    stray; and a window Pearl+'s decoder refuses (other keys, W not an object, rounds or dropped not lists of
+    nonnegative integers) leaves Pearl+ to refuse it."""
+    assert [s for s, _ in R.WINDOW.names] == [R.INFERENCE_ONLY.id, R.PEARL_PLUS.id]
+
+    def record(n: int, **extra) -> dict:
+        return {"format": "verity/registration/v2", "n": n, "registered": [], **extra}
+
+    def digest(r: dict) -> bytes:
+        return R.policy_record(canonical(r).encode(), b"")[0]
+
+    def run(w: object, **window) -> bytes:
+        return canonical({"manifests": [{}], "record": "00" * 64,
+                          "window": {"dropped": [], "record": w, "rounds": None, **window}}).encode()
+
+    def strays(policy: dict, commitment: bytes) -> str | None:
+        return R.WINDOW.strays([(R.INFERENCE_ONLY.id, "{}", canonical(policy).encode(), b""),
+                                (R.PEARL_PLUS.id, "{}", commitment, b"")])
+
+    w = record(9)
+    assert R.run_window(run(w), b"") == [digest(w)] == [bytes.fromhex(R.REG.digest(w))]
+    assert R.policy_previous(canonical(record(0, previous=digest(w).hex())).encode(), b"") == [digest(w)]
+    assert strays(record(0, previous=digest(w).hex()), run(w)) is None
+    assert strays(record(0, previous=digest(record(8)).hex()), run(w)) == (
+        f"window: {R.INFERENCE_ONLY.id} committed {digest(record(8)).hex()}, {R.PEARL_PLUS.id} committed {digest(w).hex()}")
+    assert strays(record(0), run(w)) == f"window: {R.INFERENCE_ONLY.id} committed , {R.PEARL_PLUS.id} committed {digest(w).hex()}"
+    for undecoded in (run([]), run(w, rounds=[-1]), run(w, rounds=[True]), run(w, dropped=None), run(w, x=1)):
+        assert R.run_window(undecoded, b"") is None and strays(record(0), undecoded) is None, undecoded
+
+
+@functools.cache
+def _empty_audit(i: int, after: str | None = None) -> tuple[dict, dict, dict]:
+    """One-stage v2's audit of `OS.SETUPS[i]`, a program that reads no registered value, its params but δ, its record
+    and its evidence: its draw at its challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin
+    tree) drew no unit (a subset of none), so it has no session and no proved unit, and `BLOBS` hold its circuit and
+    public files. Its log is empty, or with `after` (a record's canonical JSON) that one record, which its record is
+    chained right after. Made once each: a challenger's signed session is slow to make."""
+    s, law = OS.SETUPS[i], {"k": 0, "law": "subset"}
+    part = {"program": s.sha512, "query": s.query}
+    log = [json.loads(after)] if after else []
+    rec = OS.R.record(s.program, s.query, law, OS.SCHEME, [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports],
+                      OS.WINDOW, leaf_layer=OS.LEAF, previous=OS.R.digest(log[-1]) if log else None, partition=part)
+    ch, d, coins = OS._challenger_draw(random.Random(f"composition/empty/{i}"), s, law, rec, trees=0)
+    evidence = {"coins": coins, "draw": d, "instances": 0, "proofs": {"public": _sha(PUBLIC), "sessions": []},
+                "proved_units": [], "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": None,
+                "session_roots": None, "sessions": [], "statement": {}}
+    params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "law": law,
+              "leaf_layer": OS.LEAF, "log": log, "partition": part, "ports": s.ports, "program": s.desc,
+              "proofs": {"circuit": _sha(CIRCUIT), "registered": None}, "query": s.query, "registered": None,
+              "scheme": OS.SCHEME, "window_root": ch.ledger.window["root"], "work_table": None}
+    return params, rec, evidence
+
+
+#: A directory holding a served Pearl+ run (`test_remote_v1_on_a_served_pearl_plus_run`).
+SERVED = VERITY_SETTINGS.VERITY_COMPOSITION_SERVED
+#: The served run's window record W's digest and its run commitment (the dress rehearsal r20261105-082550-ed23's).
+SERVED_W = ("50214c57da3ddafad760f1059eb3e2c1b8dd70e45c4906f308215f32589cc504"
+            "1901e26b5d927f6249c4d813ba62b3d2a3a531f2652b61941dbab322d3803601")
+SERVED_RUN = ("99841564d3beb02456ad3397c509ef236dd5bcd31e65b2d8187baca7e14b2f91"
+              "e0e343524222acc79dbe4dbae9c4472a651fce81d831de6d9626f596e525d31e")
+
+
+def _paths(j) -> list[str]:
+    """Every file a pass's manifest names: each of its objects' ``path``."""
+    if isinstance(j, dict):
+        return ([j["path"]] if isinstance(j.get("path"), str) else []) + [p for v in j.values() for p in _paths(v)]
+    return [p for v in j for p in _paths(v)] if isinstance(j, list) else []
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not SERVED, reason="VERITY_COMPOSITION_SERVED names no served run (its Lean check hashes 2.1 GB of "
+                                       "distinct pass files and replays 470 tiles: about an hour on a CPU node)")
+def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
+    """Remote v1 on a served Pearl+ run with live coins and the challenger's draw: Pearl+ accepts in Lean, both ties
+    hold, and the composite is undecided only because sampled proofs is (`_empty_audit`, as everywhere here), in Lean
+    as in Python. The run is the dress rehearsal r20261105-082550-ed23's (development, never the record): its four
+    retained passes, the epoch coins, the coin record and the window record W the passes are tied to, with the verdict
+    ``served_passes.py verify`` recorded on them (``verify.json``), which is Pearl+'s Python answer here
+    (`reference.pearl_plus_answer`); the Lean replays the passes. `VERITY_COMPOSITION_SERVED` names a directory holding
+    them, as ``research data fetch art:e76bdb5195f7d82bfbb073e50fa76b10dbd0b25417e20f430073e4d86a135ac0 --path
+    out/served`` lays them out under ``out/served`` (run r20261105-155828-663b's record): ``passes/pass-0000{0..3}/``,
+    ``passes/coins.json``, ``coin.json``, ``verify.json`` and ``window-record.json``.
+
+    The registration record R the policy and sampled proofs commit to is constructed here, the empty audit's record
+    chained right after W (``previous`` = digest(W), W the one record of its log), because the dress ran no follow-on
+    and so registered no R. The run of record's own R, with its own run, replaces it.
+
+    It catches what no drawn case can: the composite's `run` and `window` ties and Pearl+'s Lean decoder, opener and
+    check on a real run's commitment, coin record and files handed over as blobs, which the synthetic cases (Pearl+'s
+    commitments that don't decode, the ties' unit tests) never reach."""
+    d = Path(SERVED)
+    w = json.loads((d / "window-record.json").read_bytes())
+    coin, verified = json.loads((d / "coin.json").read_bytes()), json.loads((d / "verify.json").read_bytes())
+    assert OS.R.digest(w) == verified["tie"]["record"] == SERVED_W
+    assert (coin["schema"], coin["draw"]["from"], coin["commitment"], verified["commitment"]) == (
+        "verity-pouw/pearl-plus-coin/v2", "challenger", SERVED_RUN, SERVED_RUN)
+    assert verified["answer"]["verdict"] == R.ACCEPT, verified["answer"]
+
+    params, rec, evidence = _empty_audit(0, canonical(w))
+    audit = as_component(R.SAMPLED_PROOFS, form_case(OS._json({"params": {**params, "delta": "1/2"}, "record": rec,
+                                                               "evidence": evidence})))
+    policy = policy_on(audit)
+    record = R.policy_record(policy["root"], policy["evidence"])[0]
+    assert R.policy_previous(policy["root"], policy["evidence"]) == [bytes.fromhex(SERVED_W)]
+
+    passes = sorted((d / "passes").glob("pass-*"))
+    manifests = [(p / "manifest.json").read_bytes() for p in passes]
+    assert [hashlib.sha256(m).hexdigest() for m in manifests] == [x.rsplit("sha256:", 1)[1] for x in coin["passes"]]
+    files: dict[str, Path] = {}
+    names = []
+    for p, m in zip(passes, manifests):
+        named = {}
+        for f in _paths(json.loads(m)):
+            with open(p / f, "rb") as fh:
+                named[f] = hashlib.file_digest(fh, "sha512").hexdigest()
+            files.setdefault(named[f], p / f)
+        names.append(named)
+    commitment = canonical({"manifests": [json.loads(m) for m in manifests], "record": record.hex(),
+                            "window": {"dropped": coin["dropped"], "record": w, "rounds": coin["rounds"]}}).encode()
+    pearl = {"commitment": commitment.hex(), "evidence": canonical({"files": names}).encode().hex(),
+             "params": {"coins": json.loads((d / "passes" / "coins.json").read_bytes()), "draws": verified["draws"],
+                        "record": {k: coin[k] for k in ("commitment", "draw", "schema", "source")}}}
+    monkeypatch.setitem(R.PEARL_PLUS.cases, "served", (pearl, R.pearl_plus_answer(commitment, verified)))
+
+    case = product_case(R.REMOTE_V1, [policy, as_component(R.PEARL_PLUS, pearl), audit])
+    assert R.REMOTE_V1.verdicts(case) == [R.ACCEPT, R.ACCEPT, R.UNDECIDED]
+    assert R.REMOTE_V1.tied(case) == [("record", True), ("window", True)]
+    want = R.REMOTE_V1.answer(case)
+    assert want["verdict"] == R.UNDECIDED, want
+
+    blobs = [tmp_path / "circuit", tmp_path / "public"]
+    for b, data in zip(blobs, BLOBS):
+        b.write_bytes(data)
+    for name, data in (("params", canonical(case["params"]).encode()), ("commitment", bytes.fromhex(case["commitment"])),
+                       ("evidence", bytes.fromhex(case["evidence"]))):
+        (tmp_path / name).write_bytes(data)
+    p = subprocess.run([D.build(REMOTE_PACKAGE, "remote-v1"), "check", tmp_path / "params", tmp_path / "commitment",
+                        tmp_path / "evidence", *blobs, *files.values()], capture_output=True, text=True)
+    got = json.loads(p.stdout)
+    assert p.returncode == 2 and {k: v for k, v in got.items() if k != "reason"} == {
+        k: v for k, v in want.items() if k != "reason"}, (p.returncode, got, p.stderr)
+    assert got["reason"].startswith(f"{R.SAMPLED_PROOFS.id} undecided") and R.PEARL_PLUS.id not in got["reason"], got
+
+
 @pytest.mark.slow
 @OPT_IN
 def test_onsite_agrees(onsite_server, recorded):
@@ -708,40 +885,47 @@ def test_onsite_agrees(onsite_server, recorded):
     which is no subprotocol, refused."""
     _agree(ONSITE, onsite_server, SEEN["onsite"], 1000, (R.REJECT, "reject, a component undecided", "one record",
                                                        "two records", "one store", "two stores"))
-    assert SEEN["onsite"]["generic bandwidth"] > 0, dict(SEEN["onsite"])
 
 
-def test_product_names_only_the_two_composites():
-    """`product IDS id` is remote over remote's subprotocols and onsite over onsite's, in any order, exactly the
-    configuration's composites (`verity.configuration.deploy.config.COMPOSITES`, by the ids `SUBPROTOCOLS` gives their names),
-    and refuses every other set of their subprotocols and the wipe (exit 64)."""
+@pytest.mark.slow
+def test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit(onsite_server, recorded):
+    """PoUB-P2's case named as the generic bandwidth audit's, under a commitment that binds it, names no component of
+    onsite: refused, in Lean as in Python, on every drawn case (`generic-bandwidth` on each, a break that
+    `test_onsite_agrees`'s seeded draw needn't reach)."""
+    seen = collections.Counter()
+    p = RejectingPort("onsite", reference(R.ONSITE, seen), composite(R.ONSITE, "generic-bandwidth"),
+                      package=ONSITE_PACKAGE, need_rejects=False)
+    stats = D.run(p, examples=10, seed=0, server=onsite_server)
+    assert stats.counts == {R.REJECT: 10} and seen["generic bandwidth"] == 10, (stats, dict(seen))
+
+
+def test_product_names_only_the_composites():
+    """`product IDS id` is each composite over its subprotocols, in any order (onsite, and remote v1 with Pearl+'s
+    run), exactly the configuration's composites (`verity.configuration.deploy.config.COMPOSITES`, by the ids `SUBPROTOCOLS`
+    gives their names), and refuses every other set of their subprotocols, H1's development composite's among them,
+    and the wipe (exit 64)."""
     exe = D.build(ONSITE_PACKAGE, "product")
 
     def named(xs) -> tuple[int, str]:
         p = subprocess.run([exe, ",".join(xs), "id"], capture_output=True, text=True)
         return p.returncode, p.stdout.strip()
 
-    want = {p.id: sorted(C.id for C in p.components) for p in (R.ONSITE, R.REMOTE)}
+    want = {p.id: sorted(C.id for C in p.components) for p in (R.ONSITE, R.REMOTE_V1)}
     assert {cid: sorted(subs.values()) for cid, subs in SPP.SUBPROTOCOLS.items()} == want
     assert {cid: sorted(names) for cid, names in K.COMPOSITES.items()} == {
         cid: sorted(subs) for cid, subs in SPP.SUBPROTOCOLS.items()}
     for cid, ids in want.items():
         assert named(ids) == (0, cid)
         assert named(ids[::-1]) == (0, cid)
+    assert named(C.id for C in R.REMOTE.components)[0] == 64
     every = sorted({i for ids in want.values() for i in ids} | {"verity/wipe/v0"})
     others = [s for k in range(len(every) + 1) for s in itertools.combinations(every, k)
               if sorted(s) not in want.values()]
-    assert len(others) == 2 ** len(every) - 2
+    assert len(others) == 2 ** len(every) - len(want)
     for s in others:
         assert named(s)[0] == 64, s
     assert named([R.POUW_PERIOD.id, R.POUW_PERIOD.id, R.SAMPLED_PROOFS.id])[0] == 64
     assert named([R.INFERENCE_ONLY.id, "verity/pouw/v1", R.SAMPLED_PROOFS.id])[0] == 64
-
-
-@pytest.mark.slow
-@OPT_IN
-def test_product_over_remotes_subprotocols_is_remote(product_remote_server):
-    _agree(PRODUCT[R.REMOTE.id], product_remote_server, SEEN["remote"], 1000, (R.REJECT, "one record", "two records"))
 
 
 @pytest.mark.slow

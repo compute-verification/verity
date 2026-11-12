@@ -218,9 +218,8 @@ def test_the_verdict_and_the_row_slot_by_slot():
 def test_the_blocks_ands():
     """The proof block's ANDs at the bindings circuit-check pins: a row of the tests' schedule, and a slot and
     sixteen at 4,096-byte cells with u32 places and 18-bit counts, a slot's gates their difference's fifteenth."""
-    memo: dict = {}
-    assert HC.ands(LR.block(SH), memo) == ANDS_TESTS
-    one, sixteen = (HC.ands(LR.block(LR.Shape(k, 4096, 32, 18)), memo) for k in (1, 16))
+    assert HC.ands(LR.block(SH)) == ANDS_TESTS
+    one, sixteen = (HC.ands(LR.block(LR.Shape(k, 4096, 32, 18))) for k in (1, 16))
     assert (one, sixteen) == (ANDS_ONE, ANDS_SIXTEEN) and (sixteen - one) % 15 == 0
     assert (sixteen - one) // 15 == ANDS_A_SLOT
 
