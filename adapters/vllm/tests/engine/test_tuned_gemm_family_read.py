@@ -3,6 +3,7 @@ function for a device's compute capability, and `gpu_info` records the answer.  
 and CUDA's device properties are faked, so no GPU and no vLLM is needed."""
 from __future__ import annotations
 
+import logging
 import sys
 from types import SimpleNamespace as NS
 from typing import Any
@@ -45,17 +46,25 @@ def test_the_family_is_vllms_answer_for_the_capability_as_two_ints(vllm: fake_vl
     assert asked == [(8, 9), (9, 0), (8, 0), (8, 9)] and all(type(v) is int for pair in asked for v in pair)
 
 
-def test_a_vllm_that_cannot_say_leaves_the_field_unavailable(vllm: fake_vllm.FakeVllm, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_vllm_that_cannot_say_leaves_the_field_unavailable_and_says_why_at_debug(
+        vllm: fake_vllm.FakeVllm, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     def fails(cap: _Capability) -> str:
         raise KeyError("no such device")
 
-    vllm.set(RULE, fails)
-    assert EP._tuned_gemm_arch_family(8, 9) == "<unavailable>"
-    vllm.set(RULE, lambda cap: "ada")
     no_number: Any = "eight"
-    assert EP._tuned_gemm_arch_family(no_number, 9) == "<unavailable>", "a capability that is no number"
-    monkeypatch.setitem(sys.modules, "vllm.model_executor.determinism.batch_invariant_configs", None)
-    assert EP._tuned_gemm_arch_family(8, 9) == "<unavailable>", "another vLLM layout: no such module"
+    with caplog.at_level(logging.DEBUG, logger="verity_vllm"):
+        vllm.set(RULE, fails)
+        assert EP._tuned_gemm_arch_family(8, 9) == "<unavailable>"
+        vllm.set(RULE, lambda cap: "ada")
+        assert EP._tuned_gemm_arch_family(no_number, 9) == "<unavailable>", "a capability that is no number"
+        monkeypatch.setitem(sys.modules, "vllm.model_executor.determinism.batch_invariant_configs", None)
+        assert EP._tuned_gemm_arch_family(8, 9) == "<unavailable>", "another vLLM layout: no such module"
+    mine = [r for r in caplog.records if r.name == "verity_vllm.engine.engine_profile"]
+    said = [r.getMessage() for r in mine]
+    assert len(said) == 3 and {r.levelno for r in mine} == {logging.DEBUG}
+    assert "capability 8.9" in said[0] and "KeyError('no such device')" in said[0]
+    assert "capability 'eight'.9" in said[1] and "ValueError" in said[1]
+    assert "capability 8.9" in said[2] and "ModuleNotFoundError" in said[2]
 
 
 def test_a_gpu_record_carries_the_family_of_its_first_device(vllm: fake_vllm.FakeVllm, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -32,7 +32,6 @@
     {"file": "verity_vllm/pipeline/source_identity.py", "kind": "environ", "symbol": "manifest", "detail": "VERITY_TREE"},
     {"file": "verity_vllm/pipeline/source_identity.py", "kind": "environ", "symbol": "manifest", "detail": "os.environ.get"},
     {"file": "verity_vllm/pipeline/source_identity.py", "kind": "environ", "symbol": "requested_tree", "detail": "VERITY_TREE"},
-    {"file": "verity_vllm/engine/engine_profile.py", "kind": "broad-except", "symbol": "_tuned_gemm_arch_family", "detail": "except Exception"},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "_backends_probe", "detail": "os.environ.get", "count": 2},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "gpu_info", "detail": "RUNPOD_POD_ID"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "environ", "symbol": "main", "detail": "os.environ.get"},
