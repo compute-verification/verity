@@ -44,7 +44,6 @@ from typing import Any
 import numpy as np
 
 from verity_vllm import settings
-from verity_vllm.commit import challenge as CH
 from verity_vllm.config import (
     CHECKPOINTS,
     VLLM,
@@ -89,6 +88,8 @@ def row_seed(row_id: str) -> str:
 
 
 def rng_for(seed_hex: str, purpose: str) -> np.random.Generator:
+    # imported here, not at the top: it loads the core `verity`, which importing this module does not
+    from verity_vllm.commit import challenge as CH
     h = hashlib.sha256(bytes.fromhex(seed_hex) + b"/" + purpose.encode()).digest()
     return CH.generator([int.from_bytes(h[i:i + 4], "little") for i in range(0, 32, 4)])
 
