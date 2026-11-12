@@ -80,7 +80,7 @@ def proved_by(lock: Mapping, name: str | None) -> dict:
 
 def _proof_said(proof: Mapping) -> str:
     if proof["name"] is None:
-        return "the table names no lock entry for it"
+        return f"no lock entry is named for it (`{TABLE.name}`)"
     if not proof["listed"]:
         return f"`{proof['name']}` is not in the lock"
     if proof[PROVED]:
@@ -197,13 +197,13 @@ def open_items(cover: Mapping, kinds: Sequence[Mapping], audit_checks: Sequence[
         items.append({"item": "inputs after the sample",
                       "said": f"{AFTER_SAMPLE}: the interior registers {E._names(cover['registered'])} after the first "
                               "stage's sample"})
-    other = [f"`{k['kind']}` ({k['verifier']})" for k in kinds if k["decided_by"] != LEAN]
-    other += [f"`{c['check']}` ({c['verifier']})" for c in audit_checks if c["decided_by"] != LEAN]
+    other = [f"`{k['kind']}` (`{k['verifier']}`)" for k in kinds if k["decided_by"] != LEAN]
+    other += [f"`{c['check']}` (`{c['verifier']}`)" for c in audit_checks if c["decided_by"] != LEAN]
     if final["decided_by"] != LEAN:
-        other.append(f"the final accept ({final['verifier']})")
+        other.append(f"the final accept (`{final['verifier']}`)")
     if other:
         items.append({"item": "not Lean", "said": "decided by a verifier that is not Lean: " + ", ".join(other)})
-    items += [{"item": "lock entry", "kind": k["kind"], "said": f"`{k['kind']}` ({k['verifier']}): {_proof_said(k['proved_by'])}"}
+    items += [{"item": "lock entry", "kind": k["kind"], "said": f"`{k['kind']}` (`{k['verifier']}`): {_proof_said(k['proved_by'])}"}
               for k in kinds if k["decided_by"] == LEAN and not k[PROVED]]
     if final["final"] == "withheld":
         items.append({"item": "final accept", "said": f"the final accept is withheld by `{final['verifier']}`: "
@@ -375,16 +375,16 @@ def render(doc: Mapping[str, Any]) -> str:
              "- **to fully proved**:" + ("" if doc["to_fully_proved"] else
                                         " nothing in the run's own files or in its verdicts' lock entries.")]
     lines += [f"  - {item['said']}" for item in doc["to_fully_proved"]]
-    body = [[f"`{k['kind']}`", k["what"], _of(k), f"{k['decided_by']}: {k['verifier']}",
+    body = [[f"`{k['kind']}`", k["what"], _of(k), f"{k['decided_by']}: `{k['verifier']}`",
              _proof_said(k["proved_by"]) if k["decided_by"] == LEAN else "none: not a Lean verifier's"]
             for k in doc["verdicts"]]
-    body += [[f"`{c['check']}`", c["what"], _of(c), f"{c['decided_by']}: {c['verifier']}", "none: not a Lean verifier's"]
+    body += [[f"`{c['check']}`", c["what"], _of(c), f"{c['decided_by']}: `{c['verifier']}`", "none: not a Lean verifier's"]
              for c in doc["checks"]]
     body.append(["the final accept", final["what"],
                  {"given": "given", "withheld": f"withheld (`{(final['withheld'] or {}).get('code')}`)",
                   "refused": "refused" + (f" ({E._names(final['codes'])})" if final["codes"] else ""),
                   "none": "no outcome"}[final["final"]],
-                 f"{final['decided_by']}: {final['verifier']}", "the theorem the next block cites"])
+                 f"{final['decided_by']}: `{final['verifier']}`", "the theorem the next block cites"])
     lines += ["", *E._table(["verdict", "what", "true", "decided by", "what proves its verifier"], body), ""]
     for stage, what in (("serve", "the serve"), ("first", "the first stage"), ("replay", "the replay of the sampled spans"),
                         ("second", "the second stage")):

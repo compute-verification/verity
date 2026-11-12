@@ -72,7 +72,7 @@ def test_proved_is_printed_only_where_every_lock_entry_has_no_open_premise(tmp_p
     assert doc["verdict"]["mark"] == E.RUN_NOT_PROVED and "- **verdict: run, not proved.**" in out
     assert "proved by" not in out and "verdict: proved" not in out and not any(k[W.PROVED] for k in doc["verdicts"])
     assert [i["said"] for i in doc["to_fully_proved"]] == [
-        f"`{k}` (lean-{k}): its lock entry `Made.up` takes 1 open premise" for k in ("lean-draw", "lean-verify", "m0-verifier")]
+        f"`{k}` (`lean-{k}`): its lock entry `Made.up` takes 1 open premise" for k in ("lean-draw", "lean-verify", "m0-verifier")]
 
 
 @pytest.mark.parametrize("how", ["theorem", "hole", "unknown hole", "no entry named", "entry not in the lock", "python",
@@ -101,9 +101,9 @@ def test_one_thing_open_and_the_mark_is_run_not_proved(tmp_path, how):
     said = [i["said"] for i in doc["to_fully_proved"]]
     assert said == {
         "theorem": [], "hole": [], "unknown hole": [],
-        "no entry named": ["`lean-draw` (lean-lean-draw): the table names no lock entry for it"],
-        "entry not in the lock": ["`lean-verify` (lean-lean-verify): `Made.other` is not in the lock"],
-        "python": ["decided by a verifier that is not Lean: `pins` (lean-pins)"],
+        "no entry named": ["`lean-draw` (`lean-lean-draw`): no lock entry is named for it (`served_row.json`)"],
+        "entry not in the lock": ["`lean-verify` (`lean-lean-verify`): `Made.other` is not in the lock"],
+        "python": ["decided by a verifier that is not Lean: `pins` (`lean-pins`)"],
         "stand-in": ["the replay block is the stand-in (`Select{V=8}`), not a Definition of the request: the model's "
                      "layers are not covered"],
         "no layout": ["the replay block is not known: no layout is given (the first stage's `stage1.json`, or the serve's "
@@ -143,7 +143,7 @@ def test_an_accept_the_verifier_withheld_is_never_said_to_be_given(tmp_path):
     # who decided each verdict is the table's, and a verdict no Lean verifier decided is listed
     assert {k["kind"]: k["decided_by"] for k in doc["verdicts"]} == {"lean-draw": "lean", "lean-verify": "lean",
                                                                      "m0-verifier": "rust and python"}
-    assert "  - decided by a verifier that is not Lean: `m0-verifier` (" in out and "`round_two` (" in out
+    assert "  - decided by a verifier that is not Lean: `m0-verifier` (`" in out and "`round_two` (`" in out
     # its record is the command's word for an accept the verifier withheld, and one the command's own reader takes
     assert doc["verdict_record"] == E.verdict(doc["verdict_record"], "the section's record") == {
         "piece": "second_stage", "control": None, "run": record["run"],
