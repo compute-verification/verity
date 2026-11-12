@@ -69,6 +69,9 @@ LIMITS = ("table", "c", "k", "n")
 WIRE = {"reader", "port", "writer", "out", "at", "radix", "base", "step"}
 READ = {"reader", "port", "param", "at", "radix", "base", "step"}
 REGISTERED = {"params", "tables", "reads", "roots", "openings"}
+FORMAT = {"row_schema", "word_bits"}
+#: the row schemas a format may name, the first the default's
+SCHEMAS = ("hm96-sha512/row/v2", "hm96-sha512/row-seg/v1")
 TABLE = {"name", "param", "offset", "words", "rows"}
 TABLE_READ = {"reader", "port", "table", "of", "at", "units"}
 OPENING = {"reader", "table", "key", "ports", "verdict", "at", "units"}
@@ -427,7 +430,7 @@ class Inputs:
         for i, w in enumerate(wires):
             put(w["reader"], w["port"], ((u, r) for u, r, _ in entries(w)), ("wire", i))
         reg = rec.get("registered", {"params": {}, "tables": [], "reads": [], "roots": [], "openings": []})
-        if not (isinstance(reg, dict) and REGISTERED <= set(reg) <= REGISTERED | {"values"}
+        if not (isinstance(reg, dict) and REGISTERED <= set(reg) <= REGISTERED | {"values", "formats"}
                 and isinstance(reg["params"], dict) and all(_nat(v) and v >= 1 for v in reg["params"].values())
                 and isinstance(reg["reads"], list)):
             raise Malformed("inputs")
@@ -440,6 +443,13 @@ class Inputs:
                     and t["offset"] + t["words"] * t["rows"] <= self.params[t["param"]]):
                 raise Malformed("inputs")
             self.tables[t["name"]] = t
+        formats = reg.get("formats", {})
+        if not (isinstance(formats, dict) and all(
+                p in self.params and p not in {t["param"] for t in self.tables.values()} and isinstance(f, dict)
+                and set(f) == FORMAT and f["row_schema"] in SCHEMAS and _nat(f["word_bits"]) and f["word_bits"] in (16, 32)
+                and (f["row_schema"], f["word_bits"]) != (SCHEMAS[0], 16) and 16 * self.params[p] % f["word_bits"] == 0
+                for p, f in formats.items())):
+            raise Malformed("inputs")
         self.reads = [pattern(r, READ) for r in reg["reads"]]
         for r in self.reads:
             words, k = port(r["reader"], r["port"], outs=True)
@@ -448,7 +458,8 @@ class Inputs:
                 raise Malformed("inputs")
             units(r["reader"], r["at"], n // r["C"])
             got = [s for _, _, s in entries(r)]
-            if r["param"] not in self.params or min(got) < 0 or max(got) + words // k > self.params[r["param"]]:
+            if (r["param"] not in self.params or min(got) < 0 or max(got) + words // k > self.params[r["param"]]
+                    or 16 * (words // k) % width_of(rec, r["param"])):
                 raise Malformed("inputs")
             put(r["reader"], r["port"], ((u, j) for u, j, _ in entries(r)), ("read", r["param"]))
         self.roots = _objects(reg["roots"], TABLE_READ)
@@ -512,18 +523,55 @@ def slots_of(templates: list[Template], rec: dict) -> tuple[int, dict[str, list[
     return slots, out
 
 
-def theta(T: dict, params: dict, p: str) -> bool:
-    """Whether registered parameter `p` is θ: the registration log's first record registers a value `p` (its last
-    entry of that name) under the root the run's own record commits `p` under (its window's `registered_roots`), with
-    the record's leaves for `p` in 16-bit words."""
+def theta(T: dict, params: dict, p: str, b: int) -> bool:
+    """Whether registered parameter `p`, its leaves `b` bits each in its rows (`width_of`), is θ: the registration
+    log's first record registers a value `p` (its last entry of that name) under the root the run's own record commits
+    `p` under (its window's `registered_roots`), in leaves of `b` bits, the record's 16-bit leaves for `p` in all."""
     e = reference.last_with(T["log"][0], "registered", "value", p)
-    window = T["log"][T["run"]].get("window")
-    roots = window.get("registered_roots") if isinstance(window, dict) else None
-    root = roots.get(p) if isinstance(roots, dict) else None
+    root = _committed(T, p)
     if e is None or not isinstance(root, str) or e.get("root") != root:
         return False
     m = reference.dims(e)
-    return m is not None and m[0] * m[1] == params[p] and m[2] == 16
+    return m is not None and m[0] * m[1] * b == 16 * params[p] and m[2] == b
+
+
+def _committed(T: dict, p: str):
+    """The root the run's own record commits registered parameter `p` under (its window's `registered_roots`)."""
+    window = T["log"][T["run"]].get("window")
+    roots = window.get("registered_roots") if isinstance(window, dict) else None
+    return roots.get(p) if isinstance(roots, dict) else None
+
+
+def width_of(rec: dict, p: str) -> int:
+    """`RecordText.widthOf`, b(p): the bits of a leaf of registered parameter `p`'s rows, its format's `word_bits`
+    (`registered.formats`), 16 where the record declares none."""
+    reg = rec.get("registered")
+    formats = reg.get("formats") if isinstance(reg, dict) else None
+    f = formats.get(p) if isinstance(formats, dict) else None
+    b = f.get("word_bits") if isinstance(f, dict) else None
+    return b if _nat(b) else 16
+
+
+def formats_held(T: dict, rec: dict, params: dict) -> bool:
+    """`Record.formatsHeld`, the formats held to the registration log: of each registered parameter `p` the run's own
+    record registers (its last entry named `p`), that entry's root is the one the run's record commits `p` under, its
+    `word_bits` (16 where absent) is `p`'s width (`width_of`), and its leaves of `words` words of that width hold the
+    record's 16-bit leaves for `p`; and each parameter with a format that the run's record does not register is θ, at
+    its width."""
+    formats = rec["registered"].get("formats", {}) if "registered" in rec else {}
+    for p, leaves in params.items():
+        b = width_of(rec, p)
+        e = reference.last_with(T["log"][T["run"]], "registered", "value", p)
+        if e is None:
+            if p in formats and not theta(T, params, p, b):
+                return False
+            continue
+        m = reference.dims(e)
+        root = _committed(T, p)
+        if not (isinstance(e.get("root"), str) and e.get("root") == root and m is not None and m[2] == b
+                and m[0] * m[1] * b == 16 * leaves):
+            return False
+    return True
 
 
 def layout(t: Template) -> dict | None:
@@ -609,10 +657,12 @@ def expand(inst, tr) -> dict:
     wires, cuts = wires_of(templates, rec, (i["order"],) if "order" in i else None)
     leaf_widths(program, templates, wires, cuts)
     x = Inputs(templates, cuts, wires, rec)
+    if not formats_held(T, rec, x.params):
+        raise Malformed("formats")
     slots, slot = slots_of(templates, rec)
     by = {t.tid: t for t in templates}
     inside = [all(slot[w["reader"]][u] == slot[w["writer"]][v] for u, _, v in entries(w)) for w in wires]
-    is_theta = {p: theta(T, x.params, p) for p in x.params}.__getitem__
+    is_theta = {p: theta(T, x.params, p, width_of(rec, p)) for p in x.params}.__getitem__
     digests = {t.tid: closure_digest(desc, t.tid) for t in templates}
     pins = {tid: d if d in i["pins"] else None for tid, d in digests.items()}
 

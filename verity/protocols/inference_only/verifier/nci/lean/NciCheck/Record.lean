@@ -61,12 +61,14 @@ record first, and the digest of the run's own record. `params` is not read.
    instance's (`piece`, `wiringOf`).
 9. `leaf-widths`: some wire's row holds bits its writer's output lacks; or a leaf of some wire's writer does not lie
    inside one leaf of the row that reads it, and that row is not closed (`unwhole`, "Wires whole" below).
-10. `inputs`: a registered read, table, table read, opening or ingress declaration is malformed for the templates and
-    cuts, or two declarations (wires among them) fill one row (`RecordText.inputsOf`). A registered read is a
-    wire's record with `param` for its writer, and SPOT's reader reads it (`Spot.Wires.Wire.ofJson`).
-11. `blocks`: the record's inference entries do not tile every template's units, each with one slot digit of the
+10. `inputs`: a registered read, table, table read, opening, ingress or row format declaration is malformed for the
+    templates and cuts, or two declarations (wires among them) fill one row (`RecordText.inputsOf`). A registered
+    read is a wire's record with `param` for its writer, and SPOT's reader reads it (`Spot.Wires.Wire.ofJson`).
+11. `formats`: a registered parameter's leaf width (`RecordText.widthOf`: its format's, 16 without one) is not the one
+    the registration log registers it in (`formatsHeld`, "Formats" below).
+12. `blocks`: the record's inference entries do not tile every template's units, each with one slot digit of the
     class's radix (`RecordText.gridsOf`).
-12. `reader-layout`, then `reader-roles` (`rolesOf`, "The layout" below): a pinned template that an opening or a table
+13. `reader-layout`, then `reader-roles` (`rolesOf`, "The layout" below): a pinned template that an opening or a table
     read names as its reader has no layout; or an opening or a table read of such a reader names a row or an output
     that is not the layout's.
 
@@ -154,9 +156,22 @@ where a block has more than `Γ` gates, else `nci` where its fresh bits exceed `
 ## θ
 
 A registered parameter is θ where the log's first record registers a value of its name (its last entry of that name)
-under the root the run's own record commits the parameter under (`window.registered_roots`), with the record's leaves
-for it in 16-bit words (`isTheta`). So θ is registered at the start of the deployment, before the run, and no
-earlier run's output is θ.
+under the root the run's own record commits the parameter under (`window.registered_roots`), in leaves of the
+parameter's width, the record's 16-bit leaves for it in all (`isTheta`). So θ is registered at the start of the
+deployment, before the run, and no earlier run's output is θ.
+
+## Formats
+
+A registered parameter's rows are 16-bit leaves unless the record's `registered.formats` declares another width for
+it, 32 bits (`RecordText.widthOf`, b(p)). The record's counts do not read the width: a row is 16 bits a word under
+any. θ does (`isTheta`), and so does the stage `formats` (`formatsHeld`), which holds the width to the registration
+log. Of each registered parameter the run's own record registers (its last entry of that name), that entry's root is
+the one the run's record commits the parameter under, its `word_bits` (16 where absent) is b(p), and its leaves of
+b(p) bits hold the record's 16-bit leaves for the parameter. Each parameter with a format that the run's record does
+not register is θ, at its width. So a format the log does not state for its value, a 32-bit value the record declares
+no format for, and a format on a weight registered in 16-bit leaves are each refused. A format's row schema is read
+and held to the set of its two names (`RecordText.formatsOk`), to nothing registered: no registration entry states
+it.
 
 ## The layout
 
@@ -553,17 +568,40 @@ def sameSlot (S : Nat) (gr gw : List Grid) (w : Spot.Wires.Wire) : Bool :=
 
 /-! ## θ, and an opening held -/
 
-/-- Whether the registered parameter `p`, of `leaves` leaves in the record, is θ: the log's first record registers a
-value `p` (its last entry of that name) under the root the run's own record commits `p` under (its
-`window.registered_roots`), with `leaves` leaves in 16-bit words. -/
-def isTheta (T : Baseline.Trusted) (leaves : Nat) (p : String) : Bool :=
+/-- Whether the registered parameter `p`, of `leaves` 16-bit leaves in the record and leaves of `b` bits in its rows
+(`RecordText.widthOf`), is θ: the log's first record registers a value `p` (its last entry of that name) under the
+root the run's own record commits `p` under (its `window.registered_roots`), in leaves of `b` bits, `leaves` 16-bit
+leaves in all. -/
+def isTheta (T : Baseline.Trusted) (leaves b : Nat) (p : String) : Bool :=
   match Baseline.lastWith T.log[0]! "registered" "value" p,
       Baseline.strAt (Baseline.getD (Baseline.getD T.log[T.run]! "window") "registered_roots") p with
   | some e, some root =>
     Baseline.strAt e "root" == some root && match Baseline.dims e with
-      | some (rows, words, wordBits) => rows * words == leaves && wordBits == 16
+      | some (rows, words, wordBits) => rows * words * b == 16 * leaves && wordBits == b
       | none => false
   | _, _ => false
+
+/-- **The formats, held to the registration log** (the module docstring's `formats`), of the registered parameters
+`params` (each with its 16-bit leaves) and the record's text `doc`. Of each parameter `p` that the run's own record
+registers (its last entry named `p`): the entry's root is the one the run's record commits `p` under (its
+`window.registered_roots`), its `word_bits` (16 where it has none) is `p`'s width b(p) (`RecordText.widthOf`), and its
+leaves of `words` words of b(p) bits hold `p`'s 16-bit leaves. And each parameter with a format that the run's record
+does not register is θ (`isTheta`, at its width). The format's row schema is held to nothing here (`RecordText.formatsOk`
+holds its name to the two it may be). -/
+def formatsHeld (T : Baseline.Trusted) (doc : Json) (params : List (String × Nat)) : Bool :=
+  let run := T.log[T.run]!
+  let roots := Baseline.getD (Baseline.getD run "window") "registered_roots"
+  params.all fun (p, leaves) =>
+    let b := widthOf doc p
+    match Baseline.lastWith run "registered" "value" p with
+    | some e =>
+      (match Baseline.strAt e "root", Baseline.strAt roots p with
+        | some r, some r' => r == r'
+        | _, _ => false) &&
+      match Baseline.dims e with
+      | some (rows, words, wordBits) => wordBits == b && rows * words * b == 16 * leaves
+      | none => false
+    | none => !hasFormat doc p || isTheta T leaves b p
 
 /-- The pin of template `tid`'s Definition, where the policy pins it: its closure digest in the Program whose
 descriptor is `desc` (`DefinitionDigest.closureDigest`), where that is among `pins`. -/
@@ -727,11 +765,12 @@ def finish (f : Front) (pin : String → Option String) : Except String Case := 
     | .error _ => throw "wires"
   if (unwhole f.ts f.leaves wired.wires).isSome then throw "leaf-widths"
   let x ← inputsOf f.ts text f.doc
+  if !formatsHeld f.T f.doc x.params then throw "formats"
   let (S, grids) ← gridsOf f.ts f.doc
   let pins ← rolesOf f.P f.ts pin x
   let gridsAt := fun (tid : String) => (grids.lookup tid).getD []
   let inside := (wired.wires.map fun w => sameSlot S (gridsAt w.reader) (gridsAt w.writer) w).toArray
-  let theta := x.params.map fun (p, leaves) => (p, isTheta f.T leaves p)
+  let theta := x.params.map fun (p, leaves) => (p, isTheta f.T leaves (widthOf f.doc p) p)
   let thetaAt := fun (p : String) => (theta.lookup p).getD false
   let held := (x.openings.map (openingHeld (fun tid => (pins.lookup tid).isSome) thetaAt x)).toArray
   return { f, W, wired, x, S, grids, inside, theta, held, pins }

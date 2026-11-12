@@ -201,6 +201,10 @@ structure Inputs where
   decls : List Decl
 
 def REGISTERED : List String := ["params", "tables", "reads", "roots", "openings"]
+def FORMAT : List String := ["row_schema", "word_bits"]
+/-- The row schemas a format may name: a row of 16-bit words, `hm96-sha512/row/v2`, the default; or a segment of
+one, `hm96-sha512/row-seg/v1`. -/
+def SCHEMAS : List String := ["hm96-sha512/row/v2", "hm96-sha512/row-seg/v1"]
 def READ : List String := ["reader", "port", "param", "at", "radix", "base", "step"]
 def TABLE : List String := ["name", "param", "offset", "words", "rows"]
 def TABLE_READ : List String := ["reader", "port", "table", "of", "at", "units"]
@@ -261,6 +265,35 @@ def NO_REGISTERED : Json :=
   Json.mkObj [("params", Json.mkObj []), ("tables", Json.arr #[]), ("reads", Json.arr #[]), ("roots", Json.arr #[]),
     ("openings", Json.arr #[])]
 
+/-- Whether `registered` has exactly the keys `REGISTERED`, with `values` or without and `formats` or without. -/
+def registeredKeyed (reg : Json) : Bool :=
+  [[], ["values"], ["formats"], ["values", "formats"]].any fun more => keyed reg (more ++ REGISTERED)
+
+/-- The text's row formats, its `registered.formats`: `null` where it states none. -/
+def formatsOf (doc : Json) : Json := valueAt (valueAt doc "registered") "formats"
+
+/-- Whether the text states a format for registered parameter `p`. -/
+def hasFormat (doc : Json) (p : String) : Bool := ((formatsOf doc).getObjVal? p).toOption.isSome
+
+/-- **A parameter's leaf width**, b(p): the bits of a leaf of the rows that registered parameter `p`'s reads read, as
+the text declares them, its format's `word_bits` (`formatsOf`), 16 where it declares none. -/
+def widthOf (doc : Json) (p : String) : Nat := (nat? (valueAt (valueAt (formatsOf doc) p) "word_bits")).getD 16
+
+/-- Whether `registered`'s formats, `{param: {row_schema, word_bits}}` where it states them, are well formed: each of a
+registered parameter of `params` that no table of `tables` lies in, its schema one of `SCHEMAS`, its width 16 or 32,
+not the default (16-bit leaves in `hm96-sha512/row/v2` rows, which no format states), and the parameter's 16-bit
+leaves whole leaves of that width. -/
+def formatsOk (reg : Json) (params : List (String × Nat)) (tables : List Table) : Bool :=
+  match reg.getObjVal? "formats" with
+  | .error _ => true
+  | .ok (.obj kvs) => kvs.toArray.toList.all fun (p, f) =>
+    match params.lookup p, stringAt f "row_schema", nat? (valueAt f "word_bits") with
+    | some leaves, some schema, some b =>
+      keyed f FORMAT && !(tables.any (·.param == p)) && SCHEMAS.contains schema && (b == 16 || b == 32) &&
+        !(schema == "hm96-sha512/row/v2" && b == 16) && 16 * leaves % b == 0
+    | _, _, _ => false
+  | .ok _ => false
+
 /-- The record's declarations of what fills its units' rows, each refused (`inputs`) unless it is well formed for
 the templates `ts` and the cuts of `W`, and unless no two declarations, the wires of `W` among them, fill one row.
 It reads `W`'s cuts and wires and nothing else of it: no template of its own and no order.
@@ -268,8 +301,14 @@ It reads `W`'s cuts and wires and nothing else of it: no template of its own and
 * `registered.params`, `{name: leaves}`, at least one leaf each;
 * `registered.tables`, `{name, param, offset, words, rows}`: `rows` rows of `words` leaves from leaf `offset` of a
   registered parameter, within it; names distinct;
+* `registered.formats` (`formatsOk`), where it is stated: `{param: {row_schema, word_bits}}`, each of a registered
+  parameter no table lies in, the schema `hm96-sha512/row/v2` or `hm96-sha512/row-seg/v1`, the width 16 or 32, not the
+  default (`hm96-sha512/row/v2` at 16), and the parameter's 16-bit leaves whole leaves of the width. The width is the
+  parameter's b(p) (`widthOf`, 16 without a format), which the check holds to the registration log. The schema's name
+  is read and held to the set of those two names, to nothing registered: no registration entry states it;
 * `registered.reads` (`readOf`): of an input row or an output of the reader, its cut as a wire's, its reader units
-  among the reader's, and every source with its row's words within the parameter;
+  among the reader's, every source with its row's words within the parameter, and its row's words whole leaves of
+  the parameter's width;
 * `registered.roots`, `{reader, port, table, of, at, units}`: units `[at, at + units)` of the reader read, in a row
   of 32 words, the table's root (`of` = `root`) or its domain id (`domain`);
 * `registered.openings`, `{reader, table, key, ports, verdict, at, units}`: units `[at, at + units)` of the reader
@@ -277,7 +316,7 @@ It reads `W`'s cuts and wires and nothing else of it: no template of its own and
 * `ingress`, `{reader, port, at, units, step}`: units `[at, at + units)` of the reader read that row from outside. -/
 def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except String Inputs := do
   let reg := (doc.getObjVal? "registered").toOption.getD NO_REGISTERED
-  if !(keyed reg REGISTERED || keyed reg ("values" :: REGISTERED)) then throw "inputs"
+  if !registeredKeyed reg then throw "inputs"
   let .obj pkv := valueAt reg "params" | throw "inputs"
   let params ← pkv.toArray.toList.mapM fun (p, v) => match nat? v with
     | some n => if n ≥ 1 then pure (p, n) else throw "inputs"
@@ -296,6 +335,7 @@ def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except Stri
     let some leaves := params.lookup param | throw "inputs"
     if tables.any (·.name == name) || words < 1 || rows < 1 || offset + words * rows > leaves then throw "inputs"
     tables := tables ++ [({ name, param } : Table)]
+  if !formatsOk reg params tables then throw "inputs"
   let .arr readsJ := valueAt reg "reads" | throw "inputs"
   for r in readsJ do
     let w ← readOf r
@@ -309,7 +349,8 @@ def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except Stri
       throw "inputs"
     if !(w.readerUnits ≥ 1 && w.start + w.readerUnits ≤ t.units) then throw "inputs"
     let some leaves := params.lookup w.writer | throw "inputs"
-    if !(0 ≤ w.span.1 && w.span.2 + ((words / k : Nat) : Int) ≤ (leaves : Int)) then throw "inputs"
+    if !(0 ≤ w.span.1 && w.span.2 + ((words / k : Nat) : Int) ≤ (leaves : Int) &&
+        16 * (words / k) % widthOf doc w.writer == 0) then throw "inputs"
     decls := decls.push { w, bits := rowBits, fill := .read w.writer }
   let .arr rootsJ := valueAt reg "roots" | throw "inputs"
   let mut roots : List TableRead := []
