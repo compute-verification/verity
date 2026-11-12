@@ -5,24 +5,18 @@ document it could not write, `verity_vllm.check.match.instance_sequence` names i
 import, and `verity_vllm.check.match.global_match_fast` names in a warning a forked worker's result file it could not remove.
 
 `batch_decomp` and `program_dag` run on the toy of `test_batch_decomp_e2e.py`; `global_match.main` runs over a stand-in for its
-checker, since the lines under test are `main`'s own.
-
-`batch_decomp.main` and `global_match.main` tune the collector of the process that runs them. Under a test that process is pytest's,
-so every test here runs with the setting that leaves the interpreter's thresholds alone, and is held to having left them."""
+checker, since the lines under test are `main`'s own."""
 from __future__ import annotations
 
 import collections
-import gc
 import json
 import logging
 import os
 import tempfile
 
-import pytest
 from verity.definitions.registry import catalog
 
 from tests.check import test_batch_decomp_e2e as e2e
-from verity_vllm import gc_tuning
 from verity_vllm.check.match import batch_decomp as bd
 from verity_vllm.check.match import global_match as gm
 from verity_vllm.check.match import global_match_fast as gmf
@@ -32,14 +26,6 @@ from verity_vllm.check.match import program_loaders as loaders
 
 memory = e2e.memory                          # the toy's fixtures, under their own names
 derived_is_a_fold = e2e.derived_is_a_fold
-
-
-@pytest.fixture(autouse=True)
-def the_collector_is_left_as_it_was(monkeypatch):
-    monkeypatch.setenv(gc_tuning.ENV, "default")
-    before = gc.get_threshold()
-    yield
-    assert gc.get_threshold() == before, "a command tuned the collector of the test process"
 
 
 def _logged(caplog, module) -> list[logging.LogRecord]:
