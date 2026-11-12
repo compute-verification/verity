@@ -20,6 +20,7 @@ from device import HOST_FORMS, HostRead, host_read_plan  # noqa: E402
 @pytest.mark.parametrize("name, plan", [
     ("ahead1", HostRead(1, HOST_FORMS["load"], 0, 0)),
     ("ahead3-keep", HostRead(3, HOST_FORMS["keep"], 0, 0)),
+    ("ahead4", HostRead(4, HOST_FORMS["load"], 0, 0)),
     ("prefetch-ahead2", HostRead(2, HOST_FORMS["prefetch"], 0, 0)),
     ("feed4", HostRead(0, HOST_FORMS["load"], 4, 128)),
     ("feed2-lead8-keep", HostRead(0, HOST_FORMS["keep"], 2, 8)),
@@ -34,7 +35,7 @@ def test_pass_is_no_plan():
 
 
 @pytest.mark.parametrize("name", [
-    "", "ahead", "ahead0", "ahead4", "ahead2-ahead1", "feed0", "feed", "lead8", "ahead1-lead8", "keep", "prefetch",
+    "", "ahead", "ahead0", "ahead5", "ahead2-ahead1", "feed0", "feed", "lead8", "ahead1-lead8", "keep", "prefetch",
     "feed4-prefetch", "keep-prefetch-ahead1", "pass-ahead1", "ahead1-", "ahead-1", "ahead--1", "ahead1+keep",
     "ahead1.keep", "ahead1 keep", "feed4-lead0", "Ahead1", "keep2-ahead1",
 ])

@@ -354,7 +354,7 @@ def release(torch, t) -> None:
 
 
 HOST_FORMS = {"load": 0, "keep": 1, "prefetch": 2}   # session.cu's HOST_LOAD, HOST_KEEP, HOST_PREFETCH
-HOST_AHEAD_MAX = 3
+HOST_AHEAD_MAX = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -370,7 +370,7 @@ class HostRead:
 
 def host_read_plan(name: str) -> HostRead | None:
     """A host segment's read by name. `pass` is None: `rs_pass`, as it reads a shard. Otherwise terms joined by `-`:
-    `aheadA` (A = 1 … 3), `feedF` (F feed CTAs) with `leadT` (T tiles, 128 unless given), and one of `keep` and
+    `aheadA` (A = 1 … 4), `feedF` (F feed CTAs) with `leadT` (T tiles, 128 unless given), and one of `keep` and
     `prefetch` for how what is ahead is asked for (`prefetch` only with `aheadA`). `ahead2`, `ahead2-keep`,
     `feed4-lead8`, `ahead1-feed4`. A name is one word of letters, digits and `-`, so it can be a field of a list."""
     if name == "pass":

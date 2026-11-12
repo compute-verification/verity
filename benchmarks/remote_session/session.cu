@@ -456,27 +456,40 @@ __global__ void __launch_bounds__(32 * SK16_WARPS, 2) sketch16_pass_kernel(const
   }
 }
 
-// --- a host shard's receipts, its bytes asked for ahead ---------------------------------------------------------------
+// --- a host shard's receipts, its bytes asked for ahead --------------------------------------------------------------
 //
 // A host shard is pinned host memory the GPU reads over its PCIe link (`device.host_tier`), where a fetch takes many
 // times a step's work. A warp of sketch16_pass_kernel asks for the next 256 bytes of each of its 32 blocks one step
 // before it needs them and has nothing else in flight, so its tile is one fetch after another. The kernels below hash
 // the same bytes into the same receipts and only ask for them earlier (`rs_host_pass`).
 
-// How a host warp asks for what is ahead: a load of 16 of its bytes (L2 fetches the 256 around them), the same load
+// How a host warp asks for what is ahead: a load of 4 of its bytes (L2 fetches the 256 around them), the same load
 // asking L2 to evict them last (a shard's bytes stream through L2 beside the host's), or a prefetch of its lines.
 enum { HOST_LOAD, HOST_KEEP, HOST_PREFETCH, HOST_FORMS };
-constexpr int HOST_AHEAD_MAX = 3;
+constexpr int HOST_AHEAD_MAX = 4;
 
-// ld_l2_256 under a cache policy that evicts its line last. The policy is an operand because a 16-byte load takes no
-// `.L2::evict_last` of its own, and a 32-byte one is not in every architecture this builds for.
+// A load of 4 bytes that asks L2 for the 256 around them, as ld_l2_256 does; with `last`, under a cache policy that
+// evicts its line last. The policy is an operand because a load this narrow takes no `.L2::evict_last` of its own.
+__device__ __forceinline__ u32 ask_l2_256(const uint4 *p, bool last) {
+  u32 v;
+  if (last) {
+    unsigned long long policy;
+    asm("createpolicy.fractional.L2::evict_last.b64 %0, 1.0;" : "=l"(policy));
+    asm("ld.global.nc.L2::cache_hint.L2::256B.u32 %0, [%1], %2;" : "=r"(v) : "l"(p), "l"(policy));
+  } else {
+    asm("ld.global.nc.L2::256B.u32 %0, [%1];" : "=r"(v) : "l"(p));
+  }
+  return v;
+}
+
+// ld_l2_256 under the same policy: the feed's load.
 __device__ __forceinline__ uint4 ld_l2_256_last(const uint4 *p) {
   uint4 v;
-  unsigned long long last;
-  asm("createpolicy.fractional.L2::evict_last.b64 %0, 1.0;" : "=l"(last));
+  unsigned long long policy;
+  asm("createpolicy.fractional.L2::evict_last.b64 %0, 1.0;" : "=l"(policy));
   asm("ld.global.nc.L2::cache_hint.L2::256B.v4.u32 {%0, %1, %2, %3}, [%4], %5;"
       : "=r"(v.x), "=r"(v.y), "=r"(v.z), "=r"(v.w)
-      : "l"(p), "l"(last));
+      : "l"(p), "l"(policy));
   return v;
 }
 
@@ -485,61 +498,49 @@ __device__ __forceinline__ uint4 ld_l2_256_last(const uint4 *p) {
 // start on one (phase = its address / 64 mod 4). Lane (g, t) holds one of its four blocks as its own (2 mt + hi = t),
 // so each of the warp's 32 blocks has one lane. Where its loads enter a unit, a lane asks for its own block's unit A
 // further on (`form`), and at the tile's first step for the A units after the first: the warp has A + 1 units of each
-// block in flight where sk16_tile has one. What a lane asks for by a load is its own 16 bytes of that unit's first
-// step, which it keeps until its loads reach that step, so every load is of bytes the receipt hashes and the
-// receipts are sk16_tile's.
+// block in flight where sk16_tile has one. The loads the receipts are computed from are sk16_tile's, untouched, so
+// the receipts are. What a lane asks for by a load is 4 of its own bytes of that unit's first step; it folds them
+// into acc only when its loads reach that unit (each unit asked for is one they reach), so it waits for none of them
+// before it needs the unit, and acc keeps them loads (`sketch16_host_pass_kernel`).
 template <int A>
 __device__ __forceinline__ void sk16_host_tile(const uint4 *__restrict__ data, u64 j0, u64 n, u64 b0, const u32 *sg,
-                                               int *S, u64 *__restrict__ ys, int lane, int form, int phase) {
+                                               int *S, u64 *__restrict__ ys, int lane, int form, int phase, u32 &acc) {
   const int g = lane >> 2, t = lane & 3;
-  const u64 own = b0 + 16 * (t >> 1) + g + 8 * (t & 1);
-  const uint4 *mine = data + own * (BLOCK / 16) + t;   // the lane's 16 bytes of its own block at step 0
-  const bool there = own < n;
-  uint4 early[A];
-  // Unit k of the lane's own block (its steps 4 k − phase … 4 k − phase + 3) asked for: by a load, its own 16 bytes
-  // of the unit's first step.
-  auto ask = [&](int k) {
-    uint4 v = make_uint4(0, 0, 0, 0);
+  u32 asked[A];
+  // Unit k of the lane's own block (its steps 4 k − phase … 4 k − phase + 3) asked for; what a load brought.
+  auto ask = [&](int k) -> u32 {
+    const u64 own = b0 + 16 * (t >> 1) + g + 8 * (t & 1);
     const int p = 4 * k - phase;
-    if (!there || p >= SK16_P) return v;
-    if (form == HOST_PREFETCH) {
+    if (own >= n || p >= SK16_P) return 0;
+    const uint4 *at = data + own * (BLOCK / 16) + 4 * p + t;
+    if (form != HOST_PREFETCH) return ask_l2_256(at, form == HOST_KEEP);
 #pragma unroll
-      for (int i = 0; i < 4; ++i)
-        if (p + i < SK16_P) asm volatile("prefetch.global.L2 [%0];" ::"l"(mine + 4 * (p + i)));
-    } else {
-      v = form == HOST_KEEP ? ld_l2_256_last(mine + 4 * p) : ld_l2_256(mine + 4 * p);
-    }
-    return v;
+    for (int i = 0; i < 4; ++i)
+      if (p + i < SK16_P) asm volatile("prefetch.global.L2 [%0];" ::"l"(at + 4 * i));
+    return 0;
   };
   sk16_tile_of([&](uint4 (&d)[2][2], int p) {
     sk64_load<false, 2>(d, data, nullptr, b0, n, p, g, t);
     if (!p) {
 #pragma unroll
-      for (int i = 0; i < A; ++i) early[i] = ask(1 + i);
-      return;
+      for (int i = 0; i < A; ++i) asked[i] = ask(1 + i);
+    } else if (!((p + phase) & 3)) {
+      acc ^= asked[0];
+#pragma unroll
+      for (int i = 0; i + 1 < A; ++i) asked[i] = asked[i + 1];
+      asked[A - 1] = ask(((p + phase) >> 2) + A);
     }
-    if ((p + phase) & 3) return;
-    const int k = (p + phase) >> 2;
-    if (form != HOST_PREFETCH) {
-#pragma unroll
-      for (int mt = 0; mt < 2; ++mt)
-#pragma unroll
-        for (int hi = 0; hi < 2; ++hi)
-          if (2 * mt + hi == t) d[mt][hi] = early[0];
-    }
-#pragma unroll
-    for (int i = 0; i + 1 < A; ++i) early[i] = early[i + 1];
-    early[A - 1] = ask(k + A);
   }, [&](u64 q) { return j0 + q; }, n, b0, sg, S, ys, lane);
 }
 
 // sketch16_pass_kernel over a host shard, its tiles by sk16_host_tile<A>: the same counters, the same receipts.
+// *sink takes what the asking loads would say (never, in practice), which keeps them loads.
 template <int A>
 __global__ void __launch_bounds__(32 * SK16_WARPS, 2) sketch16_host_pass_kernel(const uint4 *__restrict__ data, u64 n,
                                                                                 u64 base, const u32 *__restrict__ pk,
                                                                                 u64 *__restrict__ ys, unsigned *ctr,
                                                                                 unsigned tiles_per, unsigned *started,
-                                                                                int form) {
+                                                                                int form, unsigned *sink) {
   __shared__ u32 sg[SK16_PACK];
   __shared__ __align__(16) int st[SK16_WARPS][32 * SK_ROWS];
   if (!threadIdx.x) atomicExch(started, 1u);
@@ -547,16 +548,25 @@ __global__ void __launch_bounds__(32 * SK16_WARPS, 2) sketch16_host_pass_kernel(
   const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
   const int phase = (int)((reinterpret_cast<unsigned long long>(data) >> 6) & 3);
   const u64 tiles = (n + 31) / 32;
+  u32 acc = 0;
   for (;;) {
     unsigned tile = 0;
     if (!lane) tile = atomicAdd(ctr, 1u);
     tile = __shfl_sync(~0u, tile, 0);
     if (tile >= tiles) break;
-    sk16_host_tile<A>(data, base, n, (u64)tile * 32, sg, st[warp], ys, lane, form, phase);
+    sk16_host_tile<A>(data, base, n, (u64)tile * 32, sg, st[warp], ys, lane, form, phase, acc);
     __threadfence();
     __syncwarp();
     if (!lane) atomicAdd(ctr + 1 + tile / tiles_per, 1u);
   }
+  if (acc == 0x9e3779b9u) atomicXor(sink, 1u);
+}
+
+template <int A>
+static void host_grid(int ctas, cudaStream_t s, const uint4 *data, u64 n, u64 base, const u32 *pk, u64 *ys,
+                      unsigned *ctr, unsigned tiles_per, unsigned *started, int form, unsigned *sink) {
+  sketch16_host_pass_kernel<A><<<ctas, 32 * SK16_WARPS, 0, s>>>(data, n, base, pk, ys, ctr, tiles_per, started, form,
+                                                                sink);
 }
 
 // The feed (`rs_host_pass`): warps that read a host shard's tiles just ahead of its receipt grid and write nothing a
@@ -596,7 +606,10 @@ __global__ void __launch_bounds__(FEED_THREADS) host_feed_kernel(const uint4 *__
     for (int k = 0; k < 32 * BLOCK / 256 / 32; k += 4) {
       uint4 v[4];
 #pragma unroll
-      for (int i = 0; i < 4; ++i) v[i] = keep ? ld_l2_256_last(p + 16 * 32 * (k + i)) : ld_l2_256(p + 16 * 32 * (k + i));
+      for (int i = 0; i < 4; ++i) {
+        const uint4 *at = p + 16 * 32 * (k + i);
+        v[i] = keep ? ld_l2_256_last(at) : ld_l2_256(at);
+      }
 #pragma unroll
       for (int i = 0; i < 4; ++i) acc ^= v[i].x ^ v[i].y ^ v[i].z ^ v[i].w;
     }
@@ -1314,8 +1327,9 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
 // receipts and kept levels; no padding), its bytes asked for ahead. ahead = 1 … HOST_AHEAD_MAX: the receipt grid is
 // sketch16_host_pass_kernel<ahead>, asking as `form` says (HOST_LOAD, HOST_KEEP, HOST_PREFETCH); ahead = 0: it is
 // rs_pass's own grid. feed_ctas > 0: host_feed_kernel on sf beside it, at most feed_lead tiles ahead of the receipt
-// grid, its loads asking L2 to keep them when form is HOST_KEEP; feed is its scratch of 2 words. The consumer grid is
-// rs_pass's, on sb. sa waits for the whole shard pass, the feed included, before anything queued on it after.
+// grid, its loads asking L2 to keep them when form is HOST_KEEP. feed is scratch of 2 words: the feed's next tile,
+// and what the asking loads would say. The consumer grid is rs_pass's, on sb. sa waits for the whole shard pass, the
+// feed included, before anything queued on it after.
 int rs_host_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, unsigned *ctr, uint64_t *ys,
                  uint64_t *kept, int h0, uint64_t chunk, int ctas, int consumers, int ahead, int form, unsigned *feed,
                  int feed_ctas, unsigned feed_lead, cudaStream_t sa, cudaStream_t sb, cudaStream_t sf) {
@@ -1331,9 +1345,9 @@ int rs_host_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk
       return 4;
     made[dev] = true;
   }
-  if (!data || !pk || !ctr || !ys || !kept || !n || n % PER_LEAF || chunk % 32 || chunk % PER_LEAF || !chunk ||
-      n % chunk || base % chunk || ctas < 0 || consumers < 1 || ahead < 0 || ahead > HOST_AHEAD_MAX || form < 0 ||
-      form >= HOST_FORMS || feed_ctas < 0 || (feed_ctas && (!feed || !feed_lead)))
+  if (!data || !pk || !ctr || !ys || !kept || !feed || !n || n % PER_LEAF || chunk % 32 || chunk % PER_LEAF ||
+      !chunk || n % chunk || base % chunk || ctas < 0 || consumers < 1 || ahead < 0 || ahead > HOST_AHEAD_MAX ||
+      form < 0 || form >= HOST_FORMS || feed_ctas < 0 || (feed_ctas && !feed_lead))
     return 1;
   const uint64_t lc = chunk / PER_LEAF, chunks = n / chunk, base_leaf = base / PER_LEAF;
   const int hc = log2_exact(lc);
@@ -1348,23 +1362,19 @@ int rs_host_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk
   if (groups + side >= (1ULL << 32)) return 1;
   unsigned *started = ctr + 2 + ready_groups + chunks;
   if (cudaMemsetAsync(ctr, 0, 4 * (3 + ready_groups + chunks), sa) ||
-      (feed_ctas && cudaMemsetAsync(feed, 0, 2 * sizeof(unsigned), sa)) || cudaEventRecord(go[dev], sa) ||
+      cudaMemsetAsync(feed, 0, 2 * sizeof(unsigned), sa) || cudaEventRecord(go[dev], sa) ||
       cudaStreamWaitEvent(sb, go[dev], 0) || (feed_ctas && cudaStreamWaitEvent(sf, go[dev], 0)))
     return 4;
   const uint4 *blocks = (const uint4 *)data;
-  const unsigned ready_tiles = (unsigned)(ready_blocks / 32), threads = 32 * SK16_WARPS;
+  const unsigned ready_tiles = (unsigned)(ready_blocks / 32);
   switch (ahead) {
     case 0:
-      sketch16_pass_kernel<<<ctas, threads, 0, sa>>>(blocks, n, base, pk, ys, ctr, ready_tiles, started);
+      sketch16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>(blocks, n, base, pk, ys, ctr, ready_tiles, started);
       break;
-    case 1:
-      sketch16_host_pass_kernel<1><<<ctas, threads, 0, sa>>>(blocks, n, base, pk, ys, ctr, ready_tiles, started, form);
-      break;
-    case 2:
-      sketch16_host_pass_kernel<2><<<ctas, threads, 0, sa>>>(blocks, n, base, pk, ys, ctr, ready_tiles, started, form);
-      break;
-    default:
-      sketch16_host_pass_kernel<3><<<ctas, threads, 0, sa>>>(blocks, n, base, pk, ys, ctr, ready_tiles, started, form);
+    case 1: host_grid<1>(ctas, sa, blocks, n, base, pk, ys, ctr, ready_tiles, started, form, feed + 1); break;
+    case 2: host_grid<2>(ctas, sa, blocks, n, base, pk, ys, ctr, ready_tiles, started, form, feed + 1); break;
+    case 3: host_grid<3>(ctas, sa, blocks, n, base, pk, ys, ctr, ready_tiles, started, form, feed + 1); break;
+    default: host_grid<4>(ctas, sa, blocks, n, base, pk, ys, ctr, ready_tiles, started, form, feed + 1);
   }
   if (cudaGetLastError()) return 4;
   pass_consumer_kernel<<<(unsigned)side, CONSUMER_THREADS, shared, sb>>>(blocks, n, base_leaf, pk, ys, ctr, kept, chunk,
