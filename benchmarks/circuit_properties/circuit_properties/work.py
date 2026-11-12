@@ -78,25 +78,15 @@ The rule rests on one premise, the one `SHARED_PREFIX` takes (a longer shared pr
 each row's first position, no two positions of the batch hold equal words. A batch breaks it three ways, each making
 two positions' values equal at every layer, under this rule and the trace's reading alike: two rows sharing a prefix
 of two tokens or more, a row starting with a run of one token, and, where no positional table reaches the rows, two
-positions whose prefixes hold the same tokens in the same proportions. It doesn't reach a softmax's backward, so the input
-gradients of the first attention's queries and keys, which `Layout`'s rules charge, stay gathered.
+positions whose prefixes hold the same tokens in the same proportions.
+
+The rule doesn't reach a softmax's backward or a table the Program doesn't state, so the input gradients of the
+attention's queries and keys (dQ·Wq and dK·Wk, behind a rope table's product or the softmax's backward) stay gathered,
+where the trace's reading charges them.
 
 Two limits follow. A Program with no scan has no carried word, so no θ′ and no bound. And a value the rule can't show
 specific stays a gather's rows: a model whose first op is a table lookup by its tokens is charged only downstream of a
 softmax over a constant that differs between its rows.
-
-`Layout` states, beside the Program, which external input holds the tokens and how its words lay out as rows by
-positions (the last axis the positions). It is off by default, and under it rows become specific to a position by
-three rules and no other, none from an input's name, shape or size:
-
-* (a) A batch's members are positions only where data flow shows it: a member reads the gathered rows of one
-  position's index word, one to one; a member reading two positions' rows (a score's query and key) is none.
-* (b) Rows become specific at an op that combines them member by member over positions with a constant whose words,
-  as the Program states them, differ between the positions of a row.
-* (c) An external input whose values the Program doesn't state (the rope tables) makes nothing specific, unless the
-  layout names it positional: then the reading takes it and lists it in `Work.premises`, a premise it couldn't check.
-
-A specific value is no gather's rows, and any op one of whose arguments is specific gives a specific value.
 
 `bound` takes the most blocks over the sub-works whose products are at least a threshold β_w·β_x, at least a
 contraction length and of one kind or both, each at the least β_w·β_x, the least `b` and the ω of its own products,
@@ -177,12 +167,8 @@ class Status(NamedTuple):
     #: the source bits a word holds on average: a fresh input's and a carried θ′ word's width, θ's 0, and a computed
     #: array's the bits of the sources it reads over its words, at most its width
     bits: float = 0.0
-    #: under a `Layout`, the (row, position) of each token word whose gathered rows (or which itself) some word reads
-    keys: frozenset = frozenset()
-    #: under a `Layout`, every word is specific to its position, so carries no gather's rows
+    #: every word is specific to its position (the module docstring's rule), so carries no gather's rows
     specific: bool = False
-    #: under a `Layout`, the inputs it names positional that every word is a view of
-    positional: frozenset = frozenset()
     #: every word is a view of a constant the Program states
     stated: bool = False
 
@@ -199,8 +185,7 @@ def unspecific(st: Status, sts) -> Status:
     """``st`` where a rule couldn't keep its words specific: its gather's rows those of every argument's that carries
     them or is specific."""
     sts = list(sts)
-    return st._replace(specific=False, gathered=any(s.gathered or s.specific for s in sts),
-                       keys=frozenset().union(*(s.keys for s in sts)))
+    return st._replace(specific=False, gathered=any(s.gathered or s.specific for s in sts))
 
 
 NEG_INF = 0xFF800000
@@ -280,9 +265,7 @@ def join(sts, weights=None) -> Status:
         bits = sum(w * s.bits for w, s in zip(weights, sts)) / total
     gathered = any(s.gathered for s in sts)
     return Status(all(s.aff for s in sts), any(s.dep for s in sts), any(s.reach for s in sts), gathered,
-                  frozenset().union(*(s.data for s in sts)), rate, bits, frozenset().union(*(s.keys for s in sts)),
-                  any(s.specific for s in sts) and not gathered,
-                  frozenset().union(*(s.positional for s in sts)) if all(s.positional for s in sts) else frozenset(),
+                  frozenset().union(*(s.data for s in sts)), rate, bits, any(s.specific for s in sts) and not gathered,
                   all(s.stated for s in sts))
 
 
@@ -294,8 +277,7 @@ def computed(sts, rate: float, bits: float) -> Status:
     specific = any(s.specific for s in sts)
     return Status(any(s.aff for s in sts), dep, any(s.reach for s in sts),
                   any(s.gathered for s in sts) and not specific, frozenset().union(*(s.data for s in sts)),
-                  rate if dep else 0.0, bits, frozenset() if specific else frozenset().union(*(s.keys for s in sts)),
-                  specific)
+                  rate if dep else 0.0, bits, specific)
 
 
 #: an array's status by leaf: runs (end, status), ends rising, the last the array's leaves
@@ -364,7 +346,7 @@ def carried(p: Profile, t) -> Profile:
         while widths[j][0] < e:
             j += 1
         s, w = p[i][1], float(widths[j][1])
-        s = s._replace(gathered=False, keys=frozenset(), specific=False, positional=frozenset(), stated=False)
+        s = s._replace(gathered=False, specific=False, stated=False)
         out.append((e, s._replace(aff=True, dep=True, rate=w, bits=w) if s.reach else
                     s._replace(aff=False, dep=False, rate=0.0, bits=0.0)))
     return runs_of(out)
@@ -495,101 +477,6 @@ def _hulls(log, j: int, memo: dict) -> dict:
     return hs[j]
 
 
-@dataclass(frozen=True)
-class Layout:
-    """A statement beside a Program, which the reading takes only where given: the external input that holds the
-    tokens, its words laid out as ``rows`` rows of ``positions`` (word j at row (j // positions) mod rows and position
-    j mod positions), and the external inputs it names positional, which the reading takes unchecked."""
-
-    tokens: str
-    rows: int
-    positions: int
-    positional: tuple[str, ...] = ()
-
-    def key(self, j: int) -> tuple[int, int]:
-        return ((j // self.positions) % self.rows, j % self.positions)
-
-
-class SeqRun(NamedTuple):
-    """Positions a to b of a sequence read leaves lo, lo + step, ... of (space, idx); step None: some leaves inside lo
-    to hi."""
-
-    a: int
-    b: int
-    space: str
-    idx: int
-    lo: int
-    step: int | None
-    hi: int
-
-
-def _seq_runs(refs, limit: int = 1 << 15) -> list[SeqRun]:
-    """``refs`` as runs of a sequence over its sources, exactly, but for a strided view of more than ``limit`` runs."""
-    out: list[SeqRun] = []
-
-    def walk(r, at: int) -> None:
-        if isinstance(r, Affine):
-            if r.count:
-                out.append(SeqRun(at, at + r.count, r.space, r.idx, r.base, 1, r.base + r.count))
-        elif isinstance(r, Strided):
-            if not r.count:
-                return
-            rows = -(-r.count // r.inner)
-            if r.inner_stride in (0, 1) and rows <= limit:
-                for q in range(rows):
-                    n, lo = min(r.inner, r.count - q * r.inner), r.base + q * r.outer_stride
-                    out.append(SeqRun(at + q * r.inner, at + q * r.inner + n, r.space, r.idx, lo, r.inner_stride,
-                                      lo + (n if r.inner_stride else 1)))
-            elif r.count <= limit:
-                for j in range(r.count):
-                    leaf = r[j][2]
-                    out.append(SeqRun(at + j, at + j + 1, r.space, r.idx, leaf, 1, leaf + 1))
-            else:
-                ends = [r.base + q * r.outer_stride + j * r.inner_stride for q in (0, rows - 1)
-                        for j in (0, min(r.inner, r.count) - 1)]
-                out.append(SeqRun(at, at + r.count, r.space, r.idx, min(ends), None, max(ends) + 1))
-        elif isinstance(r, Concat):
-            if r.prefix is not None:
-                log, j = r.prefix
-                parts = (*log.parts[:j], *r.parts[j:])
-            else:
-                parts = r.parts
-            pos = at
-            for p in parts:
-                walk(p, pos)
-                pos += p.count
-        else:
-            for j, (space, idx, leaf) in enumerate(r):
-                last = out[-1] if out else None
-                if last and last.b == at + j and last[2:4] == (space, idx) and last.step == 1 and last.hi == leaf:
-                    out[-1] = last._replace(b=at + j + 1, hi=leaf + 1)
-                else:
-                    out.append(SeqRun(at + j, at + j + 1, space, idx, leaf, 1, leaf + 1))
-
-    walk(refs, 0)
-    return out
-
-
-def _slice(p: Profile, lo: int, hi: int) -> Profile:
-    """``p`` over leaves ``lo`` to ``hi``, ends relative to ``lo``."""
-    ends = [e for e, _ in p]
-    i = bisect.bisect_right(ends, lo)
-    out = []
-    while i < len(p) and (p[i - 1][0] if i else 0) < hi:
-        out.append((min(p[i][0], hi) - lo, p[i][1]))
-        i += 1
-    return runs_of(out)
-
-
-def by_member(p: Profile, per: int, n: int) -> list[tuple[int, Status]]:
-    """A mapped argument's profile ``p`` by member, ``per`` leaves a member: runs (end member, status), a run of
-    members inside one of ``p``'s runs at its status, a member across several at their join."""
-    if per <= 0:
-        return [(n, THETA)]
-    cuts = sorted({0, n} | {min(n, e // per) for e, _ in p} | {min(n, -(-e // per)) for e, _ in p})
-    return [(b, span(p, a * per, b * per)) for a, b in zip(cuts, cuts[1:]) if b > a]
-
-
 def paid(rate: float, width: float) -> bool:
     """Whether a rate pays its operand's width (`training_slowdown.work.is_paid`)."""
     return rate >= PAID * width
@@ -684,15 +571,12 @@ def _unit(t) -> int:
 
 
 class Reader:
-    def __init__(self, program, k: float, products=PRODUCTS, lookups=LOOKUPS, layout: Layout | None = None) -> None:
-        self.program, self.k, self.products, self.lookups, self.layout = program, k, products, lookups, layout
+    def __init__(self, program, k: float, products=PRODUCTS, lookups=LOOKUPS) -> None:
+        self.program, self.k, self.products, self.lookups = program, k, products, lookups
         self.memo: dict = {}
         self.logs: dict = {}
         self._match: dict = {}
         self._leaves: dict = {}
-        self._seq: dict = {}
-        #: the inputs named positional that made some word specific
-        self.taken: set = set()
 
     def product(self, fn) -> Product | None:
         return self._of(fn, self.products)
@@ -715,12 +599,6 @@ class Reader:
             self._leaves[key] = (refs, _leaf_runs(refs))
         return self._leaves[key][1]
 
-    def seq_runs(self, refs):
-        key = id(refs)
-        if key not in self._seq:
-            self._seq[key] = (refs, _seq_runs(refs))
-        return self._seq[key][1]
-
     def root(self) -> Summary:
         root = self.program.root
         return self.summary(root, (), 0, theta=frozenset(root.theta))
@@ -734,110 +612,12 @@ class Reader:
         S = Summary(-1, fn.id, ())
         prof: list[Profile] = []
 
-        lay = self.layout
-
         def source(space: str, idx: int) -> Profile:
             return ctx[idx] if space == "p" else prof[idx]
 
-        def seq_profile(refs) -> Profile:
-            """``refs``' statuses by position, a strided run's leaf by leaf."""
-            out: list = []
-            for r in self.seq_runs(refs):
-                src = source(r.space, r.idx)
-                if r.step == 1:
-                    out.extend((r.a + e, s) for e, s in _slice(src, r.lo, r.hi))
-                else:
-                    out.append((r.b, span(src, r.lo, r.hi)))
-            return runs_of(out) or ((refs.count, THETA),)
-
         def arg_profile(a) -> Profile:
-            if lay is not None:
-                return seq_profile(a.refs)
             return runs_of([(b_, span(source(s, i), lo, hi)) for _a, b_, s, i, lo, hi in self.parts(a.refs)]) or \
                 ((a.refs.count, THETA),)
-
-        def segments(nd, params) -> tuple[int, list, list[bool]]:
-            """Node ``nd``'s members, runs of them (end member, each argument's status there), and which arguments
-            are mapped over them (a node that isn't a batch is one member mapping every argument)."""
-            if nd.form != "batch":
-                return 1, [(1, [arg_status(a) for a in nd.args])], [True] * len(nd.args)
-            n, cols = nd.n, []
-            for a, ax, (_n, t) in zip(nd.args, nd.axes, params):
-                cols.append(by_member(seq_profile(a.refs), t.leaves, n) if ax is not None else [(n, arg_status(a))])
-            out, at = [], [0] * len(cols)
-            for e in sorted({e for c in cols for e, _ in c}):
-                for j, c in enumerate(cols):
-                    while c[at[j]][0] < e:
-                        at[j] += 1
-                out.append((e, [cols[j][at[j]][1] for j in range(len(cols))]))
-            return n, out, [ax is not None for ax in nd.axes]
-
-        def positioned(sts, mapped, rules: bool) -> tuple:
-            """(gathered, keys, specific, the positional inputs taken) of a word computed from words of statuses
-            ``sts``: specific where one is, or (``rules``) where it reads the gathered rows of one token word and a
-            mapped view of an input named positional."""
-            spec = any(s.specific for s in sts)
-            gath = any(s.gathered for s in sts) and not spec
-            if gath and rules:
-                rows = frozenset().union(*(s.keys for s in sts if s.gathered))
-                took = frozenset().union(*(s.positional for s, m in zip(sts, mapped) if m))
-                if len(rows) == 1 and took:
-                    return False, frozenset(), True, took
-            return gath, frozenset() if spec else frozenset().union(*(s.keys for s in sts)), spec, frozenset()
-
-        def stated(nd, params, n: int, segs: list, pos: list) -> tuple[list, list]:
-            """Members each reading the gathered rows of one token word are specific where a constant the Program
-            states, mapped over them, reads words that differ between every two positions of their row."""
-            if nd.form != "batch" or not any(p[0] for p in pos):
-                return segs, pos
-            consts = [i for i, (a, ax) in enumerate(zip(nd.args, nd.axes)) if ax is not None and arg_status(a).stated]
-            if not consts:
-                return segs, pos
-            keyof, start = [], 0
-            for (e, sts), p in zip(segs, pos):
-                rows = frozenset().union(*(s.keys for s in sts if s.gathered))
-                keyof.extend([next(iter(rows)) if p[0] and len(rows) == 1 else None] * (e - start))
-                start = e
-            vals = []
-            for i in consts:
-                per, words = params[i][1].leaves, list(nd.args[i].refs)
-                if any(s != "n" for s, _j, _l in words):
-                    return segs, pos
-                fids = [body.nodes[j].fn.id for _s, j, _l in words]
-                vals.append([tuple(fids[m * per:(m + 1) * per]) for m in range(n)])
-            by_row: dict = {}
-            for m, key in enumerate(keyof):
-                if key is not None:
-                    by_row.setdefault(key[0], {}).setdefault(key[1], []).append(tuple(v[m] for v in vals))
-            made = {(r, p) for r, ps in by_row.items() if len(ps) > 1 and len({tuple(v) for v in ps.values()}) == len(ps)
-                    for p in ps}
-            if not made:
-                return segs, pos
-            new_segs, new_pos, start = [], [], 0
-            for (e, sts), p in zip(segs, pos):
-                for m in range(start, e):
-                    pm = (False, frozenset(), True, frozenset()) if keyof[m] in made else p
-                    if new_pos and new_pos[-1] == pm:
-                        new_segs[-1] = (m + 1, sts)
-                    else:
-                        new_segs.append((m + 1, sts))
-                        new_pos.append(pm)
-                start = e
-            return new_segs, new_pos
-
-        def by_position(nd, params, base: Status, rules: bool) -> Profile:
-            """Node ``nd``'s output: ``base`` but for each member's gathered rows, keys and specificity."""
-            n, segs, mapped = segments(nd, params)
-            pos = [positioned(sts, mapped, rules) for _e, sts in segs]
-            if rules:
-                segs, pos = stated(nd, params, n, segs, pos)
-            per = nd.out.leaves // n if n else 0
-            out = []
-            for (e, _sts), (g, keys, spec, took) in zip(segs, pos):
-                self.taken |= took
-                out.append((e * per, base._replace(gathered=g, keys=keys, specific=spec, positional=frozenset(),
-                                                   stated=False)))
-            return runs_of(out) or ((nd.out.leaves, base),)
 
         def arg_status(a) -> Status:
             return join(span(source(s, i), lo, hi) for _a, _b, s, i, lo, hi in self.parts(a.refs))
@@ -1072,15 +852,14 @@ class Reader:
             rows = softmax_rows(nd.args[ix], K, n) or (arg_status(nd.args[ix]).specific and one_to_one(nd.args[ix]))
             cols = not (nd.form == "batch" and nd.axes[iw] is not None) and distinct_rows(nd, iw, K)
             if rows and cols:
-                return base._replace(specific=True, gathered=False, keys=frozenset())
+                return base._replace(specific=True, gathered=False)
             return unspecific(base, [arg_status(a) for a in nd.args])
 
         def shared_rows(nd, sts: list, args) -> list:
             """The statuses ``sts`` of batch ``nd``'s arguments ``args``, where its members read rows of the current inputs
             against an argument they share: those rows carry a gather's rows, since two of them may be equal, as a value
-            batch's may, and the members would then read one pair of values (from the circuit alone; under a `Layout`,
-            its rows are distinct)."""
-            if lay is not None or nd.form != "batch" or nd.n < 2:
+            batch's may, and the members would then read one pair of values."""
+            if nd.form != "batch" or nd.n < 2:
                 return sts
             mapped = [nd.axes[i] is not None for i in args]
             if all(mapped) or not any(mapped):
@@ -1108,13 +887,7 @@ class Reader:
             if is_input(f):
                 st = THETA if is_registered(f) or k in theta else \
                     Status(False, False, True, False, frozenset({0}), 0.0, float(max(nd.out.width_set(), default=0)))
-                name = getattr(nd, "name", None)
-                if lay is not None and name in lay.positional:
-                    st = st._replace(positional=frozenset({name}))
-                if lay is not None and name == lay.tokens:
-                    prof.append(runs_of([(j + 1, st._replace(keys=frozenset({lay.key(j)}))) for j in range(leaves)]))
-                else:
-                    prof.append(((leaves, st),))
+                prof.append(((leaves, st),))
                 continue
             rate, bits = made(nd.args, nd.out)
             if isinstance(f, PrimitiveDefinition):
@@ -1123,13 +896,11 @@ class Reader:
                 if lk is not None:
                     names = [n for n, _t in f.params]
                     t, x = sts[names.index(lk.table)], sts[names.index(lk.index)]
-                    st = Status(t.aff, t.dep, True, True, t.data | x.data, 0.0, bits, x.keys) \
+                    st = Status(t.aff, t.dep, True, True, t.data | x.data, 0.0, bits) \
                         if x.reach and not x.dep else computed(sts, rate, bits)
                     prof.append(((leaves, st),))
                 elif not nd.args:
                     prof.append(((leaves, THETA._replace(stated=True)),))
-                elif lay is not None:
-                    prof.append(by_position(nd, f.params, computed(sts, rate, bits), True))
                 else:
                     prof.append(((leaves, primitive_status(f, nd, sts, computed(sts, rate, bits))),))
                 continue
@@ -1154,35 +925,13 @@ class Reader:
                 S.sites.append(site)
                 out = min(float(site.out_width), gemm_rate(site, self.k))
                 base = computed((arg_status(a) for a in nd.args), out, bits)
-                prof.append(by_position(nd, params, base, False) if lay is not None else
-                            ((leaves, product_status(nd, ix, iw, base)),))
+                prof.append(((leaves, product_status(nd, ix, iw, base)),))
                 continue
             if nd.form == "call":
                 C = self.summary(f, tuple(arg_profile(a) for a in nd.args), depth)
                 S.children.append((C, 1, [b for i, a in enumerate(nd.args) for b in bindings(i, a, False)]))
                 S.at.append((k, (0,)))
                 prof.append(capped(C.ret, rate, bits))
-            elif nd.form == "batch" and lay is not None:
-                params, _ = f.signature()
-                seqs = [seq_profile(a.refs) if ax is not None else arg_profile(a) for a, ax in zip(nd.args, nd.axes)]
-                groups: list = []
-                for m in range(nd.n):
-                    cctx = tuple(s if ax is None else _slice(s, m * t.leaves, (m + 1) * t.leaves) or ((t.leaves, THETA),)
-                                 for s, ax, (_n, t) in zip(seqs, nd.axes, params))
-                    if groups and groups[-1][1] == cctx:
-                        groups[-1][0] += 1
-                    else:
-                        groups.append([1, cctx])
-                bs = [b for i, (a, ax) in enumerate(zip(nd.args, nd.axes)) for b in bindings(i, a, ax is not None)]
-                out, at, m0 = [], 0, 0
-                for count, cctx in groups:
-                    C = self.summary(f, cctx, depth)
-                    S.children.append((C, count, bs))
-                    S.at.append((k, range(m0, m0 + count)))
-                    per = C.ret[-1][0]
-                    out.extend((at + m * per + e, s) for m in range(count) for e, s in C.ret)
-                    at, m0 = at + count * per, m0 + count
-                prof.append(capped(runs_of(out) or ((leaves, THETA),), rate, bits))
             elif nd.form == "batch":
                 params, _ = f.signature()
                 mapped = shared_rows(nd, [arg_status(a) for a in nd.args], range(len(nd.args)))
@@ -1204,8 +953,7 @@ class Reader:
                 prof.append(capped(self.scan(S, k, nd, depth, arg_profile, arg_status, bindings), rate, bits))
             else:
                 raise ValueError(f"{fn.id} node {k}: form {nd.form!r}")
-        S.ret = seq_profile(body.ret) if lay is not None else \
-            runs_of([(b_, span(source(s, i), lo, hi)) for _a, b_, s, i, lo, hi in self.parts(body.ret)]) or \
+        S.ret = runs_of([(b_, span(source(s, i), lo, hi)) for _a, b_, s, i, lo, hi in self.parts(body.ret)]) or \
             ((body.ret.count, THETA),)
         S.sid = len(self.memo)
         self.memo[key] = S
@@ -1223,13 +971,6 @@ class Reader:
         xs = []
         for j in range(nx):
             a, per = nd.args[1 + j], params[1 + j][1].leaves
-            if self.layout is not None:
-                p = arg_profile(a)
-                slices = {_slice(p, m * per, (m + 1) * per) for m in range(n)}
-                if len(slices) == 1:
-                    xs.append(runs_of([(e, s._replace(data=s.data | {inner})) for e, s in next(iter(slices))]) or
-                              ((per, THETA),))
-                    continue
             s = arg_status(a)
             xs.append(((per, s._replace(data=s.data | {inner})),))
         xs = tuple(xs)
@@ -1346,10 +1087,6 @@ class Work:
     r_step: int | None = None
     #: the share of a token-indexed product's MACs a sequence's start leaves (`SHARED_PREFIX`)
     keep: float = 1.0
-    #: the statement read beside the Program, if any, and the inputs it names positional that made a word specific:
-    #: premises the reading takes and could not check
-    layout: Layout | None = None
-    premises: tuple[str, ...] = ()
 
     @property
     def groups(self) -> list[Group]:
@@ -1442,18 +1179,17 @@ def operand_beta(rate: float, w: float, activation: bool, r_step: int | None, k:
     return min(b, most)
 
 
-def read(program, k: float, products=PRODUCTS, lookups=LOOKUPS, layout: Layout | None = None) -> Work:
-    """The work ``program`` holds at a policy's k (module docstring), from the circuit alone or with ``layout``
-    stated beside it."""
-    return _read(program, k, products, lookups, layout)[0]
+def read(program, k: float, products=PRODUCTS, lookups=LOOKUPS) -> Work:
+    """The work ``program`` holds at a policy's k (module docstring), from the circuit alone."""
+    return _read(program, k, products, lookups)[0]
 
 
-def calls(program, k: float, products=PRODUCTS, lookups=LOOKUPS, layout: Layout | None = None):
+def calls(program, k: float, products=PRODUCTS, lookups=LOOKUPS):
     """Each product call of ``program``'s circuit, every member and iteration its own, with its `Site` and the reason
     `read` leaves it out ("" where it is charged): the reading's decisions on the circuit's own calls."""
     from verity.circuits.layout import FunctionCall
 
-    _work, R, root, reasons = _read(program, k, products, lookups, layout)
+    _work, R, root, reasons = _read(program, k, products, lookups)
     circ = program.circuit
 
     def walk(S: Summary, scope):
@@ -1469,9 +1205,9 @@ def calls(program, k: float, products=PRODUCTS, lookups=LOOKUPS, layout: Layout 
     yield from walk(root, circ.root_scope)
 
 
-def _read(program, k: float, products, lookups, layout: Layout | None):
+def _read(program, k: float, products, lookups):
     gates = boolean_gates(program)
-    R = Reader(program, k, products, lookups, layout)
+    R = Reader(program, k, products, lookups)
     root = R.root()
     order = sorted(R.memo.values(), key=lambda s: -s.sid)
     count = {root.sid: 1}
@@ -1530,7 +1266,7 @@ def _read(program, k: float, products, lookups, layout: Layout | None):
             g[2].add(frozenset((cls.find(x), cls.find(w))))
     out = [Group(key[0], key[1], key[2], key[3], key[4], m, o, frozenset(e), *key[5:])
            for key, (m, o, e) in sorted(groups.items(), key=lambda kv: repr(kv[0]))]
-    return Work(k, gates, out, r_step, keep, layout, tuple(sorted(R.taken))), R, root, reasons
+    return Work(k, gates, out, r_step, keep), R, root, reasons
 
 
 def clique(edges) -> int:

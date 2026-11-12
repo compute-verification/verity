@@ -23,7 +23,7 @@ two of its rows may be equal, as two here are, and every product of its rows by 
 twice.
 
 In every step the first layer's P·V reads repeated pairs, where two keys of one token hold one value row, and is left
-out. With the rope tables stated positional (`work.Layout`), the reading charges more, all of it the same invariant's.
+out.
 """
 from __future__ import annotations
 
@@ -46,7 +46,6 @@ V, D, T, L = 8, 4, 4, 2
 K0 = 65536.0
 #: two rows of T + 1 tokens, each repeating a token, the loss reading the first T
 BATCH = torch.tensor([[1, 2, 1, 3, 5], [4, 1, 4, 6, 7]])
-ROPE = WK.Layout("batch", *BATCH.shape, ("buf_cos", "buf_sin"))
 #: batches that break the premise, each by its first row but the last: the other row is one the held batch could have
 BROKEN = {"a run of one token first": [[1, 1, 2, 4, 5], [6, 7, 0, 5, 1]],
           "one token": [[3, 3, 3, 3, 3], [6, 7, 0, 5, 1]],
@@ -140,11 +139,11 @@ def evaluated(make, batch: torch.Tensor = BATCH, loss=_square, n: int = 3):
     return step, prog, materialize(prog, ins)
 
 
-def pairs(prog, tab, layout=None) -> dict:
+def pairs(prog, tab) -> dict:
     """By the step's product node: the reason it is left out ("" where charged) and each of its third iteration's MACs'
     pair of operand values."""
     by: dict = defaultdict(lambda: ["", []])
-    for call, site, reason in WK.calls(prog, K0, layout=layout):
+    for call, site, reason in WK.calls(prog, K0):
         if THIRD not in call.parent.path():
             continue
         got = [tuple(sorted((tab[g.operands[0]], tab[g.operands[1]]))) for g in call if g.prim.name == "F32Fma"]
@@ -208,13 +207,6 @@ def test_what_the_circuit_alone_charges_reads_distinct_pairs(case):
     if case == "relu":
         down = first_after(step, by, r"SelectF32_v\d+", f"LinearRef_v1{{K={2 * D},N={D},")
         assert by[down][0] and repeats(by[down][1])
-    if case in ("rope", "lf"):
-        rope = pairs(prog, tab, ROPE)
-        mine = {k for k, (reason, _ps) in by.items() if not reason}
-        theirs = {k for k, (reason, _ps) in rope.items() if not reason}
-        assert mine < theirs
-        for k in theirs:
-            assert len(set(rope[k][1])) >= keep * len(rope[k][1])
 
 
 @pytest.mark.slow
@@ -235,23 +227,21 @@ def test_a_value_batchs_rows_may_repeat():
     assert by[down][0] == "gathered" and repeats(by[down][1])
 
 
-def repeating(case: str, batch: torch.Tensor, layout) -> set:
-    """The products the reading under ``layout`` charges on ``case``'s step at ``batch`` whose MACs repeat a pair."""
+def repeating(case: str, batch: torch.Tensor) -> set:
+    """The products the reading charges on ``case``'s step at ``batch`` whose MACs repeat a pair."""
     _step, prog, tab = evaluated(CASES[case], batch)
-    return {k for k, (reason, ps) in pairs(prog, tab, layout).items() if not reason and repeats(ps)}
+    return {k for k, (reason, ps) in pairs(prog, tab).items() if not reason and repeats(ps)}
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("case,broken,stated", [
-    ("lf", "a run of one token first", "rope"), ("lf", "one token", "rope"),
-    ("lf", "two rows sharing two tokens first", "rope"), ("lf", "a run of one token first", "nothing"),
-    ("lf", "two rows sharing two tokens first", "nothing"), ("sdpa", "prefixes in proportion", "nothing")])
-def test_a_batch_that_breaks_the_premise_repeats_pairs_the_readings_charge(case, broken, stated):
+@pytest.mark.parametrize("case,broken", [
+    ("lf", "a run of one token first"), ("lf", "one token"), ("lf", "two rows sharing two tokens first"),
+    ("sdpa", "prefixes in proportion")])
+def test_a_batch_that_breaks_the_premise_repeats_pairs_the_reading_charges(case, broken):
     """The premise is a limit, held as a fact: at a batch that breaks it, the reading charges products whose MACs read
-    one pair twice past the ones that repeat at the held batch (the first position's, which `keep` leaves out). With a
-    positional table the prefixes in proportion are no break: the rope reading charges no new repeat there."""
-    lay = ROPE if stated == "rope" else None
-    held = repeating(case, BATCH, lay)
-    assert repeating(case, torch.tensor(BROKEN[broken]), lay) - held
+    one pair twice past the ones that repeat at the held batch (the first position's, which `keep` leaves out). Where
+    a positional table reaches the rows, as lf's rope tables do, the prefixes in proportion are no break."""
+    held = repeating(case, BATCH)
+    assert repeating(case, torch.tensor(BROKEN[broken])) - held
     if case == "lf":
-        assert not repeating(case, torch.tensor(BROKEN["prefixes in proportion"]), lay) - held
+        assert not repeating(case, torch.tensor(BROKEN["prefixes in proportion"])) - held

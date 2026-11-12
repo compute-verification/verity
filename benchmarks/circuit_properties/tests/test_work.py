@@ -295,7 +295,7 @@ def test_every_operand_is_at_most_bf16_and_beta_k():
     assert WK.bound(WK.read(loop(), 1e10), C) is None
 
 
-#: a row's positions under a stated layout
+#: a row's positions
 PN = 2
 ROWS_T = Array(PN, X_T)
 
@@ -322,30 +322,12 @@ def _token_loop(kind: str) -> Program:
                  Array(PN, Y_T), step, shared=(("pos", ROWS_T),), registered=("pos",))
 
 
-def test_rows_stay_a_gathers_without_a_stated_layout():
-    for kind in ("positional", "mask"):
+def test_rows_stay_a_gathers_from_the_circuit_alone():
+    """An input of unstated values, a constant added by position, or none: no softmax over a constant makes the rows
+    specific, so each product reading them is left out."""
+    for kind in ("positional", "mask", "flat", "mixed"):
         w = WK.read(_token_loop(kind), KB)
-        assert w.groups == [] and w.left_out["gathered"] == (T - 1) * PN * K * N and w.premises == ()
-
-
-def test_a_mapped_input_named_positional_makes_one_positions_rows_specific():
-    p = _token_loop("positional")
-    w = WK.read(p, KB, layout=WK.Layout("tok", 1, PN, ("pos",)))
-    assert w.N == (T - 1) * PN * K * N and w.left_out["gathered"] == 0 and w.premises == ("pos",)
-    unnamed = WK.read(p, KB, layout=WK.Layout("tok", 1, PN))
-    assert unnamed.groups == [] and unnamed.premises == ()
-
-
-def test_a_stated_constant_that_differs_by_position_makes_rows_specific():
-    lay = WK.Layout("tok", 1, PN)
-    assert WK.read(_token_loop("mask"), KB, layout=lay).N == (T - 1) * PN * K * N
-    flat = WK.read(_token_loop("flat"), KB, layout=lay)
-    assert flat.groups == [] and flat.left_out["gathered"] == (T - 1) * PN * K * N
-
-
-def test_a_member_reading_two_positions_rows_is_not_a_position():
-    w = WK.read(_token_loop("mixed"), KB, layout=WK.Layout("tok", 1, PN, ("pos",)))
-    assert w.groups == [] and w.left_out["gathered"] == (T - 1) * PN * K * N and w.premises == ()
+        assert w.groups == [] and w.left_out["gathered"] == (T - 1) * PN * K * N
 
 
 def test_clique():

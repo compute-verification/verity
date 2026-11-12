@@ -7,14 +7,11 @@ The Program is the training-step frontend's step (`step_program`) as the body of
 parameters and AdamW's two moments, each iteration's inputs its three scalars and its batch, the rope tables shared. Its
 work an iteration is what a third iteration adds to two, the iteration a trace's step stands for (its weights an update
 away from θ). Both readings are in one unit: the trace's rows priced at f32, the Program's dtype, and |C| in Boolean
-gates on both sides. The Program is read under three statements (`STATED`): nothing beside it, its layout
-(`work.Layout`: the batch's words as rows by positions), and the layout naming the rope tables positional, a premise
-the reading lists. Under each, the Program's reading is never above the trace's: every product it charges is one the
-trace's M holds, with no more MACs and no larger β on either operand, and its blocks at the trace's F, and at its own,
-are at most what the trace's M gives under the same choice of sub-work. With the layout alone it charges nothing, and
-with nothing stated less than with the rope tables named. A dense step with no table lookup (`_dense`) is charged
-nothing from the circuit alone, since its batch's rows may repeat. Where the readings differ, the Program's is below,
-each for one cause:
+gates on both sides. The Program is read from the circuit alone, with nothing stated beside it, and its reading is
+never above the trace's: every product it charges is one the trace's M holds, with no more MACs and no larger β on
+either operand, and its blocks at the trace's F, and at its own, are at most what the trace's M gives under the same
+choice of sub-work. A dense step with no table lookup (`_dense`) is charged nothing, since its batch's rows may repeat.
+Where the readings differ, the Program's is below, each for one cause:
 
 - Rates: each product's operands are paid at most what the trace pays any product of its shape. Attention's scores
   multiply two activations, which `gemm_rate` prices at the least of attention's form and each single token side's,
@@ -23,10 +20,7 @@ each for one cause:
   they become specific only at a softmax over the causal mask, whose rows and columns the mask makes differ
   (`test_value_reading` holds that rule to the values), so the Program charges the projections downstream of the
   softmax and its P·V, its rows' and columns', and leaves those through the rope tables (inputs of unstated values)
-  and the softmax's backward; the trace's M holds its products after the rope and the mask. The layout alone charges
-  nothing: every member of the mask's batch reads two positions' rows, a query's and a key's. Naming the rope tables
-  makes Q and K specific, and the Program charges the projections downstream of them, leaving the gathered products
-  where the trace does.
+  and the softmax's backward, dQ·Wq and dK·Wk; the trace's M holds its products after the rope and the mask.
 - The dots only the Program writes as products: the softmax's backward, two `DotRef`s a row, carries the same rows,
   and the sums and means the frontend writes as a product with a repeated constant are `θ`'s.
 - The head's products and attention's: from `HEAD_K` the Program gives no bound, since it doesn't say which products
@@ -124,9 +118,9 @@ def _key(g: WK.Group) -> tuple:
     return (g.product, g.widths, g.weight, g.out_width, g.k_dim, g.dims, g.rates, g.bits, g.beta, g.reason)
 
 
-def iteration(step: Program, k: float, layout: WK.Layout | None = None) -> WK.Work:
+def iteration(step: Program, k: float) -> WK.Work:
     """The work a third iteration adds to two, at k."""
-    two, three = WK.read(loop(step, 2), k, layout=layout), WK.read(loop(step, 3), k, layout=layout)
+    two, three = WK.read(loop(step, 2), k), WK.read(loop(step, 3), k)
     before = {_key(g): g for g in two.products}
     out = []
     for g in three.products:
@@ -134,7 +128,7 @@ def iteration(step: Program, k: float, layout: WK.Layout | None = None) -> WK.Wo
         g = dataclasses.replace(g, macs=g.macs - (b.macs if b else 0), wires=g.wires - (b.wires if b else 0))
         if g.macs:
             out.append(g)
-    return WK.Work(k, three.gates - two.gates, out, three.r_step, three.keep, layout, three.premises)
+    return WK.Work(k, three.gates - two.gates, out, three.r_step, three.keep)
 
 
 def primitives(step: Program) -> Counter:
@@ -162,17 +156,11 @@ def primitives(step: Program) -> Counter:
     return Counter({k: n * sum(compile_bits(boolean_version(by_id[k[1]])).counts.values()) for k, n in counts.items()})
 
 
-#: what is stated beside the Program: nothing; the batch's layout, two rows of positions; and the layout naming the
-#: rope tables positional
-STATED = {"nothing": None, "layout": WK.Layout("batch", *BATCH),
-          "rope": WK.Layout("batch", *BATCH, ("buf_cos", "buf_sin"))}
-
-
 @dataclasses.dataclass
 class Reading:
     step: Program
-    #: by (statement, k): the Program's work an iteration; by k: the trace's priced rows, `work.he_of_rows`' M and
-    #: `calculator.slowdown` on them
+    #: by k: the Program's work an iteration, the trace's priced rows, `work.he_of_rows`' M and `calculator.slowdown`
+    #: on them
     work: dict
     rows: dict
     he: dict
@@ -180,9 +168,9 @@ class Reading:
     size: float
 
 
-def read(make, loss, batch: torch.Tensor, stated: dict) -> Reading:
-    """The step of the model ``make()`` builds, on ``batch`` under ``loss`` and AdamW, as a Program read under each of
-    ``stated`` and as a trace at each k."""
+def read(make, loss, batch: torch.Tensor) -> Reading:
+    """The step of the model ``make()`` builds, on ``batch`` under ``loss`` and AdamW, as a Program and as a trace at
+    each k."""
     with torch.device("meta"):
         model = make()
     step = step_program(model, loss, AdamW(**LF.ADAMW), torch.empty_like(batch, device="meta"))
@@ -199,15 +187,14 @@ def read(make, loss, batch: torch.Tensor, stated: dict) -> Reading:
                                        "tokens": g.tokens})
         r.he[k] = record["he"]
         r.fig[k] = calculator.slowdown({"c_gates": C, "k_bits": k}, record, {"gates": size})
-        for name, lay in stated.items():
-            r.work[name, k] = iteration(step, k, lay)
+        r.work[k] = iteration(step, k)
     return r
 
 
 @pytest.fixture(scope="module")
 def readings() -> Reading:
     return read(lambda: LF.LM(LF.SIZES["tiny"], ctx=CTX, vocab=64), LF.square_loss,
-                torch.zeros(*BATCH, dtype=torch.long), STATED)
+                torch.zeros(*BATCH, dtype=torch.long))
 
 
 #: a dense step: no table lookup, a float batch of 32 rows into a linear layer whose contraction, 1024, a block of
@@ -304,42 +291,38 @@ def trace_work(r: Reading, k: float) -> WK.Work:
 def never_above(r: Reading) -> None:
     """Each of ``r``'s works at each k: every group it charges fits the trace's M, and its blocks, at the calculator's
     F on the trace and at its own, are at most what the trace's M gives under the same choice of sub-work."""
-    for (name, k), it in r.work.items():
-        assert fits(it, r.he[k]), (name, k)
+    for k, it in r.work.items():
+        assert fits(it, r.he[k]), k
         own = WK.bound(it, C)
         theirs = (r.fig[k]["figure"] or {}).get("F")
         for F_ in {F_ for F_ in (theirs, own.bound.F if own else 1.0) if F_ is not None}:
-            assert blocks(it, F_) <= blocks(trace_work(r, k), F_), (name, k, F_)
+            assert blocks(it, F_) <= blocks(trace_work(r, k), F_), (k, F_)
 
 
 @pytest.mark.slow
 def test_the_programs_bound_is_never_above_the_traces(readings):
-    """Derives the step, captures it and reads it under each statement at each k (about a minute): what it catches is
-    a Program reading, from the circuit alone or with its layout stated, that charges work the trace's M doesn't hold,
-    a β above the trace's, or more blocks than the trace's M gives under the same choice of sub-work and F, at any k of
-    the dial. With the layout alone it charges nothing, and with nothing stated less than with the rope tables named."""
+    """Derives the step, captures it and reads it at each k (about a minute): what it catches is a Program reading that
+    charges work the trace's M doesn't hold, a β above the trace's, or more blocks than the trace's M gives under the
+    same choice of sub-work and F, at any k of the dial. It charges weights' products with activations, and leaves out
+    as gathered more than the trace does: what its rule doesn't reach."""
     r = readings
     never_above(r)
     for k in KS:
         assert trace_blocks(r.fig[k]) > 0
-        assert r.work["layout", k].groups == []
-        rope, alone = r.work["rope", k], r.work["nothing", k]
-        for it in (rope, alone):
-            assert it.groups and all(g.weight == (False, True) for g in it.groups)
-        assert rope.premises == ("buf_cos", "buf_sin") and alone.premises == ()
-        assert sum(g.macs for g in alone.groups) < sum(g.macs for g in rope.groups)
-        assert rope.left_out["gathered"] == r.he[k]["gathered_macs"]
+        it = r.work[k]
+        assert it.groups and all(g.weight == (False, True) for g in it.groups)
+        assert it.left_out["gathered"] > r.he[k]["gathered_macs"]
 
 
 @pytest.mark.slow
 def test_a_dense_steps_rows_may_repeat_so_its_circuit_alone_charges_nothing():
-    """A step with no table lookup (`_dense`), read with nothing stated: its batch is rows of values, two of which may
+    """A step with no table lookup (`_dense`): its batch is rows of values, two of which may
     be equal, so every product of its hidden rows by a shared weight carries rows that may repeat and is left out, where
     the trace, whose contraction a block can't make the hidden rows below their width up to k = 800000, charges them."""
-    r = read(_dense, _square, torch.randn(*DENSE), {"nothing": None})
+    r = read(_dense, _square, torch.randn(*DENSE))
     never_above(r)
     for k in KS:
-        it = r.work["nothing", k]
+        it = r.work[k]
         assert it.groups == [] and it.left_out["gathered"] > 0 and it.left_out["activations"] == 0
         assert (trace_blocks(r.fig[k]) > 0) == (k <= 800_000), k
 
@@ -347,11 +330,10 @@ def test_a_dense_steps_rows_may_repeat_so_its_circuit_alone_charges_nothing():
 @pytest.mark.slow
 def test_every_product_pays_at_most_what_the_trace_pays_its_shape(readings):
     """Each of the Program's products (m, K, n) is a shape the trace has a product of, each operand's rate at most
-    the least the trace's products of that shape pay it, under every statement; with the layout and no input named
-    positional, every product with two θ′ operands carries the embedding's rows."""
+    the least the trace's products of that shape pay it."""
     r = readings
     traced = sum(row["count"] * row["macs"] for row in r.rows[KS[0]])
-    for (name, k), it in r.work.items():
+    for k, it in r.work.items():
         lins = [g for g in it.products if g.product.startswith("LinearRef")]
         assert sum(g.macs for g in lins) == traced == r.he[k]["candidates_macs"]
         rows = [row for row in r.rows[k] if all(row["affected"])]
@@ -364,11 +346,8 @@ def test_every_product_pays_at_most_what_the_trace_pays_its_shape(readings):
                     if (dm, d["k"], dn) == (m, kk, n):
                         least = [min(least[0], ra), min(least[1], rb)]
             assert math.isfinite(least[0]), g.dims
-            assert g.rates[0] <= least[0] + 1e-9 and g.rates[1] <= least[1] + 1e-9, (name, g.dims, g.rates, least)
+            assert g.rates[0] <= least[0] + 1e-9 and g.rates[1] <= least[1] + 1e-9, (k, g.dims, g.rates, least)
         assert it.r_step is None and it.left_out["self"] == 0
-        if name == "layout":
-            dots = [g for g in it.products if g.product.startswith("DotRef")]
-            assert {g.reason for g in lins} == {"gathered"} and {g.reason for g in dots} == {"gathered", "theta"}
 
 
 @pytest.mark.slow
@@ -377,7 +356,7 @@ def test_both_sizes_are_boolean_gates_and_differ_by_what_each_prices(readings):
     their Definition's gates, and the rest of the Program's |C| is the trace's and the primitives no MAC of the
     trace's prices, less what the trace prices its elementwise MACs at beyond the Program's multiplies and divisions."""
     r = readings
-    step, it, rows, size = r.step, r.work["nothing", K0], r.rows[K0], r.size
+    step, it, rows, size = r.step, r.work[K0], r.rows[K0], r.size
     assert it.gates == WK.boolean_gates(step)
     split = primitives(step)
     assert sum(split.values()) == it.gates
