@@ -406,7 +406,7 @@ theorem copies_of_ref (hr : r.Ok h) {x q i : ℕ} {m : _root_.Flock.Circuit × A
     rw [← hst0] at hd
     have hunit : m.1.unit = FlockSoundness.lunit a.st.c := by
       rw [← hce]
-      exact (FlockSoundness.unrolled_unit_commit ((_root_.Flock.Readable.tagsAt_typed _ _ _).trans hRu.2.1)
+      exact (FlockSoundness.unrolled_unit_commit ((FlockSoundness.Discharge.Exec.tagsAt_typed _ _ _).trans hRu.2.1)
         (FlockSoundness.Discharge.Hidden.setupHidden_spec' hd).parse).1
     have hlw : (FlockSoundness.lunit a.st.c).inWords * _root_.Flock.WORD = a.st.c.unit.inWords * _root_.Flock.WORD :=
       (show (FlockSoundness.unitRows a.st a.L.unit_built).nIn = _ from Nat.min_eq_left a.L.unit_at.in_le).symm.trans
