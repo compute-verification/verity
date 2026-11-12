@@ -5,9 +5,9 @@ public import Definitions.Core.Interaction
 /-!
 # The first-hit collision finders
 
-The finders a guarantee names when it takes `Claims.ExpectedCR` at a first-hit finder: what such a finder draws, what
-it outputs and what it is charged. A prover's run with coins `ω` opens node `p` to a value, or doesn't open it
-(`op ω p`). The finder draws a first run and `K` further runs, and at each node the first run opened it waits for
+The finders a guarantee names when it takes `Claims.ExpectedCR` at a first-hit finder: what such a finder's seed is,
+what it outputs and what it is charged. A prover's run with coins `ω` opens node `p` to a value, or doesn't open it
+(`op ω p`). The finder makes a first run and `K` further runs, and at each node the first run opened it waits for
 the first further run that opens the node again (`firstIdx`). Its bounds are proved in
 `Proofs.Core.SamplingGeneric.FirstHit` and `Proofs.Core.SamplingGeneric.FirstHitClass`.
 
