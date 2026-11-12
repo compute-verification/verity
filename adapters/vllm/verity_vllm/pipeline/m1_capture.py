@@ -40,19 +40,17 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity_vllm.engine import static_schedule
 from verity_vllm.config import option, workload_arg
-from verity_vllm.engine import engine_profile as prof  # noqa: F401  (apply_env before vllm import)
+from verity_vllm.engine import engine_profile as prof  # apply_env before vllm import
+from verity_vllm.engine import static_schedule
 
 prof.apply_env()
 
 from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> JSONL, else no-op)
 
-ACCEPTED_TOKENS = va.ACCEPTED_TOKENS   # the B0 request's accepted tokens (kept for the older importers); prefer workload["accepted"]
 
-
-def dump_cos_sin(engine: "va.Engine", out: Path) -> Path | None:
+def dump_cos_sin(engine: va.Engine, out: Path) -> Path | None:
     """`model.layers.0.self_attn.rotary_emb.cos_sin_cache` (bf16 [MAX_POS, D]) as uint16 words -> DIR/cos_sin_cache.npy.  The
     table is a derived weight computed on the GPU (vLLM `_compute_cos_sin_cache`, CUDA cosf/sinf); the one-stage audit reads the
     `cos_sin` field from this file (`benchmarks/one_stage/a11.py`)."""
@@ -89,7 +87,7 @@ def dump_cos_sin(engine: "va.Engine", out: Path) -> Path | None:
     return path
 
 
-def dump_normalizer(engine: "va.Engine", out: Path) -> Path | None:
+def dump_normalizer(engine: va.Engine, out: Path) -> Path | None:
     """Gemma-2's `model.normalizer` (0-d bf16 buffer `torch.tensor(hidden_size ** 0.5)`,
     no checkpoint tensor) as its one uint16 word -> DIR/normalizer.npy, the same observation `dump_cos_sin` makes of the other
     analytic-table root, whose rule (`analytic.check_normalizer`) is bf16(sqrt(H)).  Models
@@ -140,7 +138,7 @@ class Options:
     vllm_commit: str = option("--vllm-commit", default="d9105ea80")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     case: str | None = option("--case", default=None,
-                              help="checkpoint role (B0 SmolLM2-135M, B1 Qwen2.5-1.5B); default: the workload file's, else B0")
+                              help="checkpoint role (B0, B1, ...: a role of --checkpoints); default: the workload file's, else B0")
     verify_weights: bool = option("--verify-weights", default=False, action="store_true",
                                   help="sha256-verify the local checkpoint files against the manifest before loading (root policy: weight identity)")
     engine_arg: list[str] = option("--engine-arg", action="append", default=[],

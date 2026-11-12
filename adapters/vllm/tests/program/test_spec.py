@@ -17,6 +17,7 @@ from verity.circuits import Program, bind
 from verity.circuits.evaluation import evaluate_call
 from verity.definitions.registry import spec
 from verity.definitions.registry.b1 import Serve
+
 from tests.program.crosscheck import _standalone
 
 U32 = 0xFFFFFFFF

@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import UsageError, option
+from verity_vllm.errors import Refused
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -68,10 +69,6 @@ class Options:
     salts: str = option("--salts", help="where each value's row salts go (private: never under --out)")
     workers: int = option("--workers", type=int, default=8, help="ranks registered at once, a spawned process each (1: in this process)")
     cmd: str = field(default="node-registration", init=False)
-
-
-class Refused(Exception):
-    """The node's parameters are not the descriptor's, or a rank's θ is not what its Commit of record registered."""
 
 
 def load_descriptor(path: str | os.PathLike) -> dict[str, Any]:

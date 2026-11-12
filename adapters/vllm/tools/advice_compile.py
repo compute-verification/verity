@@ -41,6 +41,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+from verity_vllm.config import DTYPES
+from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
+from verity_vllm.engine.served_seed import DEFAULT_SEED
+from verity_vllm.pipeline import window_advice as WA
+from verity_vllm.program.predict.phi import Phi
+
 MANIFEST = "verity-vllm/served-window-programs/v1"
 #: the engine args the registration carries from the run's engine: the ones class G states (`engine_classes.CLASS_G_LIMITS`, the
 #: prefix cache), none of which a request Program reads
@@ -74,8 +80,6 @@ def engine_of(meta: dict, rank: int) -> tuple[dict, dict]:
     (`LLM.engine_record`'s ``engine_kwargs``), and, from a record of the environment its build set (``env_flags``), the DSA top-k's
     (`engine_classes.DSA_TOPK_ENV`) as set or not, so `predict.dsa` refuses a row past INDEX_TOPK the engine served in the kernels'
     own order; a ValueError for a rank the world doesn't have."""
-    from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
-
     rec = meta.get("engine_record") or {}
     kw = rec.get("engine_kwargs") or {}
     world = int(kw.get("tensor_parallel_size") or 1)
@@ -93,8 +97,6 @@ def checkpoint_dtype(hf_config: dict) -> str | None:
     id), read from the pinned config's `quantization_config`: a block-FP8 checkpoint (``quant_method: fp8``, ``fmt: e4m3``) is
     ``float8_e4m3fn``, the dtype `predict.dsa`'s domain requires. Any other config states none, and the decoder takes the dtype its
     config's shape implies (bfloat16, or int8)."""
-    from verity_vllm.config import DTYPES
-
     q = hf_config.get("quantization_config") or {}
     return DTYPES["fp8"] if q.get("quant_method") == "fp8" and q.get("fmt", "e4m3") == "e4m3" else None
 
@@ -103,8 +105,6 @@ def phi_of(meta: dict, hf_config: dict, rank: int):
     """The registration's φ (module docstring): the run's model at its pinned config ``hf_config``, with the checkpoint dtype that
     config states (`checkpoint_dtype`), on the run's target at its execution, at the engine's tensor-parallel world at ``rank`` with
     the engine args class G states (`engine_of`, whose ValueError it raises)."""
-    from verity_vllm.program.predict.phi import Phi
-
     tp, engine = engine_of(meta, rank)
     dtype = checkpoint_dtype(hf_config)
     return Phi(model={"repo": meta["model"], "revision": meta["revision"], "hf_config": hf_config, **({"dtype": dtype} if dtype else {})},
@@ -124,8 +124,6 @@ def window_coin(run: Path, window: int) -> dict | None:
 def registered_seed(meta: dict) -> int:
     """The default seed the registration fixes, `engine.served_seed.DEFAULT_SEED`; a ValueError when the run's server says it
     filled in another (or says none), since a request that sent no seed would be compiled under a seed its sample didn't use."""
-    from verity_vllm.engine.served_seed import DEFAULT_SEED
-
     seed = meta.get("default_seed")
     if type(seed) is not int or seed != DEFAULT_SEED:
         raise ValueError(f"the run's server filled in default seed {seed!r}, and the registered one is "
@@ -138,8 +136,6 @@ def carry_of(run: Path, window: int, data: bytes) -> dict:
     last non-empty one): K must open where that window closed (`window_advice.follows`). The requests K carries in and the ones it
     leaves with outputs to keep, by id, and the window it follows; a ValueError when K doesn't follow it, or carries a request in
     with no advice before it to carry it from."""
-    from verity_vllm.pipeline import window_advice as WA
-
     a = WA.decode(data)
     lines = (run / "windows.jsonl").read_text().splitlines() if (run / "windows.jsonl").exists() else []
     before = [int(d["window"]) for d in map(json.loads, filter(str.strip, lines)) if not d.get("empty") and int(d["window"]) < window]

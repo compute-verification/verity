@@ -67,7 +67,7 @@ from verity_vllm.pipeline.serve_seal import GB, committed_bytes, extras_of, free
 
 #: The compile slice the served windows are proved by, `compile_slice_v7.CompileSlice`'s id: CompileSlice_v1's statics,
 #: rows and schedule, charging the window's decisions and each certified arrival's output length. The serve path commits
-#: only the rows v1 and v4 share, ``srv`` (the served rows); the rest of v4's are the prover's.
+#: only the rows v1 and v7 share, ``srv`` (the served rows); the rest of v7's are the prover's.
 SERVED_SLICE = "CompileSlice_v7"
 #: The compile slice's size class beside the engine's statics; R and P (with the engine's L and T, and IW) shape the rows.
 SERVED_CLASS = ("R", "W", "A", "IW", "Q", "D", "P", "K")
@@ -182,7 +182,7 @@ def ingress_of(brought: Mapping[str, Any], params: Any, rule: str) -> dict[str, 
 
 def served_statics(engine: Mapping[str, Any], size_class: Mapping[str, int]) -> dict[str, int]:
     """`SERVED_SLICE`'s statics for the served engine's scheduler configuration (`engine.step_trace.scheduler_config`) and
-    the slice's size class (every name of `SERVED_CLASS`): CompileSlice_v1's (`compile_slice.statics`), refused where v4
+    the slice's size class (every name of `SERVED_CLASS`): CompileSlice_v1's (`compile_slice.statics`), refused where v7
     refuses them (`charge_chain.check_length_slots`: an output length wider than a length slot), so a server refuses at
     start what its windows' proofs would."""
     if missing := [k for k in SERVED_CLASS if k not in size_class]:
