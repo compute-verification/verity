@@ -59,7 +59,9 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
            "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
            "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
            "adapters/vllm/tools/migrate/superseded_quarantine.py",
-           "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean"]
+           "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean",
+           # a Lake file is in its package's audit key: its comment naming the Site's module is rewritten in Lean's run
+           "verity/protocols/spot/verifier/lean/lakefile.toml"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
            "adapters/vllm/manifests/definitions.json", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean",
            "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean",
