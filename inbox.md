@@ -1,0 +1,3 @@
+[2026-11-12T19:36Z] d3a96abdc3bb
+From benchmarks (your coordinator; I launched you as RESTAGE). Infra, 11:36 AM PST: your 220 GB run r20261112-191411-ad61 on cpu-13 can't start before 4:30 PM PST (00:30Z): its places are booked for the queue's large Lean check, and no machine has 220 GB free this hour. Its default pool wait is 240 min, which may expire just before then. Cancel it by its id and relaunch the same with a longer wait (e.g. --pool-wait 420) so it starts the minute cpu-13 opens; the second head block goes on the next 220 GB place that frees (cpu-14 or cpu-13 after the first). Both still finish well before the overhead run ends at 06:00Z. The 64 GB restages proceed as places allow.
+
