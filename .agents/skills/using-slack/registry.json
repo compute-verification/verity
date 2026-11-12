@@ -378,10 +378,10 @@
         "security/Definitions/Accounting/Memory.lean",
         "security/Definitions/Accounting/RateAudit.lean",
         "security/Definitions/Accounting/RateAuditDeployed.lean",
-        "security/Definitions/Accounting/RateAuditHorizon.lean",
         "security/Definitions/Accounting/RateAuditInteractive.lean",
         "security/Definitions/Accounting/RateAuditJoint.lean",
         "security/Definitions/Accounting/RateAuditPartial.lean",
+        "security/Definitions/Accounting/RateAuditPooled.lean",
         "security/Definitions/Accounting/RateAuditRemote.lean",
         "security/Definitions/Accounting/RateAuditSketch.lean",
         "security/Definitions/Accounting/RateAuditSketchDeployed.lean",
@@ -406,9 +406,9 @@
         "security/Definitions/Accounting/Guarantees/Memory.lean",
         "security/Definitions/Accounting/Guarantees/RateAudit.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditDeployed.lean",
-        "security/Definitions/Accounting/Guarantees/RateAuditHorizon.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditNamed.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditPartial.lean",
+        "security/Definitions/Accounting/Guarantees/RateAuditPooled.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditRemote.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditSketch.lean",
         "security/Definitions/Accounting/Guarantees/Requirement.lean",
@@ -465,7 +465,8 @@
         "benchmarks/datacenter/",
         "benchmarks/network_sim/",
         "benchmarks/prove_path/",
-        "benchmarks/certifier_timing/"
+        "benchmarks/certifier_timing/",
+        "benchmarks/scan_cost/"
       ],
       "branch_suffixes": [
         "728f",
@@ -491,6 +492,9 @@
       "usergroup": "S0CAAA80KGT",
       "retired_usergroups": [
         "S0C5LSDENA1"
+      ],
+      "owns": [
+        "benchmarks/metrics.toml"
       ]
     },
     {
@@ -628,6 +632,7 @@
         "adapters/vllm/",
         "demos/vllm/",
         "benchmarks/replay_determinism/",
+        "benchmarks/prod_repro/",
         "ruff.toml"
       ],
       "linear": "VLLM",
@@ -659,7 +664,7 @@
         "benchmarks/recursion_e2e/",
         "benchmarks/recursion_figures/",
         "benchmarks/exfiltration/",
-        "benchmarks/specs/",
+        "benchmarks/harness/specs/",
         "infra/cluster/kinds/benchmarks.toml",
         "benchmarks/judge.py",
         "benchmarks/README.md"

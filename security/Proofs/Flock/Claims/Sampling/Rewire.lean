@@ -32,7 +32,8 @@ alone (`cutBlock`).
 * `Prog.correct_wired_of_agree`: the same at a decoder: values that make the block correct in `C` give values that
   make it correct, cut, at the wired program, where the two agree through `ω` at the block's gates and the wires they
   read.
-* `Prog.exists_correct_wired`: such values exist where `ω` sends no two of those gates to one gate.
+* `Prog.exists_correct_wired`: such values exist where the block's values agree at any two of those gates `ω` sends to
+  one gate.
 * `Prog.needs_rewire`, `Prog.needs_wired`, `Prog.fixed_of_needs_wired`: a gate a cut proof block's correctness reads
   at the wired program is the image, under `ω`, of a gate the block's correctness reads in `C`, so it is no gate `ω`
   moves.
@@ -542,11 +543,11 @@ theorem Prog.correct_wired_of_agree {C : Prog} {ω : ℕ → ℕ} {keep : ℕ �
   · show some (v₀ i) = some (v (ω i))
     rw [hr g hg x hx i hi hiu]
 
-/-- **The bridge where `ω` sends no two gates a proof block reads to one gate**: values `v₀` that make a proof block
-`u` correct in `C` give values `v` that make it correct, cut, at the wired program, with `v` at the gate `ω` gives
-each gate of `S` being `v₀` there. `S` holds the gates of `u` and the wires they read, and `ω` sends no two gates of
-`S` to one gate: a block that read one gate of its writer at two of its own input gates has no such `v` unless `v₀`
-agrees at the two, which no statement about the block alone gives. -/
+/-- **The bridge where the values agree at gates `ω` sends to one gate**: values `v₀` that make a proof block `u`
+correct in `C` give values `v` that make it correct, cut, at the wired program, with `v` at the gate `ω` gives each
+gate of `S` being `v₀` there. `S` holds the gates of `u` and the wires they read, and `v₀` agrees at any two gates of
+`S` that `ω` sends to one gate: a block that reads one gate of its writer at two of its own input gates has such a
+`v` exactly where `v₀` agrees at the two, which no statement about the block alone gives. -/
 theorem Prog.exists_correct_wired {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} {u : List ℕ} {v₀ : ℕ → Bool}
     (hin : ∀ i, ω i ≠ i → C.gates[i]? = some .input)
     (hnc : ∀ i, ω i ≠ i → ∀ c, C.gates[ω i]? ≠ some (.const c))
@@ -554,7 +555,7 @@ theorem Prog.exists_correct_wired {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → 
     (htgt : ∀ g ∈ u, ∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, ω i ≠ i → ω i ∉ u)
     (S : ℕ → Prop) (hSu : ∀ g ∈ u, S g)
     (hSr : ∀ g ∈ u, ∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, S i)
-    (hinj : ∀ i j, S i → S j → ω i = ω j → i = j)
+    (hagree : ∀ i j, S i → S j → ω i = ω j → v₀ i = v₀ j)
     (hc : C.Correct (fun g => some (v₀ g)) u) :
     ∃ v : ℕ → Bool, (∀ i, S i → v (ω i) = v₀ i) ∧
       (C.wired ω keep).Correct (fun g => some (v g)) (cutBlock ω u) := by
@@ -564,7 +565,7 @@ theorem Prog.exists_correct_wired {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → 
     have h : ∃ j, S j ∧ ω j = ω i := ⟨i, hi, rfl⟩
     show (if h : ∃ j, S j ∧ ω j = ω i then v₀ h.choose else false) = v₀ i
     rw [dite_eq_left h]
-    exact congrArg v₀ (hinj _ _ h.choose_spec.1 hi h.choose_spec.2)
+    exact hagree _ _ h.choose_spec.1 hi h.choose_spec.2
   obtain ⟨v, hv⟩ := hex
   exact ⟨v, hv, Prog.correct_wired_of_agree hin hnc hw htgt (fun g hg => hv g (hSu g hg))
     (fun g hg x hx i hi _ => hv i (hSr g hg x hx i hi)) hc⟩

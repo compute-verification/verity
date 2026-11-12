@@ -57,7 +57,7 @@ from typing import Collection, NamedTuple, Sequence
 
 from verity.protocols.certifier.verifier import warden as W
 from verity.protocols.certifier.verifier.active import DATA, PAD, id_request
-from verity.protocols.certifier.verifier.grid import Record, row_count
+from verity.protocols.certifier.verifier.grid import BlockGrid, row_count
 from verity.protocols.certifier.verifier.io_tie import parse_cell
 
 #: why the rule refuses: what `check` names in a record's stamps, then what the records themselves show
@@ -239,7 +239,7 @@ def _request(q: int, data: bytes, cell_bytes: int) -> Request:
     return r
 
 
-def _buckets(params: W.WardenParams, records: Sequence[Record], b: int, what: str):
+def _buckets(params: W.WardenParams, records: Sequence[BlockGrid], b: int, what: str):
     """Each bucket before b of a link's records with its cells, in bucket order."""
     T, by_window = params.window, {rec.window: rec for rec in records}
     if len(by_window) != len(records):
@@ -258,7 +258,7 @@ def _buckets(params: W.WardenParams, records: Sequence[Record], b: int, what: st
             yield t, out
 
 
-def read(params: W.WardenParams, ingress: Sequence[Record], egress: Sequence[Record], b: int) -> list[Response]:
+def read(params: W.WardenParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid], b: int) -> list[Response]:
     """The requests released before b and their responses' cells before b, in release order, from the network
     certifier's ingress and egress records (the module docstring's "The records"). Raises `Refused` (`records`)."""
     if type(b) is not int or b < 0 or b % params.window:
@@ -297,7 +297,7 @@ def read(params: W.WardenParams, ingress: Sequence[Record], egress: Sequence[Rec
     return [Response(q, n, t, requests[q], tuple(ids[q]), ended.get(q)) for q, (n, t) in at.items()]
 
 
-def edge(params: W.WardenParams, ingress: Sequence[Record], egress: Sequence[Record], b: int,
+def edge(params: W.WardenParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid], b: int,
          eos: Collection[int]) -> Edge:
     """The close at b on the network certifier's records: the stamps it writes and the continuations they give,
     `eos` the deployment's end-of-sequence ids."""

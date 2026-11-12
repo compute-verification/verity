@@ -36,10 +36,13 @@ NOT_SCANNED = {
     "tests/test_module_strings.py": "its exemptions name modules that don't resolve, as data",
 }
 
-#: The public modules: module -> the interface it is (the vision note's I1..I10).
+#: The public modules: module -> the interface it is (I1..I10).
 PUBLIC = {
-    "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec and its target",
+    "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec, its target and the serving device's target and execution",
     "verity_vllm.engine.spec": "I1: engine spec documents",
+    "verity_vllm.settings": "I1: the record of the value settings in force in an environment (record): each variable set "
+                            "there that can change what is computed or committed, a credential by name only, and their "
+                            "digest, which benchmarks/serve_tax writes into an arm's meta.json and a replay's replay.json",
     "verity_vllm.engine.handle": "I2: a built engine's vLLM objects",
     "verity_vllm.engine.stock": "I1: a stock engine at the pin, with no protocol on: an in-process LLMEngine, vLLM's "
                                 "SamplingParams and its version",
@@ -67,7 +70,7 @@ PUBLIC = {
                                                 "them (the session Definition, its Boolean gates by the gate table, a "
                                                 "block's fresh bits), which benchmarks/inference_only prices",
     "verity_vllm.program.predict.window_weights": "I7: the window circuit's weights, the committer's registration and the "
-                                                  "verifier's pins of it (VLLM-113)",
+                                                  "verifier's pins of it",
     "verity_vllm.pipeline.expert_tables": "I7: the per-expert cut's tables, their layout and record, the committer's "
                                           "registration of a TP rank's and the verifier's pin of it (tp-register-tables)",
     "verity_vllm.commit.history_tables": "I7: the committer's history tables of DSA's long rows by table reads, one a "
@@ -76,11 +79,12 @@ PUBLIC = {
     "verity_vllm.commit.history_tables_device": "I7: a history table on the GPU and its CPU twin (Table), which "
                                                 "benchmarks/commitments times",
     "verity_vllm.program.predict.window_rows": "I7: a window's rows, the window circuit's units filled from a served window's "
-                                               "values (VLLM-125)",
+                                               "values",
     "verity_vllm.program.predict.scan_state": "I7: the network certifier's scan state as a window class's Programs read it: "
                                               "the registered value, its class, its words and a slot's bridge",
-    "verity_vllm.program.predict.window_class": "I7: a window class, and H1's tables as a window circuit reads them under H1's "
-                                                "tie (Tables)",
+    "verity_vllm.program.predict.window_class": "I7: a window class, and the layouts of PoUW's tables a window circuit reads "
+                                                "on a fixed load (FixedLoad): H1's under H1's tie (Tables) and Pearl+'s, the "
+                                                "circuit cut at its linears (PearlTables)",
     "verity_vllm.program.frontend.train_step": "I7: one training step's Program (step_program, step_report, export_step), its "
                                                "layout and the primitives a census prices, which the grader "
                                                "(benchmarks/training_slowdown/grader) reads",
@@ -114,6 +118,8 @@ PUBLIC = {
     "verity_vllm.pipeline.cut_plugin": "I1: the carried pool's cut at each window edge under vLLM's own OpenAI server: its "
                                        "general plugin (register, an edge of the engine core's seam) and ASGI middleware "
                                        "(SentFeed), configured by VERITY_CUT, which the trace corpus's cut traces serve under",
+    "verity_vllm.pipeline.serve_pearl": "I1: serve-openai's Pearl+ arm (PearlWindows), its --protocols-config (config_of, "
+                                        "CONFIG) and where a serve dir holds each window's epoch (DIR)",
     "verity_vllm.pipeline.tick_plugin": "I1: the certified tick (--admit tick) under vLLM's own OpenAI server: its general "
                                         "plugin (register) and ASGI middleware (TickFeed), configured by VERITY_TICK, which "
                                         "the trace corpus serves under",
@@ -135,13 +141,26 @@ PUBLIC = {
                                                  "the rules that do, which benchmarks/network_e2e reports",
     "verity_vllm.protocols.pouw.h1.commit": "I1: a served H1 window's Commit: its registration W (registration), the audited "
                                             "window's tables rebuilt as W's (reuse, reused) and the record H1 names (named)",
+    "verity_vllm.protocols.pouw.pearl_c.window": "I1: Pearl+'s window record W over a run's retained timed rounds (record, write), "
+                                                 "the names it registers each call's A rows and y under (a_value, y_value), "
+                                                 "each weight's B rows at PoUW's weight root (b_entries, b_value), "
+                                                 "built at the version W states (version_of, VERSION), "
+                                                 "which verify_run.tie and the one-stage audit read, the audited "
+                                                 "window's values rebuilt as W's (reuse), and the served run's served.json "
+                                                 "W is written from (SERVED_SCHEMA, KEEP, served_passes, macs, coins_of)",
     "verity_vllm.protocols.pouw.h1.words": "I1: the words H1 commits a call's rows and a step's input ids as (chunk_words, "
                                            "ids_words)",
     "verity_vllm.protocols.pouw.h1.drawn": "I1: a served H1 window's drawn calls staged as C-Flock statements and checked as "
                                            "credit does (main), which benchmarks/pouw/h1_prove/drawn.py runs",
+    "verity_vllm.protocols.pouw.h1.answers": "I1: the verifier of record's answers on a window's statements, each run once "
+                                             "as credit asks for it and shared by key by the steps that judge them "
+                                             "(Answers), which drawn.py check and pouw_piece.py period read",
     "verity_vllm.protocols.pouw.h1.receipts": "I1: served H1's receipt producer, the zy receipts serve-openai's "
                                               "--h1-receipts registers (Receipts) and its noise kernel, which PoUW's "
                                               "benchmarks time and gate",
+    "verity_vllm.protocols.pouw.pearl_c.served_y": "I1: Pearl+'s served y as a retained pass commits it, a call's real rows "
+                                                   "under its domain (y_domain, commit_y, retain_y) and on its device "
+                                                   "(DeviceTrees), which verify_run opens on each drawn tile",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.
@@ -435,6 +454,6 @@ def test_the_scan_sees_each_form_and_the_tree():
     got = {(s.module, s.name) for s in _sites_in("x.py", text)}
     assert got == {("verity_vllm.engine.handle", None), ("verity_vllm", "LLM"), ("verity_vllm.protocols", None),
                    ("verity_vllm.config", "_x"), ("verity_vllm.llm", None), ("verity_vllm.config", None), ("verity_vllm.llm", "LLM")}
-    assert ("benchmarks/specs/tests/test_engine_spec_presets.py", "verity_vllm", "EnginePin") in {(s.file, s.module, s.name) for s in sites()}
+    assert ("benchmarks/harness/specs/tests/test_engine_spec_presets.py", "verity_vllm", "EnginePin") in {(s.file, s.module, s.name) for s in sites()}
     assert not any(s.file.startswith(INTEGRATION) for s in sites())
     assert all((ROOT / f).is_file() for f in NOT_SCANNED)

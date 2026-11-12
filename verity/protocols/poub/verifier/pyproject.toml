@@ -6,7 +6,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # What the tests import of `verity`: the audit's codec, receipts and record, on the commitments, the randomness and the
 # profile; its coins on the one challenger, local and as a service.
-inputs = ["verity/__init__.py", "verity/errors.py", 
+inputs = ["verity/protocols/spot/device/coins.py", "verity/protocols/spot/verifier/one_stage/link_points.py",
+          "verity/__init__.py", "verity/errors.py",
           "verity/hardware/record.py",
           "verity/protocols/spot/verifier/profile.py", "verity/protocols/reporting.py",
           "verity/protocols/spot/verifier/__init__.py",
@@ -19,6 +20,8 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/spot/verifier/one_stage/verdict.py",
           "verity/circuits", "verity/commitments",
           "verity/commitments/crypto", "verity/commitments/randomness",
+          # the core's monitoring periods, which `monitoring` reads through PoUS's `wipe_monitoring`
+          "verity/periods",
           # PoUS's setup, P2 and vk, which a P2 store is under (`p2.py`)
           "verity/protocols/pous",
           "verity/protocols/pous/prover",

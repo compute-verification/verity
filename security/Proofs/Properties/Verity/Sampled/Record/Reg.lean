@@ -45,7 +45,7 @@ open Properties.Spot.SecurityProofs (layout_ok units_eq popUnits strataOf_perm p
   throw_bind_ne nat_toJson derive_bounds derive_ok deriveWork_ok)
 open private split1 digits from Spot.Select
 
-theorem strataSizes_slotPartition (l : _root_.Spot.Slots.Layout) :
+theorem strataSizes_slotPartition (l : _root_.Spot.Slots.SlotOrder) :
     strataSizes ((_root_.Properties.Spot.slotPartition l).classes.headD []) =
       (l.classes.toList.headD #[]).toList.map Array.size := by
   unfold _root_.Properties.Spot.slotPartition strataSizes
@@ -54,7 +54,7 @@ theorem strataSizes_slotPartition (l : _root_.Spot.Slots.Layout) :
 
 /-- **v2's slots are two classes**: the population in the registration's strata, whose sizes are those of the first
 class of the registration's layout `l`, and the input class, at most one stratum. -/
-theorem partSlots_classes (A : Live) {p : _root_.Spot.Program} {l : _root_.Spot.Slots.Layout}
+theorem partSlots_classes (A : Live) {p : _root_.Spot.Program} {l : _root_.Spot.Slots.SlotOrder}
     (hp : _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok p)
     (hl : _root_.Spot.Slots.layout p A.qr = .ok l) :
     ∃ pop ins, (partSlots A).classes = [pop, ins] ∧ ins.length ≤ 1 ∧
@@ -72,7 +72,7 @@ their verifier's program and its query is their verifier's, at the parameters wh
 the population. -/
 theorem regIs_of_setsUp (A : Live) {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]
     {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A) :
-    ∃ p, ParamsAt θ p ∧ p.base.verifier.query = A.qr ∧ lawAt p.base.verifier A.n = .ok A.law ∧
+    ∃ p, ParamsAt θ p ∧ p.base.verifier.query = A.qr ∧ lawAt p.base.verifier A.n = .ok A.design ∧
       _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok p.base.verifier.program := by
   obtain ⟨p, hp, -, -, hl, hd, hq, -⟩ := hsu.params
   exact ⟨p, hp, hq.symm, hl, hd⟩
@@ -156,7 +156,7 @@ theorem parseDesign_bernoulli (a b : ℕ) (hb : 0 < b) (hab : a ≤ b) :
 /-- **The population is `PopMatches`' count**: where the descriptor parses as `p` and `p`'s layout under the query is
 `l`, `PopMatches desc q n` makes `Partition.units p q` the count `n`. -/
 theorem units_of_popMatches {desc : Claims.Msg} {q : Json} {n : ℕ} {p : _root_.Spot.Program}
-    {l : _root_.Spot.Slots.Layout} (h : Flock.Bridge.PopMatches desc q n)
+    {l : _root_.Spot.Slots.SlotOrder} (h : Flock.Bridge.PopMatches desc q n)
     (hp : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p)
     (hl : _root_.Spot.Slots.layout p q = .ok l) : _root_.Spot.Partition.units p q = .ok n := by
   obtain ⟨rs, he, pop, rfl, hlays⟩ := layout_ok p q _ hl
@@ -391,11 +391,11 @@ theorem slotDesign_lawText {v : _root_.Spot.Registration.Verifier} {n : ℕ} {L 
       exact deriveLaw_congr _ _ _ (getD_law_of_kindOf hw (by decide)).symm (by rw [hnat]; exact nat_toJson k)
 
 /-- **v2's design at the law's text**: over the verifier's program and query of `A`'s population, where `lawAt` reads
-`A`'s law, the design under `law (lawText A.law)` is `designSlots A`. -/
+`A`'s law, the design under `law (lawText A.design)` is `designSlots A`. -/
 theorem slotDesign_designSlots (A : Live) {v : _root_.Spot.Registration.Verifier}
-    (hu : _root_.Spot.Partition.units v.program v.query = .ok A.n) (hl : lawAt v A.n = .ok A.law)
-    (hk : ∀ k, A.law = .subset k → 1 ≤ k) :
-    _root_.Properties.Spot.slotDesign (.law (lawText A.law)) v.program v.query v.workTable =
+    (hu : _root_.Spot.Partition.units v.program v.query = .ok A.n) (hl : lawAt v A.n = .ok A.design)
+    (hk : ∀ k, A.design = .subset k → 1 ≤ k) :
+    _root_.Properties.Spot.slotDesign (.law (lawText A.design)) v.program v.query v.workTable =
       .ok (designSlots A) :=
   slotDesign_lawText hu hl hk
 

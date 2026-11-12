@@ -23,6 +23,7 @@ import Proofs.Flock.Soundness.Discharge.Placed.Keyed
 import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.Soundness.Lowering
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
 
 /-!
 # `--zk` unit placements: each sampled proof block's `UnitPlace` from setupH's accept

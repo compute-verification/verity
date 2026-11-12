@@ -32,6 +32,7 @@ import pytest
 from verity.protocols.certifier.prover import ingress_scan as IS
 from verity.protocols.certifier.verifier import warden as W
 from verity.protocols.certifier.verifier.active import id_request
+from verity.protocols.certifier.verifier.blocks import SCAN_STATE
 from verity.protocols.certifier.verifier.certificate import Issuer, LmsSigner
 from verity.commitments.crypto import lms
 from verity_vllm.program.predict.window_circuit import WindowClass
@@ -130,6 +131,30 @@ def test_a_windows_state_rows_are_the_rows_of_the_scans_state_tree(serve_dir):
     for w, users in ((0, USERS[:3]), (1, USERS[3:])):
         rows, _ = PP.kept_scan(serve_dir, CLASS, users)
         assert [list(r) for r in rows] == IS.window_state(CLASS.scan, states, w * T, T)
+
+
+def test_the_scan_state_opening_is_the_registered_scan_state_the_scan_holds(serve_dir, tmp_path, monkeypatch):
+    """window-commit's `SCAN_STATE` (`window_rows.state_value` of the kept scan's rows, on NumPy, the reference)
+    opened whole, prover only (`prove_path.scan_state_opening`), is the tree ``scan_zk.py --v3c`` reads as its state:
+    `scan_zk.v3c_state` finds it at the registered entry's root and domain and holds its rows to the scan's; another
+    link-window's rows are refused by name."""
+    from verity_vllm.program.predict import window_circuit as WC, window_rows as WRS
+    from verity_vllm.protocols.pouw.h1 import registered as H1R
+
+    monkeypatch.setattr(H1R, "MODE", "numpy")
+    with PP.network_traces():
+        import scan_zk as SZ
+    rows, _ = PP.kept_scan(serve_dir, CLASS, USERS[:3])
+    run = "ab" * 64
+    value = WRS.state_value(WC.NAME, CLASS, rows, hashlib.sha512(b"committer").digest()[:32], 0, window=run)
+    path = PP.scan_state_opening(value, tmp_path)
+    assert path == tmp_path / SZ.SCAN_STATE_FILE and path.stat().st_mode & 0o777 == 0o600
+    rec = {"window": {"run": run, "activations": {"program": WC.NAME, "values": {SCAN_STATE: value.entry()}}}}
+    held = SZ.v3c_state(tmp_path, rec, [list(r) for r in rows])
+    assert (held.root.hex(), held.domain.domain_id.hex()) == (value.entry()["root"], value.entry()["domain"])
+    late, _ = PP.kept_scan(serve_dir, CLASS, USERS[3:])
+    with pytest.raises(SystemExit, match=r"rows \[.*\] aren't the scan's .* it scanned another warden run or link-window"):
+        SZ.v3c_state(tmp_path, rec, [list(r) for r in late])
 
 
 def test_a_window_the_kept_run_doesnt_give_is_refused_by_name(serve_dir, tmp_path):
