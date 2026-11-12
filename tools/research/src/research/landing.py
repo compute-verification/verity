@@ -209,6 +209,31 @@ def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None 
     return {"dir": d, "pid": p.pid}
 
 
+#: a quick tier's launch job (`quick_launch`): a worktree of its commit in its directory, the `research run` there, the worktree
+#: removed once the run has shipped it, and `RUN <id>` (`RUN_RE`, which `launched` reads) once the run registered
+QUICK_JOB = ('t=$1 c=$2 rid=$3; shift 3; git worktree add -q --detach "$t/tree" "$c" || exit; (cd "$t/tree" && "$@"); rc=$?; '
+             'git worktree remove --force "$t/tree"; rm -rf "$t"; git worktree prune; [ "$rc" = 0 ] && echo "RUN $rid"; exit "$rc"')
+#: how long a candidate's quick tier waits for a check slot, and runs in one
+QUICK_WAIT_S, QUICK_RUN_S = 3600, 3 * 3600
+
+
+def quick_launch(repo: Path, commit: str, base: str, machine: str, auth: tuple[str, ...] = ()) -> dict:
+    """The quick tier of candidate ``commit`` since ``base`` (`queue.QUICK_TIER`, as `research queue ready` runs it remotely:
+    `queue.quick_run`) launched detached (`detach`) as a `research run` on ``machine``, in a `--priority` check slot there, from
+    a worktree of ``commit`` of its own: the record `launched` reads, whose `RUN` line names the run."""
+    from . import runs as R
+    from .queue import quick_run
+
+    root = Path(tempfile.gettempdir()) / LAUNCHES
+    root.mkdir(parents=True, exist_ok=True)
+    t = tempfile.mkdtemp(prefix="quick-", dir=root)
+    rid = R.new_run_id()
+    argv = quick_run(rid, machine, Path(t) / "tree", commit, base, by="ci", wait_s=QUICK_WAIT_S, timeout_s=QUICK_RUN_S,
+                     priority=True)
+    env = {**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0"}
+    return detach(repo, ["sh", "-c", QUICK_JOB, "sh", t, commit, rid, *argv], env)
+
+
 def _epoch(ts: object) -> float | None:
     """A UTC timestamp (`YYYY-MM-DDTHH:MM:SSZ`) as seconds since the epoch, None when it isn't one."""
     try:
@@ -788,6 +813,9 @@ class Landing:
                                                         detached=True, rank=POSTLAND_SLOT_RANK,
                                                         bookkeeping_warn=takes_bookkeeping(repo)))
             if launch is train_launch else (lambda repo, commit, machine: self.launch(repo, commit, machine, False)))
+        #: a candidate's quick tier (`vqueue_slim.start_quick`): `quick_launch`, detached
+        self.launch_quick: Callable[[Path, str, str, str], tuple[list[str], str] | dict] = (
+            lambda repo, commit, base, machine: quick_launch(repo, commit, base, machine, auth=q.auth))
         #: what a detached launch has printed so far (`launched`, `_resolve`)
         self.launched: Callable[[dict], tuple[list[str] | None, str]] = launched
         if launch is train_launch:

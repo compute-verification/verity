@@ -77,11 +77,12 @@ from dataclasses import replace
 from pathlib import Path
 from typing import NamedTuple
 
+from . import quick_tier
 from .landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, KILLED_SAYS, LAUNCH_LOST_S, LEAN_AUDIT_RE, LEAN_STEP,
                       PLAN_WAIT_S, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Landing, _epoch, _step_log,
                       _suite_log, implicated, killed, lean_errors, not_run, shard_machines, shard_passed, shard_steps, step_named,
                       step_paths, step_records, suite_named, suite_pyproject, suite_rows, tree_root)
-from .queue import _SUMMARY_RE, CHECK_STEPS, KEY_COMMAND, QueueError, _git
+from .queue import _SUMMARY_RE, CHECK_STEPS, KEY_COMMAND, QueueError, _git, allowed, judge_report, tier_report
 from .reds import named
 from .store.fixtures import REPLICA_MAP, entries
 from .vqueue import FAIL, INFRA, KINDS, LIST_FAILED, PASS, PENDING, STATES, Failed, Verdict, meets
@@ -115,6 +116,9 @@ FIXTURES_CODE = "tools/research/src/research"
 KEY_TAG = "verity-vqueue-slim-step/v1"
 #: a record's ``gate`` when its run is the check that gates (`start` with ``shards``)
 CHECK = "check"
+#: the record of a candidate's quick tier (`start_quick`), which gates a plain one where the land verdicts gate
+#: (`vqueue_loop.VERDICT_GATE`); its suites are pytest's, so its failures are that step's
+QUICK, QUICK_STEP = "quick", "pytest"
 #: `start`'s ``shards`` naming N shards of an auto plan of the candidate's tree
 AUTO_SHARDS = re.compile(r"auto:([1-9]\d*)")
 #: lean-audit's own failures of no package, in its log
@@ -392,6 +396,68 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     return rec if _go(driver, rec, go, gone) is None else None
 
 
+def start_quick(driver: Landing, sha: str, base: str) -> dict | None:
+    """Launch candidate ``sha``'s quick tier since ``base`` (`Landing.launch_quick`: `queue.QUICK_TIER` on its own merge, as a
+    `research run`) on one of the queue's machines, the one its sha picks, so a start again takes the same one.  The record to
+    keep: ``ids`` (none while its detached launch runs, ``launch`` then), ``tip``, ``base``, ``at``, ``on``, ``steps``
+    (`QUICK_STEP`) and ``gate`` (`QUICK`), which `judge` reads by `_quick`.  None, logged, when it registered no run or
+    ``driver`` launches nothing (a dry run, or its queue's shadow)."""
+    if not driver.on:
+        raise ValueError("a candidate's quick tier needs the queue's machines: build the Landing with drive.toml's `on`")
+    ms = driver.on.split(",")
+    on = ms[int(sha[:8], 16) % len(ms)]
+    what = f"the quick tier of candidate {sha[:12]} since {base[:12]} on {on}"
+    if driver.dry_run or driver.q.shadow:
+        driver.q.log(f"research queue vqueue: would launch {what}")
+        return None
+    got, tail = driver._started(driver.launch_quick(driver.repo, sha, base, on))
+    if got is None:
+        driver.q.log(f"research queue vqueue: {what} registered no run: {tail}")
+        return None
+    driver.q.log(f"research queue vqueue: {what}: {' '.join(got['ids']) or 'launching'}")
+    return {**got, "tip": sha, "base": base, "at": driver.now(), "on": on, "steps": [QUICK_STEP], "gate": QUICK}
+
+
+def _quick(driver: Landing, rec: dict) -> Verdict:
+    """The verdict of the quick tier `start_quick` recorded in ``rec``: pending while it launches or runs, or its records can't
+    be fetched yet; once it ended, its result.json judged as `research queue ready` judges the remote tier
+    (`queue.judge_report`, each failure an allowance at ``base`` covers counting as passed): pass; fail, ended, when only suites
+    failed, one `Failed` of step `QUICK_STEP` as the check's (`read_suite` of each, what it declares at the candidate,
+    `suite_reads`), so `vqueue.decide` reads it as it reads the check's; infra when it registered no run, was lost, never ran
+    or ended without its facts (`queue.tier_report`), or failed on what no suite says (a Lean build, a checkout not at it)."""
+    tip, base = rec["tip"], rec["base"]
+    if (tail := driver._resolve(rec, f"the quick tier of candidate {tip[:12]}")) is not None:
+        return _keep(rec, _down(rec, f"registered no run: {tail}"))
+    if "launch" in rec:
+        return Verdict(PENDING)
+    if not (ids := rec["ids"]):
+        return _keep(rec, _down(rec, "registered no run"))
+    states = driver.states(driver.repo, ids)
+    if driver._lost(rec, states):
+        return _keep(rec, _down(rec, "was lost"))
+    st, rc, *_ = states.get(ids[0]) or ("unknown", None)
+    if st in ACTIVE:
+        return Verdict(PENDING)
+    if (got := driver.fetch(ids[0], ["result.json"])) is None:
+        return Verdict(PENDING)
+    status, on = {"state": st, "rc": rc}, rec.get("on") or driver.on
+    res, why = tier_report(got[0], ids[0], on, status)
+    if why is not None:
+        return _keep(rec, _down(rec, f"{why}"))
+    covers = allowed(driver.repo, base)
+    if (why := judge_report(res, ids[0], on, tip, status, covers)) is None:
+        return _keep(rec, Verdict(PASS), [QUICK_STEP])
+    tier = res.doc.get("tier") or {}
+    rows = [r for r in tier.get("rows") or () if isinstance(r, dict) and r.get("status") == "failed"
+            and not (covers is not None and covers(r))]
+    if not rows or quick_tier.judge({**tier, "rc": 0}, tip) is not None:
+        return _keep(rec, _down(rec, f"failed on what no suite says: {why}"))
+    k = key(driver.repo, tip, QUICK_STEP) or f"{tip}:{QUICK_STEP}"
+    parts = [read_suite(r.get("name") or r.get("suite") or ".", r, "", unnamed(k),
+                        *suite_reads(driver.repo, tip, r.get("suite") or ".")) for r in rows]
+    return _keep(rec, Verdict(FAIL, (_failure(QUICK_STEP, k, key(driver.repo, base, QUICK_STEP), parts),), ended=True), [])
+
+
 def _go(driver: Landing, rec: dict, go: dict, gone: list[str]) -> str | None:
     """Launch what `start` made ``go`` of into ``rec`` (``at`` then): an auto plan's job (``plan``), each shard of ``n``
     (`_launch`), or one run, each launch naming ``rec``'s ``carry`` (`_carrying`), the shard that audits `HEAVY_PART` (the
@@ -537,6 +603,8 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
         return _kept(rec["verdict"])
     if "wait" in rec:
         return _waited(driver, rec)
+    if rec.get("gate") == QUICK:
+        return _quick(driver, rec)
     tip, check = rec["tip"], rec.get("gate") == CHECK
     what = f"the run of {', '.join(rec['steps'])} " + (f"as candidate {tip[:12]}'s check" if check else
                                                       f"beside candidate {tip[:12]}'s check")

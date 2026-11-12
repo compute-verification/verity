@@ -5318,9 +5318,9 @@ def test_the_gate_is_graph2_unless_the_command_says_check_which_needs_the_run_be
     with pytest.raises(SystemExit):
         Q.main(["vqueue", "--help"])
     said = " ".join(capsys.readouterr().out.split())
-    assert all(o in said for o in ("--gate {graph2,check}", "--shards", "--on", "(default 3)", "or auto:N")), said
+    assert all(o in said for o in ("--gate {graph2,check,verdict}", "--shards", "--on", "(default 3)", "or auto:N")), said
     loop = Loop(None, tmp_path / "log")
-    assert (loop.gate, loop.shards, L.GATES) == ("graph2", 3, ("graph2", "check")) and vqueue_slim.CHECK == L.CHECK_GATE
+    assert (loop.gate, loop.shards, L.GATES) == ("graph2", 3, ("graph2", "check", "verdict")) and vqueue_slim.CHECK == L.CHECK_GATE
     assert L.main(["--gate", "check", "--no-slim", "--shadow", "--once"]) == 1
     assert "neither --no-slim nor --shards below 1" in capsys.readouterr().err
     with pytest.raises(ValueError, match="a gate is one of graph2, check"):

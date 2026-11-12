@@ -3784,6 +3784,27 @@ def _launch(argv: list[str], cwd: Path) -> subprocess.CompletedProcess:
     return subprocess.run(argv, cwd=cwd, capture_output=True, text=True)
 
 
+def quick_run(rid: str, on: str, wt: Path, at: str, base: str, *, merged: str | None = None, audit: list[str] | None = None,
+              by: str = "", project: str = "verity", wait_s: float = REMOTE_WAIT_S, timeout_s: float = REMOTE_TIMEOUT_S,
+              pool: str = "", priority: bool = False) -> list[str]:
+    """The `research run` of the quick tier at ``at`` (``wt``, a checkout of it, its `--source`) since ``base`` as run ``rid`` on
+    machine ``on`` (`RemoteQuickTier`): in a check slot of the machine (of its ``pool``'s), a `--priority` one with
+    ``priority``, waiting `wait_s` for it and running `timeout_s` in it; ``merged``, the PR head when ``at`` is its merge onto
+    ``base``; ``audit``, `LEAN_AUDIT` when it audits (`lean_audit`)."""
+    slot = (["env", f"CHECK_SLOTS={POOL_SLOTS.format(pool=pool)}"] if pool else []) + list(SLOT)
+    job = Path(quick_tier.__file__)
+    args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", at, "--base", base,
+            *(["--merged", merged] if merged else []), *(["--lean-audit", shlex.join(audit)] if audit else []),
+            "--", *QUICK_TIER]
+    opts = [*(["--priority"] if priority else []), *(["--by", by] if by else []), "--wait-max", f"{wait_s:g}",
+            "--run-max", f"{timeout_s:g}"]
+    return [sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", project,
+            "--source", str(wt), "--cwd", "source", "--send", str(job), "--require-result",
+            "--timeout", f"{wait_s + timeout_s:g}", "--custody-ttl", str(math.ceil(wait_s + timeout_s + REMOTE_GRACE_S)),
+            "--declared-output", "out/*", "--", *slot, *opts,
+            "--", "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/{job.name}" {shlex.join(args)}']
+
+
 class RemoteQuickTier(QuickTier):
     """The quick tier as a `research run` on machine ``on`` (`auto` or `M1,M2`: the one `place` picks when the tier starts): a
     worktree of its own (`WORKTREE_SUFFIX`), checked out and cleaned as `QuickTier` does, is the run's `--source`, and the worktree's
@@ -3819,21 +3840,12 @@ class RemoteQuickTier(QuickTier):
                 return NotStarted(f"--on {on}: {why}")
             print(f"research queue: --on {on}: {got}: {why}", flush=True)
             on, _, pool = got.partition(":")
-        slot = (["env", f"CHECK_SLOTS={POOL_SLOTS.format(pool=pool)}"] if pool else []) + list(SLOT)
-        job = Path(quick_tier.__file__)
         rid = R.new_run_id()
         try:
             with self._checkout(pr) as (wt, at, base):
-                audit = lean_audit(self.repo, base, at)
-                args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", at, "--base", base,
-                        *([] if at == pr.head else ["--merged", pr.head]), *(["--lean-audit", shlex.join(audit)] if audit else []),
-                        "--", *QUICK_TIER]
-                opts = [*(["--by", self.by] if self.by else []), "--wait-max", f"{self.wait_s:g}", "--run-max", f"{self.timeout_s:g}"]
-                r = self.launch([sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", self.project,
-                                 "--source", str(wt), "--cwd", "source", "--send", str(job), "--require-result",
-                                 "--timeout", f"{self.wait_s + self.timeout_s:g}", "--custody-ttl", str(math.ceil(self.wait_s + self.timeout_s + REMOTE_GRACE_S)),
-                                 "--declared-output", "out/*", "--", *slot, *opts,
-                                 "--", "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/{job.name}" {shlex.join(args)}'], wt)
+                r = self.launch(quick_run(rid, on, wt, at, base, merged=None if at == pr.head else pr.head,
+                                          audit=lean_audit(self.repo, base, at), by=self.by, project=self.project,
+                                          wait_s=self.wait_s, timeout_s=self.timeout_s, pool=pool), wt)
         except TierRefused as e:
             return str(e)
         if r.returncode:
