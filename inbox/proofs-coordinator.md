@@ -87138,3 +87138,64 @@ What stops it now, and nothing else that I know of:
 - Whether the close against #9199 runs: written from the two hunks, not run.
 
 **Runs out:** `r20261112-114752-62d1` (plain records at `3d2014b73969`), `r20261112-115707-fb43` (the suites that read the locks, at `3d2014b73969`). Resume me when they end and I confirm the ready line or say what failed.
+
+## CROSSCLOSE, Thu 12 Nov 12:06Z: #9112 is on `main` (`c330688b9582`) and `f58b4a3ef6e9` closes its two files there; three moved heads have closes (#9075 `1d9bf7eaa19e`; #9234 `b7fb9c30eab1`, with #9253 `fed2063c5d79`); your joined line elaborates (`9bb1` exit 0) and is the line #9234's owner wrote; `aa34` will not end before its timeout
+
+Landing branch `cursor/proofs-landing-closes-99d1` is at `fed2063c5d79e01906e69d826f6356aed93f2a6e` (three commits past `b58ece80e982`, nothing rewritten).
+
+**1. `main` moved twice (`33866d93e66e`, then `c330688b9582`); the merge branch is still `f3837f57d113`.**
+- [run] `git merge-tree` of the two tips at 12:00Z: 24 stops, the 23 plus `verity/protocols/spot/optimize.py` (#9112, landed as `862a214346`). Ours are now seven.
+- [run] `f58b4a3ef6e9` closes `optimize.py` and `test_optimize.py` on this `main` as it is: `main`'s `optimize.py` is #9112's head's byte for byte (blob `a540e748eb0e`) and `main`'s `test_optimize.py` (blob `f15f47dc0e20`) is what `33faab2be81c` + #9112 gave, the tree the close was cut on. In the new merge each file has one stop, and every line outside it is the close's (script over the merge's file with the stops cut out: 0 lines absent from the close).
+- [run] local, on the new closed merge `9325cc226ee3` (tip `f3837f57d113` + `main` `c330688b9582`, ours closed, vllm's by path): `test_optimize.py` not-slow 57 passed.
+- [derived] `43aee125f46c` (`test_optimize.py` without #9112) serves only a merge with `main` before `862a214346`, so today's `33faab2be81c` keeps it; from `862a214346` on lean takes `f58b4a3ef6e9`'s two paths. In your 14:00Z table that row turns to "on `main` now: yes".
+- [run] our other closed files (`a5.py`, `test_a5_wiring.py`, `whole_run.py`, spot's `test_difftest.py`, spot's README, `FlockVerify.lean`, PoUS's `TRUSTED.sha256`) are byte for byte the same on `main` at `33faab2be81c` and `c330688b9582`, so `d22d1644ce14`, `6248c84064e7`, `5a04c87c6ee8`, `494bd85fb553`, `a8c9ac795709`, `b58ece80e982`, `01dea4d2566f` stand.
+
+**2. #9253's close `b58ece80e982`, so far.** [run] `r20261112-111406-9949` (trial `17d309af0476`): tries of `FlockVerify.lean`, `Flock/VerifyMembers.lean`, `Flock/CircuitRead.lean`, `Flock/ProgramRead.lean` exit 0; `test_lean_verify_members.py`, `test_lean_registered_reads.py`, `test_lean_plain_tree.py` with the fixture exit 0; the overlong test exit 0; suites 7 passed, none failed, of 63, on a slot of two processes. That is every step `a8c9ac795709` was checked by except the rest of the suites.
+
+**3. The joined line (your item 4) is [run] now, and the owner wrote it.** `r20261112-111553-9bb1` done exit 0: tries of `FlockVerify.lean`, `Flock/ProvedScope.lean`, `Flock/Test/ProgramHeld.lean` exit 0 and the three flock prover tests exit 0 on `let handed := program.map read.digest`. [read] #9234's new head `95fe2956f926` merged #9190's head `f6d1341b85` and `main`, and its line 1105 is that line, comment included.
+
+**4. #9234 `95fe2956f926` now holds #9190, so it stops against lean's tip where #9190 does** (`FlockVerify.lean`, the same two places). Which close serves which order:
+
+| in the merge | `FlockVerify.lean` from | lines | over 2000, with `HmRow.lean`'s 700 |
+|---|---|---|---|
+| #9190 | `a8c9ac795709` | 2015 | 715 |
+| #9190, #9253 | `b58ece80e982` | 2016 | 716 |
+| #9190, #9234 | `b7fb9c30eab122b823123d9b36eccfe3e56299b7` | 2017 | 717 |
+| #9190, #9253, #9234 | `fed2063c5d79e01906e69d826f6356aed93f2a6e` | 2018 | 718 |
+
+- [run] `b7fb9c30eab1`'s file is `a8c9ac795709`'s plus exactly #9234's own change to the file (the two diffs' changed lines are equal), the two stops resolved as `a8c9ac795709` resolved them.
+- [run] with #9253 in under `b58ece80e982`, #9234's head merges with no stop; `fed2063c5d79` is that merge's file, byte for byte the file `9bb1` tried. Lean needs it only if it takes paths instead of merging the heads in order.
+- [run] local: `test_no_long_module_grows` passes on both trials (cap 725).
+- [run] `r20261112-114014-0008` (trial `8e447e75b6f9`: closed merge `520cd3a182ca` + #9234 with `b7fb9c30eab1`'s file + #9199 `7a528d6b1c01` + #9215 `205129204ded`): eight tries exit 0 (`FlockVerify.lean`, `Flock/ProvedScope.lean`, `Flock/VerifyMembers.lean`, `Flock/Test/ProgramHeld.lean`, `Spot/SecondWires.lean`, `Spot/MembersRefusal.lean`, `Spot/ZkMain.lean`, `Spot/DifftestMain.lean`), the three flock prover tests, `test_a5_wiring.py` + `test_server_rate.py` and the overlong test exit 0; suites 31 passed, none failed, of 74.
+- [run] `r20261112-114103-c21e` (trial `66bd6dccd78b`, all three in): six tries exit 0, the three flock prover tests and the overlong test exit 0; suites 3 passed, none failed, of 63.
+- [run] `bece` (the old heads of #9234 and #9199) cancelled by me as superseded; it had six tries exit 0 and 7 suites passed, none failed.
+
+**5. #9075 `aa874cd26b1e` now holds #9116's head `3a580254f8bf`, so it stops where #9116 does** (spot's `test_difftest.py`, `PIECE_RUNS`).
+- Close `1d9bf7eaa19eddccd9ae5261c5302c0942d31138` (blob `07b08a1d7864`): [run] `494bd85fb553`'s file plus exactly #9075's own change to it; `PIECE_RUNS` is `494bd85fb553`'s, 47 entries, none twice. With #9116 alone in, `494bd85fb553` still serves; the #9116 × #9075 stop between heads is gone.
+- [run] `r20261112-113659-0233` (trial `21f0776b8d8d` on closed merge `520cd3a182ca`): tries of `Spot/Pieces.lean`, `Spot/Run.lean`, `Spot/SecondStage.lean`, `Spot/SecondStageExamples.lean` exit 0; the difftest selection (`pop_order or public_units or link_points or replay_block_returns or token_select or names_of_what_a_replay or returned_output`) exit 0; `test_served_select.py` + `test_two_stage.py` not-slow exit 0; suites 6 passed, none failed, of 71.
+
+**6. The other heads at 12:00Z against the closed merge `9325cc226ee3` and `main`.**
+- [run] no stop against either: #9185 `5a4b6dc7102b` (its two files are on `main` with #9112), #9087 `f7fdbacb3fa4` (new: its owner merged #9185's head), #9199 `7a528d6b1c01` (new), #9173, #9081, #9178, #9149, #9220, #9202, #9215.
+- [run] stop against `main` itself since #9112 landed, theirs to merge: #8950 (`benchmarks/spot_figures/breakeven/headline.py`), #9091 (`benchmarks/spot_figures/README.md`, `total_cost.py`, `tests/test_total_cost.py`). #9091's pin close `01dea4d2566f` gets rechecked on its next head.
+- [run] stop against the closed merge only, closed: #9116 → `494bd85fb553`; #9075 → `1d9bf7eaa19e`; #9190, #9253, #9234 → the table in 4; #9091 → `01dea4d2566f`.
+
+**7. By name: the pass missed one real hit, another owner's and already closed; the script now sees its kind.**
+- [run] `aa34`'s vllm suite: `TypeError: weights_tree() takes 4 positional arguments but 5 were given`, three tests of `adapters/vllm/tests/pipeline/test_serving_rows_served_experts.py`. `main`'s `adapters/vllm/tests/pipeline/served_experts.py:240` (#8961) calls `step_rows.weights_tree(geo, names, step_rows.names_digest(names), roots, wk)`, and the crossed line drops `names_digest` from `weights_tree`. No stop.
+- [read] @vllm, `adapters/vllm/tests/pipeline/served_experts.py`: closed by their `76d4f89516` on `cursor/vllm-remote-closes2-5879`. My closed merges from `ff29cb8aa1be` on hold it; `aa34`'s tree `e7343acc7c0d` is older.
+- [derived] why the pass missed it: it looked for a removed parameter by its keyword, and a positional call names nothing. It now lists every function whose positional list is no longer an extension of the old one (lean's side: 36; `main`'s: 27) and each call of one in the added lines.
+- [run] rerun both ways over `main`'s added lines and all 18 heads: that one hit and no other. Read and false: `I.Registered({...}, reads=...)` in `test_a5_wiring.py` (one positional argument), `P.check` and `SS.check` (other modules' `check`), `rss`, "Session" in a docstring, `.split`, `math.comb`. The three moved heads: #9075 0 candidates, #9234 1 false (`rss`), #9199 3 false.
+
+**8. Failures in the runs, none in a file of ours.**
+- @memory-accounting, `tools/verity/check/public_boundary.toml`: `tests/test_public_boundary.py::test_no_public_file_needs_one_the_export_does_not_copy` fails in `aa34`, `fc27`, `7b52`, `02ef`. [read] my stand-in keeps `"verity/protocols/poub/verifier/commitments/gates"`, which `main`'s side of that stop removes; the stand-in's, not a meet.
+- @memory-accounting, `verity/protocols/pous/verifier/tests/test_pous_wipe_monitoring.py`: 5 failed in `7b52`, `02ef`, my stand-in again (as in `1243`).
+- @vllm, `serve_openai.py` (`main` 151 lines) and `dead_code_keep.json`: in the runs on `e7343acc7c0d`, closed by vllm's `7e9dea87f792` and `0a8d2b647b9` since.
+- `02ef`'s `verity-network-traces` ("read files outside its inputs", `benchmarks/spot_figures/second_stage.py`): [read] #9091's old head `d8afb6b2724c`; its head `6227b8397518` lists the file.
+- `7b52`'s `benchmarks/spot_figures` is the #9185 × #9087 test of item 5 at 10:54Z; #9087's new head is its owner's answer, untried by me yet.
+
+**9. Runs.**
+- `r20261112-094921-aa34` (closed merge `e7343acc7c0d`, `main` `33faab2be81c`): [run] the four selections exit 0 (`test_optimize.py` 55, `test_a5_wiring.py` 6, `test_mains.py` 9, the difftest selection 6); suites 29 passed, 2 failed (`repository` and `verity-vllm`: item 8's first, third and item 7's), of 126. [derived] it runs on a slot of two processes: 31 suites in 131 min, so it stops at its timeout (13:27Z) with about a third done; my 12:45Z was wrong. I launch the suites it has not reached in parts on `9325cc226ee3` now and name the runs in the next entry.
+- `r20261112-095455-fc27` (`f58b4a3ef6e9`'s files, #9112 + #9185 on `e7343acc7c0d`): the three selections exit 0; suites 51 passed, 2 failed (`repository`, `verity-vllm`: item 8's), of 60.
+- `r20261112-101406-7b52` (group A): 45 passed, 4 failed (item 8), of 77. `r20261112-101506-02ef` (group B): 62 passed, 4 failed (item 8), of 73.
+- `9949`, `0233`, `0008`, `c21e`: above. All four run on slots of two to four processes; none ends before 13:30Z at this rate.
+
+No open choice. Next entry: the 13:30Z table.
