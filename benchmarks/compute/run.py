@@ -63,11 +63,23 @@ answer's, or the run left no answer) and 2 when the command line, the run or its
 withdrawn whole, or in a part that holds a file read here, is refused before any of it is fetched; a withdrawal of
 other files of it is printed beside the number. Under `research run` the printed document is also `$OUT/compute.json`;
 there the evidence store is read with the run's `--store-read` key.
+
+Through the harness kit's writer (`verity_bench.kit`) it also writes the run directory's `result.json` under `research run`,
+and `$OUT/result.json` outside one where `OUT` is set, with the
+fields every resource's benchmark reports (`amounts`), each stamped with this run and its commit and computed from the
+recorded run: the metric (the printed number, its unit and target), the verified MACs (the credit), the capacity and
+the free MACs at each data-sheet reading, and the error beside them (the answer's δ_s, sampling's alone). Their names
+are every resource's: `metric`, `verified`, `capacity`, `free` and `error`. A reading is a clock of a
+registered device's card file (`clock.tensor`, `clock.sm`; `verity.hardware.cards`), capacity the registered devices'
+peak e4m3 MACs a second at that clock times the run's span (`capacity`), and free capacity less verified. A recorded
+run's record holds no registration of its hardware and no span the verifier holds its passes to, so capacity and free
+are written as one entry each, with no value and why.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 from collections.abc import Callable
@@ -75,6 +87,9 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from verity.hardware import cards
+from verity.hardware.site import Site
+from verity_bench import kit
 from verity_config.settings import SHARED
 
 UNIT = "share of the served model's MACs that Pearl+ credits, over the tokens served"
@@ -104,6 +119,14 @@ ABSENT = ("absent: a Pearl+ answer holds its passes to no seconds, and the secon
           "developer's node")
 #: what the answer's ε and δ leave out, printed beside them
 SAMPLING_ALONE = "sampling's alone: the assumption's gap and δ, and binding, are not in them"
+#: the data sheet's readings of a device's peak, each a clock of its card file (`clock.tensor`, `clock.sm`)
+READINGS = ("tensor", "sm")
+#: the operand format of the MACs Pearl+ credits
+FORMAT = "e4m3"
+NO_SITE = "the run's record holds no registration of its hardware: no site entry naming its devices and their sheets"
+NO_SPAN = ABSENT.removeprefix("absent: ")
+DELTA_S = ("probability that a sample that accepts misses more than the share ε_s of the credited MACs: the answer's δ_s, "
+           "sampling's alone (the assumption's gap and δ, and binding, are not in it)")
 #: how the store ends the reason of a withdrawal of only the files under some prefixes of a record
 SCOPED = re.compile(r" \(only ([^()]+)\)$")
 
@@ -367,6 +390,52 @@ def document(tree: Path, commit: str | None, run: str | None, withdrawn: list[st
             "tokens": served["tokens"], "tokens_from": "class", "wall_s": None, "capacity_share": None}
 
 
+def capacity(site: Site, span_s: Fraction) -> dict[str, int]:
+    """The registered hardware's MACs over `span_s` seconds at each data-sheet reading (`READINGS`): each registered
+    device's peak `FORMAT` MACs a second at its card's clock of that reading (`verity.hardware.cards.rate` on the card
+    file of its sheet's SKU), summed over the devices, times the span, rounded up. `Unreadable` where the site registers
+    no device, or a device names no registered sheet or an SKU with no card file."""
+    if not site.units:
+        raise Unreadable("the registered hardware holds no device")
+    total = dict.fromkeys(READINGS, Fraction(0))
+    for d in site.units:
+        if (sheet := site.sheet(d)) is None:
+            raise Unreadable(f"the registered device {d} names no registered sheet")
+        try:
+            card = cards.load(sheet.sku)
+        except KeyError as e:
+            raise Unreadable(f"the registered device {d}'s SKU has no card file: {e}") from e
+        for r in READINGS:
+            total[r] += cards.rate(card, fmt=FORMAT, mhz=card["clock"][r]["value"]) * span_s
+    return {r: math.ceil(v) for r, v in total.items()}
+
+
+def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None) -> list[dict]:
+    """The result a document `doc` gives in the fields every resource's benchmark reports, as the kit writer's
+    measurements: the metric (`metric`, the printed number in its unit, beside its target), the verified amount
+    (`verified`, the credited MACs), at each data-sheet reading the capacity (`capacity at clock.tensor`, ..., from the
+    registered hardware `site` over the run's span `span_s`) and the free amount (`free at ...`, capacity less verified),
+    and the probability the verified amount holds except with (`error`, the answer's δ_s, which its `inputs` name).
+    Where `site` or `span_s` is None, capacity and free are one entry each, with no value and why. Each is computed from
+    the recorded run."""
+    inputs = [doc["run"]] if doc["run"] else []
+    verified = doc["credited_macs"]
+    out = [{"name": "metric", "value": doc["value"], "unit": doc["unit"], "target": doc["target"],
+            "verdict": "at or above target" if doc["met"] else "below target", "inputs": inputs},
+           {"name": "verified", "value": verified, "unit": "MAC", "inputs": inputs}]
+    if site is None or span_s is None:
+        why = "absent: " + "; and ".join(w for w, x in ((NO_SITE, site), (NO_SPAN, span_s)) if x is None)
+        out += [{"name": x, "value": None, "unit": "MAC", "inputs": inputs, "why": why} for x in ("capacity", "free")]
+    else:
+        for r, c in capacity(site, span_s).items():
+            out += [{"name": f"capacity at clock.{r}", "value": c, "unit": "MAC", "inputs": inputs},
+                    {"name": f"free at clock.{r}", "value": c - verified, "unit": "MAC", "inputs": inputs}]
+    delta = doc["delta_s"]
+    out.append({"name": "error", "value": None if delta is None else float(Fraction(str(delta))), "unit": DELTA_S,
+                "inputs": [*inputs, "delta_s"], **({"why": "the answer states no δ_s"} if delta is None else {})})
+    return out
+
+
 def commit_of(attempt: dict) -> str | None:
     source = attempt.get("source") or {}
     return f"{source['commit']}-dirty" if source.get("commit") and source.get("dirty") else source.get("commit")
@@ -454,6 +523,7 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
         ap.error("--uncredited and --top go with --per-call")
     try:
         doc = from_run(store_of(), a.run, a.per_call, a.uncredited, a.top)
+        measured = amounts(doc)
     except NoNumber as e:
         print(f"compute: no number: {e}", file=sys.stderr)
         return 1
@@ -466,6 +536,9 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
     if out := SHARED.OUT:
         Path(out).mkdir(parents=True, exist_ok=True)
         (Path(out) / "compute.json").write_text(line + "\n")
+        writer = kit.writer(out)
+        for m in measured:
+            writer.measurement(**m)
     return 0
 
 

@@ -8,9 +8,10 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 
 | arm | its change | parent |
 |---|---|---|
-| `compiled` | stock vLLM: torch.compile and CUDA graphs, chunked prefill, prefix caching, async scheduling | — |
+| `compiled` | stock vLLM, its defaults: CUDA graphs, with torch.compile on the architectures vLLM compiles (not those it captures breakable CUDA graphs for, GLM-5.3's among them), chunked prefill, prefix caching, async scheduling | — |
 | `compiled-again` | nothing: stock in a second server lifetime, for what two starts of one engine differ by | `compiled` |
 | `no-prefix-cache` | `--no-enable-prefix-caching` | `compiled` |
+| `published` | the server started as vLLM's recipe for the model starts it (`Model.published`): the recipe's flags, its speculative decoding among them, the job's context limit or else the recipe's, and vLLM's own limit on the requests it runs at once in place of the runner's 256 | `compiled` |
 | `eager` | `--enforce-eager` | `compiled` |
 | `bi-compiled` | `VLLM_BATCH_INVARIANT=1`: vLLM's batch-invariant kernels | `compiled` |
 | `bi-eager` | `VLLM_BATCH_INVARIANT=1`, eager: the committing path's execution (`TargetProfile`'s `bi-eager`), nothing committed | `eager` |
@@ -21,9 +22,10 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `kv` | the whole paged KV pool hashed in place on a side stream at each window edge | `tokens` |
 | `tokens-only` | each Commit period's tokens committed as `tokens` commits them, without the tick | `record` |
 | `boundary` | the boundary commitment at each replay block's edge, as a server would take it: drained, the KV pool hashed by the row-table kernels under a fresh key and copied to host memory, the scheduler's state and each rank's runner rows and generators taken and kept | `tokens-only` |
-| `boundary-rows` | prefix caching off, and the two-stage audit's boundary commitment at serve: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), under the arm's object (`serve_tax.ROWS`) and the model's check template (`Model.check`) | `record` |
+| `boundary-rows` | the two-stage audit's boundary commitment at serve, vLLM's prefix cache left on: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), under the arm's object (`serve_tax.ROWS`) and the model's check template (`Model.check`) | `record` |
 | `canonical-topk` | the canonical DSA top-k: `benchmarks/dsa_topk`'s plugin loaded and `VERITY_DSA_TOPK=canonical`, its counters kept on the node | `compiled` |
-| `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`) | `boundary-rows` |
+| `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`), and prefix caching off, which the tables need | `boundary-rows` |
+| `two-stage-tick` | the two-stage serve's launch line admitting on the certified tick: `two-stage`'s data with the tick on, served by the corpus's client | `two-stage` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
 | `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
 | `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
@@ -35,6 +37,41 @@ stated there alone, as the `two-stage` arm: a job that serves the two-stage audi
 (`ARMS=two-stage RATES=... PLAN_FILE=...`), so the serve and its measured cost can't differ in an engine setting.
 Before an arm's server starts, the runner loads each of its plugins once in the server's environment and refuses the
 arm where one doesn't load, because vLLM logs such a plugin and serves on without it.
+
+`published` is stock vLLM under the settings its authors publish for the model, where `compiled` is stock under the
+settings every other arm shares. Its data is the command of the model's recipe (`recipes/models/` in vLLM's
+repository, shown at recipes.vllm.ai) for the cards the runner serves the model on: the flags that command adds
+(`Model.published`) and the context limit it is served at where the job names none (`Model.published_context`). The
+arm adds the flags to `compiled`'s line and drops the runner's limit of 256 requests at once, which leaves vLLM's own
+for the cards. A model with no recipe here is refused.
+
+GLM-5.3's is the recipe's command "FP8 on 8xH200 (standard)": an FP8 KV cache, speculative decoding with five draft
+tokens a step from the model's own draft layer (`mtp`), and the tool-call and reasoning parsers. The arm departs from
+that command in two things, each with the recipe's own alternative:
+
+- **The front end.** The command starts vLLM's Rust front end (`VLLM_USE_RUST_FRONTEND=1`) with the tokenizer mode
+  `glm5_next`, which the integration's pin does not have. The arm takes what the recipe names for such a build: the
+  Python front end and `--tokenizer-mode auto`. The release the recipe names as its minimum is also later than the
+  pin. A job on a build that has the Rust front end asks for the command's own with `PUBLISHED_FRONTEND=rust`: the
+  server is then `vllm serve` under that variable with `--tokenizer-mode glm5_next`, and the arm's `meta.json` names
+  the front end it served behind (`front_end`). Every other arm serves behind the Python one, whatever the job says.
+- **The context limit.** The command names none, so vLLM takes the model's own, 1,048,576 tokens, and by the recipe's
+  own note refuses to start on eight H200s, whose KV cache does not hold one request of that length. The arm serves
+  at 262,144 tokens, the limit the recipe's command builder sets for these cards. A job that wants another limit
+  names it (`MAX_MODEL_LEN`), for every arm it serves, so that its arms differ by their flags alone.
+  `MAX_MODEL_LEN=auto` is vLLM's setting for the longest limit the cards' KV cache holds, which the engine resolves
+  when it starts and prints in its log. At the integration's pin the engine then builds the model at its own limit
+  and fits the cache after, so the sparse attention's table of a step is sized by the model's limit and not by the
+  one resolved. The runner checks no load against `auto`: a request past the limit the engine resolved is refused by
+  the server and counted as failed.
+
+The values a recipe leaves to the operator (the requests at once, the cards' share of memory, the tokens a step) are
+vLLM's own defaults on the arm's line. A job that sets any of them adds the flags to that line alone with
+`PUBLISHED_ARGS=--FLAG=VALUE,...`, each flag once; the arm's `meta.json` holds the line it served (`server_argv`).
+
+The recipe's page asks for prefix caching off under a benchmark; the arm keeps it on, as a server has it, and each
+pass starts from an empty cache as every arm's does. A job that ends on `published` prints no cost: the arm is stock,
+and a cost is of an arm of ours over stock.
 
 What an arm keeps that holds values never goes under its run's directory, which is published: a boundary commitment's
 classes (each class's requests' tokens and its salts), the history tables' rows and salts, and the top-k's counters.
@@ -82,7 +119,11 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   it. A pass sends the load's prompts whatever its rung, so a rung near or past them is held for part of the pass
   only: `PASS_PROMPTS=chat=N` makes a pass of `chat` send N prompts at every rung, for a ladder that climbs past
   them. Every rung sends the same N, since passes of two sizes differ in tokens a second by their size alone, and
-  the cost refuses two arms whose passes sent different numbers of prompts.
+  the cost refuses two arms whose passes sent different numbers of prompts. Under one N the pass's draining end, its
+  last requests finishing a few at a time, is a larger share of the pass the higher the rung. `PASS_PROMPTS=chat=Kx`
+  sizes each rung's pass by the rung instead, K prompts for each request it holds in flight and the load's own at
+  least, which makes that end the same share at every rung: for a ladder read for the rung where tokens a second
+  stop rising.
 - **The dataset file** of `chat` is pinned (`serve_tax.Dataset`: its repository, revision, file and SHA-512). A node
   keeps one copy, in its Hugging Face cache outside every run's directory; `serve_tax.py passes --fetch`, which
   `run.sh` runs before it holds a GPU, downloads it there where there is none, and a download or a copy whose SHA-512
@@ -95,7 +136,12 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
 - **A pass** is a load at a rung, `<load>@<rung>`. An arm serves each pass REPS times (six by default) in one server
   lifetime, each from an empty prefix cache, every request greedy and decoding to its length (`--ignore-eos`), the same
   prompts under one seed. `<load>@<rung>/rep-<r>/result.json` is the result the client saved, and the table's figures
-  for a pass are the client's own.
+  for a pass are the client's own. It is the client's detailed result, with each request's prompt and output lengths,
+  start, time to first token and latency in the order sent, less each request's generated text and inter-token
+  times, which no run keeps: the client saves it outside the run's directory and the runner keeps the rest.
+  `STOP_AT=TIME` is the time the job's GPUs are another's: an arm starts no pass it can't expect to finish by then,
+  going by the same pass's longest so far, so the job ends between two passes with every pass it served, and the
+  arm's `meta.json` says where it stopped (`stopped`).
 - **The cost** of an arm over `compiled` at a load (`serve_tax.serving_cost`) is the arm's tax where stock is
   saturated: stock's output tokens a second over the arm's, less one. Every arm serves the same prompts, each decoded
   to its length, so both sides serve the same tokens, and at a rung where stock's GPUs have no idle time the ratio is
@@ -119,10 +165,10 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   every request. No target or verdict is of it: the model's target is of GPU time at equal tokens, and the SLO
   (`Model.slo`) is the benchmark's own constant. An arm that meets the SLO for no request at any rung has no finite
   cost within it.
-- **The Commit window** of an arm with a boundary commitment is 30 s in this form (`WINDOW_S`), shorter than a pass,
-  so that a pass holds the commits of the requests it finishes. At a window longer than a pass the commits would fall
-  between passes, where no request waits on them, and the cost would leave them out. A short window counts a window's
-  fixed work more often than a long one does, so the cost errs high; the commitment's line names the window.
+- **The Commit period** of an arm with a boundary commitment is 30 s in this form (`WINDOW_S`), shorter than a pass,
+  so that a pass holds the commits of the requests it finishes. At a period longer than a pass the commits would fall
+  between passes, where no request waits on them, and the cost would leave them out. A short period counts a period's
+  fixed work more often than a long one does, so the cost errs high; the commitment's line names the period.
 - **The number** is the larger of the two loads' costs, each load's cost printed beside it. Where only one load has
   run, the first line names it (`load chat alone`) and a later line says the number waits for the other: one load's
   cost is not the number. Its loads repeat no prefix, so it is labelled `no repeated prefix` and is never given
@@ -135,7 +181,7 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   limit of 131,072 tokens, each sent again with another ending, so half of the prompt tokens repeat, all of them on
   the second and fourth request. The client's `timed_trace` dataset sends them from a file of lengths and block ids
   that the arm writes (`<arm>/prefix.trace.jsonl`; a block is 64 tokens, and two prompts share the tokens of the
-  blocks whose ids they share), each prompt as the synthetic token ids the client draws for its blocks, in the
+  blocks whose ids they share), each prompt as the synthetic token ids the client generates for its blocks, in the
   file's order with one request in flight, so each repeat follows the request it repeats (`--loads` takes no rungs
   for it). The row is labelled `scaled down` while the load is those four requests alone: half of their prompt
   tokens repeat, which is this load's share and no serve's, where such pairs arrive among requests that repeat
@@ -180,9 +226,13 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   it, and no target is made of the parts that are on. The `two-stage` arm leaves off admission on the certified
   tick and the edge snapshot, which need the corpus's client, and turns on four changes GLM-5.3's target has no
   part for (the step record, prefix caching off, the two-stage boundary commitment, the history tables), so its
-  cost against the model's target is not comparable. A target given with `--target` has no parts.
-- **Stock has vLLM's prefix cache on,** its default at the pin for a model that generates text, and the arms from
-  `boundary-rows` down turn it off, since the boundary commitment needs it off. Neither load repeats a prefix
+  cost against the model's target is not comparable. `two-stage-tick` is that line with the tick on, and no cost
+  here is of it: vLLM's own client can't drive a tick arm. A target given with `--target` has no parts.
+- **Stock has vLLM's prefix cache on,** its default at the pin for a model that generates text, and so does
+  `boundary-rows`: a request's boundary is its own prompt ids and the ids it was served, whichever KV pages its
+  prefill read. `two-stage` turns it off: a history table holds its request's latent rows from position 0, and a
+  request served from the cache computes none before its hit's end, so the boundary commitment refuses tables on a
+  scheduler that caches prefixes. Neither load repeats a prefix
   (chat's requests are different conversations' first turns, long context's are random tokens, and the cache is
   emptied before every pass), so the number does not hold what the cache is worth on a load that does: the row on
   a repeated prefix does. `no-prefix-cache` is stock with the cache off alone, and each rep's `meta.json` records

@@ -1,0 +1,19 @@
+# An H200 node: one h200-sxm-141gb card in a VM of a two-socket Xeon Platinum 8468 server. This file holds what the
+# node's registration states that no card does (verity/hardware/README.md): the cards it names, how many GPUs it
+# carries, and the host's own memory, one table a leaf. Each number is { value, unit, mark, source }, as in a card.
+# A GPU's memory is its card's store.dram, whole, and every rate, clock and peak is a card's: none is here.
+
+node = "h200-sxm-141gb-x1"
+name = "An H200 node: one card in a VM of a two-socket Xeon Platinum 8468 server"
+
+[device]
+sku = "h200-sxm-141gb"
+count = { value = 1, unit = "card", mark = "measurement", source = "nvidia-smi -q on each of the two H200 nodes: 'Attached GPUs : 1', an NVIDIA H200 (art:72daa20de42c, art:28ff838a63c9)" }
+
+[host]
+sku = "xeon-platinum-8468-2s"
+
+# The host's own memory has no leaf yet: no run has read the memory the VM is given (lsmem -b) or its block devices
+# (lsblk -b), and MemTotal, which the runs' records hold, leaves out what the kernel keeps. A leaf is a table
+# memory.NAME with its tier and bytes, as the RTX PRO 6000 node's file has them. Until this file has a dram leaf and a
+# disk leaf, no entry is built of it.

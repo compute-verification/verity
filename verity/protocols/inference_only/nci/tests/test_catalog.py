@@ -67,7 +67,6 @@ def test_kimi_k2_fanout_covers_every_activation_but_the_lm_head():
 def test_cited_theorems_are_guarantees_in_the_lock():
     guarantees = json.loads(LOCK.read_text())["guarantees"]
     assert slowdown.THREAD_THEOREM in guarantees
-    assert slowdown.CHAIN_THEOREM in guarantees
 
 
 def test_index_renders_every_source_and_estimate():

@@ -41,6 +41,7 @@ untraced = [
 inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/registry.json",
           "infra/control/agent_watch_relay.py", "infra/control/agent_watch_timers.json", "infra/control/agent_watch_nodes.json",
           "tools/research/src/research/slack.py", "tools/research/src/research/linear.py",
+          "tools/research/src/research/goals.py",
           "tools/research/src/research/vocabulary.py", "tests/test_retired_terms.py",
           "tools/research/src/research/notes_sync.py",
           "tools/research/src/research/telemetry/cancel.py", "tools/research/src/research/telemetry/classify.py",

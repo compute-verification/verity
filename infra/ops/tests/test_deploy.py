@@ -512,6 +512,42 @@ def test_the_manifest_loads_and_every_source_is_a_file_of_the_repository():
             assert e.path.startswith("/") and all(r.split(":", 1)[0] in ("systemd", "user-systemd") for r in e.run)
 
 
+def test_the_uk_south2_train_nodes_get_exactly_what_their_live_twin_gets():
+    """vy-nebius-cpu-14 to -17 get what a live node of their kind runs, so a staged one's first install, the hour it exists, is
+    one cpu-12 has already run: cpu-12's entries, its managed patterns and its record."""
+    nodes = deploy.load()
+    twin = nodes["vy-nebius-cpu-12"]
+    want = sorted(twin.entries, key=lambda e: e.path)
+    assert want
+    for n in range(14, 18):
+        node = nodes[f"vy-nebius-cpu-{n}"]
+        assert sorted(node.entries, key=lambda e: e.path) == want, node.name
+        assert (node.managed, node.record, node.admin, node.quiet) == (twin.managed, twin.record, twin.admin, twin.quiet), node.name
+
+
+USERNS = "/etc/sysctl.d/61-vy-userns.conf"
+
+
+def test_every_machine_with_check_slots_or_a_research_pool_lets_an_unprivileged_process_make_a_user_namespace():
+    """A check's Lean builds and a training job's steps run in a user namespace: every CPU node and vy-nebius-2 take the setting,
+    no auditor-trusted or gated node does, and a copy made by hand under another 61-vy-userns name is a stray there, which
+    `research deploy attic` moves, so no node carries two."""
+    nodes = deploy.load()
+    want = {n for n in nodes if re.fullmatch(r"vy-nebius-cpu-\d+", n)} | {"vy-nebius-2"}
+    assert len(want) > 2
+    got = {n.name for n in nodes.values() if USERNS in {e.path for e in n.entries}}
+    assert got == want
+    assert not [n.name for n in nodes.values() if n.admin and n.name in got]
+    for name in sorted(want):
+        managed = nodes[name].managed
+        assert any(fnmatch.fnmatch(USERNS.replace(".conf", "-byhand.conf"), p) for p in managed), name
+        assert any(fnmatch.fnmatch(USERNS, p) for p in managed), name
+        assert not any(fnmatch.fnmatch("/etc/sysctl.d/90-vy-mptcp-off.conf", p) for p in managed), name
+    entry = next(e for e in nodes["vy-nebius-2"].entries if e.path == USERNS)
+    keys = [ln.split("=")[0].strip() for ln in (deploy.SRC / entry.src).read_text().splitlines() if ln and not ln.startswith("#")]
+    assert keys == ["kernel.apparmor_restrict_unprivileged_userns", "kernel.unprivileged_userns_clone"]
+
+
 def test_every_switched_unit_is_one_deploy_installs_on_its_node():
     """The lock-out switches each tmux loop to its unit: every unit it starts, and every file of its own, is one deploy.toml installs."""
     import importlib.util
