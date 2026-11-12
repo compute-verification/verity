@@ -124,6 +124,21 @@ def test_an_engine_with_the_draft_off_or_absent_binds(unset):
         assert RS.statics(2, 1, 2, _engine(**{k: unset}), 7) == base, k
 
 
+@pytest.mark.parametrize("served", [SERVED, SERVED_ASYNC], ids=["sync", "async"])
+def test_a_serves_speculative_entry_binds_absent_or_empty_and_is_refused_with_any_setting(served):
+    """The three shapes of the entry a serve records of its speculative configuration: no key where the engine has none,
+    an empty dict, and a dict of the settings that are set."""
+    assert "speculative" not in served
+    base = RS.statics(8, 1, 9, served, 9)
+    assert base == _formula(8, 1, 9, served, 9)
+    assert RS.statics(8, 1, 9, {**served, "speculative": {}}, 9) == base
+    for settings in ({"method": "mtp"}, {"num_speculative_tokens": 0}, {"disable_padded_drafter_batch": False},
+                     {"method": "mtp", "num_speculative_tokens": 5, "rejection_sample_method": "strict"}):
+        msg = _refused({**served, "speculative": settings})
+        assert f"engine speculative={settings!r}" in msg and all(name in msg for name in settings)
+        assert "draft" in msg and "Serve with the draft off" in msg
+
+
 @pytest.mark.parametrize("key, value", [("policy", "priority"), ("policy", None), ("scheduler", "PriorityScheduler"),
                                         ("scheduler", "SimpleNamespace")])
 def test_a_policy_or_a_scheduler_the_step_does_not_model_is_refused_by_name(key, value):
