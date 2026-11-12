@@ -250,7 +250,20 @@ def await_end(status: Any, polls: int = 300) -> dict[str, Any]:
     return status()
 
 
-def gate_command(argv: list[str]) -> Any:
+@dataclasses.dataclass(frozen=True, eq=False)
+class GateCommand:
+    """What `gate_command` answers. Called with a challenge phase and its root it is ``call``, the gate's open of it;
+    ``argv`` is the command its verbs run through, and ``reserve`` and ``ended`` are as `gate_command` says."""
+    call: Callable[..., dict[str, Any]]
+    argv: list[str]
+    reserve: Callable[[str, int | None], dict[str, Any]]
+    ended: Callable[[str], dict[str, Any]]
+
+    def __call__(self, session: str, root: str, withhold: bool = False) -> dict[str, Any]:
+        return self.call(session, root, withhold)
+
+
+def gate_command(argv: list[str]) -> GateCommand:
     """The `pouw_h1_window.Gate` that runs the gate's verbs as `argv` + VERB (an ``ssh ... research@HOST``): ``open
     --session S --root R``, its JSON answer's ``commitment`` (null until serve.py signs its record) then read from ``status
     S``, and the answer returned once its ``port`` listens on this host (`await_listener`); with ``withhold`` (a sample's
@@ -294,8 +307,7 @@ def gate_command(argv: list[str]) -> Any:
             raise ValueError(f"the gate reserved draw challenge phase {answer.get('session')} plain: {PHW.WITHHELD_OPEN}")
         return answer
 
-    gate.argv, gate.reserve, gate.ended = argv, reserve, lambda session: await_end(lambda: verb("status", session))
-    return gate
+    return GateCommand(gate, argv, reserve, lambda session: await_end(lambda: verb("status", session)))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -959,7 +971,7 @@ def served_measures(got: list[dict[str, Any]], want: list[dict[str, Any]], cap: 
                     stamps: dict[int, float]) -> dict[str, Any]:
     """What only the serving process sees of a fill window: its rate, each step's seconds (at linear 0 of the next), its
     tokens against the plain run's and the static schedule's check."""
-    step_s = [round((stamps[s + 1] if s + 1 in stamps else end) - stamps[s], 4) for s in sorted(stamps)]
+    step_s = [round(stamps.get(s + 1, end) - stamps[s], 4) for s in sorted(stamps)]
     return {"serve": rate(got, end - t0, served_steps), "step_s": step_s, "served_end_unix": round(time.time(), 3),
             "decode_step_s_median": float(np.median(step_s[1:])) if len(step_s) > 1 else None,
             "same_tokens": [g["token_ids"] for g in got] == [g["token_ids"] for g in want], "tokens_digest": tokens_digest(got),
