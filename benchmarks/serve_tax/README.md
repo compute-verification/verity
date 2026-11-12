@@ -281,39 +281,70 @@ kernels order a row of more than 2,048 keys differently run to run, and the agen
 replay is to give the served tokens only where both select by the canonical rule. Its cost over `prod` holds the
 top-k's with the record's. An arm is costed over the nearest stock arm above it (`serve_tax.STOCK`, `stock_of`),
 so `serve_tax.py cost --arm prod-record` is over `prod`, stock at the same settings, with `prod-again`'s cost over
-`prod` as its noise floor. The three start from one environment, the job's (`VENV`), and `cost` refuses arms that
+`prod` as its noise floor, printed beside it. The three start from one environment, the job's (`VENV`), and `cost` refuses arms that
 different builds of vLLM served. Where `prod`'s server and its requests differ from the recipe's line, beside
 `published`'s two departures (above), and why:
 
 | the recipe's line | `prod` | why |
 |---|---|---|
 | no seed, uvicorn's access log on | `--seed 0`, `--disable-uvicorn-access-log` | every arm's (`serve_tax.BASE_ARGS`): the same engine seed on both sides, and no line a request in the server's log |
-| requests as an agent's client sends them: the chat endpoint, tools, sampled as the model's own configuration says, no seed | `/v1/completions` with token ids, each request decoding to its recorded length; greedy, or under `SAMPLED=1` sampled at temperature 1.0 and top-p 0.95, each request naming its `user` and sending that user's seed (`serve_tax.user_seed`) | every arm then serves the same tokens whatever it generates, and a replay samples them again; the seed is the client's, which a recipe's client does not send; the parsers are loaded and parse nothing |
+| requests as an agent's client sends them: the chat endpoint, tools, sampled as the model's own configuration says, no seed | `/v1/completions` with token ids, each request decoding to its recorded length; greedy, or under `SAMPLED=1` sampled at temperature 1.0 and top-p 0.95, each request naming its `user` and carrying no seed | every arm then serves the same number of tokens whatever it generates; the parsers are loaded and parse nothing |
 
-The loads `agentic` and `agentic-full` are a coding agent's recorded sessions: SemiAnalysis's AgentX traces
-(`serve_tax.AGENTX`, Apache-2.0), a line a session, each request its prompt's and its output's tokens and an id for
-each 64-token block of its prompt, with no token and no text. vLLM's client makes a block's tokens from its id
+Under `SAMPLED=1` the client sends `prod-record`, as it sends every arm that keeps the record, each user's seed with
+the request (`serve_tax.user_seed`, `sends_seed`): its replay samples the request again under that seed. `prod` is
+sent none, so vLLM samples its requests as it samples any without a seed, and what a seed changes in vLLM's sampling
+is in `prod-record`'s cost over `prod`, a change of ours like the record and the top-k. The seed is the client's; a
+served request need not send one.
+
+The loads `agentic`, `agentic-full` and `agentic-256k` are a coding agent's recorded sessions: SemiAnalysis's AgentX
+traces (`serve_tax.AGENTX`, Apache-2.0), a line a session, each request its prompt's and its output's tokens and an id
+for each 64-token block of its prompt, with no token and no text. vLLM's client makes a block's tokens from its id
 (its `timed_trace` dataset), so a turn's prompt begins with the tokens of the turn before it and the engine's prefix
 cache serves them. The tokens are synthetic, so the share of its drafts the engine accepts is a synthetic prompt's;
 `cost` prints it. A session is its own chain of requests, without the groups its subagents sent, up to the first
 request that does not fit the load's context with its output: 131,072 tokens for `agentic`, the model's own limit for
-`agentic-full` (`serve_tax.session_lines`). The load is closed-loop. Its rung is its users (`--loads agentic=4`), each
-a client of its own with one request in flight that sends its sessions' turns in order, each once the turn before has
-ended, so no turn arrives before the prompt it repeats is computed; `PASS_PROMPTS=agentic=N` is the turns each user
-sends in a pass. A pass's rate is the sum of its users' rates (`serve_tax.merged`). Its users' sessions must fit the
-engine's KV pool together, or the prefix cache evicts what a later turn repeats.
+`agentic-full` (`serve_tax.session_lines`). `agentic-256k` reads the publisher's own cut of the same sessions for a
+context of 262,144 tokens (`serve_tax.AGENTX_256K`), the recipe's limit on these cards, in which no request passes
+that context, so no session of it is cut by ours. The load is closed-loop. Its rung is its users (`--loads
+agentic=4`), each a client of its own with one request in flight that sends its sessions' turns in order, each once
+the turn before has ended, so no turn arrives before the prompt it repeats is computed; `PASS_PROMPTS=agentic=N` is
+the turns each user sends in a pass. A pass's rate is the sum of its users' rates (`serve_tax.merged`). Its users'
+sessions must fit the engine's KV pool together, or the prefix cache evicts what a later turn repeats: `agentic-256k`
+sends 12 turns a user where the others send 24, since four users' sessions of it at 24 turns pass the KV cache the
+recipe's server has on eight of these cards. Sessions loads share a job's servers (`--loads agentic=4,agentic-256k`),
+which no other load joins, and the job has a cost of each: `cost` prints the first's and then the others', each
+written beside the first's as `serving_cost.<load>.{json,txt}`.
 
-`cost` on such a load prints `serve_tax.session_cost`: the arm's cost over its stock arm with its 95% interval over
-reps, the noise floor (the second lifetime's cost over the first), and the verdict against `--target` or
-`serve_tax.SESSION_TARGET`, the interval widened by the noise floor. It says the share of prompt tokens the load
-plans to repeat beside the share each side's prefix cache served, and gives no verdict where a side left a request
-unserved or the two caches served different shares in a rep: the sides then did not do the same work. Beside each
-side's output tokens a second it prints its prompt and output tokens a second a GPU, the output tokens a second a
-user gets at the P90 time a token, and the share of its draft tokens the model accepted with the tokens a draft gave
-(the engine's own counters).
+`cost` on such a load prints `serve_tax.session_cost`: the arm's cost over its stock arm, whose unit is a server
+lifetime. A lifetime's cost is the mean over the passes both arms counted in it, the cost is the mean of the
+lifetimes' costs, and its 95% interval is Student's t over the lifetimes an arm. The verdict against `--target` or
+`serve_tax.SESSION_TARGET` reads that interval's upper end alone: "meets" where it is under the target. One lifetime
+an arm has no such interval, and its verdict is "cannot tell". Beside the cost and in no verdict it prints the cost
+over the passes taken as independent (the median over them with its interval, too narrow where the lifetimes' costs
+spread more than a lifetime's passes do), the spread between lifetimes and between a lifetime's passes, and the noise
+floor, stock over stock a lifetime apart, saying so where the floor's own interval leaves out zero. It says the share
+of prompt tokens the load plans to repeat beside the share each side's prefix cache served, and gives no verdict where
+a side left a request unserved or the two caches served different shares in a rep: the sides then did not do the same
+work. Beside each side's output tokens a second it prints its prompt and output tokens a second a GPU, the output
+tokens a second a user gets at the P90 time a token, and the share of its draft tokens the model accepted with the
+tokens a draft gave (the engine's own counters).
 
 ~~~text
 bash benchmarks/serve_tax/run.sh --model glm53 --arms "prod prod-record prod-again" --loads agentic=4 --reps 6
+~~~
+
+A node drifts over a job's hours, and the passes of one server lifetime share whatever that server had of its own.
+`LIFETIMES=L` serves the arms `L` times, each time a server of its own, in the arms' order and then that order turned
+round, and so on, so that the two arms' lifetimes of one number are neighbours in time and the order's effect falls on
+both alike. `LEAVE_OUT=N` leaves each lifetime's first `N` passes out of every figure: a lifetime's first pass after
+its warm-up is still warming (compiled graphs, the prefix cache's first fill), so it is served and recorded like the
+rest and not counted, and the table and the cost say how many were left out. The cost then pairs pass `r` of lifetime
+`k` of its two arms (`serve_tax.lifetimes`), prints each lifetime's own cost under the cost over all of them, and
+takes its noise floor from stock's own lifetimes, each second one over the one before it, where no twin of stock was
+served. Two lifetimes an arm are the fewest that give the cost an interval, and so a verdict.
+
+~~~text
+LIFETIMES=6 LEAVE_OUT=1 bash benchmarks/serve_tax/run.sh --model glm53 --arms "prod prod-record" --loads agentic=4 --reps 6
 ~~~
 
 ## Running it

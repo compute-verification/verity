@@ -608,7 +608,7 @@ def test_a_sessions_loads_cost_is_under_its_target_only_where_the_benchmark_says
     # a rep whose prefix cache served another share of the prompts: the benchmark's own cost has no verdict, nor this
     by["prod-record"]["loads"]["agentic@4"][2]["prompt_cached_share"] = 0.9
     c = P.cost(tmp_path, by, "prod", "prod-record", None, S.AGENTIC, 1.0)
-    assert own["verdict"] == "meets" and S.session_cost(list(by.values()), "prod-record", "prod")["verdict"] == "cannot tell"
+    assert own["verdict"] == "cannot tell" == S.session_cost(list(by.values()), "prod-record", "prod")["verdict"]
     assert c["measured"] and (c["same_work"], c["verdict"]) == (False, "not shown")
     assert P._verdict(c) == "not shown, the arms did not do the same work (one left a request unserved, or their prefix " \
                             "caches served different shares of the prompts in some rep)"

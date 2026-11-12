@@ -257,7 +257,7 @@ def test_the_boundary_rows_arm_turns_prefix_caching_off_and_hands_the_plugin_its
     assert "boundary_rows" not in json.loads(record[S.PLUGIN_ENV])
     # each arm of a job keeps its own under the job's private directory
     sh = (S.HERE / "run.sh").read_text()
-    assert '${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE/$arm"}' in sh
+    assert '${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE/$dir"}' in sh
 
 
 def test_only_the_restore_arms_take_edges_and_only_restore_dumps_there(tmp_path: Path):
@@ -1066,8 +1066,8 @@ def test_a_loads_dataset_file_is_the_nodes_copy_of_the_pinned_one_or_nothing(tmp
 def test_the_pinned_dataset_is_a_whole_sha512_and_a_commit_of_its_repository():
     ds = S.LOADS["chat"].file
     assert re.fullmatch(r"[0-9a-f]{128}", ds.sha512) and re.fullmatch(r"[0-9a-f]{40}", ds.revision) and ds.size > 0
-    assert [n for n, load in S.LOADS.items() if load.file] == ["chat", "agentic", "agentic-full"]
-    assert list(S.LOADS) == ["chat", "long", "prefix", "agentic", "agentic-full"]
+    assert [n for n, load in S.LOADS.items() if load.file] == ["chat", "agentic", "agentic-full", "agentic-256k"]
+    assert list(S.LOADS) == ["chat", "long", "prefix", "agentic", "agentic-full", "agentic-256k"]
 
 
 def test_drive_bench_keeps_the_clients_result_and_counts_its_failed_requests(tmp_path: Path,
@@ -1148,7 +1148,7 @@ def bench_arm(d: Path, name: str, passes: dict[str, list[dict]], model_id: str =
     return d
 
 
-def test_an_arm_served_by_vllms_client_reads_each_pass_result(tmp_path: Path):
+def test_an_arm_served_by_vllms_client_reads_each_pass_result(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     d = bench_arm(tmp_path, "compiled", {"chat@8": [result(good=150.0), result(good=160.0)], "chat@16": [result(good=40.0)]})
     m = S.arm_metrics(d)
     assert list(m["loads"]) == ["chat@8", "chat@16"] and [r["rep"] for r in m["loads"]["chat@8"]] == [1, 2]
@@ -1160,6 +1160,27 @@ def test_an_arm_served_by_vllms_client_reads_each_pass_result(tmp_path: Path):
     # the client counted goodput against the SLO it ran with: another can't be read from its result
     with pytest.raises(SystemExit, match="serve it again"):
         S.arm_metrics(d, (1.0, 0.05))
+    # a server lifetime of an arm (run --lifetime, --leave-out) says which it is, what it leaves out and its reps
+    assert (m["lifetime"], m["left_out"], m["reps"], m["seeded"]) == (None, 0, None, False)
+    # a sampled arm says whether its client sent a seed; one served before the arms differed in it was sent one
+    sampled = {"chat@8": [result(good=150.0)]}
+    assert [S.arm_metrics(bench_arm(tmp_path / str(i), "compiled", sampled, **meta))["seeded"] for i, meta in enumerate(
+        ({"sampled": S.SAMPLED, "seeded": False}, {"sampled": S.SAMPLED, "seeded": True}, {"sampled": S.SAMPLED}))] == [
+            False, True, True]
+    passes = {"chat@8": [result(good=150.0), result(good=160.0), result(good=155.0)]}
+    two = S.arm_metrics(bench_arm(tmp_path / "second", "compiled", passes, lifetime=2, left_out=1, reps=3))
+    assert (two["lifetime"], two["left_out"], two["reps"]) == (2, 1, 3)
+    (one,) = S.lifetimes([two])
+    assert [(r["rep"], r["lifetime"], r["pass"]) for r in one["loads"]["chat@8"]] == [(5, 2, 2), (6, 2, 3)]
+    assert [r["rep"] for r in one["warm"]["chat@8"]] == [4] and one["lifetimes"] == [2]
+    seen = []
+    monkeypatch.setattr(S, "run", lambda a: seen.append((a.lifetime, a.leave_out)) or 0)
+    run = ["run", "--arm", "prod", "--model-id", "glm53", "--out", str(tmp_path / "o")]
+    assert S.main(run) == 0 == S.main([*run, "--lifetime", "2", "--leave-out", "1"]) and seen == [(None, 0), (2, 1)]
+    sh = (S.HERE / "run.sh").read_text()
+    # the job gives each lifetime its number and a directory of its own, and every arm what it leaves out
+    assert 'dir=$arm.${item##*:}; life=(--lifetime "${item##*:}")' in sh and '${LEAVE_OUT:+--leave-out "$LEAVE_OUT"}' in sh
+    assert '--private "$PRIVATE/$dir"} --out "$OUT/$dir"' in sh
 
 
 def cost_arm(name: str, rate: dict[int, list[float]], load: str = "chat", good: dict[int, list[float]] | None = None) -> dict:
@@ -1986,6 +2007,12 @@ def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anythi
         assert rc != 0 and "run this under research run" in out    # past the flags: only the run is missing
     rc, out = run_sh(ARMS="compiled", RATES="light=1")             # the corpus client's form is untouched
     assert rc != 0 and "run this under research run" in out
+    # the arms' lifetimes and what each leaves out are read before the run too
+    assert run_sh("--model", "glm53", LIFETIMES="0") == (2, "serve-tax: LIFETIMES=0: how many times the arms are served, 1 or more\n")
+    assert run_sh("--model", "glm53", LEAVE_OUT="6") == (
+        2, "serve-tax: LEAVE_OUT=6: the passes each lifetime leaves out, fewer than its REPS=6\n")
+    rc, out = run_sh("--model", "glm53", "--arms", "prod prod-record", LIFETIMES="6", LEAVE_OUT="1")
+    assert rc != 0 and "run this under research run" in out
     sh = (S.HERE / "run.sh").read_text()
     assert 'cost "${dirs[@]}" --arm "${ARMS##* }"' in sh and '--client vllm-bench --loads "$LOADS"' in sh
     # a job that ends on a stock arm has no cost: no arm of ours is over it
@@ -2000,7 +2027,7 @@ def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anythi
     # a budget's time left is shared equally by the arms still to serve: the measured arm is served last, and a cost
     # compares only the reps both of its arms have
     assert 'left=$(((BUDGET_MIN * 60 - ($(date +%s) - t_leased)) / to_serve))' in sh
-    assert sh.count("to_serve=$((to_serve - 1))") == 1 and 'to_serve=$(wc -w <<< "${ARMS:-}")' in sh
+    assert sh.count("to_serve=$((to_serve - 1))") == 1 and "to_serve=${#order[@]}" in sh
     # --arms all is every arm vLLM's client can drive from stock up to the launch line, each after the arm it is over
     every = re.search(r'ARMS = all \] && ARMS="([^"]+)"', sh.replace("\"$ARMS\"", "ARMS")).group(1).split()
     assert every[:2] == ["compiled", "compiled-again"] and every[-1] == S.OURS and set(every) <= set(S.ARMS)
