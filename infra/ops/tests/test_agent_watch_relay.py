@@ -279,6 +279,33 @@ def test_a_silent_coordinator_rings_top(relay):
     assert relay.rung(rec) == "top" and relay.rung({**rec, "owner": None}) == "proofs"
 
 
+def test_a_silent_coordinators_words_count_its_turn_and_its_text_and_a_workers_its_active_spell(relay):
+    """A lead was told to top as "ACTIVE 83 min" a quarter of an hour after its turn ended. A coordinator's `active_minutes`
+    are the turn it is in and its `minutes` count its assistant text too, so its sentence says so; a worker's, and a record
+    with no `role`, read as before."""
+    top = relay.slack.tag(relay.slack.entry(relay.REG, "top"))
+    proofs = relay.slack.tag(relay.slack.entry(relay.REG, "proofs"))
+    co, w = PROOFS_INBOX["holder"], "bc-22222222-2222-2222-2222-222222222222"
+    rec = {"kind": "silent", "agent": co, "name": "verity: proofs", "run": "run-r", "handle": "proofs", "lane": "proofs",
+           "minutes": 61, "active_minutes": 83, "window": 1, "since": "2026-10-26T02:00:00Z", "owner": "top",
+           "role": "coordinator"}
+    worker = {**rec, "agent": w, "name": "ZKS10", "run": "", "minutes": 90, "active_minutes": 95, "role": "worker",
+              "owner": None}
+    relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
+        rec, {**rec, "window": 2, "minutes": 125, "active_minutes": 147, "unread_minutes": 62}, worker,
+        {k: v for k, v in rec.items() if k != "role"}]) + "\n"
+    relay.once()
+    lead = f"{top} *Agent watch:* agent verity: proofs (<https://cursor.com/agents/{co}|{co}>)"
+    assert relay.posts == [
+        f"{lead} has been in one turn for 83 min, with no note, no push and no assistant text for 61 min; check on it.",
+        f"{lead} has been in one turn for 147 min, with no note and no push for 125 min; the API wouldn't read its "
+        "conversation for 62 min, so its assistant text is unchecked; check on it. Second window: the last ring until it "
+        "shows activity.",
+        f"{proofs} *Agent watch:* agent ZKS10 (<https://cursor.com/agents/{w}|{w}>) has been ACTIVE 95 min with no note and "
+        "no push for 90 min; check on it.",
+        f"{lead} has been ACTIVE 83 min with no note and no push for 61 min; check on it."]
+
+
 def test_a_workers_no_step_names_it_a_worker_of_its_lane_and_still_rings_top(relay):
     """A worker's no_step that reads "@LANE's coordinator" sends whoever archives it looking for a coordinator a handover
     left behind."""

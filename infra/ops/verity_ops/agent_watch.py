@@ -106,21 +106,35 @@ says it set (`subscribe_timer`, "a wake-up in 15 minutes") in its last messages,
 endpoint is the only conversation the API has, and it carries only user and assistant text: a tool call left without its
 result, the shape of those stops, is not visible to the watch, so a worker that stops is judged by its IDLE alone.
 
-An agent that works but says nothing is **silent**: a worker ACTIVE for `SILENT_S` (90 min), or a coordinator for
+An agent that works but says nothing is **silent**: a worker ACTIVE for `SILENT_S` (90 min), or a coordinator in one turn for
 `COORD_SILENT_S` (60 min, its record's `owner` top, whom the relay rings), with no note of
 its (a note whose `origin:` names it, new or changed by its mtime; for a coordinator also any note of its lane, under
-`lanes/<handle>/` or with `lane: <handle>`, since it signs with its lane) and no push to its branches. Its branches are the API's
+`lanes/<handle>/` or with `lane: <handle>`, since it signs with its lane) and no push to its branches. A coordinator works
+through Slack, Linear and its workers for hours with neither, so its assistant text counts too, and it is judged only in a
+turn: ACTIVE with the run it is judged by RUNNING, from the sweep that first saw that run so (`active` in `state.json`). One
+whose run waits on background work, is queued or has ended is between turns, where the rules above judge it. Its text is its
+run's `assistant` events and their `text-delta` twins, timed as they arrive like every event (text a stream started again
+replays counts once), which costs no read. Before one is recorded, and only then, the watch reads its runs again
+(`in_turn`): a sweep's own reads are minutes old by then, and a turn that ended meanwhile is no silence. With no stream
+being received (nothing from it in `STREAM_LIVE_S`, or started within that: a goal run, a stream past its retention, a
+broken one), it also reads its conversation, which carries no times: assistant text the watch hasn't read there before is
+a sign of life at that read, and the same text as at the last read is silence since then (`texts`), so such a
+coordinator's first record comes up to a window late. A read that fails records nothing and is made again
+`SILENT_RETRY_S` later; a conversation unread at every try for a further window is recorded all the same, with
+`unread_minutes`, the relay saying its text is unchecked. The record's `active_minutes` are a worker's ACTIVE spell and a
+coordinator's turn (`role`). Its branches are the API's
 (`git.branches` of its runs, or of a worker's GET), a worker's workers.d `branch`, those its notes' origins name, and every
 head ending in its id's last four characters (a coordinator's `cursor/...-1037`), widened by `same_task` to the heads a task
 moved to (`cursor/lean-one18-v2-fc8d` beside `cursor/lean-one18-fc8d`); pushes are read every `HEADS_EVERY_S` with
 `git ls-remote --heads` of `--git-remote` (the deploy key fixtures_export.sh fetches with), a branch's push time being when the
-watch first saw its sha (`heads.json` beside `--log`). The 90 min count from the latest of its ACTIVE spell's start, its newest
-note, its newest push and the first heads read, so a fresh deploy judges nobody for 90 min. It is recorded once, and again
-after a second window (`SILENT_RINGS`), then not until one of those moves; the relay rings its handle (a coordinator's own, a
-worker's launcher's). A silent agent still showing nothing `NO_STEP_S` (6 h) after its last activity is recorded once more:
+watch first saw its sha (`heads.json` beside `--log`). The window counts from the latest of a worker's ACTIVE spell's start
+or a coordinator's turn's, its newest note, push and text, and the first heads read, so a fresh deploy judges nobody for a
+window. It is recorded once, and again after a second window (`SILENT_RINGS`), then not until one of those moves; the relay
+rings a worker's launcher's handle, and top for a coordinator. A silent agent still showing nothing `NO_STEP_S` (6 h) after
+its last activity is recorded once more:
 a worker is archived (`POST /v1/agents/{id}/archive`, which stops it and frees its slot) and recorded as **archived**, rung to
-its lane, which relaunches it from its last note or drops it; a coordinator, or a worker the API won't archive, is recorded as
-**no_step**, rung to top.
+its lane, which relaunches it from its last note or drops it; a coordinator still in that turn, or a worker the API won't
+archive, is recorded as **no_step**, rung to top.
 Its last activity there also counts its agent's own `updatedAt` and, for a coordinator, its judged run's `updatedAt` and last
 stream event, since no_step advises stopping and archiving it, and a coordinator working only in Slack makes no note or push for hours.
 Without `--notes` and heads read in the last `HEADS_STALE_S`, nobody is judged.
@@ -177,8 +191,9 @@ sweep that fails leaves the last one. With `$AGENT_WATCH_PG_URL` set, the same b
 overwriting, into Neon's `store_private.agent_watch_status` (`Publisher`, through `psql`; the newest `STATUS_ROWS` kept), for
 readers off the pod. `state.json` beside it keeps what must outlive a restart (the watch restarts on every
 deploy): when it last cancelled or restarted each agent, and recorded it ready to wake, the restart counts, the continue runs still to start, the runs
-already recorded, and since when each coordinator has been ACTIVE and each silent spell's rings. `watch.lock` beside it keeps a second watch from running. The control pod holds no Slack credential, so
-infra's relay reads the findings over ssh and posts each in #agent-alerts. Cancelling and restarting don't wait for it.
+already recorded, the turn each coordinator is in and since when, each silent spell's rings, and the assistant text last
+read in a coordinator's conversation. `watch.lock` beside it keeps a second watch from running. The control pod holds no
+Slack credential, so infra's relay reads the findings over ssh and posts each in #agent-alerts. Cancelling and restarting don't wait for it.
 `--once --dry-run` runs one sweep that follows no stream and sends no POST (each is printed).
 """
 from __future__ import annotations
@@ -187,6 +202,7 @@ import argparse
 import base64
 import calendar
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -335,7 +351,10 @@ WORKER_LONG_S = 6 * 3600        # ACTIVE this long is recorded once (--worker-lo
 WORKER_KEEP_S = 2 * 86400       # a worker idle or gone this long, and in no recent note, is forgotten
 WORKERS_NEW = 20                # workers read for the first time per sweep: a fresh notes clone names hundreds
 SILENT_S = 90 * 60              # ACTIVE with no note of its and no push to its branches this long: rung, again a window later
-COORD_SILENT_S = 60 * 60        # ... a coordinator's window, rung to top (a coordinator can hang for hours)
+COORD_SILENT_S = 60 * 60        # ... a coordinator's window, in one turn and with no assistant text either, rung to top
+STREAM_LIVE_S = 3 * 60          # a stream started this long ago that gave anything this recently, a heartbeat included, has
+                                # shown all the text its run wrote: a coordinator's conversation is read only without one
+SILENT_RETRY_S = 10 * 60        # a coordinator whose turn or conversation a failed read left unjudged is judged again after this
 SILENT_RINGS = 2                # rings per silent spell; then none until it shows activity
 NO_STEP_S = 6 * 3600            # ... and still nothing this long: one `no_step`, rung to top (workers sat ACTIVE
                                 # with no step for days, each rung twice as silent and then by no one)
@@ -820,6 +839,13 @@ def followed(runs: list[dict]) -> dict | None:
     return next((x for x in runs if x.get("status") in FOLLOW and not str(x.get("id")).startswith(GOAL)), None)
 
 
+def judge_of(runs: list[dict], latest: str | None) -> dict | None:
+    """The run of `runs` (newest first) an agent is judged by: the one followed, else its newest that started or is CREATING,
+    else its `latest`."""
+    return (followed(runs) or next((x for x in runs if started(x) or x.get("status") == "CREATING"), None)
+            or next((x for x in runs if x.get("id") == latest), None))
+
+
 def overdue(runs: list[dict], t: float) -> list[tuple[dict, float]]:
     """(run, since when) for each of `runs` (newest first) left in CREATING for `STUCK["CREATING"]` by the API's `updatedAt`
     with no newer run started: one that started after it shows it blocks nothing."""
@@ -924,6 +950,11 @@ class Run:
     last_kind: str = "start"            # start | text | call | tool_done | turn_ended
     last_t: float = 0.0                 # the parent's last event
     bg_t: float = 0.0                   # its subagents' last progress
+    opened_t: float = 0.0               # when the sweep last started its stream, which then replays the run from its start
+    heard_t: float = 0.0                # the last thing its stream gave, a heartbeat included
+    said_t: float = 0.0                 # its last assistant text the watch hadn't been given before
+    said_n: int = 0                     # characters of assistant text since its stream was last started ...
+    said_max: int = 0                   # ... and the most a stream of its has given: text a replay repeats is no new text
     agent_t: float = 0.0                # its agent's `updatedAt` as the last sweep listed it
     calls: dict[str, float] = field(default_factory=dict)   # open tool calls the parent waits on: callId -> started
     bg: set[str] = field(default_factory=set)               # open calls it went on past: background work
@@ -993,8 +1024,14 @@ class Watch:
         self.done: dict[str, float] = s.get("done", {})           # runs judged once (ERROR, stuck, unreadable) -> when
         self.woken: dict[str, float] = s.get("woken", {})         # agent -> when the watch last recorded it ready to wake
         self.workers: dict[str, dict] = s.get("workers", {})      # worker -> lane, handle, status, updated, since, read, ...
-        self.active: dict[str, float] = s.get("active", {})       # coordinator -> since when the watch has seen it ACTIVE
+        # coordinator in a turn -> {"run": the turn's run, "since": when the watch first saw it RUNNING}
+        self.active: dict[str, dict] = {a: v for a, v in s.get("active", {}).items() if isinstance(v, dict)}
         self.silent: dict[str, dict] = s.get("silent", {})        # agent -> {"from": its last activity, "rings"} while silent
+        self.texts: dict[str, dict] = s.get("texts", {})          # coordinator -> {"sig": the assistant text its conversation
+                                                                  # showed, digested, "t": when the watch first read it so}
+        self.blind: dict[str, float] = s.get("blind", {})         # coordinator due a silent record -> its conversation unread
+                                                                  # since when
+        self.unjudged: dict[str, float] = {}                      # coordinator a failed read left unjudged -> when (not saved)
         self.awaiting: dict[str, dict] = s.get("awaiting", {})    # agent -> the research runs that ended for it to act on
         self.relaunched: dict[str, float] = s.get("relaunched", {})   # agent -> when the watch last tried to relaunch it
         self.owners: dict[str, str] = s.get("owners", {})         # listed agent a coordinator launched -> that coordinator's handle
@@ -1020,6 +1057,7 @@ class Watch:
         tmp.write_text(json.dumps({"freed": self.freed, "errors": self.errors, "left": sorted(self.left),
                                    "pending": self.pending, "done": self.done, "woken": self.woken,
                                    "workers": self.workers, "active": self.active, "silent": self.silent,
+                                   "texts": self.texts, "blind": self.blind,
                                    "awaiting": self.awaiting, "relaunched": self.relaunched, "owners": self.owners,
                                    "children": children, "bursts": self.bursts, "down": self.down, "back": self.back,
                                    "rung_outage": self.rung_outage}) + "\n")
@@ -1322,6 +1360,8 @@ class Watch:
             if r is None:
                 return
             t = self.clock()
+            if event != "error":
+                r.heard_t = t
             kind = data.get("type") if event == "interaction_update" else None
             if event in ("status", "result"):
                 if str(data.get("status")) in TERMINAL:
@@ -1355,6 +1395,10 @@ class Watch:
                     r.last_kind = "turn_ended"
                 elif kind == "user-message-appended":
                     r.last_kind = "start"
+            if event == "assistant" or kind == "text-delta":
+                r.said_n += len(str(data.get("text") or "")) or 1
+                if r.said_n > r.said_max:           # past what a stream of its gave before: not a replay's
+                    r.said_max, r.said_t = r.said_n, t
             r.last_t = t
 
     def classify(self, r: Run, t: float) -> str | None:
@@ -1698,18 +1742,21 @@ class Watch:
         write_atomic(self.heads_path, (json.dumps(self.heads, sort_keys=True) + "\n").encode())
 
     def watch_silence(self, known: dict[str, dict], t: float) -> None:
-        """Record `silent` for each agent in `known` (agent -> {name, handle, lane, run, since: ACTIVE since, branches}) with no
+        """Record `silent` for each agent in `known` (agent -> {name, handle, lane, run, since, branches}: a worker ACTIVE
+        since then, a coordinator in the turn of `run` since then, with its `latest` run) with no
         note of its (`note_times`), no push to its branches (its own, the ones its notes name, those of open PRs whose body names
         it, every head ending in its id's last four characters, as a coordinator's `cursor/...-1037`, and the heads `same_task`
         finds for any of these; with none of these, its lane's: `cursor/<lane>-*` and open PRs whose `Lane NAME` line is it, and
-        its lane's agents' runs) and no start or end of a research run it sent (`run_ends`' `ran`) for `SILENT_S`, counted from
-        the latest of those, its ACTIVE spell's start and the first heads read; again after a second window, then not until one
-        of those moves. Needs
+        its lane's agents' runs), no start or end of a research run it sent (`run_ends`' `ran`) and, for a coordinator, no
+        assistant text (its run's stream's, and what a read of its conversation found new) for `SILENT_S`, or a coordinator's
+        `COORD_SILENT_S`, counted from the latest of those, `since` and the first heads read; again after a second window,
+        then not until one of those moves. A coordinator is recorded only once `quiet` confirms it. Needs
         `--notes` and heads read in the last `HEADS_STALE_S`."""
         changed = False
-        for agent in [a for a in self.silent if a not in known]:
-            self.silent.pop(agent)
-            changed = True
+        for d, gone in ((self.silent, known), (self.blind, known), (self.unjudged, known), (self.texts, self.coords)):
+            for agent in [a for a in d if a not in gone]:
+                d.pop(agent)
+                changed = True
         if self.notes is None or not self.git_remote or t - self.heads.get("t", -HEADS_STALE_S) >= HEADS_STALE_S:
             if changed:
                 self.save()
@@ -1737,8 +1784,12 @@ class Watch:
                 ran = max((x for a, x in ran_by.items() if x is not None and (a == agent or (known.get(a) or {}).get("lane") == k["lane"]
                                                                               or (known.get(a) or {}).get("handle") == k["lane"])),
                           default=ran)
+            with self.lock:
+                r = self.runs.get(k["run"]) if coord else None
+                said = r.said_t if r and r.said_t else None
+            read = (self.texts.get(agent) or {}).get("t") if coord else None
             last = max(x for x in (k["since"], heard.get(agent), heard.get(short_id(agent)), lane_note, pushed, ran,
-                                   self.heads["t0"]) if x is not None)
+                                   self.heads["t0"], said, read) if x is not None)
             s = self.silent.get(agent)
             if s and s["from"] != last:
                 self.silent.pop(agent)
@@ -1746,7 +1797,7 @@ class Watch:
             n = s["rings"] if s else 0
             if n >= SILENT_RINGS:
                 still = max(last, k.get("acted") or last)
-                if s and not s.get("no_step") and t - still >= NO_STEP_S:
+                if s and not s.get("no_step") and t - still >= NO_STEP_S and (not coord or self.in_turn(agent, k, t)):
                     s["no_step"] = True
                     changed = True
                     why = None if coord else self.archive(agent)
@@ -1760,14 +1811,60 @@ class Watch:
                 continue
             if t - last < (COORD_SILENT_S if coord else SILENT_S) * (n + 1):
                 continue
+            unread = None
+            if coord:
+                if t - self.unjudged.get(agent, -SILENT_RETRY_S) < SILENT_RETRY_S:
+                    continue
+                changed = True
+                if (quiet := self.quiet(agent, k, t)) is None:
+                    self.unjudged[agent] = t
+                if not quiet:
+                    continue
+                unread = self.blind.pop(agent, None)
             self.silent[agent] = {"from": last, "rings": n + 1}
             changed = True
             self.record("silent", Run(agent, k["run"], k["name"]), since=iso(last), minutes=int((t - last) // 60),
                         active_minutes=int((t - k["since"]) // 60), window=n + 1, lane=k["lane"],
-                        branches=sorted(b for b in mine if b in heads) or sorted(mine),
-                        **({"handle": k["handle"]} if k["handle"] else {}), **({"owner": "top"} if coord else {}))
+                        branches=sorted(b for b in mine if b in heads) or sorted(mine), role="coordinator" if coord else "worker",
+                        **({"handle": k["handle"]} if k["handle"] else {}), **({"owner": "top"} if coord else {}),
+                        **({"unread_minutes": int((t - unread) // 60)} if unread is not None else {}))
         if changed:
             self.save()
+
+    def in_turn(self, agent: str, k: dict, t: float) -> bool | None:
+        """Whether a coordinator is, by its runs read again, still in the turn the sweep saw it in (`k`, its `known` entry):
+        the run it is judged by is that turn's and RUNNING. A sweep's own reads are minutes old by the time it judges
+        silence, and a turn that ended meanwhile is no silence. None when the read fails."""
+        runs = self.runs_of({"id": agent, "name": k["name"], "status": "ACTIVE", "latestRunId": k["latest"]}, t, stuck=True)
+        if not runs:
+            return None
+        judge = judge_of(runs, k["latest"])
+        return bool(judge) and judge["id"] == k["run"] and judge.get("status") == "RUNNING"
+
+    def quiet(self, agent: str, k: dict, t: float) -> bool | None:
+        """Whether a coordinator with no note, push, run or streamed assistant text for its window is silent: still in its turn
+        (`in_turn`), and with no assistant text either. Its run's stream, when it is being received (`STREAM_LIVE_S`), has
+        shown every text of the run, each timed as it came, so nothing more is read. Without one (a goal run, a stream past
+        its retention, a broken one) its conversation is read, which carries no times: text the watch hasn't read there
+        before (`texts`) is a sign of life dated at this read, and the same text as at the last read is silence since that
+        read. None when a read failed and the next try decides; a conversation unread at every try for a further window
+        (`blind`) hides nothing: it is silent, the text unchecked."""
+        if not (turn := self.in_turn(agent, k, t)):
+            return turn
+        with self.lock:
+            r = self.runs.get(k["run"])
+            live = r is not None and t - r.heard_t < STREAM_LIVE_S <= t - r.opened_t
+        if not live and (msgs := self.conversation(agent)) is None:
+            return True if t - self.blind.setdefault(agent, t) >= COORD_SILENT_S else None
+        self.blind.pop(agent, None)
+        if live:
+            return True
+        said = "\0".join(str(m.get("text") or "") for m in msgs if m.get("type") == "assistant_message")
+        sig = hashlib.sha256(said.encode()).hexdigest()[:16]
+        if (self.texts.get(agent) or {}).get("sig") == sig:
+            return True
+        self.texts[agent] = {"sig": sig, "t": t}
+        return False
 
     def parent_handle(self, parent: str, coords: dict[str, str]) -> str | None:
         """The handle a worker's `parent` answers to: its own (`lineage`), the coordinator that launched it, or its own launcher's."""
@@ -2249,7 +2346,7 @@ class Watch:
             last = next((x for x in runs if x.get("id") == latest), None)
             if follow:
                 current[follow["id"]] = (a, follow)
-            judge = follow or next((x for x in runs if started(x) or x.get("status") == "CREATING"), None) or last
+            judge = judge_of(runs, latest)
             judged[judge["id"] if judge else latest] = a
             if judge:
                 judges[a["id"]] = judge
@@ -2288,16 +2385,23 @@ class Watch:
         self.agent_status = {a["id"]: str(a.get("status") or "") for a in agents}
         known, active = {}, {}
         for a in agents:
-            if a["id"] in coords and a.get("status") == "ACTIVE":
-                active[a["id"]] = since = self.active.get(a["id"], t)
-                judge = judges.get(a["id"]) or {}
-                with self.lock:
-                    r = self.runs.get(judge.get("id") or "")
-                acted = max((x for x in (epoch(a.get("updatedAt")), epoch(judge.get("updatedAt") or judge.get("createdAt")),
-                                         r.last_t if r and r.last_kind != "start" else None) if x is not None), default=None)
-                known[a["id"]] = {"name": self.names[a["id"]], "handle": coords[a["id"]], "lane": coords[a["id"]],
-                                  "run": judge.get("id") or a.get("latestRunId") or "", "since": since,
-                                  "branches": sorted(self.branches.get(a["id"], set()) | pushed_branches(a)), "acted": acted}
+            if a["id"] not in coords or a.get("status") != "ACTIVE" or not a.get("latestRunId"):
+                continue
+            judge, turn = judges.get(a["id"]), self.active.get(a["id"])
+            if judge is not None:           # with its runs unread at this sweep, the turn it was last seen in stands
+                # an ACTIVE agent whose run is not RUNNING is between turns: a background wait, a run queued, or one that ended
+                turn = None if judge.get("status") != "RUNNING" else (
+                    turn if turn and turn["run"] == judge["id"] else {"run": judge["id"], "since": t})
+            if turn is None:
+                continue
+            active[a["id"]], judge = turn, judge or {}
+            with self.lock:
+                r = self.runs.get(turn["run"])
+            acted = max((x for x in (epoch(a.get("updatedAt")), epoch(judge.get("updatedAt") or judge.get("createdAt")),
+                                     r.last_t if r and r.last_kind != "start" else None) if x is not None), default=None)
+            known[a["id"]] = {"name": self.names[a["id"]], "handle": coords[a["id"]], "lane": coords[a["id"]],
+                              "run": turn["run"], "latest": a["latestRunId"], "since": turn["since"],
+                              "branches": sorted(self.branches.get(a["id"], set()) | pushed_branches(a)), "acted": acted}
         if active != self.active:
             self.active = active
             self.save()
@@ -2322,6 +2426,8 @@ class Watch:
                 r.status, r.agent_t = x["status"], epoch(a.get("updatedAt")) or 0.0
                 start = not r.streaming
                 r.streaming = True
+                if start:
+                    r.opened_t, r.said_n = self.clock(), 0
             if start:
                 start_stream(r)
         with self.lock:

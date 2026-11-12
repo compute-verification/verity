@@ -1793,9 +1793,13 @@ class FakeSh:
 REMOTE = "git@github.com:compute-verification/verity.git"
 
 
-def sweeps(w, clock, minutes, step=5):
+def sweeps(w, clock, minutes, step=5, beat=True):
+    """A sweep every `step` minutes for `minutes`, each followed run's stream giving a heartbeat before it (`beat`): the
+    stream is being received, as on the pod."""
     for _ in range(minutes // step):
         clock.t += step * 60
+        for run in list(w.runs) if beat else ():
+            w.on_event(run, "heartbeat", {})
         w.sweep(lambda r: None)
 
 
@@ -2156,6 +2160,239 @@ def test_a_restarted_watch_keeps_the_spells_rings(tmp_path):
     assert len(silent(tmp_path)) == 1, "neither the ring nor the spell's start is forgotten"
     sweeps(again, clock, 5)
     assert [r["window"] for r in silent(tmp_path)] == [1, 2]
+
+
+def lead(tmp_path):
+    """CO, circuits' coordinator, ACTIVE in the turn of run-r since the first sweep (T0), with no note of its lane and no
+    branch of its own. It works: its agent's `updatedAt` moves at every sweep, so no run of its is stalled."""
+    agents = [{"id": CO, "name": "verity: circuits", "status": "ACTIVE", "latestRunId": "run-r"}]
+    runs = {"run-r": {"status": "RUNNING", "createdAt": W.iso(T0), "updatedAt": W.iso(T0)}}
+    (tmp_path / "notes").mkdir(parents=True)
+    api, clock, w = coordinators(tmp_path, agents, runs, notes=tmp_path / "notes", git_remote=REMOTE,
+                                 sh=FakeSh({"main": "m" * 40}))
+    sweep = w.sweep
+
+    def working(start):
+        agents[0]["updatedAt"] = W.iso(clock.t)
+        sweep(start)
+    w.sweep = working
+    w.sweep(lambda r: None)
+    return api, clock, w, agents, runs
+
+
+def reads(api, what):
+    """How often the fake API was asked for CO's `runs` or `conversation`."""
+    return api.gets.count(f"/{'v0' if what == 'conversation' else 'v1'}/agents/{CO}/{what}")
+
+
+def test_a_lead_writing_assistant_text_with_no_note_or_push_is_not_silent_and_its_text_costs_no_read(tmp_path):
+    """A lead works through Slack, Linear and its workers for hours with no note and no push, and was rung silent two minutes
+    after it wrote. Its run's stream gives its assistant text, timed as it comes, for no read; an hour after its last text,
+    still in its turn, it is silent, in a record that counts the turn and the text."""
+    api, clock, w, agents, runs = lead(tmp_path)
+    for _ in range(9):
+        sweeps(w, clock, 20)
+        w.on_event("run-r", "assistant", {"text": "Read the thread; asking the worker for its numbers."})
+    said = clock.t
+    sweeps(w, clock, 55)
+    assert silent(tmp_path) == [], "text every 20 min for three hours, the last 55 min ago"
+    assert reads(api, "conversation") == 0 and reads(api, "runs") == 1 + 235 // 5, "nothing read beyond each sweep's own"
+    sweeps(w, clock, 5)
+    (rec,) = silent(tmp_path)
+    assert {k: rec.get(k) for k in ("agent", "run", "role", "owner", "since", "minutes", "active_minutes", "window")} == {
+        "agent": CO, "run": "run-r", "role": "coordinator", "owner": "top", "since": W.iso(said), "minutes": 60,
+        "active_minutes": 240, "window": 1}
+    assert reads(api, "conversation") == 0 and reads(api, "runs") == 2 + 240 // 5, \
+        "its runs are read once more, to see it still in its turn; its stream is received, so its conversation is not"
+
+
+def test_a_lead_in_a_turn_with_nothing_written_for_an_hour_is_silent_and_its_record_counts_that_turn(tmp_path):
+    """The fault the ring is for: a lead in a turn, its stream received, that writes nothing anywhere the watch reads; tool
+    calls and thinking are no text. The record counts the turn it is in, not how long the list has read ACTIVE: a lead
+    ACTIVE through two turns was rung an hour into the first's start, with the minutes of both."""
+    api, clock, w, agents, runs = lead(tmp_path)
+    sweeps(w, clock, 40)
+    runs["run-r"]["status"] = "FINISHED"
+    runs["run-s"] = {"status": "RUNNING", "createdAt": W.iso(clock.t), "updatedAt": W.iso(clock.t)}
+    agents[0]["latestRunId"], api.older[CO] = "run-s", ["run-r"]
+    began = clock.t + 5 * 60                # the sweep that first sees its second turn
+    for i in range(12):
+        sweeps(w, clock, 5)
+        w.on_event("run-s", "tool_call", {"callId": f"c{i}", "name": "mcp", "status": "running"})
+        w.on_event("run-s", "tool_call", {"callId": f"c{i}", "name": "mcp", "status": "completed"})
+        w.on_event("run-s", "thinking", {"text": "Which worker has the numbers?"})
+    assert silent(tmp_path) == [], "55 min into its second turn, 100 min ACTIVE"
+    sweeps(w, clock, 5)
+    (rec,) = silent(tmp_path)
+    assert (rec["run"], rec["since"], rec["minutes"], rec["active_minutes"], rec["role"], rec["owner"]) == (
+        "run-s", W.iso(began), 60, 60, "coordinator", "top")
+    sweeps(w, clock, 60)
+    assert [(r["window"], r["minutes"], r["active_minutes"]) for r in silent(tmp_path)] == [(1, 60, 60), (2, 120, 120)]
+
+
+@pytest.mark.parametrize("status", ["FINISHED", "WAITING_FOR_BACKGROUND_WORK", "CREATING"])
+def test_a_lead_between_turns_is_not_silent_whatever_the_list_says(tmp_path, status):
+    """The list's ACTIVE lags a turn's end, and covers a background wait and a run about to start: a lead was rung "ACTIVE 83
+    min" a quarter of an hour after its turn ended. One whose run is not RUNNING is between turns, however old its last
+    note; its next turn counts from the sweep that sees it begin."""
+    api, clock, w, agents, runs = lead(tmp_path)
+    sweeps(w, clock, 45)
+    runs["run-r"]["status"] = status
+    sweeps(w, clock, 120)
+    assert silent(tmp_path) == [] and w.active == {}, "ACTIVE on the list for 165 min, with no note and no push"
+    runs["run-r"]["status"] = "FINISHED"
+    runs["run-s"] = {"status": "RUNNING", "createdAt": W.iso(clock.t), "updatedAt": W.iso(clock.t)}
+    agents[0]["latestRunId"], api.older[CO] = "run-s", ["run-r"]
+    sweeps(w, clock, 60)
+    assert silent(tmp_path) == []
+    sweeps(w, clock, 5)
+    assert [(r["run"], r["minutes"], r["active_minutes"]) for r in silent(tmp_path)] == [("run-s", 60, 60)]
+
+
+def test_a_lead_whose_turn_ends_while_the_sweep_runs_is_not_recorded_silent(tmp_path):
+    """A sweep's reads take minutes: a lead was rung silent at the minute its turn ended. Its runs are read again before it
+    is recorded, and a turn over by then is no silence."""
+    api, clock, w, agents, runs = lead(tmp_path)
+    sweeps(w, clock, 55)
+    get = api.get
+
+    def ending(path, **params):             # its turn ends between the sweep's read of its runs and its judging of silence
+        got = get(path, **params)
+        if path.endswith("/runs"):
+            runs["run-r"]["status"] = "FINISHED"
+        return got
+    api.get = ending
+    before = reads(api, "runs")
+    sweeps(w, clock, 5)
+    assert silent(tmp_path) == [] and reads(api, "runs") == before + 2, "the sweep's read saw it RUNNING; the second, ended"
+    api.get, agents[0]["status"] = get, "IDLE"
+    sweeps(w, clock, 60)
+    assert silent(tmp_path) == [] and w.active == {} and w.silent == {}
+
+
+def test_a_lead_whose_turn_ends_as_its_six_hours_are_up_is_not_no_step(tmp_path):
+    """no_step tells top to stop and archive a lead: one whose turn ended while the sweep ran has just done something."""
+    api, clock, w, agents, runs = lead(tmp_path)
+    sweeps(w, clock, 125)
+    assert [r["window"] for r in silent(tmp_path)] == [1, 2]
+    w.sweep = W.Watch.sweep.__get__(w)      # its agent's `updatedAt` stops moving: no_step counts from here
+    get, due = api.get, clock.t + W.NO_STEP_S
+
+    def ending(path, **params):
+        got = get(path, **params)
+        if path.endswith("/runs") and clock.t >= due:
+            runs["run-r"]["status"] = "FINISHED"
+        return got
+    api.get = ending
+    sweeps(w, clock, W.NO_STEP_S // 60 + 30)
+    assert [r["kind"] for r in records(tmp_path) if r["kind"] in ("no_step", "archived")] == []
+
+
+def test_a_leads_conversation_is_read_only_when_it_is_about_to_be_recorded_with_no_stream_received(tmp_path):
+    """With no stream of its run received (a goal run, a stream past its retention, a broken one) a lead's conversation
+    says whether it wrote: read when it is about to be recorded, never once a sweep. The conversation carries no times, so
+    text the watch reads for the first time is life at that read, and the same text an hour on is silence since."""
+    api, clock, w, agents, runs = lead(tmp_path)
+    api.convs[CO] = [("user_message", "Go."), ("assistant_message", "On it.")]
+    sweeps(w, clock, 55, beat=False)
+    assert reads(api, "conversation") == 0 and silent(tmp_path) == []
+    sweeps(w, clock, 5, beat=False)
+    assert reads(api, "conversation") == 1 and silent(tmp_path) == [], "text read for the first time can't be dated"
+    sweeps(w, clock, 30, beat=False)
+    api.convs[CO].append(("assistant_message", "Asked the worker for its numbers."))
+    sweeps(w, clock, 30, beat=False)
+    assert reads(api, "conversation") == 2 and silent(tmp_path) == [], "it wrote since the last read"
+    sweeps(w, clock, 55, beat=False)
+    assert reads(api, "conversation") == 2 and silent(tmp_path) == []
+    sweeps(w, clock, 5, beat=False)
+    (rec,) = silent(tmp_path)
+    assert reads(api, "conversation") == 3 and "unread_minutes" not in rec
+    assert (rec["since"], rec["minutes"], rec["active_minutes"]) == (W.iso(T0 + 120 * 60), 60, 180), \
+        "silent since the read that last found new text, in a turn three hours old"
+    again = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d",
+                    notes=tmp_path / "notes", git_remote=REMOTE, sh=w.sh)
+    assert again.texts == w.texts and again.active == w.active, "a restart keeps the text last read and the turn"
+
+
+def test_a_conversation_the_api_wont_read_neither_rings_by_itself_nor_hides_a_silent_lead(tmp_path):
+    """A read that fails says nothing, so it records nothing and is made again ten minutes on, not every sweep. A
+    conversation unread at every try for a further hour hides no silence: the lead is recorded, its record saying for how
+    long its text went unread."""
+    api, clock, w, agents, runs = lead(tmp_path)        # the API answers 404 for its conversation
+    sweeps(w, clock, 115, beat=False)
+    assert silent(tmp_path) == [] and reads(api, "conversation") == 6, "tried at 60 min and every ten after"
+    sweeps(w, clock, 5, beat=False)
+    (rec,) = silent(tmp_path)
+    assert (rec["minutes"], rec["active_minutes"], rec["unread_minutes"], rec["window"]) == (120, 120, 60, 1)
+    sweeps(w, clock, 60, beat=False)
+    assert len(silent(tmp_path)) == 1, "the second window waits its own hour of tries"
+    sweeps(w, clock, 5, beat=False)
+    assert [(r["window"], r["unread_minutes"]) for r in silent(tmp_path)] == [(1, 60), (2, 60)]
+    api.convs[CO] = [("assistant_message", "Still here.")]
+    w.silent.clear()
+    sweeps(w, clock, 10, beat=False)
+    assert len(silent(tmp_path)) == 2 and w.blind == {}, "read at last: text the watch hadn't read, so life"
+    sweeps(w, clock, 60, beat=False)
+    assert "unread_minutes" not in silent(tmp_path)[-1] and silent(tmp_path)[-1]["minutes"] == 60
+
+
+def test_a_failed_read_of_a_leads_runs_records_nothing_until_a_read_shows_it_in_its_turn(tmp_path):
+    """Whether it is still in its turn is not known from a read that failed: nothing is recorded, the turn the watch last
+    saw stands, and the next try, ten minutes on, decides."""
+    api, clock, w, agents, runs = lead(tmp_path)
+    get, asked, fail = api.get, [], {"from": 1}
+
+    def failing(path, **params):            # each sweep's reads of its runs fail from the `fail["from"]`th on
+        if path.endswith("/runs"):
+            asked.append(clock.t)
+            if asked.count(clock.t) >= fail["from"]:
+                raise W.urllib.error.URLError("timed out")
+        return get(path, **params)
+    api.get = failing
+    sweeps(w, clock, 5)
+    fail["from"] = 2
+    sweeps(w, clock, 55)
+    assert silent(tmp_path) == [] and asked.count(clock.t) == 2, "the sweep's read, and the one before recording, which failed"
+    assert w.active == {CO: {"run": "run-r", "since": T0}}, "the sweep that couldn't read its runs left it in its turn"
+    sweeps(w, clock, 5)
+    assert silent(tmp_path) == [] and asked.count(clock.t) == 1, "not judged again for ten minutes"
+    fail["from"] = 3
+    sweeps(w, clock, 5)
+    assert [(r["minutes"], r["active_minutes"]) for r in silent(tmp_path)] == [(70, 70)]
+
+
+def test_text_a_stream_started_again_replays_is_no_new_text(tmp_path):
+    """A stream that fails is started again from the run's start, and gives the run's old text over again, timed as it
+    arrives: counted as written then, every failure would hide an hour of silence."""
+    api, clock, w, agents, runs = lead(tmp_path)
+    sweeps(w, clock, 10)
+    w.on_event("run-r", "assistant", {"text": "Read the thread; "})
+    w.on_event("run-r", "assistant", {"text": "asking the worker."})
+    said = clock.t
+    sweeps(w, clock, 40)
+    w.runs["run-r"].streaming = False       # its stream failed: the next sweep starts it again
+    sweeps(w, clock, 5)
+    w.on_event("run-r", "assistant", {"text": "Read the thread; asking the worker."})
+    sweeps(w, clock, 10)
+    assert silent(tmp_path) == [], "55 min after its text"
+    sweeps(w, clock, 5)
+    assert [r["since"] for r in silent(tmp_path)] == [W.iso(said)] and reads(api, "conversation") == 0
+    w.on_event("run-r", "assistant", {"text": " It answered."})
+    sweeps(w, clock, 60)
+    assert [r["since"] for r in silent(tmp_path)] == [W.iso(said), W.iso(said + 60 * 60)], "text past the replay is new"
+
+
+def test_a_stream_just_started_shows_nothing_yet_so_the_conversation_is_read(tmp_path):
+    """A stream started in the last minutes may still be replaying: that it gave no new text proves none was written."""
+    api, clock, w, agents, runs = lead(tmp_path)
+    api.convs[CO] = [("assistant_message", "On it.")]
+    sweeps(w, clock, 58, step=1)
+    w.runs["run-r"].streaming = False
+    sweeps(w, clock, 2, step=1)
+    assert silent(tmp_path) == [] and reads(api, "conversation") == 1, "an hour in, its stream a minute old"
+    sweeps(w, clock, 60, step=1)
+    assert [r["minutes"] for r in silent(tmp_path)] == [60] and reads(api, "conversation") == 1, \
+        "an hour after that read, its stream received again: no second read"
 
 
 def node_run(root, rid, ended, *, by="", state="done", rc=0, wall_s=750.0, command=None, job="", lane="", tree=""):

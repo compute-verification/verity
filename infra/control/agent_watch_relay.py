@@ -11,8 +11,9 @@ the doorbell also counts toward the coordinator's own ready-to-wake rule). A wor
 infra to find its launcher; its alerts, which the watch marks `quiet`, are posted with no handle and no lane and ring no one.
 An alert of a worker whose registered lane no handle owns, which the watch doesn't mark, leads with infra's handle and says
 its lane is unknown. A silent worker (ACTIVE 90 min with no note
-and no push) leads with the record's handle and rings it the same way; a silent coordinator (60 min, its record's owner top)
-rings top. A `research run` that ended on a node leads with its
+and no push) leads with the record's handle and rings it the same way; a silent coordinator (in one turn, with no note, no
+push and no assistant text for 60 min; its record's owner top) rings top, its sentence giving the turn's length, and saying
+so when its conversation went unread and its text unchecked. A `research run` that ended on a node leads with its
 sender's handle (a coordinator's own, a worker's launcher's, for a run whose sender is a lane, the lane's), and its doorbell is
 `research msg ring-run`, the one sender of run-end doorbells: `from runs, run R rc N (AGENT): ...`, once per run however
 often it is called, with `--to` the watch's resolved handle for all but a coordinator's own run. A worker's run that ended rc 0
@@ -109,6 +110,11 @@ TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable", "no_st
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
 HANDLE = WORKER | {"silent", "run_ended", "workers_failed", "archived"}       # rung to the record's handle
 FAIL = {"held", "stalled", "crashed", "dropped", "idle_after_run", "relaunch", "held_unread"}  # rung to the record's owner: who follows it up
+#: a silent coordinator's sentence (the record's `role`): its `active_minutes` count the turn it is in, and its `minutes` its
+#: assistant text too; with `unread_minutes`, its conversation went unread that long, so its text is unchecked
+SILENT_LEAD = "has been in one turn for {active_minutes} min, with no note, no push and no assistant text for {minutes} min"
+SILENT_LEAD_UNREAD = ("has been in one turn for {active_minutes} min, with no note and no push for {minutes} min; the API "
+                      "wouldn't read its conversation for {unread_minutes} min, so its assistant text is unchecked")
 UNROUTED = "infra"      # rung once for a worker the watch can't place, and for one whose lane no handle owns
 UNSENT_LISTED = 12      # runs of unknown senders one post names; the rest are counted
 RING_RUN = [sys.executable, "-m", "research", "msg", "ring-run"]
@@ -251,6 +257,8 @@ def text(rec: dict) -> str:
         return f"{lead.rstrip()}{who} *Agent watch, outage:* {SAY['outage'].format(**{**rec, 'handles': down})}."
     if rec.get("kind") == "silent":
         again = " Second window: the last ring until it shows activity." if rec.get("window") == 2 else ""
+        if rec.get("role") == "coordinator":
+            line = (SILENT_LEAD_UNREAD if rec.get("unread_minutes") is not None else SILENT_LEAD).format(**rec) + "; check on it"
         return f"{lead}*Agent watch:* agent {name} ({link}) {line}.{again}"
     if rec.get("kind") == "run_ended":
         run = f"run {rec.get('run')} ({rec.get('what') or '?'})"
