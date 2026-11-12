@@ -13,10 +13,10 @@ import report
 
 POUW = CT.POUW
 TESTS = Path(__file__).resolve().parent
-#: (script, name): a script beside its own ``NAME.py`` that still imports NAME by name, though under the suite NAME is
-#: another directory's. An entry goes in the commit that makes its script load the file, which the test below says once the
-#: script no longer needs it. It may name a script that is not in the tree yet
-EXCUSED = frozenset({("pearl_c_sm90/debit.py", "run")})
+#: (directory, name): one script of the directory may still import NAME by name beside its own ``NAME.py``, though under
+#: the suite NAME is another directory's. Like a lint's list, an entry may stand before its script is in the tree, and
+#: it goes in the commit that makes the script load the file
+EXCUSED = frozenset({("pearl_c_sm90", "run")})
 
 
 def holders() -> dict[str, list[Path]]:
@@ -42,8 +42,8 @@ def test_a_name_two_directories_hold_is_imported_by_name_from_one_of_them_at_mos
     """With every script directory on one path, ``import NAME`` is the first holder's module whoever asks. So only the
     first holder's own scripts and the tests ask by name: a script beside another ``NAME.py`` never does, nor one in no
     holder's directory, which means whichever holder it put on the path itself. Nobody asks by name for a NAME that
-    `AHEAD` gives to no directory, and `AHEAD` names no directory it need not. `EXCUSED` holds the scripts that still ask
-    beside their own file, and no script that has stopped."""
+    `AHEAD` gives to no directory, and `AHEAD` names no directory it need not. `EXCUSED` lets one script of a directory
+    ask beside its own file, and no second one."""
     shared = {name: dirs for name, dirs in holders().items() if len(dirs) > 1}
     ahead = [POUW / d for d in CT.AHEAD]
     wrong, used, excused = [], set(), set()
@@ -51,11 +51,12 @@ def test_a_name_two_directories_hold_is_imported_by_name_from_one_of_them_at_mos
         for name in sorted(imported(path) & shared.keys()):
             first, beside = shared[name][0], path.parent in shared[name]
             where = ", ".join(str(d.relative_to(POUW)) for d in shared[name])
+            entry = (path.parent.relative_to(POUW).as_posix(), name)
             if first not in ahead:
                 wrong.append(f"{path.relative_to(POUW)} imports {name}, which {where} hold and conftest.AHEAD gives to "
                              f"none: put the directory whose scripts import it by name in AHEAD, or load() the file")
-            elif beside and path.parent != first and (path.relative_to(POUW).as_posix(), name) in EXCUSED:
-                excused.add((path.relative_to(POUW).as_posix(), name))
+            elif beside and path.parent != first and entry in EXCUSED - excused:
+                excused.add(entry)
             elif beside and path.parent != first:
                 wrong.append(f"{path.relative_to(POUW)} imports {name} beside its own {name}.py, and under the suite "
                              f"that is {first.relative_to(POUW)}'s: load it from its file")
@@ -67,8 +68,6 @@ def test_a_name_two_directories_hold_is_imported_by_name_from_one_of_them_at_mos
     assert not wrong, "\n".join(wrong)
     unused = [d.name for d in ahead if d not in used]
     assert not unused, f"nothing imports by name a module {unused} share with another directory: take them out of AHEAD"
-    stale = sorted(f"{script} ({name})" for script, name in EXCUSED - excused if (POUW / script).is_file())
-    assert not stale, f"{stale} no longer import the name by name beside their own file: take them out of EXCUSED"
 
 
 def test_no_script_is_another_suites_unless_this_suites_inputs_hold_it():
