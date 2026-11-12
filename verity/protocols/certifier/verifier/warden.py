@@ -116,11 +116,13 @@ call without releases, on which the network certifier signs that the execution p
 - ends each execution phase it has not ended without releases when the run ends early, whatever ended it.
 
 **The content rows** (`WardenParams.content`, none by default: the classes of a schedule with lengths rows, each
-(P, O, rows), `content_rows`' "The classes"): the network certifier also keeps, of each request it releases, the
-request's bytes as it cut them into cells and the id of each `DATA` cell it released, four bytes an id, and hands them
-with the release (`Released.request`, `Released.ids`), so that `connection_rows` lays three more tables a class under
-the same head. The hand copies an execution phase's ids and makes nothing else: the tables are laid, committed and
-signed by whoever takes the hand, never on the tick.
+(P, O, rows) under form 1 and (P, O) under form 2, `content_rows`' "The classes"): the network certifier also keeps,
+of each request it releases, the request's bytes as it cut them into cells and the id of each `DATA` cell it released,
+four bytes an id, and hands them with the release (`Released.request`, `Released.ids`), so that `connection_rows` lays
+three more tables a class under the same head. Under form 2 those tables hold a row a release filed in the class and
+no other, at most `WardenParams.phase_releases`, a bound on an execution phase's releases. The hand copies an
+execution phase's ids and makes nothing else: the tables are laid, committed and signed by whoever takes the hand,
+never on the tick.
 Both are read off its own cells and nothing the server says. It keeps them from the release to the hand that carries
 it, or to where that hand would have been for a release it never hands (the lengths rows' hand, under either form),
 and no longer; of a connection it never released it keeps nothing. The classes enter the parameters' digest; a
@@ -230,7 +232,7 @@ class WardenParams:
     egress: str = "id"  # the egress form, one of `EGRESS_FORMS`
     max_tokens_cap: int | None = None  # the response cap (the module docstring's), or none
     lengths: int | None = None  # the lengths rows' form (the module docstring's "The lengths rows"): 1 or 2, or none
-    content: tuple[tuple[int, int, int], ...] | None = None  # the content rows' classes, each (P, O, rows), or none
+    content: tuple[tuple[int, ...], ...] | None = None  # the content rows' classes (`content_rows.classes`), or none
 
 
     def __post_init__(self) -> None:

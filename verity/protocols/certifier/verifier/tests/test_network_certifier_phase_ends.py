@@ -20,15 +20,15 @@ from verity.protocols.certifier.verifier import connection_rows as CR
 from verity.protocols.certifier.verifier.active import VirtualClock
 from verity.protocols.certifier.verifier.certificate import Issuer
 from verity.protocols.certifier.verifier.tests.test_network_certifier_content_tables import (
-    CON, GONE, LEN_DIGEST, LINK, leaves, leaving, mixed)
+    CON, GONE, HELD, LEN_DIGEST, LINK, leaves, leaving, mixed, registered)
 from verity.protocols.certifier.verifier.tests.test_network_certifier_lengths import (
     B, LEN, PLAIN, D, R, T, answer, id_req, traffic)
 from verity.protocols.certifier.verifier.tests.test_network_certifier_warden import TAU, Server, records, run
 from verity.protocols.certifier.verifier.warden import LENGTHS_FORMS, Warden, WardenParams, cells
 
-#: the lengths tests' schedule at form 2, and the content tables tests'
+#: the lengths tests' schedule at form 2, and the content tables tests' classes at it, each its two sizes
 TWO = dataclasses.replace(LEN, lengths=2)
-TWO_CON = dataclasses.replace(CON, lengths=2)
+TWO_CON = HELD
 SPAN = TWO.span
 #: pinned, as `LEN_DIGEST` is: the content tables tests' schedule's digest at form 1, and `leaves` of two runs at
 #: form 1, the content tables tests' traffic and the lengths tests' with its fourth tick of the second execution
@@ -39,6 +39,12 @@ CON_RUN = ("e654968a5568465737c2286818ecfc3a171f856ef0c44c67eecbed14c266f9fd"
            "24f9bb588bbe0f34c9fd7e62da8584d513c1307022901995eff2be5a3159fdbb")
 LATE_RUN = ("5b80530f5b725d8f9f6068dc5db9becb00ecd2ea186889c31573378b806425f9"
             "a2e5998a32a4dd617d60868359836eb3bd888cfa586c41d13e9ce008f602eb46")
+#: pinned with them: `registered` of the content tables tests' traffic at form 1, and of the lengths tests' without
+#: content rows, the registrations a verifier reads
+CON_REGISTERED = ("c969de114e4808370eb22eb9082ff4d290c742459fe1b9cab183a258b1d6268d"
+                  "9691e51ccbfb79420456efeb5f76d5669a8e9c9bffb8c3662b71538faeb3797a")
+LEN_REGISTERED = ("97a5a38d9ed904b94947425638fb0fd7c092d128f8940ecae204a25bff540fdf"
+                  "4d2ed4043989d3d0b0a5930a550ba7c6e925ea78855b0955705c8519b28d5fba")
 
 
 def ends(device: Warden) -> list[tuple[int, bool]]:
@@ -59,15 +65,18 @@ def order_of(device: Warden) -> dict[int, int]:
 
 
 def test_form_2_is_a_value_of_its_own_digest_and_a_schedule_at_form_1_leaves_what_it_left(tmp_path):
-    """The form is 1 or 2. Form 2 has the tables and the bounds of form 1 and another digest; a schedule at form 1,
-    with content rows or without, has the digest it had, and its run leaves the records, the certificates, the
-    cells' heads, the hands and the connection rows' heads it left, byte for byte: with content rows, and with a
-    late tick, whose execution phase and the one before it it doesn't hand."""
+    """The form is 1 or 2. Form 2 has the lengths and fails tables and the bounds of form 1 and another digest, and
+    its content tables have form 1's names and row sizes; a schedule at form 1, with content rows or without, has
+    the digest it had, and its run leaves the records, the certificates, the cells' heads, the hands, the
+    connection rows' heads and their registrations it left, byte for byte: with content rows, and with a late tick,
+    whose execution phase and the one before it it doesn't hand."""
     assert LENGTHS_FORMS == (1, 2)
     assert [(p.lengths, p.closes) for p in (PLAIN, LEN, TWO)] == [(None, False), (1, False), (2, True)]
     assert LEN.digest.hex() == LEN_DIGEST and CON.digest.hex() == CON_DIGEST
     assert len({PLAIN.digest, LEN.digest, TWO.digest, CON.digest, TWO_CON.digest}) == 5
-    assert CR.tables_of(TWO) == CR.tables_of(LEN) and CR.tables_of(TWO_CON) == CR.tables_of(CON)
+    assert CR.tables_of(TWO) == CR.tables_of(LEN) == CR.tables_of(TWO_CON)[:2] == CR.tables_of(CON)[:2]
+    assert [(name, size) for name, _, size in CR.tables_of(TWO_CON)] == \
+        [(name, size) for name, _, size in CR.tables_of(CON)]
     assert (TWO.stride_releases, TWO.span) == (LEN.stride_releases, LEN.span)
     assert SPAN == D + (LEN.egress_cells - 1) // R
     assert WardenParams(**json.loads(json.dumps(dataclasses.asdict(TWO_CON)))) == TWO_CON
@@ -78,12 +87,15 @@ def test_form_2_is_a_value_of_its_own_digest_and_a_schedule_at_form_1_leaves_wha
         dataclasses.replace(TWO, delay=13)
     _, arrivals, answers = mixed()
     device, _, _ = run(answers, arrivals, params=CON, windows=3, client=leaving(GONE))
-    (tmp_path / "content").mkdir()
+    for name in ("content", "content-registered", "late", "lengths-registered"):
+        (tmp_path / name).mkdir()
     assert leaves(device, CON, tmp_path / "content") == CON_RUN
+    assert registered(device, CON, tmp_path / "content-registered") == CON_REGISTERED
     _, arrivals, answers = traffic()
     device, _, _ = run(answers, arrivals, params=LEN, windows=5, late={T + 3: 0.05})
-    (tmp_path / "late").mkdir()
     assert [w for w, _ in device.lengths] == [2, 3] and leaves(device, LEN, tmp_path / "late") == LATE_RUN
+    device, _, _ = run(answers, arrivals, params=LEN, windows=3)
+    assert registered(device, LEN, tmp_path / "lengths-registered") == LEN_REGISTERED
 
 
 # --- the admission -------------------------------------------------------------------------------------------------

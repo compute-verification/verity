@@ -34,28 +34,40 @@ A decoder (`request_of`, `response_of`, `end_of`) gives back what its encoder wa
 field, bytes that are not a row of the form: another size, a count past the row, anything past the count, an end
 row whose class is neither 0 nor 1.
 
-**The classes** (`classes`): a schedule lists its classes in order, each (P, O, rows): its two sizes and the rows
-of each of its three tables, at most the lengths table's slots, since an execution phase releases no more. A class
-is its place in the list: two classes may have the same sizes, and class i's tables are `request.i`, `response.i`
-and `end.i`, i from 0 (`names`).
+**The classes** (`classes`): a schedule lists its classes in order. A class is its place in the list: two classes
+may have the same sizes, and class i's tables are `request.i`, `response.i` and `end.i`, i from 0 (`names`). What a
+class is beside its two sizes is the lengths rows' form's (`counted`):
+
+- under form 1 a class is (P, O, rows): its two sizes and the rows of each of its three tables, at most the lengths
+  table's slots, since an execution phase releases no more;
+- under form 2 a class is (P, O) and its tables have no size of their own: each holds a row a release filed in the
+  class and no other, at most R = `WardenParams.phase_releases` of them, a bound on an execution phase's releases.
+
+A class of the other form's is refused where the schedule is built, with what to change (`sized` is each class with
+the most rows its tables have under either form).
 
 **The tables** (`tables`) of an execution phase are made from its releases in release order, each with its request's
 bytes and its ids as the network certifier cut and released them (`warden.Released`), and from each release's class,
 which is an argument. Row r of class i's three tables is the r-th of the execution phase's releases filed in class
-i, and every row after the last held one is zero bytes. So a table's size is the schedule's whatever the load, a
-class's held rows are its first, and how many are held is a value. A release filed in no class, or in a class whose
-rows are all held, is unfiled: it has no content row, and its slots of the lengths and fails tables are the ones it
-had. A release filed in a class that doesn't hold it, its request longer than `request_room` or its ids more than O,
-is refused, never cut short.
+i. A release filed in no class, or in a class whose rows are all held, is unfiled: it has no content row, and its
+slots of the lengths and fails tables are the ones it had. A release filed in a class that doesn't hold it, its
+request longer than `request_room` or its ids more than O, is refused, never cut short.
+
+- Under form 1 every row after the last held one is zero bytes. So a table's size is the schedule's whatever the
+  load, a class's held rows are its first, and how many are held is a value.
+- Under form 2 a table is its held rows and nothing after them. A class's three tables have one count of rows, the
+  releases filed in it, and that count is public wherever the tables are committed (`connection_rows`' "The signed
+  head"); a class in which none is filed has three tables of no row. A class's rows are all held at R of them.
 
 **The filing** (`file`): a release's class is the first the schedule lists that holds it. The rule reads the
 release as the network certifier cut it and nothing a server says. It has one caller, `connection_rows.tables`, and
 `tables` lays whatever class that caller gives.
 
-**A row of zero bytes** is what every table holds where no release is filed (`empty_rows`, the one statement of
-it), and each table's decoder reads it its own way. `request_of` refuses it: its count is 0, and a released request has a byte. `response_of` reads a response
-of no id, and `end_of` an `END` after no `DATA` cell. So a held connection that ended before any id has the response
-and end rows of an unheld row, and of the three only the request row says whether a row is held (`held`).
+**A row of zero bytes** is what every table of form 1 holds where no release is filed (`empty_rows`, the one
+statement of it), and each table's decoder reads it its own way. `request_of` refuses it: its count is 0, and a
+released request has a byte. `response_of` reads a response of no id, and `end_of` an `END` after no `DATA` cell. So
+a held connection that ended before any id has the response and end rows of an unheld row, and of the three only
+the request row says whether a row is held (`held`). Under form 2 no table has an unheld row.
 """
 
 from __future__ import annotations
@@ -212,33 +224,57 @@ def held(request: bytes) -> bool:
     return any(request[:U32_BYTES])
 
 
-def classes(params: WardenParams) -> tuple[tuple[int, int, int], ...]:
-    """A schedule's classes as its parameters hold them (the module docstring's "The classes"), each (P, O, rows), or
-    ValueError naming what is none. `WardenParams` calls it where it is built and keeps what it returns, so no
-    schedule holds classes of another form."""
+def counted(params: WardenParams) -> bool:
+    """Whether a class's tables hold a row a release filed in it and no other, so that their rows are a count and
+    no size of the schedule's (the module docstring's "The classes"): under the lengths rows' form 2."""
+    return params.closes
+
+
+def classes(params: WardenParams) -> tuple[tuple[int, ...], ...]:
+    """A schedule's classes as its parameters hold them (the module docstring's "The classes"), each (P, O, rows)
+    under the lengths rows' form 1 and (P, O) under form 2, or ValueError naming what is none. `WardenParams` calls
+    it where it is built and keeps what it returns, so no schedule holds classes of another form."""
     if params.lengths is None:
         raise ValueError("the content rows' tables are listed in the connection rows' head, so a schedule with "
                          "content has lengths rows (lengths is 1 or 2)")
     got = params.content
+    form, numbers = ("(P, O)", 2) if counted(params) else ("(P, O, rows)", 3)
     if not isinstance(got, (tuple, list)) or not 0 < len(got) <= MOST_CLASSES:
-        raise ValueError(f"content is 1 to {MOST_CLASSES} classes, each (P, O, rows), or unset, not {got!r}")
+        raise ValueError(f"content is 1 to {MOST_CLASSES} classes, each {form}, or unset, not {got!r}")
     slots, most = params.window // params.every * params.stride_releases, params.ingress_cells * params.payload
     out = []
     for i, c in enumerate(got):
-        if not isinstance(c, (tuple, list)) or len(c) != 3:
-            raise ValueError(f"content class {i} is (P, O, rows), not {c!r}")
-        P, O, rows = c
+        if not isinstance(c, (tuple, list)) or len(c) not in (2, 3):
+            raise ValueError(f"content class {i} is {form}, not {c!r}")
+        if len(c) > numbers:
+            raise ValueError(f"content class {i} is (P, O) under the lengths rows' form 2, not {c!r}: drop its third "
+                             f"number, since each of its tables holds a row a release filed in it and no other "
+                             f"(or lengths is 1, under which a class has rows of its own)")
+        if len(c) < numbers:
+            raise ValueError(f"content class {i} is (P, O, rows) under the lengths rows' form 1, not {c!r}: give "
+                             f"the rows of each of its tables, 1 to {slots} (or lengths is 2, under which a class "
+                             f"is (P, O) and its tables hold a row a release filed in it and no other)")
+        P, O = c[:2]
         check_size(P, "prompt ids")
         check_ids(O)
         if P > most:
             raise ValueError(f"content class {i} has P={P} prompt ids, and a request of the schedule is at most "
                              f"{most} bytes (ingress_cells · a cell's payload), each id at least one")
         request_room(params.cell_bytes, P)
-        if type(rows) is not int or not 0 < rows <= slots:
+        if not counted(params) and (type(c[2]) is not int or not 0 < c[2] <= slots):
             raise ValueError(f"content class {i} has 1 to {slots} rows, the lengths table's slots, since an "
-                             f"execution phase releases no more, not {rows!r}")
-        out.append((P, O, rows))
+                             f"execution phase releases no more, not {c[2]!r}")
+        out.append(tuple(c))
     return tuple(out)
+
+
+def sized(params: WardenParams) -> tuple[tuple[int, int, int], ...]:
+    """Each class of a schedule as (P, O, the most rows each of its tables has): the class's own rows under form 1
+    and, where a table's rows are a count (`counted`), R = `WardenParams.phase_releases`. None for a schedule
+    without content rows."""
+    if params.content is None or not counted(params):
+        return params.content or ()
+    return tuple((P, O, params.phase_releases) for P, O in params.content)
 
 
 def names(i: int) -> tuple[str, str, str]:
@@ -248,9 +284,10 @@ def names(i: int) -> tuple[str, str, str]:
 
 def tables_of(params: WardenParams) -> tuple[tuple[str, int, int], ...]:
     """The content tables a schedule's head lists after the lengths and fails tables, class by class in the
-    schedule's order: each one's (name, rows, a row's bytes). None for a schedule without content rows."""
+    schedule's order: each one's (name, rows, a row's bytes), the rows the table's own under form 1 and the most it
+    has where they are a count (`counted`). None for a schedule without content rows."""
     B = params.cell_bytes
-    return tuple(t for i, (P, O, rows) in enumerate(params.content or ())
+    return tuple(t for i, (P, O, rows) in enumerate(sized(params))
                  for t in zip(names(i), (rows,) * 3, (request_bytes(B, P), response_bytes(O), END_BYTES)))
 
 
@@ -258,7 +295,7 @@ def layout(params: WardenParams, name: str) -> dict[str, int]:
     """What a content table's registration says of its rows' order: its class's place in the schedule's list and
     the class's two sizes. Row r is the r-th release of the execution phase filed in that class. ValueError for a
     name that is no content table of the schedule."""
-    for i, (P, O, _) in enumerate(params.content or ()):
+    for i, (P, O, _) in enumerate(sized(params)):
         if name in names(i):
             return {"class": i, "prompt_ids": P, "ids": O}
     raise ValueError(f"the schedule has no content table {name!r}")
@@ -275,7 +312,7 @@ def file(params: WardenParams, release: Released) -> int | None:
     """The class the network certifier files a release in (the module docstring's "The filing"): the first of the
     schedule's that holds its request's bytes and its ids, or None where none does."""
     B = params.cell_bytes
-    for i, (P, O, _) in enumerate(params.content):
+    for i, (P, O, _) in enumerate(sized(params)):
         if len(release.request) <= request_room(B, P) and len(release.ids) <= U32_BYTES * O:
             return i
     return None
@@ -284,15 +321,16 @@ def file(params: WardenParams, release: Released) -> int | None:
 def tables(params: WardenParams, released: Sequence[Released],
            filing: Sequence[int | None]) -> dict[str, list[bytes]]:
     """An execution phase's content tables (the module docstring's "The tables") from its releases in release order
-    and each one's class in `filing`, None for a release filed in none. ValueError for a schedule without content
-    rows, releases out of order or without the content of their lengths slots, a class the schedule doesn't list,
-    or a release filed in a class that doesn't hold it."""
+    and each one's class in `filing`, None for a release filed in none: each table its held rows and, under form 1,
+    zero rows to the class's rows. ValueError for a schedule without content rows, releases out of order or without
+    the content of their lengths slots, a class the schedule doesn't list, or a release filed in a class that
+    doesn't hold it."""
     if params.content is None:
         raise ValueError("the schedule has no content rows (WardenParams.content)")
     if len(filing) != len(released):
         raise ValueError(f"a class, or None, a release: {len(filing)} for {len(released)} releases")
-    B, last = params.cell_bytes, -1
-    filed: list[list[Released]] = [[] for _ in params.content]
+    B, last, listed = params.cell_bytes, -1, sized(params)
+    filed: list[list[Released]] = [[] for _ in listed]
     for r, i in zip(released, filing):
         if r.order <= last:
             raise ValueError(f"the releases are in release order, and {r.order} follows {last}")
@@ -305,22 +343,23 @@ def tables(params: WardenParams, released: Sequence[Released],
             continue
         if type(i) is not int or not 0 <= i < len(filed):
             raise ValueError(f"release {r.order} is filed in class {i!r}, and the schedule lists {len(filed)}")
-        P, O, rows = params.content[i]
+        P, O, rows = listed[i]
         if len(r.request) > request_room(B, P) or r.outputs > O:
             raise ValueError(f"release {r.order}, of {len(r.request)} bytes and {r.outputs} ids, is filed in class "
                              f"{i}, which holds {request_room(B, P)} bytes and {O} ids")
         if len(filed[i]) < rows:
             filed[i].append(r)
     out: dict[str, list[bytes]] = {}
-    for i, ((P, O, rows), mine) in enumerate(zip(params.content, filed)):
+    for i, ((P, O, rows), mine) in enumerate(zip(listed, filed)):
         made = ([request_row(r.request, B, P) for r in mine], [response_row(ids_of(r.ids), O) for r in mine],
                 [end_row(r.failed, r.outputs) for r in mine])
         for name, held_, empty in zip(names(i), made, empty_rows(B, P, O)):
-            out[name] = held_ + [empty] * (rows - len(mine))
+            out[name] = held_ if counted(params) else held_ + [empty] * (rows - len(mine))
     return out
 
 
 __all__ = ["END", "END_BYTES", "END_SLOT", "ENDED", "FAILED", "MIN_SIZE", "MOST_CLASSES", "NO_COUNT", "REQUEST",
-           "RESPONSE", "TIE_WORDS", "U32_BYTES", "check_ids", "check_size", "classes", "empty_rows", "end_of",
-           "end_row", "file", "held", "ids_of", "layout", "most_ids", "names", "request_bytes", "request_of",
-           "request_room", "request_row", "response_bytes", "response_of", "response_row", "tables", "tables_of"]
+           "RESPONSE", "TIE_WORDS", "U32_BYTES", "check_ids", "check_size", "classes", "counted", "empty_rows",
+           "end_of", "end_row", "file", "held", "ids_of", "layout", "most_ids", "names", "request_bytes",
+           "request_of", "request_room", "request_row", "response_bytes", "response_of", "response_row", "sized",
+           "tables", "tables_of"]

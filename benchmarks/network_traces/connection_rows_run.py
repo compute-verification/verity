@@ -2,10 +2,11 @@
 keep of each execution phase's hand, the offline check of what it kept, and the cost of a close.
 
 **The flags** (`flags`, `schedule`, `flags_of`). `--lengths 1` or `--lengths 2` gives the schedule lengths rows
-of that form (`warden`'s "The lengths rows") and `--content P,O,ROWS ...` its content rows' classes, in order
-(`content_rows`' "The classes"): a class's size of prompt ids, its size of ids released, and the rows of each of its
-three tables. `warden_serve`'s `serve` and `rehearse` take both, and `rehearse` passes them to its `serve`. Without
-them the schedule, its digest and everything the run writes are what they were.
+of that form (`warden`'s "The lengths rows") and `--content P,O[,ROWS] ...` its content rows' classes, in order
+(`content_rows`' "The classes"): a class's size of prompt ids, its size of ids released and, under form 1 and only
+there, the rows of each of its three tables. Under form 2 a class is `P,O`: its tables hold a row a release filed in
+it and no other. `warden_serve`'s `serve` and `rehearse` take both, and `rehearse` passes them to its `serve`.
+Without them the schedule, its digest and everything the run writes are what they were.
 
 **The hand** (`hand`, `Keeper`). With lengths rows the network certifier hands an execution phase's releases once
 the next one's records are published (`Warden.hand_lengths`): on its ticker, after that execution phase's last bucket
@@ -22,7 +23,9 @@ Under form 2 the network certifier ends every execution phase of the run, the la
 it doesn't hand without releases. For that one the publisher's process signs the word that it has no head
 (`connection_rows`' "The word that no head comes"): its line of `rows.jsonl` holds the word's record under
 `no_head` in place of a registration, and its blob of `rows.salts` is empty. So every execution phase has one line
-and one blob, in the run's order, and takes one leaf of the key.
+and one blob, in the run's order, and takes one leaf of the key. Under form 2 a class's tables are its held rows,
+so a line's rows, its blob of salts and the publisher's build and commit follow the execution phase's releases, and
+`read` takes each table's salts by the rows the line's registration counts.
 
 **The check** (`check`). Every execution phase that is handed, and no other, has a registration that
 `connection_rows.check_registration` accepts under the network certifier's key and session, and its head is the head
@@ -75,18 +78,21 @@ HAND = "connection-rows"
 ROWS, SALTS = "rows.jsonl", "rows.salts"
 #: a line's key for the word that its execution phase has no head, where a head's line has `registration`
 NO_HEAD = "no_head"
-#: the classes the cost is measured at by default: each (P, O) a power of four apart, 16 rows each
+#: the classes the cost is measured at by default: each (P, O) a power of four apart, 16 rows each under form 1
 CLASSES = tuple((size, size, 16) for size in (2, 16, 64, 256, 1024, 4096))
 
 
 # The schedule's flags.
 
-def _class(text: str) -> tuple[int, int, int]:
+def _class(text: str) -> tuple[int, ...]:
     try:
-        p, o, rows = (int(x) for x in text.split(","))
+        numbers = tuple(int(x) for x in text.split(","))
     except ValueError:
-        raise argparse.ArgumentTypeError(f"a class is P,O,ROWS, three integers, not {text!r}") from None
-    return p, o, rows
+        numbers = ()
+    if len(numbers) not in (2, 3):
+        raise argparse.ArgumentTypeError(f"a class is P,O,ROWS under --lengths 1 and P,O under --lengths 2, integers, "
+                                         f"not {text!r}")
+    return numbers
 
 
 def flags(q: argparse.ArgumentParser) -> None:
@@ -96,9 +102,11 @@ def flags(q: argparse.ArgumentParser) -> None:
                         "execution phase's releases, and the publisher commits and signs their tables; under 2 "
                         "every execution phase of the run ends, the last included, in its head or in the network "
                         "certifier's signed word that it has none (default: none)")
-    q.add_argument("--content", type=_class, nargs="+", default=None, metavar="P,O,ROWS",
+    q.add_argument("--content", type=_class, nargs="+", default=None, metavar="P,O[,ROWS]",
                    help="with --lengths: the content rows' classes, in order (content_rows' \"The classes\"): a "
-                        "class's size of prompt ids, its size of ids released, and its tables' rows (default: none)")
+                        "class's size of prompt ids, its size of ids released and, under --lengths 1 and only "
+                        "there, its tables' rows; under --lengths 2 its tables hold a row a release filed in it "
+                        "(default: none)")
 
 
 def schedule(params: WardenParams, args: argparse.Namespace) -> WardenParams:
@@ -176,24 +184,42 @@ class Keeper:
 
 def read(run: Path, params: WardenParams) -> list[tuple[dict, dict[str, list[bytes]]]]:
     """`rows.jsonl` and `rows.salts`, line by line: each execution phase's registration (or the word that it has no
-    head, or a refusal) and cost, and its rows' salts by table, none where no table was committed."""
+    head, or a refusal) and cost, and its rows' salts by table, none where no table was committed. A table's salts
+    are one a row: the schedule's rows, or where a class's rows are a count (`content_rows.counted`) the rows the
+    line's registration gives the table, and there a line without a registration has no salts read."""
     path = run / ROWS
     lines = [json.loads(x) for x in path.read_text().splitlines()] if path.exists() else []
     blobs = ar.read_blobs(run / SALTS)
-    listed = CR.tables_of(params)
-    size = WR.SALT_BYTES * sum(rows for _, rows, _ in listed)
-    if len(blobs) != len(lines) or not all(len(b) == size or (not b and "registration" not in doc)
-                                           for doc, b in zip(lines, blobs)):
+    listed = [(name, rows) for name, rows, _ in CR.tables_of(params)]
+    size = WR.SALT_BYTES * sum(rows for _, rows in listed)
+    counted = CT.counted(params) and params.content is not None
+    if len(blobs) != len(lines) or not (counted or all(len(b) == size or (not b and "registration" not in doc)
+                                                       for doc, b in zip(lines, blobs))):
         raise ValueError(f"{ROWS} has {len(lines)} lines and {SALTS} {len(blobs)} blobs, each of {size} bytes or, "
                          f"for a line without a registration, of none")
     out = []
     for doc, blob in zip(lines, blobs):
         salts, at = {}, 0
-        for name, rows, _ in listed if blob else ():
+        for name, rows in (_counted(doc, blob, listed) if counted else listed if blob else ()):
             salts[name] = [blob[at + k * WR.SALT_BYTES:at + (k + 1) * WR.SALT_BYTES] for k in range(rows)]
             at += rows * WR.SALT_BYTES
         out.append((doc, salts))
     return out
+
+
+def _counted(doc: Mapping, blob: bytes, listed: Sequence[tuple[str, int]]) -> list[tuple[str, int]]:
+    """Each table's rows in a line's blob of salts where a class's rows are a count: the rows the line's
+    registration gives the table, and no table for a line without one. ValueError for a registration that doesn't
+    list the schedule's tables, or a blob that isn't a salt a row of them."""
+    if "registration" not in doc:
+        return []
+    mine = [(t["name"], t["rows"]) for t in doc["registration"]["tables"]]
+    if [name for name, _ in mine] != [name for name, _ in listed] or \
+            not all(type(rows) is int and rows >= 0 for _, rows in mine) or \
+            len(blob) != WR.SALT_BYTES * sum(rows for _, rows in mine):
+        raise ValueError(f"execution phase {_phase(doc)}'s blob of {SALTS} isn't a salt a row of the schedule's "
+                         f"tables as its registration counts them")
+    return mine
 
 
 def _phase(doc: Mapping) -> int:
@@ -272,7 +298,9 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Recor
             costs.append(doc["cost"])
             try:
                 head, _ = CR.check_registration(doc["registration"], key, session, params, link, w)
-                ok = CR.Rows.commit(link, w, CR.tables(params, held[w]), params, session, salts).head == head
+                mine = CR.tables(params, held[w])
+                ok = all(len(salts.get(name, ())) == len(rows) for name, rows in mine.items()) and \
+                    CR.Rows.commit(link, w, mine, params, session, salts).head == head
                 if not ok:
                     problems.append(f"execution phase {w}'s connection rows aren't its records' releases")
             except ValueError as e:
