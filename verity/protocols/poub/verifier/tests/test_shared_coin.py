@@ -37,9 +37,9 @@ def finish_draws(s: AuditRun, prover: audit.Prover, passes, clock, open_=None) -
         group = s.params.draw_of(t)
         if t != group[-1]:
             continue
-        drawn = s.close(t)
-        if isinstance(drawn, audit.Verdict):
-            return out + [drawn]
+        sampled = s.close(t)
+        if isinstance(sampled, audit.Verdict):
+            return out + [sampled]
         for u in group:
             if s.windows[u].verdict is not None:
                 out.append(s.windows[u].verdict)
@@ -117,8 +117,8 @@ def test_an_honest_session_drawn_four_windows_a_coin_is_accepted(store) -> None:
     assert audit.pooled_windows(r)[0] == [(sum(us[:4]), p.samples), (sum(us[4:]), p.samples)]
     fs, floors = audit.pooled_bound(r).floors, audit.floors(r)
     for t, u in enumerate(us):
-        draw = sum(us[t // 4 * 4:t // 4 * 4 + 4])
-        assert Fraction(floors[t]) >= min(Fraction(1), fs[t // 4] * draw / u) > fs[t // 4]
+        pooled = sum(us[t // 4 * 4:t // 4 * 4 + 4])
+        assert Fraction(floors[t]) >= min(Fraction(1), fs[t // 4] * pooled / u) > fs[t // 4]
 
 
 def test_a_window_the_draw_misses_is_accepted_at_its_close_and_refused_a_verify(store) -> None:
@@ -159,8 +159,8 @@ def test_the_last_draw_may_hold_fewer_windows(store) -> None:
     L = ledger.window_receipts(r.pace, r.blocks, r.append_coins, r.codec.max_blocks)
     q = n.sketch_outside * ledger.compressions(r, n)
     assert r.append_coins > 0 and (audit.STEP_LIMIT - 1) * r.codec.max_blocks == L
-    per_draw, per_window = ledger.binding_over(2, 2 * L, p.samples, q), ledger.binding_over(3, L, p.samples, q)
-    assert ledger.binding(r, n) == per_draw != per_window
+    per_sample, per_window = ledger.binding_over(2, 2 * L, p.samples, q), ledger.binding_over(3, L, p.samples, q)
+    assert ledger.binding(r, n) == per_sample != per_window
     with pytest.raises(ValueError, match=r"the draw of windows 0…1 drew 7 of its 140 receipts, not min\(6, 140\)"):
         dataclasses.replace(r, samples=p.samples - 1)
 

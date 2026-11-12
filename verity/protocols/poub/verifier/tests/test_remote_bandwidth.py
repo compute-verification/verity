@@ -141,10 +141,10 @@ def finish(s: AuditRun, prover: audit.Prover, passes, clock: Clock, open_=None):
     clock.now = max(clock.now, s.deadline(len(s.windows) - 1) + 1)
     out = []
     for t in range(s.params.windows):
-        draws = s.close(t)
-        if isinstance(draws, audit.Verdict):
-            return out + [draws]
-        out.append(s.verify(t, [(open_ or prover.open)(passes[t, i], p) for i, p in draws]))
+        sampled = s.close(t)
+        if isinstance(sampled, audit.Verdict):
+            return out + [sampled]
+        out.append(s.verify(t, [(open_ or prover.open)(passes[t, i], p) for i, p in sampled]))
         if not out[-1].accepted:
             return out
     return out

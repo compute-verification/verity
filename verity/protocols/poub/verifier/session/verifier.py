@@ -443,13 +443,13 @@ def pace_of(spec: str, pass_ms: float) -> dict:
     parts = spec.split(":")
     if len(parts) not in (4, 5):
         raise ValueError(f"a pace is K:T_MS:DRAWS:WINDOWS[:F], not {spec!r}")
-    k, t_ms, draws_t, windows = (float(x) if i == 1 else int(x) for i, x in enumerate(parts[:4]))
+    k, t_ms, samples_t, windows = (float(x) if i == 1 else int(x) for i, x in enumerate(parts[:4]))
     f = int(parts[4]) if len(parts) == 5 else 2
     if f not in (1, 2):
         raise ValueError(f"a pace's windows in flight are 1 or 2, not {f}")
     groups = max(1, round(t_ms / (k * pass_ms)))
-    return {"k": k, "t_ms": t_ms, "draws_t": draws_t, "windows": windows, "groups": groups,
-            "draws": math.ceil(draws_t / groups), "pass_ms": pass_ms} | ({"in_flight": 1} if f == 1 else {})
+    return {"k": k, "t_ms": t_ms, "draws_t": samples_t, "windows": windows, "groups": groups,
+            "draws": math.ceil(samples_t / groups), "pass_ms": pass_ms} | ({"in_flight": 1} if f == 1 else {})
 
 
 def paced_groups(mem: dict, seen: list[dict], *, block_bytes: int) -> list[line.Group]:
@@ -1143,14 +1143,14 @@ class Verifier:
             item = self.clock.wait(self.inbox, not_before_ns)
             if item is not None:
                 self.log(f"verifier: skipped a {item[0]['type']} before the session's first coin")
-        sent = drawn = 0
+        sent = closed = 0
         arrivals: list[list[int]] = [[] for _ in range(W)]
         verdicts: dict[int, dict] = {}
         lean_ready: dict[int, tuple[int | dict, int, bool]] = {}
         lean_checks: dict[int, int] = {}
         settling: set[int] = set()
         frames: dict[int, int] = {}
-        draws_at: dict[int, int] = {}
+        sampled_at: dict[int, int] = {}
         failure = None
         cpu0 = time.process_time_ns()
 
@@ -1198,7 +1198,7 @@ class Verifier:
                 t = lean_checks.pop(check_id)
                 ready = (lv.REFUSED if "refused" in head else check_id) if head["id"] is not None else \
                     {"error": "the process ended"}
-                lean_ready[t] = (ready, stamp - draws_at[t], head["accepted"])
+                lean_ready[t] = (ready, stamp - sampled_at[t], head["accepted"])
                 decide(t)
 
         def close(t: int) -> None:
@@ -1219,7 +1219,7 @@ class Verifier:
             now = self.clock.now()
             for u in group:
                 share = session.windows[u].draws
-                draws_at[u] = now
+                sampled_at[u] = now
                 self.conn.send({"type": "draws", "t": u, "draws": [list(d) for d in share]})
                 if not share:
                     verdicts[u] = {"t": u, "accepted": True, "failure": None, "at": None, "openings": 0,
@@ -1244,7 +1244,7 @@ class Verifier:
         while failure is None and len(verdicts) < W:
             if sent < W:
                 until = session.next_boundary_ns()
-            elif drawn < W:
+            elif closed < W:
                 until = session.deadline(W - 1) + 1
             else:
                 until = None
@@ -1252,12 +1252,12 @@ class Verifier:
             if item is None:
                 if sent < W:
                     bound()
-                    while failure is None and K is not None and drawn < sent and len(session.windows[drawn].roots) >= K:
-                        close(drawn)
-                        drawn += 1
+                    while failure is None and K is not None and closed < sent and len(session.windows[closed].roots) >= K:
+                        close(closed)
+                        closed += 1
                 else:
-                    close(drawn)
-                    drawn += 1
+                    close(closed)
+                    closed += 1
                 continue
             head, body, stamp = item
             kind = head["type"]
@@ -1278,12 +1278,12 @@ class Verifier:
                     failure = {"t": v.window, "failure": v.failure, "at": v.at}
                     break
                 arrivals[t].append(stamp)
-                while failure is None and (drawn < t or (drawn == t and K is not None and i + 1 >= K and sent > t)):
-                    due = session.next_boundary_ns() if drawn == t and sent + 1 < W else None
+                while failure is None and (closed < t or (closed == t and K is not None and i + 1 >= K and sent > t)):
+                    due = session.next_boundary_ns() if closed == t and sent + 1 < W else None
                     with (session.coins.ahead(coins.CHALLENGE, sent + 1, bytes.fromhex(head["root"]))
                           if due is not None and due <= self.clock.now() else contextlib.nullcontext()):
-                        close(drawn)
-                    drawn += 1
+                        close(closed)
+                    closed += 1
             elif kind == "append":
                 try:
                     got = self.append(session, head)
@@ -1371,7 +1371,7 @@ class Verifier:
                                  "passes": len(w.roots), "arrivals_ns": arrivals[t],
                                  "slack_ns": (session.deadline(t) - arrivals[t][-1])
                                  if arrivals[t] and w.boundary_ns is not None else None,
-                                 "draws_sent_ns": draws_at.get(t)} for t, w in enumerate(session.windows)]}
+                                 "draws_sent_ns": sampled_at.get(t)} for t, w in enumerate(session.windows)]}
         if accepted:
             record = session.record()
             out["record"] = {"public": record.public(), "profile": record.profile(), "end_ns": record.end_ns}

@@ -203,8 +203,8 @@ class Verifier:
         if isinstance(self.s.close(t), audit.Verdict):
             return self._finish()
         self.opening = t
-        draws = b"".join(DRAW.pack(i, p) for i, p in self.s.windows[t].draws)
-        return [Send(PROVER, Message("Open", {"t": t}, draws))]
+        body = b"".join(DRAW.pack(i, p) for i, p in self.s.windows[t].draws)
+        return [Send(PROVER, Message("Open", {"t": t}, body))]
 
     def _verify(self, body: bytes, now: int) -> list[Any]:
         t, self.opening = self.opening, None
@@ -263,8 +263,8 @@ class Prover:
             self.passes += 1
             return [Send(VERIFIER, Message("Root", {"t": t, "i": m.fields["i"]}, root))]
         if m.type == "Open":
-            draws = [DRAW.unpack_from(m.body, k) for k in range(0, len(m.body), DRAW.size)]
-            return [Send(VERIFIER, Message("Openings", {"t": t}, W.encode_openings(self.store.open(t, draws))))]
+            sampled = [DRAW.unpack_from(m.body, k) for k in range(0, len(m.body), DRAW.size)]
+            return [Send(VERIFIER, Message("Openings", {"t": t}, W.encode_openings(self.store.open(t, sampled))))]
         if m.body:
             try:
                 doc = json.loads(m.body)

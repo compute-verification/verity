@@ -68,9 +68,9 @@ def per_window(t: int, windows: Sequence[tuple[int, int]], delta: Fraction) -> d
     b = pooled.bound(windows, delta / t)
     wrong = -(-b.wrong.numerator // b.wrong.denominator)
     each = (sum(u for u, _ in windows) - wrong) * codec.BLOCK_BYTES
-    draws = sum(s for _, s in windows)
+    sampled = sum(s for _, s in windows)
     return {"q_bytes_each": each, "q_bytes": t * each, "at": f"δ/T = {delta}/{t} a session",
-            "except_with": f"δ + T·S/2^64 = {float(delta + Fraction(t * draws, 2 ** 64)):.3g}"}
+            "except_with": f"δ + T·S/2^64 = {float(delta + Fraction(t * sampled, 2 ** 64)):.3g}"}
 
 
 def table(answer: Mapping[str, Any], machines: int, window_s: int, *, deployment: str | None = None) -> dict[str, Any]:

@@ -805,10 +805,10 @@ class Record:
         g = self.groups_per_coin
         for a in range(0, len(self.windows), g):
             ws = self.windows[a:a + g]
-            u, drawn = sum(w.receipts for w in ws), sum(w.profile.drawn["receipt"] for w in ws)
-            if drawn != min(self.samples, u):
+            u, sampled = sum(w.receipts for w in ws), sum(w.profile.drawn["receipt"] for w in ws)
+            if sampled != min(self.samples, u):
                 what = f"window {ws[0].window}" if g == 1 else f"the draw of windows {ws[0].window}…{ws[-1].window}"
-                raise ValueError(f"{what} drew {drawn} of its {u} receipts, not min({self.samples}, {u}) at the "
+                raise ValueError(f"{what} drew {sampled} of its {u} receipts, not min({self.samples}, {u}) at the "
                                  "record's samples")
 
     @property
@@ -1228,18 +1228,18 @@ class AuditRun:
         coin = coins.coin(self.coins.openings(c, w.roots[-1]))
         key = derive(coin, OPENINGS_DOMAIN, {"registration": self.registration.digest, "window": c})
         ends = tuple(itertools.accumulate(plan.length for v in ws for plan in v.plans))
-        draws = []
+        sampled = []
         for u in key.subset(min(self.params.samples, ends[-1]), ends[-1], "openings"):
             i = bisect.bisect_right(ends, u)
-            draws.append((i, u - (ends[i - 1] if i else 0)))
+            sampled.append((i, u - (ends[i - 1] if i else 0)))
         base = 0
         for u, v in zip(group, ws):
             n = len(v.plans)
-            v.draws, v.opened_ns = tuple((i - base, p) for i, p in draws if base <= i < base + n), now
+            v.draws, v.opened_ns = tuple((i - base, p) for i, p in sampled if base <= i < base + n), now
             if not v.draws:
                 v.verdict = Verdict(u, True)
             base += n
-        return tuple(draws)
+        return tuple(sampled)
 
     def _previous(self, t: int, i: int) -> bytes:
         """What pass i of window t's seed takes as the root before it: that root, chained to the appends received

@@ -261,9 +261,9 @@ def session(node: str, prover: Prover, coins: bytes, *, windows: int = 2, passes
         challenge = call({"kind": "boundary"}, s.boundary, s.next_boundary_ns())
     for t in range(windows if verify is None else verify):
         d = s.deadline(t)
-        draws = call({"kind": "close", "t": t}, functools.partial(s.close, t),
+        sampled = call({"kind": "close", "t": t}, functools.partial(s.close, t),
                      None if s.windows[t].final else d + 1)
-        if isinstance(draws, audit.Verdict):
+        if isinstance(sampled, audit.Verdict):
             break
         got = prover.open(t, s.windows[t].draws)
         v = call({"kind": "verify", "t": t, "openings": [opening_json(o) for o in got]},

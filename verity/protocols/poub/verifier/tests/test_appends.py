@@ -128,8 +128,8 @@ class Run:
         self.clock.now = self.s.deadline(len(self.s.windows) - 1) + 1
         out = []
         for t in range(self.p.windows):
-            draws = self.s.close(t)
-            out.append(self.s.verify(t, [(open_ or self.prover.open)(self.passes[t, i], q) for i, q in draws]))
+            sampled = self.s.close(t)
+            out.append(self.s.verify(t, [(open_ or self.prover.open)(self.passes[t, i], q) for i, q in sampled]))
             if not out[-1].accepted:
                 break
         return out
@@ -672,11 +672,11 @@ def test_an_appended_block_opens_only_with_its_digest(appended, digest, failure)
     decode.  A registered block's opening with a digest is malformed."""
     r = honest_session()
     r.clock.now = r.s.deadline(1) + 1
-    draws = r.s.close(0)
-    n = next(n for n, (i, q) in enumerate(draws) if (r.passes[0, i].plan.block(q) >= N) == appended)
-    opened = [r.prover.open(r.passes[0, i], q) for i, q in draws]
+    sampled = r.s.close(0)
+    n = next(n for n, (i, q) in enumerate(sampled) if (r.passes[0, i].plan.block(q) >= N) == appended)
+    opened = [r.prover.open(r.passes[0, i], q) for i, q in sampled]
     opened[n] = dataclasses.replace(opened[n], digest=digest)
-    assert r.s.verify(0, opened) == audit.Verdict(0, False, failure, draws[n])
+    assert r.s.verify(0, opened) == audit.Verdict(0, False, failure, sampled[n])
 
 
 @pytest.mark.parametrize("opened", [0, 1], ids=["no-openings", "an-opening"])
@@ -688,8 +688,8 @@ def test_a_window_with_no_draws_is_malformed_whatever_its_openings(opened) -> No
     assert r.run() is None
     r.boundary()
     r.clock.now = r.s.deadline(0) + 1
-    draws = r.s.close(0)
-    openings = [r.prover.open(r.passes[0, i], q) for i, q in draws][:opened]
+    sampled = r.s.close(0)
+    openings = [r.prover.open(r.passes[0, i], q) for i, q in sampled][:opened]
     r.s.windows[0].draws = ()
     assert r.s.verify(0, openings) == audit.Verdict(0, False, "malformed") == r.s.failed
 
