@@ -212,6 +212,32 @@ def test_add_norm_storing_its_rows_twice_binds_its_definition_per_buffer(art: Pa
         T.recognize(name, twice.replace(store.replace("out_ptr1", "out_ptr2"), store.replace("out_ptr1", "out_ptr2").replace("tmp22", "tmp20")), cfg, cc=CC)
 
 
+def test_a_file_with_no_runner_call_has_no_launch(tmp_path: Path) -> None:
+    (tmp_path / "w.py").write_text("x = 1\n")
+    doc = C.parse_wrapper(str(tmp_path / "w.py"))
+    assert (doc["launches"], doc["returns"], doc["unparsed_runs"], doc["signatures"]) == ([], [], 0, {}) and not doc["args"] and not doc["arg_kinds"]
+
+
+def _wrapper(kernel: str) -> dict:
+    """What `assign_wrappers` reads of a parsed wrapper: one argument of no kind `get_args()` names, one return, one launch."""
+    return {"args": ["arg0_1"], "arg_kinds": ["?"], "returns": [{}], "launches": [{"kernel": kernel, "nargs": 1, "widths": [8]}]}
+
+
+def test_a_piece_takes_the_first_wrapper_of_its_one_launch_program() -> None:
+    graph = {"wiring": [{"piece": 3, "submod": "submod_3", "args": ["name"], "arg_kinds": ["layer"], "n_ret": 1}]}
+    wrappers = [_wrapper("k"), {**_wrapper("other"), "returns": [{}, {}]}, _wrapper("k")]
+    assert [w is wrappers[0] for w in C.assign_wrappers(wrappers, graph)] == [True]
+
+
+@pytest.mark.parametrize(("kernels", "found"), [((), "0 wrapper candidates with 0 launch programs"), (("k", "other"), "2 wrapper candidates with 2 launch programs")],
+                         ids=["none", "two"])
+def test_a_piece_without_one_launch_program_ends_the_process(kernels: tuple[str, ...], found: str) -> None:
+    graph = {"wiring": [{"piece": 3, "submod": "submod_3", "args": ["name"], "arg_kinds": ["layer"], "n_ret": 1}]}
+    with pytest.raises(SystemExit) as e:
+        C.assign_wrappers([_wrapper(k) for k in kernels], graph)
+    assert str(e.value) == f"compiled_manifest: piece 3 (submod_3, 1 args, 1 returns): {found} -- the wrapper set does not describe the split graph"
+
+
 def test_a_kernel_that_is_a_template_only_in_its_function_is_refused(art: Path) -> None:
     """A source whose jit function is a template's text is still refused, by name, when its heuristic or its signature is not the
     template's, its literals break the template's relations, its launch config is absent or one the Definition's layout does not
