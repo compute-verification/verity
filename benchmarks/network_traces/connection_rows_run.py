@@ -55,8 +55,9 @@ import certifier_serve as cs
 from verity.protocols.certifier.verifier import connection_rows as CR
 from verity.protocols.certifier.verifier import content_rows as CT
 from verity.protocols.certifier.verifier import warden_rows as WR
+from verity.protocols.certifier.verifier.active import VirtualClock
 from verity.protocols.certifier.verifier.certificate import Direction, Issuer
-from verity.protocols.certifier.verifier.grid import Record
+from verity.protocols.certifier.verifier.grid import BlockGrid
 from verity.protocols.certifier.verifier.warden import Released, Warden, WardenParams, _Connection
 
 #: the publisher queue's name for a hand's items, where a record's rows have their link's
@@ -173,8 +174,8 @@ def _spread(xs: list[float]) -> dict:
             "max": round(max(xs), 3) if xs else None}
 
 
-def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Record], egress: Sequence[Record],
-          fails: Sequence[Record], link: str) -> tuple[dict | None, list[str]]:
+def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[BlockGrid],
+          egress: Sequence[BlockGrid], fails: Sequence[BlockGrid], link: str) -> tuple[dict | None, list[str]]:
     """The module docstring's check of a run's connection rows under its deployment record `dep`: the summary (the
     registered execution phases, of those that have connection rows, and the cost) and the problems. None, and no
     problem, for a schedule without lengths rows."""
@@ -257,8 +258,9 @@ def loaded(params: WardenParams, load: str) -> list[tuple[int, int]]:
 
 def _device(params: WardenParams, releases: Sequence[tuple[int, int]], lengths) -> Warden:
     """A network certifier at the close of execution phase 1 with `releases` as execution phase 0's, each ended in
-    its `END`, laid in its slot strides in order."""
-    device = Warden(params, None, origin=0.0, windows=2, lengths=lengths)
+    its `END`, laid in its slot strides in order. It is never run, so its clock is one nothing moves."""
+    clock = VirtualClock(0.0)
+    device = Warden(params, None, origin=0.0, windows=2, clock=clock, sleep=clock.sleep, lengths=lengths)
     K = params.stride_releases
     made = [_Connection(n + 1, None, None, None, 0, release=n, bytes_in=size, egress_cells=ids + 1, ended=0,
                         request=bytes([n % 251 + 1]) * size, ids=bytearray((n % 251 + 1).to_bytes(4, "little") * ids))
