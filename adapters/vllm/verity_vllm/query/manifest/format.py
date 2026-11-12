@@ -19,6 +19,7 @@ too, with its rank policy).  Dependency-free (json/hashlib, and `SCHEMA` from `v
 """
 from __future__ import annotations
 
+import glob
 import hashlib
 import json
 import os
@@ -27,6 +28,15 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from verity_vllm.records import required_manifest
+
+__all__ = ["LIFTED_DTYPES", "LIFTED_F32", "MOE_FP8_PLANES", "MOE_PLANES", "PROMOTED_DTYPE_BYTES",
+           "PROMOTED_OBSERVATION_RULE", "REQ_RE", "RUN_FAMILY", "RUN_PARAM", "SCHEDULE_PARAM", "SCHEDULE_READERS",
+           "SCHEMA", "SERVED_FAMILY", "SERVED_IDS", "SERVED_LOGITS", "SERVED_POSITIONS", "SERVED_SAMPLED",
+           "TP_PARTIAL_MEMBER", "TP_SHARD_MEMBER", "alias_family", "batch_launch_shortfall", "canonical_identity",
+           "collector_path", "components_fold_digest", "is_token_select", "layer_of", "lifted_bot", "load_program",
+           "manifest_digest", "moe_geometry", "moe_plane_kind", "moe_plane_modules", "program_dirs_for", "programs_for",
+           "promoted_observation", "segment_steps", "spec_family", "spec_statics", "split_name", "tp_ranks_fold_digest",
+           "wrapper_prefix_of"]
 
 SCHEMA = required_manifest.SCHEMA
 
@@ -454,6 +464,8 @@ def load_program(program_dir: str, *, expand: bool = True) -> dict[str, Any]:
     """The Program dir's instances, result and artifact.  `expand=False` keeps a v2 row's argument progressions as stored, for a reader
     that expands what it reads (the sampled replay's `index.row_args` / `node_runs`).  Equal argument items are one list
     (`instances_file.read_instances`): read them, never modify them in place."""
+    # Inside the function: importing this module loads nothing of `program`, which a suite that lists its inputs by file
+    # and reads this module relies on (its read guard fails on a file its list lacks).
     from verity_vllm.program.instances_file import read_instances
     inst = read_instances(os.path.join(program_dir, "instances.json.gz"), expand=expand)
     with open(os.path.join(program_dir, "result.json")) as f:
@@ -696,8 +708,7 @@ def program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
     build_request*/result.json declaring exactly (LP, T, C) (the row's default request Program); never a near shape, and never a cold
     request's Program for a warm one (`prefix_plan.request_shape`).  The traversal engine streams these (rows never all in
     memory: 57 MB vs 1 GB peak on the Llama B8 fold, same digest)."""
-    import glob
-
+    # Inside the function, for `load_program`'s reason.
     from verity_vllm.program import prefix_plan as PP
     progs: dict[str, str] = {}
     for r in fx["requests"]:

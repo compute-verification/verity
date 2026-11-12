@@ -7,6 +7,8 @@ import sys
 
 import pytest
 
+from verity_vllm.observe import storage as S
+
 torch = pytest.importorskip("torch")
 
 from verity_vllm.observe.events import (  # noqa: E402
@@ -124,8 +126,6 @@ def test_generation_bump_on_pointer_reuse_raw():
 def test_weakref_probe_answers_no_without_torch_or_weakrefs(monkeypatch):
     """`use_weakrefs` is off where torch is absent, where a storage is not one preserved object, and where it takes no
     weakref; a `StorageAdapter` made there falls back to implied frees."""
-    from verity_vllm.observe import storage as S
-
     class NoWeakref:
         @staticmethod
         def ref(_obj):
