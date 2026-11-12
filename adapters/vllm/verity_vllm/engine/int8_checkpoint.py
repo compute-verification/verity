@@ -84,6 +84,7 @@ from verity_vllm.config import option
 from verity_vllm.engine import fp8_checkpoint as F
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.program.frontend.target_profile import TargetProfile
+from verity_vllm.records.schema_ids import INT8_ERROR_REPORT_SCHEMA
 
 __all__ = ["COMMANDS", "main"]
 
@@ -401,7 +402,7 @@ def report(entry: dict[str, Any], entries: list[dict[str, Any]], hf_home: str | 
     tensors: dict[str, dict[str, Any]] = {}
     for part in F.map_shards(report_shard, [(bdir / fn, mdir / fn, plan, recipe) for fn in shards], jobs):
         tensors.update(part)
-    return {"schema": "verity-vllm/int8-error-report/v1", "role": entry["role"], "recipe": recipe.id, "revision": entry["revision"],
+    return {"schema": INT8_ERROR_REPORT_SCHEMA, "role": entry["role"], "recipe": recipe.id, "revision": entry["revision"],
             "base": {"repo": base["repo"], "revision": base["revision"]}, "summary": summarize(tensors),
             "tensors": dict(sorted(tensors.items()))}
 
