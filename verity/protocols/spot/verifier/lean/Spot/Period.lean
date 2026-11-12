@@ -232,7 +232,8 @@ def Window.toJson (w : Window) : Json :=
   Json.mkObj [("period", Json.str w.period), ("phase", Lean.toJson w.phase), ("root", Json.str w.root),
     ("session", Json.str w.session)]
 
-private def refused (code : Code) (why : String) : List (String × Json) :=
+/-- A refusal as the piece answers it. -/
+def refusedJson (code : Code) (why : String) : List (String × Json) :=
   [("code", Json.str code.name), ("refused", Json.str why)]
 
 /-- `{"key", "label", "lane", "ledger", "start", "stop"}` to `{others, sessions, windows}`: `read`'s sessions and
@@ -243,12 +244,12 @@ def windowsPiece (j : Json) : V Json := do
     throw "a request's keys are key, label, lane, ledger, start, stop"
   let p ← Params.of (getD j "key") (getD j "label") (getD j "lane") (getD j "start") (getD j "stop")
   return match read p (getD j "ledger") with
-    | .error (code, why) => Json.mkObj (refused code why)
+    | .error (code, why) => Json.mkObj (refusedJson code why)
     | .ok r =>
       let sessions := ("sessions", Json.arr (r.sessions.map Session.toJson))
       match windowsIn p r with
       | .ok ws => Json.mkObj [("others", Json.arr (ws.others.map Session.toJson)), sessions,
           ("windows", Json.arr (ws.windows.map Window.toJson))]
-      | .error (code, why) => Json.mkObj (refused code why ++ [sessions])
+      | .error (code, why) => Json.mkObj (refusedJson code why ++ [sessions])
 
 end Spot.Period
