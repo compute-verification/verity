@@ -147,9 +147,8 @@ paths = [
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_stream_zk_server.py"]
-# the challenger each verifier is on (`pod/challenger.sh` starts it), and `lake build` of its Lean and its audit's
-# (sampled-proofs-verifier, sampled-proofs-difftest) and of flock-verify and flock-firewall: their packages and those
-# they require by path
+# the challenger each verifier is on (`pod/challenger.sh` starts it), and `lake build` of its Lean and its audit's and
+# of the Lean verifier's two executables: their packages and those they require by path
 paths = [
     "verity/circuits/base",
     "verity/circuits/lean",

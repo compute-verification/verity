@@ -1,4 +1,4 @@
-"""`flock-circuit prove --zk --stream -` behind the ZK server (``FC_FIREWALL=1``, live PROTOCOL.md §10.4), on real builds.
+"""`flock-circuit prove --zk --stream -` behind the ZK server (`ZK_SERVER`, live PROTOCOL.md §10.4), on real builds.
 Three members, sessions of `plain_hidden.py`'s statement at its two committed input sets, each on a sample of its own,
 are proved through SPOT's proof server (`verity_flock.proof_server`: one kept `prove --stream` process, its verifier on a
 challenger), all three submitted before the first is awaited; and each member once more as the process pair a session
@@ -6,7 +6,7 @@ behind the ZK server otherwise is, one `serve` and one `prove` process on a chal
 
 * **A member through the stream is the process pair's member, less the seconds** (`differ`). A session's coins,
   commitments and proofs are its own, so no two sessions are equal byte for byte. What is held of the stream's record
-  (`session.json`), its `LIVE` line and Lean's verdict on its record (`flock-verify verify --zk`) against the pair's:
+  (`session.json`), its `LIVE` line and Lean's verdict on its record (`VERIFY`'s `verify --zk`) against the pair's:
   every key, every list's length and every value is the pair's, but a clock's reading (a float) and a field word or digest
   the session's coins decide (lowercase hex of 32 digits or more, compared by its length). Lean's verdict names the
   record it read, each side's own directory. A `LIVE` line's fields about its process and not its session are held on
@@ -23,8 +23,8 @@ behind the ZK server otherwise is, one `serve` and one `prove` process on a chal
   before it.
 
 These skip unless ``FLOCK_CIRCUIT`` names a proving build of `flock-circuit`
-(`verity/protocols/flock/pod/94-stream-zk-server.sh` builds one and runs them); they build the Lean verifier's
-`flock-verify` and `flock-firewall` and the challenger's Lean. No stand-in shows what they hold, which is what the real
+(`verity/protocols/flock/pod/94-stream-zk-server.sh` builds one and runs them); they build the Lean verifier's two
+executables (`VERIFY`, `LOOP`) and the challenger's Lean. No stand-in shows what they hold, which is what the real
 prover, the real Lean loop and the real challenger do in six sessions. The two rules themselves (`differ`,
 `order_reason`) are tested on values written here, with no build."""
 from __future__ import annotations
@@ -40,7 +40,6 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
-import verity_difftest as D
 from verity.protocols.spot.device import challenger as C, remote as R
 
 import settings
@@ -48,8 +47,12 @@ from verity_flock import challengers as CH
 from verity_flock.proof_server import ProofServer, Statement
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-SP = Path(__file__).resolve().parents[3] / "spot" / "verifier" / "lean"
+#: the Lean verifier, and the ZK server's Lean: its tap and its session loop
+VERIFY = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+LOOP = LEAN / ".lake" / "build" / "bin" / "flock-firewall"
 BIN = settings.flock_circuit()
+#: what puts a `--zk` prover behind the ZK server
+ZK_SERVER = {"FC_FIREWALL": "1"}
 real = pytest.mark.skipif(BIN is None or shutil.which("lake") is None,
                           reason="FLOCK_CIRCUIT names no proving build of flock-circuit, or there is no Lean toolchain")
 
@@ -151,12 +154,12 @@ def test_order_reason_names_a_member_whose_first_line_is_before_the_closing_roun
     assert order_reason(log[:5], ["a", "b"]) == "member 1: the log shows no coin tree under its root sampled and then opened"
 
 
-def _stamping(d: Path, loop: Path) -> Path:
-    """`loop`, the Lean `flock-firewall`, behind a script that first writes its arguments as a line of ``d/loops.txt``:
-    which Lean processes a prover started, in order, and on what."""
+def _stamping(d: Path) -> Path:
+    """`LOOP` behind a script that first writes its arguments as a line of ``d/loops.txt``: which Lean processes a prover
+    started, in order, and on what."""
     d.mkdir(parents=True, exist_ok=True)
-    script = d / "flock-firewall"
-    script.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {shlex.quote(str(d / 'loops.txt'))}\nexec {shlex.quote(str(loop))} \"$@\"\n")
+    script = d / "loop.sh"
+    script.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {shlex.quote(str(d / 'loops.txt'))}\nexec {shlex.quote(str(LOOP))} \"$@\"\n")
     script.chmod(0o755)
     return script
 
@@ -175,9 +178,9 @@ def _loops(d: Path) -> list[list[str]]:
     return out
 
 
-def _verdict(verify: Path, st: Statement, stage: Path, session: Path) -> dict:
+def _verdict(st: Statement, stage: Path, session: Path) -> dict:
     """Lean's verdict on a session's record."""
-    p = subprocess.run([str(verify), "verify", "--zk", "--session-tables", "1", "--statement", "verity/flock-circuit",
+    p = subprocess.run([str(VERIFY), "verify", "--zk", "--session-tables", "1", "--statement", "verity/flock-circuit",
                         "--circuit", str(st.circuit), "--public", str(st.public), "--partition", str(stage / "partition.json"),
                         "--program", str(stage / "program.json"), "--session", str(session)], capture_output=True, text=True, check=False)
     lines = [x.split(" ", 1)[1] for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
@@ -185,18 +188,18 @@ def _verdict(verify: Path, st: Statement, stage: Path, session: Path) -> dict:
     return json.loads(lines[0])
 
 
-def _pair(env: dict, st: Statement, draw: dict, d: Path) -> dict:
-    """One member as a process pair: `serve` for one session on a challenger of its own, and `prove`. Its `LIVE` line,
-    its record's directory and its challenger's audit."""
+def _pair(env: dict, st: Statement, sample: dict, d: Path) -> dict:
+    """One member as a process pair: `serve` for one session at `sample` on a challenger of its own, and `prove`. Its
+    `LIVE` line, its record's directory and its challenger's audit."""
     d.mkdir(parents=True, exist_ok=True)
-    (d / "draw.json").write_text(json.dumps(draw))
+    (d / "sample.json").write_text(json.dumps(sample))
     ch, flags = CH.start(d / "challenger")
     serve = None
     try:
         with open(d / "serve.err", "w") as err:
             serve = subprocess.Popen([str(BIN), "serve", "--zk", "--listen", "127.0.0.1:0", "--out", str(d / "sessions"),
                                       "--instances", str(st.public), "--circuit", str(st.circuit), "--tables", str(st.tables),
-                                      "--pin", st.pin, "--operator", "proof-server", "--draw-file", str(d / "draw.json"),
+                                      "--pin", st.pin, "--operator", "proof-server", "--draw-file", str(d / "sample.json"),
                                       "--sessions", "1", *flags], stdout=subprocess.PIPE, stderr=err, text=True, env=env)
         addr = next((x.split()[1] for x in serve.stdout if x.startswith("SERVING ")), None)
         assert addr, (d / "serve.err").read_text()[-600:]
@@ -225,11 +228,12 @@ def window(tmp_path_factory):
     """The three members through the stream, and each as a process pair."""
     import plain_hidden as PH
 
-    subprocess.run(["lake", "build", "flock-verify", "flock-firewall"], cwd=LEAN, check=True, capture_output=True)
-    for exe in ("sampled-proofs-verifier", "sampled-proofs-difftest"):
-        D.build(SP, exe)
-    bins = LEAN / ".lake" / "build" / "bin"
+    subprocess.run(["lake", "build", VERIFY.name, LOOP.name], cwd=LEAN, check=True, capture_output=True)
     d = tmp_path_factory.mktemp("stream-zk-server")
+    # the Lean the challengers and their audits run, built as a pod builds it
+    built = subprocess.run(["bash", "-c", '. "$0" && challenger_build && challenger_built', str(CH.SH)], capture_output=True,
+                           text=True, check=False, env=CH._env(d, d / "challenger-lean"))
+    assert built.returncode == 0, built.stderr[-600:]
     stages = [d / f"stage-{seed}" for seed in SEEDS]
     for stage, seed in zip(stages, SEEDS):
         PH.stage(stage, seed)
@@ -243,21 +247,21 @@ def window(tmp_path_factory):
     members = [(statements[i], {"k": len(units), "law": "subset", "population": PH.N, "units": units}) for i, units in MEMBERS]
 
     def env(at: Path) -> dict:
-        return {**os.environ, "FC_FIREWALL": "1", "FC_FIREWALL_LEAN": str(_stamping(at, bins / "flock-firewall")),
+        return {**os.environ, **ZK_SERVER, "FC_FIREWALL_LEAN": str(_stamping(at)),
                 "FC_FIREWALL_HELLO_ARGS": f"--partition {stages[0] / 'partition.json'} --program {stages[0] / 'program.json'}"}
 
     out = d / "stream"
     with ProofServer(BIN, out / "server", env=env(out), challenger=True, verify_ahead=0) as server:
-        sessions = [server.submit(st, draw, f"m{k}", out=out / f"m{k}") for k, (st, draw) in enumerate(members)]
+        sessions = [server.submit(st, sample, f"m{k}", out=out / f"m{k}") for k, (st, sample) in enumerate(members)]
         for s in sessions:
             s.result()
     (name,) = server.challengers
     stream = [{"live": s.live, "dir": s.dir, "challenger": s.challenger} for s in sessions]
-    pairs = [_pair(env(d / f"pair-m{k}"), st, draw, d / f"pair-m{k}") for k, (st, draw) in enumerate(members)]
+    pairs = [_pair(env(d / f"pair-m{k}"), st, sample, d / f"pair-m{k}") for k, (st, sample) in enumerate(members)]
     for (st, _), *both in zip(members, stream, pairs):
         for one in both:
             one["record"] = json.loads((one["dir"] / "session.json").read_text())
-            one["verdict"] = _verdict(bins / "flock-verify", st, stages[0], one["dir"])
+            one["verdict"] = _verdict(st, stages[0], one["dir"])
     return {"members": members, "stream": stream, "pairs": pairs, "exits": server.exits, "loops": _loops(out),
             "log": R.log_lines(out / "server" / f"{name}-challenger" / R.RELEASES)}
 
@@ -267,13 +271,13 @@ def test_a_member_through_the_stream_is_the_process_pairs_member_less_the_second
     assert set(window["exits"].values()) == {0}, window["exits"]
     # the Lean the stream started: its tap, then a session loop a member, each the one its process pair started
     assert window["loops"] == [["tap"], *(pair["loops"][1] for pair in window["pairs"])], window["loops"]
-    for k, ((st, draw), got, pair) in enumerate(zip(window["members"], window["stream"], window["pairs"])):
+    for k, ((st, sample), got, pair) in enumerate(zip(window["members"], window["stream"], window["pairs"])):
         tap, loop = pair["loops"]
         assert tap == ["tap"] and loop[0] == "session", pair["loops"]
         assert (loop[loop.index("--circuit") + 1], loop[loop.index("--tables") + 1]) == (str(st.circuit), str(st.tables))
         for one in (got, pair):
             assert one["live"]["accepted"] is True and one["verdict"]["accepted"] is True and one["challenger"]["ok"] is True, (k, one["live"].get("why"), one["verdict"].get("why"), one["challenger"])
-            assert one["record"]["unit_draw"] == draw, k
+            assert one["record"]["unit_draw"] == sample, k
         assert differ(pair["record"], got["record"]) == [], k
         # Lean's verdict names the record it read, each side's own
         assert [one["verdict"]["session"] for one in (pair, got)] == [str(one["dir"]) for one in (pair, got)], k
@@ -305,5 +309,5 @@ def test_member_i_plus_1s_first_coin_follows_member_is_closing_round_in_the_chal
 @real
 def test_the_stream_behind_the_zk_server_refuses_to_verify_ahead():
     p = subprocess.run([str(BIN), "prove", "--zk", "--stream", "-"], input="", capture_output=True, text=True, check=False,
-                       env={**os.environ, "FC_FIREWALL": "1", "FC_VERIFY_AHEAD": "2"})
+                       env={**os.environ, **ZK_SERVER, "FC_VERIFY_AHEAD": "2"})
     assert p.returncode == 2 and p.stdout.startswith("REFUSED\t") and "FC_VERIFY_AHEAD=0" in p.stdout, (p.stdout, p.stderr[-300:])
