@@ -134,6 +134,18 @@ def test_pous_registers_p2_v4_as_its_default_and_refuses_what_it_cannot_run():
     assert not hasattr(pous, "keeps_weight_copy")                                       # POUS keeps only C*
 
 
+def test_the_decode_at_use_on_a_gpu_is_the_stores_own_module():
+    """What `pous._decoder` builds on a GPU comes from the store's package alone, as far as a CPU reaches: the layout of no
+    tensors at the registered point, refused at any other, and rows of another shape refused before the library loads."""
+    load = pous._p2("load")
+    assert load.__name__ == "p2_v1.load" and "p2_stage" not in sys.modules
+    layout = load.StoreLayout(pous._base(P2), (), bytes(128))
+    with pytest.raises(ValueError, match="the point libp2v1.so is built for"):
+        load.StoreLayout(SMALL, (), bytes(128))
+    with pytest.raises(ValueError, match=r"a contiguous \[n, 2056\] uint8 tensor"):
+        load.EncodedRows(layout, torch.zeros(1, 8, dtype=torch.uint8), 0, "no-such-directory")
+
+
 def test_with_pous_on_the_selector_refuses_an_option_that_keeps_a_weight_copy(monkeypatch):
     _fake_pouw(monkeypatch, lambda scheme, target: None, keeps=True)
     got = PO.refusals(_ctx("pouw:ncp-v1", ENTRY))
