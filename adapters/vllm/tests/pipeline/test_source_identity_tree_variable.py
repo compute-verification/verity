@@ -1,7 +1,9 @@
-"""`verity_vllm.pipeline.source_identity`'s two reads of ``VERITY_TREE``, in this process: the requested tree is checked against the variable, and the
-manifest's record carries the variable as the environment holds it.  The command's own tests (`test_source_identity`) run it in a
-child process, with the packages it resolves, the commits git names and the run store's generic half; here all three are stood in,
-so no test starts a program or needs the run store, which the public release leaves out."""
+"""`verity_vllm.pipeline.source_identity`'s reads of the environment, in this process.  ``VERITY_TREE``: the requested tree is
+checked against the variable, and the manifest's record carries the variable as the environment holds it.  ``RESEARCH_SOURCE_SHA``:
+it declares the commit where the command line names none, and the manifest carries it and ``PYTHONPATH`` as the environment holds
+them.  The command's own tests (`test_source_identity`) run it in a child process, with the packages it resolves, the commits git
+names and the run store's generic half; here all three are stood in, so no test starts a program or needs the run store, which
+the public release leaves out."""
 from __future__ import annotations
 
 import os
@@ -17,13 +19,15 @@ INTEGRATION = Path(__file__).resolve().parents[2]  # <repo>/adapters/vllm
 REPO = INTEGRATION.parents[1]
 #: what the environment holds for the variable in each case; None is a variable that is not set
 HELD = {"unset": None, "empty": "", "the repository": str(REPO), "the integration": str(INTEGRATION)}
+#: a commit as the command line names one, and as the research runner's variable does
+GIVEN, SHIPPED = "a" * 40, "f" * 40
 
 
-def _hold(monkeypatch: pytest.MonkeyPatch, value: str | None) -> None:
+def _hold(monkeypatch: pytest.MonkeyPatch, value: str | None, name: str = "VERITY_TREE") -> None:
     if value is None:
-        monkeypatch.delenv("VERITY_TREE", raising=False)
+        monkeypatch.delenv(name, raising=False)
     else:
-        monkeypatch.setenv("VERITY_TREE", value)
+        monkeypatch.setenv(name, value)
 
 
 class Refused(Exception):
@@ -94,3 +98,31 @@ def test_the_manifest_of_a_variable_that_names_another_tree_fails_and_records_it
     assert doc["ok"] is False and doc["fail_class"] == FAIL_CLASS and [m["package"] for m in doc["mismatches"]] == ["VERITY_TREE"]
     unchecked = sid.manifest(strict_env=False)
     assert unchecked["VERITY_TREE"] == str(tmp_path) and unchecked["ok"] is True
+
+
+@pytest.mark.parametrize("held", [None, "", SHIPPED])
+def test_a_commit_the_command_line_names_is_the_declared_one_whatever_the_variable_holds(monkeypatch, held):
+    _hold(monkeypatch, held, sid.ENV_SOURCE_SHA)
+    assert sid.declared_sha(GIVEN) == (GIVEN, "--sha")
+
+
+@pytest.mark.parametrize("held", [None, ""])
+def test_no_commit_is_declared_where_the_command_line_names_none_and_the_variable_is_unset_or_empty(monkeypatch, held):
+    _hold(monkeypatch, held, sid.ENV_SOURCE_SHA)
+    assert sid.declared_sha() == (None, None) and sid.declared_sha("") == (None, None)
+
+
+def test_the_variable_declares_the_commit_where_the_command_line_names_none(monkeypatch):
+    _hold(monkeypatch, SHIPPED, sid.ENV_SOURCE_SHA)
+    assert sid.ENV_SOURCE_SHA == "RESEARCH_SOURCE_SHA"
+    assert sid.declared_sha() == (SHIPPED, "RESEARCH_SOURCE_SHA") and sid.declared_sha("") == (SHIPPED, "RESEARCH_SOURCE_SHA")
+
+
+@pytest.mark.parametrize("name", ["PYTHONPATH", "RESEARCH_SOURCE_SHA"])
+@pytest.mark.parametrize("held", [None, "", "a value"])
+def test_the_manifest_records_the_search_path_and_the_runners_commit_as_the_environment_holds_them(monkeypatch, no_packages, name, held):
+    _hold(monkeypatch, None)
+    _hold(monkeypatch, held, name)
+    doc = sid.manifest()
+    assert doc[name] == held and name in doc
+    assert doc["ok"] is True and doc["mismatches"] == []
