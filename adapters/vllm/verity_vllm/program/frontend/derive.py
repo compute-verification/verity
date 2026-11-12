@@ -34,30 +34,58 @@ from __future__ import annotations
 
 import hashlib
 import operator
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, NoReturn
-from collections.abc import Sequence
 
 import torch
-
-from verity.circuits.codec import descriptor_id, canonical_json, encode_program, program_digest
+from verity.circuits.codec import (
+    canonical_json,
+    descriptor_id,
+    encode_program,
+    program_digest,
+)
 from verity.circuits.defs import Builder, CompositeDefinition, SpecializedDefinition
 from verity.circuits.defs import bind as ir_bind
+from verity.circuits.liveness import dead_gates as _dead_gates
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, concat
-from verity.circuits.liveness import dead_gates as _dead_gates
-from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
-from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, REASONS, Refuse, Unsupported, _jsonable, refuse
+from verity.circuits.types import Array, RecordType, Type, Value
+from verity.circuits.types import Tuple as TupleT
+from verity.definitions.replay import replayer
+
+from verity_vllm.program.frontend import seed_rule as SEED
+from verity_vllm.program.frontend import stop_rule as SR
+from verity_vllm.program.frontend.derive_context import (
+    Ctx,
+    StaticIndex,
+    WeightLeaf,
+    _runs,
+    fx_arg_nodes,
+)
+from verity_vllm.program.frontend.derive_context import (
+    module_registrations as module_registrations,  # read through this module
+)
+from verity_vllm.program.frontend.outcomes import (
+    _CODE_TO_REASON,
+    REASONS,
+    Refuse,
+    Unsupported,
+    _jsonable,
+    refuse,
+)
 from verity_vllm.program.frontend.provenance import registry_version
 from verity_vllm.program.frontend.registration import RegisteredInputs, RunInputs
-from verity_vllm.program.frontend.report import DeriveReport, DerivationTail
-from verity_vllm.program.frontend import seed_rule as SEED, stop_rule as SR
-from verity_vllm.program.frontend.derive_context import Ctx, StaticIndex, WeightLeaf, _runs, fx_arg_nodes
-from verity_vllm.program.frontend.derive_context import module_registrations as module_registrations  # read through this module
-from verity.definitions.replay import replayer
-from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor
-from verity_vllm.program.frontend.value_types import Alloc
+from verity_vllm.program.frontend.report import DerivationTail, DeriveReport
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleSet, StateRule
+from verity_vllm.program.frontend.torch_frontend import (
+    FRONTEND_VERSION,
+    FrontendError,
+    check_identity,
+    shape_of,
+    type_of_tensor,
+)
+from verity_vllm.program.frontend.value_types import Alloc
 
 DERIVE_VERSION = "verity_vllm.program.frontend.derive/2026-09-09.d4"  # d4: rotary table without terminal cast, 0-d buffer operand in Elementwise; d3: embedding padding_idx, bf16 inv_freq rotary table; d2: HF 5.x plumbing
 
@@ -147,7 +175,8 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
         prov["checks"] = {"output": ctx.checks_output, "accept": 1, "of": [w for _, w in ctx.checks]}
     # runtime correspondence (`runtime-correspondence/v1`): per Call the owning module, the source occurrence and the return /
     # argument slots -- data beside the Program, under ONE annotation namespace, digested apart (annotations never enter program_digest)
-    from verity_vllm.program.frontend.emit import NAMESPACE as _CORR, kept_correspondence
+    from verity_vllm.program.frontend.emit import NAMESPACE as _CORR
+    from verity_vllm.program.frontend.emit import kept_correspondence
     body, corr_doc, corr_digest, hints = kept_correspondence(ctx, flat_sd.body, rank=rank, registered=dead_free, emit=correspondence)
     flat_sd = flat_sd if body is flat_sd.body else _flat_definition(flat_sd.defn.name[len("Derived["):-1], body, flat_sd.bindings["SRC"], mode)
     holes = {"survey_holes": ctx.state["survey_holes"]} if ctx.state.get("survey_holes") else {}

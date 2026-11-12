@@ -900,8 +900,6 @@
     {"file": "verity_vllm/program/frontend/conformance.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/conformance.py", "kind": "SIM115", "symbol": "main", "detail": "Use a context manager for opening files"},
     {"file": "verity_vllm/program/frontend/conformance.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
-    {"file": "verity_vllm/program/frontend/derive.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/program/frontend/derive.py", "kind": "I001", "symbol": "_finish_report", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/examples.py", "kind": "E741", "symbol": "SiluMul", "detail": "Ambiguous variable name: `I`"},
     {"file": "verity_vllm/program/frontend/examples.py", "kind": "UP037", "symbol": "BiasAdd", "detail": "Remove quotes from type annotation", "count": 3},
     {"file": "verity_vllm/program/frontend/examples.py", "kind": "UP037", "symbol": "DotBf16", "detail": "Remove quotes from type annotation", "count": 2},
