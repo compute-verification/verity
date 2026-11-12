@@ -207,7 +207,8 @@ def test_ranks_that_recorded_no_source_pass_without_a_tap_and_fail_a_tap_that_is
     made = _made([..., None, {}, *OTHER_EMPTY])
     versions: dict[str, Any] = {}
     assert TAPS.require_on_every_rank(made, ("a",), versions, TAPS.TapSources(), explicit_classes=True) == ("a",) and versions == {}
-    with pytest.raises(SystemExit, match=r"fail-closed: the vocab_range source did not attach on ranks \[0, 1, 2, 3, 4, 5, 6, 7\] of 8: "):
+    refused = r"fail-closed: the vocab_range source did not attach on ranks \[0, 1, 2, 3, 4, 5, 6, 7\] of 8: \[None, None\]$"
+    with pytest.raises(SystemExit, match=refused):
         TAPS.require_on_every_rank(made, ("a",), {}, TAPS.TapSources(vocab_range=True), explicit_classes=True)
 
 
