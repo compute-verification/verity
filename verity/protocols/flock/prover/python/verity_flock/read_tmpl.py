@@ -3,6 +3,8 @@ one template `Flock.ReadNet.check` accepts), parsed (`tmpl.parse`). A structural
 `struct_lower`'s lowering of the Python Definition, whose Definitions and columns the check refuses
 (`class_statement.unit_lowering`).
 
+`check` asks the same executable whether a circuit file holds that template (``flock-read-tmpl check V H CIRCUIT``).
+
 The executable is `EXE` where a caller sets it, else this tree's build (`BUILT`, where ``lake build flock-read-tmpl`` in
 ``verity/protocols/flock/verifier`` puts it), else ``flock-read-tmpl`` on the path (`executable`)."""
 from __future__ import annotations
@@ -51,6 +53,21 @@ def template(V: int, H: int) -> TM.Tmpl:
     if r.returncode:
         raise ValueError(f"{exe} {V} {H}: {r.stderr.strip() or f'exit {r.returncode}'}")
     return TM.parse(r.stdout)
+
+
+def check(V: int, H: int, circuit: Path) -> str | None:
+    """What ``flock-read-tmpl check V H CIRCUIT`` decides of the circuit file ``circuit`` (`Flock.ReadTmplCmd.premises`):
+    None where it accepts the file as a templated statement whose unit's template passes `Flock.ReadNet.check V H` and
+    whose outputs are its unit's; else its reason, the first of those that fails. A usage error or an unreadable file
+    raises."""
+    exe = executable()
+    r = subprocess.run([exe, "check", str(V), str(H), str(circuit)], capture_output=True, text=True, check=False)
+    if r.returncode == 0:
+        return None
+    why = r.stderr.strip() or f"exit {r.returncode}"
+    if r.returncode != 1:
+        raise ValueError(f"{exe} check {V} {H} {circuit}: {why}")
+    return why
 
 
 def of(definition: Any) -> TM.Tmpl | None:
