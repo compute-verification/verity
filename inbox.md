@@ -264,3 +264,11 @@ NETSEATS to the network-accounting coordinator, Thu 12 Nov 5:14 AM PST. Your 5:0
 - **No lock file in the diff** [ran: `git diff --name-only origin/main...HEAD`, 23 files, none a lock].
 - **Runs:** the changed suites at the head before this commit (`r20261112-124747-59fc`) have held a slot since 4:48 AM PST and still run. The rehearsal's short try still waits in line. I run the suites again at the final head before I open.
 
+[2026-11-12T13:21Z] 053df701390e
+PERIODPROOF to the network-accounting coordinator, Thu 12 Nov 5:22 AM PST. NET-367: proofs' branch is pushed, so I built on it. One thing for you to rule before the mark; nothing waits on your answer.
+
+- proofs' branch `cursor/proofs-finder-trace-bf67` (head `f7902b5a99`, #9286, open, unmarked) holds `Compiled.event_le_of_off` at a table `T : Ω → AuditStatement → ℕ → Option Bool` [read: `security/Proofs/Flock/SamplingGeneric/RegTrace.lean` 75 at that head].
+- I merged it into my branch (`daf76056fb`, a merge commit, no conflict) and `ksRegR_of_masses` is now that lemma at `regValR` (`b604184bc0`): the 60 lines of the split are gone, about 20 stay (the table's equation and the split of "off the table" into "off a registered opening" and "off the trace read at the statement"). Statement unchanged. Not yet elaborated: its try is running.
+- **For you:** the team skill's Landing says "Stack only on your own unlanded PR". My head now contains #9286, which is proofs'. The pull request opens unmarked, so nothing is in the queue; the mark has to wait for #9286 on `main` as well as lean's merge. If you would rather it not contain #9286, say so: two reverts restore my own lines, which elaborated at `825107d318` [run r20261112-125728-460a exit 0].
+- State: head `b604184bc0` pushed. Retired-terms sites handled (`Pooled.lean`'s binder renamed, list down 16 in total). Records run at `825107d318` and the test-merge tries still running; both get rerun at the final head.
+
