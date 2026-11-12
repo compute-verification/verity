@@ -100213,3 +100213,66 @@ Nothing in the five changes a file of our pieces or of the driver. [run: `git me
 - **vy-nebius-cpu-13 has no room now.** [run: `research run --on vy-nebius-cpu-13 … --mem-gb 96`, 20:25Z] I tried to move `c30d` there as your 20:23Z message says (it has waited more than 20 minutes): refused, `MemoryNotAvailable`, 10.6 GB free of 754.7, 727.4 GB held by 5 live reservations. So `c30d` stays in its line; I try cpu-13 again at my next look and move `2e7a` and `4978` there too if they have then waited 20 minutes. The script's header asks `--cwd clone` (it builds in the tree), so that is what I send, with `--source`.
 
 **Next.** I end my turn on `c30d`, `2e7a`, `4978` (mine), `86b4` (STOPS') and `2196` (vllm's). On each end, an entry; on `2196`'s exit 0, the merge of vllm's branch, its probe, its local tests and a small rehearsal in our pool. Friday's head and what was rehearsed at it by Fri 11:00Z.
+
+## FIXEDCOST, Thu 12 Nov 20:26Z: the rehearsal ran again and passed (`r20261112-201501-096a`, vy-nebius-cpu-8's proofs pool, `--mem-gb 8`, exit 0, 0 of its 5 parts failed); it shipped from the launch tree with only `slot.py` taken from `main`, not from `main` itself, which cannot run it; kernels' data does not change what Friday's half hour times
+
+It has ended, so this entry has its result and no ETA. Nothing here runs on the served engine: the rehearsal is a CPU run on a stand-in prover. Each sentence ends with its source.
+
+**Two things I did that are not what you wrote. Redirect me on either.**
+
+1. **The tree is the launch tree with one file from `main`, not `main` and not a plain merge.**
+   - What shipped: commit `ba470f98b8bc8bced82cdcddf29ed654d82d9179`, with parents `c6cadd0e325f` and `main` (`5f0c008aa040`). Its tree, `774b31eca17c`, is `c6cadd0e325f`'s with `tools/verity/check/slot.py` replaced by `main`'s (blob `bc6005eeae4f`). [run: `git diff --stat c6cadd0e325f ba470f98b8bc` names that one file]
+   - It meets what top cancelled for: `724617692f8` is among its ancestors [run: `git merge-base --is-ancestor`], and the `slot.py` that ran is `main`'s, SHA-256 `833ef631f542…` [run: `096a` prints it].
+   - Why not `main`: the rehearsal reads the prover's Python from the tree it runs in (`benchmarks/one_stage`, `verity/ml/flock/python`, `tools/config`) [read: `rehearse-pair.sh`, `pair.sh`]. On `main` the last two paths do not exist, and the proof server is another file at another path (blob `659adc2355fe` against the launch tree's `2b2deb76d345`). [run: `git ls-tree` on both]
+   - Why not a plain merge: it stops on two files under `benchmarks/served_units/`, and its tree has `main`'s paths and `main`'s proof server. [run: `git merge-tree c6cadd0e325f 5f0c008aa040`, exit 1]
+   - So either would have needed edits to the checksummed scripts, and would have rehearsed a proof server that Friday's job does not run. [derived]
+   - **Do not push this commit anywhere.** `main` is its parent and its tree is Monday's, so merging it would move `main` to Monday's tree. It is on no branch: it is in my scratch worktree and in the run's shipped source. [derived; run: `git branch --contains` is empty]
+   - If you want the rehearsal on `main`'s own files, that is a port of the kit to `main`'s paths, new checksums, and a decision that Friday times `main`'s proof server. Say so and I do it. [derived]
+
+2. **I cancelled one run of my own after 2 minutes in line, not 20.**
+   - 20:12Z: `--on auto --cpus 4 --mem-gb 8` went to vy-nebius-cpu-3's research line, and auto said "it starts now". It did not: every slot there was short of memory (8 GB under zero, 304 GB reserved by live runs). [run: `r20261112-201201-6338`'s `slot.json`]
+   - Your 20:11Z note reached me at 20:13Z. I cancelled `r20261112-201201-6338` by its id at 20:14Z (exit 143, `CANCELLED_MANUAL`). It was mine, it had not started, and left in line it would have run the same rehearsal twice. [run]
+   - 20:15Z: launched again with `--on vy-nebius-cpu-8 --pool proofs --mem-gb 8`, from the same commit, with the same thirteen files. [run: `r20261112-201501-096a`]
+
+**The run** [run: `r20261112-201501-096a`, all of this from its `stdout.log`, `stderr.log` and `status.json`]
+
+- Exit 0 after 263 s, of which 148 s were the wait for a slot. Its last line is `== 0 failed`.
+- **The wait was for memory, on a pool with four free slots:** cpu-8 had between 4 GB free and 14 GB under zero against the 8 GB asked, with 344 to 370 GB reserved by live runs. It took slot p0 (cores 12-40) at 20:17:55Z.
+- **It started ahead of `r20261112-201421-4978`,** which joined the line before it and was still waiting at 20:18Z [run: `slot.py --status` on cpu-8]. That is the rule the old tree lacked: an ask of at most 32 GB passes a waiter that only memory holds [read: `slot.py`, `BACKFILL_MAX_GB`].
+- **P1 PASS, and it is the part that had never run through `research run`:** the staged statement of the fused block type came from the store in 24 s (1.9 GB, `art:964c87d8409e…`), its SHA-512 is the pin `1fd651999b36433d…`, and it was handed over whole in 30 s with nothing left behind.
+- P2 PASS (another circuit's statement: exit 13, nothing started). P3 PASS (a failed fetch: exit 12, nothing started).
+- P4 PASS: six blocks of 60 sessions, all accepted; the split read back is 0.1539 s fixed and 0.000100 s a block, against the stand-in's 0.15 and 0.0001. P5 PASS.
+- These seconds are a stand-in's sleeps. They say the kit reads a split correctly and nothing about any block's cost.
+- The 8 GB is an ask, not a measured peak: the run's cgroup was the pod's, shared with every other job [run: `sampler.json`].
+
+**Nothing it measures moved** [run]
+
+| file | before: the cancelled `r20261112-185347-e691`'s own inputs | after: printed by `096a` |
+|---|---|---|
+| `kit.sha256` | `538e652d68c4a087d99c75e0899cf492a1ad6e6060ee6be77f1c50bc3b54681e` | the same |
+| `pair.sha256` | `485f306b28af0a4a16b9078c912ffcc257fbf99bc63b0bc850a430cc613062b4` | the same |
+| `steady.py` | `05a8c350e428adc3964e6fe5c3dc61866978f3eb8b83b1ba0630dc0ef8f80be7` | the same |
+
+- `sha256sum -c` passed inside the run for the ten files the two lists name. The thirteen files sent are byte for byte `e691`'s inputs (`cmp`, here).
+- The tree's files it reads are `c6cadd0e325f`'s: `verity/ml/flock/python` (tree `b61578466f43`), `benchmarks/one_stage` (`e76545c34e24`), `tools/research` (`8a1c9274a2ef`), `tools/config` (`b9918cc635d2`). The proof server's SHA-256 is `0d9b454195d8…` in both.
+- One thing did move that it does not measure: the cores. `e691` asked for 4; a pool's slot gives its own, 29 here.
+
+**Friday's launch under your rule** [read: `launch-pair.sh`, `research/cli.py`]
+
+- It names node A itself and joins no pool, so no `slot.py` runs for it and it is in no line. It names no `--mem-gb` today, and it refuses any tree but `c6cadd0e325f`.
+- **I add `--mem-gb` to it and show the dry run when you resume me.** One risk to rule on: on a named machine `--mem-gb` refuses the launch outright when the memory is not free, unless `--mem-wait` is given. I would give `--mem-wait 300`, so a short node costs five minutes of the row, not the row.
+- **The tree is your call:** `c6cadd0e325f` is on the remote and is what every earlier row ran; `ba470f98b8bc` holds `main` as you ordered, runs the same prover, and is on no remote. Without your word I ship from `ba470f98b8bc`, as the rule says, and the figure names both commits.
+
+**Does kernels' data change what Friday's half hour should time? No.**
+
+1. It stays the fused block type's quarter and full statement at one prover from `c6cadd0e325f`: kernels' rows are all the head block at a full statement, and none separates fixed seconds from seconds a block. [read: HASH-123, by me]
+2. But print its fixed seconds as "host-built, walk off": the walk has the card build what the host built, and the host's build was 1.93 s of the head block's 2.57 s this morning. [read: `gpu_circuit.rs` at `f9fc32ff3fc4`; run: `r20261112-110333-4c33`]
+3. Worth knowing before Friday: under `FC_FIREWALL=1` the walk is refused, so its 24% is not a zero-knowledge figure, and whether the fused type has a walk at all is unchecked (a host-only `flock-circuit walk-twin` on the kept statement would say). [read: `PROTOCOL.md` §10.4 and `flock-circuit.rs` at `f9fc32ff3fc4`]
+
+**Acknowledged:** your 20:07Z NO to both half hours: Friday's row, card 7, 15:45Z to 16:15Z, is the timing, and nothing of mine is launched on node A. And your 20:26Z note: a rehearsal of Friday's tree goes to vy-nebius-cpu-13 by name with `--mem-gb` from now; this one had ended before the note came, so nothing is moved. [read: your note, as the shell hook delivered it]
+
+**Open, and what stops it**
+
+- Friday's launcher names no `--mem-gb`: `launch-pair.sh` line 69. Mine to change when resumed.
+- NET-329's reading of `r20261112-135528-7404`, due Sat 14 Nov 02:00Z: not started.
+- #9251: unmarked, at `8a5aebc549a6`; I have not reread FOLD's records run and quick tier since 19:40Z.
