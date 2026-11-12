@@ -68,7 +68,7 @@ def profile():
 
 
 C = profile().config
-H, I, E, TOPK, V = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"], C["V"]
+H, INTER, E, TOPK, V = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"], C["V"]
 
 
 @functools.cache
@@ -80,7 +80,7 @@ def _resolved(rank: int):
 @pytest.mark.parametrize("rank", RANKS)
 def test_fixture_is_the_recorded_layer_scope_of_the_tp8_capture(rank):
     header, steps, roots, notes = _resolved(rank)
-    assert (C["WORLD"], H, I, E, TOPK, V) == (WORLD, 4096, 1536 // WORLD, 128, 8, 151936 // WORLD)
+    assert (C["WORLD"], H, INTER, E, TOPK, V) == (WORLD, 4096, 1536 // WORLD, 128, 8, 151936 // WORLD)
     assert header.profile["case"] == "QWEN3_235B_A22B" and header.profile["model"]["revision"] == REVISION
     assert header.profile["model"]["config_sha256"] == hashlib.sha256(CONFIG.read_bytes()).hexdigest()
     assert header.profile["vllm"]["commit"] == "d9105ea80" and header.profile["parallelism"]["tensor_parallel_size"] == WORLD
@@ -116,8 +116,8 @@ def test_recorded_tp8_scope_resolves_the_gate_gemm_ahead_of_the_router_and_the_r
     gemm, router, up, silu, down, msum = computes
     assert [c.spec.id for c in (gemm, router, up, down, msum)] == [
         f"Gemm_v2{{K={H},N={E},DOT={DOT}}}", f"MoeRouterTopKOrderedNorm_v1{{E={E},TOPK={TOPK},VPT=8}}",
-        f"MoeExpertGemm_v2{{E={E},K={H},N={2 * I},DOT={DOT}}}", f"MoeExpertGemmW_v2{{E={E},K={I},N={H},DOT={DOT}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
-    assert re.fullmatch(rf"SiluMul_v\d+\{{I={I}\}}", silu.spec.id), silu.spec.id
+        f"MoeExpertGemm_v2{{E={E},K={H},N={2 * INTER},DOT={DOT}}}", f"MoeExpertGemmW_v2{{E={E},K={INTER},N={H},DOT={DOT}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
+    assert re.fullmatch(rf"SiluMul_v\d+\{{I={INTER}\}}", silu.spec.id), silu.spec.id
     assert [c.rows for c in computes] == [M, M, M * TOPK, M * TOPK, M * TOPK, M]
     assert len([p for p in group.parts if isinstance(p, Transparent) and any("moe_align_block_size" in k for k in p.kernels)]) == int(aligned)
 

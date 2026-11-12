@@ -40,7 +40,7 @@ from verity_vllm.program.frontend.target_profile import TargetProfile
 
 Q3 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN3_30B_A3B_tp2")
 C = Q3.C
-H, I, E, TOPK = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"]
+H, INTER, E, TOPK = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"]
 
 FIXTURE = Path(__file__).parent / "fixtures" / "qwen3_30b_a3b_tp2_moe_l24.rank0.jsonl.gz"
 SOURCE_SHA256 = "4f6fb584e7236ffd6b349a8aebe4a40fa245a523037cf0b9b6ff2a12ca1bebc6"
@@ -52,8 +52,8 @@ STEPS = {0: (256, True), 1: (1, False)}
 
 DOT = "HopperBF16WgmmaDot16_v1"
 EXPECTED_SPECS = [f"Gemm_v2{{K={H},N={E},DOT={DOT}}}", f"MoeRouterTopKOrderedNorm_v1{{E={E},TOPK={TOPK},VPT=8}}",
-                  f"MoeExpertGemm_v2{{E={E},K={H},N={2 * I},DOT={DOT}}}", f"SiluMul_v2{{I={I}}}",
-                  f"MoeExpertGemmW_v2{{E={E},K={I},N={H},DOT={DOT}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
+                  f"MoeExpertGemm_v2{{E={E},K={H},N={2 * INTER},DOT={DOT}}}", f"SiluMul_v2{{I={INTER}}}",
+                  f"MoeExpertGemmW_v2{{E={E},K={INTER},N={H},DOT={DOT}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
 
 
 def _fold(path: Path):

@@ -61,8 +61,8 @@ from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
 Q3 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN3_30B_A3B_tp2")
-H, I, SI, E, TOPK, G, RSF = 6144, 256, 256, 256, 8, 128, 2.5
-C = {"NUM_EXPERTS": E, "TOPK": TOPK, "H": H, "I": I, "SHARED_I": SI, "ROUTED_SCALING_FACTOR": RSF}
+H, INTER, SI, E, TOPK, G, RSF = 6144, 256, 256, 256, 8, 128, 2.5
+C = {"NUM_EXPERTS": E, "TOPK": TOPK, "H": H, "I": INTER, "SHARED_I": SI, "ROUTED_SCALING_FACTOR": RSF}
 CUDA = "cuda:0"
 E4M3 = "float8_e4m3fn"
 LAYER = 5
@@ -117,8 +117,8 @@ def weights() -> dict[str, ViewDesc]:
     return {"gate_w": view(A["gate_w"], (E, H)), "bias": view(A["bias"], (E,), "float32"),
             "sgu": view(A["sgu"], (2 * SI, H), E4M3), "sgu_s": view(A["sgu_s"], (2 * SI // G, H // G), "float32"),
             "sd": view(A["sd"], (H, SI), E4M3), "sd_s": view(A["sd_s"], (H // G, SI // G), "float32"),
-            "w13": view(A["w13"], (E, 2 * I, H), E4M3), "w13_s": view(A["w13_s"], (E, cdiv(2 * I, G), H // G), "float32"),
-            "w2": view(A["w2"], (E, H, I), E4M3), "w2_s": view(A["w2_s"], (E, H // G, I // G), "float32")}
+            "w13": view(A["w13"], (E, 2 * INTER, H), E4M3), "w13_s": view(A["w13_s"], (E, cdiv(2 * INTER, G), H // G), "float32"),
+            "w2": view(A["w2"], (E, H, INTER), E4M3), "w2_s": view(A["w2_s"], (E, H // G, INTER // G), "float32")}
 
 
 NAMES = {"gate_w": f"{PRE}.gate.weight", "bias": f"{PRE}.gate.e_score_correction_bias",
@@ -195,7 +195,7 @@ def scope_events(M: int, *, gate: str = GATE_CUBLAS, tile=None, router_args=None
         op("_moe_C.moe_align_block_size.default",
            "_moe_C::moe_align_block_size(Tensor topk_ids, int num_experts, int block_size, Tensor($0! -> ) sorted_token_ids, Tensor($1! -> ) "
            "experts_ids, Tensor($2! -> ) num_tokens_post_pad, Tensor? maybe_expert_map) -> ()", [ids, E, bm, sorted_ids, expert_ids, npad, None])
-    cache1, cache3 = view(301, (M, TOPK, 2 * I), offset=P * I), view(301, (M, TOPK, H), offset=P * I)
+    cache1, cache3 = view(301, (M, TOPK, 2 * INTER), offset=P * INTER), view(301, (M, TOPK, H), offset=P * INTER)
     tile_c = {"BLOCK_SIZE_M": bm, "BLOCK_SIZE_N": bn, "BLOCK_SIZE_K": bk, "GROUP_SIZE_M": 1, "SWAP_AB": bm < 64 and bn >= 64,
               "naive_block_assignment": naive}
 
@@ -207,17 +207,17 @@ def scope_events(M: int, *, gate: str = GATE_CUBLAS, tile=None, router_args=None
                 "stride_bsk": b_s.strides[2], "stride_bsn": b_s.strides[1], **consts}
         evs.append(TritonLaunch(new(), scope, 0, "forward", FN, "sha", args, consts, [cdiv(EM, bm) * cdiv(N, bn)], 4, 4, 7))
 
-    launch(xq, xs, W["w13"], W["w13_s"], cache1, None, 2 * I, H, dict(CONSTS, **tile_c))
-    hq, hs = view(312, (P, I), E4M3), view(313, (P, I // G), "float32")
+    launch(xq, xs, W["w13"], W["w13_s"], cache1, None, 2 * INTER, H, dict(CONSTS, **tile_c))
+    hq, hs = view(312, (P, INTER), E4M3), view(313, (P, INTER // G), "float32")
     if fused_silu_quant:
         empty(hq)
         empty(hs)
-        op("_C.silu_and_mul_per_block_quant.default", SILU_QUANT, [hq, view(301, (P, 2 * I), offset=P * I), hs, G, None, False])
+        op("_C.silu_and_mul_per_block_quant.default", SILU_QUANT, [hq, view(301, (P, 2 * INTER), offset=P * INTER), hs, G, None, False])
     else:
-        cache2 = view(301, (P, I))
-        op("_C.silu_and_mul.default", SILU, [cache2, view(301, (P, 2 * I), offset=P * I)])
+        cache2 = view(301, (P, INTER))
+        op("_C.silu_and_mul.default", SILU, [cache2, view(301, (P, 2 * INTER), offset=P * INTER)])
         quant(cache2, hq, hs)
-    launch(hq, hs, W["w2"], W["w2_s"], cache3, w_, H, I, dict(CONSTS, **tile_c, MUL_ROUTED_WEIGHT=True, top_k=1))
+    launch(hq, hs, W["w2"], W["w2_s"], cache3, w_, H, INTER, dict(CONSTS, **tile_c, MUL_ROUTED_WEIGHT=True, top_k=1))
     empty(routed_out)
     op("_moe_C.moe_sum.default", "_moe_C::moe_sum(Tensor input, Tensor($0! -> ) output, Tensor? topk_ids=None, Tensor? expert_map=None) -> ()",
        [cache3, routed_out, None, None])
@@ -282,8 +282,8 @@ def test_the_shared_scope_folds_the_gate_the_shared_expert_the_router_and_the_ro
         bind(GateStandIn, K=H, N=E, TIER=gate).id,
         f"{linear}{{K={H},N={2 * SI}}}", f"SiluMul_v2{{I={SI}}}", f"{linear}{{K={SI},N={H}}}",
         bind(MOE.MoeRouterSigmoidBias, E=E, TOPK=TOPK, SCALE=RSF, KERNEL="block").id,
-        f"Fp8GroupQuantUe8m0_v1{{K={H},G={G}}}", f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * I},{fp8}}}", f"SiluMul_v2{{I={I}}}",
-        f"Fp8GroupQuantUe8m0_v1{{K={I},G={G}}}", f"MoeExpertFp8GemmW_v1{{E={E},K={I},N={H},{fp8}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
+        f"Fp8GroupQuantUe8m0_v1{{K={H},G={G}}}", f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * INTER},{fp8}}}", f"SiluMul_v2{{I={INTER}}}",
+        f"Fp8GroupQuantUe8m0_v1{{K={INTER},G={G}}}", f"MoeExpertFp8GemmW_v1{{E={E},K={INTER},N={H},{fp8}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
     P = M * TOPK
     assert [c.rows for c in computes] == [M] * 6 + [P, P, P, P, M]
     assert all(_fits(c) for c in computes)
@@ -300,7 +300,7 @@ def test_the_shared_scope_folds_the_gate_the_shared_expert_the_router_and_the_ro
     # the routed pairs: w13 gathers its token's quantised row; the SiLU and its quant write w2's A and scales
     assert qr.operands[0].view.alloc == 295 and [type(o) for o in up.operands] == [Gather, Gather, PerRow, Shared, Shared]
     assert up.operands[0].indices == tuple(p // TOPK for p in range(P)) and up.operands[2].view.alloc == router.outputs[1].view.alloc
-    assert rs.operands[0].view.shape[-1] == 2 * I and (rs.operands[0].view.alloc, rs.operands[0].view.offset) == (301, P * I)
+    assert rs.operands[0].view.shape[-1] == 2 * INTER and (rs.operands[0].view.alloc, rs.operands[0].view.offset) == (301, P * INTER)
     assert rq.operands[0].view == rs.outputs[0].view and (down.operands[0].view, down.operands[1].view) == (rq.outputs[0].view, rq.outputs[1].view)
     assert down.operands[3].view.alloc == router.outputs[0].view.alloc
     assert up.roots[3:] == (NAMES["w13"], NAMES["w13_s"]) and down.roots[4:] == (NAMES["w2"], NAMES["w2_s"])

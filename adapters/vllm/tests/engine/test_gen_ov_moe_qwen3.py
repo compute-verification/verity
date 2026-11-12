@@ -67,7 +67,7 @@ from verity_vllm.program.frontend.target_profile import TargetProfile
 Q3 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN3_30B_A3B_tp2")
 
 C = Q3.C
-H, I, E, TOPK, NL = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"], C["NL"]
+H, INTER, E, TOPK, NL = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"], C["NL"]
 CUDA = "cuda:0"
 
 #: the Build of record's per-rank parameters (r17int9 build_summary.json, `tp.sharded_params.by_class`, rank 0 == rank 1 in shape)
@@ -278,9 +278,9 @@ def moe_scope_events(M: int, *, step: int = 0, naive: bool = False, renormalize:
                              [hidden, None, None, None, None, None], {}, 7, None))
     evs.append(DispatchExit(i, out))
     P_ = M * TOPK
-    cache1 = view(301, (M, TOPK, 2 * I), offset=P_ * I)
-    cache2 = view(301, (P_, I))
-    cache3 = view(301, (M, TOPK, H), offset=P_ * I)
+    cache1 = view(301, (M, TOPK, 2 * INTER), offset=P_ * INTER)
+    cache2 = view(301, (P_, INTER))
+    cache3 = view(301, (M, TOPK, H), offset=P_ * INTER)
     if naive:
         sorted_ids, expert_ids, npad = None, view(298, (P_,), "int32"), view(304, (1,), "int32")
         EM = P_ * 64
@@ -292,7 +292,7 @@ def moe_scope_events(M: int, *, step: int = 0, naive: bool = False, renormalize:
                                  "_moe_C::moe_align_block_size(Tensor topk_ids, int num_experts, int block_size, Tensor($0! -> ) sorted_token_ids, Tensor($1! -> ) experts_ids, Tensor($2! -> ) num_tokens_post_pad, Tensor? maybe_expert_map) -> ()",
                                  [ids, E, 64, sorted_ids, expert_ids, npad, None], {}, 7, None))
         evs.append(DispatchExit(i, None))
-    w13, w2 = view(7, (E, 2 * I, H)), view(8, (E, H, I))
+    w13, w2 = view(7, (E, 2 * INTER, H)), view(8, (E, H, INTER))
     c_up = dict(CONSTS, naive_block_assignment=naive)
     c_up.update(consts_up or {})
     c_dn = dict(CONSTS, naive_block_assignment=naive, MUL_ROUTED_WEIGHT=True, top_k=1)
@@ -305,12 +305,12 @@ def moe_scope_events(M: int, *, step: int = 0, naive: bool = False, renormalize:
         return TritonLaunch(new(), scope, step, "forward", "vllm.model_executor.layers.fused_moe.fused_moe.fused_moe_kernel", "sha", args, consts,
                             [(EM // 64) * (N // 64)], 4, num_stages, 7)
 
-    evs.append(launch(hidden, w13, cache1, None, 2 * I, H, c_up))
+    evs.append(launch(hidden, w13, cache1, None, 2 * INTER, H, c_up))
     i = new()
     evs.append(DispatchEnter(i, scope, step, "forward", "_C.silu_and_mul.default", "_C::silu_and_mul(Tensor($0! -> ) result, Tensor input) -> ()",
-                             [cache2, view(301, (P_, 2 * I), offset=P_ * I)], {}, 7, None))
+                             [cache2, view(301, (P_, 2 * INTER), offset=P_ * INTER)], {}, 7, None))
     evs.append(DispatchExit(i, None))
-    evs.append(launch(cache2, w2, cache3, w_, H, I, c_dn))
+    evs.append(launch(cache2, w2, cache3, w_, H, INTER, c_dn))
     i = new()
     evs.append(DispatchEnter(i, scope, step, "forward", "_moe_C.moe_sum.default", "_moe_C::moe_sum(Tensor input, Tensor($0! -> ) output, Tensor? topk_ids=None, Tensor? expert_map=None) -> ()",
                              [cache3, out, None, None], {}, 7, None))
@@ -340,8 +340,8 @@ def _start(M: int, step: int = 0, padded: int | None = None) -> StepStart:
 
 def _ctx(start: StepStart, profile=None) -> StepContext:
     header = RunHeader("verity-capture/log/v1", "2026-09-22T00:00:00Z", "x", {"vllm": "d9105ea80"}, {"repo": Q3.MODEL, "config": {}}, {"requests": []})
-    roots = {7: [Root(view(7, (E, 2 * I, H)), "weight", f"model.layers.{LAYER}.mlp.experts.routed_experts.w13_weight")],
-             8: [Root(view(8, (E, H, I)), "weight", f"model.layers.{LAYER}.mlp.experts.routed_experts.w2_weight")],
+    roots = {7: [Root(view(7, (E, 2 * INTER, H)), "weight", f"model.layers.{LAYER}.mlp.experts.routed_experts.w13_weight")],
+             8: [Root(view(8, (E, H, INTER)), "weight", f"model.layers.{LAYER}.mlp.experts.routed_experts.w2_weight")],
              A_GATE_W: [Root(view(A_GATE_W, (E, H)), "weight", f"model.layers.{LAYER}.mlp.gate.weight")]}
     return StepContext(header, start, None, [], roots, C, profile or Q3.PROFILE)
 
@@ -354,8 +354,8 @@ def _resolve(M: int, profile=None, **kw):
     return resolve_step(se, _ctx(start, profile)), se
 
 
-EXPECTED_SPECS = [f"MoeRouterTopKOrderedNorm_v1{{E={E},TOPK={TOPK},VPT=8}}", f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v2{{I={I}}}",
-                  f"MoeExpertGemmW_v1{{E={E},K={I},N={H}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
+EXPECTED_SPECS = [f"MoeRouterTopKOrderedNorm_v1{{E={E},TOPK={TOPK},VPT=8}}", f"MoeExpertGemm_v1{{E={E},K={H},N={2 * INTER}}}", f"SiluMul_v2{{I={INTER}}}",
+                  f"MoeExpertGemmW_v1{{E={E},K={INTER},N={H}}}", f"MoeSum_v1{{TOPK={TOPK},H={H}}}"]
 
 
 @pytest.mark.parametrize("M,naive,where", [(2, True, "inside"), (2, True, "after"), (3, False, "inside"), (32, False, "after"), (1, True, None)])
@@ -372,8 +372,8 @@ def test_rank_scope_folds_to_the_renormalising_pair_major_group_plus_the_block_a
     assert [c.rows for c in computes[:5]] == [M, M * TOPK, M * TOPK, M * TOPK, M]
     router, up, silu, down, msum = computes[:5]
     assert router.spec.name == "MoeRouterTopKOrderedNorm" and router.outputs[0].view.dtype == "float32" and router.outputs[1].view.dtype == "int32"
-    assert up.operands[0].indices == tuple(p // TOPK for p in range(M * TOPK)) and up.operands[2].view.shape == (E, 2 * I, H)
-    assert down.operands[3].view.shape == (E, H, I) and down.operands[2].view.alloc == router.outputs[0].view.alloc
+    assert up.operands[0].indices == tuple(p // TOPK for p in range(M * TOPK)) and up.operands[2].view.shape == (E, 2 * INTER, H)
+    assert down.operands[3].view.shape == (E, H, INTER) and down.operands[2].view.alloc == router.outputs[0].view.alloc
     assert msum.outputs[0].view.shape == (M, H)
     assert up.hint.endswith("routed_experts.w13_weight") and down.hint.endswith("routed_experts.w2_weight")     # the record's weight names
     kernels = [k for p in g.parts for k in p.kernels]
