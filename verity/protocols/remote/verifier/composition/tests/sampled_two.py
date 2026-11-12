@@ -6,7 +6,8 @@ name, the declared items, `ONE_DEFINITION`, `ONE_KEY`) are mirrored word for wor
 audit's decoders are the one-stage difftest's mirrors of them (`_rule` for `Select.Rule.ofJson`, `decode_params` for
 `OneStage.paramsParsed`, `template_circuits` for `Run.templateCircuits`), which that difftest holds to the Lean by verdict;
 `reason_mirrored` says which reasons are the form's own. Past the template circuits (the replay program, the members'
-audit, the evidence and the check) is outside the mirror: while `Spot.SecondStage.FORM` is false the form
+audit, the evidence and the check, its refusal of first-stage bytes past what the run read, `SOURCE_READ`, included;
+the form's `#guard`s pin that one) is outside the mirror: while `Spot.SecondStage.FORM` is false the form
 accepts nothing, which its Lean proves at every input (`checkBlobs_refuses`)."""
 
 from __future__ import annotations
