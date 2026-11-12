@@ -97,6 +97,7 @@ public import Proofs.Pouw.PearlC.ChainCapLoopGap
 public import Proofs.Pouw.PearlC.ChainOnlyGap
 public import Proofs.Pouw.PearlC.Completeness
 public import Proofs.Pouw.PearlC.DeadlineWitness
+public import Proofs.Pouw.PearlC.DevGap
 public import Proofs.Pouw.PearlC.DeviceCapGap
 public import Proofs.Pouw.PearlC.DeviceCapRev1Gap
 public import Proofs.Pouw.PearlC.DeviceChainCapGap
