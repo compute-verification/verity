@@ -98255,3 +98255,94 @@ the tries of `e169` and `606d` by 20:10Z and their suites by 20:40Z; `9fdd`'s tr
 
 - **(a) what I do at 21:00Z unless you say otherwise:** a base branch of my own at `1e06774f4ec9` (tree 1 with #9075's head merged, nothing else) and the pull request from `cursor/proofs-gather-served-select-b88b` against it. It shows the three commits and six files, exactly what the rehearsals run, and it is plainly not landable: its body says it is for the vLLM lane's read, that it sits on #9075, the mend and the return port, and that it is made again on `main` when those three are there.
 - **(b)** the three commits adapted to #9075's head: the layout whole, the stand-in's check without the return and the driver's change left out. It could land after #9075, but it is `17b9`'s tree again (`second-read` at the combine), not the tree that reaches the last withheld accept, and its test would assert an ending the return port then changes.
+
+## SERVEDCARD, Thu 12 Nov 19:45Z: the rehearsal has run since 19:39Z as `r20261112-192938-e3ae` (verdict about 21:50Z, by 22:20Z at the latest); tonight's commit is before #9375; CIR-259: the head block and `router-slots` are tonight's units, the end block is not, and no list changes
+
+- **The rehearsal** [run].
+  - Why the first copy never started: `r20261112-184230-99b2` waited 61 min on vy-nebius-cpu-11, second in a line of 13, behind circuits' `r20261112-183158-1477` (256 GB). All 11 slots there were held by runs started 17:21Z to 18:52Z. I cancelled it at 19:43Z; it never started.
+  - Every CPU pool was full:
+    - vy-nebius-cpu-13's ten slots are closed 17:30Z to 00:30Z for the merge loop's heavy candidate;
+    - vy-nebius-cpu-2 and vy-nebius-cpu-5 had stalled on memory;
+    - the other pools had every slot that fits held.
+    Node A's free cores end at vllm's 21:00Z row [read: `calendars/node-a.md`].
+  - The copy that runs asks for 16 CPUs and 32 GB instead of 32 and 160. The rehearsal's largest statement stages in 12 GB, and a waiter asking at most 32 GB may pass waiters that only memory holds back (`slot.py`'s `BACKFILL_MAX_GB`) [read]. I launched it at 19:29Z with `--on auto`, and it took slot r13 on vy-nebius-cpu-1 (cores 8-31, 24 CPUs) at **19:39:04Z**.
+  - It runs the same commit and scripts, with two changes: the Lean step takes two statements instead of four, and proving stops at 45 min.
+  - By 19:43Z the CPU prover was built (90 s), and the small head block was staging for its pin.
+  - ETA [guess]: the verdict about 21:50Z, and about 22:20Z at the latest under its own limits (staging stopped at 60 min, proving at 45 min, then the Lean step). The node A rows stay PROVISIONAL until it passes. Nothing is needed from infra now.
+- **The commit, #9375 and the two settings** (your 19:40Z section) [run].
+  - (a) The commit. Both of tonight's jobs launch from `0803d36697868861ec37c71fd656789911c719a4` on `cursor/proofs-overhead-7c41`, branched from `main` at `9ddae97ba2f7`. `launch.sh` refuses any other commit or an unclean tree (`EXPECT`). #9375 is open and unmerged at 19:44Z, so the run is on the side before it, and so is the rehearsal, at the same commit. I merge nothing into the branch before the run.
+  - (b) The two settings. Neither `VERITY_ROPE_CACHE_FUSED` nor `VERITY_INT8_FUSED_PRODUCERS` exists at that commit: a search over the tree finds neither name. At #9375's head (`64ee10f179`), `settings.py` turns both on (`True`) by default.
+    - Neither can reach the run, which starts no engine. It stages census statements whose values are drawn from a seed of the type's name [read: `benchmarks/served_units/stage.py`, `stage_census`], then proves them.
+    - From now on, both GPU jobs write each setting's value, in the tree and in the job's environment, into `out/steps.txt` (both read "absent" at this commit, tried locally). The running rehearsal has the older scripts, which write only the commit.
+  - (c) The serve. Tonight's table reads no serve.
+    - Its prices go onto the workload card. The card's block counts are the census of the served circuit at `r20261109-031946-2a90`: commit `0ba596a7222f`, Mon 9 Nov, one request of 256 tokens in and 32 out, eight ranks, marked provisional [read: `benchmarks/spot_figures/cards/workload.glm-5.3.json` and the run's record].
+    - Which serve's time Friday's figure divides by is for benchmarks to name at Fri noon PST, and I have not read it. The two serves on node A's calendar are VLLM-268's run of record (Thu 03:00Z to 11:30Z, before #9375) and VLLM-339's serving rate (Fri 08:15Z to 15:45Z, possibly after it) [read: `calendars/node-a.md`].
+  - The head block's row of record: the table prices each type from tonight's own timings at that commit. Any share I print from the row of record I mark as the row of record's, about 10% high, until kernels' label at 8:30 AM PST.
+  - vllm's 06:15Z takeover is now in the run's plan (the head of `launch.sh`) and in my 19:37Z note.
+    - The prove job's leases end by 05:57Z, and `window.py` is stopped at 05:58:30Z and killed by 05:59:30Z.
+    - I lowered the run's own timeout from 06:30Z to 06:15Z [run: `DRY=1 launch.sh prove`].
+    - When the job ends it writes every compute process on the node into `out/cards-at-end.txt`.
+    - If the run needs minutes past 06:00Z, I say so in an entry by 05:00Z.
+
+- **CIR-259, read whole: both circuits comments (10:34 AM and 11:14 AM PST) and our own table on CIR-245 (12:11Z) [read: Linear].** Against tonight's units: the head block and `router-slots` are the same units; the end block is not; `token-select`, `dsa-q` and `router-row` are not staged tonight. No statement moves, no card's memory changes, and I changed no list.
+  - Tonight's 36 types are benchmarks' ranked types 1 to 36, 98.19% of the ranked proving time [read: `overhead-run/bench-rows.tsv`, `types.tsv` in our notes]. The greedy blocks, `DsaIndexerQ_v1`, `MoeRouterSigmoidBias_v1` and rope are all among "the other 152 types, summed: 1.64%".
+- **`sparse-mla-head`.**
+  - The block is the same unit. Tonight times `SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=false|true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},SCALE=…}` [read: `types.tsv`]. These are ranked types 1 and 2, 5.29% between them, and they are node A's two statements staged Tue at `k_log` 27, 256 blocks each [read: their `stage.json`, today]. That matches circuits' "units derived, `ks-form` passed over 256 blocks" [relayed]. Its first session at 64 keys is circuits' `r20261112-183158-1477`, which waits on vy-nebius-cpu-11 at the head of the line my rehearsal is in [run].
+  - The end block differs. Tonight times `SparseMlaHeadEnd_v2{DV=512,INV={"fn":"Fa3InvSum_v2"}}`, ranked type 35 (0.05%); circuits' default is `SparseMlaHeadEnd_v1{DV=512,INV={"fn":"Fa3InvSum_v1"}}`. Both compute the same rows:
+    - `units.py` takes a type's Boolean version only where that template's word is the census name [read: `units.py`:61-73];
+    - a Boolean Definition's rows are its word view [read: `adapters/vllm/verity_vllm/pipeline/serving_rows.py`:38-48];
+    - the partition card names `_v1` [read: `benchmarks/spot_figures/cards/partition.glm-5.3.72823681e10b.json`].
+  - Which is right [guess, my judgment]: `_v2`. It gives one rule for the whole head: the block can only be `_v2`, since `ks-form` refuses `_v1` at 64 keys [relayed]. It is also the rule tonight follows for every type that has a Boolean version (32 of 36) [read: `types.tsv`].
+  - What changes if you take it: circuits stages `SparseMlaHeadEnd_v2{…}` bound and runs its four verdicts before the pull request names it. Their `_v1` took 74 s and 2.3 GB to stage [relayed]. If `_v2` fails any verdict, `_v1` stays. Either way our end block's line says it times `_v2`, which computes the same rows as `_v1`. At 0.05% no figure turns on it. Nothing changes tonight.
+  - `_v2` has no Lean verdict yet. The rehearsal stages it at 2 blocks and proves it on the CPU, but its Lean step takes only the first statements in its file, not this one [read: `rehearsal.units`, `rehearse.sh`].
+- **`token-select`: not staged tonight.** The census's `GreedyChunk_v1{N=16384,FIRST=false}` and `GreedyCombine_v1{V=154880,N=16384}` are among the 152 types beyond tonight's [read: `bench-rows.tsv`]. For tonight the default stands and nothing changes. circuits did not try the Boolean version `TokenSelect_v2{V=154880}` [relayed]. I did not check whether the two greedy blocks have Boolean versions.
+- **`router`: `router-slots` is tonight's unit.** It is ranked type 34 (0.06%), `MoeRouterSigmoidBiasSlots_v2{E=256,TOPK=8,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"}`, staged as named because it is itself the Boolean Definition [read: `types.tsv`].
+  - Its name comes from the fused partition of record, not from `glm53_blocks.json` [read: `bench-rows.tsv`'s header]. That agrees with circuits' finding that the census card has no entry for it [relayed].
+  - `router-row` is not tonight's; `MoeRouterSigmoidBias_v1` is beyond type 36. The default stands and nothing changes.
+- **`dsa-q`: not staged tonight**; `DsaIndexerQ_v1` is beyond type 36 [read: `bench-rows.tsv`].
+  - Tonight's rule (a type's Boolean version wherever one is registered) would stage `dsa-q-row`, which is circuits' default.
+  - Switching to `DsaIndexerQ_v1` on a Lean verdict is circuits' to make. It is the same rows at 43 GB of staging against 235 GB [relayed], and it changes nothing tonight.
+- **Measured sizes against the eight lists: no statement moves.**
+  - The lists come from `balance.tsv`: 300 s for a full statement, 150 s for a quarter, 330 s and 320 s for the two head blocks. `window.py`'s grouping is by those seconds [read]. No ANDs and no `k_log` enter it [derived].
+  - A statement's block count at `full` is set when it is staged, from the built block's `k_log` [read: `benchmarks/served_units/stage.py`:380]. So a `k_log` that differs from the card's changes the block count automatically, not the statement's size, which is at most 2^35 bits [read: our table on CIR-245].
+  - Of circuits' measured types, only two are tonight's:
+    - the head block's Boolean version at 64 keys: `k_log` 27 and 256 blocks, as node A's statements are;
+    - `router-slots`: `k_log` 25, as estimated, so 1,024 blocks. Staging one block took 15.5 GB [relayed]; our estimate for a full statement is 60 GB [read: `overhead.units`].
+  - None of the others is a unit of tonight's run: rope, `router-row`, `rmsnorm-v8` (tonight's type 29 is its Boolean version, `RMSNormFusedCudaVector8_v2{…,RSQRT={"fn":"RsqrtApprox_v2"}}`), `dsa-topk` and the end block's `_v1`.
+- **Card memory: no change.**
+  - A card proves its statements one after another, one `prove_time.sh` per card [read: `window.py`'s docstring]. So its peak is its largest statement's: 60 GiB estimated for the head blocks, at most 40 GiB for every other. All are under the 135 GiB each card is held to (`WIN_DEV_GIB`) [read: `overhead.units`, `launch.sh`].
+  - circuits measured staging memory, not device memory. A smaller `k_log` does not make a full statement larger [derived]. No card would fail on what they measured, so I changed no list.
+- **`dsa-q-row`'s 235 GB: not part of tonight's plan**, which does not stage it.
+  - If it were added: the staging job admits a statement only while the running stagings' memory, what `/dev/shm/proofs-overhead` holds and its own estimate stay within 540 GB, 600 GB × 0.9 [read: `window.py`'s docstring, `launch.sh`].
+  - Tonight's 70 statements come to about 355 GB in `/dev/shm` by the end, by estimate. That includes the head blocks' 24 GB, staged Tue. The largest staging estimate among the 68 staged tonight is 63 GB [derived: `overhead.units`].
+  - So it would fit only near the start, beside little else, and only if a full statement of it (512 blocks at `k_log` 26) peaked near what one block did. That is unmeasured: circuits staged one block, in 75 min [relayed]. I would not add it tonight.
+- **Our table's lines to correct**, for you to post on CIR-259:
+
+```
+proofs, on CIR-259: corrections to our table on CIR-245 (Thu 12 Nov 12:11Z), from circuits' staged table above (10:34 AM PST). The staged figures are circuits' [relayed]; the old ones are the census card's estimates, `benchmarks/sampling_plan/glm53_blocks.json`, as our table gave them [read].
+
+What each becomes:
+- `sparse-mla-head`: not the census's `SparseMlaHeadBlock_v1{...}`, which the Lean verifier's `ks-form` refuses at 64 keys (it reads ex2 in lookup slots), but its Boolean version `SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},SCALE={"f64":"0x1.0000000000000p-4"}}` and its `FIRST=true` twin, with the end block `SparseMlaHeadEnd_v1{DV=512,INV={"fn":"Fa3InvSum_v1"}}` (verifies) or its Boolean version `SparseMlaHeadEnd_v2{DV=512,INV={"fn":"Fa3InvSum_v2"}}` (not yet staged bound).
+- `router`, `dsa-q`: the census's own names, which our card prices under, are not what verified. `MoeRouterSigmoidBias_v1` did not stage within 96 GB. `DsaIndexerQ_v1` stages (43.0 GB) and has no Lean verdict yet. What verified is `router-row`, `router-slots` and `dsa-q-row`, their Boolean versions.
+
+| type | the whole's statement, as our table gave it | staged with `--bind` (ANDs, `k_log`, blocks a statement) |
+|---|---|---|
+| `router` | 12,379,040 ANDs, 25, 1,024 | `router-row` (`MoeRouterSigmoidBias_v2`): 8,313,579, 24, 2,048; `router-slots` (`MoeRouterSigmoidBiasSlots_v2`): 8,313,579, 25, 1,024, a Definition the census has no entry for |
+| `dsa-q` | 29,662,560 ANDs, 26, 512 | `dsa-q-row` (`DsaIndexerQ_v2`): 21,268,704, 26, 512; `DsaIndexerQ_v1`: 21,088,736, 26, 512 |
+| `dsa-krow` | 2,536,665 ANDs, 23, 4,096 | 2,352,568, 23, 4,096 |
+| `dsa-topk` | 131,072 ANDs, 23, 4,096 | 61,441, 23, 4,096 |
+| `rmsnorm-cuda` | the census's norm: 55,293,328 ANDs, 27, 256 | `rmsnorm-v8`: 29,530,074, 27, 256 |
+| `sparse-mla-head` | census blocks up to 37,568,903 ANDs, 27, 256 | `SparseMlaHeadBlock_v1{NVIS=64,FIRST=false,...}`: 37,478,573, 27, refused by `ks-form`; its Boolean version at 64 keys: units derived and `ks-form` passed over 256 blocks, no session yet; `SparseMlaHeadEnd_v1{DV=512,...}`: 1,363,955, 23, 4,096 |
+| `rope` | `RoPEHeadGptJ_v2{D=64}`: 191,872 ANDs, 21, 16,384 | 191,872, 22, 8,192 |
+| `moe-sum` | `H=96`: 663,264 ANDs, 22, 8,192 | 623,424, 22, 8,192 |
+| `dsa-logits` | `_v3{N=1}`: 1,102,610 ANDs, 23, 4,096 | 1,087,058, 23, 4,096: the same ANDs as the coordinate `DsaMqaLogit_v1` our card's entry 8 measured |
+| `moe-w13` | `_v3`: 1,749,389 and 2,323,469 ANDs, 24, 2,048 | 1,737,375 (`SWAP=true`) and 2,307,615 (`SWAP=false`), 24, 2,048 |
+| `moe-gemmw` | 622,009 ANDs, 26, 512 | 620,575, 26, 512 |
+| `token-select` | none | the census's two blocks: `GreedyChunk_v1{N=16384,FIRST=false}` 2,031,531, 25, 1,024 and `GreedyCombine_v1{V=154880,N=16384}` 913,433, 25, 1,024; `TokenSelect_v1{V=154880}` whole did not stage within 256 GB |
+
+A statement holds min(2^(35 - k_log), 2^20) blocks. Our comment here of 13:07Z is corrected the same way: the whole `DsaMqaLogits_v3{N=1,H=32,D=128}` stages at 1,087,058 ANDs, not 1,102,610, and `moe-w13`'s at 1,737,375 and 2,307,615. Unchanged: `silu-mul` (362,496, 22).
+```
+
+For the table:
+- PRF-502 overhead run: rehearsal `r20261112-192938-e3ae` running since 19:39Z on vy-nebius-cpu-1, verdict about 21:50Z (by 22:20Z at the latest); node A's rows PROVISIONAL until it passes; commit `0803d3669786`, before #9375; the run ends by 06:15Z.
+- CIR-259: the head block and `router-slots` are tonight's units; tonight's end block is `SparseMlaHeadEnd_v2` where circuits' default is `_v1` (I'd take `_v2`); `token-select`, `dsa-q` and `router-row` are not staged tonight; no statement or card changes; the corrections are in the fence above.
