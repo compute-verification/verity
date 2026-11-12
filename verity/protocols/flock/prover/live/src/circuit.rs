@@ -2841,7 +2841,7 @@ pub fn unit_ab_seeded(net: &IrUnitNet, sched: &UnitSched, seeds: &[u32], seed_z:
 /// A pass's rows as [`unit_walk_seeded`] is given them, from its eight lane groups': `group(q)` is each row's `u32` in the
 /// pass's slots `32 q ..` (bit l slot l's).
 pub fn walk_pass_rows(group: impl Fn(usize) -> Vec<u32> + Sync) -> Vec<[u64; 4]> {
-    let groups: Vec<Vec<u32>> = (0..8).into_par_iter().map(group).collect();
+    let groups: Vec<Vec<u32>> = (0..8usize).into_par_iter().map(|q| group(q)).collect();
     (0..groups[0].len()).map(|s| std::array::from_fn(|g| u64::from(groups[2 * g][s]) | u64::from(groups[2 * g + 1][s]) << 32)).collect()
 }
 
@@ -4297,7 +4297,7 @@ mod tests {
                     unit_rows_z(net, seeds, &grp)
                 });
                 let want = unit_walk_words(net, &full, &rows, 4 * uw, &ins);
-                let (got, held) = unit_walk_seeded(net, &cut, &cut_rows, 4 * uw, &ins, seeds, given);
+                let (got, held) = unit_walk_seeded(net, &cut, &cut_rows, 4 * uw, &ins, seeds, &given);
                 assert!(held && got == want, "net {k}, {slots} slots: the cut walk's words, every seed held ({held})");
                 assert!(!unit_walk_seeded(net, &cut, &cut_rows, 4 * uw, &ins, seeds, |_| vec![[0; 4]; seeds.len()]).1, "net {k}, {slots} slots: every seed 0");
                 // one seed off in one slot of the last pass: the last slot with inputs, and the pass's last slot, which has
