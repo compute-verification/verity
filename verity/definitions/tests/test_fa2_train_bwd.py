@@ -19,6 +19,7 @@ from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import boolean_fa2_train_bwd as BX
 from verity.definitions.registry import fa2_train_bwd as W
+from verity.definitions.registry import prims as P
 from verity.definitions.registry.prims import BF16, F32
 
 FIXTURE = Path(__file__).parent / "fixtures" / "fa2_train_bwd_sm120.npz"
@@ -30,7 +31,8 @@ def _ints(a) -> list[int]:
 
 
 def test_train_sdpa_backward_binds_each_captured_shape() -> None:
-    for H, NS in ((8, 12), (12, 8), (16, 6), (24, 4)):
+    """H = 8's 12 buffers are more than a row's 8 parts can fill, so it binds H = 12's circuit."""
+    for H, NS in ((8, 8), (12, 8), (16, 6), (24, 4)):
         assert W.train_sdpa_backward(2, H, 1024, 64).id == f"Fa2TrainBwdHead_v1{{T=1024,D=64,BM=64,BN=128,NS={NS}}}"
     for shape in ((2, 4, 1024, 64), (2, 12, 512, 64), (2, 12, 1024, 128)):
         with pytest.raises(ValueError, match="is not captured"):
@@ -143,27 +145,99 @@ def test_a_head_is_its_rows_and_keys_in_the_kernels_order() -> None:
 
 def test_the_head_at_a_stand_in_shape_keeps_its_signature_and_builds(monkeypatch) -> None:
     """At T = 16, D = 32 and blocks of 16, the statics a training step's frontend binds the head at when a test makes its shape a
-    route: a stand-in entry of `TRAIN_SDPA_BWD` binds through `train_sdpa_backward`, the head takes (dO, q, k, v, O, LSE) and
-    returns (dQ, dK, dV) in the op's order, it builds on words and on bits, and on words it is the kernel's loop at those statics
-    with one dQ buffer as with the stand-in's."""
+    route: a stand-in entry of `TRAIN_SDPA_BWD` binds through `train_sdpa_backward` to the head with one dQ buffer, which takes
+    (dO, q, k, v, O, LSE) and returns (dQ, dK, dV) in the op's order, builds on words and on bits, and on words is the kernel's
+    loop at those statics."""
     T, D, bm = 16, 32, 16
     monkeypatch.setitem(W.TRAIN_SDPA_BWD, (2, 2, T, D), (bm, bm))
-    stand_in = W.train_sdpa_backward(2, 2, T, D)
-    one = bind(W.Fa2TrainBwdHead, T=T, D=D, BM=bm, BN=bm, NS=1)
-    assert stand_in.id == f"Fa2TrainBwdHead_v1{{T={T},D={D},BM={bm},BN={bm},NS=47}}"
+    head = W.train_sdpa_backward(2, 2, T, D)
+    assert head.id == bind(W.Fa2TrainBwdHead, T=T, D=D, BM=bm, BN=bm, NS=1).id
     rows = Array(T, Array(D, BF16))
-    for head in (stand_in, one):
-        assert head.signature() == (tuple((n, rows) for n in ("do", "q", "k", "v", "o")) + (("lse", Array(T, F32)),),
-                                    Tuple(rows, rows, rows))
-    assert bind(BX.Fa2TrainBwdHead, T=T, D=D, BM=bm, BN=bm, NS=1).gates > one.gates > 0
+    assert head.signature() == (tuple((n, rows) for n in ("do", "q", "k", "v", "o")) + (("lse", Array(T, F32)),),
+                                Tuple(rows, rows, rows))
+    assert bind(BX.Fa2TrainBwdHead, **head.bindings).gates > head.gates > 0
     rng = np.random.default_rng(4207)
     do, q, k, v, o = (_bf16(rng, (T, D)) for _ in range(5))
     lse = _f32(rng, (T,), 2.0)
     parts, dk, dv = _loop(q, k, v, do, o, lse, bm, bm)
     want = [x for r in range(T) for x in _ints(evaluate(bind(W.Fa2TrainBwdDq, D=D, NP=1, NS=1), parts[r]))]
-    want += [x for row in dk + dv for x in row]
-    for head in (stand_in, one):
-        assert _ints(evaluate(head, *map(_ints, (do, q, k, v, o, lse)))) == want, head.id
+    assert _ints(evaluate(head, *map(_ints, (do, q, k, v, o, lse)))) == want + [x for row in dk + dv for x in row]
+
+
+def _tiny_bf16(rng, shape, lo: int, hi: int):
+    """bf16 words of random sign and mantissa at magnitudes 2^lo to 2^hi."""
+    x = np.ldexp(rng.uniform(1, 2, shape), rng.integers(lo, hi, shape)) * rng.choice([-1, 1], shape)
+    return (x.astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
+
+
+def _dpsum(do, o, fused: bool) -> int:
+    """The dP sum of one row at D = 64 written out as `dot_do_o` runs it: eight threads of eight head dims, each by FMUL and then
+    FFMA into its sum (`fused`) or FMUL and FADD, and the butterfly's FADDs."""
+    f32 = [[int(x) << 16 for x in a] for a in (do, o)]
+    sums = []
+    for t in range(8):
+        dims = range(8 * t, 8 * t + 8)
+        acc = None
+        for d in dims:
+            a, b = f32[0][d], f32[1][d]
+            if acc is None:
+                acc = P.F32MulV2.evaluate(a, b)
+            else:
+                acc = P.F32FmaV2.evaluate(a, b, acc) if fused else P.F32AddV2.evaluate(acc, P.F32MulV2.evaluate(a, b))
+        sums.append(acc)
+    while len(sums) > 1:
+        half = len(sums) // 2
+        sums = [P.F32AddV2.evaluate(sums[t], sums[t + half]) for t in range(half)]
+    return sums[0]
+
+
+def test_the_dp_sum_is_fmul_then_ffma() -> None:
+    """dO and O at 2^-75 to 2^-60, so products fall under f32's normal range, where FMUL then FADD rounds each product and FFMA
+    does not: the dP sum is the FFMA chain the kernel's SASS holds, and on these rows the FADD chain is another."""
+    rng = np.random.default_rng(4207)
+    N, D = 64, 64
+    do, o = _tiny_bf16(rng, (N, D), -75, -60), _tiny_bf16(rng, (N, D), -75, -60)
+    pre = bind(W.Fa2TrainBwdPre, D=D)
+    got = [int(evaluate(pre, _ints(do[i]), _ints(o[i]), [0])[0]) for i in range(N)]
+    assert got == [_dpsum(do[i], o[i], True) for i in range(N)]
+    assert sum(g != _dpsum(do[i], o[i], False) for i, g in enumerate(got)) > N // 10
+
+
+def _dq(parts, D: int, NS: int, ftz: bool, first: bool) -> list[int]:
+    """A row's dQ written out: buffer x adds parts x, x + NS, .. to +0, flushing to zero (`ftz`) or not; the convert kernel adds
+    the buffers to +0 (`first`) or starts at the first buffer; then the scale and bf16."""
+    add = P.F32AddFtzV2.evaluate if ftz else P.F32AddV2.evaluate
+    scale = int(np.float32(D ** -0.5).view(np.uint32))
+    out = []
+    for d in range(D):
+        acc = 0 if first else None
+        for x in range(min(NS, len(parts))):
+            buf = 0
+            for b in range(x, len(parts), NS):
+                buf = add(buf, int(parts[b][d]))
+            acc = buf if acc is None else P.F32AddV2.evaluate(acc, buf)
+        out.append(P.F2fpBf16.evaluate(P.F32MulV2.evaluate(acc, scale)))
+    return out
+
+
+def test_a_dq_part_s_add_into_its_buffer_flushes_to_zero() -> None:
+    """Parts of random sign at 2^-127 to 2^-120, subnormal or near it: the buffers' atomic adds flush to zero and the convert
+    kernel's FADDs don't, so the FTZ-free sum is another on most words.  A row of eight parts in four buffers holds 2^-126 and
+    then -(2^-126 + 2^-149) in each buffer at head dim 0, so every buffer's flushed sum is -0: the convert kernel's first add
+    makes the sum +0, which starting at the first buffer would not."""
+    rng = np.random.default_rng(4207)
+    N, NS, D = 4, 4, 64
+    for NP in (5, 8):
+        parts = np.ldexp(rng.uniform(1, 2, (N, NP, D)), rng.integers(-127, -120, (N, NP, D))) * rng.choice([-1, 1], (N, NP, D))
+        parts = parts.astype(np.float32).view(np.uint32)
+        if NP == 8:
+            parts[-1, :, 0] = [0x00800000] * 4 + [0x80800001] * 4
+        dq = bind(W.Fa2TrainBwdDq, D=D, NP=NP, NS=NS)
+        got = [_ints(evaluate(dq, _ints(parts[i]))) for i in range(N)]
+        assert got == [_dq(parts[i], D, NS, True, True) for i in range(N)], NP
+        plain = [_dq(parts[i], D, NS, False, True) for i in range(N)]
+        assert sum(a != b for g, p in zip(got, plain) for a, b in zip(g, p)) > N * D // 2, NP
+    assert got[-1][0] == 0 and _dq(parts[-1], D, NS, True, False)[0] == 0x8000
 
 
 def test_on_bits_each_is_its_words() -> None:

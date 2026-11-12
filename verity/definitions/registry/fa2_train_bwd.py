@@ -29,17 +29,18 @@ i and key j:
     dQ part of row i = sum_j bf16(dS) k_j     k16 steps over the block's keys in turn, from +0
 
 dPsum_i is dO_i . O_i in f32 as `dot_do_o` adds it: a thread holds 8 head dims of each page of W (64 at a D that is a multiple of
-64, else 32), multiplies and adds them in turn (FMUL, FADD), and the W / 8 threads of the row add by a butterfly, xor W / 16 down
-to 1.  After the loop dV_j = bf16(acc) and dK_j = bf16(acc * D^-0.5).  A row's dQ parts are added in f32: thread block x adds the
-parts of key blocks x, x + NS, .. in turn into its own buffer from +0, `flash_bwd_convert_dq_kernel` adds the buffers in turn,
-and dQ_i = bf16(sum * D^-0.5).  NS is the kernel's split count under deterministic algorithms, ceil(SMs / (B H)).  Without
+64, else 32), takes them in turn, the first by FMUL and each after it by FFMA into the sum (nvcc contracts the multiply-add), and
+the W / 8 threads of the row add by a butterfly, xor W / 16 down to 1.  After the loop dV_j = bf16(acc) and dK_j = bf16(acc *
+D^-0.5).  A row's dQ parts are added in f32: thread block x adds the parts of key blocks x, x + NS, .. in turn into its own
+buffer from +0 by atomic adds that flush to zero (`red.add.f32`, FTZ in the SASS), `flash_bwd_convert_dq_kernel` adds the
+buffers in turn to +0 by FADD, and dQ_i = bf16(sum * D^-0.5).  NS is the kernel's split count under deterministic algorithms, ceil(SMs / (B H)).  Without
 deterministic algorithms every thread block adds into one buffer with atomics, in the order the card schedules them: no function
 of the inputs, and no Definition here.
 
-torch builds these kernels without fast math, so every f32 operation is the GPU's without flush-to-zero, as in `fa2_train`.
-What the Definitions leave out is the identity on every word: the dP sum's and dV's FMUL by a dropout factor of 1, the convert
-kernel's first add (+0 plus a buffer that is never -0), its adds of the buffers no thread block wrote (+0 to a sum that is
-never -0), and a masked score's FMUL (-inf times L).
+torch builds these kernels without fast math, so every f32 operation but the dQ atomics is the GPU's without flush-to-zero, as
+in `fa2_train`.  What the Definitions leave out is the identity on every word: the dP sum's FMUL by a dropout factor of 1, the
+convert kernel's adds of the buffers no thread block wrote (+0 to a sum that is never -0, since it starts at +0), and a masked
+score's FMUL (-inf times L).
 """
 from __future__ import annotations
 
@@ -67,12 +68,14 @@ TRAIN_SDPA_BWD = {(2, 8, 1024, 64): (64, 128), (2, 12, 1024, 64): (64, 128), (2,
                   (2, 24, 1024, 64): (64, 128)}
 
 _FA2 = EVIDENCE["cc12_fa2_backward_capture"]
-CONFORMANCE = ("exact-model-tested: every word of dQ, dK and dV of torch's flash attention backward "
+CONFORMANCE = ("exact-model-tested: words of dQ, dK and dV of torch's flash attention backward "
                "(aten._scaled_dot_product_flash_attention_backward, causal, bf16, head dim 64) under deterministic algorithms "
-               "on cc 12.0 with 188 SMs (torch 2.14.0+cu130) at B = 2, T = 1,024 and H = 8, 12, 16 and 24 "
-               "(`flash_bwd_dq_dk_dv_loop_seqk_parallel_kernel`, BM = 64, BN = 128, 12, 8, 6 and 4 dQ buffers), on each batch "
-               "member's first and last heads with q and k N(0, 1) and N(0, 9), v N(0, 1) and a random bf16 dO "
-               f"(capture {_FA2['capture']}, run record {_FA2['run_record']})")
+               "on cc 12.0 with 188 SMs (torch 2.14.0+cu130) at B = 2 and T = 1,024 "
+               "(`flash_bwd_dq_dk_dv_loop_seqk_parallel_kernel`, BM = 64, BN = 128), v N(0, 1) and a random bf16 dO: dQ of five "
+               "rows of an H = 24 head (4 dQ buffers) with q and k N(0, 9), one of whose words tells the buffers from the sum in "
+               "the key blocks' order, and dK and dV of the last key block of an H = 16 head with q and k N(0, 1) "
+               f"(capture {_FA2['capture']}, run record {_FA2['run_record']}); the dP sum's FFMA and the dQ atomics' "
+               "flush-to-zero are the capture's SASS, which no captured word tells apart")
 
 
 def _refuse(b: dict) -> str | None:
@@ -132,16 +135,16 @@ def _rows(S, n: int, t=BF16):
            conformance=CONFORMANCE, refuse=_refuse)
 def Fa2TrainBwdPre(B, S, do, o, lse):
     """A query row's dP sum and scaled LSE: dPsum = dO . O, each of the row's W / 8 threads (W = 64 at a D that is a multiple of
-    64, else 32) adding the products of its 8 head dims of each page in turn and the threads adding by a butterfly; ms =
-    guard(lse) * log2 e."""
+    64, else 32) taking its 8 head dims of each page in turn, the first by FMUL and each after it by FFMA into the sum, and the
+    threads adding by a butterfly; ms = guard(lse) * log2 e."""
     D = S.D
     W = 64 if D % 64 == 0 else 32
     x = []
     for t in range(W // 8):
         acc = None
         for d in (page * W + 8 * t + e for page in range(D // W) for e in range(8)):
-            prod = B.call(P.F32MulV2, B.call(P.Bf16ToF32, do[d]), B.call(P.Bf16ToF32, o[d]))
-            acc = prod if acc is None else B.call(P.F32AddV2, acc, prod)
+            a, b = B.call(P.Bf16ToF32, do[d]), B.call(P.Bf16ToF32, o[d])
+            acc = B.call(P.F32MulV2, a, b) if acc is None else B.call(P.F32FmaV2, a, b, acc)
         x.append(acc)
     while len(x) > 1:
         half = len(x) // 2
@@ -207,15 +210,16 @@ def Fa2TrainBwdDkDv(B, S, acc):
 @composite("Fa2TrainBwdDq", 1, ["D", "NP", "NS"], lambda S: ((("parts", _rows(S, S.NP, F32)),), _vec(S)),
            conformance=CONFORMANCE, refuse=_refuse)
 def Fa2TrainBwdDq(B, S, parts):
-    """A query row's dQ from its parts of key blocks 0..NP-1: buffer x < NS is +0 plus the parts of blocks x, x + NS, .. in turn,
-    the buffers are added in turn, and dQ = bf16(sum * D^-0.5)."""
+    """A query row's dQ from its parts of key blocks 0..NP-1: buffer x < NS is +0 plus the parts of blocks x, x + NS, .. in turn
+    by the main kernel's atomics, which flush to zero; the convert kernel adds the buffers in turn to +0, and dQ = bf16(sum *
+    D^-0.5).  A buffer can be -0 (a negative subnormal sum flushed), so the convert kernel's first add is not the identity."""
     zeros = _zeros(B, S.D)
-    acc = None
+    acc = zeros
     for x in range(min(S.NS, S.NP)):
         buf = zeros
         for b in range(x, S.NP, S.NS):
-            buf = B.batch(P.F32AddV2, buf, parts[b], axes=(0, 0))
-        acc = buf if acc is None else B.batch(P.F32AddV2, acc, buf, axes=(0, 0))
+            buf = B.batch(P.F32AddFtzV2, buf, parts[b], axes=(0, 0))
+        acc = B.batch(P.F32AddV2, acc, buf, axes=(0, 0))
     scaled = B.batch(P.F32MulV2, acc, _c(B, _scale(S.D)), axes=(0, None))
     return B.batch(P.F2fpBf16, scaled, axes=(0,))
 
@@ -264,12 +268,13 @@ def Fa2TrainBwdHead(B, S, do, q, k, v, o, lse):
 
 def train_sdpa_backward(B: int, H: int, T: int, D: int):
     """The head Definition of torch's flash attention backward at (B, H, T, D) on cc 12.0 under deterministic algorithms, bound
-    (`TRAIN_SDPA_BWD`, the dQ buffers ceil(`SMS` / (B H))); ValueError at a shape the capture doesn't cover."""
+    (`TRAIN_SDPA_BWD`, the dQ buffers ceil(`SMS` / (B H)), at most the T / BN a row's parts can fill: more buffers are the same
+    circuit); ValueError at a shape the capture doesn't cover."""
     blocks = TRAIN_SDPA_BWD.get((B, H, T, D))
     if blocks is None:
         raise ValueError(f"(B, H, T, D) = {(B, H, T, D)} is not captured: torch's flash attention backward is fitted at "
                          f"{sorted(TRAIN_SDPA_BWD)}")
-    return bind(Fa2TrainBwdHead, T=T, D=D, BM=blocks[0], BN=blocks[1], NS=-(-SMS // (B * H)))
+    return bind(Fa2TrainBwdHead, T=T, D=D, BM=blocks[0], BN=blocks[1], NS=min(-(-SMS // (B * H)), T // blocks[1]))
 
 
 __all__ = ["CONFORMANCE", "Fa2TrainBwdDkDv", "Fa2TrainBwdDq", "Fa2TrainBwdHead", "Fa2TrainBwdKey", "Fa2TrainBwdKeyFirst",

@@ -25,27 +25,32 @@ from pathlib import Path
 
 import numpy as np
 
-BN = 128
-#: name -> (capture case, which of its heads, B * H, rows)
-ROWS = {"xl/wide": ("bwd/xl/det/wide", 0, 48, (0, 5, 127, 130, 621))}
-#: name -> (capture case, which of its heads)
-BLOCK = {"l16/unit": ("bwd/l16/det/unit", 1)}
-SMS = 188
+from verity.definitions.registry.fa2_train_bwd import train_sdpa_backward
+
+#: name -> (capture case, which of its heads, (B, H), rows)
+ROWS = {"xl/wide": ("bwd/xl/det/wide", 0, (2, 24), (0, 5, 127, 130, 621))}
+#: name -> (capture case, which of its heads, (B, H))
+BLOCK = {"l16/unit": ("bwd/l16/det/unit", 1, (2, 16))}
+
+
+def _head(d, case: str, bh: tuple[int, int]) -> dict:
+    """The bindings of the head Definition at the case's shape: its key block `BN` and dQ buffers `NS`."""
+    return train_sdpa_backward(*bh, *d[f"{case}/q"].shape[1:]).bindings
 
 
 def cut(d) -> dict[str, np.ndarray]:
     out: dict[str, np.ndarray] = {}
     for name, (case, head, bh, rows) in ROWS.items():
-        r = list(rows)
-        keys = (max(r) // BN + 1) * BN
+        r, b = list(rows), _head(d, case, bh)
+        keys = (max(r) // b["BN"] + 1) * b["BN"]
         out[f"rows/{name}/rows"] = np.array(r, np.int32)
-        out[f"rows/{name}/ns"] = np.array(-(-SMS // bh), np.int32)
+        out[f"rows/{name}/ns"] = np.array(b["NS"], np.int32)
         for f in ("q", "do", "o", "lse", "dq"):
             out[f"rows/{name}/{f}"] = d[f"{case}/{f}"][head][r]
         for f in ("k", "v"):
             out[f"rows/{name}/{f}"] = d[f"{case}/{f}"][head][:keys]
-    for name, (case, head) in BLOCK.items():
-        T = d[f"{case}/q"].shape[1]
+    for name, (case, head, bh) in BLOCK.items():
+        T, BN = d[f"{case}/q"].shape[1], _head(d, case, bh)["BN"]
         for f in ("q", "do", "o", "lse", "k", "v", "dk", "dv"):
             out[f"block/{name}/{f}"] = d[f"{case}/{f}"][head][T - BN:]
     return out
