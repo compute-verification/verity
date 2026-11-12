@@ -3,7 +3,8 @@ registry's products whose work is known by hand: a training loop's scan, whose c
 their second iteration, whose batch is free, and whose value input's rows are left out however the Program writes
 them; carried rows no one node shows distinct left out, one multiply by an input's words however it is written, a
 stated 0's update `θ`'s, a weight rounded to bf16 charged, rows times an input however a product reads them, a
-weight cancelled against itself or times its own rows in another order, the updates' premise held as facts; a lookup
+weight cancelled against itself, through a call too, or times its own rows in another order refused at a point, the
+updates' premise held as facts; a lookup
 whose table is the registered one or the loop's own; a Program with no scan; one array times itself; two
 activations; the largest set of arrays a work multiplies pairwise; a weight decoded from a ternary code; a one-hot
 row; a rank-4 bottleneck between two carried weights; each operand's β at min(16, β(k)); and |C| in Boolean gates."""
@@ -696,6 +697,39 @@ def test_a_weight_times_its_own_rows_in_another_order_is_refused(carried):
     assert w.N == (T - 1) * PN * K * N and {g.weight for g in w.groups} == {(True, True)}
 
 
+NEG_ROWS = bind(_def("NegRows", ((("rows", ROWS_T),), ROWS_T),
+                     lambda B, S, rows: B.batch(F32Neg, Coll(FLAT, rows.refs), axes=(0,)).reshape(ROWS_T)))
+
+
+def _cross_call() -> Program:
+    """prev′ = the PN rows looked up by the iteration's tokens, plus M plus `NEG_ROWS` of M, a composite negating M's
+    rows, M carried; and prev W^T."""
+    def step(B, c, tok, z, zr):
+        table, w, prev, m = c
+        rows = Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)]))
+        new = _add(B, rows, _add(B, m, B.call(NEG_ROWS, m)))
+        return (_add(B, table, z), _add(B, w, z), new, _add(B, m, zr)), B.batch(LIN, prev, w, axes=(0, None))
+
+    return _loop("CrossCall", (("table", TABLE_T), ("w", W_T), ("prev", ROWS_T), ("m", ROWS_T)),
+                 (("tok", Array(PN, I32)), ("z", X_T), ("zr", ROWS_T)), Array(PN, Y_T), step)
+
+
+def test_a_weight_cancelled_through_a_call_is_refused(monkeypatch):
+    """M plus a call's negation of M is 0, an identity seen only with the callee's output at the caller's words: the
+    reading's rules alone charge the looked-up rows plus it as two weights, and the point, which evaluates the call
+    at M's words, finds its two rows equal and refuses the Program, naming the product, the rows and the fix."""
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_cross_call(), KB)
+    assert (e.value.definition, e.value.operand, e.value.rows) == ("CrossCallStep_v1", "x", (0, 1))
+    assert str(e.value).endswith(
+        "operand 'x', whose rows the reading shows distinct, holds rows 0 and 1 equal at the point; fix: compute it "
+        "from a weight one to one (a shift, a rounding, a multiply by a word no input reaches) or let it read the "
+        "inputs, which leaves its product out as gathered")
+    monkeypatch.setattr(PT, "check", lambda *a: None)
+    w = WK.read(_cross_call(), KB)
+    assert w.N == (T - 1) * PN * K * N and {g.weight for g in w.groups} == {(True, True)}
+
+
 def test_a_weight_times_a_difference_of_inputs_is_refused():
     """W times z0 minus z1, two words of an input, is one word every member reads, which the reading takes as a
     nonzero multiplier (`Status.fixed`); it is 0 wherever the input repeats, as the point's does, so every row of W
@@ -777,7 +811,7 @@ def test_a_row_with_a_nan_equals_no_row():
 
 def test_a_claim_past_a_scan_the_point_does_not_run_whole_is_refused():
     """An inner scan whose contexts repeat before its last iteration leaves its outputs unevaluated at the point, so a
-    charged weight carried out of it is refused, with the scan named."""
+    charged weight carried out of it is refused, with the scan named and the fix."""
     one = const(32, 0x3F800000)
     inner = _def("InnerStep", ((("w", W_T),), Tuple(W_T, F32)),
                  lambda B, S, w: tuple_of(_add(B, w, B.call(one)), B.call(const(32, 0))))
@@ -790,6 +824,10 @@ def test_a_claim_past_a_scan_the_point_does_not_run_whole_is_refused():
     with pytest.raises(WK.RepeatedRows) as e:
         WK.read(_loop("Outer", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, step), KB)
     assert (e.value.scan.fn, e.value.scan.ran, e.value.scan.n, e.value.operand) == ("OuterStep_v1", 1, 4, "w")
+    assert str(e.value).endswith(
+        f"operand 'w', whose rows the reading shows distinct, reads the outputs of scan node {e.value.scan.node} of "
+        "OuterStep_v1, which the point runs 1 of its 4 iterations; fix: carry the weight through the outer scan "
+        "rather than out of a scan whose contexts repeat")
 
 
 def test_the_point_is_drawn_once_a_program_and_read_at_every_k():
