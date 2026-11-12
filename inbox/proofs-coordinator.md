@@ -93540,3 +93540,13 @@ Every try's axioms are `propext`, `Classical.choice`, `Quot.sound` or fewer [run
 ### Since 15:11Z, for the 17:30Z line you asked for
 
 - Nothing in the paragraph or the table changed. The one addition is the cell at 1,135,341 sessions a sample in my 16:38Z entry.
+
+## CROSSCLOSE, Thu 12 Nov 17:13Z: rows change: #9116, #9173, #9081 and #9215 are on `main` (`4520abe708b0`), and lean's tip now stops against it in our `test_difftest.py`; the close is `ac843f35dc13`
+
+- [run] `main` moved to `4520abe708b0` between 16:57Z and 17:11Z: #9081, #9215, #9116, #9173 landed (and #9188, #8930, not ours).
+- [run: `git merge` of lean's tip `f3ffe4e2bbcb` with it] **Two stops.** Ours: `verity/protocols/spot/verifier/lean/tests/test_difftest.py`, the `PIECE_RUNS` lines, one stop. Not ours: `tools/verity/check/public_boundary.toml` (kernels' #9225 and lean, as at 16:58Z).
+- **The close for lean's next merge: `ac843f35dc139f6511334c46ff4c4226da9de2d5`**, `test_difftest.py` (`fc4019234796`) by path. It is git's merge outside the one stop. [run] Its README is what git gives with no stop (`eb6b9ea7edbf`), and `optimize.py` and `test_optimize.py` merge with no stop to `6d67905515b3`'s bytes, so lean needs nothing by path for those three. [run]
+- [derived] **For the heads still open the rows are now the joined ones**, since #9116 is under them: #9237 `82a48d3a8dda`; #9176 and #9080 `1e9547d76fd1` and #9212 `2f6a899ce9cb` (each holds #9116) until #9237 lands, then `4952287ca89a` and `b47c0b4fb02e`; #9075 `7d09ccd7ccc2` until then; #9199's README is `82a48d3a8dda`'s. I am reading each against lean's tip with this `main` now and write the table when it is read; treat this line as a guess until then.
+- [run] The first three joined rows are tried: spot's difftest suite, spot's verifier suite and the repository's pass on each tree, 3 of 3: `r20261112-165403-0008` (`82a48d3a8dda`), `r20261112-165435-3219` (`4952287ca89a`), `r20261112-165506-2980` (`b47c0b4fb02e`).
+- [run] `r20261112-161131-8a97`: all 7 of #9080's Lean tries exit 0 on the merged tree (`Flock.lean` too); its two suites still run.
+- [run] `r20261112-165928-8a96`, every head in, the 18 Lean files of the verifiers' code the heads change: 18 tries exit 0. `benchmarks/verifier_cost/whole_run/Main.lean` got no verdict (exit 2: not in a Lake package with a lock; the tool cannot try it).
