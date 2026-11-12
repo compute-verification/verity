@@ -480,7 +480,6 @@ def test_the_programs_bind_at_dsv4s_statics() -> None:
 FIXTURE = Path(__file__).parents[1] / "check" / "fixtures" / "deepseek_v4" / "config.json"
 
 
-@pytest.mark.skipif(not FIXTURE.exists(), reason="DeepSeek-V4-Pro's config fixture lands with cursor/dsv4-prep-8c79")
 def test_the_statics_are_dsv4s() -> None:
     cfg = json.loads(FIXTURE.read_text())
     assert (cfg["index_n_heads"], cfg["index_head_dim"], cfg["index_topk"], cfg["qk_rope_head_dim"]) == (D4.H, D4.D, D4.TOPK, D4.ROPE)
