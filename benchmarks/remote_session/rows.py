@@ -149,12 +149,14 @@ def every(trace: dict, parts: dict) -> dict:
     are read from these, where `slow` keeps only the passes the node was slow in. With them, where the device kept
     it, the leader's wait for the last GPU and its top (`join_ms`, `top_ms`), the host's side of each pass
     (`device.host_side`, and `free_ms`, its launch's wait for a slot) and the offloader's time on it (`offload_ms`, of
-    which `offload_copy_ms` is its own copy): whether a pass waited on the cards or on the host."""
+    which `offload_copy_ms` is its own copy, with that copy's CPU time, minor faults and involuntary context
+    switches): whether a pass waited on the cards or on the host, and whether the host worked or waited."""
     return {"interval_ms": [None] + [x / 1e6 for x in trace["intervals_ns"]],
             "gpu_ms": [round(x, 3) for x in parts["gpu_ms"]],
             "part_ms": [[round(x, 3) for x in p] for p in parts["part_ms"]],
             **{k: parts[k] for k in ("join_ms", "top_ms", "free_ms", "launch_at_ms", "launch_ms", "launch_cpu_ms",
-                                     "root_at_ms", "offload_ms", "offload_copy_ms") if k in parts}}
+                                     "root_at_ms", "offload_ms", "offload_copy_ms", "offload_copy_cpu_ms",
+                                     "offload_copy_faults", "offload_copy_switched") if k in parts}}
 
 
 def set_arms(backend: device.GpuBackend, arms: tuple[str, ...]) -> dict:

@@ -532,6 +532,7 @@ class DeviceStore:
         self._launch_freed: dict = {}
         self.offload_ns: list[int] = []
         self.offload_copy_ns: list[int] = []
+        self.offload_copy_cost: list[tuple] = []
         self.offload_jobs: queue.Queue = queue.Queue()
         threading.Thread(target=self._offload, daemon=True).start()
         self.ring = None
@@ -864,10 +865,11 @@ class DeviceStore:
                 return
             slot, seed, handle = job
             t0 = c0 = time.perf_counter_ns()
+            cost0 = (time.thread_time_ns(), *_faults())
             try:
                 for g in range(len(self.gpus)):
                     self.copied[g][slot].synchronize()
-                c0 = time.perf_counter_ns()
+                c0, cost0 = time.perf_counter_ns(), (time.thread_time_ns(), *_faults())
                 host = self.ring[0]["host"]
                 handle.value = (seed if seed is not None else bytes(host["seeds"][slot].numpy()),
                                 host["pks"][slot].clone(), [x["host"][slot].clone() for x in self.seg_ring],
@@ -880,6 +882,8 @@ class DeviceStore:
                 t1 = time.perf_counter_ns()
                 self.offload_ns.append(t1 - t0)
                 self.offload_copy_ns.append(t1 - c0)
+                # the copy's CPU time on this thread, then its faults and context switches (`_faults`)
+                self.offload_copy_cost.append(tuple(b - a for a, b in zip(cost0, (time.thread_time_ns(), *_faults()))))
                 self.offload_jobs.task_done()
 
     @staticmethod
@@ -1407,9 +1411,14 @@ class GpuBackend:
         open_ns = time.perf_counter_ns() - o0
         del kept
         # the offloader's time on each of those passes, in their order: it takes them one at a time, as they are queued;
-        # and of it, its own copy once every GPU's copies are done
+        # and of it, its own copy once every GPU's copies are done, with that copy's CPU time on its thread, its minor
+        # faults and its involuntary context switches
         self.calibration_parts["offload_ms"] = [round(x / 1e6, 3) for x in s.offload_ns[f0:f0 + len(trace)]]
         self.calibration_parts["offload_copy_ms"] = [round(x / 1e6, 3) for x in s.offload_copy_ns[c0:c0 + len(trace)]]
+        cost = s.offload_copy_cost[c0:c0 + len(trace)]
+        self.calibration_parts["offload_copy_cpu_ms"] = [round(x[0] / 1e6, 3) for x in cost]
+        self.calibration_parts["offload_copy_faults"] = [x[1] for x in cost]
+        self.calibration_parts["offload_copy_switched"] = [x[4] for x in cost]
         host_ms = sorted(s.pass_host_ms[1:])
         s.pass_gpu_ms.clear()
         s.pass_host_ms.clear()

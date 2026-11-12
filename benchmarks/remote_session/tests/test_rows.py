@@ -72,7 +72,8 @@ def test_a_row_keeps_each_slow_pass_with_every_gpus_part():
     assert host["launch_at_ms"][2] is None and host["launch_at_ms"][0] == 0.0
     assert host["launch_cpu_ms"] == [2.0, 2.0, None, 2.0, 2.0, 2.0, 2.0]
     assert host["root_at_ms"] == [0.0, 10.0, 20.0, 35.0, 45.0, 55.0, 66.0]
-    leader = {"join_ms": [0.5] * 7, "top_ms": [0.125] * 7, "free_ms": [0.0] * 7, "offload_copy_ms": [0.125] * 7}
+    leader = {"join_ms": [0.5] * 7, "top_ms": [0.125] * 7, "free_ms": [0.0] * 7, "offload_copy_ms": [0.125] * 7,
+              "offload_copy_cpu_ms": [0.125] * 7, "offload_copy_faults": [3] * 7, "offload_copy_switched": [0] * 7}
     kept = rows.every(report, {**parts, **host, **leader, "offload_ms": [0.25] * 7})
     assert kept["launch_ms"] == host["launch_ms"] and kept["root_at_ms"][3] == 35.0 and kept["offload_ms"] == [0.25] * 7
     assert kept["launch_cpu_ms"] == host["launch_cpu_ms"] and all(kept[k] == v for k, v in leader.items())
