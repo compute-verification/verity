@@ -36,12 +36,12 @@ namespace Properties.Spot.Period
 open Lean (Json)
 open _root_.Spot _root_.Spot.Challenger Properties.Challenger
 
-/-- What a ledger line says, its signature aside: the canonical text of its entry's fields other than `sig`, which
-is what the device signs (`ledgerMessage` hashes it under the entry's schema's tag). `none` for a line that is no
-entry. -/
+/-- What a ledger line says, its signature aside: the canonical text of its entry without its `sig`
+(`Core.Record.unsigned`), which is what the device signs (`ledgerMessage` hashes it under the entry's schema's tag).
+`none` for a line that is no entry. -/
 def unsignedText (line : Json) : Option String := do
   let e ← ledgerEntry? line
-  (Flock.canon (Json.mkObj ((entries e.entry).toList.filter (·.1 != "sig")))).toOption
+  (Flock.canonUtf8 (Core.Record.unsigned e.entry)).toOption
 
 /-- **Each line of the ledger a period's check reads is one the device wrote, under the number it is read at.** For
 every challenger device and every ledger the ledger's half of the period's check reads under the verifier's key
