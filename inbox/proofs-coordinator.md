@@ -109920,3 +109920,24 @@ Runs:
 To post: nothing.
 
 Not established: that any of `9af21118fe`, `6caa280aed` or `052eb3aba5` elaborates. The do-block case split in `accepted_steps` and `prefixAgree_of_bytes`'s `Array.ext` step are the likeliest to need a fix.
+
+## RELAX, Thu 12 Nov 23:58Z: stopping now on your 23:43Z word, to free the place. Five runs out on vy-nebius-2. One suite of the quick tier is red, the certifier's network verifier (2 tests), in files this change does not touch; I have it running at both bases to say whose it is
+
+**Runs I wait on** [run: `research status`, 23:56Z; ETAs are guesses]
+- Records `r20261112-231801-aceb`, at `8592d9d7c429`: running since about 23:50Z. About 00:20Z to 00:50Z.
+- Quick tier `r20261112-231802-58bf`, at `8592d9d7c429` (`--changed 67b2c6791982 --quick`, 78 suites): running since about 23:40Z; 36 passed and 1 failed at 23:56Z. About 00:30Z to 01:30Z.
+- Tries `r20261112-231803-3394`, at `8592d9d7c429`: five of the nine files done, each lean exit 0. About 00:05Z.
+- `r20261112-235748-3471` and `r20261112-235749-1e8b`: the red suite alone, at lean's merge head `67b2c6791982` and at #9458's head `dbb268ce3009`. Waiting for a slot; about 00:30Z.
+
+**The red suite** [run: `58bf`'s log; read: the test file and `interface.py`'s imports]
+- `verity/protocols/certifier/verifier/network`: 88 passed, 2 failed, both in `tests/test_nci_record_difftest.py` (`test_a_pinned_readers_layout`, `test_the_reference_reads_a_record_as_the_interface_does`: `verity.commitments.windows.interface` refuses a random case's record at `blocks` where the reference refuses nothing).
+- This branch changes no file under `verity/commitments`, `verity/protocols/certifier` or `verity/circuits` from lean's merge head [run: `git diff --stat`], and `interface.py` imports none of the nine files I changed [read]. So I expect it at a base; the two runs say which, or that it is the two bases together. `policy.toml` holds no allowance for it [read].
+- `verity/protocols/spot/verifier` passed in that run: 905 tests, the new stream and audit-record tests among them. The Lean difftest's suite had not reported at 23:56Z.
+
+**Work that needs no run:** the design entry (due Fri 16:00Z). It can wait for the resume, so I do not hold the place for it. From the issue [read: the last eight comments, 21:50Z to 22:50Z], it will also say how a read named by one of the record's own ports is held under the one-stage rule, since network's port names wait on that (their 2:34 PM PST comment), and it will ask the read of drawn members only (soundness, 2:29 PM PST), in place of `CertifiedRead`.
+
+**Pushed, for the new machine:** both branches at `8592d9d7c429`; the pull request's body draft, the design's reading notes and the helper scripts in the notes store (`lanes/proofs/20261112T2355Z-report-relax-drafts.md`).
+
+**When resumed:** read the five runs; commit the lock records exactly as `aceb` wrote them and list each changed record; the quick tier at that final head; retired terms, Markdown caps, merged-tree sentence; open the pull request unmarked; the ready line. Then the design.
+
+For the table: R7 with the refusal | `cursor/proofs-r7-certified-b6a0` at `8592d9d7c429` | records `aceb`, quick tier `58bf`, tries `3394`, base suites `3471` and `1e8b` | ready line by Fri 06:00Z | resume me when `aceb` and `58bf` end.
