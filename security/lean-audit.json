@@ -2957,69 +2957,9 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Pouw.PearlC.Assumptions.TTOutFp4Sm120W1": {
-   "owner": "@compute-accounting",
-   "digest": "11fbbc8e631ecb9b44f15770dce1d3f071b4cc0a57c467e03cf8cd3f08821e7a",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.PearlC.Assumptions.TTOutPearlCDevChainCapW1": {
-   "owner": "@compute-accounting",
-   "digest": "fcb25acfedf9419f8a05f328c1a44f15c4419000c1f468407f30f2447578c4ab",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnlyW1": {
-   "owner": "@compute-accounting",
-   "digest": "736b6150e226ff857569ac76a89f63ee21bb00d71a4bed6db9560a6b0a417acb",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnlyW1": {
-   "owner": "@compute-accounting",
-   "digest": "d4205fa6d017f402d221810cecd8cea4eb16f3b252ef264740b8876cc0022a16",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1": {
    "owner": "@compute-accounting",
    "digest": "a73283d0a161d6e60166c146206b66aeb0b4226996edc961d5772114b789f15e",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.PearlC.Assumptions.TTOutPearlCDevUOnlyW1": {
-   "owner": "@compute-accounting",
-   "digest": "13b4e2d318e62ec3114e6957a488ba3e8bf72206097e7374e6ee53675f31e358",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.PearlC.Assumptions.TTOutPearlCDevW1": {
-   "owner": "@compute-accounting",
-   "digest": "39407e42a6cb9f9ad368744eb1c82e9c2e6fce343a7767613bd7ab11c53eeaaa",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.PearlC.Assumptions.TTOutPearlCH100Rev1W1": {
-   "owner": "@compute-accounting",
-   "digest": "adfa261d3299a7888c22b8be013ba946fdf4ef6f0e7d4d6946c0443e2728943a",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.PearlC.Assumptions.TTOutTileFp4Sm120W1": {
-   "owner": "@compute-accounting",
-   "digest": "f5c362fcaafa9a56b8b773e9a2ed90bae93c4c517a7892a0b5db8de4a5e2799d",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCapW1": {
-   "owner": "@compute-accounting",
-   "digest": "5ec813925617579e08bdff640c6e1cf719029793c86e2e6fcb913b56ff9b0cc2",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1": {
-   "owner": "@compute-accounting",
-   "digest": "4e57dc514719cecf3e5352aed81aed5279bb6cf85e7334470654200561d4edc0",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -3029,51 +2969,9 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Pouw.PearlC.Assumptions.TTOutTilePearlCDevW1": {
-   "owner": "@compute-accounting",
-   "digest": "939c52222c95172b1049d047089973836b3b59709894af204bc42db2bda3b216",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1": {
-   "owner": "@compute-accounting",
-   "digest": "3c0b6df708354f428a46f68dd5d38dfa7d4a22ddb5e35a3047fe915fd1d56103",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1W1": {
-   "owner": "@compute-accounting",
-   "digest": "9df58bce6b2a066570e29c40d9ef15f15ad7434557aeb3f2202bc6af2e3fb801",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Pouw.PearlC.Assumptions.TTOutW1": {
    "owner": "@compute-accounting",
    "digest": "c4d6029e62d5d84b450dbb229c099b1d1325caa30091b6c283108c853fbb3a7c",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.PearlC.Assumptions.TileProofSoundAll": {
-   "owner": "@compute-accounting",
-   "digest": "68fa374e6e32105f7e0fb6ac933a3494270054495536d060d6015fc6a3e4a6d5",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.PearlC.CodeSeedNoise": {
-   "owner": "@compute-accounting",
-   "digest": "f9ab26e6d4dd33af4ded83eab6b937847d746e41ca534f195aaf1a9ca80cc644",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.PearlC.CostModel.RelabelClosed": {
-   "owner": "@compute-accounting",
-   "digest": "b52e8fbb4d7625dd73c0cedee733d387c31182fb93335e760a0d8e2f210ed0e2",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.PearlC.CostModel.SplitClosed": {
-   "owner": "@compute-accounting",
-   "digest": "353aa6d0f5fed29774fd1a91d648f6af80abe49bd07e307d3d8bd0fad9c37e26",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -3110,12 +3008,6 @@
   "Pouw.PearlC.HiddenAudit.ProverBounded": {
    "owner": "@compute-accounting",
    "digest": "1bbb2f517195f5184e0645318d4127f392d6de4329d0afefd1dfbf94f72f9dfc",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.PearlC.RowSeedNoise": {
-   "owner": "@compute-accounting",
-   "digest": "9be706a50086a718e23dc64ac89ed8b810905d3abb907a91cb52c4c4bc35045b",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -27944,26 +27836,6 @@
     "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le (P.Wref U.layout u).cast (instHMul.hMul Ωmax (instHMul.hMul 3 (U.layout.shape u).Wmm.cast))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le d.cast (instHMul.hMul g₀ (instHMul.hMul 3 (U.layout.shape u).k.cast))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192": {
-    "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192": {
-    "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192": {
-    "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.PearlC.pearlCSampledSm120v1RowSeed_8192": {
-    "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem' (1 / 400)).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem' (1 / 400)).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.PearlC.pearlCSampledSm120v2RowSeedCap1000_8192": {
-    "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) sem' (1 / 1000)).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) sem' (1 / 1000)).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "Pouw.SecurityProofs.Dither.FleetSound": {
     "∀ (u : Fin N) (ω : Ω), Real.instLE.le (κ u (A u ω)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
@@ -28020,22 +27892,6 @@
     "Real.instLT.lt 0 (Finset.univ.sum fun r => instHMul.hMul (μ r) (instHMul.hMul 1 (Pd.hon r)))": "restated on `next` after the rule was keyed from `main`, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P1": "restated on `next` after the rule was keyed from `main`, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P2": "restated on `next` after the rule was keyed from `main`, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.SecurityProofs.PearlC.GapUOnlySm120Rev1_8192": {
-    "Eq d.G 4": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq d.prices Pouw.PearlC.Prices.sm120": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.SecurityProofs.PearlC.GapUOnlyUnpromotedCap1000_8192": {
-    "Eq d.G 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq d.prices Pouw.PearlC.Prices.sm120": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.SecurityProofs.PearlC.GapUnpromotedCap1000_8192": {
-    "Eq d.G 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq d.prices Pouw.PearlC.Prices.sm120": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.SecurityProofs.PearlC.GapUnpromotedChainCap1000_8192": {
-    "Eq d.G 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq d.prices Pouw.PearlC.Prices.sm120": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore": {
     "instLTNat.lt g ((Pouw.PearlC.pearlCTilesFp4 Pouw.PearlC.devFp4Sm120 (Pouw.PearlC.RowCircuit.pc4Sem Pouw.PearlC.RowCircuit.coreOps lines) ρ).tiling U.layout).NT": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -37329,103 +37185,11 @@
     "Pouw.Assumptions.RemoteWorkFloor": "94149488193a30d3ff759729014af0c567a5fb05dbd73bcc0a391aa941016751"
    }
   },
-  "Definitions.Pouw.Assumptions.PearlC.DeviceChainCap": {
-   "digest": "711a6ee3ff99ce8aef95134127d3e9380f2e74e1cb8e058ce10581cda3e21e5a",
-   "definitions": {
-    "Pouw.PearlC.Assumptions.TTOutPearlCDevChainCapW1": "fcb25acfedf9419f8a05f328c1a44f15c4419000c1f468407f30f2447578c4ab",
-    "Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCapW1": "5ec813925617579e08bdff640c6e1cf719029793c86e2e6fcb913b56ff9b0cc2",
-    "Pouw.PearlC.chainCreditDev": "6e4d7c50189df577e5e4a060c20f50516332d4dda5d497288e0d52b91a58e362",
-    "Pouw.PearlC.pearlCProtocolDevChainCap": "a32465c48b49412c6bdc319a70f29916299750ba9bad244ce0dc2157bda079d0",
-    "Pouw.PearlC.pearlCTilesDevChainCap": "2170dd5823cfd9a6272b9ce11cf29f7de11dce337c0926e307ab60d0f8dd34b6"
-   }
-  },
-  "Definitions.Pouw.Assumptions.PearlC.HiddenTile": {
-   "digest": "0f1e82a4432c532d1b4730153bdd96c0102e8019fa1b46cd9fc20da348d95910",
-   "definitions": {
-    "Pouw.PearlC.Assumptions.TileProofSound": "084fe2b015d5f5cd7b0e0c8e070b017416af05f9e2878b3cf2b393ad1fb65a5e",
-    "Pouw.PearlC.Assumptions.TileProofSoundAll": "68fa374e6e32105f7e0fb6ac933a3494270054495536d060d6015fc6a3e4a6d5"
-   }
-  },
-  "Definitions.Pouw.Assumptions.PearlC.TTOut": {
-   "digest": "c16bd9669336c83c5b5946572ffd76b39908485c67ef5b4e30a40efddb8181a7",
-   "definitions": {
-    "Pouw.PearlC.Assumptions.TTOutTile": "953f75b038ef12f1ca8e035102cd694d2a82f97ea079f1ebbd54fa365fefab88"
-   }
-  },
-  "Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1": {
-   "digest": "cb5dbdad86bca9aa081cdb298ac7c6ef24dfd0111ab7679599ad7606a6524081",
-   "definitions": {
-    "Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnlyW1": "736b6150e226ff857569ac76a89f63ee21bb00d71a4bed6db9560a6b0a417acb",
-    "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnlyW1": "d4205fa6d017f402d221810cecd8cea4eb16f3b252ef264740b8876cc0022a16"
-   }
-  },
-  "Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1": {
-   "digest": "bd6938e16c8367d473cc72a6f384a3cb4202fe23574188bcc6d5bf8663e791d8",
-   "definitions": {
-    "Pouw.PearlC.Assumptions.TTOutFp4Sm120W1": "11fbbc8e631ecb9b44f15770dce1d3f071b4cc0a57c467e03cf8cd3f08821e7a",
-    "Pouw.PearlC.Assumptions.TTOutFp4W1": "779da159775e9bf6e01b68aa8fcf864a31ca74449e0822e3b13b8d0561c6a5d4",
-    "Pouw.PearlC.Assumptions.TTOutTileFp4Sm120W1": "f5c362fcaafa9a56b8b773e9a2ed90bae93c4c517a7892a0b5db8de4a5e2799d",
-    "Pouw.PearlC.Assumptions.TTOutTileFp4W1": "999cd654b50eee280e58c6d21d6be7d2b47d4df8e7562003aa736424f9d2564b"
-   }
-  },
-  "Definitions.Pouw.Assumptions.PearlC.TTOutRev1": {
-   "digest": "14e0555260f70482b12b2a04224c36fe2b1930263869a7df6bc62c2afab1fff0",
-   "definitions": {
-    "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1": "4e57dc514719cecf3e5352aed81aed5279bb6cf85e7334470654200561d4edc0",
-    "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1": "3c0b6df708354f428a46f68dd5d38dfa7d4a22ddb5e35a3047fe915fd1d56103"
-   }
-  },
-  "Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed": {
-   "digest": "d3851c871256d7342f3914030ddf8e181a845b7e96d4df9830818892f03a4fab",
-   "definitions": {
-    "Pouw.PearlC.CodeSeedNoise": "f9ab26e6d4dd33af4ded83eab6b937847d746e41ca534f195aaf1a9ca80cc644",
-    "Pouw.PearlC.CostModel.RelabelClosed": "b52e8fbb4d7625dd73c0cedee733d387c31182fb93335e760a0d8e2f210ed0e2",
-    "Pouw.PearlC.CostModel.SplitClosed": "353aa6d0f5fed29774fd1a91d648f6af80abe49bd07e307d3d8bd0fad9c37e26",
-    "Pouw.PearlC.PearlCSem.splitNoise": "2df55e654ca27e6b1bada04a9595a066f1368356a179fd611b23cdf8d9295425",
-    "Pouw.PearlC.RowSeedNoise": "9be706a50086a718e23dc64ac89ed8b810905d3abb907a91cb52c4c4bc35045b",
-    "Pouw.PearlC.pearlCProtocolDevRev1RowCap": "617f30281142d2965cde678c0af8d01acee62ef955bd745937de7d8f046ff795",
-    "Pouw.PearlC.pearlCProtocolDevRev1RowCapAt": "8a376fdf34de2345f39b57ca46efaf886ccf9f8e745bb55f089eb374739727f6",
-    "Pouw.PearlC.pearlCTilesDevRev1RowCap": "cd3ea20339a97eba967bbe4fba31a33a7658958e7c02175666d9bc56abb600e2",
-    "Pouw.PearlC.pearlCTilesDevRev1RowCapAt": "2f3ded416074bc3a1a5775745280b12edfb0226d2ac129622d026710f8354351",
-    "Pouw.PearlC.rowCodes": "c91a8f1fb927b2f47f6257de270d635ffaf2260e693dc29cf52f4f5a5669e1bc",
-    "Pouw.PearlC.rowCommit": "888c33844b9b9435bc3d13edcf13ffd73aee1b1efbff62c571a026fcb8b6a537",
-    "Pouw.PearlC.rowIdx": "59cb6676ca00f2a216e10a6d338ed41ec385fbbf9f68425c17370c646239f11d",
-    "Pouw.PearlC.rowOfRow": "0e1914b84ddecdcdaa6793879ee4efcd377e19bc216c2b002ab0eadfa0080062",
-    "Pouw.PearlC.rowOffset": "328aa5c4f5580b9a9c1419a9559f058bbcb957eb080c02bb6e2985a8368da129",
-    "Pouw.PearlC.rowsOf": "a3c2b1bfa348f378311e221170a34600743b1a81d0ff8a197504751e1bfea0f1",
-    "Pouw.PearlC.splitLayout": "27bc56b434d465550e99b14bd1a7d44fe7ee59b4abf2fb946764693b88186a65",
-    "Pouw.PearlC.splitTranscript": "21e3b2755e8c87ca9227b7f28b55ad0b4229c5cfa8d71c5ae348b50ad3b46973",
-    "Pouw.PearlC.splitWorkload": "ce1c33c6f778239613d5a02239693e99b8ae6c377f2998579f64deca7a1daa84",
-    "Pouw.PearlC.unitOfRow": "e51d799b7f3c9c79c7647a03c7c8c91da5c332c638998f81f07a3addae19ff16"
-   }
-  },
-  "Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK": {
-   "digest": "08e933d2a8c4e7e7d50a811b32b9e91062098d18da8abe21d92c02b321384523",
-   "definitions": {
-    "Pouw.PearlC.pearlCProtocolDevRev1KRowCap": "73cf6c5bde80581358c4771008ff2389d2d6574fe661e38e1842af3295b0fea1",
-    "Pouw.PearlC.pearlCTilesDevRev1KRowCap": "bb8b060e2a730ffb3d8561cdab8cc6ff646998428045966eb230d50e4e22ecb0"
-   }
-  },
-  "Definitions.Pouw.Assumptions.PearlC.TTOutUOnly": {
-   "digest": "29190317245ec61a572ddcd4ca659b2dff055f640c445149e6f2c42fa022a371",
-   "definitions": {
-    "Pouw.PearlC.Assumptions.TTOutPearlCDevUOnlyW1": "13b4e2d318e62ec3114e6957a488ba3e8bf72206097e7374e6ee53675f31e358",
-    "Pouw.PearlC.Assumptions.TTOutUW1": "1f20fa7ea9307baf031d9e7b47fa80d1cee52020582980de83356f4fcfdcc6b7",
-    "Pouw.PearlC.CorrectU": "c11fde829b2fd4900bd7256b991135f9cd60144598815f3900c2ad3be0085975",
-    "Pouw.PearlC.GGapU": "4bf873bd3a6f3fd3f43a63bfda8292e9c4ac4ca8314e96a3469786ccc55afb59",
-    "Pouw.PearlC.WinsU": "2d6a53fb682ba4e3aae06aa2223195b8414c5864167c317a09b9d6931436462c",
-    "Pouw.PearlC.correctSetU": "19ce334a79474ff6821aff36d3e0ee5d39495fad9f2f73827aea74cfc2e3ecb8"
-   }
-  },
   "Definitions.Pouw.Assumptions.PearlC.TTOutW1": {
-   "digest": "22f001778ad480f183c5ac01a7529fb48173b06de4af75afd2b9ee8f14b22fd0",
+   "digest": "4e71f7fdfde2e170ba5134e48d2a7800535ef0ba802be9711e3351281739f58f",
    "definitions": {
     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1": "a73283d0a161d6e60166c146206b66aeb0b4226996edc961d5772114b789f15e",
-    "Pouw.PearlC.Assumptions.TTOutPearlCDevW1": "39407e42a6cb9f9ad368744eb1c82e9c2e6fce343a7767613bd7ab11c53eeaaa",
-    "Pouw.PearlC.Assumptions.TTOutPearlCH100Rev1W1": "adfa261d3299a7888c22b8be013ba946fdf4ef6f0e7d4d6946c0443e2728943a",
     "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1W1": "4f345d210c3331087992cb7382fed68ce46439f58c273989e24f5df822d574b3",
-    "Pouw.PearlC.Assumptions.TTOutTilePearlCDevW1": "939c52222c95172b1049d047089973836b3b59709894af204bc42db2bda3b216",
-    "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1W1": "9df58bce6b2a066570e29c40d9ef15f15ad7434557aeb3f2202bc6af2e3fb801",
     "Pouw.PearlC.Assumptions.TTOutTileW1": "b0144b16d96b324c76ffe37c04479593580a477e5eb83f0ac9cc8a35455767cb",
     "Pouw.PearlC.Assumptions.TTOutW1": "c4d6029e62d5d84b450dbb229c099b1d1325caa30091b6c283108c853fbb3a7c"
    }
@@ -37931,7 +37695,7 @@
    }
   },
   "Definitions.Pouw.Game.Defs": {
-   "digest": "157bb25ddea75495a8dbaa9d90977aa8ac3637e051099f8772c96046dfe3511b",
+   "digest": "34297d2ff6176bb45b8f83c519a4a96f0506108c6f00e382d05b1d2e07a51476",
    "definitions": {
     "Pouw.ActOK": "57df5c36d420d174dd1ebd0c6da6f2b1b1224f87e845887cad3141376edf8246",
     "Pouw.Adversary": "31e5f27929c23a83f5a51c9ac4c7ffdb286783adfe2232061e07c1434ee9748f",
@@ -37943,7 +37707,6 @@
     "Pouw.Adversary.pre": "d962772536799da87120dbbf7fa08d3b3b62c92134eb6bf076b7c1573a0be8b4",
     "Pouw.Adversary.transcript": "1c56533d3d4595cfc187b83eb4ebc10ce9f0cf92783432e59c89ab2637657571",
     "Pouw.AuditAccepts": "a820eec4f37801f83a13f329d4e98bde106b2d261626f37790d09d7525eb9eff",
-    "Pouw.AuditAcceptsTol": "cdf12ac80d402896e81c4a50aa9e61d11b01c60e6413960b52bfb530c6661b62",
     "Pouw.Checked": "9babb72b7f36e7cbcb114a72e4bc13aa45fe9532d3f78d9df308ef3183f36a8c",
     "Pouw.CheckedOK": "adbd3e8bfb156131721c35fe71de78f0edcbc8b3305ced9d760069b0d7a7e4fd",
     "Pouw.Commit": "35e054f707da97f9d81156e7654fa25a4fcf489d657cfb72254ba37ecefcbd99",
@@ -37985,7 +37748,6 @@
     "Pouw.Workload.layout": "12b9aec72fa13f5995e625c2f4a8ecf9d07839578ca7f0c6127d95d36c3c2782",
     "Pouw.checkedSet": "146cff53c42f69698486cd1002a89dfff5315f517b75cc10217efa290e265cc8",
     "Pouw.correctSet": "65f3c4235814c036237829734679ddc74ad3fb1c8cb2cb9936478538d6c56646",
-    "Pouw.drawsIn": "0fe3da60716106ff198ee4a1fe476d1d26728a6cbf7c72709b5b499d92d961d3",
     "Pouw.milestoneShape": "eaf4ea5c7e91e8cef41c48c7118529f707c43d776303af12d6b8b0720fc15014",
     "Pouw.totalWref": "3d8335db3ac54640710d963c0f384ba2b1873c754407a631506112891ea4f35a"
    }
@@ -37998,11 +37760,10 @@
    }
   },
   "Definitions.Pouw.Guarantees.Advantage": {
-   "digest": "3b102dc6bd319f7ab29e293ffd29d81c3a9208655894779de3bd757216cb0d16",
+   "digest": "1fb64457e41f499f2e25d0b92d55b83dac357e779bfcb2301773a016b7475f25",
    "definitions": {
     "Pouw.Guarantees.EndToEndEps": "174c2e3aebda86bd05d53302c4b1fee563d6efd428a4c7bfc120ec3cca524f83",
     "Pouw.Guarantees.NCP.EpsFromTTNCP_U_v1": "3af76624992dcf434ad196229e573cbd64367b560b3ad08fb3e928c03da651b8",
-    "Pouw.Guarantees.PearlC.EpsFp4Sm120_8192": "81315e7d3aa377d601835a8cc0babda3366ffc92405f3fa17529c8f121d249b5",
     "Pouw.Guarantees.PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192": "dc541fb1645f5b41016b724887be199471247203e633704567ad32faed173742"
    }
   },
@@ -38076,101 +37837,12 @@
     "Pouw.Guarantees.OnsiteFreed": "5129608d90605c106932fed15a2bc583455763a5a1e032b833ad500c822ba265"
    }
   },
-  "Definitions.Pouw.Guarantees.PearlC": {
-   "digest": "3ca70fdd8f4d0801dcd24f5fe152b8ea0c03d9280b56bd279bb7b393d23dd52e",
-   "definitions": {
-    "Pouw.Guarantees.PearlC.GapFp4Sm120_16384": "833ded59ef811fdec42e1b64365ccd0558f9a54e612cf9800457cafe52018504",
-    "Pouw.Guarantees.PearlC.GapFp4Sm120_8192": "19e9b8a76d37dcff9d8c0bd97af647ddb754f9b44477b710f437eb1f327d86ac",
-    "Pouw.Guarantees.PearlC.GapH100Rev1_16384": "92ad186892fa7ded65199f2f14dd6972fce0755c25fbc181eb0141da94c6261e",
-    "Pouw.Guarantees.PearlC.GapH100Rev1_8192": "d4ed6fc3d64dd7f7872471afba3a283e79877c7607a80e46250cd8df8789a5e9",
-    "Pouw.Guarantees.PearlC.GapSm120v1Cast16Rev1_8192": "5fe92b2447f3c5420719267be0a8da0259a7a223c3ccd08f4f6c0783317e5533",
-    "Pouw.Guarantees.PearlC.GapSm120v1Cast32p06ChainOnlyRev1_8192": "c32c8c984fad41614d27b7e29fd95b60622a5349733269d4c2fbcf17e379e733",
-    "Pouw.Guarantees.PearlC.GapSm120v1Cast32p06Rev1_8192": "b101a9ccb45d6013263767f124e62d52dbc8a0c041c67d31160d2ad5b3c61e9d",
-    "Pouw.Guarantees.PearlC.GapSm120v1Cast8p72ChainOnlyRev1_8192": "2e2d6596f6ae860cbbe0bd2d0e791a70dae281500945422af88278b2859edf3f",
-    "Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1Cap1000_16384": "b87c88bf57dee6447d59dfb1db5cebfd177bef971e0e8826bf46f161e72c44ef",
-    "Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1Cap1000_8192": "20a76547be04342e0869cc68faaa4f9d5a002cd20bd38edafa0cbdbaec72a168",
-    "Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1Cap1000_llama31_8b": "3539c90457df47928a97c0deebfd9e1a73b787a9dce5c98d994ad115c14ea0c6",
-    "Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1Cap1000_n28672k4096": "40f19de071ef16ee9c43dbbb742a9b2cccf8b82082de13b16edd1330329d9a1e",
-    "Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1Cap1000_n4096k14336": "49df7d9871b4abb844a74bb0de3c25c2b6a18db341cf3ccd5bac0f93a3352a90",
-    "Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1Cap1000_n4096k4096": "32972e4676fde674a01cbb3601f83e8d922cf225d35b0d2f5c221a0541f4adb0",
-    "Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1Cap1000_n6144k4096": "0581e5a4569c5316ce1b699caa6a68ee5adfa45cd852015cc38fd34ef773557f",
-    "Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1_16384": "d3ed50b12d4bc5770f45c4172a353c6215179bdcfd5ea7e34a95e678f07621a5",
-    "Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1_8192": "2b9a3c68f459796276ca84d14527c665827fd9e1bf1f0b9ce8a0a93106eaee38",
-    "Pouw.Guarantees.PearlC.GapSm120v1LoopCast16Rev1_8192": "aad8e7b37d5144f2872e9ce787489c58d230d008facc2ef58d8dbc272eb7826b",
-    "Pouw.Guarantees.PearlC.GapSm120v1LoopCast32p06ChainOnlyRev1_8192": "083331b191f3506a23b048a1f6c51ae2cf5e9ef027f32e7c63cd6d37f284abc4",
-    "Pouw.Guarantees.PearlC.GapSm120v1LoopCast32p06Rev1_8192": "761ed230eef653bb76ba836b2a1f6a8e6877ba1965226a5b7f4c10b1f3ba1798",
-    "Pouw.Guarantees.PearlC.GapSm120v1LoopCast8Rev1_8192": "98a4a343c6f74e117aaf8e8dfe1b07a7e6bae26c8f239c6675dac421b7b44081",
-    "Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72ChainOnlyRev1_8192": "c580ef84755df47bd6e6a8a9cf842d2c15676a1e6e4afdbf1c0240645ba4526d",
-    "Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_16384": "e717f557fa3f5b623b57b39a1dffecccc30d96c2f12c361ed539ba2edec35beb",
-    "Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400": "c55954cf37004e9342ff32a86c066ac7388ae333c664ba0cdee4f06000190214",
-    "Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192": "92c07afd3202513309269f94c1e10df47b5aee84ce3eb666c45c9a1fe30fee91",
-    "Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400": "3785c11199ab0e51516466ff8dca2dcea0547eb78582eced324cbcf503fec1fb",
-    "Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_llama31_8b": "4401f7a56f497d9f48ead6cd4bf4b80e00367928ed1ac2cb18f96f7c0889d2b1",
-    "Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_n28672k4096": "7543fe30f31dd5ab2e0a953cac8a0ce424379f854229d228e3b483104c14ba60",
-    "Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_n4096k14336": "f587af11882808b3cbac5bbd32066dfd89e6804e16512b831dafaf6d31b23404",
-    "Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_n4096k4096": "021e665e49b66b35755e1ce16f7def0e48d676e893a7e97a482a2f5907642666",
-    "Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_n6144k4096": "e1848f16c1ebd100cfeab431f14d1c0cd1d787d24adb8cd1e45a8ae583f4cf98",
-    "Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1_16384": "d16d7959dd6def47f3522ba42e1b9fcc1d9e1f27110c1f7b4389da06f456707d",
-    "Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1_8192": "9d7577cf5bcbecba061b932baa03c26e51f3f0a46990c9cbe49204ec32733200",
-    "Pouw.Guarantees.PearlC.GapSm120v1Rev1_16384": "a721e0b4905923da96d2aaf89b7511bcfb93158d21499a0f5c2443e443759ffa",
-    "Pouw.Guarantees.PearlC.GapSm120v1Rev1_8192": "f953112daa49d897127d167c2db908dbcecd89c74ab8cbf1e6ac074d1a2bccfd",
-    "Pouw.Guarantees.PearlC.GapSm120v2Cap1000_16384": "4a18b48dd9919c14e313dc5cc33dda723b36b305a9afe14de206170bd6947e8d",
-    "Pouw.Guarantees.PearlC.GapSm120v2Cap1000_8192": "16e302a5860b257b315da912b8ad8eabe9277f5cda4d11134c7faf2872b45aa5",
-    "Pouw.Guarantees.PearlC.GapSm120v2Cast16Cap1000_8192": "1832841476baa8805e2a5b99b08e62f7d52ed908652a3c39f95a6f4f3d6d476d",
-    "Pouw.Guarantees.PearlC.GapSm120v2Cast8p72Cap1000_8192": "93026cc1337f7e90c7a4c199ac1de90259519f4bb039b8df22831e1047d320a3",
-    "Pouw.Guarantees.PearlC.GapSm120v2Cast8p72ChainOnlyCap1000_8192": "79a067aaca2cc0cec4aaf720927a6e34cc6d17fb4cec9124c6fb1e9191acbb51",
-    "Pouw.Guarantees.PearlC.GapSm120v2ChainCap1000_16384": "2241c904c555d9b5ec064a8ef5904f1eb11864b0d0730e60b393884cf013e377",
-    "Pouw.Guarantees.PearlC.GapSm120v2ChainCap1000_8192": "7f0e35e4add3647b83ec1a4b176e5799261725a2bcd63ff683d0a4097021c472",
-    "Pouw.Guarantees.PearlC.GapSm120v2LoopCast16Cap1000_8192": "32e501c6ea06dea917e7319d45a613efbd214fc8f439090b10cd31bf097bd1cd",
-    "Pouw.Guarantees.PearlC.GapSm120v2LoopCast8Cap1000_8192": "2f116cbbeeb86b173a1f67352fb751c59a9eb60e31046e69808900b2601e98f5",
-    "Pouw.Guarantees.PearlC.GapSm120v2LoopCast8p72Cap1000_8192": "6cf5ff54b9d884b822d1f6d2ccbc2d5c328d59effe9130dd72fb605f6d4a932e",
-    "Pouw.Guarantees.PearlC.GapSm120v2LoopCast8p72ChainOnlyCap1000_8192": "b0c830ed586bf1a6b84f19bea02726de090efe587c070b3b7c1004da2f4f7f6c",
-    "Pouw.Guarantees.PearlC.GapUOnlySm120Rev1_8192": "3de08ef0af8dd7e8105939bf6d20fd8f225556a4a526156552c35ba3cbac9520",
-    "Pouw.Guarantees.PearlC.GapUOnlyUnpromotedCap1000_8192": "e20ef5fe8c790649c674e80af9f2e9865cb38874e528f0c6e106cd7a7839d250",
-    "Pouw.Guarantees.PearlC.GapUnpromotedCap1000_8192": "70f6d3c356df599bd161d600946ce41dc3af5c44ca4cfbb0573dd646869341c9",
-    "Pouw.Guarantees.PearlC.GapUnpromotedChainCap1000_8192": "53b94c94b064102bb90f4e6c8566e6f9500e595f7e78082ca0447ec717e79be4",
-    "Pouw.Guarantees.PearlC.SampledFp4Sm120_16384": "98c812079b15ba48328d80395c725c5545202124bf6d7e24bccf632f40744c27",
-    "Pouw.Guarantees.PearlC.SampledFp4Sm120_8192": "46be5922b8a2eae669acf870303bfb90656678a06e04e63b2e7df29c5d3ed567",
-    "Pouw.Guarantees.PearlC.SampledH100Rev1_16384": "b2957f24df127508223905ddaebd2a30f6b5edad6de61e68a89104b59d9b90d7",
-    "Pouw.Guarantees.PearlC.SampledH100Rev1_8192": "99e1d47b93ad51bea7625600dd59e7be207234d6cef19dd63c36a4d7f182367b",
-    "Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384": "469c7d0867cf5189a004619175349515013707dbac6311d9e38cbaca2d0a7180",
-    "Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192": "badcffa0adc8e7684e76b395a894ef9feb13fbf973cd88024d6280d621a4fa72",
-    "Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b": "a92142832419a6f0706d6cb851e0b31d7f3f2cc6be1a0e3d93b0176f84990034",
-    "Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096": "beb0b18b274f55455429d771548205368067c7e0a111cd054f95194cf0c67241",
-    "Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336": "15adf305c2d4c7dcd3a6f74a5441afe296f44f13a631b78c5f3a0c9c89d95d66",
-    "Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096": "0f9b7f910a864fede7b9b882be9deef6259c3270dd13107e90cdbdf1e18df285",
-    "Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096": "ce54ee94ece652e1fa7a8374da7d979aaddc1b0f6ac9afd264ceb14444854ab3",
-    "Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1_16384": "ecc300efe04b656f8669634bd28f752171c5e29314c7a7b67509e574010c6bd4",
-    "Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1_8192": "dc077b6213d2793f9b7b8f72b6a326c6c11e16f8da866079fa4c0c9e4d817621",
-    "Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384": "39cacc546653ce3ed06335cd868cf5a5026ffdfe5157c9a2e09d5917d9359533",
-    "Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192": "5213656a070656e1f43314f76e6d1e31efe132aaaf8d661b6ed68e0c7fb35782",
-    "Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b": "69d20aa2a8aafa69b4a20ce5edfd63a5328939d0af6f4698da50c9f26a4aba9b",
-    "Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096": "06643e84a1a77943898e63e7325f690170c814517cb95ad4f34ad7a84747813c",
-    "Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336": "8541e89e3d5afb0483d79902021411bfd27fa4f5570b260061fb7df4c09f6c85",
-    "Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096": "71e56c005c3229dbf06d374622582d86dc5df3fb29cab24b77a0a007b9e238b9",
-    "Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096": "ceaa9eb368e12dc3f41bc0bb92472705d6b165086a11f5156ee0d2ae70bc2c68",
-    "Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1_16384": "740f67bb384d020fb35a240f332c9f42fe259daec8b42b06a17fc4763e2c6517",
-    "Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1_8192": "18c3f91ff7a223699ac06f640d3b093ffe86ed08edcac67c6f6d41d124231a08",
-    "Pouw.Guarantees.PearlC.SampledSm120v1Rev1_16384": "ffa960b9a927b136cc383c245688695e974d89a8d0ee55333008ed8c34765c66",
-    "Pouw.Guarantees.PearlC.SampledSm120v1Rev1_8192": "6c53b8b5c73f20e5da040d955c95791eeed1512831d01bcf67853390862c45c8",
-    "Pouw.Guarantees.PearlC.SampledSm120v2Cap1000_16384": "d4a111561a0700e70bdac11d706a268eb633b46016373c55251fd43583435be7",
-    "Pouw.Guarantees.PearlC.SampledSm120v2Cap1000_8192": "be570fff8539640664b9e2dd05b5f9dc2b737bd9e3c59698bc08f68e478c6aba",
-    "Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_16384": "46e124f78c31c222e6dbe5f3eed12b36ac382c7bb5f4d8c8a8cc20d4522ec55d",
-    "Pouw.Guarantees.PearlC.SampledSm120v2ChainCap1000_8192": "11eab441930e380feb659354016a36a0971b4435cdd6315dd4cfdf8bf4b42327"
-   }
-  },
   "Definitions.Pouw.Guarantees.PearlCDev": {
    "digest": "1cfe9f1ad3413f9eae3bfe6adbe4d25dc154336a9675a8941ba58d61af84c11a",
    "definitions": {
     "Pouw.Guarantees.PearlC.GapDevRev1K": "7a733ce504d4fc9fac5ea2f04a9e138706a5f2756fe44b6d3730ca59134afd4b",
     "Pouw.Guarantees.PearlC.HiddenFlockDevRev1K": "5cae8c8253f5a3fd269305ace336b9927516fcfaf90ffebe1139f803ac2fa5a0",
     "Pouw.Guarantees.PearlC.SampledDevRev1K": "65aae056a7c14c7ebe1880bce934157b0519c0df7e8bd15be5486ebc6f94a62d"
-   }
-  },
-  "Definitions.Pouw.Guarantees.PearlCFlockTile": {
-   "digest": "152c0b1798ad3f204b5f2b3fe0bb6cbcbfc212401e0975f0a811b30864ff0f78",
-   "definitions": {
-    "Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": "0187629268af06a4a34ab965b8d481611d2d1a0afa2550c7328227d1df6d6a14"
    }
   },
   "Definitions.Pouw.Guarantees.PearlCTileCheck": {
@@ -38597,7 +38269,7 @@
    }
   },
   "Definitions.Pouw.PearlC.Defs": {
-   "digest": "350b44d46f899827a4548325c7e3a22764769cc4127b087638de0fd72142b240",
+   "digest": "9e45d14dd48c1240ae0fe11c6d22506007dfe35d10f8c1bef88bc6cea86afa2b",
    "definitions": {
     "Pouw.PearlC.AtomIn": "e03f4bafc750c0f6d4578e67ec34924dca3698ed3ee961822b032675b3ce5fb0",
     "Pouw.PearlC.FormChain": "8bbf20f4a6edc84151755d1bd0e2038ec23aa963263ac51397c6ba7bf41c053d",
@@ -38625,9 +38297,7 @@
     "Pouw.PearlC.Stat": "fb6ea93d38df6bb29aedf870b5b95fc8923cdad8f497d13cfa2c3c67b2e5043b",
     "Pouw.PearlC.Stat.every8": "29ee5032e353de0b06530282256c338f62e21a6d1b7a10079d522bcf7a8f6bc7",
     "Pouw.PearlC.Stat.rms": "d5efb9a6ed03e96eda4785a411610c665881ed7663bc92cabd0d2ba2618d4d37",
-    "Pouw.PearlC.chain": "c4445868e9a77031ef3fc75c1dbce754ccf6ed2957613b0aed2cea87c4c53f5c",
     "Pouw.PearlC.codeVal": "b7f83d92c0c337fd8b5d439024b1b08bae7d9dcfb5201dbab687fd8aa17c824c",
-    "Pouw.PearlC.ctChain": "3d97fb3cbf6446de081ed3c7191151025bb2398761477d8570865241f7e4432f",
     "Pouw.PearlC.e4m3": "d7f9ad6dd637f93d137c17ba92a4c48a29f97b2342ba552e54c1710f12f770aa",
     "Pouw.PearlC.e4m3Mag": "1f2035c3ea82a721e9eb524bc436243d3edce517e4844ad6cbbe9d3656eb249e",
     "Pouw.PearlC.e4m3Word": "f5987ee9212676fde9cb720b0a260285dadcd3878ad7a27a5452799b54cc7471",
@@ -38638,12 +38308,11 @@
     "Pouw.PearlC.mulCode": "1d6b7b3dcb2ee06319b4e010aeb78fccf642a5627e2a552bd27ef6e23dbec075",
     "Pouw.PearlC.promote": "66b84bc181f483cf7a61c9a50141215de3c22ec8c77f2aed82bc1c59247fa11f",
     "Pouw.PearlC.rowAtoms": "3e4518576891684ce39e21fae392ae8622a21522e87b1207fe47670fb7c2f4fb",
-    "Pouw.PearlC.total": "2275e24e1c8b11053920720b904d4086df1950ed4ff50c3905b88c345c80d630",
     "Pouw.PearlC.wordVal": "7b459d6a6a2e56206c59625d0f16586131ed9bba3c06f13a9866d5f8e3ab6af0"
    }
   },
   "Definitions.Pouw.PearlC.Device": {
-   "digest": "1457f057d3bfadac30b6e3897ed288b484307f25f98af8eff144e9c18cd0fd22",
+   "digest": "ff8658cafe125afa72e749e01d23b44ea077a2d773a2bfd873137f22043ffdfc",
    "definitions": {
     "Pouw.PearlC.PearlCDevice": "49b0746e634512b0ba15501dae4a8e1e7f5a92906eccf6db5291f7ed68f2dfd0",
     "Pouw.PearlC.PearlCDevice.G": "dbfc86330607b7c4760f02bf16a71635ec8b1b7775a76ee3bb4ebfcdf645e58b",
@@ -38659,35 +38328,21 @@
     "Pouw.PearlC.Prices.add": "1dafe7c660398166bf6af347e43e69d324341f6dcb530ad44fa993ac1a7ac015",
     "Pouw.PearlC.Prices.bf16": "0fa6711404e6117909176b090564e8b07f6a46acfdc89907f884b34b40278aeb",
     "Pouw.PearlC.Prices.costs": "e80c4e8e8d468ed4a4719b334755cef2f56cbe52697ed93e61b638ac25299993",
-    "Pouw.PearlC.Prices.h100": "11e0f5cea3d574b561d311c463d384e45ea08ad98a0bdf43587da1063a2611ca",
     "Pouw.PearlC.creditDev": "9afb51c265a332ac45a85411f9a4127dd9e9d9a99d85fee925a8562d2621addb",
     "Pouw.PearlC.debitDev": "5d35649e7854f34640190f26b02bf5e94e0be15469e978a3536b4ca2a1ad68b7",
     "Pouw.PearlC.devAt": "94a05321199e2480ef9144b73ac8172e53414bb0afd06fb9647b9568ceea03e6",
-    "Pouw.PearlC.devH100": "5a43c1efe07cc2ac628095c95c6a205e1e584a4c451a1c7c0a8199510578dd0b",
     "Pouw.PearlC.devSm120v1": "e8683e11423332331304d0a3f6ed4662ea00f45d4231727cd607dcd9712e8d34",
-    "Pouw.PearlC.devSm120v2": "4f59d45fd7215c5db0568e89746297fc170061906445f41b418d7022ac26153a",
     "Pouw.PearlC.llama31_8bLinears": "33576ad425f7422cc95800869f043984dd86cf55d803af807f76e2b00f4a6ed3",
     "Pouw.PearlC.pearlCDomainDev": "30f9d9afd030d0011715c64c3eb31415ae766561630de7ad5b5ceeb3b57cf36b",
     "Pouw.PearlC.pearlCDomainDevAt": "402ff5676e5550b47d1280a8f49978fa59d12520c6d93eceb5d2a4b3eb81c6c9",
-    "Pouw.PearlC.pearlCDomainDevNK": "2653a120d87aafb7cd768ecc73e0d63a375fe6e07544f2c8a4c4acd087981bbf",
     "Pouw.PearlC.pearlCDomainDevShapes": "78adc7a7c4a1a04f003481193b6567586db39739f903d0da828e54908278bcfe",
     "Pouw.PearlC.pearlCProtocolDev": "db4659dcb7475e15f899edf4f1b866458a6152293660334714d9c8a8e97af9ff",
-    "Pouw.PearlC.pearlCTilesDev": "0e25aa0c49d11e687cbf95864f1817864224d98d3442299d12ce99cab12b3698",
     "Pouw.PearlC.qwen3_8bLinears": "e25b770eeb457e844d90861406541e27a7f86b9b6de54aecbf0e3be954c0fc31",
     "Pouw.PearlC.wrefDev": "122d664caedfadd83fb8bdb36749da7e283172c9bfb7c98db59652e72191d649"
    }
   },
-  "Definitions.Pouw.PearlC.DeviceChainOnly": {
-   "digest": "404609ffd4c443abb32be49dffe54d976e38f2ea96c4fe8798d8d1fff62ca645",
-   "definitions": {
-    "Pouw.PearlC.creditDevChainOnly": "1fcf92d490081a15805691168521ff9f15ceef9baa834b1abe8f323155f6a8f2",
-    "Pouw.PearlC.creditDevRev1ChainOnly": "ecb3630b101c748851b2f6e4945f2ee1135a1a6e71f39336c402d968da2ee4cf",
-    "Pouw.PearlC.pearlCProtocolDevKChainOnly": "6fa7e9f4ebdc59956beab0a77b80918a24c0808a8533df4d508fafd3976d144f",
-    "Pouw.PearlC.pearlCProtocolDevRev1KChainOnly": "5f9af7d51a21a7d83714cf6f69aeeacdb70ead523f683a972e4e2e6e07a78cb5"
-   }
-  },
   "Definitions.Pouw.PearlC.DeviceFp4": {
-   "digest": "657c69a3a5bb57c2dfa67b78c28765fa9c2b75269385254c038a5d76e1914d8f",
+   "digest": "5f403aa0c8d6bdbf969f1c664504631e446a0e70e0a51c96b185880883d6504f",
    "definitions": {
     "Pouw.PearlC.Fp4Dev.Fire4": "30b9898b21ff1a6d0b1809ad5a3901728d7cfbec1e2d3617fbf938ac1b99be98",
     "Pouw.PearlC.Fp4Dev.Op4": "fac14db9df452432138fc3e58c0abe9218e1f3697f2580bc5523740f16d79adc",
@@ -38776,7 +38431,6 @@
     "Pouw.PearlC.creditFp4": "06eee40f4e41f770f026c85c2f45d5ee037d1641a8f97ea32165f8a2e4ab856a",
     "Pouw.PearlC.devFp4Sm120": "260f88322f3f9fe809d5c4c2fc7539935547990c9f81ee2321acb84ff627b335",
     "Pouw.PearlC.pearlCDomainFp4": "d35798f38112752aec2fc1aea30a0410143b1a8dafc819bab049b7fc8d5964f7",
-    "Pouw.PearlC.pearlCDomainFp4At": "2900804eeccab4915944fd93d88fe5cfb71a632082baefc0f50753b84a37db86",
     "Pouw.PearlC.pearlCProtocolFp4": "e71139c4dc0484dd14b100077bd36d013fb5366c78fe73a75169969fa7842e82",
     "Pouw.PearlC.pearlCShapeFp4": "7a7dd041adc6601e2220fff2cd45dec2e59517cd3f4d12ad997346edaac6ff82",
     "Pouw.PearlC.pearlCTilesFp4": "8d92cb185b1dda2aa616025fd8bb2d1bee6ea74373e5c512da81e6b73e26948c",
@@ -38784,19 +38438,11 @@
    }
   },
   "Definitions.Pouw.PearlC.DeviceKernelWref": {
-   "digest": "4d4a9b299c1ba135d163a8d3e4590fe16b095a723ba40193fe97642161560589",
+   "digest": "228e91a6f4a1172f9c5d9f28337ba72f07c8c8b68f1f6e09cad45ca0c9d1dbb7",
    "definitions": {
-    "Pouw.PearlC.pearlCProtocolDevK": "364ab1dd995d4e9c19faf7e83484adbf9f17d4c73e6b7ebb2656052c03a0c160",
     "Pouw.PearlC.pearlCProtocolDevRev1K": "3952ff3a34800ba15332f841a89dfa6d48c75a52e4ea21ba174c41f105a90c4a",
     "Pouw.PearlC.pearlCTilesDevRev1K": "7915d854cd3050707212bca976dc4954af6793900e5a96e700a05e62abcb8637",
-    "Pouw.PearlC.wrefDevK": "425638b05f9fc1aaa754d10d6cf92e93ef5c42aa519ad0509379c21f8b291b6e",
     "Pouw.PearlC.wrefDevRev1K": "879d0a21ff2119bde3087d1782bdd96e57d954cd44c008bde79373993cdbe272"
-   }
-  },
-  "Definitions.Pouw.PearlC.DevicePrices": {
-   "digest": "69a748cf875ee791e7772396135f3891c1606448e5fa86c6a7b00a3f895f9609",
-   "definitions": {
-    "Pouw.PearlC.Prices.sm120": "5d9e367dec517eddde018b601410df43f3e19e473cc59c7d7a4056b066931164"
    }
   },
   "Definitions.Pouw.PearlC.DevicePricesLoop": {
@@ -38917,7 +38563,7 @@
    }
   },
   "Definitions.Pouw.PearlC.Game": {
-   "digest": "cb193c3215b80ed4eaaa1b62b5dc9cf1393d75c58d1964aee1fa3f844a396eb3",
+   "digest": "1f0251f4d83793d6c3adba8554d7614dfefc2d505920dea1d928f3fa010db62f",
    "definitions": {
     "Pouw.PearlC.Adversary": "0ee52871dcaf758b253ac426e7aeb15102769c78de176d68a249b87972c3008c",
     "Pouw.PearlC.Adversary.Bounded": "6e1c94b133f0936f2204620b0d3768b543cb0bbd21fd0440a115b65ccf71ae79",
@@ -38933,12 +38579,10 @@
     "Pouw.PearlC.Correct": "e631025754bd3ea0c692082caa49bc50214817b45c4ca55dbf43956235cdaacc",
     "Pouw.PearlC.CostModel": "3a12c83fcaea85b3e9e00eb4b3acc8de79cbb0e9d0aa8050d488c75ed5bbe3ff",
     "Pouw.PearlC.CostModel.Prog": "109a75e5991fec32f93b0205aa33572c2499873b046a81964ec87e6637ca67bd",
-    "Pouw.PearlC.CostModel.Queries": "fc29e1557a05a37f97631427f66d0dd276f05cdf08f24f105463684364a0e909",
     "Pouw.PearlC.CostModel.calls": "63ded3923f4fc7dda79113febb6a04a93ae27652b5d9d979716c9d8ba995f3d2",
     "Pouw.PearlC.CostModel.cost": "6459a7fc23a01757ca22fc7c9784cd4947bde06f4966b6a6634e711d93326281",
     "Pouw.PearlC.CostModel.run": "614d3f600e0a31228ea63d35c2abe467f4e814649c3350c771de1e063cd92be0",
     "Pouw.PearlC.Costs": "937f73d860a5bdefdcf404560e9171f09612656efa2af0fb473d2fe736b7d900",
-    "Pouw.PearlC.Costs.adopted": "51a12d0b1d974ab387c8d39c212b860a646fa7248c566a2cd579355ffebcb83e",
     "Pouw.PearlC.Costs.fs": "84a9ba0e5d0cbb38fa1022c5b7d4713c181de0cfa60000c75dd8054fc4a94204",
     "Pouw.PearlC.Costs.qa": "a7a271c45310e7b41ad3b0c5cb9ad0d416ef7d0b3da47551cbac8c5dde197c03",
     "Pouw.PearlC.Debit": "5c9dc7cb32c95cbf6d3723ce1ee8e030c449f9eeb08d98b7e74fe9d7c7e96d0f",
@@ -39015,7 +38659,7 @@
    }
   },
   "Definitions.Pouw.PearlC.PeelExact": {
-   "digest": "dad3c83ca1839b9ff3b9d7bb1d838f4678ba9597a6b17d8dcd9159dd3f0da5ae",
+   "digest": "848d3bb8691d29e00537ad3ec027a9a1242d7d175a617c9721215323705a8be2",
    "definitions": {
     "Pouw.PearlC.PeelExact.accChain?": "019b576f2025362a3023e1af4d9da9ddc5948912deeba6700ea0a6c3d63bd732",
     "Pouw.PearlC.PeelExact.addWord?": "49f033614c36e581baf2fcca4c26cc65060c881a4f0ef44e7884dd3c0d37dcf6",
@@ -39029,7 +38673,6 @@
     "Pouw.PearlC.PeelExact.bf16ProductTotal": "2993ec602a2ac3452372d3874fbe8e0475eff4eac0632112a89acc96270245f8",
     "Pouw.PearlC.PeelExact.bf16Sig": "68f38f596ce821e18ccc6d968165ad4898cb88f4bba948bd67a097249da5a42e",
     "Pouw.PearlC.PeelExact.bf16Sign": "3d6da95a1b658e8c1320fe70fd504d4491fbfd92afdbdce53a81184158417da3",
-    "Pouw.PearlC.PeelExact.chainWord?": "78dfcfd4d76b80293de6d7ede98f2f26c706e1c15eb9baa772cc0ce909ddf111",
     "Pouw.PearlC.PeelExact.col": "b399db56af42d4b0144f304cc08768598b58a61b7fc814fab7cb14e074b0f046",
     "Pouw.PearlC.PeelExact.finite?": "815f130b42d5ad5643c81ae053c6ce6569e834d0414f513c26c04906c181b7d9",
     "Pouw.PearlC.PeelExact.fmaWord?": "f4b6a87fde3c679ccacc4dedc56821004cbdad2d57881b03064b703f451dd310",
@@ -39038,16 +38681,13 @@
     "Pouw.PearlC.PeelExact.negWord": "122d6c35e92cc4765d327d88e4a53e6d0357b8d82d2f3bb0e26ca5d6a6d5702c",
     "Pouw.PearlC.PeelExact.paRow?": "ecd6cfe9817e0273d329e16b233b334039d089d2d971130118e8ab041377299d",
     "Pouw.PearlC.PeelExact.pbRow?": "489c6adbab3fce4862e26f68446736f4b1f31f032c800afe912b8f0e98bbd416",
-    "Pouw.PearlC.PeelExact.peelExact": "3c1ca7fc27a7de8196ab454089bbcfaa2f7724ccce9cca5cf80641deeb541287",
-    "Pouw.PearlC.PeelExact.peelExactVal": "93ba0b18215bd8c7e69f097f56abe94a8661ef03860b49e2738817683d6d92ef",
     "Pouw.PearlC.PeelExact.promoteWord?": "17ea6c19f9d372dfb47cc779d452b5d00bb2c4234104b6aa2bda7f66b83c1554",
     "Pouw.PearlC.PeelExact.rnBf16?": "edf861b0643c203993691289e52471fffaf5b2c2b6f729814a0e0d6034a4e4cb",
     "Pouw.PearlC.PeelExact.rnWord": "8fdae1697992c6b8ab2d7769038b258e3f29257f4c0a92d57afcde122954b7e7",
     "Pouw.PearlC.PeelExact.signBit": "b4db7bbe6c347da5cd9c9f516695c511498ac9de73f3aa27698a1494bd9f578a",
     "Pouw.PearlC.PeelExact.slice16": "3471a9e7befb86fc8889865d8635b9d8e013b5c9fab7a09c153497745dd52bf2",
     "Pouw.PearlC.PeelExact.uStep?": "130c3b8dd340cc0c37ba298e8db9f5dfd46210d856446bd2b559b62b91401c11",
-    "Pouw.PearlC.PeelExact.uWord?": "d46fa5307e9e2eb575c5a255d61b6f786552e6a67bb875ce03225ccfcf6f2188",
-    "Pouw.PearlC.PeelExact.windowWord?": "614a46158508b90d7a00a69737e4d81e5570527e420dcb400cd70c0ba7b86e7a"
+    "Pouw.PearlC.PeelExact.uWord?": "d46fa5307e9e2eb575c5a255d61b6f786552e6a67bb875ce03225ccfcf6f2188"
    }
   },
   "Definitions.Pouw.PearlC.PeelExactP": {
@@ -39348,7 +38988,7 @@
    }
   },
   "Definitions.Pouw.PearlC.Tile": {
-   "digest": "e1a2da5f59304ef2b3a1a8417864efd57d1f8b8dc4790adff1a1369b91418dc8",
+   "digest": "3cda286e46c96eba8f8bb3fbfe7734baacccdcb351ec1001f265bd2115d3f2f3",
    "definitions": {
     "Pouw.PearlC.GGapSampled": "9616f99ed36d373c2140f0b5eb24e46886d1d2c6139c65293e3289afe3287050",
     "Pouw.PearlC.PearlCSem.passRows": "501dbad8f3a8e06e8bb593ceaa0a7e85bcd2ce56d2ad81056371c8e4fb83fa22",
@@ -39371,7 +39011,6 @@
     "Pouw.PearlC.claimedWref": "692adf0dd8d465a09b58a1776b904a9ca66cb58fc11a5057b3605110e8f1cdd3",
     "Pouw.PearlC.goodTiles": "d5e0ad40614504f0ae1fadacbfdea02990b7b21c82bb1a265f7520f36fbe78e1",
     "Pouw.PearlC.gridTiles": "cd94e5959b68a2e8f30fb0dc72db8cd4817a255343b85f33bbfa7e4c7e5d9b39",
-    "Pouw.PearlC.overCapTiles": "a62b4bef31f9e001eafccee5ab8415eef43f6dc3200aa3b5fb41858d1d3c2de6",
     "Pouw.PearlC.pearlCTiles": "3b437f1f247b61f48446890a7d49baf412fa3fab511662237e866e5d0e2d3f3e",
     "Pouw.PearlC.tileShare": "e5769f881eba3e3067186ea9b70725c392bec6e7311827aa077a78e44fcb20fa",
     "Pouw.PearlC.tileWrefTotal": "386e9e51f5f23870c7a84efb172d3d877a87a0b0ee2b51bb608c59c1a613f9be"
@@ -39468,27 +39107,8 @@
     "Pouw.PearlC.TileCircuit.val": "5eba5b68841a39918695a18e0e73ccd6a967f7f072c3c12129067f507623d17e"
    }
   },
-  "Definitions.Pouw.PearlC.TileDraw": {
-   "digest": "0e6eb7852b3e97cbddb1aadee79e3e54957e0d08780e3e2433cd8a3c4f79a0e7",
-   "definitions": {
-    "Pouw.PearlC.Decl": "141fb994d42557b746b1ecc75426b646cfc1c3469e75ab7614bd66e4a92c64dc",
-    "Pouw.PearlC.Decl.cols": "e1ce13ba51bd3add61f510baa924d9f013c702b55c7fa80ae8013735e404aeb7",
-    "Pouw.PearlC.Decl.kept": "0b0c019bb2854eb81ad1deb35c69a3c81454270f59dc7f19828577107ed6d228",
-    "Pouw.PearlC.Decl.rows": "4c695d0ca526ee20bc2d6468e9783f08b39597e06b3c7e30d2e1e1b8b24a1380",
-    "Pouw.PearlC.GGapSampledDraw": "1d7a50bd3a252b1588253fda7fd24e0208055e0649285d0843df1a7bb40c7123",
-    "Pouw.PearlC.GGapSampledDrawTolThreshold": "7803192e38518467d4fb06d6d1b8c7e6ec5d19ca5ab360e158a9be9d78cea1d1",
-    "Pouw.PearlC.claimedDraw": "7e1f80a332b907b43ae3a928c34471415c9f6aa93e90b6fc2c6624a660aafe62",
-    "Pouw.PearlC.declOK": "5f965b450232e6b5793c38d8a3aec92b13321694619aa0c4149a1f11ef755156",
-    "Pouw.PearlC.drawTickets": "764c9b72ba32fd18079e7acb3eca9b3fb23b17758b6c35521acdabd450c1e433",
-    "Pouw.PearlC.drawWeight": "67cd9cd36eec721ff6df12d643bff2ab593954f98ab944073523755e2ba11d3b",
-    "Pouw.PearlC.goodDeclTiles": "6e351acd87bf7b3c78a865b20f19768f3d84bcc15e1f56f3513ffb05a1e84ebe",
-    "Pouw.PearlC.pearlCDrawRev1": "fb780da95e93f59caa6df42cb17b21821f380d460faf98f905796a62a6bd533a",
-    "Pouw.PearlC.ticketsOf": "bb645cc836030831ef35ab6b121010e070c66d9e779c765acc9e9382f15212d7",
-    "Pouw.PearlC.wrefRowRev1": "28fe9d0394f33dc6591180ffdf040e620032a119e385adcffaedbe0c9ae98b69"
-   }
-  },
   "Definitions.Pouw.PearlC.W1": {
-   "digest": "c2d4f7d166ef643f29d68f5ec246f84e7032fd3219a77b7aa6d73e3ec9e12fb8",
+   "digest": "ca7249888f9fff6a18bc4899ed759722452239374eaa7388b0886d53e9ff7ce1",
    "definitions": {
     "Pouw.PearlC.W1.Addr": "f874d9f13c441c566c9eb13426b94122d70bc31ea9e1d646825e675de38e9c30",
     "Pouw.PearlC.W1.Addr.off": "55814166b9f20bad081bb03f147091dee7afcfb346d37f30c4beea6d432a3704",
@@ -39581,24 +39201,17 @@
     "Pouw.PearlC.W1.W1Device.depth": "01678895c6bb09b96fea0cd0675ae7bc407bee4efa9d9a67963b0f46aa0c8883",
     "Pouw.PearlC.W1.W1Device.e4m3": "6eb6d506616e4e521e4b774aaacce06bb558d996f23e93abb6616d92a808b2f8",
     "Pouw.PearlC.W1.W1Device.fp4": "318321e3afd42d8d39e22cdbeab9ce4c2e4410e017c0c92cce955554e3b0d4d3",
-    "Pouw.PearlC.W1.W1Device.fp4Sm120": "53746d9366060c23684b347daff641d537ec9991b6f75a8836c647b2bf6f275e",
     "Pouw.PearlC.W1.W1Device.frags": "b764bfec1bd1fd9939f80f98e495c7a465c3c4c226c153ae129a8f76dc78eb62",
-    "Pouw.PearlC.W1.W1Device.h100": "68ac4c72c026e183c657979f9d00c5f6f0361a65235025fb7f03ff857921c7cd",
-    "Pouw.PearlC.W1.W1Device.h100At": "5eb0e996a6e380b3198b0fadd5d32d6966c16e50e2e2cbd497b6320e61c6e9aa",
     "Pouw.PearlC.W1.W1Device.has": "166d9aac4c2896bdaf18f658d538fa61080babd63f651a4f92e3d5acb5bc4281",
     "Pouw.PearlC.W1.W1Device.prices": "c1d76fa7b3c71c021b7d908ca28b7ebfa3b47c20f191a06e03083d8e9f78ee7a",
-    "Pouw.PearlC.W1.W1Device.sm120": "b6c2e3b7e130758d5f07928e43ec6a24241f847e8c165351a97980a011b6252f",
     "Pouw.PearlC.W1.W1Device.sm120At": "19918e107d38a42e531e594770615d5c8188c6a3321fa2662bf3db8914139d5a",
     "Pouw.PearlC.W1.W1Device.sm120Loop": "268947dfd9f2596bd5e05387b8fa2161fc0fe10f113408fe78402646449bfc60",
     "Pouw.PearlC.W1.W1Prices": "3419694a372d74999ebf68a8236af94ee5470cbeed15e84627c63f244790bd52",
     "Pouw.PearlC.W1.W1Prices.cvt": "4ceaedd32ac030952cd9da67b4bb7fc496ae4a6cbf50727e9869ca1812d09685",
     "Pouw.PearlC.W1.W1Prices.fetch": "d0f283472c4161bb638f4b15969bdd5a5e0704f51d26080e96fe9729bc7b5eb0",
     "Pouw.PearlC.W1.W1Prices.fp32": "cf0cced6538038df65423a289b211163e6c19ae268b12085bb5345d25d456094",
-    "Pouw.PearlC.W1.W1Prices.fp4Sm120": "6c30ae5b45668564cf16efdbff216789a631fd1d514b7c93ddbc9f2f87aac165",
-    "Pouw.PearlC.W1.W1Prices.h100": "12f7d46475640f769f1f1c4fe8e147e320b438c79b282a1f755202f0fbe38232",
     "Pouw.PearlC.W1.W1Prices.int32": "9c7f3a6f9decc4fb3791972b1a8499d221a2707abc4057862756c020aece2a96",
     "Pouw.PearlC.W1.W1Prices.mac": "a2f761e8bfd914c9738487f9e5816cd94be9d08047104b636a3f69bcb8ef60af",
-    "Pouw.PearlC.W1.W1Prices.scale": "8063474a6885488cb0512513d2a29ffeb356b9c1e9c36585b53e5da5f37d51d2",
     "Pouw.PearlC.W1.W1Prices.sha512": "2633f80140bc6878792de4d5dd656ed7362e3beb85a8f06730d0b73e97d63e04",
     "Pouw.PearlC.W1.W1Prices.sm120": "5afab1e1686866974f893cf376cad7c72ca6b428b0c122d465b68b76cb011be5",
     "Pouw.PearlC.W1.W1Prices.sm120Loop": "2032bd65d42062324933d980bc61f12b416e0584f64fda157b60949102c8fb52",
@@ -39608,7 +39221,6 @@
     "Pouw.PearlC.W1.exec": "b14bfae236ba7c7365175f38c923a6797929f80bc5ace1193b850c0e69cbbfb1",
     "Pouw.PearlC.W1.field": "5a34513a6efe273245594bc96b2173f00a581c1fcc4aba122914c0f8b509b9ad",
     "Pouw.PearlC.W1.final": "58bc1bc27c36508c1ff4a8cebc85ab9eb8dc9cc1ca07abfa7d6aca7cc6d2cbe7",
-    "Pouw.PearlC.W1.h100Frags": "a6a43a2e8add496ea0eb9bba66be067d15b50e82ab62272fe9805bb0ca3dafcf",
     "Pouw.PearlC.W1.init": "867a7fb2cfb0683e359b3dcfabf728b4e674dfa029f97db13da0880756f9407c",
     "Pouw.PearlC.W1.instDecidableEqFmt": "a6920800a55fe1bc0609ecd6c25c6c5e09a05cf34cee4d8a246aca24772c8e5c",
     "Pouw.PearlC.W1.instDecidableEqFrag": "265e3aaba85cb63c012baa40b1e3c0169c0e49c04a4664d8b55a4b1023d49091",
