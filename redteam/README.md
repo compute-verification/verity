@@ -57,5 +57,5 @@ The code is `benchmarks/training_slowdown/`, whose README has its commands. It d
   this page takes a circuit and its output.
 - It prices a trace of the PyTorch loop body, each op at its Definition's gate count, where this page prices a Program.
 - The compiler from a PyTorch loop body to a Program (`adapters/vllm/verity_vllm/program/frontend/train_step.py`, in
-  the vLLM adapter until there is a torch adapter) derives one optimizer's, AdamW's.
+  the vLLM adapter until there is a torch adapter) takes one optimizer, AdamW.
 - It grades one submission at a time and makes no plot.
