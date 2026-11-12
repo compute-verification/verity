@@ -6378,7 +6378,8 @@ def main(argv: list[str]) -> int:
                          f"{len(rep['guarantees'])} guarantees; {rep['seconds']}" +
                          (f"; peak GiB {rep['peak_gib']}" if rep.get("peak_gib") else ""))
             if "sandbox" in rep:
-                head += "; built in the sandbox" if rep["sandbox"] else "; built WITHOUT a sandbox (unshare unavailable here)"
+                head += ("; built WITHOUT a sandbox (unshare unavailable here)" if not rep["sandbox"] else
+                         "; built in the sandbox" + ("" if rep.get("bound") else ", not bound: outside --tree"))
             if "inline_debt" in rep:
                 head += f"; inline debt {rep['inline_debt'][0]} ({rep['inline_debt'][1]} premises)"
             print(head + ("; unowned" if rep.get("unowned") else ""), flush=True)

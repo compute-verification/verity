@@ -376,6 +376,22 @@ def test_the_lean_check_names_an_unowned_lock_and_repairs_no_bookkeeping_in_it(t
     assert code == 0 and "unowned" not in rep and "unowned" not in head
 
 
+def test_the_audit_line_says_when_a_sandboxed_build_was_not_bound(tmp_path, monkeypatch, capsys):
+    """A sandboxed build of a package outside `--tree` (`check.py` run from another checkout, or given a copy elsewhere)
+    reads its sources at their own path, and nothing but the artifact cache reads its report's `bound`: its AUDIT line
+    says so, where a bound build's and an unsandboxed one's say what they always said."""
+    (pkg := tmp_path / "pkg").mkdir()
+    lines = {}
+    for sandbox, bound in ((True, [str(A.FIXED), str(tmp_path)]), (True, None), (False, None)):
+        monkeypatch.setattr(A, "audit", lambda p, out, *a, **k: A.reported(
+            {"package": str(p), "failures": [], "sandbox": sandbox, "bound": bound}))
+        assert A.main([str(pkg), "--no-runs", "--out", str(tmp_path / "out"), "--repo", str(tmp_path)]) == 0
+        (lines[sandbox, bool(bound)],) = (s for s in capsys.readouterr().out.splitlines() if s.startswith(f"AUDIT {pkg}: "))
+    assert lines == {(True, True): f"AUDIT {pkg}: PASS; built in the sandbox",
+                     (True, False): f"AUDIT {pkg}: PASS; built in the sandbox, not bound: outside --tree",
+                     (False, False): f"AUDIT {pkg}: PASS; built WITHOUT a sandbox (unshare unavailable here)"}
+
+
 def spec_facts(reads=None, outside=(), spec=()):
     """``facts()`` whose guarantee reads ``reads`` under `meaning` and stops at ``outside`` ([name, module] pairs) outside it,
     in a package whose spec modules declare ``spec`` ({name, module, kind})."""
