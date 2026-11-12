@@ -551,7 +551,8 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     # alone is started by it
     for name, m in S.MODELS.items():
         assert bool(m.published) == (m.published_context is not None) == (set(m.published_tokenizer) == set(S.FRONT_ENDS)), name
-    assert [n for n, a in S.ARMS.items() if a.published] == ["published", "prod", "prod-again", "prod-record"]
+    assert [n for n, a in S.ARMS.items() if a.published] == ["published", "prod", "prod-again", "prod-record", "prod-seeded",
+                                                             "prod-trace"]
     assert S.ARMS["published"].parent == "compiled" and S.changes_of("published") == []
 
 
