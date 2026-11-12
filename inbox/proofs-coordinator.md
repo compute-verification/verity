@@ -74761,3 +74761,47 @@ prover's per-table part.
 **Two notes.**
 - **Not this pull request's:** `main`'s reason for `NetTiming.SecurityProofs.PooledLeakCarried` under `unwitnessed` names `CIR-190`, by the same finder. #8495's lock has one mention of it fewer than `main`'s. I left it.
 - **The mailbox:** read, all of it. I take the hook's text as yours from here and read the mailbox when it points there.
+
+## SESSIONS, Thu 12 Nov 06:32Z: the class mix of COUNT's 06:02Z designs is the one I assumed, 166.72 to 166.73 classes a sampled proof block in the best designed configuration, so no figure of my 06:11Z entry moves [run `r20261112-062639-bd0d`]; with the one-wait trace alone every bound priced reads 100 bits or more for an execution phase in calls, the least 807.8 GB as measured and 273.4 GB on the frontier
+
+**Everything here is modeled.** The designs are the cost model's and the bits are arithmetic on the hash term. No session of these shapes has run.
+
+Tags: [run] is `r20261112-062639-bd0d` unless a line says otherwise: exit 0 on vy-nebius-cpu-14, 06:26:46Z to 06:29:27Z, tree `c8b46edd10e4`, record `art:d5f3eb48ff4e938c9e75cc7ab3589f8904193eb55d56ac8c19dbffe1084cdbfc`, `out/sessions_measured.json` (sha256 `3b3a30b0e313…`, the same bytes as the same script on my VM). It imports `count_measured.py` of COUNT's run `r20261112-054659-8921` unchanged (that run's `inputs/`, its 11 digests checked), rebuilds each design keeping every block type's sample, and counts the classes by subcircuit template as runs `d5e1` and `e68a` did. 89 designs: rows A to C of the three configurations at the head's 160 and 287.5 core-seconds, and the 64 cells of the grid; **all 89 give back that run's K, GB, sampled proof blocks and sessions** (`measured.json`, `measured.head287.json`).
+
+**For Daniel.** The check asked for came back clean. The designs of the 06:02Z cost entry draw the same mix of subcircuit templates as the designs I had counted before, so the bits I gave at 06:11Z stand and none changed. Under 300 GB, which needs a session's fixed seconds near zero and which nothing measured gives, an execution phase reads 94.4 to 94.5 bits as the proof stands, 101.1 to 101.2 with the one-wait trace and 105.1 to 105.2 with all three changes, counting SHA-512 calls on 64 KiB rows. With the one-wait trace alone every bound priced so far is over 100 bits for an execution phase in calls, so the cheapest design decides: 807.8 GB as measured, and it needs three things that are not on `main` (item 3).
+
+**1. Rows A (the read at 459), B and C of the best designed configuration** [run]. One table a session; bits for an execution phase in calls. "All three" is the one-wait trace with the wide level-0 leaves; charging the reruns a table changes nothing at one table a session.
+
+| row | head statement, core-seconds | GB (×1.05) | K | sampled proof blocks | classes a sampled proof block | as the proof stands | one-wait trace | all three | my 06:11Z arithmetic | agrees to 0.05 bit | lines of session coins, millions |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| A, the read at 459 | 160 | 2,942.0 (3,089.1) | 86 | 336,170,646 | 166.73 | 98.01 | 104.72 | 108.72 | 98.01 / 104.72 / 108.72 | yes | 48.3 |
+| B | 160 | 1,045.4 (1,097.6) | 17 | 1,063,205,806 | 166.72 | 96.35 | 103.06 | 107.06 | 96.35 / 103.06 / 107.06 | yes | 152.7 |
+| C | 160 | 807.8 (848.2) | 22 | 1,375,913,396 | 166.72 | 95.97 | 102.69 | 106.69 | 95.97 / 102.69 / 106.69 | yes | 197.5 |
+| A, the read at 459 | 287.5 | 3,202.7 (3,362.8) | 79 | 308,807,919 | 166.73 | 98.13 | 104.84 | 108.84 | 98.13 / 104.84 / 108.84 | yes | 44.4 |
+| B | 287.5 | 1,367.0 (1,435.4) | 13 | 813,039,734 | 166.72 | 96.73 | 103.45 | 107.45 | 96.73 / 103.45 / 107.45 | yes | 116.7 |
+| C | 287.5 | 987.3 (1,036.6) | 18 | 1,125,747,324 | 166.72 | 96.26 | 102.98 | 106.98 | 96.26 / 102.98 / 106.98 | yes | 161.6 |
+
+- **The classes a sampled proof block do not differ from 166.72**: 166.72 in rows B and C and in every cell of the grid, 166.73 in the rows A (166.725 to 166.731 over the 74 designs of this configuration; run `e68a`'s designs 166.725 to 166.731). In the other two configurations 391.63 in all 15 designs, as in `e68a`. [run]
+- **Every row agrees with my 06:11Z arithmetic**: against that arithmetic unrounded, the largest difference over the 89 designs and four columns is 0.0001 bit; against the 100 figures of the 06:11Z table as printed, 0.005 bit, which is their rounding, and none prints differently at two decimals (`compare_0611.py`, on my VM). [run; derived]
+
+**2. The grid's frontier designs under 300 GB** [run]. The best designed configuration, the head at 160, one table a session; multipliers on what every session pays, from row B (the verifier's own Lean seconds, the prover's fixed seconds).
+
+| verifier's / prover's multiplier | GB (×1.05) | K | sampled proof blocks | classes a sampled proof block | as the proof stands | one-wait trace | all three | my 06:11Z arithmetic | agrees to 0.05 bit | lines of session coins, millions |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0.05 / 0 | 296.2 (311.0) | 60 | 3,752,491,080 | 166.72 | 94.53 | 101.24 | 105.24 | 94.53 / 101.24 / 105.24 | yes | 538.8 |
+| 0.02 / 0.02 | 291.3 (305.9) | 61 | 3,815,032,598 | 166.72 | 94.50 | 101.22 | 105.22 | 94.50 / 101.22 / 105.22 | yes | 547.7 |
+| 0.01 / 0.05 | 296.2 (311.0) | 60 | 3,752,491,080 | 166.72 | 94.53 | 101.24 | 105.24 | 94.53 / 101.24 / 105.24 | yes | 538.8 |
+| 0 / 0 | 273.4 (287.1) | 65 | 4,065,198,670 | 166.72 | 94.41 | 101.12 | 105.12 | 94.41 / 101.12 / 105.12 | yes | 584.4 |
+
+- 0.05 / 0 and 0.01 / 0.05 are one design (the same K and sample). Over the whole grid the one-wait column is 101.12 to 103.06 and no cell reaches 100 as the proof stands (96.35 at most, row B itself). [run]
+
+**3. The sentence.** Modeled, and no session of these shapes has run: with the one-wait trace alone an execution phase in calls reads 100 bits or more at every bound priced so far, so the least is the cheapest design and not a threshold: priced as measured it is 807.8 GB at 102.69 bits (987.3 GB at 102.98 with the head's read of its circuit file counted), which needs three things that are not on `main`: the one-wait trace (#9149, open), a kept verifier process with the circuit file kept (two branches), and a release log that holds its 197.5 million lines of session coins where `main`'s holds 1,048,576; on the frontier it is 273.4 GB at 101.12 bits, which needs the trace, a larger release log (584.4 million lines) and a session's fixed seconds at zero on both sides, or 291.3 GB at 101.22 with them at 0.02 of a kept process's and of today's prover's, which no measurement and no branch gives.
+
+- Where each part comes from: the bits [run]; the GB, rows and multipliers [run, giving back COUNT's run `8921`]; the lines of session coins and the 1,048,576 [read: that run's `out/measured.json`, the designs' `limit`; #8914's 8,388,608 is under every row too]; #9149 open and not on `main` [read: `gh pr view 9149`, 06:29Z; `main` at `d6075b75d2`]; the two branches and "nothing measured gives 0.02" [relayed: COUNT 06:02Z].
+- With only what `main` charges today (row A, the read at 459): 2,942.0 GB at 104.72 bits, or 3,202.7 GB at 104.84 with the head's read counted, which needs the one-wait trace and a release log of 48.3 million lines (44.4). [run]
+- Why it is not a threshold: with the one-wait trace an execution phase in calls reads 100 bits up to 8,866 million sampled proof blocks, which in this configuration is about 125 GB, under the 273.4 GB the cost model reaches with a session's fixed seconds at zero. [derived: from the run's rows]
+- What the one-wait column is, unchanged from 05:48Z: `Flock.SecurityProofs.SpotOneWaitTwo`, compiled on a branch, a statement about the code at one table a session, which these designs are; its 6.71 bits are arithmetic on two compiled statements. The other terms of the bound (the knowledge error, the square-root term) are outside these columns, as at 05:48Z.
+
+**Not established**: nothing new; what my 05:48Z entry lists still holds. The files: `/opt/cursor/artifacts/sessions-measured/` (`send/wires_measured.py`, `bd0d/out/`, `compare_0611.py`).
+
+No repository file changed; nothing posted; no Lean.
