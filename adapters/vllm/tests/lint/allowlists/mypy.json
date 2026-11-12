@@ -159,7 +159,6 @@
     {"file": "tests/migrate/test_superseded_quarantine.py", "kind": "dict-item", "symbol": "test_verify_allows_new_ids_only_where_the_promoted_targets_reach", "detail": ""},
     {"file": "tests/migrate/test_superseded_quarantine.py", "kind": "dict-item", "symbol": "test_verify_allows_only_the_deleted_versions_to_go", "detail": ""},
     {"file": "tests/migrate/test_superseded_quarantine.py", "kind": "union-attr", "symbol": "_load", "detail": "", "count": 3},
-    {"file": "tests/observe/test_gen_sampling.py", "kind": "attr-defined", "symbol": "test_sampling_params_uses_request_seed_and_n", "detail": ""},
     {"file": "tests/pipeline/serve_async_commit_gpu.py", "kind": "arg-type", "symbol": "arm", "detail": ""},
     {"file": "tests/pipeline/serve_async_commit_gpu.py", "kind": "union-attr", "symbol": "arm", "detail": ""},
     {"file": "tests/pipeline/serve_prefix_gpu.py", "kind": "operator", "symbol": "serve", "detail": ""},

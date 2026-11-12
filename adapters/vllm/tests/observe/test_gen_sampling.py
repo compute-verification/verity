@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from tests import fake_vllm
 from verity_vllm.config import RowEngine, workload_file
 from verity_vllm.engine import static_schedule
 from verity_vllm.program import prefix_plan as PP
@@ -119,11 +120,7 @@ def test_sampling_params_uses_request_seed_and_n(monkeypatch):
     class SP:
         def __init__(self, **kw):
             calls.append(kw)
-    import sys
-    import types
-    fake = types.ModuleType("vllm")
-    fake.SamplingParams = SP
-    monkeypatch.setitem(sys.modules, "vllm", fake)
+    fake_vllm.install(monkeypatch).set("vllm:SamplingParams", SP)
     fn({"max_tokens": 16, "seed": 3, "n": 2}, {"temperature": 0.7, "top_p": 1.0, "top_k": 0, "seed": 0, "n": 1})
     fn({"max_tokens": 16}, {"temperature": 0.0, "top_p": 1.0, "top_k": 0})
     assert calls[0]["seed"] == 3 and calls[0]["n"] == 2 and calls[0]["temperature"] == 0.7
