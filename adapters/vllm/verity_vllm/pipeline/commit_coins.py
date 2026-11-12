@@ -44,7 +44,7 @@ from verity.protocols.spot.device.challenger import CoinError, LiveOpening, live
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 from verity_vllm.protocols.pouw.h1 import window as PHW
 
-SCHEME = "verity/vllm/commit-coins/v1"
+SCHEME_TAG = "verity/vllm/commit-coins/v1"
 POSITIONS, IDENTITIES, REPLAY = "opening-positions", "opening-identities", "replay"
 FAMILIES = (POSITIONS, IDENTITIES, REPLAY)
 CHALLENGER, IN_PROCESS = "challenger", "in-process"
@@ -115,7 +115,7 @@ class ChallengePhase:
     def reserve(cls, gate: ChallengerGate, peer: str, runs: int, **kw: Any) -> ChallengePhase:
         if runs < 1:
             raise SystemExit("--challenger-gate draws the coins of the Commit's instrumented runs: not without one")
-        return cls(gate, gate.call("reserve", "--peer", peer, "--scheme", SCHEME, "--families", json.dumps(families(runs))),
+        return cls(gate, gate.call("reserve", "--peer", peer, "--scheme", SCHEME_TAG, "--families", json.dumps(families(runs))),
                    runs, **kw)
 
     def _open(self, root: bytes) -> None:
@@ -128,9 +128,9 @@ class ChallengePhase:
             raise CoinError(f"the challenger gate's open answer: {e}") from e
         self.client = PHW.connect(self._address(int(answer["port"])), self.given)
         c = self.client.commitment
-        if c.scheme != SCHEME or [list(f) for f in c.families] != families(self.runs):
+        if c.scheme != SCHEME_TAG or [list(f) for f in c.families] != families(self.runs):
             self.close()
-            raise CoinError(f"the challenger's coins are {c.scheme} {list(c.families)}, not the Commit's {SCHEME} "
+            raise CoinError(f"the challenger's coins are {c.scheme} {list(c.families)}, not the Commit's {SCHEME_TAG} "
                             f"{families(self.runs)}")
 
     def draw(self, root: bytes) -> dict[str, Any]:
@@ -264,7 +264,7 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
                     f"not {audited.session}, the one the auditor's ledger opened for the Commit's root {window['root'][:16]}")
         if given.get("commitment") != trusted.root.hex() or run.get("index") != i:
             return f"run {i}'s coins are not coin {i} of the commitment the auditor's challenger signed"
-    if trusted.scheme != SCHEME or [list(f) for f in trusted.families] != families(len(roots)):
+    if trusted.scheme != SCHEME_TAG or [list(f) for f in trusted.families] != families(len(roots)):
         return f"the challenger's coins are {trusted.scheme} {list(trusted.families)}, not the Commit's {families(len(roots))}"
     for f in FAMILIES:
         if tuple(received.get(f, ())) != tuple(roots):
@@ -285,5 +285,5 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
 
 
 __all__ = ["CHALLENGER", "ChallengePhase", "ChallengerGate", "FAMILIES", "IDENTITIES", "IN_PROCESS", "POSITIONS", "REPLAY",
-           "ROOT_BYTES", "SCHEME", "draw", "families", "identities", "of_options", "positions", "reason", "replay_challenge", "tp_draw",
+           "ROOT_BYTES", "SCHEME_TAG", "draw", "families", "identities", "of_options", "positions", "reason", "replay_challenge", "tp_draw",
            "tp_keys"]

@@ -86,6 +86,7 @@ from verity_vllm.observe.capture_log import read_steps, request_params
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.compact import idx_values as _idx_values
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event
+from verity_vllm.records.schema_ids import BATCH_DECOMP_SCHEMA, X09_PROFILE_SCHEMA
 
 __all__ = ["Options", "derived_shape", "main"]
 
@@ -154,7 +155,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     t0 = time.time()
     profiling = _profile_on()
     force_dag = (settings.get(FORCE_DAG_ENV) or "").strip() == "1"
-    run_prof: dict = {"schema": "cb-a/x09-profile/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir,
+    run_prof: dict = {"schema": X09_PROFILE_SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir,
                       "force_dag": force_dag, "pid": os.getpid(), "phases": {}, "requests": []}
     if profiling:
         _install_profile_counters()
@@ -190,7 +191,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     A_cache: dict[tuple[int, ...], C.RootView] = {}
     components = components if components is not None else {}  # decoded component Progs keyed by dir, shared with the caller
 
-    res: dict[str, Any] = {"schema": "cb-a/batch-decomp/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir,
+    res: dict[str, Any] = {"schema": BATCH_DECOMP_SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir,
                            "log": log_path, "n_requests_header": len(reqs), "n_output_sequences": len(per_req), "engine_steps": len(steps),
                            "oracle": {"digest": B.digest, "instances": len(B.inst), "n_input_nodes": n_in, "fold_form": getattr(B, "fold_form", None),
                                       # the shared weights as a node RANGE (contiguous after the request-owned parameters)

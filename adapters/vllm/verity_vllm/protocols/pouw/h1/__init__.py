@@ -107,12 +107,13 @@ from verity_vllm.protocols.pouw.h1.static import (
     graph_pad,
     utilization,
 )
+from verity_vllm.records.schema_ids import POUW_H1_CALLS_SCHEMA
 
 SCHEME = H.SCHEME
 TILE = (32, 32)
 #: the bits of one s8 entry and of one bf16 output
 I8_BITS, BF16_BITS = 8, 16
-RECORD = "verity-vllm/pouw-h1-calls/v2"
+RECORD = POUW_H1_CALLS_SCHEMA
 CALLS_FILE = "pouw-h1-calls.json"
 #: the declared window Program a server writes under its ``h1/`` (`served.write_program`): its descriptor, gzipped, and
 #: what a period-open of it reads, so ``pouw_h1_circuits --program OUT/h1`` builds its circuit files

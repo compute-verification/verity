@@ -6,6 +6,8 @@ from __future__ import annotations
 import json
 import logging
 import re
+import subprocess
+import sys
 
 import pytest
 
@@ -132,3 +134,13 @@ def test_every_entry_point_records_the_query_of_record():
     from verity_vllm.pipeline.row import _Row
     row_default = next(f.default for f in dataclasses.fields(_Row) if f.name == "query")
     assert QUERY_OF_RECORD == Q_WORD_ID == research_tools.DEFAULT_QUERY == attempt_provenance.DEFAULT_QUERY == row_default == row_records.QUERY_OF_RECORD
+
+
+def test_importing_the_module_loads_neither_numpy_nor_the_core():
+    """`verity_vllm.commit.partition`: `pipeline.row_records` imports `word_check_refusal` from it, so what this module loads at import
+    every module of the row driver loads.  Only `partition_of_record`, when called, reads the partition object's module."""
+    code = ("import sys; before = set(sys.modules); import verity_vllm.commit.partition; "
+            "print(sorted({m.split('.')[0] for m in set(sys.modules) - before} & {'numpy', 'torch', 'verity'}))")
+    child = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)
+    assert child.returncode == 0, child.stderr
+    assert child.stdout.strip() == "[]"

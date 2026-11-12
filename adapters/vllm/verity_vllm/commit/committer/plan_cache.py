@@ -23,6 +23,8 @@ from collections.abc import Hashable, Iterable, Iterator, Sequence
 from itertools import chain
 from typing import Any
 
+__all__ = ["PlanMetas"]
+
 
 class PlanMetas(Sequence):
     """One plan's metas as columns, one flat tuple of names, dtypes, byte counts, offsets, ranks and dimensions each. A tuple
