@@ -106,6 +106,13 @@ def _jsonable(x: Any) -> Any:
     return json.loads(json.dumps(x, default=str))
 
 
+def _per_request(stated: Any, n_req: int) -> dict[str, int]:
+    """A number for each request `r<i>` of the batch, from the table the driver stated: 0 for a request the table leaves
+    out, and for every request when there is no table."""
+    table = stated if stated else {}
+    return {f"r{i}": int(table.get(f"r{i}", 0)) for i in range(n_req)}
+
+
 def _collector_counters(rc: Any) -> dict[str, Any]:
     """The counters a run's native collector stated; none when its committer has no collector, or states none."""
     stated = rc.extra.get("native_collect")
@@ -1003,7 +1010,7 @@ class TP2CaptureWorkerExtension:
             return {"skipped": f"B={n_req} > 1 but the rank's collector recorded no step_rows ({getattr(com, 'step_rows_why', None)}) -- no coverage verdict"}
         try:
             requests = [f"r{i}" for i in range(n_req)]
-            arrivals = {f"r{i}": int((st.get("arrivals") or {}).get(f"r{i}", 0)) for i in range(n_req)}
+            arrivals = _per_request(st.get("arrivals"), n_req)
             man_doc = st.get("manifest_doc") if st.get("required_manifest") else None
             binder = Binder.of_manifest(man_doc, rank=rank, ports=source_ports(com.sources), arrivals=arrivals) if man_doc else None
             bmap = bd.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, rank=rank, weight_registration=rc.weight_registration, request_rows=request_rows, binder=binder,
@@ -1019,14 +1026,14 @@ class TP2CaptureWorkerExtension:
             if tps is not None:
                 by_path = {d["op_path"]: d for d in struct["modules"]}
                 for site, cls in tps.sites:
-                    mem = f"shard_rank{rank}" if cls == "LogitsProcessor" else f"part_rank{rank}"
+                    mem = f"shard_rank{rank}" if cls == LC.LOGITS else f"part_rank{rank}"
                     if site in by_path:
                         by_path[site]["members"] = list(by_path[site]["members"]) + [mem]
                     else:
                         struct["modules"].append({"op_path": site, "class": cls, "invocations": 1, "members": [mem]})
                     tp_members += 1
                 struct["tp_partial_sites"] = len(tps.sites)
-            caps = {f"r{i}": int((st.get("caps") or {}).get(f"r{i}", 0)) for i in range(n_req)}
+            caps = _per_request(st.get("caps"), n_req)
             horizon = max(arrivals[k] + caps[k] for k in caps) if any(caps.values()) else len(rc.steps)
             wl = {"program_digest": pd, "requests": requests, "steps": horizon, "ranks": [rank],
                   "request_steps": {k: list(range(arrivals[k], arrivals[k] + caps[k])) for k in caps} if any(caps.values()) else None}
@@ -1041,7 +1048,8 @@ class TP2CaptureWorkerExtension:
                 pop_all, man_hdr = bd.load_required_manifest(st["required_manifest"], pd, requests=requests, steps=horizon, ranks=[rank], arrivals=arrivals)
                 pop = [i for i in pop_all if int(i[7]) == rank]          # identity = (pd, rid, step, inv, op, member, (lo, hi), rank)
                 man_hdr["rows_for_rank"], man_hdr["rows_all_ranks"] = len(pop), len(pop_all)
-                man_hdr["program_digest_for_rank"] = ((st.get("manifest_doc") or {}).get("program_digest_per_rank") or {}).get(str(rank))
+                per_rank = man_doc.get("program_digest_per_rank") if man_doc else None
+                man_hdr["program_digest_for_rank"] = per_rank.get(str(rank)) if per_rank else None
                 source = "required-manifest (Program(rank) x canonical query, rows with rank=r)"
                 if not pop:
                     return {"error": f"required manifest has no rows for rank {rank} ({man_hdr.get('path')})", "rank": rank}
@@ -1054,13 +1062,17 @@ class TP2CaptureWorkerExtension:
             # to WHICH block a request was bound to; this is what makes an omitted / relabelled / duplicated request fail named on a rank
             comp = bd.composition_check(man_hdr, bmap) if (man_hdr is not None and hasattr(bd, "composition_check")) else None
             if comp is not None:
-                cov["composition"] = {k: v for k, v in comp.items() if k != "problems"} | {"problems": (comp.get("problems") or [])[:3]}
+                problems = comp.get("problems")
+                cov["composition"] = {k: v for k, v in comp.items() if k != "problems"} | {"problems": problems[:3] if problems else []}
             if man_hdr is not None and man_hdr.get("complete") is False:            # unmodelled Program families -> not a population
-                cov = dict(cov, ok=False, error="manifest incomplete: unmodelled Program families " + "; ".join(f"{k} x{v}" for k, v in sorted((man_hdr.get("unmodelled") or {}).items())))
+                unmodelled = man_hdr.get("unmodelled")
+                families = "; ".join(f"{k} x{v}" for k, v in sorted(unmodelled.items())) if unmodelled else ""
+                cov = dict(cov, ok=False, error="manifest incomplete: unmodelled Program families " + families)
             elif man_hdr is not None and man_hdr.get("program_digest_for_rank") not in (None, pd):
                 cov = dict(cov, ok=False, error=f"manifest Program digest for rank {rank} {str(man_hdr.get('program_digest_for_rank'))[:16]} != this rank's Program {pd[:16]}")
             elif comp is not None and not comp.get("ok"):
-                cov = dict(cov, ok=False, missing=list(cov.get("missing") or []), error=f"rank {rank}: " + str(comp.get("error") or "composition check failed"))
+                missing = cov.get("missing")
+                cov = dict(cov, ok=False, missing=list(missing) if missing else [], error=f"rank {rank}: " + str(comp.get("error") or "composition check failed"))
             ctx_ok, ctx_why = bd.map_context_check(bmap, rc) if hasattr(bd, "map_context_check") else (None, "n/a")
             st["bmap"] = bmap
             st["pop"] = pop

@@ -60,6 +60,11 @@ def test_adapter_execution_of_workload_and_labels():
     assert va.execution_of_workload({"execution": "bi-compiled", "sweep": {"row_id": EAGER_ROW}}) == "bi-compiled"
     assert va.execution_of_workload({"requests": []}) is None
     assert va.execution_of_workload(None) is None
+    # the row id's own grammar: a top-level id is read as the sweep's is, the sweep's first; an id of one field names no execution
+    assert va.execution_of_workload({"row_id": COMPILED_ROW}) == "bi-compiled"
+    assert va.execution_of_workload({"row_id": COMPILED_ROW, "sweep": {"row_id": EAGER_ROW}}) == "bi-eager"
+    assert va.execution_of_workload({"sweep": {"row_id": "one-field"}}) is None
+    assert va.execution_of_workload({"sweep": {"row_id": 7}}) is None
     assert va.execution_label_of(True) == "bi-eager" and va.execution_label_of(False) == "bi-compiled" and va.execution_label_of(None) is None
     assert va.execution_label_of(True, False) == "eager" and va.execution_label_of(False, False) == "compiled"
     assert va.execution_label_of(False, None) is None
