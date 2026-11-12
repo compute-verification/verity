@@ -519,7 +519,11 @@ def test_the_header_supplies_the_configuration_a_profile_does_not_state(memory):
         assert r.weights_type == own.weights_type == b1.weights_type(C) and r.report.by_spec == own.report.by_spec
 
 
-@pytest.mark.parametrize("workload", [None, {}, {"requests": None}, {"requests": []}])
+#: what reads as no document: a null, and each empty or zero value
+EMPTY: tuple = (None, {}, [], 0, "", False)
+
+
+@pytest.mark.parametrize("workload", [*EMPTY, *({"requests": empty} for empty in EMPTY)])
 def test_a_header_without_requests_is_refused(memory, workload):
     import dataclasses
 
@@ -540,15 +544,15 @@ def test_a_weight_root_ahead_of_the_run_header_is_refused(memory):
 
 
 def test_a_header_reads_alike_without_children_sampling_and_a_tensor_parallel_note(memory):
-    """A workload's `children` and `sampling` and the notes' `tp2` are optional: missing, null and empty each read as none."""
+    """A workload's `children` and `sampling` and the notes' `tp2` are optional: missing, null, and empty or zero each read as none."""
     import dataclasses
 
     hdr = toy_log()[0]
     own = fold(toy_log(), toy_profile(), strict=True, with_program=False)
     more: dict
     notes: dict | None
-    for more in ({}, {"children": None, "sampling": None}, {"children": [], "sampling": {}}):
-        for notes in (None, {}, {"tp2": None}, {"tp2": {}}, {"tp2": {"world_size": 1}}):
+    for more in ({}, *({"children": empty, "sampling": empty} for empty in EMPTY)):
+        for notes in (None, {}, *({"tp2": empty} for empty in EMPTY), {"tp2": {"world_size": 1}}):
             evs = toy_log()
             evs[0] = dataclasses.replace(hdr, workload={"requests": hdr.workload["requests"], **more}, notes=notes)
             r = fold(evs, toy_profile(), strict=True, with_program=False)

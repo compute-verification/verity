@@ -1,5 +1,6 @@
-"""What the fold's patterns read when a document they read is missing, null, empty or full: a run header's sampling, backends, GPU
-and tensor-parallel facts, a step's KV groups, a sampler's scratch, the capture's external-buffers note and a Build's `result.json`.
+"""What the fold's patterns read when a document they read is missing, null, empty or zero, or full: a run header's sampling,
+backends, GPU and tensor-parallel facts, a step's KV groups, a sampler's scratch, the capture's external-buffers note and a Build's
+`result.json`.  Each value of `EMPTY` in a document's place reads as the document left out.
 
 The readers: `verity_vllm.observe.fold.patterns.sampling`, `verity_vllm.observe.fold.profiles.gen_ov_sampling_patterns`,
 `verity_vllm.observe.fold.patterns.fp8`, `verity_vllm.observe.fold.patterns.int8`, `verity_vllm.observe.fold.patterns.target`,
@@ -43,10 +44,13 @@ from verity_vllm.observe.fold.resolver import StepContext, external_buffers
 from verity_vllm.observe.fold.supplied import program_registered_values
 from verity_vllm.observe.fold.tree import step_events
 
+#: what reads as no document: a null, and each empty or zero value
+EMPTY: tuple = (None, {}, [], 0, "", False)
+
 
 def _absent(key: str) -> list[dict]:
-    """What a document may hold where it holds no sub-document under `key`: no such key, a null, an empty one."""
-    return [{}, {key: None}, {key: {}}]
+    """What a document may hold where it holds no sub-document under `key`: no such key, or a value of `EMPTY`."""
+    return [{}, *({key: empty} for empty in EMPTY)]
 
 
 def _ctx(profile=None, model=None, workload=None, notes=None, scratch=None) -> StepContext:
@@ -81,7 +85,9 @@ def test_request_sampling_reads_each_requests_own_values_then_its_record_then_th
     requests = [{"request_id": "a", "seed": 7, "top_p": 0.5}, {"request_id": "b"}]
     plain = request_sampling(_ctx(workload={"requests": requests}))
     assert plain == {"a": {"seed": 7, "temperature": 0.0, "top_p": 0.5, "top_k": 0}, "b": {"seed": None, "temperature": 0.0, "top_p": 1.0, "top_k": 0}}
-    assert request_sampling(_ctx(workload={"requests": requests, "sampling": {"per_request": []}, "children": []})) == plain
+    for empty in EMPTY:
+        assert request_sampling(_ctx(workload={"requests": requests, "sampling": {"per_request": empty}, "children": empty})) == plain, empty
+        assert request_sampling(_ctx(workload={"requests": empty, "sampling": {"temperature": 0.5}})) == {}, empty
     sampling = {"temperature": 0.7, "top_p": 0.9, "top_k": 4, "per_request": [{"request_id": "b", "temperature": 0.2, "top_k": 0}]}
     children = [{"request_id": "0_a", "parent": "a", "seed": 7}, {"request_id": "1_a", "parent": "a", "seed": 8},
                 {"request_id": "0_z", "parent": "z", "seed": None}]
@@ -95,10 +101,14 @@ def test_the_seeded_samplers_request_facts():
     assert OV.request_seeds(_ctx()) == {} == OV.request_seeds(_ctx(workload={"requests": [], "children": []}))
     workload = {"requests": [{"request_id": "a", "seed": "7"}, {"request_id": "b"}], "children": [{"request_id": "0_a", "seed": 8}, {"request_id": "1_a"}]}
     assert OV.request_seeds(_ctx(workload=workload)) == {"a": 7, "b": None, "0_a": 8, "1_a": None}
-    assert OV.request_temperatures(_ctx()) == (0.0, {}) == OV.request_temperatures(_ctx(workload={"sampling": {"per_request": []}}))
+    assert OV.request_temperatures(_ctx()) == (0.0, {})
+    for empty in EMPTY:
+        assert OV.request_seeds(_ctx(workload={"requests": [{"request_id": "b"}], "children": empty})) == {"b": None}, empty
+        assert OV.request_temperatures(_ctx(workload={"sampling": {"temperature": 1, "per_request": empty}})) == (1.0, {}), empty
+        assert OV.sampling_filters_off({"top_k": -1, "per_request": empty}) is None, empty
     sampling = {"temperature": 1, "per_request": [{"request_id": "b", "temperature": 0}]}
     assert OV.request_temperatures(_ctx(workload={"sampling": sampling})) == (1.0, {"b": 0.0})
-    assert OV.sampling_filters_off({}) is None and OV.sampling_filters_off({"top_k": -1, "top_p": 1.0, "per_request": []}) is None
+    assert OV.sampling_filters_off({}) is None and OV.sampling_filters_off({"top_k": -1, "top_p": 1.0}) is None
     assert OV.sampling_filters_off({"top_k": 3}) == "top_k/top_p (3/None)"
     assert OV.sampling_filters_off({"per_request": [{"request_id": "b"}, {"request_id": "c", "top_p": 0.5}]}) == "per-request top_k/top_p (None/0.5) for c"
 
@@ -151,7 +161,7 @@ def test_a_kv_group_without_a_block_table_for_the_request_is_a_geometry_error():
     layer, tables = "model.layers.0.self_attn.attn", dict(start.block_tables)
     request = next(iter(tables))
     held: dict
-    for held in ({}, {"block_tables": None}, {"block_tables": {}}, {"block_tables": {"other": tables[request]}}):
+    for held in (*_absent("block_tables"), {"block_tables": {"other": tables[request]}}):
         groups = [{"layers": [layer], "block_size": start.block_size, **held}, {"layers": ["other"], "block_size": start.block_size}]
         with pytest.raises(GeometryError, match="no block table for request"):
             kv_slots(context(dataclasses.replace(start, kv_groups=groups)), request, 1, layer)
@@ -163,7 +173,8 @@ def test_a_kv_group_without_a_block_table_for_the_request_is_a_geometry_error():
 
 def test_a_sampler_without_its_first_stage_claims_no_argmax_and_no_gather():
     """The argmax and the gather of a step whose blockwise kernel no sampler has seen: each two-stage sampler leaves them to the
-    patterns after it, with no state of its own, with the state it makes, and with one that holds only another view's records."""
+    patterns after it, with no state of its own, with the state it makes, with one that holds only another view's records, and
+    with a value of `EMPTY` in the state's place or in the place of each of its tables."""
     events, start = decode_step(sampler="gumbel")
     roots = {root.op: root for root in step_events(events).roots}
     stochastic = {"greedy": False, "temperature": 0.7}
@@ -180,6 +191,17 @@ def test_a_sampler_without_its_first_stage_claims_no_argmax_and_no_gather():
                         table[-1] = {}
             assert sampler.match(roots["aten.argmax.default"], ctx) is None, (sampler.name, state)
             assert sampler.match(roots["aten.gather.default"], ctx) is None, (sampler.name, state)
+        for empty in EMPTY:
+            for whole in (True, False):
+                ctx = context(start, None, **({} if sampling is None else {"sampling": sampling}))
+                made = sampler._state(ctx)
+                (key,) = ctx.scratch
+                if whole:
+                    ctx.scratch[key] = empty
+                else:
+                    made.update({name: empty for name, table in made.items() if isinstance(table, dict)})
+                assert sampler.match(roots["aten.argmax.default"], ctx) is None, (sampler.name, empty, whole)
+                assert sampler.match(roots["aten.gather.default"], ctx) is None, (sampler.name, empty, whole)
 
 
 def test_the_external_buffers_note_gives_the_views_it_records_with_an_offset_and_strides():
