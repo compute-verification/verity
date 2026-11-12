@@ -82194,3 +82194,68 @@ Mailbox read: 31 sections, the last 09:57Z, read at 09:58Z. One word of my 09:59
 - **Line numbers of my 09:02Z entry** were read at `19fb19a21e40`. `main` has since changed `tools/verity/check/check.py`, `tests/test_boundaries.py`, `tests/test_documented_commands.py`, the registry and remote's README [read: `git diff --name-only 19fb19a21e40 origin/main`], so its line numbers in those five files have moved; the facts stand. I recount them in the CI-489 line before the move is marked.
 - **What I hold now, each waiting on someone else:** the one_stage change (`3f29ae86e4a4`), for the hour lean's merge is on `main`; the staging of the move, for #9202 and lean's merge on `main`; the CI-489 line, an hour before the move's mark. #9178 and #9196 are open and marked.
 - Not run: any Lean build; the check.
+
+## WIRED, Thu 12 Nov 10:05Z: #9215's ready line is below (head `205129204ded`, every run exit 0, read by FINDER); #9043 is not ready: `main` moved and its head conflicted in the cap, new head `b2585b1f5bb6`, quick suites passed there, the records run `b9fe` took its slot at 10:03:41Z; `4204` had ended at 08:59Z, so nothing was cancelled or relaunched
+
+Mailbox read first (157 lines, newest section 09:26Z; unchanged at 10:04Z). FINDER's 09:22Z entry read whole.
+
+**1. The relaunch: none made.**
+
+- [run] `r20261112-082545-4204`, fetched 09:29Z before anything else: done, rc 0, started 08:27:04Z, ended 08:59:10Z; outcome pass on the verifier package, `security` and `security/Properties`; `regenerated {}`. Your 09:25Z "submitted" was a stale reading. I cancelled nothing and launched nothing for it.
+- [run] vy-nebius-cpu-7 starts runs now: `6be4` (below) took slot r11 there at 09:48:30Z and ended rc 0.
+
+**2. Not in your brief: `main` moved under #9043, and its head had to move.**
+
+- [run] `main` is `33faab2be81c`. Its cap of unread proof modules for `Proofs/Flock` is 267 modules and 2,141 declarations (commit `058136e656`: another change's 2 and 11).
+- [run] #9043's head `8209970890da` no longer merged with `main`: one conflict, `tools/verity/lean/unread-caps.json`. #9215's head merges with no conflict.
+- [run] I merged `main` into `cursor/proofs-wired-7ac3` and set the cap to 272 and 2,283: `main`'s raised by this change's 5 and 142, your 01:19Z rule. New head **`b2585b1f5bb6`**, pushed 09:42Z. Against `main` it is the same 8 files, 2,104 lines added, 2 changed.
+- [derived] The merge leaves the five files' Lean as the earlier runs checked it: since `19fb19a21e40` `main` modified four Lean files (the import lists of `Proofs.Flock` and `Proofs.WeightSecurity`, two benchmark programs), none of which the five import, and added three modules under `Proofs/Flock` that declare no name of the five ([run] by text: 24 names against 142).
+- [run] The merge was not a clean one, so I ran both checks again at the new head: quick suites `r20261112-094511-6be4` (rc 0) and the records run `r20261112-094323-b9fe` (on vy-nebius-cpu-1; in line from 09:44:56Z, slot r9 taken at 10:03:41Z, running).
+- [guess] If you take the hand-made part of the merge (two numbers in the caps file) as needing no records run, #9043's line in 4 is ready as it stands; I do not assume that.
+
+**3. #9215: ready line.**
+
+- [run] Head `205129204ded` (`cursor/proofs-wired-deciders-ef61`), unchanged. Not marked.
+- [run] `r20261112-082513-fd7c`, exit 0: quick suites, 59 suites, 59 passed (1 cached), 0 failed.
+- [run] `r20261112-082545-4204`, exit 0: records run. The verifier package passes (5,661 declarations in 51 modules, no guarantee listed), `security` (27,217 declarations, 1,121 guarantees), `security/Properties` (3,093 and 465), `security/Proofs` (195,578 declarations in 3,889 modules). **No lock record moves**: `regenerated {}`, and the lock it kept is the commit's. A `lean-fast/v1` result, without the kernel replay.
+- [run] `r20261112-084825-db7a`, exit 0: `Spot/SecondWires.lean` Lean exit 0, `Spot/DifftestMain.lean` Lean exit 0, the suite `verity-core-sampled-proofs` under `-k second_wires` 47 passed. Also `WiresDecided.lean` (not in this pull request) Lean exit 0 in 326 s, none of its 9 theorems beyond the three axioms.
+- [run] `fd7c` and `4204` ran at `55ef724d1f02`, the commit under the head's clean merge of `main`; `db7a` at `cc4dca9fe32f`, whose verifier package differs from this head's in one line of the lock's `exempt` reasons.
+- [run] `git merge-tree --write-tree origin/main HEAD` at `main` `33faab2be81c`: no conflict. `main` has changed no file of the verifier's Lean packages since `19fb19a21e40`.
+- [run] The step against lean's `f3837f57d113`: the head stops in 12 files, all among `main`'s own 23; none beyond `main`'s.
+- [run] At the head against `main` now: `ratchet_gate.py` exit 0; `unread_gate.py` exit 0.
+- [relayed] Read by FINDER, 09:22Z: all three statements read as they say. What it did not check: it built nothing and ran no Lean; it did not trace that `two h s` refuses a statement whose file fails to parse; its Python run (60,000 layouts) tests its own transcription and the mirror, not the Lean; [guess] whether an honest served design passes `wiresWide`. Its open point that nothing showed the theorem elaborates at `cc4dca9fe32f` is closed by `db7a` [run]; its [guess] on rows named `π#j` is answered in 6.
+
+**4. #9043: not ready, one run out.**
+
+- [run] Head `b2585b1f5bb6` (`cursor/proofs-wired-7ac3`). Not marked.
+- [run] At this head: `r20261112-094511-6be4`, exit 0: quick suites against `33faab2be81c`, 6 suites, 6 passed (0 cached), 0 failed. `r20261112-094323-b9fe`: the records run, running since 10:03:41Z.
+- [run] At the head below it, `8209970890da`: `r20261112-084216-f9a3` exit 0 (6 suites, 6 passed); `r20261112-084241-b4cd` exit 0 (`security/Proofs` 195,616 declarations in 3,882 modules, `security` 27,098 and 1,103 guarantees, `security/Properties` 3,093 and 465; **no lock record moves**, `regenerated {}`); `r20261112-084126-12f1` run exit 0, per file below.
+- [run] `12f1`, per file: Lean exit 0 on all five, no theorem beyond the three axioms (46, 15, 21, 4, 26 theorems). The step for a name declared twice: `Rewire.lean` exit 0, `WiredScope.lean` exit 0, **`AddressesAt.lean`, `WiredAt.lean`, `WireMap.lean` exit 1**. It stopped before those files' own names, on `Claims.stepWith.eq_1` declared by two of `main`'s modules that #9043 does not touch (`Proofs.Flock.Claims.CompleteFails` with `Claims.Bridge.OfGame` or `Claims.Finder`), on vy-nebius-cpu-13's `build-3`.
+- [derived] What stands in for that step: `b4cd` built `security/Proofs`' roots, which import those modules and the five files together, and passed. I did not rerun the step.
+- [run] `git merge-tree --write-tree origin/main HEAD`: no conflict. The step against lean's `f3837f57d113`: the head stops in 23 files, the same 23 as `main`; none beyond `main`'s.
+- [run] `ratchet_gate.py origin/main HEAD` exit 1 on the allowlist's two lines and nothing else (`AddressesAt.lean` 0 to 4, `WireMap.lean` 0 to 3): the red that stands as ruled. `unread_gate.py` exit 0. The retired-terms lint finds what the list allows in each of the five (0, 0, 0, 4, 3).
+- [derived] The cap's count is not in any of my runs: `--records` prints none. The full Lean check's ratchet judges 272 and 2,283. If `main`'s cap moves again first, the conflict returns.
+
+**5. The words (bodies only; both heads' Lean untouched).**
+
+- [run] #9215's body replaced at 09:52Z (`research queue edit`): the "one line" claim now holds for `rowsUnder` and `namesOnce` only, with what a caller of `wiresWide` must do first; the theorem is about the registration and the check of the wires is its hypothesis; the call sits after `designOk`; the forms that take the wires and rows as arguments are outside the theorem; a "Not shown" list of six; one line naming the goal I think it serves, "Two-stage soundness proved for running code" (`proofs/spot-two-stage-sound`), PRF-571 left named.
+- [run] #9043's body replaced at 09:56Z and 10:03Z: a "Not shown" list with 6's answer, the new head and cap, the runs above.
+- [derived] No docstring edited: every run for #9215's head had passed, so the head stays. Owed when `WiresDecided.lean` goes into its pull request: its docstring's "the run's parts" and "what the verifier holds of the run" become the registration's.
+
+**6. Rows named `π#0`, `π#1`: in one-stage windows yes, in a two-stage file no, and the verifier does not keep it out.**
+
+- [read] The verifier's check of a file against its Program accepts a parameter on several rows named `π#j` (`Spot/Bits.lean`: `paramOf`, `runsOf`, `check`). #9043's map finds a wire by the row's name in the reader's file (`heldWire h … s.2.2.row`), so at such a file a wire at `π` moves nothing and `wiresMove` asks nothing.
+- [read] One-stage windows use the form: a tensor-parallel window lays a combine unit's `parts` on one row a rank (`pipeline/tp/wires.py`, `cuts`; a test names `parts#1`).
+- [run] `SparseMlaCombine_v1{NSPLIT=2,DV=64,…}`: its rows under its layout are `lse#0`, `lse#1`, `o#0`, `o#1`; serving's window stages them as `in0.0`, `in0.1`, `in1.0`, `in1.1`; `interior_rows.named` refuses it as an interior member ("not one whole row a parameter").
+- [run] The second stage's staged files for `TokenSelectChunk_v2{C=64}` and `TokenSelectCombine_v2{V=4096,C=64}` (`member_stager` on `named(unit_member(…))`): input ports `x` (the chunk) and `x0`, `best`, `idx` (the combine), output ports `o0`, `o1` and `o0`; no `#` in a port name.
+- [derived] Both refusals are the adapter's and Flock's Python, the prover's side. I read no file of a served run and no other template.
+
+**7. For lean or infra, yours to pass on: the step for a name declared twice.**
+
+- [run] `lean_changed.py --try FILE --siblings` exits 1 on `Claims.stepWith.eq_1` in two of `main`'s own modules, before it checks FILE's names (`12f1`, three files of five).
+- [guess] `stepWith.eq_1` is an equation lemma Lean makes where it is first needed, so two builds can each hold one while a root that imports both still builds. If so the step refuses a sound tree; its own message offers a stale build as the other cause.
+
+**8. Not done, and what I wait for.**
+
+- Marked nothing. Opened nothing. `3b9e` not opened. Pull request 2 not started.
+- I wait for `r20261112-094323-b9fe`: about 40 minutes from its slot ([run] `b4cd` took 40 from its slot on another machine), so about 10:45Z [guess]. Then #9043's ready line with its exit and whether a record moves.
