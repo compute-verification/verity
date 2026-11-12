@@ -325,6 +325,32 @@ def test_a_relabel_that_raises_leaves_its_rank_to_a_full_derive(tmp_path):
     assert _relabeled(row) == [] and all(os.path.isfile(f"{row.rank(r)}/{REQ}/result.json") for r in range(W))
 
 
+def test_the_step_guard_says_why_a_rank_was_not_compared(tmp_path):
+    """A rank is compared only when its own step and the template's relabel of it were both derived; otherwise the guard names
+    whichever failed, and for a relabel the reason the template's report gives (none: "no emit report")."""
+    bdir, chk, t = str(tmp_path), str(tmp_path / "relabel_check"), 1
+
+    def derived(d: str, ok: bool = True) -> None:
+        os.makedirs(d)
+        Path(d, "result.json").write_text(json.dumps({"ok": ok}))
+
+    for r in range(6):
+        derived(f"{bdir}/rank{r}/build_step", ok=r != 3)
+    derived(f"{chk}/rank0/build_step")
+    os.makedirs(f"{chk}/rank{t}")
+    report = [{"rank": 0, "ok": True}, {"rank": 2, "ok": False, "error": "RuntimeError: emit of rank 2 failed"}, {"rank": 5, "ok": False}]
+    Path(f"{chk}/rank{t}/build_step.relabel.json").write_text(json.dumps({"schema": emit_ranks.SCHEMA, "ranks": report}))
+    assert RB.step_guard(bdir, chk, 6, t) == {
+        0: {"ok": True},
+        1: {"ok": False, "why": "the template's step derive failed"},
+        2: {"ok": False, "why": "its relabel failed: RuntimeError: emit of rank 2 failed"},
+        3: {"ok": False, "why": "its step derive failed"},
+        4: {"ok": False, "why": "its relabel failed: no emit report"},
+        5: {"ok": False, "why": "its relabel failed: no emit report"}}
+    os.remove(f"{chk}/rank{t}/build_step.relabel.json")      # the template's process died before it wrote its report
+    assert RB.step_guard(bdir, chk, 6, t)[2] == {"ok": False, "why": "its relabel failed: no emit report"}
+
+
 def test_compare_dirs_names_the_first_difference(tmp_path, monkeypatch):
     a, b = tmp_path / "a", tmp_path / "b"
     for d in (a, b):

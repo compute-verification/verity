@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from pathlib import Path
 
 import numpy as np
 
@@ -46,12 +47,12 @@ def _add_promoted(d: str, *, producer_spec: str = PRODUCER_SPEC, with_producer: 
     data = _bf16(n, 9)
     sha = hashlib.sha256(data).hexdigest()
     fn = f"values/0/{sha[:16]}.bin"
-    open(os.path.join(d, "capture", fn), "wb").write(data)
-    snap = json.load(open(os.path.join(d, "capture", "snapshots.json")))
+    Path(os.path.join(d, "capture", fn)).write_bytes(data)
+    snap = json.loads(Path(os.path.join(d, "capture", "snapshots.json")).read_text())
     snap["entries"].append({"event": P_EVENT, "path": "outs", "view": {"$v": [P_ALLOC, 0, [n, H], [H, 1], "bfloat16", "cuda:0"]}, "dtype": "bfloat16",
                             "shape": [n, H], "strides": [H, 1], "byte_offset": 0, "nbytes": len(data), "layout": "spanned-storage-bytes",
                             "sha256": sha, "file": fn, "step": 0})
-    json.dump(snap, open(os.path.join(d, "capture", "snapshots.json"), "w"))
+    Path(os.path.join(d, "capture", "snapshots.json")).write_text(json.dumps(snap))
     with open(os.path.join(d, "instances.jsonl"), "a") as f:
         row = 0
         for u in order:
@@ -177,14 +178,14 @@ def test_promoted_resolution_ignores_a_consumer_reading_only_part_of_the_value(t
     d, vals = make_match(str(tmp_path))
     data = _add_promoted(d)
     # rewrite the consumer instances' operand as the first half of each row
-    lines = open(os.path.join(d, "instances.jsonl")).read().splitlines()
+    lines = Path(os.path.join(d, "instances.jsonl")).read_text().splitlines()
     out = []
     for ln in lines:
         m = json.loads(ln)
         if m.get("hint", "").startswith(CONSUMER_OP + "/"):
             m["operand_views"][0]["shape"] = [H // 2]
         out.append(json.dumps(m))
-    open(os.path.join(d, "instances.jsonl"), "w").write("\n".join(out) + "\n")
+    Path(os.path.join(d, "instances.jsonl")).write_text("\n".join(out) + "\n")
     bmap, committed = _promoted_bmap(vals, data)
     res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed), producers=OC.producers_of(_manifest()))
     assert res["result"] is True and res["complete"] is True, res

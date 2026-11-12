@@ -10,7 +10,6 @@ import hashlib
 import itertools
 import json
 import struct
-import sys
 import types
 from pathlib import Path
 from typing import Any
@@ -18,6 +17,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from tests import fake_vllm
 from tests.check.opened import commit_steps
 from tests.pipeline.test_config_run import _tp
 from tests.pipeline.test_row import TP_DENSE, _opts
@@ -684,7 +684,7 @@ def test_a_tp_commit_at_an_unproven_world_drops_the_deferral_before_it_takes_its
     def acquire(*a, **k):
         raise _AtLease(args.replay_deferred)
 
-    monkeypatch.setitem(sys.modules, "vllm", types.SimpleNamespace(LLM=None))
+    fake_vllm.install(monkeypatch)
     monkeypatch.setattr(engine_profile, "apply_env", lambda *a, **k: None)
     monkeypatch.setattr(vllm_adapter, "load_workload", lambda *a, **k: {})
     monkeypatch.setattr(lease, "acquire", acquire)

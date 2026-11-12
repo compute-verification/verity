@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import ROOT, option, row_file
+from verity_vllm.records.schema_ids import REBASELINE_DIGESTS_SCHEMA
 
 __all__ = ["COMMANDS", "build_programs", "main", "resolve", "row_digests"]
 
@@ -309,7 +310,7 @@ def main(a: Any) -> int:
         return 0 if rep["ok"] else 1
     elif a.cmd == "digests":
         rows = [row_digests(Path(d)) for d in a.row_dirs]
-        text = json.dumps({"schema": "verity-vllm/rebaseline-digests/v1", "rows": rows}, indent=1) + "\n"
+        text = json.dumps({"schema": REBASELINE_DIGESTS_SCHEMA, "rows": rows}, indent=1) + "\n"
         if a.out:
             Path(a.out).write_text(text)
         md = digests_markdown(rows)
