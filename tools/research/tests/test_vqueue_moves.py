@@ -1,7 +1,8 @@
 """A `Move:` PR in the verified queue: `decide` builds it last in its batch, one a batch, with nothing above it and nothing
 below or beside it that changes `tools/move/`'s scripts; the loop regenerates it on its batch's tip with `main`'s
-`rename.py` and `move_check.py`, given its map's path rows as `--map`, and a certified one lands on its ready mark alone, its
-certificate in the build line, while an uncertified one needs a land verdict.  The simulated queue holds `decide` to those
+`rename.py` for a word map (`move_check.py` given its path rows as `--map`) or `layout.py` for a path map, and `main`'s
+`move_check.py`, and a certified one lands on its ready mark alone, its certificate in the build line, while an uncertified
+one needs a land verdict.  The simulated queue holds `decide` to those
 rules over every seed; the loop's tests run its build against a throwaway origin whose `main` holds stub scripts."""
 from __future__ import annotations
 

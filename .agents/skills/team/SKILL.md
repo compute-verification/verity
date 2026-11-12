@@ -63,9 +63,9 @@ it, and fast-forwards `main` only to a candidate with no new failure:
 - Reviewers ci staffs, never the owner, record a verdict at the head (`research queue review N --land|--hold REASON --by
   LANE`); no other per-head grant exists. While drive.toml's `lowrisk_lane` is on, a PR touching nothing its
   `lowrisk_excludes` names (Lean, locks, Lake files, the verifiers, the soundness-path Python) lands on its ready mark
-  alone, with no verdict (the low-risk lane), as does a move's PR (`Move: tools/move/MAP.toml`), whatever it touches,
-  once the loop certifies its map, from `main`, rerun on its batch's tip; under `signed_verdicts`, not one changing
-  `SIGNED_GUARDS`.
+  alone, with no verdict (the low-risk lane), as does a move's PR (`Move: tools/move/MAP.toml`, one word or path map),
+  whatever it touches, once the loop certifies its map, from `main`, rerun on its batch's tip; under `signed_verdicts`,
+  not one changing `SIGNED_GUARDS`.
 - The loop builds candidates from the marked PRs with a land verdict or on their mark alone, in the priority file's order
   and then by mark time, each after the PRs it contains, so a stack lands its bases first: `main`'s tip, or the candidate
   below, and one `Queue: #N` merge per PR. Stack only on your own unlanded PR, two deep at most: hand a longer chain in

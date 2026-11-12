@@ -4,7 +4,8 @@ branch across a generated layout move by running the move's own script on it, in
 
 With no `--move-commit`, the moves are every commit `--main` (default origin/main) has and the branch lacks whose message
 has a move line, oldest first: `Move: MAP` runs `tools/move/rename.py --map MAP`, as drive and `stage.py` write it, and
-`Layout-move: MAP` (with `--no-lock` when the move ran so) runs `tools/move/layout.py --map MAP`, as `stage.py` writes it.
+`Layout-move: MAP` (with `--no-lock` when the move ran so) runs `tools/move/layout.py --map MAP`, as drive and `stage.py`
+write it.
 The branch crosses each in turn as below, the last merging `--onto` (default `--main`), so one command carries it across a
 window's moves; one of them it is based after may be skipped (below). A `--move-commit` without `--script` runs its own
 move line's script, else `layout.py`; with `--script`, that script and its `--script-arg`s.

@@ -76,11 +76,17 @@ run names one and bundles the branch into its outputs, and the lead pushes it fr
         --bundle "$OUT/move.bundle" --certificate "$OUT/cert.json"'
     research fetch RUN --all && git fetch ~/.research/runs/RUN/out/move.bundle BRANCH:BRANCH && git push -u origin BRANCH
 
-A move's PR, whose body says `Move: tools/move/NAME.toml`, lands on its ready mark alone, with no land verdict, whatever
-it touches: the verified queue reruns the map, from `main`, on its batch's tip, over whatever landed since, and takes it
-once `move_check.py` certifies that run (the team skill's "Landing"). It needs a land verdict while drive.toml's
-`lowrisk_lane` is off, and under `signed_verdicts` when it changes a `SIGNED_GUARDS` file. Once it lands, each open branch
-crosses it with `restack.py`.
+A move's PR, whose body says `Move: tools/move/NAME.toml` (one map, a word map or a path map), lands on its ready mark
+alone, with no land verdict, whatever it touches: the verified queue reruns the map with `main`'s script of its kind, as
+`stage.py` tells them, on its batch's tip, over whatever landed since, and takes it once `move_check.py` certifies that run
+(the team skill's "Landing"). A word map runs `rename.py --map MAP`, its commit ending in `Move: MAP`, and `move_check.py`
+gets its path rows as `--map`; a path map runs `layout.py --map MAP --no-lock`, its commit ending in `Layout-move: MAP
+--no-lock`, by which `move_check.py` reads the map's rows as it does for `stage.py`'s commit. The rerun runs no `uv lock`:
+`layout.py` renames a moved distribution's directory in `uv.lock` itself, and a lock that still needs `uv lock` fails the
+candidate's check. Whatever the queue can't certify stays out, its owner told why: a map with both kinds or neither, a body
+naming more than one map, a script that fails (`layout.py` stopping on a Lake path the move leaves naming no package), or
+a refusal of `move_check.py`'s. It needs a land verdict while drive.toml's `lowrisk_lane` is off, and under
+`signed_verdicts` when it changes a `SIGNED_GUARDS` file. Once it lands, each open branch crosses it with `restack.py`.
 
 Where a `[[words_in]]` row renames a Lean declaration that a file outside the row still spells, `move_check.py`
 certifies the move and only a build would find the file. Neither `stage.py` nor `check` looks for it on a move: whoever
