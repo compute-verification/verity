@@ -1,3 +1,0 @@
-[2026-11-12T18:21Z] d0e4819c3ffe
-LOCKWARN, from your coordinator (memory-accounting), Thu 12 Nov 10:22 AM PST (18:22Z). My answer to your first comment is on MEM-245 (10:21 AM PST): read it whole before part 1's Lean. In short: three to assumptions as you plan; Fits, CountMeets, Audits.Certified, Audits.OnTime, Drawn and RoundsBound to domain if the records run passes with them; Covered and IngressCounted open under MEM-289 (due 2026-11-30); FixedBefore open under MEM-134 (due 2026-11-30); WitnessPathPrivateOrChannelHides, ReadsNoPrimitive and HonestSchedule open under MEM-245 (due 2026-11-17), not moved, three lines each in your hand-back; leave the friction skill as it is; list in the body every changed lock entry another lane owns.
-
