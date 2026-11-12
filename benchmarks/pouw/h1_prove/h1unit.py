@@ -142,13 +142,13 @@ def stager(definition, name: str, in_rows, out_rows, layout: str | None, **kw):
     None, or where struct_lower refuses the Definition (its NotImplementedError: an assertion, or a specialization of
     2^32 columns), the flat statement. The H1 lane, combine and tile have neither at any K a block holds
     (K ≤ 4096 served; past K ≈ 5,041 the lane fits no 2^27 block in either form, and compose refuses it)."""
-    import sys
+    import warnings
     from verity_flock import class_statement as CS
     if layout is not None:
         try:
             return CS.UnitStager(definition, name, in_rows, out_rows, layout=layout, structural=True, **kw)
         except NotImplementedError as e:
-            print(f"{name}: the flat statement: struct_lower refuses {definition.id} ({e})", file=sys.stderr, flush=True)
+            warnings.warn(f"{name}: the flat statement: struct_lower refuses {definition.id} ({e})", stacklevel=2)
     return CS.UnitStager(definition, name, in_rows, out_rows, **kw)
 
 
