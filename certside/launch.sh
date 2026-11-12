@@ -2,7 +2,7 @@
 # Launches certside/job.sh (the network certifier's side of a served id-form run with a response cap) on a named CPU
 # node as a `research run`, its tree this clean checkout's HEAD, from any host with research's credentials (the
 # nodes' ssh key and the store's custody key), once the id-form endpoint is up on the serving node's loopback:
-#   PORT=P [MODEL=NAME] [ID_BOUND=N] [TRIES=2 [LANES2=64] [RATE2=1.67] [REQUESTS2=2000] [SEED2=SEED]]
+#   PORT=P [MODEL=NAME] [ID_BOUND=N | PREFIXED=1 [PREFIX_BLOCK=N]] [ABORTS=N [ABORT_RATE=2]] [TRIES=2 [LANES2=64] [RATE2=1.67] [REQUESTS2=2000] [SEED2=SEED]]
 #     [the job's schedule and traffic variables] [MEM_GB=4] [TIMEOUT=90m]
 #     [ON=vy-nebius-cpu-11] [MACHINE=vy-spot-glm53 | PEER=USER@HOST [SSH_PORT=N]] [KEY=FILE] bash certside/launch.sh [--reach]
 # --reach runs the job's reach check alone (under a minute, waited on) and exits with its code: 0 reached, 3 not
@@ -10,7 +10,7 @@
 # PORT is the endpoint's port on the serving node's 127.0.0.1, the one port the forward opens. MODEL, when the endpoint
 # doesn't answer GET /v1/models, is its model's name: the reach check is then a connect, and the run sends it as
 # --model. The job's variables (CELL_BYTES SLOTS BUCKET_MS DELAY LANES QUEUE WINDOW INGRESS_CELLS INGRESS_BUCKETS
-# EGRESS_CELLS CAP RATE REQUESTS SEED PROMPT_MAX MAX_TOKENS TAIL ID_BOUND RECHECK, TRIES LANES2 RATE2 REQUESTS2 SEED2)
+# EGRESS_CELLS CAP RATE REQUESTS SEED PROMPT_MAX MAX_TOKENS TAIL ID_BOUND PREFIXED PREFIX_BLOCK ABORTS ABORT_RATE RECHECK, TRIES LANES2 RATE2 REQUESTS2 SEED2)
 # pass through when set here; their defaults are the job's, in its header. The serving node's tick's bucket must equal
 # BUCKET_MS. TRIES=2 is both tries in one run behind one forward, the second only if the first is accepted.
 # PEER and SSH_PORT default to MACHINE's ssh endpoint as `research` reaches it: a RunPod pod's (node A, vy-spot-glm53)
@@ -54,7 +54,7 @@ else
   serving="the serving node (PEER as given)"
 fi
 envs=(--env "PEER=$PEER" --env "PORT=$PORT")
-for name in SSH_PORT KEY MODEL ID_BOUND CELL_BYTES SLOTS BUCKET_MS DELAY LANES QUEUE WINDOW INGRESS_CELLS \
+for name in SSH_PORT KEY MODEL ID_BOUND PREFIXED PREFIX_BLOCK ABORTS ABORT_RATE CELL_BYTES SLOTS BUCKET_MS DELAY LANES QUEUE WINDOW INGRESS_CELLS \
             INGRESS_BUCKETS EGRESS_CELLS CAP RATE REQUESTS SEED PROMPT_MAX MAX_TOKENS TAIL RECHECK \
             TRIES LANES2 RATE2 REQUESTS2 SEED2; do
   [ -n "${!name:-}" ] && envs+=(--env "$name=${!name}")

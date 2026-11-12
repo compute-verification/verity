@@ -4,7 +4,8 @@
 # certifier's id request and answers one io_tie.id_event an output id, then io_tie.TRAILER, and closes), which listens
 # on the serving node's loopback and is reached through one ssh local forward. A `research run` job from the shipped
 # tree's root (--cwd source); certside/launch.sh launches it:
-#   PEER=USER@HOST PORT=P [SSH_PORT=22] [KEY=FILE] [MODEL=NAME] [ID_BOUND=N] [schedule and traffic, below]
+#   PEER=USER@HOST PORT=P [SSH_PORT=22] [KEY=FILE] [MODEL=NAME] [ID_BOUND=N | PREFIXED=1 [PREFIX_BLOCK=N]]
+#     [ABORTS=N [ABORT_RATE=2]] [schedule and traffic, below]
 #     [TRIES=2 [LANES2=64] [RATE2=1.67] [REQUESTS2=2000] [SEED2=SEED]]
 #     [REACH_ONLY=1 | FAKE=1 [FIRST_MS=2000] [TOKEN_MS=220] [FAKE_IDS=N]] bash certside/job.sh
 # 1. Reach, in under a minute, before anything is sent: KEY readable, the forward up (ssh -N, one -L from this node's
@@ -21,7 +22,15 @@
 #    16..PROMPT_MAX token ids and max_tokens of 1..MAX_TOKENS, both log-uniform, each prompt id uniform below 128,256,
 #    the temperature sampled from 0, 0.7 and 1, top_p 1, a seed on each, all fixed by SEED), the model MODEL or the
 #    endpoint's one, at the schedule below, with the watermark stream sent to the same port. ID_BOUND=N (at most
-#    128,256) scales every prompt id below N and changes nothing else (certside/bounded.py).
+#    128,256) scales every prompt id below N and changes nothing else (certside/bounded.py). PREFIXED=1 writes shared
+#    prefixes over the heads of a share of the prompts, for a server with its prefix cache on, and changes nothing
+#    else (certside/prefixed.py; never with ID_BOUND): $OUT/prefix-groups.json is each request's group and what a
+#    cache that drops nothing would hit, in blocks of PREFIX_BLOCK tokens (16 unless set; GLM-5.3's are 64).
+#    ABORTS=N (with TRIES=1) is the abort's phase: after an ACCEPTED try, 2 and 3 once more under $OUT/aborts/, N
+#    requests at ABORT_RATE (2) a second at SEED + 1, with DELAY 1 and TAIL 30 and nothing else changed, so one
+#    window. The certifier fails every connection of it, since no response's first cell comes within a bucket of its
+#    admission, and closes its server connection, which is how a request the serving node holds is aborted: the
+#    certifier reads nothing of a client after its request's END. Its verdict is not the job's exit.
 # 3. warden_serve.py check on $OUT/warden, from its files alone: $OUT/check.txt (RECHECK=0 leaves it out: rehearse has
 #    already run the same check once and written check.json); $OUT/summary.json, with each step's seconds and the
 #    memory the run took; then the record's reading, certside/report.py: $OUT/report.txt and $OUT/report.json.
@@ -334,6 +343,8 @@ export PYTHONPATH=$SRC
 
 REHEARSE=("$PY" benchmarks/network_traces/warden_serve.py)
 [ -n "${ID_BOUND:-}" ] && REHEARSE=("$PY" "$HERE/bounded.py" "$ID_BOUND")
+[ -z "${PREFIXED:-}" ] || [ -z "${ID_BOUND:-}" ] || { log "PREFIXED and ID_BOUND are one wrapper each: set one"; exit 2; }
+[ -n "${PREFIXED:-}" ] && REHEARSE=("$PY" "$HERE/prefixed.py")
 UPSTREAM=(--upstream "127.0.0.1:$LOCAL")
 [ -n "$MODEL" ] && UPSTREAM+=(--model "$MODEL")
 # try DIR: steps 2 and 3 at SCHEDULE and TRAFFIC as they stand, every file under DIR; 0 when it is ACCEPTED (rehearse
@@ -343,7 +354,7 @@ TRY=
 try() {
 local T=$1 rehearsed checked
 mkdir -p "$T"
-log "${TRY}rehearse: ${UPSTREAM[*]}, ${TRAFFIC[*]}, ${SCHEDULE[*]}, watermark${ID_BOUND:+, prompt ids below $ID_BOUND}"
+log "${TRY}rehearse: ${UPSTREAM[*]}, ${TRAFFIC[*]}, ${SCHEDULE[*]}, watermark${ID_BOUND:+, prompt ids below $ID_BOUND}${PREFIXED:+, shared prefixes over the heads of the prompts}"
 peak "$W/rehearse.mb" "${REHEARSE[@]}" rehearse "${UPSTREAM[@]}" --watermark --out "$T/warden" "${TRAFFIC[@]}" \
   "${SCHEDULE[@]}" 2>&1 | tee "$T/rehearse.log"
 rehearsed=${PIPESTATUS[0]}
@@ -352,6 +363,7 @@ if [ -n "$TUN" ]; then
   if kill -0 "$TUN" 2>/dev/null; then log "${TRY}forward: up to the end"; else log "${TRY}forward: gone before the end"; fi
 fi
 log "${TRY}rehearse: rc $rehearsed"
+[ -z "${PREFIXED:-}" ] || log "${TRY}prefixes: $("$PY" "$HERE/prefixed.py" groups "$T/warden/traffic.json" --seed "$SEED" ${PREFIX_BLOCK:+--block "$PREFIX_BLOCK"} --out "$T/prefix-groups.json" 2>&1 | cut -c1-600)"
 if [ "${RECHECK:-1}" = 0 ]; then
   checked=$rehearsed   # rehearse's own exit is its check's verdict
   log "${TRY}check: not run again (RECHECK=0): check.json is rehearse's own, whose verdict is its last line above"
@@ -412,9 +424,20 @@ log "${TRY}done in $SECONDS s: rehearse rc $rehearsed, check rc $checked, report
 }
 
 if [ "$TRIES" = 1 ]; then
-  try "$OUT"
-  exit
+  try "$OUT"; first=$?
+  if [ -n "${ABORTS:-}" ] && [ "$first" = 0 ]; then
+    # The abort's phase: at D = 1 a response's first cell is due one bucket after its admission, which none makes, so
+    # the certifier fails every connection and closes its server connection; a request it had released is then
+    # aborted on the serving node. Its verdict is not the job's.
+    DELAY=1; REQUESTS=$ABORTS; RATE=${ABORT_RATE:-2}; SEED=$(( SEED + 1 )); TAIL=30; plan
+    TRY="aborts: "; mark start
+    try "$OUT/aborts"; log "aborts: its try ended $? (0 is ACCEPTED): not the job's verdict, which is the try's before it"
+  elif [ -n "${ABORTS:-}" ]; then
+    log "the try is NOT ACCEPTED: the abort's phase is not started"
+  fi
+  exit "$first"
 fi
+[ -z "${ABORTS:-}" ] || { log "ABORTS is one try's phase: not with TRIES=2"; exit 2; }
 # Two tries. `seconds` in a try's summary.json are the job's own, from its start: `start` is the try's.
 TRY="try 1: "; SEED1=$SEED; mark start
 try "$OUT/try1"; first=$?
