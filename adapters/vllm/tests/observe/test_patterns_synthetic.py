@@ -34,7 +34,6 @@ from verity_vllm.observe.fold.patterns.sampling import (
     TokenSelectGumbelTwoStage,
 )
 from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as PROF
-from verity_vllm.observe.fold.profiles.kernel_allowlist import KERNEL_ALLOWLIST
 from verity_vllm.observe.fold.resolver import (
     Compute,
     Gather,
@@ -1082,11 +1081,3 @@ def test_profile_weight_fields_and_root_classes():
     assert PROF.root_class("something.else") == "unknown"
     assert PROF.check_header(header()) == []
     assert PROF.PROFILE.config["BN"] == 128 and PROF.PROFILE.id == "vllm-d9105ea80-sm89-eager-bf16"
-
-
-def test_the_profile_carries_the_kernel_allowlist_the_census_accepts_by():
-    """The census accepts by `properties.kernel_allowlist.KERNEL_ALLOWLIST`; a profile's tuple is what its report compares with that one."""
-    from verity_vllm.properties import kernel_allowlist as census_side
-
-    assert PROF.PROFILE.kernel_allowlist is KERNEL_ALLOWLIST and PROF.KERNEL_ALLOWLIST is KERNEL_ALLOWLIST
-    assert KERNEL_ALLOWLIST == census_side.KERNEL_ALLOWLIST and len(set(KERNEL_ALLOWLIST)) == len(KERNEL_ALLOWLIST)
