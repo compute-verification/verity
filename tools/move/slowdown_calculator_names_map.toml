@@ -7,8 +7,8 @@
 #   the package reads either file or key.
 # - The references the move's tools don't follow and no check reads: `rho/params.py` in a comment of the circuit
 #   properties' suite, a path from the calculator's directory that its move keeps there ([rewrite] keep_in), and its
-#   modules where a docstring or a comment names one (`rho.theorem.multiple_bound`, `rho.instances`). The two a check
-#   reads went with the move (`slowdown_calculator_refs_map.toml`).
+#   modules where a docstring or a comment names one (`rho.theorem.multiple_bound`, `rho.instances`). The one a check
+#   reads went with the move (its [tokens] row).
 # - The calculator named "rho" in the benchmarks' prose: "rho's" is "the slowdown calculator's".
 # What stays: the board's key `"rho"` (`nci.search`'s, which the calculator's `tests/test_attacks.py` reads and no row
 # here names), every `rho` that is a Python name (`slowdown_python_map.toml`), the symbol ρ, the red team's codec, whose

@@ -1,10 +1,10 @@
 # The slowdown calculator's place: what `tools/move/layout.py --map tools/move/slowdown_calculator_map.toml` moves and
 # rewrites. `verity/protocols/inference_only/rho/`, the calculator of the slowdown lower bound, is
 # `verity/protocols/inference_only/slowdown/`, and its package `rho` is `slowdown`. Only the directory, the package and
-# the references to them are rewritten. Two references name the directory in a way this tool doesn't follow, and the
-# tree doesn't pass the check until they do: `slowdown_calculator_refs_map.toml` renames them, run right after this
-# map, and the two commits land as one pull request. The names and prose that say rho for the slowdown are the maps'
-# after it (`slowdown_prose_map.toml`, `slowdown_calculator_names_map.toml`, `slowdown_python_map.toml`).
+# the references to them are rewritten. One reference names the directory from `verity/`, not from the root: its entry
+# among the trees with an import root of their own in `tests/test_boundaries.py` (`SEPARATE`), which the [tokens] row
+# follows. The names and prose that say rho for the slowdown are the maps' after it (`slowdown_prose_map.toml`,
+# `slowdown_calculator_names_map.toml`, `slowdown_python_map.toml`).
 # Nothing is split, edited or deleted, and no file is added. The format is `layout_map.toml`'s.
 
 [roots]
@@ -14,6 +14,10 @@ new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 [paths]
 "verity/protocols/inference_only/rho/" = "verity/protocols/inference_only/slowdown/"
 "verity/protocols/inference_only/rho/rho/" = "verity/protocols/inference_only/slowdown/slowdown/"
+
+[tokens]
+# the directory as a list entry writes it from `verity/`
+"protocols/inference_only/rho" = "protocols/inference_only/slowdown"
 
 [retired]
 paths = ["verity/protocols/inference_only/rho/"]
