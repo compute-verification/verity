@@ -27,14 +27,16 @@ For `min_cut.bound`'s inputs it reads:
   and the product's token side.
 * Which are charged (`Work.groups`; the others are `Work.left_out` by why): a product both of whose operands depend on
   θ′ in every word ("theta" else), neither of which may repeat its rows (`may_repeat`: it carries a gather's rows, or
-  reads the current inputs or rows carried from them and is not specific; "gathered"), whose operands are no one
-  array ("self") and not two activations ("activations"). A gather's rows stay a gather's rows through every op until
-  the rule below makes them specific. A carry makes them no gather's, but its rows may still repeat (`Status.rows`):
-  an iteration's slice of an input of more than one word, a gather's rows and every value computed from them have
-  rows, until an op one to one in a weight (`rows_status`) ends them, as an update W + u does wherever u sums a
-  gradient over the positions. Where the Program doesn't show a carried word a weight by that op, it is taken as rows,
-  the smaller bound. A weight gradient and attention's products are both products of two activations, which a Program tells apart
-  only by where their outputs go, which its author chooses.
+  reads the current inputs or has rows not shown distinct, and is not specific; "gathered"), whose operands are no
+  one array ("self") and not two activations ("activations"). A gather's rows stay a gather's rows through every op
+  until the rule below makes them specific; a carry makes them no gather's. Rows are shown distinct
+  (`Status.distinct`), for generic weights, where they are `θ`'s, whose rows differ, or one node computes them by a
+  `INJECTIVE` op that reads one to one an argument whose rows are (`distinct_status`), as an update W + u
+  does wherever u sums a gradient over the positions; a carry keeps that (`carried`). Nothing else shows it: not an
+  input or a gather, a stated value (a carry's initial 0), a batch of a composite through an argument its members
+  share, or an array that reads a word twice or the outputs of more than one node (calls a word, a batch a row). A carried
+  word not shown distinct may repeat its rows: the smaller bound. A weight gradient and attention's products are both
+  products of two activations, which a Program tells apart only by where their outputs go, which its author chooses.
 * Each operand's `β`, as `he_of_rows` derives it from the rate ρ at the operand's width w (its type's, at most the
   source bits its values hold): w where ρ pays it, else w·ρ/(w + ρ). Where an adapter's rank shows (`Work.r_step`,
   the least contraction of a product of two θ′ operands that widens it 4K-fold or more, one of them reading no input,
@@ -86,8 +88,11 @@ each row's first position, no two positions of the batch hold equal words. A bat
 two positions' values equal at every layer, under this rule and the trace's reading alike: two rows sharing a prefix
 of two tokens or more, a row starting with a run of one token, and, where no positional table reaches the rows, two
 positions whose prefixes hold the same tokens in the same proportions. The updates': a carried word an input reaches is
-θ′, and an op one to one in a weight keeps its rows distinct, even where the update can't change the weight or cancels
-it for a reason the constant test doesn't see, as W plus z plus -1 times z is θ′.
+θ′, and rows one node computes one to one from distinct rows are distinct, even where the update can't change a weight
+or cancels it for a reason the constant test doesn't see (W plus z plus -1 times z is θ′), where an input's unstated
+word that every member reads multiplies it and is 0 (a learning rate, a decay, taken as nonzero), and where two nodes
+compute rows one to one from one array's words into two arrays (b added to each of two rows, carried apart, whose
+products by W are charged).
 
 The rule doesn't reach a softmax's backward or a table the Program doesn't state, so the input gradients of the
 attention's queries and keys (dQ·Wq and dK·Wk, behind a rope table's product or the softmax's backward) stay gathered,
@@ -180,12 +185,13 @@ class Status(NamedTuple):
     specific: bool = False
     #: every word is a view of a constant the Program states
     stated: bool = False
-    #: two of its rows may be equal, as two rows of the current inputs may: rows of an input or a gather, which a carry
-    #: keeps (`carried`) and an op one to one in a weight ends (`rows_status`)
-    rows: bool = False
+    #: no two of its rows can be equal, for generic weights: `θ`'s, and those one node computes one to one from such
+    #: rows (`distinct_status`), which a carry keeps (`carried`)
+    distinct: bool = False
 
 
-THETA = Status(False, False, False, False, frozenset())
+THETA = Status(False, False, False, False, frozenset(), distinct=True)
+STATED = THETA._replace(stated=True, distinct=False)
 
 
 def unknown(st: Status) -> bool:
@@ -194,10 +200,10 @@ def unknown(st: Status) -> bool:
 
 
 def may_repeat(st: Status) -> bool:
-    """Whether two rows of an array may hold one word: it carries a gather's rows, or reads the current inputs or rows
-    an earlier iteration carried from them and is not specific, however the Program writes its rows (a batch, a call a
-    row, a scan, two inputs)."""
-    return st.gathered or ((bool(st.data) or st.rows) and not st.specific)
+    """Whether two rows of an array may hold one word: it carries a gather's rows, or reads the current inputs or its
+    rows aren't shown distinct, and it is not specific, however the Program writes its rows (a batch, a call a row, a
+    scan, two inputs)."""
+    return st.gathered or ((bool(st.data) or not st.distinct) and not st.specific)
 
 
 def unspecific(st: Status, sts) -> Status:
@@ -287,7 +293,7 @@ def join(sts, weights=None) -> Status:
     gathered = any(s.gathered for s in sts)
     return Status(all(s.aff for s in sts), any(s.dep for s in sts), any(s.reach for s in sts), gathered,
                   frozenset().union(*(s.data for s in sts)), rate, bits, any(s.specific for s in sts) and not gathered,
-                  all(s.stated for s in sts), any(s.rows for s in sts))
+                  all(s.stated for s in sts), all(s.distinct for s in sts))
 
 
 def computed(sts, rate: float, bits: float) -> Status:
@@ -298,7 +304,7 @@ def computed(sts, rate: float, bits: float) -> Status:
     specific = any(s.specific for s in sts)
     return Status(any(s.aff for s in sts), dep, any(s.reach for s in sts),
                   any(s.gathered for s in sts) and not specific, frozenset().union(*(s.data for s in sts)),
-                  rate if dep else 0.0, bits, specific, rows=any(s.rows for s in sts))
+                  rate if dep else 0.0, bits, specific)
 
 
 #: an array's status by leaf: runs (end, status), ends rising, the last the array's leaves
@@ -357,7 +363,7 @@ def capped(p: Profile, rate: float, bits: float) -> Profile:
 def carried(p: Profile, t) -> Profile:
     """A carry ``p`` of type ``t`` as an iteration's input: a word reached from a fresh input or θ′ is θ′, paid at
     and holding its width, any other is free and holds nothing. A carried word reads none of the iteration's inputs,
-    so it is no token's and carries no gather's rows; where two of its rows may repeat (`Status.rows`) they still may."""
+    so it is no token's and carries no gather's rows; rows shown distinct (`Status.distinct`) stay so."""
     cuts = sorted({e for e, _ in p} | {e for e, _ in _width_runs(t)})
     widths = _width_runs(t)
     out, i, j = [], 0, 0
@@ -374,8 +380,48 @@ def carried(p: Profile, t) -> Profile:
 
 
 def first(p: Profile) -> Profile:
-    """A carry's initial value as its first iteration's input: `θ`'s, whatever it is computed from."""
-    return runs_of([(e, THETA) for e, _s in p])
+    """A carry's initial value as its first iteration's input: `θ`'s, whatever it is computed from, its rows distinct
+    only where the initial value's are (a stated 0 isn't)."""
+    return runs_of([(e, THETA._replace(distinct=s.distinct)) for e, s in p])
+
+
+def _fields(t, at: int = 0) -> list[tuple[int, int]]:
+    """A type's arrays as leaf ranges (lo, hi): a tuple's fields', recursively, any other type whole."""
+    if not hasattr(t, "fields"):
+        return [(at, at + t.leaves)]
+    out = []
+    for f in t.fields:
+        out += _fields(f, at)
+        at += f.leaves
+    return out
+
+
+def returned(parts, t, source, words: list) -> Profile:
+    """References of type ``t`` as runs, each part (`Reader.parts`) at its source's status over its leaves; an array of
+    ``t`` that reads a word twice (of ``words``, the references' words), or whose parts come from more than one node
+    or parameter, has no rows shown distinct, since two of them may then be one array's words, or computed one to one
+    from them."""
+    parts = list(parts)
+    fields = _fields(t)
+    starts = [lo for lo, _hi in fields]
+
+    def over(a: int, b: int) -> range:
+        return range(max(bisect.bisect_right(starts, a) - 1, 0), bisect.bisect_left(starts, b))
+
+    sources: list[set] = [set() for _ in fields]
+    for a, b, s, i, _lo, _hi in parts:
+        for j in over(a, b):
+            sources[j].add((s, i))
+    for j, (lo, hi) in enumerate(fields):
+        if len(set(words[lo:hi])) < hi - lo:
+            sources[j].add(None)
+    out = []
+    for a, b, s, i, lo, hi in parts:
+        for j in over(a, b):
+            x, y = max(a, fields[j][0]), min(b, fields[j][1])
+            st = span(source(s, i), lo + x - a, lo + y - a) if hi - lo == b - a else span(source(s, i), lo, hi)
+            out.append((y, st._replace(distinct=False) if st.distinct and len(sources[j]) > 1 else st))
+    return runs_of(out)
 
 
 def _width_runs(t) -> list[tuple[int, int]]:
@@ -637,11 +683,16 @@ class Reader:
             return ctx[idx] if space == "p" else prof[idx]
 
         def arg_profile(a) -> Profile:
-            return runs_of([(b_, span(source(s, i), lo, hi)) for _a, b_, s, i, lo, hi in self.parts(a.refs)]) or \
-                ((a.refs.count, THETA),)
+            return returned(self.parts(a.refs), a.type, source, words(a)) or ((a.refs.count, THETA),)
 
         def arg_status(a) -> Status:
-            return join(span(source(s, i), lo, hi) for _a, _b, s, i, lo, hi in self.parts(a.refs))
+            """``a``'s status as one array: its rows distinct only where one node or parameter gives them all and no
+            word is read twice."""
+            st = join(span(source(s, i), lo, hi) for _a, _b, s, i, lo, hi in self.parts(a.refs))
+            if st.distinct and (len({(s, i) for _a, _b, s, i, _lo, _hi in self.parts(a.refs)}) > 1 or
+                                not one_to_one(a)):
+                return st._replace(distinct=False)
+            return st
 
         def bindings(i: int, a, mapped: bool) -> list:
             ps = self.parts(a.refs)
@@ -901,17 +952,25 @@ class Reader:
             cs = [value(*w) for w in words(a)]
             return bool(cs) and all(isinstance(c, tuple) and _finite(c[1]) and not _nonzero(c[1]) for c in cs)
 
-        def rows_status(f, nd, sts: list, st: Status) -> Status:
-            """``st`` without `Status.rows` where an `INJECTIVE` op reads one to one an argument whose rows can't
-            repeat and that isn't stated, so its outputs' rows differ where that argument's do: whatever the others
-            hold for a shift (`SHIFTS`), and where no other argument is an input's unstated values for any other."""
-            if not st.rows or f.name not in INJECTIVE or not constants_pass(f, sts, nd):
+        def distinct_status(f, nd, sts: list, st: Status) -> Status:
+            """``st`` with `Status.distinct` where an `INJECTIVE` op reads one to one (a batch maps it) an argument whose
+            rows are distinct and not stated, so its outputs' rows differ where that argument's do: whatever the others
+            hold for a shift (`SHIFTS`), and for any other where each other argument that is an input's unstated
+            values is one word every member reads (a learning rate, a decay), taken as nonzero."""
+            if f.name not in INJECTIVE or not constants_pass(f, sts, nd):
                 return st
-            free = f.name in SHIFTS or not any(unknown(s) for s in sts)
-            if free and any(not s.rows and not s.stated and
-                            (nd.form != "batch" or (nd.axes[i] is not None and one_to_one(nd.args[i])))
-                            for i, s in enumerate(sts)):
-                return st._replace(rows=False)
+            batch = nd.form == "batch"
+
+            def mapped(i: int) -> bool:
+                return not batch or (nd.axes[i] is not None and one_to_one(nd.args[i]))
+
+            def one_word(j: int) -> bool:
+                return not batch or nd.axes[j] is None or len(set(words(nd.args[j]))) == 1
+
+            for i, s in enumerate(sts):
+                if s.distinct and not s.stated and mapped(i) and (
+                        f.name in SHIFTS or all(not unknown(o) or one_word(j) for j, o in enumerate(sts) if j != i)):
+                    return st._replace(distinct=True)
             return st
 
         for k, nd in enumerate(body.nodes):
@@ -928,16 +987,16 @@ class Reader:
                 if lk is not None:
                     names = [n for n, _t in f.params]
                     t, x = sts[names.index(lk.table)], sts[names.index(lk.index)]
-                    st = Status(t.aff, t.dep, True, True, t.data | x.data, 0.0, bits, rows=True) \
+                    st = Status(t.aff, t.dep, True, True, t.data | x.data, 0.0, bits) \
                         if x.reach and not x.dep else computed(sts, rate, bits)
                     prof.append(((leaves, st),))
                 elif not nd.args:
-                    prof.append(((leaves, THETA._replace(stated=True)),))
+                    prof.append(((leaves, STATED),))
                 elif f.name == "F32Mul" and any(s.stated and zero(a) for s, a in zip(sts, nd.args)):
-                    prof.append(((leaves, THETA._replace(stated=True)),))
+                    prof.append(((leaves, STATED),))
                 else:
                     st = primitive_status(f, nd, sts, computed(sts, rate, bits))
-                    prof.append(((leaves, rows_status(f, nd, sts, st)),))
+                    prof.append(((leaves, distinct_status(f, nd, sts, st)),))
                 continue
             p = self.product(f)
             if p is not None and nd.form in ("call", "batch"):
@@ -980,6 +1039,8 @@ class Reader:
                 sts = [arg_status(a) for a in nd.args]
                 if not any(s.specific and ax is not None and one_to_one(a) for s, a, ax in zip(sts, nd.args, nd.axes)):
                     ret = runs_of([(e, unspecific(s, sts) if s.specific else s) for e, s in ret])
+                if not any(s.distinct and ax is not None and one_to_one(a) for s, a, ax in zip(sts, nd.args, nd.axes)):
+                    ret = runs_of([(e, s._replace(distinct=False)) for e, s in ret])
                 prof.append(capped(runs_of([(m * per + e, s) for m in range(nd.n) for e, s in ret])
                                    if len(ret) == 1 or nd.n * len(ret) <= 4096 else ((leaves, whole(ret)),),
                                    rate, bits))
@@ -987,7 +1048,7 @@ class Reader:
                 prof.append(capped(self.scan(S, k, nd, depth, arg_profile, arg_status, bindings), rate, bits))
             else:
                 raise ValueError(f"{fn.id} node {k}: form {nd.form!r}")
-        S.ret = runs_of([(b_, span(source(s, i), lo, hi)) for _a, b_, s, i, lo, hi in self.parts(body.ret)]) or \
+        S.ret = returned(self.parts(body.ret), fn.signature()[1], source, list(body.ret)) or \
             ((body.ret.count, THETA),)
         S.sid = len(self.memo)
         self.memo[key] = S
@@ -1006,7 +1067,7 @@ class Reader:
         for j in range(nx):
             a, per = nd.args[1 + j], params[1 + j][1].leaves
             s = arg_status(a)
-            xs.append(((per, s._replace(data=s.data | {inner}, rows=s.rows or (bool(s.data) and per > 1))),))
+            xs.append(((per, s._replace(data=s.data | {inner})),))
         xs = tuple(xs)
         shared = tuple(drop(arg_profile(a), outer) for a in nd.args[1 + nx:])
         carry_leaves = params[0][1].leaves

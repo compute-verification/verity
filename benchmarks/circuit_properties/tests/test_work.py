@@ -1,7 +1,8 @@
 """The work the min-cut bound reads off a Program (`circuit_properties.work`), on word circuits of the reference
 registry's products whose work is known by hand: a training loop's scan, whose carried weights are charged from
 their second iteration, whose batch is free, and whose value input's rows are left out however the Program writes
-them; rows carried into the next iteration left out, a stated 0's update `θ`'s, the updates' premise held as a fact; a lookup whose table is the registered one or the loop's own; a Program with
+them; carried rows no one node shows distinct left out, a stated 0's update `θ`'s, the updates' premise held as
+facts; a lookup whose table is the registered one or the loop's own; a Program with
 no scan; one array times itself; two activations; the largest set of arrays a work multiplies pairwise; a weight
 decoded from a ternary code; a one-hot row; a rank-4 bottleneck between two carried weights; each operand's β at
 min(16, β(k)); and |C| in Boolean gates."""
@@ -65,8 +66,9 @@ def _mul(B, a: Coll, b: Coll) -> Coll:
     return _ew(B, P.F32Mul, a, b)
 
 
-def _loop(name: str, carry: tuple, xs: tuple, y_t, step, shared: tuple = (), registered: tuple = ()) -> Program:
-    """A scan of T iterations of ``step(B, carry, *xs, *shared) -> (new carry fields, y)``, each of ``carry``,
+def _loop(name: str, carry: tuple, xs: tuple, y_t, step, shared: tuple = (), registered: tuple = (),
+          n: int = T) -> Program:
+    """A scan of ``n`` iterations of ``step(B, carry, *xs, *shared) -> (new carry fields, y)``, each of ``carry``,
     ``xs`` and ``shared`` (name, type): the carry `θ`, ``xs`` an iteration's inputs, ``shared`` the loop's."""
     carry_t = Tuple(*(t for _, t in carry))
 
@@ -75,13 +77,13 @@ def _loop(name: str, carry: tuple, xs: tuple, y_t, step, shared: tuple = (), reg
         return tuple_of(tuple_of(*new), y)
 
     st = _def(name + "Step", ((("carry", carry_t), *xs, *shared), Tuple(carry_t, y_t)), body)
-    params = (*carry, *((n, Array(T, t)) for n, t in xs), *shared)
+    params = (*carry, *((name_, Array(n, t)) for name_, t in xs), *shared)
 
     def run(B, S, *a):
         nc, nx = len(carry), len(xs)
         return B.scan(bind(st), tuple_of(*a[:nc]), xs=list(a[nc:nc + nx]), shared=list(a[nc + nx:]))
 
-    fn = _def(name, (params, Tuple(carry_t, Array(T, y_t))), run)
+    fn = _def(name, (params, Tuple(carry_t, Array(n, y_t))), run)
     return Program(bind(fn), registered=registered, theta=tuple(n for n, _ in carry))
 
 
@@ -412,6 +414,129 @@ def test_rows_carried_into_the_next_iteration_are_left_out_as_in_the_iteration_t
     assert same.groups == [] and same.left_out["gathered"] == (T - 1) * PN * K * N
 
 
+FLAT = Array(PN * K, F32)
+ADD_ROW = bind(RP.AddRef, N=K, DT="f32")
+
+
+def _carried_with(kind: str) -> Program:
+    """Each iteration multiplies by the carried W the rows it carried from the iteration before, computed from the PN
+    rows it looked up by its tokens and the carried b (``kind``): b added word by word in calls, as a batch of a row
+    composite sharing b, or a batch a row; b's row repeated as a view, plus a stated 0; b plus 1, b plus 2, each its own
+    node, as one argument; the shared input s added; or b's row repeated as a view alone. Every one gives two equal rows
+    where the looked-up rows or s's are, or always."""
+    def step(B, c, tok, z, *shared):
+        table, w, prev, b = c
+        rows = Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)]))
+        if kind == "calls":
+            new = Coll(ROWS_T, concat([B.call(P.F32Add, rows[p][j], b[j]).refs for p in range(PN) for j in range(K)]))
+        elif kind == "composite":
+            new = B.batch(ADD_ROW, rows, b, axes=(0, None))
+        elif kind == "batches":
+            new = Coll(ROWS_T, concat([_add(B, rows[p], b).refs for p in range(PN)]))
+        elif kind == "replicated":
+            fresh = _add(B, Coll(FLAT, concat([b.refs] * PN)), B.call(const(32, 0)))
+            new = B.batch(P.F32Add, Coll(FLAT, rows.refs), fresh, axes=(0, 0)).reshape(ROWS_T)
+        elif kind == "assembled":
+            each = Coll(ROWS_T, concat([_add(B, b, B.call(const(32, 0x3F800000 * (p + 1)))).refs for p in range(PN)]))
+            new = B.batch(P.F32Add, Coll(FLAT, rows.refs), Coll(FLAT, each.refs), axes=(0, 0)).reshape(ROWS_T)
+        elif kind == "shared":
+            new = B.batch(P.F32Add, Coll(FLAT, rows.refs), Coll(FLAT, shared[0].refs), axes=(0, 0)).reshape(ROWS_T)
+        else:
+            new = Coll(ROWS_T, concat([b.refs] * PN))
+        return (_add(B, table, z), _add(B, w, z), new, _add(B, b, z)), B.batch(LIN, prev, w, axes=(0, None))
+
+    return _loop("With" + kind, (("table", TABLE_T), ("w", W_T), ("prev", ROWS_T), ("b", X_T)),
+                 (("tok", Array(PN, I32)), ("z", X_T)), Array(PN, Y_T), step,
+                 shared=(("s", ROWS_T),) if kind == "shared" else ())
+
+
+@pytest.mark.parametrize("kind", ("calls", "composite", "batches", "replicated", "assembled", "shared", "view"))
+def test_carried_rows_no_one_node_shows_distinct_are_left_out(kind):
+    """Rows are distinct only where they are `θ`'s or one node computes them one to one from distinct rows read one to
+    one, so each of these is left out as gathered once θ′ reaches it: from the second iteration, and the view of b,
+    which holds the iteration before's b, from the third."""
+    w = WK.read(_carried_with(kind), KB)
+    late = 2 if kind == "view" else 1
+    assert w.groups == [] and w.left_out == {"theta": late * PN * K * N, "gathered": (T - late) * PN * K * N,
+                                             "self": 0, "activations": 0}
+
+
+def test_a_weights_row_read_twice_as_a_products_rows_is_left_out():
+    """b's row read by both members of a product, b carried: its two rows are one row, so the product is left out."""
+    p = _loop("Twice", (("w", W_T), ("b", X_T)), (("z", X_T),), Array(PN, Y_T),
+              lambda B, c, z: ((_add(B, c[0], z), _add(B, c[1], z)),
+                               B.batch(LIN, Coll(ROWS_T, concat([c[1].refs] * PN)), c[0], axes=(0, None))))
+    w = WK.read(p, KB)
+    assert w.groups == [] and w.left_out["gathered"] == (T - 1) * PN * K * N
+
+
+def test_a_carry_from_a_stated_zero_plus_rows_is_left_out():
+    """A carry that starts at a stated 0 and adds the looked-up rows holds them exactly after one iteration: its
+    initial value's rows aren't distinct, so neither are the carried ones."""
+    carry_t = Tuple(TABLE_T, W_T, ROWS_T)
+
+    def body(B, S, c, tok, z):
+        table, w, prev = c[0], c[1], c[2]
+        rows = Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)]))
+        new = B.batch(P.F32Add, Coll(FLAT, prev.refs), Coll(FLAT, rows.refs), axes=(0, 0)).reshape(ROWS_T)
+        return tuple_of(tuple_of(_add(B, table, z), _add(B, w, z), new), B.batch(LIN, prev, w, axes=(0, None)))
+
+    st = _def("ZeroInitStep", ((("carry", carry_t), ("tok", Array(PN, I32)), ("z", X_T)),
+                           Tuple(carry_t, Array(PN, Y_T))), body)
+
+    def run(B, S, table, w, tok, z):
+        zeros = Coll(ROWS_T, concat([B.call(const(32, 0)).refs] * (PN * K)))
+        return B.scan(bind(st), tuple_of(table, w, zeros), xs=[tok, z], shared=[])
+
+    fn = _def("ZeroInit", ((("table", TABLE_T), ("w", W_T), ("tok", Array(T, Array(PN, I32))), ("z", Array(T, X_T))),
+                       Tuple(carry_t, Array(T, Array(PN, Y_T)))), run)
+    w = WK.read(Program(bind(fn), theta=("table", "w")), KB)
+    assert w.groups == [] and w.left_out["gathered"] == (T - 1) * PN * K * N
+
+
+def test_a_register_of_one_word_inputs_is_left_out():
+    """The carry holds the last PN·K one-word inputs as PN rows: an input's words aren't distinct, so neither are its
+    rows, and once the register holds inputs alone, PN·K iterations in, its products are left out as gathered."""
+    def step(B, c, s, z):
+        w, prev = c
+        words = [prev[p][j].refs for p in range(PN) for j in range(K)]
+        return (_add(B, w, z), Coll(ROWS_T, concat([*words[1:], s.refs]))), B.batch(LIN, prev, w, axes=(0, None))
+
+    full, n = PN * K, PN * K + 6
+    w = WK.read(_loop("Register", (("w", W_T), ("prev", ROWS_T)), (("s", F32), ("z", X_T)), Array(PN, Y_T), step, n=n),
+                KB)
+    assert w.groups == [] and w.left_out == {"theta": full * PN * K * N, "gathered": (n - full) * PN * K * N,
+                                             "self": 0, "activations": 0}
+
+
+def test_what_the_carried_words_premise_leaves_held_as_facts():
+    """Two facts of what stays a premise. A weight times an unstated one-word input every word reads (a learning rate,
+    a decay) is taken as distinct, as if that input weren't 0, while times an unstated input a word is not; and b added
+    to each of two looked-up rows, carried in two arrays, gives two arrays each of distinct rows, whose two products by
+    W are charged though they read one pair where the two rows are equal."""
+    def scaled(scalar: bool) -> Program:
+        def step(B, c, s, z):
+            w, u = c
+            return (_mul(B, w, s if scalar else z), _add(B, u, z)), B.call(LIN, u, w)
+        return _loop("Scaled" if scalar else "Weighted", (("w", W_T), ("u", X_T)),
+                     (("s", F32), ("z", X_T)), Y_T, step)
+
+    (g,) = WK.read(scaled(True), KB).groups
+    assert g.weight == (True, True) and g.macs == (T - 1) * K * N
+    assert WK.read(scaled(False), KB).groups == []
+
+    def step(B, c, tok, z):
+        table, w, b, p0, p1 = c
+        rows = [B.call(EMB, tok[p], table) for p in range(PN)]
+        ys = concat([B.call(LIN, p0, w).refs, B.call(LIN, p1, w).refs])
+        return (_add(B, table, z), _add(B, w, z), _add(B, b, z), _add(B, rows[0], b), _add(B, rows[1], b)), \
+            Coll(Array(PN, Y_T), ys)
+
+    w = WK.read(_loop("TwoArrays", (("table", TABLE_T), ("w", W_T), ("b", X_T), ("p0", X_T), ("p1", X_T)),
+                      (("tok", Array(PN, I32)), ("z", X_T)), Array(PN, Y_T), step), KB)
+    assert w.N == (T - 1) * PN * K * N and {g.weight for g in w.groups} == {(True, True)}
+
+
 def test_an_update_by_a_stated_zero_leaves_a_weight_thetas():
     """W plus z times a stated 0 is W: the multiply gives a stated 0 whatever z holds, so z doesn't reach W and u W^T,
     u carried, is `θ`'s as with W carried unchanged. The updates' premise, held as a fact: W plus z plus -1 times z is W
@@ -445,9 +570,9 @@ S_T, V_T = Array(D, F32), Array(K, Array(D, F32))
 
 def _attention_loop() -> Program:
     """Each iteration looks up PN rows of the carried table by its tokens, each times the carried g (so a block pays
-    for its words), scores them by the carried W1 under a causal mask, and multiplies each score row's softmax P by the carried V1 and V2: O1 = P V1^T and O2 = P V2^T are
-    specific, so O1 Wo^T is a token-indexed product of an activation by a weight and O1 O2^T one of two activations.
-    Wo is updated by the sum of O1's rows over the positions, as a gradient is; the others by an input."""
+    for its words), scores them by the carried W1 under a causal mask, and multiplies each score row's softmax P by
+    the carried V1 and V2: O1 = P V1^T and O2 = P V2^T are specific, so O1 Wo^T is a token-indexed product of an
+    activation by a weight and O1 O2^T one of two activations. Wo is updated by the sum of O1's rows over the positions, as a gradient is; the others by an input."""
     def step(B, c, tok, z, zn):
         table, g, w1, v1, v2, wo = c
         rows = _mul(B, Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)])), g)
@@ -462,8 +587,8 @@ def _attention_loop() -> Program:
                _add(B, wo, _add(B, o1[0], o1[1])))
         return new, Coll(Array(PN * (N + PN), F32), y)
 
-    return _loop("Attention", (("table", TABLE_T), ("g", X_T), ("w1", Array(D, X_T)), ("v1", V_T), ("v2", V_T), ("wo", W_T)),
-                 (("tok", Array(PN, I32)), ("z", X_T), ("zn", S_T)), Array(PN * (N + PN), F32), step)
+    carry = (("table", TABLE_T), ("g", X_T), ("w1", Array(D, X_T)), ("v1", V_T), ("v2", V_T), ("wo", W_T))
+    return _loop("Attention", carry, (("tok", Array(PN, I32)), ("z", X_T), ("zn", S_T)), Array(PN * (N + PN), F32), step)
 
 
 def test_a_token_indexed_product_is_charged_at_keep_and_two_activations_are_left_out():
