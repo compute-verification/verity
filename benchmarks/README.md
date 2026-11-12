@@ -41,6 +41,7 @@ says. These are the directories that have one:
 | `verity bench replay_determinism` | whether a served MoE window's recorded schedule, replayed, gives its served bytes, op by op |
 | `verity bench replay_ladder` | the same replay across a ladder of dense and MoE models, with the per-model status table |
 | `verity bench route_capture` | what a model executes when served, step by step, and the routes class G's Definitions don't cover |
+| `verity bench scan_cost` | one scan of the network certifier's synthetic run with every block proved, and what it costs for each second of execution phase: the prover's seconds and the Lean verifier's CPU seconds on one core |
 | `verity bench serve_tax` | what each change to serving costs vLLM's own server against stock compiled vLLM, at three loads |
 | `verity bench served_commit` | served vLLM against served vLLM with every value committed, interleaved, through `verity-bench vllm` |
 | `verity bench tensor_duty` | the tensor-duty sweep on one H200: dense tensor MACs a second by duty cycle, against the card's tensor clock |
@@ -119,8 +120,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `harness/` | `verity-bench`: specs, recorded runs, sweeps and results for an arm against stock vLLM, the served table of each protocol's overhead, and the kit runners share (`verity_bench/kit.py`) | maintained |
-| `specs/` | the harness's specs and sweeps, one TOML file each | maintained |
+| `harness/` | `verity-bench`: its specs and sweeps (`specs/`, one TOML file each), recorded runs and results for an arm against stock vLLM, the served table of each protocol's overhead, and the kit runners share (`verity_bench/kit.py`) | maintained |
 | `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
 | `replay_determinism/` | whether a served MoE window's recorded schedule, replayed without batch invariance, gives its served bytes, and whether a request alone gives the bytes it got in its batch, op by op | maintained |
@@ -141,7 +141,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | --- | --- | --- |
 | `hash/` | GPU kernels for PoUW's Dither prover (`dither/`: the no-fold and J10-R units, their gates and harnesses), the served path's SHA-512 commitment library (`lib/`), and vLLM's int8-exact linear kernels (`exactlin/`) | maintained |
 | `flock_kernels/` | Flock's CUDA prover kernels on one GPU, each printing a digest of its output beside its time so that builds against two trees' kernels compare word for word: hm96's leaves (`hm96_leaves.cu`) | maintained |
-| `torch_gpu/` | the H200 demo's GPU kernels, each bit-exact to its Definition: the serve-time commit (`commit_slots`, `sha512_rows`), the store's load with bandwidth receipts (`p2_stage`), the decoder's non-matmul ops (`units`), attention (`attn_bf16`), the exact W8A8 linear (`s8_linear`) and J10-R's units on the H200 (`j10r_sm90`) | maintained |
+| `torch_gpu/` | the H200 demo's GPU kernels, each bit-exact to its Definition: the serve-time commit (`commit_slots`, `sha512_rows`), the store's load with bandwidth receipts (`p2_stage`), attention (`attn_bf16`), the exact W8A8 linear (`s8_linear`) and J10-R's units on the H200 (`j10r_sm90`) | maintained |
 | `pouw/` | Pearl-C's kernels on the RTX PRO 6000, their harness, and the served vLLM path and its audits; `contents.py` lists the rest | maintained |
 | `tc_probe/` | tensor-core instructions bit for bit against their silicon models, and the trust each instruction's evidence earns | maintained |
 | `tc_probe_fp4/` | the FP4 path on Blackwell: its conversions bit for bit, and each sm_120a multiplier priced against dense NVFP4 | maintained |
@@ -199,6 +199,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `certifier_term/` | the network certifier's term for GLM-5.3 at the load of a node, a datacenter and the world, in bits and GB, each row by its check's own counting rule: the scan and N2 as the monitoring-period check charges them, the scan under each change to its check, and the design with no run behind it, without its stop block and with it (`network_traces/leak_bounds.py`'s runner) | maintained |
 | `network_sim/` | the device graph, and a mock datacenter of Linux network namespaces that runs the real network certifier | maintained |
 | `certifier_timing/` | the bits an interval a server moves through when the network certifier releases its bytes: one number from a server that times its writes by a bit, with a guard, a target and the candidate fixes as flags | maintained |
+| `scan_cost/` | what the network certifier's scan costs for each second of execution phase it covers: proving seconds (the round's sessions and their staging) and the Lean verifier's CPU seconds on one core, at a fixed identity, each with its stages, a guard on the round's answer, a baseline and two targets | maintained |
 | `mempool/` | the certifier's prefix-cache pool as memory-checked RAM (`pool_ram`, held to vLLM's pool on the encodings' traces; `stream.py` holds `CacheStep_v3`'s stream to it after every call): a window's cost at its busiest stretch, and `MemCheck_v1`'s and `CacheStep_v3`'s vectors | maintained |
 | `datacenter/` | a datacenter as Verity accounts for it, in a small Python API: the Program, hardware, binding, plan, run, claims and account | maintained |
 
@@ -207,7 +208,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `pous/` | every PoUS implementation on one dataset, by its effective weight bandwidth | maintained |
-| `bandwidth/` | the device ceilings PoUB's timing cites: how fast a card and a host write labels, and the chip's on-chip stores | maintained |
+| `bandwidth/` | the device ceilings PoUB's timing cites: how fast a card and a host write labels, and the chip's on-chip stores; and a node's own report of its interfaces' line rates, its disks' interfaces and its cards' usable memory | maintained |
 | `remote_session/` | PoUB's session harness: a verifier's and a prover's process over TCP, end to end. The remote protocol's demo is the vLLM demo, not this | maintained |
 | `memory/` | `verity bench memory`, the front door for the memory audit's number: the share of a node's memory read rate one accepted PoUB session leaves uncertified, at the data sheet's read bandwidth, from a gate run on the whole node, a recorded run or a loopback | maintained |
 | `kv_filler/` | the filler top-up beside vLLM serving, and what it costs inference | maintained |

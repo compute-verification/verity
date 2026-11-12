@@ -1,7 +1,7 @@
 """PoUW's audit execution phase as the proof system sees it: what the execution phase makes public, the grid its tile count is padded to,
 the size of the uniform sample, and the execution phase's advice (its per-call entries and the map from a sampled index to a tile).
 
-**Public items** (`PUBLIC`), the draft's list and the rows' fixed length.  The service refuses a registration
+**Public items** (`PUBLIC`), the draft's list and the workloads' fixed length.  The service refuses a registration
 that makes anything else public; the execution phase's own root and W's root are salted roots, which the rule allows.
 
     item       kind         source     what it is
@@ -9,7 +9,7 @@ that makes anything else public; the execution phase's own root and W's root are
     work       output       execution phase     the credited work, as the tile count N padded to a grid level (`bucket`)
     check      structure    parameter  the tile template every unit instantiates, its work per tile, the commitment scheme
     sampling   structure    parameter  ε, δ, the grid and the sampling design subset:K′ they fix with the work level (`k_prime`)
-    length     structure    parameter  the rows of record's fixed length: each slot's public max_tokens (`length_item`)
+    length     structure    parameter  the workloads of record's fixed length: each slot's public max_tokens (`length_item`)
     flipped      coins        outcome    the verifier's own sample, after the receipt
     root_W     commitment   parameter  the weights' salted root
 
@@ -25,9 +25,9 @@ under 1 − 2^-s of the credit (at most 11% at s = 3) and the factor N / g_ℓ <
 credited work and w_max the most work a tile does (`k_prime`).  A wrong set holding a share ε of W has at least ε·W/w_max
 tiles, so a sample of K′ without replacement misses it with probability at most δ.  Filler tiles are credited nothing.
 
-**The fixed length**: correct tokens served past the honest run's end of sequence are not useful work.  A row of record serves its slot's public max_tokens whatever it samples (vLLM's ``ignore_eos``), so W_use is
+**The fixed length**: correct tokens served past the honest run's end of sequence are not useful work.  A workload of record serves its slot's public max_tokens whatever it samples (vLLM's ``ignore_eos``), so W_use is
 public: the `length` item is ``{"stop": "fixed", "max_tokens": [...], "served": [...]}``, one entry a slot, and
-`length_problem` refuses an EOS-keyed row (`window-form: eos-keyed-row`) and a slot that served another length
+`length_problem` refuses an EOS-keyed workload (`window-form: eos-keyed-row`) and a slot that served another length
 (`window-form: length-mismatch`).  A window commitment record made before the rule carries `LEGACY_REGISTERED`, without
 the item, and is not of record.
 
@@ -312,7 +312,7 @@ def sampling(eps: Fraction, delta: Fraction, work: Work, tile_work: int, bits: i
 
 # ---- the fixed length -----------------------------------------------------------------------------------------------------
 
-#: a row of record's stop mode: it serves its slot's max_tokens whatever it samples (vLLM's ``ignore_eos``)
+#: a workload of record's stop mode: it serves its slot's max_tokens whatever it samples (vLLM's ``ignore_eos``)
 STOP_FIXED = "fixed"
 LENGTH_KEYS = ("max_tokens", "served", "stop")
 
