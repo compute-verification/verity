@@ -450,7 +450,7 @@ private def head : V Head := do
   "42e06e201e0aa95f640add398ae7bfa8e52b42746890306bcda039cca889aadc\
     2be1f1de6fa6356040606407609bdc7cc411b3d865761ff8004bc0455ee3444a"
 -- a head that lists a table twice, or none, doesn't encode
-#guard (head.bind fun h => ({ h with tables := h.tables.push h.tables[0]! } : Head).encode).toOption.isNone
+#guard (head.bind fun h => ({ h with tables := h.tables ++ h.tables } : Head).encode).toOption.isNone
 #guard (head.bind fun h => ({ h with tables := #[] } : Head).encode).toOption.isNone
 #guard held.held 0 == (false, false) && held.held 2 == (true, false) && held.held 3 == (true, true) &&
   held.held 4 == (true, true) && held.held 5 == (true, false) && own.held 3 == (false, false)
