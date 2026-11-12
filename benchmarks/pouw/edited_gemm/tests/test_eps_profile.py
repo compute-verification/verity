@@ -11,7 +11,8 @@ import eps_profile as E
 import pytest
 from verity_machine_model import model as mmod
 
-MODEL = Path(__file__).resolve().parents[2] / "machine_model"
+#: the ACCEL model's directory (its package and data/), where the workspace has it: what the job scripts give as --mm
+MODEL = Path(mmod.__file__).resolve().parents[1]
 # One call of an arm: 10^7 MMAs over 100 SMSPs, so 10^5 MMAs a SMSP. A MMA comes with 2 LOP3, a quarter of an
 # IMAD.WIDE, two instructions of the mbarrier's retry loop, and 0.05 of FROB (no class) and EXIT.
 SASS = [("IMMA.16832.S8.S8 R0, R1, R2", 6_000_000, 6), ("IMMA.16832.S8.S8 R4, R1, R2", 4_000_000, 0),
