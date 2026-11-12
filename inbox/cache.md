@@ -351,3 +351,70 @@ the audit).
 
 **Runs cancelled as duplicates, never started:** `r20261112-024202-2e5d`, `r20261112-030122-ede5`,
 `r20261112-024625-487a`. Nothing of mine is running.
+
+## Entry 5, 03:58Z: your 03:17Z section read; the line for 07:00Z; the published serve; REPLAY's two figures
+
+The note is synced (notes commit `437b610c1d`); it opens with the line below and has a new section, "Under vLLM's
+published serve for eight H200s". No tree code changed.
+
+**The line for 07:00Z.** To prove: `AdmissibleTwoRankinPatterns` without its hypothesis that each request reads
+one replay block (`security/Definitions/Claims/SamplingTwoRankin.lean:79-88`); `RequestsCover` then loses its first
+clause (`security/Properties/Spot/TwoStageCheck.lean:58`), and a wrong replay block is charged the served cap of the
+session that reads it. Its price against today's bound of 14,229 GB (world, one year, audit at 10% of compute)
+[modeled]: AgentX 1.7 to 3.1 times, at session caps of 220,500 to 2,000,000 served tokens; GitHub Copilot about 1.2
+times [between two modeled rows]; the Moonshot conversation trace not computable, it names no sessions; our plan
+0.88 times, 0.99 if its sessions hold two requests. Recomputing the hit, as `main` does: 39, 5.9, 1.4 and 1 times.
+
+**The date: I give none.** My instructions bar me from estimating calendar time, so I size it by what changes.
+- One definition loses one hypothesis; the right side of its inequality does not change.
+- One proof of 106 lines is redone (`admissibleTwo_rankin_patterns`,
+  `security/Proofs/Flock/SamplingGeneric/TwoRankin.lean:267-372`). Two facts replace its use of the hypothesis. A
+  request's cost is at most the sum of its costs in each replay block, which `min_sum_le_sum_min` (line 374) and
+  `sum_min_inter_le` (line 386) already give for the capped form. And a request's pattern is fixed by its patterns
+  in each replay block: if any is heavy the whole is, and light ones record their sets. [my argument, unproved]
+- The clause is used once, as `hreq.1` in `twoStageCheckPatternsSound_form`
+  (`security/Proofs/Properties/Spot/TwoStageCheck.lean:243-260`). The per-replay-block factor and the check's bound
+  on it do not use it. Then the lock's records.
+- No ruling: the guarantee's statement, `InfluenceTwoPatterns`, does not change.
+- Whether it fits Fri 13 Nov 9 AM PST is settled by one attempt at the restated lemma, which the Lean lane can
+  start now; nothing else gates it.
+
+**What that lemma does not give: the count across an execution phase's edge.** `InfluenceTwoPatterns` is one
+statement on fixed input values, and phases are joined only in that their misses multiply
+(`security/Definitions/Claims/SamplingTwoReg.lean:8-11`). A wrong block in one phase that shapes tokens served in
+a later one is charged by neither. Stating that changes what the guarantee says, so it is an ask to Daniel. It is
+avoided, not closed, by carrying a session to the phase in which it ends, as a running request is carried today
+(`adapters/vllm/verity_vllm/pipeline/boundary_rows.py:5-7`); the coin then waits for the session, 2.8 hours at
+AgentX's median [computed].
+
+**Under the published serve** (FP8 KV cache, MTP with five draft tokens, Model Runner V2, prefix caching on):
+- **Steps or positions?** The statement reads neither: gates, proof blocks, replay blocks, requests and served
+  bits. Positions enter in the verifier's schedule (`Spot/Schedule.lean:1-6`), steps only in the adapter. They meet
+  where a run of positions ends inside a step that emitted up to six tokens: the replay re-runs the whole step and
+  keeps its own positions. vLLM pads each request's query to include rejected positions (`speculator.py:240-245`
+  at the pin), so a step's shape does not depend on what was accepted.
+- **The page's element type?** One term reads it, and it can only fall: the bits a lightly wrong block commits
+  (`bitsOf`). A session's cap does not. Outside the bound, it moves the circuits: every attention reads FP8 pages,
+  cache on or off, and the tree's Definitions take bf16 ("quantised KV not modelled",
+  `verity/definitions/numerics/fa2_model.py:286-287`). Not priced.
+- **Prices.** Every figure scales by tokens served a GPU-second, not known at five draft tokens (2.27 at three
+  [relayed], at most 6). The ratios between routes do not move. Proving a kept token costs one draft-layer row
+  more, about 1.3% if that layer is one of 78 [arithmetic; its size not read]. Bytes committed a row halve to
+  46,314 B a token [arithmetic].
+- **Found in vLLM's source:** the draft's later steps reuse its first step's indexer top-k
+  (`mtp_speculator.py:28-34`), and the draft samples with each request's seed and temperature and hands its logits
+  to the accept rule (`speculator.py:204-262`). Both must be in the circuit.
+
+**REPLAY's two figures, as I would say them now.** "About 1.5 times today's bound for 86 requests sharing a
+prefix" is against the no-repeat figure (12,552 GB) and for a session cap of 86 times ours, 75,250 served tokens;
+against today's bound it is 1.34. AgentX's sessions serve more: 1.7 times today's bound at 220,500 served tokens,
+3.1 at 2,000,000. "About 1,900 times" for the sets' form is 1,945 times the no-repeat figure, 1,715 times today's
+bound.
+
+**Since entry 4, in the note:** the cost model's figure is its column "GB@10% x1.05" (the bound at 10% of compute
+times `LAMBDA`), and it charges serving 4.34% of compute at the plan, of which 2.29% is the egress wait; a serve at
+1% would leave 8.89% for proving and multiply every figure by 0.62 [arithmetic].
+
+**Running:** `r20261112-032526-949b` and `r20261112-033048-7551`, the same job twice (the routes at week, month and
+year, world and datacenter), both still queued. They fill cells the note marks "not run" and change no answer. I
+cancel both before my final if neither has started.
