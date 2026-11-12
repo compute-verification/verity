@@ -71148,3 +71148,62 @@ Tags: [run] a command run now or a run's fetched log (id given), [read] a file r
 2. (A) or (B) in section 3, and who writes the map.
 3. The issue and due date for each of the three `open` lines (section 4).
 4. #8940 on `main`. Then #9043's head to you, pull request 2's file with item 5's change, and pull request 3 in item 4's form.
+
+## DUPNAMES, Thu 12 Nov 05:10Z: PRF-518 is carried and checked up to two runs still queued at its head; PR not opened yet; a builder on `main` did make a Definition with a name twice
+
+Times: 05:10Z is Wed 11 Nov 9:10 PM PST [run: date -u].
+
+**State.** Branch `cursor/proofs-dupnames-7453`, head `ad2b8f93d442ea86ee9eece1fc5e614b68b9f504`, pushed, 10 commits on `be9a3d5669` [run: git log]. **PR: none yet.** I open it when the two runs at that head end, since "done" is a PR at a head whose checks passed and no suites run has passed at this head. Resume me then; the body is drafted (`note:proofs/20261112T0505Z-draft-dupnames-pr-body`).
+
+**Ready line, once the PR is open as N and only if both runs below exit 0:** `research queue ready N --mark --by proofs` at `ad2b8f93d442ea86ee9eece1fc5e614b68b9f504`. I have not marked anything.
+
+**In flight, both at ad2b8f93d4.**
+
+- `r20261112-045939-aec1` (cpu-8): `suites.py --changed be9a3d5669 --mem-gb 32`, the changed suites whole, slow tests included. Waiting for a slot, 4 ahead [read: its stderr, 05:04Z]. ETA 08:00Z to 08:40Z [guess]; it gives up at 09:00Z if it gets no slot, and its timeout is 4 h from the slot [read: launch log].
+- `r20261112-050016-eb7f` (cpu-3): `lean_changed.py --records verity/circuits/lean --update`, to confirm the committed locks at the head. Waiting for a Lean slot. ETA 06:30Z [guess].
+
+**Finding you did not ask for.** The vLLM adapter's derive frontend built such a Definition on `main`. It names a derived function's parameters after the module's inputs, then adds `run`, `values`, the registered tables and the module's record `weights` [read: adapters/vllm/verity_vllm/program/frontend/derive.py:717-728]. A test model whose `forward` takes an argument named `weights` got `x, ids, weights, act, weights`, and the builder took them [run: local probe of `derive` at 2b99eeb77b, which has `main`'s Python]. It binds by position, so its tests passed. I found it because the builder's refusal failed three quick tests in `r20261112-032237-fd67`. No tracked descriptor holds a name twice [run: scan, 33 descriptors, 288 definitions]; whether a served descriptor outside the tree does, I did not read [guess: none, a served model's inputs are not named `weights`].
+
+What I did about it, in d48b9780b9: `derive` refuses an input named as a parameter it adds, as its own outcome (`Unsupported(shape)`, naming the input), 5 lines; the test model's argument is `topk_weights`; one negative test. **These are the vLLM adapter's files, and `verity/circuits/codec.py`, `defs.py`, `PROTOCOL.md` are the circuits lane's.** The body says so. Tell me if you want the adapter part split out.
+
+**No statement of a guarantee changed.** The `security` and `security/Properties` locks regenerated; each differs from `main`'s in two values, `Circuits.Program`'s digest and `paramsOf`'s hash [run: a key-by-key diff of each regenerated lock against the tree's].
+
+**Runs ended.**
+
+| Run | What, at which head | Exit |
+|---|---|---|
+| `r20261112-025624-0bad` | `lean_changed.py --records verity/circuits/lean --update` at 7d7105aff6: circuits/lean, Flock's verifier, the certifier's Lean, `security/Proofs` pass; `security`, `security/Properties` regenerated | 0 |
+| `r20261112-031233-2808` | `verity lean try Flock/Test/RegTwoParams.lean` at f9a12e21f8 (after 7d7105aff6 the only Lean change is two docstring lines of that file) | 0 |
+| `r20261112-025500-2e4f` | the same with `--siblings` at 7d7105aff6 | 0 |
+| `r20261112-031600-0b62` | the same file at 2b99eeb77b, `main`'s decoder: the two-`w` template decoded and passed Flock's seven registered-read checks. Only those checks, no whole `verify`, no proof | 0 |
+| `r20261112-032237-fd67` | `suites.py --changed be9a3d5669 --quick` at f9a12e21f8: 86 suites passed, `verity-vllm` failed 3 tests (`test_a_marlin_launch_the_capture_does_not_give_refuses_by_name`), fixed in d48b9780b9 | 1 |
+| `r20261112-031404-300c` | `verity lean try` at 71645ab7c8: that commit's file has a syntax error the next carried commit fixes | 1 |
+| `r20261112-030924-2c3f` | quick suites via `--on auto`, cpu-1: the tree was shipped without git; machine cause (`note:proofs/20261112T0340Z-friction-archive-ship-recurs`) | 2 |
+| `r20261112-043211-5fe0` | whole suites at d48b9780b9: I cancelled it 4 min into its slot to rerun at the head with the locks. That cost its place in line; my mistake | cancelled |
+
+Here, single tests only: the Marlin tests and the new negative test, 10 passed [run: pytest -k "marlin or named_as_the_weights"]; `ratchet_gate.py origin/main HEAD` at ad2b8f93d4, 0 failed [run].
+
+**Every decoder and builder of a Definition** [read at ad2b8f93d4 unless tagged].
+
+Refuses:
+
+1. Lean decoder, composite and primitive: `verity/circuits/lean/Circuits/Program.lean:748-755` (`paramsOf`), called at :827 and :863 [run: r20261112-031233-2808 for the composite].
+2. Every Lean reader of a descriptor, through `Program.decode` or `decodeWith`: Flock (`FlockVerify.lean:1813`, `Flock/Registered.lean:465`, `Qcall.lean:521`, `Sigma.lean:577`, `HmRow.lean:1231`, `With/Setup.lean:607`), SPOT (`Spot/Program.lean:23`), the inference-only check (`NciCheck/Check.lean:199`, `Protocol.lean:139`, `Count.lean:285`), PoUW (`PouwCheck/Credit.lean:566`), the certifier (`NetworkCheck/Period.lean:682,757`), remote (`CoreRemote.lean:194`), the evaluator, `Circuits/Annot.lean:1142`. No other Lean reads a Definition's `params`.
+3. SPOT, the program function's parameters: `verity/protocols/spot/verifier/lean/Spot/Registered.lean:112`, on `main` already, unchanged and not duplicated.
+4. Python decoder: `verity/circuits/codec.py:911-914`.
+5. A primitive's declaration: `verity/circuits/defs.py:128`.
+6. A composite's body when built: `defs.py:495-498`, `Builder.__init__` :745.
+7. A body however made: `defs.py:334` (`Body.__post_init__`), new; it covers `fold.py:1255-1268` and `derive.py:757`, which replace a builder's parameters after it took them, and `adapters/vllm/verity_vllm/program/prune.py:155,180,277,426`, which make a body without one.
+8. The vLLM adapter's derive frontend: `derive.py:729-733` by name, new; it made one on `main`.
+9. The other builders, all `verity.circuits.defs.Builder`: `torch_frontend.py:274`, `relabel.py:155`, `observe/fold/fold.py:452`, `program/predict/build.py:739`, `node.py:214`, `verity/definitions/registry/lifted.py:1134,1937`, `verity/circuits/program.py:158`, circuit-check's `by_calls.py:60,104`, C-Flock's `class_statement.py:495` and `partition_units.py:237`.
+
+Not covered:
+
+1. PoUW's Python credit check, `verity/protocols/pouw/verifier/credit.py:941-988`: reads a descriptor's JSON without decoding it; only its template's names are held to fixed lists (:849-852). Its Lean twin refuses. The pouw lane's file, and it needs difftest cases: more than a few lines.
+2. Prover-side readers that take a descriptor's JSON as given and build no Definition: `verity_flock/boolean_export.py:635,1512`, `adapters/vllm/tools/popread.py:148`, `verity_vllm/check/match/program_loaders.py:128`.
+3. A definition no decode reaches is never read, in Lean (`Program.lean:991-994`) or Python (`codec.py:983-986`).
+4. No Rust reads a descriptor.
+
+**What a refusal says.** Lean: `definition 'RegisteredTestTwoParams_v0': parameters: a name twice`. Python: `definition 'TPair_v1': parameters: a name twice`, `primitive T_v1: parameters: a name twice`. Derive: `input 'weights' has the name of a parameter this function gets beside its inputs (weights): a Definition's parameter names are distinct`.
+
+**On resume.** Read the two runs; fix what a slow test shows, if anything; fill the body's two run lines; `research queue open --head cursor/proofs-dupnames-7453 --sha ad2b8f93d4… --issue PRF-518 --by proofs`; give you N and the ready line. Mailbox `inbox/dupnames.md`: nothing at 05:04Z.
