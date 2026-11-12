@@ -355,3 +355,11 @@ def test_a_plan_that_names_unsupported_values_is_refused_and_nothing_is_recorded
     assert len(steps.named("install")) == 1 and not (tmp_path / "acquisition_engine.json").exists()
     assert said() == ["INFO [delta] runtime tree 3 modules", "INFO [delta] acquisition plan abcd",
                       "ERROR [delta] REFUSE: acquisition plan: 2 Values are UNSUPPORTED"]
+
+
+def test_a_stage_that_drew_no_plan_is_refused_before_anything_is_installed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, said: Lines) -> None:
+    steps = Acquisition(monkeypatch, plan=None)
+    refused(lambda: attach(committer("identity_check"), options(), manifest(instance_outputs=8), tmp_path, served=None))
+    assert steps.named("install") == [] and not (tmp_path / "acquisition_engine.json").exists()
+    assert said()[-1] == "ERROR [delta] REFUSE: acquisition plan: the stage drew no acquisition plan"
+

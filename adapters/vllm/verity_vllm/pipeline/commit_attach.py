@@ -47,14 +47,14 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
     serve-openai's rows-sha512 Commit (`serve_seal.committer`) builds its own here too, over its row's manifest of record.
     Returns the required classes, whether the MoE source attached and whether the manifest requires the hidden class."""
     moe_attached = False
+    families: dict[str, Any] = {} if required_manifest is None else (required_manifest.get("populations") or {}).get("by_family") or {}
     _hidden_required = hidden_classes_required(required_manifest)
     if args.hidden_so and _hidden_required is False:
         # a tap that never fires would fail the identity check and the required classes as an omitted producer
         if not required_classes_cli:
             required_classes = tuple(c for c in required_classes if c not in HIDDEN_CLASS_BY_FA.values())
         logger.info("[delta] hidden source NOT attached: the required-value manifest names no %s identity (families %s); required classes %s",
-                    " / ".join(HIDDEN_CLASS_BY_FA.values()), sorted((required_manifest.get("populations") or {}).get("by_family") or {}),
-                    list(required_classes))
+                    " / ".join(HIDDEN_CLASS_BY_FA.values()), sorted(families), list(required_classes))
     # MLA / DSA sparse MLA: no hidden class, no FA2 source
     if args.hidden_so and _hidden_required is not False and (required_classes_cli or hidden_family):
         # the op namespace defaults to the .so stem (verity_fa2_matReq | verity_fa2_matAll), as e2e_commit_run.py does.
@@ -85,7 +85,7 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
     # `--moe-source on` is refused by name.  A manifest that names the planes (MOE-01 rows) attaches exactly as before.
     _moe_planes_required = None
     if required_manifest is not None:
-        _moe_planes_required = int(((required_manifest.get("populations") or {}).get("by_family") or {}).get("moe_block_stream", 0) or 0) > 0
+        _moe_planes_required = int(families.get("moe_block_stream", 0) or 0) > 0
     if args.moe_source != "off" and _moe_planes_required is False:
         if args.moe_source == "on":
             logger.error("[delta] REFUSE: --moe-source on but the required-value manifest %s names no moe_block_stream identity "
@@ -93,8 +93,7 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
                          "planes the arena has no slot for", args.required_manifest)
             sys.exit(3)
         logger.info("[delta] MoE block source NOT attached: the required-value manifest names no moe_block_stream identity (families %s; the "
-                    "Program's MoE construction has no MOE-01 rows) -- nothing is staged that the manifest does not name",
-                    list((required_manifest.get("populations") or {}).get("by_family") or {}))
+                    "Program's MoE construction has no MOE-01 rows) -- nothing is staged that the manifest does not name", list(families))
     if args.moe_source != "off" and _moe_planes_required is not False and hasattr(com, "attach_source") and getattr(com, "model", None) is not None:
         msrc = MOE.MoeBlockSource(com, com.model)
         if msrc.layers:
@@ -158,11 +157,14 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
             _docs = STAGE.plan_at_stage(com.model, getattr(eng, "runner", None), required_manifest, out, source=f"commit_delta {kind}")
             for _ln in _docs.log_lines("delta"):
                 logger.info("%s", _ln)
-            _rec = INSTALL.apply_plan_to_committer(com, _docs.plan)
+            _plan = _docs.plan
+            if _plan is None:
+                raise INSTALL.IncompletePlan("the stage drew no acquisition plan")
+            _rec = INSTALL.apply_plan_to_committer(com, _plan)
         except INSTALL.IncompletePlan as e:
             logger.error("[delta] REFUSE: acquisition plan: %s", e)
             sys.exit(3)
-        (out / "acquisition_engine.json").write_text(json.dumps({"engine": "v2", "plan_digest": _docs.plan.digest, **_rec}, indent=1) + "\n")
+        (out / "acquisition_engine.json").write_text(json.dumps({"engine": "v2", "plan_digest": _plan.digest, **_rec}, indent=1) + "\n")
         logger.info("[delta] committer %s: %s module output hooks from the plan, consumer inputs %s, deferred sites %s", com.name,
                     len(_rec["modules_after"]), _rec["plan_inputs"], len(_rec["deferred_sites"]))
     return SimpleNamespace(required_classes=required_classes, moe_attached=moe_attached, hidden_required=_hidden_required)
