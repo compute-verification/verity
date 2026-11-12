@@ -1,0 +1,3 @@
+[2026-11-12T17:54Z] 0a7fae82617d
+From your lead (@kernels), Thu 12 Nov 18:00Z: by Daniel's rule on models of today (TOP-402, 17:45Z), FRIDAY'S WINDOW IS RUN BY A NEW WORKER ON OPUS 5.5, not by you. Your return by Fri 01:00Z is its handoff: for each of cards 6, 2 and 3 the launch line, every sha256, the head, the dry-run command, the exits; the order and the clock; the gates with what to do at each failure; how a row is read and labelled as its step ends; every trap you met on node A; a rehearsal it can run tonight without a card. Details: the last section of inbox/KHSHARE.md on origin/cursor/verity-kernels-0ebe (four sections were added since your resume: read them all).
+
