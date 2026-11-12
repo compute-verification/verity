@@ -29,7 +29,7 @@ def job(name, scope="world week", scale=1.0, beta=0.01, inputs_=None, line_=None
 def design(name, **kw):
     m, g, budget, span, conf = job(name, **kw)
     row = opt.two_stage_design(g.cells, g.replay_blocks, m.delta, budget=budget, replay=g.replay, h=m.byte_s,
-                               served=m.served, union=conf.form == "patterns", registration=span)
+                               stratify=tc.STRATA, served=m.served, union=conf.form == "patterns", registration=span)
     return m, g, row, span
 
 

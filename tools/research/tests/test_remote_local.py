@@ -193,6 +193,26 @@ def test_the_machines_deployed_slot_rule_decides_not_the_shipped_trees(tmp_path,
     assert remote.node_slot_only().through_slot(["python3", "tools/verity/check/slot.py", "--", "true"])
 
 
+def test_the_machines_deployed_tool_rules_judge_the_package_that_answers(tmp_path, monkeypatch):
+    """With /usr/local/lib/vy-monitoring/tool_rules.py installed (deploy.toml), launch-request asks it about the research package
+    answering the request, so a rule the machine has refuses a shipped package that lacks its fix, however old the launcher."""
+    from research.pods.nebius import tool_rules
+
+    node = tmp_path / "tool_rules.py"
+    node.write_text(Path(tool_rules.__file__).read_text().replace(
+        '("telemetry/pyspy.py", "ARGV_LINE",', '("remote.py", "NOT IN ANY PACKAGE", "a test\'s rule", "#0"),\n    ("telemetry/pyspy.py", "ARGV_LINE",'))
+    monkeypatch.setenv("NODE_TOOL_RULES_FILE", str(node))
+    req, runs_root = _request(tmp_path, "old", [PY, "-c", "print('no')"])
+    out = remote.launch_request(req)
+    assert out["started"] is False and f"the research package at {Path(remote.__file__).resolve().parent} predates #0" in out["refused"]
+    assert "Merge origin/main into the branch" in out["refused"]
+    assert R.summarize(runs_root / "old")["state"] == "refused" and not (runs_root / "old" / "job.json").exists()
+    node.write_text(Path(tool_rules.__file__).read_text())
+    req, _ = _request(tmp_path, "new", [PY, "-c", "print('yes')"])
+    assert remote.launch_request(req)["started"]
+    assert _wait_terminal(runs_root / "new")["state"] == "done"
+
+
 def test_an_auditor_host_starts_only_the_commands_its_marker_lists(tmp_path, monkeypatch):
     """/etc/vy/auditor (vy-challenger-1's, deploy.toml): the auditor host runs its own service and nothing else, so the
     launcher refuses any other command before anything starts, a listed one with an extra argument or a wrapper among them, and a
