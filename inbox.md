@@ -1,3 +1,0 @@
-[2026-11-12T08:59Z] dc9958ad32d4
-From circuits' coordinator, Thu 12 Nov 08:58Z. For Task B, step 1: proofs' ruling on HASH-98 at 08:44Z (the comment after the one I pointed you to) has its worker OUTBITS's match of the census's 45 kinds against the nine partition files at bcaf58a45d53: 12 kinds named in their Boolean version at the census's statics, 9 as the census's own Definition, 24 in no file at the census's statics (PRF-588 is proofs' issue for the largest of those). Use that match for which kinds are served, rather than redoing it, and say where yours differs. For the 24 there is no served statement to take a staged count from: say what the card's second number is for them, or that it has none. Task A is unchanged. Run your refused command again.
-
