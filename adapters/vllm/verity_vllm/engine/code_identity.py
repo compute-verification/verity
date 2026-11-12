@@ -247,7 +247,9 @@ def loaded_code_objects() -> dict[str, Any]:
                 if id(m) in seen:
                     continue
                 seen.add(id(m)); reg.append((str(k), m))
-        mods, kernels, bins_all = [], {}, set()
+        mods: list[dict[str, Any]] = []
+        kernels: dict[str, dict[str, Any]] = {}
+        bins_all: set[str] = set()
         for key, mod in reg:
             ks = 0
             for name, obj in list(vars(mod).items()):
@@ -266,8 +268,8 @@ def loaded_code_objects() -> dict[str, Any]:
                     cub = asm.get("cubin") if isinstance(asm, dict) else None
                     if cub is not None:
                         bins.append("cubin:" + _sha(cub))
-                    elif getattr(k, "hash", None):
-                        bins.append("triton:" + str(k.hash))
+                    elif held := getattr(k, "hash", None):
+                        bins.append("triton:" + str(held))
                 # the EXECUTED specialization: the launcher(s) left after autotuning (Inductor keeps ONE launcher = the benchmark winner; the
                 # graphs captured / the eager steps launch that binary) -- autotuning picks it per process by benchmark, so two processes
                 # running the same code objects can execute differently configured binaries
@@ -276,7 +278,7 @@ def loaded_code_objects() -> dict[str, Any]:
                 for l in list(getattr(obj, "launchers", None) or []):
                     c = getattr(l, "config", None)
                     b = getattr(l, "bin", None)
-                    e_ = _binary_identity(b, c) if b is not None else ({"config": None, "id": None})
+                    e_: dict[str, Any] = _binary_identity(b, c) if b is not None else ({"config": None, "id": None})
                     if b is None and c is not None:
                         # no `bin` on the launcher (older Inductor): the executed binary is the compile result whose config equals the launcher's
                         for b_ in compiled:
@@ -300,10 +302,11 @@ def loaded_code_objects() -> dict[str, Any]:
                 bins_all.update(bins)
                 candidates = [{"kwargs": {str(a): (int(b2) if isinstance(b2, int) else str(b2)) for a, b2 in (getattr(c, "kwargs", None) or {}).items()},
                                "num_warps": getattr(c, "num_warps", None), "num_stages": getattr(c, "num_stages", None)} for c in list(getattr(obj, "configs", None) or [])]
-                ent = {"src_sha256": _sha(src) if src else None, "binaries": sorted(set(bins)), "n_launchers": len(getattr(obj, "launchers", None) or []),
-                       "n_compile_results": len(compiled), "executed_configs": cfgs, "n_configs_candidate": len(candidates), "candidate_configs": candidates,
-                       "compiled": compiled, "executed": executed, "module_key": key,
-                       "autotuned": len(candidates) > 1 or len(compiled) > 1}
+                ent: dict[str, Any] = {
+                    "src_sha256": _sha(src) if src else None, "binaries": sorted(set(bins)), "n_launchers": len(getattr(obj, "launchers", None) or []),
+                    "n_compile_results": len(compiled), "executed_configs": cfgs, "n_configs_candidate": len(candidates), "candidate_configs": candidates,
+                    "compiled": compiled, "executed": executed, "module_key": key,
+                    "autotuned": len(candidates) > 1 or len(compiled) > 1}
                 if kname in kernels and kernels[kname]["src_sha256"] == ent["src_sha256"]:   # the same kernel bound in kernel module + wrapper namespace
                     kernels[kname]["binaries"] = sorted(set(kernels[kname]["binaries"]) | set(bins))
                     have = {json.dumps(x.get("id")) + json.dumps(x.get("config"), sort_keys=True) for x in kernels[kname]["compiled"]}
