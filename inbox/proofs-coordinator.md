@@ -68028,3 +68028,41 @@ Still running: #8893 at its new head, #9051 with each of #8950, #9066 and #8878,
 - The other 7 of the 19 failures [relayed: lean, 22:26Z]: other lanes', not read.
 
 **For the table:** LEAN-249, proofs. Commit: `e00ebe7b085f735860d764200bf5c7e14a528987` on `cursor/proofs-crossed-tests-fba7` (parent `3ff11d118f93`; picks clean onto `a07cf0b341d7`, merges clean with `efe3ec71b92a`). Run: `r20261112-013251-8c03`, 890 passed, 0 failed. Cause of the two: #8839 removed the class-of-record measurement and the branch's own `H1_TIE` test still expected its third call. Rename `80c0a4ab6e97`: the token only, byte for byte; 12 lines, all binder types; 17 statements take the name, none listed in a lock; `ScopeOf.lean` exit 0, 38 theorems, axioms clean, in two runs; `ScopeDesc.lean` the same, 19 theorems (mine `r20261112-014551-a26e`, theirs `r20261112-015557-26ec`). Keep it; nothing of ours replaces it.
+
+## OUTBITS, Thu 12 Nov 02:36Z: the refusal `interior-window` is written and pushed, its Lean builds, and it is in two runs; not opened or marked until the records run shows no lock record moved; #9066 still merges onto `main`, and the figures' suite and two others pass on the merge
+
+**Where it is.** Branch `cursor/proofs-interior-root-7b1e`, head `3e94266a6db3`, two commits on `origin/main` `be9a3d566905`, pushed [run: `git push`, 02:10Z]. No pull request yet. I open and mark it only when the records run ends with no lock record changed and the quick tier passes, as your step 2 says.
+
+**What it does.** [read: my diff]
+- The interior registration's window root must be the boundary registration's (both absent counts), or the root the verifier computes from the boundary registration's digest and the replay sample in order. Anything else is refused at the interior registration, code `interior-window`.
+- Lean: `SecondStage.interiorRoot` and `Run.interiorWindowOk` (public), one check in the private `interiorSteps` after the population check. Python: `second_stage.interior_root`, the same check in `Stream.register_interiors`, and the difftest's reference.
+- I took (B), as my step-1 entry said silence would mean: the root is byte for byte `interior_rows.interior_run`'s. Neither `two_stage.py` nor `interior_rows.py` is touched.
+
+**One correction to my step-1 entry.** I wrote that under (B) no in-tree test changes. That was wrong for one test [read: `lean/tests/test_difftest.py`, `_two_stage_text`]. The difftest's own two-stage case opened its second session on a sampled root, which is exactly the input the refusal refuses. The honest case now opens that session on the computed root, and the former input is kept as the case the run refuses. No command and no other test changed [read: every caller of `register_interiors` at `be9a3d566905`: each passes no root to both stages, or the fake's one root to both].
+
+**One thing you did not ask for.** A second commit, `3e94266a6d`, adds one assertion to the adapter's test `adapters/vllm/tests/pipeline/test_interior_rows.py`: `interior_run` equals `second_stage.interior_root` on the registration the test already builds. `verity/` may not import the adapter, so without it nothing in the tree holds the two formulas together. It is its own commit so it can be dropped; say if the vLLM lane would rather own that line.
+
+**What is shown so far.**
+- The same input bytes (SHA-512 `089f1e1d57a2...`, the former two-stage case) are accepted at `main` with the two-stage form allowed, and refused `interiors/interior-window` on the branch. This is the Python reference of the Lean run only, run here in seconds, with no Lean [mine: `interior-root-python-reference.log`].
+- On the branch the honest case, on the computed root, runs to the form's refusal as before and accepts with the form allowed; a root no session opened and no root are refused `interior-window`; with the boundary registration's root the check passes and the second stage's coins fail, since the second session was not opened there [mine: the same log].
+- The Lean builds: `SecondStage.lean` elaborates with a clean axiom probe [run r20261112-020453-8db7, exit 0], and the records run's audit of the Spot package passed, 82 s, two files changed [run r20261112-021116-74a6, still running].
+- Not shown yet: the Lean run against its Python reference on these cases, and that no lock record or proof under `security/` moved. `run` is textually unchanged and `interiorSteps` is private, so I expect none to move [guess].
+
+**Runs.**
+- `r20261112-021116-74a6`, the records run `lean_changed.py --records verity/protocols/spot/verifier/lean --update` at `3e94266a6d`, on vy-nebius-cpu-3. It took its slot at 02:20Z; the last one took 28 minutes, so about 02:50Z [run; guess for the hour].
+- `r20261112-021056-bfef`, the quick tier `suites.py --changed be9a3d5669 --quick` at `3e94266a6d`, on vy-nebius-cpu-1. In line since 02:11Z, one check ahead at 02:35Z; once it has a slot the last one took about 25 minutes, so about 03:10Z [run; guess for the hour].
+- `r20261112-012749-acd1`, #9066's merge with `main` (`cc88badd57`, never pushed), three suites. Done, exit 0, at 02:35Z [run].
+
+**#9066.** [run r20261112-012749-acd1, exit 0, on the merge of `23b637d143` with `main` `be9a3d566905`]
+- `benchmarks/spot_figures`: 219 passed. `verity/protocols/spot/verifier`: 880 passed. `verity-core-sampled-proofs`: 257 passed, 2 skipped. Three suites, none cached, none failed.
+- `main` is still `be9a3d566905` at 02:36Z and `git merge-tree` gives the same tree, `f9ab5ecb0bd2` [run]. GitHub shows it open, mergeable, no review yet [read: `gh pr view 9066`].
+- The new branch merges with #9066's head without conflict (tree `745e5f4453ee`) [run: `git merge-tree`]; no suite has run on that merge.
+
+**What a fresh worker does next.**
+1. Read the two runs (`research fetch RUN --all`, then `stdout.log`). If the records run kept a record under `lean-audit/record/`, or printed a changed record for any guarantee, stop and say so here: step 2 is then not mine to mark.
+2. Otherwise: `research queue open --head cursor/proofs-interior-root-7b1e --sha 3e94266a6db34a74adc2291c3153cb19cf522b8f --title "SPOT: the interior registration's window is the boundary registration's or the one the verifier computes (interior-window)" --body-file BODY --issue PRF-477 --by proofs`, then `research queue ready N --mark --by proofs`, then the ready line for CI-489 here. The body is drafted in my checkpoint note `proofs/20261111T2205Z-report-outbits-interior-root`.
+
+**Three asks.**
+1. (A) or (B) is still yours to overrule: (B) is what is built.
+2. The goal line in the body. PRF-477 is labelled `proofs/spot-128k-attention-proved`, and that is what I have put; the sibling refusals of round 2 used `proofs/spot-two-stage-sound`. Say if it should be the other.
+3. From step 1, still open: whether "one session answers any number of registration digests" is known, and whose it is. This refusal does not close it.
