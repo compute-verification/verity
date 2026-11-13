@@ -113289,3 +113289,63 @@ For the table: RELAX | R7 | real `df7342a16519`, side (A) `3c020f77568d` | four 
 **Not established.** No kernel replay. No second reader. The records run has not returned, so I do not know that the lock edits satisfy the check or that `Window.lean`'s refactor moves no record. PR 3's own records run (its lock without the proofs) is not sent yet; it goes when `d333` shows the edits are right. The last four cleanups in PR 4 (closers the linter said never ran) are compiled only by `d333`.
 
 I can pause: yes once `d333` is the only thing I wait on, which is after PR 2's quick tier ends and I open PR 2 and PR 3; I say so in the entry that does it. Mailbox read at `23c3e423be` (01:55Z), nothing new. Pushed: PR 3 `06ac8f46e700`, PR 4 `36dc4d568ff4`; nothing unpushed.
+
+## ADDRWC, Fri 01:57Z: COMPILED: `r20261113-012948-7bbd` and `r20261113-012658-73cc` exit 0: `WidthFact h (addressOf h)` and `CopyFact h (addressOf h)` compile from FRAME's `Wiring h` and `BitsInPorts h` (the copy also from `RowFact` and `CopiesAt h`), with only the three axioms; `BitsInPorts` cannot be proved without a new decided condition: each member circuit's port names distinct
+
+**In plain words.** Both facts I was asked for now compile at the real address map. The width fact says a value's committed row is as wide as the port it is read from. The copy fact says the bit an inner block reads is the bit that row holds. Each rests on FRAME's conditions on how the outer block is wired, and on one more fact: every committed position's bit lies inside its port's row. The copy fact also rests on the row fact (ADDRROW's) and on a condition I state on each inner block's circuit alone. That extra fact about positions cannot be proved today. The verifier's model never checks that a circuit's ports have distinct names, so a circuit could name two ports alike, with different widths. A decided check of distinct names would close that hole; it is FRAME's file.
+
+Clock: `date -u` read 01:56Z. Mailbox read at 01:13Z; the hook delivered your 01:30Z message.
+
+### Heads
+
+- Branch `cursor/proofs-addrwc-60f3` at `ec9742e5e2`, pushed [run: `git push`]. Unpushed: nothing.
+
+### What a run has compiled
+
+- [run: `r20261113-012948-7bbd`, vy-nebius-2, at `ec9742e5e2`] `AddressFacts/WidthOf.lean`: lean exit 0 in 216 s. Axiom probe: "none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The five, each "depends on axioms: [propext, Classical.choice, Quot.sound]":
+  - `widthFact_of_wiring (W : Wiring h) (hB : BitsInPorts h) : WidthFact h (addressOf h)`;
+  - `widthFact_addressOf`, at the same statement as before, which HONEST2 calls;
+  - `CheckedRun.target_of_wiring`, `CheckedRun.widthAt_of_wiring` and `CheckedRun.widthAt_of_target`.
+- [run: `r20261113-012658-73cc`, vy-nebius-cpu-11, at `ec9742e5e2`] `AddressFacts/CopyOf.lean`: lean exit 0 in 299 s. Axiom probe: "none of its 2 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The two:
+  - `copyFact_of_wiring (W : Wiring h) (hB : BitsInPorts h) (hrow : RowFact h ω keep (addressOf h)) (hC : CopiesAt h) : CopyFact h (addressOf h)`;
+  - `CheckedRun.copyAt_of_wiring`.
+  
+  It built `WidthOf.lean` and `Copy.lean` as imports, at the base's `7984747798`.
+- Compiled before these: `Copy.lean`'s 10 theorems [run: `5e86`]; `ports_member`, `words_eq` and `widthHolds_of_ref` [run: `25a6`].
+
+### `BitsInPorts h`: not provable from what the model checks today (GAP)
+
+`BitsInPorts h`: each source bit's and written bit's `bit` is below `16 · words` of the first port of its row's name in `memberCircuit h t`. Two halves:
+
+- **The bit inside its own port:** provable [derived].
+  - Source bits: `rowBit_keyRowOf` turns Bits' position into `keyRowOf`'s, whose bit is a `Fin (portRowW c q)`, and `portRowW c q = 16 * c.ports[q].words` [read: `Layout/KeysRow.lean:242`]. Its hypothesis `RowKey` at each read input comes from `KeysRow`, which Flock's scope gives (`keysRow_stmt` from `PortReads`), so it needs FRAME's `membersScoped` from L1.
+  - Written bits: `outPos_eq` gives `bit = 16 · (x − outAt port) + t` inside the port's words.
+- **The first port of that name being that port:** not provable [read]. It needs the member circuit's port names distinct. Nothing in `two h`, `templateOk` or Flock's general parse refuses duplicates:
+  - Bits' `check` does (`Spot/Bits.lean:813`), but no Lean or Python outside `Bits.lean` calls it;
+  - Flock's `RecVStar.checkMsgNames` does, for recursive statements only.
+  
+  With duplicates, `portNamed` takes the first of the name and `placeAt` that port's words, which can differ from the bit's own port. Then the width fact is false.
+
+### NEEDS
+
+1. **FRAME: a decided `portsOnce h`**, in `templateOk` or `wiringOk` (your `Code.lean`): `∀ t < h.ms.length, ((memberCircuit h t).ports.toList.map (·.name)).Nodup`. It is one pass over each template's ports, so its cost is the description's. The verifier refuses more and accepts no form it refused. Bits already states the same refusal, uncalled. With it, plus `membersScoped`, I prove `BitsInPorts h` from `two h s = some d`.
+2. FRAME: `BitsInPorts h` joins the assembly's list (you were told at 01:30Z); `CopiesAt h` joins it too, until I prove it.
+
+### Next
+
+- `CopiesAt h` from the members' circuits: the path is in my 01:33Z entry (`picks_pickAny`, `rowBit_keyRowOf`, `Layout.keyRowOf_wire`; written bits by `outRowBit_outRowOf`). It needs the same distinct names.
+- `BitsInPorts h` at `portsOnce h` and the scope.
+
+### Size
+
+4 files, 807 lines. Theorems left: `BitsInPorts` (once `portsOnce` is decided) and `CopiesAt`, about 300 lines together [guess]. Both facts at the address map compiled at 01:56Z.
+
+### Not established
+
+- `BitsInPorts h` and `CopiesAt h` are unproved, and `BitsInPorts` is unprovable without a refusal of duplicate port names.
+- No Lean evaluation shows that Friday's registrations have distinct port names or meet `CopiesAt` [guess: they do, since Bits' Python layout and the honest prover name each port once].
+- `RowFact` at `addressOf` is ADDRROW's.
+
+### To post
+
+Nothing.
