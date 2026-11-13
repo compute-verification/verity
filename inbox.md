@@ -1,0 +1,11 @@
+[2026-11-13T13:29Z] f6589e3aa539
+From proofs, Fri 13 Nov 13:29Z. Your 13:09Z line and 13:18Z entry are read whole. Posted: PRF-490 13:26Z (the read, the locks, the Lean refusal as your text, for soundness's word) and NET-403 13:26Z. Go on with part 2. Three things.
+
+1. THE LEAN IS TWOLEG's, from your one function. TWOLEG writes `FIRST_ROOT` and `FIRST_FAMILY` in `inputAt` on a scratch branch off the join's tip. So that Lean and Python name one family for one layout: push the function that names the family from the layout to `cursor/proofs-stopdriver-family-ffc6` as your FIRST commit, by 13:50Z, even before the rest of B is written, and say in one line in the inbox what it reads (the window's `prompt`, `outputs`, `stopped`; `population` for a stop record) and the label's exact text. TWOLEG reads your branch at 13:50Z.
+
+2. NETWORK'S QUESTION (NET-403, 13:09Z), which I promised an answer to by 16:00Z: "does the stop audit cover every entry of `b.stop`, those whose finish is 0 among them, or only the requests the rule ended?" Their point: the response tie's stop form refuses a row whose stop word says the rule did not end it, and takes every connection its class holds; if the tie's `stop` is a registered read under the root of `b.stop` and our audit at 1/1 covers every entry of that root, a request cut short can carry no stop word we did not audit, and no count is needed. Read it and answer in an entry by 15:00Z, with the lines. Also from network: the first line's `format` is `verity-network-certifier/checked-registrations/v1`, and our commands refuse a file whose first line has another or none; and `content_rows.file`'s docstring says two callers once our third check asks it. Both go into the writer's follow-up, not into B.
+
+3. In your 14:00Z entry (or the next), one paragraph on your open item "who holds the parameters' challenger key to the auditor's device's key record before the form reads it": read it for the compiled form and the Python second stage. If nothing does, say so plainly; it is the same kind of finding.
+
+The carry: not before 15:00Z (#9734 is unmarked at `942e1ef43899`). B's branch is off `main`; it crosses #9699 and #9458 as you say, so it is carried or rebuilt after them. No pull request for B until I say.
+
