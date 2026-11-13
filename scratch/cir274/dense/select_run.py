@@ -27,8 +27,11 @@ from test_node_window import glm_request  # noqa: E402
 
 import verity.definitions.numerics.rows  # noqa: E402,F401  (registers the row kernels)
 from verity.circuits.codec import descriptor_id  # noqa: E402
+from verity.circuits.defs import bind  # noqa: E402
+from verity.circuits.evaluation.batch import evaluate_batch  # noqa: E402
 from verity.circuits.refs import runs  # noqa: E402
 from verity.commitments.windows import interface as IF  # noqa: E402
+from verity.definitions.registry import b1  # noqa: E402
 from verity.definitions.registry import greedy_stages as G  # noqa: E402
 from verity_vllm.pipeline import serving_templates as ST  # noqa: E402
 from verity_vllm.program.predict import node_window as NW  # noqa: E402
@@ -102,7 +105,7 @@ rec["select"] = {"templates": len(sel_t), "units": sum(c0.units[t] for t in sel_
 free_sel = [f for f in w0.free if f.tid in set(sel_t)]
 rec["select"]["free"] = {"rows": sum(f.count for f in free_sel), "ports": sorted({f.port for f in free_sel}),
                          "by_peer": dict(sorted(Counter(f.name for f in free_sel).items()))}
-rec["free_ports_all"] = dict(sorted(Counter(f"{f.tid.split('{')[0]}/{f.port}: {f.kind} {f.fam}" for f in w0.free).items()))
+rec["free_ports_all"] = dict(sorted(Counter(f"{f.tid.split('{')[0]}/{f.port}: {f.kind} {f.family}" for f in w0.free).items()))
 rec["census"] = {k: v for k, v in cen.items() if k not in ("peers", "trace")}
 log(f"window {cen['digest'][:16]}: {rec['templates']} templates, {rec['units']} units; {len(bad)} refused proof blocks; "
     f"unlowered {cen['unlowered']}")
@@ -118,6 +121,7 @@ for j, n in enumerate(fn.body.nodes):
         continue
     spec = descriptor_id(n.fn)
     s: dict = {"node": j, "spec": spec, "form": n.form, "out": str(w0.outs.get(j))[:300]}
+    stops.append(s)
     try:
         s["unit_templates"] = [str(t) for t in ST.unit_templates(spec)]
     except Exception as e:  # noqa: BLE001
@@ -133,18 +137,20 @@ for j, n in enumerate(fn.body.nodes):
     except Exception as e:  # noqa: BLE001
         s["check_proof_block"] = f"{type(e).__name__}: {e}"[:400]
     args = []
+    s["args"] = args
     for k, arg in enumerate(n.args):
-        segs = [list(x) if x[0] == "p" else x for x in w0.segments(arg.refs)]
-        r: dict = {"leaves": len(arg.refs), "segments": [str(x)[:120] for x in segs][:8]}
+        r: dict = {"leaves": len(arg.refs)}
+        args.append(r)
+        try:
+            r["segments"] = [str(x)[:160] for x in w0.segments(arg.refs)][:8]
+        except Exception as e:  # noqa: BLE001
+            r["segments"] = f"{type(e).__name__}: {e}"[:300]
         try:
             r["rows"] = [(x.tid, x.unit, x.out, x.words) for x in w0.rows(arg.refs)][:8]
         except NW._Free as e:
             r["rows"] = f"free: {e.sources}"[:300]
         except Exception as e:  # noqa: BLE001
             r["rows"] = f"{type(e).__name__}: {e}"[:300]
-        args.append(r)
-    s["args"] = args
-    stops.append(s)
 rec["stop_check"] = stops
 save()
 log("window recorded")
@@ -197,6 +203,33 @@ for s in rec["select_nodes"]:
 rec["tokens"] = tokens
 log(f"tokens: {[(t['twin'], t['v4']) for t in tokens]}")
 
+# The units' own answer: a plain Check (no twin anchors), so the combine's inputs r<c> are the chunk units recomputed from
+# their logits rows (wired rank 0, stood peers), and the row Definition TokenSelect_v1{V} on the same row.
+plain = NV.Check(c, w, values, tables)
+comb_t = descriptor_id(G.plan(V)[-1].defn)
+v1 = bind(b1.TokenSelect, V=V)
+for t in tokens:
+    j, m = t["node"], t["member"]
+    u = next(at_ for at_, _n, _f in w.allocs[comb_t] if w.node_of[(comb_t, at_)] == j) + m
+    got = plain.outputs(comb_t, [u])["o0"][0]
+    t["units"] = int(got[0]) | int(got[1]) << 16
+    t["units_recomputed_chunks"] = sum(1 for (tid, _u) in plain.memo if tid != comb_t and tid in sel_t)
+    x = np.asarray(values.leaves(values.arg(fn.body.nodes[j], 0, m)), np.uint16)
+    t0_ = time.perf_counter()
+    try:
+        r1 = np.asarray(evaluate_batch(v1, x[None])).reshape(-1).astype(np.uint64)
+        t["v1"] = int(r1[0]) if r1.size == 1 else int(r1[0]) | int(r1[1]) << 16
+    except Exception as e:  # noqa: BLE001
+        t["v1"] = f"{type(e).__name__}: {e}"[:300]
+    t["v1_s"] = round(time.perf_counter() - t0_, 1)
+    t["agree"] = len({t["twin"], t["v4"], t["units"], t["v1"]}) == 1
+    if a.tie:
+        t["tie_token"] = TIE[0]
+        t["tie_holds"] = t["agree"] and t["units"] == TIE[0]
+rec["units_agree"] = all(t["agree"] for t in tokens)
+log(f"units: {[(t['units'], t['v1'], t['agree']) for t in tokens]}")
+save()
+
 
 class SelCheck(NV.Check):
     def want(self, tid, out, u):
@@ -235,7 +268,8 @@ try:
     R = 7744 // c.cuts[chunk0]["logits"]
     row = lane // R
     for i, x in enumerate(c.wires):
-        if x.reader == chunk0 and x.port == "logits" and x.cut[0] == row and x.at <= unit0 < x.at + x.reader_units:
+        if (x.reader == chunk0 and x.port == "logits" and x.cut[0] <= row < x.cut[0] + x.cut[1]
+                and x.at <= unit0 < x.at + x.reader_units):
             ws = list(c.wires)
             ws[i] = dataclasses.replace(x, base=x.base + 1)
             plant("1_chunk_logits_row", dataclasses.replace(c, wires=tuple(ws)), chunk0,
