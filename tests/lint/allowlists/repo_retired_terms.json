@@ -5299,7 +5299,7 @@
     {"file": "verity/protocols/accounting/pouw/prover/circuit/pc8.py", "count": 37},
     {"file": "verity/protocols/accounting/pouw/prover/circuit/plan.py", "count": 59},
     {"file": "verity/protocols/accounting/pouw/prover/circuit/words.py", "count": 4},
-    {"file": "verity/protocols/accounting/pouw/prover/schemes/pearl_c.py", "count": 26},
+    {"file": "verity/protocols/accounting/pouw/prover/schemes/pearl_c.py", "count": 27},
     {"file": "verity/protocols/accounting/pouw/prover/schemes/pearl_c4.py", "count": 43},
     {"file": "verity/protocols/accounting/pouw/prover/schemes/pearl_c_debit.py", "count": 35},
     {"file": "verity/protocols/accounting/pouw/prover/schemes/pearl_c_device.py", "count": 8},

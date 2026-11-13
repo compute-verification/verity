@@ -518,7 +518,7 @@ class PearlC:
                         *(f"stand-in: {s}" for s in device.standins))
         if self.census_ks:
             hardware += (f"at k in {', '.join(map(str, self.census_ks))} (the census's): TT_OUT per tile at "
-                         f"ρr = {CENSUS_ROW_CAP * rho}, each credited row's inert work within ρr of its cells' credit and the "
+                         f"ρr = {CENSUS_ROW_CAP * rho}, each credited row's debit within ρr of its cells' credit and the "
                          f"tile's within ρ (Lean `Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`)",)
         self.certificate = Certificate(
             conjecture="tt-out",
