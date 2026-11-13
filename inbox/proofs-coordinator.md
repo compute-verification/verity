@@ -161041,3 +161041,43 @@ What the blocks are, as far as I have read them:
 **Not established:** where the tool stops on #9576 and on #9593; what the seven unread files' blocks of #9593 hold; any carry's result.
 
 **Waiting on:** jobs 1 to 3 (about 22:10Z), the dry run of #9593, and your answer on #9576 (which does not hold up the others).
+
+## MEMBERS, Fri 13 Nov 21:20Z: the split's head is `1527be81d44c6d92561224cacc81069c3d2de4c2` on `cursor/proofs-members-split-34fd`: SPOT's Lean verifier, the recursive audit's package and the two compositions build on it; the five importing modules of the security trees are still building
+
+Your 20:56Z and your 21:02Z (infra's rule) are read, the first confirmed in the mailbox. The pen is mine, on a machine that started at 20:43Z.
+
+**The head, for WINDOWAT, ASSEMBLY and STREAMKEPT.** `1527be81d44c6d92561224cacc81069c3d2de4c2`, one commit on FRAME's carried switch head `097b85eff21b810113c125694d38ccd7bb112e0b`, pushed. [read: `git rev-parse`, `git log`]
+
+**What it is.** [read: the commit's diff]
+- `Spot/OneStageZkStatement.lean` (module `Spot.OneStageZkStatement`, 1,499 lines): the old file's lines 143 to 1600, text unchanged, from `PROTOCOL` through `membersFiles_eq_kept`: the parameters, one statement's check, a member's statement and the files' pass. Names and the namespace `Spot.OneStageZk` are unchanged. It opens with `@[expose] public section`, as STREAMKEPT asked.
+- `Spot/OneStageZk.lean` (1,150 lines, from 2,602): the head comment, then `statementAt` to the end: the run over the members, the evidence's parts, the checks, the commands and all 164 `#guard`s. It takes the new module with `public import` (and with `meta import`, as it takes its other imports, for the `#guard`s).
+- `Spot.lean` gains `public import Spot.OneStageZkStatement`.
+- No `import all` of a module in the tree. `NO_FILE` is read below the cut in one place only, the `#guard`s' helper `oneProofs`, which now spells the value (`"".pushn '0' 128`); `NO_FILE` keeps its `private`. `import all Init.Util` went with `withPtrEq`, which only the new module uses.
+- It is a move of declarations and nothing more: no declaration's text changed but that helper.
+
+**What built.** [run `r20261113-210106-df62`, vy-nebius-cpu-11, at `1527be81d44c`, ended 21:15Z, every step exit 0]
+- SPOT's Lean verifier whole, `lake build Spot` with every executable: 532 jobs, 105 s. `Spot.OneStageZkStatement`, `Spot.OneStageZk`, `Spot.MembersParse` and `Spot.Pieces` compiled. The root imports both modules, so no name is declared twice.
+- The recursive audit's package (`VStarRecursive.Protocol` compiled, 459 jobs), the remote composition (590 jobs) and the onsite one (706 jobs), each its default targets.
+
+**Still running.**
+- `r20261113-211522-423f` on vy-nebius-cpu-1: the five modules of `security/Properties` and `security/Proofs` that import `Spot.OneStageZk` (`Properties.Challenger`, `Properties.Spot.Tables`, `Proofs.Properties.Spot.Units`, `Proofs.Properties.Verity.Recursive.BaseSetup`, `Proofs.Properties.Verity.Sampled.MemberForm.Evidence`). At 21:19Z it waited for a slot. A 170-minute limit from its slot.
+- `r20261113-211822-06c4` on vy-nebius-cpu-14: the split's quick tier, `suites.py --changed 097b85eff21b --quick`. A 180-minute limit from its slot.
+- `r20261113-204756-e64b` and `r20261113-205009-9cba` on vy-nebius-cpu-14: the quick tiers of #9820 and #9821. At 21:03Z neither had a failed suite. #9821's reached list is now read: 63 suites, the 52 passed whole and 11 left for the quick tier. [run `r20261113-205009-9cba`, `stdout.log`]
+
+**The two lists the lints keep.** [read: the lists; derived: counts by the lints' own counting functions, no test run]
+- `tests/lint/allowlists/lean_bar.json`: the file's `long-file` entry is deleted; neither file has a finding.
+- `tests/lint/allowlists/repo_retired_terms.json`: the file's entry of 77 is now 28 for `Spot/OneStageZk.lean` and 49 for the new module, the same total, so the list does not grow. The lint finds 28 and 76. Before the split it found 104 in the one file against the 77 listed: the 27 above the list were at the carried head before my commit, and the split adds none.
+
+**The lock: it is a move, and I have changed no lock.** [read: `security/lean-audit.json`, `security/Properties/lean-audit.json`, `tools/verity/lean/check.py`]
+- Both locks' `reads` section is keyed by module. Under `Spot.OneStageZk` each records 161 definitions. 145 of them are now in `Spot.OneStageZkStatement`, 14 stay, and two (`MULTI_REFUSED`, `scopeOf`) are in neither file at the carried head, so the locks at the carried head are not yet regenerated for the switch itself.
+- Six of the recorded names are private (`exactly`, `digest?`, `without`, `digestOf`, `committedOf`, `sessionOf`), and a private name carries its module's name: `_private.Spot.OneStageZk.0.Spot.OneStageZk.X` becomes `_private.Spot.OneStageZkStatement.0.Spot.OneStageZk.X`. That map, seven lines with `NO_FILE`, is the `MOVES.json` for `--update --moved`.
+- No guarantee's own name moves. The two compositions' locks list `Spot.OneStageZk` among a layer's imports; whether the new module must be listed there the records run will say.
+- What I do next unless you say otherwise: two records runs in clones, which write to no branch: `lean_changed.py --records verity/protocols/proofs/spot/verifier/lean --update` at the carried head, and the same with `--moved` at the split's head; then I compare the two regenerated locks. If they differ in anything but the module a definition is recorded under and those private names, I stop and write you the words. I name the node for these too, by your 17:47Z; the lean-proofs skill says `--on auto` for this one command, so say if you want that instead.
+
+**Infra's rule (your 21:02Z).** Read. Item 4: no branch of mine holds an unpushed commit, and every commit of mine on my four branches (3, 1, 1 and 1) has my checkout's identity as author and committer. No job of mine commits on a node.
+
+**Not established.**
+- That the five importing modules of the security trees build on the split.
+- That the split's suites pass, and which of their failures, if any, the carried head has too.
+- That no record's text moves: no records run has been made.
+- The quick tiers of #9820 and #9821: no verdict yet.
