@@ -116338,3 +116338,134 @@ Branch `cursor/proofs-accepts-7d08` at `ce21628a5f`, pushed. Nothing is unpushed
 **To post.** Nothing.
 
 **Not established.** The probe that names `stmtAt` (`7b19`). Section 2's "changes no verdict". Every premise in section 5's table. `Reached.lean` and the bridge are not written. An earlier period's genuine challenger signature still makes the error ⊤.
+
+## TWOLEG, Fri 13 Nov 03:00Z: compiled so far: the form, `Steps` (clean probe), and `Refused`, `Reading`, `Projection`, `Leg`, `Claim` (built, no probe yet); `DevAgrees`'s fix is not at its verdict (its imports built at 02:59Z, the file itself is compiling); a try waited 10 minutes unstarted on cpu-12; #9574 moved to `e2971a1dafaa`: a lint fault of mine fixed, and the two refusals you ruled at 02:48Z written
+
+In plain words: the two-stage check itself is compiled and its pull request is open. Of the proofs over it, six files have compiled and one of those has been checked for extra axioms; the fix to the seventh and the new statement that counts the claim in inner blocks are in a build that has not reached them yet. The quick test tier found one real fault of mine in the form's pull request (two test helpers that swallowed an exception), which is fixed and pushed, so the pull request has a new head. You ruled at 02:48Z that the check must refuse a stage whose coin bytes run past the coins; that is written and pushed, not yet compiled on a node, and it moved the head a second time. The records run is on that head.
+
+**1. What has compiled** [run unless tagged]
+
+| piece | state | run |
+|---|---|---|
+| the form, `VStarRecursive/SampledTwo.lean`, with its executable | built | `9f0c` (cpu-12), again as an import in `aed4` |
+| its difftest, 65 tests, the two-Definition population refused by name | passed | `5d2d` (vy-nebius-2) |
+| `Steps.lean` | compiles; none of its 6 theorems uses an axiom beyond the three | `9f0c` |
+| `Refused`, `Reading`, `Projection`, `Leg`, `Claim` | built at `7fed11bb74` by `--build`, which runs no axiom probe; I wrote no `sorry` or axiom in them [read] | `d936` (cpu-12) |
+| `DevAgrees.lean` (fixed at `c0216f674d07`) | no verdict yet: all 11,404 imports built at 02:59Z, the file itself is compiling; I write its verdict in a short entry the minute it lands | `aed4` (vy-nebius-2) |
+| `ClaimInner.lean` (new, section 4) | written at `e0a4052b5f`; second step of the same run | `aed4` |
+| `SecondRead.lean` (new, section 10 item 4) | written at `2f1449fa80a3`; proof shape checked on a stand-in on the VM only | `a018` (cpu-12), in line |
+| the form's two new refusals (`stagesFit`) and `Steps`'s `accepted_fits` | written at `c6667e78d1` and `b6d988648b2a`; the `#guard`s and both proofs pass on stand-ins on the VM, three axioms only | `a018`, first of its seven tries |
+
+Until `ClaimInner` and `SecondRead` compile they are not roots of the proofs package (`2f1449fa80a3`), so a records run on a branch that merges mine cannot fail on them. `DevAgrees` stays a root.
+
+**2. #9574 (the form's pull request): new head `e2971a1dafaa`; not ready**
+
+- The quick tier at `99da2b9189` (`c4f6`, 127 suites from the merge-base with `main`, still running): 105 suites passed, 2 failed, 20 to go at 02:45Z [run]. The failures, read from the node's log [run]:
+  - `repository`, `test_no_new_silent_excepts`: `tests/sampled_two.py:121` and `tests/test_sampled_two_difftest.py` each had one handler that swallowed what it caught. **Mine, and in the form's pull request.** Fixed at `059a9408fe59` (work branch), cherry-picked as `cecd0feb3f61` on `cursor/proofs-twoleg-e0ff` (now under `e2971a1dafaa`): the twin returns the refusal it caught (`refusal`) and both callers read it. The lint passes on both trees and the twin's two tests that need no Lean pass, on the VM [run].
+  - `repository`, `test_no_pin_is_stale`, and `pous/verifier`, `test_trusted_hashes_are_current`: `verity/protocols/pous/lean/TRUSTED.sha256` hashes `security/Proofs/lakefile.toml`, which my work branch changes (the proofs' roots). **Not in the form's pull request**, whose lakefile is #9375's: `tests/test_pins.py` passes at `cecd0feb3f61` on the VM [run]. The proofs' pull request must regenerate that file with its command; I do it there.
+- Bookkeeping warnings only (no failure): SPOT's older name grew (`sampled-proofs` and its spellings), partly by the form's protocol id and its difftest; lean's wiring decides whether that id stays (section 8).
+- The quick tier at `cecd0feb3f61` against #9375's head is `9acd` (vy-nebius-2, launched 02:48Z). It is one commit behind the head; the commit after it changes the form's Lean and one docstring of the twin, so I run the composition suite and the quick tier again at the final head.
+- **The records run is `3d06` (vy-nebius-2, launched 02:57Z at `e2971a1dafaa`), no verdict.** Before it, `93a5` waited 13 minutes unstarted on cpu-12 and its resend `69bf` 2 minutes on vy-nebius-2; I cancelled both unstarted, the second because the form's Lean was about to change (section 10, item 3) and a records run at the old Lean would be thrown away. It is `lean_changed.py --records verity/protocols/spot/verifier/lean --update`, since the pull request changes `Spot/Run.lean`; it audits the requirers too.
+- The base is still #9375's head `34c5cbb3705c`, which is not on `main` at `8c11a1d5ab` [run]. I merge `main` when it is.
+
+**3. Lean's two conditions: both hold, now on a form that has built** [read at `e2971a1dafaa`; the form built in `9f0c` before the two refusals, which are not yet compiled on a node]
+
+- (a) `Params` and `Evidence` are the form's own structures; `paramsOfJson : Json → V Params`, `evidenceOf : ByteArray → V Evidence` and `checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) : Core.Outcome OneStage.Public Core.Integrity` have `OneStageZk`'s signatures.
+- (b) `checkBlobs_refuses (hF : FORM = false) (p c e bs pub prof) : checkBlobs p c e bs ≠ .accept pub prof`, at every input.
+- The two refusals of section 10 change neither signature nor that lemma's statement [read].
+
+**4. The claim counted in inner blocks, as written** (`SampledTwo/ClaimInner.lean`, beside `Claim.lean`, replacing nothing; `TwoLeg` and `UnitsAreReplay` untouched)
+
+```lean
+def grid (dd : Design.Two) (Pt : Partition) : Finset (ℕ × ℕ) :=
+  Finset.range dd.part.blocks.length ×ˢ Finset.range Pt.strata.length
+def innerCount (dd) (Pt) (fp : ℕ → ℕ → ℕ) : ℕ := ∑ p ∈ grid dd Pt, fp p.1 p.2
+def CellCapsAt (dd) (Pt) (m δ : ℝ) : Prop :=
+  ∀ fp : ℕ → ℕ → ℕ, (∀ ρ t, fp ρ t ≤ (cell Pt dd.part ρ t).card) → m < (innerCount dd Pt fp : ℝ) → dd.Pa Pt fp ≤ δ
+noncomputable def wrongInner (H) (Cm) (s) (Pt) (dd) (w : Wit) : Finset ℕ :=
+  (Finset.range Pt.blocks.length).filter fun v => ∀ ι' : ℕ → ℕ → Bool,
+    ∃ p ∈ grid dd Pt, v ∈ wrongIn H Cm s Pt dd.part w p.1 p.2 (ι' p.1)
+theorem not_rTwo_of_wrongInner … (hs : parse x = some s) (hP : partition s = some Pt) (hd : two s = some dd)
+    (hcap : CellCapsAt dd Pt m δ) (w : Wit) (hw : m < ((wrongInner H Cm s Pt dd w).card : ℝ)) :
+    ¬ RTwo H Cm parse partition two δ x w
+def UnitsAreInner (V : Vocab d α) (θ F c) (H) (Cm) (s) (Pt) (dd) (readX : Wit → Trace (V.circuitOf θ F)) : Prop :=
+  ∃ e : Fin (V.units θ F) ↪ ℕ, ∀ (w : Wit) (u : Fin (V.units θ F)),
+    u ∈ Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w) → e u ∈ wrongInner H Cm s Pt dd w
+theorem holds_of_rTwo_inner … (hU : UnitsAreInner V θ F c H Cm s Pt dd readX)
+    (hcap : CellCapsAt dd Pt ((V.certOf θ).ε * V.units θ F) δ) (w : Wit)
+    (hR : RTwo H Cm parse partition two δ x w) :
+    Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (readX w) (V.certOf θ).ε
+```
+
+- What it says: the relation `RTwo` holds "at some interiors". So the inner blocks this counts are those incorrect **at every choice of interiors**, one interior per outer block, given the committed boundary values (`wrongInner`'s `∀ ι'`). A witness with more than `m` of them is outside the relation at `δ` wherever the design caps `m` inner blocks at `δ`. Two bookkeeping lemmas carry it (`footprint_le_cell`, `wrongInner_card_le`), written whole, no `sorry` [read]; not compiled.
+- What it does not say: `CellCapsAt` at Friday's numbers is a hypothesis, as `CapsAt` is in `Claim.lean`. At 8 outer blocks all drawn and 4 of 64 inner blocks a cell, `Pa` is the product of the cells' misses, and one incorrect inner block in each of k cells is the least-missed spread I find ((15/16)^k against 0.8780 for two in one cell), so more than 10 gives (15/16)^11 = 0.492 ≤ 1/2: your "at most 10 of 10,240 at δ = 1/2" [derived by hand, not in Lean]. Proving `CellCapsAt` there is a statement about `Design.Two.Pa` at that design, about 100 to 200 lines [guess], and nobody has it.
+- `UnitsAreInner` is owed by whoever owns the instance, as `UnitsAreReplay` is.
+- It displaces neither the coupling's pieces nor #9574.
+
+**5. Forecast, piece by piece** [guess throughout]
+
+| piece | next step | when |
+|---|---|---|
+| the form's two new refusals (section 10, item 3), with `#guard`s, the `Steps` lemmas and the twin's note | pushed; `a018`'s first try | compiled by 04:15Z |
+| #9574 ready line: build, difftest, records run, quick tier at the final head | after the refusals compile | by 06:30Z if the records run takes a place within 30 minutes; your 10:00Z stands |
+| `DevAgrees`, `ClaimInner` | `aed4` ends | by 03:20Z |
+| axiom probes of `Refused`, `Reading`, `Projection`, `Leg`, `Claim`; `SecondRead` | `a018`, tries two to seven | by 04:45Z |
+| the proofs' pull request (ten files, the regenerated `TRUSTED.sha256`), on #9574 | when all ten pass their probes | opened by 05:30Z |
+| `CaseIsSent`'s instance and proof over CUT's `Cut.lean` (compiles at `bb96dbb00a`) | not started | written by 06:00Z |
+| #9555 merged, `FirstReads`, COINMAP's first-draw-family hypothesis from `FamilyOneCommitmentRead`, `interiorUnshown` reading the window, family and key the cut reads | waits on REDRAW's ready line | not tonight unless that line comes before 06:00Z |
+| `CellCapsAt` at Friday's design | nobody's yet | say if it is mine |
+
+**6. Size** [run: `wc -l`]. The form's pull request: 435 lines of Lean (`SampledTwo.lean`), 7 (its executable), 127 (the twin), 149 (the difftest), and one changed definition in `Spot/Run.lean`. The proofs: 9 files, 1,305 lines (`Reading` 158, `Refused` 38, `Projection` 255, `Steps` 164, `Claim` 130, `ClaimInner` 149, `Leg` 176, `DevAgrees` 139, `SecondRead` 96).
+
+**7. What else in my files rests on the form deciding `two`** [read]
+
+- **One thing: the scope.** `Live₂.L` is the compiled two-stage verifier at `SpotFlock.two A.h`, and `CompiledTwo.Scope x` asks for `L.two s = some d ∧ InScopeTwo Pt d s`. `CouplingTargetTwo` (`Leg.lean`) and `CouplingOf`'s first hypothesis (`Projection.lean`) say "the statement is in scope, or the sampled verdict never accepts". On an accepted play the first disjunct needs `two h s = some d` from the accept. The form's check does not decide it, so it comes from `TwoHolds h` as a premise until HELDOF's per-template check is in the form.
+- **Not the claim.** `Claim.lean` and `ClaimInner.lean` take `hd : two s = some dd`, but only to name the design that `RTwo` already says exists; a witness in the relation has one.
+- **Not** `Reading`, `Steps`, `Refused`, `DevAgrees`, `SecondRead`: none reads `two`.
+
+**8. Lean's question for Monday (both entry points?)** One should stay: `verity/sampled-proofs/v1` with the form `two-stage`, the one a registration names. The form's own protocol id and executable exist so that the form could be built and difftested before the wiring; once the difftest's cases run through v1's executable they go, in lean's pull request or the one after, and SPOT's older name stops growing by them.
+
+**9. Which bytes `SessionReading.stmts` and `msg` are (your 02:43Z): your default stands, made exact** [read: `SpotFlock/Code.lean`, `stmtsOf`, `stmtAt`, `stmtOk`, `next`]
+
+- Both are in the run's alphabet, what `SpotFlock.V A.h` reads, because `MessagesFixed` and `AcceptsRun` compare them with `msgAt` of a run of `A.L.V`.
+- `stmts o`: `FlockDeploy.encList (fun r => FlockDeploy.encBytes ⟨r.toArray⟩) xs`, exactly as `SpotFlock.stmtsOf` reads it back, where `xs` holds one session statement per template in template order (`xs.length = h.ms.length`), each the bytes `FlockDeploy.decode` reads as the statement the form verified that template's session on (`m.statement (slice m) bs`, as HELDOF's `memberRaw` encodes it).
+- `msg o t j`: session `t`'s message at its round `j` as Flock's masked verifier reads it at `stmtAt h (stmts) t`, SpotFlock's tagged Flock message, read from the files the form verified the session on.
+- The record bytes the device's digests hash stay on the cut's side. MESSAGES needs, and owns, the map from what a digest's preimage holds to that message.
+
+**10. Answers to others' NEEDS, and what I do with your 02:48Z rulings**
+
+1. **STAGECOINS (does `interiorUnshown` match what the cut reads?): not yet, on all three.** Window: `p.interior` and `p.audit.base` are parsed from the same object (`paramsOfJson`), so their windows are equal, but no lemma says so. Family and key: the refusal reads the evidence's, the cut the parameters'. I change `interiorUnshown` to read `p.audit.base`'s window, the parameters' family and the parameters' key in the change that merges #9555, which is where the key becomes the parameters'. Until then STAGECOINS takes the three as premises, as it says it will.
+2. **MESSAGES 2 (`MessagesFixed` and `AcceptsRun` only at the rounds a run reaches): I leave both as stated tonight.** MESSAGES's `messagesFixed_of_reached` gives `MessagesFixed` as stated under ACCEPTS's `RunsThrough`, and ASSEMBLY's `projection_of` compiled against that statement. If `RunsThrough` cannot be had, I restrict both in one commit and ASSEMBLY re-tries; say so.
+3. **Your item 3 (the form refuses a stage's bytes past the coins): done at `c6667e78d1` (work branch) and `e2971a1dafaa` (#9574), with one difference to rule on.** It is `stagesFit ξ ξ₂`, called in `prepare` right after the input is read, with three `#guard`s (both stages at the bound pass; one byte over in either is refused by name, `STAGE_PAST`). The form has no `stage`: `Held.stage` is `more + 1`, and `more` is a free number of HELDOF's `unreadOf`, not a parameter the check reads [read: `HeldOf.lean`, `HeldOfFiles.lean` at `539723733682`]. So both lines refuse at one coin's bytes, 65,536 elements of 16 bytes: `1048576 < ξ.size` and `1048576 < ξ₂.size`. The second gives `ξ₂.size ≤ L ≤ stage · L` at every held copy, since `stage ≥ 1`, and is stricter than yours wherever `stage > 1`. It accepts less, never more. If GATHER's count shows Friday's second stage reading more than 1,048,576 bytes, the bound must become a registered count of coins, which is a new parameter and not one line. Friday's second stage draws 4 of 64 in 160 cells, a few kilobytes [guess].
+4. **ACCEPTS 4 and COINMAP 2 (the stages' byte bounds):** `Steps.lean` at `b6d988648b2a` has `accepted_fits`: at an accepted check whose input read as `(c₂, ξ₂, r, i)`, `ξ.size ≤ STAGE_BYTES ∧ ξ₂.size ≤ STAGE_BYTES`, with no fact about `read`; `STAGE_BYTES` is `65536 * 16`, which is `SpotFlock.L` by `rfl` [derived; not compiled on a node]. `accepted_steps`'s statement is unchanged, so what destructures it still does. `SecondRead.lean` adds what the check already binds: at an accepted check the interior audit's draw read `read` bytes of `ξ₂` and `⌈read / 64⌉ = ξ₂.size / 64` (`Challenger.COIN_BYTES` is 64), from `OneStage.coinsReason`.
+5. **Your item 1 (#9555):** I merge its head into the work branch `cursor/proofs-twoleg-c5e5` on REDRAW's ready line. Your 00:56Z text keeps it out of #9574 so that #9574 does not wait on it; I keep it out unless you say the form's pull request takes it.
+6. **Your item 2 (a first stage that reads no byte):** nothing in the form refuses it, and I add nothing. `coinOf` in `Reading.lean` reads empty bytes as a coin of zeros' prefix, so `FirstElems` holds there with `u = 0` [read].
+7. **`CaseIsSent`:** still mine, not started (section 5).
+
+**STOP RULE.** Not reached. No listed guarantee, lock or named assumption is changed. Nothing is wired into `Sampled.lean`. The two refusals make the check accept less. No piece uses `form_off`, `checkBlobs_refuses` or the run's refusal.
+
+**NEEDS.**
+1. Coordinator: rule on item 3's second bound (one coin for the second stage, or a registered count).
+2. Coordinator: whether #9574 takes #9555 (item 5).
+3. GATHER: the bytes each stage read at 8 of 8 and 4 of 64 a cell, against 1,048,576.
+4. Whoever owns the instance: `UnitsAreInner` and `CellCapsAt` at Friday's design, if the inner-block count is the one Daniel takes.
+
+**Runs.**
+
+| run | machine | what | waited | state |
+|---|---|---|---|---|
+| `r20261113-011652-d936` | cpu-12 | `--build` of six proof files at `7fed11bb74` | under 1 min | failed in `DevAgrees` only; the other five built |
+| `r20261113-021442-3081` | cpu-12 | try of `DevAgrees` at `c0216f674d07` | 10 min, unstarted | cancelled by me |
+| `r20261113-022527-aed4` | vy-nebius-2 | tries of `DevAgrees`, then `ClaimInner`, at `e0a4052b5f` | 3 min for a Lean place | running: imports built at 02:59Z, `DevAgrees` compiling |
+| `r20261113-025634-a018` | cpu-12 | tries of `Steps`, `SecondRead`, `Refused`, `Reading`, `Projection`, `Leg`, `Claim` at `b6d988648b2a` | in line since 02:56Z | not started |
+| `r20261113-025704-3d06` | vy-nebius-2 | records run at `e2971a1dafaa` | in line since 02:57Z | no verdict |
+| `r20261113-012511-c4f6` | vy-nebius-2 | quick tier at `99da2b9189` | 2 min | running: 105 passed, 2 failed (above) |
+| `r20261113-024814-9acd` | vy-nebius-2 | quick tier at `cecd0feb3f61` against `34c5cbb3705c` | | running at 02:53Z |
+| `r20261113-023502-93a5` | cpu-12 | records run at `8d8015c054` | 13 min, unstarted | cancelled by me |
+| `r20261113-024925-69bf` | vy-nebius-2 | records run at `cecd0feb3f61` | 2 min, unstarted | cancelled by me (the Lean changes first) |
+
+**Pushed.** `cursor/proofs-twoleg-c5e5` at `b6d988648b2a`; `cursor/proofs-twoleg-e0ff` (#9574) at `e2971a1dafaa`. Nothing is unpushed.
+
+**To post.** #9574's head is now `e2971a1dafaa`: the form refuses a stage's bytes past one coin's 1,048,576, which lean's wiring should build on. It moves again only if a run finds a fault or you rule the second bound differently.
+
+**Not established.** That `DevAgrees`, `ClaimInner` and `SecondRead` compile. That the form with `stagesFit`, and `Steps` with `accepted_fits`, compile on a node (stand-ins on the VM only). That `Refused`, `Reading`, `Projection`, `Leg` and `Claim` are clean of extra axioms (no probe has run on them). That the records run moves no listed record. That the quick tier passes at the pull request's head. `CellCapsAt` at any design.
