@@ -1,8 +1,8 @@
-# The party runtime (`verity.configuration.deploy`)
+# The party runtime (`verity.runtime`)
 
 The party runtime runs a protocol's parties on the machines a configuration assigns them, over channels between them,
 and keeps each party's log of the run. It knows no protocol: a protocol hands it a manifest and its parties' code, and it
-reads no message's meaning (the frames and the handshake are `verity.configuration.wire`'s). A party does no I/O and reads no
+reads no message's meaning (the frames and the handshake are `verity.channel`'s). A party does no I/O and reads no
 ambient clock or randomness: its clock readings and coins are messages from sources the runtime attaches, so the same
 party code runs live, simulated, replayed, or live against recorded counterparts, and a replay reproduces it exactly.
 Nothing is retried: every failure the runtime sees finishes the party refused by name, and a party that dies fails its run.
@@ -18,7 +18,7 @@ is `manifest`'s `Manifest`, `Role`, `Channel` and `ProtocolDef` and `config`'s `
 `check`, `digest`, `new`, `parse`, `render`, `canonical`, `declared` and `composite`, with `COMPOSITES`, `LOCAL`,
 `PARTY`, `CHANNEL` and `TRANSPORT`. The runtime is `runtime`'s `run` and `RunResult`, `stream`'s `Side`, and the sources
 a caller hands `runtime.run` (`sources`): `VirtualClock` on a `VirtualTime`, `SeededCoins`, `seeded` and `OWNER`. A
-refusal by name is raised as the wire's `Refused`: import it from `verity.configuration.wire`.
+refusal by name is raised as the wire's `Refused`: import it from `verity.channel`.
 
 | Entry point | What it is |
 |---|---|
@@ -46,4 +46,4 @@ The served table of `verity run` doesn't go through `runtime.run`: it runs `serv
 - `verity/protocols/pous/verifier/wipe_parties.py` and `verity/protocols/poub/verifier/session_parties.py`: protocols'
   parties on the runtime.
 - `tests/deploy_example.py`: a two-party protocol the tests run every way the runtime runs one; `tests/test_deploy.py`
-  and `tests/test_stream.py` are the suite (`uv run tools/verity/check/suites.py verity/configuration/deploy`).
+  and `tests/test_stream.py` are the suite (`uv run tools/verity/check/suites.py verity/runtime`).

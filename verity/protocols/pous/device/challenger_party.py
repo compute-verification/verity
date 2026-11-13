@@ -28,7 +28,7 @@ are the challenger's, the setup's salt and the session's:
 
 A refusal prints `{"refused": REASON}` and exits 1 before the side listens.
 
-The two sides are parties of the deployment layer (`verity.configuration.deploy`), the challenger (`Challenger`) and the prover
+The two sides are parties of the deployment layer (`verity.runtime`), the challenger (`Challenger`) and the prover
 (`challenger_session.Prover`). Their messages and codec, the request, the ids and the prover's side are PoUS's
 (`challenger_session`), which this device imports and which never imports it. The challenger takes its coin tree's hiding
 key and each round's salt from its host's coins too. `serve` is its party, stepped over the session's stream by PoUS's
@@ -61,9 +61,9 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from verity.configuration.deploy.manifest import ProtocolDef
-from verity.configuration.deploy.party import Finish, Identity, Received, Send
-from verity.configuration.wire import Message, Phase, Refused
+from verity.protocol import ProtocolDef
+from verity.party import Finish, Identity, Received, Send
+from verity.channel import Message, Phase, Refused
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.device.challenger_session import (
     CHALLENGER,

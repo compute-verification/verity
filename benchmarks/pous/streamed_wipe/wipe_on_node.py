@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import sys
 
-from verity.configuration.deploy.stream import Side
+from verity.runtime.stream import Side
 from verity.protocols.pous.verifier import wipe_period
 
 if __name__ == "__main__":

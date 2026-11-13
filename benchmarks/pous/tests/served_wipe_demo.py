@@ -18,7 +18,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from verity.configuration.deploy.stream import Side
+from verity.runtime.stream import Side
 from verity.protocols.pous.verifier import wipe_period as W
 
 SIDE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pous" / "verifier" / "tests" / "wipe_side.py"

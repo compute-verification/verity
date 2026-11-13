@@ -8,7 +8,7 @@ import sys
 
 import pytest
 
-from verity.configuration.deploy.stream import Side
+from verity.runtime.stream import Side
 
 
 def test_the_side_follows_period_json() -> None:

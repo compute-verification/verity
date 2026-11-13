@@ -3,7 +3,7 @@ a session runs under, and one session with the challenger's side as PoUS is hand
 auditor-trusted device (`challenger_party`, on a host the developer doesn't control: the challenger host, `trusted-host`),
 which imports this module and which this module never imports; how it runs a session is its docstring's.
 
-The two sides are parties of the deployment layer (`verity.configuration.deploy`), the challenger (`challenger_party.Challenger`)
+The two sides are parties of the deployment layer (`verity.runtime`), the challenger (`challenger_party.Challenger`)
 and the prover (`Prover`), whose messages are one frame each way a round (`MANIFEST`):
 
 ~~~text
@@ -51,9 +51,9 @@ from pathlib import Path
 from typing import Any, BinaryIO, Protocol, TypeVar
 
 from verity.commitments.randomness import derive
-from verity.configuration.deploy.manifest import Channel, Manifest, Role
-from verity.configuration.deploy.party import Finish, Identity, LogEntry, Params, Party, Received, Send, Timer
-from verity.configuration.wire import Body, Int, Message, Schema
+from verity.protocol import Channel, Manifest, Role
+from verity.party import Finish, Identity, LogEntry, Params, Party, Received, Send, Timer
+from verity.channel import Body, Int, Message, Schema
 from verity.protocols.pous.verifier import run as R
 from verity.protocols.pous.verifier.schemes.p2 import P2Params
 

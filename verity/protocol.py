@@ -8,7 +8,7 @@ to a deployment configuration (`config.Component`), which is where it says what 
   rest capabilities such as `gpu` or `signing-key`);
 - its channels (`Channel`): who may send which messages to whom, under what latency bound, whether they carry coins,
   and the messages sent before them (`after`);
-- its messages: the wire schemas (`verity.configuration.wire.Schema`), each with its kind.
+- its messages: the wire schemas (`verity.channel.Schema`), each with its kind.
 
 `ProtocolDef` is the protocol as a run takes it: its manifest with a factory for each of its parties (`party.Party`).
 
@@ -26,7 +26,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.configuration.wire import NAME, MessageTypes, Refused, Schema
+from verity.channel import NAME, MessageTypes, Refused, Schema
 
 from .party import Party
 

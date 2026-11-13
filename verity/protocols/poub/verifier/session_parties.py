@@ -1,4 +1,4 @@
-"""PoUB's session (`period.session`) as two parties of the deployment layer (`verity.configuration.deploy`): the
+"""PoUB's session (`period.session`) as two parties of the deployment layer (`verity.runtime`): the
 verifier and its challenger (`Verifier`), on a machine the developer doesn't control, and the prover (`Prover`) on its node.
 
 ~~~text
@@ -35,8 +35,8 @@ from collections.abc import Callable
 from typing import Any
 
 from verity.commitments.identity import canonical_json_bytes
-from verity.configuration.deploy.manifest import Channel, Manifest, ProtocolDef, Role
-from verity.configuration.deploy.party import (
+from verity.protocol import Channel, Manifest, ProtocolDef, Role
+from verity.party import (
     Finish,
     Identity,
     LogEntry,
@@ -44,7 +44,7 @@ from verity.configuration.deploy.party import (
     Send,
     Timer,
 )
-from verity.configuration.wire import Body, Int, Json, Message, Phase, Refused, Schema
+from verity.channel import Body, Int, Json, Message, Phase, Refused, Schema
 
 from . import audit, receipts
 from . import coins as C

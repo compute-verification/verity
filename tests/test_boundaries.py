@@ -199,9 +199,9 @@ PROVER_ONLY = {
 
 #: The runtime's modules: what runs parties over channels and what starts a side as another process (the layout's
 #: ``verity/runtime/``, ``tests/tree.toml``).
-RUNTIME = ("verity.configuration.deploy.channels", "verity.configuration.deploy.process", "verity.configuration.deploy.runtime",
-           "verity.configuration.deploy.sources", "verity.configuration.deploy.stream", "verity.configuration.deploy.transcript",
-           "verity.configuration.wire.handshake")
+RUNTIME = ("verity.runtime.channels", "verity.runtime.process", "verity.runtime.runner",
+           "verity.runtime.sources", "verity.runtime.stream", "verity.runtime.transcript",
+           "verity.runtime.handshake")
 #: The trees whose files import no module of the runtime: only what starts a run does (a demo, a benchmark, the `verity`
 #: command), and it hands a protocol's file the stream, the side or the driver it needs.
 RUNTIME_FREE = ("verity/protocols/", "adapters/")
@@ -873,8 +873,8 @@ def test_a_runtime_import_is_found() -> None:
                                     f"ARGV = ('python', '-m', '{module}')\nPROTOCOL = '{module}:PROTOCOL'\n"),
         "adapters/y/z.py": f"from {RUNTIME[-1]} import Key\n",
         "verity/protocols/x/clean.py": (f'"""Handed a `{module}.Side`."""\n'
-                                        "from verity.configuration.deploy.manifest import Manifest\n"
-                                        "from verity.configuration.deploy.party import Party\n"),
+                                        "from verity.protocol import Manifest\n"
+                                        "from verity.party import Party\n"),
         "verity/protocols/x/tests/test_a.py": f"from {module} import run\n",
         "demos/d/run.py": f"from {package} import {name}\n",
     }
