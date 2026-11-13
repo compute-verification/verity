@@ -99,7 +99,7 @@ def test_a_definition_valued_static_parses_to_the_definition_it_names_recursivel
     Definition among those the same way, in a tuple too, beside a bare id, a literal and a tuple of literals; without the
     catalog."""
     from verity.circuits.defs import REGISTRY, bind
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import gemm as BG
 
     TG.load_registries()
     _no_catalog(monkeypatch)
