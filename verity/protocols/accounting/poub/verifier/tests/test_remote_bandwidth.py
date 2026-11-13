@@ -15,8 +15,18 @@ import pytest
 from remote_bandwidth_fakes import Clock, Entropy
 
 from verity.commitments.randomness import frame
-from verity.protocols.accounting.poub.verifier import audit, codec, coins, receipts, timing
-from verity.protocols.accounting.poub.verifier.audit import AuditRun, Params, SessionError
+from verity.protocols.accounting.poub.verifier import (
+    audit,
+    codec,
+    coins,
+    receipts,
+    timing,
+)
+from verity.protocols.accounting.poub.verifier.audit import (
+    AuditRun,
+    Params,
+    SessionError,
+)
 from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Subset
 
 N = 20
