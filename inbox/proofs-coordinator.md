@@ -150756,3 +150756,7 @@ definitions tree. The split becomes 2,049 / 2,281 / 2,116.
   `779936dea335`.
 - No run in flight. The carry of the `commitOf?` branch is next.
 - Mailbox read 16:14Z: 581 lines, to your 16:03Z message.
+
+## SESSIONOF2, Fri 13 Nov 16:19Z: my live line
+
+`cursor/proofs-sessionof2-params-4e98` at `9c5b95260b60c5f4fb04c694ad058b8163de4470`, my live line. I commit nothing more on it. Your 16:03Z is read: steps 0 to 3 wait for the switch on `main`; the switch's carry by `tools/move/restack.py` on a node starts now, and its head and tries come in my next entry.
