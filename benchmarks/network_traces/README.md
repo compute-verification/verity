@@ -227,9 +227,18 @@ protocol's verdict.
     tcpdump -i IFACE -U -s 130 -w run.pcap 'ip host SERVER'
 
 - The filter keeps the flows with the server's address on one side and nothing else, so a shared link's other traffic
-  never enters the file: one `or` clause for each further address (`ip6 host` for an IPv6 one), and `vlan and (…)` on
-  a link whose frames carry a VLAN tag. The reader refuses a file that still holds a flow between two addresses it
-  wasn't given; `--skip-foreign` counts and skips them.
+  never enters the file: one `or` clause for each further address (`ip6 host` for an IPv6 one, which `ip host` never
+  keeps), and, on an interface captured by its name, `vlan and (…)` where its frames carry a VLAN tag and
+  `vlan and vlan and (…)` where they carry two, which `vlan and (…)` doesn't keep. A capture of every interface
+  (`-i any`) is a Linux cooked one, where `tcpdump` refuses a filter that holds `vlan`, and the filter without it
+  keeps a frame under one tag and none under two. The reader walks the one tag a cooked v1 capture holds after its
+  header, where the header's type names it (a v2 capture holds nothing of that tag); a second tag can reach either
+  as four bytes before the IP header that no type names, and the reader refuses a cooked frame whose type says IP
+  where no IP header starts by that name. It tells by the first byte there, so an unnamed second tag of priority 2
+  with a VLAN id of 1280 or more (under IPv4's type), or of priority 3 (under IPv6's), its drop-eligible bit clear,
+  is not refused by that name. The reader refuses a file that still holds a flow between two addresses it wasn't
+  given; `--skip-foreign` counts and skips them. A flow the filter left out is refused by nothing: the record's bytes
+  on it are a difference in each direction, and nothing names the cause.
 - `-s 130` keeps at most each packet's first 130 bytes: every header and, where the headers are shorter (a common
   packet's are 54 to 66 bytes), the first bytes of its content, so the file holds the start of each segment. The
   reader needs the 130 for the longest headers it reads, and reads every length from the headers, never from how
@@ -252,10 +261,17 @@ forward's end and the server's port:
 - `-s 54` keeps no byte of any segment's content, where `-s 130` keeps each segment's first bytes, a request's start
   and a token id among them. A TCP packet's headers on a Linux loopback are Ethernet's 14 bytes, IPv4's 20 and TCP's
   20 or more, so never under 54, and the reader reads none of TCP's options: it counts the file as it counts one
-  kept at 130. This length is for IPv4 on a loopback alone: an IPv6 packet, or one with eight bytes of IP options
-  or more, is kept too short for its headers, and the reader refuses the file by that name.
+  kept at 130. A packet with eight bytes of IP options or more is kept too short for its headers, and the reader
+  refuses the file by that name.
 - The two sides are one address, told apart by the server's port: the reader takes them as
   `--server 127.0.0.1:PORT --certifier 127.0.0.1`.
+- The filter and the length are for a server reached over IPv4. Reached over IPv6, the server leaves no packet in
+  this file, since `ip host` keeps IPv4 alone, and the reader refuses nothing in a file of no packet: it counts no
+  flow, says each direction differs by the record's whole count and pairs no connection, and nothing names the
+  cause. That server's capture is `tcpdump -i lo -U -s 74 -w run.pcap 'ip6 host ::1 and tcp port PORT'`, read with
+  `--server [::1]:PORT --certifier ::1`. IPv6's header is 40 bytes where IPv4's is 20, so a TCP packet's headers are
+  never under 74 and that file holds no byte of content either. A packet under an IPv6 extension header never enters
+  it: the filter looks for TCP's header right after IPv6's.
 - The count is of what the server's port received and sent. The link under the forward carries the forward's own
   bytes, which this capture doesn't hold and the reader doesn't read.
 
