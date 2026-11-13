@@ -166,7 +166,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `benchmarks/one_stage` call it. Python is held to the Lean by
   `verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py`. The executable answers the challenger's ledger
   and session checks too (`challenger_ledger`, `challenger_head`, `challenger_session`, `challenger_credited` and
-  `challenger_pinned`, `Spot/ChallengerSession.lean`), for a caller that asks a verifier of record for them;
+  `challenger_pinned`, `Spot/ChallengerSession.lean`), for a caller that asks the verifier for them;
   `lean/tests/test_challenger_difftest.py` holds its answers to the challenger's Python. The same package ports the challenger's sample from the
   selection rule on (`Spot/Select.lean`: `service.selection_law`, `draw.derive` and `service.select_draw`,
   with the number of coin bytes it reads), which the difftest holds to the Python on fixed coins, every rule and random

@@ -68,13 +68,13 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as T
+from verity.protocols.proofs.spot.verifier.one_stage.verifier import EXE as VERIFIER
 from verity.commitments import coin_tree as CT
 from verity.commitments.identity import canonical_json_text
 from verity.commitments.crypto import lms
 
 PACKAGE = Path(__file__).resolve().parents[1]
 PIECES = "sampled-proofs-difftest"
-VERIFIER = "sampled-proofs-verifier"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 LABELS = ["pouw/salt", "pouw/draw", "pouw/round", "vllm/positions", "vllm/identities", "memory/audit", "a", "x-1"]
@@ -2652,9 +2652,9 @@ def test_a_challenger_piece_agrees(pieces, port, make, names, examples):
 
 @pytest.mark.parametrize("port, make, names", VERIFIED, ids=[v[0].fn for v in VERIFIED])
 def test_the_verifier_answers_the_challengers_ledger_and_session_checks(pieces, verifier, port, make, names):
-    """`sampled-proofs-verifier` answers each of the challenger's ledger and session checks as its row expects, on the
-    sweep's cases (every mutation, four seeds each): held to the Python reference as the row holds the difftest
-    executable, and equal to `sampled-proofs-difftest`'s answer."""
+    """The verifier's executable (`one_stage.verifier.EXE`) answers each of the challenger's ledger and session checks
+    as its row expects, on the sweep's cases (every mutation, four seeds each): held to the Python reference as the row
+    holds the difftest executable, and equal to that executable's answer."""
     served = dataclasses.replace(port, exe=VERIFIER)
     for name in names:
         for seed in range(4):
