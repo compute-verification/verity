@@ -35,7 +35,7 @@ has the period's game (`monitoringPeriodGame`). With `budget_tail` at `n` rounds
 def MonitoringPeriodBudget : Prop :=
   ∀ {C Ξ : Type} [Fintype C] [Fintype Ξ] {N M n : ℕ} (stg : Fin N → ℕ) (w : (Fin N → Bool) → Fin N → ℝ) (a b : ℝ)
     (K : ℕ) (Λ : ℝ) (Wp : ExecutionPhasePlay C (Paths C M × (Equiv.Perm (Fin N) × Ξ)) (Fin N) M n),
-    Wp.EveryWindow (fun live W => RoundGame.BudgetAt Λ (serviceGame (Ξ := Ξ) stg W (w live) a b K)) →
+    Wp.EveryExecutionPhase (fun live W => RoundGame.BudgetAt Λ (serviceGame (Ξ := Ξ) stg W (w live) a b K)) →
     RoundGame.BudgetAt Λ (monitoringPeriodGame stg w a b K Wp)
 
 /-- **The budget's tail at every prefix at once** (Ville's inequality, finite form): for any play of `n` rounds on
