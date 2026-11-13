@@ -170,4 +170,69 @@ theorem fillOk_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread
   rw [hb]
   simp [hu]
 
+/-! ## `descOk` at the copies -/
+
+theorem reg_withFrame (h : Held) (c₀ : Code) : (withFrame h c₀).reg = h.reg := by
+  unfold withFrame
+  dsimp only
+
+theorem k_withFrame (h : Held) (c₀ : Code) : (withFrame h c₀).k = h.k := by
+  unfold withFrame
+  dsimp only
+
+theorem xS₀_withFrame (h : Held) (c₀ : Code) : (withFrame h c₀).xS₀ = h.xS₀ := by
+  unfold withFrame
+  dsimp only
+
+theorem descOk_withFrame (h : Held) (c₀ : Code) : descOk (withFrame h c₀) = descOk h := by
+  simp only [descOk, descAt, replayDesign, ms_withFrame, reg_withFrame, k_withFrame]
+
+/-- **The registration's descriptor is in the two-stage scope** (`descOk`) at the copies `heldOf` builds, from the
+run's population check and what is left per template: each member fits (`memberOk`), the first stage's design is well
+formed on the layout's strata (`designOk`), and one count of at least `1` and one cell per template. -/
+theorem descOk_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {first : Reg} {ns ks : Array ℕ}
+    {l : Spot.Slots.Layout} {d : Design} {n : ℕ} {hz : ∀ t, zkOk (refStmt u.xs t) = true}
+    (hl : Spot.Slots.layout first.program first.query = .ok l)
+    (hd : slotDesign first.rule first.program first.query first.table = .ok d)
+    (hp : Spot.Slots.popOk first.program first.query n = true) (hT : ns.size = it.circuits.size)
+    (hm : (held₀ i it u first ns ks (requests l) hz).ms.all memberOk = true) (hdes : designOk d l = true)
+    (hk : ks.size = it.circuits.size) (hk1 : ∀ x ∈ ks.toList, 1 ≤ x) :
+    descOk (held₀ i it u first ns ks (requests l) hz) = true := by
+  have hlen := ms_length_held₀ i it u first ns ks (requests l) hz
+  have e1 : (Spot.Slots.layout (held₀ i it u first ns ks (requests l) hz).reg.first.program
+      (held₀ i it u first ns ks (requests l) hz).reg.first.query).toOption = some l := by
+    show (Spot.Slots.layout first.program first.query).toOption = some l
+    rw [hl]
+    rfl
+  have e2 : replayDesign (held₀ i it u first ns ks (requests l) hz) = some d := by
+    show (slotDesign first.rule first.program first.query first.table).toOption = some d
+    rw [hd]
+    rfl
+  unfold descOk
+  rw [e1, e2]
+  dsimp only
+  unfold descAt
+  simp only [Bool.and_eq_true, beq_iff_eq]
+  refine ⟨⟨⟨⟨⟨hm, filesOk_held₀ hl hp hT⟩, fillOk_held₀ hl hp⟩, hdes⟩, ?_⟩, ?_⟩
+  · show ks.toList.length = _
+    rw [hlen, Array.length_toList, hk]
+  · show ks.toList.all (1 ≤ ·) = true
+    exact List.all_eq_true.2 fun x hx => decide_eq_true (hk1 x hx)
+
+/-- **The design evaluates at the copies `heldOf` builds** (`two`), from `descOk_held₀`'s premises, each member's unit
+net built, and every template's reference statement reading as a member's (`templateOk`). -/
+theorem two_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {first : Reg} {ns ks : Array ℕ}
+    {l : Spot.Slots.Layout} {d : Design} {n : ℕ} {hz : ∀ t, zkOk (refStmt u.xs t) = true} (s : AuditStatement)
+    (hl : Spot.Slots.layout first.program first.query = .ok l)
+    (hd : slotDesign first.rule first.program first.query first.table = .ok d)
+    (hp : Spot.Slots.popOk first.program first.query n = true) (hT : ns.size = it.circuits.size)
+    (hm : (held₀ i it u first ns ks (requests l) hz).ms.all memberOk = true) (hdes : designOk d l = true)
+    (hk : ks.size = it.circuits.size) (hk1 : ∀ x ∈ ks.toList, 1 ≤ x)
+    (hb : ∀ ci ∈ (held₀ i it u first ns ks (requests l) hz).ms, FlockSoundness.Built ci.1.unit)
+    (ht : ∀ t < (held₀ i it u first ns ks (requests l) hz).ms.length,
+      templateOk (held₀ i it u first ns ks (requests l) hz) t = true) :
+    (two (withFrame (held₀ i it u first ns ks (requests l) hz) u.c₀) s).isSome := by
+  rw [two_eq, ms_withFrame, reg_withFrame, k_withFrame, xS₀_withFrame, ← two_eq _ s]
+  exact two_of_descOk _ s hb (descOk_held₀ hl hd hp hT hm hdes hk hk1) ht
+
 end SpotFlock.HeldOf
