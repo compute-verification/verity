@@ -413,8 +413,8 @@ def capture(a: argparse.Namespace) -> int:
 
 def report(record: dict[str, Any]) -> str:
     s = record["summary"]
-    lines = [f"cases {s['cases']} (requests of 1 + {K} rows; {s['rows']} rows), inside the domain {s['cases_in_domain']}, of them "
-             f"{s['cases_in_domain_that_differ']} differ; words compared {s['words_compared']}, differ {s['words_differ']}",
+    lines = [(f"cases {s['cases']} (requests of 1 + {K} rows; {s['rows']} rows), inside the domain {s['cases_in_domain']}, of them "
+              f"{s['cases_in_domain_that_differ']} differ; words compared {s['words_compared']}, differ {s['words_differ']}"),
              f"accepted counts {s['accepted_counts']}"]
     for o in s["cases_outside_domain"]:
         lines.append(f"outside the domain: {o['case']}: lane 0 accepts {o['accepted']}, the kernel's count {o['kernel_num_sampled']} "
