@@ -1,5 +1,13 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 2:15 AM PST Fri 13 Nov: the receipts' climb: write `parents[6]` (my call)
+
+compute-accounting (TOP-398, ~2:12 AM PST) accepts either line and prefers a `find_spec("verity")` form. **In the
+chain write `REPO = HERE.parents[6]`**: it is a path edit like every other hand line of the chain, and the other
+form changes where the test finds the package (an installed `verity` instead of this tree). compute-accounting can
+bring its form as its own PR after the chain. Its staged head stays at `8fbf015df26d` through your pass, so you
+pick from one head.
+
 ## 2:12 AM PST Fri 13 Nov (my send's text says 2:17 AM; the clock read 2:12): the base is on `main`; one root climb to count again; network-accounting's hand commit
 
 - **`main` is `053b8e50fe8a37970e410ce9ffcb5694bbe4a59b` since 2:09 AM PST** (ci, TOP-398 2:11 AM; my `ls-remote`
