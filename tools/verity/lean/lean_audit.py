@@ -79,7 +79,8 @@ one imported (`check.verdicts_fetched`) is reused (`check.py --replay-cache`, `l
 `REPLAYS_KEPT` last used kept), so a change to a few modules replays those and what imports them, and a dependency's
 modules go through the kernel once per change of their `.olean` files. With `--fresh` the replay cache is
 the scratch tree's, so the packages of one run share it and nothing outlives the run. Lean gets this
-machine's CPUs (`LEAN_NUM_THREADS`): inside a pod, its default counts the host's.
+machine's CPUs (`LEAN_NUM_THREADS`): inside a pod, its default counts the host's; a heavy build runs as many of them as
+what the run reserved holds (`check.py`'s `build_threads`).
 
 The audits of `security` and `security/Proofs` (`UNREAD_FACTS`) also write what each constant of the analysis mentions
 (`check.py`'s `unread_facts`), and their passes are stored, and reused, only with those facts beside them (`unread/` in
@@ -249,9 +250,10 @@ def provers(pkg: str) -> list[str]:
 FLAGS = ["--build", "--closure"]
 
 
-#: the files of `tools/verity/lean/` no audit reads, each with what does: out of every key, and of the scratch tree, where a
-#: read of one fails the audit
+#: the files of `tools/verity/lean/` no audit reads, each with what does: out of every key, and but for `CARRIED` of the
+#: scratch tree, where a read of one fails the audit
 NOT_READ = {
+    "reserve.json": "the figures a run reserves and plans its jobs by (`reserve.py`'s), never what it checks",
     "axiom_probe.py": "the axiom probe of `verity lean try`, which `lean_changed.py` and the CLI load",
     "lean-deps.json": "the dependency bundles' pins, which preflight reads",
     "lean_changed.py": "the Lean fast path, which runs beside the audit",
@@ -269,6 +271,9 @@ NOT_READ = {
     "warm.py": "the audit of a ready mark's merge, which starts `lean_audit.py` for the packages a change reaches",
     "pyproject.toml": "the tools/verity/lean suite's settings",
 }
+#: the files of `NOT_READ` every scratch tree carries all the same (`scratch_tree`): check.py plans its run by them, and
+#: no verdict reads them
+CARRIED = ("reserve.json",)
 
 #: the packages whose audits write `Unread.lean`'s facts (`check.py`'s `UNREAD_FACTS`): a pass of one is reused only with
 #: the facts it wrote, kept beside it, and the ratchet on wholly unread modules joins theirs (`unread_ratchet`)
@@ -1522,7 +1527,8 @@ def _move(src: Path, dst: Path) -> None:
 
 
 def scratch_tree(dest: Path, files: list[str]) -> None:
-    for f in files:
+    """``files`` copied from this checkout into ``dest``, and with them `CARRIED`."""
+    for f in dict.fromkeys([*files, *(LEAN_TOOL + c for c in CARRIED)]):
         s, d = ROOT / f, dest / f
         d.parent.mkdir(parents=True, exist_ok=True)
         if s.is_symlink():
