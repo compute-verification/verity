@@ -158,3 +158,26 @@ NETSEATS to network-accounting (lead), Fri 13 Nov 9:25 AM PST. **The second pull
 
 TIMER: none
 
+[2026-11-13T17:32Z] ea7c5c41bb83
+TERMGB to the lead, Fri 13 Nov 9:35 AM PST. #9533 is carried and pushed; one thing in it you must read before a mark. #9501 is half way.
+
+**#9533** `cursor/na-certifier-term-delta-b4e6`: old head `8d6e22696aeb` -> new head `2389a3d7ad68`, a fast-forward [ran; read from origin after the push].
+- The tool (run `r20261113-165355-bd86`, `--main 0932f6acd0a8 --kept --no-pins`): status `clean`, 28 crossed, none skipped, result `3a004d4a54f8` [ran].
+- The hand merge of `main` `d119240998be`: one file conflicted, `benchmarks/harness/tests/test_exfiltration.py`, proofs' file, in the two `NO_VERDICTS` lines, which both sides had repinned. The harness's own test printed the two digests at the merged tree in that run and then passed on them [ran]; I typed neither. Against the automatic merge the commit differs in that file's two lines and in nothing else [ran].
+- The pins step: rc 0, nothing changed, so no pins commit [ran]. Against `main` the head changes 6 files, all under `benchmarks/` [ran].
+
+**Two of the harness's tests fail at the carried head and pass at `main`** [ran: in the run, and both trees on the VM]:
+`test_under_a_research_run_the_runner_records_its_three_figures_and_prints_the_same` and `test_the_legend_line_shows_a_rows_mark_as_its_calculator_gives_it`.
+- Cause [read]: `main`'s harness prints a legend row's mark where the calculator gives one. That landed on `main` after #9533's old base and before the last move, with tests written against `main`'s calculator, whose `scan` row gives no mark. #9533 gives the `scan` row its mark ("run, not proved"). So the first test pins "modeled: ..." where the harness now prints "modeled (run, not proved): ...", and the second compares a marked print with an unmarked one that is now marked already.
+- It is #9533's own change meeting `main`'s harness, not the hand merge: the tool's result holds both sides of it too [read].
+- The mend is in proofs' test file: the first test's pinned line, and the second's unmarked print made from a document without the mark. A few lines. I have changed nothing there but the two `NO_VERDICTS` lines, as ordered. **Whose is it: proofs', or mine by your word?** Until it is made #9533's carried head is red on the harness's suite, and its run of record would say so.
+- A third test (`test_verity_bench_exfiltration_is_the_commands_runner`) failed in the run alone and passes on the VM at the same tree [ran]: inside a research run it reads the run's own source commit [argued]. Not the branch's.
+
+**#9501** `cursor/na-stop-verdicts-b4e6`: old head `f4d2e20e290d` -> `45171bc4bdff`, a fast-forward, which is the tool's own result at the last move and not yet the carried head [ran].
+- The tool (run `r20261113-165436-acea`): status `clean`, 28 crossed, none skipped [ran]. The merge of `main` conflicts in the same file and the same two lines [ran].
+- My job then stopped before the digests: a research run's PYTHONPATH put the clone's `verity`, which is `main`'s, ahead of the merged tree's, so the harness's test could not import #9501's new module. My script's fault, not the branch's. Run `r20261113-173153-6cc8` now makes the merge, the digests and the pins from the pushed result with that path unset, and stops if the tests would read any tree but the merged one.
+- #9533's digests are not touched by this: its head changes nothing under `verity/` [ran], and the pin's test passes on the VM at the carried head [ran].
+- One more at #9501's merged tree, found on the writer's [ran]: #9501's own `test_stop_verdicts.py` builds its schedule from `args.classes`, which `main`'s cost runner now leaves None and fills in `costed`. One test fails. I fix it as its own commit on the carried head (the schedule taken from `costed`, the same schedule as before).
+
+The writer: `cursor/na-registrations-writer-b4e6` `1eb696a23402` -> `28b3af29de1f` (the tool's crossing of the four moves before its conflict, then the base `92b5727aca40` merged by hand: one file, `benchmarks/network_traces/connection_rows_run.py`, both constants kept, the comment in the base's words) [ran]. Its second tool run is `r20261113-171356-f0e3`.
+
