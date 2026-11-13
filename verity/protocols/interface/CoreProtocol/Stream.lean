@@ -25,13 +25,14 @@ open Flock (V)
 
 /-- A check that reads its blobs one at a time, in an order it names before the first, and holds of each blob only what
 `step` keeps: `tables`, the SHA-512 of the blobs that may come first, each at most once and in this order; `plan`, the
-SHA-512 of every other blob, in the order they are read, or a refusal. -/
+SHA-512 of every other blob, in the order they are read, or a refusal. `step` takes a blob's SHA-512, which the feed
+computes once, beside its bytes. -/
 structure Stream (Out : Type) where
   State : Type
   tables : List ByteArray
   plan : V (Array ByteArray)
   init : State
-  step : State → ByteArray → State
+  step : State → ByteArray → ByteArray → State
   finish : State → Out
 
 namespace Stream
@@ -55,6 +56,10 @@ structure At (s : Stream Out) where
 
 def start (s : Stream Out) : s.At := ⟨s.init, s.tables, 0, 0, none⟩
 
+/-- The state after `step` on each of `bs`, in order. -/
+def steps (s : Stream Out) (bs : List ByteArray) : s.State :=
+  bs.foldl (fun st b => s.step st (Flock.Sha512.hash b) b) s.init
+
 /-- The list after the first entry `h`, if any. -/
 def after (h : ByteArray) : List ByteArray → Option (List ByteArray)
   | [] => none
@@ -64,9 +69,9 @@ theorem after_some {h : ByteArray} : ∀ {l r : List ByteArray}, after h l = som
   | [], _, hl => by simp [after] at hl
   | t :: ts, r, hl => by
     by_cases ht : t = h
-    · simp only [after, ht, if_true, Option.some.injEq] at hl
+    · simp only [after, ht, ite_true, Option.some.injEq] at hl
       exact ⟨[], by simp [ht, hl]⟩
-    · simp only [after, ht, if_false] at hl
+    · simp only [after, ht, ite_false] at hl
       obtain ⟨u, hu⟩ := after_some hl
       exact ⟨t :: u, by simp [hu]⟩
 
@@ -85,9 +90,9 @@ def feed (s : Stream Out) (plan : Array ByteArray) (a : s.At) (b : ByteArray) : 
   | none =>
     let h := Flock.Sha512.hash b
     match s.tableNext a h with
-    | some rest => ⟨s.step a.state b, rest, 0, a.read + 1, none⟩
+    | some rest => ⟨s.step a.state h b, rest, 0, a.read + 1, none⟩
     | none =>
-      if plan[a.next]? = some h then ⟨s.step a.state b, [], a.next + 1, a.read + 1, none⟩
+      if plan[a.next]? = some h then ⟨s.step a.state h b, [], a.next + 1, a.read + 1, none⟩
       else { a with read := a.read + 1, error := some (outOfPlace a.read h) }
 
 def close (s : Stream Out) (refuse : String → Out) (plan : Array ByteArray) (a : s.At) : Out :=
@@ -107,7 +112,7 @@ def run (s : Stream Out) (refuse : String → Out) (bs : List ByteArray) : Out :
 /-- What a feed without a refusal holds: its state is the steps on every blob read, and those blobs are some tables
 in order, then the plan's first `next`. -/
 def Inv (s : Stream Out) (plan : Array ByteArray) (past : List ByteArray) (a : s.At) : Prop :=
-  a.error = none → a.state = past.foldl s.step s.init ∧
+  a.error = none → a.state = s.steps past ∧
     ∃ pre rest used, past = pre ++ rest ∧ (pre.map Flock.Sha512.hash).Sublist used ∧ s.tables = used ++ a.tables ∧
       rest.map Flock.Sha512.hash = plan.toList.take a.next
 
@@ -128,12 +133,12 @@ theorem inv_feed (s : Stream Out) (plan : Array ByteArray) {past : List ByteArra
       simp only [hn'] at hn ⊢
       unfold tableNext at hn'
       by_cases h0 : a.next = 0
-      · simp only [h0, if_true] at hn'
+      · simp only [h0, ite_true] at hn'
         obtain ⟨u, hu⟩ := after_some hn'
         have hrest : rest = [] := by
           rw [h0, List.take_zero] at hr
           exact List.map_eq_nil_iff.mp hr
-        refine ⟨by simp [hst], pre ++ [b], [], used ++ u ++ [Flock.Sha512.hash b], ?_, ?_, ?_, by simp⟩
+        refine ⟨by simp [hst, steps], pre ++ [b], [], used ++ u ++ [Flock.Sha512.hash b], ?_, ?_, ?_, by simp⟩
         · simp [hp, hrest]
         · simpa using (hsub.trans (List.sublist_append_left used u)).append (List.Sublist.refl _)
         · simp [ht, hu]
@@ -141,10 +146,10 @@ theorem inv_feed (s : Stream Out) (plan : Array ByteArray) {past : List ByteArra
     | none =>
       simp only [hn'] at hn ⊢
       by_cases hplan : plan[a.next]? = some (Flock.Sha512.hash b)
-      · simp only [hplan, if_true] at hn ⊢
-        refine ⟨by simp [hst], pre, rest ++ [b], used ++ a.tables, by simp [hp], ?_, by simp [ht], ?_⟩
+      · simp only [hplan, ite_true] at hn ⊢
+        refine ⟨by simp [hst, steps], pre, rest ++ [b], used ++ a.tables, by simp [hp], ?_, by simp [ht], ?_⟩
         · exact hsub.trans (List.sublist_append_left used a.tables)
-        · rw [List.map_append, hr, List.take_succ, Array.getElem?_toList, hplan]
+        · rw [List.map_append, hr, List.take_add_one, Array.getElem?_toList, hplan]
           rfl
       · simp [hplan] at hn
 
@@ -159,7 +164,7 @@ theorem inv_fold (s : Stream Out) (plan : Array ByteArray) :
 /-- `run` refuses, or its plan is a plan, `bs` is fed in its order and `run` is the finish after every step. -/
 theorem run_fed (s : Stream Out) (refuse : String → Out) (bs : List ByteArray) :
     (∃ r, s.run refuse bs = refuse r) ∨
-      ∃ plan, s.plan = .ok plan ∧ s.Fed plan bs ∧ s.run refuse bs = s.finish (bs.foldl s.step s.init) := by
+      ∃ plan, s.plan = .ok plan ∧ s.Fed plan bs ∧ s.run refuse bs = s.finish (s.steps bs) := by
   unfold run
   match hp : s.plan with
   | .error e => exact .inl ⟨e, rfl⟩
@@ -169,14 +174,15 @@ theorem run_fed (s : Stream Out) (refuse : String → Out) (bs : List ByteArray)
     simp only [List.nil_append] at hi
     unfold close
     match he : (bs.foldl (s.feed plan) s.start).error with
-    | some e => exact .inl ⟨e, by simp [he]⟩
+    | some e => exact .inl ⟨e, by simp⟩
     | none =>
       simp only
       by_cases hlt : (bs.foldl (s.feed plan) s.start).next < plan.size
-      · exact .inl ⟨_, by simp [hlt]⟩
-      · obtain ⟨hst, pre, rest, used, hb, hsub, _, hr⟩ := hi he
+      · exact .inl ⟨s!"the check reads {plan.size - (bs.foldl (s.feed plan) s.start).next} more blobs than came",
+          by simp [hlt]⟩
+      · obtain ⟨hst, pre, rest, used, hb, hsub, ht, hr⟩ := hi he
         rw [List.take_of_length_le (by simpa using Nat.le_of_not_lt hlt)] at hr
-        exact .inr ⟨plan, rfl, ⟨pre, rest, hb, hsub.trans (List.sublist_append_left used _), hr⟩,
+        exact .inr ⟨plan, rfl, ⟨pre, rest, hb, ht ▸ hsub.trans (List.sublist_append_left used _), hr⟩,
           by simp [hlt, hst]⟩
 
 /-- The blobs the files `paths` hold, as `run` reads them, holding one blob at a time; the files after a refusal are
@@ -200,7 +206,7 @@ structure StreamProtocol extends BlobProtocol where
 rejection's reason included. -/
 def StreamProtocol.Sound (P : StreamProtocol) : Prop :=
   ∀ p c e plan bs, (P.stream p c e).plan = .ok plan → (P.stream p c e).Fed plan bs →
-    (P.stream p c e).finish (bs.foldl (P.stream p c e).step (P.stream p c e).init) =
+    (P.stream p c e).finish ((P.stream p c e).steps bs) =
       P.checkBlobs p c e (Blobs.ofArray bs.toArray)
 
 /-- **The streamed check refuses, or decides what `checkBlobs` decides on the blobs fed**, in any order they come. -/
