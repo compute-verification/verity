@@ -7332,6 +7332,20 @@ def test_round_two_refuses_a_wire_that_reads_a_returned_output(pieces):
     assert "second-wires" in got["codes"] and "second-links" not in got["codes"], got
 
 
+def test_round_two_refuses_a_wire_whose_readers_port_a_link_names(pieces):
+    """A port a link names is read at the link's entry (`second_stage._read_ok`, which looks its link up first), so a
+    wire naming that port too holds nothing of what its sessions read. The design fails `second-wires` alone, its links
+    derived (the wire's rows place the reader's units), alike in both; without the link the same design passes."""
+    pair, triple = SECOND_MIXED.templates
+    wired = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], wires=[(triple, pair)], allow=True)
+    wire = wired["wires"][0]
+    linked = {**wired, "links": [{"template": wire["template"], "port": wire["port"], "value": BX}]}
+    for case, codes in ((wired, []), (linked, ["second-wires"])):
+        got = second_statements(copy.deepcopy(case))
+        assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), got
+        assert got["codes"] == codes, got
+
+
 def test_round_two_reads_each_unit_at_the_row_its_rows_name(pieces):
     """Round 2's rows, Lean's the Python's whole, over the two-template interior after a replay sample of two: a slot of
     a linked or wired port reads exactly its unit's row of its cell's replay block, of the rows a block the design
