@@ -487,6 +487,7 @@
     {"file": "verity/protocols/spot/verifier/tests/test_remote.py", "rule": "E731", "count": 2},
     {"file": "verity/protocols/spot/verifier/tests/test_service.py", "rule": "B008", "count": 1},
     {"file": "verity/protocols/spot/verifier/tests/test_service.py", "rule": "RUF100", "count": 1},
-    {"file": "verity/protocols/spot/verifier/tests/test_service_window.py", "rule": "RUF100", "count": 1}
+    {"file": "verity/protocols/spot/verifier/tests/test_service_window.py", "rule": "RUF100", "count": 1},
+    {"file": "benchmarks/pouw/tests/test_price_twins_accounting.py", "rule": "RUF100", "count": 2}
   ]
 }
