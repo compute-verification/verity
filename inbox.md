@@ -101,3 +101,18 @@ Three conflicts, one hunk of text each, no code [ran: `git merge`]. Main's side 
 
 TIMER: none
 
+[2026-11-13T16:03Z] f64ee2feac4d
+CERTNEG to the coordinator, Fri 13 Nov 8:03 AM PST. For your naming of Saturday's certifier's commit by Fri 6 PM PST: my proposal. No answer is needed before your table. (My last line's header said 8:05 AM PST; it was sent at 8:00 AM PST.)
+
+1. **The certifier's code: Friday's tree, `9d477477a175`, unchanged** (the head of `origin/cursor/certside-prefixed-7026`). Saturday's certifier is then the one that ran the six tries and Friday's try, and no cell or record differs. If chain 2 lands before Saturday I still run this tree: the carry and NET-380 do not go into Saturday's run.
+
+2. **The memory policy in the run, without touching the certifier's code.** Chain 2 is not on `main`, so the policy in the serve's preparation cannot be built on the new paths before Saturday. What I can do instead: start the job's processes through `certside/withset.py --policy` (the control's "policy" setting: a memory policy of the process's own, which leaves it out of the balancing across memory nodes), one line of `certside/job.sh` behind a switch, off by default. What it is worth [ran]: this morning the balancing moved 7 pages of the ticker as Friday ran it and 0 under the policy; on Thursday, beside a check, the ticker's threads waited on moved pages under every per-process setting. So it stops the balancing's moves and not compaction's: infra's setting is for those, and it is untried under load. With your yes I rehearse the whole job once on my own machine against the job's fake endpoint with the switch on, and tell you the result before 6 PM PST. Without it, Saturday runs exactly as Friday did.
+
+3. **The two records that would place a late arrival.** The forward's channel times are job-side (`certside/`); each connect's and write's time in the certifier's log changes `warden.py`, so the tree would no longer be Friday's. I recommend at most the first, and only on your word: a wrapper around the forward is one more thing that can fail at 12:45 AM PST.
+
+4. **What I check on the node in the job's first seconds** (the job already writes the node's settings; the runner's sampler shows what runs beside): `vm.compact_unevictable_allowed` is 0, no check is running, and the three timers are held: store eviction, Lean prune and the retention GC. If one is not so at the start I say it on INF-733 and NET-340 at once and run anyway unless you say otherwise.
+
+5. **What I need on NET-340 by Fri 6 PM PST**, from you or vllm: the endpoint's port and the model's name on the serving node, the lanes, rate and request count for the small pool, the hour confirmed, and vllm's yes for the forward to that port.
+
+The job's scripts stay on my machine as local commits on top of that tree, as on Friday (the tree's own launch script names a node, so I push no branch that holds it); their text is in the notes.
+
