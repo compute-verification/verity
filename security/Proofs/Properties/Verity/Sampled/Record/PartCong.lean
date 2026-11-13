@@ -251,6 +251,7 @@ def setupTablesV (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coi
             unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := coins.tree? }, sts)
 
 set_option maxRecDepth 20000 in
+set_option smartUnfolding false in
 theorem setupH_view (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins)
     (tables : List (String × ByteArray)) (draw partition : Option Json) (program : Option ByteArray) :
     Stmt.setupH tags circuitFile publicFile coins tables draw partition program =
@@ -258,6 +259,7 @@ theorem setupH_view (tags : Tags) (circuitFile publicFile : ByteArray) (coins : 
   cases partition <;> rfl
 
 set_option maxRecDepth 20000 in
+set_option smartUnfolding false in
 theorem setupHidden_view (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins)
     (tables : List (String × ByteArray)) (draw partition : Option Json) (program publicInputs : Option ByteArray) :
     Stmt.setupHidden tags circuitFile publicFile coins tables draw partition program publicInputs =
@@ -265,6 +267,7 @@ theorem setupHidden_view (tags : Tags) (circuitFile publicFile : ByteArray) (coi
   cases partition <;> rfl
 
 set_option maxRecDepth 20000 in
+set_option smartUnfolding false in
 theorem setupTables_view (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray)) (draw partition : Option Json) (program : Option ByteArray)
     (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
