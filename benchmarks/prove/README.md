@@ -184,7 +184,7 @@ verity bench prove lean-verify --lean VERIFIER --proof TREE [--repeat 3] [--out 
     [--session DIR] [--circuit F] [--public F] [--program F] [--partition F] [--registered F] [--tables DIR]
 ```
 
-VERIFIER is the Lean verifier's executable, as `lake build` leaves it under `verity/protocols/flock/verifier`. TREE
+VERIFIER is the Lean verifier's executable, as `lake build` leaves it under `verity/protocols/proofs/flock/verifier`. TREE
 holds one session directory (`session.json` and its proof files, `<table>.rep0.bin` and `<table>.rep1.bin`) and the
 statement it was proved on (`circuit.txt`, the public file, and the verifier's program (`program*.json`),
 `partition.json` and `registered.json` where the statement has them), each found by its name. A run is one process of the verifier's `verify` on the session,
