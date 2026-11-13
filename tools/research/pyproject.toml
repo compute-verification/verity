@@ -142,8 +142,9 @@ untraced = [
 # the sync's pin rebuild (`repinned`) reads the real `PINS`. tools/verity/graph/tests/key_vectors.json: test_executor holds
 # the executor client's graph/v2 key rule to the vectors both sides of the contract reproduce. tools/verity/lean/lean_changed.py
 # and the files its `--inputs-key` loads (lean_audit.py, settings.py, module_keys.py, headers.py, check.py, siblings.py, axiom_probe.py,
-# tools/verity/check/common.py, slot.py, lean_slot.py, tools/verity/graph/verity_graph/contract.py): test_queue commits them
-# into its origin, so the records gate keys each commit's Lean inputs with its own code (`lean_keys`). tools/move/rename.py,
+# reserve.py, reserve.json, tools/verity/check/common.py, slot.py, lean_slot.py, tools/verity/graph/verity_graph/contract.py):
+# test_queue commits them into its origin, so the records gate keys each commit's Lean inputs, and asks its memory, with its own
+# code (`lean_keys`, `records_mem_gb`). tools/move/rename.py,
 # layout.py and restack.py: test_queue_moves_carry commits them into its origin and restacks a head across the moves they make.
 inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "benchmarks/numerical/bench-instances", "infra/ops", "adapters/vllm", "verity", "verity/circuits", "verity/circuits/kernels",
           "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "tools/verity/check/drive.toml", "benchmarks/tc_probe",
@@ -156,7 +157,8 @@ inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "bench
           "benchmarks/tc_probe_fp4/pyproject.toml", "tools/move/rename.py", "tools/move/layout.py", "tools/move/restack.py",
           "tools/verity/graph/tests/key_vectors.json", "tools/verity/lean/lean_changed.py",
           "tools/verity/lean/lean_audit.py", "tools/verity/lean/module_keys.py", "tools/verity/lean/headers.py",
-          "tools/verity/lean/siblings.py", "tools/verity/lean/axiom_probe.py", "tools/verity/lean/settings.py", "tools/verity/check/common.py",
+          "tools/verity/lean/siblings.py", "tools/verity/lean/axiom_probe.py", "tools/verity/lean/settings.py",
+          "tools/verity/lean/reserve.py", "tools/verity/lean/reserve.json", "tools/verity/check/common.py",
           "tools/verity/graph/verity_graph/contract.py",
           "tools/verity/graph/verity_graph/__init__.py"]
 parallel = true
