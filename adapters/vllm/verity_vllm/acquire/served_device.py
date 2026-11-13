@@ -109,7 +109,7 @@ def card_of(name: str) -> str | None:
     if name in NO_CARD:
         return None
     raise Unmodelled(f"device {name!r} is in neither engine.profiles.devices.CARD ({sorted(CARD)}) nor NO_CARD ({sorted(NO_CARD)}): "
-                     "add its card under verity/hardware/cards/ and map it in CARD")
+                     "add its card under hardware/cards/ and map it in CARD")
 
 
 def check_card(cc: tuple[int, int], sms: int, sku: str) -> None:
@@ -117,12 +117,12 @@ def check_card(cc: tuple[int, int], sms: int, sku: str) -> None:
     c = load(sku)
     arch = re.fullmatch(r"sm_(\d+)(\d)[af]?", c["arch"])
     if arch is None:
-        raise Unmodelled(f"verity/hardware/cards/{sku}.toml: arch {c['arch']!r} names no compute capability")
+        raise Unmodelled(f"hardware/cards/{sku}.toml: arch {c['arch']!r} names no compute capability")
     fields = (("compute capability", f"{cc[0]}.{cc[1]}", f"{arch[1]}.{arch[2]}"),
               ("SM count", str(sms), str(c["sm"]["count"]["value"])))
     off = [f"{name} {got}, the card's {want}" for name, got, want in fields if got != want]
     if off:
-        raise Unmodelled(f"the device is not its registered card verity/hardware/cards/{sku}.toml: " + "; ".join(off))
+        raise Unmodelled(f"the device is not its registered card hardware/cards/{sku}.toml: " + "; ".join(off))
 
 
 # ------------------------------------------------------------------------------------------------------------- FA3 (cc 9.0)
