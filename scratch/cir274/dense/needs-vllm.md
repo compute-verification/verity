@@ -24,12 +24,16 @@ def shard_param(label: str, words: int, block: int) -> str:
     return f"{WR.weight_param(label, words)}/b{int(block)}/vocab"
 ```
 
-and in `unit_templates(spec)`, beside the `EXPERTS` case:
+and in `unit_templates(spec)`, beside the `EXPERTS` case (the read at each halving of H within 256 words, H / g of
+them):
 
 ```diff
-+    if spec_base(spec) == "EmbeddingShard_v1":
-+        H = int(spec_statics(spec)["H"])
-+        out += [(f"{READ}{{V={shard_vocab(spec)},H={g}}}", H // g) for g in _halvings(H)]
++        if spec_base(spec) == "EmbeddingShard_v1":
++            from verity.commitments.gates.embedding import read
++
++            H, V = int(spec_statics(spec)["H"]), shard_vocab(spec)
++            hit += tuple((descriptor_id(read(V, H >> k)), 1 << k) for k in range(H.bit_length())
++                         if H % (1 << k) == 0 and H >> k <= 256)
 ```
 
 `adapters/vllm/verity_vllm/records/`: the prover commits each block's padded table, V rows of G words, as
