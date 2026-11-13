@@ -85,8 +85,8 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import a7  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registration as R  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Statement  # noqa: E402
@@ -697,7 +697,7 @@ def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int
     ``--registered`` file (`registered.reads_file` at the values' roots, and the output rows' port) written under
     ``out``."""
     from circuit_check import targets as TG
-    from verity.protocols.spot.verifier.one_stage import registered as G
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.program import Program
     from verity.circuits.refs import coll_concat

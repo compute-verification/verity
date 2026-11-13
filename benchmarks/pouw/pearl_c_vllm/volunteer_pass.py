@@ -45,15 +45,15 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "pouw" / "clear"))
+sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "clear"))
 import fast_tile as FT  # noqa: E402
 import verify_run as VR  # noqa: E402
 import clear_work as CW  # noqa: E402
-from verity.protocols.pouw.verifier.audit import opened_value  # noqa: E402
-from verity.protocols.pouw.verifier.coins import CoinCommitment  # noqa: E402
-from verity.protocols.pouw.verifier.protocol import Context  # noqa: E402
-from verity.protocols.pouw.prover.schemes import pearl_c as C  # noqa: E402
-from verity.protocols.pouw.prover.schemes import pearl_c_work as PW  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.audit import opened_value  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.protocol import Context  # noqa: E402
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C  # noqa: E402
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW  # noqa: E402
 
 #: the device's counts are held to the CPU replay's on every Nth tile id
 CROSS_CHECK = 1024
