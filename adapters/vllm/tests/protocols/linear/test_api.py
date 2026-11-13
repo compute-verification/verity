@@ -164,6 +164,45 @@ def test_an_arm_that_executes_on_a_stack_with_no_executor_is_refused():
         pass
 
 
+def test_a_pass_inside_a_pass_is_refused_and_the_open_one_goes_on():
+    ex = Executor()
+    stack = Stack(SITES, ex)
+    stack.activate(PEARLC)
+    with stack.pass_(PassSpec(index=1)) as p:
+        with pytest.raises(RuntimeError, match="a pass is already open"), stack.pass_(PassSpec(index=2)):
+            pass
+        assert stack.open_pass is p and ex.opened == [p] and p.ended == 0
+        stack.apply(SITES[0], Layer(), "x", None, original)
+    assert p.ended == 1 and stack.passes == [{"pass": 1, "units": 1}] and stack.open_pass is None
+
+
+def test_a_pass_of_a_stack_that_executes_nothing_is_none_and_is_not_recorded():
+    """With no arm, and under an arm that names no executor, `pass_` opens nothing, on a stack that has an executor
+    too: the forward inside it is vLLM's own ``apply``."""
+    ex = Executor()
+    stack = Stack(SITES, ex)
+    for arm in (None, Arm("bf16", "bf16")):
+        stack.activate(arm)
+        with stack.pass_(PassSpec(index=3)) as p:
+            assert p is None and stack.open_pass is None
+            assert stack.apply(SITES[0], Layer(), "x", None, original)[0] == "stock"
+    assert ex.opened == [] and stack.passes == []
+
+
+def test_a_pass_whose_spec_the_stack_refuses_begins_nothing():
+    """`pass_` holds the spec it is handed against the stack as `activate` holds the arm's: a control nothing implements
+    is refused by name before the executor begins a pass, and the arm's own spec still runs after it."""
+    ex = Executor()
+    stack = Stack(SITES, ex)
+    stack.activate(PEARLC)
+    with pytest.raises(Refused, match="control 'tamper'"), stack.pass_(PassSpec(index=4, controls=(Control("tamper"),))):
+        pass
+    assert ex.opened == [] and stack.open_pass is None and stack.passes == []
+    with stack.pass_() as p:
+        pass
+    assert ex.opened == [p] and stack.passes == [{"pass": PEARLC.spec.index, "units": 0}]
+
+
 def test_the_interface_imports_neither_vllm_nor_torch():
     path = Path(__file__).resolve().parents[3] / "verity_vllm" / "protocols" / "linear" / "api.py"
     mods = {a.name for n in ast.walk(ast.parse(path.read_text())) if isinstance(n, ast.Import) for a in n.names}

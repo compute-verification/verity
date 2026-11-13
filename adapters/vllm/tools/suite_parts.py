@@ -130,7 +130,6 @@ SECONDS: dict[str, float] = {
     "tests/properties/test_glm53_fused_rmsnorm_capture.py": 24,
     "tests/program/test_lifted_request.py": 24,
     "tests/properties/test_sigmoid_router_capture.py": 23,
-    "tests/program/test_b1_authored.py": 23,
     "tests/program/test_moe_router_sigmoid.py": 23,
     "tests/program/test_boolean_marlin_moe.py": 23,
     "tests/lint/test_p07_declared_inputs.py": 22,

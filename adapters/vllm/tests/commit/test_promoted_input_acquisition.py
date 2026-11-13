@@ -31,7 +31,7 @@ from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.manifest.bind import Binder
 
 V, H, TOKENS = 8, 16, 3
-PD = hashlib.sha256(b"program").hexdigest()
+PD = hashlib.sha512(b"program").hexdigest()
 
 
 # ------------------------------------------------------------------------------------------------------------ the tiny module tree
@@ -112,7 +112,7 @@ def _cpu_committer(model, *, acquire_classes: set[str], manifest: dict) -> tuple
     with pytest.MonkeyPatch.context() as mp:
         mp.setenv("VERITY_RETAIN", "host")
         c = NativeHostCommitter(_Engine(model), hash_threads=1, program_digest=bytes.fromhex(PD), acquire_classes=acquire_classes,
-                                staging="direct", geo_digest=hashlib.sha256(b"geo").digest())
+                                staging="direct", geo_digest=hashlib.sha512(b"geo").digest())
     c._start_worker = lambda: None                                             # the worker hashes CUDA jobs; the test commits its step itself
     pia = B.promoted_input_acquisition(manifest)
     assert pia["problems"] == [], pia["problems"]

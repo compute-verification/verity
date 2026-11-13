@@ -9,12 +9,12 @@ public import Proofs.Accounting.RateAudit.DeployedSketchSum
 public import Proofs.Accounting.RateAudit.DeployedRelay
 public import Proofs.Accounting.RateAudit.DeployedRun
 public import Proofs.Accounting.RateAudit.Honest
-public import Proofs.Accounting.RateAudit.Horizon
 public import Proofs.Accounting.RateAudit.Interactive
 public import Proofs.Accounting.RateAudit.Joint
 public import Proofs.Accounting.RateAudit.Named
 public import Proofs.Accounting.RateAudit.Partial
 public import Proofs.Accounting.RateAudit.PartialJoint
+public import Proofs.Accounting.RateAudit.Pooled
 public import Proofs.Accounting.RateAudit.Relay
 public import Proofs.Accounting.RateAudit.Session
 public import Proofs.Accounting.RateAudit.Sketch
@@ -23,6 +23,7 @@ public import Proofs.Accounting.RateAudit.SketchInteractive
 public import Proofs.Accounting.RateAudit.SketchRank
 public import Proofs.Accounting.RateAudit.SketchTable
 public import Proofs.Accounting.RateAudit.Windows
+public import Definitions.Accounting.RateAuditRemote
 
 /-! The rate audit's proofs: the guarantee in the random-oracle model (`Accounting.SecurityProofs.RateAudit`), its
 completeness (`Accounting.SecurityProofs.RateHonest`), its time average over windows

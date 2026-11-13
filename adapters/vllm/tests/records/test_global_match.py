@@ -78,3 +78,5 @@ def test_an_unknown_field_is_refused_by_name_and_a_wrong_one_named():
         GlobalMatch.of(doc, "w")
     with pytest.raises(RecordError, match="'reasons' holds a value that is not a string"):
         GlobalMatch.of(_doc() | {"reasons": [1]}, "w")
+    with pytest.raises(RecordError, match="'schema' cannot be read: the Match result is a list, not a JSON object"):
+        GlobalMatch.of([_doc()], "w")

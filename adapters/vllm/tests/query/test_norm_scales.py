@@ -13,7 +13,7 @@ from verity_vllm.acquire import plan
 from verity_vllm.acquire import plan as PL
 from verity_vllm.check import oracle_compare as OC
 from verity_vllm.correspondence.reader_for_acquire import (
-    AnnotationCorrespondence,
+    AcquireCorrespondence,
     runtime_tree_from_paths,
 )
 from verity_vllm.correspondence.reader_for_query import Correspondence
@@ -176,14 +176,14 @@ def test_the_plan_takes_the_scale_at_the_norm_module():
     man = _manifest(kernel_program(), norm_scales=True).manifest
     rt = runtime_tree_from_paths({"": ["M"], "model.layers.0.input_layernorm": ["N"], "model.norm": ["N"]}, buffers=[],
                                  runner={"sample": True}, source="synthetic")
-    corr = AnnotationCorrespondence(rt, wrapper_prefix="", aliases={})
+    corr = AcquireCorrespondence(rt, wrapper_prefix="", aliases={})
     vals = {v.value_id: v for v in PL.value_classes(man) if v.family == NS.FAMILY}
     assert sorted(vals) == [f"model.layers.0.input_layernorm/{NS.MEMBER}", f"model.norm/{NS.MEMBER}"]
     for v in vals.values():
         legal, refused = PL.sites_of(v, corr)
         assert [(s.kind, s.module, s.slot) for s in legal] == [("native_tap", v.op_path, NS.MEMBER)] and not refused
     gone = runtime_tree_from_paths({"": ["M"]}, buffers=[], runner={"sample": True}, source="synthetic")
-    legal, refused = PL.sites_of(vals["model.norm/norm_scale"], AnnotationCorrespondence(gone, wrapper_prefix="", aliases={}))
+    legal, refused = PL.sites_of(vals["model.norm/norm_scale"], AcquireCorrespondence(gone, wrapper_prefix="", aliases={}))
     assert not legal and refused[0]["why"] == "the norm module is not a module of the runtime tree"
 
 

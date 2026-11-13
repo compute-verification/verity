@@ -14,7 +14,8 @@
 #   The stand-in (no A5_TP): the CPU TP Commit tests/pipeline/served_tp, world 2, once per STANDIN entry I:LAW (its SiluMul_v2{I}
 #     rows, its partition's law); with A5_WINDOWS=bundles it is served_tp --deferred and its windows come from its bundles.
 #     The STANDIN entry sparse-mla is a5_sparse_mla.py: test_serving_rows_splits' window (one SparseMlaSplit row's key blocks,
-#     column ends and combines, each read row wired to the unit that wrote it), run as the entry row-tables is.
+#     column ends and combines, each read row wired to the unit that wrote it), run as the entry row-tables is; the entry
+#     sparse-mla:units is its --units, each key block served as its scores unit and its values units.
 #     The STANDIN entry topp is a5_topp.py: test_serving_rows_stages' window (GumbelTopPTokenSelectSharedGreedy rows cut into
 #     their stages, each stage on bits and each carried row wired to the unit that wrote it: at V = 64, split count 1's stats,
 #     probs and step blocks; A5_TOPP its other statics, a5_topp.py's arguments, e.g. '--v 128 --splits 1,2', or
@@ -88,13 +89,18 @@
 #   A5_JOBS=2.
 # ZK_SERVER=1: every session's prover runs behind the Lean ZK server's send check (--firewall to a5.py and each STANDIN
 #   script, the core protocols' path); by default each runs `prove --zk` itself, as SPOT[Flock]'s proof server does (Figure
-#   1's dev arm).
+#   1's dev arm). An audit's members are then verified by one kept process (Lean's `verify-members`, a0.VerifyMembers).
+# A5_MEMBER_SECONDS=1: each audit's seconds a member outside its prover's clock and in Lean's verify before its first check,
+#   split by what is read (member_seconds.py): the audit runs on stamping wrappers of its three programs (the prover, Lean's
+#   verifier and the ZK server's Lean loop), and each audit's member-seconds.json is kept beside its summary. It runs
+#   `verify` on each member's session as a process of its own, and fails where that prints another verdict line than the
+#   audit's.
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; mkdir -p $O
 PY=${PY:-$REPO/.venv/bin/python}; VV=${VV:-$REPO/.venv/bin/verity-vllm}
 if [ -n "${A5_DRY:-}" ]; then W=$A5_DRY; else W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; fi
 
-STORE_RC=0
+STORE_RC=0; MSEC_RC=0
 store() {  # NAME: $W/NAME's circuit.txt files and lookup tables by SHA-512, one tree through store_trees.sh, the run labelled with it
   local t=$W/store/$1 f h rc
   rm -rf $t; mkdir -p $t/sha512 $O/store
@@ -116,6 +122,13 @@ print(json.dumps({"name": f"a5-circuits/{n}", "run": run, "source": src, "layout
 keep() {  # NAME: $W/NAME's records into $O/NAME (never the MUFU tables a circuit with lookups reads: ir_lower.TABLES pins them), and
           # its circuits and tables into the store
   mkdir -p $O/$1
+  if [ "${A5_MEMBER_SECONDS:-0}" = 1 ]; then   # before the copy: a process's end is its log's modification time
+    cp $W/stamped/stamps.txt $O/$1/member-seconds.stamps.txt
+    (cd $W/$1 && find . -name '*.log' -printf '%T@ %P\n' | sort -k2) > $O/$1/member-seconds.ends.txt
+    timeout 1800 $PY $REPO/benchmarks/one_stage/member_seconds.py measure $W/$1 --stamped $W/stamped > $O/$1/member-seconds.log 2>&1 \
+      || MSEC_RC=1
+    grep '^MEMBER-SECONDS' $O/$1/member-seconds.log | cut -c1-4000
+  fi
   (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' \
     ! -path '*/tables/*.u32' -print0 \
     | xargs -0 -r -I{} cp --parents {} $O/$1/)
@@ -142,10 +155,14 @@ RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protoco
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
 LEAN=$REPO/verity/protocols/flock/verifier/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
-ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--firewall $FWL); fi
 PLAINS=(); if [ "${A5_PLAIN:-0}" = 1 ]; then PLAINS=(--plain); fi
 (cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
+if [ "${A5_MEMBER_SECONDS:-0}" = 1 ]; then
+  STAMPED=$($PY benchmarks/one_stage/member_seconds.py wrap $W/stamped $BIN $LEAN $FWL) || exit 9
+  read -r BIN LEAN FWL <<< "$STAMPED"
+fi
+ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--firewall $FWL); fi
 
 # the verifier's lowering: a synthetic input set per template (its values are never read)
 for I in ${A5_SETS:-256 1536}; do
@@ -235,9 +252,9 @@ if [ -n "${A5_TP:-}" ]; then
   audit $N $A5_TP/commit ${A5_BUILD:-$A5_TP/build} "$WL" $WIN $PART "${ADV[@]}" || rc=1
 else
   for e in ${STANDIN:-256:subset:4 1536:subset:4}; do   # a rank's stand-in window holds 8 units; a sample of all leaves no negative
-    if [ "$e" = row-tables ] || [ "$e" = sparse-mla ] || [ "${e%%:*}" = topp ]; then
-      case $e in row-tables|sparse-mla) FORM=();; topp) FORM=(${A5_TOPP:-});; topp:slots) FORM=(--stages slots ${A5_TOPP:-});;
-        *) echo "STANDIN $e: topp or topp:slots"; exit 3;; esac
+    if [ "$e" = row-tables ] || [ "${e%%:*}" = sparse-mla ] || [ "${e%%:*}" = topp ]; then
+      case $e in row-tables|sparse-mla) FORM=();; sparse-mla:units) FORM=(--units);; topp) FORM=(${A5_TOPP:-});;
+        topp:slots) FORM=(--stages slots ${A5_TOPP:-});; *) echo "STANDIN $e: sparse-mla:units, topp or topp:slots"; exit 3;; esac
       [ -n "$MAIN" ] || { echo "STANDIN $e draws from a challenger's coins: set A5_CHALLENGER=local"; exit 3; }
       N=${e/:/-}; B=${e%%:*}; mkdir -p $O/$N
       $TIME $PY benchmarks/one_stage/a5_${B//-/_}.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" --main $MAIN \
@@ -301,4 +318,5 @@ else
   done
 fi
 [ $STORE_RC = 0 ] || { echo "a session's circuits weren't stored and preserved: $O/store/"; rc=1; }
+[ $MSEC_RC = 0 ] || { echo "an audit's member seconds weren't measured: $O/*/member-seconds.log"; rc=1; }
 exit $rc

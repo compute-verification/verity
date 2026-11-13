@@ -590,8 +590,10 @@ def test_the_honest_forgery_stand_in_is_credited():
 
 @pytest.mark.parametrize("name", [None, *FORGERIES])
 def test_the_value_check_on_the_device_is_the_hosts(name):
-    """`pouw_h1_records.reason` of a call's records, scales and served y left on a CUDA device, as the arm leaves them, is
-    what it is of their host copies: None for honest records, and each forgery's own refusal."""
+    """A call's records, scales and served y left on a CUDA device, as the arm leaves them, are judged as their host copies
+    are: `pouw_h1_records.holds_on` there holds exactly when `reason` of the host copies is None (honest records), and
+    `reason` of the device's records is each forgery's own refusal. `reason` takes y as its bf16 bits and the scales as
+    arrays, as `H1Run` hands them over (`numpy_of`, `row_words`)."""
     if not torch.cuda.is_available():
         pytest.skip("needs CUDA")
     w = Linear(64, 1, None)
@@ -599,9 +601,11 @@ def test_the_value_check_on_the_device_is_the_hosts(name):
     y, zy = E.scaled_mm_zy(xq, s_a, w.weight, w.weight_scale, ROWS)
     if name is not None:
         y, zy = FORGERIES[name][0](y.clone(), zy.clone(), xq, s_a, w.weight, w.weight_scale)
-    host = ZR.reason(zy.numpy(), ROWS, 64, y, s_a, w.weight_scale)
+    bits, sa, sw = y.contiguous().view(torch.int16).numpy(), PH.numpy_of(s_a), PH.numpy_of(w.weight_scale)
+    host = ZR.reason(zy.numpy(), ROWS, 64, bits, sa, sw)
     assert host == (None if name is None else FORGERIES[name][1])
-    assert ZR.reason(zy.cuda(), ROWS, 64, y.cuda(), s_a.cuda(), w.weight_scale.cuda()) == host
+    assert ZR.holds_on(zy.cuda(), ROWS, 64, y.cuda(), s_a.cuda(), w.weight_scale.cuda()) == (host is None)
+    assert ZR.reason(zy.cuda(), ROWS, 64, bits, sa, sw) == host
 
 
 def test_a_z_written_outside_the_trace_is_refused_as_untraced():
@@ -1136,22 +1140,20 @@ def test_the_rehearsals_check_hands_the_harness_its_samples_tree_by_name(monkeyp
     """`pouw_h1_rehearsal.check` calls `pouw_h1_gpu.check_challenger` with the tree of the window's sample as the
     harness's directory of its sample session, the one parameter it has for a second directory, and not as its
     statements, which stand before it: the tree itself on a check of the challenge phase's tree, its ``out/`` on a check
-    with a window. It names no statements and no live session, and answers the five fields of what the harness found."""
+    with a window. It passes the harness nothing else, so no statements and no live session, and answers the five fields
+    of what the harness found."""
     signature = inspect.signature(GPU.check_challenger)
     (second,) = (name for name in signature.parameters if name.endswith("_directory"))
     found = {"ok": True, "reason": None, "manifest": None, "period": {"id": "p"}, "credit": {"credit": 3}}
     bound = []
 
     def check_challenger(*args, **kwargs):
-        call = signature.bind(*args, **kwargs)
-        call.apply_defaults()
-        bound.append(call.arguments)
+        bound.append(signature.bind(*args, **kwargs).arguments)
         return {**found, "rounds": 2}
 
     monkeypatch.setattr(GPU, "check_challenger", check_challenger)
     calls, tree, ledger, out, sample = (tmp_path / n for n in ("calls.json", "tree", "ledger.jsonl", "check", "sample"))
-    plain = {"calls_file": str(calls), "public_sha512": "ab" * 64, "out": str(out), "ledger": [str(ledger)],
-             "statements": (), "live": None}
+    plain = {"calls_file": str(calls), "public_sha512": "ab" * 64, "out": str(out), "ledger": [str(ledger)]}
 
     assert RH.check(calls, tree, "ab" * 64, [ledger], out, None, None, None, None, None, sample) == found
     assert bound.pop() == {**plain, "directory": str(tree), "window_file": None, "period": None, "descriptor": None,

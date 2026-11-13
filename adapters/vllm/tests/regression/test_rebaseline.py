@@ -49,6 +49,17 @@ def test_record_result_writes_the_document_write_reads(monkeypatch, tmp_path):
     assert resolver.record_result(ROW, "x", {}, {}, []) is None
 
 
+def test_results_skips_a_file_it_cannot_read_and_keeps_the_rest(tmp_path, capsys):
+    """A result file that is no JSON, is not text, or is nested deeper than `json.load` reads is named on stderr and left out."""
+    (tmp_path / ROW).mkdir()
+    (tmp_path / ROW / "no_json.json").write_text("{")
+    (tmp_path / ROW / "not_text.json").write_bytes(b"\xff\xfe{}")
+    (tmp_path / ROW / "nested.json").write_text('{"a":' * 200_000 + "1" + "}" * 200_000)
+    (tmp_path / ROW / "kept.json").write_text(json.dumps(_result("kept", {}, {}, [], matched="frozen")))
+    assert list(RB.results(tmp_path)[ROW]) == ["kept"]
+    assert capsys.readouterr().err.count("[rebaseline] unreadable") == 3
+
+
 def test_write_takes_v2_values_keeps_shape_and_records_the_decision(monkeypatch, tmp_path):
     row = _row()
     old: dict = {"row": 57, "class": "FAIL", "reference": {"tag": "v1-reference", "commit": "89af", "release": "r19-int-21", "branch": "lane/vllm-integration"},
