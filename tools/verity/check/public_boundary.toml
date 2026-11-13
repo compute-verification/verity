@@ -164,6 +164,9 @@ protocols = [
     # (`NciCheck.Desc`): the check, the library root, which imports it, its executable (`network-period`), its Python
     # mirror, and the tests that run that executable
     "verity/protocols/certifier/verifier/lean/NetworkCheck{.lean,/Period.lean,/PeriodMain.lean}",
+    # the rows audit of the network certifier's run, which reads the period check's schedule and records: the audit and
+    # its executable (`network-rows`)
+    "verity/protocols/certifier/verifier/lean/NetworkCheck/{RowsAudit,RowsMain}.lean",
     "verity/protocols/certifier/verifier/network/tests/{period_case,test_network_period_protocol,test_slot_entry_pins}.py",
     "verity/protocols/certifier/verifier/network/tests/fixtures/slot_entry.json",
     "verity/protocols/pous/prover",
