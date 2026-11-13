@@ -324,7 +324,7 @@ theorem messageInput_of {k s : ByteArray} {l : String} {d : Direction} {w : Int}
   simp only [bind, Except.bind, pure, Except.pure] at he
   rw [ite_eq_right (by simp [NetworkCheck.digestBytes, hg])] at he
   simp only [hwb] at he
-  rw [ite_eq_right (by simp [NetworkCheck.sessionBytes, hs])] at he
+  rw [ite_eq_right (by simp [NetworkCheck.attachmentBytes, hs])] at he
   rw [ite_eq_right (by simp [hk])] at he
   cases he
 
