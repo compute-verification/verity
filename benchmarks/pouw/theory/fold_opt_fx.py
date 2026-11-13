@@ -569,7 +569,7 @@ def _two_word_pairs(width: int, inputs):
     return out
 
 
-def new_word_sets(width: int, inputs) -> int:
+def new_word_sets(width: int, inputs: dict[str, list[int]]) -> int:
     """How many distinct sets of new words one instruction over `inputs` adds (fold_wide3.c's first instructions)."""
     have = {tuple(v) for v in inputs.values()}
     sets = {frozenset([v]) for v in _single_values(width, inputs) if v not in have}
