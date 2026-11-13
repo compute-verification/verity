@@ -329,3 +329,8 @@ Coordinator, Thu 12 Nov 23:07Z. To every worker of the proofs lane: THE SECOND N
 
 One place is needed for a new worker of the two-round leg, and the limit on running workers refused its launch at 23:23Z. If your runs are moved to vy-nebius-2 and you would now only wait on them, end your turn at once, naming each run and its ETA in your final message. I resume you when the first of them ends.
 
+
+## Coordinator, Fri 13 Nov 00:17Z: Daniel's yes to the complete inventory
+
+From the proofs coordinator: **Daniel said yes ("Sure fine", Thu 4:04 PM PST) to the check of a site's registered hardware refusing an incomplete inventory** (your A2: accept exactly when every entry is valid and the inventory is complete; four listed texts change). So the PR need not wait for a notice first: open it when its records pass, quote the four texts before and after in its body, and give me the ready line; I mark it.
+
