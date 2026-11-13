@@ -363,7 +363,7 @@ open Classical in
 row's activations `x` and the weight rows `W`: `tileDebitRev1`'s terms on the one-row tile `{i} × cols`. -/
 noncomputable def rowDebit (d : PearlCDevice) (α β : (k : ℕ) → (Fin k → ℚ) → ℚ) {m n k : ℕ}
     (A : Matrix (Fin m) (Fin k) Code) (B : Matrix (Fin n) (Fin k) Code) (i : Fin m) (cols : Finset ℕ)
-    (x : Fin k → ℚ) (W : Fin n → Fin k → ℚ) : ℚ :=
+    (x : Fin k → ℚ) (W : Matrix (Fin n) (Fin k) ℚ) : ℚ :=
   debitDev d ⟨∑ j ∈ univ.filter (fun j : Fin n => (j : ℕ) ∈ cols),
       ((range (k / 32)).filter fun t => d.flags A B i j t = true).card, 0⟩ +
     (d.prices.costs.fs : ℚ) * (cols.card / n) * (univ.filter fun l : Fin k => d.saltDead α β k x l ∨
@@ -447,7 +447,7 @@ open Classical in
 /-- A row's debit reads that row of `A` only, at a row-local record. -/
 theorem rowDebit_row {d : PearlCDevice} (hd : d.RowLocal) (α β : (k : ℕ) → (Fin k → ℚ) → ℚ) {m n k : ℕ}
     (A : Matrix (Fin m) (Fin k) Code) (B : Matrix (Fin n) (Fin k) Code) (i : Fin m) (cols : Finset ℕ)
-    (x : Fin k → ℚ) (W : Fin n → Fin k → ℚ) :
+    (x : Fin k → ℚ) (W : Matrix (Fin n) (Fin k) ℚ) :
     rowDebit d α β A B i cols x W = rowDebit d α β (fun _ : Fin 1 => A i) B 0 cols x W := by
   have hf : ∀ j t, d.flags A B i j t = d.flags (fun _ : Fin 1 => A i) B 0 j t := fun j t => (hd.1 A B i j).2 t
   simp only [rowDebit, hf, laterZeroPromos_row hd A B i]
