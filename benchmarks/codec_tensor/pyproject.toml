@@ -24,4 +24,4 @@ inputs = ["benchmarks/word_codec/kv.py", "benchmarks/word_codec/kv_bench.py", "b
           "verity/protocols/proofs/spot/device/challenger.py", "verity/protocols/proofs/spot/device/remote.py",
           "verity/commitments/crypto",
           "verity/circuits", "verity/commitments", "verity/commitments/randomness",
-          "verity/protocols/__init__.py", "verity/protocols/accounting/poub/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/device/__init__.py"]
+          "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/poub/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/device/__init__.py"]
