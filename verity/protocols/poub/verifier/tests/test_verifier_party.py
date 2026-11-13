@@ -129,12 +129,12 @@ def test_the_party_follows_period_json() -> None:
 
 
 class Handed(Exception):
-    """What a stand-in for the runtime's `Side.of` raises once it has seen what the leg hands it."""
+    """What a stand-in for the runtime's `Side.of` raises once it has seen what it is handed."""
 
 
-def test_the_leg_asks_its_caller_for_the_bandwidth_side(tmp_path) -> None:
-    """`period.leg` takes the side from the program that starts the run: `period.json`'s challenger under bandwidth's
-    key, started on this node by `verifier_party.command`."""
+def test_a_period_asks_its_caller_for_the_bandwidth_side(tmp_path) -> None:
+    """A period's PoUB takes the side from the program that starts the run: `period.json`'s challenger under
+    bandwidth's key, started on this node by `verifier_party.command`."""
     (tmp_path / "period.json").write_text("{}")
     handed = []
 

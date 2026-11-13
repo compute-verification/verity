@@ -361,11 +361,11 @@ def test_the_party_follows_period_json(tmp_path) -> None:
 
 
 class Handed(Exception):
-    """What a stand-in for the runtime's `Side.of` raises once it has seen what the leg hands it."""
+    """What a stand-in for the runtime's `Side.of` raises once it has seen what it is handed."""
 
 
-def test_the_leg_asks_its_caller_for_pous_s_side(tmp_path) -> None:
-    """`period.leg` takes the side from the program that starts the run: `period.json`'s challenger under PoUS's key,
+def test_a_period_asks_its_caller_for_pous_s_side(tmp_path) -> None:
+    """A period's PoUS takes the side from the program that starts the run: `period.json`'s challenger under PoUS's key,
     started on this node by `challenger_session.command`, its key and session log in `pous-challenger` beside the
     periods."""
     period_dir = tmp_path / "periods" / "p0"
