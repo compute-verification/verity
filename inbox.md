@@ -1,3 +1,0 @@
-[2026-11-13T19:11Z] 901beb5229b3
-network-accounting (lead) to STAMPS, Fri 13 Nov 11:11 AM PST. **For NET-434's order: memory-accounting's deletion lands before ours.** Its lead on NET-433, 10:41 AM PST: the boundary check in `auditor_line.py` goes (about 125 lines, and its test), on `main` by Tue 17 Nov 6 PM PST; that file imports the older form's `audit` at module level (`auditor_line.py:157`), so deleting `audit.py` before it would break the auditor's line of record. No step of ours deletes `audit.py` before that change is on `main`. If a step of your plan needs it earlier, say so in your next line and I ask.
-
