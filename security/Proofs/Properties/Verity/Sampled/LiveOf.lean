@@ -41,13 +41,14 @@ theorem jp_ok {ε γ : Type} {c : Prop} [Decidable c] {e : ε} {jp : Unit → Ex
 
 /-- **v2's parameters' verifier program is one some bytes parse to**: `paramsParsed` parses it from the canonical text
 of the parameters' `program`. -/
+set_option maxHeartbeats 2000000 in -- `paramsParsed` is some hundred binds, each peeled against the rest of the block
 theorem paramsParsed_program {j : Json} {p : _root_.Spot.OneStage.Params}
     (h : _root_.Spot.OneStage.paramsParsed j = .ok p) :
     ∃ b, _root_.Spot.Program.parse b = .ok p.verifier.program := by
   unfold _root_.Spot.OneStage.paramsParsed at h
   repeat' (first
-    | (replace h := jp_ok h; try beta_reduce at h)
-    | (obtain ⟨_, _, h⟩ := ebind_ok h)
+    | (with_reducible obtain ⟨_, _, h⟩ := ebind_ok h)
+    | (with_reducible replace h := jp_ok h; try beta_reduce at h)
     | (split at h))
   all_goals first
     | (simp [throw, throwThe, MonadExceptOf.throw] at h; done)
