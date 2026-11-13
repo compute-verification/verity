@@ -211,8 +211,8 @@ def test_the_training_routes_bind_the_opt_in_step_and_the_served_programs_keep_v
     """`TRAIN_DOT` is `HopperBF16WgmmaDot16_v3`, ``opt_in``: each route binds it and names the word the served step names, and
     `boolean_version` of that word, and of a route's word, is still on `HopperBF16WgmmaDot16_v2`, so no served Program moves."""
     from verity.circuits.boolean.trace import word_of
-    from verity.definitions.ops import prims as P
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops import prims as P
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.definitions.boolean import boolean_version
 
     assert CB.TRAIN_DOT is BG.HopperBF16WgmmaDot16V3 and CB.TRAIN_DOT.opt_in
@@ -232,7 +232,7 @@ def test_the_training_steps_chain_parts_give_the_served_steps_words() -> None:
     with special words (NaNs of several payloads, the infinities, the zeros, subnormals, the largest finite) at a rate of 1,
     5 or 30%."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import gemm as BG
 
     rng = np.random.default_rng(118)
     special = np.array([0x7FC0, 0x7F81, 0xFFFF, 0x7F80, 0xFF80, 0x0000, 0x8000, 0x0001, 0x807F, 0x7F7F, 0xFF7F], np.uint16)

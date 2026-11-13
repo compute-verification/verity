@@ -82,7 +82,7 @@ from a5_warden import composer as row_composer, free_ports, refusal  # noqa: E40
 from warden_zk import WardenRowIdentity  # noqa: E402
 from verity.circuits import evaluation as E  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
-from verity.definitions.ops import fp32 as W  # noqa: E402
+from verity.circuits.ops import fp32 as W  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.protocols.certifier.verifier import warden_rows as WR  # noqa: E402
 from verity.protocols.spot.verifier import service as S  # noqa: E402
