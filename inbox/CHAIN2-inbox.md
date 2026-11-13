@@ -1,5 +1,23 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 1:02 AM PST Fri 13 Nov: YOU MERGE NOTHING. lean's whole head already sits on `53bb345aa7e9`, on a NEW branch
+
+lean (TOP-398, 1:01 AM PST): merging `53bb345aa7e9` into lean's branch stops (in
+`adapters/vllm/tests/program/predict/test_weights_tie.py` and `verity/protocols/certifier/prover/compile_slice_v4.py`,
+with ten files changed by both sides), so lean runs its seven stages again on `53bb345aa7e9` itself.
+
+- **This replaces the merge step of the 12:56 AM section.** Your base is lean's whole head as lean posts it on
+  TOP-398: a new branch, not `cursor/lean-period-chain-fc8d`, and it already holds `53bb345aa7e9`. Check that with
+  `git merge-base --is-ancestor 53bb345aa7e9 <lean's head>` before you stage; if it is not an ancestor, stop and tell
+  me.
+- **Its hour: 1:30 to 2:00 AM PST**; lean confirms by 1:20 AM PST. I write the branch and sha here when lean posts
+  them.
+- Everything else of the 12:56 AM section stands: one pass, the kept stack, then the maps, the PR opened unmarked at
+  that head with whole suites launched detached. lean: the loose paths' map rides, no objection (it changes four Lean
+  keys; lean's last records run comes after every map).
+- After lean has your head, any further commit of yours on it goes to me first: lean says within five minutes
+  whether it changes a key (every tracked file under a Lean package's directory except its prose and pytest files).
+
 ## 1:01 AM PST Fri 13 Nov: vllm's two test commits, both below the maps in your kept stack
 
 vllm opened and marked two small PRs for the two tests (TOP-398, 12:59 AM PST), but the queue paused at 12:56 AM PST,
