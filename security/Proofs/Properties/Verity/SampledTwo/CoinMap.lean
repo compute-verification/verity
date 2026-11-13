@@ -45,6 +45,7 @@ Statements and definitions: `LawAt`'s and `CoinMapHolds`' proofs are to come. No
 namespace Verity.SampledTwo.CoinMap
 
 open Verity.Game
+open Claims
 open scoped ENNReal
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
@@ -170,7 +171,7 @@ def openG {β : Type} (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree)
   if treeLines ts < maxTreeLines then optGame ts[i]? (f []) (openT k fs ts f i sn n b) else f []
 
 /-- What the coin map does along `relK k`, from any layout, trees, releases before and continuation. -/
-abbrev PlaceRec (β : Type) (k : ℕ) : Type :=
+abbrev PlaceRec (β : Type) (k : ℕ) : Type 1 :=
   (fs : List (String × ℕ)) → (ts : List OpenTree) → (pre : List Verity.Release) → (f : List Verity.Release → Game β) →
     (s : Strategy (relK k fs ts f)) → Tape (relK k fs ts f) s → Tape (relK k fs ts f) s
 
@@ -334,7 +335,7 @@ noncomputable def gapOpt {β γ : Type} (n : Game β) (y : γ → Game β) (gn :
   | some a, s => gy a s
 
 /-- What the hiding term is along `relK k`, from any layout, trees, releases before and continuation. -/
-abbrev GapRec (β : Type) (k : ℕ) : Type :=
+abbrev GapRec (β : Type) (k : ℕ) : Type 1 :=
   (fs : List (String × ℕ)) → (ts : List OpenTree) → (pre : List Verity.Release) → (f : List Verity.Release → Game β) →
     Strategy (relK k fs ts f) → ℝ≥0∞
 

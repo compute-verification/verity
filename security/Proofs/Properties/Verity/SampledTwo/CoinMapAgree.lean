@@ -29,6 +29,7 @@ time, now counting the mapped play only where every release after the releases b
 namespace Verity.SampledTwo.CoinMap
 
 open Verity.Game
+open Claims
 open scoped ENNReal
 
 variable {β : Type}

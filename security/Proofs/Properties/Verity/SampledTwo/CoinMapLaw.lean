@@ -32,6 +32,7 @@ its shortfall below uniform.
 namespace Verity.SampledTwo.CoinMap
 
 open Verity.Game
+open Claims
 open scoped ENNReal
 
 /-! ## An element's bits -/
