@@ -18,8 +18,8 @@ windows printed the play's log (`PrintsTwo`, through `BindsOfPrints`), and it si
   releases, `log.take (cut log)`, then the interior's, `log.drop (cut log)`; the history holds the first setup's run
   at the first and the second setup's at the second, with both setups' ledger lines.
 * **The device printed the log** (`printsTwo_dev₂`, `binds_dev₂`): each run prints its part
-  (`Sampled.Device.prints_dev`, `holds_dev`), and where each setup's ledger opens its run's id only on its own window (`Apart`), no run prints the
-  other part's window. `binds_dev₂` is `Binds` at the history, from `CutHeld.binds_of_accepts`.
+  (`Sampled.Device.prints_dev`, `holds_dev`), and where each setup's ledger opens its run's id only on its own window
+  (`Apart`), no run prints the other part's window. `binds_dev₂` is `Binds` at the history, from `CutHeld.binds_of_accepts`.
 * **The history holds both runs** (`holdsTwo_dev₂`): `PrintsTwo` speaks of the runs the history holds, and holds of a
   history holding none. On two windows, where the first session's releases hold no tree's hello (`NoHello`), each part
   fits its setup's layout (`Sampled.Device.Fits`) and each printed run reads as coin trees (`TreesRead`), the history
@@ -227,11 +227,13 @@ theorem printsTwo_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Release
     have h2 := oneWindow_false hw hww
     obtain ⟨hA₁, hA₂⟩ := hA hww
     refine ⟨_, _, (List.take_append_drop (cut o.log) o.log).symm, ?_, ?_⟩
-    · refine printsOn_part (S := S₁ o) (S' := S₂ o) (log' := o.log.drop (cut o.log)) (fun pk r hr => ?_) fun pk ho => ?_
+    · refine printsOn_part (S := S₁ o) (S' := S₂ o) (log' := o.log.drop (cut o.log)) (fun pk r hr => ?_)
+        fun pk ho => ?_
       · rw [runs_two S₁ S₂ cut h2] at hr
         exact List.mem_append.1 hr
       · exact hww (hA₂ w₁ (opensIn_of_opensOn ho (ledger_two S₁ S₂ cut h2 pk)))
-    · refine printsOn_part (S := S₂ o) (S' := S₁ o) (log' := o.log.take (cut o.log)) (fun pk r hr => ?_) fun pk ho => ?_
+    · refine printsOn_part (S := S₂ o) (S' := S₁ o) (log' := o.log.take (cut o.log)) (fun pk r hr => ?_)
+        fun pk ho => ?_
       · rw [runs_two S₁ S₂ cut h2] at hr
         exact (List.mem_append.1 hr).symm
       · exact hww (hA₁ w₂ (opensIn_of_opensOn ho (ledger_two S₁ S₂ cut h2 pk))).symm
