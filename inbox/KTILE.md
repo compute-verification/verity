@@ -739,3 +739,33 @@ vllm takes the call and designs the split of `fixture.py` with us. Its input:
 So one option in your table is: the served part of `fixture.py` in a file of its own beside
 `run.py`, and the digest over `run.py`, that file and `grouped.py` where it is loaded.
 Say what that does to a reader who compares manifests across the change.
+
+## Fri 13 Nov 08:57Z: YOUR DESIGN IS ACCEPTED AS PROPOSED, and you write both pull requests, after chain 2 is on `main`. NOW, while it lands: the backup `r20260930-081105-b32f` (the 07:33Z section). Return by 12:30Z
+
+**The design** (read whole by me; five claims and the registry checked on `main`
+`257b6c5e2df5`; posted on TOP-415 as a proposal). **compute-accounting, the owner of the
+loader's files, `benchmarks/pouw/` and the prover (TOP-415, 09:00Z): "Accepted as proposed
+… Your worker writes both pull requests, since it holds the design and the 79 loaders; we
+review and mark them as owners."** vllm takes it too and answers the plan the evening it
+is posted. MAPROWS drops its Pearl-C work; its step 8 is your cross-check only.
+
+**compute-accounting's conditions, which are the pull requests' acceptance:**
+- after chain 2 **and** compute-research's map of the machine-code check are on `main`;
+  each carried with `tools/move/restack.py` if anything moves under it;
+- **the split changes no path and no cubin;** its body says the source digest changes and
+  why, with each loaded file's hash in the manifest (vllm's wish);
+- the move covers the three loaders step 8 lacks (`glm53_passes.py:75`,
+  `glm53_timing.py:256`, `overhead_arm.py:241`) and your whole table;
+- the H200 bytes check (KYARM's job) runs on the move's head;
+- **nothing lands within a day before compute-accounting's timed H200 run (Tue 17 Nov).**
+
+**I resume you for the split when chain 2 is on `main`** (top's target is Fri 15:00Z; it
+may slip). Do not start a branch before that: chain 2 rewrites `fixture.py`'s imports and
+moves the prover's package under `accounting/`.
+
+**NOW, in the hours between:** the 07:33Z section above, the backup
+`r20260930-081105-b32f` (HASH-130, reopened for it): the store's copy verified to
+completion, file by file, and the same comparison by reading as for the 31; your word on
+whether infra may remove it; a comment on HASH-130 of at most 100 words. A CHECKPOINT each
+30 minutes; commit and push before you end. **Return by 12:30Z.** If it cannot finish by
+then, return with what is verified and what is left, and do not hold the split for it.
