@@ -618,8 +618,12 @@ theorem not_tablesSent (k : Verity.Registration.Composite) (hRg : I.RegisteredFi
 /-- **The read finder's success is at most SPOT's collision bound** under its premise (`Vocab.FinderCR`). -/
 theorem readFinder_le_sampledBound {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {σ : Verity.Game.Strategy ((I.vocab K).game θ F c)} (h : (I.vocab K).FinderCR .sampled θ F c σ) :
-    (Binding.readFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg ≤ I.sampledBound θ ((I.vocab K).cost θ F c σ) :=
-  (I.vocab K).finderPr_le_crBound h
+    (Binding.readFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg ≤ I.sampledBound θ ((I.vocab K).cost θ F c σ) := by
+  have h1 := (I.vocab K).finderPr_le_crBound h
+  have hf : (I.vocab K).finder .sampled θ F c σ = Binding.readFinder I.base I.dev θ F c σ := rfl
+  have hb : ∀ t, (I.vocab K).crBound θ .sampled t = I.sampledBound θ t := fun _ => rfl
+  rw [hf, hb] at h1
+  exact h1
 
 /-- **The session's δ adds the read finder's bound** (`Live.delta`). -/
 theorem ofReal_le_deltaOf {θ : ByteArray} {A : Live} (hA : I.session θ = some A) (t : ℕ) :
