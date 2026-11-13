@@ -24,7 +24,7 @@ def _written(path: Path, doc: Any) -> str:
     return str(path)
 
 
-def test_the_command_opens_its_workload_by_the_name_given(tmp_path):
+def test_the_command_opens_its_workload_by_the_name_given(tmp_path, monkeypatch):
     """`predict compiled` reads ``--workload`` through `open`: a workload that states no steps is read and then refused for
     them, by its name in a str or in bytes, and the name with a slash after it and the empty name are `open`'s errors."""
     name = _written(tmp_path / "workload.json", {"requests": []})
@@ -35,6 +35,7 @@ def test_the_command_opens_its_workload_by_the_name_given(tmp_path):
             PC.main(replace(a, workload=given))
     with pytest.raises(NotADirectoryError):
         PC.main(replace(a, workload=name + "/"))
+    monkeypatch.chdir(tmp_path)  # the suites' read guard takes an open of the empty name for one of the working directory
     with pytest.raises(FileNotFoundError):
         PC.main(replace(a, workload=""))
 
@@ -77,6 +78,7 @@ def _pin_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[PC.Pi
 def test_the_pin_command_opens_its_build_by_the_name_given(tmp_path, monkeypatch):
     """`predict compiled-pin` reads ``--build`` through `open`: the empty name is `open`'s error, and no pin is made."""
     a, seen = _pin_command(tmp_path, monkeypatch)
+    monkeypatch.chdir(tmp_path)  # as in the workload's test
     with pytest.raises(FileNotFoundError):
         PC.main(replace(a, build=""))
     assert PC.main(a) == 0 and seen == [None]
