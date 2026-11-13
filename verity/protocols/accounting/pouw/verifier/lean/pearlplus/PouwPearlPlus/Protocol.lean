@@ -45,7 +45,7 @@ the pass's openings read, mapped to the SHA-512 (lowercase hex) of the blob hold
 that digest, held to its manifest entry (`held`); a path the object doesn't name, or a digest no blob has, is the tile's
 `FileNotFoundError` or the opening's failure, which rejects the run.
 
-**The check** is `check` on them: it accepts with the run's credit at Pearl's assumption at δ = `DELTA`, or rejects with
+**The check** is `check` on them: it accepts with the run's credit at its scheme's named assumption at δ = `DELTA`, or rejects with
 `check`'s reason. It never leaves a run undecided.
 
 **Public**, on acceptance: the credit (`credited`, `credited_tiles`, `macs`, `rho`, `epsilon`) and `delta`.

@@ -33,7 +33,8 @@ def RUN_TAG : String := "verity/pouw/pearl-plus/run/v1"
 def RUN_DRAW_DOMAIN : String := "verity/pouw/pearl-plus-run-draw/v1"
 def COIN_SCHEMA : String := "verity-pouw/pearl-plus-coin/v2"
 def COIN_SCHEMA_V1 : String := "verity-pouw/pearl-plus-coin/v1"
-def ASSUMPTION : String := "Pearl's Assumption 1 (pearl_kw)"
+/-- The named assumption a run of the H100's scheme is credited at (`verify_run.ASSUMPTION_H100`). -/
+def ASSUMPTION : String := "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1"
 
 /-- One retained pass as the verifier holds it once its manifest is read and checked (`Load.load`). -/
 structure Pass where
