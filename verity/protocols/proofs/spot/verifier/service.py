@@ -1918,7 +1918,8 @@ class Stream:
         copies given here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, `supplied`, `pinned`,
         `schemas`, `window_root`, `held`, `outputs` and `history`, as `registration.check` takes them, and `declared`,
         the window's day, the registration log's declarations and the head of the prefix they were filled from,
-        `{"day", "declarations", "head"}` as `registration.check` takes them, which the run of record reads too).
+        `{"day", "declarations", "head"}` as `registration.check` takes them, which the run of record reads too; the
+        record's window names that head, `R6-head`).
         Then the receipt. Under
         `Check.registration_deadline` the challenger first reads its clock (`received_at`): a registration received more
         than the deadline after the salt's release, or before any salt, is refused (`late-registration`, with both

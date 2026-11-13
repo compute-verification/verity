@@ -292,7 +292,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
           history: Mapping[str, Any] | None = None, head: str | None = None) -> Verdict:
     """`registration.check` (R1-R8) by the verifier, with R2's declared day when it passes `day` and `declarations`
-    (and the registration head it filled them from, `head`),
+    (and the registration head it filled them from, `head`, which R6 holds the record's window to name),
     R6's seed salt when it passes `seed_salt`, R6's pool reset, week and spent mark, a reset at most once a week,
     and R7's pool chain when it passes `pool`, R8's tied values when it passes `tied`, and the roots of the history
     tables it passes as `history`, which the Lean computes from the members' public bodies and puts in place of the

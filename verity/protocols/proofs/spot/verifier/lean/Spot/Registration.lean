@@ -40,6 +40,10 @@ declarations) holds R2's program to the day's one declared circuit (`declaredCod
 declaration, `R2-declared-twice` when it has more than one, and `R2-declared` when the record's program is not the
 day's.
 
+A verifier whose parameters name the registration head it filled those declarations from (`head`) holds the record's
+window to name that head, and to name none when its parameters name none (`R6-head`), so an accepted record says which
+prefix of the registration log its verdict was held to.
+
 A value that is an output of an earlier run (`outputs`; never NCI's baseline θ, which holds registered public data only)
 reuses that run's commitment: its entry has the domain and root of the port in the `roots` of the log's record with that
 digest, whose leaf count must be the value's rows (`R7-output` otherwise). One may instead reuse an earlier record's
@@ -198,8 +202,8 @@ structure Verifier where
   /-- the window's day and the registration log's declarations as `(day, program)` each, from the log it holds when it
   samples; none when it reads no declarations -/
   declared : Option (Nat × Array (Nat × String)) := none
-  /-- the head of the prefix of the registration log the auditor filled `declared` from, lowercase hex of 64 bytes;
-  none when it names none -/
+  /-- the head of the prefix of the registration log the auditor filled `declared` from, lowercase hex of 64 bytes,
+  which the record's window must name; none when it names none, and the window then names none (`R6-head`) -/
   head : Option String := none
   /-- the window's seed salt, lowercase hex of 64 bytes: the coin of the challenger's seed-salt family it read from the
   challenger's log (`Challenger.seedSaltOf`), which the window must name; none when it read none -/
@@ -604,6 +608,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
     if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
   -- `kept` terms, not statements: a statement's join point doubles what `check_eq_checkRef`'s `simp` unfolds
   c := kept (jeq (getD (get "window") "seed_salt") (optStr v.seedSalt)) c "R6-seed-salt"
+  c := kept (jeq (getD (get "window") "head") (optStr v.head)) c "R6-head"
   c := poolMarks (get "window") v.pool v.log c
   -- R7
   if v2 then
@@ -678,6 +683,7 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
     if !jeq (getD (get "window") "stream") (Json.str stream) then c := addCode c "R6-stream"
     if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
   c := kept (jeq (getD (get "window") "seed_salt") (optStr v.seedSalt)) c "R6-seed-salt"
+  c := kept (jeq (getD (get "window") "head") (optStr v.head)) c "R6-head"
   c := poolMarks (get "window") v.pool v.log c
   -- R7
   if v2 then

@@ -31,7 +31,8 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   declarations, each exactly `{"blocks", "day", "program"}` with a natural day and a string program, which R2 holds the
   record's program to (`Registration.declaredCode`), refused in any other form; and it may add `head`: the head of the
   prefix of the registration log it filled `day` and `declarations` from (lowercase hex of 64 bytes, `HEAD_FORM`),
-  which needs `day` and `declarations` (`HEAD_UNDECLARED`); and it may add `seed_salt`: the window's
+  which needs `day` and `declarations` (`HEAD_UNDECLARED`) and which R6 holds the record's window to name, as it
+  holds it to name none where the parameters name none (`R6-head`); and it may add `seed_salt`: the window's
   seed salt it read from the challenger's log (`Challenger.seedSaltOf`), lowercase hex of 64 bytes, which needs
   `window_root` and which R6 holds the record's window to name (`R6-seed-salt`), refused in any other form; and it may
   add `pool`, `{"genesis", "lag", "pin", "pout", "reset", "verdicts", "week"}`: the two registered values a window

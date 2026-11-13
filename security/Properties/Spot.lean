@@ -14,7 +14,8 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 * **the registration** keeps R1–R8 against the verifier's own copies (`Registered`): the record's format, protocol, law
   and window (`R1`); its program, query, partition and population, and its day's declared program (`R2`); its scheme,
   ports, roots, leaves and domains (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window, the
-  window's stream and prover, its seed salt and its pool's reset, once a week (`R6`); for a v2 record its registered
+  window's stream and prover, its seed salt, its registration head and its pool's reset, once a week (`R6`); for a v2
+  record its registered
   values (`R7`), its window opening the pool the previous window of record left, or the empty pool where the public
   rule or its reset restarts it, for a verifier with a pool (`PoolChained`); and under a template query, no run Input
   its proof blocks don't each read alone (`R8`); and in the per-member form each member's one count of link points
@@ -146,6 +147,11 @@ read none. -/
 def RunSeedSalt (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD (getD rec "window") "seed_salt") (match v.seedSalt with | some s => .str s | none => .null)
 
+/-- The record's window names the registration head the verifier's parameters name (`head`: the head of the prefix of
+the registration log its day and declarations were filled from), and none when they name none. -/
+def RunHead (rec : Json) (v : Registration.Verifier) : Prop :=
+  jeq (getD (getD rec "window") "head") (match v.head with | some h => .str h | none => .null)
+
 /-- The record's window names the reset serving chose for the verifier's pool (`Registration.Pool.reset`), and none for
 a verifier with no pool. -/
 def RunPoolReset (rec : Json) (v : Registration.Verifier) : Prop :=
@@ -169,8 +175,9 @@ def PoolResetOnce (v : Registration.Verifier) : Prop :=
 
 /-- R6: the record names the digest of the prover's last earlier record (null when the log is empty, or when that record
 has no digest), no earlier record has its window, a verifier bound to a stream and a prover (`binding`) sees its
-window name both, and its window names the verifier's seed salt (`RunSeedSalt`) and its pool's reset, week and
-spent mark (`RunPoolReset`, `RunPoolWeek`, `RunPoolSpent`), at most one reset a week (`PoolResetOnce`). -/
+window name both, and its window names the verifier's seed salt (`RunSeedSalt`), its registration head (`RunHead`)
+and its pool's reset, week and spent mark (`RunPoolReset`, `RunPoolWeek`, `RunPoolSpent`), at most one reset a week
+(`PoolResetOnce`). -/
 def R6 (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD rec "previous") (match v.log.back? with
     | some e => ((Registration.digestHex e).toOption.map Json.str).getD .null
@@ -178,7 +185,7 @@ def R6 (rec : Json) (v : Registration.Verifier) : Prop :=
   (∀ e ∈ v.log, jeq (getD e "window") (getD rec "window") = false) ∧
   (∀ sp, v.binding = some sp → jeq (getD (getD rec "window") "stream") (.str sp.1) = true ∧
     jeq (getD (getD rec "window") "prover") (.str sp.2) = true) ∧
-  RunSeedSalt rec v ∧ RunPoolReset rec v ∧ RunPoolWeek rec v ∧ RunPoolSpent rec v ∧ PoolResetOnce v
+  RunSeedSalt rec v ∧ RunHead rec v ∧ RunPoolReset rec v ∧ RunPoolWeek rec v ∧ RunPoolSpent rec v ∧ PoolResetOnce v
 
 /-- A v2 record's registered values: the string values, each once (`names`), as many as the list's entries and as the
 verifier's own entries, and each one of the verifier's. -/

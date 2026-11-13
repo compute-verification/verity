@@ -76,6 +76,9 @@
   declaration (`R2-undeclared`), a day declared twice (`R2-declared-twice`, which the log's own check refuses as
   `duplicate-declaration`), and a record whose program is not the day's declared one (`R2-declared`), as R2's Lean does
   (`Spot.Registration.declaredCode`), which `verifier.check` runs beside it.
+* **Registration head** (`head`): the head of the prefix of the registration log the verifier filled `day` and
+  `declarations` from, lowercase hex of 64 bytes. R6 holds the record's window to name it (`HEAD`), and to name none
+  for a verifier that names none (`R6-head`), so an accepted record says which prefix its verdict was held to.
 * **Binding** (`binding`: `{"stream", "prover"}`, the verifier's stream digest and the identity it registered the prover
   under): R6 also holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them,
   so a tile seeded for one prover's stream is refused in any other's, in the same window or not.
@@ -149,7 +152,7 @@ RECEIPT = "verity/registration-receipt/v1"
 KINDS = ("served", "stand-in")
 #: the window's field naming its seed salt (Seed salt)
 SEED_SALT = "seed_salt"
-#: the window's field naming the registration head its verifier's declarations were filled from
+#: the window's field naming the registration head its verifier's declarations were filled from (Registration head)
 HEAD = "head"
 #: the window's field naming the reset serving chose for its pool (Pool chain)
 POOL_RESET = "pool_reset"
@@ -279,7 +282,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     the log registered under the domain it takes now is a ValueError (`unwindowed`).  `day` and `declarations`: the
     window's day and the registration log's declarations (Declared day), both or neither; R2 holds the record's program
     to the day's one declaration (`_declared`).  `head`: the head of the prefix of the registration log the verifier
-    filled `day` and `declarations` from, lowercase hex of 64 bytes, which needs both (`_head`).  `seed_salt`: the
+    filled `day` and `declarations` from, lowercase hex of 64 bytes, which needs both (`_head`) and which R6 holds the
+    window to name (Registration head).  `seed_salt`: the
     window's seed salt the verifier read from its challenger (Seed salt), which R6 holds the window to name; ValueError in another form or without `window_root`.
     `pool`: the values a window opens and leaves its pool in, the empty pool's root, whether the verifier refused the
     window the public lag back, the window's own reset, which R6 holds it to name, and whether its week's one reset is
@@ -407,6 +411,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
                 c.fail(f"R6-{k}", {"registered": w.get(k), "verifier": bound[k]})
     if w.get(SEED_SALT) != salt:
         c.fail("R6-seed-salt", {"registered": w.get(SEED_SALT), "verifier": salt})
+    if w.get(HEAD) != head:
+        c.fail("R6-head", {"registered": w.get(HEAD), "verifier": head})
     reset = pool["reset"] if pool is not None else None
     if w.get(POOL_RESET) is not reset:
         c.fail("R6-pool-reset", {"registered": w.get(POOL_RESET), "verifier": reset})

@@ -164,6 +164,9 @@ EARLIER_WROOT = "e0" * 64
 #: another
 SEED_SALT = "5a" * 64
 OTHER_SEED_SALT = "5b" * 64
+#: the registration head a verifier's parameters may name, which the record's window then names, and another
+REG_HEAD = "5c" * 64
+OTHER_REG_HEAD = "5d" * 64
 RECEIVED = "2026-10-07T00:00:00Z"
 
 
@@ -697,7 +700,8 @@ def _registration_verdict(p: dict, rec) -> Verdict:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
-                   p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"))
+                   p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"),
+                   day=p.get("day"), declarations=p.get("declarations"), head=p.get("head"))
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
@@ -6623,6 +6627,37 @@ def test_a_seed_salt_the_server_chose_is_refused_by_name(pieces):
     for bad in (SEED_SALT.upper(), SEED_SALT[:-2], SEED_SALT + "\n", "", 5):
         assert codes(rec["window"], {**params, "seed_salt": bad}) == "reject", bad
     assert codes(rec["window"], {**params, "window_root": None}) == "reject"
+
+
+def test_a_window_naming_another_registration_head_is_refused_by_name(pieces):
+    """Lean and Python agreeing: a verifier whose parameters name the registration head its day and declarations were
+    filled from accepts a record whose window names that head, and refuses one naming another head, the head in another
+    form or none (`R6-head`). A verifier that names none (no `head`, or null), with a declared day or without, accepts a
+    window naming none and refuses one naming a head (`R6-head`). A head the verifier holds in another form, or with no
+    day and declarations, refuses its inputs."""
+    s, values = REGISTERED_SETUPS[0], {"D": 1, "W": 3}
+    law = {"k": 1, "law": "subset"}
+    rec = _record_of(s, values, law, {**WINDOW, R.HEAD: REG_HEAD}, leaf_layer=LEAF, window_root=WROOT)
+    bare = {"anchors": [], "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": [], "parameters": s.signature,
+            "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": values,
+            "scheme": SCHEME, "window_root": WROOT, "work_table": None}
+    day = {**bare, "day": 0, "declarations": [{"blocks": [], "day": 0, "program": rec["program"]}]}
+    params = {**day, "head": REG_HEAD}
+
+    def codes(window, p=params):
+        kind, out = D.replay(REGISTRATION, _json({"params": p, "record": {**rec, "window": window}}), pieces)
+        return json.loads(out)["codes"] if kind == "output" else kind
+
+    assert codes(rec["window"]) == []
+    for head in (OTHER_REG_HEAD, REG_HEAD.upper(), None, 5):
+        assert codes({**WINDOW, R.HEAD: head}) == ["R6-head"], head
+    assert codes(WINDOW) == ["R6-head"]
+    for p in (bare, day, {**day, "head": None}):
+        assert codes(rec["window"], p) == ["R6-head"]
+        assert codes(WINDOW, p) == []
+    for bad in (REG_HEAD.upper(), REG_HEAD[:-2], REG_HEAD + "\n", "", 5):
+        assert codes(rec["window"], {**params, "head": bad}) == "reject", bad
+    assert codes(rec["window"], {**bare, "head": REG_HEAD}) == "reject"
 
 
 def test_a_window_opens_the_pool_its_chain_left(pieces):

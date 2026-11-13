@@ -209,12 +209,19 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
 def test_the_boundary_record_names_the_registration_head_its_verifier_declares():
     """The first stage's boundary record names, in its window, the head of the registration log's prefix its verifier's
     declared day was filled from (`registration.HEAD`): the development log's by default (`declared_of`), the caller's
-    where it hands a declared day."""
+    where it hands a declared day. A hand-off whose record names another head, or none, is refused at the resume
+    (`R6-head`)."""
     pub = json.loads(json.dumps(_class().public()))
     got = TS.first(pub, PAIR, RULE, FC.Challenger("first"))
     mine, later = TS.declared_of(got.record["program"]), TS.declared_of(got.record["program"], day=1)
     assert got.record["window"][R.HEAD] == mine["head"] != later["head"]
     assert TS.first(pub, PAIR, RULE, FC.Challenger("later"), declared=later).record["window"][R.HEAD] == later["head"]
+    stage1 = json.loads(json.dumps(got.stage1()))
+    window = stage1["record"]["window"]
+    for other in ({**window, R.HEAD: later["head"]}, {k: v for k, v in window.items() if k != R.HEAD}):
+        with pytest.raises(S.Refused) as e:
+            TS.resume({**stage1, "record": {**stage1["record"], "window": other}}, PAIR)
+        assert e.value.verdict.codes == ("R6-head",)
 
 
 def test_resume_refuses_another_rule_registration_or_sample():

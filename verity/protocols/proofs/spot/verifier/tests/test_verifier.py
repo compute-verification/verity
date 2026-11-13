@@ -110,6 +110,36 @@ def test_the_declared_day_is_held_by_both():
                     declarations=change.get("declarations"))
 
 
+def test_the_registration_head_is_held_by_both():
+    """R6's registration head (`registration.HEAD`, `Registration.check`'s `R6-head`) by the verifier: one whose
+    parameters name the head its day and declarations were filled from accepts a record whose window names that head,
+    and refuses one naming another head, the head in another form or none; one naming no head accepts a window naming
+    none and refuses a window naming one. The Lean and the Python give the same codes, and both refuse a head in
+    another form (`HEAD_FORM`) and a head with no day and declarations (`HEAD_UNDECLARED`)."""
+    bare, program, law = _record(), P.population_program(PAIR, 6), {"law": "subset", "k": 2}
+    head, other = "5a" * 64, "5b" * 64
+    day = {"day": 0, "declarations": [{"blocks": [PAIR.id], "day": 0, "program": bare["program"]}]}
+
+    def named(h) -> dict:
+        return {**bare, "window": {**bare["window"], R.HEAD: h}}
+
+    for rec, mine, codes in ((named(head), head, ()), (named(other), head, ("R6-head",)),
+                             (named(head.upper()), head, ("R6-head",)), (named(None), head, ("R6-head",)),
+                             (named(5), head, ("R6-head",)), (bare, head, ("R6-head",)), (bare, None, ()),
+                             (named(None), None, ()), (named(head), None, ("R6-head",))):
+        v = V.check(rec, program, QUERY, law, S.SCHEME, _ports(6), **day, head=mine)
+        side = {"ok": not codes, "codes": list(codes)}
+        assert v.codes == codes and v.verifiers == {"of_record": "lean", "lean": side, "python": side}, (rec["window"], mine)
+    assert V.check(named(head), program, QUERY, law, S.SCHEME, _ports(6)).codes == ("R6-head",)
+    params = V._params(program, QUERY, law, S.SCHEME, _ports(6), None, (), (), None, None, None)
+    for change, why in (({**day, "head": head.upper()}, R.HEAD_FORM), ({**day, "head": head[:-2]}, R.HEAD_FORM),
+                        ({**day, "head": 5}, R.HEAD_FORM), ({"head": head}, R.HEAD_UNDECLARED)):
+        assert "refused" in V.lean("registration", {"params": {**params, **change}, "record": named(head)}), change
+        with pytest.raises(ValueError, match=re.escape(why)):
+            R.check(named(head), program, QUERY, law, S.SCHEME, _ports(6), day=change.get("day"),
+                    declarations=change.get("declarations"), head=change["head"])
+
+
 def test_the_record_reads_each_ports_last_root_and_its_own_values_as_the_python_does():
     """`audit_record`'s sessions' roots (`Record.checks`) and the registered reads it keeps (`Record.ownRegistered`), which
     the Lean compiles on a hash map of the registration's roots, against the Python's whole: the sessions' roots all

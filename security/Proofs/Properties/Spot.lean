@@ -868,23 +868,24 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
       (Registration.r8Codes v c)).trans
       ⟨fun ⟨h, l, _⟩ => ⟨((r8Codes_nil v c).1 h).1, ((r8Codes_nil v c).1 h).2, l⟩,
         fun ⟨h, r, l⟩ => ⟨(r8Codes_nil v c).2 ⟨h, r⟩, l, trivial⟩⟩
-  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ RunSeedSalt rec v ∧ RunPoolReset rec v ∧ RunPoolWeek rec v ∧
-      RunPoolSpent rec v ∧ PoolResetOnce v ∧ (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ R8 v ∧ RL v := by
+  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ RunSeedSalt rec v ∧ RunHead rec v ∧ RunPoolReset rec v ∧
+      RunPoolWeek rec v ∧ RunPoolSpent rec v ∧ PoolResetOnce v ∧ (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ R8 v ∧
+      RL v := by
     intro c
     simp only [j13]
     by_cases hv : v2 = true
     · simp only [hv, ↓reduceIte, true_implies]
-      rw [h14, kept_nil, checkOutputs_nil, poolMarks_nil, kept_nil, poolChained_iff]
-      exact ⟨fun ⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, b⟩, q⟩, e⟩ => ⟨a, s, r, wk, p, o, ⟨b, q⟩, e⟩,
-        fun ⟨a, s, r, wk, p, o, ⟨b, q⟩, e⟩ => ⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, b⟩, q⟩, e⟩⟩
+      rw [h14, kept_nil, checkOutputs_nil, poolMarks_nil, kept_nil, kept_nil, poolChained_iff]
+      exact ⟨fun ⟨⟨⟨⟨⟨⟨a, s⟩, hd⟩, r, wk, p, o⟩, b⟩, q⟩, e⟩ => ⟨a, s, hd, r, wk, p, o, ⟨b, q⟩, e⟩,
+        fun ⟨a, s, hd, r, wk, p, o, ⟨b, q⟩, e⟩ => ⟨⟨⟨⟨⟨⟨a, s⟩, hd⟩, r, wk, p, o⟩, b⟩, q⟩, e⟩⟩
     · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h14, kept_nil, poolMarks_nil]
-      exact ⟨fun ⟨⟨⟨a, s⟩, r, wk, p, o⟩, e⟩ => ⟨a, s, r, wk, p, o, trivial, e⟩,
-        fun ⟨a, s, r, wk, p, o, _, e⟩ => ⟨⟨⟨a, s⟩, r, wk, p, o⟩, e⟩⟩
+      exact ⟨fun ⟨⟨⟨⟨a, s⟩, hd⟩, r, wk, p, o⟩, e⟩ => ⟨a, s, hd, r, wk, p, o, trivial, e⟩,
+        fun ⟨a, s, hd, r, wk, p, o, _, e⟩ => ⟨⟨⟨⟨a, s⟩, hd⟩, r, wk, p, o⟩, e⟩⟩
   have h12 : ∀ c, j12 () c = #[] ↔ c = #[] ∧ (∀ sp, v.binding = some sp →
       jeq (getD (get "window") "stream") (.str sp.1) = true ∧
       jeq (getD (get "window") "prover") (.str sp.2) = true) ∧
-      (RunSeedSalt rec v ∧ RunPoolReset rec v ∧ RunPoolWeek rec v ∧ RunPoolSpent rec v ∧ PoolResetOnce v ∧
-        (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ R8 v ∧ RL v) := by
+      (RunSeedSalt rec v ∧ RunHead rec v ∧ RunPoolReset rec v ∧ RunPoolWeek rec v ∧ RunPoolSpent rec v ∧
+        PoolResetOnce v ∧ (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ R8 v ∧ RL v) := by
     intro c
     simp only [j12]
     rcases hb : v.binding with _ | ⟨stream, prover⟩
@@ -1057,17 +1058,17 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
   rw [ek, ef, e7]
   constructor
   · rintro ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hdecl, hsch, hroots, hports,
-      h7', h4', h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, h7r, h8, hrl⟩
+      h7', h4', h5', h6a, h6b, h6c, h6d, h6n, h6e, h6f, h6g, h6h, h7r, h8, hrl⟩
     have ⟨l1, l2, l3⟩ := (r2loop get _ _ _).1 hloop
     exact ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop, hdecl⟩,
       ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5',
-      ⟨h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h⟩, fun hv => ⟨(h7r hv).1, (h7r hv).2, pinnedHeld_of_R7 (h7r hv).1⟩,
-      h8, hrl⟩
+      ⟨h6a, h6b, h6c, h6d, h6n, h6e, h6f, h6g, h6h⟩,
+      fun hv => ⟨(h7r hv).1, (h7r hv).2, pinnedHeld_of_R7 (h7r hv).1⟩, h8, hrl⟩
   · rintro ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop, hdecl⟩,
-      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h⟩, h7r, h8, hrl⟩
+      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c, h6d, h6n, h6e, h6f, h6g, h6h⟩, h7r, h8, hrl⟩
     refine ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
       (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hdecl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7', h4',
-      h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, fun hv => ⟨(h7r hv).1, (h7r hv).2.1⟩, h8, hrl⟩
+      h5', h6a, h6b, h6c, h6d, h6n, h6e, h6f, h6g, h6h, fun hv => ⟨(h7r hv).1, (h7r hv).2.1⟩, h8, hrl⟩
     have : some d' = some d := hd''.symm.trans hd'
     cases this
     exact l3

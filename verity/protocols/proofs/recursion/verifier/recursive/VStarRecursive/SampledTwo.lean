@@ -12,7 +12,8 @@ package's audit builds and reads it.
 * **params**: exactly `{"boundary", "challenger", "delta", "interior", "outputs", "public", "rule", "values"}`, the
   auditor's, fixed before any coin:
   * `boundary`: the boundary registration's parameters, as the stream's run reads them (`OneStage.paramsParsed`),
-    naming the registration head they were filled from (`NO_HEAD`), so their day and declarations too; its
+    naming the registration head they were filled from (`NO_HEAD`), so their day and declarations too, which the
+    boundary record's window then names (`R6-head`); its
     program's proof blocks under its query are one stratum, the replay block's one Definition (`ONE_DEFINITION`), so a
     share of replay blocks by count is their share by weight; it names the challenger at the interior's key
     (`ONE_KEY`), so both stages' coins are read under one key, and a coin family other than the interior's
