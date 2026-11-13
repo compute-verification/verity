@@ -121,25 +121,41 @@ def _boolean_ops() -> None:
         importlib.import_module(f"{OB.__name__}.{m.name}")
 
 
+class AmbiguousWord(Exception):
+    """A word primitive that registered Boolean Definitions build with more than one builder (`_boolean_build`)."""
+
+
 def _boolean_build(key):
-    """The ``build`` of a registered Boolean Definition (``verity.circuits.boolean.trace.definition``) whose ``word`` is the
+    """The ``build`` of the registered Boolean Definitions (``verity.circuits.boolean.trace.definition``) whose ``word`` is the
     primitive ``key``: a `forms` builder on the operand words, as a piece is. So the word primitive lowers by the builder that
-    lowers an activation of the Definition itself (`lower_gates`), commits included. Every module of
-    `verity.circuits.ops.boolean` is imported first: a Program of word primitives (`ops.prims`' s8 IMMA steps, `ops.s8`'s
-    limb steps) imports none of the modules that hold their Boolean versions, and without them the registry has no build."""
+    lowers an activation of the Definition itself (`lower_gates`), commits included. One marked ``opt_in`` is left out, as
+    `verity.definitions.boolean` leaves it out: it lowers only the activations that bind it. None when none is left;
+    `AmbiguousWord` when those left hold more than one builder (by identity, unwrapped), so no import order picks one. Every
+    module of `verity.circuits.ops.boolean` is imported first: a Program of word primitives (`ops.prims`' s8 IMMA steps,
+    `ops.s8`'s limb steps) imports none of the modules that hold their Boolean versions, and without them the registry has
+    no build."""
+    import inspect
+
     from verity.circuits.defs import REGISTRY
 
     _boolean_ops()
+    found = []
     for d in list(REGISTRY.defs.values()):
         w, build = getattr(d, "word", None), getattr(d, "build", None)
-        if callable(build) and getattr(w, "id", None) == key:
-            return build
-    return None
+        if callable(build) and getattr(w, "id", None) == key and not getattr(d, "opt_in", False):
+            found.append(d)
+    found.sort(key=lambda d: d.id)
+    if len({id(inspect.unwrap(d.build)) for d in found}) > 1:
+        raise AmbiguousWord(f"{key} is built by more than one builder, of {', '.join(d.id for d in found)}: give it one "
+                            "Boolean Definition, or a piece of its own in `ir_lower.PIECES`")
+    return found[0].build if found else None
 
 
 class _Pieces(dict):
     """:data:`PIECES`, which also resolves a primitive whose id carries a width (``tail_pieces.FAMILIES``: ``BitAtx{W}_v1``)
-    or an arity (:data:`GATE_FAMILIES`), or that a registered Boolean Definition computes (`_boolean_build`); ``wrap`` (the Boolean export's tracer) wraps a piece resolved later like the rest."""
+    or an arity (:data:`GATE_FAMILIES`), or that a registered Boolean Definition computes (`_boolean_build`); ``wrap`` (the Boolean export's tracer) wraps a piece resolved later like the rest.
+    A word `_boolean_build` refuses raises its `AmbiguousWord` from every question, ``key in PIECES`` and `get` included: a
+    False would read as no piece (`NoPiece`) and hide the cure."""
 
     wrap = None
 
