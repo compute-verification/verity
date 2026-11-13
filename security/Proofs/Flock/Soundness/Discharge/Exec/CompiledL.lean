@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.CompiledSound
 import Proofs.Flock.Soundness.Game
-import Proofs.Flock.Soundness.Merkle
+import Proofs.Flock.Soundness.MerklePair
 import Proofs.Flock.Soundness.Soundness
 
 /-!
@@ -14,14 +14,14 @@ from the row's leaf under its salt (`OpensOKL`), for any leaf scheme `Lf` (`Merk
 is the `hm96-sha512/v1` table flock-verify checks (`accepts_tables_hm96`).
 
 The argument is `CompiledSound`'s, and only the openings change. A salted opening is `(position, row, salt, path)`. A
-clash is two verifying openings of one position to different rows, under any salts, and it is a collision of `H` by
-`Merkle.opening_bindingL`: the leaf scheme's binding (`Leaf.bind`) does what the encoding's injectivity does for the
-unsalted leaf. The lockstep with the oracle table (`lockTableL`) is `lockTable` with the salts in the openings'
+clash is two verifying openings of one position to different rows, under any salts, and the pair of the two openings
+(`Merkle.openPairL`) is a collision of `H` by `Merkle.openPairL_spec`: the leaf scheme's pair (`Leaf.pair`) does what
+the encoding's injectivity does for the unsalted leaf. The lockstep with the oracle table (`lockTableL`) is `lockTable` with the salts in the openings'
 message; the reps' locksteps (`lockRep`) are unchanged.
 
 * `table_sound_compiledL`: `Pr[accepted ∧ T*(P*) uncommitted] ≤ tableError + √(N₀·Q₀·Adv₀) + Σ √(N_ℓ·Q_ℓ·Adv_{r,ℓ})
   + Pr[self-clash]`, with each `Adv` and the self-clash a collision of `H` (`op₀L_conflict_collision`,
-  `opRL_conflict_collision`, `SelfClashL.collision`).
+  `opRL_conflict_collision`, `selfCandsL_spec`).
 -/
 
 @[expose] public section
@@ -373,51 +373,166 @@ theorem opOfL_some {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merk
   rw [List.mem_filter, decide_eq_true_eq] at hmem
   exact ⟨x, hmem.1, hmem.2.1, hmem.2.2, by rw [hx]; rfl⟩
 
-omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **A clash is a collision**, under any salts (`Merkle.opening_bindingL`). -/
-theorem ClashL.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
-    {cap : Cap D} {lanes depth : ℕ} {xs : List (ℕ × List F × Sl × List D)} (h : ClashL H E Lf cap lanes depth xs) :
-    Merkle.Collision H := by
-  obtain ⟨x, -, y, -, hxy, hx, hy, hne⟩ := h
-  exact Merkle.opening_bindingL H E Lf cap depth x.1 x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2 hne hx.2
-    (hxy ▸ hy.2)
+/-- `ClashL`'s test at two openings: one position, both verify, different rows. -/
+abbrev ClashLAt (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (cap : Cap D)
+    (lanes depth : ℕ) (w : (ℕ × List F × Sl × List D) × (ℕ × List F × Sl × List D)) : Prop :=
+  w.1.1 = w.2.1 ∧ VerifiedL H E Lf cap lanes depth w.1 ∧ VerifiedL H E Lf cap lanes depth w.2 ∧ w.1.2.1 ≠ w.2.2.1
+
+/-- **The pair of two salted openings** `x` and `y` at position `pos` (`Merkle.openPairL`). -/
+def pairL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (pos : ℕ)
+    (x y : ℕ × List F × Sl × List D) : List UInt8 × List UInt8 :=
+  Merkle.openPairL H E Lf pos x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2
+
+/-- **A clash's candidates**: for each two of the openings, the test that they clash and the pair of the two openings
+(`pairL`). -/
+def clashCandsL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (cap : Cap D)
+    (lanes depth : ℕ) (xs : List (ℕ × List F × Sl × List D)) : List (Prop × (List UInt8 × List UInt8)) :=
+  (Merkle.pairsOf xs).map fun w => (ClashLAt H E Lf cap lanes depth w, pairL H E Lf w.1.1 w.1 w.2)
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **A self-clash is a collision.** -/
-theorem SelfClashL.collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
-    {sch : Schedule} {out : OutCL F D Sl} (h : SelfClashL H E Lf sch out) : Merkle.Collision H := by
-  rcases h with h | ⟨_, _, _, _, _, _, h⟩
-  · exact h.collision
-  · exact h.collision
+/-- **A clash is a collision**, under any salts: a candidate whose test passes is one (`Merkle.openPairL_spec`). -/
+theorem clashCandsL_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
+    {cap : Cap D} {lanes depth : ℕ} {xs : List (ℕ × List F × Sl × List D)}
+    {c : Prop × (List UInt8 × List UInt8)} (hc : c ∈ clashCandsL H E Lf cap lanes depth xs) (h : c.1) :
+    Hash.Collision H c.2.1 c.2.2 := by
+  obtain ⟨w, -, rfl⟩ := List.mem_map.1 hc
+  have hw : ClashLAt H E Lf cap lanes depth w := h
+  obtain ⟨h1, h2, h3, h4⟩ := hw
+  exact Merkle.openPairL_spec H E Lf cap depth w.1.1 w.1.2.1 w.2.2.1 w.1.2.2.1 w.2.2.2.1 w.1.2.2.2 w.2.2.2.2 h4 h2.2
+    (h1 ▸ h3.2)
+
+omit [Field F] [Fintype F] [DecidableEq F] in
+/-- A clash has a candidate whose test passes. -/
+theorem ClashL.cand {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
+    {cap : Cap D} {lanes depth : ℕ} {xs : List (ℕ × List F × Sl × List D)} (h : ClashL H E Lf cap lanes depth xs) :
+    ∃ c ∈ clashCandsL H E Lf cap lanes depth xs, c.1 := by
+  obtain ⟨x, hx, y, hy, hxy, hvx, hvy, hne⟩ := h
+  exact ⟨_, List.mem_map.2 ⟨(x, y), Merkle.mem_pairsOf hx hy, rfl⟩, hxy, hvx, hvy, hne⟩
+
+/-- **A self-clash's candidates**: the level-0 cap's, then each rep's at each of its recorded caps. -/
+def selfCandsL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
+    (sch : Schedule) (out : OutCL F D Sl) : List (Prop × (List UInt8 × List UInt8)) :=
+  clashCandsL H E Lf out.cap₀ (lvOf sch 0).lanes (pathLen (lvOf sch 0)) (opens₀L sch out) ++
+    [0, 1].flatMap fun r => (if r = 0 then out.pend.1 else out.pend.2).caps.zipIdx.flatMap fun ci =>
+      clashCandsL H E Lf ci.1 (lvOf sch (ci.2 + 1)).lanes (pathLen (lvOf sch (ci.2 + 1)))
+        (slotOpensL out r (ci.2 + 1) (lvOf sch (ci.2 + 1)).queries)
+
+omit [Field F] [Fintype F] [DecidableEq F] in
+/-- **A self-clash is a collision**: a candidate whose test passes is one. -/
+theorem selfCandsL_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
+    {sch : Schedule} {out : OutCL F D Sl} {c : Prop × (List UInt8 × List UInt8)}
+    (hc : c ∈ selfCandsL H E Lf sch out) (h : c.1) : Hash.Collision H c.2.1 c.2.2 := by
+  rcases List.mem_append.1 hc with hc | hc
+  · exact clashCandsL_spec hc h
+  · obtain ⟨r, -, hc⟩ := List.mem_flatMap.1 hc
+    obtain ⟨ci, -, hc⟩ := List.mem_flatMap.1 hc
+    exact clashCandsL_spec hc h
+
+omit [Field F] [Fintype F] [DecidableEq F] in
+/-- A self-clash has a candidate whose test passes. -/
+theorem SelfClashL.cand {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
+    {sch : Schedule} {out : OutCL F D Sl} (h : SelfClashL H E Lf sch out) :
+    ∃ c ∈ selfCandsL H E Lf sch out, c.1 := by
+  rcases h with h | ⟨r, hr, ℓ, hℓ, cap, hcap, h⟩
+  · obtain ⟨c, hc, hp⟩ := h.cand
+    exact ⟨c, List.mem_append_left _ hc, hp⟩
+  · obtain ⟨k, rfl⟩ : ∃ k, ℓ = k + 1 := ⟨ℓ - 1, (Nat.sub_add_cancel hℓ).symm⟩
+    obtain ⟨c, hc, hp⟩ := h.cand
+    have hr' : r ∈ [0, 1] := by
+      have : r = 0 ∨ r = 1 := by omega
+      rcases this with rfl | rfl <;> simp
+    have hk : (cap, k) ∈ (if r = 0 then out.pend.1 else out.pend.2).caps.zipIdx :=
+      List.mem_zipIdx_iff_getElem?.2 (by simpa using hcap)
+    exact ⟨c, List.mem_append_right _ (List.mem_flatMap.2 ⟨r, hr', List.mem_flatMap.2 ⟨(cap, k), hk, hc⟩⟩), hp⟩
+
+open Classical in
+/-- A run's first verifying opening at `p`: the opening whose row `opOfL` returns. -/
+noncomputable def firstOfL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
+    (lanes depth d : ℕ) (xs : List (ℕ × List F × Sl × List D)) (cap : Cap D) (p : Fin (2 ^ d)) :
+    Option (ℕ × List F × Sl × List D) :=
+  (xs.filter fun x => decide (x.1 = p.val ∧ VerifiedL H E Lf cap lanes depth x)).head?
+
+/-- **The pair of two runs at a position**: the pair of their first verifying openings there (`pairL`), and the empty
+pair when either run has none. -/
+noncomputable def opOfLPair (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
+    (lanes depth d : ℕ) (xs xs' : List (ℕ × List F × Sl × List D)) (cap : Cap D) (p : Fin (2 ^ d)) :
+    List UInt8 × List UInt8 :=
+  match firstOfL H E Lf lanes depth d xs cap p, firstOfL H E Lf lanes depth d xs' cap p with
+  | some x, some y => pairL H E Lf p.val x y
+  | _, _ => ([], [])
 
 omit [Fintype F] [DecidableEq F] in
-/-- Two runs that open a position to different rows under one cap give a collision. -/
+theorem firstOfL_of_isSome {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
+    {lanes depth d : ℕ} {xs : List (ℕ × List F × Sl × List D)} {cap : Cap D} {p : Fin (2 ^ d)}
+    (h : (opOfL H E Lf lanes depth d xs cap p).isSome) : ∃ x, firstOfL H E Lf lanes depth d xs cap p = some x := by
+  unfold opOfL at h
+  rw [Option.isSome_map] at h
+  exact Option.isSome_iff_exists.1 h
+
+omit [Field F] [Fintype F] [DecidableEq F] in
+open Classical in
+theorem firstOfL_some {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
+    {lanes depth d : ℕ} {xs : List (ℕ × List F × Sl × List D)} {cap : Cap D} {p : Fin (2 ^ d)}
+    {x : ℕ × List F × Sl × List D} (h : firstOfL H E Lf lanes depth d xs cap p = some x) :
+    x.1 = p.val ∧ VerifiedL H E Lf cap lanes depth x := by
+  unfold firstOfL at h
+  have hmem := List.mem_of_mem_head? h
+  rw [List.mem_filter, decide_eq_true_eq] at hmem
+  exact hmem.2
+
+omit [Fintype F] [DecidableEq F] in
+/-- **The pair of two runs that open a position to different rows under one cap is a collision.** -/
 theorem opOfL_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
     {Lf : Merkle.Leaf (List F) Sl D H} {lanes depth d : ℕ} {cap : Cap D} {xs xs' : List (ℕ × List F × Sl × List D)}
     {p : Fin (2 ^ d)} (h1 : (opOfL H E Lf lanes depth d xs cap p).isSome)
     (h2 : (opOfL H E Lf lanes depth d xs' cap p).isSome)
     (hne : opOfL H E Lf lanes depth d xs cap p ≠ opOfL H E Lf lanes depth d xs' cap p) :
-    Merkle.Collision H := by
-  obtain ⟨x, -, hxp, hx, hox⟩ := opOfL_some h1
-  obtain ⟨y, -, hyp, hy, hoy⟩ := opOfL_some h2
-  refine Merkle.opening_bindingL H E Lf cap depth p.val x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2
-    (fun hxy => hne ?_) (hxp ▸ hx.2) (hyp ▸ hy.2)
+    Hash.Collision H (opOfLPair H E Lf lanes depth d xs xs' cap p).1
+      (opOfLPair H E Lf lanes depth d xs xs' cap p).2 := by
+  obtain ⟨x, hx⟩ := firstOfL_of_isSome h1
+  obtain ⟨y, hy⟩ := firstOfL_of_isSome h2
+  obtain ⟨hxp, hxv⟩ := firstOfL_some hx
+  obtain ⟨hyp, hyv⟩ := firstOfL_some hy
+  have hox : opOfL H E Lf lanes depth d xs cap p = some (rowFin lanes x.2.1) :=
+    congrArg (Option.map fun x : ℕ × List F × Sl × List D => rowFin lanes x.2.1) hx
+  have hoy : opOfL H E Lf lanes depth d xs' cap p = some (rowFin lanes y.2.1) :=
+    congrArg (Option.map fun x : ℕ × List F × Sl × List D => rowFin lanes x.2.1) hy
+  have e : opOfLPair H E Lf lanes depth d xs xs' cap p = pairL H E Lf p.val x y := by
+    unfold opOfLPair
+    rw [hx, hy]
+  rw [e]
+  refine Merkle.openPairL_spec H E Lf cap depth p.val x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2
+    (fun hxy => hne ?_) (hxp ▸ hxv.2) (hyp ▸ hyv.2)
   rw [hox, hoy, hxy]
 
+/-- **The pair of two runs at a level-0 position.** -/
+noncomputable def op₀LPair (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
+    (sch : Schedule) (cap : Cap D) (x : OutCL F D Sl × OutCL F D Sl) (p : Fin (2 ^ (lvOf sch 0).logLen)) :
+    List UInt8 × List UInt8 :=
+  opOfLPair H E Lf (lvOf sch 0).lanes (pathLen (lvOf sch 0)) (lvOf sch 0).logLen (opens₀L sch x.1) (opens₀L sch x.2)
+    cap p
+
+/-- **The pair of two runs at a position of rep `r`'s level-`ℓ` cap.** -/
+noncomputable def opRLPair (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
+    (sch : Schedule) (r ℓ : ℕ) (cap : Cap D) (x : OutCL F D Sl × OutCL F D Sl)
+    (p : Fin (2 ^ (lvOf sch ℓ).logLen)) : List UInt8 × List UInt8 :=
+  opOfLPair H E Lf (lvOf sch ℓ).lanes (pathLen (lvOf sch ℓ)) (lvOf sch ℓ).logLen
+    (slotOpensL x.1 r ℓ (lvOf sch ℓ).queries) (slotOpensL x.2 r ℓ (lvOf sch ℓ).queries) cap p
+
 omit [Fintype F] [DecidableEq F] in
-/-- **Every pair the level-0 collision finder counts is a collision.** -/
+/-- **Every pair the level-0 collision finder outputs is a collision.** -/
 theorem op₀L_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
     {Lf : Merkle.Leaf (List F) Sl D H} {sch : Schedule} {cap : Cap D} {x : OutCL F D Sl × OutCL F D Sl}
     {p : Fin (2 ^ (lvOf sch 0).logLen)} (h : Rewinding.ConflictAt (op₀L H E Lf sch cap) x p) :
-    Merkle.Collision H :=
+    Hash.Collision H (op₀LPair H E Lf sch cap x p).1 (op₀LPair H E Lf sch cap x p).2 :=
   opOfL_conflict_collision h.1 h.2.1 h.2.2
 
 omit [Fintype F] [DecidableEq F] in
-/-- **Every pair a rep's collision finder counts is a collision.** -/
+/-- **Every pair a rep's collision finder outputs is a collision.** -/
 theorem opRL_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D}
     {Lf : Merkle.Leaf (List F) Sl D H} {sch : Schedule} {r ℓ : ℕ} {cap : Cap D} {x : OutCL F D Sl × OutCL F D Sl}
     {p : Fin (2 ^ (lvOf sch ℓ).logLen)} (h : Rewinding.ConflictAt (opRL H E Lf sch r ℓ cap) x p) :
-    Merkle.Collision H :=
+    Hash.Collision H (opRLPair H E Lf sch r ℓ cap x p).1 (opRLPair H E Lf sch r ℓ cap x p).2 :=
   opOfL_conflict_collision h.1 h.2.1 h.2.2
 
 /-! ## The plurality prover and the collision finders -/
@@ -685,7 +800,7 @@ openings: `Pr[accepted ∧ no codeword near T*(P*) packs a satisfying witness]` 
 `√(N·Q·Adv)` for the level-0 cap and for every rep's cap, plus the probability of a self-clash. Each `Adv` is the
 success probability of an explicit collision finder, and every pair it counts, like every self-clash, is two verifying
 openings of one position to different rows under one cap, under any salts: a collision of `H`
-(`Merkle.opening_bindingL`). At `Leaf.plain` it is `table_sound_compiled`'s bound; at `Refine.leaf512`,
+(`Merkle.openPairL_spec`). At `Leaf.plain` it is `table_sound_compiled`'s bound; at `Refine.leaf512`,
 `hm96-sha512/v1`'s. -/
 theorem table_sound_compiledL (A : Arith F K) (hA : A.Correct)
     [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
