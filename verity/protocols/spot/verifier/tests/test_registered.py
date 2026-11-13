@@ -293,6 +293,23 @@ def test_the_verifiers_reads_file_names_a_bit_row_values_format():
         G.reads_file(prog, Q, {"W": 2}, {"W": reg.root.hex()}, schemas={"W": "hm96-sha512/row/v3"})
 
 
+def test_bind_ports_binds_each_port_the_file_leaves_out_at_the_registrations_root():
+    """`bind_ports` (`Flock.RegBound`): a v1 file's ports the statement has and the file names no registered port for are
+    bound at the registration's root and domain of their rows, its registered ports left as they are; a file with no
+    other port, or of v0, is returned as it is (Lean holds it to name every port); a port the registration holds no root
+    for is refused."""
+    w = {"value": "W", "root": "aa" * 64, "leaves": 2, "domain": "bb" * 64, "reads": [0, 1]}
+    roots = {p: {"root": f"{i}" * 128, "domain": f"{i + 4}" * 128, "leaves": 2} for i, p in enumerate(("w", "x", "out"))}
+    v1 = {"format": G.READS_V1, "ports": {"w": w}}
+    got = G.bind_ports(v1, ["w", "x", "out"], roots)
+    assert got == {**v1, G.BOUND: {"out": {"root": "2" * 128, "domain": "6" * 128}, "x": {"root": "1" * 128, "domain": "5" * 128}}}
+    assert G.bind_ports(v1, ["w"], roots) == v1 and G.BOUND not in G.bind_ports(v1, ["w"], roots)
+    v0 = {"format": G.READS, "ports": {"w": w}}
+    assert G.bind_ports(v0, ["w", "x"], roots) == v0
+    with pytest.raises(ValueError, match=r"ports \['y'\] are neither registered ports of the file nor"):
+        G.bind_ports(v1, ["w", "x", "y"], roots)
+
+
 XOR1 = PrimitiveDefinition("RegisteredTestXor1", 1, (("a", Value(1)), ("b", Value(1))), Value(1), lambda a, b: a ^ b,
                            register=False)
 #: an A row of K = 64 int8 codes, its bits one-bit leaves: a `row/v2` row of K/2 = 32 u16 words

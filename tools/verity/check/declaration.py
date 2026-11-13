@@ -23,9 +23,10 @@ no `merge_requires`, and no job on the gate `needs` it or runs `after` it.
 
 A `[[plan]]` is one way to split a check over several machines (`check.py --shard K/N`): `shards`, a list of N lists of
 selectors, shard K the K-th. A selector is a job's name, or for a job in `SPLIT`, `JOB:PART` (one part: for `lean-audit`, a
-Lake package with a `lean-audit.json`; for `circuit-check`, one of its `shards`, `K/N`; for `lean-suites`, one of its suites,
-or of one that declares `[tool.verity.tests] parts = P`, one of its parts by test id, `SUITE:K/P`) or `JOB:*` (its parts no
-other selector of the plan names). Every job on the gate is in exactly one shard, whole or, for a split job, as named parts
+Lake package with a `lean-audit.json`; for `circuit-check`, one of its `shards`, `K/N`; for `lean-suites` and `pytest`, one of
+its suites, or of one that declares `[tool.verity.tests] parts = P`, one of its parts by test id, `SUITE:K/P`) or `JOB:*` (its
+parts no other selector of the plan names). pytest has parts only in a plan that names one (`check.py`'s `_parts_of`): in
+any other it runs whole. Every job on the gate is in exactly one shard, whole or, for a split job, as named parts
 plus exactly one `*`, and a job off it in at most one (a shard skips it either way: a plan that keeps it puts it back on the
 gate in one line); a shard that holds a job whole holds what it `needs` or runs `after`, and one that holds parts of a split
 job runs what that job needs beside them when it doesn't hold it (`check.py`'s `groups`: lean-build beside lean-suites'
@@ -55,7 +56,8 @@ REQUIRED = ("name", "owner", "group")
 SPLIT = {"lean-audit": "the Lake packages with a lean-audit.json",
          "circuit-check": "its `shards` shards of its targets, K/N (`circuit-check --all --shard K/N`)",
          "lean-suites": "its suites (`suites.AFTER_LEAN`), one that declares `[tool.verity.tests] parts = P` as its P parts by "
-                        "test id, SUITE:K/P (`suites.py SUITE:K/P`)"}
+                        "test id, SUITE:K/P (`suites.py SUITE:K/P`)",
+         "pytest": "its suites (all but `suites.AFTER_LEAN`), as lean-suites', in a plan that names one"}
 #: the split jobs whose parts are shards of their own work, as many as their `shards` say (none given: the job runs whole)
 SHARDED = ("circuit-check",)
 #: the parts a check runs alone (`check.py PART...`)
@@ -234,12 +236,12 @@ def needed(jobs: list[Job], names: list[str]) -> set[str]:
 
 def job_parts(job: Job, parts_of: dict[str, list[str]]) -> list[str] | None:
     """A split job's parts, or None for a job that runs whole: a `SHARDED` job's ``K/N`` for K = 1..N, its `shards` (none given:
-    whole), another split job's from ``parts_of`` (the tree's), sorted."""
+    whole), another split job's from ``parts_of`` (the tree's, for a plan; one it leaves out: whole), sorted."""
     if job.name not in SPLIT:
         return None
     if job.name in SHARDED:
         return None if job.shards is None else [f"{k}/{job.shards}" for k in range(1, job.shards + 1)]
-    return sorted(parts_of[job.name])
+    return sorted(parts_of[job.name]) if job.name in parts_of else None
 
 
 def all_parts(jobs: list[Job], parts_of: dict[str, list[str]]) -> list[str]:

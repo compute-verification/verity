@@ -125,7 +125,7 @@ class Case:
     salts: int = N
 
 
-def sampled_units() -> list:
+def units_with_sampled_salts() -> list:
     """Legal units of one to three slices (and one of eight), with columns `j` whose tuples differ in one lane (`j` and
     `j + 1`, `j + 23`), columns that differ only by their tuple, and loud, zero, subnormal and padded rows."""
     rng = random.Random(SEED)
@@ -173,7 +173,7 @@ def exact_units() -> list:
     return out
 
 
-CASES = sampled_units() + exact_units()
+CASES = units_with_sampled_salts() + exact_units()
 
 
 # ---------------------------------------------------------------------------------------------------------------

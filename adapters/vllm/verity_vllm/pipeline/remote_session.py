@@ -18,8 +18,8 @@ def commit_session(opts: Any, out: Any, kv_pages: int | None) -> Any:
     remote = protocols.driver(POUB, "remote")
     return remote.CommitSession(opts.remote_verifier, plan=opts.remote_plan, kv_pages=kv_pages,
                                 weight_blocks=opts.remote_weight_blocks, kv_lib=opts.remote_kv_lib,
-                                out=out, step_ms=opts.remote_step_ms, filler_gib=opts.remote_filler_gib,
-                                log=lambda m: print(m, flush=True))
+                                out=out, node=opts.remote_node, step_ms=opts.remote_step_ms,
+                                filler_gib=opts.remote_filler_gib, log=lambda m: print(m, flush=True))
 
 
 def session_of(args: Any) -> Any | None:

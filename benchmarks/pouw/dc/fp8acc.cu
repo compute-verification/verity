@@ -125,7 +125,7 @@ static double e4m3_value(uint8_t b) {
 static uint32_t mix(uint32_t x) { return dc_mix32(x); }
 // Operand classes (emu8's adversaries, reduced): uniform s8, every product +max, every product -max (both -128),
 // max magnitude with independent signs, l = -8 with the largest h.
-static int8_t draw(int cls, uint32_t which, uint32_t i) {
+static int8_t operand_at(int cls, uint32_t which, uint32_t i) {
   const uint32_t r = mix(mix(0xD8u + cls * 0x1000u + which) + i);
   switch (cls) {
     case 0: return (int8_t)(r & 0xFF);
@@ -155,8 +155,8 @@ static int run_gate(const std::string& dir, bool sim) {
   for (int arm = 0; arm < 2; arm++)    // 0: k3, 1: k4
     for (int cls = 0; cls < 5; cls++) {
       std::vector<int8_t> X(BM * KB), W(BN * KB);
-      for (int i = 0; i < BM * KB; i++) X[i] = draw(cls, 1, i);
-      for (int i = 0; i < BN * KB; i++) W[i] = draw(cls, 2, i);
+      for (int i = 0; i < BM * KB; i++) X[i] = operand_at(cls, 1, i);
+      for (int i = 0; i < BN * KB; i++) W[i] = operand_at(cls, 2, i);
       auto h = [](int x) { return (x + 8) >> 4; };
       // plane values: k3 A [4h, m, -l], B [4h', m', l']; k4 A [16h, l], B [16h', l']
       std::vector<int> av[NPL], bv[NPL];

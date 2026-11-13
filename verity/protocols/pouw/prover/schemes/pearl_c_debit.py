@@ -15,13 +15,18 @@
   (`pearl_c.PearlC.first_adds`).
 * `chain_debit(a_rows, b_rows)`: the flagged atoms and the later +0 promotions, each summed over the tile's words (the
   chain debit is additive over words).
-* `forming_elements(...)`: **a stub that returns 0.** P3's per-tile rule is still being written: an A′ element is shared by
-  every tile of its row band, and P3's owner is stating how a per-tile `needed` and the element's credit are apportioned.
-  Until it is relayed, the replayed debit is the chain debit alone.
+* `salt_dead(alpha, x, beta)`: P3's salt-dead predicate (`SaltDead.saltDead`) on each element of a formed A row: its
+  A′ code has one value at every noise pair of the support, which by `saltDeadP_iff_ends` is the support's two ends
+  agreeing, E′ the row's flat code c_β = e4m3(f32(β·44)) at all 32 positions and F e4m3(±11/4) at all 32, from the
+  forming's accumulator f32(α·x) (`circuit.words.ends_agree`, the hidden cap's bit).
+* `forming_elements(flags, dead)`: P3's per-tile rule (`tileDebitDev`'s `elems`): the A′ elements (i, l), l < k, of the
+  tile's rows that are salt-dead or whose atom block l/32 every word of the row over the tile's columns flags.  Each
+  counts fs·|cols|/n of inert work, the tile's share of an element its row band shares (`clear_work.tile_cap`).
+* `tile_debit(a_rows, b_rows, formed)`: the chain debit and `forming_elements`, each word's flags replayed once.
 * `debit_units(atoms, elements, prices, device, zeros=…)` is rev1's `tileDebitRev1` at a device's W1 prices
   (`pearl_c.Prices`, the device's own by default): `debitDev` (`debitOf` at `Params.pi`, `Costs.adopted` on the H100),
   per flagged atom-word its 32 MACs and a quarter of a promotion add (40 on the H100, 34 on sm_120) and fs per debited
-  element (64 and 40), and an add per later +0 promotion (32 and 8).
+  element (64 and 40; a tile's elements count |cols|/n each), and an add per later +0 promotion (32 and 8).
 * The cap ρ is the device record's (`Device.cap`; `CAP` is the H100's 1/400, sm_120's is 1/1,000): a tile whose debit
   exceeds ρ times its credited cells' credit, their share of the unit's `creditDevRev1` (`clear_work.tile_cap`), is
   rejected (`pearlCTilesDevRev1`'s `capOK`, per tile: `Tile.lean`'s `tileShare`).
@@ -158,15 +163,70 @@ def chain_debit(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]]
     return atoms, zeros
 
 
-def forming_elements(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]]) -> int:
-    """STUB, pending P3's per-tile rule (module docstring): the debited A′ elements of a tile.  Returns 0."""
-    return 0
+#: the salt-dead support's ends (`SaltDead.support`, `Cap.plusEnd` and `minusEnd`): E's flat entry e4m3(44), and F's
+#: e4m3(+11/4) and e4m3(−11/4)
+E_FLAT = 0x63
+F_ENDS = (0x43, 0xC3)
 
 
-def debit_units(atoms: int, elements: int, prices: Prices | None = None, device: Device = H100, *, zeros: int
+def flat_code(beta: int) -> int:
+    """c_β: the E′ code of the support's flat E entry at the row's β (`pearl_c.eprime` of 44)."""
+    return P.f32_to_fp8(P.f32_of_bits(fp32.mul(beta, P.f32_bits(P.fp8_to_f32(E_FLAT)))))
+
+
+def ends_agree(c_plus: int, c_minus: int) -> bool:
+    """Whether the two ends' codes have one value: equal, or both zeros (`Cap.codeVal_eq_iff`)."""
+    return c_plus == c_minus or not (c_plus | c_minus) & 0x7F
+
+
+def salt_dead(alpha: int, x: Sequence[int], beta: int, device: Device = H100) -> list[bool]:
+    """P3's salt-dead predicate on each element of a formed row (module docstring): its two ends' codes from f32(α·x)
+    agree."""
+    cb, k = flat_code(beta), device.atom.k
+    seen: dict[int, bool] = {}
+    out = []
+    for w in x:
+        acc = fp32.mul(alpha, w)
+        if acc not in seen:
+            seen[acc] = ends_agree(*(P.f32_to_fp8(P.f32_of_bits(_step(acc, [cb] * k, [f] * k, device))) for f in F_ENDS))
+        out.append(seen[acc])
+    return out
+
+
+def forming_elements(flags: Sequence[Sequence[Sequence[bool]]], dead, device: Device = H100) -> int:
+    """`tileDebitDev`'s inert forming elements: over the tile's rows i, the l < k with row i's atom block l/32 flagged
+    by every word (i, j) of the tile's columns (``flags[i][j]``, `word_flags`), or salt-dead (``dead(i)``, row i's
+    `salt_dead`, read only where some word leaves the block unflagged)."""
+    elements, atom = 0, device.atom.k
+    for i, words in enumerate(flags):
+        every = [all(col) for col in zip(*words)]
+        if all(every):
+            elements += atom * len(every)
+            continue
+        row_dead = dead(i)
+        elements += sum(1 for l, d in enumerate(row_dead) if every[l // atom] or d)
+    return elements
+
+
+def tile_debit(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]],
+               formed: Sequence[tuple[int, Sequence[int], int]], device: Device = H100) -> tuple[int, int, int]:
+    """(atoms, zeros, elements) over a tile's words: `chain_debit`'s counts and `forming_elements`, each word's flags
+    replayed once; ``formed`` is each A row's (α, x, β), its forming's."""
+    flags, atoms, zeros = [], 0, 0
+    for a in a_rows:
+        row = []
+        for b in b_rows:
+            f, z = word_debit(a, b, device)
+            row.append(f)
+            atoms, zeros = atoms + sum(f), zeros + z
+        flags.append(row)
+    return atoms, zeros, forming_elements(flags, lambda i: salt_dead(formed[i][0], formed[i][1], formed[i][2], device), device)
+
+
+def debit_units(atoms: int, elements: Fraction | int, prices: Prices | None = None, device: Device = H100, *, zeros: int
                 ) -> Fraction:
     """rev1's debit at a device's prices (`tileDebitRev1`): `debitDev` (`debitOf Params.pi Costs.adopted` at the H100's),
-    per flagged atom-word its 32 MACs and 1/G of a promotion add and fs per debited element, and an add per later
-    promotion into a +0 total; `prices` the device's own by default."""
+    per flagged atom-word its 32 MACs and 1/G of a promotion add and fs per debited element (a tile's at |cols|/n
+    each), and an add per later promotion into a +0 total; `prices` the device's own by default."""
     p = prices or device.prices
     return atom_units(device, prices) * atoms + p.forming_credited * elements + p.fadd * zeros

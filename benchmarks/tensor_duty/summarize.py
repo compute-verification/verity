@@ -92,32 +92,38 @@ def join(r: dict, smi: list) -> None:
     r["smi_reasons"] = f"0x{reasons:x}"
 
 
-def fmt(x, nd=1):
+def fmt(x: float | None, nd: int = 1) -> str:
     return "-" if x is None else f"{x:.{nd}f}"
 
 
-def at(r) -> str:
+def at(r: dict) -> str:
     return f"{r['fill']} / {r['burst']} / {r['duty']:.0f}{' warm' if r['warm'] else ''}"
 
 
-def where(r) -> str:
+def where(r: dict) -> str:
     return f"clock {r['clock']}, {r['arm']} {r['class']}, fill / burst / duty {at(r)}"
 
 
 def report(pts: list[dict], sku: str = SKU) -> tuple[str, list[str], dict]:
     """The verdict, the Markdown lines and the JSON summary of ``pts``."""
     bound, second, per_mhz = readings(sku)
-    tm = lambda r: host_rate(r) * 1e-12  # noqa: E731
+
+    def tm(r: dict) -> float:
+        return host_rate(r) * 1e-12
+
+    def mean(rs: list[dict], k: str) -> float:
+        return sum(r[k] for r in rs) / len(rs)
+
     v, refuting, undecided = verdict(pts, bound)
     top = max(pts, key=host_rate)
     hi = max(pts, key=lambda r: host_rate(r, -STAMP_S))
-    L = [f"**{v}**: of {len(pts)} points, {len(refuting)} exceed the card's tensor rate, 132 x 4096 x clock.tensor = "
-         f"{bound:.4e} MACs a second, over the host's wall clock at its longest reading, and {len(undecided)} more "
-         f"only at its shortest (the host stamps' {STAMP_S * 1e3:g} ms either way). The highest is "
-         f"{tm(top):.2f} T MAC/s "
-         f"({host_rate(top) / bound:.5f} of the card's rate and {host_rate(top) / second:.5f} of the tensor at "
-         f"clock.sm, {second:.4e}; {host_rate(top) / per_mhz:.1f} MHz-equivalent) at {where(top)}. At its shortest "
-         f"reading the highest is {host_rate(hi, -STAMP_S) / bound:.5f} of the card's rate, at {where(hi)}."]
+    L = [(f"**{v}**: of {len(pts)} points, {len(refuting)} exceed the card's tensor rate, 132 x 4096 x clock.tensor = "
+          f"{bound:.4e} MACs a second, over the host's wall clock at its longest reading, and {len(undecided)} more "
+          f"only at its shortest (the host stamps' {STAMP_S * 1e3:g} ms either way). The highest is "
+          f"{tm(top):.2f} T MAC/s "
+          f"({host_rate(top) / bound:.5f} of the card's rate and {host_rate(top) / second:.5f} of the tensor at "
+          f"clock.sm, {second:.4e}; {host_rate(top) / per_mhz:.1f} MHz-equivalent) at {where(top)}. At its shortest "
+          f"reading the highest is {host_rate(hi, -STAMP_S) / bound:.5f} of the card's rate, at {where(hi)}.")]
     tmax = max(pts, key=lambda r: r["tensor_mhz"])
     gap = [r["host_t1"] - r["host_t0"] - r["event_s"] for r in pts]
     L.append(f"Diagnostics, the GPU's own timers: over cudaEvents the highest is "
@@ -166,8 +172,8 @@ def report(pts: list[dict], sku: str = SKU) -> tuple[str, list[str], dict]:
                         best = m
                 L.append(f"| {d:.0f} | " + " | ".join(cells) + f" | {fmt(best and best['clock64_mhz'])} | "
                          f"{fmt(best and best['tensor_mhz'])} |")
-            L += ["", f"## Clock {clock}, {arm}: fills and bursts at duties 90-99 (the maximum T MAC/s, and the mean "
-                  "clock64 MHz)", ""]
+            L += ["", (f"## Clock {clock}, {arm}: fills and bursts at duties 90-99 (the maximum T MAC/s, and the mean "
+                       "clock64 MHz)"), ""]
             L.append("| fill | burst (SM-cycles) | max T MAC/s | mean clock64 MHz | mean tensor-phase MHz | "
                      "mean fill-phase MHz |")
             L.append("| --- | ---: | ---: | ---: | ---: | ---: |")
@@ -175,9 +181,8 @@ def report(pts: list[dict], sku: str = SKU) -> tuple[str, list[str], dict]:
                 for b in sorted({r["burst"] for r in rs}):
                     c = [r for r in rs if r["fill"] == f and r["burst"] == b and 90 <= r["duty"] < 100]
                     if c:
-                        mean = lambda k: sum(r[k] for r in c) / len(c)  # noqa: E731
-                        L.append(f"| {f} | {b} | {max(tm(r) for r in c):.2f} | {mean('clock64_mhz'):.1f} | "
-                                 f"{mean('tensor_mhz'):.1f} | {mean('fill_mhz'):.1f} |")
+                        L.append(f"| {f} | {b} | {max(tm(r) for r in c):.2f} | {mean(c, 'clock64_mhz'):.1f} | "
+                                 f"{mean(c, 'tensor_mhz'):.1f} | {mean(c, 'fill_mhz'):.1f} |")
     doc = {"verdict": v, "sku": sku, "bound": bound, "clock_sm_rate": second, "stamp_s": STAMP_S, "points": len(pts),
            "refuting": len(refuting), "undecided": len(undecided),
            "top": {**{k: top[k] for k in ("clock", "arm", "class", "fill", "burst", "duty", "clock64_mhz",
@@ -187,7 +192,7 @@ def report(pts: list[dict], sku: str = SKU) -> tuple[str, list[str], dict]:
     return v, L, doc
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("outs", nargs="+", type=Path)
     ap.add_argument("--json", type=Path)

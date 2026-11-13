@@ -131,6 +131,19 @@ def open_period(lines: Iterable[str], lane: str) -> dict[str, Any] | None:
     return opened
 
 
+def after_close(lines: Iterable[str], lane: str, period: str) -> tuple[bool, dict[str, Any] | None]:
+    """Whether the auditor's ledger `lines` closes period `period`, and the first ``reserve`` entry after that close
+    whose prover (``for``, else ``by``) is lane `lane`, None while there is none: the one reserve a Pearl-C run's draw
+    session may be, so a draw is taken once (`bench_arm.LiveDraw`, `served_verdicts.pearlplus_live_draw`)."""
+    closed = False
+    for e in map(json.loads, lines):
+        if not closed:
+            closed = e["kind"] == "period-close" and e["body"]["period"] == period
+        elif e["kind"] == "reserve" and (e["body"].get("for") or e["body"].get("by")) == lane:
+            return True, e
+    return closed, None
+
+
 def period_setting(raw: Any) -> dict[str, Any] | None:
     """The pouw setting ``period``: None (the lane has no period open) or its open period's ``period-open`` body
     (`open_period`); ValueError otherwise."""
@@ -278,6 +291,16 @@ def reserve_salt(call: Callable[..., Mapping[str, Any]], ledger: Callable[[], It
     if (why := period_reason(period, reserved)) is not None:
         raise ValueError(f"session {reserved.get('session')} is reserved and refused before its open: {why}")
     return reserved, period
+
+
+def reserve_draw(call: Callable[..., Mapping[str, Any]], peer: str) -> dict[str, Any]:
+    """A draw session (`window.DRAW_FAMILIES`, the draw coin alone) reserved withheld at infra's gate, as words (`call`,
+    ``reserve --peer PEER ... --withhold``, under the lane's gate key): its reserve answer as `DrawSession` takes it
+    (`reserved_of`). `CoinError` when the gate refuses, or reserves it plain."""
+    answer = call("reserve", "--peer", peer, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(), "--withhold")
+    if answer.get("withheld") is not True:
+        raise CoinError(f"the gate reserved draw session {answer.get('session')} plain, not withheld")
+    return reserved_of({k: v for k, v in answer.items() if k in ("session", *RESERVE_FIELDS)}, "draw_session")
 
 
 def open_session(entry: str, gate: Callable[..., Mapping[str, Any]], sid: str, root: bytes, k: int = 0,
@@ -439,5 +462,5 @@ def finish(run: Any, client: Any) -> None:
 
 __all__ = ["DrawSession", "EPOCHS", "Gate", "H1_PERIOD", "NO_DRAW_SESSION", "RESERVE_FIELDS", "WITHHELD_OPEN", "Window", "at_port",
            "closed_on_error", "connect", "finish", "gate_of", "in_process_draw", "open_period", "open_session", "opened",
-           "period_reason", "period_setting", "refusals", "reserve_salt", "reserved_of", "salt_session", "session",
-           "session_setting"]
+           "period_reason", "period_setting", "refusals", "reserve_draw", "reserve_salt", "reserved_of", "salt_session",
+           "session", "session_setting"]

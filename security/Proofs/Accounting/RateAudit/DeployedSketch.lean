@@ -314,7 +314,7 @@ theorem pr_unpaid_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) 
             pr (fun _ : SketchStore N m × Passes => False) :=
           pr_mono fun _ hx => (hx.1 hr).elim
         _ ≤ (P : ℝ≥0∞) * (G * ((N : ℝ≥0∞) / 2 ^ h + (q : ℝ≥0∞) / 2 ^ (8 * r))) := by
-          rw [Rate.Horizon.pr_false]
+          rw [Rate.Pooled.pr_false]
           exact bot_le
 
 end SketchDeployedWindow
@@ -428,7 +428,7 @@ theorem pr_samples_pooled_le_map {Ω : Type} [Fintype Ω] (store : Ω → Sketch
       ∑ w, ((A.win w y).correctAll E (y w).1 (y w).2.1).card ≤ K) _
     (fun X _ Gs hG f E hmem hcard => ?_)
   refine (pr_mono (fun ω hω => ?_)).trans
-    ((Rate.Horizon.pr_causal_le' n (P * N) (d * K) X (fun _ => d) Gs hG).trans (le_of_eq ?_))
+    ((Rate.Pooled.pr_causal_le' n (P * N) (d * K) X (fun _ => d) Gs hG).trans (le_of_eq ?_))
   · obtain ⟨hall, hK⟩ := hω
     refine ⟨fun w t => hmem ω w t (hall w t), ?_⟩
     show ∑ i, d * (Gs i ω).card ≤ d * K
@@ -465,7 +465,7 @@ theorem pr_samples_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → Sketch
       ∃ w, ((A.win w y).correctAll E (y w).1 (y w).2.1).card ≤ Kw) _
     (fun X _ Gs hG f E hmem hcard => ?_)
   refine (pr_mono (fun ω hω => ?_)).trans
-    ((Rate.Horizon.pr_floor_le n (P * N) Kw d X Gs hG).trans (le_of_eq ?_))
+    ((Rate.Pooled.pr_floor_le n (P * N) Kw d X Gs hG).trans (le_of_eq ?_))
   · obtain ⟨hall, w, hw⟩ := hω
     exact ⟨fun w t => hmem ω w t (hall w t), w, (hcard ω w).trans_le hw⟩
   · simp only [Nat.cast_mul, mul_assoc]

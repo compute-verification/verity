@@ -36,15 +36,15 @@ from verity_bench.vllm.presets import (
     served,
 )
 from verity_bench.vllm.result import IdentityMismatch, identity_mismatches, judge, validate
-from verity_bench.vllm.runner import ResidentCapacityError, _token_digest, run_benchmark
+from verity_bench.vllm.runner import PER_PASS_TOKENS, ResidentCapacityError, _token_digest, run_benchmark
 from verity_bench.vllm.table import render
 
 
 class FakeEngine:
     def __init__(self, arm, events, *, gate_ok=True, bad_tokens=False, kv_tokens=458_752, timed_digest=None,
-                 drift=0.0, timed_ok=True):
+                 drift=0.0, timed_ok=True, per_pass_tokens=False):
         self.arm, self.events, self.gate_ok, self.bad_tokens = arm, events, gate_ok, bad_tokens
-        self.timed_digest, self.drift, self.timed_ok = timed_digest, drift, timed_ok
+        self.timed_digest, self.drift, self.timed_ok, self.per_pass_tokens = timed_digest, drift, timed_ok, per_pass_tokens
         self.identity = {
             "vllm_version": "0.fake+gd9105ea80",
             "kernel_digest": f"digest-{arm.id}",
@@ -60,7 +60,8 @@ class FakeEngine:
     def custom_gate(self):
         self.events.append(("custom-gate", self.arm.id))
         timed = any(e[:2] == ("measure", self.arm.id) for e in self.events)
-        return {"passed": self.gate_ok and (self.timed_ok or not timed), "provided": True}
+        return {"passed": self.gate_ok and (self.timed_ok or not timed), "provided": True,
+                **({PER_PASS_TOKENS: True} if self.per_pass_tokens else {})}
 
     def warmup(self, point):
         self.events.append(("warmup", self.arm.id, point.id))
@@ -90,8 +91,9 @@ class FakeEngine:
 
 class FakeFactory:
     def __init__(self, *, resident_failure=None, gate_ok=True, bad_tokens=None, kv_tokens=None, timed_digest=None,
-                 drift=0.0, kv_after_gate=None, timed_ok=True):
+                 drift=0.0, kv_after_gate=None, timed_ok=True, per_pass_tokens=()):
         self.events = []
+        self.per_pass_tokens = set(per_pass_tokens)
         self.resident_failure = resident_failure
         self.failed = False
         self.gate_ok = gate_ok
@@ -112,7 +114,7 @@ class FakeFactory:
         return FakeEngine(arm, self.events, gate_ok=self.gate_ok,
                           bad_tokens=arm.id == self.bad_tokens,
                           kv_tokens=kv, timed_digest=self.timed_digest.get(arm.id), drift=self.drift,
-                          timed_ok=self.timed_ok)
+                          timed_ok=self.timed_ok, per_pass_tokens=arm.id in self.per_pass_tokens)
 
 
 def inputs():
@@ -1064,6 +1066,60 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
     assert "device only" in pouw.refusals("pearl-c-sm120-v1-h3", Context(stage="serve", enabled=arm.protocols))[0]
 
 
+def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kernel_from_its_setup(monkeypatch):
+    """`served_pearlplus.sh`'s spec: Llama 3.2 1B's BF16 checkpoint through `pouw:pearl-c-h100-v1-h3` on one H200, its kernel
+    directory and cubin both the setup's (pearl_c_sm90.sh exports them), serial, beside stock FP8 eager and compiled; the
+    adapter's refusals accept it."""
+
+    from verity.protocols.pouw.verifier import verifier
+    from verity_vllm.protocols import pouw
+    from verity_vllm.protocols.interface import Context
+
+    from verity_bench.vllm.arms import protocols_config
+
+    spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served-h200")
+    assert (spec.preset.model, spec.preset.gpu_id, spec.preset.gpu_count) == ("unsloth/Llama-3.2-1B", "h200", 1)
+    assert spec.setup == "benchmarks/harness/setup/pearl_c_sm90.sh"
+    control, arm, compiled = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert [(a.id, a.precision, a.control, a.execution) for a in (control, compiled)] == [
+        ("stock-fp8", "fp8", None, None), ("stock-fp8@compiled", "fp8", None, "compiled")]
+    assert (arm.protocols, arm.precision, arm.control) == (("pouw:pearl-c-h100-v1-h3",), "bfloat16", None)
+    assert arm.protocols_config == {"pouw": {"device": "cuda", "kernel": "$PEARLC_KERNEL", "cubin": "$PEARLC_CUBIN"}}
+    with pytest.raises(ValueError, match=r"\$PEARLC_KERNEL"):
+        protocols_config(arm, {"PEARLC_CUBIN": "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"})
+    monkeypatch.setattr(verifier, "coins", lambda n: b"\1" * n)
+    config = protocols_config(arm, {"PEARLC_KERNEL": "/tree/benchmarks/pouw/pearl_c_sm90",
+                                    "PEARLC_CUBIN": "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"})
+    assert (config["pouw"]["kernel"], config["pouw"]["cubin"]) == ("/tree/benchmarks/pouw/pearl_c_sm90",
+                                                                   "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin")
+    assert pouw.refusals("pearl-c-h100-v1-h3", Context(stage="serve", enabled=arm.protocols, settings=config)) == ()
+
+
+def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(monkeypatch, tmp_path):
+    """``served_passes.py arm`` writes the H200 spec's Pearl-C arm as serve-openai's Pearl+ arm takes it
+    (`serve_pearl.config_of`): `serve_pearl.CONFIG`'s keys alone, the setup's paths read in, no coins drawn (the server
+    draws each window's); an unset ``$`` value is refused, naming it."""
+    from verity.protocols.pouw.verifier import verifier
+    from verity_vllm.pipeline import serve_pearl as SPL
+
+    from benchmarks.pouw.pearl_c_vllm import served_passes as SP
+
+    def drawn(n):
+        raise AssertionError("served_passes.py arm drew coins")
+    monkeypatch.setattr(verifier, "coins", drawn)
+    spec, out = str(SPEC_ROOT / "llama32-1b-1gpu-pouw-protocol-served-h200.toml"), tmp_path / "config.json"
+    monkeypatch.delenv("PEARLC_KERNEL", raising=False)
+    monkeypatch.setenv("PEARLC_CUBIN", "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin")
+    with pytest.raises(ValueError, match=r"\$PEARLC_KERNEL"):
+        SP.main(["arm", "--spec", spec, "--out", str(out)])
+    monkeypatch.setenv("PEARLC_KERNEL", "/tree/benchmarks/pouw/pearl_c_sm90")
+    assert SP.main(["arm", "--spec", spec, "--out", str(out)]) == 0
+    doc = json.loads(out.read_text())
+    assert doc == {"pouw": {"device": "cuda", "kernel": "/tree/benchmarks/pouw/pearl_c_sm90",
+                            "cubin": "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"}}
+    assert SPL.config_of(str(out)) == doc
+
+
 def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_path):
     source = (SPEC_ROOT / "llama31-8b-1gpu-pouw-protocol-served.toml").read_text()
     path = tmp_path / "spec.toml"
@@ -1623,8 +1679,10 @@ def test_an_arm_whose_timed_tokens_differ_from_its_controls_keeps_no_points():
 
 
 def test_an_arm_without_a_control_is_timed_on_its_own_gated_tokens_in_resident_mode():
-    """An uncontrolled arm (a Pearl-C protocol arm, whose tokens no stock arm reproduces) must still produce in every
-    timed rep the tokens its gate saw from the same engine; blocks mode times other engines, so it has no such gate."""
+    """An uncontrolled arm must still produce in every timed rep the tokens its gate saw from the same engine; blocks mode
+    times other engines, so it has no such gate, and neither has an arm whose own gate says its tokens carry each pass's
+    coins (`PER_PASS_TOKENS`: a Pearl-C protocol arm, whose every call's noise is seeded by its index across the epoch, so
+    its timed reps never repeat its gated tokens), whose closing gate alone holds its timed reps."""
 
     doc = bench(FakeFactory(timed_digest={"stock-fp8": "other"}))
     [gate] = [g for g in doc["gates"] if g["kind"] == "timed-tokens" and g["arm"] == "stock-fp8"]
@@ -1634,6 +1692,14 @@ def test_an_arm_without_a_control_is_timed_on_its_own_gated_tokens_in_resident_m
     blocks = bench(FakeFactory(resident_failure="candidate"))
     assert blocks["execution"]["interleave"] == "blocks"
     assert not [g for g in blocks["gates"] if g["kind"] == "timed-tokens" and g["control"] is None]
+    arms = (Arm("stock-fp8", precision="fp8"), Arm("pearl"))
+    per_pass = bench(FakeFactory(timed_digest={"pearl": "other"}, per_pass_tokens={"pearl"}), arms=arms)
+    assert per_pass["execution"]["interleave"] == "resident" and per_pass["points"]
+    assert [g["arm"] for g in per_pass["gates"] if g["kind"] == "timed-tokens"] == ["stock-fp8"]
+    assert [g["passed"] for g in per_pass["gates"] if g["kind"] == "arm-closing" and g["arm"] == "pearl"] == [True]
+    closing = bench(FakeFactory(timed_digest={"pearl": "other"}, per_pass_tokens={"pearl"}, timed_ok=False), arms=arms)
+    assert closing["points"] == [] and not all(g["passed"] for g in closing["gates"] if g["kind"] == "arm-closing")
+    validate(per_pass)
     good = bench()
     with pytest.raises(ValueError, match="lacks gates"):
         validate({**good, "gates": [g for g in good["gates"] if g["kind"] != "tokens"]})

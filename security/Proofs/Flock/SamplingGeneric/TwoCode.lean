@@ -96,7 +96,7 @@ theorem RegTwo.sample_ok (g : RegTwo) {src : ByteArray} (h : g.sample src ≠ #[
     exact absurd rfl h
 
 theorem slots_select_of (rule : Spot.Select.Rule) (p : Spot.Program) (query : Json)
-    (table : Option Json) (cm : Option (Array (Int × Array Int))) (src : ByteArray) {l : Spot.Slots.Layout}
+    (table : Option Json) (cm : Option (Array (Int × Array Int))) (src : ByteArray) {l : Spot.Slots.SlotOrder}
     {draw : Json} {proved : Array ℕ} {read : ℕ} (hl : Spot.Slots.layout p query = .ok l)
     (hs : Spot.Select.select rule p query table cm src = .ok (draw, proved, read)) :
     Spot.Slots.select rule p query table cm src = .ok (l, Spot.Slots.checked l proved) := by
@@ -107,7 +107,7 @@ theorem slots_select_of (rule : Spot.Select.Rule) (p : Spot.Program) (query : Js
   rfl
 
 /-- A checked population slot is a proved unit. -/
-theorem mem_slots_checked {l : Spot.Slots.Layout} {proved : Array ℕ} {ρ : ℕ}
+theorem mem_slots_checked {l : Spot.Slots.SlotOrder} {proved : Array ℕ} {ρ : ℕ}
     {b : Spot.Slots.ProofBlock} (h : ρ ∈ Spot.Slots.checked l proved) (hb : l.blocks[ρ]? = some b)
     (hu : b.unit = some ρ) : ρ ∈ proved := by
   unfold Spot.Slots.checked at h
@@ -277,7 +277,7 @@ theorem prod_second_le {T N : ℕ} {cellF : ℕ → ℕ → Finset ℕ} {kOf : �
 
 /-- **The first stage misses `T` with probability at most `P_a(T)`**: the sample of record's checked slots on uniform
 bytes (`drawMisses`); a refused sample checks every slot, and a well-formed design has `P_a(∅) = 1`. -/
-theorem replay_le (g : Reg) (l : Spot.Slots.Layout) (Dd : Claims.Sampling.Design) (L : ℕ) (T : Finset ℕ)
+theorem replay_le (g : Reg) (l : Spot.Slots.SlotOrder) (Dd : Claims.Sampling.Design) (L : ℕ) (T : Finset ℕ)
     (hl : Spot.Slots.layout g.program g.query = .ok l)
     (hds : slotDesign g.rule g.program g.query g.table = .ok Dd) (hwf : Dd.WellFormed (slotPartition l))
     (hT : T ⊆ range (slotPartition l).blocks.length) :
@@ -310,7 +310,7 @@ theorem replay_le (g : Reg) (l : Spot.Slots.Layout) (Dd : Claims.Sampling.Design
 always-checked proof block is in `B`, the miss probability is `0`; otherwise `secondMisses`'s product over the sample's
 cells, each entry one replay block of `rl` (`prod_second_le`). -/
 theorem secondDraws_le (g : RegTwo) (Pt : Claims.Sampling.Partition) (d : Claims.Sampling.Design.Two)
-    (l : Spot.Slots.Layout) (src₁ : ByteArray) (rl : List ℕ) (B : Finset ℕ) (L₂ : ℕ)
+    (l : Spot.Slots.SlotOrder) (src₁ : ByteArray) (rl : List ℕ) (B : Finset ℕ) (L₂ : ℕ)
     (hlen : d.part.blocks.length = l.blocks.size)
     (hrl : ∀ draw proved read, Spot.Select.select g.first.rule g.first.program g.first.query g.first.table
       g.first.closure src₁ = .ok (draw, proved, read) → rl = (Spot.Slots.checked l proved).toList)

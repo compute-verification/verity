@@ -175,19 +175,34 @@ def store_salt(setup: dict, layout_doc: dict, layout_sha512: str, source: bytes,
     return salt
 
 
-def open_store(layout_path: Path, manifest: dict, encoded: Path | None, source: str | None, commitment: str | None,
-               salt: str | None) -> tuple[StoreLayout, dict | None]:
+def weights_name(manifest: dict) -> str | None:
+    """A weights manifest's name of its weights: its `model` (the generator's `model_id`), or, in a manifest with no
+    `model`, its `program`, the key the sessions' pinned manifest (`full.sh`'s and `session.sh`'s `MANIFEST_SHA256`)
+    holds that name under. None where it gives neither, as the generator's manifest with no seed does."""
+    name = manifest["model"] if "model" in manifest else manifest.get("program")
+    return name if isinstance(name, str) and name else None
+
+
+def open_store(layout_path: Path, manifest: dict | None, encoded: Path | None, source: str | None,
+               commitment: str | None, salt: str | None) -> tuple[StoreLayout, dict | None]:
     """The layout at `layout_path` under its store's prefix, and the store's `setup.json`: an encoded store's
-    (`encoded`, under `store_salt` of the hex `source` and `commitment`, holding the weights manifest's program), or a
-    development store's under the public test salt `salt` (hex), with no setup."""
+    (`encoded`, under `store_salt` of the hex `source` and `commitment`), or a development store's under the public test
+    salt `salt` (hex), with no setup. An encoded store is held to the weights `manifest` its caller checks the load
+    against: refused unless its `setup.json`'s `program` is the manifest's name of its weights (`weights_name`), and so
+    is a manifest that gives no name. `manifest` is None only for a caller that holds nothing to a weights manifest."""
     doc = json.loads(layout_path.read_text())
     setup = None
     if encoded is not None:
         if not (source and commitment):
             raise ValueError("an encoded store needs its coin and commitment")
         setup = json.loads((encoded / "setup.json").read_text())
-        if "program" in manifest and setup.get("program") != manifest["program"]:
-            raise ValueError(f"the store holds {setup.get('program')}, the weights manifest is {manifest['program']}")
+        if manifest is not None:
+            name = weights_name(manifest)
+            if name is None:
+                raise ValueError("the weights manifest names no weights (no `model`: the generator writes it under "
+                                 "--seed), so nothing holds the store to it")
+            if setup.get("program") != name:
+                raise ValueError(f"the store holds {setup.get('program')}, the weights manifest is {name}")
         key = store_salt(setup, doc, hashlib.sha512(layout_path.read_bytes()).hexdigest(), bytes.fromhex(source),
                          bytes.fromhex(commitment))
     elif salt:

@@ -31,8 +31,8 @@ if [ "${DC_LEASED:-}" != 1 ]; then
   "$NVCC" --version >"$OUT/env/nvcc.txt" 2>&1
   if [ "${DC_BUILD_ONLY:-}" != 1 ]; then
     nvidia-smi -q >"$OUT/env/nvidia-smi.txt" 2>&1
-    cap=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1)
-    [ "${cap%%.*}" = 10 ] || { echo "pipe.sh: needs compute capability 10.x, the device reports '$cap'" >&2; exit 2; }
+    have=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1)
+    [ "${have%%.*}" = 10 ] || { echo "pipe.sh: needs compute capability 10.x, the device reports '$have'" >&2; exit 2; }
   fi
   "$NVCC" -O3 -std=c++17 -gencode arch=compute_100a,code=sm_100a -Xptxas -v "$HERE/pgemm.cu" -o "$WORK/pgemm" \
     >"$OUT/build.log" 2>&1 || { cat "$OUT/build.log" >&2; exit 1; }

@@ -17,7 +17,7 @@ A climber's run, from a clean pushed checkout:
 `score.py ARM` builds dcap.cu and dscore.cu (outside the lease), then under `gpu-lease 1 --wait` runs the gates before
 anything is timed: FILL's receipt gate (`dcap dgate`), the scorer's own at the arm's chunk shape (`dscore sgate`: poisoned
 and launched, every receipt equal to the host's; poisoned with nothing launched, none; stale and skipped work, none) and
-CAP's serving gate (`dcap gate`); a failed gate times nothing (exit 5). Then ncu's DRAM bytes for the filler's launches
+dcap's serving gate (`dcap gate`); a failed gate times nothing (exit 5). Then ncu's DRAM bytes for the filler's launches
 beside the counter's positive control (1 GiB streamed), and every suite point: ROUNDS rounds in ABBA order of K reps of
 serving alone on the whole GPU and K reps under the arm's placement, each arm block followed by a standalone block (the
 filler alone on the same SMs as long), every rep's SM clock and board power read (clocks are never set), then serving
@@ -70,15 +70,23 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "harness"))
+import arms as A
+import scoring as S
+
+#: what the arms' runners read
+__all__ = [
+    "A", "LIBS", "NVCC", "NVFLAGS", "REPO", "S", "arm_doc", "build", "control", "fmt", "record", "report", "rows", "sh",
+    "show", "smi",
+]
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "harness"))
-import arms as A  # noqa: E402
-import scoring as S  # noqa: E402
-
 NVCC = os.environ.get("NVCC", "/usr/local/cuda-13.0/bin/nvcc")
 os.environ["PATH"] = f"{Path(NVCC).parent}:{os.environ.get('PATH', '')}"  # cuobjdump and ncu beside nvcc, as dfill.sh
 NVFLAGS = ["-O3", "-std=c++17", "-gencode", "arch=compute_120a,code=sm_120a", "-Xptxas", "-v"]
@@ -90,14 +98,14 @@ SHAPE = "filler-suite"
 CONTROL = ("decode", 32, 8192)  # the positive control's point, or the arm's first filler point if it places none there
 
 
-def sh(cmd, out=None, err=None, env=None) -> int:
+def sh(cmd: list[str], out: Path | None = None, err: Path | None = None, env: dict[str, str] | None = None) -> int:
     with open(out, "a") if out else open(os.devnull, "w") as fo, open(err, "a") if err else open(os.devnull, "w") as fe:
         return subprocess.run(cmd, stdout=fo, stderr=fe, env=env).returncode
 
 
-def arm_doc(arm) -> dict:
+def arm_doc(arm: Any) -> dict:
     sys.path.insert(0, str(HERE.parent / "harness"))
-    import ledger  # noqa: PLC0415
+    import ledger
 
     fl = {k: v for k, v in dataclasses.asdict(arm.filler).items() if v is not None} if arm.filler else None
     variant = ledger.variant_record(family=f"filler-{arm.name}", device="sm120", schemes=["dfill-receipt"],
@@ -176,7 +184,7 @@ def smi(out: Path) -> None:
     sh(cmd, out=out / "smi.csv", err=out / "errors.txt")
 
 
-def measure(arm, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) -> int:
+def measure(arm: Any, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) -> int:
     env = dict(os.environ, DFILL_COINS=(out / "coins.txt").read_text().strip())
     fl = arm.filler
     if fl:
@@ -223,13 +231,14 @@ def measure(arm, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) ->
     return 0
 
 
-def control_point(arm, pts=None):
+def control_point(arm: Any, pts: list[tuple[str, int, int]] | None = None) -> tuple[str, int, int] | None:
     """The positive control's point: CONTROL, unless the arm places no filler there, then its first filler point."""
     cand = [CONTROL] + list(pts or S.points())
     return next(((ph, b, l) for ph, b, l in cand if A.placed(arm, ph, b, l).place != "none"), None)
 
 
-def control(arm, fl, bdir: Path, out: Path, env: dict, rounds: int, reps: int, index: int, note) -> int:
+def control(arm: Any, fl: A.Filler, bdir: Path, out: Path, env: dict, rounds: int, reps: int, index: int,
+            note: Callable[[str], None]) -> int:
     """The honest gate's positive control (`control.jsonl`): the arm's filler shape and placement at `control_point`,
     its arm blocks running S - S/CHEAT steps a tile credited at S (DSCORE_CHEAT_S), its standalone blocks S. Its rounds
     take point index `index`, past the suite's, so its tile ranges are its own."""
@@ -258,7 +267,7 @@ def rows(path: Path) -> list[dict]:
     return [json.loads(ln) for ln in path.read_text().splitlines() if ln.strip().startswith("{")] if path.is_file() else []
 
 
-def report(out: Path, arm=None, version: str | None = None, coins: float = S.PREFILL_COINS) -> dict:
+def report(out: Path, arm: Any = None, version: str | None = None, coins: float = S.PREFILL_COINS) -> dict:
     """The run's result under `version` (the active `scoring.SCORER` by default), written to ``score.json`` only under the
     active one: another version's (``report --as v3``) is a preview. Under filler-scorer/v5, `coins` is prefill's
     per-stage coins factor (`scoring.PREFILL_COINS`)."""
@@ -267,7 +276,9 @@ def report(out: Path, arm=None, version: str | None = None, coins: float = S.PRE
     if arm is None:
         try:
             arm = A.load(doc.get("spec") or doc["name"])
-        except (A.ArmError, OSError, AttributeError):
+        except (A.ArmError, OSError, AttributeError) as ex:
+            print(f"report: arm {doc['name']} can't be loaded ({type(ex).__name__}: {ex}); its placement goes "
+                  "unchecked", file=sys.stderr)
             arm = None
     drows = rows(out / "dscore.jsonl")
     has_filler = doc["filler"] is not None
@@ -349,7 +360,7 @@ def report(out: Path, arm=None, version: str | None = None, coins: float = S.PRE
 
 
 def record(res: dict, doc: dict, run_dir: Path, by: str | None) -> dict:
-    import ledger  # noqa: PLC0415
+    import ledger
 
     lin = doc["lineage"]
     g = res["gates"]
@@ -396,7 +407,7 @@ def record(res: dict, doc: dict, run_dir: Path, by: str | None) -> dict:
     return rec
 
 
-def fmt(x, p=3):
+def fmt(x: object, p: int = 3) -> str:
     return "–" if x is None else f"{x:.{p}f}" if isinstance(x, float) else str(x)
 
 
@@ -492,7 +503,7 @@ def show(res: dict) -> None:
           + f" (mixes: {fmt((res['min_mix'] or {}).get('coverage'))} at {(res['min_mix'] or {}).get('entry')})"
           + f"; nominal ÷ capacity {fmt(res['score_nominal'])}, at 0.99 for all {fmt(res['score_at_target'])}")
     if "score_under_ch_if_gated" in res:
-        print(f"  SCORE under CH (every filler at 0.99; CH withdrawn, decision 27; "
+        print("  SCORE under CH (every filler at 0.99; CH withdrawn, decision 27; "
               + ("of the fixed work v4 credits" if res["scorer"] == S.V4 else "v2's reading, for comparison")
               + f"): {fmt(res['score_under_ch'])}" + ("" if res["scored"] else
                                                       f" ({fmt(res['score_under_ch_if_gated'])} if gated)"))
@@ -557,12 +568,12 @@ def show(res: dict) -> None:
 
 
 def leaderboard(local: list[Path], refresh: bool, as_json: bool) -> int:
-    import ledger  # noqa: PLC0415
+    import ledger
 
     entries = []
     try:
         if refresh:
-            from research.store import cli as SC  # noqa: PLC0415
+            from research.store import cli as SC
             SC.main(["refresh"])
         entries = [(art, m) for art, m, _ in ledger.attempts() if m.get("scorer", "").startswith("filler-scorer/")]
     except Exception as ex:  # noqa: BLE001  the store is optional here; local run dirs still list
@@ -661,8 +672,8 @@ def tp_report(outs: list[Path], listings: dict | None, noise: str | None, fold: 
                        if smi else None})
     unread = [f"{s['dir']} {k} {a}" for s in sets for k, by_ in s["rows"]["arms"].items() for a, reps in by_.items()
               for ranks in reps for x in ranks if any(len(r) < 3 or not r[1] for r in x["reps"])]
-    whole = [((x["served_macs"] + x["fill_macs_rep"]) / (S.cap(x["mhz"]) * x["ms"] * 1e-3), f"{k} rank {x['rank']}")
-             for k, v in by.items() for ranks in v.get("phase", []) for x in ranks]
+    whole = [((x["served_macs"] + x["fill_macs_rep"]) / (S.capacity(x["mhz"]) * x["ms"] * 1e-3),
+              f"{k} rank {x['rank']}") for k, v in by.items() for ranks in v.get("phase", []) for x in ranks]
     g["dram"] = {"ok": bool(dram) and all(d["ok"] for d in dram), "dirs": dram}
     g["clocks"] = {"ok": bool(clocks) and all(c["ok"] for c in clocks) and not unread, "dirs": clocks,
                    "reps_without_clock": unread[:4]}
@@ -715,7 +726,7 @@ def show_tp(res: dict) -> None:
         print(f"missing entries: {', '.join(res['missing'])}")
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv and argv[0] == "--leaderboard":
         ap = argparse.ArgumentParser(prog="score.py --leaderboard")

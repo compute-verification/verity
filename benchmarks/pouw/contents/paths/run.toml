@@ -1,0 +1,4 @@
+order = 5
+path = "`run.py`"
+runs_on = ""
+what = "The front door: `run.py NAME [ARGS]` runs `NAME/`'s runner, its `run.sh` or else its `run.py`, as `verity bench pouw NAME [ARGS]` does"

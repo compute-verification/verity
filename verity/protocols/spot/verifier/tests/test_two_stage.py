@@ -839,7 +839,7 @@ def test_the_rule_and_the_spec_state_one_form():
         with pytest.raises(ValueError, match=match):
             S.TwoStage(*bad)
     for retired in (RULE.to_json(), {"rule": "two-stage", "replay": "subset:4", "check": "all"}, "two-stage:subset:4"):
-        with pytest.raises(ValueError, match="a selection rule is All, Law, Sequential or TwoStage"):
+        with pytest.raises(ValueError, match="a selection rule is All, Law or TwoStage"):
             _spec(selection=retired)
     with pytest.raises(ValueError, match="interior values"):
         _spec(values=VALUES[:2])
@@ -1079,6 +1079,36 @@ def test_round_two_refuses_statements_out_of_the_parts_order():
     checks = stream.records[0]["audit"]["checks"]
     assert not out.accepted and checks["statements"]["codes"] == ["second-order"] and "run" not in checks, checks
     assert checks["statements"]["detail"]["second-order"] == {"statement": 0, "template": codec.descriptor_id(TRIPLE)}
+
+
+def test_round_two_names_what_a_replay_block_returns_and_refuses_an_interior_value_of_it():
+    """What a replay block returns is committed before the first stage's sample. Its names in the boundary record are
+    the block's output ports, one for each field of what it returns, named as the record names its ports
+    (`second_stage.replay_returns`): each port a link names for the return is one of them. An interior registration
+    that registers a value of one is refused by name (`second-return`, `returns_ok`), with the interior record's
+    order; one that registers any other name, or a run whose return has no such name, is not."""
+    for block, fields in ((BLOCK, 1), (MIXED, 2)):
+        program, key = P.population_program(block, N), codec.descriptor_id(block)
+        assert SS.replay_returns(program, key, None) == tuple(f"o{j}" for j in range(fields))
+        named = SS.replay_returns(program, key, {"roots": [{"port": f"{key}/x"}]})
+        assert named == tuple(f"{key}/o{j}" for j in range(fields))
+        assert {x.value for x in SS.replay_links(program, key, None) if x.port.startswith("o")} == {
+            f"o{j}" for j in range(fields)}
+        assert SS.replay_returns(program, "Other_v0", None) == ()
+    assert SS.replay_returns(P.population_program(MIXED, N), codec.descriptor_id(MIXED),
+                             {"roots": [{"port": p} for p in MIXED_BOUNDARY]}) == MIXED_BOUNDARY[2:]
+
+    def own(registered, returns=(BOUT,)) -> SS.Own:
+        return SS.Own((0, 1), None, {"registered": registered}, {}, (), returns=returns)
+    for registered, returns in (([{"value": "w"}, {"value": 5}, {}], (BOUT,)), (5, (BOUT,)), ([{"value": BOUT}], ()),
+                                ([{"value": BX}], (BOUT,))):
+        assert SS.returns_ok(own(registered, returns))
+        assert "second-return" not in SS.check(True, own(registered, returns), None).codes
+    refused = own([{"value": "w"}, {"value": BOUT}])
+    v = SS.check(True, refused, None)
+    assert not SS.returns_ok(refused) and "second-return" in v.codes and not v.ok, v
+    assert v.to_json()["detail"]["second-return"] == SS.RETURN_WHY
+    assert SS.check(False, refused, None).codes == v.codes
 
 
 def test_a_replay_block_of_two_templates_takes_a_count_per_template():

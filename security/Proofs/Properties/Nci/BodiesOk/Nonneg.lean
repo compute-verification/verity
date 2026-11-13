@@ -147,7 +147,7 @@ theorem parsePartsIn_nonneg_step (leaves : Bool → Nat → Option Nat) (args : 
             all_goals try (injection hw; done)
             split at hw
             all_goals rename_i hq0
-            · rw [if_pos hq0] at hp1
+            · rw [ite_eq_left hq0] at hp1
               split at hw
               all_goals try (injection hw; done)
               rename_i hc
@@ -155,7 +155,7 @@ theorem parsePartsIn_nonneg_step (leaves : Bool → Nat → Option Nat) (args : 
               have e1 := le_trans hc.1 (Walk.foldl_min_le _ _ _ (Or.inl (List.mem_map_of_mem hp1)))
               dsimp only at h1 e1
               exact le_trans e1 h1
-            · rw [if_neg hq0] at hp1
+            · rw [ite_eq_right hq0] at hp1
               split at hw
               all_goals try (injection hw; done)
               rename_i hc

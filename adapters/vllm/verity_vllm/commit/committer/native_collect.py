@@ -157,6 +157,7 @@ class NativeCollectCommitter(NativeHostCommitter):
     M1 glue is `Fa2Wrap` -- no Python frame per producer; gather windows (P0/P1/P2 + step end) with 32 blocks per descriptor by default
     (size-adaptive, `auto_blocks`: up to 1024)."""
 
+    commit_scheme, rows = step_rows.NAME, True
     ends_source_steps = True
     #: set by the first sampling step that binds a seed (`install`'s `sample`)
     seed_bound_steps: int
@@ -747,11 +748,11 @@ class NativeCollectCommitter(NativeHostCommitter):
         return metas
 
     def layout_digest(self, metas: list[TensorMeta]) -> bytes:  # type: ignore[override]
-        """The base class's function, computed once per plan: nothing changes a field it reads once the plan's record is built."""
+        """``step_rows.layout_digest``, computed once per plan: nothing changes a field it reads once the plan's record is built."""
         if not isinstance(metas, PlanMetas):
-            return NativeHostCommitter.layout_digest(metas)
+            return step_rows.layout_digest(metas)
         if metas.digest is None:
-            metas.digest = NativeHostCommitter.layout_digest(metas.scan())
+            metas.digest = step_rows.layout_digest(metas.scan())
         return metas.digest
 
     def _commit_step(self, job: _StepJob) -> None:

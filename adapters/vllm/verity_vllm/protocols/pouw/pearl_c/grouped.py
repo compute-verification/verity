@@ -497,7 +497,7 @@ def _gemm_grouped(run: Any, ws: tuple[int, ...], x: Any, counts: tuple[int, ...]
             xa, slot_a = b["xa"][:4 * g.rows * k].view(torch.float32).view(g.rows, k), G.tree_bytes(R)
             for i, (u, mm) in enumerate(zip(us, mms, strict=True)):
                 run._retained(cur, mm, u.m, flags[u.src:u.src + u.m], xa[u.row:u.row + u.m16],
-                              b["tree_a"][slot_a * i:slot_a * i + run.nb * (2 * R.pow2(u.m16) - 1)])
+                              b["tree_a"][slot_a * i:slot_a * i + run.nb * (2 * R.pow2(u.m16) - 1)], y=c.y[u.row:u.row + u.m])
         cur.tiles += tiles
     y = c.y.index_select(0, c.idx)
     return y if bias is None else y + bias

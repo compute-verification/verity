@@ -13,9 +13,12 @@ that credits, samples and checks by them, with its clear audit, is a reference t
   - Its kept width |K|.
   - Its excluded rows: A rows of the matmul and B rows of its weight that fail the scheme's per-row rules.
   - Its voluntary rows (V-EX): rows it gives up, which earn no credit.
+  - The band rule (`UnitRecord.credited`): a voluntary A row takes the credit of its whole band of 64 A rows, and an
+    excluded or voluntary B row takes the credit of its whole block of 64 columns. The ticket weight, the inert-work bound
+    and the credit all read it.
   `records_root` binds the records and the splits.
 * **`pad_weight`**: a weight whose n is not whole column tiles (GLM-5.3's lm_head, 19360 rows a TP8 rank) is served with
-  zero rows up to the next whole tile, and the last tile's rows are voluntary, so that tile is neither credited nor sampled.
+  zero rows up to the next whole tile, and the last tile's rows are voluntary, so their block is neither credited nor sampled.
 """
 
 from __future__ import annotations
@@ -31,6 +34,8 @@ from verity.protocols.pouw.verifier.protocol import Matmul, Tile, tagged
 RECORDS_TAG = domains.POUW_PEARL_C_RECORDS
 SPLIT_TAG = domains.POUW_PEARL_C_SPLIT
 ALIGN = 128
+#: The band rule's band of A rows and block of B rows, at absolute indices: the game's 64 × 64 tiling.
+BAND = 64
 
 
 @dataclass(frozen=True)
@@ -93,18 +98,26 @@ class UnitRecord:
         return base + struct.pack(f"<II{len(va)}I{len(vb)}I", len(va), len(vb), *va, *vb) if va or vb else base
 
     def credited(self, tile: Tile) -> tuple[list[int], list[int]]:
-        """The tile's credited rows and columns: real, neither excluded nor voluntary."""
-        ua, ub = set(self.excluded_a) | set(self.voluntary_a), set(self.excluded_b) | set(self.voluntary_b)
-        return [i for i in tile.rows if i < self.real_rows and i not in ua], [j for j in tile.cols if j not in ub]
+        """The tile's credited rows and columns, by the band rule:
+        - an A row is credited when it is real, not excluded, and its band of `BAND` rows (``i // BAND``) holds no
+          voluntary A row;
+        - a column is credited when its block of `BAND` B rows holds no excluded or voluntary B row.
+        At the deployed 64 × 64 tile, a tile holding a voluntary row, or an excluded B row, has no credited cell, and on
+        every other tile the credited rows × columns are the game's passing rows × all its columns (`auditTiling 64 64`)."""
+        bands = {i // BAND for i in self.voluntary_a}
+        blocks = {j // BAND for j in (*self.excluded_b, *self.voluntary_b)}
+        ea = set(self.excluded_a)
+        return ([i for i in tile.rows if i < self.real_rows and i not in ea and i // BAND not in bands],
+                [j for j in tile.cols if j // BAND not in blocks])
 
 
 def pad_weight(rows: Sequence[bytes], tile_n: int) -> tuple[list[bytes], tuple[int, ...]]:
     """(the rows, the padded tile's rows): a weight's rows (FP32 words along k) with all-zero rows appended up to a whole
     number of `tile_n`-column tiles, and the rows of the last tile when it holds any of them, its real columns with the
     zero rows.  The glue drops the padded rows' outputs.  The prover declares the padded tile's rows voluntary
-    (`voluntary_b`, through `declare`'s `padded_b`), so that tile has no credited cell: no sample lands on it and it opens
-    no exclusion tile, so no tile check sees a zero row, and the credit is the full tiles' real columns at the padded
-    n's cell credit, under an unpadded n's honest credit."""
+    (`voluntary_b`, through `declare`'s `padded_b`), so by the band rule their block of 64 columns has no credited cell:
+    no sample lands on it and it opens no exclusion tile, so no tile check sees a zero row, and the credit is the other
+    blocks' columns at the padded n's cell credit, under an unpadded n's honest credit."""
     if not rows or len({len(r) for r in rows}) != 1:
         raise ValueError("a weight's rows are one length")
     pad = -len(rows) % tile_n

@@ -12,13 +12,13 @@
    For each job line "a0 a1 w0 w1 w2 w3" on stdin this prints
      S a0 a1 w0 w1 w2 w3 |K_1| .. |K_rmax| pxn g3bad degenerate
    (|K_R| counts w itself; pxn = 1 iff K_1 is exactly w's orbit under the P/X/N group; g3bad counts words in the
-   union of the K_R that break (G3) against w; degenerate = 1 if some join passed `cap` candidates and was cut short),
+   union of the K_R that break (G3) against w; degenerate = 1 if some join passed `limit` candidates and was cut short),
    and one line "E a0 a1 w0 w1 w2 w3 R d0 d1 d2 d3" for each word of K_R outside K_1 (R >= 2) or of K_1 outside the
    orbit (R = 1). With -a it also prints "K a0 a1 R d0 d1 d2 d3" for every w' != w in K_R, as fold_kernel.c does.
-   -p sets the number of probe states (default 3, at most 64 / n) and -c the cap as log2 (default 16): more probes
-   and a higher cap settle a cut join at a structured Φ^R.
+   -p sets the number of probe states (default 3, at most 64 / n) and -c the limit as log2 (default 16): more probes
+   and a higher limit settle a cut join at a structured Φ^R.
 
-   usage: fold_root_kernel [-a] [-p probes] [-c log2cap] n r1 r2 rmax < jobs
+   usage: fold_root_kernel [-a] [-p probes] [-c log2limit] n r1 r2 rmax < jobs
    build: gcc -O2 -fopenmp -o fold_root_kernel fold_root_kernel.c */
 #include <stdint.h>
 #include <stdio.h>
@@ -99,8 +99,8 @@ static void push(scratch_t *s, word_t v) {
     s->found[s->nfound++] = v;
 }
 
-/* K_R for one job and one R, into s->found (sorted, w included); returns 1 if the join was cut at `cap`. */
-static int kernel_r(const job_t *j, int R, scratch_t *s, size_t cap) {
+/* K_R for one job and one R, into s->found (sorted, w included); returns 1 if the join was cut at `limit`. */
+static int kernel_r(const job_t *j, int R, scratch_t *s, size_t limit) {
     uint32_t a0 = j->a0, a1 = j->a1, a0i = inv2(a0) & mask, a1i = inv2(a1) & mask;
     uint32_t *sig = s->sig;
     for (uint32_t y = 0; y < ns; y++) {
@@ -162,7 +162,7 @@ static int kernel_r(const job_t *j, int R, scratch_t *s, size_t cap) {
                 if (lo >= half_n || sorted[lo].fp != fp) break;
                 ia = sorted[lo++].idx;
             }
-            if (++cand > cap) { cut = 1; break; }
+            if (++cand > limit) { cut = 1; break; }
             uint32_t xa = ia >> n, ca = ia & mask;
             int ok = 1;
             for (uint32_t y = 0; y < ns && ok; y++) {
@@ -189,15 +189,15 @@ static int contains(const word_t *set, size_t cnt, const word_t *v) {
 }
 
 int main(int argc, char **argv) {
-    int ai = 1, log2cap = 16;
+    int ai = 1, log2limit = 16;
     for (; ai < argc && argv[ai][0] == '-'; ai++) {
         if (!strcmp(argv[ai], "-a")) all_out = 1;
         else if (!strcmp(argv[ai], "-p") && ai + 1 < argc) nprobe = atoi(argv[++ai]);
-        else if (!strcmp(argv[ai], "-c") && ai + 1 < argc) log2cap = atoi(argv[++ai]);
+        else if (!strcmp(argv[ai], "-c") && ai + 1 < argc) log2limit = atoi(argv[++ai]);
         else break;
     }
     if (argc - ai != 4) {
-        fprintf(stderr, "usage: fold_root_kernel [-a] [-p probes] [-c log2cap] n r1 r2 rmax < jobs\n");
+        fprintf(stderr, "usage: fold_root_kernel [-a] [-p probes] [-c log2limit] n r1 r2 rmax < jobs\n");
         return 2;
     }
     n = atoi(argv[ai]); r1 = atoi(argv[ai + 1]); r2 = atoi(argv[ai + 2]); rmax = atoi(argv[ai + 3]);
@@ -205,12 +205,12 @@ int main(int argc, char **argv) {
         fprintf(stderr, "need 3 <= n <= 16, 0 < r1, r2 < n, 1 <= rmax <= %d\n", RMAX);
         return 2;
     }
-    if (nprobe < 1 || nprobe > MAXPROBES || nprobe * n > 64 || log2cap < 0 || log2cap > 40) {
-        fprintf(stderr, "need 1 <= probes <= 64 / n and 0 <= log2cap <= 40\n");
+    if (nprobe < 1 || nprobe > MAXPROBES || nprobe * n > 64 || log2limit < 0 || log2limit > 40) {
+        fprintf(stderr, "need 1 <= probes <= 64 / n and 0 <= log2limit <= 40\n");
         return 2;
     }
     mask = (1u << n) - 1; top = 1u << (n - 1); ns = 1u << n;
-    size_t cap = (size_t)1 << log2cap;
+    size_t limit = (size_t)1 << log2limit;
     size_t njobs = 0, capjobs = 1024;
     job_t *jobs = malloc(capjobs * sizeof(job_t));
     unsigned long v[6];
@@ -245,7 +245,7 @@ int main(int argc, char **argv) {
             size_t blen = 0;
             FILE *mem = open_memstream(&buf, &blen);
             for (int R = 1; R <= rmax; R++) {
-                degenerate |= kernel_r(j, R, &s, cap);
+                degenerate |= kernel_r(j, R, &s, limit);
                 counts[R] = s.nfound;
                 if (R == 1) {
                     k1n = s.nfound;

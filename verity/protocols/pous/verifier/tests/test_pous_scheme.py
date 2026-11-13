@@ -3,16 +3,35 @@
 from __future__ import annotations
 
 import hashlib
-import os
+import json
 import random
+from pathlib import Path
 
+import pous_vectors
 import pytest
+import settings
 
-from verity.protocols.pous.verifier.labels import component, from_bytes, join, split, tag, to_bytes, transpose, w_labels, w_value
+from verity.protocols.pous.verifier.labels import (
+    component,
+    from_bytes,
+    join,
+    split,
+    tag,
+    to_bytes,
+    transpose,
+    w_labels,
+    w_value,
+)
 from verity.protocols.pous.verifier.oracle import run
 from verity.protocols.pous.verifier.params import LEAN_P3_MEETS, OPERATING_POINT, Params
 from verity.protocols.pous.verifier.primitives import heuristic_arx, ideal, reference
-from verity.protocols.pous.verifier.scheme import decode, decode_prog, decode_segment, encode, encode_prog
+from verity.protocols.pous.verifier.scheme import (
+    decode,
+    decode_prog,
+    decode_segment,
+    encode,
+    encode_prog,
+)
 
 BACKENDS = {"reference": reference, "heuristic-arx": heuristic_arx, "ideal": lambda p: ideal(p, b"test-seed")}
 SHAPES = [Params(8, 64, 3), Params(6, 64, 0), Params(4, 96, 12, 3), Params(1, 384, 1)]
@@ -97,10 +116,7 @@ def test_parameters():
 
 def test_vectors():
     """Known-answer vectors pinned in `fixtures/vectors.json` (regenerate with `verifier/tests/pous_vectors.py`)."""
-    import json
-    from pathlib import Path
 
-    import pous_vectors
 
     pinned = json.loads((Path(__file__).parent / "fixtures" / "vectors.json").read_text())
     slow = {"segment_64kb", "band/64kb/segment"}
@@ -108,13 +124,10 @@ def test_vectors():
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not os.environ.get("VERITY_POUS_SLOW"), reason="about a minute: set VERITY_POUS_SLOW=1")
+@pytest.mark.skipif(not settings.SLOW, reason="about a minute: set VERITY_POUS_SLOW=1")
 def test_operating_point_segment():
     """One whole 64 KB-label segment: its pinned digest and a bit-exact decode (about a minute)."""
-    import json
-    from pathlib import Path
 
-    import pous_vectors
 
     pinned = json.loads((Path(__file__).parent / "fixtures" / "vectors.json").read_text())
     params, prims = OPERATING_POINT, reference(OPERATING_POINT)

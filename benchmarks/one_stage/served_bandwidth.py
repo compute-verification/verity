@@ -40,7 +40,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-from verity.protocols.poub.verifier import p2_party  # noqa: E402
+from verity.protocols.poub.verifier import ledger, p2_party  # noqa: E402
 
 #: an H200's specified HBM read rate, bytes a second
 H200_BYTES_PER_S = 4_800_000_000_000
@@ -83,6 +83,7 @@ def answer(session: Mapping[str, Any], scope: str, r_bytes_per_s: int | None) ->
     out = p2_party.core_answer(a, r_bytes_per_s)
     if out["verdict"] == "accept":
         out["profile"]["scope"] = scope
+        out["profile"]["named_terms"] = ledger.NAMED_TERMS
     else:
         out["reason"] = f"{out['reason']}; {scope}"
     return out

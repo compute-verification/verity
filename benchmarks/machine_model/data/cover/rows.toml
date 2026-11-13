@@ -1,5 +1,5 @@
-# The coverage table: the evidence for the ACCEL model's one coverage premise, that every instruction a
-# card executes is dominated by an envelope op (envelope.toml: `Accel.Op` and the proposed
+# The opcode table: the evidence for the card assumption, that every instruction a
+# card executes is dominated by an ACCEL op (envelope.toml: `Accel.Op` and the proposed
 # entries) at no fewer units of the same resource. It is evidence, not the trusted base: `machine-model cover` renders
 # it, and tests/test_cover.py fails when an opcode has no row or a dominated row's rate exceeds its resource's ρ.
 #
@@ -20,7 +20,7 @@
 # - covered: dominated, and the rate the inequality reads is a document's or a run's, for this opcode or its pipe;
 # - coarse: dominated by the argument stated, on a bound shared with other opcodes (a port, the issue slot), with no rate
 #   of its own;
-# - hole: no argument yet that an envelope op dominates it, or a run shows none does; `severity` says how much it could
+# - hole: no argument yet that an ACCEL op dominates it, or a run shows none does; `severity` says how much it could
 #   matter;
 # - absent: the opcode is in NVIDIA's family table, and the card can't execute it.
 # A row whose op, pipe or format is a proposed entry rests on it: `machine-model cover` counts the table both ways, with
@@ -861,7 +861,7 @@ words = [32, 1]
 rate_value = 0.4990
 rate_unit = "warp instructions/SM/clk"
 cost = "one issue slot and a unit of collective a warp instruction"
-argument = "32 words to one uniform word. A fold of IADD3s is 16 alu lanes and beside LOP3 the card spends less (LOP3 + MOV + REDUX/2 = 2.007, 0.35% past the cap: RM7), but REDUX runs on MATCH.ANY's unit: 0.4990 alone, 0.2498 + 0.2498 beside MATCH.ANY, so it is a unit of `collective` at 0.5"
+argument = "32 words to one uniform word. A fold of IADD3s is 16 alu lanes and beside LOP3 the card spends less (LOP3 + MOV + REDUX/2 = 2.007, 0.35% past the bound: RM7), but REDUX runs on MATCH.ANY's unit: 0.4990 alone, 0.2498 + 0.2498 beside MATCH.ANY, so it is a unit of `collective` at 0.5"
 source = "collective.cu (reproduced): REDUX.SUM, .MIN, .XOR 0.4990 alone; mix_redux_match; mix_redux_lop3_16, 32, 64; reproduced again, collective_verdict.py: held"
 
 [[row]]
@@ -1268,7 +1268,7 @@ envelope = "collective"
 pipe = "alu"
 units = 16
 words = [32, 1]
-argument = "each thread gets the AND, OR or count of a predicate over the CTA, a function of other warps' registers, which no one envelope op computes (`collective` is a warp's). Simulated as a vote, a `red` of its word into shared memory and a `move` of the result to every lane, it costs about one issue slot a warp more than the card's one. On sm_120 the barrier holds 16 alu lanes: BAR.RED.OR runs at 0.2105 warp instructions a SM-clock alone (one 1024-thread CTA a SM), and on a named barrier in 16 warps beside a LOP3 stream in the other 16, LOP3 + BAR/2 = 1.8107 + 0.1535/2 = 1.8874; smaller CTAs, which may run it faster, aren't measured, and no H200 run measures it. MODEL-MIN's README puts BAR under none (no data effect)"
+argument = "each thread gets the AND, OR or count of a predicate over the CTA, a function of other warps' registers, which no one ACCEL op computes (`collective` is a warp's). Simulated as a vote, a `red` of its word into shared memory and a `move` of the result to every lane, it costs about one issue slot a warp more than the card's one. On sm_120 the barrier holds 16 alu lanes: BAR.RED.OR runs at 0.2105 warp instructions a SM-clock alone (one 1024-thread CTA a SM), and on a named barrier in 16 warps beside a LOP3 stream in the other 16, LOP3 + BAR/2 = 1.8107 + 0.1535/2 = 1.8874; smaller CTAs, which may run it faster, aren't measured, and no H200 run measures it. MODEL-MIN's README puts BAR under none (no data effect)"
 source = "corpus BAR.RED.AND.DEFER_BLOCKING, BAR.RED.OR.DEFER_BLOCKING; pipes.cu (bar_or, mix_bar_or_lop3; bar16, mix_bar16_lop3)"
 
 [[row]]

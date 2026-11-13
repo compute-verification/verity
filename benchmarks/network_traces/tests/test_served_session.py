@@ -1,6 +1,7 @@
 """served_session: the plan is the gate's scan rehearsal inside the scan's class (PROMPT_IDS prompt ids in, at most KO
 out), which this tree's gate accepts, with the endpoint's sealed flags and its hand start, and a request the gate or
-the class refuses is refused with its reason; a session through a stub gate keeps
+the class refuses is refused with its reason; each of the plan's runs is on the peer or the auditor's node the plan is
+given, and its commands name no other node; a session through a stub gate keeps
 the session's fetch (with witness/) 0700 under KEEP and publishes only the bundle less witness/ and its outcome, removes
 a published file that holds a prompt's ids, and refuses a KEEP inside --out; --at waits on the injected clock and sends
 nothing when late; io writes the kept run's certified I/O 0600 in KEEP; endpoint runs the endpoint step on the served
@@ -33,6 +34,8 @@ import served_session as SS  # noqa: E402
 import scan_zk as sz  # noqa: E402
 
 RUN = "c20261028T120000Z-0000"
+#: made-up names of a served node and of an auditor's node, for where any name does
+SOME_PEER, SOME_AUDITOR = "some-served-node", "some-auditors-node"
 #: a witness value (the stub's witness/certified.jsonl) its status plants with STUB_NOTE: two of the guard's text pieces
 PLANTED = hashlib.sha256(b"a certified line").hexdigest()
 #: the warden's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
@@ -82,7 +85,7 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     assert SS.prompts(2, 4, 256, b"seed") != SS.prompts(2, 4, 256, b"other")
     data = json.dumps(ps, separators=(",", ":")).encode()
     doc = SS.plan(a, data)
-    assert doc["request"] == ("warden-rehearse --peer vy-dc-h200-2 --port 18782 --minutes 10 --requests 113 --height 12 "
+    assert doc["request"] == (f"warden-rehearse --peer {SS.PEER} --port 18782 --minutes 10 --requests 113 --height 12 "
                               "--scan --prompts --tokens 64")
     assert doc["prompts"] == {"count": 64, "ids": 64 * SS.PROMPT_IDS} and doc["prompts_bytes"] <= SS.A.WARDEN_PROMPTS_BYTES
     assert doc["endpoint"].endswith("--port 18782 --protocol ids --id-payload 503 --admit release-order "
@@ -96,7 +99,7 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
                                                  "--disk-floor-gb 40", "VERITY_STAGING_BOUNDED stays unset"))
     ep = shlex.split(doc["runs"]["endpoint"])
     inner = SS.parser().parse_args(shlex.split(ep[-1])[2:])
-    assert ep[ep.index("--") + 1:-1] == ["bash", "-lc"] and ep[ep.index("--on") + 1] == "vy-dc-h200-2"
+    assert ep[ep.index("--") + 1:-1] == ["bash", "-lc"] and ep[ep.index("--on") + 1] == SS.PEER
     assert ep[ep.index("--send") + 1] == SS.CERTIFIED
     assert (inner.cmd, inner.out, inner.port, inner.io) == ("endpoint", Path("$OUT"), 18782,
                                                             f"$RESEARCH_RUN_DIR/inputs/{SS.CERTIFIED}")
@@ -107,10 +110,46 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     assert SS.plan(long, b"[[1]]")["endpoint"].endswith(f"--max-model-len {SS.KI + SS.KO}")
 
 
+def test_a_plan_at_another_scan_class_asks_the_gate_for_it_and_its_session_runs_the_plans_request():
+    """``--scan-class w63k4`` is passed to the gate, which takes prompts of its KI = 32 ids and 4 tokens out, and the
+    plan's session run is the plan's request: its class, prompt ids, tokens and vocabulary."""
+    a = SS.parser().parse_args(["plan", "--scan-class", "w63k4", "--prompt-ids", "32", "--tokens", "4", "--prompts", "4",
+                                "--requests", "4", "--height", "10"])
+    a.minutes = SS.A.warden_minutes(a.requests, a.height) + SS.MARGIN
+    ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, b"seed")
+    doc = SS.plan(a, json.dumps(ps).encode())
+    assert doc["request"] == (f"warden-rehearse --peer {SS.PEER} --port 18782 --minutes {a.minutes} --requests 4 "
+                              "--height 10 --scan --prompts --tokens 4 --scan-class w63k4")
+    session = SS.parser().parse_args(shlex.split(shlex.split(doc["runs"]["session"])[-1])[2:])
+    # every key of the plan but ``auditor``, which says where the plan's runs are launched: a session is one of them
+    asked = {k: v for k, v in vars(a).items() if k != "auditor"}
+    assert {k: v for k, v in vars(session).items() if k in asked} == {**asked, "cmd": "session"}
+    assert "--scan-class" not in SS.plan(SS.parser().parse_args(["plan", "--minutes", "10"]), b"[[1]]")["request"]
+
+
+def test_the_plans_runs_are_on_the_nodes_it_is_given_and_its_commands_name_no_other():
+    doc = SS.plan(SS.parser().parse_args(["plan", "--peer", SOME_PEER, "--auditor", SOME_AUDITOR, "--minutes", "10"]),
+                  b"[[1]]")
+    runs = {name: shlex.split(cmd) for name, cmd in doc["runs"].items()}
+    assert {name: run[run.index("--on") + 1] for name, run in runs.items()} == {
+        "session": SOME_AUDITOR, "io": SOME_AUDITOR, "endpoint": SOME_PEER, "chain": SOME_AUDITOR}
+    text = json.dumps(doc)
+    assert text.count("--on ") == len(runs)
+    # the session's own parser takes the command the plan writes for it, so the command carries no --auditor
+    session = SS.parser().parse_args(shlex.split(runs["session"][-1])[2:])
+    assert (session.cmd, session.peer) == ("session", SOME_PEER) and not hasattr(session, "auditor")
+    # the chain samples on the gate's coins where it runs
+    assert SS.parser().parse_args(shlex.split(runs["chain"][-1])[2:]).coin_peer == SOME_AUDITOR
+    # nothing of site.json is written into the plan but the lane, which is each run's --as
+    assert not [k for k, v in SS.SITE.items() if k != "lane" and v in text]
+
+
 @pytest.mark.parametrize("flags, why", [
     (["--tokens", "65"], "1 to KO = 64"),
     (["--tokens", "0"], "1 to KO = 64"),
     (["--prompt-ids", "1025"], "1 to KI = 1024"),
+    (["--scan-class", "w63k4", "--prompt-ids", "33", "--tokens", "4"], "1 to KI = 32"),
+    (["--scan-class", "w63k4", "--prompt-ids", "32"], "1 to KO = 4"),
     (["--prompts", "200", "--prompt-ids", "1024"], "the gate refuses it: --prompts: over 1048576 bytes"),
     (["--requests", "100000", "--minutes", "60"], "the gate refuses it: --requests '100000'"),
     (["--minutes", "5"], "the gate refuses it: --minutes 5"),
@@ -478,17 +517,17 @@ def _gate_chain(tmp_path, monkeypatch, peer):
 
 
 def test_a_gate_coin_draw_runs_on_the_auditors_side_and_never_on_the_served_node(tmp_path, monkeypatch, capsys):
-    argv = _gate_chain(tmp_path, monkeypatch, "vy-dc-h200-2")
+    argv = _gate_chain(tmp_path, monkeypatch, SOME_PEER)
     assert SS.main(argv) == 0
     scan = (tmp_path / "seen").read_text().strip().removeprefix("CR_SCAN_ARGS=").split(" ")
     assert scan == ["--draw", "8", "--challenger", f"gate:{SS.GATE}", "--main", str(tmp_path / "main.txt"), "--peer",
                     SS.AUDITOR, "--challenger-key", str(tmp_path / "challenger-key.json"),
                     "--gate-key", str(tmp_path / "gate-key")]
-    for peer in ("vy-dc-h200-2", "vy-nebius-1"):
-        argv = _gate_chain(tmp_path, monkeypatch, "vy-nebius-1")
+    for peer in (SS.PEER, SOME_PEER):
+        argv = _gate_chain(tmp_path, monkeypatch, SOME_PEER)
         assert SS.main([*argv, "--coin-peer", peer]) == 2
         assert "is the served node, the prover's" in capsys.readouterr().err
-    assert SS.main([*argv, "CR_SCAN_ARGS=--peer vy-dc-h200-2"]) == 2
+    assert SS.main([*argv, f"CR_SCAN_ARGS=--peer {SOME_PEER}"]) == 2
     assert SS.main([*argv[:-2], "--key", str(tmp_path / "no-key")]) == 2
     assert "no gate key" in capsys.readouterr().err
     assert SS.main([a for a in argv if a not in ("--draw", "8")]) == 2

@@ -824,6 +824,9 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
     assert lg["delta"]["rejection"] == len(record.windows) * record.samples / 2 ** 64 > 0
     assert record.samples == r["samples"] == 200 and record.public()["samples"] == 200
     assert lg["memory"]["error"] > lg["memory"]["delta"] + record.passes * 2.0 ** -audit.SLACK_LOG2 * 0.99
+    assert lg["named"] == lg["memory"]["named"] == reading["named"] == ledger.NAMED_TERMS, (
+        "each object of the record that carries a δ or an error names the PRF term it leaves out")
+    assert all(x["named"] == ledger.NAMED_TERMS for x in lg["declared"]["memory"].values() if "delta" in x)
     assert lg["inputs"]["slack_log2"] == audit.SLACK_LOG2
 
     def same(x, y) -> bool:

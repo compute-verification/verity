@@ -17,8 +17,10 @@ yet only when named with --on; `install` takes it as any other), and gives each 
   missing   not there
   absent    the manifest lists it and REF lacks its source (a checkout's manifest ahead of REF)
   held      the entry's `hold` says why it isn't deployed yet (its owner's yes is pending); install skips it
-and `restart` when a process running the file started before it was installed: it still runs the old code. A file that a
-`managed` pattern matches and no entry lists is a `stray`: a backup (`*.bak-*`, `*.prev-*`) or a script outside the repository.
+and `restart` when a process running the file started before it was installed: it still runs the old code. An entry's
+`no_restart` says why such a process is left to end instead (a run's own process, which nothing restarts): drift and install
+then say nothing of it. A file that a `managed` pattern matches and no entry lists is a `stray`: a backup (`*.bak-*`,
+`*.prev-*`) or a script outside the repository.
 A file in a tree that REF lacks is `ahead` instead when a recent origin branch has it (a PR adding the file).
 Each one should move into the repository and the manifest, or into the attic: `attic` moves strays (`--backups`: every one named
 as a backup) to <the record's directory>/attic/<when>/<path>, refusing a file a process runs, and records each move, so
@@ -26,7 +28,9 @@ as a backup) to <the record's directory>/attic/<when>/<path>, refusing a file a 
 that setup script, and drift checks only that it exists. A file of a tree that isn't installed is `missing` but leaves drift
 clean (an install of the tree adds it), unless the tree is `required`: what runs from it can't run without it. A node whose trust
 store (/etc/ssl/certs) still holds a distrusted CA root (DISTRUSTED_ROOTS) lists it as `root`, with the upgrade that removes it.
-Exit 0 when every entry is ok, nothing strays and no distrusted root is trusted, else 1. A node marked `admin = true` is reached only by an admin login (vy-admin, whose key only
+A node whose null device isn't the character device 1,3 with mode 666 lists it as `null`, with the command that repairs it:
+every redirect to /dev/null fails there for a user who isn't root.
+Exit 0 when every entry is ok, nothing strays, no distrusted root is trusted and the null device is whole, else 1. A node marked `admin = true` is reached only by an admin login (vy-admin, whose key only
 Daniel and infra's lead hold, never the research key the relays use), so drift reads it only when `--on` names it.
 `install` and `attic` write as root, so on a node whose lock-out took root from `research` (pods/nebius/lockout) they take
 `--login vy-admin`: the same node, reached as that user instead of the one its registry entry names.
@@ -51,6 +55,7 @@ import base64
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import time
@@ -78,10 +83,12 @@ CERTS = "/etc/ssl/certs"       # the system trust store, which Python, git, gh a
 # 20260816 removes them, and the Nebius images ship with apt's daily timers off, so nothing on a node upgrades it unasked.
 DISTRUSTED_ROOTS = ("emSign_ECC_Root_CA_-_G3", "Comodo_AAA_Services_root")
 TRUST_FIX = "sudo apt-get update && sudo apt-get install -y --only-upgrade ca-certificates 'libnss3*'"
+NULL = "/dev/null"             # the character device 1,3 with mode 666: what a shell's `2>/dev/null` opens for writing
 
 # Runs on the node (stdlib): each path's git blob, mtime, the oldest start of a process whose argv names it and every such
 # process's start and service (its cgroup's last component, `systemd:NAME` or `user-systemd:NAME`, else null), the files the
-# managed patterns and trees hold, the record's last line per path, and the trust store's files that name a distrusted root.
+# managed patterns and trees hold, the record's last line per path, the trust store's files that name a distrusted root, and
+# the null device's mode and device numbers (or why it can't be read).
 PROBE = r'''
 import glob, hashlib, json, os, sys
 req = json.loads(sys.argv[1])
@@ -147,8 +154,13 @@ try:
     distrusted = sorted(n for n in os.listdir(req["certs"]) if any(r in n for r in req["distrusted"]))
 except OSError:
     distrusted = []
+try:
+    st = os.stat(req["null"])
+    null = [st.st_mode, os.major(st.st_rdev), os.minor(st.st_rdev)]
+except OSError as e:
+    null = f"{type(e).__name__}: {e}"
 print(json.dumps({"files": files, "found": sorted(found), "procs": procs, "running": running, "record": record,
-                  "distrusted": distrusted}))
+                  "distrusted": distrusted, "null": null}))
 '''
 
 # On the node as root: append lines to the record, owned as the directory above the record's.
@@ -251,6 +263,7 @@ class Entry:
     owner: str | None = None           # a Slack handle (.agents/skills/using-slack/registry.json)
     hold: str | None = None            # why it isn't deployed yet: install skips it
     required: bool = False             # (a tree) what runs from it can't run without any of its files
+    no_restart: str | None = None      # why a process that started before an install is left to end: never `restart`
 
 
 @dataclass
@@ -278,12 +291,16 @@ def load(manifest: Path = MANIFEST, text: str | None = None) -> dict[str, Node]:
                 raise ValueError(f"deploy.toml: {e['path']!r} is held, which only an entry install copies (src) can be")
             if "required" in e and (kind != "tree" or not isinstance(e["required"], bool)):
                 raise ValueError(f"deploy.toml: {e['path']!r}: `required` is a tree's, true or false (a file always is)")
+            if "no_restart" in e and (kind != "file" or not e.get("src") or e.get("run") or not isinstance(e["no_restart"], str)
+                                      or not e["no_restart"].strip()):
+                raise ValueError(f"deploy.toml: {e['path']!r}: `no_restart` says why, for a file install copies (src) that names "
+                                 "no service to restart (run)")
             for n in e["nodes"]:
                 if n not in nodes:
                     raise ValueError(f"deploy.toml: {e['path']!r} names node {n!r}, which has no [nodes.{n}]")
                 mode = int(e["mode"], 8) if e.get("mode") else None
                 nodes[n].entries.append(Entry(e["path"], e.get("src"), e.get("by"), list(e.get("run", [])), kind == "tree", mode,
-                                              e.get("owner"), e.get("hold"), e.get("required", False)))
+                                              e.get("owner"), e.get("hold"), e.get("required", False), e.get("no_restart")))
     for node in nodes.values():
         seen = set()
         for e in node.entries:
@@ -389,7 +406,7 @@ def released(node: str) -> bool:
 
 def probe(node: Node, paths: list[str], run: Runner) -> dict:
     req = {"paths": paths, "globs": node.managed, "trees": [e.path for e in node.entries if e.tree], "record": node.record,
-           "certs": CERTS, "distrusted": DISTRUSTED_ROOTS}
+           "certs": CERTS, "distrusted": DISTRUSTED_ROOTS, "null": NULL}
     r = run(node.name, ["python3", "-c", PROBE, json.dumps(req)], None)
     if r.returncode != 0:
         err = r.stderr.decode(errors="replace").strip()
@@ -398,8 +415,27 @@ def probe(node: Node, paths: list[str], run: Runner) -> dict:
     return json.loads(r.stdout)
 
 
+def null_fault(seen: list[int] | str) -> dict | None:
+    """What is wrong with the null device the probe read (its `[st_mode, major, minor]`, or why it couldn't be read) and the
+    command that repairs it, {"what", "fix"}; None for the character device 1,3 with mode 666."""
+    path = NULL
+    remake = f"sudo rm -f {path} && sudo mknod -m 666 {path} c 1 3"
+    if isinstance(seen, str):
+        return {"what": f"{path} can't be read ({seen})", "fix": remake}
+    mode, major, minor = seen
+    if not stat.S_ISCHR(mode) or (major, minor) != (1, 3):
+        kind = f"the character device {major},{minor}" if stat.S_ISCHR(mode) else \
+            "a directory" if stat.S_ISDIR(mode) else "a regular file" if stat.S_ISREG(mode) else "no character device"
+        return {"what": f"{path} is {kind}, not the character device 1,3", "fix": remake}
+    if stat.S_IMODE(mode) != 0o666:
+        return {"what": f"{path} has mode {stat.S_IMODE(mode):o}, not 666: a redirect to it fails for every user but root",
+                "fix": f"sudo chmod 666 {path}"}
+    return None
+
+
 def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
-    """One node's report: {"commit", "entries": [{path, src, owner, state, detail, restart}], "strays": [...]}."""
+    """One node's report: {"commit", "entries": [{path, src, owner, state, detail, restart}], "strays": [...], "distrusted":
+    [...], "null_device": null_fault's}."""
     commit = git("rev-parse", f"{ref}^{{commit}}", repo=repo).strip()
     want = expected(node, commit, repo)
     generated = [e.path for e in node.entries if e.by]
@@ -452,7 +488,7 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
         started = seen["procs"].get(path)
         if e.hold:
             state, detail = "held", f"{e.hold} ({'not installed' if got is None else 'installed: ' + state})"
-        elif got and "mtime" in got and started is not None and started < got["mtime"] - 1:
+        elif not e.no_restart and got and "mtime" in got and started is not None and started < got["mtime"] - 1:
             restart = (f"a process started {time.strftime('%m-%d %H:%MZ', time.gmtime(started))}, before the file "
                        f"({time.strftime('%m-%d %H:%MZ', time.gmtime(got['mtime']))})" + (f"; restart {', '.join(e.run)}" if e.run else ""))
         entries.append({"path": path, "src": rp, "owner": e.owner, "state": state, "detail": detail, "restart": restart,
@@ -476,7 +512,8 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
                 strays.remove(p)
                 entries.append({"path": p, "src": rp, "owner": t.owner, "state": "ahead", "restart": None, "tree": t.path, "detail":
                                 f"commit {hit[0][:12]} ({hit[1]}) on {', '.join(origin_branches(hit[0], repo)) or 'a branch'}, not in {ref}"})
-    return {"commit": commit, "entries": entries, "strays": strays, "distrusted": seen.get("distrusted", [])}
+    return {"commit": commit, "entries": entries, "strays": strays, "distrusted": seen.get("distrusted", []),
+            "null_device": null_fault(seen["null"])}
 
 
 def render(node: str, ref: str, rep: dict) -> str:
@@ -501,6 +538,8 @@ def render(node: str, ref: str, rep: dict) -> str:
         lines.append(f"  stray    {p}")
     for c in rep.get("distrusted", []):
         lines.append(f"  root     {CERTS}/{c}  (a distrusted CA root: {TRUST_FIX})")
+    if null := rep.get("null_device"):
+        lines.append(f"  null     {null['what']}  ({null['fix']})")
     return "\n".join(lines)
 
 
@@ -510,7 +549,7 @@ def _tree_missing(e: dict) -> bool:
 
 
 def clean(rep: dict) -> bool:
-    return not rep["strays"] and not rep.get("distrusted") and all(e["state"] in ("ok", "held") and not e["restart"] for e in rep["entries"] if not _tree_missing(e))
+    return not rep["strays"] and not rep.get("distrusted") and not rep.get("null_device") and all(e["state"] in ("ok", "held") and not e["restart"] for e in rep["entries"] if not _tree_missing(e))
 
 
 def unit_name(run: str) -> str | None:
@@ -620,9 +659,10 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
                                    f"failed (exit {r.returncode}): {r.stderr.decode(errors='replace').strip()[-400:]}")
 
     def old(after: dict) -> dict[str, list]:
-        """path -> the services (None outside one) of the processes that started before it was installed"""
+        """path -> the services (None outside one) of the processes that started before it was installed, but those an
+        entry's `no_restart` leaves to end"""
         return {p: [u for start, u in after["running"].get(p, []) if "mtime" in (after["files"].get(p) or {})
-                    and start < after["files"][p]["mtime"] - 1] for p in now}
+                    and start < after["files"][p]["mtime"] - 1] for p in now if not want[p][3].no_restart}
 
     after = probe(node, now, run) if now else {"files": {}, "running": {}}
     done = restart(node, restarts(node, {p: want[p][3] for p in now}, old(after)), run, apply=True)

@@ -58,8 +58,9 @@ targets read them:
   `canon` reads a value, so at `vb` it is taken with `Val := vb.Opening`, `val := id` and `bit := vb.bit ∘ vb.val`;
 * `SampledKSLiveV2`: `SampledKSLive` at circuit files whose ports are rows the verifier reads, each a
   `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row (`Bridge.RowsOk`, which Flock's scope check implies)
-  and at registrations whose ports each have one name (`Registered.dupName`) and whose equal roots have one domain
-  (`PortRoots.RootFixesDomain`), which `TransportsLiveC` also takes, and whose descriptor and query evaluate to a
+  and at registrations whose ports' published domains are pairwise distinct (`PortRoots.dupId`) and whose equal roots
+  have one domain (`PortRoots.RootFixesDomain`), which `TransportsLiveC` also takes, and whose descriptor and query
+  evaluate to a
   population of the game's `n` units in order (`Bridge.PopMatches`);
 * `Bridge.AssemblyTargetC`: those, `PartBlocksTarget`, `CountTarget` and `EndToEndHiddenC` give `SampledKSLiveV2`.
 
@@ -220,8 +221,8 @@ commit string at the prover's registration that is canonical at `g` (`Bridge.can
 row of its width, and the salt has `saltLen` bytes), at a wire that isn't a constant (`Bridge.constsOf`), some data
 opens `g`'s claims position to `o`'s bit there, under the registration's roots
 at SHA-512, at a circuit file whose ports are rows the verifier reads (`Bridge.RowsOk`: `sha512/row/v1`,
-`sha512/row/v2` or `sha512/row-seg/v1`) and a registration whose ports each have one name and whose equal port roots
-have one domain (`Registered.dupName`, `PortRoots.RootFixesDomain`). -/
+`sha512/row/v2` or `sha512/row-seg/v1`) and a registration whose ports' published domains are pairwise distinct and
+whose equal port roots have one domain (`PortRoots.dupId`, `PortRoots.RootFixesDomain`). -/
 def _root_.Flock.Bridge.TransportsLiveC : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
@@ -229,7 +230,7 @@ def _root_.Flock.Bridge.TransportsLiveC : Prop :=
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (_hrows : Bridge.RowsOk D.unroll)
-    (_hdup : Flock.Registered.dupName D.unroll = none) (_hroots : Bridge.PortRoots.RootFixesDomain D.unroll pub n)
+    (_hdup : Flock.PortRoots.dupId D.unroll pub = false) (_hroots : Bridge.PortRoots.RootFixesDomain D.unroll pub n)
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
@@ -256,7 +257,7 @@ def _root_.Flock.Bridge.TransportsLiveC : Prop :=
         ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩
     let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hU n g
     let roots := Bridge.rootsOf D.unroll pub n
-    let Cd := Bridge.commitDep Cc rows D.unroll n roots
+    let Cd := Bridge.commitDep Cc rows D.unroll pub n roots
     ∀ u, ∀ g ∈ P.io u, κ g = none → ∀ o : vb.Opening, vb.com o = vb.cs (reg σ) (vb.pos g) →
       Bridge.canonOpen rows g (vb.val o) o.2.2 →
       ∃ d : Claims.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
@@ -265,10 +266,11 @@ open Classical in
 /-- **`SampledKSLive` at the circuit files the verifier reads**: `SampledKSLive`'s statement at a circuit
 file whose ports are rows of `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` (`Bridge.RowsOk`, which
 `scopeOkH` implies: `Bridge.rowsOk_of_scopeOkH`), each row's leaf in the deployed sampling commitment hashing its
-port's row message (`Bridge.rowDep`) framed at its port's schema (`Bridge.schemaOf`), with the registration's ports and roots distinct (`dupName`, and no colliding pair of ports, `PortRoots.rootsColl`, which
-`PortRoots.rootsColl_none_iff` reads as `PortRoots.RootFixesDomain`) and
-its descriptor `desc` and query `qr` evaluating to a population of `n` units in order (`Bridge.PopMatches`), whose strata
-(`Bridge.nsOf`) the statement's partition lays. Every finder is charged its SHA-512 evaluations, the prover's per-run
+port's row message (`Bridge.rowDep`) framed at its port's schema (`Bridge.schemaOf`), with the registration's ports'
+published domains and roots distinct (`dupId`, and no colliding pair of ports, `PortRoots.rootsColl`, which
+`PortRoots.rootsColl_none_iff` reads as `PortRoots.RootFixesDomain`) and its descriptor `desc` and query `qr`
+evaluating to a population of `n` units in order (`Bridge.PopMatches`), whose strata (`Bridge.nsOf`) the statement's
+partition lays. Every finder is charged its SHA-512 evaluations, the prover's per-run
 time `t'` and one opening's verification `v` per run: `2(t' + v)` for a rewinding finder (two runs after a commitment,
 two openings verified), `t' + v` for the self-clash finder (one run, one verification), and `t' + v` per run for the
 link finders (`LinkCRZC`), whose trials read each run's verdict. Its one bound on the prover is `t'`, where
@@ -283,7 +285,7 @@ def SampledKSLiveV2 : Prop :=
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (_hrows : Bridge.RowsOk D.unroll)
-    (_hdup : Flock.Registered.dupName D.unroll = none) (_hroots : Bridge.PortRoots.rootsColl D.unroll pub n = none)
+    (_hdup : Flock.PortRoots.dupId D.unroll pub = false) (_hroots : Bridge.PortRoots.rootsColl D.unroll pub n = none)
     -- the statement's descriptor, and the registration's query, whose population is the game's n units in order
     (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
@@ -324,7 +326,7 @@ def SampledKSLiveV2 : Prop :=
         ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩
     -- the registration's frame-v3 roots, over the public file's rows
     let roots := Bridge.rootsOf D.unroll pub n
-    let Cd := Bridge.commitDep Cc rows D.unroll n roots
+    let Cd := Bridge.commitDep Cc rows D.unroll pub n roots
     -- the circuit's constants, public
     let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hU n g
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs, at their cost: two runs of the

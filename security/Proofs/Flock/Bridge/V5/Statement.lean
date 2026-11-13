@@ -174,7 +174,7 @@ def _root_.Flock.Bridge.TransportsLiveV5 : Prop :=
     (pub : Public) (hpub : HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (_hrows : Bridge.RowsOk D.unroll)
-    (_hdup : Flock.Registered.dupName D.unroll = none)
+    (_hdup : Flock.PortRoots.dupId D.unroll pub = false)
     (_hroots : Bridge.RootFixesDomainL D.unroll (Bridge.LeafMap.ofPublic D.unroll pub n))
     (law : Flock.Draw.Law) (kd : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
@@ -220,7 +220,7 @@ def _root_.Flock.Bridge.SampledKSLiveV5R : Prop :=
     (pub : Public) (hpub : HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (_hrows : Bridge.RowsOk D.unroll)
-    (_hdup : Flock.Registered.dupName D.unroll = none)
+    (_hdup : Flock.PortRoots.dupId D.unroll pub = false)
     (_hroots : Bridge.RootFixesDomainL D.unroll (Bridge.LeafMap.ofPublic D.unroll pub n))
     -- the statement's descriptor, and the registration's query, whose population is the game's n proof blocks in order
     (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
@@ -330,7 +330,7 @@ def SampledKSLiveV5 : Prop :=
     (pub : Public) (hpub : HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (_hrows : Bridge.RowsOk D.unroll)
-    (_hdup : Flock.Registered.dupName D.unroll = none)
+    (_hdup : Flock.PortRoots.dupId D.unroll pub = false)
     -- the statement's descriptor, and the registration's query, whose population is the game's n proof blocks in order
     (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
     -- the registration's law object and work table
