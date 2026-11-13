@@ -20,7 +20,7 @@ import pytest
 from verity_flock.record_text import session_text
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-VERIFIER = Path(__file__).resolve().parents[2] / "agreement"
+VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: RoPE d64 (8 instances) with loopback sessions of several tables: J = 2 without a sample, J = 2 with `--draw subset:4` (two), J = 4
 FIXTURE = "art:425f6860"
