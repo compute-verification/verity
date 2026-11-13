@@ -1227,7 +1227,7 @@ def test_a_shard_refused_at_its_prebuild_never_planned_its_steps_and_holds_no_pa
 
 
 def test_lean_audit_s_failures_are_what_it_prints_under_each_failed_package_but_its_run_s_counts():
-    log = ("lean-audit: verity/hardware/world: PASS reused\n" + AUDIT.format(n=1)
+    log = ("lean-audit: verity/protocols/interface/world: PASS reused\n" + AUDIT.format(n=1)
            + "  tamper: /w/lean-audit-scratch-1-x/security/Proofs/A.olean changed\n"
            "AUDIT /w/lean-audit-scratch-1-x/security: PASS  12 declarations\n  note: fine\n"
            "AUDIT /w/lean-audit-scratch-1-x/Flock: FAIL\nAUDIT: FAIL (security/Proofs, Flock); reports in /out\n"
