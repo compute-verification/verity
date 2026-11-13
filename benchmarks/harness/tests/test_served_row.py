@@ -240,6 +240,72 @@ def test_an_accept_is_the_audits_only_where_the_second_stage_held_and_complete_o
     assert (W.ACCEPT, W.NOT_COMPLETE, W.REFUSE, W.WITHHELD) == E.VERDICT_READS
 
 
+NO_PROOFS = ("the record counts no verdict of the Lean verifier on a sampled proof (`lean-verify`), and no run is proved "
+             "on its outcome alone")
+NO_CHECKS = "the record counts none of the driver's checks around the sessions, and no run is proved on its outcome alone"
+
+
+@pytest.mark.parametrize("how", ["no kinds and no checks", "no kinds", "no lean-verify", "lean-verify of no session",
+                                 "no checks", "a proof not accepted", "a check not true"])
+def test_no_run_is_proved_on_its_outcome_alone(tmp_path, how):
+    """Under a table and a lock with nothing open, closed holes, and an outcome that accepted, beside a second stage
+    that held, and says it is complete: a record that counts no kind of verdict and no check is not proved, whatever
+    its outcome says. Neither is one that lacks the Lean verifier's verdicts on the sampled proofs or the driver's
+    checks, or that counts one of either as not true. The same record with all of them, all true, is proved."""
+
+    record = record_of(tmp_path, outcome=GIVEN, layout=OWN, registered=())
+    audit = record["audit"]
+    assert W.account(record, tree(tmp_path), kinds=ALL_LEAN, holes=CLOSED)["verdict"]["mark"] == W.PROVED
+    change, said = {
+        "no kinds and no checks": ({"verdicts": {}, "checks": {}}, [NO_PROOFS, NO_CHECKS]),
+        "no kinds": ({"verdicts": {}}, [NO_PROOFS]),
+        "no lean-verify": ({"verdicts": {k: v for k, v in audit["verdicts"].items() if k != W.PROOFS}}, [NO_PROOFS]),
+        "lean-verify of no session": ({"verdicts": audit["verdicts"] | {W.PROOFS: {"accepted": 0, "of": 0}}}, [NO_PROOFS]),
+        "no checks": ({"checks": {}}, [NO_CHECKS]),
+        "a proof not accepted": ({"verdicts": audit["verdicts"] | {W.PROOFS: {"accepted": 1, "of": 2}}},
+                                 ["not every verdict and check the record counts is true: `lean-verify` (1 of 2)"]),
+        "a check not true": ({"checks": audit["checks"] | {"pins": {"accepted": 1, "of": 2}}},
+                             ["not every verdict and check the record counts is true: `pins` (1 of 2)"])}[how]
+    doc = W.account(record | {"audit": audit | change}, tree(tmp_path), kinds=ALL_LEAN, holes=CLOSED)
+    out = W.render(doc)
+    # the outcome says all an outcome can, and the cited theorem takes no open premise
+    assert (doc["outcome"]["final"], doc["outcome"]["complete"], doc["outcome"][W.PROVED]) == ("given", True, True)
+    assert doc["verdict"]["mark"] == E.RUN_NOT_PROVED and "verdict: proved" not in out
+    assert [i["said"] for i in doc["to_fully_proved"]] == said and all(f"  - {s}" in out for s in said)
+    if said[0] == NO_PROOFS:
+        assert doc["verdict"]["line"] == "no sampled proof was put to the Lean verifier; the final accept given by `lean-outcome`"
+    # its record names no proof, and says what the accept lacks
+    assert reads(doc["verdict_record"])
+    assert [doc["verdict_record"][k] for k in ("verdict", "proved_by", "open")] == ["accept", None, "; ".join(said)]
+
+
+def test_a_record_that_counts_every_kind_and_check_the_audit_writes_reads_as_it_did(tmp_path):
+    """Under the tree's own table, a record as the two-stage audit writes one today, each kind of verdict and each
+    check counted and all true: what stands between the run and fully proved is the same list, with no line of the
+    record lacking a verdict or a check."""
+
+    doc = W.account(record_of(tmp_path), tree(tmp_path), holes=CLOSED)
+    assert {c["check"] for c in doc["checks"]} == set(W.table()["checks"])
+    assert {k["kind"] for k in doc["verdicts"]} == set(W.table()["verdicts"])
+    assert doc["verdict"]["mark"] == E.RUN_NOT_PROVED and doc["outcome"]["final"] == "withheld"
+    assert [(i["item"], i["said"]) for i in doc["to_fully_proved"]] == [
+        ("replay block", "the replay block is the stand-in (`Select{V=8}`), not a Definition of the request: the model's "
+                         "layers are not covered"),
+        ("inputs after the sample", "the replay block's inputs are committed after the sample: the interior registers "
+                                    "`logits` after the first stage's sample"),
+        ("not Lean", "decided by a verifier that is not Lean: `m0-verifier` (`flock-circuit serve, compared in "
+                     "benchmarks/one_stage/a5.py`), `checks_before_draw` (`benchmarks/one_stage/a5.py`), `pins` "
+                     "(`benchmarks/one_stage/two_stage.py`), `negatives` (`benchmarks/one_stage/a5.py`), "
+                     "`registered_reads` (`verity/commitments/windows/tables.py`), `complete` "
+                     "(`verity/protocols/spot/verifier/one_stage/audit.py`), `round_two` "
+                     "(`verity/protocols/spot/verifier/second_stage.py`)"),
+        ("lock entry", "`lean-draw` (`flock-verify draw-test`): no lock entry is named for it (`served_row.json`)"),
+        ("lock entry", "`lean-verify` (`flock-verify verify`): `FlockSoundness.Discharge.FailClosed.flock_verify_sound` "
+                       "is not in the lock"),
+        ("final accept", "the final accept is withheld by `sampled-proofs-verifier`: `two-stage-form`, the two-round "
+                         "form's soundness is not proved")]
+
+
 def test_what_the_audit_covered_is_the_layouts_own_account(tmp_path):
     stand_in = W.covered(R.read(**served(tmp_path / "a"))[0]["audit"]["layout"], {"registered": ["logits"]})
     assert stand_in["stand_in"] is True and stand_in["said"] == (

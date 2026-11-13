@@ -172,13 +172,16 @@ From a record that holds `audit` the command prints one more section, before the
   template) or a Definition of the class's own.
 - **To fully proved**: the replay block where it is the stand-in; its inputs where the interior registers them,
   which is after the first stage's sample; every verdict a verifier that is not Lean decided; every Lean verdict
-  whose lock entry (`security/lean-audit.json`) is missing or lists open premises; and the final accept where it was
-  not given, or is not complete. Which verifier decides each kind of verdict, and the lock entry that covers it, are
-  data (`verity_bench/data/served_row.json`). The resampling holes and the cited theorem are the next block's, and
-  this one prints no line on them.
+  whose lock entry (`security/lean-audit.json`) is missing or lists open premises; the Lean verifier's verdicts on
+  the sampled proofs and the driver's checks where the record counts none of either, and any verdict or check it
+  counts as not true; and the final accept where it was not given, or is not complete. Which verifier decides each
+  kind of verdict, and the lock entry that covers it, are data (`verity_bench/data/served_row.json`). The resampling
+  holes and the cited theorem are the next block's, and this one prints no line on them.
 - **The mark** is `proved` only where that list is empty, the final accept is given and complete, the cited
   theorem's lock entry lists no open premise and each resampling hole is closed at every one of the served run's
-  four runs' commits, as the next block reads them; `run, not proved` otherwise.
+  four runs' commits, as the next block reads them; `run, not proved` otherwise. No run is `proved` on its outcome
+  alone: a record that counts no verdict of the Lean verifier on a sampled proof, or none of the driver's checks,
+  is not, whatever its outcome says.
 - **The prover's seconds** as the record holds them, said as "at most" where they are a session's, with the cards
   the provers ran on and what the data file notes of a card.
 - **The verdict as a record** of the stop class's verdicts of record, for the piece `second_stage`, in the

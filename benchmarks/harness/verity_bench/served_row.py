@@ -18,13 +18,16 @@ run; it reads from the tree who decided each of those and what proves it, and pr
   block where it is the stand-in; its inputs where the interior registers them, which is after the first stage's
   sample (`AFTER_SAMPLE`); every verdict a verifier that is not Lean decided (`TABLE`'s ``decided_by``);
   every Lean verdict whose lock entry (``proved_by``, in ``security/lean-audit.json``) is missing or lists open
-  premises; and the final accept where it was not given, or is not complete. The resampling holes and the cited
-  theorem are not listed here: `spot_status` prints them, in the same command.
+  premises; the Lean verifier's verdicts on the sampled proofs and the driver's checks where the record counts
+  none of either, and any verdict or check it counts as not true; and the final accept where it was not given, or
+  is not complete. The resampling holes and the cited theorem are not listed here: `spot_status` prints them, in the
+  same command.
 * **The mark**: ``proved`` only where that list is empty, the final accept is given and complete, the cited
   theorem's lock entry lists no open premise and each resampling hole is closed at the commit of every one of the
   served run's four runs (`spot_status.served`, the reading the next block prints, so the two cannot disagree);
-  `exfiltration.RUN_NOT_PROVED` otherwise. A kind of verdict is ``proved`` only where a Lean verifier decided it and
-  its lock entry lists no open premise.
+  `exfiltration.RUN_NOT_PROVED` otherwise. So no run is ``proved`` on its outcome alone: the record counts the Lean
+  verifier's verdict on a sampled proof and the driver's checks, all of them true, or the mark is not ``proved``. A
+  kind of verdict is ``proved`` only where a Lean verifier decided it and its lock entry lists no open premise.
 * **The prover's seconds** as the record holds them, said as ``at most`` where they are a session's, wait included.
 * **The verdict as a record** of the stop class's verdicts of record (`verdict_record`), naming its class, its
   serve and the digest of its registration (`NAMES`), each null where the served run's files give none.
@@ -66,6 +69,11 @@ GIVEN_NOT_COMPLETE = "not complete: its outcome does not say `complete`"
 #: a fact of a two-stage run as served, beside what its form waits on: the values the replay block reads are
 #: registered by the interior registration, which follows the first stage's sample
 AFTER_SAMPLE = "the replay block's inputs are committed after the sample"
+#: what an accept stands on beside the outcome's own word, each open where the record counts none: the Lean
+#: verifier's verdict on each sampled proof, and the driver's checks around the sessions
+ALONE = "and no run is proved on its outcome alone"
+NO_PROOFS = f"the record counts no verdict of the Lean verifier on a sampled proof (`{PROOFS}`), {ALONE}"
+NO_CHECKS = f"the record counts none of the driver's checks around the sessions, {ALONE}"
 
 
 def table(path: Path | None = None) -> dict:
@@ -181,12 +189,20 @@ def outcome(shown: Mapping, kinds: Mapping, theorem: Mapping) -> dict:
     return out | {"final": "refused", "why": why}
 
 
+def sampled_proofs(kinds: Sequence[Mapping]) -> Mapping | None:
+    """The Lean verifier's verdicts on the sampled proofs, the kind `PROOFS` as the record counts it; None where the
+    record holds no such kind, or counts no session under it."""
+
+    proofs = next((k for k in kinds if k["kind"] == PROOFS), None)
+    return proofs if proofs is not None and proofs["of"] else None
+
+
 def verdict_line(kinds: Sequence[Mapping], final: Mapping) -> str:
     """The verdict in the verifier's own words: the sampled proofs the Lean verifier accepted, then the final accept
     as the outcome gave it. No accept the verifier withheld or refused is said to be given."""
 
-    proofs = next((k for k in kinds if k["kind"] == PROOFS), None)
-    if proofs is None or not proofs["of"]:
+    proofs = sampled_proofs(kinds)
+    if proofs is None:
         said = "no sampled proof was put to the Lean verifier"
     elif proofs["accepted"] == proofs["of"]:
         said = f"every sampled proof accepted by the Lean verifier ({proofs['of']} of {proofs['of']} sessions)"
@@ -204,7 +220,10 @@ def verdict_line(kinds: Sequence[Mapping], final: Mapping) -> str:
 
 
 def open_items(cover: Mapping, kinds: Sequence[Mapping], audit_checks: Sequence[Mapping], final: Mapping) -> list[dict]:
-    """What stands between the run and fully proved, from the run's own files and its verdicts' lock entries."""
+    """What stands between the run and fully proved, from the run's own files and its verdicts' lock entries. An
+    accept stands on more than the outcome's word, so a record that counts no verdict of the Lean verifier on a
+    sampled proof (`NO_PROOFS`) or none of the driver's checks (`NO_CHECKS`), or counts one of either as not true,
+    has that open whatever its outcome says."""
 
     items = []
     if cover["stand_in"] is None:
@@ -216,6 +235,14 @@ def open_items(cover: Mapping, kinds: Sequence[Mapping], audit_checks: Sequence[
         items.append({"item": "inputs after the sample",
                       "said": f"{AFTER_SAMPLE}: the interior registers {E._names(cover['registered'])} after the first "
                               "stage's sample"})
+    if sampled_proofs(kinds) is None:
+        items.append({"item": "sampled proofs", "said": NO_PROOFS})
+    if not audit_checks:
+        items.append({"item": "checks", "said": NO_CHECKS})
+    if short := [f"`{c.get('kind') or c['check']}` ({c['accepted']} of {c['of']})" for c in (*kinds, *audit_checks)
+                 if c["accepted"] != c["of"]]:
+        items.append({"item": "not all true",
+                      "said": "not every verdict and check the record counts is true: " + ", ".join(short)})
     other = [f"`{k['kind']}` (`{k['verifier']}`)" for k in kinds if k["decided_by"] != LEAN]
     other += [f"`{c['check']}` (`{c['verifier']}`)" for c in audit_checks if c["decided_by"] != LEAN]
     if final["decided_by"] != LEAN:
@@ -291,7 +318,9 @@ def account(record: Mapping[str, Any], root: Path | None = None, *, kinds: Mappi
     """The section's document from a served run's ``record`` (`served_record.read`), read against the tree at
     ``root``: its lock, the table (``kinds``, default `TABLE`) and each resampling hole's status over the served
     run's own commits (``holes``, default `spot_status.served`'s, closed only where it is closed at all four runs).
-    None where the record holds no ``audit``."""
+    The mark is `PROVED` only where `open_items` lists nothing, so never for a record that counts no verdict of the
+    Lean verifier on a sampled proof or none of the driver's checks, whatever its outcome says. None where the
+    record holds no ``audit``."""
 
     shown = record.get("audit")
     if not isinstance(shown, Mapping):
