@@ -49,8 +49,9 @@ being its `…Of check`: the shape rule reads the acceptance off the statement's
 `RowsCapPublished` says an accepted period's public names its schedule's response cap, and `RowsCapPublishedOf` is
 its property of any period check, false at `acceptAllRows` too.
 `RowsCertified` says an accepted period's evidence shows each of its link-windows, and every certificate and rows
-registration shown verifies under a key the parameters list, in the session they list at that key's place, over a
-message it names (`CertifiedBy`, `RegisteredBy`); `RowsCertifiedOf` is its property of any period check.
+registration shown for a link-window verifies under the key of the entry that link-window picks, in that entry's
+session and at that session's own number for the link-window, over a message it names (`CertifiedBy`,
+`RegisteredBy`); `RowsCertifiedOf` is its property of any period check.
 -/
 
 @[expose] public section
@@ -212,42 +213,45 @@ def RowsCapPublishedOf (chk : Params → Commitment → Evidence → Core.Outcom
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → CapPublished p pub
 
-/-- The certificate `c` is of `link`'s end `d` at window `w`, and a listed key signed it in that key's session. At
-some place `i` the parameters list the key `key` and, at the same place, the session `session`; `c` names that key (its
-identifier `I`, the key's first 16 bytes); and `c`'s LMS signature decodes and verifies under `key` over `m`, the
-`certificateMessage` of `I`, `session`, the link, the end, the window and the digest `c` signs. -/
+/-- The certificate `c` is of `link`'s end `d` for link-window `w` of the period, and the entry `w` picks signed it.
+The parameters' entry for `w` is `e` (`entryAt`: the last listed entry whose start is at most `w`; a key, its session
+and its stretch's start). `c` names `e`'s key (its identifier, the key's first 16 bytes); `c`'s window is that
+session's own number for the link-window, `w - e.start`; and `c`'s LMS signature decodes and verifies under `e.key`
+over `m`, the `certificateMessage` of that identifier, `e.session`, the link, the end, `w - e.start` and the digest
+`c` signs. -/
 def CertifiedBy (p : Params) (link : String) (d : Direction) (w : ℕ) (c : Certificate) : Prop :=
-  c.link = link ∧ c.direction = d ∧ c.window = w ∧
-    ∃ (i : ℕ) (key session m : ByteArray) (sig : Lms.Signature),
-      p.keys[i]? = some key ∧ p.sessions[i]? = some session ∧ c.keyId = key.extract 0 16 ∧
-        certificateMessage c.keyId session link d w c.digest = .ok m ∧
-        Lms.Signature.decode p.lms c.signature = .ok sig ∧ Lms.verify p.lms key m sig = .ok true
+  c.link = link ∧ c.direction = d ∧
+    ∃ (e : Entry) (m : ByteArray) (sig : Lms.Signature),
+      entryAt p w = some e ∧ c.window = w - e.start ∧ c.keyId = e.key.extract 0 16 ∧
+        certificateMessage c.keyId e.session link d (w - e.start) c.digest = .ok m ∧
+        Lms.Signature.decode p.lms c.signature = .ok sig ∧ Lms.verify p.lms e.key m sig = .ok true
 
-/-- The rows registration `r` is of the link's rows in direction `d` at window `w` under the schedule `s` (its digest
-`sd`), and a listed key signed it in that key's session. At some place `i` the parameters list the key `key` and, at
-the same place, the session `session`; `r` names that key as its signer; its domain is `rowsDomain` of that session,
-the link, the direction and the window; the digest it signs is its head's, `headDigest` of its wiring, that domain and
-its root; and its LMS signature decodes and verifies under `key` over `m`, the `certificateMessage` of the key's
-identifier, `session`, the link, the direction, the window and that digest. -/
+/-- The rows registration `r` is of the link's rows in direction `d` for link-window `w` of the period under the
+schedule `s` (its digest `sd`), and the entry `w` picks signed it. The parameters' entry for `w` is `e` (`entryAt`).
+`r` names `e`'s key as its signer; `r`'s window is that session's own number for the link-window, `w - e.start`; its
+domain is `rowsDomain` of `e.session`, the link, the direction and that number; the digest it signs is its head's,
+`headDigest` of that number, its wiring, that domain and its root; and its LMS signature decodes and verifies under
+`e.key` over `m`, the `certificateMessage` of the key's identifier, `e.session`, the link, the direction, that number
+and that digest. -/
 def RegisteredBy (p : Params) (s : Schedule) (sd : ByteArray) (d : Direction) (w : ℕ) (r : Rows) : Prop :=
-  ∃ (i : ℕ) (key session dom m : ByteArray) (sig : Lms.Signature),
-    p.keys[i]? = some key ∧ p.sessions[i]? = some session ∧ r.key = key.extract 0 16 ∧
-      rowsDomain s sd session p.link d w = .ok dom ∧ r.domain = Flock.hexOf dom ∧
-      headDigest p.link d w sd s r.wiring dom r.root = .ok r.digest ∧
-      certificateMessage r.key session p.link d w r.digest = .ok m ∧
-      Lms.Signature.decode p.lms r.signature = .ok sig ∧ Lms.verify p.lms key m sig = .ok true
+  ∃ (e : Entry) (dom m : ByteArray) (sig : Lms.Signature),
+    entryAt p w = some e ∧ r.key = e.key.extract 0 16 ∧ r.window = w - e.start ∧
+      rowsDomain s sd e.session p.link d (w - e.start) = .ok dom ∧ r.domain = Flock.hexOf dom ∧
+      headDigest p.link d (w - e.start) sd s r.wiring dom r.root = .ok r.digest ∧
+      certificateMessage r.key e.session p.link d (w - e.start) r.digest = .ok m ∧
+      Lms.Signature.decode p.lms r.signature = .ok sig ∧ Lms.verify p.lms e.key m sig = .ok true
 
 /-- What `RowsCertified` says of the evidence `e` of a period under the parameters `p`: the evidence shows each of the
-period's link-windows, and of the one at place `i`, window `p.first + i`,
+period's link-windows, and of the one at place `i`, the period's link-window `p.first + i`,
 
 - in the clock form, two certificates, the link's egress and ingress, and the clock certificate, the link's egress,
-  each `CertifiedBy` a listed key in that key's session;
+  each `CertifiedBy` the entry that link-window picks;
 - in the rows form, three certificates, the requests' (the link's ingress), the responses' (its egress) and the fails'
-  (`<link>-fails`, egress), each `CertifiedBy` a listed key in that key's session, and two rows registrations, the
-  ingress rows' and then the egress rows', each `RegisteredBy` one. -/
+  (`<link>-fails`, egress), each `CertifiedBy` the entry that link-window picks, and two rows registrations, the
+  ingress rows' and then the egress rows', each `RegisteredBy` it. -/
 def RowsCertifiedAt (p : Params) (e : Evidence) : Prop :=
   e.windows.size = p.windows ∧
-    ∀ (i : ℕ) (x : Window), e.windows[i]? = some x →
+    ∀ (i : ℕ) (x : ExecutionPhase), e.windows[i]? = some x →
       (∀ ss, p.form = .clock ss → ∃ egress ingress clock,
         x.certificates = #[egress, ingress] ∧ x.shown = .clock clock ∧
           CertifiedBy p p.link .egress (p.first + i) egress ∧ CertifiedBy p p.link .ingress (p.first + i) ingress ∧
@@ -264,15 +268,16 @@ def RowsCertifiedOf (chk : Params → Commitment → Evidence → Core.Outcome P
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → RowsCertifiedAt p e
 
-/-- **Every certificate and rows registration of an accepted period verifies under a listed key in that key's
-session.** If the check accepts a period, its evidence shows each of the period's link-windows, and every certificate
-and every rows registration a link-window shows names a key the parameters list and carries an LMS signature that
-verifies under that key over the certificate message of that key's identifier, the session the parameters list at the
-key's own place, the link, the direction, the window and the digest it signs (`CertifiedBy`). A rows registration's
-digest is its head's, over its wiring, its root and the domain that the same session fixes (`RegisteredBy`). So each
-signed message is named, and a composition that pins its certifiers (an `AuditorPin` each, the pinned list
-`AuditorPins`) and reads their keys and sessions off the parameters (`certifierKeys`, `certifierSessions`) knows which
-messages verify under which of them.
+/-- **Every certificate and rows registration of an accepted period verifies under the entry its link-window
+picks.** If the check accepts a period, its evidence shows each of the period's link-windows, and every certificate
+and every rows registration shown for link-window `w` names the key of the one entry whose stretch holds `w`
+(`entryAt`) and carries an LMS signature that verifies under that key over the certificate message of that key's
+identifier, that entry's session, the link, the direction, the session's own number for the link-window (`w` less
+the entry's start) and the digest it signs (`CertifiedBy`). A rows registration's digest is its head's, over that
+number, its wiring, its root and the domain that the same session and number fix (`RegisteredBy`). The link-window
+alone picks the entry, so a key the parameters list signs nothing outside its own stretch. So each signed message is
+named, and a composition that pins its certifiers (an `AuditorPin` each, the pinned list `AuditorPins`) and reads
+their entries off the parameters (`certifierEntries`) knows which messages verify under which of them.
 
 It says nothing of who signed: that a message verifying under a listed key is one the auditor's device signed is the
 reader's step, under its own premises. Nor does it tie a certificate's digest to the rows: the period check reads no
