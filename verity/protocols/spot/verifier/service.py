@@ -2129,10 +2129,10 @@ class Stream:
         work sample it widens proves a set whose size varies with the sample, which the sampled audit's soundness
         statement doesn't cover. The sample of record is the verifier's (`verifier.select`: the Lean's `Select.select` on the
         bytes of the coins this sample read), unless a `sampler` samples. Raises `Refused` for a registration sampled before
-        (nothing resamples), a closure map (before any coin is read), a two-stage design's first stage on coins of another
-        family than the place its record's window names (`place`, before any coin is read: `_placed`), the two verifiers
-        sampling differently (`disagree`), and a sample that isn't well formed under the sampling design
-        (`draw.check_draw`, by `verifier.check_draw`).
+        (nothing resamples), a closure map (before any coin is read), the challenger's coins of another family than the
+        place the record's window names (`place`, before any coin is read: `_placed`), the two verifiers sampling
+        differently (`disagree`), and a sample that isn't well formed under the sampling design (`draw.check_draw`, by
+        `verifier.check_draw`).
 
         Under a two-stage design, `select` of a registration is the first stage, and of its interior registration
         (`register_interiors`) the second (`select_second`, by `verifier.select_second`): `k` proof blocks in each
@@ -2183,10 +2183,10 @@ class Stream:
         return e.draw
 
     def _placed(self, registration: WindowCommitmentRecord) -> None:
-        """Under a two-stage design, `Refused` (`place`) where the first stage's coins are of another family of the
-        challenger's than the one of the place the record's window names (`window_place.family`): the sample's
-        family is its record's, never its coin source's to choose. A window that names no place is held to none."""
-        if not (isinstance(self.spec.selection, TwoStage) and isinstance(self._coins, ChallengerCoins)):
+        """`Refused` (`place`) where the sample's coins are of another family of the challenger's than the one of the
+        place the record's window names (`window_place.family`): the sample's family is its record's, never its coin
+        source's to choose. A window that names no place is held to none."""
+        if not isinstance(self._coins, ChallengerCoins):
             return
         try:
             mine = WP.family(registration.record.get("window"))

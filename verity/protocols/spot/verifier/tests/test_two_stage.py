@@ -1218,12 +1218,12 @@ def test_an_outcome_carries_the_params_to_the_run_of_record(monkeypatch):
     assert _refused(lambda: stream.outcome(draw, _lean(), {"statement": "stub"}, proofs=_circuits())) == ("proofs",)
 
 
-def test_a_first_stage_is_sampled_on_the_family_of_the_place_its_records_window_names():
-    """Where a boundary record's window names a place (`window_place.of`), a two-stage stream samples its first stage
-    only on the challenger's family of that place (`window_place.family`): on a source of another family the sample
-    is refused (`place`), whatever the source is asked afterwards, and on the place's family it samples and names
-    that family to the verifier's run. A record whose window names no place is held to none: the stream names its
-    source's family, as before. The stop blocks' place is another family than its class's spans'."""
+def test_a_sample_is_read_on_the_family_of_the_place_its_records_window_names():
+    """Where a record's window names a place (`window_place.of`), a stream samples it only on the challenger's family
+    of that place (`window_place.family`), a two-stage stream's first stage and a one-stage stream's sample alike: on
+    a source of another family the sample is refused (`place`) and nothing is sampled, and on the place's family it
+    samples and names that family to the verifier's run. A record whose window names no place is held to none: the
+    stream names its source's family, as before. The stop blocks' place is another family than its class's spans'."""
     record, ports = _boundary(prompt=4, outputs=4, stopped=True)
     mine = WP.family(record["window"])
     assert mine == "draw/68719476754" != FC.LABEL and WP.run(record["window"]) == RUN
@@ -1235,4 +1235,20 @@ def test_a_first_stage_is_sampled_on_the_family_of_the_place_its_records_window_
     stream = _stream(coins=FC.Challenger(label=mine))
     assert stream.family(stream.select(stream.register(record, ports))) == mine
     stream = _stream()
+    assert stream.family(stream.select(stream.register(*_boundary()))) == FC.LABEL
+
+    def one(**kwargs) -> S.Stream:
+        return FC.Stream(S.Spec(VALUES[:2], S.Law("rate:1/2"), S.Check(P.program_digest(Program(BLOCK)), GRAIN,
+                                                                     proof_deadline=60.0), PUBLIC, b"two-stage-test"),
+                         BLOCK, budget=2, delta=DELTA, challenger="challenger-test", clock=Clock(), **kwargs)
+    record, ports = _boundary(prompt=4, outputs=4, stopped=True, population="stop")
+    blocks = WP.family(record["window"])
+    assert blocks == "draw/68719476755"
+    for label in (FC.LABEL, mine):
+        stream = one(coins=FC.Challenger(label=label))
+        reg = stream.register(record, ports)
+        assert _refused(lambda: stream.select(reg)) == ("place",)
+    stream = one(coins=FC.Challenger(label=blocks))
+    assert stream.family(stream.select(stream.register(record, ports))) == blocks
+    stream = one()
     assert stream.family(stream.select(stream.register(*_boundary()))) == FC.LABEL
