@@ -74,13 +74,14 @@ READINGS = {None: "forming-credited", "ChainOnly": "chain-only", "Chain": "chain
 RULED_SIZING = "publicConst64"
 #: each FP8 statement's debit cap ρ
 INERT_SHARES = {"pearl-c-sm120/v1": Fraction(1, 1000), "pearl-c-sm120/v2": Fraction(1, 1000)}
-NAME_INERT_SHARES = {"Rev1": Fraction(1, 400), "InertShare1000": Fraction(1, 1000), "Rev1InertShare1000": Fraction(1, 1000)}
+NAME_INERT_SHARES = {"Rev1": Fraction(1, 400), "InertShare1000": Fraction(1, 1000), "Rev1InertShare1000": Fraction(1, 1000),
+                     "Cap1000": Fraction(1, 1000), "Rev1Cap1000": Fraction(1, 1000)}
 
 _RAT = r"(\d+)(?: / (\d+))?"
 #: `Pouw.PearlC.`, which a signature prints and a `Guarantees` definition's source may leave to its `open`
 _NS = r"(?:Pouw\.PearlC\.)?"
 _FP8 = re.compile(r"pearlC(?P<kind>Gap|Gamma|Sampled)Sm120(?P<ver>v1|v2)(?P<loop>Loop)?(?:Cast(?P<cast>8p72|32p06|16|32|8))?"
-                  r"(?P<read>ChainOnly|Chain)?(?P<cap>Rev1InertShare1000|Rev1|InertShare1000)"
+                  r"(?P<read>ChainOnly|Chain)?(?P<cap>Rev1InertShare1000|Rev1Cap1000|Rev1|InertShare1000|Cap1000)"
                   r"_(?:(?P<shape>8192|16384)|n(?P<n>\d+)k(?P<k>\d+)|(?P<layout>[a-z][a-z0-9_]*))")
 _LIFTED = re.compile(r"(\S+) : (Pouw\.Guarantees\.\S+)")
 _DEV = re.compile(_NS + r"devSm120(v1|v2) " + _NS + r"Prices\.(sm120Loop|sm120)\b")
