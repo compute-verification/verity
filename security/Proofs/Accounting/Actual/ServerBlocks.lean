@@ -52,7 +52,7 @@ theorem gates_eq {C : Circuit} {n : ℕ} (P : Partition C n) (u : Fin n) (R : Fi
   ext g
   simp [Partition.gates, h]
 
-theorem window_le {k ω t : ℕ} : min ((k + 1) * ω) t - k * ω ≤ ω := by
+theorem serverBlock_le {k ω t : ℕ} : min ((k + 1) * ω) t - k * ω ≤ ω := by
   rw [Nat.sub_le_iff_le_add]
   exact (min_le_left _ _).trans (by rw [add_one_mul]; omega)
 
@@ -213,10 +213,10 @@ theorem ServerBlocks : Guarantees.Actual.ServerBlocks := by
     exact (congrArg (A.region (X i)) Set.Ico_inter_Iio).symm
   · show Φ (X i) * (min (((k : ℕ) + 1) * ω) t - min ((k : ℕ) * ω) t) ≤ _
     rw [e]
-    exact Nat.mul_le_mul_left _ window_le
+    exact Nat.mul_le_mul_left _ serverBlock_le
   · show A.stateIn (X i) (min ((k : ℕ) * ω) t) univ +
         linkCapacity ends β (X i) * (min (((k : ℕ) + 1) * ω) t - min ((k : ℕ) * ω) t) ≤ _
     rw [e]
-    exact Nat.add_le_add hst (Nat.mul_le_mul_left _ window_le)
+    exact Nat.add_le_add hst (Nat.mul_le_mul_left _ serverBlock_le)
 
 end Accounting.SecurityProofs.Actual
