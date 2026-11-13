@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
-from test_retention import NOW, UNIT, Disk, aged, by_path, clock, never_in_use, stored, vault_store  # noqa: F401  (a fixture)
+from test_retention import NOW, REPO, UNIT, Disk, aged, by_path, clock, never_in_use, stored, vault_store  # noqa: F401  (a fixture)
 from test_retention_unpreserved import written
 
 from research import retention as R
@@ -403,7 +403,7 @@ def test_a_copy_with_a_fetched_custody_marker_goes_by_the_launchers_rule(tmp_pat
 
 
 def test_the_docs_state_the_rule_and_its_one_number():
-    readme = " ".join((Path(__file__).resolve().parents[1] / "README.md").read_text().split())
+    readme = " ".join((REPO / "tools/research/README.md").read_text().split())
     for needed in ("[--launcher-copies]", "`--launcher-copies`", "48 hours after its last write", "vy-launcher-copies-gc"):
         assert needed in readme, f"tools/research/README.md no longer states {needed!r}"
     assert "LAUNCHER_COPY_EXPIRY (48 hours)" in R.__doc__ and "[--launcher-copies]" in R.__doc__
