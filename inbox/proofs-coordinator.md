@@ -160934,3 +160934,39 @@ As promised at 21:00Z: `f175` has ended. Not the ready line.
 - [run, 21:15Z] `git log origin/BRANCH..HEAD` is empty in `verity-hcls` (`bbcaac1cf46e`), `verity` (`e977fbc96f63`), the scratch (`4667f9e890d3`) and the inbox worktree. No job of mine runs. I use neither `restack.py` nor `mkpass.py`.
 - **One fact for infra, already on the remote, so not judged by the rule as you state it:** #9817's head holds 60 commits whose author and committer are `restack carry <noreply@invalid>`, of 295 over `main` at `4ae17f7eafd7`. They are FRAME's carry of my line (`cursor/proofs-carried-windowat-4ae1`, to which I fast-forwarded at 18:10Z); the other 235, my merge `bbcaac1cf46e` among them, are under the checkout's identity. I rewrite nothing. If those 60 must not reach `main` under that name, that is a new carry on a new branch and yours to order.
 - #9817 stays as opened, unmarked; I wait for the commit you name.
+
+## [2026-11-13T21:18Z] ACCEPTS: LINK 1'S PYTHON PASSES BUT FOR THE KEPT FIXTURE'S ONE TEST (`r20261113-201204-193b`); ADDITION 1 (`R6-head`, `RunHead`) IS WRITTEN AND PUSHED AT `f52115107cf`, ITS LEAN TRY AND ITS SUITES RUNNING; MY 20:00Z DESIGN NAMED THE WRONG WRITER OF THE HEAD, CORRECTED BELOW; ONE QUESTION LEFT OPEN FOR YOU
+
+STOP RULE: this entry holds the two waiting runs' verdicts you asked for, Addition 1 as written, one correction to my own design, and what is running. I send the try's and the suites' verdicts when they end. Nothing else is in hand.
+
+**0. Your 21:02Z rule (INF-798) is read [ran].** Item 4: two commits were unpushed, `1b2dadf294b` and `f52115107cf`; author and committer of both are `Cursor Agent <cursoragent@cursor.com>`, the checkout's own `user.name` and `user.email`. Pushed. No job of mine commits on a node.
+
+**1. Link 1's Python at `d6b69f623dc`: `r20261113-201204-193b` on `vy-nebius-cpu-2`, ended 20:46Z, rc 1 [run].**
+
+- (a) `benchmarks/one_stage`, the three two-stage files, slow included: 51 passed in 811 s.
+- (b) `benchmarks/prove_path`, `test_records_audit.py`: 50 passed in 11 s.
+- (c) `verity-core-composition`: 97 passed, 1 failed, 5 skipped in 590 s. The failure is `test_sampled_two_difftest.py::test_the_form_accepts_one_honest_play_with_its_switch_on`, refused "params: the boundary's parameters name no registration head": the kept `sampled-two-case` names none. Reported, not fixed, by your ruling 2.
+- (d) `verity-core-sampled-proofs`: 327 passed, 2 skipped in 506 s.
+
+So link 1's own Python shows no fault. The change's suites (`suites.py --changed 20936c91d40b --quick`, 69 suites) run at `d6b69f623dc` as `r20261113-205153-695b` on `vy-nebius-cpu-11` since 20:51Z; not ended.
+
+**2. Addition 1 is written, on `cursor/proofs-accepts-link1-3e9a` at `f52115107cf` [derived; no Lean or Python of it has run yet].**
+
+- The check: `R6-head` in `Registration.check` and `checkRef`, one `kept` term after the seed salt's. The record's `window.head` must be the parameters' `head`, and absent where they name none.
+- The spec: `Properties.Spot.RunHead`, a conjunct of `R6` after `RunSeedSalt`, with its case in `registration_nil` (`h13`, `h12` and the last patterns).
+- The Python twin: `registration.HEAD` and the same code at the same place. The verifier's test runs the Lean beside it; the one-stage difftest has the case, and its reference now hands the twin the day, declarations and head, which it dropped before.
+- The records it moves, none run: `Properties.Spot.R6` (statement), `Properties.Spot.RunHead` (new) and `Spot.Registration.check`, read in `security/Properties/lean-audit.json` and `security/lean-audit.json`.
+
+**3. A correction to my 20:00Z design [read].** I wrote that serve_day's `Day.naming()` writes the window's head. That naming goes only into W, and W is never the record R6 reads under a verifier that names a head; the `--day-ledger` path has no head at all. What I wrote instead:
+
+- `two_stage.first` writes the head of the declared day it registers under into the boundary record's window. That is the one record a headed verifier checks.
+- The stop record copies the boundary's window without the head. Its verifier declares no day, so `R6-head` holds it to name none.
+- `records_audit.declared_day` no longer returns the head (link 1 had added it). With `R6-head` it would refuse every honest one-stage `--day` audit, whose record names none. One-stage `--day` audits run unheaded, as on `main`.
+- serve_day, `DAY_KEYS` and the `--day-ledger` path are untouched.
+
+**4. Open, yours or soundness's to rule [derived].** In a deployment, who writes the head into the boundary record? The serving side commits that record, so it must hold the registration log's head at that moment. Today only the benchmark driver does it, from a development log (`declared_of`). I have not built a deployed writer and will not without your word.
+
+**5. Running [ran].**
+
+- The Lean try: `r20261113-211441-c50b` on `vy-nebius-cpu-2` since 21:14Z, `lean_changed.py --try security/Proofs/Properties/Verity/SampledTwo/AcceptsTop.lean --siblings`. Its closure holds every file Addition 1 touches. The named risk is `check_eq_checkRef`: its `simp` unfolds one more term in each copy, and how near its step limit it ran is not known.
+- The suites at `f52115107cf`: `r20261113-211632-70d4` on `vy-nebius-cpu-11` since 21:16Z, limit 150 minutes. Six parts: the two-stage drivers with the stop audit and the verdict record (slow included), the records audit, `verity-core-composition`, `verity-core-sampled-proofs`, the verifier's own suite, the adapter's boundary rows. The fixture's one test stays red there until the fresh headed case replaces it.
