@@ -120,7 +120,7 @@ for r in "$O"/ncu/*.ncu-rep; do
   ncu -i "$r" --page source --csv --print-source sass > "$b.sass.csv" 2> "$b.sass.err"
 done
 cat "$O/rc.txt"
-$PY $D/eps_profile.py "$O" --mm benchmarks/pouw/machine_model --json "$O/profile.json" --toml "$O/profile.toml" \
+$PY $D/eps_profile.py "$O" --mm benchmarks/machine_model --json "$O/profile.json" --toml "$O/profile.toml" \
   --toml-arms "${PROFILE_ARMS:-d_l7qs,d_plains,e_l7qs,e_plains,lt_d2s,plain,qk_l7qs,qk_plains,qk_l7qs_m,qk_plains_m}" \
   > "$O/profile.md" 2> "$O/profile.err"
 echo "profile rc $?" | tee -a "$O/rc.txt"

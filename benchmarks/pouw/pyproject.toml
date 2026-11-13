@@ -28,6 +28,7 @@ untraced = [
     "tests/test_ffill.py",
     "tests/test_pearl_c_hash_decode.py",
     "tests/test_pearl_c_hash_host.py",
+    "tests/test_pearl_c_hash_wide.py",
     "tests/test_pearl_c_sm120.py",
     "tests/test_pearl_c_sm90.py",
     "tests/test_pearl_c_sm90_prefill.py",
@@ -64,7 +65,7 @@ untraced = [
 # served_h1's producer loads dither's j10r_ws.py, which sizes a J10-R call's workspace from the loaded build.
 # test_dither_j10r_form imports dither's J10-R host units (j10r_units.py, over served_h1's receipts) and forms.py.
 # pouw_h1 imports its table commits' module and pouw_h1_served its word encodings' module, each named at its path
-# before and after vllm's layout move.
+# before and after vllm's layout move. bench_arm's live coins open their session through verity_vllm.pipeline.commit_coins.
 # test_pearl_c_sm90_overhead_arm reads the overhead door's schemes and linears (verity_bench's overhead.py), which name
 # pearl_c_sm90's arm.
 # test_proved_ticks_placed places PoUW's compiled Program on a block of the datacenter model (benchmarks/datacenter's
@@ -84,6 +85,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "verity/configuration/config/verity_config",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
           "adapters/vllm/verity_vllm/commit/__init__.py", "verity/commitments/windows/hiding.py",
+          "adapters/vllm/verity_vllm/pipeline/__init__.py", "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
           "verity/commitments/windows/rows.py", "adapters/vllm/verity_vllm/errors.py",
           "adapters/vllm/verity_vllm/engine", "adapters/vllm/verity_vllm/protocols/linear",
           "adapters/vllm/verity_vllm/protocols/__init__.py",
@@ -128,13 +130,19 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/ends.py",
           "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
           "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/served_y.py",
           "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
           "adapters/vllm/verity_vllm/protocols/spot.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/whole_calls.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/window.py",
           "adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda",
           "adapters/vllm/verity_vllm/protocols/pouw/h1/kept.py",
           "adapters/vllm/verity_vllm/protocols/pouw/h1/live.py",
           "adapters/vllm/verity_vllm/protocols/pouw/h1/served_files.py",
           "adapters/vllm/verity_vllm/protocols/pouw/h1/receipts.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/nodes.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/public_rows.py",
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/served_program.py",
           "adapters/vllm/verity_vllm/commit", "adapters/vllm/verity_vllm/records",
           "adapters/vllm/verity_vllm/query/__init__.py", "adapters/vllm/verity_vllm/query/manifest",
           "adapters/vllm/verity_vllm/program/__init__.py", "adapters/vllm/verity_vllm/program/frontend/__init__.py",
@@ -157,7 +165,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "security/Definitions/Pouw/Guarantees/PearlCFlockTile.lean", "security/lean-audit.json",
           "security/Proofs/Accounting/Gates/Rows.lean",
           "benchmarks/pouw/exact_kit/exact_kit", "verity/protocols/pouw/receipts", "benchmarks/pouw/filler",
-          "benchmarks/pouw/machine_model", "benchmarks/pouw/README.md",
+          "benchmarks/machine_model", "benchmarks/pouw/README.md",
           "benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
           "benchmarks/hash/dither/j10r_ws.py",
           # test_mma_gate runs torch_gpu's build gates, which read the build through harness/sass_gate.py's mma_gate
@@ -211,7 +219,7 @@ paths = ["benchmarks/pouw", "verity/configuration/config/verity_config", "verity
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_facet_break.py"]
-paths = ["benchmarks/pouw/machine_model/verity_machine_model", "benchmarks/pouw/opcode_probe"]
+paths = ["benchmarks/machine_model/verity_machine_model", "benchmarks/pouw/opcode_probe"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_ffill.py"]

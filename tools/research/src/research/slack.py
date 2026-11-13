@@ -88,6 +88,7 @@ from __future__ import annotations
 import argparse
 import base64
 import fcntl
+import fnmatch
 import html
 import http.client
 import json
@@ -278,6 +279,7 @@ def origin_registry(path: Path, fetch: bool = True) -> dict | None:
 
 
 GROUP_ID_RE = re.compile(r"^S[0-9A-Z]{8,}$")
+STAFF_RE = re.compile(r"[a-z0-9*?][a-z0-9*?._-]{0,40}")                 # a `staffs` name pattern: `review-*`
 
 
 def group_ids(h: dict) -> set[str]:
@@ -384,6 +386,12 @@ def check_registry(reg: dict, path: str) -> dict:
         if not isinstance(ex, list) or len(ex) > EXAMPLES_MAX or not all(isinstance(q, str) and 0 < len(q) <= EXAMPLE_CHARS for q in ex):
             raise SlackError(f"registry {path}: @{name}'s examples: at most {EXAMPLES_MAX} questions, each one line of at most "
                              f"{EXAMPLE_CHARS} characters, in a newcomer's words (what the chat router matches a post against)")
+        staffs, names = h.get("staffs", []), {o.get("handle") for o in reg["handles"]}
+        if not isinstance(staffs, list) or any(not isinstance(p, str) or not STAFF_RE.fullmatch(p)
+                                               or any(fnmatch.fnmatchcase(n, p) for n in names if n) for p in staffs):
+            raise SlackError(f"registry {path}: @{name}'s staffs: the names of the agents its holder alone may register "
+                             "(`research queue delegate`), as lower-case patterns such as `review-*`, each matching no handle, "
+                             "so it can never hand a lane's own name to another")
         lineage = h.get("lineage", [])
         if not isinstance(lineage, list) or not all(isinstance(a, str) and AGENT_ID_RE.fullmatch(a) for a in lineage):
             raise SlackError(f"registry {path}: @{name}'s lineage: the agent ids that held it before (bc-<8 hex> or its full "
@@ -1832,10 +1840,9 @@ def cmd_subscriptions(ns: argparse.Namespace, reg: dict) -> int:
             print(f'subscribe_slack_channel(channelId="{cid or "<#" + key + " id not recorded>"}", topLevelOnly=true, '
                   f"expiresInSeconds={EXPIRES_S})   # #{key}")
     if key := h.get("linear"):
-        print(f'subscribe_linear_issue(options={{"scope": "team", "teamId": "{key}"}}, expiresInSeconds={EXPIRES_S})   '
-              f"# an issue filed into or changing state in @{h['handle']}'s Linear team, a human's included")
-        print(f"# but no comment subscription on {key}: nearly every comment there is @{h['handle']}'s own, and it would wake "
-              "it for each (every handle writes as one app)")
+        print(f"# no Linear subscription on {key}: its events are nearly all @{h['handle']}'s own writes (every handle writes as "
+              "one app), and another handle's ask rings the inbox; a person's new issue rings it through the sweep's audit "
+              "(`unheard`)")
     print(f"# and subscribe_slack_thread(channelId, threadTs, expiresInSeconds={EXPIRES_S}) only for a thread a human may "
           f"answer in (@{h['handle']}'s #ask-daniel card, a thread a named human posted in); renew on every wake")
     print(f"# not for a thread between handles: the inbox already rings @{h['handle']} for each reply addressed to it, and "
@@ -4042,7 +4049,16 @@ def page_request(body: dict, area: str, markdown: str, db: dict) -> dict:
                            "Deadline": {"date": {"start": body["deadline"]}},
                            "Lane checked": {"checkbox": True},
                            "Asked by": {"url": body["agent_url"]}},
-            "markdown": with_reply(markdown), "markdown_version": "v2"}
+            "markdown": with_reply(display_math(markdown)), "markdown_version": "v2"}
+
+
+#: a display equation on one line: Notion shows `$$ x $$` as its literal text, and renders it only with each `$$` on a line of its own
+ONE_LINE_DISPLAY = re.compile(r"(?m)^([ \t]*)\$\$[ \t]*(\S(?:.*\S)?)[ \t]*\$\$[ \t]*$")
+
+
+def display_math(markdown: str) -> str:
+    """Each one-line `$$ x $$` as the three lines `$$`, `x`, `$$`; inline `$x$` and display blocks already split stay."""
+    return ONE_LINE_DISPLAY.sub(lambda m: f"{m[1]}$$\n{m[1]}{m[2]}\n{m[1]}$$", markdown)
 
 
 def with_reply(markdown: str) -> str:

@@ -72,7 +72,6 @@ ALLOWLIST = {
     "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
     "tools/research/src/research/store/moves.json": 320 * 1024,  # the paths of every layout move: it only grows
     "adapters/vllm/tests/lint/allowlists/ruff_vllm.json": 512 * 1024,  # shrink-only: ruff's findings under vLLM's rules
-    "adapters/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
     "verity/definitions/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"
@@ -217,9 +216,8 @@ def test_markdown_size_caps() -> None:
     assert not offenders, "maintained documents are small:\n" + "\n".join(offenders)
 
 
-#: Test files that need torch, a GPU or cargo, and were never part of `check`; and the tests of archived code, which go to
-#: `archive/` with it and which no suite runs.
-UNSUITED_TEST_DIRS = ("verity/definitions/kernels/", "archive/")
+#: Test files that need torch, a GPU or cargo, and were never part of `check`.
+UNSUITED_TEST_DIRS = ("verity/definitions/kernels/",)
 #: what pytest collects from a module: a function or a class of its own named as a test
 _DEFINES_A_TEST = re.compile(r"^(?:async\s+)?def\s+test|^class\s+Test", re.M)
 
@@ -371,7 +369,6 @@ def test_tracked_data_within_budget() -> None:
 #: Tracked files an ignore line covers, each added on purpose (`git add -f`): a fixture whose name a pattern for run
 #: outputs or archives matches.
 IGNORED_TRACKED = frozenset({
-    "adapters/vllm/tests/acquire/fixtures/served_llama.tar.gz",
     "tools/research/tests/fixtures/run_v0.2/out/proof.bin",
     "tools/research/tests/fixtures/run_v0.2/out/verify.jsonl",
 })
