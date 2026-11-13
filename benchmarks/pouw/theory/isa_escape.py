@@ -284,7 +284,7 @@ CANDIDATES = [
         "cls": "NO-MULTIPLY", "D": None, "escape": False,
         "isa": "a register pair a lane: add.u64 assembles to one IADD.64 on sm_120a (either "
                "operand negated, the sass_gate fixtures), IMNMX.U64 is in TS.lean's fan-in table and SEL.64 in "
-               "harness/sass_pins.json",
+               "verity/protocols/accounting/pouw/prover/sass_pins.json",
         "reason": "no multiply, so they sum, compare or select existing words (not fresh); as a fold step, fold_wide3.c "
                   "finds no program whose last instruction writes fx1's two outputs as one IADD.64, IMNMX.64 or SEL.64 "
                   "(fold_opt_fx.py --wide3)",
