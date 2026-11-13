@@ -125580,3 +125580,18 @@ Not established:
 - The walk over the real `Registration.check`: `47b2` runs it for the first time.
 - That the parser's objects list each key once: [guess] true, because they are built by `insert`, but not read.
 - My run walk from `AcceptedTwo` to both checks: not written yet.
+
+## MEMBERS, Fri 13 Nov 06:37Z: one-parse at `a2d48735c2b463c4ed31121ddc74a81f4f595b14`: its five suites passed; its records run regenerated `security`'s lock in the `reads` group `Spot.OneStageZk` alone and is still on `security/Properties`; your 05:50Z and 05:56Z read, I take the site at `OneStageZk` 589 meanwhile
+
+My timer fired at 06:35Z; I hold none now [run: `list_subscriptions` empty]. Same machine, `~/wt/.pen` is this loop's.
+
+- **Suites, `r20261113-053207-fc76` (vy-nebius-cpu-1): done rc 0, 5 of 5 passed** [run, fetched 06:36Z]: `verity/protocols/spot/verifier/lean` 324 passed, 2 skipped; `verity/protocols/spot/verifier` 933 passed; `benchmarks/one_stage` 1046 passed; `verity/protocols/tests` 321 passed; root suite 392 passed. This is also the first pass at a tree that holds #9441's change and `main` past `4a7291116e11` (it holds `main` at `e8915b820130`).
+- **Records, `r20261113-053035-5934` (vy-nebius-cpu-5): still running** [run, 06:36Z]. The spot package and the certifier's: pass, no record changes. `security`: its audit failed on a record difference, as expected, and `--update` regenerated the lock (3615 s); the audit's own line for what moved: definitions of `Spot.OneStageZk` that `Flock.SecurityProofs.RecursiveAuditC3` and `Verity.Sampled.remote_soundness_deployedReady` with its two forms read (changed: `Member.blockHeld`, `Member.statement`, `StepAt`, `StepAt.filesHeld`, `StepAt.ofOwn`, `StepAt.population`, `StepAt.programSha`, `StepAt.want`; new: `StepAt.g`, `StepAt.ksForm`, `scopeAt`; gone: `scopeOf`). No guarantee's statement is named. `security/Properties` began about 06:33Z; expected end about 07:35Z [guess: a failed audit, then `--update`].
+- **STOP RULE so far** [derived from the audit's line; the regenerated file is not fetched yet, since `research fetch --all` is refused while the run's sampled build is live]: the difference is the `reads` group only. I compare the regenerated locks with `main`'s as JSON before I commit them, and stop if anything under `guarantees` differs.
+- **Then:** commit the two regenerated locks to the one-parse branch, rerun the root suite remotely (the locks are its inputs), open the pull request unmarked, write its ready line.
+
+Your 05:50Z: read. I launch no `walk_ab.sh` or `walk_cut.sh`. My next try names a cpu node, since my build tree is not warm on vy-nebius-2 from this machine's side [guess: the last try there was 03:42Z].
+
+Your 05:56Z, the site at `Spot/OneStageZk.lean` 589 in `push`: taken. While the records run goes I write it on a branch of its own from `origin/main` (`cursor/proofs-members-programsha-34fd`), pushing nothing to the one-parse head. Its ready line comes after the one-parse change's, as you ordered.
+
+Pushed: `cursor/proofs-members-oneparse-7b3e` `a2d48735c2b463c4ed31121ddc74a81f4f595b14`; `cursor/proofs-members-files-61d4` `51a2e803cb83e7d539c067dd50d119758e6a3e27` (marked, untouched). Unpushed: nothing.
