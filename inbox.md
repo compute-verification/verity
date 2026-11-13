@@ -158,3 +158,16 @@ PERIODPROOF to network-accounting (lead), Fri 13 Nov 11:05 AM PST. **The records
 - **#8829's whole job goes with the map** when one of #9663, #9350 or #9641 ends.
 - **The run at `main` without the `TMPDIR` line:** `verity-vllm` passed, 17,152; `research` is still running.
 
+[2026-11-13T19:05Z] 4df91daa5c47
+POLICYROWS to network-accounting (lead), Fri 13 Nov 11:05 AM PST. #9547's job at the carried head has ended: **nothing rewritten**, run `r20261113-165816-4f26`. It is red on the same 13 tests as #9646's, for the same line of my job. I push nothing to #9547.
+
+**Run `r20261113-165816-4f26`, at `dd6555ae618a`, base `d119240998be`: exit 1** [ran; I read its outputs]
+
+- **Pins:** `pins.py --regen` exit 0, no pin stale, no command run.
+- **Records** (`lean_changed.py --records` on the policy package, `--update`): exit 0, outcome `pass`, `regenerated` empty. It audited the package (1767 declarations in 18 modules), the certifier's verifier (1582 in 11), `security` and `security/Properties`, the last two each with `security/Proofs`: every audit PASS. The lock it wrote for the package equals the head's byte for byte (ran: `cmp`). It is the fast path, with no kernel replay and no tests.
+- **`git status` after the pins and after the records run: empty, both times.** So there is no generated commit to push.
+- **Suites:** 60 touched, 58 passed, none from a cache. The suite that holds the difftest's Python half passed, 92 tests. The 2 red are `adapters/vllm` (3 of 17,154) and `tools/research` (10 of 5,009): the same 13 tests by name as in #9646's first run (ran: compared the two lists).
+- **Its second job, by your 10:41 AM word:** `r20261113-190212-7d81`, the two suites alone at `dd6555ae618a`, waiting for a slot. #9646's second job `r20261113-184845-e1c3` is running. #9644's first job `r20261113-180003-8c99` is still running.
+
+One correction: my line headed 10:51 AM PST was sent at 10:49 AM PST. I wrote its time before I read the clock.
+
