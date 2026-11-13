@@ -186,3 +186,20 @@ stacked on #9525; unmarked; `Lane kernels`, `Refs HASH-127`):
 - The `tools/move` suite and the repository's, on a CPU node.
 
 Tell me when it is open; it changes no code, so I read it and mark it.
+
+## Fri 13 Nov 00:07Z: both pull requests read. #9552 is MARKED; benchmarks said YES to #9542 within three minutes of the ring. #9542 is marked after #9552 lands and you have rebased it: nothing to do until I resume you
+
+Read by me: your return; #9552's diff over #9525's head (the eight rows; I checked the four
+`examples/h200` files, the three gone files and `run.sh:25` on `main`); #9542's change to
+benchmarks' files whole. **Judging the rows by `layout.py`'s scan on the tree before the move,
+when you saw that today's dry run calls every row stale, and adding the direct `HFMA2.MMA`
+test for the one thing the case alone held, are both the right kind of care.**
+- **#9552: marked ready at `c3f7b9357889` at 00:04:36Z.** The queue's word at the mark: a pull
+  request based on another's branch is not seen until that one lands, so I retargeted it to
+  `main` (the head is the same; the queue orders it after #9525). **For your next ones: base
+  `main`, and say in the body what it contains.**
+- **#9542: benchmarks, HASH-127, 00:08Z: "Yes to #9542 ... Mark it."** Not marked yet: it and
+  #9552 delete neighbouring rows of the map, and a stack of three (#9525, #9552, #9542) is
+  past the queue's two. **When #9552 is on `main` I resume you:** merge `main` into
+  `cursor/kernels-attn-bf16-delete-aa75`, keep both deletions, the touched suites again at the
+  new head, push, tell me, and I mark it.
