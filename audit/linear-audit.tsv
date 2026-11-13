@@ -1,0 +1,52 @@
+PRF-199	comment		#8569, SPOT's deployed remote soundness, merged Thu 12 Nov 10:10 AM PST. Next: the other gates named in the last comment; due Mon 30 Nov stands.
+PRF-306	comment		Not started: no pull request or worker has it. On main, benchmarks/one_stage/replay.py and the path where the verifier draws its own challenges are still there, so the done-condition does not hold.
+PRF-413	comment		No change since Thu 12 Nov: all ten pull requests are on main, and LeaksThrough is still open in the lock. No pull request for it is attached; due Tue 17 Nov stands.
+PRF-419	comment		No change: on main the two-stage form's switch is still off, so every two-stage run is refused. It turns on with PRF-460's proof; due Mon 30 Nov stands.
+PRF-453	comment		Not started: no pull request or worker has it, and RecordCustodyZKJ is still a hypothesis on main (security/Proofs/Flock/Bridge/Canon.lean). The issue puts it after the SPOT post; no date is set.
+PRF-455	comment		Not started: no pull request or worker has it. Part of it is PRF-464's split template form, which has no pull request yet; whether main serves a templated statement at template cost is not known.
+PRF-460	comment		#9208 merged Thu 12 Nov 10:10 AM PST; #8363, #8406 and #8543 are still open. Our worker's registration for token select is written in Lean and waits on a build; due Mon 30 Nov stands.
+PRF-461	comment		Since the settlement of Thu 12 Nov, #9305 is still open. It closes when the post's draft carries the sentences for items 5 and 7; whether it does is not known. Due Fri 13 Nov.
+PRF-462	comment		No change: #8139 and #8197 are still open, and main's lock still dates EgressTied Tue 10 Nov rather than Tue 17 Nov. Item 5 waits on the network certifier's egress tie reaching main, which is not known to have happened.
+PRF-464	comment		No change since Thu 12 Nov: no pull request for the split template form is attached, so the attention and combine blocks still verify from the unrolled file. Due Fri 13 Nov; a later date is not known.
+PRF-466	none		
+PRF-466	comment		#9265 and #9220 merged Thu 12 Nov 10:10 AM PST, so every attached pull request is in. Left: the open premise ReplayCap still names this issue in main's lock.
+PRF-475	comment		No change: all three pull requests are on main. The run at K = 3 and K = 4 on one H200 is the kernels lane's and is not known to have run; due Fri 13 Nov.
+PRF-477	none		
+PRF-492	comment		No change: on main benchmarks/spot_figures/cards.py still does not refuse a GLM-5.3 card without a record stamp, and no pull request for it is attached. Due Fri 13 Nov.
+PRF-505	comment		#9375, the remote merge, merged Thu 12 Nov 7:01 PM PST, so the heads can now cross or close. None is known to have yet; due Tue 17 Nov.
+PRF-508	comment		#9375, the remote merge, merged Thu 12 Nov 7:01 PM PST, so #8197, #8438, #8462 and #7850 can now cross or close. Due Tue 17 Nov.
+PRF-510	comment		Not started: no pull request or worker has it. Its precondition now holds, since #9375, the remote merge, merged Thu 12 Nov 7:01 PM PST. Due Tue 17 Nov.
+PRF-511	comment		Not started: no pull request or worker has it, and TheftTied is not on main. Due Tue 17 Nov.
+PRF-512	comment		Not started: no pull request or worker has it. AdviceCovered is still open in main's lock, filed there against PRF-465 and dated Tue 10 Nov. Due Mon 30 Nov.
+PRF-514	none		
+PRF-514	comment		#9256 merged Thu 12 Nov 10:10 AM PST, so every attached pull request is in. Left: the three upward imports still listed in the layer test on main; due Tue 17 Nov.
+PRF-517	comment		Nothing posted since Wed 11 Nov: five pull requests are on main. Whether the two-stage cost lemmas and route 3's lemmas, dated Fri 13 Nov 10 AM PST, are proved is not known; due Wed 18 Nov.
+PRF-518	place	Full proofs: protocol soundness --milestone F-NEXT · Tue 1 Dec · gaps past PRF-282	Placed beside PRF-331, which also concerns a circuit's registered parameters. #9376 is open.
+PRF-520	state	Done	Answered in our comment of Tue 10 Nov 4:13 PM PST; nothing is left to do.
+PRF-521	state	Done	Answered in soundness's comment of Tue 10 Nov 3:42 PM PST; nothing is left to do.
+PRF-523	place	Full proofs: protocol soundness --milestone F-NEXT · Tue 1 Dec · gaps past PRF-282	Placed with the other binding-term issues, such as PRF-599.
+PRF-524	place	Full proofs: protocol soundness --milestone F-NEXT · Tue 1 Dec · gaps past PRF-282	Placed with the other binding-term issues, such as PRF-599.
+PRF-524	comment		#8915 merged Thu 12 Nov 10:10 AM PST; #9149 is still open. Due Wed 18 Nov stands.
+PRF-528	place	Full proofs: protocol soundness --milestone F-NEXT · Tue 1 Dec · gaps past PRF-282	Placed with PRF-523, the issue it shares its context with.
+PRF-528	none		
+PRF-545	place	Repository cleanup: organization, size and code quality --milestone C5 · Fri 13 Nov · after the demos	Taken up: vllm took our answer, and our change to the Glossary row and the panel labels is not done (the Glossary on main still says exfiltration capacity).
+PRF-546	none		
+PRF-548	place	Remote demo: sampled proofs and PoUW on one served H200 run	Placed in the remote demo project, which its label names; no milestone is chosen.
+PRF-548	comment		The sizing is not posted yet; #9636, #9253 and #9023 are still open. No new date is set, since it depends on when those land, which is not known.
+PRF-549	none		
+PRF-561	place	Full proofs: protocol soundness --milestone F-NEXT · Tue 1 Dec · gaps past PRF-282	Placed with the other binding-term issues, such as PRF-599.
+PRF-561	comment		No change since Thu 12 Nov: #9108 is still open and not marked; the plan dates it Fri 13 Nov 2 PM PST. Due Tue 17 Nov stands.
+PRF-566	comment		#8878, #8893 and #8904 merged Thu 12 Nov 12:28 AM PST; #8950, the fourth, is still open. When it lands is not known; due Fri 13 Nov.
+PRF-567	none		
+PRF-567	state	Done	#9234 merged Thu 12 Nov 10:10 AM PST with the verdict fields, their tests and readers (run r20261112-113613-90a7).
+PRF-569	none		
+PRF-569	state	Done	#9237 merged Fri 13 Nov 1:17 AM PST with items 1 to 5; item 6 was answered here by runs r20261112-065929-3b3c and r20261112-071303-db4c.
+PRF-575	comment		#8569 and #9375, the two #9268 waits on, are both on main now. #9268 is still open; due Mon 16 Nov stands.
+PRF-577	comment		No change since Thu 12 Nov: no pull request for the follow-up is attached, and no plan dates it. Due Wed 18 Nov stands.
+PRF-587	comment		#9209, #9251 and #9264 are still open; #9251's records run (r20261112-211724-00f5) was waiting for a slot on Thu 12 Nov. Due Mon 16 Nov stands.
+PRF-588	comment		No change since Thu 12 Nov: #9282 is still open. When it lands is not known; due Wed 18 Nov.
+PRF-594	comment		No change since Thu 12 Nov: the way is the row, and nothing is built. Next: size what moves at registration; due Fri 20 Nov.
+PRF-595	comment		#9285, part 1, merged Thu 12 Nov 10:10 AM PST. #9339, part 2, is open; the one failing test fails on main too. Due Thu 19 Nov stands.
+PRF-597	comment		#9349 is open and not marked since Thu 12 Nov 8:15 AM PST. When it lands is not known; due Fri 13 Nov.
+PRF-598	state	Done	#9337 merged Thu 12 Nov 11:13 AM PST, and the memory accounting lane agreed in its comment here.
+PRF-599	comment		#9332, #9346 and #9513 are open; #9513 has its ready line and lands after #9346. Due Mon 16 Nov stands.
