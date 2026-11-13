@@ -2,7 +2,7 @@
 
 The advice code (`codec`) charges nothing for what is certified (the network certifier's admission order, the request
 records, the release buckets), replayed (the scheduler replay, `replay`) or derived (`derived`'s rules), and sends only the
-residual, one `Window` (the certifier's `window_charge.Window`) per sampling block, each field's values in the
+residual, one `Window` (the certifier's `window_charge.Advice`) per sampling block, each field's values in the
 order its reader asks for them:
 - `arrived`: the replay's decisions, one per open step: whether the next request had arrived (`codec.Decision`);
 - `hits`: each admitting row's prefix-cache hit in hit units, from the step where the no-eviction bound fails
@@ -70,7 +70,7 @@ from dataclasses import asdict, dataclass
 from itertools import accumulate
 from typing import Any, NamedTuple
 
-from verity.protocols.certifier.prover.window_charge import Window
+from verity.protocols.certifier.prover.window_charge import Advice as Window
 from verity.protocols.certifier.verifier.arith_encode import CW
 from verity_vllm.pipeline.advice_code import arith as C
 

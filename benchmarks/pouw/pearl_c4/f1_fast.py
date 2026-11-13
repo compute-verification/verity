@@ -24,6 +24,7 @@ from collections.abc import Callable, Sequence
 from fractions import Fraction
 
 import numpy as np
+
 from verity.protocols.pouw.prover.schemes import pearl_c4 as F
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
 
@@ -34,9 +35,9 @@ SLACK = F.F1_EPS
 C = F.FFMA_UNITS / F.SPAN_K
 XM = 4                                              # ½ − c·x < 0 from x = 4 on
 _GAIN = np.array([max(0.0, 0.5 - C * x) for x in range(XM + 1)])
-_EDGES = np.array([-m for m in reversed(F._E2M1_MIDPOINTS)] + list(F._E2M1_MIDPOINTS))
+_EDGES = np.array([-m for m in reversed(F.E2M1_MIDPOINTS)] + list(F.E2M1_MIDPOINTS))
 _COMBOS = np.array(list(itertools.product(range(3), repeat=4)))
-_EXCESS = np.array([F._pair_excess(tuple(js)) for js in _COMBOS])
+_EXCESS = np.array([F.pair_excess(tuple(js)) for js in _COMBOS])
 
 
 def _phi(size: int) -> np.ndarray:
@@ -46,7 +47,7 @@ def _phi(size: int) -> np.ndarray:
 
 def row_pmf(e_row: Sequence[int]) -> tuple[int, np.ndarray]:
     """(lo, pmf) of n given the E line, as `pearl_c4.noise_law`: the pmf over the consecutive integers from lo."""
-    e2 = np.abs(np.array([F._F2[c] for c in e_row]))
+    e2 = np.abs(np.array([F.E2M1_SIGNED_HALVES[c] for c in e_row]))
     L = int(12 * e2.sum())
     if L == 0:
         return 0, np.ones(1)
@@ -155,7 +156,8 @@ def _chunk(pairs: np.ndarray) -> np.ndarray:
 
 
 def _changed(p: np.ndarray) -> np.ndarray:
-    d = np.zeros(p.shape[:-1] + (XM + 1,)); d[..., 0] = 1.0
+    d = np.zeros(p.shape[:-1] + (XM + 1,))
+    d[..., 0] = 1.0
     for t in range(p.shape[-1]):
         q = p[..., t:t + 1]
         nd = d * (1 - q)
@@ -171,9 +173,11 @@ def window_charges(p: np.ndarray, kappa: np.ndarray, block: int = 16) -> np.ndar
     s = np.sort(p.reshape(W, -1, block), axis=-1)
     pairs = s.reshape(W, s.shape[1], block // 2, 2)
     n = block // 8
-    d = np.zeros((W, XM + 1)); d[:, 0] = 1.0
+    d = np.zeros((W, XM + 1))
+    d[:, 0] = 1.0
     for b in range(s.shape[1]):
-        blk = np.zeros((W, XM + 1)); blk[:, 0] = 1.0
+        blk = np.zeros((W, XM + 1))
+        blk[:, 0] = 1.0
         for ch in range(n):
             blk = _conv(blk, _chunk(pairs[:, b, ch::n]))
         d = _conv(d, blk)
@@ -193,7 +197,7 @@ def split_units_fast(x: Sequence[int], alpha: int, e_row: Sequence[int], ae: int
     a32 = np.float32(P.f32_of_bits(alpha))
     v = (np.array([P.f32_of_bits(w) for w in x[:k]], dtype=np.float32) * a32).astype(np.float64).reshape(-1, 16)
     lo, pmf = row_pmf(e_row)
-    cdf = _cdf(lo, pmf, F._scale_value(F.NVFP4, ae) / 64)
+    cdf = _cdf(lo, pmf, F.scale_value(F.NVFP4, ae) / 64)
     realised = np.array(F.hw_scales(F.NVFP4, scales[:k // 16]), dtype=np.int64)
     modes = certified_modes(v, realised, cdf)
     uncertified = modes < 0
