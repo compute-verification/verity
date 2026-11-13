@@ -2253,6 +2253,9 @@ def test_under_a_research_run_the_runner_records_spots_metrics_and_prints_the_sa
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "reader"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(s.config))
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20261112-000000-0000")
+    # spot's holes block over the fixture runs, with no git and the fixture lock: test_spot_status.py decides the holes
+    monkeypatch.setattr(spot_status, "commit_known", lambda root, commit: False)
+    monkeypatch.setattr(spot_status, "LOCK", Path(__file__).parent / "fixtures" / "spot_status" / "lock.json")
     monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "none", "gpus": [], "driver": None, "cuda": None,
                                                     "node": "cpu-node-0", "commit": "c" * 40, "why": "no nvidia-smi on PATH"})
     writers, writer = [], kit.writer
