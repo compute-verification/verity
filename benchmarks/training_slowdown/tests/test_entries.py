@@ -247,6 +247,83 @@ def grown(dials: dict) -> dict:
     return model.state_dict()
 
 
+def stacked(dials: dict) -> tuple[dict, dict]:
+    """The start and the model `topcode` starts from, written out: new block i of `grow`, above the start's L blocks,
+    a copy of the start's block i·L/grow rounded down, its two output projections zero."""
+    torch.manual_seed(0)
+    theta = LM.of(SHAPE).state_dict()
+    blocks, n = SHAPE["n_layer"], dials["grow"]
+    start = {k: v.clone() for k, v in theta.items()}
+    for i in range(n):
+        for k, v in theta.items():
+            if k.startswith(f"blocks.{i * blocks // n}."):
+                rest = k.split(".", 2)[2]
+                zero = rest in ("wo.weight", "w_down.weight")
+                start[f"blocks.{blocks + i}.{rest}"] = torch.zeros_like(v) if zero else v.clone()
+    return theta, start
+
+
+class Coded(torch.autograd.Function):
+    """The top's code as the published scheme states it, in the basis of `r`'s rows: forward, each token's
+    coordinates on the midpoints of 2^bits steps of 2/2^bits of their largest magnitude (in bf16); backward, the
+    gradient's on 2^grad_bits − 1 steps from −top to top, top its largest magnitude a token times 1 + 2^-7 in bf16,
+    rounded up or down at random, from torch's generator."""
+
+    @staticmethod
+    def forward(ctx, h, r, bits, grad_bits):
+        ctx.r, ctx.grad_bits = r, grad_bits
+        z = h @ r.T
+        step = (z.abs().amax(-1, keepdim=True) * 2 / 2 ** bits).bfloat16().float()
+        half = 2 ** (bits - 1)
+        return ((torch.floor(z / step).clamp(-half, half - 1) + 0.5) * step) @ r
+
+    @staticmethod
+    def backward(ctx, g):
+        r, levels = ctx.r, 2 ** ctx.grad_bits - 1
+        z = g @ r.T
+        top = (z.abs().amax(-1, keepdim=True) * (1 + 2 ** -7)).bfloat16().float()
+        step = 2 * top / levels
+        return (torch.floor((z + top) / step + torch.rand_like(z)).clamp(0, levels) * step - top) @ r, None, None, None
+
+
+def topcoded(dials: dict) -> dict:
+    """`topcode` written out: the stacked model; the top block's output over its root mean square crossing as the
+    code in the basis of a DCT-II's rows signed at random from 1000 plus the depth, then the final norm and the tied
+    head; its blocks' matrices under the published Muon at `lr` with the decay decoupled, its gains at `norm_lr` under
+    torch's AdamW, undecayed, the embedding frozen; the gradient clipped at 1; the rate a linear ramp over `warmup`
+    steps, falling linearly to 0 over the last `decay` share of them. One forward and backward over the whole batch:
+    the route's micro-batches draw the backward's rounding in the same order, one row after another."""
+    depth = SHAPE["n_layer"] + dials["grow"]
+    start = stacked(dials)[1]
+    torch.manual_seed(0)
+    model = LM.of(SHAPE | {"n_layer": depth})
+    model.load_state_dict(start)
+    model.embed.requires_grad_(False)
+    d = SHAPE["d_model"]
+    i = torch.arange(d, dtype=torch.float32)
+    r = torch.stack([torch.cos(math.pi * (i + 0.5) * k / d) for k in range(d)]) * math.sqrt(2 / d)
+    r[0] /= math.sqrt(2)
+    r = r * (torch.randint(0, 2, (d,), generator=torch.Generator().manual_seed(1000 + depth)) * 2 - 1)
+    matrices = [p for n, p in model.named_parameters() if p.ndim == 2 and n != "embed"]
+    opts = [Rule(matrices, muon_rule, lr=dials["lr"], weight_decay=dials["weight_decay"]),
+            torch.optim.AdamW([p for p in model.parameters() if p.ndim == 1], lr=dials["norm_lr"], betas=(0.9, 0.95),
+                              weight_decay=0.0)]
+    for t, rows in enumerate(batches()):
+        h = model.hidden(rows[:, :-1])
+        h = Coded.apply(h * torch.rsqrt(h.pow(2).mean(-1, keepdim=True) + 1e-12), r, dials["forward_bits"],
+                        dials["backward_bits"])
+        logits = F.linear(F.rms_norm(h, (d,), model.norm), model.embed)
+        F.cross_entropy(logits.flatten(0, 1), rows[:, 1:].flatten()).backward()
+        torch.nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad], 1.0)
+        for o in opts:
+            for g in o.param_groups:
+                ramp = min(1.0, (t + 1) / dials["warmup"]) if dials["warmup"] else 1.0
+                g["lr"] = g.setdefault("rate", g["lr"]) * ramp * min(1.0, (1 - t / STEPS) / dials["decay"])
+            o.step()
+            o.zero_grad()
+    return model.state_dict()
+
+
 def adamw(d: dict):
     return lambda matrices, beside: [torch.optim.AdamW(matrices + beside, lr=d["lr"], betas=(0.9, 0.95),
                                                       weight_decay=d["weight_decay"])]
@@ -334,6 +411,7 @@ REFERENCES = {
     "m-t20-1.1x-shallow-depthshare-8": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-wildcard-topcode": (under(muon), CLOSE_BF16),
     "m-t20-2x-hybrid-grow-depth": (grown, CLOSE_BF16),
+    "m-t20-2x-wildcard-topcode-coded": (topcoded, CLOSE_BF16),
     "s-t20-1.1x-accumulate": (under(adamw), CLOSE),
     "s-t20-1.1x-adafactor": (under(adafactor), CLOSE),
     "s-t20-1.1x-adamw": (under(adamw), CLOSE),
@@ -377,7 +455,7 @@ def test_an_entrys_steps_end_at_its_references_weights(name):
     reference, close = REFERENCES[name]
     got, want = routed(route, dials), reference(dials)
     torch.manual_seed(0)
-    start = deepened(dials)[1] if reference is grown else LM.of(SHAPE).state_dict()
+    start = {grown: deepened, topcoded: stacked}.get(reference, lambda _: (None, LM.of(SHAPE).state_dict()))(dials)[1]
     moved = [k for k in got if not torch.equal(got[k], start[k])]
     assert moved and set(moved) == {k for k in want if not torch.equal(want[k], start[k])}
     for k in moved:
