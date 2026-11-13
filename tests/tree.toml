@@ -23,8 +23,6 @@ means = "the distribution `verity`: what a party, a channel, a device, a protoco
 [[tree]]
 path = "hardware/"
 means = "the registered hardware's data sheets, TOML only, no code"
-owner = "compute-research"
-day = "2026-11-13"
 
 [[tree]]
 path = "adapters/"
@@ -298,25 +296,13 @@ owner = "top"
 day = "2026-11-15"
 
 [[not_yet]]
-path = "verity/hardware/cards/*.toml"
-to = "hardware/"
-owner = "compute-research"
-day = "2026-11-13"
-
-[[not_yet]]
-path = "verity/hardware/nodes/*.toml"
-to = "hardware/"
-owner = "compute-research"
-day = "2026-11-13"
-
-[[not_yet]]
-path = "verity/hardware/cards/__init__.py"
+path = "verity/hardware/cards.py"
 to = "into the hardware file"
 owner = "compute-research"
 day = "2026-11-14 22:00 PST"
 
 [[not_yet]]
-path = "verity/hardware/nodes/__init__.py"
+path = "verity/hardware/nodes.py"
 to = "into the hardware file"
 owner = "compute-research"
 day = "2026-11-14 22:00 PST"
