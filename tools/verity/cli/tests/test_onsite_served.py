@@ -44,7 +44,7 @@ VARIABLES = {
     "CERTIFIER_CMD": '.venv/bin/python benchmarks/network_traces/certifier_piece.py piece "$1" "$2" "$3"',
     "CERTIFIER_FRONT": '.venv/bin/python benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3" '
                        "--gate user@gate-1",
-    "H1_GATE": "gate-command", "H1_KEY_SHA512": KEY, "H1_PEER": "peer-1", "LOAD": "varied",
+    "DEVELOPMENT": "1", "H1_GATE": "gate-command", "H1_KEY_SHA512": KEY, "H1_PEER": "peer-1", "LOAD": "varied",
     "POUS_ARGS": "--rounds 320 --challenger-host auditor-1 --challenger-address 192.0.2.1:7000 --challenger-command "
                  f"start-side --trusted-sha512 {KEY}",
     "POUS_CMD": 'bash benchmarks/pous/served_piece.sh "$@"', "PRECISION": "verity_int8",
@@ -137,6 +137,7 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
         "auditor-1", "192.0.2.1:7001", "start-wipe", "1" * 128)
     assert (hooks["H1_GATE"], hooks["H1_PEER"], hooks["H1_KEY_SHA512"]) == ("gate-command", "peer-1", KEY)
     assert hooks["CERTIFIER_FRONT"].endswith("--gate user@gate-1") and "PP_CHALLENGER" not in hooks
+    assert hooks["DEVELOPMENT"] == "1"
 
 
 def test_a_dry_run_without_bindings_names_every_one_it_lacks(capsys):
@@ -191,7 +192,7 @@ def test_the_live_challenger_is_bound_only_when_given(tmp_path, capsys):
     rc, got, _ = dry(capsys, "--bindings", bindings(tmp_path, tables))
     hooks = {k: v for x in got["plan"] for e in x["entries"] for k, v in e["hooks"].items()}
     assert rc == 0 and (hooks["PP_CHALLENGER"], hooks["PP_PEER"]) == ("gate:user@gate-1", "peer-1")
-    assert "PP_CHALLENGER_KEY" not in hooks
+    assert "PP_CHALLENGER_KEY" not in hooks and "DEVELOPMENT" not in hooks
 
 
 def test_a_binding_the_file_lacks_is_refused(tmp_path, capsys):
