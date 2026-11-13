@@ -145865,3 +145865,88 @@ At `fc5c9053db63c6e5458888de2dd00db95619aee9` unless a line says otherwise; to r
 - **Records at this head**: running (`r20261113-135738-2020`).
 - Not run: `verity check`; the form's run on a kept case of twenty.
 ~~~~
+
+## MESSAGES, Fri 13 Nov 14:13Z: `LastSlotFree` from `LogRecorded`, the verdict's count of rep rounds and ONE named hypothesis COMPILES at `fa617b298f8f` (try `2f44`, rc 0, 8 theorems, no axiom beyond the three); `SessionMsgsAsk` at the form and the run's locator now rests on `SetupsOfTemplates` in place of `LastSlotFree`; to your 13:39Z message `61d8181131ba`, each point answered; no STOP RULE
+
+To the coordinator. Marks: [run] I ran it, [read] I read it in the tree, [derived] I worked it out, [guess].
+
+### 1. The head and its try
+
+- Branch `cursor/proofs-messages-rise-745c`, head `fa617b298f8fa6c2d9aadef5cfc7316bebc600cb`, pushed [run]. Under it: `dc5bd11e174` (the file's first text), `c840fa3bec7` (the merge of SESSIONCOINS's `250278de6bd`, no conflict, no `main` in it), `74bb74b46cb` (compiled, `e4a5`).
+- New file `security/Proofs/Properties/Verity/SampledTwo/LastSlot.lean`. One root added to `security/Proofs/lakefile.toml` and to the `roots` of `security/Proofs/lean-audit.json` (319 roots, no duplicate [run]); nothing else in the lock. One docstring paragraph of `PrefixFixed.lean` mended (it still said `SessionMsgsAsk` was not proved).
+- The try, word for word [run]:
+  `cd /home/ubuntu/wt/rise && /workspace/.venv/bin/research run --on auto --as proofs --cpus 4 --mem-gb 24 --max-min 60 --project verity --source /home/ubuntu/wt/rise --cwd clone -- bash -c 'set +e; git rev-parse HEAD; python3 tools/verity/lean/lean_changed.py --try security/Proofs/Properties/Verity/SampledTwo/LastSlot.lean --siblings; a=$?; echo "TRY LastSlot rc=$a"; [ $a -eq 0 ]'`
+- `r20261113-140333-2f44` on vy-nebius-cpu-1: `fa617b298f8f…` printed, `lean exit 0 in 403 s`, "axiom probe: none of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", siblings: no built module declares a name it does, `TRY LastSlot rc=0` [run]. No warning names the file [run].
+- The three text lints at the head: 41 passed, none names `LastSlot.lean`, `PrefixFixed.lean` or `SessionAsk.lean` [run].
+
+### 2. What compiled
+
+All in `Verity.SampledTwo.Messages` [run for each: it is in the probe's list].
+
+- `slotStream_rep1`: a slot `j ≠ 0` with `¬ j - 1 < R` is round `j - 1 - R` of the table's rep 1 stream.
+- `RecordReps A C Good tab` (a definition): on an accepted, good play, for `t` below the templates' count and `rec` the `t`-th of `sessionRecords C o`: `2 ≤ k₀ t` and `Spot.Challenger.recordRounds rec (repStreamName (tab t) 1) ≤ repsOf (k₀ t)`.
+- `lastSlotFree_of_recorded : LogRecorded A C Good L tab → RecordReps A C Good tab → LastSlotFree A (FormAccepts C) Good L`. The last slot `k₀ t - 1` is round `k₀ t - 2 - repsOf (k₀ t)` of the rep 1 stream, which is at least `repsOf (k₀ t)`; SESSIONCOINS's `LogRecorded` puts it below the rounds the record gives that stream.
+- **(r1)** `verify_reps`: where `Flock.Zk.verify spec (FlockDeploy.tabsOf sts) text proofs = .ok ()`, every statement of `sts` is under a Merkle scheme of the registry (`Named`), `text` parses as `rec`, and `spec.tables = #[T]`, then for `r < 2`: `Spot.Challenger.recordRounds rec (repStreamName T r) = FlockDeploy.repRounds true spec sts[0]!`. The road: `verifyRep_of_accepted`, `Flock.With.zk_verifyRepWith_std` (this is where `Named` is used), `FlockDeploy.zkVerifyRepWith_rounds`, `extraClaims_size`, `decodeWith_parts` (as many link points as the session has), `recordRounds_decode`. The two definitions `Spot.Challenger.recordRounds` and `Verity.Sampled.recordRounds` have one body and are equal by `rfl`.
+- **(r1) at the form** `accepted_reps`: for a session the per-member form accepted (`MemberChecks.SessionAccepted` at `StepAt.ofOwn own Flock.Tags.circuit circuitB pubB bs rd pop`) whose record on the blobs is `recJ`: there are `text dr proofs spec sts rest T` with `setupAt … dr = .ok (spec, tabsOf sts, rest)`, `Flock.Zk.verify spec (tabsOf sts) text proofs = .ok ()`, every statement `Named` (`Flock.With.setupTables_named`), `parse text = .ok recJ`, `spec.tables = #[T]`, and for `r < 2` `recordRounds recJ (repStreamName T r) = repRounds true spec sts[0]!`.
+- `SetupsOfTemplates A C Good tab` (a definition, the named hypothesis; section 3).
+- `recordReps_of_setups : SetupsOfTemplates A C Good tab → RecordReps A C Good tab`.
+- `lastSlotFree_of_setups : LogRecorded A C Good L tab → SetupsOfTemplates A C Good tab → LastSlotFree A (FormAccepts C) Good L`.
+- `lastSlotFree_run_of_setups`: the same at the run's locator, from `HeldSize`, `InteriorLogged C Good` (through SESSIONCOINS's `logRecorded_run`) and `SetupsOfTemplates`.
+- `sessionMsgsAsk_run`: `SessionMsgsAsk A S (FormAccepts C) (fun o => Good o ∧ ReadAt A x (formReading A C S dev) o) (runLocate A Ls tab)` from `PlayAccepts`, `SessionMsgs`, `RoundsHeldAt`, `HeldSize`, `InteriorLogged C Good` and `SetupsOfTemplates A C Good tab`. `LastSlotFree` is no longer a premise there.
+
+### 3. The named hypothesis, word for word
+
+```lean
+def SetupsOfTemplates (A : Live₂) (C : CaseOf) (Good : Verity.Exchange → Prop) (tab : ℕ → String) : Prop :=
+  ∀ o, FormAccepts C o → Good o → ∀ recs rec t, t < A.h.ms.length →
+    SessionCoins.sessionRecords C o = some recs → recs[t]? = some rec →
+      2 ≤ SpotFlock.k₀ A.h t ∧
+        ∃ (spec : Flock.SessionSpec) (sts : Array Flock.Stmt) (text : String) (proofs : Array ByteArray),
+          Flock.Zk.verify spec (FlockDeploy.tabsOf sts) text proofs = .ok () ∧ (∀ st ∈ sts, st.merkle.Named) ∧
+            Flock.JsonParse.parse text = .ok rec ∧ spec.tables = #[tab t] ∧
+            FlockDeploy.repRounds true spec sts[0]! = repsOf (SpotFlock.k₀ A.h t)
+```
+
+In words: on an accepted, good play, template `t`'s session has at least two rounds, and its record is one Flock's masked verdict accepts at a setup of one table alone, named `tab t`, whose rep has `repsOf (k₀ t)` rounds.
+
+What I must say plainly about its shape:
+
+- **It is stated at the record, not at "the form's setup".** It says there is a setup with the template's table name and rep rounds that the verdict accepts the record at. It does not name the form's own setup as an object, because that object is reached from the play only through `membersRun_ran`, `runMembers_sessions` and `SessionAccepted`, which HELDOF is mending under #9441's text. So the hypothesis holds two things together: the tie (your words), and that the verdict accepted the record at that setup. The second is from the form today (`accepted_reps` gives it at each accepted session, and `located_rising`'s proof shows the road from the play to each session [read]); I did not put that road into a definition now, so that nothing new of mine reads the nine theorems being mended.
+- **`2 ≤ k₀ t` is in it.** `k₀ t = 1` exactly when the template's reference statement does not set up [read: `FlockDeploy.V`'s `k`]. `TableName.session_of_held` gives `k₀ t = 2 + 2 · repRounds` on the join's premises [read], so the discharge gets it there.
+- **How the discharge will produce it** [derived, not written]: at the `t`-th session, `SessionAccepted` gives `verify`, `Named`, the parse and one table (`accepted_reps`' proof); the tie `SpotFlock.stmtAt A.h m₂ t = w.encode` makes the form's setup the template's (`setupOf true (stmtAt …)`), and `session_of_held` then gives the table name `refTable A.h t` and `repsOf (k₀ t) = repRounds true spec st`. So it holds at `tab = refTable A.h` [derived].
+
+### 4. To your 13:39Z message, point by point
+
+1. Done: sections 1 to 3.
+2. Understood. I discharge `SetupsOfTemplates` only after HELDOF names its compiled head with #9441 merged, on a branch of my own off that head, not off the join's tip. I write nothing of it before. **Which of the join's fields the tie would let go** [derived from reading `JoinsAt.lean`, `OfRun.lean`, `MemberChecks.lean`, `TableName.lean`; none of it written]:
+   - `SetupsOfTemplates` itself never becomes a field (tie plus `session_of_held`).
+   - What `sessionsRun`'s docstring says no field states ("each rep to have `SessionCoins.repsOf` rounds, one table a session, and `tab t` to be that table's name") is exactly what the tie carries from the template's setup to the form's. So the tie is what `sessionsRun` and `sessionMsgs` lack on the statement side.
+   - It does not by itself let `sessionsRun` go. That field says Flock's masked verifier accepts the provers `P'` round by round at `stmtAt A.h m₂ t`. From the tie one has that the verdict accepted the record at that statement's setup; one still needs that the provers who send the record's messages (`sessionMsgs spec x record proofs`: the link, one message a recorded round, the last) are accepted on coins agreeing with what the check read. I have not found that theorem in the tree [read: every use of `SessionsRun` takes it as a premise]. With it, `sessionsRun` goes, and `sessionMsgs` goes at the reading that reads the record (`SessionMsgs.lean`'s `sessionReading`), since there the messages are the record's by definition.
+   - `scopeHeldAt`: `MemberChecks.memberSession_ok` gives `sessionOk` of `w.encode` from the form, given that `w.encode` has the template's reference statement's shape (`hshape`). With the tie that is `ScopeHeld` at `stmtAt`, but for `hshape`, which is a comparison to the template and not the tie [read].
+   - It does not touch `roundsHeldAt` or `pinHeldAt`: those compare the statement to the template's reference statement, and the tie compares it to the member's statement as the form built it [read].
+3. Understood: not now. I changed nothing of `roundOf` and nothing in `SessionOpened.lean`.
+4. Understood. For the batch after: the head is `fa617b298f8f`, and the named field is `SetupsOfTemplates A C Good tab`, at the join's own `Good`, in place of `LastSlotFree`; `sessionMsgsAsk_run` is the lemma to call. It holds SESSIONCOINS's `250278de6bd` by merge, so it merges cleanly over a join that has `250278de6bdc` [derived; I ran no merge against the join's new tip `757ef18fdc`].
+
+### 5. To SESSIONCOINS
+
+`LogRecorded` and `logRecorded_run` are read by `lastSlotFree_of_setups` and `lastSlotFree_run_of_setups` as they stand at your `250278de6bd`; nothing asked of you.
+
+### STOP RULE
+
+None. No listed guarantee, no named assumption and nothing in a lock beyond one root changed. `SetupsOfTemplates` is a `Prop` taken as a hypothesis of lemmas; it is in no lock and no guarantee reads it.
+
+### NEEDS
+
+None now. I wait on HELDOF's compiled head for the discharge.
+
+### Runs
+
+- `r20261113-135145-fb1d`, rc 1, at `dc5bd11e174`: one error, `Msg` unknown in `sessionMsgsAsk_run` (the file lacked `open Claims`); the other 7 theorems passed [run].
+- `r20261113-140333-2f44`, rc 0, at `fa617b298f8f` [run].
+
+### Not established
+
+- `SetupsOfTemplates`: assumed, as said.
+- That the provers sending a record's messages are accepted round by round (what `sessionsRun` needs beyond the tie): not found, not written.
+- `Fx`, `raw`, `ctx` at the form, `FixedBefore`'s body from `session_prefix_fixed_form`, `Explains`, `ShowsStrings`: not started; the word on the whole is due Sat 02:00Z and is next.
+- No merge of `main`, no rebase, on any branch of mine.
