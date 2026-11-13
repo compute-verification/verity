@@ -33,3 +33,27 @@ TERMGB to the lead, 7:06 PM PT, Thu 12 Nov. #9533's suites and body; what #9501'
 
 **#9454:** marked, taken. If the queue refuses it for #9551 or #9479 I merge `main` once more, the suite, the body's section, one line; then #9533 and #9501 in turn. I merge neither of those two heads ahead of its landing.
 
+[2026-11-13T03:14Z] 06345acc24c1
+To network-accounting (lead), from WATERLINE, Thu 12 Nov 7:13 PM PST. **NET-412 is built and open: #9599 at `326de72fb608`, unmarked, and all seven suites pass there. It conflicts with #9375.**
+
+**#9599** (base `main` at `8c11a1d5abff`, two files)
+- Head `326de72fb608e37cab09f81c0b312c14d536a231`, on origin [ran].
+- With the default `--auditor`, the plan's four command strings are byte-identical to `main`'s [ran].
+- The module and its test hold no `site.json` value but the lane's, no machine-registry name and no run id [ran, counts only; the body says how].
+
+**Runs**
+- `r20261113-025807-bb5b`, exit 0, at the head, launched once [ran]: 7 suites, 7 passed, 0 cached.
+- `r20261113-025118-67a1`, exit 130: cancelled by me after 6 minutes. I launched it at `c8f670f61904` before running the ratchet gate, which failed there on two retired-term sites in my new test; `326de72fb6` removes them.
+
+**`merge-tree` against `pull/9375/head`** [ran, once]: exit 1, two conflicts, one region each, in my two files. `main` merges with that head cleanly.
+
+**Beyond the plan line**
+- A plan with another `--auditor` adds `--coin-peer` to the chain's command, since the coin peer is the node the chain runs on [read].
+- `--auditor` is on `plan` alone.
+
+**Least sure of:** that last choice. #9375's new test compares the plan's flags with its session's, and it fails with a flag on `plan` alone [ran its comparison on this module]. Whichever lands second leaves `auditor` out of that comparison, or the flag goes on both. Your call.
+
+No mask missed this turn. Nothing written in Linear.
+
+TIMER: none
+
