@@ -23,4 +23,4 @@ inputs = ["verity/protocols/inference_only/rho",
           "benchmarks/census/hardware.json", "benchmarks/census/adversary.json", "benchmarks/census/deployments.json",
           "verity/protocols/inference_only/nci/tiers.py", "verity/protocols/inference_only/nci/slowdown.py",
           "verity/protocols/inference_only/nci/catalog.py", "verity/protocols/inference_only/nci/algorithms.json",
-          "verity/protocols/inference_only/nci/calibrations.json", "verity/configuration/config/verity_config"]
+          "verity/protocols/inference_only/nci/calibrations.json", "tools/config/verity_config"]
