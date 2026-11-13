@@ -43,6 +43,8 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 "verity/protocols/pouw/verifier/lean/check/README.md: verity/difftest" = "the shared harness's `ProtocolPort`, in `verity_difftest`"
 "verity/protocols/pouw/verifier/lean/window/README.md: verity/difftest" = "the shared harness's Python, `verity_difftest`"
 "verity/protocols/spot/verifier/lean/pyproject.toml: verity/difftest" = "a suite input: the Lake package stays covered by its `verity/circuits` entry"
+"tests/tree.toml: verity/difftest" = "the layout's not-yet entry for the directory this map splits, which its `to` describes; it follows the larger part"
+"verity/periods/tests/test_periods_difftest.py: verity/difftest" = "the harness this suite drives its Lean through, `verity_difftest`"
 
 [retired]
 # the directory this map empties: `layout.py` refuses a tracked file under one that has no row, and its row is a
