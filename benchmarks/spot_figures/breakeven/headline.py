@@ -42,14 +42,17 @@ names the line's block by its census type, a fused read's by `FUSED`): a block w
 or its Definition's at the same static K (`family`) takes that row's seconds a block: its price without the verifier
 (the walk and the row's scale in it) times one factor, so that a block and its share of a statement's fixed seconds
 come to the row's seconds and keep the planner's proportion, and the measured verifier's seconds a statement on top,
-not its seconds a block; every other block keeps its price (the planner's). A table's row for no block of the
-line is refused by name, but for a block of the `workload` card that the row's cut leaves out: that row measured
-another cut, and the row counts it unread by family (`prices.unread`), as a steady-state row of one is listed unread.
-Each row then says which table priced it (`prices`), and its split gives the share of the plan's proving each source
-prices (`split.sources`: own row, family row, the planner's price, the copy stratum, and apart from them the Lean
-verifier's seconds, which no row times) and how each share is priced (`split.priced`: a table row's blocks by its
-source, `steady` or `family`, the planner's by its own word, `computed` where it scales, and the Lean verifier's
-`modeled` but for the type whose verifier is timed).
+not its seconds a block; every other block keeps its price (the planner's). A row may name a block's Boolean
+version, the same parameters with each function-valued static its Boolean version, as the registry pairs them for
+`verity bench prove` (`verity_bench.boolean`): where the table holds no row of the block's own, that row prices it
+as its own. A table's row for no block of the line, nor a Boolean version of one, is refused by name, but for a block
+of the `workload` card that the row's cut leaves out: that row measured another cut, and the row counts it unread by
+family (`prices.unread`), as a steady-state row of one is listed unread. Each row then says which table priced it
+(`prices`), and its split gives the share of the plan's proving each source prices (`split.sources`: own row,
+family row, either as "its Boolean version" where its row is that, the planner's price, the copy stratum, and apart
+from them the Lean verifier's seconds, which no row times) and how each share is priced (`split.priced`: a table
+row's blocks by its source, `steady` or `family`, a Boolean version's row too, the planner's by its own word,
+`computed` where it scales, and the Lean verifier's `modeled` but for the type whose verifier is timed).
 
 `plan` prints its row's GB at the row's own pinned budget, where its total is what the row says, at lambda 1;
 `rows` and `read` print lambda times the GB where a scope's total is 10%, read between the two pinned budgets that
@@ -180,12 +183,15 @@ FUSED = {"fr-w13": ("EmbeddingRead_v1{V=256,H=3072}", "MoeExpertFp8BlockGemm_v4"
          "fr-w2": ("EmbeddingRead_v1{V=256,H=4096}", "MoeExpertFp8BlockGemmW_v4", "MoeExpertFp8ReadGemmW_v1")}
 LEFT_OUT = ("PageCopy[",)
 CALL_KEYS = ("block", "kind", "per_token", "seconds_per_block", "fixed_seconds", "statement_blocks", "ands", "k_log",
-             "priced", "macs", "basis", "table", "verifier_priced", "verifier_fixed", "verifier_block")
+             "priced", "macs", "basis", "table", "verifier_priced", "verifier_fixed", "verifier_block", "boolean")
 #: what priced the carried pages' copy blocks, and a block whose pricing call names no basis
 COPY_BASIS, NO_BASIS = "headline.copy_stratum", "none stated"
 #: the sources of `verity bench prove`'s table that price a block (a type's own steady-state row, its Definition's at
 #: the same static K), as a row's split names them, and what prices every other block
 TABLE_SOURCES = {"steady": "own row", "family": "family row"}
+#: how a row's split names a source whose row is the census block's Boolean version's, after the source, as `verity
+#: bench prove` names a row staged in that form
+BOOLEAN = "its Boolean version"
 PLANNER = "planner's price"
 #: the source of a block's Lean verifier seconds, which no table row times and a split counts apart from the row's
 VERIFIER_SOURCE = "Lean verifier"
@@ -314,12 +320,48 @@ def steady(rows_path, map_path=None, P: SimpleNamespace | None = None) -> dict:
     return {"rows": by, "unread": unread}
 
 
+@lru_cache(maxsize=None)
+def census_blocks() -> frozenset:
+    """Every block a row's line may hold: the `workload` card's, and each of its `partition` cards' cut's."""
+    _flat()
+    import cards
+    cuts = [c["value"]["name"] for c in cards.load_all("partition", MODEL)]
+    return frozenset(x["block"] for cut in ["", *cuts] for x in workload(cut)["strata"])
+
+
+def boolean_rows(names, blocks) -> dict:
+    """Each of `names` that is no block of `blocks` but the Boolean version of one, by that block: the pairing `verity
+    bench prove` names a row's form by (`verity_bench.boolean.boolean_version`, from the Definitions' own word links),
+    so the two hold the same parameters, each function-valued static its Boolean version. A name that pairs with
+    none is not in it, and one that pairs with two blocks is refused."""
+    names = sorted(set(names) - set(blocks))
+    if not names:
+        return {}
+    from verity_bench.boolean import boolean_version
+    from verity_bench.prove import definition_id
+    out = {}
+    for name in names:
+        spelled = definition_id(name)
+        if len(of := [b for b in sorted(blocks) if boolean_version(b, spelled)]) > 1:
+            raise ValueError(f"`{name}` is the Boolean version of {len(of)} blocks: {of}")
+        out |= {name: of[0]} if of else {}
+    return out
+
+
 def prices(doc: dict) -> dict:
     """What a row's spec takes as `prices`: a `verity bench prove --json` table's rows by the line's block each prices
     (a census type's own name, a fused read's the line's fused block, `fused_block`), with when the table was read
-    (`read`, where it says) and its host's cores. A table already keyed by the line's blocks (`cells`) is taken as
-    it is."""
-    cells = doc["cells"] if "cells" in doc else {fused_block(r["block"]) or r["block"]: r for r in doc["rows"]}
+    (`read`, where it says) and its host's cores. A row for no block of the census (`census_blocks`) but for its
+    Boolean version (`boolean_rows`) prices that block, where the table holds no row of the block's own, and names the
+    Boolean version it measured (`boolean`). A table already keyed by the line's blocks (`cells`) is taken as it is."""
+    if "cells" in doc:
+        cells = doc["cells"]
+    else:
+        cells = {fused_block(r["block"]) or r["block"]: r for r in doc["rows"]}
+        if names := {r["block"] for r in doc["rows"]} & set(cells):
+            for name, block in boolean_rows(names, census_blocks()).items():
+                if block not in cells:
+                    cells[block] = cells.pop(name) | {"boolean": name}
     above = (doc.get("totals") or {}).get("above_cores") or {}
     return {"cells": cells, "read": doc.get("read"), "cores": doc.get("cores"),
             "above_cores": {k: above[k] for k in ("block_types", "time_share", "timed_at") if k in above}}
@@ -373,15 +415,19 @@ def verifier(x: dict, bare: dict, core: float) -> dict:
 def tabled(x: dict, bare: dict, row: dict | None) -> dict:
     """`x` at its table row's seconds a block where that row is a steady-state row, its type's own or its family's:
     `bare`, `x` priced without the verifier, times the one factor that makes a block and its share of a statement's
-    fixed seconds the row's seconds, with the verifier's seconds a statement on top; else `x` as it is."""
+    fixed seconds the row's seconds, with the verifier's seconds a statement on top; else `x` as it is. A row of the
+    block's Boolean version (`prices`) names it (`boolean`)."""
     own = bare["fixed_seconds"] / max(1, x["statement_blocks"]) + bare["seconds_per_block"]
     if not row or row["source"] not in TABLE_SOURCES or own <= 0:
         return x
     f = row["seconds"] / own
     fixed = x["fixed_seconds"] - bare["fixed_seconds"] + f * bare["fixed_seconds"]
-    return x | {"fixed_seconds": fixed, "seconds_per_block": f * bare["seconds_per_block"], "table": row["source"],
-                "basis": f"{row['source']}: {row['record']}", "verifier_block": 0.0,
-                "verifier_fixed": (x["fixed_seconds"] - bare["fixed_seconds"]) / fixed if fixed else 0.0}
+    out = x | {"fixed_seconds": fixed, "seconds_per_block": f * bare["seconds_per_block"], "table": row["source"],
+               "basis": f"{row['source']}: {row['record']}", "verifier_block": 0.0,
+               "verifier_fixed": (x["fixed_seconds"] - bare["fixed_seconds"]) / fixed if fixed else 0.0}
+    if form := row.get("boolean"):
+        out |= {"boolean": form, "basis": f"{out['basis']} ({BOOLEAN}, `{form}`)"}
+    return out
 
 
 def pricing(planner_price, scale: dict, core: float, calls: list, rows: dict | None = None,
@@ -661,16 +707,18 @@ def plan_split(p: dict, calls: list, strata: list) -> dict:
     """Each block family's share of a sampled replay block's proving in the row's plan `p`, with how its blocks were
     priced (`priced`) and what priced them (`basis`: `steady`, a steady-state row, else the planner's table): by the
     row's own pricing calls, else by its model's strata; and by source (`sources`: a steady-state row, the type's own
-    or its family's in `verity bench prove`'s table, the planner's price, the Lean verifier's, or the copy stratum's
-    model). A block a table row prices is priced as the row's source names it (`steady`, `family`), every other block
-    as the planner priced it (`computed` where it scaled the price); a block's Lean verifier seconds, which no row
-    times, are its share apart, priced as `verifier` priced them (`modeled` but for a type whose verifier was timed).
-    Each family gives its share by way (`ways`)."""
+    or its family's in `verity bench prove`'s table, either followed by `BOOLEAN` where the row is its Boolean
+    version's, the planner's price, the Lean verifier's, or the copy stratum's model). A block a table row prices is
+    priced as the row's source names it (`steady`, `family`), its Boolean version's row too, every other block as the
+    planner priced it (`computed` where it scaled the price); a block's Lean verifier seconds, which no row times, are
+    its share apart, priced as `verifier` priced them (`modeled` but for a type whose verifier was timed). Each family
+    gives its share by way (`ways`)."""
     priced = {x["block"]: str(x.get("priced")) for _v, xs in calls for x in xs}
     priced |= {x["block"]: str(x["priced"]) for x in strata if x.get("priced") and x["block"] not in priced}
     basis = {x["block"]: x.get("basis") for _v, xs in calls for x in xs}
     basis |= {x["block"]: x["basis"] for x in strata if x.get("basis") and x["block"] not in basis}
     table = {x["block"]: x.get("table") for _v, xs in calls for x in xs}
+    boolean = {x["block"] for _v, xs in calls for x in xs if x.get("boolean")}
     checked = {x["block"]: x for _v, xs in calls for x in xs if x.get("verifier_priced")}
     fam: dict = {}
     ways: dict = {}
@@ -688,7 +736,8 @@ def plan_split(p: dict, calls: list, strata: list) -> dict:
         f["cells"] += 1
         b = "steady" if way == "steady" else t or (basis.get(c["block"]) or NO_BASIS).split(", cut into")[0]
         bases[b] = bases.get(b, 0.0) + c["share"]
-        s = (TABLE_SOURCES[own] if own in TABLE_SOURCES else COPY_BASIS if b == COPY_BASIS else PLANNER)
+        s = (TABLE_SOURCES[own] + (f", {BOOLEAN}" if c["block"] in boolean else "") if own in TABLE_SOURCES else
+             COPY_BASIS if b == COPY_BASIS else PLANNER)
         v = checked.get(c["block"])
         lean = 0.0
         if v and c["prove_s"]:
