@@ -137509,3 +137509,35 @@ Yes, that is what `main` does: the cover is the largest single series' cover whi
 ### To post
 
 A reply on NET-427, if you take these: "2: no theorem reads the cap. It reads a link's capacity as a count of signals, the reading `Accounting.Alphabet` already takes, so it holds for `cells` and `schedules` and is not shown for `jitter`; the options differ only in the free column of a row whose verified column is 0. 3: sized at about 30 lines in the interface's `Account.lean`, no lock record, a pull request of its own after Site v2; the key half waits on the check publishing its key. 1: Site v2 already adds the sessions' covers once each session's start is placed in the period."
+
+## HONEST2, Fri 13 Nov 11:22Z: YES, the join takes my head: `191488fbab` merged with the join's `701559cfdc` COMPILES for my four files (`d6c5`, rc 0, 57 theorems, probes clean); the merge has no conflict; ASSEMBLY can merge `191488fbab` as it is. Nothing running; nothing changed on my branch since 11:01Z
+
+**In plain words.** I checked ahead of ASSEMBLY that the smaller instance still compiles once it sits on the join as it stands now, with ADDRROW2's newest row files under it. It does. So the merge is safe to make, and what it brings is: the design premises at the instance ask only that the reference statement's reads are well formed, in three files.
+
+Clock: `date -u` read 11:21Z. Mailbox: read at 11:15Z, nothing since your 09:52Z.
+
+**1. What compiled** [run: `r20261113-105930-d6c5`, `--on auto`, vy-nebius-cpu-1, 10:59Z to 11:20Z, `done rc=0 class=SUCCESS`; lines quoted from its `stdout.log`], at the scratch merge `ae722d623974142eb902ae5f4cfef9906387b3e5`, which is `191488fbab` merged with the join's `701559cfdc` (it holds ADDRROW2's `784042d103`):
+- `SampleBelow.lean`: "lean exit 0 in 210 s"; "none of its 3 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- `Honest/Instance.lean`: "lean exit 0 in 556 s"; 29 theorems, the same probe line.
+- `Honest/Wiring.lean`: "lean exit 0 in 91 s"; 16 theorems, the same.
+- `Honest/Sits.lean`: "lean exit 0 in 158 s"; 9 theorems, the same.
+- No warning or error line of the log names a file of mine [run: `grep`, 0 lines].
+- The scratch merge is on no branch and is not pushed; its worktree is removed. ASSEMBLY's own merge of `191488fbab` makes the same tree if the join has not moved past `701559cfdc`.
+
+**2. Where the instance stands** [run: `f386` at `191488fbab`, `d6c5` on the join; statements in my 10:40Z item 2].
+- `premises_held (hWf : Claims.Json.Wf R.reads) : Premises (held R B desc q c₀)`.
+- `honest_of_accepts (hWf : Claims.Json.Wf R.reads) (hA : Accepts (held R B desc q c₀)) : HonestExists`.
+- `two_of_ref`: the design evaluates at the instance from five decided facts of `R`'s circuit.
+- Not there: an accepted run, and any concrete `Ref` or `Bnd`. Those are what is left of the non-vacuity of the two-stage guarantees at this instance.
+
+**STOP RULE.** Nothing touched since `191488fbab`.
+
+**NEEDS.** ASSEMBLY: merge `191488fbab`. From you: what I take next. Two things I can start, pick one or name another:
+- a concrete `Bnd` (a boundary registration whose layout is one proof block and whose first stage is `subset:1`), so that the instance stops being "for any `Bnd`";
+- a records run of the join with my head in it, if ASSEMBLY wants it run by someone else.
+
+**Not established.** An accepted run; a concrete `Ref` or `Bnd`; a whole build or a records run at my head; a sibling name check past 414 modules.
+
+**Pushed.** `cursor/proofs-honest2-7c4e` at `191488fbab70a42df4baad9db9387acb1de06c9c`, compiled. Nothing unpushed. No run out.
+
+**To post.** Nothing.
