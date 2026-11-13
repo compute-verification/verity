@@ -119106,3 +119106,25 @@ Events that are yours, not mine, are reaching this agent. I did nothing with the
 This session stays stopped, as my 03:59Z entry says. Heads unchanged: `cursor/proofs-twoleg-c5e5` at `d06ec7c3306d`, #9574 at `457a4837078c`; nothing of mine is unpushed.
 
 STOP RULE: not reached. NEEDS: none beyond my 03:59Z entry's (which TWOLEG session writes). Runs: none launched or read. To post: nothing. Not established: whether these events also reached you; what starts the second session.
+
+## ACCOUNTS, Fri 13 Nov 04:02Z: #9593 at `eeef8331792a` (it holds `main` with #9375): 16 of 16 suites passed and its eleven Lean files build, each exit 0. The records run waited 17 min for a Lean slot on vy-nebius-2 and has built since 03:43Z; it should end near 04:51Z, and the ready line follows it
+
+**To act on:** nothing, unless you want the ready line before the records run ends. What it would add to the two verdicts below is the build of everything in `security` that imports the Site's files, and the regenerated locks.
+
+| Run | What | Verdict | Tag |
+|---|---|---|---|
+| `r20261113-032506-f3bd` | the 16 suites, `--quick`, vy-nebius-2 | exit 0 at 03:56Z; 16 passed, 0 from the cache, 0 failed | [run] |
+| `r20261113-032911-eac0` | `lean_changed.py --build` of the eleven Lean files the branch changes, vy-nebius-cpu-12 | exit 0 at 04:00Z; six packages, each exit 0; its last line lists none failed and none skipped | [run] |
+| `r20261113-032506-d8fc` | records: `lean_changed.py --records security --update`, vy-nebius-2, 115 GB | in its slot since 03:43:29Z; no audit line yet at 04:01Z | [run] |
+
+**The suites, by count** [run, the run's own lines]: `verity/hardware/site` 183; `verity/hardware` 191; `verity/protocols/certifier/verifier` 1,479 (1 skipped); `verity/protocols/certifier/verifier/network` 90; `verity-core-sampled-proofs` 328 (2 skipped), which holds the Site's difftest against the Lean; `verity-core-composition` 22, which holds the registration's; `verity/protocols/spot/verifier` 910; `benchmarks/certifier_term` 14; `benchmarks/compute` 78; `verity-datacenter` 49; `demos/lifecycle` 66; `verity-cli` 109; `verity-graph` 220; `verity-difftest` 151; `verity/protocols/tests` 321; `repository` 388.
+
+**The build, by package** [run]: the interface (`CoreProtocol` and four modules), the spot verifier's Lean (`Spot.SiteDifftest`), the certifier verifier's Lean (`NetworkCheck.Registered`), `security/Proofs` (`Proofs.Core.Site`, `Proofs.Properties.Core.Site`), `security` (`Definitions.Core.Site`), `security/Properties` (`Properties.Core.Site`).
+
+- One linter warning, in my file: `Proofs/Properties/Core/Site.lean` line 319, an `exact Iff.rfl` after a `simp only` that already closes the goal. [run] It is older than the merge: the one-file try before it (`r20261113-012045-e9fe`) printed the same line. It fails nothing. I leave it so the head stays the one the runs checked.
+
+**Waits** [run]: the records run 17 min for its slot (in line 03:26:36Z, slot 03:43:29Z); the suites 16 min; the build 29 min on vy-nebius-cpu-12 (in line 03:29:36Z, slot 03:58:26Z).
+
+**Expected** [derived]: the last records run took 67.5 min in its slot (01:29:22Z to 02:36:53Z), so this one ends near 04:51Z. Then: commit a regenerated lock if it differs from the tree's, bring #9593's "Checked" section up to date, and the ready line.
+
+**Not established:** that everything importing the Site's files builds on `main` with #9375 (only the records run says so); the regenerated locks; the whole `check` and the kernel replay. Mailbox read at 04:01Z: 355 lines, nothing new.
