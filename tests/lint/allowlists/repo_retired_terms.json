@@ -5330,7 +5330,7 @@
     {"file": "verity/protocols/pouw/prover/circuit/plan.py", "count": 59},
     {"file": "verity/protocols/pouw/prover/circuit/words.py", "count": 4},
     {"file": "verity/protocols/pouw/prover/schemes/pearl_c.py", "count": 42},
-    {"file": "verity/protocols/pouw/prover/schemes/pearl_c4.py", "count": 48},
+    {"file": "verity/protocols/pouw/prover/schemes/pearl_c4.py", "count": 43},
     {"file": "verity/protocols/pouw/prover/schemes/pearl_c_debit.py", "count": 35},
     {"file": "verity/protocols/pouw/prover/schemes/pearl_c_device.py", "count": 10},
     {"file": "verity/commitments/randomness/tests/test_randomness.py", "count": 8},
