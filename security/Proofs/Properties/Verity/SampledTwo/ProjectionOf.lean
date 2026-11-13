@@ -147,9 +147,9 @@ theorem cutBound_and {V : Vocab d α} {k : Verity.Registration.Composite} {θ : 
   exact ⟨ho.1, fun hg => ho.2 ⟨hg, hR o hr⟩⟩
 
 /-- **The projection's bound from the coins of accepted plays**: the wiring, the coin map's law at an agreement `Ag`,
-the messages fixed where the coins agree, the cut, the accept and the statement read give the projection's bound at
-`hide + miss + terms`, where on every frame play the check accepts, whose log it read is the device's and where `Ag`
-holds, each coin it reads at a read round agrees with the run's coin there. -/
+the messages fixed where the coins agree, the cut, the accept on the plays `Acc` and `Good` hold of, and the statement
+read give the projection's bound at `hide + miss + terms`, where on every frame play the check accepts, whose log it
+read is the device's and where `Ag` holds, each coin it reads at a read round agrees with the run's coin there. -/
 theorem projection_core (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ)
     (Rd : Reading A) (Acc Good : Verity.Exchange → Prop) (Ag : Verity.Exchange → Coins A x → Prop)
@@ -160,7 +160,7 @@ theorem projection_core (V : Vocab d α) (k : Verity.Registration.Composite) (A 
       Ag (Fr.out ω r) r → ∀ i : Fin (A.L.V.k x), Rd.reads i.val →
         ∀ c', Rd.coin (Fr.out ω r) i.val = some c' → Rd.agree (Fr.out ω r) i.val c' (r i))
     (hMsg : MessagesFixedAgreed V A x θ F c σ Fr Rd Acc Good miss) (hCut : CutBound V k θ F c σ Good terms)
-    (hRun : AcceptsRun A x Rd Acc) (hAt : StmtAt V A x θ F c σ Fr Rd Acc) :
+    (hRun : AcceptsRun A x Rd (fun o => Acc o ∧ Good o)) (hAt : StmtAt V A x θ F c σ Fr Rd Acc) :
     ProjectionBound V k A x θ F c σ Fr (hide + miss + terms) := by
   have hsplit : Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ ≤
       Verity.Game.prob (fun o => Acc o ∧ Good o) (V.game θ F c) σ +
@@ -193,7 +193,7 @@ theorem projection_core (V : Vocab d α) (k : Verity.Registration.Composite) (A 
     by_cases hm : ∃ i < A.L.V.k x, Rd.msg (Fr.out s.1 s.2) i ≠
         msgAt (Claims.run FlockDeploy.sha512 Fr.P A.L.V x s.1 s.2) i
     · exact Or.inr ⟨ha, hg, hCoins s.1 s.2 ha hg hag, hm⟩
-    exact Or.inl (hRun _ ha (hAt s.1 s.2 ha) _ Fr.P s.1 s.2 (hCoins s.1 s.2 ha hg hag)
+    exact Or.inl (hRun _ ⟨ha, hg⟩ (hAt s.1 s.2 ha) _ Fr.P s.1 s.2 (hCoins s.1 s.2 ha hg hag)
       (fun i hi => Classical.not_not.1 fun hne => hm ⟨i, hi, hne⟩))
   calc Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ
       ≤ Verity.Game.prob (fun o => Acc o ∧ Good o) (V.game θ F c) σ +
@@ -220,7 +220,7 @@ theorem projection_agreed (V : Vocab d α) (k : Verity.Registration.Composite) (
     (hFirst : CoinsAgree A Rd Acc Good .first) (hSecond : CoinsAgree A Rd Acc Good .second)
     (hSessions : CoinsAgree A Rd Acc Good .sessions) (hStmt : StmtReadsNone A Rd)
     (hMsg : MessagesFixedAgreed V A x θ F c σ Fr Rd Acc Good miss) (hCut : CutBound V k θ F c σ Good terms)
-    (hRun : AcceptsRun A x Rd Acc) (hAt : StmtAt V A x θ F c σ Fr Rd Acc) :
+    (hRun : AcceptsRun A x Rd (fun o => Acc o ∧ Good o)) (hAt : StmtAt V A x θ F c σ Fr Rd Acc) :
     ProjectionBound V k A x θ F c σ Fr (hide + miss + terms) := by
   refine projection_core V k A x θ F c σ Fr Rd Acc Good Ag hide miss terms hAcc hLaw
     (fun ω r ha hg hag i hi c' hc => ?_) hMsg hCut hRun hAt
@@ -239,6 +239,6 @@ theorem projection_of (V : Vocab d α) (k : Verity.Registration.Composite) (A : 
     ProjectionOf V k A x θ F c σ := by
   intro Fr Rd Acc Good Ag hide miss terms hAcc hLaw hDev hFirst hSecond hSessions hStmt hMsg hCut hRun hAt
   exact projection_agreed V k A x θ F c σ Fr Rd Acc Good Ag hide miss terms hAcc hLaw hDev hFirst hSecond hSessions
-    hStmt (messagesFixedAgreed_of_fixed hMsg) hCut hRun hAt
+    hStmt (messagesFixedAgreed_of_fixed hMsg) hCut (fun o h => hRun o h.1) hAt
 
 end Verity.SampledTwo
