@@ -54,7 +54,7 @@ inputs = [
     "verity/protocols/certifier/verifier/certificate.py",
     "verity/protocols/certifier/verifier/grid.py",
     "verity/protocols/certifier/verifier/schedule.py",
-    # the chain checks import sampled proofs' produced and registered row helpers
+    # the chain checks import SPOT's produced and registered row helpers
     "verity/protocols/spot/__init__.py",
     "verity/protocols/spot/verifier/__init__.py",
     "verity/protocols/spot/verifier/one_stage/__init__.py",
