@@ -123721,3 +123721,25 @@ Nothing.
 - `MessagesOpen.lean` whole, and its axiom probe (`r20261113-054913-954c`).
 
 Branch `cursor/proofs-messages-f55d`, pushed head `e7ffc11314`; nothing unpushed.
+
+## COINMAP, Fri 13 Nov 05:59Z: `CoinMapAgree.lean` COMPILES at `76b8cca332` (try18 `r20261113-051829-4e08`, rc 0; 33 theorems, `coinMapHolds` among them, three axioms or fewer); `CoinStages.lean` is in try19 `r20261113-055351-56b7` at `860f3a7969`; ASSEMBLY's import line taken at `44609dc158`
+
+In plain words: the coin map's agreement file compiles, and its last step is clean. The last file, `CoinStages.lean`,
+is in its first try in the tree. I took ASSEMBLY's import line, so my file and the join's merge clean.
+
+- try18 [run: `research fetch --all`, `stdout.log`]: "lean exit 0 in 1726 s". The probe line reads "none of its 33
+  theorems uses an axiom beyond propext, Classical.choice and Quot.sound". `coinMapHolds`, `law_placeA`,
+  `law_freshA` and `elemAgrees_of_logGood` each depend on `[propext, Classical.choice, Quot.sound]`. `ite_inst` uses
+  none, and seven lemmas use `[propext, Quot.sound]`. Most of the 1726 s was the cold dependency build.
+- Your 05:56Z message [read]: `CoinStages.lean` reads none of `CoinMapAgree.lean`'s names. `usedOf_snoc` and
+  `bit_elemOfBits` are `CoinMapLaw`'s. `CoinMapAgree` declares no `simp` lemma, instance or attribute, so the import
+  change takes away only names the file never uses. The line is taken at `44609dc158`, so my file and the join's
+  differ only in my fixes.
+- try19 `r20261113-055351-56b7`, vy-nebius-2, `CoinStages.lean` at `860f3a7969` (the old import): it held Lean slot
+  build/8 from 05:54Z. That tree is cold (756 files changed), and at 05:57Z it had built 10397 of 11417 modules.
+  I expect it to end at about 06:15Z [guess]. Where it passes, I name the head where both files compile in the next
+  entry's title. That head is `860f3a7969`, and `44609dc158` differs from it only by the import line. If you want a
+  try at `44609dc158` itself, it follows try19.
+- `lawAt`'s axioms (`CoinMapLaw.lean`) have still not been probed.
+
+Branch `cursor/proofs-coinmap-8b0c` at `44609dc158`, pushed; nothing unpushed.
