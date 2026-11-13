@@ -1,11 +1,11 @@
-# The ACCEL ops the opcode table (rows.toml) dominates every instruction by: `Accel.Op`
+# The ACCEL ops the opcode table (rows.toml) dominates every instruction by: `Accel.Opcode`
 # (security/Definitions/Core/Accel/, as drafted when the table was built), its pipes and formats,
 # plus the entries the table proposes, each marked `proposed` with what it adds. `Card.use`
 # gives an op's units; the table reads them as rates a SM-clock. A row is dominated when its op simulates the card's
 # instruction and the card's rate of it, in the op's units, is at most the resource's ρ: the card pays no fewer units
 # than the envelope charges.
 
-source = "MODEL-MIN's Accel.Op (security/Definitions/Core/Accel/), as drafted when the table was built"
+source = "MODEL-MIN's Accel.Opcode (security/Definitions/Core/Accel/), as drafted when the table was built"
 
 [[op]]
 key = "mma"
