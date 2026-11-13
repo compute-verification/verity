@@ -19,8 +19,8 @@ draws. This module states the messages' bound in the form those rounds need.
   a round's miss is at most the square root of a tape and two coins of one history giving `opn` two values, wherever
   an accepted play gives `opn` the message it reads, at its own history (`hopen`). No digest enters.
 * **What the play fixes** (`openingBy`, `frameBy`, `Opens`, `FixedBefore`, `Breaks`, `finderBy`, `missBoundBy`,
-  `reachedBy`, `messagesFixedBy`, `callsLeBy`): the play fixes a value `Fx o i` for round `i` (digests, and whatever else the
-  device's log holds before the round's coin), fixed by the coins the history before the round shows (`FixedBefore`);
+  `reachedBy`, `messagesFixedBy`, `callsLeBy`): the play fixes a value `Fx o i` for round `i` (digests, and whatever
+  else the device's log holds before the round's coin), fixed by the coins the history before the round shows (`FixedBefore`);
   an accepted play's reading at round `i` opens it (`Opens`, at any relation `Opn`); and two plays that open one fixed
   value with two messages give a SHA-512 collision (`Breaks`, at the finder's `pair`). The round's miss is then at
   most the square root of the finder's success, and `MessagesFixed` holds at the sum over the rounds.
@@ -31,8 +31,8 @@ draws. This module states the messages' bound in the form those rounds need.
   files), the play shows a list of strings for the round (`raw`: the record's bytes the device's digests hash, the
   blobs the registered digests name), and on accepted plays the message is a function of the strings and the context
   (`Explains`). Two accepted plays with two messages then show two lists of strings under one list of digests, and
-  the finder outputs a pair of them that differ (`exists_zip_collide`). `reachedStrings` and `messagesFixedStrings` are the bound
-  from `ShowsStrings`, `FixedBefore` and `Explains`.
+  the finder outputs a pair of them that differ (`exists_zip_collide`). `reachedStrings` and `messagesFixedStrings`
+  are the bound from `ShowsStrings`, `FixedBefore` and `Explains`.
 
 **Not established** at the two-stage form: `Opens` (the device's digests are the SHA-512 of the strings the check
 read: the interior's root, each opening's `after`), `FixedBefore` (the device's log before a round's coin is the same
