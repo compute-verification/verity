@@ -101,7 +101,7 @@ Credit and all reporting are in circuit size (tentative).
   S, and Pr[accept ∧ the AND gates whose values in the committed trace are right number fewer than (1 − ε_skip)·S] ≤
   δ_coin + δ_crypto, with no algorithmic premise. Dither's compute credit also needs values that read live noise and SAK
   (`SAKResidual`), over noised operands only; an un-noised call earns none. PoUW's bar is T1–T3
-  (`verity/protocols/pouw/verifier/README.md`). PoUB (`Accounting.Remote`) bounds no hidden work itself, so PoUW's
+  (`verity/protocols/accounting/pouw/verifier/README.md`). PoUB (`Accounting.Remote`) bounds no hidden work itself, so PoUW's
   guarantee beside it is its compute credit alone.
 - **The slowdown lower bound** bounds the hidden training beside verified compute. Its N counted objects can come from
   verified compute (products the registered circuit computes anyway, through inference-block yields) and free compute: a
@@ -278,7 +278,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
 - **Noise period** L′: the period of Dither's noise along K, a length, not a time (Period); a segment is t = L/L′
   noise periods.
 - **Prefix sums** T_s: Dither's committed running sums along a segment, stored as 16-bit elements.
-- **Dither** is the protocol, PoUW's no-fold design, at v3.2 (`verity/protocols/pouw/verifier/dither/PROTOCOL.md` while
+- **Dither** is the protocol, PoUW's no-fold design, at v3.2 (`verity/protocols/accounting/pouw/verifier/dither/PROTOCOL.md` while
   experimental). Its Lean covers the no-fold round (`Pouw.Dither`), not v3.2's proof block. Its receipt: each segment's
   noised prefix sums are committed in 16 KiB SHA-512 hiding commitments before the check coin, and the sampled cells
   opened after it. The served PoUW moves to it; `SharedNoiseLucks` (the H1 and J10-R folds') has no place in it.
@@ -293,7 +293,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   runs any **private circuit** of the class, whose description is given as a value. Circuit hiding is
   recursion (Flock's `--hide`), not the universal unit.
 - A **transition unit** is one tensor-core accumulator step; a GEMM-coordinate subcircuit chains `K/16` of them, and a "unit circuit" arithmetises one.
-- Flock's statement layout (`Flock.Statement`, `Flock.HmRow`, in `verity/protocols/flock/verifier/`) nests three levels inside one proof:
+- Flock's statement layout (`Flock.Statement`, `Flock.HmRow`, in `verity/protocols/proofs/flock/verifier/`) nests three levels inside one proof:
   - a **unit copy** is one copy of the statement's unit circuit in one slot of the unit range (the spec's "unit",
     `units_per_vu` ≥ 1 of them per VU);
   - a **VU** is one instance's share of the witness: the slots that lay out one sampled proof block, with its rows' digests,
