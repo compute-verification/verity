@@ -27,6 +27,13 @@ The pieces read an accepted play (`Verity.SampledTwo.AcceptsOn`) through these.
 namespace VStar.Recursive.SampledTwo
 
 open Lean (Json)
+open Spot
+
+private theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : x >>= f = .ok b) :
+    ∃ a, x = .ok a ∧ f a = .ok b := by
+  cases x with
+  | error => cases h
+  | ok a => exact ⟨a, rfl, h⟩
 
 /-- **The last step accepts** only with the switch on, the run of record's symbol `accept` and the interior audit
 accepting with the same public outputs and profile. -/
@@ -49,35 +56,20 @@ theorem inputAt_ok {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : 
       OneStageZk.membersRun p.audit p.members c₂ e.interior e.statements bs = .ok r ∧ r.all = true ∧
       ∃ vs received₂, stamped p e bs r.out = .ok vs ∧ i = inputOf p c ξ ξ₂ e received₂ vs := by
   unfold inputAt at h
-  cases h1 : Flock.canon e.record with
-  | error _ => simp [h1, bind, Except.bind] at h
-  | ok s =>
-  cases h2 : OneStage.commitmentOf s.toUTF8 with
-  | error _ => simp [h1, h2, bind, Except.bind] at h
-  | ok c₂' =>
-  cases h3 : OneStageZk.coinsOf p.audit c₂' e.interior with
-  | error _ => simp [h1, h2, h3, bind, Except.bind] at h
-  | ok ξ₂' =>
-  cases h4 : OneStageZk.membersRun p.audit p.members c₂' e.interior e.statements bs with
-  | error _ => simp [h1, h2, h3, h4, bind, Except.bind] at h
-  | ok r' =>
-  cases h5 : r'.all with
-  | false => simp [h1, h2, h3, h4, h5, bind, Except.bind] at h
-  | true =>
-  cases h6 : stamped p e bs r'.out with
-  | error _ => simp [h1, h2, h3, h4, h5, h6, bind, Except.bind] at h
-  | ok vs =>
-  cases h7 : Spot.getD e.interior.base.receipt "received" with
-  | str rc =>
-    simp only [h1, h2, h3, h4, h5, h6, h7, bind, Except.bind, pure, Except.pure, Bool.not_true,
-      Bool.false_eq_true, ↓reduceIte, Except.ok.injEq, Prod.mk.injEq] at h
-    obtain ⟨rfl, rfl, rfl, rfl⟩ := h
-    exact ⟨⟨s, h1, h2⟩, h3, h4, h5, vs, rc, h6, rfl⟩
-  | null => simp [h1, h2, h3, h4, h5, h6, h7, bind, Except.bind] at h
-  | bool _ => simp [h1, h2, h3, h4, h5, h6, h7, bind, Except.bind] at h
-  | num _ => simp [h1, h2, h3, h4, h5, h6, h7, bind, Except.bind] at h
-  | arr _ => simp [h1, h2, h3, h4, h5, h6, h7, bind, Except.bind] at h
-  | obj _ => simp [h1, h2, h3, h4, h5, h6, h7, bind, Except.bind] at h
+  obtain ⟨s, h1, h⟩ := bind_ok h
+  obtain ⟨c₂', h2, h⟩ := bind_ok h
+  obtain ⟨ξ₂', h3, h⟩ := bind_ok h
+  obtain ⟨r', h4, h⟩ := bind_ok h
+  cases h5 : r'.all
+  · simp [h5] at h
+    cases h
+  · simp only [h5, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
+    obtain ⟨vs, h6, h⟩ := bind_ok h
+    split at h
+    · simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl, rfl, rfl⟩ := h
+      exact ⟨⟨s, h1, h2⟩, h3, h4, h5, vs, _, h6, rfl⟩
+    · cases h
 
 /-- **An accepted two-stage check ran every step** (module docstring). -/
 theorem accepted_steps {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
@@ -96,22 +88,13 @@ theorem accepted_steps {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ 
     obtain ⟨hf, hj, htwo⟩ := finishWith_accept h
     subst hf
     unfold prepare at hp
-    cases hi : inputAt p c ξ e bs with
-    | error _ => simp [hi, bind, Except.bind] at hp
-    | ok w =>
-      obtain ⟨c₂, ξ₂, r, i⟩ := w
-      cases hr : Spot.Run.run i true with
-      | error _ => simp [hi, hr, bind, Except.bind] at hp
-      | ok run' =>
-        cases hs : sourceRead ξ run' with
-        | error _ => simp [hi, hr, hs, bind, Except.bind] at hp
-        | ok u =>
-          cases hu : interiorUnshown p e with
-          | error _ => simp [hi, hr, hs, hu, bind, Except.bind] at hp
-          | ok u' =>
-            simp only [hi, hr, hs, hu, bind, Except.bind, pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hp
-            obtain ⟨rfl, rfl⟩ := hp
-            exact ⟨rfl, c₂, ξ₂, r, i, run', hi, hr, hs, hu, hj, htwo⟩
+    obtain ⟨⟨c₂, ξ₂, r, i⟩, hi, hp⟩ := bind_ok hp
+    obtain ⟨run', hr, hp⟩ := bind_ok hp
+    obtain ⟨u, hs, hp⟩ := bind_ok hp
+    obtain ⟨u', hu, hp⟩ := bind_ok hp
+    simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hp
+    obtain ⟨rfl, rfl⟩ := hp
+    exact ⟨rfl, c₂, ξ₂, r, i, run', hi, hr, hs, hu, hj, htwo⟩
 
 /-- **The evidence's first-stage bytes are no more than the run read**, where the run reports what it read and
 `sourceRead` passed. -/
@@ -119,8 +102,8 @@ theorem sourceRead_le {ξ : ByteArray} {run : Json} (h : sourceRead ξ run = .ok
     (hr : Spot.nat? (Spot.getD run "read") = some read) : ξ.size ≤ read := by
   unfold sourceRead at h
   rw [hr] at h
-  split at h
-  · cases h
+  by_cases hlt : read < ξ.size
+  · simp [hlt] at h
   · omega
 
 /-- **On two windows the first session's log shows no second-stage coin after the interior's digest**: where the
