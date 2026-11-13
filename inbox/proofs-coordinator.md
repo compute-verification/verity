@@ -158104,3 +158104,36 @@ The hold to 19:27Z ended with no word in my mailbox, so I stacked it as you orde
 - The sm_120 rows are not in the body. They ran over the old head and went to PRF-612 through you. I add them on your word.
 
 Mailbox read at 19:33Z; nothing newer than your 17:07Z.
+
+## FRAME, Fri 13 Nov 19:33Z: STATUS TABLE 8: MESSAGES's WORD LINE IS CARRIED AND PUBLISHED: `873a752808a1b973259ba34e27e60bcb5c69352f` on `cursor/proofs-carried-messages-word-4ae1` (`clean`, 24 crossed, none skipped; against the carried join it fails in the pin file alone); no run of mine is out; way (b) on #9713 waits for your word
+
+**In plain words.** The word line is carried and MESSAGES can go on from the published head. As for the four, what I carried is the word line merged with the join's old tip, since the word line alone stops at a conflict with the first move. It meets the carried join with a conflict in the pin file only, and the mended join merges after the carried join with no conflict. It still names two things the join named before the mend, in the join's files, not in MESSAGES's.
+
+| Line | Carried from | Carried head | Branch | The tool's words | Test against the carried join `daa91ec75a3e` |
+| --- | --- | --- | --- | --- | --- |
+| MESSAGES's word line | `92abd1afff9e560b655563eab78a309d98c8b680` (`c4ddda089f44addf197a37bcf9c2be45063aa36f` merged with the join's old tip `6bae773eb345`, no conflict) | `873a752808a1b973259ba34e27e60bcb5c69352f` | `cursor/proofs-carried-messages-word-4ae1` | "status clean, result 873a752808a1, crossed 24, skipped 0" | conflict in `tools/pous_grader/TRUSTED.sha256` alone; the merged tree is the carried tree but for that file |
+
+- [run: `r20261113-190254-b325`, vy-nebius-cpu-12, rc 0] "RESTACK messages-word-join EXIT 0 in 1471s". "checks found kept: 24". "holds main 4ae17f7eafd7: True; holds its own head: True; merges with main with no conflict: True". "57130 added lines read against 17 maps: 0 lines name an old path or module".
+- [run: `after.py`] "TEST messages-word-join merged with a main that holds carried join: conflicts ['tools/pous_grader/TRUSTED.sha256']". [run: `git diff --stat` of the two trees] "tools/pous_grader/TRUSTED.sha256 | 4 ++++", one file. That is the failure you accept, so it is published, at 19:32Z.
+- [run: `git merge-base --is-ancestor`] The carried head holds `c4ddda089f44`, `6bae773eb345` and `4ae17f7eafd7`.
+- **The mended join.** [run: `git merge-tree`] `20936c91d40bd5bf4143d22770786677f5243bb8` merged after the carried join: no conflict; it changes the mend's five files, +12 −12. Merged directly, without the carried join first: conflicts in `security/Proofs/Properties/Verity/SampledTwo/CutOrder.lean` and the pin file. So the order is as for GATHER: the carried join, then the mended join, then the pin regenerated.
+- **Today's `main`** (`f479876a87581c572c7b7b74ba2f23aa95785851`): merges with no conflict.
+- **Carried MESSAGES** (`24f63f743de2030c9329f709523621acd9a5e9b1`, `cursor/proofs-carried-messages-4ae1`) is not an ancestor of this head: the tool carried the word line's own history again. [run] The two merge with a conflict in the pin file alone, and the merged tree is this head's tree but for that file. MESSAGES goes on from this head, not from a merge of the two.
+- **Words.** [run: `words.py` over `4ae17f7eafd7`] "50761 added Lean lines; 96 hits of 7 words; unresolved names 2: ['trustedSessionOf', 'window_opens']": `trustedSessionOf` on 9 lines of 4 files (`SampledTwo/{CutRoots,StageAlone,Steps}.lean`, `VStarRecursive/SampledTwo.lean`) and `window_opens` on 2 lines of `SampledTwo/CutOrder.lean`. Those are the join's files and the mended join's five; the mend cures them. [run: over the carried join] The word line's own: "1910 added Lean lines; 4 hits of 1 words; unresolved names 0": `Flock.Draw` on four lines of `SampledTwo/RoundOne.lean`, a name still declared (16 declarations at the head, 16 on `main`). [run: over carried MESSAGES] "865 added Lean lines; 4 hits of 1 words; unresolved names 0".
+- [run: stderr of the test's merge] The merge driver printed eight lines for the merge of the two merge bases (`6bae773eb345`, `4ae17f7eafd7`), such as "Spot/RecordAcross.lean: 3 conflict(s) beyond import lists". None is a conflict of the merge itself: its only conflicted path is the pin file.
+
+### What is out
+
+| Run | State |
+| --- | --- |
+| `r20261113-190254-b325` (job 12) | ended rc 0, 19:30Z |
+| `r20261113-185123-71a9` (#9555's eight suites) | ended rc 0, 8 passed; my 19:27Z entry |
+| `r20261113-164151-1e2c` | ended by its slot, 19:12Z |
+
+No run of mine is out. Ready lines written by me today: #9681 (17:36Z) and #9441 (18:09Z); #9555 you marked on my 18:52Z entry.
+
+**Way (b) on #9713:** sized in my 19:22Z entry, nothing written. I wait for your word on its two points: PoUW's 16 lemmas (move them, or import PoUW's file), and the `roots` line. A script that makes the cut as sized is ready and has been run only into a scratch directory: 109 declarations moved, the four old files keep 21, 36, 16 and 7. I hold one recurring timer, ten minutes, and read my mailbox at each firing.
+
+**Not established.**
+- That the carried word line compiles: no build ran on it.
+- That the pin file regenerates to one value after the carried join and the mended join are merged: nobody has made that merge.
