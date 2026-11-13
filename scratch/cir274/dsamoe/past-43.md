@@ -67,8 +67,16 @@ Verified [ran]:
   (`T=65, places=26, repeated_keys=9`).
 - the value check at 4 layers, patched: VALUES.
 
-It touches neither `node_window.py` nor `node_window_dense.py` nor their tests. A test for it would go in
-`test_node_window_sparse.py`: a T = 129 node (and a T = 128, NS = 2 node) ordered without a cycle [inferred, not written].
+It touches neither `node_window.py` nor `node_window_dense.py` nor their tests.
+
+With its test, it is `fix-chain-ranges-with-test.diff` (15 lines in, 3 out, ours alone). `test_chain_place_ranges` in
+`test_node_window_sparse.py` builds a 2-layer, 150-id window, whose first layer has unsplit 3-block chains, and requires
+each `HeadBlock{NVIS=64,FIRST=false}` place to be a range of 8 [ran, `r20261113-062914-322f`]:
+- without the fix it fails, on `ordered`'s cycle `ValueError` (30 s);
+- with it, the whole file passes, 13 tests in 44 s at about 1 GB.
+
+A 129-id version of the test passes without the fix (`r20261113-062721-313e`): at 129 ids the 3-block token splits
+(bps = 2), so its chain has no `FIRST=false` place twice.
 
 ## 3. The two-digit `Piece` for w2's `g` wires (not built)
 
