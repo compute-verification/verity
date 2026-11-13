@@ -1454,6 +1454,7 @@ def test_a_pass_that_started_before_an_install_finishes_on_the_directory_it_star
     try:
         ready, _, _ = select.select([reads, first.stdout], [], [])      # it started, or it ended without starting
         assert reads in ready and os.read(reads, 16) == b"started"      # it runs v1's code, and has not yet imported all of it
+        assert os.readlink(f"/proc/{first.pid}/cwd") == str(w["v1"]), "the pass's process names its directory, so an install keeps it"
         _swap(w["link"], w["v2"])
         r = subprocess.run(argv, env={**env, "FAKE_OUT": str(tmp_path / "second.json")}, stdin=subprocess.DEVNULL, capture_output=True, text=True)
         assert r.returncode == 0, r.stderr
