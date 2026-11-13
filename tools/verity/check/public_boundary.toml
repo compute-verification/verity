@@ -53,6 +53,7 @@ ml = [
     "verity/definitions/{__init__.py,boolean.py,call_scope.py,circuits,commitments,cross_call.py,encoding.py,evidence.json}",
     "verity/definitions/{evidence.py,kernels,numerics,ops,private_circuits,pyproject.toml,README.md,registry,replay.py}",
     "verity/definitions/{silicon,tests,tiny.py,word.py}",
+    "adapters/vllm/verity_vllm/definitions",
 ]
 # PoUW: the integrity profile, the protocol, and its part of the security analysis (the accounting it reads is `needed`)
 pouw = [
@@ -191,13 +192,18 @@ protocols = [
     # PoUB's opening unit's test, which holds it to PoUB's Python verifier
     "verity/commitments/tests/test_block_check.py",
     # PoUB's plan unit and memory-map unit, with their test
-    "verity/definitions/circuits/requirement_units*",
+    "verity/definitions/circuits/requirement_units.py",
+    "verity/definitions/circuits/requirement_units.circuit-check.json",
+    "verity/definitions/circuits/requirement_units.circuit-check.py",
     "verity/circuits/tests/test_requirement_units.py",
     # the population programs' circuit-check bindings, whose example templates are PoUB's plan units
     "verity/circuits/population.circuit-check.py",
     # the recorded population programs, some keyed by PoUB's plan and memory-map units, and the test that rebuilds each
     "verity/circuits/tests/{population_recorded.json,test_population_recorded.py}",
 ]
+# the auditor host's challenger service: it links the network certifier's coins beside SPOT's challenger, and its gate and
+# units are the team's pods'
+challenger_service = ["verity/composite/device/live_challenger"]
 # vLLM's tests that read a private protocol (NCI, the bandwidth audit, PoUS)
 protocol_tests = [
     "adapters/vllm/tests/pipeline/test_memory_map.py",
@@ -295,6 +301,7 @@ flock_bench = [
 # what a public directory holds that is not its own: another area's package or tool that sits under it, and is no part
 # of the public tree
 nested = [
+    "verity/circuits/requirement",
     "verity/definitions/requirement",
     "verity/hardware/tests/test_lean.py",
     "verity/hardware/tests/test_nodes.py",
@@ -327,7 +334,8 @@ from = "*"
 [[needed]]
 why = "the challenger and service code SPOT needs"
 paths = [
-    "verity/{claims,commitments,configuration,definitions,difftest,hardware,protocols}",
+    "verity/{claims,commitments,configuration,definitions,hardware,protocols}",
+    "verity/difftest",
     "verity/{channel.py,config.py,device.py,party.py,protocol.py,runtime,tests}",
     "security/{Properties,Proofs/Properties}/{Spot,Challenger}{,.lean}",
 ]
