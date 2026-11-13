@@ -34,7 +34,9 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
            "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
            "adapters/vllm/tools/migrate/superseded_quarantine.py",
            "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean", "tests/tree.toml",
-           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c"]
+           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c",
+           # puts the clear audit on sys.path by a parent of the verifier's `audit.py`, an index no rewrite changes
+           "verity/protocols/pouw/verifier/lean/commit/tests/difftest_vectors.py"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
            "adapters/vllm/manifests/definitions.json", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean",
            "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean",
