@@ -555,8 +555,9 @@ theorem vocab_verdict_le (k : Verity.Registration.Composite) {θ : ByteArray} {F
 theorem vocab_finder_le {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {σ : Verity.Game.Strategy ((I.vocab K).game θ F c)} (h : (I.vocab K).FinderCR .sampled θ F c σ) :
     (windowReadFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg ≤
-      I.sampledBound θ ((I.vocab K).cost θ F c σ) :=
-  (I.vocab K).finderPr_le_crBound h
+      I.sampledBound θ ((I.vocab K).cost θ F c σ) := by
+  have h' := (I.vocab K).finderPr_le_crBound h
+  exact h'
 
 /-- Where the deployment runs a window, the deployed vocabulary's sampled δ is at least `sampledBound`. -/
 theorem vocab_delta_ge {θ : ByteArray} {W : Window} (hA : I.window θ = some W) (t : ℕ) :
