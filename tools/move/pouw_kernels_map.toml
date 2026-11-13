@@ -59,7 +59,10 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
            "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
            "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
            "adapters/vllm/tools/migrate/superseded_quarantine.py",
-           "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean", "tests/tree.toml"]
+           "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean", "tests/tree.toml",
+           # its PD_HOST_EXTRA is included from pearl_c_sm120/hash_decode_host.cpp, so it names hash_prefill.cuh from
+           # there, which holds after the move
+           "benchmarks/pouw/pearl_c_sm90/hash_prefill_host.cpp"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
            "adapters/vllm/manifests/definitions.json", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean",
            "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean",
