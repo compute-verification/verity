@@ -1,7 +1,7 @@
 """N2's check of one certified record head, zero-knowledge: the head committed at leaf 2 + direction of N2's root
 (`service.LinkWindows`) is the execution phase's, complete, under the declared grid, and, where its end has an occupancy
 profile, its counts are the profile's; and the certificate's signed digest is the head's record digest salted by the
-certifier. A Boolean Definition, the gated part of N2's proof block (`service`'s `NetworkLinkWindow` v5, one per end),
+certifier. A Boolean Definition, the gated part of N2's proof block (`service`'s `NetworkTransferBlocks` v5, one per end),
 which runs on every execution phase; its one output is the ok bit. That proof block's Program holds it as one gate that
 names its circuit digest (`gate`), pinned in this module's sidecar and held to the Definition by circuit-check; N2's
 verifier reads its output from the proof block's proof, and the in-the-clear check (`LinkWindows.clear`) runs
