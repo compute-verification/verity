@@ -28,7 +28,7 @@ from hypothesis import strategies as st
 import verity_difftest as D
 from verity.protocols.spot.verifier.profile import IntegrityProfile, Stratified, Stratum
 from verity.protocols.spot.verifier.consumers import location_bits
-from verity.protocols.spot.optimize import (Candidate, Objective, certify, density_bound, fill,
+from verity.protocols.spot.prover.optimize import (Candidate, Objective, certify, density_bound, fill,
                                                            ln_upper, max_harm, max_harm_check)
 
 from test_difftest import DELTA, EXACT_DELTA, JSON, PACKAGE, PIECES, _exactly, _json, _nat, ratio
