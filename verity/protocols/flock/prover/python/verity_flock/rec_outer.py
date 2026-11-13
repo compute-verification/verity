@@ -59,7 +59,7 @@ from types import SimpleNamespace
 import numpy as np
 from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.program import Program
-from verity.definitions.ops.boolean.gf2k import mul
+from verity.circuits.ops.boolean.gf2k import mul
 
 from . import circuit as FC
 from . import ir_lower as IL

@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from verity.definitions import word as W_
+from verity.circuits import word as W_
 
 from tests.check.test_sampled_replay_v2_addresses import _tp_rank_program, _v2_manifest
 from verity_vllm.acquire import plan

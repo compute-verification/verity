@@ -19,7 +19,7 @@ import pytest
 from verity.circuits import Program, bind
 from verity.circuits import query_ast as G
 from verity.circuits.partition import Level, validate_partition
-from verity.definitions.ops import gemm
+from verity.circuits.ops import gemm
 from verity.protocols.spot.verifier.profile import (ESCAPE_TERMS, HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified,
                                                     Stratum, Subset, Work, WorkStratum, neg_log_escape, work_k)
 
