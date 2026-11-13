@@ -125538,3 +125538,45 @@ Nothing new compiled since `r20261113-051428-7214` and `r20261113-051449-dfaa` [
 Next: items 4 and 5 now, the launch file once the rehearsal's numbers are in (by Fri 10:00Z, as ordered).
 
 For the table: kit `art:7fe64883…75551` (sha256 `e63b0a7e…2fe73`); Lean rehearsal `r20261113-063506-2823` on cpu-14, waiting for 240 GB, then about 3 to 4 hours.
+
+## ACCEPTS 06:38Z: SESSIONOF's 98ba037e04 merged with MemberChecks' lock root; RecordNames.lean out in r20261113-063619-47b2
+
+- [run] Merged SESSIONOF's `98ba037e04` (no conflict). Added `Proofs.Properties.Verity.SampledTwo.MemberChecks` at the
+  end of `security/Proofs/lean-audit.json`'s `roots` (`eb71ff973f`). Its lakefile root came with the merge.
+- [read] Nothing on my branch names `SessionMatches`, so STAGECOINS's narrowing touches no statement of mine.
+- [run] New file `SampledTwo/RecordNames.lean` at `9c4ef2ffc3` (not compiled): roots in both the lakefile and the lock,
+  in the same commit. Try `r20261113-063619-47b2` on vy-nebius-cpu-10.
+  - The file proves `recordOk_of_check`: if `Registration.check rec v` has no code and `v` lists each port once, then
+    `recordOk rec (namesOf v)`.
+  - This first try still has two `sorry`s with `trace_state`. They are the two walks (over `check` and over
+    `checkRegistered`), and the trace shows me the real conditions. Everything else in the file is complete: the
+    counting for R3-ports and R7-values, the record with no `registered` key, the helpers' monotonicity, and the
+    registered names that `entries` gives.
+  - The walk tactic proved itself on a local copy of the block's shape: an `if let`, loops over a List and an Array,
+    and a `match` inside a condition, which it leaves alone.
+- [derived] `RecordsHeldAt` still needs one more step: from `AcceptedTwo`, both registration checks have no code.
+  `RunsAs.run_path` (RUNCOINS's `Steps.lean`) passes the `register` step but does not keep its condition, and it is
+  private. I will write my own copy of its walk that keeps the two `Registration.check` conditions. I will not edit
+  `Steps.lean`.
+
+To post (for soundness):
+
+The registration check's R3-ports and the model's `recordOk` disagree on one input: a verifier that lists a port
+twice. R3-ports compares the record's distinct root ports with the verifier's port list by count and by membership.
+So with ports `[a, a]` and roots `[a, b]` it passes (two distinct roots, two ports, each port among the roots), while
+`recordOk` refuses, because `b` is not a port of the verifier. [read] That list is the verifier's own registration,
+not the prover's. It is `Run.Input.params` (and `Interior.params` for the second stage). `OneStage.lean` parses it as
+the entries of the params file's `ports` object: `entries (← obj (getD j "ports") "ports")`. A parsed object holds each
+key once. [derived] So a prover cannot use this. It is a gap between the model and the code: nothing proves yet that a
+parsed object's entries are distinct. It is closed for now by the named premise `PortsDistinctAt`, and for good by a
+lemma that the JSON parser's objects list each key once. The R7 side has no such gap: R7-values forces the
+registered names to be distinct.
+
+STOP RULE: if the walk over the real `check` fails twice, I stop and write what it reaches.
+
+NEEDS: nothing now.
+
+Not established:
+- The walk over the real `Registration.check`: `47b2` runs it for the first time.
+- That the parser's objects list each key once: [guess] true, because they are built by `insert`, but not read.
+- My run walk from `AcceptedTwo` to both checks: not written yet.
