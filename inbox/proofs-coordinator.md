@@ -152769,3 +152769,168 @@ Nothing.
 - Facts 6 to 11 as theorems. `ShowsAt` and `ExplainsOr` at round 1, the statements' round and a session's rounds.
 - That the bytes the second stage reads are the sum of the strata's, so at least 64, as a theorem: read, not proved.
 - Which parts of `AddressFacts/RowDraw.lean` and `FirstSample.lean` fact 7 needs.
+
+## [2026-11-13T16:58Z] ACCEPTS: REGISTRATION'S STATEMENTS, THE SECOND READ, WHOLE (draft #9701 at `fc054660c826`, items 1 to 6): no statement is empty, six would change (`View.Onsite`, `View.Holds`, `DeclaredIsParams`, `CertifiedIsParams`, `RootIsRegistered` with the spec's `Theta`, `AccountedFor` with `Site.parts`); `AccountedFor` IS met by a list that accounts for nothing; in OUR form the record's side of both ties is lemmas and the registration's side is nowhere in Lean; I changed nothing and ran nothing
+
+**What was read.** [read] Every Lean file of the draft at `fc054660c826` whole (20 files, +1426), its body as it stands (last edited 15:38Z), the lock diffs against its merge base `2e99b1cf48b8`, the smell-check skill, and of our own form what item 4 asks, on `dd528bb7b6d3` (which the join holds). The branch has moved since your order: its head is `5e3c81b9efd2`, two commits on (12 files, +256/−62), still a draft, and the body still says "Verified: Head `fc054660c82`". Each finding says what the two later commits change. Lines are at `fc054660c826` unless a head is named.
+
+**Why no heading "says nothing".** No statement is empty. `AccountedFor` comes nearest: it is a predicate on a table whose entries nothing ties to a protocol (A6), but no theorem states or takes it, so nothing false is claimed. Yours to overrule.
+
+**The three lines that matter most.**
+1. A theorem that reads `Holds` in place of `Valid` loses `Owners`, `Fresh` and `Kinds`, and three places in the draft lean on them (A2).
+2. Both ties that are ours end at the same missing step: who fills our parameters' `declarations` and `pinned` roots from the accepted log's view. Everything after that step is already a lemma of ours (D).
+3. `Checks` would hold with any entry digest: it says the two checks agree, not that a head binds a log. The newer commits state the ties at a head, which needs that second statement (B3).
+
+### A. Findings that would change a statement
+
+Each: the statement, what it says, what it should say, why.
+
+**A1. `View.Onsite`** (`security/Definitions/Core/Registration.lean:124-126`).
+- Says [read]: `∀ x ∈ v.site.locs, x.kind = .memory → ∀ h ∈ v.site.host? x, h ∈ v.site.reached`. Its docstring (`:122-123`): "the host of every memory leaf is at an end of a memory challenger's link".
+- Less than the docstring [derived]: `Site.host?` (`security/Definitions/Core/Site.lean:327-328`) is an `Option`, so a memory leaf with no host meets the clause with nothing reached.
+- Should say: `∃ h ∈ v.site.host? x, h ∈ v.site.reached`.
+- Why: `Valid` gives every leaf a host through `Kinds` (`Site.lean:442-446`, `Kind.parents` `:97-103`), so the stronger form follows from `Valid` [derived, not compiled]; a reader of `Holds` alone gets the weak one. The code's own check `Reached` (`Site.lean:474-475`) has the same `∀`: this is wording, not a hole in the check.
+- Later commits: unchanged.
+
+**A2. `View.Holds`** (`:134`), and so `RegistrationSound` (`security/Definitions/Core/Guarantees/Registration.lean:22-24`).
+- Says [read]: `v.Devices D A ∧ v.Onsite c ∧ v.Once`.
+- Drops [read]: `Fresh`, `Refs`, `Kinds`, `Capacity`, `Owners` (`Site.lean:432-468`) and the chain (`Follows`, `:516`).
+- Why it matters: three places in the draft lean on a dropped clause [read].
+  - `certifiedKeys`' docstring (`security/Properties/Verity/Ties.lean:70-72`) calls the registered key one "which registration's `owner` check holds to the auditor's own". That is `Owners`. Without it `CertifiedIsParams` ties the check's key to whatever key the developer's log wrote.
+  - `Site.parts` and `AccountedFor` name parts by id (`:63-66`, `:151-152`). That an id names one location is `Fresh`.
+  - `Onsite`'s "certified" is "a certifier is at an end" (`Site.Certified`, `Site.lean:320`). That this certifier's other link goes to the outside is `Kinds`' third clause (`Site.lean:445-446`). [derived] By unfolding, a link joining a certifier and a host is always certified and a host's bare link to the outside never is, so `Onsite`'s first clause is exactly "onsite, no link joins a host to the outside".
+- Should say: `Holds` also carries the head Site's formedness: ids once, each link's ends registered and of kinds a link may join, each certifier splitting one uplink, each of the auditor's devices owned by the auditor under its key. `Valid.ids_nodup` and `Valid.parents` (`security/Proofs/Core/Site.lean:213`, `:225`) already prove two of these at the head.
+- Later commits: unchanged (they add `heads` to `View`, nothing to `Holds`).
+
+**A3. `DeclaredIsParams`** (`Ties.lean:65-68`).
+- Says [read]: `∃ p, boundProgram tags (V.circuitFile θ F) tables = some p ∧ NamesRegistered {e | e ∈ v.declarations ∧ e.day = j} Declared.program p`, for free `tags`, `tables` and `j`.
+- (a) [read] `tags` and `tables` are arguments, though the docstring says "read at the statement's `tags` and `tables`" (`:54`). The game reads `(V.read θ F).tags`, `.tables` and `.circuitFile` (`security/Properties/Verity/Game.lean:575-585`), and `Vocab` has no field making `(V.read θ F).circuitFile` the file `V.circuitFile θ F` (`Game.lean:781`). Should read all three from `V.read θ F`. In our deployed vocabulary they agree (`readOf`, `DigestsAt.tables`: `security/Proofs/Properties/Verity/Sampled.lean:795`, `:755`).
+- (b) [read] `j` is free. `Registration.RunsDeclared` (`Site.lean:275-277`, on `main` already) is the spec's "a window runs its day's declared circuit" and takes the day from the window's span in the monitoring period's cut. The tie doesn't read it. Should take the day as `RunsDeclared` does, or name the parameters' field that is the day (ours: `day`).
+- (c) [derived] It holds a label, not the file. META's `program_sha512` is a field of the circuit file (`Flock.ProvedScope.metaProgram`, `verity/protocols/flock/verifier/Flock/ProvedScope.lean:451`); any number of files carry one label, and the log registers no digest of the circuit file. "The registered circuit" stays whichever file the parameters name. To give "the circuit the log registered", either a declaration holds the circuit file's digest (then `f` is the identity and `boundProgram` goes), or the tie says the file is the registered compiler's on the declared Program, which nothing can state while the code's builder holds a digest and a cap.
+- (d) [read] `Declared.blocks` is read by nothing: the tie projects `Declared.program` alone.
+- Later commits [read]: the same body renamed `DeclaredIn`, and the tie is it at a head, `AtHead D c log h P := ∃ n, (n, h) ∈ (view D c log).heads ∧ P (view D c (log.take n))` (`security/Definitions/Core/Registration.lean:106-107` at `5e3c81b9efd2`). (a) to (d) stand. [derived] `AtHead` is the stronger form (with `declaredIn_take_mono` it gives the tie at the whole log), and `h` is one more free argument: which head an answer names is said nowhere.
+
+**A4. `CertifiedIsParams`** (`Ties.lean:86-87`).
+- Says [read]: `∀ l ∈ p.egress.toList ++ p.ingress.toList, NamesRegistered (certifiedKeys v) id (l, Flock.hexOf p.key)`.
+- (a) [derived] One key for every link: `NetworkCheck.Check.Params` holds one `key` (`verity/protocols/certifier/verifier/lean/NetworkCheck/Check.lean:95-104`), so a Site with two certifiers under two keys can't meet it for both. The newer head's docstring now says so, and that it becomes per key entry.
+- (b) [derived] One inclusion: every link the check reads is registered. A registered certifier's link the check doesn't read is not asked for, and that inclusion is the one `AccountedFor`'s egress part needs.
+- (c) [read] Empty `egress` and `ingress` meet it with nothing. The parser refuses that (`Check.lean:207`); the `Params` type doesn't.
+- (d) With A2: the key is the auditor's only through `Owners`.
+- Fits the code [derived]: `certifiedKeys` (`:73-75`) is exactly what `NetworkCheck.Registered.registered` accepts (`.../NetworkCheck/Registered.lean:97`: a link joining a certifier and a host, with that certifier's registered key).
+- Should say: each link with its own key, both inclusions, at a view whose `Owners` holds.
+
+**A5. `RootIsRegistered`** (`Ties.lean:94-95`) and the spec's `Theta`.
+- Says [read]: `NamesRegistered {t | t ∈ v.theta ∧ t.value = value} Theta.root root`: a name and a root.
+- Why it is short for our use [read]: the code's θ entry holds `value, root, leaves, words, word_bits, domain, checkpoint` (`verity/protocols/interface/CoreProtocol/Registration.lean:118-123`); the spec's holds the name and the root (`security/Properties/Core/Registration.lean:39`). Our record's `registered` entry is `{value, root, leaves, words, domain}` and R7 holds all five to the verifier's own (`Properties.Spot.R7`, `security/Properties/Spot.lean:251`). A tie on the root can't say the leaves, words and domain an answer names are the registered ones.
+- Should say: the spec's `Theta` keeps what the code's digest covers, and the tie names the whole entry.
+- This is also what choice (1) rests on: B2.
+
+**A6. `AccountedFor`** (`:151-152`), `Registration.Lists` (`:143-145`), `Site.parts` (`:63-66`): item 5. Met by a list that accounts for nothing: YES, three ways [derived].
+- (a) A Site with no device, memory leaf or boundary link has no part, so every `Lists` meets it, the empty one included. `Valid` admits such logs: the empty log, or an information entry and a declaration (the draft's own `honestLog`, `security/Properties/Core/Registration.lean:96-105`).
+- (b) `accounts` is a free field: `fun _ _ _ _ => Set.univ` with one protocol on the list meets it at every Site. The docstring says a deployment's values "come from each protocol's account in code (`Core.Account`)"; nothing defines them from it.
+- (c) A device's memory is a part only through registered memory leaves. `Site.device` builds the device model's `mem := 8 * k.mem` and `bw := k.bw` from the sheet (`Site.lean:408-421`), and `Capacity` asks only that the leaves fit (`:460-462`). The draft's witness Site (`gpu0`, a sheet of 64·2^30 bytes, no leaf) has two parts, `(gpu0, compute)` and `(uplink0, egress)`: nobody accounts for its memory and `AccountedFor` doesn't notice.
+- Also [read]: `Accountable` carries no tier though the header (`:28`) and its docstring say "at the leaf's tier" (the code's `Core.Account.Part` has tiers); and a memory leaf under a host gets a `bandwidth` part for which the code says the registration holds no rate (`CoreProtocol/Account.lean:175-176`), so it can't be charged at capacity.
+- Should say: the deployment's `Lists` is a definition over `Core.Account` (its amounts' parts and `Part.leaves`), not a field; a device's sheet memory is a part whether or not leaves are registered, or `Valid` asks the leaves to sum to the sheet's; and a reader adds that the Site has a part.
+- No guarantee concludes or assumes it and no lock record lists it [read].
+
+### B. `Checks` (item 3)
+
+**B1. What it says** [read] (`security/Properties/Core/Registration.lean:83-89`; proved as `checks`, `security/Proofs/Properties/Core/Registration.lean:289`): for every reading `B` of a builder as a compiler, every auditor, composite and code log `l`, `check A c l` accepts exactly when `Valid (digests (names B l)) (auditor A) (composite c) (log B l)`, and its view is then the spec's. No hypothesis.
+- "The log it denotes" is `l.map (entry B)` (`:61-62`): a site entry by `Properties.Site.regEntry`, a θ item to its name and root, a builder to `⟨b.digest, b.advice, B b⟩`, a declaration field for field.
+- Who chooses `B`: nobody. It is universally quantified and no check reads it. Nothing asks `(B b).ℓa = b.cap`, though the spec's builder docstring says the compiler's advice cap "is the builder's public cap" (`Site.lean:187-188`); the denotation drops `cap`.
+- Can an accepted code log denote two spec logs [derived]: for one `B`, no. Across `B` the denoted logs differ only in the builder's compiler. Conversely, several code logs (differing in θ's `leaves`, `words`, `word_bits`, `domain`, `checkpoint` or the builder's `cap`) denote one spec log, and their views differ only in `head`.
+
+**B2. `denotes_once`** [read] (`security/Proofs/Properties/Core/Registration.lean:233-235`): `Valid D A' c' (log B (q ++ [e])) → y ∈ q → entry B y = entry B e → y = e`. In a log whose denotation is valid up to and including `e`, an earlier entry with `e`'s denotation is `e`: a site entry and an itemless information entry by injectivity, an information entry with items would break `ItemsOnce`, a declaration `DayOnce`.
+- Choice (1) needs it [derived]. `names B l` gives a spec entry the code digest of the FIRST entry of `l` that denotes it (`:77-79`). For the spec's `Follows` and `head` to be the code's, that first entry must be the entry itself: `names_accepted` (`:274-277`), which is `denotes_once`. On a refused log either the same holds or `Once` already fails.
+- What choice (1) costs [derived]: the spec's `Digests` in the statement depends on the log being checked, so the statement at `l` and at a prefix use two `Digests` that agree only through `names_accepted`; the newer head's prefix views meet this at once. And it exists only because the spec's θ is a strict projection of the code's (A5): if the spec's `Theta` and `Builder` held what the code's digest covers, the spec's entry digest would be a function of the entry, as a site entry's is, and `names` and `denotes_once` would go.
+
+**B3. One clause is the same function on both sides** [derived]. Under `names`, the spec's `Follows` compares `e.previous` with the code's digest of the code's previous entry, which is the code's own check (`CoreProtocol/Registration.lean:265`, `:268`). The proofs file never opens `Entry.digest` or `Site.tagged` [read]. So `Checks` would hold with any entry digest, a constant included. It says the two checks agree, and nothing about a head binding a log. That is a second statement (two accepted logs with one head are one log, or two of their entries' texts collide under SHA-512), which the draft doesn't state and the ties at a head will need.
+
+**B4.** [read] It is about `check` on a parsed log. `checkLog` and `protocol` (canonical JSON, ASCII, the committed composite, the head as bytes) are outside it.
+
+**B5. Witnesses** [read]. `checks_nontrivial` (`:340-347`) is real: the accept-all check at a log registering one value twice. `checks_honest` (`:316-319`) is at one information entry and one declaration, remote, under an auditor with no sheets: no site entry is exercised, and its `Valid` conjunct is concluded from `checks` itself (`:321-329`), so on its own it tests that the code accepts `honestLog`.
+
+### C. `RegistrationSound` (items 1 and 2): fine, as far as `Holds` goes
+
+- [read] It says what its docstring and the body say: `Registration.Valid D A c log → (view D c log).Holds D A c`, proved at `security/Proofs/Core/Registration.lean:146-148`.
+- A hypothesis nobody can meet: no. `RegistrationSound_honest` is a valid onsite log [relayed: the body's runs at `fc054660c82`].
+- A conclusion true of every log: no. `RegistrationSound_nontrivial` (`.../Guarantees/Registration/Witnesses.lean:69-70`), a device naming no sheet.
+- [derived] `Valid` admits the empty log and `Holds` holds of the empty view, each clause with nothing to check. Right for a log that registers nothing, and the reason A6(a) matters.
+- A free `∃`: no. `Devices`' two are lookups (`sheet?`, `A.sheet k.sku`).
+- [derived] The conclusion is `Valid`'s own clauses carried from each entry to the head; the content is that they survive later entries. About registration and nothing else.
+- What the one-entry witness doesn't exercise [read] (`Witnesses.lean:27-51`: one sheet, one GPU, one host, one certifier): `Onsite`'s memory clause (no leaf, no challenger), `Once` (no θ value, no declaration), the tolerance (the registered sheet IS the auditor's), and `Onsite`'s first clause only by a link certified by definition. `_nontrivial` fails `Devices` alone. A witness with a memory leaf, a challenger, a θ value and a declaration, and one failing log a clause, would show each.
+
+### D. The ties in OUR form (item 4)
+
+[read] All four are stated and read by no theorem, and no code checks one. `NamesRegistered` (`:37`) is the image of a set under a map: it ties nothing until both are fixed. Can the deployment meet them today: as facts yes, by nobody's check [guess: from reading the drivers, nothing run].
+
+Our form names its Program and its roots in the registration's record, not in a circuit file's META. So each tie is a chain for us. "Lemma" means at one stage, at what `OneStage.check` accepts (`Properties.Spot.acceptMeans`, `security/Proofs/Properties/Spot.lean:1333`), unless said.
+
+`DeclaredIsParams`, link by link:
+
+| | what must equal what | our Lean |
+|---|---|---|
+| 1 | the view's declaration of the day = the parameters' `day` and `declarations` | NOT AT ALL. They are optional JSON in our parameters ("both or neither", `verity/protocols/spot/verifier/lean/Spot/OneStage.lean:30-32`, `:375-383`); a Python driver fills them from the log (`benchmarks/prove_path/records_audit.py:588-612`); no Lean of ours reads `Core.Registration.View`. A verifier whose parameters carry neither checks nothing here. |
+| 2 | the parameters' declared program of the day = the record's `program` | LEMMA: `Properties.Spot.DeclaredDay`, a conjunct of `R2` (`security/Properties/Spot.lean:71-74`, `:81-87`). |
+| 3 | the record's `program` = the verifier's own Program's digest | LEMMA: `R2`'s first two conjuncts. |
+| 4 | the verifier's Program = each session's Program bytes | FIELD: `A.I.program = some p.own.program` (`security/Proofs/Properties/Verity/Sampled.lean:679`). |
+| 5 | the session's Program = the circuit file's META `program_sha512` | Flock's LEMMA on the plain path (`programWhyP_none`, `ProvedScope.lean:520`). Under `--zk` it is the partition check's refusal, whose text our Lean restates (`security/Proofs/Properties/Verity/Sampled/Record/PartSame.lean:290`) with no lemma of its own. |
+| 6 | the circuit file = the one the game reads | LEMMA and field: `DigestsAt`, `digestsAt_of`, `readOf_eq` (`Sampled.lean:750`, `:804`, `:818`). |
+
+`RootIsRegistered`, link by link:
+
+| | what must equal what | our Lean |
+|---|---|---|
+| 1 | θ's root of a value in the view = the parameters' `pinned` root of it, or the root the verifier's log first registered a held value under | NOT AT ALL. `pinned` is the parameters' JSON (`Spot/OneStage.lean:305-313`); nothing reads θ. |
+| 2 | that root = the record's `registered` entry's root | LEMMA: `Properties.Spot.PinnedHeld`, `pinnedHeld_of_accept` (`security/Properties/Spot.lean:285`, `security/Proofs/Properties/Spot.lean:1603`); a held value inside `R7`. |
+| 3 | the record = the one the commitment names (two stages: the boundary record's digest) | LEMMA: `digestIs_ok` (`security/Proofs/Properties/Verity/SampledTwo/Steps.lean:80`). |
+| 4 | the sessions' registered reads = the record's `{value: root}` | LEMMA (`SameRoots`, `security/Properties/Spot.lean:375`, `:383-393`). |
+
+What follows [derived]:
+- In both chains the record's side is ours and is lemmas. The registration's side, link 1 of each, is nowhere in Lean, and it is a statement about who fills our parameters.
+- Soundness's `DeclaredIsParams` is links 1 to 5 in one step, taken from the circuit file's side. For us the statement to own is link 1 alone, at the record: the parameters' `day` and `declarations` are the view's, at the head the parameters name. Links 2 and 3 then give "the record's Program is the day's declared one" with no META in it.
+- The two-stage form has no one circuit file of the served Program: the boundary registration has no session, and the second stage's sessions are over the members' circuit files, one a template [read: the form's header on the join; its code is not in the draft's tree]. `V.circuitFile θ F` is one file, so the tie as stated doesn't fit that form. Link 1 at the boundary's parameters does.
+- Not every pinned root is θ's: a window's arrivals are pinned at the root the network certifier signed (`PinnedHeld`'s docstring). `RootIsRegistered` is for the values θ names.
+- Link 1 needs three things nothing has: our parameters naming the registration's head; `day` and `declarations` no longer optional where a log is held; the spec's θ entry holding leaves, words and domain (A5).
+
+### E. The locks (item 6) [read]
+
+- `security/lean-audit.json`: `domain` gains `Verity.Registration.Valid` and `Verity.Site.Boundary` (@soundness); `witnesses` gains `RegistrationSound`; `guarantees` gains `Verity.SecurityProofs.RegistrationSound`, `_honest`, `_nontrivial` (@soundness, no assumption, nothing open); `shape.properties` gains its accept property of `Verity.Registration.Valid`. Two modules' `reads` move with `Accounting.Resource`, from `Joint.lean` to `Device.lean`.
+- `security/Properties/lean-audit.json`: two roots; `meaning` gains `CoreProtocol.Registration`; the layers of `Properties.Verity` and `Properties.Core`; `witnesses` and `guarantees` gain `Properties.Registration.checks`, `_honest`, `_nontrivial`, ALL THREE OWNED BY `@proofs`. `checks_honest` lists `Verity.Site.Boundary` under `open`, an entry of that lock owned by `@lean` (LEAN-186, due 2026-11-30), while the security lock classes the same `Prop` as `domain`. `checks` and `checks_nontrivial` list nothing, though all three read `Valid`.
+- `security/Proofs/lean-audit.json` and the two lakefiles: roots only. `verity/protocols/interface/lean-audit.json`: a layer for `CoreProtocol.Registration`. `verity/protocols/pous/lean/TRUSTED.sha256`: one pin.
+- `tests/test_lean_vocabulary.py`: `Sheet` becomes a concept, `KNOWN_MAX` goes 418 to 424, six new known duplicates of the data sheet, three of them written as proofs' to make one.
+- Does each guarantee's statement read only the definitions tree: yes. `RegistrationSound` and its two witnesses are `Prop`s under `security/Definitions/Core/Guarantees/`, importing `Definitions.Core.Registration` alone. `Checks` and the ties are properties (definitions, code and `Properties.*`, no proof). `checks_honest` and `checks_nontrivial` are stated inline in the proofs file over properties-tree instances, as `Properties.Site`'s are.
+- Choice (2): at `fc054660c826` the `Properties.Verity` layer takes `Definitions.Core.Registration`, `Flock.ProvedScope` and `NetworkCheck.Check`. At `5e3c81b9efd2` the ties are `Properties.Ties` with a layer of their own and `Properties.Verity`'s is as before. Fine. If the ties are restated at our record (D), that layer takes sampled proofs' code too.
+- At `5e3c81b9efd2` no record is regenerated, though `View` gained a field in the spec and in the code: `security/lean-audit.json` is untouched and no hash moves in the properties lock. Its own check regenerates them; the body's runs are of the older head.
+
+### Fine, one line each [read]
+
+- `RegistrationSound`, `_honest`, `_nontrivial`: say what they say (C).
+- `View.Devices` (`:117-120`), `View.Once` (`:130`): each says its docstring.
+- `View`, `view` (`:77-91`): the spec's copy of the code's view, and `Checks` proves the copy.
+- `Checks`: not empty, and no "accepts exactly when" of one function unfolded but for the chain clause (B3).
+- `denotes_once`, `names_accepted`: each says its docstring.
+- `NamesRegistered` (`Ties.lean:37`), `boundProgram` (`:45-48`), `certifiedKeys` (`:73-75`): each says its docstring; `certifiedKeys` matches the code's reading.
+- `security/Proofs/Properties/Ties.lean` at `5e3c81b9efd2` (112 lines): what a prefix registers a longer prefix registers; five monotonicity lemmas, each saying its docstring.
+- Choice (2), the ties' own prefix: fine.
+
+## STOP RULE
+
+Reading only, and it stops here. Nothing built, nothing run, no try used, nothing committed but this entry, no branch of theirs touched, nothing opened. No timer is set. The ports' keys lemma stays unwritten. My heads are unchanged (`dd528bb7b6d3` on `cursor/proofs-accepts-partsout-3153`). My mailbox held nothing new when I wrote this.
+
+## NEEDS
+
+Nothing to finish the read. Two things are yours to say:
+- whether proofs writes link 1 of each chain (D) as the ties' form for sampled proofs and offers it to soundness;
+- whether the three `Properties.Registration.checks*` records should land owned by `@proofs` (E), with `Verity.Site.Boundary` open on one of them.
+
+## Not established
+
+- Nothing was compiled or run by me. The body's runs are relayed and are of `fc054660c82`; the body names none at `5e3c81b9efd2`.
+- A1's stronger `Onsite` and B3's "any entry digest" are derived by reading, not compiled.
+- Of the two later commits I read the ties, `AtHead`, `heads` and `security/Proofs/Properties/Ties.lean`; not the 39 changed lines of `security/Proofs/Properties/Core/Registration.lean`, nor `verity/hardware/registration.py`.
+- Link 4 of the first chain: whether the verifier's `Program.sha512` is `Flock.ProvedScope.programDigest` of the session's Program bytes. Not read. Nor whether the recursive path holds a session's META Program to the parameters'.
+- Whether the two-stage path reaches R2 and R7's facts for the boundary registration: as far as I read, our two-stage Lean takes only the record's names from a registration check with no code (`SampledTwo/RecordNames.lean`).
+- [guess] That θ's value names are our registered parameters' names; that a root alone doesn't fix leaves, words and domain under frame-v3; that our parameters name no registration head (I looked only at `Spot/OneStage.lean`'s keys).
+- How `check.py` gathers a record's premises, so why `checks_honest` alone lists `Verity.Site.Boundary`.
+- Who builds the certifier check's parameters: in Lean nothing calls `NetworkCheck.Registered.registered` but its test vectors [read, by search at `fc054660c826`]; the Python side not read.
