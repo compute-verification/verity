@@ -24,8 +24,9 @@ checks of the descriptor alone, one step per member, slot and unit:
   side of `stmtOk`, `(partition h s).isSome && (two h s).isSome`, from it and each member's unit net built (`Built`,
   which the unrolled circuit of a statement `Flock.Desc.parseStmt` parsed has, flat or templated:
   `FlockSoundness.Discharge.Hidden.built_of_parseStmt`; a flat file's, `FlockC3.VStarList.built_of_parse`), where
-  every template's reference statement reads as a member's (`templateOk`, a hypothesis here: `descOk` doesn't decide
-  it).
+  every template's reference statement reads as a member's, every member's circuit is in the scope Flock's
+  hidden-output proof covers and the registered wiring passes its check (`templateOk`, `membersScoped`, `wiringOk`,
+  hypotheses here: `descOk` doesn't decide them).
 -/
 
 @[expose] public section
@@ -97,7 +98,7 @@ theorem length_memberProg (c : _root_.Flock.Circuit) (n : ℕ) : (memberProg c n
 
 /-! ## The replay partition's strata -/
 
-variable (ms : Spot.Bits.Members) (ns : Array ℕ) (l : Spot.Slots.Layout)
+variable (ms : Spot.Bits.Members) (ns : Array ℕ) (l : Spot.Slots.SlotOrder)
 
 theorem classes_filesReplay : (filesReplay ms ns l).classes =
     l.classes.toList.map fun c => c.toList.map fun s => s.toList.map (filesBlock ms ns) := rfl
@@ -130,13 +131,13 @@ theorem memberFits_of_memberOk {ci : _root_.Flock.Circuit × Array ℕ} (hU : Fl
 
 /-- **The replay layout fills the members' files**, decided: unit `x` of member `t`, of `n_t` units a request, is in
 request `x / n_t`'s run, whose slot is that request's unit. One check per unit, none per gate. -/
-def fillOk (ms : Spot.Bits.Members) (ns : Array ℕ) (l : Spot.Slots.Layout) : Bool :=
+def fillOk (ms : Spot.Bits.Members) (ns : Array ℕ) (l : Spot.Slots.SlotOrder) : Bool :=
   (List.range ms.length).all fun t => (List.range (((ms[t]?).map (·.2.size)).getD 0)).all fun x =>
     decide (0 < ns.getD t 0) && (l.blocks[x / ns.getD t 0]?).any fun b => b.unit == some (x / ns.getD t 0)
 
 section fill
 
-variable {ms : Spot.Bits.Members} {ns : Array ℕ} {l : Spot.Slots.Layout}
+variable {ms : Spot.Bits.Members} {ns : Array ℕ} {l : Spot.Slots.SlotOrder}
 
 theorem filesFill_of_fillOk (h : fillOk ms ns l = true) : FilesFill ms ns l := by
   intro t ht x hx
@@ -171,12 +172,12 @@ end fill
 
 /-- **The first stage's design on the replay layout's strata**, decided: one rule per class of `l`, each well formed
 over its class's strata sizes in slots (`oneStageOk`). -/
-def designOk (d : Design) (l : Spot.Slots.Layout) : Bool :=
+def designOk (d : Design) (l : Spot.Slots.SlotOrder) : Bool :=
   d.rules.length == l.classes.size &&
     (d.rules.zip (l.classes.toList.map fun c => c.toList.map (·.size))).all fun p => oneStageOk p.2 p.1
 
 /-- **A design is well formed on the members' replay partition** exactly when it is on the replay layout's strata. -/
-theorem wellFormed_filesReplay_iff {ms : Spot.Bits.Members} {ns : Array ℕ} {l : Spot.Slots.Layout} {d : Design} :
+theorem wellFormed_filesReplay_iff {ms : Spot.Bits.Members} {ns : Array ℕ} {l : Spot.Slots.SlotOrder} {d : Design} :
     d.WellFormed (filesReplay ms ns l) ↔ designOk d l = true := by
   show d.rules.length = (filesReplay ms ns l).classes.length ∧
       (∀ p ∈ d.rules.zip (filesReplay ms ns l).classes, p.1.WellFormed (strataSizes p.2)) ↔ _
@@ -188,7 +189,7 @@ theorem wellFormed_filesReplay_iff {ms : Spot.Bits.Members} {ns : Array ℕ} {l 
   exact and_congr_right fun _ => forall₂_congr fun p _ => ⟨oneStageOk_complete, oneStageOk_sound⟩
 
 /-- `descOk`'s checks at the members `ms`, the replay layout `l` and the first stage's design `d`. -/
-def descAt (h : Held) (ms : Spot.Bits.Members) (l : Spot.Slots.Layout) (d : Design) : Bool :=
+def descAt (h : Held) (ms : Spot.Bits.Members) (l : Spot.Slots.SlotOrder) (d : Design) : Bool :=
   ms.all memberOk && filesOk h.reg ms l h.k && fillOk ms h.reg.ns l && designOk d l && h.k.length == ms.length &&
     h.k.all (1 ≤ ·)
 
@@ -204,19 +205,22 @@ def descOk (h : Held) : Bool :=
 /-! ## The registration's side of `stmtOk` -/
 
 /-- **`two` returns the members' replay design** where the descriptor's checks pass at the replay layout and the first
-stage's design, each member's unit net is built, and every template's reference statement reads as a member's
-(`templateOk`). -/
-theorem two_of_descAt (h : Held) (s : AuditStatement) {l : Spot.Slots.Layout} {d : Design}
+stage's design, each member's unit net is built, every template's reference statement reads as a member's
+(`templateOk`), every member's circuit is in the scope Flock's hidden-output proof covers (`membersScoped`) and the
+registered wiring passes its check (`wiringOk`). -/
+theorem two_of_descAt (h : Held) (s : AuditStatement) {l : Spot.Slots.SlotOrder} {d : Design}
     (hl : (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption = some l) (hd : replayDesign h = some d)
     (hb : ∀ ci ∈ h.ms, FlockSoundness.Built ci.1.unit) (hok : descAt h h.ms l d = true)
-    (ht : ∀ t < h.ms.length, templateOk h t = true) : two h s = some ⟨filesReplay h.ms h.reg.ns l, d, h.k⟩ := by
+    (ht : ∀ t < h.ms.length, templateOk h t = true) (hsc : membersScoped h = true) (hw : wiringOk h = true) :
+    two h s = some ⟨filesReplay h.ms h.reg.ns l, d, h.k⟩ := by
   simp only [descAt, Bool.and_eq_true, List.all_eq_true, beq_iff_eq, decide_eq_true_eq] at hok
   obtain ⟨⟨⟨⟨⟨hm, hf⟩, hfill⟩, hdes⟩, hk⟩, hk1⟩ := hok
   exact two_eq_filesReplay h s hl hd (fun ci hci => memberFits_of_memberOk (hb ci hci) (hm ci hci))
-    (filesFill_of_fillOk hfill) (wellFormed_filesReplay_iff.2 hdes) hk hk1 hf ht
+    (filesFill_of_fillOk hfill) (wellFormed_filesReplay_iff.2 hdes) hk hk1 hf ht hsc hw
 
 theorem two_of_descOk (h : Held) (s : AuditStatement) (hb : ∀ ci ∈ h.ms, FlockSoundness.Built ci.1.unit)
-    (hok : descOk h = true) (ht : ∀ t < h.ms.length, templateOk h t = true) : (two h s).isSome := by
+    (hok : descOk h = true) (ht : ∀ t < h.ms.length, templateOk h t = true) (hsc : membersScoped h = true)
+    (hw : wiringOk h = true) : (two h s).isSome := by
   unfold descOk at hok
   rcases hl : (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption with _ | l
   · rw [hl] at hok
@@ -225,15 +229,16 @@ theorem two_of_descOk (h : Held) (s : AuditStatement) (hb : ∀ ci ∈ h.ms, Flo
   · rw [hl, hd] at hok
     simp at hok
   rw [hl, hd] at hok
-  simp [two_of_descAt h s hl hd hb hok ht]
+  simp [two_of_descAt h s hl hd hb hok ht hsc hw]
 
 /-- **The registration's side of `stmtOk`**, `(partition h s).isSome && (two h s).isSome`, where the registration's
-descriptor is in the two-stage scope (`descOk`), each member's unit net is built, and every template's reference
-statement reads as a member's (`templateOk`). -/
+descriptor is in the two-stage scope (`descOk`), each member's unit net is built, every template's reference
+statement reads as a member's (`templateOk`), every member's circuit is in the scope Flock's hidden-output proof
+covers (`membersScoped`) and the registered wiring passes its check (`wiringOk`). -/
 theorem partition_two_of_descOk (h : Held) (s : AuditStatement) (hb : ∀ ci ∈ h.ms, FlockSoundness.Built ci.1.unit)
-    (hok : descOk h = true) (ht : ∀ t < h.ms.length, templateOk h t = true) :
-    ((partition h s).isSome && (two h s).isSome) = true := by
-  rw [two_of_descOk h s hb hok ht]
+    (hok : descOk h = true) (ht : ∀ t < h.ms.length, templateOk h t = true) (hsc : membersScoped h = true)
+    (hw : wiringOk h = true) : ((partition h s).isSome && (two h s).isSome) = true := by
+  rw [two_of_descOk h s hb hok ht hsc hw]
   rfl
 
 end SpotFlock
