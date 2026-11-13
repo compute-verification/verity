@@ -8,6 +8,7 @@ public import Proofs.Flock.SpotFlock.RunsAs.RoundTwoOf
 public import Proofs.Flock.SpotFlock.RunsAs.SecondStageOf
 public import Proofs.Properties.Verity.SampledTwo.RecordNames
 public import Proofs.Properties.Verity.SampledTwo.RunChecks
+public import Proofs.Properties.Verity.SampledTwo.AtStmt
 
 /-!
 # The form's accept is the run's accept: the pieces joined
@@ -35,6 +36,10 @@ that are proved and so not asked:
 
 `playAccepts_form` is `PlayAccepts` from what is left. Nothing here turns the form on, and none of the premises says
 it is off.
+
+Most of the premises name the one session of record `A`, so each is false at a case map whose accepted plays carry two
+boundary records. `acceptsRun_form_at` and `reachedAccepts_form_at` ask them only of the accepted plays at the
+statement `x`, at the case map `atStmt C x` (`AtStmt.lean`), and conclude at `C`.
 -/
 
 @[expose] public section
@@ -137,5 +142,48 @@ theorem reachedAccepts_form (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionRea
     ReachedAccepts A x (formReading A C S dev) (FormAccepts C) :=
   reachedAccepts A x C S dev P' (sourcesFit A C)
     (playAccepts_form A C S P' hheld htwo hof hports hread hst hrounds hscope hpin hsess) hsm
+
+/-- **The cases at `x` carry the play's commitment where `C`'s do.** -/
+theorem caseCommits_at {C : CaseOf} (x : Msg) (h : CaseCommits C) : CaseCommits (atStmt C x) :=
+  fun o k hk => h o k (atStmt_some hk).1
+
+/-- **`ReachedAccepts` at `C` from `ReachedAccepts` at the cases at `x`** (as `acceptsRun_at`). -/
+theorem reachedAccepts_at {A : Live₂} {x : Msg} {C : CaseOf} {S : SessionReading}
+    {dev : List Verity.Release → ℕ → Option FlockDeploy.Coin}
+    (h : ReachedAccepts A x (formReading A (atStmt C x) S dev) (FormAccepts (atStmt C x))) :
+    ReachedAccepts A x (formReading A C S dev) (FormAccepts C) := by
+  intro o hA hx Ω P ω r hc hm
+  obtain ⟨hA', hin⟩ := at_of_stmt hA hx
+  obtain ⟨e₁, e₂, e₃, e₄⟩ := formReading_at (A := A) (S := S) (dev := dev) hin
+  refine h o hA' (e₁.trans hx) Ω P ω r ?_ ?_
+  · rw [e₂, e₄]; exact hc
+  · rw [e₃]; exact hm
+
+/-- **The form's accept is the run's accept, its premises asked at the plays at `x`**: `acceptsRun_form` at the cases
+at `x` (`atStmt C x`), whose accepted plays are `C`'s at the statement `x`, the only ones `AcceptsRun` at `x` looks at
+(`acceptsRun_at`). -/
+theorem acceptsRun_form_at (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
+    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
+    (hsm : SessionMsgs A (atStmt C x) S P') (hheld : HeldAt A (atStmt C x)) (htwo : TwoHolds A.h)
+    (hof : HeldOfAt A (atStmt C x)) (hports : PortsDistinctAt (atStmt C x)) (hread : RecordsRead (atStmt C x))
+    (hst : StmtsRead A (atStmt C x) S) (hrounds : RoundsHeldAt A (atStmt C x) S)
+    (hscope : ScopeHeldAt A (atStmt C x) S) (hpin : PinHeldAt A (atStmt C x) S)
+    (hsess : SessionsRun A (atStmt C x) S P') :
+    AcceptsRun A x (formReading A C S dev) (FormAccepts C) :=
+  acceptsRun_at
+    (acceptsRun_form A x (atStmt C x) S dev P' hsm hheld htwo hof hports hread hst hrounds hscope hpin hsess)
+
+/-- **The form's accept is the run's accept, with every message reached, its premises asked at the plays at `x`**:
+`reachedAccepts_form` at the cases at `x` (`reachedAccepts_at`). -/
+theorem reachedAccepts_form_at (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
+    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
+    (hsm : SessionMsgs A (atStmt C x) S P') (hheld : HeldAt A (atStmt C x)) (htwo : TwoHolds A.h)
+    (hof : HeldOfAt A (atStmt C x)) (hports : PortsDistinctAt (atStmt C x)) (hread : RecordsRead (atStmt C x))
+    (hst : StmtsRead A (atStmt C x) S) (hrounds : RoundsHeldAt A (atStmt C x) S)
+    (hscope : ScopeHeldAt A (atStmt C x) S) (hpin : PinHeldAt A (atStmt C x) S)
+    (hsess : SessionsRun A (atStmt C x) S P') :
+    ReachedAccepts A x (formReading A C S dev) (FormAccepts C) :=
+  reachedAccepts_at
+    (reachedAccepts_form A x (atStmt C x) S dev P' hsm hheld htwo hof hports hread hst hrounds hscope hpin hsess)
 
 end Verity.SampledTwo
