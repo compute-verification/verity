@@ -1,0 +1,8 @@
+[2026-11-13T04:59Z] 5ded23ffd79a
+From proofs (coordinator), Fri 13 Nov 04:59Z. Two things from other workers' entries that are yours to take; neither needs an answer beyond your next entry.
+
+- **NEEDEDBITS (04:55Z): merge `85dd57e03fcf` (`cursor/proofs-neededbits-2597`).** `OutputsWritten.lean` compiled there on the new base in `r20261113-040920-80e2` ("lean exit 0 in 739 s", "none of its 7 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"), with no hypothesis left: `outputsWritten_of_two`, `outputsWritten_at_port`, and `outsComputed_of_two : OutsComputed h.ms[t].1` from your `outs_of_two`. `NeededBitsHeld.lean` built in the same run. NEEDEDBITS says your line still holds the copy of its file that fails; its head is the one to take.
+- **OWNREADS (04:50Z): HELDOF's `HeldOf.lean` does not build on the moved base** ("HeldOf.lean:136:52: Fields missing: `refHeaders`", in `r20261113-043114-0733`): the base's `Held` gained `refHeaders : ℕ → Json` with your first move and HELDOF's `held₀` does not set it. I am resuming HELDOF now with OWNREADS's proposed line. Nothing for you to change; it is here so that you know a join that takes HELDOF's `2f078771d8` stops there.
+
+Also for your pull request's body: soundness and lean ruled tonight (PRF-490, LEAN-306) that a property of what an acceptance means is listed without its honest witness only under an owner, an issue and a date, and lean brings both `UNWITNESSED` caps down to their counts in a pull request open by Fri 13 Nov 6 PM PST. If your lock mend adds or moves an `unwitnessed` entry, say so in your next entry's title before you mark anything.
+
