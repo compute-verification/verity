@@ -112716,3 +112716,25 @@ Nothing.
 - What started the second loop, and which loop the platform will keep. [guess: a resume while a turn was open]
 - Whether the other loop has read my note. If it has not by its next commit, both of us may still write; I will not.
 - Nothing of piece E is compiled yet. The owed run (one session's coins by 07:00Z) is the other loop's `d4a0` or its successor.
+
+
+## WINDOWAT, Fri 13 Nov 01:43Z: correction to 01:37Z: the link-first gap (Finding L) is not on `main`, whose scan refuses it by accident; soundness's widened scan in #9520 opens it, so ruling 2's refusal goes on top of #9520, not on the first pull request's head
+
+**Compiled since 01:37Z: nothing new.** This corrects item 3 of my 01:37Z entry, before anything is written on it. Mailbox read at `8e81b64f8dd2`.
+
+**The correction.** I wrote that at `5d5c7183ca94` the trees' check lets a later tree's table round be opened before its link. That is false of `main`'s scan and true only of soundness's widened one:
+
+- [run: `challenger.members_tree_reason` on `test_member_trees.py`'s two-member log with one tree's rounds reordered to table round, link, closing round; python on the VM, under a second] At `5d5c7183ca94` (`main`'s `membersOrder`) it is refused, `MEMBERS_ORDER`, for the first tree and for the second. On my proving tree (soundness's `e7ad18779103`) the same two logs pass.
+- [read] Why. `main`'s scan (`Spot/ChallengerTrees.lean:408-418` at `5d5c7183ca94`) sets `closed` at any `session`-stream line of the tree after the tree's first line, and refuses a line of a tree after `closed`. A tree needs two `session` rounds, its link (`sessionTreeReason`) and its closing round (`memberTreeReason`); if its first line is not of that stream both come later, and the second is refused. So on `main` the link is first by an accident of the scan, under the reason `MEMBERS_ORDER`. Soundness's change (`fbd623491d`, in #9520: `memberLine`, lines 402-428 on their head) sets `closed` only at the round `CLOSING_ROUND` of the stream `session`, which is the right reading of a closing round, and with it that accidental refusal goes: table round, link, closing round is accepted for any tree by `membersTreeReason`. For the first tree `orderHeld` (`sampleLinkFirst`) still refuses it; for a later tree nothing does. That is Finding L, and it exists only on #9520's tree.
+
+**What it changes in ruling 2.**
+
+- The refusal cannot be cut from the first pull request's head: on `main`'s scan its reason can never be reached (every log it would refuse is `MEMBERS_ORDER` first), so a test by name could not show it. It belongs on top of #9520, where the gap is. It does not touch the first pull request's files (`ChallengerTrees.lean`, `challenger.py` and their tests, against `OneStageZk.lean`, `MembersParse.lean`, `test_difftest.py`), so the two are independent.
+- I write it on `cursor/proofs-windowat-linkfirst-5e4b` cut from soundness's head `e7ad18779103`, never pushing to their branch: self-contained (`openTree`, `linksFirstFrom`, `linksFirst`, `LINKS_FIRST`; it reads `linkLine`, which `sampleLinkFirst` already has, and neither `openOf`, which #9520 removes, nor `memberLine`), one branch more at the end of `membersTreeReason`'s body. Size as said, about 40 lines of verifier Lean. [read: `MemberForm/Order.lean:661-690`] soundness's `membersTreeReason_none` still closes with the branch added (its last case does not read the hypothesis the new `if` leaves), so no file of theirs changes; my try compiles it to be sure.
+- As a pull request it is stacked on #9520 and can open only when you say so: before #9520 lands its diff shows soundness's. Its difftest by name is a row of `test_members_twin.py`, which is on `main` and not yet in #9520's tree, so that row waits on soundness's merge of `main`. Say if you would rather soundness take the commit into #9520.
+- For soundness, to post or not as you judge: #9520's widened scan accepts a log `main`'s scan refuses (a tree's table round before its link). Nothing accepts the form, so nothing is unsound today; the window theorem's `SessionOpens` needs the link first, and this refusal restores it explicitly.
+
+**Not established**
+
+- That `main`'s scan refuses *every* such log: derived, and run on two logs.
+- The refusal: not written yet. Its Lean is next, then its try.
