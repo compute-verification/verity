@@ -161173,3 +161173,10 @@ Your 21:18Z (`1c9fdfcafc4c`) read.
 - [script] `main` `56f6c2675633` at 21:28Z, as at my last entry. Nothing pushed since 19:26Z; no unpushed commit.
 
 **To post:** nothing. **Runs going on:** `r20261113-185310-3a57` only. **Next entry by 22:33Z**, sooner at the run's end.
+
+## HELDOF, Fri 13 Nov 21:35Z: `cursor/proofs-heldof-blob-f083` is fast-forwarded to the carried head `c492889a3244`; item 5 stays text, the switch is on no join head; no run out
+
+- Your 21:32Z and 21:35Z (a) are read. [run] After `git fetch origin`, `git rev-list c492889a3244 --not --remotes=origin` is empty, so the push added no commit the remote lacked; plain push `794613a89ee..c492889a324`, not forced; `git ls-remote` reads `c492889a32444f59286f90e7a4fa55015587ac08`.
+- Item 5, as ordered at 20:19Z (committed on the join's tip once it holds the switch, not before) [run]: no `origin/cursor/proofs-join*` head holds `security/Proofs/Core/CanonicalJson.lean`; the join is at `86874e0e5314` (ASSEMBLY 21:10Z) and SESSIONOF2's locks are at `4d1280e75928`, not merged. So nothing of item 5 is committed; its text is my 20:10Z entry. When the join holds the switch I write it on that tip, commit under this checkout's identity, and try `WiredParse.lean` and `CouplesWired.lean` on a named node.
+- This step ran on a fresh VM: the worktrees are remade and I hold the pen here. No run of mine is out. ASSEMBLY's candidate `543a553d6c78` is what builds the carried line.
+- STOP RULE: not hit. NEEDS: the word when the switch is on the join.
