@@ -99,11 +99,12 @@ TODAY = ("compiled", "compiled-again", "record")
 #: the most serving with our changes may cost over stock, in percent of stock's serving time
 TARGET = 1.0
 #: by model, as the benchmark names it: the id its cost at vLLM's published settings (`PROD`'s ours over its stock) is
-#: recorded under in a run's result.json (`measurement`; benchmarks/metrics.toml), and that measurement's unit
+#: recorded under in a run's result.json (`measurement`; benchmarks/prod_repro/metrics.toml), and that measurement's
+#: unit
 METRICS = {"glm53": "vllm/prod-serving-cost-glm53"}
 UNIT = "percent of stock's serving time"
 #: by model: the ids the replay's match and the advice of the pass it re-ran are recorded under, of ours at vLLM's
-#: published settings (`PROD`'s ours), and their units (`measurements`; benchmarks/metrics.toml)
+#: published settings (`PROD`'s ours), and their units (`measurements`; benchmarks/prod_repro/metrics.toml)
 MATCH = {"glm53": "vllm/prod-replay-match-glm53"}
 ADVICE = {"glm53": "vllm/prod-advice-bits-glm53"}
 MATCH_UNIT, ADVICE_UNIT = "percent of served tokens", "bits a request"

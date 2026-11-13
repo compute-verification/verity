@@ -129,7 +129,7 @@ STUBS = {
 DEMO_A = ("integrity", "pouw", "certifier")
 PROTOCOL_NAMES = {"integrity": "SPOT", "pouw": "PoUW", "certifier": "network certifier", "pous": "PoUS",
                   "bandwidth": "the bandwidth audit", "wipe": "the wipe"}
-PERIODS = block_record.PERIODS
+PERIODS = block_record.MONITORING_PERIODS
 #: retired words, and the old names of the six subprotocols; a code span (a field or a quoted verdict line) is exempt
 BANNED = re.compile(r"\b(legs?|windows?|templates?|integrity|work|space|communication)\b", re.IGNORECASE)
 CODE_SPAN = re.compile(r"(`+)(?:(?!\1).)+?\1")
