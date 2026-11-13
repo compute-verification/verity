@@ -15,8 +15,10 @@ reference statements `xs₀`. A reference statement (`SpotFlock.HeldOf.refRawOf`
 member's circuit file and public file, each the blob under a digest the parameters name (`Core.Blobs.get`), and the
 pinned lookup tables the blobs hold (`Spot.OneStageZk.tablesOf`), each the first blob under a digest the verifier pins
 (`Flock.MUFU_TABLES`). The blobs are the ones the prover sent (`CaseIsSent`), so each read is checked here against
-its digest, with a collision as the second way out: two of the blobs sent differ under one SHA-512 (`BlobsCollide`,
-`SentCollides`). No statement takes a premise on SHA-512.
+its digest, with a collision as the second way out: a blob of the play and a blob of an array the statement is given
+differ under one SHA-512 (`BlobsCollide`). No statement takes a premise on SHA-512, and no collision is under an `∃`
+over plays: each conclusion is per accepted play (`RefsAtOr`, `HeldOfAtOr`), its pair a blob of that play and a blob
+of the array given.
 
 * **The files** are pinned: two plays' blobs give one file under one digest, or collide (`get_same`).
 * **Each table's bytes** are pinned: where two plays' blobs both hold a pinned table, its two files are one or collide.
@@ -26,8 +28,9 @@ its digest, with a collision as the second way out: two of the blobs sent differ
   (`Spot.OneStageZk.tablesHeld`: the registration's circuit file, under its digest, looks up exactly the pinned tables
   the blobs hold): `names_same`.
 
-So `RefsAt` holds at the reference statements of any one accepted play, or two of the blobs sent collide, on a case
-map whose accepted plays all passed the tables' check at one registration (`TablesHeldAt`): `refsAt_of_held`.
+So at blobs `F₀` that give `xs₀` and passed the tables' check at one registration, each accepted play's blobs give
+`xs₀` or collide with `F₀`, on a case map whose accepted plays all passed the check there (`TablesHeldAt`):
+`refsAtOr_of_tables`, and `refsAt_of_held` at `F₀` an accepted play's blobs.
 
 ## What the form checks of the tables
 
@@ -36,8 +39,8 @@ The per-member form's run reads every member's statement, whichever members the 
 (`memberStatement_tables`). So every member of an accepted play's parameters has its circuit
 file on the blobs, and the file looks up exactly the tables the blobs hold (`accepted_tables`), and on a case map
 whose accepted plays decode one parameters (`DecodesAt`) every accepted play passed the check at template 0's member
-(`tablesHeldAt_of_accept`). `refsAt_of_accept` is `RefsAt` from `CaseIsSent` and `DecodesAt` alone, or a collision,
-and `heldOfAt_or_collide` the held copies at the cases at one statement.
+(`tablesHeldAt_of_accept`). `refsAt_of_accept` is `RefsAtOr` from `CaseIsSent` and `DecodesAt` alone, and
+`heldOfAt_or_collide` the held copies per play at the cases at one statement (`HeldOfAtOr`, `heldOfAtOr_at`).
 
 ## What this does not show
 
@@ -118,10 +121,6 @@ private theorem filterMap_eq_of_names {τ : Type} {name : τ → String} {L : Li
 SHA-512. -/
 def BlobsCollide (F F' : Array ByteArray) : Prop :=
   ∃ b ∈ F, ∃ b' ∈ F', b ≠ b' ∧ Flock.Sha512.hash b = Flock.Sha512.hash b'
-
-/-- **Two of the blobs sent differ under one SHA-512**: two plays the form accepts on `C` sent blobs that collide. -/
-def SentCollides (C : CaseOf) : Prop :=
-  ∃ o o', FormAccepts C o ∧ FormAccepts C o' ∧ BlobsCollide o.sent.blobs o'.sent.blobs
 
 /-! ## A file under a digest -/
 
@@ -312,40 +311,64 @@ theorem names_same {q : _root_.Spot.OneStageZk.Own} {F F' : Array ByteArray}
 theorem caseIsSent_at {C : CaseOf} (x : Claims.Msg) (h : CaseIsSent C) : CaseIsSent (atStmt C x) :=
   fun o k p c e hk hdec => h o k p c e (atStmt_some hk).1 hdec
 
-/-- **The reference statements of one accepted play are every accepted play's, or two of the blobs sent differ under
-one SHA-512**, on a case map whose cases are the ones sent (`CaseIsSent`), whose accepted plays decode one parameters
-(`DecodesAt`) and passed the tables' check at one registration (`TablesHeldAt`). -/
+/-! ## Per play: `RefsAt` or a collision with the blobs given -/
+
+/-- **Each accepted play's blobs give the reference statements `xs₀`, or collide with the blobs `F₀`**: `RefsAt`
+per play, the play's way out a collision between its own blobs and `F₀`, which the statement is given. -/
+def RefsAtOr (C : CaseOf) (xs₀ : List Claims.Msg) (F₀ : Array ByteArray) : Prop :=
+  ∀ o k p c e xs, FormAccepts C o → C o = some k → Decoded k p c e → refStmtsOf p k.blobs = some xs →
+    xs = xs₀ ∨ BlobsCollide o.sent.blobs F₀
+
+/-- **Each accepted play's held copies are the ones `heldOf` builds, or its blobs collide with the blobs `F₀`**:
+`HeldOfAt` per play, the play's way out a collision between its own blobs and `F₀`, which the statement is given. -/
+def HeldOfAtOr (A : Live₂) (C : CaseOf) (F₀ : Array ByteArray) : Prop :=
+  ∀ o i it, FormAccepts C o → inputOn C o = some i → i.interior = some it →
+    (∃ u, SpotFlock.HeldOf.heldOf i it u = some A.h) ∨ BlobsCollide o.sent.blobs F₀
+
+/-- **`RefsAtOr` at blobs `F₀` that give `xs₀` and passed the tables' check at the registration `q`**, on a case map
+whose cases are the ones sent (`CaseIsSent`), whose accepted plays decode one parameters (`DecodesAt`) and passed the
+tables' check at `q` (`TablesHeldAt`). -/
+theorem refsAtOr_of_tables {C : CaseOf} {P : VStar.Recursive.SampledTwo.Params} {q : _root_.Spot.OneStageZk.Own}
+    {F₀ : Array ByteArray} {xs₀ : List Claims.Msg}
+    (hS : CaseIsSent C) (hP : DecodesAt C P) (hT : TablesHeldAt C q)
+    (hT₀ : Properties.Spot.HoldsRegisteredTables q (_root_.Core.Blobs.ofArray F₀))
+    (hx₀ : refStmtsOf P (_root_.Core.Blobs.ofArray F₀) = some xs₀) : RefsAtOr C xs₀ F₀ := by
+  intro o k p c e xs hA hk hdec hx
+  have hpP : p = P := hP o k p c e hA hk hdec
+  subst hpP
+  have hb := (hS o k _ c e hk hdec).2
+  have hh := hT o k hA hk
+  rw [hb] at hx hh
+  by_cases hne : BlobsCollide o.sent.blobs F₀
+  · exact .inr hne
+  exact .inl ((refStmts_same hx hx₀ ((names_same hh hT₀).resolve_right hne)).resolve_right hne)
+
+/-- **Each accepted play's reference statements are the play `o₀`'s, or its blobs collide with `o₀`'s**, on a case
+map whose cases are the ones sent (`CaseIsSent`), whose accepted plays decode one parameters (`DecodesAt`) and passed
+the tables' check at one registration (`TablesHeldAt`), at the accepted play `o₀` the statement is given. -/
 theorem refsAt_of_held {C : CaseOf} {P : VStar.Recursive.SampledTwo.Params} {q : _root_.Spot.OneStageZk.Own}
     {o₀ : Verity.Exchange} {k₀ : Case} {c₀ : _root_.Spot.OneStage.Commitment}
     {e₀ : VStar.Recursive.SampledTwo.Evidence} {xs₀ : List Claims.Msg}
     (hS : CaseIsSent C) (hP : DecodesAt C P) (hT : TablesHeldAt C q)
     (hA₀ : FormAccepts C o₀) (hk₀ : C o₀ = some k₀) (hd₀ : Decoded k₀ P c₀ e₀)
-    (hx₀ : refStmtsOf P k₀.blobs = some xs₀) : RefsAt C xs₀ ∨ SentCollides C := by
-  by_cases hcol : SentCollides C
-  · exact .inr hcol
-  refine .inl fun o k p c e xs hA hk hdec hx => ?_
-  have hpP : p = P := hP o k p c e hA hk hdec
-  subst hpP
-  have hb := (hS o k _ c e hk hdec).2
+    (hx₀ : refStmtsOf P k₀.blobs = some xs₀) : RefsAtOr C xs₀ o₀.sent.blobs := by
   have hb₀ := (hS o₀ k₀ _ c₀ e₀ hk₀ hd₀).2
-  have hh := hT o k hA hk
   have hh₀ := hT o₀ k₀ hA₀ hk₀
-  rw [hb] at hx hh
   rw [hb₀] at hx₀ hh₀
-  have hne : ¬ BlobsCollide o.sent.blobs o₀.sent.blobs := fun hc => hcol ⟨o, o₀, hA, hA₀, hc⟩
-  exact (refStmts_same hx hx₀ ((names_same hh hh₀).resolve_right hne)).resolve_right hne
+  exact refsAtOr_of_tables hS hP hT hh₀ hx₀
 
-/-- **The reference statements of one accepted play are every accepted play's, or two of the blobs sent differ under
-one SHA-512**, on a case map whose cases are the ones sent (`CaseIsSent`) and whose accepted plays decode one
-parameters (`DecodesAt`). Where the parameters name a template, every accepted play passed the tables' check at
-template 0's member (`tablesHeldAt_of_accept`); where they name none, every play's reference statements are none. -/
+/-- **Each accepted play's reference statements are the play `o₀`'s, or its blobs collide with `o₀`'s**, on a case
+map whose cases are the ones sent (`CaseIsSent`) and whose accepted plays decode one parameters (`DecodesAt`). Where
+the parameters name a template, every accepted play passed the tables' check at template 0's member
+(`tablesHeldAt_of_accept`); where they name none, every play's reference statements are none. -/
 theorem refsAt_of_accept {C : CaseOf} {P : VStar.Recursive.SampledTwo.Params} {o₀ : Verity.Exchange} {k₀ : Case}
     {c₀ : _root_.Spot.OneStage.Commitment} {e₀ : VStar.Recursive.SampledTwo.Evidence} {xs₀ : List Claims.Msg}
     (hS : CaseIsSent C) (hP : DecodesAt C P)
     (hA₀ : FormAccepts C o₀) (hk₀ : C o₀ = some k₀) (hd₀ : Decoded k₀ P c₀ e₀)
-    (hx₀ : refStmtsOf P k₀.blobs = some xs₀) : RefsAt C xs₀ ∨ SentCollides C := by
+    (hx₀ : refStmtsOf P k₀.blobs = some xs₀) : RefsAtOr C xs₀ o₀.sent.blobs := by
   by_cases hz : P.circuits.size = 0
-  · refine .inl fun o k p c e xs hA hk hdec hx => ?_
+  · intro o k p c e xs hA hk hdec hx
+    refine .inl ?_
     have hpP : p = P := hP o k p c e hA hk hdec
     subst hpP
     have h1 := SpotFlock.HeldOf.refStmtsOf_length hx
@@ -356,15 +379,71 @@ theorem refsAt_of_accept {C : CaseOf} {P : VStar.Recursive.SampledTwo.Params} {o
     obtain ⟨m₀, -, -, hm, -⟩ := refRawOf_some hr
     exact refsAt_of_held hS hP (tablesHeldAt_of_accept hP hm) hA₀ hk₀ hd₀ hx₀
 
-/-- **The held copies at the cases at one statement, or two of the blobs sent differ under one SHA-512**:
-`heldOfAt_at` with `RefsAt` from `refsAt_of_accept`, at the reference statements `xs₀` of one accepted play. -/
+/-- **`HeldOfAtOr` at the cases at the statement `x`**: `heldOfAt_at` per play, from `RefsAtOr` in place of
+`RefsAt`. -/
+theorem heldOfAtOr_at {A : Live₂} {C : CaseOf} {x : Claims.Msg} {P : VStar.Recursive.SampledTwo.Params}
+    {j : Lean.Json} {xs₀ : List Claims.Msg} {F₀ : Array ByteArray} (u₀ : Unread) (hd : DescAt (atStmt C x))
+    (hP : DecodesAt (atStmt C x) P) (hR : RefsAtOr (atStmt C x) xs₀ F₀) (hj : SpotFlock.jsonMsg x = some j)
+    (hA : CopyOf A P j { u₀ with xs := xs₀ }) : HeldOfAtOr A (atStmt C x) F₀ := by
+  intro o i it hacc hi hit
+  obtain ⟨k, hk, p, c, e, -, -, hdec, -⟩ := id hacc
+  obtain ⟨xs, h, hx, hh⟩ := SpotFlock.HeldOf.heldOf_of_descOk u₀ (hd o k p c e i it hacc hk hdec hi hit)
+  obtain rfl := hP o k p c e hacc hk hdec
+  rcases hR o k p c e xs hacc hk hdec hx with rfl | hcol
+  · obtain ⟨j₁, hj₁, hrec, hpar, hrule, hcl, hip, hrep, hcirc⟩ := fields_of_accept hacc hk hdec hi hit
+    have hmsg : recordMsg i.record = some x := (inputOn_at hi).2
+    rw [hrec] at hmsg
+    have hjj : j₁ = j := Option.some.inj ((jsonMsg_of_readBack hj₁ hmsg).symm.trans hj)
+    obtain rfl := hA i it h (by rw [hpar]) (hrec.trans hjj) hrule hcl (by rw [hip]) hrep hcirc hh
+    exact .inl ⟨_, hh⟩
+  · exact .inr hcol
+
+/-- **Each accepted play at one statement has the held copies, or its blobs collide with the play `o₀`'s**:
+`heldOfAtOr_at` with `RefsAtOr` from `refsAt_of_accept`, at the reference statements `xs₀` of the accepted play
+`o₀` the statement is given. -/
 theorem heldOfAt_or_collide {A : Live₂} {C : CaseOf} {x : Claims.Msg} {P : VStar.Recursive.SampledTwo.Params}
     {j : Lean.Json} {o₀ : Verity.Exchange} {k₀ : Case}
     {c₀ : _root_.Spot.OneStage.Commitment} {e₀ : VStar.Recursive.SampledTwo.Evidence} {xs₀ : List Claims.Msg}
     (u₀ : Unread) (hS : CaseIsSent C) (hd : DescAt (atStmt C x)) (hP : DecodesAt (atStmt C x) P)
     (hA₀ : FormAccepts (atStmt C x) o₀) (hk₀ : atStmt C x o₀ = some k₀)
     (hd₀ : Decoded k₀ P c₀ e₀) (hx₀ : refStmtsOf P k₀.blobs = some xs₀) (hj : SpotFlock.jsonMsg x = some j)
-    (hA : CopyOf A P j { u₀ with xs := xs₀ }) : HeldOfAt A (atStmt C x) ∨ SentCollides (atStmt C x) :=
-  (refsAt_of_accept (caseIsSent_at x hS) hP hA₀ hk₀ hd₀ hx₀).imp_left fun hR => heldOfAt_at u₀ hd hP hR hj hA
+    (hA : CopyOf A P j { u₀ with xs := xs₀ }) : HeldOfAtOr A (atStmt C x) o₀.sent.blobs :=
+  heldOfAtOr_at u₀ hd hP (refsAt_of_accept (caseIsSent_at x hS) hP hA₀ hk₀ hd₀ hx₀) hj hA
+
+/-! ## Anchored on files the statement is given -/
+
+/-- **Each accepted play's reference statements are the files `B₀`'s, or its blobs collide with `B₀`**, on a case
+map whose cases are the ones sent (`CaseIsSent`) and whose accepted plays decode the parameters `P` (`DecodesAt`), at
+files `B₀` the statement is given that give the reference statements `xs₀` and passed the tables' check at template
+0's member. No accepted play is read beyond the one at hand. -/
+theorem refsAtOr_of_files {C : CaseOf} {P : VStar.Recursive.SampledTwo.Params} {B₀ : Array ByteArray}
+    {xs₀ : List Claims.Msg} (hS : CaseIsSent C) (hP : DecodesAt C P)
+    (hT₀ : ∀ m₀, memberOf P 0 = some m₀ →
+      Properties.Spot.HoldsRegisteredTables m₀.own (_root_.Core.Blobs.ofArray B₀))
+    (hx₀ : refStmtsOf P (_root_.Core.Blobs.ofArray B₀) = some xs₀) : RefsAtOr C xs₀ B₀ := by
+  by_cases hz : P.circuits.size = 0
+  · intro o k p c e xs hA hk hdec hx
+    refine .inl ?_
+    have hpP : p = P := hP o k p c e hA hk hdec
+    subst hpP
+    have h1 := SpotFlock.HeldOf.refStmtsOf_length hx
+    have h2 := SpotFlock.HeldOf.refStmtsOf_length hx₀
+    rw [hz] at h1 h2
+    rw [List.eq_nil_of_length_eq_zero h1, List.eq_nil_of_length_eq_zero h2]
+  · obtain ⟨r, hr, -⟩ := SpotFlock.HeldOf.refStmtsOf_getElem? hx₀ (Nat.pos_of_ne_zero hz)
+    obtain ⟨m₀, -, -, hm, -⟩ := refRawOf_some hr
+    exact refsAtOr_of_tables hS hP (tablesHeldAt_of_accept hP hm) (hT₀ m₀ hm) hx₀
+
+/-- **Each accepted play at one statement has the held copies, or its blobs collide with the files `B₀`**:
+`heldOfAtOr_at` with `RefsAtOr` from `refsAtOr_of_files`, where `A.h` is the copy `heldOf` builds from the parameters
+`P`, the record read from `x` and the reference statements `xs₀` the files `B₀` give (`CopyOf`). -/
+theorem heldOfAtOr_of_files {A : Live₂} {C : CaseOf} {x : Claims.Msg} {P : VStar.Recursive.SampledTwo.Params}
+    {j : Lean.Json} {B₀ : Array ByteArray} {xs₀ : List Claims.Msg} (u₀ : Unread) (hS : CaseIsSent C)
+    (hd : DescAt (atStmt C x)) (hP : DecodesAt (atStmt C x) P)
+    (hT₀ : ∀ m₀, memberOf P 0 = some m₀ →
+      Properties.Spot.HoldsRegisteredTables m₀.own (_root_.Core.Blobs.ofArray B₀))
+    (hx₀ : refStmtsOf P (_root_.Core.Blobs.ofArray B₀) = some xs₀) (hj : SpotFlock.jsonMsg x = some j)
+    (hA : CopyOf A P j { u₀ with xs := xs₀ }) : HeldOfAtOr A (atStmt C x) B₀ :=
+  heldOfAtOr_at u₀ hd hP (refsAtOr_of_files (caseIsSent_at x hS) hP hT₀ hx₀) hj hA
 
 end Verity.SampledTwo
