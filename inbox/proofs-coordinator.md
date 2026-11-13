@@ -120464,3 +120464,35 @@ Nothing.
   - `r20261113-042954-f29b` (cpu-8): 17 suites on the moved tree `88597ed28b6f` (`repository`, `verity-cli`, `demos/lifecycle`, `benchmarks/one_stage`, `benchmarks/prove_path`, `benchmarks/remote_session`, `verity-core-composition`, `verity-lean-audit`, `verity-check`, `tools/move`, `verity-graph`, `research`, the certifier's verifier and its network suite, `verity/protocols/tests`, SPOT's verifier, `verity/hardware`). Waiting for a slot at 04:31Z; about three hours once it has one, so 07:45Z at the earliest [derived]. The whole moved tree touches 87 suites; these are the ones that read the moved paths, by my reading.
 - **Not established, unchanged:** the two runs above, and any Lean build on the moved tree.
 - No timer set, no subscription held. Resume me when `46a8` ends, for #9602's ready line.
+
+## NEEDEDBITS, Fri 13 Nov 04:32Z: nothing new compiled; the output fact's try `r20261113-033047-0355` has built for 26 minutes and has no verdict yet; my branch now holds the moved base through FRAME's line (`85dd57e03fcf`), and the same file is in a second try there (`r20261113-040920-80e2`)
+
+**In plain words.** Compiled since 03:14Z: nothing. The fact that every bit of every output word of a unit, of an inner block or an outer block alike, is a written bit waited 34 minutes for a machine place and has been building what it rests on since 04:05Z; Lean has not reached my file. While it built I merged FRAME's line, which now holds the moved base, and put the same file in line a second time at that head, so that a pass on the old base is followed by a verdict on the new one without another wait. Your 03:58Z message is read; its first line does not touch my statements, and the join does not read them yet.
+
+**Tries** (machine vy-nebius-2, `--pool proofs`)
+- [run: `r20261113-033047-0355`, running] `OutputsWritten.lean` at `d9f0c6183c12` (the old base, FRAME's line at `8c37334cc716`). In line from 03:30Z, a check place at 03:54Z, a Lean place at 04:05Z; at 04:31Z its log reads "[11298/11359] Built Proofs.Flock.SpotFlock.RevealAt". No verdict. The build is slower than `ab80`'s 17 minutes for the same step.
+- [run: `r20261113-040920-80e2`, running] The same file at `85dd57e03fcf` (the new base). In line from 04:09Z, a check place at about 04:30Z, three ahead of it for a Lean place at 04:32Z. If `0355` fails in my file before this one starts to build, I cancel it and send the mended head; once it builds I leave it.
+- [read] Since 03:32Z I reread each step of the two proofs Lean has never elaborated (`covered_of_parse`, `written_of_word`) and of the four theorems under them against the lemmas they call, and each core lemma against a use of it that compiles elsewhere in the tree. I changed nothing. That is reading, not a compile.
+
+**The merge** (your 03:58Z line 3)
+- [run: `git merge`] My branch holds FRAME's line `cursor/proofs-frame-l1-9c4e` at `f00922d4e938`, which holds the moved base `e033bfc14be4` (`main` at `4a7291116e11`) and FRAME's rename of `WiringRows`' `rows_of_two` to `namedRows_of_two`. No conflict. I took FRAME's line and not the base alone, so FRAME resolves its own files against `main` and I only follow.
+- [run: `git diff 0a2a205017 85dd57e03fcf -- security/Proofs/Flock/SpotFlock/NeededBitsHeld.lean`] Empty: the file that compiled is the file at my head. It has not been compiled on the new base.
+- [read] Two files my proofs call into changed in `main`: `security/Proofs/Flock/Soundness/Discharge/Hidden/Rows.lean` (`outGroup_single` is now a corollary of `outGroup_singleN`, the same statement) and `security/Proofs/Flock/Soundness/Discharge/HiddenExec/Ret.lean` (`outAt_size` and `outPortOf_spec` keep their statements). Every import of my two files exists in the merged tree, and no file of mine names `Spot.Slots.Layout` [run: `grep`].
+
+**Your 03:58Z lines 1, 4 and 5**
+- [read] Line 1: no statement of mine is over the form's accept, and none reads the form (`Accepts`, `checkBlobsAtWith`). `neededBits_held` and `writtenOnce_held` hold at every held code; `rowsArePorts_of_two`, `membersRowed_of_two` and the three output facts hold where the design evaluates (`two h s = some d`), which a checked run's does (`CheckedRun.Ok`). They are empty for another reason, the one HONEST2 names at 04:13Z: no registration is shown here at which `two` evaluates. FRAME's guard on Friday's registration is the run that would show it.
+- [run: `git merge-base --is-ancestor`, `git grep`] Line 4: the join's branch `cursor/proofs-join-42b8` at `30199c131c20` holds none of my commits and names none of my theorems. So no statement the join reads has changed. For whoever reads `outputsWritten_of_two` later: since `efe3ecbcf937` it takes no `hC`.
+- [read] Line 5: I list no guarantee.
+
+**Notifications of yours that reached me** [read: the notifications; `list_subscriptions` shows only my own timers]
+- Between 03:35Z and 03:37Z, eleven of your timers after the one in my 03:34Z entry: `proofs-1650Z-prf589-read`, `proofs-1905z-marks`, `proofs-1955z-runs`, `proofs-2015z-posts`, `proofs-2108z-daniel-answers`, `two-round-2-25pm-pst`, `proofs-2250z-board`, `board-3pm-pst`, `history-launch-retry`, `launch-retry-2355z`, `gather-five-facts-0030z`, fired Thu 16:50Z to Fri 00:24Z. I acted on none: no mark, no post, no launch, no resume, and I did not open your `due.md`.
+
+Pushed: `cursor/proofs-neededbits-2597` at `85dd57e03fcf`; nothing unpushed.
+
+Not established:
+- that `OutputsWritten.lean` compiles, on either base;
+- that `NeededBitsHeld.lean` compiles on the new base (it is built as a dependency in `80e2`, with no axiom probe of its own there);
+- a registration at which `two` evaluates;
+- the clause on Friday's 20 circuit files by a run.
+
+I wait on `r20261113-033047-0355`: its verdict about 04:40Z [guess]. Then on `r20261113-040920-80e2`: about 05:05Z [guess].
