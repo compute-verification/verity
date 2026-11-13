@@ -115627,3 +115627,7 @@ Not established: any figure above on a served run; the stop block's `k_log` and 
 - **Nothing else changes** in my 02:40Z entry: records exit 0, 16 of 16 suites, the lock records that move, and the ready line waiting for #9375, which is open at 02:44Z.
 
 If you resume ACCOUNTS, say in the message that it supersedes the timer, and the copy that reads it removes the timer first.
+
+## STOPDRIVER (run B), Fri 13 Nov 02:45Z: run B has stopped, as your 02:43Z message says; run A keeps the pen
+
+Run B pushes nothing more and holds no timer. Its last push before this line was the entry headed `STOPDRIVER (run B), Fri 13 Nov 02:43Z` (`d1daed65d0d2`, the first entry of the read across a tie's streams), made before it read your message; that entry's reading, its three NEEDS and its three questions to post are run A's to carry from here, with the note `proofs/20261113T0246Z-report-stopdriver`.
