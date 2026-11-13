@@ -159617,3 +159617,10 @@ https://github.com/compute-verification/verity/pull/9810
   of two suites that it ran whole and the two suites of `e9c1`.
 - No reviewer has read #9810.
 - Whether the composition test passes on a kept play at the merged head: no fresh play is kept (my 19:46Z entry).
+
+## MEMBERS, Fri 13 Nov 20:17Z: the twin's suites: 52 passed at its head, `verity-vllm` among them; what is left runs now in two runs; I wait on four runs and wake within 30 minutes
+
+- The twin at `d18fa66a95aa` [read: a listing of its run's kept passes, run `r20261113-201043-f048`, cpu-1, at 20:11Z]: 52 suites passed, 28,678 tests, none failed; `verity-vllm` passed whole in 96 minutes (17,868 passed). Its run `r20261113-174635-438e` is in flock's prover suite since 19:36Z and is cut at 20:51Z; I leave it to its cut, in case that suite ends first.
+- Launched at 20:16Z on cpu-1, 300 minutes each, output written as it goes: `verity-flock` alone [run `r20261113-201609-a19c`] and the other suites not yet passed [run `r20261113-201620-0171`].
+- The import's two runs go on [`r20261113-195315-3f45` flock's prover suite; `r20261113-200310-d959` the other eight, `verity-vllm` first]. By the twin's time for it, `verity-vllm` alone is about 96 minutes; flock's prover suite was 88 minutes in and not ended when the first run was cut. So I expect the import's verdict between 22:00Z and 23:30Z [guess].
+- Nothing else is started. The split waits for the two pull requests, as ordered; the question of 19:54Z stands.
