@@ -27,6 +27,13 @@ is resumed with the text itself), `worktree_guard.py` (one agent per checkout), 
 `env` that redacts values and a `git` that keeps credentials out of remote URLs and gives every push `pre_push.py`,
 which `install.sh` puts ahead of the system's), and `settings.py` (every environment variable the hooks share, read once).
 
+The event log (`settings.record_event`; `$AGENT_GUARD_EVENT_LOG`, default `/tmp/agent-guard-events.jsonl`) holds one line
+for each run of the shell, Task and stop hooks: when, which hook, the event's name, its conversation id and tool name, the
+payload's key names, and of the payload's other values only `model` and `generation_id` (the turn's id), each where the
+payload has it as a string, cut at 64 characters; never the command, a path or an address. Past about 1 MB it is renamed
+to `.1` and started again. `inbox.py check`, `selftest` and `guard` read from it whether a shell hook has run for an agent,
+and `inbox.py turns` the model each of an agent's turns names there. Each VM's log is its own.
+
 The push rules, typed (`worktree_guard.py`) or in `pre_push.py`, cover the queue's two repositories alone
 (`worktree_guard.queue_remote`: their GitHub URLs exactly, in https, ssh or scp form, with or without `.git` and a credential;
 `AGENT_GUARD_PUSH_REMOTES` names others in their place). The registry is the VM's own and names a branch without its
@@ -66,6 +73,7 @@ git -C /workspace show origin/main:tools/agent-guard/boot.sh | bash -s -- /works
 python3 tools/agent-guard/inbox.py send AGENT_ID --text 'TEXT'     tell a running agent something
 python3 tools/agent-guard/inbox.py list                            each agent's pending and delivered messages
 python3 tools/agent-guard/inbox.py check AGENT_ID                  on its own VM: whether its hook polls for it
+python3 tools/agent-guard/inbox.py turns [AGENT_ID]                on its own VM: the model each of its turns names in the event log
 python3 tools/agent-guard/procs.py [PATTERN]                       processes and their command lines, tokens cut
 python3 tools/agent-guard/worktree_guard.py hand BRANCH AGENT_ID   give a branch you created to another agent
 python3 tools/agent-guard/worktree_guard.py list                   each worktree's owner

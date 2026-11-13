@@ -1,7 +1,6 @@
 """`verity-vllm verdict` -- a row's Commit verdict record (`check.verdict`), rebuilt from the row's evidence.
 
     verity-vllm verdict from-record <row_dir> [--out PATH]      rebuild the record from a row's evidence
-    verity-vllm verdict mapping                                  the old -> new check-name table (markdown)
 """
 from __future__ import annotations
 
@@ -9,8 +8,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from verity_vllm.check.verdict import from_record
-from verity_vllm.check.verdict_names import mapping_markdown
 from verity_vllm.config import option
+
+__all__ = ["COMMANDS", "main"]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -27,20 +27,10 @@ class FromRecordOptions:
     cmd: str = field(default="from-record", init=False)
 
 
-@dataclass(frozen=True, kw_only=True)
-class MappingOptions:
-    """print the old -> new check-name table (markdown)"""
-
-    cmd: str = field(default="mapping", init=False)
+COMMANDS = {"from-record": FromRecordOptions}
 
 
-COMMANDS = {"from-record": FromRecordOptions, "mapping": MappingOptions}
-
-
-def main(a: FromRecordOptions | MappingOptions) -> int:
-    if a.cmd == "mapping":
-        print(mapping_markdown(), end="")
-        return 0
+def main(a: FromRecordOptions) -> int:
     v = from_record(a.row_dir, rc=a.rc, stage_ok=a.stage_ok)
     out = Path(a.out) if a.out else Path(a.row_dir) / "verdict.json"
     v.write(out)

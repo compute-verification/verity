@@ -23,13 +23,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.circuits import Program, bind
 from verity.circuits.codec import program_digest
-from verity.definitions.registry import b1, serve3
 from verity.definitions.numerics import serve3_reference as ref
+from verity.definitions.registry import b1, serve3
 from verity.definitions.registry.b1 import weights_type
 
-TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
-        "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 16, "BIAS": True,
-        "tie_word_embeddings": True, "profile": {}}
+TINY: dict = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
+              "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 16, "BIAS": True,
+              "tie_word_embeddings": True, "profile": {}}
 LP, D_MAX = 4, 8
 #: raw greedy samples of `Serve_v1{TINY, LP=4, STEPS=8}` on the fixture inputs (pinned; y[3]=17 is fresh)
 Y_RAW = [15, 23, 26, 17, 26, 17, 26, 17, 26]
@@ -41,7 +41,7 @@ def c3(eos: int) -> dict:
     return {**TINY, "EOS_ID": eos}  # C₃ = {**C, "EOS_ID": id} at the binding site
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _inputs() -> tuple[tuple[int, ...], tuple[int, ...]]:
     rng = np.random.default_rng(1001)
     w = ((rng.standard_normal(weights_type(TINY).leaves) * 0.05).astype(np.float32).view(np.uint32) >> 16)
@@ -49,7 +49,7 @@ def _inputs() -> tuple[tuple[int, ...], tuple[int, ...]]:
     return tuple(int(x) for x in prompt), tuple(int(x) for x in w)
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _v1(steps: int):
     """(program, transcript, outputs) of the frozen `Serve_v1{TINY, LP, STEPS=steps}`."""
     prompt, w = _inputs()
@@ -58,7 +58,7 @@ def _v1(steps: int):
     return prog, t, [t[g] for g in prog.circuit.root_outputs()]
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _v3(eos: int):
     """(program, transcript, out, live) of `Serve_v3{TINY_PAD(eos), LP, D_MAX, Ampere}`."""
     prompt, w = _inputs()

@@ -1,7 +1,7 @@
 # infra
 
 Our machines: the shared CPU and GPU nodes, the control pod that watches them, and the tools that launch the coordinators.
-Nothing outside `infra/` imports it, apart from the files `INFRA_IMPORTERS` in `tests/test_boundaries.py` names; the
+Nothing outside `infra/` imports it, apart from the ties `tests/import_order.toml` lists into its row, the last; the
 `research` command reaches `ops` and `cluster` by running them, never by import. `cluster`, `control`, `cursor` and
 `slack-events` each have a README with the detail; `ops` and `nebius` are described here. This page maps each machine
 and loop to its code.

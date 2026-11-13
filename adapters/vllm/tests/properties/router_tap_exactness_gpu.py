@@ -18,6 +18,7 @@ import multiprocessing as mp
 import os
 import platform
 import random
+import struct
 import sys
 import time
 import types
@@ -35,7 +36,6 @@ PROMPTS = ("The capital of France is", "def fibonacci(n):\n    ", "Mixture-of-ex
 
 
 def _bf16(v: float) -> int:
-    import struct
     return struct.unpack("<I", struct.pack("<f", v))[0] >> 16
 
 
