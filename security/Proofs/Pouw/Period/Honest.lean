@@ -273,7 +273,7 @@ theorem every_perLiveTile {P : Kind → ReceiptGame Bool 1 → ReceiptGame Bool 
 /-- **The honest period passes every prefix of its game**, at any weights and costs. -/
 theorem acceptsUpTo_period (wt : (Fin 144 → Bool) → Fin 144 → ℝ) (a b : ℝ) :
     ∀ (n j : ℕ) (x : Paths Ω1 n),
-      RoundGame.acceptsUpTo (periodGame (tileStage circuit 144) wt a b 24 (period n)) j x
+      RoundGame.acceptsUpTo (monitoringPeriodGame (tileStage circuit 144) wt a b 24 (period n)) j x
   | 0, _, _ => trivial
   | _ + 1, 0, _ => trivial
   | n + 1, j + 1, x =>
@@ -308,7 +308,7 @@ theorem h1_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     (∀ j, stageShare (tileStage circuit 144) (shareCone Honest.scheme circuit 144) j ≤ 1) ∧
     (∀ t : Fin 144, 0 < shareCone Honest.scheme circuit 144 t →
       tileLuck Honest.scheme circuit 144 t ≤ 7 / 8 ∧ tileLuck0 Honest.scheme circuit 144 t ≤ 1 / 2) ∧
-    (play n).game = periodGame (tileStage circuit 144) (liveCone Honest.scheme circuit 144) 1 1 24 (period n) ∧
+    (play n).game = monitoringPeriodGame (tileStage circuit 144) (liveCone Honest.scheme circuit 144) 1 1 24 (period n) ∧
     (period n).EveryWindow (fun live _ => DeadConeDead Honest.scheme circuit 144 live) ∧
     PrefixOf (layer n) (play n).game ∧
     (∀ w, prob (fun x => (layer n).MovedIn x w) ≤ 0) ∧
@@ -321,7 +321,7 @@ theorem h1_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
       (fun live W => PerLiveTile Honest.scheme circuit live W (fun k G _ => ReceiptLuckAt (Honest.scheme.rB k) G)) ∧
     (period n).EveryWindow
       (fun live W => PerLiveTile Honest.scheme circuit live W (fun k _ G0 => GuessLuckAt (Honest.scheme.guess k) G0)) ∧
-    UnitFixed (play n) (layer n) (periodMode circuit (period n) (run n))
+    UnitFixed (play n) (layer n) (monitoringPeriodMode circuit (period n) (run n))
       (fun _ t => (tileWords Honest.scheme circuit 144 t : ℝ)) (fun _ => 128) ∧
     (∀ x w, Accepts prm ((windows n).reg x w) ((windows n).ev x w)) ∧
     (∀ x, (windows n).prefixLen prm x = n) ∧

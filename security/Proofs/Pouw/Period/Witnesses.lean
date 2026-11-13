@@ -125,7 +125,7 @@ theorem h1CheckedCreditPeriod_honest :
     (∀ t : Fin 144, 0 < shareCone Honest.scheme circuit 144 t →
       tileLuck Honest.scheme circuit 144 t ≤ 7 / 8 ∧ tileLuck0 Honest.scheme circuit 144 t ≤ 1 / 2) ∧
     (checkedPlay 64).game =
-      periodGame (tileStage circuit 144) (liveCone Honest.scheme circuit 144) 1 1 24 (period 64) ∧
+      monitoringPeriodGame (tileStage circuit 144) (liveCone Honest.scheme circuit 144) 1 1 24 (period 64) ∧
     (period 64).EveryWindow (fun live _ => DeadConeDead Honest.scheme circuit 144 live) ∧
     PrefixOf (layer 64) (checkedPlay 64).game ∧
     (∀ w, prob (fun x => (layer 64).MovedIn x w) ≤ 0) ∧
@@ -138,7 +138,7 @@ theorem h1CheckedCreditPeriod_honest :
       (fun live W => PerLiveTile Honest.scheme circuit live W (fun k G _ => ReceiptLuckAt (Honest.scheme.rB k) G)) ∧
     (period 64).EveryWindow
       (fun live W => PerLiveTile Honest.scheme circuit live W (fun k _ G0 => GuessLuckAt (Honest.scheme.guess k) G0)) ∧
-    UnitFixed (checkedPlay 64) (layer 64) (periodMode circuit (period 64) (run 64))
+    UnitFixed (checkedPlay 64) (layer 64) (monitoringPeriodMode circuit (period 64) (run 64))
       (fun _ t => (tileWords Honest.scheme circuit 144 t : ℝ)) (fun _ => 128) ∧
     (∀ x w, Accepts prm ((windows 64).reg x w) ((windows 64).ev x w)) ∧
     (∀ x, (checkedPlay 64).accepts x) ∧

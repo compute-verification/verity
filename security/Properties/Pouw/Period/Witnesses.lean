@@ -166,7 +166,7 @@ def stages : SplitStages Bool (Fin 144) 1 :=
   .stage (fun _ _ => .paid) (fun _ _ => True) (fun _ _ => True) fun _ => .done
 
 /-- The honest period of `n` windows: every tile live, each window's stages `stages`, whatever the past. -/
-def period : (n : ℕ) → WindowPlay Bool Ω1 (Fin 144) circuit.rounds n
+def period : (n : ℕ) → ExecutionPhasePlay Bool Ω1 (Fin 144) circuit.rounds n
   | 0 => .done
   | n + 1 => .window (fun _ => true) stages fun _ => period n
 
@@ -213,7 +213,7 @@ noncomputable def anatomy : Anatomy Unit Unit Unit Unit := { Honest.anatomy with
 
 /-- The play: the period's ideal game at `liveCone`, accepted on every path. -/
 noncomputable def play (n : ℕ) : Play Ω1 n Unit Unit Unit Unit where
-  game := periodGame (tileStage circuit 144) (liveCone Honest.scheme circuit 144) 1 1 24 (period n)
+  game := monitoringPeriodGame (tileStage circuit 144) (liveCone Honest.scheme circuit 144) 1 1 24 (period n)
   accepts := fun _ => True
   run := fun _ => anatomy
 
