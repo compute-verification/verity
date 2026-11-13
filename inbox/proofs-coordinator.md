@@ -127992,3 +127992,118 @@ Mailbox read at 07:39Z: the coordinator's 07:22Z and 07:29Z messages are read. F
 ## GATHER, Fri 13 Nov 07:41Z: two loops of me run since the machine's 07:38Z restart and the other holds the pen, so this loop stops; your 07:38Z query (the weights read, due 09:30Z) reached this loop and none of it is done
 
 The machine started at 07:38:38Z [run: `uptime -s`, 07:39Z]; the pen's owner line, written at 07:39:10Z, reads "the loop of the 06:32Z entry (run 1822 ended; the final-head entry and one reprint)" and is not this loop's [run: my `mkdir ~/wt/.pen` was refused at 07:39:13Z; another session rebuilt `/tmp/gather/t2` and `/tmp/gather/coord-b` at 07:39:25Z and was fetching at 07:40:33Z]; so by your standing line 1 this loop ends here, having launched, merged, pushed and posted nothing but this line; the entry on `1822` (done, exit 0, ended 07:10:00Z, its Friday-size part's check 8 of 8 true [run: `research status`, `status.json`, `out/rc.txt` and `out/friday/expect.txt`, 07:35Z, before the restart]) and its reprint are the other loop's; whether that loop has your 07:38Z query (no merge of `main` into #9480; how the served weights are committed and registered, for TOP-415) I cannot tell, since its owner line names neither [guess], so the read starts only when you say which loop does it.
+
+## STOPDRIVER, Fri 13 Nov 07:42Z: READY #9699, the `reason: stop_word` follow-up off `main`, a test for each of soundness's three conditions; quick suites and the rehearsal both passed at its head
+
+In plain words. The follow-up is open as #9699 and has its ready line. The stop audit's summary now gives one word
+for what Lean refused: `stop_word` where Lean's own verdict refused the stop relation, and nothing for every other
+outcome. A real forged proof on a node got the word, and the four other runs of the rehearsal got none. Nothing in
+Friday's tries changes: the branch is off `main` and I touched no other.
+
+### Ready line
+
+**Ready line: #9699 at `725720f8a4a063cf898e180ebbab169092bff91e`** (`cursor/proofs-stopdriver-stop-reason-ffc6`),
+open, unmarked, off `main` at `2e99b1cf48b8`. One commit, four files, all under `benchmarks/one_stage/`.
+
+- [run] It merges onto `main` at `9182900fb94e` without conflict (`git merge-tree`), and none of its four files
+  changed on `main` since its base (`git diff --stat`). I merged no `main` into it.
+- [run] `r20261113-072558-93a3` (vy-nebius-2, `suites.py --changed 2e99b1cf48b8 --quick` at the head): 4 suites,
+  4 passed, 0 failed (`benchmarks/one_stage` 1,071, `repository` 355, `benchmarks/prove_path` 170, `verity-graph`
+  220). `test_stop_audit.py` ran whole there, its slow tests too.
+- [run] `r20261113-073104-6049` (vy-nebius-cpu-14, `stop_audit_small.sh` at the head, `--on auto`): exit 0, all seven
+  expectations true. It built `flock-circuit` and the Lean verifier from the head's tree.
+  - `length`, the control proved with `--forge`: Lean's verdict of record is
+    `zk inner: the batched constraint fails (⟨c, Y⟩ ≠ t + β τ)`, and the summary states `reason: "stop_word"`.
+  - `accept`, `unlogged`, `unaccepted`, `incomplete`: each summary holds the key `reason` and its value is null.
+  - `accept` accepted, so the widened check of the prover's trees refuses no honest class.
+- [run] On the VM at the head: the four new tests passed; `ruff check` found nothing; the ratchet gate passed with
+  nothing new. Retired-term sites in the four files went from 66, 24, 12, 51 to 66, 24, 12, 47.
+- [run] Three changes to the code each fail one new test: the word for any refusal of Lean's past setup; the word for
+  an entry that is not of record; a control that changes a request word too.
+- The body's Checks say all of this. It has `Lane proofs` and `Goal network/certifier-term-zero` (NEEDS 1).
+
+### What the change is
+
+- [run] `stop_audit.py` gains `reason(verdicts)`. It reads the audit record's `lean-verify/stop` entry and nothing
+  else. It returns `stop_word` only where that entry is of record, holds the digest of Lean's own verdict line, did
+  not accept, and Lean's text opens with `zk inner: the batched constraint fails`. Otherwise it returns null.
+- [run] `summary.json` gains `reason`. A command that stopped before a verdict writes `reason: null`, so every
+  summary has the key. The `STOP` line prints it.
+- [run] `opens(roots, file)` lists the statement's ports whose tree, as the prover opens it, is not the one the
+  verifier's own registered file reads the port under. `main` now refuses, before any session, a prover whose list
+  is not empty. Before this it held the stop row's tree only.
+- [run] The rehearsal expects the word of its control (`length`) and a null reason of its four other runs
+  (`no_other_reason`).
+- [read] No Lean, no verifier, no lock and no record writer changes.
+
+### Soundness's three conditions, each with its test
+
+1. **A pure function of Lean's verdict of record, written beside the audit, holding no judgement of its own.**
+   - [run] `test_the_reason_is_a_function_of_leans_verdict_of_record_alone`: the word on Lean's refusal at the
+     batched constraint; the same word whatever the record's other entries say; no word where only another entry
+     refused.
+   - [derived] "Which blocks failed at which stage": Lean's verdict names the stage, its inner check's batched
+     constraint. It names no block: the stop blocks' session is one statement over the sampled blocks.
+2. **Every other refusal gets another word or none.** All get none.
+   - [run] The same test, on eight outcomes: an accept; a refusal at setup; a file of the session that was not there;
+     another refusal of the inner check; a refusal at setup whose text quotes the constraint; no verdict line of
+     Lean's; no reason; an entry that is not of record.
+   - [run] `test_a_summary_states_the_stop_word_only_where_lean_refused_the_stop_relation`: the same through the
+     audit record and `summary.json`, on a stop class's first stage that the driver itself registered. A refusal at
+     setup, a missing file, another entry's refusal and a command that stopped before a verdict each write
+     `reason: null`.
+3. **The control changes the stop word alone, from the accepted record.**
+   - [run] `test_the_control_is_the_accepted_class_with_its_stop_word_changed_and_nothing_else`. The control's prover
+     opens the two parameters' rows, salts, paths and roots as the class's own. Its stop row differs in bit 0 of its
+     first word at the forged spans and in nothing else. The first stage's boundary record and registration are the
+     accepted class's. Its stop record differs from the accepted one in `b.stop`'s root alone.
+   - [run] The same test holds `opens`: empty for the class on its record and for the control on its record, the stop
+     row alone where one's prover meets the other's record, and a parameter's port where a prover changed its tree.
+
+### Three things I decided; say if you or soundness want another
+
+1. **The stage is narrower than "Lean refused past setup".** [read] Past setup Lean can also refuse for the form, for
+   scope, and at other steps of its inner check. None of those is the stop relation's. So the word is tied to the
+   one check that holds a proof to the statement's constraints. [derived] It fails closed: if Lean's text changes,
+   no word is written and the control does not count. The rehearsal's `length` expectation then fails.
+2. **The word names the relation, not the row.** [read] Lean's verdict does not say which of the statement's three
+   rows is wrong. The word is the changed stop word's only on the control, by condition 3. The docstring says so.
+3. **`opens` is a new refusal on the honest path too.** [run] It refuses a prover whose parameter tree is not the
+   record's, before any session. The rehearsal's `accept` run shows it refuses no honest class.
+
+STOP RULE: I stop here on this follow-up. I mark nothing. I merge no `main` into the branch and carry it across the
+move only on your word, with `tools/move/restack.py`, and give a new ready line then.
+
+NEEDS:
+1. **The goal.** [run] `research queue open` warned twice: PRF-608 carries no goal label (its labels: `from:proofs`),
+   and the body's `Goal network/certifier-term-zero` is a goal no label of PRF-608 names. [read] I took the goal from
+   NET-403's label. Label PRF-608, or name the goal you want and I replace the line.
+2. **Your mark on #9699**, when you have read it.
+
+To post (NET-403, for network's row 8, as written):
+
+> The stop record's control now states its reason. The stop audit's `summary.json` holds `reason`: `"stop_word"`
+> where Lean's own verdict refused the stop relation, null for every other outcome, a refusal at setup or for a
+> missing file among them (#9699, a follow-up off `main`; it is not in Friday's tries). On a CPU node the forged
+> class got `stop_word` from Lean's refusal `zk inner: the batched constraint fails`, and the class as served and
+> three other refusals got null. Our record writer does not yet copy the word into a control's record: that line
+> goes in with the `withheld` and `codes` fields, once your record's shape for our objects is fixed.
+
+Not established:
+- [read] The record writer on `main` takes `--control id|max_tokens` only and writes no `reason` field. A stop
+  record's control in network's five-field form is not written by any code of ours yet.
+- No run of the control on a served class. The rehearsal's class is at small statics with no engine.
+- Whether Lean would itself refuse a session whose parameter row is opened under another root than the registered
+  file's, and at which stage. `opens` refuses it first, so no run shows it.
+- The unit tests use stand-in verdicts of Lean's form. Only the rehearsal reads Lean's real text, and the rehearsal
+  is not in the check.
+
+Other facts:
+- [run] `r20261113-072831-c81e` on vy-nebius-cpu-12 never started: it waited in the closed pool for one minute and
+  I cancelled it on your 07:28Z word. No try of mine has `ulimit -Sv` in its command.
+- Your 07:22Z and 07:28Z mail is read. New prose of mine says "challenges" and "the auditor's devices".
+- Items 3 to 5 of the forged second stage are not started. They wait on Friday's launch, as you ruled.
+
+Pushed heads: `cursor/proofs-stopdriver-stop-reason-ffc6` at `725720f8a4a063cf898e180ebbab169092bff91e` (#9699).
+Unchanged: across `64364792ed70bb0b934d5cb5fac96f3779d8047f` (#9624), cards
+`08b5d4b3c0a69b319826fcb86ed338cf7ba17e04`. No run of mine is out.
