@@ -131,9 +131,9 @@ theorem pous_record_size {c : MemoryChallenger.SessionCommitment} {ended : Strin
   exact hash_size _
 
 /-- The wipe's session record is a digest. -/
-theorem wipe_record_size {c : MemoryChallenger.StreamedWipe.Commitment} {ended : String} {fillStartNs fillEndNs : Int}
-    {batches : Array MemoryChallenger.StreamedWipe.Batch} {egressBits : Int} {r : ByteArray}
-    (h : MemoryChallenger.StreamedWipe.message c ended fillStartNs fillEndNs batches egressBits = .ok r) :
+theorem wipe_record_size {c : MemoryChallenger.StreamedWipe.Commitment} {ended : String} {startMark : ByteArray}
+    {fillStartNs fillEndNs : Int} {batches : Array MemoryChallenger.StreamedWipe.Batch} {r : ByteArray}
+    (h : MemoryChallenger.StreamedWipe.message c ended startMark fillStartNs fillEndNs batches = .ok r) :
     r.size = 64 := by
   unfold MemoryChallenger.StreamedWipe.message at h
   cases hr : MemoryChallenger.StreamedWipe.recordsRoot c.session batches <;>
@@ -157,9 +157,9 @@ theorem closeRecord_ne_pous {lines : Nat} {entries : Array ByteArray} {c : Memor
   closeRecord_ne_digest (pous_record_size h)
 
 theorem closeRecord_ne_wipe {lines : Nat} {entries : Array ByteArray} {c : MemoryChallenger.StreamedWipe.Commitment}
-    {ended : String} {fillStartNs fillEndNs : Int} {batches : Array MemoryChallenger.StreamedWipe.Batch}
-    {egressBits : Int} {r : ByteArray}
-    (h : MemoryChallenger.StreamedWipe.message c ended fillStartNs fillEndNs batches egressBits = .ok r) :
+    {ended : String} {startMark : ByteArray} {fillStartNs fillEndNs : Int}
+    {batches : Array MemoryChallenger.StreamedWipe.Batch} {r : ByteArray}
+    (h : MemoryChallenger.StreamedWipe.message c ended startMark fillStartNs fillEndNs batches = .ok r) :
     closeRecord lines (chainOf entries) ≠ r :=
   closeRecord_ne_digest (wipe_record_size h)
 
@@ -200,10 +200,10 @@ theorem closePreimage_ne_pous {I I' s s' r : ByteArray} {lines : Nat} {entries :
   closePreimage_ne_digest hI hI' hs hs' (pous_record_size h)
 
 theorem closePreimage_ne_wipe {I I' s s' r : ByteArray} {lines : Nat} {entries : Array ByteArray}
-    {c : MemoryChallenger.StreamedWipe.Commitment} {ended : String} {fillStartNs fillEndNs : Int}
-    {batches : Array MemoryChallenger.StreamedWipe.Batch} {egressBits : Int}
+    {c : MemoryChallenger.StreamedWipe.Commitment} {ended : String} {startMark : ByteArray}
+    {fillStartNs fillEndNs : Int} {batches : Array MemoryChallenger.StreamedWipe.Batch}
     (hI : I.size = 16) (hI' : I'.size = 16) (hs : s.size < 2 ^ 64) (hs' : s'.size < 2 ^ 64)
-    (h : MemoryChallenger.StreamedWipe.message c ended fillStartNs fillEndNs batches egressBits = .ok r) :
+    (h : MemoryChallenger.StreamedWipe.message c ended startMark fillStartNs fillEndNs batches = .ok r) :
     rolePreimage I s (closeRecord lines (chainOf entries)) ≠ rolePreimage I' s' r :=
   closePreimage_ne_digest hI hI' hs hs' (wipe_record_size h)
 

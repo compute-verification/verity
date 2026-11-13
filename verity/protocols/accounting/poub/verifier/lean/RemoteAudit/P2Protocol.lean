@@ -310,7 +310,7 @@ private def pousRecord : Option ByteArray :=
 private def wipeRecord : Option ByteArray :=
   (MemoryChallenger.StreamedWipe.message
     { (default : MemoryChallenger.StreamedWipe.Commitment) with session := toySession }
-    MemoryChallenger.StreamedWipe.COMPLETE 0 0 #[] 0).toOption
+    MemoryChallenger.StreamedWipe.COMPLETE .empty 0 0 #[]).toOption
 
 private def flipLast (b : ByteArray) : ByteArray := b.set! (b.size - 1) (b[b.size - 1]! ^^^ 1)
 

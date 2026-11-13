@@ -253,7 +253,7 @@ def _pous_record() -> bytes:
 
 def _wipe_record() -> bytes:
     c = sw.WipeCommitment(b"\x05" * 32, SESSION_ID, sw.WipeParams(4, 2, 1, 10 ** 6, (("hbm", 1024),)))
-    return sw.message(c, "complete", 0, 10, [], 0)
+    return sw.message(c, "complete", b"", 0, 10, [])
 
 
 @pytest.mark.parametrize("record", [_pous_record, _wipe_record], ids=["pous-session", "wipe"])
