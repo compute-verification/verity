@@ -155369,3 +155369,79 @@ counts before and after the carry (+373 −209, +385 −209).
 - The run started at 18:05:36Z and ended at 18:12:00Z, exit 0 [run `r20261113-180531-594b`: its status record]. The scope's `memory.peak` after the last step: 13,571,985,408 bytes of `memory.max` 32,212,254,720; `oom_kill 0` [run: the job's last `figures` line].
 - In one line, ahead of the figures: on Thursday's kept parameters and record, with the import line, `popHeld` held in 2.28 s and again in 2.87 s; the root has 31,594,140,276 input gates, counted and not built [run].
 - It opened `v3c-w0-4-27-2/audit/window/case.json` and nothing else there: the audit named held the file, so no name beside it was read. Its scratch was on a disk and is removed [run: the job's own lines]. The figures follow in my checkpoint.
+
+## MEMBERS, Fri 13 Nov 18:16Z: checkpoint and the figures: on Thursday's kept window, with the import line, `popHeld` holds in 2.3 s under a scope whose peak is 13.57 GB (31.6 billion input gates, never built); the twin makes the per-member parse of 102,810 members 210 ms where it was 1,065 s; the pull request waits on its suites
+
+### 1. Thursday's kept window, with the import line [run `r20261113-180531-594b`, vy-nebius-cpu-6, main's tree at `fb3e260c42d1`]
+
+The run's conditions, each as the job printed it:
+
+- **The cap is the launch line's.** The whole job (the build, both readers) ran in the one scope `systemd-run --user --scope -p MemoryMax=30G -p MemorySwapMax=0 -p OOMPolicy=continue` made: `memory.max` 32,212,254,720, `memory.swap.max` 0. Its first step showed a scope of the same kind killing a process past 256 MB (exit 137, `oom_kill 1`).
+- **It opened one file.** `v3c-w0-4-27-2/audit/window/case.json` (1,043,068,886 bytes) was where you said, so no name beside it was read. Its scratch was on a disk (ext), removed on exit. It printed sizes, times, counts and key names.
+- **It ran for 6 minutes 24 seconds**, 18:05:36Z to 18:12:00Z, exit 0.
+
+The case:
+
+- The kept parameters are v1's, with the keys job (a) read; canonical, 366,953,552 bytes. (Job (a)'s 556,784,097 bytes were these with the members, a challenger key and a window root added [read: its script].) The record is 301,951,000 bytes.
+- The program has 8,429 definitions and 931 root nodes. **The root has 31,594,140,276 input gates**, counted from the descriptor and never built. The record's population is 1,109,804 units; the query has 298 ranges.
+
+The step:
+
+| what | time | the reader's own peak so far |
+|---|---:|---:|
+| the parameters as canonical JSON | 16.1 s | 5,895 MB |
+| v1's parse (`OneStage.paramsParsed`) | 30.8 s | 10,214 MB |
+| the record's parse (`commitmentOf`) | 15.4 s | 10,214 MB |
+| the query's ranges (`Partition.evaluate`) | 683 ms | 10,214 MB |
+| the units' gates (`Partition.unitGates`) | 1,662 ms | 10,214 MB |
+| **`popHeld`** | **2,283 ms** | 10,214 MB |
+| `popHeld`, a second time | 2,868 ms | 10,214 MB |
+
+`popHeld` held both times. It added nothing to the reader's peak: the peak is the parse's.
+
+**The scope's `memory.peak`** (the figure to post): 5.69 GB after the reader's build, 5.75 GB after the kept case was written to the scratch, **13,571,985,408 bytes (13.57 GB) after the population step**, of 30 GiB; `oom_kill 0`.
+
+Against before: without the import, the same step on the same window broke 30 GB twice today on cpu-6 and never ended [job (a): run `r20261113-152216-f68f` and my 15:45Z to 16:10Z entries]. At the row's measured 69 bytes and 38 ns an input gate, 31.6 billion input gates would be about 2.2 TB and 20 minutes [derived: scaled from the made-up descriptor's row, not measured on this program].
+
+The compiler's C for `Spot/OneStageZk.lean` in this run names `Spot_Slots_popOkRanges` twice and no `popOk` [run].
+
+### 2. The units' term on Thursday's program, for your item 3
+
+`popHeld` is the two calls `popOkRanges` makes: `Partition.evaluate` (683 ms), then `Partition.unitGates` (1,662 ms), which starts by evaluating the query again [read: `Partition.unitGatesBy`]. So of 2.28 s, about 1.37 s is the query evaluated twice and about 0.98 s the 1,109,804 units' gates [derived]. Reading the count off the ranges would leave one evaluation, about 0.68 s. On the row's descriptor the units' call was nearly all of the time; here it is 73%.
+
+### 3. The run's own memory record and the scope (infra's "not checked")
+
+Two answers, both read from this run's records. The run's process samples do count the processes inside the scope: their summed resident memory reaches 9.33 GB [run: `resources.jsonl`, sampled, so under the reader's own 10.2 GB]. The run's cgroup figure does not: it reads the session's cgroup, whose peak it gives as 0.46 GB, because the scope sits beside it. So a job that wants the cap's own figure must read the scope's `memory.peak` itself, as this one does.
+
+### 4. The twin (`membersOf`), your item 4 [branch `cursor/proofs-members-membersof-34fd`, head `d18fa66a95aa`, cut from `origin/main` at `af9b13440693`]
+
+- It compiles: `membersOf_eq_membersOfApart` is proved by `funext` and `rfl`; Lean exit 0; none of the file's 9 theorems beyond the three axioms; siblings clean [run `r20261113-173247-3415`, cpu-9]. `membersOf` is untouched; its text on `main` is the text I measured [read: a diff against the live line's].
+- The pair of timings, each run in a scope of its own under 30G, the timer built twice (the tree as it is; the same with `@[csimp]` taken off the equality) [run `r20261113-174548-1682`, vy-nebius-cpu-14]:
+
+| made-up members | before | before: the scope's peak | after | after: the scope's peak |
+|---:|---:|---:|---:|---:|
+| 25,628 | 62.3 s | 57.2 MB | 54 ms | 57.3 MB |
+| 51,256 | 236.1 s | 79.1 MB | 190 ms | 75.6 MB |
+| 102,810 | 1,064.9 s | 118.0 MB | 210 ms | 113.7 MB |
+
+  Before, twice the members is 3.8 and then 4.5 times the time. In the compiler's C the one call (in `membersParamsOfJson`) moves from `Spot_OneStageZk_membersOf` to `Spot_OneStageZk_membersOfApart` [run: the references go 4 to 3 and 3 to 4; that the call is that one is derived, it is the only caller in the tree].
+- Its suites are running [run `r20261113-174635-438e`, cpu-1]. Its pull request body is written; it opens after the import's, as you ordered.
+- A proposal, not done: no row of `benchmarks/verifier_cost/` covers the per-member parse, so nothing in the tree would catch the quadratic time coming back. I would add one in a third small pull request if you say so.
+
+### 5. The import's pull request
+
+Not open yet: its suites at `fb3e260c42d1` have run since 17:09Z and print only at their end [run `r20261113-170545-ec7a`, cpu-9; the same at the import-only head, `r20261113-164751-d3cc`]. The body is written, now with section 1's figures. It opens the minute `ec7a` ends green, and the ready line follows.
+
+A correction to my 17:27Z entry and the body: the try's "10 imported" are the 10 sibling modules it read, not modules that import the file; 42 were not checked for lack of a build.
+
+### Pushed and unpushed
+
+Pushed: `cursor/proofs-members-popimport-34fd` at `fb3e260c42d1`, `cursor/proofs-members-membersof-34fd` at `d18fa66a95aa`. Nothing is unpushed. The job's scripts are not in the tree.
+
+### Not established
+
+- The suites' verdict for either branch.
+- A records run for either branch (none made; the candidate's makes one).
+- Why the compiler's code for `membersOf` is quadratic: the measurement says the loop's place decides it; I have not read the intermediate code.
+- The per-member parse of a served window with the twin (the members above are made up).
+- The check of Thursday's window whole: this run is the population step alone, on the kept parameters and record. It checks no challenge and reads no blob.
