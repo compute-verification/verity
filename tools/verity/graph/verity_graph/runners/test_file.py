@@ -36,7 +36,7 @@ from . import call
 GUARD = ROOT / "tools" / "verity" / "check" / "guard"
 #: on the tests' PYTHONPATH: its `sitecustomize` makes every Python a test starts trace what it reads
 CHILD = GUARD / "child"
-REGISTRY = "fixtures/artifacts.json"
+REGISTRY = "artifacts.json"
 #: pytest with the guard's directory on `sys.path` (`suites._PYTEST`)
 PYTEST = "import sys, pytest; sys.path.append(sys.argv.pop(1)); sys.exit(pytest.main(sys.argv[1:]))"
 #: what a test never inherits: a machine runner's `RESEARCH_*` and PYTHONPYCACHEPREFIX (`suites.RUNNER_PREFIX`, `RUNNER_ENV`), and
