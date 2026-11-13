@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import dataclasses
 import importlib.util
+import json
 import math
 import sys
 from collections import Counter
@@ -73,6 +74,8 @@ C, K0 = 1e13, 65536.0
 MC = WK.min_cut()
 #: the k of the dial at which (H) states β(k)
 KS = tuple(float(k) for k in products.DIAL_K if MC.beta(k) is not None)
+#: the tiny step's whole `Work` at `K0` over two iterations, written by running this file
+TINY_WORK = Path(__file__).with_name("tiny_work.json")
 #: the primitives no MAC of the trace's prices: every counted op is a multiply, a division, a fused multiply-add, a
 #: scaled add or a gather
 UNCOUNTED = ("F32ExpRn", "F32Sqrt", "F32Add", "F32Sub", "SelectF32", "F32MaxRef", "F32Eq", "I32Eq", "I32Add",
@@ -385,3 +388,32 @@ def test_the_readings_constants_are_the_benchmarks():
         for w, rank in ((32.0, 4.0), (16.0, 64.0)):
             assert WK.k_star(k, w) == pytest.approx(TW.k_star(k, w))
             assert WK.beta_eff(w, rank, k) == pytest.approx(TW.beta_eff(w, rank, k))
+
+
+def tiny_work() -> dict:
+    """The lf model's tiny step, as `readings` builds it, read over two iterations at `K0`: its whole `Work`, every
+    set as a sorted list, as JSON reads it back."""
+    with torch.device("meta"):
+        model = LF.LM(LF.SIZES["tiny"], ctx=CTX, vocab=64)
+    step = step_program(model, LF.square_loss, AdamW(**LF.ADAMW), torch.empty(*BATCH, dtype=torch.long, device="meta"))
+
+    def plain(o):
+        if dataclasses.is_dataclass(o):
+            return {f.name: plain(getattr(o, f.name)) for f in dataclasses.fields(o)}
+        if isinstance(o, (set, frozenset)):
+            return sorted((plain(x) for x in o), key=repr)
+        if isinstance(o, (list, tuple)):
+            return [plain(x) for x in o]
+        return o
+
+    return json.loads(json.dumps(plain(WK.read(loop(step, 2), K0))))
+
+
+def test_the_tiny_steps_work_keeps_its_reading():
+    """The tiny step's whole `Work` is the one in `TINY_WORK`, field for field, so a change to the reader that moves any
+    product, rate, β, edge or count shows."""
+    assert tiny_work() == json.loads(TINY_WORK.read_text())
+
+
+if __name__ == "__main__":
+    TINY_WORK.write_text(json.dumps(tiny_work(), indent=1) + "\n")
