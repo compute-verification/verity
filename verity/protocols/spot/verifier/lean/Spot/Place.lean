@@ -99,4 +99,16 @@ private def windowOf (prompt outputs : Nat) (more : List (String × Json) := [])
 #guard run (Json.mkObj [("run", Json.null)]) == none
 #guard run Json.null == none
 
+/-- What `piece` refuses a window with. -/
+def NO_PLACE : String := "the window names no place in its session"
+
+/-- The `place` piece: a window to its place, its family and its run (null: it names none). Refused: a window that
+names no place. -/
+def piece (w : Json) : Except String Json :=
+  match place w, family w with
+  | some n, some f =>
+    .ok (Json.mkObj [("place", Lean.toJson n), ("family", .str f),
+      ("run", match run w with | some r => .str r | none => .null)])
+  | _, _ => .error NO_PLACE
+
 end Spot.Place
