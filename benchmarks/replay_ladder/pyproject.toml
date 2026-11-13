@@ -15,7 +15,7 @@ inputs = [
     "benchmarks/network_e2e/traces/corpus.py",
     "benchmarks/network_e2e/traces/traffic.py",
     "adapters/vllm/manifests/checkpoints.json",
-    "verity/configuration/config/verity_config",
+    "tools/config/verity_config",
     "verity/__init__.py",
     "verity/settings.py",
 ]
