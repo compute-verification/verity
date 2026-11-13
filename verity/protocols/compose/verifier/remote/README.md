@@ -12,7 +12,7 @@ registered circuit is inference, not training).
 **The open gap.** Remote's composed guarantee, `Verity.remote_soundness_of_subprotocols`, is proved at its compiled
 verifier from its three subprotocols' targets (`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`), each an open
 premise until proved at remote. The policy's is proved (`Vocab.inferenceOnlySound`), on the Program its check judges,
-and the composed statement still takes it; `Vocab.Holds` lists what it leaves unsaid of the committed files.
+and the composed statement still takes it.
 
 This file is an outline with signposts; the Lean is the definition. The vocabulary is `ARCHITECTURE.md`'s
 Glossary, with `GLOSSARY.md` for the notation and the older names. Lean keeps some older names: `Dampener*` means
@@ -411,9 +411,8 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 ### What's open
 
 - **Chaining the parts in Lean.**
-  - `Vocab.SpotSound` and `Vocab.PouwSound` aren't proved at remote. `Vocab.InferenceOnlySound` is
-    (`Vocab.inferenceOnlySound`), as a claim on the Program the policy's check judges: nothing yet holds the committed
-    values to that Program's wires, gives `Γ` in PoUW's unit, or holds the Program to the registered compiler's output.
+  - `Vocab.SpotSound` and `Vocab.PouwSound` aren't proved at remote. `Vocab.InferenceOnlySound` is, on the Program its
+    check judges; `Vocab.Holds` lists what that leaves unsaid of the committed files.
   - `SampledKSLiveV3` doesn't read part 1's theorem.
   - `ServiceSound` and `Nci.Assumptions.PouwSound` are undischarged premises.
   - `JointPooledLive` isn't instantiated with parts 2 and 3.
