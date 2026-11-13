@@ -892,7 +892,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             m = mm["m"]
             fv_roots = mm["header"]["frame_v3"]["roots"]
             own = REG.bind_ports(reads[m.key], fv_roots, {p: {"root": roots[m.port(p)]["root"], "domain": want[m.port(p)]["domain"]}
-                                                         for p in fv_roots})
+                                                         for p in fv_roots if m.port(p) in roots and m.port(p) in want})
             mm["st"]["registered_file"] = mm["st"]["dir"] / "registered.json"
             mm["st"]["registered_file"].write_text(json.dumps(own, sort_keys=True))
             if iface is not None:
