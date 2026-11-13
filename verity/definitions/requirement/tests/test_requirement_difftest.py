@@ -39,7 +39,7 @@ from verity.circuits.program import Program
 from verity.circuits.refs import array_of
 from verity.circuits.types import Array, Value
 from verity.definitions.circuits import requirement as R
-from verity.definitions.ops import fp32
+from verity.circuits.ops import fp32
 from verity.definitions.registry import b1
 
 LEAN = Path(__file__).resolve().parents[1]
