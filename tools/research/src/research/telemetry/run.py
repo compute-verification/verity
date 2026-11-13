@@ -229,7 +229,9 @@ def _end_leftovers(em: Emitter, stage: str, pgid: int) -> None:
         pass
 
 
-def run(a: argparse.Namespace, cmd: list[str]) -> int:
+def run(a: argparse.Namespace, cmd: list[str], poll: Callable[[], None] | None = None) -> int:
+    """`poll`, when given, is called on each pass of the loop that waits for CMD, and is dropped, with a `poll_failed` mark, the
+    first time it raises: what the caller watches for while CMD runs (`research run`: a file to preserve, store.run_preserve)."""
     d = Path(a.attempt_dir)
     d.mkdir(parents=True, exist_ok=True)
     em = Emitter(d, proc="tele-run")
@@ -315,6 +317,12 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
                 except Exception as e:      # the watch is never the reason the workload stops
                     em.mark(a.stage, "stall_watch_failed", error=f"{e.__class__.__name__}: {e}"[:300])
                     stall = None
+            if poll is not None:
+                try:
+                    poll()
+                except Exception as e:  # noqa: BLE001  nor is what the caller watches for
+                    em.mark(a.stage, "poll_failed", error=f"{e.__class__.__name__}: {e}"[:300])
+                    poll = None
             if sweep is None and (req := cancel_request(d)) is not None:
                 # research cancel sent SIGTERM to the run's group and scopes already; what is left at the end of its grace is ours to end
                 sweep = Sweep(proc.pid, str(d.resolve()), leader_start=starttime, scopes=req.get("scopes") or [])

@@ -8,6 +8,6 @@ per-tensor decode), `setup` (commit to `W`, the verifier's salt and `vk`), `veri
 Merkle root), `audit` (the challenge key, responders and the unsigned timed rounds) and `adversary` (partial holdings
 replayed against the real labels).  `protocol` is the generic protocol over any scheme (abstract `Scheme`,
 `CapacityBound`, `TimedAudit`, `StorageProfile`), and `schemes` the registered schemes behind it (the band first).
-`memory_challenger` is the memory challenger, which signs its rounds (`MemoryChallenger`).
+The memory challenger, which signs its rounds, is the device's: `verity.protocols.pous.device.memory_challenger`.
 `PROTOCOL.md` says what is here, and `DISCREPANCIES.md` where the Lean model and the prose spec differ.
 """

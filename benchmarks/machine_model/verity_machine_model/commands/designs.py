@@ -2,6 +2,7 @@
                                           noise on each product, fold, filler, proof block, coins and perplexity arm"""
 from __future__ import annotations
 
+import argparse
 import json
 import textwrap
 
@@ -9,12 +10,12 @@ from verity_machine_model import eps as E
 from verity_machine_model.commands._shared import registry
 
 
-def add(sub) -> None:
+def add(sub: argparse._SubParsersAction) -> None:
     r = sub.add_parser("designs")
     r.add_argument("--json", action="store_true")
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     ds = [E.design(n, args.data) for n in E.designs(args.data)]
     if args.json:
         print(json.dumps([registry(d) for d in ds], ensure_ascii=False, indent=1))

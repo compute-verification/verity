@@ -1,6 +1,6 @@
 """P11: names say the job, and versions appear only in hashed data.
 
-Checked today, against ``allowlists/p11_names.json``:
+Checked against ``allowlists/p11_names.json``:
 
 * ``module-name`` / ``package-name`` / ``def-name`` / ``class-name`` / ``flag-name`` / ``env-name``: a file, directory,
   function, class, flag or environment-variable name (``add_argument``, ``config.option`` and its ``env``) with a

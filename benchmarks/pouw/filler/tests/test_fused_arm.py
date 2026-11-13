@@ -5,28 +5,18 @@ after the build and the lease)."""
 
 from __future__ import annotations
 
-import importlib.util
 import re
-import sys
 from pathlib import Path
 
+import fused_arm as F
+import fused_score as FS
 import pytest
 
 FILLER = Path(__file__).resolve().parents[1]
 DCAP = Path(__file__).resolve().parents[1]
 
 
-def _load(name):
-    spec = importlib.util.spec_from_file_location(name, FILLER / f"{name}.py")
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-F = _load("fused_arm")
-FS = _load("fused_score")
-A = F.A  # the arms module fused_arm imported (the one test_filler_score loaded, when it ran first): one Colocation class
+A = F.A  # the arms module fused_arm imported
 ARMS = [F.Fused(), F.FusedV2(), F.FusedPump(), F.FusedPumpK(), F.FusedWarpK(), F.FusedPumpBU(), F.FusedPumpBUXin13(),
         F.FusedPumpBULi()]
 V1 = [a for a in ARMS if a.nvcc_flags == "-DDFILL_V1"]

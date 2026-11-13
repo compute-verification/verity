@@ -53,7 +53,7 @@ deploy bindings:
 | --- | --- | --- |
 | `REPO`, `REV`, `PRECISION`, `SLOTS`, `WINDOW_STEPS`, `LOAD` | the workload | `[workload.params]` |
 | `V3C_LAW` | sampled proofs | `[service] law` |
-| `PP_CHALLENGER`, `PP_PEER`, `PP_CHALLENGER_KEY`, `PP_GATE_KEY` | sampled proofs | `challenger.sampled-proofs`: `gate`, `peer`, `key`, `gate-key`, each optional; with no `gate` the records audit samples on its own live coins |
+| `PP_CHALLENGER`, `PP_PEER`, `PP_CHALLENGER_KEY`, `PP_GATE_KEY`, `DEVELOPMENT` | sampled proofs | `challenger.sampled-proofs`: `gate`, `peer`, `key`, `gate-key`, each optional; the records audits, V3c's of record among them, take their coins from the live challenger when `gate` is bound, else from a local development session in a development run (`DEVELOPMENT=1`) |
 | `H1_GATE`, `H1_PEER`, `H1_KEY_SHA512` | PoUW | `challenger.pouw`: `gate` (the gate command), `peer`, `key-sha512`; `POUW_CMD` is the runner's default then |
 | `POUS_CMD`, `POUS_ARGS` | PoUS | `memory-challenger.pous`: `host`, `address`, `command`, `key-sha512`; `--rounds` is `[params."verity/pous/p2/v4/run"] challenges`, 320 (ε = 2^-20) |
 | `SERVE_ARGS` (`--remote-verifier`) | PoUB | `bandwidth-verifier.bandwidth`: `address` |
@@ -114,3 +114,6 @@ The gate's and the auditor host's sides are started by their gates when the prov
 record, the onsite check and the period's verdict:
 
     verity run demos/onsite_served/config.toml --on auditor-host --state STATE
+
+A run of record launches each of the two commands under `research run`, and `minutes.py` reads the demo's minutes from
+those two runs (`vllm/onsite-demo-minutes` in `benchmarks/metrics.toml`).

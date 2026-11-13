@@ -41,7 +41,7 @@ import Mathlib.Topology.Sheaves.Init
 Definitions only. Network accounting writes the whole computation as one program `C` of the Boolean profile,
 each machine a subcircuit, and audits its committed trace with sampled proofs (`Claims.Sampling`). The transfer-gate
 units and N2's head checks are classes sampled `all`, and the internal step units are sampled. This module says what an
-accepted audit then establishes about the egress, in the network certifier's terms (`Program`, `Accepted`), on
+accepted audit then establishes about the egress, in the network certifier's terms (`EgressPrediction`, `Accepted`), on
 sampling's own vocabulary: its statement, partition, design, incorrect set and `M_δ`.
 
 **The layout** (`BoundaryGates`, public, part of the statement) says which of `C`'s gates hold each step's egress rows
@@ -116,7 +116,7 @@ def BoundaryGates.inputOf {L S : ℕ} (lay : BoundaryGates L S) (k : ℕ) (ins :
 run on the ingress up to `t` and the declared advice `(a, free)`: the inputs other than the ingress (`a`), and the gates
 held at values (`free`). -/
 def circuitProgram {L S : ℕ} (C : Prog) (lay : BoundaryGates L S) (k : ℕ) :
-    Program L S (List Bool) ((ℕ → Bool) × (ℕ → Option Bool)) where
+    EgressPrediction L S (List Bool) ((ℕ → Bool) × (ℕ → Option Bool)) where
   rows t ins adv ℓ := rowOf (valOver C (lay.inputOf k ins adv.1) adv.2) (lay.egress t ℓ)
 
 /-- Gate `g` of `C` depends on gate `i`: it is `i`, or it reads a gate that depends on `i`. -/

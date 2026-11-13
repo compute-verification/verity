@@ -1,6 +1,11 @@
-"""Onsite's or remote's case from its subprotocols' cases, and the Lean verdict on it (`onsite check`, `remote check`).
+"""Onsite's or remote's case from its subprotocols' cases, and the Lean verdict on it (`onsite check`, `remote check`,
+`remote-v1 check`).
 
-    composite.py onsite|remote --cases DIR ... --private-out DIR --public-out DIR [--exe PATH]
+    composite.py onsite|remote|remote-v1 --cases DIR ... --private-out DIR --public-out DIR [--exe PATH]
+                 [--development WHY]
+
+``remote-v1`` is remote's composite of record (`Core.Remote.V1`, ``verity/remote/v1``), whose work subprotocol is
+Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`) in the period's place; ``remote`` is v0, H1's development one.
 
 Each ``--cases`` is a private directory (0700, its files 0600, as the pieces write it) holding one subprotocol's case,
 or a directory whose subdirectories each hold one. A case is the subprotocol's case as its own `serve` reads it,
@@ -16,19 +21,25 @@ its files 0600) gets the product's params (``params.json``), commitment (``commi
 the order of the ids) and evidence (``evidence.json``), all canonical, as `Core.Composition.sameB` reads them (the
 composition README's formats), the blobs' paths
 (``blobs.txt``), each piece's answer (``pieces/N.answer.json``) and the product's (``answer.json``). An answer's
-query, digests, profile and reason are private too (a partition's digest is the query), so ``--public-out`` gets only
+query, digests, profile and reason are private too (a partition's digest is the query), and so is a case's commitment
+(Pearl+'s holds its passes' manifests, their salt key among them), so ``--public-out`` gets only
 ``composite.json``: the product, the composite's commitment, each case's id, params digest (SHA-512 of its canonical
-params) and commitment, what is missing, and each piece's and Lean's outcome (`outcome`: the id, the verdict and the
+params) and commitment's digest (its answer's; null where it names none), what is missing, and each piece's and Lean's
+outcome (`outcome`: the id, the verdict and the
 refusal's name) and its stated exceptions (`EXCEPTIONS`: the policy's v0, composed in the clear for one run of record
 only); and ``verdicts.txt``, its ``PIECE ID VERDICT [NAME]``, ``NOT_ESTABLISHED``, ``VERDICT
 ID VERDICT [NAME]`` and ``EXCEPTION LINE`` lines, which it also prints. Before writing them it refuses (exit 65) public bytes that share 64 bytes or more
-with any case's evidence, raw or hex, the cases' commitments and digests aside. The public directory may not be or
-contain the private one.
+with any case's commitment or evidence, raw or hex, the digests the answers name aside. The public directory may not be
+or contain the private one.
 
 With ``--exe``, it runs ``EXE check params.json commitment.bin evidence.json BLOB...`` and exits with its code: 0
 accept, 1 reject, 2 undecided. It decides nothing itself: a subprotocol with no case, or whose directory lacks its case
 or its answer, is left out of the product's case, and Lean's verdict on that case is the composite's (a rejection
 naming the missing case). Such a run is labelled ``NOT_ESTABLISHED``, naming what is missing. 64 is a usage error.
+
+``--development WHY`` labels a composite that claims no record (one composed on the served node, which the prover
+controls: `served_composite.sh`): ``composite.json`` carries ``development`` WHY, and ``DEVELOPMENT WHY`` is the first
+line of its ``verdicts.txt`` and of what it prints after its ``COMPOSITE`` line.
 """
 from __future__ import annotations
 
@@ -43,13 +54,14 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
-PRODUCTS = {"onsite": "verity/onsite/v0", "remote": "verity/remote/v0"}
-#: Each product's subprotocols, as `Core.Onsite.components` and `Core.Remote.components` list them; read only to name
-#: the missing ones.
+PRODUCTS = {"onsite": "verity/onsite/v0", "remote": "verity/remote/v0", "remote-v1": "verity/remote/v1"}
+#: Each product's subprotocols, as `Core.Onsite.components`, `Core.Remote.components` and `Core.Remote.V1.components`
+#: list them; read only to name the missing ones.
 COMPONENTS = {
     "onsite": ("verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
                "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"),
     "remote": ("verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/v1"),
+    "remote-v1": ("verity/inference-only/v0", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"),
 }
 #: The subprotocols a product composes in the clear, as a stated exception to everything-zero-knowledge, each with the
 #: line its record carries (`Core.Remote`'s and `Core.Onsite`'s docstrings say the same).
@@ -109,7 +121,8 @@ def case_dirs(roots: Iterable[Path]) -> list[Path]:
 
 def piece(d: Path) -> dict[str, Any]:
     """A subprotocol's case, digest and own answer line from its directory: ``{"id", "params", "commitment", "evidence",
-    "digest", "blobs", "answer"}``, the commitment, evidence and digest bytes."""
+    "digest", "named", "blobs", "answer"}``, the commitment, evidence and digest bytes, and ``named`` the digest its
+    answer names, or None."""
     case = json.loads((d / "case.json").read_text())
     line = (d / "answer.json").read_text().strip()
     answer = json.loads(line)
@@ -117,7 +130,7 @@ def piece(d: Path) -> dict[str, Any]:
     digest = answer.get("commitment")
     return {"id": answer["protocol"], "params": case["params"], "commitment": commitment,
             "evidence": bytes.fromhex(case["evidence"]), "digest": bytes.fromhex(digest) if digest else commitment,
-            "blobs": [str(b) for b in case.get("blobs") or []], "answer": line}
+            "named": digest or None, "blobs": [str(b) for b in case.get("blobs") or []], "answer": line}
 
 
 def compose(product: str, pieces: Sequence[dict[str, Any]]) -> tuple[dict, bytes, bytes, list[str]]:
@@ -164,27 +177,29 @@ def exceptions(product: str) -> list[str]:
 
 
 def public_record(product: str, commitment: bytes, cases: Sequence[dict[str, Any]], gone: Sequence[str],
-                  verdict: dict[str, str] | None) -> dict[str, Any]:
-    """What ``--public-out`` may hold: no evidence, no params bodies and no answer bodies."""
+                  verdict: dict[str, str] | None, development: str | None = None) -> dict[str, Any]:
+    """What ``--public-out`` may hold: no evidence, no params bodies, no answer bodies and no case's commitment, only the
+    digest its answer names."""
     return {"product": PRODUCTS[product], "commitment": commitment.hex(), "missing": list(gone), "verdict": verdict,
-            "exceptions": exceptions(product),
+            "exceptions": exceptions(product), **({"development": development} if development else {}),
             "cases": [{"params_sha512": hashlib.sha512(canonical(p["params"])).hexdigest(),
-                       "commitment": p["commitment"].hex()} | outcome(p["id"], p["answer"]) for p in cases]}
+                       "commitment": p["named"]} | outcome(p["id"], p["answer"]) for p in cases]}
 
 
 def check_public(public: bytes, cases: Sequence[dict[str, Any]]) -> None:
-    """Refuse ``public`` when it shares a run of ``2 * WINDOW`` bytes or more with any case's evidence, raw or hex. The
-    cases' commitments and digests are public by definition (hiding commitments), and evidence may carry the same
-    roots, so they are masked first; everything else, the pieces' own answers included, is held to it."""
+    """Refuse ``public`` when it shares a run of ``2 * WINDOW`` bytes or more with any case's commitment or evidence, raw
+    or hex. The digests the cases' answers name are public by definition, and evidence may carry the same roots, so they
+    are masked first; a case's commitment is held to it like its evidence, since one may be witness (Pearl+'s holds its
+    passes' manifests and their salt key), and so is everything else, the pieces' own answers included."""
     for p in cases:
-        for v in (p["commitment"], p["digest"]):
-            if len(v) >= WINDOW:
-                public = public.replace(v.hex().encode(), b"*").replace(v, b"*")
+        if p["named"] and len(p["digest"]) >= WINDOW:
+            public = public.replace(p["digest"].hex().encode(), b"*").replace(p["digest"], b"*")
     seen = {public[i:i + WINDOW] for i in range(len(public) - WINDOW + 1)}
     for p in cases:
-        for e in (p["evidence"], p["evidence"].hex().encode()):
-            if any(e[i:i + WINDOW] in seen for i in range(0, len(e) - WINDOW + 1, WINDOW)):
-                raise Leak(f"the public output holds bytes of {p['id']}'s evidence")
+        for what, b in (("commitment", p["commitment"]), ("evidence", p["evidence"])):
+            for e in (b, b.hex().encode()):
+                if any(e[i:i + WINDOW] in seen for i in range(0, len(e) - WINDOW + 1, WINDOW)):
+                    raise Leak(f"the public output holds bytes of {p['id']}'s {what}")
 
 
 def write_private(d: Path, files: dict[str, bytes]) -> None:
@@ -213,7 +228,8 @@ def run(a: argparse.Namespace) -> int:
     write_private(priv, files)
     cases = sorted(found, key=lambda p: p["id"])
     gone = missing(a.product, found)
-    lines = [line("PIECE", outcome(p["id"], p["answer"])) for p in cases]
+    lines = [f"DEVELOPMENT {a.development}"] if a.development else []
+    lines += [line("PIECE", outcome(p["id"], p["answer"])) for p in cases]
     lines += [f"NOT_ESTABLISHED missing {', '.join(gone)}"] if gone else []
     cmd = [a.exe or a.product, "check", *(str(priv / n) for n in ("params.json", "commitment.bin", "evidence.json")),
            *blobs]
@@ -226,7 +242,7 @@ def run(a: argparse.Namespace) -> int:
         lines.append(line("VERDICT", verdict) + ("" if answer else f" (exit {p.returncode}; its stderr is in --private-out)"))
         rc = p.returncode
     lines += [f"EXCEPTION {x}" for x in exceptions(a.product)]
-    record = canonical(public_record(a.product, commitment, cases, gone, verdict))
+    record = canonical(public_record(a.product, commitment, cases, gone, verdict, a.development))
     text = "".join(f"{ln}\n" for ln in lines).encode()
     try:
         check_public(record + b"\n" + text, found)
@@ -251,8 +267,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--cases", type=Path, action="append", default=[],
                     help="a private directory holding a subprotocol's case.json and answer.json, or such directories")
     ap.add_argument("--private-out", type=Path, required=True, help="the composed case and the answers (0700)")
-    ap.add_argument("--public-out", type=Path, required=True, help="verdicts, commitments and params digests only")
+    ap.add_argument("--public-out", type=Path, required=True, help="verdicts, commitment digests and params digests only")
     ap.add_argument("--exe", help="the product's executable, to run its check")
+    ap.add_argument("--development", help="why this composite claims no record: its outputs lead with it")
     return run(ap.parse_args(argv))
 
 

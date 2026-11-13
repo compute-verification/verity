@@ -11,6 +11,8 @@ A' = A + E_A and B' = B + E_B within the format's exact range, each batch's A B^
 and the generation-only kernel's folded words.
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 import struct
@@ -20,7 +22,10 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
-from mref import decode, duo_receipts, words  # noqa: E402
+from mref import decode, duo_receipts, words
+
+#: what pvref.py and lpref.py import
+__all__ = ["fold", "noise", "sigma"]
 
 FMTS = ["i8", "e4"]
 ALS = {"pm1": 1, "u17": 2, "u17w": 3, "u17p": 2, "u17wp": 3}   # u17p, u17wp: the noise of u17, u17w, five lanes a patch
@@ -30,7 +35,8 @@ U17_LIM = 6 * P17_15
 U17W_LIM = 10 * 17**7
 
 
-def sigma(seed, inst=0):
+def sigma(seed: int, inst: int = 0) -> list[int]:
+    """The four 64-bit words of splitmix64 from the seed and the instance, which key the noise's SHA-512."""
     x, out = (seed << 32 | inst) & M64, []
     for _ in range(4):
         x = (x + 0x9E3779B97F4A7C15) & M64
@@ -40,7 +46,7 @@ def sigma(seed, inst=0):
     return out
 
 
-def patch_noise(key, ns, side, p):
+def patch_noise(key: bytes, ns: int, side: int, p: int) -> np.ndarray:
     """Patch p's 512 noise values, entry e = (row % 4) 128 + col % 128."""
     tag = 2 * (ns - 1) + side
     if ns == 1:
@@ -66,14 +72,14 @@ def patch_noise(key, ns, side, p):
     return np.array(digits[:512], dtype=np.int64) - 8
 
 
-def noise(rows, k, key, ns, side):
+def noise(rows: int, k: int, key: bytes, ns: int, side: int) -> tuple[np.ndarray, np.ndarray]:
     """The patches of a rows x k operand, laid out: E (rows x k) and the patches (rows / 4 * k / 128, 512)."""
     kb = k // 128
     pt = np.stack([patch_noise(key, ns, side, p) for p in range(rows // 4 * kb)])
     return pt.reshape(rows // 4, kb, 4, 128).transpose(0, 2, 1, 3).reshape(rows, k), pt
 
 
-def fold(pt):
+def fold(pt: np.ndarray) -> np.ndarray:
     """sha_gen's word per patch: xor over chunks c of rotl(n0 ^ n1 ^ n2 ^ n3, c)."""
     w = pt.astype(np.int8).view(np.uint8).reshape(len(pt), 32, 16).copy().view("<u4").astype(np.uint64)   # (patches, 32, 4)
     x = (w[:, :, 0] ^ w[:, :, 1] ^ w[:, :, 2] ^ w[:, :, 3])

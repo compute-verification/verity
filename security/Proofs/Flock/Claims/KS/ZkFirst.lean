@@ -1,7 +1,6 @@
 module
 
 public import Proofs.Flock.Claims.KS.LiveMix
-public import Proofs.Flock.Claims.KS.PlainThird
 public import Proofs.Flock.Claims.KS.ZkDecodeW
 public import Proofs.Flock.Claims.KS.ZkEvent
 import Mathlib.Algebra.Order.Floor.Extended
@@ -36,6 +35,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.ConflictRun
+public import Proofs.Flock.Claims.KS.PlainFirst
+public import Proofs.Flock.Claims.KS.PlainThird
 
 /-!
 # The masked mixture's first and third bounds, from a simulation

@@ -16,19 +16,20 @@ import pytest
 
 import circuit_fixtures as CF
 import pearl_c4_vectors as V
-from verity.circuits.evaluation import evaluate
 from verity.circuits import partition_object as PO
+from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
+from verity.commitments.randomness import derive
 from verity.definitions.ops.prims import F32ToE2m1Sat, F32ToE4m3Sat, HopperBF16WgmmaDot16
 from verity.definitions.ops.scalar import F32Fabs, F32Fmaxf, I32Le
 from verity.definitions.silicon import fp32
-from verity.commitments.randomness import derive
+from verity.definitions.silicon.models import HOPPER_BF16_M16N8K16
 from verity.protocols.pouw.prover.circuit import pc4, plan
-from verity.protocols.pouw.prover.circuit.anchors import TileAnchors, region_bytes
 from verity.protocols.pouw.prover.circuit import words as W
-from verity.protocols.pouw.verifier.protocol import DomainError
+from verity.protocols.pouw.prover.circuit.anchors import TileAnchors, region_bytes
 from verity.protocols.pouw.prover.schemes import pearl_c4 as F
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.pouw.verifier.protocol import DomainError
 
 K = 128
 CASE = next(c for c in json.loads(V.OUT.read_text())["cases"] if c["case"] == "test-16-nvfp4")
@@ -98,7 +99,7 @@ def test_core_bf16_step_is_the_schemes_peel_step():
     for _ in range(200):
         acc = P.f32_bits(rng.uniform(-1e4, 1e4))
         a, b = [bf16() for _ in range(16)], [bf16() for _ in range(16)]
-        assert evaluate(HopperBF16WgmmaDot16, acc, a, b) == (F.HOPPER_BF16_M16N8K16.step(acc, a, b),)
+        assert evaluate(HopperBF16WgmmaDot16, acc, a, b) == (HOPPER_BF16_M16N8K16.step(acc, a, b),)
 
 
 # ---- the units against the scheme -------------------------------------------------------------------------------------

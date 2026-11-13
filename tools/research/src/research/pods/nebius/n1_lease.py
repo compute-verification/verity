@@ -179,13 +179,14 @@ def lock_path(i: int) -> Path:
     return p
 
 
-def lock_holders() -> dict[int, list[int]]:
-    """inode -> the pids /proc/locks names for its flocks: the process that took each lock, which for gpu-lease is a `flock`
-    helper long gone (the lock lives on in the lease's descriptors), so a lease is attributed by its owner line's pid instead.
+def lock_holders(path: Path = Path("/proc/locks")) -> dict[int, list[int]]:
+    """inode -> the pids `path`, /proc/locks or a text in its form, names for its flocks: the process that took each lock,
+    which for gpu-lease is a `flock` helper long gone (the lock lives on in the lease's descriptors), so a lease is
+    attributed by its owner line's pid instead.
     The kernel hands /proc/locks out a page per read, so with locks coming and going one read can miss a lock held throughout
     (node 1: 182 lines, 3 pages): use it only where missing a lock costs a tick, and `locked` where it must not."""
     out: dict[int, list[int]] = {}
-    for line in Path("/proc/locks").read_text().splitlines():
+    for line in path.read_text().splitlines():
         f = line.split()
         if len(f) >= 6 and f[1] == "FLOCK":
             out.setdefault(int(f[5].split(":")[-1]), []).append(int(f[4]))

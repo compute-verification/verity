@@ -1,7 +1,8 @@
 """`block_census.py`: each row's cut (the row itself when it fits, else each slot's coarsest fitting option, else a gap with
 its finest option's reason; a ``COLS`` or ``WIDE_COORDS`` row or slot at its fitting width of least leakage-weighted proving
 cost; no proof block
-for a row of no gate or no input), the slots of each kind of split the serving rows' tables name, and the census's counts per
+for a row of no gate or no input; a ``CHAINS`` row's key blocks as scores and values units before whole), the slots of each
+kind of split the serving rows' tables name, and the census's counts per
 Definition, phase, token and request over the ranks. The sized units are stand-ins: nothing is bound or lowered."""
 
 from __future__ import annotations
@@ -52,10 +53,46 @@ def test_a_parts_rows_slots_are_its_parts_each_whole_then_finer():
     assert B.slots("DeepGemmFp8Linear_v1{K=8,N=4}", [q, g, g1]) == [[[q]], [[g], [g1]]]
 
 
-@pytest.mark.parametrize("row", ["RoPE_v1{D=64}", "SparseMlaSplit_v1{T=9,NS=2}"])
-def test_a_cut_or_split_rows_units_are_each_a_slot(row):
+def test_a_cut_rows_units_are_each_a_slot():
     a, b = unit("A_v1{}"), unit("B_v1{}")
-    assert B.slots(row, [a, b]) == [[[a]], [[b]]]
+    assert B.slots("RoPE_v1{D=64}", [a, b]) == [[[a]], [[b]]]
+
+
+#: a decode row of GLM-5.3's sparse attention: 272 keys in five splits, eight heads
+CHAIN_ROW = ('SparseMlaSplit_v1{T=272,NS=5,NH=8,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},'
+             'INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}')
+
+
+def _chain_units(**sized):
+    """`CHAIN_ROW`'s unit templates past itself as stand-in sized units (``sized``: a family's fields), and its ways' units."""
+    ways = dict(B.ST.chain_ways(CHAIN_ROW))
+    by = {u: unit(u, n, **sized.get(u.split("{")[0], {})) for way in ways.values() for u, n in way}
+    return list(by.values()), {g: [by[u] for u, _n in way] for g, way in ways.items()}
+
+
+def test_a_chain_rows_slot_is_its_key_blocks_as_scores_and_values_units_of_64_columns_then_whole():
+    units, ways = _chain_units()
+    assert B.CHAIN_COLS == 64 and sorted(ways, key=str) == [128, 16, 256, 32, 64, None]
+    assert B.slots(CHAIN_ROW, units) == [[ways[64], ways[None]]]
+    assert [(u["spec"].split("{")[0], u["n"]) for u in ways[64]] == [
+        ("SparseMlaHeadScores_v1", 32), ("SparseMlaHeadValues_v1", 256), ("SparseMlaHeadScores_v1", 8),
+        ("SparseMlaHeadValues_v1", 64), ("SparseMlaSplitEnd_v1", 320), ("SparseMlaCombine_v1", 64)]
+    assert B.slots(CHAIN_ROW, ways[None]) == [[ways[None]]]                         # a census sized before the units existed
+
+
+def test_a_chain_row_takes_its_scores_and_values_units_and_whole_key_blocks_when_one_misfits():
+    units, ways = _chain_units()
+    row = family(CHAIN_ROW, units, est_log=31)
+    assert B.cut(CHAIN_ROW, row) == ("split", ways[64], None)
+    units, ways = _chain_units(SparseMlaHeadValues_v1={"unpieced": ["Erf_v1"]})
+    assert B.cut(CHAIN_ROW, family(CHAIN_ROW, units, est_log=31)) == ("split", ways[None], None)
+
+
+def test_the_served_sparse_attention_partition_names_a_decode_rows_units_at_the_census_s_width():
+    """The served partition's templates are `CHAIN_ROW`'s units at `CHAIN_COLS` (a scores or values unit its Boolean form), so
+    the planner's card and the served partition hold one cut of the row."""
+    served = json.loads((HERE.parent / "glm53_sparse_mla_tp8_step16.json").read_text())["templates"]
+    assert sorted(B.ST.template(t).word for t in served) == sorted(u for u, _n in dict(B.ST.chain_ways(CHAIN_ROW))[B.CHAIN_COLS])
 
 
 def test_a_kchunks_rows_slot_is_its_coordinate_or_its_chunks_of_one_width():
