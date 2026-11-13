@@ -145067,3 +145067,9 @@ the test.
 
 One slip of mine: a local `pytest` of the new test started `lake build` on this VM for about three minutes before my
 timeout cut it. I removed the half-built `.lake` trees; nothing was kept from it.
+## ONSITE, Fri 13 Nov 14:08Z: PRF-615, THE CAUSE (one line, the entry follows by 16:00Z): (a) the kept data is older than the rule. Its inner session ran on per-round OS challenges (the record's Hello has no `coins` key at all and its `coin_tree` is null); the verifier has set the recursive inner statement up on the challenger's tree since `45716bad8ed`, which reached `main` on 5 Nov 05:56Z with #6996, 1 h 45 min after the kept data was named there
+
+- [read: `research data show` of the art] The kept data is run `r20261102-182836-0936`'s, 2 Nov 18:28Z to 19:32Z on cpu-2, source `fe7be681ae90`, K 64, N 4, GPU 0. `45716bad8ed` is not an ancestor of that source [read: git].
+- [read: the art's two inner records, fetched alone, 330 KB each] In `inner/s0` and in `inner-neg-challenge` the Hello's keys are `digests`, `flavor`, `link`, `profile`, `reps`, `rounds`, `tables`: no `coins`. The record's `coin_tree` and `coin_seed` are null. The run's own Lean step verified with `--rec-inner-statement-coins os` (`v-sess/rec-inner-args.txt`).
+- [read: git] The nonce rule itself is older (`2b9fc0242b2`, on `main` 28 Sep). What changed is which branch of `Record.decode` the inner record takes: `45716bad8ed` changed `RecCoins.Files.stmt` from `Coins.os` to `RecVStar.innerTree`, so the spec holds a tree and `checkHello` reads a nonce the old Hello never had. `recursive_data.json` reached `main` on 5 Nov 04:11Z (#7030).
+- Not established yet: that a session made at `main` is accepted part for part (step 2). The kept run took 64 min on a CPU node with no GPU; I size a fresh one next and launch it only if it fits your bound.
