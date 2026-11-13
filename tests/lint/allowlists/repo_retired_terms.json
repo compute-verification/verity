@@ -136,7 +136,6 @@
     {"file": "security/Definitions/Claims/SamplingTwoRankin.lean", "count": 4},
     {"file": "security/Definitions/Core.lean", "count": 3},
     {"file": "security/Definitions/Core/Accel/Card.lean", "count": 4},
-    {"file": "security/Definitions/Core/Assumptions/Accel.lean", "count": 1},
     {"file": "security/Definitions/Core/Blocks.lean", "count": 5},
     {"file": "security/Definitions/Core/Challenger.lean", "count": 1},
     {"file": "security/Definitions/Core/Compiler.lean", "count": 3},
