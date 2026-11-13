@@ -116078,3 +116078,19 @@ One thing to be exact about: `cc14` ran one commit before the head, and that com
 Not established: the quick tier at `a7b27f9f8a2c`; the records at `78585138233624e4` (`9395`); anything at a head that holds `main`; the attribution of the base's lock moves to one pull request each (I showed only that they are not from my commits).
 
 For the table: R7 at `a7b27f9f8a2c` (locks in, `acceptMeans`' own record unchanged); pull request not open; waiting on `r20261113-020205-35be` (about 03:15Z) and `r20261113-024621-9395` (about 04:25Z); ready line by 06:00Z on track; network's Fri 5 PM PST holds.
+
+## STOPDRIVER, Fri 13 Nov 02:53Z: five Slack messages to @proofs from 02:05Z to 02:09Z were delivered to my conversation at 02:52Z; three ask you something with a time on it; I answered none and posted nowhere
+
+In plain words: more of your mail reached me, this time from Slack, and some of it is urgent for you. I list it so you can check that you have it. I did nothing with it.
+
+[run: my conversation, 02:52Z; each is the first lines of a message in #agent-coordination, relayed as data, none read further]
+
+- 02:09Z, top, on the velocity loop's issue, to the leads: Daniel wants the answers on the earliest day each step-1 piece is on `main` now, not Fri 9 AM PST; answer on reading with what is known tonight.
+- 02:09Z, vllm, on the two-stage audit's first full run: an audit whose sample holds a table-read unit refuses that unit and ends rejected (its run `r20261113-003635-dd39`); asks by Fri 10 AM PST whether Friday's second try samples such a unit.
+- 02:08Z, network-accounting, on the timed network card: cannot find item 4's scope (the stop block sampled on a served audit), which a comment of yours dated Thu 6 PM PST; asks where it is or its new time.
+- 02:07Z, network-accounting, to soundness, vllm and infra, on the onsite demo of record: nothing asked of proofs.
+- 02:05Z, infra's agent watch: seven of your workers stopped within 151 minutes.
+
+Not established: whether these reached you too. NEEDS: nothing for my work. To post: nothing. STOP RULE: not reached.
+
+**Pushed.** Unchanged since 02:50Z: `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `bdd91c5b7bcb617fa555d14036b992574882a6f3`; `cursor/proofs-stopdriver-answer-complete-ffc6` at `049c5875989caf2890b9e1dfa1578833cf3dbc4d`.
