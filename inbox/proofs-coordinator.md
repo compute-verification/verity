@@ -135067,3 +135067,137 @@ This loop changed none. `cursor/proofs-sessionof2-7c3a` `b49c6e40619f` and `curs
 - [run] My machine was replaced at about 10:20Z (`uptime`: up 1 min at 10:21Z; `~/wt` and every `/tmp` worktree gone). Nothing was lost: every branch was pushed and the note synced. I made `~/wt/.pen` again at 10:21Z; no other loop of me shows in `git ls-remote` or the inbox.
 - [read] Events not mine that reached me at 10:19Z, acted on in no way: nine task-finished notices of other workers (turns of about 05:05Z to 05:31Z) and twenty Slack and Linear events of 05:17Z to 05:32Z. One names my pull request: ci's review of #9555 notes that `verity/protocols/spot/verifier/README.md` line 559 adds the retired term "component", to be fixed in a next pull request. I take it in the session pull request's follow-up unless you place it elsewhere.
 - Mailbox read to your 10:19Z message (486 lines). The one-call witness, sized, is my next entry, before 11:30Z.
+
+## ASSEMBLY, Fri 13 Nov 10:26Z: THE TABLE WHOLE (23 fields) and the EIGHT edges with a fix proposed for each; THE JOIN COMPILES at `75f438d9f7` (`681d`, rc 0, nine tries) with your four heads of 10:03Z in; THE RECORDS RUN IS RED at `0df461b1b2`: the lock lacks two `escapes` lines for ACCEPTS's `JpWalk.lean`; the quick tier is red on the two known tests and nothing else; GATHER's `552354cbe19` IS merged; no merge changed a field's statement
+
+**In plain words.** Everything you sent is on the join and the join's theorem compiles with it. The table for the post is section 2, whole. The boundary's eight edges are in section 4 with one fix proposed for each; I fixed none. One new red: the records check of `security/Proofs` fails on the join, because two helper functions of a tactic file that came with ACCEPTS's head are not listed in the lock. That is two lines of the lock, and the lock's `escapes` is not mine to edit.
+
+**One correction to my 10:03Z entry.** I wrote that ADDRROW2's `d2cae2a309` "was never merged". It was: I merged it at `2fc4e01e46`, 09:16Z. `7b4574d02e` is one commit above it. So the import `RowTable.lean:26`, the edge FRAME found, came in by my merge one minute after my 09:15Z run of the two tests, and I did not run them again until 10:08Z.
+
+**1. The join: `75f438d9f7`, pushed, worktree clean** [run].
+- Since `0df461b1b2`: ACCEPTS's `413f769e2d` (`d78dd0fb6f`), ADDRROW2's `7b4574d02e` (`a7dc97c8f6`), row 10's mend (`418fe1a201`), the pin (`a37f2bb519`); then your 10:03Z: SESSIONOF2's `b88626efe9` (`425f6b98a3`), RUNCOINS's `66bbbd6266` (`47eaec0753`), GATHER's `552354cbe19` (`275672f7c3`), HONEST2's `49ae9b1101` (`22053aa4b3`), the pin (`75f438d9f7`).
+- Each merge: no conflict, its tree equal to the dry `git merge-tree`, and every commit it brings is off `main` (4, 2, 1 and 2 commits).
+- **GATHER's `552354cbe19` is in.** I merged it at 10:05Z, before your 10:19Z item 5 reached me. It is left as it is, not reverted: two files under `benchmarks/one_stage/`.
+- Not taken, as you ruled: FRAME's `767972c546b8`, HONEST2's `d947e22ec8`, ACCEPTS's draft of the refusal.
+- After them: `lock_roots.py --check` adds nothing and finds nothing wrong; lakefile roots 313 (312 distinct), lock roots 316; `dup_names.py` the same 17 names; the pin's line regenerated, `pins.py --stale` prints nothing; `pytest tests/test_lean_packages.py`, "35 passed, 3 warnings".
+- **No field of `JoinsAt` changed its statement by a merge** [derived: the 17 Lean files the four merges change hold no definition a field names; `Sampled/Held.lean` only loses the two lemmas RUNCOINS moved]. The one change to the structure is mine, row 10.
+
+**2. THE TABLE, whole, of `JoinsAt`'s 23 fields at `75f438d9f7`** [read: `JoinsAt.lean` and each definition at that head]. It is my 09:10Z table with your four rulings in it. The row numbers are the 09:10Z ones, so other entries' references still hold: row 6 is gone and row 10 is two rows. **23 fields, not 22:** `firstDrawn` left (23 to 22) and `partsHeldAt` became two (22 to 23).
+
+**In plain words, for the post.** The join's theorem takes 23 premises. Thirteen say nothing about a play once they are asked at the plays of the game in hand: they are facts of the parameters, the commitment, the device or the instance's own maps, and no accepted play can make them false. Ten are facts of what the prover sent in a play, and no refusal of the form gives them today; one odd accepted play that fails one of these makes the theorem empty at that instance. One premise of 09:10Z is now a theorem (`firstDrawn`), and one that was a fact of the play is now two facts of the parameters (`partsHeldAt`), the first of which ACCEPTS is turning into a lemma of the accept.
+
+**How to read it.**
+- **Ranges over** is the field's own quantifier. "Every accept" is every exchange `o` with `FormAccepts C o`, whatever its parameters and commitment. "Good accepts" adds `JoinGood o` (the cut's read is the device's, and the log's challenges are fresh).
+- **Reads** is what of the exchange the statement depends on.
+- **Kind** is `instance` or `play`, as in the notes under the table.
+
+| # | field | ranges over | reads | kind | what makes it true; owner; compiled? |
+|---|---|---|---|---|---|
+| 1 | `ledgerInOrder` | every exchange after θ on two windows, accepted or not | request, log, close and draw, through the deployment's ledger lines | instance (the device) | a lemma of the modelled device, none written; soundness's device pull request |
+| 2 | `distinctFamilies` | no exchange | `ℓ₁`, `ℓ₂` | instance | TWOLEG's `Shown.paramsOfJson_families`, compiled at `1e20910586`; the line that reads `ℓ₁`, `ℓ₂` off θ is not written |
+| 3 | `family₁` | good accepts | the case's parameters only | instance (θ) | lemma not written; mine |
+| 4 | `family₂` | good accepts | the case's parameters only | instance (θ) | lemma not written; mine |
+| 5 | `otherRoots` | good accepts | the evidence's two sessions' roots | play | no lemma; two refusals on two windows would give it (CUT's 07:03Z item 1); TWOLEG's form, after Friday; not written |
+| 6 | (`firstDrawn`: gone) | | | | a theorem now: STAGECOINS's `firstDrawn_of C caseIsSent`, which `joinedOfLaw` calls at the kept case; compiled on the join in `8f29` |
+| 7 | `sessionMatches` | **good accepts** (`SessionMatches (goodCase C JoinGood)`; it was every accept) | the evidence's interior record and challenges | play | no lemma on any branch I read. Its second half is `rfl` at the join's cut. Its first half lacks one comparison in the form: only the first stage's read-back record is held to its digest, and the second stage's to `c₂.digest` is missing (STAGECOINS's 4b); with it the field is a theorem as `firstDrawn` became one [STAGECOINS: derived]. The restatement compiled in `8f29` |
+| 8 | `msgOpens` | good accepts | the message the reading reads at each round, against `Dg` | play | no check gives it; MESSAGES; `Opens` and `Explains` replace it |
+| 9 | `FixedBefore`, in `digestBefore`'s place | every tape, and two plays of the frame at it: the first a good accept, the second at any challenges that agree with the first at the frame's rounds before `i` | `Fx` at round `i` of both plays | play (two plays) as stated; a lemma of the form's accept and the frame's map once MESSAGES's section 5 (a) and (b) are written, with no fact about the strategy left in it | the statement compiled (`e76d`); the order at the first play is `accepted_roundsBefore`, compiled in `fa1b`, on a branch soundness has not taken; (a) and (b) not written; MESSAGES, with COINMAP's prefix lemma |
+| 10a | `firstSized` | no exchange | the held copies' first-stage registration | instance today; **a lemma of the accept, being written** | it says the held first stage samples one fixed number `K` of replay blocks. True at the demo's rule (`rate:2/6` over 6 replay blocks is `subset:2`) and at every rule the form's parser accepts, since the parser takes a two-stage rule only with a rate law (ACCEPTS's 10:06Z). ACCEPTS writes `firstK_of_formAccepts`; when it is named compiled the field leaves, as `firstDrawn` did. The field compiled in `1fe7` and `681d` |
+| 10b | `partsSizedAt` | every accept, at that one `K` | the parameters only (the interior program and query); no byte of the play | instance (θ), as rows 11 and 12 are | an accepted run does not decide it: the run never checks the parts' order or offsets against the held copies'. Every term of it is the parameters', so no play makes it false at one θ. One refusal in the run would make it a lemma; ACCEPTS drafts that refusal on its own branch, not on the join (your 10:19Z item 3). `PartsSizedAt` and `partsHeldAt_of_sized` compiled in ACCEPTS's `932d` and on the join in `1fe7` and `681d`. Not `PartsAre`, which holds of no held copy with a stratum (HELDOF's `not_partsAre`) |
+| 11 | `heldOfAt` | every accept | the parameters and the commitment's record only | instance (θ, `c`) | by `heldOfAt_of_desc` once the form calls `descOk`, from `DescAt` and `CopyAt`; `CopyAt`'s reference-statements part is a premise nobody states today. HELDOF: stated at `68dc23428a`, not compiled |
+| 12 | `portsDistinctAt` | every accept | the parameters only | instance (θ) | nothing refuses a `ports` object that holds a key twice; the keys' refusal, held by you |
+| 13 | `stmtsRead` | every accept | the evidence's session statements, the reading's | play | no lemma from the accept; MESSAGES's reading and SESSIONOF2 |
+| 14 | `roundsHeldAt` | every accept | the reading's session statements | play | no lemma; SESSIONOF2 |
+| 15 | `scopeHeldAt` | every accept | the reading's session statements | play | no lemma concludes it; SESSIONOF's `memberSession_ok` is one piece, compiled at `98ba037e04` |
+| 16 | `pinHeldAt` | every accept | the reading's session statements | play | no lemma; `PinHeld`'s docstring: no check of round 2 makes it |
+| 17 | `sessionsRun` | every accept, and every challenges that agree with what the check read | the evidence's sessions, the provers `P'` | play | no lemma; SESSIONCOINS and MESSAGES |
+| 18 | `sessionMsgs` | the same | the same | play | no lemma; SESSIONCOINS and MESSAGES |
+| 19 | `wiring` | every exchange after θ the sampled verdict accepts | the verdict | instance | the composite's wiring; no instance of `JoinsAt` is written |
+| 20 | `caseIsSent` | every exchange `C` has a case of | the case map | instance | by how the instance defines `C`; not written |
+| 21 | `caseCommits` | every exchange `C` has a case of | the case map | instance | the same |
+| 22 | `stmtX` | no exchange | `c`, `x` | instance | it says which `x` the commitment carries |
+| 23 | `signer` | no exchange | the vocabulary's signer | instance | the instance's |
+
+**The thirteen of kind `instance`** (1 to 4, 10a, 10b, 11, 12, 19 to 23).
+- [read] Every play of the game after θ, `F` and `c` ends with those three (`Sampled.Binding.play_reaches`), and what the prover sent carries the play's parameters and commitment. So a statement that reads only the parameters and the commitment says one thing at every play of one game: it is true or false of θ and `c`, and no odd play changes it.
+- [read] As stated, 3, 4, 10b, 11 and 12 range wider: over every exchange `C` has an accepted case of, with any parameters and any commitment. The instance closes that with a case map that has a case only where `o.params = θ`, and ACCEPTS's `atStmt C x` for the commitment (compiled in `4204`); the join does not call the `_at` forms yet.
+- **No instance of `JoinsAt` is written on any branch I have read.** So all thirteen are premises of the join until one is. "Instance" says only that no accepted play of the game can falsify them.
+- Row 10a is written as `∃ K, firstK A.h.reg.first = some K` and row 10b as `∀ K, firstK A.h.reg.first = some K → PartsSizedAt A C K`, because `JoinsAt` has no `K` among its parameters. `firstK` is a function, so the two are your two premises at the one `K` (my 10:03Z entry, section 3).
+
+**The ten of kind `play`** (5, 7, 8, 9, 13 to 18). None has a lemma from the form's check today.
+- 5 (`otherRoots`): CUT's two refusals would make it a lemma.
+- 7 (`sessionMatches`): one comparison in the form, STAGECOINS's 4b.
+- 8 and 9: your 06:05Z ruling stands (the join takes `Opens`, `FixedBefore`, `Explains`). On the join the field is still `digestBefore`: `MessagesOpen.lean`, which holds `FixedBefore`, is on no head named for me. MESSAGES's 09:55Z: (a) is stated (`LocatedRising`), not proved, and lacks one lemma of SESSIONOF2's.
+- 13 to 16: they hold the session statements the evidence carries to the held copies' templates. No theorem takes the per-member step's check to any of the four at the form's accept.
+- 17, 18: SESSIONOF2's `session_of_held` gives them from what rows 14 to 16 say and ACCEPTS's `twoHolds_at`.
+- [derived, as at 09:10Z] The nine of the run's accept (10b to 18) reach `joined` through `hReach`, which carries the accept and no `Good`; putting one in `Good` is a change to `joined` and to `Projection.lean`'s `AcceptsRun`.
+
+**3. The two root tests at `75f438d9f7`** [run: `uv run pytest tests/test_boundaries.py tests/test_public_boundary.py` on my VM: "2 failed, 113 passed in 73.04s"].
+- **The certifier test fails on ONE import**, as you said: `AddressFacts/RowTable.lean:26` to `SampledTwo/OneTable.lean` (15 chains, all through it). RUNCOINS's two are gone.
+- **The public-boundary test: "8 edges, 8 new"**, not nine: RUNCOINS's `66bbbd6266` cut `Proved.lean` to `Sampled/Held.lean`, and `RowTable.lean:26` is in.
+
+**4. The eight edges, by importer and imported file, with a fix proposed for each.** Paths are under `security/Proofs/` unless written out. "Whole file" is what the boundary's own script says moving the imported file to the public side would take with it [run: `public_boundary.py --json`, its `moves` and `blocked_by`]. I fixed nothing.
+
+| # | importer, line | imported file | whose | what it reads | whole file | proposed fix |
+|---|---|---|---|---|---|---|
+| 1 | `Flock/SpotFlock/AddressFacts/RowTable.lean:26` | `Properties/Verity/SampledTwo/OneTable.lean` | ADDRROW2's import, SESSIONOF2's lemma | `oneTable_of_sessionOk`, once (line 230) | 109 files, 40,537 lines, and 11 files the boundary keeps private | **turn the import round**: the two lemmas move down |
+| 2 | `Flock/SpotFlock/OwnReads.lean:9` | `Properties/Challenger/CanonLine.lean` | FRAME | `canon_inj`, `field?_equiv`, `field?_obj`, `field?_of_not_obj` | 11 files, 2,391 lines: the composition's Lean package and the two `Composition.lean` | **turn the import round**: the lemmas move down, FRAME's (b) |
+| 3 | `Flock/SpotFlock/OwnReads.lean:10` | `Properties/Challenger/CanonWf.lean` | FRAME | `sortedKeys_of_wf` | 2 files, 803 lines (it and `CanonRead.lean`), nothing private behind | **an entry in the list**, or move the file |
+| 4 | `Flock/SpotFlock/ReadsCheck.lean:3` | `Properties/Challenger/CanonRead.lean` | OWNREADS | five lemmas (FRAME's 09:56Z section 4) | 1 file, 759 lines, nothing private behind | **an entry in the list**, or move the file |
+| 5 | `Flock/SpotFlock/RunsAs/Coins.lean:4` | `Properties/Challenger/Drawn.lean` | RUNCOINS | `drawnByDevice`, `coinsReason_draw`, 10 lines | 18 files, 6,164 lines, and one file of PoUS's device the boundary keeps private | **move the file**: the importer, to the challenger's side |
+| 6 | `Flock/SpotFlock/RunsAs/OfCheck.lean:5` | `Properties/Verity/SampledTwo/Steps.lean` | RUNCOINS's import, TWOLEG's file | `inputAt_ok`, `accepted_steps` and their helpers, about 100 of 282 lines | 1 file, 282 lines, nothing private behind | **an entry in the list**, or move the file |
+| 7 | `Flock/SpotFlock/RunsAs/Proved.lean:4` | `Properties/Spot/Credited.lean` | RUNCOINS | five lemmas, about 44 lines | 9 files, 3,963 lines, one of them PoUS's `MemoryChallenger/Sort.lean` | **turn the import round**: the lemmas move down |
+| 8 | `Flock/SpotFlock/RunsAs/Statement.lean:6` | `security/Properties/Challenger.lean` | RUNCOINS | the definitions `Run`, `Run.released`, `History`, `OpensOn`, `Break`, about 30 of 548 lines | 1 file, 548 lines, nothing private behind | **an entry in the list** |
+
+**Each fix, and why that one.**
+- **1, `RowTable` to `OneTable`: turn the import round.** `oneTable_of_shape` and `oneTable_of_sessionOk` are lines 36 to 66 of `OneTable.lean`. Their statements and proofs name `SpotFlock`, `FlockDeploy`, `Flock`, `FlockSoundness` and `Claims.Msg` and nothing of `SessionCoins` [read]; only the file's last two lemmas read `SessionCoins.repsOf`. So the two move to a file under `Flock/SpotFlock/`, `OneTable.lean` imports that file, and `RowTable.lean` imports it in `OneTable.lean`'s place. 31 lines, no statement changed. It clears the certifier test as well, since this is its one import. SESSIONOF2 and ADDRROW2 have it from you. Not compiled, not tried.
+- **2, `OwnReads` to `CanonLine`: FRAME's (b), as you ruled, after the carry.** One thing to read before it: `canon_inj` is proved through `utf8_canon`, which reads the composition's escape functions (`Composition.Esc.unesc2`, `unescLow`, defined in `Proofs/Properties/Composition.lean`) [read: `CanonLine.lean` lines 36 to 352]. So `canon_inj` cannot move down by itself: either those escape functions move with it, or its proof is rewritten on `LiveSalt.Canon`'s own, which is public. `field?_obj`, `field?_of_not_obj` and `field?_equiv` read `CanonRead` and `FlockDeploy` only, and no escape function. FRAME to say which; I have not read (b)'s plan for it.
+- **3 and 4, `CanonWf` and `CanonRead`: an entry.** Both files are facts about canonical JSON text with nothing private behind them. FRAME's (b) moves their lemmas piece by piece; one entry clears both edges with no Lean change and no module renamed. Seven files import one of the two, on branches in flight.
+- **5, `Coins` to `Drawn`: move the importer** (RUNCOINS's way 3). `RunsAs/Coins.lean` (95 lines) proves a fact about the challenger's code, and only the aggregator `RunsAs.lean` imports it. It moves to the challenger's side (RUNCOINS names `Properties/Challenger/RunCoins.lean`) and leaves the aggregator. The cost: in the public tree `RunCoinsFromDevice` is a premise with no discharge there. The other way takes 6,164 lines public, PoUS's attest and tree among them, and is blocked by a file of PoUS's device.
+- **6, `OfCheck` to `Steps`: an entry.** `Steps.lean` has nothing private behind it. Ten files of `SampledTwo/` import it beside `OfCheck.lean`, and it is a root of the lock, so a move renames a module under eleven importers and one lock record; an entry does neither.
+- **7, `Proved` to `Credited`: turn the import round** (RUNCOINS's way 2). The five lemmas (`filterMap_int_arr`, `filterMap_int`, `toList_of_mapM`, `qsort_ascending`, `ascending_lt`) move to a public file and `Credited.lean` imports it. Their statements read `Properties.Spot.Ascending`, defined in `security/Properties/Spot.lean`, which is private with nothing private behind it: so this fix also needs that one-line definition moved, or one more entry.
+- **8, `Statement` to `security/Properties/Challenger.lean`: an entry.** It is a definitions file of the properties tree, the challenger's vocabulary, and it imports only `Spot.OneStageZk`, which is public. It is of another Lean package than `Proofs/Flock/`, so it does not move there. Turning the import round would split that vocabulary over two files: the five definitions sit between its lines 80 and 356.
+
+**"The list" is `public_boundary.toml`, not `public_boundary_allowed.txt`.** The allowed file "only shrinks" by its test's docstring and holds no reason. An entry here is a `[[needed]]` block with its `why`, `from = ["flock"]`, which the file calls a boundary decision: yours, or Daniel's.
+
+**Two things I ran on scratch copies of the boundary file, the tree untouched** [run: `public_boundary.py --boundary /tmp/…`].
+- **Four files in one `[[needed]]` block from `flock`** (`security/Properties/Challenger.lean`, `SampledTwo/Steps.lean`, `Challenger/CanonRead.lean`, `Challenger/CanonWf.lean`): "4 edges, 4 new". Edges 3, 4, 6 and 8 go, no new edge appears behind them, and the public set grows by exactly those four files (8,666 to 8,670), 1,633 lines.
+- **RUNCOINS's one line, the existing SPOT entry extended to `flock`:** "5 edges, 5 new", the public set grows by 17 files. It clears six edges and opens three behind them: `Challenger/CanonLine.lean:4` to `Proofs/Properties/Composition.lean`, `Challenger/Coins.lean:5` to PoUS's `MemoryChallenger/Attest.lean`, `Spot/Credited.lean:6` to PoUS's `MemoryChallenger/Sort.lean`. So I do not propose it.
+
+**What is left after the proposal:** edges 1, 2, 5 and 7 are Lean changes by their owners (two lemma moves of 31 and about 44 lines, FRAME's (b), one file moved to the private side); edges 3, 4, 6 and 8 are one block of the boundary file. None is mine to make, and none before your ruling.
+
+**5. The runs** [run: each run's `stdout.log` and `status.json`].
+- **`r20261113-100653-681d`**, vy-nebius-cpu-5, at `75f438d9f7`, 10:07:22Z to 10:23:29Z, **rc 0, "ALL TRIES rc=0"**. Nine tries, each "lean exit 0" and each probe "none of its N theorems uses an axiom beyond propext, Classical.choice and Quot.sound":
+  - `JoinsAt.lean` 333 s, 11 theorems. `JoinedCoupling.lean` 91 s, 1. `JoinedForm.lean` 62 s, 2.
+  - `MemberChecks.lean` 120 s, 11. `Sampled/Record/PartReadsBack.lean` 25 s, 1.
+  - `AddressFacts/RowPlace.lean` 128 s, 18. `RunsAs/Proved.lean` 26 s, 5. `Honest/Sits.lean` 150 s, 10. `Honest/Instance.lean` 31 s, 28.
+  - The nine reach all 20 Lean files that changed since `0df461b1b2` [run: the import closure, over-approximated].
+- **`r20261113-100020-1fe7`**, vy-nebius-cpu-11, at `a37f2bb519`, 10:00:43Z to 10:18:54Z, **rc 0, "ALL TRIES rc=0"**: `JoinsAt.lean` "lean exit 0 in 443 s" (11 theorems), `JoinedCoupling.lean` 461 s (1), `JoinedForm.lean` 57 s (2), `RowPlace.lean` 128 s (18); probes clean. So row 10's two fields compile.
+- **`r20261113-095814-418d`, the root suite's quick tier** at `0df461b1b2`, vy-nebius-cpu-14, 09:58:35Z to 10:03:43Z, rc 1: "2 failed, 386 passed, 4 deselected, 18 warnings in 297.79s". The two are `test_spot_never_imports_the_network_certifier_in_lean` and `test_no_public_file_needs_one_the_export_does_not_copy`, and no other test failed.
+  - Three bookkeeping warnings: Lean names with the retired word "law" ("204 > 133"), SPOT's older name's four counts, and `tests/tree.toml`'s arriving line for `verity/periods/`. They warn. The join's own `joinedOfLaw` and `joinedCouplingOfLaw` are two names with "law" [read]; I have not traced the rest of the counts.
+- **`r20261113-095636-adf2`, the records run** at `0df461b1b2`, vy-nebius-cpu-1, started 09:58:03Z: **`security/Proofs` FAILS**, and the run is still going on `security` and `security/Properties`.
+  - "AUDIT …/security/Proofs: FAIL  209677 declarations in 4213 modules; axioms propext, Classical.choice, Quot.sound", "check.py exit 1 in 1361 s".
+  - Its report's `failures` holds two lines and no other [read: `lean-audit/audit-Proofs/report.json`]:
+    - "escape: SpotFlock.RecordNames.jpBody (opaque, in Proofs.Properties.Verity.SampledTwo.JpWalk) is compiled code no proof sees; list it under `escapes` with the reason, or remove it"
+    - the same for `SpotFlock.RecordNames.walkGoal`.
+  - [read] Both are `meta partial def`s of `JpWalk.lean`'s tactics (`jp_body`, `jp_walk`). The file came with ACCEPTS's `7e7f0609ad` (the join's `0c7a84c235`, 08:35Z). The lock has its `compile_time` entry and its root, and no `escapes` line for the two; the thirteen `Fwd.*` partial defs each have one.
+  - The report lists no other failure. This is the records run's fast path: it builds and audits, with no kernel replay and no tests.
+  - **The same failure is at `75f438d9f7`** [derived: `JpWalk.lean` and the lock's `escapes` are unchanged since]. So I send no records run at the new head until the two lines are in.
+- GATHER's rehearsal `r20261113-095312-3257`: `research status` reads "done", rc 0, class SUCCESS at 10:17Z. I have not read its log; GATHER's entry says what it shows.
+
+## NEEDS
+
+- **ACCEPTS:** two lines under `escapes` in `security/Proofs/lean-audit.json`, for `SpotFlock.RecordNames.jpBody` and `SpotFlock.RecordNames.walkGoal`, each with its reason as the `Fwd.*` lines have, on its branch, and the head named. Or, coordinator, say that I add them on the join: I edit only `roots` in the lock unless you say.
+- **You:** the ruling on the eight edges (section 4). The one decision that is a boundary's is the `[[needed]]` block for edges 3, 4, 6 and 8.
+- **SESSIONOF2 and ADDRROW2:** edge 1 has a 31-line cut written out in section 4; it is theirs.
+
+## Not established
+
+- **A wired play of more than one member is not an accepted play today** [TWOLEG's 10:01Z and 10:04Z, by your 10:19Z item 4; I have not run it]. The form's compiled check refuses an honest wired play of twenty members at two rules: the per-member form's `roots`, then the interior audit's `registered`, because the form's step 5 and step 4 read own reads two ways. Every theorem of the join over a good accept is about plays the check accepts, so it says nothing of such a play yet. TWOLEG drafts the step 5 change on a scratch branch; none of it is on the join.
+- That any instance of `JoinsAt` exists: none is written, so all 23 fields are premises of the join.
+- The records of `security/Proofs` at any head of the join: red at `0df461b1b2`, not run at `75f438d9f7`. `security` and `security/Properties` at `0df461b1b2`: `adf2` has not reached a verdict.
+- The quick tier at `75f438d9f7`: not run. The two boundary tests are red there on my VM (section 3); the other 386 were run at `0df461b1b2` only.
+- That any of the eight fixes compiles or leaves the tests green: none is written. The two scratch runs of the boundary's script change only a copy of its file.
+- Whether GATHER's `552354cbe19` makes `main`'s Python take a file the Lean per-member form refuses: TWOLEG's to say.
+
+**Runs out:** `r20261113-095636-adf2` (records, vy-nebius-cpu-1, at `0df461b1b2`), expected end between 10:40Z and 11:00Z [guess: FRAME's `a613` took 40 minutes for the three packages, and this one's first took 23]. **Timer:** one, for it. No other run of mine is out.
