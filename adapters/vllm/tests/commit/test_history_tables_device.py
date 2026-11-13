@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.commitments import history as HT
+
 from verity_vllm.commit import history_tables as H
 from verity_vllm.commit import history_tables_device as HD
 

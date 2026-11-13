@@ -16,7 +16,9 @@ from pathlib import Path
 import pytest
 
 REGISTRY = "verity.definitions.registry"
-DIR = Path(importlib.util.find_spec(REGISTRY).origin).parent
+_SPEC = importlib.util.find_spec(REGISTRY)
+assert _SPEC is not None and _SPEC.origin is not None, REGISTRY
+DIR = Path(_SPEC.origin).parent
 FAMILY = ("moe", "moe_pad", "boolean_moe", "fp8", "fp8_moe", "fp8_moe_experts", "boolean_fp8", "boolean_fp8_moe", "nvfp4",
           "boolean_gather", "dsv4_moe", "boolean_dsv4_moe")
 #: other families' modules the family's Definitions call: the scalar and bit primitives (`prims`, `ref_prims`, `pad_prims`), the B1

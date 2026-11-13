@@ -19,6 +19,8 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Callable
+from typing import Any
 
 from verity_vllm.check.match.canonical_operands import as_progression
 from verity_vllm.program.compact import expand, idx_values, rle_mapped
@@ -38,7 +40,8 @@ def layer_number(name: str | None) -> int | None:
 def serves_prefix_caching(header: dict) -> bool:
     """Whether the record attests an engine serving with vLLM's prefix cache (the RunHeader's engine kwargs; G1 holds every location the
     recorder writes them to the Program's applicability)."""
-    prof = header.get("profile") if isinstance(header.get("profile"), dict) else {}
+    prof = header.get("profile")
+    prof = prof if isinstance(prof, dict) else {}
     return any(isinstance(ek, dict) and ek.get("enable_prefix_caching") is True for ek in (prof.get("engine_kwargs"), header.get("engine_kwargs")))
 
 
@@ -58,7 +61,8 @@ def load_layout(P, d: str) -> None:
     p = os.path.join(d, PREFIX_FILE)
     if not os.path.exists(p):
         return
-    lay = json.load(open(p))
+    with open(p) as f:
+        lay = json.load(f)
     k, C, rl, names = int(lay["input"]), int(lay["C"]), int(lay["row_leaves"]), list(lay["layers"])
     nums = [layer_number(n) for n in names]
     if None in nums:
@@ -72,6 +76,7 @@ class PrefixInput:
     """`instance_sequence.RootView`'s reads of a warm request's `prefix` Input node (`pfx`: node -> (C, KVH*D, layer numbers))."""
 
     pfx: dict = {}
+    _per_run: Callable[[tuple, bool], list[tuple]]   # the view's own (`RootView._per_run`), declared and nothing more
 
     def _pfx_src(self, idx: int, lo: int, hi: int):
         C, rl, layers = self.pfx[idx]
@@ -115,14 +120,23 @@ def merge_reads(items: list[tuple], compact: bool) -> list[tuple]:
 
 
 class CachedKv:
-    """`batch_decomp.Projection`'s canon for a warm request (`cached_rows` > 0): its attention's reads of other requests' key / value."""
+    """`batch_decomp.Projection`'s reads for a warm request (`cached_rows` > 0): its attention's reads of other requests' key / value."""
 
     cached_rows = 0   # the request's rows the prefix cache served (`cached_rows`), set by its caller
+    # what the Projection it is mixed into brings, declared and nothing more: its instances and their form, its inputs, its own
+    # instances by node, the fold it projects, and its readers of a run, of a progression, of a peers run and of a cross-request read
+    inst: list[dict]
+    compact: bool
+    inputs: dict[int, tuple[str, int]]
+    k2i: dict[int, int]
+    _fold: Any
+    _src: Callable[[Any, bool], Any]
+    _srcP: Callable[[tuple, bool], list[tuple]]
+    _split_peer: Callable[[Any], list[tuple]]
+    _xreq: Callable[..., None]
 
-    def canon(self, i: int, unfold: bool = False) -> list[list[tuple]]:
-        rl = self._kv_row_leaves(i) if self.cached_rows else None
-        if rl is None:
-            return super().canon(i, unfold)
+    def _kv_canon(self, i: int, rl: int, unfold: bool) -> list[list[tuple]]:
+        """`canon` of a warm request's attention instance `i`, whose KVH*D is `rl` (`Projection.canon` asks for it)."""
         out = []
         for ai, a in enumerate(self.inst[i]["args"]):
             if ai in KV_OPERANDS:
@@ -155,7 +169,8 @@ class CachedKv:
     def _kv_reads(self, i: int, kv: int, a: list, rl: int, unfold: bool, count: bool = True) -> list[tuple[tuple, str | None]]:
         """Canonical sources of one key / value operand, each with the request whose row it links to (None for the request's own)."""
         layer = layer_number((self._meta(self.inst[i]["k"]) or {}).get("hint"))
-        out, o = [], 0
+        out: list[tuple[tuple, str | None]] = []
+        o = 0
         for p in a:
             if self.compact and not (p[0] == "n" and any(self._foreign(x) for x in idx_values(p))):
                 out.extend((t, None) for t in self._srcP(p, unfold))
@@ -189,7 +204,7 @@ class CachedKv:
         for i in range(len(self.inst)):
             rl = self._kv_row_leaves(i)
             for ai, a in enumerate(self.inst[i]["args"] if rl else ()):
-                if ai not in KV_OPERANDS:
+                if rl is None or ai not in KV_OPERANDS:
                     continue
                 for t, who in self._kv_reads(i, ai - 1, a, rl, False, count=False):
                     if who is not None:
@@ -202,8 +217,8 @@ class CachedKv:
 def check_hits(g: dict, P) -> tuple[list[str], dict | None]:
     """GM-01 (G5) for one request: the engine served the Program's declared prefix rows, and every cached block's rows were read from the
     request the Program declares for it.  (problems, the request's `prefix` entry | None for a cold request on both sides)."""
-    decl = g.get("prefix") or {}
-    C_decl, C_obs = int(decl.get("rows") or 0), int(getattr(P, "cached_rows", 0) or 0)
+    decl = g.get("prefix")   # the Program's declared prefix-cache hit {rows, producers}; a request it declares cold has no entry
+    C_decl, C_obs = (int(decl.get("rows") or 0) if decl else 0), int(getattr(P, "cached_rows", 0) or 0)
     if not C_decl and not C_obs:
         return [], None
     rid, why = g["request_id"], []
@@ -212,7 +227,8 @@ def check_hits(g: dict, P) -> tuple[list[str], dict | None]:
     rows = P.prefix_producers() if C_obs else {}
     if C_obs and sorted(rows) != list(range(C_obs)):
         why.append(f"{rid}: {C_obs - len(rows)} of its {C_obs} cached rows are read from no other request's row of the same layer and position")
-    want = list(decl.get("producers") or [])
+    producers = decl.get("producers") if decl else None
+    want = list(producers) if producers else []
     bs = C_decl // len(want) if want else 0   # the plan caches whole blocks: one declared producer per block
     got = [sorted(set().union(*(rows.get(j, set()) for j in range(b * bs, min((b + 1) * bs, C_obs))))) for b in range(len(want))] if bs else []
     bad = [b for b, (w, h) in enumerate(zip(want, got)) if h != [w]]

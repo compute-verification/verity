@@ -19,12 +19,11 @@ import signal
 import numpy as np
 import pytest
 
-from verity_vllm.commit.committer import native_collect as NC
-from verity_vllm.check.replay import driver as SR
-from verity_vllm.check.replay import fork as FK
-
 # the sampled-replay world / helpers of test_sampled_replay (one fixture set, not a copy)
 from tests.check import test_sampled_replay as TSR
+from verity_vllm.check.replay import driver as SR
+from verity_vllm.check.replay import fork as FK
+from verity_vllm.commit.committer import native_collect as NC
 
 HIDDEN_PREFIXES = ("fa2.m1/", "fa3.m1/")
 
@@ -58,6 +57,7 @@ def _child_probe(vu: dict) -> tuple[dict, dict, float]:
     return vu, {"result": True, "frozen": gc.get_freeze_count(), "pid": os.getpid(), "i": vu["i"]}, 0.0
 
 
+@pytest.mark.slow
 def test_forked_children_inherit_a_frozen_heap_and_the_parent_unfreezes_after_the_pool_joins(monkeypatch):
     monkeypatch.setattr(SR, "FORK_GC_FREEZE", True)
     picked = [{"i": i, "family": "x", "stratum": "s", "spec": "Gemm_v1", "request_id": "r0", "phase": "mid"} for i in range(6)]
@@ -82,6 +82,7 @@ def test_fork_gc_freeze_opt_out_is_named_on_the_record(monkeypatch):
     assert gc.get_freeze_count() == 0
 
 
+@pytest.mark.slow
 def test_parent_unfreezes_even_when_the_pool_fails(monkeypatch):
     monkeypatch.setattr(SR, "FORK_GC_FREEZE", True)
 
@@ -99,6 +100,7 @@ def _killed_child(vu: dict) -> tuple[dict, dict, float]:
     return vu, {"result": True}, 0.0
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("ooms, why", [((0, 0), "exited mid-task"), ((3, 4), "OOM-KILLED (cgroup memory.events oom_kill 3 -> 4; 2 workers")])
 def test_a_worker_killed_mid_task_is_reported_by_name_not_waited_out(monkeypatch, capsys, ooms, why):
     """A SIGKILLed worker (the cgroup's OOM killer) loses its task: the pool says so, OOM-killed when memory.events counted it, at once
@@ -269,8 +271,8 @@ def test_sampled_replay_never_reads_the_hidden_m1_family(world):
 
 
 def test_oracle_compare_classifies_the_hidden_family_out_before_any_read(tmp_path):
-    from verity_vllm.check import oracle_compare as OC
     from tests.check import test_oracle_compare as TOC
+    from verity_vllm.check import oracle_compare as OC
     d, vals = TOC.make_match(str(tmp_path))
     bmap, committed = TOC.make_bmap(vals)
     seen: list = []
