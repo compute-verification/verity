@@ -63,7 +63,7 @@ def chain_certificate(theorem: str, cliff: int | None, segments: int | None, rou
     """The chain certificate at `POINT` (the band's `BandMultiMeetsFamily` and dense's `ChainDenseMeets64` share its
     terms at `D = 5`)."""
     return CapacityBound(k=k, rounds=rounds, work=1 << 20, call_ns=pi2_call_ns(POINT[1]), theorem=theorem, cliff=cliff,
-                       segments=segments, claims=CHAIN_CLAIMS)
+                         segments=segments, claims=CHAIN_CLAIMS)
 
 
 class Band(Scheme):

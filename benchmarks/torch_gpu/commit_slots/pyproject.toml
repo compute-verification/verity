@@ -19,7 +19,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_cost.py", "tests/test_host_twin.py", "tests/test_scale.py", "tests/test_stream.py"]
-# slots_gpu runs the SHA-512 engine (sha512_rows: engine.py and the host twin's sources). step.py and overlap.py read the
+# slots_gpu runs the SHA-512 engine (sha512_rows: engine.py and the host twin's sources). step.py reads the
 # run's directory, id and lease through verity_config's SHARED settings.
 inputs = ["benchmarks/torch_gpu/sha512_rows", "verity/configuration/config/verity_config"]
 

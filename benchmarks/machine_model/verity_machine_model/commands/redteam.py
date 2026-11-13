@@ -12,7 +12,7 @@ from verity_machine_model import redteam as RT
 from verity_machine_model.commands._shared import device_help, pct
 
 
-def add(sub) -> None:
+def add(sub: argparse._SubParsersAction) -> None:
     rt = sub.add_parser("redteam")
     rt.add_argument("designs", nargs="*", help="the designs to audit (default: every design in the data directory)")
     rt.add_argument("--device", default=argparse.SUPPRESS, help=device_help())
@@ -24,7 +24,7 @@ def add(sub) -> None:
     rt.add_argument("--vector", help="the vector whose rows are Π (default: model.toml's current)")
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     names = args.designs or E.designs(args.data)
     for name in names:
         a = RT.audit(name, args.data, q=args.q, operands=args.operands, credit=args.credit, vector=args.vector or "")

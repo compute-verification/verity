@@ -64,7 +64,7 @@ namespace Flock.Bridge
 open Properties.Spot
 
 /-- **A layout's population**: its first class's proof blocks, in slot order. -/
-def popOf (l : Spot.Slots.Layout) : List Spot.Slots.ProofBlock :=
+def popOf (l : Spot.Slots.SlotOrder) : List Spot.Slots.ProofBlock :=
   ((l.classes.toList.headD #[]).toList.map Array.toList).flatten
 
 /-- `PopMatches`'s check. -/
@@ -106,7 +106,7 @@ theorem popMatches_iff {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} :
 
 /-- The population's units at the layout `PopMatches` reads. -/
 theorem popOf_units {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
-    {l : Spot.Slots.Layout} (h : PopMatches desc q n)
+    {l : Spot.Slots.SlotOrder} (h : PopMatches desc q n)
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : Spot.Slots.layout p q = .ok l) :
     (popOf l).map (·.unit) = (List.range n).map some := by
   obtain ⟨p', l', hp', hl', hu⟩ := popMatches_iff.1 h
@@ -118,7 +118,7 @@ theorem popOf_units {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Prog
 
 /-- **N = n at the layout**: at `PopMatches`, the population has `n` slots. -/
 theorem popOf_size {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
-    {l : Spot.Slots.Layout} (h : PopMatches desc q n)
+    {l : Spot.Slots.SlotOrder} (h : PopMatches desc q n)
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : Spot.Slots.layout p q = .ok l) :
     (popOf l).length = n := by
   have := congrArg List.length (popOf_units h hp hl)
@@ -134,7 +134,7 @@ def nsOf (desc : Claims.Msg) (q : Lean.Json) : List ℕ :=
     | .error _ => []
     | .ok l => (l.classes.toList.headD #[]).toList.map Array.size
 
-theorem nsOf_eq {desc : Claims.Msg} {q : Lean.Json} {p : Spot.Program} {l : Spot.Slots.Layout}
+theorem nsOf_eq {desc : Claims.Msg} {q : Lean.Json} {p : Spot.Program} {l : Spot.Slots.SlotOrder}
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : Spot.Slots.layout p q = .ok l) :
     nsOf desc q = (l.classes.toList.headD #[]).toList.map Array.size := by
   unfold nsOf
@@ -145,7 +145,7 @@ theorem nsOf_eq {desc : Claims.Msg} {q : Lean.Json} {p : Spot.Program} {l : Spot
   rw [hl]
 
 /-- A layout's strata sizes sum to its population's slots. -/
-theorem sum_strata_popOf (l : Spot.Slots.Layout) :
+theorem sum_strata_popOf (l : Spot.Slots.SlotOrder) :
     ((l.classes.toList.headD #[]).toList.map Array.size).sum = (popOf l).length := by
   simp only [popOf, List.length_flatten, List.map_map]
   congr 1
@@ -157,7 +157,7 @@ theorem nsOf_sum {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} (h : PopMatches d
 
 /-- **Slot `u` is unit `u`**: at `PopMatches`, the population's proof block at slot `u` is the population's unit `u`. -/
 theorem popOf_unit {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
-    {l : Spot.Slots.Layout} (h : PopMatches desc q n)
+    {l : Spot.Slots.SlotOrder} (h : PopMatches desc q n)
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : Spot.Slots.layout p q = .ok l)
     (u : ℕ) (hu : u < (popOf l).length) : ((popOf l)[u]'hu).unit = some u := by
   have hu' : u < ((popOf l).map (·.unit)).length := by rw [List.length_map]; exact hu
@@ -168,7 +168,7 @@ theorem popOf_unit {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Progr
 def popCount (Pt : Claims.Sampling.Partition) : ℕ := (Pt.classes.headD []).flatten.length
 
 /-- The claims' partition of a layout has the layout's population as its population. -/
-theorem popCount_slotPartition (l : Spot.Slots.Layout) : popCount (slotPartition l) = (popOf l).length := by
+theorem popCount_slotPartition (l : Spot.Slots.SlotOrder) : popCount (slotPartition l) = (popOf l).length := by
   rcases l with ⟨⟨cl⟩⟩
   cases cl with
   | nil => rfl
@@ -184,7 +184,7 @@ theorem popCount_partOf_eq {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoun
 /-- **N = n**: at `PopMatches`, the claims' partition of the deployed layout has as many population slots as the
 game's partition `partOf P κ ns` has population slots, at strata that sum to `n`. -/
 theorem popCount_partOf {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
-    {l : Spot.Slots.Layout} (h : PopMatches desc q n)
+    {l : Spot.Slots.SlotOrder} (h : PopMatches desc q n)
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : Spot.Slots.layout p q = .ok l)
     {C : Verity.Boolean.Circuit} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     {ns : List ℕ} (hns : ns.sum = n) :

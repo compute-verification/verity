@@ -1,4 +1,4 @@
-// MATCH's rates on sm_120 and sm_90, for the coverage table's MATCH rows (machine_model/data/cover/rows.toml). Joint
+// MATCH's rates on sm_120 and sm_90, for the opcode table's MATCH rows (machine_model/data/cover/rows.toml). Joint
 // points: rows.jsonl only, no census line. Each warp runs 8 independent chains v = match(v); the mask a lane gets is
 // the same for every lane of its class and differs between classes, so the lanes' partition into classes holds every
 // trip.

@@ -3,15 +3,8 @@ IMMA step, a product mod p1024 right in both carry forms, at its pinned census."
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
+import demo as D
 import pytest
-
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
-
-import demo as D  # noqa: E402
 
 CENSUS = {
     "idiv": {"I32Add_v1": 896, "I32Div_v1": 896, "I32Rem_v1": 896, "IMMA.u8.u8.SAT (silicon model)": 768,

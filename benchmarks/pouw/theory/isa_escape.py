@@ -1,7 +1,6 @@
-"""ISA-ESCAPE, mechanically: no instruction or unit outside the model's menu heads a committed word more cheaply than the
-menu allows.
+"""No instruction or unit outside the model's menu heads a committed word more cheaply than the menu allows.
 
-A committed word is a fresh s32: the running sum of 32 int8 products of noised operands (32 MACs a word; FOLD-BW), or an
+A committed word is a fresh s32: the running sum of 32 int8 products of noised operands (32 MACs a word), or an
 input to the receipt fold (which is itself such a word). The model's menu for it (the ledger's rows
 (I2)/(I4) WordsWritten, (I3) ScalarRoute, (I5) SideUnits/NoSum) is exactly five routes:
   - an MMA form's writer, at most omega_t committed words an instruction (the tensor pipe, priced per form);
@@ -19,7 +18,8 @@ it, and the verdict. A committed word that is a sum of 32 int8 products needs a 
 can at most sum or move words that already exist (not fresh), and an instruction whose multiply is lower precision pays a
 decomposition factor D (int8 = D unit-products) that its raw rate must beat the honest IMMA route by to escape. A
 committed word is also an input to the receipt fold, so a cross-lane reducer is also tested as a fold: it collapses the
-warp to one result (one word a warp instruction = 32 lane instructions a word), so it cannot undercut duo's 3 (FOLD-OPT).
+warp to one result (one word a warp instruction = 32 lane instructions a word), so it cannot undercut duo's 3
+(`FoldOpt`).
 
 The checkable arithmetic is verified here, bit-exact over Z/2^32 and the operand alphabets; the measured rates are cited
 (tensor_kinds / opcode_probe census, the data sheet). The conclusion for sm_120 is that every candidate is closed, by one of:

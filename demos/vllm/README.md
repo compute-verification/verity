@@ -1,6 +1,7 @@
 # The vLLM demo: the remote protocol on a served H200
 
-The vLLM demo is the runnable form of the **remote protocol** (`verity/remote/v0`, in `verity/protocols/remote/verifier/`):
+The vLLM demo is the runnable form of the **remote protocol**'s H1 development executable (`verity/remote/v0`, H1's
+period as its work, which no configuration names, in `verity/protocols/remote/verifier/`; the composite of record, `verity/remote/v1`, has Pearl+'s run instead):
 what an auditor with no devices at the site establishes about a datacenter serving a model. One served run of
 Llama-3.2-1B INT8 on one H200 gives its verdict, and the same run carries the onsite protocol's subprotocols beside it.
 The remote protocol composes three subprotocols, tied to one record, and accepts only when all three accept:
@@ -61,8 +62,10 @@ gets no verdict.
 
 The auditor's parties are the verifier, the challenger, the network certifier and the memory challenger. The
 challenger is an auditor host reached through its gate, and its live coins are PoUW's always and sampled proofs' when
-`PP_CHALLENGER` names it; otherwise a local development challenger session on the endpoint's node samples the proof
-blocks, which shows the path but is no auditor's coins. The verifier flips no coins of its own. The other three are not
+`PP_CHALLENGER` names it, V3c's audit, the sampled-proofs audit of record, among them. Otherwise a local development
+challenger session on the endpoint's node samples the proof blocks, which shows the path but is no auditor's coins, and
+`served_verdicts.sh` takes it only in a development run, which the demo's `placement.toml` says it is (`DEVELOPMENT=1`).
+The verifier flips no coins of its own. The other three are not
 placed: the Lean verifier runs on the endpoint's node beside the prover, and the network certifier and the memory
 challenger, which onsite's pieces read, may run there too. Being placed needs each of them on a machine the developer
 doesn't control.

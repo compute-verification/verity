@@ -43,8 +43,8 @@ if [ "$MODE" = build ]; then
   echo "build 0" | tee "$O/status.txt"
   exit 0
 fi
-cap=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1)
-[ "${cap%%.*}" = "$CC" ] || { echo "s8_mma.sh: $FAM needs compute capability $CC.x, the device reports '$cap'" >&2; exit 2; }
+have=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1)
+[ "${have%%.*}" = "$CC" ] || { echo "s8_mma.sh: $FAM needs compute capability $CC.x, the device reports '$have'" >&2; exit 2; }
 export B; B=$(mktemp -d /tmp/s8-mma.XXXXXX); trap 'rm -rf "$B"' EXIT
 git rev-parse HEAD > "$O/tree.txt" 2>/dev/null || true
 if [ -n "${S8_MMA_BIN:-}" ]; then

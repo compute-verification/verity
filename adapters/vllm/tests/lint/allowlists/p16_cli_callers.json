@@ -3,24 +3,24 @@
   "public": {
     "advice": "benchmarks/network_e2e/e2e.py",
     "advice-windows": "benchmarks/one_stage/a5_tp.sh",
-    "block-counts": "benchmarks/one_stage/served_verdicts.sh",
     "build": "benchmarks/stacked_share/job.sh",
     "int8-checkpoint": "benchmarks/hash/dither/pin_glm53.sh",
-    "properties-admission": "adapters/vllm/tools/migrate/superseded_quarantine.py",
     "row": "tools/research/src/research/pods/nebius/n2_commit.sh",
     "serve-openai": "demos/vllm/serve.sh",
     "served-match": "benchmarks/hash/maxtput/build_job.sh",
     "served-pin": "benchmarks/served_commit/served_arm.sh",
     "serving-rows": "benchmarks/one_stage/a5.sh",
     "tp-serving-rows": "benchmarks/one_stage/a5_tp.sh",
-    "tp-register-tables": "benchmarks/one_stage/expert_tables_tp.sh",
+    "weights-tie": "benchmarks/prove_path/run.sh",
     "workload": "benchmarks/stacked_share/job.sh",
+    "block-counts": "benchmarks/one_stage/served_verdicts.sh",
+    "properties-admission": "adapters/vllm/tools/migrate/superseded_quarantine.py",
+    "tp-register-tables": "benchmarks/one_stage/expert_tables_tp.sh",
     "topp-pin-check": "adapters/vllm/tools/topp_pin_gpu.sh",
     "ids-front": "benchmarks/network_e2e/traces/ids.sh"
   },
   "entries": [
     {"file": "verity_vllm/engine/fp8_checkpoint.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "fp8-checkpoint"},
-    {"file": "verity_vllm/engine/meta_inventory.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "meta-inventory"},
     {"file": "verity_vllm/glue.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "glue"},
     {"file": "verity_vllm/pipeline/commit_arb.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "commit-arb"},
     {"file": "verity_vllm/pipeline/coverage_workloads.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "coverage-workloads"},
@@ -29,6 +29,7 @@
     {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "topp-split-probe"},
     {"file": "verity_vllm/program/gemm_target_correspondence.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "gemm-correspondence"},
     {"file": "verity_vllm/program/mla_capture.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "mla-capture"},
-    {"file": "verity_vllm/properties/quarantine_lint.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "quarantine-lint"}
+    {"file": "verity_vllm/properties/quarantine_lint.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "quarantine-lint"},
+    {"file": "verity_vllm/engine/meta_inventory.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "meta-inventory"}
   ]
 }

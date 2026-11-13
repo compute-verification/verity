@@ -83,12 +83,12 @@ def test_only_a_live_epochs_coins_carry_a_window():
             "the coin commitment's coins are not a live epoch's: one salt, then the rounds'"
 
 
-def test_a_windows_draw_session_is_its_draw_coin_alone():
+def test_a_windows_sampling_session_is_its_sampling_coin_alone():
     """`draw_epoch_reason`: `LIVE_SCHEME` over `DRAW_FAMILIES` alone, the session the gate opens withheld on the
     execution phase's sample root. The execution phase's own layout, a sample beside the rounds, and another scheme are refused."""
-    draw = Wd.draw_challenger(7, entropy("d")).commitment
-    assert draw.families == ((Wd.DRAW, 1),) and Wd.draw_epoch_reason(draw) is None
-    assert Wd.live_epoch_reason(draw) is not None
+    sampling = Wd.draw_challenger(7, entropy("d")).commitment
+    assert sampling.families == ((Wd.DRAW, 1),) and Wd.draw_epoch_reason(sampling) is None
+    assert Wd.live_epoch_reason(sampling) is not None
     for layout in (Wd.live_families(1), ((Wd.SALT, 1), (Wd.DRAW, 1), (Wd.ROUND, 1)), ((Wd.DRAW, 2),)):
         assert Wd.draw_epoch_reason(Ch.LiveChallenger(Wd.LIVE_SCHEME, 7, layout, entropy("o")).commitment) == \
             "the coin commitment's coins are not a live window's draw session's: its draw coin alone"

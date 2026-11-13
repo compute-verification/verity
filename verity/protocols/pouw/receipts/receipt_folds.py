@@ -18,6 +18,8 @@ steps are shared; the schedules are not, and `SCHEDULES` says who runs which.
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
+
 M32 = 0xFFFFFFFF
 GOLDEN = 0x9E3779B9
 
@@ -183,7 +185,7 @@ def served_duo_absorb(y: list[int], z: list[int], p: list[int]) -> tuple[list[in
 EGEMM_KEY_BASE = 0x5A5A0000
 
 
-def egemm_xin_keys(seed: int, rule=key_ok_r9) -> tuple[int, int, int]:
+def egemm_xin_keys(seed: int, rule: Callable[[int], bool] = key_ok_r9) -> tuple[int, int, int]:
     """egemm.cu's xin_keys: the first two candidates that pass `rule`, and how many `key_ok` candidates it skipped."""
     out, skipped, i = [], 0, 0
     while len(out) < 2:
@@ -213,7 +215,7 @@ def egemm_xin13_absorb(y: list[int], p: list[int], a0: int, a1: int) -> list[int
 E2E_KEY_BASE = 0xC0000000
 
 
-def e2e_xin_keys(rule=lambda8_ok) -> tuple[tuple[int, ...], tuple[int, ...]]:
+def e2e_xin_keys(rule: Callable[[int], bool] = lambda8_ok) -> tuple[tuple[int, ...], tuple[int, ...]]:
     """segment.XA0, XA1: the first 16 candidates that pass `rule`, alternately chain t's a0 and a1."""
     out, i = [], 0
     while len(out) < 2 * MI * NI:
@@ -224,7 +226,7 @@ def e2e_xin_keys(rule=lambda8_ok) -> tuple[tuple[int, ...], tuple[int, ...]]:
     return tuple(out[0::2]), tuple(out[1::2])
 
 
-def e2e_xin_absorb(y: list[int], p: list[int], xa0, xa1) -> list[int]:
+def e2e_xin_absorb(y: list[int], p: list[int], xa0: Sequence[int], xa1: Sequence[int]) -> list[int]:
     """One segment's 32 words: chain t absorbs entries 4 t .. 4 t + 3 with its own keys."""
     return [xin13_step(y[t], *p[4 * t:4 * t + 4], xa0[t], xa1[t]) for t in range(MI * NI)]
 
@@ -233,7 +235,7 @@ def e2e_xin_absorb(y: list[int], p: list[int], xa0, xa1) -> list[int]:
 
 #: Per fold: its step, its state, the keys it reads, its rotations into an XOR (None: words enter by addition), the key rule
 #: each schedule samples its multipliers under, and its soundness status (``status`` one of proved, open, pairs-only,
-#: retired; ``needs`` the open premises; ``ref`` where it is stated).
+#: retired; ``needs`` the open premises; ``ref`` what is proved and what is open).
 FOLDS = {
     "duo": {"step": duo_step, "state": ("y", "z"), "keys": ("a0", "a1", "k0", "k1"), "xor_rotations": (),
             "key_rule": {"pfill": "key_ok (key_ok_r9 in an r9 build)", "served": "fixed public odd keys SERVED_KA"},
@@ -247,34 +249,29 @@ FOLDS = {
                    "runs with the same final states differ at two words at least four positions apart "
                    "(DuoWindowNoKernel), a run checkpointed every four words has no kernel (DuoCheckpointNoKernel), "
                    "and every run of more than 2*4^n words has one (DuoLongRunKernel); open for five or more words "
-                   "at the deployed keys, and for the served receipt y ^ rotl(z, 16) at any length "
-                   "(note:20261017T1000Z-draft-fold-r §6.5, §8)"},
+                   "at the deployed keys, and for the served receipt y ^ rotl(z, 16) at any length"},
     "xin13": {"step": xin13_step, "state": ("y",), "keys": ("a0", "a1"), "xor_rotations": (13, 19),
               "key_rule": {"pfill": "key_ok_r9", "egemm": "key_ok_r9", "e2e": "lambda8 (weaker: no key_ok)"},
               "status": "open", "needs": ("RT", "G3"),
-              "ref": "RS-E-REF Part IX (note:20261015T1931Z-draft-theorem-e-referee): (RT) open, no lemma removes it; "
-                     "(G₃) suffices for (G₄). P2-FF r11 (note:20261016T1549Z-draft-fullfloor-s-r11): pricing can't "
-                     "replace (RT); (G₃) proved at one MMA under key_ok_r11 (Theorem 1), and for chains apart from runs "
-                     "of two or more non-XOR δ"},
+              "ref": "(RT) open, no lemma removes it; (G₃) suffices for (G₄). Pricing can't replace (RT); (G₃) is proved "
+                     "at one MMA under key_ok_r11, and for chains apart from runs of two or more non-XOR δ"},
     "li": {"step": li_step, "state": ("y",), "keys": ("a0", "a1", "k0", "k1"), "xor_rotations": (0,),
            "key_rule": {"pfill": "key_ok_r9"},
            "status": "open", "needs": ("RT", "G3", "HO"),
-           "ref": "as xin13 (RS-E-REF Part IX, P2-FF r11), and (HO): no hand-off (d1, d2) or (d3, next d0) joins two "
-                  "words whose rows or columns are equal or complementary (note:20261016T1117Z-draft-fullfloor-s-r9 §2). "
+           "ref": "as xin13, and (HO): no hand-off (d1, d2) or (d3, next d0) joins two "
+                  "words whose rows or columns are equal or complementary. "
                   "With every absorbed word pinned and a checkpoint a segment (the XOR of the chains' states), none of "
                   "them is read: a half step is a bijection and a checkpoint is injective in each word, for odd "
                   "multipliers alone (Lean: Pouw.SecurityProofs.Receipt.LiHalfBijective, LiCheckpointWordInjective, "
-                  "LiCheckpointLowBit; note:20261017T1848Z-draft-li-alt)"},
+                  "LiCheckpointLowBit)"},
     "ram": {"step": ram_step, "state": ("y",), "keys": ("a0", "a1"), "xor_rotations": None,
             "key_rule": {"pfill": "key_ok (key_ok_r9 in an r9 build)"},
             "status": "pairs-only", "needs": (),
-            "ref": "a step is rotl(y, 7) a0 + Q: it reads a pair only through Q = a0 d0 + d1, one product a pair "
-                   "(note:20261016T0917Z-draft-fullfloor-s-r8 §1.2)"},
+            "ref": "a step is rotl(y, 7) a0 + Q: it reads a pair only through Q = a0 d0 + d1, one product a pair"},
     "xin7": {"step": xin7_step, "state": ("y",), "keys": ("a0", "a1"), "xor_rotations": (7, 19),
              "key_rule": {"pfill": "key_ok"},
              "status": "retired", "needs": (),
-             "ref": "±128 is an int8 ratio at its step boundary (note:20261016T1117Z-draft-fullfloor-s-r9 §1); "
-                    "pfill.cuh refuses -DPFILL_XIN"},
+             "ref": "±128 is an int8 ratio at its step boundary; pfill.cuh refuses -DPFILL_XIN"},
 }
 
 #: Who runs which schedule, and the build that selects the fold
@@ -288,7 +285,7 @@ SCHEDULES = {
 }
 
 
-def step(fold: str, state, d, keys: dict):
+def step(fold: str, state: int | tuple[int, int], d: Sequence[int], keys: dict) -> int | tuple[int, int]:
     """One step of `fold` from state (y, or (y, z) for duo) over d = (d0, d1, d2, d3) with keys {a0, a1, k0, k1}."""
     f = FOLDS[fold]
     args = [keys[k] for k in f["keys"]]
@@ -297,10 +294,17 @@ def step(fold: str, state, d, keys: dict):
     return f["step"](state, *d, *args)
 
 
-def chain(fold: str, start, words, keys: dict) -> list:
+def chain(fold: str, start: int | tuple[int, int], words: Sequence[Sequence[int]], keys: dict) -> list:
     """The states after each step of `words` (a list of 4-word steps) from `start`."""
     out, s = [], start
     for d in words:
         s = step(fold, s, d, keys)
         out.append(s)
     return out
+
+
+__all__ = ["E2E_KEY_BASE", "EGEMM_KEY_BASE", "FOLDS", "KEY_RULES", "M32", "NCH", "NCT", "PFILL_KEY_DEFAULTS",
+           "SCHEDULES", "SERVED_KA", "SERVED_KK", "SERVED_ROT", "chain", "duo_final", "duo_step", "duo_word",
+           "e2e_xin_absorb", "e2e_xin_keys", "egemm_xin13_absorb", "egemm_xin13_start", "egemm_xin_keys", "int8_ratio",
+           "key_ok", "key_ok_r11", "key_ok_r9", "kj19", "lambda8_ok", "li_step", "mix32", "pfill_keys", "pfill_start",
+           "ram_step", "rotl", "served_duo_absorb", "served_entry", "served_start", "xin13_step"]
