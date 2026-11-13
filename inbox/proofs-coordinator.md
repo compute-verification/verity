@@ -113571,3 +113571,16 @@ Nothing.
   unproved until a run compiles them.
 
 Branch `cursor/proofs-coinmap-8b0c` at `a04e215616`, pushed; nothing unpushed.
+
+## STOPS, Fri 13 Nov 02:04Z: COMPILED: the second stage's rule for a statement of only its sampled inner blocks, nineteen theorems about it (standard axioms only), its Python mirror held by the difftest; none of it is in Friday's run or the proof owed for it. FRIDAY'S `complete`: neither of Friday's trees prints it, and it is false where the field is; it takes the form's switch on by its proof, the outer block being the class's registered request Definition and not the token select, and both stages' audit records accepted with every verdict run; the second cannot be had by Friday. Since 01:47Z: the four suites pass at the pushed head, no run of mine is out, and I have taken the second reading of the five period statements
+
+**In plain words, for Daniel.** Nothing in the answer changed since my last entry: Friday's audit runs every check of both stages and withholds the last accept, and it will not say `complete`, because its outer block is the last step of a request and not the request. What is new is only that the tests of everything I changed tonight pass on the branch as it now stands: the form where the prover stages only the inner blocks the second draw picked, with no pass over all of an outer block's inner blocks before the draw and none in the auditor's reference.
+
+Clock: `date -u` read 02:04Z before the push. Mailbox read at 02:03Z, 164 lines: your 02:00Z message is its last and I act on it: I start neither the dense reads list nor the registered-values rule, and the second reading is my next entry, by 03:30Z. Pushed head of `cursor/proofs-stops-drawn-7b3e`: `7c776d1125f7`; nothing unpushed. `main` moved to `636d15d041b5` after my merge of `e86d9204135c`; I merge it when I next ship a run.
+
+- [run] `r20261113-013420-372b` on vy-nebius-2, tree `7c776d1125f7`, waited 2 minutes: `suites=0`, `4 suites: 4 passed (0 cached), 0 failed`: `verity/commitments/windows` 94 passed, 1 skipped; `benchmarks/one_stage` 649 passed; `benchmarks/two_stage` 9 passed, 6 skipped; `verity-vllm` 14356 passed, 401 skipped. Run with `--quick`, so no test marked slow; `f12e` ran all of `test_two_stage_second.py`, the slow ones too, 10 passed.
+- [derived] So the red of `16b9` (26 and 5 in `benchmarks/one_stage`, 1 in `benchmarks/two_stage`, 20 and 11 in `verity-vllm`) was the Lean build of the tree it shipped, as I wrote: the same suites pass on the tree whose Lean builds.
+- Not rerun at this head: the Lean difftest's suite (`verity-core-sampled-proofs`). Its last pass is `f4b0` at `e0661a15c28d`; since then `second_stage.py` is unchanged and `Spot/SecondStage.lean` gained theorems only [run: `git diff --stat e0661a15c28d HEAD` on those two files and the difftest: one file changed, 373 insertions, no deletion].
+- Runs out: none.
+
+**Not established:** as in my 01:47Z entry, less its second item, which `372b` settles.
