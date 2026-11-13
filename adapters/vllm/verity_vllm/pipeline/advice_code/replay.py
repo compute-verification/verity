@@ -40,7 +40,8 @@ too, in a step with no prefill chunk of a running request, beside a running row 
 takes slots for K tokens past its row, and blocks taken for drafts that are rejected stay with the request; a prefix hit
 gives up its last block; only tokens the request has are cached. A row's output is its token and the drafts it kept:
 the rest roll its computed tokens (and placeholders) back. How many it kept is the model's choice, so it is an input,
-`RequestIO.kept`, as where the request stopped is; `Step.drafts` says how many each row carried.
+as where the request stopped is: `RequestIO.kept`, or `kept`, asked as each row emits, where the counts are read
+while the replay runs. `Step.drafts` says how many each row carried.
 """
 
 from __future__ import annotations
@@ -63,7 +64,9 @@ from verity_vllm.pipeline.advice_code.schedule import (
     Tick,
 )
 
-__all__ = ["compare", "Decide", "drive", "Emitted", "Match", "Open", "Queue", "Replay", "replay", "Scheduler"]
+__all__ = ["compare", "Decide", "drive", "Emitted", "Kept", "Match", "Open", "Queue", "Replay", "replay", "Scheduler"]
+
+Kept = Callable[[int, int], int]    # (request, its emitting row) -> the drafts that row kept
 
 
 @dataclass
@@ -92,11 +95,12 @@ class _Pass:
 
 
 class Scheduler:
-    def __init__(self, engine: Engine, requests: Sequence[RequestIO]) -> None:
+    def __init__(self, engine: Engine, requests: Sequence[RequestIO], kept: Kept | None = None) -> None:
         self.e = engine
         self.kv = BlockPool(engine)
         hashes = BlockHashes() if engine.enable_prefix_caching else None
-        if engine.num_speculative_tokens:
+        self.kept = kept            # asked for each emitting row's drafts kept, in place of `RequestIO.kept`
+        if engine.num_speculative_tokens and kept is None:
             for i, io in enumerate(requests):
                 if io.kept is None or len(io.kept) + sum(io.kept) != io.output_len or any(
                         type(k) is not int or not 0 <= k <= engine.num_speculative_tokens for k in io.kept):
@@ -114,7 +118,7 @@ class Scheduler:
         """A copy to run on while this one waits, which may change only the requests in the engine and `touched` (the
         rest, and the block-hash interning, which only names contents, are shared)."""
         c = object.__new__(Scheduler)
-        c.e, c.kv, c.whatif = self.e, self.kv.fork(), True
+        c.e, c.kv, c.whatif, c.kept = self.e, self.kv.fork(), True, None
         c.reqs = list(self.reqs)
         for i in {*touched, *(r.i for r in (*self.running, *self.waiting, *self.skipped))}:
             c.reqs[i] = self.reqs[i].fork()
@@ -325,11 +329,15 @@ class Scheduler:
         return False
 
     def _kept(self, r: RequestState, d: int) -> int:
-        """The drafts request r's row, which carries d and emits, kept: its next entry of `io.kept`."""
+        """The drafts request r's row, which carries d and emits, kept: its next entry of `io.kept`, or `kept`'s answer.
+        A fork asks nothing: its rows aren't the run's, and where the counts are asked it keeps none."""
         kept = r.io.kept
-        if not self.e.num_speculative_tokens or kept is None or r.emitted >= len(kept):
+        if self.e.num_speculative_tokens and self.kept is not None:
+            k = self.kept(r.i, r.emitted)
+        elif not self.e.num_speculative_tokens or kept is None or r.emitted >= len(kept):
             return 0
-        k = kept[r.emitted]
+        else:
+            k = kept[r.emitted]
         if k > d:
             if not self.whatif:
                 raise ValueError(f"request {r.i}: emitting row {r.emitted} kept {k} drafts, but the row the replay "
@@ -492,7 +500,7 @@ def _whatif(s: Scheduler, queue: Queue, p: _Pass, i: int, now: bool, want: int) 
 
 def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int] | None = None,
            passed: Sequence[int] | None = None, decide: Decide | None = None, tick: Tick | None = None,
-           released: Sequence[int] | None = None, max_steps: int | None = None) -> Replay:
+           released: Sequence[int] | None = None, max_steps: int | None = None, kept: Kept | None = None) -> Replay:
     """Run the scheduler over `requests` (in the order they reached the engine) and return the executed steps.
 
     Exactly one of: `admit`, each request's `before_step` (it is added before the first `schedule` after `admit[i]`
@@ -505,7 +513,10 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
     jumps to the next request's bucket close, and every request whose bucket has closed by T ((a + 1)·τ_b ≤ T) is added,
     except at an iteration that only frees finished requests (nothing running or waiting), which adds none; after each
     step that schedules a token, T advances by τ_sat if the waiting queue is nonempty and by τ_free if it is empty
-    (`Replay.clock` keeps T after each such step)."""
+    (`Replay.clock` keeps T after each such step).
+
+    With a draft, `kept(i, row)` gives the drafts request i's emitting row `row` kept, in place of `RequestIO.kept`:
+    it is asked once for each row that emits, the steps in the order they execute and a step's rows in its own."""
     n = len(requests)
     if (admit is not None) + (decide is not None) + (tick is not None) != 1:
         raise ValueError("give exactly one of admit, decide and tick")
@@ -526,7 +537,7 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
             raise ValueError(f"{len(released)} release buckets for {n} requests")
         if any(type(a) is not int or a < 0 for a in released) or any(released[k] > released[k + 1] for k in range(n - 1)):
             raise ValueError("release buckets are ints ≥ 0, nondecreasing in release order")
-    s = Scheduler(engine, requests)
+    s = Scheduler(engine, requests, kept)
     out = Replay(steps=[], finish=[None] * n, admitted=[None] * n, forced=[False] * n, asked=[[] for _ in range(n)],
                  clock=[], passed=[0] * n)
     nxt = 0
