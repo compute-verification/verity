@@ -224,8 +224,8 @@ theorem period_leadEscape {β : ℕ → Type} (G : (i : ℕ) → Verity.Game (β
     (rec : (i : ℕ) → Strategy (G i) → β i → ServedEsc O V Tick Adv) (good : (i : ℕ) → Strategy (G i) → Prop)
     (hstage : ∀ i τ, good i τ → ∃ e : ℝ≥0∞, e ≠ ⊤ ∧ (∀ b, (rec i τ b).escape = e) ∧
       prob (fun b => ¬ (rec i τ b).sampledIncorrect) (G i) τ ≤ e) :
-    ∀ (T i : ℕ) (s : Strategy (periodG G i T)) (c : ℝ≥0∞), PeriodGood G good i T s →
-      value (fun l => ServedEsc.leadEscape l < c) (periodRun G rec i T s) ≤ c
+    ∀ (T i : ℕ) (s : Strategy (monitoringPeriodG G i T)) (c : ℝ≥0∞), MonitoringPeriodGood G good i T s →
+      value (fun l => ServedEsc.leadEscape l < c) (monitoringPeriodRun G rec i T s) ≤ c
   | 0, i, s, c, _ => by
       classical
       show value (fun l => ServedEsc.leadEscape l < c) (Verity.Game.ret []) ≤ _
@@ -239,8 +239,8 @@ theorem period_leadEscape {β : ℕ → Type} (G : (i : ℕ) → Verity.Game (β
       · exact (value_le_one _ _).trans hc.le
       obtain ⟨e, he, hw, hp⟩ := hstage i _ hs.1
       by_cases he0 : e = 0
-      · have h := value_runBind_le_mul (fun _ => periodG G (i + 1) T)
-          (fun b s' => (periodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
+      · have h := value_runBind_le_mul (fun _ => monitoringPeriodG G (i + 1) T)
+          (fun b s' => (monitoringPeriodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
           (fun l => ServedEsc.leadEscape l < c)
           (fun b => ¬ (rec i (Strategy.ofBind _ (G i) s) b).sampledIncorrect) 1 (G i) s
           (atEnds_mono (fun b s' _ => by
@@ -255,8 +255,8 @@ theorem period_leadEscape {β : ℕ → Type} (G : (i : ℕ) → Verity.Game (β
         refine h.trans ?_
         rw [mul_one]
         exact (hp.trans_eq he0).trans zero_le
-      · have h := value_runBind_le_mul (fun _ => periodG G (i + 1) T)
-          (fun b s' => (periodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
+      · have h := value_runBind_le_mul (fun _ => monitoringPeriodG G (i + 1) T)
+          (fun b s' => (monitoringPeriodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
           (fun l => ServedEsc.leadEscape l < c)
           (fun b => ¬ (rec i (Strategy.ofBind _ (G i) s) b).sampledIncorrect) (c / e) (G i) s
           (atEnds_mono (fun b s' hg => by
@@ -271,7 +271,7 @@ theorem period_leadEscape {β : ℕ → Type} (G : (i : ℕ) → Verity.Game (β
                 (period_leadEscape G rec good hstage T (i + 1) s' (c / e) hg)
               simp only [ServedEsc.leadEscape, ite_eq_right hm, hw b] at hl
               exact (ENNReal.lt_div_iff_mul_lt (Or.inl he0) (Or.inl he)).2 (by rwa [mul_comm])) (G i) s hs.2)
-        calc value (fun l => ServedEsc.leadEscape l < c) (periodRun G rec i (T + 1) s)
+        calc value (fun l => ServedEsc.leadEscape l < c) (monitoringPeriodRun G rec i (T + 1) s)
             ≤ prob (fun b => ¬ (rec i (Strategy.ofBind _ (G i) s) b).sampledIncorrect) (G i)
                 (Strategy.ofBind _ (G i) s) * (c / e) := h
           _ ≤ e * (c / e) := by gcongr
@@ -339,8 +339,8 @@ most `δ + Σ_t ε_t`. It is `CompilerPeriodTwoReg`'s premises with the period's
 cell. -/
 theorem periodTwoProd_regVal (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) (hA : A.KS H)
     (hS : ∀ t, (Lv t).commit.Binds H ∧ (Lv t).Sessions H) (T : ℕ) (ε : ℕ → ℝ)
-    (s : Strategy (periodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T))
-    (herr : ∀ t τ, PeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ →
+    (s : Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T))
+    (herr : ∀ t τ, MonitoringPeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ →
       (Lv t).εregTwo H τ.2.1.1 τ.2.1.2 ≤ ε t) (δ : ℝ) :
     Verity.Game.value (fun l : List (ServedEsc O V Tick Adv) =>
         (∀ r ∈ l, r.accepted) ∧ (l.map ServedEsc.escape).prod < ENNReal.ofReal δ)
@@ -355,8 +355,8 @@ its committed incorrect set, or the escapes at the committed boundary traces of 
 first such sample multiply below `δ`, with probability at most `δ + Σ_t ε_t`. -/
 theorem periodTwoLead_regVal (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) (hA : A.KS H)
     (hS : ∀ t, (Lv t).commit.Binds H ∧ (Lv t).Sessions H) (T : ℕ) (ε : ℕ → ℝ)
-    (s : Strategy (periodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T))
-    (herr : ∀ t τ, PeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ →
+    (s : Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T))
+    (herr : ∀ t τ, MonitoringPeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ →
       (Lv t).εregTwo H τ.2.1.1 τ.2.1.2 ≤ ε t) (δ : ℝ) :
     Verity.Game.value (ServedEsc.UndetectedBelow δ)
         (twoAtRun H Lv (fun t _ x P => (Lv t).regVal H P x ()) T s) ≤
