@@ -85,7 +85,7 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     assert SS.prompts(2, 4, 256, b"seed") != SS.prompts(2, 4, 256, b"other")
     data = json.dumps(ps, separators=(",", ":")).encode()
     doc = SS.plan(a, data)
-    assert doc["request"] == ("warden-rehearse --peer vy-dc-h200-2 --port 18782 --minutes 10 --requests 113 --height 12 "
+    assert doc["request"] == (f"warden-rehearse --peer {SS.PEER} --port 18782 --minutes 10 --requests 113 --height 12 "
                               "--scan --prompts --tokens 64")
     assert doc["prompts"] == {"count": 64, "ids": 64 * SS.PROMPT_IDS} and doc["prompts_bytes"] <= SS.A.WARDEN_PROMPTS_BYTES
     assert doc["endpoint"].endswith("--port 18782 --protocol ids --id-payload 503 --admit release-order "
@@ -99,7 +99,7 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
                                                  "--disk-floor-gb 40", "VERITY_STAGING_BOUNDED stays unset"))
     ep = shlex.split(doc["runs"]["endpoint"])
     inner = SS.parser().parse_args(shlex.split(ep[-1])[2:])
-    assert ep[ep.index("--") + 1:-1] == ["bash", "-lc"] and ep[ep.index("--on") + 1] == "vy-dc-h200-2"
+    assert ep[ep.index("--") + 1:-1] == ["bash", "-lc"] and ep[ep.index("--on") + 1] == SS.PEER
     assert ep[ep.index("--send") + 1] == SS.CERTIFIED
     assert (inner.cmd, inner.out, inner.port, inner.io) == ("endpoint", Path("$OUT"), 18782,
                                                             f"$RESEARCH_RUN_DIR/inputs/{SS.CERTIFIED}")
@@ -496,17 +496,17 @@ def _gate_chain(tmp_path, monkeypatch, peer):
 
 
 def test_a_gate_coin_draw_runs_on_the_auditors_side_and_never_on_the_served_node(tmp_path, monkeypatch, capsys):
-    argv = _gate_chain(tmp_path, monkeypatch, "vy-dc-h200-2")
+    argv = _gate_chain(tmp_path, monkeypatch, SOME_PEER)
     assert SS.main(argv) == 0
     scan = (tmp_path / "seen").read_text().strip().removeprefix("CR_SCAN_ARGS=").split(" ")
     assert scan == ["--draw", "8", "--challenger", f"gate:{SS.GATE}", "--main", str(tmp_path / "main.txt"), "--peer",
                     SS.AUDITOR, "--challenger-key", str(tmp_path / "challenger-key.json"),
                     "--gate-key", str(tmp_path / "gate-key")]
-    for peer in ("vy-dc-h200-2", "vy-nebius-1"):
-        argv = _gate_chain(tmp_path, monkeypatch, "vy-nebius-1")
+    for peer in (SS.PEER, SOME_PEER):
+        argv = _gate_chain(tmp_path, monkeypatch, SOME_PEER)
         assert SS.main([*argv, "--coin-peer", peer]) == 2
         assert "is the served node, the prover's" in capsys.readouterr().err
-    assert SS.main([*argv, "CR_SCAN_ARGS=--peer vy-dc-h200-2"]) == 2
+    assert SS.main([*argv, f"CR_SCAN_ARGS=--peer {SOME_PEER}"]) == 2
     assert SS.main([*argv[:-2], "--key", str(tmp_path / "no-key")]) == 2
     assert "no gate key" in capsys.readouterr().err
     assert SS.main([a for a in argv if a not in ("--draw", "8")]) == 2
