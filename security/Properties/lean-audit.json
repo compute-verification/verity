@@ -299,7 +299,7 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Compose.ExecutionPhasePlay.EveryWindow": {
+  "Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase": {
    "owner": "@compute-accounting",
    "digest": "19de4d95e501636b06b44f3f2b8d4f466291377913266366ee89e7ebe5d629d5",
    "issue": "LEAN-186",
@@ -951,7 +951,7 @@
    "Accounting.Assumptions.TS.UnitFixed",
    "Accounting.Compose.PrefixOf",
    "Accounting.Compose.Scope",
-   "Accounting.Compose.ExecutionPhasePlay.EveryWindow",
+   "Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase",
    "Properties.Pouw.Period.RegisteredBeforeDraw",
    "Properties.Pouw.Period.SaltIsLiveCoin",
    "Properties.Pouw.Period.SampleIsCoin",
