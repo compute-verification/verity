@@ -1,0 +1,32 @@
+random: 211600 requests; recomputed from 2660 kept rows against the record's sums:
+  rows_differ  2660 record 2660 equal
+  pos_differ   2122 record 2122 equal
+  own_differ   574 record 574 equal
+  wq           1.89096e-05 record 1.89096e-05 equal
+  wq_rev       2.76465e-05 record 2.76465e-05 equal
+  rq           1.89096e-05 record 1.89096e-05 equal
+  own_q        2.34083e-05 record 2.34083e-05 equal
+  own_split    0 record 0 equal
+  rate a position, exact reach: 4.846e-11 +- 8.4e-12 (over 390179; 516 requests carry it; the largest request 8.8% of it)
+  rate a position, own reach: 6.001e-11 +- 1.3e-11 (over 390072; 190 requests carry it; the largest request 14.5% of it)
+  rate a request (P): 8.936e-11 +- 1.6e-11 (over 211600; 516 requests carry it; the largest request 8.8% of it)
+  lse_hi - lse in last places, positions i < K-1: {-1: 1034, -2: 23, -6: 1, 1: 1041, 2: 22, 4: 1}
+  positions with words that split: 703; their words: min 2, median 78, max 14590 of 2^32
+  by lane 0's log-sum-exp (differing positions, their share of the exact-reach rate): 16 or above: 160, 49%; 4 to 8: 771, 18%; 8 to 16: 1136, 31%; below 4: 55, 3%
+  differing positions by which tile pairs hold mass: {(0,): 14, (0, 1): 52, (0, 1, 2): 1949, (0, 2): 42, (1,): 10, (1, 2): 46, (2,): 9}
+peaked: 249200 requests; recomputed from 288 kept rows against the record's sums:
+  rows_differ  288 record 288 equal
+  pos_differ   230 record 230 equal
+  own_differ   204 record 204 equal
+  wq           7.78541e-05 record 7.78541e-05 equal
+  wq_rev       8.11064e-05 record 8.11064e-05 equal
+  rq           7.78541e-05 record 7.78541e-05 equal
+  own_q        8.26647e-05 record 8.26647e-05 equal
+  own_split    0 record 0 equal
+  rate a position, exact reach: 8.813e-11 +- 9.6e-12 (over 883408; 111 requests carry it; the largest request 2.2% of it)
+  rate a position, own reach: 9.350e-11 +- 1.1e-11 (over 884158; 102 requests carry it; the largest request 2.1% of it)
+  rate a request (P): 3.124e-10 +- 3.4e-11 (over 249200; 111 requests carry it; the largest request 2.2% of it)
+  lse_hi - lse in last places, positions i < K-1: {-1: 119, 1: 111}
+  positions with words that split: 111; their words: min 1024, median 2818, max 8192 of 2^32
+  by lane 0's log-sum-exp (differing positions, their share of the exact-reach rate): 16 or above: 59, 49%; 4 to 8: 61, 12%; 8 to 16: 110, 39%
+  differing positions by which tile pairs hold mass: {(0,): 9, (0, 1): 10, (0, 1, 2): 189, (0, 2): 5, (1,): 4, (1, 2): 10, (2,): 3}

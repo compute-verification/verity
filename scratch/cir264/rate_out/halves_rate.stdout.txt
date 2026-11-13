@@ -1,0 +1,106 @@
+start 2026-11-13T14:47:00Z on computeinstance-e01h1k0s87a5r36b9x, tree 37eeb6d818e2cd27f57739b409ffd9d5ce599134, 22 cores
+table in 19 s: {"words": 4294967296, "magnitudes": 2147483648, "distinct_u": 75497472, "distinct_log_u": 37707749, "u_min": 805306367, "u_max": 1065353215, "log_u_min": 3249268359, "log_u_max": 3011510272, "log_u_descents_in_u": 0, "first_descents": []}
+checks in 25 s: {"words_checked": 20015, "count_below_worst_sigma": 2.2, "hand_vector_halves_split": {"P": 3.725290298461914e-08, "position_0": {"kind": "hand", "request": 0, "i": 0, "n": 9, "pairs": [0], "draft_tile": 5, "in_pair": 0, "top": 1093346733, "lse": 1094818394, "lse_hi": 1094818395, "lp": 3226592940, "lp_hi": 3226592944, "below_lp": 161659960, "below_lp_hi": 161659800, "w": 1.0, "r": 1.0, "live": true, "test": true, "test_hi": false}}, "stub": {"random": 24, "peaked": 24}}
+table: {"words": 4294967296, "magnitudes": 2147483648, "distinct_u": 75497472, "distinct_log_u": 37707749, "u_min": 805306367, "u_max": 1065353215, "log_u_min": 3249268359, "log_u_max": 3011510272, "log_u_descents_in_u": 0, "first_descents": []}
+checks: {"words_checked": 20015, "count_below_worst_sigma": 2.2, "hand_vector_halves_split": {"P": 3.725290298461914e-08, "position_0": {"kind": "hand", "request": 0, "i": 0, "n": 9, "pairs": [0], "draft_tile": 5, "in_pair": 0, "top": 1093346733, "lse": 1094818394, "lse_hi": 1094818395, "lp": 3226592940, "lp_hi": 3226592944, "below_lp": 161659960, "below_lp_hi": 161659800, "w": 1.0, "r": 1.0, "live": true, "test": true, "test_hi": false}}, "stub": {"random": 24, "peaked": 24}}
+
+random: requests 0 to 211599 of seed 20261112 (211600 requests, 2116 blocks of 100)
+  rate a request, exact (P): 8.936e-11 +- 1.6e-11 (standard error over requests)
+  expected split positions a request (E): 8.936e-11 +- 1.6e-11
+  rate a request, the request's own reached positions: 1.106e-10 +- 2.4e-11
+  direct count: 0 of 211600 requests report halves_split (95% bound 1.42e-05 a request); 2628 requests have a draft row whose halves' sums differ
+  draft rows 1058000, of them 2660 with differing sums; positions i < K-1 846400, of them 2122 differing; reached under the request's own seed 390072, of them 574 differing; own splits 0, own reverse 0
+  all positions i < K-1
+    class              positions   reached   E reached   differ     share  rate/pos own    rate/pos     reverse split own
+    all                   846400    390072    390178.9      574 1.472e-03     6.001e-11   4.846e-11   7.086e-11         0
+  by nucleus size (finite logits in the row)
+    class              positions   reached   E reached   differ     share  rate/pos own    rate/pos     reverse split own
+    1                     122000    104540    104540.0        0 0.000e+00     0.000e+00   0.000e+00   0.000e+00         0
+    2                     120892     72506     72447.7        0 0.000e+00     0.000e+00   0.000e+00   0.000e+00         0
+    5                     119720     56738     56795.3        9 1.586e-04     9.578e-12   8.832e-12   5.286e-12         0
+    40                    122340     47670     47567.7      114 2.391e-03     7.439e-11   8.222e-11   1.305e-10         0
+    400                   120464     38970     39094.6      155 3.977e-03     2.794e-10   2.552e-10   2.365e-10         0
+    5000                  120204     35590     35567.2      175 4.917e-03     8.004e-11   6.362e-11   1.558e-10         0
+    154880                120780     34058     34166.4      121 3.553e-03     1.639e-10   6.603e-11   1.859e-10         0
+  by tile pairs (t, t+16) that both hold a finite logit
+    class              positions   reached   E reached   differ     share  rate/pos own    rate/pos     reverse split own
+    0                     345394    225422    225393.3        0 0.000e+00     0.000e+00   0.000e+00   0.000e+00         0
+    1                      31433     13851     13866.5       10 7.220e-04     3.923e-11   4.815e-11   1.670e-11         0
+    2                      52312     20360     20300.5       43 2.112e-03     8.483e-11   8.650e-11   1.095e-10         0
+    3                     417261    130439    130618.6      521 3.994e-03     1.621e-10   1.262e-10   1.929e-10         0
+  by whether the draft token's tile is in such a pair
+    class              positions   reached   E reached   differ     share  rate/pos own    rate/pos     reverse split own
+    no                    692060    339435    339401.6      389 1.146e-03     4.458e-11   3.386e-11   6.018e-11         0
+    yes                   154340     50637     50777.3      185 3.653e-03     1.634e-10   1.461e-10   1.422e-10         0
+  by lane 0's probability of accepting
+    class              positions   reached   E reached   differ     share  rate/pos own    rate/pos     reverse split own
+    p < 0.5               507731    177177    177347.0      546 3.082e-03     5.912e-11   5.938e-11   8.619e-11         0
+    0.5 <= p < 0.9        104334     48389     48320.6       27 5.580e-04     2.673e-10   1.734e-10   2.231e-10         0
+    0.9 <= p < 0.99        40551     20600     20595.5        1 4.854e-05     0.000e+00   0.000e+00   7.666e-11         0
+    p >= 0.99             193784    143906    143915.8        0 0.000e+00     0.000e+00   0.000e+00   0.000e+00         0
+  by the row's top logit
+    class              positions   reached   E reached   differ     share  rate/pos own    rate/pos     reverse split own
+    below 15              690012    323751    323781.6      537 1.659e-03     2.884e-11   3.042e-11   3.600e-11         0
+    15 or above           156388     66321     66397.2       37 5.579e-04     2.122e-10   1.364e-10   2.408e-10         0
+  rate a request by the request's nucleus size (its first row's):
+    n           requests           P         own  halves_split
+    1              30500   0.000e+00   0.000e+00             0
+    2              30223   0.000e+00   0.000e+00             0
+    5              29930   1.676e-11   1.816e-11             0
+    40             30585   1.279e-10   1.159e-10             0
+    400            30116   3.313e-10   3.615e-10             0
+    5000           30051   7.529e-11   9.479e-11             0
+    154880         30195   7.471e-11   1.849e-10             0
+
+peaked: requests 0 to 249199 of seed 20261112 (249200 requests, 2492 blocks of 100)
+  rate a request, exact (P): 3.124e-10 +- 3.4e-11 (standard error over requests)
+  expected split positions a request (E): 3.124e-10 +- 3.4e-11
+  rate a request, the request's own reached positions: 3.317e-10 +- 3.8e-11
+  direct count: 0 of 249200 requests report halves_split (95% bound 1.20e-05 a request); 288 requests have a draft row whose halves' sums differ
+  draft rows 1246000, of them 288 with differing sums; positions i < K-1 996800, of them 230 differing; reached under the request's own seed 884158, of them 204 differing; own splits 0, own reverse 0
+  all positions i < K-1
+    class              positions   reached   E reached   differ     share  rate/pos own    rate/pos     reverse split own
+    all                   996800    884158    883408.4      204 2.307e-04     9.350e-11   8.813e-11   9.181e-11         0
+  by nucleus size (finite logits in the row)
+    class              positions   reached   E reached   differ     share  rate/pos own    rate/pos     reverse split own
+    2                     111032     98520     98352.5        0 0.000e+00     0.000e+00   0.000e+00   0.000e+00         0
+    3                     110832     98140     98051.8        0 0.000e+00     0.000e+00   0.000e+00   0.000e+00         0
+    5                     110024     97569     97431.4        1 1.025e-05     1.649e-11   1.620e-11   0.000e+00         0
+    10                    110752     98201     98083.4       13 1.324e-04     5.342e-11   5.126e-11   5.573e-11         0
+    30                    111656     99097     99066.0       29 2.926e-04     1.353e-10   1.213e-10   8.186e-11         0
+    100                   110512     97845     97999.3       45 4.599e-04     1.468e-10   1.334e-10   2.139e-10         0
+    300                   110236     97733     97739.6       39 3.990e-04     1.720e-10   1.690e-10   1.560e-10         0
+    1000                  110992     98725     98428.2       36 3.646e-04     1.557e-10   1.485e-10   1.090e-10         0
+    3000                  110764     98328     98256.1       41 4.170e-04     1.612e-10   1.530e-10   2.095e-10         0
+  by tile pairs (t, t+16) that both hold a finite logit
+    class              positions   reached   E reached   differ     share  rate/pos own    rate/pos     reverse split own
+    0                     377769    334948    334476.1        0 0.000e+00     0.000e+00   0.000e+00   0.000e+00         0
+    1                      91411     81036     80968.6       14 1.728e-04     5.223e-11   5.694e-11   6.992e-11         0
+    2                      61850     54885     54881.5       21 3.826e-04     2.269e-10   1.986e-10   1.202e-10         0
+    3                     465770    413289    413082.1      169 4.089e-04     1.596e-10   1.509e-10   1.667e-10         0
+  by whether the draft token's tile is in such a pair
+    class              positions   reached   E reached   differ     share  rate/pos own    rate/pos     reverse split own
+    no                    806362    715197    714525.4      129 1.804e-04     7.517e-11   7.249e-11   6.691e-11         0
+    yes                   190438    168961    168883.0       75 4.439e-04     1.711e-10   1.543e-10   1.972e-10         0
+  by lane 0's probability of accepting
+    class              positions   reached   E reached   differ     share  rate/pos own    rate/pos     reverse split own
+    0.5 <= p < 0.9        257865    228593    228313.2      174 7.612e-04     3.150e-10   2.912e-10   2.659e-10         0
+    0.9 <= p < 0.99       369654    328145    327805.5       28 8.533e-05     3.106e-11   3.320e-11   6.167e-11         0
+    p >= 0.99             369281    327420    327289.6        2 6.108e-06     1.456e-12   1.457e-12   5.444e-13         0
+  by the row's top logit
+    class              positions   reached   E reached   differ     share  rate/pos own    rate/pos     reverse split own
+    below 15              498783    442253    442046.3      144 3.256e-04     8.921e-11   8.430e-11   9.728e-11         0
+    15 or above           498017    441905    441362.0       60 1.358e-04     9.778e-11   9.196e-11   8.633e-11         0
+  rate a request by the request's nucleus size (its first row's):
+    n           requests           P         own  halves_split
+    2              27758   0.000e+00   0.000e+00             0
+    3              27708   0.000e+00   0.000e+00             0
+    5              27506   5.740e-11   5.849e-11             0
+    10             27688   1.816e-10   1.895e-10             0
+    30             27914   4.305e-10   4.804e-10             0
+    100            27628   4.731e-10   5.200e-10             0
+    300            27559   5.994e-10   6.099e-10             0
+    1000           27748   5.266e-10   5.541e-10             0
+    3000           27691   5.428e-10   5.725e-10             0
+done in 1589 s; errors 0
+end 2026-11-13T15:13:30Z exit 0
