@@ -74,8 +74,15 @@ CONFORMANCE = ("exact-model-tested: every word of dQ, dK and dV of torch's flash
                "on cc 12.0 with 188 SMs (torch 2.14.0+cu130) at B = 2, T = 1,024 and H = 8, 12, 16 and 24 "
                "(`flash_bwd_dq_dk_dv_loop_seqk_parallel_kernel`, BM = 64, BN = 128, and the dQ convert kernel), on each batch "
                "member's first and last heads with q and k N(0, 1) and N(0, 9), v N(0, 1) and a random bf16 dO "
-               f"(capture {_FA2['capture']}, run record {_FA2['run_record']}, fit {_FA2['fit']}); the dP sum's FFMA and the "
-               "dQ atomics' flush-to-zero are the capture's SASS, which no captured word tells apart")
+               f"(capture {_FA2['capture']}, run record {_FA2['run_record']}, fit {_FA2['fit']}), and of two probes on the "
+               "same card at H = 24 whose inputs give products no captured word has: the first's two cases, one whose dP "
+               "sums overflow and one whose dQ parts are subnormal "
+               f"(run record {_FA2['probe_ovf_ftz']}, fit {_FA2['fit_ovf_ftz']}), and the second's eight, in each of which "
+               "a dP sum overflows by one dim's product "
+               f"(run record {_FA2['probe_fma']}, fit {_FA2['fit_fma']}).  The probes' words tell that the dQ atomics "
+               "flush to zero and, of the dP sum, two things only: a thread's second dim's product (dim 1) is rounded "
+               "alone, and each of its other seven is fused.  That its first dim (dim 0) is fused next and dims 2 to 7 "
+               "then in turn rests on the captured heads' every-word fit, which no probe tells")
 
 
 def _refuse(b: dict) -> str | None:
