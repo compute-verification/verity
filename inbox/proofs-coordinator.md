@@ -114844,3 +114844,56 @@ NEEDS: unchanged from 01:56Z.
 To post: nothing.
 
 Not established: that the merged head `8b5549bfb6` compiles in a run of its own (`9f3b`; the files `Device.lean` imports are the ones `6d55` built). That `Apart` holds at any live deployment. The known hole stays open: a history holds earlier runs and ledger lines only on other windows, so on the play's own two windows it holds exactly this play's runs; the key pins replace that step on Tue 17 Nov.
+
+## ASSEMBLY, Fri 02:30Z: `projection_of` and `coupling_of` both compiled with only the three axioms (r20261113-000208-baa1); the retry at the merged head, r20261113-021235-dc1b, is still waiting for a slot on vy-nebius-cpu-12
+
+In plain words: the two assembly theorems of the two-stage audit's projection are proved, and the Lean kernel checked them with only the three standard axioms [run]. The first, `projection_of`, says the named pieces give the projection's bound. Through the coin map, it moves a sampled accept to one run of the inner proof system at uniform coins, at the cost of the pieces' terms. The second, `coupling_of`, says the projection's bound and the majority's bound give the coupling the two-stage leg needs, at the published δ. Neither theorem reads how many outer blocks or inner blocks are incorrect [read].
+
+What compiled [run], in `r20261113-000208-baa1` on vy-nebius-2, at `19e555b9d3` (TWOLEG's `052eb3aba5` merged), rc 0:
+- `security/Proofs/Properties/Verity/SampledTwo/ProjectionOf.lean`: `play_params`, `projection_core` and `projection_of` each depend on `[propext, Classical.choice, Quot.sound]`. Lean exited 0 in 389 s, and the axiom probe found nothing beyond the three.
+- `security/Proofs/Properties/Verity/SampledTwo/CouplingOf.lean`: `coupling_of` depends on `[propext, Classical.choice, Quot.sound]`. Lean exited 0 in 367 s.
+- No `sorry`, `axiom` or `native_decide` in either file. The only `sorry` warnings in the log are ArkLib's own (`ArkLib/Data/Fin/Basic.lean`, `MvPolynomial/Interpolation.lean`) [run].
+
+Since then, at 02:12Z, I merged CUT's head `bb96dbb00a`, which contains TWOLEG's `99da2b9189`, and pushed `4bb68f528b` [run]. None of the files my two import changed in that merge, and nothing in `Projection.lean` changed [run]. So I expect the same verdict [derived], but that is not established until dc1b ends. dc1b is the retry of both files on vy-nebius-cpu-12 with 24 GB, launched at 02:12Z [run]. At 02:27Z it had waited 15 minutes and was 1 check from a place [run]. It held 7 ahead at 02:23Z, so I kept it rather than moving it to vy-nebius-2 and losing its place [run]. Once it starts, I expect it to end about 13 minutes later [guess].
+
+What each still takes as a hypothesis [read]:
+- `projection_of` proves `ProjectionOf V k A x θ F c σ` at every argument, with no hypothesis of its own. `ProjectionOf` is an implication, so it takes as premises the projection's eleven pieces:
+  - the composite's wiring `∀ o, o.params = θ → V.Verdict k .sampled o → Acc o`;
+  - `CoinMapLaw … Ag hide`;
+  - `DevAgrees … Ag`;
+  - `CoinsAgree` at the first stage's, the second stage's and the sessions' groups;
+  - `StmtReadsNone`;
+  - `MessagesFixed … miss`;
+  - `CutBound … terms`;
+  - `AcceptsRun`;
+  - `StmtAt`.
+- `coupling_of` proves `CouplingOf V k A θ F` at every argument, with no hypothesis of its own. Its premises are:
+  - the scope-or-never-accepts disjunction;
+  - `ProjectionBound` at `bound`;
+  - `MajorityBound` at `tr` and `bind`;
+  - the extraction is `tr` (`V.extract θ F c σ = tr c σ`);
+  - the δ inequality under `finderCR` and `premises`.
+
+How my files take `h` (HELDOF's NEEDS 4) [read]: both theorems are stated for every `A : Live₂`, so for every `A.h`. They read `h` only through `groupOf`, where `A.h.stage` splits the first stage from the second, and through `A.L` and `A.R`, which `Leg.lean` defines from `A.h`. They hold at `heldOf`'s output at the run of record as at any other copy [derived]. Making the assembly's `A` and the leg's `HeldMatches` the same copy is the instantiation's job, wherever `A` is chosen. My two files need no change for it [derived].
+
+The inner-block reading (`CellCapsAt` beside `CapsAt`) [read, derived]: `CapsAt` appears only in `Claim.lean`, and my files never read it.
+- `projection_of` is about one run's coins, messages and accept, and needs no change.
+- `coupling_of` passes `¬ IntegrityHolds …`, the condition of `CouplingTargetTwo`, straight through to `MajorityBound`.
+  - If the inner-block reading only adds a claim beside the outer-block one, nothing changes.
+  - If Daniel's choice changed the condition `CouplingTargetTwo` and `MajorityBound` read, both of them TWOLEG's, that one line of `coupling_of` follows it. No other line would change.
+
+### STOP RULE
+Nothing. No lock edits. Only my two files changed; my lakefile lines are in TWOLEG's two-per-line layout [run].
+
+### NEEDS
+Nothing from HELDOF, HISTORY or OWNREADS for these two files [derived].
+
+### To post
+For infra: dc1b waited 15 minutes or more for a place on vy-nebius-cpu-12 (02:12Z to at least 02:27Z), with 7 ahead at 02:23Z. Two tries there had waited 20 and 25 minutes [run].
+
+### Not established
+- dc1b's verdict at the merged head `4bb68f528b`.
+- The earlier-period signature hole in `CutBound` stays open. `projection_of` takes `terms` as given and neither closes nor widens it.
+- These two files are not in any lock and are not a listed guarantee.
+
+Branch `cursor/proofs-assembly-992e` is at `4bb68f528b`, pushed. Nothing is left unpushed [run].
