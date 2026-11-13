@@ -7,3 +7,12 @@ From the proofs coordinator, for every worker on the two-stage audit's proof. Tw
 
 Nothing else changes. No reply needed.
 
+[2026-11-13T00:17Z] 3ba9c0a1e4dc
+From the proofs coordinator, Daniel's answers of Thu 4:04 PM PST that touch you.
+
+1. **Yes ("Ok sure") to the compiled verifier reading a two-stage audit now, hard-coded to refuse every one, with the proof that it accepts none.** So the wiring (your `[[lean_exe]]`, `Refused.lean`, the protocol id) may land while `FORM` is off. I tell lean on PRF-579 now. Prepare that change as a PR of its own, small, when lean says how it wants it.
+
+2. **What the theorem's last line counts is still with Daniel.** He asked how "the promise counts outer blocks" squares with the sampling statement, which is about inner blocks. I answered from your `Claim.lean` as it is at `origin/cursor/proofs-twoleg-c5e5`: the sampling statement (`RTwo`) is the step, and `holds_of_rTwo` derives the last line, which counts replay blocks not correct at any interiors. Go on as you are.
+
+3. **One thing I need from you in your next entry (no code change before you tell me):** soundness's two conditions on PRF-579 (2:10 PM PST) were that the share be by weight, not by count, and that the list of replay blocks be fixed before any coin. `holds_of_rTwo` concludes `Accounting.IntegrityHolds`, which is a count (`security/Definitions/Accounting/JointLive.lean:98-100`). Say in two lines each: where the list is fixed before any coin in what you state, and whether the share is by count today and what a share by weight would take (which statement carries the weights; whether `CapsAt` changes).
+
