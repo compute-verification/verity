@@ -214,13 +214,24 @@ The alternative is a frame change: `_whole` gathering the mixed members by one s
 | 43 | 97 | 86 + 11 = 97 | `HeadEnd` 86, first blocks 11 |
 | 86 | 1,616.5 | 128 + 64·23 + 16.5 = 1,616.5 | 22 split prefill chains and the decode's |
 | 127 | 354.5 | 130 + 3·63 + 19 + 16 = 354 | |
-| 150 | 544.5 | 132 + 3·86 + 3·22 + 16 + 64 = 536 | measured `FIRST=false` 332, against 324 |
-SMS_MORE
+| 150 | 544.5 | 128 + 3·86 + 3·22 + 16 + 64 = 532 | `FIRST=false` 332, against 324 |
+| 200 | 849.5 | 128 + 3·136 + 3·72 + 16 + 64 = 832 | `FIRST=false` 635, against 624 |
+| 256 | 1,185.5 | 128 + 3·192 + 3·128 + 16 + 64 = 1,168 | `FIRST=false` 971, against 960 |
 
-**At 78 layers** [computed from the formula, past 256 ids extrapolated]:
-- unsplit: about 78 · 6 · LP. That is 70,000 at 150 ids, 120,000 at 256, and 480,000 at 1,024 (T is capped at the
-  index's top-k, 2,048);
-- at 86 ids (mixed): 78 × 1,616.5 + 130 ≈ 126,000.
+The part that doesn't scale with layers measures 91 to 155 (130 or so past 86 ids). The formula is within 2% from 150
+ids on. It is linear in LP up to chains of 4 blocks (256 ids), not quadratic: later blocks don't add wires a block.
+
+**At 78 layers** [computed: 78 × the measured count a layer + the part that doesn't scale; the 1,024 row from the
+formula, extrapolated]:
+
+| ids, 2 outputs | SparseMlaSplit wires at 78 layers | the experts' key wires at 78 layers, for scale |
+|---|---|---|
+| 86 (mixed) | 126,220 | 907,200 |
+| 150 | 42,604 | 907,200 |
+| 256 | 92,600 | 907,200 |
+| 1,024 | about 451,000 | 907,200 |
+
+The key wires are 6,048 × 75 MoE layers × 2 steps (the earlier report). T is capped at the index's top-k, 2,048.
 
 **A form ours alone: none.** What costs a wire a token is the per-T template, `NVIS` being a static of the Definition,
 together with one node a token in the Program. No unit order in `sparse_mla_split` makes two templates one writer. What
