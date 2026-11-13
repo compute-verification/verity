@@ -33,15 +33,12 @@ and with `RecordsHeld` its `RegistersNone` (`registersNone_of`). The last is
 the second two-stage try's design, whose interior registration registers none; the first try's registers `logits`,
 and there `heldOf` is `none`.
 
-`heldMatches_of`: a held copy `heldOf` builds agrees with what the run reads (`HeldMatches`), given two clauses that
-the run's input does not decide and are taken as named hypotheses:
-
-* `PartsAt`: `HeldMatches.parts`, the interior program's strata making the held copy's parts at the replay sample the
-  first stage selects on the run's bytes. `PartsAre`, the same at every sample's size, gives it
-  (`partsAt_of_partsAre`), but no held copy meets `PartsAre` where the interior program has a stratum
-  (`not_partsAre`: at `q = 0`, `SecondStage.partOf` refuses);
-* `RefsAre`: `HeldMatches.refs`, each template's reference header as read from its reference statement's public file
-  equal to the params' as `Json` values, which no check the run makes decides.
+`heldMatches_of`: a held copy `heldOf` builds agrees with what the run reads (`HeldMatches`), given one clause that
+the run's input does not decide, taken as a named hypothesis: `PartsAt`, `HeldMatches.parts`, the interior program's
+strata making the held copy's parts at the replay sample the first stage selects on the run's bytes. `PartsAre`, the
+same at every sample's size, gives it (`partsAt_of_partsAre`), but no held copy meets `PartsAre` where the interior
+program has a stratum (`not_partsAre`: at `q = 0`, `SecondStage.partOf` refuses). `HeldMatches.refs` (`RefsAre`)
+holds by construction (`refsAre_of`): the held copy's reference headers are the params'.
 
 ## What this does not show
 
@@ -149,6 +146,7 @@ def held₀ (i : Spot.Run.Input) (it : Spot.Run.Interior) (u : Unread) (first : 
   xS₀ := refStmt u.xs
   xS₀_ok := hz
   refReads := fun t => (it.circuits.map (·.2.2.2)).toList.getD t .null
+  refHeaders := fun t => (it.circuits.map (·.2.2.1)).toList.getD t .null
   frame := u.c₀
   more := u.more
 
@@ -334,8 +332,8 @@ theorem not_partsAre {it : Spot.Run.Interior} {h : Held} {strata : Array (String
     rw [hl] at h0
     simp [List.mapM_cons, partOf_zero] at h0
 
-/-- **`HeldMatches.refs`**: each template's reference header, as read from its reference statement's public file, is
-the params' (`Run.Interior.circuits`), as `Json` values. -/
+/-- **`HeldMatches.refs`**: each template's reference header (`Held.refHeaders`) is the params'
+(`Run.Interior.circuits`); `refsAre_of` proves it at every held copy `heldOf` builds. -/
 def RefsAre (it : Spot.Run.Interior) (h : Held) : Prop :=
   refsOf h = it.circuits.map fun (t, _, hd, _) => (t, hd)
 
@@ -348,10 +346,28 @@ theorem refReads_eq (cs : Array (String × String × Json × Json)) :
     have hj : j < cs.size := by simpa using hj₁
     simp [List.getD_eq_getElem?_getD, hj]
 
-/-- **A held copy `heldOf` builds agrees with what the run reads** (`HeldMatches`), given the clauses `PartsAt` and
-`RefsAre`, which the run's input does not decide. Every other clause holds by `heldOf`'s construction. -/
+theorem refHeaders_eq (cs : Array (String × String × Json × Json)) :
+    ((List.range cs.size).map fun t => ((cs.map (·.1)).toList.getD t "", (cs.map (·.2.2.1)).toList.getD t .null)).toArray =
+      cs.map fun (t, _, hd, _) => (t, hd) := by
+  apply Array.ext
+  · simp
+  · intro j hj₁ hj₂
+    have hj : j < cs.size := by simpa using hj₁
+    simp [List.getD_eq_getElem?_getD, hj]
+
+/-- **`RefsAre` holds at a held copy `heldOf` builds**: its reference headers are the params' (`Held.refHeaders`). -/
+theorem refsAre_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h : Held}
+    (hh : heldOf i it u = some h) : RefsAre it h := by
+  obtain ⟨first, ns, ks, l, hz, -, -, -, rfl, -⟩ := heldOf_spec hh
+  unfold RefsAre refsOf
+  rw [ms_withFrame, ms_length_held₀]
+  exact refHeaders_eq it.circuits
+
+/-- **A held copy `heldOf` builds agrees with what the run reads** (`HeldMatches`), given the clause `PartsAt`, which
+the run's input does not decide. Every other clause holds by `heldOf`'s construction. -/
 theorem heldMatches_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h : Held}
-    (hh : heldOf i it u = some h) (hP : PartsAt i it h) (hR : RefsAre it h) : HeldMatches i it h := by
+    (hh : heldOf i it u = some h) (hP : PartsAt i it h) : HeldMatches i it h := by
+  have hR := refsAre_of hh
   obtain ⟨first, ns, ks, l, hz, hf, hc, -, rfl, -⟩ := heldOf_spec hh
   have hrr : refRegisteredOf (withFrame (held₀ i it u first ns ks (requests l) hz) u.c₀) =
       it.circuits.map fun (t, _, _, r) => (t, r) := by
@@ -393,18 +409,18 @@ noncomputable def heldOfForm (p : VStar.Recursive.SampledTwo.Params) (c : Spot.O
   | none => none
 
 /-- **At the form's run of record**, a held copy `heldOfForm` builds agrees with what the run reads, given `PartsAt`
-and `RefsAre` at its interior. -/
+at its interior. -/
 theorem heldMatches_form {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment} {ξ ξ₂ : ByteArray}
     {e : VStar.Recursive.SampledTwo.Evidence} {received₂ : String} {vs : Array (String × Json)} {u : Unread}
     {h : Held} (hh : heldOfForm p c ξ ξ₂ e received₂ vs u = some h) :
     ∃ it, (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).interior = some it ∧
       heldOf (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs) it u = some h ∧
-      (PartsAt (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs) it h → RefsAre it h →
+      (PartsAt (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs) it h →
         HeldMatches (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs) it h) := by
   unfold heldOfForm at hh
   split at hh
   · rename_i it hit
-    exact ⟨it, hit, hh, fun hP hR => heldMatches_of hh hP hR⟩
+    exact ⟨it, hit, hh, fun hP => heldMatches_of hh hP⟩
   · cases hh
 
 end SpotFlock.HeldOf
