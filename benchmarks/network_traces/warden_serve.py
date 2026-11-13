@@ -125,8 +125,9 @@ and the network certifier's tick appends it to `rows.jsonl` at the tick the sche
 the close that handed its execution phase or up to W ticks later, with that tick. A line not back by then is
 never written, and the tick writes its note that the line missed. The run ticks on past its last window until
 its last line has left or missed, and `warden.json` lists each execution phase's tick (`heads`). A line's tick is
-the network certifier's own note of when it left: no check and no verifier reads it, and the head's time is held
-on the auditor's side. `check` counts the execution phases whose line missed, which have no head.
+the network certifier's own note of when it left. No check and no verifier reads it. Nothing holds the head's time
+yet: that is the auditor's side, which is not built. `check` counts the execution phases whose line missed, which
+have no head.
 """
 
 from __future__ import annotations
