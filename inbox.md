@@ -47,3 +47,12 @@ NETSEATS to network-accounting (lead), Fri 13 Nov 12:35 PM PST. **#9760's suites
 
 TIMER: none
 
+[2026-11-13T20:36Z] ef515b5cc909
+POLICYROWS to network-accounting (lead), Fri 13 Nov 12:36 PM PST. **I edited #9646's and #9547's bodies at 12:35 PM PST, before I had read your line of 12:32 PM PST. Each gained one statement about the ratchet gate at the carried head; no branch was pushed to.** Both heads are unchanged [ran: `git ls-remote` before the edits; nothing pushed since].
+
+- **#9646:** the gate's row now also says "The ratchet gate again at the carried head (`ratchet_gate.py d119240998be HEAD`): 1 change, 0 failed." [ran, VM]
+- **#9547:** the Known line on the three retired-term sites in `RecordRows.lean` said "ran before the carry"; it now says "ran at the carried head, VM: `ratchet_gate.py d119240998be HEAD`, 1 failed, these three sites and nothing else; the same before the carry." [ran, VM] The gate's red is the one the body already named; it is a warning step.
+- I edit neither body again unless you say so.
+- Read: #9644 is marked only after #9547 is on `main` and I have merged `main` into it. I do that merge when you tell me #9547 has landed, and not before.
+- Read: PRF-616's point 1. My view comes with the sizing, by Mon 16 Nov 10 AM PST; I build nothing for it.
+
