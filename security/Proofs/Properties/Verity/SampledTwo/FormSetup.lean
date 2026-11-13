@@ -7,6 +7,8 @@ public import Proofs.Properties.Verity.Sampled.Held
 public import Proofs.Flock.Claims.JsonNorm
 public import Proofs.Flock.Claims.Complete.Json.Canon
 public import Proofs.Flock.Claims.Complete.Json.Stmt
+public import Proofs.Flock.SessionLoop.Concrete
+import all Init.Data.String.Defs
 
 /-!
 # The session the form verified is the one template `t`'s statement sets up
@@ -31,6 +33,10 @@ This module shows the two sessions are one, and proves `VerdictsAt` from what is
   bytes decode as it, sets up under `--zk` the session the form set up on the member's files at the record's sample
   (`MemberChecks.ins_of_fields`, `Verity.Sampled.Record.setup_of_setupAt`), where the circuit statement's leaves are
   not plain, which the member's statement passing gives (`verified_at`).
+* **The statement decodes from its bytes** (`stmtRaw_decode`): the form refuses a member's file, lookup table,
+  program, partition object or registered reads, or a record's sample, at `2^64` bytes or more
+  (`Spot.OneStageZk.fitsWhy`, `drawFitsWhy`), so every length of the statement fits its 8-byte word
+  (`stmtRaw_fits`) and `FlockDeploy.decode` reads it back (`FlockDeploy.decode_encode_of_fits`).
 * **The session digests with SHA-512** (`setupAt_sha512`), as `setupAt_oneTable` gives its one table.
 * **`VerdictsAt`** (`verdictsAt_of`), at the table `Flock.Tags.circuit.table`, and so `MsgsOfRecords`
   (`msgsOfRecords_form`).
@@ -41,9 +47,8 @@ What `verdictsAt_of` takes beside the join's fields (`HeldOfAt`, `StmtsRead`, `R
 * `StmtsPrint`: each member's partition object's objects are well-formed trees, and its registered reads are
   printable. Nothing the setup checks holds a member's partition object to well-formed trees or its registered
   reads to integers.
-* `StmtsFit`: each session's statement decodes from its bytes, and the statements' message holds fewer than `2^64`
-  statements of fewer than `2^64` bytes each. The form refuses a field its statement can't hold
-  (`Spot.OneStageZk.fitsWhy`, `drawFitsWhy`); that refusal is not carried to here, and it bounds no sum.
+* `StmtsFit`: the statements' message holds fewer than `2^64` statements of fewer than `2^64` bytes each. The form
+  refuses a field its statement can't hold, which bounds each field and no sum of them.
 * `SessionsLive`: a session the masked verdict accepts has messages (`SessionMsgs.sessionMsgs`): its record reads as a
   live session and each recorded round kept its bytes.
 -/
@@ -157,6 +162,84 @@ theorem setupOf_of_fields {w : FlockDeploy.Raw} {m : Spot.OneStageZk.Member} {ci
   rw [hinsOf]
   simp [hsu, Except.toOption]
 
+/-! ## The statement decodes from its bytes -/
+
+private theorem ite_some_none {α : Type} {c : Prop} [Decidable c] {s : α} {o : Option α}
+    (h : (if c then some s else o) = none) : ¬c ∧ o = none := by
+  by_cases hc : c
+  · rw [if_pos hc] at h
+    cases h
+  · rw [if_neg hc] at h
+    exact ⟨hc, h⟩
+
+private theorem statement_size : Spot.OneStageZk.STATEMENT.toUTF8.size < 2 ^ 64 := by decide +kernel
+
+private theorem toUTF8_size (s : String) : s.toUTF8.size = s.utf8ByteSize := String.size_toByteArray
+
+/-- A printed value the check holds under `2^64` bytes (`Spot.OneStageZk.printedSize`) is under `2^64` bytes as a
+statement holds it. -/
+private theorem printed_fits {o : Option Json}
+    (h : ¬(o.any fun j => decide (Spot.OneStageZk.WORD ≤ Spot.OneStageZk.printedSize j)) = true) (b : ByteArray)
+    (hb : (o.map fun j => (Flock.RecordText.printT j).toUTF8) = some b) : b.size < 2 ^ 64 := by
+  cases o with
+  | none => simp at hb
+  | some j =>
+    obtain rfl : (Flock.RecordText.printT j).toUTF8 = b := Option.some.inj hb
+    rw [toUTF8_size]
+    exact Nat.lt_of_not_le fun (hc : Spot.OneStageZk.WORD ≤ Spot.OneStageZk.printedSize j) => h (decide_eq_true hc)
+
+/-- **Every length of a member's statement fits its 8-byte word** (`FlockDeploy.Raw.Fits`), where the form's check
+refused none of them: the member's files, the lookup tables, its program, partition object and registered reads
+(`Spot.OneStageZk.fitsWhy`), and the record's sample (`Spot.OneStageZk.drawFitsWhy`). -/
+theorem stmtRaw_fits {m : Spot.OneStageZk.Member} {circuitB pubB : ByteArray} {bs : Core.Blobs} {record : String}
+    (hfit : Spot.OneStageZk.fitsWhy Spot.OneStageZk.WORD circuitB pubB (Spot.OneStageZk.tablesOf bs)
+      (some m.own.program) (some m.own.partition) m.own.registered = none)
+    (hd : Spot.OneStageZk.drawFitsWhy Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none) :
+    (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf bs) (SessionMsgs.drawBytes record)
+      (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)).Fits := by
+  unfold Spot.OneStageZk.fitsWhy at hfit
+  obtain ⟨h1, hfit⟩ := ite_some_none hfit
+  obtain ⟨h2, hfit⟩ := ite_some_none hfit
+  obtain ⟨h3, hfit⟩ := ite_some_none hfit
+  obtain ⟨h4, hfit⟩ := ite_some_none hfit
+  obtain ⟨h5, hfit⟩ := ite_some_none hfit
+  obtain ⟨h6, hfit⟩ := ite_some_none hfit
+  obtain ⟨h7, -⟩ := ite_some_none hfit
+  unfold Spot.OneStageZk.drawFitsWhy at hd
+  obtain ⟨h8, -⟩ := ite_some_none hd
+  refine ⟨statement_size, Nat.lt_of_not_le h1, Nat.lt_of_not_le h2, Nat.lt_of_not_le h3, fun q hq => ?_,
+    (by show 1 < 2 ^ 64; decide), printed_fits h8, ?_, ?_, ?_, ?_, ?_, ?_, printed_fits h7, ?_⟩
+  · have hq' : ¬(decide (Spot.OneStageZk.WORD ≤ q.1.utf8ByteSize) || decide (Spot.OneStageZk.WORD ≤ q.2.size)) =
+        true := fun hc => h4 (List.any_eq_true.2 ⟨q, hq, hc⟩)
+    simp only [Bool.or_eq_true, decide_eq_true_eq, not_or] at hq'
+    exact ⟨by rw [toUTF8_size]; exact Nat.lt_of_not_le hq'.1, Nat.lt_of_not_le hq'.2⟩
+  · intro b hb
+    cases hb
+    rw [toUTF8_size]
+    exact Nat.lt_of_not_le
+      fun (hc : Spot.OneStageZk.WORD ≤ Spot.OneStageZk.printedSize m.own.partition) => h6 (decide_eq_true hc)
+  · intro b hb
+    cases hb
+    exact Nat.lt_of_not_le fun (hc : Spot.OneStageZk.WORD ≤ m.own.program.size) => h5 (decide_eq_true hc)
+  · intro n hn; cases hn
+  · intro b hb; cases hb
+  · intro n hn; cases hn
+  · intro b hb; cases hb
+  · intro b hb; cases hb
+
+/-- **A member's statement decodes from its bytes**, where the form's check refused none of its lengths
+(`stmtRaw_fits`, `FlockDeploy.decode_encode_of_fits`). -/
+theorem stmtRaw_decode {m : Spot.OneStageZk.Member} {circuitB pubB : ByteArray} {bs : Core.Blobs} {record : String}
+    (hfit : Spot.OneStageZk.fitsWhy Spot.OneStageZk.WORD circuitB pubB (Spot.OneStageZk.tablesOf bs)
+      (some m.own.program) (some m.own.partition) m.own.registered = none)
+    (hd : Spot.OneStageZk.drawFitsWhy Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none) :
+    FlockDeploy.decode
+        (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf bs) (SessionMsgs.drawBytes record)
+          (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)).encode =
+      some (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf bs) (SessionMsgs.drawBytes record)
+        (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)) :=
+  FlockDeploy.decode_encode_of_fits (stmtRaw_fits hfit hd)
+
 /-- **The session `--zk` sets up at one table of hm96-sha512 rows digests its record with SHA-512.** -/
 theorem setupAt_sha512 {W : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {dr : Option Json}
     {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {x : Json × Json}
@@ -183,20 +266,10 @@ def StmtsPrint (C : CaseOf) (Good : Verity.Exchange → Prop) : Prop :=
     ∀ t m, SessionMsgs.memberAt p e t = some m →
       Claims.Json.Wf m.own.partition ∧ ∀ j, m.own.registered = some j → Claims.Json.Good j
 
-/-- **The session statements fit their length words**: on a play the form accepts whose log the check read is the
-device's, each template's session statement decodes from its bytes (`each`), and the statements' message holds
-fewer than `2^64` statements, each of fewer than `2^64` bytes (`all`). -/
-structure StmtsFit (C : CaseOf) (Good : Verity.Exchange → Prop) : Prop where
-  each : ∀ o k p e, FormAccepts C o → Good o → C o = some k → SessionMsgs.formOf k = some (p, e) →
-    ∀ t m fs record circuitB pubB, SessionMsgs.memberAt p e t = some m → SessionMsgs.filesAt e t = some fs →
-      SessionMsgs.recordAt k.blobs fs = some record → k.blobs.get m.own.circuit "circuit" = .ok circuitB →
-      k.blobs.get m.own.pub "public file" = .ok pubB →
-        FlockDeploy.decode
-          (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf k.blobs) (SessionMsgs.drawBytes record)
-            (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)).encode =
-          some (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf k.blobs)
-            (SessionMsgs.drawBytes record) (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8))
-  all : ∀ o k p e xs, FormAccepts C o → Good o → C o = some k → SessionMsgs.formOf k = some (p, e) →
+/-- **The statements' message fits its length words**: on a play the form accepts whose log the check read is the
+device's, the statements' message holds fewer than `2^64` statements, each of fewer than `2^64` bytes. -/
+def StmtsFit (C : CaseOf) (Good : Verity.Exchange → Prop) : Prop :=
+  ∀ o k p e xs, FormAccepts C o → Good o → C o = some k → SessionMsgs.formOf k = some (p, e) →
     (List.range e.stmts.size).mapM (SessionMsgs.stmtAtCase k) = some xs →
       xs.length < 2 ^ 64 ∧ ∀ x ∈ xs, x.length < 2 ^ 64
 
@@ -238,16 +311,16 @@ theorem verdictsAt_of {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Ve
   have hte : t < e.stmts.size := by
     rw [hcount o k p e hacc hgood hk hf]
     exact ht
-  obtain ⟨hl, hb⟩ := hfit.all o k p e xs hacc hgood hk hf hxs
+  obtain ⟨hl, hb⟩ := hfit o k p e xs hacc hgood hk hf hxs
   have hx := SessionMsgs.stmtAt_stmtsMsg A.h hmsg hf hxs hl hb hte
   obtain ⟨s', spec', st, hset', hk₀, -⟩ :=
     reps_of_scope (twoHolds_at hof hacc hi hit) (hrounds o m₂ hacc hm₂) (hscope o m₂ hacc hm₂) ht
   obtain ⟨fs, hfs⟩ := SessionMsgs.filesAt_of_stmt hx hf
   obtain ⟨m, circuitB, pubB, rd, record, spec, tabs, ⟨p0, o0⟩, proofs, hpl, hm, hc, hp, hrd, hrec, hsetup, hfiles,
-    hzk⟩ := verified_at hacc hk hf hfs
+    hzk, hfw, hfd⟩ := verified_at hacc hk hf hfs
   have hxw := stmtAtCase_of_member hf hm hfs hrec hc hp
   obtain ⟨hgp, hgr⟩ := hprint o k p e hacc hgood hk hf t m hm
-  have hdec := hfit.each o k p e hacc hgood hk hf t m fs record circuitB pubB hm hfs hrec hc hp
+  have hdec := stmtRaw_decode hfw hfd
   obtain ⟨si, sts, hset, htabs⟩ :=
     setupOf_of_fields hpl
       (memberFields_stmtRaw m circuitB pubB k.blobs (SessionMsgs.drawBytes record)
