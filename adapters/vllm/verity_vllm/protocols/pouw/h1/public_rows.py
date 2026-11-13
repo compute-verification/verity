@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import core_check as CC
 
 
 @dataclass(frozen=True)
