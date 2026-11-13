@@ -2,18 +2,19 @@
 a code. New block i of n, at L + i above the start's L blocks, starts as a copy of the start's block ⌊iL/n⌋ with its
 `wo` and `w_down` zero, so the grown model computes the start's function at step 0.
 
-The code (`Code`): the top block's output is divided by its root mean square a token (which the final norm maps to
-the same output), rotated by R, a fixed orthogonal matrix, and each token's coordinates rounded to nearest on
-2^forward_bits levels over their largest magnitude; the codes cross as a uint8 plane, `forward_bits` bytes for every
-eight coordinates (`codecs.wire.pack_codes`), beside the token's step in bf16, and are rotated back. The gradient
-crosses back rotated by R, rounded stochastically onto 2^backward_bits − 1 steps whose ends are its largest magnitude
-a token (rounded up a bf16 unit), as floats, and rotated back. R is a DCT-II's rows with each coordinate's sign drawn
-from a generator seeded 1000 plus the grown depth, from the dials and the shape alone; `build` makes it once, a buffer
-outside the state dict, so a resumed job keeps the one it began with. The stochastic rounding draws from torch's global
-generator, which a job keeps across a resume.
+The code (`Code`): the top block's output is divided by its root mean square a token (which the final norm maps to the
+same output), rotated by R, a fixed orthogonal matrix, and each token's coordinates rounded to nearest on 2^forward_bits
+levels over their largest magnitude; the codes cross as a uint8 plane, `forward_bits` bytes for every eight coordinates
+(`codecs.wire.pack_codes`), beside the token's step in bf16, and are rotated back. The gradient crosses back rotated by
+R, rounded stochastically onto 2^backward_bits − 1 steps whose ends are its largest magnitude a token (rounded up a bf16
+unit), as floats, and rotated back. A trace reads the forward's plane at its width; the backward's rounding is on its
+own grid and never crosses as bytes. R is a DCT-II's rows with each coordinate's sign drawn from a generator seeded 1000
+plus the grown depth, from the dials and the shape alone; `build` makes it once, a buffer outside the state dict, so a
+resumed job keeps the one it began with. The stochastic rounding draws from torch's global generator, which a job keeps
+across a resume.
 
 - `grow`: the new top blocks, at least 1;
-- `forward_bits`, `backward_bits`: the code's widths each way;
+- `forward_bits`: the forward code's width; `backward_bits`: the backward's grid, 2^backward_bits − 1 steps;
 - `lr`: Muon's rate over every matrix of the blocks (Nesterov momentum 0.95, the update orthogonalized by five
   Newton-Schulz steps in bf16), `weight_decay` its decoupled decay;
 - `norm_lr`: the gains' rate, the final norm's included, under one undecayed AdamW (betas 0.9, 0.95) in torch's
@@ -50,7 +51,7 @@ TENSORS = ("attn_norm", "mlp_norm", "wq.weight", "wk.weight", "wv.weight", "wo.w
            "w_up.weight", "w_down.weight")
 #: the widths the forward's code takes, each a whole number of bytes for every eight coordinates
 FORWARD_BITS = range(4, 9)
-#: and the backward's
+#: the backward's grids, 2^b − 1 steps for each b here
 BACKWARD_BITS = range(1, 17)
 #: R's seed is this plus the grown model's depth
 SEED = 1000
