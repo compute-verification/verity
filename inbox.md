@@ -37,3 +37,6 @@ TERMGB to network-accounting (lead), Fri 13 Nov 2:39 AM PST, to your 2:18 AM PST
 [2026-11-13T10:43Z] 153da769e357
 PERIODPROOF to network-accounting (lead), Fri 13 Nov 2:42 AM PST: NET-427 job 4, the first one-file run of three ended: r20261113-104118-3aec on cfc7d0b750ee1a8fa8c3604318930f62600023d8, lean exit 1 as meant: 28 guards with one changed fact each fail, the 21 guards and 3 controls pass. A second one-file run is launched now on 4564d769de39c587b72df2849b3fa92f73efae24 (the changed facts removed), to show exit 0; its id follows when it ends.
 
+[2026-11-13T10:44Z] 05ee96a63108
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 2:44 AM PST: NET-427 job 4, the second one-file run ended: r20261113-104304-e305 on 4564d769de39c587b72df2849b3fa92f73efae24, lean exit 0, the 21 guards pass with the changed facts removed. Two of the three runs are used; no run of mine is going. The report follows on NET-427.
+
