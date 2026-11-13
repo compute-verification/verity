@@ -110535,3 +110535,55 @@ The shared averaging argument compiles at my branch's `f620ef7fd4`. Both sampled
 **4. Pushed and unpushed (your 23:52Z rule).** [run] Pushed: `cursor/proofs-redraw-cc71` at `db228c8966f0`; `cursor/proofs-keyheld-3c9a` at `436884bdbdfe`; the old close `cursor/proofs-redraw-9373-close-7b3e` at `50e5d9fcc06b`. [run] Unpushed: nothing in any worktree.
 
 **5. What I wait on.** `859f` and `fe73` for #9237's ready line; `c669` and `a03a` for the key change's first whole verdict.
+
+
+## HONEST2, Fri 00:37Z: `r20261113-003207-7af3` (cpu-11, head `c5ccca865fa9`) waiting for a slot since 00:32Z, after `r20261113-001808-5cac` waited 14 min on cpu-8 with no slot; all five address facts at my instance are now written, two of them conditional on ADDRROW's `RowGoal`
+
+This is an interim entry, because no Lean slot opened. Both cpu-8 and cpu-11 refuse every check slot for memory, which live runs reserve beyond what the machines have. All five address facts for my one-template instance are now written; it registers one outer block, and every inner block's port is linked. Three of the facts compiled earlier. The other two, and the bundle that gives the address premise, are written but not compiled. They also rest on `RowGoal`, which ADDRROW states but has not proved. I stopped importing the base's `PortsMember.lean`, because it reaches `WiringOk.lean`, which does not compile.
+
+### Slots (for infra)
+
+- [run] `r20261113-001808-5cac`: on `vy-nebius-cpu-8`, waited 00:18Z to 00:32Z (14 min) and never started. `slot.json` says "every check slot is taken (p0: -94 GB of memory free (451 GB more is reserved by live runs that haven't reached it …)", the same for p1 to p3. I withdrew it and resent it to cpu-11.
+- [run] `r20261113-003207-7af3`: on `vy-nebius-cpu-11`, waiting since 00:32Z. Its `slot.json` says "p0: -161 GB of memory free (455 GB more is reserved by live runs that haven't reached it)", the same for p1.
+- [run] I cancelled `r20261113-001132-5c2e` and `r20261113-001530-f51e` (cpu-8), which ran at heads that import `WiringOk.lean`.
+
+### What `7af3` builds and tries
+
+[read] Head `c5ccca865fa9` on `cursor/proofs-honest2-7c4e`. It builds ADDRROW's six `AddressFacts/Row*.lean` files (merged from `2f3ccf969c`, never compiled before) and my `Honest/` files. It then tries `Roots`, `Entry`, `Width`, `Rows`, `Copy` and `Five`.
+
+### The five facts at the instance
+
+- [run] Compiled earlier (`017f`, `05c5`): `WidthFact` (`widthFact_held`), `EntryFact` (`entryFact_held`), `OneTreeFact` (`oneTreeFact_held`).
+  - Back then they also took a `PortsMember` hypothesis. That is now removed: `templateOf_held` reads the session's ports from ADDRWC's `CheckedRun.ports_member`, in `AddressFacts/Width.lean`, which compiles. This edit has not been compiled.
+- [derived] Written, not compiled:
+  - `Honest/Rows.lean`: `rowFact_held (hG : AddressRow.RowGoal …) (hR) (hN) : RowFact …`. It discharges every premise of `RowGoal` at the instance:
+    - `always_held`;
+    - `neededKinds_held`: every read is `.boundaryLink`, since the interior registers no values;
+    - `shapeFact_held`;
+    - `outputsAt_held`;
+    - `rootsHold_held`.
+  - `Honest/Copy.lean`: `copyFact_held (hG) (hR) (hN) (hC : CopiesHeld …) : CopyFact …`, via ADDRWC's `copyFact_of_ref`.
+    - `CopiesHeld`: the template's circuit copies each needed bit from the place its port's row is read.
+  - `Honest/Five.lean`: `five_held : RowGoal → RefPorts R → RefWidths R → CopiesHeld → NeededBits → Five …`, and `addressesConnected_of_held`, the address premise at the instance.
+
+NEEDS: ADDRROW to prove `AddressRow.RowGoal` (`AddressFacts/RowGive.lean`), or to say who does.
+
+### For FRAME
+
+[run: `r20261113-001132-5c2e`, cpu-8, head `62bd7a1b292e`] The base's `WiringOk.lean` fails at 78:89 and 81:91, which breaks every importer of `PortsMember.lean`.
+- The cause: `Array.find?_some hw'` leaves the `beq` lambda unreduced.
+- A likely fix [guess]: `have hf := Array.find?_some hw'` then `simp only [beq_iff_eq] at hf` before using it.
+
+### Pushed
+
+[run] `cursor/proofs-honest2-7c4e` at `c5ccca865fa9`; nothing unpushed.
+
+### Not established
+
+- That `Rows`, `Copy` and `Five` elaborate, and that ADDRROW's six files do (never compiled).
+- That the three earlier facts still compile without `PortsMember`.
+- That `CopiesHeld` holds for the token select's circuit.
+
+### To post
+
+Nothing.
