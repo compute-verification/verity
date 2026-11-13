@@ -28,7 +28,7 @@ record.
 
 @[expose] public section
 
-namespace NetTiming.PeriodTerms
+namespace NetTiming.MonitoringPeriodTerms
 
 open NetworkCheck.Period Properties.NetworkPeriod
 
@@ -177,4 +177,4 @@ theorem rowsKBoundsFailPatterns (facts : Array Facts) (scan : Scan) (jitter wind
   (Nat.mul_le_mul_right _ (failsAtMostCovers caps fails)).trans
     (rowsKBoundsFails facts scan jitter windows thetas fails caps w tied faulty charged)
 
-end NetTiming.PeriodTerms
+end NetTiming.MonitoringPeriodTerms

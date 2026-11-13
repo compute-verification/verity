@@ -39,11 +39,11 @@ import Mathlib.Topology.Sheaves.Init
 # The period's leak with each failure charged as it happens
 
 `monitoringPeriodLeakFails`, `monitoringPeriodLeakFailsAtMost` and `monitoringPeriodLeakCharged` are `Guarantees.MonitoringPeriodLeakFails`,
-`Guarantees.MonitoringPeriodLeakFailsAtMost` and `Guarantees.MonitoringPeriodLeakCharged`. Each is `periodLeakChecked` applied once a fail
+`Guarantees.MonitoringPeriodLeakFailsAtMost` and `Guarantees.MonitoringPeriodLeakCharged`. Each is `monitoringPeriodLeakChecked` applied once a fail
 pattern and summed over the patterns, so each rests on what `Guarantees.MonitoringPeriodLeakChecked` rests on and, for the
 charged form, on the weights' sum.
 
-**At one pattern.** `checked_at_pattern` is `periodLeakChecked` at the secrets of `Zs` whose run has the fail pattern
+**At one pattern.** `checked_at_pattern` is `monitoringPeriodLeakChecked` at the secrets of `Zs` whose run has the fail pattern
 `φ`, at the pattern's operator `op φ` and registered values `ρ φ`: both are fixed before the secrets, so the theorem
 reads them as its own operator and registered values. It gives the held clause at that pattern and the count
 `#Θ · windowsCount` of the pattern's secrets.
@@ -177,7 +177,7 @@ section Compiled
 
 open Claims.SamplingGeneric (Arg Compiled)
 
-/-- `periodLeakChecked` at one fail pattern `φ`: over the secrets of `Zs` whose run has the pattern, at the pattern's
+/-- `monitoringPeriodLeakChecked` at one fail pattern `φ`: over the secrets of `Zs` whose run has the pattern, at the pattern's
 operator and registered values. -/
 theorem checked_at_pattern
     {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
@@ -218,7 +218,7 @@ theorem checked_at_pattern
           ∀ i, ExecutionPhaseGoodChecked H D L K S lay k δ reg (fun s r => valid₁ s r ∧ valid₂ s r) Dj (sw i) (ρ φ i) tops
             (x z i) (wit z i) ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
         Θ.encard * ((windowsCount lay k δ (fun s => reg s ∪ chk s) Dj sw Pw β : ℕ) : ℕ∞) := by
-  have hφ := (periodLeakChecked H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj sw Pw β hplaced hchk
+  have hφ := (monitoringPeriodLeakChecked H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj sw Pw β hplaced hchk
     (ρ φ) (op φ) arr f tap run htrust rd allows hread Θ
     {z | z ∈ Zs ∧ failCell (schedOf z) (arr (srvOf z)) = φ} schedOf srvOf dec
     (And.intro (fun z hz => hch.1 z hz.1) fun z hz => hch.2 z hz.1) x wit tops hb).2 fun z hz i s hs => by
@@ -229,12 +229,12 @@ theorem checked_at_pattern
   rintro z ⟨hp, hz, hg⟩
   exact ⟨⟨hz, hp⟩, hg⟩
 
-/-- **`Guarantees.MonitoringPeriodLeakFails`**: `periodLeakChecked` at each fail pattern (`checked_at_pattern`), summed over
-the patterns of exactly `j` failures (`encard_failsExactly_le`). Its first clause is `periodLeakChecked`'s. -/
+/-- **`Guarantees.MonitoringPeriodLeakFails`**: `monitoringPeriodLeakChecked` at each fail pattern (`checked_at_pattern`), summed over
+the patterns of exactly `j` failures (`encard_failsExactly_le`). Its first clause is `monitoringPeriodLeakChecked`'s. -/
 theorem monitoringPeriodLeakFails : Guarantees.MonitoringPeriodLeakFails := by
   intro Coin _ _ _ A H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj n sw Pw β hplaced hchk Conn _ ρ op
     Cell Srv Dev Z Par arr f tap run htrust rd allows hread Θ Zs schedOf srvOf dec hch x wit tops hb cap j
-  refine ⟨(periodLeakChecked H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj sw Pw β hplaced hchk
+  refine ⟨(monitoringPeriodLeakChecked H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj sw Pw β hplaced hchk
     (ρ fun _ => none) (op fun _ => none) arr f tap run htrust rd allows hread Θ Zs
     schedOf srvOf dec hch x wit tops hb).1, fun htap => ?_⟩
   refine (Set.encard_le_encard ?_).trans

@@ -121,19 +121,19 @@ RecordRows.lean  the rows format reads back the code's cells on every schedule t
 TapRows.lean    at the network certifier's rows: the trace filled in with its values carries its records
     (carries_fillTrace), and a disagreement between the two is a collision
     (certifierColl_of_disagree, Pr_certifierColl_le_Btap)
-PeriodChecked.lean  the period's leak with the checked inputs left out (periodLeakChecked): each window's
+MonitoringPeriodChecked.lean  the period's leak with the checked inputs left out (monitoringPeriodLeakChecked): each window's
     bound at the network certifier's rows with a valid run
-    (periodChecked_first), and the records counted by Carried's count at the
-    empty pool (encard_periodChecked_le, periodChecked_second)
-PeriodFails.lean  the period's leak with each failure charged (monitoringPeriodLeakFails, monitoringPeriodLeakFailsAtMost,
-    monitoringPeriodLeakCharged): periodLeakChecked at each fail pattern
+    (monitoringPeriodChecked_first), and the records counted by Carried's count at the
+    empty pool (encard_monitoringPeriodChecked_le, monitoringPeriodChecked_second)
+MonitoringPeriodFails.lean  the period's leak with each failure charged (monitoringPeriodLeakFails, monitoringPeriodLeakFailsAtMost,
+    monitoringPeriodLeakCharged): monitoringPeriodLeakChecked at each fail pattern
     (checked_at_pattern), summed over the patterns (exists_failPatterns,
     encard_failsExactly_le, encard_weighted_le)
-PeriodLengths.lean  a lengths format reads back under the link's parameters (LengthsRows.readsBy): a lane is
+MonitoringPeriodLengths.lean  a lengths format reads back under the link's parameters (LengthsRows.readsBy): a lane is
     its length, released data and fail cell (lanesView_laneRecord); no
     device's layout is modelled
-Period.lean     MonitoringPeriodLeakAccepted as MonitoringPeriodLeakChecked's instance at no checked input
-    (periodLeak_of_checked, monitoringPeriodLeak; monitoringPeriodLeak_fixed at operators fixed
+MonitoringPeriod.lean  MonitoringPeriodLeakAccepted as MonitoringPeriodLeakChecked's instance at no checked input
+    (monitoringPeriodLeak_of_checked, monitoringPeriodLeak; monitoringPeriodLeak_fixed at operators fixed
     before the period)
 PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
     period's windows by a union bound (Pr_exists_mem_le_sum, monitoringPeriodLeak_le_sum)
@@ -175,9 +175,9 @@ PoolRoots.lean  the opened rows' roots, a lemma: a run's check that holds its op
 PeriodCheckedChecks.lean  MonitoringPeriodLeakChecked held to the trace's run is false (freeL_traceRun_insufficient,
     monitoringPeriodLeakChecked_traceRun_fails, freeL_certifierRun_miss); its nontrivial lemma, and
     its honest lemma at the toy code over a period of no windows
-PeriodCheckedExclusion.lean  a placed window: no count without ReadsBy (MonitoringPeriodLeakChecked_readsBy_exclusion);
+MonitoringPeriodCheckedExclusion.lean  a placed window: no count without ReadsBy (MonitoringPeriodLeakChecked_readsBy_exclusion);
     premises hold together (MonitoringPeriodLeakChecked_placed)
-PeriodFailsChecks.lean  at a placed window whose operator follows the fail pattern: the count without the
+MonitoringPeriodFailsChecks.lean  at a placed window whose operator follows the fail pattern: the count without the
     failures' factor fails and the factor is 2 (MonitoringPeriodLeakFailsAtMost_factor_met); the charged
     count fails at weights that sum to 2 (MonitoringPeriodLeakCharged_nontrivial,
     MonitoringPeriodLeakCharged_kraft_exclusion); the charged form's premises at the toy code, a period of
@@ -296,7 +296,7 @@ that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `All
 
 The lock (`lean-audit.json`'s `guarantees`) holds the 18 statements of `Guarantees.lean`, the sampled audit's charge
 (`../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`), the monitoring period's leak through the network certifier
-(`Guarantees/Period.lean`) with its bound with checked inputs (`Guarantees/PeriodChecked.lean`), the monitoring period's
+(`Guarantees/MonitoringPeriod.lean`) with its bound with checked inputs (`Guarantees/MonitoringPeriodChecked.lean`), the monitoring period's
 incorrect proof blocks
 (`../../Definitions/NetworkCertifier/Guarantees/Pooled.lean`) and the leak over a monitoring period
 (`../../Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`), each listed as
@@ -426,14 +426,14 @@ The other 26 are the rest of the Capacity table's bounds and the schedule's caus
     bound its miss discharges them. `SampledLeakCarried`'s honest lemma is its premises at the toy code, with a run
     that opens its row at its circuit's input gates (`SampledLeakCarried_honest`). `PooledLeakCarried`'s waits on the
     pool circuit, which pins its closing row (`CheckedClosing`), and on its period's inputs.
-- **The period's bound with checked inputs** (`PeriodChecked.lean`):
+- **The period's bound with checked inputs** (`MonitoringPeriodChecked.lean`):
   `MonitoringPeriodLeakChecked` is `MonitoringPeriodLeakAccepted` with each window's checked inputs left out of the count and the client's
   view read from the records under a registered parameter (`RecordFormat.ReadsBy`), so the count is `#Θ` times the
-  windows'; without it the count fails (`PeriodCheckedExclusion.lean`). Its check is held to the run at the
+  windows'; without it the count fails (`MonitoringPeriodCheckedExclusion.lean`). Its check is held to the run at the
   network certifier's rows (`certifierRun`): held to the trace's run the statement is false
-  (`PeriodCheckedChecks.lean`). `RegisteredInputsHeld` names that the trace holds the registration's values at the
+  (`MonitoringPeriodCheckedChecks.lean`). `RegisteredInputsHeld` names that the trace holds the registration's values at the
   registered inputs. `MonitoringPeriodLeakAccepted` is its instance at no checked input.
-- **The period's bound with each failure charged as it happens** (`PeriodFails.lean`): where the operator's moves
+- **The period's bound with each failure charged as it happens** (`MonitoringPeriodFails.lean`): where the operator's moves
   and the registered values may follow the network certifier's fail cells, the secrets whose run fails exactly `j`
   connections, each below its cap, number at most `failPatterns cap j` times `MonitoringPeriodLeakChecked`'s count
   (`MonitoringPeriodLeakFails`); at most `j`, the factor summed over `0 … j`, with the lengths held at each run's own pattern

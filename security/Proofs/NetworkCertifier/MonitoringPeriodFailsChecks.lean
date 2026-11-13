@@ -66,7 +66,7 @@ premise: it is a lemma about the factor, and no exclusion.
 against `T = 1`. `MonitoringPeriodLeakCharged_nontrivial` is that count alone.
 
 **The premises together** (`MonitoringPeriodLeakCharged_honest`). At the toy code over a monitoring period of no windows and no
-connection, where `PeriodLeakChecked_honest` has `MonitoringPeriodLeakChecked`'s premises, the weights `2^-(j+1)` sum to at most
+connection, where `MonitoringPeriodLeakChecked_honest` has `MonitoringPeriodLeakChecked`'s premises, the weights `2^-(j+1)` sum to at most
 one (`kraftWeights_halves`). The lemma shows that the premises hold together and nothing more: the toy code's
 verifier rejects every run and the period has no window and no connection, so it shows nothing about a failure, a
 window's check or a run that passes, and where a window is placed and a run is accepted every premise but the weights'
@@ -264,7 +264,7 @@ theorem kraftWeights_halves (N : ℕ) : KraftWeights (fun j => (2⁻¹ : ℚ≥0
 
 set_option synthInstance.maxSize 1024 in
 /-- **`MonitoringPeriodLeakCharged`'s premises at the toy code**, over a monitoring period of no windows and no connection:
-`MonitoringPeriodLeakChecked`'s premises there (`PeriodLeakChecked_honest`), the channel over the one registered parameter as a
+`MonitoringPeriodLeakChecked`'s premises there (`MonitoringPeriodLeakChecked_honest`), the channel over the one registered parameter as a
 finite set, the network certifier's registration at every window (`CertifierRegisters`, which the charged form takes
 as a premise), of which the period has none, and the weights `2^-(j+1)` on the number of failures, which sum to at
 most one (`kraftWeights_halves`). The premises hold together there, and the lemma shows nothing more. The toy code
@@ -295,8 +295,8 @@ theorem MonitoringPeriodLeakCharged_honest :
             (fun _ _ _ => [])).commit trivLay 1 (fun _ _ => []) s []
           ((recordingCode noFormat ⟨0, 0, Empty.elim, Empty.elim⟩ fun c => c.elim).2 i)) ∧
       KraftWeights (fun j => (2⁻¹ : ℚ≥0) ^ (j + 1)) (Fintype.card Empty) :=
-  ⟨PeriodLeakChecked_honest.1, PeriodLeakChecked_honest.2.1, PeriodLeakChecked_honest.2.2.1,
-    PeriodLeakChecked_honest.2.2.2.1, PeriodLeakChecked_honest.2.2.2.2.1,
+  ⟨MonitoringPeriodLeakChecked_honest.1, MonitoringPeriodLeakChecked_honest.2.1, MonitoringPeriodLeakChecked_honest.2.2.1,
+    MonitoringPeriodLeakChecked_honest.2.2.2.1, MonitoringPeriodLeakChecked_honest.2.2.2.2.1,
     ⟨fun _ _ => ⟨trivial, (), Finset.mem_coe.2 (Finset.mem_univ _), trivial⟩, fun _ _ => rfl⟩, fun i _ => i.elim0,
     kraftWeights_halves _⟩
 

@@ -109,16 +109,16 @@ to a collision (`TapProof.certifierColl_of_disagree`): an accepted audit's extra
 certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the network
 certifier's. `Checked` proves the leak bound with checked inputs (`SampledLeakChecked`): inputs a check pins cost no
 advice bits, and `WitnessesChecked` gives its nontrivial lemma.
-`PeriodChecked` proves the period's bound with the checked inputs left out (`MonitoringPeriodLeakChecked`): each window's bound
+`MonitoringPeriodChecked` proves the period's bound with the checked inputs left out (`MonitoringPeriodLeakChecked`): each window's bound
 at the network certifier's rows with a valid run, and the count of the period's records through `Carried`'s at the
-empty pool. `Period` proves `MonitoringPeriodLeakAccepted` as its instance at no checked input. `PeriodCheckedChecks` checks the
-checked statement: which run its check is held to, and its nontrivial and honest lemmas. `PeriodCheckedExclusion` shows
+empty pool. `MonitoringPeriod` proves `MonitoringPeriodLeakAccepted` as its instance at no checked input. `MonitoringPeriodCheckedChecks` checks the
+checked statement: which run its check is held to, and its nontrivial and honest lemmas. `MonitoringPeriodCheckedExclusion` shows
 the read-back is needed: at a placed window the count fails without `RecordFormat.ReadsBy`.
-`PeriodFails` proves the period's bounds with each failure charged as it happens (`MonitoringPeriodLeakFails`,
+`MonitoringPeriodFails` proves the period's bounds with each failure charged as it happens (`MonitoringPeriodLeakFails`,
 `MonitoringPeriodLeakFailsAtMost`, `MonitoringPeriodLeakCharged`): `MonitoringPeriodLeakChecked` at each fail pattern, at the pattern's operator and
-registered values, summed over the patterns. `PeriodFailsChecks` checks them at a placed window whose operator follows
+registered values, summed over the patterns. `MonitoringPeriodFailsChecks` checks them at a placed window whose operator follows
 the fail pattern: the failures' factor is met, and the charged count fails at weights that sum past one.
-`PeriodLengths` shows a record format of each lane's length, released data and fail cell reads back under the link's
+`MonitoringPeriodLengths` shows a record format of each lane's length, released data and fail cell reads back under the link's
 registered parameters (`LengthsRows.readsBy`).
 `Carried` proves the leak bounds over a carried pool (`SampledLeakCarried`, `PooledLeakCarried`): one
 run's relation at the rows its extracted trace holds, and the period's bound, where an opened row costs no advice bits,
@@ -195,7 +195,7 @@ theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
     fun x hx s P hs hP op =>
       (NetTiming.sampledLeak_reg hSA H D hks L K S lay k δ hδ reg β Dj hβ).2 x hx s P hs hP op _⟩
 
-theorem MonitoringPeriodLeakChecked : NetTiming.Guarantees.MonitoringPeriodLeakChecked := NetTiming.periodLeakChecked
+theorem MonitoringPeriodLeakChecked : NetTiming.Guarantees.MonitoringPeriodLeakChecked := NetTiming.monitoringPeriodLeakChecked
 theorem MonitoringPeriodLeakFails : NetTiming.Guarantees.MonitoringPeriodLeakFails := NetTiming.monitoringPeriodLeakFails
 theorem MonitoringPeriodLeakFailsAtMost : NetTiming.Guarantees.MonitoringPeriodLeakFailsAtMost := NetTiming.monitoringPeriodLeakFailsAtMost
 theorem MonitoringPeriodLeakCharged : NetTiming.Guarantees.MonitoringPeriodLeakCharged := NetTiming.monitoringPeriodLeakCharged
