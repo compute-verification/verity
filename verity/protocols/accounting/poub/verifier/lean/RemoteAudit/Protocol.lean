@@ -53,8 +53,8 @@ open Flock
 
 def ID : String := "verity/remote-bandwidth/v0"
 
-/-- `audit.DELTA`: the pooled bound's δ, `2^-40`. -/
-def DELTA : Rat := 1 / (2 ^ 40 : Nat)
+/-- `audit.DELTA`: PoUB's δ, the pooled bound's, `2^-101`. -/
+def DELTA : Rat := 1 / (2 ^ 101 : Nat)
 
 private def natJ (n : Nat) : Json := .num (JsonNumber.fromNat n)
 
@@ -170,9 +170,9 @@ def protocol : Core.Protocol where
 
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason ==
   some "params: params: the keys must be [not_before_ns, params], not []"
-#guard (ratio DELTA).toString == "1/1099511627776"
+#guard (ratio DELTA).toString == "1/2535301200456458802993406410752"
 private def three : Session.Params :=
   { deadlineNs := 0, windows := 3, samples := 5, minPasses := 1, windowNs := 0, lifetime := 1 }
-#guard (ratio (eps three 2)).toString == "8388613/9223372036854775808"
+#guard (ratio (eps three 2)).toString == "1374389534721/2535301200456458802993406410752"
 
 end RemoteAudit.Protocol

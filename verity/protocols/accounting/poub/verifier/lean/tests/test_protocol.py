@@ -142,7 +142,7 @@ def test_a_small_periods_answers_agree(server) -> None:
     honest = got["honest"]
     assert honest["public"]["q_bytes"] == honest["profile"]["receipts"] * 4096 > 0 and honest["profile"]["gaps"] == []
     assert sum(s for _, s in honest["profile"]["windows"]) < 2 * audit.SAMPLES, honest
-    assert Fraction(honest["public"]["eps"]) == Fraction(2 ** 24 + 2 * audit.SAMPLES, 2 ** 64), honest
+    assert Fraction(honest["public"]["eps"]) == Fraction(audit.DELTA) + Fraction(2 * audit.SAMPLES, 2 ** 64), honest
 
 
 def _covered(kw: dict) -> bool:

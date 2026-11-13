@@ -447,8 +447,8 @@ def main() -> None:
         pool = line_at(p32, o=o, d=d, k=k, r=r32, theta=10 * T)
         rows.append([f"{s_T:,}", k, f"{d:.3g}", pct(LN / s_T), pct(per["eps_held"]), pct(LN / (10 * s_T)),
                      pct(pool["eps_held"]), pct(per["rebuild_held"])])
-    md.append(f"\n## ε against openings proved a {T:g}-s window (δ = 2^-40, which reads {ledger.DELTA_FORM}), "
-              f"at 32B x8's {r32:.2f} passes/s\n")
+    md.append(f"\n## ε against openings proved a {T:g}-s window (δ = 2^{math.log2(audit.DELTA):.0f}, which reads "
+              f"{ledger.DELTA_FORM}), at 32B x8's {r32:.2f} passes/s\n")
     md.append(table(["openings a window", "k", "draws a group", "ε a window, snapshot", "ε a window, held",
                      "pooled over 10 windows, snapshot", "pooled over 10, held", "rebuilds held (a window)"], rows))
 

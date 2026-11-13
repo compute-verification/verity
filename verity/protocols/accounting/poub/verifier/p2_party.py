@@ -90,6 +90,9 @@ SESSION = {"deadline_ns": 10**9, "passes": 4, "samples": 1024, "window_ns": 20 *
 four passes each, 1,024 openings a window and an allowance of 1 s. At δ = 2^-40 an accepted session's ε is
 δ + 6,144/2^64 (`EPS_TERMS`), about 9.1e-13, which leaves out Σ_t adv_t (SHA-512 stream as PRF: not priced, not
 assumed)."""
+DELTA = 2.0 ** -40
+"""PoUB-P2's δ, its own (`P2Session.DELTA`): each window's profile δ and the pooled bound's.  It is not PoUB's
+`audit.DELTA`, and not at an error of 2^-100."""
 REFUSED = {"refused": True}
 DISAGREEMENT = "disagreement"
 #: The draws a thread of the Lean checks at once (`P2Session.checkOpeningsChunked`).
@@ -254,8 +257,9 @@ def params_of(reg: p2.Registration, request: Mapping[str, Any],
         raise ValueError("; ".join(f"the request's {k} is not the auditor's ({request[k]}, not {auditor[k]})"
                                    for k in off))
     return audit.Params(blocks=reg.blocks, deadline_ns=auditor["deadline_ns"], windows=auditor["windows"],
-                        samples=auditor["samples"], min_passes=auditor["passes"], window_ns=auditor["window_ns"],
-                        codec=reg.codec, receipt=reg.receipt, layout=reg.layout, rows=reg.rows)
+                        samples=auditor["samples"], delta=DELTA, min_passes=auditor["passes"],
+                        window_ns=auditor["window_ns"], codec=reg.codec, receipt=reg.receipt, layout=reg.layout,
+                        rows=reg.rows)
 
 
 def verdict_json(v: audit.Verdict) -> dict[str, Any]:
@@ -818,10 +822,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["Books", "EPS_TERMS", "GAMMA_TERMS", "PROTOCOL", "Prover", "SESSION", "Twin", "answer", "core_answer",
-           "held_json", "hold", "main", "message", "opening_json", "opening_of", "params_of", "plan_of", "pous_record",
-           "prove", "registration_json", "registration_of", "registration_of_setup", "released_of", "request_of",
-           "session", "verdict_json"]
+__all__ = ["Books", "DELTA", "EPS_TERMS", "GAMMA_TERMS", "PROTOCOL", "Prover", "SESSION", "Twin", "answer",
+           "core_answer", "held_json", "hold", "main", "message", "opening_json", "opening_of", "params_of", "plan_of",
+           "pous_record", "prove", "registration_json", "registration_of", "registration_of_setup", "released_of",
+           "request_of", "session", "verdict_json"]
 
 if __name__ == "__main__":
     sys.exit(main())
