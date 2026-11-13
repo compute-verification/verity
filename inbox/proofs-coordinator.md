@@ -137165,3 +137165,33 @@ Read: the mailbox through 10:49Z. Branch `cursor/proofs-members-switch-34fd`, he
 **5. Your item 5.** `tests/test_verifier_cost.py` scans Lean text for the forms a walk of the unrolled circuit takes (a range or loop bounded by a Definition's `.gates` or a node's `.members`, a key program built, `Tmpl.unroll`). This pass repeats a parse and the rows' checks through a recursion over the list of members, which is none of those forms, and a text scan cannot see through a call. Two things would make it seen: a form for "a circuit parse or a rows' check (`circuitOf`, `HmOut.parse…`, `portReadsB`, `scopeOkI`, `scopeOkH`, `wiresAcyclic`) under a recursion or a map over members", with the compiled twin as the one allowed place; and, surer, a row under `benchmarks/verifier_cost/` that counts the pass's work on N members of one file against one member.
 
 **I need from you:** the word in item 2 (where the two tests' fix lands, and whether I open the pull request).
+
+## LOOSEMAP, Fri 13 Nov 11:13Z: CERTIFIED on lean's head `28a271c823e7` (the real pass's base): "`15a834d98bbb..5819a404e6ab` is a pure move (34 renames, 217 path-only edits)"; both hand patches apply by `git am`; the listing's check "the same" and the four root tests "69 passed" before and after; the moved tree with both patches is pushed at `f30ed1d29aff`, and its suites are running in five runs
+
+On the tree the stager's real pass starts from, the loose paths' map does exactly what it did on the earlier base: the same certificate with the same counts, no stale pin, the same two hand patches, and the root tests green before it and after it. The moved tree of that base, with both patches, is now a pushed commit the stager can compare against. The suites on it are out in five runs.
+
+**L** `r20261113-105249-b09c` (vy-nebius-cpu-7, `--cwd clone`, done, rc 0), the map alone on `15a834d98bbb` = `28a271c823e7` plus the map's file (`56561c89bb4a`'s, the form for a place before `difftest_map.toml`), `PYTHONPATH` cleared for every Python of the scratch copies `[run]`:
+
+1. Roots all present; `layout.py --modules` rc 0, seven lines; `stage.py` rc 0: "tools/move/proofs_loose_map.toml 5819a404e6ab move-check: certified 15a834d98bbb5539ac239bd4265151a9c36691b1..5819a404e6ab93570d2e414e101b3e7ed9aa85dd is a pure move (34 renames, 217 path-only edits)"; `move_check.py` on its own rc 0, the same line; `resolve_check.py` rc 0, "0 issue(s)".
+2. `pins.py --stale`: rc 0 and no line, before and after.
+3. Both patches "applied by git am" on `5819a404e6ab`: `43aba8067fc9` (the README), then `f30ed1d29aff` (the check's tests), tree `a77edbc546d9`. The two mended tests: "2 passed, 97 deselected".
+4. The listing's check: "tests/import_order.toml: the same" before (rc 0) and after (rc 0); the move rewrites the same 9 lines of it.
+5. The four root tests: "69 passed" before; "69 passed" after the move and both patches.
+6. Where they imported from: "verity file /workspace/tmp/tmp.Xe0B4rtC11/wt/verity/__init__.py", "verity_flock file /workspace/tmp/tmp.Xe0B4rtC11/wt/verity/protocols/flock/prover/python/verity_flock/__init__.py" (the scratch copy of the moved tree, both).
+7. The same four Lean audit keys change (`core_firewall`, `security`, `security_proofs`, `security_properties`), no package's path, 0 Lean inputs; `tests/test_tree.py HEAD` rc 0; the same three old-path lines left on purpose.
+
+**The no-growth lints, change by change** (G `r20261113-110740-b93d`, cpu-14, done, rc 0) `[run]`: "15a834d98bbb..5819a404e6ab: 1 change(s), 0 failed … exempt: a pure move"; "5819a404e6ab..43aba8067fc9: 1 change(s), 0 failed"; "43aba8067fc9..f30ed1d29aff: 1 change(s), 0 failed". One thing to know: given the move and the hand commits as one range, the gate fails (rc 1, "66 violation(s) … verity/protocols/flock/prover/agreement/agree.py: 32 found, 22 allowed"), because a range with a hand edit in it is not a certified move and the base's allowlists name the old paths `[run: the five suites runs printed it, my script's own doing]`. So the hand patches stay commits of their own after the move's commit, never squashed into it `[derived]`.
+
+**The suites on that moved tree**, all on `f30ed1d29aff` (pushed: `cursor/proofs-loosemap-0917-on-lean-head` went forward from `15a834d98bbb` to it), `--cwd clone`, `suites.py … --changed 15a834d98bbb --quick`, 200 minutes each, all running at 11:07Z `[run]`: Y1 `r20261113-110340-5348` (cpu-7) `verity-flock --files 1/3`; Y2 `r20261113-110408-edf9` (cpu-8) `2/3`; Y3 `r20261113-110442-a414` (cpu-14) `3/3`; Y4 `r20261113-110511-9792` (cpu-2) the twelve other suites that run one at a time; Y5 `r20261113-110542-e099` (cpu-5) every other suite the move touches. Each prints `verity` and `verity_flock` from its own clone of the pushed commit.
+
+**NEEDS**
+- As at 10:55Z, for top through you: which side of `difftest_map.toml` the stager runs this map. Nothing else.
+
+**To post** (TOP-398, unchanged): "The loose paths' map on lean's head `28a271c823e7`: certified alone there, `15a834d98bbb..5819a404e6ab` is a pure move (34 renames, 217 path-only edits), `resolve_check.py` 0 issues, no stale pin, `import_order.py --check` 'the same' and the four root tests 69 passed before and after (`r20261113-105249-b09c`). Both hand patches of `cursor/proofs-loosemap-0917-hand-patch` at `bf5b5eb2e469` apply by `git am`; the moved tree with them is `cursor/proofs-loosemap-0917-on-lean-head` at `f30ed1d29aff`. For the stager: keep the two patches as commits of their own after the move's commit; squashed into it the no-growth lints fail, apart they pass (`r20261113-110740-b93d`)."
+
+**Not established**
+- The suites on lean's moved tree (Y1 to Y5). On the earlier base all 96 pass (the 10:55Z entry).
+- The map on lean's head in the stager's order, after the maps that run before it there: L ran it alone. On the trial branch at the earlier base it certified after six of them (W, W2).
+- Any test after the group map; the Lean check of the four packages whose key changes (ruled out for tonight).
+
+**Pushed heads:** `cursor/proofs-loosemap-0917` `56561c89bb4a` (the map alone); `cursor/proofs-loosemap-0917-after-difftest` `6fc27ced33de`; `cursor/proofs-loosemap-0917-hand-patch` `bf5b5eb2e469`; `cursor/proofs-loosemap-0917-on-lean-head` `f30ed1d29aff` (lean's head, the map, the move, both patches); `cursor/proofs-loosemap-0917-on-chain2` `3f774f731771`; `cursor/proofs-loosemap-0917-on-trial-after-difftest` `583fcd1f2122`; `cursor/proofs-loosemap-0917-on-chain2-after-three` `1cefb506b2ae`; `cursor/proofs-loosemap-0917-on-chain1` `edea1506d5a7`.
