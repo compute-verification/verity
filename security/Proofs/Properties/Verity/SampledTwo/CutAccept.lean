@@ -51,9 +51,7 @@ theorem evidence_of_caseOf {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Par
   obtain ⟨p', -, h⟩ := bind_ok h
   obtain ⟨ce, hce, h⟩ := bind_ok h
   have he : ce.2 = e := by
-    first
-      | exact congrArg (fun x => x.2.2) (Except.ok.inj h)
-      | (simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h; exact h.2.2)
+    exact congrArg (fun x => x.2.2) (Except.ok.inj h)
   subst he
   unfold caseIn at hce
   obtain ⟨ev, -, hce⟩ := bind_ok hce
@@ -62,50 +60,41 @@ theorem evidence_of_caseOf {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Par
     obtain ⟨e', he', hce⟩ := bind_ok hce
     have hpair : (c', e') = ce := Except.ok.inj hce
     exact ⟨_, by rw [← hpair]; exact he'⟩
-  · first
-      | (cases hce; done)
-      | (simp [throw, throwThe, MonadExceptOf.throw] at hce; done)
+  · cases hce
 
 /-- The form's evidence parses only with the first stage's coin evidence not `null`: `evidenceOf` refuses it. -/
 private theorem evidence_coins {b : ByteArray} {e : VStar.Recursive.SampledTwo.Evidence}
     (h : VStar.Recursive.SampledTwo.evidenceOf b = .ok e) : e.coins ≠ Json.null := by
-  first
-    | (unfold VStar.Recursive.SampledTwo.evidenceOf at h
-       obtain ⟨j₀, -, h⟩ := bind_ok h
-       obtain ⟨j, -, h⟩ := bind_ok h
-       obtain ⟨_, -, h⟩ := bind_ok h
-       dsimp only at h
-       generalize Spot.getD j "coins" = cj at h
-       cases cj
-       case null =>
-         simp only [↓reduceIte] at h
-         obtain ⟨_, ht, -⟩ := bind_ok h
-         cases ht
-       all_goals
-         simp only [Bool.false_eq_true, ↓reduceIte] at h
-         split at h
-         · split at h
-           · obtain ⟨src, -, h⟩ := bind_ok h
-             split at h
-             · split at h
-               · obtain ⟨_, -, h⟩ := bind_ok h
-                 obtain ⟨it, -, h⟩ := bind_ok h
-                 split at h
-                 · have he := Except.ok.inj h
-                   rw [← he]
-                   intro hx
-                   cases hx
-                 · cases h
-               · cases h
-             · cases h
-           · cases h
-         · cases h)
-    | (unfold VStar.Recursive.SampledTwo.evidenceOf at h
-       simp only [bind, Except.bind] at h
-       repeat' split at h
-       all_goals try contradiction
-       all_goals try (simp [throw, throwThe, MonadExceptOf.throw] at h; done)
-       all_goals (simp only [pure, Except.pure, Except.ok.injEq] at h; subst h; intro hc; simp_all))
+  unfold VStar.Recursive.SampledTwo.evidenceOf at h
+  obtain ⟨j₀, -, h⟩ := bind_ok h
+  obtain ⟨j, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  dsimp only at h
+  generalize Spot.getD j "coins" = cj at h
+  cases cj
+  case null =>
+    simp only [↓reduceIte] at h
+    obtain ⟨_, ht, -⟩ := bind_ok h
+    cases ht
+  all_goals
+    simp only [Bool.false_eq_true, ↓reduceIte] at h
+    split at h
+    · split at h
+      · obtain ⟨src, -, h⟩ := bind_ok h
+        split at h
+        · split at h
+          · obtain ⟨_, -, h⟩ := bind_ok h
+            obtain ⟨it, -, h⟩ := bind_ok h
+            split at h
+            · have he := Except.ok.inj h
+              rw [← he]
+              intro hx
+              cases hx
+            · cases h
+          · cases h
+        · cases h
+      · cases h
+    · cases h
 
 /-- **The first stage's coin evidence is not `null` on any play the form reads** (`FirstShown`): the form's evidence
 parses only so. -/
@@ -158,17 +147,12 @@ private theorem ordered_order {p : VStar.Recursive.SampledTwo.Params} {e : VStar
       · cases h
       · rename_i heq
         obtain ⟨en, r, he, hr, hlt⟩ := VStar.Recursive.SampledTwo.orderReason_none heq
-        first
-          | exact ⟨first, second, rfl, rfl, hx, wins, ms, hc, en, r, he, hr, hlt⟩
-          | exact ⟨first, second, hf, hs, hx, wins, ms, hc, en, r, he, hr, hlt⟩
+        exact ⟨first, second, rfl, rfl, hx, wins, ms, hc, en, r, he, hr, hlt⟩
 
 theorem option_bind_ok {α β : Type} {o : Option α} {f : α → Option β} {b : β} (h : o.bind f = some b) :
     ∃ a, o = some a ∧ f a = some b := by
   cases o with
-  | none =>
-    first
-      | (cases h; done)
-      | (simp at h; done)
+  | none => cases h
   | some a => exact ⟨a, rfl, h⟩
 
 /-- The two windows `windowsOf` names are the boundary registration's and the interior audit's open roots. -/
@@ -179,23 +163,14 @@ theorem windowsOf_some {θ : ByteArray} {p : VStar.Recursive.SampledTwo.Params} 
   unfold windowsOf at h
   rw [hp] at h
   cases h1 : p.boundary.verifier.windowRoot with
-  | none =>
-    first
-      | (simp [Except.toOption, hb, h1] at h; done)
-      | (simp [Except.toOption, hb] at h; done)
+  | none => simp [Except.toOption, hb, h1] at h
   | some a =>
     cases h2 : p.audit.base.verifier.windowRoot with
-    | none =>
-      first
-        | (simp [Except.toOption, hb, h2] at h; done)
-        | (simp [Except.toOption, hb, h1, h2] at h; done)
+    | none => simp [Except.toOption, hb, h2] at h
     | some b =>
       have h' : some (a, b) = some (w₁, w₂) := by
         rw [← h]
-        first
-          | (simp [Except.toOption, hb, h1, h2]; done)
-          | (simp [Except.toOption, hb, h2]; done)
-          | (simp [Except.toOption, hb]; done)
+        simp [Except.toOption, hb, h1, h2]
       have hpair := Option.some.inj h'
       simp only [Prod.mk.injEq] at hpair
       obtain ⟨rfl, rfl⟩ := hpair
@@ -213,15 +188,11 @@ theorem win_lines {es : Array LedgerEntry} {key : ChallengerKey} {wins : Array W
   obtain ⟨i, hi, hW⟩ := Array.mem_iff_getElem.1 (Array.mem_of_find?_eq_some hf)
   have hroot : W.root = w := by
     have hp := Array.find?_some hf
-    first
-      | exact beq_iff_eq.1 hp
-      | simpa using hp
+    exact beq_iff_eq.1 hp
   obtain ⟨hm, hk, hr, -⟩ := hI.win i hi
   rw [hW] at hm hk hr
   refine ⟨hm, hk, ?_, fun en he => ?_⟩
-  · first
-      | exact hr.symm.trans hroot
-      | (unfold openedRoot; rw [← hr]; exact hroot)
+  · exact hr.symm.trans hroot
   · obtain ⟨h1, h2, h3, -⟩ := hI.ended i hi en (by rw [hW]; exact he)
     rw [hW] at h3
     exact ⟨h1, h2, h3⟩

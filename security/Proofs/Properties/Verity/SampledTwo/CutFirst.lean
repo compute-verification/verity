@@ -110,21 +110,14 @@ do (`Limits.paramsOfJson_deployed`). -/
 theorem members_deployed {j : Json} {a : Spot.OneStageZk.Params}
     (h : Spot.OneStageZk.membersParamsOfJson j = .ok a) :
     ∃ key label, a.base.challenger = some (key, label) ∧ key.params = Lms.deployed := by
-  first
-    | (unfold Spot.OneStageZk.membersParamsOfJson at h
-       simp only [bind, Except.bind, pure, Except.pure] at h
-       repeat' split at h
-       all_goals first
-         | (cases h; done)
-         | (cases h; exact Limits.paramsOfJson_deployed (by assumption)))
-    | (refine of_triple
-         (Q := fun a => ∃ key label, a.base.challenger = some (key, label) ∧ key.params = Lms.deployed) ?_ h
-       clear h
-       mvcgen -trivial [Spot.OneStageZk.membersParamsOfJson, -Spec.throw_Except, throw_spec, members_exactly_spec,
-         members_of_spec, v2_deployed_spec]
-       all_goals first
-         | exact True.intro
-         | assumption)
+  refine of_triple
+    (Q := fun a => ∃ key label, a.base.challenger = some (key, label) ∧ key.params = Lms.deployed) ?_ h
+  clear h
+  mvcgen -trivial [Spot.OneStageZk.membersParamsOfJson, -Spec.throw_Except, throw_spec, members_exactly_spec,
+    members_of_spec, v2_deployed_spec]
+  all_goals first
+    | exact True.intro
+    | assumption
 
 -- `paramsOfJson` unfolds to one `match` or `if` per decoded field, hence the heartbeat budget.
 set_option maxHeartbeats 4000000 in
@@ -132,22 +125,15 @@ set_option maxHeartbeats 4000000 in
 theorem form_audit {j : Json} {p : VStar.Recursive.SampledTwo.Params}
     (h : VStar.Recursive.SampledTwo.paramsOfJson j = .ok p) :
     ∃ j', Spot.OneStageZk.membersParamsOfJson j' = .ok p.audit := by
-  first
-    | (unfold VStar.Recursive.SampledTwo.paramsOfJson at h
-       simp only [bind, Except.bind, pure, Except.pure] at h
-       repeat' split at h
-       all_goals first
-         | (cases h; done)
-         | (cases h; exact ⟨_, by assumption⟩))
-    | (refine of_triple (Q := fun p => ∃ j', Spot.OneStageZk.membersParamsOfJson j' = .ok p.audit) ?_ h
-       clear h
-       mvcgen -trivial [VStar.Recursive.SampledTwo.paramsOfJson, -Spec.throw_Except, throw_spec, form_split_spec,
-         form_keys_spec, form_rule_spec, form_mapM_spec, form_paramsAt_spec, form_templates_spec, form_canon_spec,
-         form_program_spec, form_members_spec, form_values_spec] invariants
-       · ⇓? _ => ⌜True⌝
-       all_goals first
-         | exact True.intro
-         | exact ⟨_, by assumption⟩)
+  refine of_triple (Q := fun p => ∃ j', Spot.OneStageZk.membersParamsOfJson j' = .ok p.audit) ?_ h
+  clear h
+  mvcgen -trivial [VStar.Recursive.SampledTwo.paramsOfJson, -Spec.throw_Except, throw_spec, form_split_spec,
+    form_keys_spec, form_rule_spec, form_mapM_spec, form_paramsAt_spec, form_templates_spec, form_canon_spec,
+    form_program_spec, form_members_spec, form_values_spec] invariants
+  · ⇓? _ => ⌜True⌝
+  all_goals first
+    | exact True.intro
+    | exact ⟨_, by assumption⟩
 
 end FormAudit
 
@@ -160,7 +146,6 @@ theorem paramsAt_form {θ : ByteArray} {p : VStar.Recursive.SampledTwo.Params} (
   all_goals first
     | (cases h; done)
     | exact ⟨_, h⟩
-    | exact ⟨_, by assumption⟩
 
 /-- **The parameters' key is the interior audit's challenger's**, at the deployed LMS parameters. -/
 theorem keyOf_some {θ : ByteArray} {p : VStar.Recursive.SampledTwo.Params} (h : paramsAt θ = .ok p) :
@@ -247,9 +232,7 @@ theorem commitment_of_caseOf {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.P
   obtain ⟨p', -, h⟩ := bind_ok h
   obtain ⟨ce, hce, h⟩ := bind_ok h
   have hc : ce.1 = c := by
-    first
-      | exact congrArg (fun x => x.2.1) (Except.ok.inj h)
-      | (simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h; exact h.2.1)
+    exact congrArg (fun x => x.2.1) (Except.ok.inj h)
   subst hc
   unfold caseIn at hce
   simp only [bind, Except.bind, pure, Except.pure] at hce
