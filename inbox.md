@@ -17,3 +17,27 @@ OPTIN (TIEVERIFY) to the network-accounting coordinator, Thu 12 Nov 6:07 PM PST.
 
 TIMER: none tonight unless you send work; next is the Mon 16 Nov noon PST line.
 
+[2026-11-13T02:10Z] 717e5cd1e24b
+**TERMGB to the lead, 6:10 PM PT, Thu 12 Nov: #9454's branch is at `f0616c75f9ba`, the merge of `main` with both sides' marks, and `verity-bench`'s suite passed at it: `r20261113-015915-cdc9`, exit 0.**
+
+**1. The head.** `cursor/na-certifier-term-simulated-b4e6` is at `f0616c75f9ba510241b99c6eac1875f889e2bf97` [ran: pushed as a fast-forward from `4916fc023070`; no force]. Its parents are `4916fc023070` and `origin/main` at `636d15d041b5`. It met #9421 only: #9467 was still open at 6:08 PM PT.
+
+**2. The run.** `r20261113-015915-cdc9`: done, exit 0, tree `f0616c75f9ba`, on a CPU node of the pool. `verity-bench`: 566 passed, 0 failed, 1 suite of 1 [ran: the masked reader].
+
+**3. What the merge changed by hand: three conflicts and one pin.** Everything else is git's own merge.
+
+- **`MARKS` is the union:** `("measured", "modeled", "simulated", "assumed", "missing")` in `benchmarks/harness/verity_bench/exfiltration.py`. `main`'s comment above it and its new constants below it are kept as they are.
+- **The line that counts the inputs by mark names both.** With no missing input it reads "N modeled, 1 simulated and K assumed.", as this branch pinned it. With some it reads "N modeled, 1 simulated, K assumed and J missing."
+- **The README's Inputs paragraph** (`benchmarks/exfiltration/README.md`) describes `simulated` and `missing` both, each in its side's words.
+- **One pin of `main`'s side moved,** and it is the one line I changed outside a conflict: in `test_a_field_the_record_lacks_names_its_gap_and_no_share_is_claimed`, "modeled, {assumed} assumed and 4 missing." became "modeled, 1 simulated, {assumed} assumed and 4 missing." It failed at the merge without it [ran: 20 passed and 1 failed before, 21 passed after, on this machine]. It is benchmarks' test, so please read that line.
+
+**4. One thing I left as the merge made it.** Three sentences say every input is "labelled measured, modeled, simulated or assumed": the README's opening, the module's docstring and the command's help. They name four marks and `MARKS` holds five. `main`'s own text there named three of its four, so `missing` was never in those sentences. I added nothing.
+
+**5. The same commit is also on my scratch** `cursor/na-certifier-term-simulated-merge-wip-b4e6`, pushed before the suite ran. I delete no branch, so it stays.
+
+**6. W's two suites runs are still running** at 6:08 PM PT, and the first will end red on the harness's seven, as expected.
+
+- **Why they are long:** the change from `0e8d16c3b8be` touches 57 suites at W's head, `verity-flock` and Flock's Lean build among them, because it holds `verity/protocols/certifier/verifier/class_charge.py` from the branch's base [ran: the run's own first lines].
+- **`r20261113-005354-0e28` so far** (at `9096bb240a2b`): 46 suites passed and one failed [ran: the masked reader on the running run]. The one is `verity-bench`: 556 passed, 7 failed, the same seven tests by name as in my table on NET-403. So its exit will not be 0, and the same holds for `r20261113-012901-0c7e` at `d7d44f849cec`.
+- I send each run's verdict line when it ends.
+
