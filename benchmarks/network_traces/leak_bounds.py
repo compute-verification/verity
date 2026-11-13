@@ -108,19 +108,19 @@ from typing import Any, NamedTuple
 
 from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.certifier.verifier import calibration
-from verity.protocols.accounting.certifier.verifier import warden as W
+from verity.protocols.accounting.certifier.verifier import network_certifier as W
 from verity.protocols import reporting
 
 #: the monitoring periods' seconds, by name
 PERIODS: dict[str, int] = dict(reporting.PERIODS)
 DELTAS: tuple[Fraction, ...] = reporting.DELTAS
 #: a bucket's seconds when a link names none: the network certifier's default τ
-TAU = Fraction(W.WardenParams().bucket_ms, 1000)
+TAU = Fraction(W.NetworkCertifierParams().bucket_ms, 1000)
 #: a sampling block's scan's δ when a link names none: `scan_zk --delta`'s default
 SCAN_DELTA = Fraction(1, 2 ** 20)
 #: the jitter bound D_j that K is charged at (`NetTiming.JitterBounded`, one bound over every step): a statement of k
 #: steps, one a bucket, pays ⌈log2 D_j^k⌉ = k bits. Each bucket leaves at a time fixed before it is made
-#: (`warden.Warden(paced=…)`, `active.Proxy(paced=…)`), yet the host's state after the server's writes for the next
+#: (`network_certifier.NetworkCertifier(paced=…)`, `active.Proxy(paced=…)`), yet the host's state after the server's writes for the next
 #: bucket still moves a bucket's arrival offset, so J isn't met at D_j = 1
 JITTER_BOUND = 2
 JITTER = "J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel)"

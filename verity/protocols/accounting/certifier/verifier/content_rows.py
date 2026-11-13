@@ -1,6 +1,6 @@
 """The network certifier's content rows: three rows of a connection it released, which hold what the connection
 carried where its slots of the lengths and fails tables (`connection_rows`) hold how much, and the tables a
-schedule's classes lay them in. A schedule has them only where its parameters say so (`WardenParams.content`, in a
+schedule's classes lay them in. A schedule has them only where its parameters say so (`NetworkCertifierParams.content`, in a
 schedule with lengths rows): a schedule without them has the tables, the head and the digest it had. The tables are
 listed in the connection rows' one head, after `lengths` and `fails`, and signed with them, once
 (`connection_rows`' "The signed head"): nothing here commits or signs.
@@ -41,13 +41,13 @@ class is beside its two sizes is the lengths rows' form's (`counted`):
 - under form 1 a class is (P, O, rows): its two sizes and the rows of each of its three tables, at most the lengths
   table's slots, since an execution phase releases no more;
 - under form 2 a class is (P, O) and its tables have no size of their own: each holds a row a release filed in the
-  class and no other, at most R = `WardenParams.phase_releases` of them, a bound on an execution phase's releases.
+  class and no other, at most R = `NetworkCertifierParams.phase_releases` of them, a bound on an execution phase's releases.
 
 A class of the other form's is refused where the schedule is built, with what to change (`sized` is each class with
 the most rows its tables have under either form).
 
 **The tables** (`tables`) of an execution phase are made from its releases in release order, each with its request's
-bytes and its ids as the network certifier cut and released them (`warden.Released`), and from each release's class,
+bytes and its ids as the network certifier cut and released them (`network_certifier.Released`), and from each release's class,
 which is an argument. Row r of class i's three tables is the r-th of the execution phase's releases filed in class
 i. A release filed in no class is unfiled: it has no content row, and its slots of the lengths and fails tables are
 the ones it had. A release filed in a class that doesn't hold it, its request longer than `request_room` or its ids
@@ -81,8 +81,8 @@ from functools import lru_cache
 
 from verity.circuits.partition_v2 import UNIT_CLASS_MAX
 from verity.protocols.accounting.certifier.verifier.active import id_request
-from verity.protocols.accounting.certifier.verifier.warden import Released, WardenParams
-from verity.protocols.accounting.certifier.verifier.warden_rows import WORD_BITS
+from verity.protocols.accounting.certifier.verifier.network_certifier import Released, NetworkCertifierParams
+from verity.protocols.accounting.certifier.verifier.network_certifier_rows import WORD_BITS
 
 REQUEST, RESPONSE, END = "request", "response", "end"
 #: the most classes a schedule lists: the head counts its tables in a u16, three a class after `lengths` and `fails`
@@ -227,15 +227,15 @@ def held(request: bytes) -> bool:
     return any(request[:U32_BYTES])
 
 
-def counted(params: WardenParams) -> bool:
+def counted(params: NetworkCertifierParams) -> bool:
     """Whether a class's tables hold a row a release filed in it and no other, so that their rows are a count and
     no size of the schedule's (the module docstring's "The classes"): under the lengths rows' form 2."""
     return params.closes
 
 
-def classes(params: WardenParams) -> tuple[tuple[int, ...], ...]:
+def classes(params: NetworkCertifierParams) -> tuple[tuple[int, ...], ...]:
     """A schedule's classes as its parameters hold them (the module docstring's "The classes"), each (P, O, rows)
-    under the lengths rows' form 1 and (P, O) under form 2, or ValueError naming what is none. `WardenParams` calls
+    under the lengths rows' form 1 and (P, O) under form 2, or ValueError naming what is none. `NetworkCertifierParams` calls
     it where it is built and keeps what it returns, so no schedule holds classes of another form."""
     if params.lengths is None:
         raise ValueError("the content rows' tables are listed in the connection rows' head, so a schedule with "
@@ -271,9 +271,9 @@ def classes(params: WardenParams) -> tuple[tuple[int, ...], ...]:
     return tuple(out)
 
 
-def sized(params: WardenParams) -> tuple[tuple[int, int, int], ...]:
+def sized(params: NetworkCertifierParams) -> tuple[tuple[int, int, int], ...]:
     """Each class of a schedule as (P, O, the most rows each of its tables has): the class's own rows under form 1
-    and, where a table's rows are a count (`counted`), R = `WardenParams.phase_releases`. `()` for a schedule
+    and, where a table's rows are a count (`counted`), R = `NetworkCertifierParams.phase_releases`. `()` for a schedule
     without content rows."""
     if params.content is None or not counted(params):
         return params.content or ()
@@ -285,7 +285,7 @@ def names(i: int) -> tuple[str, str, str]:
     return f"{REQUEST}.{i}", f"{RESPONSE}.{i}", f"{END}.{i}"
 
 
-def tables_of(params: WardenParams) -> tuple[tuple[str, int, int], ...]:
+def tables_of(params: NetworkCertifierParams) -> tuple[tuple[str, int, int], ...]:
     """The content tables a schedule's head lists after the lengths and fails tables, class by class in the
     schedule's order: each one's (name, rows, a row's bytes), the rows the table's own under form 1 and the most it
     has where they are a count (`counted`). `()` for a schedule without content rows."""
@@ -294,7 +294,7 @@ def tables_of(params: WardenParams) -> tuple[tuple[str, int, int], ...]:
                  for t in zip(names(i), (rows,) * 3, (request_bytes(B, P), response_bytes(O), END_BYTES)))
 
 
-def layout(params: WardenParams, name: str) -> dict[str, int]:
+def layout(params: NetworkCertifierParams, name: str) -> dict[str, int]:
     """What a content table's registration says of its rows' order: its class's place in the schedule's list and
     the class's two sizes. Row r is the r-th release of the execution phase filed in that class. ValueError for a
     name that is no content table of the schedule."""
@@ -305,13 +305,13 @@ def layout(params: WardenParams, name: str) -> dict[str, int]:
 
 
 def ids_of(packed: bytes) -> tuple[int, ...]:
-    """The ids a release carries (`warden.Released.ids`, a little-endian u32 each), in order."""
+    """The ids a release carries (`network_certifier.Released.ids`, a little-endian u32 each), in order."""
     if len(packed) % U32_BYTES:
         raise ValueError(f"a release's ids are {U32_BYTES} bytes each, not {len(packed)} bytes")
     return struct.unpack(f"<{len(packed) // U32_BYTES}I", packed)
 
 
-def file(params: WardenParams, release: Released) -> int | None:
+def file(params: NetworkCertifierParams, release: Released) -> int | None:
     """The class the network certifier files a release in (the module docstring's "The filing"): the first of the
     schedule's that holds its request's bytes and its ids, or None where none does."""
     B = params.cell_bytes
@@ -321,7 +321,7 @@ def file(params: WardenParams, release: Released) -> int | None:
     return None
 
 
-def tables(params: WardenParams, released: Sequence[Released],
+def tables(params: NetworkCertifierParams, released: Sequence[Released],
            filing: Sequence[int | None]) -> dict[str, list[bytes]]:
     """An execution phase's content tables (the module docstring's "The tables") from its releases in release order
     and each one's class in `filing`, None for a release filed in none: each table its held rows and, under form 1,
@@ -329,7 +329,7 @@ def tables(params: WardenParams, released: Sequence[Released],
     the content of their lengths slots, a class the schedule doesn't list, a release filed in a class that doesn't
     hold it, or under form 2 a release filed in a class past its R-th, naming the release, the class and R."""
     if params.content is None:
-        raise ValueError("the schedule has no content rows (WardenParams.content)")
+        raise ValueError("the schedule has no content rows (NetworkCertifierParams.content)")
     if len(filing) != len(released):
         raise ValueError(f"a class, or None, a release: {len(filing)} for {len(released)} releases")
     B, last, listed = params.cell_bytes, -1, sized(params)
@@ -354,7 +354,7 @@ def tables(params: WardenParams, released: Sequence[Released],
             filed[i].append(r)
         elif counted(params):
             raise ValueError(f"release {r.order} is filed in class {i} past the class's {rows} rows: R = {rows} "
-                             f"(WardenParams.phase_releases) bounds an execution phase's releases, so these are "
+                             f"(NetworkCertifierParams.phase_releases) bounds an execution phase's releases, so these are "
                              f"not one execution phase's of the schedule")
     out: dict[str, list[bytes]] = {}
     for i, ((P, O, rows), mine) in enumerate(zip(listed, filed)):

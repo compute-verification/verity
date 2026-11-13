@@ -15,7 +15,7 @@ from typing import Any, Sequence
 from verity.commitments import hm96
 from verity.commitments.merkle import tree_levels
 from verity.commitments.rowleaf import sha512_row_v2_digest
-from verity.protocols.accounting.certifier.verifier import service as SVC, tie_service as TS, warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import service as SVC, tie_service as TS, network_certifier_rows as WR
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF, registered as G
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import Finding
@@ -72,7 +72,7 @@ def prove_tie(tie: Any, cells: Any, draw: S.Draw, lanes: Any, out: Path, *, prog
               salts: dict[int, dict[str, bytes]] | None = None, units: Sequence[int] | None = None,
               rows: Sequence[bytes] | None = None) -> TS.Delivered:
     """The delivered proof of the sampled ingress-tie proof blocks (`tie_service.IngressTie`) on the network certifier's
-    opening `cells` (`warden_rows.Cells`) and the prover's `lanes` (each bucket's), as `prove` delivers N2's: proof
+    opening `cells` (`network_certifier_rows.Cells`) and the prover's `lanes` (each bucket's), as `prove` delivers N2's: proof
     block t's ``wit`` row its
     bucket row under the network certifier's salt and its header's registered read of the network certifier's root (`Cells.statement`), its
     ``pub`` row its lanes and its ``o0`` row its output bit by IoTieRequest's reference (`io_request.reference`),
@@ -139,7 +139,7 @@ def _known(registered: dict) -> str | None:
 def _registered(public: Path, registered: dict) -> str | None:
     """The stand-in for Lean's registered reads: every port of the statement one of the verifier's
     (`Flock.Registered.checkComplete`), and each of the verifier's ports read by the statement's header entry
-    (`warden_rows.refusal`), its table rows (a shared-row file's, port-major) the public file's commitments; None when
+    (`network_certifier_rows.refusal`), its table rows (a shared-row file's, port-major) the public file's commitments; None when
     they hold."""
     data = public.read_bytes()
     head, body = data.split(b"\n", 1)

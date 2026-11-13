@@ -24,15 +24,15 @@
 #     Lean's verify --zk.
 #     The STANDIN entry row-tables is a5_row_tables.py: test_row_tables' window (ScaledMmS8Coordinate chunks whose x rows link
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
-#     The STANDIN entries warden and warden:KIND are a5_warden.py: transfer-gate chunks whose ports open the bucket rows of
-#     one connection's cells under the network certifier's signed roots, beside a sampled rest, on a network certifier run rehearsed here first (warden_serve.py
+#     The STANDIN entries network_certifier and network_certifier:KIND are a5_network_certifier.py: transfer-gate chunks whose ports open the bucket rows of
+#     one connection's cells under the network certifier's signed roots, beside a sampled rest, on a network certifier run rehearsed here first (network_certifier_serve.py
 #     rehearse --fake, about a minute, its prompts up to 2048 tokens so that seed 0's traffic has a connection admitted in its
-#     link-window with a5_warden.py's 16 ingress cells and D·r + 16 egress cells; only its public deployment.json, cells.jsonl
+#     link-window with a5_network_certifier.py's 16 ingress cells and D·r + 16 egress cells; only its public deployment.json, cells.jsonl
 #     and check.json are kept), on a local challenger's coins (A5_CHALLENGER=local);
-#     warden:altered reads one cell a bit off, and warden:pad, warden:pad-named and warden:swapped make the egress chunk's
+#     network_certifier:altered reads one cell a bit off, and network_certifier:pad, network_certifier:pad-named and network_certifier:swapped make the egress chunk's
 #     statement for another units' wiring (--made-for); each is to be refused by Lean's registered reads. A5_WARDEN_RUN=DIR
-#     audits that network certifier run instead of rehearsing one (e.g. warden_replay.py's, a served window's traffic through the
-#     network certifier), A5_WARDEN_UNITS=N each transfer-gate chunk's units (a5_warden.py --units, default 16).
+#     audits that network certifier run instead of rehearsing one (e.g. network_certifier_replay.py's, a served window's traffic through the
+#     network certifier), A5_WARDEN_UNITS=N each transfer-gate chunk's units (a5_network_certifier.py --units, default 16).
 #     The STANDIN entries tp-gates and tp-gates:KIND are a5_tp_gates.py: both ranks of a synthetic Llama TP2 step of two
 #     requests, each rank's AllReduce2 chunks reading both ranks' registered partials of each request (layer 0's embedding,
 #     o_proj and down_proj at H = 2048), beside a sampled rest, on one local challenger session's coins (A5_CHALLENGER=local); tp-gates:altered
@@ -264,9 +264,9 @@ else
       keep $N
       continue
     fi
-    if [ "${e%%:*}" = warden ]; then
-      case $e in warden) REFUSE=();; warden:altered) REFUSE=(--altered);; warden:pad|warden:pad-named|warden:swapped) REFUSE=(--made-for ${e#warden:});;
-        *) echo "STANDIN $e: warden, warden:altered, warden:pad, warden:pad-named or warden:swapped"; exit 3;; esac
+    if [ "${e%%:*}" = network_certifier ]; then
+      case $e in network_certifier) REFUSE=();; network_certifier:altered) REFUSE=(--altered);; network_certifier:pad|network_certifier:pad-named|network_certifier:swapped) REFUSE=(--made-for ${e#network_certifier:});;
+        *) echo "STANDIN $e: network_certifier, network_certifier:altered, network_certifier:pad, network_certifier:pad-named or network_certifier:swapped"; exit 3;; esac
       [ "${A5_CHALLENGER:-}" = local ] || { echo "STANDIN $e draws through its stream: set A5_CHALLENGER=local"; exit 3; }
       N=${e/:/-}; mkdir -p $O/$N
       if [ -n "${A5_WARDEN_RUN:-}" ] && [ ! -d $W/warden-run ]; then
@@ -274,13 +274,13 @@ else
         ln -s $A5_WARDEN_RUN $W/warden-run
       fi
       if [ ! -d $W/warden-run ]; then
-        (cd benchmarks/network_traces && $PY warden_serve.py rehearse --fake --out $W/warden-run --requests 6 --rate 1 --tail 5 \
+        (cd benchmarks/network_traces && $PY network_certifier_serve.py rehearse --fake --out $W/warden-run --requests 6 --rate 1 --tail 5 \
           --max-tokens 64 --prompt-max 2048 --start-in 2) > $O/warden-rehearse.log 2>&1; r=$?
         mkdir -p $O/warden-run && cp $W/warden-run/{deployment.json,cells.jsonl,check.json} $O/warden-run/
         [ $r = 0 ] || { tail -20 $O/warden-rehearse.log; $PY -c 'import json, sys; print(*json.load(open(sys.argv[1])).get("problems", []), sep="\n")' \
           $O/warden-run/check.json; exit 8; }
       fi
-      $TIME $PY benchmarks/one_stage/a5_warden.py --run $W/warden-run --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" \
+      $TIME $PY benchmarks/one_stage/a5_network_certifier.py --run $W/warden-run --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" \
         --challenger local --main $MAIN "${REFUSE[@]}" ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} ${A5_WARDEN_UNITS:+--units $A5_WARDEN_UNITS} \
         --out $W/$N > $O/$N/a5.log 2> $O/$N/a5.err || rc=1
       grep '^A5' $O/$N/a5.log | cut -c1-4000; tail -25 $O/$N/a5.err

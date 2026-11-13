@@ -15,7 +15,7 @@ to its end. So the network certifier's code under the cap sends each connection 
 (`responseCapped_run`).
 
 The `#guard` holds the capped lane to the Python network certifier's cells under a cap of four (the test harness of
-`verity/core/protocols/certifier/tests/test_network_certifier_warden.py`, `CAPPED`: r = 2, D = 3, a connection
+`verity/core/protocols/certifier/tests/test_network_certifier.py`, `CAPPED`: r = 2, D = 3, a connection
 admitted at bucket 1): a request of `max_tokens` two answered with three ids gets two data cells in bucket 4, then the
 fail cell and padding in bucket 5.
 -/

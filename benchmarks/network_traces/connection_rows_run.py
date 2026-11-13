@@ -1,15 +1,15 @@
-"""The connection rows of a `warden_serve` run: a schedule's lengths rows and content rows as flags, the publisher's
+"""The connection rows of a `network_certifier_serve` run: a schedule's lengths rows and content rows as flags, the publisher's
 keep of each execution phase's hand, the offline check of what it kept, and the cost of a close.
 
 **The flags** (`flags`, `schedule`, `flags_of`). `--lengths 1` or `--lengths 2` gives the schedule lengths rows
-of that form (`warden`'s "The lengths rows") and `--content P,O[,ROWS] ...` its content rows' classes, in order
+of that form (`network_certifier`'s "The lengths rows") and `--content P,O[,ROWS] ...` its content rows' classes, in order
 (`content_rows`' "The classes"): a class's size of prompt ids, its size of ids released and, under form 1 and only
 there, the rows of each of its three tables. Under form 2 a class is `P,O`: its tables hold a row a release filed in
-it and no other. `warden_serve`'s `serve` and `rehearse` take both, and `rehearse` passes them to its `serve`.
+it and no other. `network_certifier_serve`'s `serve` and `rehearse` take both, and `rehearse` passes them to its `serve`.
 Without them the schedule, its digest and everything the run writes are what they were.
 
 **The hand** (`hand`, `Keeper`). With lengths rows the network certifier hands an execution phase's releases once
-the next one's records are published (`Warden.hand_lengths`): on its ticker, after that execution phase's last bucket
+the next one's records are published (`NetworkCertifier.hand_lengths`): on its ticker, after that execution phase's last bucket
 has left, or after the pacer has reported it released. The ticker only queues the hand, a slot stride an item, so the
 queue's thread pickles a stride's releases at a time and never an execution phase's. The hand carries every release,
 filed in a class or not, so its time on the ticker follows the releases and not the classes' rows. The publisher's
@@ -18,7 +18,7 @@ head: a line of `rows.jsonl` (the registration, or the execution phase under `re
 their rows and bytes, and the build's, the commit's and the signature's ms) and the rows' salts in `rows.salts`
 (witness, table by table). It keeps no row: the prover, who holds the records, lays the tables again from them
 (`connection_rows.of_records`). The head takes one more leaf of the key an execution phase. A hand the tables refuse
-has no line and no salts: under form 2 one that files more than R = `WardenParams.phase_releases` releases in a
+has no line and no salts: under form 2 one that files more than R = `NetworkCertifierParams.phase_releases` releases in a
 class is no execution phase's of the schedule, the keep raises naming the release, the class and R, and `serve`'s
 publisher process ends on it, which fails the run at its next record's close.
 
@@ -50,10 +50,10 @@ It loads an execution phase (`loaded`): with `--load grid`, releases of each cla
 longest request and most ids, until the classes' rows, the lengths table's slots or the cells the schedule's grids
 carry in an execution phase are used up; with `--load rows`, every row of every class, whether or not a grid carries
 that much. `--lengths` is the lengths rows' form, 1 by default. Under 2 the classes are `P,O`, the default ones the
-same sizes, and an execution phase holds at most R = `WardenParams.phase_releases` releases over all the classes:
+same sizes, and an execution phase holds at most R = `NetworkCertifierParams.phase_releases` releases over all the classes:
 `--load grid` stops there too, and `--load rows` is R releases of the one class whose rows are the most bytes, the
 costliest close the schedule has. It then times, over `--phases` execution phases: the device's own hand of it to
-`warden_serve`'s publisher process (`Warden._emit_lengths`, what the ticker does at the close: `hand_ms`), the
+`network_certifier_serve`'s publisher process (`NetworkCertifier._emit_lengths`, what the ticker does at the close: `hand_ms`), the
 pickling of the queue's items, which the queue's thread does in the ticker's process (`pickle_ms`, and the longest
 item's), and, in the publisher's process, the build, the commit and the signature (`rows.jsonl`'s cost). The result
 is `--out`'s JSON.
@@ -75,11 +75,11 @@ import active_replay as ar
 import certifier_serve as cs
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.active import VirtualClock
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer
 from verity.protocols.accounting.certifier.verifier.grid import BlockGrid
-from verity.protocols.accounting.certifier.verifier.warden import LENGTHS_FORMS, Released, Warden, WardenParams, _Connection
+from verity.protocols.accounting.certifier.verifier.network_certifier import LENGTHS_FORMS, Released, NetworkCertifier, NetworkCertifierParams, _Connection
 
 #: the publisher queue's name for a hand's items, where a record's rows have their link's
 HAND = "connection-rows"
@@ -118,13 +118,13 @@ def flags(q: argparse.ArgumentParser) -> None:
                         "(default: none)")
 
 
-def schedule(params: WardenParams, args: argparse.Namespace) -> WardenParams:
+def schedule(params: NetworkCertifierParams, args: argparse.Namespace) -> NetworkCertifierParams:
     """`params` with the connection rows `args` names (`flags`); the same schedule where it names none."""
     content = getattr(args, "content", None)
     return replace(params, lengths=getattr(args, "lengths", None), content=content and tuple(content))
 
 
-def flags_of(params: WardenParams) -> list[str]:
+def flags_of(params: NetworkCertifierParams) -> list[str]:
     """The flags that give a schedule `params`' connection rows: none for a schedule without them."""
     out = [] if params.lengths is None else ["--lengths", str(params.lengths)]
     return out + ([] if params.content is None else ["--content", *(",".join(map(str, c)) for c in params.content)])
@@ -145,10 +145,10 @@ def hand(window: int, strides: Sequence[Sequence[Released]] | None) -> Iterator[
 class Keeper:
     """The publisher's keep of the hands (the module docstring's "The hand"): called with each item of `hand`, less
     its name, it lays, commits and signs an execution phase's tables at its close, or signs the word that it has no
-    head. `keep` takes a whole hand, or None, as `Warden(lengths=…)` gives it to a publisher in the network
+    head. `keep` takes a whole hand, or None, as `NetworkCertifier(lengths=…)` gives it to a publisher in the network
     certifier's own process."""
 
-    def __init__(self, out: Path, issuer: Issuer, params: WardenParams, link: str) -> None:
+    def __init__(self, out: Path, issuer: Issuer, params: NetworkCertifierParams, link: str) -> None:
         self.out, self.issuer, self.params, self.link = out, issuer, params, link
         self.open: dict[int, dict[int, Sequence[Released]]] = {}
 
@@ -191,7 +191,7 @@ class Keeper:
 
 # The offline check.
 
-def read(run: Path, params: WardenParams) -> list[tuple[dict, dict[str, list[bytes]]]]:
+def read(run: Path, params: NetworkCertifierParams) -> list[tuple[dict, dict[str, list[bytes]]]]:
     """`rows.jsonl` and `rows.salts`, line by line: each execution phase's registration (or the word that it has no
     head, or a refusal) and cost, and its rows' salts by table, none where no table was committed. A table's salts
     are one a row: the schedule's rows, or where a class's rows are a count (`content_rows.counted`) the rows the
@@ -247,7 +247,7 @@ def _spread(xs: list[float]) -> dict:
             "max": round(max(xs), 3) if xs else None}
 
 
-def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[BlockGrid],
+def check(run: Path, dep: Mapping, params: NetworkCertifierParams, ingress: Sequence[BlockGrid],
           egress: Sequence[BlockGrid], fails: Sequence[BlockGrid], link: str) -> tuple[dict | None, list[str]]:
     """The module docstring's check of a run's connection rows under its deployment record `dep`: the summary (the
     registered execution phases, of those that have connection rows, the cost, and under form 2 the execution phases
@@ -329,7 +329,7 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
 
 # The cost of a close.
 
-def loaded(params: WardenParams, load: str) -> list[tuple[int, int]]:
+def loaded(params: NetworkCertifierParams, load: str) -> list[tuple[int, int]]:
     """An execution phase's releases for the cost, in release order: each one's (request bytes, ids), the longest
     request and the most ids its class holds in the schedule (the module docstring's "The cost"). Where a class's
     rows are a count (`content_rows.counted`) the releases are at most the execution phase's, `phase_releases`, and
@@ -366,12 +366,12 @@ def loaded(params: WardenParams, load: str) -> list[tuple[int, int]]:
     return out
 
 
-def _device(params: WardenParams, releases: Sequence[tuple[int, int]], lengths) -> Warden:
+def _device(params: NetworkCertifierParams, releases: Sequence[tuple[int, int]], lengths) -> NetworkCertifier:
     """A network certifier at the close of execution phase 1 with `releases` as execution phase 0's, each ended in
     its `END`, laid in its slot strides in order. Under form 2 its run goes on past execution phase 1, so that
     close hands execution phase 0's rows and ends no other. It is never run, so its clock is one nothing moves."""
     clock = VirtualClock(0.0)
-    device = Warden(params, None, origin=0.0, windows=3 if params.closes else 2, clock=clock, sleep=clock.sleep,
+    device = NetworkCertifier(params, None, origin=0.0, windows=3 if params.closes else 2, clock=clock, sleep=clock.sleep,
                     lengths=lengths)
     K = params.stride_releases
     made = [_Connection(n + 1, None, None, None, 0, release=n, bytes_in=size, egress_cells=ids + 1, ended=0,
@@ -382,9 +382,9 @@ def _device(params: WardenParams, releases: Sequence[tuple[int, int]], lengths) 
     return device
 
 
-def cost(params: WardenParams, load: str, phases: int, height: int) -> dict:
+def cost(params: NetworkCertifierParams, load: str, phases: int, height: int) -> dict:
     """The module docstring's cost of a close of `params` under `load`, over `phases` execution phases."""
-    import warden_serve as ws  # at its use: it imports this module
+    import network_certifier_serve as ws  # at its use: it imports this module
 
     releases = loaded(params, load)
     hands, pickles, longest = [], [], []
@@ -442,10 +442,10 @@ def parser() -> argparse.ArgumentParser:
     return ap
 
 
-def costed(args: argparse.Namespace) -> WardenParams:
+def costed(args: argparse.Namespace) -> NetworkCertifierParams:
     """The schedule the `cost` command's flags name."""
     classes = args.classes or (CLASSES if args.lengths == 1 else [c[:2] for c in CLASSES])
-    return WardenParams(cell_bytes=args.cell_bytes, slots=args.slots, lanes=args.lanes, window=args.window,
+    return NetworkCertifierParams(cell_bytes=args.cell_bytes, slots=args.slots, lanes=args.lanes, window=args.window,
                         every=args.every, delay=args.delay, ingress_buckets=args.delay,
                         ingress_cells=args.ingress_cells, egress_cells=args.egress_cells, lengths=args.lengths,
                         content=tuple(classes))

@@ -17,7 +17,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE / "tests"))
-from test_warden_zk import needs_lean, reads_of, statement  # noqa: E402
+from test_network_certifier_zk import needs_lean, reads_of, statement  # noqa: E402
 
 
 def _load():

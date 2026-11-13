@@ -23,7 +23,7 @@ from typing import Any
 from verity.runtime import runner as runtime
 from verity.config import Component, Workload
 from verity.protocol import Channel, Role
-from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams
 from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_design
 from verity.channel import Refused
@@ -56,28 +56,28 @@ def _work_law(law: str, params: Mapping[str, Any]) -> None:
                              f"output-class-needs-a-streamed-work-draw): work:K, not {law}")
 
 
-def _warden(params: Mapping[str, Any]) -> dict[str, Any]:
-    """The network certifier's parameters: `WardenParams`' fields, and ``tie``, which is true. A field that is unset
+def _network_certifier(params: Mapping[str, Any]) -> dict[str, Any]:
+    """The network certifier's parameters: `NetworkCertifierParams`' fields, and ``tie``, which is true. A field that is unset
     by default (``max_tokens_cap``, ``lengths``, ``content``) stays out of the table while unset (`WARDEN_DEFAULTS`),
-    as it stays out of `WardenParams.digest`, so a configuration that sets none has the form and hash it had before
+    as it stays out of `NetworkCertifierParams.digest`, so a configuration that sets none has the form and hash it had before
     any was a parameter."""
-    names = [f.name for f in fields(WardenParams)]
+    names = [f.name for f in fields(NetworkCertifierParams)]
     if extra := sorted(set(params) - {*names, "tie"}):
-        raise Refused("unknown-key", f"[params.\"verity/certifier/v0\"]: {', '.join(extra)} (known: WardenParams' "
+        raise Refused("unknown-key", f"[params.\"verity/certifier/v0\"]: {', '.join(extra)} (known: NetworkCertifierParams' "
                                      f"{', '.join(names)}, and tie)")
     if params.get("tie") is not True:
         raise Refused("tie", "tie = true: the network certifier ties the workers' outputs to the ones it relayed")
     given = {k: params[k] for k in names if k in params}
     try:
-        WardenParams(**given)
+        NetworkCertifierParams(**given)
     except (TypeError, ValueError) as e:
         raise Refused("params", f"verity/certifier/v0: {e}") from None
     return {**given, "tie": True}
 
 
-#: The network certifier's defaults: `WardenParams`' but the fields unset by default (the response cap, the lengths
+#: The network certifier's defaults: `NetworkCertifierParams`' but the fields unset by default (the response cap, the lengths
 #: rows' form, the content rows' classes), and ``tie``.
-WARDEN_DEFAULTS = {**{k: v for k, v in asdict(WardenParams()).items() if v is not None}, "tie": True}
+WARDEN_DEFAULTS = {**{k: v for k, v in asdict(NetworkCertifierParams()).items() if v is not None}, "tie": True}
 
 
 def _toy(params: Mapping[str, Any]) -> dict[str, Any]:
@@ -113,7 +113,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
               channels=(Channel("network-certifier", "workers", ("out-opening",)),
                         Channel("network-certifier", "verifier", ("out-record",))),
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
-              colocated=(("challenger", "network-certifier"),), params=_warden,
+              colocated=(("challenger", "network-certifier"),), params=_network_certifier,
               default_params=WARDEN_DEFAULTS, law=_work_law, default_law="work:64"),
     Component("wipe", "verity/wipe/v0", parties=_VERIFIER),
 )}

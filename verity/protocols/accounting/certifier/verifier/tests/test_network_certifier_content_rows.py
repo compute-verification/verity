@@ -14,7 +14,7 @@ from verity.circuits.partition_v2 import UNIT_CLASSES
 from verity.protocols.accounting.certifier.prover import lengths_row as LR
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.active import id_request
 
 
@@ -51,7 +51,7 @@ def test_the_most_ids_follow_the_widest_class(monkeypatch):
 
 def test_every_row_is_whole_words_of_its_classes_size():
     """A response row is its count and O ids, an end row the four bytes of a fails slot, and a request row its count and
-    its class's room to a whole word, so each is whole 16-bit words (`warden_rows.words` reads it)."""
+    its class's room to a whole word, so each is whole 16-bit words (`network_certifier_rows.words` reads it)."""
     assert [CT.response_bytes(O) for O in (2, 16, 4096)] == [12, 68, 16_388]
     assert CT.END_BYTES == 4 and CT.END_SLOT.format == CR.SLOT[CR.FAILS].format
     for B, P in ((512, 2), (512, 64), (387, 4), (4096, 512)):
