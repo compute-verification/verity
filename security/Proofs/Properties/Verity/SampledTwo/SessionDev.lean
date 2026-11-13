@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.SessionAgrees
 public import Proofs.Properties.Verity.SampledTwo.SessionFits
+public import Proofs.Properties.Verity.SampledTwo.SessionRecord
 public import Proofs.Properties.Verity.SampledTwo.CoinMap
 
 /-!
@@ -25,6 +26,8 @@ and second stages and nothing else. At `runLocate`, for any `Ls`:
 * `coinsAgree_run`, `sessionsAgree_run`: the piece at the coin map's release: `CoinsAgree` at the sessions' rounds
   and `SessionsAgree`, at the run's locator and the coin map's agreement there, from the cut's `InteriorLogged` and
   `HeldSize`.
+* `devReads_run`: the coin map's release there reads a session's round's releases as `coin_record` takes it
+  (`DevReads`, at the coin map's `elemOfBits`), so the coin the check read for a session's round is its record's.
 
 At a stage's round the run's locator puts what `Ls` puts, where `Ls` puts no opening on a round
 (`locAt_run_stage`; the session-round locator puts a release only past the statements' round, `locOf_past`), so the
@@ -263,5 +266,12 @@ theorem sessionsAgree_run (A : Live₂) (x : Claims.Msg) (C : CaseOf) (Ms : Sess
   sessionsAgree_accepted A x C Ms tab _ Good _ hsz hlog
     (devElems_of A x tab _ (readsAt A.h) (FormAccepts C) Good (locates_run A Ls tab) (fun _ h => h)
       (sessionsFit_of A C tab Good hsz hlog))
+
+/-- **The coin map's release at the run's locator reads a session's round's releases** (`DevReads`, as `coin_record`
+and `agree_record` take it): at a session's round it is the coin of the bits the releases the session-round locator
+puts there carry, in order. -/
+theorem devReads_run (A : Live₂) (Ls : CoinMap.Locate) (tab : ℕ → String) :
+    DevReads A (locOf A tab) (CoinMap.dev (runLocate A Ls tab)) CoinMap.elemOfBits := fun n hg log =>
+  dev_located (fun pre fr b => locates_run A Ls tab pre fr b n hg) widthOf_locOf log
 
 end Verity.SampledTwo.SessionCoins
