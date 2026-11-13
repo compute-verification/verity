@@ -1,7 +1,8 @@
-"""The tracked tree holds to its layout of record, `tests/tree.toml` (its header says what each part holds), at four
-levels: the root, `verity/`, `verity/protocols/` and each protocol's directory. Every tracked entry at those levels is in
-the tree or on the not-yet list; every not-yet line names a path the tree still holds, with where it goes, its owner and
-its day; and an entry the tree has that main doesn't hold yet names its owner and day until it lands. A stray entry
+"""The tracked tree holds to its layout of record, `tests/tree.toml` (its header says what each part holds), at five
+levels: the root, `verity/`, `verity/protocols/`, each group's directory there (a directory of `verity/protocols/` that
+holds protocols: `proofs/`, `accounting/`, `policy/`) and each protocol's directory. Every tracked entry at those levels
+is in the tree or on the not-yet list; every not-yet line names a path the tree still holds, with where it goes, its
+owner and its day; and an entry the tree has that main doesn't hold yet names its owner and day until it lands. A stray entry
 fails; a line or an entry whose move landed only warns (`BOOKKEEPING` in `tests/conftest.py`), so a move is never
 reverted for a line of this file: top deletes landed lines, and the metric counts them until then. The not-yet list
 only shrinks: it holds at most `NOT_YET_MAX` lines, at most `UNOWNED_MAX` of them unowned and `ARRIVING_MAX` arriving.
@@ -23,12 +24,14 @@ from test_repository import ROOT, _tracked
 LAYOUT = "tests/tree.toml"
 HANDLES = ".agents/skills/using-slack/registry.json"
 #: the not-yet list's length, its unowned lines and its arriving lines: each only shrinks, so lower it with the list
-NOT_YET_MAX = 36
+NOT_YET_MAX = 10
 UNOWNED_MAX = 0
-ARRIVING_MAX = 1
+ARRIVING_MAX = 0
 UNOWNED = "unowned"
 #: the tree's entries under this prefix are what each protocol's directory may hold
 NAME = "verity/protocols/NAME/"
+#: the tree's entries under this prefix are what each group's directory may hold beside its protocols
+GROUP = "verity/protocols/GROUP/"
 _DAY = re.compile(r"^\d{4}-\d{2}-\d{2}( \d{2}:\d{2} PST)?$")
 _KEYS = {"tree": ({"path", "means"}, {"protocol", "owner", "day"}),
          "not_yet": ({"path", "to", "owner", "day"}, {"note", "arriving"}),
@@ -48,25 +51,33 @@ def _protocols(doc: dict) -> set[str]:
     return {_p(t["path"]) for t in doc["tree"] if t.get("protocol")}
 
 
+def _groups(doc: dict) -> set[str]:
+    return {p.rsplit("/", 1)[0] for p in _protocols(doc)} - {"verity/protocols"}
+
+
 def tree(doc: dict) -> set[str]:
-    """The tree's paths, each protocol's directory's entries written out for each protocol."""
+    """The tree's paths, each protocol's directory's entries written out for each protocol and each group's for each
+    group."""
     out = set()
     for t in doc["tree"]:
         path = _p(t["path"])
-        out |= {f"{p}/{path[len(NAME):]}" for p in _protocols(doc)} if path.startswith(NAME) else {path}
+        if path.startswith(NAME):
+            out |= {f"{p}/{path[len(NAME):]}" for p in _protocols(doc)}
+        elif path.startswith(GROUP):
+            out |= {f"{g}/{path[len(GROUP):]}" for g in _groups(doc)}
+        else:
+            out.add(path)
     return out
 
 
 def entries(doc: dict, tracked: list[str]) -> set[str]:
-    """The tracked entries at the four levels: each file's first component, its second under `verity/`, its third under
-    `verity/protocols/` and its fourth under a protocol's directory."""
-    protocols, out = _protocols(doc), set()
+    """The tracked entries at the five levels: each file's first component, and the component below `verity/`,
+    `verity/protocols/`, a group's directory and a protocol's directory."""
+    levels, out = {"verity", "verity/protocols"} | _groups(doc) | _protocols(doc), set()
     for f in tracked:
         parts = f.split("/")
         out.add(parts[0])
-        for k, under in ((2, lambda q: q == "verity"), (3, lambda q: q == "verity/protocols"), (4, protocols.__contains__)):
-            if len(parts) >= k and under("/".join(parts[:k - 1])):
-                out.add("/".join(parts[:k]))
+        out |= {"/".join(parts[:k]) for k in range(2, len(parts) + 1) if "/".join(parts[:k - 1]) in levels}
     return out
 
 
@@ -86,7 +97,8 @@ def landed(doc: dict, tracked: list[str]) -> list[str]:
     gone = [f"{n['path']}: main no longer holds it, so its move landed: delete its [[not_yet]] line"
             for n in doc["not_yet"] if not n.get("arriving") and not holds(tracked, n["path"])]
     here = [f"{t['path']}: main holds it now: drop its owner and day from its [[tree]] entry"
-            for t in doc["tree"] if "owner" in t and not t["path"].startswith(NAME) and holds(tracked, t["path"])]
+            for t in doc["tree"] if "owner" in t and not t["path"].startswith((NAME, GROUP))
+            and holds(tracked, t["path"])]
     return gone + here
 
 
