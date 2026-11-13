@@ -172,7 +172,7 @@ def _two_raiser_rows(side: str, rows: int, k: int, groups: int, rng: np.random.G
 
 
 def raised_pearlc_tile(k: int, ns: list[int], groups: int, fill: str, salt: bytes, rows: int = 64, cols: int = 64,
-                       units: int = 1, cross: int = 64, scalar: bool = False) -> list[dict]:
+                       units: int = 1, cross: int = 64, scalar: bool = False, codes_only: bool = False) -> list[dict]:
     """The raised adder on a whole audit tile that the scheme's own code forms, admits, checks and holds to its tile rule:
     `PearlC.encode` at forming v1 with -h3's SHA-512 row seeds and lines, `admissible`, `checked`'s ticket words, and
     `clear_work.check_opened`, the per-row rules and the inert-work bound on the tile and on each credited row, all on
@@ -180,7 +180,8 @@ def raised_pearlc_tile(k: int, ns: list[int], groups: int, fill: str, salt: byte
     codes and compared with `checked`'s on every word, and `cross` of `checked`'s words are recomputed with the scalar
     chain. One row of the result per n of `ns`: the forming does not read n, the bound, the credit and the price do.
     `scalar` leaves the batch forms out: the forming, the check and the tile rule then run on the scalar reference, and
-    only the count of flagged atoms in planted groups is the batch form's, held to the reference's total."""
+    only the count of flagged atoms in planted groups is the batch form's, held to the reference's total. `codes_only`
+    stops after the forming and lists the planted codes that are not the designed ones at the salt drawn."""
     sys.path.insert(0, str(HERE / "pearl_c_vllm"))
     sys.path.insert(0, str(HERE.parents[1] / "verity" / "protocols" / "pouw" / "clear"))
     import clear_work as CW
@@ -216,20 +217,28 @@ def raised_pearlc_tile(k: int, ns: list[int], groups: int, fill: str, salt: byte
         lap("checked")
         a, b = np.array(ops.a.codes, dtype=np.uint8), np.array(ops.b.codes, dtype=np.uint8)
         value = np.array([np.nan if c & 0x7F == 0x7F else PC.P.fp8_to_f32(c) for c in range(256)])
-        planted_ok, largest, peak = True, 0.0, []
+        planted_ok, largest, peak, off = True, 0.0, [], []
         later = np.array([128 * g + l for g in range(groups) for l in range(32, 128) if l % 32 != 1])
         for side, codes, plant in (("A", a, T.PLANT_A), ("B", b, T.PLANT_B)):
             vals = value[codes]
             for g in range(groups):
                 top = -448.0 if side == "B" and g % 2 else 448.0
-                planted_ok &= bool((vals[:, 128 * g + 1:128 * g + (3 if fill in TWO_RAISER else 4)] == top).all())
-                planted_ok &= all(bool((vals[:, 128 * g + 32 * t + 1] == v).all()) for t, v in zip((1, 2, 3), plant[g % 2]))
+                designed = [(128 * g + l, top) for l in range(1, 3 if fill in TWO_RAISER else 4)]
+                designed += [(128 * g + 32 * t + 1, v) for t, v in zip((1, 2, 3), plant[g % 2])]
+                for pos, v in designed:
+                    off += [(side, int(i), g, pos - 128 * g, v, float(vals[i, pos])) for i in np.flatnonzero(vals[:, pos] != v)]
+            planted_ok &= not off
             largest = max(largest, float(np.abs(vals[:, later]).max()))
             peak.append(np.abs(vals[:, later]).max(0))
         want = np.array(checked.c, dtype=np.uint32).reshape(-1)
         sample = [(i * rows // cross, (5 * i) % cols) for i in range(min(cross, rows * cols))]
         scalar_equal = sum(scalar_chain(ops.a.codes[i], ops.b.codes[j], H100) == int(want[i * cols + j]) for i, j in sample)
         lap("codes")
+        if codes_only:
+            return [{"fill": fill, "shape": (8192, k, ns[0]), "groups": groups, "salt": salt.hex()[:16], "admitted": admitted,
+                     "planted_codes_as_designed": planted_ok, "planted_entries": (rows + cols) * groups * 5,
+                     "off_design": len(off), "off_design_first": off[:40],
+                     "scalar_chain_agrees": f"{scalar_equal}/{len(sample)}"}]
         ii, jj = np.meshgrid(np.arange(rows), np.arange(cols), indexing="ij")
         A, B = a[ii.ravel()], b[jj.ravel()]
         programs = {}
@@ -298,6 +307,7 @@ def main() -> None:
     ap.add_argument("--scalar", action="store_true", help="--raised-pearlc on the scalar reference, without fast_tile's batch forms")
     ap.add_argument("--raised-pearlc", default="", help="k:n[+n...]:groups:fill (fill: gauss, zero, or the two-raiser variants ends and edge), comma separated: "
                                                     "whole tiles on the scheme's code")
+    ap.add_argument("--codes-only", action="store_true", help="--raised-pearlc: form the tile and list the planted codes off their design")
     ap.add_argument("--salts", type=int, default=1)
     ap.add_argument("--tile", default="4x4")
     ap.add_argument("--out", required=True)
@@ -325,7 +335,7 @@ def main() -> None:
         for i in range(args.salt_from, args.salt_from + args.salts):
             for r in raised_pearlc_tile(int(k), [int(n) for n in ns.split("+")], int(groups), fill,
                                         hashlib.sha512(b"raised/salt/%d" % i).digest()[:32], units=args.units,
-                                        scalar=args.scalar):
+                                        scalar=args.scalar, codes_only=args.codes_only):
                 out["scheme"].append(r)
                 print(json.dumps(r), flush=True)
     rows, cols = map(int, args.tile.split("x"))
