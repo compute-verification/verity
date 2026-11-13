@@ -118,7 +118,7 @@ class Bound:
 
 
 def bound(windows: Sequence[tuple[int, int]], delta: object) -> Bound:
-    """The pooled bound of `windows`, window t's receipts U_t and draws s_t, at δ; refused (`Refused`) as the Lean
+    """The pooled bound of `windows`, window t's receipts U_t and samples s_t, at δ; refused (`Refused`) as the Lean
     refuses."""
     ws = [(u, s) for u, s in windows]
     if any(type(x) is not int or x < 0 for w in ws for x in w):
@@ -163,3 +163,6 @@ def run_json(j: Mapping) -> dict:
         return bound(ws, d).to_json()
     except Refused as e:
         return {"refused": str(e)}
+
+
+__all__ = ["number"]

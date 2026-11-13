@@ -139,18 +139,26 @@ def test_a_gpu_with_live_foreign_memory_is_held_so_a_whole_node_grant_waits(c, t
     assert [a.gpus for a in sh.unowned] == [(7,)]
 
 
-@pytest.mark.skipif(not Path("/proc/locks").exists(), reason="needs /proc/locks")
-def test_locked_reads_the_kernels_proc_locks(tmp_path):
-    p, q = tmp_path / "0.lock", tmp_path / "1.lock"
+@pytest.mark.skipif(not Path("/proc/self/fdinfo").exists(), reason="needs /proc/PID/fdinfo")
+def test_locked_reads_the_kernels_line_for_a_held_flock(tmp_path):
+    """The kernel's own line for a flock this test holds names the file by the device and inode `locked` looks it up under.
+    The line comes from the descriptor's fdinfo, which prints it in /proc/locks' form: the machine's list is every process's
+    locks, handed out a page per read, and one read of it can miss a lock held throughout."""
+    p, q, proc = tmp_path / "0.lock", tmp_path / "1.lock", tmp_path / "proc"
     p.touch()
     q.touch()
+    proc.mkdir()
     fd = os.open(p, os.O_RDWR)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        assert nebius2.locked({p, q}) == {p}
+        info = Path(f"/proc/self/fdinfo/{fd}").read_text().splitlines()
+        [line] = [x.removeprefix("lock:\t") for x in info if x.startswith("lock:\t")]
     finally:
         os.close(fd)
-    assert nebius2.locked({p, q}) == set()
+    (proc / "locks").write_text(line + "\n")
+    assert line.split()[1] == "FLOCK" and nebius2.locked({p, q}, proc) == {p}
+    (proc / "locks").write_text("")
+    assert nebius2.locked({p, q}, proc) == set()
 
 
 def test_a_sampler_line_is_an_observation():

@@ -1,10 +1,12 @@
 # p512 squaring rates and their tests. Not a package: the GPU forms (`sq.cu`, `sq.sh`) and the host's AVX-512 IFMA
-# (`ifma.c`, `ifma.sh`) run on a GPU node; their CPU twins, the host build's gate and `gamma.py` run
-# here as a suite (`uv run tools/verity/check/suites.py benchmarks/rate_squaring`).
+# (`ifma.c`, `ifma.sh`) run on a GPU node, by name through `run.sh`; their CPU twins, the host build's gate,
+# `sass_mix.py`, `gamma.py` and the runner's test run here as a suite
+# (`uv run tools/verity/check/suites.py benchmarks/rate_squaring`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["tests/test_host_and_gamma.py"]
+untraced = ["tests/test_host_and_gamma.py", "tests/test_run.py"]

@@ -10,6 +10,9 @@ from collections.abc import Callable
 
 import numpy as np
 
+#: what `theory/fold_kernel_check.py` and the tests read
+__all__ = ["meet", "meet_kernel"]
+
 
 def _probes(xs: np.ndarray, probe: int, seed: int) -> np.ndarray:
     probe = max(probe, 2)
@@ -17,15 +20,6 @@ def _probes(xs: np.ndarray, probe: int, seed: int) -> np.ndarray:
         return xs
     pick = np.random.default_rng(seed).choice(len(xs), size=probe - 2, replace=False)
     return xs[np.concatenate(([0, len(xs) - 1], pick))]
-
-
-def _same(a, b) -> np.ndarray:
-    if isinstance(a, tuple):
-        out = np.ones(np.broadcast_shapes(*(x.shape for x in a)), dtype=bool)
-        for x, y in zip(a, b, strict=True):
-            out &= x == y
-        return out
-    return np.asarray(a) == np.asarray(b)
 
 
 def meet(left, right) -> list[tuple[int, int]]:

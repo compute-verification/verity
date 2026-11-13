@@ -6,7 +6,6 @@ and channel:
 - `TcpPipe` (`dial`, `TcpListen`): a TCP stream, for live runs across processes and machines;
 - `Playback`: the transcript reader. It plays a recorded party's side of one channel: what it sent arrives, and what
   the live party sends must be what it received, or the run stops at the first divergence (`Refused('divergence')`);
-- `Tee`: the transcript writer, which keeps every frame through any other pipe in a transcript of its own;
 - `Adversary`: drops, delays, reorders or corrupts what one end sends, each by its seed.
 
 A pipe never parses: the runtime parses what `take` returns with the wire (`verity.configuration.wire`), as adversarial. A stream
@@ -226,7 +225,7 @@ class TcpListen:
     def __init__(self, address: str = "127.0.0.1:0", max_head: int = MAX_HEAD, max_body: int = 1 << 32) -> None:
         host, _, port = address.rpartition(":")
         self.server = socket.create_server((host, int(port)))
-        self.address = "%s:%d" % self.server.getsockname()[:2]
+        self.address = "{}:{}".format(*self.server.getsockname()[:2])
         self.pipe: TcpPipe | None = None
         self._held: list[bytes] = []
         self._bounds = (max_head, max_body)
@@ -333,41 +332,6 @@ class Playback:
         self.i = len(self.entries)
 
 
-class Tee:
-    """The transcript writer: `pipe`, with every frame sent through it and taken from it appended to `transcript` (`out`
-    and `in` on `channel`, of kind `kind`)."""
-
-    def __init__(self, pipe: Pipe, transcript: PartyLog, channel: str, kind: str = "private") -> None:
-        self.pipe, self.transcript, self.channel, self.kind = pipe, transcript, channel, kind
-
-    def send(self, frame: bytes) -> None:
-        self.transcript.append("out", self.channel, self.kind, frame)
-        self.pipe.send(frame)
-
-    def take(self) -> bytes | None:
-        f = self.pipe.take()
-        if f is not None:
-            self.transcript.append("in", self.channel, self.kind, f)
-        return f
-
-    def due(self) -> int | None:
-        return self.pipe.due()
-
-    def fileno(self) -> int | None:
-        return self.pipe.fileno()
-
-    @property
-    def closed(self) -> bool:
-        return self.pipe.closed
-
-    @property
-    def ended(self) -> str | None:
-        return self.pipe.ended
-
-    def close(self) -> None:
-        self.pipe.close()
-
-
 class Adversary:
     """`pipe` with what it sends tampered with, from its frame numbered `after` on (0 counts the handshake's), each frame
     by `seed`'s samples in turn: dropped (`drop`), one byte flipped (`corrupt`), held back until the next frame has gone
@@ -389,19 +353,19 @@ class Adversary:
         if n < self.after:
             self.pipe.send(frame)
             return
-        draw = {k: self.rng.random() for k in ("drop", "corrupt", "reorder", "delay")}
-        if draw["drop"] < self.p["drop"]:
+        sample = {k: self.rng.random() for k in ("drop", "corrupt", "reorder", "delay")}
+        if sample["drop"] < self.p["drop"]:
             self.events.append((n, "drop"))
             return
-        if draw["corrupt"] < self.p["corrupt"] and frame:
+        if sample["corrupt"] < self.p["corrupt"] and frame:
             i = self.rng.randrange(len(frame))
             frame = frame[:i] + bytes([frame[i] ^ (1 + self.rng.randrange(255))]) + frame[i + 1:]
             self.events.append((n, f"corrupt byte {i}"))
-        if draw["reorder"] < self.p["reorder"]:
+        if sample["reorder"] < self.p["reorder"]:
             self.events.append((n, "reorder"))
             self.held.append(frame)
             return
-        if draw["delay"] < self.p["delay"]:
+        if sample["delay"] < self.p["delay"]:
             self.events.append((n, f"delay {self.delay_ns} ns"))
             self.pipe.send(frame, self.delay_ns)  # type: ignore[call-arg]
         else:
@@ -437,4 +401,4 @@ class Adversary:
         self.pipe.close()
 
 
-__all__ = ["Adversary", "MemoryPipe", "Pipe", "Playback", "Tee", "TcpListen", "TcpPipe", "dial"]
+__all__ = ["Adversary", "MemoryPipe", "Pipe", "Playback", "TcpListen", "TcpPipe", "dial"]

@@ -21,7 +21,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
-from verity.configuration.wire import KINDS, NAME, PUBLIC, Body, Bool, Int, Message, MessageTypes, Refused, Schema, Str, frames
+from verity.configuration.wire import (
+    KINDS,
+    NAME,
+    PUBLIC,
+    Body,
+    Bool,
+    Int,
+    Message,
+    MessageTypes,
+    Refused,
+    Schema,
+    Str,
+    frames,
+)
 
 DIRS = ("start", "in", "out", "arrived", "event", "record", "finish", "handshake-in", "handshake-out", "party")
 ENTRY = Schema("Entry", 1, "structure", {"n": Int(), "dir": Str(16, "|".join(DIRS)), "channel": Str(64),

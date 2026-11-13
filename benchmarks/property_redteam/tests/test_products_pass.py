@@ -4,19 +4,13 @@ Definitions only the attention row has them, its `Q′K′ᵀ` and `P V′`."""
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
+import cases as C
+import products_pass as T
 import pytest
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
-
-import cases as C  # noqa: E402
-import products_pass as T  # noqa: E402
-from verity.definitions.circuits import stacking as P  # noqa: E402
-from verity.definitions.ops import prims  # noqa: E402
-from verity.circuits.refs import array_of  # noqa: E402
+from verity.circuits.refs import array_of
+from verity.definitions.circuits import stacking as P
+from verity.definitions.ops import prims
 
 BITS, BYTE = (0, 1), (-128, 127)
 
