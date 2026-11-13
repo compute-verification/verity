@@ -462,9 +462,6 @@
     {"file": "tests/pipeline/test_serving_rows_bits.py", "kind": "attr-defined", "symbol": "test_every_unit_of_the_long_row_but_its_read_is_a_bits_template_on_its_definitions_rows", "detail": "", "count": 2},
     {"file": "tests/program/predict/test_weights_tie.py", "kind": "arg-type", "symbol": "test_another_checkpoints_words_are_refused", "detail": ""},
     {"file": "tests/program/predict/test_window_circuit_pearl.py", "kind": "var-annotated", "symbol": "test_each_tables_readers_are_templates_of_their_own", "detail": "", "count": 2},
-    {"file": "tests/protocols/test_credit_gate_outside.py", "kind": "misc", "symbol": "_Count", "detail": ""},
-    {"file": "tests/protocols/test_credit_gate_outside.py", "kind": "valid-type", "symbol": "_Count", "detail": ""},
-    {"file": "tests/protocols/test_credit_gate_outside.py", "kind": "var-annotated", "symbol": "_window", "detail": ""},
     {"file": "tests/protocols/test_pouw_h1_answers.py", "kind": "arg-type", "symbol": "kit", "detail": ""},
     {"file": "tests/protocols/test_pouw_h1_answers.py", "kind": "assignment", "symbol": "test_a_statement_the_verifier_refuses_refuses_both_steps", "detail": ""},
     {"file": "tests/protocols/test_pouw_h1_answers.py", "kind": "func-returns-value", "symbol": "<module>", "detail": "", "count": 3},
@@ -513,10 +510,6 @@
     {"file": "verity_vllm/protocols/pouw/__init__.py", "kind": "arg-type", "symbol": "install", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/__init__.py", "kind": "assignment", "symbol": "install", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/__init__.py", "kind": "misc", "symbol": "install", "detail": ""},
-    {"file": "verity_vllm/protocols/pouw/h1/answers.py", "kind": "var-annotated", "symbol": "Answers.__init__", "detail": ""},
-    {"file": "verity_vllm/protocols/pouw/h1/commit.py", "kind": "assignment", "symbol": "CommitTap.arow", "detail": ""},
-    {"file": "verity_vllm/protocols/pouw/h1/commit.py", "kind": "index", "symbol": "CommitTap.arow", "detail": ""},
-    {"file": "verity_vllm/protocols/pouw/h1/prover.py", "kind": "var-annotated", "symbol": "Writer.__init__", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/h1/window.py", "kind": "return-value", "symbol": "reserve_draw", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/lead/__init__.py", "kind": "arg-type", "symbol": "LeadRun._open", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/lead/__init__.py", "kind": "arg-type", "symbol": "LeadRun.end_pass", "detail": ""},
@@ -524,6 +517,7 @@
     {"file": "verity_vllm/protocols/pouw/pearl_c/ends.py", "kind": "arg-type", "symbol": "PassEnds.end", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/pearl_c/ends.py", "kind": "assignment", "symbol": "PassEnds.end", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/pearl_c/ends.py", "kind": "operator", "symbol": "PassEnds._write_retained", "detail": "", "count": 2},
-    {"file": "verity_vllm/protocols/pouw/pearl_c/ends.py", "kind": "union-attr", "symbol": "PassEnds._write_retained", "detail": ""}
+    {"file": "verity_vllm/protocols/pouw/pearl_c/ends.py", "kind": "union-attr", "symbol": "PassEnds._write_retained", "detail": ""},
+    {"file": "verity_vllm/protocols/pouw/h1/served.py", "kind": "arg-type", "symbol": "Served._tree", "detail": ""}
   ]
 }
