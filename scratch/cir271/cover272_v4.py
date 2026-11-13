@@ -25,7 +25,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-TREE = "33d7c7dfd8c23f5db0c93584aeb7a96391defde9"  # runs a and b; c and d at 82a2979f9601, f and g at a03c53314c89 (scratch/cir272 only)
+TREE = "33d7c7dfd8c23f5db0c93584aeb7a96391defde9"  # runs a and b; c and d at 82a2979f9601, f and g at a03c53314c89, h at 9b8895ab4a16 (scratch/cir272 only)
 CHANGES = [
     "form.py: the list as run stages census:<the lookup's boolean_version> where names.jsonl gives a zk_refusal",
     "session: serve and prove get --tables DIR when the stage wrote tables/",
@@ -42,6 +42,8 @@ LISTS = {
          "too and B reached 8 of them",
     "f": "after A and B ended: the 10 extras and t171, t173, t175, t177, t179, which A and B listed, did not reach, and no live run held (types-p2f.tsv)",
     "g": "the rest of those: t172, t174, t176, t178, t202 (types-p2g.tsv)",
+    "h": "after D ended: the 5 types of list d that D did not reach, the next --mem-gb 160 run, with a 15000 s budget so that it ends "
+         "before the record is due (types-p2h.tsv)",
 }
 
 cover_path, plan_path, runs_dir = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
@@ -126,6 +128,13 @@ for R in RUNS:
                 r.update(outcome="not-run", why="stage-past-62GB", text=next(l for l in err if l.startswith("stopped:")))
             elif stopped:
                 r.update(outcome="not-run", why="lean-past-62GB", text="; ".join(stopped))
+            elif oom := [(side, l, (J(d / "B" / f"{side}.time") or {}).get("cmd", "")) for side, log_ in (("serve", "serve.log"), ("prove", "prove.err"))
+                         if (d / "B" / log_).exists() for l in (d / "B" / log_).read_text(errors="replace").splitlines()
+                         if l.startswith("memory allocation of")]:
+                side, line, cmd = oom[0]
+                lim = re.search(r"ulimit -v (\d+)", cmd)
+                r.update(outcome="not-run", why="session-past-ulimit",
+                         text=f"{side}: {line} (its ulimit -v {int(lim.group(1)) // 2 ** 20 if lim else '?'} GB)")
             else:
                 texts = [f"ks-form: {ks['why']}"] if ks and ks["exit"] != 0 else []
                 texts += [l.split(": ", 1)[1] for l in r["lines"] if "session FAILED" in l or "staging refused" in l]
@@ -170,7 +179,7 @@ cnt = Counter(b["bound_outcome"] for b in on)
 cover["schema"] = "circuits/request-cover/v4"
 cover["second_pass"] = {"issue": "CIR-272", "tree": TREE, "branch": "cursor/circuits-cir272-bound-6f04", "plan": "scratch/cir272/p2-plan.json",
                         "runs": RUNS, "threads": 8, "mem_gb": 64, "stage_stop_gb": 62, "lean_gate_gb": 60, "lean_stop_gb": 62,
-                        "budget_s": 21000, "runner_changes": CHANGES, "split": split, "lists": LISTS, "v3": "art:de7ccd2119367c0264ca57c1be3d88774345f1ea13a8f91baf09817c4a188888"}
+                        "budget_s": {"a-g": 21000, "h": 15000}, "runner_changes": CHANGES, "split": split, "lists": LISTS, "v3": "art:de7ccd2119367c0264ca57c1be3d88774345f1ea13a8f91baf09817c4a188888"}
 cover["bound_totals"] = {s: [n, sum(b["blocks"] for b in on if b["bound_outcome"] == s)] for s, n in sorted(cnt.items())}
 groups = {"accepted": [s for s in cnt if s.startswith("accepted")], "refused": ["refused"], "held-control-off": ["held-control-off"],
           "not-run": [s for s in cnt if s.startswith("not-run")], "running": ["running"]}
