@@ -17,6 +17,7 @@ CPU only."""
 from __future__ import annotations
 
 import copy
+import json
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -64,18 +65,27 @@ class Kept(Committer):
     families it leaves out of the host's copy, of which the host holds every leaf (``all_kept``) or every leaf but the first
     one a run asks about, so that each run's challenge leaves one to the replay; ``releases`` gives it a staging to release;
     ``flip`` is what its fault of the retained bytes reports; ``blocks`` and ``layouts`` are its retained blocks and their
-    members by step; ``sources`` are its sources.  ``asked`` keeps the leaves `main` asked about and ``opened`` the ones it
-    was handed to open, a list a call."""
+    members by step; ``sources`` are its sources; ``dumps`` is what it dumps of its layouts and ``step_rows`` the requests'
+    rows it recorded by step.  ``asked`` keeps the leaves `main` asked about and ``opened`` the ones it was handed to open, a
+    list a call."""
 
     #: The leaves `main` leaves to the replay, which it writes on its committer: a `Kept` has none until then.
     _oar_deferred: list[tuple[int, int]]
 
     def __init__(self, eng: SimpleNamespace, run_id: str, *, retain: str = "host", exclude: tuple[str, ...] = (), all_kept: bool = True,
                  releases: bool = False, flip: Record | None = None, blocks: Any = None, layouts: Any = None, sources: Any = None,
-                 **kw: Any) -> None:
+                 dumps: Any = None, step_rows: Any = None, **kw: Any) -> None:
         super().__init__(eng, run_id, **kw)
         if sources is not None:
             self.sources = sources
+        if dumps is not None:
+            def layouts_dump() -> Any:
+                self.calls.append("layouts_dump")
+                return copy.deepcopy(dumps)
+
+            self.layouts_dump = layouts_dump
+        if step_rows is not None:
+            self.step_rows = step_rows
         self.retain, self.retain_exclude, self.all_kept, self.flip = retain, frozenset(exclude), all_kept, flip
         self.first: tuple[int, int] | None = None
         self.asked: list[tuple[int, int]] = []
@@ -655,3 +665,358 @@ def test_a_program_digest_of_record_is_the_one_each_pairs_weights_pin_is_held_to
     why = None if same else f"record built for Program {W.PROGRAM[:16]} != Program of record ['{digest[:16]}']"
     assert W.pins(ended) == [pin, pin] and (pin["result"], pin["program_of_record"], pin["why"]) == (same, same, why)
     assert W.pin_lines(ended) == [W.pin_line(pair) if same else W.pin_line(pair, "FAIL [mismatch]", why) for pair in (0, 1)]
+
+
+#: A committer's layouts as it dumps them: a step's tensors in layout order.
+LAYOUTS: Record = {str(step): [{"name": "head.out", "numel": n // 4}] for step, n in enumerate(M.STEP_BYTES)}
+#: What the manifest's coverage check answers: every identity it was handed is covered.
+COVERED: Record = {"ok": True, "checked": 5, "missing_n": 0, "missing_by_family": {}, "families_missing_entirely": [], "committed_unmatched_n": 0}
+COVERAGE_LINE = ("[delta] required_value_coverage: MANIFEST COVERAGE (pair {pair}, instrumented): {ok} checked {checked} missing {missing} {{}} "
+                 "families-missing-entirely [] unmatched-committed {unmatched}")
+DECLARED_BASIS = "manifest engine_step annotation (declared arrive_steps)"
+OBSERVED_BASIS = "engine schedule of record (request step + observed arrival)"
+
+
+def identity(request: int, step: int, **more: Any) -> Record:
+    """A manifest identity of request ``request``'s step ``step``, annotated with the engine step its declared arrival puts it at."""
+    return {"request_id": f"r{request}", "step": step, "engine_step": step, "family": "instance_outputs", "op_path": "head",
+            "output_member": "out", **more}
+
+
+def composition(step: int, *requests: int) -> Record:
+    """A manifest's declared composition of engine step ``step``: a row a request."""
+    return {"engine_step": step, "members": [{"request_id": f"r{r}", "rows": 1} for r in requests], "rows": len(requests), "n_seq": len(requests)}
+
+
+#: The identities of `WORKLOAD` run to each request's ``max_tokens``: three steps of request a and two of request b.
+IDENTITIES = [identity(0, 0), identity(1, 0), identity(0, 1), identity(1, 1), identity(0, 2)]
+COMPOSITIONS = [composition(0, 0, 1), composition(1, 0, 1), composition(2, 0)]
+#: The executed prefix of record of `WORKLOAD` served to each request's ``max_tokens`` under `STOP_RULE`, as the coverage keeps it.
+PREFIX: Record = {"r0": {"served_output_len": 3, "executed_prefix_len": 3, "cap": 3, "cap_exhausted": True, "eos_stop": False},
+                  "r1": {"served_output_len": 2, "executed_prefix_len": 2, "cap": 2, "cap_exhausted": True, "eos_stop": False},
+                  "lag": 1, "ok": True, "problems": []}
+
+
+@pytest.fixture
+def manifest(stand_ins, monkeypatch):
+    """`stand_ins` for a Commit under a required-value manifest: the Programs' two readers before the engine answer that
+    there is no plan and no fact, the attachment of record takes the manifest, and the manifest's coverage check
+    (`query.manifest.bind.coverage_check`) answers ``coverage``, or raises ``raises``; ``checked`` keeps what it was handed."""
+    from verity_vllm.pipeline import boundary_plan, commit_plan
+    from verity_vllm.query.manifest import bind
+
+    s = stand_ins
+    s.coverage, s.raises, s.checked = copy.deepcopy(COVERED), None, []
+
+    def attach_of_record(com, eng, args, manifest, out, **kw):
+        s.calls.append(("attach_of_record", {"com": com, "manifest": manifest}))
+        return SimpleNamespace(required_classes=kw["required_classes"], moe_attached=False, hidden_required=None)
+
+    def coverage_check(manifest, layouts, **kw):
+        s.checked.append((copy.deepcopy(manifest), layouts, kw))
+        if s.raises:
+            raise s.raises
+        return copy.deepcopy(s.coverage)
+
+    for owner, name, value in [(boundary_plan, "use", lambda args, manifest, *, tl: (None, None)),
+                               (commit_plan, "producer_facts", lambda args, manifest, reqs, sampling, *, tl: ((None, {"members": 0}), None)),
+                               (commit, "attach_of_record", attach_of_record), (bind, "coverage_check", coverage_check)]:
+        monkeypatch.setattr(owner, name, value)
+    return s
+
+
+def under(tmp_path: Any, capsys: Any, doc: Record, *argv: str) -> Ended:
+    """`kept` under the manifest ``doc`` and its Program's digest, with a committer that dumps `LAYOUTS`."""
+    M.MAKE.setdefault("dumps", LAYOUTS)
+    return kept(tmp_path, capsys, "--required-manifest", str(M.manifest_at(tmp_path, doc)), "--program-digest", doc["program_digest"], *argv)
+
+
+def coverages(ended: Ended) -> list[Record]:
+    """Each instrumented run's coverage, after its row is seen to keep it in both places the verdict reads it from."""
+    rows = instrumented(ended)
+    assert all(row["commit"]["coverage"] == row["commit"]["extra"]["coverage"] for row in rows)
+    return [row["commit"]["coverage"] for row in rows]
+
+
+def dumped(ended: Ended, pair: int) -> Any:
+    import gzip
+
+    with gzip.open(ended.out / f"layouts_pair{pair}_instrumented.json.gz", "rt") as f:
+        return json.load(f)
+
+
+def test_a_manifest_that_lists_no_identity_is_checked_as_it_is_against_the_committers_layouts(tmp_path, manifest, capsys):
+    """Each run's layouts are dumped once, checked against the manifest of record itself and written beside the run; the
+    coverage is the check's answer, kept in the run's record and in its committer's own."""
+    s = manifest
+    s.verdicts = [(True, None)]
+    ended = under(tmp_path, capsys, M.MANIFEST)
+    [com] = made()
+    assert ended.exit is None and com.calls == ["register_weights", *WARMUP, *[c for _ in (0, 1) for c in (*RUN, "layouts_dump")], "close"]
+    assert s.checked == [(M.MANIFEST, LAYOUTS, {"request_id": None, "rank": 0, "ports": {}})] * 2
+    assert coverages(ended) == [COVERED, COVERED] and [dumped(ended, pair) for pair in (0, 1)] == [LAYOUTS, LAYOUTS]
+    assert lines(ended, "MANIFEST COVERAGE", "executed prefix") == [
+        COVERAGE_LINE.format(pair=pair, ok="OK", checked=5, missing=0, unmatched=0) for pair in (0, 1)]
+    assert ended.doc("verdict.json")["required_manifest"] == {
+        "path": str(tmp_path / "manifest.json"), "manifest_digest": "e" * 64, "program_digest": "d" * 128, "populations": M.MANIFEST["populations"],
+        "query": None, "coverage": [COVERED, COVERED]}
+
+
+def test_a_coverage_check_that_raises_is_recorded_as_a_coverage_that_failed_with_its_error(tmp_path, manifest, capsys):
+    """The run keeps its record: the coverage is then not ok, with the error and no count, and the layouts are still written."""
+    s = manifest
+    s.raises, s.verdicts = TypeError("a row of every step"), [(True, None)]
+    ended = under(tmp_path, capsys, M.MANIFEST)
+    failed = {"ok": False, "error": "TypeError('a row of every step')", "checked": 0, "missing_n": -1, "missing_by_family": {},
+              "families_missing_entirely": [], "committed_unmatched_n": -1, "manifest_source": str(tmp_path / "manifest.json")}
+    assert ended.exit is None and coverages(ended) == [failed, failed] and dumped(ended, 1) == LAYOUTS
+    assert lines(ended, "MANIFEST COVERAGE") == [line for pair in (0, 1) for line in [
+        f"[delta] MANIFEST COVERAGE ERROR (pair {pair}, instrumented): TypeError('a row of every step')",
+        COVERAGE_LINE.format(pair=pair, ok="FAIL", checked=0, missing=-1, unmatched=-1)]]
+
+
+def test_a_committer_that_dumps_no_layouts_is_given_no_manifest_coverage(tmp_path, manifest, capsys):
+    s = manifest
+    s.verdicts = [(True, None)]
+    M.MAKE.update(dumps=None)
+    ended = under(tmp_path, capsys, M.MANIFEST)
+    assert ended.exit is None and s.checked == [] and ["coverage" in row["commit"] for row in instrumented(ended)] == [False, False]
+    assert not [name for name in ended.files() if name.startswith("layouts_")]
+
+
+def placed(doc: Record, identities: list[Record], compositions: list[Any], *, basis: str = OBSERVED_BASIS, schedule: Record,
+           not_executed: Record | None = None, prefix: Record = PREFIX) -> tuple[Record, Record]:
+    """What the coverage check is handed of ``doc`` once its requirement is placed, and the coverage `main` makes of `COVERED`."""
+    classified = {"rule": not_executed_rule(), "n": 0, "by_family": {}, "by_request": {}, "kind_by_family": {}, "scope": not_executed_scope(),
+                  **(not_executed or {})}
+    return ({**doc, "identities": identities, "engine_steps": compositions},
+            {**COVERED, "schedule": schedule, "engine_step_basis": basis, "executed_prefix_of_record": prefix, "not_executed_by_rule": classified,
+             "manifest_of_record": {"digest": doc["manifest_digest"], "identities_n": len(doc["identities"]), "required_n": len(identities),
+                                    "not_executed_n": classified["n"], "edited": False}})
+
+
+def not_executed_rule() -> str:
+    from verity_vllm.commit import executed_prefix
+
+    return executed_prefix.RULE
+
+
+def not_executed_scope() -> Any:
+    from verity_vllm.commit import executed_prefix
+
+    return executed_prefix.ACTIVE_REFERENCE_ONLY
+
+
+def declared_schedule(**more: Any) -> Record:
+    """The schedule of a committer that recorded no step's rows: the declared arrivals stand."""
+    return {"use": "declared", "basis": SCHEDULE_BASIS, "why": "no per-step request rows (single request or none recorded): declared arrive_steps",
+            "all_equal_declared": False, "declared_arrive_steps": {"r0": 0, "r1": 0}, "observed_arrive_steps": {}, **more}
+
+
+SCHEDULE_BASIS = ("engine schedule of record: per-committed-step request rows (the scheduler's row order as the collector recorded it); "
+                  "arrival = the first committed step the request ran in")
+PLACED_LINE = ("[delta] manifest requirement placed over the executed prefix of record (pair {pair}): identities not-executed {dropped} (by family "
+               "{families}; manifest of record untouched: {n} identities, digest eeeeeeeeeeeeeeee), composition members dropped {members} over "
+               "{changed} steps, steps not executed {steps}")
+
+
+def test_a_manifests_identities_are_placed_over_the_executed_prefix_of_record_before_they_are_checked(tmp_path, manifest, capsys):
+    """A manifest that lists its identities, all of them executed: the check is handed a copy of the manifest with the same
+    identities and compositions, and the coverage says how they were placed, under which schedule, and that the manifest
+    of record was not edited.  Nothing was left out, so no line says so."""
+    s = manifest
+    s.verdicts = [(True, None)]
+    doc = {**M.MANIFEST, "identities": IDENTITIES, "engine_steps": COMPOSITIONS}
+    ended = under(tmp_path, capsys, doc)
+    handed_on, coverage = placed(doc, IDENTITIES, COMPOSITIONS, schedule=declared_schedule())
+    assert ended.exit is None and [m for m, _, _ in s.checked] == [handed_on, handed_on] and coverages(ended) == [coverage, coverage]
+    assert lines(ended, "MANIFEST COVERAGE", "executed prefix") == [
+        COVERAGE_LINE.format(pair=pair, ok="OK", checked=5, missing=0, unmatched=0) for pair in (0, 1)]
+
+
+def test_identities_and_composition_members_past_a_requests_executed_prefix_are_left_out_by_name_and_counted(tmp_path, manifest, capsys):
+    """A manifest built for longer runs than the served ones: an identity at a step its request did not execute is left out
+    of the requirement and counted by family and request, a composition's member likewise, a step no request executes is
+    dropped whole with its members, and a line says how many of each.  The manifest of record keeps its count and its digest."""
+    s = manifest
+    s.verdicts = [(True, None)]
+    late = [identity(1, 2), identity(0, 3, family="sampled_token_ids")]
+    doc = {**M.MANIFEST, "identities": [*IDENTITIES, *late], "engine_steps": [composition(0, 0, 1), composition(1, 0, 1), composition(2, 0, 1),
+                                                                               composition(3, 0)]}
+    ended = under(tmp_path, capsys, doc)
+    classified = {"n": 2, "by_family": {"instance_outputs": 1, "sampled_token_ids": 1}, "by_request": {"r1": 1, "r0": 1},
+                  "kind_by_family": {"instance_outputs": "row", "sampled_token_ids": "row"}}
+    handed_on, coverage = placed(doc, IDENTITIES, COMPOSITIONS, schedule=declared_schedule(), not_executed=classified)
+    assert ended.exit is None and [m for m, _, _ in s.checked] == [handed_on, handed_on] and coverages(ended) == [coverage, coverage]
+    assert lines(ended, "executed prefix") == [PLACED_LINE.format(pair=pair, dropped=2, families=classified["by_family"], n=7, members=2, changed=1,
+                                                                  steps=1) for pair in (0, 1)]
+
+
+def test_a_manifest_whose_engine_steps_are_numbers_is_restricted_to_the_steps_a_request_executes(tmp_path, manifest, capsys):
+    """A manifest of one request lists its engine steps as plain numbers, with no composition: the steps no request executes
+    at are dropped, and with no identity left out no line is printed."""
+    s = manifest
+    s.verdicts = [(True, None)]
+    doc = {**M.MANIFEST, "identities": IDENTITIES, "engine_steps": [0, 1, 2, 3, 4]}
+    ended = under(tmp_path, capsys, doc)
+    handed_on, coverage = placed(doc, IDENTITIES, [0, 1, 2], schedule=declared_schedule())
+    assert ended.exit is None and [m for m, _, _ in s.checked] == [handed_on, handed_on] and coverages(ended) == [coverage, coverage]
+    assert lines(ended, "executed prefix") == []
+
+
+def test_a_request_the_committer_saw_arrive_later_than_declared_has_its_identities_placed_by_the_observed_arrival(tmp_path, manifest, capsys):
+    """The committer's rows by step say request b first ran at step 1: the schedule of record is the observed one, each
+    identity is placed at its request's step past the observed arrival, b's one engine step later, with the declared engine
+    step kept beside it, and the compositions are restricted to the steps of that schedule."""
+    s = manifest
+    s.verdicts = [(True, None)]
+    M.MAKE.update(step_rows={0: [("a", 0, 1)], 1: [("a", 0, 1), ("b", 1, 2)], 2: [("a", 0, 1), ("b", 1, 2)]})
+    doc = {**M.MANIFEST, "identities": IDENTITIES, "engine_steps": COMPOSITIONS}
+    ended = under(tmp_path, capsys, doc)
+    moved = [identity(0, 0, engine_step_declared=0), identity(1, 0, engine_step=1, engine_step_declared=0), identity(0, 1, engine_step_declared=1),
+             identity(1, 1, engine_step=2, engine_step_declared=1), identity(0, 2, engine_step_declared=2)]
+    schedule = {"use": "observed", "basis": SCHEDULE_BASIS, "why": None, "all_equal_declared": False, "declared_arrive_steps": {"r0": 0, "r1": 0},
+                "observed_arrive_steps": {"r0": 0, "r1": 1}}
+    handed_on, coverage = placed(doc, moved, [composition(0, 0), composition(1, 0, 1), composition(2, 0)], schedule=schedule)
+    assert ended.exit is None and [m for m, _, _ in s.checked] == [handed_on, handed_on] and coverages(ended) == [coverage, coverage]
+    assert lines(ended, "executed prefix") == [PLACED_LINE.format(pair=pair, dropped=0, families={}, n=5, members=1, changed=1, steps=0)
+                                               for pair in (0, 1)]
+
+
+def test_an_executed_prefix_that_cannot_be_placed_fails_a_coverage_the_check_passed(tmp_path, manifest, capsys, monkeypatch):
+    """A request served short of its limit under a Program that declares no stop rule: its executed prefix is not of
+    record, so the coverage is failed in place with the prefix's own sentence, whatever the check answered."""
+    s = manifest
+    s.verdicts = [(True, None)]
+    monkeypatch.setattr(M.va, "sampling_params", lambda req, sampling: SimpleNamespace(max_tokens=int(req["max_tokens"]) - (req["request_id"] == "a")))
+    doc = {**M.MANIFEST, "identities": IDENTITIES, "engine_steps": COMPOSITIONS}
+    ended = under(tmp_path, capsys, doc)
+    for coverage in coverages(ended):
+        [why] = coverage["executed_prefix_of_record"]["problems"]
+        assert why.startswith("r0: served 2 of its ") and why.endswith("the Program declares no stop rule (eos_token_ids): the early stop cannot be verified, fail closed")
+        assert (coverage["ok"], coverage["error"]) == (False, "executed prefix of record: " + why)
+        assert coverage["executed_prefix_of_record"] == {
+            **PREFIX, "r0": {**PREFIX["r0"], "served_output_len": 2, "cap_exhausted": False, "eos_stop": True}, "ok": False, "problems": [why]}
+    assert ended.exit is None and lines(ended, "MANIFEST COVERAGE") == [
+        COVERAGE_LINE.format(pair=pair, ok="FAIL", checked=5, missing=0, unmatched=0) for pair in (0, 1)]
+
+
+def test_under_a_manifest_the_weights_pin_is_held_to_every_program_digest_the_manifest_names(tmp_path, manifest, pinned, capsys):
+    """The Programs a record may be of are then the Build's digest of record, the manifest's component digests and each of
+    its components' own; a component that is no record, or names no digest, adds none."""
+    pinned.verdicts = [(True, None)]
+    doc = {**M.MANIFEST, "component_digests": ["1" * 128, W.PROGRAM], "components": {
+        "decoder": {"program_digest": "2" * 128}, "sampler": {"program_digest": None}, "embedder": "not a record"}}
+    file = W.record_at(tmp_path, W.record_of(M.Model()))
+    ended = under(tmp_path, capsys, doc, "--weights-of-record", str(file))
+    assert ended.exit is None
+    assert [kw["program_digests_of_record"] for name, _, kw in pinned.handed if name == "check"] == [{"d" * 128, "1" * 128, W.PROGRAM, "2" * 128}] * 2
+    assert [row["commit"]["weights_pin"]["result"] for row in instrumented(ended)] == [True, True]
+    assert W.pin_lines(ended) == [W.pin_line(0), W.pin_line(1)]
+
+
+SERVED_METHOD = "sampled-exact-replay (the served Build's Program on the committed values; served_check.py) + boundary linkage"
+#: What the served source's check of a run answers, as far as `main` reads it.
+SERVED_C2: Record = {"ok": True, "line": "3/3 values exact", "components": {"sampled_replay": {"result": True}, "boundary_linkage": {"result": True}},
+                     "value_correspondence": {"compiled_check": {"ok": True, "equal": 3, "checked": 3, "steps_unrun": [], "error": None}}}
+SOURCE_SUMMARY: Record = {"slots": 1, "plans": 2, "identities": 3}
+
+
+class Through(W.Served):
+    """`test_commit_weights_of_record`'s served source, which goes on past the committers' setup: its rebuild answers the
+    Build of record's digest, each run is begun on its source, and its check of a run answers ``answers``' next, the last
+    for every later run.  ``calls`` keeps what it was asked after the setup, in order."""
+
+    made: list[Through] = []
+    answers: list[Record] = []
+
+    def __init__(self, build: Record, fault: str | None) -> None:
+        super().__init__(build, fault)
+        self.calls: list[Any] = []
+        self.src.begin_run = lambda: self.calls.append("begin_run")
+        self.src.summary = lambda: dict(SOURCE_SUMMARY)
+        Through.made.append(self)
+
+    def rebuild(self, workload: Record, out: str) -> Record:
+        self.calls.append(("rebuild", workload, out))
+        return {"program_digest": self.build["program_digest"], "complete": True}
+
+    def c2(self, com: Any, rc: Any, reqs: list[Record], challenge: str, seed: Any) -> Record:
+        n = sum(1 for c in self.calls if c[0] == "c2")
+        self.calls.append(("c2", com, rc.run_root.hex(), [r["request_id"] for r in reqs], challenge, seed))
+        return copy.deepcopy(Through.answers[min(n, len(Through.answers) - 1)])
+
+
+@pytest.fixture
+def serving(manifest, monkeypatch):
+    """`manifest` on the served row, its source `Through`."""
+    from verity_vllm.pipeline import served_match
+
+    Through.made, Through.answers = [], [SERVED_C2]
+    W.ORDER.clear()
+    monkeypatch.setattr(served_match, "ServedCommit", Through)
+    return manifest
+
+
+def served(tmp_path: Any, capsys: Any, *argv: str) -> Ended:
+    return kept(tmp_path, capsys, "--compiled-taps", "served", "--required-manifest", str(M.manifest_at(tmp_path)), "--program-digest",
+                M.MANIFEST["program_digest"], *argv)
+
+
+@pytest.mark.parametrize(("argv", "result", "method"), [
+    ((), True, SERVED_METHOD + " + " + M.VALUE_CORRESPONDENCE["method"]),
+    (("--expect-root", "ab" * 64), False, f"{SERVED_METHOD} + {M.VALUE_CORRESPONDENCE['method']} + root-compare-vs-independent-run (--expect-root)"),
+], ids=["alone", "after-another-root"])
+def test_the_served_source_begins_each_run_and_its_check_of_the_run_is_the_value_correspondences_first_method(
+        tmp_path, serving, capsys, argv, result, method):
+    """``--compiled-taps served``: the source is told of each instrumented run before the committer is installed and, after
+    the run, checks it under the run's own replay coin; the row keeps the source's summary and the compile settings, and the
+    value correspondence takes the check's components, its record and its result, which never turns a failed one."""
+    s = serving
+    s.verdicts = [(True, None)]
+    ended = served(tmp_path, capsys, *argv)
+    [com], [source] = made(), Through.made
+    rows = instrumented(ended)
+    coins = [row["commit"]["extra"]["coins"]["keys"][M.CC.REPLAY] for row in rows]
+    assert ended.exit is None and source.build == M.MANIFEST
+    assert source.calls == [("rebuild", M.WORKLOAD, str(ended.out)),
+                            *(c for root, coin in zip(com.roots[1:], coins) for c in ["begin_run", ("c2", com, root, ["a", "b"], coin, None)])]
+    assert lines(ended, "served Build", "SERVED C2") == [
+        "[delta] served Build of this process: program dddddddddddddddd complete True, equal to the Build of record True",
+        "[delta] SERVED C2 (pair 0): 3/3 values exact", "[delta] SERVED C2 (pair 1): 3/3 values exact"]
+    for row in rows:
+        assert row["commit"]["compiled_source"] == SOURCE_SUMMARY and row["commit"]["compilation"] == ended.doc("versions.json")["compilation"]
+        assert row["commit"]["value_correspondence"] == {
+            **M.VALUE_CORRESPONDENCE, "method": method, "result": result, **SERVED_C2["value_correspondence"],
+            "components": {**SERVED_C2["components"], "replay_challenge": {"source": M.CC.IN_PROCESS, "family": M.CC.REPLAY, "index": None}}}
+        assert (row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"]) == (True, None)
+
+
+def test_a_replay_challenge_given_on_the_command_line_is_the_one_the_served_check_is_handed(tmp_path, serving, capsys):
+    """``--replay-challenge``, a measurement's: where the run's coins are this process's own the given challenge takes the
+    coin's place, and the component says it came from the flag."""
+    serving.verdicts = [(True, None)]
+    ended = served(tmp_path, capsys, "--replay-challenge", "5eed")
+    assert ended.exit is None and [c[4] for c in Through.made[0].calls if c[0] == "c2"] == ["5eed", "5eed"]
+    assert [row["commit"]["value_correspondence"]["components"]["replay_challenge"] for row in instrumented(ended)] == [{"source": "flag"}] * 2
+
+
+@pytest.mark.parametrize(("verdict", "why"), [
+    ((True, None), "served C2 FAIL: 2/3 values exact, steps unrun [1] step 1 not replayed"),
+    ((False, "openings verified 3 != checked 4"), "openings verified 3 != checked 4"),
+], ids=["a-run-the-verdict-passed", "a-run-the-verdict-failed"])
+def test_a_served_check_that_is_not_ok_fails_a_run_the_verdict_passed_and_leaves_a_failed_runs_reason(tmp_path, serving, capsys, verdict, why):
+    """The served check's own record is read after the verdict: a run that passed the verdict fails on the check's counts,
+    and a run the verdict failed keeps the verdict's reason."""
+    failed = {**SERVED_C2, "ok": False, "line": "2/3 values exact", "value_correspondence": {"compiled_check": {
+        "ok": False, "equal": 2, "checked": 3, "steps_unrun": [1], "error": "step 1 not replayed"}}}
+    Through.answers = [failed, SERVED_C2]
+    serving.verdicts = [verdict, (True, None)]
+    ended = served(tmp_path, capsys)
+    rows = instrumented(ended)
+    assert [(row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"]) for row in rows] == [(False, why), (True, None)]
+    assert [row["commit"]["value_correspondence"]["result"] for row in rows] == [False, True]
+    assert lines(ended, "SERVED C2", "COMMIT F") == [
+        "[delta] SERVED C2 (pair 0): 2/3 values exact", f"[delta] COMMIT FAIL (pair 0, instrumented): {why}", "[delta] SERVED C2 (pair 1): 3/3 values exact",
+        M.FAIL_LINE.format(failed=1, n=2, pair=0, arm="instrumented", why=why)]
+    assert ended.exit == 3
