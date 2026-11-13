@@ -14,6 +14,7 @@ with made-up errors; every input's mark; each refusal by name; and the command."
 
 from __future__ import annotations
 
+import hashlib
 import json
 import runpy
 import sys
@@ -168,6 +169,32 @@ def test_proving_time_is_priced_by_the_rows_plan_not_by_the_rows_own_shares():
     assert E.at_share("world year", "r1", other, 0.10)["priced"] is None
 
 
+def test_a_family_priced_several_ways_is_split_by_its_ways_and_only_an_own_row_is_measured():
+    """A family whose split gives its share by way (`ways`: a table's own row, the Lean verifier at the driver's
+    modeled price, a family's row) has its plan's share split in their proportion, not printed under one joined way;
+    the Inputs mark a block type's own steady-state row measured, and a family's row and the Lean verifier modeled."""
+
+    split = {"families": {"A_v1": {"priced": ["modeled", "steady"], "share": 0.9, "ways": {"steady": 0.6, "modeled": 0.3}},
+                          "B_v1": {"priced": ["family"], "share": 0.1, "ways": {"family": 0.1}}}}
+    own = [r | {"split": split | {"q": r["q"], "replay_sample": r["replay_sample"]}} for r in TOY]
+    plan = {"scope": "world year", "beta": 0.04, "q": 0.5, "replay_sample": 3.0, "bound_bits": 25.0,
+            "cells": [{"block": "A_v1{K=1}", "share": 0.75}, {"block": "B_v1", "share": 0.25}]}
+    for at in (E.at_share("world year", "r1", own, 0.10, ("r2", plan)), E.at_share("world year", "r1", own, 0.10)):
+        ways = at["priced"]["ways"]
+        assert set(ways) == {"steady", "modeled", "family"}
+        assert sum(w["share"] for w in ways.values()) == pytest.approx(1.0, abs=1e-12)
+    ways = E.at_share("world year", "r1", own, 0.10, ("r2", plan))["priced"]["ways"]
+    assert {k: (round(w["share"], 12), w["families"]) for k, w in ways.items()} == {
+        "steady": (0.5, {"A_v1": pytest.approx(0.5)}), "modeled": (0.25, {"A_v1": pytest.approx(0.25)}),
+        "family": (0.25, {"B_v1": 0.25})}
+    point = E.at_share("world year", "r1", own, 0.10, ("r2", plan))
+    marks = {i["input"]: i["mark"] for i in E._inputs({"world year": point}, ["r1"], {"inputs": {}},
+                                                       {"at_zero_in": [], "GB": None}, 0.10, 0.003, E.ROW,
+                                                       E.served_share(None))}
+    assert {k: v for k, v in marks.items() if k.startswith("proving priced")} == {
+        "proving priced steady": "measured", "proving priced modeled": "modeled", "proving priced family": "modeled"}
+
+
 # ---- the store side ----------------------------------------------------------------------------------------------------------
 
 
@@ -189,10 +216,10 @@ class Store:
 
         return LocalStore(self.tmp / name, config_path=self.config)
 
-    def ran(self, run: str, rows: list[dict] | Mapping[str, list[dict]] | None, *, plan: dict | None = None,
+    def ran(self, run: str, rows: list[dict] | Mapping[str, list[dict] | str] | None, *, plan: dict | None = None,
             name: str = E.ROWS_FILES[0]) -> str:
         """A run's attempt on the remote, its run record holding `rows` as the planner's rows, in the file `name` or
-        by file, and `plan` as its plan (neither: it kept no files)."""
+        by file (a file's rows, or its text), and `plan` as its plan (neither: it kept no files)."""
 
         from research.store import canon
 
@@ -200,7 +227,8 @@ class Store:
         if rows is not None or plan is not None:
             tree = self.tmp / "run-files" / f"{run}-{self._ts}"
             files = rows if isinstance(rows, Mapping) else {name: rows}
-            for path, text in (*((f, its and "".join(json.dumps(r) + "\n" for r in its)) for f, its in files.items()),
+            for path, text in (*((f, its if isinstance(its, str) else its and "".join(json.dumps(r) + "\n" for r in its))
+                                 for f, its in files.items()),
                                (E.PLAN_FILE, plan and json.dumps(plan))):
                 if text:
                     (tree / path).parent.mkdir(parents=True, exist_ok=True)
@@ -301,6 +329,7 @@ def test_the_rows_requests_are_the_count_they_are_priced_over(tmp_path):
     assert year["requests"] == pytest.approx(doc["periods"][-1]["requests"], rel=1e-12)
     assert year["requests"] == pytest.approx(term().plan()["world_requests"].value, rel=1e-12)
     assert "The row is priced over 1.778e+16 requests, the count the network certifier's part is over." in E.render(doc)
+    assert "\n- this is the headline figure: λ times the bound where the row's total is 10% of compute" in E.render(doc)
 
     s = Store(tmp_path / "other")
     s.label(s.ran(ROWS, [as_row(r) for r in rows() if (r["row"], r["h8"]) == (CUT_ROW, "h8")]))
@@ -407,9 +436,9 @@ def test_rows_that_hold_their_own_plans_are_read_with_them(tmp_path):
             "block families priced each way is 52.4% computed, 47.17% measured, 0.4277% measured and computed, 0.001791% "
             "modeled: the largest families are SparseMlaSplitPart_v1 (52.33%, computed)") in text
     assert f"| world week | {PLANNED} (rows) | 5.500% | computed | 53.457% | 7 | SparseMlaSplitPart_v1 53.390%, " in text
-    assert ("| world | week | 2.268e+14 | 3.411e+14 | 13,962 | 0.3275 | 0.01 | 973,357 | 35,627 | 504,396 | 35,434 | 8.259e-20 | "
-            "1.829e-08 | 987,319 | 49,589 | 518,357 | 49,395 | 0.01 | 468,962 |") in text
-    assert ("| world | week | 0 | 13,962 | 937,924 | 193.8 | 468,962 | 0 | 951,885 | 14,155 | 482,924 | 13,962 | 8.259e-20 | "
+    assert ("| world | week | 2.268e+14 | 3.411e+14 | 13,962 | 0.3275 | 0.01 | 973,357 | 35,627 | 506,156 | 37,194 | 8.259e-20 | "
+            "1.829e-08 | 987,319 | 49,589 | 520,117 | 51,155 | 0.01 | 468,962 |") in text
+    assert ("| world | week | 0 | 13,962 | 937,924 | 193.8 | 470,722 | 1,760 | 951,885 | 14,155 | 484,684 | 15,722 | 8.259e-20 | "
             "1.829e-08 | 0.01 |") in text
     assert "'s plan (" not in text
 
@@ -478,7 +507,7 @@ def test_the_network_certifiers_part_is_beside_it_at_the_requests_its_calculator
 def test_the_network_certifiers_figures_of_record_are_at_two_release_schedules(tmp_path, monkeypatch):
     """The network certifier's figures of record are its document's at D_j = 2, held here to that document: the scan's
     over the world's year is the document's `value`, on the class its calculator assumes by default and on the class
-    the command reads, and the design's is the jitter alone on either. The headline and the sums are those figures,
+    the command reads, and the design's is the jitter and the count on either. The headline and the sums are those figures,
     and the calculator's own figure is printed beside the command's where their classes differ. A document of
     another schema is refused by name."""
 
@@ -486,7 +515,7 @@ def test_the_network_certifiers_figures_of_record_are_at_two_release_schedules(t
     theirs = lb.document(lb.inputs())
     design = next(r for r in theirs["rows"] if (r["scope"], r["period"], r["row"]) == ("world", "year", "design"))
     assert (theirs["schema"], theirs["request_count"], lb.OF_RECORD) == (E.TERM_SCHEMA, "plan", 2)
-    assert theirs["value"] == pytest.approx(59_645_644, abs=0.5) and design["term"]["2"]["GB"] == pytest.approx(1_847_615, abs=0.5)
+    assert theirs["value"] == pytest.approx(59_645_644, abs=0.5) and design["term"]["2"]["GB"] == pytest.approx(1_939_394, abs=0.5)
 
     wide = E.build(store=recorded(tmp_path / "wide").fresh(), root=REPO, response_ids=lb.RESPONSE_IDS)
     sums = wide["periods"][-1]["together"]
@@ -496,7 +525,7 @@ def test_the_network_certifiers_figures_of_record_are_at_two_release_schedules(t
     text = E.render(wide)
     assert ("- **the network certifier's part: 59,645,644 GB** (modeled, on an assumed class of at most 4,096 ids a response) "
             "as the scan's check charges it today, 26.83 bits a request, and 1,857,720 GB as N2 charges it today, ") in text
-    assert ("1,847,615 GB by the design no run has behind it, once a served audit has sampled a stop block, each at D_j = 2, "
+    assert ("1,939,394 GB by the design no run has behind it, once a served audit has sampled a stop block, each at D_j = 2, "
             "its term of record, and each failing with at most ε = 9.537e-07 (2^-20) over the world's year, at a scan's δ of "
             "8.259e-20 (2^-63.39).\n") in text
     assert "assumes by default" not in text
@@ -506,23 +535,23 @@ def test_the_network_certifiers_figures_of_record_are_at_two_release_schedules(t
     sums = doc["periods"][-1]["together"]
     assert E.RESPONSE_IDS == 1024 and sums["scan"]["certifier_GB"] == narrow["value"] == pytest.approx(50_753_639, abs=0.5)
     assert sums["design"]["certifier_GB"] == design["term"]["2"]["GB"]
-    assert sums["scan"]["GB"] == pytest.approx(narrow["value"] + YEAR_GB) and sums["design"]["GB"] == pytest.approx(1_861_855, abs=0.5)
+    assert sums["scan"]["GB"] == pytest.approx(narrow["value"] + YEAR_GB) and sums["design"]["GB"] == pytest.approx(1_953_634, abs=0.5)
     assert doc["certifier"]["default_class"] == wide["certifier"]["default_class"]
     text = E.render(doc)
     assert ("- **the network certifier's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids a response) "
             "as the scan's check charges it today, 22.83 bits a request, and 1,857,720 GB as N2 charges it today, "
-            "26,300,627 GB by the design no run has behind it, before a served audit has sampled a stop block, 1,847,615 GB by "
+            "26,392,406 GB by the design no run has behind it, before a served audit has sampled a stop block, 1,939,394 GB by "
             "the design no run has behind it, once a served audit has sampled a stop block, each at D_j = 2, its term of "
             "record, and each failing with at most ε = 9.537e-07 (2^-20) over the world's year, at a scan's δ of 8.259e-20 "
             "(2^-63.39). On the class of at most 4,096 ids a response that `verity bench certifier_term` assumes by "
             "default, the scan's is 59,645,644 GB.\n") in text
     assert ("at D_j = 2, with no advice priced and with a response's output count taken at 0 under `all three` and `design`: "
-            "50,767,879 GB as the scan's check charges it today; 1,871,959 GB as N2 charges it today; 26,314,867 GB by the "
-            "design no run has behind it, before a served audit has sampled a stop block; 1,861,855 GB by the design no run "
+            "50,767,879 GB as the scan's check charges it today; 1,871,959 GB as N2 charges it today; 26,406,646 GB by the "
+            "design no run has behind it, before a served audit has sampled a stop block; 1,953,634 GB by the design no run "
             "has behind it, once a served audit has sampled a stop block; each failing with at most 0.01, the two parts' "
             "errors summed.\n") in text
-    assert ("| world | year | 1.182e+16 | 1.778e+16 | 14,240 | 0.006406 | 0.01 | 50,753,639 | 1,857,720 | 26,300,627 | 1,847,615 | "
-            "8.259e-20 | 9.537e-07 | 50,767,879 | 1,871,959 | 26,314,867 | 1,861,855 | 0.01 | 24,453,012 |") in text
+    assert ("| world | year | 1.182e+16 | 1.778e+16 | 14,240 | 0.006406 | 0.01 | 50,753,639 | 1,857,720 | 26,392,406 | 1,939,394 | "
+            "8.259e-20 | 9.537e-07 | 50,767,879 | 1,871,959 | 26,406,646 | 1,953,634 | 0.01 | 24,453,012 |") in text
     assert "| scan | 24,453,012 | 24,453,012 | 50,753,639 | 134,745 | 48,906,024 | 4.108e+10 | 8.259e-20 | 9.537e-07 |" in text
 
     document = lb.document
@@ -559,16 +588,16 @@ def test_what_rests_on_the_set_time_card_is_printed_only_under_the_calculators_l
     for figure, least in (("48,906,024", 5), ("48,920,264", 2), ("24,344", 2), ("14,240 GB with the lengths held", 1)):
         under = [under for under, cell in shown if figure in cell]
         assert len(under) >= least and all(label in u for u in under), figure
-    assert "- the network certifier's part with a set-time card (not yet tested): 0 GB with the lengths held by a stop block" in text
-    assert ("- together, with a set-time card (not yet tested): 14,240 GB with the lengths held by a stop block, the timing "
+    assert "- the network certifier's part with a simulated set-time card: 0 GB with the lengths held by a stop block" in text
+    assert ("- together, with a simulated set-time card: 14,240 GB with the lengths held by a stop block, the timing "
             "taken once and the entries charged through the compute audit; and at D_j = 1, 48,920,264 GB as the scan's "
-            "check charges it today; 24,344 GB as N2 charges it today; 24,467,252 GB by the design no run has behind it, "
-            "before a served audit has sampled a stop block; 14,240 GB by the design no run has behind it, once a served "
+            "check charges it today; 24,344 GB as N2 charges it today; 24,559,030 GB by the design no run has behind it, "
+            "before a served audit has sampled a stop block; 106,018 GB by the design no run has behind it, once a served "
             "audit has sampled a stop block; error 0.01.\n") in text
-    assert ("| all three, with a set-time card (not yet tested) | 0 | 0 | 0 | 0 | 0 | the compute side's | 8.259e-20 | "
+    assert ("| all three, with a simulated set-time card | 0 | 0 | 0 | 0 | 0 | the compute side's | 8.259e-20 | "
             "9.537e-07 |") in text
-    assert "\n## Each monitoring period over all compute, with a set-time card (not yet tested): in GB\n" in text
-    assert ("| world | year | 0 | 14,240 | 48,906,024 | 10,104 | 24,453,012 | 0 | 48,920,264 | 24,344 | 24,467,252 | 14,240 | "
+    assert "\n## Each monitoring period over all compute, with a simulated set-time card: in GB\n" in text
+    assert ("| world | year | 0 | 14,240 | 48,906,024 | 10,104 | 24,544,790 | 91,778 | 48,920,264 | 24,344 | 24,559,030 | 106,018 | "
             "8.259e-20 | 9.537e-07 | 0.01 |") in text
     # no figure of record is under the label: the headline's and the table of record's lines don't carry it
     assert not [line for line in text.splitlines() if label in line and ("its term of record, " in line or "at D_j = 2, with no" in line)]
@@ -665,15 +694,15 @@ def test_every_figure_carries_its_error_at_the_scans_delta_the_term_states(tmp_p
             "link's execution phases, 1.155e+13 of them: 9.537e-07 (2^-20). The two together fail with at most the sum of "
             "both, 0.01. A figure whose error, summed over everything it covers, is 1 or more is printed as \"no bound at "
             "this period\", with that error and no amount.\n") in text
-    assert ("- the network certifier's part with a set-time card (not yet tested): 0 GB with the lengths held by a stop "
+    assert ("- the network certifier's part with a simulated set-time card: 0 GB with the lengths held by a stop "
             "block, the timing taken once and the entries charged through the compute audit; and at D_j = 1, ") in text
     assert "once a served audit has sampled a stop block; ε = 9.537e-07 (2^-20).\n" in text
     assert ("| compute | period | GPU-seconds | requests | compute audit | bits a request | compute audit's δ | certifier, scan | "
             "certifier, N2 | certifier, design, no stop block | certifier, design | scan's δ | certifier's ε | together, scan | "
             "together, N2 | together, design, no stop block | together, design | together's error | output count (assumed) |\n") in text
-    assert ("| datacenter | year | 3.154e+12 | 4.743e+12 | 13,708 | 23.12 | 0.01 | 13,536 | 495.4 | 7,014 | 492.8 | 8.259e-20 | "
-            "2.543e-10 | 27,244 | 14,203 | 20,722 | 14,201 | 0.01 | 6,521 |") in text
-    assert ("| datacenter | week | 6.048e+10 | 9.096e+10 | no rows of record | none | none | 259.6 | 9.502 | 134.5 | 9.45 | "
+    assert ("| datacenter | year | 3.154e+12 | 4.743e+12 | 13,708 | 23.12 | 0.01 | 13,536 | 495.4 | 7,039 | 517.2 | 8.259e-20 | "
+            "2.543e-10 | 27,244 | 14,203 | 20,747 | 14,225 | 0.01 | 6,521 |") in text
+    assert ("| datacenter | week | 6.048e+10 | 9.096e+10 | no rows of record | none | none | 259.6 | 9.502 | 135 | 9.919 | "
             "8.259e-20 | 4.878e-12 | none | none | none | none | none | 125.1 |") in text
     shown = printed(text)
     assert {cell for under, cell in shown if under.startswith("scan's δ | ")} == {"8.259e-20"}
@@ -753,7 +782,7 @@ def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_p
                                 if line.startswith(("- **the network certifier's part", "- **together", "- the output count")))
     assert "with a set-time card" not in head and "its term of record" not in head
     # none of the world year's amounts of the network certifier is printed, at either jitter bound or summed
-    for figure in ("50,753,639", "1,857,720", "26,300,627", "1,847,615", "48,906,024", "24,453,012", "50,767,879", "1,861,855",
+    for figure in ("50,753,639", "1,857,720", "26,392,406", "1,939,394", "48,906,024", "24,453,012", "50,767,879", "1,953,634",
                    "59,645,644", "22.83 bits a request", "11 bits a request"):
         assert figure not in text, figure
     assert "| scan | " + "no bound at this period | " * 6 + "0.125 | 3.5 |" in text
@@ -765,11 +794,11 @@ def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_p
     assert ("| world | week | 2.268e+14 | 3.411e+14 | no rows of record | none | none | " + no * 4 + "0.125 | 1 | "
             + "none | " * 4 + "none | no bound at this period |") in text
     assert "| world | week | no bound at this period | none | " + no * 4 + "none | " * 4 + "0.125 | 1 | none |" in text
-    assert ("| datacenter | year | 3.154e+12 | 4.743e+12 | 13,708 | 23.12 | 0.01 | 13,536 | 495.4 | 7,014 | 492.8 | 0.125 | 0.995 | "
+    assert ("| datacenter | year | 3.154e+12 | 4.743e+12 | 13,708 | 23.12 | 0.01 | 13,536 | 495.4 | 7,039 | 517.2 | 0.125 | 0.995 | "
             + no * 4 + "1.005 | 6,521 |") in text
-    assert ("| datacenter | year | 0 | no bound at this period | 13,043 | 2.695 | 6,521 | 0 | " + no * 4
+    assert ("| datacenter | year | 0 | no bound at this period | 13,043 | 2.695 | 6,546 | 24.48 | " + no * 4
             + "0.125 | 0.995 | 1.005 |") in text
-    assert ("| datacenter | week | 6.048e+10 | 9.096e+10 | no rows of record | none | none | 259.6 | 9.502 | 134.5 | 9.45 | 0.125 | "
+    assert ("| datacenter | week | 6.048e+10 | 9.096e+10 | no rows of record | none | none | 259.6 | 9.502 | 135 | 9.919 | 0.125 | "
             "0.25 | none | none | none | none | none | 125.1 |") in text
     # the δ printed is the document's own on every line that carries one, and the one the command gave is nowhere
     shown = printed(text)
@@ -792,7 +821,7 @@ def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_p
         E.build(store=recorded(tmp_path / "two").fresh(), root=REPO)
 
 
-def test_every_input_is_marked_measured_modeled_or_assumed_with_its_source(tmp_path):
+def test_every_input_is_marked_measured_modeled_simulated_or_assumed_with_its_source(tmp_path):
     doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
     by = {i["input"]: i for i in doc["inputs"]}
     assert all(i["mark"] in E.MARKS and i["source"] and i["part"] in ("compute audit", "network certifier", "both")
@@ -831,7 +860,7 @@ def test_every_input_is_marked_measured_modeled_or_assumed_with_its_source(tmp_p
     assert "the audit budget is β = 5.243% and the compute audit's part 15,054 GB." in text
     assert f"- compute-audit: {PLAN}, {ROWS} (`{E.RECORD}`): the planner's rows, 18 of row `(ii) honest`" in text
     marks = {m: sum(i["mark"] == m for i in doc["inputs"]) for m in E.MARKS}
-    assert f"of {len(doc['inputs'])} inputs, {marks['measured']} are measured, {marks['modeled']} modeled and {marks['assumed']} assumed" in text
+    assert f"of {len(doc['inputs'])} inputs, {marks['measured']} are measured, {marks['modeled']} modeled, 1 simulated and {marks['assumed']} assumed" in text
     assert "| world year | " + ROWS + " | 5.542% | 13,562 | 14,240 | 37.81 | 1.778e+16 | 4.339% | 2.293% | 5.372% |" in text
     assert "| world | year | 1.182e+16 | 1.778e+16 | 14,240 | 0.006406 | 0.01 | 50,753,639 | 1,857,720 | " in text
     assert "| world | week | 2.268e+14 | 3.411e+14 | no rows of record | none | " in text
@@ -1034,6 +1063,342 @@ def test_what_prices_the_rows_proving_is_printed_by_source_or_not_recorded(tmp_p
     assert "- what prices the row's proving time, as its rows record it: " + none in E.render(planned)
 
 
+# ---- the share of compute a served run measures ------------------------------------------------------------------------------
+
+#: a made-up served run's record, as its reader gives it: the window served 1,000 s on 8 GPUs, 8,000 GPU-seconds, and the
+#: audit's 960 of them, 12%: two proving sessions on a GPU each (480), staging (20), the replay (240), the interior
+#: commitment (20) and the serving charge over stock on the same load (8,000 - 7,800)
+SERVED = {"run": "r20261113-000000-5e7d", "serving": {"seconds": 1000.0, "gpus": 8},
+          "prove": [{"seconds": 300.0, "gpus": 1}, {"seconds": 180.0, "gpus": 1}], "staging": [{"seconds": 20.0, "gpus": 1}],
+          "replay": [{"seconds": 30.0, "gpus": 8}], "interior": [{"seconds": 5.0, "gpus": 4}],
+          "stock": {"seconds": 975.0, "gpus": 8}}
+
+
+def test_with_no_served_run_the_share_is_not_measured_and_the_given_share_is_assumed(tmp_path):
+    doc = E.build(store=recorded(tmp_path).store, root=REPO)
+    cs = doc["compute_share"]
+    assert (cs["run"], cs["value"], cs["mark"], cs["why"], cs["GB"]) == (None, None, None, E.NO_RUN, None)
+    assert cs["given"] == {"share": 0.1, "mark": "assumed", "GB": doc["value"]} and doc["value"] == pytest.approx(YEAR_GB)
+    by = {i["input"]: i for i in doc["inputs"]}
+    assert by["compute_share"]["mark"] == "assumed" and E.NO_RUN in by["compute_share"]["source"]
+    assert not any(i["input"].startswith("served_") or i["mark"] == "missing" for i in doc["inputs"])
+    text = E.render(doc)
+    assert ("\n\n**The audit's share of compute: not measured: no served run's record.** Every figure below is read at the "
+            "given 10% of total compute (assumed).\n\n") in text
+    assert "- **the compute audit's part: 14,240 GB** (modeled)" in text and "## The audit's share of compute on" not in text
+
+
+def test_a_served_runs_record_gives_the_share_measured_and_the_part_at_it(tmp_path):
+    s = recorded(tmp_path)
+    doc = E.build(served=SERVED, store=s.store, root=REPO)
+    cs = doc["compute_share"]
+    assert (cs["run"], cs["mark"], cs["why"], cs["missing"], cs["serving_gpu_s"]) == (SERVED["run"], "measured", None, [], 8000.0)
+    assert cs["value"] == pytest.approx(0.12, rel=1e-12)
+    assert {k: (p["gpu_s"], p["mark"]) for k, p in cs["parts"].items()} == {
+        "prove": (480.0, "measured"), "staging": (20.0, "measured"), "replay": (240.0, "measured"),
+        "interior": (20.0, "measured"), "serving_charge": (200.0, "measured")}
+    # the part at the measured share is the part the command reads at that share given; the given 10%'s is beside it
+    at = E.build(share=0.12, store=s.store, root=REPO)["value"]
+    assert cs["GB"] == pytest.approx(at, rel=1e-12) and cs["inside"] and cs["no_GB"] is None
+    assert cs["given"] == {"share": 0.1, "mark": "assumed", "GB": doc["value"]} and doc["value"] == pytest.approx(YEAR_GB)
+    by = {i["input"]: i for i in doc["inputs"]}
+    assert {k: by[f"served_{k}_gpu_s"]["mark"] for k in (*E.SERVED_PARTS, "serving")} == dict.fromkeys(
+        (*E.SERVED_PARTS, "serving"), "measured")
+    assert (by["served_compute_share"]["mark"], by["served_compute_share"]["value"]) == ("measured", cs["value"])
+    assert by["compute_share"]["mark"] == "assumed" and SERVED["run"] in by["compute_share"]["source"]
+    text = E.render(doc)
+    assert (f"**The audit's share of compute: 12.000% (measured)**, on {SERVED['run']}: the audit's GPU-seconds over the "
+            "window's serving, 8,000 GPU-seconds, in parts prove 6.000%, staging 0.250%, replay 3.000%, interior 0.250%, "
+            f"serving charge 2.500%. At that share, β = {E._part(cs['beta'])}, the compute audit's part over the world's "
+            f"year is {E._n(at)} GB, beside 14,240 GB at the given 10% of total compute (assumed)") in text
+    assert f"| serving_charge | {E.SERVED_PARTS['serving_charge'][0]} | 200 | 2.500% | measured | the served GPU-seconds less" in text
+
+    # with no stock serve of the load, the serving charge is the serve tax's cost of the arm over stock, modeled
+    cost = {k: v for k, v in SERVED.items() if k != "stock"} | {
+        "serving_cost": 0.025 / 0.975, "serving_cost_source": "r20261110-000000-0000, load chat"}
+    cs = E.build(served=cost, store=s.store, root=REPO)["compute_share"]
+    assert cs["value"] == pytest.approx(0.12, rel=1e-12) and cs["mark"] == "modeled"
+    assert cs["parts"]["serving_charge"]["mark"] == "modeled" and "r20261110-000000-0000, load chat" in cs["parts"][
+        "serving_charge"]["source"]
+
+
+def test_a_field_the_record_lacks_names_its_gap_and_no_share_is_claimed(tmp_path):
+    s = recorded(tmp_path)
+    lacking = {k: v for k, v in SERVED.items() if k not in ("staging", "stock")} | {
+        "prove": [{"seconds": 300.0}, {"seconds": 180.0, "gpus": 1}]}
+    doc = E.build(served=lacking, store=s.store, root=REPO)
+    cs = doc["compute_share"]
+    assert (cs["value"], cs["mark"], cs["GB"]) == (None, None, None) and doc["value"] == pytest.approx(YEAR_GB)
+    assert {g["field"]: g["lacks"] for g in cs["missing"]} == {
+        "prove": ["prove.gpus"], "staging": ["staging"], "serving_charge": ["stock"]}
+    assert cs["why"] == "not measured: " + "; ".join(
+        f"{SERVED['run']}'s record lacks {lacks} ({E.SERVED_PARTS[k][1]})"
+        for k, lacks in (("prove", "`prove.gpus`"), ("staging", "`staging`"), ("serving_charge", "`stock`")))
+    assert {k: p["mark"] for k, p in cs["parts"].items()} == {
+        "prove": "missing", "staging": "missing", "replay": "measured", "interior": "measured", "serving_charge": "missing"}
+    by = {i["input"]: i for i in doc["inputs"]}
+    assert {k: by[k]["mark"] for k in ("served_prove_gpu_s", "served_staging_gpu_s", "served_replay_gpu_s",
+                                       "served_compute_share")} == {
+        "served_prove_gpu_s": "missing", "served_staging_gpu_s": "missing", "served_replay_gpu_s": "measured",
+        "served_compute_share": "missing"}
+    assert E.SERVED_PARTS["staging"][1] in by["served_staging_gpu_s"]["source"]
+    text = E.render(doc)
+    assert f"\n\n**The audit's share of compute: {cs['why']}.** Every figure below is read at the given 10%" in text
+    assumed = sum(i["mark"] == "assumed" for i in doc["inputs"])
+    assert f"modeled, 1 simulated, {assumed} assumed and 4 missing." in text
+    assert "| staging | " + E.SERVED_PARTS["staging"][0] + " | none | none | missing | `staging`; lacks `staging`: " in text
+    # the window's serving lacking: every part is unclaimed as a share, and the gap is the serve's
+    cs = E.served_share({k: v for k, v in SERVED.items() if k != "serving"})
+    assert cs["value"] is None and cs["missing"][0] == {"field": "serving", "lacks": ["serving"], "why": E.SERVING_GAP}
+    assert {p["share"] for p in cs["parts"].values()} == {None}
+
+    for bad, why in (({"replay": [{"seconds": 30.0, "gpus": 0}]}, "holds replay at 30.0 seconds on 0 GPUs"),
+                     ({"serving": {"seconds": 0.0, "gpus": 8}}, "holds the window's serving at 0.0 GPU-seconds"),
+                     ({"stock": None, "serving_cost": -1}, "holds a serving cost of -1: a fraction over -1")):
+        with pytest.raises(ValueError, match=f"{SERVED['run']}'s record {why}"):
+            E.served_share(SERVED | bad)
+    with pytest.raises(ValueError, match="a served run's record is one JSON object, not list"):
+        E.served_share([SERVED])
+
+
+# ---- the stop class's verdicts -----------------------------------------------------------------------------------------------
+
+#: the sha256 of the print and of the `--json` document on the fixtures' runs with no verdicts of record: the command's
+#: output before it read any. A change elsewhere that moves the print on purpose pins the new digests here
+NO_VERDICTS = {"text": "0b6a7352cafaf5ace94a8a09d9b1bea6c69231661d426df7b74cf7ec1ad092d0",
+               "json": "1a3f148cc6e8ce51edbfc8cb7c8209b81080f544a232e66b3c2a97d0f0d06388"}
+#: made-up verdicts: a verifier, what stands between its verdicts and proved, the run that holds the records, and each
+#: verdict's own run
+VERIFIER = {"module": "made_up.stop_verifier", "commit": "0123456789ab" * 3 + "0123"}
+OPEN = "the two-round form's soundness is not proved"
+HOLDER = "r20261113-000000-a000"
+ALL = "the stop record, the response tie, the request tie and the compute audit's second stage"
+
+
+def made_up_verdict(piece: str, control: str | None = None, **more) -> dict:
+    """A made-up verdict's record: the honest run's on ``piece`` accepted, or a ``control`` on it refused, by `VERIFIER`
+    and proved by nothing."""
+
+    n = list(E.PIECES).index(piece) + (0 if control is None else 4 + list(E.CONTROLS).index(control) * 4)
+    return {"piece": piece, "control": control, "run": f"r20261113-000000-a{n + 1:03d}", "verifier": VERIFIER,
+            "verdict": "accept" if control is None else "refuse", "proved_by": None, "open": OPEN} | more
+
+
+def complete() -> list[dict]:
+    """The four pieces accepted, and a changed id refused on the response tie and a changed `max_tokens` on the request
+    tie, each by the verifier that accepted that piece."""
+
+    return [*(made_up_verdict(p) for p in E.PIECES), made_up_verdict("response_tie", "id"),
+            made_up_verdict("request_tie", "max_tokens")]
+
+
+def with_verdicts(tmp: Path, verdicts: list[dict] | str, run: str = HOLDER) -> Store:
+    """The fixture's rows of record, and ``run`` labelled the stop class's record holding ``verdicts`` (or that text)."""
+
+    s = recorded(tmp, planned=False)
+    s.label(s.ran(run, {E.VERDICTS_FILE: verdicts}), value=E.VERDICTS)
+    return s
+
+
+def digests(doc: dict) -> dict:
+    return {"text": hashlib.sha256(E.render(doc).encode()).hexdigest(),
+            "json": hashlib.sha256(json.dumps(doc, indent=1, ensure_ascii=False).encode()).hexdigest()}
+
+
+def test_with_no_verdicts_of_record_the_print_is_as_it_was_byte_for_byte(tmp_path):
+    """With nothing in the store carrying the stop class's record, the print and the document are byte for byte those
+    the command gave before it read verdicts (`NO_VERDICTS`), the output count assumed as it was."""
+
+    doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
+    assert "stop_class" not in doc and E.VERDICTS not in E.render(doc)
+    assert digests(doc) == NO_VERDICTS, (
+        f"the print with no verdicts of record moved: {digests(doc)}; where a change elsewhere moved it on purpose, pin "
+        "these in NO_VERDICTS")
+    assert {i["input"]: i["mark"] for i in doc["inputs"]}["output_count"] == "assumed"
+
+
+def test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apart_from_measured(tmp_path):
+    """Every piece accepted and every control refused by the verifier that accepted its piece, none of them proved: the
+    output count's 0 is `run, not proved`, printed "run (Python verifier, not proved)" with each verdict's run and
+    verifier, and the summary counts it apart from measured. The class prints `complete (run, not proved: ...; Python
+    verifier for ...)`, with what is open in words and no issue's id, and no line calls it proved."""
+
+    base = E.build(store=recorded(tmp_path / "base", planned=False).store, root=REPO)
+    doc = E.build(store=with_verdicts(tmp_path, complete()).store, root=REPO)
+    stop = doc["stop_class"]
+    said = f"complete (run, not proved: {OPEN}; Python verifier for {ALL})"
+    assert (stop["record"], stop["runs"], stop["complete"], stop["mark"], stop["lacks"], stop["said"]) == (
+        E.VERDICTS, [HOLDER], True, E.RUN_NOT_PROVED, [], said)
+    assert [(v["piece"], v["control"]) for v in stop["verdicts"]] == [
+        ("stop_record", None), ("response_tie", None), ("response_tie", "id"), ("request_tie", None),
+        ("request_tie", "max_tokens"), ("second_stage", None)]
+    by, before = {i["input"]: i for i in doc["inputs"]}, {i["input"]: i for i in base["inputs"]}
+    count = by["output_count"]
+    assert (count["part"], count["value"], count["mark"]) == ("network certifier", 0, E.RUN_NOT_PROVED)
+    assert count["source"].startswith(
+        f"taken at 0 in the sums under `all three` and `design`: the stop class's verdicts of record, `{E.VERDICTS}` "
+        f"({HOLDER}), are {said}: the stop record, `accept` on r20261113-000000-a001 by `made_up.stop_verifier` at "
+        f"{VERIFIER['commit']}, not proved: {OPEN}; the response tie, `accept` on r20261113-000000-a002 by ")
+    assert ("the response tie, the control with a changed id, `refuse` on r20261113-000000-a006 by `made_up.stop_verifier`"
+            in count["source"])
+    assert count["source"].endswith("Without them the server chooses a response's output count, which the network "
+                                    "certifier's row `design, no stop block` charges 11 bits a request as its schedules")
+    assert {k: i for k, i in by.items() if k != "output_count"} == {k: i for k, i in before.items() if k != "output_count"}
+    assert doc["periods"] == base["periods"] and doc["value"] == base["value"]
+
+    text = E.render(doc)
+    marks = {m: sum(i["mark"] == m for i in doc["inputs"]) for m in E.MARKS}
+    assert (marks[E.RUN_NOT_PROVED], marks["measured"], marks["assumed"] + 1) == (
+        1, sum(i["mark"] == "measured" for i in base["inputs"]), sum(i["mark"] == "assumed" for i in base["inputs"]))
+    assert (f"of {len(doc['inputs'])} inputs, {marks['measured']} is measured, {marks['modeled']} modeled, 1 simulated, "
+            f"{marks['assumed']} assumed and 1 run (Python verifier, not proved).\n") in text
+    assert f"| network certifier | output_count | 0 | bit/request | run (Python verifier, not proved) | {count['source']} |" in text
+    assert (f"take it at 0, as they price no advice. The stop class's verdicts of record (`{E.VERDICTS}`, {HOLDER}): "
+            f"{said}.\n") in text
+    assert f"- the stop class: {HOLDER} (`{E.VERDICTS}`): 6 verdicts, {said}\n" in text
+    assert [line for line in text.splitlines() if "proved" in line.replace("not proved", "")] == []
+
+    # a piece proved and the others not: still run, not proved, and the Python verifier is the others'
+    mixed = [v | {"proved_by": "Made.Up.StopRecordSound", "open": None} if v["piece"] == "stop_record" else v
+             for v in complete()]
+    stop = E.build(store=with_verdicts(tmp_path / "mixed", mixed).store, root=REPO)["stop_class"]
+    assert (stop["mark"], stop["said"]) == (E.RUN_NOT_PROVED, f"complete (run, not proved: {OPEN}; Python verifier "
+                                            "for the response tie, the request tie and the compute audit's second stage)")
+
+
+def test_proved_by_on_every_piece_makes_it_measured(tmp_path):
+    """Only where every piece's record names the Lean guarantee that proves its verifier is the output count's 0
+    measured; it is then counted with the measured inputs and nothing prints as not proved."""
+
+    proved = [v | {"proved_by": f"Made.Up.{v['piece']}", "open": None} for v in complete()]
+    base = E.build(store=recorded(tmp_path / "base", planned=False).store, root=REPO)
+    doc = E.build(store=with_verdicts(tmp_path, proved).store, root=REPO)
+    stop = doc["stop_class"]
+    assert (stop["complete"], stop["mark"], stop["said"]) == (True, "measured", (
+        "complete (measured: proved by `Made.Up.stop_record`, `Made.Up.response_tie`, `Made.Up.request_tie` and "
+        "`Made.Up.second_stage`)"))
+    count = next(i for i in doc["inputs"] if i["input"] == "output_count")
+    assert count["mark"] == "measured" and "proved by `Made.Up.second_stage`" in count["source"]
+    measured = sum(i["mark"] == "measured" for i in base["inputs"])
+    text = E.render(doc)
+    assert f"inputs, {measured + 1} are measured, " in text and "not proved" not in text
+    assert "| network certifier | output_count | 0 | bit/request | measured | taken at 0 " in text
+
+
+@pytest.mark.parametrize("field", E.VERDICT_FIELDS)
+def test_a_verdicts_record_missing_a_field_is_refused_by_its_name(tmp_path, field):
+    lacking = {k: v for k, v in made_up_verdict("stop_record").items() if k != field}
+    with pytest.raises(ValueError, match=f"^here lacks `{field}`: a verdict's record holds `piece`, `control`, `run`, "
+                                         "`verifier`, `verdict`, `proved_by`, `open`"):
+        E.verdict(lacking, "here")
+    s = with_verdicts(tmp_path, [*complete()[:3], lacking])
+    with pytest.raises(ValueError, match=f"^{HOLDER}'s `{E.VERDICTS_FILE}` line 4 lacks `{field}`"):
+        E.build(store=s.store, root=REPO)
+
+
+def test_a_verdicts_record_whose_field_holds_what_it_cant_is_refused(tmp_path):
+    v = made_up_verdict("stop_record")
+    with pytest.raises(ValueError, match="^here lacks `verifier.commit`: a verdict's verifier is its module and the commit"):
+        E.verdict(v | {"verifier": {"module": "m"}}, "here")
+    with pytest.raises(ValueError, match="^here lacks `verifier.module`, `verifier.commit`"):
+        E.verdict(v | {"verifier": "m"}, "here")
+    for change, why in (({"piece": "stop"}, "`piece` is one of stop_record, response_tie, request_tie, second_stage"),
+                        ({"control": "length"}, "`control` is null on the honest run, else one of id, max_tokens"),
+                        ({"run": ""}, "`run` is the id of the run that produced the verdict"),
+                        ({"verdict": "pass"}, "`verdict` is one of accept, not complete, refuse, withheld"),
+                        ({"verdict": "withheld", "proved_by": "G", "open": None},
+                         "`open` states what the verifier withheld its accept for, on a `withheld` verdict"),
+                        ({"verdict": "withheld", "open": "PRF-456"}, "`open` names an issue, .*"),
+                        ({"proved_by": ""}, "`proved_by` is null, or the Lean guarantee whose proof covers the verifier"),
+                        ({"open": None}, "`open` states what stands between the verdict and proved, while `proved_by` is "
+                                         "null"),
+                        *(({"open": issue}, "`open` names an issue, and the print carries no issue's id: state what is open "
+                                            "in words \\(e.g. `the two-round form's soundness is not proved`\\), and put the "
+                                            "issue on the board") for issue in ("PRF-419", "waits on PRF-419", "NET-386 and more"))):
+        with pytest.raises(ValueError, match=f"^here holds .*: {why}$"):
+            E.verdict(v | change, "here")
+    assert E.verdict(v | {"proved_by": "G", "open": None, "verifier": VERIFIER | {"more": 1}}, "here")["verifier"] == VERIFIER
+    assert E.verdict(v | {"open": "SHA-512's collision resistance is assumed"}, "here")["open"].startswith("SHA-512")
+    with pytest.raises(ValueError, match="^here is a verdict's record, one JSON object, not list"):
+        E.verdict([v], "here")
+    s = with_verdicts(tmp_path, json.dumps(v) + "\n\n{not json\n")
+    with pytest.raises(ValueError, match=f"^{HOLDER}'s `{E.VERDICTS_FILE}` line 3 is no JSON object"):
+        E.build(store=s.store, root=REPO)
+
+
+def test_without_both_negative_controls_refused_the_class_is_not_complete_and_says_what_is_missing(tmp_path):
+    """The class is complete only with every piece accepted, a changed id and a changed `max_tokens` each refused, and
+    each refusal by the verifier that accepted the honest run's verdict on its piece. Short of that the inputs print as
+    they do with no verdicts, and the output count's line names what is missing. A `withheld` verdict is neither an
+    accept nor a refusal: a withheld piece or control keeps the class short, printed `withheld: <open>`, and a control
+    on a withheld piece refused by that piece's verifier counts as refused and prints nothing more."""
+
+    base = E.build(store=recorded(tmp_path / "base", planned=False).store, root=REPO)
+    honest = complete()[:4]
+    other = VERIFIER | {"commit": "f" * 40}
+    for name, verdicts, lacks in (
+            ("none", honest, ["no negative control with a changed id", "no negative control with a changed `max_tokens`"]),
+            ("one", [*honest, made_up_verdict("response_tie", "id")],
+             ["no negative control with a changed `max_tokens`"]),
+            ("accepted", [*complete()[:5], made_up_verdict("request_tie", "max_tokens", verdict="accept")],
+             ["the control with a changed `max_tokens` on the request tie is `accept` on r20261113-000000-a011, not "
+              "refused"]),
+            ("other", [*complete()[:5], made_up_verdict("request_tie", "max_tokens", verifier=other)],
+             ["the control with a changed `max_tokens` is refused on r20261113-000000-a011 by `made_up.stop_verifier` at "
+              f"{'f' * 40}, not by a verifier that accepted the honest run's verdict on the request tie"]),
+            ("unaccepted", [*complete()[:2], made_up_verdict("request_tie", verdict="not complete"), *complete()[3:]],
+             ["the request tie is `not complete` on r20261113-000000-a003",
+              "the control with a changed `max_tokens` is refused on r20261113-000000-a011 by `made_up.stop_verifier` at "
+              f"{VERIFIER['commit']}, not by a verifier that accepted the honest run's verdict on the request tie"]),
+            ("withheld", [*complete()[:3], made_up_verdict("second_stage", verdict="withheld"), *complete()[4:]],
+             [f"the compute audit's second stage on r20261113-000000-a004, withheld: {OPEN}"]),
+            ("withheld control", [*complete()[:5], made_up_verdict("request_tie", "max_tokens", verdict="withheld")],
+             [f"the control with a changed `max_tokens` on the request tie on r20261113-000000-a011, withheld: {OPEN}, "
+              "not refused"]),
+            ("withheld, its controls refused", [*complete()[:3], made_up_verdict("second_stage", verdict="withheld"),
+                                                made_up_verdict("second_stage", "id"),
+                                                made_up_verdict("second_stage", "max_tokens")],
+             [f"the compute audit's second stage on r20261113-000000-a004, withheld: {OPEN}"]),
+            ("withheld, a control refused by another", [*complete()[:3], made_up_verdict("second_stage", verdict="withheld"),
+                                                        made_up_verdict("second_stage", "id", verifier=other),
+                                                        made_up_verdict("second_stage", "max_tokens")],
+             [f"the compute audit's second stage on r20261113-000000-a004, withheld: {OPEN}",
+              "the control with a changed id is refused on r20261113-000000-a008 by `made_up.stop_verifier` at "
+              f"{'f' * 40}, not by a verifier that accepted the honest run's verdict on the compute audit's second stage"]),
+            ("missing", complete()[1:], ["no verdict on the stop record"])):
+        doc = E.build(store=with_verdicts(tmp_path / name, verdicts).store, root=REPO)
+        stop = doc["stop_class"]
+        assert (stop["complete"], stop["mark"], stop["lacks"]) == (False, None, lacks), name
+        assert doc["inputs"] == base["inputs"], name
+        text = E.render(doc)
+        said = "not complete: " + "; ".join(lacks)
+        assert stop["said"] == said and f"(`{E.VERDICTS}`, {HOLDER}): {said}.\n" in text, name
+        assert "complete (run" not in text and "run (Python verifier" not in text, name
+        assert text.split("\n## Inputs")[1] == E.render(base).split("\n## Inputs")[1], name
+
+
+def test_a_verdict_two_runs_hold_or_a_superseded_run_is_refused_by_name(tmp_path):
+    s = with_verdicts(tmp_path, complete())
+    again = s.label(s.ran("r20261113-000000-a100", complete()[:1], name=E.VERDICTS_FILE), value=E.VERDICTS)
+    with pytest.raises(ValueError, match=f"^{HOLDER} and {again} both hold a verdict on the stop record and neither is "
+                                         "superseded: label the one the other replaces .*superseded_by NEWER"):
+        E.build(store=s.store, root=REPO)
+    s.label(again, E.SUPERSEDED_BY, HOLDER)
+    doc = E.build(store=s.store, root=REPO)
+    assert doc["stop_class"]["complete"] and {x["target"]: x["why"] for x in doc["refused"]} == {
+        again: f"superseded by {HOLDER}"}
+    assert f"- {again} (`{E.VERDICTS}`): superseded by {HOLDER}" in E.render(doc)
+    with pytest.raises(ValueError, match=f"^{HOLDER} holds two verdicts on the request tie, the control with a changed "
+                                         "`max_tokens`"):
+        E.build(store=with_verdicts(tmp_path / "twice", [*complete(), complete()[-1]]).store, root=REPO)
+    empty = recorded(tmp_path / "empty", planned=False)
+    empty.label(empty.ran(HOLDER, [{}], name="out/other.jsonl"), value=E.VERDICTS)
+    doc = E.build(store=empty.store, root=REPO)
+    assert doc["refused"] == [{"target": HOLDER, "record": E.VERDICTS, "why": f"holds no verdicts (`{E.VERDICTS_FILE}`)"}]
+    assert doc["stop_class"]["runs"] == [] and not doc["stop_class"]["complete"]
+    assert f"(`{E.VERDICTS}`, no run read): not complete: no verdict on the stop record; " in E.render(doc)
+
+
 # ---- the command -------------------------------------------------------------------------------------------------------------
 
 
@@ -1082,6 +1447,14 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     assert code == 2 and out == "" and "verity bench exfiltration: " in err and "the scan's δ in (0, 1)" in err
     code, out, err = run("--row", "(iv)")
     assert code == 2 and out == "" and "verity bench exfiltration: no run of record holds the planner's rows" in err
+    # a served run's record from its reader: the share it measures, beside the given one
+    (served := tmp_path / "served.json").write_text(json.dumps(SERVED))
+    code, out, _ = run("--served-run", str(served))
+    assert code == 0 and f"**The audit's share of compute: 12.000% (measured)**, on {SERVED['run']}" in out
+    code, out, _ = run("--json", "--served-run", str(served))
+    assert code == 0 and json.loads(out)["compute_share"]["value"] == pytest.approx(0.12)
+    code, out, err = run("--served-run", str(tmp_path / "none.json"))
+    assert code == 2 and out == "" and "verity bench exfiltration: " in err and "none.json" in err
     # this machine's catalog alone holds no label
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "alone"))
     code, _, err = run("--local-only")
