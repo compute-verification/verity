@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.SpotFlock.Honest.Roots
+public import Proofs.Flock.SpotFlock.Honest.Instance
 public import Proofs.Flock.SpotFlock.WiringOk
 
 /-!
@@ -13,7 +13,7 @@ each clause of the registered wiring's check (`wiringOk`) holds where a link nam
 * each wire's reader port is like its writer's (`wiresAlike_held`), and no wire names a written bit's port
   (`writtenUnwired_held`): there is no wire;
 * no written bit the boundary record holds is at an unlinked port (`returnedWhole_held`), and none needs a wire to
-  read it (`writtenRead_held`), from `RefPorts.written`;
+  read it (`writtenRead_held`), where every bit `R` writes is at one of its ports (`RefWritten`);
 * each reference read is at a linked port or reads a port of the interior registration (`refReadsOwn_held`), from
   `RefReadsNamed`;
 * the interior registration registers no value (`values_held`).
@@ -30,6 +30,9 @@ namespace SpotFlock.Honest
 open Claims Claims.Sampling SamplingDeploy
 
 variable (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code)
+
+/-- **Every bit `R` writes is at one of its ports.** -/
+def RefWritten : Prop := ∀ y ∈ writtenBits (ms2 R.x), R.ports.contains y.2.2.row = true
 
 /-- **Each of `R`'s reference registered reads is at one of its ports, or reads a port of the interior
 registration.** -/
@@ -48,12 +51,12 @@ theorem name_held {t : ℕ} (ht : t < (held R B desc q c₀).ms.length) :
 
 /-- **No written bit the boundary record holds is at a port no link names**: every written bit is at one of `R`'s
 ports, each linked. -/
-theorem returnedWhole_held (hR : RefPorts R) : returnedWhole (held R B desc q c₀) = true := by
+theorem returnedWhole_held (hR : RefWritten R) : returnedWhole (held R B desc q c₀) = true := by
   unfold returnedWhole
   rw [List.all_eq_true]
   rintro ⟨y, t, r⟩ hy
   obtain ⟨ht, -⟩ := mem_writtenBits hy
-  have hrow : R.ports.contains r.row = true := hR.written _ hy
+  have hrow : R.ports.contains r.row = true := hR _ hy
   dsimp only
   rw [name_held R B desc q c₀ ht, heldLink_held R B desc q c₀ _ hrow, Bool.true_or]
 
@@ -92,17 +95,17 @@ theorem wiresAlike_held : wiresAlike (held R B desc q c₀) = true := by
   simp [wiresAlike, held, held₀]
 
 /-- **Every port a member writes is linked**, so none needs a wire to read it. -/
-theorem writtenRead_held (hR : RefPorts R) : writtenRead (held R B desc q c₀) = true := by
+theorem writtenRead_held (hR : RefWritten R) : writtenRead (held R B desc q c₀) = true := by
   unfold writtenRead
   rw [List.all_eq_true]
   rintro ⟨y, t, r⟩ hy
   obtain ⟨ht, -⟩ := mem_writtenBits hy
-  have hrow : R.ports.contains r.row = true := hR.written _ hy
+  have hrow : R.ports.contains r.row = true := hR _ hy
   dsimp only
   rw [name_held R B desc q c₀ ht, heldLink_held R B desc q c₀ _ hrow, Bool.true_or]
 
 /-- **The registered wiring passes its check at the instance** (`wiringOk`), each clause by its own lemma. -/
-theorem wiringOk_held (hR : RefPorts R) (hO : RefReadsNamed R B) : wiringOk (held R B desc q c₀) = true :=
+theorem wiringOk_held (hR : RefWritten R) (hO : RefReadsNamed R B) : wiringOk (held R B desc q c₀) = true :=
   (wiringOk_iff _).2 ⟨namesOnce_held R B desc q c₀, wiresFirst_held R B desc q c₀, sourcesNamed_held R B desc q c₀,
     wiresMove_held R B desc q c₀, wiresAlike_held R B desc q c₀, returnedWhole_held R B desc q c₀ hR,
     writtenUnwired_held R B desc q c₀, writtenRead_held R B desc q c₀ hR, refReadsOwn_held R B desc q c₀ hO,
@@ -120,7 +123,7 @@ theorem membersScoped_held (hS : _root_.Flock.ProvedScope.scopeOkH (stmtOf R.x) 
 /-- **The design evaluates at the instance**, where `R`'s circuit is in the scope Flock's hidden-output proof
 covers, each bit it writes is at one of its ports and each of its reference reads is at one of its ports or reads a
 port of the interior registration. -/
-theorem two_of_ref (hS : _root_.Flock.ProvedScope.scopeOkH (stmtOf R.x) = true) (hR : RefPorts R)
+theorem two_of_ref (hS : _root_.Flock.ProvedScope.scopeOkH (stmtOf R.x) = true) (hR : RefWritten R)
     (hO : RefReadsNamed R B) (s : AuditStatement) :
     two (held R B desc q c₀) s =
       some ⟨Properties.Spot.filesReplay (ms2 R.x) #[2] (oneLayout B.gs), design1, [1]⟩ :=
