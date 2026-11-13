@@ -42,7 +42,9 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
   4. the stream's run of record over both stages (`Run.run` of `inputOf`): the boundary audit over the replay
      sample at the boundary's session roots, and the interior audit over the second sample with round 2's statement
      check, at the rest; the evidence's first-stage bytes are exactly the ones the run's first stage read
-     (`sourceRead`, `SOURCE_READ`), since the run holds only those to the challenger's coins;
+     (`sourceRead`, `SOURCE_READ`), since the run holds only those to the challenger's coins; and on two windows the
+     first session's log shows no coin of the second stage's family after the interior's digest (`interiorUnshown`,
+     `INTERIOR_SHOWN`);
   5. the interior audit's verdict at its coins (`OneStage.checkAt`, as v2's per-member form decides it), which gives
      the public output and the integrity profile;
   6. last, the switch (`finish`): the run must accept, and the form is refused while `FORM` is off.
@@ -267,13 +269,40 @@ def sourceRead (ξ : ByteArray) (run : Json) : V Unit :=
   | some read => if read < ξ.size then .error SOURCE_READ else .ok ()
   | none => .ok ()
 
+def INTERIOR_SHOWN : String :=
+  "on two windows the first session's log shows coins of the interior's family released after the interior " ++
+    "registration's digest: the second stage's coins are its own session's alone"
+
+/-- Whether the roots a session's log shows, by family (`Challenger.Roots`), show a coin of family `label` released after
+`after`. -/
+def interiorShown (roots : Challenger.Roots) (label : String) (after : ByteArray) : Bool :=
+  (((roots.find? (·.1 == label)).map (·.2)).getD []).contains after
+
+/-- **On two windows, the first session releases none of the second stage's coins** (check, 4): where the interior
+registration's window is not the boundary registration's, the first session's log (the session `e.coins` names on the
+boundary's window, `Challenger.trustedSessionOf`) shows no coin of the second stage's family released after the
+interior registration's digest (`INTERIOR_SHOWN`), so the coins of that family after that digest are the second
+session's alone. Where a piece is missing or unreadable the run has already refused, and this adds nothing. -/
+def interiorUnshown (p : Params) (e : Evidence) : V Unit :=
+  match p.boundary.verifier.windowRoot, getD (getD e.interior.base.coins "segment") "label" with
+  | some w, .str label =>
+    if some w == p.interior.verifier.windowRoot then .ok () else do
+      let after ← Registration.digest e.record
+      let k ← Challenger.ChallengerKey.ofJson (getD e.coins "key")
+      let (_, roots) ← Challenger.trustedSessionOf (getD e.coins "ledger") (Json.mkObj [("root", Json.str w)]) k
+        (getD e.coins "pins") (getD e.coins "main") (getD e.coins "session")
+      if interiorShown roots label after then .error INTERIOR_SHOWN else .ok ()
+  | _, _ => .ok ()
+
 /-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output, its round 2 at the
-switch `form`, its first stage having read every byte of `ξ`. -/
+switch `form`, its first stage having read every byte of `ξ`, the first session releasing none of the second stage's
+coins. -/
 def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (Core.Outcome OneStage.Public Core.Integrity × Json) := do
   let (c₂, ξ₂, r, i) ← inputAt p c ξ e bs
   let run ← Spot.Run.run i form
   sourceRead ξ run
+  interiorUnshown p e
   pure (OneStage.checkAt p.audit.base c₂ (some ξ₂) { e.interior.base with verdicts := r.out }, run)
 
 /-- **The last step** (check, 6) at the switch `form`: the interior audit's verdict where it doesn't accept; where it
@@ -373,5 +402,9 @@ def protocol : Core.BlobProtocol where
   | .ok _ => false
 #guard (sourceRead (ByteArray.mk #[1, 2]) (Json.mkObj [("read", Lean.toJson (2 : Nat))])).toOption.isSome
 #guard (sourceRead (ByteArray.mk #[1, 2]) (Json.mkObj [("step", "select")])).toOption.isSome
+#guard interiorShown [("boundary", [ByteArray.mk #[1]]), ("interior", [ByteArray.mk #[1], ByteArray.mk #[7]])]
+  "interior" (ByteArray.mk #[7])
+#guard !interiorShown [("interior", [ByteArray.mk #[1]])] "interior" (ByteArray.mk #[7])
+#guard !interiorShown [("boundary", [ByteArray.mk #[7]])] "interior" (ByteArray.mk #[7])
 
 end VStar.Recursive.SampledTwo
