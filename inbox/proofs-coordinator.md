@@ -117528,3 +117528,45 @@ NEEDS: HELDOF, as at 02:58Z (`HeldOf.lean` against its own head). Nobody else.
 To post: nothing.
 
 Not established: that `HeldOfReads.lean` or `OwnReadsGive.lean` compiles; `OpensOwn` at any device (HISTORY's question (a), (b), (c) and soundness's PRF-490); `ReadsWf` at the form's parameters, which stays the named premise you ruled at 02:13Z until something runs `readsChecked`. The sibling checks covered only the modules built in each tree. The package's Lean check with its lock has not run on any of these heads.
+
+## CUT, Fri 13 Nov 03:24Z: the two-case file is dropped and the base is merged (`cb9c52965a`); `PrintsTwo` from the accept takes ONE FACT OF THE DEVICE that no check gives: the device's history, as the proofs hold it, has no order between a ledger line and a release
+
+In plain words: I dropped the two-case file as you ruled at 03:00Z; it was on my disk only. I merged the base and sent my four compiled files to a try at the merged head. Then I read what `PrintsTwo` from the accept takes, against TWOLEG's shape of the order refusal (03:15Z). It is three steps. Two I can prove, and I am writing them. The third is a fact about the device: it releases a session's coins before it signs that session's `end` line and after it signs its `reserve` line. The proofs hold the device's history as a list of runs and a list of ledger lines, with no order between the two, so the ledger's order says nothing of the play's log until that fact is assumed. It is a fact of the device alone: it names no window the prover chose, and the swap does not make it false. That is what `Apart` could not say. I name it as the premise that takes `PrintsTwo`'s place, and ask you under NEEDS 2 whether that is what you want.
+
+**1. Done** [run]
+- `CutStages.lean` is deleted from my working tree. It was never committed or pushed. `FirstReads` and `LogRead` stay as compiled (`CutRead.lean`, run `r20261113-024011-f92d`).
+- The base is merged: `cursor/proofs-twoleg-c5e5` at `b6d988648b` into my branch, merge `cb9c52965a`, pushed. That tip is `059a9408fe` and the two commits after it (`stagesFit`, `accepted_fits`), which SESSIONCOINS's 03:16Z says are not compiled. I merged at 03:15Z, before I read that. `accepted_steps`' statement is the same there [read: the diff], and my files use only it and `inputAt_ok` of `Steps.lean`.
+- Try 8, `r20261113-031548-ee00` (vy-nebius-2): `Cut`, `CutPrints`, `CutHeld`, `CutRead` at `cb9c52965a`. In line since 03:15:48Z; not started at this entry.
+
+**2. The premises the cut still names**
+The compiled bound is `cutBound_read`: `Wired`, `FirstReads θ`, `PrintsTwo` at each play, `SignsPlay`.
+- `FirstReads θ` is not proved. TWOLEG's 03:15Z finding 1 changes what I said of it. At today's base the form accepts no play, so `FirstReads θ` and every theorem of the cut hold there of nothing [relayed; I re-read the two readers: `drawCoins` refuses unless the evidence's keys are `{ledger, main, pins, segment, session}`, `coinsReason` unless they are `{key, ledger, main, pins, segment, session}`, and `inputOf` hands the interior's `coins` to both]. At a form mended only there, the first stage's coins are still read under the key the evidence carries, and `FirstReads θ` is false for a play whose evidence names its own key [read, 02:43Z]. #9555 mends both. I prove `FirstReads` on the head that holds it.
+- `PrintsTwo` is a premise until the order refusal is on the base and section 3 compiles. After that the cut names section 3's device premise in its place.
+- The known hole stands: at a history holding one play's signatures, an earlier period's genuine signature in the evidence is the forger's, and the forger's term bounds nothing there.
+
+**3. `PrintsTwo` from the accept, in three steps** [derived; nothing compiled]
+TWOLEG's shape: on two windows the second stage's copy of the ledger, read under the parameters' key, opens both windows; the first window's session `a` has its `end` line; that line's `seq` is below the `seq` of the `reserve` line of the second window's session `b`.
+- (i) **The accept gives those four lines** (two opens, the end, the reserve) in the second stage's copy. This is TWOLEG's step lemma (NEEDS 1) and `LedgerInv` (an end's session is its open's; `Ledger.verifyLedger_inv`) [read].
+- (ii) **Each of the four is a line of the device's own ledger, apart from its signature, or the second session's record carries a break.** `Window.window_opens` proves it for the one open line a draw reads, and `verifyLedger_sig` holds every line signed [read]. I restate it for any line. Two facts it takes are not on the tree: an entry's `seq`, and an end's or a reserve's `session`, are its JSON's (`Window.ledgerEntry_fields` gives the kind, the schema, the body and an open's session) [read]. I prove both.
+- (iii) **From the device's ledger to the play's log.** `Properties.Challenger.History` is `runs` and `ledger`, by key, and nothing else [read: `security/Properties/Challenger.lean`]. No statement over it orders a release against a ledger line. So I state the fact as `PrintsInOrder dev w₁ w₂ log`: on one window, `PrintsOn dev w₁ log`, as now; on two, for every key and sessions `a`, `b`: where the device's ledger opens `w₁` for `a` and `w₂` for `b` and holds an `end` line of `a` whose `seq` is below a `reserve` line's of `b`, the log is `log₁ ++ log₂`, the runs on `w₁` printing `log₁` and those on `w₂` printing `log₂`.
+- **What it asks.** It is `PrintsTwo`'s conclusion under a condition the check now shows. So it asks less of the device than `PrintsTwo` did, and nothing of the prover: at a faithful device under the swap its condition is false, and it holds.
+- **The cut then reads**: `Wired`, `FirstReads θ`, `PrintsInOrder` at each play, `SignsPlay`, and step (i) as the named premise `OrderShown θ` until TWOLEG's head; the same bound, finder and forger. The break of (ii) is in the second session's record, which the finder reads already.
+- **What it does not take**: the evidence's two ledger copies held to one chain (TWOLEG's NEEDS 3). The order is read on the second copy. The session the first copy opens on `w₁` is one more the device's ledger opens there, and `PrintsOn` speaks of every run opened on the window.
+- **At HISTORY's `dev₂`** it follows where the two setups' ledger lines (a) open a root once and a session once, (b) open only the two setups' runs, (c) hold no `end` of the second setup's run whose `seq` is below a `reserve` of the first's. Those take `Apart`'s place, and none names a window the prover chose [derived; not written].
+
+**STOP RULE.** Not reached. No listed guarantee or named assumption changes, and the form accepts nothing more. But `PrintsInOrder` is a premise about the device, where your 03:00Z asked for none: 3 (iii) is why.
+
+**NEEDS.**
+1. TWOLEG, with the order refusal, one step lemma. At an accepted check whose two windows differ (the boundary's root `w₁`, the interior audit's `w₂`), with `ℓ := getD e.interior.base.coins "ledger"`: entries `o₁ e₁ rv o₂ ∈ Properties.Pouw.LiveSalt.entries ℓ` with `o₁.kind = "open"` of root `w₁`, `e₁.kind = "end"`, `e₁.session = o₁.session`, `o₂.kind = "open"` of root `w₂`, `rv.kind = "reserve"`, `rv.session = o₂.session`, `e₁.seq < rv.seq`. Or `checked ℓ key = .ok (wins, _)` with the two `find?`s, `win₁.ended = some e₁`, the reserve and the inequality: I take the rest from `LedgerInv`. On one window the refusal must not apply: both stages read one session there, whose `end` is after its `reserve`.
+2. Coordinator: the device premise of 3 (iii), yes or no. If no, say which fact of the device's history I may use. And who proves it at `dev₂`: HISTORY, from (a) to (c) in place of `Apart`, or I once HISTORY's file is on the base.
+3. TWOLEG, as before: the head that holds #9555, and the lemma that the form's parameters name a key at the deployed LMS parameters.
+
+**To post.** Nothing.
+
+**Not established.** Steps (ii) and (iii) are not compiled; step (i) waits on the refusal. `FirstReads θ` is not proved. That the form accepts an honest play at any tree. `PrintsInOrder` at any history. My four files at the merged head: try 8 has not finished. The known hole.
+
+**Pushed.** `cursor/proofs-cut-9323` at `cb9c52965a`. Nothing is unpushed.
+
+**Runs.** Try 8 `r20261113-031548-ee00` (vy-nebius-2): in line for a place since 03:15:48Z, not started; I cancel and resend it at ten minutes, as the rule says. Try 7 `r20261113-024011-f92d`: done, rc 0 (`CutRead.lean`, at `0dc5993463`).
+
+Next: `SampledTwo/CutOrder.lean` (steps (ii) and (iii), and the bound under `OrderShown`), in a try by about 04:30Z [guess]. The next entry by 04:25Z.
