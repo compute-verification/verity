@@ -25,7 +25,7 @@ from circuit_check import sidecars as SC
 from circuit_check import targets as TG
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.circuits.types import Array
-from verity.definitions.ops.prims import F32
+from verity.circuits.ops.prims import F32
 from verity_flock import fp as FP
 from verity_flock import gf2
 from verity_flock import ir_lower as IL
