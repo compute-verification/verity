@@ -116153,3 +116153,48 @@ Not `null`. A first stage at `rate:1/1` reads the challenger's coins like any ot
 - `b025`'s exit and outcome, and so my word on the second try's design.
 - Which launch file and tree Friday's second serve uses.
 - Anything on the engine or on cards in my runs.
+
+## CUT, Fri 13 Nov 02:57Z: `CutRead.lean` COMPILES WHOLE on the first try (`r20261113-024011-f92d`, vy-nebius-2, at `0dc5993463`: "lean exit 0 in 163 s", 8 theorems, only propext, Classical.choice and Quot.sound). So the cut with the read in its event is done, under `FirstReads θ`, which is false at today's base for a play whose evidence names its own key. The window swap in three lines and the two cases of `LogRead` are below; today's form refuses a first stage with no coin evidence on two windows.
+
+In plain words: the cut now says, of every accepted play, that the check read the challenger's log for both stages' sessions and that each is the device's own, or else the play holds a forgery or a SHA-512 collision. That compiled. It rests on one premise that today's check does not yet give: the first stage's coins (which pick the outer blocks) are read under the registered key. Your second question was the case where the first stage picks every outer block and so reads no coin. There the cut should speak of the second stage's log alone (the coins that pick the inner blocks). I state that below and write it next. One thing I found on the way: on two windows, today's two-stage check refuses that case outright, by accident.
+
+Head pushed: `0dc5993463` on `cursor/proofs-cut-9323`. Nothing unpushed.
+
+**What compiled** [run, `f92d`]: `SampledTwo/CutRead.lean`, lean exit 0 in 163 s. Axiom probe: "none of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound" (`logsOf_ne_nil`, `mapM_isSome_of`, `first_reads`, `members_records`, `second_reads`, `reads_or_break`, `cutBound_of`, `cutBound_read`). No `sorry`, `axiom` or `native_decide` in it [read]. The sibling check found no clash among the 3,897 built modules it imported; it says 165 modules of the package were unchecked, having no build there. With tries 5 and 6 the cut is four files and 48 theorems, all compiled.
+
+**For STAGECOINS, HISTORY, ASSEMBLY:** merge `0dc5993463`. `cutBound_read : Wired V k θ → FirstReads θ → (∀ o, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → PrintsTwo (dev o) w₁ w₂ o.log) → SignsPlay V dev θ F c → CutBound V k θ F c σ ReadIsDevice (terms V dev θ F c σ)`, where `ReadIsDevice o := LogRead o ∧ LogIsDevice o` and `LogRead o := readsLogs o.sent ≠ []`. `cutBound`, `LogIsDevice`, `PrintsOn`, `PrintsTwo`, `SignsPlay` and `terms` are as they were.
+
+**The window swap, in three lines** (your 02:43Z):
+1. `binds_of_accepts`, `cutBound` and `cutBound_read` take `PrintsTwo` and nothing else about windows; `Apart` is in no file of mine [read]. It is HISTORY's hypothesis of `printsTwo_dev₂`, used only where `w₁ ≠ w₂`.
+2. The check reads each session's window from the parameters, never from the evidence [read]: the first stage's from `p.boundary.verifier.windowRoot` (`Run.run`'s `coinsHold`), the second's from `p.interior.verifier.windowRoot` (`interiorSteps`) and `p.audit.base.verifier.windowRoot` (`OneStageZk.coinsOf`). The evidence gives only the session's files, which must be those of the one session the ledger opens, withheld, on that root (`trustedSessionOf`, `withheldOn`). So evidence that hands the session opened on `w₂` to the first stage is refused: the ledger opens no such session on `w₁`.
+3. What the check does not read is which session released first. On two windows it does force `w₂ = SecondStage.interiorRoot digest sample` (`interiorWindowOk`), a SHA-512 of the boundary's digest and the outer blocks' sample, so the prover can name `w₂` to the device before the first stage's coins only where that sample is known without coins (a first stage that takes every outer block) or guessed [derived, no lemma]. So the swap is not refused by the check where the first sample is predictable; there the device must open the parameters' windows in order.
+
+**`LogRead` in two cases** (your 02:48Z, point 2) [derived, not written yet]. The case is read off the evidence: the first stage's coin evidence is `null`, which the run takes only where its first stage read no byte (`coinsHold`). My event does not read the design, so "its design takes every unit" is not in it.
+- Case one, the evidence is not `null`: both logs, `readsLogs`, as compiled.
+- Case two, it is `null`: the interior session's log alone, `[r₂]` with `r₂` the second read at the second stage's coins, held to the play's whole log.
+- What it costs. (a) A new finder and so new terms of the same two kinds: the compiled `readFinder` looks for an opening collision in `opensReads`, which is empty in case two, so the finder must also look in the second read without coins. The forger is unchanged and so is the cost count. (b) `FirstReads` splits: the parameters name a key at the deployed LMS parameters (a fact of `θ` alone, now a hypothesis of its own, since case two needs the key to name the second record's break), and the first stage's draw only in case one. (c) The printing premise in case two is that the runs on the interior's window print the play's whole log. On one window that is `PrintsTwo`. On two windows it says the first session released nothing, which is HISTORY's to say of the device. (d) Nothing in case two speaks of a first log, and the bound's value is no worse.
+- **A finding** [read]: on two windows today's form already refuses case two. `interiorUnshown`, where the boundary's window is not the interior's, reads `ChallengerKey.ofJson (getD e.coins "key")`, and on `null` evidence that throws (`KEY_FORM`), so `prepare` fails. The boundary always has a window, because it names a challenger (`ONE_KEY`, and `paramsParsed` refuses a challenger without `window_root`). So an 8 of 8 first stage on a session of its own for the second stage is refused by the form on TWOLEG's branch as it stands; on one window it is not.
+
+Runs:
+- `r20261113-024011-f92d` [run]: try 7, vy-nebius-2, done, rc 0, SUCCESS. Waited about 4 min for a slot, 8 min to the verdict.
+
+### STOP RULE
+Nothing here changes a listed guarantee or a named assumption. No lock is touched and the form accepts nothing it refused.
+
+### NEEDS
+1. TWOLEG (the form's owner): if case two is to stand on two windows, `interiorUnshown` must pass where `e.coins` is `null` (there is no first session's log to show anything). It accepts more than the form on your branch does today, so it is yours to weigh; it changes no listed guarantee.
+2. GATHER: besides what the coordinator asked (what the first stage's coin evidence is at 8 of 8), say whether that run's two stages are on one window or two.
+3. HISTORY `bc-3e1bb2d6-7c79-5a00-8b4a-12f4945146a9`: in case two on two windows, whether the first session releases nothing (then the interior's runs print the whole log). On one window nothing new is asked.
+4. TWOLEG, unchanged: a lemma that the two-stage `paramsOfJson` yields a challenger key at the deployed LMS parameters. Until then it is the hypothesis `keyOf θ = some key`.
+5. REDRAW's key change on the form's branch, unchanged: then I prove `FirstReads`.
+
+### To post
+Nothing.
+
+### Not established
+- `FirstReads θ` is a premise, unproved, and FALSE at today's base for a play whose first-stage coin evidence names a key of the prover's own (the run reads that key from the evidence), and for a play whose first stage read no coin (case two, not written yet).
+- The two-case statement is designed, not written and not compiled.
+- Point 3 of the window swap is an argument, not a lemma; no term for a guessed sample is stated anywhere in my files.
+- The known hole stands: at a history holding one play's signatures, an earlier period's genuine signature in the evidence counts as the forger's, and the forger's term bounds nothing there.
+
+Next: the two-case file (`SampledTwo/CutStages.lean`, new names only), in a try by about 04:15Z [guess]; the next entry by 03:55Z.
