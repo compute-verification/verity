@@ -63,16 +63,6 @@ structure GemmFigures (c : Card) : Prop where
   /-- Device memory holds `A` and `B` and then `C` at `n = 2048`: `kernel_computes`, for `stores_exec`. -/
   dram : 2048 * 2048 / 2 + 2048 * 2048 ≤ c.size .dram
 
-instance instDecidableGemmFigures (c : Card) : Decidable (GemmFigures c) :=
-  decidable_of_iff ((0 < c.ρ .tensor ∧ 0 < c.ρ .issue ∧ 0 < c.ρ .alu ∧ 0 < c.ρ .imad ∧ 0 < c.ρ .shfl ∧
-      0 < c.ρ .f64 ∧ 0 < c.ρ .sfu ∧ 0 < c.ρ .smem ∧ 0 < c.ρ .l2 ∧ 0 < c.ρ .dram) ∧ c.weight .s8 = 1 ∧
-      1069056 ≤ c.text ∧ 2048 * 2048 ≤ c.size .reg ∧ 2 * 2048 * 512 ≤ c.size .smem ∧
-      c.size .smem ≤ c.size .dram ∧ 2048 * 2048 / 2 + 2048 * 2048 ≤ c.size .dram)
-    ⟨fun ⟨hr, hw, ht, hg, hs, hsd, hd⟩ => ⟨fun r => by
-        obtain ⟨_, _, _, _, _, _, _, _, _, _⟩ := hr
-        cases r <;> assumption, hw, ht, hg, hs, hsd, hd⟩,
-      fun h => ⟨⟨h.1 _, h.1 _, h.1 _, h.1 _, h.1 _, h.1 _, h.1 _, h.1 _, h.1 _, h.1 _⟩, h.2, h.3, h.4, h.5, h.6, h.7⟩⟩
-
 variable {c : Card}
 
 /-- A card's machine at the exact `s8` semantics. -/
