@@ -14,13 +14,15 @@ before a run is read against them, decided on the form's params, its blobs and t
   encoding holds (`fits`), reading as a member's (`templateOk`), fitting the two-stage scope (`memberOk`) and in the
   scope of Flock's hidden-output proof (`ProvedScope.scopeOkH`);
 * the registered wiring, on the templates' names, the outer block's links and wires and the reference reads: each name
-  one template's (`namesOnce`), each wire's writer before its reader (`writersFirst`), each wire's reader port like its
-  writer's output port (`wiresAlike`), each reference read no link or wire names a port of the interior
-  registration (`refReadsOwn`), and an interior registration that registers no value.
+  one template's (`namesOnce`), each wire's writer before its reader (`writersFirst`), each row a template's units
+  read source bits at a port a link or a wire names (`sourceRowsNamed`), each wire's reader port like its writer's
+  output port (`wiresAlike`), no wire at a row a template writes that no link names (`writtenRowsUnwired`), each such
+  row some wire's writer port (`writtenRowsRead`), each reference read no link or wire names a port of the interior
+  registration (`refReadsOwn`), an interior registration that registers no value, each template's circuit naming its
+  ports once (`portsOnce`) and every returned output bit on a computed row (`outsOk`), each read off one unit's net.
 
-The registered wiring's five checks over every source or written bit (whether each source bit is at a named port,
-whether each wired one has a gate to go to, and the three checks of the written bits) are not decided here: each walks
-every unit, and waits on a per-template form.
+Whether each wired source bit has a gate to go to (`wiresMove`) is not decided here: it walks every source bit of every
+unit, and waits on a per-template form.
 
 Nothing calls this module yet. Its definitions have the shapes of the two-stage verifier's own (`SpotFlock.Code`), over
 the components the form holds in place of the auditor's held copies, and a proof (`SpotFlock.HeldOfDesc`) reads each
@@ -29,6 +31,7 @@ of those as this one.
 module
 
 public import VStarRecursive.SampledTwo
+public import Spot.Bits
 
 @[expose] public section
 
@@ -287,6 +290,54 @@ def refReadsOwn (T : Nat) (names : List String) (links : Option (Array Spot.Seco
         | .str v => ports.contains v
         | _ => false
 
+/-- **The rows a unit of circuit `c` reads source bits at**: each input bit's row, where it has one. -/
+def sourceRows (c : Circuit) : List String :=
+  let ix := Spot.Bits.Index.of c
+  (List.range ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nIn).filterMap fun b =>
+    (Spot.Bits.srcPos c 0 (Spot.Bits.srcKey c ix b)).map fun x => x.row
+
+/-- **The rows a unit of circuit `c` writes**: its output row ports' names. -/
+def writtenRows (c : Circuit) : List String :=
+  (List.range c.outRowPorts.size).map fun o => (c.ports.getD (Flock.HmOut.nIn c + o) default).name
+
+/-- **Every returned output bit of circuit `c`'s unit sits on a computed row** of the unit net: past its input columns
+and before its constant. -/
+def outsComputed (c : Circuit) : Bool :=
+  let R := Spot.Bits.Rows.ofNet c.unit
+  (List.range c.upv).all fun k => (List.range (c.leavesOut.getD k #[]).size).all fun j =>
+    (List.range 16).all fun t =>
+      decide (R.nIn ≤ Spot.Bits.outCol c j t) && decide (Spot.Bits.outCol c j t < R.nIn + R.nComp)
+
+/-- **Every row a template's units read source bits at is a port a link or a wire names.** -/
+def sourceRowsNamed (T : Nat) (names : List String) (links : Option (Array Spot.SecondStage.Link))
+    (wires : Option (Array Spot.SecondStage.Wire)) (circ : Nat → Circuit) : Bool :=
+  (List.range T).all fun t =>
+    (sourceRows (circ t)).all fun row =>
+      (linkOf links (names.getD t "") row).isSome || (wireOf wires (names.getD t "") row).isSome
+
+/-- **No wire names a row a template's units write that no link names.** -/
+def writtenRowsUnwired (T : Nat) (names : List String) (links : Option (Array Spot.SecondStage.Link))
+    (wires : Option (Array Spot.SecondStage.Wire)) (circ : Nat → Circuit) : Bool :=
+  (List.range T).all fun t =>
+    (writtenRows (circ t)).all fun row =>
+      (linkOf links (names.getD t "") row).isSome || (wireOf wires (names.getD t "") row).isNone
+
+/-- **Every row a template's units write that no link names is some wire's writer port.** -/
+def writtenRowsRead (T : Nat) (names : List String) (links : Option (Array Spot.SecondStage.Link))
+    (wires : Option (Array Spot.SecondStage.Wire)) (circ : Nat → Circuit) : Bool :=
+  (List.range T).all fun t =>
+    (writtenRows (circ t)).all fun row =>
+      (linkOf links (names.getD t "") row).isSome ||
+        (wires.getD #[]).any fun w => w.writer == names.getD t "" && w.wport == row
+
+/-- **Each template's circuit names its ports once.** -/
+def portsOnce (T : Nat) (circ : Nat → Circuit) : Bool :=
+  (List.range T).all fun t => decide ((circ t).ports.toList.map (·.name)).Nodup
+
+/-- **Every returned output bit of each template's unit sits on a computed row.** -/
+def outsOk (T : Nat) (circ : Nat → Circuit) : Bool :=
+  (List.range T).all fun t => outsComputed (circ t)
+
 /-! ## The check -/
 
 /-- **The registered wiring's checks decided per template**, at `T` templates named `names`, the links and wires, the
@@ -294,8 +345,10 @@ templates' circuits, their reference reads and the interior registration's verif
 def wiringOk (T : Nat) (names : List String) (links : Option (Array Spot.SecondStage.Link))
     (wires : Option (Array Spot.SecondStage.Wire)) (circ : Nat → Circuit) (refReads : Nat → Json)
     (vi : Spot.Registration.Verifier) : Bool :=
-  namesOnce T names && writersFirst T names wires && wiresAlike T names wires circ &&
-    refReadsOwn T names links wires refReads (vi.ports.map (·.1)).toList && (vi.registered.map (·.1)).toList.isEmpty
+  namesOnce T names && writersFirst T names wires && sourceRowsNamed T names links wires circ &&
+    wiresAlike T names wires circ && writtenRowsUnwired T names links wires circ &&
+    writtenRowsRead T names links wires circ && refReadsOwn T names links wires refReads (vi.ports.map (·.1)).toList &&
+    (vi.registered.map (·.1)).toList.isEmpty && portsOnce T circ && outsOk T circ
 
 /-- **The two-stage descriptor check** (module docstring), at the form's params `p`, its blobs `bs`, and the run of
 record's input `i` and interior `it`. -/

@@ -10,8 +10,8 @@ public import VStarRecursive.SampledTwoDesc
 The two-stage form's descriptor check (`VStar.Recursive.SampledTwoDesc.descOk`) is the verifier's own code, so it can't
 read `heldOkDesc`, which is stated over held copies. It decides the same things on what the form holds, once per
 template. Where it passes, `heldOkDesc` holds at the form's params, blobs and the run of record's input, given the
-registered wiring's checks over every source or written bit at the held copies it builds (`walksOk`), which the
-descriptor check does not decide.
+registered wiring's one check over every source bit at the held copies it builds (`walksOk`: each wired source bit
+has a gate to go to), which the descriptor check does not decide.
 
 * `refOf_ok`: a reference statement the check reads, field by field.
 * `setupOf_rawOf`: its bytes (`rawOf`) set up under `--zk` as the check set it up, with Flock's parsers' reading
@@ -29,9 +29,8 @@ open Claims Claims.Sampling SamplingDeploy Properties.Spot SpotFlock.RunsAs
 open Lean (Json)
 open VStar.Recursive
 
-/-- **The registered wiring's checks over every source or written bit**, which the descriptor check does not decide. -/
-def walksOk (h : Held) : Bool :=
-  sourcesNamed h && wiresMove h && returnedWhole h && writtenUnwired h && writtenRead h
+/-- **The registered wiring's check over every source bit** (`wiresMove`), which the descriptor check does not decide. -/
+def walksOk (h : Held) : Bool := wiresMove h
 
 theorem ok_bind {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl
 
@@ -366,6 +365,20 @@ theorem wiresAlike_of {h : Held} {c : ℕ → _root_.Flock.Circuit} (hc : ∀ t,
   show SampledTwoDesc.wiresAlike h.ms.length h.names h.wires (memberCircuit h) = _
   rw [e]
 
+theorem sourceRowsNamed_eq (h : Held) :
+    sourceRowsNamed h = SampledTwoDesc.sourceRowsNamed h.ms.length h.names h.links h.wires (memberCircuit h) := rfl
+
+theorem writtenRowsUnwired_eq (h : Held) :
+    writtenRowsUnwired h = SampledTwoDesc.writtenRowsUnwired h.ms.length h.names h.links h.wires (memberCircuit h) :=
+  rfl
+
+theorem writtenRowsRead_eq (h : Held) :
+    writtenRowsRead h = SampledTwoDesc.writtenRowsRead h.ms.length h.names h.links h.wires (memberCircuit h) := rfl
+
+theorem portsOnce_eq (h : Held) : portsOnce h = SampledTwoDesc.portsOnce h.ms.length (memberCircuit h) := rfl
+
+theorem outsOk_eq (h : Held) : outsOk h = SampledTwoDesc.outsOk h.ms.length (memberCircuit h) := rfl
+
 theorem memberOk_eq (c : _root_.Flock.Circuit) (us : Array ℕ) :
     memberOk (c, us) = SampledTwoDesc.memberOk c us.size := rfl
 
@@ -386,7 +399,7 @@ theorem decided_of {u : Unread} {it : Spot.Run.Interior} {H : Held} {l : Spot.Sl
 /-! ## The check gives `heldOkDesc` -/
 
 /-- **The two-stage form's descriptor check gives `heldOkDesc`**, at the held copies it builds, where the registered
-wiring's checks over every bit hold of them (`walksOk`). -/
+wiring's check over every source bit holds of them (`walksOk`). -/
 theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot.Run.Input}
     {it : Spot.Run.Interior} (u₀ : Unread) (hd : SampledTwoDesc.descOk p bs i it = true) :
     ∃ (xs : List Msg) (first : Reg) (ns ks : Array ℕ) (r : ℕ) (hz : ∀ t, zkOk (refStmt xs t) = true),
@@ -438,12 +451,10 @@ theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot
   refine ⟨rs.map fun R => (rawOf R).encode, ⟨f.verifier, f.rule, f.closure⟩, ns, ks, requests l,
     zkOk_refStmt hxsOk, refStmtsOf_of_refsOf hrs, hfirst, hc, fun hw => ?_⟩
   unfold walksOk at hw
-  simp only [Bool.and_eq_true] at hw
-  obtain ⟨⟨⟨⟨hsn, hwm⟩, hrw⟩, hwu⟩, hwr⟩ := hw
   have hw' := hwir
   unfold SampledTwoDesc.wiringOk at hw'
   simp only [Bool.and_eq_true] at hw'
-  obtain ⟨⟨⟨⟨hno, hwf⟩, hwa⟩, hro⟩, hval⟩ := hw'
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨hno, -⟩, -⟩, -⟩, -⟩, -⟩, -⟩, hval⟩, -⟩, -⟩ := hw'
   unfold heldOkDesc
   rw [refStmtsOf_of_refsOf hrs]
   simp only
@@ -505,7 +516,8 @@ theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot
         ⟨f.verifier, f.rule, f.closure⟩ ns ks (requests l) (zkOk_refStmt hxsOk)) t = SampledTwoDesc.circAt rs t :=
       fun t => stmtOf_refStmt hrs hfits hne' t
     unfold wiringOk
-    rw [namesOnce_eq, writersFirst_eq, wiresAlike_of hmc, refReadsOwn_eq, ms_length_held₀, hsn, hwm, hrw, hwu, hwr]
+    rw [namesOnce_eq, writersFirst_eq, sourceRowsNamed_eq, wiresAlike_of hmc, writtenRowsUnwired_eq,
+      writtenRowsRead_eq, refReadsOwn_eq, portsOnce_eq, outsOk_eq, funext hmc, ms_length_held₀, hw]
     simp only [Bool.and_true]
     exact hwir
 
