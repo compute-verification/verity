@@ -152,6 +152,17 @@ def test_a_post_flip_reference_row_is_summarised_from_its_own_evidence(tmp_path,
     assert act["rc"] == 0 and act["pass"] is True and act["engine_settings"]["max_num_seqs"] == 8 and act["n_treatment"] == 1
 
 
+@pytest.mark.parametrize(("depth", "inner", "kept"), [(0, "0.5", 0.5), (0, "auto", "auto"), (200_000, "", None)],
+                         ids=["json", "no-json", "nested-past-what-json-reads"])
+def test_an_engine_arg_json_cannot_read_stays_the_text_of_the_command_line(tmp_path, monkeypatch, depth, inner, kept):
+    """`summarize` reads each `--engine-arg` as JSON, and keeps the text of one that `json.loads` does not read, whatever it raises."""
+    row = _post_flip_row(tmp_path, monkeypatch, rc=None)
+    value = "[" * depth + inner + "]" * depth
+    (tmp_path / "rows" / "k" / "commit.log").write_text(f"$ commit --engine-arg x={value} --max-num-seqs 8\n")
+    settings = CS.actual(row)["engine_settings"]
+    assert settings["max_num_seqs"] == 8 and settings["x"] == (value if kept is None else kept)
+
+
 def test_a_post_flip_rows_rc_is_its_verdicts(tmp_path, monkeypatch):
     row = _post_flip_row(tmp_path, monkeypatch, rc=3)
     assert CS.actual(row)["rc"] == 3 and CS.actual(row)["pass"] is False
