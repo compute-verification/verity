@@ -57,11 +57,19 @@ def reads(w: NodeWindow, j: int) -> list[tuple[int, int]]:
     if got is None:
         got = _READS[w] = {}
         for node in w.fn.body.nodes:
-            for k in range(len(node.args)):
-                for t in range(w.members(node)):
-                    for space, idx, lo, hi in runs(w.arg(node, k, t)):
-                        if space == "n":
-                            got.setdefault(idx, []).append((lo, hi))
+            for k, arg in enumerate(node.args):
+                rs = runs(arg.refs)
+                if not any(r[0] == "n" for r in rs):
+                    continue
+                L = len(arg.refs) // node.n if node.form == "batch" and node.axes[k] == 0 else 0
+                at = 0
+                for space, idx, lo, hi in rs:
+                    a = lo
+                    while space == "n" and a < hi:
+                        e = min(hi, a + L - (at + a - lo) % L) if L else hi
+                        got.setdefault(idx, []).append((a, e))
+                        a = e
+                    at += hi - lo
     return got.get(j, [])
 
 
