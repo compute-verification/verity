@@ -754,13 +754,15 @@ def test_a_stream_its_listener_does_not_answer_as_taken_is_refused(tmp_path, mon
                 for fd in fds:
                     os.close(fd)
                 conn.sendall(answer)
-        served_by = threading.Thread(target=serve)
+        # a daemon, joined only under the refusal its answer makes: a stream refused before the listener is reached
+        # fails the test and leaves no thread to wait for
+        served_by = threading.Thread(target=serve, daemon=True)
         served_by.start()
         client: Any = SimpleNamespace(_wire=SimpleNamespace(sock=stream))
         with pytest.raises(OSError) as refused:
             HO.send_stream(client, "s")
+        assert str(refused.value) == "the holder at s didn't take the session's stream"
         served_by.join()
-    assert str(refused.value) == "the holder at s didn't take the session's stream"
 
 
 def test_only_a_window_on_the_auditor_hosts_coins_hands_off_and_only_a_saved_window_resumes(tmp_path):
