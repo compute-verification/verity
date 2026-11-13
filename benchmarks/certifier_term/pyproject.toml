@@ -33,7 +33,7 @@ inputs = [
     "verity/commitments/crypto",
     "verity/commitments/randomness",
     "verity/configuration/__init__.py",
-    "verity/configuration/config/verity_config",
+    "tools/config/verity_config",
     "verity/configuration/wire",
     "verity/definitions/__init__.py",
     "verity/definitions/circuits/__init__.py",
