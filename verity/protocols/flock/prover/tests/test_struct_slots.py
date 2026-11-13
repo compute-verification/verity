@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import numpy as np
 from verity.circuits.defs import CompositeDefinition
-from verity.definitions.ops.fp32 import F32AddFtz
-from verity.definitions.ops.mufu import MufuEx2Ftz, MufuRcpFtz
+from verity.circuits.ops.fp32 import F32AddFtz
+from verity.circuits.ops.mufu import MufuEx2Ftz, MufuRcpFtz
 from verity.circuits.refs import array_of
 from verity.circuits.types import Array, Value
 from verity_flock import struct_lower as SL
