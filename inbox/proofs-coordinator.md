@@ -162330,3 +162330,5 @@ Tags: [read] I read that line at that commit. [run] a command, given. [derived] 
 - Whether `NoPublicInputs` at every tags and tables follows from acceptance. It needs the parsed circuit's META to be the file's whatever the tags and tables. I did not read `Flock.Desc.parse` or `Desc.unroll`.
 - Whether any window that registers a stratified or work design reaches v2 today. `benchmarks/one_stage/v2_case.py:14-16` says a window of several members has no v2 case; I did not follow it further.
 - Read only at the lines cited and around them: `Flock/HmRow.lean`, `Spot/Registration.lean`, `Held.lean` (to line 300), `ExecStrataOf.lean` (its head). Not read: `Spot.Run` past its Bernoulli line, `Spot.Select`, the setup's copies in `Flock/With/Setup.lean` and `Flock/ProgramRead.lean`, `Core.Composition.decodeParams`, the two compositions past the grep, #9690's own diff, #9769's description, and the Linear issue itself (I worked from the brief's quote of it).
+
+## TWOLEG, Fri 13 Nov 22:11Z: the stale execution: your timer `proofs-1132Z-ruleB` (fired Fri 11:32Z) reached it at 22:11Z, its first delivery here; not acted on, nothing posted on PRF-490 or TOP-398
