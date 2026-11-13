@@ -56,7 +56,7 @@ from collections.abc import Callable, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from verity.protocols.accounting.poub.verifier import audit
@@ -66,6 +66,9 @@ from verity.protocols.accounting.poub.verifier import receipts as rb
 from verity_vllm import config
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
 from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
+
+if TYPE_CHECKING:
+    from verity_vllm.protocols.remote_bandwidth.binder import Binder
 
 #: The PoUB session's processes (not a package), whose prover runs in the Commit's.
 REMOTE_SESSION = config.ROOT.parent.parent / "benchmarks" / "remote_session"
@@ -156,7 +159,8 @@ class Serving:
             lambda first, slots, digests, payloads: self._events.append(("append", first, slots, digests, payloads)))
         self.moves, self._early = True, False
         self.map.ahead = 1
-        self.step, self.steps, self.first = -1, 0, None
+        self.step, self.steps = -1, 0
+        self.first: int | None = None
         self.live = np.ones(registration.blocks, bool)
         self._plan: rb.Plan | None = None
         self.appends: list[audit.Append] = []
@@ -425,6 +429,7 @@ class KvDevice:
 
     def encode(self, payloads: Sequence[bytes], first: int, offsets: Sequence[int] | None = None) -> list[bytes]:
         """Blocks ``first`` … of ``payloads``: under the seed's key, or each under its bound offset."""
+        out: list[bytes]
         torch, w, out = self.torch, self.codec.field.block_words, []
         stream = torch.cuda.current_stream().cuda_stream
         for u in range(0, len(payloads), self.CHUNK):
@@ -646,7 +651,8 @@ class CommitSession:
         self.verifier, self.plan, self.kv_pages, self.weight_blocks = verifier, plan, kv_pages, weight_blocks
         self.kv_lib, self.step_ms, self.filler_gib = kv_lib, step_ms, filler_gib
         self.out, self.node, self.codec, self.log = None if out is None else Path(out), node, codec, log
-        self.store, self.binder = NodeMemory(), None
+        self.store = NodeMemory()
+        self.binder: Binder | None = None
         self.lockstep: Lockstep | None = None
         self.backend: StoreBackend | None = None
         self.record: dict[str, Any] | None = None
@@ -698,27 +704,31 @@ class CommitSession:
             why.append("a KV pool registered (served writes stay outside the registration)")
         if why:
             raise SystemExit("--remote-verifier: the engine is not one the session serves: " + "; ".join(why))
+        binder = self.binder
+        if binder is None:
+            raise RuntimeError("the Commit's session checks its engine once its binder is installed (`install`)")
         if self.filler_gib:
-            self.binder.register_filler(int(self.filler_gib * (1 << 30)), runner.device)
-        stats = self.binder.stats()
+            binder.register_filler(int(self.filler_gib * (1 << 30)), runner.device)
+        stats = binder.stats()
         self.log(f"[delta] remote session: the store binder on the engine, {stats}")
         return stats
 
     def begin(self) -> Lockstep:
         if self.lockstep is not None:
             raise RuntimeError("a store serves one session: the Commit's session audits one run")
-        self.lockstep = Lockstep()
+        self.lockstep = lockstep = Lockstep()
         path = None if self.out is None else self.out / "memory_map.jsonl"
         device = None if self.kv_lib is None else KvDevice(self.kv_lib, self.codec)
-        self.backend = StoreBackend(self.store, self.lockstep, path=path, device=device)
-        self.backend.step_ns = round(self.step_ms * 1e6)
-        self._thread = threading.Thread(target=self._session, name="remote-session", daemon=True)
+        self.backend = backend = StoreBackend(self.store, lockstep, path=path, device=device)
+        backend.step_ns = round(self.step_ms * 1e6)
+        self._thread = threading.Thread(target=self._session, args=(backend, lockstep), name="remote-session",
+                                        daemon=True)
         self._thread.start()
-        self.lockstep.begun()
-        return self.lockstep
+        lockstep.begun()
+        return lockstep
 
-    def _session(self) -> None:
-        backend, error, result, agree = self.backend, None, {}, {}
+    def _session(self, backend: StoreBackend, lockstep: Lockstep) -> None:
+        error, result, agree = None, {}, {}
         try:
             (result,) = prove(backend, self.verifier, self.plan, node=self.node.encode(), codec=self.codec, log=self.log)
             agree = store_map.agreement(backend)
@@ -743,15 +753,17 @@ class CommitSession:
                     **agree}}
             store_map.end(self.store)
         finally:
-            self.lockstep.close()
+            lockstep.close()
 
     def end(self) -> dict[str, Any]:
-        self.lockstep.finish()
-        self._thread.join()
-        rec = self.record if self.record is not None else {
+        lock, thread = self.lockstep, self._thread
+        if lock is None or thread is None:
+            raise RuntimeError("the Commit's session ends once it has begun (`begin`)")
+        lock.finish()
+        thread.join()
+        rec: dict[str, Any] = self.record if self.record is not None else {
             "schema": "verity-vllm/remote-session/v0", "verifier": self.verifier, "plan": self.plan, "accepted": False,
             "error": "the session's record was not written (its thread raised)", "memory_map": None, "encode": None}
-        lock = self.lockstep
         rec["run"] = {"steps": lock.audited + lock.unaudited, "audited": lock.audited, "unaudited": lock.unaudited}
         self.record = rec
         if self.out is not None:

@@ -991,6 +991,22 @@ def test_the_commits_session_checks_the_built_engine_and_registers_its_filler():
     assert cs.binder.calls == ["stats"] and len(said) == 2
 
 
+def test_the_commits_session_names_the_step_that_comes_first():
+    """`CommitSession.check` before `install`, and `end` before `begin`, each raise a `RuntimeError` naming the step
+    that comes first; an engine the session doesn't serve is refused before `check` asks for its binder."""
+    cs = remote.CommitSession("127.0.0.1:7781", log=lambda m: None)
+    runner = type("Runner", (), {"device": "cuda:0"})()
+    with pytest.raises(RuntimeError) as early:
+        cs.check(built(), runner)
+    assert str(early.value) == "the Commit's session checks its engine once its binder is installed (`install`)"
+    with pytest.raises(SystemExit, match="^--remote-verifier: the engine is not one the session serves: prefix caching on$"):
+        cs.check(built(prefix=True), runner)
+    with pytest.raises(RuntimeError) as early:
+        cs.end()
+    assert str(early.value) == "the Commit's session ends once it has begun (`begin`)"
+    assert cs.binder is None and cs.lockstep is None and cs.record is None
+
+
 class Stats:
     def stats(self) -> dict:
         return {}
