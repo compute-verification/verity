@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 import verity_vllm.pipeline.c2_replay as C2
+from verity_vllm.query.manifest import format as MF
 
 Record = dict[str, Any]
 
@@ -45,7 +46,7 @@ def test_a_program_whose_build_result_names_no_t_takes_its_steps_from_its_rows_a
 
 def loads(monkeypatch: pytest.MonkeyPatch, program: Record, manifest: Any, digest: str | None = None) -> tuple[Record, dict[str, str]]:
     """`programs_of_record` for the one request `a`, whose Program dir loads as ``program``."""
-    monkeypatch.setattr(C2.MF, "load_program", lambda d: program)
+    monkeypatch.setattr(MF, "load_program", lambda d: program)
     args = SimpleNamespace(program_digest=digest, programs_root=None, program_dir="/programs/r0")
     return C2.programs_of_record(C2.ProgramSources(args, manifest, REQS[:1], {}), C2.request_labels(REQS[:1]), definitions=False)
 
