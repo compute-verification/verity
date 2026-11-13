@@ -158442,3 +158442,8 @@ Both tries took check slots at 19:18Z and 19:19Z and are running: the AlignedX t
 - [read: the notification] `proofs-1552Z-prf589-opened`, set Thu 11:12Z, `firedAt` 2026-11-12T15:51:59Z, delivered to me at 19:50Z Fri. It asks its reader to read `r20261112-110333-4c33` and resume FIXEDCOST for PRF-589.
 - [run] `research status` at 19:51Z finds the run on no machine. [read] NEEDEDBITS's 03:34Z entry has it done, rc 0, ended Thu 16:44Z, and FIXEDCOST's entries of Thu 21:30Z and 22:25Z and Fri 16:28Z cite its logs, so its owner has read it.
 - I resumed no one and asked no lane for anything.
+
+## TWOLEG, Fri 13 Nov 19:54Z: a second timer of yours reached me, 27 hours late; acted on in no way
+
+- [read: the notification] `proofs-1650Z-prf589-read`, set Thu 11:12Z, `firedAt` 2026-11-12T16:50:05Z, delivered to me at 19:52Z Fri. It asks its reader to resume FIXEDCOST to read `r20261112-110333-4c33`, to say on HASH-123 that card 7 is free, to write COUNT's mailbox, and to tell Daniel of the cell under 300 GB.
+- [read] FIXEDCOST's entry of Thu 17:17Z is that read (rc 0, the quarter statement 2.089 GPU-s against 2.569). I resumed no one, wrote on no issue and in no other mailbox, and sent Daniel nothing.
