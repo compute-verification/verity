@@ -7,8 +7,8 @@ public import Proofs.Flock.SpotFlock.AddressFacts.WidthOf
 
 `bitsInPorts_of`: `BitsInPorts`, which the width and the copy at the address map ask, from two conditions:
 
-* `PortsOnce`: each member circuit names each of its ports once. The address map's port is the first port of a row's
-  name (`portNamed`), so only then is it the port the position's row is.
+* `PortsOnce` (`WiringOk`): each member circuit names each of its ports once. The address map's port is the first
+  port of a row's name (`portNamed`), so only then is it the port the position's row is.
 * `BitsOwn`: each source bit's and each written bit's row is a port of its member's circuit and its bit is inside
   that port's `16 w` bits, a fact of the members' programs alone.
 -/
@@ -20,10 +20,6 @@ namespace SpotFlock
 open Claims Claims.Sampling SamplingDeploy
 
 variable (h : Held)
-
-/-- **Each member circuit names each of its ports once.** -/
-def PortsOnce : Prop :=
-  ∀ t < h.ms.length, ((memberCircuit h t).ports.toList.map (·.name)).Nodup
 
 /-- **Each commitment position's bit is inside a port of its row's name**: each source bit's and each written bit's
 row names a port of its member's circuit, and its bit is inside that port's `16 w` bits. -/

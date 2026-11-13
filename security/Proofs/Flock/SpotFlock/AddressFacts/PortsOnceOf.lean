@@ -6,7 +6,7 @@ public import Proofs.Pouw.Period.Sort
 /-!
 # Each member names its ports once
 
-`portsOnce_of_two`: `PortsOnce` where the second stage's design evaluates, so the width and the copy at the address
+`portsOnce_of_rows`: `PortsOnce` where the second stage's design evaluates, so the width and the copy at the address
 map rest on the design and the wiring alone (`widthFact_of_design`, `copyFact_of_design`).
 
 A member's circuit is a committed circuit unrolled (`member_commit`), whose parse ends in `HmOut.checkRows`, flat or
@@ -118,8 +118,8 @@ theorem unrolled_rows (c : _root_.Flock.Circuit) :
 
 variable {h : Held}
 
-/-- **`PortsOnce` where the design evaluates.** -/
-theorem portsOnce_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) : PortsOnce h := by
+/-- **`PortsOnce` where the design evaluates**, from what each member's parse checks of its rows and its scope. -/
+theorem portsOnce_of_rows {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) : PortsOnce h := by
   intro t ht
   obtain ⟨r, c, hty, hc, hm⟩ := member_commit hd ht
   have hfit := rowsFit_member hd ht
@@ -136,12 +136,12 @@ theorem portsOnce_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = s
 /-- **The width at the address map where the design evaluates and the wiring holds.** -/
 theorem widthFact_of_design {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) (W : Wiring h) :
     WidthFact h (addressOf h) :=
-  widthFact_of_two hd (portsOnce_of_two hd) W
+  widthFact_of_two hd (portsOnce_of_rows hd) W
 
 /-- **The copy at the address map where the design evaluates, the wiring holds and each counted gate's row is the
 address map's.** -/
 theorem copyFact_of_design {s : AuditStatement} {d : Design.Two} {ω : ℕ → ℕ} {keep : ℕ → Bool}
     (hd : two h s = some d) (W : Wiring h) (hrow : RowFact h ω keep (addressOf h)) : CopyFact h (addressOf h) :=
-  copyFact_of_two hd (portsOnce_of_two hd) W hrow
+  copyFact_of_two hd (portsOnce_of_rows hd) W hrow
 
 end SpotFlock
