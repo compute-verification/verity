@@ -17,8 +17,8 @@ at a time. The asker ends when the run has started on either machine, has ended 
 twin), when its twin was cancelled, or when the first's wait for a slot is over.
 
 Its record (`record`) is <runs root>/DIR/<run id>.json on the launching VM, written before every sleep and before a twin is
-launched, so a twin is never launched unrecorded, and copied beside the run's request on its machine
-(<root>/requests/<run id>/FILE), where another VM's `research status` reads it: who asks (the launching agent, since
+launched, and copied beside the run's request on its machine (<root>/requests/<run id>/FILE), where another VM's
+`research status` reads it; a twin is launched only once both name it. It says who asks (the launching agent, since
 agent VMs share one host name; pid, since), when it looked last and looks next, each ask and its answer, the twin (its run
 and machine, why the first waited and for how many minutes) and how the asker ended. It is no file of the run dir, which
 the run's custody seals. `alive` reads it, and `told` is what `research status RUN` says from it; a copy that can't be
@@ -235,17 +235,24 @@ def _beside(run_dir: Path) -> tuple[list[str], str] | None:
     return remote.ssh_argv(rr["host"], rr["port"], user=rr.get("user") or "root"), f"{rr['root']}/requests/{run_dir.name}/{FILE}"
 
 
-def tell(root: Path, rec: dict) -> None:
-    """Write the asker's record ``rec``: here, and its copy beside the run's request on its machine (as it can: a machine
-    that doesn't answer keeps its last copy)."""
+def tell(root: Path, rec: dict) -> str | None:
+    """Write the asker's record ``rec`` here and copy it beside the run's request on its machine. Why the copy wasn't
+    written, which the asker's log says too (the machine then keeps its last copy), or None."""
     from . import remote
 
     (root / DIR).mkdir(parents=True, exist_ok=True)
     remote.write_json_atomic(root / DIR / f"{rec['run']}.json", rec)
-    with contextlib.suppress(OSError, subprocess.SubprocessError):
-        if there := _beside(root / rec["run"]):
-            q = shlex.quote(there[1])
-            remote.ssh_run(there[0], ["sh", "-c", f"cat > {q}.tmp && mv {q}.tmp {q}"], stdin=json.dumps(rec).encode(), timeout=60)
+    if not (there := _beside(root / rec["run"])):
+        return None
+    q = shlex.quote(there[1])
+    try:
+        r = remote.ssh_run(there[0], ["sh", "-c", f"cat > {q}.tmp && mv {q}.tmp {q}"], stdin=json.dumps(rec).encode(), timeout=60)
+        lost = f"exit {r.returncode}: {r.stderr.decode(errors='replace').strip()[-200:]}" if r.returncode else None
+    except (OSError, subprocess.SubprocessError) as e:
+        lost = f"{type(e).__name__}: {e}"
+    if lost:
+        print(f"asker: {rec['run']}'s record was not copied beside its request on its machine ({lost})", file=sys.stderr, flush=True)
+    return lost
 
 
 # ---- the asker ----------------------------------------------------------------------------------------------------------------
@@ -264,9 +271,9 @@ def run(root: Path, m: dict, *, now: Callable[[], float] = time.time, sleep: Cal
     tried: dict[str, str] = {}                                 # machines a twin of the run left unrun: asked for no other
     again = False                                              # a twin was just launched: look at once, in case of a cancel
 
-    def beat(pause: float) -> None:
+    def beat(pause: float) -> str | None:
         rec.update(seen=_utc(now()), next=_utc(now() + pause))
-        tell(root, rec)
+        return tell(root, rec)
 
     def due(t: float) -> float:
         """Its next look after ``t``: minute FIRST_ASK_MIN of its life, then each ASK_EVERY_MIN, and never past the wait."""
@@ -326,7 +333,10 @@ def run(root: Path, m: dict, *, now: Callable[[], float] = time.time, sleep: Cal
             twin["said"] = (f"moved from {m['home']}'s {m['pool']} pool, where {m['run']} waited {twin['after_min']} min "
                             f"({twin['why']}), to {twin['machine']}'s, which would start it now ({asked['said']})")
             rec["twin"] = twin
-            beat(every)                                        # before the launch: no twin is ever launched unrecorded
+            if lost := beat(every):                            # before the launch: no twin is ever launched unrecorded
+                rec["twin"] = twin = None
+                raise OSError(f"its record could not be copied beside its request on {m['home']} ({lost}), and a twin "
+                              "launched then is one no other VM could follow or cancel")
             with tree(m["git"], m["commit"]) as source:
                 sent = launch(source, m, twin, max(min(over - now(), every), 1))
             twin["state"] = "launched" if sent.get("phase") == "launched" else "refused"

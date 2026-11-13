@@ -207,6 +207,37 @@ def test_a_twin_is_recorded_before_it_is_launched_so_an_asker_that_dies_then_lea
     assert asker.twin(world.root / RUN)["run"] == tw["run"], "so status and cancel follow it"
 
 
+@pytest.mark.parametrize(("ssh", "lost"), [(["sh", "-c"], "exit "), (["/no/such/ssh"], "FileNotFoundError: ")], ids=["refused", "unreached"])
+def test_no_twin_is_launched_while_its_record_can_not_be_copied_beside_the_firsts_request(world, monkeypatch, capsys, ssh, lost):
+    """Another VM follows a run to its twin by the copy of the asker's record beside the first's request, and the launching
+    VM may be gone a minute later: a twin launched while that copy can't be written is one no other VM could follow or
+    cancel. The asker's log says why, and its next ask is of the same machine, which refused nothing."""
+    world.answers = [((B, "research"), STARTS)] * 2
+    beside = world.root.parent / A / "requests" / RUN / asker.FILE
+    monkeypatch.setattr(asker, "_beside", lambda run_dir: (ssh, str(beside)))
+    copies, real = [], world.launch
+
+    def launch(source, m, twin, wait_s):
+        copies.append(json.loads(beside.read_text())["twin"])
+        return real(source, m, twin, wait_s)
+
+    def its_machine_takes_the_copy():
+        beside.parent.mkdir(parents=True)
+        ssh[:] = ["sh", "-c"]
+
+    monkeypatch.setattr(asker, "launch", launch)
+    world.at[10] = its_machine_takes_the_copy
+    world.at[20] = lambda: world.runs.update({world.launched[0]["run"]: held()})
+    world.run()
+    (tw,) = world.launched
+    assert world.asked == [(1, {}), (10, {})] and tw["at"] == "2026-10-01T09:10:00Z"
+    assert [(c["run"], c["state"]) for c in copies] == [(tw["run"], "launching")], "the copy named the twin when its launch began"
+    unsent, sent = world.record()["asks"]
+    assert unsent["error"].startswith(f"OSError: its record could not be copied beside its request on {A} ({lost}") and "error" not in sent
+    assert f"asker: {RUN}'s record was not copied beside its request on its machine ({lost}" in capsys.readouterr().err
+    assert json.loads(beside.read_text()) == world.record()
+
+
 def test_a_twin_whose_launch_fails_is_recorded_and_the_run_keeps_its_place_and_asks_elsewhere(world, monkeypatch):
     world.answers = [((B, "research"), STARTS), ((C, "research"), "c")]
     real = world.launch
