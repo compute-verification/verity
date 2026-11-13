@@ -62,7 +62,7 @@ serves none of its products, as its word view (`census.serves_none`).
 from __future__ import annotations
 
 from verity.circuits import boolean as BL
-from verity.definitions.circuits.census import FAMILY_COUNTS, serves_none, silicon_step
+from verity.circuits.census import FAMILY_COUNTS, serves_none, silicon_step
 from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Coll, broadcast, concat
 from verity.circuits.types import Array
