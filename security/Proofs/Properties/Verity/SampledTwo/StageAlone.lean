@@ -11,10 +11,11 @@ registration's digest (`FirstUnshown`), the cut's read of that session's log hol
 The read places a coin only at a release whose root line names its family and digest (`none_readLog`), and the roots
 list every such line (`countFresh_zero`).
 
-The form's check refuses a case whose first session shows such a coin (`interiorUnshown`), but reads that session from
-the evidence's `coins` under the evidence's key, on the boundary's window against the interior's, in the family the
-interior's segment names, after the interior record's digest; the cut reads it from `firstCoins` under the parameters'
-key, against the interior audit's window and family, after the interior commitment's digest. `firstUnshown_of` gives
+The form's check refuses a case whose first session shows such a coin (`interiorUnshown`). It reads that session
+under the interior audit's challenger key, on the boundary's window against the interior audit's, in the interior
+audit's family, as the cut does (`keyOf_challenger`, `secondDraws_parts`); it differs from the cut in two places: it
+reads the session from the evidence's `coins` where the cut reads `firstCoins` (the same without `key`), and it reads
+the digest of the interior record where the cut reads the interior commitment's. `firstUnshown_of` gives
 `FirstUnshown` from the check where those agree (`SessionMatches`, a named `Prop` taken as a hypothesis).
 -/
 
@@ -192,38 +193,74 @@ theorem unshown_of_accepts {C : CaseOf} (hC : CaseIsSent C) {o : Verity.Exchange
   obtain ⟨rfl, -, rfl⟩ := hpce
   exact hu
 
-/-- **The check's first session is the cut's**: on a play the form accepts, where the cut reads the first session
-`drawCoins` reads and the interior's draw, the form's `interiorUnshown` reads the same session (the evidence's `coins`
-name the same ledger, pins, main and session, and its key is the parameters'), the interior's window is the second
-draw's, the interior's segment names the second draw's family, and the interior record's digest is the second
-draw's. -/
+/-- **The parameters' key is the interior audit's challenger's**, on the parameters the case decodes. -/
+theorem keyOf_challenger {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
+    {e : VStar.Recursive.SampledTwo.Evidence} {key : ChallengerKey} (hcase : caseOf s = .ok (p, c, e))
+    (hkey : keyOf s.params = some key) : p.audit.base.challenger.map (·.1) = some key := by
+  have hp : paramsAt s.params = .ok p := by
+    unfold caseOf at hcase
+    cases hq : paramsAt s.params with
+    | error err => simp [hq, bind, Except.bind] at hcase
+    | ok p' =>
+      cases hc : caseIn s with
+      | error err => simp [hq, hc, bind, Except.bind] at hcase
+      | ok ce =>
+        first
+          | (simp only [hq, hc, bind, Except.bind, pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hcase
+             rw [hcase.1])
+          | (simp [hq, hc, bind, Except.bind, pure, Except.pure] at hcase
+             obtain ⟨rfl, -, -⟩ := hcase
+             rfl)
+  unfold keyOf at hkey
+  rw [hp] at hkey
+  exact (Option.filter_eq_some_iff.1 hkey).1
+
+/-- **The interior's draw is the interior audit's**: its key and family the interior audit's challenger's, its window
+the interior audit's, after the interior commitment's digest. -/
+theorem secondDraws_parts {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
+    {d : Properties.Challenger.Draws} (h : secondDraws p e = some d) :
+    ∃ c₂, interiorOf e = .ok c₂ ∧ p.audit.base.challenger = some (d.key, d.label) ∧
+      p.audit.base.verifier.windowRoot = some d.window ∧ d.after = c₂.digest := by
+  cases hi : interiorOf e with
+  | error err =>
+    unfold secondDraws at h
+    rw [hi] at h
+    simp [Except.toOption] at h
+  | ok c₂ =>
+    have h' := secondDraws_eq hi h
+    unfold Properties.Challenger.oneStageZkSource Properties.Challenger.oneStageSource at h'
+    rcases hch : p.audit.base.challenger with _ | ⟨key, label⟩ <;>
+      rcases hw : p.audit.base.verifier.windowRoot with _ | w <;> simp only [hch, hw] at h' <;> cases h'
+    refine ⟨c₂, ?_, ?_, ?_, rfl⟩ <;> first | rfl | assumption
+
+/-- **The check's first session is the cut's**: on a play the form accepts, the evidence's `coins` name the ledger,
+pins, main and session `firstCoins` names, and the interior record's digest is the interior commitment's. -/
 def SessionMatches (C : CaseOf) : Prop :=
-  ∀ o, FormAccepts C o → ∀ p c e key d₁ d₂ cm roots, caseOf o.sent = .ok (p, c, e) → keyOf o.sent.params = some key →
-    firstDraws key p c e = some d₁ → secondDraws p e = some d₂ →
-    trustedSessionOf (Spot.getD (firstCoins e) "ledger") (Json.mkObj [("root", Json.str d₁.window)]) d₁.key
-      (Spot.getD (firstCoins e) "pins") (Spot.getD (firstCoins e) "main") (Spot.getD (firstCoins e) "session") =
-        .ok (cm, roots) →
-    p.interior.verifier.windowRoot = some d₂.window ∧
-    Spot.getD (Spot.getD e.interior.base.coins "segment") "label" = .str d₂.label ∧
-    Spot.Registration.digest e.record = .ok d₂.after ∧
-    ChallengerKey.ofJson (Spot.getD e.coins "key") = .ok d₁.key ∧
-    trustedSessionOf (Spot.getD e.coins "ledger") (Json.mkObj [("root", Json.str d₁.window)]) d₁.key
-      (Spot.getD e.coins "pins") (Spot.getD e.coins "main") (Spot.getD e.coins "session") = .ok (cm, roots)
+  ∀ o, FormAccepts C o → ∀ p c e c₂, caseOf o.sent = .ok (p, c, e) → interiorOf e = .ok c₂ →
+    Spot.Registration.digest e.record = .ok c₂.digest ∧
+    ∀ f ∈ ["ledger", "pins", "main", "session"], Spot.getD (firstCoins e) f = Spot.getD e.coins f
 
 /-- **`FirstUnshown` from the form's check**, where it reads the cut's session (`SessionMatches`). -/
 theorem firstUnshown_of (C : CaseOf) (hC : CaseIsSent C) (hM : SessionMatches C) : FirstUnshown C := by
   intro o ha p c e key d₁ d₂ cm roots hcase hkey hd₁ hd₂ hw hts
-  obtain ⟨hwin, hlab, hdig, hk, hts'⟩ := hM o ha p c e key d₁ d₂ cm roots hcase hkey hd₁ hd₂ hts
-  obtain ⟨bp, hb, hbw, -⟩ := firstDraws_window hd₁
+  obtain ⟨c₂, hi₂, hch₂, hwin₂, hafter⟩ := secondDraws_parts hd₂
+  obtain ⟨hdig, hf⟩ := hM o ha p c e c₂ hcase hi₂
+  obtain ⟨bp, hb, hbw, hkey₁⟩ := firstDraws_window hd₁
   have hbp : bp = p.boundary := by
     unfold boundaryOf at hb
     first
       | exact (Except.ok.inj hb).symm
       | (cases hb; rfl)
-      | (simp only [pure, Except.pure, Except.ok.injEq] at hb; exact hb.symm)
   subst hbp
-  refine VStar.Recursive.SampledTwo.interiorUnshown_roots (unshown_of_accepts hC ha hcase) hbw ?_ hlab hdig hk hts'
-  rw [hwin]
+  have hk : d₁.key = d₂.key := by
+    rw [hkey₁]
+    have h1 := keyOf_challenger hcase hkey
+    rw [hch₂] at h1
+    exact (Option.some.inj h1).symm
+  rw [hf "ledger" (by simp), hf "pins" (by simp), hf "main" (by simp), hf "session" (by simp), hk] at hts
+  rw [hafter]
+  refine VStar.Recursive.SampledTwo.interiorUnshown_roots (unshown_of_accepts hC ha hcase) hch₂ hbw ?_ hdig hts
+  rw [hwin₂]
   exact fun h => hw (Option.some.inj h)
 
 /-- **`SecondAlone` from the form's check**, where it reads the cut's session. -/

@@ -17,7 +17,8 @@ accepts at the switch `form` (`accepted_steps`):
 * `Spot.Run.run`, at the switch on, returned a run of record whose symbol is `accept`, and the first stage's bytes `ξ`
   run no further than what it read (`sourceRead`, read as `ξ.size ≤ read` by `sourceRead_le`), and on two windows the
   first session's log shows no second-stage coin after the interior's digest (`interiorUnshown`, read by
-  `interiorUnshown_roots`);
+  `interiorUnshown_roots`), and the stages' sessions are in order on one ledger (`stagesOrdered`, by
+  `accepted_ordered`, read by `orderReason_none` and `Ordered.stagesOrdered_order`);
 * the interior audit's verdict at its coins, over the sessions' verdicts, is the accept, with the check's public
   outputs and profile.
 
@@ -95,9 +96,42 @@ theorem accepted_steps {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ 
     obtain ⟨run', hr, hp⟩ := bind_ok hp
     obtain ⟨u, hs, hp⟩ := bind_ok hp
     obtain ⟨u', hu, hp⟩ := bind_ok hp
+    obtain ⟨u'', -, hp⟩ := bind_ok hp
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hp
     obtain ⟨rfl, rfl⟩ := hp
     exact ⟨rfl, c₂, ξ₂, r, i, run', hi, hr, hs, hu, hj, htwo⟩
+
+/-- **An accepted two-stage check found the stages' sessions in order** (`stagesOrdered`). -/
+theorem accepted_ordered {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+    {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
+    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) : stagesOrdered p e = .ok () := by
+  unfold checkBlobsAtWith at h
+  cases hp : prepare form p c ξ e bs with
+  | error err => simp [hp] at h
+  | ok v =>
+    unfold prepare at hp
+    obtain ⟨⟨_, _, _, _⟩, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨u, ho, -⟩ := bind_ok hp
+    cases u
+    exact ho
+
+/-- **The stages' order holds** where `orderReason` finds no fault: the first stage's session has an end line, the
+second stage's a reserve line, and the end's `seq` is below the reserve's. -/
+theorem orderReason_none {ended reserve : Option Spot.Challenger.LedgerEntry} (h : orderReason ended reserve = none) :
+    ∃ en r, ended = some en ∧ reserve = some r ∧ en.seq < r.seq := by
+  cases ended with
+  | none => simp [orderReason] at h
+  | some en =>
+    cases reserve with
+    | none => simp [orderReason] at h
+    | some r =>
+      by_cases hlt : en.seq < r.seq
+      · exact ⟨en, r, rfl, rfl, hlt⟩
+      · simp [orderReason, hlt] at h
 
 /-- **Neither stage's bytes run past one coin's**, where `stagesFit` passed. -/
 theorem stagesFit_le {ξ ξ₂ : ByteArray} {u : Unit} (h : stagesFit ξ ξ₂ = .ok u) :
@@ -139,23 +173,23 @@ theorem sourceRead_le {ξ : ByteArray} {run : Json} (h : sourceRead ξ run = .ok
   · omega
 
 /-- **On two windows the first session's log shows no second-stage coin after the interior's digest**: where the
-check's `interiorUnshown` passed, the boundary's window is `w` and not the interior's, the second stage's family is
-`label`, the interior registration's digest is `after` and the first session `e.coins` names on `w` has the roots
-`roots`, those roots show no coin of `label` released after `after`. -/
+check's `interiorUnshown` passed, the interior audit's parameters name the challenger key `k` and the family `label`,
+the boundary's window is `w` and not the interior audit's, the interior registration's digest is `after` and the
+first session `e.coins` names on `w` under `k` has the roots `roots`, those roots show no coin of `label` released
+after `after`. -/
 theorem interiorUnshown_roots {p : Params} {e : Evidence} (h : interiorUnshown p e = .ok ()) {w label : String}
     {after : ByteArray} {k : Spot.Challenger.ChallengerKey} {c : Spot.Challenger.LiveCommitment}
-    {roots : Spot.Challenger.Roots} (hw : p.boundary.verifier.windowRoot = some w)
-    (hne : some w ≠ p.interior.verifier.windowRoot)
-    (hl : Spot.getD (Spot.getD e.interior.base.coins "segment") "label" = .str label)
+    {roots : Spot.Challenger.Roots} (hk : p.audit.base.challenger = some (k, label))
+    (hw : p.boundary.verifier.windowRoot = some w)
+    (hne : some w ≠ p.audit.base.verifier.windowRoot)
     (ha : Spot.Registration.digest e.record = .ok after)
-    (hk : Spot.Challenger.ChallengerKey.ofJson (Spot.getD e.coins "key") = .ok k)
     (ht : Spot.Challenger.trustedSessionOf (Spot.getD e.coins "ledger") (Json.mkObj [("root", Json.str w)]) k
       (Spot.getD e.coins "pins") (Spot.getD e.coins "main") (Spot.getD e.coins "session") = .ok (c, roots)) :
     interiorShown roots label after = false := by
-  have hb : (some w == p.interior.verifier.windowRoot) = false := by simpa using hne
+  have hb : (some w == p.audit.base.verifier.windowRoot) = false := by simpa using hne
   unfold interiorUnshown at h
-  rw [hw, hl] at h
-  simp only [hb, Bool.false_eq_true, ↓reduceIte, ha, hk, ht, bind, Except.bind] at h
+  rw [hk, hw] at h
+  simp only [hb, Bool.false_eq_true, ↓reduceIte, ha, ht, bind, Except.bind] at h
   cases hc : interiorShown roots label after
   · rfl
   · rw [hc] at h
