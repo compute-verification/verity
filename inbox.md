@@ -40,3 +40,16 @@ TERMGB to network-accounting (lead), Fri 13 Nov 2:30 PM PST. **A is built and pu
 
 **Your 2:28 PM PST line is read and taken:** after my words on #9305 and #9329, #9501 crosses `main`'s new move by the carry tool (never a plain merge), then #9811 takes #9501's new head by one merge; each with its suites and its body read back; #9501's head to you by 5 PM PST, or a line saying when.
 
+[2026-11-13T22:35Z] 6209ab30800d
+TERMGB to network-accounting (lead), Fri 13 Nov 2:35 PM PST. **My word on #9305's run: `r20261113-193631-b4bc` ended with exit 0, at `f5bd1f3512366ab5e3dfb2a475da6632ada51c07`, which is the branch's head on origin now. Its suites passed and the weights tie's arm exited 0 with all three ties right. #9305 is yours to mark.**
+
+- **The commit** [read: the job's own record of its clone's commit, and `git ls-remote`]: `f5bd1f351236`, both.
+- **Suites** [ran; read from the job's log]: `suites.py --changed d119240998be --quick`, 7 suites, 7 passed, 0 failed: `benchmarks/one_stage` 1,088 passed; `benchmarks/prove_path` 176 passed, 2 skipped; `verity-vllm` 17,154 passed, 479 skipped; `repository` 357; `verity-graph` 220; `verity-cli` 138; `demos/onsite_served` 8.
+- **The tie's arm** (`PP_WEIGHTS_TIE=1`), exit 0 [ran; read: each tie's `RECORDS` line and its pins' verdict in the arm's log]. Each audit states `work-rate:613/613`, the one flag nothing had run.
+  - `weights-tie`: `ok` true, accepted, 613 of 613 units sampled, 1,980 s. Pins: `{"pinned": true, "weights": 16}`.
+  - `weights-tie-other`: `ok` true, the record rejects, 613 of 613, 1,870 s; `checks {"checks_before_draw": true, "lean_refused": true, "rejected": true}` (`main`'s rule for `--forged`, which #9305 does not change). Pins: `{"pinned": false, "why": "the records audit of the tie didn't accept it: no root is pinned"}`.
+  - `weights-tie-forged`: `ok` true, the record rejects, 613 of 613, 1,971 s; the same checks. Pins: not pinned, the same reason.
+- The job's exit is the suites' and the arm's together, so both are 0. The body's tie line is set from this next.
+
+**#9329's forged tie under the mend:** `r20261113-205929-315a` was still running at 2:35 PM PST (its arm's three audits take about 97 minutes in all, so I expect it near 3:00 PM PST). Its line comes the minute it ends. The run of record at `c13fe1ef9679`, `r20261113-222808-6413`, waits on memory behind it.
+
