@@ -201,7 +201,7 @@ theorem outs_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d
 
 /-- **Where the design evaluates, every source bit is at a port a link or a wire names, no wire names a port a
 member writes that no link names, and some wire reads it.** -/
-theorem rows_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
+theorem namedRows_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
     sourcesNamed h = true ∧ writtenUnwired h = true ∧ writtenRead h = true := by
   obtain ⟨-, -, hn, -, -, hu, hr, -, -, -⟩ := wiring_of_two h hd
   exact ⟨sourcesNamed_of_rows h hn, writtenUnwired_of_rows h hu, writtenRead_of_rows h hr⟩
