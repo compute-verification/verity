@@ -113,8 +113,8 @@ The statement's form is the causal game, the committed files, one fixed extracto
   their window's coin, over the period's windows (`computed`), with no pricing. At remote, Pearl+'s claim reads the
   credit its compiled check publishes on its case (`PearlPlusCredits`): the play computed at least `(1 − ρ)(1 − ε) · W`
   MACs on the served run's matmul tiles after the run's coin, each tile that passes Pearl+'s rule at its credited
-  cells' MACs (`macs`), for the run's claimed MACs `W`, the cap's share `ρ` and the draw's `ε` it published: the
-  tolerant audit's event (`Pouw.GγSampledTol`) with no drawn tile credited nothing.
+  cells' MACs (`macs`), for the run's claimed MACs `W`, the cap's share `ρ` and the sample's `ε` it published: the
+  tolerant audit's event (`Pouw.GγSampledTol`) with no sampled tile credited nothing.
 
 Each subprotocol's target (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
 `NetworkCertifierSound`, `WipeSound`) is `Target k a`: at every `θ`, `F`, `c` and strategy, the probability that `a`'s
@@ -850,7 +850,7 @@ own coins choose neither. The wipe's: the play, read at the wipe's boundary as t
 content past the published survivor threshold (`Verity.Wipe.OfRun.Kept`). PoUW's at remote is Pearl+'s, in MACs, not
 a period claim: a credit `w` Pearl+'s check published on the blobs sent (`PearlPlusCredits`), with the play computing at
 least `(1 − ρ)(1 − ε) · W` MACs on the run's tiles (`macs`), where `W` is the credit's `macs` (the MACs of the cells
-its passes credit), `ρ` its cap share `rho` and `ε` its `epsilon`, the miss table's value at `X_O`, the draws that
+its passes credit), `ρ` its cap share `rho` and `ε` its `epsilon`, the miss table's value at `X_O`, the samples that
 landed on tiles over their inert-work bound (credited nothing under `over_cap` `uncredited`; `X_O = 0` in a run
 `reject` accepts).
 
@@ -866,7 +866,7 @@ files until both exist. Neither is a premise of the claim.
 
 1. **The case's wires are the committed record's wires.** The circuit the clause speaks of is the Program's own layout.
    SPOT's claim is on the committed files' units, and no check holds the rows a unit commits to the Program's gates or
-   a wired row to its writer's row: `Spot.Wires.Summary.drawnOk` states that check on the sampled units, and no
+   a wired row to its writer's row: `Spot.Wires.Summary.drawnOk` states that check on the sampled proof blocks, and no
    protocol calls it.
 2. **The case's unit is the committed `Γ`'s unit.** `Γ` counts the Program's gates; PoUW's claim counts gates of the
    committed files' circuit (`computed`). No check holds the one unit to the other, or gives how many of those a
