@@ -122652,3 +122652,53 @@ Nothing.
 - Everything at the form's accept is empty until the form accepts a play.
 
 **Heads** [run]: `cursor/proofs-sessioncoins-e4a0` at `eb01648a0d4143146246e20e3c7454598d0fad47`, nothing unpushed. Run `r20261113-053006-523c` (vy-nebius-2: `SessionLogged --siblings`, `SessionCut --siblings`, `SessionHeld`): launched 05:30Z, waiting for a Lean slot at 05:30Z; first verdict about 05:50Z [guess].
+
+## STAGECOINS, Fri 05:31Z: merged 9b300c2d3ea2; statements the join reads changed: `SessionMatches` narrows to two conjuncts and `FirstRead` reads `Run.coinsCode`; the recompile `r20261113-052130-1915` is building
+
+I merged TWOLEG's `9b300c2d3ea2` (not the tip) into my branch from `91de14e478`. Two of my statements had to follow the form. `FirstRead` and `run_path` now read the run's `coinsCode` where they read `coinsHold`. `SessionMatches`, the hypothesis behind `coinsAgree_second_matches`, shrinks from five conjuncts to two: the interior record's digest is the interior commitment's, and the evidence's ledger, pins, main and session fields are `firstCoins`'s. The key, window and family are now derived from the form's refusal of a shown interior. The first try on the merge built five of my six files and failed on one unqualified name in `StageAlone`. I fixed it, and the recompile is building on vy-nebius-2. It should end near 05:55Z, and I'll report its lines in my next entry. To your item 2: yes, `DevSecond` at `goodCase C JoinGood` is what my two theorems take.
+
+Head pushed: `b637342d9f` on `cursor/proofs-stagecoins-71b1` (merge `e0d0611c02`, edits `e575ea1db6`, fix `b637342d9f`). Nothing unpushed.
+
+**The runs**
+- `r20261113-051640-362f`, vy-nebius-2, at `e575ea1db6`, waited about 1 min, done in about 3 min on a warm build directory [run]. It printed:
+  - `Built … SampledTwo.FirstCoins (17s)`, `StageLog (4.6s)`, `SecondCoins (4.9s)`, `CoinBytes (4.8s)` and `StageCut (4.8s)`;
+  - `error: StageAlone.lean:221:9: Unknown identifier 'Draws'`. It is CUT's `Properties.Challenger.Draws`, which my file doesn't open. I qualified it in `b637342d9f`.
+  - So the build failed in `StageAlone` alone. `StageCoins`, which imports it, did not build, and no axiom probe ran.
+- `r20261113-052130-1915`, vy-nebius-2, at `b637342d9f`, started at once (waited under 1 min) on a colder build directory. At 05:31Z it was at target 10,650 of 11,638 with no error [run]; it should end near 05:55Z [guess]. Nothing in my files is called compiled until it ends.
+
+**What changed in my files at this head** [read, derived]
+- `FirstCoins`: `FirstRead`'s last conjunct is now `Run.coinsCode i.key i.main i.coins i.record i.params.verifier.windowRoot i.family (source.extract 0 read) = none`. `run_path` reads `∀ code, coinsCode … = some code → False`, matching the run's `if let some code := coinsCode …`.
+- `StageAlone`: `interiorUnshown_roots` now takes the interior audit's challenger `(k, label)` and window, and the boundary's window. `firstUnshown_of` gets the key from `keyOf_challenger` (the parameters' key is the interior audit's challenger key) and the second draw's key, family and window from `secondDraws_parts`.
+  - `SessionMatches C` is `∀ o, FormAccepts C o → ∀ p c e c₂, caseOf o.sent = .ok (p, c, e) → interiorOf e = .ok c₂ → Registration.digest e.record = .ok c₂.digest ∧ ∀ f ∈ [ledger, pins, main, session], getD (firstCoins e) f = getD e.coins f`.
+- Every theorem over the form's accept (`FirstUnshown`, `SessionMatches`, `secondAlone_of_matches` and `coinsAgree_*`) is true and empty until #9555 is merged and TWOLEG's honest play is accepted in a test.
+
+**Item 2, `goodCase`** [read, derived]
+Yes. `DevSecond A (goodCase C JoinGood) dev` is what `coinsAgree_second_log` and `coinsAgree_second_matches` take when applied at `goodCase C JoinGood`. The rest comes for free:
+- `CaseIsSent` and `SessionMatches` (or `SecondAlone`) at `goodCase` follow from the ones at `C`, since `goodCase … o = some k → C o = some k` and `caseOf` doesn't read `C`.
+- `CutReads` at `goodCase C JoinGood` holds outright, because `JoinGood` contains `ReadIsDevice`, which contains `LogRead`.
+- My conclusion is `CoinsAgree … LogIsDevice .second`, but `coinsAgree_goodCase` wants `Good := JoinGood`. That's a one-line weakening (`Good` is only a hypothesis): `fun o ha hg => h o ha hg.1.2`. ASSEMBLY writes it at the join.
+
+**Item 3, CUT's two-case `LogRead`** [derived]
+From it I'd read, for each accepted play, which logs the check read, as equations on `readLog`:
+- if the first stage read a byte, the first session's log, then the interior's;
+- if it read none, the interior's alone.
+`firstShown_of` would be trivial in the read-none case, since it covers an empty prefix, and `secondShown_of` would read the interior's log alone. But at `9b300c2d3ea2`, `coinsCode` refuses non-null coins when the stage reads no byte, and `FIRST_COINS_NULL` refuses null first-stage coins. So an accepted play's first stage reads at least one byte, and the read-none case may be empty [read, derived; not checked by a run]. CUT may only need the one case.
+
+**For CUT** [read]
+At this head the run reads `i.family = p.boundary.challenger.map (·.2)`, the boundary's family. CUT's `firstLabel` (and so `firstDraws` and my `firstDraw`) still reads the evidence segment's label. They should move to the boundary's family. `firstLabel` is CUT's; I follow it in `firstDraw` once it moves.
+
+## STOP RULE
+Nothing in it was touched: no listed guarantee's statement or premises, nothing the verifier accepts, no switch, no lock, nothing wired into `Sampled.lean`. No piece rests on the switch being off. The earlier-period signature hole is noted, not worked around. The device's five ledger facts stay hypotheses, and I built no device lines. I listed no guarantee over the form's accept and added no `unwitnessed` entry.
+
+## NEEDS
+- CUT: `firstLabel` reads the boundary's family (`p.boundary.challenger.map (·.2)`), as the run does now.
+- ASSEMBLY: the `Good` weakening from `JoinGood` to `LogIsDevice` at the join (one line, above).
+- TWOLEG: tell me when `r20261113-044424-14a0` passed; then I take the tip `03072eb90b`.
+
+## To post
+Nothing.
+
+## Not established
+- The recompile `r20261113-052130-1915` has not ended. `StageAlone` and `StageCoins` are not compiled at this head, and no axiom probe has run there.
+- `SessionMatches`' two conjuncts are hypotheses, not proved. The record digest's equality goes through `commitmentOf`'s reparse of the canonical record.
+- That the read-none case is empty under `FIRST_COINS_NULL` is read, not proved.
