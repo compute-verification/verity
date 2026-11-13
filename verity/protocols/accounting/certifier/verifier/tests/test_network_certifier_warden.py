@@ -8,10 +8,13 @@ id-form server's cells and fails any other at its first cell (format), none of w
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import dataclasses
 import hashlib
+import inspect
 import socket
+from pathlib import Path
 
 import pytest
 
@@ -242,6 +245,62 @@ def expected_egress(s: int, n: int, last: int = END) -> list[tuple[int, int]]:
     kinds = [PAD] * (D * R) + [DATA] * (n - 1) + [last]
     kinds += [PAD] * (-len(kinds) % R)
     return [(s + i // R, k) for i, k in enumerate(kinds)]
+
+
+# --- the relay's files and the older form's --------------------------------------------------------------------------
+
+#: what a file of the relay still imports from the older form's file, by the file: the relay's own its sleep, and the id
+#: form's files the id request's writer. Each leaves that file in a change of its own, so this only shrinks.
+OLDER_FORM_READS = {Path(inspect.getfile(audit)).stem: {"precise_sleep"}, "io_request": {"id_request"},
+                    "content_rows": {"id_request"}, "continuation": {"id_request"}}
+
+
+def package_imports(path: Path, package: str) -> dict[str, set[str]]:
+    """{a module of `package`: the names `path` imports from it, "*" for the module itself}, the imports inside its
+    functions included."""
+    out: dict[str, set[str]] = {}
+    for node in ast.walk(ast.parse(path.read_text())):
+        if isinstance(node, ast.ImportFrom):
+            module = ".".join(filter(None, (package, node.module))) if node.level == 1 else node.module or ""
+            if module == package:
+                for a in node.names:
+                    out.setdefault(a.name, set()).add("*")
+            elif module.startswith(package + "."):
+                out.setdefault(module[len(package) + 1:].partition(".")[0], set()).update(a.name for a in node.names)
+        elif isinstance(node, ast.Import):
+            for a in node.names:
+                if a.name.startswith(package + "."):
+                    out.setdefault(a.name[len(package) + 1:].partition(".")[0], set()).add("*")
+    return out
+
+
+def test_a_file_of_the_relay_imports_from_the_older_forms_file_only_what_is_listed():
+    """A file of the relay is a module of this package that reaches the relay's by its imports, or one such a module
+    reaches, the older form's file left out. Of the older form's file they import `OLDER_FORM_READS` and no more, so
+    once that is empty the older form can go without the relay; and the list names nothing they no longer import."""
+    older, relay = Path(active.__file__), Path(inspect.getfile(audit))
+    imports = {p.stem: package_imports(p, active.__package__) for p in older.parent.glob("*.py") if p != older}
+
+    def reached(start: str) -> set[str]:
+        seen, todo = set(), [start]
+        while todo:
+            if (m := todo.pop()) in imports and m not in seen:
+                seen.add(m)
+                todo += imports[m]
+        return seen
+
+    files = set().union(*(r for m in imports if relay.stem in (r := reached(m))))
+    assert {relay.stem, *OLDER_FORM_READS} <= files, sorted(files)
+    found = {m: imports[m].get(older.stem, set()) for m in files}
+    more = {m: sorted(names - OLDER_FORM_READS.get(m, set())) for m, names in found.items()}
+    assert not any(more.values()), (
+        "\n".join(f"{m}.py imports {', '.join(names)} from {older.name}" for m, names in sorted(more.items()) if names)
+        + f"\nA file of the relay reads nothing of the older form's file. Move the definition to a module of the relay's "
+          f"own, or to one named for what it holds, beside {relay.name}, and have {older.name} import it from there, so "
+          f"that it keeps one definition.")
+    stale = {m: sorted(names - found[m]) for m, names in OLDER_FORM_READS.items() if names - found[m]}
+    assert not stale, (f"OLDER_FORM_READS lists what its file no longer imports from {older.name}: {stale}. Delete it "
+                       f"from the list, which only shrinks.")
 
 
 # --- the schedule ----------------------------------------------------------------------------------------------------

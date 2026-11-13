@@ -8,6 +8,7 @@ certifier's process, moves no tick in `serve`'s publisher process."""
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import dataclasses
 import importlib.util
@@ -52,6 +53,65 @@ ws = _load()
 
 async def _no_sleep(_: float) -> None:
     pass
+
+
+#: what the relay's runner still imports from the older form's files, by the file: the certificate's JSON and the
+#: endpoint's model from the older runner, a record's bytes on disk and its process's runtime and usage from its replay,
+#: and the id request's writer from the older form's protocol file. Each leaves its file in a change of its own, so this
+#: only shrinks.
+OLDER_FORM_READS = {"certifier_serve": {"certified_from_json", "certified_json", "served_model"},
+                    "active_replay": {"_quiet_runtime", "_usage", "pack_record", "unpack_record"},
+                    "active": {"id_request"}}
+
+
+def _imports(path: Path) -> dict[Path, set[str]]:
+    """{a file of the tree: the names `path` imports from it, "*" for the module itself}, the module named bare beside
+    `path` or dotted from the root, the imports inside `path`'s functions included."""
+    def file(module: str) -> Path | None:
+        beside, rooted = path.with_name(f"{module}.py"), ROOT.joinpath(*module.split(".")).with_suffix(".py")
+        return beside if beside.is_file() else rooted if rooted.is_file() else None
+
+    out: dict[Path, set[str]] = {}
+    for node in ast.walk(ast.parse(path.read_text())):
+        if isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            if f := file(node.module):
+                out.setdefault(f, set()).update(a.name for a in node.names)
+            for a in node.names:
+                if f := file(f"{node.module}.{a.name}"):
+                    out.setdefault(f, set()).add("*")
+        elif isinstance(node, ast.Import):
+            for a in node.names:
+                if f := file(a.name):
+                    out.setdefault(f, set()).add("*")
+    return out
+
+
+def test_the_relays_runner_imports_from_the_older_forms_files_only_what_is_listed():
+    """A file of the relay's runner is the runner's own or a file beside it that it reaches by its imports, the two
+    older runners left out. Of the older runners and the older form's protocol file, only the runner's own imports, and
+    `OLDER_FORM_READS` and no more, so once that is empty the older form can go without the relay; and the list names
+    nothing the runner no longer imports."""
+    runner = Path(ws.__file__)
+    older = {runner.with_name("certifier_serve.py"), runner.with_name("active_replay.py"),
+             ROOT.joinpath(*WR.__package__.split("."), "active.py")}
+    assert all(f.is_file() for f in older) and {f.stem for f in older} == set(OLDER_FORM_READS), older
+    files: dict[Path, dict[Path, set[str]]] = {}
+    todo = [runner]
+    while todo:
+        if (path := todo.pop()) not in files:
+            files[path] = _imports(path)
+            todo += [f for f in files[path] if f.parent == runner.parent and f not in older]
+    assert len(files) > 4, sorted(p.name for p in files)
+    found = {(p.name, f.stem): names for p, imports in files.items() for f, names in imports.items() if f in older}
+    more = {k: sorted(names - (OLDER_FORM_READS[k[1]] if k[0] == runner.name else set())) for k, names in found.items()}
+    assert not any(more.values()), (
+        "\n".join(f"{f} imports {', '.join(names)} from {m}.py" for (f, m), names in sorted(more.items()) if names)
+        + f"\nA file of the relay reads nothing of the older form's files. Move the definition to a module of the relay's "
+          f"own, or to one named for what it holds, beside {runner.name} (a definition of the protocol's: beside the "
+          f"relay's protocol file), and have the older form's file import it from there, so that it keeps one definition.")
+    stale = {m: sorted(gone) for m, names in OLDER_FORM_READS.items() if (gone := names - found.get((runner.name, m), set()))}
+    assert not stale, (f"OLDER_FORM_READS lists what {runner.name} no longer imports from the older form's files: "
+                       f"{stale}. Delete it from the list, which only shrinks.")
 
 
 def test_varied_traffic_is_fixed_by_its_seed_and_varies():
