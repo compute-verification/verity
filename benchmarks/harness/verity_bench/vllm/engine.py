@@ -10,6 +10,7 @@ import hashlib
 import multiprocessing as mp
 import os
 import statistics
+import sys
 import tempfile
 import time
 import traceback
@@ -158,11 +159,9 @@ def h1_gate(windows: list[Mapping[str, Any]]) -> dict[str, Any]:
 def _kv_cache_tokens(llm: Any) -> int | None:
     """The engine's actual KV pool in tokens (in-process V1 engine), None when the engine does not expose it."""
 
-    try:
-        cache = llm.vllm.llm_engine.vllm_config.cache_config
-        blocks, block_size = cache.num_gpu_blocks, cache.block_size
-    except AttributeError:
-        return None
+    engine = getattr(getattr(llm, "vllm", None), "llm_engine", None)
+    cache = getattr(getattr(engine, "vllm_config", None), "cache_config", None)
+    blocks, block_size = getattr(cache, "num_gpu_blocks", None), getattr(cache, "block_size", None)
     if blocks is None or block_size is None:
         return None
     return int(blocks) * int(block_size)
@@ -513,18 +512,18 @@ class _ProcessEngine:
     def _death_report(self, doing: str) -> str:
         """The engine process died under ``doing``: its own last error when it managed to send one, else its exit code,
         so a kill during a gate surfaces as what it was instead of a connection error."""
-        final = None
+        final, unread = None, ""
         try:
             if self.conn.poll(0):
                 final = self.conn.recv()
-        except (EOFError, ConnectionResetError, OSError):
-            pass
+        except (EOFError, ConnectionResetError, OSError) as e:
+            unread = f"; its last message could not be read ({type(e).__name__})"
         self.process.join()
         if isinstance(final, dict) and "error" in final:
             return f"benchmark engine process died during {doing}: " + final["error"] + "\n" + final.get("trace", "")
         code = self.process.exitcode
         hint = " (SIGKILL: likely out of memory; its own last error is on the job's stderr)" if code == -9 else ""
-        return f"benchmark engine process died during {doing} with exit code {code}{hint}"
+        return f"benchmark engine process died during {doing} with exit code {code}{hint}{unread}"
 
     def gate(self, point: SweepPoint) -> Mapping[str, tuple[int, ...]]:
         return self._ask("gate", point)
@@ -547,10 +546,11 @@ class _ProcessEngine:
                 try:
                     self.conn.send(("close", None))
                     self.conn.recv()
-                except (EOFError, ConnectionResetError, BrokenPipeError):
+                except (EOFError, ConnectionResetError, BrokenPipeError) as e:
                     # A worker that sent its error has left its loop and is closing its engine on its own; raising here
                     # would replace that error, which the caller is propagating, with this one.
-                    pass
+                    print(f"verity-bench: the engine process left before the close handshake ({type(e).__name__}); "
+                          "its exit code says how it ended", file=sys.stderr)
         finally:
             self.process.join()
             self.conn.close()

@@ -29,9 +29,9 @@ from verity_bench.tool import VLLM_BENCH_POINT
 from verity_bench.vllm import presets
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.arms import Arm, H1, build_bound, h1_config, plugin, protocols_config, resolve_arms, window_steps
-from verity_bench.vllm.engine import (H1_OPENING_STEPS, PASS_COUNTS, ProcessEngineFactory, _pass_totals, _pearl_c_gate,
-                                      _pearl_c_run, _ProcessEngine, _VllmEngine, arm_execution, engine_args, h1_gate,
-                                      h1_summary)
+from verity_bench.vllm.engine import (H1_OPENING_STEPS, PASS_COUNTS, ProcessEngineFactory, _kv_cache_tokens,
+                                      _pass_totals, _pearl_c_gate, _pearl_c_run, _ProcessEngine, _VllmEngine, arm_execution,
+                                      engine_args, h1_gate, h1_summary)
 from verity_bench.vllm.presets import (
     ENGINE_SETTINGS,
     FORMER_SPECS,
@@ -398,7 +398,6 @@ def test_a_spec_warmups_count_loads_strictly_and_binds_the_identity(tmp_path):
 
 
 def test_an_engine_setting_the_runner_doesnt_read_refuses_by_name(tmp_path):
-
     path = tmp_path / "spec.toml"
     path.write_text((SPEC_ROOT / "llama31-8b-fp8-1gpu.toml").read_text().replace(
         "[preset.engine_settings]\n", '[preset.engine_settings]\nmoe_backend = "triton"\n'))
@@ -496,7 +495,6 @@ def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_th
 
 
 def test_the_served_bandwidth_spec_times_compiled_stock_uncontrolled_beside_its_graph_path_at_six_reps():
-
     served_spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-r6")
     assert served_spec.reps == 6 and served_spec.arm_settings["stock-fp8@compiled"].control == "none"
 
@@ -514,7 +512,6 @@ def test_the_served_bandwidth_spec_times_compiled_stock_uncontrolled_beside_its_
 
 
 def test_a_queued_point_records_its_identity_as_the_key_param_resume_matches():
-
     root = Path(__file__).resolve().parents[3]
     plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
     item = plan.points[0]
@@ -587,7 +584,6 @@ def test_experimental_arm_can_require_an_isolated_engine(monkeypatch):
 
 
 def test_graphs_are_refused_for_arms_bound_to_the_build():
-
     bound_arm, _control = resolve_arms("sampled-proofs:hm96,stock-fp8")
     assert build_bound(bound_arm) == ("sampled-proofs:hm96",)
     assert build_bound(resolve_arms("stock")[0]) == ()
@@ -596,7 +592,6 @@ def test_graphs_are_refused_for_arms_bound_to_the_build():
 
 
 def test_a_dead_engine_process_reports_its_own_error_not_a_connection_reset():
-
     class DeadConn:
         def __init__(self, final=None):
             self.final = final
@@ -621,13 +616,32 @@ def test_a_dead_engine_process_reports_its_own_error_not_a_connection_reset():
     with pytest.raises(RuntimeError, match="died during gate: RuntimeError: CUDA out of memory"):
         drained.gate(point)
     silent = _ProcessEngine(DeadProcess(), DeadConn(), {})
-    with pytest.raises(RuntimeError, match=r"exit code -9 \(SIGKILL: likely out of memory"):
+    with pytest.raises(RuntimeError, match=r"exit code -9 \(SIGKILL: likely out of memory; its own last error is on the job's stderr\)$"):
         silent.gate(point)
 
+    class TornConn(DeadConn):
+        def poll(self, _timeout):
+            raise ConnectionResetError
 
-def test_closing_an_engine_whose_worker_already_sent_its_error_keeps_that_error():
+    torn = _ProcessEngine(DeadProcess(), TornConn(), {})
+    with pytest.raises(RuntimeError, match=r"exit code -9 .*; its last message could not be read \(ConnectionResetError\)$"):
+        torn.gate(point)
+
+
+def test_an_engines_kv_pool_is_its_blocks_times_their_size_and_none_where_the_engine_hides_either():
+    def llm(cache):
+        return SimpleNamespace(vllm=SimpleNamespace(llm_engine=SimpleNamespace(vllm_config=SimpleNamespace(cache_config=cache))))
+
+    assert _kv_cache_tokens(llm(SimpleNamespace(num_gpu_blocks=28_672, block_size=16))) == 458_752
+    assert _kv_cache_tokens(llm(SimpleNamespace(num_gpu_blocks=None, block_size=16))) is None
+    assert _kv_cache_tokens(llm(SimpleNamespace(block_size=16))) is None
+    assert _kv_cache_tokens(SimpleNamespace(vllm=SimpleNamespace())) is None
+
+
+def test_closing_an_engine_whose_worker_already_sent_its_error_keeps_that_error(capsys):
     """A gate that fails in the worker (an arm's refusal) ends the worker's loop; the runner's cleanup then closes the
-    engine, and that close must not replace the gate's error with a connection error."""
+    engine, and that close must not replace the gate's error with a connection error, only say on stderr that the
+    handshake broke."""
 
 
     class ExitingConn:
@@ -651,6 +665,7 @@ def test_closing_an_engine_whose_worker_already_sent_its_error_keeps_that_error(
             pass
 
     _ProcessEngine(ExitingProcess(0), ExitingConn(), {}).close()
+    assert "left before the close handshake (EOFError)" in capsys.readouterr().err
     with pytest.raises(RuntimeError, match="exited with code 1 while closing"):
         _ProcessEngine(ExitingProcess(1), ExitingConn(), {}).close()
 
@@ -876,7 +891,6 @@ def _serving_defaults_preset():
 
 
 def test_engine_args_pin_the_pool_in_either_mode_and_serving_defaults_leave_compilation_to_vllm():
-
     served_preset = _serving_defaults_preset()
     for resident in (True, False):
         args = engine_args(served_preset, "bfloat16", resident=resident, eager=False)
@@ -893,7 +907,6 @@ def test_engine_args_pin_the_pool_in_either_mode_and_serving_defaults_leave_comp
 
 
 def test_serving_defaults_give_every_arm_process_one_inductor_cache(monkeypatch):
-
     spawned = []
 
     class Context:
@@ -1331,7 +1344,6 @@ def test_each_h1_run_opens_its_own_window_through_the_llm_and_closes_it_after_se
 
 
 def test_an_h1_window_passes_its_gate_only_static_credited_and_entered():
-
     def run(**over):
         base = dict(verdicts={0: {"credit": True}, 1: {"credit": True}}, refused=[], order_ok=True, steps=130, rows=64,
                     calls=[0, 1], requests=[0], refused_requests=[], coin_source="in-process",
@@ -1422,7 +1434,6 @@ def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the
 
 
 def test_a_sweep_that_samples_other_than_greedily_refuses(tmp_path, monkeypatch):
-
     quick = (presets.SPEC_ROOT / "quick.toml").read_text().replace('id = "quick"', 'id = "odd"')
     sampled = quick.replace("[output_tokens]", 'sampling = ["greedy", "stochastic"]\n\n[output_tokens]')
     (tmp_path / "odd.toml").write_text(sampled)
@@ -1432,7 +1443,6 @@ def test_a_sweep_that_samples_other_than_greedily_refuses(tmp_path, monkeypatch)
 
 
 def test_inter_token_latency_is_per_token_after_the_first_and_shares_a_multi_token_return():
-
     returns = [
         (1.0, {"a": 1}),
         (1.5, {"a": 2, "b": 1}),
@@ -1468,7 +1478,6 @@ def test_ratio_table_puts_the_headline_cell_first():
 
 
 def test_decode_time_per_token_counts_only_decode_only_forwards():
-
     steps = [
         {"forward": True, "s": 0.9, "prefill_tokens": 512, "decode_tokens": 0},
         {"forward": True, "s": 0.5, "prefill_tokens": 64, "decode_tokens": 7},
@@ -1485,7 +1494,6 @@ def test_decode_time_per_token_counts_only_decode_only_forwards():
 
 
 def test_the_decode_metric_is_reported_only_where_every_rep_has_it():
-
     arms = (Arm("stock"), Arm("candidate", control="stock"))
     point = expand_sweep("quick")[0]
 
