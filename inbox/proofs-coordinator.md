@@ -144849,3 +144849,85 @@ Clock: `date -u` read 13:59Z when I wrote this. Mailbox: your 13:29Z (`d534a5fcf
 - The batch after it, as I read your mails: ACCEPTS's commit off this tip; MESSAGES's `74bb74b46cb4` with `LastSlotFree` as its named field; the field for (a), which I write, with STOPDRIVER's function as its text (I read it at `b7e15e1d4cc`, where it is `window_place.of` and `family`); HELDOF's `join9441` branch and STAGECOINS's scripts branch each on your word.
 
 To post: nothing. Head pushed: `757ef18fdc`; nothing unpushed. Runs going on: `r20261113-135551-1520` (records), `r20261113-135641-c19b` and `r20261113-135722-4e85` (tries), and the tails of `90e0` and `33bd`. My timer is set for 14:47Z.
+
+## MEMBERS, Fri 13 Nov 14:05Z: SIZING the per-member `check` on Thursday's served window: NO case written from what the audit kept can be accepted (its 298 sessions ran on no challenger's trees, and the form reads each from the window's challenger session); the members' half of the case CAN be written from what was kept; unstreamed it needs about 0.45 to 0.6 TB where vy-nebius-cpu-6 has 741 GB free, so the streamed main is not needed there, only cheaper; and ONE FINDING against my own row: the files' pass evaluates the partition's query over the whole program once a MEMBER, so its hours on 102,781 members are not sized
+
+Item 4 of your 13:29Z message. By reading and one small run, `r20261113-134855-d717` (vy-nebius-cpu-6, 13:49Z, rc 0, 17.7 s, read-only: names, counts, sizes and key names of `v3c-w0-4-27-2/audit/` in the serve directory of `r20261112-101803-fbc8`; nothing copied off the node, nothing deleted). Nothing was launched. Mailbox read through 13:29Z. GB is 10⁹ bytes.
+
+**0. The answer in five lines.**
+- **Accept: not from what was kept, whoever writes the case.** The form reads each session's challenges as one tree of the window's challenger session, in the sessions' order, and checks that before any member's file (`membersStructure`: `treesOf`, `orderHeld`, `membersTreesHeld`, then `runMembers`). [read: `Spot/OneStageZk.lean:1768-1787`] Thursday's sessions took their trees from no challenger at all. [run `d717` + read, item 2] An accept needs the 298 sessions run again by a driver that puts them on the window's session: a second audit of an audited window, which is vllm's ruling and yours, not mine. [relayed: FIRSTACCEPT 08:03Z]
+- **The members' half can be written** from what was kept: every one of the 102,781 members has its public file in place, and its circuit's digest, units and `vus_per_block` are in the audit's summary. [run `d717`]
+- **Memory, unstreamed, one process: about 0.45 to 0.6 TB** [derived, item 3], against 740.8 GB available on vy-nebius-cpu-6, where the files are. [run `d717`] So **the streamed main is not needed on that node; it makes the check cheaper** (about 155 GB [relayed: FIRSTACCEPT 12:17Z]) and is needed on any node under about 0.6 TB.
+- **Hours: about 12 plus one term I cannot size** (item 4): the files' pass evaluates the partition's query once a member. With that kept once a program, about 12 hours, 10 of them the 298 sessions. [derived]
+- **What can run with no new audit**: the files' pass alone on all 102,781 members' real files, by my row's timing main. Not launched; it should wait for the finding's fix or its one number (item 5).
+
+**1. The files `check` must be handed.** `check PARAMS COMMITMENT EVIDENCE [BLOB ...]`: every blob read whole into memory, then the check. [read: `CoreProtocol/Blobs.lean`, the `check` command]
+
+| file | what it is | bytes | kept by Thursday's audit? |
+|---|---|---|---|
+| PARAMS | v1's parameters, plus `proofs` exactly `{"members"}` (a name each: `circuit`, `public`, `registered`, `units`, `vus_per_block`), plus `challenger` `{key, label}` at the deployed LMS parameters and `window_root` (refused at the parse without them: `NO_CHALLENGER`, `KEY_PARAMS`) [read: `OneStageZk.lean:271-285`, `:857-864`; `OneStage.lean:361-368`] | v1's are 366,953,552 [run: SESSIONOF2's `dad3`, relayed]; the members add about 0.2 GB [derived: 102,781 × about 0.35 kB, and the 87,000 registered files' 159,557,454 bytes] | v1's part: yes, in `window/case.json`. `proofs.members`, `challenger`, `window_root`: **no** [run `d717`: the kept parameters' keys hold none of the three] |
+| COMMITMENT | the registration record | 301,951,000 [run `d717`] | yes, in `case.json` |
+| EVIDENCE | v1's without `verdicts`, plus `proofs` exactly `{"statements"}` (298, each its member and its session's `session.json` digest and rep files' digests), plus `coins`, the window's challenger session's evidence | v1's is 15,584,496 [run `d717`] | v1's part yes; `coins`: **no** in the case (its evidence's keys hold none) [run `d717`]; `statements`: the files yes, their trees no (item 2) |
+| circuit files | one a template, every member's, sampled or not | 298 files, 332,770,759,993 [run `36f0`]; largest 21.93 GB [run: vllm's `9e07`, relayed] | yes: 391 names of 298 distinct files; name each once |
+| public files | one a member, sampled or not | 102,781 files, 4,866,143,777 [run `d717`] | yes, every member's own `pub-<n>.bin` exists |
+| sessions' files | `session.json` and two rep files a session | 298 + 596 files, 284,305,981 + 553,603,208 [run `d717`] | yes |
+| lookup tables | none, and none may be among the blobs | 0 | the 298 circuits' one `lookups` list is empty [run `36f0`]; a pinned table among the blobs refuses (`tablesHeld`) [run `133c`: the test] |
+
+- Blobs together: **103,973 files, 338.47 GB** [derived: the four sums]. FIRSTACCEPT's 338.47 agrees. [relayed]
+- The paths in place are past the kernel's argument limit (`ARG_MAX` 2,097,152 on the node [run `d717`]). `benchmarks/one_stage/case_files.py` already hands blobs as short links in one directory under a raised stack limit, each distinct file once; 103,973 short names fit its 6 MiB cap. [read; about 2 MB, derived] Nothing is copied.
+
+**2. Who can write the case from what the audit kept, part by part.**
+- **No case was written, and Thursday's driver could not write one.** The audit ran at `69655a037c6`. Its `a5.py` has none of `members_proof`, `case_members`, `case_coins`, `window_trees`. [read: `git show 69655a037c6:benchmarks/one_stage/a5.py`] It kept `case-v2-error.txt`, 104 bytes: "v2 verifies one table's session on its circuit and public file; this audit drew 298 members". No `case-v2-members.json`, no `case-v2-members-error.txt`, no `case-v2.json`. [run `d717`]
+- **`proofs.members`: writable from what was kept, by a driver's owner.** Per member [run `d717` unless tagged]:
+  - units: the summary's members hold `base`, `k`, `n`, `template`, laid range by range from 0 to the population, 1,109,804, in listed order;
+  - circuit digest and `vus_per_block`: the summary's `circuits`, 298 entries, each with a `pin` and an integer `vus_per_block` (1 or 2); if `pin` is not the file's SHA-512, hashing the 298 files is 13 minutes [derived];
+  - public digest: SHA-512 of its own `m<k>/pub-<n>.bin`, all 102,781 there;
+  - registered reads: its `registered.json`, 87,000 members; null for the rest;
+  - name: the member's key in the window's binding, its chunk's name or its template (`rows.Member.key`). [read: `verity/commitments/windows/rows.py:263`] The summary's members carry no name, so the writer builds the binding from the kept `program.json` and `partition.json` (130.6 s in Thursday's audit [run: SESSIONOF2's `f485`, relayed]).
+  - `a5`'s writer builds these from the audit's members in memory; no command rebuilds them from a kept directory. [read: `a5.py:1328-1351`, `:1451-1478`] That is about 60 lines on the driver's side, which is FIRSTACCEPT's. For the files-only run of item 5 I can write it as a read-in-place job script instead; say which.
+- **`challenger`, `window_root` and `coins` (the sample's): not established.** The window's summary holds `coins` with keys `coins_reason`, `outcome`, `read`, `run`, `segment`, `session`, and `audit/challenger/` exists, so the sample's session was kept. [run `d717`] The key's W and H I did not read; v2 refuses any but the deployed ones, and the served audit step never passes `--deployed-key`. [relayed: FIRSTACCEPT 09:58Z]
+- **`proofs.statements`: nobody can, and this is what decides.**
+  - At Thursday's tree a session takes its tree from "a challenger of its own" under `FLOCK_CHALLENGER=1`, or from none; no path puts it on the window's session. Each such challenger is written to the summary's `challengers`. [read: `a5.py` at `69655a037c6`, `:106-110`, `:1032-1033`]
+  - The kept summary has no `challengers` key. Its arm is `fw`: each session a process pair behind the ZK server. [run `d717`]
+  - So the window's challenger session's log holds no tree of any of the 298 sessions, and `membersTreesHeld` refuses at the first statement. [derived]
+  - The trees are the auditor's challenges for the sessions, so no writer can supply them after the fact: the sessions must run again on a session that is open, and Thursday's is ended. A gate opens a root once; a local session draws a new sample. [relayed: FIRSTACCEPT 08:03Z]
+
+**3. Memory.** My row sizes none of this: its circuit files are under 70 MB. All figures here are derived from slopes measured on circuit files up to 0.95 GB, a 23rd of Thursday's largest.
+- The node [run `d717`]: `MemTotal` 792,536,240 kB (811.6 GB), `MemAvailable` 723,395,016 kB (**740.8 GB**), no swap, 192 cores; 1,044.9 GB free on the serve's filesystem.
+- By parts [derived]: the blobs as read, 338.5 GB; the three texts' parse, about 15 GB (v1's `check` of this window peaks at 10,765,988 kB [run: SESSIONOF2's `dad3`, relayed], and the members add 0.2 GB of text); one parse of the largest circuit at a time, 21.93 GB at 4.2 to 6 bytes a byte [relayed: FIRSTACCEPT 12:17Z], 92 to 132 GB. **About 450 to 490 GB.**
+- By FIRSTACCEPT's two fits on the `refusal` main, which reads its files the same way [relayed: 09:17Z; derived here at Thursday's sizes]: 1.26 × 338.47 + 3.78 × 21.93 + 0.4 = 510 GB; 1.53 × 338.47 + 3.19 × 21.93 + 0.4 = 588 GB. With the texts, **about 525 to 605 GB.**
+- So **0.45 to 0.6 TB, 140 to 290 GB under what the node has free**. By parts the largest parse could cost 17 bytes a byte before the node runs out. [derived] Not measured: any parse of a file over 0.95 GB, and what the kept pass holds of 298 files of this size (my row: 627 MB at its end for two files).
+- Streamed (FIRSTACCEPT's `check-stream`, which has never run on a case): about 155 GB. [relayed: 12:17Z, 12:44Z]
+
+**4. Hours, and the finding.**
+- Read and hash the blobs: SHA-512 at 2.3 s a GB, 13 minutes [derived from FIRSTACCEPT's run `6b82`]; the read itself not measured.
+- The files' pass, the part my row measured [run `7cf8`; derived]: 332.77 GB once a file at 15.0 s a GB, 83 minutes (97 at FIRSTACCEPT's 17.5), and 0.92 ms a further member, 94 s.
+- **THE FINDING: that 0.92 ms was measured on a program of 300 members and two templates, and does not carry.** [read] A member's population check is `Member.populationOn` → `Partition.strata` → `Partition.evaluate`, once a member (`OneStageZk.lean:1309-1313`, called from `statementOn`). Each call walks every body the root reaches (`Prog.orderViolation`), every root node against the templates' list (`TemplateQuery.evaluate`), the committed bits of each template (`checkTemplates`, `templateBits`: 298 a call), and the strata (`Draw.strataOf`). [read: `Spot/Partition.lean:129-190`, `Flock/TemplateQuery.lean:129-144`, `Circuits/Program.lean:1172`] The kept pass keeps the program's parse once (`ProgramKept`) and still evaluates the query a member; the stated pass does the same and parses too.
+  - On Thursday's window that is 102,781 evaluations over a program of 220.8 MB of text. One evaluation's seconds, t, I have not measured. v1's `check` evaluates the query at least once [read at the switch's tree: `Spot/OneStage.lean:157`] and its whole run on this window takes 80.6 s [run: SESSIONOF2's `dad3`, relayed], so t is under that. At t = 0.1 s the pass adds 2.9 hours, at 1 s 28.5 hours, at 10 s 12 days. [derived] Which of these: not known; one timed evaluation on the kept parameters says.
+  - This is the same defect as the parse a member, one level up, and the same mend: keep the program's strata beside its parse, read them a member, as an equality under `membersFiles = membersFilesKept`, so no statement moves. It changes `ProgramKept`, `ProgramKept.next`, `Member.populationOn`, `Member.filesOn`, `Member.files_on`, `keptFiles` and `keptFiles_eq`. It changes none of `stepMember`, `runMembers`, `membersRun`, `Member.files`, `membersRun_files`, `statementOf` or `Member.statement`. **I write it on your word, not before** (HELDOF is mending against `ad3efc0ca19c`).
+  - The row needs a second axis for it: the program's size at a fixed count of members handed. Mine to add with the mend.
+  - Until one of the two, the switch's pull request cannot say the pass is under the cost rule.
+- The 298 sessions, one after another: 35,941.4 s summed in Thursday's audit, 10.0 hours, the largest 328.0 s. [run: SESSIONOF2's `f485`, relayed]
+- One `Blobs.get` scan a member for its public file over 103,973 entries: about 5×10⁹ digest compares, minutes. [derived; guess] The index stays "not now".
+- **Total with the strata kept once: about 12 hours** in one process with nothing saved on the way; streamed or not, the work is the same. [derived]
+
+**5. What can run with no new audit. Not launched; each needs your word, and vllm's leave to read in place.**
+- **(a) Does the form read Thursday's registration at all?** Minutes, about 20 GB. The parameters written as in item 2, parsed, then `rootsOf` on the kept record: it refuses a `row-table` root and a root that is no member's, before any blob. [read: `OneStageZk.lean:972-1018`] That settles the first two lines of item 6. My timing main does exactly these steps first. [read: `benchmarks/verifier_cost/members_files/Main.lean:70-76`]
+- **(b) The files' pass on every member's real files**: `members-files-time PARAMS COMMITMENT BLOBS all --ref-max 0`, the blobs by a list file, 103,079 files (298 circuit files and 102,781 public files, 337.64 GB) read in place. Memory as item 3 without the sessions. Hours: 1.4 to 1.6 plus 102,781 t, so not before the mend or t.
+- Both need a `challenger` in the parameters to parse. If Thursday's key is not at the deployed parameters, the job would name a stand-in key, and I would say so in its first line: it times the pass and says whether every member's files are held; it is no accept and checks no challenge.
+
+**6. Not established.**
+- Whether Thursday's registration is one the form reads: 820,193 roots, all ports distinct, 256 registered values [run `d717`]; whether one is a `row-table` root, and whether every root is one member's, not read.
+- Whether its wired members and link points pass the form's checks: the summary has `wiring_reference` and `link_points` (members 102,781) [run `d717`]; I read neither's content.
+- The gate's key's W and H, and which challenger Thursday's audit named (`audit/summary.json`, not read).
+- t, the seconds of one evaluation of the partition's query on Thursday's program; the program's count of root nodes.
+- Any memory figure on a circuit file past 0.95 GB.
+
+**7. Your 13:29Z item 3.** I have changed none of `stepMember`, `runMembers`, `membersRun`, `Member.files` and change none before the carry without an entry first.
+
+**State.** Switch branch `cursor/proofs-members-switch-34fd` at `caaeae611728`, pushed; nothing unpushed; nothing compiled since `ad3efc0ca19c` (the two commits after it are Python tests and one `pyproject.toml` line). No run of mine is out, no timer. #9712 at `b940017b6864`, unmarked, waiting on "carry".
+
+**Needed from you.**
+1. Yes or no: the strata kept once a program (item 4), now or after the carry.
+2. Whether (a) should run, and with it whether I write the members' parameters as a job script or FIRSTACCEPT's driver does.
+3. Nothing is asked of vllm by me. What a second audit would ask of it is in item 0; that ruling is yours.
