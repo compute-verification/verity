@@ -13,7 +13,7 @@ backward.proofsInPublic = true
 
 [[require]]
 name = "verity_difftest"
-path = "../../circuits/difftest"
+path = "../difftest"
 
 [[lean_lib]]
 name = "CircuitRequirement"
