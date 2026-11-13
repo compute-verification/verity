@@ -114449,3 +114449,53 @@ Nothing new. The move of this entry is the one you ruled on at 22:50Z and 02:00Z
 ### To post
 
 The notice's table above, when you choose to send it.
+
+## STOPDRIVER, Fri 13 Nov 02:21Z: both failed runs failed on the machine, not on a test of mine: every suite passed but `research`, on two of infra's tests that read vy-nebius-2's hold file and fail on `main` there too; at V = 154,880 one chunk inner block commits 123,952 bits and the combine's 124,848, under 262,144; TWO RUNS OF ME ARE ALIVE, say which you keep
+
+In plain words: neither test run found anything wrong with my two branches. Each passed every suite but one, and that one fails on two tests of the team's own tooling, because the machine carries a file tonight that tells those tests the machine is closed; the same two tests fail on `main` when that file is there and pass when it is not. Second, I read both circuit files of the real vocabulary size row by row: an inner block of a chunk commits 123,952 bits and the inner block of the combine 124,848, each under half of the 262,144 a block may commit, so the two-stage design is not refused on size at Friday's shape. Third, your 02:11Z message started a second run of me while my 02:00Z turn was still working; that other run wrote the 02:17Z entry above. We share one machine and I have kept out of its way.
+
+This answers your 02:11Z message. Clock: `date -u` read 02:21Z. Mailbox read to its last heading, "Coordinator, Fri 13 Nov 00:30Z: #9458 conflicts with main" [run: 02:12Z]; `COMMON.md` last changed 00:17Z (say stage, not round), read.
+
+**1. What failed, one line each.**
+
+- `r20261112-234519-8cc3` (cards branch at `2c5806b33e8c`, exit 1 after 2 h 09 min, 72 of them in line): **the machine.** 58 suites: 57 passed, 1 failed, `research`, 2 of its tests (4,769 passed) [run: its `stdout.log`, read over ssh].
+- `r20261113-005103-99bb` (#9458 at `049c5875989c`, exit 1 after 57 min): **the machine.** 66 suites: 65 passed, 1 failed, `research`, the same 2 tests (4,783 passed) [run: its `stdout.log`].
+- The two tests are infra's, in `tools/research/tests/test_auto.py`: `test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_the_pool` and `test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen`. Neither is mine, and neither branch's own commits touch `tools/research` [run: the 02:17Z entry's two `git` lines].
+- **They fail on `main` the same way, and they are not flaky** [run, my VM, 02:18Z, `main` at `636d15d041b5`, the two tests alone]: with `auto.HOLD_FILE` set to a file that holds a time still to come, 2 failed, `KeyError: 'error'` at `test_auto.py:691`, the node's own error; with it set to a path that does not exist, 2 passed. The node carries `/etc/vy/auto-hold` until Sat 14 Nov 02:00Z [run: read over ssh, 02:03Z]. So any suites run on vy-nebius-2 that reaches `research` is red until then, from any branch.
+- Owner: infra. The fix is one `monkeypatch.setattr(auto, "HOLD_FILE", ...)` line in each test, as `test_auto.py:705` on `main` does for a third; the note for infra, worded to send, is in my 00:40Z entry. I do not fix it and I do not rerun: a rerun on that node fails again.
+
+**2. The committed counts at V = 154,880, from the circuit files.** [run: a scan of every row of `vy-nebius-2:/workspace/tmp/proofs-stopdriver-statements/v154880/{chunk,combine}/circuit.txt`, sha256 `92461c7c8362…` and `60c1502f19f9…`, the files my card job `4ed2` proved from and Lean verified, staged by the audit's own `second` in `d852`; over ssh, 5 s, 02:17Z]
+
+| template | the header's one input group | bits its rows read | bits it returns | **one inner block commits** | of 262,144 |
+|---|---|---|---|---|---|
+| `GreedyChunk_v2{N=7744,OFF=0}` | 1,024 words of 128 columns = 131,072 columns; 7,744 ports of 16 bits | 123,904 | 48 (3 ports of 16 bits) | **123,952 bits** (7,747 values of 16 bits) | 47.3% |
+| `GreedyCombine_v2{V=154880,N=7744}` | the same 131,072 columns; 7,801 ports of 16 bits | 124,816 | 32 (2 ports of 16 bits) | **124,848 bits** (7,803 values of 16 bits) | 47.6% |
+
+- [run] The unit sections hold 1,083,265 and 1,085,953 rows. In each, the rows read every bit of every port and **no padding column**: the highest input column any row reads is 123,903 and 124,815. The 7,168 and 6,256 padding columns each have the row `0 0`, which fixes them to zero.
+- [derived] This settles the one guess in HELDOF's 02:06Z entry ("no padding column is keyed") for what a row reads. Its figures 123,952 and 124,848 are then the counts, and its bound of 131,120 and 131,104, which counts all 131,072 columns, holds whether or not Lean's `committed` counts a column no row reads. That last question is HELDOF's and FRAME's to read; either answer is under the cap.
+- [read: the staged window, `d852`'s `second/interior/window.json`] All 20 templates: each of the 19 chunks has one input port of 7,744 words and returns 3; the combine has 20 input ports of 7,801 words in all (7,744 of logits and 3 from each chunk) and returns 2. [read: both `registered.json`] The same ports, 16 bits a word.
+- [derived] The count does not grow with the number of inner blocks: `units_per_vu` is 1 in both, so one unit section is one inner block, and Friday's 512 a template repeat it.
+- Not established: I scanned one chunk's file, `OFF=0`; the other 18 differ in that static and I have their ports, not their rows. No circuit file staged at the second try's head `5ad83c84ef5e`: [run: `git diff ddcd46b4919c 5ad83c84ef5e`] it changes neither the two Definitions (`greedy_stages.py`) nor the lowering (`ir_lower.py`), so [derived] the same unit sections, but none has been staged there. Lean's `committed` evaluated on these files: not mine.
+
+**3. #9458: the mark you name is not at its head.** Your message says it is marked at `dbb268ce3009`. [run] Its head is `049c5875989c`, three commits past that: the two merges of `main` and the Glossary-terms commit, all made on your 00:30Z message. [run: `research queue status`, 02:08Z and again 02:21Z] "#9458 049c5875 waiting: not marked ready at 049c5875". [derived] So it will not land as it stands. Its ready line at `049c5875989c` is in the 02:17Z entry; `dbb268ce3009` itself conflicts with `main` and is red on the ratchet gate. It needs your mark at the new head.
+
+**4. Two runs of me are alive on one machine.**
+
+- [run] This VM's uptime was 1 minute at 02:12:46Z. Between my own commands another process wrote in my scratch directory (`9458-body-new.md` at 02:11:37Z, `mt-g.out`, `mt-s.out`, `entry-0217.md`), edited #9458's body and pushed the 02:17Z entry. I did none of that.
+- [guess] It is my 02:00Z turn, which had not ended when your 02:11Z message started me from the same memory. Its entry reads the mailbox to 00:30Z and does not mention your message, so it does not hold it.
+- What it has taken, and I leave alone: the cards branch (it joins it with the second try's branch `5ad83c84ef5e`, where three driver files conflict; its plan is in its entry), #9458's body, the suites and the rehearsal that follow. I push nothing to either branch.
+- What I have taken: this entry, and next the second build's first entry (reading only, on no branch of ours; due Fri 22:00Z).
+- [run] I left a file in the shared directory that names this split and asks it to write a run's id there before launching, as I do. It has not answered.
+- **NEEDS: say which run you keep.** If one, tell the other to stop in the mailbox; I stop at your word. Until then I launch no run and write only to this file.
+
+**5. Your list, item by item.**
+
+- Each verdict read: above. The Lean job on the served-size sessions: done, `r20261113-002435-08a7`, all four accepted [run: my 01:13Z entry].
+- The one entry at V = 154,880: my 01:13Z entry. Its row again: chunk `k_log` 24, card peak 2,619 MiB, prover's timer 2.247 s then 0.152 s; combine `k_log` 25, 4,381 MiB, 2.502 s then 0.413 s; the ZK server's verifier and Lean accept all four sessions.
+- The cards branch's ready line: **not given.** Its suites are 57 of 58 with the machine's red only, but it does not merge onto the second try's branch (the 02:17Z entry); the other run joins them.
+- No `main` is merged into the cards branch: its merge base with `main` is still `b39caa2b3e` [run].
+- Machines: no run launched since 01:13Z. One 5-second scan over ssh on vy-nebius-2, at nice 19.
+
+STOP RULE: not reached. To post: nothing new. Not established: named under 2.
+
+**Pushed.** Nothing of mine is unpushed: I changed no file of the tree. Heads as the 02:17Z entry names them: `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `2c5806b33e8c`, `cursor/proofs-stopdriver-answer-complete-ffc6` at `049c5875989c`.
