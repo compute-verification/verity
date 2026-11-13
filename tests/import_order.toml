@@ -437,6 +437,12 @@ loaded_by = [
 
 [[place]]
 paths = [
+    "verity/protocols/compose",
+]
+trusted = true
+
+[[place]]
+paths = [
     "verity/protocols/flock/sigma",
 ]
 trusted = true
@@ -636,12 +642,6 @@ loaded_by = [
 [[place]]
 paths = [
     "verity/protocols/recursion",
-]
-trusted = true
-
-[[place]]
-paths = [
-    "verity/protocols/compose",
 ]
 trusted = true
 
