@@ -116198,3 +116198,25 @@ Nothing.
 - The known hole stands: at a history holding one play's signatures, an earlier period's genuine signature in the evidence counts as the forger's, and the forger's term bounds nothing there.
 
 Next: the two-case file (`SampledTwo/CutStages.lean`, new names only), in a try by about 04:15Z [guess]; the next entry by 03:55Z.
+
+## OWNREADS, Fri 13 Nov 02:58Z: nothing new compiled; the try of `HeldOfReads.lean` stopped in HELDOF's `HeldOf.lean`, which does not compile at the head I branched from (`47c3da67a8`) nor, by reading, at HELDOF's head now; I re-send on HELDOF's last compiled commit
+
+In plain words: my lemma's try never reached my file. HELDOF's file `HeldOf.lean` compiled at `e310d9d623`, and then HELDOF merged three other workers' branches, which brought a newer `main` with a renamed structure and moved four names. The file was not updated for those, so it no longer compiles, and everything that imports it stops there. That is HELDOF's file, so I do not touch it. To get a verdict on my own file I have put it on HELDOF's last compiled commit, on a second branch, and I send that next.
+
+- [run] `r20261113-022017-7cd5` on **vy-nebius-2** (sent 02:20:17Z, took a check place 02:21:13Z, so under a minute; my cancelled `r20261113-015807-1593` had waited 21 minutes on vy-nebius-cpu-12 and never started). Its tree was cold for this branch ("754 files changed there"), so the build of what my file imports took 1772 s and then failed: "lake build +Proofs.Flock.SpotFlock.HeldOfReads:deps exit 1". `OwnReads.lean` built in it (job 11450 of 11451). The errors, all in `HeldOf.lean` at `47c3da67a8` (stdout lines 13070 to 13118):
+  - line 97: unknown identifier `Spot.Slots.Layout`. The verifier's `Spot/Slots.lean` at that commit has `structure SlotOrder` (it had `structure Layout` at `e310d9d623`) [read].
+  - lines 217, 226, 248, 249: unknown identifiers `TwoHolds`, `NamesDistinct`, `RecordsHeld`, `RegistersNone`. At that commit `RunsAs/Statement.lean` opens them from `Round2` inside its own namespace only [read].
+- [read] At HELDOF's head now (`5397237336`), `HeldOf.lean` line 103 still says `Spot.Slots.Layout`, and `Spot/Slots.lean` still has `SlotOrder`. So I expect it to fail there too. I did not run it.
+- [read] `heldOf_spec`, `heldMatches_form`, `held₀` and `withFrame` have the same statements at `e310d9d623`, `47c3da67a8` and `5397237336` in the parts my file reads, so my file is the same text on all three.
+- New branch **`cursor/proofs-refreadswf-e310-a64c`** at `2793282dc9`: HELDOF's `e310d9d623`, my `cursor/proofs-ownreads-9a1c` merged, and my two commits (`HeldOfReads.lean`, `ReadsCheck.lean`) picked onto it. This is only where the files get compiled. `cursor/proofs-refreadswf-a64c` (at `f167a566e1`) stays the branch on HELDOF's later commit; I merge HELDOF's head into it when that head compiles.
+- [run: started] The same run's second step, `ReadsCheck.lean` (the decided check of option (ii)), took a Lean place at 02:54Z after 400 s and is building; it does not import `HeldOf.lean`.
+- Your 02:13Z message is read: (iii) for Friday, then the `Apart` reduction, then (ii); I change neither `decided` nor the form. Both files were already written (my 02:20Z entry); what is missing is their compile.
+
+Order of my next tries on vy-nebius-2, one at a time: `Apart.lean` (`cursor/proofs-apart-a64c`, `9179aaea5a`), `HeldOfReads.lean` on the `e310` branch, `OwnReadsGive.lean` (`cursor/proofs-ownreads-frame-a64c`, `4b55f363b4`).
+
+NEEDS:
+- HELDOF (`bc-3ddfb587-549a-5964-9ddf-80547065f684`): `HeldOf.lean` against its own head: `Spot.Slots.Layout` is now `Spot.Slots.SlotOrder`, and the four names above need their new place. Until then nothing that imports `HeldOf.lean` compiles on that head.
+
+To post: nothing.
+
+Not established: that any of `HeldOfReads.lean`, `ReadsCheck.lean`, `Apart.lean`, `OwnReadsGive.lean` compiles; that `OwnReads.lean` compiles against FRAME's head (it does compile on HELDOF's `47c3da67a8` tree, in this run).
