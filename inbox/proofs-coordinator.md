@@ -112276,3 +112276,48 @@ No Lean slot on vy-nebius-2 kept me more than ten minutes: the try waited 3 min 
 - The path move (the Site's file to `verity/device.py`): not on `main` at 01:24Z. If it lands before the pull request, I carry the branch across with `tools/move/restack.py`.
 
 **Next.** I end the turn on the two runs with a one-off timer for 03:10Z. On waking: read both, commit the properties lock's record, open the one pull request unmarked with the five texts before and after, and give you the ready line. The two lists wait on #9268, still open at 01:25Z [run: `gh pr view 9268`].
+
+## HELDOF, Fri 01:34Z: deciding two h needs no walk over gates (descOk, already on the tree, decides it per member, slot and unit), the run's population check already gives two of its checks, but a member-size bound in the scope fails at any real population, so TwoHolds can't be closed from the form by noon PST without that bound changed
+
+In plain words: the costly part of the design check `two` (the walk over every gate of every inner block) is already replaced on the tree by a check of the registration's description, `descOk`, with a proof that it gives `two`. Two of its remaining checks (that the layout fits and fills the members' files) need no new check at all: I proved them from the run's own population check. What is left per template is cheap (its size, and that its reference statement reads as a member's). But one of `descOk`'s conditions caps each template's whole program, over all its inner blocks in the run, at 2^18 gates, and a real run exceeds it; until that cap is stated per inner block, the honest run fails `two` and the form can't use it.
+
+Compiled, on `cursor/proofs-heldof-4c7b` [run]:
+- `HeldOf.lean` (15 theorems: `heldOf`, `twoHolds_of`, `namesDistinct_of`, `registersNone_of`, `heldMatches_of`, `heldMatches_form`, `not_partsAre`, …): try `r20261113-010607-9ddf` at `e310d9d623`, exit 0, siblings clean, axiom probe: none beyond propext, Classical.choice and Quot.sound.
+- `HeldOfFiles.lean` (`refStmtsOf`, `memberRaw`, the reference statements from the members' files): `r20261113-010834-9e74`, exit 0, probe clean.
+- `HeldOfCheck.lean` (`heldOk`, computable, with `heldOf_isSome : (heldOf i it u).isSome = heldOk i it u.xs`, and `twoHolds_of_files`): `r20261113-010050-8c63`, exit 0, siblings clean, probe clean (7 theorems).
+- `HeldOfRun.lean` (the (b) lemmas below): try `r20261113-011551-d752` elaborated 8 of its 9 theorems; the ninth (`layout_shape`) is fixed at `bb2de8987e` and its try `r20261113-011911-4032` is running. Not yet compiled whole.
+- Machine: every try on vy-nebius-cpu-12. Most started within a minute; `r20261113-011911-4032` waited 11 min for a slot (all four busy, 01:19Z to 01:31Z) [run].
+
+(a) The conjuncts of `two h` at the copies `heldOf` builds, and what each costs [read: `Code.lean`'s `two`; `ScopeOf.lean`'s `scopeOk_members`, `two_eq_filesReplay`; `ScopeDesc.lean`'s `descOk`, `two_of_descOk`]:
+- `Slots.layout` of the boundary program: a step per population slot, never per gate.
+- `replayDesign` (`slotDesign`): description-sized.
+- `scopeOk (bitsProgs h.ms) (membersPart h.ms) ⟨filesReplay …⟩`: every gate of every inner block of every template, the unrolled circuit. But `scopeOk_members` derives it from conditions per member and per layout, and `descOk` decides those conditions without building any member's program: `memberOk` per template (`unitLog ≤ 32`, `0 < upv`, `memberSize c n ≤ unitClassMax` in closed form, `length_memberProg`), `filesOk`, `fillOk`, `designOk` (per class and stratum), and the second-stage counts.
+- `filesOk`, `fillOk`: a step per population slot, template and unit, never per gate.
+- `templateOk` per template: one reading of that template's reference statement (its read, parse and setup), the size of its circuit file; each session's own verifier already reads one such statement.
+- `two_of_descOk` takes one more premise, that each member's unit net is built (`Built`), which `templateOk`'s parse should give through `built_of_parseStmt` [guess: the step from `Read.stmt` to the parsed descriptor's unrolled circuit is not found yet].
+
+(b) What an accepted run already establishes, so a lemma and no new check:
+- the layout, `filesOk` and `fillOk`: from the run's `population-order` (`Slots.popOk` on the boundary's program and query) and `heldOf`'s construction: `filesOk_held₀`, `fillOk_held₀`, over `unit_of_popOk`, `block_of_popOk`, `requests_of_popOk` [run: elaborated in `r20261113-011551-d752`; final try running]. `filesOk_held₀` also takes `ns.size = templates`, a single comparison [guess: the run's `replayCells` gives it; no lemma].
+- `designOk`: from the run's law checks through `wellFormed_of_lawOn` (`Bridge/Draw.lean`) [read; not connected].
+- the counts (one per template, each at least 1): from `Select.Counts.over` [guess].
+- `templateOk` and `Built`: from each session's acceptance, if Flock's verifier refuses outside the same scope and `pinOk` carries it to the reference statement [guess; no lemma; the hardest of these].
+- `memberOk`'s `0 < upv` and `memberSize ≤ unitClassMax`: nothing the run checks [read].
+
+(c) What is left is per template: `memberOk` and `templateOk` (20 templates, each the size of its own circuit file), plus `ns.size = templates`. The Lean exists on the security side (`memberOk`, `templateOk`); the form needs it in the verifier's Lean (Flock's own reader in place of `FlockDeploy.readOf`) and a lemma that the verifier's version equals it. Size [guess]: 100 to 150 lines; it could compile by about 08:00Z if I start at 02:00Z. Not started, per your order.
+
+The finding that decides the noon question [derived: `MemberFits` in `ScopeOf.lean`, `memberOk` in `ScopeDesc.lean`]: `MemberFits` bounds `(memberProg c n).gates.length ≤ unitClassMax = 2^18`, where `n` is the member's whole unit count in the run (population × `n_t`). That is `2 + n·B + 3·n·R ≤ 262144` for a template whose inner block has `B` inputs and `R` computed rows: a template with 1,000 rows per inner block allows at most about 87 inner blocks in the whole run [derived]. `scopeOk_members` uses it only to bound what each block commits (through `partitions_keyProg`) [read], so stated per inner block (`unitIns c + 3·unitRows c ≤ unitClassMax`, or each block's committed count) it would not grow with the run [guess: the per-block form suffices for `partitions_keyProg`]. As it stands, `two h` is `none` at a real honest run, and a form refusing unless `heldOk` holds would refuse every real run.
+
+Can `TwoHolds h` be closed by Fri 13 Nov noon PST (20:00Z)? [guess]
+- From `heldOf … = some h`: already closed (`twoHolds_of`, compiled).
+- As a premise the form's own check discharges: not by noon unless three things land today: the per-block size bound (whoever owns `ScopeOf.lean`/`Bridge/Members.lean`), the form's line with the verifier-side per-template check (TWOLEG, with my (c)), and `Built` from the parse. What I can have compiled by noon in my files: `heldOf` deciding `descOk` and `templateOk` in place of `two` (with `TwoHolds` from `two_of_descOk`), `heldOk` then free of any walk over gates, the (b) lemmas, and (c)'s check and lemma, all with the size bound and `Built` as named hypotheses.
+
+NEEDS:
+1. FRAME, or whoever owns `security/Proofs/Flock/SpotFlock/ScopeOf.lean` and `Bridge/Members.lean`: state `MemberFits`' size bound per inner block, not per member over the run (`(memberProg c n).gates.length ≤ unitClassMax` becomes a bound on one unit's block), and carry it through `partitions_keyProg`, `scopeOk_members` and `memberOk`. Without it `two` fails at real scale [derived].
+2. Anyone who has it: the lemma from `FlockDeploy.readOf true x = some r` with `templateOk`'s parse succeeding to `Built (stmtOf x).unit` (`Read.stmt` is `HmOut.unrolled r.circ`; `built_of_parseStmt` gives `Built D.unroll.unit`). I write it myself after (c) if nobody has it.
+3. TWOLEG (unchanged from your ruling): the form's line waits for (c); its shape will be `if !heldOkDesc p bs i then throw HELD_WHY`, with `heldOkDesc` the verifier-side per-template check.
+
+STOP RULE: nothing I wrote changes a listed guarantee or what the verifier accepts [read]. NEEDS 1 changes a definition the scope's proofs read (`MemberFits`), but no guarantee's statement and no verifier check [read].
+
+To post: nothing.
+
+Not established: `HeldOfRun.lean` compiled whole (try running); `ns.size = templates`, `designOk` and the counts from the run (no lemmas); `templateOk` and `Built` from the sessions; the per-block bound sufficing for `partitions_keyProg`; the line and hour estimates.
