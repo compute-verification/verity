@@ -11,7 +11,7 @@ own memory is its card's ``store.dram``, whole, and no clock or peak of a card i
 number is an entry ``{value, unit, mark, source}`` under the cards' rules (``verity.hardware.cards``), so what is not
 a number is not written as one, and a leaf or an interface with no read on record has no table. A kind is the card
 and its count, never a host's name, and a file names no machine, no address and no provider: whoever registers a node
-gives its host's id (``verity.hardware.site.Registration.node_entry``, which gives no entry of a file with no ``dram``
+gives its host's id (``verity.device.Registration.node_entry``, which gives no entry of a file with no ``dram``
 or no ``disk`` leaf, none of a file with no interface, and none of a file with no way out that has a rate).
 Stdlib and the cards only.
 
@@ -37,7 +37,7 @@ the one that bounds the node's disks together, ``leaves``'s for ``disk``. A serv
 
 ~~~python
 from verity.hardware import cards, nodes
-from verity.hardware.site import Auditor, Registration, check
+from verity.device import Auditor, Registration, check
 node = nodes.load("rtx-pro-6000-server-x8")
 gpu = cards.load(node["device"]["sku"])
 log = Registration("remote")
@@ -211,7 +211,7 @@ def ways_out(node: Mapping[str, Any], host: str, card: Mapping[str, Any] | None 
 
     An interface is refused when it states neither a rate in ``bit/s`` above 0 nor what was read of it, the storage
     path when it does not name, each once, disk leaves of the file's, and a leaf or an interface named ``storage``,
-    the path's own name. What registers each way as a link is ``verity.hardware.site.Registration.node_entry``."""
+    the path's own name. What registers each way as a link is ``verity.device.Registration.node_entry``."""
     ports, memory, path = node.get("interface", {}), node.get("memory", {}), node.get(STORAGE)
     if not isinstance(ports, Mapping) or not isinstance(memory, Mapping):
         raise InvalidArtifact("a node file's interface and memory are tables, one table a name")

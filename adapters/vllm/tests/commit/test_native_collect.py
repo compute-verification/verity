@@ -6,14 +6,19 @@ bit-for-bit (same-layout root equality is the correctness gate).
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
 if not torch.cuda.is_available():  # pragma: no cover
     pytest.skip("CUDA device required", allow_module_level=True)
 
-from verity_vllm.commit.committer.native_collect import ext  # noqa: E402
+from verity_vllm.commit.committer.native_collect import ext
 
 
 @pytest.fixture(scope="module")

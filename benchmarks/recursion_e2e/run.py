@@ -34,6 +34,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import rec_profile as RP  # noqa: E402
+import rec_table as RT  # noqa: E402
 import settings as RS  # noqa: E402
 
 NODE = "vy-nebius-1"
@@ -262,7 +263,7 @@ def cmd_result(a) -> int:
     text = json.dumps(doc, indent=1, sort_keys=True) + "\n"
     if a.out:
         Path(a.out).write_text(text)
-    md = RP.markdown(doc)
+    md = RT.markdown(doc)
     if a.md:
         Path(a.md).write_text(md)
     print(md)
@@ -298,8 +299,8 @@ def docs_of(refs: list[str]) -> list[dict]:
 
 def render(docs: list[dict], merge: bool) -> tuple[dict | None, str]:
     merged = RP.merge(docs) if merge else None
-    md = (f"## {', '.join(merged['runs'])}\n\n{RP.markdown(merged)}" if merged
-          else "\n".join(f"## {d['ref']}\n\n{RP.markdown(d)}" for d in docs))
+    md = (f"## {', '.join(merged['runs'])}\n\n{RT.markdown(merged)}" if merged
+          else "\n".join(f"## {d['ref']}\n\n{RT.markdown(d)}" for d in docs))
     return merged, md
 
 

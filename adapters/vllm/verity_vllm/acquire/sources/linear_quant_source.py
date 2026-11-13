@@ -12,11 +12,12 @@ a second inside one call is a collector error.
 """
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from verity_vllm.acquire.sources.allreduce_norm import _flush
-from verity_vllm.query.manifest.bind import Port
 from verity_vllm.engine import hooks
+from verity_vllm.query.manifest.bind import Port
 
 GROUP_QUANT_OP = "per_token_group_fp8_quant"
 GROUP = 128
@@ -39,11 +40,11 @@ def manifest_names_it(manifest: Mapping[str, Any] | None) -> bool:
 class LinearQuantSource:
     short_name = "linear_quant"
 
-    def __init__(self, committer: Any, model: Any, names: list[str] | None = None) -> None:
+    def __init__(self, committer: Any, model: Any) -> None:
         import torch
 
         self.torch, self.c, self.model = torch, committer, model
-        self.sites = list(sites(model) if names is None else names)
+        self.sites = sites(model)
         if not self.sites:
             raise ValueError("linear quant: the model has no block-FP8 linear module")
         self._hooks = hooks.Hooks()

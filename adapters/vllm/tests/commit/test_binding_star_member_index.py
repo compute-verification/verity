@@ -39,19 +39,23 @@ def _fixture(b: int, steps: int, layers: int, *, planes: int = 3):
         for st in range(steps):
             if rid == "r3" and st == 0:
                 pop.append(identity(PD, rid, st, 0, "model.norm", "out", 0, 8, 0))                                # required [0, 8)
-                entries.append(_leaf(rid, st, "model.norm", "out", lo=8, hi=16, off=0, ordinal=k)); k += 1      # bound at [8, 16): mismatch
+                entries.append(_leaf(rid, st, "model.norm", "out", lo=8, hi=16, off=0, ordinal=k))  # bound at [8, 16): mismatch
+                k += 1
             else:
                 pop.append(identity(PD, rid, st, 0, "model.norm", "out", 0, -1, 0))
-                entries.append(_leaf(rid, st, "model.norm", "out", lo=0, hi=-1, ordinal=k)); k += 1
+                entries.append(_leaf(rid, st, "model.norm", "out", lo=0, hi=-1, ordinal=k))
+                k += 1
             for L in range(layers):
                 op = f"{HID}/L{L}"
                 pop.append(identity(PD, rid, st, 0, op, "*", 0, -1, 0))
                 if rid == "r1" and st == 1 and L == 0:
                     continue                                                                                    # missing
                 for p in range(planes):
-                    entries.append(_leaf(rid, st, op, f"g{p}", ordinal=k)); k += 1
+                    entries.append(_leaf(rid, st, op, f"g{p}", ordinal=k))
+                    k += 1
                 if rid == "r2" and st == 0 and L == 1:
-                    entries.append(_leaf(rid, st, op, "g0", ordinal=k)); k += 1                                  # second binding: ambiguous
+                    entries.append(_leaf(rid, st, op, "g0", ordinal=k))  # second binding: ambiguous
+                    k += 1
     entries.append(_leaf("r0", steps + 7, "model.norm", "out", lo=0, hi=-1, ordinal=k))                            # extra (unrequired step)
     return pop, {"digest": "22" * 32, "entries_n": len(entries), "entries": entries}
 

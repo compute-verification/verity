@@ -528,9 +528,10 @@ def _strata(work: bool, j: Any, ctx: str) -> list[dict]:
 
 
 def _num_den(p: str, ctx: str) -> str:
-    """`pOf`: ``num/den``, each a natural number in canonical decimal (`Flock.Draw.Law.bernoulli`'s), kept as written."""
+    """`pOf`: ``num/den``, each a natural number in canonical decimal (`Flock.Draw.Law.bernoulli`'s) of any length, kept as
+    written."""
     parts = p.split("/")
-    if len(parts) == 2 and all(t and all(c in "0123456789" for c in t) and str(int(t)) == t for t in parts):
+    if len(parts) == 2 and all(t and all(c in "0123456789" for c in t) and (len(t) == 1 or t[0] != "0") for t in parts):
         return p
     raise Refused(f"{ctx}.p: not num/den")
 

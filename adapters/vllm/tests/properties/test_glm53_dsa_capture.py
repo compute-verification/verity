@@ -7,6 +7,7 @@ from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3",)
 
+import contextlib
 import copy
 import json
 from pathlib import Path
@@ -14,18 +15,19 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
-
-from tests.properties import glm53_dsa_capture_gpu as X
-from verity.circuits.evaluation import evaluate
 from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import sparse_mla_split_twins as TW
+from verity.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
 from verity.definitions.registry import dsa
 from verity.definitions.registry import ref_prims as RP
 from verity.definitions.registry import sparse_mla as M
+
+from tests import fake_vllm
+from tests.properties import glm53_dsa_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
-from verity.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
-from verity_vllm.properties.record import REGISTRY, digest_of
+from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 PAIRS = [(a, b) for fs in (X.L_FORMS, X.H_FORMS) for i, a in enumerate(fs) for b in fs[i + 1:]]
 
@@ -283,7 +285,7 @@ def _split(seq_lens, query_lens, workspace, max_logits_bytes):
 
 def test_the_sizes_are_the_constants_at_seq_and_reach_131072() -> None:
     s = X.sizes()
-    assert s == (X.SEQ, X.NB, X.MAX_MODEL_LEN, X.FULL_ROWS, X.DECODE_LENS) and s.full_rows[-1] == X.SEQ - 1
+    assert s.full_rows[-1] == X.SEQ - 1 and s == (X.SEQ, X.NB, X.MAX_MODEL_LEN, X.FULL_ROWS, X.DECODE_LENS)
     s = X.sizes(131_072)
     assert (s.seq, s.nb, s.max_model_len) == (131_072, 2048 + X.NB - X.SEQ // X.BLOCK, 131_072)
     assert {2047, 65_535, 131_071} <= set(s.full_rows) and set(X.FULL_ROWS) <= set(s.full_rows) and s.full_rows[-1] == 131_071
@@ -383,7 +385,7 @@ def test_the_topk_checks() -> None:
 # ------------------------------------------------------------------------------------------------------------ slots, ptx
 def test_the_slot_layout_reads_the_block_rows_then_the_scales() -> None:
     nb = 2
-    cache = np.zeros((nb, X.BLOCK, X.STRIDE), dtype=np.uint8)
+    cache: np.ndarray = np.zeros((nb, X.BLOCK, X.STRIDE), dtype=np.uint8)
     flat = cache.reshape(-1)
     for slot in (0, 70, 127):
         blk, off = divmod(slot, X.BLOCK)
@@ -500,15 +502,10 @@ def test_main_refuses_a_run_it_cannot_make(tmp_path, capsys, args: list[str], me
 def _stub_main(tmp_path, monkeypatch) -> tuple[list[dict], dict, list[dict]]:
     """`main`'s surroundings stood in for (vLLM's config module, the gate, the PTX scan, the bindings): what `served` saw of the
     environment, a k-slots job and the logits jobs."""
-    import contextlib
-    import sys
-    import types
-
-    vc = types.ModuleType("vllm.config")
-    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
-    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     for k in SERVED_DEFAULTS:
         monkeypatch.setenv(k, "0")
     for k in ("VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR", "DG_JIT_CACHE_DIR"):
@@ -516,7 +513,12 @@ def _stub_main(tmp_path, monkeypatch) -> tuple[list[dict], dict, list[dict]]:
     monkeypatch.setenv("PATH", X.os.environ.get("PATH", ""))
     monkeypatch.delenv("CUDA_HOME", raising=False)
     seen: list[dict] = []
-    monkeypatch.setattr(X, "served", lambda: (seen.append({k: X.os.environ.get(k) for k in SERVED_DEFAULTS}), {"ok": True})[1])
+
+    def served() -> dict:
+        seen.append({k: X.os.environ.get(k) for k in SERVED_DEFAULTS})
+        return {"ok": True}
+
+    monkeypatch.setattr(X, "served", served)
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "ptx", lambda cache, outdir: {"kernels": {}, "ok": True})
@@ -586,7 +588,5 @@ def test_main_on_the_logits_alone_at_131072_keys(tmp_path, monkeypatch, capsys) 
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["glm53_dsa_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)
