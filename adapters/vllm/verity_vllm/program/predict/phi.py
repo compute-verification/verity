@@ -23,11 +23,13 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
-PHI_SCHEMA = "verity-predict/phi/v1"
+from verity_vllm.records.schema_ids import PHI_SCHEMA
+
+__all__ = ["Phi"]
 
 
 @dataclass
@@ -47,28 +49,30 @@ class Phi:
                 "engine": self.engine, "workload": self.workload, "execution": self.execution, "profile": self.profile}
 
     @classmethod
-    def from_json(cls, d: dict) -> "Phi":
+    def from_json(cls, d: dict) -> Phi:
         if d.get("schema") != PHI_SCHEMA:
             raise ValueError(f"phi schema {d.get('schema')!r} != {PHI_SCHEMA!r}")
+        engine, workload = d.get("engine"), d.get("workload")   # a φ that leaves one out declares no engine argument, no request
         return cls(model=dict(d["model"]), target=dict(d["target"]), tp=dict(d.get("tp") or {"world": 1, "rank": 0}),
-                   sampling=dict(d.get("sampling") or {"kind": "greedy"}), engine=dict(d.get("engine") or {}),
-                   workload=dict(d.get("workload") or {}), execution=d.get("execution", "bi-eager"), profile=d.get("profile", "b1-eager-v3"))
+                   sampling=dict(d.get("sampling") or {"kind": "greedy"}), engine=dict(engine) if engine else {},
+                   workload=dict(workload) if workload else {}, execution=d.get("execution", "bi-eager"), profile=d.get("profile", "b1-eager-v3"))
 
     def digest(self) -> str:
         return hashlib.sha256(json.dumps(self.to_json(), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
     @property
     def hf_config(self) -> dict:
-        return dict(self.model.get("hf_config") or {})
+        config = self.model.get("hf_config")   # a model block that carries no config.json has an empty one
+        return dict(config) if config else {}
 
     @property
     def requests(self) -> list[dict]:
-        return list(self.workload.get("requests") or [])
+        declared = self.workload.get("requests")   # a workload that states none has no request
+        return list(declared) if declared else []
 
     def target_profile(self):
         """The declared `TargetProfile`; where the target block does not declare `batch_invariant`, the one the execution label names
         (`TargetProfile.execution_label`: a `bi-*` row runs the batch-invariant kernels, an `eager` row vLLM's defaults)."""
-        from dataclasses import fields
         from verity_vllm.program.frontend.target_profile import TargetProfile
         names = {f.name for f in fields(TargetProfile)}
         tp = TargetProfile.default().with_overrides(**{k: (tuple(v) if k == "compute_capability" else v) for k, v in self.target.items()
@@ -91,11 +95,13 @@ class Phi:
 def _prompt_len(r: dict) -> int:
     if r.get("prompt_token_ids") is not None:
         return len(r["prompt_token_ids"])
-    return int(r.get("prompt_len") or r.get("input_len"))
+    stated: Any = r.get("prompt_len") or r.get("input_len")   # a request that states neither has no length: `int`'s TypeError
+    return int(stated)
 
 
 def _cap(r: dict) -> int:
-    return int(r.get("max_tokens") or (r.get("sampling_params") or {}).get("max_tokens") or 0)
+    params = r.get("sampling_params")   # where a request may state its `max_tokens` instead; one that states it nowhere has 0
+    return int(r.get("max_tokens") or (params.get("max_tokens") if params else None) or 0)
 
 
 def load_phi(path: str | Path) -> Phi:

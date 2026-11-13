@@ -34,14 +34,25 @@ from functools import cache
 from typing import Any
 
 import torch
-from vllm.model_executor.layers.fused_moe import FusedMoEMethodBase, FusedMoeWeightScaleSupported, RoutedExperts
-from vllm.model_executor.layers.linear import (LinearBase, LinearMethodBase, UnquantizedLinearMethod,
-                                               register_weight_loader_v2_supported_method)
+from vllm.model_executor.layers.fused_moe import (
+    FusedMoEMethodBase,
+    FusedMoeWeightScaleSupported,
+    RoutedExperts,
+)
+from vllm.model_executor.layers.linear import (
+    LinearBase,
+    LinearMethodBase,
+    UnquantizedLinearMethod,
+    register_weight_loader_v2_supported_method,
+)
 from vllm.model_executor.layers.quantization import register_quantization_config
 from vllm.model_executor.layers.quantization.base_config import QuantizationConfig
 from vllm.model_executor.layers.quantization.utils.quant_utils import is_layer_skipped
 from vllm.model_executor.layers.vocab_parallel_embedding import ParallelLMHead
-from vllm.model_executor.parameter import ChannelQuantScaleParameter, ModelWeightParameter
+from vllm.model_executor.parameter import (
+    ChannelQuantScaleParameter,
+    ModelWeightParameter,
+)
 from vllm.model_executor.utils import set_weight_attrs
 
 from verity_vllm.engine import int8_exact as E
