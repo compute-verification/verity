@@ -1,4 +1,4 @@
-"""CIR-274 DSAMOE: the window at prompt lengths past 43, at 4 layers, rank 0, eager, the census's Build
+"""CIR-274 DSAMOE: the window at prompt lengths past 43, at $LAYERS layers (default 4), rank 0, eager, the census's Build
 (`benchmarks/compile_cost/run.py` `registered`). Run from the repository root of the tree to measure (a clone with
 `fix-chain-ranges.diff` applied, or not):
 
@@ -13,6 +13,7 @@ import bisect
 import hashlib
 import importlib.util
 import json
+import os
 import resource
 import sys
 import time
@@ -34,10 +35,11 @@ from verity_vllm.program.predict import node_window_dense as ND  # noqa: E402
 from verity_vllm.program.predict import node_window_sparse as NS  # noqa: E402
 from verity_vllm.program.predict.steps import plan_steps, request_program  # noqa: E402
 
-reg = cc.registered(0, 4, "eager")
+LAYERS = int(os.environ.get("LAYERS", "4"))
+reg = cc.registered(0, LAYERS, "eager")
 families = {**NW.FAMILIES, **ND.FAMILIES, **NS.FAMILIES}
-path = out / f"fix_{OUTS}.json"
-rec: dict = {"outs": OUTS, "lengths": {}}
+path = out / (f"fix_{OUTS}.json" if LAYERS == 4 else f"fix_{OUTS}_l{LAYERS}.json")
+rec: dict = {"outs": OUTS, "layers": LAYERS, "lengths": {}}
 
 
 def peak() -> float:
