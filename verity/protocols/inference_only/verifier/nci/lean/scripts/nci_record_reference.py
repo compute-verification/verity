@@ -743,14 +743,14 @@ def count(inst, tr, limits) -> dict:
 
 def block_rows(inst, tr, limits) -> dict:
     """`RecordRows.checkDetail`: the rate rule in rows, a block's rows each unit's template's entry of the rows table
-    (`{template: rows of one unit}`), unit by unit: `size` where a block has more than `Γ` rows, else `nci` where its
-    fresh bits exceed `α` times its rows. `instance` or `params` where the limits are not as stated, then the form's
-    own refusal, then `rows-table` where the table lacks a template of the record."""
+    (`{template: rows of one unit}`, none of them 0), unit by unit: `size` where a block has more than `Γ` rows, else
+    `nci` where its fresh bits exceed `α` times its rows. `instance` or `params` where the limits are not as stated,
+    then the form's own refusal, then `rows-table` where the table lacks a template of the record."""
     if not (isinstance(limits, dict) and all(k in limits for k in ROWS_LIMITS) and isinstance(limits["table"], dict)):
         return {"error": "instance"}
     table, gamma, alpha = (limits[k] for k in ROWS_LIMITS)
     if not (_nat(gamma) and isinstance(alpha, list) and len(alpha) == 2 and all(map(_nat, alpha)) and alpha[1] != 0
-            and all(map(_nat, table.values()))):
+            and all(_nat(m) and m != 0 for m in table.values())):
         return {"error": "params"}
     try:
         e = expand(inst, tr)

@@ -123,7 +123,10 @@ def test_the_generator_covers_what_it_says(random_cases, shaped):
     assert {r["count"].get("error") for r in good} >= {None, "instance", "params", "gate-table"}
     assert {r["block_rows"].get("failure") for r in good if "error" not in r["block_rows"]} == {None, "size", "nci"}
     assert {r["block_rows"].get("error") for r in good} == {None, "instance", "params", "rows-table"}
-    assert any(r["block_rows"].get("rows") == 0 for r in good)
+    assert all(r["block_rows"]["rows"] > 0 for r in good if "error" not in r["block_rows"])
+    zero = [r["block_rows"] for m, r in zip(made, results, strict=True) if "error" not in r["detail"]
+            and isinstance(m["case"]["block_rows"].get("table"), dict) and 0 in m["case"]["block_rows"]["table"].values()]
+    assert {z.get("error") for z in zero} == {"params"}
     assert {k for r in good for k in r["kinds"]} == set(ref.KINDS)
     for k in ("fresh", *ref.FRESH):
         assert any(r["detail"][k] > 0 for r in good), k
@@ -775,8 +778,10 @@ def test_a_blocks_rows(shaped):
     The reference adds them up unit by unit into each unit's slot and takes the most a slot holds; on the served
     shape, at both sizes, that is the sum the record's listing gives. `Γ` and `α` are the limits' own, in rows,
     whatever the instance's are in the Program's gates: a row more than `Γ` is `size`, and a fresh bit more than `α`
-    times the rows is `nci`. An entry of the table for no template of the record is not read, and a table that lacks
-    a template of the record is refused (`rows-table`), after the limits' own refusals and the record's."""
+    times the rows is `nci`. An entry of the table for no template of the record is not counted, and a table that
+    lacks a template of the record is refused (`rows-table`), after the limits' own refusals and the record's. An
+    entry of 0 is one of the limits' own refusals (`params`), for a template of the record or for none, so no table
+    counts a template as holding no rows."""
     for size, slots in (("2x3", 2), ("4x35", 4)):
         case = shaped[f"{size} registered"]["case"]
         inst, tr, limits = case["instance"], case["trusted"], case["block_rows"]
@@ -797,12 +802,15 @@ def test_a_blocks_rows(shaped):
             assert (more["rows"], more["failure"]) == (rows + n // slots, "size"), t
             lacking = {k: v for k, v in table.items() if k != t}
             assert ref.block_rows(inst, tr, {**limits, "table": lacking}) == {"error": "rows-table"}, t
+            assert ref.block_rows(inst, tr, {**limits, "table": {**table, t: 0}}) == {"error": "params"}, t
+            assert ref.block_rows(inst, tr, {**limits, "table": {**lacking, "Other_v1": 0}}) == {"error": "params"}, t
     case = shaped[LISTED]["case"]
     inst, tr, limits = case["instance"], case["trusted"], case["block_rows"]
     assert ref.block_rows(inst, tr, {**limits, "table": {}}) == {"error": TEXT[LISTED]}
     for bad in (-1, "3", 1.5, True, None):
         assert ref.block_rows(inst, tr, {**limits, "gamma": bad}) == {"error": "params"}, bad
         assert ref.block_rows(inst, tr, {**limits, "table": {"Other_v1": bad}}) == {"error": "params"}, bad
+    assert ref.block_rows(inst, tr, {**limits, "table": {"Other_v1": 0}}) == {"error": "params"}
     for bad in ([1], [1, 0], [1, 2, 3], [1.5, 1], [-1, 1], [1, "2"], "1/2", None):
         assert ref.block_rows(inst, tr, {**limits, "alpha": bad}) == {"error": "params"}, bad
     for bad in ([], None, *({k: v for k, v in limits.items() if k != gone} for gone in ref.ROWS_LIMITS),

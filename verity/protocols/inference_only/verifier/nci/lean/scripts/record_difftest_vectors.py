@@ -1088,16 +1088,16 @@ def finish(rng, c: Circuit, held: dict[str, tuple[str, int, int]], roots: dict[s
 
 def rows_limits(c: Circuit, inst: dict, tr: dict, policy: dict | None) -> dict:
     """The rows rule's limits on a case (`RecordRows`' `{"table", "gamma", "alpha"}`): a table of every template's
-    rows of one unit, some of them 0, and `Γ` and `α` at, just under or just over what a block holds in rows under that
-    table. One table in ten then lacks a template, one in five has an entry for no template, and one set of limits in
-    twenty is malformed in one way. Under a `policy` the limits are its `block_rows`, which the first circuit under it
+    rows of one unit, each at least 1, and `Γ` and `α` at, just under or just over what a block holds in rows under that
+    table. One table in ten then lacks a template, one in five has an entry for no template, one in twenty has an
+    entry of 0, and one set of limits in twenty is malformed in one other way. Under a `policy` the limits are its `block_rows`, which the first circuit under it
     fills with exactly what its blocks hold; a template a later circuit has that the policy's table lacks has rows
     of its own. Its random choices are a stream of their own, seeded by the record and the trusted input, so the rest
     of a case is what it is without them."""
     rr = random.Random("the rows rule's limits on " + inst["record"] + json.dumps(tr, sort_keys=True))
     tids = sorted({codec.descriptor_id(fn) for fn, _ in c.templates})
     if policy is None:
-        table = {t: rr.choice([0, 1, 2, rr.randint(0, 40), rr.randint(41, 5000)]) for t in tids}
+        table = {t: rr.choice([1, 2, 3, rr.randint(1, 40), rr.randint(41, 5000)]) for t in tids}
     else:
         table = {t: 3 + 2 * k for k, t in enumerate(tids)} | policy.get("block_rows", {}).get("table", {})
     held = ref.block_rows(inst, tr, {"table": table, "gamma": 0, "alpha": [0, 1]})
@@ -1113,7 +1113,9 @@ def rows_limits(c: Circuit, inst: dict, tr: dict, policy: dict | None) -> dict:
     if tids and rr.random() < 0.1:
         del table[rr.choice(tids)]
     if rr.random() < 0.2:
-        table["RecNope_v1"] = rr.randint(0, 40)
+        table["RecNope_v1"] = rr.randint(1, 40)
+    if table and rr.random() < 0.05:
+        table[rr.choice(sorted(table))] = 0
     if rr.random() < 0.05:
         rr.choice([lambda: limits.pop(rr.choice(ref.ROWS_LIMITS)), lambda: limits.update(table=[]),
                    lambda: limits.update(gamma=rr.choice([-1, "3", 1.5, None])),

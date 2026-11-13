@@ -18,7 +18,10 @@ gates (`Bridge.progOf`), and a unit's proof block holds the `3m` gates of its ro
 (`Spot.FilePart.FilePart.block`). That count is the claims' own, and nothing here reads it.
 
 Each template's `m` comes in a table, by the template's id. This module reads no circuit file: whoever calls it
-says where the table is from.
+says where the table is from. No entry of the table is 0. A circuit file lays a unit out as at least one computed
+row for each of its `units_per_vu`, which a file the parser takes has at least one of (`Flock.HmRow.check`), so a
+table that gives a template no rows is not of circuit files, and a block would look smaller to the rule than it
+is.
 
 `blockRows` is the one definition of what a block counts in rows. It takes each template with its units in a block,
 and each template's `m`, and reads nothing else, so a check that has no summary calls it on its own templates,
@@ -34,14 +37,15 @@ times its rows.
 ## The limits
 
 One JSON object beside `Record`'s instance and trusted input, `{"table", "gamma", "alpha"}`: the rows table
-`{template id: m}`, and `Γ` and `α = [num, den]` in rows. The instance's own `gamma` and `alpha` are not read here:
-they are `Record.rate`'s, in the Program's gates.
+`{template id: m}`, each `m` at least 1, and `Γ` and `α = [num, den]` in rows. The instance's own `gamma` and
+`alpha` are not read here: they are `Record.rate`'s, in the Program's gates.
 
 ## Refusals
 
 In the order checked: `instance` (the limits are no object, a field is missing, or `table` is no object), `params`
 (`gamma`, `alpha` or a value of `table` is not as stated), then `Record`'s own in its order, then `rows-table` (the
-table lacks a template of the record). An entry of the table for no template of the record is not read.
+table lacks a template of the record). An entry of the table for no template of the record is held to the form of
+the others, and the count does not read it.
 
 ## The cost
 
@@ -80,7 +84,7 @@ def rate (gamma num den rows fresh : Nat) : Option String :=
 
 /-- The limits: the rows table, `Γ` and `α = num/den`. -/
 structure Limits where
-  /-- Per template's id, the rows of one unit of it. -/
+  /-- Per template's id, the rows of one unit of it, not 0. -/
   table : Array (String × Nat)
   /-- The most rows a block holds. -/
   gamma : Nat
@@ -93,7 +97,7 @@ structure Limits where
 def Limits.rowsOf (l : Limits) (tid : String) : Option Nat := (l.table.find? (·.1 == tid)).map (·.2)
 
 /-- The limits, refused (`instance`) where a field is missing or `table` is no object, and (`params`) where `gamma`
-or a value of `table` is not a natural, or `alpha` is not two naturals, the second not 0. -/
+is not a natural, a value of `table` is not a natural or is 0, or `alpha` is not two naturals, the second not 0. -/
 def parse (j : Json) : Except String Limits := do
   let .obj table ← field j "table" | throw "instance"
   let gammaJ ← field j "gamma"
@@ -104,7 +108,7 @@ def parse (j : Json) : Except String Limits := do
   let some den := natOf? b | throw "params"
   if den = 0 then throw "params"
   let table ← table.toArray.mapM fun (tid, v) => match natOf? v with
-    | some m => pure (tid, m)
+    | some m => if m = 0 then throw "params" else pure (tid, m)
     | none => throw "params"
   return { table, gamma, num, den }
 
