@@ -1151,7 +1151,13 @@ exclude = ["tools/move/**"]
 # another namespace's `trustedSessionOf` stands elsewhere, so the challenger's is renamed only in its files
 files = ["Spot/Challenger*.lean"]
 words = { "trustedSessionOf" = "trustedChallengePhaseOf" }
+
+[[words_in]]
+# another protocol's `Window` stands elsewhere, so the period's is renamed only in its file
+files = ["Net/Period.lean"]
+words = { "Window" = "ExecutionPhase" }
 """
+PERIOD = "namespace Window\ndef bound := 1\nend Window\n"
 CHALLENGER = "def trustedSessionOf := 1\ndef windowIdx := 2\n"
 USES = "-- Flock.trustedSessionOf is another's\ndef trustedSessionOf_ok := 3\n\ndef z := 4\n"
 
@@ -1159,14 +1165,15 @@ USES = "-- Flock.trustedSessionOf is another's\ndef trustedSessionOf_ok := 3\n\n
 @pytest.fixture
 def scoped(tmp_path, monkeypatch):
     """main: `old` (Spot's challenger, and a file outside it that spells another namespace's `trustedSessionOf`), then `base`
-    (the real `rename.py` and a word map renaming `trustedSessionOf` only in `Spot/Challenger*.lean`, and `windowIdx`
-    everywhere), then the move, written by that script and named by its move line. A branch `pr` starts at `old`."""
+    (the real `rename.py` and a word map renaming `trustedSessionOf` only in `Spot/Challenger*.lean`, `Window` only in
+    `Net/Period.lean`, and `windowIdx` everywhere), then the move, written by that script and named by its move line. A branch `pr` starts at `old`."""
     for name in ("SCRIPT", "SCRIPT_ARGS", "KEEP"):          # `carry` and `main` set them: put back after the test
         monkeypatch.setattr(RS, name, getattr(RS, name))
     r = tmp_path / "scoped"
     r.mkdir()
     git(r, "init", "-q", "-b", "main")
-    commit(r, "old", {".gitignore": "__pycache__/\n", "Spot/Challenger.lean": CHALLENGER, "Other/Uses.lean": USES})
+    commit(r, "old", {".gitignore": "__pycache__/\n", "Spot/Challenger.lean": CHALLENGER, "Other/Uses.lean": USES,
+                      "Net/Period.lean": PERIOD, "Net/Accounting.lean": "def total := 2\n"})
     git(r, "branch", "pr")
     commit(r, "base", {"tools/move/rename.py": (HERE.parent / "rename.py").read_text(),
                        "tools/move/layout.py": (HERE.parent / "layout.py").read_text(), WORDS_MAP: WORDS})
@@ -1211,6 +1218,17 @@ def test_a_branch_that_spells_the_new_name_or_the_old_one_in_a_file_its_block_na
     r = cross(scoped)
     assert r["status"] == "clean" and "words" not in r, r
     assert show(scoped, r["result"], "Spot/ChallengerTwo.lean") == "def u := trustedChallengePhaseOf\n"
+
+
+def test_a_line_the_branch_adds_to_a_file_main_has_and_no_block_names_is_stale_words(scoped):
+    """The file need not be the branch's: `Net/Accounting.lean` is main's, and the block renaming `Window` names only
+    `Net/Period.lean`, so the lemma the branch adds there keeps `Window`, which the move renamed where it is declared."""
+    on(scoped, "pr", ("a lemma of its own", {"Net/Accounting.lean": "def total := 2\ntheorem own : Window.bound = 1 := rfl\n"}))
+    r = cross(scoped)
+    assert r["status"] == "stale-words", r
+    assert [(w["file"], w["line"], w["word"], w["new"]) for w in r["words"]] == [
+        ("Net/Accounting.lean", 2, "Window", "ExecutionPhase")]
+    assert show(scoped, r["result"], "Net/Period.lean") == PERIOD.replace("Window", "ExecutionPhase")
 
 
 def test_only_the_branchs_own_lines_are_read_never_mains(scoped):
