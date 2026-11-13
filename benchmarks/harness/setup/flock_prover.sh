@@ -2,13 +2,13 @@
 # node's cards and names it, with the Python that drives it, for a steady-state point whose rows name their statements
 # (a row staged in the run needs what the stager needs besides).
 #
-# - The prover: verity/protocols/flock/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1, which keeps the binary under FLOCK_WORK by
+# - The prover: verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1, which keeps the binary under FLOCK_WORK by
 #   a hash of the prover's sources and build scripts, so a later point of the same sources finds it built
 #   (VERITY_BENCH_STEADY_BIN). Its build tree stays under FLOCK_WORK, as the build scripts leave it.
 # - The Python: 3.12 with numpy and blake3, kept under FLOCK_WORK too (VERITY_BENCH_STEADY_PY), with the PYTHONPATH
 #   benchmarks/one_stage/server_rate.py imports from.
 # - The CUDA 13.3 toolkit the prover is built with, first on PATH, where the node side reads its version, and its lib64
-#   on LD_LIBRARY_PATH: the installed one, else the one verity/protocols/flock/pod/cuda-13.3.sh unpacks. Its compat
+#   on LD_LIBRARY_PATH: the installed one, else the one verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh unpacks. Its compat
 #   library, which a driver older than the toolkit needs, is left out: a spec names its driver.
 # - The scratch (VERITY_BENCH_STEADY_SCRATCH): a directory on the node's disk beside the builds, never the node's memory,
 #   so a statement a row names in the store can be fetched into it. A point removes its own directory there at its end; one
@@ -25,14 +25,14 @@ unset CARGO_TARGET_DIR
 
 # the unpacking runs in a subshell, which keeps this shell's arguments (the point's) from its `set --`; sourced again,
 # the script only names the toolkit it finds
-( . verity/protocols/flock/pod/cuda-13.3.sh ) > "$steady_out/cuda.log" 2>&1 \
+( . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh ) > "$steady_out/cuda.log" 2>&1 \
   || { tail -20 "$steady_out/cuda.log" >&2; echo "setup: the node has no CUDA 13.3 toolkit and none could be unpacked (out/setup/cuda.log)" >&2; exit 4; }
-. verity/protocols/flock/pod/cuda-13.3.sh >> "$steady_out/cuda.log" 2>&1
+. verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh >> "$steady_out/cuda.log" 2>&1
 steady_cuda=${CUDA_TK:-/usr/local/cuda-13.3}
 export PATH=$steady_cuda/bin:$PATH LD_LIBRARY_PATH=$steady_cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 
 # the build scripts write their own out/ files: they get a run directory of their own under the setup's
-RESEARCH_RUN_DIR=$steady_out/build OUT=$steady_out/build/sweep bash verity/protocols/flock/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 \
+RESEARCH_RUN_DIR=$steady_out/build OUT=$steady_out/build/sweep bash verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 \
   > "$steady_out/build.txt" 2>&1 \
   || { tail -30 "$steady_out/build.txt" >&2; echo "setup: the prover's build failed (out/setup/build.txt)" >&2; exit 4; }
 VERITY_BENCH_STEADY_BIN=$(sed -n 's/^BINARY=//p' "$steady_out/build.txt" | tail -1)
@@ -54,4 +54,4 @@ fi
 
 find "$FLOCK_WORK/scratch" -mindepth 1 -maxdepth 1 -name 'verity-bench-steady-*' -mmin +1440 -exec rm -rf {} + 2> /dev/null || true
 export VERITY_BENCH_STEADY_BIN VERITY_BENCH_STEADY_PY VERITY_BENCH_STEADY_SCRATCH=$FLOCK_WORK/scratch
-export PYTHONPATH=$PWD:$PWD/verity/protocols/flock/prover/python:$PWD/adapters/vllm:$PWD/tools/verity/circuit_check/src:$PWD/benchmarks/numerical/python
+export PYTHONPATH=$PWD:$PWD/verity/protocols/proofs/flock/prover/python:$PWD/adapters/vllm:$PWD/tools/verity/circuit_check/src:$PWD/benchmarks/numerical/python

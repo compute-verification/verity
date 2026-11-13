@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.circuits.codec import canonical_json
-from verity.protocols.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
 __all__ = ["Answers", "key", "verdict"]
 

@@ -11,11 +11,11 @@ from typing import Any
 
 import numpy as np
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.protocols.pouw.prover.circuit import h1zy as Z
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import leaf_lanes as LL
-from verity.protocols.spot.verifier.one_stage import produced as PR
-from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
+from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from verity_vllm.errors import Refused
 from verity_vllm.protocols.pouw.h1 import registered as NR

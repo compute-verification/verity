@@ -98,14 +98,14 @@ from typing import Any
 import numpy as np
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
-from verity.protocols.pouw.prover.circuit import h1tile as HT
-from verity.protocols.pouw.prover.circuit import h1window as HW
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import salt as PS
-from verity.protocols.pouw.verifier import weights as Wt
-from verity.protocols.spot.verifier.one_stage import partition as P
-from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import weights as Wt
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import live as LV
