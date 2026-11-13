@@ -129595,3 +129595,38 @@ My 08:12Z entry said "`Accel` is compute-research's by the registry's remit, and
 - **The guarantees' owners differ from the files'.** Of the `security` lock's guarantees whose names hold `Accel`, `TS.`, `Sheet` or `Card`: 27 are `@compute-accounting`'s, 5 `@proofs`', 4 `@compute-research`'s and 3 `@network-accounting`'s [ran: a scan of `security/lean-audit.json`; by name only, so a rough count].
 
 Nothing else in the two entries changes. The recommendation stands: `Accel.Card`.
+
+## TWOLEG, Fri 13 Nov 08:16Z: the join's tip cannot commit the select's inputs: GATHER's `--logits` and `--kept` are not in it, so the plays you ordered at 07:54Z (item 3) need a tree that also holds GATHER's second try
+
+No Lean-slot wait over 10 minutes. This is one finding and one question; nothing of mine is stopped by it yet.
+
+- **What the plays need** [read, at `984cb027efa3`]: `two_stage_small.py serve --logits` (it needs `--inline --units K`: the class inlined as the greedy select in K units) commits the select's inputs beside the ids through `adapters/vllm/verity_vllm/pipeline/boundary_logits.py`, and `two_stage.py second --kept PRIVATE` opens the kept rows.
+- **None of that is in the join** [run: `git merge-base --is-ancestor`, `git grep`, `git cat-file -e`, on my VM]: `984cb027efa3` is not an ancestor of the join's tip `42bba26494`, nor of `main` (`9182900fb9`); neither tree has `--logits` or `--kept` in `two_stage_small.py`, `two_stage_small.sh` or `two_stage.py`; neither has `boundary_logits.py`. My branch has none of it either.
+- **So "the change in the play script only" works only on a tree that holds GATHER's second try.** On the join as it is, the small class's interior registers the select's `logits`, and `second-inputs` refuses it, as HELDOF's `593d` shows.
+- **A scratch merge on my VM, pushed nowhere** [run]: the join's tip with my `744ded04cb` merges with one conflict, the one you know (`SampledTwo/AcceptsOfSteps.lean`, which is mine by your 06:57Z word). GATHER's `984cb027efa3` on top of that conflicts in five files, eleven places: `a5.py` (1), `two_stage.py` (2), `two_stage_small.py` (4), `two_stage_small.sh` (2), `test_two_stage_second.py` (2). GATHER's branch has no `--challenger-host` (its two commands still start a challenger each), which is what most of the eleven are about.
+
+## STOP RULE
+
+Not reached.
+
+## NEEDS
+
+- **Which tree the plays run at.** Either ASSEMBLY merges GATHER's second try into the join (the eleven places are theirs or GATHER's to resolve), or you name another tree that holds my head, FRAME's rule and GATHER's `--logits`. I do not put GATHER's branch on mine.
+
+## What I do meanwhile
+
+- I write the play script's half now, inert without GATHER's code: it reads `logits` from the serve's record and hands `second` `--kept`, as GATHER's `two_stage_small.sh` does.
+- I resolve the eleven places on the scratch merge, on my VM only, and run the three plays there with `--inline --units 1 --logits`, so the interior stays one member. That run is a rehearsal on a tree nobody else has: it tells us early whether the form's case and the form's check take such a play. It is not the run you asked for, and I will say so on every line that cites it.
+
+## Runs
+
+- `r20261113-080909-6319` on vy-nebius-cpu-9 (the mended head `744ded04cb`: build, sixteen files, difftest) and `r20261113-080956-4da9` on vy-nebius-cpu-3 (the recursive package's records at `744ded04cb`): running at 08:14Z, expected ends about 08:30Z and 08:40Z.
+
+## To post
+
+Nothing.
+
+## Not established
+
+- That a play which commits the select's inputs is accepted by the form's check, at any tree.
+- That `--units 1` is a class GATHER's serve and the second stage take: I have read that `--logits` needs `--inline --units K`, not that K = 1 runs.
