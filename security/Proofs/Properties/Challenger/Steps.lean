@@ -22,6 +22,15 @@ reader returned. These are the converses, the steps a proof that the reader acce
   (`sessionNamed_ok_of_steps`), and `sessionOf` the record's commitment, the log's roots and the close's session where
   the record and the close are signed and the log is the one the close signs (`sessionOf_ok_of_steps`).
 
+Under them, for the smallest session a challenger closes, one window whose one family holds one coin:
+
+* a ledger line reads as the entry of the record its text parses to (`ledgerEntry_some_of_steps`), the ledger of that
+  window's open and its end verifies to the one window, ended (`verifyLedger_two`, `checked_two`), and opens it
+  withheld (`withheldOn_two`);
+* a record signed under the key gives no reason (`recordReason_none_of_steps`), the release log of that commitment's
+  head, one root and its release shows the family's one root (`releasedRootsOf_one`), and `challengerStream` reads the
+  one opening's coin (`challengerStream_one`).
+
 Each hypothesis is one step's result, so a proof of an acceptance supplies them one at a time.
 -/
 
@@ -29,7 +38,7 @@ Each hypothesis is one step's result, so a proof of an acceptance supplies them 
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-open private strOf isDigest jsonTrue from Spot.ChallengerSession
+open private strOf isDigest jsonTrue verifies join pairs isTime escapesSurrogate isBodyOf from Spot.ChallengerSession
 
 namespace Properties.Challenger.Steps
 
@@ -51,6 +60,36 @@ theorem bytes_beq (a : ByteArray) : (a == a) = true := by
   exact beq_self_eq_true _
 
 /-! ## The session's files -/
+
+/-- `recordReason` gives no reason for a record whose signature decodes and verifies under the key over the record's
+message. -/
+theorem recordReason_none_of_steps {key : ChallengerKey} {record : Json} {r : ChallengerRecord} {m : ByteArray}
+    {sig : Lms.Signature} (hn : record.isNull = false) (hr : ChallengerRecord.ofJson record = .ok r)
+    (hm : recordMessage (key.pub.extract 0 16) r.host r.commitment = .ok m)
+    (hd : Lms.Signature.decode key.params r.signature = .ok sig)
+    (hv : Lms.verify key.params key.pub m sig = .ok true) : recordReason key record = .ok none := by
+  unfold recordReason
+  simp [hn, hr, hm, hd, hv, Except.toOption, pure, Except.pure, bind, Except.bind]
+
+/-- `releasedRootsOf` shows the one root of a commitment's one family: the release log is the commitment's head, a root
+line `a` and its release `b`, each its own event and no coin tree's, the root line naming the family, coin 0 and the
+root, and the release naming them back. -/
+theorem releasedRootsOf_one {c : LiveCommitment} {a b label root : String} {r s : Json} {bytes : ByteArray} {n : Nat}
+    (hf : c.families = [(label, n)]) (hta : treeLine a = false) (htb : treeLine b = false)
+    (hr : event a = .ok r) (hs : event b = .ok s)
+    (hkr : keys? r = some #["event", "index", "label", "received_at", "root"])
+    (hks : keys? s = some #["after", "event", "index", "label", "released_at"])
+    (her : jsonStrIs (getD r "event") "root" = true) (hes : jsonStrIs (getD s "event") "release" = true)
+    (htr : isTime (getD r "received_at") = true) (hts : isTime (getD s "released_at") = true)
+    (hl : getD r "label" = .str label) (hroot : getD r "root" = .str root) (hb : Flock.unhex root = .ok bytes)
+    (hir : int? (getD r "index") = some 0) (his : int? (getD s "index") = some 0)
+    (hsl : jsonStrIs (getD s "label") label = true) (hsa : jsonStrIs (getD s "after") root = true)
+    (hlen : root.length = 128) :
+    releasedRootsOf c ["{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf c.root ++ "\"}", a, b] =
+      .ok [(label, [bytes])] := by
+  unfold releasedRootsOf
+  simp [hf, hta, htb, hr, hs, hkr, hks, her, hes, htr, hts, hl, hroot, hb, hir, his, hsl, hsa, hlen, pairs,
+    Except.toOption, pure, Except.pure, bind, Except.bind, -Array.any_eq_true, -Array.any_eq_false]
 
 /-- `sessionOf` returns the record's commitment, the roots its release log shows and the close's session: the record is
 signed under the key, the close's signature decodes and verifies over the close's message, the log has the lines the
@@ -95,6 +134,77 @@ theorem sessionNamed_ok_of_steps {a : Audited} {key : ChallengerKey} {session : 
   simp only [hld, ite_true]
   rw [mapM_strs (fun _ => rfl)]
   simp only [hhd, hhn, beq_self_eq_true, Bool.and_self, ite_true]
+
+/-! ## The ledger's lines -/
+
+/-- `ledgerEntry?` reads a line as the entry of the record its text parses to: the text is short enough, parses to a
+value it is the canonical text of, escapes no surrogate, and the value is a session's record of the ledger's form. -/
+theorem ledgerEntry_some_of_steps {text session tag t : String} {e : Json} {r : Core.Record}
+    (hlen : text.length ≤ MAX_LEDGER_LINE) (hp : Flock.JsonParse.parse text = .ok e)
+    (hpy : PyJson.canonical e = .ok text) (hes : escapesSurrogate text = false) (hc : Flock.canon e = .ok t)
+    (hs : sortedKeys e = true) (hr : Core.Record.ofJson e = .ok r) (ht : ledgerTag? r.schema = some tag)
+    (h4 : 4 ≤ r.sig.size) (hk : r.kind = "open" ∨ r.kind = "end") (hse : r.session = some session)
+    (hid : isSessionId session = true) (hb : isBodyOf r.kind (r.schema == LEDGER_SCHEMA) r.body = true) :
+    ledgerEntry? (.str text) = some ⟨e, text, r.schema, r.seq, r.prev, r.kind, session, r.sig, r.body⟩ := by
+  unfold ledgerEntry?
+  rcases hk with hk | hk <;> rw [hk] at hb <;>
+    simp [hlen, hp, hpy, hes, hc, hs, hr, ht, h4, hk, hse, hid, hb, Except.toOption, guard, bind, Option.bind,
+      pure, failure]
+
+/-- No lane has a period open, so a window joins none. -/
+theorem join_none (periods : Array MonitoringPeriod) (i : Nat) (lane session : String) :
+    join periods #[] i lane session = .ok (periods, none) := by
+  unfold join
+  simp [pure, Except.pure]
+
+/-- `verifyDays` accepts a ledger of one open and its end: no lane declares a day. -/
+theorem verifyDays_two {o e : LedgerEntry} (hok : o.kind = "open") (hek : e.kind = "end") :
+    verifyDays #[o, e] = .ok () := by
+  unfold verifyDays
+  simp [Array.zipIdx, hok, hek, pure, Except.pure, bind, Except.bind, -Array.any_eq_true, -Array.any_eq_false]
+
+/-- **`verifyLedger` reads the ledger of one window**, its v2 open `o` and its end `e`, as that window, ended, in no
+period: the open is entry 0 after `ZERO` and names no reserve, the end is entry 1 chained to the open's text and of
+its session, each is signed under the key, and the end's record leaf `r` is between the leaves the two were signed
+at. -/
+theorem verifyLedger_two {key : ChallengerKey} {o e : LedgerEntry} {mo me : ByteArray} {root : String} {r : Nat}
+    (hos : o.schema = LEDGER_SCHEMA) (hoq : o.seq = 0) (hop : o.prev = ZERO) (hok : o.kind = "open")
+    (hom : ledgerMessage (key.pub.extract 0 16) o.entry = .ok mo) (hov : verifies key mo o.sig = true)
+    (hor : strOf (getD (getD o.body "window") "root") = root) (hof : field? o.body "reserve" = none)
+    (hes : e.schema = LEDGER_SCHEMA) (heq : e.seq = 1)
+    (hep : e.prev = Flock.hexOf (Flock.Sha512.hash o.text.toUTF8)) (hek : e.kind = "end")
+    (hem : ledgerMessage (key.pub.extract 0 16) e.entry = .ok me) (hev : verifies key me e.sig = true)
+    (hse : e.session = o.session) (hrl : nat? (getD e.body "record_leaf") = some r)
+    (hrn : (getD e.body "record_leaf").isNull = false) (h1 : leafOf o.sig < r) (h2 : r < leafOf e.sig) :
+    verifyLedger #[o, e] key = .ok (#[{ root, opened := o, leaf := leafOf o.sig, ended := some e }], #[]) := by
+  have hl0 : (-1 : Int) < (leafOf o.sig : Int) := by omega
+  have hl1 : (leafOf o.sig : Int) < (leafOf e.sig : Int) := by omega
+  have hl2 : leafOf o.sig < leafOf e.sig := by omega
+  have hn0 : r ≠ leafOf o.sig := by omega
+  have hn1 : r ≠ leafOf e.sig := by omega
+  unfold verifyLedger
+  simp [Array.zipIdx, hos, hoq, hop, hok, hom, hov, hor, hof, join_none, hes, heq, hep, hek, hem, hev, hse, hrl, hrn,
+    h1, h2, verifyDays_two hok hek, hl0, hl1, hl2, hn0, hn1, LEDGER_SCHEMA, LEDGER_SCHEMA_V1, bind, Except.bind, pure,
+    Except.pure, -Array.any_eq_true, -Array.any_eq_false]
+
+/-- `checked` returns what `verifyLedger` returns of a ledger's two lines, an open under the pinned key and an end,
+each read by `ledgerEntry?`. -/
+theorem checked_two {key : ChallengerKey} {l0 l1 : Json} {o e : LedgerEntry} {r : Array Win × Array MonitoringPeriod}
+    (h0 : ledgerEntry? l0 = some o) (h1 : ledgerEntry? l1 = some e) (hok : o.kind = "open") (hek : e.kind = "end")
+    (hkey : strOf (getD o.body "key_sha512") = Flock.hexOf (Flock.Sha512.hash key.pub))
+    (hv : verifyLedger #[o, e] key = .ok r) : checked (.arr #[l0, l1]) key = .ok r := by
+  unfold checked
+  simp [Array.zipIdx, h0, h1, hok, hek, hkey, hv, Json.isNull, pure, Except.pure, bind, Except.bind,
+    -Array.any_eq_true, -Array.any_eq_false]
+
+/-- `withheldOn` holds of a ledger of one open and its end whose open names the window and marks its session
+withheld. -/
+theorem withheldOn_two {l0 l1 : Json} {o e : LedgerEntry} {window : String} (h0 : ledgerEntry? l0 = some o)
+    (h1 : ledgerEntry? l1 = some e) (hok : o.kind = "open") (hek : e.kind = "end")
+    (hr : getD (getD o.body "window") "root" = .str window) (hw : getD o.body "withheld" = .bool true) :
+    withheldOn (.arr #[l0, l1]) window = true := by
+  unfold withheldOn
+  simp [h0, h1, hok, hek, hr, hw, Option.filter]
 
 /-! ## The ledger's session -/
 
@@ -167,6 +277,19 @@ theorem trustedSessionOf_ok_of_steps {ledger window : Json} {key : ChallengerKey
   simp only [hp, hs, bind, Except.bind]
 
 /-! ## The draw -/
+
+/-- `challengerStream` reads the coin of a segment's one opening: the segment is of the family from coin 0, opened
+after `after`, its opening is coin 0's under the commitment (`liveReason`), and the family's roots are the one
+`after`. -/
+theorem challengerStream_one {c : LiveCommitment} {segment doc : Json} {after : ByteArray} {label : String}
+    {o : LiveOpening} (hk : keys? segment = some #["after", "label", "openings", "start"])
+    (hl : getD segment "label" = .str label) (hst : nat? (getD segment "start") = some 0)
+    (hop : getD segment "openings" = .arr #[doc]) (ha : jsonStrIs (getD segment "after") (Flock.hexOf after) = true)
+    (ho : LiveOpening.ofJson doc = .ok o) (hr : liveReason c o label 0 after = .ok none) :
+    challengerStream c segment after (some [after]) = .ok o.coin := by
+  unfold challengerStream
+  simp [hk, hl, hst, hop, ha, ho, hr, bytes_beq, pure, Except.pure, bind, Except.bind, -Array.any_eq_true,
+    -Array.any_eq_false]
 
 /-- **`drawCoins` reads the stream where each of its steps accepts**: the evidence has its five keys,
 `trustedSessionOf` returns the session's commitment and roots, the ledger opens the window withheld, the segment is of
