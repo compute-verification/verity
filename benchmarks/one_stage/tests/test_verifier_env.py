@@ -18,7 +18,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.protocols.spot.verifier.one_stage.proofs import EXE
+from verity.protocols.proofs.spot.verifier.one_stage.proofs import EXE
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))

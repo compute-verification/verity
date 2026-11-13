@@ -18,9 +18,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.protocols.certifier.verifier import warden_rows as WR
-from verity.protocols.certifier.verifier.active import HEADER
-from verity.protocols.spot.verifier.one_stage import draw as D, verifier as V
+from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier.active import HEADER
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, verifier as V
 from verity.commitments.windows import rows as SR
 
 HERE = Path(__file__).resolve().parents[1]
