@@ -146642,3 +146642,70 @@ I stop here and write nothing more until your word. The ports' keys lemma stays 
 - That the merged tree at `ff6ea109e06` plus this commit compiles: by `merge-tree` and by reading only.
 - That no lock record moves: no lock names `JoinsAt` but as a root of `security/Proofs` [read], and no records run was made.
 - What my 13:29Z entry left open is unchanged: no honest play of an interior of two or more templates reaches the Lean's `interior-parts` clause at the join's tip.
+
+## MESSAGES, Fri 13 Nov 14:39Z: your 14:18Z is read and followed. The step point 2 needs from my side COMPILES at `1ce63fda6bb` over HELDOF's head with #9441 (`a702`, rc 0, 9 theorems, probe clean): `two_le_rounds`, a template's session has at least two rounds at an accepted play, from four fields the join already has. Point 2 now waits only on SESSIONCOINS's head. ONE CORRECTION to my 14:13Z: the theorem I called missing is compiled on an older branch of mine
+
+At an accepted play each template's session has at least two rounds, and this is now a theorem from four of the join's own fields, with no new premise. When SESSIONCOINS's head brings `locOf_ne_last`, two lines join the two and `SessionMsgsAsk` costs the join nothing named. Separately, I was wrong at 14:13Z to say nobody has written that provers who send a record's messages are accepted: I wrote and compiled it for one session earlier today, on a branch the join does not hold.
+
+**1. Your five points** [read]
+
+1. SESSIONCOINS writes the second way: taken. I change nothing in `SessionCoins.lean` or `SessionOpened.lean`.
+2. Merge its compiled head, state `LastSlotFree` and `sessionMsgsAsk_run` from `2 ≤ k₀ t`, one try, the head to you: section 2 is what is ready.
+3. `SetupsOfTemplates`, `verify_reps`, `accepted_reps` stay in the file: they are there, unchanged.
+4. ASSEMBLY takes my head after point 2: understood; ASSEMBLY's 14:26Z says its local merge of my `74bb74b46cb4` is dropped.
+5. Section 4, item 2 in the field list's notes: see the correction in section 3, which changes its second half.
+
+**2. What is ready for point 2**
+
+- [run] `two_le_rounds {A C S} (hof : HeldOfAt A C) (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) {o} (hA : FormAccepts C o) {t} (ht : t < A.h.ms.length) : 2 ≤ SpotFlock.k₀ A.h t`, in `LastSlot.lean`. Try `r20261113-142841-a702` at `1ce63fda6bb`: `lean exit 0 in 377 s`, "none of its 9 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", siblings clean (3540 imported).
+- [read] Its proof: the accepted play's run of record has an interior (`input_of_accepts`), the reading states its session statements (`StmtsRead`), the held copies' two-stage design evaluates (`twoHolds_at`, from `HeldOfAt`), and `OneTable.reps_of_scope` gives `k₀ h t = 2 + 2 * repRounds …`. The four hypotheses are the join's fields `heldOfAt`, `stmtsRead`, `roundsHeldAt`, `scopeHeldAt` at `joinSessions …`; `pinHeldAt` is not used.
+- [derived] What remains is two statements, written in my scratch and not committed, because they name `SessionCoins.locOf_ne_last`, which no pushed head has yet (SESSIONCOINS's branch is still at `250278de6bd` [run: fetched 14:38Z]):
+  - `lastSlotFree_run_of_scope A C S Good Ls tab hof hst hrounds hscope : LastSlotFree A (FormAccepts C) Good (SessionCoins.runLocate A Ls tab)`, by `lastSlotFree_run` and `locOf_ne_last … (two_le_rounds …)`;
+  - `sessionMsgsAsk_run` restated with `hplay`, `hsess` and those four in place of `hsz`, `hI`, `hset`.
+- [run] The branch: `cursor/proofs-messages-setups-745c`, off HELDOF's `b755ba133f98` with my `fa617b298f8` merged in (`1f8f9c45d44`, no conflict; `lock_roots.py --check` clean, 332 roots). `LastSlot.lean` as it was at `fa617b298f8` compiles over HELDOF's head too: try `r20261113-141809-102e`, `lean exit 0 in 548 s`, 8 theorems, probe clean. So #9441's change of the members' check (`stepMember` and its lemmas take the statements' reader) breaks nothing of mine.
+- [derived] Point 2's head goes on this branch, not on `cursor/proofs-messages-rise-745c`: it is compiled over the text the join's tip `ff6ea109e06` holds, so ASSEMBLY's merge brings only my commits and SESSIONCOINS's. I move `…-rise-745c` forward to the same commit (a fast-forward, it is an ancestor) so one name serves.
+- [run] PR #9740 is open for `cursor/proofs-messages-rise-745c` against `cursor/proofs-join-42b8`, "Lane MESSAGES", not marked ready, no merge of `main`. Its base is the join's branch because my branch is off the join's tip. Its body states the 14:13Z head; I mend it when point 2 compiles.
+
+**3. Correction to my 14:13Z, section 4, item 2**
+
+I wrote that the theorem "that the provers who send a record's messages are accepted round by round" was "not found, not written". That is wrong for one session, and you took the sentence into the field list's notes.
+
+- [run] `SessionReplay.lean` (189 lines, mine) is on `cursor/proofs-messages-f55d` at `7d6308def2f`, compiled this morning (try `r20261113-091522-be85`, rc 0, 5 theorems, probe clean). It has:
+  - `run_acc_replay`: a prover that sends a fixed list `sends ++ [f]` is accepted by `FlockDeploy.V true` at coins `r`, where the statement sets up, the sends are of tag `0`, fit the verifier's rounds and start with a link message, the last decodes, and the masked verdict and the `checks` pass on it;
+  - `run_acc_sessionMsgs`: the same for a prover that sends `SessionMsgs.sessionMsgs spec x record proofs`, under length-word bounds on the record's parts;
+  - `run_acc_replayProver`: the same for `SessionMsgs.replayProver C o t` on a play whose case gives template `t`'s session's messages;
+  - `replayProver_next`, `streams_even`.
+- [read] What is in fact missing:
+  - The file is not on the join. It imports `SessionMsgs` and `Flock.Claims.Complete.Zk.Run`, both of which the join has, byte for byte as at `7d6308def2f` [run: `git diff --stat` between the two heads is empty for the two files]; I have not tried it over the join's tip.
+  - `SessionsRun` at the form from it is not written. For each template `t` and each coins `r' t` that agree with what the reading holds, it needs three things at the statement `stmtAt A.h m₂ t`: (i) the setup `setupOf true … = some (s, spec, sts)` with `setupWith … = .ok (spec, sts)`, (ii) the masked verdict on that session's record and proofs, (iii) `checks true s spec x link (coinSeq r 0) (midsOf ms …) ⟨x, record, proofs⟩ = .ok ()` at those coins. (i) and (ii) are the tie: the form's accept gives them at each record's own statement (`MembersAccepted`), and they move to the template's statement only by the tie. (iii) says the record's rounds answer the run's coins: it is where `SessionCoins`' agreement is used, and I have not read how far `sessionsAgree_accepted` goes toward it.
+- [derived] So the note's second half should read: the one-session theorem exists, compiled, off the join; what is not written is its use at the form, which waits on the tie for (i) and (ii) and has (iii) unread.
+
+**4. The tie, by reading, nothing written** [read] [derived]
+
+With the second way, `SetupsOfTemplates` no longer feeds `LastSlotFree`. What the tie has to give `sessionsRun` is the verdict and setup at the template's session statement. Its parts, at `SessionMsgs.sessionReading` and a `w : FlockDeploy.Raw` for template `t`:
+
+- T1 `MemberFields w m …` of `stmtRaw …`: by `rfl` [guess]; not tried.
+- T2 `ReadsBack w m record` (the partition, the registered reads, the draw print and parse round trip): not shown anywhere (`HeldOfFiles.lean`, "What this does not show"). SESSIONOF2's 14:32Z gives `Wf` of the partition object and `ReadsWf` under its one hypothesis `hcj`, and names `partition_readsBack_of_setup`; those are two of its three parts.
+- T3 `decode w.encode = some w`: `decode_encode_of_fits`, given `w.Fits`.
+- T4 `stmtAt A.h m₂ t = w.encode`: `stmtAt_stmtsMsg`.
+- T5 the `t`-th flattened session record is template `t`'s member's: structural, about `sessionRecords` and `memberAt`; not written, and it may be SESSIONOF's ground.
+
+I write none of it before point 2, and I ask before starting: it is on the branch off HELDOF's head, as you ordered at 13:39Z.
+
+**STOP RULE**: nothing. No listed guarantee, named assumption or lock entry beyond roots is touched. `two_le_rounds` is a new theorem in a file no lock lists. No verifier code is touched.
+
+**Runs** [run]
+
+- `r20261113-141809-102e` (vy-nebius-cpu-14, `--mem-gb 24`): `LastSlot.lean` at `1f8f9c45d44`, rc 0.
+- `r20261113-142841-a702` (vy-nebius-cpu-14, `--mem-gb 24`): `LastSlot.lean` at `1ce63fda6bb`, rc 0.
+- On the VM: nothing but git and reading.
+
+**Not established**
+
+- Point 2 itself: `LastSlotFree` from `2 ≤ k₀ t`. It waits on SESSIONCOINS's compiled head.
+- That `SessionReplay.lean` compiles over the join's tip.
+- `SessionsRun` at the form; the tie (T1 to T5); `(iii)` above.
+- The Saturday word (`Fx`, `raw`, `ctx` at the form): nothing written since 14:13Z.
+- A build of `security/Proofs` at any head of mine: each try is of one file with its dependencies.
+
+**Pushed heads**: `cursor/proofs-messages-setups-745c` `1ce63fda6bbb6afb67def5edc52c1116a3526ac5` (new); `cursor/proofs-messages-rise-745c` `fa617b298f8f` (unchanged, PR #9740); `cursor/proofs-messages-f55d` `7d6308def2f` (unchanged). No run is out. Next: SESSIONCOINS's head, then point 2 in one try; entry by 15:45Z or one line when it compiles.
