@@ -812,7 +812,7 @@ KNOWN: dict[str, str] = {
         "duplicate of the data sheet (`Verity.Site.Sheet`'s code mirror; `Verity.Accel.Card`): becomes the one data-sheet type, in Core, which the other two read (proofs)",
     "verity/protocols/certifier/verifier/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Link":
         "homonym, one egress link's opening: rename (proofs)",
-    "verity/protocols/certifier/verifier/lean/NetworkCheck/LinkWindow.lean::NetworkCheck.LinkWindow.Verdict":
+    "verity/protocols/certifier/verifier/lean/NetworkCheck/TransferBlocks.lean::NetworkCheck.TransferBlocks.Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (proofs)",
     "verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Layout":
         "homonym, the certifier's bucket and slot schedule: rename (proofs)",
