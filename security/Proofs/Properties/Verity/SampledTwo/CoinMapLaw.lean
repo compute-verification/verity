@@ -123,7 +123,8 @@ theorem avg_split {R P Q : Type} [Fintype R] [Fintype P] [Fintype Q] (e : R ≃ 
   exact Tape.avg_prod _
 
 /-- **Uniform coordinates restricted along an injective map are uniform.** -/
-theorem avg_restrict {I J T : Type} [Fintype I] [DecidableEq I] [Fintype J] [Fintype T] (κ : J → I)
+theorem avg_restrict {I J T : Type} [Fintype I] [DecidableEq I] [Fintype J] [DecidableEq J] [Fintype T] [Nonempty T]
+    (κ : J → I)
     (hκ : Function.Injective κ) (H : (J → T) → ℝ≥0∞) :
     avg (fun f : I → T => H (f ∘ κ)) = avg H := by
   classical
@@ -196,16 +197,14 @@ theorem avg_coord {C : Type} [Fintype C] [DecidableEq C] {T : C → Type} [∀ c
 theorem avg_le_write1 {P C : Type} [Fintype P] [Nonempty P] [Fintype C] [Nonempty C] (w : P → C → C)
     (A : C → ℝ≥0∞) (hA : ∀ c, A c ≤ 1) : avg A ≤ avg (fun p : P => avg fun c : C => A (w p c)) + shortfall w := by
   have h := avg_le_write (T := fun _ : C => Unit) w (fun z => A z.1) fun z => hA z.1
-  have e : ∀ B : C → ℝ≥0∞, avg (fun z : C × (C → Unit) => B z.1) = avg B := fun B => by
-    rw [Tape.avg_prod]
-    simp only [avg_const]
-  rw [e A] at h
-  simpa only [e] using h
+  simp only [Tape.avg_prod, avg_const] at h
+  exact h
 
 /-! ## The law at one node -/
 
 variable {β : Type}
 
+open Classical in
 /-- A tape of a coin node, averaged over a function of its value and the tape after it. -/
 theorem avg_tape_coin {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β}
     (s : Strategy (@Game.coin β C iF iN k)) (Φ : (c : C) → Tape (k c) (s c) → ℝ≥0∞) :
@@ -215,6 +214,7 @@ theorem avg_tape_coin {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → G
   rw [Tape.avg_prod]
   exact congrArg avg (funext fun c => avg_coord (T := fun c => Tape (k c) (s c)) c (Φ c))
 
+open Classical in
 /-- A tape of a coin node, averaged over a function of the tape after a fixed value. -/
 theorem avg_tape_at {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β}
     (s : Strategy (@Game.coin β C iF iN k)) (c₀ : C) (Φ : Tape (k c₀) (s c₀) → ℝ≥0∞) :
@@ -235,7 +235,7 @@ variable {R : Type} [Fintype R] [Nonempty R]
 
 theorem law_mono {g : Game β} {s : Strategy g} {P : R → Tape g s → Tape g s} {G G' : ℝ≥0∞} (h : LawHolds g s P G)
     (hG : G ≤ G') : LawHolds g s P G' :=
-  fun H hH => (h H hH).trans (add_le_add_left hG _)
+  fun H hH => (h H hH).trans (add_le_add le_rfl hG)
 
 theorem law_id (g : Game β) (s : Strategy g) : LawHolds g s (fun (_ : R) t => t) 0 := fun H _ => by
   rw [avg_const, add_zero]
@@ -311,6 +311,7 @@ theorem law_set {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β
           H (Tape.out _ s (placeCoin k (fun _ => v r) (f r) s t))) + avg G :=
         congrArg (· + avg G) (congrArg avg (funext fun r => (e r).symm))
 
+open Classical in
 /-- **At a coin node the map writes `W (e r)` of the node's value**, with `e r` independent of what the map reads after
 it: the node's term is `W`'s shortfall below uniform plus the average of the terms after the written value. -/
 theorem law_write {C P : Type} {iF : Fintype C} {iN : Nonempty C} [Fintype P] [Nonempty P] {k : C → Game β}
@@ -338,7 +339,7 @@ theorem law_write {C P : Type} {iF : Fintype C} {iN : Nonempty C} [Fintype P] [N
       = avg A := avg_tape_coin s fun c τ => H (Tape.out (k c) (s c) τ)
     _ ≤ avg (fun p : P => avg fun c : C => A (W p c)) + shortfall W := avg_le_write1 W A hA
     _ ≤ avg (fun p : P => avg fun c : C => (avg fun r : R => B (W p c) r) + G (W p c)) + shortfall W :=
-        add_le_add_right (avg_mono fun p => avg_mono fun c => h (W p c) H hH) _
+        add_le_add (avg_mono fun p => avg_mono fun c => h (W p c) H hH) le_rfl
     _ = (avg fun p : P => avg fun c : C => avg fun r : R => B (W p c) r) +
           (avg fun p : P => avg fun c : C => G (W p c)) + shortfall W := by
         simp only [avg_add]
@@ -399,7 +400,10 @@ theorem splits_chunk {K : ℕ} (i : Fin K) (u m : ℕ) (hm : u + m ≤ 65536) :
   let A : Fin K × Fin 65536 → Prop := fun a => a.1 = i ∧ u ≤ a.2.val ∧ a.2.val < u + m
   let v' : (Fin K × Fin 65536 → FlockLevel3.GF128) → (Fin m → FlockLevel3.GF128) := fun ρ => ρ ∘ κ
   have hvA : ∀ ρ ρ' : Fin K × Fin 65536 → FlockLevel3.GF128, (∀ a, A a → ρ a = ρ' a) → v' ρ = v' ρ' :=
-    fun ρ ρ' h => funext fun q => h (κ q) ⟨rfl, Nat.le_add_right _ _, by have := q.isLt; simp only; omega⟩
+    fun ρ ρ' h => funext fun q => h (κ q) ⟨rfl, Nat.le_add_right _ _, by
+      have := q.isLt
+      show u + q.val < u + m
+      omega⟩
   have hv : ∀ H : (Fin m → FlockLevel3.GF128) → ℝ≥0∞, avg (fun ρ => H (v' ρ)) = avg H := fun H =>
     avg_restrict κ hκ H
   calc avg (fun r : Fin K → FlockDeploy.Coin => F (fun q : Fin m => (r i ⟨u + q.val, by omega⟩ : FlockLevel3.GF128)) r)
@@ -420,7 +424,8 @@ theorem freshVal_eq (c : FlockDeploy.Coin) (u : ℕ) (hu : u + 4 ≤ 65536) :
   have h2 : (128 * u + j.val) % 128 = j.val % 128 := by omega
   have h3 : u + j.val / 128 < 65536 := by have := j.isLt; omega
   show (c.at ((128 * u + j.val) / 128)).bit ((128 * u + j.val) % 128) =
-    Flock.F128.bit (c ⟨u + (finProdFinEquiv.symm j).1.val, _⟩) (finProdFinEquiv.symm j).2.val
+    Flock.F128.bit (c ⟨u + ((finProdFinEquiv (m := 4) (n := 128)).symm j).1.val, _⟩)
+      ((finProdFinEquiv (m := 4) (n := 128)).symm j).2.val
   rw [h1, h2, finProdFinEquiv_symm_apply, Fin.coe_divNat, Fin.coe_modNat]
   simp only [FlockDeploy.Coin.at, dif_pos h3]
 
@@ -571,8 +576,10 @@ theorem placeFresh_congr {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin
     {r r' : Fin K → FlockDeploy.Coin} (h : AgreeFrom L pre r r') :
     placeFresh L r k (rc r) fs ts pre f l b s t = placeFresh L r' k (rc r') fs ts pre f l b s t := by
   unfold placeFresh
-  refine placeOpt_congr _ _ (fun _ _ => rfl) (fun fs' s' t' => placeCoin_congr _ (fun v => ?_)
-    (fun x s₃ t₃ => hrc _ _ _ _ _ _ r r' (h.snoc L _)) s' t') _ s t
+  refine placeOpt_congr (f []) (freshY k ts f l b) (fun _ _ => rfl) (fun fs' s' t' => ?_) _ s t
+  refine placeCoin_congr _ (fun v => ?_) (fun x s₃ t₃ => ?_) s' t'
+  rotate_left
+  · exact hrc _ _ _ _ _ _ r r' (h.snoc L _)
   split
   next i u hs =>
     obtain ⟨-, hu, -⟩ := slot_spec L hs
@@ -585,8 +592,9 @@ theorem placeHello_congr {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin
     (t : Tape (helloG k fs ts f spec ν) s) {r r' : Fin K → FlockDeploy.Coin} (h : AgreeFrom L pre r r') :
     placeHello k (rc r) fs ts pre f spec ν s t = placeHello k (rc r') fs ts pre f spec ν s t := by
   unfold placeHello
-  exact placeIte_congr _ _ _ s (fun s' t' => placeCoin_congr _ (fun _ => rfl)
-    (fun _ _ _ => hrc _ _ _ _ _ _ r r' (h.snoc L _)) s' t') (fun _ _ => rfl) t
+  refine placeIte_congr _ (helloX k fs ts f spec ν) (f []) s (fun s' t' => ?_) (fun _ _ => rfl) t
+  refine placeCoin_congr _ (fun _ => rfl) (fun _ _ _ => ?_) s' t'
+  exact hrc _ _ _ _ _ _ r r' (h.snoc L _)
 
 theorem placeRound_congr {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k} (hrc : RecCongr L rc)
     (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β)
@@ -595,7 +603,9 @@ theorem placeRound_congr {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin
     {r r' : Fin K → FlockDeploy.Coin} (h : AgreeFrom L pre r r') :
     placeRound L r k (rc r) fs ts pre f i sn n b T p s t = placeRound L r' k (rc r') fs ts pre f i sn n b T p s t := by
   unfold placeRound
-  refine placeCoin_congr _ (fun dr => ?_) (fun _ _ _ => hrc _ _ _ _ _ _ r r' (h.snoc L _)) s t
+  refine placeCoin_congr _ (fun dr => ?_) (fun _ _ _ => ?_) s t
+  rotate_left
+  · exact hrc _ _ _ _ _ _ r r' (h.snoc L _)
   split
   next j u hs =>
     obtain ⟨-, hu, -⟩ := slot_spec L hs
@@ -647,8 +657,8 @@ theorem law_fresh {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → P
   rcases hs : slot L K pre (.fresh l) b 4 with _ | ⟨i, u⟩
   · refine law_keep s' fun x => ?_
     exact hlaw _ _ _ _ _
-  · refine law_set s' (fun r => freshVal (r i) u) (OffChunk i u 4) (splits_fresh i u (slot_spec L hs).2.2) ?_
-      fun x => ?_
+  · have hv := splits_fresh i u (slot_spec L hs).2.2
+    refine law_set (R := Fin K → FlockDeploy.Coin) s' _ _ hv ?_ fun x => ?_
     · intro x r r' τ hr
       exact hrc _ _ _ _ _ _ r r' (offChunk_agree L hs rfl hr _)
     · exact hlaw _ _ _ _ _
@@ -675,18 +685,20 @@ theorem law_round {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → P
   · refine law_keep s fun dr => ?_
     exact hlaw _ _ _ _ _
   · obtain ⟨-, -, hu⟩ := slot_spec L hs
-    refine law_mono (law_congr (P' := fun r => placeCoin _ (fun dr => openW n (bitsOf (openElems (r j) u n)) dr)
+    have hv := splits_open j u n hu
+    refine law_mono (law_congr (P' := fun r : Fin K → FlockDeploy.Coin =>
+        placeCoin _ (fun dr => openW n (bitsOf (openElems (r j) u n)) dr)
         (fun dr s₅ t₅ => rc r fs (ts.set i (T.bump p.1)) (pre ++ [⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩])
           (fun log => f (⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩ :: log)) s₅ t₅) s) ?_
-      (law_write s (fun e dr => openW n (bitsOf e) dr) (fun r => openElems (r j) u n) (OffChunk j u n)
-        (splits_open j u n hu) ?_ fun dr => ?_)) ?_
+      (law_write (R := Fin K → FlockDeploy.Coin) s (fun (e : Fin n → Fin 128 → Bool) dr => openW n (bitsOf e) dr)
+        _ _ hv ?_ fun dr => ?_)) ?_
     · intro r t
       show placeCoin _ (fun dr => openW n (openBits (r j) u n) dr) _ s t = _
       rw [openBits_eq]
     · intro dr r r' τ hr
       exact hrc _ _ _ _ _ _ r r' (offChunk_agree L hs rfl hr _)
     · exact hlaw _ _ _ _ _
-    · exact add_le_add_right le_self_add _
+    · exact add_le_add le_self_add le_rfl
 
 theorem law_open {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k} {gr : GapRec β k}
     (hlaw : RecLaw rc gr) (hrc : RecCongr L rc) (fs : List (String × ℕ)) (ts : List OpenTree)
@@ -708,15 +720,18 @@ theorem law_placeK {β : Type} : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts :
       (gapK L K k fs ts pre f s)
   | 0, _, _, _, _, s => law_id _ s
   | _ + 1, _, _, _, _, ⟨none, _⟩ => law_id _ _
-  | k + 1, fs, ts, pre, f, ⟨some (.fresh l, b), s'⟩ =>
-    law_send _ _ s' (law_fresh L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
+  | k + 1, fs, ts, pre, f, ⟨some (.fresh l, b), s'⟩ => by
+    refine law_send _ _ s' ?_
+    exact law_congr (fun r t => rfl) (law_fresh L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
       (fun fs ts pre f s => law_placeK k fs ts pre f s)
       (fun fs ts pre f s t r r' h => placeK_congr L k fs ts pre f s t r r' h) fs ts pre f l b s')
-  | k + 1, fs, ts, pre, f, ⟨some (.hello spec, ν), s'⟩ =>
-    law_send _ _ s' (law_hello (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
+  | k + 1, fs, ts, pre, f, ⟨some (.hello spec, ν), s'⟩ => by
+    refine law_send _ _ s' ?_
+    exact law_congr (fun r t => rfl) (law_hello (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
       (fun fs ts pre f s => law_placeK k fs ts pre f s) fs ts pre f spec ν s')
-  | k + 1, fs, ts, pre, f, ⟨some (.opening i sn n, b), s'⟩ =>
-    law_send _ _ s' (law_open L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
+  | k + 1, fs, ts, pre, f, ⟨some (.opening i sn n, b), s'⟩ => by
+    refine law_send _ _ s' ?_
+    exact law_congr (fun r t => rfl) (law_open L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
       (fun fs ts pre f s => law_placeK k fs ts pre f s)
       (fun fs ts pre f s t r r' h => placeK_congr L k fs ts pre f s t r r' h) fs ts pre f i sn n b s')
 
@@ -740,7 +755,10 @@ theorem law_place (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : B
   law_along (game_eq V θ F c)
     (Pl := fun r s t => placeK L r (frames (V.families θ)) (V.families θ) [] [] (finish (V.signer θ) θ F c s.1) s.2 t)
     (G := fun s => gapK L K (frames (V.families θ)) (V.families θ) [] [] (finish (V.signer θ) θ F c s.1) s.2)
-    (fun s => law_send _ s.1 s.2 (law_placeK L _ _ _ _ _ s.2)) σ
+    (fun s => by
+      rcases s with ⟨m, s'⟩
+      refine law_send _ m s' ?_
+      exact law_congr (fun r t => rfl) (law_placeK L _ _ _ _ _ s')) σ
 
 /-- **`LawAt`**: the period's play is at most as likely, at every event, as the frame's play at a uniform tape and
 uniform run coins, plus the hiding term. -/

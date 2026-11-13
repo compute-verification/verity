@@ -73,7 +73,7 @@ def LawA (g : Game β) (s : Strategy g) (P : R → Tape g s → Tape g s) (Ag : 
 
 theorem law_monoA {g : Game β} {s : Strategy g} {P : R → Tape g s → Tape g s} {Ag : R → β → Prop} {G G' : ℝ≥0∞}
     (h : LawA g s P Ag G) (hG : G ≤ G') : LawA g s P Ag G' :=
-  fun H hH => (h H hH).trans (add_le_add_left hG _)
+  fun H hH => (h H hH).trans (add_le_add le_rfl hG)
 
 theorem law_congrA {g : Game β} {s : Strategy g} {P P' : R → Tape g s → Tape g s} {Ag : R → β → Prop} {G : ℝ≥0∞}
     (hP : ∀ r t, P r t = P' r t) (h : LawA g s P' Ag G) : LawA g s P Ag G := by
@@ -143,8 +143,8 @@ theorem law_keepA {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game 
     _ ≤ avg fun c => (avg fun r : R => B' c r) + G c := avg_mono fun c => h c H hH
     _ = (avg fun c => avg fun r : R => B' c r) + avg G := avg_add _ _
     _ = (avg fun r : R => avg fun c => B' c r) + avg G := congrArg (· + avg G) (avg_swap _)
-    _ ≤ _ := add_le_add_right (avg_mono fun r => (avg_mono fun c => avg_mono fun τ =>
-        ind_mono (hup c r τ) _).trans_eq (e r).symm) _
+    _ ≤ _ := add_le_add (avg_mono fun r => (avg_mono fun c => avg_mono fun τ =>
+        ind_mono (hup c r τ) _).trans_eq (e r).symm) le_rfl
 
 /-- **A coin node written with `v r`**, independent of what the map and the subtree's agreement read after it: the
 node's agreement holds wherever the written subtree's does. -/
@@ -180,9 +180,10 @@ theorem law_setA {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game �
     _ ≤ avg fun c => (avg fun r : R => B' c r) + G c := avg_mono fun c => h c H hH
     _ = (avg fun c => avg fun r : R => B' c r) + avg G := avg_add _ _
     _ = (avg fun r : R => B' (v r) r) + avg G := congrArg (· + avg G) (hv B' hB).symm
-    _ ≤ _ := add_le_add_right (avg_mono fun r =>
-        (avg_mono fun τ => ind_mono (hup r τ) _).trans_eq (e r).symm) _
+    _ ≤ _ := add_le_add (avg_mono fun r =>
+        (avg_mono fun τ => ind_mono (hup r τ) _).trans_eq (e r).symm) le_rfl
 
+open Classical in
 /-- **A coin node written through `W` at `e r`**, independent of what the map and the subtree's agreement read after
 it: the node's agreement holds wherever the written subtree's does and `e r` is good; the node costs `W`'s shortfall
 and the chance `e r` is not good. -/
@@ -239,7 +240,7 @@ theorem law_writeA {C P : Type} {iF : Fintype C} {iN : Nonempty C} [Fintype P] [
       = avg A := avg_tape_coin s fun c τ => H (Tape.out (k c) (s c) τ)
     _ ≤ avg (fun p : P => avg fun c : C => A (W p c)) + shortfall W := avg_le_write1 W A hA
     _ ≤ avg (fun p : P => avg fun c : C => (avg fun r : R => B' (W p c) r) + G (W p c)) + shortfall W :=
-        add_le_add_right (avg_mono fun p => avg_mono fun c => h (W p c) H hH) _
+        add_le_add (avg_mono fun p => avg_mono fun c => h (W p c) H hH) le_rfl
     _ = (avg fun p : P => avg fun c : C => avg fun r : R => B' (W p c) r) +
           (avg fun p : P => avg fun c : C => G (W p c)) + shortfall W := by
         simp only [avg_add]
@@ -253,7 +254,7 @@ theorem law_writeA {C P : Type} {iF : Fintype C} {iN : Nonempty C} [Fintype P] [
           (he (fun p r => avg fun c => B' (W p c) r) hB).symm
     _ ≤ (avg fun r : R => (avg fun c : C => B (W (e r) c) r) + if Good (e r) then 0 else 1) +
           (avg fun p : P => avg fun c : C => G (W p c)) + shortfall W :=
-        add_le_add_right (add_le_add_right (avg_mono hgood) _) _
+        add_le_add (add_le_add (avg_mono hgood) le_rfl) le_rfl
     _ = (avg fun r : R => avg fun c : C => B (W (e r) c) r) + (avg fun p => if Good p then 0 else 1) +
           (avg fun p : P => avg fun c : C => G (W p c)) + shortfall W := by
         rw [avg_add, hbad]
@@ -592,7 +593,7 @@ theorem coinMapHolds {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype
           if E (Tape.out _ σ (place V θ F c σ L r t)) ∧
             ElemAgrees L A x reads (Tape.out _ σ (place V θ F c σ L r t)) r then 1 else 0) +
           gapOf V θ F c σ L (A.L.V.k x) := by
-        refine add_le_add_right (avg_mono fun r => avg_mono fun t => ?_) _
+        refine add_le_add (avg_mono fun r => avg_mono fun t => ?_) le_rfl
         by_cases hA : AgFrom L Verity.Exchange.log r [] (Tape.out _ σ (place V θ F c σ L r t))
         · by_cases hE : E (Tape.out _ σ (place V θ F c σ L r t))
           · rw [if_pos hA, if_pos hE, if_pos ⟨hE, elemAgrees_of_logGood L reads r hA⟩]
