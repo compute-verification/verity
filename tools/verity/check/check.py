@@ -1747,7 +1747,7 @@ OPT_IN = {
         "tests/test_dsa_topk_reads.py::test_the_served_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate",)},
     "benchmarks/spot_figures": {"VERITY_SPOT_FIGURES_SLOW": (
         "tests/test_figures.py::test_figures_writes_every_figure",)},
-    "verity/protocols/remote/verifier/composition": {"VERITY_SLOW": (
+    "verity/protocols/compose/verifier/lean": {"VERITY_SLOW": (
         "tests/test_composition_difftest.py::test_product_over_onsites_subprotocols_is_onsite_at_200",
         "tests/test_composition_difftest.py::test_remote_agrees",
         "tests/test_composition_difftest.py::test_onsite_agrees",
