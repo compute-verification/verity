@@ -137541,3 +137541,65 @@ Clock: `date -u` read 11:21Z. Mailbox: read at 11:15Z, nothing since your 09:52Z
 **Pushed.** `cursor/proofs-honest2-7c4e` at `191488fbab70a42df4baad9db9387acb1de06c9c`, compiled. Nothing unpushed. No run out.
 
 **To post.** Nothing.
+
+## GATHER, Fri 13 Nov 11:22Z: R3 of a wired port, written here before the Lean: the parameters' `ports` name the port each added name is wired to (`wired`), R3 refuses a record whose two roots differ with the code `R3-wired`, and three `reads` records move; I keep the Lean half; the test's term and the toy's rule are pushed and the toy passes end to end at the layout, with the windows' and the wiring tests
+
+`cursor/proofs-gather-second-try-5a28` at `984cb027efa30548bd370a1f0e04830e8d12be1a` is the head I stand behind for Friday, unmoved [run: `git ls-remote origin` at 11:20Z]; the Friday-size rehearsal `r20261113-053940-1822` ran at it and ended exit 0 [run: read 07:36Z]. The first try stays `496aa183544b` on #9480 [run: same `ls-remote`]. Nothing below touches either: it is all on the trial branch `cursor/proofs-gather-wired-layout-6a9b`, which has no pull request.
+
+**What replaced what.** The 11:05Z entry named a branch `cursor/proofs-gather-audit-header-6a9b` and a mend through `matches_public`. Both are withdrawn by your 11:06Z message: the branch was never created [run: `git ls-remote origin` at 11:20Z], and the audit will call the twin `one_stage/members.py` on the trial branch, its own commit, with no new difftest case.
+
+**Pushed on the trial branch** [run: `git push`, 11:10Z; head `8c24d412e8007755c4805201f75e2ea0e9b8b065`]:
+
+1. `7f5b2470dd2`: the windows' test of a wired port with no tree of its own states the layout that names it (the one term, and the record's roots through `registration`). Its own selection passes locally: 1 passed [run: 11:07Z].
+2. `8c24d412e80`: the two-stage toy's rule names every row port of every member (`benchmarks/two_stage/toy.py`, `spec`), and the toy's test states the layout and the record's roots under both names. The toy's eight tests that need no Lean pass locally [run: 11:09Z].
+
+**The run** `r20261113-111009-7656`, machine vy-nebius-cpu-11, at `8c24d412e80`: launched 11:10:09Z by its id, its first file written 11:10:33Z, so it waited under half a minute; job exit 0 [run: `research pods ssh` at 11:20Z, `research status` at 11:21Z].
+
+- The toy end to end at the layout: rc 0 at 11:17:30Z, both cases `as_expected: true` [run: `out/rc.txt`, the two `TWO` lines]. The honest case: the audit's record accepted, the second stage's check ok with no code, and the outcome refused by the two-stage form alone (`statements: ["two-stage-form"]`), which is what the toy expects while the form is off. The altered case: refused. So the toy's two registrations pass R1 to R8 in the Python and the compiled Lean with four names added.
+- The windows' interface tests and `test_a5_wiring.py`: 93 passed in 130 s, rc 0 [run: `out/pytest-windows.log`].
+- The toy's tests: not run. The step failed on my launch line, not on the tree: `uv run` inside the toy's directory, which has a `pyproject.toml` of its own, made a second environment with no pytest ("No module named pytest") [run: `out/pytest-toy.log`]. Relaunched with the workspace's environment as `r20261113-112101-2f36` on vy-nebius-cpu-1 at 11:21:01Z; expected end 11:40Z [guess]. Its line goes in my next entry.
+
+### R3 of a wired port: the design, before any Lean
+
+**1. The parameters' new shape, one example.** The toy's interior window at the layout has 10 ports, four of them added names [run: `expected_ports` and `wired_ports` on `toy.interior_window`, 11:17Z]. Today each entry is `{"leaves", "domain"}`. An added name gains one key, `wired`, the name of the port whose tree holds its rows:
+
+```json
+"ports": {
+  "TwoStageToyFlip_v1{H=1024}/o0": {"leaves": 3, "domain": "61a2dadd83a5…"},
+  "TwoStageToyFlipB_v1{H=1024}/x": {"leaves": 3, "domain": "61a2dadd83a5…",
+                                    "wired": "TwoStageToyFlip_v1{H=1024}/o0"}
+}
+```
+
+- A port with a tree of its own keeps exactly `{"leaves", "domain"}`, so every set of parameters written today parses as it does now [derived].
+- The key is `wired`, not `held`: the registration's verifier already has a field `held` that means something else (the registered values it holds across windows, `Spot/Registration.lean:197`) [read].
+- The record does not change: a root stays `{"port", "root", "leaves", "domain"}`, so the public-items rule and every reader of a record are untouched [read: `ROOT_KEYS`, `Spot/Registration.lean:114`; `service._LAYOUT`].
+- `rows.expected_ports` writes the key; the parameters' parser (`OneStage.paramsParsed`, and its Python twin in the difftest) takes a port's entry with `wired` a string and refuses any other key or type, as it refuses today [derived].
+
+**2. The rule in words.** R3 gains one clause, after its loop over the ports. For every port of the verifier's layout that names the port it is wired to, the record has a root under that port's name and a root under the port it names, each root is a string, and the two strings are equal. Where a name has two roots the last is read, as the rest of R3 reads it. A record that lacks either root, or whose two roots differ, is refused.
+
+- Leaves and domain need no clause: R3 already holds each name to its own entry's leaves and domain, and the layout gives an added name the leaves and domain of the port it is wired to [read: `rows.expected_ports` at the trial's head].
+- The clause is read only when the record's roots are well formed (not empty, each exactly the four keys), as R3's loop is. A record refused with `R3-roots` gets no second code [derived: this keeps the Python and the Lean equal on malformed roots without a second parse].
+- The parser adds no rule on what `wired` names. A `wired` that names a port outside the layout refuses every record: either the record has no root for it (`R3-wired`) or it has one the layout does not name (`R3-ports`) [derived].
+
+**3. The refusal's code:** `R3-wired`, once, after `R3-ports`, `R3-root`, `R3-leaves` and `R3-domain` in the order of codes; the Python's detail names the first such port and the port it names [derived].
+
+**4. In Lean** (the verifier's package, then the analysis) [read: each file at the trial's head]:
+
+- `Spot/Registration.lean`: one definition, `wiredHeld find ports : Bool`, and one `kept` term in `check` and the same in `checkRef`, between R3's loop and R4. A `kept` term, not an `if`: the comment at line 602 says a statement's join point doubles what `check_eq_checkRef`'s `simp` unfolds, and that proof is already at 1,600,000 heartbeats. `check` reads the port index, `checkRef` the reversed search, and `portIndex_find` is the lemma that equates them, so `check_eq_checkRef` should close as written [guess, until it is built].
+- `Spot/OneStage.lean`: `paramsParsed` takes the `wired` key.
+- `security/Properties/Spot.lean`: the property `R3` gains the clause as its last conjunct. It has to: `registration_nil` is an equivalence (`check rec v = #[] ↔ ∃ law, Registered v rec law`), so a rule in `check` that the property lacks would make it false.
+- `security/Proofs/Properties/Spot.lean`: `registration_nil` gains one step at R4's join point (by `kept_nil`, as its step for the seed salt does) and one name in each of its two closing patterns.
+
+**5. The lock records that move.** The locks record, per module, a digest of each definition some guarantee reads (`reads`); a guarantee's own record holds its statement's text and hashes, which name definitions and do not hash their bodies [read: `tools/verity/lean/check.py`, `read_groups` and the `unfolded_hash` docstring]. So:
+
+- `security/lean-audit.json`, `reads["Spot.Registration"]`: the entry `Spot.Registration.check` and the module's `digest`, and a new entry for `wiredHeld` (helpers `check` calls are listed there, as `Spot.Registration.kept` is) [read: line 60251].
+- `security/Properties/lean-audit.json`, `reads["Spot.Registration"]`: the same [read: line 27480]; and `reads["Properties.Spot"]`: the entry `Properties.Spot.R3` and that module's `digest` [read].
+- No guarantee's own record (`signature`, `type_hash`, `unfolded_hash`) [derived: none states `check` or `R3` itself; `Properties.Spot.Registered`'s body names `R3` and is unchanged]. The verifier package's own lock lists no guarantee [run: read at 11:20Z].
+- Which guarantees read those definitions: not known. The lock keeps no reader list; the records run prints it. I run the fast path (`lean_changed.py --records … --update`) once the Lean elaborates and give its printout here.
+
+**6. The Python twin and the difftest.** `registration.check` gains the same clause in the same place, after its loop, inside the branch of well-formed roots. The difftest's registration port (`REGISTRATION`, which already draws changed records and parameters) gains a setup with one wired name and three cases held to equal codes in the Python and the compiled Lean: unchanged (no code), the record's root under the added name changed (`R3-wired`), and the parameters' `wired` naming a port the record has no root for (`R3-wired`).
+
+**7. The Lean half: I keep it.** It is the registration's check and its property, not the form's Lean, so a worker in `SampledTwo` now has no head start on it, and it would take STAGECOINS off rule B. The risk I can name is `check_eq_checkRef`'s `simp` running out of its budget; if it or `registration_nil` has not closed after three tries on a node, I say so here and ask you to hand it over then.
+
+**Order of work from here**, each its own commit on the trial branch: the audit's call of the twin (Python only); R3's Lean and its Python twin with the difftest cases; the play of two and of twenty again at that head, without `--interior-trees`; the records by the fast path. No pull request, no mark, no merge of `main`, neither of Friday's branches moved.
