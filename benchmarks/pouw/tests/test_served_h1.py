@@ -47,7 +47,7 @@ from verity_vllm.protocols.pouw.h1 import receipts as RC
 SALT, RA, RB = bytes(range(64)), bytes(range(64, 128)), bytes(range(128, 192))
 
 
-def _call(m: int, n: int, k: int, seed: int) -> "RC.Call":
+def _call(m: int, n: int, k: int, seed: int) -> RC.Call:
     g = torch.Generator().manual_seed(seed)
     return RC.Call(torch.randint(-127, 128, (m, k), generator=g, dtype=torch.int8),
                    torch.randint(-127, 128, (n, k), generator=g, dtype=torch.int8))
@@ -96,7 +96,7 @@ def test_receipt_tree_opens_and_refuses():
     assert not CM.verify(dom, root, u, CM.leaf(dom, key, "r/1", u, bytes(rows[u]))[0], CM.path(pooled, u))
 
 
-def _padded_call(m: int, t: int, n: int, k: int, seed: int) -> "RC.Call":
+def _padded_call(m: int, t: int, n: int, k: int, seed: int) -> RC.Call:
     """A T-slot call whose first m slots are real rows and the rest the canonical empty row."""
     call = _call(t, n, k, seed)
     call.a[m:] = 0

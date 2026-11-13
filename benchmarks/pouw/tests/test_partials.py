@@ -34,7 +34,7 @@ def _s8(shape, seed: int) -> torch.Tensor:
     return torch.randint(-128, 128, shape, generator=torch.Generator().manual_seed(seed), dtype=torch.int8)
 
 
-def _window(steps: dict[int, int]) -> "PT.Calls":
+def _window(steps: dict[int, int]) -> PT.Calls:
     """Two calls; steps {s: m}, each its own A and coin index s."""
     units = [(T // 32) * (n // 32) for n, _ in NK]
     offs = [sum(units[:w]) for w in range(len(NK))]
