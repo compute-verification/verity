@@ -144,14 +144,12 @@ private def tmV (name : String) (version : Nat) (keys : Array String) (tmpl : Op
     pure ts
   else none
 
-set_option maxRecDepth 20000 in
 set_option smartUnfolding false in
 private theorem tm_view (name : String) (version : Nat) (params : Json) :
     TemplateQuery.templatesOf name version params =
       tmV name version (keysOf params) (params.getObjValAs? String "template").toOption
         (params.getObjVal? "templates") mapStrs := by rfl
 
-set_option maxRecDepth 20000 in
 set_option smartUnfolding false in
 private theorem tmV_tsv (name : String) (version : Nat) (keys : Array String) (tmpl : Option String)
     {x y : Except String Json} (h : AlikeE x y) :
@@ -215,7 +213,6 @@ private def chkObjV (okeys : Array String) (fmt : Option String) (prog : String)
   if let some ts := tm name version then discard ts
   return (name, version)
 
-set_option maxRecDepth 20000 in
 set_option smartUnfolding false in
 private theorem chkObj_view (obj : Json) :
     HmRow.checkPartitionObject obj =
@@ -231,7 +228,6 @@ section
 variable {ok qk pk : Array String} {f : Option String} {p nm : String} {v : Option Json} {ps : Json}
   {px : String → Option Json} {tm : String → Nat → Option (V (Array String))}
 
-set_option maxRecDepth 20000 in
 set_option smartUnfolding false in
 private theorem chkObjV_ver {va vb : Option Json} (h : Alike va vb) :
     chkObjV ok f p qk nm va ps pk px tm = chkObjV ok f p qk nm vb ps pk px tm := by
@@ -239,13 +235,11 @@ private theorem chkObjV_ver {va vb : Option Json} (h : Alike va vb) :
   · rfl
   · cases hs <;> rfl
 
-set_option maxRecDepth 20000 in
 set_option smartUnfolding false in
 private theorem chkObjV_ps {psa psb : Json} (h : Same psa psb) :
     chkObjV ok f p qk nm v psa pk px tm = chkObjV ok f p qk nm v psb pk px tm := by
   cases h <;> rfl
 
-set_option maxRecDepth 20000 in
 set_option smartUnfolding false in
 private theorem chkObjV_px {pxa pxb : String → Option Json} (hX : Alike (pxa "X") (pxb "X"))
     (hW : Alike (pxa "W") (pxb "W")) :
@@ -302,14 +296,12 @@ private def chkPartV (c : Circuit) (obj : Option Json) (chk : V (String × Nat))
   | _, some _ => throw "partition: the circuit binds the provisional unit cover, not a verity/partition/v1 object"
   | _, none => return { rule, digest, derived := false, note := "units taken as stated, not derived: the provisional unit cover names no query" }
 
-set_option maxRecDepth 20000 in
 set_option smartUnfolding false in
 private theorem chkPart_view (c : Circuit) (o : Json) :
     HmRow.checkPartition c (some o) =
       chkPartV c (some o) (HmRow.checkPartitionObject o) (HmRow.partitionDigest o)
         (o.getObjValAs? String "program").toOption := by rfl
 
-set_option maxRecDepth 20000 in
 set_option smartUnfolding false in
 private theorem chkPartV_obj (c : Circuit) (a b : Json) (chk : V (String × Nat)) (dig : V ByteArray) (prog : Option String) :
     chkPartV c (some a) chk dig prog = chkPartV c (some b) chk dig prog := by rfl
