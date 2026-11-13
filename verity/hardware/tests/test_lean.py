@@ -113,7 +113,7 @@ def disagreements(card: dict, text: str) -> list[str]:
 def test_lean_table_agrees_with_the_card_file(sku: str) -> None:
     card = load(sku)
     found = disagreements(card, (ROOT / card["lean"]).read_text(encoding="utf-8"))
-    assert not found, (f"{card['lean']} and verity/hardware/cards/{sku}.toml disagree; change the card file or the "
+    assert not found, (f"{card['lean']} and hardware/cards/{sku}.toml disagree; change the card file or the "
                        f"generator, then write the table: `{lean.COMMAND}`\n" + "\n".join(found))
 
 
@@ -209,7 +209,7 @@ def test_a_generated_table_states_its_source_and_no_number_in_prose() -> None:
     for sku in LEAN:
         text = lean.render(sku)
         opening = text.split("@[expose] public section")[0]
-        assert lean.COMMAND in opening and f"verity/hardware/cards/{sku}.toml" in opening and "do not edit" in opening
+        assert lean.COMMAND in opening and f"hardware/cards/{sku}.toml" in opening and "do not edit" in opening
         comments = re.findall(r"/-[-!].*?-/", text, re.S)
         assert len(comments) >= 3
         assert not re.search(r"\d", re.sub(r"`[^`]*`", "", "\n".join(comments))), f"{sku}: a comment states a number"

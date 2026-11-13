@@ -2354,6 +2354,21 @@
         "verity/definitions/evaluate/": "verity/circuits/evaluate/",
         "verity/definitions/requirement/": "verity/circuits/requirement/"
       }
+    },
+    {
+      "paths": {
+        "verity/hardware/cards/b200-sxm-180gb.toml": "hardware/cards/b200-sxm-180gb.toml",
+        "verity/hardware/cards/dgx-h200.toml": "hardware/cards/dgx-h200.toml",
+        "verity/hardware/cards/h200-sxm-141gb.toml": "hardware/cards/h200-sxm-141gb.toml",
+        "verity/hardware/cards/nebius-vm-monotonic-raw.toml": "hardware/cards/nebius-vm-monotonic-raw.toml",
+        "verity/hardware/cards/rtx-pro-6000-server.toml": "hardware/cards/rtx-pro-6000-server.toml",
+        "verity/hardware/cards/xeon-6776p-2s.toml": "hardware/cards/xeon-6776p-2s.toml",
+        "verity/hardware/cards/xeon-platinum-8468-2s.toml": "hardware/cards/xeon-platinum-8468-2s.toml",
+        "verity/hardware/nodes/h200-sxm-141gb-x1.toml": "hardware/nodes/h200-sxm-141gb-x1.toml",
+        "verity/hardware/nodes/rtx-pro-6000-server-x8.toml": "hardware/nodes/rtx-pro-6000-server-x8.toml",
+        "verity/hardware/cards/__init__.py": "verity/hardware/cards.py",
+        "verity/hardware/nodes/__init__.py": "verity/hardware/nodes.py"
+      }
     }
   ]
 }
