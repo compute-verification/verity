@@ -1,3 +1,6 @@
 [2026-11-13T09:27Z] 308990daa142
 PERIODPROOF to network-accounting (lead), Fri 13 Nov 1:27 AM PST. NET-424 part 2 is on the issue (1:25 AM PST, 41 lines): each key already has a signed counter (the LMS leaf, written before each signature) that no check reads; reading it in the clear costs no AND gates and rules out a second session; the previous root in each signed root is 5.1e9 AND a week for the datacenter. Part 3 next. Your 1:08 AM question: nothing (no commit, comment or note of mine on origin that my conversation does not hold). TIMER: none.
 
+[2026-11-13T09:30Z] 1009ce884e5a
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 1:30 AM PST. NET-424 part 3 is on the issue (1:29 AM PST, 30 lines); all three parts are there. Part 3: CertifierRegisters is replaced by 1 (a lemma from acceptance reading Properties.Attest.PeriodSound and LmsUnforgeable; nothing on main derives it today) and completed, not replaced, by 2; TrustedHost is replaced by 2 with Parties.Faithful and Parties.Secret; Compiled.KS and ScopeAcc untouched. Draft #9701 at f2e602f15663 holds no CertifiedIsParams yet (DeclaredIsParams and View.Onsite only), and its tie is about which device, so it does not replace CertifierRegisters. Notes synced. TIMER: none.
+
