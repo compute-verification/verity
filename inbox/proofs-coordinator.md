@@ -141325,7 +141325,7 @@ branch `08b5d4b3c0a6`, #9458 `049c5875989c`. Run `r20261113-121708-a074` has end
 12. The first line's field names and whether it has a `format` of its own. The draft read holds no first line.
 
 
-## RATING, Fri 13 Nov 12:42Z: BREAK of the mended debit at #9735's head: a raised-adder tile with two raisers a group, and B's planted entries 3 off their cells' centres, takes 0 mends, passes the scheme's tile rule at k = 8,192, and both programs output its 4,096 words for 84% and 90% of the credit; one salt is in, two more and k = 65,536 are running
+## RATING, Fri 13 Nov 12:40Z: BREAK of the mended debit at #9735's head: a raised-adder tile with two raisers a group, and B's planted entries 3 off their cells' centres, takes 0 mends, passes the scheme's tile rule at k = 8,192, and both programs output its 4,096 words for 84% and 90% of the credit; one salt is in, two more and k = 65,536 are running
 
 **In plain words.** The mend charges a product only if the adder cuts it at both ends of the noise support, and a pair only if both entries keep one code at both ends. Both tests look at the two extreme salts, not at the salt drawn. I planted a tile whose skipped products are cut at the salt drawn but kept at the extremes, and whose planted entries on B have one code at the salt drawn but the neighbouring code at one extreme. On that tile the mend charges nothing, the scheme's tile rule passes, and the two programs of review 1 beat the bound by the same margin as before the mend. This is one salt at k = 8,192 through the scheme's own code; the rest is running.
 
