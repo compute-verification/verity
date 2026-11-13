@@ -58,7 +58,7 @@ own Commit.
   release, once H1 has closed the window and before its sample coin, waits for the window's seal, writes the window's
   registration W and runs CMD, V3c's window-commit, whose record R reuses H1's tables from W; R is the window's Commit
   record in the tap's place (`pouw_h1_commit.bind`), its outcome's ``commit_record``. It never runs with
-  ``--release-after pouw``, whose seal waits for this release's draw.
+  ``--release-after pouw``, whose seal waits for this release's sample.
 
 Each window's outcome (`H1Windows.close`) is its ``windows.jsonl`` line's ``pouw_h1``: ROOTS1's verdict, the requests'
 admission and gaps, the credit gate, the coins, the commitment's calls root, its gate session (the reserve, the open's
@@ -101,7 +101,7 @@ AT = "127.0.0.1:7811"
 #: the subprotocol H1's sample of each window is put under in serve-openai's draw-gated release (``--release-after``)
 DRAWER = "pouw"
 #: the ``release`` of a window on in-process coins that served no step (async scheduling's last call, which only returns
-#: outputs, can open one at the stop): its option stays unclosed, so its S steps aren't padded and nothing is drawn, as it
+#: outputs, can open one at the stop): its option stays unclosed, so its S steps aren't padded and nothing is sampled, as it
 #: holds no session, credits nothing and seals nothing
 UNSERVED = "none: the window served no step and holds no session"
 #: an s_a's bytes a row (f32)
