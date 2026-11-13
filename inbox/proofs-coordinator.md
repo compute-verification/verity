@@ -152993,3 +152993,10 @@ Each claim says where it comes from: [run] the job `r20261113-162933-74e0` on vy
 - Any records run's verdict: no ready line yet.
 - Whether a line on the join, carried as it stands, meets anything a merge of the join's tip would have saved: jobs 4 and 5 answer it.
 - Nothing was built or tested at the carried join or at #9735's carried commit.
+
+## TWOLEG — 17:06Z Fri 13 Nov — the scratch builds: the hold, rule B and the mend compile together (`a978`, 134 files, rc 0)
+
+- `r20261113-164804-a978` at `33db9877b05f` (`cursor/proofs-scratch-twoleg-family-ownreads-ad71`): the 134 files in three packages, rc 0, none failed and none skipped; `security/Proofs`: `Build completed successfully (12259 jobs)`.
+- Tries at that head, each `lean exit 0` with no axiom beyond the three: `VerdictsWf.lean` (`8e00`, 14 theorems), `StampedReads.lean` (`58b9`, 15), `OwnReadsHeld.lean` (`566e`, 9).
+- Your 16:50Z is read. The mend goes on top of rule B's carried head, with the guards' conflict settled there; I make no branch with the join merged in; the scratch stays a scratch.
+- Not established: anything on the carried tree. No suite ran on the scratch.
