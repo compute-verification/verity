@@ -30,7 +30,7 @@ from verity_flock import circuit as FC
 from verity.protocols.spot.verifier.one_stage import partition as P, registered as G
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-VERIFIER = Path(__file__).resolve().parents[2] / "agreement"
+VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 FIXTURE = "art:bf70d8eb"
 STATEMENT = "verity/flock-circuit"
