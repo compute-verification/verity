@@ -37,7 +37,7 @@ set_option backward.privateInPublic.warn false
 
 open private verifies isDigest strOf jsonTrue isBodyOf from Spot.ChallengerSession
 
-namespace Properties.Challenger.Honest
+namespace Properties.Challenger.Withheld
 
 open Lean (Json)
 open _root_.Spot _root_.Spot.Challenger
@@ -602,10 +602,11 @@ theorem trusted (h : p.Honest I) :
   have g4 : getD p.session "hellos" = .arr (([] : List String).map Json.str).toArray := rfl
   have hsn := Steps.sessionNamed_ok_of_steps (key := p.key) (session := p.session) (c := p.commitment)
     (roots := [(LABEL, [p.after])]) (r := p.record) (lines := p.lines) (hellos := [])
-    (a := { session := SESSION, host := strOf (getD (.obj nbo) "host"), prover := laneOf (.obj nbo),
-      files := getD (.obj nbe) "files", recordLeaf := 1, commitment := strOf (getD (.obj nbe) "commitment"),
-      refusedHellos := 0, pinned := strOf (getD (.obj nbo) "pinned"), period := none, cap := Json.null,
-      circuit := Json.null })
+    (a :=
+      { session := SESSION, host := strOf (getD (.obj nbo) "host"), prover := laneOf (.obj nbo),
+        files := getD (.obj nbe) "files", recordLeaf := 1, commitment := strOf (getD (.obj nbe) "commitment"),
+        refusedHellos := 0, pinned := strOf (getD (.obj nbo) "pinned"), period := none, cap := Json.null,
+        circuit := Json.null })
     (keys?_mkObj (by simp only [List.map_cons, List.map_nil]; decide))
     (by
       rw [g1, g2, g3]
@@ -746,7 +747,7 @@ theorem zeros_size (n : Nat) : (⟨Array.replicate n 0⟩ : ByteArray).size = n 
   show (Array.replicate n 0).size = n
   exact Array.size_replicate ..
 
-end Properties.Challenger.Honest
+end Properties.Challenger.Withheld
 
 namespace Properties.Challenger
 
@@ -754,17 +755,17 @@ open Lean (Json)
 open _root_.Spot _root_.Spot.Challenger
 
 /-- **`FamilyOneCommitment`'s honest lemma**: `Challenger.drawCoins` accepts at the honest deployed instance. A key
-`Lms.keygen` derives at the deployed LMS parameters signs an honest session withheld (`Honest.Play.Honest`): the
+`Lms.keygen` derives at the deployed LMS parameters signs an honest session withheld (`Withheld.Play.Honest`): the
 auditor's device commits to one family of one challenge, records the commitment, logs the root answered and the
 release and closes its log, and the auditor's ledger opens the session on the window and ends it closed. `drawCoins`
 under that key returns the session's challenge. -/
 theorem familyOneCommitment_honest :
     ∃ (seed : ByteArray) (k : Lms.PrivateKey) (w label : String) (after : ByteArray) (coins : Json) (ξ : ByteArray),
       Lms.keygen Lms.deployed seed = .ok k ∧ drawCoins ⟨Lms.deployed, k.publicKey⟩ w label after coins = .ok ξ := by
-  obtain ⟨k, hkg, I, hk⟩ := Honest.keygen_ok (seed := ⟨Array.replicate 64 0⟩) (Honest.zeros_size 64)
-  obtain ⟨p, hpub, -, -, -, -, h⟩ := Honest.exists_honest hk 0 (Honest.zeros_size 64) (Honest.zeros_size 192)
-    (Honest.zeros_size 64) (Honest.zeros_size 64) (Honest.zeros_size 20) .empty .empty
-  have hd := Honest.draws h
+  obtain ⟨k, hkg, I, hk⟩ := Withheld.keygen_ok (seed := ⟨Array.replicate 64 0⟩) (Withheld.zeros_size 64)
+  obtain ⟨p, hpub, -, -, -, -, h⟩ := Withheld.exists_honest hk 0 (Withheld.zeros_size 64) (Withheld.zeros_size 192)
+    (Withheld.zeros_size 64) (Withheld.zeros_size 64) (Withheld.zeros_size 20) .empty .empty
+  have hd := Withheld.draws h
   have hkey : p.key = ⟨Lms.deployed, k.publicKey⟩ := congrArg (ChallengerKey.mk Lms.deployed) hpub
   rw [hkey] at hd
   exact ⟨_, k, _, _, _, _, _, hkg, hd⟩
@@ -776,10 +777,10 @@ theorem familyOneCommitmentRead_honest :
     ∃ (seed : ByteArray) (k : Lms.PrivateKey) (main : Json) (w label : String) (after read : ByteArray) (coins : Json),
       Lms.keygen Lms.deployed seed = .ok k ∧
         coinsReason ⟨Lms.deployed, k.publicKey⟩ main coins w label after read = none := by
-  obtain ⟨k, hkg, I, hk⟩ := Honest.keygen_ok (seed := ⟨Array.replicate 64 0⟩) (Honest.zeros_size 64)
-  obtain ⟨p, hpub, -, -, -, -, h⟩ := Honest.exists_honest hk 0 (Honest.zeros_size 64) (Honest.zeros_size 192)
-    (Honest.zeros_size 64) (Honest.zeros_size 64) (Honest.zeros_size 20) .empty .empty
-  have hd := Honest.reads h
+  obtain ⟨k, hkg, I, hk⟩ := Withheld.keygen_ok (seed := ⟨Array.replicate 64 0⟩) (Withheld.zeros_size 64)
+  obtain ⟨p, hpub, -, -, -, -, h⟩ := Withheld.exists_honest hk 0 (Withheld.zeros_size 64) (Withheld.zeros_size 192)
+    (Withheld.zeros_size 64) (Withheld.zeros_size 64) (Withheld.zeros_size 20) .empty .empty
+  have hd := Withheld.reads h
   have hkey : p.key = ⟨Lms.deployed, k.publicKey⟩ := congrArg (ChallengerKey.mk Lms.deployed) hpub
   rw [hkey] at hd
   exact ⟨_, k, _, _, _, _, _, _, hkg, hd⟩
