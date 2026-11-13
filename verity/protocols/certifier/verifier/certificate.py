@@ -83,6 +83,13 @@ mark to its certificate through that opening (`CertifiedMark.refusal`). The dige
 certificate opens as a record's or a clock's, or either of those as a mark's, only on a SHA-512 collision.
 `Issuer.mark` is the signing step alone: the execution phase is its caller's to give.
 
+An issuer certifies a mark once. Asked for a mark it has signed a certificate of, at any execution phase and for any
+link, it raises (`MarkRefused`): it hands back nothing, takes no coins and uses no leaf. So the mark certificates of
+one issuer are of distinct marks, and a mark has one certificate of it, which names one execution phase. A second
+signer on the key's leaf state signs nothing in a session the state has started (`Signer.start`), so a session's mark
+certificates are those of the issuers on the one signer that started it, and the network certifier's run builds one
+issuer.
+
 **A certificate's bytes** (`Certificate.encode`, its inverse `Certificate.decode`) are its one serialization, every
 field fixed-width or length-prefixed:
 
@@ -363,6 +370,11 @@ def mark_digest(salt: bytes, mark: bytes) -> bytes:
 class SignerRefused(Exception):
     """The signer's one-time-key state is missing, behind or held by another signer, so it signs nothing rather than risk
     reusing a key; or the session it is asked to start is already started."""
+
+
+class MarkRefused(Exception):
+    """The issuer has signed a mark certificate of these 64 bytes already and certifies a mark once: it hands back
+    nothing, takes no coins and uses no leaf."""
 
 
 class Signer(Protocol):
@@ -763,7 +775,8 @@ class Issuer:
     randomness (the operating system's by default; a test injects its own), and `clock_salts` are those its signed
     clock certificates have taken, none of which it takes again. It certifies a mark the same way (`mark`), at the
     execution phase its caller gives, under a salt of the same coins; `mark_salts` are those its signed mark
-    certificates have taken, none of which it takes again."""
+    certificates have taken, none of which it takes again, and `marked` the marks they certify, none of which it
+    certifies again (`MarkRefused`). Its calls are made one at a time: it holds no lock."""
 
     signer: Signer
     session: bytes
@@ -772,6 +785,7 @@ class Issuer:
     coins: Callable[[int], bytes] = field(default=secrets.token_bytes, repr=False)
     clock_salts: set[bytes] = field(default_factory=set, repr=False)
     mark_salts: set[bytes] = field(default_factory=set, repr=False)
+    marked: set[bytes] = field(default_factory=set, repr=False)
 
     def certify(self, record: BlockGrid, direction: Direction, params: GridParams, parameters: bytes, *,
                 deadline: bool = True) -> CertifiedRecord | None:
@@ -811,10 +825,15 @@ class Issuer:
         """The mark certificate of the 64-byte `mark` for `link` at the execution phase `window`, which is the
         caller's to give: the mark salted by `SALT_BYTES` fresh bytes of `coins` (`mark_digest`), signed as an egress
         certificate on `link`'s marks link name (`marks_link`), or None when the signer refuses (that link name's
-        execution phase is then listed in `refused`). Raises `ValueError` on a mark or coins of another length and on
+        execution phase is then listed in `refused`). Raises `MarkRefused`, before it takes a coin or asks its signer
+        anything, on a mark an earlier signed mark certificate of this issuer is of, whatever the link and the
+        execution phase: it certifies a mark once. Raises `ValueError` on a mark or coins of another length and on
         a salt the coins gave an earlier signed mark certificate of this issuer, under which two certificates of one
-        mark would sign one digest. A salt is taken once signed under: a refused one signed nothing, so nothing public
-        shares it."""
+        mark would sign one digest. A salt and a mark are taken once signed under: a refused one signed nothing, so
+        nothing public shares the salt, and the mark is certified when it is asked for again."""
+        if type(mark) is bytes and mark in self.marked:
+            raise MarkRefused("the network certifier has certified this mark, and it certifies a mark once: no second "
+                              "certificate is signed over the same 64 bytes")
         salt = self.coins(SALT_BYTES)
         if len(salt) != SALT_BYTES:
             raise ValueError(f"the certifier's coins gave {len(salt)} bytes for a {SALT_BYTES}-byte salt")
@@ -825,6 +844,7 @@ class Issuer:
         if certificate is None:
             return None
         self.mark_salts.add(salt)
+        self.marked.add(mark)
         return CertifiedMark(mark, salt, certificate)
 
     def sign(self, link: str, direction: Direction, window: int, digest: bytes) -> Certificate | None:
