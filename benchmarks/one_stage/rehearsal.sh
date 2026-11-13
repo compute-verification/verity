@@ -83,10 +83,14 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
       v=${want%%=*}
       [ "${!v-}" = "${want#*=}" ] || no "$v is ${!v-unset}, and the rehearsal serves at $want"
     done
-    for v in ROW PP_CHALLENGER PP_PEER MAIN_FILE PP_CHALLENGER_KEY ALPHA GAMMA LIMITS_UNIT HELD_ALPHA HELD_GAMMA DAY \
-      DAY_PROGRAM DAY_LOG DAY_PARAMS; do
+    for v in ROW PP_CHALLENGER PP_PEER MAIN_FILE PP_CHALLENGER_KEY ALPHA GAMMA LIMITS_UNIT DAY DAY_PROGRAM DAY_LOG DAY_PARAMS; do
       [ -n "${!v-}" ] || no "$v is unset"
     done
+    # the record form's pair of the class, which the limits file states before the first request
+    [ -n "${HELD_ALPHA-}" ] && [ -n "${HELD_GAMMA-}" ] \
+      || no "HELD_ALPHA is ${HELD_ALPHA:-unset} and HELD_GAMMA is ${HELD_GAMMA:-unset}: set both in $1, beside ALPHA and" \
+        "GAMMA, to the record form's pair of the class, the two lines \`rehearsal.sh check\` writes to its" \
+        "record.env.add (limits.json's held)"
     # the record states the class's own two numbers with what they prove
     [ -n "${LIMITS_PROVE-}" ] || no "LIMITS_PROVE is unset: the limits are the class's own two numbers, and the record" \
       "says in a sentence what they prove (the slowdown they prove is 1, that is none)"
