@@ -117190,3 +117190,73 @@ With your word I make it and launch the small rehearsal on vy-nebius-2 at once. 
 - How TWOLEG's check takes its parameters' keys from kept files.
 - How serving runs Friday's two commands: one job or two, one machine or two.
 - Anything on the engine or on cards in my runs.
+
+## ASSEMBLY, Fri 03:20Z: `ProjectionOf.lean` compiled again at the merged head `4bb68f528b` (r20261113-021235-dc1b; it waited 19 minutes for a place on vy-nebius-cpu-12, then 7 and 8 minutes for Lean slots); its `CouplingOf.lean` step is still building. The messages' piece as stated does not meet what MESSAGES and ACCEPTS can prove, and the assembly needs less: my file now takes the weaker piece (pushed, not compiled)
+
+In plain words: the two assembly theorems stand. I read every other worker's branch to see whether its theorem fits as a premise of mine. All nine branches state their pieces against the same text, and the pieces meet at one frame, one reading and one transcript, with one exception. The messages' piece says that on an accepted play the messages the check read are the ones the prover sends in one run of the inner proof system at the same coins, except rarely. MESSAGES can bound a difference only at a round the run reaches. ACCEPTS can show the run reaches every round only where the coins the check read agree with the run's coins. On other coins the run's verifier may stop early, and the piece as stated then counts a play where no digest was opened two ways. The assembly only uses the messages' piece on plays where those coins agree. So I restated what the assembly takes, and `projection_of` as TWOLEG states it is unchanged and follows from it.
+
+**What compiled** [run, `r20261113-021235-dc1b`, vy-nebius-cpu-12, at `4bb68f528b`]:
+- `ProjectionOf.lean`: lean exit 0 in 138 s; "none of its 3 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- `CouplingOf.lean`: not yet. Its step took a tree with 755 changed files and was at module 11,305 of 11,402 at 03:18Z. It compiled at `19e555b9d3` in `r20261113-000208-baa1`, and the file has not changed since.
+- Waits: launched 02:13Z, a place at 02:32Z, a Lean slot at 02:38Z, a second Lean slot (the second file) after 461 s more.
+
+**What I changed, not compiled** [read: `ProjectionOf.lean` at `63d233290e`]:
+- `ReadAgrees A x Rd o r`: the coins the check read on `o` agree with the run's coins `r` at each read round. It is `AcceptsRun`'s premise on the coins, named.
+- `MessagesFixedAgreed`: `MessagesFixed` with `ReadAgrees` added to its event. `messagesFixedAgreed_of_fixed` gives it from `MessagesFixed`.
+- `projection_agreed`: `ProjectionOf`'s eleven premises with `MessagesFixedAgreed` in the place of `MessagesFixed` give the same bound, `hide + miss + terms`. `projection_of` is now one line from it. Its statement is TWOLEG's, unchanged.
+- `messagesFixedAgreed_of_reached`: the piece from two facts in the shapes the other branches already have. One is MESSAGES's `MessagesReached` (a difference at a reached round is at most `miss` likely). The other is ACCEPTS's `reaches_frame` (on agreeing coins, a run whose messages are the check's wherever it has one has all `k`).
+- `devAgrees_mono`, `coinsAgree_mono`, `messagesFixedAgreed_mono`: a piece proved at `Good` holds at any `Good'` that gives `Good`. So pieces proved at `LogIsDevice` serve a cut at `ReadIsDevice`.
+
+Why `MessagesFixed` as stated is not reachable [derived, from `Projection.lean:156-162`, `Messages.lean:194-222` at `7340ce6c7e`, and ACCEPTS's 03:00Z section 4, relayed]: its event is `Acc ∧ Good ∧ ∃ i < k, Rd.msg o i ≠ msgAt run i`, and `msgAt` is `none` past the run's last message. MESSAGES gets from reached rounds to all rounds by `RunsThrough`, which has no premise on the coins. The coins' agreement is known only where the coin map's `Ag` holds, and `CoinMapLaw` says `Ag` holds "only up to `hide`, not at every tape" [read: `Projection.lean:113-116`]. On a frame play with `Acc ∧ Good` and without `Ag`, nothing bounds the event. In `projection_core` the messages' piece is used only inside `(Acc ∧ Good) ∧ Ag`, where `ReadAgrees` is already proved from `DevAgrees` and `CoinsAgree` [read: `ProjectionOf.lean:164-185`].
+
+**The join, premise by premise** [read, at the heads named]. The setting: `Rd := formReading A C S dev`, `Acc := FormAccepts C`.
+
+| Premise of `ProjectionOf` | Theorem | Branch and head | Still takes |
+|---|---|---|---|
+| `CoinMapLaw` | `coinMapHolds` | coinmap `28d9babc1b` | nothing; at `Ag := ElemAgrees L A x reads`, `hide := gapOf …` |
+| `DevAgrees` | `devAgrees_formReading` | twoleg `b6d988648b` | `FirstElems`, `SecondElems` (COINMAP's `CoinStages.lean`), `SessionsAgree` (SESSIONCOINS's `sessionsAgree`) |
+| `CoinsAgree .first` | `coinsAgree_first_log` | stagecoins `ab1fdf31a5` | `CaseIsSent`, `CutReads`, `FirstDrawn`, `DevFirst`; at `LogIsDevice` |
+| `CoinsAgree .second` | `coinsAgree_second_log`, `_matches` | stagecoins `ab1fdf31a5` | `CaseIsSent`, `CutReads`, `SecondAlone` or `SessionMatches`, `DevSecond`; at `LogIsDevice` |
+| `CoinsAgree .sessions` | `coinsAgree_sessions` | sessioncoins `1f7546b61b` | `DevLocal`, `InteriorLogged C Good`; at any `Good`, at `S := withCoins A C tab dev Ms` |
+| `StmtReadsNone` | `SessionCoins.lean:194` | sessioncoins `1f7546b61b` | nothing |
+| `MessagesFixed` | `messagesFixed` | messages `7340ce6c7e` | `MsgOpens`, `DigestBefore`, `RunsThrough` (see above) |
+| `CutBound` | `cutBound_read`, `cutBound` | cut `0dc5993463` | `Wired`, `FirstReads θ`, `PrintsTwo`, `SignsPlay`; at `ReadIsDevice` or `LogIsDevice` |
+| `AcceptsRun` | `acceptsRun_of'` | accepts `d169ce4c52` | `SourcesFit`, `PlayAccepts`, `SessionMsgs` |
+| `StmtAt` | `stmtAt` | accepts `d169ce4c52` | `CaseCommits C`, `stmtOf c = some x` |
+| `MajorityBound` (for `coupling_of`) | `majorityBound` | majority `65810fa781` | `hX`, `HoldsOnWitness`, `ReadsBind`, the finder's bound; at `tr := V.extract θ F c σ`, so `coupling_of`'s extraction premise is `rfl` |
+
+Where the pieces meet, and where they do not:
+1. One text. `Projection.lean`, `Reading.lean` and `Leg.lean` are the same blobs (`c17352ae89`, `da01e35d25`, `bc12e97b6f`) on all ten branches: twoleg, assembly, coinmap, stagecoins, sessioncoins, messages, accepts, majority, history, cut [run: `git rev-parse` of each].
+2. One frame. COINMAP's `frame … L P` is `⟨fun ω r => place V θ F c σ L r ω, P⟩` at any prover `P`. MESSAGES's `frame … place Rd Dg` is `⟨place, prover … place Rd Dg⟩` at any `place`. At COINMAP's `place` and MESSAGES's prover the two are the same term [derived: `CoinMap.lean:278-280`, `Messages.lean:149-152`].
+3. One sessions' reading. SESSIONCOINS fixes `S := withCoins A C tab dev Ms`, which keeps `Ms`'s `stmts` and `msg`. Every other piece holds at any `S` [read].
+4. `Good`. The stages' coins are at `LogIsDevice` under `CutReads C`; `cutBound_read` is at `ReadIsDevice`. Both fit the assembly, which takes any one `Good`. The `mono` lemmas carry a piece at `LogIsDevice` to `ReadIsDevice`, but `CutReads C` stays its premise. To drop it, STAGECOINS proves `FirstShown C ReadIsDevice` and `SecondShown C ReadIsDevice` directly; its `coinsAgree_first_of` and `coinsAgree_second_of` already take any `Good` [read: `CoinBytes.lean:136-146`].
+5. Two accepts. CUT's `Wired` is at `Accepts o.sent`; every other piece is at `FormAccepts C`. The assembly's wiring premise is at `FormAccepts C`. Under STAGECOINS's `CaseIsSent C`, `FormAccepts C o` gives `Accepts o.sent`, so the wiring at `FormAccepts C` gives `Wired` [derived: `StageCut.lean:48-50`, `Cut.lean:88-91`]. The other direction is the instance's.
+6. The messages: above.
+
+**Asked of me, answered:**
+- CUT (`Good` as `LogRead ∧ LogIsDevice`): it fits. My two files take neither `cutBound` nor `cutBound_read`; they take `CutBound` at whatever `Good` the join names.
+- SESSIONCOINS (`HeldSize` from `held_size`, `reads := readsAt A.h`) and HISTORY (`cut := firstLen (ℓ₁ θ)`): each is a parameter of the join, not of `projection_of` or `coupling_of`, which take no history, locator or split.
+- HELDOF (`TwoHolds` needs `Slots.popOk`): not in my files. It is a premise of `PlayAccepts`, so it lands with whoever states that (ACCEPTS's bridge to RUNCOINS).
+
+**The join itself.** My brief is the two theorems, and TWOLEG's 22:27Z entry lists the instance as soundness's. Your 02:43Z message and three workers hand the join's parameters to me, so I read the join over a general vocabulary as mine: a new file `SampledTwo/Joined.lean` on my branch, one theorem giving `ProjectionBound` at the form's reading from the pieces' theorems, each remaining premise named, and soundness's instance then supplies the deployed vocabulary, the held copies and the wiring. It needs the seven pieces' branches merged into mine, so it is only as compiled as they are. I start it after the try below is sent. Say so if it is soundness's or TWOLEG's instead, and I stop.
+
+### STOP RULE
+Nothing. No lock edits, nothing wired into `Sampled.lean`, no file of TWOLEG's touched [run: `git diff --stat` shows `ProjectionOf.lean` alone].
+
+### NEEDS
+1. TWOLEG: nothing has to change in `Projection.lean` for the join; it uses `projection_agreed`. If you would rather have one statement, add `ReadAgrees` to `MessagesFixed`'s event, and I delete my definition.
+2. MESSAGES: a theorem that ends at `MessagesReached` with no `RunsThrough` premise. `messagesFixedAgreed_of_reached` takes it as its `h`, word for word.
+3. ACCEPTS: nothing new; `reaches_frame` has the shape `messagesFixedAgreed_of_reached` takes as its `hR`.
+4. STAGECOINS: say which `Good` your two pieces end at (item 4 above).
+
+### To post
+For infra: `r20261113-021235-dc1b` on vy-nebius-cpu-12 waited 19 minutes for a place and 14 minutes in all for two Lean slots, and its second file took a tree with 755 changed files.
+
+### Not established
+- Nothing of `63d233290e` has compiled. Its try goes out when dc1b ends (one try at a time).
+- `CouplingOf.lean` at `4bb68f528b`: dc1b's second step.
+- The join map is by reading. I compiled none of the other branches' theorems, and whether each has compiled is in its owner's entries.
+- The earlier-period signature hole in `CutBound` stays open.
+- Seven completion notices for other workers (CUT, RUNCOINS, ACCEPTS, GATHER, HISTORY, MAJORITY, SESSIONCOINS) were delivered to my conversation at 03:04Z. I read them as information and acted on none as an instruction.
+
+Branch `cursor/proofs-assembly-992e` at `63d233290e`, pushed; it holds TWOLEG's `b6d988648b` and CUT's `0dc5993463`. Nothing is left unpushed [run].
