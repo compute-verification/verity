@@ -16,9 +16,11 @@ coins (`SessionReading.coin` and `.agree`) and states, at the reading, that the 
 is the device's release for that round (`coinsRead_sessions`), and that the statements' round reads no coin
 (`stmtReadsNone`).
 
-* **A session's layout** (`slotStream`): a session's round `j` is, as one-stage v2 lays out a `--zk` session
-  (`Verity.Sampled.slotAt`), the link's opening (the session stream's round 0) at `j = 0`, and round `k` of its table's
-  rep `r` stream at `j = 2k + r + 1`.
+* **A session's layout** (`slotStream`, `repsOf`): a session's round `j` is the link's opening (the session stream's
+  round 0) at `j = 0`, then its table's rep 0 stream's rounds in order, then its rep 1 stream's: the order in which
+  Flock's deployed verifier takes a session's rounds (`FlockDeploy.custody`: round `j ≥ 1` is the `(j - 1)`-th recorded
+  round, the record's rep streams one after another). It is not one-stage v2's layout of a `--zk` session
+  (`Verity.Sampled.slotAt`), which alternates the two reps.
 * **The session-round locator** (`treesOpened`, `sessLoc`): from the frames before a release only, the run's round a
   session's opening continues. The tree's session is its place among the trees the log opens, in the order it first
   opens each; the round in the session is its stream's slot at the count of that stream's openings before it. The
@@ -58,10 +60,18 @@ open Verity.Sampled.Binding (Read)
 
 /-! ## A session's layout -/
 
-/-- **The stream and the round of a session's round `j`**: the link's opening, the session stream's round 0, at
-`j = 0`; round `k` of the table `tab`'s rep `r` stream at `j = 2k + r + 1` (`Verity.Sampled.slotAt`). -/
-def slotStream (tab : String) (j : ℕ) : String × ℕ :=
-  if j = 0 then (Spot.Challenger.TREE_SESSION, 0) else (repStreamName tab ((j - 1) % 2), (j - 1) / 2)
+/-- **The rounds of a rep** in a session of `K` rounds at one table: the session's rounds are the link's, each of the
+two reps' and the last message's (`FlockDeploy.V`'s `k = 2 + 2 · repRounds`). -/
+def repsOf (K : ℕ) : ℕ := (K - 2) / 2
+
+/-- **The stream and the round of a session's round `j`**, at `R` rounds a rep: the link's opening, the session
+stream's round 0, at `j = 0`; then the table `tab`'s rep 0 stream's rounds in order, round `j - 1` at `1 ≤ j ≤ R`, and
+after them its rep 1 stream's, round `j - 1 - R`. This is the order Flock's deployed verifier takes a session's rounds
+in: `FlockDeploy.custody` checks the session's round `j ≥ 1` against the `(j - 1)`-th recorded round, the record's rep
+streams one after another (`Flock.SessionSpec.repStreams`), each with all its rounds. -/
+def slotStream (tab : String) (R j : ℕ) : String × ℕ :=
+  if j = 0 then (Spot.Challenger.TREE_SESSION, 0)
+  else if j - 1 < R then (repStreamName tab 0, j - 1) else (repStreamName tab 1, j - 1 - R)
 
 /-! ## The session-round locator -/
 
@@ -79,25 +89,27 @@ def openTree : Verity.Frame → Option ℕ
 def treesOpened (log : List Release) : List ℕ :=
   firstsOf [] (log.filterMap fun r => openTree r.frame)
 
-/-- **The round of a session a stream's opening is**, at the session's table `tab`: the link's at the session stream's
-first opening, round `2k + r + 1` at the `k`-th opening of the table's rep `r` stream (`slotStream`); none for any other
-stream or a later opening of the session stream. -/
-def roundOf (tab : String) (name : Option String) (k : ℕ) : Option ℕ :=
+/-- **The round of a session a stream's opening is**, at the session's table `tab` and `R` rounds a rep: the link's
+at the session stream's first opening, round `k + 1` at the `k`-th opening of the table's rep 0 stream below `R`,
+round `R + 1 + k` at the `k`-th opening of its rep 1 stream (`slotStream`); none for any other stream, a later opening
+of the session stream or an opening of the rep 0 stream past its `R` rounds. -/
+def roundOf (tab : String) (R : ℕ) (name : Option String) (k : ℕ) : Option ℕ :=
   if name = some Spot.Challenger.TREE_SESSION ∧ k = 0 then some 0
-  else if name = some (repStreamName tab 0) then some (2 * k + 1)
-  else if name = some (repStreamName tab 1) then some (2 * k + 2)
+  else if name = some (repStreamName tab 0) ∧ k < R then some (k + 1)
+  else if name = some (repStreamName tab 1) then some (R + 1 + k)
   else none
 
 /-- **The session-round locator** at the sessions' first rounds `off`, their round counts `K`, their number `M` and
 their tables `tab`: an opening of tree `i`'s stream `s` after the releases `pre` continues session `t`'s round `j`,
 which is the run's round `off t + j`, where `t` is the tree's place among the trees `pre` opens in the order first
-opened (a tree not yet opened the next), and `j` is the stream's round of the session (`roundOf`) at the count of its
-openings in `pre`; none past the sessions or a session's rounds, and none at a frame that is no opening. It reads only
-the frames of `pre`. -/
+opened (a tree not yet opened the next), and `j` is the stream's round of the session (`roundOf`, at the rounds a rep
+has in a session of `K t` rounds, `repsOf`) at the count of its openings in `pre`; none past the sessions or a
+session's rounds, and none at a frame that is no opening. It reads only the frames of `pre`. -/
 def sessLoc (off K : ℕ → ℕ) (M : ℕ) (tab : ℕ → String) (pre : List Release) : Verity.Frame → Option ℕ
   | .opening i s _ =>
     let t := (treesOpened pre).idxOf i
-    (roundOf (tab t) ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) (openedOf pre i s)).bind fun j =>
+    (roundOf (tab t) (repsOf (K t)) ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?)
+        (openedOf pre i s)).bind fun j =>
       if t < M ∧ j < K t then some (off t + j) else none
   | _ => none
 
@@ -397,8 +409,8 @@ def LocatedOwn (A : Live₂) (C : CaseOf) (tab : ℕ → String) : Prop :=
     ∀ x ∈ located (locOf A tab) (SpotFlock.off A.h t + j) [] l, ∃ recs rec,
       sessionRecords C o = some recs ∧ recs[t]? = some rec ∧
       (∃ i s n, x.1 = .opening i s n) ∧
-      x.2 = ((Verity.Sampled.recordRound rec (slotStream (tab t) j).1 (slotStream (tab t) j).2).map
-        Verity.bitsOfBytes).getD []
+      x.2 = ((Verity.Sampled.recordRound rec (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).1
+        (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).2).map Verity.bitsOfBytes).getD []
 
 /-- **The members' check held of the log the check read** (the form's acceptance, unpacked as the two-stage steps
 unpack it): on a play the form accepts, the interior's release log's lines are ones `coinTreesOf` reads as trees, the
@@ -434,25 +446,29 @@ theorem off_sep {off K : ℕ → ℕ} (hs : ∀ t, off (t + 1) = off t + K t) {t
   · exact absurd h.symm (Nat.ne_of_lt (lt h1 hj'))
 
 /-- The stream and its round a session's round is. -/
-theorem roundOf_slot {tab : String} {name : Option String} {k j : ℕ} (h : roundOf tab name k = some j) :
-    name = some (slotStream tab j).1 ∧ k = (slotStream tab j).2 := by
+theorem roundOf_slot {tab : String} {R : ℕ} {name : Option String} {k j : ℕ} (h : roundOf tab R name k = some j) :
+    name = some (slotStream tab R j).1 ∧ k = (slotStream tab R j).2 := by
   unfold roundOf at h
   split_ifs at h with h1 h2 h3
   · obtain ⟨rfl, rfl⟩ := h1
     cases h
     simp [slotStream]
+  · obtain ⟨rfl, hk⟩ := h2
+    cases h
+    have hs : slotStream tab R (k + 1) = (repStreamName tab 0, k) := by
+      unfold slotStream
+      rw [if_neg (Nat.succ_ne_zero k), if_pos (by omega)]
+      rfl
+    rw [hs]
+    exact ⟨rfl, rfl⟩
   · cases h
-    rw [h2]
-    have e1 : 2 * k + 1 - 1 = 2 * k := by omega
-    have e2 : 2 * k % 2 = 0 := by omega
-    have e3 : 2 * k / 2 = k := by omega
-    simp [slotStream, e1, e2, e3]
-  · cases h
-    rw [h3]
-    have e1 : 2 * k + 2 - 1 = 2 * k + 1 := by omega
-    have e2 : (2 * k + 1) % 2 = 1 := by omega
-    have e3 : (2 * k + 1) / 2 = k := by omega
-    simp [slotStream, e1, e2, e3]
+    have hs : slotStream tab R (R + 1 + k) = (repStreamName tab 1, k) := by
+      unfold slotStream
+      rw [if_neg (by omega), if_neg (by omega)]
+      congr 1
+      omega
+    rw [hs]
+    exact ⟨h3, rfl⟩
 
 theorem mem_firstsOf {x : ℕ} : ∀ (acc xs : List ℕ), x ∈ acc ∨ x ∈ xs → x ∈ firstsOf acc xs
   | acc, [], h => by simpa [firstsOf] using h
@@ -758,8 +774,8 @@ theorem MembersHeld.own (H : MembersHeld lines trees log records tree)
     {pre : List Release} {x : Release} {post : List Release} (he : log = pre ++ x :: post) {n₀ : ℕ}
     (hloc : sessLoc off K M tab pre x.frame = some n₀) :
     ∃ t j i s c rec, t < M ∧ j < K t ∧ n₀ = off t + j ∧ x.frame = .opening i s c ∧ recs[t]? = some rec ∧
-      x.coins = ((Verity.Sampled.recordRound rec (slotStream (tab t) j).1 (slotStream (tab t) j).2).map
-        Verity.bitsOfBytes).getD [] := by
+      x.coins = ((Verity.Sampled.recordRound rec (slotStream (tab t) (repsOf (K t)) j).1
+        (slotStream (tab t) (repsOf (K t)) j).2).map Verity.bitsOfBytes).getD [] := by
   cases hx : x.frame with
   | fresh _ => rw [hx] at hloc; simp [sessLoc] at hloc
   | hello _ => rw [hx] at hloc; simp [sessLoc] at hloc
@@ -798,8 +814,8 @@ theorem MembersHeld.key (H : MembersHeld lines trees log records tree)
     {pre : List Release} {x : Release} {post : List Release} (he : log = pre ++ x :: post) {n₀ : ℕ}
     (hloc : sessLoc off K M tab pre x.frame = some n₀) :
     ∃ t j s c, t < records.size ∧ x.frame = .opening (tree t) s c ∧ j < K t ∧ n₀ = off t + j ∧
-      ((helloSpecs pre)[tree t]?.bind fun sp => sp.streams[s]?) = some (slotStream (tab t) j).1 ∧
-      openedOf pre (tree t) s = (slotStream (tab t) j).2 := by
+      ((helloSpecs pre)[tree t]?.bind fun sp => sp.streams[s]?) = some (slotStream (tab t) (repsOf (K t)) j).1 ∧
+      openedOf pre (tree t) s = (slotStream (tab t) (repsOf (K t)) j).2 := by
   cases hx : x.frame with
   | fresh _ => rw [hx] at hloc; simp [sessLoc] at hloc
   | hello _ => rw [hx] at hloc; simp [sessLoc] at hloc
