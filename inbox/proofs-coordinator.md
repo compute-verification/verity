@@ -137025,3 +137025,32 @@ STOP RULE: not reached. The honest plays have not been replayed yet. After the t
 To post: nothing. Head pushed: `a013df7279`; nothing unpushed. Machine: vy-nebius-cpu-3, run `r20261113-110318-e827`.
 
 Not established: that the new step compiles; that honest plays pass it; that no lock record moves.
+
+## FIRSTACCEPT, Fri 11:05Z: members' names are fixed by the committed window, and a template's members sort together; the hours with and without MEMBERS's further equalities, as far as my one rate reaches
+
+Answers the 10:39Z and 10:49Z messages. My 11:03Z entry has the run these figures come from (`r20261113-103556-a7d5`).
+
+**1. The names are not the driver's.** [read] A member's name is `<template id>/c<j>` (`IF._members`, `name=f"{tid}/c{j}"`), with the template's descriptor id. The verifier derives the members from the window's templates and cap (`IF.members`), and the case's keys are those names (`m.key`). A driver cannot rename them.
+
+**2. A template's members sort together.** [derived] All of a template's members share the prefix `<template id>/`. Strings that share a prefix are contiguous in any lexicographic order, Lean's `String` order and Python's `sort_keys` included. A template has one circuit file [relayed: 298 templates, 298 files]. So in the members' order, each file's members come in one run, and a kept parse can be dropped when the next member names another digest: one parse held at a time.
+- [read] This holds for any window whose members the verifier derives. Whether Thursday's record lists its members instead, and under which names, I cannot read from what I may read. That is vllm's to say from `registration.json`.
+- [guess] A one-slot cache (parse again when the digest changes) gives the equality lemma for any order, and the memory of one parse when the names sort as above.
+
+**3. The equality lemma.** [read] Its statement: for every `slice`, `bs` and list of members `ms`, the kept-parse pass returns what `membersFiles slice bs ms` (`OneStageZk.lean:1200`) returns today. Then `runMembers` is unchanged as a function, so `runMembers_files` (`:1345`) and `membersRun_files` (`:1489`) stand, and soundness's constraint holds: every member's files are still required. It is MEMBERS's to write: the Lean side was ruled MEMBERS's at 10:20Z. I write none.
+
+**4. The hours on Thursday's window.** Only one rate is measured: about 1.0 s a member for a 66 MB circuit, about 15 s per GB of circuit, for everything today's code does for an unsampled member [derived from the run]. That rate includes the parse and both walks, but no lookup tables (the stand-in's templates look up none) and only 308 blobs.
+
+| what the pass does | hours | basis |
+|---|---|---|
+| today: a parse and two walks a member | 26 at the least (6.34 TB); about 480 (20 days) if members spread evenly | [derived] from the measured rate |
+| today's run-wide work, not in my stand-in: tables 1.3 × 10^11 steps, `Blobs.get` 3 × 10^10 comparisons | about 0.05 to 0.5 more | [relayed] the counts; [guess] a rate of 10^8 to 10^9 a second |
+| one parse a file, the two walks still a member | between 1.4 and 26 at the least | not measured: my rate does not split the parse from the walks |
+| one parse and one walk a file, run-wide work once | about 1.4, plus what stays a member | [derived] if all the per-byte cost goes once a file |
+
+**5. A run to split the rate.** Run `r20261113-110416-45a9` on vy-nebius-cpu-7: the same driver, 100 members at K = 2048 and K = 4096. With the 100-member row at K = 128 and 256, it gives the per-byte cost and the cost that stays with each member whatever its circuit. That fills the last row's "plus". I expect it to end by about 11:45Z.
+
+**Not established**
+- Whether Thursday's members are derived or listed, and their names.
+- The split of the 1.0 s between parse, walks and the public file's checks.
+- Any rate for the lookup tables or `Blobs.get` at 102,781 members.
+- That the measured rate holds for circuits up to 21.9 GB.
