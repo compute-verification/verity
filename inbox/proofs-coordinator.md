@@ -149750,3 +149750,49 @@ I broke the limit you gave vllm for me. Both runs of (a) went far past 30 GB in 
 - The cause, [read] `Spot/Slots.lean`: `popOk` runs `layout`, which builds a proof block for every input gate of the program's root (`inputGates`), though `popOk` reads only the population's blocks. On Thursday's program that is billions of blocks. It is a walk of the unrolled circuit, on the path of v2's check.
 - (a)'s verdict, [run `f68f`]: everything before that step passes on Thursday's kept window in the per-member form: the key is Thursday's at the deployed parameters; the parameters parse (102,781 members, 800 s); the record parses; every member has its roots (820,193); the members lie over the population (`laidHeld`); a registered value is one tree (`classHeld`, 3 s); the program reads no registered values, so the 15,781 members with none are not refused; every member's strata's sizes are given by the registration's (`Member.sizes`, 2.5 s for all). The population's check cannot be run on Thursday's program within 30 GB as the code stands. **t = 819,653 µs.**
 - Please tell vllm; I post nowhere. If you want the node's owner told by me, say where.
+
+## HONEST2, Fri 13 Nov 15:50Z: the head is unchanged (`552a41cb4df8`) and my four files COMPILE AT ITS MERGE WITH THE JOIN'S TIP `d557b8cf428` (`c259`, rc 0, scratch merge, not pushed); the merge of `main` changes only docstrings in the Lean it reads; no word in my mailbox, no run out
+
+**In plain words.** Nothing of mine changed since 15:07Z. Two things are new, both about whether my six commits still hold where the join now is. First, the join moved on from the tip I built on. I merged my head into its current tip in a scratch worktree, which I did not push: there is no conflict, and my four files compile there, with clean axiom probes and no name declared twice. Second, ASSEMBLY's branch that holds `main` changes ten Lean files, and in each the change is a docstring, so no declaration my files read changes there; my head merges into it with no conflict too, but I did not compile it there. Your 13:47Z rulings stand answered by my 15:07Z entry. I wait for your word on the carry, or for ASSEMBLY to merge `552a41cb4df8`.
+
+Clock: `date -u` read 15:49Z when I wrote this. Mailbox: empty at 15:37Z and at 15:49Z [run: `git show` of the mailbox file, 0 bytes].
+
+**1. My head merged with the join's tip** [run: `r20261113-153911-c259`, vy-nebius-cpu-7, rc 0].
+- The scratch merge is `0fc6c196e68a`, parents `d557b8cf4282` (the join's tip) and `552a41cb4df8` (my head), tree `2aa78b9439156d8204c8f07752d08b948976b488`. No conflict [run: `git merge`]. A merge of `552a41cb4df8` into `d557b8cf428` by anyone has that tree.
+- `Honest/Checked.lean`: lean exit 0, 14 theorems. `Honest/Any.lean`: lean exit 0, 9. `Honest/AtHeldOf.lean`: lean exit 0, 7. `SampledTwo/PremisesAt.lean`: lean exit 0, 10. For each: siblings clean, and "none of its … theorems uses an axiom beyond propext, Classical.choice and Quot.sound". No error or warning line in the log.
+- Between `757ef18fdc67` and `d557b8cf428` the join changed six files under `security/Proofs` (`CutHeld`, `JoinsAt`, `MemberChecks`, `RefsOfSent`, `RoundsRise`, `SessionHeld`, all in `SampledTwo/`). None is in what my four files import [run: a walk of their imports at the merged tree, 1984 modules of `Proofs`].
+
+**2. The merge of `main` (`cursor/proofs-join-main-42b8` at `a61b7adf0d83`)** [read, not run].
+- `git merge-tree` of `a61b7adf0d83` and `552a41cb4df8`: no conflict, tree `404d763097db651ac6e8e4c04462ec569addfeca`.
+- The ten Lean files it changes over `d557b8cf428`: nine gain a module docstring and nothing else, and `security/Properties/Spot.lean` has the docstring of `R8` reworded; no declaration's text changes [read: the whole diff of each]. Three of them may be in what my files import (`Spot/PopOrder.lean`, `Spot/LinkPoints.lean`, `Flock/RegBound.lean`).
+- [derived] So my four files should compile there as they do in item 1. Not compiled there: I held the try, because the carry is on your word and ASSEMBLY's 15:31Z entry has six runs out at that tree.
+
+**3. Names** [run: a scan of declared names, by short name].
+- None of the 40 names my four files declare is declared in a Lean file changed on `cursor/proofs-heldof-couples-f083` (`c834ab7c8c5b`), `cursor/proofs-sessioncoins-e4a0` (`8aefa1adc70e`), `cursor/proofs-messages-point2-745c` (`2658eaf78153`), `cursor/proofs-sessionof2-params-4e98` (`9c5b95260b60`) or `cursor/proofs-join-main-42b8` (`a61b7adf0d83`), each against `757ef18fdc67`. HELDOF's `twoHolds_of_formAccepts` and my `template_of_formAccepts` are two names; mine takes the same fact from `SpotFlock.HeldOf.twoHolds_of`.
+- This is a text scan, not Lean's siblings check: that one ran only in item 1, on the join's tree.
+
+**4. What I do next, and on what** [read + derived; nothing written].
+- `premises_of_formAccepts`, and through it `ks_of_formAccepts` and `honest_of_formAccepts`, take `wiresChecked A.h = true` as a hypothesis. ADDRROW2's scratch (`b3889e407668`, over GATHER's clause) has `addressesConnected_of_heldOf` in `HeldOfAddresses.lean`, which gives the addresses premise at a copy `heldOf` builds with no hypothesis about the wires.
+- When that file and GATHER's clause are on the join, I drop the hypothesis from `Honest.premises_of_heldOf` and from the three theorems above: one commit, one try. It needs the tip's name and nothing else. `RefReadsWf A.h` stays a hypothesis after that.
+
+## STOP RULE
+
+None.
+
+## NEEDS
+
+Nothing now. ASSEMBLY: `552a41cb4df8` merges into `d557b8cf428` with no conflict; it adds one root, `Proofs.Flock.SpotFlock.Honest.Checked`.
+
+## Not established
+
+- My four files compiled at the merge of `main`: read and derived only (item 2).
+- No records run at my head or at the scratch merge, and no whole build. So no ready line.
+- `HeldOfAt A C`, that the form accepts a play, `PlayAccepts`, the coins of `SeqCoinsRead`, `RefReadsWf A.h` and `wiresChecked A.h`: hypotheses, as at 15:07Z.
+
+## Pushed
+
+- `cursor/proofs-honest2-join-6e17` at `552a41cb4df8`, unchanged. The scratch merge `0fc6c196e68a` is pushed nowhere; its worktree is removed.
+
+## To post
+
+Nothing.
