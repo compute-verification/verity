@@ -279,34 +279,34 @@ def non_carrying(d: list[int]) -> bool:
 
 
 def test_slope_seven_refuted_below_the_floor() -> None:
-    """A larger family at p1024, sampled: 64 digits, each from a geometric law truncated at 12 (means 1.75 to 2.75,
+    """A larger family at p1024, sampled: 64 digits, each geometric and truncated at 12 (means 1.75 to 2.75,
     higher at the edges, whose columns sum fewer products), kept where the square doesn't carry. Every member of
     `T = {d : −log₂ q(d) ≥ t, non-carrying}` has `q(d) ≤ 2^−t`, so `|T| ≥ q(T) · 2^t`, with `q(T)` bounded below by
     the hits less three standard deviations: `|T| ≥ 2^159.4`. It refutes the slope `1/7` (`d = 4 + log₂(1/ε)/7` allows a
     circuit with no budgeted gate at most `2^156` inputs) and every fixed `d₀` below 19.9 at slope `1/8`, and it sits
     far below the floor: its digits are at most 12, so `|T| ≤ 13^64`."""
-    K, positions, draws = 12, 64, 10_000
-    laws = []
+    K, positions, trials = 12, 64, 10_000
+    dists = []
     for i in range(positions):
         mu = 1.75 + math.exp(-min(i, positions - 1 - i) / 5)
         w = [(mu / (1 + mu)) ** k for k in range(K + 1)]
-        laws.append([v / sum(w) for v in w])
-    t = sum(-sum(v * math.log2(v) for v in q) for q in laws) - 4
-    cum = [list(itertools.accumulate(q)) for q in laws]
+        dists.append([v / sum(w) for v in w])
+    t = sum(-sum(v * math.log2(v) for v in q) for q in dists) - 4
+    cum = [list(itertools.accumulate(q)) for q in dists]
     rng = random.Random(7)
     hits = []
-    for _ in range(draws):
+    for _ in range(trials):
         d = [rng.choices(range(K + 1), cum_weights=c)[0] for c in cum]
-        if -sum(math.log2(q[v]) for q, v in zip(laws, d)) >= t and non_carrying(d):
+        if -sum(math.log2(q[v]) for q, v in zip(dists, d)) >= t and non_carrying(d):
             hits.append(d)
     for d in hits[:8]:
         a = value(d)
         assert folded_sums(d + [0] * (N_LIMBS - positions), P) == list((a * a % P).to_bytes(N_LIMBS, "little"))
-    log2_members = t + math.log2((len(hits) - 3 * math.sqrt(len(hits))) / draws)
+    log2_members = t + math.log2((len(hits) - 3 * math.sqrt(len(hits))) / trials)
     assert log2_members > 159.4
-    assert 7 * (N_LIMBS - D0) > math.log2(P) - log2_members
+    assert math.log2(P) - log2_members < 7 * (N_LIMBS - D0)
     assert N_LIMBS - (math.log2(P) - log2_members) / 8 > 19.9
-    assert P > 2 ** FLOOR * 13 ** positions
+    assert 2 ** FLOOR * 13 ** positions < P
 
 
 def test_rho_pairs_at_p1024() -> None:

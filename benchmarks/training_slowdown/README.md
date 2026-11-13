@@ -54,6 +54,11 @@ least 1; None, with the reason in `why`, where the record gives none); `binds` (
 `term`, the count before the floor; `bound`, the calculator's bound with its theorem, least blocks, premises and the
 work it read; `figure`, the choice of that work; and `read`, what the record says of itself.
 
+The work it reads takes one premise on the step's batch, which no record checks (`work.P_BATCH`): past each row's
+first position, no two positions of the batch hold equal words. Every published string that names what the products
+term rests on states it: `formalism.RESTS_ON`, `RESTS_ON_CELL` and `he_rests_on` (a row's `rests_on`, the grade's
+"rests on"), the `premise` part of the library's table and the `proved` part of the grade's periods.
+
 ## The library of training algorithms
 
 ~~~text
@@ -170,7 +175,7 @@ back, and one whose record's fused attention rows `as_math` can't rewrite. `--ou
 verity bench training-slowdown NAME|CONFIG.toml [--dry-run] [--local [--root DIR] | --on MACHINE [--pool NAME]] \
     [--weights]
 python -m training_slowdown.run --config CONFIG.toml --seed 0 --split search|final --out OUT [--starts-root DIR] \
-    [--device cuda] [--keep-weights] [--state DIR]      # one job
+    [--device cuda] [--threads 8] [--keep-weights] [--state DIR]      # one job
 python -m training_slowdown.run --retrace RUN_JSON --out OUT   # a record with its trace taken again
 python -m training_slowdown.capture.circuit STEP.npz    # a saved step circuit's quantities
 python -m training_slowdown.gates [--check]             # gates per multiply-add by op; --check compiles the Definitions
@@ -326,7 +331,10 @@ A job on a CPU computes with oneDNN held below AMX (`ONEDNN_MAX_CPU_ISA=AVX512_C
 its two processes sets the limit itself, over whatever it was started with, before torch computes anything, because
 oneDNN's AMX kernels can return a wrong bf16 product on a virtual CPU and a step run twice then gives two results.
 The record names the variable and the value the route's process set (`cpu_isa`); on a GPU a job sets nothing and
-the field is null.
+the field is null. Each of its processes also holds torch at the job's CPU thread count, `--threads` (default 8,
+`run.THREADS`), before torch computes anything, since what a job trains on a CPU follows that count and the cores
+only its speed. The record states the count (`threads`), and a stopped job continues only at the count its kept
+record states: started at another, it is refused with the `--threads` that continues it.
 
 Run the `python -m` commands from this directory. A start and its data are read where `starts.toml` says a node holds them, and checked
 against it; elsewhere, `research data fetch ART --path starts/NAME/theta.safetensors` (and its `start.json`) gets a
@@ -417,6 +425,12 @@ of M named `tf32` is priced apart from its trace, and ρ is refused.
   traced, so they have no Δ_grad and Fit's check on the training holds at no (c, k): the grade's ρ is never Fit's.
   It is the products term where that exceeds 1, else 1. The reduction and update sensitivities sum the steps that
   have the traced step's cuts, and the block says so where an untraced step's token work fills two blocks or more.
+- The products count charges a token-indexed product for every position past each row's first, as words of its own
+  (`work.P_BATCH`). A batch breaks that, to rounding, where two rows share their first two tokens or more, where a
+  row starts with a run of three or more of one token, and, on a model with no rotation, where two positions hold
+  one token and their tokens up to it, its own included, are in the same proportions (`tests/test_batch_premise.py`
+  holds each on the model's forward). No trace keeps the batch's tokens, so the count takes the premise and measures
+  none of them.
 - Bit-for-bit rebuilds need the run's kernels: families are checked on the run's device, right after it trains.
 
 The suite: `uv run tools/verity/check/suites.py benchmarks/training_slowdown`.

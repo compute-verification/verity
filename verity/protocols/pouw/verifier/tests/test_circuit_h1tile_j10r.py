@@ -12,9 +12,9 @@ import pytest
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.ops.boolean import gemm as BG
 from verity.circuits.refs import runs
 from verity.circuits.types import Array
+from verity.definitions.ops.boolean import gemm as BG
 from verity.protocols.pouw.prover.circuit import h1tile as H
 from verity.protocols.pouw.prover.circuit import seeds as SD
 
