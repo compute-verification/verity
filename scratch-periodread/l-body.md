@@ -51,6 +51,10 @@ In `Proofs/Properties/Spot/PeriodLedger.lean`, the per-place step of `ledgerOfDe
 
 ## Checks
 
-CHECKS
+- **The proof file elaborates, on the three axioms only**: `r20261113-051324-3c1a` on vy-nebius-2 at this head, `5edf7e30ee`. `lean exit 0 in 563 s`; "none of its 12 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- **Its imports build there**: `Properties.Spot.PeriodLedger` with the new statement and finder, and `Proofs.Properties.Spot.PeriodLedger` with `own_line_at` lifted out, so `ledgerOfDevice` still proves.
+- **The first try failed on one line** (`r20261113-050027-499f`, 11 of 12 theorems): `String.toUTF8` is not exposed under the module system, so its injectivity now goes through `String.toUTF8_eq_toByteArray`.
+- **On the head, by hand**: `tests/test_lean_packages.py`, 34 passed.
+- **Not run on the head**: the Lean check (the kernel's replay and the locks' rules) and the quick tier. So of what "proved" asks, two hold (the file elaborates; the axioms are the three) and two do not yet (a full check's replay through the kernel; a reader other than the prover on the statement).
 
 Refs PRF-600
