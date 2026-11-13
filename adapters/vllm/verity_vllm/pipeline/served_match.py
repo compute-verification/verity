@@ -152,6 +152,14 @@ def moe_facts(model: Any) -> dict[str, dict[str, Any]]:
     return {str(m.layer_name): layer(m) for m in runners}
 
 
+def _own_dirs() -> dict[str, str]:
+    """This process's own compile dirs (`engine.env.compile_dirs`); a process that was given none is refused."""
+    dirs = engine_env.compile_dirs()
+    if dirs is None:
+        raise UsageError("this process was not given its own compile dirs (engine.env.own_compile_dirs, ops/served_commit.sh)")
+    return dirs
+
+
 def build_here(src: Any, facts: dict[str, Any], schedule: list[dict[str, Any]], steps: int, out: str) -> dict[str, Any]:
     """The served Build of this process's compile artifact, its GEMMs' cuBLAS routes probed on this GPU; launch_configs.json,
     routes.json and, with fused-MoE layers, moe.json (the process's MoE record, `served_moe.expand`) go to `out`.  Raises
@@ -164,9 +172,7 @@ def build_here(src: Any, facts: dict[str, Any], schedule: list[dict[str, Any]], 
     graphs = glob.glob(os.path.join(facts["cache_dir"], "**", "computation_graph.py"), recursive=True)
     if len(graphs) != 1:
         raise UsageError(f"{len(graphs)} computation_graph.py under {facts['cache_dir']}: one split graph is required")
-    dirs = engine_env.compile_dirs()
-    if dirs is None:
-        raise UsageError("this process was not given its own compile dirs (engine.env.own_compile_dirs, ops/served_commit.sh)")
+    dirs = _own_dirs()
     kw = dict(split_graph=graphs[0], launch_configs=configs, schedule=schedule, steps=steps, capture_sizes=facts["cudagraph_capture_sizes"],
               max_num_seqs=facts["max_num_seqs"], device=device_of(facts))
     if facts.get("moe"):
@@ -277,7 +283,7 @@ class ServedCommit:
                  "populations": {"identities": 0}, "identities": []}
         with open(f"{out}/build_rebuilt.json", "w") as f:
             json.dump(b, f, indent=1)
-        loaded = b.get("artifact") or {"winners": SA.winners(engine_env.compile_dirs()["inductor"])}
+        loaded = b.get("artifact") or {"winners": SA.winners(_own_dirs()["inductor"])}
         diff = SA.differences(self.pin, loaded, SA.PARTS if "artifact" in b else ("winners",))
         with open(f"{out}/artifact_check.json", "w") as f:
             json.dump({"pinned": self.pin["digest"], "loaded": loaded.get("digest"), "equal": not diff, "differences": diff}, f, indent=1)

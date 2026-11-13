@@ -364,7 +364,6 @@
     {"file": "verity_vllm/pipeline/serve_seal.py", "kind": "return-value", "symbol": "port_identities", "detail": ""},
     {"file": "verity_vllm/pipeline/serve_seal.py", "kind": "union-attr", "symbol": "freeze", "detail": ""},
     {"file": "verity_vllm/pipeline/serve_seal.py", "kind": "union-attr", "symbol": "thaw", "detail": ""},
-    {"file": "verity_vllm/pipeline/served_match.py", "kind": "index", "symbol": "ServedCommit.rebuild", "detail": ""},
     {"file": "verity_vllm/pipeline/serving_rows.py", "kind": "assignment", "symbol": "member_rows", "detail": ""},
     {"file": "verity_vllm/pipeline/serving_rows.py", "kind": "assignment", "symbol": "members", "detail": ""},
     {"file": "verity_vllm/pipeline/serving_rows.py", "kind": "assignment", "symbol": "read", "detail": ""},

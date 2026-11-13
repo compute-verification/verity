@@ -121,8 +121,9 @@ def test_a_cache_dir_that_does_not_hold_one_split_graph_is_refused_after_the_lau
 def test_a_process_that_was_not_given_its_own_compile_dirs_is_refused_before_the_build(monkeypatch, process, tmp_path):
     _graph(tmp_path)
     monkeypatch.delenv(engine_env.INDUCTOR_DIR_MARK)
-    with pytest.raises(UsageError, match="was not given its own compile dirs"):
+    with pytest.raises(UsageError) as stop:
         sm.build_here(_Source(), _facts(tmp_path), SCHEDULE, 3, str(tmp_path / "out"))
+    assert str(stop.value) == "this process was not given its own compile dirs (engine.env.own_compile_dirs, ops/served_commit.sh)"
     assert process == []
 
 
