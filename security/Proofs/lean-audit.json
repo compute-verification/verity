@@ -210,8 +210,6 @@
   "Proofs.Flock.SpotFlock.AddressFacts.Connected",
   "Proofs.Flock.SpotFlock.Honest.Instance",
   "Proofs.Flock.SpotFlock.Honest.Wiring",
-  "Proofs.Flock.SpotFlock.Honest.Written",
-  "Proofs.Flock.SpotFlock.Honest.Runs",
   "Proofs.Flock.SpotFlock.Honest.Sits",
   "Proofs.Flock.SpotFlock.SampleBelow",
   "Proofs.Properties.Verity.SampledTwo.CoinPrefix",
