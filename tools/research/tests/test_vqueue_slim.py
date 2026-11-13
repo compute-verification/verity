@@ -429,7 +429,7 @@ def test_start_with_shards_launches_the_after_landing_run_of_every_step_a_shard_
     kw = h.d.beside_args(sha, base)[0]
     assert kw == {"base": base, "agreement": agreement, "no_regenerate": True}
     assert h.posted == [(sha, ",".join(AFTER_LANDING), {**kw, "shard": f"{k}/3", "train_from": OWN_TRAIN}) for k in (1, 2, 3)]
-    assert machines == shard_machines("m1,m2,m3,m4", 3) == ["m1,m4", "m2", "m3"]
+    assert machines == shard_machines("m1,m2,m3,m4", 3) == ["m1,m4,m2,m3", "m2,m3,m4,m1", "m3,m4,m1,m2"]
     assert rec == {"ids": ["r-post-0", "r-post-1", "r-post-2"], "groups": [["r-post-0"], ["r-post-1"], ["r-post-2"]],
                    "tip": sha, "base": base, "at": h.clock, "gate": CHECK,
                    "steps": [s for s in AFTER_LANDING if agreement or s != "lean-agreement"],
@@ -437,6 +437,28 @@ def test_start_with_shards_launches_the_after_landing_run_of_every_step_a_shard_
     whole = start(h.d, sha, base, shards=1)
     assert h.posted[3] == (sha, ",".join(AFTER_LANDING), {**kw, "train_from": OWN_TRAIN}) and machines[3] == "m1,m2,m3,m4"
     assert whole == {**{k: v for k, v in rec.items() if k != "groups"}, "ids": ["r-post-3"]}
+
+
+def test_each_shard_takes_its_own_machines_first_then_every_other_from_the_next_shards_on():
+    """A shard never waits in one machine's line while a slot elsewhere stands free: given one machine of its own (the fifth of
+    five shards over nine machines), its runs queued there behind each other while slots on the other eight stood free.  Its
+    own machines come first, so with slots free the shards keep apart and their caches warm; then every other machine, each
+    shard's from the next shard's own on, so two shards whose own are busy fall back on different machines first."""
+    nine = ",".join(f"m{k}" for k in range(1, 10))
+    assert shard_machines(nine, 3) == ["m1,m4,m7,m2,m3,m5,m6,m8,m9", "m2,m5,m8,m3,m4,m6,m7,m9,m1",
+                                       "m3,m6,m9,m4,m5,m7,m8,m1,m2"]
+    assert shard_machines(nine, 5) == ["m1,m6,m2,m3,m4,m5,m7,m8,m9", "m2,m7,m3,m4,m5,m6,m8,m9,m1", "m3,m8,m4,m5,m6,m7,m9,m1,m2",
+                                       "m4,m9,m5,m6,m7,m8,m1,m2,m3", "m5,m6,m7,m8,m9,m1,m2,m3,m4"]
+    assert shard_machines("m1,m2", 3) == ["m1,m2", "m2,m1", "m1,m2"]          # fewer machines than shards: one own, shared
+    assert shard_machines("m1", 2) == ["m1", "m1"] and shard_machines(nine, 1) == [nine]
+    machines = nine.split(",")
+    for n in (2, 3, 5, 9):
+        lists = [s.split(",") for s in shard_machines(nine, n)]
+        own = [ms[:len(machines[k::n])] for k, ms in enumerate(lists)]
+        assert all(sorted(ms) == sorted(machines) for ms in lists)                    # every machine, once each
+        assert sorted(sum(own, [])) == sorted(machines)                                # the own lists split them
+        assert len({ms[len(o)] for ms, o in zip(lists, own)}) == n                      # the first fallbacks all differ
+    assert all(sorted(s.split(",")) == sorted(machines) for s in shard_machines(nine, 11))
 
 
 @pytest.mark.parametrize("shards", [0, 1, 3, "auto:2"])
@@ -576,7 +598,7 @@ def test_start_with_auto_shards_has_the_candidates_plan_made_and_the_judge_that_
     assert judge(h.d, rec) == Verdict(PENDING)
     assert h.posted == [(sha, ",".join(AFTER_LANDING), {**kw, "shard": f"auto:{k}/6", "shard_plan": str(out / AUTO_PLAN),
                                                         "train_from": OWN_TRAIN}) for k in range(1, 7)]
-    assert machines == shard_machines(h.d.on, 6) == [f"m{k}" for k in range(1, 7)]
+    assert machines == shard_machines(h.d.on, 6) == [",".join(f"m{(k + i) % 6 + 1}" for i in range(6)) for k in range(6)]
     assert rec["plan"]["made"] == {"digest": "d" * 64, "predicted_s": 3600.0} and rec["at"] == h.clock
     ids = [f"r-{k}" for k in range(1, 7)] if detached else [f"r-post-{k}" for k in range(6)]
     said = "launching" if detached else " ".join(ids)
@@ -622,7 +644,8 @@ REST_PLAN = [["lean-audit:*", "lean-build"], ["pytest"]]
 
 
 @pytest.mark.parametrize("shards, plan, heavy", [
-    (3, HEAVY_PLAN, ["m1", "big", "m3"]), (2, REST_PLAN, ["big", "m2"]), (3, None, ["big"] * 3), (1, HEAVY_PLAN, ["big"]),
+    (3, HEAVY_PLAN, ["m1,m2,m3", "big", "m3,m1,m2"]), (2, REST_PLAN, ["big", "m2,m3,m1"]), (3, None, ["big"] * 3),
+    (1, HEAVY_PLAN, ["big"]),
 ], ids=["names-it", "rest", "unread", "whole"])
 def test_with_heavy_on_the_shard_that_audits_security_proofs_alone_launches_on_the_heavy_machines(
         world, monkeypatch, shards, plan, heavy):
@@ -656,7 +679,7 @@ def test_heavy_on_moves_no_run_that_audits_nothing(world, monkeypatch):
                                                                                                          steps, **kw)
     assert "heavy_on" not in start(h.d, sha, base, heavy_on="big")
     assert "heavy_on" not in start(h.d, sha, base, shards=3, audit_from=base, heavy_on="big")
-    assert machines == ["m1,m2,m3", "m1", "m2", "m3"]
+    assert machines == ["m1,m2,m3", "m1,m2,m3", "m2,m3,m1", "m3,m1,m2"]
 
 
 def test_with_heavy_on_the_auto_plan_shard_that_audits_security_proofs_launches_on_the_heavy_machines(
@@ -672,7 +695,7 @@ def test_with_heavy_on_the_auto_plan_shard_that_audits_security_proofs_launches_
     assert rec["heavy_on"] == "big" and machines == []
     shards = [{"parts": HEAVY_PLAN[k]} for k in (0, 2, 1)]
     plans.answers[rec["plan"]["out"]] = ({**_plan_doc(3), "shards": shards}, None)
-    assert judge(h.d, rec) == Verdict(PENDING) and machines == ["m1", "m2", "big"]
+    assert judge(h.d, rec) == Verdict(PENDING) and machines == ["m1,m2,m3", "m2,m3,m1", "big"]
 
 
 @pytest.mark.parametrize("how", ["failed", "lost", "late", "another n"])
@@ -1032,6 +1055,43 @@ def test_the_check_that_gates_stays_pending_while_a_step_it_judges_runs_in_a_sha
     _shards_now(h, tmp_path, running=(step, (3, "circuit-check")))
     assert judge(h.d, rec) == Verdict(PENDING) and "verdict" not in rec and "still_running" not in rec
     _shards_now(h, tmp_path, running=((3, "circuit-check"),))
+    assert judge(h.d, rec) == Verdict(PASS) and rec["still_running"]
+
+
+@pytest.mark.parametrize("unfetched", [1, 3])
+def test_the_check_that_gates_stays_pending_while_a_shard_s_dir_isn_t_fetched(world, monkeypatch, tmp_path, unfetched):
+    """Every step the check is judged on passed in each shard and the first still runs circuit-check, but one shard's run
+    dir wasn't fetched: the running one's, or the third's, which ended and whose one step judged (pytest) the second shard
+    passed too.  What it holds is unread, so the check is pending, its verdict unkept; fetched, the same shard lets it
+    pass."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base, shards=3)
+    _shards_now(h, tmp_path, running=((1, "circuit-check"),))
+    every = h.evidence
+    h.evidence = [d for k, d in enumerate(every, 1) if k != unfetched]
+    assert judge(h.d, rec) == Verdict(PENDING) and "verdict" not in rec and "still_running" not in rec
+    h.evidence = every
+    assert judge(h.d, rec) == Verdict(PASS) and rec["still_running"]
+
+
+def test_the_check_that_gates_stays_pending_while_a_running_shard_s_live_record_names_only_the_preflights(
+        world, monkeypatch, tmp_path):
+    """The third shard passed its preflights and its live record names nothing else yet, so its plan (pytest's other
+    suites among it) is unknown: though pytest passed in the second shard and every other step the check is judged on
+    passed, the check is pending; once that record names the shard's whole plan, circuit-check still running, it passes."""
+    from research.landing import LIVE as LIVE_FILE, PREFLIGHT
+
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base, shards=3)
+    _shards_now(h, tmp_path, running=((3, "circuit-check"),))
+    d = h.evidence[2]
+    planned = (d / "steps.jsonl").read_text(), (d / LIVE_FILE).read_text()
+    (d / "steps.jsonl").write_text("".join(json.dumps({"step": s, "status": "passed"}) + "\n" for s in PREFLIGHT))
+    (d / LIVE_FILE).write_text(json.dumps({"schema": "check-live/v1", "state": "running",
+                                           "steps": [{"step": s, "state": "passed"} for s in PREFLIGHT]}))
+    assert judge(h.d, rec) == Verdict(PENDING) and "verdict" not in rec and "still_running" not in rec
+    (d / "steps.jsonl").write_text(planned[0])
+    (d / LIVE_FILE).write_text(planned[1])
     assert judge(h.d, rec) == Verdict(PASS) and rec["still_running"]
 
 

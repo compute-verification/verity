@@ -5,11 +5,10 @@ from fractions import Fraction
 
 import pytest
 
-from verity.protocols.spot.verifier.profile import Stratified, Stratum
 from verity.commitments.randomness import derive
-
 from verity.protocols.pouw.prover.circuit import ncp2
 from verity.protocols.pouw.prover.circuit import plan as PL
+from verity.protocols.spot.verifier.profile import Stratified, Stratum
 
 
 def _key(tag: bytes = b"r"):
