@@ -218,7 +218,11 @@ def ints_of(raw: bytes, dtype: str) -> list[int]:
 
 def committed_raw(committer: Any, step: int, name: str) -> tuple[bytes, str] | None:
     """`committed_ints`' bytes of ``name`` at ``step`` and its dtype. A plan's metas (`plan_cache.PlanMetas`) are read from its
-    columns, so no `TensorMeta` is built for the read."""
+    columns, so no `TensorMeta` is built for the read. A window whose draw-gated release dropped the bytes answers from what was
+    read just before it (``read_before_release``, `serve_release.Draws.release`), which no bundle holds."""
+    before = getattr(committer, "read_before_release", None)
+    if before is not None and (step, name) in before:
+        return before[step, name]
     metas = committer._layouts.get(step, ())
     if isinstance(metas, PlanMetas):
         if name not in metas.names:
@@ -491,8 +495,10 @@ def window_commit(rc: Any) -> dict[str, Any]:
     """The Commit's own verdict on a finalized window (`RunCommitment`): a run root, no committer errors, and the identity
     check not failed."""
     extra = getattr(rc, "extra", None) or {}
-    ident = extra.get("identity_check") or {}
-    errors = list(extra.get("errors") or [])
+    ident, recorded = extra.get("identity_check"), extra.get("errors")
+    if not ident:
+        ident = {}   # the committer ran no identity check on the window: none failed, and there is nothing of it to report
+    errors = list(recorded) if recorded else []   # a committer that recorded no error leaves the list out
     root = bytes(getattr(rc, "run_root", b"") or b"")
     return {"passed": bool(root) and not errors and int(extra.get("errors_n") or 0) == 0 and ident.get("ok") is not False,
             "run_root": root.hex(), "steps": len(getattr(rc, "steps", ()) or ()), "errors": errors[:10],

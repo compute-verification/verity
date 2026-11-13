@@ -620,7 +620,7 @@ def test_realhf_summary_written():
     """Prints the compressed outcome table from the JSONL rows of this run (for the report)."""
     if not os.path.exists(OUT_PATH):
         pytest.skip("no rows")
-    rows = [json.loads(l) for l in open(OUT_PATH)]
+    rows = [json.loads(line) for line in open(OUT_PATH)]
     rows = [r for r in rows if r.get("importer_head") == GIT_HEAD and r.get("probe", 0) == PROBE]
     print(f"\n{len(rows)} rows @ {GIT_HEAD} probe={PROBE} {PROBE_APPLIED}")
     for r in rows:

@@ -79,7 +79,7 @@ def test_a_slot_taken_while_the_worker_abandons_goes_back_once(monkeypatch):
     com = RS.committer(monkeypatch, retain_levels=False)
     nc, side = com._nc, torch.cuda.Stream()
     t = torch.arange(40 * 1024 // 4, dtype=torch.int32, device="cuda")          # five 8 KiB windows over a ring of four
-    seen: dict[str, object] = {}
+    seen: dict[str, tuple] = {}
 
     def worker() -> None:
         seen["window"] = nc.wait_window(0, 0, side.cuda_stream)                  # marked when the serving thread runs out of slots

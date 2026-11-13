@@ -35,12 +35,13 @@ from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.config import TARGET_NUM_SMS, TARGETS, RowEngine, option, workload_arg
+from verity_vllm.records.schema_ids import TARGET_FAMILY_SCHEMA
 
-#: The names other modules and the tests read here; ``Options`` and ``main`` are the ``target-family`` command.
+#: The names the library's other modules read here; ``Options`` and ``main`` are the ``target-family`` command.
 __all__ = ["Options", "declared_profile", "device_token_of_row", "main"]
 
 FAIL_CLASS = "PRECHECK_FAIL_TARGET_FAMILY"
-SCHEMA = "verity-sweep/target-family/v1"
+SCHEMA = TARGET_FAMILY_SCHEMA
 
 # device token in a row id -> compute capability family: the target table of `config.py`
 DEVICE_FAMILY: dict[str, tuple[int, int]] = TARGETS
@@ -120,12 +121,14 @@ def device_cc() -> tuple[tuple[int, int] | None, str]:
 
 
 def built_target(build_summary: dict) -> tuple[int, int] | None:
-    step = build_summary.get("step") or {}
-    t = step.get("target") or {}
-    cc = _cc(t.get("compute_capability"))
+    step = build_summary.get("step")
+    if not step:
+        return None
+    target = step.get("target")
+    cc = _cc(target.get("compute_capability")) if target else None
     if cc is None:
-        app = step.get("applicability") or {}
-        fam = (app.get("tensor_core_family") or app.get("gemm_target") or "").lower()
+        app = step.get("applicability")
+        fam = (app.get("tensor_core_family") or app.get("gemm_target") or "").lower() if app else ""
         if fam == "hopper":
             return (9, 0)
     return cc

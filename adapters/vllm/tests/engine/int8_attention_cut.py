@@ -111,7 +111,7 @@ def image(group: Group, store: SnapshotStore, last: int) -> dict[int, tuple[np.n
     out = {}
     for a, have in got.items():
         el = np.array(sorted(have), dtype=np.int64)
-        cut = np.flatnonzero(np.diff(el) != 1) + 1
+        cut: np.ndarray = np.flatnonzero(np.diff(el) != 1) + 1
         starts, ends = el[np.r_[0, cut]], el[np.r_[cut - 1, el.size - 1]]
         out[a] = (np.stack([starts, ends - starts + 1], axis=1), np.array([have[e] for e in el.tolist()], dtype=dtype[a]))
     return out
@@ -119,6 +119,7 @@ def image(group: Group, store: SnapshotStore, last: int) -> dict[int, tuple[np.n
 
 def cut(capture: Path, layer: int, steps: set[int], source: dict) -> tuple[list[Event], dict[str, np.ndarray]]:
     store = SnapshotStore(capture)
+    roots: dict[int, list[Root]]
     header, roots, events, arrays = None, {}, [], {}
     root_events: list[Root] = []
     for pre, step in split_steps(read_log(capture / "log.jsonl.gz")):

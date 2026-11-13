@@ -17,7 +17,7 @@ PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 O=${OUT:-$RESEARCH_RUN_DIR/out}
 mkdir -p "$O"
 export PATH=$CUDA/bin:$PATH CUDA_HOME=$CUDA CUDA_DEVICE_ORDER=PCI_BUS_ID
-export PYTHONPATH=$PWD:$PWD/verity/configuration/config:$PWD/adapters/vllm:$PWD/benchmarks/pouw:$PWD/benchmarks/harness${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$PWD:$PWD/tools/config:$PWD/adapters/vllm:$PWD/benchmarks/pouw:$PWD/benchmarks/harness${PYTHONPATH:+:$PYTHONPATH}
 card=
 for ((i = 1; i < $#; i++)); do
   if [[ ${!i} == --card ]]; then j=$((i + 1)); card=${!j}; fi
@@ -32,8 +32,6 @@ POUW_HARNESS_LIB=$(PH_ARCH=$arch POUW_HARNESS_BUILD=${POUW_HARNESS_BUILD:-/works
   bash benchmarks/pouw/harness/native/build.sh 2> "$O/harness-build.log")
 export POUW_HARNESS_LIB
 cp "$(dirname "$POUW_HARNESS_LIB")/build.json" "$O/harness-build.json"
-nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,power.limit --format=csv \
-  -i "$GPU_LEASE_UUID" > "$O/gpu.txt" 2>&1 || true
 sub=$1
 shift
 extra=()

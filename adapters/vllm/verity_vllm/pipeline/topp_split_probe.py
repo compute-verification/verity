@@ -35,6 +35,8 @@ import numpy as np
 from verity_vllm.commit import challenge as CH
 from verity_vllm.config import option
 
+__all__ = ["COMMANDS", "main"]
+
 f32 = np.float32
 NEG_INF_BITS = 0xFF800000
 SPLITS = (1, 2, 4, 8, 16, 32)
@@ -269,13 +271,15 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
     if record_npz:
         record = (np.load(record_npz), json.load(open(record_npz + ".json")))
     cases = build_manifest(seed, with_record=record is not None)
-    o = Path(out); o.mkdir(parents=True, exist_ok=True)
+    o = Path(out)
+    o.mkdir(parents=True, exist_ok=True)
     arrays: dict[str, np.ndarray] = {}
     summary = []
 
     def run_pipeline(x_dev: "torch.Tensor", p_dev: "torch.Tensor", S: int, V: int):
         """stats -> 5 steps -> (instrumented mask on a copy | real mask kernel in place); returns (keep_real, keep_probe, zlane, stats, sc)."""
-        stats = x_dev.new_empty((S, 4)); parts = x_dev.new_empty((1, R, S, F, 3))
+        stats = x_dev.new_empty((S, 4))
+        parts = x_dev.new_empty((1, R, S, F, 3))
         TT._topp_sb_stats_kernel[(S,)](x_dev, x_dev.stride(0), stats, x_dev, p_dev, HAS_K=False, VOCAB_SIZE=V, S=S, BLOCK=8192, num_warps=8)
         for r in range(R):
             TT._topp_sb_step_kernel[(S,)](x_dev, x_dev.stride(0), stats, parts, x_dev, p_dev, r, HAS_K=False, S=S, F=F, NUM_ROUNDS=R, VOCAB_SIZE=V, BLOCK=2048, num_warps=8)
@@ -319,10 +323,12 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
             c["temperature"] = record_temperature(c, record)
             c["x_in_sha"] = __import__("hashlib").sha256(x_in.tobytes()).hexdigest()[:16]    # the checker's TemperatureScale model must reproduce it
         c["p"] = float(p)
-        c["kept"] = int(keep_real.sum()); c["z_nunique"] = int(len(zu))
+        c["kept"] = int(keep_real.sum())
+        c["z_nunique"] = int(len(zu))
         c["probe_keep_eq_real"] = None if keep_probe is None else bool(np.array_equal(keep_probe, keep_real))
         c["ties"] = bool(np.nanmax(sc[:, 4]) < np.nanmax(sc[:, 5])) if not np.isnan(sc).all() else None
-        c["numkeep"] = None if np.isnan(sc[0, 4]) else float(sc[0, 4]); c["numdup"] = None if np.isnan(sc[0, 5]) else float(sc[0, 5])
+        c["numkeep"] = None if np.isnan(sc[0, 4]) else float(sc[0, 4])
+        c["numdup"] = None if np.isnan(sc[0, 5]) else float(sc[0, 5])
         summary.append(c)
         print(json.dumps({k: c[k] for k in ("id", "kind", "S", "V", "p", "kept", "z_nunique", "ties", "numkeep", "numdup", "probe_keep_eq_real")}), flush=True)
     # drain: the real entry point on a stacked batch
@@ -335,7 +341,8 @@ def produce(out: str, record_npz: str | None, seed: int) -> None:
     X = torch.from_numpy(np.stack([r[0] for r in rows]).view(np.int32).copy()).view(torch.float32).to(dev)
     P = torch.tensor([r[1] for r in rows], dtype=torch.float32, device=dev)
     dc["rows"] = [{"seed": dc["seed"] + b, "S_gen": 16 if b % 2 == 0 else 32, "p": float(rows[b][1])} for b in range(len(rows))]
-    dc["num_sm"] = int(num_sm); dc["batches"] = []
+    dc["num_sm"] = int(num_sm)
+    dc["batches"] = []
     for B in drain_batches(num_sm):
         L = X[:B].clone()
         TT._apply_topp_split(L, None, P[:B], float("-inf"), num_sm)

@@ -102,6 +102,21 @@ def test_a_prefix_no_account_links_is_passed_on_with_its_faults_named(tmp_path: 
                     f"FAULTS {faults}")
 
 
+@pytest.mark.parametrize("binding", ["absent", None, {}])
+def test_a_commit_whose_binding_is_absent_null_or_empty_links_no_account_either(tmp_path: Path, said: Lines, binding: Any) -> None:
+    bare, s = sources(tmp_path, binding={}), sources(tmp_path)
+    if binding == "absent":
+        del s.row["commit"]["binding"]
+    else:
+        s.row["commit"]["binding"] = binding
+    arr = {"r0": 0, "r1": 1}
+    kw, facts = C2.executed_prefix_kw(bare, executed(), LINKAGE, arr, LABELS)
+    assert C2.executed_prefix_kw(s, executed(), LINKAGE, arr, LABELS) == (kw, facts)
+    assert all("a_r is not linked" in v["faults"][1] for v in kw["executed_prefix"].values())
+    first, second = said()
+    assert first == second and first.startswith("WARNING [delta] not-executed class -> sampled_replay(executed_prefix=): ")
+
+
 def test_with_no_early_stop_the_facts_pass_quietly_and_a_sample_of_k_takes_none(tmp_path: Path, said: Lines) -> None:
     full = {"a": [5, 6, 7, 8], "b": [5, 6, 7, 8]}
     linked = {"coverage": LINKED["coverage"] | {"commit_account_link": LINKED["coverage"]["commit_account_link"] | {"served_by_request": {"r0": 4, "r1": 4}}}}
@@ -162,6 +177,28 @@ def test_a_disagreement_fails_the_commit_s_coverage_by_name(tmp_path: Path, said
     assert not reconciled(absent, None)["not_executed_reconciliation"]["ok"] and "coverage" not in absent.row["commit"]
 
 
+@pytest.mark.parametrize("binding", ["absent", None, {}, {"population": None}, {"population": {}}, {"population": {"manifest": None}},
+                                     {"population": {"manifest": {}}}, {"population": {"manifest": {"not_executed_by_rule": None}}}])
+@pytest.mark.parametrize("population", ["absent", None, {}, {"not_executed_by_rule": None}])
+def test_a_commit_or_a_population_that_names_no_class_is_reconciled_as_one_whose_class_is_null(
+        tmp_path: Path, said: Lines, binding: Any, population: Any) -> None:
+    null = sources(tmp_path)
+    null.row["commit"]["binding"]["population"]["manifest"]["not_executed_by_rule"] = None
+    want = reconciled(null, None)["not_executed_reconciliation"]
+    assert not want["ok"] and want["problems"]
+    s, sr = sources(tmp_path), Record()
+    if binding == "absent":
+        del s.row["commit"]["binding"]
+    else:
+        s.row["commit"]["binding"] = binding
+    if population != "absent":
+        sr["population"] = population
+    C2.reconcile(s, sr, {}, None, executed(), {"executed_prefix": {}})
+    assert sr["not_executed_reconciliation"] == want and s.row["commit"]["not_executed_reconciliation"] is sr["not_executed_reconciliation"]
+    first, second = said()
+    assert first == second and first.startswith("WARNING [delta] not-executed reconciliation (pair 0): DISAGREE ")
+
+
 def test_nothing_is_reconciled_without_the_class_or_without_an_early_stop(tmp_path: Path, said: Lines) -> None:
     full = {"a": [5, 6, 7, 8], "b": [5, 6, 7, 8]}
     for s, kw, tokens in ((sources(tmp_path), {}, None), (sources(tmp_path, tokens=full), None, full)):
@@ -186,8 +223,10 @@ class Steps:
         self.calls: list[tuple[Any, ...]] = []
         self.replays: list[Record] = []
         self.reader = SimpleNamespace(record=lambda: dict(OPENED))
-        self.loaded: Record = {"r0": {"instances": {"rows": ["p0"]}, "dir": "/programs/r0", "result": {"T": 3}},
-                               "r1": {"instances": {"rows": ["p1"]}, "dir": "/programs/r1", "result": {"T": 3}}}
+        # each Program's one row is of a family with no row kernel and no delegate: a row as `evaluate` may read it, which the
+        # replay evaluates nothing of
+        self.loaded: Record = {"r0": {"instances": {"rows": [{"spec": "NotReplayed_v1{request=0}"}]}, "dir": "/programs/r0", "result": {"T": 3}},
+                               "r1": {"instances": {"rows": [{"spec": "NotReplayed_v1{request=1}"}]}, "dir": "/programs/r1", "result": {"T": 3}}}
         self.progs: Record = {k: v["instances"] for k, v in self.loaded.items()}
         monkeypatch.setattr(C2, "programs_of_record", self.programs_of_record)
         monkeypatch.setattr(C2.SR, "ProgramIndex", self.index)
@@ -231,7 +270,7 @@ def test_the_replay_and_the_linkage_are_given_the_run_s_facts_of_record_and_the_
     arr = {"r0": 0, "r1": 1}
     assert [c[0] for c in steps.calls] == ["programs", "index", "readers", "linkage", "replay", "replay"]
     assert steps.calls[0] == ("programs", LABELS, True)
-    assert steps.calls[1] == ("index", {"rows": ["p0"]}, "/programs/r0")
+    assert steps.calls[1] == ("index", {"rows": [{"spec": "NotReplayed_v1{request=0}"}]}, "/programs/r0")
     assert steps.calls[2] == ("readers", None, "stub", Weights("model."), steps.progs, {"entries": 5}, arr, steps.loaded,
                               {"manifest_digest": "m" * 8}, "row", {"r0": "d" * 8, "r1": "e" * 8})
     linked = steps.calls[3]

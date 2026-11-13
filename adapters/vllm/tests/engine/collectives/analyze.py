@@ -254,12 +254,20 @@ def entry_bytes(run: Path, rank: int, e: dict) -> bytes | None:
     return p.read_bytes() if p.exists() else None
 
 
+def entry_array(run: Path, rank: int, e: dict) -> np.ndarray:
+    """`view_array` of the entry's snapshot.  FileNotFoundError where the rank's directory does not hold the file the index names."""
+    raw = entry_bytes(run, rank, e)
+    if raw is None:
+        raise FileNotFoundError(f"rank {rank}: the snapshot index names {e.get('file')!r}, which the run does not hold")
+    return view_array(raw, e)
+
+
 def view_array(raw: bytes, e: dict) -> np.ndarray:
     """The logical elements of a snapshotted view (spanned-storage-bytes layout) as a uint16/uint32/... array in logical order."""
     v = ViewDesc.from_json(e["view"])
     width = v.itemsize
     kind = {1: np.uint8, 2: np.uint16, 4: np.uint32, 8: np.uint64}[width]
-    flat = np.frombuffer(raw, dtype=kind)
+    flat: np.ndarray = np.frombuffer(raw, dtype=kind)
     # spanned bytes start at the view's first element (min offset); strides are in elements
     base = v.offset * width - int(e["byte_offset"])
     assert base % width == 0
@@ -282,8 +290,10 @@ def f32_to_bf16_rne(f: np.ndarray) -> np.ndarray:
 
 def collective_entries(run: Path, inv_rank: dict) -> dict[tuple, dict]:
     """(step, op, ordinal) -> {'arg0': entry, 'out': entry} from this rank's snapshot index."""
-    by_event = defaultdict(dict)
-    rank = int(re.search(r"rank(\d+)", inv_rank["log"]).group(1))
+    by_event: defaultdict[Any, dict] = defaultdict(dict)
+    named = re.search(r"rank(\d+)", inv_rank["log"])
+    assert named is not None, inv_rank["log"]
+    rank = int(named.group(1))
     for e in load_index(run, rank):
         by_event[e["event"]][e["path"]] = e
     out = {}
@@ -314,8 +324,8 @@ def body_report(run: Path) -> dict[str, Any]:
         res["in_sha"] = {str(r): ins[r]["sha256"][:16] for r in ranks}
         res["out_sha"] = {str(r): outs[r]["sha256"][:16] for r in ranks}
         try:
-            a = {r: view_array(entry_bytes(run, r, ins[r]), ins[r]) for r in ranks}
-            b = {r: view_array(entry_bytes(run, r, outs[r]), outs[r]) for r in ranks}
+            a = {r: entry_array(run, r, ins[r]) for r in ranks}
+            b = {r: entry_array(run, r, outs[r]) for r in ranks}
             dt = ViewDesc.from_json(ins[ranks[0]]["view"]).dtype
             res["dtype"] = dt
             res["shape_in"], res["shape_out"] = list(a[ranks[0]].shape), list(b[ranks[0]].shape)
@@ -360,7 +370,7 @@ def determinism_report(a: Path, b: Path) -> dict[str, Any]:
         ra, rb = inv_a["ranks"][r], inv_b["ranks"][r]
         ea, eb = collective_entries(a, ra), collective_entries(b, rb)
         keys = sorted(set(ea) & set(eb))
-        coll = Counter()
+        coll: Counter = Counter()
         mism = []
         for k in keys:
             for part in ("arg0", "out"):
@@ -373,8 +383,8 @@ def determinism_report(a: Path, b: Path) -> dict[str, Any]:
                     coll[f"{part}_differ"] += 1
                     mism.append({"key": list(k), "part": part, "a": x["sha256"][:16], "b": y["sha256"][:16]})
         # every snapshot entry of every step, aligned by (step, per-step ordinal of (path))
-        def all_entries(run: Path, rank: str = r) -> dict[tuple, str]:
-            out = {}
+        def all_entries(run: Path, rank: str = r) -> dict[tuple, str | None]:
+            out: dict[tuple, str | None] = {}
             seen: Counter = Counter()
             for e in load_index(run, int(rank)):
                 key0 = (e.get("step"), e["path"], e.get("dtype"), tuple(e.get("shape", [])))
@@ -443,11 +453,23 @@ def _dump(doc: dict, out: str | None, default: Path) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    s = sub.add_parser("inventory"); s.add_argument("run"); s.add_argument("--out")
-    s = sub.add_parser("roots"); s.add_argument("run"); s.add_argument("--tp1-log", required=True); s.add_argument("--out")
-    s = sub.add_parser("body"); s.add_argument("run"); s.add_argument("--out")
-    s = sub.add_parser("determinism"); s.add_argument("run_a"); s.add_argument("run_b"); s.add_argument("--out")
-    s = sub.add_parser("unsupported"); s.add_argument("res", nargs="+"); s.add_argument("--out")
+    s = sub.add_parser("inventory")
+    s.add_argument("run")
+    s.add_argument("--out")
+    s = sub.add_parser("roots")
+    s.add_argument("run")
+    s.add_argument("--tp1-log", required=True)
+    s.add_argument("--out")
+    s = sub.add_parser("body")
+    s.add_argument("run")
+    s.add_argument("--out")
+    s = sub.add_parser("determinism")
+    s.add_argument("run_a")
+    s.add_argument("run_b")
+    s.add_argument("--out")
+    s = sub.add_parser("unsupported")
+    s.add_argument("res", nargs="+")
+    s.add_argument("--out")
     a = ap.parse_args(argv)
     if a.cmd == "inventory":
         doc = inventory(Path(a.run))

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import logging
+import struct
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
@@ -223,3 +224,55 @@ def test_the_value_correspondence_passes_only_when_the_replay_the_linkage_and_wh
         f"[delta] boundary_linkage (C2 BOUNDARY LINKAGE, pair 0): {linked} 2/2 (step, request) boundaries linked",
         ("[delta] C2 MOE PLANE ALIAS CHECK (pair 0): ALIAS up != down bytes on 3/4 (request, step, layer) triples, 1 layers, plane words None"
          " -- one triple aliases")]
+
+
+@pytest.mark.parametrize("block", [None, {}])
+def test_a_record_whose_blocks_are_null_or_empty_reads_as_one_that_leaves_them_out(tmp_path: Path, logged: Lines, block: Any) -> None:
+    """`record` reads a replay record's `sample`, `population`, `strata` and `moe_planes` as blocks the record may leave out: a
+    replay that did not run holds none of them, and one that holds them null or empty puts the same on the run's row."""
+    absent, held = sources(tmp_path), sources(tmp_path)
+    sr, lk = {"schema": SAMPLED_REPLAY, "result": None, "grade": "not-evaluated"}, {"schema": BOUNDARY_LINKAGE, "result": None}
+    blocks = dict.fromkeys(("sample", "population", "strata", "moe_planes"), block)
+    C2.record(absent, dict(sr), dict(lk), tmp_path / "sampled_replay_p0.json")
+    lines = logged()
+    C2.record(held, sr | blocks, dict(lk), tmp_path / "sampled_replay_p0.json")
+    assert held.components == absent.components and logged()[len(lines):] == lines and len(lines) == 2
+    assert held.components["sampled_replay"]["population"] == {"n": None, "source": None, "by_family": None, "not_evaluable_by_family": None}
+    assert (held.components["sampled_replay"]["n"], held.components["sampled_replay"]["strata_n"]) == (None, 0)
+    assert held.row["commit"]["sampled_replay"] == absent.row["commit"]["sampled_replay"] | {k: block for k in blocks if k != "strata"}
+    assert held.row["commit"]["sampled_replay"]["strata_n"] == 0
+
+
+@pytest.mark.parametrize("check, layers", [({}, 0), ({"per_layer": None}, 0), ({"per_layer": {}}, 0), ({"per_layer": {"0": {}, "1": {}}}, 2)])
+def test_the_alias_check_s_line_counts_the_layers_the_check_names(tmp_path: Path, logged: Lines, check: Record, layers: int) -> None:
+    sr, lk = evaluated()
+    sr["moe_planes"] = {"alias_check": {"compared": 2, "identical_n": 0, "result": True, "plane_words": 8} | check}
+    C2.record(sources(tmp_path), sr, lk, tmp_path / "sampled_replay_p0.json")
+    assert logged()[-1] == (f"[delta] C2 MOE PLANE ALIAS CHECK (pair 0): OK up != down bytes on 2/2 (request, step, layer) triples, {layers} layers, "
+                            "plane words 8")
+
+
+@pytest.mark.parametrize("sample", [None, {}])
+def test_a_replay_whose_sample_is_null_or_empty_is_kept_with_no_seed_and_counts_no_evaluation(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sample: Any) -> None:
+    sr, lk = evaluated()
+    evaluates(monkeypatch, (sr | {"sample": sample}, lk))
+    readings(monkeypatch, None, None, None)
+    s, cache = sources(tmp_path, **CACHED), Cache()
+    C2.run(s, cache)
+    (kept,) = cache.values()
+    assert kept["seed"] is None and kept["sr"]["sample"] == sample
+    assert s.tl.calls[-1] == ("end", "validate.sampled_replay", {"pair": 0, "ok": True, "n": None, "linkage": True, "reused": False})
+
+
+def test_the_live_replay_reads_a_registered_weight_from_the_engine_s_model() -> None:
+    """`live_weights` is the in-process replay's reader of registered inputs: a field's words from the model's own tensor,
+    under the Program's prefix or without it, and None for a field the model does not hold."""
+    torch = pytest.importorskip("torch")
+    values = [1.0, -2.0, 0.5, 3.0, -0.25, 8.0]
+    model = torch.nn.Linear(2, 3, bias=False)
+    model.weight = torch.nn.Parameter(torch.tensor(values).reshape(3, 2))
+    words = list(struct.unpack("<6I", struct.pack("<6f", *values)))
+    read = C2.live_weights(model, "model.")
+    assert read("model.weight", 0, 6).tolist() == words and read("weight", 2, 5).tolist() == words[2:5]
+    assert read("model.bias", 0, 1) is None and read("model.weight", 0, 7) is None

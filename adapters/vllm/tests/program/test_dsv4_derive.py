@@ -60,6 +60,7 @@ from verity.definitions.numerics.serve3_reference import materialize
 from verity.definitions.registry import bf16_gemm_check as BC
 from verity.definitions.registry import hopper
 
+from tests import fake_vllm
 from tests.program.test_dsa_norm import ptx_block_model
 from tests.program.test_dsv4_indexer import head as inv_rope_head
 from verity_vllm.program.frontend import marlin_moe_leaf as mml
@@ -307,10 +308,9 @@ def test_a_sparse_mla_the_leaves_do_not_model_refuses_at_export(model, refusal):
 
 
 def test_deep_gemms_einsum_is_the_leaf_op_in_every_vllm_module_bound_to_it(monkeypatch):
-    deep_gemm, user = types.ModuleType("vllm.utils.deep_gemm"), types.ModuleType("vllm.o_proj_standin")
-    for module in (deep_gemm, user):
-        module.__dict__["fp8_einsum"] = _launches
-        monkeypatch.setitem(sys.modules, module.__name__, module)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.utils.deep_gemm", "vllm.o_proj_standin"])
+    deep_gemm, user = fake["vllm.utils.deep_gemm"], fake["vllm.o_proj_standin"]
+    deep_gemm.fp8_einsum = user.fp8_einsum = _launches
 
     class _OProj(nn.Module):
         def forward(self, a, a_scale, b, b_scale, c=None):
@@ -381,14 +381,12 @@ class _Routed(nn.Module):
 @pytest.fixture
 def marlin_site(monkeypatch):
     """vLLM's Marlin MoE modules."""
-    mxfp4, oracle = types.ModuleType(mml._MXFP4), types.ModuleType(mml._ORACLE)
-    site, scalar_type = types.ModuleType(mml._MARLIN_MOE), types.ModuleType("vllm.scalar_type")
-    mxfp4.__dict__["Mxfp4MoEMethod"] = _Mxfp4Method
-    oracle.__dict__.update(Mxfp4MoeBackend=types.SimpleNamespace(MARLIN="marlin"), make_mxfp4_moe_kernel=lambda **kwargs: kwargs)
-    scalar_type.__dict__["scalar_types"] = types.SimpleNamespace(float4_e2m1f=types.SimpleNamespace(id=7))
-    site.__dict__["fused_marlin_moe"] = _launches
-    for module in (mxfp4, oracle, site, scalar_type):
-        monkeypatch.setitem(sys.modules, module.__name__, module)
+    fake = fake_vllm.install(monkeypatch, extra=[mml._MXFP4, mml._ORACLE, mml._MARLIN_MOE, "vllm.scalar_type"])
+    oracle, site = fake[mml._ORACLE], fake[mml._MARLIN_MOE]
+    fake[mml._MXFP4].Mxfp4MoEMethod = _Mxfp4Method
+    oracle.Mxfp4MoeBackend, oracle.make_mxfp4_moe_kernel = types.SimpleNamespace(MARLIN="marlin"), lambda **kwargs: kwargs
+    fake["vllm.scalar_type"].scalar_types = types.SimpleNamespace(float4_e2m1f=types.SimpleNamespace(id=7))
+    site.fused_marlin_moe = _launches
     return site
 
 

@@ -18,6 +18,7 @@ from typing import Any
 
 from verity_vllm.acquire.sources.allreduce_norm import FUSED, REDUCED_MEMBER
 from verity_vllm.check.match import xrank_collectives as XC
+from verity_vllm.records.schema_ids import XRANK_PICKS_SCHEMA
 
 ROUTED_WORLD = 8
 
@@ -238,7 +239,7 @@ def dump(st: dict[str, Any], *, settings: dict[str, Any], out_dir: str, seed_hex
             pk["w"] = w_.detach().to("cpu").clone() if w_ is not None else None
         emb = embedding_leg(pk, metas, step, rows, part, mods, tensor_of, unverified) if pk["kind"] == "all_reduce" and XC.is_embedding_site(pk["site"]) else None
         picks.append(dict(pk, part=part, recv=recv, recv_member=rname, why=why, emb=emb))
-    rec = {"schema": "verity/tp2/xrank-picks/v1", "rank": rank, "pair": int(pair), "seed": seed_hex, "strata": plan["strata"], "picks": picks,
+    rec = {"schema": XRANK_PICKS_SCHEMA, "rank": rank, "pair": int(pair), "seed": seed_hex, "strata": plan["strata"], "picks": picks,
            "per_stratum": int(per_stratum), "max_rows": int(max_rows), "steps_in_layout": len(layouts)}
     fn = Path(out_dir) / f"xrank_pair{int(pair)}_rank{rank}.pt"
     torch.save(rec, fn)

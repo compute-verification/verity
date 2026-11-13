@@ -172,14 +172,15 @@ def test_bare_reshape_and_cache_flash_uses_the_module_hint_for_its_group():
 
 
 def test_a_group_without_a_slot_mapping_covers_no_row():
-    """A KV-cache group whose slot mapping is missing, null or empty maps no row: the move is unsupported, having 0 slots."""
+    """A KV-cache group whose slot mapping is missing, null, or empty or zero maps no row: the move is unsupported, having 0 slots."""
     from verity_vllm.observe.fold.patterns import KVCacheUpdate
     events, start = decode_step()
     se = step_events(events)
     rc = next(n for n in se.roots for n in n.walk() if n.op.startswith("_C_cache_ops.reshape_and_cache_flash"))
     bare = dataclasses.replace(rc, enter=dataclasses.replace(rc.enter, module=LAYER, parent=None), children=[])
     absent: dict
-    for absent in ({}, {"slot_mapping": None}, {"slot_mapping": []}):
+    empties: tuple = (None, [], {}, 0, "", False)
+    for absent in ({}, *({"slot_mapping": empty} for empty in empties)):
         g0, g1 = _groups(start, this_layer_group=1)
         g1 = {**{k: v for k, v in g1.items() if k != "slot_mapping"}, **absent}
         res = KVCacheUpdate().match(bare, context(dataclasses.replace(start, kv_groups=[g0, g1]), se.sample))

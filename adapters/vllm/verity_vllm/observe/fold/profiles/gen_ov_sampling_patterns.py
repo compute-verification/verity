@@ -59,21 +59,24 @@ def request_seeds(ctx: StepContext) -> dict[str, int | None]:
     """request id -> seed of the run header's request record (children: the recorded fork fact parent seed + index)."""
     wl = ctx.header.workload or {}
     seeds: dict[str, int | None] = {r["request_id"]: (None if r.get("seed") is None else int(r["seed"])) for r in wl.get("requests", [])}
-    for c in wl.get("children", []):
+    children = wl.get("children")
+    for c in children if children else []:
         seeds[c["request_id"]] = None if c.get("seed") is None else int(c["seed"])
     return seeds
 
 
 def request_temperatures(ctx: StepContext) -> tuple[float, dict[str, float]]:
     s = header_sampling(ctx)
-    per = {p["request_id"]: float(p["temperature"]) for p in s.get("per_request", [])}
+    per_request = s.get("per_request")
+    per = {p["request_id"]: float(p["temperature"]) for p in per_request} if per_request else {}
     return float(s.get("temperature", 0.0)), per
 
 
 def sampling_filters_off(s: dict) -> str | None:
     if s.get("top_k") not in (None, 0, -1) or s.get("top_p") not in (None, 1, 1.0):
         return f"top_k/top_p ({s.get('top_k')!r}/{s.get('top_p')!r})"
-    for p in s.get("per_request", []):
+    per_request = s.get("per_request")
+    for p in per_request if per_request else []:
         if p.get("top_k") not in (None, 0, -1) or p.get("top_p") not in (None, 1, 1.0):
             return f"per-request top_k/top_p ({p.get('top_k')!r}/{p.get('top_p')!r}) for {p.get('request_id')}"
     return None
@@ -211,9 +214,10 @@ class TokenSampleGumbel:
         if not isinstance(x, ViewDesc):
             return None
         st = ctx.scratch.get(SCRATCH_OV)
-        if st is None:
+        if not st:
             return None
-        s1 = st["stage1"].get(x.alloc)
+        by_max = st.get("stage1")
+        s1 = by_max.get(x.alloc) if by_max else None
         if s1 is None or x.shape != s1["local_max"].shape:
             return None
         dim = a.get("dim", a.get("arg1"))
@@ -235,7 +239,8 @@ class TokenSampleGumbel:
         if not isinstance(src, ViewDesc) or not isinstance(idx, ViewDesc):
             return None
         st = ctx.scratch.get(SCRATCH_OV)
-        s2 = None if st is None else st["stage2"].get(idx.alloc)
+        by_idx = st.get("stage2") if st else None
+        s2 = by_idx.get(idx.alloc) if by_idx else None
         if s2 is None or src.alloc != s2["local_argmax"].alloc:
             return None
         dim = a.get("dim", a.get("arg1"))

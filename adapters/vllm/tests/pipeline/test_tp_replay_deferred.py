@@ -10,7 +10,6 @@ import hashlib
 import itertools
 import json
 import struct
-import sys
 import types
 from pathlib import Path
 from typing import Any
@@ -18,6 +17,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from tests import fake_vllm
 from tests.check.opened import commit_steps
 from tests.pipeline.test_config_run import _tp
 from tests.pipeline.test_row import TP_DENSE, _opts
@@ -669,10 +669,10 @@ class _AtLease(Exception):
 
 
 @pytest.mark.parametrize("world, defers", [(2, True), (4, False), (8, True)])
-def test_a_tp_commit_at_an_unproven_world_drops_the_deferral_before_it_takes_its_gpus(tmp_path, monkeypatch, capsys, world, defers):
+def test_a_tp_commit_at_an_unproven_world_drops_the_deferral_before_it_takes_its_gpus(tmp_path, monkeypatch, capsys, caplog, world, defers):
     """The row's `tp-commit --replay-deferred` (REPLAY_DEFERRED=1, as the dispatcher's auto resolves it) run to its GPU lease: at world 4
-    the flag is gone by then, so no rank's finalize defers and nothing is sealed, and the Commit's log says why; worlds 2 and 8, where
-    deferral is proven, still defer."""
+    the flag is gone by then, so no rank's finalize defers and nothing is sealed, and the Commit's log says why, once, on stdout or as a
+    record of the logger; worlds 2 and 8, where deferral is proven, still defer."""
     pytest.importorskip("torch")
 
     t = _tp(tmp_path, "--config-run", "1", "--replay-deferred", "1")
@@ -684,14 +684,14 @@ def test_a_tp_commit_at_an_unproven_world_drops_the_deferral_before_it_takes_its
     def acquire(*a, **k):
         raise _AtLease(args.replay_deferred)
 
-    monkeypatch.setitem(sys.modules, "vllm", types.SimpleNamespace(LLM=None))
+    fake_vllm.install(monkeypatch)
     monkeypatch.setattr(engine_profile, "apply_env", lambda *a, **k: None)
     monkeypatch.setattr(vllm_adapter, "load_workload", lambda *a, **k: {})
     monkeypatch.setattr(lease, "acquire", acquire)
     with pytest.raises(_AtLease) as at:
         TC.main(args)
     assert at.value.args[0] == ("full" if defers else None)
-    said = [ln for ln in capsys.readouterr().out.splitlines() if "--replay-deferred not taken" in ln]
+    said = [ln for ln in [*capsys.readouterr().out.splitlines(), *caplog.messages] if "--replay-deferred not taken" in ln]
     assert said == ([] if defers else [("[tp2commit] --replay-deferred not taken (world 4: deferral is proven at TP2 and TP8 only): every "
                                         "rank's C2 replay runs in its process")])
 

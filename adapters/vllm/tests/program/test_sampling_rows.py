@@ -183,7 +183,7 @@ def test_nv_log1pf_exhaustive_over_every_fp32_word_the_rn_model_and_the_true_rz_
     diff_words, e_lane = [], []
     for lo, hi in ((0x00000001, 0x7F800000), (0x80000001, 0xBF800000), (0xBF800000, 0xFF800001)):
         for start in range(lo, hi, CH):
-            w = np.arange(start, min(start + CH, hi), dtype=np.int64).astype(np.uint32)
+            w: np.ndarray = np.arange(start, min(start + CH, hi), dtype=np.int64).astype(np.uint32)
             l1, l2 = SR.nv_log1pf(w), SR.nv_log1pf_v1_model(w)
             d = l1 != l2
             if d.any():

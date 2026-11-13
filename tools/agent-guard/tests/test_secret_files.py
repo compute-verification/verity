@@ -697,11 +697,7 @@ TRACKED = [
     "openssl pkey -in conf/settings.key",
     "sudo cat conf/env/a.env",
     "timeout 5 cat conf/env/a.env",
-    "cd conf && cat env/a.env",
-    "cd conf/env; grep -n NAME a.env b.env",
-    "cat sub/c.env && cd sub && cat c.env",
     "bash -c 'cat conf/env/a.env'",
-    "bash -lc 'cd conf && cut -d= -f1 env/*.env'",
     "for f in conf/env/*.env; do echo \"== $f\"; cut -d= -f1 \"$f\"; done",
     "while read l; do echo \"$l\"; done < conf/env/a.env",
     "python3 -c \"print(open('conf/env/a.env').read())\"",
@@ -737,6 +733,11 @@ NOT_TRACKED = [
     "cd conf | cat conf/env/a.env",
     "(cd sub); cat c.env",
     "pushd conf; cat env/a.env",
+    # a `cd` the guard would have to follow, and doesn't
+    "cd conf && cat env/a.env",
+    "cd conf/env; grep -n NAME a.env b.env",
+    "cat sub/c.env && cd sub && cat c.env",
+    "bash -lc 'cd conf && cut -d= -f1 env/*.env'",
     "sudo -i cat conf/env/a.env",
     "sudo -i bash -c 'cat conf/env/a.env'",
 ]
@@ -753,6 +754,19 @@ def test_a_file_git_has_committed_is_read_freely_in_its_checkout(hook, checkout,
 @pytest.mark.parametrize("command", NOT_TRACKED)
 def test_a_changed_untracked_linked_or_remote_file_of_that_name_is_still_refused(hook, checkout, command):
     assert hook.secret_file_reason(command, checkout) is not None, command
+
+
+def test_a_cd_that_never_runs_hides_no_secret_behind_a_committed_file(hook, checkout):
+    """The rule followed a `cd DIR` typed before `&&` or `;` as if it ran, so `false && cd sub; cat c.env` read as a read of the
+    committed sub/c.env and passed while the shell printed ./c.env; `eval 'cd ..'` and `$C ..` moved the shell where the rule
+    never looked. It now follows no `cd`: a command with one reads no file freely."""
+    Path(checkout, "c.env").write_text("TOKEN=dummy\n")
+    for command, where in (("false && cd sub; cat c.env", checkout), ("cd sub && cat c.env", checkout),
+                           ("eval 'cd ..'; cat c.env", f"{checkout}/sub"), ("C=cd; $C ..; cat c.env", f"{checkout}/sub"),
+                           ("false && cd .; cat c.env", f"{checkout}/sub")):
+        assert hook.secret_file_reason(command, where) is not None, command
+    assert hook.secret_file_reason("cat sub/c.env", checkout) is None
+    assert hook.secret_file_reason("cat c.env", f"{checkout}/sub") is None
 
 
 def test_without_git_no_file_is_taken_for_committed(hook, checkout, monkeypatch):
@@ -794,8 +808,9 @@ def test_the_hook_denies_it_keeps_a_queued_message_and_its_reason_comes_before_a
 
 def test_the_hook_reads_the_commands_directory_from_the_event_and_guesses_none(checkout):
     assert ask("cat conf/env/a.env", cwd=checkout) == {"permission": "allow"}
-    assert ask("cd conf && cut -d= -f1 env/*.env", cwd=checkout) == {"permission": "allow"}
-    for command, cwd in (("cat changed.env", checkout), ("ssh n1 cat conf/env/a.env", checkout), ("cat conf/env/a.env", "")):
+    assert ask("cut -d= -f1 conf/env/*.env", cwd=checkout) == {"permission": "allow"}
+    for command, cwd in (("cat changed.env", checkout), ("ssh n1 cat conf/env/a.env", checkout), ("cat conf/env/a.env", ""),
+                         ("cd conf && cut -d= -f1 env/*.env", checkout)):
         out = ask(command, cwd=cwd)
         assert out["permission"] == "deny" and "would print an env or credentials file" in out["agent_message"], command
     event = json.dumps({"command": "cat conf/env/a.env", "workspace_roots": [checkout]})        # the workspace's root is a guess at it

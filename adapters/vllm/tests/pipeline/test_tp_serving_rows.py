@@ -125,7 +125,7 @@ def served_tp(tmp_path_factory):
     pytest.importorskip("torch")
     from tests.pipeline import served_tp as ST
 
-    return ST.commit(tmp_path_factory.mktemp("served-tp"), world=2, I=256, law="subset:2")
+    return ST.commit(tmp_path_factory.mktemp("served-tp"), world=2, inter=256, law="subset:2")
 
 
 def _registered(c, rank: int) -> dict:
@@ -254,7 +254,7 @@ def deferred_tp(tmp_path_factory):
     from tests.pipeline import served_tp as ST
 
     root = tmp_path_factory.mktemp("deferred-tp")
-    c = ST.commit(root / "tp", world=2, I=256, law="subset:2", deferred=True)
+    c = ST.commit(root / "tp", world=2, inter=256, law="subset:2", deferred=True)
     c["windows"] = root / "stand-in"
     c["made"] = {r: SRT.from_bundle(c["commit"], r, c["partition"], c["windows"] / f"rank{r}", workers=1) for r in range(2)}
     return c

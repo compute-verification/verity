@@ -13,6 +13,8 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
 )
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
 
+__all__ = ["DSV4_TOPK_PINS", "QKV_RMS_PINS"]
+
 #: kernel pins of the admitted profile `vllm_d9105ea80_sm89_eager` (source: the profile module cited above).
 #: `NUM_SMS` is a TARGET fact: its admitted value is the default `TargetProfile`'s (one source; the active profile overrides it
 #: through `observe_target_profile`, and the GEMM rule then checks every launch against THAT value).

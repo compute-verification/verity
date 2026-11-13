@@ -1,12 +1,13 @@
-"""The package stands apart from the job's machinery: but for the job itself (`run.py`), no module of it imports a
-`run` module (the command, the job), the sandbox or a `research` module, so the machinery can move by path and what
-the library imports brings none of it."""
+"""The package stands apart from the job's machinery: but for the job itself (`run.py`) and the port check
+(`of_record.py`), which counts a config's step under the job's own harness and loop, no module of it imports a `run`
+module (the command, the job), the sandbox, the port check or a `research` module, so the machinery can move by path
+and what the library imports brings none of it."""
 import ast
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parents[1] / "training_slowdown"
-JOB = {PACKAGE / "run.py", PACKAGE / "sandbox.py"}
-MACHINERY = {"run", "sandbox", "research"}
+JOB = {PACKAGE / "run.py", PACKAGE / "sandbox.py", PACKAGE / "of_record.py"}
+MACHINERY = {"run", "sandbox", "research", "of_record"}
 
 
 def machinery(path: Path) -> set[str]:
@@ -26,4 +27,4 @@ def test_no_module_but_the_job_imports_the_jobs_machinery():
     assert names >= {"config.py", "screen.py", "grade.py", "calculator.py", "library.py", "traced.py",
                      "codecs/__init__.py", "routes/subset.py"}
     assert {(p.relative_to(PACKAGE).as_posix(), n) for p in library for n in machinery(p)} == set()
-    assert machinery(PACKAGE / "run.py") == {"sandbox"}
+    assert machinery(PACKAGE / "run.py") == {"sandbox"} and machinery(PACKAGE / "of_record.py") == {"run"}

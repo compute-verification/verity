@@ -6,7 +6,8 @@ skip unless VERITY_REGRESSION_REBUILD=1 (the post-train job), which selects them
 manifest's rows beyond v1 are its "promoted" facts whatever the engine is called (`v2-query`, `q-word` since S1).  A post-flip reference
 row (no `commit_summary.json`) is summarised from its own evidence.  A row's `manifest_flags` replaces POLICIES_OFF.  A merged
 Programs view outlives the trees it was assembled from, and a row's tree evicted under the suite is fetched again.  Each process
-rebuilds in a scratch of its own.  A row's pins are files.toml's, and without it nothing resolves unpinned.
+rebuilds in a scratch of its own.  A row's pins are files.toml's, and without it nothing resolves unpinned.  A check module loads
+neither numpy, torch nor the core `verity` as it is imported.
 """
 from __future__ import annotations
 
@@ -14,6 +15,8 @@ import gzip
 import hashlib
 import json
 import shutil
+import subprocess
+import sys
 
 import pytest
 
@@ -35,8 +38,8 @@ class _Fake(resolver.Row):
         return self.docs[rel]
 
 
-def _ident(op: str, member: str = "out", step: int = 0) -> dict:
-    return {"program_digest": "p", "request_id": "r0", "step": step, "invocation": 0, "op_path": op, "output_member": member,
+def _ident(op: str) -> dict:
+    return {"program_digest": "p", "request_id": "r0", "step": 0, "invocation": 0, "op_path": op, "output_member": "out",
             "element_range": [0, 4], "rank": 0, "family": "instance_outputs"}
 
 
@@ -149,6 +152,17 @@ def test_a_post_flip_reference_row_is_summarised_from_its_own_evidence(tmp_path,
     assert act["rc"] == 0 and act["pass"] is True and act["engine_settings"]["max_num_seqs"] == 8 and act["n_treatment"] == 1
 
 
+@pytest.mark.parametrize(("depth", "inner", "kept"), [(0, "0.5", 0.5), (0, "auto", "auto"), (200_000, "", None)],
+                         ids=["json", "no-json", "nested-past-what-json-reads"])
+def test_an_engine_arg_json_cannot_read_stays_the_text_of_the_command_line(tmp_path, monkeypatch, depth, inner, kept):
+    """`summarize` reads each `--engine-arg` as JSON, and keeps the text of one that `json.loads` does not read, whatever it raises."""
+    row = _post_flip_row(tmp_path, monkeypatch, rc=None)
+    value = "[" * depth + inner + "]" * depth
+    (tmp_path / "rows" / "k" / "commit.log").write_text(f"$ commit --engine-arg x={value} --max-num-seqs 8\n")
+    settings = CS.actual(row)["engine_settings"]
+    assert settings["max_num_seqs"] == 8 and settings["x"] == (value if kept is None else kept)
+
+
 def test_a_post_flip_rows_rc_is_its_verdicts(tmp_path, monkeypatch):
     row = _post_flip_row(tmp_path, monkeypatch, rc=3)
     assert CS.actual(row)["rc"] == 3 and CS.actual(row)["pass"] is False
@@ -215,3 +229,15 @@ def test_two_processes_rebuilding_one_row_share_no_scratch(tmp_path, monkeypatch
 def test_a_rows_manifest_flags_replace_the_policies_off():
     assert MD._flags(resolver.Row("k", {"row": 9}, fixtures={})) == MD.POLICIES_OFF
     assert MD._flags(resolver.Row("k", {"row": 9, "manifest_flags": []}, fixtures={})) == []
+
+
+@pytest.mark.parametrize("name", checks.ORDER)
+def test_importing_a_check_module_loads_neither_numpy_torch_nor_the_core(name):
+    """`tests.regression.checks.<name>`, imported alone in a fresh interpreter: `checks.all_checks()` imports every one of them to lift a
+    contract or to say which apply, and only a recomputation needs numpy, torch or the core `verity`."""
+    code = ("import importlib, sys\n"
+            "before = set(sys.modules)\n"
+            "importlib.import_module(sys.argv[1])\n"
+            "loaded = sorted({m.partition('.')[0] for m in set(sys.modules) - before} & {'numpy', 'torch', 'verity'})\n"
+            "assert not loaded, f'{sys.argv[1]} loads {loaded} as it is imported: import them in the function that recomputes'\n")
+    subprocess.run([sys.executable, "-c", code, f"tests.regression.checks.{name}"], check=True, cwd=resolver.VLLM_ROOT)

@@ -34,7 +34,7 @@ ROWS = "rows-sha512"
 MAX_TOKENS = 3
 
 
-def commit(root: Path, *, world: int = 2, I: int = 256, law: str = "subset:2", deferred: bool = False,
+def commit(root: Path, *, world: int = 2, inter: int = 256, law: str = "subset:2", deferred: bool = False,
            templates: tuple[str, ...] = ()) -> dict:
     """The TP Commit's files under ``root`` (module docstring), and its TP run root, record and windows (deferred: none)."""
     from verity_vllm.check.replay import driver as SR
@@ -46,10 +46,10 @@ def commit(root: Path, *, world: int = 2, I: int = 256, law: str = "subset:2", d
 
     root.mkdir(parents=True, exist_ok=True)
     pf = root / "partition.json"
-    pf.write_text(json.dumps({"templates": [*templates, f"SiluMul_v2{{I={int(I)}}}"], "law": law}))
+    pf.write_text(json.dumps({"templates": [*templates, f"SiluMul_v2{{I={int(inter)}}}"], "law": law}))
     ranks = []
     for r in range(world):
-        c = served_rope.commit(root / "ranks" / f"rank{r}", seed=17 + r, silu="SiluMul_v2", I=I)
+        c = served_rope.commit(root / "ranks" / f"rank{r}", seed=17 + r, silu="SiluMul_v2", I=inter)
         b = root / "build" / f"rank{r}"
         b.mkdir(parents=True)
         shutil.copyfile(c["row_dir"] / "build_request" / "instances.json.gz", b / "instances.json.gz")
@@ -135,7 +135,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--template", action="append", default=[], help="a template the partition holds before SiluMul_v2{I} (repeatable)")
     ap.add_argument("--deferred", action="store_true", help="no window: every rank's replay deferred to its sealed bundle")
     a = ap.parse_args(argv)
-    c = commit(Path(a.out), world=a.world, I=a.I, law=a.law, deferred=a.deferred, templates=tuple(a.template))
+    c = commit(Path(a.out), world=a.world, inter=a.I, law=a.law, deferred=a.deferred, templates=tuple(a.template))
     print(json.dumps({k: str(c[k]) for k in ("commit", "build", "workload", "partition", "windows", "tp_run_root", "world")}))
     return 0
 

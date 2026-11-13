@@ -8,7 +8,14 @@ from types import SimpleNamespace
 import pytest
 
 from verity_vllm import config
-from verity_vllm.pipeline import advice, cli, commit_plan, research_tools, serve_seal, source_identity
+from verity_vllm.pipeline import (
+    advice,
+    cli,
+    commit_plan,
+    research_tools,
+    serve_seal,
+    source_identity,
+)
 from verity_vllm.pipeline.row_driver import RESEARCH
 from verity_vllm.pipeline.tp import commit as tp_commit
 

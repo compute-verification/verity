@@ -184,7 +184,7 @@ names = {"l8": (2048, 32), "l8x8k": (8192, 32), "l8x32k": (32768, 8)}
 for name, (s, h) in names.items():
     (o / f"gate_{name}_meta.json").write_text(json.dumps({"m": h * s, "n": s, "k": 128}))
 EOF
-$PY $D/eps_profile.py "$O" --mm benchmarks/pouw/machine_model --json "$O/profile.json" --toml "$O/profile.toml" \
+$PY $D/eps_profile.py "$O" --mm benchmarks/machine_model --json "$O/profile.json" --toml "$O/profile.toml" \
   --toml-arms "hm,hsm,fu" > "$O/profile.md" 2> "$O/profile.err"
 echo "profile rc $?" >> "$O/rc.txt"
 wait $apv_ref $cg_ref

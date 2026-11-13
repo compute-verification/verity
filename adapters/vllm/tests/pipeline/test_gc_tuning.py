@@ -1,4 +1,4 @@
-"""verity_vllm.pipeline.gc_tuning: process-level cyclic-GC thresholds for the Build's derives and compose, the fold worker, the Match
+"""verity_vllm.gc_tuning: process-level cyclic-GC thresholds for the Build's derives and compose, the fold worker, the Match
 checkers and the manifest build.
 
 The setting is content-neutral by construction (the collector only frees unreachable cycles); these tests pin
@@ -9,19 +9,21 @@ digest, instances, steps and report are identical under the interpreter defaults
 """
 from __future__ import annotations
 
+import ast
 import gc
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
 from tests.observe.test_fold_synthetic import memory, toy_log, toy_profile  # noqa: F401  (memory: fixture)
+from verity_vllm import gc_tuning
 from verity_vllm.observe.fold.fold import fold
-from verity_vllm.pipeline import gc_tuning
 
 PROBE = ("import gc, json, sys\n"
-         "from verity_vllm.pipeline.gc_tuning import tune\n"
+         "from verity_vllm.gc_tuning import tune\n"
          "before = gc.get_threshold(); r = tune(); after = gc.get_threshold()\n"
          "print(json.dumps({'before': before, 'ret': r, 'after': after}))\n")
 
@@ -61,7 +63,7 @@ def test_env_contract_in_a_fresh_interpreter(value, expect):
 
 
 EXIT_PROBE = ("import atexit, gc\n"
-              "from verity_vllm.pipeline.gc_tuning import tune\n"
+              "from verity_vllm.gc_tuning import tune\n"
               "n0 = gc.get_freeze_count()\n"
               "atexit.register(lambda: print('frozen' if gc.get_freeze_count() > n0 else 'unfrozen', flush=True))\n"
               "tune(); tune()\n")
@@ -180,3 +182,38 @@ def test_the_entry_points_call_tune():
     assert "gc_tuning import tune" in inspect.getsource(global_match.main)
     assert "gc_tuning import tune" in inspect.getsource(batch_decomp.main)
     assert "gc_tuning import tune" in inspect.getsource(manifest.main)
+
+
+def test_the_older_path_is_the_same_tune():
+    """`pipeline.gc_tuning.tune` is the module's own function, so the heap is frozen once whichever path a caller takes."""
+    from verity_vllm.pipeline import gc_tuning as older
+    assert older.tune is gc_tuning.tune and older.__all__ == ["tune"]
+
+
+def _imported_modules(path: Path, package: list[str]) -> set[str]:
+    """Every module an import statement of the file names: `import a.b` as `a.b`, `from a import b` as `a` and `a.b`, and a
+    relative one from the file's own package."""
+    out: set[str] = set()
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            out.update(a.name for a in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            above = package[:len(package) + 1 - node.level] if node.level else []
+            base = ".".join([*above, *([node.module] if node.module else [])])
+            out.update({base, *(f"{base}.{a.name}" for a in node.names)})
+    return out
+
+
+def test_only_the_two_match_checkers_read_the_older_path():
+    """A test that replaces `tune` replaces the name its caller reads. The older path hands the same function on under a second
+    name, so a replacement made there never reaches a caller that reads `verity_vllm.gc_tuning`, which then tunes the test
+    process itself. So nothing but the two Match checkers, and the test above, imports the older path."""
+    root = Path(__file__).resolve().parents[2]
+    readers = set()
+    for path in sorted([*(root / "verity_vllm").rglob("*.py"), *(root / "tests").rglob("*.py")]):
+        if "gc_tuning" in path.read_text(encoding="utf-8"):
+            package = list(path.relative_to(root).parent.parts)
+            if "verity_vllm.pipeline.gc_tuning" in _imported_modules(path, package):
+                readers.add(path.relative_to(root).as_posix())
+    assert readers == {"tests/pipeline/test_gc_tuning.py", "verity_vllm/check/match/batch_decomp.py", "verity_vllm/check/match/global_match.py"}, (
+        f"import it from `verity_vllm.gc_tuning`, never from `verity_vllm.pipeline.gc_tuning`: {sorted(readers)}")

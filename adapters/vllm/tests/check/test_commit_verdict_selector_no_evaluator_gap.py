@@ -16,6 +16,8 @@ has no fold instance) and `result` is None there -- that partiality is not about
 plane-fed FAIL still leads when both are present; greedy rows (TokenSelect_v1 HAS an evaluator) are byte-identical."""
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from verity.definitions.numerics.rows import EVALUATORS
 
@@ -43,22 +45,22 @@ K_SEL = "no registered evaluator for GumbelTopPTokenSelect_v1"
 # the first stochastic row of record's sampled_replay_p0.json population (llama32-1b L40S B1 256/32 stoch-t0.8-p0.95):
 # the NOT_YET domain (RoPE 9184, Attention 4592) + the 32 selector outputs (one per step) with no evaluator; the Const* structure rows are
 # counted by family only (no identity) and are not in not_evaluable
-SR_STOCH = {"result": True, "grade": "complete", "why": None,
-            "sample": {"evaluated": 919, "equal": 919, "mismatch_n": 0, "not_evaluated_n": 0},
-            "strata_unevaluated": [], "unevaluated_strata": [],
-            "population": {"vus": 32750, "not_evaluable": {K_ROPE: 9184, K_ATTN: 4592, K_SEL: 32},
-                           "not_evaluable_by_family": {"RoPE_v1": 9184, "Attention_v3": 4592, "GumbelTopPTokenSelect_v1": 32}}}
+SR_STOCH: dict[str, Any] = {"result": True, "grade": "complete", "why": None,
+                            "sample": {"evaluated": 919, "equal": 919, "mismatch_n": 0, "not_evaluated_n": 0},
+                            "strata_unevaluated": [], "unevaluated_strata": [],
+                            "population": {"vus": 32750, "not_evaluable": {K_ROPE: 9184, K_ATTN: 4592, K_SEL: 32},
+                                           "not_evaluable_by_family": {"RoPE_v1": 9184, "Attention_v3": 4592, "GumbelTopPTokenSelect_v1": 32}}}
 # a greedy dense row (phi3 B8 256/32): the NOT_YET domain only -- TokenSelect_v1 has an evaluator
 SR_GREEDY = {**SR_STOCH, "population": {"vus": 242048, "not_evaluable": {K_ROPE: 68480, K_ATTN: 34240}, "not_evaluable_by_family": {"RoPE_v1": 68480, "Attention_v3": 34240}}}
 
 # the same row's oracle_compare (runs.jsonl commit/oracle_compare): result None / grade attribution-complete -- value-partial on
 # instance_outputs (32 'no fold instance of this op at this step' = the selector's own instance output), the 32 sampled ids all compared
-OC_STOCH = {"result": None, "grade": "attribution-complete", "complete": False, "compared": 6304, "mismatch_n": 0,
-            "compared_by_family": {"input_token_ids": 32, "instance_outputs": 6240, "sampled_token_ids": 32},
-            "not_compared_by_family": {"hidden_stream": 512, "instance_outputs": 32},
-            "not_compared": {"no oracle family: hidden_stream": 512, "no fold instance of this op at this step": 32},
-            "attribution": {"complete": True, "pairs": 32, "unverified": [], "unverified_n": 0, "ambiguous_steps": [], "requests": ["r0"]},
-            "steps_not_snapshotted": []}
+OC_STOCH: dict[str, Any] = {"result": None, "grade": "attribution-complete", "complete": False, "compared": 6304, "mismatch_n": 0,
+                            "compared_by_family": {"input_token_ids": 32, "instance_outputs": 6240, "sampled_token_ids": 32},
+                            "not_compared_by_family": {"hidden_stream": 512, "instance_outputs": 32},
+                            "not_compared": {"no oracle family: hidden_stream": 512, "no fold instance of this op at this step": 32},
+                            "attribution": {"complete": True, "pairs": 32, "unverified": [], "unverified_n": 0, "ambiguous_steps": [], "requests": ["r0"]},
+                            "steps_not_snapshotted": []}
 
 
 def test_the_class_label_is_the_domains_and_the_family_is_not_in_the_domain():

@@ -7,13 +7,15 @@ import random
 
 import pytest
 
-from verity.protocols.pouw.verifier import leaf_lanes as LL
 from verity.protocols.pouw.prover.circuit import h1tile as H
+from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity.protocols.pouw.prover.circuit import seeds as SD
 from verity.protocols.pouw.prover.circuit import segment as SG
+from verity.protocols.pouw.verifier import leaf_lanes as LL
 from verity.protocols.spot.verifier.one_stage import produced as PR
 from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.spot.verifier.one_stage import registration as R
 
 SALT, POSITION, ROOTS = bytes(range(64)), 11, (b"\x01" * 64, b"\x02" * 64)
 
@@ -94,7 +96,7 @@ def test_the_statement_set_and_its_reads():
 
 def test_every_statements_partials_are_registered_reads_and_an_unregistered_row_does_not_open():
     """A port the verifier's registered reads (``own``) don't name is free in the checked relation, so in
-    each of the 33 statements every port reading the partials is a registered read of the after-draw tree at its row."""
+    each of the 33 statements every port reading the partials is a registered read of the produced tree at its row."""
     for kind, ln in LL.statements(32, 32):
         got = {p: r for p, (v, r) in LL.reads(32, 32, kind, ln).items() if v == LL.PARTIALS}
         assert got == ({LL.PARTIALS: ln} if kind == LL.LANE else {f"p{x}": x for x in range(32)})
@@ -219,7 +221,7 @@ def test_a_statements_registered_file_reads_each_value_at_its_row_under_its_root
 
 def test_a_statements_row_ports_and_only_those_are_read_in_full():
     """Lane l's ``a<s>``, ``b<t>`` and ``partials`` and the combine's ``p<x>`` are marked ``read_in_full``, which
-    flock-verify holds to one row of the registered row's words (`KnownRead.fullRows`, proofs'
+    `verity verify proof` holds to one row of the registered row's words (`KnownRead.fullRows`, proofs'
     `PouwWindow.Lanes.readFull`); ``zy``, which each lane reads only at its own cells, and ``receipt`` are not."""
     reg, pd = "ab" * 64, "12" * 64
     vals = [LL.PARTIALS, LL.RECEIPT, LL.A, LL.B, LL.ZY]
@@ -239,8 +241,6 @@ def test_the_verifiers_entries_are_the_registrations_and_the_produced_records():
     """Each registered value's entry and root are the registration's first of its value; the partials' are the
     verifier's own entry under the registration's digest at the produced record's root, over any registered entry of
     that name (Lean's `PouwWindow.Lanes.roots?`)."""
-    from verity.protocols.spot.verifier.one_stage import registration as R
-
     e = {v: {"value": v, "root": f"{i:02x}" * 64, "leaves": 4, "words": 2, "domain": f"{i + 8:02x}" * 64}
          for i, v in enumerate((LL.A, LL.B, LL.PARTIALS))}
     rec = {"format": "verity/registration/v2", "program": "12" * 64,
@@ -264,8 +264,6 @@ def test_a_j10r_leafs_statements_and_every_port_are_its_v2_definitions(k):
     """A J10-R leaf's statements are `h1zy.lane_statements` lane by lane, then the combine, and each one's registered
     ports (`own`) are exactly its Definition's Flock ports (`h1zy.statement_ports`), ``o0`` among them; statement i's
     ``o0`` reads row i of ``oks`` and the combine's ``ok<i>`` the same row."""
-    from verity.protocols.pouw.prover.circuit import h1window as HW
-
     t, n = HW.h1_tile(k, (32, 32), H.PouwH1Tile5), LL.n_chunks(k)
     sts = LL.statements(32, 32, j10r=k)
     assert sts[-1] == (LL.COMBINE, None) and len(sts) == 32 * n + 1
@@ -317,8 +315,6 @@ def test_a_j10r_chunks_rows_carries_and_partials():
 def test_a_j10r_lanes_pub_row_is_v1s_then_its_call_and_blocks_then_its_index():
     """A J10-R lane's ``pub`` row is v1's 100 words, then its call's and its two blocks' leaves as the unit reads them
     (`seeds.position_leaves`), 12 words, then the index, at the fields `h1zy.statement_ports` states."""
-    from verity.protocols.pouw.prover.circuit import h1window as HW
-
     call, blocks = 0x0123456789ABCDEF, (5, 1 << 40)
     w = LL.pub_words(SALT, POSITION, ROOTS, 9, call=call, blocks=blocks)
     assert len(w) == 113 == sum(LL.PUBLIC_J10R_BITS) // 16 and w[:100] == LL.pub_words(SALT, POSITION, ROOTS, 9)[:100]
@@ -363,10 +359,8 @@ def test_a_j10r_leafs_known_rows_and_registered_files():
 
 
 def test_the_verifiers_entries_of_a_j10r_leafs_produced_values():
-    """With ``values`` (`produced_values`) every after-draw value's entry is the verifier's own under the registration's
+    """With ``values`` (`produced_values`) every produced value's entry is the verifier's own under the registration's
     digest at the produced record's root, and a value the record lacks is refused by name."""
-    from verity.protocols.spot.verifier.one_stage import registration as R
-
     rec = {"format": "verity/registration/v2", "program": "12" * 64, "registered": []}
     vals = LL.produced_values(32, 32, 8192, j10r=True)
     produced = {"produced": [{"value": v, "root": f"{i:02x}" * 64} for i, v in enumerate(vals)]}

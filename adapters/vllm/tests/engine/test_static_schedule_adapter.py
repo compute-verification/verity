@@ -4,12 +4,11 @@ engine whose tokens depend on the prompt, so an EOS stop makes the schedule depe
 from __future__ import annotations
 
 import json
-import sys
-import types
 from types import SimpleNamespace
 
 import pytest
 
+from tests.fake_vllm import install
 from verity_vllm.engine import static_schedule
 
 EOS = 0
@@ -21,9 +20,7 @@ def _va():
 
 @pytest.fixture
 def fake_vllm(monkeypatch):
-    mod = types.ModuleType("vllm")
-    mod.__dict__.update(SamplingParams=lambda **kw: SimpleNamespace(**kw))
-    monkeypatch.setitem(sys.modules, "vllm", mod)
+    install(monkeypatch).set("vllm:SamplingParams", lambda **kw: SimpleNamespace(**kw))
 
 
 class _Core:

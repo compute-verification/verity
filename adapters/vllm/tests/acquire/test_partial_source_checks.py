@@ -120,3 +120,9 @@ def test_a_received_output_of_no_decoder_layer_is_refused_by_name():
     com, run = commit_steps({0: [("model.mlp.experts/out", b"a" * 8), ("model.norm/0", b"b" * 8)]})
     with pytest.raises(ValueError, match=r"^model\.mlp\.experts/out: a fused-MoE received output of no decoder layer"):
         P.late_read_check(com, run, 0)
+
+
+def test_the_detectors_record_carries_its_schema_id_and_its_rank():
+    com, run = commit_steps({0: [("model.norm/0", b"b" * 8)]})                 # a dense rank: no received output to compare
+    res = P.late_read_check(com, run, 1)
+    assert (res["schema"], res["rank"], res["applicable"], res["result"]) == ("verity/commit-integ/t6_4-check/v1", 1, False, None)

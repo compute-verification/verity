@@ -25,8 +25,9 @@ The wiring has two halves, each read at a run with no hypothesis that the outer 
   session's view is a run of the proof system's verifier against the session's prover at every run of the outer
   verifier (`served_eval`).
 * **The code's half** (`session_acc_msg`, `run_msgs_of_answered`, `session_acc_run`): a session whose view accepted
-  is not the refused one, so every round before the session's was answered with a message; round 2 is answered only
-  where the session statements' check `stmtOk` passed, and the session's statement is the checked unit's.
+  is not the refused one, so every round before the session's was answered with a message; round `stage + 1` is
+  answered only where the session statements' check `stmtOk` passed, and the session's statement is the checked
+  unit's.
 
 Those are the premises of `Reveals` (the decoded values' openings pass at every gate the proof block needs), which the
 frame's construction gives under `Built` and `Addresses`. `Reveals` is stated at an accepted transcript (`seenAt`);
@@ -89,107 +90,181 @@ namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy
 
-/-! ## A run whose round 2 was answered -/
+/-! ## A run whose session statements' round was answered -/
+
+/-- A transcript whose last round was refused has no message answered there or after. -/
+theorem getElem?_concat_rej {l : List (Msg × Out)} {a m y : Msg} {i : ℕ} (hi : l.length ≤ i)
+    (h2 : (l ++ [(a, Out.rej)])[i]? = some (m, Out.msg y)) : False := by
+  rw [List.getElem?_append_right hi] at h2
+  cases hd : i - l.length with
+  | zero =>
+    rw [hd] at h2
+    simp at h2
+  | succ j =>
+    rw [hd] at h2
+    simp at h2
 
 section Steps
 
 variable {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn : List Msg → OC Out)
 
-/-- **A run whose verifier answers its first two rounds and checks its third**, and whose third round was answered
-with a message, answered it with nothing at a check that passed. The run need not accept. -/
-theorem stepWith_three_msg (c₀ c₁ : Msg) (ok : Msg → Msg → Bool) (hv1 : ∀ a, vn [a] = .ret (.msg c₀))
-    (hv2 : ∀ a b, vn [a, b] = .ret (.msg c₁))
-    (hv3 : ∀ a b c, vn [a, b, c] = .ret (if ok b c then .msg [] else .rej)) :
-    ∀ (f : ℕ), 3 ≤ f → ∀ m y : Msg,
-      (stepWith H P x ω vn f [] [] ⟨[], [], [], .rej⟩).msgs[2]? = some (m, .msg y) →
-      ∃ m₀ m₁ xS rest, (stepWith H P x ω vn f [] [] ⟨[], [], [], .rej⟩).msgs =
-        (m₀, .msg c₀) :: (m₁, .msg c₁) :: (xS, .msg []) :: rest ∧ ok m₁ xS = true
-  | 0, hf, _, _, _ => absurd hf (by decide)
-  | 1, hf, _, _, _ => absurd hf (by decide)
-  | 2, hf, _, _, _ => absurd hf (by decide)
-  | g + 1 + 1 + 1, _, m, y, h2 => by
-    rw [stepWith_succ_msg H P x ω vn (m := c₀) (lo := []) (by rw [List.nil_append, hv1]; rfl)] at h2 ⊢
+/-- **The later rounds of a second stage, at a run that need not accept**: `stepWith_pad` with the round after the
+stage's answered with a message in place of the run's acceptance. -/
+theorem stepWith_pad_msg (c : ℕ → Msg) (n : ℕ) (ok : List Msg → Bool) (a₀ a₁ : Msg)
+    (hpad : ∀ (as : List Msg) (a : Msg), 2 ≤ as.length → as.length ≤ n + 1 →
+      (a = [] ∧ vn (as ++ [a]) = .ret (.msg (c as.length))) ∨ vn (as ++ [a]) = .ret .rej)
+    (hstmt : ∀ as : List Msg, as.length = n + 3 → vn as = .ret (if ok as then .msg [] else .rej)) (m y : Msg) :
+    ∀ (d k : ℕ), k + d = n → ∀ (f : ℕ) (hist : List (Msg × Msg)) (t : Transcript),
+      (stepWith H P x ω vn f hist (a₀ :: a₁ :: List.replicate k []) t).msgs[n + 2]? = some (m, .msg y) →
+      t.msgs = (a₀, .msg (c 0)) :: (a₁, .msg (c 1)) ::
+        (List.range k).map (fun i => (([] : Msg), Out.msg (c (i + 2)))) →
+      ∃ m₂ rest, (stepWith H P x ω vn f hist (a₀ :: a₁ :: List.replicate k []) t).msgs =
+          (a₀, .msg (c 0)) :: (a₁, .msg (c 1)) ::
+            ((List.range n).map (fun i => (([] : Msg), Out.msg (c (i + 2)))) ++ (m₂, .msg []) :: rest) ∧
+        ok ((a₀ :: a₁ :: List.replicate n []) ++ [m₂]) = true := by
+  intro d
+  induction d with
+  | zero =>
+    intro k hk f hist t h2 hmsgs
+    have hkn : n = k := by omega
+    subst hkn
+    have hlen : t.msgs.length = n + 2 := by rw [hmsgs]; simp
+    cases f with
+    | zero =>
+      have hnone : t.msgs[n + 2]? = none := List.getElem?_eq_none (by omega)
+      simp only [stepWith] at h2
+      rw [hnone] at h2
+      cases h2
+    | succ g =>
+      have hl : ((a₀ :: a₁ :: List.replicate n ([] : Msg)) ++ [((P.next x hist ω).eval H).1]).length = n + 3 := by
+        simp
+      cases hok : ok ((a₀ :: a₁ :: List.replicate n []) ++ [((P.next x hist ω).eval H).1]) with
+      | false =>
+        have e : (vn ((a₀ :: a₁ :: List.replicate n []) ++ [((P.next x hist ω).eval H).1])).eval H = (.rej, []) := by
+          rw [hstmt _ hl, hok]; rfl
+        simp only [stepWith, e] at h2
+        exact (getElem?_concat_rej (by omega) h2).elim
+      | true =>
+        rw [stepWith_succ_msg H P x ω vn (m := []) (lo := []) (by rw [hstmt _ hl, hok]; rfl)]
+        obtain ⟨rest, hr⟩ := Claims.Sampling.stepWith_msgs_prefix H P x ω vn g _ _ _
+        refine ⟨((P.next x hist ω).eval H).1, rest, ?_, hok⟩
+        rw [hr, hmsgs]
+        simp
+  | succ d ih =>
+    intro k hk f hist t h2 hmsgs
+    have hlen : t.msgs.length = k + 2 := by rw [hmsgs]; simp
+    cases f with
+    | zero =>
+      have hnone : t.msgs[n + 2]? = none := List.getElem?_eq_none (by omega)
+      simp only [stepWith] at h2
+      rw [hnone] at h2
+      cases h2
+    | succ g =>
+      have hl : (a₀ :: a₁ :: List.replicate k ([] : Msg)).length = k + 2 := by simp
+      rcases hpad (a₀ :: a₁ :: List.replicate k []) ((P.next x hist ω).eval H).1 (by rw [hl]; omega)
+        (by rw [hl]; omega) with ⟨ha, hv⟩ | hv
+      · rw [hl] at hv
+        rw [stepWith_succ_msg H P x ω vn (m := c (k + 2)) (lo := []) (by rw [hv]; rfl)] at h2 ⊢
+        have has : (a₀ :: a₁ :: List.replicate k ([] : Msg)) ++ [((P.next x hist ω).eval H).1] =
+            a₀ :: a₁ :: List.replicate (k + 1) [] := by
+          rw [ha]
+          exact (congrArg (fun l => a₀ :: a₁ :: l) List.replicate_succ').symm
+        rw [has] at h2 ⊢
+        refine ih (k + 1) (by omega) g _ _ h2 ?_
+        simp [hmsgs, List.range_succ, ha]
+      · have e : (vn ((a₀ :: a₁ :: List.replicate k []) ++ [((P.next x hist ω).eval H).1])).eval H = (.rej, []) := by
+          rw [hv]; rfl
+        simp only [stepWith, e] at h2
+        exact (getElem?_concat_rej (by omega) h2).elim
+
+/-- **A run whose verifier answers its first two rounds, then `n` rounds where the prover sent nothing, and checks the
+next**, and whose round after those was answered with a message, answered it with nothing at a check that passed.
+The run need not accept. -/
+theorem stepWith_stage_msg (c : ℕ → Msg) (n : ℕ) (ok : List Msg → Bool) (hv1 : ∀ a, vn [a] = .ret (.msg (c 0)))
+    (hv2 : ∀ a b, vn [a, b] = .ret (.msg (c 1)))
+    (hpad : ∀ (as : List Msg) (a : Msg), 2 ≤ as.length → as.length ≤ n + 1 →
+      (a = [] ∧ vn (as ++ [a]) = .ret (.msg (c as.length))) ∨ vn (as ++ [a]) = .ret .rej)
+    (hstmt : ∀ as : List Msg, as.length = n + 3 → vn as = .ret (if ok as then .msg [] else .rej)) :
+    ∀ (f : ℕ) (m y : Msg),
+      (stepWith H P x ω vn f [] [] ⟨[], [], [], .rej⟩).msgs[n + 2]? = some (m, .msg y) →
+      ∃ m₀ m₁ m₂ rest, (stepWith H P x ω vn f [] [] ⟨[], [], [], .rej⟩).msgs =
+          (m₀, .msg (c 0)) :: (m₁, .msg (c 1)) ::
+            ((List.range n).map (fun i => (([] : Msg), Out.msg (c (i + 2)))) ++ (m₂, .msg []) :: rest) ∧
+        ok ((m₀ :: m₁ :: List.replicate n []) ++ [m₂]) = true
+  | 0, _, _, h2 => by simp [stepWith] at h2
+  | 1, _, _, h2 => by
+    rw [stepWith_succ_msg H P x ω vn (m := c 0) (lo := []) (by rw [List.nil_append, hv1]; rfl)] at h2
+    simp [stepWith] at h2
+  | g + 1 + 1, m, y, h2 => by
+    rw [stepWith_succ_msg H P x ω vn (m := c 0) (lo := []) (by rw [List.nil_append, hv1]; rfl)] at h2 ⊢
     simp only [List.nil_append] at h2 ⊢
-    rw [stepWith_succ_msg H P x ω vn (m := c₁) (lo := []) (by rw [List.singleton_append, hv2]; rfl)] at h2 ⊢
+    rw [stepWith_succ_msg H P x ω vn (m := c 1) (lo := []) (by rw [List.singleton_append, hv2]; rfl)] at h2 ⊢
     simp only [List.cons_append, List.nil_append] at h2 ⊢
-    generalize ((P.next x [] ω).eval H).1 = a₀ at h2 ⊢
-    generalize ((P.next x [(a₀, c₀)] ω).eval H).1 = a₁ at h2 ⊢
-    cases hok : ok a₁ ((P.next x [(a₀, c₀), (a₁, c₁)] ω).eval H).1 with
-    | false =>
-      have e₂ : (vn ([a₀, a₁] ++ [((P.next x [(a₀, c₀), (a₁, c₁)] ω).eval H).1])).eval H = (.rej, []) := by
-        rw [List.cons_append, List.singleton_append, hv3, hok]; rfl
-      exfalso
-      simp only [stepWith, e₂] at h2
-      simp at h2
-    | true =>
-      rw [stepWith_succ_msg H P x ω vn (m := []) (lo := [])
-        (by rw [List.cons_append, List.singleton_append, hv3, hok]; rfl)]
-      obtain ⟨rest, hr⟩ := Claims.Sampling.stepWith_msgs_prefix H P x ω vn g _ _ _
-      refine ⟨a₀, a₁, _, rest, ?_, hok⟩
-      rw [hr]
-      simp
+    obtain ⟨m₂, rest, hm, hok⟩ :=
+      stepWith_pad_msg H P x ω vn c n ok _ _ hpad hstmt m y n 0 (Nat.zero_add n) g _ _ h2 rfl
+    exact ⟨_, _, m₂, rest, hm, hok⟩
 
 end Steps
 
-/-- **Rounds answered through the third**: a transcript's messages of which at least `n ≥ 3` are there, the first `n`
-answered with a message, have a third one answered with a message. -/
-theorem answered_two {l : List (Msg × Out)} {n : ℕ} (hn : 3 ≤ n) (hlen : n ≤ l.length)
-    (hall : (l.take n).all (fun p => answered p.2) = true) : ∃ m y, l[2]? = some (m, Out.msg y) := by
-  rcases l with _ | ⟨a, _ | ⟨b, _ | ⟨⟨m, o⟩, tl⟩⟩⟩
-  · have : n ≤ 0 := hlen
-    omega
-  · have : n ≤ 1 := hlen
-    omega
-  · have : n ≤ 2 := hlen
-    omega
-  · obtain ⟨n', rfl⟩ : ∃ n', n = n' + 3 := ⟨n - 3, by omega⟩
-    cases o with
-    | msg y => exact ⟨m, y, rfl⟩
-    | acc =>
-      simp [List.take_succ_cons, answered] at hall
-    | rej =>
-      simp [List.take_succ_cons, answered] at hall
+/-- **Rounds answered through the `n`-th**: a transcript's messages of which at least `n` are there, the first `n`
+answered with a message, have each of those answered with a message. -/
+theorem answered_at {l : List (Msg × Out)} {n i : ℕ} (hi : i < n) (hlen : n ≤ l.length)
+    (hall : (l.take n).all (fun p => answered p.2) = true) : ∃ m y, l[i]? = some (m, Out.msg y) := by
+  have hil : i < l.length := by omega
+  have hmem : l[i] ∈ l.take n := List.mem_take_iff_getElem.2 ⟨i, by omega, rfl⟩
+  have ha : answered l[i].2 = true := List.all_eq_true.1 hall _ hmem
+  cases ho : l[i].2 with
+  | msg y =>
+    have e : l[i] = (l[i].1, Out.msg y) := Prod.ext rfl ho
+    exact ⟨l[i].1, y, (List.getElem?_eq_getElem hil).trans (congrArg some e)⟩
+  | acc =>
+    rw [ho] at ha
+    simp [answered] at ha
+  | rej =>
+    rw [ho] at ha
+    simp [answered] at ha
 
 variable (h : Held)
 
-/-- **A run whose round 2 was answered passed the session statements' check**: its messages start with rounds 0 and
-1 answered with their coins and round 2 answered with nothing, and `stmtOk` held at them. `run_seenAt` without the
-run's acceptance. -/
+/-- **A run whose round `stage + 1` was answered passed the session statements' check**: its messages are `seenAt`'s,
+rounds 0 to `stage` answered with their coins and round `stage + 1` with nothing, and `stmtOk` held at them.
+`run_seenAt` without the run's acceptance. -/
 theorem run_msgs_of_answered {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
     (r : Fin ((V h).k x) → FlockDeploy.Coin) {m y : Msg}
-    (h2 : (run H P (V h) x ω r).msgs[2]? = some (m, .msg y)) :
+    (h2 : (run H P (V h) x ω r).msgs[h.stage + 1]? = some (m, .msg y)) :
     ∃ m₀ m₁ m₂ rest, (run H P (V h) x ω r).msgs =
-        (m₀, .msg (r ⟨0, k_pos h x⟩).bytes) :: (m₁, .msg (r ⟨1, one_lt_k h x⟩).bytes) :: (m₂, .msg []) :: rest ∧
-      stmtOk h x m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) = true := by
-  have e0 : coinSeq r 0 = r ⟨0, k_pos h x⟩ := dite_eq_left (k_pos h x)
-  have e1 : coinSeq r 1 = r ⟨1, one_lt_k h x⟩ := dite_eq_left (one_lt_k h x)
-  have hk : 3 ≤ (V h).k x := by
-    have := three_le_off h h.ms.length
-    show 3 ≤ off h h.ms.length + 1
-    omega
-  obtain ⟨m₀, m₁, m₂, rest, hm, hok⟩ := stepWith_three_msg H P x ω
-    (fun as => (V h).next x as ((List.range as.length).map (coinSeq r)))
-    (r ⟨0, k_pos h x⟩).bytes (r ⟨1, one_lt_k h x⟩).bytes
-    (fun m₁ m₂ => stmtOk h x m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩))
-    (fun a => by show next h x [a] [coinSeq r 0] = _; rw [e0]; rfl)
-    (fun a b => by show next h x [a, b] [coinSeq r 0, coinSeq r 1] = _; rw [e1]; rfl)
-    (fun a b c => by show next h x [a, b, c] [coinSeq r 0, coinSeq r 1, coinSeq r 2] = _; rw [e0, e1]; rfl)
-    ((V h).k x) hk m y h2
-  exact ⟨m₀, m₁, m₂, rest, hm, hok⟩
+        (seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) rest).msgs ∧
+      stmtOk h x m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) = true := by
+  have h2' : (run H P (V h) x ω r).msgs[h.more + 2]? = some (m, .msg y) := h2
+  obtain ⟨m₀, m₁, m₂, rest, hm, hok⟩ := stepWith_stage_msg H P x ω
+    (fun as => (V h).next x as ((List.range as.length).map (coinSeq r))) (fun j => (coinSeq r j).bytes) h.more
+    (fun as => stmtOk h x (as.getD 1 []) (as.getD (h.stage + 1) []) (r ⟨0, k_pos h x⟩) (stageCoins h x r))
+    (next_run_one h r) (next_run_two h r) (next_run_pad h r) (next_run_stmt h r) ((V h).k x) m y h2'
+  have hok' : stmtOk h x m₁ (((m₀ :: m₁ :: List.replicate h.more ([] : Msg)) ++ [m₂]).getD (h.stage + 1) [])
+      (r ⟨0, k_pos h x⟩) (stageCoins h x r) = true := hok
+  rw [getD_stmts h] at hok'
+  have hm' : (run H P (V h) x ω r).msgs =
+      (m₀, Out.msg (coinSeq r 0).bytes) :: (m₁, Out.msg (coinSeq r 1).bytes) ::
+        (((List.range h.more).map fun i => (([] : Msg), Out.msg (coinSeq r (i + 2)).bytes)) ++
+          (m₂, Out.msg []) :: rest) := hm
+  exact ⟨m₀, m₁, m₂, rest, hm'.trans (msgs_seenAt h r m₀ m₁ m₂ rest), hok'⟩
 
-/-- **A session whose view accepted is not the refused one**: the transcript's round 2 was answered with a message,
-and the session's statement is the unit's template's as round 2 states it. -/
+/-- **A session whose view accepted is not the refused one**: the transcript's round `stage + 1` was answered with a
+message, and the session's statement is the unit's template's as that round states it. -/
 theorem session_acc_msg {u : ℕ} {v : Seen} {xS : Msg} {vS : Seen} (hsess : session h u v = some (xS, vS))
     (hacc : vS.out = .acc) :
-    (∃ m y, v.msgs[2]? = some (m, Out.msg y)) ∧
-      xS = stmtAt h (v.msgs.getD 2 ([], .rej)).1 (templateOf h.ms u) := by
+    (∃ m y, v.msgs[h.stage + 1]? = some (m, Out.msg y)) ∧
+      xS = stmtAt h (v.msgs.getD (h.stage + 1) ([], .rej)).1 (templateOf h.ms u) := by
   by_cases hans : off h (templateOf h.ms u) ≤ v.msgs.length ∧
       (v.msgs.take (off h (templateOf h.ms u))).all (answered ·.2) = true
   · by_cases hok : sessionOk h (templateOf h.ms u)
-        (stmtAt h (v.msgs.getD 2 ([], .rej)).1 (templateOf h.ms u)) = true
+        (stmtAt h (v.msgs.getD (h.stage + 1) ([], .rej)).1 (templateOf h.ms u)) = true
     · rw [session, ite_eq_left hans, ite_eq_left hok] at hsess
       have e := Prod.mk.inj (Option.some.inj hsess)
-      exact ⟨answered_two (three_le_off h _) hans.1 hans.2, e.1.symm⟩
+      have hlt : h.stage + 1 < off h (templateOf h.ms u) := by
+        have := stage_le_off h (templateOf h.ms u)
+        omega
+      exact ⟨answered_at hlt hans.1 hans.2, e.1.symm⟩
     · rw [session, ite_eq_left hans, ite_eq_right hok] at hsess
       have e := Prod.mk.inj (Option.some.inj hsess)
       rw [← e.2] at hacc
@@ -199,29 +274,29 @@ theorem session_acc_msg {u : ℕ} {v : Seen} {xS : Msg} {vS : Seen} (hsess : ses
     rw [← e.2] at hacc
     simp [refusedSeen] at hacc
 
-/-- **The code's half of the wiring**: at any run, a unit's session whose view accepted has the run's rounds 0 to 2
-answered, the session statements' check passed at them, and its statement the unit's. -/
+/-- **The code's half of the wiring**: at any run, a unit's session whose view accepted has the run's rounds 0 to
+`stage + 1` answered, the session statements' check passed at them, and its statement the unit's. -/
 theorem session_acc_run {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
     (r : Fin ((V h).k x) → FlockDeploy.Coin) {u : ℕ} {xS : Msg} {vS : Seen}
     (hsess : session h u (run H P (V h) x ω r).seen = some (xS, vS)) (hacc : vS.out = .acc) :
     ∃ m₀ m₁ m₂ rest, (run H P (V h) x ω r).msgs =
-        (m₀, .msg (r ⟨0, k_pos h x⟩).bytes) :: (m₁, .msg (r ⟨1, one_lt_k h x⟩).bytes) :: (m₂, .msg []) :: rest ∧
-      stmtOk h x m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) = true ∧ xS = unitStmt h m₂ u := by
+        (seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) rest).msgs ∧
+      stmtOk h x m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) = true ∧ xS = unitStmt h m₂ u := by
   obtain ⟨⟨m, y, h2⟩, hxS⟩ := session_acc_msg h hsess hacc
   obtain ⟨m₀, m₁, m₂, rest, hm, hok⟩ := run_msgs_of_answered h H P x ω r h2
   refine ⟨m₀, m₁, m₂, rest, hm, hok, ?_⟩
   have hm' : (run H P (V h) x ω r).seen.msgs =
-      (m₀, .msg (r ⟨0, k_pos h x⟩).bytes) :: (m₁, .msg (r ⟨1, one_lt_k h x⟩).bytes) :: (m₂, .msg []) :: rest := hm
-  have hg : ((run H P (V h) x ω r).seen.msgs.getD 2 ([], .rej)).1 = m₂ := by
+      (seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) rest).msgs := hm
+  have hg : ((run H P (V h) x ω r).seen.msgs.getD (h.stage + 1) ([], .rej)).1 = m₂ := by
     rw [hm']
-    all_goals rfl
+    exact seenAt_stmts h
   exact hxS.trans (congrArg (fun a => stmtAt h a (templateOf h.ms u)) hg)
 
 /-! ## The code's reveal reads a transcript's messages -/
 
 /-- **The reveal reads only the transcript's messages**, at a registration whose frame is SPOT's own: the roots read
-the round-1 message and the opener rounds 1 and 2, so the reveal at a refused transcript is the one at an accepted
-transcript of the same messages. -/
+the round-1 message and the opener rounds 1 and `stage + 1`, so the reveal at a refused transcript is the one at an
+accepted transcript of the same messages. -/
 theorem reveal_out (hB : Built h) (s : AuditStatement) (u : ℕ) (ms : List (Msg × Out)) (o o' : Out)
     (wF : Claims.Flock.Wit) : (code h).reveal s u ⟨ms, o⟩ wF = (code h).reveal s u ⟨ms, o'⟩ wF := by
   obtain ⟨c₀, hc⟩ := hB
@@ -274,7 +349,7 @@ theorem reveal_passes (hB : Built h) (hS : Addresses h) {x : Msg} {s : AuditStat
     cases hdx : decode x with
     | none => simp [SpotFlock.parse, hdx] at hx
     | some st => exact ⟨st, rfl⟩
-  have hum : u ∈ h.reg.checked (units (base h) x) (src (r ⟨0, k_pos h x⟩)) (src (r ⟨1, one_lt_k h x⟩)) :=
+  have hum : u ∈ h.reg.checked (units (base h) x) (src (r ⟨0, k_pos h x⟩)) (stageSrc (stageCoins h x r)) :=
     (congrArg (u ∈ ·) (checked_eq h x hst r)).mp hu
   have hlt : u < Pt.blocks.length := by
     have := mem_checked_lt hum
@@ -283,18 +358,18 @@ theorem reveal_passes (hB : Built h) (hS : Addresses h) {x : Msg} {s : AuditStat
   obtain ⟨rb, hrb⟩ := replay_block hρ
   have hb : Pt.blocks[u]? = some Pt.blocks[u] := List.getElem?_eq_getElem hlt
   have hseen : (run FlockDeploy.sha512 P (V h) x ω r).seen =
-      ⟨(m₀, .msg (r ⟨0, k_pos h x⟩).bytes) :: (m₁, .msg (r ⟨1, one_lt_k h x⟩).bytes) :: (m₂, .msg []) :: rest,
+      ⟨(seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) rest).msgs,
         (run FlockDeploy.sha512 P (V h) x ω r).out⟩ :=
     congrArg (fun l => (⟨l, (run FlockDeploy.sha512 P (V h) x ω r).out⟩ : Seen)) hm
   have hrev : (code h).reveal s u (run FlockDeploy.sha512 P (V h) x ω r).seen wF =
-      (code h).reveal s u (seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) rest) wF :=
+      (code h).reveal s u (seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) rest) wF :=
     (congrArg (fun v => (code h).reveal s u v wF) hseen).trans (reveal_out h hB s u _ _ .acc wF)
   rw [hrev] at hq
   obtain ⟨g, hg, hgq⟩ :=
     (Reveal.mem_reveal (partition h) (two h) (iroots []) (Reveal.frameAt h.frame)).1 hq
   obtain ⟨q', hq', hop, hpos, -, -⟩ :=
     reveals_of_frameRows h (layoutFor h) (frameRows_of_frameIs h (layoutFor h) (frameIs_built h hB hS))
-      x s Pt d m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) rest wF u _ ρ rb hx hP hd hin hok hum hck hb hρ
+      x s Pt d m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (stageCoins h x r) rest wF u _ ρ rb hx hP hd hin hok hum hck hb hρ
       hrb g ((Reveal.mem_needs (partition h) hP hb).1 hg)
   obtain ⟨g', -, hgq'⟩ :=
     (Reveal.mem_reveal (partition h) (two h) (iroots []) (Reveal.frameAt h.frame)).1 hq'

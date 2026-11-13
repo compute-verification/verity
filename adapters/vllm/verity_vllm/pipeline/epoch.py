@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import ROOT, option, row_file
+from verity_vllm.records.schema_ids import REBASELINE_DIGESTS_SCHEMA
 
 __all__ = ["COMMANDS", "build_programs", "main", "resolve", "row_digests"]
 
@@ -44,6 +45,16 @@ def _doc(p: Path) -> dict:
     return json.loads(p.read_text()) if p.is_file() else {}
 
 
+def _of(block: Any, key: str) -> Any:
+    """`key` of a document's block; None where the block is absent, null or empty."""
+    return block.get(key) if block else None
+
+
+def _of_query(man: dict[str, Any], key: str) -> Any:
+    """`key` of a manifest's `query`; None for a manifest without one, and for a row that has no manifest."""
+    return _of(man.get("query"), key)
+
+
 def _seconds(utc: str) -> int:
     return calendar.timegm(time.strptime(utc[:19].rstrip("Z"), "%Y-%m-%dT%H:%M:%S" if len(utc.rstrip("Z")) > 16 else "%Y-%m-%dT%H:%M"))
 
@@ -55,7 +66,8 @@ def _epoch(utc: str | None) -> int | None:
 def run_end(run_dir: str | Path) -> int | None:
     """When the run's timeout ends (epoch seconds), or None."""
     d = Path(run_dir)
-    runs = [t for t in _doc(d / "status.json").get("transitions") or [] if t.get("state") == "running"]
+    transitions = _doc(d / "status.json").get("transitions")   # a run that has no status.json, or has not changed state, has none
+    runs = [t for t in transitions if t.get("state") == "running"] if transitions else []
     if not runs or not runs[-1].get("started_utc"):
         return None
     timeout = _doc(d / "control" / "timeout_s").get("timeout_s", runs[-1].get("timeout_s"))
@@ -86,7 +98,8 @@ def resolve(row: str) -> tuple[str, str, str, int]:
     role = wl["case"]
     cps = _doc(ROOT / "manifests" / "checkpoints.json")["checkpoints"]
     cp = next((c for c in cps if c.get("role") == role), None) or next(c for c in cps if has_role(c, role) and c.get("local_path"))
-    tp = int((wl.get("sweep") or {}).get("tp") or wl.get("tp") or (2 if "__tp2__" in row else 1))
+    # a row outside a sweep states `tp` itself, or in its id
+    tp = int(_of(wl.get("sweep"), "tp") or wl.get("tp") or (2 if "__tp2__" in row else 1))
     return role, cp["repo"], cp["revision"], tp
 
 
@@ -97,8 +110,8 @@ def row_state(row_dir: str | Path, header: str | None) -> tuple[list[str], str |
     if man and header:
         keys = ("schema", "manifest_digest", "program_digest", "complete", "populations", "query")
         Path(header).write_text(json.dumps({k: man.get(k) for k in keys}, indent=1))
-    fams = list((man.get("query") or {}).get("required_families") or [])
-    return fams, _doc(d / "verdict.json").get("outcome"), _doc(d / "commit" / "manifest_verify.json").get("ok")
+    fams = _of_query(man, "required_families")   # a query that requires no family lists none
+    return list(fams) if fams else [], _doc(d / "verdict.json").get("outcome"), _doc(d / "commit" / "manifest_verify.json").get("ok")
 
 
 def word_check(row: str, row_dir: str | Path, world: int, build_word_check: str, build_max_gates: str, allowed_max_gates: str) -> dict[str, Any]:
@@ -106,15 +119,16 @@ def word_check(row: str, row_dir: str | Path, world: int, build_word_check: str,
     d = Path(row_dir)
     problems: list[str] = []
     man = _doc(d / "manifest.json")
-    q = man.get("query") or {}
-    if q.get("query_id") != QUERY_OF_RECORD or not QUERY_OF_RECORD.startswith("Q_word_v1{X=16,W=32"):
-        problems.append(f"manifest query {q.get('query_id')} is not the query of record {QUERY_OF_RECORD}")
-    if not q.get("partition"):
+    query_id, partition = _of_query(man, "query_id"), _of_query(man, "partition")
+    if query_id != QUERY_OF_RECORD or not QUERY_OF_RECORD.startswith("Q_word_v1{X=16,W=32"):
+        problems.append(f"manifest query {query_id} is not the query of record {QUERY_OF_RECORD}")
+    if not partition:
         problems.append("the manifest names no partition (query.partition)")
     log = (d / "manifest.log").read_text(errors="replace") if (d / "manifest.log").is_file() else ""
     lines = WORD_LINE.findall(log)
     wl = _doc(row_file(row))
-    batch = int((wl.get("sweep") or {}).get("batch") or len(wl.get("requests") or []) or 1)
+    requests = wl.get("requests")   # a row outside a sweep is as wide as the requests it declares, and one that declares none is one wide
+    batch = int(_of(wl.get("sweep"), "batch") or (len(requests) if requests else 0) or 1)
     need = batch * max(1, world)
     if len(lines) < need:
         problems.append(f"manifest.log has {len(lines)} Q_word lines, fewer than the {need} components (batch {batch} x world {world})")
@@ -125,7 +139,7 @@ def word_check(row: str, row_dir: str | Path, world: int, build_word_check: str,
     if build_max_gates and build_max_gates != allowed_max_gates:
         problems.append(f"VERITY_QWORD_MAX_GATES={build_max_gates} in the Build's environment (allowed for this row: {allowed_max_gates or None})")
     calls, units, gates = (sum(int(x[i]) for x in lines) for i in range(3))
-    return {"row": row, "check": "fast", "query_of_record": QUERY_OF_RECORD, "query_id": q.get("query_id"), "partition": bool(q.get("partition")),
+    return {"row": row, "check": "fast", "query_of_record": QUERY_OF_RECORD, "query_id": query_id, "partition": bool(partition),
             "manifest_digest": man.get("manifest_digest"), "word_lines": len(lines), "components": need, "calls": calls, "units": units,
             "gates": gates, "env": {"VERITY_WORD_CHECK": build_word_check or None, "VERITY_QWORD_MAX_GATES": build_max_gates or None},
             "problems": problems, "ok": not problems}
@@ -137,14 +151,16 @@ def _partition_digests(part: Any) -> list[str]:
         return []
     if "object" in part:
         return [part["digest"]]
-    return sorted(dg for k in ("by_component", "by_rank") for v in (part.get(k) or {}).values() for dg in _partition_digests(v))
+    groups = [part.get(k) for k in ("by_component", "by_rank")]   # a partition names its parts by component, by rank, or neither
+    return sorted(dg for group in groups if group for v in group.values() for dg in _partition_digests(v))
 
 
 def build_programs(d: Path) -> dict[str, dict]:
     """Per rank, the Program digests of a row's Build (`build_summary.json`: a TP row's per rank under `ranks`, `row_records.tp_build_summary`)."""
     s = _doc(d / "build_summary.json")
-    per_rank = {k.removeprefix("rank"): v for k, v in (s.get("ranks") or {}).items()} if isinstance(s.get("ranks"), dict) else {"0": s} if s else {}
-    return {r: {"step": (v.get("step") or v.get("build_step") or {}).get("program_digest"), "workload": (v.get("workload") or {}).get("workload_digest"),
+    ranks = s.get("ranks")   # a TP row's Builds by rank; a summary without them is its one rank's, and a row with no summary has no rank
+    per_rank = {k.removeprefix("rank"): v for k, v in ranks.items()} if isinstance(ranks, dict) else {"0": s} if s else {}
+    return {r: {"step": _of(v.get("step") or v.get("build_step"), "program_digest"), "workload": _of(v.get("workload"), "workload_digest"),
                 "requests": {k: x.get("program_digest") for k, x in sorted(v.items()) if (k == "request" or k.startswith("build_request")) and isinstance(x, dict)}}
             for r, v in sorted(per_rank.items(), key=lambda kv: int(kv[0]))}
 
@@ -153,18 +169,20 @@ def row_digests(d: Path) -> dict[str, Any]:
     """One row's digests from its run directory."""
     ranks = build_programs(d)
     man, vd = _doc(d / "manifest.json"), _doc(d / "verdict.json")
-    q = man.get("query") or {}
+    query_id, partitions = _of_query(man, "query_id"), _partition_digests(_of_query(man, "partition"))
+    roots = vd.get("run_roots")   # the roots of the runs the Commit's verdict graded; a row with no verdict has none
     return {"row": d.name, "programs": ranks, "manifest_digest": man.get("manifest_digest"), "program_digest": man.get("program_digest"),
-            "query_id": q.get("query_id"), "partition_digests": _partition_digests(q.get("partition")),
-            "run_roots": list(vd.get("run_roots") or []), "verdict": vd.get("outcome")}
+            "query_id": query_id, "partition_digests": partitions, "run_roots": list(roots) if roots else [], "verdict": vd.get("outcome")}
 
 
 def digests_markdown(rows: list[dict[str, Any]]) -> str:
     short = lambda x: (x or "-")[:16]                                        # noqa: E731
     md = ["| row | verdict | step (rank 0) | workload (rank 0) | requests | manifest | partitions | run roots |", "|---|---|---|---|---|---|---|---|"]
     for r in rows:
-        p0 = r["programs"].get("0") or {}
-        md.append(f"| {r['row']} | {r['verdict'] or '-'} | {short(p0.get('step'))} | {short(p0.get('workload'))} | {len(p0.get('requests') or {})} "
+        p0 = r["programs"].get("0")   # rank 0's Programs; a row with no Build has none, and its cells are dashes
+        cells = f"| {r['row']} | {r['verdict'] or '-'} | {short(_of(p0, 'step'))} | {short(_of(p0, 'workload'))} "
+        requests = _of(p0, "requests")
+        md.append(cells + f"| {len(requests) if requests else 0} "
                   f"| {short(r['manifest_digest'])} | {len(r['partition_digests'])} | {', '.join(x[:16] for x in r['run_roots']) or '-'} |")
     return "\n".join(md) + "\n"
 
@@ -179,7 +197,7 @@ def store_meta(row_dir: str | Path, *, kind: str, role: str, rownum: int, run_id
             wds[f"rank{r}"] = p["workload"]
     m, v = _doc(d / "manifest.json"), _doc(d / "verdict.json")
     return {"name": f"epoch-{kind}/{d.name}", "role": role, "row": rownum, "row_id": d.name, "epoch": epoch, "program_digests": progs,
-            "workload_digests": wds, "manifest_digest": m.get("manifest_digest"), "query_id": (m.get("query") or {}).get("query_id"),
+            "workload_digests": wds, "manifest_digest": m.get("manifest_digest"), "query_id": _of_query(m, "query_id"),
             "verdict": v.get("outcome"), "build": {"gpu": gpu or None, "machine": pod or None, "run": run_id, "source": epoch_sha, "stage": kind}}
 
 
@@ -309,7 +327,7 @@ def main(a: Any) -> int:
         return 0 if rep["ok"] else 1
     elif a.cmd == "digests":
         rows = [row_digests(Path(d)) for d in a.row_dirs]
-        text = json.dumps({"schema": "verity-vllm/rebaseline-digests/v1", "rows": rows}, indent=1) + "\n"
+        text = json.dumps({"schema": REBASELINE_DIGESTS_SCHEMA, "rows": rows}, indent=1) + "\n"
         if a.out:
             Path(a.out).write_text(text)
         md = digests_markdown(rows)

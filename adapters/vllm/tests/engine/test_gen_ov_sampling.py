@@ -5,12 +5,11 @@ probe's noise is `test_gen_ov_sampling_of_record`."""
 from __future__ import annotations
 
 import json
-import sys
-import types
 from pathlib import Path
 
 import pytest
 
+from tests import fake_vllm
 from tests.observe.test_gen_sampling import _adapter_fn
 
 PROFILES = Path(__file__).resolve().parents[2] / "workloads"
@@ -88,9 +87,7 @@ def test_sampling_params_prefers_the_request_params(monkeypatch):
     class SP:
         def __init__(self, **kw):
             calls.append(kw)
-    fake = types.ModuleType("vllm")
-    fake.__dict__.update(SamplingParams=SP)
-    monkeypatch.setitem(sys.modules, "vllm", fake)
+    fake_vllm.install(monkeypatch).set("vllm:SamplingParams", SP)
     samp = {"temperature": 1.0, "top_p": 1.0, "top_k": 0, "seed": 0, "n": 1}
     fn({"max_tokens": 16, "seed": None, "n": 1, "temperature": 0.0, "top_p": 1.0, "top_k": 0}, samp)   # the pinned greedy workload
     fn({"max_tokens": 16, "seed": 0, "n": 1}, samp)                                                     # the sampled workload

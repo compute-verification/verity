@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import sys
 import types
 from typing import Any
 
 import pytest
 import torch
 
+from tests import fake_vllm
 from tests.acquire.test_vocab_range_source import Recorder
 from verity_vllm.acquire.norm_tap_src.build_ext import NAME as NORM_TAP_NS
 from verity_vllm.acquire.norm_tap_src.build_ext import TAP_VERSION as NORM_TAP_VERSION
@@ -335,12 +335,8 @@ def norm(monkeypatch, tmp_path):
 
     ns = types.SimpleNamespace(tap_version=lambda: NORM_TAP_VERSION, fused_add_rms_norm_scale=fused_add_rms_norm_scale)
     c = types.SimpleNamespace(fused_add_rms_norm=fused_add_rms_norm)
-    envs = types.ModuleType("vllm.envs")
-    envs.__dict__["VLLM_BATCH_INVARIANT"] = True
-    vllm = types.ModuleType("vllm")
-    vllm.__dict__["envs"] = envs
-    monkeypatch.setitem(sys.modules, "vllm", vllm)
-    monkeypatch.setitem(sys.modules, "vllm.envs", envs)
+    envs = fake_vllm.install(monkeypatch)["vllm.envs"]
+    envs.VLLM_BATCH_INVARIANT = True
     monkeypatch.setattr(torch.ops, "load_library", loaded.append)
     monkeypatch.setattr(torch.ops, NORM_TAP_NS, ns, raising=False)
     monkeypatch.setattr(torch.ops, "_C", c, raising=False)
@@ -402,6 +398,20 @@ def test_a_source_of_no_fused_norm_loads_no_build(norm):
     src = N.NormScaleSource(Recorder(), _two_modules(_fused_norm, "norm"), {"norm": "RsqrtF32_v1"}, norm.so)
     assert src.kinds == ["aten"] and norm.loaded == [] and src.ns is None
     assert src.stats["so"] == norm.so and src.stats["so_sha256"] is None
+
+
+def test_the_fused_norm_source_reads_its_words_per_token_before_the_bytes_of_its_build(norm, tmp_path):
+    """The loaded build is hashed last, so a `words_per_token` that is no integer is refused whether or not the build's bytes can be
+    read."""
+    model, gone = _two_modules(_fused_norm, "norm"), str(tmp_path / "no_such_build.so")
+    no_integer: Any = "x"
+    with pytest.raises(ValueError, match="invalid literal for int"):
+        N.NormScaleSource(Recorder(), model, {"norm": FUSED}, gone, words_per_token=no_integer)
+    with pytest.raises(FileNotFoundError):
+        N.NormScaleSource(Recorder(), model, {"norm": FUSED}, gone, words_per_token=3)
+    assert norm.loaded == [gone, gone]
+    src = N.NormScaleSource(Recorder(), model, {"norm": FUSED}, norm.so, words_per_token=3)
+    assert src.words_per_token == 3 and src.stats["so_sha256"] == hashlib.sha256(BUILD).hexdigest()
 
 
 # --- the call boundaries: forward pre-hooks alone ------------------------------------------------------------------------------------------

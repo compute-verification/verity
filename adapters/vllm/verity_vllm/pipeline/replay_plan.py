@@ -22,6 +22,8 @@ from typing import Any
 
 from verity_vllm.config import option
 
+__all__ = ["Options", "main"]
+
 
 @dataclass(frozen=True, kw_only=True)
 class Options:

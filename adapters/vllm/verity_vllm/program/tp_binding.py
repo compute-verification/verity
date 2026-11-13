@@ -27,6 +27,8 @@ from typing import Any
 
 from verity.circuits.refs import runs
 
+__all__ = ["RankSites", "RequestBinding", "pair", "rank_sites"]
+
 BINDING_TAG = "verity-vllm/tp-binding/v1"
 PEERS = "peers_"
 

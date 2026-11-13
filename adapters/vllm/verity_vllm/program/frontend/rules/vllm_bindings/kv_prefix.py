@@ -13,6 +13,8 @@ from verity_vllm.program.frontend.rules.common import dtype_is, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 
+__all__ = ["layout_of"]
+
 
 class KvPrefixRule(StateRule):
     """`vllm_iface.kv_prefix(prefix)`: `prefix` bf16 [L, 2, C, KVH*D] is rows 0..C-1 of every attention layer's key and value cache, read

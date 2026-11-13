@@ -226,21 +226,21 @@ def check(cmap: dict[str, Any], inventory: dict[str, Any], config: dict[str, Any
         elif alt not in used:
             problems.append(f"program {pid} is the alternative to {alt!r}, which no tap cites")
 
-    for e in cmap.get("expect", []):
-        g = groups.get((e["pattern"], e["type"]))
-        want = e["value"]
+    for exp in cmap.get("expect", []):
+        g = groups.get((exp["pattern"], exp["type"]))
+        want = exp["value"]
         if isinstance(want, str) and want.startswith("="):
             want = evaluate(want[1:], env)
         if g is None:
-            problems.append(f"expect {e['pattern']} ({e['type']}): not in the inventory")
+            problems.append(f"expect {exp['pattern']} ({exp['type']}): not in the inventory")
             continue
         try:
-            got = _walk(g, e["path"])
+            got = _walk(g, exp["path"])
         except KeyError:
-            problems.append(f"expect {e['pattern']} {e['path']}: not recorded")
+            problems.append(f"expect {exp['pattern']} {exp['path']}: not recorded")
             continue
         if got != want:
-            problems.append(f"expect {e['pattern']} {e['path']} = {want!r}, the inventory has {got!r}")
+            problems.append(f"expect {exp['pattern']} {exp['path']} = {want!r}, the inventory has {got!r}")
     return problems
 
 

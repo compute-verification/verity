@@ -10,7 +10,7 @@
 # SZ_MEM_PER_JOB, capped to the CPUs; SZ_JOBS=1 is the old serial loop), SZ_MEM_PER_JOB the GB each is budgeted (default 13, the
 # session's serve + prove peak). Each unit's verdicts go to its own file; a reduce after the fan-out folds them into the summary.
 # In order, each step's files under out/:
-#   1. hidden_zk/job.sh's builds (cached under $HZ_CACHE): flock-circuit (proving and selftest builds), Lean flock-verify, a venv
+#   1. hidden_zk/job.sh's builds (cached under $HZ_CACHE): flock-circuit (proving and selftest builds), the Lean verifier, a venv
 #   2. params: the verifier's own parameters of each request's window (<p>/params.json: its context, ε, δ, the grid, P, |W|)
 #   3. commit: served_commit.py commit of the same SZ_CALLS o_proj calls (picked from os.urandom, or SZ_CALL_LIST) on the
 #      "request" and the "other" pass: <p>/commitment.json (public), <p>/advice.json (the prover's entries), rows in scratch
@@ -20,7 +20,7 @@
 #      coin opened after the request pass's weights' root (salt-opening.json), receive (Stream.register: receipt.json;
 #      the challenger re-starts the pass's epoch from its manifest under its own commitment, the request pass, salted by a
 #      beacon before epoch coins, as a recorded replay) and select (draw.json: the epoch's sampling coin opened after the
-#      registration, once, and Lean flock-verify sample --population N --k K' --stream over its key)
+#      registration, once, and the Lean verifier's sample --population N --k K' --stream over its key)
 #   5. per sampled proof block u<t>, as a parallel fan-out (SZ_JOBS at once): stage_tile.py (Pc8TileSide{K=4096,1,1,sm120}), the --zk
 #      session, the opening check, Lean; the selftest build's controls on the first; a filler unit's the same, and the other request's tile staged
 #   6. deliver (the sampled proof blocks' session records' SHA-512) and outcome (one-stage's audit record over every sampled proof block and
@@ -72,7 +72,7 @@ export HZ_CASES=${HZ_CASES:-honest message_byte_differs_from_the_committed_row o
 source "$SRC/benchmarks/pouw/hidden_zk/job.sh"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}
 PASSES=$WORK/passes/${SERVED_RUN:?serve.sh run id}
-export PYTHONPATH=$SRC:$SRC/verity/configuration/config:$SRC/adapters/vllm:$SRC/benchmarks/pouw:$SRC/verity/protocols/flock/prover/python:$SRC/verity/difftest/python
+export PYTHONPATH=$SRC:$SRC/tools/config:$SRC/adapters/vllm:$SRC/benchmarks/pouw:$SRC/verity/protocols/flock/prover/python:$SRC/verity/difftest/python
 SC="$Z/served_commit.py"
 VPY=${SZ_PYTHON:-$WORK/venv312/bin/python}
 
@@ -308,7 +308,7 @@ opencheck open-foreign-proof REJECT request "$U0" "$OUT/other-tile/pub.bin" "$OU
 opencheck open-foreign-commit REJECT other "$OU" "$OUT/u$U0/pub.bin" "$OUT/other-tile/opening.json" --undrawn
 s=$(ls -d "$W/u$U0"/sessions/*/ 2>/dev/null | tail -1)
 if [ -n "$s" ]; then
-  ( $TIME "$OUT/u$U0/lean-foreign-pub.time" bash -c "$(vlimit "$STAGE_GB") exec $LEAN verify --zk --circuit $W/u$U0/circuit.txt \
+  ( $TIME "$OUT/u$U0/lean-foreign-pub.time" bash -c "$(vlimit "$STAGE_GB") exec $(verifier_env) $LEAN verify --zk --circuit $W/u$U0/circuit.txt \
       --statement verity/flock-circuit --public $OUT/other-tile/pub.bin --session $s" > "$OUT/u$U0/lean-foreign-pub.out" 2> "$OUT/u$U0/lean-foreign-pub.err" ) &
   BG+=($!)
 fi

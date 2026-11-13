@@ -28,6 +28,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from itertools import pairwise
 from pathlib import Path
+from typing import TypeVar
 
 from verity.definitions.silicon import models as S, term as T
 from verity.definitions.silicon.cast import f32_to_bf16_word
@@ -46,23 +47,26 @@ __all__ = [
     "HF_REPO",
     "HF_REVISION",
     "HF_URL",
+    "K",
     "MISTAKES",
+    "Mistake",
     "PIPELINE",
+    "REJECT_CLASSES",
     "REPO_FIXTURE_DIR",
     "ROWS_PER_X",
+    "Rng",
     "SEED_NAMES",
     "STEP",
     "STEPS",
-    "TU_FAMILIES",
-    "K",
-    "Mistake",
-    "Rng",
     "Safetensors",
     "Seed",
+    "TU_FAMILIES",
+    "TU_PER_FAMILY",
     "bf16",
     "bf16_pow2",
     "chain_accs",
     "epilogue",
+    "evaluate_mistakes",
     "generate_corner",
     "generate_tu_corner",
     "hawkeye_step",
@@ -71,7 +75,9 @@ __all__ = [
     "is_finite_f32",
     "load_seeds",
     "non_sticky_tc_dot",
+    "pack_u16",
     "plan_real",
+    "read_u16",
     "tensor_of",
     "variant_chain",
 ]
@@ -83,12 +89,13 @@ STEPS = K // STEP
 PIPELINE = S.AMPERE_BF16_M16N8K16
 
 BF16_ONE = 0x3F80
-BF16_MAX = 0x7F7F
 BF16_INF = 0x7F80
 F32_INF = 0x7F800000
 
 
 # --- deterministic randomness -----------------------------------------------------------------------------------------------
+
+_Item = TypeVar("_Item")
 
 
 class Rng:
@@ -137,7 +144,7 @@ class Rng:
 
         return lo + self.below(hi - lo)
 
-    def choice(self, seq: Sequence):
+    def choice(self, seq: Sequence[_Item]) -> _Item:
         return seq[self.below(len(seq))]
 
     def sample(self, n: int, k: int, exclude: frozenset[int] | set[int] = frozenset()) -> list[int]:

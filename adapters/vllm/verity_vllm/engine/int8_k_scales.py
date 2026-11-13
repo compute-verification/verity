@@ -22,9 +22,10 @@ from typing import Any
 import numpy as np
 
 from verity_vllm import config as C
+from verity_vllm.records.schema_ids import INT8_K_SCALES_SCHEMA
 
 RECIPE = "verity-int8-kscale-amax/v0"
-SCHEMA = "verity-vllm/int8-k-scales/v1"
+SCHEMA = INT8_K_SCALES_SCHEMA
 MANIFEST = C.MANIFESTS / "int8-k-scales.json"
 TOP = 127
 SCALE_FLOOR = 1e-30

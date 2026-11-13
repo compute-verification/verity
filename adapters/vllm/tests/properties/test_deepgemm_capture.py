@@ -21,6 +21,7 @@ from verity.definitions.numerics import deepgemm_twins as T
 from verity.definitions.numerics import derived_rows as R
 from verity.definitions.registry import fp8 as F
 
+from tests import fake_vllm
 from tests.properties import deepgemm_capture_gpu as X
 from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
@@ -535,11 +536,10 @@ ENV = ("VLLM_USE_DEEP_GEMM", "VLLM_USE_DEEP_GEMM_E8M0", "VLLM_BLOCKSCALE_FP8_GEM
 def _stub_gpu(tmp_path, monkeypatch, *, gate_ok: bool = True, flip: bool = False) -> dict:
     """vLLM's config module and every GPU piece stood in for: the launches are the jobs above, the JIT scan and MUFU probe
     canned; returns what the stubs saw."""
-    vc = types.ModuleType("vllm.config")
-    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
-                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     for k in ENV:
         monkeypatch.setenv(k, "")
     seen: dict = {"mufu": [], "jit": [], "linear": []}

@@ -262,13 +262,19 @@ def selection() -> dict[str, Any]:
     import torch
     from vllm.engine.arg_utils import EngineArgs
     from vllm.model_executor.layers.fused_moe.activation import MoEActivation
-    from vllm.model_executor.layers.fused_moe.config import FusedMoEConfig, FusedMoEParallelConfig, RoutingMethodType
+    from vllm.model_executor.layers.fused_moe.config import (
+        FusedMoEConfig,
+        FusedMoEParallelConfig,
+        RoutingMethodType,
+    )
     from vllm.model_executor.layers.fused_moe.oracle.mxfp4 import (
         Mxfp4MoeBackend,
         mxfp4_round_up_hidden_size_and_intermediate_size,
         select_deepseek_v4_mxfp4_moe_backend,
     )
-    from vllm.model_executor.layers.quantization.utils.marlin_utils import get_marlin_input_dtype
+    from vllm.model_executor.layers.quantization.utils.marlin_utils import (
+        get_marlin_input_dtype,
+    )
     from vllm.usage.usage_lib import UsageContext
 
     cfg = FusedMoEConfig(num_experts=NUM_EXPERTS, experts_per_token=TOP_K, hidden_dim=HIDDEN, intermediate_size=INTER,
@@ -433,7 +439,9 @@ def weights(work: Path, seed: int) -> dict[str, Any]:
     codes [E][N][K] (every e2m1 code), scale bytes [E][N][K / 32] in SCALE_BYTES, the edge experts' partly from EDGE_BYTES; packed
     as the checkpoint is, two codes a byte, the even k in the low nibble (GPTQ's order, which `gptq_marlin_repack` reads)."""
     import torch
-    from vllm.model_executor.layers.quantization.utils.marlin_utils_fp4 import prepare_moe_mxfp4_layer_for_marlin
+    from vllm.model_executor.layers.quantization.utils.marlin_utils_fp4 import (
+        prepare_moe_mxfp4_layer_for_marlin,
+    )
 
     gen = torch.Generator(device="cuda").manual_seed(seed)
     edge = torch.tensor(EDGE_BYTES, device="cuda", dtype=torch.uint8)
@@ -808,7 +816,9 @@ def forced_launches(work: Path, W: dict[str, Any], cap: dict[str, Any], sms: int
 
     import torch
     from vllm import _custom_ops as ops
-    from vllm.model_executor.layers.quantization.utils.marlin_utils import marlin_make_workspace_new
+    from vllm.model_executor.layers.quantization.utils.marlin_utils import (
+        marlin_make_workspace_new,
+    )
 
     kind, L = cap["launch"], cap["L"]
     K, N = shape(kind)
@@ -818,6 +828,7 @@ def forced_launches(work: Path, W: dict[str, Any], cap: dict[str, Any], sms: int
     if list(xs.shape) != list(L["input"].shape):
         raise RuntimeError(f"probe {list(xs.shape)} for input {list(L['input'].shape)}")
     x = torch.from_numpy(xs.view(np.int16)).to(L["input"].device).view(torch.bfloat16)
+    classes: dict[str, list[list[int]]]
     launches, specs, classes = [], [], {}
     for tk, tn, b in candidates(moe_block_size_of(cap["M"])):
         out = torch.full_like(L["output"].view(torch.int16), SENTINEL).view(torch.bfloat16)

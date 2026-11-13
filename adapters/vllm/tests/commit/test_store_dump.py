@@ -164,6 +164,16 @@ def test_touching_a_read_records_what_the_verified_read_opens():
     assert touched.ranges == verified.ranges and touched.nodes == verified.nodes and touched.ranges[2]
 
 
+def test_touching_a_step_the_committer_holds_no_layout_for_opens_nothing():
+    """`verity_vllm.commit.store_dump.touch`: a read of a step the committer committed no layout for, like a read of a member its
+    step does not hold, opens no range and no tree node."""
+    com, _rc = commit_steps(STEPS)
+    assert 99 not in com._layouts
+    with SD.touched(com) as touched:
+        SD.touch(com, [(99, "runner.sampler", 0, 4), (0, "no.such.member", 0, 4)])
+    assert not any(touched.ranges.values()) and not any(touched.nodes.values())
+
+
 def test_a_rows_store_dumps_its_nodes_and_keys_in_full(tmp_path):
     com, rc = commit_steps(STEPS)
     doc = SD.dump(com, rc, tmp_path)

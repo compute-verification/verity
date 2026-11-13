@@ -9,8 +9,6 @@ __models__ = ("zai-org/GLM-5.3",)
 import copy
 import json
 import os
-import sys
-import types
 from typing import Any
 
 import numpy as np
@@ -20,6 +18,7 @@ from verity.definitions.numerics import sparse_mla_split_twins as TW
 from verity.definitions.registry import sparse_mla as M
 from verity.definitions.registry import sparse_mla_split as W
 
+from tests import fake_vllm
 from tests.properties import glm53_fa3_split_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
 from verity_vllm.properties.record import REGISTRY, digest_of, seal
@@ -220,10 +219,7 @@ def test_each_launch_has_its_own_verdict() -> None:
 
 
 def _stub_envs(monkeypatch, batch_invariant: bool = False) -> None:
-    envs = types.ModuleType("vllm.envs")
-    vars(envs).update(VLLM_BATCH_INVARIANT=batch_invariant)
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.envs", envs)
+    fake_vllm.install(monkeypatch)["vllm.envs"].VLLM_BATCH_INVARIANT = batch_invariant
 
 
 def test_served_reads_batch_invariance_back_from_vllm(monkeypatch) -> None:

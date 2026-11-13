@@ -505,7 +505,6 @@ def stack() -> dict[str, Any]:
     """What the kernels of record came from: torch, vLLM, the CuTe DSL, `_C_stable_libtorch` and its SASS architectures."""
     import torch
     import vllm
-
     import vllm._C_stable_libtorch as CS
 
     rec: dict[str, Any] = {"torch": torch.__version__, "cuda": torch.version.cuda, "vllm": getattr(vllm, "__version__", None),
@@ -572,7 +571,7 @@ def launch_sumsq_probe() -> dict[str, Any]:
     torch.cuda.synchronize()
     got = _u16(out)[0, 0]
     fn = bind(R.Dsv4QNormRope, D=D, DR=DR, EPS=SUMSQ_PROBE_EPS)
-    fused = np.asarray(_flat(evaluate(fn, o["q"][0, 0].tolist(), o["cs"][0].tolist())), dtype=np.uint16)
+    fused: np.ndarray = np.asarray(_flat(evaluate(fn, o["q"][0, 0].tolist(), o["cs"][0].tolist())), dtype=np.uint16)
     fused_model = sumsq_probe_reference(o["q"][0, 0], o["cs"][0], fused=True)
     unfused = sumsq_probe_reference(o["q"][0, 0], o["cs"][0], fused=False)
     fused_bad = np.flatnonzero(got != fused)
@@ -595,7 +594,6 @@ def launch_sumsq_probe() -> dict[str, Any]:
 def launch_insert(work: Path, case: str, quick: bool) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """One insert case, twice on caches of two fills: its launch record and comparison jobs."""
     import torch
-
     import vllm._C_stable_libtorch  # noqa: F401
 
     o = insert_operands(case)
@@ -628,7 +626,9 @@ def launch_indexer(work: Path, case: str, quick: bool) -> tuple[dict[str, Any], 
     """One indexer case, twice: its launch record and comparison jobs."""
     import torch
     from cutlass import Float32
-    from vllm.models.deepseek_v4.common.ops.fused_indexer_q import fused_indexer_q_rope_quant
+    from vllm.models.deepseek_v4.common.ops.fused_indexer_q import (
+        fused_indexer_q_rope_quant,
+    )
     from vllm.models.deepseek_v4.nvidia.ops import fused_indexer_q_cutedsl as K
 
     o = indexer_operands(case)
@@ -677,7 +677,7 @@ def bind_check() -> dict[str, Any]:
         "insert row -> FlashMlaKvRow_v1{DN=448,DR=64,QT=64}": row_seam,
         "indexer q, w -> DsaMqaLogit_v1{H=64,D=128}": logit_seam,
     }
-    out = {}
+    out: dict[str, bool | str] = {}
     for name, check in targets.items():
         try:
             out[name] = check()

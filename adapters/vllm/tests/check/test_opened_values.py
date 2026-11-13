@@ -86,7 +86,8 @@ def test_block_layout_a_byte_changed_after_the_commit_fails_every_read_of_its_le
         rd(0, "t0.4", 1400, 1600)
     assert rd(0, "t0.4", 0, 900) == steps[0][4][1][:900]       # the member's other row still opens and verifies ...
     assert rd(0, "t0.3", 0, 7000) == steps[0][3][1]            # ... and so does its neighbour (row 2 is shared, unchanged)
-    assert rd.or_none(0, "t0.4", 0, 3000) is None              # a whole-member read includes row 3
+    with pytest.raises(OC.OpeningNotVerified):                 # a whole-member read includes row 3
+        rd(0, "t0.4", 0, 3000)
     rec = rd.record()
     assert rec["failed"] == 2 and rec["reads"] == 2
     assert rec["failures"][0] == {"step": 0, "name": "t0.4", "ordinal": 4, "byte_lo": 1400, "byte_hi": 1600, "leaves": [3, 4]}

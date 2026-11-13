@@ -23,19 +23,19 @@ import pytest
 
 import circuit_fixtures as CF
 import pearl_c_vectors as V
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_bytes
-from verity.circuits.evaluation import evaluate
 from verity.circuits import partition_object as PO
+from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
-from verity.definitions.silicon import fp32
 from verity.commitments.randomness import derive
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row_bytes
+from verity.definitions.silicon import fp32
 from verity.protocols.pouw.prover.circuit import cap, pc8, plan
 from verity.protocols.pouw.prover.circuit import leaves as L
-from verity.protocols.pouw.verifier.protocol import DomainError, Shape
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c_debit as D
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.pouw.verifier.protocol import DomainError, Shape
 
 FINITE = [c for c in range(256) if c not in (0x7F, 0xFF)]
 SMALL = [c for c in FINITE if c & 0x7F < 0x10]                     # E4M3 subnormals and the smallest normals

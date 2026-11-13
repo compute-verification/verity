@@ -6,12 +6,14 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Any
 
 import numpy as np
 import pytest
 
 from tests.check.test_weights_of_record import live_digests, write_safetensors
 from tests.check.test_weights_of_record_routed_experts import _program
+from verity_vllm.check import derived_weights
 from verity_vllm.check import weights_of_record as WR
 
 torch = pytest.importorskip("torch")
@@ -83,7 +85,7 @@ def _served(t):
             f"{L0}.ffn.shared_experts.down_proj.weight_scale_inv": up("layers.0.ffn.shared_experts.w2.scale")[:, RANK:RANK + 1],
             f"{L0}.hc_attn_fn": raw("layers.0.hc_attn_fn").view(np.uint32),
             f"{L0}.hc_attn_fn_broadcast": torch.from_numpy(raw("layers.0.hc_attn_fn")).view(-1, 4, H).sum(dim=1).numpy().view(np.uint32)}
-    roles = {f"model.{n}": REQUANT[n.rsplit(".", 1)[1]] for n in want if re.search(r"(wq_b|wo_b|fused_wqa_wkv|shared_experts\.\w+)\.weight", n)}
+    roles: dict[str, dict[str, Any]] = {f"model.{n}": REQUANT[n.rsplit(".", 1)[1]] for n in want if re.search(r"(wq_b|wo_b|fused_wqa_wkv|shared_experts\.\w+)\.weight", n)}
     roles |= {f"model.{L0}.attn.wo_a.weight": {"role": "fp8_einsum_w"}, f"model.{L0}.attn.wo_a.weight_scale_inv": {"role": "fp8_einsum_ws"},
               f"model.{L0}.attn.attn_sink": {"role": "dsv4.attn_sink", "NH": NH},
               f"model.{L0}.hc_attn_fn_broadcast": {"role": "mhc.fn_broadcast", "HC": 4, "H": H}}
@@ -116,6 +118,17 @@ def test_the_e8m0_upcast_is_vllms_shift_and_the_streams_order_shows_in_the_broad
     fn = dsv4["t"]["layers.0.hc_attn_fn"][1].reshape(M, 4, H)
     pairwise = ((fn[:, 0] + fn[:, 1]) + (fn[:, 2] + fn[:, 3])).view(np.uint32)
     assert not np.array_equal(pairwise, _served(dsv4["t"])[0][f"{L0}.hc_attn_fn_broadcast"]), "the fixture tells the streams' order apart"
+
+
+@pytest.mark.parametrize("empty", [None, {}, [], "", 0, False])
+def test_a_role_the_derive_report_leaves_empty_or_zero_composes_the_field_as_one_with_no_role(dsv4, empty):
+    want, roles = _served(dsv4["t"])
+    field = f"model.{L0}.hc_attn_fn"
+    assert field not in roles and derived_weights.compose(f"{L0}.hc_attn_fn", [M, 4 * H], 32, empty, dsv4["ck"], WORLD, RANK) is None
+    plain = _record(dsv4, want, roles)
+    rec = _record(dsv4, want, {**roles, field: empty})
+    assert json.loads((dsv4["dir"] / "derive-report.json").read_text())["weight_roles"][field] == empty
+    assert rec["complete"] is True and rec["unresolved"] == [] and rec["fields"] == plain["fields"]
 
 
 @pytest.mark.parametrize("fault", ["tid2eid out of int32", "more rank heads than the padded sink"])

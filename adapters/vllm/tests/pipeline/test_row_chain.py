@@ -3,8 +3,9 @@ artifacts, the Commit's summary.json, the newest captures of record and the tree
 and a chain that would publish a row whose file is not done only at its public cap is refused before any stage runs.  The research
 CLI and `records publish` are stand-ins that record what they were asked.
 
-Then the run store's driver beside the chain (`pipeline/research.py`, which only this file may import): a job's recorded input,
-the pod guard's preserve list, a `row.json` that does not parse, and `row shed` on a tree with no pod guard."""
+Then the run store's driver beside the chain (`pipeline/research.py`, private with this file in the public boundary's `team` group,
+so only a file the boundary keeps private may import it): a job's recorded input, the pod guard's preserve list, a `row.json` that
+does not parse, and `row shed` on a tree with no pod guard."""
 from __future__ import annotations
 
 import json
@@ -223,7 +224,8 @@ def test_a_run_is_put_on_the_preserve_list_once(tmp_path, capsys, caplog):
 
 def test_a_row_json_that_does_not_parse_is_said_and_left_as_it_is(tmp_path, capsys, caplog):
     R._row_json(str(tmp_path), ("stages", "build"), {"rc": 0})
-    assert json.loads((tmp_path / "row.json").read_text())["stages"] == {"build": {"rc": 0}} and _said(capsys, caplog) == ""
+    assert json.loads((tmp_path / "row.json").read_text()) == {"schema": "verity-sweep/row-v2/v1", "stages": {"build": {"rc": 0}}}
+    assert _said(capsys, caplog) == ""
     (tmp_path / "row.json").write_text("{")
     R._row_json(str(tmp_path), ("stages", "match"), {"rc": 0})
     assert "row.json not updated" in _said(capsys, caplog) and (tmp_path / "row.json").read_text() == "{"

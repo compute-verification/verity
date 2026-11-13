@@ -325,6 +325,32 @@ def test_a_relabel_that_raises_leaves_its_rank_to_a_full_derive(tmp_path):
     assert _relabeled(row) == [] and all(os.path.isfile(f"{row.rank(r)}/{REQ}/result.json") for r in range(W))
 
 
+def test_the_step_guard_says_why_a_rank_was_not_compared(tmp_path):
+    """A rank is compared only when its own step and the template's relabel of it were both derived; otherwise the guard names
+    whichever failed, and for a relabel the reason the template's report gives (none: "no emit report")."""
+    bdir, chk, t = str(tmp_path), str(tmp_path / "relabel_check"), 1
+
+    def derived(d: str, ok: bool = True) -> None:
+        os.makedirs(d)
+        Path(d, "result.json").write_text(json.dumps({"ok": ok}))
+
+    for r in range(6):
+        derived(f"{bdir}/rank{r}/build_step", ok=r != 3)
+    derived(f"{chk}/rank0/build_step")
+    os.makedirs(f"{chk}/rank{t}")
+    report = [{"rank": 0, "ok": True}, {"rank": 2, "ok": False, "error": "RuntimeError: emit of rank 2 failed"}, {"rank": 5, "ok": False}]
+    Path(f"{chk}/rank{t}/build_step.relabel.json").write_text(json.dumps({"schema": emit_ranks.SCHEMA, "ranks": report}))
+    assert RB.step_guard(bdir, chk, 6, t) == {
+        0: {"ok": True},
+        1: {"ok": False, "why": "the template's step derive failed"},
+        2: {"ok": False, "why": "its relabel failed: RuntimeError: emit of rank 2 failed"},
+        3: {"ok": False, "why": "its step derive failed"},
+        4: {"ok": False, "why": "its relabel failed: no emit report"},
+        5: {"ok": False, "why": "its relabel failed: no emit report"}}
+    os.remove(f"{chk}/rank{t}/build_step.relabel.json")      # the template's process died before it wrote its report
+    assert RB.step_guard(bdir, chk, 6, t)[2] == {"ok": False, "why": "its relabel failed: no emit report"}
+
+
 def test_compare_dirs_names_the_first_difference(tmp_path, monkeypatch):
     a, b = tmp_path / "a", tmp_path / "b"
     for d in (a, b):
@@ -368,3 +394,25 @@ def test_compare_dirs_names_a_file_it_cannot_read_as_a_difference(tmp_path):
     (a / "result.json").write_text("{}")
     assert RB.compare_dirs(str(a), str(b))["files"] == ["descriptor.json.gz", "result.json"], "a summary that is not JSON too"
     assert RB._where({"file": "x", "only_in": "real"}) == "only in the real directory"
+
+
+def test_compare_dirs_reads_the_real_side_of_a_telemetry_file_before_it_opens_the_other(tmp_path, monkeypatch):
+    """A telemetry file is read one side after the other: the real directory's is opened and parsed before the relabel's is opened.  So
+    where neither side can be read, the difference says why the real side could not, and the relabel's file is not opened."""
+    a, b = tmp_path / "a", tmp_path / "b"
+    for d in (a, b):
+        d.mkdir()
+    (a / "result.json").write_text("{")
+    (b / "result.json").write_text("{}")
+    opened: list[str] = []
+
+    def opens(path, *args, **kw):
+        opened.append(Path(path).parent.name)
+        if Path(path).parent.name == "b":
+            raise PermissionError(13, "Permission denied", str(path))
+        return open(path, *args, **kw)
+
+    monkeypatch.setattr(RB, "open", opens, raising=False)
+    diff = RB.compare_dirs(str(a), str(b))
+    assert diff is not None and diff["file"] == "result.json" and diff["unreadable"].startswith("JSONDecodeError"), diff
+    assert opened == ["a"]

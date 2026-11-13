@@ -31,6 +31,9 @@ from verity.circuits.types import Array, RecordType, Value
 from verity.definitions.registry import b1
 from verity.definitions.registry.prims import BF16
 
+__all__ = ["INT8_EXACT_QUANT", "check_cos_sin", "config_of", "cos_sin_table", "f32_to_bf16_words", "fp8_moe_block",
+           "mla_weights_type", "normalizer_word", "quant_refusal", "rotary_dim", "weights_type"]
+
 COS_SIN_MAX_ULP = 1     # gate I9 (frozen with gates.py; change only through an approved decision)
 
 #: model_type -> family facts vLLM hard-codes (not in config.json).  `qkv_bias`: Qwen2Attention passes bias=True unconditionally;
@@ -62,7 +65,8 @@ INT8_EXACT_LMHEAD_QUANT = {**INT8_EXACT_QUANT, "modules_to_not_convert": []}
 
 
 def is_int8_exact(qc: dict[str, Any] | None) -> bool:
-    return qc is not None and str(qc.get("quant_method", "")).lower() == INT8_EXACT_QUANT["quant_method"]
+    """Whether `qc`'s `quant_method` is the exact-int8 profile's.  False for an absent or empty `qc` of any type, which is not read."""
+    return bool(qc and str(qc.get("quant_method", "")).lower() == INT8_EXACT_QUANT["quant_method"])
 
 
 def _moe_routers(cfg: dict[str, Any] | None) -> set[str]:

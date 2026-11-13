@@ -36,7 +36,7 @@ def canonicalize(dp, canon: dict[str, tuple[Any, dict]] | None = None) -> None:
             # the request Program's ROOT is never shared: its body becomes the component's
             # (`WorkloadRequest{program_digest, program_fn}`, identity = the whole descriptor's digest) and nothing calls it. Its id is
             # derive's `Root[Derived[vLLMRequest[...]]{SRC=...}]` whose SRC static names class/mode/profile/INPUT SHAPES/config -- not T --
-            # so two requests of one manifest with the same prompt length and different caps (LP11: T24/T36) carry ONE root id over two
+            # so two requests of one manifest with the same prompt length and different token limits (LP11: T24/T36) carry ONE root id over two
             # bodies, and comparing roots under that id would refuse a valid workload (E_IDENTITY) although their digests differ. Callees stay
             # under the fail-closed rule below; the root's identity is the component digest.
             continue

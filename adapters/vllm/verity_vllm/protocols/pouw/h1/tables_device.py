@@ -138,7 +138,7 @@ def device_lib(arch: str) -> ctypes.CDLL:
     dll = RTD._build(tool, RTD.DEVICE_SOURCES, (*RTD.NVCC_FLAGS, f"-gencode=arch=compute_{arch},code=sm_{arch}"),
                      "librow_table_cuda.so")
     dll.rt_midstates.argtypes = [_vp, _vp, _vp]
-    dll.rt_step.argtypes = [_vp, _vp, _vp, ctypes.c_uint64, ctypes.c_uint32, _vp, _vp, ctypes.POINTER(RTD.Args)] + [_vp] * 5
+    dll.rt_step.argtypes = [_vp, _vp, _vp, ctypes.c_uint64, ctypes.c_uint32, _vp, _vp, ctypes.POINTER(RTD.Args), *[_vp] * 5]
     dll.rt_midstates.restype = dll.rt_step.restype = ctypes.c_int
     return dll
 

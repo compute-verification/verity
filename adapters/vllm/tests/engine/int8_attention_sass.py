@@ -244,8 +244,8 @@ def fmad_rule(ptx: str, cap: int) -> dict[str, Any]:
     ffma = [sum(t.split()[0].startswith("FFMA") for t in x) for x in (on, off)]
     same = on == off
     return {"same": same, "ffma_contraction_allowed": ffma[0], "ffma_fmad_false": ffma[1],
-            "refused": [] if same else [f"fmad: ptxas contracts this PTX when allowed ({ffma[0]} FFMA against {ffma[1]} with "
-                                        "--fmad=false)"]}
+            "refused": [] if same else [(f"fmad: ptxas contracts this PTX when allowed ({ffma[0]} FFMA against {ffma[1]} with "
+                                         "--fmad=false)")]}
 
 
 def gate(kernel: str, ptx: str, cubin: bytes, cap: int) -> dict[str, Any]:
@@ -269,6 +269,7 @@ def div_full_mutant(where: Path) -> ModuleType:
     path = where / "int8_attention_triton_div_full.py"
     path.write_text(src.replace(old, "x / s"))
     spec = importlib.util.spec_from_file_location("int8_attention_triton_div_full", path)
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

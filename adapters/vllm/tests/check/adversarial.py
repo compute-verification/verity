@@ -9,11 +9,15 @@ often it fired.
 """
 from __future__ import annotations
 
+import copy
 import dataclasses
+import re
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from verity.circuits.defs import bind, composite
+from verity.circuits.layout import FunctionCall
 from verity.circuits.refs import Coll as _Coll
 from verity.circuits.refs import concat
 from verity.circuits.types import Array
@@ -96,7 +100,7 @@ def mutate_profile(profile: Profile, target: str | Callable[[Any], bool], rewrit
     `MutatingPattern(rewrite)`, every other pattern in `RecordingPattern` (so rewrites can consult `state`)."""
     state: dict = {"hits": []}
     sel = (lambda p: p.name == target) if isinstance(target, str) else target
-    pats = []
+    pats: list = []
     for p in profile.patterns:
         if sel(p):
             mp = MutatingPattern(p, rewrite, state)
@@ -128,7 +132,6 @@ def spec_name(spec) -> str:
 
 
 def layer_of(hint: str) -> int | None:
-    import re
     m = re.search(r"layers\.(\d+)\.", hint or "")
     return int(m.group(1)) if m else None
 
@@ -253,8 +256,8 @@ def catalogue(*, layer: int, o_hint: str, big_hint: str, ln1_hint: str, alt_hint
             return None
         c = parts[idx[0]]
         gu = c.operands[0].view
-        I = c.outputs[0].view.shape[1]
-        parts[idx[0]] = Transparent("move", c.consumed, PerRow(half_cols(gu, 0, I)), c.outputs[0], c.rows, c.hint,
+        width = c.outputs[0].view.shape[1]
+        parts[idx[0]] = Transparent("move", c.consumed, PerRow(half_cols(gu, 0, width)), c.outputs[0], c.rows, c.hint,
                                     c.kernels, c.pattern)
         return parts
     M["M03"] = Mutation("M03", "swallowed runtime operation (Compute -> Transparent move)",
@@ -304,13 +307,13 @@ def catalogue(*, layer: int, o_hint: str, big_hint: str, ln1_hint: str, alt_hint
         c = parts[idx[0]]
         if c.rows != 1:
             return None                                              # one row per instance keeps the constant table small
-        I = c.outputs[0].view.shape[1]
+        width = c.outputs[0].view.shape[1]
         tag = int(node.id)
         words = BAKED.get(tag)
         if words is None:
             return None                                              # the record (snapshot) was not consulted for this event
-        parts[idx[0]] = dataclasses.replace(c, spec=bind(AdvBakedOutput, N=I, TAG=tag),
-                                            operands=(PerRow(half_cols(c.operands[0].view, 0, I)),))
+        parts[idx[0]] = dataclasses.replace(c, spec=bind(AdvBakedOutput, N=width, TAG=tag),
+                                            operands=(PerRow(half_cols(c.operands[0].view, 0, width)),))
         return parts
     M["M06"] = Mutation("M06", "output smuggled as a Definition constant (per-instance specialization)",
                         f"pattern `{silu_pat}`: layer-{layer} decode SiluMul := AdvBakedOutput{{N,TAG=event}} whose body returns the observed bytes",
@@ -402,7 +405,6 @@ class ToyRecord:
         t = _evaluate_program(r, weights)
         snapdir.mkdir(parents=True, exist_ok=True)
         _write_snapshots(r, t, snapdir)
-        import copy
 
         from verity_vllm.check.fold_compare import SnapshotStore
         self.genuine, self.weights, self.transcript = r, weights, t
@@ -446,7 +448,6 @@ class ToyRecord:
                 BAKED[int(m["event"])] = tuple(int(w) for w in call_outs)
 
     def _returns(self, node: int):
-        from verity.circuits.layout import FunctionCall
         circuit = self.genuine.program.circuit
         n_in = len(self.genuine.program.root.body.nodes) - len(self.genuine.body.nodes)
         return FunctionCall(circuit, circuit.root_scope, n_in + node).returns

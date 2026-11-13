@@ -13,9 +13,9 @@ runs (`check.verdict_packs`), each held to the sha256 the store lists for it (`c
 Never packed, since they aren't verdicts: `lean-deps/` (fetched dependencies), `lean-builds/` (the Lean audit's kept builds,
 `lean_audit.WarmBuilds`, whose `ir/*.setup.json` run to 9 MB each), `lean-artifacts/`
 (Lake's cache of built modules, `lean_audit.LakeArtifacts`, whose index entries name files no pack carries), the trees steps build in, not even walked since a
-tree holds a package's dependencies, some 170k files (`lean_changed.py`'s `lean-changed/` for check's early Lean step and
-`lean-records/` for the Lean fast path, and `lean_audit.py`'s `lean-audit-scratch-*/`, which another slot may remove while this one
-reads it), the suites' `logs/` and `durations.json`, and any file that isn't a finished `.json` entry. An entry that goes away while
+tree holds a package's dependencies, some 170k files (`lean_changed.py`'s `lean-records/` for the Lean fast path,
+`lean-changed/`, which a node may still hold though no step builds in it, and `lean_audit.py`'s `lean-audit-scratch-*/`, which
+another slot may remove while this one reads it), the suites' `logs/` and `durations.json`, and any file that isn't a finished `.json` entry. An entry that goes away while
 it is read (`suites.py` keeps only a module's newest passes) is left out.
 
 Each root keeps a hidden index, `.verdicts-index.json`, memoizing its entries' sha256 by (size, mtime_ns), so `snapshot` and a
@@ -24,7 +24,8 @@ read.  Hidden files are never listed and never packed, and a missing or garbled 
 
 An entry may name the entries it can't be read without (`NEEDS`), and a pack that holds it holds them too, whether or not they
 are new: circuit-check's entries refer to read records each stored once (`circuit_check.cache`), which a later run's entries
-share.
+share.  circuit-check's binding records the store holds are left out of a recorded check's pack and named in its
+`circuit-records/` member instead, which `import` leaves out (`records.py`).
 
 A pack is a tar of regular files under `check/` and `tests/`, gzipped, or xz-compressed when `export_paths` writes a recorded
 check's reused passes (`check.Reused`), whose circuit-check entries share most of their bytes. `import` refuses a pack holding anything else (a link, an
@@ -51,7 +52,8 @@ _spec = importlib.util.spec_from_file_location("verdicts_settings", Path(__file_
 #: every environment variable check reads, declared once (`settings.py`), from beside this file: `plan.py --on` sends both
 SETTINGS = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(SETTINGS)
-SKIP = {"check": {"lean-deps", "lean-builds", "lean-changed", "lean-records", "lean-artifacts"}, "tests": {"logs", "durations.json"}}
+SKIP = {"check": {"lean-deps", "lean-builds", "lean-changed", "lean-records", "lean-artifacts", "circuit-records"},
+        "tests": {"logs", "durations.json"}}
 SCRATCH = {"check": ("lean-audit-scratch-",), "tests": ()}
 #: an entry's top-level list of the entries it can't be read without, each by its path from the entry's own directory, in its
 #: own root: a cache that stores each distinct part of its entries once (`circuit_check.cache`'s read records) names them here
@@ -239,16 +241,18 @@ def _closed(files: dict[str, Path]) -> dict[str, Path]:
     return out
 
 
-def export(out: Path, since: dict[str, str] | None = None, new: dict[str, tuple[str, Path]] | None = None) -> int:
-    """Write the entries new or changed since `since` (all when None; ``new``, `changed(since)`, when given), with every entry
-    they need (`_closed`), as a pack at `out`; the number written.  With `since`, only the new or changed entries and what they
+def export(out: Path, since: dict[str, str] | None = None, new: dict[str, tuple[str, Path]] | None = None,
+           drop: set[str] | frozenset[str] = frozenset(), extra: tuple[tuple[str, bytes], ...] = ()) -> int:
+    """Write the entries new or changed since `since` (all when None; ``new``, `changed(since)`, when given), less those ``drop``
+    names, with every entry they need (`_closed`, a dropped one too), then the members ``extra`` ((pack path, bytes): `records`'
+    manifest), as a pack at `out`; the number of entries written.  With `since`, only the new or changed entries and what they
     need are read (`_digests`), so a check's closing export costs what the run stored, not the whole cache."""
     if since is None and new is None:
-        files = entries()
+        files = {k: p for k, p in entries().items() if k not in drop}
     else:
         new = changed(since) if new is None else new
-        files = _closed({k: p for k, (_d, p) in new.items()})
-    return _write(out, sorted(files.items()))
+        files = _closed({k: p for k, (_d, p) in new.items() if k not in drop})
+    return _write(out, [*sorted(files.items()), *extra]) - len(extra)
 
 
 def export_paths(out: Path, paths, xz: bool = False) -> int:

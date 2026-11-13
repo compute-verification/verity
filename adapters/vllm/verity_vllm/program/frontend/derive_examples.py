@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import functools
 import math
 
 import torch
@@ -201,6 +202,7 @@ class Model(nn.Module):
         for layer in self.layers:
             hidden_states, residual = layer(positions, hidden_states, residual, pad)
         if last_only:
+            assert residual is not None
             hidden_states, residual = hidden_states[-1:], residual[-1:]
         hidden_states, _ = self.norm(hidden_states, residual)
         return hidden_states
@@ -408,6 +410,7 @@ class HFDecoderLayer(nn.Module):
             k = self.k_proj(h).view(1, T, self.KVH, self.D).transpose(1, 2)
             v = self.v_proj(h).view(1, T, self.KVH, self.D).transpose(1, 2)
             if position_embeddings is None:  # layer-local rotary (a single-layer example); HF computes it once at model level
+                assert self.rotary_emb is not None
                 position_ids = torch.arange(T).unsqueeze(0)
                 position_embeddings = self.rotary_emb(h, position_ids)
             cos, sin = position_embeddings
@@ -687,12 +690,21 @@ class NegStaleAlias(nn.Module):
         return qkv  # stale: the source reads the pre-mutation alias
 
 
+@functools.cache
+def _mystery_op() -> torch.library.Library:
+    """`someone_else::mystery`, defined at its first use and kept for the process: a custom op with a fake impl."""
+    lib = torch.library.Library("someone_else", "FRAGMENT")
+    lib.define("mystery(Tensor a) -> Tensor")
+    torch.library.register_fake("someone_else::mystery", lambda a: torch.empty_like(a))
+    return lib
+
+
 class NegCustomOp(nn.Module):
-    """A custom op with a fake impl but no Verity binding (`examples.py`'s `someone_else::mystery`)."""
+    """A custom op with a fake impl but no Verity binding (`someone_else::mystery`)."""
 
     def __init__(self) -> None:
         super().__init__()
-        from verity_vllm.program.frontend import examples  # noqa: F401  (defines someone_else::mystery)
+        _mystery_op()
         self.fc = nn.Linear(8, 8)
 
     def forward(self, x):

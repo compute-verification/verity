@@ -13,9 +13,10 @@
 * save_partial_states moves each token's kv row to its compressor state slot and writes the Build's `Dsv4CompressorScore_v1{W}`
   of its score row and ape[pos % R] beside it, per cache block;
 * the o-projection input's inverse RoPE and FP8 quantisation is the Build's `Dsv4InvRopeQuantHead_v1` per token and head, into its
-  group's row and the wrapper's TMA-aligned scale layout, refused off the Definition's floor or that layout;
+  group's row and the wrapper's TMA-aligned scale layout, refused off the Definition's floor, that layout or the kernel's pin;
 * DeepGEMM's wo_a einsum leaves only z's allocation after it, which is the Build's `ScaledMmFp8BlockGrouped_v1` per token over the
   quant's rows and wo_a's roots;
+* the clamped SwiGLU is the Build's `SiluMulClamp_v1` at the call's limit, refused at another alpha or beta or off a bf16 limit;
 * the indexer's compressor (its state write and its compress) folds to nothing, as the Build's indexer leaf on the short path,
   and its compress off its pin or outside the indexer's compressor is refused;
 * a head-512 compressor's compress, which leaves no event, is the attention's: at each window end its state rows' `Dsv4MlaCompressC128_v1`
@@ -41,6 +42,7 @@ from verity_vllm.observe.events import (
     TritonLaunch,
     ViewDesc,
 )
+from verity_vllm.observe.fold.patterns.activations import SiluAndMulWithClamp
 from verity_vllm.observe.fold.patterns.dsv4 import (
     INDEXER_COMPRESS_KERNEL,
     INDEXER_COMPRESS_SRC_SHA,
@@ -64,6 +66,7 @@ from verity_vllm.observe.fold.patterns.dsv4_flashmla import (
 )
 from verity_vllm.observe.fold.patterns.target import target_of_header
 from verity_vllm.observe.fold.resolver import (
+    Compute,
     Group,
     PerRow,
     Shared,
@@ -201,14 +204,14 @@ def test_a_compressor_mm_is_the_builds_f32_output_cublas_gemm_over_its_weight(T,
     assert isinstance(CublasMmF32Out().match(_mm(T, N, 950), _ctx(T)), Unsupported), "a weight with no root is refused"
 
 
-def _qkv_norm(T, q_offset=0, block=2048):
+def _qkv_norm(T, q_offset=0, block=2048, **over):
     args = {"q_ptr": ViewDesc(960, q_offset, (T, 1536), (2048, 1), "bfloat16", CUDA), "q_out_ptr": view(961, (T, 1536)),
             "q_weight_ptr": view(962, (1536,)), "q_in_stride": 2048, "q_out_stride": 1536,
             "kv_ptr": ViewDesc(960, q_offset + 1536, (T, 512), (2048, 1), "bfloat16", CUDA), "kv_out_ptr": view(963, (T, 512)),
             "kv_weight_ptr": view(964, (512,)), "kv_in_stride": 2048, "kv_out_stride": 512, "eps": 1e-6}
     consts = {"Q_SIZE": 1536, "KV_SIZE": 512, "BLOCK_SIZE": block, "launch_pdl": True}
-    ev = TritonLaunch(1, None, 0, "forward", QKV_RMS_PINS["kernel"], QKV_RMS_PINS["src_sha256"], {**args, **consts}, consts, [T, 2], 8, 3, 7,
-                      "model.layers.0.attn")
+    ev = TritonLaunch(1, None, 0, "forward", QKV_RMS_PINS["kernel"], QKV_RMS_PINS["src_sha256"], {**args, **consts, **over}, consts, [T, 2], 8, 3,
+                      7, "model.layers.0.attn")
     return build_trees([ev])[0][0]
 
 
@@ -230,6 +233,14 @@ def test_a_fused_q_kv_rmsnorm_off_the_wrappers_launch_or_ptx_specialization_or_w
     assert isinstance(QKvRmsNorm().match(_qkv_norm(1, block=4096), _ctx(1, QKV_ROOTS)), Unsupported)
     assert isinstance(QKvRmsNorm().match(_qkv_norm(1, q_offset=4), _ctx(1, QKV_ROOTS)), Unsupported), "a pointer 8 bytes off 16"
     assert isinstance(QKvRmsNorm().match(_qkv_norm(1), _ctx(1)), Unsupported)
+
+
+@pytest.mark.parametrize("over,sizes", [({"Q_SIZE": None}, [None, 512]), ({"KV_SIZE": 0}, [1536, 0]), ({"Q_SIZE": "1536"}, ["1536", 512]),
+                                        ({"eps": None}, [1536, 512])], ids=["no-q-size", "kv-size-0", "q-size-a-string", "no-eps"])
+def test_a_fused_q_kv_rmsnorm_without_two_positive_sizes_and_a_float_eps_is_refused_with_the_sizes_it_read(over, sizes):
+    r = QKvRmsNorm().match(_qkv_norm(1, **over), _ctx(1, QKV_ROOTS))
+    assert isinstance(r, Unsupported) and r.reason == "Q_SIZE, KV_SIZE and eps are not static positive sizes and a float"
+    assert r.detail["sizes"] == sizes and r.detail["eps"] == repr(over.get("eps", 1e-6))
 
 
 BLOCK_BYTES, POS, CACHE_STRIDE = 64 * (576 + 8), 970, 1435968
@@ -321,7 +332,7 @@ INV_ROPE_STATICS = {"heads_per_group": 8, "quant_group_size": 128, "chunks_per_h
                     "tma_aligned_scales": False, "fp8_max": 448.0, "n_groups": 2, "d": 4096, "scale_inner": 32}
 
 
-def _inv_rope(T, tma, scale_strides=None, eps=1e-10):
+def _inv_rope(T, tma, scale_strides=None, eps=1e-10, src=INV_ROPE_SRC_SHA, warps=1):
     o, pos, cs = ViewDesc(990, 0, (T, 16, 512), (32768, 512, 1), "bfloat16", CUDA), view(POS, (T,), "int64"), CS_ROOT.view
     fp8 = ViewDesc(991, 0, (2, T, 4096), (T * 4096, 4096, 1), "float8_e4m3fn", CUDA)
     sc = ViewDesc(992, 0, (2, T, 32), scale_strides or (32 * tma, 1, tma), "float32", CUDA)
@@ -332,7 +343,7 @@ def _inv_rope(T, tma, scale_strides=None, eps=1e-10):
             "o_stride_head": 512, "cache_stride_pos": 64, "fp8_stride_group": T * 4096, "fp8_stride_token": 4096,
             "scale_stride_group": sc.strides[0], "scale_stride_k": sc.strides[2], **consts}
     ev = [DispatchEnter(1, None, 0, "forward", "vllm.fused_inv_rope_fp8_quant_kernel.default", "", [], kw, 7, "model.layers.0.attn"),
-          TritonLaunch(2, 1, 0, "forward", INV_ROPE_KERNEL, INV_ROPE_SRC_SHA, args, consts, [tma, 16], 1, 1, 7, "model.layers.0.attn"),
+          TritonLaunch(2, 1, 0, "forward", INV_ROPE_KERNEL, src, args, consts, [tma, 16], warps, 1, 7, "model.layers.0.attn"),
           DispatchExit(1, [fp8, sc])]
     return build_trees(ev)[0][0]
 
@@ -355,6 +366,13 @@ def test_an_inverse_rope_quant_off_the_definitions_floor_or_the_wrappers_scale_l
     assert isinstance(InvRopeQuant().match(_inv_rope(3, 4, scale_strides=(96, 1, 3)), _insert_ctx(3, [])), Unsupported), \
         "a chunk stride under the aligned rows lets a padding program's zero land on a live scale"
     assert isinstance(InvRopeQuant().match(_inv_rope(1, 4), _insert_ctx(1, [], roots=())), Unsupported)
+
+
+@pytest.mark.parametrize("src, warps", [("0" * 64, 1), (INV_ROPE_SRC_SHA, 4)])
+def test_an_inverse_rope_quant_of_another_source_or_warp_count_is_refused_with_both(src, warps):
+    off = InvRopeQuant().match(_inv_rope(1, 4, src=src, warps=warps), _insert_ctx(1, []))
+    assert isinstance(off, Unsupported) and off.reason == "the kernel's source or warps differ from the pin"
+    assert (off.detail["src_sha"], off.detail["num_warps"]) == (src, warps) and off.consumed == (1, 2)
 
 
 WO_A_ROOTS = (CS_ROOT, Root(view(993, (2, 1024, 4096), "float8_e4m3fn"), "weight", "model.layers.0.attn.wo_a.weight"),
@@ -528,3 +546,29 @@ def test_a_split_buffer_other_than_the_dispatchs_or_a_weight_without_a_root_is_r
     assert isinstance(_run(_pre_broadcast(1, NS=27), _ctx(1)), Unsupported)
     r = _run(_pre_broadcast(1), _ctx(1, [r for r in ROOTS if not r.name.endswith("_broadcast")]))
     assert isinstance(r, Unsupported) and r.detail["missing"] == ["model.layers.0.hc_attn_fn_broadcast"]
+
+
+def _clamp(T, **kw):
+    x, out = view(700, (T, 192)), view(701, (T, 96))
+    return _dispatch("_C.silu_and_mul_with_clamp.default", {"result": out, "input": x, **kw}, None, "model.layers.0.ffn.act_fn"), x, out
+
+
+@pytest.mark.parametrize("kw", [{"limit": 10.0}, {"limit": 10, "alpha": 1, "beta": 0.0}])
+def test_the_clamped_swiglu_is_the_builds_clamp_kind_at_the_calls_limit(kw):
+    node, x, out = _clamp(3, **kw)
+    c = SiluAndMulWithClamp().match(node, _ctx(3))
+    assert isinstance(c, Compute) and spec_label(c.spec) == "SiluMulClamp_v1{I=96,LIMIT=10.0}" and c.pattern == "act.silu_and_mul_with_clamp"
+    assert (c.rows, c.operands, c.outputs, c.consumed) == (3, (PerRow(x),), (PerRow(out),), (1,))
+
+
+@pytest.mark.parametrize("kw, reason, detail", [
+    ({"limit": 10.0, "alpha": 2.0}, "alpha and beta are not 1 and 0", {"alpha": 2.0, "beta": 0.0}),
+    ({"limit": 10.0, "beta": 0.5}, "alpha and beta are not 1 and 0", {"alpha": 1.0, "beta": 0.5}),
+    ({}, "limit: float() argument must be a string or a real number", {"limit": "None"}),
+    ({"limit": "10"}, "limit: float() argument must be a string or a real number", {"limit": "'10'"}),
+    ({"limit": 0.1}, "limit: LIMIT must be a positive finite bf16 value, got 0.1", {"limit": "0.1"}),
+    ({"limit": -4.0}, "limit: LIMIT must be a positive finite bf16 value, got -4.0", {"limit": "-4.0"}),
+])
+def test_a_clamped_swiglu_at_another_alpha_or_beta_or_off_a_bf16_limit_is_refused(kw, reason, detail):
+    off = SiluAndMulWithClamp().match(_clamp(2, **kw)[0], _ctx(2))
+    assert isinstance(off, Unsupported) and reason in off.reason and {k: off.detail[k] for k in detail} == detail

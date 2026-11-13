@@ -5,6 +5,10 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
+pytest.importorskip("torch")
+
 from verity_vllm.observe.capture import Capture, ObserverConfig
 
 

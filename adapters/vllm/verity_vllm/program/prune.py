@@ -32,7 +32,7 @@ from functools import cache
 from itertools import accumulate, chain
 from typing import Any
 
-from verity.circuits.defs import Body, Node, bind
+from verity.circuits.defs import Body, BodyNode, bind
 from verity.circuits.refs import (
     Affine,
     Coll,
@@ -44,6 +44,8 @@ from verity.circuits.refs import (
     concat,
 )
 from verity.circuits.types import Array
+
+__all__ = ["BATCHED", "COLUMNS", "dead_free", "dead_free_versions", "dead_units", "kept_records", "registered_form"]
 
 
 def _parts(r: Concat, done: dict[int, list]) -> Iterable[Refs]:
@@ -271,7 +273,7 @@ def narrowed(body: Body) -> tuple[Body, dict[int, tuple[int, int]]]:
         params, ret = fn.signature()
         args = tuple(Coll(params[i][1], c.refs.slice(a * (c.type.leaves // N), b * (c.type.leaves // N))) if i in COLUMNS[n.fn.base_id]
                      else c for i, c in enumerate(n.args))
-        nodes[k] = Node("call", fn, args, ret, name=n.name)
+        nodes[k] = BodyNode("call", fn, args, ret, name=n.name)
         cols[k], by[k] = (a, b), a * per
     if not cols:
         return body, {}
@@ -397,7 +399,7 @@ def batched_form(body: Body, *, consume: bool = False) -> tuple[Body, list[int]]
     if consume:
         body.offsets.clear()
     at: tuple[list[int], list[int]] = ([], [])   # node k of `body` is leaves at[1][k].. of node at[0][k] of the form
-    out: list[Node] = []
+    out: list[BodyNode] = []
     sizes: list[int] = []
     memo: dict[int, Refs] = {}
     logs: dict[int, list] = {}
@@ -422,7 +424,7 @@ def batched_form(body: Body, *, consume: bool = False) -> tuple[Body, list[int]]
                 shared = all(_same(r, rs[0]) for r in rs[1:])
                 stacked.append(Coll(a.type, rs[0]) if shared else Coll(Array(len(rs), a.type), _stacked(rs)))
                 axes.append(None if shared else 0)
-            out.append(Node("batch", n.fn, tuple(stacked), Array(hi - k, n.out), axes=tuple(axes), n=hi - k, name=n.name))
+            out.append(BodyNode("batch", n.fn, tuple(stacked), Array(hi - k, n.out), axes=tuple(axes), n=hi - k, name=n.name))
             at[0].extend([j] * (hi - k))
             at[1].extend(m * n.out.leaves for m in range(hi - k))
         sizes.append(hi - k)

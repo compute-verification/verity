@@ -254,13 +254,26 @@ def lease(tmp_path, monkeypatch):
     yield SimpleNamespace(ev=ev, watched=watched, smi=smi, locks=locks, started=started, holder=holder, ranks=ranks, llm=_LLM(ranks, ev),
                           cuda=GL.DRIVER, note=lambda: json.loads((tmp_path / "gpu_lease.released").read_text()))
     for p in reversed(hooks.live()):                  # ranks share this process, so their patches stack; release them newest first,
-        if p.owner is _WorkerProc:                    # which separate processes never need
+        if isinstance(p, hooks.Patch) and p.owner is _WorkerProc:      # which separate processes never need; only a `Patch` has an owner
             p.uninstall()
     for fd in fds if held else []:                    # a release closed them, and their numbers may be another file's by now
         os.close(fd)
     ours.close()
     holder.kill()
     holder.wait()
+
+
+@pytest.fixture
+def left_on():
+    """A hook entry that is no `Patch`, live from before the `lease` fixture starts until after it ends, as one an earlier test of the
+    process left installed is.  When `lease` has ended beside it, it is still on and no patch of the stand-in worker is."""
+    entry = hooks.service("left on by an earlier test", lambda: None, lambda handle: None)
+    yield entry
+    try:
+        assert entry in hooks.live()
+        assert not [p for p in hooks.live() if isinstance(p, hooks.Patch) and p.owner is _WorkerProc]
+    finally:
+        entry.uninstall()
 
 
 def _rpcs(ev: list) -> list[tuple[str, dict]]:
@@ -295,6 +308,13 @@ def test_the_last_runs_finalize_fixes_every_root_then_gives_every_gpu_back_at_on
     assert note["released_at"] == LAST and "kept" not in note and note["shutdown_error"] is None and {"shutdown_s", "reset_s", "holder_s"} <= set(note)
     assert [(r["rank"], r["moved_bytes"], r["why"], r["teardown_error"]) for r in note["ranks"]] == [(0, (3 << 20) + 16, None, None),
                                                                                                    (1, (3 << 20) + 16, None, None)]
+
+
+def test_the_fixture_takes_the_ranks_patches_off_beside_a_live_hook_entry_that_is_no_patch(left_on, lease):
+    """`hooks.live()` lists every entry of the process (`Patch`, `Appended`, `Service`, `Armed`), and only a `Patch` has an owner."""
+    lease.cuda.looks = [[], [], [0]]
+    _last_run(lease)
+    assert _WorkerProc.shutdown is TPL._exit and left_on in hooks.live()
 
 
 def test_what_a_ranks_weights_view_holds_on_the_host_is_emptied_not_moved(lease):

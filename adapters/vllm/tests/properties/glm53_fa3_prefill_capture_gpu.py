@@ -132,7 +132,9 @@ def launch_geometry(names: list[str], static: int, max_seqlen_q: int) -> dict[st
 def backend():
     """vLLM's `FlashAttnPrefillBackend` at GLM-5.3's MLA dims on a TP8 rank, as `SparseMLACommonImpl` builds it (no VllmConfig: on
     this path the backend reads none)."""
-    from vllm.v1.attention.backends.mla.prefill.flash_attn import FlashAttnPrefillBackend
+    from vllm.v1.attention.backends.mla.prefill.flash_attn import (
+        FlashAttnPrefillBackend,
+    )
 
     return FlashAttnPrefillBackend(num_heads=NH, scale=SCALE, kv_lora_rank=KV_LORA_RANK, qk_nope_head_dim=NOPE, qk_rope_head_dim=ROPE,
                                    v_head_dim=DV, vllm_config=None)

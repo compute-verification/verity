@@ -58,7 +58,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     launch_keys_of,
 )
 from verity_vllm.program.frontend.rules.vllm_iface import iface
-from verity_vllm.program.frontend.torch_frontend import _tensor_type
+from verity_vllm.program.frontend.strided_views import _tensor_type
 
 aten = torch.ops.aten
 BF16, F32, E4M3 = torch.bfloat16, torch.float32, torch.float8_e4m3fn
@@ -726,4 +726,5 @@ class DsaIndexerAttnRule(StateRule):
 
 VLLM_DSA_RULES = [CopyIntoAllocRule(), DsaNormRopeRule(), DsaQRule(), DsaIndexerAttnRule()]
 
-__all__ = ["CopyIntoAllocRule", "DsaIndexerAttnRule", "DsaNormRopeRule", "DsaQRule", "FA3_SPARSE_GEOMETRY", "VLLM_DSA_RULES"]
+__all__ = ["CopyIntoAllocRule", "DsaIndexerAttnRule", "DsaNormRopeRule", "DsaQRule", "FA3_SPARSE_GEOMETRY", "VLLM_DSA_RULES",
+           "DECODE_THRESHOLD", "DECODE_THRESHOLD_DEFAULT", "PAD_SCORE", "long_row_blocks", "long_row_keys", "pad_words"]

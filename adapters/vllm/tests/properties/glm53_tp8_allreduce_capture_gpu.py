@@ -841,7 +841,9 @@ def allreduce_case(rank: int, case: dict[str, Any]) -> dict[str, Any]:
     """`tensor_model_parallel_all_reduce` of the rank's partials, twice (and a probe four times), its words, the communicator, the
     kernels, and (not for a probe) its time."""
     import torch
-    from vllm.distributed.communication_op import tensor_model_parallel_all_reduce as all_reduce
+    from vllm.distributed.communication_op import (
+        tensor_model_parallel_all_reduce as all_reduce,
+    )
 
     x = _tensor(_load(case["ops"])["parts"][rank])
     probe = case["phase"] in PROBE_PHASES + NCCL_PROBE_PHASES
@@ -867,8 +869,13 @@ def rank_main(rank: int, cfg: dict[str, Any]) -> None:
 
     torch.cuda.set_device(rank)
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
-    from vllm.distributed.parallel_state import (destroy_distributed_environment, destroy_model_parallel, ensure_model_parallel_initialized,
-                                                 init_distributed_environment, set_custom_all_reduce)
+    from vllm.distributed.parallel_state import (
+        destroy_distributed_environment,
+        destroy_model_parallel,
+        ensure_model_parallel_initialized,
+        init_distributed_environment,
+        set_custom_all_reduce,
+    )
 
     rec: dict[str, Any] = {"rank": rank, "cases": {}, "errors": {}, "env": {k: os.environ.get(k) for k in (*cfg["env"], *UNSET)},
                            "custom_all_reduce": cfg["custom_ar"]}

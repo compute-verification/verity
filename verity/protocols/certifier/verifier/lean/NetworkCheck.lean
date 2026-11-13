@@ -2,6 +2,7 @@ module
 
 public import NetworkCheck.Certificate
 public import NetworkCheck.Check
+public import NetworkCheck.Registered
 public import NetworkCheck.Difftest
 public import NetworkCheck.Records
 public import NetworkCheck.RecordsGrid

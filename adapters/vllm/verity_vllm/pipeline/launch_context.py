@@ -78,7 +78,9 @@ def request_launch_batch(reqs: list[dict[str, Any]], r: dict[str, Any]) -> list[
 def batch_dispatch(workload: dict[str, Any]) -> bool:
     """Whether the row's kernels read a launch other than one request's own: its declared target is not batch invariant and it
     co-schedules several requests (a B1 row's launch is its request)."""
-    return ((workload.get("engine") or {}).get("target") or {}).get("batch_invariant") is False and len(_requests(workload)) > 1
+    engine = workload.get("engine")
+    target = engine.get("target") if engine else None   # a workload that declares no target is taken as batch invariant
+    return (target.get("batch_invariant") if target else None) is False and len(_requests(workload)) > 1
 
 
 def batch_dispatch_of(path: str | None) -> bool:

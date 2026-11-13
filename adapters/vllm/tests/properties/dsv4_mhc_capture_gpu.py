@@ -463,10 +463,10 @@ def _asm(src: str, x):
 
 
 def mufu_inputs() -> dict[str, np.ndarray]:
-    j = np.arange(1 << 23, dtype=np.uint32)
+    j: np.ndarray = np.arange(1 << 23, dtype=np.uint32)
     specials = np.array([0, 0x80000000, 1, 0x7FFFFF, 0x800000, 0x7F7FFFFF, 0x7F800000, 0xFF800000, 0x7FC00000, 0xBF800000,
                          0x3F800000, 0x00400000, 0x0000F000], dtype=np.uint32)
-    sweep = splitmix(np.arange(RSQ_SWEEP, dtype=np.uint64) + (np.uint64(0xD54) << np.uint64(40))).astype(np.uint32)
+    sweep: np.ndarray = splitmix(np.arange(RSQ_SWEEP, dtype=np.uint64) + (np.uint64(0xD54) << np.uint64(40))).astype(np.uint32)
     rng = np.random.default_rng(SEED)
     expf = np.concatenate([f32_words(rng.uniform(-110, 92, EXPF_SWEEP // 2)), sweep[:EXPF_SWEEP // 2], specials])
     return {"rsq_table": np.concatenate([np.uint32(0x3F800000) | j, np.uint32(0x40000000) | j]),
@@ -792,7 +792,7 @@ def served_bindings() -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics, at every split count served here."""
-    out = {}
+    out: dict[str, bool | str] = {}
     for name, make in served_bindings().items():
         try:
             out[name] = bool(make().signature())

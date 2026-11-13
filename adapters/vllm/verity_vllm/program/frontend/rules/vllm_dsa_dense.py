@@ -259,4 +259,4 @@ def _dense_splits(tp, T: int, NH: int, D: int) -> int:
 
 VLLM_DSA_DENSE_RULES = [DsaDenseMhaRule()]
 
-__all__ = ["DsaDenseMhaRule", "PREFILL_BACKEND", "VLLM_DSA_DENSE_RULES"]
+__all__ = ["DsaDenseMhaRule", "PREFILL_BACKEND", "VLLM_DSA_DENSE_RULES", "takes_dense_mha"]

@@ -30,13 +30,9 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 
-from verity.circuits.codec import (
-    SCHEMA_V0,
-    definition_decoder,
-    descriptor_id,
-    type_from_json,
-)
-from verity.circuits.refs import Affine, Concat, Explicit, Strided
+__all__ = ["expand", "expand_mixed", "expanded_file_args", "file_items_from_refs", "first_runs", "from_runs",
+           "hash_operand", "idx_values", "is_file_prog", "lean_root", "n_crosses_step", "n_max_producer", "n_producers",
+           "p_item_indices", "p_item_weight_span", "rle_mapped", "runs_from_file_items"]
 
 Prog = tuple  # head... , base: tuple[int, ...], delta: tuple[int, ...], count: int
 
@@ -182,6 +178,7 @@ def _walk_refs(acc: _Acc, r) -> None:
     consecutive Affine parts (the real shape: the alias-spliced K/V gathers are one Affine per cached position, per mprof) is
     folded by ONE local loop that inlines `_Acc.run` + `_Acc._close` -- no method call, no tuple arithmetic per run; the accumulator's
     state is taken into locals at entry and written back at exit, so a non-Affine part in the middle simply hands over and resumes."""
+    from verity.circuits.refs import Affine, Concat, Explicit, Strided
     tr = type(r)
     if tr is Affine:
         if r.count > 0:
@@ -481,6 +478,12 @@ def lean_root(desc: dict, registry) -> dict:
     {"nodes": [(k, fid, form, args, out_str, n)], "n_nodes", "params"}.  Root-body semantics mirrored from codec.decode_program:
     v1 `alias` = the compact operand of an earlier node (flattened concat parts and nesting do not change the run sequence); v0
     descriptors have no aliases."""
+    from verity.circuits.codec import (
+        SCHEMA_V0,
+        definition_decoder,
+        descriptor_id,
+        type_from_json,
+    )
     get = definition_decoder(desc, registry)
     schema = desc["schema"]
     if schema == SCHEMA_V0:

@@ -420,17 +420,17 @@ def main(a: Options) -> int:
     rc_x09 = 0
     if a.decomp_out:
         x = loaded.get(X09_DOCUMENT)
-        x09 = res.get("x09")   # absent when X-09 was not run
-        if x is None or (x09 is not None and x09["verdict"] == "ERROR"):   # X-09 did not produce a document: no file, loud
+        x09 = res.get("x09")   # none when X-09 was not run
+        if x is None or (x09.get("verdict") if x09 else None) == "ERROR":   # X-09 did not produce a document: no file, loud
             logger.error("%s", json.dumps({"decomp_out": a.decomp_out, "error": "X-09 produced no document", "x09": res.get("x09")}, default=str))
             return 3
         with open(a.decomp_out, "w") as f:
             json.dump(x, f, indent=1, default=str)   # byte-for-byte what cb_a.batch_decomp's CLI writes for this run
         rc_x09 = 4 if x.get("verdict") == "MISSING_DERIVED" else 0   # X-09's own PASS/FAIL is read from the document (row_pod's summary), as today
-    alternate = res.get("alternate_verdict")   # absent when the other criterion was not run
+    alternate = res.get("alternate_verdict")   # none when the other criterion was not run
     brief = {"verdict": res["verdict"], "comparator": res["comparator"], "rules_version": res["rules_version"], "within_step": res.get("within_step_criterion"),
              "impl": res["impl"], "phases": res.get("phases"),
-             "alternate_verdict": {k: alternate.get(k) if alternate is not None else None for k in ("criterion", "verdict", "failed_checks")},
+             "alternate_verdict": {k: alternate.get(k) if alternate else None for k in ("criterion", "verdict", "failed_checks")},
              "failed_checks": res.get("failed_checks"), "checks": [(k["id"], k["status"]) for k in res["checks"]], "reasons": res.get("reasons", [])[:8],
              "achieved_concurrency": res.get("achieved_concurrency"),
              "requests": [{k: e.get(k) for k in ("request_id", "workload_request_id", "LP", "n_instances", "local_steps", "executed_steps_equal", "eos_truncated",

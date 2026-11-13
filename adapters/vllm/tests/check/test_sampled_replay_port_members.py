@@ -8,6 +8,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from verity.definitions.numerics.deepgemm_rows import deepgemm_linear
+from verity.definitions.numerics.glm53_rows import fp8_group_quant_ue8m0
 
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import opening as OP
@@ -18,7 +19,8 @@ PORTS = {"0": "x_q", "1": "x_s", "2": "0"}
 
 
 def test_ports_are_renamed_to_their_members_and_port_zero_never_stands_in_for_member_zero():
-    q, s, y = (np.full(2, v, dtype=np.uint16) for v in (1, 2, 3))
+    members: list[np.ndarray] = [np.full(2, v, dtype=np.uint16) for v in (1, 2, 3)]
+    q, s, y = members
     got = EV.by_member({"0": q, "1": s, "2": y}, PORTS)
     assert got == {"x_q": q, "x_s": s, "0": y}
     tp = EV.by_member({"0": q, "1": s, "2": y}, {"0": "x_q", "1": "x_s", "2": "part_rank3"})
@@ -27,7 +29,8 @@ def test_ports_are_renamed_to_their_members_and_port_zero_never_stands_in_for_me
 
 
 def test_identity_and_empty_port_maps_change_nothing():
-    a, b = np.zeros(2, dtype=np.uint32), np.ones(2, dtype=np.uint32)
+    a: np.ndarray = np.zeros(2, dtype=np.uint32)
+    b: np.ndarray = np.ones(2, dtype=np.uint32)
     got = {"router_w": a, "router_ids": b}
     assert EV.by_member(got, {"router_w": "router_w", "router_ids": "router_ids"}) == got
     assert EV.by_member(got, {}) == got
@@ -37,7 +40,7 @@ def _operands(rng):
     x = (np.asarray(rng.standard_normal(K), dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
     b = rng.integers(0, 256, N * K)
     w = np.where((b & 0x7F) == 0x7F, b & ~0x40, b).astype(np.uint8)
-    ws = np.full((N // 128) * (K // 128), 2.0 ** -8, dtype=np.float32).view(np.uint32)
+    ws: np.ndarray = np.full((N // 128) * (K // 128), 2.0 ** -8, dtype=np.float32).view(np.uint32)
     return [x, w, ws]
 
 
@@ -124,7 +127,7 @@ def test_without_the_port_map_the_row_is_not_evaluated_by_name(honest):
 
 
 def test_e4m3_plane_reads_one_byte_a_word():
-    words = np.arange(12, dtype=np.uint8)
+    words: np.ndarray = np.arange(12, dtype=np.uint8)
     got, dtype = _store({"x_q": ("float8_e4m3fn", words)}).words("r0", 0, OP_PATH, "x_q", 4, 8)
     assert dtype == "float8_e4m3fn" and got.dtype == np.uint8 and got.tolist() == [4, 5, 6, 7]
 
@@ -162,7 +165,6 @@ def _plane_store(q, s, flip=None):
 
 @pytest.fixture
 def quant(monkeypatch):
-    from verity.definitions.numerics.glm53_rows import fp8_group_quant_ue8m0
     x = _operands(np.random.default_rng(5))[0]
     got = fp8_group_quant_ue8m0({"K": K, "G": 128}, [x])
     monkeypatch.setattr(EV, "_evaluate_row", lambda *a, **k: fp8_group_quant_ue8m0({"K": K, "G": 128}, [x]))

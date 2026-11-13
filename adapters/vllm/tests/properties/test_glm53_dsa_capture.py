@@ -10,8 +10,6 @@ __models__ = ("zai-org/GLM-5.3",)
 import contextlib
 import copy
 import json
-import sys
-import types
 from pathlib import Path
 
 import numpy as np
@@ -26,6 +24,7 @@ from verity.definitions.registry import dsa
 from verity.definitions.registry import ref_prims as RP
 from verity.definitions.registry import sparse_mla as M
 
+from tests import fake_vllm
 from tests.properties import glm53_dsa_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
 from verity_vllm.properties.record import REGISTRY, digest_of, seal
@@ -503,11 +502,10 @@ def test_main_refuses_a_run_it_cannot_make(tmp_path, capsys, args: list[str], me
 def _stub_main(tmp_path, monkeypatch) -> tuple[list[dict], dict, list[dict]]:
     """`main`'s surroundings stood in for (vLLM's config module, the gate, the PTX scan, the bindings): what `served` saw of the
     environment, a k-slots job and the logits jobs."""
-    vc = types.ModuleType("vllm.config")
-    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
-                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     for k in SERVED_DEFAULTS:
         monkeypatch.setenv(k, "0")
     for k in ("VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR", "DG_JIT_CACHE_DIR"):

@@ -185,6 +185,23 @@ def test_a_manifest_that_names_no_hidden_identity_attaches_no_hidden_source(tmp_
          f"(families ['instance_outputs']); required classes {list(classes)}"), NO_RECORD, NO_PLAN]
 
 
+@pytest.mark.parametrize("required", [{"identities": []}, {"populations": None, "identities": []}, {"populations": {}, "identities": []},
+                                      {"populations": {"by_family": None}, "identities": []}, manifest()])
+def test_a_manifest_that_counts_no_family_names_no_hidden_identity_and_no_moe_plane(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                                                    said: Lines, required: Record) -> None:
+    """A manifest may hold no `populations`, or none by family (absent, null or empty): it names no family, so neither source is
+    attached."""
+    steps, com = Acquisition(monkeypatch, layers=("L0",)), committer()
+    got = attach(com, options(hidden_so=TAP, moe_source="auto"), required, tmp_path, family=FA2)
+    assert steps.named("hidden") == [] and steps.named("moe") == [] and com.sources == []
+    assert (got.required_classes, got.hidden_required, got.moe_attached) == (("module_outputs",), False, False)
+    assert said() == [
+        ("INFO [delta] hidden source NOT attached: the required-value manifest names no fa2_hidden_m1_stream / fa3_hidden_m1_stream identity "
+         "(families []); required classes ['module_outputs']"),
+        ("INFO [delta] MoE block source NOT attached: the required-value manifest names no moe_block_stream identity (families []; the "
+         "Program's MoE construction has no MOE-01 rows) -- nothing is staged that the manifest does not name"), NO_RECORD, NO_PLAN]
+
+
 def test_the_hidden_source_is_built_for_the_engine_s_attention_and_its_bounded_tap_is_told_where_to_write(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch, said: Lines) -> None:
     steps, com, required = Acquisition(monkeypatch, source=BoundedSource), committer(), manifest(**{FA2: 4})

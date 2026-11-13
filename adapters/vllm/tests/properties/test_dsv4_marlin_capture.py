@@ -14,14 +14,13 @@ import hashlib
 import json
 import os
 import struct
-import sys
-import types
 
 import numpy as np
 import pytest
 import torch
 from verity.definitions.numerics import marlin_moe_rows as MR
 
+from tests import fake_vllm
 from tests.properties import dsv4_marlin_capture_gpu as X
 from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
@@ -515,16 +514,10 @@ def test_the_replay_relaunches_the_recorded_call(monkeypatch) -> None:
         assert bool((kw["output"].view(torch.int16) == X.SENTINEL).all()), "the output starts as SENTINEL"
         kw["output"].view(torch.int16).copy_(state["words"])
 
-    ops = types.ModuleType("vllm._custom_ops")
-    vars(ops).update(moe_wna16_marlin_gemm=gemm)
-    chain = ("vllm", "vllm.model_executor", "vllm.model_executor.layers", "vllm.model_executor.layers.quantization",
-             "vllm.model_executor.layers.quantization.utils")
-    mods = {name: types.ModuleType(name) for name in chain}
-    mu = types.ModuleType("vllm.model_executor.layers.quantization.utils.marlin_utils")
-    vars(mu).update(marlin_make_workspace_new=lambda device, n: "fresh")
-    vars(mods["vllm"]).update(_custom_ops=ops)
-    for name, mod in {**mods, "vllm._custom_ops": ops, "vllm.model_executor.layers.quantization.utils.marlin_utils": mu}.items():
-        monkeypatch.setitem(sys.modules, name, mod)
+    workspace = "vllm.model_executor.layers.quantization.utils.marlin_utils:marlin_make_workspace_new"
+    fake = fake_vllm.install(monkeypatch, extra=[workspace])
+    fake["vllm._custom_ops"].moe_wna16_marlin_gemm = gemm
+    fake.set(workspace, lambda device, n: "fresh")
     monkeypatch.setattr(torch.cuda, "synchronize", lambda: None)
     L = {"output": recorded, "call": {"input": "x", "output": "stale", "workspace": "stale"}}
     assert X.replay(L)
@@ -701,11 +694,10 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys, flip
     the compute cache it points the driver at, the driver pinned to the map's, the comparisons through the spawned worker pool,
     identification against the sweep, the bindings, the per-case verdicts, the sealed record and the exit status, so a slip in the
     orchestration shows here and not in the H200's first hour."""
-    vc = types.ModuleType("vllm.config")
-    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
-                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     for k in ("VLLM_BATCH_INVARIANT", "VLLM_ENABLE_V1_MULTIPROCESSING", "CUDA_CACHE_MAXSIZE"):
         monkeypatch.setenv(k, "")
     for k in X.JIT_ENV[:2]:

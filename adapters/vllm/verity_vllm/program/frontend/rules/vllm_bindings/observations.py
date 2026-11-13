@@ -9,6 +9,8 @@ from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.frontend.outcomes import refuse
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 
+__all__ = ["launch_batch_declared", "launch_region", "traced_launch_tokens"]
+
 # -- fields observed on the construction host (derived, not declared) --------------------------------------------------------
 #
 # CB-C's validation found three Definition-selection fields both builder bets *declared*: the attention backend, the

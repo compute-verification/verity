@@ -36,8 +36,8 @@ from verity_vllm.acquire.sources.call_boundary_plan import (
     Body,
     Plan,
 )
-from verity_vllm.commit.binding import logical_request
 from verity_vllm.log import init_logger
+from verity_vllm.query.manifest.format import identity_rows
 
 logger = init_logger(__name__)
 
@@ -57,13 +57,13 @@ def claimed(r: Mapping[str, Any]) -> str | None:
 def unattached(manifest: Mapping[str, Any] | None, attached: Collection[str]) -> list[str]:
     """The `call_boundaries` identities of `manifest` whose claimant is not among `attached` (the sources the Commit attaches), each named
     with it: no source acquires them."""
-    return [f"{CP._label(r)}: claimed by {s}, a source the Commit does not attach" for r in (manifest or {}).get("identities") or []
+    return [f"{CP._label(r)}: claimed by {s}, a source the Commit does not attach" for r in identity_rows(manifest)
             if r.get("family") == FAMILY and (s := claimed(r)) is not None and s not in attached]
 
 
 def manifest_sites(manifest: Mapping[str, Any] | None) -> list[Mapping[str, Any]]:
     """The `call_boundaries` identities of a manifest this source evaluates: every one no other source claims."""
-    return [r for r in (manifest or {}).get("identities") or [] if r.get("family") == FAMILY and claimed(r) is None]
+    return [r for r in identity_rows(manifest) if r.get("family") == FAMILY and claimed(r) is None]
 
 
 def plan_of(manifest: Mapping[str, Any], *roots: str | None) -> Plan:
@@ -216,11 +216,15 @@ class CallBoundarySource:
         if rows is None:
             self.error(f"call boundaries: no row order recorded at engine step {e} (step_rows); its packed rows cannot be split")
             return None
+        # imported here, not at the top: it loads the core's commitments, which importing this module does not
+        from verity_vllm.commit.binding import logical_request
+
         got = [(self._request(logical_request(rid, self.plan.order)), int(hi) - int(lo)) for rid, lo, hi in rows]
-        declared = self.plan.composition.get(e) or {}
-        if sorted(got) != sorted(declared.items()):
+        declared = self.plan.composition.get(e)
+        ran, members = sorted(got), sorted(declared.items() if declared else ())
+        if ran != members:
             self.error(f"call boundaries: engine step {e} ran (request, rows) {got} in this order; the manifest declares "
-                       f"{sorted(declared.items())}: nothing of the step is committed")
+                       f"{members}: nothing of the step is committed")
             return None
         return [r for r, _n in got]
 

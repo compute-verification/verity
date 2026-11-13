@@ -163,7 +163,7 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
                 rec["row_kernel_declined"] += 1
             rec["binding_mismatch"] += spec.id != bind(F2S.AttentionSoftcapV2, T=T, NH=H, KVH=Hk, D=D, BN=BN, CAP=cap,
                                                        DOT=hopper.HopperBF16WgmmaDot16, INV=P.Fa2InvSum, MASKED_FROM=gfrom).id
-            ref_heads = list(np.flatnonzero(nonfinite))
+            ref_heads: list[np.integer | int] = list(np.flatnonzero(nonfinite))
             if sampled < FINITE_SAMPLE and T > BN and not nonfinite.all():
                 ref_heads.append(int(np.flatnonzero(~nonfinite)[-1]))
                 sampled += 1
@@ -247,6 +247,7 @@ def run(out: str, min_driver: int, want_cc: str, want_sms: int, workers: int, on
         from torch.profiler import ProfilerActivity, profile, record_function
 
         op = torch.ops._vllm_fa2_C.varlen_fwd
+        jobs: list[dict[str, Any]]
         doc["launches"], jobs = [], []
         with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
             for i, c in enumerate(case_list()):

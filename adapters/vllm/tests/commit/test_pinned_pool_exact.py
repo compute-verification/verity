@@ -10,6 +10,9 @@ from __future__ import annotations
 import ctypes
 import errno
 import logging
+import os
+import subprocess
+import sys
 import threading
 
 import pytest
@@ -27,6 +30,20 @@ def _rss_bytes() -> int:
         if line.startswith("VmRSS:"):
             return int(line.split()[1]) * 1024
     raise RuntimeError("no VmRSS")
+
+
+@pytest.mark.parametrize(("value", "exact"), [(None, True), ("", True), ("1", True), ("0", False), (" 0", True), ("false", True),
+                                              ("no", True), ("OFF", True), ("x", True)])
+def test_exact_mode_is_off_at_zero_alone_and_no_value_is_refused_at_import(value, exact):
+    """`VERITY_PINNED_EXACT` is read when the module is imported, so in a fresh interpreter a value: "0" is off, every other string
+    is on, and a string that is no flag is no exception in the module and in the ones that import it."""
+    env = {k: v for k, v in os.environ.items() if k != "VERITY_PINNED_EXACT"}
+    if value is not None:
+        env["VERITY_PINNED_EXACT"] = value
+    code = "from verity_vllm.commit.committer import pinned_pool; print(pinned_pool.PINNED_EXACT)"
+    child = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False, env=env)
+    assert child.returncode == 0, child.stderr
+    assert child.stdout.strip() == str(exact)
 
 
 @pytest.mark.skipif(not GPU, reason="needs CUDA (cudaHostRegister)")
@@ -309,18 +326,6 @@ def test_reserve_is_a_no_op_off_the_exact_path(fake_cuda):
     assert PinnedPool(exact=False).reserve([MiB]) == 0
     pools.append(pool := PinnedPool(block_bytes=MiB, exact=True, populate_threads=0))
     assert pool.reserve([MiB]) == 0 and pool.all == []
-
-
-@pytest.mark.parametrize("j", [0, 1, 3, 7, 12])
-def test_the_primed_level_sizes_are_begin_trees(j):
-    from verity_vllm.commit.native_ranges import level_sizes
-
-    for n_total in [1, 2, 3, 5, 8, 127, 128, 129, 4097, 1 << 15]:
-        height, m = 0, n_total
-        while m > 1:
-            m = (m + 1) // 2
-            height += 1
-        assert level_sizes(n_total, j) == [-(-n_total // (1 << L)) for L in range(min(j, height) + 1)]
 
 
 def test_the_helper_threads_are_the_commit_commands_option_and_a_fresh_pool_keeps_them():

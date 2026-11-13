@@ -529,7 +529,7 @@ def capture(rows: dict[str, dict[str, np.ndarray]], reps: int = 2) -> tuple[dict
     Hr = rows["hash"]
     xd, tokd, tabd = _device(Hr["x"]), _device(Hr["tokens"].view(U32), torch.int32), _device(Hr["tid2eid"].view(U32), torch.int32)
     before = xd.clone()
-    o = [launch_hash(xd, tokd, tabd) for _ in range(reps)]
+    o: list[Any] = [launch_hash(xd, tokd, tabd) for _ in range(reps)]
     rec["hash"] = {"launches": reps, "inputs_intact": bool(torch.equal(xd.view(torch.int32), before.view(torch.int32))),
                    "deterministic": all(np.array_equal(o[0][0], r[0]) and np.array_equal(o[0][1], r[1]) for r in o[1:])}
     got["hash"] = {"w": o[0][0], "ids": o[0][1]}
@@ -556,7 +556,7 @@ def compare(rows: dict[str, dict[str, np.ndarray]], got: dict[str, dict[str, np.
     rec: dict[str, Any] = {}
     for path, P in rows.items():
         want = expect(path, P)
-        bad = np.zeros(len(next(iter(want.values()))), bool)
+        bad: np.ndarray = np.zeros(len(next(iter(want.values()))), bool)
         for k, v in want.items():
             bad |= (v != got[path][k]).any(1)
         bad = np.flatnonzero(bad)
@@ -715,10 +715,10 @@ def run(out: str, seed: int, n: int, clamp_n: int, min_driver: int, want_cc: str
     rows = all_rows(seed, n, clamp_n)
     doc["inputs"] = {p: {"rows": int(len(_row_kind(p, P))), "sha256": digest(*P.values())} for p, P in rows.items()}
     R, Hr = rows["router"], rows["hash"]
-    probe = {"router": lambda: launch_router(_device(R["x"][:GROUP]), _device(R["b"][0])),
-             "hash": lambda: launch_hash(_device(Hr["x"][:GROUP]), _device(Hr["tokens"][:GROUP].view(U32), torch.int32),
-                                         _device(Hr["tid2eid"].view(U32), torch.int32)),
-             **{p: (lambda p=p: launch_clamp(_bf16_device(rows[p]["gu"][:GROUP]))) for p in PATHS[2:]}}
+    probe: dict[str, Any] = {"router": lambda: launch_router(_device(R["x"][:GROUP]), _device(R["b"][0])),
+                             "hash": lambda: launch_hash(_device(Hr["x"][:GROUP]), _device(Hr["tokens"][:GROUP].view(U32), torch.int32),
+                                                         _device(Hr["tid2eid"].view(U32), torch.int32)),
+                             **{p: (lambda p=p: launch_clamp(_bf16_device(rows[p]["gu"][:GROUP]))) for p in PATHS[2:]}}
     doc["kernels"] = {p: kernel_names(probe[p], p) for p in PATHS}
     for path, k in doc["kernels"].items():
         print(f"[dsv4-moe] {_utc()} kernel {path}: ok={k['ok']} {k['names']}", flush=True)

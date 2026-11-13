@@ -35,6 +35,8 @@ from verity_vllm.program.frontend.rules.vllm_bindings.operands import (
 )
 from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
 
+__all__ = ["FP8_QUANT_PINS"]
+
 # -- block-scaled FP8 linears: vLLM's sm_90 default dynamic route, and the explicit CUTLASS route ------------------------------
 
 FP8_E4M3 = torch.float8_e4m3fn

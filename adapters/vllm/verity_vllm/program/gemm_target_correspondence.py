@@ -154,7 +154,9 @@ def launched_kernels(torch, fn) -> tuple[Any, list[str]]:
 
 def device_facts(torch, bi) -> dict[str, Any]:
     import vllm
-    from vllm.model_executor.determinism.batch_invariant_configs import _get_tuned_matmul_arch_family
+    from vllm.model_executor.determinism.batch_invariant_configs import (
+        _get_tuned_matmul_arch_family,
+    )
     from vllm.platforms import current_platform
     props = torch.cuda.get_device_properties(0)
     return {"device": props.name, "compute_capability": [int(props.major), int(props.minor)],

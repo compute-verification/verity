@@ -9,8 +9,6 @@ import contextlib
 import copy
 import hashlib
 import json
-import sys
-import types
 from types import SimpleNamespace
 
 import numpy as np
@@ -19,6 +17,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import dsv4_indices_twin as T
 
+from tests import fake_vllm
 from tests.properties import dsv4_indices_capture_gpu as X
 from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
@@ -349,11 +348,10 @@ def test_main_end_to_end_on_stubbed_launches(observed, tmp_path, monkeypatch, ca
     ob = observed["c4"]
     for k in ("TRITON_CACHE_DIR", "VLLM_ENABLE_V1_MULTIPROCESSING"):
         monkeypatch.setenv(k, "")
-    vc = types.ModuleType("vllm.config")
-    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
-                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "bind_check", lambda: {"bindings": {}, "ok": True})
