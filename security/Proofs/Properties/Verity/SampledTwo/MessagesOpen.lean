@@ -90,7 +90,7 @@ open Classical in
 theorem classOf_clsBy (hS : RunShown A x) (s : TapeOf V θ F c σ × Coins A x) :
     classOf (clsBy V θ F c σ opn i) s =
       (Finset.univ.filter fun r' => Shows (histOf V θ F c σ opn i s.1 s.2) r').map
-        ⟨fun r' => (s.1, r'), fun a b h => (Prod.mk.inj h).2⟩ := by
+        ⟨fun r' => (s.1, r'), fun _ _ h => (Prod.mk.inj h).2⟩ := by
   ext ⟨ω', r'⟩
   rw [Finset.mem_map]
   unfold classOf
@@ -192,6 +192,7 @@ theorem openingBy_some {A : Live₂} {x : Msg} {Ω : Type} {out : Ω → Coins A
     {Fx : Verity.Exchange → ℕ → Option Φ} {Opn : Φ → Verity.Exchange → ℕ → Prop} {i : ℕ} {ω : Ω}
     {hist : List (Msg × Msg)} {r : Coins A x} {u : Msg} (h : openingBy out Rd Fx Opn i ω hist r = some u) :
     Rd.msg (out ω r) i = some u ∧ ∃ φ, Fx (out ω (complete hist)) i = some φ ∧ Opn φ (out ω r) i := by
+  classical
   unfold openingBy at h
   rw [Option.filter_eq_some_iff] at h
   exact ⟨h.1, of_decide_eq_true h.2⟩
@@ -201,6 +202,7 @@ theorem openingBy_of {A : Live₂} {x : Msg} {Ω : Type} {out : Ω → Coins A x
     {hist : List (Msg × Msg)} {r : Coins A x} {u : Msg} (h1 : Rd.msg (out ω r) i = some u)
     (h2 : ∃ φ, Fx (out ω (complete hist)) i = some φ ∧ Opn φ (out ω r) i) :
     openingBy out Rd Fx Opn i ω hist r = some u := by
+  classical
   unfold openingBy
   rw [h1, Option.filter_some_eq_some]
   exact decide_eq_true h2
@@ -439,6 +441,8 @@ theorem breaks_strings {A : Live₂} (Rd : Reading A) (Acc Good : Verity.Exchang
     ⟨p, ⟨hp1, hp2⟩, bs, bs', hbs, hbs', hp⟩
   refine ⟨hex.choose, ?_, hex.choose_spec.1.1, hex.choose_spec.1.2⟩
   unfold stringsPair
-  rw [dif_pos hex]
+  split
+  next => rfl
+  next h => exact absurd hex h
 
 end Verity.SampledTwo.Messages
