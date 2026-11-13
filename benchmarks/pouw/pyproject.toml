@@ -73,7 +73,7 @@ untraced = [
 # site and wire) and PoUB's block size (its codec.py); its census imports the Boolean versions' lookup
 # (verity/definitions' boolean.py), which loads no registry module for a Program already Boolean.
 inputs_only = true
-inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", 
+inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
           "verity/claims/__init__.py",
           "verity/hardware/record.py",
           "verity/protocols/spot/verifier/profile.py", "verity/protocols/pouw/verifier", "verity/protocols/spot",
@@ -82,7 +82,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "verity/difftest", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/definitions/kernels", "verity/commitments/randomness", "verity/protocols/flock/prover/python", "verity/commitments/windows",
           "verity/hardware/__init__.py", "verity/hardware/cards",
-          "verity/configuration/config/verity_config",
+          "tools/config/verity_config",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
           "adapters/vllm/verity_vllm/commit/__init__.py", "verity/commitments/windows/hiding.py",
           "adapters/vllm/verity_vllm/pipeline/__init__.py", "adapters/vllm/verity_vllm/pipeline/commit_coins.py",
@@ -168,8 +168,8 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "benchmarks/machine_model", "benchmarks/pouw/README.md",
           "benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
           "benchmarks/hash/dither/j10r_ws.py",
-          # test_mma_gate runs torch_gpu's build gates, which read the build through harness/sass_gate.py's mma_gate
-          "benchmarks/torch_gpu/s8_linear/sass_gate.py", "benchmarks/torch_gpu/attn_bf16/sass_gate.py",
+          # test_mma_gate runs torch_gpu's build gate, which reads the build through harness/sass_gate.py's mma_gate
+          "benchmarks/torch_gpu/s8_linear/sass_gate.py",
           "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/forms.py", "benchmarks/hash/dither/h1c.py",
           "benchmarks/hash/dither/h1r.py", "benchmarks/hash/dither/j10r_units.py",
           "benchmarks/hash/dither/settings.py", "benchmarks/hash/exactlin/exactlin.py",
@@ -179,8 +179,8 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "verity/definitions/ops", "verity/definitions/silicon", "verity/protocols/__init__.py",
           "verity/protocols/pouw/__init__.py", "benchmarks/datacenter/datacenter", "verity/hardware/registration.py",
           "verity/protocols/poub/__init__.py", "verity/protocols/poub/verifier/__init__.py",
-          "verity/protocols/poub/verifier/codec.py", "verity/hardware/site/__init__.py",
-          "verity/configuration/__init__.py", "verity/configuration/wire/__init__.py", "verity/definitions/__init__.py",
+          "verity/protocols/poub/verifier/codec.py", "verity/device.py",
+          "verity/channel.py", "verity/definitions/__init__.py",
           "benchmarks/harness/verity_bench/__init__.py", "verity/protocols/pouw/clear/clear_audit.py",
           "verity/protocols/pouw/clear/clear_work.py", "verity/protocols/pouw/clear/__init__.py",
           "verity/definitions/boolean.py"]
@@ -215,7 +215,7 @@ tests = [
     "tests/test_served_h1.py",
     "tests/test_served_h1_producer.py",
 ]
-paths = ["benchmarks/pouw", "verity/configuration/config/verity_config", "verity"]
+paths = ["benchmarks/pouw", "tools/config/verity_config", "verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_facet_break.py"]
