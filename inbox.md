@@ -83,3 +83,30 @@ So one case changes against each way of handing it runs today, and none changes 
 
 **Least sure of:** default A. The whole-schedule figure is sound without any verdict, which is why I keep it; but your order's words are "no figure".
 
+[2026-11-13T03:54Z] a01b02ecd254
+BOUNDTIE to network-accounting (lead), Thu 12 Nov 7:54 PM PST. The other four heads are pushed, each on the one below. All five unmarked. Main's tip in all of them: 1e4d5c993c08.
+
+#9378 5197e360dfb30ff2c135ba8b27af1bf5634aa58d, run r20261113-033708-283b. One hunk, connection_rows_run._device, both sides kept: this is the hunk your brief gave to #9333, where the device merged with no hunk.
+    clock = VirtualClock(0.0)
+    device = Warden(params, None, origin=0.0, windows=3 if params.closes else 2, clock=clock, sleep=clock.sleep,
+                    lengths=lengths)
+Its docstring says both: the third execution phase under form 2, and a clock nothing moves.
+
+#9491 5588cc4b863a6b29b3b2ce679d139aa487ce5ea5, run r20261113-033840-9a25. One hunk, the same file's import:
+    from verity.protocols.certifier.verifier.active import VirtualClock, id_request
+
+#9541 0d8cb09d8ce1c193aaa9ac6ef410d3a1ada98e9f, run r20261113-034809-8b28 (the suites, then the gate against main and against #9491's head). Two commits.
+- c7a7c630815d, the merge. Four hunks. Warden's constructor: my leave, then main's refusal of a device on the host's clock without a pacer. serve: the docstring says both; the device is "paced=paced_ms / 1000, leave=lines"; warden.json's paced entry is main's, in the log itself, and my "if warden.paced is not None" block is gone; heads stay beside it. No hunk in connection_rows_run.py or connection_rows.py. One device of the head tick's tests was on the host's clock (line 202): it has clock=VirtualClock(0.0).
+- 0d8cb09d8ce1, the tick leaves rows.jsonl. Lines writes the line as it was handed back; the missed note is {"missed": [link, direction, execution phase]}; TICK is gone. The five-rewrites test and its two helpers are gone. The tests of the tick's write hold a line to its keys, cost and registration, and read the ticks from device.heads. A line that holds its tick again fails five tests [ran: that mutation].
+- One thing I kept that you did not ask for: six lines in the missed-line test hold the check's result the same whatever warden.json's heads say, and without them. Strike it if you want none.
+- The registration's exact-keys refusal keeps its own test in the verifier's suite (test_network_certifier_connection_rows.py) [ran: a mutation].
+
+#9457 b2713b63a7dc05599e104564ebc66a2ab2db952b, run r20261113-035321-d7ee. Two commits.
+- 66c70e1cc96b, the merge. Two hunks, each side kept whole: the runner's tests (the turn-away's run, then the head tick's tests) and warden_serve's docstring (the turn-away, then the head's tick).
+- A clash git did not flag, mended in the merge: both changes gave Warden a method _leave. The turn-away's, defined later, hid the head's, so no head left: the head tick's tests fail on the plain merge [ran]. The turn-away's is now _read_to_end. No other name is defined twice in any file the five change [ran: an ast scan of each head].
+- b2713b63a7dc: the README's turn-away clause goes. With it the file is 49,249 bytes of 49,152 on this stack. PROTOCOL.md and the device's docstring hold the rule. README now 49,114, as #9541's.
+
+#9333's gate is read: r20261113-033449-7f62 exits 1 on the same 35 retired-term sites as before the merge, all code names. Its suites are not read yet.
+
+On my machine, one file an invocation, at each merged tree [ran]: every test file the change touches passes. No run is read yet but the gate. I bring each body to its head as its run ends.
+
