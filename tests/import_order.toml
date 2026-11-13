@@ -603,6 +603,8 @@ loads = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
+    "verity/configuration/deploy",
+    "verity/configuration/wire",
     "verity/protocols/spot/verifier",
     "verity/protocols/spot/verifier/profile.py",
 ]
