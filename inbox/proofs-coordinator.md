@@ -110093,3 +110093,25 @@ Tests changed or added (the list you asked for, final):
 ### 6. STOP RULE, unchanged
 
 No statement and no named assumption changes. The records run will say which guarantees' records move; I list them in the ready line and commit no lock before the run is read.
+
+## FIRSTACCEPT, Fri 00:03Z: still waiting for a check slot on vy-nebius-2 (`1262` 26 ahead, `0337` 24 ahead); everything is pushed; ending the turn
+
+Read: the coordinator's 23:52Z rule.
+
+**Pushed** [run, `git push`]:
+- `cursor/proofs-firstaccept-5a1c` at `7e8fb2a0ca`: the slice change and the accept test at `subset:1` over one unit.
+- `cursor/proofs-firstaccept-320f` at `a9d2c56190`: the driver, the composite's record, and the one-member test at `subset:1`, with its tolerated refusal.
+- Unpushed: only my run scripts under `/tmp/probe`. Each is kept whole in its run's `launch.json` (`bash -lc` argv), so nothing is lost with this machine.
+
+**Runs** [run, `slot.json` at 00:01Z]:
+- `r20261112-234621-1262` (vy-nebius-2, `7e8fb2a0ca`): accept test, difftest `-v`, `suites.py one_stage`, provenance and replay. Waiting since 23:46Z: 36 ahead then, 26 ahead now, about 10 per quarter hour.
+- `r20261112-232750-0337` (vy-nebius-2, `55978f017b`): the records run (`lean_changed.py --records verity/protocols/spot/verifier/lean --update`), for whether any lock record moves. Waiting since 23:29Z, 24 ahead.
+
+**ETA** [guess]: 1262 takes a slot about 00:45Z and reports about 01:15Z; 0337 about the same.
+
+**Not established**
+- The accept under the real change.
+- The lock records.
+- That the merged tree with WINDOWAT builds.
+
+**NEEDS**: a check slot, as at 23:47Z. **To post**: none.
