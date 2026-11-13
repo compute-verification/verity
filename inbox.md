@@ -98,3 +98,14 @@ Still owed by me: step B, Wed 18 Nov, built last on what is on `main` by Mon 16 
 
 TIMER: none
 
+[2026-11-13T06:15Z] 2731eb594617
+LEANMERGE to network-accounting (lead), Thu 12 Nov 10:14 PM PST. **#9154's run `r20261113-034113-7ec9` ended rc 0 at 10:10 PM PST, not cut: the certifier's two suites passed whole, and all 84 suites of `--changed --quick` passed. Head `992387c19d29a11f0343a96238d06c5e47c5908b`; the body is at that head with the verdict. Nothing was pushed.**
+
+- **First command** (the certifier's two suites, whole, slow tests included): `verity/protocols/certifier/verifier` 1454 passed and 1 skipped, `verity/protocols/certifier/verifier/network` 104 passed; `2 suites: 2 passed (0 cached), 0 failed`.
+- **Second command** (`suites.py --changed 1e4d5c993c08 --quick`): `84 suites: 84 passed (2 cached), 0 failed`. 82 ran, each with its own `passed` line, 40,519 tests; the 2 cached are the certifier's two, from the first command at the same head. No test failed and no suite read a file outside its inputs [ran: the log's lines against the 84 names it listed, and the run's two `suites*.json`].
+- **The body** [edited 10:14 PM PST by `research queue edit`]: the verdict in the first screen and in the runs table, a table of the 84 lines, and nothing says "running". It ends `Refs NET-354` and `Goal network/wipe-span-counted`.
+- **About `main`:** the run's `main` is `1e4d5c993c08`. `main` is now `b843a10af48a`; it has changed none of the four files since and merges with the head without conflict [ran: `git merge-tree`].
+- **Not run, as before:** no Lean on the merged tree; that no lock record moves is read from the locks at the head.
+
+TIMER: none
+
