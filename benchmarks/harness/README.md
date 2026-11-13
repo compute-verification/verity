@@ -112,7 +112,9 @@ export their paths, say), are part of the resolved spec and so of every point's 
    and a failure there keeps the gates and drops the points:
    - `timed-tokens`: each timed rep of an arm with a control produces the control's tokens in that rep, so an arm can't
      compute something else only when timed. In `resident`, each timed rep of an arm without a control produces the
-     tokens its own gate saw from the same engine (`"against": "gate"`).
+     tokens its own gate saw from the same engine (`"against": "gate"`), unless its own gate says its tokens carry each
+     pass's coins (`per_pass_tokens`: Pearl-C's, each call's noise seeded by its index across the epoch, so no two of
+     one engine's runs agree); then, as in `blocks`, its `arm-closing` gate alone holds its timed reps.
    - `engine-identity`: in `blocks`, each timed engine reports the gated engine's KV pool, kernel digest, versions,
      GPU and overrides.
    - `arm-closing`: after an engine's warm-up and timed runs, before it closes, the runner reads the arm's own gate again
