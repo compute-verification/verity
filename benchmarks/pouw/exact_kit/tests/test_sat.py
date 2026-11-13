@@ -6,7 +6,8 @@ from exact_kit.sat import Cnf
 
 
 def _brute_count(nv, clauses):
-    return sum(all(any((bits >> (abs(l) - 1) & 1) == (l > 0) for l in c) for c in clauses) for bits in range(1 << nv))
+    return sum(all(any((bits >> (abs(lit) - 1) & 1) == (lit > 0) for lit in c) for c in clauses)
+               for bits in range(1 << nv))
 
 
 @pytest.mark.parametrize("seed", range(20))
@@ -23,7 +24,7 @@ def test_model_count_of_random_3cnf_against_brute_force(seed):
     m = cnf.solve()
     assert (m is None) == (count == 0)
     if m:
-        assert all(any(m[abs(l)] == (l > 0) for l in c) for c in clauses)
+        assert all(any(m[abs(lit)] == (lit > 0) for lit in c) for c in clauses)
 
 
 def test_names_and_the_constant():
@@ -65,4 +66,4 @@ def test_models_limit_and_unsat():
         c.add([u if a else -u])
         c.add([v if b else -v])
         m = c.solve()
-        assert [m[abs(l)] == (l > 0) for l in z] == [bool(a and b), bool(a or b), bool(a ^ b)]
+        assert [m[abs(lit)] == (lit > 0) for lit in z] == [bool(a and b), bool(a or b), bool(a ^ b)]
