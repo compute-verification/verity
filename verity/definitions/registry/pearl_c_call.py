@@ -163,7 +163,7 @@ def units(fn: SpecializedDefinition, limit: int = LOWERED_WHOLE) -> dict[str, tu
 def bindings() -> list:
     """The bindings circuit-check takes (the sidecar), on words and on bits, on the H100's atom at G = 4: each row over one
     atom of the row at rank 1, the least a row is, and a cell over one promotion window at rank 8, which is lowered whole."""
-    from verity.definitions.ops.prims import HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
+    from verity.circuits.ops.prims import HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
     from verity.definitions.boolean import boolean_version
 
     out = []

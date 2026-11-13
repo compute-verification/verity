@@ -15,7 +15,7 @@ from verity.circuits import boolean as BL
 from verity.circuits import codec
 from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
 from verity.circuits.evaluation import evaluate_call
-from verity.definitions.ops import prims as P
+from verity.circuits.ops import prims as P
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, RecordType, Tuple, Value, type_from_json

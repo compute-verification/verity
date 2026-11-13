@@ -31,9 +31,9 @@ from verity.circuits.refs import (
 from verity.circuits.types import Array, RecordType, Value
 from verity.circuits.types import Tuple as TupleT
 from verity.definitions import boolean as BB
-from verity.definitions.ops import fp32 as W
-from verity.definitions.ops import gemm as G
-from verity.definitions.ops import prims as MP
+from verity.circuits.ops import fp32 as W
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops import prims as MP
 from verity.definitions.replay import replayer
 
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
@@ -83,8 +83,8 @@ def _inputs(n: int, seed: int = 7):
 
 
 def test_the_table_reads_the_boolean_definitions_word_links():
-    from verity.definitions.ops.boolean import attention as BA
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import attention as BA
+    from verity.circuits.ops.boolean import gemm as BG
     assert BB.boolean_version(W.F32AddFtz) is bind(BA.F32AddFtz)
     assert BB.boolean_version(MP.F2fpBf16) is bind(BG.F2fpBf16)
     word = bind(G.DotBf16, K=64, DOT=MP.HopperBF16WgmmaDot16)
@@ -123,7 +123,7 @@ def test_a_static_the_word_lacks_is_bound_to_the_boolean_version_of_its_word_sta
 
 @pytest.mark.slow
 def test_the_served_norms_bind_their_mufu_statics_to_mufus_boolean_versions():
-    from verity.definitions.ops.boolean import mufu as BM
+    from verity.circuits.ops.boolean import mufu as BM
     from verity.definitions.registry import b1
     from verity.definitions.registry import boolean_norms as BN
     cuda = BB.boolean_version(bind(b1.RMSNormFusedCuda, N=16, EPS=1e-5))
