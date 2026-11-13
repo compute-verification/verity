@@ -138352,3 +138352,83 @@ One try on the top of my own window proofs, `MemberForm/Sound.lean`, makes the b
 - Thursday's 24,508 bytes are from the kept summary's table and my arithmetic, not from a run of Lean's `drawUnits`.
 - What breaks in soundness's files beyond `Members/Widen.lean` and `Window.lean`: not built, since those two failed first. My text for the two is not compiled.
 - That soundness takes a lemma with the length in it for the one it asked for "under A3". It is a claim until it does.
+
+## SESSIONOF2, Fri 13 Nov 11:42Z: on the largest kept case the whole parser switch adds 0.05 s (13%) to `Protocol.answer` and nothing to its peak, which is over "a few percent", so I stop before the rest of the switch; the narrower switch would cost the same on this case
+
+In plain words: I built the verifier twice from the tree the kept case came from, once as it is and once with the one changed word, and ran both on the same kept case nine times each. The proved parser gives the same answers and holds no more memory on that case, but it is slower: 0.44 s where today's takes 0.39 s. On texts made 4 to 64 times as long it is about half as slow again and holds up to 1.8 times the memory, never twice. By your rule that is "more than a few percent in seconds", so this entry is the report and I have not written the difftest or the test's entry. Reading only the parameters with the proved parser would not help here, because the parameters are 95% of what is read. The second case (300 members) is running.
+
+**The two rows, and three longer texts** [run] `r20261113-113146-f54d`, vy-nebius-cpu-1, done rc 0 (11:31:46Z to 11:35:28Z). Seconds are the median wall time of the process (least to most), peak is that process's own peak resident memory from `wait4`.
+
+| parameters' text | bytes | Lean core's parser | the total parser | change |
+|---|---|---|---|---|
+| `{}` (start and refuse) | 2 | 0.0636 s, 274,496 kB | 0.0631 s, 274,496 kB | none |
+| **the kept case** | 1,629,177 | **0.3921 s** (0.3892 to 0.3971), **274,496 kB** | **0.4439 s** (0.4382 to 0.4507), **274,496 kB** | **+0.052 s, +13.2%; peak ×1.00** |
+| 4 copies of it in an array | 6,516,713 | 0.4149 s, 274,496 kB | 0.6158 s, 364,216 kB | +48%; ×1.33 |
+| 16 copies | 26,066,849 | 1.4602 s, 623,420 kB | 2.3545 s, 1,095,260 kB | +61%; ×1.76 |
+| 64 copies | 104,267,393 | 5.7353 s, 2,225,204 kB | 9.4386 s, 3,970,580 kB | +65%; ×1.78 |
+
+- **What ran** [run][read]. `sampled-proofs-one-stage check PARAMS COMMITMENT EVIDENCE`, which is `P.answer` on three files (`CoreProtocol/Cli.lean:83-84`), built at `70ca0eda5d` (the kept case's own tree) and again after the two changed lines (the token and `public import Base.JsonParse`). 9 runs of each on the kept case and on `{}`, 5 on the 4 and 16 copies, 3 on the 64, the two executables in turn. The rebuild after the change was 224 jobs with no error, `CoreProtocol.Cli` among them, whose `#guard`s hold `Canonical.parse` to `canonicalJson` on 81 texts (`Cli.lean:113-114`).
+- **The kept case** [read][run]. `r20261113-103102-cb47`, `out/twenty/second/audit/case.json` (sha256 `cadceb5ebe5a1419…`): the one-stage case of the play of twenty templates. Parameters 1,629,177 bytes canonical, commitment 21,075, evidence 72,943. Both parsers answer `reject`, `registration: R6-previous`, which is also the Python outcome kept beside it (`case-python.json`). So the 0.39 s is reading the three texts, decoding the parameters and the registration's checks up to R6. It is not an accepted audit's whole check, and against one the 0.05 s would be a smaller share: that share is what the 300-member run measures.
+- **What I could not run from kept files** [read]. That play's per-member case (`case-v2-members.json`) and the two-stage form's case name 100 blobs under the run's scratch directory (circuits, public files, session files), and none is kept: the script keeps no circuit.
+- **Every answer was the same under both parsers** [run]: within each row the output line's sha256 is one value across all its runs (62 runs in all).
+- **Per byte** [derived]. From the 64 copies: the total parser adds about 35 ns and about 17 bytes of peak for each byte of text ((9.4386 − 5.7353) s and (3,970,580 − 2,225,204) kB over 104.27 MB). `canonicalJson` with Lean core's parser costs about 54 ns and 19 bytes a byte. Of the kept case's 0.39 s about 0.09 s is `canonicalJson` on the parameters today and 0.14 s after ((0.4149 − 0.0636)/4 and (0.6158 − 0.0631)/4).
+- **Against your rule** [derived]: seconds are over "a few percent" on the kept case (13%, 0.052 s). The peak doubles on no row.
+
+**The narrower switch, sized** [read][derived]
+- *What it is.* `canonicalJson` keeps Lean core's parser. A second reader with the total parser (its 8 lines again, or `canonicalJson` given its parser) is read at `Protocol.lean:98`, which is every protocol's parameters (`BlobProtocol.answer` is `(P.on blobs).answer`), and at `SampledTwo.lean:175` (`paramsAt`, which is on the two-stage base and not on `main`). The import and the lock's layer line are the same as for the whole switch.
+- *What it costs here: the same.* The parameters are 1,629,177 of the 1,723,195 bytes of the kept case's three texts (94.5%), so it adds about 0.049 s of the 0.052 s. It is cheaper only where the commitment or the evidence is the long text. The two-stage form reads the parameters three times (whole, then `paramsAt` re-reads the boundary's and the interior's from their re-print), and pays each time under either switch.
+- *What it leaves.* 48 of the 50 call lines I counted on the join stay on Lean core's parser (commitments, evidence, inner reads): two readers of one format, and the theorem covers the parameters' texts only. The three dated premises are all about the parameters, so it would still close them.
+- *A third thing, named only.* Nearly all the added peak is one list cell a character (`parse s = parseList s.toList`). A total parser that reads the string in place would not hold it, but `parse_wf` and `parse_canon` are proved over `parseList` [guess for what that costs].
+- *One fact soundness should have* [read]. `main` already has a second reader of this format beside `canonicalJson`: `Core.Canonical.parse`, `parseUpTo` and `read` (`CoreProtocol/Protocol/Canonical.lean`), which read a text in place, are what every `serve` line and the long evidence go through, are held to `canonicalJson` by those 81 texts' `#guard`s and by no theorem, and call `Json.parse` themselves at `:101` and `:212`. Neither switch touches them.
+
+**What the whole switch is, as far as written** [read]
+- `013786beea` on `cursor/proofs-sessionof2-parser-defe` (off `origin/main` `053b8e50fe`): the token, the import and two docstring lines in `CoreProtocol/Protocol.lean`. Not compiled on this branch; the same two lines compiled at `70ca0eda5d` in the run above.
+- One proof opens `canonicalJson`'s body and needs the same token: `security/Proofs/Properties/Pous/Component.lean:98` (`cases hp : Lean.Json.parse s with`, inside the private `canonicalJson_ok` at `:88`). No other file under `security/` unfolds it or names Lean core's parser in a proof (24 files name `canonicalJson`, 64 lines). Not changed: the file is PoUS's.
+- Not written, since I stop here: the difftest and `tests/test_flock_json.py`'s entry. `main` already holds both parsers to one Python mirror on sampled texts (`flock-json-difftest`, `verity/difftest/tests/test_flock_json_port.py`: `parse` and `parse-core`, 3,000 samples each) [read, not run by me]. The interface's own would be a function answering what `canonicalJson` answers with each parser, served from the interface's package, with the interface in the test's `TREES` and its four other calls (`Example.lean` `refusal` and `profileRefusal`, `Canonical.lean` `strValue` and `refusal`) in `PENDING`.
+
+**D. The records that move** [read][derived], no check run
+1. `security/lean-audit.json` and `security/Properties/lean-audit.json`: `reads["CoreProtocol.Protocol"].definitions["Core.canonicalJson"]` (`84d6d8a2…`) and that module's `digest` (`2885ef43…`).
+2. The callers' hashes do not move: a definition's hash is SHA-256 of the canonical text of its own term, which names the constants it calls and not their bodies (`tools/verity/lean/Facts.lean:155-166`, `check.py:1336-1345`). `Core.Protocol.answer` (`21cefa22…`) stays.
+3. `reads["Base.JsonParse"]` is already in both locks (25 definitions, `8ad36215…`). Whether it gains a definition, or a guarantee's own list of reads gains that module, is not established.
+4. The interface's own lock has no `reads` and no guarantee. Its `layers["CoreProtocol.Protocol"].imports` is `["Lean.Data.Json", "Base.Bytes", "Base.Canon"]`, the check fails an import outside it (`layers.import`, `check.py:1517`), and `Base.Canon` does not import `Base.JsonParse`: the line needs `Base.JsonParse`, by hand, with its `why`. `security/Proofs/lean-audit.json` holds no reads and names nothing here.
+
+**C. The theorem, stated** (in no file yet)
+```lean
+/-- What `Core.canonicalJson` accepts is a well-formed tree with whole numbers, and the text is its canonical print. -/
+theorem canonicalJson_good {b : ByteArray} {j : Json} (h : Core.canonicalJson b = .ok j) :
+    Claims.Json.Good j ∧ ∃ s, b = s.toUTF8 ∧ Flock.canon j = .ok s
+/-- The canonical print of such a tree is accepted, and what is read is alike to it. -/
+theorem canonicalJson_of_canon {j : Json} {s : String} (hg : Claims.Json.Good j) (hc : Flock.canon j = .ok s) :
+    ∃ j', Core.canonicalJson s.toUTF8 = .ok j' ∧ Claims.Json.Same j j'
+/-- So the accepted texts are exactly those prints. -/
+theorem canonicalJson_accepts_iff (b : ByteArray) :
+    (∃ j, Core.canonicalJson b = .ok j) ↔ ∃ s j, b = s.toUTF8 ∧ Claims.Json.Good j ∧ Flock.canon j = .ok s
+```
+- The answer is alike to the printed tree (`Same`), not equal to it: two trees with one print can differ in how the object's tree is built.
+- What each half stands on [read]: the first on `canonicalJson_ok` (private in `Pous/Component.lean`, with its token changed), `parse_wf` and `good_of_canon`; the second on `parse_canon`, `canon_same`, `canon_ascii` (`Json/Canon.lean:303`) and `fromUTF8?_toUTF8` (`Claims/Complete/Encode.lean:90`).
+- What is missing: `good_of_canon` is on `cursor/proofs-sessionof-9b17` and not on `main`; and a step from `Claims.Json.Ascii s` to every byte of `s.toUTF8` being below `0x7f`, which I have not found. Not short enough to call proved today.
+
+**F. The three lemmas, each from `Good p` of the parameters `canonicalJson` answered** [read on the join for the places, guess for the field names]
+1. *The partition object*: where `OneStage.paramsParsed p` succeeds, the object it reads under `partition` (`Spot/OneStage.lean:268`) is `Good`, so `Claims.Json.Wf` of it holds and `partition_readsBack` needs no premise. It is the fact that a field of a `Good` object is `Good` (`wf_of_getObjVal` is its `Wf` half, `HeaderRoots.lean:135`).
+2. *The registered reads*: every circuit `Spot.Run.templateCircuits` returns from the parameters' `proofs`, and every member `membersOf` returns, carries registered reads that are `Good`. That is `ReadsWf` and `RefReadsWf`, and the hypothesis `registered_readsBack` keeps.
+3. *The ports*: the names `paramsParsed` reads under `ports` (`OneStage.lean:256`) have no duplicate, since they are the keys of a well-formed object in the tree's order; for the boundary's and the interior's parameters that is `PortsDistinctAt`.
+- In the two-stage form the boundary's and the interior's parameters are themselves answers of `canonicalJson` (`paramsAt`), so `canonicalJson_good` gives `Good` of each with no field lemma.
+
+**STOP RULE.** Nothing found says a listed guarantee is false or empty. Whether a verifier accepts something new: on every text run here, and on the 81 texts of `Cli.lean`, the two parsers gave the same answer [run]; the parser's own docstring names two differences (a number's cap of `2^64` where core has `USize.size`, the same on a 64-bit machine, and a fuel bound that refuses if it ran out) [read]. Beyond that, not established by me.
+
+**NEEDS**
+- proofs coordinator and soundness: the ruling on these numbers, whole, narrower or a cheaper total parser first. I write no more of the switch until it comes.
+- PoUS's owner, if the whole switch is taken: the one token at `security/Proofs/Properties/Pous/Component.lean:98`.
+- The interface's owner, under either switch: `Base.JsonParse` in `layers["CoreProtocol.Protocol"].imports` of `verity/protocols/interface/lean-audit.json`.
+
+**To post** (PRF-490): the table's bold row and the sentence under "What it costs here".
+
+**Not established**
+- The 300-member rows: `r20261113-113652-fee5`, vy-nebius-cpu-11, running since 11:36:52Z, expected to end about 12:15Z. It stages FIRSTACCEPT's stand-in window at `9683ae5e92` as `members_standin.sh` does, then runs v2's `refusal` with each parser twice (core, total, total, core). Their kept run took 310.6 s and 640,788 kB there.
+- An accepted audit's whole check on the play of twenty, and the two-stage form's case of it: the blobs are not kept.
+- That `cursor/proofs-sessionof2-parser-defe` compiles, and the Lean check on it.
+- Texts of 2^32 characters or more: `Canonical.lean`'s docstring says `canonicalJson` already refuses them today, since `Flock.canon` goes through `String.toList` too [read].
+
+`ScopeTable.lean`'s text is unchanged since `b49c6e4061`: I made no commit on `cursor/proofs-sessionof2-7c3a` after it.
+
+Heads: `cursor/proofs-sessionof2-parser-defe` `013786beeaadd1708a2567e77d34ae8a55190966` (new, not compiled); `cursor/proofs-sessionof-9b17` `9a548b2f975d` and `cursor/proofs-sessionof2-7c3a` `b49c6e40619f`, both as before. The two jobs' scripts were sent with the runs (`inputs/`), are in no branch, and the VM did no build.
