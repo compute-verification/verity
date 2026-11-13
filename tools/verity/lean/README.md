@@ -72,7 +72,9 @@ reads; no lock holds a row yet. `computed`: an evaluator written in Lean, with a
 run at a point; none is built yet. `mirrored`: a Python restatement of one error term (`bits_mirror.py`), printed only
 while the hashes it pins in the locks hold, and held under a `norm_num` instance where one exists
 (`tests/test_bits.py`); this is the one built today. A mirror evaluates one term of a bound, so the guarantee's
-security in bits is at most the printed figure. Whether a statement bounds a probability, and its error term,
+security in bits is at most the printed figure. A guarantee its lock lists under `unwitnessed` gets no number from any
+source: its line's bits read `not shown to accept any play`, its last column names the witness missing, and its numbers
+print once the entry leaves the lock. Whether a statement bounds a probability, and its error term,
 are read from its text and marked `~`; the rest comes from the locks.
 `check.py` exits 0 when every package passes, 1 when one fails, and 2 on a usage error or a refusal.
 

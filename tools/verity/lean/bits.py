@@ -6,13 +6,17 @@ PKG is a Lake package with a `lean-audit.json` (a path from the repository's roo
 (`LOCKS`). It prints one line for every guarantee a lock lists under `guarantees`, and one for each point and budget a
 number is evaluated at, in the columns: the guarantee, its owner, whether its statement bounds a probability, the error
 term, the point and the budget, the bits (−log₂ of the error term there), the source of the number, the row, and the
-bits left over a week, a month and a year of audits at one datacenter and at the world (`periods`, from the census).
+bits left over a week, a month and a year of audits at one datacenter and at the world (`periods`, from the census), and
+the witness missing, for a guarantee its lock lists under `unwitnessed`.
 
 A number has one of three sources, strongest first (the README, under its commands): `proved`, a Lean row at one point
 and budget, which the locks hold none of yet; `computed`, an evaluator in Lean with a soundness property, none yet either;
 and `mirrored`, a Python mirror of one error term (`bits_mirror.py`), printed only while its pins hold. A mirror evaluates
-one term of a bound (the error column names it), so the guarantee's security in bits is at most the printed figure. Lines
-with no number come first, then `mirrored`, then ascending bits. A mirrored line's row names the Lean instance, when one is, that bounds
+one term of a bound (the error column names it), so the guarantee's security in bits is at most the printed figure. A
+guarantee its lock lists under `unwitnessed` is not shown to accept any play, so it gets no number from any source: one
+line, its bits cell `not shown to accept any play`, its last column the witness missing (`check.unwitnessed_entry`'s
+half), and its numbers print once the entry leaves the lock. Lines with no number come first, then `mirrored`, then
+ascending bits. A mirrored line's row names the Lean instance, when one is, that bounds
 the mirrored expression at that point: `tests/test_bits.py` holds the printed figure under it.
 
 What the locks give is exact: the guarantees, their owners, their hashes. Whether a statement bounds a probability, and
@@ -56,6 +60,14 @@ _spec = importlib.util.spec_from_file_location("lean_bits_mirror", HERE / "bits_
 M = importlib.util.module_from_spec(_spec)
 sys.modules.setdefault("lean_bits_mirror", M)
 _spec.loader.exec_module(M)
+_spec = importlib.util.spec_from_file_location("lean_audit_for_bits", HERE / "check.py")
+C = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(C)
+#: the bits cell of a guarantee its lock lists under `unwitnessed`, the witnesses rule's words
+UNWITNESSED = "not shown to accept any play"
+#: the witness an `unwitnessed` entry exempts (`check.unwitnessed_entry`'s half), as the table's last column says it
+MISSING = {"honest": "honest", "nontrivial": "nontrivial", "both": "honest and nontrivial",
+           "unread": "an entry check.py doesn't read"}
 
 #: the spec's probability and expectation definitions besides the locks' `shape.events`: what a guarantee's statement
 #: applies when it bounds a probability
@@ -346,11 +358,15 @@ def lines(pkgs: list[Path], text: bool = True, pins: dict | None = None, census:
             mirrored.setdefault(g, []).append(mirror)
     out = []
     for where, lock in locks.items():
+        unwitnessed = lock.get("unwitnessed") or {}
         for g, record in sorted((lock.get("guarantees") or {}).items()):
             base = {"guarantee": g, "lock": where, "owner": record.get("owner"), "probability": None,
                     "probability_from": None, "error": None, "error_from": None, "point": None, "point_about": None,
                     "budget": None, "args": None, "bits": None, "source": None, "row": None, "periods": None,
-                    "note": None, "witness": False}
+                    "note": None, "witness": False, "unwitnessed": None}
+            if g in unwitnessed:
+                entry = C.unwitnessed_entry(unwitnessed[g])
+                base["unwitnessed"] = {"missing": "unread" if entry is None else entry[1] or "both", "mirrored": False}
             if g in wit[where]:
                 base |= {"probability": False, "probability_from": "lock", "witness": True}
                 reader_says = None
@@ -368,6 +384,9 @@ def lines(pkgs: list[Path], text: bool = True, pins: dict | None = None, census:
                 if moved := pins_hold(mirror, {where: lock}):
                     base["note"] = (f"{mirror.lean}'s mirror is not printed: {', '.join(moved)} moved; re-read the "
                                     f"statement, update the mirror, then its pin")
+                    continue
+                if base["unwitnessed"]:
+                    base["unwitnessed"]["mirrored"] = True
                     continue
                 for budget, bargs in mirror.budgets.items():
                     for point in mirror.points:
@@ -402,15 +421,16 @@ def table(rows: list[dict]) -> str:
         return "-" if not r["periods"] else " · ".join(fmt_bits(at[where]) for at in r["periods"].values())
 
     out = ["| guarantee | owner | probability | error term | point | budget | bits | source | row "
-           "| a week · a month · a year: one datacenter | the world |",
-           "|---|---|---|---|---|---|---|---|---|---|---|"]
+           "| a week · a month · a year: one datacenter | the world | witness missing |",
+           "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         prob = "no, a witness" if r["witness"] else None if r["probability"] is None else "yes" if r["probability"] else "no"
         err = r["error"] if r["error"] is None or len(r["error"]) <= 90 else r["error"][:89] + "…"
+        unw = r.get("unwitnessed")
         out.append(f"| {r['guarantee']} | {cell(r['owner'])} | {cell(prob, r['probability_from'] == 'text')} | "
                    f"{cell(err, r['source'] is None)} | {cell(r['point'])} | {cell(r['budget'])} | "
-                   f"{fmt_bits(r['bits'])} | {cell(r['source'])} | {cell(r['row'])} | {over(r, 'datacenter')} | "
-                   f"{over(r, 'world')} |")
+                   f"{UNWITNESSED if unw else fmt_bits(r['bits'])} | {cell(r['source'])} | {cell(r['row'])} | "
+                   f"{over(r, 'datacenter')} | {over(r, 'world')} | {cell(MISSING[unw['missing']] if unw else None)} |")
     return "\n".join(out)
 
 
@@ -424,9 +444,18 @@ def summary(rows: list[dict]) -> dict:
     prob_from: dict[str, int] = {}
     for r in {(r["lock"], r["guarantee"]): r for r in rows}.values():
         prob_from[r["probability_from"] or "none"] = prob_from.get(r["probability_from"] or "none", 0) + 1
+    unwitnessed: dict[str, int] = {}
+    unwitnessed_mirrored: dict[str, int] = {}
+    for r in rows:
+        unwitnessed.setdefault(r["lock"], 0)
+        unwitnessed_mirrored.setdefault(r["lock"], 0)
+        if r["unwitnessed"]:
+            unwitnessed[r["lock"]] += 1
+            unwitnessed_mirrored[r["lock"]] += r["unwitnessed"]["mirrored"]
     return {"lines": len(rows), "guarantees": len(guarantees), "probability": len(prob), "with_a_number": len(numbered),
             "lines_by_source": by, "probability_from": prob_from,
-            "pins_moved": sorted({r["guarantee"] for r in rows if r["note"]})}
+            "pins_moved": sorted({r["guarantee"] for r in rows if r["note"]}),
+            "unwitnessed": unwitnessed, "unwitnessed_mirrored": unwitnessed_mirrored}
 
 
 def fetch_run(run: str, pkg: Path) -> tuple[Path, Path, Path]:
@@ -484,6 +513,9 @@ def main(argv: list[str] | None = None) -> int:
           f"lines by source: " + ", ".join(f"{k} {v}" for k, v in sorted(s["lines_by_source"].items())))
     print("whether a statement bounds a probability, from: "
           + ", ".join(f"{k} {v}" for k, v in sorted(s["probability_from"].items())))
+    print(f"under its lock's `unwitnessed`, so no number ({UNWITNESSED}): " + ", ".join(
+        f"{where} {n} ({s['unwitnessed_mirrored'][where]} a mirror would number)"
+        for where, n in s["unwitnessed"].items()))
     print("audits a week · a month · a year: " + "; ".join(
         f"{where} ({census['deployment'] if where == 'datacenter' else census['adversary']}) "
         + " · ".join(f"2^{math.log2(at[where]):.2f}" for at in census["audits"].values())

@@ -5,7 +5,10 @@ and one Lean source, with no Lean build:
   statement or error term fails here until someone re-reads it, updates the mirror and then its pin;
 - **instances** (`INSTANCES`): a theorem proved by `norm_num` that bounds a mirrored definition at numerals; the mirror,
   evaluated in exact rationals at the arguments read from the theorem's source, is at most its right side, and the line
-  the command prints for that point carries the same arguments and the same figure.
+  the command prints for that point carries the same arguments and the same figure, or, while the mirrored guarantee is
+  under its lock's `unwitnessed`, the command prints no line for that point and no figure for the guarantee;
+- **unwitnessed**: a guarantee its lock lists under `unwitnessed`, in any of the entry's forms, prints one line with no
+  number, its bits cell `not shown to accept any play`, and the mirror's numbers once the entry is gone.
 
 What it does not hold: that an instance's expression is the guarantee's bound. The instance bounds the mirrored
 definition at its numerals, and which guarantee's bound reads that definition, and how (`SpotOneWaitTwo` reads
@@ -255,11 +258,94 @@ def test_instance(path, theorem, rows, capsys):
     assert isinstance(value, Fraction) and value <= rhs, \
         f"{fn}'s mirror at {theorem}'s arguments is {float(value):.4g}, above its right side {float(rhs):.4g}"
 
+    B.main(["--locks-only"])
+    out = capsys.readouterr().out.splitlines()
+    figure = B.fmt_bits(B.bits_of(value))
+    unwitnessed = {r["guarantee"] for r in rows if r["unwitnessed"] and r["guarantee"] in mirror.guarantees}
+    if unwitnessed:
+        assert not [r for r in rows if r["row"] == theorem]
+        assert not [r for r in rows if r["guarantee"] in unwitnessed and r["bits"] is not None]
+        assert not [s for s in out if f"| {theorem} |" in s]
+        assert not [s for s in out if any(f"| {g} |" in s for g in unwitnessed) and figure in s]
+        return
     printed = [r for r in rows if r["row"] == theorem]
     assert len(printed) == 1, f"the command prints {len(printed)} lines whose row is {theorem}"
     line = printed[0]
     assert {k: Fraction(v) for k, v in line["args"].items()} == at
     assert line["bits"] == B.bits_of(value)
-    B.main(["--locks-only"])
-    out = [s for s in capsys.readouterr().out.splitlines() if f"| {theorem} |" in s]
-    assert len(out) == 1 and f"| {B.fmt_bits(B.bits_of(value))} | mirrored |" in out[0]
+    out = [s for s in out if f"| {theorem} |" in s]
+    assert len(out) == 1 and f"| {figure} | mirrored |" in out[0]
+
+
+def cells(table: str, g: str) -> list[list[str]]:
+    """The cells of ``table``'s lines for the guarantee ``g``."""
+    return [[c.strip() for c in s.strip().strip("|").split(" | ")] for s in table.splitlines() if s.startswith(f"| {g} |")]
+
+
+#: the table's columns: the bits, the period columns and the witness missing
+BITS, WEEK, WORLD, WITNESS = 6, 9, 10, 11
+
+
+@pytest.mark.parametrize("form,missing", [("hash", "both"), ("hashes", "both"), ("honest", "honest"),
+                                          ("nontrivial", "nontrivial")])
+def test_an_unwitnessed_guarantee_prints_no_number(tmp_path, locks, capsys, form, missing):
+    """A mirrored guarantee its lock lists under `unwitnessed`, as a bare hash, as {type_hash, unfolded_hash} or with
+    `missing`, gets one line with no number in either output, and the mirror's numbers once the entry is gone."""
+    mirror = next(m for m in M.MIRRORS if m.per_audit and m.definitions and not any(
+        g in lock.get("unwitnessed", {}) for g in m.guarantees for lock in locks.values()))
+    g = next(iter(mirror.guarantees))
+    where = next(p for p, lock in locks.items() if g in lock.get("guarantees", {}))
+    record = locks[where]["guarantees"][g]
+    entry = {"hash": record["type_hash"], "hashes": {"type_hash": record["type_hash"], "unfolded_hash": "0" * 64},
+             "honest": {"type_hash": record["type_hash"], "missing": "honest", "why": "no honest instance yet"},
+             "nontrivial": {"type_hash": record["type_hash"], "missing": "nontrivial", "why": "no failing instance yet"},
+             }[form]
+    assert B.C.unwitnessed_entry(entry) == (record["type_hash"], None if missing == "both" else missing)
+    lock = {"guarantees": {g: record}, "reads": locks[where]["reads"], "unwitnessed": {g: entry}}
+    (tmp_path / "lean-audit.json").write_text(json.dumps(lock))
+    census = B.periods()
+
+    [line] = [r for r in B.lines([tmp_path], text=False, census=census) if r["guarantee"] == g]
+    assert {k: line[k] for k in ("bits", "periods", "point", "budget", "args", "source", "row")} == dict.fromkeys(
+        ("bits", "periods", "point", "budget", "args", "source", "row"))
+    assert line["unwitnessed"] == {"missing": missing, "mirrored": True}
+    [row] = cells(B.table([line]), g)
+    assert row[BITS] == "not shown to accept any play" and row[WITNESS] == B.MISSING[missing]
+    assert not any(c.isdigit() for k in (BITS, WEEK, WORLD) for c in row[k]), row
+    assert B.summary([line])["unwitnessed"] == {line["lock"]: 1} and B.summary([line])["unwitnessed_mirrored"] == \
+        {line["lock"]: 1}
+
+    del lock["unwitnessed"]
+    (tmp_path / "lean-audit.json").write_text(json.dumps(lock))
+    numbered = [r for r in B.lines([tmp_path], text=False, census=census) if r["guarantee"] == g]
+    assert len(numbered) == len(mirror.budgets) * len(mirror.points)
+    assert {r["bits"] for r in numbered} == {B.bits_of(mirror.value(**(p.args | b))) for b in mirror.budgets.values()
+                                             for p in mirror.points}
+    assert all(r["periods"] and r["unwitnessed"] is None for r in numbered)
+    figures = {B.fmt_bits(r["bits"]) for r in numbered}
+    assert {c[BITS] for c in cells(B.table(numbered), g)} == figures
+
+    lock["unwitnessed"] = {g: entry}
+    (tmp_path / "lean-audit.json").write_text(json.dumps(lock))
+    capsys.readouterr()
+    B.main([str(tmp_path), "--locks-only"])
+    text = [s for s in capsys.readouterr().out.splitlines() if s.startswith(f"| {g} |")]
+    assert len(text) == 1 and not any(f"| {f} |" in text[0] for f in figures)
+    B.main([str(tmp_path), "--locks-only", "--json"])
+    doc = json.loads(capsys.readouterr().out)
+    [j] = [r for r in doc["lines"] if r["guarantee"] == g]
+    assert j["bits"] is None and j["periods"] is None and j["unwitnessed"] == {"missing": missing, "mirrored": True}
+    assert doc["summary"]["unwitnessed_mirrored"] == {str(tmp_path): 1}
+
+
+def test_no_unwitnessed_guarantee_of_the_locks_has_a_number(locks):
+    out = B.lines([ROOT / p for p in B.LOCKS], text=False, census=B.periods())
+    listed = {(p, g) for p, lock in locks.items() for g in lock.get("unwitnessed", {})}
+    assert {(r["lock"], r["guarantee"]) for r in out if r["unwitnessed"]} == listed
+    held = [r for r in out if r["unwitnessed"]]
+    assert held and not [r for r in held if r["bits"] is not None or r["periods"] is not None]
+    table = B.table(held)
+    for r in held:
+        for row in cells(table, r["guarantee"]):
+            assert row[BITS] == "not shown to accept any play", row
+            assert not any(c.isdigit() for k in (BITS, WEEK, WORLD) for c in row[k]), row
