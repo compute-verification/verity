@@ -151728,3 +151728,98 @@ This entry restates nothing on a branch a pull request reads. Both merges were c
 2. The empty `git diff` against the scratch at `4667f9e890d`, shown in the entry.
 3. The plain merge of the head MEMBERS names. If it conflicts in a file of soundness's or MEMBERS's, I stop and write the file and the two sides.
 4. One build of my changed files on a node, then the push, then the line "my live line" with the full head.
+
+## GATHER — 16:34Z Fri 13 Nov — the rehearsal's verdicts for ASSEMBLY: on the merge the join's wiring test fails without the mend and passes with it; the merged tree compiles, the play of twenty is rc 0 and the difftest passes; and one line of the test I pasted at 16:16Z was wrong
+
+**The head.** My live line is unchanged: `cursor/proofs-gather-wired-layout-6a9b` at `fc5c9053db63c6e5458888de2dd00db95619aee9` [run: `git ls-remote origin` at 16:32Z]. I committed nothing on it [run]. Friday's two are unmoved [run: the same `ls-remote`]. No message of yours newer than 16:04Z has reached me [run: the hook at 16:32Z]. All four runs below are of a scratch that is pushed nowhere, and none of mine is still running [run].
+
+**A correction to my 16:16Z entry.** The first new assertion of the test I pasted there was wrong [run]. It asked that the window have one wired port, and the test's window has two readers, each with one [run: `be78`'s test log]. The line is now this [run: written, scratch `e219a9600257`]:
+
+```python
+    assert wired[reader.port("x")] == writer.port("o0") == want[reader.port("x")]["wired"]
+```
+
+`bound_reads` as I pasted it stands [run]. What I said of the join's test failing on the merge was derived then, and a run now says it [run: `e86f`].
+
+**The verdicts.**
+
+| Run | Scratch head | What ran | Verdict |
+| --- | --- | --- | --- |
+| `r20261113-162707-e86f` | `6eca6aacc25`, the merge alone | `benchmarks/one_stage/tests/test_a5_wiring.py` | 1 failed, 6 passed. The one is the join's test, at `reader.port("x") not in want` [run] |
+| `r20261113-162250-7d2a` | `e219a9600257`, the merge, the mend and the corrected line | the same file | 7 passed [run] |
+| `r20261113-161033-be78` | `55445b894a9`, the merge and the mend, before the corrected line | the play of twenty templates with its inputs committed (`two_stage_small.sh`, round 2 in Python); then `test_a5_wiring.py`, `test_two_stage_second.py`, `test_a5_tp_gates.py` | the play rc 0, `SMALL` with every field true and `"refused": null`; the tests 1 failed, 38 passed, the one being the line corrected above [run] |
+| `r20261113-161136-af18` | `55445b894a9` | `flock-verify` and `flock-firewall` built; SPOT's Lean verifier built whole; `test_audit_two_members.py` and the windows' `test_interface.py`; the verifier's `test_members_run.py`, `test_two_stage.py`, `test_served_select.py`; the difftest (`test_difftest.py`, `test_members_twin.py`, `test_members_refusal.py`) with the recorded fixtures fetched | both builds rc 0, the verifier's package 530 jobs; 92 passed; 169 passed; the difftest 134 passed, 2 skipped [run] |
+
+`55445b894a9` and `e219a9600257` differ in that one line of the test file and nothing else [run: `git diff --stat`]. So the play, the builds and the difftest ran on the code of `e219a9600257` [derived].
+
+**The mend, whole**, against `6eca6aacc25` (paths as before chain 2) [run: `git diff`]:
+
+```diff
+diff --git a/benchmarks/one_stage/a5.py b/benchmarks/one_stage/a5.py
+--- a/benchmarks/one_stage/a5.py
++++ b/benchmarks/one_stage/a5.py
+@@ -760,13 +760,16 @@ def bound_reads(file: Mapping[str, Any], m: CS.Member, ports: Iterable[str], roo
+     """Member ``m``'s ``--registered`` file ``file`` with each of its header's ``ports`` the file names no read for bound
+     (`REG.bind_ports`) to the port's own tree: the root the registration holds for ``<member>/<port>`` (``roots``, its
+     entries by port) and the domain the verifier's window derives for it (``want``), which the audit's check before the
+-    sample held the header's to (``root:<port>``). A wired port with no tree of its own (`rows.Member.wired_trees`) has
+-    neither: its rows are leaves of its writer's output tree, which the verifier's file names it a read of, each unit at
+-    its writer unit's leaf (`rows.Binding.held_leaves`: `rows.own_reads`, the two-stage audit's `verifier_reads`), the
+-    read the Lean verifier holds each session to. So it is never bound, and a file that leaves it out is refused
++    sample held the header's to (``header``, the per-member form's rule). A wired port with no tree of its own
++    (`rows.Member.wired_trees`) has none: its rows are leaves of its writer's output tree, which the verifier's file names
++    it a read of, each unit at its writer unit's leaf (`rows.Binding.held_leaves`: `rows.own_reads`, the two-stage
++    audit's `verifier_reads`), the read the Lean verifier holds each session to. The window and the registration name
++    that tree under the reader's name too (``want``'s entry says so, ``wired``: `rows.wired_ports`), and a root under
++    that name is its writer's, no tree of the port's own. So it is never bound, and a file that leaves it out is refused
+     (ValueError, `REG.bind_ports`'s)."""
+     ports = list(ports)
+-    own = {p: {"root": roots[q]["root"], "domain": want[q]["domain"]} for p in ports if (q := m.port(p)) in roots and q in want}
++    own = {p: {"root": roots[q]["root"], "domain": want[q]["domain"]} for p in ports
++           if (q := m.port(p)) in roots and q in want and "wired" not in want[q]}
+     return REG.bind_ports(file, ports, own)
+ 
+ 
+diff --git a/benchmarks/one_stage/tests/test_a5_wiring.py b/benchmarks/one_stage/tests/test_a5_wiring.py
+--- a/benchmarks/one_stage/tests/test_a5_wiring.py
++++ b/benchmarks/one_stage/tests/test_a5_wiring.py
+@@ -138,11 +138,12 @@ def test_a_wired_row_is_flipped_where_its_unit_reads_it_in_a_shared_row_member_w
+ 
+ 
+ def test_a_wired_port_with_no_tree_of_its_own_is_a_read_of_its_writers_tree_and_never_bound():
+-    """A reader whose wired port has no tree of its own (`rows.Member.wired_trees`): the verifier's window derives no port
+-    for it and the registration holds no root under its name. The verifier's file (`rows.own_reads`) names it a read of
+-    its writer's tree, each unit at its writer unit's leaf, and `a5.bound_reads` leaves that file as it is: it asks the
+-    registration for no root of the wired port. A file that leaves the wired port out is refused, and a port with a tree
+-    of its own that a file leaves out is bound at the registration's root and the window's domain for it."""
++    """A reader whose wired port has no tree of its own (`rows.Member.wired_trees`): the verifier's window names it under
++    its reader at its writer's tree (`rows.wired_ports`), and the registration holds its writer's root under that name.
++    The verifier's file (`rows.own_reads`) names it a read of its writer's tree, each unit at its writer unit's leaf, and
++    `a5.bound_reads` leaves that file as it is: the root under the reader's name is no tree of the port's own, and it
++    binds the port to none. A file that leaves the wired port out is refused, and a port with a tree of its own that a
++    file leaves out is bound at the registration's root and the window's domain for it."""
+     circuit = I.Circuit("chain", ((GEMM, 2 * UNITS),), external=(f"{GID}/x",),
+                         wires=(I.Wire(GID, "x", GID, "o0", at=UNITS, radix=(UNITS,), base=0, step=(1,)),),
+                         order=((GID, 0, UNITS), (GID, UNITS, UNITS)))
+@@ -150,10 +151,14 @@ def test_a_wired_port_with_no_tree_of_its_own_is_a_read_of_its_writers_tree_and_
+     ms = tuple(replace(m, wired_trees=False) for m in win.window.members)
+     mine = replace(win.window, members=ms)
+     want = CS.expected_ports(mine)
+-    roots = {q: {"port": q, "root": hashlib.sha512(q.encode()).hexdigest(), **e} for q, e in want.items()}
+     writer, reader = ms[0], ms[2]
++    wired = CS.wired_ports(mine)
++    assert wired[reader.port("x")] == writer.port("o0") == want[reader.port("x")]["wired"]
++    roots = {q: {"port": q, "root": hashlib.sha512(wired.get(q, q).encode()).hexdigest(),
++                 **{k: v for k, v in e.items() if k != "wired"}} for q, e in want.items()}
+     ports = [p for p, _w in reader.all_rows]
+-    assert reader.wired == (("x", "o0", (0, 1)),) and ports == ["x", "w", "o0"] and reader.port("x") not in want
++    assert reader.wired == (("x", "o0", (0, 1)),) and ports == ["x", "w", "o0"]
++    assert roots[reader.port("x")]["root"] == roots[writer.port("o0")]["root"]
+     file = CS.own_reads({reader.key: {"format": REG.READS_V1, "ports": {}}}, mine, roots, registered=REG)[reader.key]
+     assert sorted(file["ports"]) == sorted(ports)
+     assert (file["ports"]["x"]["root"], file["ports"]["x"]["reads"]) == (roots[writer.port("o0")]["root"], [0, 1])
+```
+
+**Not established.** The play of two templates and the two-stage toy were not run on the scratch [run: neither job has them]. `security/Proofs` was not built on the merge, and no records run was made on it [run]. No play went through the compiled form, which is STAGECOINS's [relayed: your 14:18Z]. That a registered file without the wired port is bound on the unmended merge is by reading: the unmended test stops one assertion before it [derived]. The scratch is the tree before chain 2, so the same hunks sit at other paths in the carried join [guess]. What the Lean verifier does with a wired port bound at its writer's root is not known to me [guess: no run reached it].
+
+**What I do next.** Nothing on the live line [relayed: your rule]. I read FRAME's table for my carried commit at each timer, the next at 17:00Z [run: set].
