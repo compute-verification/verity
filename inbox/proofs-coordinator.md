@@ -116036,3 +116036,45 @@ Nothing new since the 02:20Z notice. The second move changes what `two` reads (t
 ### To post
 
 Nothing.
+
+## RELAX, Fri 13 Nov 02:53Z: R7's two locks are regenerated and committed, head `a7b27f9f8a2c`; under A `acceptMeans` keeps its own record; `main` holds neither merge yet
+
+The records run on the Option A head passed both packages, the witnesses rule included, and I committed both locks exactly as it wrote them. In neither lock does any guarantee of this change move its own record: `Properties.Spot.acceptMeans` reads changed definitions and keeps its statement. The pull request is not open yet; it opens when the quick tier at the lock head ends, and the ready line follows inside the 06:00Z date. Network's Fri 5 PM PST date holds.
+
+**Head.** `cursor/proofs-r7-certified-b6a0` at `a7b27f9f8a2c444324953d5407663cae662a91e7`, pushed [run]. Two commits past the `3c020f77568d` of my 02:02Z entry:
+- `78585138233624e47af290e48d2c080c5a0df4d3`: one bound name in `acceptMeans`' proof (`law` to `l`), so that `security/Proofs/Properties/Spot.lean` adds no retired-term site (146 before, 146 after) [run]. Its try `r20261113-021133-7e2c` (vy-nebius-2): lean exit 0 in 278 s, 83 theorems, axioms clean, no sibling clash [run].
+- `a7b27f9f8a2c`: the two lock files, nothing else [run: `git show --stat`].
+- No interface CERTSTOP or network's worker reads moved: `certified=`'s shape, the code `R7-certified` and the audit record's check `certified` are as at `8592d9d7c429` [read].
+
+**The records run** `r20261113-015226-cc14` (vy-nebius-2, at `3c020f77568d`) [run]: `security`: `check.py --update` exit 0 in 1,357 s. `security/Properties`: the first audit failed on record differences only ("every failure of its records is a record difference"), then `check.py --update` exit 0 in 1,890 s and `AUDIT: PASS`. No witnesses failure in either, which is what Option A was for.
+
+What moved, lock by lock (old: the branch's lock; new: the run's) [run: a section-by-section comparison of the two JSON files]:
+- `security/Properties/lean-audit.json`
+  - `guarantees`: one record changed, `Properties.NetworkPeriod.rowsCapPublished_nontrivial` (its signature's literal gains `entries := 0`; type hash moves). It is not this change's: none of my commits touches `NetworkCheck/Period.lean` or `Properties/NetworkPeriod.lean` [run: `git log --no-merges --first-parent`], and lean's lock at `34c5cbb3705c` shows the same difference against the run's [run]. It is the merged heads' lock not yet regenerated.
+  - `Properties.Spot.acceptMeans`: its record is equal to the old one, key for key (type hash `b7d2aff5…`, unfolded hash `91f2a4fe…`, owner @proofs) [run].
+  - `open`: `Properties.Spot.ExpectsV2`'s digest (the widened premise Daniel approved on 12 Nov); issue and due date unchanged [run].
+  - `reads`, this change's: `Properties.Spot.CertifiedHeld` new; `Properties.Spot.ExpectsV2`, `R1`, `R7`, `Registered` changed; `Spot.OneStage.CERTIFIED_KEYS`, `CERTIFIED_REFUSED` and the private `certifiedOf` new; `Spot.OneStage.check`, `paramsOfJson`, `paramsParsed`, `recordChecks` changed; `Spot.Record.certifiedCheck` new; `Spot.Registration.Verifier.certified`, `Verifier.v2`, `certifiedHeld` new; `Spot.Registration.Verifier`, `check`, `checkOutputs` changed [run; the attribution by name is derived from which files my commits touch].
+  - `reads`, the complete answer's (#9458): `Properties.Spot.publicOf`, `Spot.OneStage.Public`, `Public.complete`, `publicJson`, `Spot.Record.allRan` [derived].
+  - `reads`, the merged heads' (not regenerated on lean's branch either): `NetworkCheck.Period` (8 changed), `Properties.NetworkPeriod.cappedPeriod`, `Properties.Verity.Game` (18 changed, all `Verity.Vocab…`), `Verity.Idle.vocab`, and two modules read under their new names (`Flock.FV3` as `Commitments.FV3`, 17 definitions; `Flock.Program` as `Circuits.Program`, 2) [run].
+  - Equal to the old lock: `unwitnessed`, `witnesses`, `trust_gap`, `deployed`, `domain`, `assumptions`, `meaning`, `claims` [run].
+- `security/lean-audit.json`: only `reads` moved: the same `Spot.OneStage`, `Spot.Record` and `Spot.Registration` lines; `NetworkCheck.Period` (8), `Properties.Verity.Game` (21), `Verity.Idle.vocab`, `Proofs.Properties.Verity.Sampled.Instance` (3), and `Flock.FV3` as `Commitments.FV3` (16). No guarantee's record, no premise list [run].
+- The landing message's tally for the two (`research.spec_alert`): `definitions: 42 changed` for `security`; `guarantees: 1 changed; definitions: 42 changed` for `security/Properties` [run].
+
+One thing to be exact about: `cc14` ran one commit before the head, and that commit changes a bound name inside one proof, which no record holds [derived]. Rather than rest on that, `r20261113-024621-9395` (vy-nebius-2, launched 02:46Z, expected end about 04:25Z [guess]) runs the same records at `78585138233624e4`; I compare its two files byte for byte with the committed ones and say so in the ready line.
+
+**Quick tier** `r20261113-020205-35be` (at `3c020f77568d`, base `67b2c6791982`): 115 of its 127 suites have reported, 114 passed, one red: the certifier's network verifier, 2 tests of `test_nci_record_difftest.py`, lean's and fixed at `34c5cbb3705c` [run]. Expected end about 03:15Z [guess]. When it ends I launch the quick tier at the lock head on the same machine, so its passes are reused.
+
+**Counts at this head** [run]:
+- Retired terms: my 19 own commits (the lock commit among them) add 20 sites on the change's files and remove 21, net −1; no file ends above where it started.
+- Markdown caps: `verity/protocols/spot/verifier/README.md` is 50,290 bytes against a cap of 49,152. Lean's head `34c5cbb3705c` alone is 49,340 and the complete answer's 48,831; my commits add 114 bytes. It warns (bookkeeping) and I name it in the ready line.
+- Merged trees: `git merge-tree --write-tree` of `a7b27f9f8a2c` is clean with `origin/main` (`8c11a1d5abff`), lean's `34c5cbb3705c`, #9458's `049c5875989c` and #9023's `6b782d972ec4`.
+
+**`main`**: `8c11a1d5abff` at 02:50Z holds neither #9375 nor #9458; both pull requests are open [run].
+
+**What I do next.** As my 02:02Z entry said, since #9375 was not on `main` when the records ended: quick tier at the lock head, the pull request opened unmarked, the ready line against this head, saying `main` is not merged. When `main` holds #9375 I merge `main` (no rebase), rerun the records, the nine tries and the quick tier at that head, commit the locks as that run writes them and write a second ready line; the lock's base moves should then leave my lock difference.
+
+**Network's date (Fri 13 Nov 5 PM PST).** It holds [derived]: the admission is written, proved and tried, both locks are in, and what is left is the quick tier at the lock head and the pull request's text. #9375 landing late does not move it: the pull request opens against the head I have.
+
+Not established: the quick tier at `a7b27f9f8a2c`; the records at `78585138233624e4` (`9395`); anything at a head that holds `main`; the attribution of the base's lock moves to one pull request each (I showed only that they are not from my commits).
+
+For the table: R7 at `a7b27f9f8a2c` (locks in, `acceptMeans`' own record unchanged); pull request not open; waiting on `r20261113-020205-35be` (about 03:15Z) and `r20261113-024621-9395` (about 04:25Z); ready line by 06:00Z on track; network's Fri 5 PM PST holds.
