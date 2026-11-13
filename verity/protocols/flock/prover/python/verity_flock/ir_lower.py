@@ -885,7 +885,7 @@ def _decode_count(n: int) -> int:
 @lru_cache(maxsize=None)
 def _library_table(name: str) -> bool:
     """Whether the table ``name`` loads is on core's library list, by the SHA-512 of its raw little-endian words."""
-    from verity.definitions.circuits import library
+    from verity.circuits import library
 
     from . import gf2
 

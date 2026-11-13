@@ -574,10 +574,10 @@ def priced(cen: dict, prices: dict) -> dict:
 
 
 def circuit_size(program) -> dict:
-    """|C|: the step Program's census (`verity.definitions.circuits.census`) at the Boolean prices of the primitives it calls
+    """|C|: the step Program's census (`verity.circuits.census`) at the Boolean prices of the primitives it calls
     (`boolean_prices`): its gates and ANDs by root callee class, and the word gates of the primitives with no Boolean
     version, which it leaves out."""
-    from verity.definitions.circuits.census import census
+    from verity.circuits.census import census
     from verity_vllm.program.frontend.train_step import primitives
 
     return priced(census(program), boolean_prices(primitives(program)))
