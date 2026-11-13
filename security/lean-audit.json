@@ -50,7 +50,7 @@
   },
   "Pouw.PearlC.Assumptions.W1CompleteH100": {
    "owner": "@compute-accounting",
-   "digest": "f9366d44a492e1ea1c0a278e99a53f7f5e2d8caa203d8fbc6376d6488f229dc5"
+   "digest": "e029c467f886f9078b0a54daeda2c7bb0a099079f92edaaee8a89feba807a286"
   },
   "WeightSecurity.Assumptions.FaultedUseHard": {
    "owner": "@proofs",
@@ -24164,12 +24164,12 @@
     "reads": [
      "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1W1",
      "Pouw.PearlC.Assumptions.TTOutTileW1",
-     "Pouw.PearlC.CostModel.DominatedBy",
+     "Pouw.PearlC.CostModel.DominatedWithin",
      "Pouw.PearlC.W1.W1Device.s8H100Best"
     ]
    },
    "type_hash": "52e3280840ec061a3bb2e6a746632595df6ab017e28137c778dfe4a2e63e60a2",
-   "unfolded_hash": "fca263a533fc7bcc74fb94b2a4401f80a1f165c7c7eeb66af0216093447f8c67"
+   "unfolded_hash": "8ab6becfe0800807523dcb179623343b49f3dcfff907dbbf7164647543e9d513"
   },
   "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8_8192": {
    "owner": "@compute-accounting",
@@ -24182,12 +24182,12 @@
     "reads": [
      "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1W1",
      "Pouw.PearlC.Assumptions.TTOutTileW1",
-     "Pouw.PearlC.CostModel.DominatedBy",
+     "Pouw.PearlC.CostModel.DominatedWithin",
      "Pouw.PearlC.W1.W1Device.s8H100Best"
     ]
    },
    "type_hash": "ce3335ef19a90b8475150d1906ef156c32d814329a9b7361da556d3637056808",
-   "unfolded_hash": "ff5ca5c11ad5dbb0e43e5e52dda43ba346d84a9638d753b07d170a0d152d4b28"
+   "unfolded_hash": "63912189a013c50ed87f6e6350c3313aaab35d73495f8919d53ed63577bfd029"
   },
   "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384": {
    "owner": "@compute-accounting",
@@ -34287,11 +34287,11 @@
    }
   },
   "Definitions.Assumptions.PearlC": {
-   "digest": "6265923a6b14872310e8fa98b4ef473702a3f642e746d21f1be3e70184b5606a",
+   "digest": "02c5a71042c95c9ae2579b9a46e77676e93b15e026c6ddcdd8efe6e4b3046637",
    "definitions": {
     "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8": "fe49e3195baf9dcbb880188e2a3bfa38957e336380ee55aed4a2002134f3a6a8",
-    "Pouw.PearlC.Assumptions.W1CompleteH100": "f9366d44a492e1ea1c0a278e99a53f7f5e2d8caa203d8fbc6376d6488f229dc5",
-    "Pouw.PearlC.CostModel.DominatedBy": "7317cd3d2d21fd6ceb46a572845abfcc0b0a0c39a7399ee219bb5e724c5b5d52",
+    "Pouw.PearlC.Assumptions.W1CompleteH100": "e029c467f886f9078b0a54daeda2c7bb0a099079f92edaaee8a89feba807a286",
+    "Pouw.PearlC.CostModel.DominatedWithin": "38b733b0a1bade47cc584f180c4d73fae9ad09b590d6b87ee40fe7597184ca8f",
     "Pouw.PearlC.W1.W1Device.s8H100Best": "8de5c71192e3bf6f3a11e89901258ab8dfc6baeb7f01f053679fd233668cd49f"
    }
   },
@@ -40307,10 +40307,10 @@
    }
   },
   "Definitions.Pouw.Guarantees.PearlCS8": {
-   "digest": "853b7df18a0f5c70afc196b7ebdf16baafb0096054e7f2d0113dbeb0e5530f8c",
+   "digest": "b5792ba885a5f583b5456d9a12f7eb66cceeaec1409b923fe9ff43d6faa34d2d",
    "definitions": {
-    "Pouw.Guarantees.PearlC.SampledH100Rev1S8Llama32_1b": "a9198bb26202dca724e6cda1df26d573dd9dbca51d074a342d8206814057c746",
-    "Pouw.Guarantees.PearlC.SampledH100Rev1S8_8192": "ce49969cbfa08ca178fcce220c6511f0634bc702eeede5ec81100249d9169e57"
+    "Pouw.Guarantees.PearlC.SampledH100Rev1S8Llama32_1b": "ab1d3693ef0f747ac9abba8d3abb6dd3c1c9e3a85403be3f8814a8a54ce1a7e3",
+    "Pouw.Guarantees.PearlC.SampledH100Rev1S8_8192": "ed679440d4d67f358e8a00f0e30e14efec09b31badbb8e5f0846653f8a1f5f80"
    }
   },
   "Definitions.Pouw.Guarantees.PearlCTileCheck": {
