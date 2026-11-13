@@ -116932,3 +116932,31 @@ NEEDS: nothing.
 To post: nothing.
 
 Not established: that my two files and CUT's four still build over TWOLEG's changed form (`f5e0`). That `Apart` holds at any live deployment. The known hole stays open: a history holds earlier runs and ledger lines only on other windows, so on the play's own two windows it holds exactly this play's runs; the key pins replace that step on Tue 17 Nov.
+
+## FRAME, Fri 13 Nov 03:13Z: `main` is merged at `e033bfc14be4`, on the pull request's branch; the base moves to that commit the minute its build is green (run `40d7`, about 03:50Z); workers: do not merge yet. (ii) has not run
+
+**In plain words.** I merged `main` into the base's tree, but pushed the merge to the pull request's branch first and not to the base, because eleven workers build on the base and the merge had six conflicts, two in Lean, and a rename on `main` that no text merge can vouch for. One run now builds the merged tree, regenerates the records and runs the suites the change touches. When its build is green I fast-forward the base to the same commit and say so here. If it is red I fix it first and nobody else loses a try.
+
+**The merge** [run: `git merge`, read]
+- `cursor/proofs-frame-connected-4e1b` = `e033bfc14be4` = base `6c1a87cc54d3` + `main` `4a7291116e11` (#9375 is in it). The base is still `6c1a87cc54d3`.
+- Conflicts and what I took:
+  - `SpotFlock/ScopeDesc.lean`, `ScopeOf.lean`: our docstrings on `main`'s `Spot.Slots.SlotOrder` (the old `Layout`). No other file of ours names the old type.
+  - `one_stage`'s small rehearsal (`two_stage_small.py`, `.sh`) and `test_two_stage_second.py`: `main` now reads the outer block's return at the first stage's rows; ours refuses the logits the prover registers after the first sample. Together: a linked run is refused by `second-inputs` alone (`expect --inputs`), as GATHER's branch resolved the same two lines.
+  - Spot's `test_difftest.py`: `_read_linked` takes `main`'s `value` and `root` and our `filled`.
+- [derived] I read 282 declarations `main` removed or renamed since the base's fork against our 35 Lean files: only the `Layout` rename touches them. The build decides.
+
+**Runs** (machine vy-nebius-2; both started within the minute)
+- `r20261113-025826-b8ff`: L1's try at `8c37334cc716`, running.
+- `r20261113-031145-40d7`: at `e033bfc14be4`, `lean_changed.py --records security/Proofs --update`, with `suites.py --changed HEAD^2 --quick` beside it; `--mem-gb 32 --timeout 180m`. Beside the try, as your 03:05Z item 2 allows.
+
+**The connected statement's ready line: 05:00Z** [guess]. It waits on `40d7` only: the build (about 03:50Z), the records (04:30Z to 05:00Z), the suites. I open the pull request unmarked when the records are committed, `Lane proofs` first, the 02:20Z table in it, way 1 for the toy named as owed.
+
+**B16** [read] On `main` `SamplingDeploy.Code.ReplayCap` and `SamplingDeploy.RegMatchesTwo` are `open` (due 12 Nov). In the merged lock both are `domain` with their why and `SampledKSTwo` lists them there. So this pull request closes them; its body carries the notice's line.
+
+**(ii)** Not run. Your 03:05Z item 1 is mine now. GATHER's head is `671dd73cce63`; it merges into L1 with no conflict (tried, not committed). Next: the export's call in `two_stage.py second`, on `cursor/proofs-frame-guard-friday-7d2a`, then the rehearsal at `--units 20 --v 2560`, then the guard's `files` mode on its folder. That is two runs after `b8ff` ends.
+
+**Your board's line on my piece is right.** The four facts are `RefReadsWf`, `WidthFact`, `CopyFact`, `RowFact`.
+
+Pushed: `cursor/proofs-frame-connected-4e1b` `e033bfc14be4`; `cursor/proofs-frame-l1-9c4e` `8c37334cc716`. Unpushed: an edit of `guard.py` on L1 that splits the export into the auditor's copies and the run's (uncommitted, goes with the export's call).
+
+Not established: that the merged tree builds; that the two Python resolutions pass their tests.
