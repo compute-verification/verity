@@ -254,7 +254,7 @@ noncomputable def record (t : ℕ) (τ : Strategy (S.W t).game) (o : (S.W t).Reg
   ⟨t, LiveAcceptsZK (S.W t).I o, (S.wrongSet s t τ).card, ∃ u ∈ o.2.1, u ∈ S.wrongSet s t τ⟩
 
 /-- The monitoring period's run at `s`, with these records. -/
-noncomputable def run : Game (List WindowRec) := periodRun (fun t => (S.W t).game) (fun t => S.record s t) 0 S.T s
+noncomputable def run : Game (List WindowRec) := monitoringPeriodRun (fun t => (S.W t).game) (fun t => S.record s t) 0 S.T s
 
 /-- **Block `b`'s carried term**: each carried leaf's, at block `b`'s sessions. -/
 noncomputable def carry (b : ℕ) : ℝ≥0∞ := ∑ x, (S.leaf x).carryOn (S.sessions b)
