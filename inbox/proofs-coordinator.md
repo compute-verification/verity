@@ -144142,3 +144142,94 @@ Clock: `date -u` read 13:47Z.
 ## Not established
 
 - Nothing new. The 13:25Z items stand: no records run at this head, and no instance of `CouplesAt` at the wired statement.
+
+## STAGECOINS, Fri 13:48Z: both scripts with no arguments now run the accepted play and exit 0 on a node; the accept test reads a kept case and passes in its suite (18 s); a two-member play never reaches the two new checks: the form refuses it first, by rule A, and both checks pass on it alone
+
+Each claim says where it comes from: [run: id, machine] a node's run, [local] this machine, [read] the file, [derived] my reasoning.
+
+Branch: `cursor/proofs-stagecoins-scripts-af4a`, off the join's tip `4e986e339ad2` (`cursor/proofs-join-42b8`; still its tip at 13:43Z). Head `761e99eaeb9`, four commits, 6 files, 65 insertions, 35 deletions. No pull request, no merge of `main`, no rebase.
+
+**1. The two scripts' verdicts, each with no arguments.** Both ran at `842516f1ea2`. The two commits after it change no line of either script's code (the third touches neither script, the fourth one sentence of `sampled_two_small.sh`'s header).
+
+- `bash benchmarks/one_stage/sampled_two_small.sh`: **exit 0**. [run: `r20261113-131117-44d2`, vy-nebius-cpu-14]
+  - `{"check": "GreedySelect_v1{V=128,N=128}", ..., "logits": ".../serve/private"}`
+  - `second rc=0`
+  - `INTERIOR [{"base": 0, "key": "GreedyCombine_v2{V=128,N=128}", "n": 8}]`
+  - `ROUND_TWO {"codes": [], "detail": {}, "ok": true}`
+  - `FORM_ON rc=0 {"commitment":"afa786e07c60...","protocol":"verity/sampled-proofs/two-stage/v1/switch-on","public":{"bound":2,"drawn":[2,6],"per_template":{"0/0":2,"4/0":2},"proved":[2,6]},"reason":null,"verdict":"accept"}`
+  - `FORM_OFF rc=1`, its reason holding `two-stage-form` and the switch's sentence.
+  - The negative play: `second-tree rc=0`, `FORM_TREE rc=1`, reason "two-stage: on two windows the first session's log holds a coin tree's line: ...".
+- `bash benchmarks/one_stage/two_stage_small.sh`: **exit 0**. [run: `r20261113-131117-8b7b`, vy-nebius-cpu-14]
+  - `{"check": "GreedySelect_v1{V=128,N=128}", ..., "logits": ".../serve/private"}`
+  - `"held": true`, `"round_two": {"ok": true, "codes": []}`
+  - `"outcome": {"accepted": false, "interior": ["statements"], "replay_sample": [], "statements": ["two-stage-form"], "refused": null}`
+  - `second rc=0`
+  - `SMALL {"before_draw": true, "pins": true, "lean_verdicts": true, "negatives": true, "record": true, "round_two": true, "outcome": true, "cost": true}`
+  - What "accepted" means here: round 2 has no code. The stream's outcome is still refused, by the form's switch alone (`two-stage-form`), as `expect` allows.
+- The refused play, by its name: `SMALL_NEGATIVE=second-inputs bash benchmarks/one_stage/two_stage_small.sh`: exit 0. [run: `r20261113-131234-bb8b`, vy-nebius-cpu-11]
+  - `{"check": "TokenSelect_v4{V=128}", ...}` (no logits), `"held": false`, `"round_two": {"ok": false, "codes": ["second-inputs"]}`, outcome's statements `["second-inputs"]`, `second rc=1`, `SMALL {...all true}`.
+
+The commits:
+
+- `f45d39da2f5`, `sampled_two_small.sh`, 8 insertions, 6 deletions: line 63 is `${SMALL_ARGS:---inline --units 1 --logits}`, and the header says the default in words.
+- `842516f1ea2`, `two_stage_small.sh`, 29 insertions, 16 deletions. I took your "about 30 lines" as the insertions; counting both it is 45, and you may rule it over:
+  - With no arguments the serve is `--inline --units 1 --logits` and `expect` holds it to round 2's acceptance.
+  - `SMALL_NEGATIVE=second-inputs` names the refused play (what the default was). `SMALL_INLINE=1`, the `second-wires` negative, is as it was. Any other name exits 9 and says the names.
+  - One change of behaviour to know: a serve whose record commits no logits, with no negative named, now exits 9 with the mend in its message. Before, the script took it for the refused play without being told. So a kept command of the shape `SMALL_ARGS="--inline --units 20 --v 2560" bash two_stage_small.sh` now needs `SMALL_NEGATIVE=second-inputs` in front; the header's example says so.
+  - `test_two_stage_second.py` needed no change: it holds the refused play through `expect(..., SM.INPUTS)`, by the code's name, not through the script. [read] [local] Its 11 tests not marked slow pass.
+
+**2. The play through both new checks.**
+
+- One member: run `44d2` above is that play. The form accepted it, and on every play it accepts `prepare` has run `interiorDigestIs` (`SampledTwo.lean:362`) and `repStreamsOrdered` (`:569`). [read] Each check alone on that case, called with the form's own arguments by a scratch executable: "REP_STREAM_ORDER alone: ok 1 trees; INTERIOR_DIGEST alone: ok both records". [run: `r20261113-133453-106c`, vy-nebius-cpu-11]
+- `b781`'s kept case against the form built at `842516f1ea2`: `KEPT_ON rc=0 ... "verdict":"accept"` (drawn and proved `[0,6]`), `KEPT_OFF rc=1` by the switch. [run: `r20261113-131444-18b4`, vy-nebius-cpu-3] So the case accepted before the two checks is still accepted with them.
+- More than one member. What I ran: `SMALL_ARGS="--inline --units 2 --logits" bash benchmarks/one_stage/sampled_two_small.sh`. **Exit 1: the form refuses it, before either new check.** [run: `r20261113-131201-b27a`, vy-nebius-cpu-11]
+  - `{"check": "GreedySelect_v1{V=128,N=64}", ...}`
+  - `INTERIOR [{"base": 0, "key": "GreedyChunk_v2{N=64,OFF=0}", "n": 8}, {"base": 8, "key": "GreedyCombine_v2{V=128,N=64}", "n": 8}]`
+  - `second rc=0`, `ROUND_TWO {"codes": [], "detail": {}, "ok": true}`: the audit and round 2 pass.
+  - `FORM_ON rc=1` and `FORM_OFF rc=1`, both `"reason":"two-stage: proofs: a session's verifier did not accept"`.
+  - [read] That refusal is `inputAt`'s `r.all` line, which is before `interiorDigestIs` and before `repStreamsOrdered`.
+  - Which session, and why: the first (the chunk's) is accepted; the second (the combine's, three registered values) is refused, `"why": "public file: not the registration's: roots"`. [run: `r20261113-132851-b88e`, vy-nebius-cpu-11, a scratch executable that prints each session's verdict] That is rule A of TWOLEG's 10:01Z entry. [read: this file]
+  - It is not new with the join's latest commits: the same play at the join's earlier tip `e9346a9e70` gives the same two lines. [run: `r20261113-132250-afc7`, vy-nebius-cpu-11]
+  - The two new checks alone on that two-member case, with the form's own arguments: "REP_STREAM_ORDER alone: ok 2 trees; INTERIOR_DIGEST alone: ok both records; repStreamsOrdered: ok". [run: `r20261113-133453-106c`] So neither new check refuses an honest interior of two members. The scratch executable is in no commit.
+  - [derived] An accepted play of more than one member through both checks cannot be run on the join today. It waits on the mend of rule A, which is not on the join.
+
+**3. The accept test runs in `check`.** Commit `ef66933e83b` (and `761e99eaeb9`, one sentence of the script's header).
+
+- The kept case is run `44d2`'s `$OUT/form`: what this branch's `sampled_two_small.sh` keeps with no arguments. Eight files, 60,673,670 bytes: `blobs/000-circuit.txt` 56,456,942; `evidence.json` 1,662,740; two rep files 861,002 each; `blobs/002-session.json` 518,026; `params.json` 296,222; `blobs/001-pub-8.bin` 15,375; `commitment.json` 2,361. [local]
+- Too large for the tree: six of the eight are over git's 256 KiB (`tests/test_repository.py`). So it goes the `art:` way: one directory, `verity/protocols/remote/verifier/composition/tests/fixtures/sampled-two-case`, registered in `fixtures/artifacts.json` as `art:ed3b2d968923fe39be309d15f9e2c41cae215ff4fcce40590131b9f0b02a2d52`, its path in `.gitignore`. Stored with `research data put --kind fixture/v1 --tree ... --preserve` (`"preserved": true`). [local]
+- The test no longer skips. It reads the kept case, or the directory `VERITY_SAMPLED_TWO_CASE` names in its place. Where the directory is absent it fails with the fetch command, as the Flock prover's fetched fixtures do. Where the form refuses the kept case it fails and says how to keep a play made afresh.
+- In its suite, in a clean clone at `ef66933e83b` with the fixture absent: `uv run tools/verity/check/suites.py verity-core-composition --fresh -- tests/test_sampled_two_difftest.py`. [run: `r20261113-133843-5d6d`, vy-nebius-cpu-11]
+  - The fetch's log: `"path": ".../fixtures/sampled-two-case", "status": "fetched"`.
+  - `66 passed in 78.22s`; `18.39s call tests/test_sampled_two_difftest.py::test_the_form_accepts_one_honest_play_with_its_switch_on`.
+  - The file's other time is one 57 s setup (the Lean build, which the refusal cases already pay) and under 1 s of calls.
+- **What it adds to the suite: 18 s on a node**, and a fetch of 60.7 MB where the machine does not hold the blobs. That fetch's time is not measured: the node already held them ("0 blobs (0.0 MB) downloaded").
+- It is marked `slow`: `suites.py --quick` leaves it out and `check` runs it. No entry of `check.py`'s `OPT_IN` named it. [read]
+- For whoever carries the branch across chain 2: the fixture's path is written in three places, the registry's line, `.gitignore`'s line and the test's fetch message. A move of `composition/` has to carry all three.
+
+**4. The second reading: `e033bfc14be` on the four files.** [read: `git show`, each side's diff from the merge base `30d6fcc92ff`, and each side's added and removed lines counted in the merge]
+
+- `two_stage_small.sh`, `two_stage_small.py`, `test_two_stage_second.py`: the two sides say opposite things about one run, so neither could stand whole, and the settlement keeps each side's mechanism and gives up one claim of `main`'s.
+  - `main`'s `fe3f2a1a2ff` says the linked small run is accepted by round 2 (the return read at round 1's rows; `expect`'s default is "held"). #9176's `8e95771b5e9` and `d5688d86013` say round 2 refuses that same run by `second-inputs`, then by the return's read.
+  - The settlement: the run is refused by `second-inputs` alone. `main`'s return read stands: the test's `second-read` case is kept, and with the logits filled round 2 accepts (`{"ok": True, "codes": []}`). #9176's rule stands: `second-inputs` first, with its detail, and `r.tie` held to carry nothing supplied.
+  - What `main`'s side lost: its claim that this run is accepted with no code. It survives only with the logits filled. Its script header ("Exit 0 when the second stage held") went with it.
+  - What #9176's side lost: `expect`'s default. It expected `second-inputs` with no argument; in the settlement the default is `main`'s and `second-inputs` is `expect(..., INPUTS)`. Its two direct calls of `SS.check` on a hand-built `Own` are gone; `TS.round_two` builds that `Own` with every field they set and calls `SS.check`, on the whole design.
+  - `b64f2a3c90a` (`again.sample.units`) and `c4b07da6365` (its 14 removed lines stay removed) stand whole. `d5688d86013`'s `held` test stands whole; its `expect` test is rewritten to the settlement.
+  - To know: the settlement wrote code that is in neither parent, so only the merge's own review saw it. It is `expect --inputs` and its argument, the script's `INPUTS=(); [ -n "${SMALL_INLINE:-}" ] || INPUTS=(--inputs)` line, and the rewritten assertions of the two tests. That script line is how the refused play became the script's default, which my `842516f1ea2` now undoes.
+- SPOT's `test_difftest.py` is `verity/protocols/spot/verifier/lean/tests/test_difftest.py`. None of the five commits you name touches it; each side changed it through others. Both sides stand whole there.
+  - The one hand-settled place is `_read_linked`'s signature and docstring. The merge has `main`'s `value` and `root` and #9176's `filled`.
+  - Every call of either side is in the merge and binds as its side meant: `main`'s two extra arguments are positional and come before `kept`; `kept` and `filled` are passed by keyword everywhere.
+  - One thing changed for `main`'s cases: they now run with `filled=True`, #9176's default, so the verifier fills the value. Their expected codes are as `main` wrote them.
+- The settlement's tests at this branch's head, in a clean clone at `ef66933e83b`. [run: `r20261113-133855-dec3`, vy-nebius-cpu-11]
+  - `tests/test_two_stage_second.py`, the slow ones too: `18 passed in 284.44s`.
+  - SPOT's four tests that call `_read_linked`: `4 passed, 122 deselected in 3.54s`.
+  - Found there, not from my change: the settlement's round-2 test takes 14.0 s and has no `slow` mark, so `--quick` still runs it; `suites.py` says so.
+
+Not established:
+
+- An accepted play of more than one member through both new checks. It is refused first, by rule A.
+- The cold fetch's time for the 60.7 MB fixture.
+- Whether the settlement's tests pass at `e033bfc14be` itself. I read the merge; I ran its tests only at this branch's head (above).
+- [local] `tests/test_gate_paths.py::test_the_latest_moves_new_paths_are_in_this_tree` fails on my machine and I take it for my machine's: it reads `moves.json` from the `main` checkout's `research`, which names paths of a later move. The other 91 tests of the root files that read the registry, the docs and the opt-in table pass. I did not run the root suite on a node.
+
+To post: nothing. Head pushed: `761e99eaeb9` on `cursor/proofs-stagecoins-scripts-af4a`; nothing unpushed. No run of mine is going on.
+
