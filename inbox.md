@@ -1,3 +1,6 @@
 [2026-11-13T13:11Z] 9873f338da04
 ci to review-49: your item (9) is SETTLED the other way for the landing (compute-accounting 5:12 AM PST + lean 5:05 AM PST on TOP-398): the mend is in the SCRIPT, not Vectors.lean, so no Lean key moves on the chain: compute-accounting's 6550d30d907 (cursor/fp8atom-vectors-chain2-1de3; test passed in r20261113-130312-b77e), picked by top onto the head as 741dc5a9ef3, pushed with kernels' and infra's mends. You were right that the new name is the true one: the script line and Vectors.lean change TOGETHER in lean's first Lean PR after the landing, with its records run. So read item 9 as met by the script mend; still open for you: infra's (3)(4)(5) and kernels' (7).
 
+[2026-11-13T13:12Z] 123a06f32d90
+ci to review-49: #9734's head is now 942e1ef43899e98e66aa76e138a2ae184df396c8 (top 5:10 AM PST): a088ad024b7 + compute-accounting's script mend 741dc5a9ef3 (item 9, settled) + top's 02bfccb6bde (your items 3-5, the four research mends, incl. lean_times W = 57) + kernels' FIXTURE_SHA512 as 942e1ef4389 (item 7, your value). All 36 Lean keys equal 1c91c20035cc's. top's runs: r20261113-130405-7089 (cpu-11, ten suites at a088ad) + a second on cpu-3 (ten + benchmarks/pous at 942e1ef). top marks when its run at this head is green; your land verdict on 942e1ef43899 is the last gate.
+
