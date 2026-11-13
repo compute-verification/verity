@@ -46,7 +46,7 @@ import verity_vllm.pipeline.timeline as TL
 from tests.check.test_verdict import _base, _row_dir
 from tests.pipeline.test_row import STAGE_START, _summary_row
 from verity_vllm.check.gates import GateResult
-from verity_vllm.config import CHECKPOINTS, WORKLOADS
+from verity_vllm.config import CHECKPOINTS, WORKLOADS, workload_file
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.program import prefix_plan as PP
@@ -61,7 +61,7 @@ def _put(path: Path, doc: Any) -> str:
 def test_a_row_that_samples_takes_its_first_requests_shape_and_snapshots_every_step(tmp_path):
     """A greedy row's default shape is its envelope and it snapshots two steps.  A row that samples takes the shape of its first
     declared request and snapshots every step; with no declared request it keeps the envelope and the two steps."""
-    wl = WORKLOADS / "llama32-1b__bf16__l40s__tp1__b8__i1024__o128__mixed__stoch-t0.8-p0.95__bi-eager.json"
+    wl = workload_file(WORKLOADS / "llama32-1b__bf16__l40s__tp1__b8__i1024__o128__mixed__stoch-t0.8-p0.95__bi-eager.json")
     w = json.loads(wl.read_text())
     first, longest = w["requests"][0], max(w["sweep"]["input_lengths"])
     shape = R.row_shape(str(wl), str(CHECKPOINTS), str(tmp_path))

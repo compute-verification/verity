@@ -17,7 +17,7 @@ import pytest
 
 import verity_vllm.pipeline.row_records as R
 from tests.pipeline.test_row import STAGE_START, _summary_row
-from verity_vllm.config import CHECKPOINTS, WORKLOADS
+from verity_vllm.config import CHECKPOINTS, WORKLOADS, workload_file
 from verity_vllm.pipeline import row_json
 
 SAMPLED = WORKLOADS / "llama32-1b__bf16__l40s__tp1__b8__i1024__o128__mixed__stoch-t0.8-p0.95__bi-eager.json"
@@ -52,7 +52,7 @@ def test_a_block_that_lists_nothing_is_walked_as_nothing():
 def test_a_rows_shape_reads_a_sweep_without_its_sampling_parameters_as_greedy(tmp_path):
     """Without sampling parameters, or with a temperature that is null or zero, the row keeps its envelope and snapshots two steps.  A
     row that samples counts its first request's prompt ids where the request states no prompt length."""
-    w = json.loads(SAMPLED.read_text())
+    w = json.loads(workload_file(SAMPLED).read_text())
     sweep, first = w["sweep"], w["requests"][0]
     envelope = (1024, 127, "0,1")   # the sweep's longest prompt, one step short of its longest answer, and the first two steps
     greedy = [*_left_out("sampling_params"), {"sampling_params": {"temperature": None}}, {"sampling_params": {"temperature": 0}}, {"sampling_params": {"top_p": 0.9}}]
