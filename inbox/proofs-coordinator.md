@@ -156352,3 +156352,28 @@ it.
 |---|---|---|
 | `r20261113-164151-1e2c`, vy-nebius-cpu-5 | #9555's records | the Lean part ended exit 0 with outcome `pass` at 18:25Z; the last of its 70 suites still run, none failed so far |
 | `r20261113-181801-da82`, vy-nebius-cpu-12 | #9728 and REDRAW's credit branch (job 11) | running since about 18:36Z; back about 19:05Z |
+
+## WINDOWAT, Fri 13 Nov 18:49Z: THE CARRIED HEAD BUILDS: all of `security/Proofs` at `5961fa466d1e` on vy-nebius-cpu-3 (`fbb7`: `AUDIT … security/Proofs: PASS`, no error); my 19 files were compiled in it; nothing to mend by hand; the merge of #9520's new head would change no file
+
+**In plain words.** Your 18:17Z is read: `fbb7` kept, this one entry at its line, and `date -u` read before this heading. My last entry, headed 18:17Z, was committed at 18:11Z.
+
+1. **The carried head builds.** [run: `r20261113-180600-fbb7`, vy-nebius-cpu-3, at `5961fa466d1e`, the tree not dirty] The run's line is `AUDIT … security/Proofs: PASS  206674 declarations in 4110 modules; axioms propext, Classical.choice, Quot.sound`, with `'build': 1153.7` and `'total': 1728.8` seconds, and then `security/Proofs: check.py exit 0 in 1856 s`. The build log ends "Build completed successfully (14641 jobs)" and holds no error.
+2. **My files were compiled in this build.** [run: its `build.log`] 5,137 of the 5,340 keyed modules came from the artifact cache and 203 were built here: in the run's words, "200 reads a module not restored (first `Proofs.Flock.EndToEnd.Joint.V5.Session`), 2 its source (first `Spot.ChallengerTrees`), 1 its source and an output it reads (first `Proofs.Flock.EndToEnd.Joint.V5.Statement`)". Each of my 19 modules has its own "Built" line: `Statement`, `Member`, `Bound` and `Layout` under `Joint/V5`; `Sampled/Window.lean` and the nine files under `Window/`; `Members/Widen`; `MemberForm/ClaimReads` and `Reads`; `WeightSecurity/Deployed` and `Pressure`. The warnings in those 19 are the two from before the carry, both deprecations on soundness's lines (`Window/Read.lean:68:10`, `Window/Instance.lean:213:6`).
+3. **Nothing to mend by hand.** FRAME's table 5 gives my line 0 old names in 22,821 added lines, and 334 hits of 4 words with none unresolved. What I read myself [run: `git diff b367df2d7cbc 5961fa466d1e` over my 19 files]: the carry changed 37 lines in 13 of them. Five names in code were renamed, fifteen occurrences: `periodG` to `monitoringPeriodG` (4), `PeriodPlays` to `MonitoringPeriodPlays` (5, the four lines of `Deployed.lean` and `Pressure.lean` among them), `PeriodGood` to `MonitoringPeriodGood` (2), `periodRun` to `monitoringPeriodRun` (2), `windowAt_members` to `executionPhaseAt_members` (2). The other changed lines are words in docstrings. The build above is what says every one of them resolves.
+4. **The merge of #9520's new head would change no file.** [run: `git merge-tree --write-tree 5961fa466d1e b5bb54bfb0dd`, in memory, nothing written] It exits 0 with no conflict, and the merged tree is `c395901b19f1cdc5e46049baf274ddb4bbb9dfe2`, which is my carried head's own tree. The merge bases are `4ae17f7eafd7` and #9520's old head `e2865001c411`; my head holds both. `merge.py` prints one note for each of two locks, `security/lean-audit.json` and `security/Properties/lean-audit.json`: "`reads[Spot.ChallengerTrees].definitions[Spot.Challenger.openOf]` (removed): taken without regenerating it". So at your word that merge is a commit with the same tree, and what `fbb7` says of this tree holds for it. I have not made it.
+5. **The records come from the same run**, which goes on: it audits `security` now, then `security/Properties`. One more entry when it ends.
+
+### STOP RULE
+
+This entry restates nothing. Nothing is committed on top of `5961fa466d1e` and nothing is merged into it: not #9520's new head, not the mended join `20936c91d40b`, not my old head, not the scratch. No lock is edited, no pull request is opened or marked, and #9576 is untouched.
+
+### Not established
+
+- The records at the carried head: `fbb7`, still running. The three `witnesses.unwitnessed-changed` of my 15:00Z entry are expected in `security`, by your 13:29Z ruling.
+- The kernel replay: `fbb7` is the fast path, in its own words "without the kernel replay or the tests".
+- Any test suite at the carried head. After the run I launch, as one job, the four quick suites whose inputs hold one of my 19 files [run: `suites.py --list`, the inputs read against the 19 paths]: `repository`, `verity-graph`, `verity/circuits/ops` and `verity/protocols/accounting/pouw/verifier`. The head touches 78 suites over `4ae17f7eafd7` [run: `suites.py --changed 4ae17f7eafd7 --quick --list`]; the other 74 are reached only through what the head holds besides my 19 files (MEMBERS's switch and the heads under it), and I do not run them unless you say.
+- That the merge under 4 stays empty if #9520's head moves: it is read at `b5bb54bfb0dd`, the branch's head when I fetched it at 18:26Z.
+
+### Next
+
+The records' entry when `fbb7` ends, then the four suites. The merge of #9520's new head at your word.
