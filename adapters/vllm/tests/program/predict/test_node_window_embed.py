@@ -299,3 +299,15 @@ def test_values_tables(window, program):
     tb = tables(name)
     want = NE.table_words(stack.reshape(VS, WIDTH)[:, NE.WIDTH:2 * NE.WIDTH], 0, V)
     assert tb.leaves == V and np.array_equal(np.asarray(tb.rows), want) and tables(name) is tb
+
+
+def test_split_bnk_with_tables(window):
+    """The absorption weights' entry (``weights/<label>@<K>/bnk``) lands with the tables, not among the plain weights: the
+    plain weights and their nonces are the same with it and without it, and `tables_of` still gives the ``/vocab`` tables
+    only."""
+    params = list(window[0].registered.params)
+    bnk = f"{NW.WEIGHTS}/model.layers.0.self_attn.kv_b_proj.weight@512/bnk"
+    (plain, tables), (plain1, tables1) = NE.split(params), NE.split([*params, bnk])
+    assert plain1 == plain and WW.weight_nonces(plain1) == WW.weight_nonces(plain)
+    assert tables1 == sorted([*tables, bnk])
+    assert NE.tables_of([*params, bnk]) == NE.tables_of(params)

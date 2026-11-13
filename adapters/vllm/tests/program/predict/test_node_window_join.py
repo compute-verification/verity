@@ -3,8 +3,8 @@
 1,376 read units (43 tokens x 32 column blocks) are row 0 of the all-reduce's combine units' ``parts``, read by wire, and
 only the decoder's stop check and token selection stay unlowered.
 
-`node_window_multimem` combines rank 0's partial in chunks of 96 words, which the shard's 192-word rows cross, and refuses
-them; until it combines them as rows, the test is a strict expected failure on that refusal (``--runxfail`` runs it).
+The shard's rows are 192 words, wider than the all-reduce's 96-word chunks at coordinate grain, so `node_window_multimem`
+combines that site as rows: one `AllReduceMultimem_v1{SIZE=192}` unit a column block of a token, rank 0's block by wire.
 """
 from __future__ import annotations
 
@@ -16,7 +16,6 @@ from verity_vllm.program.predict import node_window_dense as ND
 from verity_vllm.program.predict import node_window_embed as NE
 from verity_vllm.program.predict import node_window_multimem as NM
 from verity_vllm.program.predict import node_window_sparse as NS
-from verity_vllm.program.predict.common import Unexpressible
 
 from tests.program.predict.test_node_window import glm_request
 
@@ -26,8 +25,6 @@ READ = r"EmbeddingRead_v1\{V=154880,H=192\}"
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(raises=Unexpressible, strict=True,
-                   reason="node_window_multimem combines rank 0's partial in 96-word chunks, which 192-word rows cross")
 def test_joined():
     """The prefill's read units are row 0 of the combine's ``parts`` by one wire, block b of token t at unit ``32 t + b``
     reading read unit ``t + 43 b``; the other ranks' rows are the only free rows there, the reads' ``o0`` free nowhere,
