@@ -186,7 +186,7 @@ theorem JointHorizonV5 : Flock.Guarantees.JointHorizonV5 := by
     ∀ k, Assumptions.LinkCRZCAt execArith hs512 ((W t).ms.get k).P (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀)
       (tabZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀) ((W t).ms.get k).vb (reg ((W t).memberSim τ k))
       (cont ((W t).memberSim τ k)) ((W t).ms.get k).k ((W t).ms.get k).Rw ((W t).ms.get k).M ((W t).ms.get k).t'
-  have hs : PeriodGood (fun t => (W t).game) (fun t τ => t < T ∧ cr t τ) 0 T s :=
+  have hs : MonitoringPeriodGood (fun t => (W t).game) (fun t τ => t < T ∧ cr t τ) 0 T s :=
     periodGood_mono _ T 0 s (fun j τ _ hj hcr => ⟨by omega, hcr⟩)
       (periodGood_of_plays (fun t => (W t).game) cr T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp))
   have hA := period_union (fun t => (W t).game) (JointAuditV5.record W)
