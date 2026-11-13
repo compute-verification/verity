@@ -1,4 +1,4 @@
-"""`verity.definitions.circuits.stacking` (property/v1) on small synthetic Programs with their census/v1: an exact int8 Program passes,
+"""`verity.circuits.stacking` (property/v1) on small synthetic Programs with their census/v1: an exact int8 Program passes,
 and a clamping, wrapping, FP-smuggling, reinterpreting, carry-computing, gather-heavy, too wide or input-holding one fails with
 its reason, or has its carries budgeted. The red team's attacks (benchmarks/property_redteam) are
 cases here."""
@@ -14,8 +14,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.definitions.circuits import stacking as P
-from verity.definitions.circuits.census import census
+from verity.circuits import stacking as P
+from verity.circuits.census import census
 from verity.circuits.codec import canonical_json
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, _Widths
 from verity.circuits.ops import fp32, prims, scalar
