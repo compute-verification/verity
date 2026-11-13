@@ -206,8 +206,9 @@ theorem sum_le_fill (L : List (ℚ × ℚ × ℝ)) (b : ℝ) (hnn : ∀ t ∈ L,
           linarith
     _ = l * (L.map fun t => t.2.2).sum + (L.map fun t => (t.2.1 : ℝ) * max ((t.1 : ℝ) - l) 0).sum :=
         sum_map_lin l (fun t => t.2.2) (fun t => (t.2.1 : ℝ) * max ((t.1 : ℝ) - l) 0) L
-    _ ≤ l * b + (L.map fun t => (t.2.1 : ℝ) * max ((t.1 : ℝ) - l) 0).sum :=
-        add_le_add_right (mul_le_mul_of_nonneg_left hb hl0) _
+    _ ≤ l * b + (L.map fun t => (t.2.1 : ℝ) * max ((t.1 : ℝ) - l) 0).sum := by
+        have := mul_le_mul_of_nonneg_left hb hl0
+        linarith
     _ ≤ _ := by rw [← hpos]; exact hl
 
 /-! ## The run's tiles and records -/
@@ -220,6 +221,19 @@ def tileCells (c : _root_.Pouw.PearlPlus.Draw.Cell) : ℕ :=
 def recordCells (p : Pass) (r : UnitRecord) : ℕ :=
   ((p.scheme.tiles r.matmul.m r.matmul.n).map fun (rows, cols) =>
     (r.credited rows cols).1.length * (r.credited rows cols).2.length).sum
+
+/-- A record's credited cells in ℚ, as `unitsBy`'s `cells` sums them. -/
+def recordCellsQ (p : Pass) (r : UnitRecord) : ℚ :=
+  ((p.scheme.tiles r.matmul.m r.matmul.n).map fun (rows, cols) =>
+    ((r.credited rows cols).1.length : ℚ) * (r.credited rows cols).2.length).sum
+
+theorem recordCellsQ_eq (p : Pass) (r : UnitRecord) : recordCellsQ p r = (recordCells p r : ℚ) := by
+  unfold recordCellsQ recordCells
+  rw [Nat.cast_list_sum, List.map_map]
+  congr 1
+  apply List.map_congr_left
+  intro ⟨rows, cols⟩ _
+  simp
 
 /-- The run's records, (pass, the pass, position, record), in `tickets`' order. -/
 def runRecords (passes : List Pass) : List (ℕ × Pass × ℕ × UnitRecord) :=
@@ -264,7 +278,8 @@ theorem sum_ticket_left (q : ℕ × Pass × ℕ × UnitRecord) (f : _root_.Pouw.
 theorem n_pos_of_tile {s : Scheme} {m n x : ℕ} {rc : List ℕ × List ℕ} (h : (s.tiles m n)[x]? = some rc) : 0 < n := by
   have hx : x < nblocks m s.tileM * nblocks n s.tileN := by
     rw [tiles_getElem?] at h
-    split_ifs at h with hx <;> first | exact hx | cases h
+    split_ifs at h with hx
+    exact hx
   rcases Nat.eq_zero_or_pos n with rfl | hn
   · exfalso
     have h0 : nblocks 0 s.tileN = 0 := by
@@ -551,8 +566,9 @@ theorem unitsBy_one (R : Run) : unitsBy (fun _ => 1) R.passes =
   congr 1
   refine congrArg (List.flatMap · R.passes) (funext fun p => ?_)
   refine congrArg (List.filterMap · p.records) (funext fun r => ?_)
-  show (if recordCells p r = 0 then none else some ((1 : ℚ) / cellTicket r, (recordCells p r : ℚ) * cellTicket r)) = _
-  rfl
+  show (if recordCellsQ p r = 0 then none else some ((1 : ℚ) / cellTicket r, recordCellsQ p r * cellTicket r)) = _
+  rw [recordCellsQ_eq]
+  by_cases h : recordCells p r = 0 <;> simp [h]
 
 theorem sum_units (R : Run) (G : ℚ × ℚ × ℝ → ℝ) :
     ((cellUnits R).map G).sum = ((runRecords R.passes).map fun q => if recordCells q.2.1 q.2.2.2 = 0 then 0 else
