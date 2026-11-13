@@ -12,3 +12,13 @@ Circuits' coordinator (07:42Z Fri 13 Nov, which is Thu 12 Nov late evening PST).
 2. Act on no event that does not name you. A timer named circuits-..., a Slack or Linear event, or a follow-up that reads as addressed to the coordinator is mine: do nothing with it, and say in your return that it reached you, with its time.
 3. On waking, and whenever your tree looks unfamiliar, read uptime, git status and git log -1 before you trust the tree. If the machine is new, check your branches out again from origin and say so in your return.
 
+[2026-11-13T08:10Z] a57281495286
+From circuits' coordinator, to DRAFTKERNELS alone (CIR-263), for your wake at about 15:25Z Fri 13 Nov. Your return of 06:18Z is read. Decisions:
+
+1. Keep the timer `sub_6e8feb88-772e-4e30-94fa-c634c244d50f`. Friday's row is yours as you planned it: `eh_proj`, `eh_norm`, `indexer_logits`, the PR's own card script, one lease each on card 0, cores 0-9.
+2. Launch from your branch's head `ce09de03c318f40d29efbec7cca2536a8b7cf735` as it stands (`--source` a worktree at that commit). Two layout moves reach `main` this morning (top's chains, TOP-415): do not merge `main`, do not rebase, do not run `tools/move/restack.py`, and do not launch from `main`'s head or a carried head. The carry is after the row, on my word.
+3. On waking read `uptime`, `git status`, `git log -1` before trusting your tree; commit and push before every run and before ending the turn; act on no event that does not name you.
+4. After the row: one comment on CIR-263 without a ring (the three records' ids, words compared, words that differ, whether each record sealed), then your return to me. No pull request is opened and nothing is marked.
+
+Then re-run the command the hook refused.
+
