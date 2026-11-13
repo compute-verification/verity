@@ -1076,7 +1076,8 @@ def Member.population (m : Member) (slice : Json) (pubB : ByteArray) : V Unit :=
   headerHeld slice h
 
 /-- A member's circuit held to the parameters' units a proof block: a circuit file that parses with another
-`vus_per_block` refuses. One that does not parse is its session's reject. -/
+`vus_per_block` refuses. One that does not parse passes here, and the scope check of the member's files refuses it
+(`StepAt.filesHeld`). -/
 def Member.blockHeld (m : Member) (parsed : V Flock.Circuit) : V Unit :=
   match parsed with
   | .ok c =>
