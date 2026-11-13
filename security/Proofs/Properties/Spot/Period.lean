@@ -1008,7 +1008,8 @@ theorem auditedIn_root {wins : Array Win} {periods : Array MonitoringPeriod} {ro
     ∃ win ∈ wins, win.root = root ∧ a.1.session = win.opened.session := by
   obtain ⟨win, hfind, hses⟩ := auditedIn_ok h
   rw [getD_root] at hfind
-  exact ⟨win, Array.mem_of_find?_eq_some hfind, beq_iff_eq.1 (Array.find?_some hfind), hses⟩
+  have hbeq := Array.find?_some hfind
+  exact ⟨win, Array.mem_of_find?_eq_some hfind, beq_iff_eq.1 hbeq, hses⟩
 
 /-- **The session audited at a window is the window's** (`Properties.Spot.Period.AuditedSession`). -/
 theorem auditedSession : AuditedSession := by
