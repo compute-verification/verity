@@ -100,6 +100,10 @@ from verity.hardware.site import Site
 from verity_bench import kit
 from verity_config.settings import SHARED
 
+__all__ = ["ABSENT", "ANSWER", "DELTA_S", "LEAN", "LEAN_CHECK", "MODELS", "NO_SITE", "NO_SPAN", "POLICY", "RECORDS",
+           "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable", "amounts",
+           "capacity", "from_run", "main", "model_macs"]
+
 UNIT = "share of the served model's MACs that Pearl+ credits, over the tokens served"
 #: the share the number is driven to
 TARGET = Fraction(97, 100)
@@ -171,7 +175,7 @@ class EvidenceStore:
     store, `pull` brings its labels of some targets up to the remote's, `error` is what the store raises, and
     `withdrawn` is the key of the label a withdrawal leaves."""
 
-    def __init__(self, store, pull: Callable, error: type[Exception], withdrawn: str) -> None:
+    def __init__(self, store: Any, pull: Callable, error: type[Exception], withdrawn: str) -> None:
         self.store, self.pull, self.error, self.withdrawn = store, pull, error, withdrawn
 
     def attempt(self, run: str) -> dict | None:
@@ -336,9 +340,24 @@ def head_calls(tree: Path, given: Path | None, shape: Shape) -> list[dict]:
         raise Unreadable(f"the per-call split doesn't read as one ({type(e).__name__}: {e})") from e
 
 
+def uncredited_words(c: dict) -> int:
+    """The output words of a per-call split's call `c` that hold at least one MAC its credit leaves out, counted as the
+    words touched, not as its uncredited MACs over k. A word in an excluded A row, an excluded B row's column block or a
+    voluntary row's band or block holds no credited MAC, so those count their cells, the real words less the credited
+    cells (`checked_macs` over |K|). A call that keeps fewer than its k channels (`kept_width`) leaves the side
+    channels' MACs out of every real word, so all its real words count, more than its uncredited MACs over k. Where
+    only whole rows are excluded the two counts agree."""
+    cells, rest = divmod(c["checked_macs"], c["k_kept"])
+    if rest:
+        raise Unreadable(f"the per-call split's call {c['call']} holds checked MACs that are no whole number of cells at "
+                         f"its kept width")
+    return c["real_rows"] * c["n"] - (0 if c["uncredited_macs"]["kept_width"] else cells)
+
+
 def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, shape: Shape, top: int) -> dict:
-    """The give-up of the record under `tree` by cause and by call (module docstring), from the verifier's split in its
-    verify document or in `given`, such a split in a file of its own. `Unreadable` unless the split is the answer's. `macs` are the model's MACs at the class and `credited` the answer's credit."""
+    """The give-up of the record under `tree` by cause and by call (module docstring), and the output words that hold
+    any of it over every call (`uncredited_words`), from the verifier's split in its verify document or in `given`,
+    such a split in a file of its own. `Unreadable` unless the split is the answer's. `macs` are the model's MACs at the class and `credited` the answer's credit."""
     try:
         held = json.loads(given.read_text()) if given is not None else _held(tree, VERIFY)
         if held is None or (given is None and "uncredited" not in held):
@@ -349,6 +368,7 @@ def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, s
         got, records = held["uncredited"], held.get("records")
         calls, totals = got["calls"], got["totals"]
         sums = dict.fromkeys(("macs", "checked_macs", *ROWS, *TERMS), Fraction(0))
+        words = 0
         for c in calls:
             terms = {x: Fraction(c[x]) for x in TERMS}
             rows = {x: c["uncredited_macs"][x] for x in ROWS}
@@ -359,6 +379,7 @@ def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, s
                                  f"and its causes, or its checked MACs not its terms")
             for x, v in (("macs", c["macs"]), ("checked_macs", c["checked_macs"]), *rows.items(), *terms.items()):
                 sums[x] += v
+            words += uncredited_words(c)
         stated = {x: Fraction(totals[x]) for x in sums}
         heads = [c for c in calls if (c["k"], c["n"]) == (shape.hidden, shape.vocab)]
         in_head = sum(c["macs"] for c in heads)
@@ -390,7 +411,7 @@ def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, s
 
     worst = sorted(calls, key=lost, reverse=True)[:top]
     return {"source": str(given) if given is not None else VERIFY, "give_up": give_up, "calls": len(calls),
-            "causes": [{"cause": x, "macs": str(v), "share": float(v / give_up) if give_up else 0.0}
+            "uncredited_words": words, "causes": [{"cause": x, "macs": str(v), "share": float(v / give_up) if give_up else 0.0}
                        for x, v in gave.items()],
             "top": [{"pass": c["pass"], "call": c["call"], "weight": c["weight"], "linear": linear(shape, c["k"], c["n"]),
                      "m": c["m"], "k": c["k"], "n": c["n"], "real_rows": c["real_rows"], "rows": c["rows"],
@@ -477,7 +498,8 @@ def commit_of(attempt: dict) -> str | None:
     return f"{source['commit']}-dirty" if source.get("commit") and source.get("dirty") else source.get("commit")
 
 
-def from_run(store, run: str, per_call: bool = False, given: Path | None = None, top: int = 10) -> dict:
+def from_run(store: EvidenceStore, run: str, per_call: bool = False, given: Path | None = None,
+             top: int = 10) -> dict:
     """The printed document of recorded run `run`; with `per_call`, its give-up by cause and by call too (`split`)."""
     attempt = store.attempt(run)
     if attempt is None:
