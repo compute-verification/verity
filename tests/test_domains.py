@@ -18,7 +18,7 @@ PYTHON = ROOT / "verity/commitments/domains.py"
 #: only grows: a protocol joins in the change that makes its code read the table. A Lean definition a lock reads keeps
 #: its literal until its record next changes (the record hashes the value as written), tied to its entry by an
 #: `example : … Domains.NAME … := rfl` in its file (`TIE`).
-READERS: tuple[str, ...] = ("verity/protocols/pouw/verifier",)
+READERS: tuple[str, ...] = ("verity/protocols/accounting/pouw/verifier",)
 SKIPPED_PARTS = {"tests", "scripts"}
 ABBREV = re.compile(r'abbrev ([A-Z][A-Z0-9_]*) : String :=\s*"([^"\\]*)"')
 TIE = re.compile(r"^example : (.*) := rfl$", re.M)

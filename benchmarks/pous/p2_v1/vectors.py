@@ -18,7 +18,7 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
-from verity.protocols.pous.verifier.verifier import MerkleTree
+from verity.protocols.accounting.pous.verifier.verifier import MerkleTree
 from verity.commitments.identity import canonical_json_bytes
 from verity.commitments.randomness import derive, frame
 
@@ -28,7 +28,7 @@ from . import wire as Wi
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 AUDIT_VECTORS, NEGATIVE_VECTORS = R.AUDIT_VECTORS, R.NEGATIVE_VECTORS
-KEYS_FIXTURE = ROOT / "verity/protocols/pous/verifier/tests/fixtures/p2-v4-keys.json"
+KEYS_FIXTURE = ROOT / "verity/protocols/accounting/pous/verifier/tests/fixtures/p2-v4-keys.json"
 PINNED_TEXT = (HERE / "reference.py", KEYS_FIXTURE.parent.parent / "test_pous_protocol.py")
 
 POINTS = (*(R.vector_params(w, c0) for w, c0 in ((64, 189), (96, 17), (128, 173))), R.DEPLOYMENT)
