@@ -1560,3 +1560,43 @@ def test_a_launch_that_names_its_run_is_refused_once_and_says_what_places_it_aga
     assert main([*RUN[:3], "--id", rid, "--", "pytest", "-q"]) == 3 and [kw["run_id"] for kw in launched] == [rid]
     assert (f"research run --on auto: {CPU1} can start no run, and --id {rid} names the run it refused: without --id the job is "
             f"placed on another machine") in capsys.readouterr().err
+
+
+def test_a_waiter_asks_only_the_other_machines_pools_and_moves_only_where_it_would_start_now():
+    """A late twin is worth its launch only on a pool that starts the run now, and it can run only where its machine reaches
+    the first's: it claims the pair there. So the first's own machine and node 2's queue are never the answer, a pool with
+    a line or no memory for the run isn't either, and a machine whose peers don't name the first's is left out."""
+    waits = pool(slot("r0", blocked=f"12{auto.MEMORY_BLOCK}"), waiters=1, free_gb=12)
+    docs = {N2: share(free=48), CPU1: waits, "vy-nebius-cpu-3": {**pool(slot("r0")), "peers": [CPU1, CPU5]},
+            CPU5: {**pool(slot("r0"), slot("r1")), "peers": ["vy-nebius-cpu-3"]}}
+    target, why = auto.elsewhere(docs, CPU1, 4, 16)
+    assert target == ("vy-nebius-cpu-3", "research") and why.endswith("a slot is free there now")
+    assert f"{CPU5}'s research pool skipped: it doesn't name {CPU1} in /etc/vy/peers" in why, "more places, but no way home"
+    assert f"{N2}'s share wasn't read (not asked" in why and f"{CPU1}'s research pool" not in why
+    docs[CPU5]["peers"] = None
+    assert auto.elsewhere(docs, CPU1, 4, 16)[0] == (CPU5, "research"), "peers not read: its twin's own refusal decides"
+    assert auto.elsewhere({N2: share(free=48), CPU1: pool(slot("r0"), slot("r1"))}, CPU1, 4, 16)[0] is None, \
+        "its own machine and node 2 are no move"
+    line = {N2: share(free=48), CPU1: waits, CPU5: pool(slot("r0", held=True), waiters=1)}
+    target, why = auto.elsewhere(line, CPU1, 4, 16)
+    assert target is None and why.startswith("no other machine's pool would start it now (") and "the shortest line" in why
+    short, roomy = ({CPU1: waits, CPU5: pool(slot("r0"), free_gb=gb)} for gb in (12, 400))
+    assert auto.elsewhere(short, CPU1, 4, 16)[0] is None and auto.elsewhere(roomy, CPU1, 4, 16)[0] == (CPU5, "research"), \
+        "a free slot without the memory the run reserves is no place for it"
+    gone = auto.elsewhere({CPU1: waits, CPU5: "no answer in 30 s"}, CPU1, 4, 16)
+    assert gone[0] is None and "no answer in 30 s" in gone[1]
+
+
+def test_the_probe_reads_the_machines_a_machine_reaches_only_when_asked(tmp_path, monkeypatch):
+    """`elsewhere` needs each machine's peers; a launch's own placement doesn't, and its documents stay as they were."""
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
+    monkeypatch.setattr(auto, "HOLD_FILE", str(tmp_path / "no-hold"))
+    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))
+    monkeypatch.setattr(auto, "PEERS_FILE", str(tmp_path / "peers"))
+    (tmp_path / auto.SLOT_PY).parent.mkdir(parents=True)
+    (tmp_path / auto.SLOT_PY).write_text("def status_doc(now):\n    return {'file': 'f', 'slots': [], 'waiters': []}\n")
+    read = lambda **kw: auto.read(tmp_path, 4, reach=lambda name: [sys.executable, "-"], **kw)[CPU1]  # noqa: E731
+    assert read(peers=True)["peers"] is None, "no peers file: not read, which is not the same as naming no machine"
+    (tmp_path / "peers").write_text(f"# name, ssh options\n{CPU5} -i /k research@10.0.0.5\n\n{CPU1} research@10.0.0.1 # itself\nbare\n")
+    assert read(peers=True)["peers"] == [CPU1, CPU5]
+    assert "peers" not in read()
