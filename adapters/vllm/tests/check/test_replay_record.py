@@ -1,5 +1,5 @@
 """The fold of the sampled replay's picks and the grade it gives (`verity_vllm.check.replay.replay_record`), outcome by outcome: the texts are what
-a stored record carries and the Commit verdict prints, so each is held to the letter.  The last two read the record's population
+a stored record carries and the Commit verdict prints, so each is held to the letter.  Two read the record's population
 block and the record a whole replay writes (`verity_vllm.check.replay.driver`): what its strata's keys range over, and each
 stratum it left unevaluated."""
 from __future__ import annotations
@@ -69,7 +69,9 @@ def test_weights_that_are_not_the_committed_ones_fail_before_anything_else():
 def test_nothing_evaluated_is_not_evaluated_and_never_a_pass():
     got, fold = _graded([(_vu("a"), _unevaluated("committed bytes not retained for (r0, step 2, model.x/out) [0, 16)"), 0.1)], {"a": {"population": 1}})
     assert got == (None, "not-evaluated", "no VU could be evaluated: committed bytes not retained for (r0, step 2, model.x/out) [0, 16)")
-    assert fold.not_evaluated[0]["why_class"] == "missing-input" and fold.unevaluated_by_stratum["a"]["classes"] == ["missing-input"]
+    assert fold.not_evaluated == [{"spec": "Gemm_v1{K=4}", "request_id": "r0", "step": 2, "op_path": "model.x", "row": 0, "why_class": "missing-input",
+                                   "why": "committed bytes not retained for (r0, step 2, model.x/out) [0, 16)"}]
+    assert fold.unevaluated_by_stratum["a"]["classes"] == ["missing-input"]
     assert _graded([], {})[0] == (None, "not-evaluated", "no VU could be evaluated: empty population")
 
 
@@ -124,6 +126,16 @@ def test_the_population_record_codes_each_reason_as_the_replay_stamped_it_and_an
                                            "strata_excluded": {"s": {"population": 1, "label": "not evaluable: unexecuted"}}}
     assert (got["vus"], got["by_family"], got["not_evaluable_by_family"], got["strata_n"], got["controller"]) == (
         1, {"Gemm_v1": 1}, {"X_v1": 3}, 1, None)
+    assert sorted(got) == sorted(["vus", "source", "requests", "by_family", "not_evaluable_by_family", "not_evaluable", "not_evaluable_codes",
+                                  "strata_n", "authority", "controller", *qpop])
+
+
+def test_a_family_the_replay_does_not_evaluate_is_footnoted_by_the_reason_of_its_name_before_the_bracket():
+    left = Counter({"AttentionHead_v1 (no registered evaluator)": 2, "X_v1 (no registered evaluator)": 1, "X_v1 (interior producer)": 4})
+    assert RR.unreplayable(left) == [
+        {"family": "AttentionHead_v1 (no registered evaluator)", "n": 2, "why": RC.NOT_YET["AttentionHead_v1"]},
+        {"family": "X_v1 (interior producer)", "n": 4, "why": "interior producer: composed into its consumer's VU"},
+        {"family": "X_v1 (no registered evaluator)", "n": 1, "why": "no registered evaluator"}]
 
 
 def test_a_whole_replay_s_record_says_what_its_strata_range_over_and_names_each_it_left_unevaluated():
@@ -137,6 +149,19 @@ def test_a_whole_replay_s_record_says_what_its_strata_range_over_and_names_each_
     assert ranged["mechanisms"] == sorted({k[0] for k in keys}) and len(ranged["mechanisms"]) == 8
     assert ranged["requests"] == ["r0", "r1"] and ranged["phases"] == ["first-decode", "last", "prefill"]
     assert ranged["steps"] == {"early": [0, 1], "late": [2]} and ranged["modules"] == len({k[4] for k in keys}) == 8
+    assert sorted(ranged) == ["key", "lifetime", "mechanisms", "modules", "phase", "phase_anchor", "phases", "ranks", "requests", "steps"]
+    assert ranged["ranks"] == ["rank 0 (tp1, or the rank-0 shard of a per-rank map)"]
+    assert sorted(ranged["lifetime"]) == ["ring_slots", "rule", "sampled", "values"]
+    assert sorted(rep["timing"]) == ["cpu_s_sum", "per_family_n", "per_family_s", "wall_s", "workers"] and rep["timing"]["workers"] == 1
+    assert sorted(rep["timing"]["per_family_s"]) == sorted(rep["timing"]["per_family_n"]) and sum(rep["timing"]["per_family_n"].values()) > 0
+    # what the record says of its own keys and of its population: fixed texts, each held where it ends
+    population = rep["population"]
+    assert ranged["key"].endswith("attention rows: spec with T -> NB = ceil(T/BN) (the block-count mechanism; the row's own spec keeps T)")
+    assert ranged["lifetime"]["rule"].endswith("else fresh-window; unwindowed collectors: one value, stated")
+    assert ranged["phase"].endswith("steps past the prefix are 'not-executed', split out of the pool by name)")
+    assert population["source"] == "Program instances.json.gz rows (every row; evaluable = families with a registered evaluator)"
+    assert population["authority"] == "Q(P) -- the required manifest; `vus` above is the replay's enumeration of the Program rows, reconciled below"
+    assert population["query_total"]["source"].endswith("(the v2 query's population; NOT a Q(P) statement -- weights / ids / hidden streams absent)")
     left = [f"{spec}|{rid}|rank0|first-decode|model.layers.0.mlp.{module}|n/a (unwindowed storage)"
             for spec, module in (("Gemm_v1{K=16,N=16}", "down_proj"), ("SiluMul_v1{I=16}", "act_fn")) for rid in ("r0", "r1")]
     assert (rep["result"], rep["grade"], rep["why"]) == (None, "partial", f"4 strata not evaluated: {left[:3]}")

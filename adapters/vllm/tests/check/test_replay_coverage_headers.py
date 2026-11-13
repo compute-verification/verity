@@ -28,6 +28,13 @@ def test_the_guard_and_the_cross_check_reach_the_record_with_the_fields_the_reco
     assert q["query_total"]["engine"] == "traversal"
     assert q["scope"] == f"{OLDER_ID}(P) = 0 identities (guard armed (traversal); cross-check AGREED (traversal vs inventory: 3 / 2 identities))"
     assert q["query_checks"]["ok"] is True
+    more = _manifest(guard=GUARD | {"flags": ["hidden_bn"], "named_input": True},
+                     cross_check=CROSS | {"digests": {"traversal": "t"}, "complete": True, "why": "w"},
+                     query={"query_digest": "q" * 8, "implemented_query": "the module-boundary query"})
+    total = COV.query_population(more, {}, set(), ranks=[])["query_total"]
+    assert total["guard"] == {k: v for k, v in more["guard"].items() if k != "audited"}
+    assert total["cross_check"] == {k: v for k, v in more["cross_check"].items() if k != "seconds"}
+    assert (total["query_digest"], total["implemented_query"]) == ("q" * 8, "the module-boundary query")
 
 
 @pytest.mark.parametrize("header, line", [
@@ -97,6 +104,11 @@ def test_each_finding_names_its_first_and_counts_them_all():
     assert rows["rows_disagree"]["first"][0] == at | {"manifest_height": 2, "program_rows": 1}
     assert rows["rows_annotation_inconsistent"]["first"][0] == at | {"rows_annotation": 3, "height": 2}
     assert outside["ok"] is rows["ok"] is second["ok"] is False
+    # no alias table: said of the identities it leaves unreached, and of none where there are none
+    assert rows["identities_unreachable_by_alias"] == {"n": 0, "first": [], "alias_entries": 0, "why": None}
+    unreached = second["identities_unreachable_by_alias"]
+    assert unreached["alias_entries"] == 0 and unreached["why"].startswith("invocation >= 1 identities that no `op_path_aliases` entry maps")
+    assert unreached["why"].endswith("read as vus_outside_query and these identities as identities_without_rows")
 
 
 def test_a_request_served_to_its_last_step_counts_nothing_not_executed_beside_one_that_stopped(tmp_path):
@@ -117,11 +129,16 @@ def test_a_request_served_to_its_last_step_counts_nothing_not_executed_beside_on
     assert [by_request["r0"][k] for k in counts] == [20, 20, 20, 12] and [by_request["r1"][k] for k in counts] == [0, 0, 0, 0]
     rule = q["not_executed_rule"]
     assert (rule["n"], rule["requests"]["r0"]["n"], rule["requests"]["r1"]["n"]) == (20, 20, 0)
+    for rid, n, steps in (("r0", 20, [12, 32]), ("r1", 0, None)):                 # each request's line is its record's, with its count
+        assert len(rule["requests"][rid]) == 8 and rule["requests"][rid].items() <= (prefix[rid] | {"n": n, "step_range": steps}).items()
     assert rule["mechanism"] == {"recurrence(Continuation_v1)": 2} and rule["r3_one_mechanism"] is True
     assert (q["sampled_strata"]["strata"], q["sampled_strata"]["strata_evaluated"]) == (4, 2)
     unlisted = prefix | {"r1": record("r1")}                                      # one request whose served list the record was not handed
     rule = COV.query_population(_manifest(), {}, set(), ranks=[0], executed_prefix=unlisted)["not_executed_rule"]
     assert rule["mechanism"] == {"arithmetic(a_r, LAG)": 1, "recurrence(Continuation_v1)": 1} and rule["r3_one_mechanism"] is False
+    unnamed = prefix | {"r1": {k: v for k, v in prefix["r1"].items() if k != "mechanism"}}
+    rule = COV.query_population(_manifest(), {}, set(), ranks=[0], executed_prefix=unnamed)["not_executed_rule"]
+    assert rule["mechanism"] == {"recurrence(Continuation_v1)": 1, "unstated": 1}
     for other in (None, False):                                                   # and one whose prefix does not say it
         one = prefix | {"r1": prefix["r1"] | {"r3_one_mechanism": other}}
         assert COV.query_population(_manifest(), {}, set(), ranks=[0], executed_prefix=one)["not_executed_rule"]["r3_one_mechanism"] is False
