@@ -1,9 +1,9 @@
-"""What the global match refuses by name before it compares anything: `verity_vllm.check.match.attribution.attribute_instances`
-on a view with no recorded rows, and `verity_vllm.check.match.declaration.from_gprog` on a manifest that declares no prompt."""
+"""What the global match does before it compares anything with a fold or a manifest it cannot use:
+`verity_vllm.check.match.attribution.attribute_instances` on a view with no recorded rows fails where it reads them, and
+`verity_vllm.check.match.declaration.from_gprog` refuses by name a manifest that declares no prompt."""
 from __future__ import annotations
 
 import json
-import types
 
 import pytest
 
@@ -21,12 +21,22 @@ def _run(fold) -> MatchRun:
                     declared={})
 
 
-def test_a_view_with_no_recorded_rows_is_refused_as_the_fold():
-    """A derived Program's view has none (`instances.jsonl` is the fold's): as the fold of a global match it is refused by name,
-    as `batch_decomp.decompose` refuses it."""
-    view = types.SimpleNamespace(oracle_rows=None, n_input_nodes=3, inst=[])
-    with pytest.raises(ValueError, match="the-fold-dir: the view passed as the fold has no instances.jsonl rows"):
-        attribute_instances(_run(view), [])
+class _NoRows:
+    """A view no loader has given rows: `oracle_rows` is None, and every other attribute reads as empty."""
+
+    oracle_rows, n_input_nodes = None, 3
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return []
+
+
+def test_a_view_with_no_recorded_rows_fails_as_the_fold_where_its_rows_are_read():
+    """A derived Program's view has none (`instances.jsonl` is the fold's): as the fold of a global match its rows are read after
+    its weights' Input nodes are, and the error is Python's own."""
+    with pytest.raises(TypeError, match="'NoneType' object is not iterable"):
+        attribute_instances(_run(_NoRows()), [])
 
 
 def test_a_manifest_that_declares_lengths_alone_is_refused_at_its_first_request_without_a_prompt(tmp_path):

@@ -97,7 +97,7 @@ def _stand_in(monkeypatch, tmp_path, result, before=lambda: None):
     gpp.write_text(json.dumps({"schema": gm.GP_SCHEMA, "requests": []}))
     monkeypatch.setenv(gm.IMPL_ENV, "record")
 
-    def check(gp, oracle, **kw):
+    def check(gp, oracle, *paths, **kw):
         before()
         return dict(result)
     monkeypatch.setattr(gm, "check", check)

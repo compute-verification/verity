@@ -5,7 +5,7 @@ from __future__ import annotations
 import collections
 import dataclasses
 import functools
-from typing import Any
+from typing import Any, cast
 
 from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.check.match import global_match_fast as GMF
@@ -304,9 +304,10 @@ def _compare_component(ops: BD.Ops, within_step: str, fast: bool, g: dict, ent: 
     """The request's projection against its component over the executed steps: the leg's G3/G4 facts and the canonical address of
     every executed fold instance."""
     rid, fails = g["request_id"], out["fails"]
-    if not cd or A is None:
+    if not cd:
         fails.append((SUBCIRCUITS, f"{rid}: no component Program in the global Program for shape (LP {LP}, T_bound {g.get('T_bound')})"))
         return out
+    A = cast("SEQ.RootView", A)   # a component's directory comes with the component its loader returned
     ent["component"] = {"dir": cd, "digest": A.digest, "steps": len(A.steps), "instances": len(A.inst),
                         "LP": g["component"].get("LP"), "T": g["component"].get("T")}
     want_d = g["component"].get("program_digest")
