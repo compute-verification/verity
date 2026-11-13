@@ -280,23 +280,23 @@ section Fork
 
 open Classical
 
-variable {X Y κ : Type} [Fintype X] [Fintype Y]
+variable {β γ κ : Type} [Fintype β] [Fintype γ]
 
 /-- **The members of `x`'s class** under `cls`. -/
-noncomputable def classOf (cls : X → κ) (x : X) : Finset X := Finset.univ.filter fun x' => cls x' = cls x
+noncomputable def classOf (cls : β → κ) (x : β) : Finset β := Finset.univ.filter fun x' => cls x' = cls x
 
-theorem mem_classOf (cls : X → κ) {x x' : X} : x' ∈ classOf cls x ↔ cls x' = cls x := by
+theorem mem_classOf (cls : β → κ) {x x' : β} : x' ∈ classOf cls x ↔ cls x' = cls x := by
   simp [classOf]
 
-theorem classOf_card_pos (cls : X → κ) (x : X) : (0 : ℝ) < (classOf cls x).card :=
+theorem classOf_card_pos (cls : β → κ) (x : β) : (0 : ℝ) < (classOf cls x).card :=
   Nat.cast_pos.2 (Finset.card_pos.2 ⟨x, (mem_classOf cls).2 rfl⟩)
 
-theorem classOf_eq (cls : X → κ) {x x' : X} (h : cls x' = cls x) : classOf cls x' = classOf cls x := by
+theorem classOf_eq (cls : β → κ) {x x' : β} (h : cls x' = cls x) : classOf cls x' = classOf cls x := by
   unfold classOf
   rw [h]
 
 /-- **A sum is the sum of each member's class average.** -/
-theorem sum_classAvg (cls : X → κ) (g : X → ℝ) :
+theorem sum_classAvg (cls : β → κ) (g : β → ℝ) :
     ∑ x, (∑ x' ∈ classOf cls x, g x') / (classOf cls x).card = ∑ x, g x := by
   have h : ∀ x, (∑ x' ∈ classOf cls x, g x') / ((classOf cls x).card : ℝ) =
       ∑ x', if cls x' = cls x then g x' / ((classOf cls x').card : ℝ) else 0 := by
@@ -317,23 +317,23 @@ theorem sum_classAvg (cls : X → κ) (g : X → ℝ) :
   rw [hfe, mul_div_left_comm, div_self (classOf_card_pos cls x').ne', mul_one]
 
 /-- `x'` has a message, at `x`'s class, other than the class's most likely one. -/
-def bad (cls : X → κ) (F : κ → X → Option Msg) (v : κ → Msg) (x x' : X) : Prop :=
+def bad (cls : β → κ) (F : κ → β → Option Msg) (v : κ → Msg) (x x' : β) : Prop :=
   ∃ m, F (cls x) x' = some m ∧ m ≠ v (cls x)
 
 /-- `x` and `x'` have two different messages at `x`'s class. -/
-def fork (cls : X → κ) (F : κ → X → Option Msg) (x x' : X) : Prop :=
+def fork (cls : β → κ) (F : κ → β → Option Msg) (x x' : β) : Prop :=
   ∃ u w, F (cls x) x = some u ∧ F (cls x) x' = some w ∧ u ≠ w
 
 /-- The members of `x`'s class with a message other than its most likely one. -/
-noncomputable def badCount (cls : X → κ) (F : κ → X → Option Msg) (v : κ → Msg) (x : X) : ℝ :=
+noncomputable def badCount (cls : β → κ) (F : κ → β → Option Msg) (v : κ → Msg) (x : β) : ℝ :=
   (((classOf cls x).filter (bad cls F v x)).card : ℝ)
 
 /-- The members of `x`'s class with a message other than `x`'s. -/
-noncomputable def forkCount (cls : X → κ) (F : κ → X → Option Msg) (x : X) : ℝ :=
+noncomputable def forkCount (cls : β → κ) (F : κ → β → Option Msg) (x : β) : ℝ :=
   (((classOf cls x).filter (fork cls F x)).card : ℝ)
 
 /-- **Fewer members differ from the most likely message than from any other.** -/
-theorem card_ne_le (s : Finset X) (f : X → Option Msg) (u v : Msg)
+theorem card_ne_le (s : Finset β) (f : β → Option Msg) (u v : Msg)
     (h : (s.filter fun x => f x = some u).card ≤ (s.filter fun x => f x = some v).card) :
     (s.filter fun x => ∃ m, f x = some m ∧ m ≠ v).card ≤ (s.filter fun x => ∃ m, f x = some m ∧ m ≠ u).card := by
   have key : ∀ a, (s.filter fun x => f x = some a).card + (s.filter fun x => ∃ m, f x = some m ∧ m ≠ a).card =
@@ -351,18 +351,18 @@ theorem card_ne_le (s : Finset X) (f : X → Option Msg) (u v : Msg)
 /-- **The forking bound**: where each class's sampler is uniform on it (`hunif`), `v` is each class's most likely
 message (`hmode`) and a miss has a message other than its class's most likely one (`hmiss`), a miss is at most as
 likely as the square root of a member and a redrawn member of its class having two different messages. -/
-theorem miss_le_sqrt [Nonempty X] [Nonempty Y] (cls : X → κ) (res : X → Y → X) (F : κ → X → Option Msg)
-    (v : κ → Msg) (Miss : X → Prop)
-    (hunif : ∀ x (φ : X → ℝ), (∑ y, φ (res x y)) * (classOf cls x).card =
-      Fintype.card Y * ∑ x' ∈ classOf cls x, φ x')
+theorem miss_le_sqrt [Nonempty β] [Nonempty γ] (cls : β → κ) (res : β → γ → β) (F : κ → β → Option Msg)
+    (v : κ → Msg) (Miss : β → Prop)
+    (hunif : ∀ x (φ : β → ℝ), (∑ y, φ (res x y)) * (classOf cls x).card =
+      Fintype.card γ * ∑ x' ∈ classOf cls x, φ x')
     (hmode : ∀ x m, ((classOf cls x).filter fun x' => F (cls x) x' = some m).card ≤
       ((classOf cls x).filter fun x' => F (cls x) x' = some (v (cls x))).card)
     (hmiss : ∀ x, Miss x → bad cls F v x x) :
-    Claims.Pr Miss ≤ Real.sqrt (Claims.Pr fun s : X × Y => fork cls F s.1 (res s.1 s.2)) := by
-  have hn : (0 : ℝ) < Fintype.card X := Nat.cast_pos.2 Fintype.card_pos
-  have hm : (0 : ℝ) < Fintype.card Y := Nat.cast_pos.2 Fintype.card_pos
+    Claims.Pr Miss ≤ Real.sqrt (Claims.Pr fun s : β × γ => fork cls F s.1 (res s.1 s.2)) := by
+  have hn : (0 : ℝ) < Fintype.card β := Nat.cast_pos.2 Fintype.card_pos
+  have hm : (0 : ℝ) < Fintype.card γ := Nat.cast_pos.2 Fintype.card_pos
   have hN : ∀ x, (0 : ℝ) < (classOf cls x).card := classOf_card_pos cls
-  have hA : Claims.Pr Miss ≤ (∑ x, badCount cls F v x / (classOf cls x).card) / Fintype.card X := by
+  have hA : Claims.Pr Miss ≤ (∑ x, badCount cls F v x / (classOf cls x).card) / Fintype.card β := by
     rw [Claims.Pr_eq_sum]
     refine div_le_div_of_nonneg_right ?_ hn.le
     calc (∑ x, if Miss x then (1 : ℝ) else 0) ≤ ∑ x, if bad cls F v x x then (1 : ℝ) else 0 :=
@@ -382,7 +382,7 @@ theorem miss_le_sqrt [Nonempty X] [Nonempty Y] (cls : X → κ) (res : X → Y �
             unfold bad
             rw [hx']
   have hrow : ∀ x, (∑ y, if fork cls F x (res x y) then (1 : ℝ) else 0) =
-      Fintype.card Y * (forkCount cls F x / (classOf cls x).card) := by
+      Fintype.card γ * (forkCount cls F x / (classOf cls x).card) := by
     intro x
     have h1 := hunif x fun x' => if fork cls F x x' then 1 else 0
     have h2 : (∑ x' ∈ classOf cls x, if fork cls F x x' then (1 : ℝ) else 0) = forkCount cls F x := by
@@ -428,31 +428,31 @@ theorem miss_le_sqrt [Nonempty X] [Nonempty Y] (cls : X → κ) (res : X → Y �
       rw [classOf_eq cls ((mem_classOf cls).1 hx'')]
     rw [Finset.sum_congr rfl hcl, ← Finset.sum_div, div_div, div_pow, ← sq]
     exact div_le_div_of_nonneg_right hsq (by positivity)
-  have hB : (∑ x, (badCount cls F v x / (classOf cls x).card) ^ 2) / Fintype.card X ≤
-      Claims.Pr fun s : X × Y => fork cls F s.1 (res s.1 s.2) := by
+  have hB : (∑ x, (badCount cls F v x / (classOf cls x).card) ^ 2) / Fintype.card β ≤
+      Claims.Pr fun s : β × γ => fork cls F s.1 (res s.1 s.2) := by
     rw [Claims.Pr_eq_sum, Fintype.sum_prod_type, Fintype.card_prod, Nat.cast_mul]
     dsimp only
-    rw [Finset.sum_congr rfl fun x _ => hrow x, ← Finset.mul_sum, mul_comm (Fintype.card X : ℝ), ← div_div,
+    rw [Finset.sum_congr rfl fun x _ => hrow x, ← Finset.mul_sum, mul_comm (Fintype.card β : ℝ), ← div_div,
       mul_div_cancel_left₀ _ hm.ne']
     exact div_le_div_of_nonneg_right hge hn.le
   have hCS : (∑ x, badCount cls F v x / (classOf cls x).card) ^ 2 ≤
-      (Fintype.card X : ℝ) * ∑ x, (badCount cls F v x / (classOf cls x).card) ^ 2 := by
+      (Fintype.card β : ℝ) * ∑ x, (badCount cls F v x / (classOf cls x).card) ^ 2 := by
     have := Finset.sum_mul_sq_le_sq_mul_sq Finset.univ (fun _ => (1 : ℝ))
       (fun x => badCount cls F v x / (classOf cls x).card)
     simpa [Finset.card_univ] using this
-  have hA0 : 0 ≤ (∑ x, badCount cls F v x / (classOf cls x).card) / Fintype.card X :=
+  have hA0 : 0 ≤ (∑ x, badCount cls F v x / (classOf cls x).card) / Fintype.card β :=
     div_nonneg (Finset.sum_nonneg fun x _ => div_nonneg (by unfold badCount; positivity) (hN x).le) hn.le
-  calc Claims.Pr Miss ≤ (∑ x, badCount cls F v x / (classOf cls x).card) / Fintype.card X := hA
-    _ = Real.sqrt (((∑ x, badCount cls F v x / (classOf cls x).card) / Fintype.card X) ^ 2) :=
+  calc Claims.Pr Miss ≤ (∑ x, badCount cls F v x / (classOf cls x).card) / Fintype.card β := hA
+    _ = Real.sqrt (((∑ x, badCount cls F v x / (classOf cls x).card) / Fintype.card β) ^ 2) :=
         (Real.sqrt_sq hA0).symm
-    _ ≤ Real.sqrt (Claims.Pr fun s : X × Y => fork cls F s.1 (res s.1 s.2)) := by
+    _ ≤ Real.sqrt (Claims.Pr fun s : β × γ => fork cls F s.1 (res s.1 s.2)) := by
         refine Real.sqrt_le_sqrt ?_
         rw [div_pow]
-        calc (∑ x, badCount cls F v x / (classOf cls x).card) ^ 2 / (Fintype.card X : ℝ) ^ 2
-            ≤ ((Fintype.card X : ℝ) * ∑ x, (badCount cls F v x / (classOf cls x).card) ^ 2) /
-                (Fintype.card X : ℝ) ^ 2 := div_le_div_of_nonneg_right hCS (by positivity)
-          _ = (∑ x, (badCount cls F v x / (classOf cls x).card) ^ 2) / Fintype.card X := by
-              rw [sq (Fintype.card X : ℝ), mul_div_mul_left _ _ hn.ne']
+        calc (∑ x, badCount cls F v x / (classOf cls x).card) ^ 2 / (Fintype.card β : ℝ) ^ 2
+            ≤ ((Fintype.card β : ℝ) * ∑ x, (badCount cls F v x / (classOf cls x).card) ^ 2) /
+                (Fintype.card β : ℝ) ^ 2 := div_le_div_of_nonneg_right hCS (by positivity)
+          _ = (∑ x, (badCount cls F v x / (classOf cls x).card) ^ 2) / Fintype.card β := by
+              rw [sq (Fintype.card β : ℝ), mul_div_mul_left _ _ hn.ne']
           _ ≤ _ := hB
 
 end Fork
@@ -517,14 +517,14 @@ theorem fiber_card {A : Live₂} {x : Msg} (hist : List (Msg × Msg)) {r r' : Co
     funext j
     unfold merge
     rcases hs : shownAt hist j.val with _ | c
-    · simp
+    · simp [hs]
     · exact (hr' j c hs).symm
   · intro y hy
     simp only [Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_setOf_eq, Finset.mem_filter] at hy ⊢
     funext j
     unfold merge
     rcases hs : shownAt hist j.val with _ | c
-    · simp
+    · simp [hs]
     · exact (hr j c hs).symm
   · intro y hy
     simp only [Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_setOf_eq, Finset.mem_filter] at hy
@@ -545,7 +545,7 @@ theorem fiber_card {A : Live₂} {x : Msg} (hist : List (Msg × Msg)) {r r' : Co
 
 /-- **`merge` redraws uniformly among the coins the history shows.** -/
 theorem sum_merge {A : Live₂} {x : Msg} (hist : List (Msg × Msg)) (φ : Coins A x → ℝ) :
-    (∑ y, φ (merge hist y)) * ((Finset.univ.filter fun r => Shows hist r).card : ℝ) =
+    (∑ y, φ (merge hist y)) * ((Finset.univ.filter fun r : Coins A x => Shows hist r).card : ℝ) =
       (Fintype.card (Coins A x) : ℝ) * ∑ r ∈ Finset.univ.filter (fun r => Shows hist r), φ r := by
   have hS : ∀ y ∈ (Finset.univ : Finset (Coins A x)),
       merge hist y ∈ Finset.univ.filter fun r => Shows hist r :=
