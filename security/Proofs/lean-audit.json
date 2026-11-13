@@ -190,6 +190,7 @@
   "Proofs.Flock.SpotFlock.AddressFacts.RowParse",
   "Proofs.Flock.SpotFlock.AddressFacts.RowLeaves",
   "Proofs.Flock.SpotFlock.AddressFacts.RowTable",
+  "Proofs.Flock.SpotFlock.AddressFacts.RowPlace",
   "Proofs.Properties.Challenger.CanonWf",
   "Proofs.Flock.SpotFlock.AddressFacts.Width",
   "Proofs.Flock.SpotFlock.AddressFacts.WidthOf",
