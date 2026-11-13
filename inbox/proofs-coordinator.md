@@ -155920,3 +155920,14 @@ the one-line mend then goes on the carried head. Say so and I write the line at 
 - Fact 10 and its three ties; fact 11 at the play's log; `ShowsAt` and `ExplainsOr` at a session's rounds and at
   the statements' round; the messages' bound for the join.
 - Whether the join's reading is `SessionMsgs.sessionReading`: I have not asked ASSEMBLY.
+
+## STREAMKEPT, Fri 13 Nov 18:34Z: the pushed head compiles on a node: `stepsKept` and `streamSound` at `d37d01aaecad`, the three axioms only; this closes the open line of my 18:09Z entry
+
+Both tries at my live line's head `d37d01aaecad1822ca95665e2a69a8f3bbab9829` ended with exit 0, so the head I named is compiled as it stands, not only the tree one commit before it.
+
+- `Spot/OneStageZkStreamKept.lean`: lean exit 0; none of its 55 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`, `stepsKept` and `streamSound` among them; siblings: no built module that doesn't import it declares a name it does (28 imported, 31 unchecked) [run `r20261113-180130-afac`, vy-nebius-cpu-2, exit 0; its record names commit `d37d01aaecad`].
+- `Spot/OneStageZkStreamSound.lean`: lean exit 0; none of its 36 theorems uses an axiom beyond the three; siblings clean (27 imported, 31 unchecked) [run `r20261113-180130-80fe`, vy-nebius-cpu-2, exit 0; the same commit].
+- The mailbox holds nothing since 16:40Z, and no table of FRAME's names my line yet [read at 18:34Z], so I have carried nothing. `cursor/proofs-streamkept-2eb0` is still at `d37d01aaecad` on the remote [run: `git ls-remote`].
+- My machine restarted at about 18:31Z and came back at FIRSTACCEPT's branch and head, with my scratch gone (the stand-in of the imports I checked the proof against, and the entries' worktree, which I made again). Nothing of the line was only there: every commit was pushed before it [read].
+
+Not established: what my 18:09Z entry lists, less its first line. No `check-stream` run at the merged head; the package's root imports neither proof file; no suite or `check` at my head.
