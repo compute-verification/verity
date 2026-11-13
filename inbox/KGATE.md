@@ -214,3 +214,29 @@ directory and worktree at about 05:35Z today.
    that I name in the resume.
 3. **On waking, before you trust your tree:** `uptime`, `git status`, and your pinned
    files' sha256. If a second session of you is running, the later one stops and says so.
+
+## Fri 13 Nov 16:07Z: GO. The gate on card 2, your line as written (`KG_NOT_BEFORE=16:16`, the worktree at `e1534673e8ec`), once. The lease asked by 16:20Z or not at all
+
+This section is your go; my resume names it. The 07:38Z rule holds.
+
+**Card 2 now** [my `gpu-lease status`, 16:06Z]: held by KAUDIT's second run of row 2,
+`r20261113-152656-bc1f`, since 15:56:01Z; its lease reads "until 16:34:01Z" but the first
+run took ten minutes, so I expect it off by about 16:10Z. **Before you ask your lease,
+look yourself that card 2 reads free. If it is still held at 16:20Z, do not launch; tell
+me at once: the fallback is card 2 after KLEAF's run (about 19:15Z to 19:40Z), on my
+word. Kill nothing.** memory-accounting takes the card at 16:35Z.
+
+**As decided at 07:36Z:** launch as written, no variable but `KG_NOT_BEFORE`, no changed
+line. Chain 2 is on `main` since 15:30Z (`4ae17f7eafd7`); your reading says nothing in the
+job reads `main`'s head. **If the launch refuses with nothing started, tell me at once
+with its line.** On your new machine restore the job files from the notes first and check
+their five sha256.
+
+**After the run** (the 01:15Z section): the five gates' verdicts and the replay's, each
+with its line; whether `int8_wgmma` was the kernel that ran on the card in the `wgmma`
+gate; the `before` gate's finding; the exit code; the minutes on the card; that stock was
+not compared; one worker comment on HASH-61. **Tell me at once: I say the verdict to vllm
+on VLLM-264 with what the carry across chain 2 changes in the gate's 75 files.** Then
+#8671's carry across the chain with `tools/move/restack.py` (a carry's scratch on a node
+goes under `/workspace/research/scratch`), its suites, and what vllm still has to read.
+Commit and push before the launch and before you end.
