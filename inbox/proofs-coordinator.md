@@ -112119,3 +112119,31 @@ May I run `lean` on this VM on a scratch file that imports only core (no project
 #9537 `44b84839217d`; PR 2 `cursor/proofs-prf600-period-audit-9c4e` `5dacc95eab9e`; PR 3 `cursor/proofs-prf600-period-statements-e2a7` `f2889fd3ce`; PR 4 `cursor/proofs-prf600-period-proofs-4c9a` `8fbc099b92`; #9546 `ee245a981c3e`; notes `cursor/proofs-prf600-periodread-scratch-0b7e` `a4ff14e957`.
 
 **To post:** nothing.
+
+## TWOLEG, Fri 13 Nov 01:29Z: the form's pull request is open, unmarked: #9574, head `8d8015c054` (branch `cursor/proofs-twoleg-e0ff`); its difftest passed with the two-Definition test by name; the proofs follow in a second pull request
+
+The form's pull request is open and not marked, as you asked: https://github.com/compute-verification/verity/pull/9574, head `8d8015c0546d`, branch `cursor/proofs-twoleg-e0ff`, linked to PRF-579. It holds the form, its executable, its twin and difftest, and the switch in `Spot/Run.lean`, on #9375's head. The proofs over the form are not in it. The build of the six files besides `Steps.lean` was still rebuilding a cold tree at 01:28Z, so they go in a second pull request from `cursor/proofs-twoleg-c5e5`, as you ruled. Both branches are pushed; nothing is left unpushed.
+
+- [run] The form builds. `r20261113-011300-9f0c` (cpu-12, rc 0) built `VStarRecursive.SampledTwo`, the form with its `#guard`s, on the way to `Steps.lean`.
+- [run] The difftest passes. `r20261113-005817-5d2d` (vy-nebius-2, rc 0, at `45e4dffec3`) ran 65 tests, all passed in 130 s, including `test_two_definitions_are_refused_by_name`. It serves through the `sampled-two` executable, so the executable builds. `8d8015c054` differs from `45e4dffec3` only in docstrings, `Steps.lean`'s proofs and the removed proof files.
+- [read] The pull request's head is `99da2b9189` (my branch with `Steps.lean` compiling and the docstring renames) plus one commit, which removes `Properties/Verity/SampledTwo/*` and restores `security/Proofs/lakefile.toml` to #9375's. So the pull request touches no file under `security/`.
+- [read] Renames: the form's docstrings, and the line it adds to `Run.lean`, say "the second stage's statement check" instead of "round 2" (`99da2b9189`). The body says so.
+- [run] `ratchet_gate.py origin/main HEAD`: it fails on `lean_bar.json` growth, and every entry it names comes from #9375's merge commit (`ca2e80f1ed`), none from this change. It only warns at a mark.
+- For your ready line by 10:00Z, still open:
+  - The quick tier `r20261113-012511-c4f6` (vy-nebius-2, `suites.py --changed 5f0c008aa040 --quick` at `99da2b9189`, a superset of the pull request's suites) is running.
+  - The records run of the recursive package (`lean_changed.py --records verity/protocols/recursion/verifier/recursive --update`) goes to cpu-12 once `d936` frees it.
+  - #9375 is still open. Once it is on `main`, I merge `main` into `e0ff`.
+
+STOP RULE: nothing. The pull request accepts nothing (`checkBlobs_refuses`), touches no lock, and wires nothing into `Sampled.lean`.
+
+NEEDS:
+1. You: mark #9574 when its ready line is in, and post its number and head on PRF-579.
+2. Lean's worker on LEAN-302: the form's head is now `8d8015c054` on `cursor/proofs-twoleg-e0ff`, not `052eb3aba5`. The header sentence ("Nothing reads this module…", line 8) is untouched, and I left its neighbouring lines alone so your edit merges clean.
+
+Runs:
+- `r20261113-011652-d936` (cpu-12): the build of `Projection`, `Reading`, `Leg`, `Claim`, `Refused` and `DevAgrees` at `7fed11bb74`. It is running, with `Refused` built; it rebuilds 743 changed files of the tree first. ETA [guess]: 01:50Z to 02:20Z.
+- `r20261113-012511-c4f6` (vy-nebius-2): the quick tier, running. ETA [guess]: 01:50Z.
+
+To post: nothing.
+
+Not established: that the six proof files compile (`d936`); the quick tier; the records run.
