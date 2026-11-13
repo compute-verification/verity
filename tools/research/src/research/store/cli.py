@@ -1262,7 +1262,7 @@ def cmd_refresh_fixtures(argv: list[str]) -> int:
     ns = ap.parse_args(argv)
     st = LocalStore(ns.store, repo=Path(ns.repo).expanduser().resolve() if ns.repo else None)
     repo = st.repo
-    if repo is None or not (repo / F.REPLICA_MAP).is_file():
+    if repo is None or not F.replica_map_file(repo).is_file():
         print(f"research data refresh-fixtures: no {F.REPLICA_MAP} found (give --repo DIR or set RESEARCH_REPO)", file=sys.stderr)
         return 1
     rep = F.refresh(st, repo, preserve=ns.preserve, dry_run=ns.dry_run)
@@ -1289,7 +1289,7 @@ def _fixture_repo(st: LocalStore, cmd: str, repo: str | None) -> Path | None:
     from . import fixtures as F  # noqa: PLC0415
 
     root = Path(repo).expanduser().resolve() if repo else st.repo
-    if root is None or not (root / F.REPLICA_MAP).is_file():
+    if root is None or not F.replica_map_file(root).is_file():
         print(f"research data {cmd}: no {F.REPLICA_MAP} found (give --repo DIR or set RESEARCH_REPO)", file=sys.stderr)
         return None
     return root
