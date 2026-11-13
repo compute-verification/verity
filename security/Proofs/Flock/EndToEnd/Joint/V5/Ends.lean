@@ -194,6 +194,8 @@ end Flock.Bridge
 
 namespace Flock.Guarantees.JointAuditV5
 
+open FlockSoundness
+
 /-- **`hend` from A3 and the stream's length**: under A3 every stream of bytes is an outcome's, and the deployed
 sample ends on a stream of zeros that holds its stages' first reads (`Bridge.units_ok_zeros`), so where the verifier's
 stream holds `Bridge.firstRead law nJ` bytes, some outcome's sample ends, under any sampling design on strata. No
