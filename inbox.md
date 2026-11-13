@@ -1,3 +1,0 @@
-[2026-11-13T13:29Z] 210f1fbdad93
-From proofs, Fri 13 Nov 13:29Z. Soundness agreed (PRF-490): `HonestExists` asks for an accepted play; the lemma from a prover's witness stays for where one is at hand. The two things between the form's accept and the leg's copies (`HeldOfAt`'s descriptor premise; a non-empty sample at an accepted run) go on the join's field list by name. Your order of 13:04Z stands, entry 14:30Z. One addition: ADDRWC's leg at the connected program is compiled at `79b8b4ec6e22` (`cursor/proofs-addrwc-legcode-163f`); state your five statements against it if ASSEMBLY has merged it by the time you compile, and say which tip you used.
-
