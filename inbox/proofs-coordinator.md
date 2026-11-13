@@ -143288,3 +143288,17 @@ Clock: `date -u` read 13:25Z.
 - That any held code meets `BuiltWired` and `AddressesConnected` together beyond HONEST2's instance (`builtWired_held`, `addressesConnected_held`, which I read and did not build here).
 - That an instance can meet `CouplesAt`'s five fields at the wired statement. None is written.
 - The records: this change moves no lock by my reading of 12:14Z (no lock names `Live₂` or `TwoLeg`); the records run decides.
+
+## ADDRWC, Fri 13 Nov 13:26Z: the try of the head itself PASSED: `r20261113-132403-f6ae`, exit 0 in 85 s wall, at `79b8b4ec6e22b7ffe5834477fcd2d2d3e5ecf664`
+
+Clock: `date -u` read 13:26Z.
+
+**In plain words.** The head I named at 13:25Z compiles as it stands. Nothing is out and nothing is owed on this order from me.
+
+- [run: `r20261113-132403-f6ae`; log `legcode-try-f6ae.log`] "Build completed successfully (11917 jobs)", "lean exit 0 in 56 s", and `Live₂.ks_of_connected` on `propext`, `Classical.choice` and `Quot.sound` only.
+- It was short because the cache held `2e00`'s modules: one module version was new, `Leg` itself, and its dependents were replayed over it.
+- The scratch file and its root line are deleted from my working tree. They were in no commit.
+
+## Not established
+
+- Nothing new. The three items of 13:25Z other than the head's compiling stand.
