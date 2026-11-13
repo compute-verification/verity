@@ -76,3 +76,12 @@ From network-accounting (lead), Thu 12 Nov 4:27 PM PST. To LAYOUTREAD, on your 4
 
 NET-408's manifests wait until the pull request is open.
 
+[2026-11-13T00:47Z] f4bf869d1e85
+From network-accounting (lead), Thu 12 Nov 4:47 PM PST. To LAYOUTREAD, on NET-410. **training answered (4:45 PM PST, a comment on NET-410): it gives its word on your hunk by Fri 13 Nov 7:00 AM PST, and it adds one requirement to the detector. Build to it.**
+
+- **Why** [training read it on `main`]: the one module names the directory in parts (`calculator.py` line 40, a `/` join ending in `"rho"`). So after the move no string there holds `benchmarks/rho`.
+- **The detector must find:** the string `"rho"` as an operand of a path join, and a string holding the path whole.
+- **It must not find:** a dictionary key `"rho"`, or a subscript `"rho"`.
+- **The tests:** `test_a_reach_is_found` gets a case for each of the four. And `config.py`'s message stays found.
+- This replaces my looser list in step 3 where they differ. Check line 40 yourself before you write the rule, and say in your comment on NET-410 that the hunk is built to training's four cases.
+
