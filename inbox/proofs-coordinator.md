@@ -128666,3 +128666,50 @@ Nothing.
 - Unpushed: nothing. Heads: `cursor/proofs-honest-draw-5b2f` `8130cf7e15e20949b2da80c079aec4b3cedd031d`; `cursor/proofs-honest-session-7c1e` `5c631646192aa727695fd9687f4e3751a8161b14`. I wait on: r20261113-074833-d0f2 (5 to 10 minutes), r20261113-074654-b43a ([guess] 40 to 90 minutes).
 
 ## ONSITE, Fri 13 Nov 07:52Z: a second loop of mine woke on my own 07:48Z timer, found `~/wt/.pen` held by my loop of your 07:38Z message (taken 07:36:24Z on a machine booted 07:35:13Z) and stopped; it touched nothing. For that loop: `r20261113-072631-d98f` (the three moves with the hand commit on `tests/import_order.toml`, pins, then `repository`, `verity-cli`, `demos/lifecycle`) ended rc 0 [read: `research status`]; its log is unread.
+
+## STAGECOINS, Fri 07:52Z: everything of mine COMPILES at `244bca0793` (for ASSEMBLY, in place of `bfac82043c`); `firstDraw` now names the boundary parameters' family, a statement the join reads; at TWOLEG's `1874fb25cc` two patterns break, and without the digest comparison `FirstDrawn` rests on a digest equality no check gives (a gap in the form)
+
+As you ruled, the first stage's draw now names the parameters' family, `p.boundary.challenger.map (·.2)`. It is the family the run's challenge check reads (`inputOf`'s `family`), so nothing is left to prove equal to the evidence's segment label. I merged CUT's `fc93fee9c7` alone, which brings only CUT's files and the lakefile (nothing of TWOLEG's past my base, nothing of `main`). Then I restated `firstDraw` and `firstDraw_of` on it. All seven of my files compile together at `244bca0793` [run]. On TWOLEG's `1874fb25cc`, I read that two of my proofs break on the new `inputAt_ok` pattern, a mechanical change. The comparison CUT proposed would close the one real gap for the first stage: the digest equality that `FirstDrawn` needs. Without it, `FirstDrawn` is a premise no check gives. I wrote nothing against TWOLEG's head.
+
+Head pushed: `244bca0793` on `cursor/proofs-stagecoins-71b1`: `bfac82043c`, then the merge of CUT's `fc93fee9c7` `16443ed6c4`, then the restatement. Nothing unpushed. The machine was replaced again; I rebuilt `~/wt` from the pushed branch. I did not merge `main`.
+
+**The run** [run]
+`r20261113-073828-2156`, `research run --on auto --as proofs --mem-gb 32`, `lean_changed.py --try …/StageCoins.lean --siblings`.
+- It spilled to vy-nebius-cpu-10's research pool. It waited for a slot from 07:38Z to about 07:46Z, built on `build-1` (44 files changed) and ended rc 0 at 07:51Z.
+- Lines: `Built … SampledTwo.FirstCoins`, `StageLog`, `SecondCoins`, `CoinBytes`, `StageCut`, `StageAlone`; `Build completed successfully (11637 jobs).`; `lean exit 0 in 293 s`; siblings: no clash (3680 imported, peak 5313 MB).
+- `axiom probe: none of its 3 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`, for `coinsAgree_first_log`, `coinsAgree_second_log` and `coinsAgree_second_matches`.
+
+**Item 1: what changed** [run, read]
+- `FirstCoins.firstDraw (k : Case)` is now `match commitmentOf k.commitment, canonicalJson k.params >>= paramsOfJson with | .ok c, .ok p => (p.boundary.challenger.map (·.2)).map fun l => (l, c.digest) | _, _ => none`. It no longer decodes the evidence. The digest is unchanged: `c.digest`.
+- `StageCut.firstDraw_of` has the same statement (`Decoded k p c e → firstDraws key p c e = some d → firstDraw k = some (d.label, d.after)`), proved against CUT's `firstLabel p`.
+- Docstrings: the "not established" lines about the segment's family are gone from `FirstCoins` and `StageCut`. `FirstDrawn`'s docstring names the boundary challenger's family. The earlier-period signature line stays.
+- No check is needed for the label: the run's `i.family` is `p.boundary.challenger.map (·.2)` by `inputOf`'s definition (the form's file, line 260 at my base), so `firstDraw`'s label is the run's family by `rfl`. ASSEMBLY can now mend `family₁` and `DrawRoots.firstDraw_label` against `244bca0793`.
+- Side effect of CUT's merge: `firstCoins e` is now `e.coins`. So the second conjunct of my `SessionMatches` (the four fields of `firstCoins e` equal `e.coins`'s) holds by `rfl`. I left the statement as it is; it can be dropped in one commit if ASSEMBLY wants.
+
+**Item 2: my files against TWOLEG's `1874fb25cc`** [read: TWOLEG's 07:27Z list and CUT's 07:22Z item 3 against my files; derived; nothing compiled against that head]
+- **Breaks with or without the comparison (mechanical).** Two proofs take `inputAt_ok` apart with the old pattern:
+  - `FirstCoins.sourceRead_holds` (line 262: `⟨-, -, -, -, vs, received₂, -, rfl⟩`);
+  - `StageCut.secondShown_of` (line 209: `⟨⟨s, hs, hc₂⟩, hξ₂, -, -, vs, received₂, -, hieq⟩`).
+  Each gains `j₁ j₂` and the two `readBack` conjuncts, plus the comparison's conjunct if it lands. Each reads only `.source` (`inputOf_source`) or `.interior`'s `.source` (`inputOf_interior_source`), which `inputOf` takes from `ξ` and `ξ₂` and not from either record. Both lemmas are stated for any `c` and `e`, so they apply at `{ c with record := j₁ }` and `{ e with record := j₂ }` unchanged. `accepted_steps`, `inputOn_accepts` and `inputOfCase` are unchanged.
+- **No statement of mine changes.** `FirstRead i read` reads `i.record`, whatever it is, so it holds at `j₁` with no edit. `firstDraw` names `c.digest`, as CUT's `firstDraws` does.
+- **With the comparison** (`inputAt` refuses unless `Registration.digest j₁` is `c.digest`, as the last conjunct of `inputAt_ok`): nothing more breaks. `FirstDrawn` becomes provable from the run's side. The run's challenge check holds the first stage's challenges after `Registration.digest i.record = Registration.digest j₁ = c.digest = d.after`, under the parameters' key, the boundary's window, the boundary's family and `e.coins = firstCoins e`, which is what `drawCoins d.key d.window d.label d.after (firstCoins e)` reads. Whoever proves `FirstDrawn` (the run's-challenges piece) needs that conjunct, and nothing else from me.
+- **Without it:** my files still compile after the two pattern edits, because `FirstDrawn` is a named hypothesis. But no check gives the equality `FirstDrawn` needs. CUT's counterexample (a record whose tree hides `format`, so its tag differs from the read-back record's) makes the run check the challenges after `Registration.digest j₁ ≠ c.digest`. Then `FirstDrawn` can be false on a play the form accepts, so `coinsAgree_first_log` rests on a premise that can fail. That is the same gap CUT names, in the form, and it goes to soundness through you. I add no field for it.
+- **The inner block's version, already open in my files.** `StageAlone.SessionMatches`' first conjunct, `Registration.digest e.record = .ok c₂.digest`, is the same kind of question between the evidence's record and the reparsed `c₂ = commitmentOf (canon e.record)`. It has been a named hypothesis since 05:16Z, and the same tag counterexample would make it fail. It only feeds `coinsAgree_second_matches`. `coinsAgree_second_log` takes `SecondAlone` instead and doesn't read it. A comparison in the form for the inner block (`interiorUnshown` reading `c₂.digest`, or holding `Registration.digest e.record` to it) would close it; that also goes to soundness through you.
+
+Every theorem over the form's accept is true and empty until #9555 is merged and TWOLEG's honest play is accepted in a test.
+
+## STOP RULE
+Kept: no listed guarantee's statement or premises changed, nothing the verifier accepts changed, no switch, no lock, nothing wired into `Sampled.lean`, no `main` merged. The only statement changed is `firstDraw`'s family, on your ruling. The earlier-period signature hole is noted, not worked around. The device's ledger facts stay hypotheses.
+
+## NEEDS
+- ASSEMBLY: take `244bca0793` in place of `bfac82043c`, then mend `family₁` and `DrawRoots.firstDraw_label`. `firstDraw`'s label is `p.boundary.challenger.map (·.2)`.
+- Coordinator, to soundness: the digest comparison for the first stage (CUT's 4(a)). Without it, `FirstDrawn` has no check behind it. The inner block's version is in item 2's last point.
+- Coordinator: name TWOLEG's head; I then make the two pattern edits in one commit and one try.
+
+## To post
+Nothing.
+
+## Not established
+- Anything of mine compiled at TWOLEG's `c9e1f9dee0` or later.
+- `FirstDrawn` and `SessionMatches` are hypotheses, not proved, at any head.
+- That no other step of the run ties `Registration.digest j₁` to `c.digest`: I relied on CUT's reading and my own of `inputOf`, and did not read every line of the run.
