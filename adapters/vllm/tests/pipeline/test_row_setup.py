@@ -5,7 +5,8 @@ refusal at setup, by name.
 
 Then what the run store brings a row's stages (`pipeline/research.py`'s readers): a job's recorded inputs, an artifact's meta, an
 Attempt's outputs, tool, status and source, each for a document that leaves the block out or states it as null or empty.  The
-research CLI is a stand-in that answers ``data show`` with the document a test gives it."""
+research CLI is a stand-in that answers ``data show`` with the document a test gives it.  Before them: which research CLI a stage
+runs (`research_argv`), a store named by a relative path (`abs_store_env`) and the command `row shed` runs (`shed`)."""
 from __future__ import annotations
 
 import dataclasses
@@ -386,6 +387,64 @@ def _shows(monkeypatch, *docs: Any, publish: str = "", rc: int = 0) -> tuple[tup
 
     monkeypatch.setattr(RS.subprocess, "run", run)
     return (["research"], {}), asked
+
+
+def test_a_store_named_by_a_relative_path_reaches_the_stages_as_an_absolute_one(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    given = {"RESEARCH_STORE": "store", "RESEARCH_RUNS": "/abs/runs", "RESEARCH_STORE_CONFIG": "~/store.toml", "OTHER": "rel"}
+    assert RS.abs_store_env(given) == {**given, "RESEARCH_STORE": str(tmp_path / "store")} and given["RESEARCH_STORE"] == "store"
+    assert RS.abs_store_env({"RESEARCH_STORE": ""}) == {"RESEARCH_STORE": ""}
+
+
+def test_the_research_cli_is_the_one_named_else_the_one_on_the_path_else_the_interpreters_module(tmp_path, monkeypatch):
+    """The module is run with the tree's own copy of the tool on its path only where the interpreter cannot import it and the tree
+    has one."""
+    bin_dir, empty, src = tmp_path / "bin", tmp_path / "empty", tmp_path / "tree" / "tools" / "research" / "src"
+    bin_dir.mkdir()
+    empty.mkdir()
+    exe = bin_dir / "research"
+    exe.write_text("#!/bin/sh\n")
+    exe.chmod(0o755)
+    on_path = {"PATH": str(bin_dir)}
+    assert RS.research_argv("/opt/research", "py", on_path) == (["/opt/research"], on_path)
+    assert RS.research_argv(None, "py", on_path) == ([str(exe)], on_path)
+    probes: list[tuple[list[str], dict[str, str]]] = []
+
+    def probe(rc: int) -> Any:
+        def run(argv: list[str], **kw: Any) -> subprocess.CompletedProcess:
+            probes.append((argv, kw["env"]))
+            return subprocess.CompletedProcess(argv, rc)
+        return run
+    none = {"PATH": str(empty), "PYTHONPATH": "/site"}
+    module = ["py", "-m", "research"]
+    monkeypatch.setattr(RS, "REPO_ROOT", str(tmp_path / "tree"))
+    monkeypatch.setattr(RS.subprocess, "run", probe(1))
+    assert RS.research_argv(None, "py", none) == (module, none) and probes == [(["py", "-c", "import research"], none)]
+    src.mkdir(parents=True)
+    assert RS.research_argv(None, "py", none) == (module, {**none, "PYTHONPATH": f"{src}:/site"})
+    assert RS.research_argv(None, "py", {"PATH": str(empty)}) == (module, {"PATH": str(empty), "PYTHONPATH": str(src)})
+    monkeypatch.setattr(RS.subprocess, "run", probe(0))
+    assert RS.research_argv(None, "py", none) == (module, none)
+
+
+def test_row_shed_runs_the_guard_with_the_research_cli_and_the_stores_absolute_path_and_gives_its_exit(tmp_path, monkeypatch):
+    guard = tmp_path / "pod_guard.sh"
+    guard.write_text("")
+    ran: list[tuple[list[str], dict[str, str]]] = []
+
+    def run(argv: list[str], **kw: Any) -> subprocess.CompletedProcess:
+        ran.append((argv, kw["env"]))
+        return subprocess.CompletedProcess(argv, 7)
+    monkeypatch.setattr(RS.subprocess, "run", run)
+    monkeypatch.chdir(tmp_path)
+    env = SimpleNamespace(pod_guard=str(guard), environ={"RESEARCH_STORE": "store"})
+    o = SimpleNamespace(env=env, research_bin="/opt/research", research_py="py", force=False)
+    assert RS.shed(o) == 7
+    o.force = True
+    assert RS.shed(o) == 7
+    child = {"RESEARCH_STORE": str(tmp_path / "store")}
+    assert ran == [(["bash", "-c", RS._SHED, "shed", str(guard), force, "/opt/research"], child) for force in ("0", "1")]
+    assert env.environ == {"RESEARCH_STORE": "store"}
 
 
 def test_a_jobs_input_is_nothing_where_its_record_lists_none(tmp_path):

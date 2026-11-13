@@ -19,7 +19,9 @@ a TP Build's rank blocks, a Build's correspondence digest, a Commit's decision d
 run's source identity
 (`verity_vllm.pipeline.research_result.build_result`), the replay bundles a Commit's verdict names
 (`verity_vllm.pipeline.row_config`: `commit_verdict`, `replay`), and what `verity_vllm.pipeline.epoch` reads of a run's status, a
-row file, a manifest, a Build's summary and a verdict.
+row file, a manifest, a Build's summary and a verdict.  Beside the bundles are that module's word check that fails, its discard
+of a linked bundle, the config record's line, and a derive's device and its entry in the program cache (`word_check`,
+`discard_bundles`, `config_record`, `device_id`, `derive_cached`).
 
 Each reads the document a stage wrote and gives a word, a line or a default; a document that is absent or does not parse gives the
 default its docstring names, never an error.
@@ -28,6 +30,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -661,6 +664,101 @@ def test_a_commit_verdict_that_names_no_replay_bundle_is_not_pending_and_leaves_
     with pytest.raises(Stop):
         RCFG.replay(row)
     assert said[-1][:2] == ("replay", "FAIL") and "0 replay bundles named in commit/verdict.json" in said[-1][2]
+
+
+def test_a_word_check_that_fails_stops_the_row_at_20_and_says_where(tmp_path):
+    said: list[tuple[Any, ...]] = []
+    marks: list[tuple[Any, ...]] = []
+    logged: list[str] = []
+    _put(tmp_path / "strict_word.log", "violations: 3\n")
+    row = SimpleNamespace(env=SimpleNamespace(environ={}), d=str(tmp_path), row="a-row", cli=lambda *a: list(a), run_tl=lambda *a: 0,
+                          verdict=lambda *a: said.append(a), log=logged.append, tl=lambda *a: marks.append(a))
+    RCFG.word_check(row)
+    assert said[-1][:2] == ("word-check", "PASS") and (logged, marks) == ([], [])
+    row.run_tl = lambda *a: 1
+    with pytest.raises(Stop) as stop:
+        RCFG.word_check(row)
+    assert stop.value.rc == 20 and said[-1][:2] == ("word-check", "FAIL") and said[-1][2].startswith("rc=1 ") and "violations: 3" in said[-1][2]
+    assert logged == ["strict word check FAIL -> stop"] and marks == [("row", "end", ("ok", "false"), ("stopped_at", "word_check"))]
+
+
+def test_discarding_the_replay_bundles_removes_a_link_and_leaves_what_it_points_at(tmp_path):
+    sealed, commit = tmp_path / "elsewhere" / "replay_bundle_p0", tmp_path / "commit"
+    _put(sealed / "bundle.json", {})
+    _put(commit / "replay_bundle_p1" / "bundle.json", {})
+    _put(commit / "summary.json", {})
+    (commit / "replay_bundle_p0").symlink_to(sealed)
+    logged: list[str] = []
+    row = SimpleNamespace(d=str(tmp_path), log=logged.append)
+    gone = RCFG.discard_bundles(row)
+    assert gone == [str(commit / "replay_bundle_p0"), str(commit / "replay_bundle_p1")] and logged == [f"replay bundles deleted: {gone}"]
+    assert [p.name for p in commit.iterdir()] == ["summary.json"] and (sealed / "bundle.json").is_file()
+    assert RCFG.discard_bundles(row) == [] and len(logged) == 1
+
+
+def test_a_rows_config_record_is_written_beside_it_with_its_tree_and_device_and_its_line_says_why_or_what_replayed(tmp_path, monkeypatch):
+    """The tree is the run's source commit, else the tree's own code id; the device is the target-family record beside the row.  A
+    record that states no reason gives the replay's counts and the run root (the record is a stand-in there)."""
+    said: list[tuple[Any, ...]] = []
+    row = SimpleNamespace(d=str(tmp_path), row="a-row-outside-the-tree", env=SimpleNamespace(environ={}), code9="abcdef123",
+                          verdict=lambda *a: said.append(a))
+    rec = RCFG.config_record(row)
+    assert (rec["outcome"], rec["tree"], rec["device"]) == ("FAIL", "abcdef123", None) and said == [("config", "FAIL", rec["why"])] and rec["why"]
+    assert json.loads((tmp_path / CR.NAME).read_text())["why"] == rec["why"]
+    row.env.environ["RESEARCH_SOURCE_SHA"] = "f" * 40
+    _put(tmp_path / "target_family.json", {"declared": [8, 9]})
+    rec = RCFG.config_record(row)
+    assert (rec["tree"], rec["device"]) == ("f" * 40, {"declared": [8, 9]})
+    passed = {"outcome": "PASS", "why": None, "replay": {"equal": 4, "evaluated": 4, "k": 4, "strata_by": "layer"}, "commit": {"run_root": "ab" * 32}}
+    monkeypatch.setattr(RCFG.CR, "write", lambda d, r, **kw: passed)
+    assert RCFG.config_record(row) is passed and said[-1] == ("config", "PASS", "replay 4/4 equal (k=4, layer strata), run root abababababababab")
+
+
+def test_the_device_of_a_derives_key_is_the_first_gpu_nvidia_smi_names_asked_once(monkeypatch):
+    asked: list[list[str]] = []
+
+    def smi(argv: list[str], **kw: Any) -> subprocess.CompletedProcess:
+        asked.append(argv)
+        return subprocess.CompletedProcess(argv, 0, stdout="NVIDIA L40S, 8.9\nNVIDIA L40S, 8.9\n")
+    monkeypatch.setattr(RCFG.subprocess, "run", smi)
+    row = SimpleNamespace(tgt="")
+    assert RCFG.device_id(row) == {"name": "NVIDIA L40S", "compute_cap": "8.9"} and RCFG.device_id(row) is row._device_id
+    assert len(asked) == 1 and asked[0][0] == "nvidia-smi"
+    for rc, out in ((1, "NVIDIA L40S, 8.9\n"), (0, ""), (0, "NVIDIA L40S\n")):
+        monkeypatch.setattr(RCFG.subprocess, "run", lambda argv, rc=rc, out=out, **kw: subprocess.CompletedProcess(argv, rc, stdout=out))
+        assert RCFG.device_id(SimpleNamespace(tgt="")) is None, (rc, out)
+
+
+def test_a_derive_whose_key_has_an_entry_in_the_program_cache_is_restored_and_one_that_ran_and_said_ok_is_published(tmp_path):
+    """The key leaves the derive's `--out` out, so the same derive into another directory is the entry's; a derive that did not say
+    ok is not published, and without a cache every derive runs."""
+    wl = _put(tmp_path / "workload.json", {})
+    ran: list[list[str]] = []
+    marks: list[tuple[Any, ...]] = []
+
+    def derive(ok: bool) -> Any:
+        def run_tl(st: str, to: int, lf: str, cmd: list[str], *extra: Any) -> int:
+            ran.append(cmd)
+            _put(Path(cmd[cmd.index("--out") + 1]) / "result.json", {"ok": ok})
+            return 0
+        return run_tl
+
+    def cached(name: str, lp: int = 8) -> int:
+        out = str(tmp_path / name)
+        return RCFG.derive_cached(row, "build.derive_step", 60, f"{out}.log", ["verity-vllm", "build", "--workload", wl, "--lp", str(lp), "--out", out], out)
+    row = SimpleNamespace(cb=SimpleNamespace(program_cache=str(tmp_path / "cache")), env=SimpleNamespace(environ={"RESEARCH_SOURCE_SHA": "c" * 40}),
+                          wl="workload.json", path=lambda p: str(tmp_path / p), tgt="l40s", row="a-row", run_tl=derive(True),
+                          tl=lambda *a: marks.append(a))
+    assert cached("first") == 0 and len(ran) == 1
+    key = marks[-1][3][1]
+    assert marks == [("build.derive_step", "mark", ("cache", "published"), ("key", key))] and len(key) == 16
+    assert cached("again") == 0 and len(ran) == 1 and marks[-1] == ("build.derive_step", "mark", ("cache", "hit"), ("key", key))
+    assert json.loads((tmp_path / "again" / "result.json").read_text()) == {"ok": True}
+    assert (tmp_path / "again.log").read_text().startswith(f"program cache hit {key}: {tmp_path / 'cache' / key}")
+    row.run_tl = derive(False)
+    assert cached("other", lp=4) == 0 and len(ran) == 2 and len(marks) == 2
+    row.cb.program_cache = ""
+    assert cached("plain") == 0 and len(ran) == 3 and len(marks) == 2
 
 
 def test_a_runs_end_and_a_rows_tp_world_read_a_status_and_a_row_file_without_their_optional_blocks(tmp_path, monkeypatch):
