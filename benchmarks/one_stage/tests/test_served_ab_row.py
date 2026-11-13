@@ -105,12 +105,13 @@ def _said(tmp_path: Path) -> list[str]:
     return [x.split(" ", 1)[1] for x in (tmp_path / "out" / "row.txt").read_text().splitlines()]
 
 
-def _ended(pid: int) -> bool:
-    """No such process any more, or one that has given up its memory: it is ending, or its exit status waits to be read."""
+def _up(pid: int) -> bool:
+    """A process that is there and still has its memory: one that has given it up is ending, or its exit status waits to
+    be read."""
     try:
-        return Path(f"/proc/{pid}/statm").read_text().split()[0] == "0"
+        return Path(f"/proc/{pid}/statm").read_text().split()[0] != "0"
     except (FileNotFoundError, ProcessLookupError):
-        return True
+        return False
 
 
 @pytest.fixture
@@ -119,10 +120,9 @@ def lifetime(tmp_path):
     processes writes its pid to ``pids``, and the load says ``up`` once the endpoint listens and it is out. A process
     of it that is still there after the test is let go."""
     yield lambda **env: _lifetime(tmp_path, **env)
-    try:
-        os.close(os.open(tmp_path / "hold", os.O_WRONLY | os.O_NONBLOCK))
-    except OSError:                                # nobody is waiting on it any more
-        pass
+    hold = tmp_path / "hold"
+    if hold.exists():                              # read-write opens a FIFO at once, whether or not a process waits on it
+        os.close(os.open(hold, os.O_RDWR | os.O_NONBLOCK))
 
 
 def _lifetime(tmp_path: Path, **env: str) -> dict[str, str]:
@@ -144,7 +144,7 @@ def _left(tmp_path: Path) -> list[int]:
     """The lifetime's processes that have not ended, by the pids they wrote themselves."""
     pids = [int(x) for x in (tmp_path / "pids").read_text().split()]
     assert len(pids) == 3                          # the endpoint, its process in another session, the load
-    return [p for p in pids if not _ended(p)]
+    return [p for p in pids if _up(p)]
 
 
 def test_a_row_holds_for_the_run_before_and_the_card_then_runs_served_ab_and_ends_with_the_cards_line(tmp_path):
