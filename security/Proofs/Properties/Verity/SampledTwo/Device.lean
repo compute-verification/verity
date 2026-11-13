@@ -186,18 +186,18 @@ theorem printsOn_part {h : History} {S S' : RunSetup} {log log' : List Release} 
 
 theorem logs_one {cut : List Release → ℕ} {θ : ByteArray} {log : List Release} (h : oneWindow θ = true) :
     logs cut θ log = (log, []) := by
-  simp only [logs, h, cond_true]
+  simp only [logs, h, Bool.cond_true]
 
 theorem logs_two {cut : List Release → ℕ} {θ : ByteArray} {log : List Release} (h : oneWindow θ = false) :
     logs cut θ log = (log.take (cut log), log.drop (cut log)) := by
-  simp only [logs, h, cond_false]
+  simp only [logs, h, Bool.cond_false]
 
 theorem runs_two (S₁ S₂ : Exchange → RunSetup) (cut : List Release → ℕ) {o : Exchange}
     (h : oneWindow o.params = false) (pk : ByteArray) :
     (dev₂ S₁ S₂ cut o).runs pk =
       runsAt (S₁ o) (o.log.take (cut o.log)) pk ++ runsAt (S₂ o) (o.log.drop (cut o.log)) pk := by
   show runsOf (S₁ o) (S₂ o) (oneWindow o.params) (logs cut o.params o.log).1 (logs cut o.params o.log).2 pk = _
-  simp only [logs_two h, h, runsOf, cond_false]
+  simp only [logs_two h, h, runsOf, Bool.cond_false]
 
 theorem ledger_two (S₁ S₂ : Exchange → RunSetup) (cut : List Release → ℕ) {o : Exchange}
     (h : oneWindow o.params = false) (pk : ByteArray) :
@@ -222,7 +222,7 @@ theorem printsTwo_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Release
     refine printsOn_one (S := S₁ o) fun pk r hr => ?_
     have e : (dev₂ S₁ S₂ cut o).runs pk = runsAt (S₁ o) o.log pk := by
       show runsOf (S₁ o) (S₂ o) (oneWindow o.params) (logs cut o.params o.log).1 (logs cut o.params o.log).2 pk = _
-      simp only [logs_one h1, h1, runsOf, cond_true]
+      simp only [logs_one h1, h1, runsOf, Bool.cond_true]
     rwa [e] at hr
   · rw [if_neg hww]
     have h2 := oneWindow_false hw hww
@@ -482,14 +482,14 @@ theorem ledger_opens (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : L
     x ∈ ledgerOf (P.setup₁ fs₁ cut o) (P.setup₂ fs₂ cut o) (oneWindow o.params) (pubOf o.params) := by
   unfold opensAt at hx
   unfold ledgerOf
-  simp only [ledgerAt, setup₁, setup₂, setupAt, eq_self_iff_true, ↓reduceIte]
+  simp only [ledgerAt, setup₁, setup₂, setupAt, ↓reduceIte]
   generalize oneWindow o.params = w at hx ⊢
   cases w
-  · simp only [cond_false, List.mem_append] at hx ⊢
+  · simp only [Bool.cond_false, List.mem_append] at hx ⊢
     rcases hx with hx | hx
     · exact .inl (.inl hx)
     · exact .inr (.inl hx)
-  · simp only [cond_true, List.mem_append] at hx ⊢
+  · simp only [Bool.cond_true, List.mem_append] at hx ⊢
     exact .inl hx
 
 theorem ledger_closes (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Release → ℕ) (o : Exchange) {x : Json}
@@ -497,14 +497,14 @@ theorem ledger_closes (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : 
     x ∈ ledgerOf (P.setup₁ fs₁ cut o) (P.setup₂ fs₂ cut o) (oneWindow o.params) (pubOf o.params) := by
   unfold closesAt at hx
   unfold ledgerOf
-  simp only [ledgerAt, setup₁, setup₂, setupAt, eq_self_iff_true, ↓reduceIte]
+  simp only [ledgerAt, setup₁, setup₂, setupAt, ↓reduceIte]
   generalize oneWindow o.params = w at hx ⊢
   cases w
-  · simp only [cond_false, List.mem_append] at hx ⊢
+  · simp only [Bool.cond_false, List.mem_append] at hx ⊢
     rcases hx with hx | hx
     · exact .inl (.inr hx)
     · exact .inr (.inr hx)
-  · simp only [cond_true, List.mem_append] at hx ⊢
+  · simp only [Bool.cond_true, List.mem_append] at hx ⊢
     exact .inr hx
 
 theorem runsAt_length (S : RunSetup) (log : List Release) (pk : ByteArray) : (runsAt S log pk).length ≤ 1 := by
@@ -521,9 +521,9 @@ theorem runsOf_length (S₁ S₂ : RunSetup) (one : Bool) (log₁ log₂ : List 
   have h2 := runsAt_length S₂ log₂ pk
   unfold runsOf
   cases one
-  · simp only [cond_false, List.length_append]
+  · simp only [Bool.cond_false, List.length_append]
     omega
-  · simp only [cond_true]
+  · simp only [Bool.cond_true]
     omega
 
 theorem ledger_length (cut : List Release → ℕ) (θ a : ByteArray) (log : List Release) (b : ByteArray)
@@ -534,9 +534,9 @@ theorem ledger_length (cut : List Release → ℕ) (θ a : ByteArray) (log : Lis
   have h2 := P.two.ledger_le θ a (logs cut θ log).2 b ρ
   generalize oneWindow θ = w
   cases w
-  · simp only [cond_false, List.length_append]
+  · simp only [Bool.cond_false, List.length_append]
     omega
-  · simp only [cond_true]
+  · simp only [Bool.cond_true]
     omega
 
 /-- **`Q` at the deployment**: one message per ledger line either session signs, and each run's record and close. -/
