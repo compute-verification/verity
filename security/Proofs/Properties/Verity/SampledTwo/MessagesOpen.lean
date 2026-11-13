@@ -31,7 +31,8 @@ draws. This module states the messages' bound in the form those rounds need.
   files), the play shows a list of strings for the round (`raw`: the record's bytes the device's digests hash, the
   blobs the registered digests name), and on accepted plays the message is a function of the strings and the context
   (`Explains`). Two accepted plays with two messages then show two lists of strings under one list of digests, and
-  the finder outputs a pair of them that differ (`exists_zip_collide`).
+  the finder outputs a pair of them that differ (`exists_zip_collide`). `messagesFixedStrings` is the bound from
+  `ShowsStrings`, `FixedBefore` and `Explains`.
 
 **Not established** at the two-stage form: `Opens` (the device's digests are the SHA-512 of the strings the check
 read: the interior's root, each opening's `after`), `FixedBefore` (the device's log before a round's coin is the same
@@ -444,5 +445,52 @@ theorem breaks_strings {A : Live₂} (Rd : Reading A) (Acc Good : Verity.Exchang
   split
   next => rfl
   next h => exact absurd hex h
+
+/-- **An accepted play shows strings that have its digests**: on a play the check accepts whose log is the device's,
+at each round below `k` the reading reads a message, the play fixes a list of digests, and the strings the play shows
+for the round have them, one each. -/
+def ShowsStrings (A : Live₂) (x : Msg) (Rd : Reading A) (Acc Good : Verity.Exchange → Prop)
+    (Dg raw : Verity.Exchange → ℕ → Option (List Msg)) : Prop :=
+  ∀ o, Acc o → Good o → ∀ i < A.L.V.k x, (∃ m, Rd.msg o i = some m) ∧
+    ∃ ds bs, Dg o i = some ds ∧ raw o i = some bs ∧ bs.map Verity.sha512Msg = ds
+
+/-- **`Opens` at the strings an accepted play shows**, at any context. -/
+theorem opens_strings {A : Live₂} {x : Msg} {Rd : Reading A} {Acc Good : Verity.Exchange → Prop}
+    {Dg raw : Verity.Exchange → ℕ → Option (List Msg)} (ctx : Verity.Exchange → ℕ → κ)
+    (h : ShowsStrings A x Rd Acc Good Dg raw) :
+    Opens A x Rd Acc Good (stringsFx Dg ctx) (stringsOpn Acc Good raw ctx) := by
+  intro o hA hG i hi
+  obtain ⟨hm, ds, bs, hd, hr, hb⟩ := h o hA hG i hi
+  have hfx : stringsFx Dg ctx o i = some (ds, ctx o i) := by
+    simp [stringsFx, hd]
+  have hop : stringsOpn Acc Good raw ctx (ds, ctx o i) o i := by
+    unfold stringsOpn
+    exact ⟨hA, hG, rfl, bs, hr, hb⟩
+  exact ⟨hm, (ds, ctx o i), hfx, hop⟩
+
+/-- **The messages' bound where the plays show strings**: where an accepted play shows, for each round, strings that
+have the digests the play fixes (`ShowsStrings`), the digests and the context are fixed by the coins the history before
+the round shows (`FixedBefore`), the round's message is a function of the strings and the context (`Explains`), and
+the run reaches every round, `MessagesFixed` holds at the sum over the rounds of the square roots of the successes of
+the finders that output two of the strings two plays show at one place. -/
+theorem messagesFixedStrings (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray)
+    (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
+    (place : TapeOf V θ F c σ → Coins A x → TapeOf V θ F c σ) (Rd : Reading A) (Acc Good : Verity.Exchange → Prop)
+    (Dg raw : Verity.Exchange → ℕ → Option (List Msg)) (ctx : Verity.Exchange → ℕ → κ) (q : ℕ)
+    (hO : ShowsStrings A x Rd Acc Good Dg raw)
+    (hF : ∀ i < A.L.V.k x, FixedBefore
+      (frameBy V A x θ F c σ place Rd (stringsFx Dg ctx) (stringsOpn Acc Good raw ctx)) Rd Acc Good
+      (stringsFx Dg ctx) i)
+    (hE : ∀ i < A.L.V.k x, Explains Rd Acc Good raw ctx i)
+    (hT : RunsThrough (frameBy V A x θ F c σ place Rd (stringsFx Dg ctx) (stringsOpn Acc Good raw ctx)) Rd Acc
+      Good) :
+    MessagesFixed V A x θ F c σ (frameBy V A x θ F c σ place Rd (stringsFx Dg ctx) (stringsOpn Acc Good raw ctx))
+      Rd Acc Good
+      (∑ i ∈ Finset.range (A.L.V.k x),
+        ENNReal.ofReal (Real.sqrt ((finderBy V θ F c σ place Rd (stringsFx Dg ctx) (stringsOpn Acc Good raw ctx)
+          (stringsPair raw) i q).Pr Verity.sha512Msg))) :=
+  messagesFixedBy V A x θ F c σ place Rd Acc Good (stringsFx Dg ctx) (stringsOpn Acc Good raw ctx)
+    (stringsPair raw) q (opens_strings ctx hO) hF
+    (fun i hi => breaks_strings Rd Acc Good raw ctx i (hE i hi)) hT
 
 end Verity.SampledTwo.Messages
