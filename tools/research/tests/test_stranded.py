@@ -200,8 +200,13 @@ def test_a_job_without_a_pair_moves_only_at_its_next_launch():
 
 
 def test_a_stalled_line_is_printed_with_its_memory_and_is_no_stranded_wait():
-    """auto's own Stalled: a waiter 5 minutes beside an idle slot, for more memory than is left unreserved."""
-    line = pool(slot("r0", "0-15"), slot("r1", "16-31", held=True), waiters=(waiter(12, "r-big", mem_gb=300),), free_gb=50)
+    """auto's own Stalled: a waiter no run passes, 5 minutes beside an idle slot, for more memory than is left unreserved. The
+    waiter here would start if the runs that passed it ended (`passed_gib`). One whose ask is over all of that is passed by
+    any run (slot.py's line rule), so its line is not stalled."""
+    big = waiter(12, "r-big", mem_gb=300)
+    passed = pool(slot("r0", "0-15"), slot("r1", "16-31", held=True), waiters=(big,), free_gb=50)
+    assert stranded.analyse({A: machine(research=passed)}, T0, CPUS)["stalled"] == [], "a head any run passes stalls no line"
+    line = pool(slot("r0", "0-15"), slot("r1", "16-31", held=True), waiters=(big | {"passed_gib": 260},), free_gb=50)
     doc = stranded.analyse({A: machine(research=line)}, T0, CPUS)
     assert [w["stranded"] for w in doc["waits"]] == [False]
     assert doc["stalled"] == [{"machine": A, "pool": "research", "in_line": 1, "head_minutes": 12, "available_gb": 500.0,
@@ -406,7 +411,8 @@ def test_a_pool_shut_by_an_inode_floor_rings_infra_at_once_on_an_idle_machine_an
 
 
 def test_infra_hears_of_a_line_stalled_30_minutes_a_lean_wait_of_10_and_a_short_peers_file(tmp_path):
-    stall = pool(slot("r0", "0-15"), slot("r1", "16-31", held=True), waiters=(waiter(12, "r-big", mem_gb=300),), free_gb=50)
+    stall = pool(slot("r0", "0-15"), slot("r1", "16-31", held=True),
+                 waiters=(waiter(12, "r-big", mem_gb=300) | {"passed_gib": 260},), free_gb=50)
     lean = {"file": "lean-slots", "pools": {"audit": {"n": 1, "slots": [], "waiters": [{"pid": 1, "minutes": 11, "run": "r-l"}]}}}
     docs = quiet(**{A: machine(research=stall), B: machine(lean=lean), C: machine(peers=[A])})
     got = watch(tmp_path, [(T0, docs), (T0 + 1800, docs)])

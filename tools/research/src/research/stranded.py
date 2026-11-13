@@ -385,7 +385,7 @@ def analyse(docs: dict[str, dict | str], now: float, cpu_machines: list[str] | N
                 j["lines"].append({"machine": m, "since": w.get("since"), "minutes": w.get("minutes") or 0})
             head = max((w.get("minutes") or 0 for w in pd.get("waiters") or []), default=0)
             if p != CHECK and (m, p) not in shut and head >= auto.STALL_MIN and isinstance(
-                    _refusal(pd, auto.BACKFILL_MAX_GB + 1), auto.Stalled):
+                    _refusal(pd, NO_ASK_GB), auto.Stalled):
                 free = pd.get("free_gb")
                 avail = d.get("available_gb")
                 out["stalled"].append({"machine": m, "pool": p, "in_line": len(pd.get("waiters") or []), "head_minutes": head,
@@ -545,7 +545,7 @@ def text(doc: dict, with_moves: bool = False) -> str:
         out.append(f"  {p}: {s['in_line']} in line, {s['stranded']} stranded, {s['places']} place{'' if s['places'] == 1 else 's'}; idle slots blocked: {blocked}; "
                    f"idle in other pools: {idle}" + (f"; unread on {', '.join(s['unread'])}" if s["unread"] else ""))
     sections = (
-        ("stalled lines (a waiter beside an idle slot, for more memory than is left unreserved)", "stalled",
+        ("stalled lines (a waiter no run passes, beside an idle slot, for more memory than is left unreserved)", "stalled",
          lambda x: f"{x['machine']} {x['pool']}: {x['in_line']} in line, head {x['head_minutes']} min; available "
                    f"{_gb(x['available_gb'])}, not reserved {_gb(x['free_gb'])}, reserved and not reached {_gb(x['unreached_gb'])}"),
         ("windows", "windows", lambda x: f"{x['machine']}: {x['start']} to {x['end']}" + (f": {x['note']}" if x["note"] else "")

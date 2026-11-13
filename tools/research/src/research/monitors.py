@@ -1547,8 +1547,9 @@ MONITORS: list[Monitor] = [
             "read as stranded, because its ticket records no memory need yet; that is cured in slot.py's asker, ci's. "
             "A lane pool (infra): read why `--on auto` put each job there and fix the placement rule. Shut: the "
             "pool's machine (its disk floor, or why it can't be read). Stalled: where the pool's slots carry `peaks=`, the "
-            "line's head waits for memory, and a waiter asking more than `auto.BACKFILL_MAX_GB` may not pass it and holds "
-            "those behind (slot.py's line rule); where they don't, set `peaks=` on them. Lean: the machine's Lean slots. "
+            "line's head is a waiter no run passes (slot.py's line rule: one that would start if the runs that passed it "
+            "ended, a priority one, or one whose ticket names no ask), and it holds those behind; where they don't, set "
+            "`peaks=` on them. Lean: the machine's Lean slots. "
             "Peers: put every CPU machine in the /etc/vy/peers of each machine it names, with the key accepted.",
             every_s=120, clear_s=300),
 ]
