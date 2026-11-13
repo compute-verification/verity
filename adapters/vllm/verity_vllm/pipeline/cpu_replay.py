@@ -216,7 +216,10 @@ def slim_tree(tree: dict[str, Any], opened: Iterable[str]) -> dict[str, Any]:
     from it), only ``step_rows.tensor_key(Kw, t)`` of each tensor ``opened`` names (those the replay consumed and opened), and the
     bundle's bytes of those alone."""
     at, keep_ = {e[0]: i for i, e in enumerate(tree["names"])}, set(opened)
-    keys = {str(at[n]): held_tensor_key(tree, at[n]).hex() for n in sorted(keep_ & at.keys(), key=at.__getitem__)}
+    keys: dict[str, str] = {}
+    for n in sorted(keep_ & at.keys(), key=at.__getitem__):
+        ks: Any = tensor_key_of(tree, at[n])  # typed Any: a tree that carries no key for the tensor raises AttributeError here, as on main
+        keys[str(at[n])] = ks.hex()
     return {k: v for k, v in tree.items() if k not in ("key", "tensor_keys", "extra")} | {
         "tensor_keys": keys, "extra": {n: i for n, i in tree["extra"].items() if str(i) in keys}}
 

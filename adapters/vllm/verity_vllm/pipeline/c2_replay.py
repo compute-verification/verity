@@ -49,16 +49,6 @@ def rss_kb() -> tuple[int | None, int | None]:
         return None, None
 
 
-def mib(kb: int | None) -> int | None:
-    """An `rss_kb` reading in whole MiB; None where there is none."""
-    return None if kb is None else kb >> 10
-
-
-def freed_mib(before: int | None, after: int | None) -> int | None:
-    """The whole MiB that left the resident set between two `rss_kb` readings; None where either is absent."""
-    return None if before is None or after is None else (before - after) >> 10
-
-
 @dataclass
 class ReplaySources:
     """Everything the C2 replay of one instrumented run reads.  `weights_of(prefix)`: the weights provider for the Programs' field
@@ -577,10 +567,11 @@ def free_programs(sr: dict, held: dict[str, Any], pair: int) -> None:
     openings-after-release replay pool and the next pair's run.  The RSS drop is the evidence that the premise
     `c2_freed_before_replay` holds: 70 GB of small objects die into pymalloc arenas and glibc's heap, which keep pages the OS never sees
     back until trimmed -- ask glibc to return them (madvise/brk) so the drop measures the objects, not the allocators' retention."""
-    _rss_c2a = rss_kb()[0]
+    # the three readings are typed Any: a host that gives none (`rss_kb`'s None) raises TypeError at the record below, as on main
+    _rss_c2a: Any = rss_kb()[0]
     held.clear()
     gc.collect()
-    _rss_c2g = rss_kb()[0]
+    _rss_c2g: Any = rss_kb()[0]
     _trim: int | str | None = None
     try:
         import ctypes
@@ -588,12 +579,12 @@ def free_programs(sr: dict, held: dict[str, Any], pair: int) -> None:
         _trim = int(ctypes.CDLL("libc.so.6").malloc_trim(0))
     except Exception as e:  # noqa: BLE001  -- not glibc: the gc-only delta stands, named
         _trim = repr(e)[:80]
-    _rss_c2b = rss_kb()[0]
-    sr["programs_freed"] = {"rss_before_kb": _rss_c2a, "rss_after_gc_kb": _rss_c2g, "rss_after_kb": _rss_c2b, "freed_mib": freed_mib(_rss_c2a, _rss_c2b),
-                            "freed_by_gc_mib": freed_mib(_rss_c2a, _rss_c2g), "freed_by_malloc_trim_mib": freed_mib(_rss_c2g, _rss_c2b), "malloc_trim": _trim,
+    _rss_c2b: Any = rss_kb()[0]
+    sr["programs_freed"] = {"rss_before_kb": _rss_c2a, "rss_after_gc_kb": _rss_c2g, "rss_after_kb": _rss_c2b, "freed_mib": (_rss_c2a - _rss_c2b) >> 10,
+                            "freed_by_gc_mib": (_rss_c2a - _rss_c2g) >> 10, "freed_by_malloc_trim_mib": (_rss_c2g - _rss_c2b) >> 10, "malloc_trim": _trim,
                             "when": "after the sampled-replay + boundary-linkage records, before openings-after-release"}
     logger.info("[delta] C2 PROGRAMS FREED (pair %s): RSS %s -> %s (gc) -> %s MiB (malloc_trim %s): %s MiB back before the openings-after-release "
-                "replay", pair, mib(_rss_c2a), mib(_rss_c2g), mib(_rss_c2b), _trim, freed_mib(_rss_c2a, _rss_c2b))
+                "replay", pair, _rss_c2a >> 10, _rss_c2g >> 10, _rss_c2b >> 10, _trim, (_rss_c2a - _rss_c2b) >> 10)
 
 
 def record(s: ReplaySources, sr: dict, lk: dict, _art: Path) -> None:
