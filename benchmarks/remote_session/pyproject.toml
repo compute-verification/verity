@@ -10,8 +10,7 @@
 # release log, read through the auditor's ledger, the verifier's stamps only a cross-check; it credits a session only when
 # its period committed the verifier that ran it, it and its period closed complete, the Lean accepted it, the host's pins
 # log records its pin as main's, and the verifier bound the store to the pinned model; every line says it is conditional
-# on NoOutsideCompute, and `--boundary` (off by default) holds each session's credit to the network certifiers' records
-# of the gate node's boundary. That store, what a pinned
+# on NoOutsideCompute. That store, what a pinned
 # checkpoint alone fixes, and the binding the verifier decides (`verifier.py --model`) are the remote audit's own
 # (`verity/protocols/accounting/poub/verifier/store.py`); `store_layout.py` writes pins and synthetic checkpoints.
 [tool.pytest.ini_options]
@@ -57,8 +56,6 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "tools/research/src/research/pods/sh/gpu_lease.sh",
           # test_sampling_inputs.py: sampling_inputs.py prices an opening with sampled proofs' one cost fit
           "verity/protocols/proofs/spot",
-          # auditor_line.py --boundary: the network certifiers' records of the gate node's boundary and their audit
-          "verity/protocols/accounting/certifier", "verity/protocols/accounting/certifier/prover",
           # test_challengers.py: challengers.Gate against the auditor host's gate, its sessions served by serve.py
           "verity/protocols/compose/device/live_challenger/auditor.py", "verity/protocols/compose/device/live_challenger/host.json", "verity/protocols/compose/device/live_challenger/serve.py",
           "verity/protocols/compose/device/live_challenger/tests/stub_serve.py",
