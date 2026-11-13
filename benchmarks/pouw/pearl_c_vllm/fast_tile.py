@@ -27,9 +27,9 @@ from collections.abc import Sequence
 import numpy as np
 from verity.circuits.kernels import tc as K
 from verity.circuits.silicon import fp32
-from verity.protocols.pouw.prover.schemes import pearl_c as C
-from verity.protocols.pouw.prover.schemes import pearl_c_debit as D
-from verity.protocols.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_debit as D
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 
 _TOP = 0x7F7FFFFF
 _NEG_ZERO = np.uint32(0x80000000)

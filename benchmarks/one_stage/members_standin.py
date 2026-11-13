@@ -34,7 +34,7 @@ from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.evaluation import evaluate_batch  # noqa: E402
 from verity.commitments.windows import interface as IF  # noqa: E402
 from verity.circuits.ops import gemm as G  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import draw as D, members as M, proofs as PF, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as M, proofs as PF, registration as R  # noqa: E402
 
 KS = (128, 256)
 TEMPLATES = tuple(bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8) for k in KS)
@@ -57,7 +57,7 @@ def window(d: Path, members: int) -> Path:
 
 
 def audit_argv(win: Path, out: Path, main: Path, flock: Path, lean: Path) -> list[str]:
-    m0 = os.pathsep.join(str(ROOT / p) for p in ("", "benchmarks/numerical/python", "verity/protocols/flock/prover/python",
+    m0 = os.pathsep.join(str(ROOT / p) for p in ("", "benchmarks/numerical/python", "verity/protocols/proofs/flock/prover/python",
                                                   "adapters/vllm"))
     return [sys.executable, str(ROOT / "benchmarks" / "prove_path" / "records_audit.py"), "audit", "--window", str(win),
             "--law", DESIGN, "--circuit", hashlib.sha512((win / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,

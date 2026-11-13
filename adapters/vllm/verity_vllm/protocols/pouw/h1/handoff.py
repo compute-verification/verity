@@ -36,9 +36,9 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.spot.device import remote
-from verity.protocols.spot.device.challenger import LiveCommitment, LiveRecord
-from verity.protocols.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.device import remote
+from verity.protocols.proofs.spot.device.challenger import LiveCommitment, LiveRecord
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import requests as RQ

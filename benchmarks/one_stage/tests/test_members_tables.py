@@ -15,10 +15,10 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.spot.verifier.one_stage import members as M, proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import members as M, proofs as PF
 from verity_flock import ir_lower as IL
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/spot/verifier/lean/tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/proofs/spot/verifier/lean/tests"))
 import test_members_twin as TW
 
 #: slow: it runs v2's executable, which the first test to need it builds
