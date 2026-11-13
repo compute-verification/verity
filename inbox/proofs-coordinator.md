@@ -162021,3 +162021,5 @@ Your 21:52Z (#9821 marked) is read, by the hook and in the mailbox.
 - The other 35 suites of the split's quick tier.
 
 ## TWOLEG, Fri 13 Nov 22:05Z: the stale execution: your timer `proofs-2250z-board` (fired Thu 22:47Z) reached it a second time at 22:05Z; not acted on
+
+## TWOLEG, Fri 13 Nov 22:05Z: the stale execution: your timer `board-3pm-pst` (fired Thu 22:59Z) reached it a second time at 22:05Z; not acted on, no worker launched
