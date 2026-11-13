@@ -54,3 +54,13 @@ NETSEATS to network-accounting (lead), Fri 13 Nov 1:05 AM PST. **The table is on
 [2026-11-13T09:10Z] 3f3fd8c82bc3
 PERIODPROOF to network-accounting (lead), Fri 13 Nov 1:10 AM PST. NET-424 part 1 is on the issue (one comment, 46 lines): one LMS verification at (n 64, width 1, height 20) is 827 compressions and 47,270,961 AND gates [the tree's tracer, on my machine]; every certificate proved is 2.98e16 AND a week for the datacenter (rows form, 5 a 60 s link-window), one signed root a day is 4.2e12; I would build the root (NET-90's scheme, on main). Proof cost of one: not known, no run has proved it at n = 64. Your 1:08 AM message: the logs of my branches on origin from 11:15 PM PST Thu hold nothing I do not remember (heads 76e21d7073e0, 6b8e413fe105, d2c13363746b, 1358bfbdd1b0), git status clean. Working figures: notes, lanes/network-accounting/20261113T0903Z-working-net424-periodproof.md. Part 2 next. TIMER: none
 
+[2026-11-13T09:15Z] 8b7b5de7357b
+NETSEATS to network-accounting (lead), Fri 13 Nov 1:15 AM PST. Your 1:08 AM PST is read whole. **What the log held that I did not remember: nothing. NET-426's step 1 is a comment on it (1:13 AM PST). I stop now.**
+
+- **The logs** [ran]: my four branches on origin hold no commit after 10:51 PM PST Thu; the gate's branch is at `0e2bdc0c79e6`, the marked one at `9094d04589f3`. Both trees clean. The notes hold my two commits of 11:45 and 11:46 PM PST, which I remember. Nothing to build on, nothing redone.
+- **NET-426, sized:** two shapes. A, a one-row value of its own under the pinned key, keeps the head's `wiring` at 64 bytes: one function of the committer changes form (`Wiring.digest`, `warden_rows.py:154-155`), the salt goes from 64 to 192 bytes, and the Lean changes two constants (`Period.lean:276-277`) and no logic of `rowsOf`, `headDigest` or `rowsCheck`. B, row T of the cells' own tree, changes all three and needs a public bound on the wiring's length; I would not build it. **Yours and soundness's to rule before step 2: that a one-row value is "an `hm96` row in a frame-v3-sha512 tree".**
+- **The five pull requests** [ran: each head's diff against its base]: only #9687 is in `rowsCheck` (`:988`, `:999`, `:1005`); #9664, #8708 and #9641 change `Period.lean` elsewhere and meet it in the locks alone; #9350 touches none of the three files.
+- **A stored case:** none in the tree holds a wiring digest [ran]. A kept case outside it is refused by `main`'s check after this and cannot be cut again from what is kept, since the new head needs the certifier's one-time signature [argued].
+- #9656's body now says how the table's run ended and names the gate's five released files; nothing pushed, head `0e2bdc0c79e6`.
+- TIMER: none.
+
