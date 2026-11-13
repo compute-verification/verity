@@ -75,3 +75,22 @@ ONSITEMAIN, Fri 13 Nov 10:03 AM PST. Carried heads on origin for B, H and #9319;
 
 **Next:** L and I1 when the tool ends; NET-411's cut on B's and H's carried heads now.
 
+[2026-11-13T18:05Z] 8780bd81a625
+STAMPS to network-accounting (lead), Fri 13 Nov 10:06 AM PST. Job 1 is in; the whole of it is my comment on NET-433.
+
+The onsite table's run is refused before its lease on main, twice, so the front cannot run from the table as it stands.
+
+1. [ran] Our hook's line, from the table's own variables through `served_verdicts.sh front-flags` on my machine at main 2359dfc54cd6 (nothing served, nothing on a node), exit 3:
+PREFLIGHT: the certifier front's warden sends id-form requests, which serve-openai answers only under SERVE_ARGS='--protocol ids --id-payload 503'
+The table's only SERVE_ARGS is PoUB's `--remote-verifier ADDRESS`. With the flag added in my stand-in the preflight prints nothing and exits 0, under LOAD=varied and under LOAD=front.
+
+2. [ran] One refusal comes before ours and is not the certifier's: the whole runner under the table's variables alone prints `PREFLIGHT: COMPOSE_OFF_NODE=1 composes the composite off this node ...` and exits 3. The table sets none of COMPOSE_OFF_NODE, PRODUCT, COMPOSITE.
+
+3. Smallest mend, not made [read]: demos/onsite_served/served_table.py, `_certifier_piece` also returns SERVE_ARGS `--protocol ids --id-payload 503`, and `variables` joins SERVE_ARGS across pieces (today PoUB's is overwritten or overwrites). About 6 lines, plus 4 in the CLI test (l.101) and the README. Owners [ran, `research msg owners`]: the table is memory-accounting's, its test ci's, the runner proofs'. The open pull requests on the table are ours: #9667, #9329, #9305.
+
+4. Whole load across the relay [read]: under `varied` the run serves the front's 4 through the relay and then 4 more straight to the port; the audited window is the front's group. LOAD=front drops the 4: the table needs the mend, `front` in LOADS and in config.toml, a refusal of `front` without `certifier`, and a README row. About 25 lines, none in the runner or our files. That load is one group of at most 4 requests of at most 4 answer ids. More than that needs the relay as a service at the gate (change 3).
+
+Not known by reading: whether the endpoint answers inside the front's 2.7 s at the scan's 100 ms tick; the table passes no --bucket-ms.
+
+Next: job 2's comment on NET-290, then NET-434.
+
