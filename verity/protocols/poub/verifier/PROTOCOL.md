@@ -1348,13 +1348,13 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   `Properties.RemoteAudit.PooledCovers`). Its `eps` is that statement's δ and term per sampled receipt; the statement's
   PRF advantages (`prf/sha-512`) and its receipts' binding term are not in `eps`. γ's other terms are the ledger's
   arithmetic, which no Lean property covers. The statements γ is modelled on are the lock's `deployed` entries,
-  `RemoteSessionConservationSketchDeployed` (sketch receipts, provers that keep sectors verbatim) and
-  `RemoteSessionConservationDeployed` (whole-block receipts). `RemoteSessionRunConservation` is the whole-block
+  `RemoteRunConservationSketchDeployed` (sketch receipts, provers that keep sectors verbatim) and
+  `RemoteRunConservationDeployed` (whole-block receipts). `RemoteMonitoringPeriodConservation` is the whole-block
   statement at every parameter, read as a run of the remote audit. They take n windows of P passes, one sample of 2,773
   a window and no clock; a paced session's groups, the receipts it samples a group and its timing term are not shown to
   be an instance. The one deployed statement on a paced session's record is the memory line's,
   `Properties.RemoteAudit.Line.LineHeld`. The conservation statements' openings are
-  `Accounting.Guarantees.RateWindowSample`, a window's pooled sample over its passes' receipts, and `RateSessionSample`,
+  `Accounting.Guarantees.RateWindowSample`, a window's pooled sample over its passes' receipts, and `RateRunSample`,
   the monitoring period and every window at once, both from `PooledSampling`, the causal bound over the monitoring
   period. They take windows of one size, \(M = P \cdot N\), and samples with replacement. The record's windows differ
   in \(U_t\), and its samples are distinct, which only lowers the chance that they all pass. `pooled` applies the same
@@ -1382,7 +1382,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   (`lean/RemoteAudit/Pooled.lean`, `pooled.py` held to it by a difftest), the budget \(\bar d \cdot S\) from above by a
   certified rational root, and `Properties.RemoteAudit.PooledCovers` proves its W at least the bound `PooledSample`
   reads (the greedy by \(U_t/s_t\) is the fractional knapsack's optimum); the memory line reads that W from the
-  record's windows (`Properties.RemoteAudit.LineCoversSession`). What this code supplies is the schedule (each
+  record's windows (`Properties.RemoteAudit.LineCoversRun`). What this code supplies is the schedule (each
   window's challenge released at \(b_{t-1}\), its roots due by \(D_t\)), the chain, the plan's distinctness, one tile
   a receipt under a registration that binds \(z\), the sketch's bound read at \(r^*\) (`timing.sketch_reading`), and
   the profile at δ.
@@ -1458,7 +1458,7 @@ registration that binds \(z\), PoUW's tile evidence comes on top unless PoUW's o
 tiles. A Fiat–Shamir sample would multiply all of this by 1.5–2.6 (§6).
 
 That is the per-window reading, each window's profile at its own δ, \(W\delta\) in all. Read over the horizon, the
-windows' samples pool (`RateSessionSample`, §8). Each window samples its \(s_t\) after its own roots from its own openings
+windows' samples pool (`RateRunSample`, §8). Each window samples its \(s_t\) after its own roots from its own openings
 coin, so however the prover adapts each window to the samples before it, every sample passes while
 \(\sum_t s_t g_t \le (1-\bar d) \sum_t s_t\) with probability at most \((1-\bar d)^{\sum_t s_t}\), where \(g_t\) is
 window \(t\)'s share of correct receipts. Set that to δ: except with δ, the wrong shares \(f_t = 1 - g_t\) have
@@ -1584,7 +1584,7 @@ and held to the Lean by `lean/tests/test_p2.py`.
 3\): 8,224 bytes, 257 whole 32-byte sectors. The store's \(U = \lfloor N/4 \rfloor\) units are what plans range over,
 and the last \(N - 4U\) blocks are in no unit and no receipt certifies them (none in PoUS's store of \(2^{16}\)-block
 segments). The receipt's vector is a unit, not a block, because block \(j\) starts at byte \(8j \bmod 32\): a
-receipt of one block would leave sectors half read, and `SketchBoundSession`'s guess term, over sectors, would grow
+receipt of one block would leave sectors half read, and `SketchBoundRun`'s guess term, over sectors, would grow
 from \(Q/2^{96}\) to \(Q/2^{64}\).
 
 **Registration** (`p2.Registration`, `p2.register`). PoUS's setup: the prover commits to `W` (`setup.commit`), the
@@ -1653,7 +1653,7 @@ values, by name, before the first coin, and so does the Lean, naming each in `p2
   `audit.Rebuild` refuses a P2 codec, so `audit.ledger` refuses a P2 record: \(\mu_{\text{rebuild}}\) at P2's encode
   waits on `WorkHardnessP2` and `SquaringCeilingP2`, drafted (not decided) in Accounting's assumptions, which need the
   H200's squaring rate at 16,448 bits measured.
-- The sketch bound at units is `SketchBoundSession` at \(m = 257\) sectors, drafted as `SketchBoundP2`:
+- The sketch bound at units is `SketchBoundRun` at \(m = 257\) sectors, drafted as `SketchBoundP2`:
   \(\delta_s = Q/2^{96} + (Q + P)(\varepsilon + N/2^{512}) + (Q + P)^2/2^{257}\) at `SketchRank 16 257 12 ε`, with
   \(\varepsilon = 257 \cdot\) `timing.sign_rank_at_most(16, 11)` \(= 2^{-95.2491}\) (\(2^{-96.2548}\) at 4,096-byte
   blocks' 128 sectors). The memory line's `SketchBoundAt` follows from it by `SketchBoundLine`, which holds at every
