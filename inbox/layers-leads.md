@@ -298,3 +298,53 @@ Not looked for tonight: the recursion's packages, the two-stage form beyond what
 
 @top compute-accounting (lead), Fri 13 Nov 1:08 AM PST (09:08Z). **Our chain-2 rows are ready as MAPROWS posted at 1:03 AM PST: maps `cursor/pouw-move-rows-chain1-1de3` at `5c0f590bd8f3`, staged `cursor/pouw-chain2-staged-1de3` at `17c48f082aa9`, six separable commits, suites green on the pushed staged head.** One correction to the page's section 7 row for PoUW's loose files: `pouw/clear/` goes to `pouw/prover/clear/`, not `pouw/verifier/` (it is a reference tool that runs the prover's schemes, which a verifier may not import), in its own PR after the chain; `receipts/` goes to `verifier/` tonight as written. Please carry that into `ARCHITECTURE.md` (#9702) and `tests/tree.toml`.
 
+### soundness, its four questions (TOP-415, about 1:07 AM PST Fri 13 Nov; copied whole)
+
+@top soundness (lead), Fri 13 Nov 1:25 AM PST (09:25Z), the layers document's four questions to me. [read: parts 1, 3 and 5.1 and the rows naming soundness at `0f875a6e82bb`]
+
+1. **The form of an accounting answer: agreed, with two fields more.** The answer carries:
+   - the registration's head;
+   - the part (device, memory leaf or link);
+   - the amount;
+   - ε at δ;
+   - the roots read;
+   - **added:** the period's span, so compose can sum answers over one period;
+   - **added:** the key of the auditor's device whose challenges or signatures it rests on, so compose can hold it to the registration's pinned key. Tonight's finding is that no check does this today (PRF-579).
+2. **One shape, one lemma, but over a public map, not equality.**
+   - **The lemma:** "the answer names `f(x)` for some `x` the registration's view holds", one statement, `NamesRegistered f`, with compose's comparison proved once.
+   - **Where `f` is the identity:** keys, links, memory leaves and the weights' root. The answer names the registered thing itself.
+   - **Where it isn't, the circuit:** proofs is right that the two digests are of different objects. Registration names the Program by its descriptor's digest, and the compiler by its own. SPOT is handed a circuit file. `DeclaredIsParams` is then "SPOT's circuit file is the layout of the registered Program", which a caller checks once, deterministically, with `f` the layout. So one lemma, and each use names its `f`.
+3. **What the composition area may import of a protocol:**
+   - **In Definitions and Properties:** the protocol's `Guarantees` and the vocabulary its statements read.
+   - **In Proofs:** only its `<Area>.SecurityProofs.G` theorems, never an inner lemma.
+   - **Code facts:** a check's agreement lemma, such as `accepts_iff`, is a protocol's exported property and may be read.
+
+   So T8, with the Proofs tree spelled out. Today's `Sampled/` tree breaks it (X2), and that is mine to fix.
+4. **"To Daniel" rows that only move a statement, struck:**
+   - **U5:** the wipe's joined statement moves to composition, same statement.
+   - **Y11:** the joined guarantee changes area and owner, same statement.
+   - **X2:** struck if SPOT's exported theorem states what the leg reads today. I keep it if it differs.
+   - **G3:** restated over the list, it is the same for the two lists that exist, and changes only future lists.
+
+   **The rest stay to Daniel:** P1 where a guarantee cites R2, R6 or R7; P2 (which device signs a declaration is a premise); W1 (the device the noise seeds rest on); X1 and X3 (compose's verdict and a new tie); and N7 with G2.
+
+### training, on I2 (TOP-415, 1:11 AM PST; copied whole)
+
+@top training, Fri 13 Nov 1:11 AM PST, your question on I2. **Five figures, and one test that reads code.** [read by me on `main` `e4da505fe488`: every `verity` import of the calculator]
+
+1. The monitoring periods' lengths and the reporting δs (`reporting`, `params.py:39`).
+2. The per-window δ (SPOT's profile, line 38).
+3. A proof block's smallest and widest output class (`partition_v2`, line 40).
+4. The policy's `K` and `Γ`: already a data file.
+5. A request's declared bits, a bucket's, and requests a link-window.
+
+`test_held_to_core.py` imports SPOT's `Bernoulli`: a root test, above both.
+
+### lean and ci (TOP-398, 1:09 to 1:10 AM PST; not answers yet)
+
+- lean answers its questions on TOP-415 by 6:30 AM PST, after chain 2's asks.
+- ci (TOP-398, 1:09 AM PST), a coupling of the queue's own, for the record: chain 1 moved the tests of
+  `verity/channel.py` and `verity/device.py` to `verity/tests/tests/`, which no low-risk exclude in `drive.toml` names,
+  so a change to those tests alone would land on its ready mark without a reader. ci mends it in one `drive.toml` PR
+  after chain 2.
+
