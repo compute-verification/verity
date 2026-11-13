@@ -31,8 +31,9 @@ The result (checks below):
   the 2-instruction slot are ruled out, so **fx1's (y', z') needs >= 4 instructions** = honest's count. fx2 adds one
   more irreducible op (the leading XOR before the multiply), so **fx2 needs >= 5**.
 - **Two-word instructions.** sm_120 has four lane forms that write two words: IMAD.WIDE and IADD.64 (ptxas 13.0 for
-  sm_120a, opcode_probe/isa_accept.sh), IMNMX.U64 (TS.lean's fan-in table) and SEL.64 (harness/sass_pins.json). So the
-  count above holds only once no instruction writes both outputs. Here, at width 4, no program of at most 2
+  sm_120a, opcode_probe/isa_accept.sh), IMNMX.U64 (TS.lean's fan-in table) and SEL.64
+  (verity/protocols/pouw/prover/sass_pins.json). So the count above holds only once no instruction writes both
+  outputs. Here, at width 4, no program of at most 2
   instructions ending on an IMAD.WIDE writes them, which also completes fold_opt.py's >= 3 for duo. `--wide3` (fold_wide3.c,
   CPU minutes, outside the test suite) settles all four at width 4: neither output is a word of a program of at most 2
   instructions, so a 3-instruction program would write both as its last instruction's two words, and none does, nor as
