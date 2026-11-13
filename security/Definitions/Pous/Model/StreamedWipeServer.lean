@@ -6,15 +6,15 @@ public import Definitions.Pous.Model.StreamedWipe
 # The streamed-label wipe on one server: its threshold, and the 5 GB point
 
 What the per-server statements of the streamed-label wipe read
-(`Security/Definitions/Pous/Guarantees/StreamedWipeServer.lean`). In the physical model
-(`Security/Definitions/Accounting/Physical.lean`) a server `s` is a location whose state is at most its *assumed memory
+(`security/Definitions/Pous/Guarantees/StreamedWipeServer.lean`). In the physical model
+(`security/Definitions/Accounting/Physical.lean`) a server `s` is a location whose state is at most its *assumed memory
 capacity* `M_s` bits at every tick (`Placed.Memory`), a public parameter over every memory tier it has: each GPU's HBM,
 the host's RAM, its disks. The memory challenger fills `n` labels of 512 bits (64 bytes) into it, and
 `R = M_s − 512·n` is every bit of `M_s` the fill doesn't reach, on any tier: the boot disk, the GPU contexts, a
 driver's reserve, the host OS. At ratio `r` the fill's share of what the server keeps through the wipe is about
 `(n/r)·(512 + log₂(e·r))` bits (`fillShare`); `R` and the egress count in full.
 
-The claims (`Security/Definitions/Pous/Claims/StreamedWipeServer.lean`) take the acceptance rule as a parameter
+The claims (`security/Definitions/Pous/Claims/StreamedWipeServer.lean`) take the acceptance rule as a parameter
 (`Acceptance`, with `winRealBy` and `wipeDistinguisherBy` the game's `winReal` and `wipeDistinguisher` under it), so
 they can be stated false at `acceptAll`; and they are met at a deployment (`Deployment`), the H200 as measured (`h200`).
 -/
@@ -78,12 +78,10 @@ structure Deployment where
 /-- `R = M_s − 512·n`: every bit of the deployment's capacity outside the fill. -/
 def Deployment.R (d : Deployment) : ℕ := d.Ms - 512 * d.n
 
-/-- **One H200 on vy-dc-h200-2, as measured.** An honest wipe accepted on the whole card measured both numbers. The
-card (NVIDIA H200, GPU-7d104033) holds 143,771 MiB: `M_s = 143,771 · 2^20 · 8 = 1,206,038,560,768` bits. The fill
-was 4,425 segments of 32 MiB, `n = 2,319,974,400` labels (148,478,361,600 bytes). So `R` is 18,211,667,968 bits
-(2.276 GB), the driver's reserve and every context included. The read count is the deployed `k = 5500`, the
-`wipe_party --reads 5500` pinned for this card on vy-auditor-2 (the measuring wipe read 2152), at its published
-ratio `r = 62`, the largest `r` with `(r − 1)^k · 2^129 ≤ r^k`. -/
+/-- **One H200.** The card (an NVIDIA H200) holds 143,771 MiB: `M_s = 143,771 · 2^20 · 8 = 1,206,038,560,768` bits.
+The fill is 4,425 segments of 32 MiB, `n = 2,319,974,400` labels (148,478,361,600 bytes). So `R` is 18,211,667,968
+bits (2.276 GB), the driver's reserve and every context included. The read count is the deployed `k = 5500`
+(`wipe_party --reads 5500`), at its published ratio `r = 62`, the largest `r` with `(r − 1)^k · 2^129 ≤ r^k`. -/
 def h200 : Deployment where
   n := 2319974400
   Ms := 1206038560768

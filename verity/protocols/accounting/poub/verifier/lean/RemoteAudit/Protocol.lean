@@ -10,9 +10,10 @@ meta import RemoteAudit.Difftest
 /-!
 # A remote bandwidth session as a core protocol
 
-The verifier's session (`Shared.run g`, which `audit.Session` is held to) behind the core interface (`Core.Protocol`),
-the bandwidth component of onsite Verity (`verity/core/protocols/onsite`). Its bytes are canonical JSON, in the forms
-the difftest's `session` reads (`Difftest.sessionFn`):
+The verifier's session (`Shared.run g`, which `audit.Session` is held to) behind the core interface (`Core.Protocol`).
+No composite lists it: onsite's bandwidth component is `RemoteAudit.P2Protocol.protocol` (`Core.Onsite.components`,
+`verity/protocols/compose/verifier/onsite`). Its bytes are canonical JSON, in the forms the difftest's `session` reads
+(`Difftest.sessionFn`):
 
 * params `{"not_before_ns": n, "params": {...}}`: the session's parameters (`Difftest.sessionOf`'s, its windows a
   draw's openings coin `groups_per_coin` g among them) and the verifier's clock floor. The check refuses what no

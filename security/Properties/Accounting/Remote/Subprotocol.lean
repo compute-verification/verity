@@ -6,14 +6,15 @@ public import Properties.Accounting.Remote.Line
 /-!
 # The bandwidth component accepts only what the memory line is stated on (`RemoteAudit.Protocol`)
 
-Onsite's bandwidth component is `RemoteAudit.Protocol.protocol` (`verity/remote-bandwidth/v0`): its check replays the
-verifier's log of a session through `Shared.run g` at the session's windows a draw g (`groups_per_coin`; `Session.run`
-at g = 1) and accepts once the session does, publishing `certify` of the run's record at the session's parameters and
-g. The composition reads of it that the check accepts three byte strings (`Properties.Composition.DecodedAccepted` at
-the component, which `Verity.ComponentAccepts` reads); the remote audit's guarantees are stated on `Shared.run` at the
-node's g accepting a record's session (`Properties.RemoteAudit.Line.Verified`). The three properties join them, each
-stated here as a form over the verifier and, at the deployed one, as a closed statement in
-`Properties.Accounting.Remote.SubprotocolDeployed`:
+The bandwidth component here is `RemoteAudit.Protocol.protocol` (`verity/remote-bandwidth/v0`), which no composite lists
+(onsite's is `RemoteAudit.P2Protocol.protocol`, `verity/remote-bandwidth/p2/v0`), and the properties below are stated on
+v0. Its check replays the verifier's log of a session through `Shared.run g` at the session's windows a draw g
+(`groups_per_coin`; `Session.run` at g = 1) and accepts once the session does, publishing `certify` of the run's record
+at the session's parameters and g. The composition reads of it that the check accepts three byte strings
+(`Properties.Composition.DecodedAccepted` at the component, which `Verity.ComponentAccepts` reads); the remote audit's
+guarantees are stated on `Shared.run` at the node's g accepting a record's session
+(`Properties.RemoteAudit.Line.Verified`). The three properties join them, each stated here as a form over the verifier
+and, at the deployed one, as a closed statement in `Properties.Accounting.Remote.SubprotocolDeployed`:
 
 * **AcceptIsVerified**, the refinement: what the component's check accepts is a session the parameters and the log
   decode to (`RemoteAudit.Protocol.sessionOf`: its parameters, its g, coins, append coins, clock floor and events),
