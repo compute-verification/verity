@@ -1,6 +1,6 @@
-"""Every build gate on ptxas's report and cuobjdump's SASS (`harness/sass_gate.py`'s `mma_gate`, through each kernel's own
-`sass_gate.py`): its CLI's exit code, OUT_JSON and printed lines on each case are pinned in `fixtures/mma_gate/verdicts.json`
-(sha256s of the bytes), so a refactor of the shared gate can't move a verdict.
+"""Every build gate on ptxas's report and cuobjdump's SASS (`verity/protocols/pouw/prover/sass_gate.py`'s `mma_gate`,
+through each kernel's own `sass_gate.py`): its CLI's exit code, OUT_JSON and printed lines on each case are pinned in
+`fixtures/mma_gate/verdicts.json` (sha256s of the bytes), so a refactor of the shared gate can't move a verdict.
 
 The cases: a clean listing of every kernel the gate wants (`pass`, and `pass_sm120a` for a gate given ARCH), the same with
 one of each refusal (`refused`), and the harness's real sm_120a `cuobjdump -sass` listings (`fixtures/sass_gate/plain` and
