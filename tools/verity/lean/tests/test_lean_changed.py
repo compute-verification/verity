@@ -1559,6 +1559,27 @@ def test_try_with_siblings_compiles_the_file_then_imports_it_beside_its_built_si
         LC.main(["--records", "Sec", "--siblings"])
 
 
+def test_try_with_siblings_asks_lake_in_the_sandbox_at_the_fixed_path_its_build_reads(trying, tmp_path, monkeypatch):
+    """Every `lake build` of a try reads the tree at the fixed path (`bound`), and Lake's pass is one: it runs in the
+    sandbox with the words the try's build was handed, so it reads the tree where that build did."""
+    tree, calls = trying
+    (tree / "Sec" / "Proofs" / "Flock").mkdir(parents=True)
+    (tree / "Sec" / "Proofs" / "lakefile.toml").write_text('name = "p"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Proofs"\n')
+    (tree / "Sec" / "Proofs" / "Flock" / "X.lean").write_text("module\n")
+    (tree / "Sec" / "Proofs" / "Y.lean").write_text("module\n")
+    module(tree / "Sec" / "Proofs" / LC.SIBLINGS.LIB, "Proofs/Y", trace=of(tree / "Sec" / "Proofs" / "Y.lean"))
+    monkeypatch.setattr(LC, "sandboxed", lambda: True)
+    monkeypatch.setattr(LC.AUDIT, "sandboxed", lambda: False)
+    monkeypatch.setattr(LC, "lacks", lambda pkg, t: None)
+    ran = []
+    monkeypatch.setattr(LC.SIBLINGS, "run", lambda argv, cwd: ran.append(argv) or (0, "", 0.5, 300))
+    LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=lambda _: None, siblings=True)
+    bind = LC.bound("Sec/Proofs", tree)
+    assert bind[0] == "--at" and calls["at"][0] == bind, "the try's build is bound"
+    assert ran[0] == LC.in_sandbox("Sec/Proofs", tree, [str(tmp_path / "lake"), *LC.SIBLINGS.WORD, "+Proofs.Y"], bind), \
+        "Lake's pass runs in the sandbox at the fixed path, with the words the build was handed"
+
+
 #: what `lake build --no-build -v --no-ansi +Proofs.Y +Proofs.Z` prints where Lake replays `Proofs.Y` and would compile
 #: `Proofs.Z`, which ends it 3
 WORD_YZ = ("✔ [0/3] Ran job computation\n✔ [1/3] Ran p:extraDep\nℹ [2/3] Replayed Proofs.Y\n"
