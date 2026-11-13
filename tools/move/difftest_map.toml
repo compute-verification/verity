@@ -45,6 +45,7 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 "verity/protocols/spot/verifier/lean/pyproject.toml: verity/difftest" = "a suite input: the Lake package stays covered by its `verity/circuits` entry"
 "tests/tree.toml: verity/difftest" = "the layout's not-yet entry for the directory this map splits, which its `to` describes; it follows the larger part"
 "verity/periods/tests/test_periods_difftest.py: verity/difftest" = "the harness this suite drives its Lean through, `verity_difftest`"
+"tests/import_order.toml: verity/difftest" = "the place of the distribution `verity_difftest` in the import order, which is `tools/difftest/`; the Lake package falls in `verity/circuits`' row, and the listing's own commit after the moves settles both"
 
 [retired]
 # the directory this map empties: `layout.py` refuses a tracked file under one that has no row, and its row is a
