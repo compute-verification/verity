@@ -240,14 +240,15 @@ def site_refusal(auditor: Auditor, composite: str, s: S.Site, head: str, e: S.En
 
 @dataclass(frozen=True)
 class State:
-    """The log so far, folded: its Site, its information items in order, its head, its length and its declarations in
-    order."""
+    """The log so far, folded: its Site, its information items in order, its head, its length, its declarations in
+    order, and the head of each of its prefixes with the prefix's length, shortest first."""
 
     site: S.Site
     items: tuple[Mapping[str, Any], ...]
     head: str
     entries: int
     declared: tuple[Declaration, ...] = ()
+    heads: tuple[tuple[int, str], ...] = ()
 
     def refusal(self, auditor: Auditor, composite: str, e: Entry) -> str | None:
         if isinstance(e, S.Entry):
@@ -259,21 +260,22 @@ class State:
         return None if _nodup([item_key(i) for i in self.items + e.items]) else "duplicate-information"
 
     def add(self, e: Entry) -> State:
+        s = replace(self, head=e.digest(), entries=self.entries + 1, heads=self.heads + ((self.entries + 1, e.digest()),))
         if isinstance(e, S.Entry):
-            return replace(self, site=self.site.add(e), head=e.digest(), entries=self.entries + 1)
+            return replace(s, site=self.site.add(e))
         if isinstance(e, Declaration):
-            return replace(self, declared=self.declared + (replace(e, previous=""),), head=e.digest(),
-                           entries=self.entries + 1)
-        return replace(self, items=self.items + e.items, head=e.digest(), entries=self.entries + 1)
+            return replace(s, declared=self.declared + (replace(e, previous=""),))
+        return replace(s, items=self.items + e.items)
 
     def view(self) -> View:
         return View(self.site, tuple(dict(i) for i in self.items if i["kind"] == "theta"),
-                    next((dict(i) for i in self.items if i["kind"] == "builder"), None), self.head, self.declared)
+                    next((dict(i) for i in self.items if i["kind"] == "builder"), None), self.head, self.declared,
+                    self.heads)
 
 
 def check(auditor: Auditor, composite: str, log: Sequence[Entry]) -> State:
     """The log folded entry by entry, each held to the log before it; `Refused` at the first entry that fails."""
-    s = State(S.Site(), (), S.genesis(composite), 0)
+    s = State(S.Site(), (), S.genesis(composite), 0, heads=((0, S.genesis(composite)),))
     for e in log:
         if r := s.refusal(auditor, composite, e):
             raise Refused(s.entries, r)
@@ -284,13 +286,15 @@ def check(auditor: Auditor, composite: str, log: Sequence[Entry]) -> State:
 @dataclass(frozen=True)
 class View:
     """What a component reads of an accepted log, at its head: the Site, θ's registered values in order, the builder,
-    and the days' declared circuits in order."""
+    the days' declared circuits in order, and the head of each prefix of the log with the prefix's length (shortest
+    first), the heads an answer may name."""
 
     site: S.Site
     theta: tuple[dict[str, Any], ...]
     builder: dict[str, Any] | None
     head: str
     declarations: tuple[Declaration, ...] = ()
+    heads: tuple[tuple[int, str], ...] = ()
 
     def value(self, name: str) -> dict[str, Any] | None:
         """θ's registered value `name`."""
@@ -303,7 +307,8 @@ class View:
 
     def to_json(self) -> dict[str, Any]:
         return {"builder": self.builder, "declarations": [d.body() for d in self.declarations], "head": self.head,
-                "site": self.site.to_json(), "theta": list(self.theta)}
+                "heads": [{"entries": n, "head": h} for n, h in self.heads], "site": self.site.to_json(),
+                "theta": list(self.theta)}
 
 
 # --- the core protocol ------------------------------------------------------------------------------------------------
