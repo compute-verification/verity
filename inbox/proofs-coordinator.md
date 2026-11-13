@@ -160072,3 +160072,33 @@ lists of `security/Proofs/lakefile.toml` and `security/Proofs/lean-audit.json` (
 - That the rounds' `Dg` and `raw` fit together as one pair of functions for `messagesFixedLog`: nothing is assembled.
 - A build of the word line's own head: the tries built the scratch branch, which differs by the mend's five files.
 
+
+## ASSEMBLY, Fri 13 Nov 20:40Z: checkpoint: the join stays at `86874e0e53145a6d4bca109a9058e3d4934a5ce5`; the small two-stage play passes there; GATHER's `462ef981d91e` is NOT merged and I hold no candidate of it, because GATHER is right that it leaves `OwnReadsHeld.lean` red; I take the head GATHER names next
+
+**1. `two_stage_small.sh` at the tip** [run]
+
+- `r20261113-202818-f2b7`, cpu-5, rc 0, ended 20:36Z: `second rc=0`, and `SMALL` true in all eight fields. So the play passes with rule B's form, as it did at `7aeba81f536e` (`7d69`).
+
+**2. GATHER's 20:36Z: I read the same red** [read: a local merge of `462ef981d91e` into the tip, tree `4104f23579e2`, pushed nowhere and now deleted]
+
+- Git merges the two with no conflict, and the two change no file in common.
+- `RunsAs/OwnReadsHeld.lean:99`, rule B's, takes `Properties.Spot.R3` apart as seven conjuncts and applies the seventh. GATHER's `security/Properties/Spot.lean` gives R3 an eighth, the wired clause, after it. Over GATHER's line the seventh name binds a conjunction, so the file cannot compile.
+- I found no second place that takes R3 apart by position [read: a search of `security/Proofs` and `security/Properties`].
+- On this machine the merged tree passes what I run before a build: the five root test files 84 passed, the pins silent, the roots clean, 0 scoped words in its 159 added Lean lines. None of those reads a proof, so none shows the red.
+- No run of mine was launched on it.
+
+**3. What I do with it**
+
+- I wait for GATHER's "merge GATHER at `6cb34b4fbeff`" entry, after its build `6aec` is green. That head holds the join's tip, so the join moves to it by a fast-forward if the tip has not moved, and by a plain merge if it has.
+- Before the join moves I run at that head: a try of `OwnReadsHeld.lean` and of `security/Proofs/Properties/Spot.lean` for the axiom probe, the accept test, both small plays, the whole one-stage suite with `test_a5_wiring.py`, and the adapter's tests. GATHER's `6aec` is the build; I do not build the files that reach its six a second time (528 by my count, 522 by GATHER's) unless you say so.
+- If you would rather the pattern were my commit on my own merge, say so. Either way is the same tree.
+
+**4. Still out**
+
+- The records run at the tip, `r20261113-202750-6706`: on cpu-3 since 20:28Z and not yet on a slot; the node's memory is reserved by other live runs. If it has no slot by 21:00Z I cancel it by its id and launch one copy on another node.
+
+**Not established**
+
+- The red itself on a node, and that the one pattern is enough: GATHER's `6aec`.
+- That the lock is right at the tip: `6706`.
+- The one-stage suite and the adapter's tests with rule B's form: they run with GATHER's merge.
