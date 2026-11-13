@@ -113349,3 +113349,42 @@ Clock: `date -u` read 01:56Z. Mailbox read at 01:13Z; the hook delivered your 01
 ### To post
 
 Nothing.
+
+## RUNSAS, Fri 02:01Z: `Round2.lean` elaborates in `r20261113-012007-9b9a` at `87d9f87c4a`; the statement's text is below; its axiom check and the bridge are still running
+
+What compiled: my proof file, `Round2.lean`, now builds with no error and no warning, and so does my statements file. So the theorem ACCEPTS and RUNCOINS read, `roundTwo_of_check`, has a proof Lean accepts. In plain words it says: when the second stage's check of the running verifier reports no code, the interior record's order and names are the model's, the design is the one derived over the model's parts, and each template has a statement at its own position that names it and passes the model's code check. What is not yet done in this run is the check that the proofs use only the three permitted axioms, and the bridge to RUNCOINS's `RoundTwo`. The same run does both next. From this entry on the statement does not change without an entry's first line saying so.
+
+- [run] `r20261113-012007-9b9a` (vy-nebius-cpu-12, still running) at `87d9f87c4a`: `lake build` of `RunsAs.Statements`, `RunsAs.Round2` and RUNCOINS's `RunsAs.Statement` ended "Build completed successfully (10447 jobs)". `Built Proofs.Flock.SpotFlock.RunsAs.Round2 (5.0s)` is stdout line 3352. No line of the log names `RunsAs/Round2.lean` or `RunsAs/Statements.lean` in a warning or an error, and no `sorry` warning appears anywhere.
+- [read] The head is `87d9f87c4a` on `cursor/proofs-runsas-7e3a`. It holds the base `1f049180cd` and RUNCOINS's `264cd595d8`.
+- [read] The statement, exactly as in `security/Proofs/Flock/SpotFlock/RunsAs/Round2.lean` (namespace `SpotFlock.RunsAs.Round2`):
+
+```lean
+theorem roundTwo_of_check {h : Held} (hN : NamesDistinct h) {own : Spot.SecondStage.Own} {ss : Array Json}
+    {st : Roots} {rec draw : Json} {c₀ : FlockDeploy.Coin} (hA : OwnAgrees h own st rec draw c₀)
+    (hc : (Spot.SecondStage.check true own (some ss)).codes = #[]) :
+    Spot.SecondStage.interiorOrderOk (ownOf h st rec draw c₀) = true ∧
+      Spot.SecondStage.namesOk (ownOf h st rec draw c₀) = true ∧
+      Spot.SecondStage.designOk (partsAt h (ownOf h st rec draw c₀).sample.size) (ownOf h st rec draw c₀) = true ∧
+      ∀ t < h.ms.length, ∃ S, Spot.SecondStage.Stmt.ofJson? (ss.getD t .null) = some S ∧
+        S.template = h.names.getD t "" ∧ codesOk h (ownOf h st rec draw c₀) t S = true
+```
+
+- [read] The three definitions it reads, from `RunsAs/Statements.lean` (same namespace):
+
+```lean
+def core (own : Spot.SecondStage.Own) : Spot.SecondStage.Own :=
+  { own with reported := none, verified := #[], returns := #[], supplied := #[], fixed := #[], reads := #[] }
+
+def OwnAgrees (h : Held) (own : Spot.SecondStage.Own) (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin) : Prop :=
+  core own = ownOf h st rec draw c₀
+
+def NamesDistinct (h : Held) : Prop :=
+  ((List.range h.ms.length).map fun t => h.names.getD t "").Nodup
+```
+
+- [read] What the statement does not say: nothing about the inputs clause (`inputsFailure`), the pin, the stage counts, the scope, `two h` or `recordsOk`. Those are premises of the larger lemmas `readsOk_of_check`, `stmtOkAt_of_check` and `stmtOk_of_check` in the same file, as row B19 lists them. `roundTwo_of_check` takes none of them, in particular not the inputs premise that is false at the first try's design; whether `OwnAgrees` holds at a run is RUNCOINS's `HeldMatches`, not shown here.
+- [derived] The file's other theorems built in the same job, since the module built: `interiorOrder_of_check`, `namesOk_of_check`, `codesOk_of_check`, `count_of_check`, `designOk_of_check`, `inputsFailure_none`, `readsOk_of_check`, `stmtOkAt_of_check`, `stmtOk_of_check`.
+
+NEEDS: none new.
+
+Not established: that these proofs depend only on propext, Classical.choice and Quot.sound (the run's `--try Round2.lean --siblings` step, not yet reported), and that the bridge `RoundTwoOf.lean` elaborates against RUNCOINS's new `RoundTwo` (the run's last step). So nothing here is "done" by the rule yet. [guess] Both steps report by about 02:30Z.
