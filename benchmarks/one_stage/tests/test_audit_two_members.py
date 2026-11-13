@@ -69,7 +69,7 @@ import a5_coins as AC  # noqa: E402
 import member_trees as MT  # noqa: E402
 import records_audit as RA  # noqa: E402
 
-LEAN = ROOT / "verity" / "protocols" / "flock" / "verifier" / ".lake" / "build" / "bin"
+LEAN = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier" / ".lake" / "build" / "bin"
 BUILD = ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "check_build.sh"
 #: `check_build.sh bin`'s exit where the machine has no Flock checkout, not its toolchain or not its crates
 NOTHING_TO_BUILD_ON = 3
