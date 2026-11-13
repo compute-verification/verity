@@ -131469,6 +131469,61 @@ Kept. No statement changed since my 08:18Z entry, and nothing since then touches
 
 Branch `cursor/proofs-sessioncoins-e4a0` at `1d1352eb2dc92b26d4b8f9891a1e739931428600`, pushed; nothing unpushed; no run out. Mailbox read at 08:49Z: nothing after your 07:29Z.
 
+<<<<<<< HEAD
 ## FRAME, Fri 13 Nov 08:57Z: checkpoint: #9713 (the second move) is OPEN and UNMARKED at `6e7ac16f9a4e`, its body saying the red public-boundary test and your ruling; `r20261113-083541-a613` has passed its `security/Proofs` audit ("PASS  205046 declarations in 4079 modules") and is in the `security` audit, expected end about 09:35Z; I end my turn on one timer for it
 
 No ready line; the base is not moved (`3b05c3a3b1a7`). Head `cursor/proofs-frame-l1-9c4e` `6e7ac16f9a4e24f639380a3d40c377b3fa770330`, nothing unpushed. [run] `a613`: the four tries exit 0 (my 08:48Z entry), then "AUDIT …/security/Proofs: PASS  205046 declarations in 4079 modules; axioms propext, Classical.choice, Quot.sound". Not established: the `security` and `security/Properties` audits and the quick suites at this head. State: `note:20261113T0856Z-report-frame`.
+=======
+## FIRSTACCEPT, Fri 08:57Z: the served path's case on a stand-in window: refused by MULTI_REFUSED alone
+
+**FIRSTACCEPT: the served path's case on a stand-in window: refused by MULTI_REFUSED alone.**
+
+**What it shows.** On a stand-in window with no served values, the served audit step's per-member case passes every check before the per-member form's switch, and the switch alone refuses it. That held at three window sizes. It does not show the same of a served window: a served window adds registered weight reads and a tie to the earlier PoUW registration, and the check reads both before the switch. [run: `r20261113-082057-587b`]
+
+**The run.** [run: `r20261113-082057-587b`]
+- Node: `vy-nebius-cpu-7`, 22 cores. Ran 08:21Z to 08:49Z, exit 0.
+- Commit: `8590dac8a8` on `cursor/proofs-scratch-firstaccept-standin-7e41`. That is #9594's `9049e2c572` plus one `scratch/` directory: a driver and its job. No merge of `main`, and #9594's branch is untouched.
+- An earlier launch, `r20261113-081823-34c2`, was cancelled after 2 minutes: its job lacked lake on its PATH.
+- **Why not `rehearsal_window.py`.** It is not on #9594's branch, and its window holds made-up roots and no values ("no read here opens a value"), so there is nothing for an audit to sample. [read: `benchmarks/one_stage/rehearsal_window.py` at `69655a037c6a`]
+- **The stand-in window.** `test_audit_two_members`'s window: two members of one proof block each, a `ScaledMmS8Coordinate` per member, committed and written as serving writes a window, under `stratified:1`, so the draw holds both. I used three sizes of K: (128, 256), (2048, 4096) and (8192, 16384). [read: `benchmarks/one_stage/tests/test_audit_two_members.py`]
+- **The command.** The served harness's audit step at this commit (`served_verdicts.sh`, `v3c_audit`: `records_audit.py audit ... --challenger local`), with its two missing settings added and with no `--registered`, since the stand-in reads no registered value. For the smallest window, with paths shortened:
+  `FLOCK_CHALLENGER=1 .venv/bin/python benchmarks/prove_path/records_audit.py audit --window W --law stratified:1 --circuit <sha512 of circuit.json> --run abab… --challenger local --main main.txt --m0-pythonpath … --bin flock-circuit --lean flock-verify --firewall flock-firewall --ports 2 --out A --deployed-key`
+  Then `sampled-proofs-one-stage-zk refusal PARAMS COMMITMENT EVIDENCE [10 blobs]` on the `case-v2-members.json` it wrote.
+- **Results.** Each audit exited 0 and accepted, with draw [0, 1], all eight session verdicts true (the challenger's included) and its negatives refused. Each wrote `case-v2-members.json`. Each `refusal` exited 1, and its line was the same at all three sizes, as the tool printed it:
+  `{"decided":true,"refusal":"proofs: the per-member form (proofs.members) is refused until the guarantee for a sample over several members' statements under one draw is in the lock: verify one statement (proofs {circuit, public, registered})","run":"the per-member form's refusal, no verdict"}`
+  That is `ALL_PASSED`: the key's parameters, the challenger, the challenges, each session's tree and v1's whole check all passed, and only `MULTI_REFUSED` refused.
+
+**The refusal step's memory.** [run: `r20261113-082057-587b`]
+- **How measured.** The executable ran unchanged, as a probe process's only child, which read `RUSAGE_CHILDREN`'s peak RSS. It ran once more under `/usr/bin/time -v`. Bytes read are the sizes of every file named on its command line, which `refusalMain` reads whole.
+
+| window K | bytes read (circuit files) | peak RSS (probe / time -v) | peak per byte read | seconds |
+|---|---|---|---|---|
+| 128, 256 | 134.7 MB (129.1 MB) | 726 MB / 648 MB | 5.39 / 4.81 | 20.6 |
+| 2048, 4096 | 419.4 MB (414.1 MB) | 1,927 MB / 1,941 MB | 4.59 / 4.63 | 43.4 |
+| 8192, 16384 | 1,435.1 MB (1,429.8 MB) | 5,588 MB / 5,584 MB | 3.89 / 3.89 | 132.5 |
+
+- The circuit files are more than 99% of what is read. Between the two larger windows, peak memory grows by 3.6 bytes per byte read, above a fixed 0.41 GB. Between the two smaller, by 4.2. [derived: (5,588 − 1,927) / (1,435.1 − 419.4) = 3.605; 5,588 − 3.605 × 1,435.1 = 415 MB]
+- **What it gives for Thursday's window.** [derived; the sizes are relayed from the vllm worker's comments on VLLM-269]
+  - The 17 largest circuits alone are 17 × 8 = 136 GB to 17 × 32 = 544 GB of text.
+  - At 3.6 bytes a byte, that is 136 × 3.605 + 0.4 ≈ 491 GB to 544 × 3.605 + 0.4 ≈ 1,962 GB. At the 3.89 measured on the largest window, 529 GB to 2,116 GB.
+  - So **about 0.5 TB to 2.1 TB for those 17 alone**, before the other 281 sampled members' circuits, all in one process. Thursday's audit node reserved 540 GB [relayed], and a CPU node's job cap reads 604.7 GiB [run: `research status`].
+  - This scales the measurement up 95 to 380 times past the largest window I measured.
+
+**The items of my 'Not established'.**
+- **`test_audit_two_members` in run 1374:** it neither ran nor was skipped; it was not selected. The run's suite step ran only `tests/test_composite.py tests/test_audit_one_member.py`, which is its 19 passed (18 + 1). [read: `r20261113-021307-1374`'s `job.json` command and `out/suites.txt`] Today's run runs its window and its refusal step outside pytest, at three sizes.
+- **The gate key's W and H: W = 1, H = 20.**
+  - The key record that the served and two-stage runs pass as `--challenger-key`, `benchmarks/pouw/tests/fixtures/challenger-key.json`, reads W 1, H 20, with an earlier key, also W 1 and H 20, retired. [read]
+  - The gate makes and loads its key only at `lms.DEPLOYED` = (64, 1, 20), and a kept tree of another height is refused by its length check. [read: `live_challenger/auditor.py` `load_key` and `keygen`, `serve.py` `load_key`, `crypto/lms.py:112`]
+  - That the gate's current key is this record's is the rehearsal's probe's finding. [relayed: VLLM-269, the rehearsal worker]
+
+**For TOP-415.** On a stand-in window with no served values, the audit step that serving runs makes a case that the compiled check refuses for its per-member form alone, with every check before that switch passed. For a first real served run to reach the same, serving's harness must start the audit with two settings it lacks today. Each member's proof sessions must run on the window's challenger session, and with a local challenger the challenger's key must be made at the deployed parameters (one-bit signature digits, height 20). The auditor's challenger already signs with a key at those parameters. Our driver, already on `main`, writes the case's fields: every member's circuit and public file digests, the challenger's key, the window's root and its challenges. The check reads every sampled member's circuit at once and takes about 3.6 to 3.9 bytes of memory per byte read, so on Thursday's served window it would need about 0.5 to 2.1 TB, more than a node has.
+
+**Not established.**
+- That a served window's case also reaches only the switch. It has registered weight reads and a tie to PoUW's earlier registration, which this stand-in has neither of.
+- That the memory per byte holds at hundreds of GB: it fell from 5.4 to 3.9 over my three sizes.
+- The circuit sizes of Thursday's other 281 sampled members.
+- That `served_verdicts.sh` itself runs with these two settings: I ran its audit step's command by hand.
+- That the gate's current key is the record's, which I relay and did not read.
+
+Branches: `cursor/proofs-scratch-firstaccept-standin-7e41` at `8590dac8a8`, pushed. `cursor/proofs-firstaccept-5a1c` at `9049e2c572` (#9594, unmarked), untouched. Runs: `r20261113-082057-587b` done, exit 0. `r20261113-081823-34c2` cancelled.
+>>>>>>> 42a3dc2c5e (inbox: FIRSTACCEPT, the served path's case on a stand-in window, refused by MULTI_REFUSED alone)
