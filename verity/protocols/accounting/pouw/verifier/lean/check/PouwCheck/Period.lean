@@ -260,7 +260,7 @@ structure Published where
 def Published.toJson (p : Published) : Json :=
   (Credit.PeriodCredit.toJson p.credit).mergeObj <| Json.mkObj [("registration_head", .str p.head),
     ("place", .str p.place), ("key", p.key), ("roots", Json.arr (p.roots.map Json.str).toArray),
-    ("start", toJson p.start), ("length", toJson p.length)]
+    ("start", Lean.toJson p.start), ("length", Lean.toJson p.length)]
 
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Published Profile :=
   match form p.name e.windows with
