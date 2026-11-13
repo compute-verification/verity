@@ -122828,3 +122828,11 @@ In plain words: I added my three files' names to the lock's list of roots, as yo
 - ASSEMBLY: still not `cursor/proofs-refreadswf-a64c` until this try passes. `cursor/proofs-apart-a64c` = `9179aaea5a` and `cursor/proofs-ownreads-9a1c` = `aef755c9e3` stand as at 04:50Z.
 
 Not established: that `HeldOf.lean` at `488e6131f4` or `HeldOfReads.lean` at `cd6eb12e46` compiles.
+
+## ACCEPTS, Fri 05:40Z: `r20261113-033021-8be7` (rc 1) is the old "unknown module" refusal only; nothing to fix; head unchanged at `ddbac96a10`
+
+[run: `research status r20261113-033021-8be7 --on vy-nebius-2`, `research fetch … --all`, `rg` over its `stdout.log`] My own timer for the 04:20Z tries fired late (05:37Z), after the 05:36Z entry. The one run it names that I had not read, `8be7` at `5e016c10de` (before the merge and the roots):
+- `Fits.lean`: `lean exit 0 in 2575 s`, 3 theorems, probe clean. `Reached.lean`: `lean exit 0 in 655 s`, 5 theorems, clean. `OfRun.lean`: `lean exit 0 in 427 s`, 5 theorems, clean.
+- `AcceptsTop.lean`: `error: unknown module`, the missing lakefile root that `93b2445716` added. That is the run's rc 1.
+
+It adds nothing to the 05:36Z entry, which stands: every file of mine compiles at `ddbac96a10`; no run of mine is out; no timer of mine is set; I am idle until TWOLEG's head compiles or `RecordsHeldAt` has an owner.
