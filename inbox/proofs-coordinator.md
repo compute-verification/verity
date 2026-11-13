@@ -149864,3 +149864,18 @@ Your 15:34Z reached me at 15:47Z.
 - Not established: that the `one_stage` suite passes at the merge; that the two heads compile over the merge (`9d87`); the merge's last two packages in `1722`.
 
 To post: nothing. Heads: the join `d557b8cf428`; the merge branch `a61b7adf0d83`; local and unpushed `6bae773eb34`. Runs going on: `4752`, `577d`, `1722`, `9d87`. My timer is set again.
+
+## ADDRWC, Fri 13 Nov 15:54Z: your 15:43Z order (PRF-616, the sizing by reading) reached me at 15:48Z and is under way; first findings; the entry by 21:00Z stands. Chain 2 is on `main`; I still write no L1 code before "carry"
+
+Clock: `date -u` read 15:54Z. Reading `origin/main` at `4ae17f7eafd7dd42d56e166f04d060e96174d384` (fetched 15:49Z; #9734 merged at 15:30Z by `gh pr view`).
+
+**In plain words.** Every name in the order is on `main`, so I read no branch of network's. Two of POLICYROWS's four points already check out as said. The other two need more reading, and they decide the choice of pin.
+
+- [read] `Accounting.ReadUnit.GatesRefine`: `security/Definitions/Accounting/ReadUnit.lean:170`. `openingHeld`: `verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/Record.lean:635`. The pin is a Definition's closure digest in the Program's descriptor (`pinOf`, same file, 570).
+- [read] Point 3 of POLICYROWS, **as said**: `DigestPins`, `Provenance` and `LayoutReads` are stated in `security/Properties/Nci/Record.lean` (452, 396, 467). The one theorem that names them is `pinnedOpens_of` (`security/Proofs/Properties/Nci/Record.lean:67`), which takes all three as hypotheses. At the form (`NciCheck.Record.SecurityProofs.form`, `RecordForm.lean:33`) what is proved is `form_owns`, `form_rates`, `form_laidOut`, `form_counts`, `form_complies`; none of the three. [script: grep of `security/` for each name]
+- [read] Point 2 of POLICYROWS, **as said** so far: no file under `security/` names `MoeExpertFp8ReadGemm_v1` or `MoeExpertFp8ReadGemmW_v1`. [script: grep]
+- [read] What `TableReadBinding` proves is about a circuit file whose unit's template passes `Flock.ReadNet.check V H`, and that check takes only the verifier's own template (`decide (t.defs = (readTmpl V H).defs)`, `Flock/ReadNet/Template.lean:226–230`). [script: grep] The check is called by `flock-read-tmpl` alone (`Flock/ReadTmplCmd.lean`), by no verifier path.
+
+**Not established yet.** Points 1 and 4 of POLICYROWS line by line; the two choices' costs; the first lemma's statement and day; the fused two; point 6.
+
+**State.** No run out, no code written, no branch for L1. `main` moved to `4ae17f7eafd7` and holds chain 2; my step 1 entry (14:29Z) was read at `053b8e50fe8a`, and its paths have moved with chain 2 (`verity/protocols/proofs/...`, `verity/protocols/policy/...`): I re-find its lines at the carried head before any edit.
