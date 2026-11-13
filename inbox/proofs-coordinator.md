@@ -125399,3 +125399,30 @@ NEEDS: 1. Your word on the `Apart` wording (section 2). 2. TWOLEG's named head, 
 To post: nothing.
 
 Not established: that `DeviceAccept.lean` compiles (`7f9b`); that the three files compile after the docstring change (`455a`; no proof term changed). `LedgerInOrder` and `Apart` at any deployment (taken). My files over TWOLEG's tip. The known hole: on the play's own two windows the history holds exactly this play's runs.
+
+## MAJORITY, Fri 06:36Z: with ten two-stage files rooted, `security/Proofs` fails on exactly two lines, the orphans `ClaimInner` and `SecondRead` (r20261113-060204-4e88): the orphan lines hid nothing else for my three files and seven of TWOLEG's; my roots remove the `Majority` line from `security` and `security/Properties`; the join at `f53493e9f08f` now has both lakefile names; next: merge the base `3b05c3a3b1a7` as ordered, then one rehearsal
+
+In plain words: this is the first audit that has read my three files, and it found nothing wrong with them or with the seven of TWOLEG's files it could build. What is left failing on my branch is not mine: TWOLEG's two files that the build file does not list, and records that are older than the definitions because my branch does not hold the newest base. I merge that base next, as you ordered at 06:33Z.
+
+**What it printed** [run] r20261113-060204-4e88 on vy-nebius-cpu-10, at `62cd4b512f8ecea66cc7cae066ecec0a899cf1e2`, with TWOLEG's seven lakefile-rooted names added to the lock in the run's clone only:
+- "AUDIT …/security/Proofs: FAIL  204655 declarations in 4061 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees".
+- Two failure lines, both "orphan": `Properties/Verity/SampledTwo/ClaimInner.lean` and `Properties/Verity/SampledTwo/SecondRead.lean`. [run: `audit-Proofs/report.json`] 2 failures, both of code `orphan.file`.
+- [run: `audit-Proofs/facts.json.gz`] The 4061 modules it counted include `Proofs.Properties.Verity.Majority`, `…SampledTwo.Majority` and `…SampledTwo.Binding`; r20261113-050045-991a counted 4051. Its lists of offenders, declared axioms and unreported errors are empty.
+- "lean-records: security/Proofs: check.py exit 1 in 572 s … without the kernel replay or the tests: a lean-fast/v1 result". So no kernel replay has read these files yet.
+- `security`: FAIL on 6 lines, and "audit: …/security/lean-audit.json: every failure is a record difference". The line about `Proofs.Properties.Verity.Majority` that 991a printed is gone.
+- `security/Properties`: FAIL on 9 lines, and "audit: …/security/Properties/lean-audit.json: every failure is a record difference". The `Majority` line is gone there too.
+- `RECORDS rc=1`, and "lean-records: OUTCOME" has all three packages "failed".
+
+**The record differences** [relayed: your 06:33Z message, from FRAME's 06:21Z entry] They go when my branch holds `main`'s commit `06365af5a3`, which regenerated those records. My 06:06Z entry said "not holding the base `e033bfc14be4`"; FRAME's reason is the exact one.
+
+**The join** [run: my script over `git show` and `git ls-tree`, at 06:33Z] `cursor/proofs-join-42b8` at `f53493e9f08f` now has both halves whole: 60 two-stage files, each under a lock root, and each two-stage lock root under a lakefile root. The fault of my 06:06Z entry is closed there. TWOLEG's tip `870cc9da1b89` is whole too.
+
+**Why the first rehearsal stopped** [read: `tools/verity/lean/check.py` line 5732] The `build-roots` step is `lake build +R` for each name R in the lock's `roots`. That is why a lock root with no lakefile root stops the build.
+
+**The run itself** [run] It waited for a Lean place from 06:03Z to 06:08Z and ended before 06:32Z. It asked `--mem-gb 64` and held 41.5 GiB at peak.
+
+**Next, your 06:33Z order.** I merge `cursor/proofs-frame-connected-4e1b` at `3b05c3a3b1a775a5f322964e8effd75f3289ccc1` into my branch, push, and send one records rehearsal to a cpu node with `--mem-gb 64`. I regenerate no record. The next entry names the merged head and the run id.
+
+**STOP RULE.** None. **NEEDS.** None. **To post.** Nothing.
+
+**Not established.** Whether my files still compile on the new base; the kernel replay of my three files. Pushed head: `62cd4b512f8ecea66cc7cae066ecec0a899cf1e2`; nothing is left unpushed.
