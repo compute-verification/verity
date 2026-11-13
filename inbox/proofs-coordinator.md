@@ -134095,3 +134095,43 @@ Trees: **H** is #9594's head, `9049e2c572`. **M** is `main` at `5b2c1e735b92`. I
 - The loopback challenger (`loopback:HOST:PORT`). Its key comes back from the challenger party's answer [read: H, `a5_coins.py:705-707`]; I did not read that party.
 
 Branches: none changed. No run.
+
+## RATING, Fri 13 Nov 09:59Z: STOP RULE on the mend: four lemmas of `DeviceSm120Gap.lean` are false under the mended device record, not unproved; the rest of the whole try at `e65fed25da0` is two files green, one fixed, one a rewrite, and `Cap.lean`'s bridge still to write
+
+For a reader outside the lane. The debit's mend adds two terms to the Lean definition of a tile's debit and to the Pearl+ check. Proofs that read those definitions have to be compiled again. I ran every file on the coordinator's list once at compute-accounting's commit, as it stands. Two compile. One needed three small proof repairs and now compiles. One is blocked by a file that was not on the list, where four small lemmas say something that the mended definition makes false: that is a statement that has to change, or a definition, and by your rule neither of us decides it. The largest file, the bridge from the Pearl+ check to the Lean debit, has its scaffolding and lacks the part that says the check's two new counts cover the Lean ones.
+
+**STOP RULE.** Before and after, for compute-accounting to decide.
+
+- Before (`main`): a device record `PearlCDevice` has six fields (`G`, `prices`, `ticket`, `useful`, `flags`, `saltDead`), and `devAt p G pr` builds each from the captured step `p` through `p.step` alone. `devAt_step` says so: `p.step = p'.step → devAt p G pr = devAt p' G pr`. From it, `devAt_sm120_floor`, `devSm120v1_floor` and `devSm120v2_floor` say the sm_120 record is the same at every exponent floor at most −126 ("the floor is unobservable in the record"). [read: `security/Proofs/Pouw/PearlC/DeviceSm120Gap.lean:63-81`]
+- After (`e65fed25da0`): the record gains a seventh field, `pipe : Pipeline`, set to `p` by `devAt` (`security/Definitions/Pouw/PearlC/Device.lean`), because the mended debit replays the step's cuts and reads the pipeline's width, floor and groups directly (`Mend.cutFold`, `security/Definitions/Pouw/PearlC/Mend.lean:37-43`). [read] Then `devAt_step` is false, not merely unproved: `sm120E4m3K32 (−126)` and `sm120E4m3K32 (−133)` are two pipelines with one step (`FreezeP.sm120_floor`), and equal records would have equal `pipe` fields. The three floor lemmas are false for the same reason at every floor other than −133. [derived]
+- What the try shows: `DeviceSm120Gap.lean:64:116: unsolved goals`, with `pipe := p` against `pipe := p'` left over. [run `r20261113-094537-ae0a`]
+- Who reads them: nothing. No other Lean file and no `lean-audit.json` names any of the four. [read: a search of `security/` and `verity/`] So no lock record moves on their account, but the module's stated fact about the floor goes or changes.
+- The choices as I see them, none of them mine: delete the four and the sentence about the floor; restate them as "every map of the record agrees, and the mend's cuts agree at every floor at most −126", which needs a new lemma about `cutFold` that I have not checked to be true; or have the record carry the cut flags as a map in place of the pipeline. The third does not rescue `devAt_step` as stated either, since the cuts are not a function of `p.step` alone.
+- A related fact for the same decision [read]: the mended `tileDebitRev1` is defined for every record, so sm_120's rev1 debit now carries the two terms at sm_120's step too, while the definition's text says the zero honest cost was measured at the H100 atom.
+
+**The whole try at `e65fed25da03b94078887aa800ba585d1188388e`** [run `r20261113-094537-ae0a`, vy-nebius-cpu-9, 09:46Z to 09:52Z, exit 1]:
+
+| File | Result |
+|---|---|
+| `security/Proofs/Pouw/PearlC/Mend.lean` | compiles |
+| `security/Proofs/Pouw/PearlC/DeviceRev1Gap.lean` | compiles |
+| `security/Proofs/Pouw/PearlC/Rev1Witness.lean` | 3 of 20 theorems fail: a lemma name that does not exist, two rewrites that cannot see that the witness's depth is 128, and a `positivity` that runs out of recursion |
+| `security/Proofs/Pouw/PearlC/RowSeedGap.lean` | not reached: its import `DeviceSm120Gap.lean` fails (the stop rule above) |
+| `security/Proofs/Pouw/PearlPlus/Cap.lean` | 2 of 47 fail: `tile_bound` and `tilePassGivesTheCap` |
+| `security/Proofs/Properties/Pouw/PearlPlus/Verdict.lean` | compiles, 37 theorems, no axiom beyond the three |
+
+**Done since.**
+
+- `Rev1Witness.lean` compiles at my commit `78d74ea7955248aaf412af55f0b453cd5c9c49cc`: exit 0, none of its 20 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`. [run `r20261113-095329-3369`, vy-nebius-cpu-1] The repairs are proof text only: the name `List.getD_eq_getElem?_getD`, the witness lemma applied at the word's depth as the goal writes it, and an explicit product of nonnegatives in place of `positivity`. No statement moved.
+- A probe of `RowSeedGap.lean` behind the stop: in the run's own clone only, never on a branch, I removed the four floor lemmas and tried both files. `DeviceSm120Gap.lean` then compiles (34 theorems) and `RowSeedGap.lean` has 1 of 108 failing, `split_tileDebit`, at a rewrite that cannot match the weight rows because the proof-side helper `rowDebit` takes them as a function where its callers pass a matrix. [run `r20261113-095521-452d`, vy-nebius-cpu-11] That is proof work, one binder's type in a definition that only the proofs read.
+
+**What is left, in files and tries.**
+
+1. `DeviceSm120Gap.lean`: waits on compute-accounting. One try after their answer.
+2. `RowSeedGap.lean`: the binder, one or two tries, behind item 1 (I can keep trying it in a clone as above).
+3. `Cap.lean`: the large one. The work in progress has the split of the debit into chain, forming and mends, the end codes (`endCodes_eq`) and the sums. Missing, by name as its own header promises them: `MendSim.wordCuts_eq` (the check's cut flags are the definition's `chainCuts`, through the evaluator-to-definitions maps of `Atom.lean`), `MendSim.row_ends` (a row's end codes and dead flags, for activation rows and for weight rows), `MendSim.wordMend_le` (the check's count covers the definition's), a glue inequality with the third term, and `tile_bound` restated with the mend term and proved. `tile_bound` is a lemma inside the proofs; `tilePassGivesTheCap`'s statement does not change. A try of `Cap.lean` takes about three minutes; I expect ten to twenty.
+4. Then, as your message lists: the k = 65,536 cases as slow tests, records with `--update`, the records check, PoUW's verifier suites and the difftest, and the pull request.
+
+**Not established.** Whether the mend's cuts are the same at every sm_120 floor at most −126. Whether `Cap.lean`'s missing lemmas go through as stated: nothing of them is written yet. Nothing about the Python side or the tests: I have not read the ported tests.
+
+**Runs.** `r20261113-094537-ae0a` done, exit 1 (the table above). `r20261113-095329-3369` done, exit 0. `r20261113-095521-452d` done, exit 1 (the probe). Branch `cursor/proofs-rating-debit-4ba7` at `78d74ea7955248aaf412af55f0b453cd5c9c49cc`, pushed.
