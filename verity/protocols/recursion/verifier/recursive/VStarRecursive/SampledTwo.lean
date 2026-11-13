@@ -353,7 +353,8 @@ def firstRootIs (root : Option String) (j : Json) : V Unit :=
 
 def FIRST_PLACE : String :=
   "the boundary record's window names no place in its session: its prompt and outputs are natural numbers below " ++
-    "2^32, and a stop population is a stop class's"
+    "2^32, its stopped where it names one is true or false, its population where it names one is stop, and a stop " ++
+    "population is a stop class's"
 
 def FIRST_FAMILY : String :=
   "the boundary names a family other than the one its record's layout names: a class's first stage reads one " ++
@@ -789,6 +790,14 @@ private def firstR (more : List (String × Json) := []) : Json :=
   | .error why => why == FIRST_PLACE
   | .ok _ => false
 #guard match firstFamilyIs (some "draw/0") (Json.mkObj [("window", Json.mkObj [("run", "ab")])]) with
+  | .error why => why == FIRST_PLACE
+  | .ok _ => false
+/-! A window whose `stopped` is neither true nor false, and one whose `population` is not `stop`, name no place. -/
+#guard match firstFamilyIs (some "draw/68719476752") (firstR [("stopped", Json.null)]) with
+  | .error why => why == FIRST_PLACE
+  | .ok _ => false
+#guard match firstFamilyIs (some "draw/68719476754")
+    (firstR [("stopped", Json.bool true), ("population", "spans")]) with
   | .error why => why == FIRST_PLACE
   | .ok _ => false
 #guard match Registration.digest (Json.mkObj [("a", Json.null)]) with
