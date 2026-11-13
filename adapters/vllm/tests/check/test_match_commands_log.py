@@ -5,7 +5,11 @@ document it could not write, `verity_vllm.check.match.instance_sequence` names i
 import, and `verity_vllm.check.match.global_match_fast` names in a warning a forked worker's result file it could not remove.
 
 `batch_decomp` and `program_dag` run on the toy of `test_batch_decomp_e2e.py`; `global_match.main` runs over a stand-in for its
-checker, since the lines under test are `main`'s own."""
+checker, since the lines under test are `main`'s own.
+
+The capture log is also an input the two commands take by path: `batch-decomp --log` and `global-match --log` name a capture
+log kept outside `<oracle>/capture/`, and `global-match --tokens` the tokens file.  Those tests run each command from its
+command line on a record laid out that way, `global-match` over its checker of record."""
 from __future__ import annotations
 
 import collections
@@ -19,6 +23,7 @@ import pytest
 from verity.definitions.registry import catalog
 
 from tests.check import test_batch_decomp_e2e as e2e
+from tests.check import test_global_match as tgm
 from verity_vllm import gc_tuning
 from verity_vllm.check.match import batch_decomp as bd
 from verity_vllm.check.match import global_match as gm
@@ -26,6 +31,7 @@ from verity_vllm.check.match import global_match_fast as gmf
 from verity_vllm.check.match import instance_sequence as seq
 from verity_vllm.check.match import program_dag
 from verity_vllm.check.match import program_loaders as loaders
+from verity_vllm.pipeline import cli
 
 memory = e2e.memory                          # the toy's fixtures, under their own names
 derived_is_a_fold = e2e.derived_is_a_fold
@@ -45,6 +51,14 @@ def _the_collector_as_pytest_has_it(monkeypatch):
 
 def _logged(caplog, module) -> list[logging.LogRecord]:
     return [r for r in caplog.records if r.name == module.__name__]
+
+
+def _kept_elsewhere(oracle, tmp_path, name: str) -> str:
+    """Moves `<oracle>/capture/<name>` out of the record's directory and returns where it is now."""
+    kept = tmp_path / "kept-elsewhere"
+    kept.mkdir(exist_ok=True)
+    os.replace(os.path.join(oracle, "capture", name), kept / f"the-{name}")
+    return str(kept / f"the-{name}")
 
 
 # ------------------------------------------------------------------------------------------------------------------ batch-decomp
@@ -77,6 +91,23 @@ def test_batch_decomp_exits_4_on_a_shape_that_is_not_derived_and_3_on_a_failure(
     missing, failed = (json.loads(r.getMessage()) for r in _logged(caplog, bd))
     assert (missing["verdict"], missing["missing_derived"]) == ("MISSING_DERIVED", [[2, 1]])
     assert failed["verdict"] == "FAIL" and failed["reasons"] == json.loads((tmp_path / "fail.json").read_text())["reasons"]
+
+
+def test_batch_decomp_reads_the_capture_log_that_its_log_option_names(memory, tmp_path, derived_is_a_fold):
+    d, _ = e2e.fold_batched([e2e.R0, e2e.R1], tmp_path / "b2")
+    args = ["batch-decomp", "--oracle", d, "--derived", e2e.fold_alone(e2e.R0, tmp_path / "LP3_T2"),
+            "--derived", e2e.fold_alone(e2e.R1, tmp_path / "LP2_T1")]
+    in_place, named = tmp_path / "in_place.json", tmp_path / "named.json"
+    assert cli.main([*args, "--out", str(in_place)]) == 0
+    log = _kept_elsewhere(d, tmp_path, "log.jsonl.gz")
+    with pytest.raises(FileNotFoundError, match="capture/log.jsonl.gz"):        # the default path, which no longer has it
+        cli.main([*args, "--out", str(tmp_path / "unread.json")])
+    assert cli.main([*args, "--log", log, "--out", str(named)]) == 0
+    a, b = json.loads(in_place.read_text()), json.loads(named.read_text())
+    assert (a["log"], b["log"]) == (os.path.join(d, "capture", "log.jsonl.gz"), log) and a["verdict"] == b["verdict"] == "PASS"
+    varies = ("log", "seconds", "phases")
+    assert {k: v for k, v in b.items() if k not in varies} == {k: v for k, v in a.items() if k not in varies}
+    assert b["engine_steps"] == 3 and [e["request_id"] for e in b["requests"]] == ["r0", "r1"]
 
 
 # ------------------------------------------------------------------------------------------------------------------ program-dag
@@ -145,6 +176,34 @@ def test_global_match_says_as_an_error_that_x09_left_no_document_to_write(tmp_pa
     banner, error = _logged(caplog, gm)                                        # no brief: the command stopped at the missing document
     assert rc == 3 and not dout.exists() and (banner.levelno, error.levelno) == (logging.INFO, logging.ERROR)
     assert json.loads(error.getMessage()) == {"decomp_out": str(dout), "error": "X-09 produced no document", "x09": x09}
+
+
+def test_global_match_reads_the_capture_log_and_the_tokens_file_that_its_options_name(memory, tmp_path):
+    """The checker of record on the toy's two requests, X-09 included: the document is the one the record gives with both files in
+    place, and each file is missed by name of what it leaves undone when its option is not given."""
+    gp, oracle = tgm.assemble([tgm.R0, tgm.R1], tmp_path / "record")
+    gpp = tmp_path / "gp.json"
+    gpp.write_text(json.dumps(gp))
+    args = ["global-match", "--oracle", oracle, "--global-program", str(gpp), "--no-alternate"]
+
+    def run(name: str, *options: str) -> tuple[int, dict]:
+        out = tmp_path / f"{name}.json"
+        rc = cli.main([*args, *options, "--out", str(out)])
+        return rc, json.loads(out.read_text())
+    rc, in_place = run("in_place")
+    assert rc == 0 and in_place["verdict"] == "PASS" and tgm._check(in_place, "G6")["tokens_json"] is True, in_place["reasons"]
+    tokens = _kept_elsewhere(oracle, tmp_path, "tokens.json")
+    rc, no_tokens = run("no_tokens")                                           # the default path, which no longer has it
+    assert rc == 3 and no_tokens["failed_checks"] == ["G6"] and tgm._check(no_tokens, "G6")["tokens_json"] is False
+    log = _kept_elsewhere(oracle, tmp_path, "log.jsonl.gz")
+    with pytest.raises(FileNotFoundError, match="capture/log.jsonl.gz"):
+        run("no_log", "--tokens", tokens)
+    rc, named = run("named", "--log", log, "--tokens", tokens)
+    assert rc == 0 and named["log"] == log and in_place["log"] == os.path.join(oracle, "capture", "log.jsonl.gz")
+    assert named["verdict"] == "PASS" and tgm._check(named, "G6")["tokens_json"] is True, named["reasons"]
+    assert [(k["id"], k["status"]) for k in named["checks"]] == [(k["id"], k["status"]) for k in in_place["checks"]]
+    assert named["x09"]["verdict"] == in_place["x09"]["verdict"] == "PASS"     # X-09 read the same log, by the same option
+    assert [(e["request_id"], e["n_instances"]) for e in named["requests"]] == [(e["request_id"], e["n_instances"]) for e in in_place["requests"]]
 
 
 # ------------------------------------------------------------------------------------------------------------------ the registry

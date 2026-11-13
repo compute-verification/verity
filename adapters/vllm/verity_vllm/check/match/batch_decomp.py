@@ -523,6 +523,7 @@ class Options:
     oracle: str = option("--oracle", help="match dir: program.json + instances.jsonl (+ capture/log.jsonl.gz)")
     derived: list[str] = option("--derived", action="append", default=[],
                                 help="derived request-wrapper dir (repeatable; shape read from artifact.json)")
+    log: str | None = option("--log", default=None, help="capture log (default <oracle>/capture/log.jsonl.gz)")
     out: str = option("--out")
     within_step: str = option("--within-step", choices=WITHIN_STEP_CRITERIA, default=DEFAULT_WITHIN_STEP,
                               help="within-step criterion of record: dag (live-cone DAG multiset accepted for every request) | sequence (r14-v1)")
@@ -532,7 +533,7 @@ def main(a: Options) -> int:
     # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
     from verity_vllm.gc_tuning import tune as _gc_tune
     _gc_tune()
-    res = decompose(a.oracle, a.derived, within_step=a.within_step)
+    res = decompose(a.oracle, a.derived, a.log, within_step=a.within_step)
     with open(a.out, "w") as f:
         json.dump(res, f, indent=1, default=str)
     brief = {"verdict": res["verdict"], "within_step": res["within_step_criterion"], "reasons": res["reasons"],
