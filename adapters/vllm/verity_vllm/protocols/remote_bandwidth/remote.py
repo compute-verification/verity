@@ -53,7 +53,7 @@ import threading
 import time
 from collections import defaultdict
 from collections.abc import Callable, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any
@@ -130,11 +130,13 @@ class Phases:
 
     def summary(self) -> dict[str, dict[str, float]]:
         """Each phase's p50, p99, max and mean over the intervals, in ms (0 in an interval it didn't run in)."""
+        def at(ms: list[float], q: float) -> float:
+            return round(ms[min(len(ms) - 1, int(q * len(ms)))], 3)
+
         out = {}
         for k in sorted({k for x in self.closed for k in x}):
             ms = sorted(x.get(k, 0) / 1e6 for x in self.closed)
-            at = lambda q: round(ms[min(len(ms) - 1, int(q * len(ms)))], 3)  # noqa: E731
-            out[k] = {"p50": at(0.5), "p99": at(0.99), "max": at(1.0), "mean": round(sum(ms) / len(ms), 3)}
+            out[k] = {"p50": at(ms, 0.5), "p99": at(ms, 0.99), "max": at(ms, 1.0), "mean": round(sum(ms) / len(ms), 3)}
         return out
 
 
@@ -524,10 +526,8 @@ def prove(backend: StoreBackend, verifier: str, plan: str = "serve", *, node: by
             out.append(p.session(head, mode, fraction))
         return out
     except BaseException:
-        try:
+        with suppress(OSError):
             conn.sock.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            pass
         conn.sock.close()
         raise
 
