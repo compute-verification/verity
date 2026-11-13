@@ -21,29 +21,29 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.commitments.merkle import tree_levels
 from verity.commitments.crypto import lms
+from verity.commitments.merkle import tree_levels
 from verity.protocols.accounting.certifier.verifier import active
 from verity.protocols.accounting.certifier.verifier.active import Proxy
 from verity.protocols.accounting.certifier.verifier.certificate import LmsKey, LmsSigner
 from verity.protocols.accounting.certifier.verifier.grid import GridParams
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, SyncSet
+from verity.protocols.accounting.pouw.prover.circuit import leaves as L
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import salt as PS
 from verity.protocols.accounting.pouw.verifier import window as Wd
 from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload, weights_root
-from verity.protocols.accounting.pouw.prover.circuit import leaves as L
 from verity.protocols.accounting.pouw.verifier.coins import Challenger as Coins
 from verity.protocols.accounting.pouw.verifier.coins import CoinOpening, coin_reason
 from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES
 from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 
-import served_commit as SC
 import of_record as OR
+import served_commit as SC
 
 #: the challenger's checks are of record in Lean (`of_record`), which `lake` builds
 LEAN = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
