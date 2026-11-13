@@ -3,7 +3,8 @@ the difftest. The references live here alone: there is no Python verifier of the
 
 - `period_asked`: what one-stage v2 is asked at a case (`paramsAt`, `evidenceAt`), against `asked`.
 - `period_check_stub`: the period's check with a stand-in for one-stage v2's audit (`stubInner`), against `check`: the
-  ledger's half through `test_period_difftest.reference`, each window's session through the challenger's mirror
+  ledger's half through `test_period_difftest.reference`, whose each session of the lane is (`registered_in`, from
+  the periods the challenger's mirror reads, `challenger._checked`), each window's session through the challenger's mirror
   (`challenger._audited`, `pins_reason`, `first_parent_reason`, `session_named`, `withheld_on`), and each case answered
   as the stand-in answers it. No proof here is one that one-stage v2 accepts, so an accepted period, an undecided one
   and the records each audit is handed are run through the stand-in alone.
@@ -18,8 +19,10 @@ public file's digest and one-stage v2's evidence. Then one change each (`NAMES`)
 or rejects, a session that sampled no registration or two, no case or two for the one registration, a case of another
 registration, a public file that shares rows or is in no blob, evidence that names its own ledger or verdicts, an open
 on a commit the pins log does not record or main's first-parent line does not hold, a session not withheld, a release
-log other than the sealed one, two windows' sessions swapped, an end that seals nothing, and the ledger's half's own
-refusals; then parameters and evidence of another form, which are refused before the check.
+log other than the sealed one, two windows' sessions swapped, an end that seals nothing, the ledger's half's own
+refusals, windows whose period commits another circuit than the parameters' registration, and a session of the lane
+without the sample's family in no period, in a period that commits no circuit or in one of this registration; then
+parameters and evidence of another form, which are refused before the check.
 """
 
 from __future__ import annotations
@@ -39,7 +42,8 @@ from hypothesis import strategies as st
 from test_challenger_difftest import DEPLOYED, LEAVES as SIGNABLE, PACKAGE, PIECES, _key, _pairs, lms_verify
 from test_difftest import (LEAF, ONE_STAGE_V2, RECEIVED, ROOTS, SCHEME, SETUPS, STAND_IN_CIRCUIT, _hex, _json,
                            _public_of, _sha)
-from test_period_difftest import DAY, DRAW, LABEL, LANE, OTHER, SALT, START, STOP, Book, at, reference as ledger_half
+from test_period_difftest import (CIRCUIT, DAY, DRAW, ELSEWHERE, LABEL, LANE, OTHER, SALT, START, STOP, Book, at,
+                                  reference as ledger_half)
 
 import verity_difftest as D
 from verity.commitments.crypto import lms
@@ -62,7 +66,9 @@ AUDIT = _json({"anchors": [], "delta": DELTA, "law": LAW, "leaf_layer": LEAF, "l
                "proofs": {"circuit": _sha(STAND_IN_CIRCUIT), "registered": None}, "program": S.desc, "query": S.query,
                "registered": None, "scheme": SCHEME, "work_table": None})
 
-PARAM_KEYS = ["audit", "key", "label", "lane", "main", "start", "stop"]
+PARAM_KEYS = ["audit", "key", "label", "lane", "main", "registration", "start", "stop"]
+REGISTRATION_FORM = ("registration is this registration's circuit, the SHA-512 its lane's periods commit: 128 hex digits "
+                     "in lowercase")
 #: the keys of one-stage v2's parameters that are a window's (`WINDOW_KEYS`, `UNDERIVED_KEYS`)
 AT_A_WINDOW = ["challenger", "window_root", "day", "declarations", "seed_salt"]
 AUDIT_FORM = ("the audit's parameters are one-stage v2's less what a window sets: an object with a log, proofs of exactly "
@@ -88,6 +94,8 @@ def params_refusal(p: Any) -> str | None:
     one-stage v2's reading of `audit` at a window are not mirrored: every case here passes both."""
     if not isinstance(p, dict) or sorted(p) != PARAM_KEYS:
         return f"a period's parameters' keys are {', '.join(PARAM_KEYS)}"
+    if not (type(p["registration"]) is str and DIGEST.fullmatch(p["registration"])):
+        return REGISTRATION_FORM
     audit = p["audit"]
     if not (isinstance(audit, dict) and isinstance(audit.get("log"), list) and isinstance(audit.get("proofs"), dict)
             and sorted(audit["proofs"]) == ["circuit", "registered"] and not any(k in audit for k in AT_A_WINDOW)):
@@ -165,6 +173,33 @@ def _reject(code: str, why: str) -> dict:
     return {"reason": f"{code}: {why}", "verdict": "reject"}
 
 
+def registration_of(periods: dict, sid: str) -> str | None:
+    """`registrationOf`: the circuit the period that lists session `sid` committed, None when no period lists it or
+    the one that does committed none."""
+    return next((p["circuit"] for p in periods.values() if sid in p["windows"]), None)
+
+
+def registered_in(p: dict, periods: dict, half: dict) -> tuple[str, str] | None:
+    """`registeredIn`'s refusal, its code and text: a window whose period commits another circuit than this
+    registration's, then another session of the lane that is of no registration, then one that is this
+    registration's."""
+    this, label = p["registration"], p["label"]
+    for w in half["windows"]:
+        if registration_of(periods, w["session"]) != this:
+            return "period", (f"period {w['period']}, which lists session {w['session']}, does not commit this "
+                              f"registration's circuit {this[:16]}")
+    for s in half["others"]:
+        if registration_of(periods, s["session"]) is None:
+            return "outside", (f"session {s['session']} of lane {p['lane']} holds no {label} coin, and no period that "
+                               "commits a circuit lists it: its root is committed under no registration")
+    for s in half["others"]:
+        if registration_of(periods, s["session"]) == this:
+            return "period", (f"session {s['session']} is in a period that commits this registration's circuit "
+                              f"{this[:16]} and holds no {label} coin: its root is committed under this registration "
+                              "and never sampled")
+    return None
+
+
 def check(j: Any, inner=stand_in) -> Any:
     """`Spot.Period.checkPieceWith` at the audit `inner` (`inner(params, record, evidence, blobs)`: its verdict, then
     what it published and its profile, or its reason)."""
@@ -186,10 +221,14 @@ def check(j: Any, inner=stand_in) -> Any:
                         "stop": p["stop"]})
     if "code" in half:
         return _reject(half["code"], half["refused"])
+    key = Ch.ChallengerKey.from_json(p["key"])
+    _, periods = Ch._checked(ledger, key, lms_verify)
+    if (refusal := registered_in(p, periods, half)) is not None:
+        return _reject(*refusal)
+    others = [{"registration": registration_of(periods, s["session"]), "session": s["session"]} for s in half["others"]]
     if len(e["windows"]) != len(half["windows"]):
         return _reject("evidence", f"the evidence holds {len(e['windows'])} windows' sessions, and the ledger lists "
                                    f"{len(half['windows'])} windows in the monitoring period")
-    key = Ch.ChallengerKey.from_json(p["key"])
     before: list[dict] = []
     passed: list[dict] = []
     profiles: list[dict] = []
@@ -252,8 +291,8 @@ def check(j: Any, inner=stand_in) -> Any:
     if undecided is not None:
         return {"reason": f"audit: {undecided}", "verdict": "undecided"}
     return {"profile": profiles, "verdict": "accept",
-            "published": {"lane": p["lane"], "others": half["others"], "start": p["start"], "stop": p["stop"],
-                          "windows": passed}}
+            "published": {"lane": p["lane"], "others": others, "registration": p["registration"], "start": p["start"],
+                          "stop": p["stop"], "windows": passed}}
 
 
 # ---- the cases ------------------------------------------------------------------------------------------------------
@@ -372,8 +411,8 @@ class Week:
         return sid
 
     def params(self) -> dict:
-        return {"audit": AUDIT, "key": KEY_JSON, "label": LABEL, "lane": LANE, "main": list(self.main), "start": START,
-                "stop": STOP}
+        return {"audit": AUDIT, "key": KEY_JSON, "label": LABEL, "lane": LANE, "main": list(self.main),
+                "registration": CIRCUIT, "start": START, "stop": STOP}
 
     def request(self) -> dict:
         return {"blobs": [x.hex() for x in self.blobs], "evidence": {"pins": list(self.pins), "windows": self.windows},
@@ -390,8 +429,13 @@ NAMES = {"honest": ("accept", None), "twice": ("accept", None), "undecided": ("u
          "off-main": ("reject", "coin"), "no-seal": ("reject", "coin"), "not-withheld": ("reject", "coin"),
          "log-edited": ("reject", "coin"), "swapped": ("reject", "coin"), "unsealed": ("reject", "coin"),
          "early": ("reject", "early"), "outside": ("reject", "outside"), "open-period": ("reject", "period"),
-         "params-keys": ("refused", "params"), "audit-form": ("refused", "params"),
-         "evidence-form": ("refused", "evidence")}
+         "another-circuit": ("reject", "period"), "in-no-period": ("reject", "outside"),
+         "no-circuit": ("reject", "outside"), "never-sampled": ("reject", "period"),
+         "params-keys": ("refused", "params"), "params-registration": ("refused", "params"),
+         "audit-form": ("refused", "params"), "evidence-form": ("refused", "evidence")}
+#: the cases of a session of the lane that holds no coin of the family, after the windows' period: the period that
+#: lists it, as (whether one does, the cap and the circuit it commits)
+AFTER = {"in-no-period": (False, None, None), "no-circuit": (True, None, None), "never-sampled": (True, 8, CIRCUIT)}
 #: the cases of two windows or more
 SEVERAL = ["undecided-rejected", "swapped"]
 REQUESTS = ["request"]
@@ -428,8 +472,19 @@ def case(rng: random.Random, name: str) -> Any:
     t += 3600
     if name != "open-period":
         b.period_close("p-0", t)
-    if name == "outside" or name != "open-period" and rng.random() < 0.4:
-        b.window(LANE, t + 3600, DRAW if name == "outside" else rng.choice([SALT, [], None]))
+    elsewhere = rng.choice([SALT, [], None])
+    if name == "outside":
+        b.window(LANE, t + 3600, DRAW)
+    elif name in AFTER:
+        listed, cap, circuit = AFTER[name]
+        if listed:
+            b.period_open("p-1", LANE, t + 1800, cap, circuit)
+        b.window(LANE, t + 3600, elsewhere)
+    elif name != "open-period" and rng.random() < 0.4:
+        b.period_open("p-1", LANE, t + 1800, circuit=ELSEWHERE)
+        b.window(LANE, t + 3600, elsewhere)
+        if rng.random() < 0.5:
+            b.period_close("p-1", t + 5400)
     b.reserve(OTHER, 7 * DAY + rng.randint(0, 3600), SALT)
     j = w.request()
     windows = j["evidence"]["windows"]
@@ -440,9 +495,14 @@ def case(rng: random.Random, name: str) -> Any:
             windows[0], windows[1] = windows[1], windows[0]
         case "fewer-windows":
             windows.pop()
+        case "another-circuit":
+            j["params"]["registration"] = ELSEWHERE
         case "params-keys":
             p = j["params"]
-            j["params"] = rng.choice([{k: v for k, v in p.items() if k != "main"}, {**p, "window_root": "00" * 64}, None])
+            j["params"] = rng.choice([{k: v for k, v in p.items() if k != "main"}, {**p, "window_root": "00" * 64}, None,
+                                      {k: v for k, v in p.items() if k != "registration"}])
+        case "params-registration":
+            j["params"]["registration"] = rng.choice([None, 5, CIRCUIT.upper(), CIRCUIT[:-2], CIRCUIT + "ab", "g" * 128])
         case "audit-form":
             audit = j["params"]["audit"]
             proofs = audit["proofs"]
@@ -544,12 +604,14 @@ def test_the_check_agrees_and_each_case_is_answered_as_named(pieces):
 def test_three_windows_pass_and_each_audit_is_handed_the_records_before_it(pieces):
     """A week of three windows is accepted with the stand-in: each window is published with its one registration, the
     audit of each handed the log with the records of the registrations audited before it (the stand-in publishes the
-    log's size as its bound), and the lane's session of another layout is published among the others."""
+    log's size as its bound), and the lane's session in a period that commits another circuit is published among the
+    others by that circuit and its session alone."""
     w = Week(random.Random("three"))
     b = w.b
     b.period_open("p", LANE, 100)
     sids = [w.window(3600 * (i + 1)) for i in range(3)]
     b.period_close("p", 5 * 3600)
+    b.period_open("q", LANE, 5 * 3600 + 600, circuit=ELSEWHERE)
     other = b.window(LANE, 6 * 3600, SALT)
     b.reserve(OTHER, 7 * DAY, SALT)
     j = w.request()
@@ -560,13 +622,54 @@ def test_three_windows_pass_and_each_audit_is_handed_the_records_before_it(piece
     assert [[a["published"]["bound"] for a in x["audits"]] for x in published["windows"]] == [[0], [1], [2]]
     assert [x["audits"][0]["registration"] for x in published["windows"]] == [
         R.digest(ev["audits"][0]["registration"]) for ev in w.windows]
-    assert [s["session"] for s in published["others"]] == [other]
-    assert (published["lane"], published["start"], published["stop"]) == (LANE, START, STOP)
+    assert published["others"] == [{"registration": ELSEWHERE, "session": other}]
+    assert (published["lane"], published["registration"], published["start"], published["stop"]) == (
+        LANE, CIRCUIT, START, STOP)
     assert len(got["profile"]) == 3 and all(x["delta"] == DELTA for x in got["profile"])
 
     j["params"]["audit"] = {**AUDIT, "log": [_record(1), _record(2)]}
     got = _answer(pieces, CHECK, j)
     assert [x["audits"][0]["published"]["bound"] for x in got["published"]["windows"]] == [2, 3, 4]
+
+
+@pytest.mark.parametrize("listed, cap, circuit, code, why", [
+    (False, None, None, "outside", "of lane dev holds no draw coin, and no period that commits a circuit lists it: its "
+                                   "root is committed under no registration"),
+    (True, None, None, "outside", "of lane dev holds no draw coin, and no period that commits a circuit lists it: its "
+                                  "root is committed under no registration"),
+    (True, 8, CIRCUIT, "period", f"is in a period that commits this registration's circuit {CIRCUIT[:16]} and holds no "
+                                 "draw coin: its root is committed under this registration and never sampled")],
+    ids=["in no period", "in a period that commits no circuit", "in a period of this registration"])
+def test_a_root_committed_and_never_sampled_refuses_the_period(pieces, listed, cap, circuit, code, why):
+    """A lane that closes its period of one accepted window and then commits a root on a session reserved without the
+    sample's family is refused, by that session's name, in Lean and in the reference: the session is in no period, in
+    a period that commits no circuit, or in one that commits this registration's. Only a period that commits another
+    circuit makes it another registration's."""
+    w = Week(random.Random("never sampled"))
+    b = w.b
+    b.period_open("p", LANE, 100)
+    w.window(3600)
+    b.period_close("p", 2 * 3600)
+    if listed:
+        b.period_open("q", LANE, 3 * 3600, cap, circuit)
+    never = b.window(LANE, 4 * 3600, SALT)
+    b.reserve(OTHER, 7 * DAY, SALT)
+    got = _answer(pieces, CHECK, w.request())
+    assert got == {"reason": f"{code}: session {never} {why}", "verdict": "reject"}
+
+
+def test_a_window_in_a_period_of_another_circuit_refuses_the_period(pieces):
+    """A window whose period commits another circuit than the parameters' registration is refused before any audit,
+    by its period's and its session's names, in Lean and in the reference."""
+    w = Week(random.Random("another circuit"))
+    b = w.b
+    b.period_open("p", LANE, 100, circuit=ELSEWHERE)
+    sid = w.window(3600)
+    b.period_close("p", 2 * 3600)
+    b.reserve(OTHER, 7 * DAY, SALT)
+    got = _answer(pieces, CHECK, w.request())
+    assert got == {"reason": f"period: period p, which lists session {sid}, does not commit this registration's "
+                             f"circuit {CIRCUIT[:16]}", "verdict": "reject"}
 
 
 def test_one_stage_v2_itself_answers_each_case(pieces, one_stage_v2):

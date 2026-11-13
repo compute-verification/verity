@@ -1,13 +1,19 @@
 /-
 Sampled proofs' period, the audits' half, and the period's check (`verity/sampled-proofs/period/v1`, `protocol`): did
-every root a lane committed at the auditor's challenger during a monitoring period pass sampled proofs' audit, on the
-one sample the challenger gave it?
+every root a lane committed at the auditor's challenger during a monitoring period, in a period of the lane that
+commits this registration's circuit, pass sampled proofs' audit, on the one sample the challenger gave it?
 
 The period's check audits every window the ledger's half lists (`Spot.Period.windowsOf`) with the one-stage audit on
 the proofs themselves (`OneStageZk`). The verifier holds one set of parameters for the whole monitoring period
-(`AuditParams`): the ledger's half's, its copy of main's first-parent history (`main`), and `audit`, one-stage v2's
-parameters less what a window sets. A case supplies nothing of the parameters that the check does not hold to the
-ledger or to the registration.
+(`AuditParams`): the ledger's half's, its copy of main's first-parent history (`main`), this registration's circuit
+(`registration`), and `audit`, one-stage v2's parameters less what a window sets. A case supplies nothing of the
+parameters that the check does not hold to the ledger or to the registration.
+
+**This registration's circuit** (`registration`) is the SHA-512 a period of the lane commits as its circuit when the
+ledger opens it (`Challenger.MonitoringPeriod.circuit`), the verifier's own and never read from the ledger. A session
+is this registration's when the period that lists it committed that digest, and another registration's when it
+committed another one (`registrationOf`). The check does not hold the digest to `audit`: one-stage v2 reads no
+period's circuit.
 
 **The commitment** is the auditor's ledger, its signed lines. **The evidence** (`Evidence`) is the host's pins log
 and, for each window in the ledger's order, its challenger session's files and one case for each registration that
@@ -18,20 +24,28 @@ one-stage v2 reads a sample's coins from are the period's own (`evidenceAt`), ne
 **The check** (`checkBlobs`), in order, the first refusal the answer, each under its code (`Code`):
 
 1. the ledger's half (`windowsOf`): `coin`, `early`, `missing`, `outside`, `period`;
-2. the evidence holds as many windows' sessions as the ledger lists windows (`evidence`);
-3. then each window, in the ledger's order (`windowAt`): its session's files are the ones the ledger sealed, run from
+2. whose each session of the lane is (`registeredIn`): every window is this registration's (`period`); every other
+   session of the lane, one that holds no coin of the family, is another registration's: one that no period that
+   commits a circuit lists is refused (`outside`), and one of this registration's is a root committed under this
+   registration and never sampled, refused by its session's name (`period`);
+3. the evidence holds as many windows' sessions as the ledger lists windows (`evidence`);
+4. then each window, in the ledger's order (`windowAt`): its session's files are the ones the ledger sealed, run from
    a commit the pins log records on main's first-parent line, and its open withheld its coins (`coin`);
-4. its session's signed log shows coins of the family released after exactly one registration, the coin after the
+5. its session's signed log shows coins of the family released after exactly one registration, the coin after the
    window's own root aside (`sampledOn`): none is a root committed and never sampled (`missing`), and several are
    refused (`members`): only a window of one registration is covered, so a second registration on a session, another
    rank's or the same one registered again, is never passed over;
-5. the evidence holds one case, of that registration (`evidence`);
-6. the parameters at the window are one-stage v2's, and the case's public file shares no rows (`names`);
-7. one-stage v2 accepts the case at those parameters (`audit`). A reject refuses the period; an undecided leaves the
+6. the evidence holds one case, of that registration (`evidence`);
+7. the parameters at the window are one-stage v2's, and the case's public file shares no rows (`names`);
+8. one-stage v2 accepts the case at those parameters (`audit`). A reject refuses the period; an undecided leaves the
    period undecided unless a later window refuses it.
 
-On acceptance it publishes the lane and the monitoring period, each window with the registration audited and what
-one-stage v2 published for it, and the lane's other sessions (`Public`); its profile is each audit's, in order.
+On acceptance it publishes the lane, the monitoring period and this registration's circuit, each window with the
+registration audited and what one-stage v2 published for it, and each session of the lane that is another
+registration's, by that registration's circuit and its session and nothing else (`Public`); its profile is each
+audit's, in order. So every session of the lane that the ledger opens on a root in the monitoring period is a window
+or is published under another registration's circuit: the check holds nothing of the second kind, and a reader who
+needs them audited asks for each such registration's own check.
 
 **The parameters at a window** (`paramsAt`), key by key of one-stage v2's:
 
@@ -64,12 +78,13 @@ open Lean (Json)
 open Flock (V)
 
 /-- The verifier's own parameters of a period's check (module docstring): the ledger's half's (`ledger`), the
-challenger key's JSON as the verifier gave it (`keyJ`), the verifier's copy of main's first-parent history (`main`)
-and one-stage v2's parameters less what a window sets (`audit`). -/
+challenger key's JSON as the verifier gave it (`keyJ`), the verifier's copy of main's first-parent history (`main`),
+this registration's circuit (`registration`) and one-stage v2's parameters less what a window sets (`audit`). -/
 structure AuditParams where
   ledger : Params
   keyJ : Json
   main : Json
+  registration : String
   audit : Json
 
 /-- The keys of one-stage v2's parameters that the check sets at a window. -/
@@ -99,19 +114,25 @@ def paramsAt (p : AuditParams) (root pub : String) (before : Array Json) : Json 
 /-- A root and a digest of the right form, at which `AuditParams.of` reads `audit` once. -/
 def ZEROS : String := "".pushn '0' 128
 
-/-- The parameters from their JSON, exactly `{"audit", "key", "label", "lane", "main", "start", "stop"}`: the ledger's
-half's (`Params.of`), and `audit` of `AUDIT_FORM` that one-stage v2 reads at a window (`paramsAt` at `ZEROS`, read by
+def REGISTRATION_FORM : String :=
+  "registration is this registration's circuit, the SHA-512 its lane's periods commit: 128 hex digits in lowercase"
+
+/-- The parameters from their JSON, exactly `{"audit", "key", "label", "lane", "main", "registration", "start",
+"stop"}`: `registration` a SHA-512 in lowercase hex (`Challenger.isCircuit`), the ledger's half's (`Params.of`), and
+`audit` of `AUDIT_FORM` that one-stage v2 reads at a window (`paramsAt` at `ZEROS`, read by
 `OneStageZk.paramsOfJson`), so parameters one-stage v2 would refuse at every window are refused here. -/
 def AuditParams.of (j : Json) : V AuditParams := do
-  unless keys? j == some #["audit", "key", "label", "lane", "main", "start", "stop"] do
-    throw "a period's parameters' keys are audit, key, label, lane, main, start, stop"
+  unless keys? j == some #["audit", "key", "label", "lane", "main", "registration", "start", "stop"] do
+    throw "a period's parameters' keys are audit, key, label, lane, main, registration, start, stop"
+  let .str registration := getD j "registration" | throw REGISTRATION_FORM
+  unless Challenger.isCircuit (.str registration) do throw REGISTRATION_FORM
   let ledger ← Params.of (getD j "key") (getD j "label") (getD j "lane") (getD j "start") (getD j "stop")
   let audit := getD j "audit"
   let formed := (audit matches .obj _) && (getD audit "log" matches .arr _) &&
     keys? (getD audit "proofs") == some #["circuit", "registered"] &&
     (WINDOW_KEYS ++ UNDERIVED_KEYS).all fun k => (field? audit k).isNone
   unless formed do throw AUDIT_FORM
-  let p : AuditParams := { ledger, keyJ := getD j "key", main := getD j "main", audit }
+  let p : AuditParams := { ledger, keyJ := getD j "key", main := getD j "main", registration, audit }
   let _ ← (OneStageZk.paramsOfJson (paramsAt p ZEROS ZEROS #[])).mapError (s!"audit: {·}")
   return p
 
@@ -195,14 +216,21 @@ structure Passed where
   window : Window
   audits : Array Audit
 
-/-- What an accepted period publishes: the lane and the monitoring period, each window with its audits, and the
-lane's other sessions, of which nothing is held. -/
+/-- A session of the lane that is another registration's: the circuit the period that lists it committed, and the
+session. -/
+structure Other where
+  registration : String
+  session : String
+
+/-- What an accepted period publishes: the lane, the monitoring period and this registration's circuit, each window
+with its audits, and each session of the lane that is another registration's. -/
 structure Public where
   lane : String
   start : String
   stop : String
+  registration : String
   windows : Array Passed
-  others : Array Session
+  others : Array Other
 
 /-- The check's state along the windows: the records of the registrations audited so far, which the next audit's
 `log` holds; the windows passed; and the first audit one-stage v2 left undecided. -/
@@ -289,33 +317,61 @@ def windowAt (inner : Inner) (p : AuditParams) (r : Read) (ledger pins : Json) (
   | .undecided why =>
     return { st with before := st.before.push record, undecided := st.undecided <|> some s!"{at_}: {why}" }
 
-/-- The ledger's half, then every window in the ledger's order against its evidence (`windowAt`): the windows and
-the lane's other sessions with the check's state at the end, or the first refusal. -/
+/-- The circuit that the period listing session `ses` committed when the ledger opened it: `none` when no period
+lists the session, or the one that does committed no circuit. -/
+def registrationOf (r : Read) (ses : String) : Option String :=
+  (r.periods.find? (·.windows.contains ses)).bind fun mp =>
+    match mp.circuit with
+    | .str d => some d
+    | _ => none
+
+/-- Whose each session of the lane is (module docstring, **The check**, step 2): every window is this registration's,
+and every other session of the lane is another registration's, returned with that registration's circuit; or the
+first refusal, the windows first, then the others that are of no registration, then the others that are this
+registration's. -/
+def registeredIn (p : AuditParams) (r : Read) (ws : Windows) : Except (Code × String) (Array Other) := do
+  if let some w := ws.windows.find? fun w => registrationOf r w.session != some p.registration then
+    throw (Code.period, s!"period {w.period}, which lists session {w.session}, does not commit this " ++
+      s!"registration's circuit {p.registration.take 16}")
+  if let some s := ws.others.find? fun s => (registrationOf r s.session).isNone then
+    throw (Code.outside, s!"session {s.session} of lane {p.ledger.lane} holds no {p.ledger.label} coin, and no " ++
+      "period that commits a circuit lists it: its root is committed under no registration")
+  if let some s := ws.others.find? fun s => registrationOf r s.session == some p.registration then
+    throw (Code.period, s!"session {s.session} is in a period that commits this registration's circuit " ++
+      s!"{p.registration.take 16} and holds no {p.ledger.label} coin: its root is committed under this " ++
+      "registration and never sampled")
+  return ws.others.filterMap fun s =>
+    (registrationOf r s.session).map fun d => ({ registration := d, session := s.session } : Other)
+
+/-- The ledger's half, whose each session is (`registeredIn`), then every window in the ledger's order against its
+evidence (`windowAt`): the lane's sessions that are other registrations' with the check's state at the end, or the
+first refusal. -/
 def run (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) :
-    Except (Code × String) (Windows × Progress) := do
+    Except (Code × String) (Array Other × Progress) := do
   let r ← read p.ledger c.ledger
   let ws ← windowsIn p.ledger r
+  let others ← registeredIn p r ws
   unless e.windows.size == ws.windows.size do
     throw (Code.evidence, s!"the evidence holds {e.windows.size} windows' sessions, and the ledger lists " ++
       s!"{ws.windows.size} windows in the monitoring period")
   let st ← (ws.windows.zip e.windows).foldlM (init := ({} : Progress))
     fun st (w, ev) => windowAt inner p r c.ledger e.pins bs st w ev
-  return (ws, st)
+  return (others, st)
 
 /-- The period's check with the audit `inner`: a refusal of `run` rejects under its code; an audit left undecided
 leaves the period undecided; otherwise every window of the lane in the monitoring period has one accepted audit of
-the one registration its session sampled, and the period is accepted, publishing them with the lane's other
-sessions, its profile each audit's in order. -/
+the one registration its session sampled, and the period is accepted, publishing them with the lane's sessions that
+are other registrations', its profile each audit's in order. -/
 def checkWith (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome Public (Array Core.Integrity) :=
   match run inner p c e bs with
   | .error (code, why) => .reject s!"{code.name}: {why}"
-  | .ok (ws, st) =>
+  | .ok (others, st) =>
     match st.undecided with
     | some why => .undecided s!"audit: {why}"
     | none =>
-      .accept { lane := p.ledger.lane, start := p.ledger.start, stop := p.ledger.stop, windows := st.passed,
-                others := ws.others }
+      .accept { lane := p.ledger.lane, start := p.ledger.start, stop := p.ledger.stop,
+                registration := p.registration, windows := st.passed, others }
         (st.passed.flatMap fun x => x.audits.map (·.profile))
 
 /-- **The period's check** on the blobs (module docstring, **The check**): `checkWith` at one-stage v2's audit on
@@ -331,9 +387,13 @@ def Passed.toJson (x : Passed) : Json :=
   Json.mkObj [("audits", Json.arr (x.audits.map Audit.toJson)), ("period", Json.str x.window.period),
     ("phase", Lean.toJson x.window.phase), ("root", Json.str x.window.root), ("session", Json.str x.window.session)]
 
+def Other.toJson (o : Other) : Json :=
+  Json.mkObj [("registration", Json.str o.registration), ("session", Json.str o.session)]
+
 def Public.toJson (x : Public) : Json :=
-  Json.mkObj [("lane", Json.str x.lane), ("others", Json.arr (x.others.map Session.toJson)),
-    ("start", Json.str x.start), ("stop", Json.str x.stop), ("windows", Json.arr (x.windows.map Passed.toJson))]
+  Json.mkObj [("lane", Json.str x.lane), ("others", Json.arr (x.others.map Other.toJson)),
+    ("registration", Json.str x.registration), ("start", Json.str x.start), ("stop", Json.str x.stop),
+    ("windows", Json.arr (x.windows.map Passed.toJson))]
 
 def PROTOCOL : String := "verity/sampled-proofs/period/v1"
 

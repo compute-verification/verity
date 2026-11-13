@@ -26,7 +26,8 @@ at its reserve, or at its open when it was opened in one step) and the period th
 refusal is the answer: there is at least one (`missing`); each is in a period of the lane (`outside`); each such
 period is closed, and every session it lists that was opened is a window (`period`); no session it lists was left
 unopened, and each window has ended (`missing`). The lane's other sessions are returned beside the windows (`others`)
-with nothing held of them: a reader sees every root the lane committed in the monitoring period, a window or not.
+with nothing held of them here: the period's check refuses each that is not another registration's
+(`Spot.Period.registeredIn`).
 
 The difftest's piece: `period_windows`.
 -/
@@ -44,7 +45,9 @@ open Flock (V)
 /-- Why a period's check refuses. The ledger's half: the ledger is not the auditor's (`coin`), it does not reach the
 monitoring period's end (`early`), a window is in no period (`outside`), a window's period is open or holds a session
 that is no window (`period`), or there is no window, a reserve never opened or a window not ended (`missing`). The
-audits' half (`Spot.PeriodAudit`): a window's session is not the one the ledger sealed, or did not run main's code or
+audits' half (`Spot.PeriodAudit`): a window's period commits another circuit than this registration's, or a session
+of this registration's holds no coin of the family (`period`); a session of the lane that holds no coin of the family
+is of no registration (`outside`); a window's session is not the one the ledger sealed, or did not run main's code or
 withhold its coins (`coin`); it sampled no registration (`missing`) or several (`members`); the evidence is not one
 case for each registration it sampled (`evidence`); the parameters at the window are not one-stage v2's (`names`); or
 one-stage v2 rejects a case (`audit`). -/
