@@ -27,9 +27,10 @@ that a program which skips them gains nothing:
 * **a forced zero** (`Mend.ForcedZero`): the product is cut (its aligned contribution is 0) at both ends of the noise
   support, the two salts at which every element's line is the flat pair with `F` at `+11/4` and at `−11/4`. A product
   cut at every salt is cut at both (`Proofs.Pouw.PearlC.Mend.forcedZero_of_cutForEverySalt`).
-A product of both kinds counts once. Neither occurs on an honest workload's tiles (measured on the 614b tiles at the
-H100 atom: no dead pair and no product cut at both ends), and the planted products of a skipped step that stay uncut at
-some salt are not charged here.
+A product of both kinds counts once. At the H100 atom neither occurs on an honest workload's tiles (measured on the
+614b tiles: no dead pair and no product cut at both ends, so the two terms cost honest serving nothing there). At
+sm_120's step the honest cost of the two terms has not been measured and is owed. The planted products of a skipped step
+that stay uncut at some salt are not charged here.
 
 * `firstAddDev`, `creditDevRev1`, `wrefDevRev1`: the first add of every word at the device's add price, and the credit
   and `W_ref` without it. `creditOfRev1` and `wrefOfRev1` are the same at `Params` and `Costs` (H100 prices).
