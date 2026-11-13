@@ -171,7 +171,9 @@ The records are in the evidence store, in the run files of the runs that carry
 - `out/registrations.jsonl`: the registration of each execution phase's connection rows that the verdicts name by
   its head's digest, from which a class's count is read;
 - `out/*-controls.jsonl`: a control record, `run`, `verifier` (its `module` and `commit`), `control` (what was
-  changed) and `verdict`, the verifier's own, whose `format` says which of the four it is a control of;
+  changed), `verdict`, the verifier's own, whose `format` says which of the four it is a control of, and `reason`,
+  the verifier's own word for why it refused. A control without `reason`, or a refused one whose reason is no
+  text, doesn't read; the reason is printed in the class's line and held to no value;
 - `out/serve-registrations.jsonl`: each serve's registration, which the verdict records name by its digest and which
   states the rate each sampled population is registered at.
 
@@ -192,9 +194,20 @@ The reader holds what the rule charges below to two more things, which the rule 
   name; the reader holds it in one constant (`stop_verdicts.RATES`).
 
 The reader is handed every run that carries the record, with those another run replaces. A superseded run adds no
-accept and takes away no refusal: its records that are accepted and complete count for nothing, as do its controls
-that were refused, and everything else it holds is read as any run's, so superseding a run never raises what is
-held.
+accept and takes away no refusal: its records that are accepted and complete fill no verdict, its controls that
+were refused count for nothing, and everything else it holds is read as any run's. An accept of its is still read
+on its head: the serve and the registration it names, the rate it states and its verifier are held to what holds
+any record's, so it can keep a class at its whole schedule and never helps hold one. A record is a superseded
+run's where that run's files hold it or it names that run as its `run` or its `serve`. So superseding a run never
+raises what is held.
+
+An execution phase is one serve's: a serve, a link and the phase's number. A registration of connection rows names
+no serve, so a head's serve is the one its verdict records name, which is a run's word and no proof; the answer's
+second line says so. Two heads given for one number of a link are two execution phases only where the records of
+each name a serve and none is named for both. Where one is named for both, where no record names a serve for one of
+them, or where a table of one name has one domain in both (a domain binds the network certifier's session, the
+link, the number and the table's rows), they are one execution phase given two heads, which holds no execution
+phase at all. A head whose records name two serves is charged its whole schedule.
 
 The four verdicts count only as one class's: of one class, in one execution phase of a link, on one signed head,
 and of one serve under one registration, as their records name the two. Where each of the four was read and no
@@ -202,7 +215,8 @@ class that holds a row has them so, the answer holds nothing and its first line 
 with what the four differ in: the class, the execution phase, the head, the serve or the registration.
 
 An execution phase is held where its head was read, some class of it holds a row and every class that holds one has
-its four verdicts, at the registered rate, each by a verifier with its control. The answer is how many execution
+its four verdicts, of the one serve its head's records name, at the registered rate, each by a verifier with its
+control. The answer is how many execution
 phases of a link are held (the document's `stop`'s
 `held_phases`), and a row is charged by it:
 

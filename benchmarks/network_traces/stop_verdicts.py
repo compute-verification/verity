@@ -27,21 +27,35 @@ readers are the harness's). A run holds, each one JSON object a line:
 
 **A superseded run** adds no accept and takes away no refusal. The caller hands `read` every run that carries the
 record and says which of them another run replaces. A superseded run's files are read as any run's, but for its
-verdict records that are accepted and complete, and its control records that are refused, which count for nothing:
-nothing retries a verdict, so what a run refused on a head stands whatever is labelled later, as does an accept of
-its that is not complete, a control it did not refuse, a record of its that doesn't read and a registration it
-kept. A record counts as a superseded run's where that run's files hold it or it names that run as the one that
-produced it. So superseding a run never raises what is held. A superseded run that is not among the runs handed
-holds everything at its whole schedule: what it refused was not read.
+verdict records that are accepted and complete, which fill no verdict, and its control records that are refused,
+which count for nothing: nothing retries a verdict, so what a run refused on a head stands whatever is labelled
+later, as does an accept of its that is not complete, a control it did not refuse, a record of its that doesn't
+read and a registration it kept. An accept of its is still read on its head (`stop`'s ``spent``): the serve and
+the registration it names, the rate it states and its verifier are held to what holds any record's, so it can keep
+a class at its whole schedule, as it did before its run was superseded, and can never help hold one. A record
+counts as a superseded run's where that run's files hold it, or it names that run as the one that produced it or
+as the serve it is of. So superseding a run never raises what is held. A superseded run that is not among the runs
+handed holds everything at its whole schedule: what it refused was not read.
 
 **A head** (`head_of`) is the registration's own: its link, execution phase, parameters digest and tables as listed,
 held to the digest its certificate names. No signature is checked here: the certificate verifies under the network
 certifier's key and session, which a calculator doesn't hold, so a head read here is as good as the run that kept it.
 A verdict's own verifier checks the certificate before it accepts.
 
+**An execution phase is one serve's**: a serve, a link and the phase's number. A registration of connection rows
+names no serve, so a head's serve is the one its verdict records name (those on its digest, counted or not), which
+is a run's word and no proof, and the answer's second line says so (`SERVE_NAMED`). Two heads given for one number
+of a link are two execution phases only where the records of each name a serve and no serve is named for both.
+They are one execution phase given two heads, which holds no execution phase at all, where a serve is named for
+both, where no record names a serve for one of them, and where a table of one name has one domain in both: a
+table's domain binds the network certifier's session, the link, the phase's number and the table's rows, so the
+two are one session's execution phase whatever serves their records name. A head whose records name two serves is
+no one serve's execution phase and is charged its whole schedule.
+
 **The answer** (`stop`) counts the execution phases that are held: those whose head was read, in which some class
-holds a count above 0 and every class with a count above 0 is charged below its schedule by the rule, at the
-registered rate ("The rate"), each of its verdicts by a verifier with its control ("A negative control"). One
+holds a count above 0 and every class with a count above 0 is charged below its schedule by the rule, whose
+records name one serve, at the registered rate ("The rate"), each of its verdicts by a verifier with its control
+("A negative control"). One
 class at its whole schedule keeps its execution phase at its whole schedule, and each line says which verdict it
 lacks.
 Every other execution phase is charged its whole schedule, one whose registration no run kept among them: the
@@ -50,9 +64,9 @@ registrations read here. So a run's files with an execution phase left out charg
 execution phase refused, and since nothing but verdicts on a head's digest holds an execution phase, a
 registration nobody signed holds none. A verdict is held to a head by the digest it names, so one decided under
 another head, another serve's among them, counts for nothing. Registrations or records that don't read, and two
-heads given for one execution phase of a link, hold no execution phase at all. Each verdict that is on a head read
-is handed on under the mark `leak_bounds.RUN_NOT_PROVED`, whatever its ``proved_by`` says: a run is no proof, and
-what a record's ``proved_by`` is worth is its reader's to check.
+heads given for one execution phase ("An execution phase is one serve's"), hold no execution phase at all. Each
+verdict that is on a head read is handed on under the mark `leak_bounds.RUN_NOT_PROVED`, whatever its
+``proved_by`` says: a run is no proof, and what a record's ``proved_by`` is worth is its reader's to check.
 
 **Not one class.** The four verdicts count only as one class's: of one class, in one execution phase of a link, on
 one signed head, and of one serve under one registration, as their records name the two (`class_charge`'s "One
@@ -65,8 +79,11 @@ records name (`ONE`).
 has, at the same commit, a control of record that it refused: a run on the same path with one thing changed, the
 thing that verifier checks (`CONTROLS`). The guarantee rests on the verifier's code and not on a control; a control
 is what shows that the verifier which ran refuses what it must, so that its accept is no pass for the wrong reason.
-A control record names the run that produced it, its verifier's module and commit, what was changed (``control``)
-and the verifier's own verdict, whose ``format`` says which of the four it is a control of. A verifier's refusal at
+A control record names the run that produced it, its verifier's module and commit, what was changed (``control``),
+the verifier's own verdict, whose ``format`` says which of the four it is a control of, and the verifier's own word
+for why it refused (``reason``). A control without that field doesn't read, and neither does a refused one whose
+reason is no text; the reason is printed in the line of each class its verifier's accept is counted in, and is
+held to no value. A verifier's refusal at
 a commit is a fact of that code, so one control a verifier a commit serves every execution phase checked under that
 commit, and a control names no head, class or serve. A control at another commit, by another verifier, or of a
 thing its verifier doesn't owe counts for nothing. One its verifier did not refuse (``accepted`` anything but
@@ -91,6 +108,7 @@ from __future__ import annotations
 import fnmatch
 import json
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -110,10 +128,10 @@ FILES = (RECORDS_FILES, REGISTRATIONS_FILE, CONTROLS_FILES, SERVES_FILE)
 #: which of the four verdicts a record is, or a control record is a control of, by the ``format`` of its verdict
 FORMAT = "format"
 FORMATS = {"verity-network-certifier/response-tie-verdict/v1": CC.RESPONSE_TIE}
-#: a control record's fields: the run that produced it, the verifier that judged it, what was changed, and the
-#: verifier's own verdict on it
-CONTROL = "control"
-CONTROL_FIELDS = (CC.RUN, CC.VERIFIER, CONTROL, CC.VERDICT)
+#: a control record's fields: the run that produced it, the verifier that judged it, what was changed, the
+#: verifier's own verdict on it, and the verifier's own word for why it refused
+CONTROL, REASON = "control", "reason"
+CONTROL_FIELDS = (CC.RUN, CC.VERIFIER, CONTROL, CC.VERDICT, REASON)
 #: the negative control each verdict's verifier owes, as a control record names it, and what it changes
 CONTROLS = {CC.STOP_RECORD: ("stop_word", "a stop word changed, the count off by one"),
             CC.RESPONSE_TIE: ("id", "a released id changed"),
@@ -124,6 +142,9 @@ RATE, EVERY_BLOCK = "rate", "rate:1/1"
 #: where a serve's registration states the rate each sampled population is registered at, by the verdict over that
 #: population: the keys from the registration down to the rate. The names are the registration's writer's to give
 RATES = {CC.STOP_RECORD: ("rates", "stop_record"), CC.RESPONSE_TIE: ("rates", "response_tie")}
+#: what the answer's second line says of the serve an execution phase is of
+SERVE_NAMED = ("an execution phase is one serve's, and a head's serve is the one its verdict records name, which is "
+               f"{LB.RUN_NOT_PROVED}")
 #: what the answer's first line says where each of the four verdicts was read and they are not one class's
 NOT_ONE_CLASS = "not one class: unchecked"
 #: where a verdict says it is, and what four verdicts that are not one class's can differ in, each with its fields:
@@ -182,12 +203,15 @@ def control_lacks(record: object) -> str | None:
         return f"its `{CC.VERIFIER}` names no `{'`, `'.join(unnamed)}`"
     if not isinstance(record[CC.VERDICT], Mapping):
         return f"its `{CC.VERDICT}` is no object"
+    if record[CC.VERDICT].get(CC.ACCEPTED) is False and not _named(record[REASON]):
+        return f"its `{REASON}` is no text, though its verdict is refused"
     return None
 
 
 #: what a control record is, as a refusal of one that is none says it
 A_CONTROL = (f"a control record is an object with the fields {', '.join(CONTROL_FIELDS)}, its run and its control "
-             f"named, its verifier by its {' and '.join(CC.NAMES)}, and its verdict an object")
+             f"named, its verifier by its {' and '.join(CC.NAMES)}, its verdict an object, and its reason its "
+             "verifier's word for a refusal")
 
 
 def digest_of(registration: object) -> str:
@@ -212,11 +236,28 @@ def _rate_at(registration: Mapping[str, Any], path: Sequence[str]) -> str | None
     return at if _named(at) else None
 
 
-def _unrated(c: CC.ClassCharge, served: Mapping[str, Mapping[str, Any]]) -> list[str]:
-    """What keeps a class the rule charges below from being held, by the rate (the module docstring's "The rate"):
-    empty where the registration its records name was handed and registers `EVERY_BLOCK` for both populations, and
-    each stop record and response tie counted says it ran at that."""
-    name = c.read[0][1][CC.REGISTRATION]
+def _one_phase(a: C.Head, b: C.Head, of_a: set[str], of_b: set[str]) -> str | None:
+    """Why two heads given for one number of a link are one execution phase's (the module docstring's "An execution
+    phase is one serve's"), from the serves the records of each name, or None where they are two serves'."""
+    if shared := sorted(of_a & of_b):
+        return f"both of the serve {shared[0]}, as their verdict records name it"
+    domains = {e.name: e.domain for e in a.tables}
+    if same := sorted(e.name for e in b.tables if domains.get(e.name) == e.domain):
+        return (f"their table `{same[0]}` has one domain, so they are one session's execution phase, whatever "
+                "serves their verdict records name")
+    if not of_a or not of_b:
+        return "no verdict record names the serve of one of them, so they are not known to be two serves'"
+    return None
+
+
+Read = Sequence[tuple[str, Mapping[str, Any]]]
+
+
+def _unrated(read: Read, served: Mapping[str, Mapping[str, Any]]) -> list[str]:
+    """What keeps a class the rule charges below from being held, by the rate (the module docstring's "The rate"),
+    from its records on its head: empty where the registration they name was handed and registers `EVERY_BLOCK`
+    for both populations, and each stop record and response tie among them says it ran at that."""
+    name = read[0][1][CC.REGISTRATION]
     if name not in served:
         return [f"the registration its verdicts name, `{name}`, is not among the serves' registrations read "
                 f"(`{SERVES_FILE}`), so the rate it registers is not known"]
@@ -228,7 +269,7 @@ def _unrated(c: CC.ClassCharge, served: Mapping[str, Mapping[str, Any]]) -> list
             continue
         if registered != EVERY_BLOCK:
             lacks.append(f"the registration registers the {kind} at `{registered}`, not `{EVERY_BLOCK}`")
-        for of, record in c.read:
+        for of, record in read:
             if of == kind and record.get(RATE) != registered:
                 ran = record.get(RATE)
                 lacks.append(f"the {kind} of {record[CC.RUN]} "
@@ -250,6 +291,18 @@ def _uncontrolled(kind: str, record: Mapping[str, Any],
     if kept := sorted({r[CC.RUN] for r in its if r[CC.VERDICT].get(CC.ACCEPTED) is not False}):
         return f"{who} did not refuse its negative control (`{name}`: {what}) on {', '.join(kept)}"
     return None
+
+
+def _refused(read: Read, owed: Mapping[tuple[str, str, str], Sequence[Mapping[str, Any]]]) -> str:
+    """What a class's line says of the negative controls the verifiers of its records refused: each verifier's own
+    word for why (`REASON`), as its control records give it. Nothing for a verifier that lacks its control."""
+    said = []
+    for kind, record in read:
+        its = owed.get((kind, *(record[CC.VERIFIER][k] for k in CC.NAMES)), ())
+        if its and all(r[CC.VERDICT].get(CC.ACCEPTED) is False for r in its):
+            said.append(f"the {kind}'s `{CONTROLS[kind][0]}` for "
+                        + ", ".join(json.dumps(reason) for reason in sorted({r[REASON] for r in its})))
+    return f"; its verifiers refused their negative controls: {'; '.join(dict.fromkeys(said))}" if said else ""
 
 
 def _handed(kind: str, record: Mapping[str, Any]) -> dict[str, Any]:
@@ -278,34 +331,62 @@ def _not_one(by_verdict: Mapping[str, Sequence[Mapping[str, Any]]]) -> str:
 
 def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[str, Any]],
          left: Sequence[str] = (), controls: Iterable[Mapping[str, Any]] = (),
-         served: Iterable[Mapping[str, Any]] = ()) -> LB.Stop:
+         served: Iterable[Mapping[str, Any]] = (), spent: Iterable[Mapping[str, Any]] = ()) -> LB.Stop:
     """How the stop class is charged (the module docstring's "The answer"), from registrations, verdict records,
     control records and serves' registrations as `read` returns them; ``left`` are lines on what was not read,
-    which the answer carries."""
-    registrations, records = list(registrations), list(records)
+    which the answer carries, and ``spent`` the superseded runs' accepts, which fill no verdict and are held to
+    what holds any record on their head (the module docstring's "A superseded run")."""
+    registrations, records, spent = list(registrations), list(records), list(spent)
     if not registrations and not records:
         return LB.Stop(0, (*LB.NO_RECORDS.why, *left))
     if not registrations:
         return _whole(f"{len(records)} verdict record(s) were read and no registration (`{REGISTRATIONS_FILE}`), so "
                       "no class's count is known", *left)
-    heads: dict[tuple[str, int], C.Head] = {}
+    heads: dict[str, C.Head] = {}
     for doc in registrations:
         try:
             head = head_of(doc)
         except ValueError as e:
             return _whole(str(e), *left)
-        if heads.setdefault((head.link, head.window), head) != head:
-            return _whole(f"two heads are given for execution phase {head.window} of the link {head.link}", *left)
+        heads[head.digest().hex()] = head
     by_verdict: dict[str, list[Mapping[str, Any]]] = {}
+    spent_by: dict[str, list[Mapping[str, Any]]] = {}
     unlisted = 0
-    for record in records:
+    for record in (*records, *spent):
         if lack := CC.lacks(record):
             return _whole(f"{CC.A_RECORD}; of one read, {lack}: {record!r}", *left)
+    for record in records:
         kind = _kind(record[CC.VERDICT])
         if kind is None:
             unlisted += 1
         else:
             by_verdict.setdefault(kind, []).append(record)
+    for record in spent:
+        if (kind := _kind(record[CC.VERDICT])) is not None:
+            spent_by.setdefault(kind, []).append(record)
+    # the serves each head's verdict records name, and the heads of each number of a link: two of one number are
+    # two execution phases only as two serves'
+    serves: dict[str, set[str]] = {digest: set() for digest in heads}
+    for record in (*records, *spent):
+        if isinstance(name := record[CC.VERDICT].get(CC.HEAD), str) and name in serves:
+            serves[name].add(record[CC.SERVE])
+    numbered: dict[tuple[str, int], list[str]] = {}
+    for digest, head in heads.items():
+        for other in numbered.setdefault((head.link, head.window), []):
+            if why := _one_phase(heads[other], head, serves[other], serves[digest]):
+                return _whole(f"two heads are given for execution phase {head.window} of the link {head.link}: "
+                              f"{why}", *left)
+        numbered[head.link, head.window].append(digest)
+    both = {kind: [*by_verdict.get(kind, ()), *spent_by.get(kind, ())] for kind in CC.VERDICTS}
+
+    def charged(head: C.Head, cls: int) -> tuple[CC.ClassCharge, Read]:
+        """How the rule charges a class by the records that count, held to one serve and one registration over
+        the superseded runs' accepts on its head too; and its records on its head, those accepts among them."""
+        live = CC.charge(head, cls, by_verdict)
+        if not spent_by:
+            return live, live.read
+        whole = CC.charge(head, cls, both)
+        return replace(live, below=live.below and not whole.differ, differ=whole.differ), whole.read
     # the controls each verdict's verifier owes, by verdict, module and commit
     owed: dict[tuple[str, str, str], list[Mapping[str, Any]]] = {}
     stray = 0
@@ -321,32 +402,40 @@ def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[s
     try:
         for doc in served:
             by_digest[digest_of(doc)] = doc
-        phases = [(head, [CC.charge(head, cls, by_verdict) for cls in classes(head)])
-                  for _, head in sorted(heads.items())]
+        phases = [(digest, head, [charged(head, cls) for cls in classes(head)]) for digest, head in sorted(
+            heads.items(), key=lambda at: (at[1].link, at[1].window, sorted(serves[at[0]]), at[0]))]
     except ValueError as e:
         return _whole(str(e), *left)
-    charges = [(head, c) for head, its in phases for c in its]
+    charges = [c for _, _, its in phases for c, _ in its]
     lines: list[str] = []
     # an execution phase is ruled below where a class of it holds a row and each class that holds one is charged
-    # below by the rule; it is held where it is also at the registered rate and each verifier has its control
-    held = ruled = by_rate = by_control = 0
-    for head, its in phases:
+    # below by the rule; it is held where it is also one serve's, at the registered rate, and each verifier has
+    # its control
+    held = ruled = by_serve = by_rate = by_control = 0
+    for digest, head, its in phases:
         at = f"the link {head.link}, execution phase {head.window}"
-        lines += [f"{at}, {c.why()}" for c in its]
-        rows = [c for c in its if c.count]
-        if not rows or not all(c.below for c in rows):
+        if len(numbered[head.link, head.window]) > 1:
+            at += f" of the serve {', '.join(sorted(serves[digest]))}"
+        lines += [f"{at}, {c.why()}{_refused(read, owed) if c.below else ''}" for c, read in its]
+        rows = [(c, read) for c, read in its if c.count]
+        if not rows or not all(c.below for c, _ in rows):
             continue
         ruled += 1
+        named = sorted(serves[digest])
+        mixed = [f"{at}: held to its whole schedule by its serve: its verdict records name {len(named)} serves, not "
+                 f"one ({', '.join(named)}), and an execution phase is one serve's"] if len(named) > 1 else []
         rates = [f"{at}, class {c.cls}: held to its whole schedule by the rate: {'; '.join(lacks)}"
-                 for c in rows if (lacks := _unrated(c, by_digest))]
-        wants = list(dict.fromkeys(lack for c in rows for kind, record in c.read
+                 for c, read in rows if (lacks := _unrated(read, by_digest))]
+        wants = list(dict.fromkeys(lack for _, read in rows for kind, record in read
                                    if (lack := _uncontrolled(kind, record, owed))))
-        lines += rates + ([f"{at}: held to its whole schedule by a control: {'; '.join(wants)}"] if wants else [])
-        by_rate, by_control, held = by_rate + bool(rates), by_control + bool(wants), held + (not rates and not wants)
-    with_rows = [c for _, c in charges if c.count]
+        lines += mixed + rates + (
+            [f"{at}: held to its whole schedule by a control: {'; '.join(wants)}"] if wants else [])
+        by_serve, by_rate, by_control = by_serve + bool(mixed), by_rate + bool(rates), by_control + bool(wants)
+        held += not (mixed or rates or wants)
+    with_rows = [c for c in charges if c.count]
     # the classes that hold a row and have a record of each of the four verdicts on their head
     all_four = [c for c in with_rows if {kind for kind, _ in c.read} >= set(CC.VERDICTS)]
-    counted = [_handed(kind, record) for _, c in charges for kind, record in c.read]
+    counted = [_handed(kind, record) for c in charges for kind, record in c.read]
     of = f"{len(heads)} execution phase(s) read"
     if not with_rows:
         first = f"each connection is charged its whole schedule: no class holds a row in the {of}"
@@ -366,6 +455,7 @@ def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[s
                  f"hold a row in the {of} lack a verdict, one in each execution phase that holds a row")
     elif not held:
         back = [f"{n} by {what}" for n, what in (
+            (by_serve, "its serve, one named by all of a head's verdict records"),
             (by_rate, f"the rate, `{EVERY_BLOCK}` as registered and as run"),
             (by_control, "a negative control, one refused by each verifier that accepted, at its commit")) if n]
         first = (f"each connection is charged its whole schedule: {ruled} of the {of} have the {len(CC.VERDICTS)} "
@@ -378,7 +468,7 @@ def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[s
                  "among them")
     other = len(records) - unlisted - len(counted)
     return LB.Stop(held, (
-        first, *lines,
+        first, SERVE_NAMED, *lines,
         *([f"{other} verdict record(s) read are on no head read, or on no class of one that holds a row, and count "
            "for nothing"] if other else []),
         *([f"{unlisted} verdict record(s) read are of a format listed for none of the {len(CC.VERDICTS)} verdicts, "
@@ -404,21 +494,25 @@ def _refuses(record: Any) -> bool:
 
 
 def read(store: Any, runs: Iterable[str], superseded: Iterable[str] = ()
-         ) -> tuple[list[Any], list[Any], list[str], list[Any], list[Any]]:
+         ) -> tuple[list[Any], list[Any], list[str], list[Any], list[Any], list[Any]]:
     """The registrations and the verdict records in the run files of ``runs``, in the runs' order and each run's
-    files by name; a line for each run that is not in the store, kept no run files or holds no such file; and the
-    runs' control records and serves' registrations: `stop`'s arguments, in its order.
+    files by name; a line for each run that is not in the store, kept no run files or holds no such file; the
+    runs' control records and serves' registrations; and the superseded runs' accepts: `stop`'s arguments, in its
+    order.
     ``superseded`` are the runs among them that another run replaces: a verdict record of one that is accepted and
-    complete is left out, and so is a control record of one that is refused, each with a line that counts them (the
-    module docstring's "A superseded run" and "A negative control").
+    complete is handed apart, as one that fills no verdict, and a control record of one that is refused is left
+    out, each with a line that counts them (the module docstring's "A superseded run" and "A negative control").
+    A record is a superseded run's where that run's files hold it or it names that run as its ``run`` or its
+    ``serve``.
     ``store`` is the evidence store as the harness reads it (`get_attempt`, `listing`, `fetch`)."""
     registrations: list[Any] = []
     records: list[Any] = []
     controls: list[Any] = []
     served: list[Any] = []
+    spent: list[Any] = []
     left: list[str] = []
     superseded = set(superseded)
-    dropped = uncounted = 0
+    uncounted = 0
     for run in runs:
         attempt = store.get_attempt(run)
         out = (attempt or {}).get("outputs") or {}
@@ -436,20 +530,22 @@ def read(store: Any, runs: Iterable[str], superseded: Iterable[str] = ()
                 continue
             control = fnmatch.fnmatchcase(path, CONTROLS_FILES)
             for record in _lines(at / path):
-                named = record.get(CC.RUN) if isinstance(record, Mapping) else None
-                old = run in superseded or (isinstance(named, str) and named in superseded)
-                if old and (_refuses(record) if control else _adds(record)):
-                    dropped, uncounted = dropped + (not control), uncounted + control
+                named = [record.get(key) for key in (CC.RUN, CC.SERVE)] if isinstance(record, Mapping) else []
+                old = run in superseded or any(isinstance(name, str) and name in superseded for name in named)
+                if old and control and _refuses(record):
+                    uncounted += 1
+                elif old and not control and _adds(record):
+                    spent.append(record)
                 else:
                     (controls if control else records).append(record)
     of = f"of the superseded run(s) {', '.join(sorted(superseded))}"
-    if dropped:
-        left.append(f"{dropped} verdict record(s) {of} are accepted and complete, and count for nothing: a "
+    if spent:
+        left.append(f"{len(spent)} verdict record(s) {of} are accepted and complete, and fill no verdict: a "
                     "superseded run adds no accept, and what it refused stands")
     if uncounted:
         left.append(f"{uncounted} control record(s) {of} are refused, and count for nothing: a superseded run adds "
                     "no control, and one it did not refuse stands")
-    return registrations, records, left, controls, served
+    return registrations, records, left, controls, served, spent
 
 
 def of_runs(store: Any, runs: Iterable[str], superseded: Iterable[str] = ()) -> LB.Stop:
