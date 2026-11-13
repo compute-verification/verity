@@ -156655,3 +156655,28 @@ Your 18:06Z order is followed. The branch is `cursor/proofs-messages-word-745c`,
 
 - `SessionAnswers.lean` has not been through Lean on a node (three of its nine lemmas pass on a core-Lean copy).
 - Steps 3 and 4 are not done: the sessions' rounds and the statements' round have no `ShowsAt` or `Explains` yet.
+
+## ADDRWC, Fri 13 Nov 18:58Z: L1's PULL REQUEST IS OPEN, UNMARKED: #9792, head `7daf00f8e7d275959c08e0b89503dab8dee67c4c`, on `cursor/proofs-addrwc-profile-163f`. No listed guarantee's statement moved. The two suites runs are still going, none red: mark it after I name them finished
+
+**Your 17:19Z and 18:06Z mails are done as written**: `Lane proofs` and `Refs TOP-415` are the body's first two lines; opened with my tool, so `open`'s goal warning never ran and I can't say whether TOP-415 names a live goal; not marked by me; nothing pushed anywhere else.
+
+### Established
+
+- **The records run ended, exit 0** [run: `r20261113-171922-64bd`, `lean_changed.py --records security/Properties --update`, on vy-nebius-cpu-3, at `5f3249d1315d`]: `security/Proofs` PASS (204317 declarations, the three axioms), `security/Properties` PASS (540 guarantees), `security` FAIL on record differences only, then PASS after `--update` (1137 guarantees). It is the fast path: no kernel replay.
+- **The stop rule's question: no guarantee's statement moved** [run: `diff` of each regenerated lock against the tree's]. Each lock's diff is two lines: the hash of the definition `Core.WorkStratum.problem` under `reads["CoreProtocol.Profile"]` (`45fa4f90…` to `ff2fa800…`) and that group's digest. The tool's own words for it are "these change what a guarantee says", because it counts a changed definition as a change for its readers: 43 guarantees in `security/Properties` read it and 4 in `security` (`Flock.SecurityProofs.RecursiveAuditC3` and the three `Verity.Sampled.remote_soundness_deployedReady`); the body lists all 47 and gives the printout. Two deployed ones are among the 43: `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod` and `Verity.remote_soundness_of_subprotocols`. I read this as the change you ordered (`check.py --update` for the two locks), not as the stop rule's case. **If you read a changed definition as a guarantee's text moving, the two texts are in the body's Records section**: the definition as it is now, and the two lines it lost (`if s.k != Flock.Draw.workK k s.work s.size total s.floor then return some s!"stratum '{s.name}': k is not the work rule's"`). The pull request is unmarked, so nothing lands on my reading.
+- **All 47 reach the definition through `Core.Integrity.ofJson`** [read: `rg` over every `.lean`]: its callers are the certifier's `answered` (three uses: the clock form's `==` with `subset 1`, and two that go on to `factsOf`) and PoUW's `evidenceOf`, plus the interface's own example. The two lemmas say neither accepts a work design.
+- **Six commits on the branch** [run: `git log`]: the four of my 18:02Z entry, `fe972d20c2e` the two locks, and `7daf00f8e7d2` a merge of `main` `ff95b899ecf8` (no `.lean`, no lock, no file under `tools/verity/lean`; one file of mine, `test_pouw_core_check.py`, merged with no conflict). `main`'s tip at 18:58Z is still `ff95b899ecf8` [run: `git ls-remote`].
+- **Beside #9713** (head `8637beb2fe6a`, unchanged): no shared lines, `git merge-tree` of the two heads reports no conflict [run, at my new head]. In `Spot/Pieces.lean` mine are lines 369–370 and 373 of `main`'s file; my 18:02Z entry said 369–374.
+
+### Going on
+
+- **The changed suites, first run**, `r20261113-171916-e22e` on vy-nebius-2, at `5f3249d1315`: 66 of 76 passed, none failed, at 18:56Z; no new suite has ended since 18:41Z.
+- **The changed suites, second run**, `r20261113-185310-3a57` on vy-nebius-2, at the head, against `main` `ff95b899ecf8`: 2 passed, none failed. It is the only run that checks the Lean side of the difftest row (`verity-pouw-check-difftest`).
+
+### Not established
+
+- That the changed suites pass at the head: the second run decides it. The body's Checked table says "still running" for both; I rewrite it when they end and name it here.
+- Checks 3 and 4 of "proved" for the two lemmas: no kernel replay, no red team. The body's table says so.
+- Whether TOP-415 names a live goal (see the top).
+
+To post: nothing. Runs going on: the two suites runs. `gatesRefine_check` starts now that this is open. Next entry by 19:58Z, sooner when the suites end.
