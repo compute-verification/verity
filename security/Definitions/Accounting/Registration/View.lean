@@ -24,10 +24,12 @@ is the one `Definitions.Core.Site` and `Definitions.Core.Compiler` define.
   the reading `Site.device` builds the device model from.
 * **The registered facts** (`View.Holds`): every registered device names a sheet registration accepted against the
   auditor's data sheet (`View.Devices`); onsite, every boundary link is certified and every memory leaf is in a host
-  a memory challenger reaches (`View.Onsite`); and θ registers each value once and the log declares each day once
-  (`View.Once`), so a lookup by name or by day reads the one registered value or circuit.
+  a memory challenger reaches (`View.Onsite`); θ registers each value once and the log declares each day once
+  (`View.Once`), so a lookup by name or by day reads the one registered value or circuit; and the whole Site passes
+  every check of a site entry (`Site.Checked`).
+* **The chain** (`Registration.Chained`): each entry names the head of the log before it.
 * **The guarantee** (`Verity.Guarantees.RegistrationSound`, in `Definitions.Accounting.Registration.Guarantees`): a
-  valid log's view holds the registered facts.
+  valid log's view holds the registered facts, and the log is chained.
 * **The parts of the registered hardware** (`Site.Accountable`, `Site.parts`): each device's compute, each memory leaf's
   memory held and memory read, the device model's resources (`Accounting.Resource`) at the leaf's tier, and each
   boundary link's egress, by the id that holds it.
@@ -68,6 +70,19 @@ def parts (S : Site) : Set (String × Accountable) :=
   {xr | (∃ x ∈ S.locs, x.kind = .device ∧ xr = (x.id, .resource .compute)) ∨
     (∃ x ∈ S.locs, x.kind = .memory ∧ (xr = (x.id, .resource .capacity) ∨ xr = (x.id, .resource .bandwidth))) ∨
     ∃ k ∈ S.links, S.Boundary k ∧ xr = (k.id, .egress)}
+
+/-- **The Site as one site entry**: its sheets, locations and links. -/
+def asEntry (S : Site) : Entry := ⟨S.sheets, S.locs, S.links⟩
+
+/-- **The whole Site passes every check of a site entry**, for the digests `D`, the auditor `A` and the composite `c`:
+registered as one site entry over the empty Site, it passes each (`Site.Entry.Valid`). So its ids and sheets are fresh
+(`Entry.Fresh`), its references known (`Entry.Refs`), its locations' parents and links' ends of their kinds
+(`Entry.Kinds`), its sheets accepted and its devices' named (`Entry.Sheets`), its figures accepted (`Entry.Figures`),
+its memory within its devices' sheets (`Entry.Capacity`), its memory leaves owned (`Entry.Owners`), and onsite its
+boundary covered (`Entry.Covered`) and its memory reached (`Entry.Reached`). Each site entry is checked against the
+Site it extends, so this is what holds of the whole Site at a valid log's head. -/
+def Checked (D : Registration.Digests) (A : Registration.Auditor) (c : Registration.Composite) (S : Site) : Prop :=
+  Entry.Valid D A c ⟨[], [], []⟩ S.asEntry
 
 end Site
 
@@ -147,10 +162,16 @@ name or by day reads the one registered value or circuit. -/
 def Once : Prop := (v.theta.map (·.value)).Nodup ∧ (v.declarations.map (·.day)).Nodup
 
 /-- **The registered facts the theorems read** hold of the view, for the digests `D`, the auditor `A` and the composite
-`c`: its devices' figures (`Devices`), onsite coverage (`Onsite`), and each value and day once (`Once`). -/
-def Holds (D : Digests) (A : Auditor) (c : Composite) : Prop := v.Devices D A ∧ v.Onsite c ∧ v.Once
+`c`: its devices' figures (`Devices`), onsite coverage (`Onsite`), each value and day once (`Once`), and every check of
+a site entry, of the whole Site (`Site.Checked`). -/
+def Holds (D : Digests) (A : Auditor) (c : Composite) : Prop :=
+  v.Devices D A ∧ v.Onsite c ∧ v.Once ∧ v.site.Checked D A c
 
 end View
+
+/-- **The chain**: each entry of the log names, as its previous head, the head of the log before it (`head`). -/
+def Chained (D : Digests) (c : Composite) (log : Registration) : Prop :=
+  ∀ i (h : i < log.length), log[i].previous = head D c (log.take i)
 
 /-- **The composite's lists, and what each protocol on them accounts for**: the protocols `P` of each composite, and
 the parts of the registered hardware protocol `p` of composite `k` accounts for at id `x` of Site `S`
