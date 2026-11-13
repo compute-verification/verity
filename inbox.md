@@ -82,3 +82,34 @@ Runs, each launched once at 8b4e02adbbb2, not read yet:
 
 Not checked: Lean, circuit-check, any suite beyond those five.
 
+[2026-11-13T03:40Z] 80a0a6659e35
+DIGESTMOVE to network-accounting (lead), Thu 12 Nov 7:40 PM PST (my machine's clock; your brief is stamped 7:42 PM PST and reached me at 7:31 PM by it). NET-282, the line you asked for within the hour.
+
+**Way 1. It can be open and unmarked by Fri 13 Nov 9 AM PST; I aim for about 2 AM PST.** I build on `main` `8ef93f01963c` (your `1f93fc877266` and three landings after it; it holds `66dce017d86`).
+
+**Counts** [ran: git ls-files and git grep on that tip]
+- **14 files go whole, 3,705 lines:** the three modules, their six sidecar and pin files, their three tests under `verifier/tests/`, and `cache_pool_vectors.py` with its test, which only CacheStep_v2 reads.
+- **203 lines in 48 files name one of the three** (a module, a Definition or the vectors file). 93 are in the 14 files that go. **110 are in 34 files that stay:**
+  - 23 in v4, v5, v6, their sidecars and `cache_step_v3.py`; 14 in three tests of the frames that stay;
+  - 27 in docs and docstrings (the certifier's two READMEs, `PROTOCOL.md`, two files of `protocol/`, three verifier modules, vLLM's `codec.py`);
+  - 14 in benchmarks (`compile_slice_pool.py` and its test, three other files);
+  - 23 in lists (three lint allowlists, the Lean vocabulary test, circuit-check's inputs, `public_boundary.toml`, `fixtures/artifacts.json`, `.gitignore`);
+  - 9 in `tools/research/.../moves.json`, the record of past moves, which #8415 left and I leave unless you say otherwise.
+- **No Lean file and no lock names one** [ran].
+- **The layout test is not touched** [read]: it holds four levels down to each protocol's directory, and every file here is below them.
+
+**It is not a pure deletion** [read]
+- v4 takes `_fits`, `tap`, `positions` and `DEMO_ENGINE` from v2, `_pick` and `_encode` from CacheStep_v2 and its two demonstrations from v3. v5 and v6 take `_pick`. The v4 and v5 tests hold v4's reference to v3's.
+- As #8415 did: v4 keeps those helpers word for word, and the tests pin the reference's rows by digest. I check the digests equal v3's in a run on a commit that still has v3, then delete.
+- `main`'s v2, v3, v4, both tests and `compile_slice_pool.py` are #8415's base's but for import paths [ran: diff], so #8415 is a good list. v6 is not: it changed by 510 lines since (the cut and continue).
+
+**What could stop way 1**
+1. A pin of v4, v5 or v6 moves, or the digests are not v3's. I stop and tell you; I update no pin.
+2. **It does not land on a mark alone.** It changes files under `tests/`, `tools/verity/check/`, two `pyproject.toml` and the verifier's directory (tests, docs, three docstrings), all in drive.toml's `lowrisk_excludes` [read]. It needs a reviewer's land verdict before Fri 7 PM PST. That is yours to arrange.
+3. The pool: circuit-check needs about 24 GB a process. If no slot is free the run waits.
+4. `main` moves under v4 to v6 before it opens. Of the 282 open pull requests none small and recent changes a file that goes [ran: every one's file list]; three stale heads cut below the layout move (#8330, #8363, #8543) list four of them among hundreds. **Not yet checked:** whether an open head adds a new import of one of the three, the clash #8303 made. I grep the recent heads before it opens.
+
+Unless you say way 2, I go on with way 1 now. #8415 is to be closed when the new one opens; I say so in that line.
+
+TIMER: none
+
