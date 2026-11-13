@@ -105,7 +105,7 @@ theorem prBadOn_abort (H : Msg → Msg) (I : Recursion.Inner Coin W) (x : Msg) {
         (RunFn.abort H I.V x P A keep) = I.PrBadAbort H x P keep :=
   rfl
 
-/-- `B`'s term at an aborting prover's runs is `√(γ · Pr[B])` at `BAbort`: the same draws, regrouped. -/
+/-- `B`'s term at an aborting prover's runs is `√(γ · Pr[B])` at `BAbort`: the same samples, regrouped. -/
 theorem KTerm.val_B_abort (H : Msg → Msg) (V : Verifier Coin) (γ : Msg → ℝ) (x : Msg) {Ω : Type} [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) (A : Type) [Fintype A] [Nonempty A] (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) :
     (KTerm.B γ : KTerm Coin V).val H x (RunFn.abort H V x P A keep) =

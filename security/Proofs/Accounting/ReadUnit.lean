@@ -46,10 +46,10 @@ The binding of table reads at a picked index (`Definitions.Accounting.ReadUnit`)
   row at its index in its local evaluation, or SHA-512 collides on what the two checks hashed
   (`Hash.SecurityProofs.EmbeddingReadBinding`). The local evaluation is the row the unit's own gates consume, and the
   transcript's where the row's gates are committed (`localEval_of_committed`).
-* `readUnitDrawn`: over a run's coins, the run accepts with a drawn read that returns another row than its table's at
+* `readUnitDrawn`: over a run's coins, the run accepts with a sampled read that returns another row than its table's at
   its index, where nothing its check and the table's check hashed collides, with probability at most the layer below's
-  bound: that the run accepts with a drawn read's unit wrong, or the read's registered rows failing, in the extractor's
-  transcript. A unit may hold several reads, and a read is drawn when its unit is.
+  bound: that the run accepts with a sampled read's unit wrong, or the read's registered rows failing, in the extractor's
+  transcript. A unit may hold several reads, and a read is sampled when its unit is.
 * `readUnitDrawnCR`: the same with the collision priced through `Claims.ExpectedCR` at the reads' collision finder
   (`Accounting.ReadUnit.Reads.finder`): the layer below's bound plus the finder's expected SHA-512 calls over `2^256`.
 -/
@@ -126,14 +126,14 @@ theorem readUnitBinds (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (const
   exact Hash.SecurityProofs.EmbeddingReadBinding H G (q.domainAt d) key r q.count q.words (q.tokOf (P.localEval X u))
     (q.opening (P.localEval X u)) hok' o₀ hlt h₀
 
-/-- **At an accepted run's drawn reads, each returns its table's row at its index, or SHA-512 collides on what its
+/-- **At an accepted run's sampled reads, each returns its table's row at its index, or SHA-512 collides on what its
 check and the table's hashed**, but with probability at most the layer below's bound. Over the run's coins `Ω`, with its
-acceptance `acc`, its drawn units `drawn` and the extractor's transcript `X`: where each read's gates compute its
+acceptance `acc`, its sampled proof blocks `drawn` and the extractor's transcript `X`: where each read's gates compute its
 reference in its unit (`GatesRefine`, a hypothesis), each read's table is committed under its root, and the run accepts
-with a drawn read's unit wrong or the read's registered rows failing in `X` with probability at most `ε`, it accepts
-with a drawn read that returns, in its unit's local evaluation of `X`, another row than its table's at its index, where
+with a sampled read's unit wrong or the read's registered rows failing in `X` with probability at most `ε`, it accepts
+with a sampled read that returns, in its unit's local evaluation of `X`, another row than its table's at its index, where
 no two messages the read's check and the table's check hashed collide under `H`, with probability at most `ε`. A read
-is drawn when its unit is. -/
+is sampled when its unit is. -/
 theorem readUnitDrawn {Ω : Type} [Fintype Ω] (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
     (consts : Fin C.N → Option Bool) {n : ℕ} {ι : Type} (P : Verity.Partition C n) (R : Reads C n ι)
     (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (X : Ω → C.Trace) (ε : ℝ)
@@ -157,10 +157,10 @@ theorem readUnitDrawn {Ω : Type} [Fintype Ω] (H : Hash.Msg → Verity.Digest) 
   · exact hnc (collisionIn_mono h fun m hm => List.mem_append_left _ hm)
   · exact hnc (collisionIn_mono h fun m hm => List.mem_append_right _ hm)
 
-/-- **At an accepted run's drawn reads, each returns its table's row at its index**, in its unit's local evaluation of
+/-- **At an accepted run's sampled reads, each returns its table's row at its index**, in its unit's local evaluation of
 the extractor's transcript, but with probability at most the layer below's bound plus the reads' collision finder's
 (`Reads.finder`) expected SHA-512 calls over `2^256`, at a finder that meets `Claims.ExpectedCR` (`ecr/sha-512`). The
-finder outputs two messages the drawn reads hashed that collide under `H`, if there are two; its cost `cost` is the
+finder outputs two messages the sampled reads hashed that collide under `H`, if there are two; its cost `cost` is the
 reader's to state from the adversary it runs. -/
 theorem readUnitDrawnCR {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
     (consts : Fin C.N → Option Bool) {n : ℕ} {ι : Type} (P : Verity.Partition C n) (R : Reads C n ι)
