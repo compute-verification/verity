@@ -29,6 +29,7 @@ order = [
     ["verity/protocols/pous"],
     ["verity/protocols/poub"],
     ["verity/protocols/pouw"],
+    ["verity/protocols/experimental"],
     ["verity/protocols/inference_only"],
     ["verity/protocols/certifier"],
     ["verity/protocols/remote"],
@@ -564,6 +565,11 @@ reaches = [
     "verity/periods",
     "verity/protocols/reporting.py",
     "verity/runtime",
+]
+
+[[place]]
+paths = [
+    "verity/protocols/experimental",
 ]
 
 [[place]]
