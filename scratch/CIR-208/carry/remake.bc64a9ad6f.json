@@ -1,0 +1,56 @@
+{
+ "head": "483586d432a2389e58fe9cb90a47654921c59002",
+ "registered": 2258,
+ "boolean_versions": 673,
+ "superseded": 236,
+ "superseded_files": 61,
+ "tree_list": {
+  "entries": 239,
+  "files": 64,
+  "held": 0
+ },
+ "tree_list_against_the_registries": {
+  "new": [],
+  "gone": [
+   "CacheStep_v2",
+   "CompileSlice_v2",
+   "CompileSlice_v3"
+  ],
+  "moved": [],
+  "twice": []
+ },
+ "made_again": {
+  "entries": 236,
+  "files": 61
+ },
+ "made_again_is_the_tree_list_pruned": true,
+ "made_again_is_the_tree_list": false,
+ "by_place": {
+  "verity/definitions": 183,
+  "verity/protocols": 28,
+  "verity/circuits": 24,
+  "adapters/vllm": 1
+ },
+ "against_old": {
+  "old_rev": "d9b1f18a28fef36e24a3c3d6b6f6031236c943a6",
+  "old_entries": 239,
+  "old_files": 64,
+  "entered": {},
+  "left": {
+   "CacheStep_v2": "verity/protocols/certifier/prover/cache_step_v2.py",
+   "CompileSlice_v2": "verity/protocols/certifier/prover/compile_slice_v2.py",
+   "CompileSlice_v3": "verity/protocols/certifier/prover/compile_slice_v3.py"
+  },
+  "file_moved": 52,
+  "file_same": 184,
+  "moves": {
+   "verity/definitions/ops -> verity/circuits/ops/boolean": 14,
+   "verity/definitions/ops -> verity/circuits/ops/fp32.py": 9,
+   "verity/definitions/ops -> verity/circuits/ops/mufu.py": 1,
+   "verity/protocols/certifier -> verity/protocols/accounting/certifier": 10,
+   "verity/protocols/poub -> verity/protocols/accounting/poub": 2,
+   "verity/protocols/pouw -> verity/protocols/accounting/pouw": 16
+  }
+ },
+ "written": "tests/lint/allowlists/superseded_versions.json"
+}

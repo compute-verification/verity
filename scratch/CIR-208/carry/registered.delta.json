@@ -1,0 +1,118 @@
+{
+ "old_head": "d9b1f18a28fef36e24a3c3d6b6f6031236c943a6",
+ "new_head": "bc64a9ad6fb448de241501c93c14fc0eadcfebad",
+ "registered_old": 2249,
+ "registered_new": 2258,
+ "entered": {
+  "Fa2TrainBwdDkDv_v1": [
+   "verity/definitions/registry/fa2_train_bwd.py",
+   false
+  ],
+  "Fa2TrainBwdDkDv_v2": [
+   "verity/definitions/registry/boolean_fa2_train_bwd.py",
+   true
+  ],
+  "Fa2TrainBwdDq_v1": [
+   "verity/definitions/registry/fa2_train_bwd.py",
+   false
+  ],
+  "Fa2TrainBwdDq_v2": [
+   "verity/definitions/registry/boolean_fa2_train_bwd.py",
+   true
+  ],
+  "Fa2TrainBwdHead_v1": [
+   "verity/definitions/registry/fa2_train_bwd.py",
+   false
+  ],
+  "Fa2TrainBwdHead_v2": [
+   "verity/definitions/registry/boolean_fa2_train_bwd.py",
+   true
+  ],
+  "Fa2TrainBwdKeyFirst_v1": [
+   "verity/definitions/registry/fa2_train_bwd.py",
+   false
+  ],
+  "Fa2TrainBwdKeyFirst_v2": [
+   "verity/definitions/registry/boolean_fa2_train_bwd.py",
+   true
+  ],
+  "Fa2TrainBwdKey_v1": [
+   "verity/definitions/registry/fa2_train_bwd.py",
+   false
+  ],
+  "Fa2TrainBwdKey_v2": [
+   "verity/definitions/registry/boolean_fa2_train_bwd.py",
+   true
+  ],
+  "Fa2TrainBwdPre_v1": [
+   "verity/definitions/registry/fa2_train_bwd.py",
+   false
+  ],
+  "Fa2TrainBwdPre_v2": [
+   "verity/definitions/registry/boolean_fa2_train_bwd.py",
+   true
+  ],
+  "Fa2TrainBwdRow_v1": [
+   "verity/definitions/registry/fa2_train_bwd.py",
+   false
+  ],
+  "Fa2TrainBwdRow_v2": [
+   "verity/definitions/registry/boolean_fa2_train_bwd.py",
+   true
+  ],
+  "Fp8DsMlaUpconvertRow_v1": [
+   "verity/definitions/registry/fp8_ds_mla_upconvert.py",
+   false
+  ],
+  "GreedyChunk_v2": [
+   "verity/definitions/registry/greedy_stages.py",
+   false
+  ],
+  "GreedyCombine_v2": [
+   "verity/definitions/registry/greedy_stages.py",
+   false
+  ],
+  "GreedySelect_v1": [
+   "verity/definitions/registry/greedy_stages.py",
+   false
+  ]
+ },
+ "left": {
+  "CachePoolEnd_v1": [
+   "verity/protocols/certifier/prover/cache_step_v2.py",
+   false
+  ],
+  "CachePoolEvict_v1": [
+   "verity/protocols/certifier/prover/cache_step_v2.py",
+   false
+  ],
+  "CachePoolFree_v1": [
+   "verity/protocols/certifier/prover/cache_step_v2.py",
+   false
+  ],
+  "CachePoolUnit_v1": [
+   "verity/protocols/certifier/prover/cache_step_v2.py",
+   false
+  ],
+  "CacheStep_v2": [
+   "verity/protocols/certifier/prover/cache_step_v2.py",
+   false
+  ],
+  "CompileSlice_v2": [
+   "verity/protocols/certifier/prover/compile_slice_v2.py",
+   false
+  ],
+  "CompileSlice_v3": [
+   "verity/protocols/certifier/prover/compile_slice_v3.py",
+   false
+  ],
+  "GreedyChunk_v1": [
+   "verity/definitions/registry/greedy_stages.py",
+   false
+  ],
+  "GreedyCombine_v1": [
+   "verity/definitions/registry/greedy_stages.py",
+   false
+  ]
+ }
+}

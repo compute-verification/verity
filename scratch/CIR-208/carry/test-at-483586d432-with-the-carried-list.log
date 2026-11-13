@@ -1,0 +1,21 @@
+.F.                                                                      [100%]
+=================================== FAILURES ===================================
+_____ test_the_list_holds_only_superseded_versions_where_they_are_defined ______
+
+    def test_the_list_holds_only_superseded_versions_where_they_are_defined() -> None:
+        gone, moved, twice = (found()[k] for k in ("gone", "moved", "twice"))
+>       assert not gone and not moved and not twice, (
+            f"superseded Definition versions: {LIST.relative_to(REPO)} is exact, and {len(gone)} of its versions are gone or no "
+            f"longer superseded, {len(moved)} are defined in another module than their entry names, and {len(twice)} have both an "
+            f"entry and a `held` line. Drop the first and rewrite the second with `{PRUNE}`, and keep one line for each of the "
+            f"third:\n{_lines(gone + moved + twice)}")
+E       AssertionError: superseded Definition versions: tests/lint/allowlists/superseded_versions.json is exact, and 3 of its versions are gone or no longer superseded, 0 are defined in another module than their entry names, and 0 have both an entry and a `held` line. Drop the first and rewrite the second with `uv run python tools/verity/circuit_check/tests/test_superseded_versions.py --prune`, and keep one line for each of the third:
+E           CacheStep_v2
+E           CompileSlice_v2
+E           CompileSlice_v3
+E       assert (not ['CacheStep_v2', 'CompileSlice_v2', 'CompileSlice_v3'])
+
+tools/verity/circuit_check/tests/test_superseded_versions.py:138: AssertionError
+=========================== short test summary info ============================
+FAILED tools/verity/circuit_check/tests/test_superseded_versions.py::test_the_list_holds_only_superseded_versions_where_they_are_defined
+1 failed, 2 passed in 7.38s
