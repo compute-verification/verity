@@ -22,9 +22,9 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.protocols.pouw.prover.schemes import pearl_c as PC
-from verity.protocols.pouw.prover.schemes.pearl_c_device import H100
-from verity.protocols.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as PC
+from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import H100
+from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
 
 spec = importlib.util.spec_from_file_location("pouw_pearlc_census_ttout", Path(__file__).parents[1] / "pearlc_census.py")
 C = importlib.util.module_from_spec(spec)

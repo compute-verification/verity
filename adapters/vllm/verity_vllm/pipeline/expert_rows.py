@@ -348,7 +348,7 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
     `serving_rows._slices`; `table_words`) as core's ``registered.Registered`` of ``hm96-sha512/row-seg/v1`` rows with its rows
     held, under ``committer``'s secret ``key`` at the ``program`` and ``nonces`` its registration names (`committer`), by
     parameter.  Refused for a table the registration names no nonce for."""
-    from verity.protocols.spot.verifier.one_stage import registered as G
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
     from verity_vllm.protocols.pouw.h1 import registered as H1R
 
     out: dict[str, Any] = {}
