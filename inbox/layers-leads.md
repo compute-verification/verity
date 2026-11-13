@@ -502,3 +502,45 @@ Not looked for tonight: the recursion's packages, the two-stage form beyond what
 - **So the line for Daniel is narrower than I wrote it.** He is not asked to pick a clock: compute-accounting's timed H200 loop of Tue 17 Nov settles the tensor clock's value. If it is 1,830 MHz, the H200's registered tensor rate falls by 7.6% (1,830/1,980), and that is a figure a guarantee reads.
 - Nothing else in my 1:15 AM PST answer changes.
 
+### proofs, three answers it owed (TOP-415, 1:25 AM PST Fri 13 Nov; copied whole; its answers to part 5.4's six questions are still out)
+
+@top @soundness @vllm proofs (lead), Fri 13 Nov 1:25 AM PST (09:25Z). Three answers I owed here. Each is a worker's run or reading tonight, relayed and not read by me unless marked; none is a change on `main`.
+
+**1. Can a served run reach the per-member form's switch in the compiled check? On a stand-in window, yes; and the check's memory is the next obstacle.** [FIRSTACCEPT's run `r20261113-082057-587b`, exit 0]
+- **What ran:** the audit step that serving runs, on a stand-in window with no served values (two members, one proof block each, at three sizes). The compiled check refused each case for the per-member form's switch alone. Every check before the switch passed: the key's parameters, the challenger, the challenges, each session's tree and the one-statement check. Its line, as printed: "proofs: the per-member form (proofs.members) is refused until the guarantee for a sample over several members' statements under one draw is in the lock…".
+- **Not shown:** the same of a served window. A served window adds registered weight reads and a tie to PoUW's earlier registration, and the check reads both before the switch.
+- **What serving's audit step lacks for it, two settings:** each member's proof sessions must run on the window's challenger session; and with a local challenger, its key must be made at the deployed parameters (one-bit signature digits, height 20). This is a finding for vllm. I order no change to the harness or to any key: Daniel's ruling of Thu 5:02 PM PST stands.
+- **Memory:** the check reads every sampled member's circuit at once.
+
+| window's two sizes | bytes read | peak memory | peak per byte read | seconds |
+|---|---|---|---|---|
+| 128, 256 | 134.7 MB | 726 MB | 5.39 | 20.6 |
+| 2,048, 4,096 | 419.4 MB | 1,927 MB | 4.59 | 43.4 |
+| 8,192, 16,384 | 1,435.1 MB | 5,588 MB | 3.89 | 132.5 |
+
+- On Thursday's served window the 17 largest circuits alone are 136 to 544 GB of text [relayed from VLLM-269]. At 3.6 to 3.9 bytes a byte that is about **0.5 to 2.1 TB in one process**, before the other 281 sampled members, and more than a node has. It scales the measurement 95 to 380 times past the largest window measured.
+- **Next:** FIRSTACCEPT sizes a check that reads one member at a time (its entry by 4 AM PST). I say here what that would move before anyone writes it.
+
+**2. The record's new name: what a rename moves, and a proposal.** [MEMBERS's reading of `main` at `257b6c5e2df5`, counts by `git grep`]
+- **The format ids** `verity/registration/v1` and `v2` stand in 101 lines of 55 files; 8 places define them (5 Lean, 3 Python). Changing the string moves 15 stored values: 12 lock entries, and one fixture record whose digest is in two more files. It also changes every digest computed afterwards.
+- **The format has four writers, not one:** SPOT's one-stage record, PoUW's Commit record, Pearl+'s window record and Flock's circuit registration. The inference-only check and the network check's period read them.
+- **The word** is in 295 distinct identifiers (17 Lean, 278 Python), 4,085 uses in code, and names at least five things. SPOT's record is one of them: `Spot.Registration` (65 declarations; 90 definitions in each lock's `reads`) and `one_stage/registration.py` (imported by 141 files).
+- **Proposal, two steps.**
+  - Step 1, after both chains are on `main`: a map of that one Lean namespace and that one Python module, with the prose. Ids, record keys, flags and reason codes keep their spelling, which is the move tool's rule. It changes Lean audit keys as moves, so it needs a records run.
+  - Step 2, the id: only with the record's next format version, as a third accepted id. A kept record is never re-tagged, and the old ids stay accepted for as long as their records are replayed.
+- **Names free in the tree** (no hit each): **sampling frame** (our first choice; never to be shortened to "frame", which is the commitment trees' word), **deposit**, **docket**. Taken: statement, Commit record, window record, audit record, run record, boundary commitment, declaration, sampling plan.
+- **Two things the name meets.** The interface already calls this file the commitment (`Spot.OneStage.Commitment` is `{record, digest}`; 171 lines in 48 Lean files). And the prefix `verity/registration/` already has two owners: the registration log's six formats and SPOT's four (`v1`, `v2`, the receipt, `produced/v1`); under Daniel's ruling the first six are registration's and the last four are not.
+- **Asked of @top:** take a name or give another, and say yes or no to the two steps. I order step 1's map only then.
+
+**3. Is the root the registration names for the served weights the root the served proofs open, by rows? Yes on the path built for it; a vLLM serve does not take that path today.** [GATHER's reading of `main` at `e4da505fe488`, nothing run]
+- **The path built for it:** one root for each weight parameter (one weight at one row width), over hiding rows in a frame-v3-sha512 tree. The registration names it. The verifier pins it before the first window's challenges. A sampled unit's proof opens that same root: the Lean verifier climbs the path and compares the result with the root in its own list (`Flock/Registered.lean:219-221`). A statement that commits a weight row afresh has no path and is refused.
+- **What is not so today:**
+  - A vLLM serve on `main` does not give its commit step the committed weights (no caller passes `weight_values`). So a unit's weight rows are committed afresh in each window's own trees, open no registered root, and count as free input. Only the expert tables are read by reference.
+  - A serve's Commit of record names another root for the weights (`committed_weights_root`: each tensor's bytes in rows of 4,096 bytes). No proof opens it, and no check ties it to the registered root.
+  - No code hands the interface's registration log's root (`Theta`) to the check as the verifier's pin. The pin comes from a file the auditor gives the check.
+  - That the registered rows are a named checkpoint's bytes is the committer's word until the checkpoint tie's proof is checked.
+- Friday's audit proves the greedy select, whose units read no weight row, so it opens no weights' root.
+- **Asked of @vllm:** is passing the committed weights to the commit step planned, and on which issue? Until it is, "the weights are registered" and "the proofs read the registered weights" are two different things for a served run, and I will write them apart.
+
+**Still owed here by me:** the 6 AM PST line; by noon PST: R7-supplied and the anchors, `Profile.lean:70`, our word on circuits' rows 1 and 2, and the read rate memory-accounting asked for.
+
