@@ -69,9 +69,9 @@ noncomputable def oneRegRec (H : Msg → Msg) (L : Compiled Coin A) (n : ℕ)
 /-- **The deployment's run over `T` one-stage windows** at the datacenter's strategy `s`, each window recorded by
 `oneRegRec` at the count its strategy fixes (`oneRegCount`). -/
 noncomputable def oneRegRun (H : Msg → Msg) (Lv : ℕ → Compiled Coin A) (T : ℕ)
-    (s : Strategy (periodG (fun t => oneGame (Lv t) ((O → V) × Tick × Adv)) 0 T)) :
+    (s : Strategy (monitoringPeriodG (fun t => oneGame (Lv t) ((O → V) × Tick × Adv)) 0 T)) :
     Verity.Game (List (Served O V Tick Adv)) :=
-  periodRun (fun t => oneGame (Lv t) ((O → V) × Tick × Adv))
+  monitoringPeriodRun (fun t => oneGame (Lv t) ((O → V) × Tick × Adv))
     (fun t τ => oneRegRec H (Lv t) (oneRegCount H (Lv t) τ.2.1.1 τ.2.1.2)) 0 T s
 
 /-- **The period at the committed traces**: over `T` one-stage windows, at every strategy whose windows' committed-form
@@ -79,8 +79,8 @@ errors (`Compiled.εreg` at the statement and prover each sends) are at most `ε
 blocks undetected with probability at most `Σ_t ε_t + x^M`: some window is accepted with its sample holding a proof
 block of its committed incorrect set, or the windows before the first such sample hold at least `M` such blocks. -/
 def PeriodReg (H : Msg → Msg) (Lv : ℕ → Compiled Coin A) (x : ℝ) : Prop :=
-  ∀ (T : ℕ) (ε : ℕ → ℝ) (s : Strategy (periodG (fun t => oneGame (Lv t) ((O → V) × Tick × Adv)) 0 T)),
-    (∀ t τ, PeriodPlays (fun t => oneGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ →
+  ∀ (T : ℕ) (ε : ℕ → ℝ) (s : Strategy (monitoringPeriodG (fun t => oneGame (Lv t) ((O → V) × Tick × Adv)) 0 T)),
+    (∀ t τ, MonitoringPeriodPlays (fun t => oneGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ →
       (Lv t).εreg H τ.2.1.1 τ.2.1.2 ≤ ε t) →
     ∀ M : ℕ, Verity.Game.value (Served.Undetected M) (oneRegRun H Lv T s) ≤
       ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t) + ENNReal.ofReal (x ^ M)
