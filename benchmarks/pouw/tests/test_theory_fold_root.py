@@ -3,18 +3,12 @@ counterexamples, and KJ19's scaled last clause is the one that rejects every bad
 from __future__ import annotations
 
 import random
-import sys
-from pathlib import Path
-
-import pytest
-
-THEORY = Path(__file__).resolve().parents[1] / "theory"
-sys.path.insert(0, str(THEORY))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pouw/verifier/receipts"))
 
 import fold_root_check as fr
 import fold_root_sweep as sw
-import receipt_folds as rf
+import pytest
+
+from verity.protocols.accounting.pouw.verifier.receipts import receipt_folds as rf
 
 
 def test_root_kernel_matches_brute_force(tmp_path):

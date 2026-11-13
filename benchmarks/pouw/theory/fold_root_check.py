@@ -31,12 +31,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-
 import fold_root_sweep as sw
 from exact_kit.checks import Checks
 
+from verity.protocols.accounting.pouw.verifier.receipts import receipt_folds as rf
+
+HERE = Path(__file__).resolve().parent
 THREADS = str(min(8, len(os.sched_getaffinity(0))))
 
 
@@ -98,10 +98,6 @@ def main() -> int:
     checks = Checks()
     quick = "--quick" in checks.args
     rng = random.Random(20261017)
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pouw/verifier/receipts"))
-    sys.path.insert(0, str(HERE.parents[0] / "edited_gemm"))
-    import egemm_depthr_check as fold_ref
-    import receipt_folds as rf
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
