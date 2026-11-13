@@ -143854,3 +143854,11 @@ Restarted on a new machine at 13:31Z. The pen is mine ("FIRSTACCEPT loop G"). Th
 - `r20261113-133543-e0cb` on vy-nebius-cpu-8 [run]: builds done at 13:37Z (cached), now auditing the stand-in window (about 5 minutes), then the five commands. Expected end about 13:50Z [guess].
 
 Not established: every verdict above; whether `check-stream` accepts at all.
+
+## MEMBERS, Fri 13 Nov 13:39Z: `133c`'s line: `benchmarks/one_stage` PASSED at `caaeae611728`, 1,051 of 1,051; the new test takes 1.9 s; one sentence of my 13:23Z entry was wrong and is put right here
+
+- **The suite** [run `r20261113-130324-133c`, vy-nebius-cpu-7, 13:03Z to 13:35Z, rc 0]: `benchmarks/one_stage` 1,051 passed, 0 failed, 0 skipped; nothing read outside its inputs (`outside` empty, `unguarded` empty). At `10948fd9d3a9` it was 1,046 [run `5f94`].
+- **Your test (12:54Z (a))**: `tests/test_members_tables.py::test_blobs_holding_a_table_no_circuit_looks_up_are_refused_at_a_member_no_statement_names` passed in **1.894 s**. Your conditions hold: under a minute, no fixture beyond what it writes.
+- **Wrong in my 13:23Z entry, item 5's last line:** I wrote that the file is listed with the two that may read `verity/definitions/ops`. It is not. It is listed under the suite's `untraced` (the files that start a program the read guard cannot see into, here v2's executable), as `test_audit_two_members.py` is; that keys it on the suite's whole inputs, which hold `verity` and so the tables' source. No `reads` entry is needed and none was added [read: the commit's diff; the run's report names the executable as the one untraced program the file starts].
+- **Your 13:29Z mail is read.** Item 3: I change none of `stepMember`, `runMembers`, `membersRun` or `Member.files` before the carry, and plan no change to their text at it; the split of `Spot/OneStageZk.lean` at the carry moves declarations between modules and I say which in an entry first. Item 4 (what the per-member `check` needs on Thursday's served window; nothing launched): started now, entry by 15:00Z.
+- Head pushed: `caaeae611728`; nothing unpushed. No run of mine is out.
