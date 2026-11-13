@@ -2477,10 +2477,16 @@ KEY_PARAMS = (f"the challenger's key is not at the deployed LMS parameters (W = 
               "reads the challenger's signatures only under those")
 
 
-def decode_params_v2(j) -> dict:
-    """`OneStageZk.paramsOfJson`'s refusals of v1's part of the parameters: v1's (`covered_params`,
+def subset_only(kind: str) -> str:
+    """`OneStageZk.SUBSET_ONLY`"""
+    return f"the law is {kind}, which the one-statement audit's soundness statement doesn't cover: it covers a subset law"
+
+
+def parsed_params_v2(j) -> dict:
+    """`OneStageZk.paramsParsed`'s refusals of v1's part of the parameters: v1's (`covered_params`,
     `OneStage.paramsOfJson`), then parameters naming no challenger (`NO_CHALLENGER`), or one whose key is at other LMS
-    parameters than the deployed ones (`KEY_PARAMS`)."""
+    parameters than the deployed ones (`KEY_PARAMS`). Its law is the sampling design v1 resolved, under any kind v1
+    parses."""
     rest = {k: v for k, v in j.items() if k != "proofs"}
     p = covered_params(rest)
     if "challenger" not in rest:
@@ -2489,6 +2495,20 @@ def decode_params_v2(j) -> dict:
     if (key.W, key.H) != DEPLOYED:
         raise D.Reject(KEY_PARAMS)
     return p
+
+
+def subset_law(p: dict) -> dict:
+    """`OneStageZk.paramsOfJson`'s last refusal, of parsed parameters (`parsed_params_v2`) whose sampling design is no
+    `subset` one, by its kind (`subset_only`): a rate stated as text is its design over the population by here."""
+    if p["law"]["law"] != "subset":
+        raise D.Reject(subset_only(p["law"]["law"]))
+    return p
+
+
+def decode_params_v2(j) -> dict:
+    """`OneStageZk.paramsOfJson`'s refusals of v1's part of the parameters: `parsed_params_v2`'s, then a sampling design
+    that is no `subset` one (`subset_law`)."""
+    return subset_law(parsed_params_v2(j))
 
 
 def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: int = 1,
@@ -2796,7 +2816,9 @@ def test_link_points_refuses_a_law_none_of_whose_draws_ends():
 def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
     """v2 reads its sample's coins as v1 does (`OneStageZk.coinsOf`, v1's `coinsOf`), and only from the auditor's
     challenger under a key at the deployed parameters: parameters naming none, one without a window (`NO_CHALLENGER`) or
-    one whose key is at other parameters (`KEY_PARAMS`) are refused, as is evidence holding more than its limits
+    one whose key is at other parameters (`KEY_PARAMS`) are refused, as are parameters whose sampling design is no
+    `subset` one (`subset_only`: a `stratified` or `work` law, as an object or as a rate stated as text, while a rate
+    that names the audit's subset law over the population is read as that law), and evidence holding more than its limits
     (`Challenger.LIMITS`: an opening's path one digest past `MAX_PATH`, and the evidence at it read on), and evidence
     whose coins are not the challenger's signed release is rejected: none, the record carrying its own key, coins under
     another key, on another window, of another family or released after another digest, a session record or close whose
@@ -2807,12 +2829,18 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
     than theirs is rejected after them (`checkBlobsAt`, v1's `checkAt`). Each step Lean rejects at is the Python
     reference's: `decode_params_v2`, `coins_within`, `_coins_of`, then v1's `check` with the session's verdict the
     reject its blobs give, its record on the coin tree the challenger sampled."""
-    s, law = SETUPS[3], {"k": 3, "law": "stratified"}
+    s, law = SETUPS[3], {"k": 3, "law": "subset"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
     after = bytes.fromhex(R.digest(rec))
     circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
     failed = {"flock-verify/s": {"accepted": False, "of_record": True}}
+    table = {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}}
+    uncovered = {"a stratified law": ({"k": 3, "law": "stratified"}, None, "stratified"),
+                 "a work law": ({"k": 3, "law": "work"}, table, "work"),
+                 "a work law with no table": ({"k": 3, "law": "work"}, None, "work"),
+                 "a stratified rate": ("stratified-rate:1/2", None, "stratified"),
+                 "a work rate": ("work-rate:1/2", table, "work")}
 
     def audit_of(d: Drawn, draw: dict, coins, **params) -> dict:
         proved = DR.proved(draw)
@@ -2929,6 +2957,15 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
              for name in DRAW_MUTATIONS if name not in ("unread", "read-tampered", "other-after")}
         for name, (want, a) in cases.items():
             assert (python(a), lean(a)) == (want, want), (seed, name)
+        for name, (other_law, work, kind) in uncovered.items():
+            a = audit_of(d, draw, coins, law=other_law, **({} if work is None else {"work_table": work}))
+            with pytest.raises(D.Reject) as refused:
+                decode_params_v2(a["params"])
+            out = outcome(a)
+            assert (str(refused.value), out["verdict"], out["reason"]) == (
+                subset_only(kind), "reject", f"params: {subset_only(kind)}"), (seed, name)
+        rate = audit_of(d, draw, coins, law="rate:3/5")
+        assert decode_params_v2(rate["params"])["law"] == law and (python(rate), lean(rate)) == ("verdict", "verdict"), seed
         for name, (c, why) in unclosed(coins).items():
             a = audit_of(d, draw, c)
             e = {k: v for k, v in a["evidence"].items() if k != "proofs"} | {"verdicts": failed}
@@ -7639,7 +7676,10 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
     Bernoulli law at 0 < p < 1 are refused (`paramsOfJson`), and evidence whose sample carries a closure
     (`evidenceOf`), after its commitment's digest, v2's parameters naming a challenger at the deployed LMS parameters so
     that its refusals of parameters naming none (`NO_CHALLENGER`) or another key (`KEY_PARAMS`) aren't what refuse them;
-    the same work audit without the closure is accepted by v1."""
+    the same work audit without the closure is accepted by v1. v1 accepts an honest audit under a `subset`, `stratified`
+    or `work` law; v2, whose one statement's soundness statement covers a subset law alone, refuses the parameters of the
+    `stratified` and the `work` one by their kind (`subset_only`), and the `subset` ones' it doesn't. So v2 refuses the
+    work audit that carries the closure at its parameters, and a subset audit whose sample carries one at its evidence."""
     for kind, stage in (("bernoulli", "params: "), ("closure", "evidence: ")):
         params, rec, evidence = _covered_case(kind)
         case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
@@ -7655,6 +7695,14 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
                                   "proofs": {"circuit": _sha(circuit), "public": _sha(public), "registered": None},
                                   "window_root": d.ledger.window["root"]}}
         out = server_v2.exchange(_json(v2))
+        if kind == "closure":
+            assert (out["verdict"], out["reason"]) == ("reject", f"params: {subset_only('work')}"), out
+            covered, held, plain = _covered_case("subset")
+            draw = plain["draw"]
+            widened = {**draw, "closure": [u for u in range(draw["population"]) if u not in draw["units"]][:1]}
+            carried = {k: v for k, v in plain.items() if k != "verdicts"} | {"draw": widened, "proofs": {"sessions": []}}
+            out = server_v2.exchange(_json({**v2, "commitment": _hex(held), "evidence": _hex(carried),
+                                            "params": {**v2["params"], "law": covered["law"], "work_table": None}}))
         assert out["verdict"] == "reject" and out["reason"].startswith(stage), (kind, out)
         assert "soundness statement doesn't cover" in out["reason"], (kind, out)
         if kind == "bernoulli":
@@ -7672,7 +7720,10 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
         assert D.replay(ONE_STAGE, case, server)[0] == "accept", kind
         two = {**v2, "params": {**v2["params"], "law": params["law"], "work_table": params["work_table"]}}
         out = server_v2.exchange(_json(two))
-        assert not (out["reason"] or "").startswith("params: "), (kind, out)
+        if kind in ("stratified", "work"):
+            assert (out["verdict"], out["reason"]) == ("reject", f"params: {subset_only(kind)}"), (kind, out)
+        else:
+            assert not (out["reason"] or "").startswith("params: "), (kind, out)
 
 
 def test_the_run_refuses_a_population_out_of_order(pieces):

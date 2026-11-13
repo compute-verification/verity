@@ -116,7 +116,10 @@ independently with probability `NUM/DEN`.
 strata and that sampler but sizes each stratum by the work its proof blocks are credited: with `W = Σ_s w_s n_s`, stratum `s` samples
 `k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))`, where `w_s` and the floor `f_s ≥ 1` come from the verifier's own work table.
 Each verifier derives the strata from its own program and query, never from the prover. Both verifiers refuse what the
-soundness statement doesn't cover: `bernoulli` at any `p` (`bernoulli`) and a closure map (`closure`).
+soundness statement doesn't cover: `bernoulli` at any `p` (`bernoulli`) and a closure map (`closure`). The audit on the
+proofs refuses a `stratified` or `work` design in its one-statement form too, by the design's kind
+(`OneStageZk.SUBSET_ONLY`), written as a law or as a rate: that form's soundness statement covers `subset:K` alone, which
+a rate `rate:NUM/DEN` names over the population. Its per-member form parses every design v1 does.
 
 **What an accepted audit establishes.** Under a stratified sample, a set of incorrect proof blocks has acceptance probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)`, `m_s` being its proof blocks in
