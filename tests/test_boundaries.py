@@ -183,8 +183,8 @@ NO_UNIT = tuple(p.removeprefix("verity/") for p in (
     "verity/protocols/poub/device/live_verifier/host.py",
     "verity/protocols/poub/verifier/remote_session/verifier_process.py",
     # proofs
-    "verity/composite/device/live_challenger/auditor.py", "verity/composite/device/live_challenger/coin_link.py",
-    "verity/composite/device/live_challenger/models.py", "verity/composite/device/live_challenger/serve.py",
+    "verity/protocols/compose/device/live_challenger/auditor.py", "verity/protocols/compose/device/live_challenger/coin_link.py",
+    "verity/protocols/compose/device/live_challenger/models.py", "verity/protocols/compose/device/live_challenger/serve.py",
 ))
 _LISTED = {*_UNIT_AT, *NO_UNIT}
 #: ml and core are two named sets: the units named ``ml.*`` and ``core.*``, each with its tests, and with them the trees
@@ -334,13 +334,13 @@ BENCHMARKS_IMPORTERS = {
                                                               "(`benchmarks/tc_probe`)",
     **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
-                    "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/composite/device/live_challenger`)"),
+                    "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/protocols/compose/device/live_challenger`)"),
     **dict.fromkeys(("adapters/vllm/tests/engine/ppl_oracle.py", "adapters/vllm/tests/engine/fattn_oracle.py"),
                     "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`)"),
     "adapters/vllm/tests/engine/int8_attention_sass.py": "kernels: the PoUW kernels' SASS gate "
                                                              "(`benchmarks/pouw/harness/sass_gate.py`)",
     # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path
-    "verity/composite/device/live_challenger/auditor.py":
+    "verity/protocols/compose/device/live_challenger/auditor.py":
         "proofs: the relay's load (`benchmarks/network_traces/load_relay.py`), "
         "loaded by path since before the move; goes when the session's code moves under `verity/`",
     "verity/protocols/poub/device/live_verifier/tests/stub_verifier.py":
