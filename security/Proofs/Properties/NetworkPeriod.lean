@@ -460,7 +460,7 @@ theorem sampleHeld_whole {reg : Lean.Json} {f : Facts} {n : ℕ} {ss : Array Cor
 
 /-- The rows form's check of a scan, where it accepts, has the scan's answer's facts. -/
 theorem rowsExecutionPhaseCheck_facts {p : Params} {s : Schedule} {sd : ByteArray} {audits : Array Lean.Json} {w : ℕ}
-    {reg : Lean.Json} {x : Window} {u : Facts × ℕ} (h : rowsExecutionPhaseCheck p s sd audits w reg x = .ok u) :
+    {reg : Lean.Json} {x : ExecutionPhase} {u : Facts × ℕ} (h : rowsExecutionPhaseCheck p s sd audits w reg x = .ok u) :
     ∃ (what : String) (prof : Core.Integrity) (pub : Lean.Json), factsOf what reg prof pub = .ok u.1 := by
   unfold rowsExecutionPhaseCheck at h
   simp only [bind, Except.bind, pure, Except.pure, refuse] at h
