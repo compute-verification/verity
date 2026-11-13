@@ -14,7 +14,10 @@ stand-ins move (`Clock`), so every number in a row is one the test states.
 
 Held: the files `main` writes, `verdict.json`, `runs.jsonl`, `steps.jsonl` and `summary.json` whole (a run's root and its coins
 against what the committer and `commit_coins` gave), what each stand-in was handed, the last line printed, and how `main`
-ends: by returning, by exit 3, or by a refusal's sentence.  CPU only."""
+ends: by returning, by exit 3, or by a refusal's sentence.  The last tests stop `main` where it takes the GPU
+(`before_the_lease`) and hold what it does before that with a required-value manifest, with the served source, with a stack
+dump asked for and where the source identity precheck refuses: every line it prints and what the Programs' readers are handed.
+CPU only."""
 from __future__ import annotations
 
 import copy
@@ -39,6 +42,7 @@ from verity_vllm.engine import served as SV
 from verity_vllm.engine import vllm_adapter as va
 from verity_vllm.pipeline import cli, commit, source_identity
 from verity_vllm.pipeline import commit_coins as CC
+from verity_vllm.query.required import Q_WORD_ID
 
 Record = dict[str, Any]
 
@@ -692,3 +696,202 @@ def test_an_oracle_compare_that_cannot_be_imported_is_recorded_under_the_same_sc
     assert [(r["schema"], r["method"], r["result"], r["compared"], r["mismatch_n"]) for r in records] == [
         ("verity-sweep/oracle-compare/v1", "oracle-compare", None, 0, 0)] * 2
     assert all(r["why"] == NOT_RUN + r["error"] and r["error"].startswith(("ImportError(", "ModuleNotFoundError(")) for r in records)
+
+
+class AtTheLease(Exception):
+    """Raised in place of `gpu_lease.acquire`: `main` has done all it does before it takes the GPU."""
+
+
+#: A required-value manifest as far as `main` reads one before the GPU: it names no query, so no partition is bound.
+MANIFEST: Record = {"program_digest": "d" * 128, "manifest_digest": "e" * 64, "populations": {"identities": 3, "by_family": {"instance_outputs": 3}}}
+SOURCE_OK = "[delta] source identity OK: verity_vllm=000000000 tree=/tree"
+MANIFEST_LINE = "[delta] required-value manifest {path}: 3 identities {{'instance_outputs': 3}} digest eeeeeeeeeeeeeeee (Program dddddddddddddddd)"
+FACTS_LINE = "[delta] form (B) producer facts from the Programs of record: {summary}"
+#: Each member is printed with the first two of the modules that read it.
+HANDED_DOWN_LINE = ("[delta] v2 manifest: {rows} row(s) of {members} member(s) handed down by their module's body (every reader inside its "
+                    "subtree) marked promoted -> observed at the first consumer's input: {first}")
+#: `load_workload`'s reading of `WORKLOAD`, which the producer facts are handed.
+REQUESTS = [{"request_id": "a", "prompt_token_ids": [5, 6, 7], "max_tokens": 3}, {"request_id": "b", "prompt_token_ids": [9, 2], "max_tokens": 2}]
+
+
+@pytest.fixture
+def before_the_lease(stand_ins, monkeypatch):
+    """`stand_ins`, with `main` stopped where it takes the GPU and the three readers of a manifest's Programs stood in: ``calls``
+    keeps what the call-boundary plan, the producer facts and the handed-down members' marking were handed.  ``facts`` is what
+    the producer facts answer and ``handed`` the marking; ``prechecks`` is what the source identity precheck was handed."""
+    from verity_vllm.check import oracle_compare
+    from verity_vllm.pipeline import boundary_plan, commit_plan, gpu_lease
+
+    s = stand_ins
+    s.facts, s.handed, s.prechecks = ((None, {"members": 0}), None), {"rows": 0, "members": {}}, []
+
+    def precheck(command, out=None):
+        s.prechecks.append((command, out))
+        return copy.deepcopy(SOURCE_IDENTITY)
+
+    def use(args, manifest, *, tl):
+        assert tl is commit.TL
+        s.calls.append(("boundary_plan.use", {"manifest": manifest}))
+        return None, None
+
+    def producer_facts(args, manifest, reqs, sampling, *, tl):
+        assert tl is commit.TL
+        s.calls.append(("producer_facts", {"manifest": manifest, "reqs": [{k: r[k] for k in ("request_id", "prompt_token_ids", "max_tokens")} for r in reqs],
+                                           "sampling": sampling["variant"]}))
+        return s.facts
+
+    def promote_handed_down(manifest, facts):
+        s.calls.append(("promote_handed_down", {"manifest": manifest, "facts": facts}))
+        return s.handed
+
+    def acquire(tl):
+        assert tl is commit.TL
+        raise AtTheLease
+
+    for owner, name, value in [(source_identity, "precheck", precheck), (boundary_plan, "use", use), (commit_plan, "producer_facts", producer_facts),
+                               (oracle_compare, "promote_handed_down", promote_handed_down), (gpu_lease, "acquire", acquire)]:
+        monkeypatch.setattr(owner, name, value)
+    return s
+
+
+def manifest_at(tmp_path: Path, doc: Record = MANIFEST) -> Path:
+    (tmp_path / "manifest.json").write_text(json.dumps(doc))
+    return tmp_path / "manifest.json"
+
+
+def to_the_lease(tmp_path: Path, capsys: Any, *argv: str) -> Ended:
+    """`run`, which `main` leaves at the lease: nothing is built and no committer is made."""
+    with pytest.raises(AtTheLease):
+        run(tmp_path, capsys, *argv)
+    assert MADE == []
+    return Ended(None, tmp_path / "out", capsys.readouterr().out.splitlines())
+
+
+def test_a_commit_with_no_manifest_asks_for_no_producer_facts(tmp_path, before_the_lease, capsys):
+    ended = to_the_lease(tmp_path, capsys)
+    assert ended.printed == [SOURCE_OK] and ended.files() == []
+    assert before_the_lease.calls == [("boundary_plan.use", {"manifest": None})]
+    assert before_the_lease.prechecks == [("commit", ended.out / "source_identity.json")]
+    assert os.environ["VERITY_WEIGHTS_HASH"] == "host" and os.environ["VERITY_COLLECT_WATCHDOG_MARKER"] == str(ended.out / "COLLECTOR_DEAD_HUNG.json")
+
+
+def test_a_manifests_producer_facts_are_derived_before_the_gpu_and_its_handed_down_members_marked(tmp_path, before_the_lease, capsys):
+    """The Programs are read on the CPU, before the lease: the producer facts, then the members a module's body hands down,
+    which the facts' summary then names."""
+    s = before_the_lease
+    facts = {("model.layers.0", "out"): {"consumers": ["model.layers.0.mlp"]}}
+    s.facts, s.handed = ((facts, {"members": 1}), {"used": True}), {"rows": 2, "members": {"model.layers.0/out": ["x", "y", "z"]}}
+    manifest = manifest_at(tmp_path)
+    ended = to_the_lease(tmp_path, capsys, "--required-manifest", str(manifest), "--program-digest", "d" * 128)
+    assert ended.printed == [
+        SOURCE_OK, MANIFEST_LINE.format(path=manifest), FACTS_LINE.format(summary={"members": 1}),
+        HANDED_DOWN_LINE.format(rows=2, members=1, first={"model.layers.0/out": ["x", "y"]})]
+    assert s.calls == [("boundary_plan.use", {"manifest": MANIFEST}),
+                       ("producer_facts", {"manifest": MANIFEST, "reqs": REQUESTS, "sampling": "greedy"}),
+                       ("promote_handed_down", {"manifest": MANIFEST, "facts": facts})]
+    assert s.facts[0][1] == {"members": 1, "handed_down": s.handed} and ended.files() == []
+
+
+@pytest.mark.parametrize(("facts", "marked"), [(None, False), ({("model", "out"): {"consumers": []}}, True)], ids=["no-facts", "none-handed-down"])
+def test_a_manifest_whose_programs_hand_nothing_down_says_so_in_no_line(tmp_path, before_the_lease, capsys, facts, marked):
+    """With no facts nothing is marked; with facts that hand no row down the marking runs and `main` prints no line for it."""
+    s = before_the_lease
+    s.facts = ((facts, {"members": 0}), None)
+    manifest = manifest_at(tmp_path)
+    ended = to_the_lease(tmp_path, capsys, "--required-manifest", str(manifest), "--program-digest", "d" * 128)
+    assert ended.printed == [SOURCE_OK, MANIFEST_LINE.format(path=manifest), FACTS_LINE.format(summary={"members": 0})]
+    assert [name for name, _ in s.calls] == ["boundary_plan.use", "producer_facts", *(["promote_handed_down"] if marked else [])]
+    assert s.facts[0][1] == ({"members": 0, "handed_down": s.handed} if marked else {"members": 0})
+
+
+def test_the_control_arm_alone_reads_no_program_of_its_manifest(tmp_path, before_the_lease, capsys):
+    """``--only-arm control`` makes no committer, so nothing derives a plan or a fact from the manifest it is given."""
+    manifest = manifest_at(tmp_path)
+    ended = to_the_lease(tmp_path, capsys, "--required-manifest", str(manifest), "--program-digest", "d" * 128, "--only-arm", "control")
+    assert ended.printed == [SOURCE_OK, MANIFEST_LINE.format(path=manifest)]
+    assert before_the_lease.calls == [("boundary_plan.use", {"manifest": None})]
+
+
+@pytest.mark.parametrize(("doc", "argv", "why"), [
+    (MANIFEST, (), "[delta] REFUSED: --required-manifest requires --program-digest <the Build's Program digest of record>"),
+    (MANIFEST, ("--program-digest", " "), "[delta] REFUSED: --required-manifest requires --program-digest <the Build's Program digest of record>"),
+    ({**MANIFEST, "query": {"query_id": Q_WORD_ID}}, ("--program-digest", "d" * 128),
+     f"[delta] REFUSED: the manifest is built under {Q_WORD_ID} but names no partition (query.partition)"),
+], ids=["no-digest", "a-blank-digest", "no-partition"])
+def test_a_manifest_refused_before_the_engine(tmp_path, before_the_lease, capsys, doc, argv, why):
+    """The Build's digest must come with the manifest, and a manifest under the query of record must name its partition."""
+    ended = run(tmp_path, capsys, "--required-manifest", str(manifest_at(tmp_path, doc)), *argv)
+    assert isinstance(ended.exit, str) and ended.exit.startswith(why)
+    assert before_the_lease.calls == [] and ended.printed == [SOURCE_OK] and not ended.out.exists()
+
+
+@pytest.mark.parametrize(("fault", "handed"), [("compiled_swap", "compiled_swap"), ("late_read", None), ("", None)])
+def test_the_served_source_is_made_from_the_build_of_record_before_the_engine(tmp_path, before_the_lease, capsys, monkeypatch, fault, handed):
+    """``--compiled-taps served``: the source is made of the manifest's document, before anything else reads the manifest, and is
+    handed ``VERITY_FAULT`` only where the fault is one of its own."""
+    from verity_vllm.pipeline import served_match
+
+    made = []
+
+    class Served:
+        def __init__(self, build, fault):
+            made.append(build)
+            self.src = SimpleNamespace(fault=fault)
+
+    monkeypatch.setattr(served_match, "ServedCommit", Served)
+    monkeypatch.setenv("VERITY_FAULT", fault)
+    manifest = manifest_at(tmp_path)
+    ended = to_the_lease(tmp_path, capsys, "--compiled-taps", "served", "--required-manifest", str(manifest), "--program-digest", "d" * 128)
+    assert made == [MANIFEST]
+    assert ended.printed == [SOURCE_OK, f"[delta] SERVED TAPS: every value of every engine step at vLLM's defaults; fault {handed!r}",
+                             MANIFEST_LINE.format(path=manifest), FACTS_LINE.format(summary={"members": 0})]
+    assert [name for name, _ in before_the_lease.calls] == ["boundary_plan.use", "producer_facts"]
+
+
+def test_a_stack_dump_is_asked_for_before_the_source_identity_is_checked(tmp_path, before_the_lease, capsys, monkeypatch):
+    """``VERITY_TRACEDUMP``: every thread's stack every so many seconds, from `main`'s first line on."""
+    import faulthandler
+
+    asked = []
+    monkeypatch.setattr(faulthandler, "dump_traceback_later", lambda seconds, **kw: asked.append((seconds, kw, list(before_the_lease.prechecks))))
+    monkeypatch.setenv("VERITY_TRACEDUMP", "30")
+    to_the_lease(tmp_path, capsys)
+    assert asked == [(30.0, {"repeat": True}, [])] and len(before_the_lease.prechecks) == 1
+
+
+def test_a_tree_other_than_the_one_asked_for_exits_3_with_the_prechecks_line(tmp_path, before_the_lease, capsys, monkeypatch):
+    """The source identity precheck's refusal is the Commit's: its sentence on stderr, exit 3, and nothing else done.  The
+    refusal's class is the run store's, stood in under the name `main` reads it by."""
+    class Refused(Exception):
+        pass
+
+    refusal = Refused("PRECHECK_FAIL_SOURCE_IDENTITY: 1 package(s) do not resolve from the requested tree /tree")
+
+    def precheck(command, out=None):
+        raise refusal
+
+    monkeypatch.setattr(source_identity, "SourceIdentityError", Refused, raising=False)
+    monkeypatch.setattr(source_identity, "precheck", precheck)
+    (tmp_path / "workload.json").write_text(json.dumps(WORKLOAD))
+    args = cli.parse("commit", ["--workload", str(tmp_path / "workload.json"), "--out", str(tmp_path / "out")], {})
+    with pytest.raises(SystemExit) as ended:
+        commit.main(args)
+    streams = capsys.readouterr()
+    assert ended.value.code == 3 and ended.value.__cause__ is None and ended.value.__suppress_context__
+    assert streams.out == "" and streams.err == str(refusal) + "\n"
+    assert before_the_lease.calls == [] and not (tmp_path / "out").exists() and "VERITY_WEIGHTS_HASH" not in os.environ
+
+
+def test_a_tree_without_the_run_store_is_refused_as_the_precheck_refuses_it(tmp_path, before_the_lease, capsys, monkeypatch):
+    """A `UsageError` of the precheck leaves `main` as it is, the command line's refusal (exit 2 at the CLI), not as exit 3."""
+    from verity_vllm.config import UsageError
+
+    refusal = UsageError("the source-identity precheck of stage 'commit' needs the run store")
+
+    def precheck(command, out=None):
+        raise refusal
+
+    monkeypatch.setattr(source_identity, "precheck", precheck)
+    with pytest.raises(UsageError) as ended:
+        run(tmp_path, capsys)
+    assert ended.value is refusal and capsys.readouterr().err == "" and before_the_lease.calls == []
