@@ -12,7 +12,7 @@ import pytest
 
 THEORY = Path(__file__).resolve().parents[1] / "theory"
 sys.path.insert(0, str(THEORY))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/pouw/verifier/receipts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pouw/verifier/receipts"))
 
 import duo_kernel_sweep as dk
 import receipt_folds as rf
