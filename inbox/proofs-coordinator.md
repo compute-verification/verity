@@ -128817,3 +128817,38 @@ Branch `cursor/proofs-cut-9323` at `4d24802945` (pushed, unchanged). Run out: `r
 **To post.** Nothing.
 
 **Not established.** `ad1c6637c1` on the join's own tree. A probe line of their own for `Outcome`, `Released`, `Round2` and `RoundTwoOf`, and one at `ad1c6637c1` for `Steps`, `Top`, `Played`, `Coins` and `Proved`, until the tries that are out end (all nine compile inside `b419`). A records run of `security/Proofs` at any head with my files. That the six lines of other workers fail as derived: I compiled none of them.
+
+## [2026-11-13T07:59Z] ACCEPTS: STATEMENTS CHANGED at `b63b045150` (not compiled, no head named for the join): `input_of_accepts` (the run's record is `readBack` of the commitment's, no longer the commitment's); `RecordsRead` is now PROVED (`recordsRead`), so `recordsHeldAt_of`, `recordsAt_of_held`, `playAccepts_form`, `acceptsRun_form`, `reachedAccepts_form`, `acceptsRun_form_at`, `reachedAccepts_form_at` each LOSE that premise; `RunChecks.lean` DELETED (`checks_of_accepted` reads RUNCOINS's `accepted_registered`, in `AcceptsTop.lean`); MERGED on my branch: TWOLEG's `1874fb25cc` and RUNCOINS's `ad1c6637c1`; try `r20261113-075556-965f` is out
+
+**In plain words.** TWOLEG's form now hands the run each record as the verifier's own parser reads it back. That turns one of my premises into a theorem: the bytes the proved verifier reads are the record the run held. Every statement of mine over the form's accept asks one premise less. The copy of the run's walk I kept in my own file is gone too, because RUNCOINS's file now proves the same thing and I read it from there. None of this has compiled at the merged tree yet; one try is out.
+
+**Two merges I made, and why** [run: `git merge`, both without conflict].
+- TWOLEG's `1874fb25cc` (named compiled in its 07:39Z title), at `1bacc0b7af`. `inputAt_ok` changed there, and my `Accepts.lean`, `Fits.lean`, `Within.lean` read it, so they cannot compile on the join without the mend.
+- RUNCOINS's `ad1c6637c1` (its subject says "not compiled"; it is `3388c089b9`, which compiled whole, plus the merge of `1874fb25cc` and one line of `OfCheck.lean`), at `76f05b2986`. With TWOLEG's verifier my branch's older copy of RUNCOINS's files read `Spot.Run.coinsHold`, which is gone, so none of my files compiles without RUNCOINS's mend. I took it before a try of it passed; my try `965f` compiles its files as my dependencies, and I say here if they fail.
+- Neither is a merge of `main`. My branch's base on `main` moved from `4a7291116e` (01:47Z) to `8ef93f0196` (02:34Z), which TWOLEG's head holds [run: `git merge-base` before and after]. The tree is still the old layout (`verity/protocols/remote/verifier/composition/` is there) [run: `ls`], so no path move is crossed.
+
+**Statements that changed** [read: my diff `fb397cda5d..b63b045150` over `SampledTwo/`]. HELDOF, ASSEMBLY: check these against what you read.
+- `input_of_accepts` (`Accepts.lean`). Before: `… ∧ inputOfCase k = some i ∧ i.record = cm.record ∧ ∃ it m₁, …`. After: `… ∧ inputOfCase k = some i ∧ VStar.Recursive.SampledTwo.readBack cm.record = .ok i.record ∧ ∃ it m₁, …`. The run's record is no longer the commitment's record; it is what `readBack` returns for it, with the same canonical bytes (`readBack_ok`). `stmtAt`'s statement is unchanged.
+- `RecordsRead C` (`OfRun.lean`): the definition is unchanged, and it is no longer a premise anywhere. New `recordsRead (C : CaseOf) : RecordsRead C` and `jsonMsg_of_readBack : readBack record = .ok j → recordMsg j = some x → SpotFlock.jsonMsg x = some j` (`AcceptsTop.lean`).
+- These lose the argument `(hread : RecordsRead C)` (at `atStmt C x` for the last two) and change in nothing else: `recordsHeldAt_of`, `recordsAt_of_held`, `playAccepts_form`, `acceptsRun_form`, `reachedAccepts_form`, `acceptsRun_form_at`, `reachedAccepts_form_at`. `playAccepts_of_run` and `playAccepts_of_run'` still take it; the `_form` theorems pass `recordsRead C`.
+- `RunChecks.lean` is deleted with its lakefile root and its lock root (the one I appended at 05:57Z's rule; I removed only that line). `checks_of_accepted` keeps its statement and is in `AcceptsTop.lean`, three lines over `SpotFlock.RunsAs.accepted_registered`. `run_checks`, `interiorSteps_check` and my `secondStage_two` are gone; nothing else read them [run: `rg RunChecks security tests tools`].
+- Unchanged: every statement of `AtStmt.lean`, `RecordNames.lean`, `Fits.lean`, `Within.lean`, `Reached.lean`, `Cover.lean`, `ReadsOnly.lean`, `AcceptsProof.lean`, `RuleTwo.lean`.
+
+**What `acceptsRun_form` still asks** [read: its statement at `b63b045150`]: ten named premises, each about the plays the form's check accepts. `SessionMsgs`, `HeldAt`, `TwoHolds A.h`, `HeldOfAt`, `PortsDistinctAt`, `StmtsRead`, `RoundsHeldAt`, `ScopeHeldAt`, `PinHeldAt`, `SessionsRun`. Proved and not asked: `ReadsWithin`, `RuleIsTwo`, `RunsAs.RoundTwo`, `NamesDistinct`, `RecordsRead`, `RecordsAt`.
+
+**The try before the merges** [run], `r20261113-073803-18d0` at `fb397cda5d`, vy-nebius-cpu-14, rc 1: "lake build +Proofs.Properties.Verity.SampledTwo.AcceptsTop:deps exit 1 in 327 s". Two errors, both in the file I have since deleted: "error: ../Proofs/Properties/Verity/SampledTwo/RunChecks.lean:33:93: unsolved goals" (`run_checks`) and "error: ../Proofs/Properties/Verity/SampledTwo/RunChecks.lean:65:110: unsolved goals" (`interiorSteps_check`). Built there, as dependencies, with no error and no `sorry` warning of their own (the log's two `sorry` warnings are ArkLib's): `AtStmt` ("Built Proofs.Properties.Verity.SampledTwo.AtStmt (4.9s)"), `RecordNames` ("Built Proofs.Properties.Verity.SampledTwo.RecordNames (50s)"), `JpWalk`, `Accepts`, `AcceptsProof`, `Cover`, `ReadsOnly`, `Fits`, `OfRun`, `Reached`, `RuleTwo`, `Within`. `AcceptsTop` was not reached, and no axiom probe ran. That tree is the one before both merges, so it says nothing about `b63b045150`.
+
+**TWOLEG's next commit** [read: `git diff 1874fb25cc 1e20910586 -- …/Steps.lean`], `1e20910586` ("not compiled"), appends a conjunct to `inputAt_ok` (`Registration.digest j₁ = .ok c.digest`). My two patterns that name the last conjunct (`Accepts.lean:78`, `AcceptsTop.lean:84`) need one more `-` when that head is named; I change nothing for it until then.
+
+**STOP RULE.** Nothing. No listed guarantee's statement, no named assumption and nothing the verifier accepts changed by my hand [read: my diff touches `security/Proofs/Properties/Verity/SampledTwo/`, the lakefile's roots and the lock's `roots` only]. The theorems over the form's accept are listed nowhere, and the form stays off.
+
+**NEEDS.**
+- ASSEMBLY: no head of mine to take yet. When you take one, it holds TWOLEG's `1874fb25cc` and RUNCOINS's `ad1c6637c1`.
+- HELDOF: `input_of_accepts` no longer gives `i.record = cm.record`. If you read the run's boundary record as the commitment's, read it through `readBack` (same canonical bytes).
+- Coordinator: nothing to decide. I deleted my own lock root with its module; say if you want root deletions left to ASSEMBLY.
+
+**Not established.** That anything of mine compiles at `b63b045150`: `recordsRead`, `jsonMsg_of_readBack`, the mended `input_of_accepts` and `stmtAt`, and `checks_of_accepted` over `accepted_registered` have not been through Lean, except that the read-back lemma's script passed in a local toy with stubs [run, VM, Lean core only]. That RUNCOINS's `ad1c6637c1` and HELDOF's files on my branch compile over TWOLEG's `1874fb25cc`.
+
+**Runs.** Ended: `18d0`, rc 1 (above). Out: `r20261113-075556-965f`, `AcceptsTop.lean` with `--siblings` at `b63b045150`, vy-nebius-cpu-10, launched 07:56Z.
+
+**Machine** [run]: the VM built nothing; pen `~/wt/.pen` mine since 07:13:21Z; mailbox read to your 07:28Z.
