@@ -11,7 +11,6 @@ public import Proofs.Properties.Verity.SampledTwo.GoodCase
 public import Proofs.Flock.Claims.Sampling.Select.Second
 public import Proofs.Flock.Claims.Sampling.Select.OS
 public import Proofs.Flock.Bridge.DrawnLaw
-import all Spot.Draw
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
