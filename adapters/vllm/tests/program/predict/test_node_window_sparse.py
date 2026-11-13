@@ -91,6 +91,21 @@ def test_chain(window):
     assert {f.family for f in w.free if f.port == "q_rope"} == {"RoPEHeadGptJ"}
 
 
+def test_chain_units(window):
+    """Unit by unit at the decode step: head h's key block reads key k's latent row as its kv row k (the prompt's 32 rows,
+    then the decode token's), head h's end reads head h's block, and the value up-projection's slices of head b read head
+    b's end."""
+    circuit, w = window
+    block = _tid(circuit, rf"SparseMlaHeadBlock_v1\{{DR=64,DV=512,NVIS={LP + 1},FIRST=true,.*\}}")
+    end, latent = _tid(circuit, r"SparseMlaHeadEnd_v1\{DV=512,.*\}"), _tid(circuit, r"DsaLatentRow_v1\{.*\}")
+    up = _tid(circuit, r"BatchedGemm_v1\{B=1,K=512,N=1,.*\}")
+    (e0, _n, _f), (u0, _m, _g) = w.allocs[end][1], w.allocs[up][1]
+    for h in (0, 3, HEADS - 1):
+        assert [_writer(circuit, block, "kv", h, k) for k in (0, 5, LP)] == [(latent, "o0", k) for k in (0, 5, LP)]
+        assert _writer(circuit, end, "o", e0 + h) == (block, "o2", h)
+        assert {_writer(circuit, up, "x", u0 + h * 256 + n) for n in (0, 255)} == {(end, "o0", e0 + h)}
+
+
 def test_census(window):
     """The three families are lowered, the families they read and wrote are gone from the free list, and every template
     is a proof block Flock's composer proves."""
@@ -178,10 +193,22 @@ def test_moe_census(moe_window):
         IF.check_proof_block(fn, circuit.cuts.get(tid))
 
 
-def test_moe_tokens():
+@pytest.fixture(scope="module")
+def moe2_window():
+    return NW.node_window(glm_request(LP, 2, moe=True).program.fn, families=FAMILIES)
+
+
+def _writer(circuit: IF.Circuit, reader: str, port: str, unit: int, row: int = 0) -> tuple[str, str, int]:
+    """The writer template, output and unit that row ``row`` of reader ``unit``'s ``port`` reads."""
+    (x,) = [x for x in circuit.wires if x.reader == reader and x.port == port and x.at <= unit < x.at + x.reader_units
+            and x.cut[0] <= row < x.cut[0] + x.cut[1]]
+    return x.writer, x.out, int(x.writers(unit, 1, row)[0])
+
+
+def test_moe_tokens(moe2_window):
     """At two MoE layers the first layer's prefill routes all 32 prompt tokens, a pair row of 256 members (a token's 8 slots
     in turn): its reads' keys and its blocks' routed weights are one wire a slot over the tokens' slots units."""
-    circuit, w = NW.node_window(glm_request(LP, 2, moe=True).program.fn, families=FAMILIES)
+    circuit, w = moe2_window
     slots = _tid(circuit, r"MoeRouterSigmoidBiasSlots_v1\{.*\}")
     assert circuit.units[slots] == LP + 3
     w2 = _tid(circuit, r"MoeExpertFp8BlockGemmW_v3\{K=256,N=32,.*SWAP=true.*\}")
@@ -189,6 +216,29 @@ def test_moe_tokens():
     g = [x for x in circuit.wires if x.writer == slots and x.reader == w2 and x.port == "g"]
     assert {x.out for x in g} == {f"o{k}" for k in range(TOPK)}
     assert not [f for f in w.free if re.match(r"(MoeExpert|EmbeddingRead|MoeRouter)", f.tid)]
+
+
+def test_moe_expert_units(moe2_window):
+    """Unit by unit at the first layer's prefill (32 tokens): w2's block b of member m = t TOPK + k reads its rows from the
+    read of block b at slot k and token t, and its scale row from the read of G-block b n / G there; each read's key is
+    router unit t's slot-k id, the router unit the block's routed weight reads, and the read opens its block's table."""
+    circuit, w = moe2_window
+    gemm = _tid(circuit, r"MoeExpertFp8BlockGemmW_v3\{K=256,N=32,.*SWAP=true.*\}")
+    at, count, _f = w.allocs[gemm][0]
+    B, T, n = 192, LP, 32
+    assert count == T * TOPK * B
+    first: dict[str, int] = {}
+    for m, b in [(0, 0), (1, 0), (TOPK, 0), (0, 1), (0, 4), (5 * TOPK + 3, 101), (T * TOPK - 1, B - 1)]:
+        t, k = divmod(m, TOPK)
+        (rt, ro, ru), (st, so, su) = (_writer(circuit, gemm, p, at + m * B + b) for p in ("w", "ws"))
+        gt, go, gu = _writer(circuit, gemm, "g", at + m * B + b)
+        first = first or {"w": ru, "ws": su, "g": gu}
+        assert ro == so == "o0" and go == f"o{k}" and gu - first["g"] == t
+        assert ru - first["w"] == (b * TOPK + k) * T + t and su - first["ws"] == (b * n // 128 * TOPK + k) * T + t
+        for r, u, block in ((rt, ru, b), (st, su, b * n // 128)):
+            assert _writer(circuit, r, "tok", u) == (gt, f"o{TOPK + k}", gu)
+            (o,) = [o for o in circuit.registered.openings if o.reader == r and o.at <= u < o.at + o.units]
+            assert o.table.endswith(f"/b{block}/table") and o.key == "tok"
 
 
 def test_moe_reads_free(moe_program):
