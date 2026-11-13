@@ -185,8 +185,15 @@ def verdicts(x):
     return {k: (v.get("ok") if isinstance(v, dict) else v if isinstance(v, bool) else None) for k, v in x.items()}
 
 
+#: the reader's exit where the honest arm's answer raised: no row of a record was computed of this audit, whatever
+#: else rehearsal.json holds (1 is a rehearsal.json that is not whole)
+ANSWER_RAISED = 3
+
+
 def honest(audit: Path, tree: Path | None, registration: Path | None) -> dict:
-    """The honest arm's outcome: the answer a record's row would be of it, and what a5 says of its record."""
+    """The honest arm's outcome: the answer a record's row would be of it, and what a5 says of its record. An answer
+    that raised is kept as its ``error`` (every number in it struck), which `main` prints in the answer's place and
+    exits `ANSWER_RAISED` on."""
     a5 = load(audit / "window" / "summary.json") or {}
     rec = load(audit / "window" / "audit.json") or {}
     row = load(audit / "summary.json")
@@ -206,8 +213,8 @@ def honest(audit: Path, tree: Path | None, registration: Path | None) -> dict:
             import served_integrity as SI
             got = SI.answer(audit, load(registration))
             out["answer"] = {"verdict": got.get("verdict"), "reason": got.get("reason")}
-        except Exception as e:  # the answer is one more reading: the rest stands without it
-            out["answer"] = {"error": f"{type(e).__name__}: {e}"[:300]}
+        except Exception as e:  # the rest of rehearsal.json is written without it; `main` says it failed
+            out["answer"] = {"error": re.sub(r"[0-9a-f]{16,}|[0-9]+", "N", f"{type(e).__name__}: {e}")[:300]}
     return out
 
 
@@ -296,8 +303,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     h = doc["honest"]
     whole = now is not None and doc["negative_workers"] is not None
+    raised = (h.get("answer") or {}).get("error")
     print(f"REHEARSAL (no audit of record) honest arm: accepted {h['accepted']}, summary ok {h['ok']}, "
-          f"answer {(h.get('answer') or {}).get('verdict')}")
+          + (f"ANSWER NOT READ, it raised: {raised}" if raised else f"answer {(h.get('answer') or {}).get('verdict')}"))
     print(f"REHEARSAL negatives: {len(now or {})} now, {len(kept or {})} kept; same names {doc['same_names']}; "
           f"same refusals {doc['same_refusals']}; not refused now {len(doc['not_refused'])}")
     print(f"REHEARSAL negatives by their verdicts: {len(doc['refused_by_a_verdict'])} refused, "
@@ -321,7 +329,7 @@ def main(argv: list[str] | None = None) -> int:
         f"{f['lines']} line(s) of Python's warning of a fork with more than one thread alive"
         + (f", the first: {f['first']}" if f["lines"] else "")
         + ("" if a.warnings else "; PYTHONWARNINGS was not set, so Python hides that warning and none says nothing")))
-    return 0 if whole else 1
+    return ANSWER_RAISED if raised else 0 if whole else 1
 
 
 if __name__ == "__main__":
