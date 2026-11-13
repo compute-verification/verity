@@ -245,7 +245,7 @@ def releasedRootsOf (c : LiveCommitment) (log : List String) : V Roots := do
     let s ← event b
     let ok := keys? r == some #["event", "index", "label", "received_at", "root"] &&
       keys? s == some #["after", "event", "index", "label", "released_at"] &&
-      getD r "event" == Json.str "root" && getD s "event" == Json.str "release" &&
+      jsonStrIs (getD r "event") "root" && jsonStrIs (getD s "event") "release" &&
       isTime (getD r "received_at") && isTime (getD s "released_at")
     let .str label := getD r "label" | throw LOG_MALFORMED
     let some k := roots.findIdx? (·.1 == label) | throw LOG_MALFORMED
@@ -253,7 +253,7 @@ def releasedRootsOf (c : LiveCommitment) (log : List String) : V Roots := do
     let some bytes := (Flock.unhex root).toOption | throw LOG_MALFORMED
     let n : Int := (roots[k]?.map (·.2.size)).getD 0
     unless ok && int? (getD r "index") == some n && int? (getD s "index") == some n &&
-        getD s "label" == Json.str label && getD s "after" == Json.str root && root.length == 128 do
+        jsonStrIs (getD s "label") label && jsonStrIs (getD s "after") root && root.length == 128 do
       throw LOG_MALFORMED
     roots := roots.modify k fun (l, rs) => (l, rs.push bytes)
   return roots.toList.map fun (l, rs) => (l, rs.toList)
@@ -267,7 +267,7 @@ verifier has none). -/
 def sessionOf (key : ChallengerKey) (record log close : Json) : V (LiveCommitment × Roots × String) := do
   if let some why ← recordReason key record then throw why
   let r ← ChallengerRecord.ofJson record
-  if close == Json.null then throw NO_CLOSE
+  if close.isNull then throw NO_CLOSE
   let c ← match ChallengerClose.ofJson close with
     | .ok c => pure c
     | .error e => throw s!"the challenger's close record is malformed: {e}"
@@ -679,7 +679,7 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
 /-- `_checked`: `ledger` (its lines) as `verifyLedger` reads it under the pinned key `key`, each line first refused unless
 `ledgerEntry?` reads it and, opening a window or a period, it names no other key. -/
 def checked (ledger : Json) (key : ChallengerKey) : V (Array Win × Array MonitoringPeriod) := do
-  if ledger == Json.null then throw NO_AUDIT
+  if ledger.isNull then throw NO_AUDIT
   let .arr lines := ledger | throw s!"the auditor's ledger is malformed: {LEDGER_FORM}"
   let pinned := Flock.hexOf (Flock.Sha512.hash key.pub)
   let mut es : Array LedgerEntry := #[]
@@ -810,11 +810,11 @@ def sessionNamed (a : Audited) (key : ChallengerKey) (session : Json) : V (LiveC
     throw s!"the challenger's record is signed at leaf {q} over commitment {root.take 16}..., not at leaf {a.recordLeaf} over {a.commitment.take 16}..., the ones the auditor's ledger's end names"
   let .arr ls := getD session "log" | throw LOG_FORM
   let lines ← ls.toList.mapM fun | .str s => pure s | _ => throw LOG_FORM
-  unless getD a.files LOG_FILE == Json.str (logDigest lines) do
+  unless jsonStrIs (getD a.files LOG_FILE) (logDigest lines) do
     throw "the challenger's release log is not the one the auditor's ledger sealed at its session's end"
   let .arr hs := getD session "hellos" | throw HELLOS_FORM
   let hellos ← hs.toList.mapM fun | .str s => pure s | _ => throw HELLOS_FORM
-  unless getD a.files HELLOS_FILE == Json.str (logDigest hellos) && hellos.length == a.refusedHellos do
+  unless jsonStrIs (getD a.files HELLOS_FILE) (logDigest hellos) && hellos.length == a.refusedHellos do
     throw s!"the challenger's refused hellos are not the {a.refusedHellos} the auditor's ledger sealed at its session's end"
   return (c, roots)
 
@@ -852,7 +852,7 @@ def pinOf? (line : Json) : Option String := do
 host's pins log `pins` (its lines, `null` when the verifier has none); `none` when one of the lines the open sealed
 (`{lines, sha512}`, `log_digest` of the log's first lines) pins the open's `pinned`. -/
 def pinsReason (session : String) (opened pins : Json) : Option String := Id.run do
-  if pins == Json.null then return some NO_PINS
+  if pins.isNull then return some NO_PINS
   let .arr ls := pins | return some s!"the host's pins log is malformed: {PINS_FORM}"
   let mut commits : Array String := #[]
   for (line, i) in ls.zipIdx do
@@ -868,7 +868,7 @@ def pinsReason (session : String) (opened pins : Json) : Option String := Id.run
   if ls.size < n then
     return some s!"the host's pins log has {ls.size} lines, fewer than the {n} the open of session {session} sealed: take the auditor host's operator's newest published pins log"
   let lines := (ls.extract 0 n).toList.map strOf
-  unless getD sj "sha512" == Json.str (logDigest lines) do
+  unless jsonStrIs (getD sj "sha512") (logDigest lines) do
     return some s!"the host's pins log is not the one the open of session {session} sealed: its first {n} lines were edited or rewritten"
   let pinned := strOf (getD opened "pinned")
   unless (commits.extract 0 n).contains pinned do
@@ -885,7 +885,7 @@ def firstParentReason (session pinned : String) (main : Json) : Option String :=
   | .null => some NO_MAIN
   | .arr cs =>
     if !cs.all (isDigest · 40) then some malformed
-    else if cs.contains (Json.str pinned) then none
+    else if cs.any (jsonStrIs · pinned) then none
     else some (s!"session {session} ran commit {pinned}, which the host's pins log records but which is not on " ++
       "main's first-parent line in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit " ++
       "merged into main is in main's history but no tree main's check ran on; repin the challenger host to a commit " ++
