@@ -39,17 +39,16 @@ theorem jp_ok {ε γ : Type} {c : Prop} [Decidable c] {e : ε} {jp : Unit → Ex
   · cases h
   · exact h
 
+set_option maxHeartbeats 4000000 in -- `paramsParsed` is some hundred binds, each split against the rest of the block
 /-- **v2's parameters' verifier program is one some bytes parse to**: `paramsParsed` parses it from the canonical text
 of the parameters' `program`. -/
-set_option maxHeartbeats 2000000 in -- `paramsParsed` is some hundred binds, each peeled against the rest of the block
 theorem paramsParsed_program {j : Json} {p : _root_.Spot.OneStage.Params}
     (h : _root_.Spot.OneStage.paramsParsed j = .ok p) :
     ∃ b, _root_.Spot.Program.parse b = .ok p.verifier.program := by
   unfold _root_.Spot.OneStage.paramsParsed at h
-  repeat' (first
-    | (with_reducible obtain ⟨_, _, h⟩ := ebind_ok h)
-    | (with_reducible replace h := jp_ok h; try beta_reduce at h)
-    | (split at h))
+  simp only [bind, Except.bind] at h
+  repeat' split at h
+  all_goals try contradiction
   all_goals first
     | (simp [throw, throwThe, MonadExceptOf.throw] at h; done)
     | (simp only [pure, Except.pure, Except.ok.injEq] at h
@@ -479,8 +478,9 @@ theorem hr_planZHJP {n mPts : ℕ} {I : FlockSoundness.Discharge.Exec.Inputs} {o
     (j : Fin (planZHJP (Reg := Reg) dj y₀ S R).length) :
     rateZ (planZHJP (Reg := Reg) dj y₀ S R) j k ≤ ρ := by
   unfold rateZ
+  rw [show (planZHJP (Reg := Reg) dj y₀ S R).get j = tableZHJP dj y₀ S (Fin.cast (planZHJP_length dj y₀ S R) j) from
+    List.get_ofFn _ _]
   refine (div_le_div_of_nonneg_right (pow_le_pow_right₀ (by norm_num) ?_) (by positivity)).trans (cap_div_le hkρ)
-  simp only [planZHJP, List.get_ofFn]
   unfold tableZHJP
   split_ifs with h
   · exact zkLogLenCap_23 _ _ _ (Classical.choice h).hz
