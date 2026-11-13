@@ -108,6 +108,7 @@ public import Proofs.Flock.SpotFlock.AddressesWired
 public import Proofs.Flock.SpotFlock.AddressFacts
 public import Proofs.Flock.SpotFlock.AddressFactsGive
 public import Proofs.Flock.SpotFlock.AddressesGive
+public import Proofs.Flock.SpotFlock.AddressesHeld
 public import Proofs.Flock.SpotFlock.InsideOf
 public import Proofs.Flock.SpotFlock.AddressOf
 public import Proofs.Flock.SpotFlock.EntryRoots
