@@ -1270,6 +1270,8 @@ BY_CONFIG = ["git config user.name a", "git config user.email a@a", "git config 
              "git config --worktree user.email a@a", "git config set user.email a@a", "git config Author.Name a"]
 OWN_IDENTITY = BY_OPTION + BY_VARIABLE + BY_AUTHOR + BY_CONFIG
 IDENTITY_FIX = "commit with the machine's configured identity; pass no name or address"
+#: and what both refusals about a variable say clears one a shell already holds
+UNSET = "`unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL` clears"
 
 
 @pytest.mark.parametrize("form", OWN_IDENTITY)
@@ -1279,7 +1281,7 @@ def test_a_git_that_names_an_author_or_committer_of_its_own_is_refused_in_a_chec
     command that passes one there is refused, and the refusal says how to commit."""
     for clone in ("verity", "infra"):
         out = clones(form, clone)
-        assert out["permission"] == "deny" and IDENTITY_FIX in out["agent_message"], (form, clone, out)
+        assert out["permission"] == "deny" and IDENTITY_FIX in out["agent_message"] and UNSET in out["agent_message"], (form, clone, out)
 
 
 @pytest.mark.parametrize("form", OWN_IDENTITY)
@@ -1424,6 +1426,101 @@ def test_reading_an_author_or_the_configured_identity_passes_in_a_checkout_of_ve
     `git var GIT_AUTHOR_IDENT` read the identity; and a commit that passes none carries the machine's."""
     for clone in ("verity", "infra"):
         assert clones(form, clone) == {"permission": "allow"}, (form, clone)
+
+
+#: commands that leave a variable naming a commit's author or committer set in the shell that runs them ({S} is a scratch
+#: repository): an `export`, a `declare` or `typeset`, an assignment with no command after it, each also in what a body, a
+#: subshell or a carrier runs, after a comment, and in a text the hook can't split
+SET_IN_THE_SHELL = [
+    "export GIT_AUTHOR_NAME=x GIT_AUTHOR_EMAIL=x@x GIT_COMMITTER_NAME=x GIT_COMMITTER_EMAIL=x@x",
+    "export GIT_AUTHOR_NAME=x", "export GIT_AUTHOR_EMAIL=x@x", "export GIT_COMMITTER_NAME=x", "export GIT_COMMITTER_EMAIL=x@x",
+    "export GIT_AUTHOR_NAME='A B'", 'export GIT_COMMITTER_NAME="$USER"', "export GIT_AUTHOR_DATE=@0 GIT_COMMITTER_EMAIL=x@x",
+    "export PATH=/x:$PATH GIT_AUTHOR_NAME=x", "export GIT_AUTHOR_NAME", "export GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL",
+    "GIT_AUTHOR_NAME=x; export GIT_AUTHOR_NAME", "declare -x GIT_AUTHOR_NAME=x", "typeset -x GIT_COMMITTER_EMAIL=x@x",
+    "declare -gx GIT_COMMITTER_NAME=x", "declare GIT_AUTHOR_NAME=x", "readonly GIT_AUTHOR_EMAIL=x@x", "export -p GIT_AUTHOR_NAME",
+    "GIT_AUTHOR_NAME=x", "GIT_AUTHOR_NAME=x GIT_AUTHOR_EMAIL=x@x", "X=1 GIT_COMMITTER_NAME=x",
+    "GIT_COMMITTER_EMAIL=x@x; git -C {S} commit -m x", "set -a; GIT_AUTHOR_NAME=x; set +a",
+    "export GIT_AUTHOR_NAME=x && git -C {S} commit --allow-empty -m x",
+    "export GIT_AUTHOR_NAME=x GIT_AUTHOR_EMAIL=x@x; git -C {S} commit -m x; unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL",
+    "cd {S} && export GIT_AUTHOR_NAME=x && git commit -m x", "command export GIT_AUTHOR_NAME=x",
+    "if true; then export GIT_AUTHOR_NAME=x; fi", "for n in a b; do export GIT_AUTHOR_NAME=$n; done",
+    "f() { export GIT_AUTHOR_NAME=x; }; f", "(export GIT_AUTHOR_NAME=x; git -C {S} commit -m x)",
+    "bash -c 'export GIT_AUTHOR_NAME=x; git -C {S} commit -m x'", "bash -lc 'GIT_COMMITTER_NAME=x'",
+    "eval 'export GIT_AUTHOR_NAME=x'", "tmux send-keys 'export GIT_AUTHOR_NAME=x' C-m",
+    "# a throwaway name\nexport GIT_AUTHOR_NAME=x", "# a throwaway name\nGIT_AUTHOR_NAME=x",
+    "git -C {S} status # first\nexport GIT_AUTHOR_NAME=x", "export GIT_AUTHOR_NAME=x # for the scratch commits",
+    "# a throwaway name\ncd {S} && export GIT_AUTHOR_NAME=x", "# in a pane\ntmux send-keys 'export GIT_AUTHOR_NAME=x' C-m",
+    "export GIT_AUTHOR_NAME=$'it\\'s'", "echo $'it\\'s' && export GIT_AUTHOR_NAME=x", "echo $'it\\'s'\nexport GIT_AUTHOR_NAME=x",
+]
+#: and commands that leave none there: the names ahead of the one command, on its line or on continued ones, which the rule
+#: above judges by where its git runs; an `unset`; a read; an `export` of any other variable; and an export that is only
+#: words, in a quoted string, a comment or a heredoc's body
+NOT_SET_IN_THE_SHELL = [
+    "GIT_AUTHOR_NAME=a GIT_AUTHOR_EMAIL=a@a GIT_COMMITTER_NAME=a GIT_COMMITTER_EMAIL=a@a git -C {S} commit --allow-empty -m x",
+    "env GIT_AUTHOR_NAME=a GIT_AUTHOR_EMAIL=a@a git -C {S} commit -m x", "git -C {S} -c user.name=a -c user.email=a@a commit -m x",
+    "cd {S} && GIT_AUTHOR_NAME=a GIT_COMMITTER_NAME=a git commit -m x", "GIT_AUTHOR_NAME=a GIT_COMMITTER_NAME=a python3 fixture.py",
+    "unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL", "unset GIT_AUTHOR_NAME && git -C {S} status",
+    'echo "$GIT_AUTHOR_NAME"', 'echo "${GIT_COMMITTER_EMAIL-unset}"', '[ -n "${GIT_AUTHOR_NAME+x}" ] && echo set',
+    "declare -p GIT_AUTHOR_NAME", "compgen -e | rg GIT_", "git -C {S} var GIT_AUTHOR_IDENT",
+    "export GIT_AUTHOR_DATE=@0 GIT_COMMITTER_DATE=@0", "GIT_AUTHOR_DATE=@0", "export GIT_PAGER=cat GIT_TERMINAL_PROMPT=0",
+    "export PATH=$HOME/bin:$PATH", "export NAME=GIT_AUTHOR_NAME",
+    'git -C {S} commit --allow-empty -m "export GIT_AUTHOR_NAME=x is refused"', 'rg -n "export GIT_AUTHOR_NAME" {S}',
+    "echo 'GIT_AUTHOR_NAME=x; export GIT_AUTHOR_NAME'", "# export GIT_AUTHOR_NAME=x\ngit -C {S} status",
+    "# a throwaway commit\nGIT_AUTHOR_NAME=a GIT_AUTHOR_EMAIL=a@a git -C {S} commit --allow-empty -m x",
+    "# a throwaway commit\nGIT_AUTHOR_NAME='A (B)' GIT_AUTHOR_EMAIL=a@a git -C {S} commit --allow-empty -m 'x; GIT_AUTHOR_NAME=y'",
+    "GIT_AUTHOR_NAME=a GIT_AUTHOR_EMAIL=a@a \\\n  GIT_COMMITTER_NAME=a GIT_COMMITTER_EMAIL=a@a \\\n  git -C {S} commit --allow-empty -m x",
+    "# a throwaway commit\nGIT_AUTHOR_NAME=a GIT_AUTHOR_EMAIL=a@a \\\n  git -C {S} commit --allow-empty -m x",
+    "cat > {S}/note <<'EOF'\n# how not to\nexport GIT_AUTHOR_NAME=x\nEOF",
+]
+#: what its refusal says to do: where a scratch repository's name goes instead (and UNSET, for one a shell already holds)
+SHELL_FIX = ("put the names ahead of it, `GIT_AUTHOR_NAME=NAME GIT_AUTHOR_EMAIL=ADDRESS GIT_COMMITTER_NAME=NAME "
+             "GIT_COMMITTER_EMAIL=ADDRESS git -C <scratch> commit ...`")
+
+
+@pytest.fixture
+def scratch(tmp_path):
+    """A scratch repository beside the clones, and a form with its path for {S}."""
+    subprocess.run(["/usr/bin/git", "init", "-q", str(tmp_path / "scratch")], check=True, capture_output=True,
+                   env={**os.environ, **GIT_ENV})
+    return lambda form: form.replace("{S}", str(tmp_path / "scratch"))
+
+
+@pytest.mark.parametrize("form", SET_IN_THE_SHELL)
+def test_a_command_that_leaves_an_author_or_committer_set_in_the_shell_is_refused_wherever_it_is_typed(clones, scratch, form):
+    """A shell keeps what it is told to export, and git reads `GIT_AUTHOR_NAME` and its three kin from its environment in every
+    repository: a name exported for a commit in a scratch repository is the author of the next commit in verity's checkout too.
+    The hook reads a command and never a shell's environment, so the command that puts the name there is the one it can
+    refuse: in every repository and outside one, and, since a wrong pass can't be taken back, also where the name would die
+    with a subshell or a carrier. The refusal says where a scratch repository's name goes and what clears one already set."""
+    for clone in ("verity", "infra", "notes", "scratch", "state"):
+        out = clones(scratch(form), clone)
+        assert out["permission"] == "deny" and SHELL_FIX in out["agent_message"] and UNSET in out["agent_message"], (form, clone, out)
+        assert "-c user.name=NAME -c user.email=ADDRESS" in out["agent_message"]
+
+
+@pytest.mark.parametrize("form", NOT_SET_IN_THE_SHELL)
+def test_naming_an_author_ahead_of_one_command_unsetting_or_reading_one_and_any_other_export_pass(clones, scratch, form):
+    """The names ahead of one command reach that command alone, which the rule for a git that names an identity judges by
+    where the git runs; `unset` is the cure; a read changes nothing; `GIT_AUTHOR_DATE` and every other variable are not an
+    identity; and an export that is only the words of a message, a search, a comment or a file being written sets nothing."""
+    for clone in ("verity", "infra", "notes", "scratch", "state"):
+        assert clones(scratch(form), clone) == {"permission": "allow"}, (form, clone)
+
+
+def test_a_name_exported_for_throwaway_commits_is_stopped_before_a_later_merge_in_the_checkout_carries_it(clones, scratch):
+    """Three commands, each typed on its own: an export of a made-up author and committer, a throwaway commit in a scratch
+    repository, and later a merge in verity's checkout. The shell that ran the first still held the names at the third, whose
+    merge commit went into the history under them. The second and third name no identity and pass as typed, as they must:
+    the hook can't see what a shell holds. So the first is refused, and the form its refusal gives for the throwaway commit,
+    the names ahead of that one command, passes."""
+    export = ("export GIT_AUTHOR_NAME=x GIT_AUTHOR_EMAIL=x@x GIT_COMMITTER_NAME=x GIT_COMMITTER_EMAIL=x@x "
+              "GIT_AUTHOR_DATE=@0 GIT_COMMITTER_DATE=@0")
+    commit, merge = scratch("git -C {S} commit -q --allow-empty -m throwaway"), "git merge --no-edit lane/mine"
+    out = clones(export, "verity")
+    assert out["permission"] == "deny" and SHELL_FIX in out["agent_message"] and UNSET in out["agent_message"], out
+    assert clones(commit, "verity") == {"permission": "allow"} and clones(merge, "verity") == {"permission": "allow"}
+    ahead = "GIT_AUTHOR_NAME=x GIT_AUTHOR_EMAIL=x@x GIT_COMMITTER_NAME=x GIT_COMMITTER_EMAIL=x@x GIT_AUTHOR_DATE=@0 GIT_COMMITTER_DATE=@0"
+    assert clones(f"{ahead} {commit}", "verity") == {"permission": "allow"}
 
 
 def test_a_merge_on_a_vm_that_never_ran_boot_sh_first_gets_the_record_merge_drivers(tmp_path):

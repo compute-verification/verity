@@ -21,7 +21,10 @@ git command that names an author or committer of its own (`identity_reason`): `-
 --author`, `GIT_AUTHOR_NAME=... git` and the like, and a `git config` that writes the checkout's own `user.name` or
 `user.email`; and, wherever it is typed, a `git config --global` that writes the machine's. A scratch repository takes any
 identity. This rule alone follows a plain `cd`, so `cd CHECKOUT && git ...` is judged in CHECKOUT and `cd SCRATCH && git ...`
-in SCRATCH (`after_cd`); a command it still can't place passes.
+in SCRATCH (`after_cd`); a command it still can't place passes. A variable the shell already holds reaches a git that names
+none, which the hook can't see, so the command that leaves one of the four in its shell is refused wherever it is typed
+(`kept_identity_reason`): an `export`, a `declare`, an assignment with no command after it. A variable the shell held before
+the guard arrived, and one a script exports, are not covered.
 It refuses, too, a push, branch switch or worktree add with `$` or a backquote in its words, whose branch the shell names only
 after the hook has read it. A push the agent doesn't type (a script's, a tool's) meets the same push rule, `PROTECTED_REASON`
 and `owner_reason`, in git's pre-push hook (pre_push.py), branch by branch.
@@ -423,6 +426,8 @@ def main_or_config_reason(invocations_: list[Git], pushes: dict[int, Push], next
 #: the configuration keys and the variables that name a commit's author or committer in place of the machine's configured one
 IDENTITY_KEYS = {f"{who}.{what}" for who in ("user", "author", "committer") for what in ("name", "email")}
 IDENTITY_VARIABLES = {f"GIT_{who}_{what}" for who in ("AUTHOR", "COMMITTER") for what in ("NAME", "EMAIL")}
+#: what clears one of those variables from a shell that holds it
+UNSET_IDENTITY = "`unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL`"
 #: the words of a `git config` beside which `KEY VALUE` writes the checkout's own configuration, or the machine's
 CONFIG_SCOPE = {"set", "--local", "--worktree", "--global"}
 #: the variables that name another file as the global configuration a `git config --global` writes (not XDG_CONFIG_HOME:
@@ -448,7 +453,9 @@ def identity_reason(indexed: list[Git], envs: list[dict[str, str]]) -> str | Non
     command (`envs`, shell_hook.git_env), `commit --author`, and a `git config KEY VALUE` that writes one of IDENTITY_KEYS to
     the checkout's own configuration. `indexed` places each command (`after_cd`). A read passes (`log --author`, `config KEY`,
     `config --get KEY`), as does a `git config` with any other option (`--file`, `--unset`), a command in any other
-    repository (a scratch one takes any identity) and one the guard can't place (`Git.unknown`).
+    repository (a scratch one takes any identity) and one the guard can't place (`Git.unknown`). A variable another command
+    in the text sets or unsets (`$` in `envs`) is not judged here: where that command leaves it in the shell, the command is
+    `kept_identity_reason`'s to refuse.
     The machine's identity sits in its global configuration, which every checkout on it commits with, so a `git config
     --global KEY VALUE` of one of IDENTITY_KEYS is refused wherever it runs, unless the command names another file as the
     global configuration (GLOBAL_FILE)."""
@@ -474,8 +481,26 @@ def identity_reason(indexed: list[Git], envs: list[dict[str, str]]) -> str | Non
                     f"commit carries the machine's configured identity, so that the history shows who wrote what: commit with the "
                     f"machine's configured identity; pass no name or address (no `-c user.*`, `--author`, `GIT_AUTHOR_*` or "
                     f"`GIT_COMMITTER_*`, and no `git config user.name|user.email VALUE`; `git config user.email` reads the one "
-                    f"it has). A scratch repository takes any identity: run it there, `cd <scratch> && git ...` or `git -C "
-                    f"<scratch> ...`.")
+                    f"it has), and {UNSET_IDENTITY} clears one the shell holds. A scratch repository takes any identity: run "
+                    f"it there, `cd <scratch> && git ...` or `git -C <scratch> ...`.")
+    return None
+
+
+def kept_identity_reason(kept: list[str]) -> str | None:
+    """Whatever agent runs it, wherever it is typed: a command that leaves one of IDENTITY_VARIABLES set in the shell that
+    runs it (`kept`, shell_hook.shell_keeps): an `export`, a `declare`, an assignment with no command after it. Git reads
+    them from its environment in every repository, so a shell that holds one hands it to every later commit, in a checkout
+    of QUEUE_REPOS too, by a git command that names no identity and that `identity_reason` passes. The names ahead of one
+    command (`GIT_AUTHOR_NAME=... git ...`) reach that command alone and are `identity_reason`'s to judge."""
+    for name in kept:
+        if name in IDENTITY_VARIABLES:
+            return (f"this command sets `{name}` in the shell itself (an `export`, a `declare` or an assignment with no command "
+                    f"after it), and the shell keeps an exported name for every later commit, in verity's and infra's checkouts "
+                    f"too, where a commit carries the machine's configured identity. A scratch repository that needs a name "
+                    f"takes it on the one command: put the names ahead of it, `GIT_AUTHOR_NAME=NAME GIT_AUTHOR_EMAIL=ADDRESS "
+                    f"GIT_COMMITTER_NAME=NAME GIT_COMMITTER_EMAIL=ADDRESS git -C <scratch> commit ...`, or pass them to it, "
+                    f"`git -C <scratch> -c user.name=NAME -c user.email=ADDRESS commit ...`. If the shell already holds one, "
+                    f"{UNSET_IDENTITY} clears it.")
     return None
 
 
