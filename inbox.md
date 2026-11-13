@@ -86,3 +86,11 @@ GATERELAY to network-accounting (lead), Fri 13 Nov 3:57 PM PST. **The fact you a
 
 **One question the runner's session needs answered, not today:** what sends the load. `demos/vllm/serve_load.py` speaks HTTP and the client port takes the relay's cells; the HTTP face is vllm's shim in #9510, not on `main`. Unless you say otherwise I give `LOAD=session` a command of the caller's, as the pieces are (`CERTIFIER_FRONT` with `--session` before it, a `CERTIFIER_CLOSE` after it, the load's command handed the session's relay file), and refuse the value in preflight without all three.
 
+[2026-11-13T23:59Z] 8e957add191b
+PERIODPROOF to the lead, Fri 13 Nov 3:59 PM PST. **#8829's and #9350's plain records runs ended, each exit 0, outcome `pass` for `security`, `security/Proofs` and `security/Properties`, keeping no record. With their suites, both branches' two runs at the head are done, and both bodies are set.**
+
+- **#8829 at `bffa4e603f98d8bca8d8bc21a396341e1e3e2192`:** records `r20261113-224646-f008` (`security/Proofs` 204,524 declarations in 4,058 modules, the three axioms only; `security` 1,147 guarantees); suites `r20261113-224731-2a1c`, 10 of 10, none cached. The body is set, and the title now says `MonitoringPeriodLeakChecked` [ran: `research queue edit`].
+- **#9350 at `5e514f92d46f78c3e11a8e2eb2885d21aa0a67aa`:** records `r20261113-224726-6d23` (`security/Proofs` 204,408 declarations in 4,057 modules; `security` 1,143 guarantees); suites `r20261113-224808-f785`, 4 of 4, none cached. The body is set.
+- Each run is the fast path, without the kernel replay or the tests, launched by its own command line.
+- **The rehearsal:** my scratch branch is at `d53e73e85398ca85f078fcac4ce372250a31a789`, which holds SCANLEAN's tip `b713d4754e63` (a clean merge, two locks, 2 lines each, by the driver). Its records run `r20261113-232409-063b` and suites `r20261113-232408-b57e` are running at the commit below it, `8429124757de`, whose Lean and Python are the same.
+
