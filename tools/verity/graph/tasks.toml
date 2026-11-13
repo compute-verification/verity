@@ -76,7 +76,7 @@ timeout_s = 3600
 # whole tree)
 files = ["verity/protocols/flock/verifier/**", "verity/circuits/base/**", "verity/circuits/lean/**",
          "verity/commitments/lean/**", "verity/protocols/flock/prover/check_build.sh", "verity/protocols/flock/prover/live/**",
-         "verity/protocols/flock/prover/flock-*-b684b12.patch", "verity/protocols/flock/agreement/**", "tools/verity/check/suites.py",
+         "verity/protocols/flock/prover/flock-*-b684b12.patch", "verity/protocols/flock/prover/agreement/**", "tools/verity/check/suites.py",
          "**/pyproject.toml"]
 kinds = ["lean-build", "flock-circuit-build", "lean-agreement", "lean-unit-cut", "lean-suites", "flock-rust-tests"]
 env = "lean"
