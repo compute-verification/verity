@@ -319,12 +319,20 @@ def identity(f: Path) -> tuple | None:
     return (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns)
 
 
+def bound_files(st: dict) -> list[str]:
+    """What statement ``st`` is verified against besides its circuit, public file and tables, each by `verify`'s flag
+    for it (the file is ``st["<flag>_file"]``): its partition, program and registered reads where it has them, and with
+    registered reads the window's registered circuit record (``interface``) where it has one."""
+    return [x for x in ("partition", "program", "registered", "interface")
+            if st.get(f"{x}_file") and (x != "interface" or st.get("registered_file"))]
+
+
 def archive_files(st: dict, n: int) -> list[Path]:
-    """What `lean_verify` archives for statement ``st`` on ``n`` units: the circuit, the public file, the tables, and the
-    statement's partition, program and registered reads where it has them."""
+    """What `lean_verify` archives for statement ``st`` on ``n`` units: the circuit, the public file, the tables, and
+    what else the statement is verified against (`bound_files`)."""
     d = st["dir"]
     return [d / "circuit.txt", d / f"pub-{n}.bin", *sorted(f for f in (d / "tables").glob("*") if f.is_file()),
-            *(Path(st[f"{x}_file"]) for x in ("partition", "program", "registered") if st.get(f"{x}_file"))]
+            *(Path(st[f"{x}_file"]) for x in bound_files(st))]
 
 
 def archive_put(lean: str, archive: Path, files: Sequence[Path], log: Path, held: dict | None = None) -> dict[Path, str]:
@@ -495,13 +503,14 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
                 flags: Sequence[str] = (), members: VerifyMembers | None = None) -> dict:
     """The verifier: Lean `flock-verify verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
-    `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
-    `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a plain session's ``--coins tree
-    --stratified K``). ``members``: the run's kept verifier (`VerifyMembers`), which is handed `verify`'s arguments for
-    this session as its next member in place of a `verify` process of its own, and gives the same verdict.
-    ``st["archived"]``, a dict a run's members share (`archive_put`'s ``held``): a file archived once,
-    the members' circuit or a file the run put before its sessions, is linked into every later archive rather than put
-    again. ``st["statement"]``: the statement `verify` sets up
+    `hold_registered`) when the statement reads registered values, with the window's registered circuit record
+    (`st["interface_file"]`, `--interface`) whose declared registered ports the file never binds (`bound_files`); `zk`,
+    a `--zk` session's. `log` names its logs under `out` (a negative's own, beside the honest verdict's). `flags`: more
+    of `verify`'s (a plain session's ``--coins tree --stratified K``). ``members``: the run's kept verifier
+    (`VerifyMembers`), which is handed `verify`'s arguments for this session as its next member in place of a `verify`
+    process of its own, and gives the same verdict. ``st["archived"]``, a dict a run's members share (`archive_put`'s
+    ``held``): a file archived once, the members' circuit or a file the run put before its sessions, is linked into
+    every later archive rather than put again. ``st["statement"]``: the statement `verify` sets up
     (a templated one's ``verity/flock-circuit/tmpl``), else `STATEMENT_ID`. The verdict keeps what `verify` names of the
     public file's header, the registered reads, the sample and the tables it checked the session against
     (``public_header_sha512``, ``registered_sha512``, ``unit_draw``, ``session_tables``), which the second stage's audit
@@ -513,8 +522,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     archive, files = out / "archive", archive_files(st, n)
     keys = archive_put(lean, archive, files, out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"),
                        st.get("archived"))
-    bound = [y for x in ("partition", "program", "registered") if st.get(f"{x}_file")
-             for y in (f"--{x}", keys.get(Path(st[f"{x}_file"]), ""))]
+    bound = [y for x in bound_files(st) for y in (f"--{x}", keys.get(Path(st[f"{x}_file"]), ""))]
     args = ["--statement", st.get("statement", STATEMENT_ID), "--archive", str(archive),
             "--circuit", keys.get(files[0], ""), "--public", keys.get(files[1], ""), *bound,
             *(["--zk"] if zk else []), *flags, "--session", str(sessions[-1].parent)]

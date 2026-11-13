@@ -22,6 +22,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from verity.protocols.pouw.verifier import core_check as PCC
 from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier import leaf_lanes as LL
 from verity.protocols.pouw.prover.circuit import h1tile as HT
@@ -40,7 +41,7 @@ from tests.pipeline.test_serve_h1 import PROMPTS, _PeriodAuditor, _Server
 from tests.protocols import pouw_h1_circuits as PC
 from tests.protocols.test_pouw_h1_commit import K, ROWS, STEPS, Model
 from tests.protocols.test_pouw_h1_served import _unit
-from verity.circuits.boolean import NOT, XOR, operands
+from verity.circuits.boolean import AND, NOT, XOR, operands
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.ports import In, Out, Ports
 from verity.circuits.refs import Coll, coll_concat
@@ -58,16 +59,45 @@ def _bit(c, i):
     return Coll(V1, c.refs.slice(i, i + 1))
 
 
+def _fold(B, bits):
+    while len(bits) > 1:
+        bits = [B.call(XOR, operands(*bits[i:i + 2])) if i + 1 < len(bits) else bits[i] for i in range(0, len(bits), 2)]
+    return bits[0]
+
+
+def _zeros(B, *colls):
+    """0, read by two AND rows per 16 bits of `colls`: with u and v the XORs of the 16 bits' halves, AND(u, v) ^
+    AND(u, NOT v) ^ u, all XORed together. XOR and NOT are linear in the proof system, so only an AND row reads its
+    inputs' columns, and the form compiler folds AND(t, NOT t) and a XOR of a form with itself away (`forms.Circuit`)."""
+    bits = [_bit(c, i) for c in colls for i in range(c.type.leaves)]
+    assert len(bits) % 16 == 0, len(bits)
+    zs = []
+    for i in range(0, len(bits), 16):
+        u, v = _fold(B, bits[i:i + 8]), _fold(B, bits[i + 8:i + 16])
+        zs += [B.call(AND, operands(u, v)), B.call(AND, operands(u, B.call(NOT, v))), u]
+    return _fold(B, zs)
+
+
+#: a seed (a coin port and a position port, no sink returned) over J10-R's salt and position: `_zeros` of their bits
+StandInSeed = CompositeDefinition("H1DrawnTestSeed", 0, ("K", "R", "C"),
+                                  lambda S: ([p for p in _sig(S)[0] if p[0] in ("salt", "position")], V1),
+                                  lambda B, S, salt, position: _zeros(B, salt, position), register=False,
+                                  ports=Ports(params={"salt": In(kind="coin"), "position": In(kind="position")}))
+
+
 def _body(B, S, a, b, zy, salt, position, roots, call, blocks):
     receipt, ok = (t for _n, t in _sig(S)[1].fields)
-    x = B.call(XOR, operands(_bit(a, 0), _bit(b, 0)))
-    return coll_concat(_sig(S)[1], [coll_concat(receipt, [B.call(XOR, operands(_bit(a, i), _bit(zy, i)))
+    seed = B.call(bind(StandInSeed, K=S.K, R=S.R, C=S.C), salt, position)
+    x = B.call(XOR, operands(seed, _zeros(B, a, b, zy, roots, call, blocks)))
+    return coll_concat(_sig(S)[1], [coll_concat(receipt, [B.call(NOT, B.call(NOT, _bit(zy, i)))
                                                           for i in range(receipt.leaves)]),
-                                    B.call(NOT, B.call(XOR, operands(x, x)))])
+                                    B.call(NOT, x)])
 
 
 #: J10-R's tile unit's signature (`h1window.tile_unit` over `h1tile.PouwH1Tile5`, so its statement's rows and public row
-#: are J10-R's), its receipt bits of its A rows and record and its ok 1: a circuit of a few hundred gates
+#: are J10-R's), its receipt its record's leading bits (`_stand_in_receipts`) and its ok 1, the NOT of `_zeros` of every
+#: input (the coin and position through `StandInSeed`), since the Lean verifier refuses a known port (pub) or a port
+#: read in full that no computed row reads in every bit (`KnownRead`)
 StandInJ10R = CompositeDefinition("H1DrawnTestTileJ10R", 0, ("K", "R", "C"), _sig, _body, register=False,
                                   ports=Ports(params={"salt": In(kind="coin"), "position": In(kind="position")},
                                               ret={"receipt": Out(sink=True)}))
@@ -98,10 +128,35 @@ def _stand_in_leaf(k, kind, program, path):
                   bind=bound)
 
 
-def _with_receipts(commit):
-    """`Served.commit` with each call's zy receipts registered (`Served.receipts`): `h1zy.reference` of each of its units'
-    padded A rows, weight rows and their records (`h1zy.records`), the run's Program salt, the unit's position and the
-    call's roots, as the word reference computes the receipt the combine checks."""
+def _v1_receipt(served, ta, tb, tsa, tsw, zy, salt, position, roots, u0, ij, k):
+    rc, ok = Z.reference(ta, tb, tsa, tsw, zy, salt, position, roots)
+    assert ok == 1
+    return rc
+
+
+def _j10r_receipt(served, ta, tb, tsa, tsw, zy, salt, position, roots, u0, ij, k):
+    """J10-R's word reference's receipt (`h1zy.reference` with ``j10r``), what `drawn.call_receipts` rebuilds."""
+    blocks = PCC.j10r_blocks(served.m, k, (32, 32), *ij)
+    rc, ok = Z.reference(ta, tb, tsa, tsw, zy, salt, position, roots, j10r=(u0, blocks))
+    assert ok == 1
+    return rc
+
+
+def _stand_in_receipt(served, ta, tb, tsa, tsw, zy, salt, position, roots, u0, ij, k):
+    """`StandInJ10R`'s receipt: its record's leading bits, the record's first z cells as u32 words."""
+    return list(zy[0][:served.receipt_shape(0)[1] // 2])
+
+
+def _stand_in_receipts(z, win, k, roots):
+    """`drawn.call_receipts` under `StandInJ10R`: each unit's receipt its record row's leading u16 words."""
+    return np.asarray(z["w_zy"], np.uint16)[:, :CR.shape_of(win["raw"])["tiles"][k]["receipt"]]
+
+
+def _with_receipts(commit, receipt=_v1_receipt):
+    """`Served.commit` with each call's zy receipts registered (`Served.receipts`, serve-openai's ``--h1-receipts``):
+    `receipt` (by default v1's `h1zy.reference`) of each of its units' padded A rows, weight rows and their records
+    (`h1zy.records`), the run's Program salt, the unit's position and the call's roots (and its first position and the
+    unit's tile, J10-R's), as the word reference computes the receipt the statement's o0 (or the combine) reads."""
     def with_receipts(self, run, call, *a, **kw):
         if self.receipts is None:
             def receipts(c, codes, s_a, w, s_w):
@@ -117,8 +172,8 @@ def _with_receipts(commit):
                     ta, tb = aa[32 * i:32 * (i + 1)].view(np.uint8).tolist(), ww[32 * j:32 * (j + 1)].view(np.uint8).tolist()
                     tsa = [int(v) for v in sa[32 * i:32 * (i + 1)].view("<u4")]
                     tsw = [int(v) for v in sw[32 * j:32 * (j + 1)].view("<u4")]
-                    rc, ok = Z.reference(ta, tb, tsa, tsw, Z.records(ta, tb, tsa, tsw), run._salt, u0 + t, roots)
-                    assert ok == 1
+                    rc = receipt(self, ta, tb, tsa, tsw, Z.records(ta, tb, tsa, tsw), run._salt, u0 + t, roots, u0,
+                                 (i, j), c.k)
                     out.append([int(v) & 0xFFFFFFFF for v in rc])
                 return np.array(out, np.uint32)
             self.receipts = receipts
@@ -153,9 +208,12 @@ for s in sessions:
 
 @pytest.fixture
 def served(tmp_path, monkeypatch):
-    """One window served over the stand-in J10-R tile at K on a gate session of period p1 (sample K 2), with a prover dir
-    and b/<K> under `WKEY`; its K's circuit file built by `pouw_h1_circuits` (``--strata K``); the served weights as
-    sampled's ``--weights``."""
+    """One window served over the stand-in J10-R tile at K on a gate session of period p1 (sample K 2), with each call's
+    receipts (`_with_receipts`: J10-R's word reference's, or under the stand-in its own, which sampled then rebuilds), a
+    prover dir and b/<K> under `WKEY`; its K's circuit file built by `pouw_h1_circuits` (``--strata K``); the served
+    weights as sampled's ``--weights``."""
+    receipt = _j10r_receipt if REAL else _stand_in_receipt
+    monkeypatch.setattr(SV.Served, "commit", _with_receipts(SV.Served.commit, receipt))
     if not REAL:
         j10r = _unit(defn=StandInJ10R)
         monkeypatch.setattr(SV, "unit_of", lambda name: j10r if name == "j10r" else None)
@@ -177,6 +235,7 @@ def served(tmp_path, monkeypatch):
     DR = DRAWN
     if not REAL:
         monkeypatch.setattr(DR, "reference_check", lambda *a: None)
+        monkeypatch.setattr(DR, "call_receipts", _stand_in_receipts)
     return DR, d, tmp_path
 
 
@@ -243,12 +302,21 @@ def _session(x: dict, program: bytes, part: dict, reg: bytes, openings: dict | N
          **({} if openings is None else {"openings": openings})}))
 
 
+def _bound(x: dict, program: bytes, part: dict) -> None:
+    """Staged statement `x`'s program.json and partition.json, which the ZK server's Hello is set up on, are the Program
+    and partition object credit verifies it under."""
+    c = Path(x["dir"])
+    assert (c / "program.json").read_bytes() == program
+    assert json.loads((c / "partition.json").read_text()) == part
+
+
 def _prove(plan: dict, d: Path) -> None:
     """Each staged call proved (`_session`) on the window's Program and partition and the ``--registered`` file stage wrote
     beside it."""
     raw = gzip.decompress((d / "h1" / SH.PROGRAM).read_bytes())
     part = CR.partition_of(hashlib.sha512(raw).hexdigest(), CR.shape_of(raw))
     for x in plan["calls"]:
+        _bound(x, raw, part)
         _session(x, raw, part, (Path(x["dir"]) / "registered.json").read_bytes())
 
 
@@ -266,6 +334,7 @@ def _prove_leaves(plan: dict, win: dict) -> None:
         assert (Path(x["dir"]) / "registered.json").read_text() == json.dumps(reg)
         leaf = bytes.fromhex(plan["leaf_programs"][f"{st[0]}{k}"])
         part = CR.leaf_partition_of(hashlib.sha512(leaf).hexdigest(), CR.leaf_unit_id(win["shape"], k, st[0]))
+        _bound(x, leaf, part)
         held = {v: dict(map(tuple, rows)) for v, rows in {**plan["produced"]["openings"], **known}.items()}
         openings = {p: [[e["reads"][0], held[e["value"]][e["reads"][0]]]] for p, e in reg["ports"].items()
                     if e["value"] in held}
@@ -298,6 +367,14 @@ def test_a_served_windows_drawn_calls_are_staged_proved_and_credits_proved_accep
     assert all(hashlib.sha512(Path(x["circuit"]).read_bytes()).hexdigest() == manifest["files"][f"k{K}"]
                for x in plan["calls"])
     assert all((Path(x["dir"]) / f).exists() for x in plan["calls"] for f in ("inst.bin", "pub.bin", "pin.txt", "circuit.txt"))
+    prefix = CR.shape_of(gzip.decompress((d / "h1" / SH.PROGRAM).read_bytes()))["prefix"]
+    for x in plan["calls"]:
+        reg = json.loads((Path(x["dir"]) / "registered.json").read_text())
+        pub = (Path(x["dir"]) / "pub.bin").read_bytes()
+        head = json.loads(pub[:pub.index(b"\n")])
+        assert reg["ports"][CR.RECEIPT_PORT]["value"] == head["registered"][CR.RECEIPT_PORT]["value"] == \
+            f"{prefix}receipt@{x['call']}"
+        assert sorted(head["shared_rows"]) == sorted(reg["ports"])
     _prove(plan, d)
     st = tmp / "statements.json"
     assert DR.run("statements", SimpleNamespace(work=tmp / "work", out=st)) == 0
@@ -349,6 +426,46 @@ def test_a_prover_state_or_weights_key_other_than_the_served_ones_is_refused(ser
         np.savez(f, **kept)
     assert _stage(DR, d, tmp, weights_key=tmp / "wkey") == 1
     assert "is not the tree the window registered" in capsys.readouterr().err
+
+
+def test_a_call_statements_port_that_is_no_registered_read_is_refused_by_name():
+    """`drawn.complete` is the Lean verifier's ``registered reads (complete)``: every port of the statement's circuit is
+    a port of credit's ``--registered`` file. o0, the receipt, is refused with the serving flag that registers it."""
+    ports = ["a_k64_0", "b_k64_0", "zy", "pub", "o0", "o1"]
+    DRAWN.complete(ports, {"ports": dict.fromkeys(ports, {})}, 3)
+    with pytest.raises(DRAWN.Refused, match=r"call 3's statement's port o0 is no port of credit's registered reads.*"
+                                            r"receipt@3.*--h1-receipts"):
+        DRAWN.complete(ports, {"ports": dict.fromkeys([p for p in ports if p != "o0"], {})}, 3)
+    with pytest.raises(DRAWN.Refused, match="port zy is no port of credit's registered reads") as e:
+        DRAWN.complete(ports, {"ports": dict.fromkeys(["a_k64_0", "b_k64_0", "pub", "o1"], {})}, 3)
+    assert "--h1-receipts" not in str(e.value)
+    z = {"units": np.array([5, 6]), "r_o0": np.array([0, 1]), "v_o0": np.array(["receipt@0"] * 2),
+         "w_o0": np.array([[1, 2], [3, 4]], np.uint16)}
+    DRAWN.outputs_held(z, {"o0": z["w_o0"]})
+    with pytest.raises(DRAWN.Refused, match="unit 6: its o0 is not row 1 of receipt@0, which the window registered"):
+        DRAWN.outputs_held(z, {"o0": np.array([[1, 2], [3, 5]], np.uint16)})
+
+
+@pytest.mark.slow
+def test_a_window_without_its_receipts_or_a_unit_whose_receipt_is_not_the_registered_one_is_refused(served, monkeypatch,
+                                                                                                     capsys):
+    """A call statement's o0 is opened at the call's registered receipt table: a window that registers none is refused
+    before anything is staged, by the port the Lean verifier would refuse, and a staged o0 that is not the row the
+    window registered is refused before it is written."""
+    DR, d, tmp = served
+    window_of = DR.window_of
+    monkeypatch.setattr(DR, "window_of", lambda *a: {**(w := window_of(*a)), "roots": {
+        v: r for v, r in w["roots"].items() if "receipt@" not in v}})
+    assert _stage(DR, d, tmp, weights_key=tmp / "wkey") == 1
+    err = capsys.readouterr().err
+    assert "port o0 is no port of credit's registered reads" in err and "--h1-receipts" in err, err
+    assert not (tmp / "work" / DR.PLAN).exists()
+    monkeypatch.setattr(DR, "window_of", window_of)
+    honest = DR.call_receipts
+    monkeypatch.setattr(DR, "unit_outputs", lambda z, *a: {"o0": honest(z, *a) ^ np.uint16(1),
+                                                           "o1": np.tile(DR.OK, (len(z["units"]), 1))})
+    assert _stage(DR, d, tmp, weights_key=tmp / "wkey") == 1
+    assert "its o0 is not row" in (err := capsys.readouterr().err) and "receipt@" in err, err
 
 
 @pytest.mark.slow
