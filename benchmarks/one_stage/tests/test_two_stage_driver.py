@@ -91,6 +91,12 @@ def _interior(layout: BR.Layout, previous: str, program: Program | None = None) 
     return rec, ports
 
 
+def _placed(layout: BR.Layout, seed: str = "first") -> FC.Challenger:
+    """A test's challenger for a class's first stage whose hand-off is resumed: its one family is the class's place's
+    (`two_stage.family_of`), the family `two_stage.resume` names."""
+    return FC.Challenger(seed, label=TS.family_of(layout))
+
+
 def _samples_q(got: TS.First) -> bool:
     """The first stage sampled Q of the class's spans, a subset."""
     return got.sample.draw["law"] == "subset" and len(got.sample.units) == Q
@@ -102,7 +108,7 @@ def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
     registration is logged after it, and the second stage samples K proof blocks in each sampled span on the next
     challenger's coins, opened after the interior registration's digest."""
     c = _class()
-    got = TS.first(c.public(), PAIR, RULE, FC.Challenger("first"))
+    got = TS.first(c.public(), PAIR, RULE, _placed(c.layout))
     assert got.layout.n_rho == N_RHO and got.registration.record["population"] == N
     assert _samples_q(got) and got.read
     handoff = json.loads(json.dumps(got.stage1()))
@@ -119,7 +125,8 @@ def test_an_inlined_checks_second_stage_samples_the_template_its_body_calls():
     """An inlined check (`commit.json`'s ``inline``): the class's stream checks the template WRAP's body calls, so the
     replay side resumes it from ``stage1.json`` alone and the second stage samples among PAIR's instances, two an
     instance of WRAP, in each sampled span."""
-    got = TS.first(_class(WRAP, inline=True).public(), WRAP, RULE, FC.Challenger("first"))
+    c = _class(WRAP, inline=True)
+    got = TS.first(c.public(), WRAP, RULE, _placed(c.layout))
     assert got.layout.inline and got.stream.spec.check.query == P.template_instance_query(PAIR)
     again = TS.resume(json.loads(json.dumps(got.stage1())), WRAP, FC.Challenger("second"))
     assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
@@ -148,7 +155,7 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
     assert TS.Rule.from_json(json.loads(json.dumps(rule.to_json()))) == rule
     assert TS.counts_refused(ks, c.layout.templates) is None and TS.counts_refused(2, c.layout.templates) is None
 
-    got = TS.first(c.public(), BOTH, rule, FC.Challenger("first"))
+    got = TS.first(c.public(), BOTH, rule, _placed(c.layout))
     assert got.stream.cells == (2 * N_RHO, N_RHO) and got.stream.counts == (3, 1)
     handoff = json.loads(json.dumps(got.stage1()))
     assert handoff["rule"]["k"] == ks
@@ -207,7 +214,8 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
 
 
 def test_resume_refuses_another_rule_registration_or_sample():
-    got = TS.first(_class().public(), PAIR, RULE, FC.Challenger("first"))
+    c = _class()
+    got = TS.first(c.public(), PAIR, RULE, _placed(c.layout))
     stage1 = json.loads(json.dumps(got.stage1()))
     with pytest.raises(ValueError, match="hand-off"):
         TS.resume({**stage1, "format": "other"}, PAIR)
@@ -220,17 +228,39 @@ def test_resume_refuses_another_rule_registration_or_sample():
         TS.resume({**stage1, "units": others}, PAIR)
 
 
-def test_a_hand_off_that_names_no_window_root_resumes_under_its_commitments_run():
-    """The first stage registers under the window's open root, the commitment's ``run`` (`_first_all`), which the
-    outcome holds its session's evidence to. A hand-off that names the root resumes under it; one that names none
-    resumes under the commitment's ``run``, to the same registration and sample."""
-    pub = _class().public()
-    got = TS.first(pub, PAIR, RULE, FC.Challenger("first"), window_root=pub["run"])
+def test_resume_names_the_first_stages_family_and_its_sessions_root_itself():
+    """`resume` names the family of the first stage's challenges from the class's layout (`family_of`) and the
+    session's root from the record's window, the run the first stage registers under (`_first_all`). A hand-off that
+    names the same, or names neither, resumes to the same registration and sample under them. Refused: a hand-off
+    that names another family, as one written by a second sample of the same registration on another family is; a
+    hand-off that names another session root than its record's; a caller's root that is not the record's; and a
+    record whose window is of another run than the class's commitment."""
+    c = _class()
+    pub, mine, elsewhere = c.public(), TS.family_of(c.layout), "ab" * 64
+    got = TS.first(pub, PAIR, RULE, _placed(c.layout), window_root=pub["run"])
     stage1 = json.loads(json.dumps(got.stage1()))
-    assert "window_root" not in stage1 and TS.first_root(stage1) == pub["run"]
-    assert TS.first_root({**stage1, "window_root": "ab" * 64}) == "ab" * 64
-    again = TS.resume(stage1, PAIR, window_root=TS.first_root(stage1))
-    assert again.registration.digest == got.registration.digest and again.sample.units == got.sample.units
+    assert stage1["family"] == mine and "window_root" not in stage1 and TS.first_root(stage1) == pub["run"]
+    for handoff in (stage1, {**stage1, "window_root": pub["run"]}, {k: v for k, v in stage1.items() if k != "family"}):
+        again = TS.resume(handoff, PAIR, window_root=TS.first_root(handoff))
+        assert again.registration.digest == got.registration.digest and again.sample.units == got.sample.units
+        assert again.stream.family(again.sample) == mine
+
+    second = TS.first(pub, PAIR, RULE, FC.Challenger("another sample"), window_root=pub["run"])
+    other = json.loads(json.dumps(second.stage1()))
+    assert other["registration"] == stage1["registration"] and other["family"] == FC.LABEL != mine
+    for handoff in (other, {**stage1, "family": AC.family(0)}):
+        with pytest.raises(ValueError, match="does not choose among the families the session reserved"):
+            TS.resume(handoff, PAIR, window_root=pub["run"])
+
+    with pytest.raises(ValueError, match="the hand-off names the session root abababab"):
+        TS.first_root({**stage1, "window_root": elsewhere})
+    with pytest.raises(ValueError, match="the hand-off names the session root abababab"):
+        TS.resume({**stage1, "window_root": elsewhere}, PAIR)
+    with pytest.raises(ValueError, match="the registration is held to the session root abababab"):
+        TS.resume(stage1, PAIR, window_root=elsewhere)
+    moved = {**stage1, "record": {**stage1["record"], "window": {**stage1["record"]["window"], "run": elsewhere}}}
+    with pytest.raises(ValueError, match="the record's window is of run abababab"):
+        TS.resume(moved, PAIR, window_root=elsewhere)
 
 
 def test_the_second_stages_coins_follow_the_whole_first_stage():
@@ -282,7 +312,7 @@ def test_a_class_of_verdicts_declares_and_registers_its_blocks_return(layers):
         tables[t] = h.root
     pub = json.loads(json.dumps(BR.commit(spans, layout, 0, tables=tables).public()))
     name = f"{P.template_id(layout.replay)}/{BR.RETURN}" if layers else BR.RETURN
-    got = TS.first(pub, SAME, RULE, FC.Challenger("first"))
+    got = TS.first(pub, SAME, RULE, _placed(layout))
     served = [(v.name, v.schema) for v in got.stream.spec.values if v.phase == "serve"]
     assert served == [("b.ingress", BR.SCHEMA), ("b.egress", BR.SCHEMA), (name, BR.SCHEMA),
                       *((t, HT.SCHEMA) for t in layout.tables)]
@@ -487,14 +517,22 @@ def test_a_classs_place_in_its_windows_session_is_its_layouts_alone():
         TS.place(layout(prompt=1 << 32))
 
 
-class OneSession(CC.ChallengerCoins):
-    """One in-process challenger session of the window's family and ``ranks`` ranks' (`a5_coins.families`), as a
-    window's first stage has: the session's client (`open`, `open_many`, `close`), whose signed release log holds every
-    family's roots and releases in the order they were asked for; and coins that take the ranks' families in order, a
-    commitment each."""
+def _stop_places() -> list[int]:
+    """The places `_stop_class`'s two classes take in their window's session (`two_stage.place`): the stop class's
+    spans', its stop blocks', and the other class's."""
+    stopped, filed = (BR.Layout(PAIR, 0, 1, 4, 4 if held else 2, N, ROOT, stop=STOP, held=held) for held in (True, False))
+    return [TS.place(stopped), TS.place(stopped, blocks=True), TS.place(filed)]
 
-    def __init__(self, seed: str, ranks: int = 6, coins: int = 64) -> None:
-        layout = AC.families(dict.fromkeys(range(ranks), coins))
+
+class OneSession(CC.ChallengerCoins):
+    """One in-process challenger session of the window's family and each of ``ranks``' (`a5_coins.families`;
+    `_stop_places` unless given), as a window's first stage has: the session's client (`open`, `open_many`, `close`),
+    whose signed release log holds every family's roots and releases in the order they were asked for; and coins that
+    take the ranks' families in the order given, a commitment each."""
+
+    def __init__(self, seed: str, ranks: list[int] | None = None, coins: int = 64) -> None:
+        ranks = _stop_places() if ranks is None else list(ranks)
+        layout = AC.families(dict.fromkeys(ranks, coins))
         self.directory = Path(tempfile.mkdtemp(prefix="one-session-"))
         weakref.finalize(self, shutil.rmtree, self.directory, True)
         self.ledger = FC.Ledger(self.directory / "windows.jsonl", FC.at(0, 3))
@@ -506,7 +544,7 @@ class OneSession(CC.ChallengerCoins):
         self.commitment, self.families = self.live.commitment, self.live.families
         self._lines: list[str] = []
         self._clock, self._files = itertools.count(), None
-        super().__init__(*(Ch.LiveRecord(self, AC.family(r)) for r in range(ranks)))
+        super().__init__(*(Ch.LiveRecord(self, AC.family(r)) for r in ranks))
 
     def open_many(self, requests: list[tuple[str, int, bytes]]) -> list[Ch.LiveOpening]:
         out = []
@@ -626,7 +664,7 @@ def test_a_stop_samples_order_is_read_from_the_challengers_signed_log():
         return TS.stop_order(evidence, root, family, b, s, read, AC.lms_verify)
 
     one, read, family = session("order", b, s)
-    assert family == {b: AC.family(0), s: AC.family(1)}
+    assert family == {b: AC.family(_stop_places()[0]), s: AC.family(_stop_places()[1])}
     ev = one.evidence(s)
     assert order(ev, read, family[s]) is None
     assert "published no signed log" in order(None, read, family[s])
@@ -659,7 +697,8 @@ def test_a_stop_samples_order_is_read_from_the_challengers_signed_log():
 
 def test_each_stop_class_is_a_rank_more_of_the_windows_session_and_a_wrong_order_refuses_the_window(tmp_path, monkeypatch):
     """A window of a stop class and a class without a stop block, under the verifier's rule, on one session: three
-    ranks, the stop class's stop blocks the third, registered and sampled after its first stage at the rate given (the
+    ranks, each its place's (`two_stage.place`) and its hand-off's family that place's, the stop class's stop blocks
+    the rank after its spans', registered and sampled after its first stage at the rate given (the
     first stage's when none is), and its order held by the session's signed log. A stop sample whose order does not
     hold refuses every class of the window, each by name, with no sample handed on. A stop class whose stop blocks
     register nothing is refused itself and the other class goes on. A stop class that cannot plan its stop sample (a
@@ -677,7 +716,8 @@ def test_each_stop_class_is_a_rank_more_of_the_windows_session_and_a_wrong_order
     mine = stopped["stop"]
     assert len(mine["units"]) == 1 and mine["order"] == {"held": True, "reason": None}
     assert mine["record"]["previous"] == stopped["registration"] and mine["design"] == f"rate:1/{N}"
-    assert sorted(stopped["session"]["plan"]["needs"]) == ["0", "1", "2"]
+    assert sorted(map(int, stopped["session"]["plan"]["needs"])) == sorted(_stop_places())
+    assert [stopped["family"], mine["family"], plain["family"]] == [AC.family(r) for r in _stop_places()]
     received = [bytes.fromhex(json.loads(x)["root"]) for x in mine["evidence"]["session"]["log"] if '"event":"root"' in x]
     at = {name: [i for i, r in enumerate(received) if r == bytes.fromhex(d)]
           for name, d in (("boundary", stopped["registration"]), ("stop", mine["registration"]))}
@@ -702,6 +742,38 @@ def test_each_stop_class_is_a_rank_more_of_the_windows_session_and_a_wrong_order
     stopped, plain = run("no-rate", stop_design="subset:2")
     assert "units" not in stopped and "units" not in plain and "session was not opened" in plain["session"]["error"]
     assert "a fixed count samples" in stopped["error"] and "planned no sample" in stopped["stop"]["error"]
-    assert "rank(s) [0, 2] ended before planning" in plain["error"]
+    assert f"rank(s) {_stop_places()[:2]} ended before planning" in plain["error"]
     for o in run("no-rule", stop=None):
         assert "units" not in o and "not the verifier's own" in o["error"] and "was not opened" in o["session"]["error"]
+
+
+def test_two_directories_of_one_place_are_refused_before_any_session(tmp_path, monkeypatch):
+    """A window's session samples a class once. A class committed a second time, or its directory given twice, would
+    be two ranks of the session, two families and two samples of one class, of which its prover hands on the one it
+    prefers. So the first stage refuses the whole window, each class's hand-off saying which directories, and opens
+    no session: no challenge is released. A class's rank is its place whatever the order of its directories: the same
+    two classes in the other order reserve the same ranks and sample on the same families."""
+    stopped, filed, again = (json.loads(json.dumps(_stop_class(held).public())) for held in (True, False, True))
+    assert again["values"] != stopped["values"] and again["run"] == stopped["run"]
+
+    def never(*a: object, **k: object) -> None:
+        raise AssertionError("a session was asked for")
+    with monkeypatch.context() as m:
+        m.setattr(AC, "start", never)
+        for pubs, twice in (([stopped, filed, again], [0, 2]), ([filed, stopped, stopped], [1, 2])):
+            out = TS._first_all(_args(tmp_path), pubs, PAIR, RULE, None, STOP)
+            assert len(out) == 3 and not any("units" in o or "stop" in o for o in out)
+            for o in out:
+                assert f"directories {twice} are of one class (prompt 4, outputs 4)" in o["error"]
+                assert "was not opened" in o["session"]["error"] and o["segment"] is None and o["evidence"] is None
+
+    asked: list[list[int]] = []
+
+    def start(challenger: str, root: str, ranks: list[int], *a: object, **k: object):
+        asked.append(list(ranks))
+        return _start(OneSession("the other order"))(challenger, root, ranks, *a, **k)
+    monkeypatch.setattr(AC, "start", start)
+    plain, mine = TS._first_all(_args(tmp_path), [filed, stopped], PAIR, RULE, None, STOP)
+    assert asked == [sorted(_stop_places())]
+    assert [mine["family"], mine["stop"]["family"], plain["family"]] == [AC.family(r) for r in _stop_places()]
+    assert mine["stop"]["order"] == {"held": True, "reason": None}
