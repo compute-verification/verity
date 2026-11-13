@@ -120,9 +120,9 @@ def test_the_audit_runs_without_the_replay_on_the_trees_own_copy_of_the_audits_d
     assert LC.audit_records("a", deps, tree) == 0
     (call,) = _calls(tmp_path)
     arts = ["--artifacts", str((tmp_path / "lean-artifacts").resolve())]
-    facts = ["--facts-cache", str(LC.facts_dir())]
+    facts = ["--facts-cache", str(LC.facts_dir()), "--tree", str(tree)]
     assert _argv(call) == ["--build", "--no-replay", "--no-runs", "--facts", "named", *arts, *facts, "--out", "OUT",
-                           str(tree / "a")]
+                           str(tree / "a")], "the builds bind the slot tree, where the packages are, at the fixed path"
     assert (call["cwd"], call["threads"]) == (str(tree), "2")
     assert (tree / "a" / "Aa.lean").is_file() and (tree / "p" / "Pp.lean").is_file() and not (tree / "c").exists()
     copied, kept = tree / "a" / ".lake" / "packages" / "dep" / "Dep.olean", deps / k / "dep" / "Dep.olean"
@@ -163,8 +163,9 @@ def test_its_result_is_of_its_own_kind_which_check_and_research_merge_refuse(rep
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     assert LC.audit_records("p", tmp_path / "deps", tree) == 0
-    assert _calls(tmp_path)[0]["argv"][5:11] == ["--artifacts", str((tmp_path / "lean-artifacts").resolve()),
-                                                 "--facts-cache", str(LC.facts_dir()), "--out", str(run / "lean-audit")]
+    assert _calls(tmp_path)[0]["argv"][5:13] == ["--artifacts", str((tmp_path / "lean-artifacts").resolve()),
+                                                 "--facts-cache", str(LC.facts_dir()), "--tree", str(tree),
+                                                 "--out", str(run / "lean-audit")]
     doc = json.loads((run / "lean-audit" / "audit.json").read_text())
     assert doc["kind"] == LC.FAST_KIND == "lean-fast/v1" and [r["kind"] for r in doc["packages"]] == [LC.FAST_KIND]
     assert json.loads((run / "lean-audit" / "audit-x" / "report.json").read_text())["kind"] == LC.FAST_KIND
@@ -335,7 +336,7 @@ def test_the_packages_whose_records_read_the_build_are_audited_after_it(repo, tm
     assert LC.audit_records("p", deps, tree, update=True, out=out) == 0
     calls = _calls(tmp_path)
     arts = ["--artifacts", str((tmp_path / "lean-artifacts").resolve())]
-    facts = ["--facts-cache", str(LC.facts_dir())]
+    facts = ["--facts-cache", str(LC.facts_dir()), "--tree", str(tree)]
     assert [c["argv"] for c in calls] == [
         ["--build", "--no-replay", "--no-runs", "--facts", "named", *arts, *facts, "--update", "--out", str(out),
          str(tree / "p")],

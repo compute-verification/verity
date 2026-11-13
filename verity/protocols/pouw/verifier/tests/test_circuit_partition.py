@@ -15,6 +15,8 @@ from verity.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.circuits.types import Array
 from verity.protocols.pouw.prover.circuit import ncp2, traced_as
 from verity.protocols.pouw.prover.circuit import partition as P
+from verity.protocols.pouw.prover.circuit import words as W
+from verity.protocols.pouw.prover.circuit.hashes import Emit, keccak_lanes, shake256
 from verity.protocols.pouw.verifier.protocol import DomainError
 
 SHAPE = ncp2.Shape(32, 64, 32)
@@ -82,7 +84,7 @@ def _served_word_body(B, S, a, s, ys, c0s, t, bias, salt, fwd, pos, wid, rid):
     m, k, n = S.M, S.K, S.N
     ms, ns = m // 16, n // 16
     tm = ncp2.templates(k, S.PERM)
-    strips = a.reshape(Array(ms, Array(16, Array(k, ncp2.W.I7))))
+    strips = a.reshape(Array(ms, Array(16, Array(k, W.I7))))
     dig = B.batch(tm["digest"], strips, axes=(0,))
     root = ncp2.rfc6962(0, ms, lambda i: dig[i], lambda left, right: B.call(ncp2.NcpNode, left, right))
     key = B.call(ncp2.NcpKey, salt, fwd, pos, wid, root)
@@ -137,25 +139,25 @@ def test_calls_on_one_weight_compose_without_recompute(kind):
 
 def _naive_form_x_body(B, S, rows, key, rid):
     """`NcpFormX`'s body with E₁'s row index in one lane only, the layout the recompute check rejects."""
-    e = ncp2.Emit(B)
+    e = Emit(B)
     k, pi = S.K, ncp2.perm(S.PERM, S.K)
     key_lanes = [(key[2 * t], key[2 * t + 1]) for t in range(4)]
     out = []
     for r in range(16):
-        halves = ncp2.shake256(e, [(rid[r], 0)] + ncp2.keccak_lanes(ncp2.TAG_E1) + key_lanes, k)
+        halves = shake256(e, [(rid[r], 0)] + keccak_lanes(ncp2.TAG_E1) + key_lanes, k)
         nz = ncp2._noise(e, halves, k)
         a = [rows[r][j] for j in range(k)]
-        out.append(array_of([e.call(ncp2.W.PouwFormX, a[j], nz[j]) for j in range(k)]
-                            + [e.call(ncp2.W.PouwFormX, a[j], nz[pi[j]]) for j in range(k)]
-                            + [e.call(ncp2.W.PouwFormX3, a[j], nz[j], nz[pi[j]]) for j in range(k)]))
+        out.append(array_of([e.call(W.PouwFormX, a[j], nz[j]) for j in range(k)]
+                            + [e.call(W.PouwFormX, a[j], nz[pi[j]]) for j in range(k)]
+                            + [e.call(W.PouwFormX3, a[j], nz[j], nz[pi[j]]) for j in range(k)]))
     return array_of(out)
 
 
 def _two_strips(form_x):
     """Two X units of one call, reading the same key: a root of two instances and nothing else."""
     k = 64
-    sig = lambda S: ((("rows", Array(2, Array(16, Array(k, ncp2.W.I7)))), ("key", Array(8, ncp2.U32)),  # noqa: E731
-                      ("rowids", Array(2, Array(16, ncp2.U32)))), Array(2, Array(16, Array(3 * k, ncp2.W.U8))))
+    sig = lambda S: ((("rows", Array(2, Array(16, Array(k, W.I7)))), ("key", Array(8, ncp2.U32)),  # noqa: E731
+                      ("rowids", Array(2, Array(16, ncp2.U32)))), Array(2, Array(16, Array(3 * k, W.U8))))
     return bind(CompositeDefinition("TwoStrips", 0, (), sig, lambda B, S, rows, key, rid: B.batch(form_x, rows, key, rid, axes=(0, None, 0)),
                                     register=False))
 

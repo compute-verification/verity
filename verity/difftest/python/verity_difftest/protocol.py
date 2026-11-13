@@ -23,14 +23,15 @@ def unhex(s: str) -> bytes:
     """`Flock.unhex`: even-length lowercase hex only (`bytes.fromhex` also takes uppercase and spaces)."""
     if len(s) % 2:
         raise Reject("odd-length hex")
-    if not HEX.issuperset(s):
+    # An evidence is megabytes of hex: ASCII text is checked a byte at a time in C, anything else a character at a time.
+    if s.encode().translate(None, b"0123456789abcdef") if isinstance(s, str) and s.isascii() else not HEX.issuperset(s):
         raise Reject("not lowercase hex")
     return bytes.fromhex(s)
 
 
 def canonical_json(b: bytes) -> Any:
     """`Core.canonicalJson`: ASCII without DEL that is JSON and that `canonical` writes back byte for byte."""
-    if any(c >= 0x7f for c in b):
+    if not b.isascii() or 0x7f in b:
         raise Reject("not ASCII without DEL (a byte at or above 0x7f)")
     try:
         s = b.decode("utf-8")
