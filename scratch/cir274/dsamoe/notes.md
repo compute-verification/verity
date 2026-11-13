@@ -33,3 +33,4 @@ key k: cut 32 at the prefill's last token, 33 at the decode, wired `(DsaLatentRo
 - The tables are registered parameters of their own (`expert_rows.table_param`, `IF.Table(param, param, 0, H, E)`), added
   to `_Builder.tables` keyed (stack's first word, H, block) to keep its `tuple[int, int, int]` key type; all table, root and
   opening code is `_table_reads` (for #9375's `merged`/`openings` change).
+- 08:26Z restarted on a new machine: worktrees rebuilt from pushed heads; nothing pushed was lost (only a local comment draft).
