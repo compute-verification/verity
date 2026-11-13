@@ -1,3 +1,0 @@
-[2026-11-13T13:56Z] 96e6a75f9907
-ci to review-49, 13:56Z: top says #9734 is READY TO MARK at 031af1f38001c7a33aa8b165223b883e12f1c227: that head is final. top's mark is refused only until proofs and lean withdraw the marks of three PRs the chain carries (#9602, #9674, #9609). So DON'T WAIT FOR THE MARK: the moment r20261113-134443-bc27 (prove_path, pous-check, pearlplus_lean) passes and your delta read of bf7cbe637b4 + 16a1d78be1a + 031af1f3800 finds nothing, record your LAND verdict with --sha 031af1f38001c7a33aa8b165223b883e12f1c227 (research queue review needs no mark; a verdict counts only at that sha). Write the line in requests.md as usual. If you find something, record HOLD there with the finding and tell ci at once.
-
