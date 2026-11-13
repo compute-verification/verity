@@ -119784,3 +119784,38 @@ In plain words. Right after I ended my turn, my conversation was handed two "tas
 Not established: why they reached me; whether you received them too.
 
 **STOP RULE.** Nothing done. **NEEDS.** As at 04:11Z. **To post.** Nothing.
+
+## ACCEPTS, Fri 04:18Z: STATEMENT CHANGE: `acceptsRun_form` and `reachedAccepts_form` no longer take `ReadsWithin` (`8929a60680`, not compiled); `OfRun.lean` compiles with a clean probe; RUNCOINS's accepted head is merged (`2d2bf8a4d3`, no conflict); no file of mine reads `OneStage.checkAt`; two ACCEPTS sessions ran at once from 03:55Z to 04:00Z
+
+Everything below that is stated over the form's accept is true and empty until TWOLEG's honest play passes: the form accepts no play today.
+
+**Compiled, probe clean.** `OfRun.lean`: "lean exit 0 in 412 s", five theorems (`agreesTo_of_append`, `playCoins_of_starts`, `acceptedTwo_of_formAccepts`, `playAccepts_of_run`, `acceptsRun_of_run`), in `r20261113-031354-d0df` (done rc 0, tree `98df55aa88`, before the merge). With it `Reached.lean` again (320 s). Both are in line again at the merged head.
+
+**The statement change (title).** `AcceptsTop.lean` at `8929a60680`: `acceptsRun_form` and `reachedAccepts_form` drop the premise `(hw : ReadsWithin A.h)`; nothing else in either statement moved. They are not compiled and not lakefile roots. Unchanged, and what the join reads of mine as far as I know: `reaches_frame`, `reachedAccepts`, `SourcesFit`, `sourcesFit`, `playAccepts_of_run`, `acceptsRun_of_run` (the last two still take `ReadsWithin`). The 04:01Z entry's "`AcceptsTop` still takes `ReadsWithin`" and "309 lines" are superseded: `Within.lean` is 293 lines.
+
+**How the premise goes.** `Within.lean` (pushed, not compiled): `readsWithin (h) (hc : h.reg.first.closure = none) : ReadsWithin h`, by a walk beside RUNCOINS's `*_read` lemmas (`select_within` and eight below it), and `playAccepts_of_run'`, which has no closure premise: where the held closure is not `none`, `HeldMatches.first` makes it the input's closure, and the form's `inputOf` sets that to `none`, so no accepted case exists.
+
+**One `ReadsWithin`, not two.** Neither copy has compiled. Mine is in `r20261113-035902-2a24`, `r20261113-041240-7f9e` and `r20261113-041601-d3dd`; RUNCOINS's `reads_within` (no closure premise, on `cursor/proofs-runcoins-2d88`, which my branch does not hold) is in `r20261113-035548-49aa`. Whichever compiles first stays, and I say which in a title. If it is RUNCOINS's, I merge `2d88` and delete my walk; `playAccepts_of_run'` then needs no `by_cases`.
+
+**Merged.** My branch stands on `cursor/proofs-runcoins-accepted-5c1e`. I merged its head `f079d353a5` (it holds `71ebf98c65` and adds `RunsAs/Parsed.lean`) as `2d2bf8a4d3`: no conflict, the four Python files are the base's text. TWOLEG's `b6d988648b` (`accepted_fits`) stays in my branch; it is not in the base. Not compiled at the merged head yet (`7f9e`).
+
+**`OneStage.checkAt`: none.** None of my nine files (`Accepts`, `AcceptsProof`, `Cover`, `ReadsOnly`, `Reached`, `OfRun`, `Fits`, `Within`, `AcceptsTop`) names `checkAt`, `interiorUnshown` or `sourceRead`. They open `accepted_steps` as far as `inputAt` and drop the rest, so the form's new last step reaches them only if `accepted_steps`' or `accepted_fits`' statement changes.
+
+**Two sessions.** My VM was replaced at about 03:54Z and again at about 04:00Z, each time a fresh clone of `main`. Between them a second session of this agent acted in the same checkout: the 04:01Z entry, the commit `3dde8747b8` (my `Within.lean` text) and the try `r20261113-035814-2586` are its. This session pushed `8929a60680` and `2d2bf8a4d3`, launched `2a24`, `7f9e` and `d3dd`, and cancelled `2586` as a duplicate (unstarted after 11 minutes; `Within.lean` is the first file of `2a24`). Since 04:00Z the branch's reflog and the inbox show one writer. This session holds the pen; before each push and entry I fetch, and if a head or an entry is not mine I stop and say so.
+
+**Not mine, not acted on.** At 04:00Z my turn was started by the proofs team's subscriptions: PRF-613's creation and four `#agent-coordination` messages (ci on #9596, kernels' HASH-125 on #9620, two run notices). They are the coordinator's.
+
+**Runs.**
+- `r20261113-031354-d0df`: done rc 0.
+- `r20261113-033021-8be7` (vy-nebius-2; `Fits`, `Reached`, `OfRun`, `AcceptsTop` at `5e016c10de`): Lean slot since 04:05Z, building `Fits`' dependencies.
+- `r20261113-035902-2a24` (vy-nebius-2; `Within`, `AcceptsTop` at `8929a60680`): started, 10 checks ahead at 04:14Z.
+- `r20261113-041240-7f9e` (vy-nebius-2; all five at `2d2bf8a4d3`, 3 h): 16 ahead.
+- `r20261113-041601-d3dd` (`--on auto`, landed on vy-nebius-cpu-8, pool `research`; `Within` alone at `2d2bf8a4d3`).
+- `r20261113-035814-2586`: cancelled by me.
+
+**STOP RULE.** Nothing done: no lock, no `Sampled.lean`, no switch.
+
+**NEEDS.**
+1. TWOLEG: `RecordsRead`'s two-line form change (03:00Z) stands.
+2. ASSEMBLY: `sourcesFit` is still not compiled (`8be7` is on it).
+3. RUNCOINS: when `r20261113-040015-a535` shows `Parsed.lean` compiles I discharge `RuleIsTwo` with `paramsOfJson_twoStage` and drop it from the two `_form` statements; that will be a second statement change, named in a title.
