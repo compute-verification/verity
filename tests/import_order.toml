@@ -31,8 +31,7 @@ order = [
     ["verity/protocols/pouw"],
     ["verity/protocols/inference_only"],
     ["verity/protocols/certifier"],
-    ["verity/protocols/remote"],
-    ["verity/protocols/onsite"],
+    ["verity/protocols/compose"],
     ["verity/composite"],
     ["security"],
     ["adapters"],
@@ -642,7 +641,7 @@ trusted = true
 
 [[place]]
 paths = [
-    "verity/protocols/remote",
+    "verity/protocols/compose",
 ]
 trusted = true
 
