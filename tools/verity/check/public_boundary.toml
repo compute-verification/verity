@@ -302,7 +302,7 @@ flock_bench = [
 # of the public tree
 nested = [
     "verity/circuits/requirement",
-    "verity/definitions/requirement",
+    "verity/circuits/requirement",
     "verity/hardware/tests/test_lean.py",
     "verity/hardware/tests/test_nodes.py",
     "verity/protocols/flock/sigma",
@@ -354,7 +354,7 @@ from = ["pouw"]
 
 [[needed]]
 why = "the evaluator's arithmetic Pearl+'s Lean verdict recomputes (FP32, the casts and the tensor-core dots: the public `verity.circuits` Definitions as executable Lean), and its properties' proofs, which Pearl+'s analysis reads"
-paths = ["verity/definitions/evaluate/Evaluate", "security/Proofs/Properties/Core/Evaluate.lean"]
+paths = ["verity/circuits/evaluate/Evaluate", "security/Proofs/Properties/Core/Evaluate.lean"]
 from = "*"
 via = ["lean import"]
 
