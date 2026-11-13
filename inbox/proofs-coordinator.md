@@ -135257,3 +135257,139 @@ On the tree that carries #9441, the executable takes blobs only as arguments. [r
 - That the composition's main can stream at all. I read its call, not its main.
 
 Next: the driver, on a new branch off `cursor/proofs-windowat-5e4b`, with a stand-in case of a few hundred members, entry by 13:00Z.
+
+## WINDOWAT, Fri 13 Nov 10:29Z: the `Joint/V5` draft compiles, all five files: `JointSampledV5`, `JointShareV5` and `JointHorizonV5` keep their text and their bound, and it is now a bound on acceptance and the sample ended; `JointAuditV5.hcls` is asked only where the sample ended and one field, `hend`, is new
+
+**In plain words.** The draft is on `cursor/proofs-windowat-hcls-b2b4`, and its five files compile, the three guarantees' proofs among them. The three guarantees are word for word what they were. What they read has changed in four places: the link points are asked only where the sample ended, some outcome must end the sample, the run's outcome says whether the sample ended, and a run is accepted only if it did. The bound itself (`P_a(W)` plus the members' terms) is the same expression over the same definitions. It bounds acceptance and the sample ended. You asked for the statements before the proofs were mended; the proofs took one mend, so both are here.
+
+Mailbox read at `4cc1ca1ffb` (newest: yours of 10:23Z; I edit no `MemberForm/Sound.lean`). No `~/wt/.pen`.
+
+### STOP RULE
+
+This restates three listed guarantees of ours (`Flock.SecurityProofs.JointSampledV5`, `JointShareV5`, `JointHorizonV5`, in `security/lean-audit.json`). It is a draft on your 09:23Z word: no pull request, no lock touched, nothing merged, and the branch is read by no pull request. Before and after:
+
+**1. The field `hcls`, and a new field `hend`** [run: `r20261113-101644-9fda`].
+
+```lean
+-- before
+hcls : ∀ (k : Fin ms.length) (ω : Ω),
+  mPtsOf (ms.get k).D.unroll.g ((ms.get k).part ((Bridge.execSel (n := nJ) src law nJ).draw ω)).card =
+    mPtsOf (ms.get k).D.unroll.g ((ms.get k).kd / nTab (ms.get k).I)
+
+-- after
+def sampleEnded (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (law : Flock.Draw.Law) (pop : ℕ) (ω : Ω) : Bool :=
+  match Spot.Draw.drawUnits law pop (Properties.Spot.bytesOf (src ω 0)) with
+  | .ok _ => true
+  | .error _ => false
+
+hcls : ∀ (k : Fin ms.length) (ω : Ω), sampleEnded src law nJ ω = true →
+  mPtsOf (ms.get k).D.unroll.g ((ms.get k).part ((Bridge.execSel (n := nJ) src law nJ).draw ω)).card =
+    mPtsOf (ms.get k).D.unroll.g ((ms.get k).kd / nTab (ms.get k).I)
+hend : ∃ ω : Ω, sampleEnded src law nJ ω = true
+```
+
+**2. The game's outcome and the acceptance event** [run: same].
+
+```lean
+-- before
+noncomputable def game : Game (w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript) :=
+  .send w.Reg fun R => .coin w.L.Ω fun ω => (w.sessions (w.L.draw ω) R).map fun ts => (R, w.L.draw ω, ts)
+def Accepts (o : w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript) : Prop :=
+  List.Forall₂ (fun m t => (m.part o.2.1).Nonempty → AcceptsZKP m.I m.own t) w.ms o.2.2
+
+-- after
+def ended (ω : w.L.Ω) : Bool := sampleEnded w.src w.law w.nJ ω
+noncomputable def game : Game ((w.Reg × Bool) × Finset (Fin w.nJ) × List Discharge.Exec.Transcript) :=
+  .send w.Reg fun R => .coin w.L.Ω fun ω =>
+    (w.sessions (w.L.draw ω) R).map fun ts => ((R, w.ended ω), w.L.draw ω, ts)
+def Accepts (o : (w.Reg × Bool) × Finset (Fin w.nJ) × List Discharge.Exec.Transcript) : Prop :=
+  o.1.2 = true ∧ List.Forall₂ (fun m t => (m.part o.2.1).Nonempty → AcceptsZKP m.I m.own t) w.ms o.2.2
+```
+
+**3. A member's session played alone** [run: same]. Before, its sampling design sampled every outcome of the sample's challenges. After, only those at which the sample ended.
+
+```lean
+abbrev EndΩ : Type := {ω : w.L.Ω // w.ended ω = true}          -- nonempty by `hend`
+
+-- before:  Ω := w.L.Ω × ((ω : w.L.Ω) → w.before τ k ω),   draw x := (w.ms.get k).part (w.L.draw x.1)
+noncomputable def memberLaw (τ : Strategy w.game) (k : Fin w.ms.length) : Law (w.ms.get k).n where
+  Ω := w.EndΩ × ((ω : w.EndΩ) → w.before τ k ω.1)
+  draw x := (w.ms.get k).part (w.L.draw x.1.1)
+
+theorem oneClass_memberLaw (τ : Strategy w.game) (k : Fin w.ms.length) : (w.ms.get k).OneClass (w.memberLaw τ k) :=
+  fun x => w.hcls k x.1.1 x.1.2
+```
+
+`memberStrat` is `τ`'s strategy at those outcomes. `MemberV5.OneClass`, `sim` and `wrongSet` are untouched, and `memberSim`, `memberWrong` and `JointAuditV5.wrongSet` are the same text over the new `memberLaw`.
+
+**4. Unchanged** [read: the diff of `b653a1448c2`]: `design k`, `pa`, `eps`, `AuditRecV5`, `JointPeriodV5`, and the text of the three guarantees. `JointSampledV5` after, as before:
+
+```lean
+def JointSampledV5 : Prop :=
+  ∀ (w : JointAuditV5), Assumptions.UniformRandomBytes w.Lb w.src →
+    ∀ τ : Strategy w.game,
+    (∀ k ω j, Assumptions.TableCRZAt execArith hs512
+      (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberLaw τ k).draw ω) (reg (w.memberSim τ k))) j
+      (zcStrat execArith hs512 (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (cont (w.memberSim τ k) ω))
+      (w.ms.get k).qF (w.ms.get k).qS) →
+    (∀ k, Assumptions.LinkCRZCAt execArith hs512 (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
+      (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (reg (w.memberSim τ k)) (cont (w.memberSim τ k))
+      (w.ms.get k).k (w.ms.get k).Rw (w.ms.get k).M (w.ms.get k).t') →
+    ∀ W : Finset (Fin w.nJ),
+      prob (fun o => w.Accepts o ∧ W ⊆ w.wrongSet τ) w.game τ ≤ ENNReal.ofReal (w.pa W) + w.eps
+```
+
+`JointShareV5` and `JointHorizonV5` are likewise their old text; the horizon's `r.accepted` is `Accepts`, so it too asks that each window's sample ended.
+
+### What a reader of the three guarantees now assumes and concludes [derived from 1 to 4]
+
+- **Assumes less in `hcls`.** Each member's part has its session's link points at the samples that ended. At a sample that ran out (where the model samples every proof block) nothing is asked. That removes my 08:40Z finding: a window whose members hold more than their sessions' link points is no longer excluded.
+- **Assumes one thing more, `hend`.** Some outcome of the sample's challenges ends the sample. A window with none is never accepted, so nothing is lost by it.
+- **The named assumptions are asked at fewer plays.** A3 is as before. `cr/sha-512` and `ecr/sha-512` are asked at each member's session played alone at the samples that ended, not at every sample. `live-verifier` (`hCust`) is untouched.
+- **Concludes the same bound of a smaller event.** The bound is a bound on **acceptance and the sample ended**: `Accepts` now says the sample ended and every member with a sampled proof block had its session accepted. Of a run whose sample ran out the guarantee says nothing, where before it counted such a run as accepted if its sessions were. The compiled check refuses such a run (`OneStage.checkAt`, `Spot/OneStage.lean:560`, my 09:13Z entry), so the event is now the one the check accepts on.
+- **The incorrect proof blocks move with `memberLaw`.** `wrongSet τ` is defined by the simulation of each member's session played alone, which now plays the samples that ended only. The text is the same; the set it names can differ.
+- **The right-hand side is the same number.** `pa` and `eps` are untouched: the members' terms are still taken at `design k`, which counts the samples that ran out too.
+
+### Where the draft differs from my 09:13Z text, and why [derived]
+
+- **No chosen outcome.** You listed "one chosen outcome elsewhere". I took the samples that ended and nothing else. With a chosen outcome, each member's term would have to be taken at a design that moves the ran-out outcomes onto the chosen one, and the bound would depend on an arbitrary choice. With the ended outcomes only, the members' terms need not change at all.
+- **`prob_member` is an equality with a factor, not an inequality.** The member's event in the window's game, with the sample ended, is the event in its session played alone times the share of the challenges at which the sample ended (`endShare`). That share of a member's term at `memberLaw` is at most its term at `design k`, which is what keeps `eps` unchanged.
+- **Where the ended bit sits.** The outcome is `((R, ended), sample, transcripts)`, not `(R, (ended, sample), transcripts)`: `o.2.1` is still the sample and `o.2.2` the transcripts, so fewer readers break.
+
+### The outcome whose sample ends: a field, and a lemma from A3 [derived; the lemma compiled in `5d33`]
+
+A3 alone cannot give it. A stream too short for the sampling design (no bytes at all, say) is uniform and runs out at every outcome. And the outcome is needed before A3 is assumed: `memberLaw` is a definition the guarantees' hypotheses read, and a sampling design must have an outcome. So it is the field `hend`. `JointAuditV5.hend_of_stream` gives the field under A3 from one stream of bytes that ends the sample; a stream of zeros is one wherever the sampling design ends on it. That zeros end every registered sampling design on the registered length is not proved in Lean.
+
+### Runs
+
+- `r20261113-101644-9fda` [run]: `Statement.lean` at `b653a1448c2`. vy-nebius-cpu-8's research pool through `--on auto`; sent 10:16:44Z, started 10:17:10Z, ended 10:18:13Z; 16 GB. rc 0, `lean exit 0 in 61 s`, axiom probe clean.
+- `r20261113-102227-56b2` [run]: `Layout.lean` (it imports the other four) at `9a1a03e86a5`. vy-nebius-cpu-14's research pool; sent 10:22:27Z, started 10:22:52Z, ended 10:24:23Z. rc 1: `Member.lean` failed in two proofs (a beta-redex left by `unfold`, and one injectivity term). `Session.lean`, which I did not edit, rebuilt.
+- `r20261113-102705-5d33` [run]: the same target at `6eb3fce6397`, both mended. vy-nebius-cpu-14's research pool; sent 10:27:05Z, started 10:27:29Z, ended 10:28:41Z; 16 GB. rc 0: `Member` and `Bound` built, `Layout.lean: lean exit 0 in 70 s`, and none of `Layout.lean`'s 40 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`.
+- `r20261113-102903-3349`: `Bound.lean` alone, for the axiom probe of the three guarantees' proofs themselves (the probe reads the target file's theorems only). Going on vy-nebius-cpu-14; expected to end by about 10:32Z. `Member.lean`'s probe follows it.
+
+### `WeightSecurity/Deployed.lean` and `Pressure.lean` [read; not compiled]
+
+Nothing is mended there. By reading:
+
+- `Deployed.lean:38` (`servedGame`) and `:48` (`servedRec`) spell the outcome's type out as `w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript`. Both break; each wants `(w.Reg × Bool) × …`.
+- The other places read the outcome as `b.2`, `b.2.2.1`, or go through `Accepts`, `wrongSet`, `memberLaw`, `memberSim`, `accepted_drawnWrong_le`, `drawMiss_le`, `eps` and `pa`, whose shapes are unchanged. I expect them to stand once the two types are mended.
+- What they say moves with `Accepts`: the served record's `accepted` then means the sample ended too.
+
+I confirm this next by a try on `Deployed.lean`, and list each error. `Pressure.lean` imports it, so its own errors cannot be compiled for until `Deployed.lean` is mended, which is not mine to do.
+
+### State
+
+- `cursor/proofs-windowat-hcls-b2b4` at `6eb3fce6397`, pushed. Three commits, each with "not compiled" in its subject because it was pushed before its try; the head has since compiled (`5d33`).
+- My draft touches none of `MemberForm/*`, `Sampled/Window*.lean` or a lock.
+- `cursor/proofs-windowat-5e4b` at `e977fbc96f`, unchanged. [#9576](https://github.com/compute-verification/verity/pull/9576) not marked by me.
+- Every theorem of mine over the per-member form's accept is true and empty until the compiled check accepts parameters that name members. This draft is about `JointAuditV5`, not about an accept.
+
+**To post** (PRF-490, as ours, when you have read the text):
+> Way (i)'s `Joint/V5` half is a draft on `cursor/proofs-windowat-hcls-b2b4` (no pull request, no lock). `JointSampledV5`, `JointShareV5` and `JointHorizonV5` keep their text and their right-hand side. `JointAuditV5.hcls` is asked only where the sample ended; a new field `hend` says some outcome ends the sample; the game's outcome carries whether the sample ended and `Accepts` asks it; a member's session played alone is taken at the samples that ended. So the bound is a bound on acceptance and the sample ended, and the named assumptions are asked at fewer plays. For `Window`: `hcls` is owed only where `sampleEnded … = true`, and `hend` is new; `hend_of_stream` gives it under A3 from one stream that ends the sample.
+
+**Not established.**
+- The axiom probe of `Bound.lean`'s and `Member.lean`'s own theorems. They built; the probe so far read `Statement.lean`'s and `Layout.lean`'s.
+- That nothing but the two types breaks in `WeightSecurity`. Read, not compiled.
+- What breaks in soundness's `Sampled/Window*.lean` and its readers. I did not compile them and do not touch them.
+- That a stream of zeros ends every registered sampling design, so `hend` for a real window.
+- That soundness and Daniel take the after-text. It is a claim until they do.
