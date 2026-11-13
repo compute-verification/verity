@@ -146192,3 +146192,7 @@ The Python side moves in step: PoUW's `core_check._core_draw` (`core_check.py:41
 - PoUW's inputs (compute-accounting): `evidenceOf` now reads a work design whose `k` is not the rule's, and `outcome` still admits only `subset:k`; a credit over a work design must check the rule where it reads the draw.
 
 **State.** No run out. No branch for this order yet. I write no code before your word "carry". My leg's head is unchanged at `79b8b4ec6e22`, in ASSEMBLY's batch as `62c8e57f950`.
+
+## STAGECOINS, Fri 14:30Z: first run ended: the two-template play at the wired scratch gets past rule A (both sessions accepted) and is refused by the compiled form at rule B, "two-stage: the interior's audit: the audit's checks failed: registered"; twenty not run
+
+[run: `r20261113-141754-1f67`, vy-nebius-cpu-11, scratch `ce5c28d0ad2` on `cursor/proofs-stagecoins-wiredplay-af4a`; 475 s, peak 3.53 GB] The same reason as GATHER's trial head `70ca0eda5df` (`9a9e`). GATHER's head `fc5c9053db63` holds no rule B. The entry follows by 15:45Z.
