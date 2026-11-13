@@ -268,9 +268,11 @@ def sparse_mla_split(w: NodeWindow, j: int, node: Any) -> None:
     where: dict[int, tuple[str, int, Any]] = {}
     for key, ids in of.items():
         fn = _chain_part(spec, key, DV)
-        tid, at = w.unit(fam, fn, len(ids) * U)
-        for i, ip in enumerate(ids):
-            where[ip] = (tid, at + i * U, fn)
+        for ip in ids:
+            # Each place is a range of its own (`interface.ordered`): two places of one key can be links of one chain, and
+            # a range holding both would wait on itself.
+            tid, at = w.unit(fam, fn, U)
+            where[ip] = (tid, at, fn)
     for ip, p in enumerate(places):
         tid, at, _fn = where[ip]
         if p.key[0] == "block":
