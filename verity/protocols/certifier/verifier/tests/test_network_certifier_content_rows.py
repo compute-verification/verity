@@ -53,7 +53,7 @@ def test_every_row_is_whole_words_of_its_classes_size():
     """A response row is its count and O ids, an end row the four bytes of a fails slot, and a request row its count and
     its class's room to a whole word, so each is whole 16-bit words (`warden_rows.words` reads it)."""
     assert [CT.response_bytes(O) for O in (2, 16, 4096)] == [12, 68, 16_388]
-    assert CT.END_BYTES == 4 and CT.END_SLOT is CR.SLOT[CR.FAILS]
+    assert CT.END_BYTES == 4 and CT.END_SLOT.format == CR.SLOT[CR.FAILS].format
     for B, P in ((512, 2), (512, 64), (387, 4), (4096, 512)):
         room = CT.request_room(B, P)
         assert 0 <= CT.request_bytes(B, P) - 4 - room < 2
@@ -145,7 +145,7 @@ def test_an_end_row_is_how_the_connection_ended_and_its_cells():
     fails slot counts them before a `FAIL` alone. A class past 1 and a row of another size are refused."""
     assert CT.end_row(False, 0) == bytes(4) and CT.end_row(False, 77) == struct.pack("<HH", 0, 77)
     assert CT.end_row(True, 0) == struct.pack("<HH", 1, 0) and CT.end_row(True, 0xFFFF) == b"\x01\0\xff\xff"
-    assert CT.end_row(False, 0xFFFF) == b"\0\0\xff\xff" and CT.END_SLOT is CR.SLOT[CR.FAILS]
+    assert CT.end_row(False, 0xFFFF) == b"\0\0\xff\xff" and CT.END_SLOT.format == CR.SLOT[CR.FAILS].format
     for failed in (False, True):
         for cells in (0, 1, 300, 0xFFFF):
             assert CT.end_of(CT.end_row(failed, cells)) == (failed, cells)

@@ -17,7 +17,7 @@
 // The stream issues at about 0.8, so up to a fifth of the slots are idle and 16-32 uniform
 // instructions fit there either way (they added 4-14 SMSP-cycles). The 3-pair probes at K = 192-384 put 64-128 uniform
 // instructions beside 128-256 chain instructions on lanes, more than the idle slots: with A2u a probe's time exceeds its
-// control's by most of its uniform count; without it by about 0, the uniform datapath's own cap (0.68-0.77 a SMSP-cycle,
+// control's by most of its uniform count; without it by about 0, the uniform datapath's own ceiling (0.68-0.77 a SMSP-cycle,
 // uniform.cu's uz_*) still below half the loop's time.
 // Joint points: rows.jsonl only, no census line.
 #include "../probe.cuh"

@@ -15,7 +15,8 @@
     "tp-register-tables": "benchmarks/one_stage/expert_tables_tp.sh",
     "workload": "benchmarks/stacked_share/job.sh",
     "topp-pin-check": "adapters/vllm/tools/topp_pin_gpu.sh",
-    "ids-front": "benchmarks/network_e2e/traces/ids.sh"
+    "ids-front": "benchmarks/network_e2e/traces/ids.sh",
+    "weights-tie": "benchmarks/prove_path/run.sh"
   },
   "entries": [
     {"file": "verity_vllm/engine/fp8_checkpoint.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "fp8-checkpoint"},

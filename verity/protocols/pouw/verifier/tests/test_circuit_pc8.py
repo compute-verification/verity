@@ -21,22 +21,23 @@ import pytest
 import circuit_fixtures as CF
 import pearl_c_vectors as V
 from verity.circuits import boolean as BL
-from verity.circuits.evaluation import evaluate
 from verity.circuits import partition_object as PO
+from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
+from verity.circuits.types import Array
+from verity.commitments.randomness import derive
+from verity.commitments.rowleaf import sha512_row_seg_digest
 from verity.definitions.ops.fp32 import F32FmaV2
 from verity.definitions.ops.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperE4m3QgmmaDot32)
 from verity.definitions.ops.scalar import I32Le
 from verity.definitions.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_E4M3_K32
-from verity.commitments.rowleaf import sha512_row_seg_digest
-from verity.commitments.randomness import derive
 from verity.protocols.pouw.prover.circuit import pc8, plan
-from verity.protocols.pouw.prover.circuit.anchors import TileAnchors
 from verity.protocols.pouw.prover.circuit import words as W
-from verity.protocols.pouw.verifier.protocol import DomainError, Tile
+from verity.protocols.pouw.prover.circuit.anchors import TileAnchors
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES, SM120_UNPROMOTED
+from verity.protocols.pouw.verifier.protocol import DomainError, Tile
 
 K = 128
 CASE = next(c for c in json.loads(V.OUT.read_text())["cases"] if c["case"] == "test-16-v1")
@@ -403,7 +404,7 @@ def test_the_window_tile_reads_its_side_rows_index_fields():
     tm, tn = 2, 3
     fn, hidden = pc8.side_tile(K, (tm, tn)), pc8.templates(K, (tm, tn), "sm120", True, "h0")["tile"]
     assert fn.id == f"Pc8TileSide_v1{{K={K},TM={tm},TN={tn},DEV='sm120'}}" and fn.defn is pc8.Pc8TileSideDef
-    assert fn.signature()[0] == hidden.signature()[0] + (("ia", pc8.Array(tm, L.INDEX)), ("jb", pc8.Array(tn, L.INDEX)))
+    assert fn.signature()[0] == hidden.signature()[0] + (("ia", Array(tm, L.INDEX)), ("jb", Array(tn, L.INDEX)))
     assert fn.signature()[1] == hidden.signature()[1]
     rng = random.Random(11)
     ac, bc = ([[rng.getrandbits(8) & 0x77 for _ in range(K)] for _ in range(r)] for r in (tm, tn))
