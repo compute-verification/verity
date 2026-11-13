@@ -132,7 +132,7 @@ uv run research run --on vy-sp1 --project verity --source . --exclusive --stage 
        --out "$RESEARCH_RUN_DIR" --procs 48 --replay-golden verity/definitions/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json --sweep'
 # A100 (sm_80): same, with --on vy-a100 --stage wp1.probe.a100, --arch sm_80, and instead of the (Ada) golden replay
 #   --replay-special PATH, PATH the A100 special-value fixture
-#   (its a100/mma_special.reduced.json.gz path is in fixtures/artifacts.json)
+#   (its a100/mma_special.reduced.json.gz path is in artifacts.json)
 ~~~
 
 Recorded runs, by stage: wp1.exhaustive (SUCCESS, result valid: every counter zero over
