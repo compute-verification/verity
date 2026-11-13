@@ -160772,3 +160772,71 @@ The tie says that the `t`-th session of the evidence's statements (`sessionRecor
 - My first carry run, `r20261113-203911-0012` on vy-nebius-cpu-2, ended at 20:45:47Z having made no commit. Restack's first merge was refused on the node: `Author identity unknown`. Five moves had their kept checks found there.
 - Relaunched as `r20261113-211102-8ec0` on vy-nebius-cpu-2 (`--pool research --as proofs --cwd source`), with `env GIT_AUTHOR_NAME="$(git config user.name)" ...` ahead of the command as item 2 says. It ships one local commit, `1149d6294b60` (main's tree, parents #9574's head `b7949765a080` and `4ae17f7eafd7`, which is how both histories reach the node), and runs `tools/move/restack.py b7949765a080 --main 4ae17f7eafd7 --kept --dry-run --json`, then the confirming command if a move was skipped, and bundles the result into `$OUT`. A timer is set for its end. Nothing is pushed until the result's authors are read.
 - Timers and events not mine since 20:35Z: none.
+
+## STOPDRIVER, Fri 13 Nov 21:12Z: #9458 and #9624 are both still wanted as themselves; the kept play is on the hold
+
+`cursor/proofs-stopdriver-family-ffc6` `12ee02ed7e12755e265c8e5dd7ff4d2936ece68c` B on #9717, #9810, NOT marked
+`cursor/proofs-stopdriver-family-hold-ffc6` `5b69417537f86a9a73dd2d5ad05c92df77f60791` the hold, with the kept play
+
+To your 20:42Z items 2 and 3, your 20:19Z item 1 and your 21:02Z rule. Not the ready line: B's suites are out.
+
+- Your 21:02Z rule (INF-798) is read. Item 4: nothing is unpushed on either branch; the two commits I pushed today
+  after 20:42Z, `12ee02ed7e1` and `5b69417537f`, have author and committer `Cursor Agent <cursoragent@cursor.com>`,
+  this checkout's `user.name` and `user.email`; no `GIT_AUTHOR_*` or `GIT_COMMITTER_*` name is in the environment.
+
+### 1. #9458 (`049c5875989c`, an accept publishes `complete`): wanted as itself
+
+- [read] Nothing holds what it does. `main` at `f479876a8758`, B's merged head and the hold have no `Record.allRan`,
+  no `Public.complete`, no `audit.answer` or `audit.answer_complete`, no `second_stage.complete`, and the stop audit
+  writes no `answer.json`. B and #9717 change the family, the root and the key a sample is read under; neither says
+  whether every verdict ran. The hold's play is one honest play of the form, not an answer.
+- [read] It is the change to `Properties.Spot.AcceptMeans` its body says was approved on 12 Nov. Nothing since
+  withdraws that.
+- [run] What the carry is: its base is `4352bffdc16b` and `main` holds 28 commits with a move line that it lacks,
+  from `e62cf7cbc22` (`config_map.toml`) to the protocol groups' move. So `tools/move/restack.py`, on a node.
+- [read] After the moves, 8 of its 22 files are files B's merged head also changes: `stop_audit.py`, `two_stage.py`,
+  `test_stop_audit.py`, `test_two_stage_driver.py`, `scan_zk.py`, the verifier's `README.md`, its
+  `test_two_stage.py` and the Lean difftest's `test_difftest.py`. Those are settled by hand after the carry.
+- #9636: it needs nothing new from this answer. [read] `a287d4bf1247` holds #9458's commits and lacks the same 28
+  moves, so it waits for #9458's carried head, as before; its own carry is its owner's.
+
+### 2. #9624 (`64364792ed70`, `across_all` back, with the last stream's audit record): wanted as itself
+
+- [read] Nothing holds it: no file of `main`, of B's merged head or of the hold names `acrossAll` or `across_all`.
+  Your 04:24Z ruling builds on it (`across_all`'s `boundary` is each verdict's `registration`). It still has no
+  caller but its test, as its body says; you ruled at 03:12Z that its first caller is a fixture until a tie's
+  record exists.
+- [run] Its base is `8ef93f01963c`; it lacks the same 28 moves. `restack.py` again.
+- [read] All 4 of its files are files #9717 changes: `stop_audit.py`, `test_stop_audit.py`, `Spot/Pieces.lean`,
+  `Spot/RecordAcross.lean`. #9717 gives `across` the verifier's `key` and `main`. The list form parses each read
+  with `across`'s own parser (`acrossOf`), so each read of a list carries them with no change to the list's rule;
+  what is settled by hand is the text of the two Lean files and the test's reads, which gain `key` and `main` as
+  the across difftest's did in B's merge. B's `link` gives each read the layout's window and family.
+
+### 3. The order of the carries, and the hour
+
+- Both conflict with B and #9717 in the driver's files, so a carry onto today's `main` would be refused again the
+  hour B lands. I carry both onto a `main` that holds #9810: after B lands (your 02:00Z Sat), #9458 first, then
+  #9624. If B is not on `main` by Sat 06:00Z, I carry them onto B's head as a stack and say so.
+- Each carry is one node job under this checkout's git identity (your rule's item 2), pushed to a new branch name
+  by `--push-to`, then quick suites, then a ready line. [guess] Each takes about 3 hours with its suites; both
+  heads by Sat 14:00Z, inside your 18:00Z.
+
+### 4. The kept play (your 20:19Z item 1)
+
+- [run] One commit on the hold branch, `5b69417537f8`: `artifacts.json` names
+  `art:1ba1a38c744bee69897bc82baa0b76b5a5b6d30dae5f89ea6917bba9d26ff418` at the kept case's path, the eight files
+  of `r20261113-182809-1ee0`'s `out/form` (`params.json`, `commitment.json`, `evidence.json`, `blobs/`), put by
+  `research data refresh-fixtures --preserve`; `research data verify` says PRESERVED. The old id is under
+  `previous`. The commit's message says ACCEPTS's link-1 change replaces it again with a headed play.
+- [run] `test_the_form_accepts_one_honest_play_with_its_switch_on` at `5b69417537f8`, in a clone that fetched the
+  case from the remote: 1 passed, `r20261113-210717-634a`, vy-nebius-cpu-10, exit 0. (`r20261113-210203-4b93`,
+  the same line under a login shell, also printed 1 passed and the test's exit 0, and then the shell exited 1; I
+  did not find why, so I ran it again without the login shell.)
+- The hold still gets no ready line alone.
+
+### Not established
+
+- That either carry is clean: no `restack.py` run of mine has been made on #9458 or #9624.
+- Whether #9458's `second_stage.complete` still reads right once the hold turns the form on: not read.
+- B's suites at `12ee02ed7e12`: `3439` and `f175` have not ended.
