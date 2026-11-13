@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from test_served_record import LAYOUT, REGISTRATION, served
+from test_served_record import CLASS, LAYOUT, REGISTRATION, served
 
 from verity_bench import exfiltration as E
 from verity_bench import jobs, served_row as W
@@ -22,7 +22,7 @@ GIVEN = {"accepted": True, "complete": True, "interior": [], "replay_sample": []
 OWN = {k: v for k, v in LAYOUT.items() if k not in W.STAND_IN} | {"replay": "Request_v1{L=2}"}
 CLOSED = dict.fromkeys(spot_status.HOLES, spot_status.CLOSED)
 #: what the fixture's four runs name a verdict's class, serve and registration by
-NAMED = {"class": "p4-o2", "serve": "r20261113-000001-0001", "registration": REGISTRATION}
+NAMED = {"class": CLASS, "serve": "r20261113-000001-0001", "registration": REGISTRATION}
 #: a made-up table in which a Lean verifier decides every verdict and every check, each under a lock entry
 ALL_LEAN = {
     "verdicts": {k: {"what": f"each session's {k}", "verifier": f"lean-{k}", "decided_by": "lean", "proved_by": "Made.up"}
@@ -50,11 +50,13 @@ def record_of(tmp_path, **how):
 
 
 def reads(record):
-    """Whether the command's own reader of a verdict's record takes the section's, field for field, and the record
-    names its class, its serve and its registration beside them."""
+    """Whether the command's own reader of a verdict's record takes the section's and keeps each field as the record
+    holds it, and the record holds a verdict's fields and, beside them, only the names of its class, its serve and
+    its registration."""
 
-    return (E.verdict(record, "the section's record") == {k: record[k] for k in E.VERDICT_FIELDS}
-            and set(record) == {*E.VERDICT_FIELDS, *W.NAMES})
+    took = E.verdict(record, "the section's record")
+    return (set(E.VERDICT_FIELDS) <= set(took) and all(took[k] == record[k] for k in took)
+            and set(E.VERDICT_FIELDS) <= set(record) <= {*E.VERDICT_FIELDS, *W.NAMES})
 
 
 def over(statuses):
@@ -170,13 +172,20 @@ def test_an_accept_the_verifier_withheld_is_never_said_to_be_given(tmp_path):
         "proved_by": None,
         "open": "the two-round form's soundness is not proved; the replay block's inputs are committed after the sample",
         **NAMED}
-    # it names the class the second stage audited, the serve's run and the registration the second stage read, and
-    # where the served run's files give one of them none, the section says which
+    # it names the class the second stage audited, the serve's run and the registration the second stage read. A name
+    # the served run's files don't give is left out, never null, so the command's reader takes the record still, and
+    # the section says which it lacks: the second stage's files alone name neither the class nor the serve
     assert "The record names no" not in out
     alone = W.account(R.read(served(tmp_path / "alone")["second"])[0], tree(tmp_path), holes=CLOSED)
-    assert {k: alone["verdict_record"][k] for k in W.NAMES} == NAMED | {"serve": None}
-    assert "The record names no `serve`: the served run's files give none, so a reader that holds four verdicts to one " \
-           "class of one serve under one registration cannot count it." in W.render(alone)
+    assert {k: alone["verdict_record"][k] for k in W.NAMES if k in alone["verdict_record"]} == {"registration": REGISTRATION}
+    assert reads(alone["verdict_record"]) and None not in [alone["verdict_record"].get(k, "") for k in W.NAMES]
+    assert "The record names no `class` and no `serve`: the served run's files give none, so a reader that holds four " \
+           "verdicts to one class of one serve under one registration cannot count it." in W.render(alone)
+    # with the first stage's file and no serve, it lacks the serve alone
+    dirs = served(tmp_path / "unserved")
+    unserved = W.account(R.read(dirs["second"], first=dirs["first"])[0], tree(tmp_path), holes=CLOSED)
+    assert {k: unserved["verdict_record"].get(k) for k in W.NAMES} == NAMED | {"serve": None}
+    assert reads(unserved["verdict_record"]) and "The record names no `serve`: " in W.render(unserved)
     assert "  - the replay block's inputs are committed after the sample: the interior registers `logits` after the " \
            "first stage's sample" in out
     # a run whose interior registers nothing names the form alone

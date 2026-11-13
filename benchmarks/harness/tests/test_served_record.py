@@ -153,6 +153,16 @@ LAYOUT = {"format": "f", "window": 1, "check": "Select{V=8}", "per_prompt": 0, "
 REGISTRATION = "ab" * 64
 WITHHELD = {"accepted": False, "interior": ["statements"], "replay_sample": [], "statements": ["two-stage-form"],
             "registered": {"interior": None, "replay_sample": None}}
+#: the class of `LAYOUT` as a verdict's record names it: its window, its prompt length and its outputs
+CLASS = "w1/p4-o2"
+
+
+def window(layout=LAYOUT, **more):
+    """A boundary record's ``window`` for a class committed as ``layout``: served, its window's index as its row, the
+    class and the check."""
+
+    return {"kind": "served", "run": "cd" * 32, "row": layout["window"], "prompt": layout["prompt"],
+            "outputs": layout["outputs"], "check": "Select{V=8}"} | more
 
 
 def served(tmp_path, *, outcome=WITHHELD, held=True, verdicts=None, units=(2,), layout=LAYOUT, sessions_record=False,
@@ -163,7 +173,8 @@ def served(tmp_path, *, outcome=WITHHELD, held=True, verdicts=None, units=(2,), 
 
     verdicts = verdicts or {"lean-verify/m0": True, "lean-verify/m1": True, "lean-draw/m0": True, "lean-draw/m1": True,
                             "m0-verifier/m0": True, "m0-verifier/m1": {"accepted": True}}
-    stage1 = {"commit": layout, "registration": REGISTRATION, "rule": {"replay": "rate:1/8"},
+    stage1 = {"commit": layout, "record": {"window": window(layout), "previous": None}, "registration": REGISTRATION,
+              "rule": {"replay": "rate:1/8"},
               "draw": {"k": 1, "law": "subset", "population": 8, "units": list(units)}}
     summary = {
         "first_stage": {"registration": REGISTRATION, "units": [2]}, "unlinked": False, "held": held, "outcome": outcome,
@@ -219,8 +230,9 @@ def test_what_the_audit_showed_is_counted_from_the_four_runs_files(tmp_path):
                                     "check": {"error": None, "session_error": None, "coins_reason": None,
                                               "said": "FIRST: ACCEPTED"}}
     assert [t["holds"] for t in shown["ties"]] == [True, True, True, True, True]
-    # what a verdict of this audit is of: the class as the second stage names it, and the registration it read
-    assert (shown["class"], shown["registration"]) == ("p4-o2", REGISTRATION)
+    # what a verdict of this audit is of: the registration the second stage read, and the class registered under it,
+    # named from the first stage's boundary record as a verdict's record names a class
+    assert (shown["class"], shown["registration"]) == (CLASS, REGISTRATION)
     # the one-stage record over the interior is kept apart: it is not the stream's outcome
     assert shown["one_stage_record"] == {"accepted": False, "record": {"failed": ["registered"]}}
 
@@ -230,22 +242,60 @@ def test_files_that_are_not_one_runs_are_said_not_to_hold(tmp_path):
     (dirs["serve"] / "out/boundary/w1/p4-o2/commit.json").write_text(json.dumps(LAYOUT | {"spans": 9}))
     record, _ = R.read(**dirs)
     assert [t["holds"] for t in record["audit"]["ties"]] == [True, True, False, True, False]
-    # with the second stage alone nothing is held to anything, and nothing is said to hold
+    # with the second stage alone nothing is held to anything, and nothing is said to hold; its summary names its first
+    # stage's file by a directory, which holds no window and is no class's name, so the class is not named
     alone, _ = R.read(dirs["second"])
     assert [t["holds"] for t in alone["audit"]["ties"]] == [None, None, None, None, None]
-    assert (alone["audit"]["class"], alone["audit"]["registration"]) == ("p4-o2", REGISTRATION)
-    # a first stage of another class is not the one the second stage names, and the class stays the second stage's
+    assert (alone["audit"]["class"], alone["audit"]["registration"]) == (None, REGISTRATION)
+    # a first stage filed under another directory is not the one the second stage names, and the class's name is
+    # still its boundary record's, under the registration the second stage read: no directory names it
     (dirs["first"] / "out/stage1/p4-o2").rename(dirs["first"] / "out/stage1/p8-o2")
     other, _ = R.read(**dirs)
     assert other["audit"]["ties"][1] == {"what": "the first stage's class is the one the second stage names", "holds": False}
-    assert other["audit"]["class"] == "p4-o2"
-    # a summary that names no first stage's file leaves the class to the first stage's run
+    assert other["audit"]["class"] == CLASS
+    # a summary that names no first stage's file leaves that unchecked, and the class's name where it was
     summary = json.loads((dirs["second"] / "out/second.json").read_text())
     del summary["stage1"]
     (dirs["second"] / "out/second.json").write_text(json.dumps(summary))
-    assert R.read(**dirs)[0]["audit"]["class"] == "p8-o2" and R.read(dirs["second"])[0]["audit"]["class"] is None
+    named, _ = R.read(**dirs)
+    assert (named["audit"]["ties"][1]["holds"], named["audit"]["class"]) == (None, CLASS)
+    assert R.read(dirs["second"])[0]["audit"]["class"] is None
     assert alone["audit"]["layout"] is None and alone["audit"]["first_stage"] is None
     assert alone["runs"] == {"serve": None, "first": None, "replay": None, "second": record["runs"]["second"]}
+
+
+def test_a_class_is_named_from_its_boundary_record_under_the_registration_the_second_stage_read(tmp_path):
+    """A verdict's record names a class ``w<window>/p<P>-o<O>``, ending ``-nostop`` for a class filed without a stop
+    block under a stop rule. The reader gives that name from the boundary record the first stage's file holds, never
+    from a directory, and only where that file's registration is the one the second stage read."""
+
+    assert R.class_of({"record": {"window": window()}}) == CLASS
+    assert R.class_of({"record": {"window": window(LAYOUT | {"window": 0, "prompt": 256, "outputs": 64})}}) == "w0/p256-o64"
+    stop = {"ids": [2], "max_model_len": 8, "outputs": 2}
+    assert R.class_of({"record": {"window": window(stop=stop, stopped=True)}}) == CLASS
+    assert R.class_of({"record": {"window": window(stop=stop, stopped=False)}}) == CLASS + "-nostop"
+    assert R.class_of({"record": {"window": window(stop=stop)}}) == CLASS + "-nostop"
+    # a file that holds no boundary record, or one whose window names no class, names none
+    for held in (None, {}, {"record": None}, {"record": {}}, {"record": {"window": {"row": 1, "prompt": 4}}},
+                 {"record": {"window": window() | {"row": "1"}}}, {"record": {"window": window() | {"outputs": True}}}):
+        assert R.class_of(held) is None
+    # the fixture's first stage holds its class's boundary record, and the reader names the class from it
+    dirs = served(tmp_path)
+    file = dirs["first"] / "out/stage1/p4-o2/stage1.json"
+    first = json.loads(file.read_text())
+    assert R.read(**dirs)[0]["audit"]["class"] == R.class_of(first) == CLASS
+    # a first stage's file of another registration than the second stage read names no class of this audit
+    file.write_text(json.dumps(first | {"registration": "cd" * 64}))
+    other = R.read(**dirs)[0]["audit"]
+    assert (other["class"], other["registration"], other["ties"][0]["holds"]) == (None, REGISTRATION, False)
+    # neither does one that holds no boundary record, nor any under a second stage that names no registration
+    file.write_text(json.dumps({k: v for k, v in first.items() if k != "record"}))
+    assert R.read(**dirs)[0]["audit"]["class"] is None
+    file.write_text(json.dumps(first))
+    summary = json.loads((dirs["second"] / "out/second.json").read_text())
+    (dirs["second"] / "out/second.json").write_text(json.dumps(summary | {"first_stage": {"units": [2]}}))
+    unnamed = R.read(**dirs)[0]["audit"]
+    assert (unnamed["class"], unnamed["registration"]) == (None, None)
 
 
 def test_a_run_whose_record_names_no_commit_says_why(tmp_path):

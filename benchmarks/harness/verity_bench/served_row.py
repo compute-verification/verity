@@ -27,7 +27,7 @@ run; it reads from the tree who decided each of those and what proves it, and pr
   its lock entry lists no open premise.
 * **The prover's seconds** as the record holds them, said as ``at most`` where they are a session's, wait included.
 * **The verdict as a record** of the stop class's verdicts of record (`verdict_record`), naming its class, its
-  serve and the digest of its registration (`NAMES`), each null where the served run's files give none.
+  serve and the digest of its registration (`NAMES`), each left out where the served run's files give none.
 """
 
 from __future__ import annotations
@@ -240,8 +240,10 @@ def verdict_record(doc: Mapping) -> dict | None:
     piece `PIECE`): the final accept as `outcome` reads it, in the command's own words (an accept whose outcome does
     not say it is complete is `NOT_COMPLETE`, and one beside a second stage that did not hold is `REFUSE`), the
     verifier that gave it at the run's commit, the cited theorem only where the whole run is `proved`, and otherwise
-    what stands between it and proved, in plain words. Beside them it names the class, the serve and the registration (`NAMES`) as the served run's files give
-    them, null where they give none. None where the second stage reached no outcome: it holds no verdict."""
+    what stands between it and proved, in plain words. Beside them it names the class, the serve and the registration
+    (`NAMES`) as the served run's files give them, and holds no field for a name they don't give: a record holds a
+    name or lacks it, and never holds a null one. None where the second stage reached no outcome: it holds no
+    verdict."""
 
     final, reads = doc["outcome"], doc["mark_reads"]
     if final["final"] == "none":
@@ -264,7 +266,8 @@ def verdict_record(doc: Mapping) -> dict | None:
             *(item["said"] for item in doc["to_fully_proved"]))))
     return {"piece": PIECE, "control": None, "run": doc["run"],
             "verifier": {"module": final["verifier"], "commit": doc["commit"]}, "verdict": word,
-            "proved_by": reads["theorem"] if proved else None, "open": waits, **doc["named"]}
+            "proved_by": reads["theorem"] if proved else None, "open": waits,
+            **{k: doc["named"][k] for k in NAMES if doc["named"].get(k) is not None}}
 
 
 def prover(record: Mapping, notes: Sequence[Mapping] = ()) -> dict:
@@ -399,7 +402,7 @@ def render(doc: Mapping[str, Any]) -> str:
     if (record := doc["verdict_record"]) is not None:
         lines += ["", f"The verdict as a record of the stop class's verdicts of record (a line of `{E.VERDICTS_FILE}`, the "
                   f"piece `{PIECE}`):", "", "    " + json.dumps(record, ensure_ascii=False)]
-        if lacks := [f"`{k}`" for k in NAMES if record[k] is None]:
-            lines += ["", f"The record names no {E._listed(lacks)}: the served run's files give none, so a reader that "
+        if lacks := [f"`{k}`" for k in NAMES if k not in record]:
+            lines += ["", f"The record names no {' and no '.join(lacks)}: the served run's files give none, so a reader that "
                       "holds four verdicts to one class of one serve under one registration cannot count it."]
     return "\n".join(lines)

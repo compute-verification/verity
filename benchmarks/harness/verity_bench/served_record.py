@@ -36,14 +36,15 @@ The record is `exfiltration.served_share`'s object, with what the audit showed b
   its own run's file. A count of 0 GPUs is kept as written: that part started no process on a card.
 * ``run`` and ``commit``, the second stage's run and the commit it ran; ``runs``, each of the four runs' id and
   commit (`run_of`).
-* ``audit``, what the audit showed (`shown`): the class the second stage audited, as its summary names the first
-  stage's file (``class``, the directory that holds it), and the digest of the registration it read
-  (``registration``); the sessions' verdicts counted by kind, the driver's checks, whether the second stage says it
-  held (``held``), the stream's outcome with its codes and whether it says it is complete (``complete``, false where
-  the outcome carries none), the layout the serve committed, what the interior registered, the first stage's
-  sample and check, what holds the runs' files to each other (`ties`), the sessions' seconds as the files hold
-  them, and the cards the proof server's provers ran on (``audit.proof_server.busy``, each prover's ``device``, its
-  ``sessions`` and its ``seconds``; a session's own ``device``).
+* ``audit``, what the audit showed (`shown`): the digest of the registration the second stage read
+  (``registration``) and the class registered under it (``class``, ``w<window>/p<P>-o<O>`` as a verdict's record
+  names a class: `class_of`, from the boundary record the first stage's file holds, and None where no first stage's
+  file with that registration is given); the sessions' verdicts counted by kind, the driver's checks, whether the
+  second stage says it held (``held``), the stream's outcome with its codes and whether it says it is complete
+  (``complete``, false where the outcome carries none), the layout the serve committed, what the interior
+  registered, the first stage's sample and check, what holds the runs' files to each other (`ties`), the sessions'
+  seconds as the files hold them, and the cards the proof server's provers ran on (``audit.proof_server.busy``, each
+  prover's ``device``, its ``sessions`` and its ``seconds``; a session's own ``device``).
 """
 
 from __future__ import annotations
@@ -166,13 +167,28 @@ def _count(values: Sequence[Any]) -> dict:
 
 
 def _class(path: Any, within: Path | None = None) -> str | None:
-    """The class a first stage's file is of, as the run's files name it: the directory that holds its
-    ``stage1.json``. None for no such file, and for one directly in the run's directory ``within``."""
+    """The directory a run files a first stage's ``stage1.json`` under, which its class's own directory names
+    (``p<P>-o<O>``, with no window). None for no such file, and for one directly in the run's directory ``within``."""
 
     if not isinstance(path, (str, Path)) or Path(path).name != "stage1.json":
         return None
     parent = Path(path).parent
     return None if within is not None and parent == Path(within) else parent.name or None
+
+
+def class_of(stage1: Mapping | None) -> str | None:
+    """A class's name as a verdict's record holds it (its ``class``), ``w<window>/p<P>-o<O>``, ending ``-nostop`` for
+    a class filed without a stop block under a stop rule: read from the ``window`` of the boundary record the first
+    stage's file holds (its ``row``, ``prompt`` and ``outputs``; its ``stop`` and ``stopped``), by the rule the
+    driver's verdict records name a class by (`benchmarks/one_stage/verdict_record.py`). None where no file is given,
+    or its record's window names no class. The record is read as the file holds it: its digest is not recomputed."""
+
+    record = (stage1 or {}).get("record")
+    window = record.get("window") if isinstance(record, Mapping) else None
+    if not isinstance(window, Mapping) or any(type(window.get(k)) is not int for k in ("row", "prompt", "outputs")):
+        return None
+    unheld = "stop" in window and window.get("stopped") is not True
+    return f"w{window['row']}/p{window['prompt']}-o{window['outputs']}{'-nostop' if unheld else ''}"
 
 
 def ties(summary: Mapping, stage1: Mapping | None, check: Mapping | None, published: Any,
@@ -204,8 +220,10 @@ def ties(summary: Mapping, stage1: Mapping | None, check: Mapping | None, publis
 def shown(summary: Mapping, stage1: Mapping | None, check: Mapping | None, published: Any, machine: Path | None,
           first_class: str | None = None) -> dict:
     """What the audit showed, as its files hold it: counts and codes, no verdict of the reader's own. Its ``class``
-    is the one the second stage's summary names its first stage's file by, else the first stage's run's
-    (``first_class``)."""
+    is the name the first stage's boundary record gives its class (`class_of`), only where that file's registration
+    is the one the second stage read: the second stage's own summary names its first stage's file by a directory,
+    which holds no window, so without that file the class is None. ``first_class`` is the directory the first
+    stage's run files it under, which `ties` holds to the one the second stage names."""
 
     audit = summary.get("audit") or {}
     inner, timing = audit.get("audit") or {}, audit.get("timing") or {}
@@ -242,9 +260,11 @@ def shown(summary: Mapping, stage1: Mapping | None, check: Mapping | None, publi
     cores = None
     if machine is not None and (words := machine.read_text().split()) and words[0].isdigit():
         cores = int(words[0])
+    registration = (summary.get("first_stage") or {}).get("registration")
+    its_first = registration is not None and (stage1 or {}).get("registration") == registration
     return {
-        "class": _class(summary.get("stage1")) or first_class,
-        "registration": (summary.get("first_stage") or {}).get("registration"),
+        "class": class_of(stage1) if its_first else None,
+        "registration": registration,
         "ties": ties(summary, stage1, check, published, first_class),
         "first_stage": None if stage1 is None else {
             "registration": stage1.get("registration"), "rule": (stage1.get("rule") or {}).get("replay"),

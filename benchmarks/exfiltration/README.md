@@ -172,11 +172,15 @@ each one with the file it read and what that file holds instead. It computes no 
   clock on the session's prover (`busy_s`), or `session`, the audit's clock on the whole session (`session_s`). The
   record's `prove_seconds_source` is `busy` only where every session's is, and `session` where any is; where a
   session names none its seconds are `session_s` and the field is named as absent.
-- Beside the fields above the record holds `audit`, what the audit showed: the class the second stage audited, as
-  its summary names the first stage's file (`class`), and the digest of the registration it read (`registration`);
-  the sessions' verdicts counted by kind, the driver's checks, whether the second stage says it held, the stream's
+- Beside the fields above the record holds `audit`, what the audit showed: the digest of the registration the second
+  stage read (`registration`) and the class registered under it (`class`), named as a verdict's record names a
+  class, `w<window>/p<P>-o<O>` with `-nostop` for a class filed without a stop block under a stop rule; the
+  sessions' verdicts counted by kind, the driver's checks, whether the second stage says it held, the stream's
   outcome with its codes and whether it says it is complete, the layout the serve committed, what the interior
   registered, and what holds the four runs' files to each other.
+- The class's name is read from the boundary record the first stage's file holds (its `window`), and only where
+  that file's registration is the one the second stage read. The second stage's own summary names its first
+  stage's file by a directory, which holds no window, so with no such first stage's file the `class` is null.
 
 ## What a served run's audit showed
 
@@ -206,8 +210,8 @@ From a record that holds `audit` the command prints one more section, before the
 - **The verdict as a record** of the stop class's verdicts of record, for the piece `second_stage`, in the
   command's own words: `accept` only for an accept that is complete, `not complete` for one that is not, `refuse`,
   or `withheld`. Beside that record's fields it names what the verdict is of: its `class`, its `serve` (the serve's
-  run) and its `registration` (the digest the second stage read), each null where the served run's files give none,
-  and the section then says which it lacks.
+  run) and its `registration` (the digest the second stage read). A name the served run's files don't give is left
+  out of the record, never written as null, and the section then says which it lacks.
 
 ## The security level
 
