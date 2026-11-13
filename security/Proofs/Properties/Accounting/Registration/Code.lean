@@ -13,6 +13,14 @@ heads are the spec's (`Inv`). Each entry's refusal in code is then the spec's re
 site entry's checks read only sheet digests), an information entry's and a declaration's check for check. The check of
 the rest then follows the spec one entry at a time (`go_says`), by
 `Verity.Registration.valid_append_singleton_iff_refusal`.
+
+A prefix's view read under the whole log's names is its own (`view_take_names`): the names agree on every entry of
+the prefix (`names_take`), and a view reads its digests only on its log's entries (`view_congr`).
+
+An accepted log is chained (`check_chained`): each entry passed `previous` against the head of the log before it. So
+two chained logs with one head share their last entry, which names one head before it, or differ there
+(`search_binds`, by induction from the heads back), and two prefixes of accepted logs with one head are one prefix or a
+found collision (`headBinds`); the views a head names are then one (`view_binds`).
 -/
 
 @[expose] public section
@@ -43,7 +51,7 @@ theorem nodup_iff : ∀ l : List String, Core.Registration.nodup l = true ↔ l.
   | [] => by simp [Core.Registration.nodup]
   | x :: xs => by simp [Core.Registration.nodup, nodup_iff xs]
 
-variable (B : Core.Registration.Builder → Verity.Compiler) (E : Verity.Registration.Entry → String)
+variable (B : String → Verity.Compiler) (E : Verity.Registration.Entry → String)
 
 theorem key_item (i : Core.Registration.Item) : (item B i).key = i.key := by cases i <;> rfl
 
@@ -308,26 +316,227 @@ theorem names_accepted {D : Verity.Registration.Digests} {A' : Verity.Registrati
     rfl
   | none => simp
 
-theorem checks : Checks := by
-  intro B A c l
+/-- What the check says of a log, its entries named as the code names them. -/
+theorem says_check (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration.Composite)
+    (l : Core.Registration.Log) : Says B (names B l) A c l (Core.Registration.check A c l) := by
   have hs := go_says B (names B l) A c l [] (Core.Registration.State.empty c)
     (fun q e t h hv => by rw [List.nil_append] at h; rw [← h]; exact names_accepted B q t e hv)
     (inv_empty B (names B l) c) (by simp [log])
-  simp only [List.nil_append] at hs
   rw [check_eq]
+  simpa only [List.nil_append] using hs
+
+theorem checks : Checks := by
+  intro B A c l _
+  have hs := says_check B A c l
   revert hs
-  cases List.foldlM (step A c) (Core.Registration.State.empty c) l with
-  | ok s => rintro ⟨hv, hi⟩; simp [Except.toOption, hv, view_eq B (names B l) c hi]
+  cases Core.Registration.check A c l with
+  | ok s =>
+    rintro ⟨hv, hi⟩
+    refine ⟨by simp [Except.toOption, hv], fun s' hs' => ?_⟩
+    cases hs'
+    exact view_eq B (names B l) c hi
   | error ir =>
     intro hnv
     have hnv' : ¬Verity.Registration.Valid (digests (names B l)) (auditor A) (composite c) (log B l) := hnv
-    simp [Except.toOption, hnv']
+    exact ⟨by simp [Except.toOption, hnv'], fun s' hs' => by cases hs'⟩
+
+/-! ## A prefix's view under the whole log's names -/
+
+/-- **The whole log names each entry of a prefix as the prefix does**: the first entry denoting it is in the prefix. -/
+theorem names_take (l : Core.Registration.Log) (n : ℕ) {x : Verity.Registration.Entry} (hx : x ∈ log B (l.take n)) :
+    names B l x = names B (l.take n) x := by
+  classical
+  unfold names
+  obtain ⟨y, hy, rfl⟩ := List.mem_map.mp hx
+  conv_lhs => rw [← List.take_append_drop n l]
+  rw [List.find?_append]
+  cases hq : (l.take n).find? (fun z => decide (entry B z = entry B y)) with
+  | some z => rfl
+  | none =>
+    exfalso
+    have := List.find?_eq_none.mp hq y hy
+    simp at this
+
+/-- **A view reads its digests only at its log's entries and the genesis.** -/
+theorem view_congr {D D' : Verity.Registration.Digests} (hg : D.genesis = D'.genesis) (c : Verity.Registration.Composite)
+    {L : Verity.Registration} (he : ∀ x ∈ L, D.entry x = D'.entry x) :
+    Verity.Registration.view D c L = Verity.Registration.view D' c L := by
+  have hh : ∀ k, Verity.Registration.head D c (L.take k) = Verity.Registration.head D' c (L.take k) := by
+    intro k
+    rcases (L.take k).eq_nil_or_concat with hk | ⟨q, x, hk⟩
+    · rw [hk, Verity.Registration.head_nil, Verity.Registration.head_nil, hg]
+    · rw [hk, Verity.Registration.head_concat, Verity.Registration.head_concat]
+      exact he x (List.mem_of_mem_take (by rw [hk]; simp))
+  have h0 : Verity.Registration.head D c L = Verity.Registration.head D' c L := by simpa using hh L.length
+  simp only [Verity.Registration.view, Verity.Registration.heads, h0, hh]
+
+/-- **A prefix's view read under the whole log's names is its own**: its Site, θ, builder, declarations, head and prefix
+heads, so what an answer reads at a prefix's head does not depend on the entries after it. -/
+theorem view_take_names (c : Core.Site.Registration.Composite) (l : Core.Registration.Log) (n : ℕ) :
+    Verity.Registration.view (digests (names B l)) (composite c) (log B (l.take n)) =
+      Verity.Registration.view (digests (names B (l.take n))) (composite c) (log B (l.take n)) :=
+  view_congr rfl _ fun _ hx => names_take B l n hx
+
+/-! ## A head binds the prefix it heads -/
+
+/-- **A code log is chained**: each entry names the head of the log before it. -/
+def Chained (c : Core.Site.Registration.Composite) (l : Core.Registration.Log) : Prop :=
+  ∀ q e t, q ++ e :: t = l → e.previous = Core.Registration.head c q
+
+theorem head_nil_code (c : Core.Site.Registration.Composite) :
+    Core.Registration.head c [] = Core.Registration.genesis c := rfl
+
+theorem head_concat_code (c : Core.Site.Registration.Composite) (q : Core.Registration.Log)
+    (e : Core.Registration.Entry) : Core.Registration.head c (q ++ [e]) = e.digest := by
+  simp [Core.Registration.head]
+
+theorem state_head_add (s : Core.Registration.State) (e : Core.Registration.Entry) : (s.add e).head = e.digest := by
+  cases e <;> rfl
+
+/-- An entry the check doesn't refuse names the head of the log before it. -/
+theorem previous_of_refusal_none {A : Core.Site.Registration.Auditor} {c : Core.Site.Registration.Composite}
+    {s : Core.Registration.State} {e : Core.Registration.Entry} (h : e.refusal A c s = none) : e.previous = s.head := by
+  by_contra hne
+  cases e with
+  | site x =>
+    simp only [Core.Registration.Entry.previous] at hne
+    simp [Core.Registration.Entry.refusal, Core.Site.Registration.Entry.refusal, hne] at h
+  | information p items =>
+    simp only [Core.Registration.Entry.previous] at hne
+    simp [Core.Registration.Entry.refusal, hne] at h
+  | declaration p d =>
+    simp only [Core.Registration.Entry.previous] at hne
+    simp [Core.Registration.Entry.refusal, hne] at h
+
+theorem chained_concat {c : Core.Site.Registration.Composite} {q : Core.Registration.Log} {e : Core.Registration.Entry}
+    (hq : Chained c q) (he : e.previous = Core.Registration.head c q) : Chained c (q ++ [e]) := by
+  intro q' e' t h
+  rcases t.eq_nil_or_concat with rfl | ⟨t', x, rfl⟩
+  · obtain ⟨rfl, h2⟩ := List.append_inj' h rfl
+    obtain rfl : e' = e := List.singleton_inj.mp h2
+    exact he
+  · have h' : (q' ++ e' :: t') ++ [x] = q ++ [e] := by rw [← h]; simp
+    exact hq q' e' t' (List.append_inj' h' rfl).1
+
+theorem chained_last {c : Core.Site.Registration.Composite} {q : Core.Registration.Log} {e : Core.Registration.Entry}
+    (h : Chained c (q ++ [e])) : e.previous = Core.Registration.head c q ∧ Chained c q :=
+  ⟨h q e [] rfl, fun q' e' t hq => h q' e' (t ++ [e]) (by rw [← hq]; simp)⟩
+
+theorem chained_take {c : Core.Site.Registration.Composite} {l : Core.Registration.Log} (h : Chained c l) (n : ℕ) :
+    Chained c (l.take n) := fun q e t hq =>
+  h q e (t ++ l.drop n) (calc
+    q ++ e :: (t ++ l.drop n) = (q ++ e :: t) ++ l.drop n := by simp
+    _ = l.take n ++ l.drop n := by rw [hq]
+    _ = l := List.take_append_drop n l)
+
+theorem fold_chained (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration.Composite) :
+    ∀ (l q : Core.Registration.Log) (s s' : Core.Registration.State), Chained c q →
+      s.head = Core.Registration.head c q → l.foldlM (step A c) s = .ok s' → Chained c (q ++ l)
+  | [], q, _, _, hq, _, _ => by simpa using hq
+  | e :: l, q, s, s', hq, hh, hf => by
+    rw [List.foldlM_cons] at hf
+    cases hr : e.refusal A c s with
+    | some r =>
+      simp only [step, hr] at hf
+      cases hf
+    | none =>
+      simp only [step, hr] at hf
+      have hq' : Chained c (q ++ [e]) := chained_concat hq ((previous_of_refusal_none hr).trans hh)
+      have := fold_chained A c l (q ++ [e]) (s.add e) s' hq' (by rw [state_head_add, head_concat_code]) hf
+      simpa using this
+
+/-- **An accepted log is chained.** -/
+theorem check_chained {A : Core.Site.Registration.Auditor} {c : Core.Site.Registration.Composite}
+    {l : Core.Registration.Log} {s : Core.Registration.State} (h : Core.Registration.check A c l = .ok s) :
+    Chained c l := by
+  have := fold_chained A c l [] (Core.Registration.State.empty c) s (fun q e t h => by simp at h) rfl
+    (by rw [← check_eq]; exact h)
+  simpa using this
+
+theorem search_nil_nil (c : Core.Site.Registration.Composite) : search c [] [] = none := rfl
+
+theorem search_cons_nil (c : Core.Site.Registration.Composite) (e : Core.Registration.Entry)
+    (r : Core.Registration.Log) : search c (e :: r) [] = some (.genesis c e) := rfl
+
+theorem search_nil_cons (c : Core.Site.Registration.Composite) (e : Core.Registration.Entry)
+    (r : Core.Registration.Log) : search c [] (e :: r) = some (.genesis c e) := rfl
+
+theorem search_cons_self (c : Core.Site.Registration.Composite) (e : Core.Registration.Entry)
+    (r r' : Core.Registration.Log) : search c (e :: r) (e :: r') = search c r r' := by
+  simp [search]
+
+theorem search_cons_ne (c : Core.Site.Registration.Composite) {e e' : Core.Registration.Entry} (h : e ≠ e')
+    (r r' : Core.Registration.Log) : search c (e :: r) (e' :: r') = some (.entries e e') := by
+  simp [search, h]
+
+/-- **Two chained logs with one head are one, or the search finds a collision**, the logs given newest entry first: one
+head is one last entry's digest, or the genesis; one last entry names one head before it. -/
+theorem search_binds (c : Core.Site.Registration.Composite) :
+    ∀ r r' : Core.Registration.Log, Chained c r.reverse → Chained c r'.reverse →
+      Core.Registration.head c r.reverse = Core.Registration.head c r'.reverse →
+      Resolves (search c r r') r.reverse r'.reverse
+  | [], [], _, _, _ => by rw [search_nil_nil]; rfl
+  | e :: r, [], _, _, hh => by
+    rw [search_cons_nil]
+    rw [List.reverse_cons, List.reverse_nil, head_concat_code, head_nil_code] at hh
+    exact hh
+  | [], e :: r, _, _, hh => by
+    rw [search_nil_cons]
+    rw [List.reverse_cons, List.reverse_nil, head_concat_code, head_nil_code] at hh
+    exact hh.symm
+  | e :: r, e' :: r', hc, hc', hh => by
+    rw [List.reverse_cons] at hc hc' hh
+    rw [List.reverse_cons, head_concat_code, head_concat_code] at hh
+    by_cases he : e = e'
+    · subst he
+      rw [search_cons_self]
+      obtain ⟨hp, hr⟩ := chained_last hc
+      obtain ⟨hp', hr'⟩ := chained_last hc'
+      have ih := search_binds c r r' hr hr' (hp.symm.trans hp')
+      revert ih
+      cases search c r r' with
+      | none =>
+        intro ih
+        change r.reverse = r'.reverse at ih
+        change (e :: r).reverse = (e :: r').reverse
+        rw [List.reverse_cons, List.reverse_cons, ih]
+      | some x => exact id
+    · rw [search_cons_ne c he]
+      exact ⟨he, hh⟩
+
+theorem headBinds : HeadBinds := by
+  intro A A' c l l' s s' hl hl' n n' hh
+  have h := search_binds c (l.take n).reverse (l'.take n').reverse
+  rw [List.reverse_reverse, List.reverse_reverse] at h
+  exact h (chained_take (check_chained hl) n) (chained_take (check_chained hl') n') hh
+
+/-- **The views a head names are one**: at two accepted logs, the views of two prefixes with one head, each read under
+its own log's names, are one view, or the search of the two prefixes' entries finds a pair that collides. So a tie read
+at a head (`Verity.Registration.AtHead`) reads what the prefix that head names registers, whichever accepted log holds
+it. -/
+theorem view_binds {A A' : Core.Site.Registration.Auditor} {c : Core.Site.Registration.Composite}
+    {l l' : Core.Registration.Log} {s s' : Core.Registration.State} (hl : Core.Registration.check A c l = .ok s)
+    (hl' : Core.Registration.check A' c l' = .ok s') (n n' : ℕ)
+    (hh : Core.Registration.head c (l.take n) = Core.Registration.head c (l'.take n')) :
+    Verity.Registration.view (digests (names B l)) (composite c) (log B (l.take n)) =
+        Verity.Registration.view (digests (names B l')) (composite c) (log B (l'.take n')) ∨
+      ∃ x, search c (l.take n).reverse (l'.take n').reverse = some x ∧ x.Holds := by
+  have h := headBinds A A' c l l' s s' hl hl' n n' hh
+  cases hs : search c (l.take n).reverse (l'.take n').reverse with
+  | none =>
+    rw [hs] at h
+    have he : l.take n = l'.take n' := h
+    left
+    rw [view_take_names B c l n, view_take_names B c l' n', he]
+  | some x =>
+    rw [hs] at h
+    exact Or.inr ⟨x, rfl, h⟩
 
 /-! ## Witnesses
 
-The guarantee holds at `honestLog`, an information entry and a declaration for the remote composite, which the check
-accepts and whose denotation is valid; and its conclusion fails at the check that accepts everything, at a log that
-registers one value twice. -/
+The guarantee holds at `honestLog`, an information entry registering a value and a builder, and a declaration, for the
+remote composite, which the check accepts, whose denotation is valid and whose builder's compiler has its cap; and its
+conclusion fails at the check that accepts everything, at a log that registers one value twice. -/
 
 theorem check_honestLog :
     (Core.Registration.check Properties.Site.witnessAuditor .remote honestLog).toOption.isSome := by
@@ -335,22 +544,24 @@ theorem check_honestLog :
     Core.Registration.State.empty, Core.Registration.State.add, Core.Registration.nodup, Core.Registration.Item.key,
     Except.toOption, bind, Except.bind, pure, Except.pure]
 
+/-- The witness log's one builder names the compiler with no gates, at its cap 0. -/
+theorem caps_honestLog : Caps noGatesBuilder honestLog := by
+  intro p items h b hb
+  simp [honestLog, infoEntry, dayEntry] at h
+  obtain ⟨-, rfl⟩ := h
+  simp at hb
+  subst hb
+  rfl
+
 theorem checks_honest :
     (Core.Registration.check Properties.Site.witnessAuditor .remote honestLog).toOption.isSome = true ∧
       Verity.Registration.Valid (digests (names noGatesBuilder honestLog)) (auditor Properties.Site.witnessAuditor)
-        (composite .remote) (log noGatesBuilder honestLog) := by
-  refine ⟨check_honestLog, ?_⟩
-  have h := checks noGatesBuilder Properties.Site.witnessAuditor .remote honestLog
-  have hc := check_honestLog
-  revert h hc
-  cases Core.Registration.check Properties.Site.witnessAuditor .remote honestLog with
-  | error _ => simp [Except.toOption]
-  | ok s =>
-    intro h _
-    by_contra hv
-    simp [Except.toOption, hv] at h
+        (composite .remote) (log noGatesBuilder honestLog) ∧ Caps noGatesBuilder honestLog :=
+  ⟨check_honestLog,
+    (checks noGatesBuilder Properties.Site.witnessAuditor .remote honestLog caps_honestLog).1.mp check_honestLog,
+    caps_honestLog⟩
 
-theorem twiceLog_invalid (B : Core.Registration.Builder → Verity.Compiler)
+theorem twiceLog_invalid (B : String → Verity.Compiler)
     (E : Verity.Registration.Entry → String) :
     ¬Verity.Registration.Valid (digests E) (auditor Properties.Site.witnessAuditor) (composite .remote)
       (log B twiceLog) := by
@@ -360,12 +571,13 @@ theorem twiceLog_invalid (B : Core.Registration.Builder → Verity.Compiler)
     Verity.Registration.Entry.items, Verity.Registration.Item.key] at this
 
 theorem checks_nontrivial :
-    ¬((acceptAllCheck .remote twiceLog).toOption.map (fun s => view noGatesBuilder s.view) =
-      if Verity.Registration.Valid (digests (names noGatesBuilder twiceLog))
-          (auditor Properties.Site.witnessAuditor) (composite .remote) (log noGatesBuilder twiceLog) then
-        some (Verity.Registration.view (digests (names noGatesBuilder twiceLog)) (composite .remote)
-          (log noGatesBuilder twiceLog))
-      else none) := by
-  simp [twiceLog_invalid, acceptAllCheck, Except.toOption]
+    ¬(((acceptAllCheck .remote twiceLog).toOption.isSome = true ↔
+        Verity.Registration.Valid (digests (names noGatesBuilder twiceLog))
+          (auditor Properties.Site.witnessAuditor) (composite .remote) (log noGatesBuilder twiceLog)) ∧
+      ∀ s, acceptAllCheck .remote twiceLog = .ok s →
+        view noGatesBuilder s.view = Verity.Registration.view (digests (names noGatesBuilder twiceLog))
+          (composite .remote) (log noGatesBuilder twiceLog)) := by
+  rintro ⟨h, -⟩
+  exact twiceLog_invalid noGatesBuilder _ (h.mp rfl)
 
 end Properties.Registration

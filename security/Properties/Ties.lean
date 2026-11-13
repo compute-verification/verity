@@ -13,8 +13,10 @@ area, under a prefix of its own (`Properties.Ties`), the one module there that r
 reading of a circuit file, the network certifier's parameters). Every tie has one shape
 (`Registration.NamesRegistered`): what the answer names is `f x` for some `x` the registration holds, under a public map
 `f`, and it is stated at the head the answer names (`Registration.AtHead`): `h` heads a prefix of the accepted log, and
-what is registered is what that prefix registers. No entry retires what an earlier one registered, so what a prefix
-registers every longer prefix registers too (`Proofs.Properties.Ties`). `f` is the identity, up to
+what is registered is what that prefix registers. A head names one prefix: two prefixes of accepted logs with one
+head are one, or a search of their entries finds two whose digests collide (`Properties.Registration.HeadBinds`), and
+a prefix's view is the same read under the names of any accepted log that holds it. No entry retires what an earlier
+one registered, so what a prefix registers every longer prefix registers too (`Proofs.Properties.Ties`). `f` is the identity, up to
 projecting what the view holds to the field the answer names, for a key, a link, a memory leaf and a registered θ
 entry. For the circuit, the parameters name the circuit file and the view holds the Program's digest, so the answer
 side is read through the one public map from the first to the second (`Registration.boundProgram`, the circuit file's

@@ -123,7 +123,8 @@ def view (D : Digests) (c : Composite) (log : Registration) : View where
 
 /-- **At a head of the log's chain**: `h` is the head of a prefix of the log (`View.heads`), and `P` holds of that
 prefix's view, so what `P` reads as registered is what the prefix registers. An answer that names the head `h` is read
-so. -/
+so. That the head names one prefix, of whichever accepted log holds it, unless two entries' digests collide, is the
+code's (`Properties.Registration.HeadBinds`). -/
 def AtHead (D : Digests) (c : Composite) (log : Registration) (h : String) (P : View → Prop) : Prop :=
   ∃ n, (n, h) ∈ (view D c log).heads ∧ P (view D c (log.take n))
 
