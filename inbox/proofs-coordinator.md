@@ -133204,3 +133204,35 @@ No run of mine is running. No timer of mine is set.
 - [run] `drawWithheld`'s witness is written and in its first build: `cursor/proofs-honest-credit-9d1e` at `e91ab5c43e6d` (pushed), a new file `security/Proofs/Pouw/Credit/Withheld.lean` with its two roots, and the honest session's family name made a variable (that part built: `r20261113-092322-a2b7`, vy-nebius-cpu-11, exit 0). The build of the new file is `r20261113-093706-1ad0` (vy-nebius-cpu-11, 16 GB asked). The window it builds is the smallest there is: no call, no round, a Commit record that registers no value, and the honest session of the family `pouw/draw` opened on its sample root. Its lock lines and the cap (182 to 181) wait for the build.
 - [run] A correction to my 09:22Z entry: the count "Python reads 32 and refuses 8" of the 40 swept Commit records is from a local run of the Python side this turn, not from my 09:01Z entry, which does not hold it. I ran it again now: 32 read (31 canonical texts, 1 not canonical), 8 refused.
 - Unpushed: nothing. Mailbox read to its 09:14Z message (line 466); nothing newer.
+
+## MEMBERS, Fri 13 Nov 09:40Z: the switch: head `1c25cb14f6e`, the check and `TablesRegistered` compile; two proofs over every accept rest on the one statement's trees
+
+Mailbox read to 09:27Z (`82ea7f0938ab`). Branch `cursor/proofs-members-switch-34fd`, cut from WINDOWAT's `e977fbc96f63`; nothing marked, no pull request. Pushed head `1c25cb14f6e`; unpushed: the first proofs' edits (five lemmas in both forms, `Spot/Credited.lean`), not yet committed.
+
+**What compiled**
+- `Spot/OneStageZk.lean` with the per-member form accepting, `MULTI_REFUSED` and `checkMembersAt_refuses` gone, and 31 theorems: exit 0, no axiom beyond the three. [run: `r20261113-092723-b707`, vy-nebius-cpu-5; the first cut `r20261113-091912-1129`, vy-nebius-cpu-8]
+- `Properties.Spot.TablesRegistered` in soundness's shape (a clause per member: the tables of `p.own` where the parameters name no members, each member's where they do) and its proof `tablesRegistered` in both forms: exit 0, 17 theorems, no axiom beyond the three. [run: `r20261113-092806-82f9`, vy-nebius-cpu-3]
+- `SetsUp` has the clause `single : ∀ p, ParamsAt θ p → p.members = none`. Written, not yet compiled with its users. [read: `security/Proofs/Properties/Verity/Sampled.lean`]
+
+**What does not build at this head** [derived: the check's accept is now a disjunction]
+- `security/Proofs` above the 15 lemmas that read an accept as the one statement's: 99 declarations in 33 files. [run: my closure script on the branch]
+- The Python twin and the tests of the removed `refusal` command.
+
+**New: two proofs the window theorem and `soundnessAt_form` use at a per-member accept hold today only because no such accept exists** [read: the files named]
+1. **The binding** (`Binding.binds_of_prints`, read at a window's parameters by `Window/Assembled.lean:122`): its proof goes through `accepted_run` and `Lines.read_run`, which ask of each record `sessionTreeReason ts tabs rec = none` against all the log's trees. A member's record is held to its own tree less the closing round (`memberTreeReason`), so that premise is false at a per-member accept.
+   - It is provable in both forms with no change to `binds_of_prints`'s statement: `Lines.TreeLines` (what `read_run` uses) follows from `memberTreeReason` too, by WINDOWAT's `memberTreeReason_none` and `tree_round`. I am writing it: `read_run` takes `TreeLines`, `accepted_run` concludes it in either form, and WINDOWAT's lemmas on `membersTreesHeld` move below `Binding.lean` into one new file `MemberForm/Named.lean`, names unchanged. [derived]
+2. **The read shows the sample** (`drawReadAll_coinsRead`, read by WINDOWAT's `windowRead_members` at `MemberForm/Reads.lean:79`): proved through `logRead_isSome`, which reads `treesHeld`. WINDOWAT's `accept_read` already proves the read returns at a per-member accept, so I restrict `DrawRead`, `DrawReadAll` and `DrawHeld` to parameters that name no members and have `Reads.lean` take the read from `accept_read`. [derived]
+- Neither changes a listed statement: `DrawRead`, `DrawReadAll`, `DrawHeld`, `Binds`, `remote_soundness_window`, `soundnessAt_form` and `oneStageZk_drawn` are in no lock. [run: grep of the three locks] The one listed statement the switch moves besides `TablesRegistered` is `remote_soundness_deployedReady`, through `SetsUp`.
+- Both touch WINDOWAT's files on my branch only (`MemberForm/Read.lean`, `Reads.lean`, `Tree.lean`, `Order.lean`): WINDOWAT should know before its next change to them.
+
+**Answers you asked for**
+- **Does anything in the switch read `hcls` or `link-points`?** No. The check, the parsers, `FormAccepts` and `FormApart` name neither. [read]
+- **What the switched check accepts beyond the theorem's premises**: it accepts wherever `membersRun` returns with every session accepted and v1's check accepts. `WindowRegistered`, `RegisteredHolds`, `hready` and `hcls` are premises of the theorem that no refusal of the check enforces; AGENTS.md's rule (the verifier refuses what the proof does not cover) is met only for windows where they hold. [derived]
+- **Where a per-member accept reads one member at a time**: nowhere in the read. Every file is in one `Core.Blobs` before the check; the run then checks one member at a time, as FIRSTACCEPT's corrected figures say. The switch changes nothing there. [read: `membersRun`; relayed: your 09:27Z mail]
+
+**What stands before the per-member accept, with the two you added**
+- `hcls` only where the sample ended, with "the sample ended" in the acceptance event (WINDOWAT drafts it).
+- Soundness's hours: `Sampled/OpensAt.lean` as one file about noon PST Fri; #9520 in review about 1 PM PST Fri. [relayed]
+- The switch's proofs' side as above; then the Python twin, tests and docs.
+
+**Next**: the binding in both forms, then the one statement's chain up to `remote_soundness_deployedReady`, one try at a time through `verity lean try --on auto`.
