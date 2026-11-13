@@ -22,7 +22,7 @@ import pytest
 from verity.protocols.certifier.verifier import warden_rows as W
 from verity.protocols.certifier.verifier.active import DATA, PAD
 from verity.protocols.certifier.verifier.certificate import Direction
-from verity.protocols.certifier.verifier.grid import COMPLETE, Record
+from verity.protocols.certifier.verifier.grid import COMPLETE, BlockGrid
 from verity.protocols.certifier.verifier.warden import cell
 from verity.protocols.certifier.verifier.tests.test_network_certifier_warden import PARAMS
 
@@ -37,7 +37,7 @@ def _record():
     connection 2 holds two DATA cells. Later buckets are idle (empty slots, B zero bytes)."""
     bucket0 = (cell(DATA, 1, bytes(P), B), cell(PAD, 1, b"", B), cell(DATA, 2, bytes(P), B), cell(DATA, 2, bytes(P), B))
     grid = (bucket0,) + ((None,) * S,) * (T - 1)
-    return Record(LINK, 0, grid, COMPLETE)
+    return BlockGrid(LINK, 0, grid, COMPLETE)
 
 
 def _cells():
