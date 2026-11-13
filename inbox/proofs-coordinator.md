@@ -112590,3 +112590,74 @@ Names FRAME's assembly can take: `SpotFlock.neededBits_held (h : Held) : NeededB
 STOP RULE: nothing listed changes; no verifier change.
 
 Not established: any of this compiled; that FRAME's L1 branch builds (I find out in my try, which builds its files).
+
+## REDRAW, Fri 13 Nov 01:40Z: soundness's question answered (the compiled run holds no coin layout to the registration's, and I find nothing a prover gains by a larger reserve); (A) taken, the fast-forward waits on `d461`; #9237's records passed and its quick tier is half through with nothing red
+
+Mailbox read to its newest section, 01:16Z. [run] One correction to my 01:35Z entry: it tags the digest list's regeneration "[run, 01:36Z]"; I ran it between two clock reads of 01:34Z and 01:35Z and did not read 01:36Z.
+
+### 1. #9237: the records passed; the quick tier runs; no ready line yet
+
+- Records: `r20261113-002053-fe73` on vy-nebius-cpu-12, exit 0, at `0bafa486510c`. `security/Properties`, `security/Proofs` and `security` each pass and its outcome is `pass`, nothing regenerated [read: its `stdout.log`]; the lock of `security/Properties` it wrote is byte for byte the committed one. [run: `cmp`] Between `0bafa486510c` and the head `db228c8966f0` no Lean file, lock, lakefile, manifest or toolchain file differs (56 files do, none of those kinds). [run: `git diff --name-only`]
+- Quick tier: `r20261113-004445-454d` on vy-nebius-cpu-11 at the head `db228c8966f08b829659343e91f0a571c70192d9`, `--changed 4f0154e42026`. It waited 25 minutes for a slot (00:45Z to 01:10Z, all eight busy) and has run since. At 01:38Z: 30 of 68 suites passed, none failed, `verity-core-sampled-proofs` (307 passed, 2 skipped) and `verity/protocols/spot/verifier` among them; `benchmarks/one_stage` had not reported. [read: its `stdout.log`] ETA about 02:15Z. [guess]
+- `main` moved to `e86d9204135c` at some time before 01:09Z. The head merges with it with no conflict [run: `git merge-tree`], and `9d4aec0111fb` is an ancestor [run]. `main`'s new commits touch `benchmarks/one_stage/a5.py` beside this branch's lines, so I made the merge in a scratch tree, ran the three test files of the one-stage suite that need no Lean build there (34 passed) and threw it away. [run] I did not merge `main` a third time: the ready line will be at `db228c8966f0` when `454d` passes. If you want `main` at `e86d9204135c` in the head first, say so; it costs another quick tier, about an hour.
+- #9375 has not landed (open, head `34c5cbb3705c`, 01:34Z). [run]
+
+### 2. The key change (#9555): (A) taken as you ruled
+
+- The side branch's records run `r20261113-010237-d461` (at `ca9a951d175e`, vy-nebius-2) took a slot at 01:15Z after 12 minutes in line and is building. ETA about 01:50Z, from the 34 minutes `a03a` took. [guess] When it passes I fast-forward `cursor/proofs-keyheld-3c9a` to `ca9a951d175e` and rewrite the pull request's first paragraph as you say (the half-entry re-keyed by hand to the restated statement's hash, its reason unchanged; the honest witness is PRF-582's).
+- Quick tier at `9fd601fbb177`: `r20261113-005641-0e0d` on vy-nebius-2, waited 15 minutes (00:57Z to 01:12Z), running. At 01:38Z: 15 of 68 suites passed, none failed; the suites that hold the change (`benchmarks/one_stage`, `verity-core-sampled-proofs`, `verity/protocols/spot/verifier`) had not reported. [read] ETA about 02:30Z. [guess] `ca9a951d175e` differs from `9fd601fbb177` in one file, the lock of `security/Properties`; after the fast-forward I run `suites.py --changed 9fd601fbb177 --quick` at the new head, which reruns only the suites that read that file, so the ready line's two verdicts are both at the fast-forwarded head.
+- Ruling 6, restated for 03:00Z: Lean: every module compiles and every audit passes but the one lock rule (`a03a`); `d461` is the verdict on (A). Python, the negative test and the difftests: first verdict is `0e0d`, about 02:30Z. If both pass, the ready line is before 03:00Z; one round of fixes puts it at about 04:30Z. [guess]
+
+### S. Soundness's question (PRF-579): does the compiled run hold a session's coin layout to the registration's? No, and I find nothing a prover gains by it
+
+Read only, at the key change's head `9fd601fbb177` (the Lean of the side branch `ca9a951d175e` is the same: its one commit is a lock file). No code written.
+
+**S1. The answer: no.** The compiled run compares a session's `scheme`, `epoch`, `families` or per-family counts with nothing of the registration's. [read] The registration fixes no coin layout to compare with: `Spot/Registration.lean` reads no `families` and no `epoch`, and its `scheme` (line 105, R3 at 555) is the scheme of the values' commitment, not the coins'. [read]
+
+**S2. What the compiled run does read of the layout, with lines** (all under `verity/protocols/spot/verifier/lean/Spot/`):
+- The layout's form only. `layoutOf` (`Challenger.lean:73-85`): the scheme a nonempty name, the epoch a natural number, the families a nonempty list of `[label, count]`, each count at least 1, labels distinct, at most `MAX_COINS` = 2^24 coins in all (line 50). [read]
+- The layout is the one in the challenger's signed record. `sessionOf` (`ChallengerSession.lean:267-285`) checks the record's signature under the verifier's key and takes `r.commitment`, a `LiveCommitment` with its `scheme`, `epoch`, `families` and root. [read] The root's domain binds the three (`liveDomain`, `Challenger.lean:96-102`), and each opening is checked in that domain at the position its family and index have in that layout (`liveReason`, `Challenger.lean:190-203`). [read]
+- The ledger carries the layout and nothing reads it there. An open must carry its reserve's request field for field (`RESERVED`, `ChallengerSession.lean:124`, compared at line 605), so the layout signed at the reserve is the open's; `isReserve` (lines 513-520) reads the prover's names, the minutes, the start and the expiry, not the layout. [read]
+- The record's layout is not compared with the ledger open's. `sessionNamed` (`ChallengerSession.lean:799-819`) holds the session to the ledger by its id, host, record leaf, commitment root (line 809), release log and refused hellos. So the only tie between the layout the gate signed at the reserve and the layout the coins were committed under is that the gate starts the challenger with the open's `--scheme`, `--families` and `--epoch` (`verity/composite/device/live_challenger/auditor.py:2197-2198`): the device's own conduct, on `trusted-host`. [read]
+- The gate's `reserve` is as soundness read it: it copies `scheme`, `epoch`, `families` from the request into the signed entry (`auditor.py:2055-2056` at this head) after a form check (lines 1075-1087: names, counts of 1 or more, labels distinct, at most 4,096 bytes of JSON). [read]
+
+**S3. What the compiled run holds instead, which fixes how many coins a family USES:**
+1. The family's name is the verifier's: `coinsCode key main coins record window family read` (`Run.lean:180-187`), called with `i.family` at line 294 and `it.family` at line 234; `drawCoins` refuses a segment of another family (`ChallengerDraw.lean:61-62`). [read]
+2. Every root the session's log shows for that family is the registration's digest (`FAMILY_ROOT`, `ChallengerCoins.lean:66`). [read]
+3. The segment's openings are every coin the family released, from its first: `afterIt == List.range' start openings.size` (`ChallengerCoins.lean:67-69`). [read]
+4. Every coin opened is read, and the bytes read start the stream: `startReason` (`ChallengerCoins.lean:73-77`), `⌈read/64⌉ = stream/64`. [read]
+5. `read` is what the selection consumed of the source: `i.source.extract 0 read` (`Run.lean:292-294`, and 233-234 for the second stage). [read]
+
+So a family releases exactly `⌈bytes the selection read / 64⌉` coins, coins 0 to that minus 1, all after the one digest, or the run refuses. [derived from 1 to 5] The count in the layout is a ceiling on that and nothing else. [derived]
+
+**S4. What a prover gains by reserving more coins of a family than the design draws: nothing I can find in soundness, and two costs it can impose.** [derived, not proved]
+- No second sample. A coin of the family released beyond what the selection reads is "a coin opened and not read" (by 3 and 4). A coin released after another root is `FAMILY_ROOT` (by 2). A coin never released is seen by nobody. [derived]
+- No knowledge of the sample's coins. Coins the prover opens in OTHER families, after any bytes it likes, are other leaves of the tree; the device flips each coin on its own. This is the model the listed statements already use: `Properties.Challenger.Run` carries its own `scheme`, `epoch` and `families` (`security/Properties/Challenger.lean:80-89`), `DrawnByDevice`, `FamilyOneCommitment` and `FamilyOneCommitmentRead` (lines 387, 419, 435) quantify over every run of the device whatever its layout, and the causal game gives the device one round per coin it may release, `MAX_COINS` of them (`oneStageRounds`, line 372). [read] So the proved statements do not need the layout held, and a model of the live device that fixes the layout by the registration proves about fewer sessions than the compiled run accepts. [derived]
+- Too few coins is the prover's own loss: a family that runs out before the selection ends leaves `read` longer than the stream, refused (by 4). It is a failed window, the same as a prover that stops. [derived]
+- Cost 1, on the verifier: the release log it walks is at most `MAX_LOG_LINES = 2 · MAX_COINS + 1 + MAX_TREE_LINES` lines (`ChallengerSession.lean:87`), and a prover with a large reserve can fill it with other families' coins. It is bounded: the signed close's `lines` is at most `MAX_LOG_LINES` (line 200) and the log's length is held to it (line 281). [read]
+- Cost 2, on the auditor's device: it flips and commits every reserved coin. The gate bounds the request's text, and `layoutOf` the total, at 2^24 coins. [read]
+- One visible effect in the ledger: the gate writes a window's `complete` as "every reserved coin of every family released" (`auditor.py:2356`), which a period's close repeats (`ChallengerSession.lean:656-662`). A session that reserved more than it drew ends `complete: false`. No draw reads it; I did not read what else does. [read]
+- The scheme and the epoch: the scheme is the leaves' domain-separation name and the epoch a number in the domain. Each opening is held to the record's (`liveReason`, lines 193 and 197-201). A prover that names another scheme or epoch gets a commitment in another domain, whose coins open nowhere else. I find no gain. [derived]
+
+**S5. The size of a refusal, if soundness wants one anyway.** [guess, from the code read]
+- Holding the record's layout to the ledger open's (so the coins were committed under the layout the gate signed): about 5 lines in `sessionNamed` (the open's body is already returned by `auditedOpen`), its Python twin in `session_named`, one difftest case, one negative test. It changes `sessionNamed`, which `drawCoins` reads, so the records of `drawnByDevice`, `familyOneCommitment` and `familyOneCommitmentRead` move: a notice, and the witnesses rule bites as it did tonight.
+- Holding the scheme to a constant the verifier names: one line and its twin, the same three records.
+- Holding a family's reserved count to the design's need: larger. The need (`a5_coins.need`, `benchmarks/one_stage/a5_coins.py:107-125`: the most coins one sample reads, plus one rerun) is Python on the prover's side today; Lean has no twin of it. About 40 to 80 lines of Lean with a difftest, and it would be a completeness condition (the reserve covers the sample), not a soundness one.
+- My recommendation: none of the three in the compiled check. State the live device's model over any layout `layoutOf` accepts, as `Properties.Challenger.Run` does.
+
+### 3. Machines and waits, as you asked
+
+| Run | Machine | In line |
+| --- | --- | --- |
+| `454d` (#9237 quick) | vy-nebius-cpu-11 | 25 min |
+| `522c` (#9373 close, two suites) | vy-nebius-2 | 29 min |
+| `0e0d` (#9555 quick) | vy-nebius-2 | 15 min |
+| `d461` (#9555 records, side branch) | vy-nebius-2 | 12 min |
+
+All four waits are from the runs' `slot.json`. [read] No Lean slot made me wait: each wait was for a check slot's memory.
+
+### 4. Pushed, unpushed, waiting on
+
+Pushed: `cursor/proofs-keyheld-3c9a` `9fd601fbb17760e2fa25a723abfb16ad275abb41`; `cursor/proofs-keyheld-rekey-5d1e` `ca9a951d175e16499ff4694013211217a3d9a8d7`; `cursor/proofs-redraw-cc71` `db228c8966f08b829659343e91f0a571c70192d9`; `cursor/proofs-redraw-9373-close-a41d` `92b97c953cbb3a02fe420e968a853bebb3f21b1e`. #9373's body now names the new close and its three runs. Unpushed: nothing.
+
+Waiting on: `d461` (about 01:50Z), `454d` (about 02:15Z), `0e0d` (about 02:30Z); your word on the `research` pair of #9373's close; lean's word on (A).
