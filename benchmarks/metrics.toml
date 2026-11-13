@@ -30,3 +30,25 @@ better = "lower"
 command = "research run --on NODE --project verity --source . --cwd clone --pool network --as network-accounting --mem-gb 128 --timeout 10800 -- bash benchmarks/scan_cost/run.sh"
 every = "7d"
 goal = "network/period-bound-checked"
+
+# a local research run from a checkout on an agent VM with the team's keys: it reads the control pod, GitHub and the store's
+# labels, which no CPU node reaches (benchmarks/landing/README.md)
+[[metric]]
+id = "ci/plain-mark-to-main-p90"
+title = "PRs with no Lean change: the 90th percentile of hours from the ready mark to `main`, over the last 7 days"
+owner = "ci"
+unit = "hours"
+better = "lower"
+command = "research run --project verity --cwd source -- bash benchmarks/landing/run.sh"
+every = "12h"
+goal = "ci/landing-two-hours"
+
+[[metric]]
+id = "ci/lean-mark-to-main-p90"
+title = "PRs changing Lean: the 90th percentile of hours from the ready mark to `main`, over the last 7 days"
+owner = "ci"
+unit = "hours"
+better = "lower"
+command = "research run --project verity --cwd source -- bash benchmarks/landing/run.sh"
+every = "12h"
+goal = "ci/lean-landing-two-hours"
