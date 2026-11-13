@@ -112,7 +112,7 @@ noncomputable def missLog (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArr
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (L : CoinMap.Locate) (Rd : Reading A)
     (Acc Good : Verity.Exchange → Prop) (Dg raw : Verity.Exchange → ℕ → Option (List Msg)) (q : ℕ) : ℝ≥0∞ :=
   ∑ i ∈ Finset.range (A.L.V.k x),
-    ENNReal.ofReal (Real.sqrt ((finderBy V θ F c σ (fun ω r => CoinMap.place V θ F c σ L r ω) Rd
+    ENNReal.ofReal (Real.sqrt ((finderBy V (A := A) (x := x) θ F c σ (fun ω r => CoinMap.place V θ F c σ L r ω) Rd
       (stringsFx Dg (logBefore L)) (stringsOpn Acc Good raw (logBefore L)) (stringsPair raw) i q).Pr
         Verity.sha512Msg))
 
