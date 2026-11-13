@@ -266,7 +266,8 @@ def test_the_readmes_node_recipe_commits_on_a_node_as_the_checkout_it_is_typed_i
     bin_.mkdir()
     (tmp_path / "lead.gitconfig").write_text("[user]\n\tname = Lead Checkout\n\temail = lead@checkout.invalid\n")
     (tmp_path / "node.gitconfig").write_text("[user]\n\tuseConfigOnly = true\n")    # git guesses no name from the host
-    path = f"{Path(sys.executable).parent}:{os.environ['PATH']}"
+    shell = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    path = f"{Path(sys.executable).parent}:{shell.get('PATH', os.defpath)}"
     on_node = {"PATH": path, "HOME": str(tmp_path), "GIT_CONFIG_GLOBAL": str(tmp_path / "node.gitconfig"),
                "GIT_CONFIG_NOSYSTEM": "1", "OUT": str(out)}
     (bin_ / "research").write_text('#!/bin/sh\nwhile [ "$1" != -- ]; do shift; done\nshift\n'
@@ -274,8 +275,7 @@ def test_the_readmes_node_recipe_commits_on_a_node_as_the_checkout_it_is_typed_i
                                    + " ".join(f"{k}={shlex.quote(v)}" for k, v in on_node.items()) + ' "$@"\n')
     (bin_ / "research").chmod(0o755)
     assert subprocess.run(["git", "var", "GIT_AUTHOR_IDENT"], cwd=node, env=on_node, capture_output=True).returncode != 0
-    typed = {**{k: v for k, v in os.environ.items() if not k.startswith("GIT_")}, "PATH": f"{bin_}:{path}",
-             "GIT_CONFIG_GLOBAL": str(tmp_path / "lead.gitconfig"), "GIT_CONFIG_NOSYSTEM": "1"}
+    typed = {**shell, "PATH": f"{bin_}:{path}", "GIT_CONFIG_GLOBAL": str(tmp_path / "lead.gitconfig"), "GIT_CONFIG_NOSYSTEM": "1"}
     line = _recipe().replace("NAME.toml", "zorble_map.toml").replace("BRANCH", "staged")
     r = subprocess.run(["bash", "-c", line], cwd=lead, env=typed, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
