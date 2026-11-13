@@ -48,8 +48,8 @@ CAPTURE = "4.26.0"
 PRICED_AS_TRACED_FROM = "4.23.0"
 #: the premise a trace's price of an attention call's products takes (`priced_dtype`), as published strings state it;
 #: the card is the one whose BF16 pipeline `training_slowdown.gates` prices a bf16 GEMM at
-ATTENTION_PREMISE = ("each of a 16-bit attention call's six matrix products is a 16-bit tensor-core dot product on "
-                     "sm_120, the card whose BF16 pipeline prices a bf16 GEMM")
+ATTENTION_PREMISE = ("each of the six matrix products the count holds of a 16-bit attention call is a 16-bit "
+                     "tensor-core dot product on sm_120, the card whose BF16 pipeline prices a bf16 GEMM")
 #: the captures whose raw rows are read: this one, and the one the stored records were traced by
 READS = ("4.12.9", CAPTURE)
 #: the dtype the routes' autocast casts a step's forward to, which the rule of the captures before

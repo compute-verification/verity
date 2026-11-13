@@ -349,8 +349,9 @@ def _counted_dtype(attention: dict, n, traced: str | None) -> str | None:
     that computes it computes in (`_attention`), else the traced one.
 
     The graph holds a call as the math backend computes it, from operands cast up to float32 where they are 16 bits
-    wide; on the path a job runs the card's fused kernel computes the call in its operands' dtype. So the call's six
-    matrix products are counted at the kernel's width, on the premise `capture.products.ATTENTION_PREMISE`. The
+    wide; on the path a job runs the card's fused kernel computes the call in its operands' dtype. So the six matrix
+    products the count holds of the call are counted at the kernel's width, on the premise
+    `capture.products.ATTENTION_PREMISE`. The
     call's other counted ops (the scalings of q and of k, dropout's, a mask's add) are counted with them because the
     job's count names them in that dtype too (`flops.dtype_of`, on the stand-ins `flops.Counter._attention` makes in
     the kernel's operands' dtype), which keeps a job's count and its trace op for op."""

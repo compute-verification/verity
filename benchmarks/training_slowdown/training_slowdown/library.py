@@ -67,7 +67,9 @@ PARTS = {
               "which the trace doesn't check",
     "premise": "(H) and (E), conjectures that one set of gates refutes, at the bits a value the row states; of "
                f"every batch the planned run reads, that {work.P_BATCH}, which no trace checks; and that "
-               f"{products.ATTENTION_PREMISE}, on which a 16-bit attention call's products are priced at 16 bits",
+               f"{products.ATTENTION_PREMISE}, on which a 16-bit attention call's products are priced at 16 bits. "
+               "The card's backward computes the scores once more, a product this count leaves out, so each slowdown "
+               "reads high by that product's share of the count",
     "scaled": "the planned run: the config's steps times the traced step's gates, so the traced step stands for "
               "every step; and every share: a fleet's AND gates are its registry's peak FLOP a second, two a MAC "
               f"at the {calculator.FLEET_PRECISION} GEMM's AND gates, times its locations and the period, and the "
