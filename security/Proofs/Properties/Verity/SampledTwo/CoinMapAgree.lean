@@ -371,8 +371,9 @@ theorem law_freshA {lg : β → List Verity.Release} {k : ℕ} {rc : (Fin K → 
       obtain ⟨log, hl⟩ := hf.out ⟨.fresh l, b, List.ofFn x⟩ k fs' ts _ τ
       exact (agFrom_cons L hl).2 ⟨relGood_of_none L hs, hA⟩
     · exact hlaw _ _ _ _ (hf.cons _) _
-  · refine law_setA s' (Ag' := fun x r o => AgFrom L lg r (pre ++ [⟨.fresh l, b, List.ofFn x⟩]) o)
-      (fun r => freshVal (r i) u) (OffChunk i u 4) (splits_fresh i u (slot_spec L hs).2.2) ?_ ?_ ?_ fun x => ?_
+  · have hv := splits_fresh i u (slot_spec L hs).2.2
+    refine law_setA (R := Fin K → FlockDeploy.Coin) s'
+      (Ag' := fun x r o => AgFrom L lg r (pre ++ [⟨.fresh l, b, List.ofFn x⟩]) o) _ _ hv ?_ ?_ ?_ fun x => ?_
     · intro x r r' τ hr
       exact hrc _ _ _ _ _ _ r r' (offChunk_agree L hs rfl hr _)
     · intro x r r' o hr
@@ -417,12 +418,14 @@ theorem law_roundA {lg : β → List Verity.Release} {k : ℕ} {rc : (Fin K → 
       exact (agFrom_cons L hl).2 ⟨relGood_of_none L hs, hA⟩
     · exact hlaw _ _ _ _ (hf.cons _) _
   · obtain ⟨-, -, hu⟩ := slot_spec L hs
-    refine law_monoA (law_congrA (P' := fun r => placeCoin _ (fun dr => openW n (bitsOf (openElems (r j) u n)) dr)
+    have hv := splits_open j u n hu
+    refine law_monoA (law_congrA (P' := fun r : Fin K → FlockDeploy.Coin =>
+        placeCoin _ (fun dr => openW n (bitsOf (openElems (r j) u n)) dr)
         (fun dr s₅ t₅ => rc r fs (ts.set i (T.bump p.1)) (pre ++ [⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩])
           (fun log => f (⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩ :: log)) s₅ t₅) s) ?_
-      (law_writeA s (Ag' := fun dr r o => AgFrom L lg r (pre ++ [⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩]) o)
-        (fun e dr => openW n (bitsOf e) dr) (fun r => openElems (r j) u n) (OffChunk j u n)
-        (splits_open j u n hu) ?_ ?_
+      (law_writeA (R := Fin K → FlockDeploy.Coin) s
+        (Ag' := fun dr r o => AgFrom L lg r (pre ++ [⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩]) o)
+        (fun (e : Fin n → Fin 128 → Bool) dr => openW n (bitsOf e) dr) _ _ hv ?_ ?_
         (fun e => (Finset.univ.filter fun e' : TreeOpenable T.nonce T.spec T.sample p.1 p.2 =>
           TreeDraw.opened e'.1 n = bitsOf e).Nonempty) ?_ fun dr => ?_)) ?_
     · intro r t
@@ -465,15 +468,18 @@ theorem law_placeKA {β : Type} (lg : β → List Verity.Release) : ∀ (k : ℕ
         (fun r o => AgFrom L lg r pre o) (gapK L K k fs ts pre f s)
   | 0, _, _, _, _, hf, s => law_leafA L hf s
   | _ + 1, _, _, _, _, hf, ⟨none, s'⟩ => law_leafA L hf s'
-  | k + 1, fs, ts, pre, f, hf, ⟨some (.fresh l, b), s'⟩ =>
-    law_sendA _ _ s' (law_freshA L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
+  | k + 1, fs, ts, pre, f, hf, ⟨some (.fresh l, b), s'⟩ => by
+    refine law_sendA _ _ s' ?_
+    exact law_congrA (fun r t => rfl) (law_freshA L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
       (fun fs ts pre f hf s => law_placeKA lg k fs ts pre f hf s)
       (fun fs ts pre f s t r r' h => placeK_congr L k fs ts pre f s t r r' h) fs ts pre f hf l b s')
-  | k + 1, fs, ts, pre, f, hf, ⟨some (.hello spec, ν), s'⟩ =>
-    law_sendA _ _ s' (law_helloA L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
+  | k + 1, fs, ts, pre, f, hf, ⟨some (.hello spec, ν), s'⟩ => by
+    refine law_sendA _ _ s' ?_
+    exact law_congrA (fun r t => rfl) (law_helloA L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
       (fun fs ts pre f hf s => law_placeKA lg k fs ts pre f hf s) fs ts pre f hf spec ν s')
-  | k + 1, fs, ts, pre, f, hf, ⟨some (.opening i sn n, b), s'⟩ =>
-    law_sendA _ _ s' (law_openA L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
+  | k + 1, fs, ts, pre, f, hf, ⟨some (.opening i sn n, b), s'⟩ => by
+    refine law_sendA _ _ s' ?_
+    exact law_congrA (fun r t => rfl) (law_openA L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
       (fun fs ts pre f hf s => law_placeKA lg k fs ts pre f hf s)
       (fun fs ts pre f s t r r' h => placeK_congr L k fs ts pre f s t r r' h) fs ts pre f hf i sn n b s')
 
@@ -571,8 +577,11 @@ theorem law_placeA (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : 
   law_alongA (game_eq V θ F c)
     (Pl := fun r s t => placeK L r (frames (V.families θ)) (V.families θ) [] [] (finish (V.signer θ) θ F c s.1) s.2 t)
     (G := fun s => gapK L K (frames (V.families θ)) (V.families θ) [] [] (finish (V.signer θ) θ F c s.1) s.2)
-    (fun s => law_sendA _ s.1 s.2 (law_placeKA L Verity.Exchange.log _ _ _ _ _
-      (fun log _ _ h => by rw [List.nil_append]; exact Verity.Sampled.log_of_finish h) s.2)) σ
+    (fun s => by
+      rcases s with ⟨m, s'⟩
+      refine law_sendA _ m s' ?_
+      exact law_congrA (fun r t => rfl) (law_placeKA L Verity.Exchange.log _ _ _ _ _
+        (fun log _ _ h => by rw [List.nil_append]; exact Verity.Sampled.log_of_finish h) s')) σ
 
 end Along
 
