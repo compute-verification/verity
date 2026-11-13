@@ -72,7 +72,7 @@ def test_the_parts_sum_to_the_charge_and_are_the_decoders_shifts(asy):
         d, st = CV.Decoder(data, sum(charge.values()), V.book_of(reg)), CV.CoderState()
         for w, widths in enumerate(length_widths(rec, reg)):
             d.window()
-            CV.code_window(d, None, st)
+            CV.code_executionPhase(d, None, st)
             assert sum(parts[w][f] for f in SEGMENT) == d.seg.shifts, (name, w)
             assert parts[w]["segment_end"] == (2 if d.seg.used else 0), (name, w)
             for n in widths:
