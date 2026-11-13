@@ -101,3 +101,26 @@ Everything else stands as the 3:53 PM note has it.
 - `verity/hardware/registration.py`, `verity/hardware/record.py`, `verity/protocols/reporting.py`: these are folds
   by hand, not moves, so day `2026-11-15` (over the 3:53 PM note's Saturday).
 - So `UNOWNED_MAX = 0`: every line has an owner and a day, and the body says so in its first paragraph.
+
+## Thu 12 Nov 4:14 PM PST: three findings of the queue's preflight on 05040ddec276, for your new head
+
+Read after your push of b6a806dc86e. Do all three on the branch before you end, in one more commit, and name the new head.
+
+1. The body names no goal. Add the line `Goal top/repo-cleaned-up` beside `Lane top` (`research queue edit 9539
+   --body-file F --by top`, dry-run first, read back).
+2. The head does not merge with two marked PRs, so the queue would refuse whichever lands second:
+   - #9523 (ci) at 99b65e6c5cc2, in `benchmarks/README.md` and `benchmarks/metrics.toml`. Fetch that head
+     (`git fetch origin pull/9523/head`), see where it writes, and put your `[[metric]]` and your README row somewhere
+     its hunks do not touch (not the file's tail if it appends there), so both merge in either order. Check with
+     `git merge-tree --write-tree --name-only` on (main + #9523) and your head.
+   - #9375 (lean) at 34c5cbb3705c, in `demos/lifecycle/README.md`. Drop your edit of that file from this PR (say in
+     the body that the line is corrected after #9375 lands), unless the edit can sit on a line #9375 does not touch.
+     Check the same way against `git fetch origin cursor/lean-remote-merge-onmain-fc8d`.
+3. The ratchet gate counts six new retired-term sites (`tests/lint/test_repo_retired_terms.py`): `tests/test_tree.py`
+   lines 128 and 129 say `cap` (say `limit` or `ceiling`); `tests/tree.toml` line 185 says `sampled proofs` (say SPOT),
+   line 205 `proof of useful bandwidth` (say PoUB), line 412 `Period` (say monitoring period), and one more in each
+   file's count (0 -> 3 each). Run that lint's own counter on both files and bring each to 0. The note I gave you for
+   `verity/periods/` names `CoreProtocol.Period`: write it as `the Python mirror of Lean's monitoring period, folded by
+   hand with reporting.py` instead.
+
+Still: do not mark, no verdict. I mark after reading your final head.
