@@ -92,3 +92,34 @@ What it adds to your tasks:
 - If the import-rule sentence of rule 4 is checked by a test that reads the file, leave that test alone and say so.
 
 The hour does not move: PR open, unmarked, by Fri 13 Nov 3:00 AM PST.
+
+## Fri 13 Nov 12:25 AM PST: place 10, registration is an accounting protocol (the export is replaced a fourth time)
+
+Daniel, Thu 12 Nov 11:58 PM PST: "I'm pretty sure registration should just live inside of accounting." Its place is
+`verity/protocols/accounting/registration/`, not `verity/registration/`, and SPOT reads no registration.
+`inbox/ARCHFILE-page.md` is the page as it reads now; `git diff 04a22557802 HEAD -- inbox/ARCHFILE-page.md` shows every
+changed line (13 in, 12 out) and nothing else changed on the page. #9702 gets ONE new commit on its branch:
+
+10. `ARCHITECTURE.md`, from the new export:
+    - idea 3 of section 2: two new sentences (registration is the accounting layer's base; the proofs read no
+      registration);
+    - section 4: the Registration row reads `protocols/accounting/registration`, with its new text and cells;
+    - section 5: the first diagram loses the `registration/` node and its three arrows; the diagram "Inside
+      `protocols/`" gains a `registration` node inside `accounting` and three arrows to it (from pouw, pous, certifier);
+    - section 6: the tree loses the `registration/` line under `runtime/`, and the `accounting/` line names it (three
+      lines); rule 4 loses its last sentence; rule 7 names registration in the accounting layer and gains two sentences;
+    - section 7: the row "The registration check" is now "Registration" with new cells, and the table "Code that has to
+      be written" has one new row ("Registration" names one thing: SPOT's own record of a window takes another name).
+- `tests/tree.toml`: the coming `[[tree]]` entry `verity/registration/` becomes
+  `verity/protocols/accounting/registration/`, with the page's new meaning ("the accounting protocol that runs once,
+  before any challenge: the hardware against its data sheets, the circuit compiler, the commitments to other
+  information, every device accounted for"), written the way the other coming protocol entries are written; owner and
+  day as they stood. The `[[not_yet]]` line for `verity/hardware/registration.py` gets
+  `to = "verity/protocols/accounting/registration/"`; its owner and day stay. Any other `to` that names
+  `verity/registration/` follows.
+- `tests/test_tree.py` and the other files of the PR: only what the entry's new place needs. Do NOT touch any string
+  `verity/registration/...` in code or Lean: those are format names (`verity/registration/v1`,
+  `verity/registration/log/v1`), not paths.
+- Run the tree test, the doc-paths test and the retired-terms test on a scratch merge with `main`, as before; push;
+  the PR stays UNMARKED. Your final message gives the new head and the sentences of the PR's body that changed (lines
+  1, 19, 54 and 107 of the body name registration), as text for top to put in with `research queue edit`.
