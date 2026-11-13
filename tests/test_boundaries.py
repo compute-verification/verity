@@ -86,14 +86,14 @@ NUMPY_USERS += ("verity/circuits/cross_call.py", "verity/circuits/kernels", "ver
 #: The listing's distributions that name neither the date they become part of ``verity`` nor the reason they stay their
 #: own: each owner owes one of the two.  It only shrinks.
 NO_DATE_OR_REASON = ("verity/protocols/compose/device/live_challenger", "verity/protocols/poub/device/live_verifier",
-                     "verity/protocols/pouw/clear", "verity/protocols/pouw/receipts")
+                     "verity/protocols/pouw/clear", "verity/protocols/pouw/verifier/receipts")
 #: Inside the listing's distributions, the directories whose Python is still held as ``verity``'s own by the rules on a
 #: file's text: it reads no other distribution at run time and names no path of the census, and each of its
 #: directories is a package.  The code that came from ``benchmarks/``, and the Lean check of σ beside Flock's prover.
 #: It only shrinks, as a directory becomes part of ``verity``, which is held whole.
 HELD_AS_VERITY = ("verity/protocols/compose/device/live_challenger", "verity/protocols/flock/sigma",
                   "verity/protocols/poub/device/live_verifier", "verity/protocols/pouw/clear",
-                  "verity/protocols/pouw/receipts")
+                  "verity/protocols/pouw/verifier/receipts")
 #: SPOT[Flock] stands on its own, and the network certifier is a layer beside it: SPOT reads the certifier's stamp as a
 #: certified input and imports none of the certifier, and the two compose only above both.  SPOT's row of the
 #: listing and the certifier's, the trees each of whose Python files (tests included) is checked, SPOT's Lean packages
