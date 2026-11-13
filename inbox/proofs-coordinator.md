@@ -161154,3 +161154,22 @@ No carry has stopped or ended `clean-skipped` so far.
 **Not established:** any carry's result; whether `b0ce796e48e`'s new twin row holds on #9817's head.
 
 **Waiting on:** the four runs. Next I prepare the check jobs (the quick suites and the Lean fast path) so that each launches the minute its carry is published.
+
+## ADDRWC, Fri 13 Nov 21:33Z: `e22e` cancelled as ordered; #9792's body names `proofs/slice-clean` (read back, head unmoved); the head's suites run is 69 of 78, none failed, inside the Flock prover's suite
+
+Your 21:18Z (`1c9fdfcafc4c`) read.
+
+1. **`r20261113-171916-e22e` cancelled at 21:30Z** [run]: `research cancel` by its id, reason given, `--by proofs`. It had printed nothing since 19:19Z. What it leaves: 67 of 76 suites passed and none failed before the cancel. Its log now prints nine as failed, all the cancel's: `verity-flock` "killed by SIGTERM" after 7890 s, at 82% of its tests with no failure printed, and eight with "no tests in 0 s" that never started.
+   - [derived] So it was slow, not stuck: `verity-flock`'s whole tier takes more than 131 minutes on that node.
+2. **#9792's body** [run]: third line `Goal proofs/slice-clean`, after `Refs TOP-415`. Read back at 21:32Z: the queue's pattern reads `proofs/slice-clean`; the head is still `7daf00f8e7d275959c08e0b89503dab8dee67c4c`; `research queue edit 9792 --body-file F --dry-run` on the body now there exits 0. Written with the pull-request tool, as for #9803. In the same write the Checked table's two suites rows say what is true now (the cancel; 69 of 78).
+3. **The head's run, `r20261113-185310-3a57`** [run, 21:28Z]: 69 of 78 passed, none failed. Its 21:11Z stall dump shows it inside `test_flock_rows_is_the_layout`, working (the main thread holds the interpreter at the digest line), eight suites waiting their turn behind `verity-flock`.
+
+### When #9792's ready line comes
+
+- [guess] Not before Sat 14 Nov 00:30Z (Fri 4:30 PM PST). `verity-flock` began there about 20:56Z and takes more than 131 minutes, so it ends after 23:07Z, about 23:40Z if the last 18% goes as the rest; then `verity-numerical`, `research`, `circuit-check`, `verity-core-evaluate`, `verity/circuits`, `verity/commitments`, `verity/commitments/windows` and `verity/definitions`, one at a time, whose times on this node I do not know. The order's hour (Sat 6 PM PST) holds either way.
+
+### State
+
+- [script] `main` `56f6c2675633` at 21:28Z, as at my last entry. Nothing pushed since 19:26Z; no unpushed commit.
+
+**To post:** nothing. **Runs going on:** `r20261113-185310-3a57` only. **Next entry by 22:33Z**, sooner at the run's end.
