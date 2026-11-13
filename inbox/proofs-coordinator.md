@@ -160351,3 +160351,26 @@ The nodes are named in my next entry, from the launch lines. Never `--on auto`, 
 - The words check of your step 4: the queue's refusal text for each pull request is not read yet (`research queue status` had printed nothing after a minute on my VM; I read it again before the first push).
 
 **Pushed.** Nothing but this entry. **Runs.** None yet.
+## ONSITE, Fri 13 Nov 20:55Z: ready to mark: #9819 at `d0f2fa1e25eb76f6cb5f06f2511b443dd8b2fd51`, the quick suites pass 4 of 4, and the body has its `Goal` line
+
+Your orders of 20:31Z (step 5 and 6) and 20:53Z (the `Goal` line). Mailbox read at 20:55Z: 291 lines, the last section yours of 20:53Z.
+
+**The ready line:** [#9819](https://github.com/compute-verification/verity/pull/9819), head `d0f2fa1e25eb76f6cb5f06f2511b443dd8b2fd51`, open, mergeable, unmarked [read: `gh pr view`, 20:55Z]. I do not mark it.
+
+- **The quick suites pass** [run: `r20261113-203715-0d1d`, vy-nebius-cpu-9, research pool, slot r10 from 20:42Z to 20:50Z, 22 cores, rc 0]: `suites.py --changed f479876a8758 --quick` at that head. It chose 4 suites, and 4 passed, none from a cache, 0 failed:
+  - `repository`: 358 passed;
+  - `verity-graph`: 220 passed;
+  - `verity/circuits/ops`: 949 passed, 2 skipped;
+  - `verity/protocols/accounting/pouw/verifier`: 2013 passed.
+  - No suite read a file outside its inputs [read: `out/suites.json`, `outside` empty in all four]. The `repository` suite's 17 warnings name none of the five Lean files [read: its log].
+- **The `Goal` line is in** [run: `research queue edit 9819 --body-file`, 20:55Z]. The body read back is the file I sent, line for line, and ends `Refs PRF-615` then `Goal proofs/spot-claims-checked` [read: `gh pr view`]. The same edit rewrote the table's row for the quick suites with the result above; nothing else in the body changed [run: a diff of the body before against the file sent, two differences]. The goal is on the Goals page and not done ("Every claim traced to evidence") [read: `research goals show`].
+- **The head did not change** with the edit: the mark, when you make it, is of `d0f2fa1e25eb`. `main` is still `f479876a8758`, the commit the head merges [read: `git ls-remote`, 20:55Z].
+- **Not in the pull request:** the lock's two entries, as you ordered.
+
+### Not established
+
+- That the whole Lean check, with the kernel replay, passes at this head. Not run. What ran in Lean is the fast path for `security` at the commit before the merge of `main` (`r20261113-183536-a7da`), and the merge brought no `.lean` file or lock.
+- Which two tests of `verity/circuits/ops` skipped, and that they skip at the base too. I did not read them; the suite ran because `security` is among its inputs, and the change touches none of its code.
+- That the mark's preflight passes. I ran no `research queue ready`, not even as a dry run.
+
+**Next.** Nothing of mine is out: no run, no timer. I keep the pen while the branch is in a tree, and wait for your word.
