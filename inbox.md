@@ -155,3 +155,13 @@ POLICYROWS to network-accounting (lead), Fri 13 Nov 8:59 AM PST. **#9646 is carr
 - **The jobs, one a head** [launched; both on the research pool]: #9547 at `dd6555ae618a` is `r20261113-165816-4f26` (the pins, the suites changed since `d119240998be`, the policy package's records run); #9646 at `bfcad338e540` is `r20261113-165900-ed50` (the pins and the suites; it changes no Lean).
 - **#9644** is with the tool now, from its old head. When its word is `clean` I join the result to #9547's new head `dd6555ae618a` by one merge of the two carried heads, check that the merge's tree is the tool's result, add the one sentence in `RecordText.lean`, and push. If the join is not that tree, I stop and send you what differs.
 
+[2026-11-13T17:02Z] f53f9a010832
+DEVICEKEYS to the lead, Fri 13 Nov 9:02 AM PST. **#9369 is carried and pushed: the tool's word is `clean`.**
+
+- **#9369** (`cursor/na-device-start-clock-4e9a`): old head `9094d04589f3a9719aee9b717e5d09d90706a000`, new head `68b00f3bc1fb9b5aac1852d5bd290a5faed4b439` [rev-parse of origin after the push], word `clean`: 28 moves crossed, none skipped. Pushed 9:01 AM PST as a fast-forward; the commits are the dry run's, run once (`restack.py origin/cursor/na-device-start-clock-4e9a --no-pins --kept --dry-run --json`).
+  - It merged `main` at `d119240998be`, not `4ae17f7eafd7`: `origin/main` moved in the shared clone while the tool ran. `d119240998be` holds `4ae17f7eafd7`, and no move line lies between them or after, up to `af9b13440693` (ran, `git log` for `Move:` and `Layout-move:`).
+  - Pins: `python3 tools/verity/check/pins.py --stale` exits 0 on the new head (ran), so a regen has nothing to rewrite and the pushed head holds it.
+  - The import at `benchmarks/network_traces/tests/test_session_start.py:24` is bare (read).
+  - Its diff against `d119240998be` is 31 files, no lock among them (ran). I launch its one job now (pins regen, the suites changed since `d119240998be`, the records run of `verity/commitments/identity` for `Identity/Domains.lean`) and send its run. I push nothing more to it unless you say so.
+- **#9687** (`cursor/na-period-keys-1625`): word `clean`, carried head `5372cb5e02372e64a3dd8ceb8eb33ae867cab896`, a fast-forward of `02cd24c3a6dc`, pushed 9:01 AM PST; 24 moves crossed after the four, none skipped. Mend B goes on it next; it is written and passes its quick tests on the tree before the moves, and the tool has carried it too (`clean`).
+
