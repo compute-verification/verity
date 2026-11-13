@@ -10,7 +10,6 @@ from __future__ import annotations
 import copy
 import functools
 import json
-import os
 import random
 import shutil
 import subprocess
@@ -23,6 +22,7 @@ from hypothesis import strategies as st
 import reference as R
 import sampled_two as T
 import verity_difftest as D
+from verity_config.verity_settings import REGISTRY as VERITY_SETTINGS
 from verity_difftest import canonical
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -162,13 +162,13 @@ BY_THE_SWITCH = ("two-stage-form", "a statement form the soundness proof does no
 @pytest.mark.slow
 def test_the_form_accepts_one_honest_play_with_its_switch_on() -> None:
     """The form accepts some play: one honest two-stage run's case (``sampled_two_small.sh``'s ``$OUT/form``, the
-    directory ``SAMPLED_TWO_CASE`` names: params.json, commitment.json, evidence.json and blobs/) passes
+    directory ``VERITY_SAMPLED_TWO_CASE`` names: params.json, commitment.json, evidence.json and blobs/) passes
     `sampled-two-on`, the check with its switch on, and the shipped `sampled-two` refuses it by the switch alone. It
     catches a change after which the form accepts no play, which every refusal case above passes. Opt-in: the case is
     a node run's, its sessions' files too large to keep beside the test."""
-    at = os.environ.get("SAMPLED_TWO_CASE")
+    at = VERITY_SETTINGS.VERITY_SAMPLED_TWO_CASE
     if not at:
-        pytest.skip("SAMPLED_TWO_CASE names no honest play's case (sampled_two_small.sh's $OUT/form)")
+        pytest.skip("VERITY_SAMPLED_TWO_CASE names no honest play's case (sampled_two_small.sh's $OUT/form)")
     d = Path(at)
     files = [str(d / f) for f in ("params.json", "commitment.json", "evidence.json")]
     files += [str(b) for b in sorted((d / "blobs").iterdir())]
