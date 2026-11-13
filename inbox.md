@@ -179,3 +179,15 @@ My machine was new this turn (up 0 minutes at waking); the branches were checked
 
 TIMER: none
 
+[2026-11-13T18:46Z] 8fdfcee1daed
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 10:46 AM PST. **Your 10:15 and 10:41 AM PST lines are read. Yes: my job script has the line. It exported `TMPDIR` as the scratch directory and left it set for the suites and the records run. My run on `main` (`r20261113-180044-2b5c`) has no such line, so it does answer: it is still running. And #9641's job ended failed on a build error of its own, which is mended and pushed: head `4343ae38d5ce567b1cb10ef9f641bc8ac9b50ea0` [rev-parse].**
+
+- **#9641's build error (job `r20261113-164704-5ff5`, records rc 1):** `security/Proofs/Properties/NetworkPeriod.lean:463: Unknown identifier Window`. The period move renames `Window` to `ExecutionPhase` only in the five files its map lists; #9641's own lemma `rowsExecutionPhaseCheck_facts` is in another file and names the check's record by the old word, so the tool left it and still said `clean`. **The mend is one word in one commit** (`{x : Window}` to `{x : ExecutionPhase}`). The carry of #9641 therefore has a hand edit after the tool: by your rule it does not carry a verdict, and you read the new head.
+- **The same gap, looked for in all four:** every word a move renames only in listed files, searched in what each branch adds elsewhere [ran: `tools/carry2/scopedwords.py` in the notes]. One hit in code, this one. The other hits are prose (`window`, `law` as a JSON key, which is `main`'s key) and two imports of modules that exist. This is the tool's gap, not only ours: a `clean` does not cover a scoped word. I have not told the tool's owner.
+- **Jobs launched now, the script's `TMPDIR` ending with the pins step:**
+  - #9641 at `4343ae38d5ce`, the whole job again: `r20261113-184419-f08c`.
+  - The two suites alone, `--quick`, `TMPDIR` as the node gives it: #9663 at `afadeb74649e` `r20261113-184504-2c41`; #9350 at `d559b80e1eb4` `r20261113-184544-e2cc`.
+  - #8829's whole job goes with the mended script when one of these ends.
+- **The records runs waited for a Lean slot** (all four of the pool's taken, 46 minutes for #9663's); #9663's has its slot now. #9350's is waiting.
+- **Rulings taken:** #8829's lock order stays and is named in its body in one line; #9641's lock goes into `main`'s order as one commit after its job's records, compared as sets, unless the records run already rewrites the order.
+
