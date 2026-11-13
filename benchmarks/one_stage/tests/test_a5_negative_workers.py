@@ -10,6 +10,9 @@
 * no worker outlives the audit: one killed outright takes its workers with it;
 * a worker's Lean verifier process is its own: it never writes to the audit's, which answers after the workers end, and
   a worker reuses the checks the audit's memo kept before it was forked;
+* no worker is forked beside another Python thread of the audit's: the run ends before any task starts, its error the
+  fix, and the audit's summary is written with it; the threads read before the first fork are printed and in the
+  timing whether or not the run is refused;
 * the negatives' file is byte for byte the same with one worker and with several, on the toy window's coin negatives,
   the registration's and the audit record's, each decided by the Lean and the Python, and a negative that isn't refused
   is its entry's ``refused: false`` either way;
@@ -24,6 +27,7 @@ import multiprocessing
 import os
 import signal
 import sys
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -42,8 +46,9 @@ import test_a5_memo as TM  # noqa: E402
 GB = 2**30
 
 
-def workers(n: int, budget: float = 1000 * GB, free: float = 1000 * GB, need: float = GB, own: float = GB) -> a5.NegativeWorkers:
-    return a5.NegativeWorkers(n, budget, lambda: free, need=lambda: need, own=lambda: own)
+def workers(n: int, budget: float = 1000 * GB, free: float = 1000 * GB, need: float = GB, own: float = GB,
+            refused=None) -> a5.NegativeWorkers:
+    return a5.NegativeWorkers(n, budget, lambda: free, need=lambda: need, own=lambda: own, refused=refused)
 
 
 AUDIT = os.getpid()
@@ -314,6 +319,65 @@ def test_the_registered_reads_negatives_are_the_same_entries_in_the_same_order_o
     seen.clear()
     several = a5.registered_negatives(SimpleNamespace(lean="lean", audit_mem_gb=1), mm, tmp_path / "several", workers=3)
     assert json.dumps(several) == json.dumps(one) and sorted(seen) == sorted(one)
+
+
+def _fork_line(out: str) -> list[dict]:
+    """The threads the audit printed before a fork, a line each."""
+    return [json.loads(x[3:])["negative_workers"]["threads_at_fork"] for x in out.splitlines()
+            if x.startswith('A5 {"negative_workers"')]
+
+
+def test_no_worker_is_forked_beside_another_python_thread_and_the_refusal_says_the_fix(tmp_path, capsys):
+    """Another thread of this process is alive where `run` would fork (it waits on an event set only after `run`
+    returned): `run` raises before any task starts, in a worker or here, and its error names the threads and says the
+    fix. The threads it read are printed, and they are in the timing the audit writes as its summary with the refusal
+    (`a5.not_forked`), so a refused audit's result holds the reading too."""
+    log, up, done = tmp_path / "log", threading.Event(), threading.Event()
+    other = threading.Thread(target=lambda: (up.set(), done.wait()), name="held-open")
+    other.start()
+    up.wait()
+    me = threading.current_thread().name
+    w = workers(2, refused=lambda timing: a5.not_forked(tmp_path, {"run_root": "r"}, timing))
+    tasks = [w.submit(name, lambda name=name: logged(log, name)) for name in ("a", "b")]
+    try:
+        with pytest.raises(a5.NegativeFailed) as failed:
+            w.run()
+    finally:
+        done.set()
+        other.join()
+    said = str(failed.value)
+    assert f"holds 2 Python threads ({me}, held-open) where it would fork the negatives' workers" in said
+    assert f"The fix: end and join every thread but {me} before the negatives run" in said
+    assert "(--negative-workers 1). No worker was forked and nothing is retried" in said
+    assert not log.exists() and all(t.got is None for t in tasks) and not multiprocessing.active_children()
+    timing = w.timing()
+    assert timing["refused"] == said and timing["negatives"] == {} and len(timing["threads_at_fork"]) == 1
+    assert timing["threads_at_fork"][0]["python"] == [me, "held-open"] and timing["threads_at_fork"][0]["os"] >= 2
+    assert _fork_line(capsys.readouterr().out) == timing["threads_at_fork"]
+    assert json.loads((tmp_path / "summary.json").read_text()) == {
+        "run_root": "r", "refused": {"negative-workers": said}, "negative_workers": timing}
+
+
+def test_the_threads_read_before_the_first_fork_are_printed_and_kept_where_the_run_is_not_refused(tmp_path, capsys):
+    """With no Python thread but the caller's, `run` forks its workers, and the reading is printed and in the timing all
+    the same: Python's threads by name and the kernel's count, one reading for the `run` that forked and none for a
+    `run` with nothing waiting. One worker forks nothing, so it reads nothing and prints nothing. (The other thread of
+    the first reading has ended: the test waited for it on its event, then joined it.)"""
+    log, me = tmp_path / "log", threading.current_thread().name
+    w = workers(2)
+    assert w.timing()["threads_at_fork"] == []
+    tasks = [w.submit(name, lambda name=name: logged(log, name)) for name in ("a", "b")]
+    assert list(w.entries(tasks)) == ["a", "b"]
+    w.run()
+    timing = w.timing()
+    assert "refused" not in timing and len(timing["threads_at_fork"]) == 1
+    assert timing["threads_at_fork"][0]["python"] == [me] and timing["threads_at_fork"][0]["os"] >= 1
+    assert _fork_line(capsys.readouterr().out) == timing["threads_at_fork"]
+    one = workers(1)
+    one.submit("c", lambda: logged(log, "c"))
+    one.run()
+    assert one.timing()["threads_at_fork"] == [] and _fork_line(capsys.readouterr().out) == []
+    assert not multiprocessing.active_children()
 
 
 def test_the_flag_reaches_the_audit_and_defaults_to_one():

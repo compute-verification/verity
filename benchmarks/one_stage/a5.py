@@ -1158,7 +1158,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         if got["challenger"] is not None:
             summary.setdefault("challengers", {})[f"m{mm['k']}"] = got["challenger"]
     coin_neg: list[Negative] = []
-    workers = NegativeWorkers(getattr(a, "negative_workers", 1), audit_memory(a, available_memory), available_memory)
+    workers = NegativeWorkers(getattr(a, "negative_workers", 1), audit_memory(a, available_memory), available_memory,
+                              refused=functools.partial(not_forked, out, summary))
     if not streamed(a):
         result = V.audit_record(rec, receipt, union_draw, drawn_law, sorted(proved), instances, statement, verdicts, a.delta,
                                 sessions=sessions, served=sorted(served_units), session_roots=session_roots)
@@ -1712,7 +1713,22 @@ def audit_own() -> float:
 
 
 class NegativeFailed(RuntimeError):
-    """A negative's worker raised or died: the audit ends with it, nothing retried."""
+    """A negative's worker raised or died, or the workers were refused their fork (`NegativeWorkers.run`): the audit
+    ends with it, nothing retried."""
+
+
+def threads_alive() -> dict[str, Any]:
+    """This process's threads now: Python's by name (`threading.enumerate`), and the kernel's count of the process's
+    (/proc), which also counts the threads no Python code started (a numeric library's pool)."""
+    return {"python": [t.name for t in threading.enumerate()], "os": len(os.listdir("/proc/self/task"))}
+
+
+def not_forked(out: Path, summary: dict, timing: dict[str, Any]) -> None:
+    """The result of an audit whose negatives' workers were refused their fork (`NegativeWorkers.run`): its summary so
+    far, written with the refusal and the workers' ``timing``, the threads read at the fork among it."""
+    (out / "summary.json").write_text(json.dumps(
+        {**summary, "refused": {"negative-workers": timing["refused"]}, "negative_workers": timing},
+        indent=1, sort_keys=True, default=str))
 
 
 class Negative:
@@ -1777,15 +1793,20 @@ class NegativeWorkers:
     running the next starts whatever its estimate, so one over the budget runs alone. A task's `entries` are its own,
     and `entries` of several are in the order given, whatever order they ended in. Nothing is retried and nothing
     falls back to the audit's process: a worker that raises or dies ends `run` with `NegativeFailed`, the others
-    killed. No worker outlives the audit: one killed outright takes its workers with it (`die_with`). `timing` is each task's own seconds and, for a worker, its memory, beside the audit's and its Lean verifier
+    killed. No worker is forked beside another Python thread of the audit's, whose locks would stay held in it: `run`
+    reads the audit's threads before its first fork (`threads_alive`), prints them, keeps them in `timing`
+    (``threads_at_fork``, one reading a `run` that forks) and, where Python holds more than the one that calls it,
+    hands `timing` to ``refused`` and raises `NegativeFailed` with the fix. No worker outlives the audit: one killed outright takes its workers with it (`die_with`). `timing` is each task's own seconds and, for a worker, its memory, beside the audit's and its Lean verifier
     process's as the workers started (``memory``), which a worker's ``private`` is to be read against."""
 
     def __init__(self, workers: int, budget: float, available: Callable[[], float],
-                 need: Callable[[], float] = worker_need, own: Callable[[], float] = audit_own):
+                 need: Callable[[], float] = worker_need, own: Callable[[], float] = audit_own,
+                 refused: Callable[[dict[str, Any]], None] | None = None):
         self.workers, self.budget, self.available, self.need, self.own = workers, budget, available, need, own
+        self.refused = refused
         self.tasks: list[Negative] = []
         self.waiting: list[Negative] = []
-        self.stage: dict[str, Any] = {"workers": workers, "wall_s": 0.0}
+        self.stage: dict[str, Any] = {"workers": workers, "wall_s": 0.0, "threads_at_fork": []}
 
     def submit(self, label: str, fn: Callable[[], dict[str, dict]]) -> Negative:
         task = Negative(label, fn)
@@ -1803,6 +1824,19 @@ class NegativeWorkers:
         """Every task still waiting, each in its worker; returns once all ended, or raises `NegativeFailed`."""
         if not self.waiting:
             return
+        alive = threads_alive()
+        self.stage["threads_at_fork"].append(alive)
+        print("A5 " + json.dumps({"negative_workers": {"threads_at_fork": alive}}), flush=True)
+        if len(alive["python"]) > 1:
+            self.stage["refused"] = (
+                f"the audit's process holds {len(alive['python'])} Python threads ({', '.join(alive['python'])}) where "
+                f"it would fork the negatives' workers, and a lock another thread holds at the fork stays held in "
+                f"every worker. The fix: end and join every thread but {threading.current_thread().name} before the "
+                f"negatives run (threading.enumerate() names them), or run them in the audit's own process "
+                f"(--negative-workers 1). No worker was forked and nothing is retried")
+            if self.refused is not None:
+                self.refused(self.timing())
+            raise NegativeFailed(self.stage["refused"])
         ctx = multiprocessing.get_context("fork")
         t0, need, own = time.time(), self.need(), self.own()
         self.stage.update(need=need, audit=own, memory={"audit": process_memory(), "lean": lean_server_memory()})
