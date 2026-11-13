@@ -1,4 +1,4 @@
-"""`verity config` and `verity run` (`verity_cli.run`, `verity.configuration.deploy.config`): the configuration's refusals by name,
+"""`verity config` and `verity run` (`verity_cli.run`, `verity.config`): the configuration's refusals by name,
 a list of subprotocols that is neither composite's among them, its hash, the example reproduced by `config new`, and
 runs of a step-0 table (`step0.py`) for onsite and remote: its entries in this process, and core's sampled-proofs
 parties in the deployment layer's live run, on a machine with stand-in capabilities and a stand-in product executable,
@@ -14,12 +14,12 @@ from pathlib import Path
 
 import pytest
 
-from verity.configuration.deploy import config as K
-from verity.configuration.deploy.manifest import Channel, Role
+from verity import config as K
+from verity.protocol import Channel, Role
 from verity.protocols.certifier.verifier.warden import WardenParams
 from verity.protocols.spot.verifier import parties as SP
 from verity.protocols.spot.verifier.one_stage import registration as RG
-from verity.configuration.wire import Refused
+from verity.channel import Refused
 from verity_cli import run as R
 
 EXAMPLE = Path(__file__).parent / "fixtures" / "config.toml"

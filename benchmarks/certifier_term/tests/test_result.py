@@ -36,7 +36,7 @@ sys.path.insert(0, str(HERE.parent))
 
 import run as R  # noqa: E402
 from verity.hardware import registration  # noqa: E402
-from verity.hardware.site import OUTSIDE, TICK, Link, Loc  # noqa: E402
+from verity.device import OUTSIDE, TICK, Link, Loc  # noqa: E402
 from verity_bench import kit  # noqa: E402
 
 LB = R.calculator()
@@ -280,7 +280,7 @@ def test_capacity_is_read_from_the_registered_uplink_and_verified_is_capacity_le
             assert verified["inputs"] == ["modeled", f"{name}/capacity", f"{name}/free", *basis]
             assert capacity["inputs"] == [
                 "modeled", f"registration {registration.head(composite, entries)}, read as given: host node0's certified boundary "
-                f"link(s) uplink0 at beta {BETA}, in bits each way a tick of 1/1000000000 s (verity.hardware.site)",
+                f"link(s) uplink0 at beta {BETA}, in bits each way a tick of 1/1000000000 s (verity.device)",
                 R.SCALED, f"modeled: benchmarks/network_traces/leak_bounds.py's row scan at D_j = 2, scope {scope.name}, "
                 f"period {period}, request count given", *basis]
     assert "beta is each way and the term is egress, so one direction" in R.SCALED
