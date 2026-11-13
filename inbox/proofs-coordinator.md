@@ -136968,3 +136968,39 @@ Nothing.
 - `cursor/proofs-sessionof2-7c3a` `b49c6e40619f1a536313df29427a00a048a856f7`, pushed, compiled.
 - `cursor/proofs-sessionof-5c1e` `521933e1430b7b404142adfafbba82b0aed0fba5`, untouched.
 - No try out.
+
+## FIRSTACCEPT, Fri 11:03Z: the driver runs: 300 members of two templates on a stand-in window reach v2's refusal with every check passed, in 311 s at a 641 MB peak; the seconds grow by about one a member, the peak does not
+
+Run `r20261113-103556-a7d5` on vy-nebius-cpu-14, 16 cores, commit `9683ae5e92d` on `cursor/proofs-firstaccept-files-3c9d` (off `cursor/proofs-windowat-5e4b` at `e977fbc96f6`). No pull request. Builds 10:36Z to 10:40Z, windows 10:40Z to 10:57Z.
+
+**1. What runs.** [run] Each window: two templates (`ScaledMmS8Coordinate` at K = 128 and K = 256), half the members each, one unit a member, under `stratified:1`. One member of each template is sampled; the rest share their template's circuit unsampled, as a served window's members do. The audit is the served harness's audit step (`records_audit.py audit`, local challenger, `--deployed-key`, `FLOCK_CHALLENGER=1`). Then the new driver runs v2's `refusal` on the case it writes.
+
+| members | blobs in the case | statements | refusal | seconds | peak RSS | bytes given |
+|---|---|---|---|---|---|---|
+| 300 | 308 | 2 | `ALL_PASSED`, decided, exit 1 | 310.6 | 641 MB | 134.9 MB |
+| 100 | 108 | 2 | `ALL_PASSED`, decided, exit 1 | 109.9 | 690 MB | 134.1 MB |
+
+The peak is v2's process alone (wait4). The audit took 411.7 s and 181.0 s. Results are in `out/standin/m300/result.json` and `m100/result.json` of the run.
+
+**2. What the branch changes.** [read] Three things, all in `benchmarks/one_stage/`. Nothing under `verifier/`, no Lean, no main.
+- `a5.members_proof`: each member names its template's circuit file (`mm["circuit"]`, the one its first member composed), not `m<k>/circuit.txt` in its own directory.
+- `a5.case_members`: the case lists each path once.
+- `case_files.py` (new): the driver. It links each distinct file once into a directory as `0`, `1`, ..., writes the parameters, record and evidence there as `p`, `c` and `e`, and runs the executable from there with the stack limit raised to 24 MiB. It refuses before the run if the arguments would pass Linux's cap. `members_standin.py` and `.sh` run the stand-in. Tests: `test_case_files.py` (3) and one more in `test_a5_case_v2.py`; both files pass on my VM [run].
+
+**3. Before the change, this case had no check.** [run] Of the 300 staged members, 296 have no circuit file of their own; of the 100, 96. The carried tree's case names that missing file for each, so v2's `readBinFile` fails before any check. [derived] On Thursday's window that is every member but the 391 with a staged `circuit.txt`: about 102,390 missing paths.
+
+**4. Correction to my 11:30Z entry.** [run] Linux caps a command's arguments and environment at 6 MiB, pointers included, however high the stack limit. I measured it on my VM under a 64 MB stack: 5.5 MiB of arguments runs, 6.5 MiB fails with E2BIG. My line "a 64 MB stack allows 16 MB" is wrong. The plan still holds: [derived] Thursday's case listed once is about 104,000 blobs, and under short names they take about 1.6 MB, under the cap; under their own paths, at about 100 bytes a path, they take about 11 MB and pass it. So the short names carry the load, and the stack limit only lifts the 2 MB default to the 6 MiB cap.
+
+**5. What this says about Thursday's window.** [derived, from the two rows]
+- Seconds: 200 more members cost 200.7 s more, so about 1.0 s a member, for a circuit of about 66 MB. That is about 15 s per GB of circuit parsed once per member. The fixed part is about 10 s here.
+- At that rate, the files' pass on Thursday's window parses 6.34 TB at least, about 26 hours; about 115 TB if members spread evenly over the templates, about 20 days. Parsed once per file (MEMBERS's Lean side), it is 333 GB, about 1.4 hours.
+- Peak: flat in the number of members, since each file is held once. For Thursday's window that is about 355 GB of files held, plus one member's parse, at most about 123 GB for the largest circuit: about 480 GB.
+
+**Not established**
+- That the 1.0 s a member is the parse. It could be partly the public file's checks. I did not time inside the executable.
+- That the rate holds for circuits 300 times larger (the largest is 21.9 GB).
+- That the served window's 104,000 blobs run through the driver. I have run 308.
+- How many members each template has on Thursday's window (in `summary.json`, vllm's).
+- The audit's own seconds per member on a served window (1.15 s here); not asked, and Thursday's audit staged faster.
+
+Next: nothing runs. The branch waits for the carry. I take MEMBERS's lemma when it lands and rerun this case on it.
