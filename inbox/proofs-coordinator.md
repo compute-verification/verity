@@ -157478,3 +157478,46 @@ Pushed at 19:05Z, a fast-forward `927258036e8..462ef981d91`, nothing forced [run
 **Not established.** That the carried head builds with the mend: `fe60` answers it [derived]. Anything at `462ef981d91e` but the two merges and the pins: no test and no play has run there yet [run]. No records run is out at the carried head, as you said the join's count [relayed: your 18:49Z]. No play through the compiled form; those are STAGECOINS's [relayed: your 14:18Z].
 
 **Next.** The entry "merge GATHER at <40 hex>" when the three are back [derived]. If the build asks for a mend, it is a commit on top and that entry names the new head [derived]. A timer every 20 minutes until then [run].
+
+## STOPDRIVER, Fri 13 Nov 19:21Z: the four suites PASS at the merged head `b678f3affc5a`; B's mend holds; B's PR waits on `c4f7`
+
+`cursor/proofs-stopdriver-family-ffc6` `ca7a92c6985220c77bf22f6590983303f45ac3d5` B, no pull request yet
+`cursor/proofs-stopdriver-family-hold-ffc6` `bf701e54dc6eebd3d7e8dde26d2759a0558eb1b9` B, the mended hold, one mend
+
+**1. The merged head `b678f3affc5a`**
+
+- [run] `r20261113-182809-43bf`, vy-nebius-cpu-11, exit 0, the four suites with `--quick`: all four passed.
+  `verity-core-composition` 86 passed (it was 23 passed and 63 errors at `5f0288f9993c`);
+  `verity/protocols/proofs/spot/verifier` 970; `benchmarks/one_stage` 1105; `verity-core-sampled-proofs` 426 with
+  2 skipped.
+- [read] `--quick` leaves out the composition test on the kept play, which is marked slow. It is in `7f56` only.
+- [run] The play and the composition test on it passed (`1ee0`, my 18:58Z entry).
+- `7f56` (the named tests) took its slot about 19:16Z: it lost the shared tree's lock to `43bf` and then waited
+  for a slot. Due back about 19:35Z [guess].
+
+**2. B's old head `1cf9a938a3ae`: the changed suites, final**
+
+- [run] `6798` ended 18:51Z, exit 1: 68 suites, 66 passed, 2 failed. Both failures are the read guard on
+  `window_place.py`: `benchmarks/spot_proved` and circuit-check. No test failed in any suite.
+
+**3. B's new head `ca7a92c69852`**
+
+- [run] `r20261113-183547-e9c1`, vy-nebius-cpu-11, exit 0: `benchmarks/spot_proved` 101 passed and
+  `verity/circuits/requirement` 22 passed, both whole. So the mend cures the suite that failed.
+- [run] `r20261113-183527-3c78`, vy-nebius-cpu-2, still running at 19:18Z: the verifier's two files 102 passed,
+  the driver's four files 40 passed, the nine other files 88 passed. The root's three files are not back.
+- [run] `r20261113-183612-c4f7`, vy-nebius-cpu-1: at 19:17Z 15 suites back, 15 passed. The change now touches 88
+  suites, not 68: the 20 more come with the line in circuit-check's `pyproject.toml`. Due back about 20:15Z
+  [guess]. Circuit-check is among those not back.
+- A correction to my 18:39Z entry. I guessed `requirement` passed with `--quick` because its tests that import the
+  stream are slow. That is wrong: whole, it is the same 22 tests. Its tests did not trip the guard at the old head,
+  so the line I added to its list is not needed. It only widens that suite's key. I leave it, since dropping it
+  moves B's head again and restarts `c4f7`; say so if you want it dropped.
+- B's pull request opens when `3c78` and `c4f7` end with no failure of B's.
+
+### Not established
+
+- Whether the composition test passes on the kept play at the merged head: `7f56`.
+- Whether circuit-check passes at `ca7a92c69852`: in `c4f7`, not back.
+- Whether any of the 20 suites new to the changed set fails at `ca7a92c69852`: none of them ran at B's old head.
+- No run is at `bf701e54dc6e`. It differs from `b678f3affc5a` by the three input lists only.
