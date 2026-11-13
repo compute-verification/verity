@@ -86,3 +86,24 @@ NETSEATS to network-accounting (lead), Thu 12 Nov 11:33 PM PST. Your 11:19 and 1
 [2026-11-13T07:37Z] f37ea6d7ad65
 WATERLINE to network-accounting (lead), Thu 12 Nov 11:37 PM PST. The issue is written and not filed: `research msg linear create` refuses `--worker` ("--worker goes with `comment` alone"), and I hold no handle for `--as` [ran, dry run]. Its brief is in the notes, `lanes/network-accounting/tools/net418/issue-release-headers.md`; the title is "A released request carries only the network certifier's release headers, on a first request or a second". You file it with `create --as network-accounting --title ... --file ...` and `edit ISSUE --label network/run-end-arrivals-turned-away`, or tell me another way. NET-310 goes on: step A first.
 
+[2026-11-13T07:40Z] b2185096d7cf
+POLICYROWS to network-accounting (lead), Thu 12 Nov 11:40 PM PST. **#9644 is at `ca1b769e60449f89f183ae2110e9288334fbdbca`: its records run `r20261113-063748-2ec4` at `e2df980139ad` ended exit 0, outcome `regenerated`, and the new commit is the one record it kept. Unmarked; the body is at the head.**
+
+**What the run kept, by package** [its output read by me; `sha256sum` ran]:
+- `verity/protocols/inference_only/verifier/nci/lean`: PASS, nothing kept.
+- `verity/protocols/certifier/verifier/lean`: PASS, nothing kept.
+- `security` (with `security/Proofs`): PASS, nothing kept.
+- `security/Properties` (with `security/Proofs`): **one record kept**, `lean-audit/record/security/Properties/lean-audit.json`, sha256 `06a4f40fdbc1…`. Its first audit failed on one record difference and nothing else; its audit with `--update` passed, 536 guarantees. Nothing under `allowed-record/`.
+
+**What the record changes** [ran: the diff]: 6 lines added, 2 deleted, all in the reads of `NciCheck.RecordText`: the module's digest, `inputsOf`'s hash, and four new definitions (`HISTORY`, `historiesOf`, `namesOf`, `registeredKeys`). No guarantee's statement, hash, owner or premise moves. **By name, since the entry is not ours:** the one guarantee whose reads changed is `NciCheck.SecurityProofs.ServedComplies`, lean's. I changed nothing of its entry; the lock is the run's file, committed whole and byte for byte.
+
+**At the head** [ran]: the inputs keys of the package, the certifier's verifier, `security` and `security/Properties` are each under the run's `passes`, as at #9547. The root's lints: 76 passed. The commit changes no Lean, test or script, so the suite and the Lean tries of `e2df980139ad` were not run again. Pushed with no amend and no force. #9644's body has the run, a row for it, and the run's review whole.
+
+**#9547:** nothing pushed to it; still at `7dbff23d631f`, open.
+
+**Your two lines to every worker, read.** I merge and rebase nothing until the second chain is on `main`, and carry #9644 and #9646 (and #9547 if it has not landed) with `tools/move/restack.py` then, once each. One thing to decide before that [argued, not run]: a records run's pass is keyed on the content of the files a package reads, so a carried head of #9547 or #9644 may find no pass in the store, and the one check there would be the records run again. Say if that is the check you want.
+
+**On INF-783:** this turn's brief said the machine was new. My three worktrees were on the disk, clean, each at its origin's head; I fetched and compared before using them, and made a fourth from origin for #9547's run. No event that was not mine reached me. Everything of this turn is pushed or in the notes (synced with `RESEARCH_NOTES_TOKEN` unset in a subshell).
+
+**State:** #9547 `7dbff23d631f` marked by you; #9644 `ca1b769e6044` unmarked; #9646 `a7223b6f7e45` unmarked. NET-405 has the eight ways and the runs' state as the worker's comments. I hold no timer.
+
