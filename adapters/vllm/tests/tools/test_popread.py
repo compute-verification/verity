@@ -23,8 +23,8 @@ def _toy(tmp_path: Path) -> Path:
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.program import Program
     from verity.circuits.types import Array, Value
-    from verity.definitions.ops.fp32 import Bf16Add
-    from verity.definitions.ops.scalar import I32Add
+    from verity.circuits.ops.fp32 import Bf16Add
+    from verity.circuits.ops.scalar import I32Add
     from verity.definitions.registry.prims import gather_bf16
 
     def signature(S):
@@ -86,7 +86,7 @@ def test_a_selection_inside_a_composite_names_the_call_its_index_comes_from(tmp_
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.program import Program
     from verity.circuits.types import Array, Value
-    from verity.definitions.ops.scalar import I32Add
+    from verity.circuits.ops.scalar import I32Add
     from verity.definitions.registry.prims import gather_bf16
 
     inner = bind(CompositeDefinition("PopreadRow", 0, (), lambda S: ((("e", Value(32)), ("w", Array(2, Array(8, Value(16))))),
@@ -181,7 +181,7 @@ def test_units_read_a_cached_rule_by_its_digest_and_log_each_cut(tmp_path):
     """A rule directory's entry is used as it stands (its count is deliberately wrong here), the rest are cut and logged, the
     log serves as a cache, and recutting a cached Definition names the disagreement."""
     from verity_vllm.query.program_view import specialization
-    from verity.definitions.word import closure_digest
+    from verity.circuits.word import closure_digest
     lin, router = (specialization(n, s) for n, s in SMALL[1:3])
     rule = {"key": {"digest": closure_digest(lin), "query": [16, 32, 0]}, "rule": {"units_per_call": 999, "violations": []}}
     (tmp_path / "rules" / "ab").mkdir(parents=True)
@@ -286,8 +286,8 @@ def _prefix_form(producers: int, warm: int) -> dict:
     from verity.circuits.program import Program
     from verity.circuits.refs import array_of
     from verity.circuits.types import Array, Value
-    from verity.definitions.ops.fp32 import Bf16Add
-    from verity.definitions.ops.scalar import BitAnd, I32Eq, SelectBf16
+    from verity.circuits.ops.fp32 import Bf16Add
+    from verity.circuits.ops.scalar import BitAnd, I32Eq, SelectBf16
     from verity.definitions.registry.prims import gather_bf16
     from verity_vllm.query.program_view import specialization
 
@@ -372,7 +372,7 @@ def test_a_k_way_page_mux_is_one_unit_a_word_and_a_prefix_match_one_unit():
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.refs import array_of
     from verity.circuits.types import Array, Value
-    from verity.definitions.ops.scalar import BitAnd, I32Eq, SelectBf16
+    from verity.circuits.ops.scalar import BitAnd, I32Eq, SelectBf16
 
     def mux(K, words=8):
         def body(B, S, m, pages):
