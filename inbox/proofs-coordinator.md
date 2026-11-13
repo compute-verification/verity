@@ -111223,3 +111223,46 @@ No Lean slot opened in 37 minutes across two machines, so nothing new is compile
 ### To post
 
 For infra [run]: in the last 37 minutes, cpu-8 and cpu-11 each refused every check slot for memory, which live runs reserve beyond what the machine has (cpu-11 at 00:54Z: -151 GB free, 584 GB reserved).
+
+## HISTORY, Fri 13 Nov 01:00Z: `PrintsTwo` and `SignsPlay` at the two-session history compile, with no axiom beyond the three; my branch itself can't build yet, because CUT's and TWOLEG's files it imports have never compiled and fail (exact errors and fixes below)
+
+**In plain words.** The device's record of the two-stage audit's two sessions now checks in Lean, and so do the proofs that the device printed the play's log and signed what the play's signatures are on. To get there I patched, in a scratch copy only, five proofs in CUT's and TWOLEG's files that don't compile yet. Lean's axiom report shows that my two facts don't use those five proofs. The two theorems of mine that hand the facts to CUT's cut do use them, so those two are done only when CUT's and TWOLEG's files compile.
+
+Clock: `date -u` read 00:59Z. Mailbox read at 00:49Z (your 00:48Z ruling on the first draw's family is for COINMAP, STAGECOINS and TWOLEG; nothing in my file changes).
+
+**1. Runs** (all on vy-nebius-cpu-12, each took a slot within 2 s of launch) [run].
+- `r20261113-003714-5988`, my branch at `4fc3f75d04`: failed in about 4 minutes, before reaching my file. `SampledTwo/Steps.lean` (TWOLEG's) and `SampledTwo/Cut.lean` (CUT's) don't elaborate; errors in section 3.
+- `r20261113-004454-087b`, `r20261113-004715-f27f`: two scratch rounds, each one patching the next errors in those files.
+- `r20261113-004912-0f68`, scratch commit `300f988c91` on a detached worktree, never pushed: my branch at `4fc3f75d04` plus stubs in others' files. **done, rc 0.** "`Device.lean`: lean exit 0 in 234 s". Siblings: no name clash. Axiom probe: "2 of its 31 theorems use axioms beyond propext, Classical.choice and Quot.sound: `binds_dev₂` (sorryAx); `cut_dev₂` (sorryAx)". Both reach stubs: `binds_dev₂` through `CutHeld.binds_of_accepts`, which reads CUT's `binds_of_prints` (and through it `paramsAt_of_caseOf`) and TWOLEG's `accepted_steps` and `inputAt_ok`; `cut_dev₂` through those and CUT's `finders_of_break`.
+  - So `printsTwo_dev₂`, `signsPlay_dev₂`, `holdsTwo_dev₂`, `holdsTwo_play`, `Deployment.signs_le` and the rest compile against CUT's definitions of `PrintsOn`, `PrintsTwo` and `SignsPlay`, with only `propext`, `Classical.choice` and `Quot.sound`.
+  - My file had no error. It had warnings: deprecated `cond_true`/`cond_false` and an unused simp argument, fixed in `09d5ec9420`, and `if_pos`/`if_neg`, which I left as `Cut.lean` and `Soundness.lean` do.
+- `r20261113-005437-a879`: the same scratch try with `09d5ec9420` on top. **done, rc 0**, "lean exit 0 in 71 s", the same axiom probe line; my file's only warnings left are the six `if_pos`/`if_neg`.
+
+**2. Pushed** [run]. `cursor/proofs-history-d2e7` at `0c7bd6c2f4`, which merges TWOLEG's new head `3783545b6a` (no conflict) onto `09d5ec9420`. One file of mine, `SampledTwo/Device.lean` (630 lines, 31 theorems), and one lakefile line. Nothing left to write in it. Nothing unpushed. The scratch stubs are not on any branch.
+
+**3. For TWOLEG and CUT: what doesn't compile in your files** [run: `5988`, then the scratch rounds]. Each patch below is what I used in scratch, not committed anywhere.
+- TWOLEG, `SampledTwo/Steps.lean` at `052eb3aba5` [read: the same two faults at your new head `3783545b6a`, no `open Spot` and the same `sourceRead_le` proof]:
+  - Every `OneStage.*` and `OneStageZk.*` name is unknown (31:60 and on): the file's namespace is `VStar.Recursive.SampledTwo` and it doesn't `open Spot`. Adding `open Spot` after `open Lean (Json)` fixed the names.
+  - `sourceRead_le` (117:4, 118:4): `split at h` doesn't reduce the `if`. This compiled in its place: `by_cases hlt : read < ξ.size` then `· simp [hlt] at h` and `· omega`.
+  - With `open Spot` in, `inputAt_ok` still fails (unsolved goals at 55, 58, 61, 64, 67, 75 to 79, and an argument mismatch at 74:15), and so does `accepted_steps` (argument mismatch at 109:42). I stubbed both. `CutHeld.interiorHeld_of_accepts` reads both.
+- CUT, `SampledTwo/Cut.lean` at `6d551cb5a4`:
+  - 97:2, `atDeployed_eq`: `simp only at h1 h2 h3` makes no progress. Deleting the line compiled.
+  - 122:73, `boundaryOf`: `p.boundary` is already a `Spot.OneStage.Params` in the base's `SampledTwo.lean`, not `Json`. `pure p.boundary` compiled; whether that is the reading you meant is yours to say.
+  - 265:6, `forger`: `if keyOf θ = some x.1.key` has no `Decidable` instance. `open Classical in` placed before the docstring compiled; after the docstring it is a parse error.
+  - 377:18, `finders_of_break`: `hf` is `List.findSome? forgeryOf l = some …` where `(forger …).out t = some …` is expected. I stubbed the proof.
+- CUT, `SampledTwo/CutPrints.lean` at `6d551cb5a4`: `paramsAt_of_caseOf` (248:2, `dsimp` made no progress) and `binds_of_prints` (393:8, "(kernel) invalid projection"). I stubbed both.
+- [run] With those patches, `CutHeld.lean` compiles with no error of its own.
+
+**4. Left** [derived]. In my file, nothing. My branch builds as soon as `Steps.lean`, `Cut.lean` and `CutPrints.lean` do on their branches; then I merge them and run the try on my branch. `binds_dev₂` and `cut_dev₂` become clean when the five stubbed proofs are proved on their branches. [guess] Compile hour on my branch: within 15 minutes of CUT's and TWOLEG's fixes landing on their branches.
+
+STOP RULE: nothing. No listed guarantee, lock, named assumption, accept switch or `Sampled/` file is touched.
+
+NEEDS:
+1. TWOLEG (`cursor/proofs-twoleg-c5e5`): `Steps.lean` to compile (section 3).
+2. CUT (`cursor/proofs-cut-9323`): `Cut.lean` and `CutPrints.lean` to compile (section 3), with `binds_of_prints`, `paramsAt_of_caseOf` and `finders_of_break` proved.
+3. COINMAP: the split, as in my 00:04Z entry. Until then `cut` is a parameter and `NoHello` a condition of `holdsTwo_dev₂`.
+4. Whoever builds the two-session deployment: a proof of `Apart` at it (my 00:39Z entry).
+
+To post: nothing.
+
+Not established: that my branch builds (it can't until NEEDS 1 and 2). That `binds_dev₂` and `cut_dev₂` rest on no `sorry` (they rest on five of CUT's and TWOLEG's proofs, stubbed in scratch). The known hole stays open: a history holds earlier runs and ledger lines only on other windows, so on the play's own two windows it holds exactly this play's runs; the key pins replace that step on Tue 17 Nov.
