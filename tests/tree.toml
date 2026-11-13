@@ -149,6 +149,12 @@ owner = "top"
 day = "2026-11-13 08:00 PST"
 
 [[tree]]
+path = "verity/registration/"
+means = "checks what was registered, before any challenge: the hardware against its data sheets, the circuit compiler, the commitments to other information, every device accounted for"
+owner = "proofs"
+day = "2026-11-20"
+
+[[tree]]
 path = "verity/protocols/"
 means = "the protocols in three groups, proofs/, accounting/ and policy/, with compose/ and experimental/ beside them"
 
