@@ -217,7 +217,8 @@ def warden_frame(run: Path, at: int | None = None) -> dict:
     default) changed in its bucket's row, and the row opened at its position. The honest row's read climbs to the
     signed root and the changed one's doesn't (`WARDEN_READ`)."""
     try:
-        WR, WS = importlib.import_module(WARDEN_ROWS_MODULE), importlib.import_module("benchmarks.network_traces.warden_serve")
+        WR = importlib.import_module(WARDEN_ROWS_MODULE)
+        WS = importlib.import_module("benchmarks.network_traces.warden_serve")
     except ModuleNotFoundError as err:
         raise NotApplicable(f"no warden cells: {err.name} isn't in this tree") from None
     link, direction = WS.CERTIFIED[WS.EGRESS]

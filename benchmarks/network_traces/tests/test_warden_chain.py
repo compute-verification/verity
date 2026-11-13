@@ -24,8 +24,8 @@ import pytest
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.append(str(Path(__file__).resolve().parents[3]))  # the root, for benchmarks.network_traces
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from test_scan_zk import published, sz  # noqa: E402
 
