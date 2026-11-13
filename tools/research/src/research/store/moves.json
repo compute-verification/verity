@@ -2229,6 +2229,23 @@
         "verity/protocols/pouw/clear/": "verity/protocols/pouw/verifier/clear/",
         "adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/": "verity/protocols/pouw/prover/kernels/pouw_cuda/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/pouw/receipts/": "verity/protocols/pouw/verifier/receipts/",
+        "benchmarks/pouw/pearl_c/": "verity/protocols/pouw/prover/kernels/pearl_c/",
+        "benchmarks/pouw/pearl_c_sm120/": "verity/protocols/pouw/prover/kernels/pearl_c_sm120/",
+        "benchmarks/pouw/served_zk/hm96_rows.cu": "verity/protocols/pouw/prover/kernels/hm96_rows.cu",
+        "benchmarks/pouw/pearl_c_sm90/acc.h": "verity/protocols/pouw/prover/kernels/pearl_c_sm90/acc.h",
+        "benchmarks/pouw/pearl_c_sm90/debit_sm90.cu": "verity/protocols/pouw/prover/kernels/pearl_c_sm90/debit_sm90.cu",
+        "benchmarks/pouw/pearl_c_sm90/hash_prefill.cuh": "verity/protocols/pouw/prover/kernels/pearl_c_sm90/hash_prefill.cuh",
+        "benchmarks/pouw/pearl_c_sm90/hash_prefill_host.cpp": "verity/protocols/pouw/prover/kernels/pearl_c_sm90/hash_prefill_host.cpp",
+        "benchmarks/pouw/pearl_c_sm90/pearl_c_sm90.cu": "verity/protocols/pouw/prover/kernels/pearl_c_sm90/pearl_c_sm90.cu",
+        "benchmarks/pouw/pearl_c_sm90/build.sh": "verity/protocols/pouw/prover/kernels/pearl_c_sm90/build.sh",
+        "benchmarks/pouw/pearl_c_sm90/run.py": "verity/protocols/pouw/prover/kernels/pearl_c_sm90/run.py",
+        "benchmarks/pouw/pearl_c_sm90/fixture.py": "verity/protocols/pouw/prover/kernels/pearl_c_sm90/fixture.py",
+        "benchmarks/pouw/pearl_c_sm90/sass_gate.py": "verity/protocols/pouw/prover/kernels/pearl_c_sm90/sass_gate.py"
+      }
     }
   ]
 }

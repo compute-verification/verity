@@ -12,7 +12,7 @@ alone. `h200.sh` is the command of the `research run` that starts it and the GLM
 header has the full command and its switches.
 
 ~~~text
-bash benchmarks/pouw/pearl_c_sm90/build.sh [OUT]   # off the card, nvcc 12.8 or later; default /tmp/pearl-c-sm90-ship
+bash verity/protocols/pouw/prover/kernels/pearl_c_sm90/build.sh [OUT]   # off the card, nvcc 12.8 or later; default /tmp/pearl-c-sm90-ship
 bash benchmarks/pouw/pearl_c_sm90/h200.sh          # under research run, with OUT sent as ship.tar
 python3 run.py [check.json]                        # in the built tree, on the card
 ~~~

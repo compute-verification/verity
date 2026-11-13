@@ -6,7 +6,7 @@
 #pragma once
 #include <cstdint>
 
-#include "../../../verity/definitions/kernels/sha512.cuh"
+#include "../../../../../definitions/kernels/sha512.cuh"
 
 #ifndef DEV
 #define DEV __device__ __forceinline__

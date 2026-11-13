@@ -1,13 +1,14 @@
-"""Pearl-C's sm_90a GPU check fixture, built off the card (needs verity and numpy): inputs at a small shape and every buffer
-pearl_c_sm90.cu's kernels write, in its row-major layout (every operand in natural order along k), for forming v1 on
-`pearl_c_device.H100` (G = 4: `pearl-c-h100-v1-h3`), hashing format -h3 (SHA-512 throughout); the unpromoted plain
-baseline (gemm_fast's y_fast) on the H100 record without promotion (`H100_UNPROMOTED`, no scheme of its own).  Forming,
-lines and hashes come from `verity.protocols.pouw.prover.schemes.pearl_c` on the device record; the products over every
-cell are batched in numpy (the chains window by window, the peel with `verity.definitions.kernels.tc.group_sum_total_batch` on the
-record's peel step), and one whole 64 x 64 tile is recomputed by the scheme (`encode`, `checked`, `digest`) and must
-agree.  run.py compares the device's buffers with these bytes before it times anything.
+"""Pearl-C's sm_120 GPU check fixture, built off the card (needs verity and numpy): inputs at a small shape and every buffer
+pearl_c_sm120.cu's kernels write, in its row-major layout (A' and B~'s codes and the transposed F lines in K32 order along k,
+`k32`; every product over k is the unpermuted operands'), for forming v1 on `pearl_c_device.SM120` (G = 4) and
+`SM120_UNPROMOTED`, hashing format -h3 (SHA-512 throughout).  Forming, lines and hashes come from
+`verity.protocols.pouw.prover.schemes.pearl_c` on the device record; the products over every cell are batched in
+numpy (the chains window by window, the peel with `verity.definitions.kernels.tc.group_sum_total_batch`
+on the record's peel step), and one whole 64 x 64 tile per variant is recomputed by the scheme (`encode`, `checked`,
+`digest`) and must agree.  Pearl's tickets are not part of `pearl-c-sm120` (no PoUW check reads them), so nothing here
+computes them.  run.py compares the device's buffers with these bytes before it times anything.
 
-  uv run python benchmarks/pouw/pearl_c_sm90/fixture.py OUT_DIR [m n k]     (default 256 384 1024; m, n multiples of 128)
+  uv run python verity/protocols/pouw/prover/kernels/pearl_c_sm120/fixture.py OUT_DIR [m n k]     (default 256 384 1024; m, n multiples of 128)
 
 The instance is a one-unit epoch as `verity.protocols.pouw.verifier.audit` starts it: B's `audit.HM96` row tree under a
 fixed prover salt key (`SALT_KEY`), the salt from the salt coin of the gate's test challenger (`test_challenger`,
@@ -16,8 +17,8 @@ output the device derives, `line_a`) and each row's seed and line key from its S
 OUT_DIR/check.json (the shape, keys, seeds, the coin commitment and the salt coin's opening, and per buffer its file, dtype
 and SHA-256; `key_files` holds `audit.hm96_kernel_constants`, too large for the keys' hex) and the buffers as raw
 little-endian files: `common` (both trees and row digests, seed_A and E_A's line keys, the row seeds, lines, inputs,
-forming, the plain and adopted baselines) and per variant (`h100`) the chains and everything after them, through the tile
-leaves and the tile tree.
+forming, the plain and adopted baselines) and per variant (`sm120`, `sm120-unpromoted`) the chains and everything after
+them, through the tile leaves and the tile tree.
 """
 
 from __future__ import annotations
@@ -27,7 +28,6 @@ import itertools
 import json
 import multiprocessing
 import sys
-from dataclasses import replace
 from multiprocessing.pool import Pool
 from pathlib import Path
 
@@ -51,17 +51,16 @@ from verity.protocols.pouw.prover.schemes import pearl_c as C  # noqa: E402
 from verity.protocols.pouw.prover.schemes import pearl_kw as P  # noqa: E402
 from verity.protocols.pouw.prover.schemes.pearl_c_device import (  # noqa: E402
     DEVICES,
-    H100,
+    SM120,
+    SM120_UNPROMOTED,
     Device,
 )
 
-VARIANTS = (H100,)
-#: the plain baseline unpromoted (gemm_fast): one accumulator over all of k on the H100's atom
-H100_UNPROMOTED = replace(H100, name="h100-unpromoted", g=None)
+VARIANTS = (SM120, SM120_UNPROMOTED)
 CASE, INDEX, WEIGHT = "gpu-check", 5, 1
-COINS = b"verity-pouw/pearl-c-sm90-gpu-check/coins"
+COINS = b"verity-pouw/pearl-c-sm120-gpu-check/coins"
 #: the check's prover hm96 salt key (a served run samples its own)
-SALT_KEY = hashlib.sha256(b"verity-pouw/pearl-c-sm90-gpu-check/salt-key").digest()
+SALT_KEY = hashlib.sha256(b"verity-pouw/pearl-c-sm120-gpu-check/salt-key").digest()
 
 
 def test_challenger() -> Challenger:
@@ -199,39 +198,17 @@ class Out:
 
 
 def rowmajor(x: np.ndarray) -> bytes:
-    """pearl_c_sm90.cu's layout of a (rows, depth) byte matrix: row-major, depth contiguous, natural order along k."""
+    """pearl_c_sm120.cu's layout of a (rows, depth) byte matrix: row-major, depth contiguous (the layout function that
+    replaces the H100's `tiled`)."""
     return np.ascontiguousarray(x, np.uint8).tobytes()
 
 
-def e4m3_values(codes: np.ndarray) -> np.ndarray:
-    """E4M3 codes' values as FP32 (exact: every finite E4M3 value is one); no NaN code (0x7F, 0xFF) is passed."""
-    c = codes.astype(np.int64)
-    e, m = (c >> 3) & 0xF, (c & 7).astype(np.float64)
-    v = np.where(e == 0, m / 8 * 2.0 ** -6, (1 + m / 8) * np.exp2(e - 7.0))
-    return np.where(c & 0x80, -v, v).astype(np.float32)
-
-
-def widen_case(out: Out, rows: int, k: int) -> dict:
-    """B's widening (run.py's WIDEN) on a stored B of `rows` rows (a partial last 128-row block when 128 doesn't divide
-    them): random BF16 words, widened exactly; random E4M3 codes (no NaN) with an FP32 scale per 128 x 128 block, exponents
-    from 2^-135 (FP32 subnormals, so a flush would show) to 2^0, each product RN in FP32."""
-    rng = np.random.default_rng(20261023)
-    words = rng.integers(0, 1 << 16, (rows, k), dtype=np.uint16)
-    codes = rng.integers(0, 256, (rows, k), dtype=np.uint8)
-    codes[(codes & 0x7F) == 0x7F] ^= 1
-    sb = (-(-rows // 128), -(-k // 128))
-    exps = rng.integers(-135, 1, sb)
-    exps.flat[:3] = (-135, -122, 0)       # a subnormal scale, a normal one with subnormal products, and 1
-    scales = (np.exp2(exps.astype(np.float64)) * (1 + rng.random(sb))).astype(np.float32)
-    xb_fp8 = e4m3_values(codes) * np.repeat(np.repeat(scales, 128, 0), 128, 1)[:rows, :k]
-    out.put("widen_src_bf16", words.astype("<u2"), "u16")
-    out.put("widen_src_fp8_block", codes, "u8")
-    out.put("widen_scales", scales.astype("<f4"), "f32")
-    out.put("widen_xb_bf16", (words.astype(np.uint32) << 16).astype("<u4"), "u32")
-    out.put("widen_xb_fp8_block", xb_fp8.astype("<f4"), "f32")
-    names = {"src_bf16": "widen_src_bf16", "src_fp8_block": "widen_src_fp8_block", "scales": "widen_scales",
-             "xb_bf16": "widen_xb_bf16", "xb_fp8_block": "widen_xb_fp8_block"}
-    return {"shape": [rows, k], "files": {key: out.files[name] for key, name in names.items()}}
+def k32(x: np.ndarray) -> np.ndarray:
+    """pearl_c_sm120.cu's K32 order along the last axis (form_s5's codes, the lines' transposed F lines): within each
+    aligned 32, position 8q + 2b + s holds column 8b + 2q + s, the transpose of the 4 x 4 grid of column pairs (an
+    involution, so the same gather undoes it)."""
+    t = np.arange(x.shape[-1])
+    return x[..., (t & ~31) | (t >> 1 & 3) << 3 | (t >> 3 & 3) << 1 | (t & 1)]
 
 
 def chain(a: np.ndarray, b: np.ndarray, ii: np.ndarray, jj: np.ndarray, device: Device, block: int = 1 << 16) -> np.ndarray:
@@ -291,7 +268,7 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     assert m % 128 == 0 and n % 128 == 0 and k % 1024 == 0, (m, n, k)
     out_dir.mkdir(parents=True, exist_ok=True)
     ra, rb = CV.rows_f32(CASE, "A", m, k), CV.rows_f32(CASE, "B", n, k)
-    scheme = C.PearlC(forming="v1", device=H100, hashing="h3")
+    scheme = C.PearlC(forming="v1", device=SM120, hashing="h3")
     h = scheme.commitment_hash
     mm = Matmul(INDEX, Shape(m, k, n), WEIGHT)
     coins = test_challenger()
@@ -307,7 +284,7 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     keys = keys_of(scheme, epoch, mm, noise.seed_b)
     keys["salt_key"] = SALT_KEY
     dom_t = transcript_domain(epoch, len(scheme.tiles(mm.shape)), h)
-    manifest = {"schema": "verity-pouw/pearl-c-sm90-gpu-check/v1", "shape": [m, n, k], "case": CASE, "layout": "rowmajor",
+    manifest = {"schema": "verity-pouw/pearl-c-sm120-gpu-check/v4", "shape": [m, n, k], "case": CASE, "layout": "rowmajor, k32",
                 "hashing": scheme.hashing, "weight": WEIGHT, "coins": coins.commitment.to_json(), "salt_opening": salt_opening.to_json(),
                 "keys": {name: x.hex() for name, x in keys.items()},
                 "seeds": {"seed_a": noise.seed_a.hex(), "seed_b": noise.seed_b.hex(), "salt": epoch.salt.hex(),
@@ -332,15 +309,15 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
         o.put(f"{name}_codes", x, "u8")
     faT, fbT = lines["fa"].T.copy(), lines["fb"].T.copy()
     fbT128 = padded(fbT, 128)
-    o.put("faT32", rowmajor(faT), "u8")
-    o.put("fbT32", rowmajor(fbT), "u8")
-    o.put("fbT128", rowmajor(fbT128), "u8")
+    o.put("faT32", k32(faT), "u8")
+    o.put("fbT32", k32(fbT), "u8")
+    o.put("fbT128", k32(fbT128), "u8")
     o.put("xa", b"".join(ra), "u8")
     o.put("xb", b"".join(rb), "u8")
     # fork: the workers unpickle `_side` from this module, which callers load from its path, not by an importable name
     with multiprocessing.get_context("fork").Pool() as pool:
-        a, e_a = form(pool, H100, ra, 0, noise.seed_a, noise.seed_b, k, e_rows)
-        b, e_b = form(pool, H100, rb, 1, noise.seed_b, noise.seed_b, k)
+        a, e_a = form(pool, SM120, ra, 0, noise.seed_a, noise.seed_b, k, e_rows)
+        b, e_b = form(pool, SM120, rb, 1, noise.seed_b, noise.seed_b, k)
     inv = {}
     for tag, side in (("a", a), ("b", b)):
         o.put(f"alpha_{tag}", np.array(side.alpha, "<u4"), "u32")
@@ -350,8 +327,8 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
         inv[tag] = recip(np.array(side.alpha, np.uint32))
         o.put(f"ia_{tag}", inv[tag], "u32")
     at, bt = np.array(a.codes, np.uint8), np.array(b.codes, np.uint8)
-    o.put("at", rowmajor(at), "u8")
-    o.put("bt", rowmajor(bt), "u8")
+    o.put("at", rowmajor(k32(at)), "u8")
+    o.put("bt", rowmajor(k32(bt)), "u8")
     fa_vals = np.frombuffer(b"".join(ra), "<f4").reshape(m, k)
     fb_vals = np.frombuffer(b"".join(rb), "<f4").reshape(n, k)
     qa, sa = plain(fa_vals)
@@ -360,14 +337,12 @@ def build(out_dir: Path, m: int = 256, n: int = 384, k: int = 1024) -> dict:
     o.put("qb", rowmajor(qb), "u8")
     o.put("sa", sa, "u32")
     o.put("sb", sb, "u32")
-    o.put("y_plain", glue_y(product(H100, qa, qb), sa, sb), "u16")
-    o.put("y_fast", glue_y(product(H100_UNPROMOTED, qa, qb), sa, sb), "u16")
+    o.put("y_plain", glue_y(product(SM120, qa, qb), sa, sb), "u16")
+    o.put("y_fast", glue_y(product(SM120_UNPROMOTED, qa, qb), sa, sb), "u16")
     qa5, qb5 = adopted(fa_vals, a.alpha), adopted(fb_vals, b.alpha)
     o.put("qa_s5", rowmajor(qa5), "u8")
     o.put("qb_s5", rowmajor(qb5), "u8")
-    o.put("y_adopt", glue_y(product(H100, qa5, qb5), inv["a"], inv["b"]), "u16")
-    widen_files = Out(out_dir)
-    manifest["widen"] = widen_case(widen_files, max(n - 64, 64), k)
+    o.put("y_adopt", glue_y(product(SM120, qa5, qb5), inv["a"], inv["b"]), "u16")
     manifest["common"] = o.files
 
     be_a, be_b = np.array(C.scaled_noise(a, e_a), np.uint16), np.array(C.scaled_noise(b, e_b), np.uint16)

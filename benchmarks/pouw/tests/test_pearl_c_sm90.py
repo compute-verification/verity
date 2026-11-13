@@ -431,7 +431,7 @@ def test_a_programmatic_launch_waits_at_its_entry():
     assert RUN.PDL_KERNELS - set(form_kernels()) == {"gemm_words_win_d", "pa_w", "gemm_pearlc_d"}
     assert RUN.PDL_ENTRY_KERNELS == {"widen_a"} | {f"pd_commit_{v}" for v in (*RUN.PD_SERVED, *RUN.PD_STAMPED)}
     assert f'void {RUN.PDL_ENTRY_MARK}() {{}}' in SOURCE
-    assert SOURCE.index("#define PD_PDL") < SOURCE.index('#include "../pearl_c_sm120/hash_decode.cuh"')
+    assert SOURCE.index("#define PD_PDL") < SOURCE.index('#include "../../../verity/protocols/pouw/prover/kernels/pearl_c_sm120/hash_decode.cuh"')
     pd = (SM120_DIR / "hash_decode.cuh").read_text()
     entry = pd[pd.index("DEV void pd_commit_t("):]
     entry = entry[:entry.index("#endif")]

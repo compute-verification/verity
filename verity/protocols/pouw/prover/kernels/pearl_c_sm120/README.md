@@ -3,7 +3,7 @@
 Pearl-C's device kernels for sm_120a (`pearl_c_sm120.cu`: the served variant `sm120`, G = 4, and `sm120-unpromoted`),
 with hashing format -h3, SHA-512 throughout. `run.py` checks every buffer the kernels write against the CPU reference
 (`verity.protocols.pouw.prover.schemes.pearl_c`) before it times anything. Its timing is diagnostic, phase by phase; a
-number of record is the GPU harness's (`../harness/`), and the served one is `../pearl_c_vllm/`'s.
+number of record is the GPU harness's (`../../../../../../benchmarks/pouw/harness/`), and the served one is `../../../../../../benchmarks/pouw/pearl_c_vllm/`'s.
 
 ## The runner, `run.py`
 
@@ -12,8 +12,8 @@ alone. `card.sh` is the command of its `research run`: it takes the lease, binds
 `run.py` twice, the check alone on both variants and then the check and the timing. Its header has the full command.
 
 ~~~text
-bash benchmarks/pouw/pearl_c_sm120/build.sh [OUT]   # off the card, nvcc 12.8 or later; default /tmp/pearl-c-sm120-ship
-bash benchmarks/pouw/pearl_c_sm120/card.sh          # under research run, with OUT sent as ship.tar
+bash verity/protocols/pouw/prover/kernels/pearl_c_sm120/build.sh [OUT]   # off the card, nvcc 12.8 or later; default /tmp/pearl-c-sm120-ship
+bash verity/protocols/pouw/prover/kernels/pearl_c_sm120/card.sh          # under research run, with OUT sent as ship.tar
 python3 run.py [check.json]                         # in the built tree, on the card
 ~~~
 
@@ -43,7 +43,7 @@ its `$OUT`: `ship.sha256`, `check.jsonl` and `check.txt`, `run.jsonl` and `run.t
 
 The vLLM adapter loads `run.py` and `fixture.py` by path as the served kernel and names the variant by the sha256 of
 those two files, so a change to either is a new variant, which serves only once it has passed its own gate.
-`../pearl_c_sm90/` includes `hash_fast.cuh` and `hash_decode.cuh`; `../pearl_c_vllm/` and `../served_zk/` build and load
-this tree; the tests in `../tests/` run `run.py` on the stand-in driver and the hashing on its host builds. `run.py`
-reads the environment itself, because it runs outside the tree; `../settings.py` declares each variable. Nothing here
+`../../../../../../benchmarks/pouw/pearl_c_sm90/` includes `hash_fast.cuh` and `hash_decode.cuh`; `../../../../../../benchmarks/pouw/pearl_c_vllm/` and `../../../../../../benchmarks/pouw/served_zk/` build and load
+this tree; the tests in `../../../../../../benchmarks/pouw/tests/` run `run.py` on the stand-in driver and the hashing on its host builds. `run.py`
+reads the environment itself, because it runs outside the tree; `../../../../../../benchmarks/pouw/settings.py` declares each variable. Nothing here
 is a verifier, and nothing but `run.py` touches a GPU.

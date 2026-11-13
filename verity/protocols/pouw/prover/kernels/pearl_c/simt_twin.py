@@ -1,4 +1,4 @@
-"""A host build of `hash_h3.cuh` and `pearl_c_sm120/hash_fast.cuh` that runs their kernels thread for thread, for byte tests
+"""A host build of `hash_h3.cuh` and `../../verity/protocols/pouw/prover/kernels/pearl_c_sm120/hash_fast.cuh` that runs their kernels thread for thread, for byte tests
 without a GPU.
 
 Every CUDA thread of a block is a context on the launching thread (`host_threads.h`); `__syncthreads` and `__syncwarp` are one

@@ -1047,7 +1047,7 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
     control, arm, _ = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert (control.id, control.precision) == ("stock-fp8", "fp8")
     assert (arm.protocols, arm.precision, arm.control) == (("pouw:pearl-c-sm120-v1-h3",), "bfloat16", None)
-    assert arm.protocols_config == {"pouw": {"device": "cuda", "kernel": "benchmarks/pouw/pearl_c_sm120",
+    assert arm.protocols_config == {"pouw": {"device": "cuda", "kernel": "verity/protocols/pouw/prover/kernels/pearl_c_sm120",
                                              "cubin": "$PEARLC_CUBIN", "schedule": "deferred"}}
     assert arm.to_json()["protocols_config"] == arm.protocols_config
     settings = spec.arm_settings["pouw:pearl-c-sm120-v1-h3"]

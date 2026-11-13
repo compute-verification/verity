@@ -40,7 +40,7 @@
 # checkpoint's directory) is given, TAG names it in e2e.py's shape names, and WORK defaults to /workspace/research/pearl-c-sm90
 # (the research user's, where those nodes keep a run's data).
 set -euo pipefail
-KERNEL=${PEARLC_KERNEL:-benchmarks/pouw/pearl_c_sm120}; K=$(basename "$KERNEL")
+KERNEL=${PEARLC_KERNEL:-verity/protocols/pouw/prover/kernels/pearl_c_sm120}; K=$(basename "$KERNEL")
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run, or give OUT}}
 mkdir -p "$OUT"
 MODE=${MODE:-window}
@@ -78,7 +78,7 @@ UUID=${GPU_LEASE_UUID:-}; UUID=${UUID%%,*}
 export E2E_GPU_UUID=$UUID
 if [ "${STATEMENT:-}" = build ]; then
   /usr/local/cuda-13.0/bin/nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -cubin -o "$OUT/hm96_rows.cubin" \
-    benchmarks/pouw/served_zk/hm96_rows.cu || fail STATEMENT "hm96_rows.cu did not build"
+    verity/protocols/pouw/prover/kernels/hm96_rows.cu || fail STATEMENT "hm96_rows.cu did not build"
   STATEMENT=$OUT/hm96_rows.cubin
 fi
 [ -z "${STATEMENT:-}" ] || SWITCHES+=(--statement "$STATEMENT")

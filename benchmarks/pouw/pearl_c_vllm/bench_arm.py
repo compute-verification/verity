@@ -15,7 +15,7 @@ each call's noise is seeded by its index across the epoch, so no two of the engi
 against x·Wᵀ within `ERR` rel RMS, the same call's commitment twice bit for bit, and the ``hash_leaf``-omitted negative
 control changing the transcript root.
 
-Env: ``PEARLC_KERNEL`` (default the tree's ``benchmarks/pouw/pearl_c_sm120``), ``PEARLC_CUBIN`` (default the directory's
+Env: ``PEARLC_KERNEL`` (default the tree's ``verity/protocols/pouw/prover/kernels/pearl_c_sm120``), ``PEARLC_CUBIN`` (default the directory's
 build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``deferred``, the served schedule),
 ``PEARLC_SCHEME`` (default the kernel directory's record, `KERNEL_SCHEMES`), ``PEARLC_BENCH_EPOCH``. The salt coin
 is a challenger's held in this process (``in-process``, a cost measurement) unless ``PEARLC_CHALLENGER_GATE`` (infra's gate

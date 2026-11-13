@@ -16,7 +16,7 @@ from pathlib import Path
 def _harness():
     name = "pouw_harness_sass_gate"
     if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parents[1] / "harness" / "sass_gate.py")
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parents[6] / "benchmarks" / "pouw" / "harness" / "sass_gate.py")
         sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules[name])
     return sys.modules[name]

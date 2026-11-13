@@ -3130,7 +3130,6 @@
     {"file": "benchmarks/pouw/pearl_c4/replay.py", "count": 37},
     {"file": "benchmarks/pouw/pearl_c_sm90/glm53.py", "count": 1},
     {"file": "benchmarks/pouw/pearl_c_sm90/glm53_passes.py", "count": 1},
-    {"file": "benchmarks/pouw/pearl_c_sm90/pearl_c_sm90.cu", "count": 3},
     {"file": "benchmarks/pouw/pearl_c_vllm/bench_arm.py", "count": 4},
     {"file": "benchmarks/pouw/pearl_c_vllm/e2e.py", "count": 1},
     {"file": "benchmarks/pouw/pearl_c_vllm/fast_tile.py", "count": 24},
@@ -5454,6 +5453,7 @@
     {"file": "benchmarks/machine_model/verity_machine_model/lean_headline.py", "count": 7},
     {"file": "benchmarks/machine_model/verity_machine_model/lean_headline_dc.py", "count": 10},
     {"file": "benchmarks/pouw/h1_lanes/leaf.py", "count": 4},
-    {"file": "benchmarks/pouw/h1_prove/recorded.py", "count": 46}
+    {"file": "benchmarks/pouw/h1_prove/recorded.py", "count": 46},
+    {"file": "verity/protocols/pouw/prover/kernels/pearl_c_sm90/pearl_c_sm90.cu", "count": 3}
   ]
 }
