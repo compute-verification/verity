@@ -15,7 +15,8 @@ package's audit builds and reads it.
     program's proof blocks under its query are one stratum, the replay block's one Definition (`ONE_DEFINITION`), so a
     share of replay blocks by count is their share by weight; it names the challenger at the interior's key
     (`ONE_KEY`), so both stages' coins are read under one key, and a coin family other than the interior's
-    (`SAME_FAMILY`), so each stage's coins are a family of their own;
+    (`SAME_FAMILY`), so each stage's coins are a family of their own; the window root and the family it names are
+    held to the commitment's record (check, 4: `FIRST_ROOT`, `FIRST_FAMILY`), so neither is the parameters' to choose;
   * `rule`: the selection, two-stage only (`Select.Rule.twoStage`);
   * `values` and `public`: the Spec's boundary values (`{"name", "registered"}`) and the items both registrations
     show; `challenger`: the challenger's name its receipts carry; `delta`: the audit records' δ;
@@ -55,6 +56,11 @@ package's audit builds and reads it.
      record's canonical text, which must print back to that text (`readBack`, `RECORD_READ`), and the boundary's
      so read has the digest the commitment names (`digestIs`, `RECORD_DIGEST`), and the interior's, as the evidence
      carries it and so read, the interior commitment's (`interiorDigestIs`, `INTERIOR_DIGEST`);
+     the first stage's session and family are the boundary record's own: the parameters' boundary window root is the
+     run the record's window names (`firstRootIs`, `FIRST_ROOT`), and the family the parameters' boundary names is
+     the one the record's window names (`firstFamilyIs`, `Spot.Place.family`; `FIRST_PLACE` where the window names
+     none, `FIRST_FAMILY` where it names another), so the first stage's challenges are one sample the commitment
+     fixes, whatever the parameters say and however many families the first session holds;
      the evidence's first-stage bytes are exactly the ones the run's first stage read
      (`sourceRead`, `SOURCE_READ`), since the run holds only those to the challenger's coins; and on two windows the
      first session's log shows no coin of the second stage's family after the interior's digest (`interiorUnshown`,
@@ -86,8 +92,10 @@ module
 
 public import VStarRecursive.Protocol
 public import Spot.Run
+public import Spot.Place
 meta import VStarRecursive.Protocol
 meta import Spot.Run
+meta import Spot.Place
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -329,6 +337,39 @@ def digestIs (j : Json) (digest : ByteArray) : V Unit := do
   let d ← Registration.digest j
   if d = digest then pure () else throw RECORD_DIGEST
 
+def FIRST_ROOT : String :=
+  "the boundary's window root is not its record's run: the first stage's session is the one the auditor's ledger " ++
+    "opens on the record's own run"
+
+/-- **The first stage's session is the record's** (check, 4; `FIRST_ROOT`): the parameters' boundary window root
+`root` is the run the window of the boundary record `j` names (`Spot.Place.run`). The run of record reads the first
+stage's challenges from the session the auditor's ledger opens on the parameters' boundary window root; held to the
+record, that root is the commitment's and not the parameters' to choose. Refused where the parameters name no root or
+the record's window no run. -/
+def firstRootIs (root : Option String) (j : Json) : V Unit :=
+  match Place.run (getD j "window") with
+  | some run => if root = some run then .ok () else .error FIRST_ROOT
+  | none => .error FIRST_ROOT
+
+def FIRST_PLACE : String :=
+  "the boundary record's window names no place in its session: its prompt and outputs are natural numbers below " ++
+    "2^32, and a stop population is a stop class's"
+
+def FIRST_FAMILY : String :=
+  "the boundary names a family other than the one its record's layout names: a class's first stage reads one " ++
+    "family of its session"
+
+/-- **The first stage's family is the record's** (check, 4; `FIRST_PLACE`, `FIRST_FAMILY`): the family the
+parameters' boundary names, `family`, is the one the window of the boundary record `j` names (`Spot.Place.family`,
+the family of the window's place). The run of record reads the first stage's evidence as challenges of the family
+the parameters name; held to the record, a first session that holds several families has one the form reads. Refused
+where the record's window names no place (`FIRST_PLACE`), and where the parameters name no family or another
+(`FIRST_FAMILY`). -/
+def firstFamilyIs (family : Option String) (j : Json) : V Unit :=
+  match Place.family (getD j "window") with
+  | some f => if family = some f then .ok () else .error FIRST_FAMILY
+  | none => .error FIRST_PLACE
+
 def INTERIOR_DIGEST : String :=
   "the interior registration's record, as the evidence carries it or as the verifier's parser reads it, does not " ++
     "have the interior commitment's digest: the second stage's challenges are drawn after the commitment's digest, " ++
@@ -346,8 +387,9 @@ def interiorDigestIs (record j : Json) (digest : ByteArray) : V Unit := do
 
 /-- Check steps 1 to 3: the interior audit's commitment and the bytes its sample read, its sessions' run, every
 session accepting, and the run of record's input over the stamped verdicts, each registration's record as the
-verifier's parser reads it (`readBack`), the boundary's with the commitment's digest (`digestIs`) and the interior's,
-as given and as read back, with the interior commitment's (`interiorDigestIs`). -/
+verifier's parser reads it (`readBack`), the boundary's with the commitment's digest (`digestIs`), the parameters'
+boundary window root and family the ones that record names (`firstRootIs`, `firstFamilyIs`), and the interior's, as
+given and as read back, with the interior commitment's (`interiorDigestIs`). -/
 def inputAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (OneStage.Commitment × ByteArray × OneStageZk.Run × Spot.Run.Input) := do
   let c₂ ← OneStage.commitmentOf (← Flock.canon e.record).toUTF8
@@ -358,6 +400,8 @@ def inputAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidenc
   let .str received₂ := getD e.interior.base.receipt "received" | throw "the interior's receipt names no place"
   let j₁ ← readBack c.record
   digestIs j₁ c.digest
+  firstRootIs p.boundary.verifier.windowRoot j₁
+  firstFamilyIs (p.boundary.challenger.map (·.2)) j₁
   let j₂ ← readBack e.record
   interiorDigestIs e.record j₂ c₂.digest
   pure (c₂, ξ₂, r, inputOf p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs)
@@ -714,6 +758,38 @@ private def orderT (opened : Array Challenger.TreeOpening) : Challenger.LoggedTr
   | .error _ => false
 #guard match digestIs (Json.mkObj [("a", Json.null)]) ByteArray.empty with
   | .error why => why == RECORD_DIGEST
+  | .ok _ => false
+/-- A record whose window names the run `ab` and a class of prompt 4 and outputs 4, with `more`. -/
+private def firstR (more : List (String × Json) := []) : Json :=
+  Json.mkObj [("window", Json.mkObj ([("run", Json.str "ab"), ("prompt", Lean.toJson (4 : Nat)),
+    ("outputs", Lean.toJson (4 : Nat))] ++ more))]
+#guard (firstRootIs (some "ab") firstR).toOption.isSome
+#guard match firstRootIs (some "cd") firstR with
+  | .error why => why == FIRST_ROOT
+  | .ok _ => false
+#guard match firstRootIs none firstR with
+  | .error why => why == FIRST_ROOT
+  | .ok _ => false
+#guard match firstRootIs (some "ab") (Json.mkObj [("window", Json.mkObj [("run", Json.null)])]) with
+  | .error why => why == FIRST_ROOT
+  | .ok _ => false
+#guard (firstFamilyIs (some "draw/68719476752") firstR).toOption.isSome
+#guard (firstFamilyIs (some "draw/68719476754") (firstR [("stopped", Json.bool true)])).toOption.isSome
+/-! The family of another class, of the class's place by its rank, and none: each refused. -/
+#guard match firstFamilyIs (some "draw/68719476754") firstR with
+  | .error why => why == FIRST_FAMILY
+  | .ok _ => false
+#guard match firstFamilyIs (some "draw/0") firstR with
+  | .error why => why == FIRST_FAMILY
+  | .ok _ => false
+#guard match firstFamilyIs none firstR with
+  | .error why => why == FIRST_FAMILY
+  | .ok _ => false
+#guard match firstFamilyIs (some "draw/68719476752") (firstR [("population", "stop")]) with
+  | .error why => why == FIRST_PLACE
+  | .ok _ => false
+#guard match firstFamilyIs (some "draw/0") (Json.mkObj [("window", Json.mkObj [("run", "ab")])]) with
+  | .error why => why == FIRST_PLACE
   | .ok _ => false
 #guard match Registration.digest (Json.mkObj [("a", Json.null)]) with
   | .ok d => (interiorDigestIs (Json.mkObj [("a", Json.null)]) (Json.mkObj [("a", Json.null)]) d).toOption.isSome

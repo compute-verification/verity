@@ -15,6 +15,11 @@ accepts at the switch `form` (`accepted_steps`):
   verifier's parser reads from its canonical text (`readBack`, read by `readBack_ok`), the boundary's with the
   commitment's digest (`digestIs`, read by `digestIs_ok`), and the interior's, as given and as read back, with the
   interior commitment's (`interiorDigestIs`, read by `inputAt_interior`);
+* the first stage's session and family are the boundary record's own (`firstRootIs`, `firstFamilyIs`, read by
+  `inputAt_first`): the root of the session the run of record reads the first stage's challenges from, and the
+  family it reads them as, are functions of the commitment's record (`firstRootOf`, `firstFamilyOf`,
+  `accepted_first`), so two accepted checks of one record read one session and one family
+  (`accepted_first_same`);
 * neither stage's bytes run past one coin's (`stagesFit`, read as `ξ.size ≤ STAGE_BYTES` and `ξ₂.size ≤ STAGE_BYTES`
   by `accepted_fits`);
 * `Spot.Run.run`, at the switch on, returned a run of record whose symbol is `accept`, and the first stage's bytes `ξ`
@@ -105,6 +110,28 @@ theorem interiorDigestIs_ok {record j : Json} {d : ByteArray} (h : interiorDiges
          cases h)
       | (simp at h; done)
 
+/-- **What `firstRootIs` passed**: the root is the run the record's window names. -/
+theorem firstRootIs_ok {root : Option String} {j : Json} (h : firstRootIs root j = .ok ()) :
+    ∃ run, Spot.Place.run (Spot.getD j "window") = some run ∧ root = some run := by
+  unfold firstRootIs at h
+  split at h
+  · rename_i run hrun
+    split at h
+    · exact ⟨run, hrun, ‹_›⟩
+    · cases h
+  · cases h
+
+/-- **What `firstFamilyIs` passed**: the family is the one the record's window names. -/
+theorem firstFamilyIs_ok {family : Option String} {j : Json} (h : firstFamilyIs family j = .ok ()) :
+    ∃ f, Spot.Place.family (Spot.getD j "window") = some f ∧ family = some f := by
+  unfold firstFamilyIs at h
+  split at h
+  · rename_i f hf
+    split at h
+    · exact ⟨f, hf, ‹_›⟩
+    · cases h
+  · cases h
+
 /-- **What `inputAt` computed** where it returned: the run of record's input is `inputOf` at each registration's
 record as `readBack` returned it, and the boundary's so returned has the commitment's digest (`digestIs`). -/
 theorem inputAt_ok {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
@@ -129,6 +156,10 @@ theorem inputAt_ok {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : 
     split at h
     · obtain ⟨j₁, hj₁, h⟩ := bind_ok h
       obtain ⟨u, hd, h⟩ := bind_ok h
+      cases u
+      obtain ⟨u, -, h⟩ := bind_ok h
+      cases u
+      obtain ⟨u, -, h⟩ := bind_ok h
       cases u
       obtain ⟨j₂, hj₂, h⟩ := bind_ok h
       obtain ⟨u₂, -, h⟩ := bind_ok h
@@ -160,12 +191,76 @@ theorem inputAt_interior {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
     · obtain ⟨j₁, -, h⟩ := bind_ok h
       obtain ⟨u, -, h⟩ := bind_ok h
       cases u
+      obtain ⟨u, -, h⟩ := bind_ok h
+      cases u
+      obtain ⟨u, -, h⟩ := bind_ok h
+      cases u
       obtain ⟨j₂, hj₂, h⟩ := bind_ok h
       obtain ⟨u₂, hd₂, h⟩ := bind_ok h
       cases u₂
       simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
       obtain ⟨rfl, rfl, rfl, rfl⟩ := h
       exact ⟨(interiorDigestIs_ok hd₂).1, j₂, hj₂, (interiorDigestIs_ok hd₂).2⟩
+    · cases h
+
+/-- **The root of the first stage's session, as a boundary record names it**: the run the window of the record names,
+the record as the verifier's parser reads it from its canonical text (`readBack`); none where it does not read back or
+its window names no run. -/
+def firstRootOf (record : Json) : Option String :=
+  match readBack record with
+  | .ok j => Spot.Place.run (Spot.getD j "window")
+  | .error _ => none
+
+/-- **The first stage's family, as a boundary record names it**: the family of the place the window of the record
+names (`Spot.Place.family`), the record as the verifier's parser reads it from its canonical text (`readBack`); none
+where it does not read back or its window names no place. -/
+def firstFamilyOf (record : Json) : Option String :=
+  match readBack record with
+  | .ok j => Spot.Place.family (Spot.getD j "window")
+  | .error _ => none
+
+/-- **The first stage's session and family are the boundary record's** where `inputAt` returned (`firstRootIs`,
+`firstFamilyIs`): the record names a run and a family (`firstRootOf`, `firstFamilyOf`), the parameters' boundary
+window root is that run and the family the parameters' boundary names is that family; and they are the window root
+and the family of the input the run of record reads, whose record is the boundary's as read back. -/
+theorem inputAt_first {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
+    {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {i : Spot.Run.Input}
+    (h : inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)) :
+    ∃ run f, firstRootOf c.record = some run ∧ firstFamilyOf c.record = some f ∧
+      p.boundary.verifier.windowRoot = some run ∧ p.boundary.challenger.map (·.2) = some f ∧
+      i.params.verifier.windowRoot = some run ∧ i.family = some f ∧ readBack c.record = .ok i.record := by
+  unfold inputAt at h
+  obtain ⟨s, -, h⟩ := bind_ok h
+  obtain ⟨c₂', -, h⟩ := bind_ok h
+  obtain ⟨ξ₂', -, h⟩ := bind_ok h
+  obtain ⟨r', -, h⟩ := bind_ok h
+  cases h5 : r'.all
+  · simp [h5] at h
+    cases h
+  · simp only [h5, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
+    obtain ⟨vs, -, h⟩ := bind_ok h
+    split at h
+    · obtain ⟨j₁, hj₁, h⟩ := bind_ok h
+      obtain ⟨u, -, h⟩ := bind_ok h
+      cases u
+      obtain ⟨u, hroot, h⟩ := bind_ok h
+      cases u
+      obtain ⟨u, hfam, h⟩ := bind_ok h
+      cases u
+      obtain ⟨j₂, -, h⟩ := bind_ok h
+      obtain ⟨u₂, -, h⟩ := bind_ok h
+      cases u₂
+      simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl, rfl, rfl⟩ := h
+      obtain ⟨run, hrun, hr⟩ := firstRootIs_ok hroot
+      obtain ⟨f, hf, hfm⟩ := firstFamilyIs_ok hfam
+      refine ⟨run, f, ?_, ?_, hr, hfm, hr, hfm, hj₁⟩
+      · unfold firstRootOf
+        rw [hj₁]
+        exact hrun
+      · unfold firstFamilyOf
+        rw [hj₁]
+        exact hf
     · cases h
 
 /-- **An accepted two-stage check ran every step** (module docstring). -/
@@ -199,6 +294,42 @@ theorem accepted_steps {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ 
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hp
     obtain ⟨rfl, rfl⟩ := hp
     exact ⟨rfl, c₂, ξ₂, r, i, run', hi, hr, hs, hu, hj, law, hl, htwo⟩
+
+/-- **At an accepted two-stage check, the first stage's session and family are functions of the commitment's boundary
+record.** The record names a run and a family (`firstRootOf`, `firstFamilyOf`: the run and the place's family its
+window names, the record as the verifier's parser reads it); the parameters' boundary window root is that run and the
+family the parameters' boundary names is that family; and the run of record, which accepted, read the first stage's
+challenges on that root as challenges of that family: they are the window root and the family of the input it ran on
+(`Spot.Run.run i true`). Nothing here says which session the auditor's ledger opens on the root, or that a family's
+challenges follow one registration: those are the challenger's, read by the run of record. -/
+theorem accepted_first {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+    {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
+    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
+    ∃ run f, firstRootOf c.record = some run ∧ firstFamilyOf c.record = some f ∧
+      p.boundary.verifier.windowRoot = some run ∧ p.boundary.challenger.map (·.2) = some f ∧
+      ∃ c₂ ξ₂ r i out, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ Spot.Run.run i true = .ok out ∧
+        Spot.jeq (Spot.getD out "symbol") (Json.str "accept") = true ∧
+        i.params.verifier.windowRoot = some run ∧ i.family = some f ∧ readBack c.record = .ok i.record := by
+  obtain ⟨-, c₂, ξ₂, r, i, out, hi, hr, -, -, hj, -⟩ := accepted_steps h
+  obtain ⟨run, f, h1, h2, h3, h4, h5, h6, h7⟩ := inputAt_first hi
+  exact ⟨run, f, h1, h2, h3, h4, c₂, ξ₂, r, i, out, hi, hr, hj, h5, h6, h7⟩
+
+/-- **Two accepted two-stage checks of one boundary record read one first-stage session and one family**, whatever
+their parameters, first-stage bytes, evidence and blobs: the parameters' boundary window roots are one, and the
+families the parameters' boundaries name are one (`accepted_first`). -/
+theorem accepted_first_same {form form' : Bool} {p p' : Params} {c c' : OneStage.Commitment} {ξ ξ' : ByteArray}
+    {e e' : Evidence} {bs bs' : Core.Blobs} {pub pub' : OneStage.Public} {prof prof' : Core.Integrity}
+    (hc : c.record = c'.record) (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof)
+    (h' : checkBlobsAtWith form' p' c' ξ' e' bs' = .accept pub' prof') :
+    p.boundary.verifier.windowRoot = p'.boundary.verifier.windowRoot ∧
+      p.boundary.challenger.map (·.2) = p'.boundary.challenger.map (·.2) := by
+  obtain ⟨run, f, h1, h2, h3, h4, -⟩ := accepted_first h
+  obtain ⟨run', f', h1', h2', h3', h4', -⟩ := accepted_first h'
+  have hrun : run = run' := Option.some.inj (h1.symm.trans ((congrArg firstRootOf hc).trans h1'))
+  have hf : f = f' := Option.some.inj (h2.symm.trans ((congrArg firstFamilyOf hc).trans h2'))
+  subst hrun
+  subst hf
+  exact ⟨h3.trans h3'.symm, h4.trans h4'.symm⟩
 
 /-- **An accepted two-stage check found the stages' sessions in order** (`stagesOrdered`). -/
 theorem accepted_ordered {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}

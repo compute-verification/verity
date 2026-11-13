@@ -14,11 +14,14 @@ step before it returned, so no step holds the evidence to anything the listed on
 * `firstTreeless_of_lines`: `firstTreeless` passes where the first session's log reads as lines none of which is a
   coin tree's.
 * `digestIs_of`: `digestIs` passes where the record's digest is the one named.
+* `firstRootIs_of`, `firstFamilyIs_of`: `firstRootIs` and `firstFamilyIs` pass where the record's window names the
+  run and the family given.
 * `repStreamsOrdered_of`: `repStreamsOrdered` passes where the interior audit reads its session's coin trees and
   the log opens each one's rounds stream by stream.
 * `inputAt_of_steps`: `inputAt` returns where the interior registration's commitment reads, its sample's bytes are
   read, every session's verifier accepts, the verdicts are stamped, the interior's receipt names its place and each
-  registration's record reads back (`readBack`), the boundary's with the commitment's digest.
+  registration's record reads back (`readBack`), the boundary's with the commitment's digest and its window naming
+  the parameters' boundary window root and family.
 * `accepts_of_steps`: the check accepts where `inputAt` returned, neither stage's bytes run past one coin's
   (`stagesFit`), the run of record ran and its symbol is `accept`, the first stage's bytes are the ones it read
   (`sourceRead`), the first session shows none of the second stage's coins (`interiorUnshown`), the stages' sessions
@@ -82,6 +85,24 @@ theorem digestIs_of {j : Json} {d : ByteArray} (h : Registration.digest j = .ok 
        rfl)
     | (simp; done)
 
+/-- **`firstRootIs` passes where the record's window names the root as its run** (the converse of
+`firstRootIs_ok`). -/
+theorem firstRootIs_of {root : Option String} {j : Json} {run : String}
+    (h : Spot.Place.run (Spot.getD j "window") = some run) (hr : root = some run) : firstRootIs root j = .ok () := by
+  subst hr
+  unfold firstRootIs
+  rw [h]
+  simp only [↓reduceIte]
+
+/-- **`firstFamilyIs` passes where the record's window names the family** (the converse of `firstFamilyIs_ok`). -/
+theorem firstFamilyIs_of {family : Option String} {j : Json} {f : String}
+    (h : Spot.Place.family (Spot.getD j "window") = some f) (hf : family = some f) :
+    firstFamilyIs family j = .ok () := by
+  subst hf
+  unfold firstFamilyIs
+  rw [h]
+  simp only [↓reduceIte]
+
 /-- **`interiorDigestIs` passes where both records' digests are the one named** (the converse of
 `interiorDigestIs_ok`). -/
 theorem interiorDigestIs_of {record j : Json} {d : ByteArray} (h : Registration.digest record = .ok d)
@@ -105,7 +126,8 @@ theorem repStreamsOrdered_of {p : Params} {e : Evidence} {ts : Array Challenger.
   unfold treesOrdered
   simp only [Array.all_eq_true'.2 h, ↓reduceIte]
 
-/-- **`inputAt` returns where each of its steps does** (the converse of `inputAt_ok` and `inputAt_interior`). -/
+/-- **`inputAt` returns where each of its steps does** (the converse of `inputAt_ok`, `inputAt_first` and
+`inputAt_interior`). -/
 theorem inputAt_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {s : String} {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {vs : Array (String × Json)}
     {received₂ : String} {j₁ j₂ : Json} (h1 : Flock.canon e.record = .ok s)
@@ -115,23 +137,28 @@ theorem inputAt_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
     (h7 : Spot.getD e.interior.base.receipt "received" = Json.str received₂)
     (h8 : readBack c.record = .ok j₁) (h9 : readBack e.record = .ok j₂)
     (h10 : Registration.digest j₁ = .ok c.digest) (h11 : Registration.digest e.record = .ok c₂.digest)
-    (h12 : Registration.digest j₂ = .ok c₂.digest) :
+    (h12 : Registration.digest j₂ = .ok c₂.digest) {run f : String}
+    (h13 : Spot.Place.run (Spot.getD j₁ "window") = some run) (h14 : p.boundary.verifier.windowRoot = some run)
+    (h15 : Spot.Place.family (Spot.getD j₁ "window") = some f)
+    (h16 : p.boundary.challenger.map (·.2) = some f) :
     inputAt p c ξ e bs =
       .ok (c₂, ξ₂, r, inputOf p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs) := by
   have hd := digestIs_of h10
   have hd₂ := interiorDigestIs_of h11 h12
+  have hroot := firstRootIs_of h13 h14
+  have hfam := firstFamilyIs_of h15 h16
   unfold inputAt
   first
-    | (simp only [h1, h2, h3, h4, h5, h6, h7, h8, h9, hd, hd₂, bind, Except.bind, pure, Except.pure, Bool.not_true,
-        Bool.false_eq_true, ↓reduceIte]
+    | (simp only [h1, h2, h3, h4, h5, h6, h7, h8, h9, hd, hd₂, hroot, hfam, bind, Except.bind, pure, Except.pure,
+        Bool.not_true, Bool.false_eq_true, ↓reduceIte]
        first | done | rfl)
     | (rw [ok_bind _ h1, ok_bind _ h2, ok_bind _ h3, ok_bind _ h4]
        simp only [h5, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
        rw [ok_bind _ h6]
        simp only [h7]
-       rw [ok_bind _ h8, ok_bind _ hd, ok_bind _ h9, ok_bind _ hd₂]
+       rw [ok_bind _ h8, ok_bind _ hd, ok_bind _ hroot, ok_bind _ hfam, ok_bind _ h9, ok_bind _ hd₂]
        rfl)
-    | (simp [h1, h2, h3, h4, h5, h6, h7, h8, h9, hd, hd₂, bind, Except.bind, pure, Except.pure]
+    | (simp [h1, h2, h3, h4, h5, h6, h7, h8, h9, hd, hd₂, hroot, hfam, bind, Except.bind, pure, Except.pure]
        done)
 
 /-- **Steps 1 to 5 return where each does**: `prepare`, at the switch on, returns the interior audit's verdict at the

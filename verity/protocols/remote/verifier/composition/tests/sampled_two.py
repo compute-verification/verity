@@ -9,7 +9,9 @@ audit's decoders are the one-stage difftest's mirrors of them (`_rule` for `Sele
 audit, the evidence and the check, its refusals of a stage's bytes past one coin's, `STAGE_PAST`, of first-stage
 bytes past what the run read, `SOURCE_READ`, of a first session showing second-stage coins on two windows,
 `INTERIOR_SHOWN`, or a coin tree's line there, `FIRST_TREE`, of a registration's record its canonical text does not
-read back, `RECORD_READ`, of a boundary record so read without the commitment's digest, `RECORD_DIGEST`, of an
+read back, `RECORD_READ`, of a boundary record so read without the commitment's digest, `RECORD_DIGEST`, of a
+boundary window root that is not that record's run, `FIRST_ROOT`, of a boundary record whose window names no place,
+`FIRST_PLACE`, of a boundary family other than the one that record's window names, `FIRST_FAMILY`, of an
 interior record, as given or so read, without the interior commitment's digest, `INTERIOR_DIGEST`, and of a second
 session's log that does not open a coin tree's rounds stream by stream, `REP_STREAM_ORDER`, included; the
 form's `#guard`s pin those) is outside the mirror: while `Spot.SecondStage.FORM`
