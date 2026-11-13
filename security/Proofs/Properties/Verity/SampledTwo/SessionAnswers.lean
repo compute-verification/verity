@@ -317,8 +317,8 @@ theorem logAnswers_of {A : Live₂} {C : CaseOf} {Good : Exchange → Prop} {L :
   have e1 : locOf A tab la x.frame = some (SpotFlock.off A.h t + k) := by
     rw [locOf_logged A tab hq (hla.imp fun _ _ h => h.1) hxf]
     exact h1
-  obtain ⟨rs, rec, hrs, hrec, hd⟩ := located_answers A C tab hsz o hacc _ hl la x lrest rfl t k hk e1
-  exact ⟨rs, rec, hrs, hrec, hxa ▸ hd⟩
+  obtain ⟨rs, rc, hrs, hrc, hd⟩ := located_answers A C tab hsz o hacc _ hl la x lrest rfl t k hk e1
+  exact ⟨rs, rc, hrs, hrc, hxa ▸ hd⟩
 
 /-- **`LogAnswers` at the run's locator** (`runLocate`, which agrees with the session-round locator at the sessions'
 rounds: `locates_run`). -/
