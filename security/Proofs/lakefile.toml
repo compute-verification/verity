@@ -141,4 +141,4 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.SampledTwo.SessionHeld", "Proofs.Properties.Verity.SampledTwo.SessionRecord",
   "Proofs.Properties.Verity.SampledTwo.SessionDev", "Proofs.Properties.Verity.SampledTwo.SessionOpened",
   "Proofs.Properties.Verity.SampledTwo.SessionLogged", "Proofs.Properties.Verity.SampledTwo.SessionCut",
-  "Proofs.Properties.Verity.SampledTwo.SessionTreeless"]
+  "Proofs.Properties.Verity.SampledTwo.SessionTreeless", "Proofs.Properties.Verity.SampledTwo.SessionPrefix"]
