@@ -353,6 +353,12 @@ for dest, m in TABLE["modules"].items():
             if others:
                 problems.append(f"{rel}: `{name}` is defined in one statement with {', '.join(f'`{n}`' for n in others)}: "
                                 f"take them too, in {dest}")
+for rel, dest in WHOLE.items():
+    if rel not in TEXT:
+        problems.append(f"{rel}: not a tracked Python file (the table's `whole`, to {dest})"
+                        + (": the tree has it there already" if dest in TEXT else ""))
+if problems:  # the table doesn't fit this tree, so nothing below would read it right
+    sys.exit("cut.py refuses, and changed nothing:\n- " + "\n- ".join(dict.fromkeys(problems)))
 SOURCES = sorted({rel for rel, _ in where})
 MOVED = {name for _, name in where}
 
