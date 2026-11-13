@@ -7380,7 +7380,8 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
     that its refusals of parameters naming none (`NO_CHALLENGER`) or another key (`KEY_PARAMS`) aren't what refuse them;
     the same work audit without the closure is accepted by v1. v1 accepts an honest audit under a `subset`, `stratified`
     or `work` law; v2, whose one statement's soundness statement covers a subset law alone, refuses the parameters of the
-    `stratified` and the `work` one by their kind (`subset_only`), and the `subset` ones' it doesn't."""
+    `stratified` and the `work` one by their kind (`subset_only`), and the `subset` ones' it doesn't. So v2 refuses the
+    work audit that carries the closure at its parameters, and a subset audit whose sample carries one at its evidence."""
     for kind, stage in (("bernoulli", "params: "), ("closure", "evidence: ")):
         params, rec, evidence = _covered_case(kind)
         case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
@@ -7396,6 +7397,14 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
                                   "proofs": {"circuit": _sha(circuit), "public": _sha(public), "registered": None},
                                   "window_root": d.ledger.window["root"]}}
         out = server_v2.exchange(_json(v2))
+        if kind == "closure":
+            assert (out["verdict"], out["reason"]) == ("reject", f"params: {subset_only('work')}"), out
+            covered, held, plain = _covered_case("subset")
+            draw = plain["draw"]
+            widened = {**draw, "closure": [u for u in range(draw["population"]) if u not in draw["units"]][:1]}
+            carried = {k: v for k, v in plain.items() if k != "verdicts"} | {"draw": widened, "proofs": {"sessions": []}}
+            out = server_v2.exchange(_json({**v2, "commitment": _hex(held), "evidence": _hex(carried),
+                                            "params": {**v2["params"], "law": covered["law"], "work_table": None}}))
         assert out["verdict"] == "reject" and out["reason"].startswith(stage), (kind, out)
         assert "soundness statement doesn't cover" in out["reason"], (kind, out)
         if kind == "bernoulli":
