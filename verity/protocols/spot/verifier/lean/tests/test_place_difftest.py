@@ -121,19 +121,33 @@ JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 3) | st.text("ab
 SIZE = st.sampled_from([0, 1, 2, 4, TOP - 1, TOP, TOP, SIZES, SIZES + 1, -1]) | st.integers(0, 6)
 
 
+#: what a window's other fields take when they are no kind's own
+OTHERS = (("stopped", [True, False, "true", 1, None]),
+          ("population", ["stop", "served", "Stop", "", None, True, ["stop"]]))
+
+
 @st.composite
 def windows(pick):
-    """A window: its two sizes mostly natural numbers on both sides of the bound, each other field absent, of its own
-    kind, or arbitrary JSON."""
+    """A window: its two sizes mostly natural numbers on both sides of the bound; its `stopped` and `population` those
+    of a class's spans, a stop class's spans, a stop class's stop blocks or the stop blocks of a class that is no stop
+    class, or each absent, of its own kind or arbitrary JSON; its run a string, absent or anything else."""
     w: dict = {}
     for k in ("prompt", "outputs"):
         if pick(st.integers(0, 15)):
             w[k] = pick(SIZE) if pick(st.integers(0, 11)) else pick(JSON)
-    for k, values in (("stopped", [True, True, False, "true", 1, None]),
-                      ("population", ["stop", "stop", "served", "Stop", "", None, True, ["stop"]]),
-                      ("run", ["ab", "", 7, None])):
-        if pick(st.booleans()):
-            w[k] = pick(st.sampled_from(values)) if pick(st.integers(0, 7)) else pick(JSON)
+    kind = pick(st.sampled_from(["spans", "stopped", "blocks", "blocks", "no stop class", "any", "any"]))
+    if kind in ("stopped", "blocks"):
+        w["stopped"] = True
+    if kind in ("blocks", "no stop class"):
+        w["population"] = "stop"
+    if kind == "no stop class" and pick(st.booleans()):
+        w["stopped"] = pick(st.sampled_from([False, "true", 1, None]))
+    if kind == "any":
+        for k, values in OTHERS:
+            if pick(st.booleans()):
+                w[k] = pick(st.sampled_from(values)) if pick(st.integers(0, 7)) else pick(JSON)
+    if pick(st.booleans()):
+        w["run"] = pick(st.sampled_from(["ab", "", 7, None])) if pick(st.integers(0, 7)) else pick(JSON)
     if pick(st.integers(0, 7)) == 0:
         w[pick(st.text("abk", max_size=2))] = pick(JSON)
     return w
