@@ -641,6 +641,226 @@ def test_the_document_says_how_the_count_is_counted_and_the_lines_say_whether_it
     assert (held["lanes"], held["lanes_given"], held["releases"]) == (5, True, 10)
 
 
+def test_a_schedule_sets_its_heads_offset_and_its_wait_bound_together_or_neither(capsys):
+    """A head's offset and its wait bound are two inputs with no default, both marked assumed: given together they
+    are the schedule's head's time, a wait bound of 0 included; with neither the schedule sets none; and either
+    without the other is refused by the name of the one that is missing, by `inputs`, by the command, and by a
+    table or a document handed inputs that hold only one. An offset under 1 bucket, a wait bound under 0 and a
+    value that is no integer are refused."""
+    bare = LB.inputs()
+    assert (bare["head_offset"].value, bare["head_wait"].value) == (None, None) and LB.head_time(bare) is None
+    assert (bare["head_offset"].mark, bare["head_wait"].mark) == ("assumed", "assumed")
+    assert (bare["head_offset"].unit, bare["head_wait"].unit) == ("bucket", "tick")
+    assert LB.head_time(small()) == HEAD == LB.HeadTime(32, 0) and HEAD.bits == 0
+    assert LB.head_time(LB.inputs(head_offset=1, head_wait=7)) == LB.HeadTime(1, 7)
+    alone = {"head_offset": ("--head-offset is given without --head-wait", "--head-offset"),
+             "head_wait": ("--head-wait is given without --head-offset", "--head-wait")}
+    for key, (said, flag) in alone.items():
+        with pytest.raises(ValueError, match=f"together or neither, and neither has a default: {said}$"):
+            LB.inputs(**{key: 3})
+        with pytest.raises(ValueError, match=said):
+            LB.main(["--json", flag, "3"])
+        other = next(k for k in alone if k != key)
+        one = small() | {other: small()[other]._replace(value=None)}
+        for reads in (LB.table, LB.document, LB.head_time):
+            with pytest.raises(ValueError, match=said):
+                reads(one)
+    for offset, wait in ((0, 0), (-1, 0), (1.5, 0), (True, 0), ("7", 0), (32, -1), (32, 1.5), (32, True), (32, "0")):
+        with pytest.raises(ValueError, match="a head's offset is a positive integer of buckets and its wait bound "
+                                             "an integer of ticks from 0, not "):
+            LB.inputs(head_offset=offset, head_wait=wait)
+    assert LB.main(["--json", "--commit", "c0ffee", "--head-offset", "600", "--head-wait", "0"]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert doc == json.loads(json.dumps(LB.document(LB.inputs(head_offset=600, head_wait=0), commit="c0ffee")))
+    assert {k: doc["inputs"][k]["value"] for k in alone} == {"head_offset": 600, "head_wait": 0}
+    assert {doc["inputs"][k]["mark"] for k in alone} == {"assumed"}
+
+
+def test_the_heads_tick_is_charged_by_link_on_the_designs_rows_and_on_no_other():
+    """Under a schedule that sets its head's time a head is accepted at one of W + 1 ticks, so each execution phase
+    of a link is charged log2(W + 1) bits on the rows whose check reads the head, whatever the link serves and
+    whatever the verdict records hold, the same at either jitter bound, and nothing at W = 0. It is in the row's
+    term beside the count, on no other row, and it does not read the offset. The document says how it is charged
+    and the lines print it; the failure rate the target affords is what the count and the tick leave."""
+    year = 3 * PHASES["year"]
+    for wait, bits in ((0, 0), (1, 1), (3, 2), (7, 3), (2, math.log2(3))):
+        inp, time = small(head_wait=wait), LB.HeadTime(32, wait)
+        assert time.bits == bits
+        for stop in (LB.NO_RECORDS, LB.Stop(10 ** 40, (), head=time)):
+            got, bare = rows(inp, stop), rows(small(), LB.Stop(stop.held, (), head=HEAD))
+            for key, r in got.items():
+                for dj in LB.JITTERS:
+                    t, was = r.terms[dj], bare[key].terms[dj]
+                    assert t.head == (float(r.phases) * bits if key[2] in (NO_STOP, "design") else 0)
+                    assert t._replace(head=0) == was
+                    assert float(t.certifier) == pytest.approx(float(was.certifier) + t.head, rel=1e-12)
+                assert r.terms[1].head == r.terms[2].head
+            assert got["world", "year", "design"].terms[1].head == year * bits
+    assert LB.Terms(1, 2, 3, None, 5, 7).certifier == 18 and LB.Terms(1, 2, 3, None).head == 0
+    # the term does not read the offset
+    assert rows(small(head_offset=1, head_wait=3)) == rows(small(head_offset=10 ** 6, head_wait=3))
+    doc = LB.document(small(head_wait=3), stop=LB.Stop(10 ** 40, (), head=LB.HeadTime(32, 3)))
+    assert doc["head"] == {
+        "rows": [NO_STOP, "design"], "offset": 32, "wait": 3, "ticks": 4, "bits_a_phase": 2.0,
+        "world_year": {"bits": 2.0 * year, "GB": 2.0 * year / LB.GB, "of_target": 2.0 * year / (300 * LB.GB)},
+        "time": "the schedule sets the head of a link's execution phase due 32 bucket(s) after the close that hands "
+                "it, and accepted at that tick or one of the 3 after it, or it is no head"}
+    by = {(r["scope"], r["period"], r["row"]): r for r in doc["rows"]}
+    for (_, _, name), r in by.items():
+        assert r["head"]["bits"] == (2.0 * r["phases"] if name in (NO_STOP, "design") else 0)
+        assert r["head"]["GB"] == r["head"]["bits"] / LB.GB
+    text = LB.render(doc)
+    count = doc["count"]["world_year"]
+    assert (f"The head's tick, on the rows `{NO_STOP}` and `design`: {doc['head']['time']}. So a head is accepted at "
+            "one of 4 ticks, and a link's execution phase is charged log2(4) = 2 bits for it, on time or late, "
+            f"whatever it serves: {LB._n(2.0 * year / LB.GB)} GB over the world's year, "
+            f"{LB._n(2.0 * year / (300 * LB.GB))} times the target. An execution phase with no head accepted is "
+            "charged each connection's whole schedule. The offset and the wait bound are the schedule's, assumed "
+            "(--head-offset, --head-wait), and no tick is read from a run's files.") in text.splitlines()
+    assert (f"The count and the head's tick are {LB._n(count['GB'] + 2.0 * year / LB.GB)} GB, and with them the "
+            "world's year meets the target at a failure rate of at most 1.") in text
+    _, gb, bits = tables(text)
+    for r, g, b in zip(doc["rows"], gb, bits, strict=True):
+        assert (g["head's tick"], b["head's tick"]) == (LB._n(r["head"]["GB"]), LB._n(r["head"]["bits"]))
+        assert (g["head's tick"] == "0") == (r["row"] not in (NO_STOP, "design"))
+    # at W = 0 the line says one tick and 0 bits, and the term is the one with no tick charged
+    none = LB.render(LB.document(small(), stop=HELD))
+    assert ("So a head is accepted at one tick, and a link's execution phase is charged log2(1) = 0 bits for it, on "
+            "time or late, whatever it serves: 0 GB over the world's year, 0 times the target.") in none
+    # the rate the target affords: what the count and the tick leave of it for the failed connections' charge
+    for wait in (0, 3):
+        room = LB.document(small(head_wait=wait), target_gb=2 * count["GB"],
+                           stop=LB.Stop(10 ** 40, (), head=LB.HeadTime(32, wait)))
+        left = room["failure_rate_at_target"]
+        assert 0 < left < 1 and LB.failed(7_391_250, 7_391_250 * left, 1_001) == pytest.approx(
+            count["bits"] - math.log2(wait + 1) * year)
+    # and where the count and the tick alone are over the target, no rate meets it: a target a bit over the count
+    # and a tick of 1 bit a phase has a rate at W = 1 and none at W = 3
+    for wait, meets in ((1, True), (3, False)):
+        at = LB.document(small(head_wait=wait), target_gb=(count["bits"] + year + 64) / LB.GB,
+                         stop=LB.Stop(10 ** 40, (), head=LB.HeadTime(32, wait)))
+        assert (at["failure_rate_at_target"] is not None) is meets
+
+
+def test_under_a_schedule_that_sets_no_offset_the_design_is_charged_its_whole_schedules():
+    """Under a schedule that sets no offset the head's time is held to no tick, so the row whose check reads the
+    head and is read from verdict records, `design`, is charged each connection's whole schedule whatever the
+    records say, and nothing in the document shows it below them: not its rows, not what it holds apart, not its
+    rate. The rows whose check reads no head follow the records as before. The rows that read the head print no
+    charge for its tick, and the lines say the head's time is not held."""
+    inp, reads = small(**NO_HEAD), [name for name, kind in LB.ROWS.items() if kind.verdicts]
+    assert LB.head_time(inp) is None and reads == ["lengths", "all three", "design"]
+    whole = rows(inp)
+    every = LB.Stop(10 ** 40, ("each connection is charged below its schedule",))
+    for stop in (LB.NO_RECORDS, every, LB.Stop(7, ()), HELD, LB.Stop(7, (), head=HEAD)):
+        got = rows(inp, stop)
+        for key, r in got.items():
+            if key[2] == "design":
+                assert r == whole[key]
+                for dj in LB.JITTERS:
+                    assert r.terms[dj].schedules == got[*key[:2], NO_STOP].terms[dj].schedules > 0
+                    assert r.terms[dj].head == 0
+        doc = LB.document(inp, stop=stop)
+        assert doc["stop"]["whole"]["design"] == LB.NO_OFFSET and not doc["stop"]["below"]
+        bare = {(r["scope"], r["period"]): r["schedules"] for r in doc["rows"] if r["row"] == NO_STOP}
+        shown = [r for r in (*doc["rows"], *doc["stop"]["with_verdicts"]) if r["row"] == "design"]
+        assert len(shown) == 9 and all(r["schedules"] == bare[r["scope"], r["period"]] for r in shown)
+        assert all(r["head"] is None for r in doc["rows"] if r["row"] in (NO_STOP, "design"))
+        assert all(r["head"] == {"bits": 0.0, "GB": 0.0} for r in doc["rows"] if r["row"] not in (NO_STOP, "design"))
+        assert doc["failure_rate_at_target"] == LB.document(inp)["failure_rate_at_target"]
+    # records that hold every execution phase under no head's time: the two rows whose check reads no head are
+    # below their schedules, and only the design is not
+    got, doc = rows(inp, every), LB.document(inp, stop=every)
+    assert all(r.terms[dj].schedules == 0 for key, r in got.items() if key[2] in ("lengths", "all three")
+               for dj in LB.JITTERS)
+    assert doc["stop"] == {"rows": reads, "held_phases": 10 ** 40, "every_phase": True,
+                           "whole": {"design": LB.NO_OFFSET}, "below": False, "why": list(every.why),
+                           "verdicts": [], "with_verdicts": []}
+    assert doc["head"] == {"rows": [NO_STOP, "design"], "offset": None, "wait": None, "ticks": None,
+                           "bits_a_phase": None, "world_year": None, "time": LB.HEAD_TIME}
+    assert doc["count"]["head_time"] == LB.HEAD_TIME
+    # with no record what is held apart is the two rows whose check reads no head
+    assert {r["row"] for r in LB.document(inp)["stop"]["with_verdicts"]} == {"lengths", "all three"}
+    text = LB.render(doc)
+    lines = text.splitlines()
+    assert not any(line.startswith("The head's tick, on the rows ") for line in lines)
+    assert ("The stop class of the rows `lengths`, `all three` is charged below its schedule, as the verdict records "
+            "say, of which none on a signed head was read. An execution phase no registration was read for ") in text
+    assert ("The stop class of the row `design` is charged its whole schedule on every execution phase, whatever the "
+            f"verdict records say: {LB.NO_OFFSET}.") in lines
+    assert not any(line.startswith("Below its schedule on every execution phase, ") for line in lines)
+    said = next(line for line in lines if line.startswith("With its stop class charged its whole schedule"))
+    assert said.startswith(
+        f"With its stop class charged its whole schedule, since {LB.NO_OFFSET}, and the release times taken once by "
+        "a network certifier whose network card releases at a set time (simulated), the design's term over the "
+        "world's year is the failed connections' charge, the count and each connection's schedule. The count is ")
+    assert "This line is the count alone: the head's time is not held to a tick: nothing holds when the head" in text
+    _, gb, bits = tables(text)
+    for r, g, b in zip(doc["rows"], gb, bits, strict=True):
+        assert g["head's tick"] == b["head's tick"] == ("not held" if r["row"] in (NO_STOP, "design") else "0")
+
+
+def test_a_row_takes_only_verdict_records_held_under_its_schedules_heads_time():
+    """One rule for every row read from verdict records: it takes their answer only where they were held under the
+    head's time its schedule sets. Records held under another offset, another wait bound or none hold no execution
+    phase of `lengths`, of `all three` or of `design`, and the document says so, row by row, and holds apart what
+    each would be under its own schedule. Only the rule for a schedule that sets no offset is the design's alone."""
+    reads = {name: kind for name, kind in LB.ROWS.items() if kind.verdicts}
+    times = (None, HEAD, LB.HeadTime(32, 1), LB.HeadTime(64, 0))
+    for (name, kind), theirs, its in itertools.product(reads.items(), times, times):
+        assert LB.takes(kind, LB.Stop(1, (), head=theirs), its) is (
+            theirs == its and not (name == "design" and its is None))
+    for its in times[1:]:
+        inp = small(head_offset=its.offset, head_wait=its.wait)
+        whole, held = rows(inp), rows(inp, LB.Stop(10 ** 40, (), head=its))
+        for theirs in times:
+            got = rows(inp, LB.Stop(10 ** 40, ("held under another",), head=theirs))
+            assert got == (held if theirs == its else whole)
+        for key, r in held.items():
+            for dj in LB.JITTERS:
+                assert (r.terms[dj].schedules == 0) == (key[2] in reads)
+                assert whole[key].terms[dj].schedules > 0
+    # the document under records that hold every execution phase, but under a wait bound of 1 where its schedule's
+    # is 0: every row is charged its whole schedules and says why, and each is held apart
+    other = LB.Stop(10 ** 40, ("a line",), head=LB.HeadTime(32, 1))
+    doc, bare = LB.document(small(), stop=other), LB.document(small())
+    why = ("the verdict records were held to a head due 32 bucket(s) after the close that hands it, and accepted at "
+           "that tick or the tick after it, and its schedule's head is due 32 bucket(s) after the close that hands "
+           "it, and accepted at that tick and no later")
+    assert doc["rows"] == bare["rows"] and doc["failure_rate_at_target"] == bare["failure_rate_at_target"]
+    assert doc["stop"] == {"rows": list(reads), "held_phases": 10 ** 40, "every_phase": True,
+                           "whole": dict.fromkeys(reads, why), "below": False, "why": ["a line"], "verdicts": [],
+                           "with_verdicts": bare["stop"]["with_verdicts"]}
+    assert {r["row"] for r in doc["stop"]["with_verdicts"]} == set(reads)
+    assert all(r["schedules"]["bits"] == 0 for r in doc["stop"]["with_verdicts"])
+    lines = LB.render(doc).splitlines()
+    assert ("No row's stop class is charged as the verdict records say: each is charged its whole schedule on every "
+            "execution phase, whatever they say, and a line below says why. An execution phase no registration was "
+            "read for is charged its whole schedule: a row's execution phases are its monitoring period's, not the "
+            "ones a run kept. No option of this command changes that charge.") in lines
+    assert ("The stop class of the rows `lengths`, `all three`, `design` is charged its whole schedule on every "
+            f"execution phase, whatever the verdict records say: {why}.") in lines
+    assert any(line.startswith(f"With its stop class charged its whole schedule, since {why}, and the release times "
+                               "taken once by ") for line in lines)
+    assert any(line.startswith("Below its schedule on every execution phase, which the records read do not support, "
+                               ) for line in lines)
+    # records that hold nothing say nothing of a head's time: no row is listed, and the lines are those of no record
+    assert LB.document(small(), stop=LB.Stop(0, ("no record",)))["stop"]["whole"] == {}
+    # under a schedule that sets no offset, records held under a head's time hold no row: the two whose check
+    # reads no head for that, the design for its schedule, and only the two are held apart
+    unset = LB.document(small(**NO_HEAD), stop=HELD)
+    theirs = ("the verdict records were held to a head due 32 bucket(s) after the close that hands it, and accepted "
+              "at that tick and no later, and its schedule sets no offset for the head")
+    assert unset["stop"]["whole"] == {"lengths": theirs, "all three": theirs, "design": LB.NO_OFFSET}
+    assert unset["rows"] == LB.document(small(**NO_HEAD))["rows"]
+    assert {r["row"] for r in unset["stop"]["with_verdicts"]} == {"lengths", "all three"}
+    said = LB.render(unset).splitlines()
+    assert ("The stop class of the rows `lengths`, `all three` is charged its whole schedule on every execution "
+            f"phase, whatever the verdict records say: {theirs}.") in said
+    assert ("The stop class of the row `design` is charged its whole schedule on every execution phase, whatever the "
+            f"verdict records say: {LB.NO_OFFSET}.") in said
+
+
 def test_the_set_time_card_is_an_input_marked_simulated_and_the_documents_figure_carries_its_mark():
     """The card every figure under the label rests on is simulated: a fourth mark, which the card's input alone
     carries, with the clause the figure rests on as its source. The document's figure at D_j = 1 carries that mark

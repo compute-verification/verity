@@ -597,7 +597,8 @@ class HeadTime(NamedTuple):
     def words(self) -> str:
         """The time in words, as a line states it."""
         return (f"due {_n(self.offset)} bucket(s) after the close that hands it, and accepted at that tick "
-                + (f"or one of the {_n(self.wait)} after it" if self.wait else "and no later"))
+                + ("and no later" if not self.wait else "or the tick after it" if self.wait == 1 else
+                   f"or one of the {_n(self.wait)} after it"))
 
 
 class Stop(NamedTuple):
