@@ -310,6 +310,7 @@
   "Proofs.Flock.SpotFlock.AddressFacts.RowPlace",
   "Proofs.Flock.SpotFlock.AddressFacts.RowSample",
   "Proofs.Flock.SpotFlock.AddressFacts.RowPublished",
+  "Proofs.Flock.SpotFlock.AddressFacts.RowWires",
   "Proofs.Flock.SpotFlock.AddressFacts.RowFirst"
  ],
  "exempt": {
