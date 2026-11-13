@@ -22,8 +22,8 @@ ROOT = Path(__file__).resolve().parents[6]
 V0 = "verity/inference-only/v0"
 PRIVATE_ONLY = ("only the private form (v1: division committed under hiding leaves, compliance proved, padded profile) "
                 "may be composed")
-COMPOSITES = {"Core.Onsite": ROOT / "verity/protocols/onsite/verifier/CoreOnsite.lean",
-              "Core.Remote": ROOT / "verity/protocols/remote/verifier/CoreRemote.lean"}
+COMPOSITES = {"Core.Onsite": ROOT / "verity/protocols/compose/verifier/onsite/CoreOnsite.lean",
+              "Core.Remote": ROOT / "verity/protocols/compose/verifier/remote/CoreRemote.lean"}
 #: The protocols that publish private data in the clear, each with what it publishes.
 IN_THE_CLEAR = {V0: "the division, and each inference block's gates and fresh-input bits"}
 #: The protocols of `IN_THE_CLEAR` a composite may compose, each with its reason. KNOWN only shrinks: an entry no
