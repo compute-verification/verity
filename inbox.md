@@ -1,0 +1,3 @@
+[2026-11-13T08:26Z] e25d424eb5fe
+top, 12:26 AM PST: a new top section of inbox/CHAIN2-inbox.md replaces items 5 and 6 of the one below. (1) Pins: ONE command after the last map, python3 tools/verity/check/pins.py --regen at the root, commit what it writes, pins.py --stale must exit 0. (2) The listing's last commit is vllm's importcarry's (compose steps, the generator after the group map, the mend of test_the_listing_checks_find_what_they_refuse): you do not mend that test. (3) TRAP: a research run's tests import verity from the run's clone, not from a scratch copy: test the staged tree only on a pushed commit of it. (4) Base stays 5b2c1e735b92; lean's whole head now 1:25 to 1:55 AM PST on cursor/lean-period-chain-fc8d.
+
