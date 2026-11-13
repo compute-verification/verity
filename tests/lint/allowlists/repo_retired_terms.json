@@ -3162,7 +3162,7 @@
     {"file": "benchmarks/pouw/tests/test_salt_bind.py", "count": 1},
     {"file": "benchmarks/pouw/tests/test_served_h1.py", "count": 42},
     {"file": "benchmarks/pouw/tests/test_served_units_summarize.py", "count": 2},
-    {"file": "benchmarks/pouw/tests/test_served_zk.py", "count": 131},
+    {"file": "benchmarks/pouw/tests/test_served_zk.py", "count": 89},
     {"file": "benchmarks/pouw/tests/test_theory_fold_root.py", "count": 2},
     {"file": "benchmarks/pouw/tests/test_theory_isa_cap.py", "count": 2},
     {"file": "benchmarks/pouw/theory/fold_root_check.py", "count": 3},
