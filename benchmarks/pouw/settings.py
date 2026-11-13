@@ -116,6 +116,9 @@ REGISTRY = Registry(
     S("SERVED_TREE", str, None, WHERE, "the source tree served_profile.py profiles; unset, the working directory"),
     # ---------------------------------------------------------------- the harness
     S("POUW_CUDA_BIN", str, None, WHERE, "the CUDA toolkit's bin directory the SASS gate takes cuobjdump and nvdisasm from"),
+    S("VERITY_POUW_NVCC", str, None, WHERE, "a CUDA >= 12.8 toolkit's root (its bin/ holds nvcc and cuobjdump), with which "
+                                            "test_pearl_c_sm120.py's and test_pearl_c_sm90.py's build tests compile the "
+                                            "kernels and hold them to the SASS gate"),
     S("POUW_SASS_GATE_CACHE", str, None, WHERE, "the SASS gate's cache; unset, ~/.cache/pouw-harness/sass-gate"),
     S("POUW_HARNESS_LIB", str, None, WHERE, "the harness's native library; unset, native/build/libpouw_harness.so"),
     S("POUW_HARNESS_LT2", str, None, VALUE, "the second cuBLASLt's library; unset, libpouw_lt2.so beside the harness's if "
