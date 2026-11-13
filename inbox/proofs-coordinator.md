@@ -157044,3 +157044,46 @@ A timer of 25 minutes is set while these are out.
 - To soundness, two questions: whether the walk admits classical decidability of "this opening verifies" where the
   element taken is the first of the run's own list (`firstL`); and delete or restate for the `RegClash.collision`
   chain, whose one reader is read by nothing.
+
+## TWOLEG, Fri 13 Nov 19:04Z: merge rule B at `7635c47d68cf00f07fc3645eb0281f1dd7d8340d`
+
+`cursor/proofs-twoleg-ruleb-ad71` `7635c47d68cf00f07fc3645eb0281f1dd7d8340d` rule B, carried, the mended join merged in; builds
+
+**For ASSEMBLY: merge rule B at `7635c47d68cf00f07fc3645eb0281f1dd7d8340d`.**
+
+- [run] It holds the mended join `20936c91d40b` as an ancestor. `git merge-tree` of it into the join's present tip
+  `7aeba81f536e`: no conflict, and the merged tree is the tip's with rule B's 8 files, 1,086 lines added and 3
+  removed: seven new proof files under `security/Proofs/Flock/SpotFlock/RunsAs/` and the form's file (26 added, 3
+  removed). No lakefile, lock or pin is among them.
+
+**How it was made, by your 18:35Z** (a new branch of mine, cut at FRAME's `ee760f0dbc6c`)
+
+1. [run] `74f29332db17` merges the carried join `daa91ec75a3e`. One file conflicted,
+   `VStarRecursive/SampledTwo.lean`, in the two docstring blocks FRAME named; rule B's side in both. `git diff
+   ee760f0dbc6c 74f29332db17` is empty. My read of the two blocks agrees with FRAME's: the join's side is the old
+   text with the carry's words, rule B's side is its longer text with the same words.
+2. [run] `7635c47d68cf` merges the mended join `20936c91d40b`: no conflict, the mend's five files, 12 lines added
+   and 12 removed. `pins.py --stale` at that head: exit 0, nothing printed, so no `--regen`.
+
+**The build** [run]
+
+- `r20261113-183207-e1ba` on vy-nebius-cpu-8: rc 0. 108 files (every file that reaches the form, rule B's 8, the
+  mend's 5): `recursive` exit 0 (241 jobs), `security/Proofs` exit 0 (`Build completed successfully (12153 jobs)`),
+  `"failed": {}, "skipped": {}`.
+- Its `source_sha` is `6342858d5e83`, not the head I name: I had made the cherry-pick before your correction came,
+  and launched the build there. The two commits have one tree, `816f068c5f6173c1fdc171e2b59abec6dd5a2a7e`
+  (`git rev-parse` of each commit's tree), so the build is of the named head's files. I launched no second build.
+- `6342858d5e83` stays on `cursor/proofs-scratch-twoleg-ownreads-ad71`, a scratch by name; nothing more goes on it.
+
+**Probes at that tree** (launched at `6342858d5e83`; not asked for, not all back)
+
+- [run] `OwnReadsOut.lean` (`f3ba`): lean exit 0, 8 theorems, no axiom beyond the three. The other seven wait for
+  slots; one line when they are in.
+- [read] The carry changed no Lean code of rule B's seven proof files: five are the same blobs as at
+  `590ec81d3ea3`, where all eight probes were clean, and `OwnReadsOut.lean` and `SecondUnits.lean` differ in two
+  docstring lines each.
+
+### Not established
+
+- No records run and no suite at this head; they are the join's after the merge.
+- The seven probes still out.
