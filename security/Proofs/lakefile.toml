@@ -130,4 +130,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.SampledTwo.SessionMsgs", "Proofs.Properties.Verity.SampledTwo.MessagesOpen",
   "Proofs.Properties.Verity.SampledTwo.Claim", "Proofs.Properties.Verity.SampledTwo.Reading",
   "Proofs.Properties.Verity.SampledTwo.Refused", "Proofs.Properties.Verity.SampledTwo.Steps",
-  "Proofs.Properties.Verity.SampledTwo.DevAgrees"]
+  "Proofs.Properties.Verity.SampledTwo.DevAgrees", "Proofs.Properties.Verity.SampledTwo.SecondRead",
+  "Proofs.Properties.Verity.SampledTwo.ClaimInner", "Proofs.Properties.Verity.SampledTwo.Ordered",
+  "Proofs.Properties.Verity.SampledTwo.Deployed", "Proofs.Properties.Verity.SampledTwo.Shown",
+  "Proofs.Properties.Verity.SampledTwo.FirstSample", "Proofs.Properties.Verity.SampledTwo.InputMap"]
