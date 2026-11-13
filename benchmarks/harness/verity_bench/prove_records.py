@@ -119,6 +119,8 @@ FIGURES = {"gpus_per_serving_gpu": "prover GPUs a serving GPU",
            "gpu_seconds_per_token": "prover GPU-seconds a served token",
            "lean_verifier_seconds_per_token": "Lean verifier seconds a served token",
            "proof_bytes_per_token": "proof bytes a served token"}
+#: the unit of each Lean figure's fitted rate, as the table prints it
+LEAN_RATE_UNITS = {"lean_verifier_seconds_per_token": "s an AND gate", "proof_bytes_per_token": "bytes a witness bit"}
 #: the table a run's result keeps beside its measurements, relative to the run's directory
 TABLE = "out/prove.json"
 #: the block types with no figure the rendered table names, the most blocks first; `--json` names every one
@@ -634,7 +636,8 @@ def _mark(doc: Mapping[str, Any], figure: str) -> tuple[float | None, str]:
     """A total's value and its mark, in the table's words. The proving totals: their status (`measured`, `modeled`, or
     `partial` with how many block types it leaves out), the share of the proving time steady-state rows measure and
     the range's other end. The Lean verifier's seconds and the proof's bytes: `not measured`, with no value, else the
-    status, the block type measured with what its accept holds (its record's `label`) and what was scaled."""
+    status, each source's share of the figure (own, family, fitted) with the fitted rate, and the block type measured
+    with what its accept holds (its record's `label`)."""
 
     t = doc["totals"]
     if figure in ("gpus_per_serving_gpu", "gpu_seconds_per_token"):
@@ -652,10 +655,13 @@ def _mark(doc: Mapping[str, Any], figure: str) -> tuple[float | None, str]:
                       f"(`{RUN_OF_RECORD}={record_name(doc['workload'], LEAN)}`)")
     m = t["lean_verify"][0]
     status = "modeled, not measured" if v["status"] == "modeled" else v["status"]
-    scaled = (f"; scaled: the other {v['scaled_block_types']} block types, {1 - v['measured_share']:.1%} of it: "
-              f"{v['basis']}" if v["scaled_block_types"] else "")
+    shares = ", ".join(f"{word} {x['share'] or 0.0:.1%} ({x['block_types']} block types)"
+                       for k, word in P.LEAN_SOURCES.items() for x in [v["sources"][k]])
+    rate = ("no fitted rate" if v["fitted_rate"] is None else
+            f"fitted rate {v['fitted_rate']:.4g} {LEAN_RATE_UNITS[figure]}")
     one = "one block type" if len(t["lean_verify"]) == 1 else f"{len(t['lean_verify'])} block types, the most proving time first"
-    return v["value"], f"{status}: measured on {one}, `{m['block']}` ({m['label']}, run {m['run']}){scaled}"
+    return v["value"], (f"{status}: {shares} ({rate}); measured on {one}, `{m['block']}` ({m['label']}, run {m['run']}): "
+                        f"{v['basis']}")
 
 
 def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dict]:

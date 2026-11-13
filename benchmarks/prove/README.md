@@ -258,7 +258,8 @@ research run --on auto --project verity --source . --cwd source --store-read -- 
 ```
 
 A measurement's mark is the table's word for its total (`measured`, `modeled`, `partial`, or for the Lean verifier's
-two figures `modeled, not measured` with the block type measured and what its accept holds), first among its inputs,
+two figures `modeled, not measured` with each source's share (own, family, fitted), the fitted rate, the block type
+measured and what its accept holds), first among its inputs,
 then the records the table read; the proving totals' marks also give the plan's own prices where its record states
 them. A total the table gives as not measured has no value and says why. The validation is
 the six checks a steady-state row is held to: passed when some block type is priced from rows that passed them all

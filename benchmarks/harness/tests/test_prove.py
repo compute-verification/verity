@@ -2308,12 +2308,17 @@ def test_under_a_research_run_the_runner_records_spots_metrics_and_prints_the_sa
     run(*spot, within=second)
     lean = {m["name"]: m for m in result(second)["measurements"]}
     t = json.loads((second / R.TABLE).read_text())["totals"]
-    for name, key in (("benchmarks/lean-verifier-seconds-per-token", "lean_verifier_seconds_per_token"),
-                      ("benchmarks/proof-bytes-per-token", "proof_bytes_per_token")):
-        assert lean[name]["value"] == t[key]["value"] and "why" not in lean[name]
-        assert lean[name]["inputs"][0].startswith(
-            f"modeled, not measured: measured on one block type, `{RMSNORM}` ({L.COVER_LABEL}, run "
-            f"r20261110-000000-0001); scaled: the other {t[key]['scaled_block_types']} block types, ")
+    for name, key, unit in (("benchmarks/lean-verifier-seconds-per-token", "lean_verifier_seconds_per_token", "s an AND gate"),
+                            ("benchmarks/proof-bytes-per-token", "proof_bytes_per_token", "bytes a witness bit")):
+        v = t[key]
+        assert lean[name]["value"] == v["value"] and "why" not in lean[name]
+        own, family, fitted = (v["sources"][k] for k in ("measured", "family", "fitted"))
+        assert own["block_types"] == 1 and fitted["block_types"] > 0 and v["fitted_rate"] > 0
+        assert lean[name]["inputs"][0] == (
+            f"modeled, not measured: own {own['share']:.1%} (1 block types), family {family['share'] or 0.0:.1%} "
+            f"({family['block_types']} block types), fitted {fitted['share']:.1%} ({fitted['block_types']} block types) "
+            f"(fitted rate {v['fitted_rate']:.4g} {unit}); measured on one block type, `{RMSNORM}` ({L.COVER_LABEL}, run "
+            f"r20261110-000000-0001): {v['basis']}")
         assert "r20261110-000000-0001" in lean[name]["inputs"][1:]
 
     every = tmp_path / "run-3"
