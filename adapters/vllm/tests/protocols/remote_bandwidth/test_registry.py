@@ -9,8 +9,8 @@ from dataclasses import replace
 import numpy as np
 import pytest
 from verity.commitments.merkle import Opening
-from verity.protocols.poub.verifier import audit
-from verity.protocols.poub.verifier import receipts as rb
+from verity.protocols.accounting.poub.verifier import audit
+from verity.protocols.accounting.poub.verifier import receipts as rb
 
 from verity_vllm.protocols.remote_bandwidth.interface import (
     IDENTITY,

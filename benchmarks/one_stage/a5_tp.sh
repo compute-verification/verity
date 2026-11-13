@@ -84,7 +84,7 @@
 #   --transfer-gate`, a5.py --transfer-gate and its transfer-gate negatives). The stand-in's partition holds them before its
 #   SiluMul_v2{I} (served_tp --template), e.g. STANDIN=256:work:2 A5_TRANSFER_GATES='RoPEHead_v1{D=64}'
 #   A5_SETS='256 rope-head/d64/bf16': the toy's 32 RoPE heads a rank proved whole beside 2 of its 8 SiluMul rows.
-# A5_PLAIN=1 (with A5_CHALLENGER): plain sessions (a5.py --plain), not --zk: each rank's window is one member drawn by its stream
+# A5_PLAIN=1 (with A5_CHALLENGER): plain sessions (a5.py --plain), not --zk: each rank's window is one member sampled by its stream
 #   under the partition's stratified rate, inside PLAIN_SCOPE, e.g. STANDIN=256:stratified-rate:1/2 A5_SETS=256 A5_CHALLENGER=local
 #   A5_JOBS=2.
 # ZK_SERVER=1: every session's prover runs behind the Lean ZK server's send check (--firewall to a5.py and each STANDIN
@@ -141,22 +141,22 @@ fi
 
 ROW=${A5_ROW:-glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager}
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
-{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/protocols/flock/prover HEAD:verity/protocols/flock/pod HEAD:verity/protocols/flock/agreement HEAD:verity/protocols/flock/tool.py HEAD:benchmarks/numerical; } | tee $O/machine.txt
+{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/protocols/proofs/flock/prover HEAD:verity/protocols/proofs/flock/prover/pod HEAD:verity/protocols/proofs/flock/prover/agreement HEAD:verity/protocols/proofs/flock/prover/tool.py HEAD:benchmarks/numerical; } | tee $O/machine.txt
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }
 
-(cd verity/protocols/flock/verifier && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
+(cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
 LP=$!
 mkdir -p $O/m0-build
 FW=${A5_FLOCK_WORK:-$W}   # a kept build dir: 20-gpu-link.sh re-applies this tree's patches and cargo rebuilds what changed
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/flock/pod/60-circuit.sh > $O/m0-build/build.log 2>&1 \
+RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > $O/m0-build/build.log 2>&1 \
   || { tail -40 $O/m0-build/build.log; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
-LEAN=$REPO/verity/protocols/flock/verifier/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
+LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
 PLAINS=(); if [ "${A5_PLAIN:-0}" = 1 ]; then PLAINS=(--plain); fi
-(cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
+(cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 if [ "${A5_MEMBER_SECONDS:-0}" = 1 ]; then
   STAMPED=$($PY benchmarks/one_stage/member_seconds.py wrap $W/stamped $BIN $LEAN $FWL) || exit 9
@@ -172,7 +172,7 @@ done
 TG=(); TPL=()
 for t in ${A5_TRANSFER_GATES:-}; do TG+=(--transfer-gate "$t"); TPL+=(--template "$t"); done
 [ ${#TG[@]} -eq 0 ] || [ -n "${A5_ADVICE:-}" ] || { echo "A5_TRANSFER_GATES lists the advice compiler's transfer gates: set A5_ADVICE=workload"; exit 3; }
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/flock/prover/python:$REPO/adapters/vllm
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
 export RAYON_NUM_THREADS=$(nproc)
 MAIN=${A5_MAIN:-}
 if [ -n "${A5_CHALLENGER:-}" ] && [ -z "$MAIN" ]; then
