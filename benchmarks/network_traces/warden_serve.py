@@ -95,9 +95,9 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   exactly its egress record's cells, each in its bucket, its request is the ingress record's and its response the
   egress record's; `check.json`. With `--key-sha512 HEX --session HEX`, which the auditor hands it, the SHA-512 of
   the network certifier's public key and its session, a deployment record that names another key or session is a
-  problem. With `--registrations FILE` besides, a check that found no problem writes there what it was checked
-  under and then each registration of connection rows it held, one a line (`connection_rows_run`'s "The
-  registrations' file"); `--registrations` without the two is refused.
+  problem, the first of the problems `check.json` lists. With `--registrations FILE` besides, a check that found no
+  problem writes there what it was checked under and then each registration of connection rows it held, one a
+  line (`connection_rows_run`'s "The registrations' file"); `--registrations` without the two is refused.
 - `rehearse` makes a key in a scratch directory, writes the traffic, starts the fake endpoint when `--fake`, and runs
   `serve` and `client` as processes, then `check`.
 
@@ -1002,17 +1002,20 @@ def check_load(run: Path, dep: dict, key: LmsKey, session: bytes) -> tuple[dict 
 def check(run: Path, registrations: Path | None = None, under: tuple[bytes, bytes] | None = None) -> dict:
     """The offline check of a served run (the module docstring's `check`). ``under`` is what the auditor hands it:
     the SHA-512 of the network certifier's public key (`connection_rows_run.key_sha512`) and its session, which the
-    run's deployment record is held to. With ``registrations`` it leaves the registrations' file there: what it
-    was checked under and each registration of connection rows it held, where it found no problem at all, and no
-    file where it found one or didn't end. ValueError, before the run is read, for ``registrations`` without
-    ``under``; a file already there is removed first."""
+    run's deployment record is held to, a problem of it the first of the problems. With ``registrations`` it leaves
+    the registrations' file there: what it was checked under and each registration of connection rows it held,
+    where it found no problem at all, and no file where it found one or didn't end. ValueError, before the run is
+    read, for ``registrations`` without ``under``; a file already there is removed first."""
     crr.open_registrations(registrations, under)
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])
     key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
     certified, refused = read_certified(run / "certified.jsonl")
     records = read_records(run, params)
-    problems = [] if params.digest.hex() == dep["digest"] else ["the deployment's digest isn't its parameters'"]
+    # first what the whole check is held under: a reader that cuts the problems' list must not lose it
+    problems = [] if under is None else crr.not_under(dep, under)
+    if params.digest.hex() != dep["digest"]:
+        problems.append("the deployment's digest isn't its parameters'")
     load, load_problems = check_load(run, dep, key, session)
     problems += load_problems
     windows = []

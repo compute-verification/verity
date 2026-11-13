@@ -74,9 +74,9 @@ UNDER = ("5a" * 64, "c3" * 32)
 
 def checked(*registrations: object, under: tuple[object, object] = UNDER) -> str:
     """A registrations' file as the offline check of a network certifier's run writes it: the line of what it was
-    checked under, then the registrations, one a line."""
+    checked under, of its own format, then the registrations, one a line."""
     return "".join(json.dumps(x) + "\n" for x in (
-        {SV.CHECKED_UNDER: {SV.KEY_SHA512: under[0], SV.SESSION: under[1]}}, *registrations))
+        {"format": SV.CHECKED, SV.CHECKED_UNDER: {SV.KEY_SHA512: under[0], SV.SESSION: under[1]}}, *registrations))
 
 
 def names_under(*runs: str, under: tuple[str, str] = UNDER) -> str:
@@ -1035,17 +1035,20 @@ def kept_whole(at: str, newest: str, n: int = 1) -> str:
 
 
 def test_a_registrations_file_that_doesnt_say_what_it_was_checked_under_gives_no_head(tmp_path):
-    """The first line of the registrations' file says what the check that wrote it was handed, and the answer
-    prints the hash and the session it names. A file without that line gives no head, so the class is charged its
-    whole schedule, and the line names the file, its run and what its first line is: a file of bare registrations,
-    whose first line is a registration; one with no line; one whose first line is no JSON, is no object, names
-    another field besides or lacks one of the two; one whose hash is not the hex of a SHA-512 or whose session is
-    no hex. A line of that form past the first is no registration. The same run with the line holds its execution
-    phase. The reader compares what a file names with nothing: two runs whose files name two keys are both read,
-    and the answer prints each."""
+    """The first line of the registrations' file, under a format of its own, says what the check that wrote it was
+    handed, and the answer prints the hash and the session it names. A file whose line 1 is not that line gives no
+    head, so the class is charged its whole schedule, and the line names the file, its run and what its first line
+    is, by name: one with no `format`; one with another, a later version's or a word that is no text; a
+    registration's, as a file of bare registrations has; a blank line 1, whatever follows it; a file with no line;
+    a first line that is no JSON or no object; one of the format that names another field besides or lacks one of
+    the two; one whose hash is not the hex of a SHA-512 or whose session is no hex. A line of that form past the
+    first is no registration. The same run with the line holds its execution phase. The reader compares what a
+    file names with nothing: two runs whose files name two keys are both read, and the answer prints each."""
     first, second = head(3, 5, 0), head(4, 5, 0)
     reg, under = registration(first), {SV.KEY_SHA512: UNDER[0], SV.SESSION: UNDER[1]}
-    line = json.dumps({SV.CHECKED_UNDER: under}) + "\n"
+    word = "verity-network-certifier/checked-registrations/v1"
+    line = json.dumps({"format": word, "checked_under": under}) + "\n"
+    assert (SV.CHECKED, SV.FORMAT) == (word, "format") and word != C.REGISTRATION == reg["format"]
     assert (SV.CHECKED_UNDER, SV.KEY_SHA512, SV.SESSION) == ("checked_under", "key_sha512", "session")
     assert checked(reg) == line + jsonl([reg]) and SV.checked_under(line) == UNDER
 
@@ -1058,22 +1061,44 @@ def test_a_registrations_file_that_doesnt_say_what_it_was_checked_under_gives_no
 
     got = of(checked(reg))
     assert got.held == 1 and len(got.verdicts) == 4 and printed(got) == (names_under("a run"),)
-    a_registration = ("its first line is a registration, not an object with the one field `checked_under`, an "
-                      "object with the two fields `key_sha512` and `session`")
-    another = a_registration.replace("a registration", "another thing")
+    due = f", where a line of the `format` `{word}` is due"
+    a_registration, no_format = "its first line is a registration" + due, "its first line has no `format`" + due
+    other_fields = ("its first line is not its `format` and the one field `checked_under`, an object with the two "
+                    "fields `key_sha512` and `session`")
+
+    def of_format(form: object) -> str:
+        return f"its first line has the `format` {json.dumps(form)}" + due
+
     lacks = {
+        # no `format`
+        jsonl([{"checked_under": under}, reg]): no_format,
+        jsonl([under, reg]): no_format,
+        jsonl([{}, reg]): no_format,
+        # another `format`
+        jsonl([{"format": word[:-1] + "2", "checked_under": under}, reg]): of_format(word[:-1] + "2"),
+        jsonl([{"format": word.upper(), "checked_under": under}, reg]): of_format(word.upper()),
+        jsonl([{"format": None, "checked_under": under}, reg]): of_format(None),
+        jsonl([{"format": [word], "checked_under": under}, reg]): of_format([word]),
+        # a registration's
         jsonl([reg]): a_registration,
         jsonl([reg]) + line: a_registration,
+        jsonl([{"format": C.REGISTRATION, "checked_under": under}, reg]): a_registration,
+        # a blank line 1, and no line
+        "\n" + checked(reg): "its first line is blank",
+        " \t\n" + checked(reg): "its first line is blank",
         "": "it holds no line",
         "\n \n": "it holds no line",
+        # no JSON, no object
         "{not json\n" + jsonl([reg]): "its first line is no JSON: ",
-        jsonl([[under], reg]): another,
-        jsonl([under, reg]): another,
-        jsonl([{SV.CHECKED_UNDER: under, "more": 1}, reg]): another,
-        jsonl([{SV.CHECKED_UNDER: [UNDER[0], UNDER[1]]}, reg]): another,
-        jsonl([{SV.CHECKED_UNDER: {SV.KEY_SHA512: UNDER[0]}}, reg]): another,
-        jsonl([{SV.CHECKED_UNDER: {SV.SESSION: UNDER[1]}}, reg]): another,
-        jsonl([{SV.CHECKED_UNDER: under | {"more": 1}}, reg]): another,
+        jsonl([[under], reg]): "its first line is no object",
+        jsonl([word, reg]): "its first line is no object",
+        # of the format, and not the two alone
+        jsonl([{"format": word}, reg]): other_fields,
+        jsonl([{"format": word, "checked_under": under, "more": 1}, reg]): other_fields,
+        jsonl([{"format": word, "checked_under": [UNDER[0], UNDER[1]]}, reg]): other_fields,
+        jsonl([{"format": word, "checked_under": {SV.KEY_SHA512: UNDER[0]}}, reg]): other_fields,
+        jsonl([{"format": word, "checked_under": {SV.SESSION: UNDER[1]}}, reg]): other_fields,
+        jsonl([{"format": word, "checked_under": under | {"more": 1}}, reg]): other_fields,
         checked(reg, under=(UNDER[0][2:], UNDER[1])): "its first line's `key_sha512` is not the hex of a SHA-512",
         checked(reg, under=(UNDER[0] + "5a", UNDER[1])): "its first line's `key_sha512` is not the hex of a SHA-512",
         checked(reg, under=(UNDER[0].upper(), UNDER[1])): "its first line's `key_sha512` is not the hex of a SHA-512",
@@ -1083,19 +1108,23 @@ def test_a_registrations_file_that_doesnt_say_what_it_was_checked_under_gives_no
         checked(reg, under=(UNDER[0], "")): "its first line's `session` is not the hex of a session",
         checked(reg, under=(UNDER[0], "c3c")): "its first line's `session` is not the hex of a session",
         checked(reg, under=(UNDER[0], 7)): "its first line's `session` is not the hex of a session"}
-    assert len(lacks) == 20
+    assert len(lacks) == 31
     for n, (text, lack) in enumerate(lacks.items(), 1):
         got = of(text, n)
         assert got.held == 0 and got.verdicts == () and len(got.why) == 1, (n, lack)
-        assert got.why[0].startswith(
+        said = got.why[0].removeprefix(
             "each connection is charged its whole schedule: the records of a run don't read: "
-            f"`out/registrations.jsonl` of a run does not say what it was checked under: {lack}"), (n, got.why[0])
+            "`out/registrations.jsonl` of a run does not say what it was checked under: ")
+        assert said == lack or (lack.endswith("no JSON: ") and said.startswith(lack)), (n, got.why[0])
         with pytest.raises(ValueError, match="does not say what it was checked under: "):
             SV.checked_under(text.splitlines()[0] if text.strip() else None)
+    # a `format` that is long is printed cut
+    long = of(jsonl([{"format": "x" * 500, "checked_under": under}, reg]), 40)
+    assert long.held == 0 and long.why[0].endswith('has the `format` "' + "x" * 79 + due)
     # a session of any length reads; a second line of the form is no registration, and holds nothing
-    short = of(checked(reg, under=(UNDER[0], "c3")), 30)
+    short = of(checked(reg, under=(UNDER[0], "c3")), 41)
     assert short.held == 1 and printed(short) == (names_under("a run", under=(UNDER[0], "c3")),)
-    twice = of(line + checked(reg), 31)
+    twice = of(line + checked(reg), 42)
     assert twice.held == 0 and "a registration of connection rows doesn't read" in twice.why[0]
     assert SV.UNSAID not in twice.why[0] and printed(twice) == (names_under("a run"),)
     # two files that name two keys: both read, each printed, neither refused
@@ -1396,10 +1425,14 @@ def test_a_superseded_runs_record_that_doesnt_read_keeps_whole_each_serve_not_la
     record, text = {CC.VERDICT: {}}, "{no json"
     no_json = "it is no JSON: " + why_not(json.loads, text)
     # a registrations' file that does not say what it was checked under is one such record, whatever it holds: one
-    # whose first line is a registration, one with no line, and one whose first line names no SHA-512
+    # whose first line is a registration, one with no line, one whose line 1 is blank, one whose first line is of
+    # another format, and one whose first line names no SHA-512
     unsaid = {name: (SV.REGISTRATIONS_FILE, bad, why_not(SV.checked_under, bad.splitlines()[0] if bad else None))
               for name, bad in (("registrations with no first line", jsonl([registration(first)])),
                                 ("registrations with no line", ""),
+                                ("registrations past a blank line 1", "\n" + checked(registration(first))),
+                                ("registrations under another format",
+                                 jsonl([json.loads(checked()) | {"format": "another's"}, registration(first)])),
                                 ("registrations checked under no hash",
                                  checked(registration(first), under=("5a", "c3"))))}
     lines = {"a verdict record": ("out/a-verdicts.jsonl", jsonl([record]), CC.lacks(record)),
@@ -1411,7 +1444,7 @@ def test_a_superseded_runs_record_that_doesnt_read_keeps_whole_each_serve_not_la
                                        no_json)
                 for path in ("out/a-verdicts.jsonl", "out/a-controls.jsonl", SV.REGISTRATIONS_FILE, SV.SERVES_FILE)},
              **unsaid}
-    assert len(lines) == 11 and all(lack for _, _, lack in lines.values())
+    assert len(lines) == 13 and all(lack for _, _, lack in lines.values())
     assert all(lack.startswith("does not say what it was checked under: ") for _, _, lack in unsaid.values())
     after = 0
     for i, (name, (path, bad, lack)) in enumerate(lines.items()):

@@ -252,9 +252,10 @@ def command(out, under=None, file=None) -> list[str]:
 def test_the_check_writes_what_it_was_checked_under_then_each_registration_as_the_publisher_kept_it(
         tmp_path, monkeypatch):
     """Handed the SHA-512 of the network certifier's public key and the session, and given a file, a check that
-    accepts the run writes it. The first line names the hash and the session it was handed, and the reader's
-    `checked_under` reads them from it; the hash is over the LMS public key ``I ‖ T[1]``, the bytes the deployment
-    record writes in hex. Each line after it is one registration the check held to both, every handed execution
+    accepts the run writes it. The first line, under its own format's word, names the hash and the session it was
+    handed, and the reader's `checked_under` reads them from it; the hash is over the LMS public key ``I ‖ T[1]``,
+    the bytes the deployment record writes in hex. Each line after it is one registration the check held to both,
+    every handed execution
     phase's, in order: byte for byte the registration as the publisher kept it in `rows.jsonl`, and the head the
     reader's `head_of` reads from it is the head `check_registration` verified under the key, the session and the
     schedule. The reader, handed that file with the four verdicts of each head's classes, holds all three
@@ -271,8 +272,9 @@ def test_the_check_writes_what_it_was_checked_under_then_each_registration_as_th
     written, kept = file.read_text(), (out / crr.ROWS).read_text().splitlines()
     first, *lines = written.splitlines()
     names = (under[0].hex(), under[1].hex())
-    assert first == json.dumps({"checked_under": {"key_sha512": names[0], "session": names[1]}})
-    assert SV.checked_under(first) == names
+    assert first == json.dumps({"format": "verity-network-certifier/checked-registrations/v1",
+                                "checked_under": {"key_sha512": names[0], "session": names[1]}})
+    assert SV.checked_under(first) == names and crr.CHECKED == SV.CHECKED == json.loads(first)["format"]
     assert len(lines) == len(kept) == 3 and written == "".join(line + "\n" for line in (first, *lines))
     key, session = device_key(out)
     for w, (line, publishers) in enumerate(zip(lines, kept)):
@@ -323,7 +325,10 @@ def test_a_deployment_record_of_another_session_than_the_one_handed_gets_no_file
     """Handed the hash of the run's key and another session than its deployment record names, the check names the
     problem, the session and not the key, as its only one, and leaves no file, removing an earlier check's; handed
     another key's hash too, it names both. A deployment record changed to name another session than the one handed
-    is the same problem by name, beside its certificates, which verify under no other session."""
+    is the same problem by name, beside its certificates, which verify under no other session. What the check was
+    held under comes first among its problems, the key and then the session, ahead of the certificates': so the
+    fifty that `check.json` keeps hold it. The connection rows' check, called alone, names the two itself and
+    writes no file, and does not name again one its caller already found."""
     out, file = tmp_path / "run", tmp_path / "out" / "registrations.jsonl"
     served(out, tmp_path / "key")
     key, session = handed(out)
@@ -345,9 +350,24 @@ def test_a_deployment_record_of_another_session_than_the_one_handed_gets_no_file
 
     assert ws.check(out, file, (key, session))["accepted"] and file.exists()
     problems = refused(out, another_session, file, (key, session))
-    assert ("the deployment record's session is not the one the check was handed: "
-            f"{other.hex()}, not {session.hex()}") in problems and not file.exists()
-    assert "responses window 0 isn't certified" in problems and not any("key's SHA-512" in p for p in problems)
+    assert problems[0] == ("the deployment record's session is not the one the check was handed: "
+                           f"{other.hex()}, not {session.hex()}") and not file.exists()
+    assert "responses window 0 isn't certified" in problems[1:] and not any("key's SHA-512" in p for p in problems)
+    # both first, the key and then the session, ahead of every other problem of the check
+    both = refused(out, another_session, file, (wrong, session))
+    assert len(both) > 3 and [p.split(":")[0] for p in both[:3]] == [
+        "the deployment record's key's SHA-512 is not the one the check was handed",
+        "the deployment record's session is not the one the check was handed", "requests window 0 isn't certified"]
+    assert sum("is not the one the check was handed" in p for p in both) == 2 and not file.exists()
+    # the connection rows' check alone: it names the two first, writes no file, and repeats none its caller found
+    dep, records = json.loads((out / "deployment.json").read_text()), ws.read_records(out, ROWS)
+    rows = [out, dep, ROWS, records[ws.INGRESS], records[ws.EGRESS], records[ws.FAILS], ws.LINK, file]
+    summary, alone = crr.check(*rows, (), (wrong, other))
+    assert alone == crr.not_under(dep, (wrong, other)) and len(alone) == 2 and not file.exists()
+    assert (summary["registered"], summary["of"]) == (3, 3)
+    assert crr.check(*rows, alone[1:], (wrong, other))[1] == alone[:1] and not file.exists()
+    assert crr.check(*rows, alone, (wrong, other))[1] == [] and not file.exists()
+    assert crr.check(*rows, (), (key, session))[1] == [] and file.exists()
 
 
 def test_a_registrations_file_without_the_hash_or_the_session_is_refused_before_the_run_is_read(tmp_path):

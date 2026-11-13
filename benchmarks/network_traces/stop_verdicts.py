@@ -18,9 +18,10 @@ readers are the harness's). A run holds, each one JSON object a line:
   read, whatever its format, and the line says which it lacks). Which of the four verdicts a record is, is read from
   its verdict's ``format`` (`FORMATS`). A verdict whose verifier's format is not listed there reads as missing, and
   a record of such a format is counted in a line and charges nothing;
-- `REGISTRATIONS_FILE`: its first line, what the offline check of the network certifier's run that wrote the file
-  was handed to check it under (`CHECKED_UNDER`: the SHA-512 of the network certifier's public key and the
-  session), then the registration of each execution phase's connection rows that its verdicts were decided under,
+- `REGISTRATIONS_FILE`: its first line, of the format `CHECKED`, what the offline check of the network certifier's
+  run that wrote the file was handed to check it under (`CHECKED_UNDER`: the SHA-512 of the network certifier's
+  public key and the session), then the registration of each execution phase's connection rows that its verdicts
+  were decided under,
   as `connection_rows.registration` writes it and as that check kept it ("A head", below). A record names its head
   by digest alone, and a class's count is read from the head;
 - its control records, in every file named as `CONTROLS_FILES`: an object with the fields `CONTROL_FIELDS` ("A
@@ -102,13 +103,15 @@ written, by the offline check of the network certifier's run (`warden_serve.py c
 `connection_rows_run.check`). The auditor hands that check the SHA-512 of the network certifier's public key and
 the session; it holds the run's deployment record to them, verifies each registration under that key and session
 (`connection_rows.check_registration`), lays its tables again from the run's own records, and writes the file only
-where it found no problem: a first line that names the hash and the session it was handed, then a line for each
-registration it held to both. The reader reads the first line (`checked_under`). A file without it gives no head:
-in a run that is not superseded nothing is held and the line says the file does not say what it was checked under,
-and in a superseded run the file is one record that doesn't read ("The order of runs"). The answer prints the
-hash and the session each file names, and the reader compares them with nothing: it is told no key. The file is
-unsigned, and the reader can't tell who wrote the one it is handed: a head read here is as good as the run of that
-check and as what that run was handed, and a file from any other writer is a head nobody checked.
+where it found no problem: a first line, of a ``format`` of its own (`CHECKED`), that names the hash and the
+session it was handed, then a line for each registration it held to both. The reader reads the first line
+(`checked_under`), which is the file's line 1 and no later one. A file whose line 1 is blank, has no ``format`` or
+has another, a registration's among them, gives no head: in a run that is not superseded nothing is held and the
+line says the file does not say what it was checked under, and in a superseded run the file is one record that
+doesn't read ("The order of runs"). The mend is to run that check again, handed the hash and the session. The
+answer prints the hash and the session each file names, and the reader compares them with nothing: it is told no
+key. The file is unsigned, and the reader can't tell who wrote the one it is handed: a head read here is as good as
+the run of that check and as what that run was handed, and a file from any other writer is a head nobody checked.
 
 **An execution phase is one serve's**: a serve, a link and the phase's number. A registration of connection rows
 names no serve, so a head's serve is the one its verdict records name (those on its digest, counted or not), which
@@ -215,8 +218,9 @@ RECORDS_FILES, REGISTRATIONS_FILE = "out/*-verdicts.jsonl", "out/registrations.j
 CONTROLS_FILES, SERVES_FILE = "out/*-controls.jsonl", "out/serve-registrations.jsonl"
 FILES = (RECORDS_FILES, REGISTRATIONS_FILE, CONTROLS_FILES, SERVES_FILE)
 #: the first line of a registrations' file, as the check that wrote it writes it (`connection_rows_run`'s "The
-#: registrations' file"): what its registrations were checked under, the SHA-512 of the network certifier's public
-#: key and the session, each in hex
+#: registrations' file"): its own ``format`` word, which no registration has, and what its registrations were
+#: checked under, the SHA-512 of the network certifier's public key and the session, each in hex
+CHECKED = "verity-network-certifier/checked-registrations/v1"
 CHECKED_UNDER, KEY_SHA512, SESSION = "checked_under", "key_sha512", "session"
 #: what the reader says of a registrations' file without that line
 UNSAID = "does not say what it was checked under"
@@ -301,20 +305,28 @@ def _hex(x: object, size: int | None = None) -> bool:
 
 def checked_under(first: str | None) -> tuple[str, str]:
     """What a registrations' file says it was checked under (the module docstring's "A head"), from its first
-    line, None for a file that holds no line: the SHA-512 of the network certifier's public key and the session,
-    each the hex the line holds. ValueError, saying why the file does not say it, for no line and for a first
-    line that is anything else, a registration among them."""
+    line, the file's line 1, None for a file that holds no line: the SHA-512 of the network certifier's public key
+    and the session, each the hex the line holds. ValueError, saying why the file does not say it: no line; a
+    blank line 1; one that is no JSON or no object; one whose ``format`` is not `CHECKED`, by name where it has
+    none, has a registration's or has another; one of that format that holds anything but the two."""
     if first is None:
         raise ValueError(f"{UNSAID}: it holds no line")
+    if not first.strip():
+        raise ValueError(f"{UNSAID}: its first line is blank")
     try:
         doc = json.loads(first)
     except ValueError as e:
         raise ValueError(f"{UNSAID}: its first line is no JSON: {e}") from None
-    under = doc.get(CHECKED_UNDER) if isinstance(doc, Mapping) and set(doc) == {CHECKED_UNDER} else None
+    if not isinstance(doc, Mapping):
+        raise ValueError(f"{UNSAID}: its first line is no object")
+    if (form := doc.get(FORMAT)) != CHECKED:
+        what = ("has no `format`" if FORMAT not in doc else "is a registration" if form == C.REGISTRATION else
+                f"has the `format` {json.dumps(form)[:80]}")
+        raise ValueError(f"{UNSAID}: its first line {what}, where a line of the `format` `{CHECKED}` is due")
+    under = doc.get(CHECKED_UNDER) if set(doc) == {FORMAT, CHECKED_UNDER} else None
     if not isinstance(under, Mapping) or set(under) != {KEY_SHA512, SESSION}:
-        what = "a registration" if isinstance(doc, Mapping) and doc.get("format") == C.REGISTRATION else "another thing"
-        raise ValueError(f"{UNSAID}: its first line is {what}, not an object with the one field `{CHECKED_UNDER}`, "
-                         f"an object with the two fields `{KEY_SHA512}` and `{SESSION}`")
+        raise ValueError(f"{UNSAID}: its first line is not its `format` and the one field `{CHECKED_UNDER}`, an "
+                         f"object with the two fields `{KEY_SHA512}` and `{SESSION}`")
     if not _hex(under[KEY_SHA512], 64):
         raise ValueError(f"{UNSAID}: its first line's `{KEY_SHA512}` is not the hex of a SHA-512")
     if not _hex(under[SESSION]):
@@ -777,9 +789,11 @@ def read(store: Any, runs: Iterable[str], superseded: Iterable[str] = ()
             control = fnmatch.fnmatchcase(path, CONTROLS_FILES)
             lines = _lines(at / path)
             if path == REGISTRATIONS_FILE:
-                # its first line is what it was checked under, and a file without one gives no head
+                # its line 1 is what it was checked under, and a file without one, a blank line 1 among them,
+                # gives no head
+                first = None if not lines else lines[0][1] if lines[0][0] == 1 else ""
                 try:
-                    said.setdefault(checked_under(lines[0][1] if lines else None), []).append(run)
+                    said.setdefault(checked_under(first), []).append(run)
                 except ValueError as e:
                     if run not in superseded:
                         raise ValueError(f"`{path}` of {run} {e}") from None

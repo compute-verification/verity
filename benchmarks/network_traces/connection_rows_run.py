@@ -37,13 +37,15 @@ counting it at an execution phase that isn't complete.
 **The registrations' file** (`check`'s ``registrations`` and ``under``, `keep_registrations`). The check writes each
 registration that passed both of its holds, as the publisher kept it, one JSON object a line and in the execution
 phases' order, after a first line that says what they were checked under:
-``{"checked_under": {"key_sha512": HEX, "session": HEX}}``. The auditor hands the check the two: the SHA-512 of the
-network certifier's public key (`key_sha512`: over the LMS public key ``I ‖ T[1]``, the bytes a deployment record
-and the period check's parameters write in hex) and its session. The run's deployment record is held to them: one
-that names a key of another hash, or another session, is a problem that says which. So the key and the session
-the registrations verify under are the ones handed, and a run made under any other key, a rehearsal's own among
-them, gets no file under this one. A check that is handed neither writes no file, and one asked for a file without
-them refuses. It is the file a reader of connection rows takes its heads from
+``{"format": CHECKED, "checked_under": {"key_sha512": HEX, "session": HEX}}``. `CHECKED` is that line's own
+``format`` word, which no registration has, so a reader refuses every other first line by the one word. The
+auditor hands the check the two: the SHA-512 of the network certifier's public key (`key_sha512`: over the LMS
+public key ``I ‖ T[1]``, the bytes a deployment record and the period check's parameters write in hex) and its
+session. The run's deployment record is held to them: one that names a key of another hash, or another session,
+is a problem that says which, the first of the check's problems. So the key and the session the registrations
+verify under are the ones handed, and a run made under any other key, a rehearsal's own among them, gets no file
+under this one. A check that is handed neither writes no file, and one asked for a file without them refuses. It
+is the file a reader of connection rows takes its heads from
 (`stop_verdicts.REGISTRATIONS_FILE`), and the one place the network certifier's signature on such a head is
 checked: that reader holds no key, and reads from the first line what the file was checked under. A refusal, the
 word that no head comes and a registration that fails either hold give no line. Where the check, or the caller's
@@ -95,6 +97,8 @@ HAND = "connection-rows"
 ROWS, SALTS = "rows.jsonl", "rows.salts"
 #: a line's key for the word that its execution phase has no head, where a head's line has `registration`
 NO_HEAD = "no_head"
+#: the ``format`` of the registrations' file's first line, the line that says what the file was checked under
+CHECKED = "verity-network-certifier/checked-registrations/v1"
 #: what a check says that is asked for the registrations' file and was handed nothing to check under
 UNHANDED = ("the registrations' file is written only by a check that is handed the SHA-512 of the network "
             "certifier's public key and its session")
@@ -261,12 +265,12 @@ def open_registrations(path: Path | None, under: tuple[bytes, bytes] | None) -> 
 def keep_registrations(path: Path | None, held: Sequence[Mapping], problems: Sequence[str],
                        under: tuple[bytes, bytes]) -> None:
     """The registrations' file at `path` (the module docstring's "The registrations' file"), where there is a
-    registration and the check found no problem: its first line, what the check was handed and held the deployment
-    record to (``under``), then `held`, the registrations the check held to both, one a line. Else no file.
-    Nothing for no path."""
+    registration and the check found no problem: its first line, of the format `CHECKED`, what the check was handed
+    and held the deployment record to (``under``), then `held`, the registrations the check held to both, one a
+    line. Else no file. Nothing for no path."""
     if path is None or problems or not held:
         return
-    first = {"checked_under": {"key_sha512": under[0].hex(), "session": under[1].hex()}}
+    first = {"format": CHECKED, "checked_under": {"key_sha512": under[0].hex(), "session": under[1].hex()}}
     path.parent.mkdir(parents=True, exist_ok=True)
     whole = path.with_name(path.name + ".part")
     whole.write_text("".join(json.dumps(doc) + "\n" for doc in (first, *held)))
@@ -280,12 +284,13 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
     registered execution phases, of those that have connection rows, the cost, and under form 2 the execution phases
     with the word that they have no head, of those that have none) and the problems. None for a schedule without
     lengths rows. ``under`` is what the auditor hands the check, the SHA-512 of the network certifier's public key
-    (`key_sha512`) and its session: a deployment record that is not of them is a problem (`not_under`). With
-    ``registrations`` it leaves the registrations' file there (`keep_registrations`), written only where neither it
-    nor its caller found a problem: ``found`` is the problems of the caller's own check, of which this one is the
-    last part. ValueError for ``registrations`` without ``under``."""
+    (`key_sha512`) and its session: a deployment record that is not of them is a problem (`not_under`), the first
+    of those returned. With ``registrations`` it leaves the registrations' file there (`keep_registrations`),
+    written only where neither it nor its caller found a problem: ``found`` is the problems of the caller's own
+    check, of which this one is the last part, and a problem of the deployment record that is already among them
+    is not returned again. ValueError for ``registrations`` without ``under``."""
     open_registrations(registrations, under)
-    problems: list[str] = [] if under is None else not_under(dep, under)
+    problems: list[str] = [p for p in ([] if under is None else not_under(dep, under)) if p not in found]
     if params.lengths is None:
         return None, problems
     key, session, windows = cs.read_public(dep["key"]), bytes.fromhex(dep["session"]), dep["windows"]
