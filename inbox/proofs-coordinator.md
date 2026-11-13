@@ -110934,3 +110934,86 @@ All lines are `origin/main` at `7e70df68bd18` [read], and tonight's change edits
 - Records: `r20261112-235451-f882` (cpu-3), running since 00:20Z, peak 55 GiB so far. It is at `0ffc8406f33b`; the head since differs in one test file only, which no Lean package reads.
 - The rerun `c518` above.
 - Then: the records commit, the merge-trees once more (all three were clean at 00:04Z against `main` `7e70df68bd18`, FIRSTACCEPT `7e8fb2a0ca1d` and WINDOWAT `fd0515e77f62`), and the pull request, unmarked, under PRF-371 unless you name another issue.
+
+## FRAME, Fri 13 Nov 00:47Z: A SLOT ON vy-nebius-2 HAS KEPT MY TRY `0dde` WAITING 15 MINUTES, and cpu-11 refused it for memory. L1's rest is written whole and pushed, not compiled: the design's evaluation now refuses a registration whose wiring fails ten decided conditions, and three premises leave the two-stage guarantees. The addresses premise is assembled from eight facts of an accepted run (written, not compiled); three of the eight have no owner
+
+**In plain words.** The proved verifier used to assume three things about how the inner blocks of one outer block are wired together. It now checks them itself, with seven more conditions, before it accepts any run, so the two-stage guarantee stops assuming them. That change is written in full and pushed; no machine has compiled it yet, because my build has waited in line. One thing is still assumed in that guarantee: that every value an inner block reads or writes is committed at one place in one tree (the addresses premise). I have written how that premise follows from eight facts about an accepted run. Workers own five of the eight; three have no owner, and I take one of them now.
+
+Clock: `date -u` read 00:47Z. Mailbox read at 00:43Z: nothing after your 00:23Z message.
+
+### Heads
+
+- **The base moved: `cursor/proofs-two-round-base-84b5` is at `1f049180cda7`** (was `e3652d8de382`), one commit, no statement changed [run: `git push`]. Workers merge it in. It fixes the one error `6c94` found and the same pattern in a file not yet compiled: `Array.find?_some` and `List.find?_some` given an expected type of the form `(a && b) = true` mis-unify the predicate, so both are now elaborated first with no expected type (`WiringOk.lean`'s `wiresAlike_spec`, `EntryRoots.lean`). Anyone who wrote `have h : (p x) = true := List.find?_some hf` with a compound `p`: same fix.
+- **L1's rest: `cursor/proofs-frame-l1-9c4e` at `9aaa1c857d09`**, pushed, a branch of mine cut from the base [run: `git push`]. It does NOT go into the base until one whole build of it passes: it edits `Code.lean`, which every worker builds.
+- Unpushed: nothing.
+
+### What a run has compiled, and what is only stated
+
+- [run: `r20261112-234543-6c94`, vy-nebius-cpu-3, sent `--on auto` at 23:45Z before your 00:23Z rule, a cold tree: 38 minutes of dependencies first] `ReadWays.lean` compiles (warnings only, cleaned in `1f049180cda7`). `WiringOk.lean` failed at one line, the `find?_some` above; fixed, not yet recompiled. The run's own exit code was 0 because my script prints the build's exit and goes on: read `BUILD_EXIT`, not the run's state.
+- Stated only, never compiled: `EntryRoots.lean`, `PortsMember.lean`, all of L1's rest, `AddressesGive.lean`.
+- **The try: `r20261113-003213-0dde` on vy-nebius-2, waiting since 00:32Z, not started** [run: `research fetch`, 00:47Z]. One run, two builds: the base's four files at `1f049180cda7` (`WiringOk`, `ReadWays`, `EntryRoots`, `PortsMember`), then all of `SpotFlock/`, `SamplingGeneric/Guarantees.lean` and `SpotFirstHit.lean` at L1's `2fd832c7a5ce`.
+- **Machines.** vy-nebius-cpu-11, the one you named for me, refused the try at 00:26Z: `MemoryNotAvailable: asked 12 GB; available -349.3 GB = limit 754.7 - in use 543 - reserved 561.1 by 7 live reservation(s)` [run: `r20261113-002622-8703`]. cpu-3 refused 16 GB (9.3 GB free) and cpu-10 refused #9229's records run (4.1 GB free; 212 GB reserved by 7 reservations). So it is in vy-nebius-2's line. Seven reservations holding 561 GB on cpu-11 look like something to tell infra.
+
+### L1's rest, as approved at 22:50Z
+
+`SpotFlock.two h`, the design's evaluation, which `V h` requires of every run (`stmtOk`), now also requires two decided conditions on the auditor's copies [read: my diff]:
+
+- `membersScoped h`: every member's circuit is in the scope Flock's hidden-output proof covers (`ProvedScope.scopeOkH`). A correction to my 00:05Z entry: it is its own conjunct of `two h`, not a conjunct of `templateOk`, so four proofs that unfold `templateOk` stay as they are. The effect is the same.
+- `wiringOk h`, ten clauses: the templates' names distinct (`namesOnce`); each wire's writer before its reader (`writersFirst`); every source bit at a port a link or a wire names (`sourcesNamed`); every wired source bit with a gate to go to (`wiresMove`); each wire's two ports alike (`wiresAlike`); no gate the boundary record holds at a port no link names (`returnedWhole`); no wire naming such a port as its reader (`writtenUnwired`); some wire reading it (`writtenRead`); each reference read at a port neither names reading a port of the interior registration (`refReadsOwn`); and the interior registration registering no value.
+
+(d) and (f) of 22:32Z stay dropped, as my 23:23Z entry said: (d) follows from the scope and (f) from `wireCell`, which asks for no link before it reads a wire. (e) is no condition (`h.noAlways`). To put the conditions in `two h` the wiring's 23 definitions moved, verbatim and under their names, from five files into `Code.lean`; their theorems stayed.
+
+**STOP RULE (the change you approved; before and after for the notice).** Not yet compiled, so send the notice only when I name the base's head that holds it.
+
+| Guarantee | Before | After |
+|---|---|---|
+| `Flock.SecurityProofs.SpotKSTwo` | domain `SpotFlock.BuiltWired`; open `CompiledTwo.Scope`, `SpotFlock.AddressesConnected`, `SpotFlock.SourcesNamed`, `SpotFlock.WiresFirst`, `SpotFlock.WiresMove` | domain `SpotFlock.BuiltWired`; open `CompiledTwo.Scope`, `SpotFlock.AddressesConnected` |
+| `Flock.SecurityProofs.SpotExfilTwo` | the same five, and `Claims.Sampling.InScopeTwo` | `Claims.Sampling.InScopeTwo`, `CompiledTwo.Scope`, `SpotFlock.AddressesConnected` |
+| `Flock.SecurityProofs.SampledKSTwo` (row B16) | open `SamplingDeploy.Code.ReplayCap`, `SamplingDeploy.RegMatchesTwo`, both due Thu 12 Nov | both in `domain`: they are facts of the code the guarantee is stated over, which SPOT[Flock]'s code has (`replayCap_wired`, `regMatchesTwo_wired`) and the honest witness concludes |
+
+The verifier of the model accepts no form it refused; it refuses more. The statement of `SpotKSTwo` and `SpotExfilTwo` changes (two hypotheses, not five), so their lock records move, and the three open entries `SpotFlock.SourcesNamed`, `WiresFirst`, `WiresMove` leave the lock. I edited the lock's lists by hand; its hashes need a records run, which I send after the build passes.
+
+### What each worker changes when the base takes L1's rest
+
+- **HONEST2**: `two` at your instance now needs `membersScoped h` and `wiringOk h` there, and the guarantees take two premises, not five. `WiresFirst`, `WiresMove`, `SourcesNamed` stay as `Prop`s under their names, so `wiresFirst_held` and the two beside it still state something true.
+- **RUNSAS, RUNCOINS**: `NamesDistinct h` is `names_nodup_of_two h hd`, and "the interior registration registers no value" is the last clause of `wiring_of_two h hd`; neither needs to be a premise where `two h s = some d`.
+- **HELDOF**: the lemma that the form's check decides `two h` must now cover `membersScoped h` and `wiringOk h`. `membersScoped` is on the circuit files' headers. `wiringOk` walks every source bit and written bit of the members (`sourceBits`, `writtenBits`), so the form cannot evaluate it as stated at the cost of the description. I said this at 00:05Z; it is the largest open point of L5.
+- **NEEDEDBITS** (your NEEDS of 23:40Z): `scoped_of_two h hd : ∀ ci ∈ h.ms, scopeOkH ci.1 = true` is on the L1 branch, and `CheckedRun.wiring_of_ok hr` gives both conditions from an accepted run. `MembersRowed h` is then yours from `scopeOkH`, inside `NeededBits h`'s own proof.
+- **Anyone calling** `two_eq_filesReplay`, `isSome_two`, `two_of_descAt`, `two_of_descOk` or `partition_two_of_descOk`: two more hypotheses, `membersScoped h = true` and `wiringOk h = true`. No worker's branch calls them at the heads I fetched at 00:14Z [run: `git grep`].
+
+### The assembly (item 2's last part), written
+
+`AddressesGive.lean` on the L1 branch: `addressesConnected_of_runs`, which gives `AddressesConnected h` from eight facts, each over accepted runs:
+
+| Fact | Owner | State |
+|---|---|---|
+| `WidthFact h (addressOf h)`, `CopyFact h (addressOf h)` | ADDRWC | theirs |
+| `RowFact h (wireMap h) (returned h) (addressOf h)` | ADDRROW | theirs |
+| `NeededBits h` | NEEDEDBITS | from `MembersRowed`, uncompiled |
+| `OwnReads h` | OWNREADS | written, in line on cpu-12 |
+| `Inside h` | **none; I take it now** | unwritten |
+| `WrittenOnce h`, `RowsArePorts h` | **none** | unwritten |
+
+The entry and one tree a gate need no fact of the registered wiring any more: `CheckedRun.wiring_of_ok` reads them off the accepted run.
+
+### #9229
+
+The guard run ended: `r20261112-204759-aacf`, "6 passed in 4339.11s", `GUARD_EXIT 0`, at `7cab9aeb4422` [run]. The quick suites passed before (`r20261112-184654-0f98`). The records run is the one left: cpu-10 refused it for memory at 00:43Z (`r20261113-004201-b31b`). I send it to vy-nebius-2 when `0dde` has left the line, so I hold one place there at a time. #9375 has not landed [run: `gh pr view 9375`, 00:33Z].
+
+### NEEDS
+
+1. **An owner for `WrittenOnce h` and `RowsArePorts h`** (both in `WiringOk.lean`). NEEDEDBITS's file already has what they come from: `written_eq` (a gate is one unit's written bit) and `rowBit_leaf`, `srcPos_leaf`, `of_mem_sourceBits`, `of_mem_writtenBits`. I propose NEEDEDBITS, after `MemberRowed`. `RowsArePorts` needs each source's port index inside the circuit's ports, which the scope check may or may not give: NEEDEDBITS will know.
+2. **`Inside h`: mine**, on NEEDEDBITS's `blocksClosed_bitsProgs` and `owner_src` once its file compiles. It needs from the run's own design check that a wire's rows are its writer's units a block (`SecondStage.wiresOk`'s second clause), so that a wired read's writer is in the reader's own outer block.
+3. **cpu-11**: is it mine to use or not, given the refusal above?
+
+### Not established
+
+- Nothing of L1's rest or of the assembly has compiled.
+- That Friday's registration passes `wiringOk` and `membersScoped` in Lean. HONEST2 and GATHER read eight of the conditions on the second try's records (`92eb`) and found them true [relayed: their 00:01Z and 00:10Z entries]; `namesOnce`, `writtenRead` and the interior registering no value I read true off their descriptions [derived]. No Lean evaluation of `wiringOk` on that `Held` exists, and the guard (`TwoGuard.lean`) does not evaluate the two new conjuncts.
+- ADDRROW's `refPortsNamed` is false at the second try (a chunk's `o0` has a reference read and no link or wire names it as a reader's port), as my 00:05Z entry said; its newest head is still 23:24Z's.
+- ADDRROW's row fact asks that no inner block is always checked, so the addresses premise is proved at `h.noAlways`, the registration with that field emptied (the verifier is the same one, `V_noAlways`), not at every `h`. The connected twin of `ksTwo_noAlways`, which carries the conclusion back, is not written.
+- The lock's hashes on the L1 branch are stale.
+
+### To post
+
+Nothing.
