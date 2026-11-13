@@ -128746,3 +128746,35 @@ Clock: `date -u` read 07:55Z. Pen: this machine was replaced at 07:38:40Z; I mad
 **Not established.** That `RowTable.lean` compiles (`c127` running). All of the place half. The one-table step.
 
 Branch `cursor/proofs-addrrow-d318` at `fddc438a08`, pushed; nothing unpushed. Runs: `r20261113-075317-c127` (cpu-7).
+
+## CUT, Fri 13 Nov 07:57Z: `4d24802945` is NOT yet named compiled: `640b` has `CutRead` and `CutFirst` rc 0 there, and `CutAccept` and `CutRoots` wait for vy-nebius-cpu-2's one Lean slot (another proofs try holds it, to 08:19Z at the latest); TWOLEG's `1e20910586` is the comparison of my item 4(a), so the cut needs NO new premise; the mend to `CutFirst.lean` is written against it, unpushed, and goes on my branch when a head is named
+
+**In plain words.** The rename head is half verified and the other half waits in a line that moves by 08:19Z. TWOLEG's new commit makes the form refuse unless the read-back record has the commitment's digest, which is the fact my proof of `firstReads` lacked on its heads with `readBack`. With it no statement of mine, STAGECOINS's or the join's changes, and the change on my side is four lines of one proof. I have not put it on my branch: the 07:07Z ruling says not before TWOLEG names a compiled head, and TWOLEG names neither.
+
+1. **`r20261113-071814-640b`** (vy-nebius-cpu-2, at `4d24802945`) [run], read at 07:55Z, still running: "lean-try: …/CutRead.lean: lean exit 0 in 29 s", `=== rc CutRead 0`; "lean-try: …/CutFirst.lean: lean exit 0 in 275 s", "axiom probe: none of its 24 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", `=== rc CutFirst 0`; then `=== try CutAccept`, which waits: "lean-slot: all 1 Lean audit slot(s) of pool build are taken … build/0 held by pid 351146 since 2026-11-13T07:29Z … (run r20261113-072700-d101 … by proofs): … --try …/RepRoundsProbe.lean". `d101`'s own log says its build is done ("Build completed successfully (11738 jobs)") and "the run's timeout is now 3101.39 s from its start", so it leaves the slot by 08:19Z [derived from its 07:27:00Z start]. The line adds the wait to my run's timeout, so I leave `640b` where it is: its tree is warm there, and a second copy elsewhere would be one run on two nodes.
+2. **TWOLEG's `1e20910586`** [read: `git show`, and `Steps.lean` at `1963dc9dec`]: `inputAt` runs `digestIs j₁ c.digest` after `let j₁ ← readBack c.record`, and `inputAt_ok` ends `… ∧ readBack c.record = .ok j₁ ∧ readBack e.record = .ok j₂ ∧ Registration.digest j₁ = .ok c.digest`. That last conjunct is what `firstReads_of_shown` needs: the run's challenge check reads `Registration.digest j₁`, and the draw I, STAGECOINS and the join name is at `c.digest`. `Cut.firstDraws`, `FirstReads`, `CutBound` and the join's `draws₁` are unchanged. The premise `RecordDigest θ` of my 07:22Z entry is not needed and I do not write it.
+3. **The merge and the mend, in a scratch worktree, not pushed** [run: `git merge --no-commit origin/cursor/proofs-twoleg-c5e5` at `1963dc9dec` into `4d24802945`]: "Automatic merge went well", 21 files, none of them mine. In my files exactly one line reads what changed [run: `rg inputAt_ok|accepted_steps|accepted_ordered` over `Cut*.lean`]: `CutFirst.lean:260` destructures `inputAt_ok` to its end; `CutHeld:207`, `CutRead:200` and `CutOrder:437` stop at its third conjunct, and `accepted_steps` and `accepted_ordered` keep their statements [read: the diff of `Steps.lean`]. The mend [read, not compiled]: the `obtain` takes `j₁ j₂` and the digest fact `hdig`; `hac` rewrites with `hdig` in place of `Properties.Spot.digestIsRecord's`; `commitment_of_caseOf` (16 lines) is deleted, since nothing else reads it on my head, the join's `42bba26494` or TWOLEG's tip [run: `git grep`]; one docstring bullet says the record is the one the form read back. 6 lines in, 24 out [run: `git diff --numstat`].
+4. **Your 07:28Z mail is acted on** [run]: no run of mine waits on vy-nebius-cpu-12; `4159` and `4405` are cancelled (07:08Z, 07:18Z), and `640b` went with `--on auto`.
+5. **Events that were not mine** [run]: 29 firings of your old timers and 5 Slack events of your agent-coordination thread reached CUT between 07:25Z and 07:28Z. I acted on none: nothing launched, resumed, marked or posted. My own subscription list held one timer, mine.
+6. **Refining my 07:22Z item 4(b)** [derived, not compiled]: on a head with `readBack` and no comparison, the premise the cut needs is implied by the join's present field `recordsRead` stated at the commitment's record. `SpotFlock.jsonMsg` is UTF-8 then `Flock.JsonParse.parse`, so `RecordsRead` at `c.record` makes `c.record` the parser's own value of its text, `readBack` returns it, and `digestIsRecord's` gives the digest. So `readBack` alone moves that premise and does not remove it; the comparison removes it. With `1e20910586` this is moot.
+7. **RUNCOINS's 07:44Z line "STAGECOINS or CUT: `StageCut.lean:26` names `CheckReadsDraw`"** [run: `git log` on the join, `rg` over my files]: that file is STAGECOINS's and is not on my branch. None of my files names `CheckReadsDraw`, `EvidenceKeyIs`, `drawEvidence`, `RunCoinsFromDevice` or `FromDevice`.
+
+### STOP RULE
+
+Not reached. No statement changed and nothing was pushed this turn; my branch is `4d24802945`, as at 07:22Z.
+
+### NEEDS
+
+- Coordinator: soundness's word on the head. If the named head holds `1e20910586`, I merge it, push the mend and send one try (`CutFirst`, `CutAccept`, then the other four) in the turn I read the name. If the named head is `1874fb25cc` without the comparison, `firstReads` has no proof there and needs a named premise: say which (`RecordDigest θ`, or `recordsRead` at the commitment's record).
+- Nothing from TWOLEG, and nothing for the two refusals.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- `CutAccept.lean` and `CutRoots.lean` at `4d24802945`: `640b` has not reached them. ASSEMBLY should not merge `4d24802945` on my word yet.
+- That the mend compiles, and that my other five files compile over TWOLEG's tip. Two things could bite and only a try says: `Spot.Run`'s `audit`, `interiorSteps`, `secondStage` and `interiorAudit` went from private to public, under `run_coins`'s case split over `Spot.Run.run`; and the form now has a `firstLines` of its own beside mine (`Verity.SampledTwo.firstLines`, the rename).
+
+Branch `cursor/proofs-cut-9323` at `4d24802945` (pushed, unchanged). Run out: `r20261113-071814-640b` on vy-nebius-cpu-2. Mailbox read through `ae9d017d0f` at 07:50Z: nothing new for CUT.
