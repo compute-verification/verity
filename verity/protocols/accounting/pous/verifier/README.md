@@ -34,9 +34,9 @@ What code outside this directory may use. Everything else here is internal.
 | `period.setup_store(store: bytes, coins: bytes, point: R.Point \| None = None, *, workers: int = 1) -> Store` and `period.audit(node: str, held: Store, coins: bytes, *, signer, log, trusted, schemes, protocol, prover, clock, party)` (`period.py`) | One period of PoUS on one node. `setup_store` is setup: it commits to the node's store, samples the salt, encodes `C*` and checks it, and returns what setup published with `C*` and the setup protocol's case. `audit` runs the memory challenger's timed rounds against it and returns a `period.Run`: the verifier's answer in the core protocols' canonical form, the case the Lean replays to that answer (`period.case`), and the setup's case. `period.run` is both in one call, and `period.serve(exe: str \| os.PathLike, cases: Sequence[Mapping[str, Any]], *args: str) -> list[dict[str, Any]]` asks a Lean executable for its answers to cases. `run.Point`, `run.Setup` and `run.ChallengePhaseRecord` are the types of their arguments and records. |
 | `memory_challenger` (`memory_challenger.py`) | The memory challenger's timed rounds in Python, the reference its Lean verdict is held to: the device (`MemoryChallenger`, `CoinTree`, `SessionLog`, `LmsSigner`), the records it publishes and signs (`SessionCommitment`, `CoinOpening`, `Round`, `SignedSession`; the module docstring is their formats' spec), `block_digest(block: bytes) -> bytes`, and the check of a signed run, `verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequence[CoinOpening], expected: Callable[[int], bytes], *, trusted: frozenset[bytes] \| set[bytes], schemes: Mapping[str, Verify] = SCHEMES) -> Verdict`. |
 | `challenger_session.session(side: Side, request: Mapping[str, Any], respond: Callable[[int], bytes]) -> dict[str, Any]`, with `side_of`, `request_of`, `session_id` and `placement` (`challenger_session.py`) | The timed rounds from the node's side: it starts the memory challenger's side where `side_of(period: Mapping[str, Any], node: str, device: str \| Path) -> Side` puts it, sends the request, answers each index with `respond(index)` and returns the side's report. The module also holds the messages both sides speak (`MANIFEST`, `Frames`), which the memory challenger's party imports. |
-| `streamed_wipe` (`streamed_wipe.py`) and `wipe_period.run(node: str, params: sw.WipeParams \| None = None, *, ...) -> Wipe` (`wipe_period.py`) | The streamed-label wipe. `streamed_wipe` is its Python, the reference its Lean verdict is held to: the memory challenger's side (`Challenger`), the honest server (`Prover`), the records (`WipeParams`, `WipeCommitment`, `SignedWipe`) and `verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozenset[bytes] \| set[bytes], schemes: Mapping[str, Verify] = SCHEMES) -> Verdict`. `wipe_period.run` is one wipe of one node with the verifier's answer as `verity/wipe/v0` (`wipe_period.PROTOCOL`) and the case the Lean replays to it. |
+| `streamed_wipe` (`streamed_wipe.py`) and `wipe_period.run(node: str, params: sw.WipeParams \| None = None, *, ...) -> Wipe` (`wipe_period.py`) | The streamed-label wipe. `streamed_wipe` is its Python, the reference its Lean verdict is held to: the memory challenger's side (`WipeMemoryChallenger`, which holds a start mark before the fill when given a `mark_source`), the honest server (`Prover`), the records (`WipeParams`, `WipeCommitment`, `SignedWipe`), the two marks' messages (`start_message(commitment: WipeCommitment) -> bytes`, `end_message(signed: SignedWipe) -> bytes`) and `verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozenset[bytes] \| set[bytes], schemes: Mapping[str, Verify] = SCHEMES) -> Verdict`. `wipe_period.run` is one wipe of one node with the verifier's answer as `verity/wipe/v0` (`wipe_period.PROTOCOL`) and the case the Lean replays to it. |
 | `python -m verity.protocols.accounting.pous.verifier.wipe_period --period DIR --out DIR [--node NAME] [--expect VERDICT]` | One wipe of this node as `period.json`'s `wipe` says. It writes `wipe.json` and `wipe.case.json` under `--out`, prints a summary, and exits 0 when the verdict is the expected one. |
-| `python -m verity.protocols.accounting.pous.verifier.wipe_party --device DIR [--listen HOST:PORT] [--reads K] [--egress-bits N] [--streamer build\|PATH [--threads T]]` | The wipe's memory challenger as a process of its own, for the challenger host. It reads the request `{"labels", "limit_ns", "node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover and prints its report. `wipe_parties.MANIFEST` declares the same two parties to the deployment layer (`verity.runtime`). |
+| `python -m verity.protocols.accounting.pous.verifier.wipe_party --device DIR [--listen HOST:PORT] [--reads K] [--streamer build\|PATH [--threads T]]` | The wipe's memory challenger as a process of its own, for the challenger host. It takes no egress count and signs none. It reads the request `{"labels", "limit_ns", "node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover and prints its report. `wipe_parties.MANIFEST` declares the same two parties to the deployment layer (`verity.runtime`). |
 | `verity.protocols.accounting.pous.prover` (`verity/protocols/accounting/pous/prover/`) | PoUS's circuits, each a Definition with its parts in its module's `__all__`: `answer_circuit.PousAnswerOpens` (a round's answer and the store's hiding leaf open to the same label), `decode_circuit.PousP2Decode` (P2 v4's decode of one label), `verdict_circuit.PousVerdict` (the verdict over the timed rounds as one proof block) and `circuit.PousModSquare` (a square modulo P2's prime). |
 
 ## The lifecycle in code
@@ -136,13 +136,15 @@ streamed-label wipe") has the messages, the bound, the measured fill and round t
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 
 p = sw.WipeParams(labels=n, k=sw.DEPLOYED_K, batch=1, limit_ns=limit, tiers=(("hbm", a), ("dram", b), ("nvme", c)))
-c = sw.WipeMemoryChallenger(secret, server_id, session_id, p, signer, log=log)  # the id claimed; the commitment published
-for start, data in c.fill(chunk=1 << 20):                                     # the labels, streamed to the server
+c = sw.WipeMemoryChallenger(secret, server_id, session_id, p, signer, log=log,  # the id claimed; the commitment published
+                            mark_source=certify)                       # start message -> start certificate; or None
+for start, data in c.fill(chunk=1 << 20):                                     # the certificate held, then the labels streamed
     send(start, data)
 c.run(lambda indices: ask(indices))                                           # one batch at a time; no retry
-signed = c.close(egress_bits=certified)                                        # the network certifier's count
+signed = c.close()                                                             # one signature; no egress count in it
+end = sw.end_message(signed)                                                   # for the certifier, once the session is signed
 v, sides = wipe_verdict.judge(signed, c.commitment, trusted={signer.public_key})  # wipe_verdict.py, loaded by its path
-print(v.public())                                                              # {"accepted": ..., "egress_mib": ...}
+print(v.public())                                                              # {"accepted": ...}
 ~~~
 
 A period's wipe is `wipe_period`: one streamed wipe of the node, the memory challenger a party of its own on
@@ -151,8 +153,11 @@ Verity's wipe subprotocol, `verity/wipe/v0` (`MemoryChallenger.WipeProtocol`, `w
 `verity/protocols/accounting/pous/device/lean/`). An accepted wipe publishes `M` (every declared tier), the reads `k` the
 memory challenger chose (`wipe_party --reads`, 2152 by default; the prover never names them), `r = ratio(k)` and the
 foreign content it may leave, `StreamedWipeMeetsReads`' `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `2^-128` with
-the egress counted (`R` the declared memory past the fill), and `M` (vacuous) otherwise; an unsigned session is
-undecided. `wipe_period.leg(period_dir, node, out)` is the wipe's run in the all-protocols period runner.
+`E` the egress its evidence gives (`R` the declared memory past the fill), and `M` (vacuous) otherwise; an unsigned
+session is undecided. The session signs no egress: the check takes one count as evidence beside the signed session
+(`egress_mib`, whole MiB; none given is `EGRESS_MAX_UNITS`, accepted and not certified; one out of range is rejected),
+and holds it to nothing, so until the check that composes the wipe with the network certifier ties it to the
+certifier's count between the session's marks, it is whoever writes the evidence's to give. `wipe_period.leg(period_dir, node, out)` is the wipe's run in the all-protocols period runner.
 `wipe_monitoring` reports one accepted wipe over a week, a month and a year of a deployment's machines, each wiped
 every `cadence_s` seconds (a day by default), at δ = 1% and 10⁻⁶: the T wipes, at most M − 1 of them failing their bound
 except with δ (`prCoin_count_le_choose`'s count bound, which PoUB's period shares), every one
@@ -167,11 +172,14 @@ and gated on the challenger's host by `wipe_stream`); `benchmarks/pous/streamed_
 past the published figure, which must reject), its `reads` the reads the wipe expects, and its `placement` `simulated` names a challenger on the developer's node the stand-in for
 one on its own host. Its `trusted_sha512` pins the one memory-challenger key the verifier trusts, by the SHA-512 of its
 public key: a session signed under another key is rejected, and a challenger on its own host with no key pinned is
-refused before its session. The wipe's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
+refused before its session. That pin decides only what is accepted. The record's `trusted-host` holds only when the
+session's key is the one `wipe_party.AUDITOR_KEYS` pins for the challenger's host, and otherwise reads "rehearsal: key
+not the auditor's pinned key, no bound", whatever the host names say; the placement's `kind` (`own-host`, `simulated`,
+`prover-node`) is what the names say, a label. The wipe's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
 no network certifier counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
 the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's wipe
 declares whole, the host's DRAM, its disks), a GPU's driver reserve when NVML gave no total (the wipe declares the larger
-of CUDA's and NVML's totals, and NVML's counts the reserve: `wipe_store.Cuda.info`) and an egress signed `UNCOUNTED`. It
+of CUDA's and NVML's totals, and NVML's counts the reserve: `wipe_store.Cuda.info`) and an uncounted egress (the check given no count). It
 also carries the session's window, `t0` (the prover connected) and `t1` (the session signed) on the challenger's clock,
 which a network certifier counts the egress over.
 `wipe.disk` puts the node's disks in the same session (`wipe_store.Disk`, laid ahead of the card or host memory by

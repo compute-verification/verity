@@ -34,7 +34,8 @@ the same steps for the composition that takes it.
   propositions: a signature under a trusted key on the session's message, the session's commitment, batch size 1,
   every batch present, in order, with no wrong answer and within the deadline, the first sent after the fill.
 * `WipeAccepts`: what the compiled check accepts is of the period's server and session and carries a signed session
-  that is `WipeChecked`, and it publishes `certify` of the commitment's parameters and that session's egress. It is
+  that is `WipeChecked`, and it publishes `certify` of the commitment's parameters and the evidence's egress
+  (`WipeProtocol.Evidence.egress`, the check's one egress count; no session signs one). It is
   the accepted session that `MemoryChallenger.Properties.WipeSurvivorBound` reads.
 * `WipeDigest`: the wipe's `RunDigest`.
 
@@ -119,16 +120,16 @@ def WipeChecked (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe
 /-- **An accepted wipe is a checked signed session.** Deterministic and assumption free: if the wipe's compiled check
 (`WipeProtocol.protocol.check`) accepts the commitment `c` and the evidence `e` under the parameters `p`, then `c` is
 of `p`'s server and session, and `e` carries a signed session that passes every check of the wipe judge against `c`
-under `p`'s keys (`WipeChecked`); and it publishes `certify` of `c`'s parameters and that session's egress in MiB, and
-profiles them. -/
+under `p`'s keys (`WipeChecked`); and it publishes `certify` of `c`'s parameters and the evidence's egress in MiB
+(`e.egress`: the count the evidence gives beside the signed session, `EGRESS_MAX_UNITS` when it gives none), and
+profiles them. The signed session carries no egress, and this says nothing of where the evidence's count comes from. -/
 def WipeAccepts : Prop :=
   ∀ (p : WipeProtocol.Params) (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence) (out : WipeProtocol.Public)
     (prof : StreamedWipe.Params × Int),
     WipeProtocol.protocol.check p c e = .accept out prof →
       c.server = p.server ∧ c.session = p.session ∧
         ∃ s, e.signed = some s ∧ WipeChecked SCHEMES p.trusted.toList s c ∧
-          out = WipeProtocol.certify c.params (StreamedWipe.egressUnits s.egressBits) ∧
-          prof = (c.params, StreamedWipe.egressUnits s.egressBits)
+          out = WipeProtocol.certify c.params e.egress ∧ prof = (c.params, e.egress)
 
 /-- **The digest of the wipe's commitment is SHA-512 of its bytes**: `RunDigest` for `WipeProtocol`, and like it with
 no honest or nontrivial lemma: no check takes part in it. -/
@@ -171,7 +172,6 @@ def WipeAcceptsBy
     check p c e = .accept out prof →
       c.server = p.server ∧ c.session = p.session ∧
         ∃ s, e.signed = some s ∧ WipeChecked SCHEMES p.trusted.toList s c ∧
-          out = WipeProtocol.certify c.params (StreamedWipe.egressUnits s.egressBits) ∧
-          prof = (c.params, StreamedWipe.egressUnits s.egressBits)
+          out = WipeProtocol.certify c.params e.egress ∧ prof = (c.params, e.egress)
 
 end Pous.Component

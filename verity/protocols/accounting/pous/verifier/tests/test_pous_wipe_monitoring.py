@@ -27,24 +27,24 @@ STORE = {"backend": "cuda", "device": "NVIDIA H200", "tier": WM.HBM, "uuid": "GP
 LINK = WP.link("control", "n0", "outside", "eth0")
 
 
-def _answer(egress_bits: int) -> dict:
-    """An accepted HBM-only wipe of `HBM`, its egress signed as `egress_bits`, with the placement a GPU leg records."""
+def _answer(egress_mib: int | None) -> dict:
+    """An accepted HBM-only wipe of `HBM`, its evidence's egress `egress_mib`, with the placement a GPU leg records."""
     w = W.run("n0", HBM, signer=ts.TestSigner(b"wipe monitoring", 2), log=ts.session_log(), schemes=ts.SCHEMES,
               protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=iter(range(10 ** 9, 10 ** 10)).__next__,
-              coin_secret=b"coins", egress_bits=egress_bits)
+              coin_secret=b"coins", egress_mib=egress_mib)
     assert w.verdict == "accept"
-    where = WP.placement("n0", "auditor", store=STORE, links=[LINK])
+    where = WP.placement("n0", "auditor", w.report["key_sha512"], store=STORE, links=[LINK])
     return w.answer | {"profile": w.answer["profile"] | {"placement": where}}
 
 
 @pytest.fixture(scope="module")
 def counted():
-    return _answer(2 * sw.EGRESS_UNIT_BITS)
+    return _answer(2)
 
 
 @pytest.fixture(scope="module")
 def uncounted():
-    return _answer(W.UNCOUNTED)
+    return _answer(None)
 
 
 @pytest.mark.parametrize("t,p,delta,m", [
@@ -166,7 +166,7 @@ def test_an_uncounted_wipe_stays_vacuous_and_a_covered_egress_record_is_refused(
         WM.counted(uncounted, RECORD)
     said = str(refusal.value)
     assert said == WM.REFUSED and said.startswith(f"the {WM.EGRESS} record is refused")
-    assert "its monotonic clock (CLOCK_MONOTONIC ns" in said and "(t0_unix_ns, t1_unix_ns) is real time (Unix ns)" in said
+    assert "its raw monotonic clock (CLOCK_MONOTONIC_RAW ns" in said and "(t0_unix_ns, t1_unix_ns) is real time (Unix ns)" in said
     assert "until what the memory challenger signs ties its session to the span the record counts" in said
     assert "no --egress" in said
     for accepted in (uncounted, counted):

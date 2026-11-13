@@ -1,8 +1,10 @@
 """The wipe as a core protocol (`MemoryChallenger.WipeProtocol`, `verity/wipe/v0`): `wipe-protocol-test serve` against
 `wipe_protocol_case.test_answer` (the period hook's `outcome` behind the Lean's decoders) on sampled sessions at every batch
 size, unsigned, under one adversarial edit (`wipe_cases.MUTATIONS`), one JSON edit or params of another server or
-session; and `wipe-protocol serve` under S1's LMS on each named wipe (`wipe_protocol_case.EXPECT`): an honest one, a
-segment certified at `StreamedWipeMeetsReads`' threshold at `k = 2152` and one at `k = 5231` with memory past the fill, a
+session, each with a sampled egress in its evidence (`wipe_cases.EGRESS`: none, in range, or outside it); and
+`wipe-protocol serve` under S1's LMS on each named wipe (`wipe_protocol_case.EXPECT`): an honest one, a
+segment certified at `StreamedWipeMeetsReads`' threshold at `k = 2152` and one at `k = 5231` with memory past the fill,
+one whose evidence gives no egress (accepted, not certified) and one whose egress is out of range (rejected), a
 prover keeping one label past the threshold of foreign content, a late read and a session never signed, each with the
 verdict it is aimed at; and a commitment of no reads, refused by both as they decode it."""
 
@@ -39,23 +41,28 @@ deployed_server = D.server_fixture(deployed_port(st.none()))
 def _json_edit(c: dict, f, x: int) -> dict:
     """`wipe_cases.JSON_MUTATIONS`' edit `f` of the record a case holds, back in the case: its commitment, its signed
     session and its params' trusted keys (an edit elsewhere in the record leaves the case as it was)."""
+    ev = json.loads(bytes.fromhex(c["evidence"]))
     j = {"commitment": json.loads(bytes.fromhex(c["commitment"])),
-         "signed": json.loads(bytes.fromhex(c["evidence"]))["signed"], "trusted": c["params"]["trusted"], "schemes": []}
+         "signed": ev["signed"], "trusted": c["params"]["trusted"], "schemes": []}
     e = f(j, x)
     return {"commitment": D.canonical(e.get("commitment", j["commitment"])).encode().hex(),
-            "evidence": D.canonical({"signed": e.get("signed", j["signed"])}).encode().hex(),
+            "evidence": D.canonical(ev | {"signed": e.get("signed", j["signed"])}).encode().hex(),
             "params": c["params"] | {"trusted": e.get("trusted", j["trusted"])}}
 
 
-#: One edit of a case's own framing: params extra, missing or not hex, evidence that isn't `{"signed": …}`.
+#: One edit of a case's own framing: params extra, missing or not hex, evidence that isn't
+#: `{"egress_mib": …, "signed": …}`, or whose egress is no integer.
 CASE_EDITS = [
     lambda c, x: c | {"params": c["params"] | {"extra": x}},
     lambda c, x: c | {"params": {k: v for k, v in c["params"].items() if k != sorted(c["params"])[x % 3]}},
     lambda c, x: c | {"params": c["params"] | {"session": c["params"]["session"].upper()}},
     lambda c, x: c | {"params": c["params"] | {"trusted": "00"}},
-    lambda c, x: c | {"evidence": D.canonical({"signed": None, "more": x}).encode().hex()},
+    lambda c, x: c | {"evidence": D.canonical({"egress_mib": None, "signed": None, "more": x}).encode().hex()},
     lambda c, x: c | {"evidence": D.canonical([None]).encode().hex()},
-    lambda c, x: c | {"evidence": b'{"signed": null}'.hex()},
+    lambda c, x: c | {"evidence": b'{"egress_mib": null, "signed": null}'.hex()},
+    lambda c, x: c | {"evidence": D.canonical({"signed": json.loads(bytes.fromhex(c["evidence"]))["signed"]}).encode().hex()},
+    lambda c, x: c | {"evidence": D.canonical(json.loads(bytes.fromhex(c["evidence"]))
+                                              | {"egress_mib": [True, str(x), [x], {"mib": x}][x % 4]}).encode().hex()},
     lambda c, x: c | {"commitment": c["commitment"][:-1]},
     lambda c, x: {k: v for k, v in c.items() if k != "evidence"},
 ]
@@ -65,14 +72,15 @@ CASE_EDITS = [
 def drawn(draw) -> dict:
     s = draw(WC.sessions())
     x = draw(st.integers(0, 2 ** 16))
-    how = draw(st.sampled_from(["as-is", "as-is", "mutated", "mutated", "unsigned", "json", "case", "other"]))
+    how = draw(st.sampled_from(["as-is", "as-is", "mutated", "mutated", "unsigned", "unsigned", "json", "case", "other"]))
     if how == "mutated":
         s = draw(st.sampled_from(WC.MUTATIONS))(s, x)
     signed = None if how == "unsigned" else s.signed
+    egress = draw(WC.EGRESS)
     if how == "other":
         server, session = draw(st.sampled_from([(s.commitment.server + b"x", None), (None, M._flip(s.commitment.session, x))]))
-        return C.wipe_case(s.commitment, signed, s.trusted, server=server, session=session)
-    c = C.wipe_case(s.commitment, signed, s.trusted)
+        return C.wipe_case(s.commitment, signed, s.trusted, server=server, session=session, egress_mib=egress)
+    c = C.wipe_case(s.commitment, signed, s.trusted, egress_mib=egress)
     if how == "json":
         return _json_edit(c, draw(st.sampled_from(WC.JSON_MUTATIONS)), x)
     if how == "case":
@@ -107,8 +115,23 @@ def test_the_named_wipes(deployed_server):
         assert p["foreign_bits"] == threshold + p["egress_mib"] * sw.EGRESS_UNIT_BITS, p
         assert seen[name]["profile"]["gaps"] == [] and seen[name]["profile"]["certificate"]["reads"] == k
     small = seen["honest"]["public"]
-    assert small["certified"] and small["k"] == WP.READS
+    assert small["certified"] and small["k"] == WP.READS and 1 <= small["egress_mib"] <= 4
     assert small["foreign_bits"] - small["egress_mib"] * sw.EGRESS_UNIT_BITS < small["memory_bits"]
+    for name in ("honest", "segment", "reads", "uncounted"):
+        evidence = json.loads(bytes.fromhex(C.build(name)["evidence"]))
+        assert sorted(evidence) == ["egress_mib", "signed"] and "egress_bits" not in evidence["signed"], name
+        assert seen[name]["public"]["egress_mib"] == WP.egress_of(evidence["egress_mib"]), name
+    none = seen["uncounted"]
+    assert json.loads(bytes.fromhex(C.build("uncounted")["evidence"]))["egress_mib"] is None
+    assert none["public"] == WP.certify(WC.commitment_of(json.loads(bytes.fromhex(C.build("uncounted")["commitment"]))).params,
+                                        sw.EGRESS_MAX_UNITS)
+    assert not none["public"]["certified"] and none["public"]["egress_mib"] == sw.EGRESS_MAX_UNITS
+    assert none["public"]["foreign_bits"] == none["public"]["memory_bits"] and none["public"]["eps"] == "0"
+    assert none["profile"]["gaps"] == [f"the egress count is {sw.EGRESS_MAX_UNITS} MiB, outside 0 to "
+                                       f"{sw.EGRESS_MAX_UNITS - 1}: it bounds nothing"]
+    outside = json.loads(bytes.fromhex(C.build("egress-range")["evidence"]))["egress_mib"]
+    assert not 0 <= outside <= sw.EGRESS_MAX_UNITS
+    assert seen["egress-range"]["reason"] == WP.EGRESS_RANGE.format(outside, sw.EGRESS_MAX_UNITS)
     assert "wrong answers" in seen["foreign"]["reason"] and "past its deadline" in seen["late"]["reason"]
     assert seen["unsigned"]["reason"] == WP.UNSIGNED and seen["other-server"]["reason"] == WP.OTHER
     assert seen["untrusted"]["reason"] == "the session is signed by a key that is not a trusted memory challenger's"

@@ -309,11 +309,13 @@ theorem check_accept {schemes : Schemes} {p : WipeProtocol.Params} {c : Streamed
   · cases h
   · split at h
     · cases h
-    · dsimp only at h
-      split at h
-      · injection h with h1
-        exact ⟨_, h1⟩
+    · split at h
       · cases h
+      · dsimp only at h
+        split at h
+        · injection h with h1
+          exact ⟨_, h1⟩
+        · cases h
 
 /-- What `exactly` accepts is what its decoder decoded. -/
 theorem exactly_decodes {α : Type} {f : Lean.Json → Flock.V α} {enc : α → Lean.Json} {j : Lean.Json} {a : α}
