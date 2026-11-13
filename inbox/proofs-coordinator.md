@@ -126058,3 +126058,35 @@ Kept. The lock's only edits are `roots`; nothing listed; no `unwitnessed` entry;
 - A records run of `security/Proofs` that passes at the join's head; so no ready line.
 
 Join `cursor/proofs-join-42b8` at `8c1063fb59`, PROBE at `3daff389fc`; nothing unpushed.
+
+## STAGECOINS, Fri 06:53Z: `FirstCoins.lean` COMPILES at `bfac82043c` with `public import Spot.Run` (no `import all` of an in-tree module); try `r20261113-064615-cdad` rc 0; for ASSEMBLY in place of `41720dd161`
+
+`FirstCoins.lean` no longer imports `Spot.Run`'s private part. I cherry-picked RUNCOINS's `10757cc241` alone, which drops `private` on `audit`, `interiorSteps`, `secondStage` and `interiorAudit`, changes no body, and is my only edit of `Spot/Run.lean`. Then I made my line `public import Spot.Run`. The gating test passes on my VM, and the file compiles with its siblings at `bfac82043c` [run]. No statement changed. The other six files are unchanged since `41720dd161`, where they compiled. They weren't rebuilt at this head, though `Spot/Run.lean`'s visibility change sits below them.
+
+Head pushed: `bfac82043c` on `cursor/proofs-stagecoins-71b1`: `41720dd161`, then the cherry-pick `031f539fb8` of `10757cc241`, then the import line. Nothing unpushed. The machine was replaced again before this turn; I rebuilt `~/wt` from the pushed branch.
+
+**The check** [run]
+- `uv run pytest tests/test_lean_packages.py -k import_all` on my VM: `2 passed, 33 deselected in 5.42s`.
+- `r20261113-064615-cdad`: `research run --on auto --as proofs --mem-gb 32`, running `lean_changed.py --try …/FirstCoins.lean --siblings`.
+  - It went to vy-nebius-cpu-2's research pool (vy-nebius-2 takes no `--on auto` job tonight) and started at once at 06:46Z on a warm `build-0` (54 files changed). It ended rc 0 at 06:52Z.
+  - Lines: `Build completed successfully (11407 jobs).`; `lean exit 0 in 286 s`; siblings: no clash (1936 imported, peak 4644 MB); `axiom probe: none of its 21 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`. Among the 21 are `run_read`, `run_firstRead`, `firstRead_of_accepts`, `sourceRead_holds`, `coinsAgree_first` and `coinsAgree_of_coinsRead`.
+  - `--mem-gb 32` is my ask: the siblings step peaked at 4.6 GB, and the build's own peak isn't printed.
+- I merged `10757cc241` first and backed it out before pushing, because a merge brings RUNCOINS's whole branch, not one commit. What's pushed is the cherry-pick.
+
+**The sessions' layout** [read]
+No file of mine reads `slotStream`, `roundOf`, `locOf` or `sessLoc` (`rg` over my seven files: none).
+
+Every theorem over the form's accept is true and empty until #9555 is merged and TWOLEG's honest play is accepted in a test.
+
+## STOP RULE
+Kept: no listed guarantee's statement or premises changed, nothing the verifier accepts changed (the cherry-pick is visibility only, and RUNCOINS's), no switch, no lock, nothing wired into `Sampled.lean`. No allowlist entry added. No piece rests on the switch being off. The device's ledger facts stay hypotheses.
+
+## NEEDS
+- ASSEMBLY: take `bfac82043c` in place of `41720dd161`. It carries RUNCOINS's `10757cc241` as a cherry-pick, so if the join also takes RUNCOINS's commit, the two apply the same four-line change.
+- TWOLEG: name the head to merge.
+
+## To post
+Nothing.
+
+## Not established
+- The six other files weren't rebuilt at `bfac82043c`. They compiled at `41720dd161` (`r20261113-060344-5094`), and only `Spot/Run.lean`'s visibility and `FirstCoins`' import line changed below them.
