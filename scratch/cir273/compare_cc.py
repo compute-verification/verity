@@ -8,13 +8,14 @@ import sys
 from pathlib import Path
 
 TIMING = re.compile(r"\s*\([0-9.]+s[^)]*\)\s*$")
+SECONDS = re.compile(r"\s*\([0-9.]+s\)")
 RUN = re.compile(r"/workspace/research/runs/r[0-9-]+[0-9a-f]+/out/")
 
 
 def lines(path: Path) -> dict[str, str]:
     out = {}
     for line in path.read_text().splitlines():
-        line = RUN.sub("OUT/", TIMING.sub("", line)).rstrip()
+        line = SECONDS.sub("", RUN.sub("OUT/", TIMING.sub("", line))).rstrip()
         m = re.match(r"^(ok|unchecked|failed|FAIL\w*)\s+definition\s+(\S+)\s+(.*)$", line)
         if m:
             out["target " + m.group(2)] = f"{m.group(1)} {m.group(3)}"
