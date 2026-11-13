@@ -17,7 +17,7 @@ round, whatever challenges the device released in either:
   release after a prefix the same round where its frame is kept;
 * `locates_frames`, `locates_after`: so does any locator that agrees with it at the sessions' rounds
   (`LocatesSessions`, as the run's does: `locates_run`), at a session's round, whatever bytes the frame answers;
-* `same_append_frames`, `frames_of_read`, `locOf_logged`, `locates_logged`: the log the check read has the device's
+* `same_append_of_frames`, `frames_of_read`, `locOf_logged`, `locates_logged`: the log the check read has the device's
   frames after releases that neither sample nor open a coin tree (`InteriorLogged`), so a release of the device's log
   is on the round its like in the read log is on, and what is shown of the read log's rounds holds of the rounds
   `CoinMap`'s locator gives the device's releases;
@@ -114,7 +114,7 @@ theorem locates_after {A : Live₂} {tab : ℕ → String} {L : CoinMap.Locate}
 
 /-- Releases of the same frames, after releases that are the same to the session-round locator, are the same to
 it. -/
-theorem same_append_frames {a a' : List Release} (ha : List.Forall₂ (fun x y => x.frame = y.frame) a a') :
+theorem same_append_of_frames {a a' : List Release} (ha : List.Forall₂ (fun x y => x.frame = y.frame) a a') :
     ∀ {pre pre' : List Release}, Same pre pre' → Same (pre ++ a) (pre' ++ a') := by
   induction ha with
   | nil =>
@@ -138,7 +138,7 @@ theorem locOf_logged (A : Live₂) (tab : ℕ → String) {q a a' : List Release
     (ha : List.Forall₂ (fun x y => x.frame = y.frame) a a') (hf : r.frame = r'.frame) :
     locOf A tab a r.frame = locOf A tab (q ++ a') r'.frame := by
   have hS : Same [] q := by simpa using same_append (pre := []) hq
-  have hS' : Same a (q ++ a') := by simpa using same_append_frames ha hS
+  have hS' : Same a (q ++ a') := by simpa using same_append_of_frames ha hS
   rw [← hf]
   unfold locOf
   exact sessLoc_congr hS' r.frame
