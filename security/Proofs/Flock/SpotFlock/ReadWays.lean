@@ -58,9 +58,7 @@ theorem nonempty_all_false {α : Type} (xs : Array α) (p : α → Bool) (hp : �
     (!xs.isEmpty && xs.all p) = false := by
   by_cases hsz : xs.size = 0
   · have he : xs.isEmpty = true := by
-      first
-        | exact Array.isEmpty_iff_size_eq_zero.mpr hsz
-        | simp [Array.isEmpty, hsz]
+      exact Array.isEmpty_iff_size_eq_zero.mpr hsz
     rw [he]
     rfl
   · have hall : xs.all p = false := by
@@ -100,13 +98,9 @@ theorem openedRow_ownOf (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin)
     have hreads : (ownOf h st rec draw c₀).reads = #[] := rfl
     unfold Spot.SecondStage.readSize
     rw [hreads]
-    first
-      | simp
-      | rfl
+    simp
   unfold Spot.SecondStage.openedRow
-  first
-    | simp only [hsz, Option.isSome_none, Bool.false_and]
-    | simp [hsz]
+  simp only [hsz, Option.isSome_none, Bool.false_and]
 
 /-- **At what the model holds of the run, `second-inputs` passes only where round 1's record registers no value**:
 the model holds no value pinned or supplied and records no table read, so every value the interior registration
@@ -133,13 +127,9 @@ theorem registeredEntry_none_of_inputs {st : Roots} {rec draw : Json} {c₀ : Fl
           have hsup : (ownOf h st rec draw c₀).supplied = #[] := rfl
           unfold Spot.SecondStage.ownValues
           rw [hsup]
-          first
-            | simp
-            | rfl
+          simp
         rw [hf, hs]
-        first
-          | simp
-          | rfl
+        simp
       exact pass_of_false h1 (nonempty_all_false _ _ (openedRow_ownOf h st rec draw c₀ _ _))
     | _ => simp [Spot.jsonStrIs, hval] at hv
 
