@@ -7,7 +7,7 @@ public import Proofs.Accounting.Responder
 /-!
 # B2's oracle-location form, proved: a window as a ring responder
 
-`B2Window` (`Security/Definitions/Accounting/Guarantees/Responder.lean`): a family of `RingResponder`s whose multiplications
+`B2Period` (`Security/Definitions/Accounting/Guarantees/Responder.lean`): a family of `RingResponder`s whose multiplications
 take at least `ℓ > 0` ticks to answer and whose spans are at most `D·ℓ` ticks is the step of an `(N, D, Q, L)`
 sequential responder. With `ℓ = ⌈(Δ + RTT)/D_p⌉` (the latency form of sequential speed) and one challenge every
 `Δ + RTT` ticks (fixed pacing), that is `D = D_p`.
@@ -19,11 +19,11 @@ round. No held multiplication is due before it is asked, so every batch the wind
 rounds with a multiplication are at least `ℓ` ticks apart, so there are at most `⌈span/ℓ⌉` of them (`sim_mulDepth`); and
 it asks every query the window asks once (`sim_spec`'s counts). `cap` stops a program with a default once it would
 exceed `(D, Q, L)`, so that it is `RingBounded` on every primitive, and leaves its run alone where it stays within them
-(`cap_bounded`, `cap_run`). `window_responder` puts them together for one window, and `B2Window` picks one for each.
+(`cap_bounded`, `cap_run`). `period_responder` puts them together for one window, and `B2Period` picks one for each.
 
-`B2WindowAudit` applies PoUS's guarantee to that responder: where every window stays within `(Q, L)`, its answers are
+`B2PeriodAudit` applies PoUS's guarantee to that responder: where every window stays within `(Q, L)`, its answers are
 the windows' results (`seqAnswers_congr`), so an outcome the windows answer correctly is one it does.
-`B2WindowP2Ring` is that at P2's deployed point.
+`B2PeriodP2Ring` is that at P2's deployed point.
 -/
 
 @[expose] public section
@@ -399,7 +399,7 @@ theorem cap_run (d : α) (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (P : Or
 /-- **A window as a ring responder.** When every multiplication takes at least `ℓ > 0` ticks to answer and the window
 spans at most `D·ℓ` ticks, some `RingBounded D Q L` program yields what the window yields, whatever the oracle answers,
 wherever the window asks at most `Q` keys and `L` ring operations. -/
-theorem window_responder (W : RingResponder B w α) (ℓ D Q L : ℕ) (d : α) (hℓ : 0 < ℓ)
+theorem period_responder (W : RingResponder B w α) (ℓ D Q L : ℕ) (d : α) (hℓ : 0 < ℓ)
     (hlat : ∀ q : RingQry B w, q.isMul = true → ℓ ≤ W.lat q) (hspan : W.span ≤ D * ℓ) :
     ∃ P : OracleAlgorithm (ringRO B w p) α, P.RingBounded D Q L ∧
       ∀ f : RingQry B w → Bits w, W.keys f ≤ Q → W.ops f ≤ L → P.run f = W.result f := by
@@ -432,16 +432,16 @@ theorem seqAnswers_congr {I : IdealModel} {ℓ' S B' : ℕ} (f : I.Qry → I.Ans
 end Latency
 
 open Pous in
-theorem B2Window : Guarantees.B2Window := by
+theorem B2Period : Guarantees.B2Period := by
   intro B w p _ sch N D Q L ℓ Wd hℓ hlat hspan
   choose P hP hrun using fun W pp j σ i =>
-    Latency.window_responder (p := p) (Wd W pp j σ i) ℓ D Q L (fun _ => false, fun _ => false) hℓ (hlat W pp j σ i)
+    Latency.period_responder (p := p) (Wd W pp j σ i) ℓ D Q L (fun _ => false, fun _ => false) hℓ (hlat W pp j σ i)
       (hspan W pp j σ i)
   exact ⟨⟨P, hP⟩, hrun⟩
 
-theorem B2WindowAudit : Guarantees.B2WindowAudit := by
+theorem B2PeriodAudit : Guarantees.B2PeriodAudit := by
   intro B w p _ sch N D Q L ℓ k δ ε hsec W A₁ Wd hℓ hlat hspan hbud
-  obtain ⟨A₂, hA₂⟩ := B2Window sch N D Q L ℓ Wd hℓ hlat hspan
+  obtain ⟨A₂, hA₂⟩ := B2Period sch N D Q L ℓ Wd hℓ hlat hspan
   refine (pr_mono fun x hx => ?_).trans (hsec W A₁ A₂)
   unfold Pous.seqAcceptsOn
   dsimp only
@@ -450,8 +450,8 @@ theorem B2WindowAudit : Guarantees.B2WindowAudit := by
     (fun j σ i => hA₂ W (sch.enc W x.1 x.2.1).1 j σ i _ (hbud x.1 _ _ j σ i).1 (hbud x.1 _ _ j σ i).2)
     (List.ofFn x.2.2) 0 _) hx
 
-theorem B2WindowP2Ring : Guarantees.B2WindowP2Ring := by
+theorem B2PeriodP2Ring : Guarantees.B2PeriodP2Ring := by
   intro D Q L T ℓ hsec W A₁ Wd hℓ hT hlat hspan hbud
-  exact B2WindowAudit _ _ _ _ _ _ _ _ _ hsec W A₁ Wd hℓ hlat (fun W pp j σ i => (hspan W pp j σ i).trans hT) hbud
+  exact B2PeriodAudit _ _ _ _ _ _ _ _ _ hsec W A₁ Wd hℓ hlat (fun W pp j σ i => (hspan W pp j σ i).trans hT) hbud
 
 end Accounting.SecurityProofs
