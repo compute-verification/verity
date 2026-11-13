@@ -16,9 +16,9 @@ package's docstring lists every module.
 - **What others import:** code outside the integration imports the seven modules `tests/test_vllm_public_api.py` names
   public (`block_counts`, `naming`, `scan_state`, `step_needs`, `window_class`, `window_rows` and `window_weights`),
   from each only the names its `__all__` lists, and the seven more that test lists until their importers move:
-  `batch`, `build`, `common`, `phi`, `score`, `steps` and `window_circuit`. Of these, `build`, `common`, `phi` and
-  `window_circuit` list in `__all__` the names that library code and files outside the integration import from them;
-  `batch`, `score` and `steps` state none yet. Besides the command line's three, library code reads two names
+  `batch`, `build`, `common`, `phi`, `score`, `steps` and `window_circuit`. Of these, `build`, `common`, `phi`,
+  `steps` and `window_circuit` list in `__all__` the names that library code and files outside the integration import
+  from them; `batch` and `score` state none yet. Besides the command line's three, library code reads two names
   as text, so they stay where they are: `steps.compile_steps`, the registered compiler's name that a run's advice is
   bound to (`pipeline.advice.COMPILER`), and the package's own, which `program.frontend.inputs_trace` resolves without
   importing it.
