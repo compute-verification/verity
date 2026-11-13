@@ -152409,3 +152409,90 @@ Each claim says where it comes from: [run] a node's run, [local] this machine (g
 - #9713's and #9717's branches and records runs: next, in that order.
 - The join at `6bae773eb345` and #9735: not carried yet.
 - Whether the queue passes review-44's verdicts to `38e1ad9938f6` and `7331a7552ef0`: the queue's to say when you mark.
+
+## TWOLEG — 16:50Z Fri 13 Nov — my two live lines, named; neither changes `Leg.lean`; the hold compiles over the join merged with `main` and moves no lock record, and is not ready alone (four tests and the play wait for STOPDRIVER's driver); rule B needs one mend on the join's present tree: `VerdictsWf.lean` does not compile there
+
+`cursor/proofs-twoleg-family-ad71` `b5756631866995708b2532d9e8946291e050f442` my live line
+`cursor/proofs-scratch-twoleg-ownreads-ad71` `c8bfe0d01026fc9067951b12456698cb3ff0c239` my live line
+
+I commit nothing more on either. The first is the hold: a run's family is the one of its record's place, in the form's step 4, in `Spot.Run.run` and in `Spot.Record.acrossFound`. The second is rule B. Neither changes a `Leg.lean`, a lock or another owner's file, and neither has a pull request.
+
+**1. Rule B does not compile on the join's present tree as it stands. One file, and the mend is written**
+
+- **What fails:** `SpotFlock/RunsAs/VerdictsWf.lean`, one of rule B's seven new files. Its two dependents, `StampedReads.lean` and `OwnReadsHeld.lean`, were not reached. Every other file compiled. [`r20261113-163445-57d1` at my scratch `486c455e7b92`: the hold's named head with rule B merged; 134 files, those that reach the form through their imports and those either line changes; `security/Proofs` exit 1 with that one failure, the other two packages rc 0]
+- **Why:** the join's `3d03860e75a` changed the per-member run that the file walks (`stepMember` takes each member's statement, `runMembers` reads every member's files first, `membersRun` is its structure, the roots, then `runMembers`). Rule B was cut from `654e34d42be5`, which does not hold that commit.
+- **It fails the same way on the join's tip `6bae773eb345`, on the join merged with `main`, and in STAGECOINS's `9f4df9cc04d`.** [reading: `Spot/OneStageZk.lean` is one blob, `24200325f756`, in all four trees; only my scratch was built] STAGECOINS's runs compiled the form's executable, which does not import the proofs, so this did not show there.
+- **The form's own change compiles.** The `recursive` package built rc 0 in `57d1` with the hold and rule B together, and so did every proof file that reaches the form other than those three.
+- **The mend** is one commit on my scratch, `33db9877b05f`: four lemmas of `VerdictsWf.lean` take the new shapes, 9 lines added and 13 removed, and `membersRun_wf`'s statement is unchanged. Tries of the three files at that head are out; I report them in one line.
+- **For the carry:** rule B at `c8bfe0d01026` compiles on its own base and on no tree that holds `3d03860e75a`. Carried as it stands, it needs that commit on top, with the one conflict of section 2 settled.
+
+**2. The two lines, for the carrier**
+
+- **The hold:** nine commits on the join's `4e986e339ad2`, then a plain merge of `cursor/proofs-join-main-42b8` at `a61b7adf0d83` (no conflict), which I made before your 16:03Z and keep. So it holds `main` at `053b8e50fe8a` and no later `main`. Over `a61b7adf0d83` it changes 13 files, 835 lines added and 17 removed: `Spot/Place.lean` (new), `Spot/Run.lean`, `Spot/RecordAcross.lean`, `Spot.lean`, `Spot/DifftestMain.lean`, the package's `pyproject.toml` and two difftests, `VStarRecursive/SampledTwo.lean`, `SampledTwo/Steps.lean`, `SampledTwo/AcceptsOfSteps.lean`, the composition suite's `sampled_two.py`, and `window_place.py`.
+- `window_place.py` is STOPDRIVER's file byte for byte (blob `12a54e8f5073`). The carried line takes STOPDRIVER's blob again when its docstring changes.
+- The hold merges with the join's tip `6bae773eb345` with no conflict. [run, on the VM: `git merge-tree`; not built there]
+- **Rule B:** 14 commits on the join's `654e34d42be5`, 10 files. It compiled at its head (`r20261113-124447-fa7f`, rc 0; my 13:05Z entry). The join already holds its two three-line changes to `SampledTwo/FirstCoins.lean` and `SampledTwo/StageCut.lean`, so what it adds to the join's tip is seven new files under `SpotFlock/RunsAs/` and the form's own change: 8 files, 1090 lines added and 3 removed.
+- **Rule B conflicts in one place** with each of the join's tip, the join merged with `main`, and the hold: in `VStarRecursive/SampledTwo.lean`, two blocks of guards written at the same line. Keeping both, the tree's first and rule B's after, settles it; my scratch does that, as STAGECOINS's did.
+
+**3. The hold over the join merged with `main`** (each run at `b57566318669`, read from its `job.json`)
+
+| Run | What | Result |
+|---|---|---|
+| `r20261113-154116-6d21` | the build of 79 files in three packages | rc 0; `security/Proofs`: `Build completed successfully (12247 jobs)` |
+| `r20261113-154131-72ca` | the records run of `security/Properties` with `--update`, in a clone | pass; `regenerated: {}` for it and for its requirer `security` |
+| `r20261113-154217-3a92` | the suite `verity-core-sampled-proofs` | `433 passed, 2 skipped in 768 s` |
+| `r20261113-160840-f295` | the suite `verity/protocols/spot/verifier` | `988 passed in 412 s` |
+| `r20261113-154231-a21f` | the suite `verity-core-composition` | `94 passed, 1 failed, 5 skipped in 627 s` (section 5) |
+| `r20261113-160908-a66e` | the suite `benchmarks/one_stage` | `1123 passed, 3 failed in 1807 s` (section 5) |
+| eight tries | `SampledTwo/Steps`, `SampledTwo/AcceptsOfSteps`, and the six files that unfold `Run.run` | each `lean exit 0`; 118 theorems in all, none beyond `propext`, `Classical.choice` and `Quot.sound` |
+
+- No proof needed a change after the merge, though the join's tip and GATHER's head both change `Spot/Run.lean`.
+- The three failures of `a66e` are the hold's and no others: the same suite passes whole at the merge's other parent (ASSEMBLY's `4752` at `a61b7adf0d83`: 1126 passed), and 1123 and 3 make 1126.
+- I did not read which two tests the first suite skips; its log does not name them.
+
+**4. The runs that were out at 15:25Z**
+
+| Run | Head | What | Result |
+|---|---|---|---|
+| `r20261113-151533-3536` | `898db790ac96` | the build of 76 files | rc 0; `security/Proofs`: 12198 jobs |
+| `r20261113-151628-6711` | `898db790ac96` | `verity-core-sampled-proofs` | `432 passed, 2 skipped in 732 s` |
+| `r20261113-151704-058e` | `898db790ac96` | `verity/protocols/spot/verifier` | `986 passed in 399 s` |
+| `r20261113-145832-f65e` | `a328e97564b2` | `benchmarks/one_stage` | `1082 passed, 3 failed in 1843 s` |
+| `r20261113-151716-d7a0` | `898db790ac96` | `benchmarks/one_stage` | `1082 passed, 3 failed in 1950 s`, the same three |
+| `r20261113-151745-f30e` | `898db790ac96` | a fresh play, then the form three ways | the play is refused at its own run (`second rc=1`); the form's three verdicts are those of my 15:25Z section 2 |
+| five tries | `898db790ac96` | the other five files that unfold `Run.run` | each `lean exit 0`, none beyond the three axioms |
+
+**5. What stays refused with the hold, and what cures it**
+
+- **Three tests of `benchmarks/one_stage/tests/test_stop_audit.py`**, the same three at all three heads: `test_an_accepted_record_names_what_it_did_not_check_and_is_not_complete`, `test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept`, `test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams`. In each, Lean's `acrossFound` refuses the order with "the later sample's family is not the one of the place its record's window names" where the Python `stop_order` accepts.
+- **One test of the composition suite:** `test_sampled_two_difftest.py::test_the_form_accepts_one_honest_play_with_its_switch_on`. Step 4 refuses the kept play with "the boundary names a family other than the one its record's layout names". The test's own message asks for a play made afresh and kept.
+- **The play of `sampled_two_small.sh`** is refused at its own run: it names `draw/0` and its window's family is `draw/68719476752`.
+- **The cure is not in my line.** The driver at this head names a class's family by its rank and has no setting for the place. STOPDRIVER's `46811047714e` reserves by place and changes the stop audit's test. Then a play made by that driver is kept, with its id in `fixtures/artifacts.json`.
+- STOPDRIVER's `46811047714e` against my head conflicts in five files: `benchmarks/one_stage/stop_audit.py`, `tests/test_stop_audit.py`, `tests/test_two_stage_driver.py`, `two_stage.py` and `verity/protocols/spot/device/coins.py`. [run, on the VM: `git merge-tree`] They are STOPDRIVER's to settle.
+- **So the hold can be carried now and must not get a ready mark alone.** With it and without the driver, these four tests fail and no two-stage play is accepted.
+
+**6. `Spot.Run`'s lock record is unmoved, by three runs**
+
+- `r20261113-150731-b090` at `a328e97564b2`, `r20261113-153518-9a99` at `898db790ac96` and `r20261113-154131-72ca` at the merged head: each passes with `regenerated: {}`.
+- In each report, `reads["Spot.Run"]` equals the lock's text at that commit: digest `7e89b30ca8f0…`, over `Spot.Run.digest?` and the private `hexDigit`. Its readers are the same four, each `@proofs`.
+- The runs were in a clone and wrote nothing on my branch.
+
+**7. The line for the body**
+
+`Record.familyReason`, the family check of `acrossFound`, has no Python reference: its check is its eight compiled guards and the stop audit's test, which reaches it through the executable.
+
+**8. Not established**
+
+- Anything on the carried tree, against `main` at `4ae17f7eafd7`.
+- That the mended `VerdictsWf.lean` and its two dependents compile. The tries are out.
+- An honest play that the form accepts with the hold in it. It needs STOPDRIVER's driver.
+- That the text `4e0` cannot reach a window Lean reads.
+- `Core.Composites.atPins` and `Verity.SpotPinned`, which the form's docstring names, are not in this tree.
+- The parser lemma and the null-root hypothesis: not written, as you ordered.
+
+**9. Next, and one question**
+
+- The scratch `cursor/proofs-scratch-twoleg-family-ownreads-ad71` (the hold, rule B, the conflict settled, the mend) is not named for carrying. When its tries pass I build its 134 files again and say so in one line.
+- **Your word:** rule B's mend cannot sit on rule B's own branch, whose base does not hold `3d03860e75a`. I plan to put it on top of rule B's carried head when FRAME's table names it. If you would rather carry one line that already holds it, say so and I name a branch cut from rule B's head with the join merged in and the mend on top; your 16:03Z says not to merge, so I have not.
+- Then I wait for FRAME's table and do as your 16:03Z says.
+- **One lapse:** from 16:02Z to 16:45Z my mailbox reads were of a stale copy, since I fetched in the wrong worktree. I have now read every entry since 16:01Z. None asks anything of me; FRAME's 16:32Z, GATHER's 16:16Z and STOPDRIVER's 16:24Z are read.
