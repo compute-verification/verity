@@ -304,7 +304,8 @@ theorem ofSummary_one (sm : _root_.RemoteAudit.Session.Summary)
     obtain ⟨hl, hd⟩ := h
     simp [_root_.RemoteAudit.Line.ofSummaryAt, _root_.RemoteAudit.Line.ofSummary, _root_.RemoteAudit.Line.receipts,
       hl, hd, seen1, group1]
-    rfl
+    refine ⟨0, rfl, rfl, rfl, ?_, rfl, rfl, rfl, rfl⟩
+    simp [hl]
   · simp at h
 
 theorem groups_one : record1.groups node1 = #[group1] := by
@@ -338,6 +339,7 @@ theorem honestSchedule_one :
     have hf0 : firstPass #[group1] 0 = 0 := rfl
     have hf1 : firstPass #[group1] (0 + 1) = 1 := by decide
     obtain rfl : p = 0 := by omega
+    show released #[group1] 1 0 ≤ 0 ∧ 1 ≤ ended #[group1] 0
     decide
 
 /-- Constant receipts: `LineHeld`'s premises read them only through `Refused`'s `Moved`, which the honest draw never
