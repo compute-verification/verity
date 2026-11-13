@@ -6126,10 +6126,32 @@
    "unfolded_hash": "01fba8c75836b4820c353663bbf4732e6991a2484048acf73454e8e5b333e868"
   },
   "Properties.NetworkPeriod.rowsTiedInputWired": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkPeriod.rowsTiedInputWired : Properties.NetworkPeriod.RowsTiedInputWired"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "91459e8b497f425b6a625ece954ec26abbfc0d451e269d91729f879bbf67d0d1",
+   "unfolded_hash": "d6195b35f42f98aa235bcf402af969cc4d9cb4975a0d908fefc253aad5e3c193"
   },
   "Properties.NetworkPeriod.rowsTiedInputWired_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkPeriod.rowsTiedInputWired_nontrivial :",
+    "  Not (Properties.NetworkPeriod.RowsTiedInputWiredOf Properties.NetworkPeriod.acceptAllRows)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "ccc8fe48a449e7bd7fd594b6d4c6f0ba78f712adc5a6bef5ebf35ba935019a17"
   },
   "Properties.NetworkRecords.acceptMeans": {
    "owner": "@network-accounting",
@@ -21674,7 +21696,7 @@
    }
   },
   "NetworkCheck.Period": {
-   "digest": "1798837538f75ca78d45140ecc07ae279b0abf0cf7f2fddf519632d87038ccc1",
+   "digest": "f72de116907f8cfda2ca79bcba0978c952642c7cae62d957ee891d5d4c624b2c",
    "definitions": {
     "NetworkCheck.Period.Audit": "0d641bb152e911020e01f254af27bca6b76ff4e2cb57994e3121b4fcb8e976f4",
     "NetworkCheck.Period.Audit.bits": "e933e5e70e66fbf6d1a3f868d294c6a0cfc6be8b835a4d117602235327ee4af1",
@@ -21812,7 +21834,7 @@
     "NetworkCheck.Period.certifies": "2803235f6ec55f07888c0a09fa51eace653cb90b35adadd4d5693235a1ee7ff5",
     "NetworkCheck.Period.certifiesOn": "171f63a57032e389c2374de9f1d7e2990ea02fb0b34ba10c7c82090bd40ab411",
     "NetworkCheck.Period.chargedOf": "a67a4a83487d13967da813d8743969193df5c8ae786995cdf55573d5f8b24601",
-    "NetworkCheck.Period.check": "60d6987fbb4fc7ab3d3f86ea5e3abc7b5dde7013bc5b2564a486100966e46dbe",
+    "NetworkCheck.Period.check": "898c9a571c21ae79774ef330fac50e2bf6398d4d3e63bc855e0cef0805b7fe93",
     "NetworkCheck.Period.clearClocks": "f3d5c8cc2493a8bbfa1d7bf161c066530730dbc6f6c6bf9575f1dfb6de5fcb34",
     "NetworkCheck.Period.clog2": "0b4eb09d5ca828e9a24744a2362203d629b3e35103d57bfb916d321bdfbe2dcc",
     "NetworkCheck.Period.commitmentOf": "5d00ba8f9de1190aa45ea23862aa25f5e19e9500354711d68dea94e0f5b49737",
@@ -21843,6 +21865,7 @@
     "NetworkCheck.Period.instBEqBucketSchedule": "cf2b38e621b4fb2439edd52f558dc33ae4681421f29d919324092851bce915c2",
     "NetworkCheck.Period.instBEqBucketSchedule.beq": "fcf65fbf6406b3a8ec0c648b1f52d811b4dfbfac1effd9477edd5aa8e4301307",
     "NetworkCheck.Period.isDigest": "4bbbff6f240a86c3b59e724f4c2fe37b2e5a7c8971040832a016b87918d0a7aa",
+    "NetworkCheck.Period.laneTied": "8f4f4994467338ca68ab9746c5289fc5ecab602ad9c018d9da227ded2f930647",
     "NetworkCheck.Period.maxTokensEnd": "17ce1f771b0eb7d865e7f6a3a1cc3f9e1ebb5f24241b016e1ff9a26f106a82c1",
     "NetworkCheck.Period.need": "0103a3cf32c7c34497a8adccf4f0e5b064737920bf3a1f8ac95c9ab8674c72fd",
     "NetworkCheck.Period.needSome": "4e663cdace37e782808238c7abea51d42e61d9de0ea61096ef1c88d2cc043e0e",
@@ -21897,7 +21920,12 @@
     "NetworkCheck.Period.termsJson": "348dbc98884f58d592b9d90d5e26b3fba251a06d95e0c8857830248f79cfc325",
     "NetworkCheck.Period.tiedAudits": "965ea282bd2f71068663611ab5a510835a1c116bf5bb0f151bffdc2714f25069",
     "NetworkCheck.Period.tiedIn": "c61a279d13da96e9f75ff03a75664ffcbdbe8c1709f4c79f26783c81d6ccb128",
+    "NetworkCheck.Period.tiedInputCheck": "472ddf5fc2b6145fb1e39395095930503f1b56f66be1888c62425f48bdb55505",
+    "NetworkCheck.Period.tiedInputChecks": "a83d62c7511f27c1ea2532a9ee1acd8007c3f7301bcfec1ffac11c7f212397c0",
+    "NetworkCheck.Period.tiedInputWired": "2b72ab36327fa2efa5b54a35b04773e10db38d38e65dbecfc43bbbe6bae1da00",
+    "NetworkCheck.Period.tiedKey": "db98a5d1df91e2efac39068ef72ac1aec124e7274acb04ce508b5c8ea8702a10",
     "NetworkCheck.Period.tiedOf": "0cb27c1b526a7ad3cff170900af018046f3700a280c9c23a5c49d32538bae6dd",
+    "NetworkCheck.Period.tiedUnheld": "1614b8aa4316a0cdc7262c85c9486ae3c1fd6b32e3cb6203816046bb8242d4bc",
     "NetworkCheck.Period.unitLevel": "628450a5396d927976e8e4c9c94c1af776d9123759e78255c1aff8c85de87bb5",
     "NetworkCheck.Period.windowCheck": "7c7cdbe7f59ded6407d0578874ade8c49a53b6ef2cde9c29224cd01f49fc5eb4",
     "NetworkCheck.Period.windowOf": "5b1c9512cfc1b4a84804a2f0a30b7c7984292d13a467d018a9369b2411b71346",
@@ -24408,7 +24436,7 @@
    }
   },
   "Properties.NetworkPeriod": {
-   "digest": "21e5ca9e9d34eeea3af07c0c123b73f33c95558dbb6bbbf66d2f152b70558462",
+   "digest": "d71ccb29c137dd5224294efda9d7bcc3170a715c093b8ecd99a095c34b43cf03",
    "definitions": {
     "Properties.NetworkPeriod.AuditFacts": "eada0fae9ca4b260e02678dfa27199fe761825968d364c252289b0b873513a4a",
     "Properties.NetworkPeriod.CapPublished": "a66286ba998234dad410b23243772ae30b54124ddbe04a382095a2654c5f4dd1",
@@ -24421,6 +24449,10 @@
     "Properties.NetworkPeriod.RowsStateTiedAt": "ff582df8e2003fcfb754440ef36cc0eb6792c81f0298ed809b57414821dd7849",
     "Properties.NetworkPeriod.RowsTiedCharged": "7e96450fcdb886ed24fd7ef8125e060d87b13ef8d0a6adbcdb584b0230af3f6c",
     "Properties.NetworkPeriod.RowsTiedChargedAt": "178350d0e4fdf3356cf74ee0124b5fba253dff44db03b142e955a6671432d730",
+    "Properties.NetworkPeriod.RowsTiedInputWired": "e1e43a211ccd3e07359df896ebcdc10bf49831c304980a8d902af3547252b170",
+    "Properties.NetworkPeriod.RowsTiedInputWiredAt": "700fe7a8da954f4b91891ed341aabb0bf11d2148302eab1e30912fac7ecfd8e8",
+    "Properties.NetworkPeriod.RowsTiedInputWiredOf": "afd0b6f8af77a71094514ed6148a7f8df7ab0e731ab2c086c9cdd3970c4c0e9c",
+    "Properties.NetworkPeriod.acceptAllRows": "4e75123c9fca0239bd7ff473caf81f46d067e378f8d3f62e94f49d1122cb2530",
     "Properties.NetworkPeriod.cappedPeriod": "9dc308733321bd65295bffda4e9abed0f950f0b6bfc15dbd3c62de106b12d932",
     "Properties.NetworkPeriod.cappedSchedule": "18f18ba8548f6972a6f7dcb0c7d4e6c747d73825ba5d1c60196d9364d8095f37",
     "Properties.NetworkPeriod.tiedInPart": "81af3d439de76d2b6dab464e5e4f92f32511b01998f7c69bafca26e54f541ff7"
