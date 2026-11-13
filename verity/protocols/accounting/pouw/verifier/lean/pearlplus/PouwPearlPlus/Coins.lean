@@ -11,8 +11,8 @@ public import PouwWindow.Rounds
   (`PouwCommit.CoinCommitment`), or a live session's on the auditor host's challenger when the coins file's scheme is
   `window.LIVE_SCHEME` (`Spot.Challenger.LiveCommitment`). A live pass's salt coin opens as `host.epoch_of` holds
   it (`liveSalt`): the commitment is a Pearl-C salt session's, its salt coin alone (`window.salt_epoch_reason`), and the
-  opening is that coin opened after the salt epoch's open root (`salt.epoch_open_root` of the weights' root and the
-  manifest's ``pass_index``, `challenger.live_reason`); the salt is `audit.salt_of`'s over the weights' root.
+  opening is that coin opened after the salt epoch's open root (`salt.epoch_open_root` of the fixed operands' root and the
+  manifest's ``pass_index``, `challenger.live_reason`); the salt is `audit.salt_of`'s over the fixed operands' root.
 * **The verifier's sample** is the coin record's ``draw``: a challenger sample session's coin ``pouw/draw`` 0, or the node's
   coins. `drawReason` holds a challenger sample as a reader of the record does (`served_verdicts.pearlplus_live_draw`, less
   the auditor's ledger, key and period, which the compose checks): its opening is coin ``pouw/draw`` 0 of its commitment
@@ -68,11 +68,11 @@ def EPOCH_OPEN_TAG : ByteArray := "verity/pouw-epoch-open/v1".toUTF8
 
 example : EPOCH_OPEN_TAG = Domains.POUW_EPOCH_OPEN.toUTF8 := rfl
 
-/-- `salt.epoch_open_root`: SHA-512(`EPOCH_OPEN_TAG` ‖ the weights' root ‖ u64be(`k`)). -/
+/-- `salt.epoch_open_root`: SHA-512(`EPOCH_OPEN_TAG` ‖ the fixed operands' root ‖ u64be(`k`)). -/
 def epochOpenRoot (weights : ByteArray) (k : Nat) : ByteArray :=
   Flock.Sha512.hash (EPOCH_OPEN_TAG ++ weights ++ be8 k)
 
-/-- `host.epoch_of`'s live salt, once every weight is committed: `.ok salt`, or `.error` with its refusal (`TYPE: why`).
+/-- `host.epoch_of`'s live salt, once every fixed operand is committed: `.ok salt`, or `.error` with its refusal (`TYPE: why`).
 `k` is the manifest's ``pass_index`` as it gives it. -/
 def liveSalt (c : LiveCommitment) (o : LiveOpening) (weightsRoot : ByteArray) (k : Json) :
     Except String ByteArray := do

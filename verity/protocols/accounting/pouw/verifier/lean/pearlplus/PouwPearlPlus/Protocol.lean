@@ -31,13 +31,13 @@ run is on, the record the policy and sampled proofs commit to, which remote ties
 window record W the passes are tied to (`served_passes.py retain --window-record`'s, the record that registration is
 chained right after, which remote ties it to too, `Core.Remote.V1.window`), with the rounds the passes are, in their
 order (`null`: pass i is round i), and the rounds dropped from the retention before the coin. The check holds the
-passes to W (`tieOf`, `verify_run.tie`): W registers exactly each call's A rows and y and each weight's B rows among its
+passes to W (`tieOf`, `verify_run.tie`): W registers exactly each call's A rows and y and each fixed operand's B rows among its
 ``pearl-a/``, ``pearl-y/`` and ``pearl-b/`` values, beside the dropped rounds' calls', each B at the root the pass's
-tiles open B against (`Pass.weightRoots`, which the weights' root folds), so a run whose passes or whose rootB are not
-the ones W registers is refused before its coin, a version-2 W that registers no weight among them. That is a W at
+tiles open B against (`Pass.weightRoots`, which the fixed operands' root folds), so a run whose passes or whose rootB are not
+the ones W registers is refused before its coin, a version-2 W that registers no fixed operand among them. That is a W at
 version 2, its header's ``version`` (`wVersion`). A W that states none is version 1, written before W registered the
-weights: it is held to the calls alone, as it was then, and the verdict's tie names its weights untied
-(`WEIGHTS_UNTIED`), so its accept says that no weight it credits is a registered value. Its digest is
+fixed operands: it is held to the calls alone, as it was then, and the verdict's tie names its fixed operands untied
+(`WEIGHTS_UNTIED`), so its accept says that no fixed operand it credits is a registered value. Its digest is
 SHA-512(`commitmentTag` ‖ 0 ‖ the commitment's bytes).
 
 **Evidence**, canonical JSON `{"files": [files, …]}`, one object per pass in the commitment's order: each manifest path
