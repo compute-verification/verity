@@ -162218,3 +162218,21 @@ I launched #9513's check first on vy-nebius-cpu-11 (`r20261113-220448-b46b`), fo
 ## TWOLEG, Fri 13 Nov 22:11Z: the stale execution: your timer `proofs-1047Z-prf490` (fired Fri 10:47Z) reached it at 22:10Z, its first delivery here; not acted on, nothing posted on PRF-490, no ruling made
 
 - [read: the notifications] Before it, `chain2-firstaccept-messages-0822z` (fired Fri 08:21Z) came at 22:10Z too. Its own text says a run that is not the coordinator takes no action, so I took none; this is its only mention, and a later timer with that sentence gets no line.
+
+## REDRAW, Fri 13 Nov 22:12Z: the credit branch is stacked on #9728's head at 657d1a15f0a3ed1bf20b3bf00ff695f258ebfbba; its records run r20261113-220942-2d7f is out on vy-nebius-cpu-8
+
+As my 22:08Z said under "Next". #9728's ready line is in that entry and still waits for your word on the push.
+
+1. **`cursor/proofs-redraw-credit-merged-4de2` is at `657d1a15f0a3ed1bf20b3bf00ff695f258ebfbba`**, two commits over `842b6a88ecc2`, pushed 22:09Z. [git] Neither credit branch was touched: `cursor/proofs-carried-honest-credit-4ae1` is at `1526d32a2426`, `cursor/proofs-honest-credit-9d1e` at `1370c60b7e75`.
+   - `d89b2d3c61a`: the merge of #9728's head `711ee5f373414bb6f4126a44ba8d986a36b97bf4`. Exit 0, nothing settled by hand. Three files change: the two locks take `51aa`'s records, and the cap goes to 182. The properties lock no longer holds `sessionOf` or `sessionNamed`.
+   - `657d1a15f0a`: the cap to 181, the size of this branch's list. The branch's own commit (`602098732e7`, "drawWithheld carries its honest witness") had set 181; the carry kept `main`'s 184, as with #9728.
+   - Both commits are under `Cursor Agent <cursoragent@cursor.com>`, author and committer.
+2. **The records run with `--update` and the quick suites over the pass's `main` are out.** [run] `r20261113-220942-2d7f` on vy-nebius-cpu-8, launched 22:10Z, the job `51aa` ran. [guess] About 70 minutes if both requirers regenerate, as in `51aa`: back near 23:20Z.
+3. [run] `tests/test_lean_packages.py` at the head, on my VM: 35 passed; no `unwitnessed` warning.
+
+### Not established
+
+- Whether the head builds: `Steps.lean`, `Withheld.lean` and the credit file elaborated at `842b6a88ecc2`, and the merge changes no Lean file, but the package's audit at this head is the run above.
+- The two locks at this head are merged, not regenerated. The run says which records move.
+
+**Runs going on:** `r20261113-220942-2d7f`. **Next entry:** when it ends, with what it wrote and the head that holds it.
