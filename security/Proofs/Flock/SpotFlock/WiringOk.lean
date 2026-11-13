@@ -150,6 +150,11 @@ def RowsArePorts : Prop :=
     ∀ y ∈ writtenBits h.ms, ∃ q, q < (memberCircuit h y.2.1).ports.size ∧
       (memberCircuit h y.2.1).ports[q]!.name = y.2.2.row
 
+/-- **Each member's circuit names its ports once**: no two ports of one member's circuit have one name, so the port
+the address map finds at a commitment position's row (`portNamed`, the first of that name) is the position's own. -/
+def PortsOnce : Prop :=
+  ∀ t < h.ms.length, ((memberCircuit h t).ports.toList.map (·.name)).Nodup
+
 variable {h} in
 /-- **The address map's port at a name one of the member's ports has**: the first port of that name, one of the
 circuit's, named so. -/
