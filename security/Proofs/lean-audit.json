@@ -308,7 +308,8 @@
   "Proofs.Flock.SpotFlock.AddressFacts.RowTable",
   "Proofs.Flock.SpotFlock.AddressFacts.RowPlace",
   "Proofs.Flock.SpotFlock.AddressFacts.RowSample",
-  "Proofs.Flock.SpotFlock.AddressFacts.RowPublished"
+  "Proofs.Flock.SpotFlock.AddressFacts.RowPublished",
+  "Proofs.Flock.SpotFlock.AddressFacts.RowFirst"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
