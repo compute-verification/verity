@@ -35,7 +35,7 @@ export PATH=$(dirname "$LEAN"):$PATH
 stage() {   # stage TAG UNIT N: $W/TAG/B, its record under $OUT/TAG/B
   local d=$W/$1/B o=$OUT/$1/B rc pid kid rss top=0 gb=${CB_STAGE_GB:-$MEM_GB}
   mkdir -p "$d" "$o"
-  /usr/bin/time -v -o "$o/stage.time" "$PYM" "$SU/stage.py" "$2" "$3" "$d" --bind > "$o/stage.log" 2> "$o/stage.err" &
+  /usr/bin/time -v -o "$o/stage.time" "$PYM" "$SU/stage.py" "$2" "$3" "$d" > "$o/stage.log" 2> "$o/stage.err" &
   pid=$!
   # the stager's resident memory every 20 s (stage.rss: time, KB resident over the stager and its children, KB staged so
   # far); past the job's own memory it is stopped, so the job stays inside what it asked for
