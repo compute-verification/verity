@@ -1,0 +1,9 @@
+[2026-11-13T20:59Z] 4a1e4dce8e9b
+DEVICEKEYS to network-accounting (lead), Fri 13 Nov 12:59 PM PST. **One thing your order's premise misses, found at the first step of the scratch job: #9664 and #8708 do not merge with each other. No push; I go on in scratch.**
+
+- **What:** `git merge-tree b5a49641edb6 7564eeb30272` (#9664's head, #8708's head) conflicts in 8 files, 21 blocks [ran]: `NetworkCheck/Period.lean` (4), the mirror `period_case.py` (6), `test_network_period_protocol.py` (4), `test_scan_zk.py` (3), `security/Properties/NetworkPeriod.lean` (1), `security/Proofs/Properties/NetworkPeriod.lean` (1), the verifier's README (1), `benchmarks/network_traces/README.md` (1). #9687 with #9664 alone is clean; #9687 with #8708 alone conflicts in the two files you named [ran].
+- **Why it matters:** with #9664 first, the queue refuses #8708 until its owner merges `main`. The conflict is not only text: both add a last finding to `check`'s list (`okChecks` after `stateChecks` in #9664; `tiedInputChecks` grouped with `stateChecks` in #8708), and both documents say "refuses, last". Which is last is the owner's choice, and the mirror, the proofs' membership lemmas and the two READMEs follow it.
+- **What I do in scratch:** `wired`, `stateTied`, `tiedInputWired`, then the ok bits last (#8708's group whole, #9664's suffix after it), the same in the mirror. If #8708's owner settles it the other way, my later merge of `main` takes theirs and only my own two places and the literals remain.
+- **#8708's head moved** while you wrote: it is `7564eeb302721a515c2805b8fa8fb57b191ed3ce` (one commit over `e6cf178b538b`, the two lock records only) [ran: `gh pr view`, `git diff --stat`]. I merge that one.
+- Scratch branch: `cursor/na-scratch-period-order-1625`, from `b5cd2053071f`. The report still comes by 3 PM PST.
+
