@@ -141558,3 +141558,99 @@ MEMBERS's 12:29Z entry says `3d03860e75a` (every member's files held) is not an 
 No branch `cursor/proofs-addrwc-legcode-*` exists as I write. If ADDRWC names a head by 13:00Z I merge it and send the records run at that tip. If not, the records run goes at 13:00Z at `4e986e339a` without it, and I say so. Either way a short entry follows with the run's id and its expected end, about 50 minutes after launch (`3623` took 51, `76c3` 49).
 
 To post: nothing. Head pushed: `4e986e339a` on `cursor/proofs-join-42b8`; nothing unpushed. No run of mine is going on.
+
+## HONEST2, Fri 13 Nov 12:49Z: `Honest/Any.lean` COMPILES at `cf303cb73f` (`c9bc`): the scope, the premises and an accepted run at ANY copies. BY READING the join at `e9346a9e70`: `always` is `false` at every copy `heldOf` builds, the toy's included; between the form's accept and `Accepts h` THREE things are missing, and one is of another kind: `Accepts` holds a WITNESS in Flock's relation, which is the prover's and which no accept gives
+
+In plain words: the file you picked is written and compiles. For any auditor's copies, not only my small instance, it says three things. Where the design evaluates, the two-stage scope has a statement in it. Where the frame is SPOT's own and five checks pass, the two premises the leg takes hold. And an accepted run, as I stated it, needs a passing statement check, one checked inner block and a witness for that block's session. The two readings: the copies the form runs at have `always` off, the toy's too. But the witness is the prover's. The form's accept is the verifier's, and what it gives is a play the verifier accepts, never a witness. So either the honest instance takes the witness from the prover's side, or `HonestExists` asks for an accepted play. That choice is yours.
+
+**1. The file** [run: `r20261113-123813-c9bc` at `cf303cb73f`, `Honest/Any.lean` with `--siblings`: rc 0; lean exit 0; six theorems, none with an axiom beyond the three; siblings clean over 364 imported modules, 3,845 unchecked; no warning names the file]
+
+| theorem | says | hypotheses |
+|---|---|---|
+| `scope_of_two` | `(compiled h).Scope x` | `parse h x = some s`, `two h s = some d` |
+| `inScope_of_two` | `InScope h` | `decode x = some st`, `two h s = some d` at any `s` (`two` does not read it) |
+| `inScope_of_run` | `InScope h` | `Accepts h` |
+| `premises_of_checks` | `Premises h`: `SpotKSTwo`'s `hB` and `hA`, word for word | `BuiltWired h (wireMap h) (returned h)`, `RefReadsWf h`, `∀ v, h.reg.always v = false`, `popOk h.reg.first.program h.reg.first.query n = true`, `firstK h.reg.first = some K`, `AddressRow.wiresChecked h = true` |
+| `accepts_of` | `Accepts h` | `parse h x = some s`, `two h s = some d`, `stmtOk h x m₁ m₂ c₀ c₁ = true`, `u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁)`, `Claims.Flock.check (FlockDeploy.parse true Flock.Readable.relation) (unitStmt h m₂ u) wF = true` |
+| `honest_of_run` | `HonestExists` | `premises_of_checks`'s six and `Accepts h` |
+
+- `accepts_of` is beyond the three you named. It is the eleven lines of `stmtOpensWired` that build `CheckedRun.Ok` (the two block lookups and the session's setup follow from the five hypotheses), lifted out so item 3 can say exactly what an accepted run takes.
+- No `toyBnd`; `two_of_ref`, `held`, `Bnd`, `Ref` and the three other `Honest/` files are untouched. The first commit defined `framed`, SPOT's own frame on given copies; that is `HeldOf.withFrame` word for word, so the second commit removed it and the premises take `BuiltWired` as a hypothesis.
+- `r20261113-123634-d1c5` tried nothing: I put `--siblings` before the file and argparse refused in a second. `c9bc` is the try.
+
+**2. `always`: `false` at every copy `heldOf` builds, so at the toy** [read: `HeldOf.lean:133-139`, same text on my branch and the join]. `held₀` sets `reg := { first, ns, ks, blockOf := filesBlockOf …, always := fun _ => false }`, `withFrame` changes only `frame`, and `heldOf` returns `withFrame (held₀ …) u.c₀` or nothing. It is `rfl` after `heldOf_spec`. The toy's play adds no block that is always checked: nothing in `heldOf` reads one.
+
+**3. Which `h` the form runs at, and what is missing** [read: the join at `e9346a9e70`; HELDOF's `2861eed8d0a`; nothing here is compiled by me]
+
+The leg holds one `A.h`. `heldOf i it u` is built per run: it reads the run's input (`firstOf i`: the boundary registration with the law over the record's population and `i.closure`; `replayLinks … i.record`), its interior (cells, circuits) and `u` (descriptor, query, reference statements, code), which the run does not read. The tie is `HeldOfAt A C` (`AcceptsTop.lean:135`): at each accepted play some `u` has `heldOf i it u = some A.h`.
+
+- **(i) `HeldOfAt` itself.** `acceptedTwo_of_check` gives the run (`AcceptedTwo i it run`) and stops there. On HELDOF's head, `heldOfAt_or_collide` gives `HeldOfAt` or a collision from `CaseIsSent`, `DescAt`, `DecodesAt`, `TablesHeldAt`, one accepted play's reference statements and `CopyOf`. `DescAt`, that every accepted play passes `SampledTwoDesc.descOk`, is a named premise: the form's check calls no descriptor check (the join's `verity/**` has no `descOk`; on HELDOF's branch only `SampledTwoDescMain.lean` evaluates it). This is HELDOF's open list, not new.
+- **(ii) A checked unit.** `Accepts` needs `u ∈ A.h.reg.checked …`: the second stage proves an inner block at the play's coins. I found no lemma that the two stages' sample is non-empty at an accepted run [read: a grep of the join for one].
+- **(iii) The witness, which is of another kind.** `CheckedRun.Ok` holds `wF` with `Claims.Flock.check (FlockDeploy.parse true relation) (unitStmt h m₂ u) wF = true`. Everything the form's accept reaches is the verifier's: `runAcceptsPlay` (`RunsAs/Played.lean`) concludes `(Claims.run H (proverSeq h [] m₁ m₂ P') (V h) x … ).out = .acc`, and its premise `SessionsAccept` holds that Flock's verifier accepts each session. A witness follows from an accept only through Flock's knowledge soundness, with its error, or it comes from the prover. `CheckedRun.Ok` is built in two places only, both inside the knowledge-soundness proofs, from the extracted witness (`RevealsWired.lean:617`, `SlotsAt.lean:315`).
+
+What is not missing, at `A.h` under `HeldOfAt` and one accepted play [derived from the statements read; not compiled]:
+
+| what my statements take | where it comes from |
+|---|---|
+| `two A.h s = some d` | `twoHolds_at` (`AcceptsTop.lean:331`), through `popOk_of_accepted` and `twoHolds_of` |
+| `decode x = some st`, so `parse` | `recordsRead`: `jsonMsg x = some i.record` |
+| so `InScope A.h` | `inScope_of_two`; nothing else |
+| `BuiltWired` | by construction: `withFrame`, `builtWired_spot`, `wireMap_frame`, `returned_frame`. No lemma states it at `withFrame` yet |
+| `always` | item 2 |
+| `popOk` at the record's population | `popOk_of_accepted`, `firstOf_program` |
+| `firstK A.h.reg.first = some K` | `firstK_of_formAccepts` (`AcceptsTop.lean:276`): the form's parser takes a two-stage rule only with a rate law, which resolves to `subset:K` |
+| `wiresChecked` | ADDRROW2's `wiresChecked_of_unlinked` and the form's `wiresOk` clause, as you say |
+| `RefReadsWf` | the one hypothesis (`refReadsWf_of` from `ReadsWf it.circuits`) |
+| `stmtOk` | `stmtOk_of_check` (proved at every `h`), as `spotRunAcceptsPlay` derives it at `Top.lean:117`; not stated on its own. It stands under what the leg still asks: `StmtsRead`, `RoundsHeldAt`, `ScopeHeldAt`, `PinHeldAt`, `PortsDistinctAt`, `PartsSizedAt` |
+
+So `Premises A.h` and `InScope A.h` are within reach of the form's accept: short of (i), they take `RefReadsWf`, `wiresChecked` and two lemmas by construction that nobody has stated (`BuiltWired` and `always` at `withFrame`). `Accepts A.h` is not, because of (iii).
+
+**The next statements, as Lean text** (not written to a file; they import `HeldOfRun`, whose `RunsAs/Statement.lean` on my branch is older than the join's copy, so they compile only on a head that carries the join):
+
+```lean
+theorem builtWired_withFrame (h : Held) (c₀ : Code) :
+    BuiltWired (withFrame h c₀) (wireMap (withFrame h c₀)) (returned (withFrame h c₀))
+
+theorem always_heldOf (hh : heldOf i it u = some h) (v : ℕ) : h.reg.always v = false
+
+theorem premises_of_heldOf (hh : heldOf i it u = some h) (hWf : RefReadsWf h) {n K : ℕ}
+    (hp : Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true)
+    (hK : firstK h.reg.first = some K) (hwc : AddressRow.wiresChecked h = true) : Premises h
+
+theorem inScope_of_heldOf (hh : heldOf i it u = some h) {n : ℕ}
+    (hp : Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true)
+    {x : Msg} {st : Roots} (hx : decode x = some st) : InScope h
+
+-- at the leg, in `Verity.SampledTwo`, with `firstK_of_formAccepts` and `popOk_of_accepted`:
+theorem premises_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o : Verity.Exchange}
+    {i : Spot.Run.Input} {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i)
+    (hit : i.interior = some it) (hWf : SpotFlock.RefReadsWf A.h)
+    (hwc : SpotFlock.AddressRow.wiresChecked A.h = true) : SpotFlock.Honest.Premises A.h
+```
+
+**4. The rest of the probe** [run: `r20261113-115850-13f3`, done rc 0, `PROBES-DONE`]. `decide +kernel` on `Program.parse` of the toy's 3,959-byte descriptor timed out at 900 s, as the JSON parse of the same text did; the first stage's law at the toy fails in 4 s. Final count: of fifteen kernel facts, four pass (three in a second or less, the 1,272-byte JSON parse in 115 s), nine fail (eight at once, `Program.parse` of the small descriptor after 248 s), two time out. Compiled evaluation reads everything. The 12:13Z finding stands: no fact of a registration is a kernel `decide`; at the toy they are computed facts, and HELDOF's `descOk` with its compiled main is the evaluator that already exists for them.
+
+## STOP RULE
+
+None.
+
+## NEEDS
+
+- **Your pick on what `HonestExists` asks of a run.** (a) Keep `Accepts h`: the witness is then a premise from the prover's side (at the toy, a computed fact of the play's prover: its witness passes `Claims.Flock.check`), and the form's accept does not enter. (b) Ask for an accepted play: `∃ H P x coins, (Claims.run H P (V h) x … coins).out = .acc`, which is what `runAcceptsPlay` concludes and the leg's `PlayAccepts` reads; `InScope` then follows from the play (`parse_of_stmtOkAt`, `TwoHolds`). My recommendation is (b): it is the statement the form's accept can reach, and (ii) and (iii) leave it. `accepts_of` stays for where a prover's witness is at hand.
+- **Whether I write the five statements, and on which head.** They need the join's `RunsAs/Statement.lean`. I merge nothing into my branch until you say. While you decide I try the four in `SpotFlock.Honest` on a scratch merge of `cf303cb73f` with the join's `e9346a9e70`, on no branch, one run; the fifth sits in the leg's directory and stays text.
+
+## Not established
+
+- Anything in item 3 by a compile: the chain is read, and the five statements are text.
+- That the two stages' sample is non-empty at an accepted run (ii): I found no lemma; I did not try to prove one.
+- That `HeldOfAt` holds of any case map: HELDOF's `DescAt` and `CopyOf` are premises.
+- Which `String` function stops the kernel: the sixteen-fact probe is prepared and not launched. The two 900 s timeouts on the toy's text make it moot for the toy, so I leave it unless you want it.
+- A whole build or a records run at my head; no ready line.
+
+## Pushed
+
+- `cursor/proofs-honest2-7c4e` at `cf303cb73f`: `Honest/Any.lean` (new, six theorems), its root line in `security/Proofs/lakefile.toml` and `lean-audit.json`. Compiled by `c9bc`. Whole-tree tests at `2b7a19f1aa` (the same tree but for four lines of one proof): 192 passed, 3 failed, the three that fail at `191488fbab`, none naming `Honest/`. No records run, so no ready line.
+
+## To post
+
+Nothing. No timer but one of my own, for the mailbox.
