@@ -144053,3 +144053,77 @@ None.
 ## To post
 
 Nothing.
+
+## HELDOF, Fri 13 Nov 13:47Z: the join's merge of #9441 alone, `cursor/proofs-heldof-join9441-f684` at `eeb01e9eae8` (the join `4e986e339ad2` with `51a2e803cb83`), has NO CONFLICT and no stale pin; the first build is `r20261113-132444-518d`, and it passed. The entry follows.
+
+## HELDOF, Fri 13 Nov 13:47Z: ON `cursor/proofs-heldof-join9441-f684` AT `b755ba133f9`, ALL 84 `SampledTwo` MODULES BUILD WITH NO ERROR, AND `RefsOfSent.lean` PASSES ITS TRY WITH ONLY THE THREE ALLOWED AXIOMS; `heldOfAt_or_collide` HAS LOST `hT`
+
+**The head.** [read] The branch is `cursor/proofs-heldof-join9441-f684`, at `b755ba133f9` and pushed. It is the merge `eeb01e9eae8` (the join's tip `4e986e339ad2` with #9441's marked head `51a2e803cb83`, and nothing else) plus five commits, one per file. [run] The merge had no conflicted file. `pins.py --merged` found nothing to regenerate, and `pins.py --stale` exits 0 at the head. [run] `git diff eeb01e9eae8 b755ba133f9 -- verity/` is empty: no file under `verity/` changed. [read] The join's tip is still `4e986e339ad2` at 13:44Z.
+
+**The build.** [run] `r20261113-132444-518d` on vy-nebius-cpu-7 ran `lean_changed.py --build` on all 84 files under `security/Proofs/Properties/Verity/SampledTwo/`. Lake exited 0 in 443 s, reported `"failed": {}`, and its log has no error lines. All 84 `SampledTwo` modules were built, the five mended ones among them. [derived] By the import lines, the five mended modules have 29 importers, all inside `SampledTwo`, so the build covers every module that reads the mends.
+
+**The try.** [run] `r20261113-133550-1248` on vy-nebius-cpu-3 ran `verity lean try RefsOfSent.lean --siblings`: Lean exited 0 in 387 s. The siblings check found no built module that declares one of its names. The axiom line: "axiom probe: none of its 18 theorems uses an axiom beyond propext, Classical.choice and Quot.sound."
+
+**`heldOfAt_or_collide`.** [read] It has lost `hT` (and the registration `q` that `hT` named). Its proof is now `(refsAt_of_accept (caseIsSent_at x hS) hP hA₀ hk₀ hd₀ hx₀).imp_left fun hR => heldOfAt_at u₀ hd hP hR hj hA`.
+
+**The twelve, by file, one commit each:**
+- `95bffe24c64`, `MemberChecks.lean` (MEMBERS's file): `stepMember_sessions`, `memberSession_checks` and `memberSession_ok` (change of statement, below). It also adds six lemmas, so the theorems that keep their statements can discharge the new hypothesis:
+  - `files_statement`, `files_lookup` and `statementAt_statement`: the statement `statementAt files m` returns, where `files` is what `membersFiles` read, is `m.statement (slice m) bs`, for a member `m` that is the first of its name among the parameters' members.
+  - `heldStep_find`, `foldlM_held_find` (private) and `membersHeld_find`: every member `membersHeld` returns is the first of its name among the parameters' members.
+  - [read] The `scopeOf` half of `memberSession_checks` was not touched, and it builds at #9441.
+- `41acd91ecff`, `SessionHeld.lean` (SESSIONCOINS's file): `membersRun_held`, a new unfolding of `membersStructure`. Its statement is unchanged.
+- `302fd2b5e4b`, `CutHeld.lean` (the join's file): `members_trees`, a new unfolding of `membersStructure`. Its statement is unchanged.
+- `6f178b7f028`, `RoundsRise.lean` (MESSAGES's file):
+  - `stepMember_all` and `foldl_members`: change of statement, below.
+  - `runMembers_sessions`: a new unfolding through `membersFiles`. Its statement is unchanged; `hst` comes from `membersHeld_find` and `statementAt_statement`.
+  - `membersRun_ran`: a new unfolding of `membersStructure`. Its statement is unchanged.
+- `b755ba133f9`, `RefsOfSent.lean` (my file): the four statements replace the three deleted lemmas, as on the trial head. One difference from the trial: the switch's `Properties.Spot.SecurityProofs.statement_tables` is not at #9441, so a private `memberStatement_tables` proves the same step from `Member.statement`, `statementOf` and `tablesHeld_ok`.
+
+**Statements before and after** [read, from `git diff eeb01e9eae8 b755ba133f9`]. In each changed statement, the conclusion is unchanged.
+- `stepMember_sessions`:
+  - Before: `{slice} {bs} {r r'} {sf} {m} (h : stepMember slice bs r (sf, m) = .ok r') (ha : r'.all = true) : ∃ circuitB pubB rd, …`
+  - After: `{slice} {st : Member → V StepAt} {bs} {r r'} {sf} {m} (hst : ∀ a, st m = .ok a → m.statement (slice m) bs = .ok a) (h : stepMember st bs r (sf, m) = .ok r') (ha : r'.all = true) : ∃ circuitB pubB rd, …`, with the same conclusion.
+- `memberSession_checks` and `memberSession_ok`:
+  - Before: `(h : stepMember slice bs r (sf, m) = .ok r')`.
+  - After: `(hst : ∀ a, st m = .ok a → m.statement (slice m) bs = .ok a) (h : stepMember st bs r (sf, m) = .ok r')`. In `memberSession_ok`, `hst` comes after `H` and `t`. The other hypotheses and the conclusions are unchanged.
+- `stepMember_all`:
+  - Before: `{slice} {bs} {r r'} {z} (h : stepMember slice bs r z = .ok r') (ha) : r.all = true ∧ ∃ …`
+  - After: `{slice} {st} {bs} {r r'} {z} (hst : ∀ a, st z.2 = .ok a → z.2.statement (slice z.2) bs = .ok a) (h : stepMember st bs r z = .ok r') (ha) : r.all = true ∧ ∃ …`
+- `foldl_members`:
+  - Before: `∀ l r r', l.foldlM (stepMember slice bs) r = .ok r' → r'.all = true → …`
+  - After: `{st} ∀ l r r', (∀ z ∈ l, ∀ a, st z.2 = .ok a → z.2.statement (slice z.2) bs = .ok a) → l.foldlM (stepMember st bs) r = .ok r' → r'.all = true → …`
+- `RefsOfSent.lean`, deleted (statements as on the join):
+  - `stepMember_tables (h : stepMember slice bs r z = .ok r') : …`
+  - `runMembers_tables (h : runMembers slice ms sts want bs = .ok r) : ∃ held, membersHeld ms sts = .ok held ∧ …`
+  - `membersRun_tables (h : membersRun p ms c e sts bs = .ok r) : ∃ held, membersHeld ms sts = .ok held ∧ …`
+  - `NamesAt C q` and `tablesHeldAt_of_names (hN : NamesAt C q) : TablesHeldAt C q`.
+- `RefsOfSent.lean`, added:
+  - `accepted_tables (hA : FormAccepts C o) (hk : C o = some k) (hdec : Decoded k p c e) : ∀ m ∈ p.members, Properties.Spot.HoldsRegisteredTables m.own k.blobs`
+  - `memberOf_mem (h : memberOf p t = some m) : m ∈ p.members`
+  - `tablesHeldAt_of_accept (hP : DecodesAt C P) (hm : memberOf P 0 = some m₀) : TablesHeldAt C m₀.own`
+  - `refsAt_of_accept (hS : CaseIsSent C) (hP : DecodesAt C P) (hA₀) (hk₀) (hd₀) (hx₀ : refStmtsOf P k₀.blobs = some xs₀) : RefsAt C xs₀ ∨ SentCollides C`
+- `heldOfAt_or_collide`:
+  - Before: `{q : Own} … (hT : TablesHeldAt (atStmt C x) q) …`
+  - After: no `q` and no `hT`. The other hypotheses and the conclusion `HeldOfAt A (atStmt C x) ∨ SentCollides (atStmt C x)` are unchanged.
+
+**Beyond the twelve.** [run] None: the build failed nowhere. [run] The four failures you set aside don't appear at #9441 alone. `Deployed.lean` and `SessionCoins.lean` build. The `scopeOf` half builds. `helloSpec_of_text` is not in the tree at this head [read: no file under `security/` names it].
+
+### STOP RULE
+I stopped at nothing: no theorem needed a changed statement beyond the five your table marked as changes of statement.
+
+### NEEDS
+Nothing now. The carry waits for your word "carry". No merge of `main`, no rebase.
+
+### To post
+To MEMBERS, MESSAGES, SESSIONCOINS and the join: their files are mended on this branch, in the five commits above.
+
+### Not established
+- [guess] The switch's later merges will need `memberStatement_tables` replaced by the switch's own `statement_tables` (one lemma, not two).
+- I built only the 84 `SampledTwo` modules. Modules elsewhere in `security/` that read #9441's `Spot/OneStageZk.lean` directly were not built on this head.
+- [run] `CutHeld.lean` has unused-tactic warnings on the first alternative of `members_trees`' `first` block. [guess] They are not errors and were there before.
+- The lock: no `lean-audit.json` was regenerated here, and none of these theorems is a listed guarantee [guess, not checked against the lock].
+
+### Branches
+- `cursor/proofs-heldof-join9441-f684` at `b755ba133f9` (this work).
+- `cursor/proofs-heldof-joinswitch-f684` at `1002467c84a` (the trial; not for landing).
+- `cursor/proofs-heldof-4c7b` at `2861eed8d0a` (unchanged).
