@@ -43,8 +43,8 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # `H1CheckedCreditPeriod`'s witnesses
 
 The honest and nontrivial witnesses of `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod`, both at one
-instance: H1's honest live-salt period (`Proofs.Pouw.Period.Honest`) of `n = 64` windows at `δ_s = 1%`,
-`δ_bind = δ_ks = 0`.
+instance: H1's honest live-salt period (`Properties.Pouw.Period.Witnesses`, `Proofs.Pouw.Period.Honest`) of `n = 64`
+windows at `δ_s = 1%`, `δ_bind = δ_ks = 0`.
 
 * `h1CheckedCreditPeriod_honest`: every premise of `H1CheckedCreditPeriod` holds there (`HonestH1.h1_meets`), with the
   period's play accepted exactly where the deployed check (`PouwCheck.protocol.check` at `Accept.h1Params`) accepts
@@ -63,21 +63,6 @@ namespace Properties.Pouw.Period.SecurityProofs.HonestH1
 open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs Properties.Pouw.Period.SecurityProofs.Accept
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 open Accounting.SecurityProofs.ComposeMonitoringPeriod
-
-/-- The uniform measure's instance on `64` windows' coins: instance search unfolds `Paths` 64 levels deep and fails. -/
-instance (priority := high) fintypePaths64 : Fintype (Paths Ω1 64) := Paths.instFintype Ω1 64
-
-/-- **The deployed check accepts the period**: `PouwCheck.protocol.check` accepts every window on the coins `x`. -/
-def checkedAccepts (n : ℕ) (x : Paths Ω1 n) : Prop :=
-  ∀ w, Accepts prm ((windows n).reg x w) ((windows n).ev x w)
-
-/-- The honest play, accepted where the deployed check accepts every window. -/
-noncomputable def checkedPlay (n : ℕ) : Play Ω1 n Unit Unit Unit Unit :=
-  { play n with accepts := checkedAccepts n }
-
-/-- **The verifier that accepts everything**: the honest play's game, accepted on every path, fixing no word. -/
-noncomputable def acceptAll (n : ℕ) : Play Ω1 n Unit Unit Unit Unit :=
-  { game := (play n).game, accepts := fun _ => True, run := fun _ => { anatomy with fixed := 0 } }
 
 theorem zeroCone_eq : zeroCone Honest.scheme circuit 144 = 0 := by
   unfold zeroCone

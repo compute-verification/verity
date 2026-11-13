@@ -6,6 +6,7 @@
   "Properties.Pouw.Commit",
   "Properties.Pouw.LiveSalt",
   "Properties.Pouw.Period",
+  "Properties.Pouw.Period.Witnesses",
   "Properties.Pouw.PeriodJ10R",
   "Properties.Pouw.ServedFreed",
   "Properties.Pouw.ServedWork",
@@ -2239,7 +2240,7 @@
   },
   "Properties.Pouw.Period": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],
-   "except": [],
+   "except": ["Properties.Pouw.Period.Witnesses"],
    "why": "the period's work at the deployed check's accepted prefix is stated against the check's own verdict (`PouwCheck.protocol.check`) and the accounting model's period, its proofs and its named claims (`Definitions.Accounting.ComposeMonitoringPeriod`, `Definitions.Accounting.Assumptions`), never a proof"
   },
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": {
@@ -2600,14 +2601,6 @@
   "Randomness": "core's randomness (`core_randomness`), read through PouwCommit and RemoteAudit's draws: its lock declares no spec layer yet (draft #1499), so its definitions are recorded here as read rather than as a spec",
   "PouwWindow.Rounds": "PoUW window's rounds code, read by `PouwCheck.liveSaltCheck` through `Properties.Pouw.LiveSalt.oneRoot`: the salt epoch's rule (`SALT`, `SALT_FAMILIES`, `LIVE_SCHEME`, `saltEpochReason`); and the round check (`roundsReason`, `ROUND`, `liveEpochReason`), which the lead's g-private order reads through `Properties.Pouw.Lead.Commit`; the window's lock declares no spec layer for `PouwWindow.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-81)",
   "PouwCheck.Rounds": "PoUW check's rounds code, read by `Credit.window` through `roundsCheck` in `Properties.Pouw.PeriodJ10R.WindowAccepts`: the window's round coins read through the challenger's session; PouwCheck's lock declares no spec layer for `PouwCheck.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-127)"
- },
- "trees": {
-  "except": {
-   "Proofs.Pouw.Period.Honest": "h1CheckedCreditPeriod's witnesses read H1's honest instance (`HonestH1`: its circuit, windows, period, layer, run and play), proof-only beside its honest lemma",
-   "Proofs.Pouw.Period.Accept": "h1CheckedCreditPeriod's witnesses read the parameters, registration and evidence H1's honest instance is checked at (`h1Params`, `h1Reg`, `h1Evidence`), proof-only beside the check's verdict on them",
-   "Proofs.Pouw.Period.Witnesses": "h1CheckedCreditPeriod's witnesses read their two plays of H1's honest instance (`checkedPlay`, `acceptAll`) and its coins' uniform measure at 64 windows, proof-only beside them",
-   "Proofs.Accounting.ComposeMonitoringPeriod.Honest": "h1CheckedCreditPeriod's witnesses read the honest scheme (`Honest.scheme`) H1's honest instance is credited under, proof-only beside it"
-  }
  },
  "guarantees": {
   "Accounting.SecurityProofs.Bridge.CheckProofSystemSound": {
