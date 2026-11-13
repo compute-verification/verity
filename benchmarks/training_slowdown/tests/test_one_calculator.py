@@ -72,7 +72,7 @@ def test_a_reach_is_found():
                    f"from {PACKAGE} import min_cut\nimport {PACKAGE}.params\n") == [
         f"2: '{home}'", "3: import periods", f"4: from {PACKAGE} import", f"5: import {PACKAGE}.params"]
     assert reaches("from pathlib import Path\nimport importlib.util\n"
-                   f"P = Path('verity') / 'protocols' / 'inference_only' / '{PACKAGE}' / '{PACKAGE}' / 'min_cut.py'\n"
+                   f"P = Path('inference_only') / '{PACKAGE}' / '{PACKAGE}' / 'min_cut.py'\n"
                    "importlib.util.spec_from_file_location('m', P)\n") == ["3: 'inference_only'"]
     assert reaches(f'"""Reads {home} through calculator."""\nfrom . import calculator\n'
                    f'from .{PACKAGE} import x\n\ndef f():\n    """As inference_only says."""\n    {PACKAGE} = 1\n') == []
