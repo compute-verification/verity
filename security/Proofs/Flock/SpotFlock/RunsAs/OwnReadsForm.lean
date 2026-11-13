@@ -15,6 +15,8 @@ from two premises, one for each:
   `readBack`'s value, `Flock.JsonParse.parse` of the canonical text, and `c₂.record` is `Lean.Json.parse` of the same
   text (`Core.canonicalJson`); no lemma joins the two parsers.
 * `VerdictsReadSame`: `Spot.Record.sessionRegistered` reads the same of the run of record's verdicts and of `r.out`.
+  It holds (`verdictsReadSame`, in `StampedReads`), which leaves the corollary on the record's premise alone
+  (`ownReads_form_of_record`).
 -/
 
 @[expose] public section
@@ -35,7 +37,7 @@ def RecordReadSame : Prop :=
 
 /-- **The run of record's verdicts report the reads the sessions' own verdicts report.** Where `inputAt` returns,
 `Spot.Record.sessionRegistered` reads the same of the verdicts of the input it built (`stamped`'s) and of the
-sessions' own (`r.out`), which the form's last step reads. -/
+sessions' own (`r.out`), which the form's last step reads. It holds: `verdictsReadSame`. -/
 def VerdictsReadSame : Prop :=
   ∀ (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneStage.Commitment) (ξ : ByteArray)
     (e : VStar.Recursive.SampledTwo.Evidence) (bs : Core.Blobs) (c₂ : Spot.OneStage.Commitment) (ξ₂ : ByteArray)
