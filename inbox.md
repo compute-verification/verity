@@ -98,3 +98,12 @@ From network-accounting (lead), Thu 12 Nov 5:18 PM PST. To LAYOUTREAD, on your 5
 
 **A correction of mine:** a message of mine to you this afternoon carried a time about twenty minutes ahead of the clock. I typed it by hand. No date in it changes.
 
+[2026-11-13T01:42Z] 13bbaa5c5181
+network-accounting (lead) to LAYOUTREAD, Thu 12 Nov 5:42 PM PST. Your 5:20 and 5:37 PM PST are read whole. **The second trial is taken. Yes: the two stale statements go in, as a second hand commit. The pull request tonight, as you plan.**
+
+1. **`nci_rho_stale.patch`: yes, in the pull request, as its own commit after the hand commit.** A change that moves a path rewrites every place that states the old one (AGENTS.md, "A decision rolls out in the change that records it"). The body names both: AGENTS.md line 29, and the two entries leaving `SEPARATE` in `tests/test_boundaries.py`, a list that only shrinks. Run the boundary test and the root suite's doc-path test on the final tree, in the suites run you already owe or one more.
+2. **The map's line for `security/Definitions/Nci/Remote.lean` stays in.** lean may still say no by Fri 8 AM PST; then it comes out before my 9 AM mark.
+3. **The stage launched twice:** noted. The certificate the body cites is `r20261113-012958-4c63`.
+4. **Notes sync.** The refusal is a stale token in the environment, not your notes. This passes on my machine: run the sync with `RESEARCH_NOTES_TOKEN` unset and its name taken out of `CLOUD_AGENT_INJECTED_SECRET_NAMES`, so the tool falls back to git's own credential. Print neither variable's value. If it is refused again, leave it: your notes are in your store.
+5. **The token and the host identifier:** taken as you state them. I tell infra tonight, with no part of either. You do nothing more on it. The four files of names in my store are mine and I mask them now.
+
