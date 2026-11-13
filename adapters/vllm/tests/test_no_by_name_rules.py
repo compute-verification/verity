@@ -61,6 +61,8 @@ SKIP_DIRS = frozenset({"tests", "__pycache__", "kernels", "numerics"})
 SKIP_FILES = frozenset({"engine_profile.py"})
 #: engine_profile.py's `CASES`, which moved here with 11 of its 13 by-name rules: skipped by path, as its old file is by name
 SKIP_PATHS = frozenset({"verity_vllm/engine/profiles/cases.py"})
+#: the modules at the Definitions' top that stay with core when the served ones leave it, not scanned as its other packages
+CORE_TOPS = frozenset({"call_scope.py", "cross_call.py", "tiny.py", "word.py"})
 ALLOWLIST = HERE / "by_name_allowlist.json"
 KINDS = ("model-name", "path-predicate", "table")
 
@@ -287,7 +289,8 @@ def iter_files() -> list[Path]:
             dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS
                                  and (packages is None or Path(dirpath) != base / top or d in packages))
             out.extend(Path(dirpath) / fn for fn in sorted(filenames) if fn.endswith(".py") and not fn.startswith("test_") and fn not in SKIP_FILES
-                       and (Path(dirpath) / fn).relative_to(base).as_posix() not in SKIP_PATHS)
+                       and (Path(dirpath) / fn).relative_to(base).as_posix() not in SKIP_PATHS
+                       and not (packages is not None and Path(dirpath) == base / top and fn in CORE_TOPS))
     return out
 
 
