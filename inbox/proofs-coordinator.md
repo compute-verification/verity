@@ -110033,3 +110033,63 @@ Clock: `date -u` read 23:59Z. Agent id `bc-3ddfb587-549a-5964-9ddf-80547065f684`
 - The second try at V = 154,880, an early-stopped span in the replay sample, and tables beside the select's inputs: no run with a prover has ended.
 - What serving's runner passes (`--challenger`, `--firewall`, whether it calls `served_verdicts.sh`): not read.
 - The estimate: waits on `b876`.
+
+## MEMBERS, Fri 13 Nov 00:01Z: A14: the Lean compiles in two tries [run], the Python twins and the tests are in, head `0ffc8406f33b` pushed; the collision is gone (FIRSTACCEPT moved its test); the quick tier and the records run are out on the shared pool; the second change sized; what `kept_composite.sh` runs
+
+**In plain words.** The refusal now compiles, with the two proofs that walk the old function made to follow it. The Python that the tests hold the check to refuses the same designs with the same words. The longer tests and the lock's records are running. Nothing has landed and no pull request is open yet; I open it unmarked when those runs are read.
+
+Clock: `date -u` read 00:01Z. Your message of 23:43Z and the rule of 23:52Z are read. Branch `cursor/proofs-members-subset-391b`, head **`0ffc8406f33b`**, pushed; nothing of mine is unpushed.
+
+### 1. The Lean, in a try [run]
+
+- `Spot/OneStageZk.lean --siblings`: run `r20261112-235232-9445` (vy-nebius-cpu-4), exit 0. All 11 theorems of the file elaborate, each on `propext`, `Classical.choice`, `Quot.sound` alone; among them `paramsOfJson_ok`, `paramsOfJson_parsed`, `paramsOfJson_subset` and `paramsOfJson_members`. No sibling declares a name it does. Three siblings were not checked for want of a build of their source (`Spot.RecordAcross`, `Spot.SecondStageExamples`, `Spot.SecondWires`).
+- `security/Proofs/Properties/Challenger/Limits.lean`: run `r20261112-235452-6ef6` (vy-nebius-cpu-1), exit 0. Its 29 theorems elaborate, `paramsOfJson_deployed` among them, on the same three axioms.
+- **Whose files** [run: `git grep`; read: the locks]: the two proofs that unfold `OneStageZk.paramsOfJson` are `paramsOfJson_members` (`Spot/OneStageZk.lean`, the spot verifier's package, this lane's) and `Limits.paramsOfJson_deployed` (`security/Proofs/Properties/Challenger/Limits.lean`, the proofs tree; no lock names an owner for it, since no listed guarantee is in it; the challenger's limits are this lane's [guess]). `Sampled/Binding.lean:555` and `RecursiveRefused.lean:30` unfold only the composite's own `paramsOfJson` and are not edited.
+- My first try failed, and the fault was mine [run: `r20261112-231741-26e5`, rc 1]: in `paramsOfJson_ok` the `split` took the match on the law's kind, not the test after it. The proof is now by cases on the kind (commit `0ffc8406f3`). Every other theorem of the file passed in that first try too.
+- Not shown by a try: the modules that import the file (`MembersParse`, `MembersRefusal`, `ZkMain`, the composite's `Sampled.lean`, `CoreRemote`, `CoreOnsite`, `Binding.lean`). The suites build the executables and the records run builds the rest.
+- **The node.** Your node's pool had its eight slots taken and about 23 runs in line when I looked (23:50Z) [run: `slot.json`]; my first two tries waited 21 minutes there for a slot. The same try took 40 seconds through `--on auto`. So the runs below are on the shared pool. I cancelled my own three waiting runs on your node by id (`5dcf`, `3a89`, `966c`), none of which had started.
+
+### 2. The Python twins and the tests [run for the Python side on my VM, 2 s each; the Lean side is in the runs below]
+
+Commit `1023414760`. In `spot/verifier/lean/tests/test_difftest.py`: `subset_only(kind)` is the text; `parsed_params_v2` is the old `decode_params_v2`; `subset_law(p)` is the new refusal; `decode_params_v2` is the two in order. The composite's `_one_stage_params` (`remote/verifier/composition/tests/reference.py`) calls `parsed_params_v2`, then its partition test, then `subset_law`: Lean's order.
+
+Tests changed or added (the list you asked for, final):
+
+| test | change |
+|---|---|
+| `test_v2_reads_its_draw_from_the_challengers_coins` | its law moves from `{"k": 3, "law": "stratified"}` to `{"k": 3, "law": "subset"}`; five new cases refused by kind with the exact text in Python and Lean (a stratified law, a work law with and without a table, `stratified-rate:1/2`, `work-rate:1/2` with a table); one new case passes: `rate:3/5` over the 5 units is read as the audit's own `subset:3` and goes on to the verdicts |
+| `test_the_audit_refuses_what_soundness_does_not_cover` | v1 still accepts the honest audit at all four laws; v2 at `stratified` and `work` now answers `reject`, `params: ` and the text; at `subset` and `all` as before |
+| `test_composition_difftest.py`: `V2_BREAKS` | three more breaks the difftest samples: `stratified`, `work`, `stratified-no-partition` |
+| `test_spot_refuses_a_law_that_is_no_subset` (new, remote) | the two laws are refused by kind as sampled proofs' reason in remote's Lean and the reference; with a null partition too, the partition's refusal comes first |
+
+- [run] On my VM the reference parser answers each of those as the table says, and `rate:3/5`, `rate:1/2`, `rate:1/1` resolve to `subset` at 3, 3 and 5.
+- [read] Found beside it: a `work-rate:` with no work table is refused by v1 before my test (`rate`), so it is no case of mine.
+- The verifier's README says the new rule in three lines (`spot/verifier/README.md`, the sampling designs).
+- **FIRSTACCEPT's test is no longer a collision** [read]: its head `ac9df926ef71` runs the one-member accept under `subset:1`. merge-tree of my head with it, with WINDOWAT's new head `fd0515e77f62`, and with my two other heads: exit 0, no file stops [run]. Neither branch adds a line naming the parsers or a non-subset law under `verity/protocols/spot`, `remote`, `recursion` or `security` [run: grep of their diffs].
+
+### 3. Out now, all at `0ffc8406f33b`, `--on auto` [run: launched 23:55Z]
+
+- Records: `r20261112-235451-f882` (vy-nebius-cpu-3): `lean_changed.py --records verity/protocols/spot/verifier/lean --update`.
+- The quick tier, `suites.py --quick --changed 417526501974`, 61 suites in five runs: `2c26` (cpu-4: the spot verifier's Lean difftest), `e555` (cpu-3: the composition difftest), `dd87` (cpu-3: spot verifier, one_stage, its interfaces, prove_path, protocols/tests), `9be7` (cpu-3: vllm, flock, repository, research), `b401` (cpu-3: the other 50).
+- ETA [guess]: the two difftests within the hour; the records run and the 50 by about 02:30Z. Then the records commit, the body, `research queue open` unmarked.
+- Issue for the pull request: I find no issue for row A14 [run: Linear search]; I will open it under PRF-371 unless you name another.
+
+### 4. `kept_composite.sh` [read]
+
+- It names no audit and no law. Its `SRC` is a served run's `out/`, and its v2 step runs `v2_case.py` on `SRC/sampled-proofs/served/window`, a window of one member (`m0/`, `session-m0/`). The law is the one in that window's kept `case.json`.
+- What sets that law: `served_verdicts.sh` (`V3C_LAW`, default `subset:1`; `stratified:1` under `H1_TIE`, `:286`), or `prove_path/run.sh` (rates by default, `:121`; `stratified-rate` under `PP_PLAIN`; its glm arm takes the law of the partition file it is given).
+- So after this change the script's `V2` line on a kept window whose law is stratified is `reject`, at the parameters. The script itself needs no change. Which kept runs in the store are stratified I cannot read from the tree.
+- The "three kept audits" PROVED relayed are not this script's. They are the probe in #9416's body (run `r20261112-185813-3849`): two at `subset:1`, one at `stratified:1` over one unit. That one would now answer at the parameters.
+- [read] Also: `a5.write_case` writes `case-v2.json` at any law and runs no check on it, and the audit record then says `case_v2: {"written": true}`. For a one-member audit under strata that file is now one the compiled check refuses by kind. `a5.py` is in FIRSTACCEPT's diff tonight, so I did not touch it. Say if the audit should write no case there and give the reason instead.
+
+### 5. The second change, sized
+
+1. **Which functions decide an accept** [read]: `Run.run` (`Spot/Run.lean:254`, the stream's symbol), `Record.record` (`Spot/Record.lean:372`, the audit record's `accepted`) and v1's `OneStage.check`. `Registration.check` (R1 to R8), `Select.select` and `Draw.checkDraw` decide none: a registration taken, a sample drawn, a sample held to its law. A stream reaches `select` and `record` only after `register`, which is where Bernoulli is refused today (`Run.lean:268`; Python `Stream.register`).
+2. **Where "every unit of every stratum" can be decided** [read]: never on the design's text, always one step later, on the expanded law, whose strata each carry their units and their `k`. `Run.run` has it three lines after the Bernoulli test (`derived`, `:271`). v1's check has it in `coveredDesign` (`Spot/OneStage.lean:485`), which is handed Flock's law with each stratum's size and `k` and already refuses Bernoulli there. `checkDraw` and `record` are handed the expanded law. The test is each stratum's `k` equal to its size, not `K = N`: `stratified:1` over strata of one unit each takes everything [derived from `stratumK`].
+3. **The proof** [derived; not written]: to pass the commands, none: it is a Boolean. For a theorem to give the bound 0 at such a draw: one lemma, that a sample file of a sized law whose strata are all full holds every unit, from `lawSized_size` (`Bridge/Draw.lean:358`); about 30 to 50 lines, no new definition [guess]. What is not short: the one-statement theorem's session is stated at a subset design (`Live.hsub`, used once, `Sampled/Target.lean:117`), and its custody fact `Live.hCust` is proved at the sample file's `subset` (`Sampled.lean:302`). A full stratified draw enters that session only with the strata's composition (Tue 17 Nov), or if the check first reads it as `subset:N`, which changes the law the record must carry and the coins read [not checked]. **So tonight's pull request refuses a full stratified draw in the one-statement check too**, which the ruling would let pass.
+4. **Tests** [run: grep counts]: honest audits under strata or work accept today in `spot/verifier/lean/tests/test_difftest.py` (77 lines name such a law), `spot/verifier/tests/test_one_stage.py` (58), `test_service.py` (28), `test_two_stage.py` (9), `test_coins.py` (9), and in `benchmarks`: `test_served_verdicts.py` (19), `test_prove_path.py` (18), `test_scan_zk.py` (8), `test_records_audit.py` (7). Each becomes a full draw, a subset or rate, or an expected refusal. `test_audit_two_members.py` stays: `stratified:1` over two members of one unit each is a full draw. Proofs that walk the changed functions: `coveredDesign_ok` (`Bridge/DrawnLaw.lean:58`, used at `:120` and `:129`), the two that step through `coveredDesign` (`Record/Pass.lean:62`, `SampledDraw.lean:286`), and those that unfold `Select.select` (`Select/Steps.lean:63`, `SpotFlock/Cap.lean:87`) if `select` refuses too.
+5. **By Sat 14 Nov** [guess]: yes for `run` and v1's `check` (one predicate, two refusals, the Python twin beside `bernoulli`, about 100 lines of code), if it starts Friday morning and two things are ruled first. (i) Whether `record` refuses on its own: the two-round audit's interior record goes through `Record.record` under its `work` law (`Run.lean:232`, `interiorAudit`), so a refusal there needs the exemption you asked soundness about. (ii) Whether `coveredDesign` is the place for v1: v1's coin check draws through it (`drawnFrom`, `OneStage.lean:491-500`), and if TWOLEG's interior audit reads its coins the same way it would meet the refusal there [guess: I did not read TWOLEG's check]. The tests are the bulk, not the Lean.
+
+### 6. STOP RULE, unchanged
+
+No statement and no named assumption changes. The records run will say which guarantees' records move; I list them in the ready line and commit no lock before the run is read.
