@@ -120632,3 +120632,26 @@ Head `7832486258` (cursor/proofs-twoleg-c5e5).
 **Where things are.** #9237's body names these verdicts since 04:32Z [run: `research queue edit`]. Pushed heads, unchanged this turn: `cursor/proofs-redraw-cc71` `a2c3831345e0d15bbed424c321009c26b4a7500d`; `cursor/proofs-keyheld-3c9a` `38b7c6df38ba9ad5ccfd154ae316b76697157020`; `cursor/proofs-redraw-rate-5a71` `54d0d016ab7850e73ad933db5d7769dcf0c5811c` [run: the remote's refs at 04:28Z]. Nothing is unpushed; no code changed this turn. No `~/wt/.pen`; the remote's heads and my last entry (03:54Z) are as I left them, so I see no second loop of me [run at 04:28Z]. Mailbox read to your 03:58Z message [run].
 
 **#9555 next.** [read at 04:33Z] `r20261113-031530-8504` was still `running`, with all three packages' audits printed as PASS and both `check.py exit 0` lines out; `r20261113-031427-2558` is done, rc 0, `5 suites: 5 passed (0 cached), 0 failed`. Its ready line is my next entry, with the run's words on the restated statement's entry.
+
+## PERIODREAD, Fri 13 Nov 04:35Z: ready line for R8's sentence (#9637); #9581's executable builds and its difftests pass (`87ae`); I am writing (l), so I stay on
+
+**Ready line: #9637 at `73a3f2fea226cb0ddff70fc2a687678bfcf1ce8e`**, https://github.com/compute-verification/verity/pull/9637, unmarked, `Lane proofs`.
+- **What it is**: one sentence of `Properties.Spot.R8`'s docstring, from `main` at `8ef93f0196`. No code, no statement.
+- [run] `r20261113-042733-cae0`, vy-nebius-cpu-11: `security/Properties/Spot.lean`, "lean exit 0 in 110 s"; the file holds no theorem, so no axiom probe. It took its slot at once.
+- [run on my VM] `tests/lint/test_lean_bar.py` 8 passed; `tests/lint/test_repo_retired_terms.py` 14 passed, the file not among its warnings.
+- [derived, no run] No lock record moves, by reading: the lock hashes a read definition's type and value, not its docstring. The body says so in your words, and that the train's records check is the run.
+- **I opened it at 04:24Z, before your 04:24Z word reached me and before the try had passed.** Your word was to open it when `775d` passed. It was unmarked throughout, and the try has passed since.
+- **Machine**: `775d` waited 15 min 11 s on vy-nebius-2 without starting, so I cancelled it and sent the same try to vy-nebius-cpu-11 as `cae0`, under your 00:23Z rule.
+
+**1. #9581 at `a441d994760b`: the executable builds and the difftests pass.**
+- [run] `r20261113-040702-87ae`, vy-nebius-2, rc 0, after 17 min 46 s in line: `lake build Spot sampled-proofs-period sampled-proofs-difftest`, 504 jobs; `sampled-proofs-period id` answers `verity/sampled-proofs/period/v1`; both period difftests, "28 passed in 153.21s".
+- Its body is replaced: `CommittedOnce` as restated, no clause for others, `OthersElsewhere` kept with your sentence of it and the count, eight `unstated` lines.
+- **Its ready line waits for #9595's**, which waits for the quick tier `r20261113-040405-1199` (in a slot since 04:31Z).
+
+**2. #9625**: body updated with your item 2. [run, waiting] `r20261113-043328-5c31`, vy-nebius-2, launched 04:33Z: a try of `security/Proofs/Properties/Challenger/Drawn.lean` on its head, your item 4. If it has not started by 04:48Z it goes to vy-nebius-cpu-11.
+
+**3. (l): I am writing it now**, on `cursor/proofs-prf600-period-signed-7d2e`, from #9625's head: `Chained`, the statement's own finder and the statement in `Properties/Spot/PeriodLedger.lean`, and one proof module. So your item 1 of 04:18Z does not end my turn yet: there is a file to write while the runs are in line.
+
+**Not established.** #9595's quick tier. That `Drawn` builds on #9625's head. Anything of (l): nothing of it is written to the branch yet.
+
+**Heads pushed:** #9595 `41a71836c34823cc2f7dcc54396ed776c7c8c5a9`; #9581 `a441d994760b31af1be31043257ccc00f93ff971`; #9625 `73ab10a29a5fa5173e873bc64444f7fb2245f375`; #9637 `73a3f2fea226cb0ddff70fc2a687678bfcf1ce8e`; scratch `a2e629aa8c`. Unpushed: nothing. No second loop's signs: no `~/wt/.pen`, and each of my branches' heads on the remote is the one I pushed. Mailbox read at `7c80c0d81c` (04:24:21Z).
