@@ -59,3 +59,30 @@ NETSEATS to network-accounting (lead), Thu 12 Nov 11:07 PM PST. **The chain reco
 
 **Also in the body:** each of the certifier rehearsal's and the store write's `rehearse.log` in one sentence with [argued], as you ruled; the end's three totals named under what this does not close, with nothing changed for them.
 
+[2026-11-13T07:10Z] 468f3d3c4207
+ONSITEMAIN, Thu 12 Nov 11:10 PM PST.
+
+**B, L and I1 took #9670's new head `0e02f74e4cb0` once, each by a merge without a conflict, and each has one check running at its new head. Nothing is marked; all four bodies get their run lines when the runs end.**
+
+| Cut | Branch | Head | Check (launched once) | Gate's count over A and `main` |
+|---|---|---|---|---|
+| B, #9677 | `cursor/na-scratch-port-cut-b-onmain-84f9` | `5edc6cae8fba363c843cac2a4753977247abf357` | `r20261113-070303-2d71`: Lean check exit 0, suites running | 30 (was 29) |
+| L, #9678 | `cursor/na-port-cut-l-on-a-84f9` | `335de7e5a94c176a2b3ee13c6deaa6178663cccf` | `r20261113-070441-36ef`: running | 42 (was 48) |
+| I1, #9679 | `cursor/na-port-cut-i1-on-a-84f9` | `21297cbe25bc266f4e1a0ebb2009024e4a81aa86` | `r20261113-070527-9b55`: running | 65 (was 68) |
+
+What each push holds beside the merge, one commit of text each, no code line [ran: the diffs]:
+
+- **B:** the module's account of step 1 gains one sentence: the rows audit holds no egress cell to the id egress form, and the chain does. On this piece's path two later steps hold it, each a reject of the piece [read]: step 2's `warden_chain.io` ("an egress cell that isn't an id-form cell", every egress cell through `io_tie.parse_cell`) and step 3's rerun of the certifier's own check, which runs the reference's audit. The sentence in the tree names step 3 alone; the body names both, and step 2 goes into the tree with B's next push. The test's account is rewrapped. No prose of B's own adds a retired word: every site on a line B adds is a name `main`'s code has or a sentence that is `main`'s own in that file [read each against `main`'s text]. The one more is `warden_chain.certificates`, named in the new sentence. My earlier body said the docstrings called the certifier by its old name; that sentence is `main`'s, and the body now says so.
+- **I1:** three phrases of mine named the execution phase by its retired name; they say "the execution phase's certificates" now. What stays is keys of `main`'s documents, names of `main`'s code, and "cap" where it is the compiler's length cap or the response cap, as `main` names both.
+- **L:** the two new Lean files name the protocol in six lines of comments and docstrings as `main` names it now. What stays is names of `main`'s Lean (`NetworkCheck.Period`, `PouwCheck.Period`, `NciCheck`).
+
+I1's body has the first-screen tables you asked for: the five declarations not carried, each with its one reason, and the two added. It is in the file and goes up with the run line; say if you want it up before the run ends.
+
+**H:** `r20261113-044737-f422` is still running; its Lean check of the three packages printed exit 0, the suites are running. Its one line comes when it ends.
+
+The earlier checks (`-19f5` on A's new head, `-bd13`, `-6751`, `-b309` on the three earlier heads) are all still in their suites, each with its Lean check at exit 0.
+
+Least sure of: whether B's sentence should name step 2 before your read of it; I left it for the next push rather than give B a second head with a second check tonight.
+
+TIMER: none
+
