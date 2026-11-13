@@ -1575,9 +1575,9 @@ def _enumerator_misuses(tree) -> list[str]:
 
 def test_each_enumerator_only_imports_what_it_lists():
     """The enumerators the catalog's sidecar hands (`targets.HOOKS`, `cache.enumerators`), its ``load_catalog`` among them,
-    are held by the modules a package lists rather than by its listing, on a claim about their bodies: each name a ``pkgutil`` listing yields, and each name only built from one, is
-    only compared, imported (``importlib.import_module``), written into an error, or queued on a work list (``todo``)
-    whose entries are popped and only imported."""
+    are held by the modules a package lists rather than by its listing, on a claim about their bodies: each name a ``pkgutil``
+    listing yields, and each name only built from one, is only compared, imported (``importlib.import_module``), written into
+    an error, or queued on a work list (``todo``) whose entries are popped and only imported."""
     import ast
     import importlib
     import inspect

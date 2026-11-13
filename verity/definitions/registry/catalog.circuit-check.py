@@ -10,7 +10,8 @@ from typing import Any
 
 def enumerators() -> set[tuple[str, str]]:
     """The functions (module, qualified name) that list a package only to import each module listed (`cache.enumerators`)."""
-    return {("verity.definitions.registry.catalog", "load"), ("verity.definitions.boolean", "_load"), (__name__, "load_catalog")}
+    return {("verity.definitions.registry.catalog", "load"), ("verity.definitions.boolean", "_load"),
+            (__name__, "load_catalog")}
 
 
 def load_catalog() -> None:

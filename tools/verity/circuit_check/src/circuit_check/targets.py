@@ -68,8 +68,9 @@ def _authored(d: Any) -> bool:
 def load_registries() -> None:
     """Register every Definition and kernel: each module with a circuit-check sidecar (`sidecars.discover`: a Definition module
     has its bindings, or its pins, beside it), and the catalog, as the sidecar that loads it hands it (`HOOKS`: its
-    ``enumerators`` are read, and its ``load_catalog`` is, before any module is imported).  The modules with a sidecar are in the task list's key, and a target holds whether a module whose import registered what its check read is one
-    of them (`cache.registries`)."""
+    ``enumerators`` are read, and its ``load_catalog`` is, before any module is imported).  The modules with a sidecar are in
+    the task list's key, and a target holds whether a module whose import registered what its check read is one of them
+    (`cache.registries`)."""
     global _LOADED
     if _LOADED:
         return
@@ -323,7 +324,8 @@ SPLIT_READER = "struct_slots_split"
 #: what circuit-check reads of the catalog it checks, each a function the one sidecar that defines it at its top level hands
 #: (`_handed`), by its name, with what it returns: circuit-check names no module of the catalog's
 HOOKS = {
-    "enumerators": "the functions (module, qualified name) that list a package only to import its modules (`cache.enumerators`)",
+    "enumerators": "the functions (module, qualified name) that list a package only to import its modules "
+                   "(`cache.enumerators`)",
     "load_catalog": "nothing, having imported every module of the catalog",
     "preload": "every C++ model of the catalog's fast evaluators, built: {model: what built it}",
     "kernels": "the catalog's registered kernels, each with its ``check_targets(rng)``",
@@ -652,10 +654,10 @@ def _kinds_and_templates() -> list[Any]:
 
 
 def word_call_families() -> set[str]:
-    """The word Call families of a served Program: the replay's row families (`HOOKS`' ``row_families``), every frontend vocabulary kind's Definition and every template's.  Their bindings build in seconds, without the
-    catalog.  A kind that doesn't bind is refused by name: left out, its family's partition would be judged as no Call's.  So is a
-    path no binding file binds a vocabulary on (``_vocabulary_roots``, in a sidecar of the frontend's package): every kind would
-    be left out."""
+    """The word Call families of a served Program: the replay's row families (`HOOKS`' ``row_families``), every frontend
+    vocabulary kind's Definition and every template's.  Their bindings build in seconds, without the catalog.  A kind that
+    doesn't bind is refused by name: left out, its family's partition would be judged as no Call's.  So is a path no binding
+    file binds a vocabulary on (``_vocabulary_roots``, in a sidecar of the frontend's package): every kind would be left out."""
     if "words" not in _SHORT:
         load_registries()
         made = _kinds_and_templates()
@@ -798,8 +800,8 @@ def boolean_call_candidates(word_calls: set[str]) -> set[str]:
 
 
 def on_demand_boolean_families(word_calls: set[str]) -> set[str]:
-    """The Boolean version's family of each word Call family made on demand, by its id (`HOOKS`'
-    ``made_on_demand``: `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`, `GatherF32x{V}`).  No module registers such a family's members ahead,
+    """The Boolean version's family of each word Call family made on demand, by its id (`HOOKS`' ``made_on_demand``:
+    `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`, `GatherF32x{V}`).  No module registers such a family's members ahead,
     so these come from the families' own patterns, not from the catalog.  Made in sorted order: making one registers it, and
     the registry's order is then the same in every process, whatever its hash seed or what it did before."""
     made_on_demand = _handed("made_on_demand")
@@ -853,9 +855,9 @@ def certified_boolean_calls(word_calls: set[str], only: set[str] | None = None) 
 
 
 def boolean_call_families(word_calls: set[str], found: dict[str, Any] | None = None) -> set[str]:
-    """Sigma's image of the word Call families ``word_calls``: the family of the Boolean version (`HOOKS`' ``boolean_version``: the
-    switch's table of `word=` links) of each catalog specialization of a word Call family that has one, and of each word Call
-    family made on demand (`on_demand_boolean_families`)."""
+    """Sigma's image of the word Call families ``word_calls``: the family of the Boolean version (`HOOKS`' ``boolean_version``:
+    the switch's table of `word=` links) of each catalog specialization of a word Call family that has one, and of each word
+    Call family made on demand (`on_demand_boolean_families`)."""
     from verity.circuits.evaluation import ScalarReference
     from verity.circuits import boolean as BL
     out: set[str] = on_demand_boolean_families(word_calls)

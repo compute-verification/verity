@@ -268,9 +268,9 @@ _NAMED: dict[str, Any] = {}
 
 
 def composite_lift(fid: str) -> Any | None:
-    """The lift (`targets.HOOKS`' ``lift_composite``) of the registered composite a ``Lifted[<composite>]_v<k>`` id wraps (the lift a body calling it
-    makes, or its hand lift), whatever version the id writes; None when the id wraps no registered composite.  The on-demand
-    ``Lifted[...]`` families lift primitives only."""
+    """The lift (`targets.HOOKS`' ``lift_composite``) of the registered composite a ``Lifted[<composite>]_v<k>`` id wraps (the
+    lift a body calling it makes, or its hand lift), whatever version the id writes; None when the id wraps no registered
+    composite.  The on-demand ``Lifted[...]`` families lift primitives only."""
     from verity.circuits.defs import REGISTRY, CompositeDefinition
 
     m = re.fullmatch(r"Lifted\[(.+)\]_v\d+", fid)

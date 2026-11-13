@@ -426,7 +426,7 @@ def _importing() -> bool:
 
 #: the functions (module, qualified name) that list a package with ``pkgutil`` only to import each module it lists, naming any
 #: that fails: what they list and import is held by the package's modules (`_children`); one moved is no longer one of them.
-#: The sidecar that loads the catalog hands them (`targets.ENUMERATORS`, `enumerators`)
+#: The sidecar that loads the catalog hands them (`targets.HOOKS`' ``enumerators``)
 _ENUMERATORS: set[tuple[str, str]] = set()
 
 
