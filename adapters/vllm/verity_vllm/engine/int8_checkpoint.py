@@ -148,8 +148,9 @@ def fp8_exact(codes: np.ndarray, s: np.ndarray, lo: int, block: int) -> np.ndarr
     v = E4M3_VALUES[codes]
     if np.isnan(v).any():
         raise ValueError("an e4m3 NaN code")
-    rows, k = codes.shape
-    return v * _block_rows(s, lo, rows, k, block).astype(np.float64)
+    # the shape is spread over the call, here and in `fp8_served_bf16`, not unpacked: codes that are no matrix are then a call
+    # `_block_rows` refuses (TypeError)
+    return v * _block_rows(s, lo, *codes.shape, block).astype(np.float64)
 
 
 def fp8_served_bf16(codes: np.ndarray, s: np.ndarray, lo: int, block: int) -> np.ndarray:
@@ -157,8 +158,7 @@ def fp8_served_bf16(codes: np.ndarray, s: np.ndarray, lo: int, block: int) -> np
     v = F.e4m3fn_value(codes)
     if np.isnan(v).any():
         raise ValueError("an e4m3 NaN code")
-    rows, k = codes.shape
-    u = np.ascontiguousarray(v * _block_rows(s, lo, rows, k, block), dtype=np.float32).view(np.uint32)
+    u = np.ascontiguousarray(v * _block_rows(s, lo, *codes.shape, block), dtype=np.float32).view(np.uint32)
     return ((u + np.uint32(0x7FFF) + ((u >> 16) & np.uint32(1))) >> 16).astype(np.uint16)
 
 
