@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 
 import arm as A
@@ -22,16 +23,25 @@ def fresh_pool(monkeypatch):
         RF._POOL.shutdown()
 
 
-def test_cpus_is_the_fill_jobs_budget_within_the_cpus_the_process_may_use(monkeypatch):
+def test_cpus_is_the_fill_jobs_budget_within_the_cpus_the_process_may_use(monkeypatch, caplog):
     allowed = len(os.sched_getaffinity(0))
+    caplog.set_level(logging.WARNING, logger=RF.__name__)
     monkeypatch.setenv("OMP_NUM_THREADS", "1")
     assert RF.cpus() == 1
     monkeypatch.setenv("OMP_NUM_THREADS", str(allowed + 7))
     assert RF.cpus() == allowed
-    monkeypatch.setenv("OMP_NUM_THREADS", "eight")
-    assert RF.cpus() == allowed
     monkeypatch.delenv("OMP_NUM_THREADS")
     assert RF.cpus() == allowed
+    assert not caplog.records
+
+
+def test_cpus_takes_a_value_that_is_no_integer_as_unset_and_says_so(monkeypatch, caplog):
+    allowed = len(os.sched_getaffinity(0))
+    caplog.set_level(logging.WARNING, logger=RF.__name__)
+    monkeypatch.setenv("OMP_NUM_THREADS", "eight")
+    assert RF.cpus() == allowed
+    (said,) = caplog.messages
+    assert "OMP_NUM_THREADS='eight'" in said and f"the {allowed} CPUs" in said
 
 
 def test_pool_is_none_on_one_cpu_else_one_forked_pool_of_the_jobs_cpus(monkeypatch, fresh_pool):
