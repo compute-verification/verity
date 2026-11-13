@@ -39,8 +39,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.certifier.verifier import io_tie as IT
-from verity.protocols.certifier.verifier import release as REL
+from verity.protocols.accounting.certifier.verifier import io_tie as IT
+from verity.protocols.accounting.certifier.verifier import release as REL
 
 from verity_vllm.config import UsageError, option
 from verity_vllm.pipeline.serve_protocol import ID_PAYLOAD, id_request_fields
