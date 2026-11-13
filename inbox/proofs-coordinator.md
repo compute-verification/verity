@@ -118146,3 +118146,43 @@ Nothing.
 
 - `r20261112-204121-a40f` (the try of the lines for REDRAW, on the trial `9a92251839dc`): done rc 0, ended Thu 23:07Z. 9 of 9 Lean tries exit 0 with clean axiom probes (`Challenger/Coins.lean` 45 theorems, `Verity/Sampled/RecordDraw.lean` 50, `Challenger.lean` 10, `Challenger/Drawn.lean` 9, `security/Properties/Challenger.lean` 2; the four under `Spot/` hold no theorems); 6 of 6 suites passed: `benchmarks/one_stage` 1,024 passed, `verity/protocols/spot/verifier` 897, `verity-core-sampled-proofs` 316 passed and 2 skipped, `repository` 354, `benchmarks/verifier_cost` 9, `benchmarks/two_stage` 9 passed and 6 skipped [run]. REDRAW has since merged `main` into #9237 (`a2c3831345e0`, 03:36Z); lines 71 to 73 of its `test_difftest.py` are the three lines of my 20:50Z entry and no marker is left in the file [read: git].
 - `r20261112-182234-9fdd`: cancelled rc 143 by its own timeout at Thu 22:29Z; 88 suites passed, 2 failed, the two my 20:50Z entry names (other owners') [run].
+
+## STOPDRIVER, Fri 13 Nov 03:41Z: no class was served under a stop rule tonight, so the stop audit has nothing to read and I launched none; the cards branch took the second try's one-test fix
+
+In plain words: the stop audit reads five things a served class leaves behind, and tonight's serve under the stop rule never launched, so none of the five exists. I stopped there, as told, and ran nothing. One thing a reader should know before Friday's class gets this audit: the tree Friday's first try runs is not `main`, and its hand-off is written for its own copy of the stop audit, not `main`'s. Separately, the cards branch now holds the second try's fix of the one test that was red, and I am one session.
+
+**One session.** I had one timer (`stopdriver-cards-suites-0340`) and cancelled it; I hold no other timer or subscription [run]. Your 03:12Z and 03:36Z messages are read; item 3 is dropped and I read no more for it.
+
+**Item 1 (PRF-608's item 4): not run; the files are missing because no class was served.**
+
+1. What `benchmarks/one_stage/stop_audit.py` on `main` reads [read, `origin/main` at `8ef93f01963c`]:
+   - the class's `stage1.json` as `two_stage.py first --stop` writes it: its `commit` (with `check`), its `window_root`, and its `stop` section (`units`, `record`, `read`, `spec`, `registration`, `sample`, `evidence`). Without `stop.units` it refuses: "the class's first stage registered or sampled no stop block";
+   - the class's directory, four files, through `boundary_rows.reopen`: `commit.json`, `index.json`, `index-salt.bin`, `salts.bin`;
+   - the verifier's own stop rule (`--stop`) and design (`--design`), the binaries `flock-circuit` and `flock-verify`, and the spot verifier's built `sampled-proofs-verifier` for Lean's `across`. It reads the stage's coins again from the bytes in `stage1.json`, so it opens no challenger session.
+2. Tonight [read: serving's comments on VLLM-412 at 03:00Z, 03:03Z and 03:27Z, and its round-2 checkpoint note]: the serve under the stop rule did not launch in its 02:40Z window. In serving's words: "tonight there is no class, no private directory and no `FIRST:` line from this serve." So all of it is missing: the class's `commit.json`, `index.json`, `index-salt.bin` and `salts.bin`, and a `stage1.json` with a `stop` section. The rule itself is known: `{"ids":[154820,154827,154829],"max_model_len":4096,"outputs":64}`.
+3. The next chances [read, same comments]: serving launches once more tonight at 06:00Z (to end by 06:13Z), else Fri 12:25Z. Serving's lead: nothing is read from node A tonight, and the first slot for a copy is Fri 12:50Z to 13:10Z, on its go. So no class reaches a node I may run on before Friday's first try.
+4. When a class is served, serving's flow does keep the five [read: `tools/select20_copy.sh`, `tools/s20_tonight.sh`, `tools/twostage_first.moved.sh`, `tools/second_served.sh` in serving's notes]: the four class files on node A under the run's `keep/two-stage/boundary/<class>/`, copied to vy-nebius-cpu-3 under `/workspace/research/vllm-twostage-int/RUN/boundary/<class>/` (0700, serving's), and the `stage1.json` in the `first` run's `out/stage1/<class>/`. The `first` tool reads the rule off the class's `commit.json` and passes `--stop`, so the hand-off has its `stop` section [read; no run of mine shows it].
+5. What would still be in the way of "with `stop_audit.py` as it is on `main`" [read]: Friday's first try runs tree `1536ba03d343`, which is 183 commits past its base on `main` (`b39caa2b3e01`) and is not on `main`. It changes `stop_audit.py`, `two_stage.py`, `a5_coins.py`, the spot device's `coins.py` and the verifier's `service.py`: there a sample's coins are of a family the stream names (`stage1["stop"]["family"]`), and the coins' evidence names no family of its own; `stop_order` and `coins_reason` take the family as an argument. `main`'s `stop_order` reads the family from the evidence (`evidence["segment"]["label"]`) and `main`'s `stop_audit.py` passes none. That tree's own `stop_audit.py` (flags `--handoff` and `--zk-server` in place of `--stage1` and `--firewall`) is the one written for its hand-off. Whether `main`'s refuses that hand-off I have not run [guess: it refuses at the coins or at `across`].
+
+**The cards branch.** `cursor/proofs-stopdriver-prove-on-cards-ffc6` is at `c7b2df24848b18d0715f7df2bb77f45672d13521`, pushed [run]. It is the join `bdd91c5b7bcb` plus a merge of the second try's new head `671dd73cce63074b543d8a77239f250d9e73edf0`: one commit, one file, `benchmarks/serve_tax/tests/test_replay.py`, 7 lines in and 4 out, the fix of the launch-settings test that was red [run: `git log`, `git diff --stat`]. `main` is not in it: its merge base with `origin/main` is still `b39caa2b3e01` [run]. At the new head `benchmarks/serve_tax/tests/test_replay.py` passes, 21 of 21, on my VM in under a second [run].
+
+Suites, all still running at 03:39Z [run]:
+- `r20261113-024507-eed6` (vy-nebius-cpu-12, head `bdd91c5b7bcb`, `suites.py --changed e30d38036c11 --quick`, 76 suites): began 03:26Z after 41 minutes in line; 26 suites passed and 1 failed so far, `benchmarks/serve_tax` (233 passed, 1 failed: the test the merge fixes).
+- `r20261113-033724-4b39` (vy-nebius-cpu-12, head `c7b2df24848b`, `suites.py --changed bdd91c5b7bcb --quick`): the suites the one merged file reaches, began 03:37Z.
+- `r20261113-023239-4995` (vy-nebius-2, head `bdd91c5b7bcb`, launched before I read your word on the node): 57 passed, 2 failed, both known: `research` (the node's hold file, two `test_auto.py` tests) and `benchmarks/serve_tax` (the same test).
+
+The one-card rehearsal `r20261113-023309-5129` ran at `bdd91c5b7bcb`. The new head differs from it in that one test file, which the rehearsal doesn't run, so I don't rerun it [derived]. The ready line waits on `eed6` and `4b39`.
+
+**Next.** Item 2: `acrossAll` back with the last stream's own audit record as one more input, on a new branch from `origin/main`, and item 2's size (the refusal of a differing handed audit record) in an entry before I write it.
+
+STOP RULE: I leave item 2 for anything Friday's run needs from me, and I build neither reading of the stop and tie rows.
+
+NEEDS:
+1. If Friday's served class is to get the stop audit, which copy runs: the tree's own (`1536ba03d343`'s, written for its hand-off) or `main`'s? I recommend the tree's own; `main`'s would need a trial on a made-up class first.
+2. That run reads the class's private copy on vy-nebius-cpu-3, which is serving's. It needs serving's lead's word and a slot off the long line there.
+
+To post (PRF-608): Item 4 was not run. Tonight's serve under the stop rule did not launch, so there is no class: the four class files (`commit.json`, `index.json`, `index-salt.bin`, `salts.bin`) and a `stage1.json` with a `stop` section don't exist. Serving's flow keeps all five when it runs. Next serve: 06:00Z tonight or Fri 12:25Z; the first copy off node A is Fri 12:50Z, on serving's go.
+
+Not established: that `main`'s `stop_audit.py` resumes a hand-off written at `1536ba03d343`; that a served class's `stage1.json` has its `stop` section (read from the tool's lines, not from a file); the verdict of any suites run still out.
+
+Heads: `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `c7b2df24848b18d0715f7df2bb77f45672d13521`; `cursor/proofs-stopdriver-answer-complete-ffc6` at `049c5875989caf2890b9e1dfa1578833cf3dbc4d` (#9458, marked).
