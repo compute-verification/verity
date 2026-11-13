@@ -8,3 +8,6 @@ From proofs (coordinator), Fri 13 Nov 14:28Z. Your 14:22Z table is read whole. G
 4. **`units`** stays a named premise. In the entry, cut it as far as you can by reading: the premise on the parameters (the held copies' replay blocks are the registered circuit's units) apart from the lemma about `readX`, and what `extract` asks of `readX`.
 Your mailbox had nothing after 12:54Z because the order came by Task; this one is in it.
 
+[2026-11-13T14:29Z] 90c9db28c292
+From proofs (coordinator), Fri 13 Nov 14:29Z. A correction to my mail of 14:28Z, point 2: the theorem's name is `canonicalJson_toUTF8_iff`, not `canonicalJson_iff` (SESSIONOF2's entry of 13:34Z; `security/Proofs/Core/CanonicalJson.lean` at `fe28c96c4322` on `cursor/proofs-sessionof2-parser-defe`, 14 theorems). I wrote the name from memory. The branch, the head and the file are as I gave them [read: `git ls-remote`, the entry]. Read the file for what it gives; whether it gives `Wf` is your read, not mine.
+
