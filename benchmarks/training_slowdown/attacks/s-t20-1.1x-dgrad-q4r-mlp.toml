@@ -1,0 +1,19 @@
+# A rank-1 adapter beside every MLP matrix, each step's gradient reduced over its eight blocks of four rows through a
+# heap of messages, each a 4-bit stochastic rounding in a rotated basis, and stepped by the sign at a rate of 3e-4;
+# the factors are kept in 8-bit codes, an f16 scale a group of 64 that stays until a value outgrows it. E is each
+# adapter's factors at 4 bits a rank component.
+start = "s-t20"
+route = "dgrad"
+target = { gain = 1.1 }
+budget = { steps = 1399, batch = 32 }
+seeds = { search = [0], final = [0, 101, 102] }
+policy = "console"
+
+[dials]
+targets = "blocks.*.w_gate.weight,blocks.*.w_up.weight,blocks.*.w_down.weight"
+rank = 1
+opt = "sign"
+lr = 0.0003
+warmup = 30.0
+msg_bits = 4
+rotate = true

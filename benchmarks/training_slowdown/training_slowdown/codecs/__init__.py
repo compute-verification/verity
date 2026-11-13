@@ -79,13 +79,19 @@ class Identity(Codec):
 
 
 class LowRank(Codec):
+    """base + scale * B @ A. With `bits`, each rank component (a row of A, a column of B) is rounded to nearest at
+    that many bits, ±(2^(bits−1) − 1) times an f16 scale, its largest magnitude over that: the one rounding of E, done
+    when it is encoded, trained parts or not."""
+
     kind = "lowrank"
 
-    def __init__(self, rank: int, scale: float = 1.0):
-        self.rank, self.scale = int(rank), float(scale)
+    def __init__(self, rank: int, scale: float = 1.0, bits: int = 0):
+        if bits and not 2 <= bits <= 8:
+            raise ValueError("lowrank: 2 to 8 bits a component's entry, or 0 for fp32 factors")
+        self.rank, self.scale, self.bits = int(rank), float(scale), int(bits)
 
     def spec(self):
-        return {"kind": self.kind, "rank": self.rank, "scale": self.scale}
+        return {"kind": self.kind, "rank": self.rank, "scale": self.scale} | ({"bits": self.bits} if self.bits else {})
 
     @staticmethod
     def apply(base: torch.Tensor, a: torch.Tensor, b: torch.Tensor, scale: float) -> torch.Tensor:
@@ -96,8 +102,18 @@ class LowRank(Codec):
         """The encoding of the factors a program trained (A: r x d_in, B: d_out x r)."""
         return pack({}, [a.detach().float().contiguous(), b.detach().float().contiguous()])
 
+    def _rounded(self, rows: torch.Tensor) -> list[torch.Tensor]:
+        top = 2 ** (self.bits - 1) - 1
+        x = rows.detach().float().cpu()
+        s = (x.abs().amax(1) / top).half()
+        q = torch.where(s.float()[:, None] > 0, torch.round(x / torch.where(s > 0, s.float(), 1.0)[:, None]), 0.0)
+        return [pack_bits((q.clamp(-top, top) + top).long(), self.bits), s]
+
     def encode_trained(self, a, b):
-        return self.encode_factors(a, b)
+        if not self.bits:
+            return self.encode_factors(a, b)
+        return pack({"bits": self.bits, "shapes": [list(a.shape), list(b.shape)]},
+                    self._rounded(a) + self._rounded(b.T))
 
     def encode(self, target, base):
         if base.dim() != 2:
@@ -105,15 +121,28 @@ class LowRank(Codec):
         delta = (target.double() - base.double()).cpu() / self.scale
         u, s, vh = torch.linalg.svd(delta, full_matrices=False)
         r = min(self.rank, s.numel())
-        return pack({}, [vh[:r].float().contiguous(), (u[:, :r] * s[:r]).float().contiguous()])
+        return self.encode_trained(vh[:r].float().contiguous(), (u[:, :r] * s[:r]).float().contiguous())
+
+    def _factors(self, enc) -> tuple[torch.Tensor, torch.Tensor]:
+        h, arrays = unpack(enc)
+        if "bits" not in h:
+            return arrays[0], arrays[1]
+        top = 2 ** (h["bits"] - 1) - 1
+
+        def rows(packed, s, shape):
+            q = unpack_bits(packed, h["bits"], math.prod(shape)).reshape(shape) - top
+            return q.float() * s.float()[:, None]
+
+        (ra, ca), (rb, cb) = h["shapes"]
+        return rows(arrays[0], arrays[1], (ra, ca)), rows(arrays[2], arrays[3], (cb, rb)).T
 
     def decode(self, enc, base):
-        _, (a, b) = unpack(enc)
+        a, b = self._factors(enc)
         return self.apply(base, a.to(base.device), b.to(base.device), self.scale)
 
     def cost_macs(self, enc, base):
         h, _ = unpack(enc)
-        r = h["a"][0][1][0]
+        r = h["shapes"][0][0] if "bits" in h else h["a"][0][1][0]
         return r * base.numel() + 2 * base.numel()
 
 
@@ -232,6 +261,12 @@ class ScaledQuant(Codec):
     def apply(base: torch.Tensor, codebook: torch.Tensor, scales: torch.Tensor, codes: torch.Tensor) -> torch.Tensor:
         q = codebook.float()[codes.long()].view(scales.numel(), -1) * scales.float()[:, None]
         return (base.float() + q.view(base.shape)).to(base.dtype)
+
+    def encode_trained(self, codebook, scales, codes):
+        if codebook.numel() != 2 ** self.bits:
+            raise Unencodable(f"scaledquant: a codebook of {codebook.numel()} levels for {self.bits}-bit codes")
+        return lzma.compress(pack({"n": codes.numel()}, [codebook.detach().half().cpu(), scales.detach().half().cpu(),
+                                                         pack_bits(codes.cpu(), self.bits)]), **self.XZ)
 
     def encode(self, target, base):
         d = (target.detach().float() - base.float()).reshape(-1).cpu()
@@ -406,7 +441,7 @@ def from_spec(spec: dict) -> Codec:
     if kind == "identity":
         return Identity()
     if kind == "lowrank":
-        return LowRank(spec["rank"], spec.get("scale", 1.0))
+        return LowRank(spec["rank"], spec.get("scale", 1.0), spec.get("bits", 0))
     if kind == "sparse":
         return SparseMask(from_spec(spec["values"]) if "values" in spec else None)
     if kind == "quant":
