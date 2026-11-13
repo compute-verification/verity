@@ -115681,3 +115681,30 @@ Not established
 - FRAME's clauses and `TwoHolds` as lemmas.
 - `∃ label` is not yet the verifier's family (until #9555).
 - A replayed earlier-period signature counts as a forgery.
+
+## HISTORY, Fri 13 Nov 02:50Z: DONE on my branch: `Device.lean` compiles at the merged head too (`r20261113-022632-9f3b` at `8b5549bfb6`, "lean exit 0 in 531 s", 35 theorems, three axioms). New since: one small file, CUT's cut with the read at my history (`DeviceRead.lean`), written and in a try, not compiled.
+
+**In plain words.** My piece is the auditor's device's record of the two sessions of a two-stage audit, with the proofs that it printed the play's log and signed what the play's signatures are on. It is finished and checked by Lean at the head that holds CUT's and TWOLEG's latest work. CUT has since written a second form of its cut, one that also says the check read both sessions' logs. I added the ten lines that state that form at my record, so the one who joins the pieces can take either.
+
+Clock: `date -u` read 02:49Z. Mailbox read at 02:46Z (your 02:43Z: my NEEDS 2 is with soundness, my NEEDS 3 with ASSEMBLY; noted, nothing for me to do on either).
+
+**1. Runs** (vy-nebius-2, pool `proofs`) [run].
+- `r20261113-022632-9f3b`, head `8b5549bfb6`: **done, rc 0.** It waited 5 min for a slot (02:26Z to 02:32Z), then took 13 min, since that tree had 39 files to rebuild.
+  - "`Device.lean`: lean exit 0 in 531 s".
+  - "axiom probe: none of its 35 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+  - Siblings: no name clash.
+- `r20261113-024818-7775`, head `20f9ebf7ba`: a try of `DeviceRead.lean --siblings`, launched 02:48Z. It builds CUT's `CutRead.lean` first, which CUT's 02:23Z entry says has not compiled. [guess] It ends by 03:10Z.
+
+**2. Pushed** [run]. `cursor/proofs-history-d2e7` at `20f9ebf7ba`. Nothing unpushed. Since `8b5549bfb6`:
+- Merged TWOLEG's `2f1449fa80` (adds `SecondRead.lean`) and CUT's `0dc5993463` (adds `CutRead.lean`), both clean. [run: `git diff --stat 8b5549bfb6 f01056281b`] Only those two files and the lakefile changed, so every file `Device.lean` imports is as `9f3b` built it.
+- New file `security/Proofs/Properties/Verity/SampledTwo/DeviceRead.lean` (40 lines, one theorem), a lakefile root on its own line. `cutRead_dev₂` is CUT's `cutBound_read` at `devOf P fs₁ fs₂ cut`: it concludes `CutBound V k θ F c σ ReadIsDevice (terms …)` from `Wired`, `FirstReads θ`, `Apart` at every play after `θ` on two windows, and the vocabulary's signer being the deployment's. Its proof is `printsTwo_dev₂` and `signsPlay_dev₂` handed to `cutBound_read`. It sits in its own file so that `Device.lean` stays as compiled.
+
+**3. For TWOLEG** [read]. At `2f1449fa80`, `SecondRead.lean` is not among `security/Proofs/lakefile.toml`'s roots: the commit takes `ClaimInner` out of the roots and adds none.
+
+STOP RULE: nothing. No listed guarantee, lock, named assumption, accept switch or `Sampled/` file is touched.
+
+NEEDS: nothing new. CUT's answer on the window swap (your 02:43Z asks CUT for it).
+
+To post: nothing.
+
+Not established: that `DeviceRead.lean` or CUT's `CutRead.lean` compiles (`7775`). That `Apart` holds at any live deployment. The known hole stays open: a history holds earlier runs and ledger lines only on other windows, so on the play's own two windows it holds exactly this play's runs; the key pins replace that step on Tue 17 Nov.
