@@ -524,7 +524,6 @@ theorem devBits_getD (r : Fin K → FlockDeploy.Coin) (i : Fin K) :
           rw [List.getD_append rl.coins (devBits L i.val (q ++ [rl]) log) false t (by rw [hlen]; exact htw), hc,
             List.getD_eq_getElem _ false hg']
           simp only [openBits, List.getElem_ofFn]
-          rfl
         · rw [List.getD_append_right rl.coins (devBits L i.val (q ++ [rl]) log) false t (by rw [hlen]; omega), hlen,
             devBits_getD log (q ++ [rl]) hgs (t - 128 * widthOf rl.frame) (by omega), hsnoc]
           congr 1
