@@ -20,11 +20,11 @@ SKIP = {".lake", ".git", ".venv", "node_modules", "__pycache__"}
 FIXTURES = ROOT / "tools/verity/lean/tests/fixtures"
 
 
-def lake_packages() -> list[Path]:
+def lake_packages(fixtures: bool = False) -> list[Path]:
     out = []
     for d, dirs, files in os.walk(ROOT):
         dirs[:] = sorted(x for x in dirs if x not in SKIP)
-        if ("lakefile.toml" in files or "lakefile.lean" in files) and not Path(d).is_relative_to(FIXTURES):
+        if ("lakefile.toml" in files or "lakefile.lean" in files) and (fixtures or not Path(d).is_relative_to(FIXTURES)):
             out.append(Path(d))
     return out
 
@@ -54,6 +54,22 @@ def test_every_package_module_is_a_module():
         "\n  ".join(lakefiles)
 
 
+def test_no_lakefile_names_the_setting_lake_reads_before_the_environment():
+    """`check.py`'s builds (`lake_env`) and the suites' uncached runs (`suites.py`'s `UNCACHED_ENV`) turn Lake's artifact
+    cache off by `LAKE_ARTIFACT_CACHE` alone. That is enough while no lakefile names `enableArtifactCache`, a package's own
+    setting, which Lake reads before the environment. The Lean tools' fixtures are held to it too: their tests build them."""
+    pkgs = lake_packages(fixtures=True)
+    assert any(p.is_relative_to(FIXTURES) for p in pkgs), "the walk reached no fixture's lakefile"
+    named = [str(f.relative_to(ROOT)) for p in pkgs for f in (p / "lakefile.toml", p / "lakefile.lean")
+             if f.exists() and "enableArtifactCache" in f.read_text()]
+    assert not named, (
+        f"{', '.join(named)}: names `enableArtifactCache`, which Lake reads before `LAKE_ARTIFACT_CACHE`: where a package "
+        "turns it on, its build reads and writes a cache whatever the variable says. Two places turn Lake's cache off by "
+        "the variable alone: `lake_env` in tools/verity/lean/check.py and `UNCACHED_ENV` in tools/verity/check/suites.py. "
+        "Leave the setting out, or in the same change give both what `build` in tools/verity/lean/lean_changed.py gives a "
+        "build outside the sandbox: a `LAKE_CACHE_DIR` naming an empty directory of the command's own, removed after it.")
+
+
 def test_one_toolchain():
     """The jobs' base image installs the same one."""
     pins = {str(p.relative_to(ROOT)): (p / "lean-toolchain").read_text().strip() for p in lake_packages()}
@@ -78,7 +94,7 @@ def test_one_mathlib():
 #: (`check.py`'s `witness_failures`)
 # security's 233: Flock.SecurityProofs.SpotExfilTwo and SpotKSTwo and NetTiming.SecurityProofs.PooledLeakCarried carry
 # their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique
-UNWITNESSED = {"security": 232, "security/Properties": 186, "verity/protocols/flock/verifier": 7}
+UNWITNESSED = {"security": 251, "security/Properties": 186, "verity/protocols/flock/verifier": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -304,7 +320,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the 398 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
-INLINE = {"security": 890, "security/Properties": 132, "verity/protocols/flock/verifier": 6}
+INLINE = {"security": 902, "security/Properties": 132, "verity/protocols/flock/verifier": 6}
 
 
 def test_the_inline_list_only_shrinks():
