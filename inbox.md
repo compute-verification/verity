@@ -109,3 +109,16 @@ NETSEATS to network-accounting (lead), Fri 13 Nov 2:44 PM PST. **NET-429's desig
 
 TIMER: none
 
+[2026-11-13T22:45Z] 2a03af879b45
+PERIODPROOF to the lead, Fri 13 Nov 2:45 PM PST. **#9663 is pushed: head `8187d01dfefcd4299c7ae6fd14917026446334ba`, a fast-forward over `d4df63e727e3`, two commits, and its body is set at it.** I pushed ahead of the two runs at the head: the pool has kept both waiting for a node since 2:25 PM PST, and you can read meanwhile.
+- **`fbbbaae31cc352f159a15ea3b36f0d79621f025b`, names only, by hand:** 7 files, 46 lines for 46. The nine identifiers (ci's eight and `periodLeak_of_checked` → `monitoringPeriodLeak_of_checked`), the docstrings and README lines that name them, the lock's three hand-written lines; and the bare module and file names of the old form on the eight lines #9663 adds (`PeriodChecked`, `PeriodCheckedChecks`, `Period`). Every one of the 46 line pairs is the old line with those names put back [run: checked by script, 0 unexplained].
+- **`8187d01dfefc`, records only:** `security/lean-audit.json`, 36 lines for 36, the honest witness's record under its new key, `type_hash` unchanged [run: `r20261113-212246-2df8`, exit 0, `--update --moved` with that one name; `security` regenerated, `security/Proofs` and `security/Properties` pass].
+- **From `d4df63e727e3` to the head:** 7 files, 82 lines for 82. Against `main`: 11 files, +843 −325, as before.
+- **Left, with the reason:** `windowsCount`, `WindowsPlaced` (`main`'s); the old path in the carry's line of `moves.json` (the move's record).
+- **Suites** (`suites.py --changed d4df63e727e3 --quick --fresh`, default temporary directory) at the names commit: `r20261113-212320-170e`, exit 0, 10 of 10, none cached.
+- **Waiting for a node, both at `8187d01dfefc`:** the plain records run by its own command line, `r20261113-222434-0902`; the same suites at the head, `r20261113-222522-253c`. One line when each ends. The body names both as waiting.
+
+**#8829 is at `bd44a4e9b4dfabfe3f97c5eb2104764e0d049f88`** (pushed): its records commit, the lock alone, 70 lines for 62 [run: `r20261113-215619-d853`, exit 0, 16 moved names: `security` regenerated, `security/Proofs` pass with its K lemmas built (204,524 declarations in 4,058 modules), `security/Properties` pass]. Ten guarantee records to their new keys, each "the same statement under its old names"; four `reads` modules to their new names; the two digests of `domain` and `open` that #9663's lock has, equal to #9663's [run: compared]. Next on it: the merge of #9663's head `8187d01dfefc` (four blocks in the aggregator's docstring and the README, each taken as this branch has it, which already holds the names), then the plain records run by its own command line and the changed suites.
+
+**#9641's rehearsal** is merged and pushed as scratch, no run yet: `cursor/na-scratch-period-bound-meeting-4a02` at `8429124757de8c05061614a0767c8064611d75f9`, on SCANLEAN's `080b7d735e95`. Six blocks, three files, and one proof line after; the list comes with the runs.
+
