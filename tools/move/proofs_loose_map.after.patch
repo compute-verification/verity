@@ -1,0 +1,157 @@
+From 4aebf6a2ce4287395eb9c3dff4d66d3942ace5b6 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Fri, 13 Nov 2026 08:10:19 +0000
+Subject: [PATCH 1/2] After the loose paths' move: sigma's directory is the
+ verifier's, and the prover's README names the pod scripts where they are
+
+The move by tools/move/proofs_loose_map.toml puts the Lean check of sigma under Flock's verifier, a row of the
+listing below Flock's distribution, so the directory is verity's own and HELD_AS_VERITY no longer lists it.
+The map kept four relative paths of two documents as they were written; the two of the prover's README named
+the pod scripts from the directory above, and now name them from the root, with the two commands below them.
+
+Co-authored-by: danielreuter <danielreuter@users.noreply.github.com>
+---
+ tests/test_boundaries.py                | 7 +++----
+ verity/protocols/flock/prover/README.md | 7 ++++---
+ 2 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/tests/test_boundaries.py b/tests/test_boundaries.py
+index 7b44b054c6..05e5fc3962 100644
+--- a/tests/test_boundaries.py
++++ b/tests/test_boundaries.py
+@@ -86,11 +86,10 @@ NO_DATE_OR_REASON = ("verity/configuration/config", "verity/protocols/inference_
+                      "verity/protocols/pouw/clear", "verity/protocols/pouw/receipts")
+ #: Inside the listing's distributions, the directories whose Python is still held as ``verity``'s own by the rules on a
+ #: file's text: it reads no other distribution at run time and names no path of the census, and each of its
+-#: directories is a package.  The code that came from ``benchmarks/``, and the Lean check of σ beside Flock's prover.
++#: directories is a package.  The code that came from ``benchmarks/``.
+ #: It only shrinks, as a directory becomes part of ``verity``, which is held whole.
+-HELD_AS_VERITY = ("verity/composite/device/live_challenger", "verity/protocols/flock/verifier/sigma",
+-                  "verity/protocols/poub/device/live_verifier", "verity/protocols/pouw/clear",
+-                  "verity/protocols/pouw/receipts")
++HELD_AS_VERITY = ("verity/composite/device/live_challenger", "verity/protocols/poub/device/live_verifier",
++                  "verity/protocols/pouw/clear", "verity/protocols/pouw/receipts")
+ #: SPOT[Flock] stands on its own, and the network certifier is a layer beside it: SPOT reads the certifier's stamp as a
+ #: certified input and imports none of the certifier, and the two compose only above both.  SPOT's row of the
+ #: listing and the certifier's, the trees each of whose Python files (tests included) is checked, SPOT's Lean packages
+diff --git a/verity/protocols/flock/prover/README.md b/verity/protocols/flock/prover/README.md
+index 8992bbb9ed..6a1a9bc0f9 100644
+--- a/verity/protocols/flock/prover/README.md
++++ b/verity/protocols/flock/prover/README.md
+@@ -62,13 +62,14 @@ writes them as staging's `rows/`, to diff the two mirrors.
+ 
+ ## Hill-climb points in GPU sessions
+ 
+-A BF16 hill-climb point (`../pod/74-gemm-hill.sh`, its records by `../pod/gemm_hill.py`) runs in a GPU session: one job on node 1,
++A BF16 hill-climb point (`verity/protocols/flock/prover/pod/74-gemm-hill.sh`, its records by
++`verity/protocols/flock/prover/pod/gemm_hill.py`) runs in a GPU session: one job on node 1,
+ one preflight check (byte identity at B = 16), then `POINTS=N` points of one statement. A session's points share one tree,
+ one binary, one `FC_*` set and one K; a setting that differs needs a session of its own. A point whose key (the binaries, the
+ `FC_*` settings, the GPU) differs from its check's fails, and with it the session.
+ 
+ 1. Stage with no GPU (`gpus: 0`; 64 GiB at K <= 4096, 128 GiB at K >= 8192):
+-   `bash verity/protocols/flock/pod/74-gemm-hill.sh K=8192 CPUS=16 STAGE_ONLY=1 SM=120 FLOCK_WORK=/workspace/jobs/<lane>`.
++   `bash verity/protocols/flock/prover/pod/74-gemm-hill.sh K=8192 CPUS=16 STAGE_ONLY=1 SM=120 FLOCK_WORK=/workspace/jobs/<lane>`.
+ 2. Run the session with one GPU and the same settings plus `POINTS=N`: a step and its confirming re-run is `POINTS=2`, a
+    mean of three `POINTS=3`. With a verifier pod (`VERIFIERS=DIR`), the serving job gets the same `POINTS`.
+ 3. Once the attempt is in the store, roll up its points, each citing its session's art. On node 1 (no `research` on the
+@@ -77,7 +78,7 @@ one binary, one `FC_*` set and one K; a setting that differs needs a session of
+    ~~~sh
+    RESEARCH_STORE=/workspace/jobs/store PYTHONPATH=$T/tools/research/src \
+    RESEARCH_BIN="/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research" \
+-     python3 $T/verity/protocols/flock/pod/gemm_hill.py rollup --attempt RUN --run-dir /workspace/jobs/runs/RUN \
++     python3 $T/verity/protocols/flock/prover/pod/gemm_hill.py rollup --attempt RUN --run-dir /workspace/jobs/runs/RUN \
+        --file /workspace/usage/hillclimb/bf16-GemmCoordinate_v2-K8192.json
+    ~~~
+ 
+-- 
+2.43.0
+
+
+From 791cc2e3b85c0d489ee07ef0cb3acb97fc8cd01f Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Fri, 13 Nov 2026 08:11:07 +0000
+Subject: [PATCH 2/2] After the loose paths' move: the tree file drops their
+ eight not-yet lines, and AGENTS.md names the agreement where it is
+
+Co-authored-by: danielreuter <danielreuter@users.noreply.github.com>
+---
+ AGENTS.md       |  2 +-
+ tests/tree.toml | 48 ------------------------------------------------
+ 2 files changed, 1 insertion(+), 49 deletions(-)
+
+diff --git a/AGENTS.md b/AGENTS.md
+index 66394649bb..50b0dde628 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -22,7 +22,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
+     auditor's device (the network certifier, the memory challenger, the challenger).
+     `flock/` is the proof system: its Lean verifier and the ZK server (`flock/verifier/`, `Flock.Firewall`), its prover
+     (`flock/prover/`: `verity_flock`, its own distribution) and the agreement with upstream's verifier
+-    (`flock/agreement/`). `spot/verifier/` is sampled proofs, with the integrity profile (`profile`). The inference-only
++    (`flock/prover/agreement/`). `spot/verifier/` is sampled proofs, with the integrity profile (`profile`). The inference-only
+     policy's check (`inference_only/verifier/nci/`), `remote/` and `onsite/` are Lean only. `interface/` is the Lean
+     interface each protocol's check implements. Code the move brought from `benchmarks/`, which the listing below
+     keeps apart from `verity`'s places (a distribution of its own each, `poub/verifier/remote_session/` a place of its
+diff --git a/tests/tree.toml b/tests/tree.toml
+index 0c83ccca59..3c80bb20e4 100644
+--- a/tests/tree.toml
++++ b/tests/tree.toml
+@@ -451,54 +451,6 @@ to = "benchmarks/rho/"
+ owner = "network-accounting"
+ day = "2026-11-14 12:00 PST"
+ 
+-[[not_yet]]
+-path = "verity/protocols/flock/pod/"
+-to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
+-owner = "proofs"
+-day = "2026-11-18"
+-
+-[[not_yet]]
+-path = "verity/protocols/flock/sigma/"
+-to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
+-owner = "proofs"
+-day = "2026-11-18"
+-
+-[[not_yet]]
+-path = "verity/protocols/flock/agreement/"
+-to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
+-owner = "proofs"
+-day = "2026-11-18"
+-
+-[[not_yet]]
+-path = "verity/protocols/flock/tool.py"
+-to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
+-owner = "proofs"
+-day = "2026-11-18"
+-
+-[[not_yet]]
+-path = "verity/protocols/spot/candidates.py"
+-to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
+-owner = "proofs"
+-day = "2026-11-18"
+-
+-[[not_yet]]
+-path = "verity/protocols/spot/costfit.py"
+-to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
+-owner = "proofs"
+-day = "2026-11-18"
+-
+-[[not_yet]]
+-path = "verity/protocols/spot/optimize.py"
+-to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
+-owner = "proofs"
+-day = "2026-11-18"
+-
+-[[not_yet]]
+-path = "verity/protocols/spot/plancheck.py"
+-to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
+-owner = "proofs"
+-day = "2026-11-18"
+-
+ # ---- not ruled -----------------------------------------------------------------------------------------------------
+ 
+ [[open]]
+-- 
+2.43.0
+
