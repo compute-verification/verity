@@ -127628,3 +127628,65 @@ Clock: `date -u` read 07:32Z. Pen: `~/wt/.pen` is mine. Mailbox: nothing after y
 - **Unchanged:** no `GAP`; no records run at my head and no ready line.
 
 I end the turn with one timer, for about 08:25Z.
+
+## PERIODREAD, Fri 13 Nov 07:32Z: READY #9581, #9625, #9665, each on a passing records run at its head; and every pull request of the stack, the two marked ones too, FAILS the ratchet gate, which I had not run before any ready line
+
+**In plain words.** The three records runs passed and no record moved, so the three pull requests above #9595 get their ready lines, in your order. One thing I should have found before my first ready line and did not: the ratchet gate fails on all five pull requests, because together they add 190 uses of names the Glossary retires. 106 of them are the name `Period` in my own modules. The gate is off the merge gate and holds nothing, but #9537 and #9595 were marked without my having run it. I fix what I can in my next pull request and need one name from lean.
+
+Clock: `date -u` read 07:32. Mailbox read at `d52d262737` (your 07:22Z and 07:29Z words are in).
+
+### Ready lines
+
+- **READY #9581** at `e230e76f63423740f73b9e69bff0cfe6a32e3376`. Records run `r20261113-055441-2c57` [run]: rc 0, `OUTCOME pass`. Five locks pass: spot's verifier, the certifier's verifier, `security`, `security/Properties` and `security/Proofs` (198,512 declarations in 3,967 modules). `failed` and `regenerated` are empty in all four reports.
+- **READY #9625** at `2f3c3e6022e189a2f94be90f1d3d067eda6995d6`. Records run `r20261113-065139-a60b` [run]: rc 0, `OUTCOME pass`. `security/Properties` (3,291 declarations, 466 guarantees), `security/Proofs` (199,023 in 3,970 modules) and `security` (27,133, 1,111 guarantees) pass. `failed` and `regenerated` are empty in both reports.
+- **READY #9665** at `5edf7e30ee80bb013e16e4fe8386ef6332aee99e`. Records run `r20261113-055510-d3ba` [run]: rc 0, `OUTCOME pass`. `security/Properties` (3,298 declarations), `security/Proofs` (199,119 in 3,971 modules) and `security` pass. `failed` and `regenerated` are empty in both reports.
+- **Axioms** in every audit of the three runs: `propext`, `Classical.choice`, `Quot.sound` [run].
+- **All three are the fast path**: the build and the locks' rules, no kernel replay [run: each report's `kind` is `lean-fast/v1`].
+- **Not run at these three heads**: the quick tier. What ran below them: the quick tier at #9595's head (`1199`: 60 of 61 suites, the one red #9596's two tests), and the period's difftests and executable at `a441d99476`, which is #9581's head less one commit that rewords a docstring sentence and one `unstated` line (`r20261113-040702-87ae`).
+
+### The ratchet gate: what I did not run before my ready lines of #9537 and #9595
+
+- **It fails on each pull request's own change** [run, on this machine: `python adapters/vllm/tools/ratchet_gate.py BELOW HEAD` for each head against the one below it]. New sites of retired terms: #9537 33, #9595 65, #9581 44, #9625 37, #9665 11. 190 in all. Each report gives that one reason and no other.
+- **It holds nothing** [read: `policy.toml`'s `off_gate`, `drive.toml`'s `warn_steps`]. AGENTS.md says the owner fixes it in their next pull request; the friction skill says fix the code, never the list.
+- **Both marked pull requests carry it**, and my ready lines for them did not say so. All five bodies say it now (replaced 07:28Z).
+
+What the 190 are [run: the lint's own `sites` on each changed file, the stack's top against its merge-base]:
+
+| sites | what they are | can I fix them |
+|---|---|---|
+| 106 | `Period`, `PeriodAudit`, `PeriodLedger`, `PeriodSigned`, `PeriodMain`: the names of my own modules and namespaces. The Glossary retires the Lean's `*Period*` names "until renamed", and the lint counts every identifier that holds `Period` | only by a rename, and I have no name: NEEDS 1 |
+| 18 | the two difftests' constants `DRAW` and `LAW` | yes: rename them |
+| 9 | prose: "Sampled proofs' period" in docstrings and the README (7), "one draw a case" (2) | yes: reword |
+| 6 | the executable's name, `sampled-proofs-period`, named as its siblings are | yes: `spot-period` |
+| 37 | names and words of formats that exist: the ledger's field `cap` (15), its family label `draw` and the module `one_stage.draw` (12), the audit's `drawn` (5) and `law` (4), one sibling executable's name | no: they are the formats' own |
+| 14 | Lean that exists: `MonitoringPeriod` (12), `Nci`, `NciCheck` | no: they go when their owners rename |
+
+Two more warnings at the stack's top [run, on this machine: the root suite's Lean and text tests at the top and at the merge-base, 124 passed and 14 warnings at each]:
+
+- **The vocabulary test warns on three structures**: `Spot.Period.Session` and `Spot.Period.Window` (#9537), `Spot.Period.Commitment` (#9595).
+- **The verifier's README is over its 48 KB cap** by 1,590 bytes at the top: 1,356 are #9595's, 234 #9581's. `main`'s copy at `9182900fb9` is itself 188 over [run: `wc -c`], so the merged file is further over.
+
+### What I do unless you say otherwise
+
+1. **The heads stay.** Moving one costs a records run, and for the two marked a new mark.
+2. **One pull request after the carry** fixes the 33 sites the table says I can, renames the three structures (or lists them, lean's review either way) and cuts the README under its cap. After the carry, so that it is not a sixth branch to carry. A pull request of the stack not yet landed at the carry gets its share folded into its carried head before its new ready line.
+3. **The 106 stay** until NEEDS 1 is answered.
+
+## NEEDS
+
+1. **One name, from lean, through you.** What does a new Lean module about a monitoring period call itself so that the lint passes? Every name that holds `Period` is counted, `MonitoringPeriod` too, and the tree's own (`Pouw.Period`, `Pous.Period`, `NetworkCheck.Period`) are on the list "until renamed". If the answer is "as the tree does, until that rename", the 106 go with that rename and I write no more about them.
+
+## Other facts
+
+- **#9637 merged** at 06:43:17Z [read: `gh pr view`].
+- **Memory** [run]: each records run asked 32 GB and held at most 15.6 GB at its peak (proportional set size: 11.8, 11.1 and 15.6 GB).
+- **Your 07:22Z word**: I merge no `main`; I carry the five when you say and give new ready lines then. The bodies now say "challenges" and "the auditor's device" where they said the older words.
+
+## Not established
+
+- That the queue's own ratchet gate counts as mine did: mine ran each head against the head below it, and the queue judges each merge against its first parent on a newer `main`.
+- Any quick tier at the three heads above #9595.
+
+## Checkpoint
+
+Nothing of mine is running, and I end this turn. Heads, all pushed: #9537 `44b84839217d`, #9595 `41a71836c348`, #9581 `e230e76f6342`, #9625 `2f3c3e6022e1`, #9665 `5edf7e30ee80`. Scratch `cursor/proofs-prf600-periodread-scratch-0b7e` at `4b77b02917` holds the five bodies and NOTES.
