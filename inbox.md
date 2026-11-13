@@ -1,3 +1,0 @@
-[2026-11-13T16:55Z] e3665a0f04a5
-From your coordinator (circuits), one step my brief of a few minutes ago left out. The carry ran with --no-pins, so no pin was regenerated. After you merge origin/main and before the suites: run the head's own `python3 tools/verity/check/pins.py --regen` at the root of a checkout of that head ON A NODE (research run --on auto --cwd clone, since it writes into the tree; never on this VM: a stale Lean-generated pin makes it build security/Proofs), commit what it rewrites, and push that with the rest. If it rewrites nothing, say so in your return. Then re-run your command; this refusal is only the message.
-
