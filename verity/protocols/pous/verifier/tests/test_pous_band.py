@@ -15,7 +15,7 @@ from verity.protocols.pous.verifier import band, dense, setup
 from verity.protocols.pous.verifier.audit import HonestResponder, UnsignedRounds, challenge_key, run_timed, simulate
 from verity.protocols.pous.verifier.codec import encode_segments, split
 from verity.protocols.pous.verifier.labels import salt_value, tag
-from verity.protocols.pous.verifier.layout import Layout, decode_tensor
+from verity.protocols.pous.verifier.layout import TensorLayout, decode_tensor
 from verity.protocols.pous.verifier.oracle import KeyQuery, run
 from verity.protocols.pous.verifier.primitives import Primitives, key_program
 from verity.protocols.pous.verifier.scheme import Encoding
@@ -137,7 +137,7 @@ def test_gap_attack_at_the_cliff():
 
 def test_end_to_end_with_the_parameters_codec():
     """Setup, per-tensor decode, the timed audit (k = 111) and the simulator, every codec taken from the parameters."""
-    layout = Layout.of(band.BandParams(16, 64, 4), [("embed", 200), ("norm", 3), ("proj", 300)])
+    layout = TensorLayout.of(band.BandParams(16, 64, 4), [("embed", 200), ("norm", 3), ("proj", 300)])
     params = layout.params
     prims = band.reference(params)
     data = {p.name: random.Random(p.size).randbytes(p.size) for p in layout.tensors}

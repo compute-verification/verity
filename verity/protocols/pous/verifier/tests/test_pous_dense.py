@@ -16,7 +16,7 @@ from verity.protocols.pous.verifier import dense, setup
 from verity.protocols.pous.verifier.audit import HonestResponder, UnsignedRounds, challenge_key, run_timed, simulate
 from verity.protocols.pous.verifier.codec import encode_segments, split
 from verity.protocols.pous.verifier.labels import salt_value, tag
-from verity.protocols.pous.verifier.layout import Layout, decode_tensor
+from verity.protocols.pous.verifier.layout import TensorLayout, decode_tensor
 from verity.protocols.pous.verifier.oracle import run
 from verity.protocols.pous.verifier.primitives import OverwriteStepper, Primitives, pad_block
 from verity.protocols.pous.verifier.verifier import VerifierKey
@@ -87,7 +87,7 @@ def test_end_to_end_with_the_parameters_codec():
     """Setup, per-tensor decode, the timed audit and the simulator, every codec taken from the parameters."""
     base = dense.DenseParams(8, 64)
     sizes = [("embed", 100), ("norm", 3), ("proj", 150)]
-    layout = Layout.of(base, sizes)
+    layout = TensorLayout.of(base, sizes)
     params = layout.params
     prims = dense.reference(params)
     data = {name: random.Random(len(name)).randbytes(size) for name, size in sizes}

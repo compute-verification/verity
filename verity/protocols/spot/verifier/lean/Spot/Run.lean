@@ -55,6 +55,7 @@ module
 public import Spot.OneStage
 public import Spot.Select
 public import Spot.Slots
+public import Spot.PopOrder
 public import Spot.Service
 public import Spot.ChallengerCoins
 public import Spot.SecondStage
@@ -279,8 +280,9 @@ private def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
     return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),
       ("read", Lean.toJson read), ("audit", Json.str (← PyJson.canonical rec_))])])
 
-/-- The run, step by step; an error where the Python raises. Round 2 allows the two-stage form where `form` does, by
-default the switch (`SecondStage.FORM`); a caller that decides last by the switch itself runs it at `form := true`. -/
+/-- The run, step by step; an error where the Python raises. The second stage's statement check allows the two-stage
+form where `form` does, by default the switch (`SecondStage.FORM`); a caller that decides last by the switch itself runs
+it at `form := true`. -/
 def run (i : Input) (form : Bool := SecondStage.FORM) : V Json := do
   let v := i.params.verifier
   if !grainHolds i.rule v.query then return refused "register" #["grain"]
