@@ -2093,14 +2093,14 @@ class Queue:
     def _start_mapping(self, mark: Path, at: str, old: str, onto: str, moves: list[tuple[str, list[str]]], now: float) -> None:
         """Detach ``old``'s mapping job (`MAP_JOB`), writing its result beside ``mark``, and write the marker: what `detach`
         returned, ``at``, and the time past which a job with no result is taken as lost (`_mapped_lost`).  The job runs this
-        process's `research`, whatever the clone holds, with none of the queue's credentials (`SCRIPT_UNSET`): it pushes
-        nothing, and the head's own code runs in it."""
+        process's `research`, whatever the clone holds, with none of the queue's credentials or the store's keys (`tree_env`): it
+        pushes nothing, writes only its result, and the head's own code runs in it."""
         from .landing import detach
 
         mark.parent.mkdir(parents=True, exist_ok=True)
         argv = [sys.executable, "-c", MAP_JOB, str(Path(__file__).resolve().parents[1]), str(self.workdir), old, onto,
                 json.dumps(moves), str(mark.with_suffix(MAPPED_SUFFIX)), str(MERGED_ROOT or "")]
-        env = {k: v for k, v in _script_env().items() if k not in SCRIPT_UNSET}
+        env = tree_env(_script_env())
         job = {**detach(self.workdir, argv, env), "out": str(mark.parent), "at": at, "until": now + _mapped_lost(moves)}
         tmp = mark.with_name(f"{mark.name}.{os.getpid()}.tmp")
         tmp.write_text(json.dumps(job))
@@ -4142,12 +4142,23 @@ _MAPPED = ("import sys; sys.path.insert(0, sys.argv[1]); import restack as R\n"
 MAPPED_RE = re.compile(r"^mapped ([0-9a-f]{40,64})$", re.M)
 #: how long one move's script runs at most on one head (`mapped_tree`): a layout map on the whole tree, `uv lock` with it
 MAPPED_TIMEOUT_S = 1800.0
-#: what `mapped_tree`'s run of a head's own code never gets: the queue's GitHub and Slack credentials, any of which can push
+#: what a run of a tree's own code never gets (`tree_env`): the queue's GitHub and Slack credentials, any of which can push
 SCRIPT_UNSET = ("GH_TOKEN", "GITHUB_TOKEN", "GH_CONFIG_DIR", "SLACK_BOT_TOKEN")
+#: nor, by prefix, what reaches the store (`research.store`), which the loop, drive and a node's run hold to read and write labels
+#: and which no move's script, restack.py or suite needs: its key pair (`AWS_*`), its bucket (`R2_*`), its root and config
+#: (`RESEARCH_STORE*`), the public export's bucket and key pair (`RESEARCH_EXPORT_*`), the API token that mints a key
+#: (`CLOUDFLARE_*`) and its index's databases (`STORE_*`)
+STORE_UNSET = ("AWS_", "R2_", "RESEARCH_STORE", "RESEARCH_EXPORT_", "CLOUDFLARE_", "STORE_")
 #: why neither the loop (`StoreLabels.lands`) nor `map_moves` maps a head without a land verdict of its own that counts: a move's
 #: script runs the tree's own code as the queue's user, in a worktree of its clone, which a hook planted there or a mapping
 #: written beside it would subvert
 UNLANDED = "no land verdict of its own counts, and a move's script runs a tree's own code, so it runs only on a head a reviewer passed"
+
+
+def tree_env(env: dict[str, str]) -> dict[str, str]:
+    """``env`` as a run of a tree's own code gets it: without the queue's credentials (`SCRIPT_UNSET`) or the store's keys
+    (`STORE_UNSET`)."""
+    return {k: v for k, v in env.items() if k not in SCRIPT_UNSET and not k.startswith(STORE_UNSET)}
 
 
 def scratch() -> tempfile.TemporaryDirectory:
@@ -4164,10 +4175,10 @@ def mapped_tree(repo: Path, commit: str, move: str, restack: Path,
     runs it on a branch (`_MAPPED`), ''), or (None, why it couldn't).  It runs in a process group of its own, killed whole once
     ``timeout`` seconds pass (`run_group`), with its scratch worktree in a `scratch` directory, which goes once it has run, and
     with it the clone's record of a worktree a killed run left, forgotten under restack.py's lock (`WORKTREES_LOCK`).  The head's
-    own code runs there, which a reviewer passed (`UNLANDED`) but which needs none of the queue's credentials (`SCRIPT_UNSET`), so
-    the run gets none, and `gh` a config that isn't there."""
+    own code runs there, which a reviewer passed (`UNLANDED`) but which needs none of the queue's credentials nor the store's keys
+    (`tree_env`), so the run gets none, and `gh` a config that isn't there."""
     with scratch() as d:
-        env = {k: v for k, v in _script_env().items() if k not in SCRIPT_UNSET}
+        env = tree_env(_script_env())
         rc, out = run_group([sys.executable, "-c", _MAPPED, str(restack), commit, move], repo, timeout,
                             env={**env, "TMPDIR": d, "GH_CONFIG_DIR": str(Path(d, "no-gh"))})
         left = any(Path(d).iterdir())
@@ -4477,9 +4488,6 @@ CROSS_UNLANDED = ("no land verdict of its own counts, so its mark wouldn't carry
 LEASE_RE = re.compile(r"\(stale info\)")
 #: the branches `research queue cross --push` never pushes, whatever a PR names as its own
 CROSS_NEVER = ("main", "checked", "next")
-#: what `research queue cross` keeps from restack.py besides `SCRIPT_UNSET`, as it runs each head's own code: the store's keys
-#: (a node's run reads the store with them), which a restack never needs
-CROSS_UNSET = ("AWS_", "RESEARCH_STORE")
 #: whether `research queue cross` passes restack.py `--kept`, which keeps each move's check on the machine (restack.py's
 #: `KEEP`), so the run's restacks check each move once; tests keep nothing
 CROSS_KEPT = True
@@ -4524,9 +4532,9 @@ def restack_why(x: dict) -> str:
 def cross_one(repo: Path, head: str, main: str, moves: list[tuple[str, list[str]]], onto: str | None = None,
               kept: bool = False, src: str | None = None, drivers: dict[str, str] | None = None) -> dict:
     """``head`` carried across ``moves`` by ``main``'s own `tools/move/restack.py`, run from a `scratch` directory as `map_one`
-    runs it and as `mapped_tree` runs a move's script, without the queue's credentials (`SCRIPT_UNSET`): `--move-commit` each
-    move, `--onto` ``onto`` (the crossed head of the PR below it in its stack), else ``main``, `--main` ``main``, and `--kept`
-    with ``kept``.  restack.py and the carry check's merge run with ``drivers`` in their environment (`cross_drivers`).
+    runs it and as `mapped_tree` runs a move's script, without the queue's credentials or the store's keys (`tree_env`):
+    `--move-commit` each move, `--onto` ``onto`` (the crossed head of the PR below it in its stack), else ``main``, `--main`
+    ``main``, and `--kept` with ``kept``.  restack.py and the carry check's merge run with ``drivers`` in their environment (`cross_drivers`).
     {"new": the crossed head, "own": its own change, "key": `mapped_key` of ``src``} when restack.py says clean
     and the crossed head's own change from its merge base with ``main`` is the own change of ``src`` (the head whose labels
     would carry, default ``head``) mapped across the moves that base has and it lacks (`map_one`): the equality the loop
@@ -4539,7 +4547,7 @@ def cross_one(repo: Path, head: str, main: str, moves: list[tuple[str, list[str]
             return {"why": f"{type(e).__name__}: {e}"}
         if not restack.is_file():
             return {"why": f"{main[:12]} has no {RESTACK}"}
-        env = {k: v for k, v in _script_env().items() if k not in SCRIPT_UNSET and not k.startswith(CROSS_UNSET)}
+        env = tree_env(_script_env())
         argv = [sys.executable, str(restack), head, *(a for m, _ in moves for a in ("--move-commit", m)), "--onto", onto or main,
                 "--main", main, "--json", *(("--kept",) if kept else ())]
         rc, out = run_group(argv, repo, RESTACK_WAIT_S,
@@ -4980,7 +4988,7 @@ def root_failures(repo: Path, commit: str, sync: tuple[str, ...] | None = None,
     `merged_worktree` made ready by ``sync`` and run by ``python`` (None: the tree's own `.venv`), without the queue's
     credentials or the store's keys, as it runs the tree's own code: empty when it passes or the tree has no `tests/`, else
     why it didn't run."""
-    env = {k: v for k, v in git_env().items() if k not in SCRIPT_UNSET and not k.startswith(CROSS_UNSET)}
+    env = tree_env(git_env())
 
     def run(argv: list[str], cwd: Path) -> tuple[subprocess.CompletedProcess | None, str]:
         rc, out = run_group(argv, cwd, CROSS_ROOT_WAIT_S, env=env)
