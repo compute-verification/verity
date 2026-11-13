@@ -91,9 +91,7 @@ theorem rowBit_facts {c : _root_.Flock.Circuit} {n g : ℕ} {r : Spot.Bits.RowPo
       not_le] at hc
     obtain ⟨p, byte, bit, hk, -, -⟩ := srcPos_msg hr
     refine ⟨by omega, by omega, by omega, ?_, srcPos_leaf hr, p, byte, bit, hk⟩
-    first
-    | exact hc.2
-    | simp_all
+    exact hc.2
 
 /-- A source bit is a member's source gate with Bits' commitment position, at the gate's position. -/
 theorem sourceBits_mem {h : Held} {x t : ℕ} {r : Spot.Bits.RowPos} (hs : (x, t, r) ∈ sourceBits h.ms) :
@@ -123,8 +121,9 @@ theorem sourceBits_mem {h : Held} {x t : ℕ} {r : Spot.Bits.RowPos} (hs : (x, t
 
 /-! ## Unit columns on source gates -/
 
-/-- **A unit's input column is on its own source gate**: input `b`, its own key, of unit `u` reads gate `2 + u·B + b`. -/
-theorem exists_wire_src {c : _root_.Flock.Circuit} {hU : Built c.unit} {n : ℕ}
+/-- **A unit's input column is on its own source gate**: input `b`, its own key, of unit `u` reads gate
+`2 + u·B + b`. -/
+theorem exists_wire_src {c : _root_.Flock.Circuit} {hU : FlockSoundness.Built c.unit} {n : ℕ}
     (outs : Finset (Fin (Layout.keyN c hU n))) (u : Fin n) {b : ℕ} (hb : b < Layout.keyB c hU)
     (hself : Aliased.keyIdx c (Layout.keyB c hU) ⟨b, hb⟩ = some ⟨b, hb⟩) :
     ∃ x : Fin ((Placed.keyProg c hU n).rows u).w,
@@ -148,7 +147,7 @@ theorem exists_wire_src {c : _root_.Flock.Circuit} {hU : Built c.unit} {n : ℕ}
 variable {h : Held}
 
 /-- **`pickAny` chooses a column on a wire wherever the unit has one**: `picks_pickAny` from the column alone. -/
-theorem pickAny_of_wire {t : ℕ} (ht : t < h.ms.length) (hU : Built h.ms[t].1.unit) {k : ℕ}
+theorem pickAny_of_wire {t : ℕ} (ht : t < h.ms.length) (hU : FlockSoundness.Built h.ms[t].1.unit) {k : ℕ}
     (hk : k < h.ms[t].2.size) (y : Fin (keyC h t ht hU).N)
     (hy : ∃ cc : Fin ((Placed.keyProg h.ms[t].1 hU h.ms[t].2.size).rows ⟨k, hk⟩).w,
       (Const.Prog.instC (Placed.keyProg h.ms[t].1 hU h.ms[t].2.size)
@@ -230,7 +229,7 @@ theorem copiesRef_src {s : AuditStatement} {d : Design.Two} (hd : two h s = some
       rfl
     · have hpb := srcKey_bits hkey
       have h16 := bits_of_two hd ht (p := p) (by rw [hm]; exact hp)
-      rw [hm, getElem!_pos _ _ hp] at h16
+      rw [hm, getElem!_pos h.ms[t].1.ports p hp] at h16
       have hgd : h.ms[t].1.ports.getD p default = h.ms[t].1.ports[p] := by simp [Array.getD, hp]
       rw [hgd, h16] at hpb
       show 8 * byte + bit < 16 * h.ms[t].1.ports[p].words
@@ -243,7 +242,7 @@ theorem copiesRef_src {s : AuditStatement} {d : Design.Two} (hd : two h s = some
   obtain ⟨-, hccn, hsk⟩ := Layout.keyRowOf_wire (Layout.outsOf h.ms[t].1 hU h.ms[t].2.size) cc hr0
   have hpn : portNamed h t rp.row = q.val := by
     refine portNamed_eq (hO t ht) (by rw [hm]; exact q.isLt) ?_
-    rw [hm, getElem!_pos _ _ q.isLt, ← hrp]
+    rw [hm, getElem!_pos h.ms[t].1.ports q.val q.isLt, ← hrp]
     rfl
   have hbit : rp.bit = b.val := by
     rw [← hrp]
@@ -258,7 +257,6 @@ theorem copiesRef_src {s : AuditStatement} {d : Design.Two} (hd : two h s = some
   have e2 : (Placed.circuitRows h.ms[t].1 hU).nIn = h.ms[t].1.upv * (h.ms[t].1.unit.inWords * _root_.Flock.WORD) := by
     show h.ms[t].1.upv * (FlockSoundness.Rows.ofNet hU).nIn = _
     rw [Layout.ofNet_nIn_eq (c := h.ms[t].1) (hU := hU)]
-  rw [e2] at hccn
-  exact hccn
+  exact lt_of_lt_of_eq hccn e2
 
 end SpotFlock
