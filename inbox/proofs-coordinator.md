@@ -125176,3 +125176,92 @@ Nothing.
 - `FirstTreeless` discharged: it waits on TWOLEG's refusal, as ruled.
 
 Branch `cursor/proofs-sessioncoins-e4a0` at `49dbe8d36f5450cb24e0f6cb0bd323d95654a28f`, pushed; nothing unpushed. No `import all` in any file of mine [run].
+
+## GATHER, Fri 13 Nov 06:32Z: serving asks on VLLM-300 for the 13:10Z try's head by 11:00Z and treats `984cb027efa3` as a candidate: it is the 20:00Z try's, and on the 13:10Z serve's class its second stage refuses by `second-inputs`; the 13:10Z head is serving's `1536ba03d343`, my first try's tree less one summary key; serving served the class on cards at 06:00Z; `1822`'s Friday-size part is in its second command
+
+Second try: `cursor/proofs-gather-second-try-5a28` at `984cb027efa30548bd370a1f0e04830e8d12be1a`, not moved since 05:37Z. At it my two small rehearsals passed (`r20261113-053940-1822`) and the Friday-size part of that run is in its second command. I stand behind it for the 20:00Z try once that part ends exit 0; until then the head I stand behind is `e20b7c981b46` (`7b90`, `b025`). First try: `cursor/proofs-gather-served-select-b88b` at `496aa183544bdf647b2e98943cb1c1bc6c193210`, rehearsed by `c6bd`, not moved. [run: `git ls-remote`, 06:25Z]
+
+**In plain words.** Serving ran the engine on GPUs tonight with the select as 20 units, and the tokens it served match the captured ones. Serving now asks which version of the audit's code Friday's first try uses, and names the second try's version as a candidate. It must not be that one: the second try's code requires the serve to commit the select's inputs, and the first try's serve does not. So the answer on VLLM-300 needs two heads, each named with its try.
+
+Marks: [run] a command I ran this turn, with the time I read; [read] a file or issue I read this turn, with the place; [relayed]; [derived] my reasoning, tested by nothing; [guess]. Mailbox read to its last heading, your 05:31Z, at 06:24Z [run]. I wrote nothing on Linear.
+
+### 0. The standing lines
+
+- **The pen:** the machine was replaced again before 06:20Z. `mkdir ~/wt/.pen` at 06:20:14Z; the owner line is this loop's. [run]
+- **Events that were not mine, acted on in no way** (06:19Z to 06:23Z):
+  - Nine workers' completion notices addressed to you: RUNCOINS, REDRAW, TWOLEG, RUNSAS, SESSIONOF, STOPDRIVER, CUT, PERIODREAD, STAGECOINS.
+  - Nineteen Slack events and one Linear event (PRF-614 created) from your subscriptions.
+  - Twenty fires of fourteen of your old timers, from `proofs-1552Z-prf589-opened` to `history-try-4d04`, seven of them `proofs-sweep-30m-v42`.
+- My own 06:20Z timer had not reached me by 06:24Z, behind those. I did its work in this turn and will not do it twice.
+
+### 1. Serving's serve on cards
+
+All relayed from serving's comments. [read: VLLM-412 at 06:24Z, its 06:08Z and 06:13Z comments; VLLM-300's 06:13Z]
+
+- **The run:** `r20261113-054205-e8d2` on node A's eight cards, at `1536ba03d343`. It served from 06:00:10Z and ended at 06:06:32Z with exit 1.
+- **The serve itself ended 0:** TP 8, the select as 20 units, 8 requests, none unfinished. Its capture ended 0.
+- **The exit 1 is its pieces check's,** which counted the warm-up window's 8 spans, never captured, as unequal. Serving's lead rules it the check's fault and the 13:10Z try runs.
+- **A served class exists: `w1/p256-o64`.** Its 8 spans equal the captured ids, 64 tokens each, no unequal token. Two classes were committed (`w0`, `w1`), both `GreedySelect_v1{V=154880,N=7744}` under the stop rule.
+- **Its shape is the one I rehearsed:** 8 outer blocks of 64 tokens, so 10,240 inner blocks. It has 256 prompt ids against my made-up class's 4; the select's units read no prompt id. [derived]
+- **Not yet:** `first` over `w1`, which serving runs next on a CPU node at `rate:1/2 --k 1`. Its line was not posted at 06:24Z.
+
+### 2. The head serving asks for
+
+**The ask** [read: VLLM-300, serving's lead at 06:23Z]: name the 13:10Z try's head there by 11:00Z. With none named the try runs at `1536ba03d343`. A head named after 11:00Z is the 20:00Z try's. It writes of "your branch's `984cb027efa3`" as the other candidate for 13:10Z.
+
+**The three heads are nested.** [run: `git merge-base --is-ancestor`, `git rev-list --count`, 06:25Z]
+
+| Head | Whose | Commits past `1536ba03d343` | Rehearsed at Friday's size |
+|---|---|---|---|
+| `1536ba03d343` | serving's serve and runner | 0 | serving's runner, `rate:1/2 --k 1` [relayed] |
+| `496aa183544b` | my first try, #9480 | 8 | `c6bd`, `rate:1/2 --k 1` |
+| `984cb027efa3` | my second try | 77 | `1822`, running, `rate:1/1 --k 4` |
+
+**`1536ba03d343` is my first try's tree less one summary key.** [run: `git diff --stat 1536ba03d343 496aa183544b`; read: the diff]
+- Five files differ. In what a try executes there is one difference: at my head `second`'s `summary.json` carries `record.own_reads`, and `two_stage_small.py expect` holds the summary to it.
+- The rest is tests, the small rehearsal's `--tables` and the toy's audit.
+- So `c6bd` is a rehearsal of `1536ba03d343`'s two commands in all but that key. [derived]
+
+**`984cb027efa3` is not a head for the 13:10Z try as serving plans it.**
+- **It has a check the earlier two lack:** `second-inputs`, in the Python verifier and in Lean. [run: `git grep -c` at the three heads]
+- **It refuses a class whose record commits the ids and not the select's inputs.** The second stage's check then names `second-inputs`, `held` is false and `second` exits 1. That is the code working as written, not a fault. [read: `second_stage.py:1376–1383`; `test_two_stage_second.py:246–275`]
+- **The 13:10Z serve cannot commit them:** it runs at `1536ba03d343`, which has no `boundary_logits.py`. [run: the diff; relayed: VLLM-300, point 5 of serving's 06:23Z]
+- **On a class that does commit them, `second` needs `--kept`:** the directory the serve kept the inputs' rows and salts in. Without it the command is refused before anything is committed. [read: `two_stage.py:620–637`]
+
+**My word for VLLM-300, yours to post:**
+- **13:10Z: `1536ba03d343`.** It is serving's default, so naming nothing gives the same. Serving's form check does not read the key `496aa183544b` adds. [run: `rg own_reads` on its notes' copy, 06:32Z]
+- **20:00Z: `984cb027efa3`,** once `1822` ends exit 0, on a serve that commits the select's inputs.
+- **Each head named with its try.** Serving reads any head named before 11:00Z as the 13:10Z try's, so a post that says only "the second try's final head is `984cb027efa3`" could put it under the wrong serve.
+
+**Three things serving's runner needs for 20:00Z at `984cb027efa3`.** [read: serving's launchers in its notes at commit `e2a9ee56f5`; VLLM-300, round2's two 06:2xZ comments]
+1. **`--kept`.** `second_served.sh` passes `second` what `SECOND_ARGS` holds, and serving's rehearsals set it to the stop rule alone. The copy from node A must also carry the directory the serve kept the inputs in.
+2. **A made-up class made with `--logits`** for any rehearsal at this head. round2 is running a small class through its own runner at `984cb027efa3` now. If it reports a refusal by `second-inputs`, or an error naming `--kept`, this is why.
+3. **The design.** round2 says the shared launcher gives `first` only `rate:1/2 --k 1` and waits for its lead's word to pass the second try's `rate:1/1 --k 4`. Without that, 20:00Z would run the first try's design at the second try's head, a pair I have not run at Friday's size.
+
+**Serving's logits heads are already in `984cb027efa3`.** [run: `git merge-base`, `git merge-tree`, 06:27Z]
+- `8b1835d85f27`, where its logits serve stands today, is an ancestor.
+- `110e564feed5` and its branch's tip `4136a2de5b90` are in by content: a trial merge of either gives my head's tree unchanged.
+- So whichever of them serving serves at, the audit's head needs no merge. Serving's worker found the same. [relayed: VLLM-339, 06:28Z]
+
+**I move the branch no more unless you say.** Serving's worker reruns its tier and both rehearsals on each move of it before 08:30Z, the hour it gives. [relayed: VLLM-339, 06:28Z]
+
+### 3. The rehearsal `r20261113-053940-1822`, vy-nebius-2
+
+- **The Friday-size part is in its second command.** Its made-up serve wrote the class at 06:13Z. `first` ended at 06:16:38Z having taken 8 of 8 outer blocks, with the stop blocks' order held. `second` has run since 06:16:39Z. [run: the files' times and `first.log`'s last line, 06:24Z]
+- **Expected end: about 07:25Z.** [guess, from `b025`'s 96.5 minutes with its builds]
+- **Two rehearsals of this head that are not mine passed:** serving's worker ran the 20-unit class with committed logits at V = 2,560, with no rule and under a stop rule. In each: 60 of 60 Lean verdicts, 18 of 18 changed copies refused, the second stage's check `ok`, the outcome withheld by `two-stage-form` alone. The adapter's quick tier at this head: 14,380 passed, none failed. [relayed: VLLM-339, 06:21Z and 06:28Z]
+
+### Runs
+
+- `r20261113-053940-1822` (vy-nebius-2): running; expected end about 07:25Z. [guess] One timer of mine, at about 07:35Z.
+
+### Not established
+
+- The Friday-size part at `984cb027efa3`: running.
+- `first` on the served class: serving's, not posted at 06:24Z.
+- A two-stage audit of a served class: none yet, by anyone.
+- `--devices` on any class by me.
+
+### Still due
+
+- The final head in an entry's title when `1822` ends, then one reprint over its kept files.
