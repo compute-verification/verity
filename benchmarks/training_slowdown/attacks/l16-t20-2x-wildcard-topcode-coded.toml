@@ -1,0 +1,27 @@
+# The start grown from 16 to 36 blocks by twenty new top blocks, new block i a copy of the start's block ⌊16i/20⌋
+# with its output projections zeroed, so the grown model is the start's function at its first step; every block and
+# the final gain trained, Muon on the blocks' matrices and AdamW on the gains, in six forwards of 32 rows a step, while
+# the final norm's input crosses forward as a 4-bit code in a fixed rotated basis and its gradient crosses back
+# rounded stochastically in that basis onto 2^4 − 1 steps; the rate rises over 40 steps and falls to 0 over the last
+# quarter. The forward's code crosses as bytes, so the trace reads the forward's plane at its width; the backward's
+# rounding stays floats on its own grid. The output is the grown model, scored without the code; E is every tensor of
+# it. The dials are `m-t20-2x-wildcard-topcode-coded`'s, at six forwards of 32 rows as the other 238M entries.
+# The steps are 1.9 C0 in the plan's unit, a step's MACs (the route's trace of the grown step) times 1,480.7 gates.
+start = "l16-t20"
+route = "topcode"
+target = { gain = 2.0 }
+budget = { steps = 20236, batch = 192, minutes = 3060 }
+seeds = { search = [0] }
+policy = "console"
+honest = "l16-t20-2x-fullmuon-fe-wsd-40326"
+
+[dials]
+grow = 20
+forward_bits = 4
+backward_bits = 4
+lr = 3e-3
+norm_lr = 3e-3
+weight_decay = 0.05
+warmup = 40
+decay = 0.25
+micro_batches = 6

@@ -401,6 +401,7 @@ REFERENCES = {
     "l16-t20-1.1x-ref-optim-fullmuon-fe-wsd": (under(muon), CLOSE_BF16),
     "l16-t20-1.1x-ref-optim-fullmuon-wsd": (under(muon), CLOSE_BF16),
     "l16-t20-2x-hybrid-grow-depth": (grown, CLOSE_BF16),
+    "l16-t20-2x-wildcard-topcode-coded": (topcoded, CLOSE_BF16),
     "m-t20-1.1x-fullmuon-wsd": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-fullmuon-wsd-4611": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-fullmuon-wsd-4611-ema": (averaged, CLOSE),
