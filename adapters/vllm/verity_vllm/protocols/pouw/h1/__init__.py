@@ -1,5 +1,5 @@
-"""PoUW's H1 + fx1 (`eps1-sm120-h1fx1`, `verity.protocols.pouw.prover.circuit.h1tile`) on the eager int8_exact row: each
-served int8 linear call as its own Program on bits, which `verity.protocols.pouw.prover.circuit.compile` takes to H1 tile units.
+"""PoUW's H1 + fx1 (`eps1-sm120-h1fx1`, `verity.protocols.accounting.pouw.prover.circuit.h1tile`) on the eager int8_exact row: each
+served int8 linear call as its own Program on bits, which `verity.protocols.accounting.pouw.prover.circuit.compile` takes to H1 tile units.
 
 * **The Program** (`program(k, n, m)`): one call's linear. Its A is the call's A table (x [m, k] s8 rows, sx [m] f32 scales:
   the served rows as the Commit taps `Int8RowQuant_v1` /0 and /1, then empty rows), its B the layer's int8 weight rows and
@@ -82,13 +82,13 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, Refs, Strided, concat
 from verity.circuits.types import Array
-from verity.definitions.ops.boolean import gemm as BG
-from verity.protocols.pouw.prover.circuit import compile as C
-from verity.protocols.pouw.prover.circuit import h1tile as H
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier.audit import HM96_WEIGHTS, weight_binding
-from verity.protocols.pouw.verifier.credit import CREDIT
-from verity.protocols.spot.device.challenger import CoinError
+from verity.circuits.ops.boolean import gemm as BG
+from verity.protocols.accounting.pouw.prover.circuit import compile as C
+from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier.audit import HM96_WEIGHTS, weight_binding
+from verity.protocols.accounting.pouw.verifier.credit import CREDIT
+from verity.protocols.proofs.spot.device.challenger import CoinError
 
 from verity_vllm.protocols.pouw import credit_gate as CG
 from verity_vllm.protocols.pouw.h1 import commit as CT

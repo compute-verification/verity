@@ -8,14 +8,14 @@ public import Mathlib.Tactic.Linarith
 public import Mathlib.Tactic.Ring
 
 /-!
-# Two drawn digits combined per entry: how often a value fixed before the draw is hit (proofs)
+# Two sampled digits combined per entry: how often a value fixed before the sample is hit (proofs)
 
-A noise whose entry `(i, j)` combines a row digit and a column digit drawn after the data, `op (X i) (W j)`, is left
-unchanged at that entry by a data lane `−v` fixed before the draw exactly when `op (X i) (W j) = v`. Its `p*` is the
+A noise whose entry `(i, j)` combines a row digit and a column digit sampled after the data, `op (X i) (W j)`, is left
+unchanged at that entry by a data lane `−v` fixed before the sample exactly when `op (X i) (W j) = v`. Its `p*` is the
 largest share of the digit pairs that `op` sends to one value.
 
-* **Per entry** (`entry_card`): with rows and columns drawn independently and uniformly, the draws on which entry
-  `(i, j)` hits `v` are a `|fiber v|/(|A||B|)` share of all draws, however the rows and columns share their digits.
+* **Per entry** (`entry_card`): with rows and columns sampled independently and uniformly, the samples on which entry
+  `(i, j)` hits `v` are a `|fiber v|/(|A||B|)` share of all samples, however the rows and columns share their digits.
 * **Over the matrix** (`sum_hits_le`, `sum_cost_ge`): if no value has more than `P` preimages, the expected number of
   entries hitting their targets is at most `p*·r·s` with `p* = P/(|A||B|)`, so a cost that pays `c` for each other
   entry averages at least `(1 − p*)·c·r·s`. That premise (`hcost`) is what a floor has to supply; nothing here proves
@@ -33,7 +33,7 @@ largest share of the digit pairs that `op` sends to one value.
   at most two preimages a value (`hwLane_fiber_le`), so `p* ≤ 1/|B|`. Digits may be of any type, so a lane's digits
   and the rest's are a product.
 
-The targets are fixed before the draw. A target chosen after it is a branch on the coins, which the adaptive bounds
+The targets are fixed before the sample. A target chosen after it is a branch on the coins, which the adaptive bounds
 treat (`Lead.CoinBranch`).
 -/
 
@@ -106,7 +106,7 @@ theorem divs_card_le (n : ℕ) : (divs 32 n).card ≤ 10 := by
           _ ≤ 32 * 32 := Nat.mul_le_mul (by omega) hq
       omega
 
-/-- **`uw6`'s `p*`**: with both factors drawn from `±1..±32`, no value is the product of more than 20 of the 4,096
+/-- **`uw6`'s `p*`**: with both factors sampled from `±1..±32`, no value is the product of more than 20 of the 4,096
 pairs, so `Pr[x·w = v] ≤ 20/4096 = 5/1024` for every `v`. -/
 theorem uw6_fiber_le (v : ℤ) : (fiber (· * ·) (signed 32) (signed 32) v).card ≤ 20 :=
   (fiber_card_le_divs 32 v).trans (by have := divs_card_le v.natAbs; omega)
@@ -126,7 +126,7 @@ theorem uw6_fiber_120 : 20 ≤ (fiber (· * ·) (signed 32) (signed 32) 120).car
 variable {r s : ℕ} {α β : Type*} [DecidableEq α] [DecidableEq β]
 
 omit [DecidableEq α] [DecidableEq β] in
-/-- Row digits `X : Fin r → A` and column digits `W : Fin s → B`, drawn independently and uniformly. -/
+/-- Row digits `X : Fin r → A` and column digits `W : Fin s → B`, sampled independently and uniformly. -/
 abbrev draws (A : Finset α) (B : Finset β) (r s : ℕ) : Finset ((Fin r → α) × (Fin s → β)) :=
   Fintype.piFinset (fun _ => A) ×ˢ Fintype.piFinset (fun _ => B)
 
@@ -135,8 +135,8 @@ omit [DecidableEq α] [DecidableEq β] in
 def hits (op : α → β → ℤ) (v : Fin r → Fin s → ℤ) (D : (Fin r → α) × (Fin s → β)) : ℕ :=
   (univ.filter fun e : Fin r × Fin s => op (D.1 e.1) (D.2 e.2) = v e.1 e.2).card
 
-/-- **One entry**: the draws on which `op (X i) (W j) = v` number `|fiber v|·|A|^(r−1)·|B|^(s−1)`, so the entry hits `v`
-with probability `|fiber v|/(|A||B|)` whatever the other rows and columns draw. -/
+/-- **One entry**: the samples on which `op (X i) (W j) = v` number `|fiber v|·|A|^(r−1)·|B|^(s−1)`, so the entry hits `v`
+with probability `|fiber v|/(|A||B|)` whatever the other rows and columns sample. -/
 theorem entry_card (op : α → β → ℤ) (A : Finset α) (B : Finset β) (i : Fin r) (j : Fin s) (v : ℤ) :
     ((draws A B r s).filter fun D => op (D.1 i) (D.2 j) = v).card =
       (fiber op A B v).card * (A.card ^ (r - 1) * B.card ^ (s - 1)) := by
@@ -162,7 +162,7 @@ theorem entry_card (op : α → β → ℤ) (A : Finset α) (B : Finset β) (i :
     Fintype.card_filter_piFinset_const_eq_of_mem _ _ hp.1.2, Fintype.card_fin, Fintype.card_fin]
 
 /-- **Entries left unchanged, in expectation.** If no value is the product of more than `P` pairs of `A × B`, then for
-targets `v` fixed before the draw the hits summed over the draws are at most `P·r·s·|A|^(r−1)·|B|^(s−1)`: on average a
+targets `v` fixed before the sample the hits summed over the samples are at most `P·r·s·|A|^(r−1)·|B|^(s−1)`: on average a
 `p* = P/(|A||B|)` share of the `r·s` entries, however the rows and columns share their digits. -/
 theorem sum_hits_le (op : α → β → ℤ) (A : Finset α) (B : Finset β) (P : ℕ) (hP : ∀ v, (fiber op A B v).card ≤ P)
     (v : Fin r → Fin s → ℤ) :
@@ -180,8 +180,8 @@ theorem sum_hits_le (op : α → β → ℤ) (A : Finset α) (B : Finset β) (P 
         ring
 
 omit [DecidableEq α] [DecidableEq β] in
-/-- Summed over the draws, a cost that pays `c` for each entry it doesn't leave unchanged plus `c` per hit covers
-`c·r·s` a draw. -/
+/-- Summed over the samples, a cost that pays `c` for each entry it doesn't leave unchanged plus `c` per hit covers
+`c·r·s` a sample. -/
 theorem sum_cost_hits (op : α → β → ℤ) (A : Finset α) (B : Finset β) (v : Fin r → Fin s → ℤ) (c : ℕ)
     (cost : (Fin r → α) × (Fin s → β) → ℕ) (hcost : ∀ D ∈ draws A B r s, c * (r * s) ≤ cost D + c * hits op v D) :
     c * (r * s) * (draws A B r s).card ≤ ∑ D ∈ draws A B r s, cost D + c * ∑ D ∈ draws A B r s, hits op v D := by
@@ -190,8 +190,8 @@ theorem sum_cost_hits (op : α → β → ℤ) (A : Finset α) (B : Finset β) (
     _ ≤ ∑ D ∈ draws A B r s, (cost D + c * hits op v D) := sum_le_sum hcost
     _ = _ := by rw [sum_add_distrib, mul_sum]
 
-/-- **`p*` in the bound.** If every draw's cost pays `c` for each of the `r·s` entries it doesn't leave unchanged, the
-cost summed over the draws is at least `c·r·s·|draws|` less `c·P·r·s·|A|^(r−1)·|B|^(s−1)`: in expectation `(1 − p*)`
+/-- **`p*` in the bound.** If every sample's cost pays `c` for each of the `r·s` entries it doesn't leave unchanged, the
+cost summed over the samples is at least `c·r·s·|draws|` less `c·P·r·s·|A|^(r−1)·|B|^(s−1)`: in expectation `(1 − p*)`
 of the full `c·r·s`. -/
 theorem sum_cost_ge (op : α → β → ℤ) (A : Finset α) (B : Finset β) (P : ℕ) (hP : ∀ v, (fiber op A B v).card ≤ P)
     (v : Fin r → Fin s → ℤ) (c : ℕ) (cost : (Fin r → α) × (Fin s → β) → ℕ)
@@ -206,7 +206,7 @@ theorem card_draws (A : Finset α) (B : Finset β) : (draws A B r s).card = A.ca
   rw [card_product, Fintype.card_piFinset, Fintype.card_piFinset, prod_const, prod_const, card_univ, card_univ,
     Fintype.card_fin, Fintype.card_fin]
 
-/-- **`uw6`**: with row and column digits from `±1..±32` and targets fixed before the draw, at most `5/1024` (0.49%)
+/-- **`uw6`**: with row and column digits from `±1..±32` and targets fixed before the sample, at most `5/1024` (0.49%)
 of the entries hit their target on average. -/
 theorem uw6_sum_hits_le (hr : 0 < r) (hs : 0 < s) (v : Fin r → Fin s → ℤ) :
     1024 * ∑ D ∈ draws (signed 32) (signed 32) r s, hits (· * ·) v D ≤
@@ -222,7 +222,7 @@ theorem uw6_sum_hits_le (hr : 0 < r) (hs : 0 < s) (v : Fin r → Fin s → ℤ) 
     _ = 5 * ((r' + 1) * (s' + 1)) * ((2 * 32) ^ (r' + 1) * (2 * 32) ^ (s' + 1)) := by ring
 
 /-- **`uw6` with `p*` in the bound**: a cost that pays `c` for every entry that doesn't hit its target averages at
-least `(1 − 5/1024)·c·r·s` over the draws. -/
+least `(1 − 5/1024)·c·r·s` over the samples. -/
 theorem uw6_sum_cost_ge (hr : 0 < r) (hs : 0 < s) (v : Fin r → Fin s → ℤ) (c : ℕ)
     (cost : (Fin r → ℤ) × (Fin s → ℤ) → ℕ)
     (hcost : ∀ D ∈ draws (signed 32) (signed 32) r s, c * (r * s) ≤ cost D + c * hits (· * ·) v D) :
@@ -263,7 +263,7 @@ theorem lane_fiber_le (B : Finset ℤ) (hB : ∀ x ∈ B, Odd x) (v : ℤ) : (fi
   exact Prod.ext rfl (by omega)
 
 /-- **The coin lane**: with row bits from `{0, 1}`, column coins odd in `±(2^(e+1) − 1)` and targets fixed before the
-draw, at most a `2^−(e+2)` share of the entries hit their target on average (`p* = 1/32` at 4-bit coins). -/
+sample, at most a `2^−(e+2)` share of the entries hit their target on average (`p* = 1/32` at 4-bit coins). -/
 theorem lane_sum_hits_le (e : ℕ) (hr : 0 < r) (hs : 0 < s) (v : Fin r → Fin s → ℤ) :
     2 ^ (e + 2) * ∑ D ∈ draws ({0, 1} : Finset ℤ) (oddLane (e + 1)) r s, hits lane v D ≤
       r * s * (draws ({0, 1} : Finset ℤ) (oddLane (e + 1)) r s).card := by
@@ -356,7 +356,7 @@ theorem hwLane_add_card_le (rest : α → β → ℤ) (B₁ : Finset ℤ)
     _ = 2 * A'.card * (B₁.card * B'.card) := by ring
 
 /-- **The coin lane in any sum, over the matrix**: with row digits `{0, 1} × A'`, column digits `oddLane (e + 1) × B'`
-and targets fixed before the draw, entries `1 + b + s + rest a' b'` hit their target on at most a `2^−(e+2)` share of
+and targets fixed before the sample, entries `1 + b + s + rest a' b'` hit their target on at most a `2^−(e+2)` share of
 the entries on average, whatever `rest` adds. -/
 theorem lane_add_sum_hits_le (rest : α → β → ℤ) (A' : Finset α) (B' : Finset β) (e : ℕ) (hr : 0 < r) (hs : 0 < s)
     (v : Fin r → Fin s → ℤ) :
@@ -383,7 +383,7 @@ theorem lane_add_sum_hits_le (rest : α → β → ℤ) (A' : Finset α) (B' : F
     _ = (r' + 1) * (s' + 1) * ((2 * A'.card) ^ (r' + 1) * (2 ^ (e + 1) * B'.card) ^ (s' + 1)) := by ring
 
 /-- **hw's row lane in any sum, over the matrix**: with row digits `{0, 1} × A'` and column digits `B₁ × B'`, entries
-`(1 + 2b)·σ + rest a' b'` hit targets fixed before the draw on at most a `1/|B₁|` share of the entries on average. -/
+`(1 + 2b)·σ + rest a' b'` hit targets fixed before the sample on at most a `1/|B₁|` share of the entries on average. -/
 theorem hwLane_add_sum_hits_le (rest : α → β → ℤ) (B₁ : Finset ℤ) (A' : Finset α) (B' : Finset β) (hr : 0 < r)
     (hs : 0 < s) (v : Fin r → Fin s → ℤ) :
     B₁.card * ∑ D ∈ draws (({0, 1} : Finset ℤ) ×ˢ A') (B₁ ×ˢ B') r s,

@@ -45,8 +45,8 @@ from types import SimpleNamespace
 
 from verity.circuits.codec import register_lazy_family
 from verity.circuits.defs import bind, composite
-from verity.definitions.ops.prims import const
-from verity.definitions.ops.scalar import BIT, BitOr, I32Add, I32Le, SelectI32
+from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import BIT, BitOr, I32Add, I32Le, SelectI32
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.numerics import dsv4_decode_indices_twin

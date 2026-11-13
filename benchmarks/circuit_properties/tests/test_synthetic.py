@@ -61,7 +61,7 @@ def test_one_value_in_two_lanes_is_refused_not_miscounted():
 
 
 def test_a_word_primitive_has_no_products_of_its_own():
-    from verity.definitions.ops import gemm as G
+    from verity.circuits.ops import gemm as G
     from verity.circuits.program import Program
     p = Program(bind(G.Gemm, K=16, N=1, **G.GEMM_AMPERE))
     with pytest.raises(NotSeparable):
