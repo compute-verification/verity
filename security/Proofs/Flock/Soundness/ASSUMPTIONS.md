@@ -255,7 +255,7 @@ NOT, one generic Boolean-semantics lemma can state it for every template.
 **Its coins.** The statement is for live uniform coins: the model's proof coins are uniform and sampled after the
 prover's message. The circuit prover's non-ZK session has them on the challenger's keyed coin tree under `FC_COINS=tree` on both sides
 (`serve --tree-from`), which `flock-verify verify --coins tree` reads (the verifier reads coins only from a challenger's
-log). The benches run it so by default (`verity/protocols/flock/pod/70-class-sweep.sh`, `60-circuit.sh`, `61-circuit-cell.sh`),
+log). The benches run it so by default (`verity/protocols/flock/prover/pod/70-class-sweep.sh`, `60-circuit.sh`, `61-circuit-cell.sh`),
 and their records name the coins (`coins: coin-tree`). The binary's default still derives every coin from one OS seed
 through a SHA-512 PRF (`config_with` sets `cfg.coin_seed` from `seed_coins()`; `live/src/coin_seed.rs`). That rests on
 `prf/sha-512` and the seed commitment's hiding, and the headline takes neither, so the Lean verifier refuses such a

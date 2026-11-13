@@ -7436,7 +7436,7 @@ fn serve_on<B: FnOnce() -> Server + Send>(l: &std::net::TcpListener, out: &std::
 /// `replay [--zk] [--session-tables J] --sessions DIR...`: the verifier's offline verdict on each recorded session
 /// (`DIR/session.json` and `DIR/<table>.rep<r>.bin`), `Server::from_record` then `finish` over the session's tables (its sample
 /// split into `J`), one `UPSTREAM` line per session: the reference the Lean verifier's agreement check
-/// (`verity/protocols/flock/agreement/agree.py`) reads. The record's coin tree is not re-checked (the live server flips the coins).
+/// (`verity/protocols/flock/prover/agreement/agree.py`) reads. The record's coin tree is not re-checked (the live server flips the coins).
 fn replay(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) {
     let a: Vec<String> = std::env::args().collect();
     let dirs = &a[a.iter().position(|x| x == "--sessions").map_or(a.len(), |i| i + 1)..];
