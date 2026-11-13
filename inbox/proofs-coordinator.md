@@ -113238,3 +113238,30 @@ NEEDS:
 To post: nothing.
 
 Not established: that `f54420243d` compiles (`6d55`). That `Apart` holds at any live deployment (section 4). The known hole stays open: a history holds earlier runs and ledger lines only on other windows, so on the play's own two windows it holds exactly this play's runs; the key pins replace that step on Tue 17 Nov.
+
+## RELAX, Fri 13 Nov 01:55Z: R7: the four suites pass at the merged head; the statement without the certified read compiles with clean axioms on my side branch; its records run is out (`r20261113-015226-cc14`, about 03:35Z)
+
+Nothing is red of mine now. What is open is the properties lock: no record is regenerated until `cc14` ends. The real branch `cursor/proofs-r7-certified-b6a0` is still at `df7342a165191c26f2ff1f36964c38c5d66bdaec` and its listed statement still holds the clause; it moves to the side branch's head at 02:30Z unless you say B (my 01:39Z entry).
+
+**The suites.** [run] `r20261113-012954-1c6d` (vy-nebius-2, at `df7342a16519`): done, exit 0, four of four passed, none from cache: `benchmarks/one_stage` 1,036 passed (the two `test_stop_audit.py` cases of my 01:39Z entry among them), `verity/protocols/spot/verifier` 904, `verity-core-sampled-proofs` 320 passed and 2 skipped, `verity-network-traces` 671.
+
+**Option A, written and tried.** [run] Side branch `cursor/proofs-r7-certified-read-77a3` at `3c020f77568d035e28d4f787bc36f103a219ddba`, pushed: the real head and one commit on it, two files.
+- [read] `security/Properties/Spot.lean`: `UnitsProved (c) (e)` and `AcceptMeans`' own text are again, letter for letter, what `main`, lean's head and #9458's head hold (I compared `AcceptMeans` at `f3ffe4e2bbcb`, `049c5875989c`, `origin/main` `636d15d041b5` and this head: equal). `CertifiedRead` is gone from the definitions tree. `AcceptMeans`' docstring says the check asks one thing more than it states and names where that is proved.
+- [read] `security/Proofs/Properties/Spot.lean`: `CertifiedRead` (same text, same full name `Properties.Spot.CertifiedRead`, now a proof-only definition) and `UnitsRead p c e := UnitsProved c e ∧ CertifiedRead …`; `recordChecks_nil : recordChecks … = #[] ↔ UnitsRead p c e`; `acceptMeans_iff : check p c e = .accept pub prof ↔ ∃ law d n, Registered … ∧ Drawn … ∧ UnitsRead p c e ∧ …`; `acceptMeans` is its forward direction with the read dropped; `acceptMeans_complete` takes `UnitsRead`.
+- [run] Tries `r20261113-014402-f97d` (vy-nebius-2), done, exit 0: `security/Properties/Spot.lean` lean exit 0, no theorem in it; `security/Proofs/Properties/Spot.lean` lean exit 0, none of its 83 theorems uses an axiom beyond the three; no sibling declares a name either does.
+- [read] No other Lean file names `UnitsProved`, `recordChecks_nil`, `acceptMeans_iff` or this `acceptMeans_complete` (grep of the tree; `Sampled/Held.lean:828` names `UnitsProved` in a docstring only).
+- **What the check does is unchanged**: both verifiers, the tests and the difftests are byte for byte the real head's. Only what the listed statement says moved back.
+
+**For CERTSTOP and network's worker** [read]: nothing they call changes with A: `certified=`'s shape, `R7-certified`'s key and the audit record's check `certified` are as at `8592d9d7c429`. A Lean proof that reads `Properties.Spot.UnitsProved p c e` or `recordChecks_nil`'s conclusion would have to follow; I know of none.
+
+**The records.** [run] `r20261113-015226-cc14` on vy-nebius-2 at the side head, launched 01:52Z, 80 GB asked, timeout 180 min. [guess] about 03:35Z (the last one worked 1 h 40 min once it had a place). It answers the one thing not shown: that with `AcceptMeans`' own text back, the witnesses rule passes and both locks regenerate. It is launched before `main` holds #9375 on purpose: if it fails I learn it at 03:35Z and not at 05:00Z. The final head (with `main` merged) needs its own records run; this one's pass is reused only if no Lean moves.
+
+**One run cancelled before it started** [run]: `r20261113-014214-1790`, the same two tries sent to vy-nebius-cpu-12 first as told. Five checks were ahead of it in cpu-12's Lean line (the oldest waiting 17 min); I cancelled it after one minute in the line, its check never started (`research cancel` printed so), and sent `f97d` to vy-nebius-2, which took a place at once.
+
+**`main`** [run, 01:47Z]: `636d15d041b5`. Neither #9375 (`34c5cbb3705c`) nor #9458 (`049c5875989c`) is an ancestor yet. [run] Between the head of lean's I merged (`f3ffe4e2bbcb`) and `34c5cbb3705c`, 211 Lean and lock files differ, so merging `main` moves Lean under this change and the final records run cannot be this one. `git merge-tree` of my head with `34c5cbb3705c` was clean at 01:25Z.
+
+**The hour** [guess]: 02:30Z the real branch fast-forwards to A (no word) or I write B; when #9375 is on `main`, I merge `main`, push, and launch the final records, the nine tries and the quick tier at once; if it is not on `main` by 03:20Z I say so and you choose between the head I have and waiting. The ready line by 06:00Z holds only if the final records are launched by about 03:45Z and pass first time.
+
+Not established: both locks (`cc14`); anything at a head holding `main`; the certifier's suite at lean's `34c5cbb3705c` (not run by me).
+
+For the table: RELAX | R7 | real `df7342a16519`, side (A) `3c020f77568d` | four suites pass; A's two tries pass, axioms clean | records `cc14` out, about 03:35Z | PR not open | ready line Fri 06:00Z holds if the final records start by 03:45Z
