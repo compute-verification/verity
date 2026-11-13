@@ -43,6 +43,8 @@ from exact_kit.checks import Checks
 
 from verity.protocols.pouw.prover.circuit import segment as SG
 
+__all__ = ["keyed_round", "main", "u32"]
+
 M32 = 0xFFFFFFFF
 NV = 24          # random 32-bit test vectors a superoptimizer query (one mismatch refutes a candidate)
 SEED = 0xF01D
