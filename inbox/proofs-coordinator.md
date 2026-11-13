@@ -152632,3 +152632,35 @@ Nothing on this branch until FRAME names its carried head. Then, in the pass's o
 - Your eight named lines (16:40Z and 16:50Z) go in jobs of three as nodes free up, each against `4ae17f7eafd7`, MEMBERS's first.
 
 **Not established.** Any records run's verdict. The join at `6bae773eb345` and #9735.
+
+## ASSEMBLY, Fri 13 Nov 16:53Z: the join's tip is `6bae773eb3454a4c483293a1ed37f94aa704758f`, unmoved (beyond `a61b7adf0d83`: MESSAGES's `2658eaf78153`, HONEST2's `552a41cb4df8`, the pin); your 16:40Z order is read; FRAME's `74e0` has not reported; by git alone, the params line and the replay line each merge into the tip with no conflict; `DoWalk.lean` is read
+
+Nothing is pushed, launched or merged. What is here is by reading and by `git merge-tree`, which writes nothing.
+
+**1. The order, as I hold it.** At the join's carried head: first the whole build (the records run), then GATHER's clause with its mend, then SESSIONOF2's params line, then MESSAGES's replay line, each from its own carried head as FRAME's table names it. Nothing of HELDOF's.
+
+**2. The three lines against the tip `6bae773eb34`, old layout** [`git merge-tree --write-tree`, run on this machine]
+
+| Line | Head | Result | What I add at the merge |
+|---|---|---|---|
+| GATHER's clause | `fc5c9053db63` | conflict in four files, the four GATHER names | the settlement as GATHER's scratch has it, and the mend of its 16:34Z entry (saved whole, 63 lines) |
+| SESSIONOF2's params | `9c5b95260b60` | no conflict; three new files, 538 lines | three roots in the lakefile and the lock, the `compile_time` listing, the pin |
+| MESSAGES's replay | `ec033a945fd7` | no conflict; three new files and its own three roots | the pin |
+
+- The carried heads sit at other paths, so these results are a rehearsal only.
+
+**3. `DoWalk.lean` at `9c5b95260b60`, read by me, all 128 lines.** Its sha256 is `9c4f23f64cf0313080637290463c0ca73562e221f45a1b38979550f0bb3f145a`, the digest SESSIONOF2 gives.
+
+- `jp_intro k hk at h` (an elaborator): where `h`'s left side opens with a `have` whose value is a function, it names that function `k` with `hk : k = v` and restates `h` at `k`. It generalizes the join point to a variable.
+- `head_zeta at h` (an elaborator): where the `have`'s value is no function, it puts the value in. The new `h` is definitionally equal.
+- `head_whnf at h` (an elaborator, over the helper `headMatchWhnf`): it unfolds the matchers at the head of `h`'s left side, at most 64 deep, to their `if`s. The new `h` is definitionally equal. The helper recurses on a number, so it is not a `partial def`; it reads constants' values from the environment and changes nothing.
+- `throws h` (a macro): `cases h; done`.
+- `jp_step h to r with inv by tac` (a macro): `jp_intro`, then an `obtain` proved by `repeat' first` over `refine`, the `bind_eq_ok` step, `cases`, `split` and `dsimp only`; then `clear`, `subst`, `dsimp`, `have`.
+- `do_walk h to r` (a macro): `repeat' first` over `jp_step` with the trivial invariant, `head_zeta`, the `bind_eq_ok` step, `cases`, `split`.
+- `lit_walk h hn` (a macro): `repeat' first` over `cases`, `apply hn; assumption`, and `head_whnf` then `split`.
+- **None does IO.** The file names no `IO`, `#eval`, `run_cmd`, `initialize`, `addDecl`, `unsafe`, `partial`, `implemented_by` or `extern` (a scan: no hit). The three elaborators work on the goal and the local context only.
+- One thing a reader should know: `jp_intro` assigns its goal with no type check of its own. The kernel replays the term, so a wrong one fails the build and proves nothing.
+- The file declares no theorem and nothing a statement reads, as the listing's rule asks.
+- SESSIONOF2's `why` is accurate. I add the tactics its list of expansions leaves out (`clear`, `have`, `apply`, `assumption`, `trivial`, `done`), and I hash the file again at the carried head before I list it.
+
+To post: nothing. Run going on: none of mine. My timer is set for FRAME's report.
