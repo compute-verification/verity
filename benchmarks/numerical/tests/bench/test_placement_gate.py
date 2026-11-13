@@ -14,8 +14,8 @@ NODE1 = {"product_uuid": "u-n1", "boot_id": "b-n1", "hypervisor": True, "sys_ven
          "cpu_model": "AMD EPYC 9654"}
 NODE2 = {"product_uuid": "u-n2", "boot_id": "b-n2", "hypervisor": True, "sys_vendor": "QEMU", "public_ip": "203.0.113.2",
          "cpu_model": "AMD EPYC 9654"}
-FIREWALL = {"product_uuid": "u-fw", "boot_id": "b-fw", "hypervisor": True, "sys_vendor": "QEMU", "public_ip": "203.0.113.9",
-            "cpu_model": "AMD EPYC 9654"}
+ZK_SERVER = {"product_uuid": "u-fw", "boot_id": "b-fw", "hypervisor": True, "sys_vendor": "QEMU", "public_ip": "203.0.113.9",
+             "cpu_model": "AMD EPYC 9654"}
 CHALLENGER = {"product_uuid": "u-ch", "boot_id": "b-ch", "hypervisor": False, "sys_vendor": "Dell Inc.", "public_ip": "198.51.100.7",
               "cpu_model": "Intel Xeon 6538N"}
 #: The memory challenger inside node 2's guest: its kernel's boot id; the DMI uuid is root-only, so a user's probe lacks it.
@@ -86,14 +86,14 @@ def test_a_memory_challenger_outside_the_node_it_guards_is_refused(me, why):
     ({"peers": GUARDED + [("worker", "vy-nebius-1", NODE1)]}, "guards exactly one worker (--peer worker=FILE): 2 named"),
     ({"peers": [], "absent": ABSENT + ("worker",)}, "--absent worker: a memory-challenger's rule needs its worker"),
     ({"absent": ("firewall",)}, "no challenger named: name every one (--peer challenger[:NAME]=FILE), or --absent challenger"),
-    ({"peers": GUARDED + [("firewall", "fw", FIREWALL)]}, "firewall is both named and declared absent"),
+    ({"peers": GUARDED + [("firewall", "fw", ZK_SERVER)]}, "firewall is both named and declared absent"),
 ])
 def test_every_peer_role_is_named_or_declared_absent(kw, why):
     assert why in _problems(_mc(**kw))
 
 
-def test_a_memory_challenger_sharing_the_firewalls_or_the_challengers_machine_is_refused():
-    v = _mc(peers=GUARDED + [("firewall", "fw", {**FIREWALL, "boot_id": "b-n2"})], absent=("challenger",))
+def test_a_memory_challenger_sharing_the_zk_servers_or_the_challengers_machine_is_refused():
+    v = _mc(peers=GUARDED + [("firewall", "fw", {**ZK_SERVER, "boot_id": "b-n2"})], absent=("challenger",))
     assert "fw (firewall): they share boot_id b-n2 (one machine)" in _problems(v)
     v = _mc(peers=GUARDED + [("challenger", "ch", CHALLENGER)], absent=("firewall",))
     assert v["passed"] is True and [p["relation"] for p in v["peers"]] == ["same machine", "separate machine"]
@@ -128,29 +128,29 @@ def test_the_cores_refusal_names_the_first_intruders_and_counts_the_rest():
     assert "cores: no dedicated cores declared (--cores)" in _problems(_mc(cores=None))
 
 
-def test_the_firewall_is_a_vm_of_its_own_separate_from_every_worker_and_the_challenger():
+def test_the_zk_server_is_a_vm_of_its_own_separate_from_every_worker_and_the_challenger():
     peers = [("worker", "vy-nebius-1", NODE1), ("worker", "vy-nebius-2", NODE2), ("challenger", "ch", CHALLENGER)]
-    fw_tasks = {OWN: _task(OWN, "firewall", "2-3", "/firewall.slice/fw.service"), "1": _task("1", "systemd", "0-1", "/init.scope")}
-    v = PL.gate("firewall", FIREWALL, peers, (), frozenset({2, 3}), fw_tasks, OWN)
+    fw_tasks = {OWN: _task(OWN, "zk-server", "2-3", "/zk-server.slice/fw.service"), "1": _task("1", "systemd", "0-1", "/init.scope")}
+    v = PL.gate("firewall", ZK_SERVER, peers, (), frozenset({2, 3}), fw_tasks, OWN)
     assert v["passed"] is True, v["problems"]
     assert [(p["name"], p["relation"]) for p in v["peers"]] == [("vy-nebius-1", "separate machine"), ("vy-nebius-2", "separate machine"),
                                                                  ("ch", "separate machine")]
-    on_n2 = PL.gate("firewall", {**FIREWALL, "boot_id": "b-n2"}, peers, (), frozenset({2, 3}), fw_tasks, OWN)
+    on_n2 = PL.gate("firewall", {**ZK_SERVER, "boot_id": "b-n2"}, peers, (), frozenset({2, 3}), fw_tasks, OWN)
     assert "vy-nebius-2 (worker): they share boot_id b-n2 (one machine)" in _problems(on_n2)
-    metal = PL.gate("firewall", {**FIREWALL, "hypervisor": False, "sys_vendor": "Supermicro"}, peers, (), frozenset({2, 3}), fw_tasks, OWN)
+    metal = PL.gate("firewall", {**ZK_SERVER, "hypervisor": False, "sys_vendor": "Supermicro"}, peers, (), frozenset({2, 3}), fw_tasks, OWN)
     assert "a firewall runs in a VM guest of its own: this machine's hypervisor flag is False and its DMI sys_vendor 'Supermicro'" \
         in _problems(metal)
-    assert PL.gate("firewall", {**FIREWALL, "hypervisor": None}, peers, (), frozenset({2, 3}), fw_tasks, OWN)["passed"] is True  # QEMU
-    shared = PL.gate("firewall", FIREWALL, peers, (), frozenset({1, 2, 3}), fw_tasks, OWN)
+    assert PL.gate("firewall", {**ZK_SERVER, "hypervisor": None}, peers, (), frozenset({2, 3}), fw_tasks, OWN)["passed"] is True  # QEMU
+    shared = PL.gate("firewall", ZK_SERVER, peers, (), frozenset({1, 2, 3}), fw_tasks, OWN)
     assert "cores: this process may run on CPUs 2-3, not exactly the declared 1-3" in _problems(shared)
     assert "systemd (pid 1, /init.scope) on 1" in _problems(shared)
-    alone = PL.gate("firewall", FIREWALL, peers[:2], ("challenger",), frozenset({2, 3}), fw_tasks, OWN)
+    alone = PL.gate("firewall", ZK_SERVER, peers[:2], ("challenger",), frozenset({2, 3}), fw_tasks, OWN)
     assert alone["passed"] is True and alone["absent"] == ["challenger"]
-    assert "no worker named" in _problems(PL.gate("firewall", FIREWALL, peers[2:], (), frozenset({2, 3}), fw_tasks, OWN))
+    assert "no worker named" in _problems(PL.gate("firewall", ZK_SERVER, peers[2:], (), frozenset({2, 3}), fw_tasks, OWN))
 
 
-def test_the_challenger_is_separate_from_the_firewall_and_every_node_and_needs_no_cores():
-    peers = [("firewall", "fw", FIREWALL), ("worker", "vy-nebius-1", NODE1), ("worker", "vy-nebius-2", NODE2)]
+def test_the_challenger_is_separate_from_the_zk_server_and_every_node_and_needs_no_cores():
+    peers = [("firewall", "fw", ZK_SERVER), ("worker", "vy-nebius-1", NODE1), ("worker", "vy-nebius-2", NODE2)]
     v = PL.gate("challenger", CHALLENGER, peers)
     assert v["passed"] is True and v["cores"] is None
     v = PL.gate("challenger", {**CHALLENGER, "product_uuid": "u-fw"}, peers)
@@ -173,7 +173,7 @@ RTT = {"method": PL.RTT_METHOD, "median_ms": 0.42, "min_ms": 0.38, "n": 30, "fai
     ({"peer": "10.0.5.9:22", "peer_ip": "10.0.5.9", "rtt": RTT}, "a private address, and the machine ids are not known to differ"),
 ])
 def test_a_measured_link_to_a_separate_peer_is_a_routed_one_above_the_rtt_floor(link, why):
-    peers = [("firewall", "fw", FIREWALL), ("worker", "vy-nebius-2", NODE2)]
+    peers = [("firewall", "fw", ZK_SERVER), ("worker", "vy-nebius-2", NODE2)]
     me = {**CHALLENGER, "public_ip": "203.0.113.7"}
     ok = {"peer": "203.0.113.9:22", "peer_ip": "203.0.113.9", "source_ip": "198.51.100.7", "rtt": RTT}
     assert PL.gate("challenger", me, peers, links={"fw": ok})["passed"] is True

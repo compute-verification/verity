@@ -14,8 +14,9 @@ import report
 POUW = CT.POUW
 TESTS = Path(__file__).resolve().parent
 #: (directory, name): one script of the directory may still import NAME by name beside its own ``NAME.py``, though under
-#: the suite NAME is another directory's. Like a lint's list, an entry may stand before its script is in the tree, and
-#: it goes in the commit that makes the script load the file
+#: the suite NAME is another directory's (``run`` is the front door's), so a test that loads the script puts the
+#: script's own NAME in ``sys.modules`` first. Like a lint's list, an entry may stand before its script is in the tree,
+#: and it goes in the commit that makes the script load the file
 EXCUSED = frozenset({("pearl_c_sm90", "run")})
 
 
@@ -128,4 +129,4 @@ def test_a_file_that_fails_to_load_leaves_no_module_behind(tmp_path, monkeypatch
             assert str(ex) == "at import"
         else:
             raise AssertionError("a file that raises loaded")
-        assert "broken" not in sys.modules
+        assert CT.load_name("broken.py") not in sys.modules

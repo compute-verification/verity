@@ -17,6 +17,7 @@ import pytest
 
 from verity_numerical.bench import census
 from verity_numerical.bench import subcircuit_catalog as SC
+from verity_flock import circuit as FC
 from verity_flock import subcircuit_templates as TM
 
 DATA = Path(__file__).parent / "data" / "subcircuit_catalog"
@@ -133,8 +134,6 @@ def _digests(b, e):
 def test_digests_match_program_digests_at_the_recorded_statics(first):
     """Every variant's digest, and the descriptor id at the default statics, is `verity_flock.circuit.program_digests`'s; the
     statics each record checked are among the variants."""
-    from verity_flock import circuit as FC
-
     es = _entries(first)
     assert es[ATTN]["variants"] == {"count": 3, "varying": {"T": [1, 3]}} and es[ATTN]["default_statics"] == {"T": 3}
     assert "program_digests_file" in es[ATTN] and "program_digests" in es[ROPE]
