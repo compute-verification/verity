@@ -113670,3 +113670,16 @@ STOP RULE: nothing new; `PortsOnce` is a `Prop` no statement reads.
 Not established: `BitsInUnitsOf.lean`, `BlockSize.lean`, `addressesConnected_of_rowed` and `PortsOnce` have not been compiled. No axiom probe has printed for anything of L1's rest.
 
 To post: nothing.
+
+## RUNSAS, Fri 02:07Z: `Round2.lean` is proved: it elaborates and its 25 theorems use only the three permitted axioms, in `r20261113-012007-9b9a` at `87d9f87c4a`; the bridge is the run's last step
+
+What compiled: the whole of my proof file, with the axiom check. So `roundTwo_of_check`, at the text of my 02:01Z entry, is proved by the rule: when the second stage's check of the running verifier reports no code, the interior record's order and names are the model's, the design is the derived one, and each template has its statement at its own position passing the model's code check. The larger lemmas that add the clauses the second stage does not check, as premises, are proved in the same file. The bridge to RUNCOINS's `RoundTwo` has not reported yet.
+
+- [run] `r20261113-012007-9b9a` (vy-nebius-cpu-12), `lean_changed.py --try security/Proofs/Flock/SpotFlock/RunsAs/Round2.lean --siblings` at `87d9f87c4a`: "lean exit 0 in 168 s", and "axiom probe: none of its 25 theorems uses an axiom beyond propext, Classical.choice and Quot.sound" (stdout lines 12502 and 12504). The probe's line for `SpotFlock.RunsAs.Round2.roundTwo_of_check` is 12501; `readsOk_of_check`, `stmtOkAt_of_check` and `stmtOk_of_check` are lines 12498 to 12500.
+- [run] The sibling check: "no built module of its package that doesn't import Proofs.Flock.SpotFlock.RunsAs.Round2 declares a name it does (1306 imported in 10 s)". It also says 2685 modules were unchecked, for want of a build of their source in that slot's tree.
+- [read] No `sorry`, `axiom` or `native_decide` is in `Round2.lean` or `Statements.lean`. The head `87d9f87c4a` is pushed on `cursor/proofs-runsas-7e3a`.
+- [read] What each proved lemma takes that the second stage's check does not give (row B19, unchanged): `readsOk_of_check` takes `InputsNone own` and `PinHeld`; `stmtOkAt_of_check` adds `TwoHolds`, `RoundsHeld` and `ScopeHeld`; `stmtOk_of_check` adds `NamesDistinct` and `RecordsHeld`. `InputsNone` is false at a design whose interior registration registers a value, so those three apply at the second try's design only. `roundTwo_of_check` takes only `NamesDistinct` and `OwnAgrees`.
+
+For ACCEPTS and RUNCOINS: `roundTwo_of_check` can be taken as proved at `87d9f87c4a`. Its text is in my 02:01Z entry and is unchanged.
+
+Not established: that the bridge `RoundTwoOf.lean` (`stmtOk_of_check (h : Held) : RoundTwo h`) elaborates against RUNCOINS's `RoundTwo` at `264cd595d8`; the same run tries it next. The sibling check covered the 1306 modules built in its tree, not the 2685 others. The package's Lean check with its lock (`check.py`) has not run on this head; only the try has.
