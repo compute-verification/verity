@@ -143566,3 +143566,219 @@ For TWOLEG, the one line: branch `cursor/proofs-stopdriver-family-ffc6` at `997d
 - That a window holds no two classes of one `(prompt, outputs, stopped)` is read from the classes' directory names
   (`p<P>-o<O>` and `p<P>-o<O>-nostop`), not run; two directories of one place are what the first stage will refuse.
 - The second stage's session (the interior's root, family `draw/0`) is not in this function.
+
+## SESSIONOF2, Fri 13 Nov 13:34Z: the switch is written on and compiles with a theorem that says exactly which bytes `canonicalJson` accepts; TWOLEG cites `canonicalJson_toUTF8_iff` at `fe28c96c43`; the pull request's body is drafted here, not opened
+
+`Core.canonicalJson` is the function every protocol reads its parameters with, and a commitment or evidence that is
+JSON. With the switch it reads the text with the parser our proofs can read through, and this entry adds the theorem
+that says, with no hypothesis on the bytes, which bytes it accepts: exactly the canonical texts of JSON values whose
+numbers are whole. It also adds the sentence the second reader's docstring lacked (its `#guard`s are a test, not a
+theorem). No pull request is open, no lock was touched, and no other owner's line was edited.
+
+**What is on `cursor/proofs-sessionof2-parser-defe` now** (head `fe28c96c43228dd453ee0e2b2434d33be68e21f8`, pushed):
+
+| commit | what |
+|---|---|
+| `013786beea` | the token and the import in `CoreProtocol/Protocol.lean` |
+| `dc91f31f56` | the difftest (`CanonicalJsonDifftest.lean`, its main, the lakefile's executable, `verity/difftest/tests/test_canonical_json_port.py`) and `tests/test_flock_json.py`'s entry |
+| `87cf0539a4` | the second reader's docstring (`CoreProtocol/Protocol/Canonical.lean`) |
+| `dfc2ffbb79`, `fe28c96c43` | the theorem, `security/Proofs/Core/CanonicalJson.lean` (new file, 235 lines) |
+| `ba2aee8c08` | three doc files: the interface's README, the difftest's README, a comment in the difftest's `pyproject.toml` |
+
+**1. The theorem (order C), as it compiled** `[run]`: `r20261113-133209-09e6` on vy-nebius-cpu-1 at the head
+`fe28c96c4322`, `verity lean try`'s job with `--siblings`, `--mem-gb 24` (the sibling step peaked at 3,868 MB):
+"lean exit 0 in 32 s", "axiom probe: none of its 14 theorems uses an axiom beyond propext, Classical.choice and
+Quot.sound", "siblings: no built module of its package that doesn't import Proofs.Core.CanonicalJson declares a name
+it does (166 imported …); 3885 unchecked". The 3,885 are the package's modules that tree had no build of at this
+source, so the sibling check covers 166 modules and not the package `[read]`. The file compiled at the first try
+(`r20261113-132154-dfb8` at `ba2aee8c0865`, 13 theorems, 135 s); the second run adds one lemma, section 7's.
+- The interface at `ba2aee8c0865`, with the docstring's edit, its guards and the difftest `[run]`:
+  `r20261113-132830-96a6` on vy-nebius-cpu-1, the interface's default targets built (45 jobs), the port built (22
+  jobs), `tests/test_canonical_json_port.py` and `tests/test_protocol_port.py` 14 passed (3,000 samples; swept 200
+  honest ok, 182 broken refused, 18 broken ok), `tests/test_flock_json.py` 3 passed. The commit after it touches the
+  theorem's file alone.
+- The three runs were one at a time.
+
+The statements, namespace `Verity.CanonicalJson`, with `Good`, `Same`, `Wf` and `Ascii` those of `Claims.Json`:
+
+```lean
+theorem canonicalJson_accepts (b : ByteArray) :
+    (∃ j, Core.canonicalJson b = .ok j) ↔ ∃ j s, Good j ∧ Flock.canon j = .ok s ∧ b = s.toUTF8
+
+theorem canonicalJson_good {b : ByteArray} {j : Json} (h : Core.canonicalJson b = .ok j) : Good j
+
+theorem canonicalJson_same {j₀ : Json} {s : String} (hg : Good j₀) (hc : Flock.canon j₀ = .ok s) {j : Json}
+    (h : Core.canonicalJson s.toUTF8 = .ok j) : Same j₀ j
+
+theorem canonicalJson_iff (b : ByteArray) (j : Json) :
+    Core.canonicalJson b = .ok j ↔
+      ∃ s, b = s.toUTF8 ∧ Flock.JsonParse.parse s = .ok j ∧ Flock.canon j = .ok s
+
+theorem good_of_canon : ∀ (j : Json), Wf j → ∀ s, Flock.canon j = .ok s → Good j
+theorem toUTF8_ascii (s : String) (h : Ascii s) : s.toUTF8.data.all (· < 0x7f) = true
+theorem fromUTF8?_eq_some_iff {b : ByteArray} {s : String} : String.fromUTF8? b = some s ↔ b = s.toUTF8
+```
+
+In words: the bytes it accepts are exactly the canonical texts of printable values (`Good`: every object a
+well-formed tree, every number an integer); what it returns is printable; and what it returns on a printable value's
+canonical text is alike that value (`Same`), so two printable values with one canonical text are read as one value.
+Nothing is left stated without a proof `[run]`. The seven above and `canonicalJson_toUTF8_iff` (section 7) are
+the public ones. It rests on `main`'s `parse_wf`, `parse_canon`, `canon_ascii` and
+`canon_same` (`FlockComplete.JsonRT`) `[read]`.
+
+- `good_of_canon` is the lemma of my `PartReadsBack.lean` on `cursor/proofs-sessionof-9b17`
+  (`Flock.PartCong.good_of_canon`), carried here with its two private helpers because this branch is off
+  `origin/main`, where it is not. They are two names in two namespaces and do not clash. When both are on one
+  branch, `PartReadsBack.lean` (mine) reads this one and drops its copy `[derived]`.
+- `fromUTF8?_eq_some_iff` is new in its forward direction. Its backward direction is `fromUTF8?_toUTF8`, which `main`
+  proves three times (`Proofs/Flock/Claims/Complete/Encode.lean:90`, `Recursive/FirewallWire.lean:129`,
+  `VBridge/Family/Names.lean:222`) `[read]`. I did not import one: the nearest, `Encode`, brings 363 modules of the
+  proofs package where this file needs 22 `[run: a walk of the imports]`. The three could read this one; not mine.
+- It is not a listed guarantee and I added it to no lock.
+
+**2. The second reader's docstring** `[read]` did not say its guards are a test. It now ends: "They are a test over
+those texts, not a theorem: no proof says a reader here answers as the function it stands in for on every text." In
+the same docstring one statement became stale with the switch, and I fixed it there and in the interface's README:
+`canonicalJson` now goes through `String.toList` on its whole text, so the compiled function refuses a canonical text
+of 2^32 characters or more, where today it refuses only one holding a single string that long.
+
+- That is stricter only `[derived]`, by reading, not run: past 2^32 characters the parser sees a proper prefix of
+  the text. A proper prefix of a canonical text is a complete JSON text only where the text is a number, and then the
+  prefix is another number, whose canonical text is the prefix and not the text. So the parser refuses, or `canon`
+  writes back something other than the text, and the text is refused.
+- That the runtime counts characters in 32 bits is the docstring's own statement `[read]`; I did not check it at the
+  runtime's source.
+- The Lean statement above is about the Lean function, where `String.toList` is exact: it does not see this limit.
+
+**3. A correction to my 13:01Z entry.** I wrote that Lean core's parser reads the string's bytes in place as
+`[read]`. When I wrote it, it was from memory. I read it at the toolchain's source afterwards (Lean 4.34.0,
+`Lean.Json.parse` runs `Parser.any` over the string with a position), and it holds `[read]`.
+
+**4. Does the switch accept anything refused today?** I found nothing that says so, and it is not proved.
+- The total parser's docstring says it reads every string as Lean core's does, value and refusal text, with two
+  differences that are none on a 64-bit machine (a cap that is `2^64` in place of `USize.size`, and fuel that never
+  runs out) `[read]`. A difftest holds that, not a theorem `[read]`.
+- My difftest compares `canonicalJson`'s answer under the two parsers: 3,000 sampled texts and 400 swept, alike on
+  all `[run: r20261113-120614-9fc4]`.
+- So "what it accepts did not move" is tested, and "what it accepts after the switch" is the theorem above.
+
+**5. Files I touched that the order does not name**, so that you can strike them: commit `ba2aee8c08` alone holds
+them, and `git revert ba2aee8c08` removes them. `verity/protocols/interface/README.md` (the parser, the difftest
+and the theorem in the paragraph on `Protocol.answer`; the 2^32 sentence), `verity/difftest/README.md` (two lines
+on the new test) and one comment line of `verity/difftest/pyproject.toml`. They are the places that state what the
+switch changes, which AGENTS.md asks a change to rewrite.
+
+**6. Tests on my VM at this head**, one named file each `[run]`: `tests/test_flock_json.py` 3 passed,
+`tests/test_lean_vocabulary.py` 15 passed, `tests/test_doc_paths.py` 4 passed, `tests/test_repository.py` 17 passed,
+`tests/test_boundaries.py` 24 passed, `tests/test_lean_packages.py` 35 passed, `tests/test_tree.py` 6 passed. Their
+bookkeeping warnings name none of my files.
+- The difftest's suite needs no `untraced` line for the new test `[read]`: `verity-difftest` is in `suites.py`'s
+  `AFTER_LEAN`, so it runs as a whole suite and not through the graph's per-file runner.
+
+**7. TWOLEG's `RecordReadSame` (your 13:29Z, item 2).** The lemma to cite is
+`Verity.CanonicalJson.canonicalJson_toUTF8_iff`, in `security/Proofs/Core/CanonicalJson.lean` at head
+`fe28c96c43228dd453ee0e2b2434d33be68e21f8` of `cursor/proofs-sessionof2-parser-defe` (compiled there, section 1):
+
+```lean
+theorem canonicalJson_toUTF8_iff (s : String) (j : Json) :
+    Core.canonicalJson s.toUTF8 = .ok j ↔ Flock.JsonParse.parse s = .ok j ∧ Flock.canon j = .ok s
+```
+
+How it closes the premise `[derived]`, not compiled, since `inputAt` is not on this branch:
+- Where `inputAt` returns, `Flock.canon e.record = .ok s`, `OneStage.commitmentOf s.toUTF8 = .ok c₂` and
+  `readBack e.record = .ok j₂`, and the interior's record is `j₂` `[read: SampledTwo.lean:336-347 on TWOLEG's branch]`.
+- `commitmentOf` returns `{ record := j, … }` for the `j` that `Core.canonicalJson` returned
+  `[read: OneStage.lean:406-409]`, so `Core.canonicalJson s.toUTF8 = .ok c₂.record`, and the lemma's forward half
+  gives `Flock.JsonParse.parse s = .ok c₂.record`.
+- `readBack_ok` (`Steps.lean:58` there) gives `Flock.JsonParse.parse s = .ok j₂` at the same `s`, since `canon` is
+  a function. So `c₂.record = j₂` by `Except.ok.inj`.
+- It can be proved only on a branch that holds both the two-stage base and this branch's two commits `013786beea`
+  (the token) and the theorem's file. No such branch exists, and I merged nothing.
+
+**8. The pull request's body, as a draft** (not opened; the figures are from my entries of 12:58Z and 13:03Z):
+
+> **The interface's canonical reader reads with the total parser**
+>
+> `Core.canonicalJson` reads every protocol's parameters, and a commitment or evidence that is JSON. It parsed with
+> Lean core's `Lean.Json.parse`, which no proof can read through. It now parses with `Flock.JsonParse.parse`, the
+> parser Flock's verifier already uses: one parser for one format, under the eight protocols at once.
+>
+> **What it accepts is a theorem** (`security/Proofs/Core/CanonicalJson.lean`). `canonicalJson_accepts`: the bytes it
+> accepts are exactly the canonical texts of JSON values whose objects are well-formed trees and whose numbers are
+> integers. `canonicalJson_good`: what it returns is such a value. `canonicalJson_same`: what it returns on such a
+> value's canonical text is alike that value. No hypothesis on the bytes; no listed guarantee is added or changed.
+>
+> **What it accepts did not move, by test.** `core-canonical-json-difftest` serves the function's answer under each
+> parser; `verity/difftest/tests/test_canonical_json_port.py` holds the two alike and to a Python mirror, value and
+> refusal text, on 3,000 sampled texts and 400 swept. That the two parsers agree on every text is tested, not proved.
+>
+> **Stricter in one place.** The total parser reads `String.toList`, whose runtime counts characters in 32 bits. The
+> compiled reader now refuses a canonical text of 2^32 characters or more; before, only one holding a single string
+> that long. Evidence that large is read by `Core.Canonical`, which this does not change.
+>
+> **What it costs.** Same answer under both parsers on every row.
+>
+> | evidence | texts read | what ran | core's parser | total parser | change |
+> |---|---|---|---|---|---|
+> | a served window, 298 statements | 684,489,048 bytes | the one-stage `check` | 80.6 s, peak 10.3 GiB | 115.2 s, peak 13.4 GiB | +34.6 s (+43%), peak ×1.30 |
+> | a stand-in window, 300 members | 1,907,017 bytes | the members' check (v2's `refusal`) | 306.4 s | 307.9 s | +1.6 s (+0.5%), peak ×0.97 |
+> | a play of twenty | 1,723,195 bytes | the one-stage `check`, refused early | 0.392 s | 0.444 s | +0.052 s |
+>
+> - The 43% is of the one-stage `check` alone. Verifying that served window takes 36,022 s in all (its 298 proofs'
+>   verification is 35,941 s), so the switch adds 34.6 s to it: 0.10%.
+> - The added time is 50.6 ns for each byte of the three texts. It is the list `String.toList` builds, one cell a
+>   character, before the parser reads the first; half of the added time is system time.
+> - The peak rose by 3.1 GiB. That is 9.2 bytes for each byte of the parameters' text, but the two peaks fall at
+>   different moments of the check, so it is a difference of peaks and not a rate.
+>
+> **Not done.**
+> - A total parser that reads the string's bytes in place (`parseFast`, with `@[csimp] parse_eq_fast : @parse =
+>   @parseFast`, the base package's own pattern) would take the cost back and keep every proof. Sized at 600 to 1,000
+>   lines in the base package, by guess; not written.
+> - The second reader of the format, `Core.Canonical` (`parse`, `parseUpTo`, `read`), is held to `canonicalJson` by
+>   `#guard`s over 81 texts, a test and not a theorem; its docstring now says so. It is sized after this lands.
+> - The interface's four other calls of `Lean.Json.parse` (the in-place reader's `strValue` and `refusal`, the
+>   example's two refusals) are listed as pending in `tests/test_flock_json.py`, not switched.
+>
+> **Other owners' lines** (the four below, under NEEDS). **Records that move:** `Core.canonicalJson`'s hash and
+> `CoreProtocol.Protocol`'s digest under `reads` in `security/lean-audit.json` and
+> `security/Properties/lean-audit.json`. **Imports:** `CoreProtocol.Protocol` loads `Base.JsonParse`;
+> `tests/test_boundaries.py` passes with `tests/import_order.toml` as it is.
+
+- The stand-in's 306.4 s and 307.9 s are the means of the three runs of each in `e2a7`; the text sizes of the last
+  two rows are the sums of the three texts in my 11:42Z and 12:58Z entries; the peaks are the kB of my 11:42Z row
+  in GiB (10,765,988 and 14,047,448 kB) `[derived]`.
+- AGENTS.md asks a result for monitoring periods of a week, a month and a year, over all compute. The body does not
+  give that: it needs how many windows a period audits, which I have not read.
+
+STOP RULE: nothing in this entry changes what a listed guarantee says or rests on. Nothing I found makes a verifier
+accept what it refuses today; that the two parsers agree on every text is tested and not proved (section 4), as
+soundness took it at 11:08Z.
+
+NEEDS (none edited by me; each is another owner's file):
+1. PoUS, `security/Proofs/Properties/Pous/Component.lean:98`: `cases hp : Lean.Json.parse s with` becomes
+   `cases hp : Flock.JsonParse.parse s with`. Not compiled by me. Or, in place of its private `canonicalJson_ok`
+   (`:88-110`), it imports `Proofs.Core.CanonicalJson` and reads `Verity.CanonicalJson.canonicalJson_ok`, which gives
+   `∃ s, b = s.toUTF8 ∧ Flock.JsonParse.parse s = .ok j ∧ Flock.canon j = .ok s`; its `String.fromUTF8? b = some s`
+   is `fromUTF8?_eq_some_iff.2` of the first part.
+2. The proofs package, for the new module, which no root reaches: `"Proofs.Core.CanonicalJson"` in the `roots` of
+   lib `Proofs` in `security/Proofs/lakefile.toml` and in `roots` of `security/Proofs/lean-audit.json`. Without one
+   of this or PoUS's import the Lean check fails with `orphan.file` on it `[read: check.py:1482]`.
+3. The interface's lock, `verity/protocols/interface/lean-audit.json`, as in my 12:58Z entry: `roots` gains
+   `"CoreProtocol.CanonicalJsonDifftest"`, `exempt` gains `"CoreProtocol.CanonicalJsonDifftestMain"` with its reason,
+   `layers["CoreProtocol.Protocol"].imports` gains `"Base.JsonParse"`.
+4. The records of section 8's last paragraph, on your word only.
+
+To post: nothing new for soundness. For TWOLEG, section 7's lemma name and head.
+
+Not established:
+- The proofs package's whole build with the switch: by reading it breaks at PoUS's line until NEEDS 1; not run.
+- `check.py` on any lock, and the whole suites. The new test ran by `pytest` on a node, not under the suite's read
+  guard.
+- The sibling check beyond the 166 modules built in that tree.
+- The 2^32 behaviour (section 2) is derived, not run.
+- About 1 s of the stand-in's +1.6 s is unexplained by the bytes read (my 13:03Z entry).
+
+Heads, all pushed: `cursor/proofs-sessionof2-parser-defe` `fe28c96c43228dd453ee0e2b2434d33be68e21f8`;
+`cursor/proofs-sessionof-9b17` `9a548b2f975d`; `cursor/proofs-sessionof2-7c3a` `b49c6e40619f`;
+`cursor/proofs-sessionof-5c1e` `521933e1430b` (untouched). No run of mine is in flight.
