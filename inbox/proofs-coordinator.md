@@ -130304,3 +130304,58 @@ Why the ten lines at `ad1c6637c1` stand at `6e1696929a` [run]: those ten files a
 **Not established.** That `RowTable.lean` compiles (`b31c` holds Lean slot build/1 on cpu-11 since 08:28Z; `c127` took 473 s of Lean, so I read it at about 08:45Z). All of the place half of `Sits`.
 
 Branch `cursor/proofs-addrrow-d318` at `c9ba3542f8`, pushed; nothing unpushed. Runs: `r20261113-075317-c127` (failed), `r20261113-082753-b31c` (running). Mailbox read at 08:26Z: nothing after your 07:29Z mails.
+
+## SESSIONOF2, Fri 13 Nov 08:31Z: `OneTable.lean` and `TableName.lean` COMPILE at `ea29e4e1d1` (`r20261113-075819-cfb5`, 7 theorems, three axioms), for ASSEMBLY to merge; `PartCong.lean`'s three `rfl`s compile once smart unfolding is off (`e7bbad0a46`, `r20261113-081451-ab7a`); ADDRROW's one-statement lemma is written with one more hypothesis and is in a try
+
+**In plain words.** The two short proofs for the join are compiled: where the design evaluates and every session statement is in scope and pinned to its template, a member session sets up exactly one table, that table has the template's name, and each of its two reps has the rounds the layout gives it. The join can read them today. The restated setup texts of the partition work first failed their three `rfl`s; one option on each makes them pass in 21 seconds, so your third condition is not met and I go on to the congruence. ADDRROW's lemma at one statement holds, but only for a template inside the held list, so it carries that as a hypothesis.
+
+**1. Task 1 is compiled.**
+- [run] `r20261113-075819-cfb5` (vy-nebius-cpu-1, rc 0, at `ea29e4e1d1`): `OneTable.lean: lean exit 0 in 1067 s`, `axiom probe: none of its 4 theorems uses an axiom beyond propext, Classical.choice and Quot.sound` (`oneTable_of_shape`, `oneTable_of_scope`, `rounds_of_oneTable`, `reps_of_scope`); `TableName.lean: lean exit 0 in 342 s`, `none of its 3 theorems …` (`refTable_eq`, `tables_of_pin`, `session_of_held`). Each theorem's own line reads `[propext, Classical.choice, Quot.sound]`. The sibling check found no clash on either.
+- [run] Memory: the run asked 24 GB; the sibling checks peaked at 4,286 MB and 4,685 MB. Its dependency build was 11,494 jobs.
+- [run] Lean's warnings on my lines, all in `TableName.lean`: `if_pos` is deprecated (line 75), and two alternatives of a `first` never ran (lines 76, 82). The next head removes all three.
+- [derived] How the join reads them, unchanged from 08:00Z: `session_of_held hJ.twoHolds (hJ.roundsHeldAt o m₂ ho hm) (hJ.scopeHeldAt o m₂ ho hm) (hJ.pinHeldAt o m₂ ho hm) ht`, with `tab := refTable A.h`.
+
+**2. ADDRROW's ask (your 08:23Z, by the hook and in the mailbox).** Written at `d45f63a86c`, not compiled, in try `r20261113-082915-c289`:
+
+```lean
+theorem oneTable_of_sessionOk {h : SpotFlock.Held} {s d} (hd : SpotFlock.two h s = some d) {t : ℕ}
+    (ht : t < h.ms.length) {xS : Claims.Msg} (hs : SpotFlock.sessionOk h t xS = true) {ins : FlockDeploy.Ins}
+    {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
+    (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts)) : sts.size = 1 ∧ ins.read.I.count ≤ 1
+```
+
+- [read] **One more hypothesis than asked: `ht : t < h.ms.length`.** `two` holds a template's reference statement to one table only for `t` in `List.range h.ms.length` (`templateOk_of_two` and `ref_one_table` both take `ht`). `Held.xS₀ : ℕ → Msg` is a field, in masked scope at every `t` (`xS₀_ok`), but nothing says it is one table outside the list. So the statement without `ht` does not follow from what the tree has. If ADDRROW's `t` is a unit's template it has the bound; if not, say so and I look again.
+- [derived] The second conjunct: `sessionOk`'s last clause gives the hidden-outputs tag, and `HiddenExec.setupTables_okHP` at `Read.setup` says a count above one sets up that many tables, which one table refutes. No new hypothesis.
+- [run] `oneTable_of_scope` keeps its statement; its proof is now three lines over the new lemma. The same commit drops the three warned lines of `TableName.lean` (`rw [ite_eq_left hz]`, as `Sampled/Record/Session.lean` writes it, and `rfl`).
+
+**3. The restatement: the three `rfl`s (your condition 3).**
+- [run] First try, `r20261113-080122-9f87` (vy-nebius-cpu-3, rc 1) at SESSIONOF's `b611ff18e0`: `lean exit 1 in 30 s`; `PartCong.lean:258:22`, `:265:22`, `:276:22`: "Tactic `rfl` failed: The left-hand side `Stmt.setupH tags circuitFile publicFile coins tables draw none program` is not definitionally equal to the right-hand side `setupHV … (Option.map view none) program`", in the `none` and the `some` case of each of the three; "3 of its 5 theorems failed".
+- [run] A text diff of the verifier's three bodies (`HmRow.lean`) against the restated ones: they differ only by the intended reads through the view. So no copying error.
+- [run] Second try, `r20261113-081451-ab7a` (vy-nebius-cpu-5, rc 0) at `e7bbad0a46`, whose one change is `set_option smartUnfolding false in` before each of the three: `lean exit 0 in 21 s`, `axiom probe: none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound` (`setupH_view`, `setupHidden_view`, `setupTables_view`, `setupTables_congr`, `checks_none`); no sibling clash; asked 24 GB, sibling check peak 5,288 MB. The commit's subject says "not compiled"; this run compiled it.
+- [guess, from Lean's source as I remember it, fitting both runs] Why: a restated text matches on `Option PartView` where the verifier's matches on `Option Json`, so it gets matchers of its own. With smart unfolding on, the elaborator never unfolds a matcher whose discriminant is stuck (`finding0`, `program`, the draw), so it compares two different names and gives up. With it off, both unfold to the same case trees. The kernel accepts the proof either way.
+- [run] The option is the tree's own practice: 33 lines `set_option smartUnfolding false` under `security/Proofs` (`rg -c`), among them `Flock/Claims/ZK/Switched.lean:257` on a bare `rfl` [read].
+- [derived] So condition 3 is not met (21 s for the whole file, and they reduce), and I do not start the walk of the three bodies. Condition 1 holds as before: the three second texts are named only inside `PartCong.lean`.
+- [run] Condition 2, checked again at `e7bbad0a46`: `rg -c SessionMatch` over `security/Proofs/lean-audit.json`, `security/lean-audit.json`, `security/Properties/lean-audit.json`: 0, 0, 0.
+
+**4. What is next on the restatement, and what I found reading for it.** Nothing of the congruence is written.
+- [read] The target is `Same a b → view a = view b`, one lemma per reader. The readers read the object by key lookups (`getObjVal?`, `getObjValAs?`), by its sorted key list at three depths (the object, `query`, `params`), by `canon` (`canon_same` has it), and through `TemplateQuery.templatesOf` (an array of strings under `params`).
+- [read] `templateStrata` is `private` in `HmRow.lean`. I go through the public copy: `HmRow.stratifiedLawWith std … = HmRow.stratifiedLaw …` and the same for `workLaw` (`Flock/With/SetupEq.lean`), whose bodies name the public `templateStrataWith`.
+- [read] The one deep reader is `checkPartitionObject`: three of its matches are on values that are only alike (`params` itself, and `params`' `X` and `W`, one inside a `for`). Each needs a case split on the alike pair; the leaves are equal and the rest fall to the same branch.
+- [guess] Size: `Same`'s key and string reads about 80 lines, `checkPartitionObject` about 80, the other readers about 100. I write it in a new file `Sampled/Record/PartSame.lean` so `PartCong.lean` stays as compiled.
+
+**STOP RULE.** None met. Nothing here changes a listed guarantee's statement or named assumption, or what a verifier accepts.
+
+**NEEDS.**
+1. ASSEMBLY: merge `cursor/proofs-sessionof2-7c3a` at `ea29e4e1d1` (compiled), or at `d45f63a86c` once `c289` passes; I name it in a title then. Still open from 08:00Z: `Proofs.Properties.Verity.SampledTwo.DeviceOrder` is in the join's `lakefile.toml` roots twice (lines 164 and 182).
+2. Coordinator, a yes or no: may I run plain `lean` on my VM on a scratch file outside the tree that imports core Lean only (seconds, no package build)? The congruence is small case splits on JSON values, and a try on a node is about four minutes a turn. Until you say yes I run nothing of Lean here.
+3. ADDRROW: read the `ht` hypothesis above.
+
+**To post.** For ASSEMBLY: "`OneTable.lean` and `TableName.lean` compile at `ea29e4e1d1` of `cursor/proofs-sessionof2-7c3a` (`r20261113-075819-cfb5`); both are roots in the lakefile and the lock on that branch." For ADDRROW: the statement in section 2, with `ht`.
+
+**Not established.**
+- That `d45f63a86c` compiles (`c289`).
+- Why Lean took 1067 s and 342 s on two files of under 100 lines. Either the import closure loading cold on that node's slot trees or a slow tactic of mine [guess]; `c289` is on another node and its two times will tell them apart.
+- The mechanism behind the `rfl` failure beyond what the two runs show.
+- The congruence, and so `PartSame`: not written.
+
+**Heads, all pushed.** `cursor/proofs-sessionof2-7c3a` `d45f63a86c22e58989d6c0e88ab7309fe0a58c76`; `cursor/proofs-sessionof-9b17` `e7bbad0a4689ac43a7e91efb82e78757bdebb454`; `cursor/proofs-sessionof-5c1e` `521933e1430b7b404142adfafbba82b0aed0fba5` (untouched by me). Runs: `cfb5` done rc 0; `9f87` done rc 1; `ab7a` done rc 0; `c289` running on vy-nebius-cpu-14. Mailbox read at 08:29Z: one message, yours of 08:23Z.
