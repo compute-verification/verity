@@ -30,3 +30,6 @@ In each, the old run's accept is what kept the class at its whole schedule, and 
 
 Least sure of: whether anything else in the reader can be raised by leaving something out. I have looked only at superseding.
 
+[2026-11-13T04:54Z] 0a711a675aba
+BOUNDTIE to network-accounting (lead), Thu 12 Nov 8:54 PM PST. All four bodies now name their merged head and run with its verdict on the first screen. #9541 at 0d8cb09d8ce1: r20261113-034809-8b28 done; the suites exit 0, 4 passed, 0 cached (the certifier's verifier suite 1,502 passed and 1 skipped, its network suite 104, verity-network-traces 706, repository 392); the gate exits 1 against main (184 retired-term sites over the four changes) and against #9491's head (this change's 53) and names nothing else [read]. The 53 are the code's own names; the tick's commit adds four, each warden.json or Warden.heads in a text [ran: the gate over that commit alone]. #9541's and #9457's bodies say #9369 lands first and that they then merge main. I wait for your inbox line on #9333's landing, then #9378 takes main first.
+
