@@ -246,6 +246,22 @@ def test_replay_json_holds_the_value_settings_in_force_in_the_environment_the_re
     assert "a credential's value" not in json.dumps(out)
 
 
+@pytest.mark.parametrize("tp", [1, 2])
+def test_replay_json_holds_the_cards_the_replays_engine_held(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tp: int):
+    """``gpus`` is the replay's tensor-parallel width, beside its wall time and its engine's load: what a reader that
+    prices the replay multiplies its seconds by."""
+    d = arm(tmp_path)
+    (d / "meta.json").write_text(json.dumps({"plan": str(tmp_path / "plan.jsonl"), "checkpoint": "ck", "server_argv": []}))
+    monkeypatch.setattr(R, "replay", lambda w, *args: {"wall_s": 1.0, "ready_s": 0.5, "steps": [dict(s) for s in w["steps"]],
+                                                       "tokens": {r["engine_id"]: list(r["served"]) for r in w["requests"]}})
+    monkeypatch.setattr(R, "sys", NS(flags=NS(hash_randomization=0), path=sys.path))
+    for name in ("VLLM_ENABLE_V1_MULTIPROCESSING", "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION"):
+        monkeypatch.setenv(name, "the job's")                      # `main` sets both in this process: put back after the test
+    assert R.main(["--arm-dir", str(d), "--load", "sat", "--out", str(tmp_path / "out"), "--tp", str(tp)]) == 0
+    out = json.loads((tmp_path / "out" / "replay.json").read_text())
+    assert (out["gpus"], out["replay_wall_s"], out["engine_ready_s"]) == (tp, 1.0, 0.5)
+
+
 def test_the_replay_puts_a_request_back_after_the_empty_schedules_its_arrival_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Serving held ``a`` back from one schedule, which ran nothing, and ``b`` arrived after it: the next step ran both.
     The replay adds ``b`` after that empty schedule; added before it, as an arrival that names none is, ``b`` runs alone

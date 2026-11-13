@@ -26,6 +26,13 @@
   and closes, or its relay to one. The server starts no challenger and runs no audit: holding the sessions to that
   session's release log is the caller's. With ``verify_ahead=0`` a verifier serves one session at a time, so a caller
   that submits a session only once the one before has its records puts one session's rounds in that log at a time.
+* **Busy seconds.** The server reads its clock (``clock``, the monotonic clock unless given) when a session is submitted
+  and when both sides have recorded it, or it failed. A prover is busy while a session of its own is unfinished, and
+  `ProofServer.busy` is each prover's busy seconds, its device beside them: with one prover a device, the seconds the
+  audit held that card. A session's ``busy_seconds`` are its share of them, from when its prover's last session was
+  recorded (or its own submission, if later) to its own records. Sessions a prover finishes in the order they were
+  submitted share its busy seconds exactly: a session's ``seconds`` hold its wait behind the ones before it, so they
+  sum to more than the prover ran, and its ``busy_seconds`` do not.
 
 `submit` returns a `Session` at once: `Session.result` waits for both sides' records, `Session.verdict` for the verdict of
 record. A process that exits ends its unfinished sessions as failures (`ProofServerError`) carrying its log's tail;
@@ -75,19 +82,23 @@ class ProofServerError(RuntimeError):
 class Session:
     """One submitted session: ``label`` (unique on its server), its type (``pin``), ``device`` (None: a CPU prover) and
     ``prover`` (its prover's name); once done, ``live`` (the prover's ``LIVE`` record), ``served`` (the verifier's
-    ``SESSION`` line), ``dir`` (its record's directory) and ``seconds`` from submission to both records; on a server with
-    challengers, once it has closed, ``challenger`` (its verifier's challenger's exit and audit, `challengers.end`'s)."""
+    ``SESSION`` line), ``dir`` (its record's directory), ``seconds`` from submission to both records and
+    ``busy_seconds``, its share of its prover's busy seconds (module docstring); on a server with challengers, once it
+    has closed, ``challenger`` (its verifier's challenger's exit and audit, `challengers.end`'s)."""
 
     def __init__(self, label: str, pin: str, device: int | None, verdict: Callable[[Session], Any] | None,
-                 prover: str = ""):
+                 prover: str = "", now: float | None = None, failed: Callable[[Session], None] | None = None):
         self.label, self.pin, self.device, self.prover = label, pin, device, prover
         self.live: dict | None = None
         self.served: dict | None = None
         self.dir: Path | None = None
         self.seconds: float | None = None
+        self.busy_seconds: float | None = None
         self.challenger: dict | None = None
         self._home: Path | None = None
-        self._t0 = time.monotonic()
+        self._t0 = time.monotonic() if now is None else now
+        self._on: _Process | None = None
+        self._failed = failed
         self._fn = verdict
         self._done, self._judged = threading.Event(), threading.Event()
         self._error: ProofServerError | None = None
@@ -121,6 +132,8 @@ class Session:
     def _fail(self, why: str) -> None:
         if not self._done.is_set():
             self._error = ProofServerError(f"session {self.label}: {why}")
+            if self._failed is not None:
+                self._failed(self)
             self._done.set()
             self._judged.set()
 
@@ -234,6 +247,9 @@ class _Process:
         self.sessions: set[str] = set()
         self.challenger: tuple[Path, subprocess.Popen] | None = None
         self.home: Path | None = None
+        #: a prover's busy seconds (`ProofServer.busy`): its unfinished sessions and when the first of them was
+        #: submitted, the seconds of the stretches that ended, the sessions that ended and when the last was recorded
+        self.unfinished, self.since, self.busy, self.ended, self.recorded_at = 0, 0.0, 0.0, 0, None
         self._out = open(log, "w", buffering=1)
         self.p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._out, text=True,
                                   bufsize=1, env=env, start_new_session=True)
@@ -287,7 +303,7 @@ class ProofServer:
     both carry, so every prover and verifier of the server does; off, fast100's.
     ``challenger``: each verifier on a challenger of its own (`--zk`, or ``FC_COINS=tree`` in ``env``).
     ``tree_from``: every verifier's flags for the one challenger session the caller holds (module docstring), never with
-    ``challenger``.
+    ``challenger``. ``clock``: the seconds the server times its sessions by (the monotonic clock).
 
     ``FC_VERIFIER_CPUS`` in the server's environment (a CPU list within its affinity, as taskset takes it) runs every
     verifier on those CPUs and every prover on the server's other CPUs (`taskset -c`), so a verifier's check of each
@@ -297,7 +313,8 @@ class ProofServer:
     def __init__(self, binary: str | os.PathLike, out: str | os.PathLike, *, devices: Sequence[int] | None = None,
                  provers: int = 1, verify_ahead: int = 2, verdicts: int = 4, route: Mapping[str, int] | None = None,
                  env: Mapping[str, str | None] | None = None, zk: bool = True, challenger: bool = False,
-                 wide_leaf: bool = False, tree_from: Sequence[str] | None = None):
+                 wide_leaf: bool = False, tree_from: Sequence[str] | None = None,
+                 clock: Callable[[], float] = time.monotonic):
         if provers < 1:
             raise ValueError(f"provers must be at least 1, not {provers}")
         if challenger and tree_from:
@@ -308,6 +325,7 @@ class ProofServer:
         self.out.mkdir(parents=True, exist_ok=True)
         self.devices: list[int | None] = list(devices) if devices else [None]
         self.provers, self.verify_ahead, self.zk, self.challenger = provers, verify_ahead, zk, challenger
+        self._clock = clock
         #: the protocol and statement version every process of the server runs: one list, so the two sides can't differ
         self._version = [*(["--zk"] if zk else []), *(["--wide-leaf"] if wide_leaf else [])]
         self.challengers: dict[str, dict] = {}
@@ -342,6 +360,16 @@ class ProofServer:
         return dict(self._routes)
 
     @property
+    def busy(self) -> dict[str, dict[str, Any]]:
+        """Each prover started so far, by name: its device (None: the CPU), the seconds it had a session of its own
+        unfinished (a stretch still open counted up to now) and the sessions of its own that ended."""
+        with self._lock:
+            now = self._clock()
+            return {p.name: {"device": p.key[0], "sessions": p.ended,
+                             "seconds": round(p.busy + (now - p.since if p.unfinished else 0.0), 3)}
+                    for p in self._started if p.kind == "prover"}
+
+    @property
     def verifier_cpus(self) -> str | None:
         """The verifiers' CPUs as ``FC_VERIFIER_CPUS`` placed them (a CPU list), or none when unplaced."""
         cpus = self._cpus.get("verifier")
@@ -368,8 +396,11 @@ class ProofServer:
             if label in self._sessions:
                 raise ValueError(f"session {label!r} was already submitted")
             p = self._prover(key)
-            s = Session(label, st.pin, key[0], verdict, p.name)
-            s._home = v.home
+            s = Session(label, st.pin, key[0], verdict, p.name, self._clock(), self._session_failed)
+            s._home, s._on = v.home, p
+            if p.unfinished == 0:
+                p.since = s._t0
+            p.unfinished += 1
             self._sessions[label] = s
             v.sessions.add(label)
             p.sessions.add(label)
@@ -509,12 +540,31 @@ class ProofServer:
                 s.dir = Path(rec.get("out") or s._home) / rec["session"]
             if s.live is None or s.served is None:
                 return
-            s.seconds = round(time.monotonic() - s._t0, 3)
+            now = self._clock()
+            s.seconds = round(now - s._t0, 3)
+            self._ended(s, now, recorded=True)
             s._done.set()
             if s._fn is None:
                 s._judged.set()
             else:
                 self._pool.submit(self._judge, s)
+
+    def _ended(self, s: Session, now: float, recorded: bool) -> None:
+        """Session ``s`` ended at ``now`` (the server's lock held): its prover's busy stretch ends with its last
+        unfinished session, and a recorded session takes the seconds since its prover's last recorded one."""
+        p, s._on = s._on, None
+        if p is None:
+            return
+        if recorded:
+            s.busy_seconds = round(now - max(s._t0, s._t0 if p.recorded_at is None else p.recorded_at), 3)
+            p.recorded_at = now
+        p.unfinished, p.ended = p.unfinished - 1, p.ended + 1
+        if p.unfinished == 0:
+            p.busy += now - p.since
+
+    def _session_failed(self, s: Session) -> None:
+        with self._lock:
+            self._ended(s, self._clock(), recorded=False)
 
     @staticmethod
     def _judge(s: Session) -> None:

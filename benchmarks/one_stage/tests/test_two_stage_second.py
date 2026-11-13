@@ -59,7 +59,7 @@ def run(served) -> dict:
     got = TS.first(served["pub"], check, TS.rule_of(_layout(), f"rate:{Q}/{N}", K, 60.0), FC.Challenger("first"))
     stage1 = json.loads(json.dumps(got.stage1()))
     again = TS.resume(stage1, check, FC.Challenger("second"))
-    r = TS.replayed(again, served["class"], served["capture"], tmp / "interior")
+    r = TS.replayed(again, served["class"], served["capture"], tmp / "interior", clock=iter((100.0, 102.5)).__next__)
     return {**served, "stage1": stage1, "again": again, "r": r}
 
 
@@ -128,6 +128,13 @@ def test_the_interior_is_registered_after_round_1_under_no_name_round_1_has_and_
     assert not earlier & ({x["port"] for x in r.record["roots"]} | {"logits"})
     assert r.launches == {f"r{u}": f"launch:r{u}" for u in sample}
     assert r.draw.replay_sample == again.sample and [u // O for u in r.draw.units] == list(range(Q))
+
+
+def test_the_interiors_commitment_is_timed_by_the_callers_clock_read_twice(run):
+    """`replayed` reads the clock it is handed once before the capture and once after the window's files are written,
+    and nowhere else: the registration and the sample, which wait on the challenger, are not in ``commit_s``. (The
+    fixture's clock has two readings: a third would have stopped it.)"""
+    assert run["r"].commit_s == 2.5
 
 
 def test_the_replay_side_refuses_a_capture_that_is_not_the_sampled_spans_or_a_return_round_1_did_not_commit(run):
@@ -273,16 +280,25 @@ def test_the_small_rehearsal_expects_the_inputs_code_of_a_linked_run_and_not_of_
     ``second-inputs`` alone, its return read at round 1's rows, and not with a read's refusal beside it, with no code or
     with the form's; a linked run whose record of round 1 commits them is accepted by round 2 with no code and refused
     by the form alone, and not by ``second-inputs``; either way the one-stage audit's own record is accepted with own
-    reads; an unlinked run links no parameter, registers no value, and is refused by its wires alone."""
+    reads; an unlinked run links no parameter, registers no value, and is refused by its wires alone. Each of those
+    summaries says what the stage cost (`two_stage_small.costed`); the same run without its sessions' timing holds
+    everything but that."""
     def summary(codes: list[str], statements: list[str] | None = None) -> dict:
         return {"audit": {"checks_before_draw": {"registered": True}, "negatives": {"wrong-root": True},
-                          "audit": {"verdicts": {"m0": True}}},
+                          "audit": {"verdicts": {"m0": True}},
+                          "timing": {"m0": {"session_s": 9.0, "busy_s": 4.0, "gpus": 0, "device": None,
+                                            "prove_seconds_source": "busy"}},
+                          "staging": {"before_draw_s": 1.5, "drawn_s": 0.5, "gpus": 0}},
+                "interior_commit": {"seconds": 0.25, "gpus": 0},
                 "pins": {TID: True}, "round_two": {"ok": not codes, "codes": codes},
                 "accepted": True, "record": {"own_reads": True, "failed": []},
                 "outcome": {"accepted": False, "interior": ["statements"], "replay_sample": [],
                             "statements": codes if statements is None else statements}}
-    passed = {"before_draw": True, "pins": True, "lean_verdicts": True, "negatives": True, "record": True}
+    passed = {"before_draw": True, "pins": True, "lean_verdicts": True, "negatives": True, "record": True, "cost": True}
     assert all(SM.expect(summary([SM.INPUTS]), SM.INPUTS).values())
+    untimed = summary([SM.INPUTS])
+    del untimed["audit"]["timing"]
+    assert SM.expect(untimed, SM.INPUTS) == {**passed, "round_two": True, "outcome": True, "cost": False}
     for codes in ([], ["second-read"], [SM.INPUTS, "second-read"], [TS.FORM_REFUSED]):
         assert SM.expect(summary(codes), SM.INPUTS) == {**passed, "round_two": False, "outcome": False}
     assert all(SM.expect(summary([], [SM.FORM])).values())
@@ -309,6 +325,7 @@ def test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses
     with pytest.raises(ValueError, match="makes no wires round 2 derives"):
         TS.replayed(again, c, got["capture"], tmp_path / "never")
     r = TS.replayed(again, c, got["capture"], tmp_path / "interior", unlinked=True)
+    assert r.commit_s is None  # no clock handed, none read
     d, sample, drawn = r.design, [int(u) for u in again.sample.units], list(r.draw.units)
     chunks = O * v // 64
     assert d.cells == (chunks, O) and "registered" not in r.record and r.tie == {}
