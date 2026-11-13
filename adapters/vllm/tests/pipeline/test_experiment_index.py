@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.config import workload_file
 from verity_vllm.pipeline import experiment as EXP
 from verity_vllm.pipeline import research_tools
 
@@ -23,7 +24,7 @@ WL = REPO / "workloads" / "workload_cov_b0_b8-mixed_c256.json"
 
 
 def _spec(**over):
-    wl = json.loads(WL.read_text())
+    wl = json.loads(workload_file(WL).read_text())
     kw = dict(config_id="B0-cov_b0_b8-mixed_c256", case="B0", profile="vllm_d9105ea80_sm89_eager", workload_path=str(WL), workload_doc=wl,
               checkpoint={"repo": "HuggingFaceTB/SmolLM2-135M", "revision": "93efa2f0", "role": "B0"}, checkpoint_dir="/x/snap",
               hf_config={"hidden_size": 576, "torch_dtype": "bfloat16"}, engine_args={"max_num_batched_tokens": 2048}, max_num_seqs=8,
@@ -46,6 +47,18 @@ def test_spec_is_pre_execution_and_concrete():
     blob = json.dumps(s)
     for bad in ("generated_token_ids", "finish_step", "engine_steps_capture", "n_generated\""):
         assert bad not in blob
+
+
+def test_a_specs_initial_state_is_a_fresh_engine():
+    assert _spec()["initial_state"] == {
+        "kind": "fresh", "note": "fresh engine, empty KV cache; any prefix reuse happens inside this run's own requests"}
+
+
+def test_a_spec_states_the_initial_state_its_caller_hands_it_and_the_fresh_engines_for_none_or_an_empty_one():
+    warm = {"kind": "warm", "note": "a KV cache another run left"}
+    fresh, stated = _spec(), _spec(initial_state=warm)
+    assert stated["initial_state"] == warm and stated["digest"] != fresh["digest"]
+    assert _spec(initial_state=None) == _spec(initial_state={}) == fresh
 
 
 def test_spec_dtype_is_the_served_dtype():
@@ -200,7 +213,7 @@ def test_provenance_code_is_the_shipped_commit_on_a_pod_tree_and_git_head_in_a_g
 def test_a_spec_takes_a_workload_that_declares_no_requests_and_no_sampling():
     """A workload whose `requests` is absent, null or empty gives a spec of no request, and one whose `sampling` is absent, null or
     empty gives the driver's sampling alone, without its unset fields."""
-    wl = json.loads(WL.read_text())
+    wl = json.loads(workload_file(WL).read_text())
     left_out: list[dict[str, Any]] = [{k: v for k, v in wl.items() if k != "requests"}, {**wl, "requests": None}, {**wl, "requests": []}]
     for doc in left_out:
         w = _spec(workload_doc=doc)["workload"]

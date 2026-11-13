@@ -455,15 +455,15 @@ class TargetProfile:
                     "program_derivation": "the eager Program's Definitions, each captured launch-dependent selection at the step's padded tokens",
                     "claim": "the eager kernels replayed from breakable CUDA graphs (no torch.compile): eager's Definitions at the capture size"}
         return {"enforce_eager": False, "compilation": {**self.COMPILATIONS[self.compilation], "profile": self.compilation},
-                "program_derivation": ("P_compiled: one registered relation per Inductor-generated kernel of the production artifact (compiled_relations.py; "
+                "program_derivation": ("P_compiled: one registered relation per Inductor-generated kernel of the production artifact ("
                                        "GEMM/attention/lm_head existing Definitions; fused norm/act/RoPE regions new Definitions), applicability pinned by the "
-                                       "compilation facts + kernel_set digest (DECISIONS-2 §7 S1)" if not self.COMPILATIONS[self.compilation]["emulate_precision_casts"]
+                                       "compilation facts + kernel_set digest" if not self.COMPILATIONS[self.compilation]["emulate_precision_casts"]
                                        else "eager module-forward trace (the emulation performs the eager roundings inside the fused kernels)"),
                 "claim": ("P_compiled kernel-level conformance: every non-weight buffer of every kernel launch is committed under graph replay "
-                          "(wrapper-level hooks, kernels untouched) and the kernel relations are replayed bit-for-bit from the committed bytes "
-                          "(S2: 4016/4016 launches on the B1 row); the eager Program is NOT a model of this execution (P_compiled != P_eager: "
+                          "(wrapper-level hooks, kernels untouched) and the kernel relations are replayed bit-for-bit from the committed bytes; "
+                          "the eager Program is NOT a model of this execution (P_compiled != P_eager: "
                           "roundings elided, residual recomputed unrounded, other reduction orders; tokens diverge from eager). Attention = eager "
-                          "FA2 splitting op; lm_head eager (DECISIONS-2 §7, ruling M-0380)")}
+                          "FA2 splitting op; lm_head eager")}
 
     # -- serialisation ---------------------------------------------------------------------------------------------------
     def to_json(self) -> dict:

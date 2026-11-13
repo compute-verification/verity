@@ -505,7 +505,7 @@ def growth(before: dict[str, list], after: dict[str, list], paths: dict[str, str
         was_all, now = [e for e in before[s] if not is_mark(e)], [e for e in after.get(s, []) if not is_mark(e)]
         kinds = counted_kinds(s, was_all + now)
 
-        def in_pool(e: object) -> bool:
+        def in_pool(e: object, kinds: set = kinds) -> bool:
             return isinstance(e, dict) and kind(e) in kinds
 
         sites, now_sites = [e for e in was_all if not in_pool(e)], [e for e in now if not in_pool(e)]
@@ -590,7 +590,7 @@ def has_ruff(python: tuple[str, ...], pin: str, exact: bool) -> bool:
     return r.returncode == 0 and (not exact or r.stdout.split() == ["ruff", pin.removeprefix("ruff==").strip()])
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def ruff_python(pin: str) -> tuple[str, ...]:
     """The isolated Python whose ``-m ruff`` is ``pin``, with no network when one has it: this one, else one ``uv run
     --offline --with`` makes from uv's cache, else one ``uv run --with`` fetches the pin for."""
@@ -806,7 +806,7 @@ def counted_paths(slug: str) -> tuple[str, str]:
     return f"{REPO_LINT}/test_{slug}.py", f"{REPO_LINT}/allowlists/{slug}.json"
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def counted_lint_at(rev: str, slug: str, sites: str, noun: str) -> types.ModuleType | None:
     """The repository's counted lint ``slug`` as ``rev`` has it, loaded (it imports only the standard library) without
     running a test, or None when ``rev`` has none."""
@@ -964,7 +964,7 @@ def public_commands(rev: str) -> dict[str, str]:
     return {k: v for k, v in table.items() if isinstance(v, str)} if isinstance(table, dict) else {}
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def callers_lint_at(rev: str) -> types.ModuleType:
     """P16's lint as ``rev`` has it, loaded with the lint directory's other modules (they import only the standard library)
     as a package of their own, without running a test.  They sit at their paths in the tree, since the shared code finds the
@@ -1091,9 +1091,9 @@ def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[st
         try:
             doc = json.loads(r.stdout)
             ran, failures = ran + doc["ran"], failures + doc["failures"]
-        except (ValueError, KeyError, TypeError):
+        except (ValueError, KeyError, TypeError) as e:
             raise GitError(f"the base's lints at {c.lo[:12]} didn't run on {c.hi[:12]}: "
-                           f"{(r.stderr or r.stdout).strip()[-300:]}")
+                           f"{(r.stderr or r.stdout).strip()[-300:]}") from e
     return ran, failures
 
 
@@ -1359,13 +1359,13 @@ def judge(c: Change, base: str) -> None:
             + ([f"public, each run by its caller: {', '.join(public)}"] if public else [])
             + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"]
                if c.lints and not (inherited or based or admitted) else [])
-            + ([f"the base's lint code ({', '.join(c.lints)}) finds {len(admitted)} violation(s) only at the edges of the "
-                f"module(s) the change adds, which the change's tables admit ({places})"] if admitted else [])
-            + ([f"the base's lint code ({', '.join(c.lints)}) finds {len(inherited)} violation(s) its own tree already holds, "
-                f"which aren't this change's: {added_by(c.lo, inherited)}"] if inherited else [])
-            + ([f"the base's lint code ({', '.join(c.lints)}) finds {len(based)} violation(s) in the base's copy of "
-                f"{', '.join(sorted({(SITE.match(v) or RUFF_PAIR.match(v))[1] for v in based}))}, which it runs in place of the change's, and the "
-                f"change's own copy is within its list"] if based else []))
+            + ([(f"the base's lint code ({', '.join(c.lints)}) finds {len(admitted)} violation(s) only at the edges of the "
+                 f"module(s) the change adds, which the change's tables admit ({places})")] if admitted else [])
+            + ([(f"the base's lint code ({', '.join(c.lints)}) finds {len(inherited)} violation(s) its own tree already holds, "
+                 f"which aren't this change's: {added_by(c.lo, inherited)}")] if inherited else [])
+            + ([(f"the base's lint code ({', '.join(c.lints)}) finds {len(based)} violation(s) in the base's copy of "
+                 f"{', '.join(sorted({(SITE.match(v) or RUFF_PAIR.match(v))[1] for v in based}))}, which it runs in place of the change's, and the "
+                 f"change's own copy is within its list")] if based else []))
         return
     if is_revert(c):
         c.verdict, c.why = "exempt", "a revert"
@@ -1576,8 +1576,8 @@ def gate(base: str, top: str) -> dict:
 
 
 def render(doc: dict) -> list[str]:
-    lines = [f"ratchet gate {doc['base'][:12]}..{doc['top'][:12]}: {len(doc['changes'])} change(s), "
-             f"{len(doc['failures'])} failed"]
+    lines = [(f"ratchet gate {doc['base'][:12]}..{doc['top'][:12]}: {len(doc['changes'])} change(s), "
+              f"{len(doc['failures'])} failed")]
     for c in doc["changes"]:
         lines.append(f"  {c['name']} ({c['commit'][:12]}): {c['verdict']}: {c['why']}")
         lines += [f"      {f}" for f in c["fix"]]
