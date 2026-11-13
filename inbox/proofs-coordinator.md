@@ -159363,3 +159363,79 @@ My 19:11Z, 19:15Z and 20:06Z entries have the full text.
 - That the decoder's proofs generalize from multiplicity k+1 to r, and the cost unit, one SHA-512 evaluation per field operation.
 - That `Rows.ofNet`'s `Built` bounds a column below 2^32, and that each `*_conflict_collision` lemma has a version with the collision as data.
 - The exact records that move, which is `check.py --update`'s to say; mine are by text.
+
+## ADDRROW2, Fri 13 Nov 20:09Z: checkpoint: your 19:40Z order is read whole and I work to it; the sampled half is WRITTEN and pushed (15 files, the three choosers gone, the premise at the proposed text) and its first file compiles, 15 tries still out; pull request 1's suites passed and its records run still holds its Lean slot; 0 of the 24 C-Flock finders done, Monday holds
+
+Clock: `date -u` read 20:09Z Fri 13 Nov. My VM restarted at about 19:38Z; I am the only session of this agent, and
+the state is rebuilt from my store. Nothing was lost but `/tmp`.
+
+**1. Pull request 1** (`cursor/proofs-addrrow2-pairs-681e` at `071cba3fba4b97e934632b79d554c170c41fb578`). Not open yet.
+- [run] Suites `r20261113-185337-0238` (vy-nebius-cpu-14): 6 of 6 changed suites passed at that head.
+- [run] Records run `r20261113-185209-f829` (vy-nebius-cpu-8, `lean_changed.py --records security`): still running
+  at 20:05Z; it took its Lean slot at 19:05Z after 13 minutes in line. [guess] back by about 21:05Z.
+- [run] The branch still merges with `origin/main` `f479876a8758` with no conflict (`git merge-tree`), and `main`'s
+  `unread-caps.json` still has `Proofs/Flock` at 273 modules and 2,309 declarations and no `Definitions/Flock` row,
+  so the raise (274 and 2,312; a new row of 1 and 3) is still the right one.
+- I open it against PRF-490 with `Lane proofs` when the records run is back with no record moved, and write the
+  ready line here. I do not mark it.
+
+**2. The sampled half** (`cursor/proofs-addrrow2-sampled-files-681e` at `e44c1faf080bb31d7201d00be6b0f5fd147dbb8e`, cut
+from `main` `f479876a8758`, pushed). One commit, 15 files, all under `security/Proofs/Properties/Verity/`, 221 lines
+added and 241 removed. [read] No lock file is edited by hand.
+- **What it does.** A new `structure Pinned` holds the pinned tables' registered files as the deployment's data: a
+  function `file : String → Option ByteArray` and the fact `hash` that each file hashes to the digest it is named by.
+  `Instance` gains a field `pinned : Pinned`. The three choosers are deleted: `pinnedFile` (with `pinnedFile_hash`),
+  `fileWith` (with `fileWith_mem`) and `registeredOf`, and with them `registeredFiles_of`. No `Classical.choose` of
+  theirs is left in `security/` [run: `rg`].
+- **How it is threaded.** `Pinned` is an explicit argument `T`, not a field of `Vocab`: of `pinnedTables`,
+  `TablesSent`, `DigestsAt`, `readOf`, `digestsAt_of`, `readOf_eq`, `tableCollision`, `readFinder`, `withBinding`,
+  `Constructions.assembled`, the `logged_le` lemmas, `couplingTarget_assembled` and `_at`, and `couplingTargetAt_counts`.
+  **`Deployed` gains the parameter too** (`Deployed V T K S`): its field `digests` is read by no proof, and I added the
+  parameter rather than delete a field that is soundness's.
+- **The premise.** `Instance.RegisteredFiles` now reads: for every `θ F A`, `I.session θ = some A`, parameters at
+  `θ` and `I.base.Registered θ F` give `I.base.Registered θ (I.base.registered θ)`. That is the proposed text. The
+  old text implies it. `covers` uses it only in the case `I.session θ = some A`; at `none` it concludes by `le_top`,
+  since δ there is `⊤` (`deltaOf_none`).
+- **Ruling 1's check** [read, `Sampled/Instance.lean`]: `session : ByteArray → Option Live` is a FIELD of
+  `structure Instance`. It is a function of `θ` alone and is fixed with the instance, which is the outermost binder of
+  `remote_soundness_deployedReady`, before any strategy is quantified. No strategy, finder or chooser picks it. So
+  soundness's condition holds in the definition as it stands, and the second pull request's body will say so.
+- **A correction to my 19:02Z entry.** I said the honest instance would register `fun _ => #[]`. It does not. With
+  `registeredOf` gone I dropped the override, so the honest base keeps `Idle.vocab`'s own `registered θ := #[θ]`
+  (`Properties/Verity/Idle.lean:103`). The honest lemma `remote_soundness_deployedReady_honest` keeps its statement
+  text; its premise is discharged by a new `Honest.registeredFiles_none`, which holds because the honest instance has no
+  session. The honest instance pins no table (`Pinned.empty`).
+- **Out of scope, seen** [read]: `Instance.extractOf` takes its `A` by `h.choose` from `∃ A, I.sessions θ F = some A`.
+  That value is unique (an `Option`'s content), not a finder's witness. I leave it and name it in the body.
+- [run] Tries `r20261113-200449-7c75` on vy-nebius-cpu-11, the 16 files of the change's closure one after another:
+  `Sampled.lean` is back, `lean exit 0`, its 25 theorems on the three axioms, and with `--siblings` no built module
+  declares a name it does (so `Pinned` clashes with nothing built). The other 15 are still out. [guess] back by 21:15Z.
+- Still to do for it: mend what the tries show, then a records run to show that only `reads`, unfolded hashes and
+  the premise's digest move, and the changed suites.
+
+**3. The S tries** (the pickers as a search, scratch branch, never to merge).
+- [run] `r20261113-194523-6705` (cpu-8) failed on one trial lemma of mine (`pickOf_isColl`, a unifier slip). Mended.
+- [run] `r20261113-200407-3f6f` (vy-nebius-cpu-12): `PickS.lean` `lean exit 0`, 9 theorems on the three axioms;
+  `CongrS.lean` `lean exit 0`, 2 theorems on the three axioms; `SessionS.lean` `lean exit 1` on a NAME, not on the
+  mathematics: I had called a type variable `X`, which is a token where the file's imports are loaded.
+- Renamed at `98c7645fea81c9d4212b36d56970dca06405ebad`; its try is `r20261113-200728-983a` on vy-nebius-cpu-12.
+  [guess] back by 20:40Z. So "a search finds the witness" is [run] for the picker and the congruence, and still
+  [derived] for the session finder until that run is back.
+
+**4. The C-Flock half.** Finders with `choose` removed: **0 of 24** (25 less `clashPickHLO`, which is deleted).
+- The three whose witness is NOT a position of the runs, named again as your order asks: `leafFinder`,
+  `clashPickCL`, `clashPickHL` (my 19:31Z entry has each one's reason and the two ways out). The pull request does not
+  open with one of them on choice.
+- My 19:31Z question is unanswered: rows 7, 9, 14, 16 (`advRSFinderL`, `advRFinderL`, `advRSFinder`, `advRFinder`)
+  hold choosers of `plurSZ`'s kind (`plurSL`, `plurCL`, `plurS`, `plurC`). Until you say, I treat them as I treat
+  the three of `StrictZ.lean`: after everything else, before those three.
+- **One thing for Saturday's ruling** [read, SESSIONCOINS's 20:07Z entry]: its route (a) changes `Finder`, `forkFinder`
+  and `Finder.CR` in `StrictCR.lean:80–150`. My half edits the same file at `:53–78` (`collOf`, `onePick`,
+  `conflictPick`) and at `:130–240` (`expect₂_conflict_le`, `forkE_conflict_le`, `tree_le_strict`, `TreeRewind`).
+  I do not touch `Finder`, `Finder.CR` or the cost at `:97`. The two changes share the file and the three
+  `_le_strict` lemmas of `StrictZ.lean`; whichever lands second merges by hand there.
+- Monday holds as I see it now [guess]: the order is the pickers in `StrictCR.lean`, then `Leaf.pair`, then the
+  finders file by file, the dead chain's deletion and `C3.lean:130`, then `topRoot_collision`.
+
+**5. For you.** The timer subscription `sub_fd639f1c-5719-434e-bc6c-3216ac30e2cb` (`addrrow2-trial-runs`) may still
+fire at me; I set no new timer, as you ruled.
