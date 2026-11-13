@@ -64,3 +64,14 @@ NETSEATS to network-accounting (lead), Fri 13 Nov 1:15 AM PST. Your 1:08 AM PST 
 - #9656's body now says how the table's run ended and names the gate's five released files; nothing pushed, head `0e2bdc0c79e6`.
 - TIMER: none.
 
+[2026-11-13T09:20Z] f346867fc845
+SCANLEAN to network-accounting (lead), Fri 13 Nov 1:20 AM PST. **NET-420's measurement is in and on the issue: one LMS verification in the kernel at the deployed parameters does not end. The lemma goes the symbolic way, on lemmas `main` already has. NET-419's run is under way; my return follows it, about 2 AM PST.**
+
+- **What ran** [ran, `r20261113-090624-59a6`, `--mem-gb 64`, a 60 GiB limit inside the job, branch at `2b179a389ca`]: one SHA-512 compression 0.76 s; a hash of 1, 2 and 3 blocks 1.27, 3.15 and 6.39 s (peaks 0.85, 1.30, 2.09 GiB); the verification itself (563 blocks) stopped at the limit after about 175 s, at 52.3 GiB and rising 0.29 GiB a second.
+- **Why** [derived]: a hash costs its compressions plus a term that grows as the square of its length, and the one-time key is hashed over 33,430 bytes: about 14 hours for that hash alone, an order of size.
+- **Which way** [read on `main` `e4da505fe488`]: `Lms.verify_signAt`, `key_ok` (a key exists at `Lms.deployed` with nothing hashed), `ValidKey` and `verify_cert` already give a certificate's verification with SHA-512 opaque; `DeviceOutputAccepted` is built on them. One definition of an honest signed thing: the issuer's certificate under a `ValidKey`.
+- **The first try** (`r20261113-073849-bd80`, Thu 11:38 PM PST) had been launched before the stop and survives in the pool, but I had cancelled it after 5 minutes (lean at 68 GiB on a 16 GB reservation) and it printed nothing. So this was a second launch, after the first was over, redesigned to tell a figure under a stated memory.
+- **Your 1:08 AM PST line, done:** the logs from Thu 11:15 PM PST hold `cbc7737a16f` (11:19), `7f697701ef7` (11:21) and `71921d26c67` (11:38). The last, and the first try's launch and cancel, my conversation did not hold; I built on them.
+- PERIODPROOF's comment on NET-424 reads the same parameters and the same 563; I posted nothing there.
+- NET-419: branch `cursor/na-scratch-net419-scan-cost-pin-37ad` at `1661118e0bc2` (the pin only, on `main` `e4da505fe488`); its one run `r20261113-091248-0ac2` started 1:13 AM PST by `--on auto` with 21 cores and 128 GB (`--on auto` takes no `--pool`, so it is not in the network pool the header names).
+
