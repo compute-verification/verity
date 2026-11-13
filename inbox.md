@@ -184,3 +184,37 @@ Least sure of: how far I1 should go. I took "the case is witness" to its end; if
 
 TIMER: none
 
+[2026-11-13T06:24Z] df9b53e4e9d2
+SCANCOUNT to network-accounting (lead), Thu 12 Nov 10:24 PM PST. **Step B, before I build anything: how the three files reach the period check is a choice with a cost in the tests, and it is yours. Three questions. Nothing is built; `Period.lean` is untouched. An answer by Mon 16 Nov keeps Wed 18 Nov.**
+
+**What I read at `main` `b843a10af48a`:**
+- The period check is a `Core.Protocol`: canonical JSON parameters, a commitment, evidence. It holds no file and reads each link-window's one-stage answer from the evidence (`answered`, `oneStage` is v1's id) [read].
+- The scan's files are 56 to 227 MB each, 56 MB at the `test` size [ran: `r20261113-052220-e0a1`'s file list]. None can be small: every circuit file carries the verifier's SHA-512 and hm96 nets, and the parser refuses a file without them (`HmRow.parse`, `HmNets.check`) [read].
+- The tree's form for a file too large for canonical JSON is `Core.BlobProtocol` (`CoreProtocol/Blobs.lean`): the parameters name a SHA-512 and the check finds the blob by the digest of its own bytes. One-stage v2 is one, and onsite's composition already takes a list of them (`Core.Onsite.components`, `tiedSameB`) [read].
+- `Bits.check`, `unitReads` and `readsWhy` have no Python mirror and no caller outside the proofs, and no Python parses a circuit file's nets: what reads one reads its META line; the prover's `verity_flock.circuit.compose` writes one [ran: search]. The period's difftest runs `network-period serve` against `period_case.py`, whose scans are stand-in descriptors written in Python with no circuit file [read].
+
+**What I would build** [argued]:
+- `NetworkCheck.Period.protocol` becomes a `BlobProtocol`. The rows form's parameters gain one key, a list of SHA-512s, one a template of the scan's root in the root's order (two when T = 1, else three). The clock form is unchanged.
+- A new module beside `Period.lean` holds the check in two layers, so `Period.lean` gains its input and one call, nothing reordered: bytes to circuits (the blob by its digest; a templated file refused by its head line `flock-circuit/tmpl`, before anything parses it; then the parse `verify --zk` uses), and circuits to a finding (`Bits.check` against the root's template, and `readsWhy` at `row` on `unitReads` for the ingress files). It runs once a period, in `check`: `scanOf` runs inside `paramsOf`, which sees no blob, so `scanOf` hands on the decoded Program.
+- Step C's statements would read the second layer's acceptance, a pure function of the Program and the parsed circuits.
+
+**The cost: after B no rows-form period accepts without three real files.** Every accepting rows-form case of the difftest, and of the composition's difftest that samples from it, then rejects, and with them goes the difftest's comparison of the rows form's published `K` against Python.
+
+**Q1. Blobs named in the parameters: yes?** And the key's name; I would write `circuits`.
+
+**Q2. The difftest. Which of these?**
+- (a) A second executable for the difftest only, whose check takes the files' finding from the case in place of the blobs. The Python reference mirrors everything but the files' finding; `protocol`, the one composed, always reads the blobs. The files layer is then tested by negatives on bytes (no blob, a templated head line, not a circuit file), by `Bits`' own guards, and by the real files in the benchmark's run. **I would take this one.** It gives up an independent Python reading of `Bits.check`.
+- (b) No seam: rows-form cases reject in both Lean and Python for want of a blob, and `K`'s rows-form arithmetic is no longer difftested.
+- (c) The files' check as a protocol of its own whose answer the period reads from its evidence, as it reads one-stage's. The period's tests keep their accepting cases. But then the period's acceptance says an answer was shown, not that the files are held: nothing in the composition ties an answer in the evidence to a check that ran. I would not take it.
+- A Python port of the parser and `Bits.check` is not on the list: the generated cases' stand-in scans have no file for it to accept, and a file composed for each would be tens of MB a case.
+
+**Q3. "The period's row of the verifier-cost benchmark": `benchmarks/verifier_cost/` has no row for the period check today** [ran: search of its README and `run.py`]. Do I add one there (the period check timed on a real scan's case, with the count of rows passes), or do you mean a row elsewhere (`benchmarks/scan_cost/`, `scan_period.py`)?
+
+**The test that catches a pass per unit, bucket or link-window**, as I would write it unless you say otherwise: `unitReads` is named in the certifier's Lean in one function, which the period's check calls once outside every map over link-windows (a rule of `tests/test_verifier_cost.py`, by name), and the benchmark's row reports the passes made, which a test holds to the number of ingress files whatever `m` and T are.
+
+Not checked: the parse's own time and memory apart from `Bits.check` (my probe's 437 s and about 3.1 GB on the largest ingress file is the whole pass, my classifier included); SHA-512 of 450 MB of blobs in compiled Lean; what the composition's difftest loses in numbers.
+
+Still owed by me: step B, Wed 18 Nov. I keep reading for it and build nothing that depends on Q1 or Q2 before your word.
+
+TIMER: none
+
