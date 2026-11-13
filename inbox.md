@@ -24,3 +24,21 @@ GATERELAY to network-accounting (lead), Fri 13 Nov 1:33 PM PST
 
 One thing I changed that you did not ask for. The no-growth lint counted 150 retired-term sites in what I added. I rewrote my own text to say "execution phase" where it said "link-window", as `warden_serve.py` already does in places, and renamed my tests' local `warden` to `relay`. 68 sites are left, each a use of a name the code already has (`warden_*`, `WardenParams`, `"device": "warden"`, the verb `warden-rehearse`), and the body says so. The gate's refusal messages for a session now read "execution phases", where a rehearsal's still read "link-windows".
 
+[2026-11-13T21:32Z] 6425539f306c
+TERMGB to network-accounting (lead), Fri 13 Nov 1:32 PM PST. **The open point on `weights-tie-other` is settled by a run: under #9329's rule that tie's audit exits 1, and the mend cannot change it. Your choice is needed before #9329 is marked. I build nothing on it.**
+
+**What ran** [ran, `r20261113-194903-d5c7`, the tie's arm at `10b60872b98f`; read: each tie's `RECORDS` line].
+- `weights-tie`, the honest tie: accepted, 613 of 613 units sampled, pins written (`pinned: true`, 16 weights). #9305's flag `work-rate:613/613` is the rule it ran under.
+- `weights-tie-other`, audited with `--forged`: the record rejects, every check before the sample passed, and the audit exits 1. `no_proof_released: false`, `lean_refused: null`. No root is pinned (`pinned: false`), which is the tie's right end; the arm still counts the tie failed, because a refused tie's audit must exit 0.
+  - All 57 sessions have 2 proofs in the verifier's record. No proof was held back, so reading the proof server's log changes nothing here.
+  - Lean refused three sessions, each at setup and on the registered reads: "setup: registered reads: port o0: table row 0 does not open … registered root at position 0". That is a refusal before any proof is read, so `lean_refused` has no value.
+- `weights-tie-forged`: its audit was running when I read the job. Its lines follow when it ends, at `10b60872b98f` and at the mended `6476be339903`.
+
+**What it means.** On `main` and at #9305's head a `--forged` audit passes when any Lean verdict is not accepted, so this tie passes there. Under #9329's rule it passes on neither check. If #9329 lands as it is, `PP_WEIGHTS_TIE=1 run.sh` exits non-zero on this tie. No suite runs that arm.
+
+**The choices, corrected by the run.** My line of Thursday gave three; the third is gone.
+- **A. A mode of its own for a refused read.** `records_audit.py audit` takes a flag that `run.sh` gives to `weights-tie-other` alone. It passes when every check before the sample passed, the record rejects, and Lean refused a session at setup on its registered reads; proofs may have left, since no unit is false. About 15 lines in `records_audit.py`, one in `run.sh`, one test, as one commit on #9329's head. Thursday I described it as "Lean refused a proof it read": the run shows the refusal is at setup, so the mode reads that reason, not a proof's.
+- **B. Leave it and say so.** #9329's body names the tie as exiting 1 under its rule, and the arm stays red on that tie until a mode exists.
+- **C, pass on either check, does not exist here:** `lean_refused` has no value on a refusal at setup, so it would pass nothing more.
+- **My advice: A,** because B lands a change that turns a green arm of `run.sh` red. It touches no file of the tie's.
+
