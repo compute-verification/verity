@@ -85,6 +85,36 @@ def test_each_hook_run_records_its_events_key_names_and_never_a_value(event_log)
     assert second["keys"] == "str" and second["conversation_id"] is None
 
 
+@pytest.fixture(scope="module")
+def before_any_test():
+    """What a module's fixture has before any per-test fixture has run: a hook it started, and a copy of the environment."""
+    event = {"hook_event_name": "a module's fixture", "command": "true", "cwd": "/"}
+    subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True)
+    return dict(os.environ)
+
+
+def test_no_hook_a_test_starts_records_in_the_machines_log_whatever_environment_it_is_handed(before_any_test, scratch_event_log,
+                                                                                            event_log):
+    """A module's fixture runs before conftest's per-test log is named in the environment, and a test that builds a hook's
+    environment from nothing, or takes every `AGENT_GUARD_*` variable out of it, drops the name. One fixture (conftest's
+    `scratch_event_log`) gives each such hook a log under the test session's own directory: in the machine's log, a run's
+    hundreds of events would push real agents' events out as it rotates."""
+    def run(name, env):
+        event = {"hook_event_name": name, "command": "true", "cwd": "/"}
+        subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True, env=env)
+
+    def events(log):
+        return [json.loads(ln)["event"] for ln in log.read_text().splitlines()]
+
+    run("the test's own", None)
+    run("a module's copy", before_any_test)
+    run("from nothing", {"PATH": os.defpath})
+    run("stripped", {k: v for k, v in os.environ.items() if not k.startswith("AGENT_GUARD_")})
+    assert events(event_log) == ["the test's own"]
+    elsewhere = ["a module's fixture", "a module's copy", "from nothing", "stripped"]
+    assert [e for e in events(scratch_event_log) if e in elsewhere] == elsewhere
+
+
 def test_a_checkout_without_the_guard_runs_the_cached_copy_so_a_branch_switch_cant_lock_the_agent_out(tmp_path):
     """Cursor keeps the hooks it read at the session's start. A branch without tools/agent-guard (checked out later) would make
     every command, the checkout back included, fail the fail-closed hook; the command falls back to the cached origin/main copy."""
@@ -822,7 +852,6 @@ def clones(tmp_path):
                      ["-C", d, "branch", "lane/mine"], ["-C", d, "branch", "theirs"], ["-C", d, "remote", "add", "origin", url]):
             subprocess.run(["/usr/bin/git", *args], check=True, capture_output=True, env={**os.environ, **GIT_ENV})
     env = {k: v for k, v in os.environ.items() if not k.startswith(("AGENT_GUARD_", "GIT_CONFIG"))}
-    env["AGENT_GUARD_EVENT_LOG"] = str(tmp_path / "events.jsonl")     # the hook's record of this test's runs, not the machine's
 
     def ask(form: str, clone: str) -> dict:
         command = form
