@@ -116838,3 +116838,42 @@ Nothing.
 - The session's table `tab t` is still a parameter of every statement here; which string it is waits on MESSAGES.
 - `devFirst_stage` and `devSecond_stage` are not tied to `dev_congr`; that is in `SessionDev.lean`'s part and waits on COINMAP.
 - A session whose member tree opened before an earlier session signed is not excluded by anything of mine; that hole is as the 01:44Z entry left it.
+
+## RELAX, Fri 13 Nov 03:09Z: `main` (`4a7291116e11`, with #9375) is merged into R7, head `a287d4bf1247`; the merge was clean and left both locks as committed; records, nine tries and the quick tier are out at it
+
+#9375 reached `main` at 03:01Z, so I merged `main` into R7's branch as planned (one merge commit, no conflict, no rebase) and pushed. The merge touched one of this change's files, a test file where `main` adds a test of its own, and left both lock files byte for byte as I committed them at 02:50Z: against `main` the locks now differ only where this change, the complete answer (#9458) and the relaxed check (#9023) move them, and in no guarantee's own record. The pull request opens when the runs at this head have verdicts; the ready line follows inside the 06:00Z date.
+
+**Head.** `cursor/proofs-r7-certified-b6a0` at `a287d4bf124738d270ac605e153805169f5d73ee`, pushed [run]. On top of `a7b27f9f8a2c` (the locks) it is the merge of `origin/main` `4a7291116e11`. History stays linear for CERTSTOP and network's worker (merge commits only); no interface they read moved.
+
+**What moved** [run unless tagged]:
+- No conflict; `benchmarks/one_stage/served_integrity.py` did not stop, so there was no resolution to take from STOPDRIVER.
+- Against the old head: 778 files. Of this change's twenty, one: `verity/protocols/spot/verifier/lean/tests/test_difftest.py` (+57 −9, `main`'s new `test_round_two_reads_a_linked_port_at_a_supplied_row_seg_value` and its helpers; none of my cases).
+- Lean: eleven files, all under `security/Proofs/Properties/Nci`. None of my nine Lean files imports one of them.
+- `security/lean-audit.json` and `security/Properties/lean-audit.json`: unchanged by the merge. `main`'s own records commit for #9375 made the base's moves that `cc14` had made (the network period's terms, the sampled game's vocabulary, the two renamed modules, and `rowsCapPublished_nontrivial`'s record).
+- Against `main` the pull request is now 35 files (+1,345 −328): thirteen only this change's, fifteen only #9458's (open at `049c5875989c`), seven that both change.
+
+**The locks against `main`** [run: the two JSON files compared section by section]:
+- `security/Properties/lean-audit.json`: no record of `guarantees` differs. `open`: `Properties.Spot.ExpectsV2`'s digest. `reads`: `Properties.Spot` (`CertifiedHeld` and `OpenedRegistered` new, `SameRoots` gone, `ExpectsV2`, `R1`, `R7`, `Registered`, `UnitsProved`, `publicOf` changed); `Spot.OneStage` (4 new, 6 changed); `Spot.Record` (`allRan`, `certifiedCheck`, `subDict` new, `checks` changed); `Spot.Registration` (3 new, 3 changed).
+- `security/lean-audit.json`: `reads` of `Spot.OneStage`, `Spot.Record`, `Spot.Registration`, the same lines; nothing else.
+- So what the body says of the lock gets shorter: the "not this change's" paragraph of my 02:53Z entry is gone from the difference, except #9458's five definitions (`publicOf`, `Public`, `Public.complete`, `publicJson`, `allRan`) and #9023's three (`UnitsProved`, `OpenedRegistered` for `SameRoots`, `subDict` with `checks`).
+
+**Runs at `a287d4bf1247`.**
+- Records `r20261113-030458-e51a` (vy-nebius-2): waiting for a Lean place since 03:05Z, two ahead in the lane's line [run]; expected end about 05:00Z [guess]. I commit a lock from it only if it writes other bytes than the committed ones.
+- Quick tier `r20261113-030533-7f6f` (vy-nebius-2, `--changed 4a7291116e11 --quick`); expected end about 04:20Z [guess].
+- Nine tries with `--siblings` `r20261113-030550-5811` (vy-nebius-cpu-12); expected end about 03:50Z [guess].
+- Started before the merge and left to end, since a started run is not cancelled: `r20261113-024621-9395` (records at `78585138233624e4`) and `r20261113-025332-d8d5` (nine tries at `a7b27f9f8a2c`). Both hold a Lean place of the lane on vy-nebius-2 meanwhile; `9395` until about 04:25Z.
+
+**The quick tier at `3c020f77568d`** (`r20261113-020205-35be`, 124 of 127 suites reported, the rest passing so far) [run]: three suites red, none from this change:
+1. the certifier's network verifier, 2 tests of `test_nci_record_difftest.py`: lean's, fixed at `34c5cbb3705c`, which `main` and this head now hold;
+2. `research`, 2 tests of `test_auto.py`: the node's, as you said;
+3. `benchmarks/one_stage`, 1 test of 1,042: `tests/test_kept_compose_cache.py::test_without_v3c_compose_cache_the_warm_and_the_audit_get_the_windows_own_directory_as_before`. The runner prints `NONDETERMINISTIC: … both passed and failed under one key: their inputs were identical, so each is flaky; delete it, don't rerun or fix it`. The file is `main`'s, byte for byte (blob `573cbdb76e` on `main`, on #9458's head and on mine). It passed at the same inputs in `r20261113-012954-1c6d`.
+
+**To post** (to whoever keeps `served_verdicts.sh`'s tests; `benchmarks/one_stage/` is proofs' by the registry, and the test came with the commits `bcd49f996d` and `a6dd728241`):
+
+> `benchmarks/one_stage/tests/test_kept_compose_cache.py::test_without_v3c_compose_cache_the_warm_and_the_audit_get_the_windows_own_directory_as_before` is flaky on `main`: the suites runner marked it NONDETERMINISTIC on vy-nebius-2 (`r20261113-020205-35be`; it passed at identical inputs in `r20261113-012954-1c6d`). Its line 191 compares the recorded order of steps between two runs of the toy driver, and the order differs: `['window-circuit', 'window-commit', 'warm', 'chain', 'audit', …]` against `[…, 'chain', 'warm', 'audit', …]`. `served_verdicts.sh` starts the certifier's chain beside the audit (`wait "$chain"`), so `chain` and `warm` reach the order file in either order. By the tests rule it is deleted, or it compares what does not depend on those two (line 190 already asserts `warm` before `audit`).
+
+I do not delete or change it in R7's pull request: it is not this change's file. If it fails again in `7f6f` I name it in the ready line as `main`'s.
+
+Not established: every run at `a287d4bf1247` (all three out); whether the records run writes the committed bytes at this head; that the flaky test's cause is the race I read (I read the script and the assertion, I did not reproduce it).
+
+For the table: R7 at `a287d4bf1247` (holds `main` `4a7291116e11`); pull request not open; waiting on `r20261113-030550-5811` (tries, about 03:50Z), `r20261113-030533-7f6f` (quick tier, about 04:20Z), `r20261113-030458-e51a` (records, about 05:00Z); ready line by 06:00Z still on track, with about an hour of room.
