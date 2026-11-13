@@ -16,3 +16,12 @@ The two files are byte for byte the same (sha256 `7cf0963110500f2a8241dfbc589b97
 - By id, base and head hold the same 17,322 targets: 17,287 Definitions and 35 templates. Neither has a target the other
   lacks.
 - The 17,322 (binding, target) pairs are equal too.
+
+## At the new base and head (after #9364)
+
+- Base `8854b8249777` (`r20261113-092459-d564`, declared 48 GB, bound peak 33.5 GiB) and #9660's head `1333bd53f693`
+  (`r20261113-092500-8212`, declared 48 GB, bound peak 33.8 GiB): each printed "288 catalog bindings, 24872 target(s),
+  0 root(s) not made, 0 registered family(ies) unchecked".
+- The two `bindings.json` files are equal as JSON and byte-identical, and both are byte-identical to the coordinator's
+  listing at `2e99b1cf48b8` (`r20261113-072414-ff5e`): targets sha256 `fff790b5b871...e512e6` by its script.
+- 24,872 targets, 24,837 Definitions and 35 templates; 24,872 (binding, target) pairs. None in one list and not the other.
