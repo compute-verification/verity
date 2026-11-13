@@ -152,7 +152,8 @@ theorem run_draw {i : Spot.Run.Input} {form : Bool} {run : Json} (h : Spot.Run.r
 /-- **The second stage's law is computed from the first stage's accepted sample.** Where the two-stage check accepts,
 the run of record's first stage drew `draw` on the first stage's bytes `ξ` (`Select.select`, under the rule
 `Select.resolve` gives the parameters' rule at the boundary's program and query, with no closure), held it to the
-boundary registration (`Draw.checkDraw`, under the sampling design the rule gives its population), and listed it as
+boundary registration's record `j₁` as the check read it (`readBack`; `Draw.checkDraw`, under the sampling design the
+rule gives its population), and listed it as
 its `draw`; and the law the last step held the interior audit's draw to (`secondCheck` at `law`) is
 `Select.secondLaw` of `draw`'s proved units, over the replay block's cells under the interior's query at the rule's
 counts. -/
@@ -162,8 +163,8 @@ theorem accepted_secondLaw {form : Bool} {p : Params} {c : OneStage.Commitment} 
     ∃ c₂ ξ₂ r i run law, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ Spot.Run.run i true = .ok run ∧
       secondCheck p.audit.base.verifier p.audit.base.delta c₂ law ξ₂ { e.interior.base with verdicts := r.out } =
         .accept pub prof ∧
-      ∃ n rule law₁ workTable derived resolved draw rest read,
-        nat? (getD c.record "population") = some n ∧
+      ∃ j₁ n rule law₁ workTable derived resolved draw rest read, readBack c.record = .ok j₁ ∧
+        nat? (getD j₁ "population") = some n ∧
         p.rule.over n (Select.strataSizes p.boundary.verifier.program p.boundary.verifier.query) = some rule ∧
         rule.lawOver n = .ok law₁ ∧
         p.rule.tableOver p.boundary.verifier.program p.boundary.verifier.query p.boundary.verifier.workTable =
@@ -172,25 +173,25 @@ theorem accepted_secondLaw {form : Bool} {p : Params} {c : OneStage.Commitment} 
         Select.resolve p.rule p.boundary.verifier.program p.boundary.verifier.query = .ok resolved ∧
         Select.select resolved p.boundary.verifier.program p.boundary.verifier.query workTable none ξ =
           .ok (draw, rest, read) ∧
-        (Draw.checkDraw draw (getD c.record "population") derived).isEmpty = true ∧
+        (Draw.checkDraw draw (getD j₁ "population") derived).isEmpty = true ∧
         Spot.getD run "draw" = draw ∧
         ∃ grain replay k ns ids ks, p.rule = .twoStage grain replay k ∧
           Select.replayCells p.replay p.interior.verifier.query = .ok ns ∧
           Select.templateIds p.interior.verifier.query = .ok ids ∧ k.over ids ns = .ok ks ∧
           law = Select.secondLaw ((Draw.proved draw).map Int.toNat) ns ks := by
   obtain ⟨-, c₂, ξ₂, r, i, run, hi, hr, -, -, hj, law, hl, htwo⟩ := accepted_steps h
-  obtain ⟨-, -, -, -, vs, received₂, -, hio⟩ := inputAt_ok hi
+  obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, hio, hj₁, -⟩ := inputAt_ok hi
   obtain ⟨n, rule, law₁, workTable, derived, resolved, draw, rest, read, hn, hrule, hlaw, htab, hder, hres, hsel,
     hchk, hd⟩ := run_draw hr hj
   obtain ⟨grain, replay, k, ns, ids, ks, hk, hns, hids, hks, hlaw₂⟩ := secondLawOf_ok hl
   rw [hd] at hlaw₂
-  obtain ⟨h1, h2, h3, h4, h5⟩ := inputOf_first p c ξ ξ₂ e received₂ vs
+  obtain ⟨h1, h2, h3, h4, h5⟩ := inputOf_first p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs
   rw [hio] at hn hrule htab hder hres hsel hchk
   rw [h3] at hn hchk
   rw [h1, h2] at hrule htab hres
   rw [h2] at hder
   rw [h2, h4, h5] at hsel
-  exact ⟨c₂, ξ₂, r, i, run, law, hi, hr, htwo, n, rule, law₁, workTable, derived, resolved, draw, rest, read, hn, hrule,
-    hlaw, htab, hder, hres, hsel, hchk, hd, grain, replay, k, ns, ids, ks, hk, hns, hids, hks, hlaw₂⟩
+  exact ⟨c₂, ξ₂, r, i, run, law, hi, hr, htwo, j₁, n, rule, law₁, workTable, derived, resolved, draw, rest, read, hj₁,
+    hn, hrule, hlaw, htab, hder, hres, hsel, hchk, hd, grain, replay, k, ns, ids, ks, hk, hns, hids, hks, hlaw₂⟩
 
 end VStar.Recursive.SampledTwo
