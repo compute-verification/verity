@@ -27,8 +27,11 @@ from __future__ import annotations
 import gzip
 import json
 import os
+from collections.abc import Iterable
 from types import SimpleNamespace
-from typing import Any, Iterable
+from typing import Any
+
+__all__ = ["of_record"]
 
 SHOWN = 5
 #: what a replay that evaluates a Boolean Definition's row leaves to others, on its record (`premises`)
@@ -42,8 +45,9 @@ def evaluated_specs(rows: Iterable[dict[str, Any]]) -> list[tuple[str, str]]:
     """The specializations of the rows the replay evaluates, each ``(spec, bound)``: ``spec`` is the row's word Definition, of a
     family with a row kernel (`rows.ROWS`) or a protocol's delegate, and ``bound`` the Definition its Build's descriptor holds
     the row's Call under, a Boolean Build's row's ``bits`` and otherwise ``spec``."""
-    from verity_vllm.check.replay.delegate import DELEGATES
     from verity.definitions.numerics.rows import ROWS
+
+    from verity_vllm.check.replay.delegate import DELEGATES
     from verity_vllm.query.manifest.format import spec_family
 
     return sorted({(str(r["spec"]), str(r.get("bits") or r["spec"])) for r in rows
@@ -75,9 +79,10 @@ def kernel_refusal(specs: Iterable[tuple[str, str]]) -> str | None:
     """Why a row kernel this tree grades ``specs`` (`evaluated_specs`) by is not its family's Definition, or None: each ``spec``'s
     family's row kernel against the reference by core `self_check` (`kernel_registry.check`; module docstring), once a family
     per process."""
-    from verity_vllm.commit import challenge as CH
     from verity.definitions.numerics import kernel_registry as KR
     from verity.definitions.numerics.rows import KERNEL, ROWS
+
+    from verity_vllm.commit import challenge as CH
     from verity_vllm.query.manifest.format import spec_family
 
     bad: list[str] = []
@@ -180,7 +185,7 @@ def _differs(desc: dict[str, Any], fn: Any, seen: dict[str, str | None]) -> list
     Definition's answer, so one that many specializations reach is encoded once."""
     from verity.circuits.codec import definition_digest, definition_entry, definitions
 
-    out = []
+    out: list[str] = []
     # definitions reads a program's root and fn: here the specialization alone
     for g, d in definitions(SimpleNamespace(root=fn, fn=fn)).items():
         if g not in seen:
@@ -190,6 +195,7 @@ def _differs(desc: dict[str, Any], fn: Any, seen: dict[str, str | None]) -> list
                 seen[g] = f"{g} is not the Definition the Build bound (entry {ours[:16]}, the Build's {theirs[:16]})"
             else:
                 seen[g] = None
-        if seen[g]:
-            out.append(seen[g])
+        why = seen[g]
+        if why:
+            out.append(why)
     return out

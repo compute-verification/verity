@@ -80,7 +80,7 @@ def _program(bias: bool | str = False):
         woff[n] = (off, off + c)
         off += c
     wtype = "{" + ", ".join(f"{n}: {t}" for n, _c, t in fields) + "}"
-    rows = []
+    rows: list[dict] = []
 
     def add(spec, name, args):
         rows.append({"i": len(rows), "spec": spec, "form": "call", "name": name, "args": args})
@@ -310,8 +310,8 @@ def test_the_build_lowers_only_the_pouw_site():
 def test_the_rows_native_evaluation_is_the_registered_definition():
     """`NcpLinearRow_v1` (`program.registry.pouw_rows`) evaluated by the IR reference is what the replay computes natively, on rows at
     three scales, a row of subnormals and a zero row."""
-    from verity.circuits.evaluation import evaluate
     from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
     from verity.definitions.registry import pouw_rows
     rng = np.random.default_rng(1)
     d = bind(pouw_rows.NcpLinearRow, K=H, N=NU)

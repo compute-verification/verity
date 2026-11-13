@@ -8,10 +8,30 @@ import hashlib
 import pytest
 
 from verity_vllm.engine.profiles import dense_generic as dg
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    StepStart,
+    ViewDesc,
+)
+from verity_vllm.observe.fold.patterns.int8 import (
+    Int8AttentionScope,
+    Int8RowQuant,
+    Int8ScaledMm,
+)
 from verity_vllm.observe.fold.profiles import profile_for_case
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, ViewDesc
-from verity_vllm.observe.fold.patterns.int8 import Int8AttentionScope, Int8RowQuant, Int8ScaledMm
-from verity_vllm.observe.fold.resolver import Compute, Const, GatherMany, Group, PerRow, Shared, StepContext, Unsupported, spec_label
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Const,
+    Group,
+    PerRow,
+    Shared,
+    StepContext,
+    Unsupported,
+    spec_label,
+)
 from verity_vllm.observe.fold.tree import build_trees
 from verity_vllm.program import model as analytic
 
@@ -98,7 +118,12 @@ def test_int8_exact_config_keeps_the_linears_its_list_names_bf16():
     torch = pytest.importorskip("torch")
     from vllm.model_executor.layers.fused_moe import RoutedExperts
     from vllm.model_executor.layers.linear import LinearBase, UnquantizedLinearMethod
-    from verity_vllm.engine.int8_vllm import Int8ExactConfig, Int8KeptLinearMethod, Int8PlainLinearMethod
+
+    from verity_vllm.engine.int8_vllm import (
+        Int8ExactConfig,
+        Int8KeptLinearMethod,
+        Int8PlainLinearMethod,
+    )
     from verity_vllm.program.frontend.kernel_readback import int8_exact_of, kept
 
     class Linear(LinearBase):
