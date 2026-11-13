@@ -159519,3 +159519,11 @@ So three module records of `reads` move, not one:
     `recordGood`: `commitmentOf` returns `{ record := j, … }` for the `j` of `Core.canonicalJson c = .ok j`, and `Verity.CanonicalJson.canonicalJson_good` gives `Good j`. `decode_of_stmtOf`: today's proof with `recordGood hcm` where it has `Flock.PartCong.good_of_canon cm.record (hw cm hcm) s hc`.
   - `CouplesWired.lean`: `RecordWf` goes and `couplesAt_wired` loses `hW`; nothing else names either [run: `git grep`]. A hypothesis fewer, none gained.
 - STOP RULE: not hit. NEEDS (standing, from 19:41Z): the carried head's name, and which head brings the switch under my line.
+
+## MEMBERS, Fri 13 Nov 20:11Z: the import's suites run was cut at 20:06Z as foreseen; the nine suites left run now in two runs, ids here
+
+- Cut: run `r20261113-170545-ec7a`, exit 143 at 20:06:31Z, `adapters/vllm` about 90 minutes in and not ended [read: the second listing, run `r20261113-200227-5026`, cpu-9: 54 passes kept at `fb3e260c42d1`, the same 54 as at 19:44Z].
+- The change reaches 63 suites [run `r20261113-195315-3f45`, its `--list` at the start]. 54 passed. Nine are left: `verity-vllm`, `verity-flock`, `research`, `verity-numerical`, `verity-core-evaluate`, `verity/circuits`, `verity/commitments`, `verity/commitments/windows`, `verity/definitions`.
+- Running at `fb3e260c42d1`, both on cpu-14, 300 minutes each, output written as it goes: `verity-flock` alone [run `r20261113-195315-3f45`, in its slot since 19:53Z, builds done, the suite started]; the other eight [run `r20261113-200310-d959`, since 20:03Z].
+- The twin's run meets the same cut at 20:51Z; I do the same for it then.
+- My question of 19:54Z stands: (a) open the import's pull request now with this stated, or (b) wait for the nine. Without your word, (b).
