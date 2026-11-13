@@ -3,7 +3,7 @@ that runs this file.
 
     python paths.py [--under-prover] [--build] [--outside DIR]
 
-It prints one JSON object: the files `verity`, `verity_vllm` and `verity.protocols.pouw.prover` were imported from, how the
+It prints one JSON object: the files `verity`, `verity_vllm` and PoUW's prover package were imported from, how the
 two distributions were installed (their `direct_url.json`), `row_tables_device.CUDA_DIR` and `pouw.device.HERE`, and the
 files each holds. It exits 0 when the two are one existing directory of the fifteen sources. `--under-prover` also requires
 that directory to be `kernels/pouw_cuda` beside the prover package's `__init__.py`; `--outside DIR` requires that nothing
@@ -39,8 +39,9 @@ def main() -> int:
 
     import verity
     import verity_vllm
-    from verity.protocols.pouw import prover
     from verity_vllm.commit import row_tables_device as D
+
+    prover = D.prover  # the package the adapter itself imports, wherever a move has put PoUW
 
     out: dict = {"python": sys.executable, "cwd": str(Path.cwd()),
                  "verity": verity.__file__, "verity_vllm": verity_vllm.__file__, "prover": prover.__file__,
