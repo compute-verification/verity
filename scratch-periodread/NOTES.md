@@ -102,3 +102,38 @@ Final theorems in `Properties.Spot.SecurityProofs`.
 - Asked the coordinator (01:55Z entry): unstated lines vs guarantee entries with witnesses; whether
   `LedgerOfDevice`'s unstated line naming `Numbered` is within "no lock entry reads Numbered".
 - Mailbox last read at `23c3e423be` (01:55Z).
+
+## State at Fri 02:20Z (read this first on a new machine)
+
+Heads (all pushed):
+- PR 1 #9537 `44b84839217d`: marked ready by the coordinator 01:57Z.
+- #9546 `ee245a981c3e`: ready line given 01:28Z.
+- PR 2 `cursor/proofs-prf600-period-audit-9c4e` at `5dacc95eab9e`: NOT opened. Opens when its quick tier
+  `r20261112-232219-a005` shows `SUITES exit 0` (script's rc is always 0; read stdout; timeout 03:26Z). Body:
+  `pr2-body.md` here, placeholders `RECORDS` and `QUICK`. Per the lean-proofs skill it needs no records run of its own
+  (no hand edit to a lock); name the records that regenerate from `d333`'s `regenerated` lists.
+  Open: `uv run -q research queue open --head cursor/proofs-prf600-period-audit-9c4e --issue PRF-600 --title T
+  --body-file F`.
+- PR 3 = #9581 `cursor/proofs-prf600-period-statements-e2a7` at `43fde9d04680`: statements, lock (roots, layer,
+  five `unstated` lines), the executable `sampled-proofs-period` (+ `exempt` line, README, difftest asserts), the premise
+  paragraph in `IntegrityPeriod`'s docstring, SPOT in titles. Body `pr3-body.md` (as posted). Exe run `0c67` rc 0
+  (24 passed). Quick tier `r20261113-021125-efae` launched 02:11Z. Needs its own records run (hand edits to locks):
+  launch when `d333` ends (one tree at a time), from a worktree at its head:
+  `uv run -q research run --on vy-nebius-2 --project verity --source WT --cwd clone --pool proofs --as proofs
+  --mem-gb 32 --timeout 10800 --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py
+  --records verity/protocols/spot/verifier/lean --update`.
+  Then: edit the body's Checks (`research queue edit 9581 --body-file F`), ready line.
+- PR 4 `cursor/proofs-prf600-period-proofs-4c9a` at `41cbecec62af` (PR 3's head merged, title says SPOT): NOT opened.
+  Body draft `pr4-body.md` (placeholders `RECORDS`, `CHECKS`). `d333` runs its tree BEFORE the merge
+  (`36dc4d568f`): it shows whether the lock edits pass and which records regenerate. Final records run on the final
+  head after PR 3's. Quick tier too. Second reader on the statements: STOPS (coordinator assigned 02:00Z).
+- Scratch: this branch.
+
+Coordinator's words since 02:00Z:
+- 02:00Z: `lean` on the VM is allowed on one scratch file importing core only, under a minute and 1 GB.
+- 02:13Z: the lock default stands: five `unstated` lines, no guarantee entry in PR 3; `LedgerOfDevice`'s line may name
+  `Numbered`; no table or page cites the five as guarantees; witnesses only if he asks on Friday.
+- Open ask of mine (02:12Z entry): rename the executable to `spot-period`? Default: keep `sampled-proofs-period`.
+
+Mailbox last read at `bea8cf9117` (02:11Z), plus the hook's 02:13Z word.
+Entries: last `9be616f60c` (02:12Z).

@@ -68,7 +68,7 @@ The reference and the Lean share an author.
 
 ## Checks
 
-- **Build**: `r20261112-213330-dbcd`, exit 0, at `c41cdcd6c8`: `lake build Spot sampled-proofs-difftest` (501 jobs).
+- **Build and difftests on the head** `5dacc95eab9e`: `r20261112-232219-e334`, exit 0: `lake build Spot sampled-proofs-difftest`; both period difftests, 24 passed in 129 s.
 - **The proofs that read the split**: `r20261112-204826-f29e`, exit 0, at `4fa7425a19`.
-- **Difftests on the head** `5b92156ab8`: `r20261112-215441-ef46`, exit 0: both period difftests, 24 passed in 118 s.
+- **Records**: RECORDS
 - **Quick tier on the head**: QUICK
