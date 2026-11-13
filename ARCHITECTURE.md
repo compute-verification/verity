@@ -270,6 +270,7 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | Registration | `protocols/interface/`, `verity/hardware/site/` and `verity/hardware/registration.py`. Three test files of SPOT's read it today and move with it | `verity/protocols/accounting/registration/`, an accounting protocol that runs once, over `device.py`'s types. Its Lean is cut out of the interface's package, so it is a code change and not in the two chains of moves |
 | The policy's two calculators | inside `protocols/inference_only/` | two directories under `benchmarks/`; training renames the slowdown one |
 | The network certifier a served run starts: its serving loop, its keys, its prover | `benchmarks/`, about 25,000 lines, and the auditor's device runs them from there, which rule 9 forbids | the certifier's `device/` and `prover/` |
+| The areas of `security/` | named before the carve | each carries its protocol's name, and the accounting area holds one protocol's files |
 
 **Code that has to be written**
 
