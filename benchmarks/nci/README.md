@@ -27,7 +27,7 @@ hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its ou
 
 | Path | Holds |
 | --- | --- |
-| `sources/<topic>.json` | sources filed under their first topic, each with `findings`: `claim` (ours), `quote` (verbatim), `location`, `quantities`, `grade`, `bears_on`. A fetched fixture (`fixtures/artifacts.json`), since it would put the tree over its data budget: `research data fetch-fixtures benchmarks/nci/sources` brings it; after an edit, `research data put --kind fixture/v1 --tree benchmarks/nci/sources --preserve` and the new id in the registry (the control pod exports it once the PR is admitted) |
+| `sources/<topic>.json` | sources filed under their first topic, each with `findings`: `claim` (ours), `quote` (verbatim), `location`, `quantities`, `grade`, `bears_on`. A fetched fixture (`artifacts.json`), since it would put the tree over its data budget: `research data fetch-fixtures benchmarks/nci/sources` brings it; after an edit, `research data put --kind fixture/v1 --tree benchmarks/nci/sources --preserve` and the new id in the registry (the control pod exports it once the PR is admitted) |
 | `parameters.json` | parameters, each with estimates: `low`, `central`, `high`, `confidence`, `evidence` (finding ids), `merge` |
 | `calibrations.json` | a policy (`K`, a block's fresh-input budget in bits; `Gamma`, its gate budget; `b_tok`) and the model it is calibrated to |
 | `rows.json` | the board's rows: method, configuration, state representation, calculator inputs (a number or `estimate-id:low|central|high`), notes, sources |
@@ -59,7 +59,7 @@ it:
   path to hold rho's own arithmetic to theirs; rho's suite names each among its `inputs`;
 - the Lean lock (`security/lean-audit.json`) names `tests/test_tiers.py` and `tests/test_fit.py` as the tests of three
   statements it holds open (its `conjectures`), and each of those tests checks that the lock names it;
-- `fixtures/artifacts.json` registers `sources/` by this directory's path.
+- `artifacts.json` registers `sources/` by this directory's path.
 
 Every command above prints, and none writes a file.
 
