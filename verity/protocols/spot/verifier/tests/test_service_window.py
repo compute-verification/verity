@@ -109,7 +109,7 @@ def test_a_windows_stream_takes_its_templates_digests_and_query_in_its_order():
 
 def test_a_two_template_window_runs_to_an_accepted_outcome_by_the_lean_run():
     """A window of PAIR x 1 and TRIPLE x 9 under `stratified-rate:1/3`: registered at the challenger's own counts, sampled once
-    from its coins by the stratified law at the K its strata need (`draw.strat_k`, 3), each stratum sampled its k (a third of
+    from its coins by the stratified sampling design at the K its strata need (`draw.strat_k`, 3), each stratum sampled its k (a third of
     its proof blocks, rounded up), and run to an accepted outcome, the
     verifier's whole run (`Run.run`, over the window's mixed population) agreeing."""
     stream = _stream()
@@ -212,7 +212,7 @@ def test_a_tied_window_runs_to_an_accepted_outcome_by_the_lean_run():
 
 
 def test_a_stratum_short_of_its_floor_is_refused():
-    """A record whose sampling design samples PAIR's stratum none (the stratified law samples each at least one) is refused
+    """A record whose sampling design samples PAIR's stratum none (the stratified sampling design samples each at least one) is refused
     (`R1-law`), and a sample short of a stratum, from a sampler that samples only TRIPLE's proof blocks, is refused at the
     select (`check_draw`), before any proof."""
     rec = _record()
