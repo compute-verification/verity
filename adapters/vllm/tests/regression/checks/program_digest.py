@@ -32,10 +32,19 @@ def _digests_of(bs: dict) -> dict:
     return out
 
 
+def _batch(row: resolver.Row) -> int | None:
+    """How many requests the row's workload declares; None for a row whose workload this tree does not hold.  A workload the store
+    keeps is fetched (`row.workload()`), so the answer is the same whether or not anything read the workload before."""
+    try:
+        return len(resolver.read_json(row.workload()).get("requests") or [])
+    except resolver.NotResolvable:
+        return None
+
+
 def expected(row: resolver.Row) -> dict:
     bs = row.json("build_summary.json")
     out: dict = {"build_summary": _digests_of(bs)}
-    b = len(resolver.read_json(row.workload()).get("requests") or []) if row.has("build_summary.json") and (resolver.VLLM_ROOT / "workloads" / f"{row.key}.json").is_file() else None
+    b = _batch(row)
     of_record = out["build_summary"]["workload"] if (b or 0) > 1 else out["build_summary"]["request"]
     out["program_digest_of_record"] = of_record
     out["batch"] = b
