@@ -1411,6 +1411,14 @@
   "Properties.NetworkPeriod.rowsCapPublished": {
    "honest": ["Properties.NetworkPeriod.rowsCapPublished_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsCapPublished_nontrivial"
+  },
+  "Properties.NetworkPeriod.registeredSampleHeld": {
+   "honest": ["Properties.NetworkPeriod.registeredSampleHeld_honest"],
+   "nontrivial": "Properties.NetworkPeriod.registeredSampleHeld_nontrivial"
+  },
+  "Properties.NetworkPeriod.sampleBoundCharged": {
+   "honest": ["Properties.NetworkPeriod.sampleBoundCharged_honest"],
+   "nontrivial": "Properties.NetworkPeriod.sampleBoundCharged_nontrivial"
   }
  },
  "unwitnessed": {
@@ -6016,6 +6024,15 @@
    "type_hash": "30ac246ed35e00d232bcbf769692a986c35476bf91dadb94f044d3eb7e708d0d",
    "unfolded_hash": "0ac812ff7d1b70761abf83cdd7cbcc3a446a9d9a67fa5409c7d8752128a954e5"
   },
+  "Properties.NetworkPeriod.registeredSampleHeld": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.registeredSampleHeld_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.registeredSampleHeld_nontrivial": {
+   "owner": "@network-accounting"
+  },
   "Properties.NetworkPeriod.rowsCapPublished": {
    "owner": "@network-accounting",
    "signature": ["Properties.NetworkPeriod.rowsCapPublished : Properties.NetworkPeriod.RowsCapPublished"],
@@ -6120,6 +6137,15 @@
    },
    "type_hash": "967b07df0522c5dce4ce83861b18efea825ce959281ecbb6ee4dc28ca39efcd1",
    "unfolded_hash": "01fba8c75836b4820c353663bbf4732e6991a2484048acf73454e8e5b333e868"
+  },
+  "Properties.NetworkPeriod.sampleBoundCharged": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.sampleBoundCharged_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.sampleBoundCharged_nontrivial": {
+   "owner": "@network-accounting"
   },
   "Properties.NetworkRecords.acceptMeans": {
    "owner": "@network-accounting",
@@ -13087,6 +13113,14 @@
     ]
    },
    "Properties.NetworkPeriod.rowsCapPublished": {
+    "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.registeredSampleHeld": {
+    "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.sampleBoundCharged": {
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
    },
