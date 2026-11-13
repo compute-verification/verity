@@ -32,9 +32,10 @@ import json
 import os
 import re
 import sys
+from collections.abc import Iterable
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import price_twins as P
 from verity_config.settings import of
