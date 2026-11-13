@@ -114499,3 +114499,81 @@ This answers your 02:11Z message. Clock: `date -u` read 02:21Z. Mailbox read to 
 STOP RULE: not reached. To post: nothing new. Not established: named under 2.
 
 **Pushed.** Nothing of mine is unpushed: I changed no file of the tree. Heads as the 02:17Z entry names them: `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `2c5806b33e8c`, `cursor/proofs-stopdriver-answer-complete-ffc6` at `049c5875989c`.
+
+
+## SESSIONCOINS, Fri 13 Nov 02:22Z: one loop is left and it is this one, so I hold the pen from here; `a8d5` is cancelled unstarted and resent as `e062` on vy-nebius-2, which is building; `OpensFit` as written is false of the device's game, and I restate it on the log the check read
+
+### In plain words
+
+In the two-stage audit, each inner block of the second stage is proved in a proof session whose coins come from the auditor's device. My piece shows those coins are the device's own for that session. Nothing of it has compiled in a run yet. Two things changed since the 02:10Z entry.
+
+First, who writes. The loop that wrote the 02:10Z entry has ended, and every message since 02:11Z has reached this loop, the one that wrote 01:44Z. I ended my turn at 02:14Z with one line, as your 02:00Z word asked. The stop hook then handed me your 02:14Z word about the machines, with "act on it before you end your run", and no one else was left to act on it. So I act as the one SESSIONCOINS from here: I moved the try, merged TWOLEG's new head and go on with the piece. If you want this loop stopped all the same, say so and I stop at once.
+
+Second, one premise the 02:10Z entry left for COINMAP to prove is not true as written. Section 3 says why and what replaces it.
+
+### Branch
+
+`cursor/proofs-sessioncoins-e4a0` at `4eca770cf3`, pushed. It is `8225ed4a00` (the other loop's last commit) plus the merge of TWOLEG's `e0a4052b5f`, which holds TWOLEG's own fix of `DevAgrees.lean` (`c0216f674d`). Nothing is unpushed.
+
+### Mailbox
+
+Read at 02:20Z: your 02:00Z and 02:14Z words. Nothing after them.
+
+### 1. Why I say one loop is left
+
+- This worker's stored transcript, fetched at 02:16Z, holds turns 0, 19, 24 and 26, and every command in them is this loop's. None of the other loop's is there: not its commits `007d76a899` to `8225ed4a00`, not its tries, not its 02:10Z entry. Turns 20 to 23 are missing from it. [run]
+- The machine was replaced again at 02:11Z. Its shell log holds 26 commands under this worker's id since then, all of them mine. Before, the other loop ran a command every half minute or so. [run]
+- Four messages have come since 02:11Z (a batch of Slack events, a task notice, your 02:14Z word by the stop hook). All reached this loop. [run]
+- So the other loop's last turn ended at about 02:10Z, the platform then resumed the worker from this loop's memory, and what the other loop knew after 01:31Z is in no memory now. [derived; the platform has not said so]
+
+Nothing on the branch was lost. What the other loop did is in its commits and its 02:10Z entry, and I have read both. Its local check of `SessionDev.lean` against a copy of COINMAP's definitions went with the machine.
+
+### 2. Runs and machines [run]
+
+| Run | Machine | What | Wait | State |
+| --- | --- | --- | --- | --- |
+| `r20261113-014633-a8d5` | vy-nebius-cpu-12 | `SessionHeld.lean --siblings` at `8225ed4a00` | 25 min for a check slot, then 6 min for a Lean place | cancelled at 02:18Z, before any file was built (your 02:14Z word) |
+| `r20261113-021820-e062` | vy-nebius-2 | the same file at the same head | 2 min | has a Lean place since 02:20Z, building |
+
+`e062` builds `SessionCoins.lean` and `SessionHeld.lean`. It does not read `DevAgrees.lean`. One try is out, on vy-nebius-2.
+
+### 3. `OpensFit Good` is false of the device's game
+
+`SessionDev.lean` (`cc6d27ee68`) proves `SessionsFit` from `OpensFit Good`: on every play `Good` holds of, accepted or not, each opening in the play's log is of at most 65536 coins. The 02:10Z entry asked COINMAP to prove that of the device's game. It cannot be proved, because it is false there. [read]
+
+- The device's game (`releases`, `security/Properties/Verity/Game.lean`) samples a coin tree at a `Hello` whenever `TreeSpecOk` holds of its spec: a coin or more a round, and at most 2^26 coins in the whole tree (`maxTreeCoins`). It serves an opening of `n` coins whenever `n` is at most the tree's block (`OpenTree.next`).
+- So a strategy that asks for a tree of one stream, one round and a block of 2^17 coins, then opens that round for 2^17 coins, gets a log with an opening of 131072 coins. The log is the device's.
+- The form refuses that play. But `OpensFit` has no acceptance in it, so the play is a counterexample unless CUT's `Good` says more than "the log the check read is the device's". [derived]
+
+The bound is true where it is used, and it comes from the check, not from the device. [read]
+- `coinTreesOf` refuses a tree's line whose spec has a block above `MAX_BLOCK` = 2^16 (`isTreeSpec`), and an opening's line whose `n` is above its tree's block (`Spot/ChallengerTrees.lean`).
+- A read opening's count is its line's `n` (`ReadsOpen`, `Sampled/RoundsRead.lean`).
+
+What replaces it, in my own file: `ReadFits C`, which says that on a play the form accepts, every opening in the log the check read is of at most 65536 coins. `sessionsFit_of` takes it in place of `OpensFit Good`. It asks nothing of the device, of `Good` or of COINMAP. I write this now.
+
+`ReadFits` is not yet proved from the form's acceptance. `main` keeps `isTreeSpec` for each tree's line (`Lines.TreesOf.spec`) but I found no lemma that carries "an opened round's `n` is at most its tree's block" out of `coinTreesOf`. That is one more clause through its fold. I write it after the restatement; until it compiles `ReadFits` is a named premise, and a true one.
+
+### 4. What is next, in order
+
+1. `ReadFits` in `SessionDev.lean` (section 3).
+2. When `e062` ends: its errors fixed, or the next try. The next try is `SessionAgrees.lean`, which reads TWOLEG's `DevAgrees.lean`. I send it once TWOLEG says its fixed head builds.
+3. `SessionDev.lean` gets a lakefile root and a try once COINMAP's `CoinMap.lean` and `CoinStages.lean` compile and I merge COINMAP's branch.
+
+### STOP RULE
+
+Nothing. No listed guarantee, lock, accept or `Sampled.lean` touched, and no file of another lane's edited.
+
+### NEEDS
+
+1. Coordinator: only if you want this loop stopped. Otherwise no reply needed.
+2. [COINMAP](bc-3253d1a3-1eb4-56a8-9297-080d9d938c5a): please drop the second item of NEEDS 2 in the 02:10Z entry (`OpensFit Good` of the device's game). It is false there (section 3) and I no longer ask it. The first item, whether you want `runLocate` or a cap inside `stageLocate`, stands.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- Nothing of mine has compiled in a run. `e062` decides `SessionCoins.lean` and `SessionHeld.lean`.
+- `ReadFits` from the form's acceptance.
+- That the other loop has ended rests on the three signs in section 1.
