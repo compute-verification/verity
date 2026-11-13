@@ -12,8 +12,8 @@ from dataclasses import dataclass, field, replace
 
 import pytest
 from research.vqueue import (BASE_DROPPED, FAIL, INFRA, LIST_FAILED, ON_MAIN, PASS, PENDING, Advance, Build, Candidate, Commit,
-                             Drop, Eject, Failed, Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot,
-                             Verdict, Wait, decide, meets)
+                             Drop, Eject, Failed, Leave, Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring,
+                             Snapshot, Verdict, Wait, decide, left_out, meets)
 from research.vqueue_slim import Read, joined, read_step, read_suite, unnamed
 
 MAIN = "m0"
@@ -835,6 +835,68 @@ def test_with_a_records_run_no_lean_batch_is_staged_on_a_chain_holding_a_pr_set_
         "no Lean change is ready to take")]
 
 
+def test_left_out_names_why_each_ready_pr_the_ticks_builds_leave_out_by_a_cause_that_holds_while_it_does():
+    """Each ready PR in no candidate once the tick's actions are applied gets one `Leave`, in rank order: its head, a cause
+    that stays the same while the reason does, and the reason in words; one being checked at its head gets none, one held at
+    an older head is in flight.  `decide`'s actions are the same whether or not the reasons are asked for."""
+    s = snap(ready=prs(1, 2, 3), batch=2, depth=2)
+    assert decide(s) == [Build((1, 2), MAIN, 2)]
+    assert left_out(s) == [Leave(3, "h3", "batch full", "behind the PRs ranked before it: a batch holds at most 2 (--batch)")]
+    full = snap(cand("c1", MAIN, 1), cand("c2", "c1", 2), ready=prs(1, 2, 3), depth=2)
+    assert decide(full) == [] and left_out(full) == [Leave(3, "h3", "chain full", "main's chain is full at --depth 2")]
+    assert left_out(snap(ready=[pr(1, conflict=True), pr(2)])) == [
+        Leave(1, "h1", "conflict", "it doesn't merge onto `main`: no batch takes it until its head changes")]
+    moved = snap(cand("c1", MAIN, 1, heads=("h1a",)), ready=[pr(1, "h1b"), pr(2)], depth=1)
+    assert left_out(moved) == [
+        Leave(1, "h1b", "in flight", "a candidate holds it at h1a, an older head: its new head waits for that one to leave the chain"),
+        Leave(2, "h2", "chain full", "main's chain is full at --depth 1")]
+    failed = Outcome((1,), heads(1), FAIL, (1, 2, 3, 4), MAIN)
+    assert decide(snap(ready=prs(1, 2, 3), history=[failed])) == [Build((1, 2), MAIN, 2)]
+    assert left_out(snap(ready=prs(1, 2, 3), history=[failed])) == [
+        Leave(3, "h3", "batch full", "behind the PRs ranked before it: a batch holds at most 2 (a suspect's cap)")]
+
+
+def test_left_out_names_the_lean_prs_and_the_lean_inputs_a_staged_batch_keeps_out_and_why_no_lean_batch_opens():
+    """Beside a staged Lean batch a Lean PR waits for its turn, one at a time, and a PR changing a Lean input for that batch to
+    go on the chain; with none staged, a Lean PR past `lean` waits behind those ranked before it, and while a PR changing a
+    Lean input that a batch may take waits, no Lean batch opens; with no batch to build, `Wait`'s reason is the Lean PR's."""
+    touching = pr(3, None, "tools/verity/check/check.py", lean_input=True)
+    staged = replace(cand("s1", MAIN, 1), waits=True, records=RUNNING)
+    s = snap(staged, ready=[lean(1), lean(2), touching, pr(4)], records=True, depth=2)
+    assert decide(s) == [Build((4,), MAIN, 2)]
+    assert left_out(s) == [
+        Leave(2, "h2", "Lean batch staged", "it is a Lean change, and a Lean batch is staged: one is staged at a time"),
+        Leave(3, "h3", "Lean input beside a staged batch", "it changes a Lean input, and a Lean batch is staged: no batch "
+              "beside it takes one until it is on main's chain")]
+    capped = snap(ready=[lean(1), lean(2), pr(4)], records=True, depth=2)
+    assert decide(capped) == [Build((1,), MAIN, 2, records=True), Build((4,), MAIN, 2)]
+    assert left_out(capped) == [Leave(2, "h2", "Lean cap", "behind the Lean PRs ranked before it: a Lean batch holds at most 1 (--lean)")]
+    first = snap(ready=[pr(0), touching, lean(2)], records=True, batch=1)
+    assert decide(first) == [Build((0,), MAIN, 2)]
+    assert left_out(first) == [
+        Leave(3, "h3", "batch full", "behind the PRs ranked before it: a batch holds at most 1 (--batch)"),
+        Leave(2, "h2", "Lean waits", "no Lean batch is staged while #3, which changes a Lean input, waits: it goes first")]
+    aside = Outcome((1,), heads(1), INFRA, (1,), MAIN)
+    waits = snap(cand("c1", MAIN, 1), ready=[lean(1), lean(2)], history=[aside], records=True, depth=3)
+    (wait,) = decide(waits)
+    assert left_out(waits) == [Leave(2, "h2", "Lean waits", wait.why)]
+
+
+def test_left_out_names_what_stops_every_build_of_the_tick():
+    """While a failed candidate above the lowest waits for its base's word, or main's chain holds a move, nothing is built,
+    and every ready PR waiting says so."""
+    f = by_tests("pytest", {"t"}, None, "pkg2/")
+    s = snap(cand("c1", MAIN, 1), cand("c2", "c1", 2, state=FAIL, failed=(f,)), ready=prs(1, 2, 3), depth=4)
+    assert decide(s) == []
+    assert left_out(s) == [Leave(3, "h3", "chain waits", "a failed candidate above the lowest waits for its base's word on its "
+                                                       "failures: nothing is built above it")]
+    move = replace(pr(1), move=True)
+    s = snap(cand("c1", MAIN, 1), ready=[move, pr(2)], depth=4)
+    assert decide(s) == []
+    assert left_out(s) == [Leave(2, "h2", "move on chain", "a candidate on main's chain holds a move: nothing is built on it "
+                                                         "until it is on `main`")]
+
+
 def test_a_staged_batch_reads_no_verdict_and_the_chain_fills_beside_it_with_no_second_lean_batch():
     """Whatever its verdict says (graph2 knows no check of it), it is never read.  It is off main's chain: nothing is built on
     it and it counts toward no depth, so batches of PRs with no Lean change are built on the chain's top up to the depth
@@ -1369,9 +1431,12 @@ class Play:
     def tick(self) -> list:
         now = len(self.acts) * self.step_s
         gone = {*self.landed, *(e.number for e in self.ejected)}
-        acts = decide(Snapshot(self.main, tuple(r for r in self.ready if r.number not in gone), tuple(self.cands.values()),
-                               tuple(self.history), now=now, **self.kw))
+        s = Snapshot(self.main, tuple(r for r in self.ready if r.number not in gone), tuple(self.cands.values()),
+                     tuple(self.history), now=now, **self.kw)
+        acts, leaves = decide(s), left_out(s)
         self.acts.append(acts)
+        built = {m for a in acts if isinstance(a, Build) for m in a.members}
+        assert not built & {x.number for x in leaves} and "other" not in {x.cause for x in leaves}, (acts, leaves)
         gone = {a.sha for a in acts if isinstance(a, (Drop, Commit))}
         staged = any(c.waits and c.sha not in gone for c in self.cands.values()) or any(
             isinstance(a, Build) and a.records for a in acts)
@@ -1422,6 +1487,9 @@ class Play:
             if c.records is not None and c.records.state == PENDING and self.records is not None:
                 got = self.records(self.trees[sha], c)
                 self.cands[sha] = replace(self.cands[sha], records=replace(got, starts=c.records.starts))
+        held = {(m, h) for c in self.cands.values() for m, h in zip(c.members, c.heads)}
+        out = {*self.landed, *(e.number for e in self.ejected), *(x.number for x in leaves)}
+        assert all((r.number, r.head) in held or r.number in out for r in s.ready), ("a ready PR waits for no reason", acts, leaves)
         return acts
 
     def run(self, ticks: int = 60) -> Play:

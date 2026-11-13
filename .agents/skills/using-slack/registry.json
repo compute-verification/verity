@@ -516,6 +516,9 @@
       "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
       "usergroup": "S0C93AFCRT8",
       "linear": "CI",
+      "staffs": [
+        "review-*"
+      ],
       "owns": [
         "verity/configuration/config/",
         "tools/verity/check/",
@@ -666,7 +669,6 @@
         "benchmarks/exfiltration/",
         "benchmarks/harness/specs/",
         "infra/cluster/kinds/benchmarks.toml",
-        "benchmarks/judge.py",
         "benchmarks/README.md"
       ],
       "branch_suffixes": [
