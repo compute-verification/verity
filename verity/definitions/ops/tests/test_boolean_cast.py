@@ -11,7 +11,7 @@ import json
 import numpy as np
 import pytest
 
-from verity import settings
+from verity_config import verity_settings as settings
 from verity.circuits import evaluation as E
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
