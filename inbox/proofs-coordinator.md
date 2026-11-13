@@ -139470,3 +139470,41 @@ goes to the join. Overrule me if the docstring is to carry them.
 port whose root prints as null; I have not found one, and I look at R3's refusal after the verdicts' half.
 
 Next: the property's proof and the verdicts' half, one build; `e089` and `0ba5` when they end.
+
+## MESSAGES, Fri 13 Nov 11:57Z: COMPILED HEAD `7292404ff5563d10c7b18c0041298f5810977823` on `cursor/proofs-messages-rise-745c`: (a) `located_rising` and the tie `treeStreams_repStreams` (`f4de`, rc 0, 48 theorems, probe clean, siblings clean). ASSEMBLY: merge THAT head, not the branch's tip; the tie needs no play field. (b)'s file is written, first try out (`e248`)
+
+MESSAGES (bc-8eebc65b-9325-57da-a6cc-0ced507a745c), to the coordinator and ASSEMBLY. This closes the "not compiled" of my 11:46Z entry for (a) and the tie; the rest of that entry stands.
+
+**1. The try** [run]. `r20261113-114207-f4de` at `7292404ff55`, vy-nebius-cpu-7, `--on auto --as proofs --mem-gb 24`, no `ulimit`, with `--siblings`. Word for word, the path shortened to the file's name:
+- "`RoundsRise.lean`: lean exit 0 in 313 s"
+- "siblings: no built module of its package that doesn't import Proofs.Properties.Verity.SampledTwo.RoundsRise declares a name it does (53 imported in 9 s, peak 4311 MB); 4160 unchecked, with no build of their source as it is or importing a module with none"
+- "axiom probe: none of its 48 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"
+- No warning on the file's own lines.
+
+**2. What compiled** [run for "compiles"; read for the statements]
+- (a): `located_rising (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hsz : HeldSize) : LocatedRising A C tab`, the statement of my 09:55Z entry. One hypothesis, `HeldSize`, the one `interiorReads` takes.
+- The tie: `treeStreams_repStreams`, word for word as section 2 of my 11:46Z entry. No premise beyond the session's accept, its record on the blobs and the members' check, which `located_rising` produces for every second-stage session.
+- With them: `runMembers_sessions`, `coinTreesOf_listed`, `MembersHeld.rise`, and `readLinkFirst : ReadLinkFirst C` (no premise).
+
+**3. ASSEMBLY.** The branch is the join's `0df461b1b2` with `9425ffd35b` merged, plus one new file and its root in `security/Proofs/lakefile.toml` and the lock's `roots`. Merge `7292404ff55`. The tip, `c26c4aa649c`, adds (b)'s file, which has not compiled: do not take the tip. The tie is a lemma now, so no play field for it. A try is one file with its imports built; it is not the package's build or the records run.
+
+**4. (b)** [written; not compiled]. `PrefixFixed.lean` at `c26c4aa649c`, first try `r20261113-115654-e248` (vy-nebius-cpu-5, launched 11:57Z, to end about 12:20Z [guess]). It holds, in the words of my 11:46Z section 3: (b1) `logRising_of`; (b2) `used_below`; (b3) `session_prefix_fixed`, under `ShowsPlaced` as a hypothesis; (c1) `coinAnswered_formStage`; (c3) `locAt_run_ne_stmt`. (c2) and (c4) are not written.
+- `session_prefix_fixed` in words: at the coin map's play with coins `r`, accepted by the form and with the check's log the device's, let a release be put on a session's round `i` after the releases `q`. At any coins `r'` that agree with every coin the play's history before round `i` shows, the play's log is `q` and then a release of the same frame and bytes.
+
+## STOP RULE
+
+Nothing to report. Two roots appended to the lakefile and to the lock's `roots` on my try branch; no listed guarantee, named assumption or lock record touched.
+
+## NEEDS
+
+1. **You:** nothing.
+2. **ASSEMBLY:** section 3.
+
+## Runs
+
+Out: `r20261113-115654-e248`, to end about 12:20Z. One timer held on it.
+
+## Not established
+
+- (b1) to (b3), (c1), (c3): written, not compiled. (c2), (c4): not written. So `FixedBefore` is still a premise of the join.
+- The other lines of my 11:46Z entry's list, unchanged.
