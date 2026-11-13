@@ -65,7 +65,7 @@ import numpy as np
 #: the tree a11.py comes from: this file's, else (sent alone into a run's inputs) the working directory's
 TREE = Path(__file__).resolve().parents[2] if (Path(__file__).resolve().parents[1] / "one_stage").is_dir() else Path.cwd()
 for _p in ("benchmarks/one_stage", "tools/verity/circuit_check/src", "benchmarks/numerical/python", "adapters/vllm",
-           "verity/protocols/flock/prover/python", "."):
+           "verity/protocols/proofs/flock/prover/python", "."):
     sys.path.insert(0, str(TREE / _p))
 sys.setrecursionlimit(100000)
 
@@ -1688,7 +1688,7 @@ def main() -> int:
     import a11
     import a11_kinds as K
     from verity.circuits.codec import canonical_json, encode_program
-    from verity.protocols.spot.verifier.one_stage import partition as P
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity_vllm import TargetProfile
 
     out = Path(a.out)

@@ -13,6 +13,6 @@ package's docstring lists every module.
   `benchmarks/spot_proved`, `adapters/vllm/tools` and `circuit-check`. No module of the Build, the Match or the
   Commit imports it.
 - **Loads:** `verity.circuits`, `verity_vllm.definitions`, `verity.commitments.windows` and `verity.commitments`; the
-  certifier's modules under `verity.protocols.certifier`, and SPOT's under `verity.protocols.spot.verifier`;
+  certifier's modules under `verity.protocols.accounting.certifier`, and SPOT's under `verity.protocols.proofs.spot.verifier`;
   and the integration's `program`, `config`, `pipeline`, `engine`, `check`, `records`, `observe`, `acquire`, `query` and
   `protocols`, with `correspondence`, `commit` and `target_family` inside functions.

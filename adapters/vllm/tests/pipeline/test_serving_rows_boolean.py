@@ -20,7 +20,7 @@ import pytest
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import REGISTRY, bind
-from verity.protocols.spot.verifier.one_stage import draw as DR, partition as P, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import draw as DR, partition as P, registration as R
 from verity.commitments.windows import rows as CS
 from verity_vllm.pipeline import deferred_rows as DRW
 from verity_vllm.pipeline import replay_bundle as RB

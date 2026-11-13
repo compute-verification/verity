@@ -23,9 +23,9 @@ from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import Tables, WindowClass
 from verity_vllm.protocols.pouw.h1 import served as SV
 
-from verity.protocols.pouw.verifier import credit
-from verity.protocols.pouw.verifier.audit import hm96_salt
-from verity.protocols.spot.verifier.one_stage import registered as CR
+from verity.protocols.accounting.pouw.verifier import credit
+from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
+from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.windows import interface as IF
 

@@ -136,7 +136,7 @@ inputs = [
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_bench.py"]
-paths = ["verity/protocols/pouw/verifier/lean/check/models.json"]
+paths = ["verity/protocols/accounting/pouw/verifier/lean/check/models.json"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_breakdown.py", "tests/test_overhead.py", "tests/test_prove.py", "tests/test_served_table.py",

@@ -34,11 +34,11 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.protocols.pouw.verifier import salt as PS  # noqa: E402
-from verity.protocols.pouw.verifier import window as Wd  # noqa: E402
-from verity.protocols.spot.device import challenger as LC  # noqa: E402
-from verity.protocols.spot.device import remote as R  # noqa: E402
-from verity.protocols.spot.device.challenger import LiveCommitment, record_message  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import salt as PS  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import window as Wd  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger as LC  # noqa: E402
+from verity.protocols.proofs.spot.device import remote as R  # noqa: E402
+from verity.protocols.proofs.spot.device.challenger import LiveCommitment, record_message  # noqa: E402
 from verity.commitments.crypto import lms  # noqa: E402
 from verity_vllm.protocols import pouw  # noqa: E402
 from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
@@ -875,7 +875,7 @@ class _NcpLinear:
 def test_ncp_v2s_salt_is_the_auditor_hosts_salt_coin_after_the_weights_root(tmp_path, monkeypatch):
     """ncp-v2 under the setting ``challenger`` takes its epoch's salt from the auditor host's salt coin, opened
     after the weights' root, carries its challenge phase, and closes the challenge phase at release."""
-    from verity.protocols.pouw.verifier.audit import salt_of
+    from verity.protocols.accounting.pouw.verifier.audit import salt_of
     host = _Session(tmp_path, monkeypatch, "auditor", leaf=1, seed=18)
     monkeypatch.setattr(pouw, "linear_types", lambda: (_NcpLinear,))
     w = (torch.randn(32, 64, generator=torch.Generator().manual_seed(3))).bfloat16().float()

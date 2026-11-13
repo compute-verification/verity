@@ -13,11 +13,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.pouw.verifier.audit import Epoch, Workload, transcript_domain
-from verity.protocols.pouw.verifier.core_check import MANIFEST_SCHEMA
-from verity.protocols.pouw.verifier.protocol import Matmul
-from verity.protocols.pouw.prover.schemes import pearl_c_work as PW
-from verity.protocols.pouw.verifier.serving import Schedule, SchemeId
+from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload, transcript_domain
+from verity.protocols.accounting.pouw.verifier.core_check import MANIFEST_SCHEMA
+from verity.protocols.accounting.pouw.verifier.protocol import Matmul
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW
+from verity.protocols.accounting.pouw.verifier.serving import Schedule, SchemeId
 
 from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _linked, _put, _zeros, joined, write_behind, write_manifest
 from verity_vllm.protocols.pouw.pearl_c.host import behind as host_behind

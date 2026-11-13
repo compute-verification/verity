@@ -17,7 +17,7 @@ from typing import Any, Callable
 
 import pytest
 
-from verity.protocols.spot.verifier.one_stage import registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 from verity.circuits.codec import canonical_json
 from verity_vllm.pipeline import serve_day as SD
 from verity_vllm.pipeline import serve_h1 as SH

@@ -19,9 +19,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.protocols.spot.device import challenger as LC
-from verity.protocols.spot.device import remote as R
-from verity.protocols.spot.device.challenger import CoinError
+from verity.protocols.proofs.spot.device import challenger as LC
+from verity.protocols.proofs.spot.device import remote as R
+from verity.protocols.proofs.spot.device.challenger import CoinError
 from verity.commitments.crypto import lms
 from verity_vllm.commit.challenge import challenge_positions
 from verity_vllm.pipeline import commit_coins as CC

@@ -42,7 +42,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.protocols.spot.verifier.one_stage import draw as D, registered as REG, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, registration as R
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch, evaluate_words
@@ -363,7 +363,7 @@ def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entri
     def group(**roots: str) -> dict:
         return {"program": "p", "values": {v: {"value": v, "root": r} for v, r in roots.items()}}
 
-    from verity.protocols.pouw.verifier import operands as OP
+    from verity.protocols.accounting.pouw.verifier import operands as OP
 
     w = {"context": RUN, "registered_roots": {"e": "01" * 64}, "activations": group(x="ab" * 64, e="01" * 64),
          "registered": group(w="cd" * 64)}
@@ -746,7 +746,7 @@ def _tied(d: Path, n: int = 8, cap: int = 4) -> SimpleNamespace:
 def test_the_audits_rule_is_the_rate_of_the_windows_design_which_a_stream_takes(text, population, rule):
     """A stream's rule is a rate (`service.Law` refuses a fixed count), so the audit states the window's fixed design K of
     N as the rate K/N of its kind (`rule_of`), which over N proof blocks samples K: one a stratum at ``stratified:1``."""
-    from verity.protocols.spot.verifier import service as S
+    from verity.protocols.proofs.spot.verifier import service as S
 
     assert RA.rule_of(D.parse_design(text), population) == rule
     assert S.Law(rule).text == rule
@@ -910,7 +910,7 @@ def _auditor():
 def _device_ledger(tmp_path: Path, events: list[tuple[str, str | None, dict]]) -> tuple[list[str], object, Path]:
     """The challenger device's own ledger of ``events`` (kind, session, body), chained and signed by the live challenger's
     code (`verity/protocols/compose/device/live_challenger/auditor.py`): its lines, its key and the key record ``--challenger-key`` reads."""
-    from verity.protocols.spot.device import challenger as Ch
+    from verity.protocols.proofs.spot.device import challenger as Ch
     from verity.commitments.crypto import lms
     A = _auditor()
     (tmp_path / "var" / "sessions").mkdir(parents=True)
@@ -1003,7 +1003,7 @@ def test_the_device_day_reads_the_devices_own_ledger_and_refuses_a_copy_pous_cut
     """memory-accounting's third point: PoUS cuts its copies of the ledger to the entries a window cites
     (`pous.period.cited`), which drops the day's declaration; ``declared_day`` refuses such a copy as a ledger (its chain
     no longer runs from seq 0), so R2 reads the device's own ledger or nothing, never a copy that would read undeclared."""
-    from verity.protocols.pous.verifier import period as PP
+    from verity.protocols.accounting.pous.verifier import period as PP
     program, root = written.rec["program"], "01" * 64
     lines, key, _ = _device_ledger(tmp_path, [_declared(program), *_window(S1, 1, root)])
     cut = [lines[i] for i in PP.cited([json.loads(x) for x in lines], {S1})]
@@ -1543,7 +1543,7 @@ import json, sys
 from pathlib import Path
 sys.path.insert(0, {str(HERE.parent)!r})
 import records_audit as RA
-from verity.protocols.spot.verifier.one_stage import draw as D, registered as REG, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, registration as R
 import a5 as A5
 d, t = Path({str(written.dir)!r}), Path({str(tmp_path)!r})
 mine, doc, sets = RA.verifier_window(d, D.parse_design({LAW!r}), None)

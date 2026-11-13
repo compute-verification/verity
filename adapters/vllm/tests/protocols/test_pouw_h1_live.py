@@ -8,10 +8,10 @@ import json
 
 import numpy as np
 import pytest
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.prover.circuit import live as L
-from verity.protocols.pouw.verifier import live_reads as LR
-from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.prover.circuit import live as L
+from verity.protocols.accounting.pouw.verifier import live_reads as LR
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import live as LV

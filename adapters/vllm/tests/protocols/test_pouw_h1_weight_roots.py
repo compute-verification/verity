@@ -46,7 +46,7 @@ def test_two_weight_sets_roots_differ_and_none_is_recomputed_without_the_key():
     """A root is core's hiding tree over the rows (``audit.commit_rows(weight_binding(w), -2, rows, HM96, key,
     HM96_WEIGHTS + w)``) under this process's 32-byte key: another weight set's root differs, and the same rows under any
     other key, or in the unsalted tree, give another root."""
-    from verity.protocols.pouw.verifier.audit import HM96, HM96_WEIGHTS, commit_rows, weight_binding
+    from verity.protocols.accounting.pouw.verifier.audit import HM96, HM96_WEIGHTS, commit_rows, weight_binding
 
     first, second = (m.weight.detach().numpy() for m in _layers(7, n=2, shape=(16, 32)))
     key = PH.WEIGHT_KEY

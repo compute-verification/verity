@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 from verity_vllm.program.predict import scan_state as SS
 
-from verity.protocols.certifier.prover import ingress_scan as IS
+from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity_vllm.definitions import boolean as SW
 from verity_vllm.definitions.registry import boolean_io_shell as BX
 from verity_vllm.definitions.registry import io_shell as X

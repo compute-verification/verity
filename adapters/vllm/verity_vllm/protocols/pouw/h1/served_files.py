@@ -8,9 +8,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from verity.protocols.pouw.prover.circuit import h1window as HW
-from verity.protocols.spot.verifier.one_stage import partition as P, registration as R
-from verity.protocols.spot.verifier.one_stage.served import ServedTree
+from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage.served import ServedTree
 from verity.circuits.codec import canonical_json
 
 #: a statement's ``--registered`` file, one a call

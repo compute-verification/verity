@@ -42,8 +42,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.pouw.verifier.audit import hm96_salt
-from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import hm96
 from verity.commitments.hm96 import batch
 from verity.commitments.merkle import merkle_depth

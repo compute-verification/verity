@@ -423,6 +423,6 @@
     {"file": "adapters/vllm/verity_vllm/definitions/registry/topp_keep_builder.py", "kind": "E731", "symbol": "_state", "detail": "Do not assign a `lambda` expression, use a `def`"},
     {"file": "verity_vllm/observe/fold/profiles/gen_llama_patterns.py", "kind": "F401", "symbol": "<module>", "detail": "`dataclasses.field` imported but unused"},
     {"file": "verity_vllm/observe/fold/profiles/gen_ov_sampling_patterns.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.observe.fold.patterns.SCRATCH_TOKEN_SELECT` imported but unused"},
-    {"file": "tests/protocols/test_pouw_h1_live.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.protocols.pouw.prover.circuit.live` imported but unused"}
+    {"file": "tests/protocols/test_pouw_h1_live.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.protocols.accounting.pouw.prover.circuit.live` imported but unused"}
   ]
 }
