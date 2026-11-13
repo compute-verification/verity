@@ -16,6 +16,9 @@ hold in their `--json` under `spot_holes`).
   record) the commits read are the run's own, from the record its reader gives: the one the record names (`commit`,
   the second stage's) and each of its runs' (`runs`, `SERVED_RUNS`), all listed. A hole is closed only where it is
   closed at every one of them; a run the record holds no entry for is printed as not given and read at no commit.
+  Where any of the four is not given, a hole closed at every commit read is `CLOSED_READ`, printed with the runs
+  read and those not given, never closed, and the label stays `SPOT`: `SPOT soundness` needs every hole closed at
+  all four runs.
 * **The theorem** is the first of `THEOREMS` that the lock (`LOCK`) lists among its guarantees, printed with the open
   premises its record there takes (`premises.open`), by name.
 """
@@ -39,6 +42,8 @@ LOCK = Path("security/lean-audit.json")
 #: the deployed vocabulary
 THEOREMS = ("Verity.Sampled.onsite_soundness_deployedReady", "Verity.Sampled.remote_soundness_deployedReady")
 CLOSED, OPEN, UNKNOWN = "closed", "open", "not known"
+#: a served run's hole closed at every commit read while some of its runs were not given, which is never `CLOSED`
+CLOSED_READ = "closed at the runs read"
 LABEL, SOUND = "SPOT", "SPOT soundness"
 #: a served two-stage run's four runs, as its record's reader names them in the record's `runs`
 SERVED_RUNS = ("serve", "first", "replay", "second")
@@ -139,8 +144,9 @@ def served(record: Mapping[str, Any], *, root: Path | None = None) -> dict:
     """The block's document over a served run's own code, from its ``record`` as its reader gives it: each hole at the
     commit the record names (``commit``, the one its second stage ran) and at each of its runs' (``runs``, by
     `SERVED_RUNS`), closed only where it is closed at every one. A run the record holds no entry for (its reader was
-    given no directory of it) is listed as not given and read at no commit; one whose entry names no commit, or a
-    dirty tree, is not known. `served` lists each run with its commit and machine."""
+    given no directory of it) is listed as not given and read at no commit; then a hole closed at every commit read is
+    `CLOSED_READ`, not closed, and the label is `SPOT`. One whose entry names no commit, or a dirty tree, is not
+    known. `served` lists each run with its commit and machine, the runs read and those not given."""
 
     if not isinstance(record, Mapping):
         raise ValueError(f"a served run's record is one JSON object, not {type(record).__name__}")
@@ -168,8 +174,15 @@ def served(record: Mapping[str, Any], *, root: Path | None = None) -> dict:
         listed.append({"name": name, "given": True, "run": r.get("run"), "commit": r.get("commit") or None,
                        "machine": r.get("machine"), "why": why})
         sources[f"{name} {r.get('run') or '(no run id)'}"] = (at, why)
-    return _over(sources, root or jobs.repository_root()) | {
-        "served": {"run": run, "commit": commit, "why": mine, "runs": listed}}
+    doc = _over(sources, root or jobs.repository_root())
+    read = [r["name"] for r in listed if r["given"]]
+    if missing := [r["name"] for r in listed if not r["given"]]:
+        for h in doc["holes"]:
+            if h["status"] == CLOSED:
+                h["status"] = CLOSED_READ
+        doc["label"] = LABEL
+    return doc | {"served": {"run": run, "commit": commit, "why": mine, "runs": listed, "read": read,
+                             "not_given": missing}}
 
 
 def _over(sources: Mapping[str, tuple[str | None, str | None]], root: Path) -> dict:
@@ -203,9 +216,10 @@ def render(doc: Mapping[str, Any]) -> str:
     lines = ["## SPOT's resampling holes in the code that ran", "",
              f"Each hole is closed only where its fix's commit (`{doc['fixes']}`; a hole with none is open) is an ancestor "
              f"{of}. The label is `SPOT soundness` only when both are closed in every "
-             f"{'one' if sv else 'run read'}.", "", f"- label: **{doc['label']}**"]
+             f"{'one, with all four runs read' if sv else 'run read'}.", "", f"- label: **{doc['label']}**"]
+    partly = sv and f" ({', '.join(sv['read']) or 'its record alone'}); {', '.join(sv['not_given'])} not given"
     for h in doc["holes"]:
-        lines.append(f"- {h['hole']}: {h['status']}")
+        lines.append(f"- {h['hole']}: {h['status']}" + (partly if h["status"] == CLOSED_READ else ""))
         kinds = {(s["status"], s["why"]) for s in h["at"].values()}
         if len(kinds) > 1:
             lines += [f"  - at `{c[:12]}`: {s['status']}" + (f": {s['why']}" if s["why"] else "") for c, s in h["at"].items()]

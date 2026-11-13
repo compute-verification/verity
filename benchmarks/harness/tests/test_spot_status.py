@@ -180,22 +180,43 @@ def _served(commit: str | None, **runs: dict | None) -> dict:
 
 
 def test_a_served_record_is_read_at_its_own_commits(repo):
-    """The block over a served run reads the commit its record names and each of its runs' commits, listed; a run the
-    record holds no entry for (the reader was given only the first and second stages) is not given and is read at no
-    commit, so it holds no hole short of closed."""
+    """The block over a served run reads the commit its record names and each of its four runs' commits, listed; with
+    all four read, a hole whose fix is an ancestor of every one is closed, and both closed is `SPOT soundness`."""
 
-    record = _served(repo.fix1, first=_entry(ONE, repo.fix1), second=_entry(BOTH, repo.fix1))
+    record = _served(repo.fix1, **{name: _entry(ONE, repo.fix1) for name in S.SERVED_RUNS})
     doc = S.served(record, root=repo.root)
     assert _by_hole(doc) == {REDRAWN: "closed", RECOMMITTED: "open"} and doc["label"] == "SPOT"
     text = S.render(doc)
     assert "is an ancestor of the commit the served run's record names and of each of its runs' commits." in text
     assert "- redrawn sample: closed\n- re-committed execution phase: open\n" in text
     assert (f"- the code {BOTH} ran: its record's `commit`, the second stage's, `{repo.fix1[:12]}`; its runs:\n"
-            f"  - serve: {S.NOT_GIVEN}\n  - first: {ONE} at `{repo.fix1[:12]}` on a-made-up-machine\n"
-            f"  - replay: {S.NOT_GIVEN}\n  - second: {BOTH} at `{repo.fix1[:12]}` on a-made-up-machine\n") in text
-    assert "- runs read:" not in text
+            + "".join(f"  - {name}: {ONE} at `{repo.fix1[:12]}` on a-made-up-machine\n" for name in S.SERVED_RUNS)) in text
+    assert "- runs read:" not in text and "not given" not in text
     both = _served(repo.fix2, **{name: _entry(BOTH, repo.fix2) for name in S.SERVED_RUNS})
     assert S.served(both, root=repo.root)["label"] == "SPOT soundness"
+
+
+def test_a_hole_never_reads_closed_where_some_of_the_served_runs_were_not_given(repo):
+    """The rehearsal's shape: the reader was given only the first and second stages, so the serve and the replay are not
+    given and no commit of theirs is read. A hole whose fix is an ancestor of every commit read is closed at the runs
+    read, naming those not given, never bare closed, and the label stays `SPOT` with both holes so."""
+
+    record = _served(repo.fix2, first=_entry(ONE, repo.fix2), second=_entry(BOTH, repo.fix2))
+    doc = S.served(record, root=repo.root)
+    assert _by_hole(doc) == {REDRAWN: S.CLOSED_READ, RECOMMITTED: S.CLOSED_READ} and doc["label"] == "SPOT"
+    assert (doc["served"]["read"], doc["served"]["not_given"]) == (["first", "second"], ["serve", "replay"])
+    text = S.render(doc)
+    assert ("- label: **SPOT**\n"
+            "- redrawn sample: closed at the runs read (first, second); serve, replay not given\n"
+            "- re-committed execution phase: closed at the runs read (first, second); serve, replay not given\n") in text
+    assert (f"  - serve: {S.NOT_GIVEN}\n  - first: {ONE} at `{repo.fix2[:12]}` on a-made-up-machine\n"
+            f"  - replay: {S.NOT_GIVEN}\n  - second: {BOTH} at `{repo.fix2[:12]}` on a-made-up-machine\n") in text
+    assert ": closed\n" not in text and "SPOT soundness**" not in text
+    # an open hole stays open, and one the read commits can't settle stays not known: only closed is qualified
+    one = S.served(_served(repo.fix1, first=_entry(ONE, repo.fix1), second=_entry(BOTH, repo.fix1)), root=repo.root)
+    assert _by_hole(one) == {REDRAWN: S.CLOSED_READ, RECOMMITTED: "open"}
+    lost = S.served(_served("d" * 40, second=_entry(BOTH, "d" * 40)), root=repo.root)
+    assert _by_hole(lost) == {REDRAWN: "not known", RECOMMITTED: "not known"}
 
 
 def test_a_hole_is_closed_on_a_served_run_only_at_every_one_of_its_commits(repo):
@@ -242,7 +263,7 @@ def test_exfiltration_reads_the_holes_at_a_served_records_commit(repo, tmp_path,
     monkeypatch.setattr(E, "build", lambda **k: {"runs": [BASE]})
     monkeypatch.setattr(E, "render", lambda doc: "the figures")
     (served := tmp_path / "served.json").write_text(json.dumps(
-        _served(repo.fix2, first=_entry(ONE, repo.fix2), second=_entry(BOTH, repo.fix2))))
+        _served(repo.fix2, **{name: _entry(BOTH, repo.fix2) for name in S.SERVED_RUNS})))
 
     find_spec, name = importlib.util.find_spec, "verity_bench.served_row"
     monkeypatch.setattr(importlib.util, "find_spec", lambda n, *a: None if n == name else find_spec(n, *a))

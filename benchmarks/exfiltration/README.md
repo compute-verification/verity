@@ -254,7 +254,9 @@ plan of the case, is left out and listed under "Refused".
   label in its header, and no amount of the table is of record. Each line ends with its errors, the table above's.
 - **SPOT's resampling holes in the code that ran**, over the compute audit's runs of record, or with `--served-run`
   over the served run's own code instead: its record's `commit` and each of its runs' commits, each listed, a hole
-  closed only where its fix is an ancestor of every one of them. The block holds the label (`SPOT`, or
+  closed only where its fix is an ancestor of every one of them. Where any of the four runs is not given, such a
+  hole prints "closed at the runs read", naming the runs read and those not given, and the label stays `SPOT`. The
+  block holds the label (`SPOT`, or
   `SPOT soundness` only when both holes are closed), each hole's status, and the theorem with its open premises as
   the lock lists them (`verity_bench.spot_status`; `spot_holes` in the JSON).
 
