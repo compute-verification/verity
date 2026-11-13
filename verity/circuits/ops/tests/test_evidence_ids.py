@@ -17,7 +17,7 @@ import verity
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
 from verity.circuits.ops import kv_cache, moe, prims
 from verity.circuits.silicon import instructions, integer, models, total_fp8
-from verity.definitions.circuits.targets import target
+from verity.circuits.targets import target
 
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 ART = re.compile(r"art:[0-9a-f]{8,64}")
