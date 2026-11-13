@@ -21,7 +21,7 @@ No number here prices a PRF's advantage, and none assumes it away. The table say
 by it, in the same closing words (`UNPRICED`).
 
 `short_sessions` is PoUB's too (`remote_bandwidth.monitoring`). The periods and δs are the reporting grid's
-(`verity.protocols.reporting`).
+(`verity.protocols.reporting`), and T is the core's `block_count` (`verity.periods`).
 
 A wipe signed `UNCOUNTED` stays vacuous: `counted` refuses every `wipe-egress/v1` record (`REFUSED`), because the memory
 challenger signs its session's times on its monotonic clock and a record's window (`t0_unix_ns`, `t1_unix_ns`) is real
@@ -42,6 +42,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NoReturn
 
+from verity.periods import block_count
 from verity.protocols.reporting import DELTAS, PERIODS
 
 from . import wipe_period
@@ -143,8 +144,7 @@ def table(answer: Mapping[str, Any], machines: int, cadence_s: int = CADENCE_S, 
     eps = Fraction(answer["public"]["eps"])
     periods = {}
     for name, seconds in PERIODS:
-        per_machine = seconds // cadence_s
-        t = machines * per_machine
+        per_machine, t = block_count(seconds, cadence_s), block_count(seconds, cadence_s, machines)
         row: dict[str, Any] = {"seconds": seconds, "wipes": t, "wipes_per_machine": per_machine}
         if t == 0:
             periods[name] = row | {"why": f"a wipe every {cadence_s} s doesn't fit a {name}"}

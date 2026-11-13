@@ -6,7 +6,7 @@ and reached in-region, never a process on the developer's node. Trust in it and 
 `trusted-host`. For the timed rounds it commits its coins in a coin tree before the run; for a wipe it fills the
 server's memory with labels it derives itself and flips its coins once the fill is complete. It reads each answer's
 receipt time on its own clock and signs the run's records once, under LMS over SHA-512. The verifier checks a signed run
-against the commitment published before it and publishes the verdict, and for a wipe the survivor bound it certifies.
+against the commitment released with it and publishes the verdict, and for a wipe the survivor bound it certifies.
 
 This directory holds the device's verdicts as executable Lean, the package `lean/` (its README lists the API). The
 device's Python is in `verity/protocols/pous` (below), the reference the Lean is difftested against.
