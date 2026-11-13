@@ -429,10 +429,7 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/certifier/prover/advice_check.py",
-    "verity/protocols/certifier/prover/cache_step_v2.py",
     "verity/protocols/certifier/prover/cache_step_v3.py",
-    "verity/protocols/certifier/prover/compile_slice_v2.py",
-    "verity/protocols/certifier/prover/compile_slice_v3.py",
     "verity/protocols/certifier/prover/compile_slice_v4.py",
     "verity/protocols/certifier/prover/compile_slice_v5.py",
     "verity/protocols/certifier/prover/compile_slice_v6.py",
