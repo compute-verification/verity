@@ -126832,3 +126832,33 @@ Not established: that all four compile in one run at one head (the join's build 
 - That the per-template form refuses no honest play other than Friday's.
 
 NEEDS: nothing of you. To HELDOF: the head in the title is safe to merge for building and tries; its lock is stale until I say `f8f8`'s records are committed.
+
+## WINDOWAT, Fri 13 Nov 07:10Z: NEITHER of #9576's runs is red: its records run (`8c61`) passes four packages and is on the last, `security`'s lock being stale in one `reads` group only, as the body says; its quick tier (`ec73`) has 8 of 75 suites passed, none failed, and may meet its 08:43Z timeout first. My records run (`5849`) waited 30 minutes for an audit slot on cpu-5; `security/Proofs` PASSES there with my 25 names rooted
+
+Mailbox read at `49dfbc816d` (07:07Z); my newest message is yours of 06:11Z. No `~/wt/.pen`. This conversation is on a new machine since about 07:01Z; nothing was unpushed.
+
+**#9576's records run, `r20261113-055558-8c61`** (vy-nebius-cpu-8, at `338c4ad877ca`, running since 05:57Z) [run]:
+
+- `verity/protocols/spot/verifier/lean`: PASS, 6,066 declarations in 57 modules, 0 guarantees.
+- `verity/protocols/certifier/verifier/lean`: PASS, 1,582 declarations in 11 modules, 4 guarantees.
+- `security/Proofs`: PASS, 204,290 declarations in 4,051 modules, the three axioms.
+- `security`: first `FAIL` with "every failure is a record difference", then `check.py --update exit 0 in 3889 s` and PASS (27,776 declarations in 730 modules, 1,137 guarantees) on the regenerated record. I compared the regenerated `security/lean-audit.json` with the head's as JSON [run, on my VM]: the one difference is `reads[Spot.OneStageZk]`, whose `definitions` go from 159 to 162 (`Member.sampled`, `sampledHeld` and `unsampled` added, `runMembers` changed) with its `digest`. No entry under `guarantees` differs. That is what the body's Lock section says.
+- `security/Properties`: not back.
+
+I commit none of it to #9576's branch: a new head would void your mark, and the body says the candidate's records run regenerates the record. The record the run kept is `lean-audit/record/security/lean-audit.json` in that run, if you would rather have it at the head.
+
+**#9576's quick tier, `r20261113-054307-ec73`** (vy-nebius-cpu-1, at `338c4ad877ca`) [run]: 8 suites passed, 0 failed, 86 minutes in: `benchmarks/certifier_term` 14, `verity-core-periods` 30, `verity-pouw-benchmarks` 1,435 (15 skipped), `benchmarks/spot_figures` 239, `verity-core-sampled-proofs` 323 (2 skipped), `benchmarks/one_stage` 1,028, `verity-pouw-check-difftest` 54, `verity-check` 992. It runs "13 parallel suites one at a time on 2 processes, beside 62 others on 1". Its timeout is 10,804 s from its slot, 08:43Z. At this pace it may not finish; if it ends on the timeout I will say so as a timeout, with the count passed, not as a failed suite. GitHub shows no label and no comment on #9576 at 07:09Z [run: `gh pr view 9576`].
+
+**My branch's records run, `r20261113-055755-5849`** (vy-nebius-cpu-5, at `61f3d467a1`) [run]: it waited 1,823 s for one of the node's two Lean audit slots, behind a records run of another lane. `security/Proofs`: PASS, 206,611 declarations in 4,108 modules, the three axioms, 0 guarantees, inline debt 0, with the 25 names I appended to `roots` and no orphan line. It is on `security` now, then `security/Properties`. `Sound.lean`, the 26th file, came after that head and has been through no records run.
+
+**Merged** [run]: soundness's `e2865001c4` (06:12Z; regenerated lock records in `security/lean-audit.json` and `security/Properties/lean-audit.json`, no `.lean` file). Head `e977fbc96f` on `cursor/proofs-windowat-5e4b`, pushed. No Lean source differs from `61b9b9e10f`, where all 26 files compiled (`r20261113-052150-348e`, `r20261113-060827-9270`) [derived]. The three locks parse; `security/Proofs`'s `roots` still has 220 names.
+
+**Correction to my 06:14Z entry.** The ratchet gate found 8 retired-term sites in my commits: 6 of the retired word for a subprotocol and 2 of the retired phrase for an input set. The entry said eight of the first "with a ninth phrase". All 8 are gone at `61b9b9e10f` (gate: "1 change(s), 0 failed") [run].
+
+**Events of yours delivered here** between 07:01Z and 07:02Z: two task-finished notices (OWNREADS, RUNSAS), a Slack message of lean's on PRF-569, and seven of your old timers. I acted on none of them.
+
+**Others' heads at 07:07Z** [run: `git fetch`]: soundness `e2865001c4` (in mine); #9475's branch `d2a507cb1b` (not in mine, not in #9520: `Sampled/OpensAt.lean` is still two); MEMBERS' files `51a2e803cb` and subset `ae80f367e6` (in mine); one-parse `a2d48735c2` (not in mine: it holds `main`); `main` `2e99b1cf48`.
+
+**Every theorem of mine at the form's accept is still true and empty**: `ParamsAt` reads parameters that name no members, so `MembersSetUp` has no instance today. `soundnessAt_form` is in no lock.
+
+**Not established.** Whether `security/Properties` passes at #9576's head, and at mine. Whether `ec73` ends before 08:43Z. `Sound` under a records run of `security/Proofs`. `Commit.Ready` of each member beyond its `domain` clause, which waits on soundness making `Sampled/OpensAt.lean` one. The four other premises of `soundnessAt_form` (`WindowRegistered`, `FormAccepts`, `FormApart`, `RegisteredHolds`).
