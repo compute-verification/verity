@@ -2294,6 +2294,11 @@
         "verity/definitions/evaluate/": "verity/circuits/evaluate/",
         "verity/definitions/requirement/": "verity/circuits/requirement/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/remote/verifier/composition/": "verity/protocols/compose/verifier/lean/"
+      }
     }
   ]
 }
