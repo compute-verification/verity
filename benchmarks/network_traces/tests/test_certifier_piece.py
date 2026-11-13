@@ -377,7 +377,7 @@ def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp
     why = (piece / CP.REFUSED).read_text()
     assert {p.name for p in piece.iterdir()} - {"piece.json"} == {CP.REFUSED, "piece.log"}, why
     assert S.piece_row("communication", tmp_path / "pieces")["verdict"] == "missing"
-    assert {"no kept run": "no warden run kept", "corrupt fetch": "fetch.tar.gz: ReadError", "no report": "the chain wrote no report (exit 7)",
+    assert {"no kept run": "no network certifier run kept", "corrupt fetch": "fetch.tar.gz: ReadError", "no report": "the chain wrote no report (exit 7)",
             "no build": "network-period check: FileNotFoundError", "time limit": "SIGTERM: the piece's time limit",
             "foreign answer": "no verity/certifier/v0 verdict"}[case] in why
     if case != "no kept run":
@@ -432,7 +432,7 @@ def test_a_step_the_leak_guard_refuses_keeps_no_case_and_a_step_that_cant_start_
     (bare / CP.CASES / CP.CASE).write_text("{}")
     out = tmp_path / "bare-pieces" / "certifier"
     assert CP.main(["piece", str(bare), str(K), str(out), "--chain-cmd", "exit 7"]) == 3
-    assert "no warden run kept" in (out / CP.REFUSED).read_text() and not _named(tmp_path, CP.CASE)
+    assert "no network certifier run kept" in (out / CP.REFUSED).read_text() and not _named(tmp_path, CP.CASE)
 
 
 def test_a_chain_file_holding_a_witness_value_is_moved_out_of_dir(tmp_path, network_certifier):
@@ -589,7 +589,7 @@ def _private_chain_out(out: Path) -> Path:
             "chain": {"ok": True, "audit": {"accepted": False, "window_accepted": False}}}},
         "scan/answers.json": {"format": "answers", "delta": "1/100", "registration": {"program": "ab" * 64},
                               "windows": [{"window": 0, "answer": {"verdict": "accept"}, "registrations": []}]},
-        "job.json": {"path": CR.WARDEN, "run": "r-chain", "rc": {"n2": "0", "scan": "0", "tie": "0"}},
+        "job.json": {"path": CR.NETWORK_CERTIFIER, "run": "r-chain", "rc": {"n2": "0", "scan": "0", "tie": "0"}},
     }
     for rel, doc in docs.items():
         (out / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -626,7 +626,7 @@ def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_
         "custody", "certificates", "endpoint", "tie", "n2", "scan", "lean"}
     assert report["steps"]["endpoint"] == {"verdict": "accepted", "in_the_clear": CR.CLEAR["warden_endpoint_served"]}
     assert report["steps"]["scan"]["eps_at_delta"]["units"] == 60
-    assert report["stubbed"] == list(CR.WARDEN_SERVED_STUBBED)
+    assert report["stubbed"] == list(CR.NETWORK_CERTIFIER_SERVED_STUBBED)
     for rel in ("endpoint/report.json", "scan/answers.json"):
         (hold / "chain" / rel).parent.mkdir()
         (hold / "chain" / rel).write_bytes((out / rel).read_bytes())

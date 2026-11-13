@@ -276,7 +276,7 @@ RATIO_BITS = clog2(10 ** 7)
 #: a name the scan checks only for form (`io_request._name_ok`) and doesn't store: a quote, up to 62 of the 93 printable
 #: ASCII characters but `"` and `\`, a quote and spaces
 NAME_BITS = clog2(sum(93 ** k for k in range(63)))
-#: the bits of a warden-form id request besides its prompt ids that the ingress scan leaves free, each field's
+#: the bits of a network-certifier-form id request besides its prompt ids that the ingress scan leaves free, each field's
 #: (`verity/protocols/accounting/certifier/verifier/io_request.py`'s `layout` and checks; `requestBits` of the Lean statement)
 REQUEST_HEAD = {
     "connection ordinal": 32,     # the cell header's u32, which `ingress_scan.step` checks only above the last

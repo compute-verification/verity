@@ -418,7 +418,7 @@ def read_cell(data: bytes, cell_bytes: int) -> tuple[int, int, bytes]:
     size = len(payload)
     if kind not in KIND_NAMES or HEADER.unpack_from(data)[2] != size or \
             cell(kind, ordinal, payload, cell_bytes) != data:
-        raise ValueError("not a warden cell")
+        raise ValueError("not a network certifier cell")
     if (kind == DATA and size != cell_bytes - HEADER.size) or (kind in (PAD, FAIL, REFUSED) and size):
         raise ValueError(f"a {KIND_NAMES[kind]} cell of {size} bytes")
     return kind, ordinal, payload
@@ -583,7 +583,7 @@ class NetworkCertifier:
                  watermark: Callable[[], Awaitable[tuple[Any, Any]]] | None = None,
                  lengths: Callable[[int, tuple[tuple[Released, ...], ...]], None] | None = None) -> None:
         if paced is None and clock is time.monotonic:
-            raise ValueError("a warden on the host's clock is paced: a bucket written on its loop leaves when its tick "
+            raise ValueError("a network certifier on the host's clock is paced: a bucket written on its loop leaves when its tick "
                              "runs, which a server's writes move; give it `paced`, seconds past the slack")
         if paced is not None and not (isinstance(paced, (int, float)) and slack < paced < params.bucket_ms / 1000):
             raise ValueError(f"a paced bucket leaves past the slack and before the next boundary, so that a tick in "

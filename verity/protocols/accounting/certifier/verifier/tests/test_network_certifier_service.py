@@ -682,25 +682,25 @@ def test_a_link_without_an_egress_profile_has_no_verdict(tmp_path):
         assert run.lw.stand_in(opening, draw, FRAMES, SYNCS)
 
 
-WARDEN_DIGEST = bytes(range(64))
+NETWORK_CERTIFIER_DIGEST = bytes(range(64))
 
 
-def test_a_network_certifier_link_holds_both_heads_to_the_wardens_digest_and_reads_no_sync(tmp_path):
+def test_a_network_certifier_link_holds_both_heads_to_the_network_certifiers_digest_and_reads_no_sync(tmp_path):
     """A network certifier link (`NetworkCertifierProfile`) is the plain proof block on the network certifier's records: its
-    public items are `PUBLIC_WARDEN` and its charge 0, a window whose two records the network certifier certified under
+    public items are `PUBLIC_NETWORK_CERTIFIER` and its charge 0, a window whose two records the network certifier certified under
     its parameters digest is accepted with no sync declared, by the Lean's verdict of record, the Python beside it and
     the in-the-clear check alike, and a window whose egress record was certified under the certifier's digest instead is
     a reject. It takes no occupancy profile, and its two ends are one grid."""
     run = Run(tmp_path)
-    run.lw = lw = replace(run.lw, occupancy=(None, None), network_certifier=SVC.NetworkCertifierProfile(3, WARDEN_DIGEST))
+    run.lw = lw = replace(run.lw, occupancy=(None, None), network_certifier=SVC.NetworkCertifierProfile(3, NETWORK_CERTIFIER_DIGEST))
     run.stream = lw.stream(budget=8, delta=DELTA, challenger="challenger-test", coins=lambda n: b"\x07" * n,
                            clock=run.clock)
-    assert lw.spec.public == SVC.PUBLIC_WARDEN and lw.charge == 0.0 and lw.windows == 3
+    assert lw.spec.public == SVC.PUBLIC_NETWORK_CERTIFIER and lw.charge == 0.0 and lw.windows == 3
     assert lw.kind == "warden" and SVC.OF_RECORD[lw.kind] == "lean"
     items = {p.item for p in lw.spec.public}
     assert items >= {"warden", "parameters"} and not items & {"charge", "occupancy"}
     assert lw.spec.digest() != replace(lw, network_certifier=SVC.NetworkCertifierProfile(3, bytes(64))).spec.digest()
-    network_certifier = lambda d, r: run.issuer.certify(r, d, PARAMS, WARDEN_DIGEST)
+    network_certifier = lambda d, r: run.issuer.certify(r, d, PARAMS, NETWORK_CERTIFIER_DIGEST)
     honest = lw.commit(0, network_certifier(EGRESS, egress_records()[0]), network_certifier(INGRESS, ingress_records()[0]), SALTS[0])
     out = standin.decide(lw, run.stream, run.stream.select(run.register(honest)), honest, (), tmp_path / "p0")
     assert out.accepted and out.public == {"verdict": 1, "deadline": 1}
@@ -715,7 +715,7 @@ def test_a_network_certifier_link_holds_both_heads_to_the_wardens_digest_and_rea
     with pytest.raises(ValueError, match="one grid"):
         replace(lw, ingress=replace(PARAMS, buckets=PARAMS.buckets + 1))
     with pytest.raises(ValueError, match="one or more windows"):
-        SVC.NetworkCertifierProfile(0, WARDEN_DIGEST)
+        SVC.NetworkCertifierProfile(0, NETWORK_CERTIFIER_DIGEST)
     with pytest.raises(ValueError, match="64 bytes"):
         SVC.NetworkCertifierProfile(3, bytes(32))
 

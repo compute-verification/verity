@@ -107,7 +107,7 @@ def link(out: Path) -> SimpleNamespace:
     head, dom = WR.check_registration(registration, signer.public_key(), SESSION, PARAMS, LINK, Direction.EGRESS, w)
     window = states[w * T:w * T + T]
     if [EG.rendered(SHAPE, s) for s in window] != list(cells.rows):
-        raise SystemExit(f"window {w}: the states don't render the warden's rows")
+        raise SystemExit(f"window {w}: the states don't render the network certifier's rows")
     ordinals = sorted({s.q for st in window for s in st.slots if s.live})
     return SimpleNamespace(window=w, states=window, cells=cells, registration=registration, head=head, dom=dom,
                            ordinals=ordinals)
@@ -287,10 +287,10 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
                       "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
     law = M.D.parse_design(f"stratified:{n}")
-    win = {"kind": "stand-in", "of": f"the {n} egress bucket rows of the warden's link-window {at.window} "
+    win = {"kind": "stand-in", "of": f"the {n} egress bucket rows of the network certifier's link-window {at.window} "
                                       "(egress_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
-           "link": f"registered: port o1 reads {at.head.value} at the warden's signed root, unit base + t row t; "
+           "link": f"registered: port o1 reads {at.head.value} at the network certifier's signed root, unit base + t row t; "
                    "state the member's committed states at their registered root; o0 the verifier's words 1"}
     rec = R.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
@@ -402,7 +402,7 @@ def prove(a) -> int:
                                "end": sum(r[s * SHAPE.B] == W.END for r in rows for s in range(SHAPE.R))},
                      "ordinals": at.ordinals, "registration": at.registration}
     log(f"{at.head.value}: {T} rows of {WR.row_bytes(PARAMS)} bytes, root {at.head.root.hex()[:16]}, cells "
-        f"{summary['cells']}, ordinals {at.ordinals}; registration read under the warden's key")
+        f"{summary['cells']}, ordinals {at.ordinals}; registration read under the network certifier's key")
     M = WZ._one_stage()
     sg = stager(M, n, out / "stager")
     WZ.check_shape(M, sg)

@@ -638,7 +638,7 @@ def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_ga
              "trusted-host": f"assumed, the auditor's devices not placed: the network certifier ran on {host}, not the "
                              f"prover's {node}",
              "links": [{"name": "certified", "from": host, "to": node, "counted": True,
-                        "via": "the warden's tunnel to the endpoint's port"},
+                        "via": "the network certifier's tunnel to the endpoint's port"},
                        {"name": "gate", "from": node, "to": host, "counted": False,
                         "via": "ssh, both ways: the session's request and prompts, its status and its fetch"}],
              "uncounted": f"every link of {node}'s but the certified one"}
@@ -656,7 +656,7 @@ def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_ga
                                        servers={k: S.piece_server(k, d.parent) for k in [*S.PIECES, "wipe"]})
         clause[name] = line["reason"].split("; the network certifier: ", 1)[1]
     assert clause["gated"].startswith(
-        f"accept (K counts the relayed link alone, {host} to {node} through the warden's tunnel to the endpoint's "
+        f"accept (K counts the relayed link alone, {host} to {node} through the network certifier's tunnel to the endpoint's "
         f"port; every link of {node}'s but the certified one is uncounted and uncertified; "
         f"trusted-host {gated['trusted-host']}; ")
     assert clause["local"].startswith(f"accept (trusted-host {local['trusted-host']}; ")
@@ -4861,7 +4861,7 @@ IDS = "--protocol ids --id-payload 503"
     ("varied", FRONT, "--gate --warmup --bucket-ms-x", IDS, "PREFLIGHT: CERTIFIER_FRONT passes --bucket-ms, which this "
                                                              "tree's certifier front doesn't take"),
     ("front", "", "", "", "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"),
-    ("front", FRONT, "--gate --warmup --bucket-ms", "--seal-hold-gb 8", "PREFLIGHT: the certifier front's warden sends "
+    ("front", FRONT, "--gate --warmup --bucket-ms", "--seal-hold-gb 8", "PREFLIGHT: the certifier front's network certifier sends "
      "id-form requests, which serve-openai answers only under SERVE_ARGS='--protocol ids --id-payload 503'"),
 ])
 def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_front_load_with_no_front(

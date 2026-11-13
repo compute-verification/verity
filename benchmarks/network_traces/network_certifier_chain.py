@@ -1,4 +1,4 @@
-"""warden-chain: the network chain's reads of an active network certifier's run (`network_certifier_serve.py`'s directory, or the
+"""network-certifier-chain: the network chain's reads of an active network certifier's run (`network_certifier_serve.py`'s directory, or the
 gate's ``warden-rehearse``'s: its witness under ``witness/``, its public files under ``out/``), in place of a certifier
 rehearsal's. A certifier rehearsal's run (`certifier_serve.py`, whose records come through `active.Proxy` in front of
 the endpoint, under a certifier key with salted clock certificates) is refused by name (`PROXY`): on the network
@@ -44,7 +44,7 @@ from verity.protocols.accounting.certifier.verifier.schedule import SyncSet
 from verity.commitments.crypto import lms
 
 PROXY = ("a certifier rehearsal's run (certifier_serve.py, its records through active.Proxy in front of the endpoint): "
-         "the warden path reads an active warden's own run (network_certifier_serve.py's, or the gate's warden-rehearse)")
+         "the network certifier path reads an active network certifier's own run (network_certifier_serve.py's, or the gate's warden-rehearse)")
 #: what only a certifier rehearsal's run holds (`certifier_serve.py rehearse`'s, per strategy under ``out/``)
 CERTIFIER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
 #: an id request's fields (`active.id_request`'s keywords but the frame's)
@@ -77,7 +77,7 @@ def deployment(run: Path) -> tuple[dict, W.NetworkCertifierParams]:
             raise SystemExit(f"{run}: {PROXY} ({hit} is there)")
     dep = json.loads(found(run, "deployment.json").read_text())
     if "certifier_key" in dep or "links" in dep or "params" not in dep or dep.get("link") != WS.LINK:
-        raise SystemExit(f"{run}: {PROXY} (its deployment.json isn't a warden's)")
+        raise SystemExit(f"{run}: {PROXY} (its deployment.json isn't a network certifier's)")
     params = W.NetworkCertifierParams(**dep["params"])
     if params.digest.hex() != dep.get("digest"):
         raise SystemExit(f"{run}: deployment.json's digest isn't its parameters'")
@@ -136,7 +136,7 @@ def certificates(run: Path, deployed: bool = False) -> dict:
            "public_is_the_records": None if public is None else theirs == mine, "rows": rows}
     why = ("the key isn't LMS at lms.DEPLOYED" if deployed and not out["key"]["deployed"]
            else "the public certificates.jsonl isn't the certified records' certificates" if public and theirs != mine
-           else f"the warden's own check refuses the run: {'; '.join(check['problems'][:3])}" if not check["accepted"]
+           else f"the network certifier's own check refuses the run: {'; '.join(check['problems'][:3])}" if not check["accepted"]
            else None)
     return out | {"verdict": "refused" if why else "accepted", "why": why}
 
@@ -157,7 +157,7 @@ def io(run: Path) -> dict:
                 try:
                     kind, q, payload = W.read_cell(f, B)
                 except ValueError as e:
-                    violations.append([rec.window * T + t, f"an ingress cell that isn't the warden's: {e}"])
+                    violations.append([rec.window * T + t, f"an ingress cell that isn't the network certifier's: {e}"])
                     continue
                 if kind in (DATA, W.END) and q not in end:
                     data[q] += payload
@@ -172,7 +172,7 @@ def io(run: Path) -> dict:
         except (ValueError, KeyError, TypeError):
             ok = False
         if not ok:
-            violations.append([q, "a request that isn't a warden-form id request"])
+            violations.append([q, "a request that isn't a network-certifier-form id request"])
             continue
         if (first := users.setdefault(fields["user"], q)) != q:
             violations.append([q, f"a request whose user names connection {first} too"])

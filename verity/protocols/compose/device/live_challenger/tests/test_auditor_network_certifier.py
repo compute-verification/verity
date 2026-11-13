@@ -135,24 +135,24 @@ def test_the_least_minutes_are_two_seconds_a_request_three_minutes_and_the_key_m
     assert [A.network_certifier_minutes(n) for n in (4, 60, 61, 100, 400)] == [A.network_certifier_minutes(n, 20) for n in
                                                                     (4, 60, 61, 100, 400)] == [8, 10, 10, 11, 21]
     for h in (10, 20):
-        assert all(A.network_certifier_minutes(n + 30, h) == A.network_certifier_minutes(n, h) + 1 for n in range(4, A.WARDEN_REQUESTS[1] - 29))
+        assert all(A.network_certifier_minutes(n + 30, h) == A.network_certifier_minutes(n, h) + 1 for n in range(4, A.NETWORK_CERTIFIER_REQUESTS[1] - 29))
 
 
 def test_one_network_certifier_session_takes_the_gates_most_requests_at_height_13_in_an_hour(host):
     """The gate's most requests, 1700, at height 13 (8192 one-time keys) take 60 minutes, a scan rehearsal's on its own
     prompts too: one session of about 57 minutes of arrivals and tail, the whole-node wipe's 745 link-windows and more
     (`wipe_gate.sh`)."""
-    assert A.WARDEN_REQUESTS[1] == A.WARDEN_PROMPT_REQUESTS[1] == 1700 and A.network_certifier_minutes(1700, 13) == 60
+    assert A.NETWORK_CERTIFIER_REQUESTS[1] == A.NETWORK_CERTIFIER_PROMPT_REQUESTS[1] == 1700 and A.network_certifier_minutes(1700, 13) == 60
     for token, argv in (("ab12", []), ("cd34", ["--scan", "--prompts", "--tokens", "24"])):
         rc, out = gate(host, REQUEST + argv + ["--requests", "1700", "--minutes", "60", "--height", "13"],
-                       stdin=json.dumps([[1]] * A.WARDEN_PROMPTS[1]).encode(), started=[], token=token)
+                       stdin=json.dumps([[1]] * A.NETWORK_CERTIFIER_PROMPTS[1]).encode(), started=[], token=token)
         assert rc == 0, out
         assert {k: json.loads(out)[k] for k in ("requests", "minutes", "height")} == \
             {"requests": 1700, "minutes": 60, "height": 13}
 
 
 def test_a_network_certifier_key_signs_five_a_link_window_so_1031_windows_take_height_13_and_the_gate_refuses_12(host):
-    """A network certifier window takes `WARDEN_WINDOW_LEAVES` = 5 one-time signatures (three certificates and two cell heads),
+    """A network certifier window takes `NETWORK_CERTIFIER_WINDOW_LEAVES` = 5 one-time signatures (three certificates and two cell heads),
     so height 12's 4096 sign 819 windows and 1031 (55 minutes of the scan's 3.2 s windows) take 13; a load's heads come
     first. 1559 requests at the gate's rate are `network_certifier_windows` 1031 and fit 55 minutes at height 13, which the gate
     takes; at 12 it refuses them with the height that fits, writing nothing, rather than run a session whose signer
@@ -188,7 +188,7 @@ CHECK = {"accepted": True, "problems": [], "summary": {
     "data_bytes": {"egress": 4242}, "completion_tokens": 77, "prompt_tokens": [16, 99], "arrival_lag_ms": {"n": 31},
     "finish_reasons": {"length": 4}}, "connections": [{"ordinal": 1, "outcome": "end", "text_bytes": 300}]}
 #: a stand-in for `network_certifier_serve.py rehearse`'s files: public, then witness
-WARDEN_FILES = (
+NETWORK_CERTIFIER_FILES = (
     f'(out / "deployment.json").write_text(json.dumps({{"upstream": url, "session": "00" * 32}}))\n'
     f'(out / "cells.jsonl").write_text(json.dumps({{"registration": {REGISTRATION!r}, "cost": {{"rows": 600}}}}) + "\\n"'
     f' + json.dumps({{"refused": ["warden", "ingress", 1], "cost": {{"rows": 600}}}}) + "\\n")\n'
@@ -210,7 +210,7 @@ def rehearsal(source: str, seen: list | None = None):
     return command
 
 
-def run_network_certifier(host, source=WARDEN_FILES, seen=None, token="ab12") -> tuple[str, dict]:
+def run_network_certifier(host, source=NETWORK_CERTIFIER_FILES, seen=None, token="ab12") -> tuple[str, dict]:
     rc, out = gate(host, REQUEST, started=[], token=token)
     assert rc == 0, out
     run = json.loads(out)["run"]
@@ -226,14 +226,14 @@ def tar_names(blob: bytes) -> set[str]:
 
 def test_a_network_certifier_rehearsal_writes_witness_apart_and_publishes_its_deployment_registrations_and_certificates(host):
     seen = []
-    run, end = run_network_certifier(host, WARDEN_FILES, seen)
+    run, end = run_network_certifier(host, NETWORK_CERTIFIER_FILES, seen)
     d = host.certifier / run
     (req, work, url), = seen
     assert work == d / A.WITNESS and url.startswith("http://127.0.0.1:") and req["device"] == "warden"
     assert (d / A.WITNESS).stat().st_mode & 0o777 == 0o700
     assert end["device"] == "warden" and end["rc"] == 0 and end["ended"] == "the rehearsal ended"
     assert end["pinned"] == PIN and end["ended_utc"] == "2026-10-24T11:20:00Z" and "runs" not in end
-    assert end["verdict"] == {"accepted": True, "problems": 0, **{k: CHECK["summary"][k] for k in A.WARDEN_COUNTS
+    assert end["verdict"] == {"accepted": True, "problems": 0, **{k: CHECK["summary"][k] for k in A.NETWORK_CERTIFIER_COUNTS
                                                                    if k != "load"}} and "load" not in end
     assert end["registrations"] == {"warden/egress/0": "ab" * 64}
     assert end["witness"] == {n: (d / A.WITNESS / n).stat().st_size for n in (
@@ -436,7 +436,7 @@ def test_a_scan_rehearsal_takes_its_prompts_off_stdin_into_its_witness_alone_and
     assert rc == 0 and json.loads(out)["requests"] == 3 and "window_per_group" not in json.loads(out)
 
     seen = []
-    grouped = WARDEN_FILES + '(out / "groups.json").write_text(json.dumps({"groups": [{"group": 0}]}))\n'
+    grouped = NETWORK_CERTIFIER_FILES + '(out / "groups.json").write_text(json.dumps({"groups": [{"group": 0}]}))\n'
     end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
                           command=rehearsal(grouped, seen), wait=lambda proc, s: proc.wait())
     (got, work, url), = seen
@@ -466,7 +466,7 @@ def test_a_scan_rehearsal_takes_its_prompts_off_stdin_into_its_witness_alone_and
       for bad in (b"", b"x", b"[]", b"[[]]", b"[1]", b"[[1.0]]", b"[[131072]]", b"[[-1]]", b"[[true]]", b'[["1"]]',
                   b'{"p": [[1]]}', b"\xff", json.dumps([[1]] * 401).encode(), json.dumps([[0] * 1025]).encode(),
                   json.dumps([[1], [0] * 2048]).encode())],
-    (["--scan", "--prompts"], b" " * A.WARDEN_PROMPTS_BYTES + b"[[1]]", "--prompts: over 1048576 bytes on stdin"),
+    (["--scan", "--prompts"], b" " * A.NETWORK_CERTIFIER_PROMPTS_BYTES + b"[[1]]", "--prompts: over 1048576 bytes on stdin"),
     (["--scan", "--prompts", "--window-per-group"], json.dumps([[1]] * 5).encode(),
      "--window-per-group: 5 prompts, past a group's 4 (the scan's lanes)"),
     (["--scan", "--scan-class", "w63k4"], b"[[1]]", "--scan-class: the scan's class of the --prompts"),
@@ -485,7 +485,7 @@ def test_the_gate_refuses_prompts_it_cant_check_and_writes_nothing(host, argv, s
 
 
 def test_a_scan_rehearsals_prompt_may_be_the_scans_ki_ids_and_no_more():
-    """A scan rehearsal's prompt is at most the scan's KI = 1024 ids (`WARDEN_PROMPT_IDS`; `test_network_certifier_serve` holds
+    """A scan rehearsal's prompt is at most the scan's KI = 1024 ids (`NETWORK_CERTIFIER_PROMPT_IDS`; `test_network_certifier_serve` holds
     it to `scan_zk.CLASS.KI`): the scan refuses a request of more, so the gate takes exactly KI and refuses KI + 1 at
     input. A varied certifier rehearsal's prompts, which no scan reads, keep the varied plan's 2048
     (`CERTIFIER_PROMPTS`)."""
@@ -499,7 +499,7 @@ def test_a_scan_rehearsal_at_another_class_runs_at_its_egress_cells_with_its_ki_
     """`--scan-class w63k4` is recorded (``scan_class``) only when given, takes a prompt of its KI = 32 ids and 4 tokens
     out (its 5 egress cells less the trailer), and runs the network certifier at the scan's schedule with its 5 egress cells, every
     other flag the class of record's (`test_network_certifier_serve` holds each class's schedule to `scan_zk.py schedule --class`).
-    A request without it is the class of record's: its bounds are `WARDEN_PROMPT_IDS` and `WARDEN_PROMPT_TOKENS`."""
+    A request without it is the class of record's: its bounds are `NETWORK_CERTIFIER_PROMPT_IDS` and `NETWORK_CERTIFIER_PROMPT_TOKENS`."""
     rc, out = gate(host, SCAN + ["--scan-class", "w63k4", "--window-per-group", "--tokens", "4", "--minutes", "4"],
                    stdin=json.dumps([[0] * 32] * 4).encode(), started=[])
     assert rc == 0, out
@@ -514,7 +514,7 @@ def test_a_scan_rehearsal_at_another_class_runs_at_its_egress_cells_with_its_ki_
     assert both[::2] == A.SCAN_SCHEDULE[::2] and dict(zip(both[::2], both[1::2])) == \
         dict(zip(A.SCAN_SCHEDULE[::2], A.SCAN_SCHEDULE[1::2])) | {"--bucket-ms": "4000", "--egress-cells": "5"}
     assert A.scan_bounds("w63k4") == ((1, 32), (1, 4))
-    assert A.scan_bounds() == A.scan_bounds(A.SCAN_CLASS) == (A.WARDEN_PROMPT_IDS, A.WARDEN_PROMPT_TOKENS)
+    assert A.scan_bounds() == A.scan_bounds(A.SCAN_CLASS) == (A.NETWORK_CERTIFIER_PROMPT_IDS, A.NETWORK_CERTIFIER_PROMPT_TOKENS)
 
     rc, out = gate(host, SCAN + ["--minutes", "4"], stdin=b"[[1]]", started=[], token="cd34")
     assert rc == 0, out

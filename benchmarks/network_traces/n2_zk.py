@@ -623,9 +623,9 @@ def prove(a) -> int:
                   "the auditor's challenger's"}})
     if network_certifier:
         summary["warden_run"] = members["honest"].plan["warden_run"]
-        summary["warden"] = {"syncs": "none: the warden runs no shaper clock, so a window declares no sync and the "
+        summary["warden"] = {"syncs": "none: the network certifier runs no shaper clock, so a window declares no sync and the "
                                       "link's charge is 0",
-                             "counts": "the warden's schedule's (service.NetworkCertifierProfile), not a profile's"}
+                             "counts": "the network certifier's schedule's (service.NetworkCertifierProfile), not a profile's"}
     for name in ("extra", "late"):
         if getattr(a, name):
             members[name] = link_windows(Path(getattr(a, name)))
@@ -747,7 +747,7 @@ def main(argv=None) -> int:
     one_session(a.jobs)
     a.rounds = tuple(x for x in a.rounds.split(",") if x)
     if a.warden_run is not None and (a.extra or a.late):
-        raise SystemExit("--extra and --late are certifier-serve's runs: a warden run's members are honest and "
+        raise SystemExit("--extra and --late are certifier-serve's runs: a network certifier run's members are honest and "
                          "tampered")
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")

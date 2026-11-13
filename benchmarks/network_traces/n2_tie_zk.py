@@ -98,12 +98,12 @@ MEMBERS = ("honest", "carried", "forged", "split")
 EXPECT = {"honest": (True, True), "carried": (True, False), "forged": (False, False), "split": (False, False)}
 #: what the verifier receives per execution phase, by file (`member`)
 def _received(T: int) -> dict[str, str]:
-    return {"registration.json": "the registration record (the warden's salted root)", "draw.json": "the stream's draw",
+    return {"registration.json": "the registration record (the network certifier's salted root)", "draw.json": "the stream's draw",
             f"pub-{T}.bin": "the statement's public file",
             "registered.json": "the verifier's own registered reads, null where it has no lanes",
             "session-*": "the session's files",
             "delivered.json": "each unit's pub and o0 rows' salts and its output word",
-            "outcome.json": "the outcome record", "advice.json": "the link's advice and the warden's release"}
+            "outcome.json": "the outcome record", "advice.json": "the link's advice and the network certifier's release"}
 
 
 RECEIVED = _received(T)
@@ -128,7 +128,7 @@ def use(name: str, run: Path | None = None, windows: int = 1) -> None:
     global B, PARAMS, T, PROFILE, MEMBERS, EXPECT, RECEIVED, WINDOWS, LINK, SESSION, REAL
     if name == "warden":
         if run is None or windows < 1:
-            raise SystemExit("--class warden reads a warden run's first link-windows: --warden-run RUN [--windows K]")
+            raise SystemExit("--class warden reads a network certifier run's first link-windows: --warden-run RUN [--windows K]")
         REAL = network_certifier_link(Path(run), windows)
         B, PARAMS, LINK, SESSION, WINDOWS = REAL.params.cell_bytes, REAL.params, REAL.link, REAL.session, windows
         EXPECT = {"honest": (True,) * windows, "forged": (False,) + (True,) * (windows - 1)}
@@ -213,10 +213,10 @@ def network_certifier_link(run: Path, windows: int) -> SimpleNamespace:
         c = WR.Cells.of(WS.LINK, Direction.INGRESS, records[w], params, session, row_salts, wiring_salt)
         if c.head != head:
             raise SystemExit(f"--warden-run {run}: ingress link-window {w}'s record under cells.salts isn't the rows "
-                             "whose root the warden signed")
+                             "whose root the network certifier signed")
         cells.append(c)
     releases, lens = _released(params, cells)
-    return SimpleNamespace(source=f"warden run {dep.get('run_id')} (network_certifier_serve.py, its deployment's key)",
+    return SimpleNamespace(source=f"network certifier run {dep.get('run_id')} (network_certifier_serve.py, its deployment's key)",
                            run_id=dep.get("run_id"), params=params, session=session, link=WS.LINK, cells=cells,
                            records=tuple(records[w] for w in range(windows)), releases=releases, prompt_lens=lens)
 
@@ -240,7 +240,7 @@ def _released(params: W.NetworkCertifierParams, cells: list) -> tuple[list[Q.Rel
                     d["end"] = b if kind == W.END else d["end"]
         for q, first, _n in c.wiring.connections:
             if q in seen and seen[q]["first"] // T_ == c.window and seen[q]["first"] != c.window * T_ + first:
-                raise SystemExit(f"connection {q}'s first cell is in bucket {seen[q]['first']}, and the warden's "
+                raise SystemExit(f"connection {q}'s first cell is in bucket {seen[q]['first']}, and the network certifier's "
                                  f"wiring says {c.window * T_ + first}")
     if sorted(seen) != list(range(1, len(seen) + 1)):
         raise SystemExit(f"the windows' connections are {sorted(seen)}, not ordinals 1 … {len(seen)}")
@@ -470,7 +470,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
         reg = tie.register(stream, tie.registration(x.head, previous))
         previous = reg.digest
         if reg.record["roots"][0]["root"] != x.head.root.hex():
-            raise SystemExit(f"{name} window {x.window}: the registered root is not the warden's")
+            raise SystemExit(f"{name} window {x.window}: the registered root is not the network certifier's")
         draw = stream.select(reg)
         if list(draw.units) != list(range(T)):
             raise SystemExit(f"{name} window {x.window}: the stream drew {list(draw.units)}, not the window's "

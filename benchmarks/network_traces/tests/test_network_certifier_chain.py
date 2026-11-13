@@ -114,7 +114,7 @@ def test_a_certifier_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path,
     run = gate_run(tmp_path)
     shutil.copyfile(certifier_run / "deployment.json", run / "out" / "deployment.json")
     shutil.copyfile(certifier_run / "deployment.json", run / "witness" / "deployment.json")
-    with pytest.raises(SystemExit, match=f"{proxy}.*its deployment.json isn't a warden's"):
+    with pytest.raises(SystemExit, match=f"{proxy}.*its deployment.json isn't a network certifier's"):
         WC.certificates(run)
     run = gate_run(tmp_path / "extra")
     with pytest.raises(SystemExit, match="--extra and --late are certifier-serve's runs"):
@@ -171,14 +171,14 @@ def _steps(tmp_path, run: Path) -> SimpleNamespace:
                          "ok": True}}}),
         scan=put("scan.json", {"ok": True, "T": 32, "warden_run": rid, "rounds": {
             "honest": {"audit": {"window_accepted": True}}, "forged": {"audit": {"window_accepted": False}}}}),
-        job=put("job.json", {"path": cr.WARDEN, "rc": {"n2": "0", "scan": "0", "tie": "0"}}), warden_run=str(run))
+        job=put("job.json", {"path": cr.NETWORK_CERTIFIER, "rc": {"n2": "0", "scan": "0", "tie": "0"}}), warden_run=str(run))
 
 
 def test_the_network_certifier_path_requires_every_step_on_one_network_certifier_run_and_refuses_a_certifier_rehearsals(tmp_path,
                                                                                                 certifier_run):
     steps = _steps(tmp_path, gate_run(tmp_path / "run"))
     got = cr.report(steps)
-    assert got["verdict"] == "accepted" and got["stubbed"] == list(cr.WARDEN_STUBBED)
+    assert got["verdict"] == "accepted" and got["stubbed"] == list(cr.NETWORK_CERTIFIER_STUBBED)
     assert got["negatives_refused"] == {"tie/forged": True, "n2/tampered": True, "scan/forged": True}
     assert got["steps"]["certificates"]["clock_certificates"] == 0 and got["d1"]["acc"] == [True] * sz.W63.windows
     assert got["steps"]["n2"]["clocks"]["source"] == "none"
@@ -187,7 +187,7 @@ def test_the_network_certifier_path_requires_every_step_on_one_network_certifier
     ep = json.loads(Path(steps.endpoint).read_text())
     Path(steps.endpoint).write_text(json.dumps(ep | {"at": cr.SERVED_NODE}))
     served = cr.report(steps)
-    assert served["verdict"] == "accepted" and served["stubbed"] == list(cr.WARDEN_SERVED_STUBBED)
+    assert served["verdict"] == "accepted" and served["stubbed"] == list(cr.NETWORK_CERTIFIER_SERVED_STUBBED)
     assert served["steps"]["endpoint"]["in_the_clear"] == cr.CLEAR["warden_endpoint_served"]
     Path(steps.endpoint).write_text(json.dumps(ep))
 
@@ -201,15 +201,15 @@ def test_the_network_certifier_path_requires_every_step_on_one_network_certifier
 
     proxy = WC.PROXY
     refused("n2", lambda d: {k: v for k, v in d.items() if k != "warden_run"} | {"run": str(certifier_run)},
-            f"N2's summary names no warden run: {proxy}")
-    refused("tie", lambda d: d | {"warden_run": "11" * 32}, "the tie's summary is on warden run " + "11" * 32)
+            f"N2's summary names no network certifier run: {proxy}")
+    refused("tie", lambda d: d | {"warden_run": "11" * 32}, "the tie's summary is on network certifier run " + "11" * 32)
     refused("tie", lambda d: d | {"tie": {"honest": [True, True], "forged": [True, True]}}, "forged's refused")
-    refused("scan", lambda d: d | {"warden_run": None}, "the scan's summary names no warden run")
+    refused("scan", lambda d: d | {"warden_run": None}, "the scan's summary names no network certifier run")
     refused("endpoint", lambda d: d | {"io": {"accepted": False, "violations": [[3, "x"]]}}, "read whole off its cells")
     refused("endpoint", lambda d: {k: v for k, v in d.items() if k != "warden_run"},
-            f"the endpoint's report names no warden run: {proxy}")
+            f"the endpoint's report names no network certifier run: {proxy}")
     certifier_certs = cr.certs(certifier_run, certifier_run)
-    refused("certs", lambda d: certifier_certs, f"the certificates step's input names no warden run: {proxy}")
+    refused("certs", lambda d: certifier_certs, f"the certificates step's input names no network certifier run: {proxy}")
     steps.endpoint = steps.tie = None
     r = cr.report(steps)
     assert r["verdict"] == "refused" and r["steps"]["endpoint"]["verdict"] == "not run"

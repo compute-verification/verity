@@ -94,7 +94,7 @@ def network_certifier_log(d: Path) -> dict[int, dict]:
     return {c["ordinal"]: c for c in json.loads(p.read_text())["connections"]} if p.exists() else {}
 
 
-def feed_releases(d: Path, wardens: dict[int, dict],
+def feed_releases(d: Path, network_certifiers: dict[int, dict],
                   client: dict[str, dict]) -> tuple[dict[str, tuple[int, int]], dict] | None:
     """A network certifier trace's releases under ``--admit tick`` as the server got them: each request's (N, bucket) from the
     release headers that `tick_plugin.TickFeed` wrote to the feed (``raw/tick-feed.jsonl``, keyed by the request's id),
@@ -113,7 +113,7 @@ def feed_releases(d: Path, wardens: dict[int, dict],
             got.setdefault(str(r["key"]), r)
     out, disagree, unlogged = {}, [], 0
     for rid, f in got.items():
-        w = wardens.get(((client.get(rid) or {}).get("warden") or {}).get("ordinal")) or {}
+        w = network_certifiers.get(((client.get(rid) or {}).get("warden") or {}).get("ordinal")) or {}
         server = [f.get("run"), f.get("n"), f.get("bucket")]
         network_certifier = None if w.get("release") is None else [run, w["release"], w["ingress_end"]]
         if server[0] == run and network_certifier in (None, server):
@@ -126,7 +126,7 @@ def feed_releases(d: Path, wardens: dict[int, dict],
                  "disagreeing": disagree[:10]}
 
 
-def arrival_fields(rid: str, c: dict, accepts: dict, added: dict, wardens: dict) -> dict:
+def arrival_fields(rid: str, c: dict, accepts: dict, added: dict, network_certifiers: dict) -> dict:
     """A request's arrival on each side of the wire: the API server's (`vllm_accept_stamp`), the engine core's (the
     tracer's `arrivals`) and, through the network certifier, its connection's (`network_certifier_log`)."""
     a = accepts.get(rid) or {}
@@ -134,7 +134,7 @@ def arrival_fields(rid: str, c: dict, accepts: dict, added: dict, wardens: dict)
     out = {"accept_unix": a.get("accept"), "conn_request": a.get("conn_request"), "headers_unix": a.get("headers"),
            "body_unix": a.get("body"), "engine_add_unix": e.get("t"), "engine_add_index": k}
     if "warden" in c:
-        w = wardens.get(c["warden"]["ordinal"], {})
+        w = network_certifiers.get(c["warden"]["ordinal"], {})
         out["warden"] = {**c["warden"], "arrived": w.get("arrived"), "admitted": w.get("admitted"),
                          "released": w.get("ingress_end"), "ended": w.get("ended"), "ingress_cells": w.get("ingress_cells"),
                          "egress_cells": w.get("egress_cells"), "failed": w.get("failed")}
@@ -204,9 +204,9 @@ def join_trace(d: Path, plan: dict[int, dict], eos: tuple[int, ...] = EOS) -> di
     by_step = {o["step"]: o for o in outputs}
     accepts = {a["id"]: a for a in raw(d, "accept") if a.get("id") and a.get("path") == "/v1/completions"}
     added = {a["id"]: (k, a) for k, a in enumerate(raw(d, "arrivals"))}
-    wardens = network_certifier_log(d)
+    network_certifiers = network_certifier_log(d)
     releases = {rid: (c["release"], c["bucket"]) for rid, c in client.items() if "release" in c}
-    if (fed := feed_releases(d, wardens, client)) is not None:
+    if (fed := feed_releases(d, network_certifiers, client)) is not None:
         releases = fed[0]
     first, last = {}, {}
     with open(d / "steps.jsonl", "w", encoding="utf-8") as f:
@@ -239,7 +239,7 @@ def join_trace(d: Path, plan: dict[int, dict], eos: tuple[int, ...] = EOS) -> di
             "client_error": c.get("error"), "client_finish_reason": c.get("finish_reason"),
             "client_ids_match": c.get("output_ids") == out_ids if c else None,
             **(dict(zip(("release", "bucket"), releases[e["id"]])) if e["id"] in releases else {}),
-            **arrival_fields(e["id"], c, accepts, added, wardens)})
+            **arrival_fields(e["id"], c, accepts, added, network_certifiers)})
     reqs.sort(key=lambda r: (r["i"] is None, r["i"]))
     with open(d / "requests.jsonl", "w", encoding="utf-8") as f:
         for r in reqs:
@@ -308,9 +308,9 @@ def own_accept(r: dict) -> float | None:
 #: time there given the network certifier's summary)
 STAGES = (
     ("client send", lambda r: r.get("send_unix"), lambda r, w: r.get("send_unix")),
-    ("warden arrival", lambda r: network_certifier_at(r, "arrived"), lambda r, w: network_certifier_time(w, network_certifier_at(r, "arrived"))),
-    ("warden admission", lambda r: network_certifier_at(r, "admitted"), lambda r, w: network_certifier_time(w, network_certifier_at(r, "admitted"))),
-    ("warden release", lambda r: network_certifier_at(r, "released"), lambda r, w: network_certifier_time(w, network_certifier_at(r, "released"))),
+    ("network certifier arrival", lambda r: network_certifier_at(r, "arrived"), lambda r, w: network_certifier_time(w, network_certifier_at(r, "arrived"))),
+    ("network certifier admission", lambda r: network_certifier_at(r, "admitted"), lambda r, w: network_certifier_time(w, network_certifier_at(r, "admitted"))),
+    ("network certifier release", lambda r: network_certifier_at(r, "released"), lambda r, w: network_certifier_time(w, network_certifier_at(r, "released"))),
     ("server accept", own_accept, lambda r, w: own_accept(r)),
     ("server headers", lambda r: r.get("headers_unix"), lambda r, w: r.get("headers_unix")),
     ("server body", lambda r: r.get("body_unix"), lambda r, w: r.get("body_unix")),
@@ -885,11 +885,11 @@ FIELDS = """\
   server's `accept_unix` (uvicorn accepted the request's TCP connection) and `conn_request` (the request's place on that
   connection, 1 for its first), `headers_unix` (the app got the request) and `body_unix` (it had read the whole body), and
   the engine core's `engine_add_unix` and `engine_add_index` (when it handed the request to the scheduler, and its place
-  in that order, which FCFS's waiting queue keeps); through the warden, `network_certifier`: its `ordinal` and `outcome` at the
-  client, and from the warden's log the buckets it `arrived`, was `admitted` (s) and `released` (a, its last ingress
+  in that order, which FCFS's waiting queue keeps); through the network certifier, `network_certifier`: its `ordinal` and `outcome` at the
+  client, and from the network certifier's log the buckets it `arrived`, was `admitted` (s) and `released` (a, its last ingress
   cell's), `ended`, its `ingress_cells` and `egress_cells`, and `failed` (a reason, or null). Under `--admit tick`,
   `release` and `bucket`: its number in the network certifier's release order and its release bucket, counted from the
-  trace meta.json's `tick.origin_unix` in `tick.bucket_us` buckets: in a warden trace the network certifier's, as the
+  trace meta.json's `tick.origin_unix` in `tick.bucket_us` buckets: in a network certifier trace the network certifier's, as the
   server got them (`raw/tick-feed.jsonl`) where they agree with its log (`summary.feed_releases`, and summary.json's
   `tick.releases`), elsewhere the client's stand-in's (`corpus.StandIn`).
 - `<trace>/engine.json`: the scheduler's KV pool as the hook saw it (`block_size`, `num_gpu_blocks`, `kv_cache_groups`),
@@ -900,17 +900,17 @@ FIELDS = """\
   `raw/accept.PID.jsonl` (`vllm_accept_stamp`), and under `--admit tick` the feed `tick_plugin.TickFeed` wrote
   (`raw/tick-feed.jsonl`) and the gate's log (`raw/tick.PID.jsonl`: each step's admissions and every event);
   `<trace>/server.log`, `<trace>/meta.json`: the server's log, argv, timings, adversary (seed and prefix-cache mode),
-  warden (its schedule, where it ran) and tick (τ in µs, where τ was calibrated, the origin, the run, the watermark's
-  outcome, and `where` the releases came from: a warden trace's watermark is warden.json's, its last line, the lost
+  network certifier (its schedule, where it ran) and tick (τ in µs, where τ was calibrated, the origin, the run, the watermark's
+  outcome, and `where` the releases came from: a network certifier trace's watermark is warden.json's, its last line, the lost
   releases it named and its error).
-- `<trace>/warden/`, a warden trace's: what the warden published (`deployment.json`, `requests.records`,
+- `<trace>/warden/`, a network certifier trace's: what the network certifier published (`deployment.json`, `requests.records`,
   `responses.records`, an admission-based relay's `fails.records`, `certified.jsonl`, `warden.json` with every
   connection's buckets and outcome), its `serve.log`, the client shim's record of every connection (`client.json`) and
-  `network_certifier_serve.py check`'s `check.json` and `check.log`; where the trace probed them, the warden's every tick,
+  `network_certifier_serve.py check`'s `check.json` and `check.log`; where the trace probed them, the network certifier's every tick,
   publish and collection (`ticks.json`, `network_certifier_probe.py`, with a spawned publisher's keeps as it wrote them in
   `publisher_keeps.jsonl` and its pid in `publisher.pid`), the host's load every 100 ms (`host.jsonl`,
   `host_sample.py`) and the client's event loop (`client_loop.json`, `corpus.drive_network_certifier`); `<trace>.admitted/`,
-  `<trace>.released/`: the trace with the warden's order as its certified ingress (`summary.network_certifier_views`).
+  `<trace>.released/`: the trace with the network certifier's order as its certified ingress (`summary.network_certifier_views`).
 """
 
 
@@ -940,7 +940,7 @@ def readme(s: dict) -> str:
         *([f"Admission: the certified tick (`--admit tick`, `verity_vllm.pipeline.serve_admit`), τ_b {tick['bucket_us']} µs, "
            f"τ_sat {tick['sat_us']} µs, τ_free {tick['free_us']} µs"
            f"{', calibrated on ' + tick['calibrated_from']['trace'] if tick.get('calibrated_from') else ''}, behind the "
-           "network certifier each trace's meta.json `tick.where` names (a warden trace's own, the client's stand-in, "
+           "network certifier each trace's meta.json `tick.where` names (a network certifier trace's own, the client's stand-in, "
            "`corpus.StandIn`, for the others); each trace's gate log is its `tick` in summary.json.",
            ""] if tick else []),
         f"Every trace serves the same {s.get('requests_per_trace')} requests (`plan.jsonl`, seed {s.get('seed')}) on a "
@@ -1004,41 +1004,41 @@ def readme(s: dict) -> str:
                          f"{g.get('opened') or '-'} |")
         fed = {name: g["releases"] for name, g in gated.items() if g.get("releases")}
         if fed:
-            lines += ["", "A warden trace's releases are the server's (`raw/tick-feed.jsonl`), checked against the network "
+            lines += ["", "A network certifier trace's releases are the server's (`raw/tick-feed.jsonl`), checked against the network "
                           "certifier's log of each connection and its run (`summary.feed_releases`); a disagreeing one is "
                           "left out of requests.jsonl, so the replay refuses the trace:", ""]
             lines += [f"- {name}: {r['released']} released, {r['agree']} agree, {r['unlogged']} the certifier logged no "
                       f"release for, {r['disagree']} disagree" for name, r in fed.items()]
-    wardens = {name: t["warden"] for name, t in s["traces"].items() if t.get("warden")}
-    if wardens:
-        where = {w.get("where") for w in wardens.values()}
-        lines += ["", "## The warden", "",
-                  f"The warden traces reach the server only through the active warden ({', '.join(map(str, where))}): "
+    network_certifiers = {name: t["warden"] for name, t in s["traces"].items() if t.get("warden")}
+    if network_certifiers:
+        where = {w.get("where") for w in network_certifiers.values()}
+        lines += ["", "## The network certifier", "",
+                  f"The network certifier traces reach the server only through the active network certifier ({', '.join(map(str, where))}): "
                   "`network_certifier_serve.py serve`, one connection to the server per client connection, each direction in B-byte "
-                  "cells on its schedule, D counted from the warden's "
-                  f"{'; '.join(sorted({w.get('egress_base') or 'base (not recorded)' for w in wardens.values()}))}. Its records, "
+                  "cells on its schedule, D counted from the network certifier's "
+                  f"{'; '.join(sorted({w.get('egress_base') or 'base (not recorded)' for w in network_certifiers.values()}))}. Its records, "
                   "certificates and connection log are in `<trace>/warden/`, and `check` is `network_certifier_serve.py check` of "
                   "them against the client shim's record of every cell.", "",
                   "| trace | B / r / D (buckets of τ ms) | windows | connections | failed | refused | cut | buckets of "
                   "ingress p50 / max | egress cells p50 / max | tick lateness p99 / max ms (over slack) | check |",
                   "|---|---|---|---|---|---|---|---|---|---|---|"]
-        for name, w in wardens.items():
+        for name, w in network_certifiers.items():
             p, ing, eg, late, chk = w["params"], w["ingress_buckets"], w["egress_cells"], w["tick_lateness_ms"] or {}, w["check"]
             verdict = "-" if chk is None else "accepted" if chk["accepted"] else f"refused: {(chk['problems'] or ['?'])[0]}"
             lines.append(f"| {name} | {p['cell_bytes']} / {p['slots']} / {p['delay']} ({p['bucket_ms']}) | {w['windows']} | "
                          f"{w['connections']} | {w['failed'] or 0} | {w['refused']} | {w['cut']} | {ing.get('p50')} / "
                          f"{ing.get('max')} | {eg.get('p50')} / {eg.get('max')} | {late.get('p99')} / {late.get('max')} "
                          f"({late.get('over_slack')}) | {verdict} |")
-        probed = {name: w for name, w in wardens.items() if w.get("ticks") or w.get("client_loop")}
+        probed = {name: w for name, w in network_certifiers.items() if w.get("ticks") or w.get("client_loop")}
         if probed:
             lines += ["", "Where the trace probed them (`network_certifier_probe.py`, `host_sample.py`, `corpus.drive_network_certifier`), the "
-                      "warden's ticks and the client's event loop: each tick's lateness in ms, its own work (`_tick`), the "
-                      "publisher's keep of each record (pack, sign and commit), the warden's collections, the host's 1-minute load "
+                      "network certifier's ticks and the client's event loop: each tick's lateness in ms, its own work (`_tick`), the "
+                      "publisher's keep of each record (pack, sign and commit), the network certifier's collections, the host's 1-minute load "
                       "and CPU pressure, and the client loop's stalls of 20 ms or more. The late ticks one by one, with what "
                       "ran around each, are the trace's `network_certifier.ticks.late` in summary.json.", "",
-                      "| trace | cores (server / client / warden) | ticks | lateness ms: " +
-                      " / ".join(LATE_LABELS) + " | over slack | tick work p99 / max ms | publish max ms | warden "
-                      "collections | load p50 / max | CPU pressure max ms per 100 ms | client stalls (max ms) |",
+                      "| trace | cores (server / client / network certifier) | ticks | lateness ms: " +
+                      " / ".join(LATE_LABELS) + " | over slack | tick work p99 / max ms | publish max ms | network "
+                      "certifier collections | load p50 / max | CPU pressure max ms per 100 ms | client stalls (max ms) |",
                       "|---|---|---|---|---|---|---|---|---|---|---|"]
             for name, w in probed.items():
                 t, c, cores = w.get("ticks") or {}, w.get("client_loop") or {}, w.get("cpus")
@@ -1053,8 +1053,8 @@ def readme(s: dict) -> str:
                              f"{(h.get('psi_ms') or {}).get('max')} | {c.get('stalls')} ({c.get('max_lag_ms')}) |")
         paced = {name: w["ticks"]["publisher"] for name, w in probed.items() if (w.get("ticks") or {}).get("publisher")}
         if paced:
-            lines += ["", ("Where the warden's publisher is a process of its own (`PublisherProcess`), whether it kept up "
-                           "(`summary.publisher_pace`): each record's lag from the warden's handing its close over to its "
+            lines += ["", ("Where the network certifier's publisher is a process of its own (`PublisherProcess`), whether it kept up "
+                           "(`summary.publisher_pace`): each record's lag from the network certifier's handing its close over to its "
                            "having been kept, the share of each window's span the publisher spent keeping that window's "
                            "records, and how long the run's end waited for the last ones past its last tick."), "",
                       ("| trace | records handed / kept | keep ms p50 / max | window busy p50 / max | lag s p50 / max "
@@ -1072,8 +1072,8 @@ def readme(s: dict) -> str:
                   "The order requests arrived in at each place along the wire (`summary.arrival_order`), against the order "
                   "the engine first scheduled them in (the replay's engine order) and against the place before: the pairs "
                   "of requests put the other way round (inversions), and the seconds from the client's send to the arrival "
-                  "there. The warden orders by (bucket, ordinal): its admission s, and its release a, the bucket of the "
-                  "request's last ingress cell, after which the server has the whole request. A warden trace's "
+                  "there. The network certifier orders by (bucket, ordinal): its admission s, and its release a, the bucket of the "
+                  "request's last ingress cell, after which the server has the whole request. A network certifier trace's "
                   "`<trace>.admitted` and `<trace>.released` are the trace with that order as its certified ingress "
                   "(`summary.network_certifier_views`), for `replay.read_corpus_trace`.", ""]
         for name, o in ordered.items():

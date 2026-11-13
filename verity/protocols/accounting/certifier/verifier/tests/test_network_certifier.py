@@ -408,7 +408,7 @@ def test_a_late_tick_faults_both_grids_window_and_the_audit_refuses_it():
     assert [w["accepted"] for w in audit(PARAMS, *records(network_certifier))["windows"]] == [False, True]
 
 
-def test_a_paced_wardens_pacer_writes_each_client_its_cells_and_a_bucket_it_got_late_faults_every_grid():
+def test_a_paced_network_certifiers_pacer_writes_each_client_its_cells_and_a_bucket_it_got_late_faults_every_grid():
     """With `paced`, each connection's cells reach its socket from the pacer, the bytes the loop writes unpaced. On the
     injected clock a bucket's time (origin 0, on the host's monotonic clock) has long passed when its tick hands it, so
     each reaches the pacer late, and the report of a window's first bucket handed faults the three grids' window

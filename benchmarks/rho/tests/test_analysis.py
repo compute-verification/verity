@@ -238,7 +238,7 @@ def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatc
     run.main()
     text = capsys.readouterr().out
     assert ("**Certified ingress:** 9.11e+04 bit/s into a location, intake 0.0282 × α Φ: 1 × each server's declared "
-            "inputs, r_in = 9.11e+04 bit/s (r_out = 2.74e+03 bit/s out) over a 32-bucket link-window, at the warden "
+            "inputs, r_in = 9.11e+04 bit/s (r_out = 2.74e+03 bit/s out) over a 32-bucket link-window, at the network certifier "
             "form's public parameters, the honest-δ form of draft:per-server-ingress's bound (an incorrect ingress "
             "unit's 3.57e+05 bits are excluded, and 0 when every ingress unit is drawn)") in text
     assert "line rate, 4.8e+12 bit/s, is its upper end until Lean proves that bound" in text

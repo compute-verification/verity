@@ -1,4 +1,4 @@
-"""warden-zk: the network certifier's bucket rows read by the proof system. A toy proof block over one row's bits, its
+"""network-certifier-zk: the network certifier's bucket rows read by the proof system. A toy proof block over one row's bits, its
 port registered against the network certifier's signed egress root (`network_certifier_rows`), proved by Flock `prove --zk` behind
 the Lean ZK server and held by the Lean verifier's registered reads (`flock-verify verify --zk --registered`), through
 the one-stage audit as `n2_zk.py` proves N2's head checks.
@@ -6,7 +6,7 @@ the one-stage audit as `n2_zk.py` proves N2's head checks.
     python benchmarks/network_traces/network_certifier_zk.py prove --run DIR --bin flock-circuit --lean flock-verify --out DIR
       [--units 16] [--dry]
 
-* **The run.** A warden-serve run's directory (`network_certifier_serve.py rehearse`'s): `deployment.json`, the records, and the
+* **The run.** A network-certifier-serve run's directory (`network_certifier_serve.py rehearse`'s): `deployment.json`, the records, and the
   rows the network certifier committed and signed while serving, a row a bucket: `cells.jsonl` (each execution phase's
   registration) and `cells.salts` (the rows' salts and the wiring's, witness, which the network certifier hands the
   prover alone).
@@ -101,8 +101,8 @@ def _body(B, S, row):
 
 WardenRowIdentity = CompositeDefinition(
     "WardenRowIdentity", 1, ("B",), _signature, _body, conformance="exact-model-tested", register=False,
-    doc="WardenRowIdentity{B}: one warden bucket row's 8·B bits, each through two NOTs: the toy unit whose port opens "
-        "a row of the warden's signed root (network_certifier_zk.py)")
+    doc="WardenRowIdentity{B}: one network certifier bucket row's 8·B bits, each through two NOTs: the toy unit whose port opens "
+        "a row of the network certifier's signed root (network_certifier_zk.py)")
 
 
 # --- the run ----------------------------------------------------------------------------------------------------------
@@ -133,7 +133,7 @@ def attestation(run: Path, n: int) -> SimpleNamespace:
     head, dom = WR.check_registration(doc["registration"], key, session, params, link, direction, w)
     opening = WR.Cells.of(link, direction, records[w], params, session, salts, wiring_salt)
     if opening.head != head:
-        raise SystemExit(f"window {w}: the warden's rows and wiring under its salts aren't its registered head")
+        raise SystemExit(f"window {w}: the network certifier's rows and wiring under its salts aren't its registered head")
     units = WR.Units.span(q, pads, n)
     placed = opening.wiring.place(params, units.cells)
     B = params.cell_bytes
@@ -360,11 +360,11 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
     law = M.D.parse_design(f"stratified:{n}")
-    win = {"kind": "stand-in", "of": f"the bucket rows of {n} cells of connection {at.connection} in the warden's "
+    win = {"kind": "stand-in", "of": f"the bucket rows of {n} cells of connection {at.connection} in the network certifier's "
                                       f"egress link-window {at.window} (network_certifier_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "units": {"cells": [list(c) for c in at.units.cells], "digest": at.units.digest().hex()},
-           "link": f"registered: port {m['port']} reads {at.units.value(at.head)} at the warden's signed root; "
+           "link": f"registered: port {m['port']} reads {at.units.value(at.head)} at the network certifier's signed root; "
                    f"{', '.join(m['committed'])} the member's committed value at its registered root"}
     rec = R.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
@@ -466,8 +466,8 @@ def prove(a) -> int:
         summary["unsigned_registration"] = f"refused: {e}"
     log(f"{at.head.value}: {N} rows of {B} bytes, root {at.head.root.hex()[:16]}; the Program's units read connection "
         f"{at.connection}'s cells {at.pads} … {at.pads + a.units - 1} (units {at.units.digest().hex()[:16]}) at rows "
-        f"{at.positions}, slots {at.slots} ({at.data_rows} data); the warden's cost {at.cost}; the prover's own root "
-        f"under the warden's certificate: {summary['unsigned_registration']}")
+        f"{at.positions}, slots {at.slots} ({at.data_rows} data); the network certifier's cost {at.cost}; the prover's own root "
+        f"under the network certifier's certificate: {summary['unsigned_registration']}")
     M = _one_stage()
     sg = stager(M, B, a.units, out / "stager")
     check_shape(M, sg)
@@ -481,7 +481,7 @@ def prove(a) -> int:
                                                    "units": m["units"], "predicted_opens": m["opens"],
                                                    "predicted": m["predicted"] or "accepted"}
         log(f"staged {name}: port {m['port']} registered, {m['ands']} ANDs, units {m['units'][:16]}, rows that open "
-            f"the warden's root (host) {sum(m['opens'])}/{len(m['opens'])}; the host's read: "
+            f"the network certifier's root (host) {sum(m['opens'])}/{len(m['opens'])}; the host's read: "
             f"{m['predicted'] or 'accepted'}")
         if (m["predicted"] is None) != MEMBERS[name][1] or WHY.get(name, "") not in (m["predicted"] or ""):
             raise SystemExit(f"{name}: the host's read of its statement ({m['predicted'] or 'accepted'}) is not the "
@@ -517,7 +517,7 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="command", required=True)
     p = sub.add_parser("prove", help="the toy proof block's ports registered against the network certifier's egress root, "
                                      "proved --zk")
-    p.add_argument("--run", required=True, type=Path, help="a warden-serve run's directory")
+    p.add_argument("--run", required=True, type=Path, help="a network-certifier-serve run's directory")
     p.add_argument("--bin")
     p.add_argument("--lean")
     p.add_argument("--out", required=True)

@@ -453,7 +453,7 @@ def main(argv=None) -> int:
                     help="time the stub's writes by a secret bit per egress bucket and write jitter.json")
     ap.add_argument("--paced-ms", type=float, help="the rehearsal's --paced-ms (certifier_serve.py's or "
                                                    "network_certifier_serve.py's default if not given; 0: the proxy writes each "
-                                                   "bucket on its loop, and the warden, which always paces, refuses "
+                                                   "bucket on its loop, and the network certifier, which always paces, refuses "
                                                    "it)")
     ap.add_argument("--warden", action="store_true",
                     help="rehearse the network certifier (network_certifier_serve.py rehearse) instead of the proxy: --requests at --rate a "

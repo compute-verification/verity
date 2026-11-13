@@ -162,7 +162,7 @@ def rehearse(args) -> int:
     sent = traffic(args.serve_run, args.serve_window, start_s=args.start, gap_s=args.gap)
     (out / "traffic.json").write_text(json.dumps(sent))
     network_certifier = [sys.executable, str(Path(__file__).resolve().parents[2] / "benchmarks/network_traces/network_certifier_serve.py")]
-    scratch = Path(tempfile.mkdtemp(prefix="warden-replay-"))
+    scratch = Path(tempfile.mkdtemp(prefix="network-certifier-replay-"))
     procs: list[subprocess.Popen] = []
     try:
         ws.cs.load_key(scratch / "warden", args.height)
@@ -202,7 +202,7 @@ def rehearse(args) -> int:
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="network_certifier_replay.py", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    e, r = sub.add_parser("endpoint", help="the window's recorded answers"), sub.add_parser("rehearse", help="the warden run")
+    e, r = sub.add_parser("endpoint", help="the window's recorded answers"), sub.add_parser("rehearse", help="the network certifier run")
     for q in (e, r):
         q.add_argument("--serve-run", required=True, type=Path, help="a serve-openai run dir (serve.json, requests.jsonl)")
         q.add_argument("--serve-window", required=True, type=int, help="the served run's closed Commit window K")
@@ -213,7 +213,7 @@ def parser() -> argparse.ArgumentParser:
     r.add_argument("--gap", type=float, help="seconds between requests (default: the times the run recorded, `arrivals`)")
     r.add_argument("--tail", type=float, default=10.0, help="seconds the run lasts past the last request's time")
     r.add_argument("--height", type=int, default=ws.cs.HEIGHT, help="the LMS key's tree height")
-    r.add_argument("--start-in", type=float, default=2.0, help="the origin, seconds after the warden is up")
+    r.add_argument("--start-in", type=float, default=2.0, help="the origin, seconds after the network certifier is up")
     r.add_argument("--slack", type=float, default=0.025, help="seconds a tick may run late before it faults")
     ws.schedule_flags(r, "bytes")
     return ap

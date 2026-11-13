@@ -76,7 +76,7 @@ def test_the_class_is_eight_byte_ids_in_and_twenty_four_out_and_its_model_says_s
             S.Shape(**bad)
 
 
-def test_a_wardens_id_request_of_the_class_is_answered_id_form_its_ids_below_the_vocabulary_then_the_trailer():
+def test_a_network_certifiers_id_request_of_the_class_is_answered_id_form_its_ids_below_the_vocabulary_then_the_trailer():
     """With or without the release headers the network certifier puts on the server's copy, the answer is the prompt's
     24 ids (`outputs`, fixed by the prompt alone), each an id event of P bytes, then the trailer: whole id-form, as the
     network certifier's rehearsal reads it (`network_certifier_serve.parse_id_response`), and the scan's cells' payloads cut from
@@ -110,7 +110,7 @@ def test_an_id_request_off_the_class_is_refused_over_http(kw, why):
     assert why in refused(respond(ids_request(**kw)))
 
 
-def test_what_isnt_a_wardens_id_request_is_refused_and_the_models_list_is_the_one_model():
+def test_what_isnt_a_network_certifiers_id_request_is_refused_and_the_models_list_is_the_one_model():
     """An id request built for smaller cells (a class request is one scan cell, so a larger cell's is the same bytes), a
     forwarded copy whose release header isn't where the network certifier puts it, a vLLM-shaped body and another path
     are none of the network certifier's id requests."""
@@ -121,7 +121,7 @@ def test_what_isnt_a_wardens_id_request_is_refused_and_the_models_list_is_the_on
                   ws.http_request({"model": NAME, "prompt": PROMPT, "max_tokens": 24}, "h"),
                   ids_request().replace(b"POST /v1/completions", b"POST /v1/chat/completions", 1)):
         assert other != ids_request() and S.network_certifier_request(other) is None
-        assert "a warden's id request" in refused(respond(other))
+        assert "a network certifier's id request" in refused(respond(other))
     models = respond(b"GET /v1/models HTTP/1.1\r\nhost: s\r\n\r\n")
     assert models.startswith(b"HTTP/1.1 200 OK\r\n")
     assert [m["id"] for m in json.loads(models.partition(b"\r\n\r\n")[2])["data"]] == [NAME]
