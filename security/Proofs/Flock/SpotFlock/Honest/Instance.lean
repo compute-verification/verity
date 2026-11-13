@@ -18,11 +18,13 @@ its input and output each at the boundary record.
 
 What `SpotKSTwo` and `SpotExfilTwo` take of a registration, and what an accepted run of it is, are stated here as
 `Premises`, `InScope` and `Accepts`; `HonestExists` says one registration has all three. At the instance:
+* `builtWired_held`: the frame is SPOT's own at the wired program;
 * `wiresFirst_held`, `wiresMove_held`: there are no wires;
 * `sourcesNamed_held`: every source bit's port is one of `R`'s ports (`Ref.named`), each of which a link names;
-* `builtWired_held`: the frame is SPOT's own at the wired program;
-* `two_held`, `scope_held`: the design evaluates, and every statement that decodes is in the two-stage scope at the
-  compiled code, so an accepted run gives `InScope` (`inScope_of_accepts`).
+* `two_held`, `scope_held`: where every member's circuit is in the scope Flock's hidden-output proof covers and the
+  registered wiring passes its check (`membersScoped`, `wiringOk`), the design evaluates, and every statement that
+  decodes is in the two-stage scope at the compiled code;
+* `inScope_of_accepts`: an accepted run's held code passes both, so an accepted run gives `InScope`.
 
 ## What this does not show
 
@@ -50,7 +52,7 @@ noncomputable abbrev compiled (h : Held) :=
 
 /-- **The premises `SpotKSTwo` takes of a registration**, in its order. -/
 def Premises (h : Held) : Prop :=
-  WiresFirst h ∧ WiresMove h ∧ SourcesNamed h ∧ BuiltWired h (wireMap h) (returned h) ∧ AddressesConnected h
+  BuiltWired h (wireMap h) (returned h) ∧ AddressesConnected h
 
 /-- **Some statement is in the two-stage scope**, the open premise of the compiled code's knowledge soundness
 (`CompiledTwo.Scope`), and with it `InScopeTwo`, which `SpotExfilTwo` reads. -/
@@ -96,7 +98,8 @@ structure Bnd where
   firstK : firstK g = some 1
 
 /-- **A template's reference statement**, named `name`, with its ports (`ports`), each linked to the boundary port of
-its own name, its reference registered reads (`reads`, `.null` for none), and the facts the registration reads of it:
+its own name, its reference registered reads (`reads`, `.null` for none), its reference header (`headers`), and the
+facts the registration reads of it:
 it sets up in Flock's masked scope, reads as a member, with its two units is in the two-stage scope, and each of its
 source bits is at one of its ports. -/
 structure Ref where
@@ -104,6 +107,7 @@ structure Ref where
   name : String
   ports : Array String
   reads : Json
+  headers : Json
   zk : zkOk x = true
   tmpl : ∀ h : Held, h.xS₀ 0 = x → templateOk h 0 = true
   scope : scopeOk (bitsProgs (ms2 x)) (membersPart (ms2 x)) ⟨part2 x, design1, [1]⟩ = true
@@ -121,7 +125,7 @@ def reg (B : Bnd) : RegTwo :=
   { first := B.g, ns := #[2], ks := #[1], blockOf := fun ρ _ p => ρ * 2 + p, always := fun _ => false }
 
 /-- **The auditor's copies at the frame `c₀`**: one template, `R`'s, with two VUs, the second stage's count `1`, `R`'s
-links and rows, its reference registered reads, no wires, and the coins of round 1 only. -/
+links and rows, its reference registered reads and header, no wires, and the coins of round 1 only. -/
 def held₀ (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code) : Held where
   desc := desc
   vus := [#[0, 1]]
@@ -137,6 +141,7 @@ def held₀ (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code) : Held wh
   xS₀ := fun _ => R.x
   xS₀_ok := fun _ => R.zk
   refReads := fun _ => R.reads
+  refHeaders := fun _ => R.headers
   frame := c₀
   more := 0
 
@@ -232,16 +237,19 @@ theorem templates_held :
   simp only [List.all_cons, List.all_nil, Bool.and_true]
   exact R.tmpl _ rfl
 
-/-- **The design evaluates**: the members' replay partition over one request's boundary layout, the design `subset:1`
-and the count `1`. -/
-theorem two_held (s : AuditStatement) :
+/-- **The design evaluates** where every member's circuit is in the scope Flock's hidden-output proof covers and the
+registered wiring passes its check: the members' replay partition over one request's boundary layout, the design
+`subset:1` and the count `1`. -/
+theorem two_held (hS : membersScoped (held R B desc q c₀) = true) (hW : wiringOk (held R B desc q c₀) = true)
+    (s : AuditStatement) :
     two (held R B desc q c₀) s = some ⟨filesReplay (ms2 R.x) #[2] (oneLayout B.gs), design1, [1]⟩ := by
   have hc : (scopeOk (bitsProgs (held R B desc q c₀).ms) (membersPart (held R B desc q c₀).ms)
       ⟨filesReplay (held R B desc q c₀).ms (held R B desc q c₀).reg.ns (oneLayout B.gs), design1,
         (held R B desc q c₀).k⟩ &&
       filesOk (held R B desc q c₀).reg (held R B desc q c₀).ms (oneLayout B.gs) (held R B desc q c₀).k &&
-      (List.range (held R B desc q c₀).ms.length).all (templateOk (held R B desc q c₀))) = true := by
-    rw [templates_held, ms_held]
+      (List.range (held R B desc q c₀).ms.length).all (templateOk (held R B desc q c₀)) &&
+      membersScoped (held R B desc q c₀) && wiringOk (held R B desc q c₀)) = true := by
+    rw [hS, hW, templates_held, ms_held]
     simp only [Bool.and_true, Bool.and_eq_true]
     refine ⟨?_, filesOk_held R B⟩
     rw [filesReplay_oneLayout]
@@ -334,11 +342,12 @@ theorem partition_compiled (h : Held) : (compiled h).partition = partitionWired 
 
 theorem two_compiled (h : Held) : (compiled h).two = twoConnected h := rfl
 
-/-- **Every statement that decodes is in the two-stage scope at the compiled code**: the program is the members'
-returning the gates the boundary record holds, the partition and design are uncut since the wiring moves nothing,
-and the two-stage scope holds of the members' (`Ref.scope`), which returning fewer gates keeps
-(`inScopeTwo_filter`). -/
-theorem scope_held (x : Msg) (st : Roots) (hx : decode x = some st) : (compiled (held R B desc q c₀)).Scope x := by
+/-- **Every statement that decodes is in the two-stage scope at the compiled code**, where the design evaluates
+(`two_held`): the program is the members' returning the gates the boundary record holds, the partition and design
+are uncut since the wiring moves nothing, and the two-stage scope holds of the members' (`Ref.scope`), which
+returning fewer gates keeps (`inScopeTwo_filter`). -/
+theorem scope_held (hS : membersScoped (held R B desc q c₀) = true) (hW : wiringOk (held R B desc q c₀) = true)
+    (x : Msg) (st : Roots) (hx : decode x = some st) : (compiled (held R B desc q c₀)).Scope x := by
   obtain ⟨s₁, hs₁⟩ : ∃ s₁, parse (held R B desc q c₀) x = some s₁ := by simp [parse, hx]
   refine ⟨wiredStmt (held R B desc q c₀) s₁, membersPart (ms2 R.x),
     ⟨filesReplay (ms2 R.x) #[2] (oneLayout B.gs), design1, [1]⟩, ?_, ?_, ?_, ?_⟩
@@ -352,24 +361,27 @@ theorem scope_held (x : Msg) (st : Roots) (hx : decode x = some st) : (compiled 
   · rw [two_compiled]
     show ((two (held R B desc q c₀) _).map fun d =>
       ({ d with part := d.part.cut (wireMap (held R B desc q c₀)) } : Design.Two)) = _
-    rw [two_held, wireMap_held]
+    rw [two_held R B desc q c₀ hS hW, wireMap_held]
     simp only [Option.map_some, cut_id]
   · unfold wiredStmt
     rw [wireMap_held, wired_id_keep]
     exact inScopeTwo_filter (s := { s₁ with prog := bitsProgs (held R B desc q c₀).ms }) _
       (scopeOk_sound R.scope _ rfl) rfl
 
-/-- **An accepted run's statement is in scope**: its statement decodes. -/
+/-- **An accepted run's statement is in scope**: its statement decodes, and the design evaluates at it, so the held
+code passes what the design's evaluation decides (`scoped_wiring_of_two`). -/
 theorem inScope_of_accepts (hA : Accepts (held R B desc q c₀)) : InScope (held R B desc q c₀) := by
-  obtain ⟨r, Pt, d, spec, hp, -⟩ := hA
+  obtain ⟨r, Pt, d, spec, hp, -, h2, -⟩ := hA
+  obtain ⟨hS, hW⟩ := scoped_wiring_of_two _ h2
   cases hx : decode r.x with
   | none => simp [parse, hx] at hp
-  | some st => exact ⟨r.x, scope_held R B desc q c₀ r.x st hx⟩
+  | some st => exact ⟨r.x, scope_held R B desc q c₀ hS hW r.x st hx⟩
 
 /-! ## The statements the instance owes -/
 
-/-- **The instance's premises, short of the address premise**: what `wiresFirst_held`, `wiresMove_held`,
-`sourcesNamed_held` and `builtWired_held` give. -/
+/-- **What holds of the instance's wiring and frame with no hypothesis**: `wiresFirst_held`, `wiresMove_held` and
+`sourcesNamed_held`, three clauses of the registered wiring's check, and `builtWired_held`, the first of the two
+premises. -/
 theorem design_held :
     WiresFirst (held R B desc q c₀) ∧ WiresMove (held R B desc q c₀) ∧ SourcesNamed (held R B desc q c₀) ∧
       BuiltWired (held R B desc q c₀) (wireMap (held R B desc q c₀)) (returned (held R B desc q c₀)) :=
@@ -385,7 +397,6 @@ def Owed : Prop :=
 /-- **What the instance owes is all `HonestExists` lacks.** -/
 theorem honest_of_owed (hO : Owed) : HonestExists := by
   obtain ⟨R, B, desc, q, c₀, hA, hR⟩ := hO
-  obtain ⟨h1, h2, h3, h4⟩ := design_held R B desc q c₀
-  exact ⟨held R B desc q c₀, ⟨h1, h2, h3, h4, hA⟩, inScope_of_accepts R B desc q c₀ hR, hR⟩
+  exact ⟨held R B desc q c₀, ⟨builtWired_held R B desc q c₀, hA⟩, inScope_of_accepts R B desc q c₀ hR, hR⟩
 
 end SpotFlock.Honest
