@@ -87,7 +87,7 @@ def test_with_spot_it_adds_tiers_escape_and_cheating_shares():
     assert shares[0] == 1 > shares[1] > 0
 
 
-def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_dampener_remote_at_full_capacity():
+def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_slowdown_remote_at_full_capacity():
     """Lean's `DampenerRemote` with no declared products (the declared share `ν = 0`) and χ = 0 is
     `max(1, 1/(s + (1 − s) u / MFU₀))`,
     against an unencumbered trainer at `MFU₀`. The bound counts every gate at capacity against the reference at
@@ -112,11 +112,11 @@ def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_dampener_remot
 
 #: `Nci.Dampener.remoteDampener` as security/Definitions/Nci/Remote.lean defines it, and the conclusion of
 #: `Nci.Guarantees.DampenerRemote` (security/Definitions/Nci/Guarantees/Remote.lean) that names it `ρ`
-REMOTE_DAMPENER = "noncomputable def remoteDampener (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))"
+REMOTE_SLOWDOWN = "noncomputable def remoteDampener (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))"
 REMOTE_CONCLUSION = "remoteDampener mfu (unregisteredShare C U)"
 
 
-def test_the_remote_overhead_is_lean_remote_dampener_at_the_references_mfu():
+def test_the_remote_overhead_is_lean_remote_slowdown_at_the_references_mfu():
     """Without reference efficiency the remote slowdown is `DampenerRemote`'s `ρ`, `remoteDampener MFU₀ s x ≤
     hardwareMultiple MFU₀`, at the reference training algorithm's MFU (0.4): free compute counts at peak. Under it free
     compute counts at `MFU₀`, so `ρ = max(1, 1/(s + x))`, the padded size ratio. Hosts carry no compute, so tiers'
@@ -124,7 +124,7 @@ def test_the_remote_overhead_is_lean_remote_dampener_at_the_references_mfu():
     `verity/protocols/inference_only/nci`'s slowdown reads it. Without both assumptions tiers' server (host CPUs 12.6% of the GPUs)
     has `x = 0.45`, which outruns that developer, so `ρ = 1`; the H200 (2.9%) has 1.12."""
     lean_dir = ROOT / "security" / "Definitions" / "Nci"
-    assert REMOTE_DAMPENER in (lean_dir / "Remote.lean").read_text()
+    assert REMOTE_SLOWDOWN in (lean_dir / "Remote.lean").read_text()
     assert REMOTE_CONCLUSION in (lean_dir / "Guarantees" / "Remote.lean").read_text()
     for mfu, s, x in ((0.4, 0.001, 0.45), (1.0, 0.0, 0.2), (0.4, 0.0, 0.0), (0.5, 0.2, 0.01)):
         rate = s + x / mfu
@@ -136,7 +136,7 @@ def test_the_remote_overhead_is_lean_remote_dampener_at_the_references_mfu():
     x = t1["residual"] + t1["declared"] + t1["cheat"]
     assert x / T.DEFAULTS["mfu"] < 1
     peak = REG.override({"task.reference_efficiency": False})
-    # tiers counts no dark share (s = 0) where rho's fleet has 0.1%
+    # tiers counts no unregistered share (s = 0) where rho's fleet has 0.1%
     for reg, ref, want in ((REG, True, 3.040), (peak, False, 1.218)):
         lo = evaluate_named(reg, "remote-tiers-kimi").lo
         assert lo == pytest.approx(multiple_bound(T.DEFAULTS["mfu"], t1["unmonitored"], x, ref), rel=5e-3)
@@ -198,7 +198,7 @@ def test_a_regime_table_with_a_stray_key_or_a_base_loop_is_refused():
         Detection(1, 3600, sampled=True)
 
 
-def test_the_serving_block_is_a_server_between_two_wipes_and_k_wipe_per_server():
+def test_the_server_block_is_a_server_between_two_wipes_and_k_wipe_per_server():
     """`(c_S, k_S) = (⌊Φ_s Δ_wipe⌋, k_wipe + (r_in + r_side) Δ_wipe)`, `k_wipe` of the server's whole memory (ruled)."""
     ctx = context("reference-h200")
     r = envelopes.regime(REG, "onsite")
@@ -215,7 +215,7 @@ def test_the_serving_block_is_a_server_between_two_wipes_and_k_wipe_per_server()
 
 def test_todays_wipe_leaves_about_12_gb_a_server_and_its_boot_disk():
     """`regime.onsite-today`: `k_wipe` of about 12 GB a server plus each server's (or compute tray's) boot disk, which
-    the wipe doesn't reach; without the boot disk an H200 serving block's input is within 2x of the 5 GB reference's."""
+    the wipe doesn't reach; without the boot disk an H200 server block's input is within 2x of the 5 GB reference's."""
     onsite, today = envelopes.regime(REG, "onsite"), envelopes.regime(REG, "onsite-today")
     for fleet in ("reference-h200", "reference-gb200"):
         loc = context(fleet).location
@@ -302,7 +302,7 @@ def test_a_servers_certified_ingress_is_its_declared_inputs_and_line_rate_the_up
 def test_onsite_w63_beside_the_reference():
     """W63's cadence beside the reference H200 server (`reference-onsite-h200`, ingress α Φ = 3.23 Mbit/s): 91.1 kbit/s
     a 32-bucket link-window, 0.028 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.80e10 bits and the
-    lower bound's padded size ratio, which a dark share of 1% caps near 100, rises from 98.7 to 99.8, with the best
+    lower bound's padded size ratio, which an unregistered share of 1% caps near 100, rises from 98.7 to 99.8, with the best
     attack's at 249 and 250; at line rate both fall to remote's (2.99, at the card table's clock). The cadence feeds the
     serving this package credits only if outputs outnumber prompts more than 20:1, so it isn't the default."""
     reg = REG.override({"fleet.world-h200.eps_unreg": 0.01})
