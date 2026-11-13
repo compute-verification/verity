@@ -948,9 +948,9 @@
    "Accounting.Assumptions.TS.OperandHMu",
    "Accounting.Assumptions.TS.ReceiptLuckAt",
    "Accounting.Assumptions.TS.UnitFixed",
-   "Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase",
    "Accounting.Compose.PrefixOf",
    "Accounting.Compose.Scope",
+   "Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase",
    "Properties.Pouw.Period.RegisteredBeforeDraw",
    "Properties.Pouw.Period.SaltIsLiveCoin",
    "Properties.Pouw.Period.SampleIsCoin",
@@ -1639,8 +1639,8 @@
   "Properties.Challenger.Drawn.familyOneCommitmentRead": {
    "type_hash": "c32f42da09da1597027e700239c40027d4973993f5c7627028ccdb1bf9500f31",
    "missing": "honest",
-   "why": "an honest instance is a whole withheld session that Challenger.coinsReason passes: the evidence's key from LMS key generation, the auditor's ledger with its signed open, the session's signed record and its close over the release log, and each coin read opened under the session's commitment with its salt and path, all as the JSON the reader parses, with the bytes read; no proof builds one yet",
-   "unfolded_hash": "efc27f982579ec13ebbf8c7ad2c5de5834f478f37618f1581927d4e5ee214873"
+   "why": "an honest instance is a whole withheld session that Challenger.coinsReason passes under the verifier's key: a key from LMS key generation, the auditor's ledger with its signed open, the session's signed record and its close over the release log, and each coin read opened under the session's commitment with its salt and path, all as the JSON the reader parses, with the bytes read; no proof builds one yet",
+   "unfolded_hash": "0c9cd9cc1ff7c0c68e2f27b924ca9402548d77da20ca38b8c224d14e3b58f286"
   },
   "Properties.Composition.acceptMeans": {
    "type_hash": "62c9c4ab346e4e8737a8dd33e32a7442528b5943912fec653650c09f23382320",
@@ -4506,26 +4506,25 @@
     "reads": []
    },
    "type_hash": "c32f42da09da1597027e700239c40027d4973993f5c7627028ccdb1bf9500f31",
-   "unfolded_hash": "efc27f982579ec13ebbf8c7ad2c5de5834f478f37618f1581927d4e5ee214873"
+   "unfolded_hash": "0c9cd9cc1ff7c0c68e2f27b924ca9402548d77da20ca38b8c224d14e3b58f286"
   },
   "Properties.Challenger.familyOneCommitmentRead_nontrivial": {
    "owner": "@proofs",
    "signature": [
-    "Properties.Challenger.familyOneCommitmentRead_nontrivial (key : Spot.Challenger.ChallengerKey) :",
+    "Properties.Challenger.familyOneCommitmentRead_nontrivial :",
     "  Not",
-    "    (And (Eq (Spot.Challenger.ChallengerKey.ofJson (Spot.getD Lean.Json.null \"key\")) (Except.ok key))",
-    "      (Or",
-    "        (Exists fun s =>",
-    "          And (List.instMembership.mem (Properties.Challenger.idle.runs key.pub) s)",
-    "            (And (Properties.Challenger.OpensOn Properties.Challenger.idle key.pub \"\" s.id)",
-    "              (And (Eq ((s.released \"\" ByteArray.empty).extract 0 ByteArray.empty.size) ByteArray.empty)",
-    "                (And",
-    "                  (Eq",
-    "                    (instHDiv.hDiv (instHSub.hSub (instHAdd.hAdd ByteArray.empty.size Spot.Challenger.COIN_BYTES) 1)",
-    "                      Spot.Challenger.COIN_BYTES)",
-    "                    (instHDiv.hDiv (s.released \"\" ByteArray.empty).size Spot.Challenger.COIN_BYTES))",
-    "                  (∀ (r : ByteArray), List.instMembership.mem (s.roots \"\") r → Eq r ByteArray.empty)))))",
-    "        (Properties.Challenger.Break Properties.Challenger.idle key \"\" Lean.Json.null)))"
+    "    (Or",
+    "      (Exists fun s =>",
+    "        And (List.instMembership.mem (Properties.Challenger.idle.runs Properties.Challenger.noKey.pub) s)",
+    "          (And (Properties.Challenger.OpensOn Properties.Challenger.idle Properties.Challenger.noKey.pub \"\" s.id)",
+    "            (And (Eq ((s.released \"\" ByteArray.empty).extract 0 ByteArray.empty.size) ByteArray.empty)",
+    "              (And",
+    "                (Eq",
+    "                  (instHDiv.hDiv (instHSub.hSub (instHAdd.hAdd ByteArray.empty.size Spot.Challenger.COIN_BYTES) 1)",
+    "                    Spot.Challenger.COIN_BYTES)",
+    "                  (instHDiv.hDiv (s.released \"\" ByteArray.empty).size Spot.Challenger.COIN_BYTES))",
+    "                (∀ (r : ByteArray), List.instMembership.mem (s.roots \"\") r → Eq r ByteArray.empty)))))",
+    "      (Properties.Challenger.Break Properties.Challenger.idle Properties.Challenger.noKey \"\" Lean.Json.null))"
    ],
    "assumptions": [],
    "premises": {
@@ -4534,7 +4533,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "afc65ff6d938e9848c1ce97c77185720ef020153e4fee4e710f54994734dc192"
+   "type_hash": "12cc19971ea099cfc9cd50cfc554cb55d253b3c3df70a23e273181d6006237d5"
   },
   "Properties.Challenger.familyOneCommitment_nontrivial": {
    "owner": "@proofs",
@@ -18331,7 +18330,7 @@
    }
   },
   "Flock.KsScope": {
-   "digest": "dae830d8bd56251f1c7e1ef681ce31c737f61ad9ecc21a0487aacf9b595ba6ee",
+   "digest": "99d3907f49fa93df5f6d1ec478723e00ec32f813080e1aac78890be3de16e8e0",
    "definitions": {
     "Flock.KsScope.ROOTS_WHY": "856122f76860449b1a6c7504a4ecf832f3c95daaabfa94f7812092d433ee5c64",
     "Flock.KsScope.SCOPE_WHY": "dd0e53f27f892c737ac8ffd6097ac7a8412479c7e79053f6fda35dc725ada0c0",
@@ -18340,6 +18339,7 @@
     "Flock.KsScope.checkOf": "6be630c05de52e27f378c42885fc58b4225079532c110a56cbc2d20b8b242345",
     "Flock.KsScope.collidesT": "d64b1507c7afd599e8161438c8ea995b72b9f89b67f3f3552c4cf8848a99d6a0",
     "Flock.KsScope.drawWhy": "31490eabd56ff3e8894152ecbe4e94d5669e623c79d6f763cc1121f716063779",
+    "Flock.KsScope.filesOf": "7b62684b3c3d417360fb28a4a6286772f3f8fe86a254bfb5a3e49e2be3289284",
     "Flock.KsScope.filesWhy": "be405c9f8b28eab80ce9674a5edb080dcf02d182ae36b237616128f066603f9c",
     "Flock.KsScope.rootT": "ab0baeea16d9ef7ded8923f9e81f4856026bef143cd82ea63b60583063c129ce",
     "Flock.KsScope.sharedWhy": "005abe36bb114dd69776434e06bbe9104d5eb1291760081d0e50df9a7cd4c1dc",
@@ -23874,11 +23874,11 @@
    }
   },
   "Properties.Challenger": {
-   "digest": "bee13ab4c17ab27ba4cdd5459f2d4bc318e597321fdaac039a5d07a9f38298dc",
+   "digest": "5e70a991f5e57de2de13f7cb69131f5e2e105114aa8ec27eebb2f9c974ba1912",
    "definitions": {
     "Properties.Challenger.Break": "b3a0f36762db752ad1a5316491d82b23edac0d1c519f753243565c1905456fb4",
     "Properties.Challenger.FamilyOneCommitment": "8b0ae7b6a4e2d3ea52ee7a813b1563f6bca38efe377383bd62e765778426ba8e",
-    "Properties.Challenger.FamilyOneCommitmentRead": "4399add87723e765cb97ecad0e43fff26c733da1cbcab747ae4a308ffc13326b",
+    "Properties.Challenger.FamilyOneCommitmentRead": "da17f240b917ff8b28a6af323b758c3e1e52baad568eae829f2947c3ccac7ef3",
     "Properties.Challenger.Finding": "75d7ee0e9589fbe5704427aad2f4e942b6637855d763d3a36b147c5031eaddd2",
     "Properties.Challenger.Finding.Valid": "9ee9ebb14acb8b1ecb6a74b7887fc11071864030ffc37081bc26f4adffd4f36c",
     "Properties.Challenger.Finding.casesOn": "e8f702d22c32eb40c8744755012a722b8f05f76a08fac627913872961c32c713",
@@ -26484,9 +26484,8 @@
    }
   },
   "Spot.ChallengerCoins": {
-   "digest": "5ae507c2abc842eaa6b4d3f3752cf8e108d9a3de08341bfff8d9ab486f8a53af",
+   "digest": "c1993a306ae72d94436fc56503e9f3e8f747579c0e205e8fb33132519a565800",
    "definitions": {
-    "Spot.Challenger.COINS_FORM": "c6d23cf67ed8d57dcc00af1d55acbd3c11f32053ca2e574aa8dd4c2567c17d81",
     "Spot.Challenger.FAMILY_ROOT": "73d04951cb6d6dd23f80140003c5dd9cd93bd72079ccbe9ccadaa50bfcf55d71",
     "Spot.Challenger.LIMITS": "e7bfb471561d80fdee056273c9f5c772f1d8042bb580ecf0c98661c934fb8008",
     "Spot.Challenger.Limits": "a0216a077b6946bf95377c777c0353192d673edebe19b2d0854123fcfef6433e",
@@ -26505,17 +26504,21 @@
     "Spot.Challenger.WITHHELD": "218d71c722297a393b300c9c0d32291a596d31ea111ff6e032acf001e1db8718",
     "Spot.Challenger.arrSize": "1ba24d09e64bb2ca0b304ea389f91ab093599edac9fdd8d71eb7e16507962c55",
     "Spot.Challenger.challengerStream": "bf344249321fd12224dcbbf9a0a95a43b345e05bea215fb3cd20c8c720b7cedf",
-    "Spot.Challenger.coinsReason": "290ee50e8ce48b884663a56881407512fd6db1696cb5f570ae33cf6a47cf0997",
-    "Spot.Challenger.readReason": "d4e026a5d6c88c8d1ace2a2cdd5917a2cc5db1037c4079110961ee8987950db5",
+    "Spot.Challenger.startReason": "6a6b7f192eaf957ce913693fb51edba82557b4481a37bc0760743ff0d5978a88",
     "Spot.Challenger.withheldOn": "0b901e9670b0baeb11447d1b44a31ef6052853b2d04bd530284525d1d902ecf4",
     "Spot.Challenger.withinAt": "f6f5b3c70fda31eee55c13ee910e2ef8c8c3f61205d67d9361ca2859f535e35d"
    }
   },
   "Spot.ChallengerDraw": {
-   "digest": "5a4c3d6138da76887bbde1239966b0ab6e0badc58090401097f506b0ae49f6c0",
+   "digest": "fb55d2c6d64e8b3de31664d88093e9664b3d1b9ab79b788a9dbc929da4b711ce",
    "definitions": {
+    "Spot.Challenger.COINS_MAIN": "82ef4ad5d437e8aed440566a48e77f980d916159212f45e27a1007f67f84b77d",
     "Spot.Challenger.DRAW_FORM": "c81caa0926220aa7353bbe024144587758887b28a1ba7db466af006cf389fe83",
-    "Spot.Challenger.drawCoins": "7e3e94697b019a42cf37c190dd54ece9db7d4961202adaffa56856f3f4623360"
+    "Spot.Challenger.coinsReason": "8b7ef56ce12b61274b8ab5c50a73c04c56756377b037c7206dc06eafb486f08d",
+    "Spot.Challenger.commitName?": "891098f782949bde965f0ab0ff2e36afe1486c9d145d8c4b8c25ae5c10ffe79f",
+    "Spot.Challenger.drawCoins": "7e3e94697b019a42cf37c190dd54ece9db7d4961202adaffa56856f3f4623360",
+    "Spot.Challenger.mainLines?": "f899f9176947c2c5851aac702afc5e3c65c3c70cbb912bf7d7e11f52deef1930",
+    "Spot.Challenger.sameMain": "50b49802a2674420870965556743b05a8be60ef1e15f7c0d7837cd0413daad0e"
    }
   },
   "Spot.ChallengerInnerTrees": {
@@ -27109,7 +27112,7 @@
    }
   },
   "Spot.OneStageZk": {
-   "digest": "98db71834393617798ff105c218e45cbec1d83423f947ae53655757497af811d",
+   "digest": "df551560db040f9f9c993847f7ae47b13e48f90712fd2f11062ec1969b9caac8",
    "definitions": {
     "Spot.OneStageZk.EVIDENCE_FITS": "33f8f6fbb586fcb57dae3c7bed6c76ad5db01ca4720f43a6ca18ab4f9dd6d705",
     "Spot.OneStageZk.Evidence": "f5fc59dc0b4a0d0d0732da27e636afe6ec207cbbf2bbe5666d18c048c5459e52",
@@ -27127,6 +27130,7 @@
     "Spot.OneStageZk.Member": "438d2f0ccacb3b2be9c14d3f916c837e4ce5b42a6efce589d08019d6c4202f61",
     "Spot.OneStageZk.Member.blockHeld": "30d9e01956c29f94b2fbf784d7a5f074b5ddd59f7fa9c244a15e3259e3bec29f",
     "Spot.OneStageZk.Member.count": "1ccacbab061c24258c9cc7c8cd6eba72c5ffbb63a1c5852aca2d3f4f51ed1f4a",
+    "Spot.OneStageZk.Member.files": "0e8fecd818bc892f00193dc80c0b6335a0b2a61bc7c64fe0ff520630ba11599d",
     "Spot.OneStageZk.Member.first": "6704f9f9a0b2f923eebd37bb820de2b614b5a62c4f7e69dc240f8023a75f05be",
     "Spot.OneStageZk.Member.g": "969b1d5d33ac4edd0908ee2381cd0c7def8467b1b3cec5aacb30a6d49bc264f1",
     "Spot.OneStageZk.Member.heldAt": "442a5999bd5a6c52e035cc11079651076a74dad88df6e1ad2aba22abfa663d7a",
@@ -27175,6 +27179,7 @@
     "Spot.OneStageZk.StatementFiles.sessions": "bca9515ec633f410c78828682108beb86046aa14e580ddfa3e2d1c119eb703f4",
     "Spot.OneStageZk.StepAt": "7846b73f4dede43dda78677d073a2289dccc733bcd8cc538d9874ab9ab440ccd",
     "Spot.OneStageZk.StepAt.I": "c9098a37b34f14defb8c930a14d29140369c805e2b0a9604a6c858ce1c5eb073",
+    "Spot.OneStageZk.StepAt.filesHeld": "b7e67a7b73f04fd0a5856895c0575666c6ae4ae0250da18d0a3fb0ad7567763b",
     "Spot.OneStageZk.StepAt.ksFiles": "5638c90ef4a18c1bdd57e1e0e6eb8675c70068451ba246ece9e4aff72dca0f00",
     "Spot.OneStageZk.StepAt.ofOwn": "0d1bfb5ff48fa6d1ff90118a5988bf1b8ce946e4aa222cf54bc15a0703439e33",
     "Spot.OneStageZk.StepAt.population": "157a90dafc8b73826e2b986fdb086f7916a6a02fb03b2f437da8c9ee1b18d1e0",
@@ -27213,8 +27218,10 @@
     "Spot.OneStageZk.laidHeld": "62fee0acf3a5a492387a44adf427ef87c0cf94e9ad0468c226f74cf3f8c22754",
     "Spot.OneStageZk.linesOf": "ea58ef2214221f1a7075a8c0461ce4a6a8eb9a06da64fcf96eb7b0bc64f6a5c0",
     "Spot.OneStageZk.lookupsOf": "c6c15967aa40752c7b9f4adc4608e3732149b0d018a70ca9f1bb497ef44e1793",
+    "Spot.OneStageZk.membersFiles": "3c468c5dc9c33037f745196ad47b9d1e38469b9a9062c3d5205fcb66080b9dfe",
     "Spot.OneStageZk.membersHeld": "e1935c3cf06b4978654a7630080695cbf6e68f7d3384158ec88fe98a4fcaf628",
-    "Spot.OneStageZk.membersRun": "43e7e77969ee600e1f2d18d0878712060c7495015d1ebe1cf0ff8e8fb82cb259",
+    "Spot.OneStageZk.membersRun": "11970b1124378a8e9310ff14a664652cc30af648c0bc30d8385ec5d1880f6d32",
+    "Spot.OneStageZk.membersStructure": "3b7b22a494729000cc32e110e06859a9217db437d951327a45d13409c4d7f98c",
     "Spot.OneStageZk.membersTreesHeld": "1a49768f7524b12bf5c7aa7bd332cb41d4bb9698167d8d73b3960ad1e4180176",
     "Spot.OneStageZk.oneSession": "3b5bc4ea098e1bcb9df88afa7689c9c6acaaf3fd29e1c6297447b1ce3a7ecf15",
     "Spot.OneStageZk.orderHeld": "dc4a26c43f92f5ac3e26f531238cf4bbaafb16dce2a97cb2859661952f44e482",
@@ -27238,7 +27245,7 @@
     "Spot.OneStageZk.rootsOf": "be102973e9ad3f0e573b77acb39b0598169f767ea5ae9afff50054dd677c8f0d",
     "Spot.OneStageZk.run": "417702f7ff36f19de4c4154b15cb9e47bd97c3b635e68ed7446afe853918c8cc",
     "Spot.OneStageZk.runFrom": "9e1c21af2dfe60b4b3a847eb8f8daf0ce515ceb24fb65b31d346bcb364a90cc9",
-    "Spot.OneStageZk.runMembers": "5b86ef3f519ab280a209e47e5344ca96cf74b7cb679511987e99429d17141c35",
+    "Spot.OneStageZk.runMembers": "2563aa68dc71210e7b604cde2ad6ff2e1661cd8a8aea8028b1c66f8460a871c8",
     "Spot.OneStageZk.scopeOf": "e94187243787d5abe3cc13000e4f657a91ed3109f7e8a9c48ca2919b23454fd9",
     "Spot.OneStageZk.sessionAt": "c8faeafb847a3afda29031af35b25bfe70134280834f8c045d22797c7c2420a6",
     "Spot.OneStageZk.sessionEvidence": "b7c784997338fbfe811fb30bbe5e4717a87f8bb9704cac295ccccb5c09ac110f",
@@ -27247,9 +27254,10 @@
     "Spot.OneStageZk.setupChecks": "6e7eea147c0b79a1391bc6d73f978f1745ccde6056349dfc4a9008ed2c2257d9",
     "Spot.OneStageZk.splitsFrom": "7181b0742833f22184fa0565070c0368a19952f2d0b0f9fbfa91483c6034f3ed",
     "Spot.OneStageZk.splitsOf": "d18169c4bc3a4ed7a2bbcd18fe4ad3536f51583a85d0683fa7b3c78447fa7255",
+    "Spot.OneStageZk.statementAt": "e569643c828f2a85cabb02918dfbc3c2cac9f1dd861f7872a40db6a2a20f6a45",
     "Spot.OneStageZk.statementOf": "5abb49800bbc7e224ac319a29853e4382d6ea3c6e5289fc9894213d84fae8b33",
     "Spot.OneStageZk.step": "3b03721d6ced6798eddc70854cb60612be4c38b1ec6167f44f123f4f83aa40d3",
-    "Spot.OneStageZk.stepMember": "9a08fa2b1f75ade7137518bba484231f2d3d4443f1b02ef1fe7853349c6effa5",
+    "Spot.OneStageZk.stepMember": "608e8bfd59a145d82a09efdf39d95d03dc071160e50ca520bbb0721df6e0a32a",
     "Spot.OneStageZk.tablesHeld": "000574eb0376f78d18d1f42de1622518420348bb5ed5667796faa54c6b7b20c4",
     "Spot.OneStageZk.tablesOf": "5d14cb4d8454567b99bad8463df6f9d6fe7503bb6809976e46259cec2c5d008b",
     "Spot.OneStageZk.templateOk": "a5e4e652dc1d4c9f51482b0b140519c4aaa029fbe83144a590e35a907e5d1348",

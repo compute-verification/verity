@@ -341,17 +341,15 @@ theorem seqCoins_at {x m₂ : Msg} (c₀ : FlockDeploy.Coin) (c₁ : Stage h)
   rw [dite_eq_left (show off h t + i - off h t < (FlockDeploy.V true).k (stmtAt h m₂ t) by omega)]
   exact congrArg (r' t) (Fin.ext (by simp))
 
-/-- **SPOT[Flock] accepts with positive probability where Flock accepts every template's session**: if the statement
-check passes `m₁` and `m₂` at some coins `c₀` of round 0 and `c₁` of the second stage's rounds, and Flock's masked
-verifier accepts `P' t` at the statement `m₂` states for each template `t` on some coins, then `proverSeq m₀ m₁ m₂ P'`
-is accepted on a positive share of SPOT[Flock]'s coins. -/
-theorem accepts_seq {Ω : Type} (H : Msg → Msg) (x m₀ m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h)
+/-- **SPOT[Flock] accepts on the coins `seqCoins` builds where Flock accepts every template's session**: if the statement
+check passes `m₁` and `m₂` at round 0's coin `c₀` and the second stage's coins `c₁`, and Flock's masked verifier
+accepts `P' t` at the statement `m₂` states for each template `t` on the coins `r' t`, then `proverSeq m₀ m₁ m₂ P'` is
+accepted on `seqCoins c₀ c₁ r'`. -/
+theorem accepts_seqCoins {Ω : Type} (H : Msg → Msg) (x m₀ m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h)
     (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) (P' : ℕ → Prover Ω) (ω : ℕ → Ω)
     (r' : ∀ t, Fin ((FlockDeploy.V true).k (stmtAt h m₂ t)) → FlockDeploy.Coin)
     (hacc : ∀ t < h.ms.length, (run H (P' t) (FlockDeploy.V true) (stmtAt h m₂ t) (ω t) (r' t)).out = .acc) :
-    0 < Pr fun r : Fin ((V h).k x) → FlockDeploy.Coin =>
-      (run H (proverSeq h m₀ m₁ m₂ P') (V h) x ω r).out = .acc := by
-  refine Claims.SamplingGeneric.Pr_pos_of (seqCoins h (x := x) c₀ c₁ r') ?_
+    (run H (proverSeq h m₀ m₁ m₂ P') (V h) x ω (seqCoins h (x := x) c₀ c₁ r')).out = .acc := by
   have hT3 := stage_le_off h h.ms.length
   have e0 : coinSeq (seqCoins h (x := x) c₀ c₁ r') 0 = c₀ := by
     unfold coinSeq
@@ -547,5 +545,18 @@ theorem accepts_seq {Ω : Type} (H : Msg → Msg) (x m₀ m₁ m₂ : Msg) (c₀
     simp [OC.eval]
   show (stepWith H (proverSeq h m₀ m₁ m₂ P') x ω vS (0 + 1) histT asT trT).out = .acc
   rw [stepWith_acc_of H (proverSeq h m₀ m₁ m₂ P') x ω vS 0 histT asT trT _ rfl [] hvT]
+
+/-- **SPOT[Flock] accepts with positive probability where Flock accepts every template's session**: if the statement
+check passes `m₁` and `m₂` at some coins `c₀` of round 0 and `c₁` of the second stage's rounds, and Flock's masked
+verifier accepts `P' t` at the statement `m₂` states for each template `t` on some coins, then `proverSeq m₀ m₁ m₂ P'`
+is accepted on a positive share of SPOT[Flock]'s coins. -/
+theorem accepts_seq {Ω : Type} (H : Msg → Msg) (x m₀ m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h)
+    (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) (P' : ℕ → Prover Ω) (ω : ℕ → Ω)
+    (r' : ∀ t, Fin ((FlockDeploy.V true).k (stmtAt h m₂ t)) → FlockDeploy.Coin)
+    (hacc : ∀ t < h.ms.length, (run H (P' t) (FlockDeploy.V true) (stmtAt h m₂ t) (ω t) (r' t)).out = .acc) :
+    0 < Pr fun r : Fin ((V h).k x) → FlockDeploy.Coin =>
+      (run H (proverSeq h m₀ m₁ m₂ P') (V h) x ω r).out = .acc :=
+  Claims.SamplingGeneric.Pr_pos_of (seqCoins h (x := x) c₀ c₁ r')
+    (accepts_seqCoins h H x m₀ m₁ m₂ c₀ c₁ hok P' ω r' hacc)
 
 end SpotFlock

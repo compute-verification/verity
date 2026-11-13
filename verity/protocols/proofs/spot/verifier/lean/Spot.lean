@@ -55,5 +55,6 @@ public import Spot.SiteDifftest
 public import Spot.Interval
 public import Spot.FactorUpper
 public import Spot.TwoStageCheck
+public import Spot.Place
 
 @[expose] public section
