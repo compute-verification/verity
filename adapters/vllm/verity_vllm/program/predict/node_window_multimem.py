@@ -121,10 +121,19 @@ def multimem(w: NodeWindow, j: int, node: Any) -> None:
     except ValueError as e:
         raise Unexpressible(str(e)) from None
     peers = [i * size for i in range(1, world)]
-    if low.grain == GR.COORD:
+    if low.grain == GR.COORD and _wide(w, node, size, low.chunk):
+        _row(w, j, node, low, size, peers, low.row)
+    elif low.grain == GR.COORD:
         _coordinate(w, j, node, low, size, peers)
     else:
         _row(w, j, node, low, size, peers)
+
+
+def _wide(w: NodeWindow, node: Any, size: int, K: int) -> bool:
+    """Whether rank 0's partial is written as rows wider than a chunk of K words (the embedding shard's column blocks,
+    `node_window_embed`), which a chunk would cut: then the combine reads those rows as blocks, as at row grain."""
+    probe = w.take(node, 0, 0, size)
+    return not isinstance(probe, _Free) and not _stands(probe[0]) and any(r.words > K for r in probe[0])
 
 
 def _coordinate(w: NodeWindow, j: int, node: Any, low: GR.Lowering, size: int, peers: Sequence[int]) -> None:
@@ -167,8 +176,10 @@ def _coordinate(w: NodeWindow, j: int, node: Any, low: GR.Lowering, size: int, p
     w.out(j, node, [Piece(0, size, chunk[0], 1, 1)])
 
 
-def _row(w: NodeWindow, j: int, node: Any, low: GR.Lowering, size: int, peers: Sequence[int]) -> None:
-    R = low.width
+def _row(w: NodeWindow, j: int, node: Any, low: GR.Lowering, size: int, peers: Sequence[int], R: int | None = None) -> None:
+    """Blocks of G columns of each token row of R words (the producers' row at row grain, else the site's token row), one
+    combine unit a block reading rank 0's block and the other ranks'."""
+    R = low.width if R is None else R
     G = _cols(R, w.b.grain.norm)
     if size % R or R % G:
         raise Unexpressible(f"{w.name}: node {j} ({node.fn.id}): rows of {R} words in blocks of {G}; a block divides a row")
