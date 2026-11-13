@@ -5290,7 +5290,7 @@ def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory
     (tmp_path / "lean").chmod(0o755)
     _script(bin_ / "lake", f'mkdir -p .lake/build/bin && cp {tmp_path}/lean ".lake/build/bin/$2"')
     _script(bin_ / "systemd-run", "exit 1")
-    for pkg in ("protocols/remote/verifier", "protocols/onsite/verifier"):
+    for pkg in ("protocols/compose/verifier/remote", "protocols/compose/verifier/onsite"):
         (tree / "verity" / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
     shutil.copy(HERE.parent / "composite.py", tree / "benchmarks" / "one_stage")
