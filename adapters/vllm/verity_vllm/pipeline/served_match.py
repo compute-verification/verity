@@ -296,6 +296,8 @@ class ServedCommit:
         order = {str(q["request_id"]): f"r{i}" for i, q in enumerate(reqs)}
         prompts = {f"r{i}": [int(t) for t in q["prompt_token_ids"]] for i, q in enumerate(reqs)}
         try:
+            if self.weight is None:
+                raise UsageError("--compiled-taps served: a run's C2 before `engine` read the served weights")
             rep = check_committed(self.build, com, self.weight, prompts, order, seed=seed)
         except Exception as e:  # noqa: BLE001  -- recorded: the run's C2 fails with the error
             rep = {"ok": False, "error": repr(e)[:300], "traceback": traceback.format_exc()[-1200:], "tally": {}, "steps": {}, "failures": []}

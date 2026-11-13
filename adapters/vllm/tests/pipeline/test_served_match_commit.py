@@ -260,10 +260,11 @@ def test_a_refused_build_whose_process_has_other_winners_exits_3(monkeypatch, pr
 
 
 def _c2(monkeypatch, row: sm.ServedCommit, report: Any, chain: dict[str, Any] = CHAIN, *, challenge: str | None = "abc",
-        replay_seed: int | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
-    """One run's C2 where the check gives ``report``, or raises it, and the committed chain is ``chain``: the record, and what
-    the check and the population were asked."""
+        replay_seed: int | None = None, weight: Any = print) -> tuple[dict[str, Any], dict[str, Any]]:
+    """One run's C2 where the engine's weights are ``weight``, the check gives ``report``, or raises it, and the committed chain
+    is ``chain``: the record, and what the check and the population were asked."""
     asked: dict[str, Any] = {}
+    row.weight = weight
 
     def check_committed(build: Any, com: Any, weight: Any, prompts: Any, order: Any, *, seed: int | None) -> dict[str, Any]:
         asked["check"] = (build, com, weight, prompts, order, seed)
@@ -294,7 +295,6 @@ LINKAGE_METHOD = ("per (engine step, request): the committed ids are the declare
 
 def test_a_run_whose_every_value_replays_and_whose_ids_link_passes_c2_under_the_challenges_seed(monkeypatch, process):
     row, report = _row(process), _report()
-    row.weight = print
     out, asked = _c2(monkeypatch, row, report)
     seed, source = sample.challenge_seed("abc", RC.run_root)
     build, com, weight, prompts, order, used = asked["check"]
@@ -415,6 +415,13 @@ def test_a_check_that_raises_is_recorded_with_its_error_and_its_traceback_and_fa
     assert (linkage["result"], linkage["unlinked_n"], linkage["prompt_linked"]) == (False, 3, {"r0": False, "r1": False}) and out["ok"] is False
     assert out["line"] == (f"FAIL 0/0 values exact over steps None (unrun None), seed challenge {replay['seed']}; linkage 0/3, committed chain "
                            f"{CHAIN}; source stats {{'slots': 1}}; first failures [] ValueError('no such value')\n{report['traceback']}")
+
+
+def test_a_c2_before_the_engine_was_read_asks_no_check_and_fails_with_that_said(monkeypatch, process):
+    out, asked = _c2(monkeypatch, _row(process), _report(), weight=None)
+    error = """UsageError("--compiled-taps served: a run's C2 before `engine` read the served weights")"""
+    assert "check" not in asked and asked["population"][1]["error"] == error
+    assert (out["ok"], out["components"]["sampled_replay"]["why"], out["value_correspondence"]["compiled_check"]["error"]) == (False, error, error)
 
 
 def test_a_long_error_is_recorded_by_its_first_300_characters_and_the_tracebacks_last_1200(monkeypatch, process):
