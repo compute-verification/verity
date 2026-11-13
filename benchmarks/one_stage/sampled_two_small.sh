@@ -4,8 +4,9 @@
 # the second stage's family (--interior-trees, FLOCK_CHALLENGER=1), and the form's case of the run (--form-case,
 # sampled_two_case.py), then the form's check on it: `sampled-two-on check` (the switch on) must accept, and
 # `sampled-two check` (the shipped switch) must refuse by the switch alone. The case's parameters, commitment and
-# evidence are kept under $OUT/form with its blobs (blobs/, their SHA-512 and sizes in blobs.txt): the directory the
-# form's accept test reads (VERITY_SAMPLED_TWO_CASE). Then a negative play: the same first stage with a coin tree sampled on
+# evidence are kept under $OUT/form with its blobs (blobs/, their SHA-512 and sizes in blobs.txt): a case as the
+# form's accept test reads one, its kept case such a run's and VERITY_SAMPLED_TWO_CASE naming another in its place.
+# Then a negative play: the same first stage with a coin tree sampled on
 # its session (first --first-tree) and its own second stage, whose case `sampled-two-on check` must refuse by the
 # first session's coin tree's line (kept under $OUT/form-tree). Before either, each kept play's case KEPT_CASES names
 # (directories like $OUT/form, space separated) is checked again: accepted with the switch on, refused by the shipped
