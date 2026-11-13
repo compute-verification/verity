@@ -25,7 +25,9 @@ from verity_vllm.log import init_logger
 logger = init_logger(__name__)
 
 BLOCK_BYTES = 64 << 20
-PINNED_EXACT = settings.VERITY_PINNED_EXACT
+# Off at "0" alone: every other string is on, and none is refused.  The registry's `flag` reads `false`, `no` and `off` as off and
+# raises on a string that is no flag, here at import, so in every module that imports this one.
+PINNED_EXACT = settings.raw("VERITY_PINNED_EXACT") != "0"
 _PAGE = 4096
 # Growing the exact pool is page faulting: every page of a fresh shared mapping is allocated and zeroed when it is first touched, which
 # `cudaHostRegister` does one page at a time on the calling thread.  On the leased node (a VM: first touch also faults on the host) that

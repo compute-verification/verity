@@ -60,16 +60,17 @@ secrets) the environment stands in:
 
 No value is ever printed.
 
-On a cloud VM a long-lived shell can lose the injected secrets that a fresh
-tmux login shell still has. Every `research` command first sets each secret
-named in `$CLOUD_AGENT_INJECTED_SECRET_NAMES` and missing from the shell from
-the tmux server's global environment, where that login shell gets them
-(`secret_hint.recover`); one run under a test doesn't, so a secret the test
-unset stays unset. If one is still missing, the store, `research queue
-ready`, node ssh and the Nebius scripts fail and say `rerun from a fresh tmux
-login shell` (`secret_hint.py`). A shell can lose that list too, so a store
-that has used the remote and now finds none configured fails `research data
-label` and `put` the same way (`LocalStore.remote_lost`).
+On a cloud VM a long-lived shell can lose the injected secrets, which the
+tmux server's global environment keeps while its session `vm-secrets` lives
+(`tools/agent-guard/kept_session.py`; `research doctor` says when it is gone).
+Every `research` command first sets from it each secret the shell lacks of
+those `$CLOUD_AGENT_INJECTED_SECRET_NAMES` names (`secret_hint.recover`; not
+under a test, so a secret a test unset stays unset). If one is still missing,
+the store, `research queue ready`, node ssh and the Nebius scripts fail and
+say `rerun from a fresh tmux login shell` (`secret_hint.py`). A shell can
+lose that list too, so a store that has used the remote and now finds none
+configured fails `research data label` and `put` the same way
+(`LocalStore.remote_lost`).
 
 `research doctor [--role lane|coordinator|infra] [--json]`: can this VM do its job (secret names, status-only
 probes, ssh, `uv sync --check`, disk, clock); each finding names its fix (exit 1); it never prints a value.
@@ -89,6 +90,7 @@ research run --on MACHINE --no-custody-r2 ...       # opt out: the records stay 
 research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N]
              [--gpu-model M] [--cpus N] [--class work|bench|...] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...   # the one queue (infra/cluster): placed, then an --on run in its CPU allocation, a GPU leased around the workload alone
 research data custody RUN [--publish] | --triage                 # a run's custody on the remote, from any machine; the runs root by custody state
+research run-preserve PATH [--kind K] [--meta JSON]              # in an --on run's workload: its runner preserves one file of $OUT now (§10.1)
 research fetch RUN [--all]               # records only, or every file sha256-verified with preserved.json written last
 research status [RUN] [--refresh] [--all] [--json]   # under each active run, a `mem` line per cgroup it executes in (scopemem.py):
                                          # current, peak, cap, growth from its own samples, NEAR CAP within 10%; remote: with RUN or --refresh
@@ -219,9 +221,9 @@ each with its repository file and owner (a Slack handle), and goes there only th
 (`units/` beside the manifest, settings in `env/`), never tmux; `install` restarts a running service whose unit, env file
 or running file changed, once the node is `quiet`. A `hold` entry is reported, never installed.
 `research deploy drift` reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
-`missing`), every process running a file replaced since it started (`restart`), and every file in a managed directory
-that no entry lists (`stray`); the hourly preflight probe posts its findings whenever they change (`ops deploy`). A new
-loop or script goes into the repository and the manifest before it runs; a backup of a replaced file is
+`missing`), every process running a file replaced since it started (`restart`, unless its entry says `no_restart`),
+and every file in a managed directory that no entry lists (`stray`); the hourly preflight probe posts its findings
+whenever they change (`ops deploy`). A new loop or script goes into the repository and the manifest before it runs; a backup of a replaced file is
 `.deploy-prev/`, which `install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ...
 --by WHO --apply` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
 A Lean build kept from node 1's credentials (the Lean cache's daily one) runs in `vy-lean-sandbox` (`lean_sandbox.py`).
@@ -375,7 +377,7 @@ The disk floor: `research run` and `research fetch --all` refuse (exit 3) while 
 --publish` removes the run's files of 1 MiB and more once custody holds (`--keep-local` keeps them); `run-files.evicted.json`
 names the fetch that restores them. `research data evict --src-dir DIR` (node 1's hourly unit) also deletes each
 shipped source tree that is exactly a commit on a ref of the node's `git/verity.git`, unused and unchanged for 2 h; any doubt
-keeps them all (`store/evict.py`).
+keeps them all (`store/evict.py`). Its other passes: `store/leftovers.py`.
 
 ### research data
 
@@ -449,43 +451,44 @@ What `research run` does:
 ### Retention of node data: `research keep`, `research retention`
 
 `src/research/retention.py`: nothing under a node's `/workspace` is deleted without a record that allows it. A record
-(`research/retention/v0`) is a sidecar, `<dir>/.retention.json` or `<file>.retention.json`, so it travels with its data.
-It covers everything beneath its
-path. A directory its owner made read-only gets its record beside it, `<dir>.retention.json`. A directory with both is invalid, and
+(`research/retention/v0`) is a sidecar, `<dir>/.retention.json` or `<file>.retention.json`. It covers everything beneath its
+path. A directory its owner made read-only gets its record beside it, `<dir>.retention.json`, and
 gc leaves a tree whole while any directory in it is read-only. A run dir whose `.custody` says `preserved: true` and which has no sidecar has an implicit record: owner its lane, else its
 campaign, else `runner`; `preserved` its run record; `expires` 48 h after `verified_utc` (`RUN_EXPIRY`); priority `normal`. Nothing
 is written for it, and a sidecar wins.
 
+A finished or runner-dead run that custody did not preserve gets a low-priority retention record that expires 7 days after the run
+directory's last write, so the collector takes it (`UNPRESERVED_RUN_EXPIRY`). The whole directory goes: it is the only copy.
+One running, queued or in a slot line stays, and one whose clone stands waits (`scratch/<run id>` goes first).
+To keep one: `research keep RUNDIR ...` before the 7 days are over, or `research data custody RUN --publish`.
+gc takes them only with `--unpreserved-runs`; it and the report list them apart.
+
 ~~~text
 research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regenerate CMD] [--art ART | --preserve] [--why T] [--by URL]
-research keep show PATH                      # the record covering PATH, explicit or implicit, as JSON
+research keep show PATH    # the record covering PATH, explicit or implicit, as JSON
 research retention report [--root /workspace] [--depth 2] [--json]
-research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--max-paths 200] [--jobs-dir D]... [--store S] [--json] [--apply]
+research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--max-paths 200] [--jobs-dir D]... [--store S] [--unpreserved-runs] [--json] [--apply]
 research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root /workspace] [--jobs-dir D]... [--json] [--apply]
 ~~~
 
 `--preserve` puts the path in the store as `node-data/v1` and pushes it PRESERVED (the store README's §7) before recording its id;
-a failed push records nothing. The report walks with `os.scandir` and `lstat`, never into a recorded path. It lists every recorded
-path and every area in the top `--depth` levels with no record beneath it (`unowned`): unowned and expired first, then totals.
+a failed push records nothing. The report lists every recorded
+path and every area in the top `--depth` levels with no record beneath it (`unowned`).
 
-Policy `default` (`default/v0`) acts only over `--high-pct` (vy-disk-guard's 80%) of blocks or inodes, or with `--force`. It deletes
-the lowest priority, then the oldest expiry, until the filesystem is under `--low-pct` (75%), at most `--max-paths` paths a pass. A
-path qualifies only when its record is valid, of this node, expired, `low` or `normal`, and preserved or regenerable, it holds no
-nested record, and no file in `/workspace/pouw/fill/queue`, `/workspace/pouw/fill/running` or a `--jobs-dir` names it. Just before
-`--apply` deletes a path, its record and the job scripts are read again. A preserved path also needs its artifact to hold every file
-now under it at its size, so files custody trimmed never count as preserved, and its stored copy `verified`, `expired` or
-`withdrawn` on the remote; one that can't be asked about fails the pass (`retention.STORED`). An implicit record's marker must still
-vouch for the run dir (the store README's §10.1). Without `--apply` gc deletes nothing and
-reads no remote; either way it prints every deletion and every skip with its reason. The failure it prevents: hundreds of GiB of
-unowned, unpreserved files on a node that nobody can decide to delete.
+Policy `default` (`default/v0`) acts only over `--high-pct` of blocks or inodes, or with `--force`. It deletes
+the lowest priority, then the oldest expiry, until the filesystem is under `--low-pct`, at most `--max-paths` paths a pass. A
+path qualifies only when its record is valid, of this node, expired, `low` or `normal`, and preserved or regenerable (or an
+unpreserved run's), it holds no nested record, and no file in `/workspace/pouw/fill/queue`, `/workspace/pouw/fill/running` or a
+`--jobs-dir` names it. Just before `--apply` deletes a path, its record and the job scripts are read again. A preserved path also needs its artifact to hold every file
+now under it at its size, and its stored copy `verified`, `expired` or `withdrawn` on the remote; one that can't be asked about
+fails the pass (`retention.STORED`). A preserved run's marker must still vouch for the run dir (the store README's §10.1). Without
+`--apply` gc deletes nothing and reads no remote; it prints every deletion and skip with its reason.
 
 `rm` is the one way to delete data you don't own on a node, for a cleanup the policy doesn't reach. It deletes a path only when a
 record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the
 `--approved-by` handle as owner and are not `keep`. No job script may name the path, and nothing in it may be read-only or a mount. Each
 decision of an `--apply` (delete, refuse, failed) is a `research/retention-log/v1` line in `/workspace/research/retention/deletions.jsonl`
-with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`. The failure it prevents: a disk cleanup's bare `rm -rf` of
-outputs whose record names another lane as owner, approved by a lane that doesn't own them, which loses them. Here that `rm` is
-refused with the true owner's name.
+with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`.
 
 ### Slack
 

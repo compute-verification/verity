@@ -1,7 +1,8 @@
 """The speculative-decoding stand-in without a GPU (the GPU run is `tests/properties/specdec_replay_gpu.py --out ...` on one
-card): its report over records made here, its arms in their order with a failed phase recorded, and, where vLLM is installed,
-its serve and replay loop (`drive`) on vLLM's own scheduler under vLLM's own engine-core loop with drafts on, the model stood in
-by a hash: a replay given the trace's records alone repeats every step and token of the serve."""
+card): its report over records made here, its arms in their order with a failed phase recorded, its serve and replay loop
+(`drive`) on a batch queue of two, where every step scheduled must leave its record, and, where vLLM is installed, that loop on
+vLLM's own scheduler under vLLM's own engine-core loop with drafts on, the model stood in by a hash: a replay given the
+trace's records alone repeats every step and token of the serve."""
 from __future__ import annotations
 
 import hashlib
@@ -89,6 +90,137 @@ def test_the_arms_run_in_their_order_and_a_failed_phase_is_recorded_while_the_re
     assert "FAILED" in capsys.readouterr().out
 
 
+# ---- the runner's loop on a batch queue of two, with no vLLM ------------------------------------------------------------------
+
+def _hash(*parts: Any) -> int:
+    return int.from_bytes(hashlib.sha512(repr(parts).encode()).digest()[:8], "big")
+
+
+class Queued:
+    """What `drive` steps and `StepTrace` wraps, with the batch queue of two that vLLM's engine core keeps under async scheduling
+    (``EngineCore.step_with_batch_queue``): a call schedules a step while the one before it is in flight, and processes the
+    oldest step's output once the queue is full or nothing is left to schedule. A request is a prompt row, then rows of one
+    token and ``drafts`` draft tokens, of which a hash of the request and its length keeps some. The scheduler counts a row in
+    flight as one token, as vLLM's does, so a row that keeps a draft can end its request with the next row already scheduled:
+    that row runs and emits nothing."""
+
+    PROMPT = 8
+
+    def __init__(self, drafts: int, limits: dict[str, int]) -> None:
+        self.drafts, self.limits = drafts, limits
+        self.requests: dict[str, Any] = {}
+        self.ended = False                      # a request ended since the last schedule, which frees it
+        self.queue: deque = deque()
+        self.tokens: dict[str, list[int]] = {}
+
+    def add(self, rid: str) -> None:
+        self.tokens[rid] = []
+        self.add_request(types.SimpleNamespace(request_id=rid, num_prompt_tokens=self.PROMPT, sampling_params=None, computed=0, flying=0))
+
+    def add_request(self, request: Any) -> None:
+        self.requests[request.request_id] = request
+
+    def finish_requests(self, request_ids: Any, finished_status: Any) -> list[Any]:
+        return []
+
+    def schedule(self) -> Any:
+        self.ended = False
+        new, cached, rows, drafts = [], [], {}, {}
+        for rid, q in self.requests.items():
+            if not q.computed:
+                new.append(types.SimpleNamespace(req_id=rid, num_computed_tokens=0))
+                rows[rid] = q.num_prompt_tokens
+            elif len(self.tokens[rid]) + q.flying < self.limits[rid]:
+                cached.append((rid, q.computed))
+                rows[rid], drafts[rid] = 1 + self.drafts, [-1] * self.drafts
+            else:
+                continue                        # held back: its rows in flight reach its limit if each emits its one token
+            q.computed += rows[rid]
+            q.flying += 1
+        return types.SimpleNamespace(
+            scheduled_new_reqs=new, num_scheduled_tokens=rows, total_num_scheduled_tokens=sum(rows.values()),
+            scheduled_cached_reqs=types.SimpleNamespace(req_ids=[r for r, _ in cached], num_computed_tokens=[n for _, n in cached]),
+            scheduled_spec_decode_tokens=drafts, preempted_req_ids=set())
+
+    def update_from_output(self, so: Any, mro: Any) -> dict[int, Any]:
+        outs = []
+        for rid in mro.req_ids:
+            q, have = self.requests.get(rid), self.tokens[rid]
+            if q is None:
+                continue                        # a row of a request that ended at the step before
+            q.flying -= 1
+            drafts = len(so.scheduled_spec_decode_tokens.get(rid, ()))
+            kept = min(_hash(rid, len(have), "kept") % (drafts + 1), self.limits[rid] - len(have) - 1)
+            q.computed -= drafts - kept
+            new = [1000 + _hash(rid, len(have) + i) % 40000 for i in range(1 + kept)]
+            have += new
+            ended = len(have) >= self.limits[rid]
+            if ended:
+                del self.requests[rid]
+                self.ended = True
+            outs.append(types.SimpleNamespace(request_id=rid, new_token_ids=new, finish_reason=1 if ended else None, stop_reason=None))
+        return {0: types.SimpleNamespace(outputs=outs)}
+
+    def has_unfinished_requests(self) -> bool:
+        return bool(self.requests)
+
+    def step(self) -> list[Any]:
+        if self.requests or self.ended:
+            so = self.schedule()
+            self.queue.appendleft(so)
+            if len(self.queue) < 2 and (so.total_num_scheduled_tokens or self.requests):
+                return []
+        elif not self.queue:
+            return []
+        so = self.queue.pop()
+        outs = self.update_from_output(so, types.SimpleNamespace(req_ids=list(so.num_scheduled_tokens)))
+        return [types.SimpleNamespace(finished=True, request_id=o.request_id, outputs=[types.SimpleNamespace(token_ids=self.tokens[o.request_id])])
+                for o in outs[0].outputs if o.finish_reason is not None]
+
+
+def _queued(eng: Queued, phase: str, due: list[dict[str, Any]]) -> dict[str, Any]:
+    trace = StepTrace().install(eng)
+    doc = X.drive(eng, trace, phase, due, eng.add)
+    trace.uninstall()
+    return json.loads(json.dumps({**doc, "records": trace.records, "sampling": dict.fromkeys(eng.limits, {"temperature": 0.0})}))
+
+
+#: a second request arrives once the first has ended, so the engine is idle with requests still due
+TWO = [{"id": "first", "iteration": 0}, {"id": "next", "iteration": 10 ** 6}]
+
+
+@pytest.mark.parametrize("drafts", [0, 3])
+def test_every_step_the_engine_scheduled_has_its_record_when_the_runner_stops(drafts):
+    """Under a draft the scheduler schedules a request's next row before the output that ends it is back. vLLM's own loop
+    steps while its batch queue holds a step, so that row's output is processed and the trace records the step; a runner that
+    stops when no request is unfinished leaves the last such step scheduled and without its record."""
+    after_the_end = []
+    for limit in range(2, 14):
+        limits = {"first": limit, "next": 15 - limit}
+        serve = _queued(Queued(drafts, limits), "serve", TWO)
+        replay = _queued(Queued(drafts, limits), "replay", X.arrivals(serve["records"]))
+        for doc in (serve, replay):
+            assert [s["step"] for s in doc["steps"]] == sorted(map(int, doc["drafted"])), (limit, doc["drafted"])
+        assert {rid: len(ids) for rid, ids in serve["tokens"].items()} == limits
+        assert X.compare(serve, replay)["equal"], limit
+        after_the_end.append(not serve["steps"][-1]["emitted"])
+    # only under a draft does a serve end on a row scheduled before its request's last output, and not every one does
+    assert (any(after_the_end), all(after_the_end)) == (bool(drafts), False), after_the_end
+
+
+def test_an_engine_that_never_processes_a_scheduled_steps_output_stops_the_runner_by_name():
+    """The engine keeps the step in its queue and processes nothing once no request is left. Its scheduler output stays alive:
+    the trace keys a step in flight by its scheduler output's ``id``, which a freed one would hand to the next."""
+    class Stalled(Queued):
+        def step(self) -> list[Any]:
+            return super().step() if self.requests else []
+
+    served = [_queued(Queued(3, {"first": n}), "serve", TWO[:1])["steps"] for n in range(2, 14)]
+    limit, last = next((n, steps[-1]["step"]) for n, steps in enumerate(served, 2) if not steps[-1]["emitted"])
+    with pytest.raises(SystemExit, match=rf"step {last} was scheduled and two engine steps with no request left processed no output"):
+        _queued(Stalled(3, {"first": limit}), "serve", TWO[:1])
+
+
 # ---- vLLM's scheduler under vLLM's engine-core loop, with no model -----------------------------------------------------------
 
 #: a config vLLM builds its model config from; no weight, tokenizer or model code is read
@@ -102,10 +234,6 @@ SERVE = {"max_model_len": 2048, "max_num_seqs": 4, "max_num_batched_tokens": 256
 
 def _draft(k: int) -> dict[str, Any]:
     return {"speculative": {"method": "mtp", "num_speculative_tokens": k}} if k else {}
-
-
-def _hash(*parts: Any) -> int:
-    return int.from_bytes(hashlib.sha512(repr(parts).encode()).digest()[:8], "big")
 
 
 class Runner:
@@ -267,6 +395,7 @@ def _run(cfg: dict[str, Any], where: Path, phase: str, due: list[dict[str, Any]]
 
     doc = X.drive(eng, trace, phase, due, add)
     trace.uninstall()
+    assert [s["step"] for s in doc["steps"]] == sorted(map(int, doc["drafted"])), "a step the scheduler scheduled has no record"
     return json.loads(json.dumps({**doc, "records": trace.records, "sampling": dict.fromkeys(reqs, {"temperature": 0.0})}))
 
 
@@ -301,7 +430,7 @@ def test_a_replay_from_the_trace_alone_repeats_vllms_scheduler_under_drafts(k, t
     reqs = _load()
     seen: dict[str, Any]
     seen = {"after_empty": 0, "early_differs": 0, "hits": 0, "empty": 0, "steps": 0, "first": {"true": 0, "ahead_by_rejected": 0, "other": 0},
-            "kept": {}}
+            "kept": {}, "after_the_end": 0}
     for gap in range(1, 13):
         serve = _run({**SERVE, **_draft(k)}, tmp_path / "model", "serve", [{"id": rid, "iteration": i * gap} for i, rid in enumerate(reqs)], reqs)
         header = serve["records"][0]["config"]
@@ -317,6 +446,7 @@ def test_a_replay_from_the_trace_alone_repeats_vllms_scheduler_under_drafts(k, t
         seen["hits"] += len(report["cache_hits"])
         seen["empty"] += serve["empty_schedules"]
         seen["steps"] += len(serve["steps"])
+        seen["after_the_end"] += not serve["steps"][-1]["emitted"]
         for name, n in report["first_position"].items():
             seen["first"][name] += n
         for name, n in report["rows_by_accepted"].items():

@@ -37,7 +37,8 @@ Only the ZK server, under its own OS user, starts the service (`zk-server-own-us
 module
 
 public import Flock.Firewall.Salts
-public import Flock.Witness
+public import Flock.Firewall
+public import Flock.WitnessZk
 public import Std.Async.TCP
 
 @[expose] public section

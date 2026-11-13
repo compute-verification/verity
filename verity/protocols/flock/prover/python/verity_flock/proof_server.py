@@ -21,13 +21,19 @@
   challenger of its own (`verity_flock.challengers`, `serve --queue --tree-from`), whose session ends with the verifier's
   queue. Its audit holds every session the verifier served to the challenger's release log at once (no tree unused, none
   shared), so it runs at `close`, into ``challengers`` by verifier name, and a session counts only if its verifier's passed.
+* **One challenger session for every verifier** (``tree_from``, `serve`'s flags ``--tree-from ADDR [--tree-secret-file
+  F]``): every verifier takes its sessions' coin trees at the caller's address, a challenger session the caller opened
+  and closes, or its relay to one. The server starts no challenger and runs no audit: holding the sessions to that
+  session's release log is the caller's. With ``verify_ahead=0`` a verifier serves one session at a time, so a caller
+  that submits a session only once the one before has its records puts one session's rounds in that log at a time.
 
 `submit` returns a `Session` at once: `Session.result` waits for both sides' records, `Session.verdict` for the verdict of
 record. A process that exits ends its unfinished sessions as failures (`ProofServerError`) carrying its log's tail;
 nothing is retried. A prover's exit also retires its types' verifiers once they have filed the sessions it finished
-(their queues hold sessions it will never connect for), and the next session on its device or types starts fresh
-processes. `close` (or leaving the ``with`` block) ends every queue and stream, waits for the processes and the verdicts,
-and returns each process's exit status by name (a restarted process's name gets ``.2``, ``.3``, ..).
+(their queues hold sessions it will never connect for), and only after its own sessions have failed: a session a prover
+left unrecorded names the prover, never the verifier the server ends for it. The next session on its device or types
+starts fresh processes. `close` (or leaving the ``with`` block) ends every queue and stream, waits for the processes and
+the verdicts, and returns each process's exit status by name (a restarted process's name gets ``.2``, ``.3``, ..).
 """
 from __future__ import annotations
 
@@ -281,6 +287,8 @@ class ProofServer:
     the plain one. ``wide_leaf``: the wide level-0 leaf's statement version (`--wide-leaf`), which a session's two sides
     both carry, so every prover and verifier of the server does; off, fast100's.
     ``challenger``: each verifier on a challenger of its own (`--zk`, or ``FC_COINS=tree`` in ``env``).
+    ``tree_from``: every verifier's flags for the one challenger session the caller holds (module docstring), never with
+    ``challenger``.
 
     ``FC_VERIFIER_CPUS`` in the server's environment (a CPU list within its affinity, as taskset takes it) runs every
     verifier on those CPUs and every prover on the server's other CPUs (`taskset -c`), so a verifier's check of each
@@ -290,9 +298,13 @@ class ProofServer:
     def __init__(self, binary: str | os.PathLike, out: str | os.PathLike, *, devices: Sequence[int] | None = None,
                  provers: int = 1, verify_ahead: int = 2, verdicts: int = 4, route: Mapping[str, int] | None = None,
                  env: Mapping[str, str | None] | None = None, zk: bool = True, challenger: bool = False,
-                 wide_leaf: bool = False):
+                 wide_leaf: bool = False, tree_from: Sequence[str] | None = None):
         if provers < 1:
             raise ValueError(f"provers must be at least 1, not {provers}")
+        if challenger and tree_from:
+            raise ValueError("a verifier takes its sessions' coin trees from a challenger of its own (challenger) or from "
+                             "the caller's (tree_from), not both")
+        self.tree_from = list(tree_from or [])
         self.binary, self.out = str(binary), Path(out)
         self.out.mkdir(parents=True, exist_ok=True)
         self.devices: list[int | None] = list(devices) if devices else [None]
@@ -393,9 +405,12 @@ class ProofServer:
         with self._lock:
             self._closed = True
             provers, verifiers = list(self._provers.values()), list(self._verifiers.values())
+            all_provers = [p for p in self._started if p.kind == "prover"]
         for p in [*provers, *verifiers]:
             p.end()
-        for p in provers:
+        # every prover the server started, not only those still running: one that exited just before this close may still
+        # be failing its sessions, and its reader returns once its verifiers' retiring threads are started and listed
+        for p in all_provers:
             p.join()
         # every prover has ended, so a verifier still holding a session no prover will connect for is retired too
         for v in verifiers:
@@ -467,7 +482,8 @@ class ProofServer:
             cmd = [self.binary, "serve", *self._version, "--queue", "-", "--listen", "127.0.0.1:0",
                    "--out", str(self.out / base), "--circuit", str(st.circuit),
                    *([] if st.tmpl_unit is None else ["--tmpl-unit", str(st.tmpl_unit)]), "--tables", str(st.tables), "--pin", st.pin,
-                   "--operator", "proof-server", "--concurrency", str(self.verify_ahead + 1), *(flags if ch else [])]
+                   "--operator", "proof-server", "--concurrency", str(self.verify_ahead + 1),
+                   *(flags if ch else self.tree_from)]
             with self._lock:
                 v = self._verifiers[(st.pin, key)] = self._start(name, "verifier", (st.pin, key), cmd, self._env)
                 v.challenger, v.home = ch, self.out / base
@@ -525,14 +541,17 @@ class ProofServer:
                     if k[1] == p.key and any(self._sessions[x].served is None for x in v.sessions):
                         del self._verifiers[k]
                         stale.append(v)
-        # a thread is started before it is listed, and listed before any session fails: a caller may close the server as
-        # soon as a session fails, and `close` joins every thread it finds listed
-        for v in stale:
-            t = threading.Thread(target=self._retire, args=(v,), name=f"retire-{v.name}", daemon=True)
-            t.start()
-            self._retiring.append(t)
-        for s in left:
-            s._fail(f"{p.name} exited (rc {p.p.returncode}) before its records: {p.tail()}")
+        # the sessions fail before any thread that retires their verifier starts: retiring ends and terminates the
+        # verifier, whose exit would otherwise race this loop to name itself as a session's reason. The threads start
+        # even if the loop raises, each before it is listed, and `close` reads the list only once this has returned
+        try:
+            for s in left:
+                s._fail(f"{p.name} exited (rc {p.p.returncode}) before its records: {p.tail()}")
+        finally:
+            for v in stale:
+                t = threading.Thread(target=self._retire, args=(v,), name=f"retire-{v.name}", daemon=True)
+                t.start()
+                self._retiring.append(t)
 
     def _retire(self, v: _Process) -> None:
         """Ends verifier ``v`` once it has filed the sessions its prover finished: the rest of its queue never comes."""

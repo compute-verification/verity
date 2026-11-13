@@ -5,13 +5,11 @@ report with both runners' gates, and a failure in either runner's gates voids th
 from __future__ import annotations
 
 import json
-import sys
+import re
 from pathlib import Path
 
-import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pfill_fp_score as F
+import pytest
 
 A, S, SC = F.A, F.S, F.SC
 ARM = "benchmarks/pouw/filler/pfill_arm.py:PFillBUDuoFPhase3"
@@ -19,10 +17,8 @@ PBIT = 1 << 62  # dcap.cu's: the phase filler's tile ids carry it, its rounds' t
 
 
 @pytest.fixture(autouse=True)
-def _one_arms_module(monkeypatch):
-    # as test_psched_score: the arm module imports `arms` when A.load runs it, and its Filler must be check_arm's
-    monkeypatch.setitem(sys.modules, "arms", A)
-    monkeypatch.setitem(sys.modules, "scoring", S)
+def _no_build_flags(monkeypatch):
+    # an arm sets the build's flags when A.load runs it: each test starts from a value no arm sets
     monkeypatch.setenv("NVCC_APPEND_FLAGS", "unset")
 
 
@@ -142,3 +138,17 @@ def test_a_point_with_both_a_fused_step_and_a_phase_filler_is_refused():
     arm.fused = lambda ph, b, l: step if ph == "decode" else None
     with pytest.raises(A.ArmError, match="both a fused step and a phase filler"):
         F.drivers(arm, S.points())
+
+
+# ---- the directory's runner ------------------------------------------------------------------------------------------
+
+
+def test_run_sh_names_every_job_of_the_directory():
+    """`run.sh` starts a job by its name: `JOBS` holds each job script beside it and no other, and `score` and `tpcomm`
+    name files that exist. This file is keyed on the whole directory, so a new script reruns it."""
+    filler = Path(__file__).resolve().parents[1]
+    text = (filler / "run.sh").read_text()
+    jobs = re.search(r'^JOBS="([\w|]+)"$', text, re.M)
+    assert jobs and set(jobs.group(1).split("|")) == {p.stem for p in filler.glob("*.sh")} - {"run"}
+    assert {p.name for p in (filler / "comm").glob("*.sh")} == {"tpcomm.sh"}
+    assert '"$HERE/score.py"' in text and '"$HERE/comm/tpcomm.sh"' in text and (filler / "score.py").is_file()

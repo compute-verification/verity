@@ -73,10 +73,11 @@ def test_a_tp_rank_s_dead_free_request_reaches_the_construction(tmp_path, monkey
 @pytest.mark.parametrize("text, code_rev", [
     ('{"commit": "c0ffee", "patch_sha256": null}', {"commit": "c0ffee", "patch_sha256": None}),     # an export: what its file says
     ("{not JSON", None),
+    pytest.param("[" * 100_000 + "]" * 100_000, None, id="nested past the parser"),                  # `json` raises RecursionError, no ValueError
     (None, None),                                                                                    # no export here
 ])
 def test_a_build_records_the_export_it_ran_in(tmp_path, monkeypatch, text, code_rev):
-    """A Build's ``code_rev`` is the ``EXPORT.json`` of the directory it ran in, and nothing where there is none or it is not JSON."""
+    """A Build's ``code_rev`` is the ``EXPORT.json`` of the directory it ran in, and nothing where there is none or it can't be parsed."""
     monkeypatch.chdir(tmp_path)
     if text is not None:
         (tmp_path / "EXPORT.json").write_text(text)
