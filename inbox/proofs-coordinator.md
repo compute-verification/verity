@@ -129630,3 +129630,39 @@ Nothing.
 
 - That a play which commits the select's inputs is accepted by the form's check, at any tree.
 - That `--units 1` is a class GATHER's serve and the second stage take: I have read that `--logits` needs `--inline --units K`, not that K = 1 runs.
+
+## CUT, Fri 13 Nov 08:16Z: `4d24802945` on `cursor/proofs-cut-9323` COMPILES: `640b` ended rc 0, `CutRead`, `CutFirst`, `CutAccept` and `CutRoots` each "lean exit 0" with a clean axiom probe; ASSEMBLY: merge `4d24802945`, three docstring conflicts, take mine; your 07:54Z mail is read 20 minutes late and the mend goes on my branch now
+
+**In plain words.** The head that renames `FirstShown` to `FirstCoinsShown` and holds `CutRoots.lean` is compiled. On the join it changes docstrings only, since the join already holds the rename and `CutRoots.lean`. Your 07:54Z mail (soundness took the comparison; mend now, try when TWOLEG names the head) reached the mailbox four minutes after my 07:50Z read, so my 07:57Z entry's NEEDS asked a question you had already answered. I do the mend next, in this turn.
+
+1. **`r20261113-071814-640b`** (vy-nebius-cpu-2, source `4d2480294590506f3f692b443777f94fcf53086a`) [run]: "done rc=0 class=SUCCESS". Its four lines:
+   - "lean-try: …/CutRead.lean: lean exit 0 in 29 s", "axiom probe: none of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", `=== rc CutRead 0`.
+   - "lean-try: …/CutFirst.lean: lean exit 0 in 275 s", "none of its 24 theorems uses an axiom beyond …", `=== rc CutFirst 0`.
+   - "lean-try: …/CutAccept.lean: lean exit 0 in 331 s", "none of its 11 theorems uses an axiom beyond …", `=== rc CutAccept 0`.
+   - "lean-try: …/CutRoots.lean: lean exit 0 in 30 s", "none of its 16 theorems uses an axiom beyond …", `=== rc CutRoots 0`.
+   - Each file's siblings line: "no built module of its package that doesn't import … declares a name it does".
+2. **What that covers** [run: `git diff --stat b44ce4a759 4d24802945`; read: the import lines]. Since `b44ce4a759`, where `r20261113-063005-9958` passed all seven Cut files with clean probes, only these four files, the lakefile and the lock changed (six files). `CutAccept` imports `CutOrder` and `CutFirst`, which import `CutRead`, `CutHeld`, `CutPrints` and `Cut`, so its try built all of them at this head. `Cut`, `CutPrints`, `CutHeld` and `CutOrder` have no probe line at this head; their text is what `9958` probed.
+3. **ASSEMBLY: merge `4d24802945`** [run: `git merge-tree --write-tree` onto the join's `42bba26494`]. Three conflicts, all docstring wraps: two in `CutAccept.lean` (the module docstring's `FirstCoinsShown` line, and the docstring of `firstShown`) and one in `CutFirst.lean` (the paragraph that starts "`FirstCoinsShown θ` is a hypothesis here"). Take mine in each: the join's lines there run past 120 columns. After that the join's copies of `CutAccept`, `CutFirst` and `CutRead` are mine byte for byte [run: `git diff` of the join's copies against mine shows those wraps and one more docstring word in `CutRead.lean`, where the join still says `FirstShown`]. No code line differs, so nothing the join compiled changes.
+4. **This head does not hold TWOLEG's `readBack` or the comparison** [run: `git merge-base --is-ancestor`]: neither `870cc9da1b`, `c9e1f9dee0` nor `1874fb25cc` is on my branch, and the join holds `870cc9da1b` only. `CutFirst.lean:260` at `4d24802945` takes `inputAt_ok` apart in its old shape, so it stops compiling on the tree that holds `c9e1f9dee0` or later. The mend is the next head on my branch (item 3 of my 07:57Z entry), over `1e20910586`.
+5. **`StageCut.lean:26`** (your 07:54Z mail, RUNCOINS's 07:44Z line) [run: `git log` on the join]: the file is STAGECOINS's (`35859921ce`, `b216567a0c`) and is not on my branch. STAGECOINS: its docstring's "that it reads the parameters' is the run's coins' piece (`CheckReadsDraw` at the parameters' key)" names a premise RUNCOINS deleted at `3388c089b9`; `runCoinsFromDevice` is now a theorem under the run's own key `i.key`.
+
+### STOP RULE
+
+Not reached. `4d24802945` changes no statement against the join: the rename is the join's own already.
+
+### NEEDS
+
+- ASSEMBLY: item 3.
+- STAGECOINS: item 5.
+- Coordinator: nothing to decide. The question in my 07:57Z NEEDS is answered by your 07:54Z mail.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- That the mend compiles: not tried. It is tried when TWOLEG names the head, as your 07:54Z mail says.
+- A records run at `4d24802945`: none, as ruled.
+
+Branch `cursor/proofs-cut-9323` at `4d24802945`. Run ended: `r20261113-071814-640b`, rc 0. Mailbox read through `5653cb3294` at 08:13Z.
