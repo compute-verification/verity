@@ -10,9 +10,8 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
-
-from verity.definitions.registry.prims import I32
 from verity.circuits.types import Array
+from verity.definitions.registry.prims import I32
 
 REPO = Path(__file__).resolve().parents[2]
 LOG = REPO / "data" / "logs" / "m1.jsonl.gz"

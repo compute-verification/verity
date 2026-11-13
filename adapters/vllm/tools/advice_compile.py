@@ -43,6 +43,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from verity_vllm.engine.served_seed import DEFAULT_SEED
+
 MANIFEST = "verity-vllm/served-window-programs/v1"
 
 
@@ -105,8 +107,6 @@ def window_coin(run: Path, window: int) -> dict | None:
 def registered_seed(meta: dict) -> int:
     """The default seed the registration fixes, `engine.served_seed.DEFAULT_SEED`; a ValueError when the run's server says it
     filled in another (or says none), since a request that sent no seed would be compiled under a seed its sample didn't use."""
-    from verity_vllm.engine.served_seed import DEFAULT_SEED
-
     seed = meta.get("default_seed")
     if type(seed) is not int or seed != DEFAULT_SEED:
         raise ValueError(f"the run's server filled in default seed {seed!r}, and the registered one is "

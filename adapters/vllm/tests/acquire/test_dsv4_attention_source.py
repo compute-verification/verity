@@ -24,8 +24,26 @@ from typing import Any
 import pytest
 import torch
 
-from tests.acquire.dsv4_model import (CMAP, CSA, CSA_R, ENV, HCA_R, HD_S, IKB, L, LONG, NHL, NHP, SW, SWAB, TOPK, _paged, dsv4_model,
-                                      metadata, run_step)
+from tests.acquire.dsv4_model import (
+    CMAP,
+    CSA,
+    CSA_R,
+    ENV,
+    HCA_R,
+    HD_S,
+    IKB,
+    LONG,
+    NHL,
+    NHP,
+    SW,
+    SWAB,
+    TOPK,
+    L,
+    _paged,
+    dsv4_model,
+    metadata,
+    run_step,
+)
 from tests.acquire.test_dsv4_route_source import COUNTED, Run, map_names
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import dsv4_attention_source as DS
@@ -131,11 +149,11 @@ class AttnRun(Run):
         self.log.append(("flush", what))
         return False
 
-    def step(self, k: int, md: Any, first: int = 0, unslotted: tuple[int, ...] = ()) -> None:
+    def step(self, k: int, md: Any, skip: tuple[int, ...] = (), *, first: int = 0, unslotted: tuple[int, ...] = ()) -> None:
         self.com._cur = types.SimpleNamespace(step=k)
         self.attn.on_step_begin()
         try:
-            run_step(self.model, md, first, unslotted=unslotted)
+            run_step(self.model, md, first, skip, unslotted=unslotted)
         finally:
             self.com._cur = None
         self.want[k] = {n: value(self.model, *ROLE_OF[n], md.num_decode_tokens) for n, _t in self.rec.get(k, [])}
@@ -164,7 +182,7 @@ def runs() -> dict[bool, AttnRun]:
         r = AttnRun(target)
         try:
             for k, (md, first, _routes, _phase) in enumerate(STEPS):
-                r.step(k, md, first)
+                r.step(k, md, first=first)
         finally:
             r.close()
         out[target] = r
@@ -259,7 +277,7 @@ def test_a_cache_in_another_layout_is_not_bound_and_the_step_fails_by_its_name()
     try:
         r.model.model.layers[5].attn.swa_cache_layer.kv_cache = _paged(6, 16, SWAB, torch.float32)
         md, first, routes, phase = STEPS[0]
-        r.step(0, md, first)
+        r.step(0, md, first=first)
         gone = [f"model.layers.5.attn/kv_insert.{p}" for p in DS.MLA_PARTS]
         assert not set(gone) & set(r.names(0)) and r.attn.stats["layout_refused"] == 1
         got = r.check({0: map_names(routes, phase, binders=OTHERS) + r.names(0)})
@@ -321,7 +339,7 @@ def test_a_step_the_source_found_empty_where_the_positions_give_rows_fails():
     r = AttnRun()
     try:
         md, first, routes, phase = STEPS[0]
-        r.step(0, md, first, unslotted=(3,))
+        r.step(0, md, first=first, unslotted=(3,))
         rows = set(compressed(range(L))) | {f"model.layers.{i}.attn.indexer.k_cache/rows" for i in CSA}
         assert set(r.attn.empty[0]) == rows and CM.row_counts(CMAP, ENV, r.attn.positions[0]) == {"NC4": 1, "NC128": 1}
         got = r.check({0: map_names(routes, phase, binders=OTHERS) + r.names(0)})
@@ -380,7 +398,7 @@ def test_a_prefill_one_row_short_under_its_compressed_rows_names_fails_by_layer_
     r = AttnRun()
     try:
         md, first, routes, phase = STEPS[PREFILL]
-        r.step(PREFILL, md, first, unslotted=(3,))
+        r.step(PREFILL, md, first=first, unslotted=(3,))
         short = {n for n, s in COUNTED.items() if s == "NC4"}
         assert {n: int(t.shape[0]) for n, t in r.rec[PREFILL] if n in short} == dict.fromkeys(short, 4) and not r.attn.empty
         got = r.check({PREFILL: map_names(routes, phase, binders=OTHERS) + r.names(PREFILL)})
@@ -425,7 +443,7 @@ def test_a_chunked_prefill_whose_first_chunk_ends_mid_window_holds_the_rows_the_
     chunks = ((0, 30), (30, 32), (62, 32), (94, 32), (126, 32))
     try:
         for k, (first, n) in enumerate(chunks):
-            r.step(k, metadata(prefill_tokens=n, max_seq_len=first + n), first)
+            r.step(k, metadata(prefill_tokens=n, max_seq_len=first + n), first=first)
         assert [CM.row_counts(CMAP, ENV, r.attn.positions[k]) for k in range(len(chunks))] == [
             {"NC4": 7, "NC128": 0}, *[{"NC4": 8, "NC128": 0}] * 3, {"NC4": 8, "NC128": 1}]
         assert r.attn.positions[4] == tuple(range(126, 158)) and set(r.attn.empty) == {0, 1, 2, 3}
@@ -434,7 +452,8 @@ def test_a_chunked_prefill_whose_first_chunk_ends_mid_window_holds_the_rows_the_
             assert all(same(t, r.want[k][n]) for n, t in r.rec[k])
             assert {n: int(t.shape[0]) for n, t in r.rec[k] if n in COUNTED} == {n: counts[s] for n, s in COUNTED.items() if counts[s]}
             assert r.src.step_routes(k) == (("hc-split", "indexer-short", "prefill-tokens"), "prefill")
-        got = r.check({k: map_names(*r.src.step_routes(k), binders=OTHERS) + r.names(k) for k in range(len(chunks))})
+        routed = {k: r.src.step_routes(k) for k in range(len(chunks))}
+        got = r.check({k: map_names(routes, phase, binders=OTHERS) + r.names(k) for k, (routes, phase) in routed.items()})
         assert got["ok"] is True, got["violations"][:2]
     finally:
         r.close()

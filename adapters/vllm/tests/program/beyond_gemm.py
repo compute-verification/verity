@@ -95,10 +95,10 @@ def load_norm_weights() -> dict[str, np.ndarray]:
 
 
 def silu_table_gpu(ops) -> np.ndarray:
-    xs = np.arange(65536, dtype=np.uint16)
+    xs: np.ndarray = np.arange(65536, dtype=np.uint16)
     d = 8192
     gate = xs.reshape(8, d)
-    up = np.full((8, d), 0x3F80, np.uint16)  # 1.0
+    up: np.ndarray = np.full((8, d), 0x3F80, np.uint16)  # 1.0
     inp = from_words(np.concatenate([gate, up], axis=1))
     out = torch.empty((8, d), dtype=torch.bfloat16, device="cuda")
     torch.ops._C.silu_and_mul(out, inp)
@@ -107,7 +107,7 @@ def silu_table_gpu(ops) -> np.ndarray:
 
 
 def silu_table_ieee() -> np.ndarray:
-    x = bf16_to_f32(np.arange(65536, dtype=np.uint16)).astype(np.float64)
+    x: np.ndarray = bf16_to_f32(np.arange(65536, dtype=np.uint16)).astype(np.float64)
     with np.errstate(over="ignore", invalid="ignore"):
         s = x / (1.0 + np.exp(-x))
     return f64_to_f32_to_bf16(s)
@@ -130,11 +130,11 @@ def probe_silu(ops, acts_dir: str, layers: list[int], Ms: list[int]) -> dict:
     gpu_tab2 = silu_table_gpu(ops)
     ieee_tab = silu_table_ieee()
     f32_tab = silu_table_f32_numpy()
-    xs = np.arange(65536, dtype=np.uint16)
+    xs: np.ndarray = np.arange(65536, dtype=np.uint16)
     finite = np.isfinite(bf16_to_f32(xs))
     diff_ieee = np.nonzero((gpu_tab != ieee_tab) & finite)[0]
     diff_f32 = np.nonzero((gpu_tab != f32_tab) & finite)[0]
-    res = {
+    res: dict = {
         "kernel": "vllm::act_and_mul_kernel<c10::BFloat16, __nv_bfloat162, silu_kernel, packed_silu_kernel, act_first=true, use_vec=true>",
         "model": "out = bf16(float(silu_bf16[gate]) * float(up)); silu_bf16 = 65536-entry table of bf16(silu_f32(x)) characterised once from the GPU (up = 1.0)",
         "table_deterministic_rerun": bool(np.array_equal(gpu_tab, gpu_tab2)),
@@ -187,7 +187,7 @@ def probe_silu(ops, acts_dir: str, layers: list[int], Ms: list[int]) -> dict:
 
 def ulp_offsets(s: np.ndarray, k: int) -> np.ndarray:
     """s (float32 array) moved by k ulps (k may be negative)."""
-    u = s.view(np.int32)
+    u: np.ndarray = s.view(np.int32)
     return (u + np.int32(k)).view(np.float32)
 
 
@@ -240,13 +240,15 @@ def fit_rows(gpu: np.ndarray, x_bf16: np.ndarray, w_bf16: np.ndarray, s0: np.nda
 
 def probe_rmsnorm(ops, acts_dir: str, layers: list[int], Ms: list[int]) -> dict:
     try:  # pinned nightly (0.28.1rc1.dev472) moved the module
-        from vllm.model_executor.determinism.batch_invariant import rms_norm_batch_invariant
+        from vllm.model_executor.determinism.batch_invariant import (
+            rms_norm_batch_invariant,
+        )
     except ImportError:  # stable 0.28.0
         from vllm.model_executor.layers.batch_invariant import rms_norm_batch_invariant
 
     norm_w = load_norm_weights()
     rng = np.random.default_rng(7)
-    res = {"eps": EPS, "kernels": {
+    res: dict = {"eps": EPS, "kernels": {
         "triton": "vllm.model_executor.layers.batch_invariant._rms_norm_kernel (BLOCK_SIZE=1024; tl.sqrt + fp32 division; batch-invariant path without residual)",
         "cuda_rms_norm": "vllm::rms_norm_kernel (cub BlockReduce, rsqrtf)",
         "cuda_fused_add_rms_norm": "vllm::fused_add_rms_norm_kernel<bf16, width=8> (bf16x2 residual add, FP32 sum of squares per 8-vector, cub BlockReduce<1024>, rsqrtf; batch-invariant path with residual)",
@@ -306,8 +308,8 @@ def rope_cache_numpy(dtype_steps: str) -> np.ndarray:
     """cos||sin cache [MAX_POS, HEAD] as BF16 words.  ``exact``: float64 then RNE to BF16;
     ``torch_f32``: emulate torch's float32 steps (inv_freq = 1/base**(i/d) in f32, t*inv_freq in
     f32, cos/sin evaluated in float64 on the f32 angle, rounded to f32 then BF16)."""
-    i = np.arange(0, HEAD, 2, dtype=np.float64)
-    t = np.arange(MAX_POS, dtype=np.float64)
+    i: np.ndarray = np.arange(0, HEAD, 2, dtype=np.float64)
+    t: np.ndarray = np.arange(MAX_POS, dtype=np.float64)
     if dtype_steps == "exact":
         inv = 1.0 / (ROPE_BASE ** (i / HEAD))
         ang = t[:, None] * inv[None, :]
@@ -322,8 +324,8 @@ def rope_model(x_bf16: np.ndarray, cache_bf16: np.ndarray, positions: np.ndarray
     RNE to BF16."""
     M, D = x_bf16.shape
     nh = D // HEAD
-    x = bf16_to_f32(x_bf16).astype(np.float64).reshape(M, nh, HEAD)
-    cs = bf16_to_f32(cache_bf16[positions]).astype(np.float64)  # [M, HEAD]
+    x: np.ndarray = bf16_to_f32(x_bf16).astype(np.float64).reshape(M, nh, HEAD)
+    cs: np.ndarray = bf16_to_f32(cache_bf16[positions]).astype(np.float64)  # [M, HEAD]
     cos, sin = cs[:, None, : HEAD // 2], cs[:, None, HEAD // 2 :]
     a, b = x[:, :, : HEAD // 2], x[:, :, HEAD // 2 :]
     out = np.empty_like(x)
@@ -344,7 +346,7 @@ def probe_rope(ops, acts_dir: str, layers: list[int], Ms: list[int]) -> dict:
     cache_w = words(cache)
     exact_w = rope_cache_numpy("exact")
     t32_w = rope_cache_numpy("torch_f32")
-    res = {
+    res: dict = {
         "kernel": "vllm::rotary_embedding_kernel<c10::BFloat16, c10::BFloat16, IS_NEOX=true> (in-place on q and k)",
         "cache": {
             "dtype": str(cache.dtype), "shape": list(cache.shape), "computed_on": str(cache.device),
@@ -367,7 +369,7 @@ def probe_rope(ops, acts_dir: str, layers: list[int], Ms: list[int]) -> dict:
             q = qkv[:, : NQ * HEAD].contiguous()
             k = qkv[:, NQ * HEAD : (NQ + NKV) * HEAD].contiguous()
             q_in, k_in = words(q), words(k)
-            pos_np = (np.arange(M) + (0 if li == 0 else 1000 * li)).astype(np.int64)
+            pos_np: np.ndarray = (np.arange(M) + (0 if li == 0 else 1000 * li)).astype(np.int64)
             positions = torch.from_numpy(pos_np).cuda()
             ops.rotary_embedding(positions, q, k, HEAD, cache, True)
             torch.cuda.synchronize()
