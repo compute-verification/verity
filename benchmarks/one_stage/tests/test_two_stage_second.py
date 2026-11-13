@@ -130,6 +130,28 @@ def test_the_interior_is_registered_after_round_1_under_no_name_round_1_has_and_
     assert r.draw.replay_sample == again.sample and [u // O for u in r.draw.units] == list(range(Q))
 
 
+def test_an_interior_registered_with_no_leaf_layer_is_held_to_its_roots_alone(run):
+    """The replay side's half with no leaf layer (`two_stage.replayed`'s ``leaf_layer`` False, ``--roots-only``): the
+    record written and registered names none, the stream took it holding none, and the registration check takes it
+    only so: a verifier that holds a leaf layer refuses a record that names none (R4), as it refuses the first
+    record, which names one, when it holds none. Nothing of a member's public body is then in the registration."""
+    again = TS.resume(run["stage1"], run["check"], FC.Challenger("roots"))
+    r = TS.replayed(again, run["class"], run["capture"], run["tmp"] / "interior-roots", leaf_layer=False)
+    sample = [int(u) for u in again.sample.units]
+    assert r.record["leaf_layer"] is None and r.interior.leaf_layer is None and r.registration.record == r.record
+    assert json.loads((run["tmp"] / "interior-roots" / "window.json").read_text())["leaf_layer"] is None
+    assert run["r"].record["leaf_layer"] == run["r"].interior.leaf_layer is not None
+    mine = r.design.window(again.registration.digest, sample)
+
+    def check(rec: dict, tie: dict, layer: str | None):
+        return R.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, CS.expected_ports(mine), layer, (),
+                       [again.record], registered=tie["registered"], schemas=tie["schemas"])
+
+    assert check(r.record, r.tie, None).ok
+    assert check(r.record, r.tie, "00" * 64).codes == ["R4"]
+    assert check(run["r"].record, run["r"].tie, None).codes == ["R4"]
+
+
 def test_the_replay_side_refuses_a_capture_that_is_not_the_sampled_spans_or_a_return_round_1_did_not_commit(run):
     """Nothing is committed from a capture of other requests, of other ids than the serve emitted (named by how many
     differ, never by id), under another commitment than the first stage registered, or from a replay whose units

@@ -6,6 +6,8 @@
 # refused by the two-stage form alone; and, here, the compiled round 2 (`second --pieces`) giving the Python check's
 # verdict on the run's own statements.
 #   research run --on auto --cwd clone --mem-gb 24 --max-min 120 -- bash benchmarks/one_stage/two_stage_small_sampled.sh
+#   SMALL_ROOTS=1 adds `second --roots-only`: the interior registration names no leaf layer and no member's public file
+#   is staged before the sample, so the verifier's side reads of a member only its sampled proof blocks' statement
 PIECES=verity/protocols/spot/verifier/lean/.lake/build/bin/sampled-proofs-difftest
 SMALL_ARGS="--inline --units 20 --v 2560" SMALL_LEAN_EXES=sampled-proofs-difftest \
-  SMALL_SECOND="--sampled-only --pieces $PIECES" exec bash "$(dirname "$0")/two_stage_small.sh"
+  SMALL_SECOND="--sampled-only ${SMALL_ROOTS:+--roots-only }--pieces $PIECES" exec bash "$(dirname "$0")/two_stage_small.sh"

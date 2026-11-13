@@ -608,7 +608,8 @@ class Replayed:
 
 
 def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, window_root: str | None = None,
-             rids: Mapping[str, str] | None = None, salt_key: bytes | None = None, unlinked: bool = False) -> Replayed:
+             rids: Mapping[str, str] | None = None, salt_key: bytes | None = None, unlinked: bool = False,
+             leaf_layer: bool = True) -> Replayed:
     """The replay side's half of the second stage, on the class's stream at the end of its first stage (``again``,
     `resume`): the sampled spans' proof blocks from ``capture`` (`spans_of`), committed as the interior
     (`interior_rows.interior`: each replay-block parameter a port reads registered as a value, under ``window_root``;
@@ -620,6 +621,8 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
     whose salts open the return's rows.
     ``window_root``: the open root of the challenger session the second stage's coins come from. ``salt_key``: tests
     only. ``unlinked``: a class round 2 derives no wires from is committed with no link and no wire (`design`).
+    ``leaf_layer`` False: the interior's record names no leaf layer and the stream holds none
+    (`interior_rows.interior`).
     ValueError where the class has no second stage (`design`), the capture isn't the sampled spans', or a replayed
     unit returns another row than round 1 committed for it. `service.Refused` as the stream refuses the registration."""
     if {k: v for k, v in c.public().items() if k != "seconds"} != {k: v for k, v in again.pub.items() if k != "seconds"}:
@@ -629,7 +632,7 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
     per, launches = spans_of(c, capture, sample, rids)
     it = IR.interior(per, d.cells, again.registration.digest, sample, row=again.pub["window"], links=d.links,
                      wires=d.wires, rows=d.rows, served=again.record, window_root=window_root, salt_key=salt_key,
-                     returns=[(x, c.port(x.value)) for x in d.returns if x.held])
+                     returns=[(x, c.port(x.value)) for x in d.returns if x.held], leaf_layer=leaf_layer)
     record = IR.write(it, directory)
     tie = {**({"registered": IR.link_words(d.links), "schemas": IR.link_schemas(d.members, d.links)} if d.links else {}),
            **({} if window_root is None else {"window_root": window_root})}
@@ -1046,7 +1049,10 @@ def _second(a: argparse.Namespace) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     stage1 = json.loads(Path(a.stage1).read_text())
-    summary: dict[str, Any] = {"stage1": str(a.stage1), "held": False, "unlinked": bool(a.unlinked)}
+    summary: dict[str, Any] = {"stage1": str(a.stage1), "held": False, "unlinked": bool(a.unlinked),
+                               "roots_only": bool(a.roots_only)}
+    if a.roots_only and not a.sampled_only:
+        raise SystemExit("--roots-only stages a member only at its sampled proof blocks: give --sampled-only too")
 
     def done(code: int, **more: Any) -> int:
         summary.update(more)
@@ -1082,7 +1088,8 @@ def _second(a: argparse.Namespace) -> int:
             coins.plan(second_need(again.stream, len(sample)))
             again.coins.then = coins
             r = replayed(again, c, Path(a.capture), out / "interior", window_root=root,
-                         rids=json.loads(Path(a.rids).read_text()) if a.rids else None, unlinked=a.unlinked)
+                         rids=json.loads(Path(a.rids).read_text()) if a.rids else None, unlinked=a.unlinked,
+                         leaf_layer=not a.roots_only)
         except (S.Refused, Ch.CoinError, ValueError, OSError) as e:
             return done(1, refused=e.verdict.to_json() if isinstance(e, S.Refused) else f"{type(e).__name__}: {e}")
         finally:
@@ -1163,6 +1170,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                    help="stage each member's statement, after the sample, at its sampled proof blocks alone (each port's "
                         "table the rows those blocks read), its session's sample every unit of it; without this a "
                         "member's statement holds every slot of its part")
+    g.add_argument("--roots-only", action="store_true",
+                   help="with --sampled-only: the interior registration names no leaf layer and the audit stages no "
+                        "member's public file before the sample, so the verifier holds the interior to its roots alone "
+                        "and reads of a member only its sampled proof blocks' statement")
     g.add_argument("--pieces", help="the built sampled-proofs-difftest executable: round 2's compiled check "
                                     "(Spot.Pieces.secondStatements) is run on the sessions' statements too, and the "
                                     "second stage held only if its verdict is the Python check's")
