@@ -126263,3 +126263,26 @@ For the table: #9672 | ready to mark at `05484421f8b7` since 06:53Z | the word w
 - No run of mine is waiting or running: the only one since my 04:30Z "nothing in line" is the quick tier `r20261113-060722-6d29`, done with rc 0. [run: `research status --all`, 1 shown, 0 active]
 - That run's `job.json` and `launch.json` don't contain `ulimit`, and neither do my drafts or notes. [run: `grep -c ulimit`, 0 in each]
 - The Lean try owed with the word fix after #9555 lands goes out without it.
+
+## MEMBERS, Fri 13 Nov 07:00Z: THE 589 SITE COMPILES (three tries, cpu-11, no wait) at `273199a73b18`; merged `main` once, head `a7e04a40f373`; its records `ae1b` and suites `b949` are out. One-parse records `5934` still on `security/Properties`
+
+**The site** (`Refs PRF-490`), branch `cursor/proofs-members-programsha-34fd`, from `origin/main`. No pull request yet; its ready line comes after the one-parse change's.
+
+- [run] The one line, `Spot/OneStageZk.lean` 589, as REDRAW gave it: `if !(match programSha with | some sha => jsonStrIs want sha | none => false) then`. No new comparison, no new lemma, no new file.
+- [run] Two proofs broke on it and are fixed in the same commit, each by one tactic. `split` goes into an `if`'s condition first, so with a `match` in the condition it split `programSha`, not the `if`. `push_proved` (`Sampled/Held.lean`) and the proof at `Properties/Spot/Credited.lean` 320 now say `split_ifs`, which also closes the refusing branch, so its `· cases h` line goes. `push_ok` (`Sampled/Moves.lean`) and `Sampled/Record/Accepts.lean` 335 split the verdict only and needed nothing. 3 files, +20 −22.
+- [run] Tries, all on vy-nebius-cpu-11, each started at once (no wait), one at a time, at `273199a73b186b6cd4fe11cea8340fb59dc4c956`:
+  - `r20261113-064656-f46a`: `Properties/Spot/Credited.lean`, lean exit 0 in 156 s (187 s wall); it built `Spot.OneStageZk` first; none of its 27 theorems past the three axioms.
+  - `r20261113-065027-67dc`: `Sampled/Held.lean`, lean exit 0 in 188 s (201 s wall); none of its 46 theorems past the three axioms.
+  - `r20261113-065401-2669`: `Sampled/Record/Accepts.lean`, lean exit 0 in 111 s (129 s wall); none of its 24 theorems past the three axioms.
+- [run] Merged `main` once, before the records run: head **`a7e04a40f37321e7d6b09f8174ef70337805f045`**, holding `main` at `e6567379d76b60e454f380f76290ec7c809ad55f`, no conflict. The only Lean `main` brought since the branch point is a docstring in `security/Properties/Spot.lean`.
+- [run] Out at that head: records `r20261113-065745-ae1b` (vy-nebius-cpu-10, `--mem-gb 64`, `lean_changed.py --records verity/protocols/spot/verifier/lean --update`, which audits `security` and `security/Properties`, each with `security/Proofs`), expected end about 09:00Z [guess]; suites `r20261113-065833-b949` (vy-nebius-cpu-11, `--mem-gb 48`: spot's Lean suite with the difftest, spot's verifier, one-stage, protocols' tests, the root suite), expected end about 08:00Z [guess].
+- [derived] Why no input changes the verdict: Lean's `==` on JSON gives `Json.str a == Json.str b` as `a == b` and false for a string against any other kind, and `Option`'s `==` is false for `none` against `some`. So the old condition lets a session through exactly when `programSha` is `some sha` and `want` is the string `sha`, which is what `jsonStrIs want sha` says. [run] A scratch file outside the tree evaluates both on 90 pairs (6 digests, 15 JSON values of every kind): equal on all 90, and the 5 let through are the digest against its own string.
+- [read] The Lean difftest has no case that reaches this refusal (no test names "verdict names program" on the Lean side; the Python twin's tests do). So "the difftest's verdicts unchanged" will rest on the accepting branch, which every accepted session takes, and the refusing branch on the reasoning above.
+
+**One-parse** (`cursor/proofs-members-oneparse-7b3e`, `a2d48735c2b463c4ed31121ddc74a81f4f595b14`): [run] records `r20261113-053035-5934` (vy-nebius-cpu-5) still running at 06:46Z, on `security/Properties` since about 06:33Z; expected end about 07:35Z [guess]. Then its locks, the root suite again, its pull request and its ready line, before the site's.
+
+**Correction** to my 06:37Z entry: [run] the `origin/main` I named there (`b843a10af48a`) was an older fetch; fetched at 06:56Z it is `e6567379d76b`, 136 commits later. Nothing I wrote depended on it.
+
+**Not established:** the site's records and suites at `a7e04a40f373` (both running); whether its regenerated locks move anything but the `reads` group `Spot.OneStageZk` (I apply the stop rule when `ae1b` ends); one-parse's `security/Properties` lock.
+
+**Pushed:** everything. Nothing is unpushed.
