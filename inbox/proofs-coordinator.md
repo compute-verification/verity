@@ -149308,3 +149308,52 @@ Two things you should know before the rest:
 - That a session whose tree comes from a challenger's device is accepted today at this size. OUTERSTEP's run of 10 Nov was, at K 4096, N 256. [read]
 - Whether the docstrings of `HonestFixture` and `KSFixture` are to be re-witnessed by a run on the tree. I changed no Lean and no lock; that is lean's and soundness's to say.
 - No whole `check` and no whole suite ran on the branch, by the standing rule.
+
+## SESSIONOF2, Fri 13 Nov 15:36Z: order F is whole and compiled: the split passes on a node at `9c5b95260b60` (22 theorems, then 2, clean axiom probes), and the audit's one line now names the tactics' module alone
+
+The three things the two-stage form's proofs take on trust about the parameters (no port listed twice, the partition object well formed, the templates' registered reads well formed) are now theorems that Lean accepts on a node, each under the one hypothesis the parser switch proves. The last change, which moved the proofs' tactics into a small file of their own so the Lean check's review covers only that file, compiles too. What is left is not mine to write: four lines in the proofs package's lock and lakefile, and the meeting of the switch with the join, after which the hypothesis goes.
+
+**The verdict** `[run]`
+
+- `r20261113-152353-21f3` on vy-nebius-cpu-14, `--mem-gb 24`, source `9c5b95260b60c5f4fb04c694ad058b8163de4470` (the run's own record), started 15:24:17Z, ended 15:33:50Z, rc 0. It was my only run; none is out now.
+- `ParamsWf.lean`: "lean exit 0 in 300 s"; "axiom probe: none of its 22 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; "siblings: no built module of its package that doesn't import Proofs.Flock.SpotFlock.ParamsWf declares a name it does (2065 imported in 10 s, peak 5018 MB); 2164 unchecked".
+- `PortsOfParams.lean`: "lean exit 0 in 251 s"; "axiom probe: none of its 2 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; "siblings: … (2065 imported in 10 s, peak 5113 MB); 2165 unchecked". "Build completed successfully (11736 jobs)".
+- No warning names any of the three files.
+- The audit line is now "Proofs/Flock/SpotFlock/DoWalk.lean:38 runs code while it compiles (elab), outside a `compile_time` listing reviewed at its digest", and no longer `ParamsWf.lean`: as meant. It stays until the listing of NEEDS 2 is in.
+- The head's commit subject still says "not compiled"; I amend nothing, and this run is its verdict.
+
+**A correction to my 15:24Z entry** `[read]`: `DoWalk.lean` holds seven tactics (`jp_intro`, `head_zeta`, `head_whnf`, `throws`, `jp_step`, `do_walk`, `lit_walk`) and one helper function (`headMatchWhnf`), not "eight tactics". The NEEDS line there named the seven rightly.
+
+**What a consumer cites, at `9c5b95260b60`** `[run: compiled]`, with `hcj : ∀ b j, Core.canonicalJson b = .ok j → Claims.Json.Wf j`
+
+| Premise on the join | Theorem | Module |
+| --- | --- | --- |
+| `Verity.SampledTwo.PortsDistinctAt C` (`hports` of `AcceptsTop.lean`, the field `portsDistinctAt` of `JoinsAt.lean`) | `Verity.SampledTwo.portsDistinctAt_of hcj C` | `Proofs.Flock.SpotFlock.PortsOfParams` |
+| `SpotFlock.HeldOf.ReadsWf p.circuits` (`hw` of `refReadsWf_form`, `ownReads_form`) | `SpotFlock.ParamsWf.readsWf_of_bytes hcj h`, with `h : (Core.canonicalJson a >>= paramsOfJson) = .ok p` | `Proofs.Flock.SpotFlock.ParamsWf` |
+| `Claims.Json.Wf o` of the partition object (`partition_readsBack_of_wf` and those on it) | `SpotFlock.ParamsWf.partition_wf_form hcj h`, with `h : paramsOfJson j = .ok p`: both for the boundary's and the interior's `verifier.partition` | the same |
+
+- `hcj` itself, on the switch's branch (`cursor/proofs-sessionof2-parser-defe` at `fe28c96c4322`), is `Verity.CanonicalJson.canonicalJson_ok` followed by `FlockComplete.JsonRT.parse_wf` `[derived]`. No branch holds both the join and the switch, and I merge nothing.
+- The join moved to `d557b8cf4282` since my branch left it at `4e986e339ad2` `[read: the diff between the two]`. None of what the three files read changed: `Spot/OneStage.lean`, `Spot/Json.lean`, `VStarRecursive/SampledTwo.lean`, `CoreProtocol/Protocol.lean`, `SampledTwo/Reading.lean`, `Steps.lean`, `InputMap.lean`, `HeldOfReads.lean`, `Properties/Spot/Units.lean` and `Select/Take.lean` are not in the diff; `Spot/Run.lean` changed only around `interiorSteps` (`cellParts`), not `templateCircuits`; `AcceptsTop.lean` grew, with `PortsDistinctAt` as it was. So the branch should merge into the join without a change `[guess: not tried, I merge nothing]`.
+
+**STOP RULE**: nothing. No listed guarantee's statement or premise changes; no verifier code is touched; I edited no lock and no lakefile.
+
+**NEEDS** (for the join's owner; `security/Proofs/lean-audit.json` and `security/Proofs/lakefile.toml` are not mine). With these the three files are in the whole Lean check; without them it fails on `orphan.file` and on the listing.
+
+1. `roots`, in both files: `"Proofs.Flock.SpotFlock.PortsOfParams"`. It imports `ParamsWf`, which imports `DoWalk`, so the one line reaches all three. If the roots name every module, as they do for `JpWalk`, then also `"Proofs.Flock.SpotFlock.ParamsWf"` and `"Proofs.Flock.SpotFlock.DoWalk"`.
+2. `compile_time`, in the lock, after a reviewer reads the file's 128 lines: `"Proofs.Flock.SpotFlock.DoWalk": {"why": "jp_intro, head_zeta, head_whnf, throws, jp_step, do_walk and lit_walk, the tactics that walk an Except do block by its join points (SpotFlock/ParamsWf.lean's proofs of what the parameters' readers return): elaborators that replace a hypothesis by a definitionally equal one or generalize a join point to a variable, and macros that expand to repeat', first, cases, split, refine, obtain, subst and dsimp only. They run only inside the elaborator and do no IO, and the kernel replays every proof they build.", "digest": "9c4f23f64cf0313080637290463c0ca73562e221f45a1b38979550f0bb3f145a"}`. The digest is the file's sha256 at `9c5b95260b60` `[run]`, and the file is unchanged since.
+3. The earlier NEEDS stand, for the switch's pull request: the PoUS token at `Component.lean:98`, the interface lock's three lines, the proofs package's root lines for `Proofs.Core.CanonicalJson`.
+4. Yours to rule, not a need: once the switch and the join meet, each consumer's premise can be replaced by the theorem of the table: `hports` in `AcceptsTop.lean` and the field in `JoinsAt.lean`, `hw` in `HeldOfReads.lean` (none of the three files is mine), and `hw` in my own `PartReadsBack.lean`, which nothing outside that file reads yet `[read: the join at d557b8cf4282]`. I have written none of those changes: before the two meet they would only trade each premise for `hcj`. Say if you want the exact lines under NEEDS for each owner now, or the premises left as they are until the switch is on `main`, as your 11:17Z ruling 3 has them.
+
+**To post**: nothing new. If you tell the join's owner: "SESSIONOF2's `cursor/proofs-sessionof2-params-4e98` at `9c5b95260b60` gives `PortsDistinctAt`, `ReadsWf` and the partition object's `Wf` from the one hypothesis that `Core.canonicalJson` returns well-formed trees; three new files under `security/Proofs/Flock/SpotFlock/`, compiled with clean axiom probes; it needs one root line and one `compile_time` listing in the proofs package."
+
+**Not established**
+
+- `hcj` on the join: it holds only after the switch.
+- That any consumer's premise is dropped: I changed no file that takes one.
+- The whole Lean check on the branch: only single-file tries ran. The kernel replay of the three files' declarations by `check.py` did not run; the tries' axiom probes did.
+- That the tactics' file passes its review: nobody but me has read it.
+- That the branch merges into the join's present head: read from the diff, not tried.
+
+**What I do next**, unless you say otherwise: the sizing your 12:33Z message left for after the switch, by reading only: the second reader of the format (`Core.Canonical.parse`, `parseUpTo`, `read`), who calls it, and what it would take to hold it to `canonicalJson` by a theorem or to remove it. It goes in my next entry, by 16:36Z. I open no pull request and run no `--update`.
+
+**Pushed heads**: `cursor/proofs-sessionof2-params-4e98` `9c5b95260b60` (off the join at `4e986e339ad2`; compiled, `21f3`); `cursor/proofs-sessionof2-parser-defe` `fe28c96c4322` (unchanged); `cursor/proofs-sessionof-9b17` `9a548b2f975d`; `cursor/proofs-sessionof2-7c3a` `b49c6e40619f`; `cursor/proofs-sessionof-5c1e` `521933e1430b`.
