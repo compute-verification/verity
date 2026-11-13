@@ -187,7 +187,9 @@ The reader holds what the rule charges below to two more things, which the rule 
   the control's own word, `stop_word`, `id`, `max_tokens` or `output`, which the reader declares
   (`stop_verdicts.REASONS`). One control a verifier a commit serves every execution phase under that commit. A
   control at another commit, by another verifier or of another thing serves none, and one the verifier did not
-  refuse, or refused for another reason, leaves it without, whatever other it refused. The line names the verifier
+  refuse, or refused for another reason, leaves it without, whatever other it refused. So does one whose accept
+  the verifier withheld: a control counts only where the verifier refused, and a verdict that states a `withheld`
+  word is no refusal, whatever `reason` its record gives. The line names the verifier
   that lacks its control, with the reason given beside the control's word; the class's line prints the reason each
   verifier gave.
 - **The rate.** A class is held only where every block of the stop record's and the response tie's populations is

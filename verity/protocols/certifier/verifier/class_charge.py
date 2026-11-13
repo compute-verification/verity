@@ -150,7 +150,8 @@ def _named(x: object) -> bool:
 def lacks(record: object) -> str | None:
     """What keeps `record` from being a verdict record (the module docstring's "A verdict record"), by the field's
     name, or None where it is one: an object with each of `FIELDS`, its run, its serve and its registration named,
-    its verifier named by each of `NAMES`, its verdict an object, and `proved_by` a name or null."""
+    its verifier named by each of `NAMES`, its verdict an object that states nothing wrongly (`misstates`), and
+    `proved_by` a name or null."""
     if not isinstance(record, Mapping):
         return "it is no object"
     if missing := [k for k in FIELDS if k not in record]:
@@ -165,7 +166,13 @@ def lacks(record: object) -> str | None:
         return f"its `{VERDICT}` is no object"
     if not (record[PROVED_BY] is None or _named(record[PROVED_BY])):
         return f"its `{PROVED_BY}` is neither a name nor null"
-    verdict = record[VERDICT]
+    return misstates(record[VERDICT])
+
+
+def misstates(verdict: Mapping[str, Any]) -> str | None:
+    """What a verdict states wrongly of `SAID` (the module docstring's "Withheld, and the codes"), or None where it
+    states nothing wrongly: a `withheld` that is neither null nor a word, `codes` that are no list of words, and
+    an accept that states a `withheld` word or a code."""
     if not (verdict.get(WITHHELD) is None or _named(verdict[WITHHELD])):
         return f"its verdict's `{WITHHELD}` is neither a word nor null"
     if CODES in verdict and not (isinstance(verdict[CODES], list) and all(type(c) is str for c in verdict[CODES])):

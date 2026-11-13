@@ -131,7 +131,11 @@ fact of that code, so one control a verifier a commit serves every execution pha
 a control names no head, class or serve: of a control record the reader reads its five fields and no other. A
 control at another commit, by another verifier, or of a thing its verifier doesn't owe counts for nothing. One its
 verifier did not refuse (``accepted`` anything but false), and one it refused for another reason than the
-control's word, leave that verifier without its control at that commit, whatever other control it refused. An
+control's word, leave that verifier without its control at that commit, whatever other control it refused. So
+does one whose accept its verifier withheld: a control counts only where the verifier refused, and a verdict that
+states a ``withheld`` word is not accepted and is no refusal, whatever ``reason`` its record gives. A control's
+verdict is held to what any verdict states of the two fields ("Withheld, and the codes"), and one that states
+either wrongly is a control record that doesn't read. An
 execution phase whose verifier lacks its control is charged its whole schedule, with a line that names the
 verifier and, for a control refused for another reason, the reason given and the control's word. A control record
 that doesn't read holds no execution phase at all, in a run that is not superseded. Of a superseded run, a control
@@ -275,6 +279,8 @@ def control_lacks(record: object) -> str | None:
         return f"its `{CC.VERIFIER}` names no `{'`, `'.join(unnamed)}`"
     if not isinstance(record[CC.VERDICT], Mapping):
         return f"its `{CC.VERDICT}` is no object"
+    if lack := CC.misstates(record[CC.VERDICT]):
+        return lack
     if record[CC.VERDICT].get(CC.ACCEPTED) is False and not _named(record[REASON]):
         return f"its `{REASON}` is no text, though its verdict is refused"
     return None
@@ -360,7 +366,7 @@ def _uncontrolled(kind: str, record: Mapping[str, Any],
     its = owed.get((kind, module, commit), ())
     if not its:
         return f"{who} has no negative control of record at that commit (`{name}`: {what})"
-    if kept := sorted({r[CC.RUN] for r in its if r[CC.VERDICT].get(CC.ACCEPTED) is not False}):
+    if kept := sorted({r[CC.RUN] + _no_refusal(r[CC.VERDICT]) for r in its if not _refusal(r[CC.VERDICT])}):
         return f"{who} did not refuse its negative control (`{name}`: {what}) on {', '.join(kept)}"
     if other := sorted({(r[REASON], r[CC.RUN]) for r in its if r[REASON] != REASONS[kind]}):
         return f"{who}: " + "; ".join(f"control {name} refused for {reason!r}, not {REASONS[kind]!r}, on {run}"
@@ -368,10 +374,21 @@ def _uncontrolled(kind: str, record: Mapping[str, Any],
     return None
 
 
+def _refusal(verdict: Mapping[str, Any]) -> bool:
+    """Whether a control's verdict is its verifier's refusal: ``accepted`` exactly false, and no accept withheld,
+    which is not accepted and is no refusal (the module docstring's "A negative control")."""
+    return verdict.get(CC.ACCEPTED) is False and CC.not_accepted(verdict) == CC.REFUSED
+
+
+def _no_refusal(verdict: Mapping[str, Any]) -> str:
+    """What a line adds of a control's verdict that is not accepted and is no refusal either: how it went."""
+    return f" ({CC.not_accepted(verdict)}, which is no refusal)" if verdict.get(CC.ACCEPTED) is False else ""
+
+
 def _counts(kind: str, record: Mapping[str, Any]) -> bool:
     """Whether a control record of the control ``kind``'s verifier owes counts for it: refused, for that control's
     word."""
-    return record[CC.VERDICT].get(CC.ACCEPTED) is False and record[REASON] == REASONS[kind]
+    return _refusal(record[CC.VERDICT]) and record[REASON] == REASONS[kind]
 
 
 def _refused(read: Read, owed: Mapping[tuple[str, str, str], Sequence[Mapping[str, Any]]]) -> str:

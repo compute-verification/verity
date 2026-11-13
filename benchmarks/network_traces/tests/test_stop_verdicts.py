@@ -383,13 +383,14 @@ def test_an_execution_phase_is_held_only_where_each_verifier_that_accepted_refus
     others = refused(CC.STOP_RECORD, CC.CERTIFIED_READ, CC.COMPUTE_AUDIT)
     for accepted in (True, None, "false", 0):
         for reason in ("id", None, ""):
-            controls = [c | {SV.REASON: reason} if i == 1 else c for i, c in enumerate(control_but(accepted=accepted))]
+            controls = [c | {SV.REASON: reason} if i == 1 else c
+                        for i, c in enumerate(control_but(accepted=accepted, codes=[]))]
             got = stop(one, four(first), controls=controls)
             assert got.held == 0 and got.why[4] == not_refused + "control run of the response tie", (accepted, reason)
             assert got.why[2] == below + others, (accepted, reason)
     bare = [c | {CC.VERDICT: {SV.FORMAT: TIE}} if i == 1 else c for i, c in enumerate(the_controls())]
     assert stop(one, four(first), controls=bare).why[4] == not_refused + "control run of the response tie"
-    again = control_but(accepted=True)[1] | {CC.RUN: "a second control run"}
+    again = control_but(accepted=True, codes=[])[1] | {CC.RUN: "a second control run"}
     got = stop(one, four(first), controls=the_controls() + [again])
     assert got.held == 0 and got.why[4] == not_refused + "a second control run" and got.why[2] == below + others
     # a control counts only where it is refused for the reason its change aims at, the control's word: one refused
@@ -1052,7 +1053,7 @@ def run_files() -> dict[str, dict[str, str]]:
             "no registration": {"out/the-verdicts.jsonl": jsonl(four(first))}, "nothing": {"out/another.json": "{}"},
             "a record that doesn't read": held_files(first, [{CC.VERDICT: {}}]),
             "the four and no control": held_files(first, four(first), controls=[]),
-            "the four and a control accepted": held_files(first, four(first), controls=control_but(accepted=True)),
+            "the four and a control accepted": held_files(first, four(first), controls=control_but(accepted=True, codes=[])),
             "the four and a control refused for another reason": held_files(first, four(first), controls=reason_but("parse")),
             "the four and a control that doesn't read": held_files(first, four(first), controls=[{CC.VERDICT: {}}]),
             "the four and no serve's registration": held_files(first, four(first), served=[]),
@@ -1117,7 +1118,7 @@ def test_a_superseded_run_takes_away_no_refusal(tmp_path):
             f"{LINK}: both of the serve the serve, as their verdict records name it")
     # a control a superseded run's verifier did not refuse stands: the later run's four, by that verifier at that
     # commit, are held back by it whether the run is superseded or not, and whatever control the later run refused
-    store = Store(tmp_path / "accepted", {"old": held_files(first, [], controls=control_but(accepted=True)),
+    store = Store(tmp_path / "accepted", {"old": held_files(first, [], controls=control_but(accepted=True, codes=[])),
                                           "new": accepts})
     for superseded in ((), ["old"]):
         got = SV.of_runs(store, ["old", "new"], superseded)
@@ -1561,6 +1562,60 @@ def test_a_verdict_not_accepted_that_states_a_withheld_word_is_withheld_for_it_u
         registrations, audit_but(first, accepted=False))))
     assert (f"- compute audit, run, not proved: refused, complete, on class 0 in execution phase 3 of the link "
             f"{LINK}, {by}, proved by nothing") in refused and "withheld" not in refused
+
+
+def test_a_control_counts_only_where_its_verifier_refused_and_a_withheld_one_is_no_refusal(tmp_path):
+    """A control whose verdict is not accepted and states a ``withheld`` word is no refusal, whatever ``reason``
+    its record gives: its verifier is left without its control, the line says how the verdict went, and in a
+    superseded run it stands as a control that was not refused. A control's verdict that states either field
+    wrongly makes its record one that doesn't read."""
+    first = head(3, 5, 0)
+    one = [registration(first)]
+    at = (f"the link {LINK}, execution phase 3: held to its whole schedule by a control: the response tie's verifier "
+          "the response tie's verifier at a commit did not refuse its negative control (`id`: a released id "
+          "changed) on ")
+    # the control's own word as its reason, and its verdict withheld: no refusal, with a code or without
+    for over in ({CC.WITHHELD: FORM}, {CC.WITHHELD: FORM, CC.CODES: []}, {CC.WITHHELD: "another word", CC.CODES: ["id"]}):
+        controls = control_but(**over)
+        assert controls[1][SV.REASON] == "id" and controls[1][CC.VERDICT][CC.ACCEPTED] is False
+        got = stop(one, four(first), controls=controls)
+        assert got.held == 0 and got.why[0] == held_back(1, 1, control=1), over
+        assert got.why[4] == at + (f"control run of the response tie (withheld for `{over[CC.WITHHELD]}`, which is "
+                                   "no refusal)") and len(got.why) == 5, over
+        assert got.why[2] == f"the link {LINK}, execution phase 3, {BELOW}" + refused(
+            CC.STOP_RECORD, CC.CERTIFIED_READ, CC.COMPUTE_AUDIT), over
+        # whatever other control that verifier refused
+        got = stop(one, four(first), controls=[*the_controls(), controls[1] | {CC.RUN: "a second control run"}])
+        assert got.held == 0 and got.why[4] == at + (f"a second control run (withheld for `{over[CC.WITHHELD]}`, "
+                                                     "which is no refusal)"), over
+    # a null `withheld` is a refusal, and one not refused at all says nothing of how it went
+    assert stop(one, four(first), controls=control_but(withheld=None)).held == 1
+    assert stop(one, four(first), controls=control_but(accepted=None, withheld=FORM)).why[4] == at + (
+        "control run of the response tie")
+    # in a superseded run a withheld control stands, as one its verifier did not refuse does
+    accepts = held_files(first, four(first))
+    store = Store(tmp_path / "withheld", {"old": held_files(first, [], controls=control_but(withheld=FORM)),
+                                          "new": accepts})
+    for superseded in ((), ["old"]):
+        got = SV.of_runs(store, ["old", "new"], superseded)
+        assert got.held == 0 and got.why[4] == at + (f"control run of the response tie ({WITHHELD}, which is no "
+                                                     "refusal)"), superseded
+    assert got.why[-1] == uncounted(3, "old")
+    # a control's verdict is held to what any verdict states of the two fields
+    for over, lack in (({CC.WITHHELD: ""}, "its verdict's `withheld` is neither a word nor null"),
+                       ({CC.WITHHELD: 0}, "its verdict's `withheld` is neither a word nor null"),
+                       ({CC.CODES: "id"}, "its verdict's `codes` is no list of words"),
+                       ({CC.CODES: [1]}, "its verdict's `codes` is no list of words"),
+                       ({CC.ACCEPTED: True, CC.CODES: []} | {CC.WITHHELD: FORM},
+                        "its verdict is accepted and states `withheld`: an accept that also says why it was held "
+                        "back says two things"),
+                       ({CC.ACCEPTED: True}, "its verdict is accepted and states `codes`: an accept that also says "
+                                             "why it was held back says two things")):
+        controls = control_but(**over)
+        assert SV.control_lacks(controls[1]) == lack, over
+        got = stop(one, four(first), controls=controls)
+        assert got == LB.Stop(0, (f"each connection is charged its whole schedule: {SV.A_CONTROL}; of one read, "
+                                  f"{lack}: {controls[1]!r}",)), over
 
 
 def stating(files: dict[str, str], how: str) -> dict[str, str]:
