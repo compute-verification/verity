@@ -30,7 +30,7 @@ open Lean (Json)
 /-- **A layout's classes**: its population, then a class of input slots, which name no unit. -/
 theorem layout_shape {p : Spot.Program} {query : Json} {l : Spot.Slots.Layout}
     (h : Spot.Slots.layout p query = .ok l) :
-    ∃ pop X, l.classes = #[pop, X] ∧ ∀ s ∈ X, ∀ b ∈ s, b.unit = none := by
+    ∃ pop ins, l.classes = #[pop, ins] ∧ ∀ s ∈ ins, ∀ b ∈ s, b.unit = none := by
   unfold Spot.Slots.layout at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
@@ -42,11 +42,11 @@ theorem layout_shape {p : Spot.Program} {query : Json} {l : Spot.Slots.Layout}
 
 theorem pop_facts {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slots.Layout}
     (hl : Spot.Slots.layout p query = .ok l) (hp : Spot.Slots.popOk p query n = true) :
-    ∃ X : Array (Array Spot.Slots.ProofBlock), (∀ s ∈ X, ∀ b ∈ s, b.unit = none) ∧
-      l.blocks.toList = Spot.Slots.popOf l ++ (X.toList.map Array.toList).flatten ∧
+    ∃ ins : Array (Array Spot.Slots.ProofBlock), (∀ s ∈ ins, ∀ b ∈ s, b.unit = none) ∧
+      l.blocks.toList = Spot.Slots.popOf l ++ (ins.toList.map Array.toList).flatten ∧
       (Spot.Slots.popOf l).map (·.unit) = (List.range n).map some := by
-  obtain ⟨pop, X, hc, hX⟩ := layout_shape hl
-  refine ⟨X, hX, ?_, ?_⟩
+  obtain ⟨pop, ins, hc, hins⟩ := layout_shape hl
+  refine ⟨ins, hins, ?_, ?_⟩
   · unfold Spot.Slots.Layout.blocks Spot.Slots.popOf
     rw [hc]
     simp [Array.toList_flatten]
@@ -65,7 +65,7 @@ theorem unit_of_popOk {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slot
     (hl : Spot.Slots.layout p query = .ok l) (hp : Spot.Slots.popOk p query n = true)
     {ρ : ℕ} {b : Spot.Slots.ProofBlock} (hb : l.blocks[ρ]? = some b) {v : ℕ} (hv : b.unit = some v) :
     v = ρ ∧ ρ < n := by
-  obtain ⟨X, hX, hbl, hpop⟩ := pop_facts hl hp
+  obtain ⟨ins, hins, hbl, hpop⟩ := pop_facts hl hp
   have hlen := length_popOf hl hp
   rw [← Array.getElem?_toList, hbl] at hb
   rcases Nat.lt_or_ge ρ (Spot.Slots.popOf l).length with hρ | hρ
@@ -80,7 +80,7 @@ theorem unit_of_popOk {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slot
     have hmem := List.mem_of_getElem? hb
     simp only [List.mem_flatten, List.mem_map] at hmem
     obtain ⟨_, ⟨s, hs, rfl⟩, hbs⟩ := hmem
-    have hn := hX s (by simpa using hs) b (by simpa using hbs)
+    have hn := hins s (by simpa using hs) b (by simpa using hbs)
     rw [hn] at hv
     cases hv
 
@@ -88,7 +88,7 @@ theorem unit_of_popOk {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slot
 theorem block_of_popOk {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slots.Layout}
     (hl : Spot.Slots.layout p query = .ok l) (hp : Spot.Slots.popOk p query n = true) {ρ : ℕ} (hρ : ρ < n) :
     ∃ b, l.blocks[ρ]? = some b ∧ b.unit = some ρ := by
-  obtain ⟨X, -, hbl, hpop⟩ := pop_facts hl hp
+  obtain ⟨ins, -, hbl, hpop⟩ := pop_facts hl hp
   have hρ' : ρ < (Spot.Slots.popOf l).length := by rw [length_popOf hl hp]; exact hρ
   refine ⟨(Spot.Slots.popOf l)[ρ], ?_, ?_⟩
   · rw [← Array.getElem?_toList, hbl, List.getElem?_append_left hρ', List.getElem?_eq_getElem hρ']
@@ -100,17 +100,17 @@ theorem block_of_popOk {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slo
 /-- **`n` slots name a unit**, under `popOk`: `heldOf`'s request count is the population. -/
 theorem requests_of_popOk {p : Spot.Program} {query : Json} {n : ℕ} {l : Spot.Slots.Layout}
     (hl : Spot.Slots.layout p query = .ok l) (hp : Spot.Slots.popOk p query n = true) : requests l = n := by
-  obtain ⟨X, hX, hbl, hpop⟩ := pop_facts hl hp
+  obtain ⟨ins, hins, hbl, hpop⟩ := pop_facts hl hp
   have h1 : (Spot.Slots.popOf l).filter (fun b => b.unit.isSome) = Spot.Slots.popOf l := by
     refine List.filter_eq_self.2 fun b hb => ?_
     have hm : b.unit ∈ (List.range n).map some := hpop ▸ List.mem_map_of_mem hb
     obtain ⟨k, -, hk⟩ := List.mem_map.1 hm
     simp [← hk]
-  have h2 : ((X.toList.map Array.toList).flatten).filter (fun b => b.unit.isSome) = [] := by
+  have h2 : ((ins.toList.map Array.toList).flatten).filter (fun b => b.unit.isSome) = [] := by
     refine List.filter_eq_nil_iff.2 fun b hb => ?_
     simp only [List.mem_flatten, List.mem_map] at hb
     obtain ⟨_, ⟨s, hs, rfl⟩, hbs⟩ := hb
-    simp [hX s (by simpa using hs) b (by simpa using hbs)]
+    simp [hins s (by simpa using hs) b (by simpa using hbs)]
   unfold requests
   rw [← Array.length_toList, Array.toList_filter, hbl, List.filter_append, h1, h2, List.append_nil,
     length_popOf hl hp]
