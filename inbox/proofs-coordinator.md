@@ -152358,3 +152358,54 @@ Nothing.
 - Whether the check refuses a second-stage design of no stratum (fact 6).
 - `reachedLog`, `messagesFixedLog` (try `3007`).
 - Facts 6 to 11 as theorems.
+
+## FRAME, Fri 13 Nov 16:46Z: STATUS TABLE 1: BATCHES 1 AND 2 ARE WHOLE: all five heads crossed the 28 moves (#9441, #9681, #9713 `clean`; #9555, #9717 `clean-skipped`, and the grep finds nothing); every carry is pure; #9555, #9441 and #9681 are fast-forwarded to their carried heads and their records runs are out (`1e2c`, `42de`, `03ad`, back about 17:25Z); no ready line yet
+
+**Every carry names `4ae17f7eafd7`, never the `main` of the day.**
+
+Each claim says where it comes from: [run] a node's run, [local] this machine (git only), [git]. My mailbox's last heading is your 16:40Z one.
+
+| Pull request | Old head | The tool's result | Carried head | Pure | Its branch | Records run |
+|---|---|---|---|---|---|---|
+| **#9555** | `38b7c6df38ba` | `clean-skipped`: crossed 24, skipped the four on `main` | `38e1ad9938f699d92a3c8cea6d5dc990821c2e24` | yes | `cursor/proofs-keyheld-3c9a` fast-forwarded, 16:39Z | `r20261113-164151-1e2c`, vy-nebius-cpu-5 |
+| **#9441** | `51a2e803cb83` | `clean`: crossed 28 | `7331a7552ef076520bacc0eed5fa082cbc5202fc` | yes | `cursor/proofs-members-files-61d4` fast-forwarded, 16:39Z | `r20261113-164011-42de`, vy-nebius-cpu-4 |
+| **#9681** | `3b05c3a3b1a7` | `clean`: crossed 28 | `2faa5974de81f5e65ddf5d7ab0a0bd18dfb08a7e` | yes | `cursor/proofs-frame-connected-4e1b` fast-forwarded, 16:36Z | `r20261113-164431-03ad`, vy-nebius-cpu-3 |
+| **#9713** | `767972c546b8` | `clean`: crossed 28 | `8637beb2fe6af5efc7f47ef4daabfd971467aaf8` | yes | not moved yet: next | not launched yet: next |
+| **#9717** | `8130cf7e15e2` | `clean-skipped`: crossed 24, skipped the four on `main` | `ec2749859711f4cd3220ab0efca142ceb1cc5039` | yes | not moved yet: after #9713 | not launched yet |
+
+- **Pure, for all five.** [run; git] Each carried head is the commit the tool ended on, with no commit of mine on top. No result is `locks-stale`. The tool's commits are by `restack carry <noreply@invalid>`, the identity the job sets: 59 on #9555 and #9717, 68 on the other three.
+- **The grep, for each.** [local, `after.py`] The lines the carried head adds over `4ae17f7eafd7`, read against the old paths and dotted modules of each move's map: none names one.
+
+  | Pull request | Added lines read | Hits, the four skipped maps | Hits, the crossed maps that name paths |
+  |---|---|---|---|
+  | #9555 | 1,039 | 0 | 0 of 17 maps |
+  | #9717 | 1,282 | 0 | 0 of 17 maps |
+  | #9441 | 1,025 | none skipped | 0 of 21 maps |
+  | #9681 | 6,166 | none skipped | 0 of 21 maps |
+  | #9713 | 9,873 | none skipped | 0 of 21 maps |
+
+  So I pushed #9555 by your 16:16Z order without the confirming command: the four skipped maps (`config_map`, `settings_map`, `bench_instances_map`, `flat_files_map`) left no old name in what it adds.
+- **Each carried head** holds `4ae17f7eafd7` and its own old head, so each push was a fast-forward. [git: `38b7c6df38b..38e1ad9938f`, `51a2e803cb8..7331a7552ef`, `3b05c3a3b1a..2faa5974de8`]
+- **The test of a stacked head.** [local] Carried #9713 merged with a `main` holding carried #9681, and carried #9717 with a `main` holding carried #9555: no conflict, and the merged tree is the head's own carried tree.
+- **The landing order** #9681, #9713, #9555, #9441, #9717 onto `4ae17f7eafd7`, one after another: no conflict at any step. [local]
+- **Against today's `main`.** [git, 16:43Z] `main` is `d119240998be`, with no move over `4ae17f7eafd7`. Each of the five merges with it with no conflict.
+- **The runs.** [run] Batch 1 `r20261113-155839-6e94`: 2,130 seconds. Batch 2 `r20261113-155918-5920`: 2,200 seconds. All 28 checks were found kept by each carry, and each job left no scratch.
+
+**The records runs.** One job a head, from a clone at the carried head: `python3 tools/verity/lean/lean_changed.py --records security/Proofs --update`, and beside it the quick suites of what the head changes over the pass's head (`suites.py --changed 4ae17f7eafd7 --quick`). The regenerated lock, if any, comes back as a patch.
+
+- A records run takes its node's one Lean slot. [`research status`] Three launches of mine waited on a held slot and I cancelled them within five minutes each: `3c86` (#9555, behind my own `42de`), `2a6c` and `c8d8` (#9681, both on vy-nebius-cpu-2 behind another's job). `03ad` is on vy-nebius-cpu-3 by name, after the second launch through auto went to the same node.
+- All three now hold a slot: `42de` since 16:40Z, `1e2c` since 16:42Z, `03ad` since 16:45Z. The last such run took 40 minutes, so about 17:25Z.
+- **If a records run regenerates a record, that head gains a commit and is no longer pure.** I say so in the ready line.
+
+**Your question on the form.** A carry may name any `main` that holds none of the pass's carried heads: today's `main` is right for REDRAW's and ONSITE's jobs, since nothing of ours has landed. From the first landing on, a line that shares a commit with a landed head must name `4ae17f7eafd7`; a free line may go on naming the `main` of the day. "Always `4ae17f7eafd7`" is the rule that is never wrong for our lines.
+
+**One node holds four carries.** REDRAW's `7b85` was on vy-nebius-cpu-14 when auto put the join's job there at 16:29Z; I did not know of it. Their scratch is under `/workspace`, with 404G free there at the job's start [run]. I leave the join's job running unless you say otherwise.
+
+**Still out.** The join's job `r20261113-162933-74e0` (the join at `6bae773eb345`, #9735, B's draft), back about 17:05Z.
+
+**Not established.**
+
+- Any records run's verdict, and any suite's.
+- #9713's and #9717's branches and records runs: next, in that order.
+- The join at `6bae773eb345` and #9735: not carried yet.
+- Whether the queue passes review-44's verdicts to `38e1ad9938f6` and `7331a7552ef0`: the queue's to say when you mark.
