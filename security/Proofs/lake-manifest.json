@@ -187,7 +187,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../Properties/../../verity/protocols/onsite/verifier/../../remote/verifier/../../pouw/verifier/lean/pearlplus/../window/../../../../../difftest/lean",
+   "../../verity/circuits/difftest",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

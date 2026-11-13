@@ -85,7 +85,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../pouw/verifier/lean/pearlplus/../window/../../../../spot/verifier/lean/../../../../difftest/lean/../../circuits/lean",
+   "../../../circuits/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -93,7 +93,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../pouw/verifier/lean/pearlplus/../window/../../../../../difftest/lean",
+   "../../../circuits/difftest",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -109,7 +109,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../pouw/verifier/lean/pearlplus/../window/../../../../spot/verifier/lean/../../../../difftest/lean/../../circuits/base",
+   "../../../circuits/base",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

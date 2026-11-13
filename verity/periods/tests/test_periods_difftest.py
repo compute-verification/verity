@@ -1,4 +1,4 @@
-"""`CoreProtocol.Period` against `verity.periods`, through the core difftest harness (`verity/difftest`).
+"""`CoreProtocol.Period` against `verity.periods`, through the core difftest harness (`tools/difftest`).
 
 `core-periods-difftest` (`Core.PeriodDifftest.table`) serves `span` (a span read from its JSON, and its stop), `within`,
 `cut` (the parts of a span's cut at its boundaries) and `monitoring` (a monitoring period read from its JSON, its execution
