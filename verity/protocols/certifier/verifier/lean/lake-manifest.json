@@ -48,7 +48,7 @@
    "name": "verity_difftest",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../../../../commitments/identity/../../difftest/lean",
+   "dir": "../../../../circuits/difftest",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
