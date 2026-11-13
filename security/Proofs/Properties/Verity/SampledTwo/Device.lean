@@ -18,8 +18,8 @@ windows printed the play's log (`PrintsTwo`, through `BindsOfPrints`), and it si
   releases, `log.take (cut log)`, then the interior's, `log.drop (cut log)`; the history holds the first setup's run
   at the first and the second setup's at the second, with both setups' ledger lines.
 * **The device printed the log** (`printsTwo_dev₂`, `binds_dev₂`): each run prints its part
-  (`Sampled.Device.prints_dev`, `holds_dev`), and where each setup's ledger opens its run's id only on its own window
-  (`Apart`), no run prints the other part's window. `binds_dev₂` is `Binds` at the history, from
+  (`Sampled.Device.prints_dev`, `holds_dev`), and where the setups' ledger lines open neither session's run on the
+  other's window (`Apart`), no run prints the other part's window. `binds_dev₂` is `Binds` at the history, from
   `CutHeld.binds_of_accepts`.
 * **The history holds both runs** (`holdsTwo_dev₂`): `PrintsTwo` speaks of the runs the history holds, and holds of a
   history holding none. On two windows, where the first session's releases hold no tree's hello (`NoHello`), each part
@@ -162,11 +162,10 @@ theorem opensIn_of_opensOn {h : History} {pk : ByteArray} {w id : String} (ho : 
   obtain ⟨line, hl, rest⟩ := ho
   exact ⟨line, hL line hl, rest⟩
 
-/-- **Each session's ledger lines open its run only on its own window**: wherever the two setups' ledger lines open the
-first setup's run, it is on `w₁`, and the second's, on `w₂`. -/
+/-- **No session's run is opened on the other's window**: the two setups' ledger lines don't open the second setup's
+run on `w₁`, nor the first's on `w₂`. -/
 def Apart (S₁ S₂ : RunSetup) (w₁ w₂ : String) : Prop :=
-  (∀ w, OpensIn (S₁.ledger ++ S₂.ledger) w S₁.id → w = w₁) ∧
-    ∀ w, OpensIn (S₁.ledger ++ S₂.ledger) w S₂.id → w = w₂
+  ¬ OpensIn (S₁.ledger ++ S₂.ledger) w₁ S₂.id ∧ ¬ OpensIn (S₁.ledger ++ S₂.ledger) w₂ S₁.id
 
 /-- A history whose runs are a setup's run at `log` prints `log` on every window. -/
 theorem printsOn_one {h : History} {S : RunSetup} {log : List Release} {w : String}
@@ -210,8 +209,8 @@ theorem ledger_two (S₁ S₂ : Exchange → RunSetup) (cut : List Release → �
   · exact List.mem_append.2 (.inr (mem_ledgerAt hx))
 
 /-- **The device printed the play's log in its two sessions** (`PrintsTwo`), at every play: on one window, the one run
-prints the whole log; on two, the first `cut o.log` releases and the rest, each printed by the run its setup's ledger
-opens on that part's window (`Apart`). -/
+prints the whole log; on two, the first `cut o.log` releases and the rest, each printed by its setup's run, where the
+ledger opens neither session's run on the other's window (`Apart`). -/
 theorem printsTwo_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Release → ℕ) (o : Exchange) {w₁ w₂ : String}
     (hw : windowsOf o.params = some (w₁, w₂)) (hA : w₁ ≠ w₂ → Apart (S₁ o) (S₂ o) w₁ w₂) :
     PrintsTwo (dev₂ S₁ S₂ cut o) w₁ w₂ o.log := by
@@ -232,16 +231,16 @@ theorem printsTwo_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Release
         fun pk ho => ?_
       · rw [runs_two S₁ S₂ cut h2] at hr
         exact List.mem_append.1 hr
-      · exact hww (hA₂ w₁ (opensIn_of_opensOn ho (ledger_two S₁ S₂ cut h2 pk)))
+      · exact hA₁ (opensIn_of_opensOn ho (ledger_two S₁ S₂ cut h2 pk))
     · refine printsOn_part (S := S₂ o) (S' := S₁ o) (log' := o.log.take (cut o.log)) (fun pk r hr => ?_)
         fun pk ho => ?_
       · rw [runs_two S₁ S₂ cut h2] at hr
         exact (List.mem_append.1 hr).symm
-      · exact hww (hA₁ w₂ (opensIn_of_opensOn ho (ledger_two S₁ S₂ cut h2 pk))).symm
+      · exact hA₂ (opensIn_of_opensOn ho (ledger_two S₁ S₂ cut h2 pk))
 
 /-- **`Binds` at the two-session history** (`CutHeld.binds_of_accepts`): at every play after `θ` the history printed
-its log on the parameters' two windows (`printsTwo_dev₂`), where each setup's ledger opens its run only on its own
-window. -/
+its log on the parameters' two windows (`printsTwo_dev₂`), where the setups' ledger lines open neither session's run
+on the other's window (`Apart`). -/
 theorem binds_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Release → ℕ) (θ : ByteArray)
     (hA : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
       Apart (S₁ o) (S₂ o) w₁ w₂) :
@@ -417,6 +416,59 @@ theorem holdsTwo_play (S₁ S₂ : Exchange → RunSetup) (cut : List Release �
       runOf (S₂ o) (o.log.drop (cut o.log)) lines₂ ∈ (dev₂ S₁ S₂ cut o).runs (S₂ o).key := by
   obtain ⟨hf₁, hf₂⟩ := fits_parts (fits_play h) (cut o.log)
   exact holdsTwo_dev₂ S₁ S₂ cut h h2 hno (hfs.1 ▸ hf₁) (hfs.2 ▸ hf₂) ht₁ ht₂
+
+/-! ## The split at the first stage's family -/
+
+/-- Whether a release is a fresh coin of the family `ℓ`. -/
+def freshOf (ℓ : String) (x : Release) : Bool :=
+  match x.frame with
+  | .fresh l => l == ℓ
+  | _ => false
+
+/-- **The first session's releases at the first stage's family `ℓ`**: the log's longest prefix of fresh coins of `ℓ`,
+so the first session ends at the first release that is anything else. -/
+def firstLen (ℓ : String) (log : List Release) : ℕ := (log.takeWhile (freshOf ℓ)).length
+
+theorem take_takeWhile {β : Type} (p : β → Bool) : ∀ l : List β, l.take (l.takeWhile p).length = l.takeWhile p
+  | [] => rfl
+  | a :: l => by
+    cases ha : p a
+    · simp [List.takeWhile, ha]
+    · simp [List.takeWhile, ha, take_takeWhile p l]
+
+theorem of_mem_takeWhile {β : Type} (p : β → Bool) : ∀ {l : List β} {x : β}, x ∈ l.takeWhile p → p x = true
+  | [], _, h => by simp at h
+  | a :: l, x, h => by
+    cases ha : p a
+    · simp [List.takeWhile, ha] at h
+    · simp only [List.takeWhile, ha, List.mem_cons] at h
+      rcases h with rfl | h
+      · exact ha
+      · exact of_mem_takeWhile p h
+
+/-- **The first session at the first stage's family holds no hello**: every release it holds is a fresh coin. -/
+theorem noHello_firstLen (ℓ : String) (log : List Release) : NoHello (log.take (firstLen ℓ log)) := by
+  intro x hx
+  rw [firstLen, take_takeWhile] at hx
+  have hf := of_mem_takeWhile _ hx
+  unfold freshOf at hf
+  unfold isHello
+  split at hf
+  · rename_i l hl
+    rw [hl]
+  · cases hf
+
+/-- **On two windows the history at the first stage's split holds both runs**: `holdsTwo_play` at `cut = firstLen ℓ`,
+whose first session holds no hello (`noHello_firstLen`). -/
+theorem holdsTwo_first (S₁ S₂ : Exchange → RunSetup) (ℓ : String) {fs : List (String × ℕ)}
+    {D : Verity.Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {o : Exchange}
+    (h : Verity.Game.Reaches (Verity.play fs D θ F c) o) (hfs : (S₁ o).families = fs ∧ (S₂ o).families = fs)
+    (h2 : oneWindow o.params = false)
+    (ht₁ : TreesRead (S₁ o) (o.log.take (firstLen ℓ o.log)))
+    (ht₂ : TreesRead (S₂ o) (o.log.drop (firstLen ℓ o.log))) :
+    ∃ lines₁ lines₂, runOf (S₁ o) (o.log.take (firstLen ℓ o.log)) lines₁ ∈ (dev₂ S₁ S₂ (firstLen ℓ) o).runs (S₁ o).key ∧
+      runOf (S₂ o) (o.log.drop (firstLen ℓ o.log)) lines₂ ∈ (dev₂ S₁ S₂ (firstLen ℓ) o).runs (S₂ o).key :=
+  holdsTwo_play S₁ S₂ (firstLen ℓ) h hfs h2 (noHello_firstLen ℓ o.log) ht₁ ht₂
 
 /-! ## What the device signs -/
 
@@ -614,7 +666,7 @@ theorem signsPlay_dev₂ (V : Vocab d α) (P : Deployment) (fs₁ fs₂ : ByteAr
       exact P.ledger_closes fs₁ fs₂ cut o hl
 
 /-- **The cut at the deployed two-session history** (`Cut.cutBound`): where the sampled verdict accepts only where the
-form does (`Wired`), each session's ledger lines open its run only on its own window (`Apart`), and the vocabulary's
+form does (`Wired`), the ledger opens neither session's run on the other's window (`Apart`), and the vocabulary's
 signer is the deployment's, an accepted play whose log the check read isn't the device's is at most as likely as the
 read finder's collision plus the forger's forgery over both sessions. -/
 theorem cut_dev₂ (V : Vocab d α) (k : Verity.Registration.Composite) (P : Deployment)
