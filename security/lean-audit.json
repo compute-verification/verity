@@ -10546,17 +10546,16 @@
   "Accounting.SecurityProofs.TableReadBinding_honest": {
    "owner": "@proofs",
    "signature": [
-    "Accounting.SecurityProofs.TableReadBinding_honest (h : Accounting.ReadUnit.ExpertReadAccepted) :",
-    "  Exists fun t => Eq (Flock.ReadNet.check 256 3072 t) Bool.true"
+    "Accounting.SecurityProofs.TableReadBinding_honest : Exists fun t => Eq (Flock.ReadNet.check 256 3072 t) Bool.true"
    ],
-   "assumptions": ["Accounting.ReadUnit.ExpertReadAccepted"],
+   "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Accounting.ReadUnit.ExpertReadAccepted"],
+    "open": [],
     "reads": []
    },
-   "type_hash": "5446f9e6191c8fb2571da58bb6039d9b22931948c80b7b00fba856fbf2657234"
+   "type_hash": "5dbf1f2e5d95a12f9eb70331c3c66b60c9cc6382e8df78298a4d4bbbfacc9926"
   },
   "Accounting.SecurityProofs.TableReadBinding_nontrivial": {
    "owner": "@proofs",
@@ -28870,11 +28869,11 @@
     "Eq pub.tables Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Bridge.PortRoots.rootsColl D.unroll pub n) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateM1 k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateM1 k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.SampledKSLiveV2": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -28883,11 +28882,11 @@
     "Eq pub.tables Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Bridge.PortRoots.rootsColl D.unroll pub n) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.SampledKSLiveV3": {
     "Eq (Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -28903,10 +28902,10 @@
     "Eq (Flock.HmIn.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll pi I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.designAt desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -43578,7 +43577,7 @@
    }
   },
   "Flock.ReadNet.Template": {
-   "digest": "689f625f34d2b206b1b5fb9cc9c7b660f62388f0645d67405251af17ef1d3fd9",
+   "digest": "d1ae3cffae273ddefe5e098bf3131498eabc160119b39ed35de6d15ee5468639",
    "definitions": {
     "Flock.ReadNet.DOMAIN_AT": "aec8ec818fa6f9d363c80a506370be9915a320c3dc0cc20c2ff18cfb652553bd",
     "Flock.ReadNet.Layout": "a85531d69ad5add25d906b1b0c39243311604b31b8b78b946ce0d177e78274cb",
@@ -43603,7 +43602,6 @@
     "Flock.ReadNet.depth": "692a7a59ff6f36c65445ad6277dd760d4081b7f28e5d5d32b33cd2f0bf946b7c",
     "Flock.ReadNet.eqPart": "a9c2340da339a3b2123b814995ba154df9c6e00085a295ec1e01b9e3c1a27c1a",
     "Flock.ReadNet.groupKey": "67703584f0c5a57ea5864c04c08f086c8bd5a6e74f742067d0012af0566aa51b",
-    "Flock.ReadNet.groupsText": "595b648d8d60e3238aebce585109f1e784cfbddc11f203436430ab958b3e46e6",
     "Flock.ReadNet.inputs": "dc765e74942a3546c5d7afad743f92a82a5b85eae3527e1272966560404acd09",
     "Flock.ReadNet.instDecidableEqCall": "673904085d87cecd719293a1d50b6bab66e602577729139a68e16dd8082231e0",
     "Flock.ReadNet.instDecidableEqCall.decEq": "1910d3008ef6122f54226342e14d447ad5604475d931101614bedc6fe5f5e42a",
@@ -43624,7 +43622,6 @@
     "Flock.ReadNet.pathAt": "67f7bb509561293b2259c972128a5feb05a38f6ef0fa360038c93bcbf597c6b3",
     "Flock.ReadNet.portBits": "3e343d84fc438f8f22d988a5bcd31cb7d564f5134b062d602f8944175109db18",
     "Flock.ReadNet.readTmpl": "d0e4c5e8f51de33320a3d4d07f3174ade26660cc5a2722be0fa479d435a37844",
-    "Flock.ReadNet.render": "68b6057e6ddd868b3dc7f47957acaed014a5eafc9c6871a815e4b45d89e47338",
     "Flock.ReadNet.rootDef": "3d276091e247fa3c4ef8aa00dc0218d48824fcfd7fe1d24d56cc4eb9be7a592c",
     "Flock.ReadNet.runOk": "74ad522efe03633b1e97a33b077e705a8737581dca7a8d6a916bd3bc650330ed",
     "Flock.ReadNet.saltAt": "bb70f5577acd316f199a23c0f2a5bda4c17511f863d1e8a9ef1bef1a794aceb4",
@@ -56698,12 +56695,6 @@
    "definitions": {
     "Properties.Flock.Nets.built": "c15dc1f7d263235f4cac5e0e9326ed6f4befefd13557fce5333a48a532a89db6",
     "Properties.Flock.Nets.sparseOf": "deba753eef0fb318212d2b28d08d1f6ccf2172e3a867e32248e59882632ca109"
-   }
-  },
-  "Properties.Flock.ReadNet": {
-   "digest": "7ca72d0be7653059cae4ef740a1e1f5240098be4621a7e38b1bf1240e0877498",
-   "definitions": {
-    "Accounting.ReadUnit.ExpertReadAccepted": "2d6129c01052458a32647d26f794a61db107274b7717b368a12315721c2eb985"
    }
   },
   "Properties.Spot.Bits": {
