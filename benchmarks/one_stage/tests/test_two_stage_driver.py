@@ -27,9 +27,9 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value as Bits
-from verity.protocols.spot.device import challenger as Ch, coins as CC
-from verity.protocols.spot.verifier import second_stage as SS, service as S
-from verity.protocols.spot.verifier.one_stage import partition as P, registered as RG, registration as R
+from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
+from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as RG, registration as R
 from verity.commitments import history as HT
 from verity.commitments.gates import embedding as E
 from verity_vllm.pipeline import (boundary_rows as BR, boundary_stop as BS, boundary_tables as BT, chunk_rows as CR,
@@ -37,7 +37,7 @@ from verity_vllm.pipeline import (boundary_rows as BR, boundary_stop as BS, boun
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "spot" / "verifier" / "tests"))
+sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
 TS = importlib.import_module("two_stage")
 FC = importlib.import_module("fake_challenger")
 AC = importlib.import_module("a5_coins")

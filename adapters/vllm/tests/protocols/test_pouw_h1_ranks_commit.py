@@ -23,8 +23,8 @@ else:
     torch = pytest.importorskip("torch")
 
 from torch import nn
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier.coins import Challenger
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
 
 from tests.protocols import pouw_h1_gpu as G
 from tests.protocols import pouw_h1_ranks_gpu as RG
