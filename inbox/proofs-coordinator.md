@@ -154507,3 +154507,83 @@ Branch `cursor/proofs-heldof-blob-f083`. Compiled head `f8c8ed69392`; pushed hea
   family. Run `d5f3` answers it for the four suites.
 - The two runs at `bd7050308d5b` are superseded: `1de3` ended with exit 0 and `b3b1` still runs. I rest nothing on
   either.
+
+## MESSAGES, Fri 13 Nov 17:53Z: checkpoint: step 2 (round 1, fact 6) is written in one file; 22 of its 23 theorems compile on a node, the one that failed is mended and its try is out; no premise is added and no lock record grows
+
+Line: `cursor/proofs-messages-word-745c` at `47f3d094e77ffa0eabeb8d2c4a8630d5d854fd93`, pushed. The new file is
+`security/Proofs/Properties/Verity/SampledTwo/RoundOne.lean` (a root in the lakefile and in the audit's list, beside
+`LogStrings`). [git]
+
+**1. The try**
+
+- [run] `r20261113-173431-1e53` at `41ad001dddf8`: lean exit 1 in 671 s; 22 of the 23 theorems compile.
+- [run] The one that failed is `tag_size` (either registration tag is 22 bytes): `decide` does not see through
+  `String.toUTF8` in a module file. Nothing else in the file was refused.
+- [local] Mended at `47f3d094e77f`: the size goes through the string's byte count. The mended proof passes on a
+  core-Lean copy here, in a module file, which is where the first one failed.
+- The try at `47f3d094e77f` is out: `r20261113-175149-b7f2`. Due back about 18:05Z [guess].
+
+**2. What step 2 proves, each compiled in the first try unless said**
+
+- `second_source_size`: the second stage of an accepted two-stage check read at least 64 bytes of its challenges.
+  It has no premise of its own. The check refuses a design of no stratum (`Spot.Draw.strataProblem`), so the
+  second design has one, and one stratum's sample needs 64 bytes and more. "The design has a stratum" is nowhere a
+  premise.
+- `before_one_second`: the log before round 1 ends at the release of the second stage's challenges, and that
+  release's answers are the digest of the interior registration. Its premises are five facts the join holds today:
+  the two families differ (`h.distinctFamilies`), `SecondShown` (`hShow₂`), `StageDraws` at the second family
+  (`stageDraws_second`), `InteriorReads` and `InteriorLogged` (`hlog`). [read, of `JoinsAt.lean`]
+- `showsAt_form_one`: `Messages.ShowsAt` at round 1 of the form's reading. The string is the interior
+  registration's tagged text, the digest is the last answers of the log before round 1, and the message is that
+  text with its 23 tag bytes dropped. It rests on `tag_size`'s statement, so it is whole when the try is back.
+- `explains_form_one`: `Messages.Explains` at round 1: two plays of one string have one message.
+- `secondShown_of_goodCase`: carries `SecondShown` from the join's good case to the case the lemmas above read.
+
+**3. Your condition on `blobsAlt`'s finder (16:59Z)**
+
+- [read, of `LogStrings.lean`] Its term is in the stated bound: `missLog` sums the finder's term at the pair
+  `orPair raw alt`, round by round.
+- [read] It has no premise of its own: `AltCollides blobsAlt` is a theorem (`blobsAlt_collides`), so what the
+  bound rests on at that finder is `ecr/sha-512` and nothing else.
+- [git] No lock record is touched on this line: the two files add roots, and no listed guarantee or named assumption.
+
+**4. Fact 7, the parts to ask the author for (your 16:40Z item)**
+
+- [read] `AddressFacts/RowDraw.lean`: `ownDraw_eq` (the second stage's own sample for a session is a subset
+  sample of stated fields), `good_subsetJson` (it is printable), `jsonEquiv_of_jeq` (two printable values of one
+  canonical text are equivalent). `subsetParses` and `proved_of_wf` I do not need: they read the parsed units.
+- [read] `FirstSample.lean`: `run_draw` and `accepted_secondLaw` (the first stage's accepted sample is the one
+  the run of record drew from the interior input).
+- [read] `second-sample` compares by `Spot.jeq`, which is equality of the two canonical texts. So the statement's
+  sample has the canonical text of the verifier's own. What I do not have yet is the step from there to the bytes
+  of the whole statement's text; I say which lemma that is when I reach step 4.
+
+**5. The carry**
+
+- [read, of FRAME's 17:31Z table] My replay line `ec033a945fd7` is `conflicted at base` and its merge with the
+  join's tip is in a job of FRAME's. The word line sits on `ec033a945fd7` with five commits of its own. I merge
+  nothing into it and rebase nothing; it moves when FRAME or you name the head it should sit on.
+
+**6. Next**
+
+- Read `b7f2`; then step 3: a session's first and middle slots (facts 9 and 10), then its last slot (fact 11 with
+  4 and 5), as new lemmas in a file of my own beside SESSIONCOINS's. `located_opened` and `MembersHeld` keep their
+  statements.
+
+## STOP RULE
+
+No listed guarantee, named assumption or lock is changed. If a lock record would grow a premise, I stop and write
+you first.
+
+## NEEDS
+
+Nothing now. When the replay line has a carried head, say which head the word line should sit on.
+
+## Not established
+
+- The mended `tag_size` on a node: `b7f2` is not back. Until it is, `showsAt_form_one` rests on a statement
+  whose proof is checked only on a core-Lean copy.
+- `ShowsAt` and `ExplainsOr` at a session's rounds and at the statements' round (steps 3 and 4), and so the
+  messages' bound for the join: not written.
+- Fact 7's step from one canonical text of the sample to the bytes of the statement: not found yet.
+- The file's lints and the audit of its 23 theorems' axioms: the try shows axioms only for a file Lean accepts.
