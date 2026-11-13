@@ -593,7 +593,7 @@ class PR:
 
 
 class GitHub:
-    """The open PRs of a repository, through `gh api` (the cloud VMs' authenticated GitHub CLI)."""
+    """A repository's PRs, through `gh api` (the cloud VMs' authenticated GitHub CLI)."""
 
     def __init__(self, repo: str):
         self.repo = repo
@@ -613,16 +613,24 @@ class GitHub:
                         return list(out.values())
                 first += GH_PAGES
 
+    def pr(self, number: int) -> PR:
+        """PR ``number``, open or not."""
+        return PR.from_api(self._api(f"pulls/{number}"))
+
     def _page(self, n: int) -> list[dict]:
-        try:
-            r = subprocess.run(["gh", "api", f"repos/{self.repo}/pulls?state=open&per_page={GH_PER_PAGE}&page={n}"],
-                               capture_output=True, text=True, timeout=GH_TIMEOUT_S)
-        except subprocess.TimeoutExpired:
-            raise QueueError(f"gh api repos/{self.repo}/pulls: no answer in {GH_TIMEOUT_S} s") from None
-        if r.returncode:
-            raise QueueError(f"gh api repos/{self.repo}/pulls: {(r.stderr or r.stdout).strip()[-300:]}")
-        page = json.loads(r.stdout)
+        page = self._api(f"pulls?state=open&per_page={GH_PER_PAGE}&page={n}")
         return page if isinstance(page, list) else [page]
+
+    def _api(self, path: str):
+        """`repos/<repo>/<path>`'s JSON."""
+        what = f"gh api repos/{self.repo}/{path.partition('?')[0]}"
+        try:
+            r = subprocess.run(["gh", "api", f"repos/{self.repo}/{path}"], capture_output=True, text=True, timeout=GH_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            raise QueueError(f"{what}: no answer in {GH_TIMEOUT_S} s") from None
+        if r.returncode:
+            raise QueueError(f"{what}: {(r.stderr or r.stdout).strip()[-300:]}")
+        return json.loads(r.stdout)
 
     def branch_tip(self, branch: str) -> str | None:
         """``branch``'s commit as git has it now (the refs API, which a push moves at once; a PR's head lags it by seconds), or
@@ -647,18 +655,17 @@ class GitHub:
 
 
 class PublicGitHub(GitHub):
-    """`GitHub`'s listing of a public repository's open PRs, from its API without credentials: where `gh` isn't, as on a node."""
+    """`GitHub`'s reads of a public repository's PRs, from its API without credentials: where `gh` isn't, as on a node."""
 
-    def _page(self, n: int) -> list[dict]:
+    def _api(self, path: str):
         import urllib.request
-        url = f"https://api.github.com/repos/{self.repo}/pulls?state=open&per_page={GH_PER_PAGE}&page={n}"
+        url = f"https://api.github.com/repos/{self.repo}/{path}"
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"}),
                                         timeout=GH_TIMEOUT_S) as r:
-                page = json.load(r)
+                return json.load(r)
         except (OSError, ValueError) as e:
             raise QueueError(f"{url}: {e}") from None
-        return page if isinstance(page, list) else [page]
 
 
 def landing_waiter(repo: str | None = None, store_root: str | None = None) -> Callable[[list[int]], bool]:

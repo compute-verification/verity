@@ -1363,15 +1363,16 @@ def trying(tmp_path, monkeypatch):
     monkeypatch.setattr(LC, "sandboxed", lambda: False)
     monkeypatch.setattr(LC.shutil, "which", lambda _: str(lake))
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", lambda *a, **k: None)
-    calls = {"build": [], "run": [], "link": [], "lean_rc": 0, "deps_rc": 0, "lean_text": "", "deps_text": ""}
+    calls = {"build": [], "run": [], "link": [], "lean_rc": 0, "deps_rc": 0, "lean_text": "", "deps_text": "", "at": []}
 
     def link(pkg, t, deps, links, log=print):
         calls["link"].append(pkg)
         links[pkg] = "k"
         return True
 
-    def build(pkg, t, lake_, targets=None, sandbox=True, cmd=None, echo=None):
+    def build(pkg, t, lake_, targets=None, sandbox=True, cmd=None, echo=None, at=None):
         calls["build"].append((pkg, t, targets, sandbox, cmd))
+        calls["at"].append(at)
         return (calls["lean_rc"], calls["lean_text"]) if cmd else (calls["deps_rc"], calls["deps_text"])
 
     monkeypatch.setattr(LC, "link", link)
@@ -1425,8 +1426,10 @@ def test_try_and_build_store_what_they_compiled_only_from_a_build_in_the_sandbox
             else:
                 assert LC.build_files(["Sec/Proofs/Flock/X.lean"], tmp_path / "deps", log=said.append) == 0
             assert marks[-1] == {"package": "Sec/Proofs", "phase": phase}, "nothing for the next run to store from"
-            built = {"sandbox": True, "compiled": ["Proofs.Flock.S", "Proofs.Flock.W"]}
+            built = {"sandbox": True, "bound": [str(LC.AUDIT.FIXED), str(tree)],
+                     "compiled": ["Proofs.Flock.S", "Proofs.Flock.W"]}
             assert [(s, r) for s, r, _ in put] == ([(store, {tree / "Sec/Proofs": built})] if stored else [])
+            assert calls["at"][before] == ["--at", *built["bound"]], "the build was handed the words its report gives"
             assert all(isinstance(since, float) for _, _, since in put)
             assert (f"lean-{phase}: Sec/Proofs: 4 module version(s) new in the artifact cache" in said) == stored
             assert ran == ([before + 1] if stored else []) and len(calls["build"]) == before + (2 if phase == "try" else 1), \
@@ -1457,7 +1460,7 @@ def test_try_elaborates_the_files_probed_copy_and_ends_with_the_theorems_beyond_
     x.write_text("namespace F\ntheorem holey : 1 = 2 := sorry\ntheorem clean : True := trivial\nend F\n")
     seen = []
 
-    def build(pkg, t, lake_, targets=None, sandbox=True, cmd=None, echo=None):
+    def build(pkg, t, lake_, targets=None, sandbox=True, cmd=None, echo=None, at=None):
         if cmd is None:
             return 0, ""
         seen.append((t / pkg / cmd[2]).read_text())
@@ -1484,7 +1487,7 @@ def test_try_names_a_theorem_lean_fails_on_and_echoes_no_axioms_answer(trying, t
              "use `set_option maxRecDepth <num>` to increase limit\n",
              "'F.clean' does not depend on any axioms\n", "'F.refused' does not depend on any axioms\n"]
 
-    def build(pkg, t, lake_, targets=None, sandbox=True, cmd=None, echo=None):
+    def build(pkg, t, lake_, targets=None, sandbox=True, cmd=None, echo=None, at=None):
         if cmd is None:
             return 0, ""
         for line in lines:
@@ -1582,6 +1585,8 @@ def test_try_with_siblings_has_lake_rebuild_the_siblings_a_refusal_names_and_ela
         said, before = [], len(calls["build"])
         rc = LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append, siblings=True)
         assert not stubs, "each stub's answer was read"
+        ats = [at for c, at in zip(calls["build"][before:], calls["at"][before:]) if c[4] is None]
+        assert ats == [LC.bound("Sec/Proofs", tree)] * len(ats), "each `lake build` of a try, the rebuild too, is bound"
         return rc, [s for s in said if "siblings:" in s], [c[2] for c in calls["build"][before:] if c[4] is None]
 
     x, y, z = products()
@@ -1755,6 +1760,10 @@ def test_try_names_the_records_run_when_lake_wanted_to_write_in_the_read_only_de
         "the dependencies of a package it requires by path are mounted read-only too"
     for other in (text.replace("/packages/", "/build/"), text.replace(str(tree.resolve()), "/elsewhere"), text.splitlines()[0]):
         assert LC.refused_write(other, "Sec/Proofs", slot) is None
+    bound = text.replace(str(tree.resolve()), str(LC.AUDIT.FIXED))
+    assert LC.refused_write(bound, "Sec/Proofs", slot) == f"{slot}/Sec/.lake/packages/dep/.lake", \
+        "a build reads the tree at the fixed path and Lake names the file there: it is said as the tree's"
+    assert LC.refused_write(bound.replace("/packages/", "/build/"), "Sec/Proofs", slot) is None
     monkeypatch.setattr(LC, "build", lambda *a, **k: (1, text.replace("/packages/", "/build/")))
     said.clear()
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 1
@@ -1866,7 +1875,7 @@ def test_build_builds_the_files_modules_on_the_slot_tree_and_reports_each_files_
     monkeypatch.setattr(LC.LA.COMMON, "tracked_files", lambda _: ["Sec/Proofs/Flock/X.lean", "Sec/Proofs/Flock/Y.lean",
                                                                    "Sec/Defs/A.lean"])
     calls["deps_rc"] = 1
-    monkeypatch.setattr(LC, "build", lambda pkg, t, lake_, targets=None, sandbox=True, cmd=None: (
+    monkeypatch.setattr(LC, "build", lambda pkg, t, lake_, targets=None, sandbox=True, cmd=None, at=None: (
         calls["build"].append((pkg, targets)) or 1,
         "✖ [3/9] Building Proofs.Flock.Y\nerror: ././../Proofs/Flock/Y.lean:2:4: unknown identifier 'foo'\n  more\n"
         "error: ./../Defs/A.lean:1:0: unexpected token\nerror: ././../Proofs/Flock/Y.lean:5:0: a later one\n"
@@ -1945,6 +1954,76 @@ def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp
     box = argv.index(str(LC.SANDBOX))
     assert argv[box + 1:argv.index("--", box)] == [str(real / "Sec" / ".lake"), str(real / "Dep" / ".lake")]
     assert argv[argv.index("ro") + 1:argv.index("--", argv.index("ro"))] == [str(real / "Sec" / ".lake" / "packages")]
+
+
+def test_a_build_s_sandbox_binds_its_tree_at_the_fixed_path_with_its_fetched_dependencies_read_only_there_too(
+        tmp_path, monkeypatch):
+    """A build reads its tree at check.py's `FIXED` (`sandbox.sh --at`), so what it compiles doesn't depend on where the
+    slot tree is. The tree's `.lake` directories are writable under both paths, so the fetched dependencies are mounted
+    read-only under both; a `packages` that is a link out of the tree (the node's kept dependencies) keeps its name."""
+    real = tmp_path / "cache-root" / "build-2"
+    (real / "Sec" / ".lake").mkdir(parents=True)
+    (real / "Dep" / ".lake" / "packages").mkdir(parents=True)
+    (tmp_path / "kept").mkdir()
+    (real / "Sec" / ".lake" / "packages").symlink_to(tmp_path / "kept")
+    link = tmp_path / "build-2"
+    link.symlink_to(real)
+    monkeypatch.setattr(LC, "closure", lambda p: [p, "Dep"])
+    fixed = LC.AUDIT.FIXED
+    assert LC.bound("Sec", link) == ["--at", str(fixed), str(real)]
+    argv = LC.in_sandbox("Sec", link, ["lake", "build"], LC.bound("Sec", link))
+    box = argv.index(str(LC.SANDBOX))
+    assert argv[box + 1:argv.index("--", box)] == ["--at", str(fixed), str(real), str(real / "Sec" / ".lake"),
+                                                   str(real / "Dep" / ".lake")]
+    assert argv[argv.index("ro") + 1:argv.index("--", argv.index("ro"))] == [
+        str(real / "Sec" / ".lake" / "packages"), str(real / "Dep" / ".lake" / "packages"),
+        str(fixed / "Sec" / ".lake" / "packages"), str(fixed / "Dep" / ".lake" / "packages")]
+    assert LC.built_report(LC.bound("Sec", link), "✔ [3/4] Built Sec.A (1.2s)\n") == {
+        "sandbox": True, "bound": [str(fixed), str(real)], "compiled": ["Sec.A"]}
+    monkeypatch.setattr(LC, "closure", lambda p: [p, "../elsewhere"])
+    (tmp_path / "cache-root" / "elsewhere").mkdir()
+    assert LC.bound("Sec", link) == [] and "--at" not in LC.in_sandbox("Sec", link, ["lake", "build"], LC.bound("Sec", link)), \
+        "a package required from outside the tree has no place under the fixed path"
+
+
+def test_every_lake_build_reads_the_tree_at_the_fixed_path_and_a_lake_command_its_own(tmp_path, monkeypatch):
+    """`build`'s `lake build`s, of the default targets, of named ones and the plugins step before the default ones, run
+    in `sandbox.sh --at` with the words it was handed (`bound`'s by default), which `try_file` and `build_files` hand
+    `built_report` too, so what the artifact cache is told matches where the build read its tree. A `lake` command
+    (``cmd``: `lake env lean` on a file) runs at the tree's own path, where its arguments name files."""
+    tree = tmp_path / "tree"
+    (tree / "Sec" / ".lake").mkdir(parents=True)
+    seen = []
+
+    class Lake:
+        def __init__(self, argv, **kw):
+            seen.append(argv)
+            self.stdout = iter(["✔ [1/1] Built Sec.A (1.0s)\n"])
+
+        def wait(self) -> int:
+            return 0
+
+    def binds(argv: list[str]) -> list[str] | None:
+        box = argv.index(str(LC.SANDBOX))
+        words = argv[box + 1:argv.index("--", box)]
+        return words[words.index("--at") + 1:words.index("--at") + 3] if "--at" in words else None
+
+    monkeypatch.setattr(LC, "closure", lambda p: [p])
+    monkeypatch.setattr(LC.AUDIT, "plugin_targets", lambda pkg: ["dep/plugin:shared"])
+    monkeypatch.setattr(LC.subprocess, "Popen", Lake)
+    at = [str(LC.AUDIT.FIXED), str(tree.resolve())]
+    assert LC.bound("Sec", tree) == ["--at", *at]
+    assert LC.build("Sec", tree, "lake", echo=lambda _: None) == (0, "✔ [1/1] Built Sec.A (1.0s)\n")
+    assert LC.build("Sec", tree, "lake", ["+Sec.A:deps"], echo=lambda _: None)[0] == 0
+    assert LC.build("Sec", tree, "lake", cmd=["env", "lean", "A.lean"], echo=lambda _: None)[0] == 0
+    assert [a[a.index("--", a.index("ro")) + 1:] for a in seen] == [
+        ["lake", "build", "dep/plugin:shared"], ["lake", "build"], ["lake", "build", "+Sec.A:deps"],
+        ["lake", "env", "lean", "A.lean"]]
+    assert [binds(a) for a in seen] == [at, at, at, None]
+    seen.clear()
+    LC.build("Sec", tree, "lake", ["+Sec.A:deps"], echo=lambda _: None, at=[])
+    assert [binds(a) for a in seen] == [None], "the words it is handed, which `built_report` reads too"
+    assert LC.built_report(LC.bound("Sec", tree), "")["bound"] == at and LC.built_report([], "")["bound"] is None
 
 
 def read_only(tmp: Path, dirs: list[Path], cmd: list[str], monkeypatch) -> tuple[int, list[str]]:
