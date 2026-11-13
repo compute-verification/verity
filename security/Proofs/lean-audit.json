@@ -195,7 +195,8 @@
   "Proofs.Properties.Verity.SampledTwo.InputMap",
   "Proofs.Properties.Verity.SampledTwo.AcceptsOfSteps",
   "Proofs.Properties.Verity.SampledTwo.SessionLogged",
-  "Proofs.Properties.Verity.SampledTwo.SessionCut"
+  "Proofs.Properties.Verity.SampledTwo.SessionCut",
+  "Proofs.Properties.Verity.SampledTwo.SessionTreeless"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
