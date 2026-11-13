@@ -87,5 +87,15 @@ for d in first second; do
   (cd "$W/$d" && find . "${RECORDS[@]}" -size +63M -print0 | sort -z \
      | xargs -0 -r -I{} sh -c 'printf "%s  %s  %s\n" "$(sha512sum < "$1" | cut -d" " -f1)" "$(stat -c %s "$1")" "$1"' _ {}) > "$O/$d/large.txt"
 done
+# SMALL_GUARD=DIR: the auditor's copies of the class's two-stage registration as SPOT[Flock]'s Lean model reads them
+# (two_stage.py guard), written in DIR, which holds circuit files and is the caller's to remove
+if [ -n "${SMALL_GUARD:-}" ]; then
+  grc=0
+  "${PY[@]}" benchmarks/one_stage/two_stage.py guard --stage1 "$W/first/$(basename "$CLASS")/stage1.json" --second "$W/second" \
+    --to "$SMALL_GUARD" "${STOP[@]}" > "$O/guard-export.log" 2>&1 || grc=$?
+  grep '^GUARD ' "$O/guard-export.log" || tail -30 "$O/guard-export.log"
+  echo "guard export rc=$grc" | tee -a "$O/machine.txt"
+  [ ! -f "$SMALL_GUARD/held.json" ] || cp "$SMALL_GUARD/held.json" "$O/held.json"
+fi
 [ -f "$W/second/summary.json" ] || exit 2
 "${PY[@]}" benchmarks/one_stage/two_stage_small.py expect "$W/second/summary.json" "${UNLINKED[@]}" "${INPUTS[@]}" | tee "$O/expect.txt"

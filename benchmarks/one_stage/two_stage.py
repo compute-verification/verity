@@ -1162,6 +1162,43 @@ def _second(a: argparse.Namespace) -> int:
         manager.shutdown()
 
 
+def _guard(a: argparse.Namespace) -> int:
+    """The auditor's copies of one class's two-stage registration, as SPOT[Flock]'s Lean model reads them
+    (`two_stage/guard.export_registration`: ``held.json`` and each template's reference statement and reads), written
+    under ``--to`` from the class's ``stage1.json`` and the params a `second` left under ``--second`` (``proofs.json``,
+    ``references/``). Each is the design's: the stream again at the end of its first stage (`resume`), the class's
+    `design` at its layout's own ports, the reference interior window of as many replay blocks as the first stage
+    sampled, and the values the interior registers (the design's links'). The values the boundary record registers are
+    read from that record. It reads no record, session or coin of the second stage.
+    `two_stage/tests/guard_node.py DIR files` then says what the model's design check decides on them."""
+    from types import SimpleNamespace
+
+    sys.path.insert(0, str(HERE.parent / "two_stage"))
+    import guard as G
+
+    stage1 = json.loads(Path(a.stage1).read_text())
+    check, stop = template_fn(stage1["commit"]["check"]), _stop(a.stop)
+    again = resume(stage1, check, delta=a.delta, window_root=first_root(stage1), stop=stop)
+    d, q = design(again.layout), len(again.sample.units)
+    entry = again.stream._entries[again.registration.order]
+    boundary = SimpleNamespace(program=entry.program, query=dict(again.stream.query), work_table=entry.work_table)
+    ports = tuple(again.layout.ports())
+    g = G.Design(boundary, d.window("00" * 64, range(q)), again.stream.replay, tuple(d.cells), ports=ports,
+                 boundary_values=tuple(e["value"] for e in again.record.get("registered", ())),
+                 values=tuple(sorted({x.value for x in d.links})))
+    held = G.export_registration(Path(a.to), Path(a.second), again.stream, again.registration.order, again.layout.spans,
+                                 q, list(again.stream.counts), g)
+    print("GUARD " + json.dumps({
+        "to": str(a.to), "spans": again.layout.spans, "q": q, "templates": len(held["names"]), "ns": held["ns"],
+        "ks": held["ks"], "links": held["links"], "wires": len(held["wires"]), "rows": len(held["rows"]),
+        "boundary": held["boundary_names"], "interior_values": held["interior_names"]["values"],
+        "returns": [[x.template, x.port, x.value, x.held] for x in d.returns],
+        "inputs": [[x.template, x.port, x.value] for x in d.inputs],
+        "record_ports_are_the_layouts": sorted(x["port"] for x in again.record["roots"]) == sorted(ports),
+        "design_is_the_records": repr(design(again.layout, again.record)) == repr(d)}))
+    return 0
+
+
 STOP_HELP = ("the verifier's own copy of the serve's stop rule, as JSON: {\"ids\": [...], \"max_model_len\": n, "
              "\"outputs\": T} (boundary_stop.Stop.of); without it a class committed under a stop rule is refused")
 
@@ -1225,9 +1262,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     g.add_argument("--challenger-key")
     g.add_argument("--ssh-key")
     g.add_argument("--out", required=True)
+    c = sub.add_parser("guard", help="one class's two-stage registration as the Lean model reads the auditor's copies")
+    c.add_argument("--stage1", required=True, help="the class's stage1.json (first)")
+    c.add_argument("--second", required=True, help="a second's --out: its proofs.json and references/")
+    c.add_argument("--to", required=True, help="the directory the copies are written in")
+    c.add_argument("--stop", help=STOP_HELP)
+    c.add_argument("--delta", type=float, default=0.5)
     a = ap.parse_args(argv)
     if a.cmd == "second":
         return _second(a)
+    if a.cmd == "guard":
+        return _guard(a)
     if a.interior is None and a.span_values:
         ap.error("--span-values is the rule's that --interior gives: without --interior each class's rule is its replay block's")
     if a.stop_design and not a.stop:
