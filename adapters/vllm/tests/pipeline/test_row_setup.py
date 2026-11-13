@@ -3,7 +3,8 @@ names, the release line, the target-family preflight, the Commit's session check
 (`tools/research/src`) on their path, so these run only where it is beside the tree; `test_row` holds a tree without it to the
 refusal at setup, by name.  With them, each with `subprocess` stood in: how a row runs a stage and a command it reads (`run_to`,
 `output`), the signals it takes, what a signalled row leaves behind, and the commands its prechecks and its report run
-(`release_line`, `source_identity`, `target_family`, `timeline_report`).
+(`release_line`, `source_identity`, `target_family`, `timeline_report`).  And a single-GPU row's prechecks themselves
+(`SingleRow.prepare`, `precheck_identity`, `shape`, `precheck_target`): what each records when it passes and when it refuses.
 
 Then what the run store brings a row's stages (`pipeline/research.py`'s readers): a job's recorded inputs, an artifact's meta, an
 Attempt's outputs, tool, status and source, each for a document that leaves the block out or states it as null or empty.  The
@@ -41,6 +42,7 @@ from verity_vllm.config import UsageError
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import research as RS
 from verity_vllm.pipeline import row_driver as RD
+from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.records.schema_ids import TIMELINE_SCHEMA
 
@@ -448,6 +450,29 @@ def test_the_source_identity_is_asked_of_each_interpreter_that_is_there_and_one_
     assert r.source_identity(pys, out_of) == 3 and ran == asked("--sha", "c0ffee")
 
 
+def test_a_refused_source_identity_fails_the_precheck_at_3_by_name(tmp_path, monkeypatch):
+    """Each of the row's interpreters is asked, its answer in a file named for its venv; a refusal is the precheck's FAIL, and no
+    identity is copied beside the row."""
+    r = _row(tmp_path, "--py312", str(tmp_path / "venv312" / "bin" / "python"))
+    asked: list[tuple[list[str], list[str]]] = []
+
+    def source_identity(pys: list[str], out_of: Any) -> int:
+        asked.append((pys, [out_of(py) for py in pys]))
+        return 3
+    monkeypatch.setattr(r, "source_identity", source_identity)
+    with pytest.raises(Stop) as e:
+        r.precheck_identity()
+    venv = os.path.basename(os.path.dirname(os.path.dirname(r.py)))
+    assert e.value.rc == 3
+    assert asked == [([r.py, r.py312], [f"{r.d}/source_identity.{venv}.json", f"{r.d}/source_identity.venv312.json"])]
+    stage, status, _utc, detail = (Path(r.d) / "stages.txt").read_text().rstrip("\n").split(" ", 3)
+    assert (stage, status, detail) == ("precheck", "FAIL", f"PRECHECK_FAIL_SOURCE_IDENTITY (see {r.d}/source_identity.*.json and row.log)")
+    start, end = _timeline(r)
+    assert (start["stage"], start["ev"]) == ("precheck", "start")
+    assert {"stage": "precheck", "ev": "end", "rc": 3, "fail_class": "PRECHECK_FAIL_SOURCE_IDENTITY"}.items() <= end.items()
+    assert not (Path(r.d) / "source_identity.json").exists()
+
+
 def test_a_passed_source_identity_goes_into_the_runs_job_record_which_is_left_alone_when_it_does_not_read(tmp_path, monkeypatch):
     """The precheck copies the stage interpreter's identity to ``source_identity.json`` and, inside a run, into ``job.json``
     (``computation.source_identity``, its reason cleared); a job record that is no JSON object is left as it is and named in row.log,
@@ -539,6 +564,83 @@ def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):
         assert r.ncb == r.child_env["NATIVE_COLLECT_BUILD"] == str(tmp_path / "nc_default")
 
 
+def _prepare(r: Any, monkeypatch, line: str) -> None:
+    """`prepare` with the release line given and the prechecks after it stood in."""
+    monkeypatch.setattr(r, "release_line", lambda fallback: (line, "-"))
+    for step in ("precheck_identity", "precheck_target", "install_signal_forwarding"):
+        monkeypatch.setattr(r, step, lambda: None)
+
+    def shape() -> None:
+        r.B = r.I = r.O = r.LP = r.T = 1
+        r.ck = r.tgt = r.hidden_so = r.code9 = ""
+    monkeypatch.setattr(r, "shape", shape)
+    r.prepare()
+
+
+def test_an_unreleased_trees_row_keeps_no_release_record_of_an_earlier_attempt(tmp_path, monkeypatch):
+    """The record beside the row is the release the tree runs under: an attempt under none removes the one an earlier attempt copied,
+    and takes no collector build dir from it."""
+    r = _row(tmp_path)
+    (Path(r.d) / "release.json").write_text(json.dumps({"tag": "r16-int-3", "build_dirs": {"native_collect": str(tmp_path / "nc_rel")}}))
+    _prepare(r, monkeypatch, f"UNRELEASED|commit=unknown tree={r.tree}")
+    assert not (Path(r.d) / "release.json").exists() and not (tmp_path / "nc_rel").exists()
+    assert r.ncb == r.child_env["NATIVE_COLLECT_BUILD"] == str(tmp_path / "nc_build")
+    stage, status, _utc, detail = (Path(r.d) / "stages.txt").read_text().rstrip("\n").split(" ", 3)
+    assert (stage, status, detail) == ("release", "UNRELEASED", f"commit=unknown tree={r.tree}")
+    assert json.loads((Path(r.d) / "tree.json").read_text())["release_line"] == f"UNRELEASED|commit=unknown tree={r.tree}"
+
+
+def test_a_row_whose_workload_file_is_not_in_the_tree_stops_at_2_and_leaves_no_result(tmp_path, monkeypatch, capsys):
+    """Before any record of the row: no release line is read, and the run store gets no result of a row that never was one."""
+    r = _row(tmp_path, environ={"RESEARCH_RUN_DIR": str(tmp_path / "run")})
+    r.wl = "workloads/no-such-row.json"
+    left: list[str] = []
+
+    def release_line(fallback: str) -> tuple[str, str]:
+        left.append("release")
+        return "", "-"
+    monkeypatch.setattr(r, "release_line", release_line)
+    monkeypatch.setattr(r, "research_result", lambda: left.append("result"))
+    assert r.run() == 2 and left == [] and not r.trap
+    assert "no manifest workloads/no-such-row.json\n" in capsys.readouterr().out
+    assert sorted(os.listdir(r.d)) == []
+
+
+# ---------------------------------------------------------------------------------------------------------------- the shape
+
+def test_a_rows_shape_is_its_workloads_under_the_callers_lp_and_t_with_the_tap_build_of_its_attention(tmp_path, monkeypatch):
+    """The batch, the envelope and the request wrapper's shape come from the workload file, `--lp` and `--t` over the last; the tap
+    build is the one named, else the build for the attention implementation the workload runs (`row fa-version`: 3, else FA2's),
+    guarded unless the guarded-max tap is off; the snapshot steps are the caller's unless they ask for the row's default."""
+    so = {k: f"/t/{k}.so" for k in ("fa2", "fa3", "fa2-guarded", "fa3-guarded")}
+
+    def shaped(fa: str, *argv: str, protocols: tuple[str, ...] | None = None) -> Any:
+        r = _row(tmp_path, *(x for k, v in so.items() for x in (f"--hidden-so-{k}", v)), *argv)
+        r.protocols = protocols
+        asked: list[tuple[list[str], Any]] = []
+
+        def output(cmd: list[str], *, stderr: Any = subprocess.STDOUT) -> tuple[int, str]:
+            asked.append((cmd, stderr))
+            return 0, fa
+        monkeypatch.setattr(r, "output", output)
+        monkeypatch.setattr(r, "export_commit", lambda: "c0ffee0123456789")
+        r.shape()
+        assert asked == [(r.cli("row", "fa-version", r.wl, *r.tgt_args), subprocess.DEVNULL)]
+        return r
+    r = shaped("3\n")
+    assert (r.B, r.I, r.O, r.LP, r.T, r.MML, r.snap_def, r.snap_steps) == (1, 256, 32, 256, 31, 288, "0,1", None)
+    assert r.ck == str(R.row_shape(r.path(r.wl), r.path("manifests/checkpoints.json"), r.env.hf_home)["ck"])
+    assert (r.tgt, r.tgt_args, r.code9, r.hidden_so) == ("", [], "c0ffee012", so["fa3-guarded"])
+    assert shaped("2").hidden_so == shaped("").hidden_so == so["fa2-guarded"]
+    assert (shaped("3", "--guarded-max-tap", "0").hidden_so, shaped("2", "--guarded-max-tap", "0").hidden_so) == (so["fa3"], so["fa2"])
+    assert shaped("3", "--hidden-so", "/t/own.so").hidden_so == shaped("2", "--hidden-so", "/t/own.so", "--guarded-max-tap", "0").hidden_so == "/t/own.so"
+    r = shaped("3", "--lp", "9", "--t", "3", "--snapshot-steps", "all")
+    assert (r.LP, r.T, r.MML, r.snap_steps) == (9, 3, 288, "all")
+    assert shaped("3", "--snapshot-steps", "row-default").snap_steps is None
+    r = shaped("3", protocols=("pouw",))
+    assert (r.tgt, r.tgt_args) == ('{"protocols": ["pouw"]}', ["--target", '{"protocols": ["pouw"]}'])
+
+
 # ---------------------------------------------------------------------------------------------------------------- the target-family preflight
 
 def test_the_preflight_names_the_row_its_workload_stages_and_match_phase_and_its_line_goes_to_the_rows_log(tmp_path, monkeypatch):
@@ -555,6 +657,23 @@ def test_the_preflight_names_the_row_its_workload_stages_and_match_phase_and_its
     assert asked == [r.cli("target-family", "--row", r.row, "--workload", r.wl, "--stages", r.stages, "--match-phase", "cpu", "--no-device",
                            "--build-summary", f"{r.d}/build_summary.json", "--out", out)]
     assert (Path(r.d) / "row.log").read_text() == said + "\n"
+
+
+@pytest.mark.parametrize("line, status", [("TARGET-FAMILY-OK: l40s 8.9, declared 8.9, device 8.9", "PASS"),
+                                          ("TARGET-FAMILY-WAIVED (canary r16): device 9.0 != row family 8.9", "WAIVED")])
+def test_a_target_family_that_holds_passes_the_precheck_and_a_waiver_is_recorded_as_one(tmp_path, monkeypatch, capsys, line, status):
+    r = _row(tmp_path)
+    asked: list[tuple[tuple[str, ...], str]] = []
+
+    def target_family(*extra: str, out: str) -> tuple[int, str]:
+        asked.append((extra, out))
+        return 0, line
+    monkeypatch.setattr(r, "target_family", target_family)
+    r.precheck_target()
+    assert asked == [((), f"{r.d}/target_family.json")] and capsys.readouterr().out == ""
+    stage, got, _utc, detail = (Path(r.d) / "stages.txt").read_text().rstrip("\n").split(" ", 3)
+    assert (stage, got, detail) == ("precheck-target", status, line)
+    assert [(e["stage"], e["ev"], e.get("rc")) for e in _timeline(r)] == [("precheck-target", "start", None), ("precheck-target", "end", 0)]
 
 
 def test_the_row_runs_the_preflight_before_build_and_canary_waives_by_name(tmp_path, monkeypatch):
