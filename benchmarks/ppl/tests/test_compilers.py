@@ -198,15 +198,15 @@ def test_dither3_activations_beside_dithered_weights_serve_the_dithered_product(
     gates = G.Gates()
     run = matmul.Run(types.SimpleNamespace(name="t"), 0, 0, types.SimpleNamespace(li=0), gates, {}, {}, None)
     mm = matmul.MM("linear", "mlp.up_proj", run, x, w).enter(step)
-    drawn = [torch.randint(0, 2, x.shape, generator=g).float(), torch.randint(0, 2, x.shape, generator=g).float(),
+    bits = [torch.randint(0, 2, x.shape, generator=g).float(), torch.randint(0, 2, x.shape, generator=g).float(),
              torch.randint(0, 2, w.shape, generator=g).float()]
-    calls = iter(drawn)
+    calls = iter(bits)
     monkeypatch.setattr(matmul.MM, "coins", lambda self, shape, levels=2: next(calls))
     y = step.defn.fn(mm, matmul.terminal, **step.kw)
     v, sa, _ = steps.native_parts(x, "e4m3i", "channel", coined=False)
     u, sw, _ = steps.native_parts(w, "e4m3i", "channel", coined=True)
-    xq = steps.dither3(v, "e4m3i", drawn[0], drawn[1]) * sa
-    wq = steps.to_grid(u, "e4m3i", "dither", drawn[2]) * sw
+    xq = steps.dither3(v, "e4m3i", bits[0], bits[1]) * sa
+    wq = steps.to_grid(u, "e4m3i", "dither", bits[2]) * sw
     assert torch.allclose(y.double(), xq.double() @ wq.double().T, rtol=1e-6, atol=1e-5)
     assert gates.passed
 
