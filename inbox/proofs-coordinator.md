@@ -161081,3 +161081,42 @@ Your 20:56Z and your 21:02Z (infra's rule) are read, the first confirmed in the 
 - That the split's suites pass, and which of their failures, if any, the carried head has too.
 - That no record's text moves: no records run has been made.
 - The quick tiers of #9820 and #9821: no verdict yet.
+
+## GATHER — 21:22Z Fri 13 Nov — the mended merge is green at `3703b2e4cd2c8e64e4df8361cb2a41c8f2df1cda` and HELD, not pushed: item 4 of your 21:02Z finds 243 commits under `restack carry`, all the join's and all on the remote already. One word from you: push, or not
+
+`cursor/proofs-gather-wired-layout-6a9b` `462ef981d91ef258bd5ab7416fee1a8e54391d3f` my live line, unchanged on the remote
+
+**Your 21:02Z is read; item 4 showed 297 commits between my remote branch and the head I would push, 243 of them under `restack carry <noreply@invalid>`, so I did not push** [run].
+
+- My checkout's identity is `Cursor Agent <cursoragent@cursor.com>` [run: `git config user.name`, `user.email`].
+- Three of the 297 are on no remote ref, and all three are mine under that identity, author and committer: the merge `0ebdb1da566f`, the mend `6cb34b4fbeff`, the comment `3703b2e4cd2c` [run: `git log HEAD --not --remotes=origin`].
+- The other 294 are the join's, already on the remote at its tip `86874e0e5314` [run: `git rev-list --count`]. 243 of those are under `restack carry`: 61 in MESSAGES's replay line, 61 in SESSIONOF2's params line, 61 in HELDOF's couples line, 60 in TWOLEG's rule B [run: each merge's second parent]. The other 51 are under `Cursor Agent`.
+- So a push of my branch would send three commits, all under my identity, and would put the join's 243 in my branch's history, where none of them is new to the remote [derived]. I did not judge that myself: your item 4 says not to push where one differs [relayed: your 21:02Z].
+- My branch on the remote already holds 120 commits under `restack carry` over `main` `4ae17f7eafd7`, from the carry of my line and of the join [run]. I rewrite none [run].
+- Items 1 to 3: I export no `GIT_AUTHOR_*` or `GIT_COMMITTER_*`, and no job of mine on a node makes a commit [run: the launcher's three jobs].
+
+**What waits for your word.** Say "push" and I fast-forward my branch to `3703b2e4cd2c` by a plain push and write "merge GATHER at 3703b2e4cd2c8e64e4df8361cb2a41c8f2df1cda" [derived]. Say "no" and the mend goes as two lines for whoever merges, in `security/Proofs/Flock/SpotFlock/RunsAs/OwnReadsHeld.lean`, proof of `byPort_root_str` [derived]:
+
+```
+-  obtain ⟨-, -, -, -, -, -, hroot⟩ := h3
++  -- `Properties.Spot.R3` by position: `hroot` is its roots clause (`RootIs`), the seventh of its eight
++  obtain ⟨-, -, -, -, -, -, hroot, -⟩ := h3
+```
+
+**The build you asked me to wait for: green** [run].
+
+- `r20261113-203424-6aec`, vy-nebius-cpu-11, at `6cb34b4fbeff`, the merge of the join's tip `86874e0e5314` over `462ef981d91e` with the one pattern: `lean_changed.py --build` of 76 named files, rc 0 [run]. Six packages, each `exit 0`: the verifier's (265 jobs), the recursive verifier's (241), the two compose verifiers' (301, 362), `security/Proofs` (14,077 jobs, 1,747 s), `security/Properties` (115); `"failed": {}`, `"skipped": {}`; no line starts with `error` [run].
+- That is every module that reaches my six Lean files in the merged tree, 522 files, and the 24 Lean files the join's eight commits change [derived: the 76 named files]. `OwnReadsHeld`, `ParamsWf`, `SecondUnits` and the recursive verifier's `SampledTwo` each print `Built` over my `Spot.Registration`, `Spot.OneStage`, `Spot.SecondStage` and `Properties.Spot` [run].
+- The red is shown, as I had derived it [run]. The same run then built `OwnReadsHeld.lean` as the merge alone has it: rc 1, `"failed"` names that file at 107:31, "Function expected at `hroot` but this term has type `(∀ pw ∈ v.ports, ∀ r, rootFor rec pw.1 = some r → RootIs r pw.2) ∧ ∀ pw ∈ v.ports, WiredIs rec pw.1 pw.2`" [run]. So `462ef981d91e` merged into the join's tip without the pattern is red in that one file, and in no other of the 76 [run].
+
+**Your request of 20:53Z, the comment line: done, in the next commit** [run].
+
+- `3703b2e4cd2c` is `6cb34b4fbeff` plus that one line above the pattern [run: `git diff --stat`, one insertion]. A search for `R3. by position` finds it [run: `rg`].
+- It is the only place: I read every proof that takes `registration_nil` or a `Registered` fact apart [read: `rg` over `security/`]. `SecondUnits.lean` passes it on whole; `Credited.lean`, `Remote.lean` and two theorems of `Proofs/Properties/Spot.lean` take R1, R2 or R7 by position, not R3 [read]. I put no line on those: your request names R3 [derived].
+- Built: `r20261113-211123-9330`, vy-nebius-cpu-11, at `3703b2e4cd2c`, `OwnReadsHeld.lean` alone, which nothing imports: rc 0 [run].
+
+**The state of the three commits** [run]. They are in a detached worktree of mine, `/tmp/gather/dry`, on no branch and pushed nowhere. Over the join's tip they hold 21 files: my 20 and `OwnReadsHeld.lean`. `pins.py --stale` at the mend: exit 0, nothing printed. The join's tip was still `86874e0e5314` at 21:22Z.
+
+**Not established.** No play and no test ran at the merged tree; the join's eight commits change no Python and no file they read, and they ran green at `462ef981d91e` [run: `git diff --name-only`; my 19:59Z]. No lock record at either head [run]. No play through the compiled form [relayed: your 14:18Z]. If the join moves again before the merge, nothing here covers its new commits [derived].
+
+**Held to.** No pull request, no mark, nothing forced, no `main` merged by itself, nothing rebased, no build on my machine, no lock committed; Friday's two unmoved, `984cb027efa3` and `496aa183544b` [run: `git ls-remote` 21:22Z]. Copies: `/opt/cursor/artifacts/wired-audit/carried/tip/6aec.txt`, `carried/comment/9330.txt` [run].
