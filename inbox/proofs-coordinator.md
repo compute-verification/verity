@@ -146717,3 +146717,69 @@ I write none of it before point 2, and I ask before starting: it is on the branc
 3. **The landing order with the join last, which section c.4 had only for the base, #9713 and the join.** [local, from `bf7cbe637b4b`, on run `1ba8`'s carried commits] The base, #9713, #9555, #9441, then the join (scratch-settled): no conflict at any step. With the join before #9555 and #9441: no conflict either. Carried #9480 or #9504 after the join: `benchmarks/one_stage/a5.py` and `benchmarks/one_stage/two_stage.py`, as in section c.3; they need no step of their own, since the join holds their heads.
 
 **Not established:** as in the 14:38Z entry, less its line on #9504's step.
+
+## HONEST2, Fri 13 Nov 14:42Z: (ii) PROVED, `Honest/Checked.lean` COMPILES at `667f6b1ba51a` (run `8b51`) with `0 < units (base h) x` a hypothesis; that hypothesis is read ONLY where the second stage is refused, and an accepted play of the form gives the rest: text at `552a41cb4df8`, NOT compiled
+
+In plain words: the two stages check at least one inner block at every accepted play whose statement has an inner block. That is proved and compiled, with the count kept a hypothesis as ruled. The proof shows where the count is used: only when the second stage is refused, where the verifier checks every inner block. When the second stage draws, it proves a unit that one of the members has, so the statement has an inner block and nothing is asked. At an accepted play the second stage is never refused if the registration has a template, because the verifier's check of the session statements reads the second stage's draw. And at the form, the accepted run's own second stage drew over the outer block's cells, which are the held copies' cells, one per template: so there is a template. So on your question in ruling 4: neither the layout's own count nor nothing. The accepted play gives it through the second stage's draw. I wrote that route down (three commits, on the branch); it is not compiled yet, and the count stays on the field list under its name until it is.
+
+**1. The tip** [run: `git merge -q --ff-only 757ef18fdc6` in my worktree at 14:14Z]
+
+`cursor/proofs-honest2-join-6e17` is fast-forwarded to `757ef18fdc67`, the tip ASSEMBLY's 14:06Z entry names for the batch of five (it holds ADDRWC's leg, `62c8e57f950`, and my `2012857f64f`, `c42bc41b7ac`). The join's tip at my fetch was `ff6ea109e06f`, which adds HELDOF's `b755ba133f` and mends two of whose commit messages say "not compiled" (`302fd2b5e4b`, `41acd91ecff`), so I did not take it. No merge of `main`, no rebase.
+
+**2. Rulings 2 and 3: on the branch, under try** [run: `r20261113-142841-8b51` at `667f6b1ba51a`, still out for these three files]
+
+- `honestExists_iff : HonestExists ↔ ∃ h : Held, Premises h ∧ AcceptsPlay h` in `Honest/Any.lean` (`a7c9765e935`).
+- `ks_of_formAccepts : A.KS` and `scope_of_accept : A.L.Scope x` in `SampledTwo/PremisesAt.lean` (`d7dbc727d05`), word for word the text `a0e0` compiled on the scratch merge.
+
+**3. Ruling 4, (ii): compiled** [run: `r20261113-142841-8b51` at `667f6b1ba51a`: `Honest/Checked.lean` lean exit 0 in 179 s; none of its 9 theorems uses an axiom beyond the three; siblings clean over 2065 imported modules]
+
+```lean
+theorem checked_ne_nil {h : Held} {x : Msg} {s : AuditStatement} {d : Design.Two} (hp : parse h x = some s)
+    (h2 : two h s = some d) (hSS : AddressRow.SampleSlots h) (hN : 0 < units (base h) x)
+    (c₀ : FlockDeploy.Coin) (c₁ : Stage h) :
+    h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁) ≠ []
+
+theorem checked_ne_nil_of_play {h : Held} (H : Msg → Msg) {Ω : Type} {P : Claims.Prover Ω} {x : Msg} {ω : Ω}
+    {r : Fin ((V h).k x) → FlockDeploy.Coin} (hacc : (Claims.run H P (V h) x ω r).out = .acc)
+    (hSS : AddressRow.SampleSlots h) (hN : 0 < units (base h) x) :
+    h.reg.checked (units (base h) x) (src (r ⟨0, k_pos h x⟩)) (stageSrc (stageCoins h x r)) ≠ []
+
+theorem units_pos_of_drawn … (hp : parse h x = some s) (h2 : two h s = some d) (hSS : AddressRow.SampleSlots h)
+    (hsel : Spot.Select.selectSecond (h.reg.sample b₁) h.reg.ns h.reg.ks b₂ = .ok (draw, read)) :
+    0 < units (base h) x
+
+theorem checked_ne_nil_of_drawn … (the same four hypotheses) : h.reg.checked (units (base h) x) b₁ b₂ ≠ []
+```
+
+The two statements of 13:42Z are the first two, unchanged. The proof: where the second stage is refused, `RegTwo.error_mem` at unit `0`, which is where `hN` is read. Where it draws, `secondProblem` passed, so the replay sample is not empty and the counts sum to at least 1 (`secondProblem_counts_pos`, new, by unfolding `secondProblem`), so the stage proves a position (`size_proved_selectSecond`), a cell's (`proved_in_cell`), a member's unit (`blockAt_slot`), below the members' units (`unitBase_add_lt`). `hN` is not read in that branch, which is what the last two statements say. `AddressRow.SampleSlots h` follows from the run's population check and a first stage of a count `K` (`sampleSlots_of_firstK`), the two facts `premises_of_checks` already takes.
+
+**4. Where an accepted play gives `0 < units (base h) x`** [read: `SpotFlock/Cap.lean` `stmtOk_draw`; `SpotFlock/Opens.lean` `run_seenAt`; `RunsAs/Steps.lean` `accepted_steps`; `SampledTwo/AcceptsTop.lean` `cells_heldOf`; `SpotFlock/Facts.lean` `filesOk_sound`] [derived; NOT compiled]
+
+- At an accepted play, `stmtOk` passed at the play's coins (`run_seenAt`). Where `0 < h.ms.length`, its check of template 0's statement reads the second stage's draw (`stmtOk_draw`), so the second stage draws at those coins (`select_of_secondDraw`). Then `units_pos_of_drawn` gives the count. So at an accepted play, with `SampleSlots`, the count reduces to `0 < h.ms.length`: the registration has a template.
+- At the form, the accepted run's second stage drew over `Select.replayCells`' `ns` (`accepted_steps`), `secondProblem` refuses an empty `ns`, those cells are the held copies' (`cells_heldOf`), and `filesOk` holds `ns.size = ms.length`. So `0 < A.h.ms.length` under `HeldOfAt` and one accepted play of the form.
+- Written on the branch, not compiled: `drawn_of_play`, `units_pos_of_play`, `checked_ne_nil_of_template` in `Honest/Checked.lean` (`2312261e94d`); `sampleSlots_of_heldOf` in `Honest/AtHeldOf.lean` (`f7d3de1b17e`); `template_of_formAccepts`, `units_pos_of_formAccepts`, `checked_ne_nil_of_formAccepts` in `SampledTwo/PremisesAt.lean` (`552a41cb4df8`). The last takes `HeldOfAt A C`, one play the form accepts, and a play `SpotFlock.V A.h` accepts, and nothing else.
+
+## STOP RULE
+
+None.
+
+## NEEDS
+
+Nothing. If the route of point 4 compiles, `0 < units (base h) x` and the non-empty sample need no place on the join's field list at the form; I say so in the next entry, with the run, or name the step that stopped it.
+
+## Not established
+
+- `Honest/Any`, `Honest/AtHeldOf` and `SampledTwo/PremisesAt` at `667f6b1ba51a`: run `8b51` has not reached their verdicts.
+- Point 4's seven statements: committed, not compiled. One try at a time, so their try starts when `8b51` ends.
+- `0 < h.ms.length` at copies that are not `heldOf`'s for an accepted run: a hypothesis of `checked_ne_nil_of_template`.
+- That the form accepts a play, `HeldOfAt`, `PlayAccepts`, `RefReadsWf A.h`, `wiresChecked A.h`: hypotheses, as at 13:42Z.
+- The whole-tree test files at the new head: running now.
+- No records run (ASSEMBLY's `r20261113-135551-1520` is the join's).
+
+## Pushed
+
+- `cursor/proofs-honest2-join-6e17` at `552a41cb4df8`: `757ef18fdc67` + `a7c9765e935` (`honestExists_iff`) + `d7dbc727d05` (the two leg statements) + `667f6b1ba51` (`Honest/Checked.lean` with its root lines in `lakefile.toml` and `lean-audit.json`) + `2312261e94d`, `f7d3de1b17e`, `552a41cb4df` (point 4, not compiled).
+
+## To post
+
+Nothing.
