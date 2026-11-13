@@ -22,9 +22,9 @@ session would put each of the interior's openings on another tree of the device'
   opens no coin tree (`FirstFresh`).
 * `readLog_plain`: a read of a log none of whose lines is a coin tree's shows only fresh coins, so no `Hello`.
 
-Not established here: that the first session's read shows no `Hello` on two windows. The form's check reads the first
-session's log only through `Spot.Challenger.releasedRootsOf`, which passes over a coin tree's lines, so no step of
-it refuses a first session's log that holds one.
+Not established here: that the first session's read shows no `Hello` on two windows. The form's first stage reads the
+first session's log only through `Spot.Challenger.releasedRootsOf`, which passes over a tree's lines; the form refuses
+such a log by a step of its own (`VStar.Recursive.SampledTwo.firstTreeless`), which `SessionTreeless` reads.
 -/
 
 @[expose] public section

@@ -11,7 +11,7 @@ import Proofs.Flock.Claims.Sampling.Select.Steps
 A draw reads its source in order (`Draw.take`), from position `0`, and throws where the source runs out, so the
 position only grows and a draw that ends at position `R` read only the source's first `R` bytes. It draws the same from
 any source that starts with those `R` bytes (`AgreesTo`): `drawUnits_read`, and through the stages' samples,
-`select_read` and `selectSecond_read`. The `R` a stage reports is the `read` `Run.coinsHold` holds to the challenger's
+`select_read` and `selectSecond_read`. The `R` a stage reports is the `read` `Run.coinsCode` holds to the challenger's
 released coins, so a stage's sample depends on its coins only through the bytes the challenger released.
 
 Each step is stated as one fact of a successful run from position `p` to `x.2`: `p ≤ x.2`, and where `x.2 ≤ R`, the

@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.Verity.SampledTwo.CutRoots
 public import Proofs.Properties.Verity.SampledTwo.FirstCoins
 public import Proofs.Properties.Verity.SampledTwo.SecondCoins
+public import Proofs.Properties.Verity.SampledTwo.StageCut
 public import Proofs.Properties.Verity.SampledTwo.CoinStages
 
 /-!
@@ -10,28 +11,15 @@ public import Proofs.Properties.Verity.SampledTwo.CoinStages
 
 `CoinMap.StageDraws` asks, of each accepted play and its stage's draw, two things: the draw names the stage's family,
 and the play's log shows that family after the draw's digest alone (`CoinMap.OneRoot`). The second is CUT's
-`oneRoot_first` and `oneRoot_second` (`CutRoots.lean`), on a play whose log the check read and found the device's
-(`ReadIsDevice`), whose sent message is the case's (`caseOf o.sent`) and that meets `OtherRoots`. So `StageDraws` takes
-the family alone (`stageDraws_first`, `stageDraws_second`).
+(`CutRoots.lean`), on a play whose log the check read and found the device's (`ReadIsDevice`), whose sent message is
+the case's (`caseOf o.sent`) and that meets `OtherRoots`: `oneRoot_draws` for the first stage, whose draw is the cut's
+first draw (`firstDraw_of`, the boundary parameters' family), and `oneRoot_second` for the second. So `StageDraws`
+takes the family alone (`stageDraws_first`, `stageDraws_second`).
 -/
 
 @[expose] public section
 
 namespace Verity.SampledTwo
-
-/-- **The first stage's draw, read back**: the family its coin evidence's segment names and the boundary
-registration's digest. -/
-theorem firstDraw_label {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c : Spot.OneStage.Commitment}
-    {e : VStar.Recursive.SampledTwo.Evidence} (hd : Decoded k p c e) {label : String} {after : ByteArray}
-    (h : firstDraw k = some (label, after)) :
-    Spot.getD (Spot.getD e.coins "segment") "label" = .str label ∧ after = c.digest := by
-  obtain ⟨-, hc, he⟩ := hd
-  unfold firstDraw at h
-  rw [hc, he] at h
-  cases hj : Spot.getD (Spot.getD e.coins "segment") "label" <;>
-    simp [hj, bind, Except.toOption] at h
-  obtain ⟨rfl, rfl⟩ := h
-  exact ⟨rfl, rfl⟩
 
 /-- **The second stage's draw, read back**: the family the interior audit's parameters name for its challenger and the
 interior registration's digest. -/
@@ -45,7 +33,7 @@ theorem secondDraw_parts {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c :
   rcases hch : p.audit.base.challenger with _ | ⟨key, label'⟩
   · simp [hch, bind, Except.bind, Except.toOption] at h
   · cases hs : Flock.canon e.record with
-    | error err => simp [hch, hs, bind, Except.bind, Except.toOption] at h
+    | error err => simp [hs, bind, Except.bind, Except.toOption] at h
     | ok s =>
       cases hc : Spot.OneStage.commitmentOf s.toUTF8 with
       | error err =>
@@ -53,7 +41,7 @@ theorem secondDraw_parts {k : Case} {p : VStar.Recursive.SampledTwo.Params} {c :
           first
             | exact hc
             | simpa using hc
-        simp [hch, hs, hc', bind, Except.bind, Except.toOption] at h
+        simp [hs, hc', bind, Except.bind, Except.toOption] at h
       | ok c₂ =>
         have hc' : Spot.OneStage.commitmentOf s.toByteArray = .ok c₂ := by
           first
@@ -80,9 +68,15 @@ theorem stageDraws_first {C : CaseOf} {Acc : Verity.Exchange → Prop} {ℓ : St
     beta_reduce at hd
     rw [hk] at hd
     exact hd
-  obtain ⟨hl, rfl⟩ := firstDraw_label hdec hd'
+  obtain ⟨p', c', e', _, d₁, _, _, _, h1, -, h3, -, -, -, ho₁, -⟩ := oneRoot_draws hg hx
+  have hpce := Except.ok.inj (h1.symm.trans (hcase o k p c e hk hdec))
+  simp only [Prod.mk.injEq] at hpce
+  obtain ⟨rfl, rfl, rfl⟩ := hpce
+  have hpair := Option.some.inj (hd'.symm.trans (firstDraw_of hdec h3))
+  simp only [Prod.mk.injEq] at hpair
+  obtain ⟨rfl, rfl⟩ := hpair
   subst hℓ
-  exact ⟨rfl, oneRoot_first hg hx (hcase o k p c e hk hdec) hl⟩
+  exact ⟨rfl, ho₁⟩
 
 /-- **The second stage's draw is its family after one root**: `StageDraws` from the family alone, on the same plays. -/
 theorem stageDraws_second {C : CaseOf} {Acc : Verity.Exchange → Prop} {ℓ : String}

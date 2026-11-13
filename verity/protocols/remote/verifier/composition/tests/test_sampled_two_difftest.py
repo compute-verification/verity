@@ -10,7 +10,6 @@ from __future__ import annotations
 import copy
 import functools
 import json
-import os
 import random
 import shutil
 import subprocess
@@ -24,6 +23,7 @@ import reference as R
 import sampled_two as T
 import verity_difftest as D
 from verity_difftest import canonical
+from verity_difftest import settings as opt
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -162,18 +162,18 @@ BY_THE_SWITCH = ("two-stage-form", "a statement form the soundness proof does no
 @pytest.mark.slow
 def test_the_form_accepts_one_honest_play_with_its_switch_on() -> None:
     """The form accepts some play: one honest two-stage run's case (``sampled_two_small.sh``'s ``$OUT/form``, the
-    directory ``SAMPLED_TWO_CASE`` names: params.json, commitment.json, evidence.json and blobs/) passes
+    directory ``VERITY_SAMPLED_TWO_CASE`` names: params.json, commitment.json, evidence.json and blobs/) passes
     `sampled-two-on`, the check with its switch on, and the shipped `sampled-two` refuses it by the switch alone. It
     catches a change after which the form accepts no play, which every refusal case above passes. Opt-in: the case is
     a node run's, its sessions' files too large to keep beside the test."""
-    at = os.environ.get("SAMPLED_TWO_CASE")
+    at = opt.get("VERITY_SAMPLED_TWO_CASE")
     if not at:
-        pytest.skip("SAMPLED_TWO_CASE names no honest play's case (sampled_two_small.sh's $OUT/form)")
+        pytest.skip("VERITY_SAMPLED_TWO_CASE names no honest play's case (sampled_two_small.sh's $OUT/form)")
     d = Path(at)
     files = [str(d / f) for f in ("params.json", "commitment.json", "evidence.json")]
     files += [str(b) for b in sorted((d / "blobs").iterdir())]
-    bin_dir = R.ROOT / "verity/protocols/recursion/verifier/recursive/.lake/build/bin"
-    on = subprocess.run([str(bin_dir / "sampled-two-on"), "check", *files], capture_output=True, text=True, check=False)
+    exes = [D.build(PORT.package, exe) for exe in ("sampled-two-on", "sampled-two")]
+    on = subprocess.run([str(exes[0]), "check", *files], capture_output=True, text=True, check=False)
     assert on.returncode == 0, (on.stdout + on.stderr)[-4000:]
-    off = subprocess.run([str(bin_dir / "sampled-two"), "check", *files], capture_output=True, text=True, check=False)
+    off = subprocess.run([str(exes[1]), "check", *files], capture_output=True, text=True, check=False)
     assert off.returncode == 1 and any(x in off.stdout for x in BY_THE_SWITCH), (off.stdout + off.stderr)[-4000:]

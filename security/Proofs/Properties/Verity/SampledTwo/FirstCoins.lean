@@ -34,10 +34,8 @@ stage read `read` of its bytes under `Select.select`, its coins hold on them, an
 (`run_read`); the form refuses where the evidence's first-stage bytes run past it, so on an accepted play the first
 stage's bytes are all read (`sourceRead_holds`).
 
-**Not established here.** The run's coin check takes the coin family from the evidence's segment (`firstDraw`), not
-from the parameters, and checks a signature over the coins without binding it to the current monitoring period: a
-signature from an earlier period passes it. Neither is worked around: `FirstShown` and `DevFirst` read the family the
-evidence names.
+**Not established here.** The run's coin check checks a signature over the coins without binding it to the current
+monitoring period: a signature from an earlier period passes it. It is not worked around.
 -/
 
 @[expose] public section
@@ -71,13 +69,13 @@ def FirstRead (i : Spot.Run.Input) (read : ℕ) : Prop :=
     Spot.Run.coinsCode i.key i.main i.coins i.record i.params.verifier.windowRoot i.family
       (i.source.extract 0 read) = none
 
-/-- **The first stage's draw on a case**: the coin family its coin evidence's segment names, and the boundary
-registration's digest, after which the run's coin check holds its coins. -/
-def firstDraw (k : Case) : Option (String × ByteArray) := do
-  let c ← (Spot.OneStage.commitmentOf k.commitment).toOption
-  let e ← (VStar.Recursive.SampledTwo.evidenceOf k.evidence).toOption
-  let .str l := Spot.getD (Spot.getD e.coins "segment") "label" | none
-  pure (l, c.digest)
+/-- **The first stage's draw on a case**: the family of the boundary registration's challenger, which the run's coin
+check reads (`inputOf`'s `family`), and the boundary registration's digest, after which it holds its coins. -/
+def firstDraw (k : Case) : Option (String × ByteArray) :=
+  match Spot.OneStage.commitmentOf k.commitment,
+      Core.canonicalJson k.params >>= VStar.Recursive.SampledTwo.paramsOfJson with
+  | .ok c, .ok p => (p.boundary.challenger.map (·.2)).map fun l => (l, c.digest)
+  | _, _ => none
 
 /-! ## What the statement rests on -/
 
@@ -261,7 +259,8 @@ theorem sourceRead_holds (C : CaseOf) : SourceRead C := by
   obtain ⟨_, _, _, e, _, _, _, run, _, _, hin, hrun, hsr, hsym⟩ := inputOn_accepts ha hi
   obtain ⟨read', hread', hr⟩ := run_read hrun hsym
   obtain rfl := firstRead_unique hread hread'
-  obtain ⟨-, -, -, -, vs, received₂, -, rfl⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
+  obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, rfl, -, -, -⟩ :=
+    VStar.Recursive.SampledTwo.inputAt_ok hin
   rw [inputOf_source]
   exact VStar.Recursive.SampledTwo.sourceRead_le hsr hr
 

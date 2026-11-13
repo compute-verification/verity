@@ -84,9 +84,15 @@ theorem stratifiedWith_within {ξ : ByteArray} {strata : Array Flock.Draw.Stratu
   try dsimp only at h
   rw [Std.Legacy.Range.forIn_eq_forIn_range'] at h
   refine bind_within h (fun r hr => forIn_within _ ξ.size (fun i b s z _ hz => ?_) _ _ _ _ hp hr)
-    (fun r _ hs hk => by first | exact pure_within hk hs | (revert hk; (repeat' split) <;> intro hk <;> exact pure_within hk hs))
+    (fun r _ hs hk => by
+      first
+        | exact pure_within hk hs
+        | (revert hk; (repeat' split) <;> intro hk <;> exact pure_within hk hs))
   exact bind_within hz (fun r hr => onWith_within (by unfold Flock.Draw.Stratum.need; omega) hr)
-    (fun r _ hs hk => by first | exact pure_within hk hs | (revert hk; (repeat' split) <;> intro hk <;> exact pure_within hk hs))
+    (fun r _ hs hk => by
+      first
+        | exact pure_within hk hs
+        | (revert hk; (repeat' split) <;> intro hk <;> exact pure_within hk hs))
 
 theorem drawWith_within {ξ : ByteArray} (law : Flock.Draw.Law) (n : ℕ) {p : ℕ}
     {x : Option Flock.Draw.UnitDraw × ℕ} (hp : p ≤ ξ.size)
@@ -95,19 +101,23 @@ theorem drawWith_within {ξ : ByteArray} (law : Flock.Draw.Law) (n : ℕ) {p : �
   | subset k =>
     unfold Flock.Draw.drawWith at h
     try dsimp only at h
-    exact bind_within h (fun r hr => onWith_within (by omega) hr) (fun r _ hs hk => by first | exact pure_within hk hs | (revert hk; (repeat' split) <;> intro hk <;> exact pure_within hk hs))
+    exact bind_within h (fun r hr => onWith_within (by omega) hr)
+      (fun r _ hs hk => by exact pure_within hk hs)
   | bernoulli a b =>
     unfold Flock.Draw.drawWith at h
     try dsimp only at h
-    exact bind_within h (fun r hr => onWith_within (by omega) hr) (fun r _ hs hk => by first | exact pure_within hk hs | (revert hk; (repeat' split) <;> intro hk <;> exact pure_within hk hs))
+    exact bind_within h (fun r hr => onWith_within (by omega) hr)
+      (fun r _ hs hk => by exact pure_within hk hs)
   | stratified k strata =>
     unfold Flock.Draw.drawWith at h
     try dsimp only at h
-    exact bind_within h (fun r hr => stratifiedWith_within hp hr) (fun r _ hs hk => by first | exact pure_within hk hs | (revert hk; (repeat' split) <;> intro hk <;> exact pure_within hk hs))
+    exact bind_within h (fun r hr => stratifiedWith_within hp hr)
+      (fun r _ hs hk => by exact pure_within hk hs)
   | work k strata =>
     unfold Flock.Draw.drawWith at h
     try dsimp only at h
-    exact bind_within h (fun r hr => stratifiedWith_within hp hr) (fun r _ hs hk => by first | exact pure_within hk hs | (revert hk; (repeat' split) <;> intro hk <;> exact pure_within hk hs))
+    exact bind_within h (fun r hr => stratifiedWith_within hp hr)
+      (fun r _ hs hk => by exact pure_within hk hs)
 
 /-- **A draw reads no byte past its source**: the units a law draws from `ξ`, having read `r.2` bytes, read them within
 `ξ`. -/
@@ -177,26 +187,17 @@ theorem select_within {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json
   | all =>
     try dsimp only at h
     have hr : r.2.2 = 0 := by
-      first
-        | (obtain ⟨ur, hu, h⟩ := bind_eq_ok.1 h
-           obtain ⟨u, rd⟩ := ur
-           obtain rfl : rd = 0 := (congrArg Prod.snd (Except.ok.inj hu)).symm
-           revert h
-           try dsimp only
-           repeat' split
-           all_goals intro h
-           all_goals first
-             | exact absurd h (throw_bind_ne _ _ _)
-             | (cases h; done)
-             | exact congrArg (fun q => q.2.2) (Except.ok.inj h).symm)
-        | (revert h
-           try dsimp only
-           repeat' split
-           all_goals intro h
-           all_goals first
-             | exact absurd h (throw_bind_ne _ _ _)
-             | (cases h; done)
-             | exact congrArg (fun q => q.2.2) (Except.ok.inj h).symm)
+      obtain ⟨ur, hu, h⟩ := bind_eq_ok.1 h
+      obtain ⟨u, rd⟩ := ur
+      obtain rfl : rd = 0 := (congrArg Prod.snd (Except.ok.inj hu)).symm
+      revert h
+      try dsimp only
+      repeat' split
+      all_goals intro h
+      all_goals first
+        | exact absurd h (throw_bind_ne _ _ _)
+        | (cases h; done)
+        | exact congrArg (fun q => q.2.2) (Except.ok.inj h).symm
     rw [hr]
     exact Nat.zero_le _
   | law text =>
@@ -259,7 +260,7 @@ theorem closure_of_formAccepts {C : CaseOf} {o : Verity.Exchange} {i : Spot.Run.
     (hi : inputOn C o = some i) : i.closure = none := by
   obtain ⟨k, hk, p, cm, e, pub, prof, ⟨h1, h2, h3⟩, hacc⟩ := hA
   obtain ⟨-, c₂, ξ₂, r, i', run, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
-  obtain ⟨-, -, -, -, vs, rc, -, hieq⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
+  obtain ⟨-, -, -, -, vs, rc, j₁, j₂, -, hieq, -, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
   have hik : inputOfCase k = some i' := by
     unfold inputOfCase
     rw [h1, h2, h3]

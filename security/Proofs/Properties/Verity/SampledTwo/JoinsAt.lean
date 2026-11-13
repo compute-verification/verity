@@ -9,6 +9,7 @@ public import Proofs.Properties.Verity.SampledTwo.DeviceOrder
 public import Proofs.Properties.Verity.SampledTwo.CutAccept
 public import Proofs.Properties.Verity.SampledTwo.SessionDev
 public import Proofs.Properties.Verity.SampledTwo.SessionCut
+public import Proofs.Properties.Verity.SampledTwo.SessionTreeless
 public import Proofs.Properties.Verity.SampledTwo.Reached
 public import Proofs.Properties.Verity.SampledTwo.Fits
 public import Proofs.Properties.Verity.SampledTwo.AcceptsTop
@@ -49,9 +50,17 @@ STAGECOINS's `CutReads`, `DevFirst` and `DevSecond` speak of every play the form
 there: the cut reads no log where a session's record carries a break, and a family's coins follow one root only on a
 log the check read. At the kept case they speak of the accepted plays `JoinGood` holds of. There `CutReads` is
 `JoinGood`'s first part, the fresh coins' width `DevSecond` needs is its last, and `StageDraws` is asked only of those
-plays. There each stage's one root is CUT's (`oneRoot_first`, `oneRoot_second`, at `otherRoots`), so `StageDraws`
-takes the families alone (`stageDraws_first`, `stageDraws_second`, `DrawRoots.lean`). What the pieces conclude comes back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase`
-and `secondFits_goodCase`. So `joinedOfLaw` takes no `CutReads` and no coins' premise for either stage.
+plays. There each stage's one root is CUT's (`oneRoot_draws`, `oneRoot_second`, at `otherRoots`), so `StageDraws`
+  takes the families alone (`stageDraws_first`, `stageDraws_second`, `DrawRoots.lean`). What the pieces conclude comes
+back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase` and `secondFits_goodCase`. So `joinedOfLaw` takes no
+`CutReads` and no coins' premise for either stage.
+
+**What the stages read is the form's accept's**, with `caseIsSent`, and no field. The check's first session is the
+cut's (STAGECOINS's `sessionMatches_of`, from the form's refusal of an interior record whose read-back digest is not
+the interior commitment's, `INTERIOR_DIGEST`), and the first stage read the cut's draw (`firstDrawn_of`, from its
+refusal of a first-stage record whose read-back digest is not the commitment's), both taken at the kept case
+(`sessionMatches_goodCase`, `caseIsSent_goodCase`). The first stage's coins are read under the parameters' key and an
+accepted play on two windows shows its sessions' order (`firstReads`, `orderShown`, CUT's `CutAccept.lean`).
 
 **Not established**, each a field of `JoinsAt`:
 
@@ -61,20 +70,22 @@ and `secondFits_goodCase`. So `joinedOfLaw` takes no `CutReads` and no coins' pr
   pull request (PRF-490). The model's device takes its ledger lines as given, so nothing here proves it, and it is a
   field by that name, not a part of `JoinGood`.
 * **The two families distinct** (`distinctFamilies`), until the form refuses equal labels (TWOLEG).
-* **Each stage's draw names its family** (`family₁`, `family₂`): the form's to show (TWOLEG).
+* **Each stage's draw names its family** (`family₁`, `family₂`): the boundary registration's challenger's family is
+  `ℓ₁` and the interior audit's is `ℓ₂`, in the parameters of each accepted play.
 * **On two windows each session shows the other stage's family after that stage's digest alone** (`otherRoots`,
   CUT's `OtherRoots`): the form's accept does not give it.
-* **The first stage read the cut's draw** (`firstDrawn`) and **the check's first session is the cut's**
-  (`sessionMatches`). That the first stage's coins are read under the parameters' key and that an accepted play on two
-  windows shows its sessions' order are theorems of the form's accept (`firstReads`, `orderShown`, CUT's
-  `CutAccept.lean`), no longer fields.
-* **On two windows the first session samples no coin tree** (`firstTreeless`): a named hypothesis until the form
-  refuses a coin tree's line in the first session's log on two windows (TWOLEG); with `caseIsSent` it gives the
-  interior's log on the play's (`SessionCoins.interiorLogged_read`, SESSIONCOINS). **The messages** (`msgOpens`,
-  `digestBefore`, MESSAGES): no check gives either; their docstrings say what each holds of.
-* **The run of record's accept** (`playAccepts_form`'s premises): `heldAt`, `twoHolds` (HELDOF); `recordsHeldAt`
-  (HELDOF's names, ACCEPTS's rest); `recordsRead` (TWOLEG's form change); `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`,
-  `pinHeldAt`, `sessionsRun` (MESSAGES and the sessions' workers); and `sessionMsgs`.
+* **The messages** (`msgOpens`, `digestBefore`, MESSAGES): no check gives either; their docstrings say what each
+  holds of. That on two windows the first session samples no challenge tree is a theorem of the form's accept
+  (`SessionCoins.firstTreeless_of_check`, from the form's refusal of a tree's line in the first session's log and
+  `caseIsSent`), no longer a field; it gives the interior's log on the play's (`SessionCoins.interiorLogged_read`).
+* **The run of record's accept** (`playAccepts_form`'s premises): `partsSizedAt` (ACCEPTS: at each number of replay
+  blocks the held first stage samples, the held copies' parts are the interior program's strata's, which with
+  `heldOfAt` gives the parts at each play's replay sample, `partsHeldAt_of_accepts`); `heldOfAt` (HELDOF);
+  `portsDistinctAt`; `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`, `sessionsRun` (MESSAGES and the sessions'
+  workers); and `sessionMsgs`. That an accepted play's records name their registrations' names and read back as the
+  records the run held, that the held copies' design evaluates, and that each accepted play's held first stage samples
+  one fixed number of replay blocks, are theorems (ACCEPTS's `recordsHeldAt_of`, `recordsRead`, `twoHolds_at`,
+  `firstK_of_formAccepts`), no longer fields.
 * **The instance's** (`wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`).
 
 Every field is over the form's accept, so the theorem says nothing about a run of record until the form accepts a
@@ -126,12 +137,6 @@ theorem caseIsSent_goodCase {C : CaseOf} {G : Verity.Exchange → Prop} (h : Cas
 theorem cutReads_goodCase {C : CaseOf} {G : Verity.Exchange → Prop} (hG : ∀ o, G o → LogRead o) :
     CutReads (goodCase C G) :=
   fun o ha => hG o (formAccepts_goodCase.1 ha).2
-
-theorem firstDrawn_goodCase {C : CaseOf} {G : Verity.Exchange → Prop} (h : FirstDrawn C) :
-    FirstDrawn (goodCase C G) := by
-  intro o ha i read hi
-  obtain ⟨ha', hg⟩ := formAccepts_goodCase.1 ha
-  exact h o ha' i read ((inputOn_goodCase hg).symm.trans hi)
 
 theorem sessionMatches_goodCase {C : CaseOf} {G : Verity.Exchange → Prop} (h : SessionMatches C) :
     SessionMatches (goodCase C G) :=
@@ -231,19 +236,15 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
     Sessions.LedgerInOrder (P.setup₁ fs₁ cut o) (P.setup₂ fs₂ cut o)
   /-- The two stages' families differ. -/
   distinctFamilies : ℓ₁ ≠ ℓ₂
-  /-- The first stage's draw names `ℓ₁`, on the accepted plays `JoinGood` holds of. -/
+  /-- The first stage's draw names `ℓ₁`, on the accepted plays `JoinGood` holds of: the family of the boundary
+  registration's challenger, in the play's parameters (`firstDraw`). -/
   family₁ : ∀ o, FormAccepts C o ∧ JoinGood o → ∀ label after, (C o).bind firstDraw = some (label, after) → label = ℓ₁
-  /-- The second stage's draw names `ℓ₂`, on the accepted plays `JoinGood` holds of. -/
+  /-- The second stage's draw names `ℓ₂`, on the accepted plays `JoinGood` holds of: the family of the interior
+  audit's challenger, in the play's parameters (`secondDraw`). -/
   family₂ : ∀ o, FormAccepts C o ∧ JoinGood o → ∀ label after, (C o).bind secondDraw = some (label, after) → label = ℓ₂
   /-- On two windows each session shows the other stage's family after that stage's digest alone (CUT's
   `OtherRoots`), on the accepted plays `JoinGood` holds of. -/
   otherRoots : ∀ o, FormAccepts C o ∧ JoinGood o → OtherRoots o.sent
-  /-- The first stage read the draw the cut reads. -/
-  firstDrawn : FirstDrawn C
-  /-- The check's first session is the cut's. -/
-  sessionMatches : SessionMatches C
-  /-- On two windows the first session's releases, as the cut reads them, hold no coin tree's `Hello`. -/
-  firstTreeless : SessionCoins.FirstTreeless C
   /-- The message the check reads at each round opens the digest the play records. Holds of a strategy whose message
   at each round is fixed before the round's coin; no check gives it: at the digests the device signs (the link's
   `after`, a rep round's SHA-512 of its retained bytes, the closing's SHA-512 of the session's evidence; the
@@ -256,14 +257,15 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   digestBefore : ∀ i < A.L.V.k x, Messages.DigestBefore
     (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
     (joinReading A C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂)) (FormAccepts C) JoinGood Dg i
-  /-- The held copies agree with what an accepted play's run reads (`RunsAs.HeldMatches`). -/
-  heldAt : HeldAt A C
-  /-- The held copies' two-stage design evaluates at every statement. -/
-  twoHolds : SpotFlock.RunsAs.Round2.TwoHolds A.h
-  /-- An accepted play's records name their registrations' names. -/
-  recordsHeldAt : RecordsHeldAt A C
-  /-- An accepted play's records read back as the records the run held. -/
-  recordsRead : RecordsRead C
+  /-- At each number of replay blocks the held copies' first stage samples (`SpotFlock.firstK`), the held copies'
+  parts are the interior program's strata's (ACCEPTS's `PartsSizedAt`): it reads each accepted play's parameters and
+  none of its bytes. Each accepted play's held first stage samples such a number (`firstK_of_formAccepts`), so with
+  `heldOfAt` it gives the parts at each accepted play's replay sample (`partsHeldAt_of_accepts`). -/
+  partsSizedAt : ∀ K, SpotFlock.firstK A.h.reg.first = some K → PartsSizedAt A C K
+  /-- Each accepted play's held copies are the ones `heldOf` builds from its input and interior. -/
+  heldOfAt : HeldOfAt A C
+  /-- Each accepted play's registrations list each port once. -/
+  portsDistinctAt : PortsDistinctAt C
   /-- The reading's session statements are the ones the run's second stage checked. -/
   stmtsRead : StmtsRead A C (joinSessions A C Ms tab ℓ₁ ℓ₂)
   /-- Each session statement has its template's stage count. -/
@@ -316,8 +318,8 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
   -- The stages' pieces, at the case kept on the plays `JoinGood` holds of.
   have hC' : CaseIsSent (goodCase C JoinGood) := caseIsSent_goodCase h.caseIsSent
   have hR' : CutReads (goodCase C JoinGood) := cutReads_goodCase fun o (hg : JoinGood o) => hg.1.1
-  have hD' : FirstDrawn (goodCase C JoinGood) := firstDrawn_goodCase h.firstDrawn
-  have hM' : SessionMatches (goodCase C JoinGood) := sessionMatches_goodCase h.sessionMatches
+  have hD' : FirstDrawn (goodCase C JoinGood) := firstDrawn_of _ hC'
+  have hM' : SessionMatches (goodCase C JoinGood) := sessionMatches_goodCase (sessionMatches_of C h.caseIsSent)
   have hcase : ∀ o k p c e, C o = some k → Decoded k p c e → caseOf o.sent = .ok (p, c, e) :=
     fun o k p c e hk hd => (h.caseIsSent o k p c e hk hd).1
   have hA : ∀ o, FormAccepts C o ∧ JoinGood o → FormAccepts C o ∧ ReadIsDevice o ∧ OtherRoots o.sent :=
@@ -361,7 +363,8 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
   -- The sessions' pieces, at the case itself.
   have hsz : SessionCoins.HeldSize := fun _ _ _ hh => held_size hh
   have hlog : SessionCoins.InteriorLogged C JoinGood := fun o hA hg =>
-    SessionCoins.interiorLogged_read C h.caseIsSent h.firstTreeless o hA hg.1
+    SessionCoins.interiorLogged_read C h.caseIsSent
+      (SessionCoins.firstTreeless_of_check C h.caseIsSent (fun _ _ _ _ _ _ _ _ => rfl)) o hA hg.1
   have hLoc := SessionCoins.locates_run A (CoinMap.stageLocate ℓ₁ ℓ₂) tab
   have hSess := SessionCoins.sessionsAgree_accepted A x C Ms tab (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) JoinGood _
     hsz hlog
@@ -375,6 +378,7 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
       (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ) :=
     cutBound_and (fun o hr => CoinMap.freshWide_play V θ F c σ hr)
       (Sessions.cutOrder_dev₂ V k P fs₁ fs₂ cut θ F c σ hw (firstReads θ) (orderShown θ) h.ledgerInOrder h.signer)
+  have hParts : PartsHeldAt A C := partsHeldAt_of_accepts h.heldOfAt h.partsSizedAt
   exact joined V k A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg q (FormAccepts C)
     JoinGood (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ) h.wiring
     (hHolds V A x θ F c σ _ _ (readsAt A.h))
@@ -382,7 +386,7 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
     (SessionCoins.stmtReadsNone A C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)))
     h.msgOpens h.digestBefore hCut
     (reachedAccepts A x C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) P' (sourcesFit A C)
-      (playAccepts_form A C _ P' h.heldAt h.twoHolds h.recordsHeldAt h.recordsRead h.stmtsRead h.roundsHeldAt
+      (playAccepts_form A C _ P' hParts h.heldOfAt h.portsDistinctAt h.stmtsRead h.roundsHeldAt
         h.scopeHeldAt h.pinHeldAt h.sessionsRun) h.sessionMsgs)
     (stmtAt V A x θ F c σ _ C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) h.caseCommits h.stmtX)
 

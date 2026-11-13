@@ -9,7 +9,7 @@ public import Proofs.Flock.SpotFlock.HeldOfFiles
 decides whether it builds a held copy, at the copies before SPOT's frame is set (`held₀`): `heldOf i it u` is `some`
 exactly where `heldOk i it u` holds (`heldOf_isSome`), since nothing `decided` reads is the frame (`decided_withFrame`).
 A form that refuses unless `heldOk` holds at the run of record's input and interior and the members' reference
-statements gets a held copy at every run it accepts, and with the run's population check `TwoHolds`
+statements gets a held copy at every run it accepts, and at an accepted run `TwoHolds`
 (`HeldOfRun.twoHolds_of_files`).
 
 ## What deciding it costs
@@ -17,9 +17,8 @@ statements gets a held copy at every run it accepts, and with the run's populati
 `decided` reads the descriptor's checks (`descCore`): the rule and count checks, the layout and the first stage's design
 (`Slots.layout`, `slotDesign`), a step per stratum (`designOk`), and per template its reference statement's reading
 (`templateOk`: parsing its circuit file, the session verifier's own parse) and its member's size class (`memberOk`, a
-closed form in the unit's descriptor); and `two`'s `membersScoped`, a step per template, and `wiringOk`, whose
-`sourcesNamed`, `wiresMove`, `returnedWhole`, `writtenUnwired` and `writtenRead` pass over every source or written bit
-of the members' programs.
+closed form in the unit's descriptor); and `two`'s `membersScoped`, a step per template, and `wiringOk`, each clause
+of which reads the circuit files and the registered wiring once per template, whatever the count of units.
 -/
 
 @[expose] public section
@@ -92,7 +91,7 @@ theorem heldOf_of_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} (u : Unread) 
 
 /-- **The form's check of the held copies**: `heldOk` at the members' reference statements on the blobs
 (`refStmtsOf`), with the registered copies `u` gives of the rest (its reference statements are not read); false where
-one is missing. With the run's population check it gives `TwoHolds` (`HeldOfRun.twoHolds_of_files`). -/
+one is missing. At an accepted run it gives `TwoHolds` (`HeldOfRun.twoHolds_of_files`). -/
 def heldOkDesc (p : VStar.Recursive.SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input)
     (it : Spot.Run.Interior) (u : Unread) : Bool :=
   match refStmtsOf p bs with

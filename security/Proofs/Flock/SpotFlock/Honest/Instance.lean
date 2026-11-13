@@ -22,6 +22,7 @@ What `SpotKSTwo` and `SpotExfilTwo` take of a registration, and what an accepted
 * `wiresFirst_held`, `heldWire_held`: there are no wires;
 * `heldLink_held`: each of `R`'s ports has a link, and every row its units read source bits at is one of them
   (`Ref.named`);
+* `popOk_held`: the boundary registration passes the run's population check at one unit;
 * `two_held`, `scope_held`: where every member's circuit is in the scope Flock's hidden-output proof covers and the
   registered wiring passes its check (`membersScoped`, `wiringOk`), the design evaluates, and every statement that
   decodes is in the two-stage scope at the compiled code;
@@ -31,8 +32,7 @@ What `SpotKSTwo` and `SpotExfilTwo` take of a registration, and what an accepted
 
 * `AddressesConnected` at the instance: it holds only where the first stage's record carries each linked port and the
   interior registers none (`CheckedRun.not_addresses_of_input`, `CheckedRun.not_addresses_of_readsInterior`).
-  `Honest.Sits` proves it from `R`'s reference reads being well formed and where the second stage puts a checked
-  proof block (`addressesConnected_of_sits`);
+  `Honest.Sits` proves it from `R`'s reference reads being well formed (`addressesConnected_held`);
 * an accepted run (`Accepts`): it needs a concrete `Ref`, a reference statement with hidden outputs and
   `sha512/row/v2` ports in the two-stage scope at two units a request, and an honest session of it. No such statement is
   defined in Lean yet.
@@ -88,15 +88,14 @@ theorem filesReplay_oneLayout (ms : Spot.Bits.Members) (ns : Array ℕ) (gs : �
     filesReplay ms ns (oneLayout gs) = filesReplay ms ns (oneLayout (0, 0)) := rfl
 
 /-- **A boundary registration of one unit, sampled `subset:1`**, with the facts the two-stage design reads of it: its
-population is one unit, its layout is one proof block and its first stage's design is `subset:1`, which Flock reads
-as a uniform `1`-subset with no closure map; and the names the boundary and interior registrations' records must name
-(`boundaryNames`, and `interiorPorts` for the interior record's ports, which registers no value). -/
+layout is one proof block and its first stage's design is `subset:1`, which Flock reads as a uniform `1`-subset with
+no closure map; and the names the boundary and interior registrations' records must name (`boundaryNames`, and
+`interiorPorts` for the interior record's ports, which registers no value). -/
 structure Bnd where
   g : Reg
   gs : ℕ × ℕ
   boundaryNames : Names
   interiorPorts : List String
-  units : Spot.Partition.units g.program g.query = .ok 1
   layout : Spot.Slots.layout g.program g.query = .ok (oneLayout gs)
   design : slotDesign g.rule g.program g.query g.table = .ok design1
   firstK : firstK g = some 1
@@ -202,6 +201,15 @@ theorem layout_held :
     (Spot.Slots.layout (held R B desc q c₀).reg.first.program (held R B desc q c₀).reg.first.query).toOption =
       some (oneLayout B.gs) := by
   show (Spot.Slots.layout B.g.program B.g.query).toOption = some (oneLayout B.gs)
+  rw [B.layout]
+  rfl
+
+/-- **The instance passes the run's population check at one unit** (`Slots.popOk`): its layout's population is the
+one proof block, unit `0`. -/
+theorem popOk_held :
+    Spot.Slots.popOk (held R B desc q c₀).reg.first.program (held R B desc q c₀).reg.first.query 1 = true := by
+  show Spot.Slots.popOk B.g.program B.g.query 1 = true
+  unfold Spot.Slots.popOk
   rw [B.layout]
   rfl
 
