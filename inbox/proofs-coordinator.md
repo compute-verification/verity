@@ -122483,3 +122483,44 @@ NEEDS: nothing.
 To post: nothing.
 
 Not mine, acted on none: between 05:14Z and 05:18Z, 19 of your timers (set from Thu 11:12Z on, the last fired Fri 05:04Z), the completion notices of GATHER and RUNCOINS, and one message of your Slack thread twice.
+
+## MEMBERS, Fri 13 Nov 05:28Z: READY line: #9441 at `51a2e803cb83e7d539c067dd50d119758e6a3e27`, holding `main` at `4a7291116e11`; every run at it passed, no record to commit; STOP RULE: no guarantee's own record moves; #9584's head is unchanged
+
+**READY: [#9441](https://github.com/compute-verification/verity/pull/9441), head `51a2e803cb83e7d539c067dd50d119758e6a3e27`, branch `cursor/proofs-members-files-61d4`.** Unmarked, no label [run: `gh pr view`, 05:24Z]; the mark is yours. Its body is rewritten for this head (`research queue edit`, between 05:26Z and 05:28Z) [run].
+
+What the head holds [run: `git merge-base`]: `main` at `4a7291116e118e0a0f8b72c558aadb58aad6b428`, merged once at 03:07Z, no conflict. `main` is now `9c4cecc797f0` (259 commits on) [run, 05:24Z]. I did not merge again (your rule: once, before the records run).
+
+Runs, all ended, all read after a fresh `research fetch --all` at 05:22Z [run]:
+
+- Records from Flock's verifier, `r20261113-031715-2b7f` (vy-nebius-cpu-5): outcome pass for `verity/protocols/flock/verifier`, the certifier's, `security`, `security/Proofs`, `security/Properties`; `regenerated: {}`.
+- Records from the spot verifier's package, `r20261113-031717-ea8d` (vy-nebius-cpu-5): outcome pass for `verity/protocols/spot/verifier/lean` and the same four; `regenerated: {}`.
+- Both ran at `1bb432a596a8`. The head's two commits after it change three `.py` files and no Lean [run: `git diff --stat 1bb432a596a8 51a2e803cb83`], so these are the head's records. Both are the slot path's (no kernel replay, no tests): not a Lean verdict.
+- Four suites at the head, `r20261113-033502-d582` (vy-nebius-cpu-1): `verity/protocols/spot/verifier/lean` 324 passed, 2 skipped; `verity/protocols/spot/verifier` 933 passed; `benchmarks/one_stage` 1046 passed; `verity/protocols/tests` 321 passed.
+- Root suite at the head, `r20261113-033544-7bf5` (vy-nebius-cpu-11): 386 passed.
+- In those, by name in the suites' records [run]: `test_members_twin.py`'s five rows (Lean's refusal and the Python's are the same text, the member with no statement among them); `test_members_run.py`'s 17; `test_audit_two_members.py::test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier`, which calls `members_run` with the default form [read: its line 221], so the executable's `ks-form` has answered `ok` on real files that must pass.
+
+No commit follows from the runs: neither regenerated a lock, and the audit's `reads` for `security` and `security/Properties` equal the committed locks' whole [run: compared the two reports' `reads` with `HEAD`'s locks].
+
+STOP RULE [run: the six locks at the head against `main`'s at `4a7291116e11`, compared as JSON]: nothing under `guarantees`, `deployed`, `trust`, `trust_gap`, `open` or `assumptions` differs in any lock. `security` and `security/Properties` differ in the `reads` groups `Flock.KsScope` (`filesOf` new) and `Spot.OneStageZk` (`membersRun`, `runMembers`, `stepMember` changed; five definitions new) and nowhere else; the other four locks are `main`'s. So no guarantee's own record moves. What a reviewer is rung for [run: the audit reports' `readers`]: under `security`, 6 guarantees read `Flock.KsScope` and 4 of them `Spot.OneStageZk`; under `security/Properties`, 26 and 29 (29 in all). Three are listed as deployed: `Flock.SecurityProofs.SampledKSLiveV3`, `SampledKSLiveV5`, `Verity.remote_soundness_of_subprotocols`. New since my last count: `main` brought `Verity.Sampled.remote_soundness_deployedReady` and its two forms as readers of both groups; the body names them now.
+
+Merges [run: `git merge-tree`, 05:24Z]:
+
+- With `main` at `9c4cecc797f0`: no conflict. Of this change's 11 files, `main` has changed one since `4a7291116e11`: `benchmarks/one_stage/tests/test_a5_case_v2.py`, in other lines (the challenger's label by name). Under the Lean packages these records read, `main` has changed one file since, `security/Proofs/Properties/Nci/LeafWidthsPart.lean`, which reads nothing of this change [derived: by its path, not built].
+- With #9584 at `ae80f367e6a2f4166fa5fbd3712e4402c1527332`: no conflict. **#9584's head is unchanged**; this merge moved none of its files.
+- With WINDOWAT's `cursor/proofs-windowat-undrawn-5e4b` at `338c4ad877ca` (it moved from `5d5c7183ca94`): no conflict. With its twin branch at `af8682dc824e`: one conflict, the second paragraph of `test_members_twin.py`'s module docstring; keep both.
+- With FIRSTACCEPT's `9049e2c572ec`: three conflicts, `benchmarks/one_stage/composite.py`, its `tests/test_composite.py` and `verity/protocols/spot/verifier/lean/tests/test_difftest.py`. All three are its conflicts with `main` at `4a7291116e11` alone [run]; none is new with this change.
+
+Not established:
+
+- Nothing ran at a tree that holds `main` past `4a7291116e11`. The merge with today's `main` is clean as text; that its suites pass there is the candidate's check.
+- The kernel replay of the changed Lean: the records runs skip it. `verity lean try` at `0429a81f9848` gave each theorem's axioms, the three only [run then: `r20261112-104920-0a26`, `r20261112-110340-92ce`]; the candidate's records run is the verdict.
+- The Python does not answer two of Lean's file checks (`ProvedScope.circuitRules` on a circuit that parses, `PortRoots.checkOf`); its docstring and the body say so. Neither side accepts in that case, since the form refuses whatever the sessions say.
+- A member the sample misses whose real files pass has no fixture; it has run only through `runMembers` in a scratch harness, at an earlier head.
+
+Your 05:07Z on `FormApart`: read. I add nothing; when the lift reads `FormApart` I take WINDOWAT's lemma by name. The lift is not started.
+
+Machine: this turn began on a new machine (no worktrees, no run copies); everything I needed was pushed or in the notes. `~/wt/.pen` did not exist; this loop made it. My one timer of 04:22Z is no longer listed; I hold none.
+
+Next, in this turn: the one-parse change (`cursor/proofs-members-oneparse-7b3e`, `daff2170a160`, already holding this head): its records and suites remotely, then its pull request, unmarked. Then circuits' question on CIR-271, by 16:00Z.
+
+Pushed: `cursor/proofs-members-files-61d4` `51a2e803cb83e7d539c067dd50d119758e6a3e27`; `cursor/proofs-members-oneparse-7b3e` `daff2170a160ab10f394c3588d796d3a2bfcdcca`. Unpushed: nothing.
