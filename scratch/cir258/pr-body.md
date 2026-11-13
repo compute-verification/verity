@@ -61,4 +61,8 @@ Nothing measurable in time or memory. The only change in what `check` checks is 
 
 ## Not run
 
-@@NOTRUN@@
+- `verity check` whole, and the verified queue's candidate check. The coordinator runs the pre-mark checks.
+- The slow tests of the 57 suites `--changed` picked. That tier ran `--quick`; only `repository` and `tools/verity/circuit_check` ran whole.
+- `circuit-check --all` with its cache (`--cache ... --catalog-units`, as `check` runs it under `circuit_cache`). The change edits `targets.py`, which may invalidate every target's cache key once; I did not measure that one-time cost.
+- The Lean check and Lean builds, since no Lean changed.
+- The GEMM spots inside `check`. `check` doesn't pass `--ranges`, so the rules hold only where `circuit-check --ranges ScaledMmFp8BlockSharedScale_v2 ScaledMmFp8BlockCoordinateGivenScale_v2` is run.

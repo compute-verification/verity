@@ -1,1 +1,1 @@
-2026-11-13T02:00Z GEMMCALL: head suites r20261112-232130-c3ca passed (57 changed suites + repository + circuit_check whole); circuit_check whole was 2203 s vs 397 s at base on another machine, so an ABA run r20261113-015932-d77d compares them in one slot
+2026-11-13T03:28Z GEMMCALL: ABA run shows circuit_check suite 1833 s at head vs 400 s at base on one machine; cause looks like no catalog record counting for an edited targets.py; control job scratch/cir258/records.sh next
