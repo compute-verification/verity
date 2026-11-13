@@ -463,8 +463,6 @@
     {"file": "verity_vllm/properties/census.py", "kind": "assignment", "symbol": "reconciliation_markdown", "detail": ""},
     {"file": "verity_vllm/properties/census.py", "kind": "attr-defined", "symbol": "run_census.profiled_run", "detail": ""},
     {"file": "verity_vllm/properties/noninterference.py", "kind": "union-attr", "symbol": "run_observer_variant.HashOnlyCapture._flush_snapshots", "detail": ""},
-    {"file": "verity_vllm/properties/noninterference_families.py", "kind": "attr-defined", "symbol": "parallel_residual_boundaries", "detail": "", "count": 2},
-    {"file": "verity_vllm/properties/noninterference_families.py", "kind": "attr-defined", "symbol": "unfused_norm_boundaries", "detail": "", "count": 2},
     {"file": "verity_vllm/properties/noninterference_families.py", "kind": "union-attr", "symbol": "unfused_norm_boundaries", "detail": ""},
     {"file": "verity_vllm/protocols/pous.py", "kind": "arg-type", "symbol": "_package", "detail": ""},
     {"file": "verity_vllm/protocols/pous.py", "kind": "union-attr", "symbol": "PousOption.leg", "detail": "", "count": 2},
