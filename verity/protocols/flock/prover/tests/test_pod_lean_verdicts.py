@@ -1,4 +1,4 @@
-"""The pod jobs' Lean step fails closed (`verity/protocols/flock/pod/lean_verdicts.py`, which 85-rec-reprice.sh and 86-zk-cpu-steps.sh
+"""The pod jobs' Lean step fails closed (`verity/protocols/flock/prover/pod/lean_verdicts.py`, which 85-rec-reprice.sh and 86-zk-cpu-steps.sh
 run after their parallel `verify` lines): a part passes on its exit and its log's VERDICT together, a forgery only when Lean
 refuses it, and a part that never ran, or no part at all, fails the step."""
 from __future__ import annotations
@@ -12,7 +12,7 @@ import pytest
 from verity.protocols.spot.device import challenger as C
 from verity_flock import rec_compose as RC
 
-POD = Path(__file__).resolve().parents[2] / "pod"
+POD = Path(__file__).resolve().parents[1] / "pod"
 sys.path.insert(0, str(POD))
 import lean_verdicts as LV  # noqa: E402
 

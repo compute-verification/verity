@@ -65,9 +65,9 @@ from inputs import EPILOGUE, I, K_MAX, KEY, S8_STEP, block_k_log, cap, observati
 
 from verity.protocols import reporting
 from verity.protocols.spot.verifier.profile import WINDOW_DELTA
-from verity.protocols.spot.costfit import Fitted, fit
+from verity.protocols.spot.prover.costfit import Fitted, fit
 from verity.protocols.spot.verifier.one_stage.partition import UNIT_CLASS_MAX
-from verity.protocols.spot.optimize import (PROVING_ONLY, Candidate, CostModel, Grain,
+from verity.protocols.spot.prover.optimize import (PROVING_ONLY, Candidate, CostModel, Grain,
                                                            Objective, ReplayGrain, for_target, grain_costs, leak_count,
                                                            loc_bits, met_replay, row_ands, sqrt_grain)
 
