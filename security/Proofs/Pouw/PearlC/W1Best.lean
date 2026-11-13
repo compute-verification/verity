@@ -1,14 +1,18 @@
 module
 
+public import Proofs.Pouw.Prob
 public import Proofs.Pouw.PearlC.TTOutW1
 public import Definitions.Assumptions.PearlC
 
 /-!
-# TT_OUT along a simulation, and W1's unpriced resources at the adversary's best case
+# TT_OUT along a domination, and W1's unpriced resources at the adversary's best case
 
-* **A simulation carries TT_OUT down** (`Pouw.PearlC.ttOutTile_of_simulatedBy`): if `CM'` simulates `CM`
-  (`CostModel.SimulatedBy`), every adversary of `CM` is one of `CM'` with the same transcript within the same bounds,
-  so TT_OUT per tile at `CM'` is TT_OUT per tile at `CM`.
+* **A domination carries TT_OUT down** (`Pouw.PearlC.ttOutTile_of_dominatedBy`): if `CM'` dominates `CM` on the tiles
+  (`CostModel.DominatedBy`), every adversary of `CM` has one of `CM'` within the same bounds whose good tiles earn no
+  less, so TT_OUT per tile at `CM'` is TT_OUT per tile at `CM`.
+* **A simulation is a domination** (`CostModel.dominatedBy_of_simulatedBy`): a program of `CM'` with the same run at no
+  more cost and calls (`CostModel.SimulatedBy`) commits the same good tiles. `ttOutTile_of_simulatedBy` is the
+  transfer along it.
 * **A compression and a first fetch at 0 is the best case** (`W1.w1Priced_s8H100_simulatedBy_best`): the run's memory
   and its fetched words never read a price, and its cost only grows with each, so at any `sha, fetch ≥ 0`
   `W1Device.s8H100 sha fetch` is simulated by `W1Device.s8H100Best`, each program by itself.
@@ -22,23 +26,42 @@ namespace Pouw.PearlC
 
 variable {Q R S : Type}
 
-/-- **TT_OUT per tile moves along a simulation**: at `CM`, given `CM.Queries` and a simulation of `CM` by `CM'`, from
-TT_OUT per tile at `CM'`. -/
+/-- **TT_OUT per tile moves along a domination**: at `CM`, given `CM.Queries` and a domination of `CM` by `CM'` on the
+tiles, from TT_OUT per tile at `CM'`. -/
+theorem ttOutTile_of_dominatedBy [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM CM' : CostModel Q R S}
+    {P : Protocol Q R S} {TR : TileRules Q R S} {D : Layout → Prop} {g₀ : ℝ} {δ : ℕ → ℕ → ℝ}
+    (hQ : CM.Queries) (hD : CM.DominatedBy P TR D CM') (h : Assumptions.TTOutTile CM' P TR D g₀ δ) :
+    Assumptions.TTOutTile CM P TR D g₀ δ := by
+  refine ⟨hQ, fun U hU T hT q hq A hA => ?_⟩
+  obtain ⟨p, hp⟩ := hD U hU A
+  let A' : Adversary CM' := ⟨A.pre, p, A.act⟩
+  have hB : A'.Bounded U T q := fun H s =>
+    ⟨(hp H s).1.trans (hA H s).1, (Nat.add_le_add_left (hp H s).2.1 _).trans (hA H s).2⟩
+  refine (pr_mono fun x hx => ?_).trans (h.2 U hU T hT q hq A' hB)
+  exact hx.trans_le (hp x.1 x.2).2.2
+
+/-- **`CM'` simulates `CM`**: every program of `CM` has a program of `CM'`, fixed before the oracle and the salt, with the
+same run at no more cost and no more oracle calls on every oracle, workload, activation input, state and salt. -/
+def CostModel.SimulatedBy (CM CM' : CostModel Q R S) : Prop :=
+  ∀ p : CM.Prog, ∃ p' : CM'.Prog, ∀ (H : Q → R) (U : Workload) (act : ℕ → Codes) (σ : State) (s : S),
+    CM'.run p' H U act σ s = CM.run p H U act σ s ∧ CM'.cost p' H U act σ s ≤ CM.cost p H U act σ s ∧
+      CM'.calls p' H U act σ s ≤ CM.calls p H U act σ s
+
+/-- A simulation is a domination on any tiles: the simulating program commits the same transcript. -/
+theorem CostModel.dominatedBy_of_simulatedBy {CM CM' : CostModel Q R S} (P : Protocol Q R S) (TR : TileRules Q R S)
+    (D : Layout → Prop) (h : CM.SimulatedBy CM') : CM.DominatedBy P TR D CM' := by
+  intro U _ A
+  obtain ⟨p, hp⟩ := h A.online
+  refine ⟨p, fun H s => ⟨(hp H U A.act (A.pre.eval H) s).2.1, (hp H U A.act (A.pre.eval H) s).2.2, ?_⟩⟩
+  rw [(hp H U A.act (A.pre.eval H) s).1]
+  exact le_rfl
+
+/-- **TT_OUT per tile moves along a simulation**: `ttOutTile_of_dominatedBy` at `dominatedBy_of_simulatedBy`. -/
 theorem ttOutTile_of_simulatedBy [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM CM' : CostModel Q R S}
     {P : Protocol Q R S} {TR : TileRules Q R S} {D : Layout → Prop} {g₀ : ℝ} {δ : ℕ → ℕ → ℝ}
     (hQ : CM.Queries) (hS : CM.SimulatedBy CM') (h : Assumptions.TTOutTile CM' P TR D g₀ δ) :
-    Assumptions.TTOutTile CM P TR D g₀ δ := by
-  refine ⟨hQ, fun U hU T hT q hq A hA => ?_⟩
-  obtain ⟨p, hp⟩ := hS A.online
-  let A' : Adversary CM' := ⟨A.pre, p, A.act⟩
-  have hrun : ∀ (H : Q → R) (s : S), A'.transcript U H s = A.transcript U H s :=
-    fun H s => (hp H U A.act (A.pre.eval H) s).1
-  have hB : A'.Bounded U T q := fun H s =>
-    ⟨(hp H U A.act (A.pre.eval H) s).2.1.trans (hA H s).1,
-      (Nat.add_le_add_left (hp H U A.act (A.pre.eval H) s).2.2 _).trans (hA H s).2⟩
-  have key := h.2 U hU T hT q hq A' hB
-  simp only [hrun] at key
-  exact key
+    Assumptions.TTOutTile CM P TR D g₀ δ :=
+  ttOutTile_of_dominatedBy hQ (CostModel.dominatedBy_of_simulatedBy P TR D hS) h
 
 end Pouw.PearlC
 

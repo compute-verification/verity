@@ -167,9 +167,9 @@ reads. Proved:
   `TTOutPearlCH100Rev1`, g = 69533/10736000 (0.648%) on the model's four linears in one layout, which is `down`'s
   (n = 2048, K = 8192); as an advantage, ε = g/(1 − g) = 69533/10666467 (0.652%). This is the assumption's gap alone:
   sampling's ε_s at δ_s multiplies in as (1 + ε)/(1 − ε_s), and the assumption's own δ adds. Its sampled form is
-  listed over the two named assumptions TT_OUT at the H100 splits into (`security/Definitions/Assumptions/PearlC.lean`):
-  `Pouw.SecurityProofs.PearlC.SampledH100Rev1S8Llama32_1b` (and `…S8_8192` at 8192³), under `w1-complete-h100` (the
-  card's cost model is simulated by W1 on the H100 with INT8, at zero SHA-512 and fetch prices) and the conjecture
+  listed over two named assumptions that together imply TT_OUT at the H100 (`security/Definitions/Assumptions/PearlC.lean`):
+  `Pouw.SecurityProofs.PearlC.SampledH100Rev1S8Llama32_1b` (and `…S8_8192` at 8192³), under `w1-complete-h100` (W1 on
+  the H100 with INT8, at zero SHA-512 and fetch prices, earns every adversary's good-tile credit at no more cost) and the conjecture
   `tt-out-tile-pearl-c-h100-rev1` (TT_OUT per audit tile over that W1 setting, whose falsification test is
   `benchmarks/pouw/tests/test_tt_out_tile_h100_rev1.py`).
 - **The audit game:** `Pouw.SecurityProofs.EndToEnd` and `Pouw.SecurityProofs.GapFromTT`, through two lemmas in
