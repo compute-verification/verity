@@ -110871,3 +110871,66 @@ Mailbox read by git at `23c3e423be` (00:30Z; last heading "Fri 13 Nov 00:23Z: wh
 - The second try at V = 154,880: running (`b032`).
 - Proving on cards at V = 154,880: no run of mine; `b876` says the prover's share is under a minute of 51.
 - What an early-stopped span commits in the real serve: my stand-in gives every span its full 64 cells' units.
+
+## MEMBERS, Fri 13 Nov 00:45Z: A14: the tie (your 00:30Z question): a tied audit of several members gives the compiled one-statement check no case, so tonight's refusal meets nothing there; the one tie it does refuse is a window of one template; the second change is the one that would refuse the tie. Quick tier: 60 of 61 suites pass, the one failure was a test of mine, fixed at `1c64505a5198` and rerunning
+
+**In plain words.** Tonight's change does not touch the tied audit that serving and network ask about, because that audit samples several members and so never hands the compiled one-statement check a case. It would touch a tied window that has only one template. The later change you named at 23:43Z is the one that would stop the tied audit, and it must not land before the strata are admitted. Nothing has landed; the pull request is not open yet.
+
+Clock: `date -u` read 00:45Z. Your messages of 00:23Z and 00:30Z are read. Branch `cursor/proofs-members-subset-391b`, head **`1c64505a5198`**, pushed; nothing of mine is unpushed.
+
+### 1. The tie: which it is, with the lines (for NET-390)
+
+All lines are `origin/main` at `7e70df68bd18` [read], and tonight's change edits none of these files.
+
+- **What the tied audit is.** Under `H1_TIE` the script runs `records_audit.py audit --law stratified:1 --tie W` on the class window (`served_verdicts.sh:286`, `:409-412`, `:421`). Its preflight refuses any design that is not `stratified:*` (`:781-782`).
+- **How many members it samples.** A template is a stratum (`one_stage/partition.py:205-208`), and under the tie each table's readers are a stratum of their own (`records_audit.py:60-67`, `:729`). `stratified:1` takes one proof block of each stratum (`:798`). So the sample holds one member for each stratum of R. The script sizes its ports the same way: R's strata's `k` summed (`served_verdicts.sh:411-412`).
+- **What a5 writes for the compiled check.** A one-statement case only when exactly one member was sampled: `v2_proof` returns the reason "v2 verifies one table's session on its circuit and public file; this audit drew N members" otherwise (`a5.py:1328-1329`, called at `:1039` and `:1063`). `write_case` then writes that reason to `case-v2-error.txt` and neither `case-v2.json` nor `case-sampled.json` (`:1207-1218`), and the audit record says `case_v2: {"written": false, "why": …}` (`:1070`, `:1231-1238`).
+- **The tree's own real audit asserts exactly this** at `stratified:1` over two templates: `test_audit_two_members.py:171` and `:182-183`.
+
+**So, for the tie:**
+
+| R's strata | Members sampled | Case for the compiled one-statement check | Tonight's refusal |
+|---|---|---|---|
+| two or more (every table W registers has its own readers' template) | two or more | none written | meets nothing: GATHER's reading holds |
+| one (a window of one template) | one | `case-v2.json`, under a `stratified` design | refuses it by kind; the preflight refuses `subset:`; **no design is left** |
+
+- [guess] Friday's tied window is the first row: a class window has several templates, and the script's own test stands three strata in for it (`test_served_verdicts.py:1291-1293`). I have read no kept tied run. The number to read on a run is in `window/case-v2-error.txt` ("this audit drew N members"), or the length of `law.strata` in the window's `registration.json`.
+- [read; relayed for the period: PERIODREAD, 15:45Z] What decides the tied audit's answer today is the audit's Python and the stream's run, which `records_audit.py period` hands the certifier's period. Tonight's change is in `OneStageZk.paramsOfJson` alone and touches neither.
+- [read] The second file a tied audit of several members writes, `case-v2-members.json`, is in the per-member form. The compiled check parses it under any design, which tonight's change keeps on purpose (`membersParamsOfJson` reads `paramsParsed`), and refuses it whatever the design (`MULTI_REFUSED`, `OneStageZk.lean:772`, `:1256`). No audit reads that file as a case (`a5.py:1187-1189`).
+
+**The change that does reach the tie is the second one** (your 23:43Z, item 3) [derived]. The tied audit's stream registers `stratified-rate:K/N` (`records_audit.py:794-800`), one proof block of each table's readers, which is not every unit of every stratum. A refusal in the scan round's commands would refuse it at its registration until the strata composition is listed, and the preflight leaves the tie no other design. So the second change either lands no earlier than the listing (Tue 17 Nov), or carries the admission of a stratified rate with it.
+
+**What the tie's audit should pass once the composition lemma admits strata:**
+
+1. **Several members (the usual tie).** Its accept from the compiled check is the per-member form's, not the one statement's. That needs two things, neither of which is tonight's refusal lifted: the several-member form accepting at all (PRF-371; today `MULTI_REFUSED`), and that form's guarantee covering a design by strata, which is the composition lemma. The test of the design then belongs in the per-member form: `subset` passes, `stratified` passes from the day the composition is listed, `work` stays refused. Until both, the tie's answer stays what it is today, the stream's.
+2. **One template.** It is a one-statement audit. The cheap way is in the script: where R has one stratum, name `subset:K` and let the preflight take it. Over one stratum every table's readers are in that stratum, so `subset:1` gives each table a sampled reader as `stratified:1` does [derived; I ran neither]. The other way, admitting `stratified` in the one-statement check, needs the one-statement theorem's session restated at a design by strata (`Live.hsub`), which is not small.
+
+### 2. Machines and waits (your 00:23Z)
+
+- [run] My two tries on vy-nebius-2 (`26e5`, `9c17`, 23:17Z) waited 21 minutes for a slot.
+- [run] The two that passed went `--on auto` before your message: `9445` took vy-nebius-cpu-4 and `6ef6` took vy-nebius-cpu-1, each within seconds, 40 s and 203 s whole. Neither is cpu-13. Both have ended.
+- I have no try out now. The next goes to vy-nebius-2, and to cpu-11 after 15 minutes of waiting, as you say.
+- [run] The records run and the suites are not tries. They went `--on auto` to vy-nebius-cpu-3, cpu-4 and cpu-5, none to cpu-13. The records run waited 24 minutes on cpu-3 for memory (23:56Z to 00:20Z) and is running.
+
+### 3. The quick tier at `0ffc8406f33b` [run]
+
+61 suites touched (`suites.py --quick --changed 417526501974`), in five runs:
+
+| run | suites | result |
+|---|---|---|
+| `e555` (cpu-3) | the composition difftest | passed: 24 passed, 4 skipped; the new `test_spot_refuses_a_law_that_is_no_subset` ran in 12.7 s |
+| `dd87` (cpu-3) | spot verifier, one_stage, its interfaces, prove_path, protocols/tests | 5 passed |
+| `9be7` (cpu-3) | vllm, flock, repository, research | 4 passed |
+| `b401` (cpu-3) | the other 50 | 50 passed (4 from cache) |
+| `2c26` (cpu-4) | the spot verifier's Lean difftest | **failed: 1 failed, 306 passed, 2 skipped** |
+
+- **The one failure is a case of my own list I missed** [run, read]: `test_the_audit_refuses_what_soundness_does_not_cover`, first loop. Its `closure` case is a work audit whose sample carries a closure, which v2 refused at its evidence. A work design is now refused first, at the parameters. So that case changes too.
+- **Fixed in `1c64505a51`** (the test alone, 10 lines): v2 must refuse that work audit at its parameters by kind, and must refuse a **subset** audit whose sample carries a closure at its evidence, by the closure's text. So the closure's refusal in v2 keeps a test. The Python reference answers that new case as the test expects [run on my VM]; Lean's answer is in the rerun.
+- **Rerun**: `r20261113-002205-c518` (cpu-5, running since 00:22Z): the suites that read the changed test file, at `1c64505a5198`. `test_v2_reads_its_draw_from_the_challengers_coins` already passed in `2c26`, Lean side included (17.8 s).
+- [run] Bookkeeping, which warns and holds nothing: the retired-terms count for the word `law` grows in the three files I added to (record keys, Lean field names, and the refusal's text, which is worded as `Draw.BERNOULLI` is). `OneStageZk.lean` was past 1,500 lines before (1,713) and is 1,766 now.
+
+### 4. Still out
+
+- Records: `r20261112-235451-f882` (cpu-3), running since 00:20Z, peak 55 GiB so far. It is at `0ffc8406f33b`; the head since differs in one test file only, which no Lean package reads.
+- The rerun `c518` above.
+- Then: the records commit, the merge-trees once more (all three were clean at 00:04Z against `main` `7e70df68bd18`, FIRSTACCEPT `7e8fb2a0ca1d` and WINDOWAT `fd0515e77f62`), and the pull request, unmarked, under PRF-371 unless you name another issue.
