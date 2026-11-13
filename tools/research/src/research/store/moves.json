@@ -2308,6 +2308,12 @@
         "verity/protocols/spot/optimize.py": "verity/protocols/spot/prover/optimize.py",
         "verity/protocols/spot/plancheck.py": "verity/protocols/spot/prover/plancheck.py"
       }
+    },
+    {
+      "paths": {
+        "verity/difftest/": "tools/difftest/",
+        "verity/difftest/lean/": "verity/circuits/difftest/"
+      }
     }
   ]
 }
