@@ -42,7 +42,10 @@ from .remote import ConfigError, Remote, config_path, load_remote
 from .remote_s3 import is_md5_etag
 
 DEFAULT_ROOT = Path.home() / ".research" / "store"
-REPLICA_MAP = Path("fixtures") / "artifacts.json"
+REPLICA_MAP = Path("fixtures/artifacts.json")
+#: each place a tree may hold the registry, the first it holds taken: a `research run` puts the launcher's research ahead of
+#: the tree's, so a tree read by an older or newer research may hold it at the place the other doesn't name
+REPLICA_MAPS = (REPLICA_MAP, Path("artifacts.json"))
 SNAPSHOT_KIND = "dataset-snapshot/v1"
 VERIFY_HEAD, VERIFY_READBACK = "etag-md5", "sha256-readback"     # what a replica record's `verified` says was checked
 VERIFY_MULTIPART = "etag-multipart"                              # ... a > 5 GiB blob: the service's multipart ETag == the one the local parts yield
@@ -76,9 +79,14 @@ def store_root(explicit: str | os.PathLike[str] | None = None) -> Path:
     return Path(os.environ.get("RESEARCH_STORE", DEFAULT_ROOT)).expanduser()
 
 
+def replica_map_file(repo: Path) -> Path:
+    """``repo``'s registry file: the first of `REPLICA_MAPS` it holds, else `REPLICA_MAP` under it."""
+    return next((repo / p for p in REPLICA_MAPS if (repo / p).is_file()), repo / REPLICA_MAP)
+
+
 def find_repo(start: Path | None = None) -> Path | None:
-    """`$RESEARCH_REPO`, else the nearest ancestor of cwd holding `fixtures/artifacts.json`; None when there is none, or no cwd
-    (a run's source tree removed under it)."""
+    """`$RESEARCH_REPO`, else the nearest ancestor of cwd holding the registry (`replica_map_file`); None when there is none,
+    or no cwd (a run's source tree removed under it)."""
     if os.environ.get("RESEARCH_REPO"):
         return Path(os.environ["RESEARCH_REPO"]).expanduser()
     try:
@@ -87,7 +95,7 @@ def find_repo(start: Path | None = None) -> Path | None:
         _warn(f"no working directory ({e}): it was removed, so no repository is found from it")
         return None
     for d in (p, *p.parents):
-        if (d / REPLICA_MAP).is_file():
+        if replica_map_file(d).is_file():
             return d
     return None
 
@@ -255,15 +263,16 @@ class LocalStore:
         return self._repo
 
     def replica_map(self) -> dict[str, str]:
-        """`<repo>/fixtures/artifacts.json`: art id -> repo-relative path of the payload (a file, or a tree's directory)."""
+        """The repository's registry (`replica_map_file`): art id -> repo-relative path of the payload (a file, or a tree's
+        directory)."""
         if self._map is None:
             self._map = {}
-            if self.repo and (self.repo / REPLICA_MAP).is_file():
+            if self.repo and (p := replica_map_file(self.repo)).is_file():
                 try:
-                    doc = json.loads((self.repo / REPLICA_MAP).read_text(encoding="utf-8"))
+                    doc = json.loads(p.read_text(encoding="utf-8"))
                     self._map = {k: v for k, v in doc.items() if ids.is_art(k) and isinstance(v, str)} if isinstance(doc, dict) else {}
                 except (OSError, json.JSONDecodeError) as e:
-                    _warn(f"ignoring unreadable replica map {self.repo / REPLICA_MAP}: {e}")
+                    _warn(f"ignoring unreadable replica map {p}: {e}")
         return self._map
 
     def object_path(self, hex_: str) -> Path:
