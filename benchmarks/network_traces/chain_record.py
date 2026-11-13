@@ -968,7 +968,7 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
     (``cert``'s rows) and N2 registered, under N2's own registration (``n2``: the honest member's digest by execution
     phase), and its
     audits must be this report's ``--audit`` registrations (``audits``). The case's parameters and evidence are outside
-    that digest: its link and certifier session must be ``cert``'s and its listed keys ``cert``'s key alone, and
+    that digest: its link must be ``cert``'s and its listed keys and sessions ``cert``'s key and session alone, and
     `block_entry` re-decides the case. The rows form's link-windows are the scan's registrations, which no step here
     holds, so that form is refused."""
     from verity.protocols.spot.verifier.one_stage import registration as R
@@ -983,7 +983,8 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
         return "the case isn't the answer's: its commitment's digest is another"
     if "sync_set" not in params:
         return "a rows-form answer: its link-windows are the scan's registrations, which this chain doesn't hold"
-    mine = {"link": cert.get("link"), "session": cert.get("session"), "keys": [(cert.get("key") or {}).get("public")]}
+    mine = {"link": cert.get("link"), "sessions": [cert.get("session")],
+            "keys": [(cert.get("key") or {}).get("public")]}
     other = [k for k, v in mine.items() if params.get(k) != v]
     if other:
         return f"the case's {', '.join(other)}: not the chain's, so another certifier session's period"
