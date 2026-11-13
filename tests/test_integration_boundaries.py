@@ -46,10 +46,8 @@ KNOWN = {
     ("verity/protocols/flock/sigma/tests/test_sigma_difftest.py", "verity.definitions.registry"),
     ("verity/protocols/flock/sigma/tests/test_sigma_difftest.py", "verity.definitions.registry.catalog"),
     ("verity/protocols/flock/sigma/tests/test_sigma_difftest.py", "verity.definitions.replay"),
-    ("verity/definitions/tests/test_catalog.py", "verity.definitions.registry"),
     ("verity/protocols/flock/prover/python/verity_flock/boolean_export.py", "verity.definitions.encoding"),
     ("verity/protocols/flock/prover/python/verity_flock/boolean_export.py", "verity.definitions.registry"),
-    ("verity/protocols/flock/prover/python/verity_flock/boolean_export.py", "verity.definitions.word"),
     ("verity/protocols/flock/prover/python/verity_flock/class_statement.py", "verity.definitions.encoding"),
     ("verity/protocols/flock/prover/python/verity_flock/ir_lower.py", "verity.definitions.numerics"),
     ("verity/protocols/flock/prover/python/verity_flock/ir_lower.py", "verity.definitions.registry"),
@@ -68,7 +66,6 @@ KNOWN = {
     ("verity/protocols/flock/prover/tests/test_class_statement.py", "verity.definitions.registry"),
     ("verity/protocols/flock/prover/tests/test_derive.py", "verity.definitions.registry.prims"),
     ("verity/protocols/flock/prover/tests/test_flock_rows.py", "verity.definitions.registry.prims"),
-    ("verity/protocols/flock/prover/tests/test_ir_lowering.py", "verity.definitions.registry"),
     ("verity/protocols/flock/prover/tests/test_ir_lowering.py", "verity.definitions.registry.prims"),
     ("verity/protocols/flock/prover/tests/test_ir_lowering.py", "verity.definitions.registry.sampling"),
     ("verity/protocols/flock/prover/tests/test_ir_sampling.py", "verity.definitions.registry"),
@@ -78,6 +75,38 @@ KNOWN = {
     ("verity/protocols/flock/prover/tests/test_stage_typed.py", "verity.definitions.registry.prims"),
     ("verity/protocols/flock/prover/tests/test_topp_word.py", "verity.definitions.registry"),
     ("verity/protocols/flock/prover/tests/test_typed_statement.py", "verity.definitions.registry.prims"),
+    # Listed ahead of the served circuits' move into the vLLM adapter, which makes each of these an integration's import;
+    # each group says whose it is to remove.  circuits': the proof-block cut is handed the catalog, and core's tests take
+    # what they check from `verity`.
+    ("verity/definitions/call_scope.py", "verity.definitions.registry.catalog"),
+    ("verity/circuits/tests/test_codec.py", "verity.definitions.registry.io_shell"),
+    ("verity/circuits/tests/test_part_log.py", "verity.definitions.registry.dsa_topk_mask"),
+    ("verity/circuits/tests/test_part_log.py", "verity.definitions.registry.prims"),
+    ("verity/definitions/requirement/tests/test_requirement_difftest.py", "verity.definitions.registry"),
+    # proofs': Flock's prover is handed the served circuits, and spot's, Flock's and PoUW's tests take theirs from `verity`.
+    ("verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py", "verity.definitions.numerics"),
+    ("verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py", "verity.definitions.numerics.rows"),
+    ("verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py", "verity.definitions.registry"),
+    ("verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py", "verity.definitions.registry.act"),
+    ("verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py", "verity.definitions.registry.attention_vocab"),
+    ("verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py", "verity.definitions.registry.b1"),
+    ("verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py", "verity.definitions.registry.cuda_rmsnorm"),
+    ("verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py", "verity.definitions.registry.dead_free"),
+    ("verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py", "verity.definitions.registry.moe"),
+    ("verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py", "verity.definitions.registry.sampling"),
+    ("verity/protocols/flock/prover/tests/test_fmaxf_commit.py", "verity.definitions.registry"),
+    ("verity/protocols/flock/prover/tests/test_ir_lowering_bench.py", "verity.definitions.registry"),
+    ("verity/protocols/flock/prover/tests/test_ir_lowering_bench.py", "verity.definitions.registry.prims"),
+    ("verity/protocols/flock/prover/tests/test_rolled_lowering.py", "verity.definitions.registry"),
+    ("verity/protocols/flock/prover/tests/test_tmpl_statement.py", "verity.definitions.registry"),
+    ("verity/protocols/flock/prover/tests/test_unit_range.py", "verity.definitions.registry"),
+    ("verity/protocols/pouw/verifier/tests/test_pearl_c_tile.py", "verity.definitions.registry"),
+    ("verity/protocols/spot/verifier/lean/tests/test_difftest.py", "verity.definitions.registry.catalog"),
+    ("verity/protocols/spot/verifier/tests/test_proofs.py", "verity.definitions.registry.catalog"),
+    # network-accounting's: the certifier's tests take the sampling Definitions from `verity`.
+    ("verity/protocols/certifier/verifier/network/tests/period_case.py", "verity.definitions.registry.sampling"),
+    ("verity/protocols/certifier/verifier/network/tests/test_slot_entry_pins.py", "verity.definitions.registry"),
+    ("verity/protocols/certifier/verifier/tests/test_network_certifier_response_tie.py", "verity.definitions.registry"),
 }
 
 
