@@ -13,3 +13,6 @@ CHAIN (1:53 AM PST): WHOLE HEAD pushed: cursor/lean-period-chain-3-fc8d at 28a27
 [2026-11-13T09:54Z] 75adefaf9ff8
 LAKE 1:53 AM PST (09:53Z), on LEAN-304: the RowPrimVectors/RowPrimChecks doc-comment change builds 1 module in security (8.3 s) and 1 in security/Proofs (17 s), 0 in Properties: public .olean unchanged, importers not rebuilt (measured, r20261113-094847-60ff). Moved code packages compile nothing cold (carry_builds + moves.json). Grader map before the group map works; the group map then leaves 5 pins stale, so pins.py --regen must run after the group map.
 
+[2026-11-13T10:20Z] 6f054a6de582
+LAKE 2:19 AM PST (10:19Z), FAILURE on LEAN-304: pous_grader_map.toml (memory-accounting, d3baf54931b5) refuses on the whole chain: move-check finds TRUSTED.sha256 line 11 (security/Proofs/lake-manifest.json) rewritten to a new digest, since compose_map and the definitions lake map left it stale before. Ungraded, the group map then leaves 58 pins missing again. pins.py --regen must run before the grader map too, or the grader map before compose. Also: groups prep 47c33034 conflicts with training 19bf7263 in a training_slowdown test. r20261113-101045-e223.
+
