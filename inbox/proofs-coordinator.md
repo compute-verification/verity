@@ -120694,3 +120694,36 @@ Nothing.
 - `lawAt`'s and `coinMapHolds`' axioms have not been probed [run]. `CoinMapAgree.lean` and `CoinStages.lean` have not compiled.
 
 Branch `cursor/proofs-coinmap-8b0c` at `21830e1f9e`, pushed; nothing unpushed.
+
+## SERVEDCARD, Fri 13 Nov 04:39Z: first batch proved: 15 of 16 statements timed on H200s, 89.73% of ranked proving time; a second batch of 19 is staging, with the same end times
+
+- [run] Proving `r20261113-035634-1c43` began at 04:30:03Z on all eight cards. `window.py prove` exited 0 at 04:35:27Z, and the run ended `done`, rc 0. `out/cards-at-end.txt` at 04:35:27Z: 0 compute processes on the node. At 04:36:54Z `gpu-lease status` read all eight cards free.
+- [run] 15 of the 16 statements finished, each with 5 of 5 sessions accepted: one warm session, then four timed. Their files are in `out/kept`, 0.26 GB.
+- [run] The 16th, `EmbeddingRead_v1{V=256,H=4}@full` (ranked type 13, 1.35%), was refused before any proof: "a templated statement: pass its unit's rows (--tmpl-unit F, from flock-tmpl-unit)". At this commit the prove step doesn't pass a templated statement's rows, so `EmbeddingRead` is not measured tonight.
+- [run] Seconds is `prove_total_s`, the median of the four timed sessions, one full statement on one H200 at commit 0803d36697, with drawn values and no serve. Utilization is the card's mean while the statement ran:
+
+| ranked type | statement | share % | n | k_log | seconds | accepted | utilization % |
+|---|---|---|---|---|---|---|---|
+| 1 | `SparseMlaHeadBlock_v2` FIRST=false | 3.97 | 256 | 27 | 0.708 | 5/5 | 9.2 |
+| 2 | `SparseMlaHeadBlock_v2` FIRST=true | 1.32 | 256 | 27 | 0.700 | 5/5 | 6.3 |
+| 3 | `MoeExpertFp8ReadGemm_v1` K=6144 | 26.06 | 1024 | 25 | 1.507 | 5/5 | 26.1 |
+| 4 | `BatchedGemm_v2` K=512 | 10.77 | 8192 | 22 | 1.169 | 5/5 | 30.7 |
+| 5 | `MoeExpertFp8ReadGemmW_v1` K=256 | 10.6 | 1024 | 25 | 1.406 | 5/5 | 29.9 |
+| 6 | `ScaledMmFp8BlockSharedScale_v2` K=6144 | 9.85 | 1024 | 25 | 1.197 | 5/5 | 36.7 |
+| 7 | `ScaledMmFp8BlockSharedScale_v2` K=2048 | 9.5 | 2048 | 24 | 1.507 | 5/5 | 13.4 |
+| 8 | `CublasSplitKGemmF32Out_v2` | 5.52 | 1024 | 25 | 1.169 | 5/5 | 12.6 |
+| 9 | `LlBf16DotprodGemm_v2` | 4.1 | 512 | 26 | 1.369 | 5/5 | 21.0 |
+| 10 | `CublasSplitKGemm_v2` | 2.64 | 1024 | 25 | 1.269 | 5/5 | 21.3 |
+| 11 | `Gemm_v3` | 1.7 | 1024 | 25 | 1.403 | 5/5 | 57.3 |
+| 12 | `BatchedGemm_v2` K=192 | 1.67 | 16384 | 22 | 1.027 | 5/5 | 32.0 |
+| 13 | `EmbeddingRead_v1` H=4 | 1.35 | 4096 | 23 | not measured tonight (refused, templated) | 0/0 | |
+| 15 | `SparseMlaCombine_v2` | 0.75 | 4096 | 23 | 0.998 | 5/5 | 30.7 |
+| 16 | `ScaledMmFp8BlockSharedScale_v2` K=256 | 0.68 | 8192 | 22 | 1.179 | 5/5 | 56.9 |
+| 17 | `EmbeddingShard_v2` START=0 | 0.6 | 1024 | 25 | 1.150 | 5/5 | 56.5 |
+
+- [derived] The 15 types timed hold 89.73% of ranked proving time, by `types.tsv`'s shares. Types 14 and 18 to 36 are being staged now. Not measured tonight: type 13, and type 30 (`EmbeddingRead` H=96), both for the templated refusal above.
+- [run] The four timed sessions vary by a factor of 2 to 4 within a statement, falling from first to last: `EmbeddingShard` read 1.99, 1.46, 0.84 and 0.50 s; the large head block 0.78, 0.67, 0.67 and 0.74 s. Each statement's wall time on its card, mostly loading its circuit, was 16 s to 296 s.
+- [run] Second batch: the 19 other full statements of `overhead.units`, ranked types 14 and 18 to 36 without 30, 6.98% of ranked proving time, in `tonight2.units`. Staging `r20261113-043814-3f1e` started at 04:38:33Z on cores 48-95, and `window.py` stops it at 05:20Z. Proving `r20261113-043823-9759` waits for its marker until 05:26Z. Its end times are the first batch's: `KILL_AT` 05:57:00Z, leases ended by 05:54Z, SIGTERM at 05:55:30Z, SIGKILL by 05:56:30Z, and the run's own timeout at 05:57:00Z. Same commit; the head blocks are not relinked.
+- [derived] The order: "Beyond them, stage now … taking types in order of their share …, each only if its staging ends in time for its proof to end by 05:54Z". The first batch left 78 minutes of the card window, so the second batch takes the rest of the full statements, with the same limit.
+
+For the table: 15 types timed on H200s at 0.70 to 1.51 s a statement (median of four sessions), 89.73% of ranked proving time (`r20261113-035634-1c43`); EmbeddingRead refused (templated); 19 more statements, 6.98%, staging (`r20261113-043814-3f1e`, `r20261113-043823-9759`); cards free at 04:35Z and again at 04:36Z.
