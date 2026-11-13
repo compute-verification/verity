@@ -1023,6 +1023,17 @@ def test_the_command_reads_who_holds_a_handle_from_origin_mains_registry_as_the_
     assert out.returncode == 0 and f"{ws} is now {LEAD}'s (@infra)" in out.stdout and vm.owner(ws) == LEAD, out.stderr
 
 
+def test_no_test_judges_by_the_checkouts_slack_registry_or_origin_mains(before_any_test, scratch_registry, tmp_path):
+    """Who holds a handle today is no input of a test, and where `origin/main` can be read `worktree_guard` reads its
+    registry through `git show`, which the suite's read guard can't see. One fixture (conftest's `scratch_registry`) names a
+    registry that holds no handle in the session's environment, so in a module's copy of it as in a test's own: `reclaim`,
+    which says which registry it judged by, names that one."""
+    for env in (os.environ, before_any_test):
+        out = subprocess.run([sys.executable, WORKTREE_GUARD, "reclaim", str(tmp_path)], capture_output=True, text=True,
+                             env={**env, "CURSOR_CONVERSATION_ID": LEAD})
+        assert out.returncode == 1 and f"{LEAD} holds no handle in the Slack registry ({scratch_registry})" in out.stderr, out.stderr
+
+
 def test_gone_is_read_from_a_record_that_reaches_back_and_that_the_shell_hook_is_writing(vm, event_log):
     """Gone is no hook run in two hours by the VM's record of hook runs. An owner the record holds no run of is gone only if
     the record reaches back that far (it rotates by size), and only if it holds the caller's own shell-hook run: where no
