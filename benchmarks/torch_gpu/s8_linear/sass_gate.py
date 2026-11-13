@@ -1,5 +1,5 @@
 """build.sh's gate on s8_wgmma.cubin: ptxas's report and cuobjdump's SASS, through the harness's `mma_gate`
-(benchmarks/pouw/harness/sass_gate.py).  Refuses (exit 1, the reasons on stderr) on a ptxas warning or serialized wgmma, a
+(verity/protocols/pouw/prover/sass_gate.py).  Refuses (exit 1, the reasons on stderr) on a ptxas warning or serialized wgmma, a
 stack frame, a spill or local memory, and on any GEMM kernel whose tensor-core instructions aren't its s8 atom alone,
 IGMMA.64xBNx32 on s8 operands at the kernel's BN, in a multiple of 4 (a 128-deep stage), or whose epilogue isn't the
 Definition's instructions: an s32-to-f32 conversion, FMUL and an F2FP to BF16 present, and no FFMA (a fused multiply-add
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 def _harness() -> ModuleType:
     name = "pouw_harness_sass_gate"
     if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parents[2] / "pouw" / "harness" / "sass_gate.py")
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "prover" / "sass_gate.py")
         sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules[name])
     return sys.modules[name]
