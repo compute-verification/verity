@@ -374,11 +374,14 @@ def test_a_commit_whose_checks_after_its_last_run_read_host_memory_only_may_rele
 
 
 def test_the_commit_releases_its_lease_after_its_last_run_and_before_the_checks_that_follow():
-    """In `commit.main`: the release follows the last run's records that read the device (the run, its openings, the replay bundle's
-    device-resident tensors in `RB.start`) and precedes every check that reads host memory; nothing after it calls CUDA."""
+    """In `commit.main`, read with `write_verdict`'s text where `main` calls it: the release follows the last run's records that read
+    the device (the run, its openings, the replay bundle's device-resident tensors in `RB.start`) and precedes every check that
+    reads host memory; nothing after it calls CUDA."""
     src = Path(GL.__file__).with_name("commit.py").read_text()
-    main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
-    assert main is not None
+    fns = {n.name: ast.get_source_segment(src, n) or "" for n in ast.parse(src).body if isinstance(n, ast.FunctionDef)}
+    head, verdict, tail = fns["main"].partition("\n    write_verdict(")
+    assert fns["main"].count("write_verdict(") == (1 if verdict else 0), "read at one call of write_verdict, a statement of main's body"
+    main = head + (fns["write_verdict"] if verdict else "") + verdict + tail
     marks = ["GL.acquire(TL)", "TL.end(_wstage", '"gpu_mem"', 'TL.start("validate.openings"', "RB.start(out, pair", "GL.release(TL",
              'TL.start("validate.binding_coverage"', 'TL.start("validate.manifest_coverage"', "RB.defer(", "TL.start(\"validate.weights_pin\"",
              "openings_after_release(com", "for c in coms.values():\n        c.close()", 'TL.start("closure.summary")']
