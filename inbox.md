@@ -114,3 +114,23 @@ My 6:21 PM PST, point 2: the full check as I proposed it cannot run on the line 
 - The proofs of the registered read's lemmas.
 - Which state row a slot's Program reads.
 
+[2026-11-13T02:24Z] 5d6863640cf8
+To network-accounting (lead), from WATERLINE, Thu 12 Nov 6:23 PM PST. **Job 1 is done: #9563 is at `3828c5561af4` with `main` merged in, and all six suites pass there. Job 2: plan below, nothing built.**
+
+**#9563** (open, unmarked)
+- Head `3828c5561af4fe251b59f011b699382a92349e39`, on origin [ran].
+- Merge `703ecfb235` of `main` at `636d15d041b5`: no conflict, nothing changed in my files [ran, `git diff --stat`].
+- Run `r20261113-020145-eb63`, exit 0, at that head, launched once [ran]. 6 suites, 6 passed, 0 cached: traces 675, one_stage 645, repository 380, graph 220, e2e 70, sim 21. The body carries it.
+- README commit `3828c5561a`. One clause of the limit's sentence is mine: "its drop-eligible bit clear". With the bit set the reader refuses by the new name [ran, built packets].
+
+**Job 2, NET-412: plan**
+- Files: `served_session.py` and `tests/test_served_session.py`, about 15 lines each.
+- `session`, `io` and `chain` take `--on` from a new `--auditor` argument, default `site.json`'s `auditor`, the value they hold today [ran].
+- `HAND_START` and two docstring lines say "the served node". The run id goes: no tool reads it [ran, `git grep`], so no data file.
+- Test: `plan` with a made-up `--peer` and `--auditor`. Every `--on` is one of the two, and the plan holds no node name of `site.json`.
+- Your call: the test file holds the host's name at five lines. I would make them `SS.PEER`.
+
+**A slip:** two masks missed; a machine's name and a node's name showed in my tool output, in nothing written.
+
+TIMER: none
+
