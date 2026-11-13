@@ -88,7 +88,7 @@ theorem field?_setKey_ne {j v : Json} (hj : Wf j) {k k' : String} (hk : k ≠ k'
     show Spot.field? (.obj (m.insert k v)) k' = Spot.field? (.obj m) k'
     rw [Properties.Challenger.CanonLine.field?_obj, Properties.Challenger.CanonLine.field?_obj,
       Std.TreeMap.Raw.get?_eq_getElem?, Std.TreeMap.Raw.get?_eq_getElem?, Std.TreeMap.Raw.getElem?_insert hm,
-      if_neg (fun he => hk (Std.compare_eq_iff_eq.1 he))]
+      if_neg (fun he => hk (Std.LawfulEqOrd.compare_eq_iff_eq.1 he))]
   | _ => rfl
 
 theorem field?_setKey_self {m : Std.TreeMap.Raw String Json compare} (hj : Wf (.obj m)) (k : String) (v : Json) :
