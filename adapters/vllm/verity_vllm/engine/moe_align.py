@@ -135,7 +135,8 @@ class _Launch:
     signature, then the integers, then the constexprs."""
 
     def __init__(self, fn: Any, fast: bool) -> None:
-        self.fn, self.fast, self.compiled = fn, fast, {}
+        self.fn, self.fast = fn, fast
+        self.compiled: dict[tuple, Any] = {}
 
     def __call__(self, grid: tuple[int, ...], tensors: tuple, ints: tuple, consts: dict, num_warps: int) -> None:
         key = (tuple(consts.values()), num_warps, tensors[0].device.index,
@@ -204,7 +205,7 @@ class Align:
         K, EP, has_map = self._launch, next_pow2(E + 1), expert_map is not None
         mp = expert_map if has_map else topk_ids
         bufs = (sorted_token_ids, experts_ids, num_tokens_post_pad)
-        if P <= self.small_max:
+        if self.small_max >= P:
             self.calls["one"] += 1
             PB = max(next_pow2(P), 16)
             T = min(self.tile, PB)

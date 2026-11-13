@@ -67,13 +67,20 @@ def seeded(seed: int):
 
 
 def challenger_coins(layout: list) -> CC.ChallengerCoins:
-    """One rank's coins on an in-process challenger of `layout`, after the coin `Draws` opens after the window's root."""
+    """Rank 0's coins, its own family's, on an in-process challenger of `layout`, after the coin `Draws` opens after the
+    window's root in the window's family."""
     live = Ch.LiveChallenger(AC.SCHEME, 0, layout, seeded(1))
-    coins = CC.ChallengerCoins(Ch.LiveRecord(live, AC.FAMILY, clock=lambda: 0.0))
-    coins.commit(bytes.fromhex(ROOT))
-    coins(Ch.COIN_BYTES)
+    window = CC.ChallengerCoins(Ch.LiveRecord(live, AC.WINDOW_FAMILY, clock=lambda: 0.0))
+    window.commit(bytes.fromhex(ROOT))
+    window(Ch.COIN_BYTES)
+    coins = CC.ChallengerCoins(Ch.LiveRecord(live, AC.family(0), clock=lambda: 0.0))
     coins.commit(AFTER)
     return coins
+
+
+def layout(*ranks: int) -> list[list]:
+    """The session's layout with `ranks[r]` coins in rank r's family, after the window family's one."""
+    return [[AC.WINDOW_FAMILY, 1], *([AC.family(r), n] for r, n in enumerate(ranks))]
 
 
 def reads(rule: str, counts: list[int], seed: int) -> int:
@@ -90,14 +97,15 @@ def reads(rule: str, counts: list[int], seed: int) -> int:
 
 def test_the_silu_mul_window_keeps_todays_reserve():
     """38b2's SiluMul window reads 226 bytes a rank (a stratum of 675 at k 4, 144 bytes, and one of 3 at its floor of 1,
-    82), so its need with the margin is 6 coins. The reserve keeps the current 16 coins a rank and one more: 129 for 8
-    ranks."""
+    82), so its need with the margin is 6 coins. The reserve keeps the current 16 coins a rank, each rank's in a family
+    of its own, and one more in the window's: 129 for 8 ranks."""
     assert [s["k"] for s in law_of(SILU_RULE, SILU_MUL)["strata"]] == [4, 1]
     assert reads(SILU_RULE, SILU_MUL, 0) == 226
     need = need_of(SILU_RULE, SILU_MUL)
     assert need == -(-(226 + 144) // Ch.COIN_BYTES) == 6
     needs = dict.fromkeys(range(8), need)
-    assert AC.families(needs) == [[AC.FAMILY, 16 * 8 + 1]]
+    assert AC.families(needs) == layout(*[16] * 8) and sum(n for _, n in AC.families(needs)) == 16 * 8 + 1
+    assert [label for label, _ in AC.families(needs)] == ["window", *(f"draw/{r}" for r in range(8))]
     assert AC.reserve_reason(AC.families(needs), needs) is None
 
 
@@ -109,19 +117,19 @@ def test_the_18_family_window_needs_more_coins_than_todays_reserve():
     assert {reads(FAMILIES_RULE, ALL_FAMILIES, seed) for seed in range(4)} == {1496}
     assert 1496 > AC.COINS_PER_RANK * Ch.COIN_BYTES
     assert need_of(FAMILIES_RULE, ALL_FAMILIES) == -(-(1496 + 86) // Ch.COIN_BYTES) == 25
-    assert AC.families({0: 25}) == [[AC.FAMILY, 26]]
+    assert AC.families({0: 25}) == layout(25)
 
 
 def test_todays_reserve_runs_out_on_the_18_family_draw_and_its_need_does_not():
     """On a challenger of one rank's old reserve (17 coins), the 18-family sample runs out of coins (`every sampling coin of the
     epoch is open`), as the 18-family run did. On its need's reserve (`families`) it samples, opening 24 coins after the
-    rank's commitment."""
+    rank's commitment, its family's first."""
     rule, law, n = FAMILIES_RULE, law_of(FAMILIES_RULE, ALL_FAMILIES), sum(ALL_FAMILIES)
-    with pytest.raises(Ch.CoinError, match="every draw coin of the epoch is open"):
-        S.select_draw(S.Law(rule), law, n, challenger_coins([[AC.FAMILY, 17]]))
+    with pytest.raises(Ch.CoinError, match="every draw/0 coin of the epoch is open"):
+        S.select_draw(S.Law(rule), law, n, challenger_coins(layout(16)))
     coins = challenger_coins(AC.families({0: need_of(rule, ALL_FAMILIES)}))
     drawn = S.select_draw(S.Law(rule), law, n, coins)
-    assert len(drawn["units"]) == 18 and len(coins.segments[-1].openings) == 24
+    assert len(drawn["units"]) == 18 and len(coins.segments[-1].openings) == 24 and coins.segments[-1].start == 0
 
 
 def test_a_work_laws_need_is_its_draw_under_the_work_table_the_rank_registers_with():
@@ -145,10 +153,13 @@ def test_a_work_laws_need_is_its_draw_under_the_work_table_the_rank_registers_wi
 
 
 def test_a_reserve_that_cant_cover_the_draws_is_refused_naming_need_and_reserve():
-    """`reserve_reason` names the need (the coin after the root, then each rank's) and the reserve when the reserve is
-    short, and the challenger's own limit when the layout is past it."""
-    assert AC.reserve_reason([[AC.FAMILY, 17]], {0: 25}) == (
-        "the draws need 26 draw coins (1 after the window's root, then rank 0 25), and the reserve [['draw', 17]] holds 17")
+    """`reserve_reason` names the need (the coin after the root, then each rank's, a family each) and the reserve when
+    the reserve is short in a family or lacks one, and the challenger's own limit when the layout is past it."""
+    need = "the draws need {'window': 1, 'draw/0': 25} coins (1 after the window's root, then each rank's in its own family)"
+    assert AC.reserve_reason(layout(16), {0: 25}) == (
+        f"{need}, and the reserve [['window', 1], ['draw/0', 16]] holds fewer of ['draw/0']")
+    assert AC.reserve_reason([[AC.FAMILY, 26]], {0: 25}) == (
+        f"{need}, and the reserve [['draw', 26]] holds fewer of ['draw/0', 'window']")
     big = {r: Ch.MAX_COINS // 2 for r in range(2)}
     assert AC.reserve_reason(AC.families(big), big).endswith(f"a live coin layout holds at most {Ch.MAX_COINS} coins")
 
@@ -172,8 +183,9 @@ def nothing_reserved(tmp_path: Path) -> bool:
 
 
 def test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds(tmp_path, monkeypatch):
-    """The local challenger opens the session once the rank has planned its sample, on the layout of its need (26 coins). The
-    18-family sample reads its 24 coins after the rank's commitment, and its coins' evidence holds (`coins.coins_reason`)."""
+    """The local challenger opens the session once the rank has planned its sample, on the layout of its need (26 coins:
+    the window family's one and 25 in the rank's own). The 18-family sample reads its 24 coins after the rank's
+    commitment, and its coins' evidence holds at the rank's family (`coins.coins_reason`) and at no other."""
     rule, law, n = FAMILIES_RULE, law_of(FAMILIES_RULE, ALL_FAMILIES), sum(ALL_FAMILIES)
     manager, draws, opener = local(tmp_path, monkeypatch, [0])
     try:
@@ -190,14 +202,19 @@ def test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds(tmp_
     assert "error" not in published, published.get("error")
     assert (tmp_path / "coins.log").read_text(), "the session's coins came from the stub, not a Lean build"
     plan = published["plan"]
-    assert plan["needs"] == {"0": 25} and plan["families"] == [[AC.FAMILY, 26]] and plan["session"]
-    assert published["trusted"]["released"] == {AC.FAMILY: 1 + 24} and len(coins.read) == 1496
-    assert CC.coins_reason(AC.evidence(published, segment), ROOT, AFTER, bytes(coins.read), AC.lms_verify) is None
+    assert plan["needs"] == {"0": 25} and plan["families"] == layout(25) and plan["session"]
+    assert published["trusted"]["released"] == {AC.WINDOW_FAMILY: 1, AC.family(0): 24} and len(coins.read) == 1496
+    assert coins.label == segment["label"] == AC.family(0) and segment["start"] == 0
+    evidence = AC.evidence(published, segment)
+    assert CC.coins_reason(evidence, ROOT, AC.family(0), AFTER, bytes(coins.read), AC.lms_verify) is None
+    for other in (AC.WINDOW_FAMILY, AC.FAMILY, AC.family(1)):
+        assert "family's" in CC.coins_reason(evidence, ROOT, other, AFTER, bytes(coins.read), AC.lms_verify)
 
 
 def test_two_ranks_open_the_session_once_both_have_planned(tmp_path, monkeypatch):
     """Rank 1's plan waits for rank 0's; then the session opens on both needs' layout (16 coins a rank and one, 33), and each
-    rank samples in its turn, 4 coins for SiluMul's 226 bytes, as 38b2's gate run did on each of its 8 ranks."""
+    rank samples in its turn from its own family's first coin, 4 coins for SiluMul's 226 bytes, as 38b2's gate run did
+    on each of its 8 ranks."""
     rule, law, n = SILU_RULE, law_of(SILU_RULE, SILU_MUL), sum(SILU_MUL)
     manager, draws, opener = local(tmp_path, monkeypatch, [0, 1])
     segments: dict[int, dict] = {}
@@ -219,23 +236,25 @@ def test_two_ranks_open_the_session_once_both_have_planned(tmp_path, monkeypatch
     finally:
         manager.shutdown()
     assert "error" not in published, published.get("error")
-    assert published["plan"]["needs"] == {"0": 6, "1": 6} and published["plan"]["families"] == [[AC.FAMILY, 33]]
+    assert published["plan"]["needs"] == {"0": 6, "1": 6} and published["plan"]["families"] == layout(16, 16)
     assert sorted(segments) == [0, 1] and all(len(s["openings"]) == 4 for s in segments.values())
-    assert published["trusted"]["released"] == {AC.FAMILY: 1 + 4 + 4}
+    assert [(segments[r]["label"], segments[r]["start"]) for r in (0, 1)] == [(AC.family(0), 0), (AC.family(1), 0)]
+    assert published["trusted"]["released"] == {AC.WINDOW_FAMILY: 1, AC.family(0): 4, AC.family(1): 4}
 
 
 def test_a_too_small_reserve_is_refused_before_the_session_opens(tmp_path, monkeypatch):
     """A reserve short of the need refuses the rank's plan, naming both, and the local host reserves nothing."""
-    manager, draws, opener = local(tmp_path, monkeypatch, [0], reserve=lambda needs: [[AC.FAMILY, 17]])
+    manager, draws, opener = local(tmp_path, monkeypatch, [0], reserve=lambda needs: layout(16))
     try:
-        with pytest.raises(Ch.CoinError, match=r"need 26 draw coins .* holds 17: the root's one session was not opened"):
+        with pytest.raises(Ch.CoinError, match=r"need \{'window': 1, 'draw/0': 25\} coins .* holds fewer of "
+                                               r"\['draw/0'\]: the root's one session was not opened"):
             AC.RankCoins(draws, 0).plan(25)
         draws.skip(0)
         opener.join()
         published = draws.evidence()
     finally:
         manager.shutdown()
-    assert published["plan"] == {"needs": {"0": 25}, "families": [[AC.FAMILY, 17]], "session": None}
+    assert published["plan"] == {"needs": {"0": 25}, "families": layout(16), "session": None}
     assert nothing_reserved(tmp_path)
 
 

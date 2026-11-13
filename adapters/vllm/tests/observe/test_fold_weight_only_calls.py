@@ -7,13 +7,28 @@ from __future__ import annotations
 import dataclasses
 
 from verity.circuits.refs import runs
-from verity_vllm.observe.fold.profiles.gen_dense_gemma2_patterns import gemma2_patterns
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, RunHeader, StorageAlloc
-from verity_vllm.observe.fold.fold import fold, instance_nodes
+
+from tests.observe.test_fold_synthetic import (  # noqa: F401  (memory: the fixture)
+    PATTERNS,
+    W_LN1,
+    C,
+    V,
+    instance_nodes,
+    memory,
+    toy_log,
+    weight_field,
+)
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    RunHeader,
+    StorageAlloc,
+)
+from verity_vllm.observe.fold.fold import fold
 from verity_vllm.observe.fold.patterns import TransparentAten
+from verity_vllm.observe.fold.profiles.gen_dense_gemma2_patterns import gemma2_patterns
 from verity_vllm.observe.fold.resolver import Profile
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
-from tests.observe.test_fold_synthetic import C, PATTERNS, V, W_LN1, memory, toy_log, weight_field  # noqa: F401  (memory: the fixture)
 
 H = C["H"]
 ADD = f"AddScalarBf16_v1{{N={H},C=1.0}}"
