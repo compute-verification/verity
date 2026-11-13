@@ -122,6 +122,26 @@ theorem written_find (hO : WrittenOnce h) {y t : ℕ} {r : Spot.Bits.RowPos} (hy
     have hb1 : b.1 = y := by simpa using List.find?_some hf
     rw [hO b hb (y, t, r) hy hb1]
 
+variable {h} in
+/-- **The boundary record holds no written bit at a port no link names** (`returnedWhole`), where a gate is at one
+written position at most: a gate the boundary record holds is a written bit at a port a link names, and it is the
+gate's one written bit. -/
+theorem returnedWhole_of_once (hO : WrittenOnce h) : returnedWhole h = true := by
+  unfold returnedWhole
+  rw [List.all_eq_true]
+  intro y hy
+  show ((heldLink h (h.names.getD y.2.1 "") y.2.2.row).isSome || !returned h y.1) = true
+  cases hr : returned h y.1 with
+  | false => simp
+  | true =>
+    unfold returned at hr
+    obtain ⟨y', hy', hc⟩ := List.any_eq_true.1 hr
+    obtain ⟨h1, h2⟩ := Bool.and_eq_true_iff.1 hc
+    have he : y'.1 = y.1 := eq_of_beq h1
+    rw [hO y' hy' y hy he] at h2
+    rw [h2]
+    rfl
+
 /-- **A commitment position's row is a port of its member's circuit**: each source bit's and each written bit's row
 is the name of one of its member's circuit's ports. -/
 def RowsArePorts : Prop :=
