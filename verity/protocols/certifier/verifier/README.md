@@ -7,15 +7,15 @@ beyond what the registered Program computes from its committed values: per execu
 accepted audit leaves the certified traffic outside what that Program accepts, and over a monitoring period, the number
 of bits of such a sender's secrets a decoder recovers from the client's view.
 
-The guarantee is `NetTiming.Guarantees.PeriodLeakAccepted`
-(`security/Definitions/NetworkCertifier/Guarantees/Period.lean`), proved as
-`NetTiming.SecurityProofs.PeriodLeakAccepted` (`security/Proofs/NetworkCertifier/Period.lean`). Over a monitoring
+The guarantee is `NetTiming.Guarantees.MonitoringPeriodLeakAccepted`
+(`security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean`), proved as
+`NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted` (`security/Proofs/NetworkCertifier/MonitoringPeriod.lean`). Over a monitoring
 period of n execution phases (the Lean's windows), execution phase i audited by the compiled sampled verifier at its
 registered statement, with one network certifier on the server's uplink running its code on schedules in `Ss`:
 
 - per execution phase, at a statement in scope, `Pr[accept ∧ ¬RLeakCertifier(δ)] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`;
 - where the network certifier registers its observations in every execution phase, the secrets whose every execution
-  phase meets its good event (`WindowGood`) number at most
+  phase meets its good event (`ExecutionPhaseGood`) number at most
   `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, whose log2 bounds the bits.
 
 `RLeakCertifier(δ)` says every observation sequence the network certifier registers is one the registered Program
@@ -26,7 +26,7 @@ advice) outside its registered inputs; `faultySets_i(δ)` are its possible incor
 any of them commits; k_i is its steps and `Dj` bounds each step's jitter class.
 
 It bounds each execution phase's failure on its own: the union over the monitoring period's live coins is not stated,
-and `WindowGood` adds a condition no proof gives, the registration's values at the prover's registered inputs. It is a
+and `ExecutionPhaseGood` adds a condition no proof gives, the registration's values at the prover's registered inputs. It is a
 statement about the network certifier's code (`recordingCode`), not about runs of the network check's Lean
 (`lean`, `NetworkCheck`), which is the verifier's code and states no bound.
 `NetTiming.Guarantees.PooledLeakAccepted` (`security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`) is the
@@ -37,7 +37,7 @@ with probability at most `δ + Σ_i e_i + Σ_i e'_i`. It is conditional on two p
 discharged (`hesc`, the conditional escape; `hleak`, the leak relation at the witness's incorrect set), so it is not
 yet the deployed system's bound over a monitoring period.
 
-What `PeriodLeakAccepted` takes, as its record in the lock (`security/lean-audit.json`, `guarantees`) lists it. Named
+What `MonitoringPeriodLeakAccepted` takes, as its record in the lock (`security/lean-audit.json`, `guarantees`) lists it. Named
 assumptions: none. A premise that is part of what it says (`domain`):
 
 - `Claims.Sampling.CommitmentScheme.Binds`: the trace's commitment binds, a break giving an explicit collision.
@@ -115,7 +115,7 @@ A spec-level reference for network accounting's timing channel:
   egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order window
   rejects the link;
 - a served link's counts (`served`, `LinkWindows(served=ServedProfile(F, F_in, windows, own))`), whose egress end has no
-  occupancy profile: N2's served proof block, `NetworkServedLinkWindow`, adds a Boolean Definition,
+  occupancy profile: N2's served proof block, `NetworkServedTransferBlocks`, adds a Boolean Definition,
   `NetworkServedCounts_v1`, that holds the egress
   head's counts to the ones its ingress head's counts derive under the window's declared sync, the advice the audit
   already charges at log2 #Σ_sync bits a window. Each window starts empty and must end idle, so nothing carries
@@ -442,7 +442,7 @@ counts to the occupancy profile on every link's execution phase (on a served lin
 the declared sync), beside the proved timing bound (provisional).
 
 N2's verifier, `LinkWindows.verify`, decides each execution phase on a `--zk` proof of N2's registered proof
-block (`NetworkLinkWindow` v5, served `NetworkServedLinkWindow` v4) and public inputs alone: its own run of Flock's Lean
+block (`NetworkTransferBlocks` v5, served `NetworkServedTransferBlocks` v4) and public inputs alone: its own run of Flock's Lean
 verifier accepts the proof, the proof's public row opens to its own copy of the proof block's public arguments, the
 output row's verdict and deadline bits are 1, the certificates verify on their public fields (`LinkWindows.certified`),
 and the window's sync is declared. It reads no head, salt or sibling. `benchmarks/network_traces/n2_zk.py` proves a
@@ -454,7 +454,7 @@ in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. 
 - **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`LinkWindows.unproved_outcome`,
   its verdict `"decided_by": "clear"`), which is never zero-knowledge.
 
-`LinkWindows.verify`'s verdict of record on a plain, served or network certifier link is the Lean's, `NetworkCheck.LinkWindow`
+`LinkWindows.verify`'s verdict of record on a plain, served or network certifier link is the Lean's, `NetworkCheck.TransferBlocks`
 (`verity/protocols/certifier/verifier/lean`, the `link-window` function of `network-records verdicts`), by the one switch line
 `service.OF_RECORD`. `verify` runs both on every proof, and an execution phase where
 they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch is at
@@ -473,8 +473,8 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
 - every proving run of N2 recorded before the switch replayed through both to the verdict it recorded, negative
   controls included.
 - the Python keeps running beside the Lean as the reference.
-- the Lean's verdict has its property in `security/Properties/NetworkCertifier/Check/LinkWindow.lean`
-  (`Properties.NetworkCertifier.LinkWindowAcceptMeans`, proved): an accepted execution phase was proved, opened to the
+- the Lean's verdict has its property in `security/Properties/NetworkCertifier/Check/TransferBlocks.lean`
+  (`Properties.NetworkCertifier.TransferBlocksAcceptMeans`, proved): an accepted execution phase was proved, opened to the
   word 0b11, certified on both ends and synced within Σ_sync (a network certifier link's syncs are not asked of), and
   its public outputs are verdict 1 and deadline 1.
 
