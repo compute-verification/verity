@@ -122,3 +122,20 @@ PERIODPROOF to the lead, Fri 13 Nov 2:45 PM PST. **#9663 is pushed: head `8187d0
 
 **#9641's rehearsal** is merged and pushed as scratch, no run yet: `cursor/na-scratch-period-bound-meeting-4a02` at `8429124757de8c05061614a0767c8064611d75f9`, on SCANLEAN's `080b7d735e95`. Six blocks, three files, and one proof line after; the list comes with the runs.
 
+[2026-11-13T22:53Z] f653a78c4212
+PERIODPROOF to the lead, Fri 13 Nov 2:53 PM PST. **#8829 and #9350 each hold #9663's pushed head `8187d01dfefc` now, pushed as fast-forwards. #8829's merge was by hand; #9350's was clean. Four runs launched, all waiting for a node.**
+
+- **#8829: `bffa4e603f98d8bca8d8bc21a396341e1e3e2192`** [rev-parse; equals the remote's]. Above `d7caa86e635e`: the K mend `c441db46a4c4`, the names `a06af1520007` (10 files, 72 for 72), the records `bd44a4e9b4df` (the lock alone, 70 for 62), and the merge.
+  - **The hand merge, two files, four blocks, each taken as this branch has it** [read]: #9663's names commit and this branch's rename the same lines, and this branch adds its own lines beside them, so git met them.
+    - `security/Proofs/NetworkCertifier.lean`, the docstring's list of the period's files: ours, which is #9663's renamed lines with the failure forms' four files beside them.
+    - the same file, the `SecurityProofs` theorems: ours, #9663's theorem with the three failure forms after it.
+    - `security/Proofs/NetworkCertifier/README.md`, the files' rows: ours, #9663's rows under their names today with this branch's four rows.
+    - the same README, the bullets on the bound with checked inputs: ours, likewise.
+  - No third wording: in each block #9663's side is a subset of ours, line for line. **The merge's tree is `bd44a4e9b4df`'s, file for file** [ran: the difference from its first parent is empty].
+  - Runs at the head: the lock's records, plain, by its own command line, `r20261113-224646-f008`; the suites changed since `d7caa86e635e`, quick, fresh, default temporary directory, `r20261113-224731-2a1c`.
+- **#9350: `5e514f92d46f78c3e11a8e2eb2885d21aa0a67aa`** [rev-parse; equals the remote's]. A clean merge of `8187d01dfefc` over `5ef1d3c768cb`: no block met, since #9663's nine are this branch's `d559b80e1eb4` in the same lines and the honest lemma's record is the one this lock held. It brings three docstring lines (two in `security/Proofs/NetworkCertifier.lean`, one in `TapRows.lean`). Against #9663's head the branch is now its own 12 files, +1419 −106; the lock +194 −3.
+  - Runs at the head: plain records `r20261113-224726-6d23`; the suites changed since `5ef1d3c768cb`, `r20261113-224808-f785`.
+- **#9663's two at `8187d01dfefc`:** the plain records run `r20261113-222434-0902` is running; the suites `r20261113-222522-253c` still wait for a node.
+- **The rehearsal:** SCANLEAN's branch is still at `080b7d735e95` [fetched 2:52 PM PST]; my scratch head `8429124757de` holds it. Its node runs go behind these six, three branches abreast.
+- Both bodies are written and are set when their runs end, with the runs' words.
+
