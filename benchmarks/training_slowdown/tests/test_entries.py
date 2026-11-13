@@ -174,21 +174,33 @@ def qat(dials: dict) -> dict:
 
     The latents step under the route's own Muon, which the Muon entries hold to the published rule, and the scale is
     summed as the codec sums it: one rounding apart before Muon's bf16 Newton-Schulz moves a latent by percents of
-    its step, and a latent that crosses the rounding's threshold is a weight a whole scale off."""
+    its step, and a latent that crosses the rounding's threshold is a weight a whole scale off.
+
+    Under a `grad_code` of B bits each matrix's gradient is rounded to the nearest multiple of its row's scale, the
+    row's largest magnitude over 2^(B-1) - 1 as bf16 holds it, within 2^(B-1) - 1 of them: the codes' values, with
+    none of the packing the route sends them in. Under `low_state` the latents are bf16 and step under the route's
+    Muon with its `low_state`, which test_routes holds to the rule written out."""
     torch.manual_seed(0)
     model = LM.of(SHAPE)
     theta = {k: v.detach().clone() for k, v in model.state_dict().items()}
-    latents = {k: torch.zeros_like(v, requires_grad=True) for k, v in theta.items() if v.ndim == 2 and any(
-        fnmatch.fnmatchcase(k, p.strip()) for p in dials["targets"].split(","))}
-    opt = Muon(list(latents.values()), lr=dials["lr"])
+    dtype = torch.bfloat16 if dials["low_state"] else torch.float32
+    latents = {k: torch.zeros_like(v, dtype=dtype, requires_grad=True) for k, v in theta.items()
+               if v.ndim == 2 and any(fnmatch.fnmatchcase(k, p.strip()) for p in dials["targets"].split(","))}
+    opt = Muon(list(latents.values()), lr=dials["lr"], low_state=dials["low_state"])
+    bits = {"fp32": 0, "rtn4": 4, "rtn8": 8}[dials["grad_code"]]
+
+    def coded(g: torch.Tensor) -> torch.Tensor:
+        top = 2 ** (bits - 1) - 1
+        step = (g.abs().amax(1, keepdim=True) / top).bfloat16().float()
+        return torch.where(step > 0, (g / step).round().clamp(-top, top) * step, 0.0)
 
     def built() -> dict:
         out = {}
         for k, v in latents.items():
-            a = v.detach().abs().reshape(1, -1)
+            a = v.detach().float().abs().reshape(1, -1)
             kept = (a >= a.topk(math.ceil(dials["keep"] * a.numel())).values[0, -1]) & (a > 0)
             scale = ((a * kept).sum(1) / kept.sum(1).clamp(min=1)).half().float()
-            out[k] = theta[k] + (v.detach().sign().reshape(1, -1) * kept * scale).view_as(v)
+            out[k] = theta[k] + (v.detach().float().sign().reshape(1, -1) * kept * scale).view_as(v)
         return out
 
     for t, rows in enumerate(batches()):
@@ -196,7 +208,7 @@ def qat(dials: dict) -> dict:
         logits = torch.func.functional_call(model, theta | weights, (rows[:, :-1],))
         F.cross_entropy(logits.flatten(0, 1), rows[:, 1:].flatten()).backward()
         for k, v in latents.items():
-            v.grad = weights[k].grad
+            v.grad = (coded(weights[k].grad) if bits else weights[k].grad).to(dtype)
         torch.nn.utils.clip_grad_norm_(list(latents.values()), dials["clip"])
         left = min(1.0, (1 - t / STEPS) / dials["decay"])
         fall = {"linear": left, "sqrt": 1 - math.sqrt(1 - left)}[dials["cooldown"]]
@@ -308,7 +320,20 @@ REFERENCES = {
     "s-t20-1.1x-muon-whole": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-qat-top2": (qat, CLOSE),
     "s-t20-1.1x-qat-top3": (qat, CLOSE),
+    "s-t20-1.1x-qat-top3-3000": (qat, CLOSE),
+    "s-t20-1.1x-qat-top3-grad4": (qat, CLOSE),
     "s-t20-1.1x-qat-top4": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep10": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep15": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep15-2380": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep15-grad4-lowstate": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep15-grad8-lowstate": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep30": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep30-grad8-lowstate": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep50": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep50-7080": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep50-grad4-lowstate": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4-keep7.5-decay60": (qat, CLOSE),
     "s-t20-1.1x-ref-optim": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-ref-optim-1027": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-ref-optim-747": (under(muon), CLOSE_BF16),

@@ -583,3 +583,6 @@ def KERNEL(in_ptr0, in_ptr1, in_ptr2, in_ptr3, in_ptr4, out_ptr1, out_ptr3, xnum
     else:
         pass
 """
+
+
+__all__ = ["ADD2_NORM", "ADD2_NORM_FINAL", "ADD_NORM", "ADD_NORM_COPY", "EMBED_NORM", "QK_NORM_ROPE", "ROPE_QK", "SILU_MUL"]

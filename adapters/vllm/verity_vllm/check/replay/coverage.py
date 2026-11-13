@@ -4,20 +4,31 @@ Commit value-checks by form (B) only (`form_b_families`)."""
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.query import norm_scales as NS
-from verity_vllm.query.manifest import format as RM
-from verity_vllm.check.replay.replay_codes import NOT_YET
 from verity.definitions.numerics.rows import EVALUATORS
+
 from verity_vllm.check.replay.index import _MOE_LAYER_RE, SAMPLER_OP, ProgramIndex
 from verity_vllm.check.replay.opening import alias_table, resolve_op_path
-from verity_vllm.check.replay.population import ATTENTION_ROW_FAMILIES, EXECUTED_PREFIX_RULE, NOT_EXECUTED_SCOPE
+from verity_vllm.check.replay.population import (
+    ATTENTION_ROW_FAMILIES,
+    EXECUTED_PREFIX_RULE,
+    NOT_EXECUTED_SCOPE,
+)
+from verity_vllm.check.replay.replay_codes import NOT_YET
+from verity_vllm.query import norm_scales as NS
+from verity_vllm.query.manifest import format as RM
 from verity_vllm.records.fields import RecordError
 from verity_vllm.records.required_manifest import RequiredManifest
 
+__all__ = ["form_b_families"]
+
 #: what `query_population` names a manifest it was handed (the replay is handed the parsed JSON, not its path)
 HANDED = "the required-value manifest the replay was handed"
+#: how many of a finding's identities `query_population` names in full (each finding's `first`, beside its count `n`)
+FIRST = 6
 
 
 #: named in population() whenever a Program carries attention rows: what the row relation does not read (a Q_fine_v1 research item, not a
@@ -73,7 +84,7 @@ QUERY_FAMILY_MECHANISM: dict[str, str] = {
 QUERY_FAMILIES_WITH_ROWS = ("instance_outputs", "sampled_token_ids", "moe_block_stream", "tp_rank_partials", "call_boundaries")
 
 
-def _row_produced(ident: dict[str, Any]) -> bool:
+def _row_produced(ident: Mapping[str, Any]) -> bool:
     """Whether a Program row must address the identity: the row families, and an ATen-chain norm's scale (its `RsqrtF32_v1` Call's own
     output, `NS.CALL_SCALES`) -- a kernel norm's scale is interior to its Call and stays a no-row family."""
     fam = str(ident.get("family"))
@@ -113,7 +124,7 @@ def _header(man: RequiredManifest | None, key: str) -> Any:
     return man.query.get(key) if man is not None and man.query is not None else None
 
 
-def controller_rows_of(programs: dict[str, Any], indices: dict[int, "ProgramIndex"] | None = None) -> dict[str, int]:
+def controller_rows_of(programs: dict[str, Any], indices: dict[int, ProgramIndex] | None = None) -> dict[str, int]:
     """The replay's OWN count of guard / controller rows per request Program (spec family under GUARD_PREFIXES) -- the
     cross-check of the manifest header's `guard_rows`, so a stale or foreign header cannot drop or shrink the controller statement ('the
     collector cannot define its own population', applied to the controller)."""
@@ -126,47 +137,24 @@ def controller_rows_of(programs: dict[str, Any], indices: dict[int, "ProgramInde
     return out
 
 
-def query_population(manifest: RequiredManifest | dict[str, Any] | None, addresses: dict[tuple, dict], evaluated: set[tuple], *, ranks: list[int],
-                     strata: dict[str, dict] | None = None, first_n: int = 6, executed_prefix: dict[str, dict] | None = None, controller_rows: dict[str, int] | None = None) -> dict[str, Any]:
-    """Reconcile the replay's reach against the population of record, Q(P), IDENTITY BY IDENTITY.
-    `manifest`: the required-value manifest of the row (Q_module(P): the module-boundary population over the Program, families selected by
-    the canonical VU query; the traversal adapter's or the inventory's -- the same identities either way); None = no manifest supplied,
-    the reconciliation is over the Program rows' own addresses and says so.
-    `addresses`: `population(..., addresses=)` accumulator (manifest address -> class of the rows producing it); `evaluated`: the
-    (request, step, op_path) triples with an evaluated pick.
-    Returns the three record fields the row must carry (`query_total`, `sampled_strata`, `uncovered_by_name`) + `query_checks`:
-      * query_total     -- |Q(P)| and its families (the authority: never the collector's, never the replay's own enumeration)
-      * sampled_strata  -- what the exact replay REACHES (identities with an evaluable VU) and what it EVALUATED, as a share of Q(P)
-      * uncovered_by_name -- every required identity the exact replay has no evaluable VU for, grouped by (family, spec, class) with the
-                             mechanism of record that covers it instead; plus the query families with no row (weights, ids, streams)
-      * query_checks    -- the fail-closed reconciliation: a VU whose address is NOT a required identity (the replay enumerating
-                           something Q(P) does not require), a required identity NO row produces, a row count that disagrees with the
-                           manifest's `rows`, a rank set that disagrees.  Any non-zero count is a finding on the record (`ok` False).
-      * not_executed_by_rule -- `executed_prefix` (request -> `executed_prefix_of_record`): the identities of Q(P) at
-                           request-relative steps >= n_exec are the third bucket beside reached / uncovered (query_total unchanged;
-                           `accounted` = reached + uncovered + not-executed == |Q(P)|); a request whose prefix carries faults is NOT
-                           classified and fails the check by name."""
-    # a manifest missing a field its writers always write is refused by name: the reach is then reconciled against nothing, and
-    # `query_checks` fails (`manifest_refused`), never a crash and never the unreconciled None of a replay handed no manifest
-    refused: RecordError | None = None
-    try:
-        man = RequiredManifest.of(manifest, HANDED) if manifest is not None else None
-    except RecordError as e:
-        man, refused = None, e
-    by_key: dict[tuple, dict] = {}
+@dataclass
+class _Required:
+    """Q(P) as the reconciliation reads it (`_required`)."""
+    by_key: dict[tuple, Mapping[str, Any]]      # a row-produced identity by (request, step, canonical op_path, member, invocation)
+    fam_total: Counter                          # identities per family
+    ranks_seen: set[int]
+    non_row_idents: list[Mapping[str, Any]]     # the no-row families' identities (kept only under an executed prefix)
+    keyed: Counter                              # row-produced identities of a no-row family (ATen norm scales)
+
+
+def _required(man: RequiredManifest | None, addresses: dict[tuple, dict], executed_prefix: dict[str, dict] | None) -> _Required:
+    """The manifest's identities counted by family, the row-produced ones keyed as `_reach` looks them up; with no manifest, the
+    Program rows' own addresses counted by family."""
+    by_key: dict[tuple, Mapping[str, Any]] = {}
     fam_total: Counter = Counter()
     ranks_seen: set[int] = set()
-    # shared modules (vLLM's one RotaryEmbedding instance called by every layer): the manifest addresses them at the FIRST layer's path
-    # with invocation = layer order and records the per-layer paths in `op_path_aliases` (alias -> [canonical, invocation]) -- resolved
-    # through the ONE table `CommittedStore.words` reads through as well
-    aliases = alias_table(man)
-
-    def _key(rid: str, st: int, op: str, mem: str) -> tuple:
-        canon, inv = resolve_op_path(aliases, op)
-        return (rid, st, canon, mem, inv)
-
-    non_row_idents: list[dict] = []                                                # the no-row families, classified below
-    keyed, keyed_not_exec = Counter(), Counter()                                   # row-produced identities of a no-row family (ATen norm scales)
+    non_row_idents: list[Mapping[str, Any]] = []                                   # the no-row families, classified by `_not_executed_without_rows`
+    keyed: Counter = Counter()                                                     # row-produced identities of a no-row family (ATen norm scales)
     if man is not None:
         for ident in man.identities:
             fam = str(ident.get("family"))
@@ -180,7 +168,33 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
     else:
         for (rid, st, op, mem), a in addresses.items():
             fam_total[_address_family(op, mem, a)] += 1
-    total = sum(fam_total.values())
+    return _Required(by_key=by_key, fam_total=fam_total, ranks_seen=ranks_seen, non_row_idents=non_row_idents, keyed=keyed)
+
+
+@dataclass
+class _Reach:
+    """What `_reach` counts over the Program rows' addresses; a Counter is by family unless it says by request."""
+    reached: Counter                            # identities with >= 1 evaluable VU
+    reached_rows: Counter                       # their Program-row addresses (a 2-member row addresses 2 identities)
+    evald: Counter                              # identities under an evaluated (request, step, module)
+    not_exec: Counter                           # identities at steps >= n_exec
+    not_exec_req: Counter                       # by request: every classified identity (rows + named inputs)
+    not_exec_req_rows: Counter                  # by request: the classified ROW identities only
+    keyed_not_exec: Counter                     # row-produced identities of a no-row family at steps >= n_exec
+    req_max_step: dict[str, int]                # by request: the last step Q(P) carries an identity at
+    req_ids: Counter                            # by request: required row identities
+    groups: dict[tuple, dict]                   # the rows with no evaluable VU, by (family, spec family, class)
+    past_stop: list[dict]                       # an EVALUATED VU past a request's executed prefix
+    outside: tuple[int, list[dict]]             # (count, the first few): a VU whose address is not a required identity
+    rows_disagree: tuple[int, list[dict]]       # an identity's block height is not the number of Program rows producing it
+    rows_annot: tuple[int, list[dict]]          # an identity's `rows` annotation is not its block height
+    missing: tuple[int, list[dict]]             # a required identity no row produces
+
+
+def _reach(man: RequiredManifest | None, addresses: dict[tuple, dict], evaluated: set[tuple], by_key: dict[tuple, Mapping[str, Any]],
+           aliases: dict[str, tuple[str, int]], executed_prefix: dict[str, dict] | None) -> _Reach:
+    """Every Program-row address against Q(P): reached (an evaluable VU), not executed (at or past its request's n_exec), or grouped
+    under the class that says why it has no VU; with the findings the reconciliation fails on."""
     # --- reach: identities with >= 1 evaluable VU; evaluated: identities under an evaluated (request, step, module) -------------------
     reached: Counter = Counter()
     reached_rows: Counter = Counter()                                              # Program-row addresses (a 2-member row addresses 2 identities)
@@ -196,15 +210,17 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
     rows_annot: list[dict] = []
     n_outside = n_rows_disagree = n_rows_annot = n_missing = 0
     groups: dict[tuple, dict] = {}
+    keyed_not_exec: Counter = Counter()                                            # row-produced identities of a no-row family (ATen norm scales)
     seen_keys: set[tuple] = set()
     for (rid, st, op, mem), a in sorted(addresses.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2], kv[0][3])):
-        k5 = _key(rid, st, op, mem)
+        canon, inv = resolve_op_path(aliases, op)
+        k5 = (rid, st, canon, mem, inv)
         seen_keys.add(k5)
         ident = by_key.get(k5) if man is not None else None
         fam = str(ident["family"]) if ident is not None else _address_family(op, mem, a)
         if man is not None and ident is None:
             n_outside += 1
-            if len(outside) < first_n:
+            if len(outside) < FIRST:
                 outside.append({"request_id": rid, "step": st, "op_path": op, "member": mem, "spec": a["spec"], "class": a["class"]})
             # not a required identity: it is NOT counted toward the reach of Q(P) (the replay does not enlarge the population)
         elif ident is not None:
@@ -216,11 +232,11 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
             height = ((int(hi) - int(lo)) // int(width)) if (hi is not None and isinstance(width, int) and width > 0) else None
             if height is not None and height != int(a["rows"]):
                 n_rows_disagree += 1
-                if len(rows_disagree) < first_n:
+                if len(rows_disagree) < FIRST:
                     rows_disagree.append({"request_id": rid, "step": st, "op_path": op, "member": mem, "manifest_height": height, "program_rows": a["rows"]})
             if isinstance(ident.get("rows"), int) and height is not None and int(ident["rows"]) != height:
                 n_rows_annot += 1
-                if len(rows_annot) < first_n:
+                if len(rows_annot) < FIRST:
                     rows_annot.append({"request_id": rid, "step": st, "op_path": op, "member": mem, "rows_annotation": ident["rows"], "height": height})
         if ident is not None:
             req_ids[str(rid)] += 1
@@ -259,9 +275,19 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
         for k, ident in by_key.items():
             if k not in seen_keys:
                 n_missing += 1
-                if len(missing) < first_n:
+                if len(missing) < FIRST:
                     missing.append({"request_id": k[0], "step": k[1], "op_path": k[2], "member": k[3], "invocation": k[4], "family": ident.get("family"),
                                     "spec": ident.get("spec")})
+    return _Reach(reached=reached, reached_rows=reached_rows, evald=evald, not_exec=not_exec, not_exec_req=not_exec_req,
+                  not_exec_req_rows=not_exec_req_rows, keyed_not_exec=keyed_not_exec, req_max_step=req_max_step, req_ids=req_ids, groups=groups,
+                  past_stop=past_stop, outside=(n_outside, outside), rows_disagree=(n_rows_disagree, rows_disagree),
+                  rows_annot=(n_rows_annot, rows_annot), missing=(n_missing, missing))
+
+
+def _not_executed_without_rows(non_row_idents: list[Mapping[str, Any]], executed_prefix: dict[str, dict], reach: _Reach) -> tuple[dict[str, str], dict[str, dict], Counter]:
+    """The not-executed class over the NO-ROW families, counted into `reach` (`not_exec`, `not_exec_req`, `req_max_step`).  Returns each
+    family's kind, the batch-level planes' counts by family, and by request their slots past the stop."""
+    not_exec, not_exec_req, req_max_step = reach.not_exec, reach.not_exec_req, reach.req_max_step
     # --- the class over the NO-ROW families: the rule names identities of a request at request-relative steps
     # >= n_exec, whatever their family -- a named input (`input_token_ids` at r0's steps past its stop) or any other per-request identity is
     # not executed by the same rule as the rows; a BATCH-LEVEL plane (request_id '*', `requests` list, ONE engine step) is not executed
@@ -273,15 +299,17 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
     batch_slots_req: Counter = Counter()
     for ident in non_row_idents:
         fam = str(ident.get("family"))
-        rid, st = ident.get("request_id"), ident.get("step")
+        rid = ident.get("request_id")
+        st: Any = ident.get("step")                                                # None where the identity states no step
         if rid != "*" and st != "*":
             kind_by_family.setdefault(fam, "named-input" if fam == "input_token_ids" else "per-request")
+            step = int(st)
             ep = executed_prefix.get(str(rid))
-            if ep is not None and not ep.get("faults") and int(st) >= int(ep["n_exec"]):
+            if ep is not None and not ep.get("faults") and step >= int(ep["n_exec"]):
                 not_exec[fam] += 1
                 not_exec_req[str(rid)] += 1
-            elif int(st) > req_max_step.get(str(rid), -1):
-                req_max_step[str(rid)] = int(st)
+            elif step > req_max_step.get(str(rid), -1):
+                req_max_step[str(rid)] = step
         elif rid == "*" and isinstance(ident.get("requests"), list) and ident.get("engine_step") is not None:
             kind_by_family.setdefault(fam, "batch-level")
             e, listed = int(ident["engine_step"]), [str(r) for r in ident["requests"]]
@@ -304,7 +332,11 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
                 b["identities_partially_executed"] += 1
         else:
             kind_by_family.setdefault(fam, "static" if st == "*" else "unclassified")
-    # --- the uncovered list: row groups by class, then the families with no rows at all -------------------------------------------------
+    return kind_by_family, batch_level, batch_slots_req
+
+
+def _uncovered_by_class(groups: dict[tuple, dict], fam_total: Counter, keyed: Counter, not_exec: Counter, keyed_not_exec: Counter) -> list[dict]:
+    """The uncovered list: the row groups by class, then the families with no rows at all, each with its mechanism of record."""
     mech_of_class = {
         "state-linked": "C1 coverage + C3 openings + form (B) where present; the exact VU (K/V history from committed qkv outputs) is an engineering gap, not a domain",
         "no-evaluator": "C1 coverage + C3 openings + form (B) where present; a registered evaluator is the engineering gap (form (A) required)",
@@ -312,7 +344,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
         "interior-composed-v2": "C1 / C3 + form (B) required (no composed evaluator yet)",
         "mixed": "rows of two classes under one identity: named, resolve before any claim",
     }
-    uncovered = []
+    uncovered: list[dict] = []
     for g in sorted(groups.values(), key=lambda g: (-g["identities"], g["family"], g["spec"])):
         shapes = sorted(g.pop("shapes"))
         uncovered.append(dict(g, shapes=len(shapes), shape_example=shapes[0], mechanism=mech_of_class.get(g["class"], "unstated (fail closed)")))
@@ -325,14 +357,19 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
         uncovered.append({"family": fam, "spec": None, "class": cls, "identities": n_rowless, "row_addresses": 0,
                           "why": "no VU row of its own (the query requires it; the exact replay has no relation to evaluate for it)",
                           "mechanism": QUERY_FAMILY_MECHANISM.get(fam, "UNSTATED: a required family with no named mechanism -- fail closed on the record")})
+    return uncovered
+
+
+def _controller(mq: Mapping[str, Any] | None, controller_rows: dict[str, int] | None) -> tuple[dict[str, Any] | None, list[dict]]:
+    """The controller statement of a lifted Program (None on an un-lifted one) and the manifest header's disagreement with the
+    replay's own count of guard rows ([] when they agree).  `mq`: the manifest's query header."""
     # a LIFTED Program's controller rows (LStepLive / LSelect / LBot; Continuation_v1's LIsEOS<E> `is_eos`,
     # LEmitNext[H] `emit`, LSelect<w> `out` = the bits b_t / e_t / r_t / o_t / u_t) carry NO identity under Q_module_v1's rule (so
     # RequiredValues(Lift(P), Q) == RequiredValues(P, Q) row for row) -- the population statement NAMES them as uncovered with their
     # mechanism of record (the lifted record's R8 controller replay through the registered evaluators; the executed prefix from r_t, R3)
     # instead of letting them be silently absent.  identities 0 by rule, rows counted; a decision to give the bits identities is a Q change
     # (Q_module_v2: digest moves), recorded in Q-EXPANSION -- not made here.
-    mq = man.query if man is not None else None
-    controller = None
+    controller: dict[str, Any] | None = None
     hdr_rows = int(mq.get("guard_rows") or 0) if isinstance(mq, dict) else 0
     own_rows = {str(k): int(v) for k, v in (controller_rows or {}).items()}          # the replay's own count per request Program (c2)
     # the header vs the replay's own count of guard-prefixed rows: the required manifest of record is the traversal of
@@ -356,11 +393,11 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
                               "RequiredValues(P, Q) row for row; the bits are not sampled by C2 -- said here BY NAME"),
                       "mechanism": ("the lifted record's R8 controller replay through the registered evaluators (LIsEOS / LEmitNext / LSelect; pad "
                                     "Continuation_v1) + the executed prefix derived from r_t (R3, executed_prefix_of_record served=)")}
-        uncovered.append(controller)
-    n_reached, n_evald = sum(reached.values()), sum(evald.values())
-    n_uncovered = sum(int(u["identities"]) for u in uncovered)
-    n_not_exec = sum(not_exec.values())
-    ep_faults = [{"request_id": r, "faults": e.get("faults")} for r, e in sorted((executed_prefix or {}).items()) if e.get("faults")]
+    return controller, ctrl_disagree
+
+
+def _manifest_cut(man: RequiredManifest | None, executed_prefix: dict[str, dict] | None, req_max_step: dict[str, int], not_exec_req: Counter) -> list[dict]:
+    """The classified requests whose Q(P) carries no identity at their not-executed steps, by name."""
     # the class is an EXCLUSION over the cap-length manifest of record: a classified request whose Q(P) carries NO
     # identity at its not-executed steps was CUT before it reached the population (a restricted manifest handed in as Q(P)) -- N_manifest
     # would shrink silently and the class count 0.  Named here, fails the reconciliation: the manifest of record is never restricted.
@@ -375,6 +412,11 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
                                      "n_exec": int(e["n_exec"]), "identities_at_not_executed_steps": int(not_exec_req.get(str(r), 0)),
                                      "why": "Q(P) carries no identity at the request's not-executed steps: the manifest was restricted before the "
                                             "population (the manifest of record stays cap-length; the class is the exclusion)"})
+    return manifest_cut
+
+
+def _unreachable_by_alias(man: RequiredManifest | None, aliases: dict[str, tuple[str, int]]) -> tuple[int, list[dict]]:
+    """(count, the first few) of the identities at invocation >= 1 that no alias entry maps a Program path to."""
     # an identity at invocation >= 1 is addressed ONLY through `op_path_aliases` (a shared module's k-th call, at the
     # first layer's path); one that is the image of no alias entry is unreachable from every Program row -- the 960 + 960 on the TP2 B1 row
     # of record were this (the rank merge had dropped the table).  The CAUSE named beside the two symptom counts, fails the reconciliation.
@@ -386,43 +428,30 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
             inv = int(ident.get("invocation", 0) or 0)
             if inv >= 1 and (str(ident.get("op_path")), inv) not in alias_images:
                 n_unreachable += 1
-                if len(unreachable) < first_n:
+                if len(unreachable) < FIRST:
                     unreachable.append({"request_id": ident.get("request_id"), "step": ident.get("step"), "op_path": ident.get("op_path"),
                                         "invocation": inv, "family": ident.get("family"), "rank": ident.get("rank", 0)})
-    checks = {"vus_outside_query": {"n": n_outside, "first": outside}, "identities_without_rows": {"n": n_missing, "first": missing},
-              "identities_unreachable_by_alias": {"n": n_unreachable, "first": unreachable, "alias_entries": len(aliases),
-                                                  "why": ("invocation >= 1 identities that no `op_path_aliases` entry maps a Program path to: the manifest "
-                                                          "carries no (or a partial) alias table; the Program's per-layer rows of the shared module then "
-                                                          "read as vus_outside_query and these identities as identities_without_rows"
-                                                          if n_unreachable else None)},
-              "rows_disagree": {"n": n_rows_disagree, "first": rows_disagree},
-              "rows_annotation_inconsistent": {"n": n_rows_annot, "first": rows_annot,
-                                               "note": "manifest annotation only (`rows` != element_range / width); digest-neutral, not a reach gap"},
-              "ranks": {"replay": [int(r) for r in ranks], "manifest": sorted(ranks_seen) if man is not None else None,
-                        "equal": (sorted(ranks_seen) == sorted(int(r) for r in ranks)) if man is not None else None},
-              "accounted": (n_reached + n_uncovered + n_not_exec == total) if man is not None else None,
-              "unstated_families": [u["family"] for u in uncovered if u["class"] == "unstated"],
-              "controller_rows_disagree": {"n": len(ctrl_disagree), "first": ctrl_disagree[:first_n]},   # [R4 c2] header vs the replay's own count
-              "executed_prefix_rule": {"applied": bool(executed_prefix), "faults": ep_faults, "evaluated_past_stop": {"n": len(past_stop), "first": past_stop[:first_n]},
-                                       "manifest_cut_before_classification": {"n": len(manifest_cut), "first": manifest_cut[:first_n]}}}
-    if refused is not None:
-        checks["manifest_refused"] = {"field": refused.field, "why": str(refused)}
-    checks["ok"] = (False if refused is not None else None if man is None else     # None = not reconciled (no Q(P) supplied), stated
-                    bool(n_outside == 0 and n_missing == 0 and n_unreachable == 0 and n_rows_disagree == 0 and checks["ranks"]["equal"] is not False
-                         and checks["accounted"] is not False and not checks["unstated_families"]
-                         and not ep_faults and not past_stop and not manifest_cut and not ctrl_disagree))
+    return n_unreachable, unreachable
+
+
+def _source(man: RequiredManifest | None, refused: RecordError | None) -> str:
+    """`query_total.source`: which query the manifest is of, or that there is no Q(P) to reconcile against."""
     _qid0 = _header(man, "query_id") or "Q_module_v1"
     _noun = {"Q_module_v1": ("the module-boundary query of record", "Program row = module-boundary VU"),
              "Q_module_pad_v1": ("the declared padded-boundary query", "Program row = module-boundary VU + every slot unit of a padded MoE row"),
              "Q_fine_v1": ("the fine query (vu_canonical) through the RequiredValues path", "fine VU = relation-level partition unit"),
              "Q_fine_direct_v1": ("the directly-committed fine query", "fine VU ending at a materialised word + the module rows"),
              }.get(_qid0, ("the query of record", (_header(man, "unit") or "per its header")))
-    src = ((f"required manifest: {_qid0}(P) -- {_noun[0]} over the Program (unit: {_noun[1]}; "
+    return (f"required manifest: {_qid0}(P) -- {_noun[0]} over the Program (unit: {_noun[1]}; "
             "Q_fine_v1 selects the families, not the unit)" if man is not None
             else f"required manifest REFUSED ({refused}): nothing reconciled; the Program rows' own manifest addresses, NOT a Q(P) statement"
             if refused is not None
             else "NO required manifest supplied: the Program rows' own manifest addresses (the v2 query's population; NOT a Q(P) statement -- "
-                 "weights / ids / hidden streams absent)"))
+                 "weights / ids / hidden streams absent)")
+
+
+def _guard_line(man: RequiredManifest | None, refused: RecordError | None) -> str:
+    """The manifest's guard state and cross-check as the scope line says them."""
     # the guard's state travels with Q(P) onto the record: a manifest whose dataflow guard was not armed says so here
     guard = man.guard if man is not None else None
     guard_line = (("guard armed" if guard.get("armed") else "guard NOT armed") + f" ({guard.get('engine')})" if guard is not None
@@ -436,6 +465,13 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
                        f"{(cc.get('identities') or {}).get(cc.get('other_engine'))} identities)")
     elif man is not None:
         guard_line += f"; no cross-check on the manifest (one engine asked for by name: {_manifest_engine_name(man)})"
+    return guard_line
+
+
+def _scope(man: RequiredManifest | None, guard_line: str, fam_total: Counter, n_reached: int, n_evald: int, uncovered: list[dict], n_not_exec: int,
+           ep_faults: list[dict[str, Any]], executed_prefix: dict[str, dict] | None) -> str:
+    """The record's `scope`: Q(P), the reach, the uncovered and the not-executed in one line."""
+    total = sum(fam_total.values())
     # the query of record BY ID on the scope line (a manifest predating the id: named as such, never assumed)
     qid = (_header(man, "query_id") or "Q_module (older header, no query_id)") if man is not None else "Q"
     if total:
@@ -449,67 +485,168 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
         scope += (f"; not-executed {n_not_exec} identities (" + ", ".join(f"{r}: a_r {e['a_r']} LAG {e['lag']} -> steps [{e['n_exec']}, {e['cap']})"
                                                                              for r, e in sorted((executed_prefix or {}).items()) if e.get('steps_not_executed')) + ")"
                   + ("; executed-prefix FAULTS: " + "; ".join(f"{f['request_id']}: {f['faults'][0]}" for f in ep_faults) if ep_faults else ""))
-    return {"query_total": {"source": src, "identities": int(total), "by_family": {k: int(v) for k, v in sorted(fam_total.items())},
-                            "manifest_digest": man.manifest_digest if man is not None else None,
-                            "program_digest": man.program_digest if man is not None else None,
-                            "query_digest": _header(man, "query_digest"),
-                            "query_id": _header(man, "query_id"),                                                  # Q_module_v1
-                            "query_id_digest": _header(man, "query_id_digest"),
-                            "engine": (_manifest_engine_name(man) if man is not None else None),
-                            "implemented_query": _header(man, "implemented_query"),
-                            "unit": "Program row = module-boundary VU under Q_module_v1 (a `vus` count above is a count of those rows)",
-                            "requests": man.requests if man is not None else None,
-                            "guard": ({k: guard.get(k) for k in ("engine", "armed", "available", "fully_wired", "flags", "named_input") if k in guard}
-                                      if guard is not None else None),
-                            "cross_check": ({k: cc.get(k) for k in ("agree", "primary_engine", "other_engine", "digests", "identities", "complete", "why") if k in cc}
-                                            if cc is not None else None),
-                            "guard_rule": ("the 'missing family cannot vanish from both sides' guard (unnamed crossing / unnamed input / hidden-BN "
-                                           "disagreement) is ARMED only when the traversal engine audited every request Program's operand runs; "
-                                           "not armed = the population is the vocabulary's word alone, said here rather than read as clean")},
-            "sampled_strata": {"identities_reached": int(n_reached), "identities_under_evaluated_module": int(n_evald), "row_addresses_reached": int(sum(reached_rows.values())),
-                               "share_of_query": (round(n_reached / total, 4) if total else None),
-                               "by_family_reached": {k: int(v) for k, v in sorted(reached.items())}, "by_family_under_evaluated_module": {k: int(v) for k, v in sorted(evald.items())},
-                               "strata": (len(strata) if strata is not None else None),
-                               "strata_evaluated": (sum(1 for v in strata.values() if int(v.get("evaluated") or 0) > 0) if strata is not None else None),
-                               "rule": ("'complete' grades the sampled strata over the REACHED identities only; every required identity outside the "
-                                        "reach is in uncovered_by_name (with its mechanism of record), never inside the grade. "
-                                        "`identities_under_evaluated_module` counts every identity of a (request, step, module) with >= 1 evaluated pick "
-                                        "-- one pick under a 2-member module counts 2; it is NOT a count of identities whose own elements were evaluated")},
+    return scope
+
+
+def _query_total(man: RequiredManifest | None, refused: RecordError | None, fam_total: Counter) -> dict[str, Any]:
+    """`query_total`: |Q(P)| and its families, with the manifest's digests, engine, guard and cross-check."""
+    total = sum(fam_total.values())
+    guard = man.guard if man is not None else None
+    cc = man.cross_check if man is not None else None
+    return {"source": _source(man, refused), "identities": int(total), "by_family": {k: int(v) for k, v in sorted(fam_total.items())},
+            "manifest_digest": man.manifest_digest if man is not None else None,
+            "program_digest": man.program_digest if man is not None else None,
+            "query_digest": _header(man, "query_digest"),
+            "query_id": _header(man, "query_id"),                                                  # Q_module_v1
+            "query_id_digest": _header(man, "query_id_digest"),
+            "engine": (_manifest_engine_name(man) if man is not None else None),
+            "implemented_query": _header(man, "implemented_query"),
+            "unit": "Program row = module-boundary VU under Q_module_v1 (a `vus` count above is a count of those rows)",
+            "requests": man.requests if man is not None else None,
+            "guard": ({k: guard.get(k) for k in ("engine", "armed", "available", "fully_wired", "flags", "named_input") if k in guard}
+                      if guard is not None else None),
+            "cross_check": ({k: cc.get(k) for k in ("agree", "primary_engine", "other_engine", "digests", "identities", "complete", "why") if k in cc}
+                            if cc is not None else None),
+            "guard_rule": ("the 'missing family cannot vanish from both sides' guard (unnamed crossing / unnamed input / hidden-BN "
+                           "disagreement) is ARMED only when the traversal engine audited every request Program's operand runs; "
+                           "not armed = the population is the vocabulary's word alone, said here rather than read as clean")}
+
+
+def _sampled_strata(reach: _Reach, total: int, strata: dict[str, dict] | None) -> dict[str, Any]:
+    """`sampled_strata`: what the exact replay reaches and what it evaluated, as a share of Q(P)."""
+    reached, reached_rows, evald = reach.reached, reach.reached_rows, reach.evald
+    n_reached, n_evald = sum(reached.values()), sum(evald.values())
+    return {"identities_reached": int(n_reached), "identities_under_evaluated_module": int(n_evald), "row_addresses_reached": int(sum(reached_rows.values())),
+            "share_of_query": (round(n_reached / total, 4) if total else None),
+            "by_family_reached": {k: int(v) for k, v in sorted(reached.items())}, "by_family_under_evaluated_module": {k: int(v) for k, v in sorted(evald.items())},
+            "strata": (len(strata) if strata is not None else None),
+            "strata_evaluated": (sum(1 for v in strata.values() if int(v.get("evaluated") or 0) > 0) if strata is not None else None),
+            "rule": ("'complete' grades the sampled strata over the REACHED identities only; every required identity outside the "
+                     "reach is in uncovered_by_name (with its mechanism of record), never inside the grade. "
+                     "`identities_under_evaluated_module` counts every identity of a (request, step, module) with >= 1 evaluated pick "
+                     "-- one pick under a 2-member module counts 2; it is NOT a count of identities whose own elements were evaluated")}
+
+
+def _not_executed_rule(executed_prefix: dict[str, dict], n_not_exec: int, not_exec_req: Counter) -> dict[str, Any]:
+    """`not_executed_rule`: the rule's parameters and count by request, and which mechanism produced the class."""
+    return {"rule": "not-executed(a_r, LAG)", "applied": bool(executed_prefix), "n": int(n_not_exec),
+            "requests": {r: {"a_r": e["a_r"], "lag": e["lag"], "n_exec": e["n_exec"], "cap": e["cap"], "step_range": e.get("steps_not_executed"),
+                             "n": int(not_exec_req.get(r, 0)), "faults": e.get("faults"), "mechanism": e.get("mechanism")}
+                         for r, e in sorted((executed_prefix or {}).items())},
+            # WHICH mechanism produced the class, per request, BY NAME: the recurrence (one code path with
+            # Continuation_v1) or the arithmetic (the served list / the unit absent) -- a reader sees the tie's status on the record
+            "mechanism": {m: int(n) for m, n in sorted(Counter(str(e.get("mechanism") or "unstated").split(":")[0]
+                                                                           for e in (executed_prefix or {}).values()).items())},
+            "r3_one_mechanism": (bool(executed_prefix) and all(e.get("r3_one_mechanism") is True for e in executed_prefix.values())),
+            "scope": NOT_EXECUTED_SCOPE}
+
+
+def _not_executed_by_rule(man: RequiredManifest | None, executed_prefix: dict[str, dict], fam_total: Counter, reach: _Reach, kind_by_family: dict[str, str],
+                          batch_level: dict[str, dict], batch_slots_req: Counter) -> dict[str, Any]:
+    """`not_executed_by_rule`: the identities of Q(P) the executed-prefix rule excludes, by family and by request, with the totals."""
+    not_exec, not_exec_req, not_exec_req_rows, req_ids = reach.not_exec, reach.not_exec_req, reach.not_exec_req_rows, reach.req_ids
+    total, n_not_exec = sum(fam_total.values()), sum(not_exec.values())
+    return {"rule": EXECUTED_PREFIX_RULE, "scope": NOT_EXECUTED_SCOPE, "applied": bool(executed_prefix), "identities": int(n_not_exec),
+            "by_family": {k: int(v) for k, v in sorted(not_exec.items())},
+            "totals": {"N_manifest": int(total) if man is not None else None,
+                       "N_required": (int(total) - int(n_not_exec)) if man is not None else None, "N_excluded": int(n_not_exec),
+                       # a batch-level family carries its plane-cell statement beside the identity-level counts (the key the MoE
+                       # reconciler reads): {identities: planes fully not executed, cells: (plane, request) cells past the stop}
+                       "by_family": {k: {"N_manifest": int(v), "N_required": int(v) - int(not_exec.get(k, 0)), "N_excluded": int(not_exec.get(k, 0)),
+                                         **({"plane_cells_not_executed": {"identities": int(batch_level[k]["identities_not_executed"]),
+                                                                          "cells": int(batch_level[k]["cells_not_executed"])}} if k in batch_level else {})}
+                                     for k, v in sorted(fam_total.items())} if man is not None else None},
+            "by_request": {r: dict(e, identities=int(not_exec_req.get(r, 0)), excluded_unexecuted_identities=int(not_exec_req.get(r, 0)),
+                               excluded_row_identities=int(not_exec_req_rows.get(r, 0)),
+                               required_row_identities=int(req_ids.get(r, 0)) - int(not_exec_req_rows.get(r, 0)),
+                               batch_level_slots_not_executed=int(batch_slots_req.get(r, 0)))
+                           for r, e in sorted((executed_prefix or {}).items())},
+            # the REACH of the class over every family of Q(P): kind per family (row | named-input |
+            # per-request | batch-level | static) and the batch-level planes' per-request slots (identity-level
+            # N_excluded counts a plane only when every listed request is past its stop; the Commit's per-request
+            # expansion reconciles against request_slots_not_executed)
+            "kind_by_family": {**{k: "row" for k in sorted(fam_total) if k in QUERY_FAMILIES_WITH_ROWS}, **dict(sorted(kind_by_family.items()))},
+            "batch_level": {k: dict(v) for k, v in sorted(batch_level.items())}}
+
+
+def query_population(manifest: RequiredManifest | dict[str, Any] | None, addresses: dict[tuple, dict], evaluated: set[tuple], *, ranks: list[int],
+                     strata: dict[str, dict] | None = None, executed_prefix: dict[str, dict] | None = None, controller_rows: dict[str, int] | None = None) -> dict[str, Any]:
+    """Reconcile the replay's reach against the population of record, Q(P), IDENTITY BY IDENTITY.
+    `manifest`: the required-value manifest of the row (Q_module(P): the module-boundary population over the Program, families selected by
+    the canonical VU query; the traversal adapter's or the inventory's -- the same identities either way); None = no manifest supplied,
+    the reconciliation is over the Program rows' own addresses and says so.
+    `addresses`: `population(..., addresses=)` accumulator (manifest address -> class of the rows producing it); `evaluated`: the
+    (request, step, op_path) triples with an evaluated pick.
+    Returns the three record fields the row must carry (`query_total`, `sampled_strata`, `uncovered_by_name`) + `query_checks`:
+      * query_total     -- |Q(P)| and its families (the authority: never the collector's, never the replay's own enumeration)
+      * sampled_strata  -- what the exact replay REACHES (identities with an evaluable VU) and what it EVALUATED, as a share of Q(P)
+      * uncovered_by_name -- every required identity the exact replay has no evaluable VU for, grouped by (family, spec, class) with the
+                             mechanism of record that covers it instead; plus the query families with no row (weights, ids, streams)
+      * query_checks    -- the fail-closed reconciliation: a VU whose address is NOT a required identity (the replay enumerating
+                           something Q(P) does not require), a required identity NO row produces, a row count that disagrees with the
+                           manifest's `rows`, a rank set that disagrees.  Any non-zero count is a finding on the record (`ok` False).
+      * not_executed_by_rule -- `executed_prefix` (request -> `executed_prefix_of_record`): the identities of Q(P) at
+                           request-relative steps >= n_exec are the third bucket beside reached / uncovered (query_total unchanged;
+                           `accounted` = reached + uncovered + not-executed == |Q(P)|); a request whose prefix carries faults is NOT
+                           classified and fails the check by name."""
+    # a manifest missing a field its writers always write is refused by name: the reach is then reconciled against nothing, and
+    # `query_checks` fails (`manifest_refused`), never a crash and never the unreconciled None of a replay handed no manifest
+    refused: RecordError | None = None
+    try:
+        man = RequiredManifest.of(manifest, HANDED) if manifest is not None else None
+    except RecordError as e:
+        man, refused = None, e
+    # shared modules (vLLM's one RotaryEmbedding instance called by every layer): the manifest addresses them at the FIRST layer's path
+    # with invocation = layer order and records the per-layer paths in `op_path_aliases` (alias -> [canonical, invocation]) -- resolved
+    # through the ONE table `CommittedStore.words` reads through as well
+    aliases = alias_table(man)
+    req = _required(man, addresses, executed_prefix)
+    fam_total, total = req.fam_total, sum(req.fam_total.values())
+    reach = _reach(man, addresses, evaluated, req.by_key, aliases, executed_prefix)
+    not_exec, past_stop = reach.not_exec, reach.past_stop
+    kind_by_family, batch_level, batch_slots_req = _not_executed_without_rows(req.non_row_idents, executed_prefix or {}, reach)
+    uncovered = _uncovered_by_class(reach.groups, fam_total, req.keyed, not_exec, reach.keyed_not_exec)
+    controller, ctrl_disagree = _controller(man.query if man is not None else None, controller_rows)
+    if controller is not None:
+        uncovered.append(controller)
+    n_reached, n_evald = sum(reach.reached.values()), sum(reach.evald.values())
+    n_uncovered = sum(int(u["identities"]) for u in uncovered)
+    n_not_exec = sum(not_exec.values())
+    ep_faults: list[dict[str, Any]] = [{"request_id": r, "faults": e.get("faults")} for r, e in sorted((executed_prefix or {}).items()) if e.get("faults")]
+    manifest_cut = _manifest_cut(man, executed_prefix, reach.req_max_step, reach.not_exec_req)
+    n_unreachable, unreachable = _unreachable_by_alias(man, aliases)
+    (n_outside, outside), (n_missing, missing) = reach.outside, reach.missing
+    (n_rows_disagree, rows_disagree), (n_rows_annot, rows_annot) = reach.rows_disagree, reach.rows_annot
+    ranks_equal = (sorted(req.ranks_seen) == sorted(int(r) for r in ranks)) if man is not None else None
+    checks = {"vus_outside_query": {"n": n_outside, "first": outside}, "identities_without_rows": {"n": n_missing, "first": missing},
+              "identities_unreachable_by_alias": {"n": n_unreachable, "first": unreachable, "alias_entries": len(aliases),
+                                                  "why": ("invocation >= 1 identities that no `op_path_aliases` entry maps a Program path to: the manifest "
+                                                          "carries no (or a partial) alias table; the Program's per-layer rows of the shared module then "
+                                                          "read as vus_outside_query and these identities as identities_without_rows"
+                                                          if n_unreachable else None)},
+              "rows_disagree": {"n": n_rows_disagree, "first": rows_disagree},
+              "rows_annotation_inconsistent": {"n": n_rows_annot, "first": rows_annot,
+                                               "note": "manifest annotation only (`rows` != element_range / width); digest-neutral, not a reach gap"},
+              "ranks": {"replay": [int(r) for r in ranks], "manifest": sorted(req.ranks_seen) if man is not None else None, "equal": ranks_equal},
+              "accounted": (n_reached + n_uncovered + n_not_exec == total) if man is not None else None,
+              "unstated_families": [u["family"] for u in uncovered if u["class"] == "unstated"],
+              "controller_rows_disagree": {"n": len(ctrl_disagree), "first": ctrl_disagree[:FIRST]},   # [R4 c2] header vs the replay's own count
+              "executed_prefix_rule": {"applied": bool(executed_prefix), "faults": ep_faults, "evaluated_past_stop": {"n": len(past_stop), "first": past_stop[:FIRST]},
+                                       "manifest_cut_before_classification": {"n": len(manifest_cut), "first": manifest_cut[:FIRST]}}}
+    if refused is not None:
+        checks["manifest_refused"] = {"field": refused.field, "why": str(refused)}
+    checks["ok"] = (False if refused is not None else None if man is None else     # None = not reconciled (no Q(P) supplied), stated
+                    bool(n_outside == 0 and n_missing == 0 and n_unreachable == 0 and n_rows_disagree == 0 and ranks_equal is not False
+                         and checks["accounted"] is not False and not checks["unstated_families"]
+                         and not ep_faults and not past_stop and not manifest_cut and not ctrl_disagree))
+    scope = _scope(man, _guard_line(man, refused), fam_total, n_reached, n_evald, uncovered, n_not_exec, ep_faults, executed_prefix)
+    return {"query_total": _query_total(man, refused, fam_total), "sampled_strata": _sampled_strata(reach, total, strata),
             "uncovered_by_name": uncovered, "uncovered_identities": int(n_uncovered),
             "controller": controller,   # [R4] None on an un-lifted Program; on a lifted one the named statement above (also in uncovered_by_name)
             # the two flat keys the readers wait for, emitted from the SAME computation as the block below
             "not_executed_by_family": {k: int(v) for k, v in sorted(not_exec.items())},
-            "not_executed_rule": {"rule": "not-executed(a_r, LAG)", "applied": bool(executed_prefix), "n": int(n_not_exec),
-                                  "requests": {r: {"a_r": e["a_r"], "lag": e["lag"], "n_exec": e["n_exec"], "cap": e["cap"], "step_range": e.get("steps_not_executed"),
-                                                   "n": int(not_exec_req.get(r, 0)), "faults": e.get("faults"), "mechanism": e.get("mechanism")}
-                                               for r, e in sorted((executed_prefix or {}).items())},
-                                  # WHICH mechanism produced the class, per request, BY NAME: the recurrence (one code path with
-                                  # Continuation_v1) or the arithmetic (the served list / the unit absent) -- a reader sees the tie's status on the record
-                                  "mechanism": {m: int(n) for m, n in sorted(Counter(str(e.get("mechanism") or "unstated").split(":")[0]
-                                                                                                 for e in (executed_prefix or {}).values()).items())},
-                                  "r3_one_mechanism": (bool(executed_prefix) and all(e.get("r3_one_mechanism") is True for e in executed_prefix.values())),
-                                  "scope": NOT_EXECUTED_SCOPE},
-            "not_executed_by_rule": {"rule": EXECUTED_PREFIX_RULE, "scope": NOT_EXECUTED_SCOPE, "applied": bool(executed_prefix), "identities": int(n_not_exec),
-                                     "by_family": {k: int(v) for k, v in sorted(not_exec.items())},
-                                     "totals": {"N_manifest": int(total) if man is not None else None,
-                                                "N_required": (int(total) - int(n_not_exec)) if man is not None else None, "N_excluded": int(n_not_exec),
-                                                # a batch-level family carries its plane-cell statement beside the identity-level counts (the key the MoE
-                                                # reconciler reads): {identities: planes fully not executed, cells: (plane, request) cells past the stop}
-                                                "by_family": {k: {"N_manifest": int(v), "N_required": int(v) - int(not_exec.get(k, 0)), "N_excluded": int(not_exec.get(k, 0)),
-                                                                  **({"plane_cells_not_executed": {"identities": int(batch_level[k]["identities_not_executed"]),
-                                                                                                   "cells": int(batch_level[k]["cells_not_executed"])}} if k in batch_level else {})}
-                                                              for k, v in sorted(fam_total.items())} if man is not None else None},
-                                     "by_request": {r: dict(e, identities=int(not_exec_req.get(r, 0)), excluded_unexecuted_identities=int(not_exec_req.get(r, 0)),
-                                                        excluded_row_identities=int(not_exec_req_rows.get(r, 0)),
-                                                        required_row_identities=int(req_ids.get(r, 0)) - int(not_exec_req_rows.get(r, 0)),
-                                                        batch_level_slots_not_executed=int(batch_slots_req.get(r, 0)))
-                                                    for r, e in sorted((executed_prefix or {}).items())},
-                                     # the REACH of the class over every family of Q(P): kind per family (row | named-input |
-                                     # per-request | batch-level | static) and the batch-level planes' per-request slots (identity-level
-                                     # N_excluded counts a plane only when every listed request is past its stop; the Commit's per-request
-                                     # expansion reconciles against request_slots_not_executed)
-                                     "kind_by_family": {**{k: "row" for k in sorted(fam_total) if k in QUERY_FAMILIES_WITH_ROWS}, **dict(sorted(kind_by_family.items()))},
-                                     "batch_level": {k: dict(v) for k, v in sorted(batch_level.items())}},
+            "not_executed_rule": _not_executed_rule(executed_prefix or {}, n_not_exec, reach.not_exec_req),
+            "not_executed_by_rule": _not_executed_by_rule(man, executed_prefix or {}, fam_total, reach, kind_by_family, batch_level, batch_slots_req),
             "query_checks": checks, "scope": scope}
 
 
