@@ -97,7 +97,8 @@ theorem refOf_ok {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : Sample
     · simp only [hj, error_bind] at h; cases h
     simp only [hj, ok_bind] at h
     rcases hr : (m.own.registered.map fun j => (_root_.Flock.RecordText.printT j).toUTF8).mapM
-        (fun b => do _root_.Flock.Registered.ofJson (← SampledTwoDesc.jsonOf "registered reads" b)) with e | registered
+        (fun b => do _root_.Flock.Registered.ofJson (← SampledTwoDesc.jsonOf "registered reads" b)) with
+      e | registered
     · simp only [hr, error_bind] at h; cases h
     simp only [hr, ok_bind] at h
     rcases hs : SampledTwoDesc.setupAt (_root_.Flock.Zk.tags tags (_root_.Flock.Zk.maskLogOf circuit) 1) tags circuit
@@ -113,8 +114,8 @@ theorem refOf_ok {p : SampledTwo.Params} {bs : Core.Blobs} {t : ℕ} {R : Sample
 theorem fits_of {R : SampledTwoDesc.Ref} (hf : SampledTwoDesc.fits R = true) : (rawOf R).Fits := by
   unfold SampledTwoDesc.fits at hf
   simp only [Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at hf
-  obtain ⟨⟨⟨⟨⟨⟨hc, hp⟩, hl⟩, hi⟩, hpa⟩, hpr⟩, hre⟩ := hf
-  refine ⟨(by show Spot.OneStageZk.STATEMENT.toUTF8.size < 2 ^ 64; decide +kernel), hc, hp, hl, fun q hq => hi q hq,
+  obtain ⟨⟨⟨⟨⟨⟨⟨hs, hc⟩, hp⟩, hl⟩, hi⟩, hpa⟩, hpr⟩, hre⟩ := hf
+  refine ⟨hs, hc, hp, hl, fun q hq => hi q hq,
     (by show 1 < 2 ^ 64; decide), ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro b hb; cases hb
   · intro b hb; cases hb; exact hpa
@@ -434,8 +435,8 @@ theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot
     rw [zkOk_rawOf hj (hR' R hRm).1]
     exact (hR' R hRm).2.1
   have hfirst := firstOf_of hf
-  refine ⟨rs.map fun R => (rawOf R).encode, ⟨f.verifier, f.rule, f.closure⟩, ns, ks, SampledTwoDesc.requests l,
-    zkOk_refStmt hxsOk, refStmtsOf_of_refsOf hrs, hfirst, (cellsOf_eq i it) ▸ hc, fun hw => ?_⟩
+  refine ⟨rs.map fun R => (rawOf R).encode, ⟨f.verifier, f.rule, f.closure⟩, ns, ks, requests l,
+    zkOk_refStmt hxsOk, refStmtsOf_of_refsOf hrs, hfirst, hc, fun hw => ?_⟩
   unfold walksOk at hw
   simp only [Bool.and_eq_true] at hw
   obtain ⟨⟨⟨⟨hsn, hwm⟩, hrw⟩, hwu⟩, hwr⟩ := hw
@@ -447,7 +448,7 @@ theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot
   rw [refStmtsOf_of_refsOf hrs]
   simp only
   unfold heldOk
-  rw [hfirst, ← cellsOf_eq, hc]
+  rw [hfirst, show cellsOf i it = some (ns, ks) from hc]
   simp only [Reg.program, Reg.query, hl]
   rw [dif_pos hxsOk]
   refine decided_of (l := l) (d := ⟨[(law.map oneStageOf).getD .all, .all]⟩) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
@@ -467,10 +468,10 @@ theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot
     intro x hx
     obtain ⟨t, ht, rfl⟩ := List.mem_map.1 hx
     have ht' : t < it.circuits.size := by simpa [held₀, unitsOf] using ht
-    show memberOk (stmtOf (refStmt _ t), (unitsOf (SampledTwoDesc.requests l) ns it.circuits.size).getD t #[]) = true
+    show memberOk (stmtOf (refStmt (rs.map fun R => (rawOf R).encode) t),
+      (unitsOf (requests l) ns it.circuits.size).getD t #[]) = true
     rw [memberOk_eq, stmtOf_refStmt hrs hfits hne' t]
-    have hsz : ((unitsOf (SampledTwoDesc.requests l) ns it.circuits.size).getD t #[]).size =
-        SampledTwoDesc.requests l * ns.getD t 0 := by
+    have hsz : ((unitsOf (requests l) ns it.circuits.size).getD t #[]).size = requests l * ns.getD t 0 := by
       simp [unitsOf, ht', List.getD_eq_getElem?_getD]
     rw [hsz]
     exact List.all_eq_true.1 hmem t (List.mem_range.2 ht')
@@ -489,20 +490,22 @@ theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot
     rw [ms_length_held₀] at ht
     obtain ⟨R, hR₁, hR₂, hRm⟩ := hat t (List.mem_range.1 ht)
     refine templateOk_of hR₁ (hR' R hRm).1 ?_ (hR' R hRm).2.2.1
-    show refStmt _ t = _
-    simp only [refStmt, List.getD_eq_getElem?_getD, List.getElem?_map, hR₂, Option.map_some, Option.getD_some]
+    show refStmt (rs.map fun R => (rawOf R).encode) t = _
+    simp only [refStmt, List.getD_eq_getElem?_getD, List.getElem?_map, hR₂] <;> rfl
   · -- every member's circuit is in the hidden-output proof's scope
     unfold membersScoped
     rw [ms_length_held₀, List.all_eq_true]
     intro t ht
     obtain ⟨R, -, hR₂, hRm⟩ := hat t (List.mem_range.1 ht)
-    show _root_.Flock.ProvedScope.scopeOkH (stmtOf (refStmt _ t)) = true
+    show _root_.Flock.ProvedScope.scopeOkH (stmtOf (refStmt (rs.map fun R => (rawOf R).encode) t)) = true
     rw [stmtOf_refStmt hrs hfits hne' t, circAt_of hR₂]
     exact (hR' R hRm).2.2.2
   · -- the registered wiring
+    have hmc : ∀ t, memberCircuit (held₀ i it { u₀ with xs := rs.map fun R => (rawOf R).encode }
+        ⟨f.verifier, f.rule, f.closure⟩ ns ks (requests l) (zkOk_refStmt hxsOk)) t = SampledTwoDesc.circAt rs t :=
+      fun t => stmtOf_refStmt hrs hfits hne' t
     unfold wiringOk
-    rw [namesOnce_eq, writersFirst_eq, wiresAlike_of (c := SampledTwoDesc.circAt rs)
-      (fun t => stmtOf_refStmt hrs hfits hne' t), refReadsOwn_eq, ms_length_held₀, hsn, hwm, hrw, hwu, hwr]
+    rw [namesOnce_eq, writersFirst_eq, wiresAlike_of hmc, refReadsOwn_eq, ms_length_held₀, hsn, hwm, hrw, hwu, hwr]
     simp only [Bool.and_true]
     exact hwir
 

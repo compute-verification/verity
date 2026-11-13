@@ -177,7 +177,8 @@ def refOf (p : SampledTwo.Params) (bs : Core.Blobs) (t : Nat) : V Ref := do
 /-- **Every field of a reference statement fits its encoding's length word**: each file, table and text under
 `2^64` bytes. -/
 def fits (r : Ref) : Bool :=
-  decide (r.circuit.size < 2 ^ 64) && decide (r.pub.size < 2 ^ 64) && decide (r.tables.length < 2 ^ 64) &&
+  decide (Spot.OneStageZk.STATEMENT.toUTF8.size < 2 ^ 64) && decide (r.circuit.size < 2 ^ 64) &&
+    decide (r.pub.size < 2 ^ 64) && decide (r.tables.length < 2 ^ 64) &&
     r.tables.all (fun q => decide (q.1.toUTF8.size < 2 ^ 64) && decide (q.2.size < 2 ^ 64)) &&
     decide (r.partitionB.size < 2 ^ 64) && decide (r.program.size < 2 ^ 64) &&
     r.registeredB.all fun b => decide (b.size < 2 ^ 64)
@@ -186,7 +187,8 @@ def fits (r : Ref) : Bool :=
 points, each at an `m` from `25` to `35` and of a shape in `Stmt.InRange`. -/
 def zkOk (spec : SessionSpec) (sts : Array Flock.Stmt) : Bool :=
   0 < sts.size && sts.size ≤ 200 && spec.points ≤ 2 &&
-    sts.toList.all fun st => 25 ≤ st.m && st.m ≤ 35 && st.c.kLog ≤ 27 && st.regions.size ≤ 1024 && spec.mPts ≤ 64
+    sts.toList.all fun st =>
+      25 ≤ st.m && st.m ≤ 35 && st.c.kLog ≤ 27 && st.regions.size ≤ 1024 && spec.mPts ≤ 64
 
 /-- **The statement circuit** of a reference statement: the circuit the scope check parses, a templated statement's
 unrolled; `default` where it doesn't parse. -/
@@ -265,13 +267,15 @@ def wireAlike (T : Nat) (names : List String) (circ : Nat → Circuit) (w : Spot
   match writerOf T names w.writer with
   | some tw =>
     ((circ t).ports[portNamed (circ t) w.port]!).words == ((circ tw).ports[portNamed (circ tw) w.wport]!).words &&
-      PortRoots.schemaOf (circ t) (portNamed (circ t) w.port) == PortRoots.schemaOf (circ tw) (portNamed (circ tw) w.wport)
+      PortRoots.schemaOf (circ t) (portNamed (circ t) w.port) ==
+        PortRoots.schemaOf (circ tw) (portNamed (circ tw) w.wport)
   | none => true
 
 /-- **Each wire's reader port is like its writer's output port**, at every template of the wire's reader's name. -/
 def wiresAlike (T : Nat) (names : List String) (wires : Option (Array Spot.SecondStage.Wire)) (circ : Nat → Circuit) :
     Bool :=
-  (wires.getD #[]).all fun w => (List.range T).all fun t => !(w.template == names.getD t "") || wireAlike T names circ w t
+  (wires.getD #[]).all fun w =>
+    (List.range T).all fun t => !(w.template == names.getD t "") || wireAlike T names circ w t
 
 /-- **Each reference read at a port no link or wire names reads a port of the interior registration** (`ports`). -/
 def refReadsOwn (T : Nat) (names : List String) (links : Option (Array Spot.SecondStage.Link))
