@@ -120058,3 +120058,15 @@ Not established: that `OwnReads.lean` compiles against the moved base or on FRAM
 - The two runs above. Per your 04:18Z message I end the turn now with one timer for 04:46Z. Both branches are pushed; the scripts I would need again are in the lane's notes.
 - On return: each run's result into its pull request's body and into an entry.
 - From you: the mark on #9479 (the ready line of 04:06Z stands unless `8074` comes back red); your word on the join; whether you want the follow-up that prints the security level at the served run's own sizes (it needs #9479 and #9621 both; not built).
+
+## MEMBERS, Fri 13 Nov 04:22Z: checkpoint, turn ended to free a place (your 04:19Z): #9441 at `51a2e803cb83e7d539c067dd50d119758e6a3e27`, the difftest passed; waits on records `2b7f` and `ea8d` (about 05:15Z) and one suite of `d582`; ONE timer set for about 05:20Z
+
+- **Heads, all pushed, nothing unpushed:** #9441 `51a2e803cb83e7d539c067dd50d119758e6a3e27`; one-parse `daff2170a160ab10f394c3588d796d3a2bfcdcca` (no pull request yet); #9584 `ae80f367e6a2`, untouched.
+- [run] `r20261113-033502-d582` (vy-nebius-cpu-1, at `51a2e803cb83`), three of four suites done: `verity/protocols/tests` 321 passed; `verity/protocols/spot/verifier` 933 passed; the Lean difftest `verity-core-sampled-proofs` 324 passed, 2 skipped. All five rows of `test_members_twin.py` passed. **So what my 03:37Z entry had as derived is now run:** on the stand-in files Lean's refusal is the twin's word for word, through `flock_form`, and a member with no statement is refused for its files by both. Still running at 04:21Z: `benchmarks/one_stage`, where `flock_form` must answer ok on the real two-member audit.
+- [run] `r20261113-033544-7bf5`, the root suite at `51a2e803cb83`: 386 passed.
+- [run] Records, both still running on vy-nebius-cpu-5: `r20261113-031715-2b7f` has `security` through (`check.py` exit 0 in 2484 s); `r20261113-031717-ea8d` is earlier in its order. No `OUTCOME` line read yet. [guess] Both end about 05:15Z.
+- [run] One-parse's try `r20261113-034214-d38b` (vy-nebius-2, pool `proofs`, at `daff2170a160`): lean exit 0 in 201 s, and none of its 17 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`. Its records are not launched; they follow #9441's ready line.
+- **Timer:** I hold ONE one-off timer, `members-9441-records`, due about 05:20Z, to read the three runs and write #9441's ready line. If you resume me before it, I drop it first.
+- **Your 04:12Z question for CIR-271** is received and not started. I take it after the ready line, before 16:00Z. First reading, [read] and incomplete: the whole description is parsed by `Spot.Program.parse` from `OneStage.paramsParsed` (the audit's parameters), from `Member.population` once per member, and from `FilePart.check`; `programDigest` only hashes it.
+- **Your 03:58Z question** (`FormApart`) is answered in my 04:03Z entry; I wait for your word on who adds the lemma.
+- Not established: `benchmarks/one_stage` at this head; the records at the merged tree; anything of one-parse beyond its try.
