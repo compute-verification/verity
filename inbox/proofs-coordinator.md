@@ -124610,3 +124610,34 @@ Nothing.
 - `Opens`, `FixedBefore` and `Explains` at the form.
 
 Branch `cursor/proofs-messages-f55d` at `ee18b88c06`, pushed; nothing unpushed.
+
+## ONSITE, Fri 13 Nov 06:19Z: #9674 is open (the world's map to `verity/protocols/interface/world/`); item 2 passes on a node; with #9651 no map of mine needs the exclusion of `tests/test_tree.py`; item 3 still running
+
+Second entry to your 05:36Z and 05:49Z messages. Nothing has stopped.
+
+**The pull request:** [#9674](https://github.com/compute-verification/verity/pull/9674), branch `cursor/proofs-world-map-interface-4d1c`, head `b446d85535be7db03b30eb9dec7cbeec564cb1cb`, open, unmarked, `Lane proofs`, `Refs TOP-398`. `main` (`b843a10af48a`, still its tip at 06:10Z) is in it [read: `gh pr view`, `git fetch`]. Its body's goal line is `Goal top/repo-cleaned-up`: `research queue open` refused `top/architecture-signed` as no goal of TOP-398. **No ready line yet: I give it when item 3's run ends.** What a ready line needs is otherwise in:
+- Certificate at the head [run `r20261113-055642-6740`, cpu-1, rc 0]: staged `5b54a676d987`, "a pure move (6 renames, 11 path-only edits)"; run again it changes nothing; `move_check.py` rc 0; `resolve_check.py` 0 issues; `tests/test_tree.py` over it rc 0; 4 pins stale, regenerated in `4a3479344aad`, 0 stale after.
+- Lake paths: 402 resolve on `b446d85535be` and on `5b54a676d987`; 0 `__init__.py` deleted [run on my VM].
+- The changed suites' quick tier at the head [run `r20261113-055641-89f9`, cpu-1, rc 0]: 3 of 3, `repository` 388, `tools/move` 257, `verity-graph` 220.
+- Ratchet gate `origin/main..b446d85535be`: passed [run on my VM].
+
+**2, on a node: pass** [run `r20261113-054503-d0f0`, cpu-7, rc 0]. On the moved tree with its pins (`c73cf364cf0f`): `repository` 388 passed (it holds the four files you named), `verity/hardware` 178, `verity-lean-audit` 750, `verity/protocols/certifier/verifier` 1427 and 1 skipped. 4 of 4 suites.
+
+**3: not established yet.**
+- [run `r20261113-054946-f77d`, cpu-10, running since 05:51Z, limit 120 min] the fast path. `core_world` at its new place: passed, 1 module [read: its `audit.json` so far]. It is now in `security`, which is the one requirer the fast path takes: it audits only a requirer that lists guarantees, so it does not check the device's package by itself.
+- So I launched the device's own Lean check, `check.py --build verity/protocols/certifier/device/lean`, on the same tree at 06:18Z. It was waiting for a slot at 06:19Z and has no run id yet.
+- One thing is already shown: Lake builds from the rewritten manifest of `security/Proofs`. The pins step ran `lake build` of three targets there on the moved tree: "Build completed successfully (9012 jobs)" [run `6740`: `out/regen.log`].
+- The Lean runs read `bdb345158461`, which has the tree of the first rehearsal's staged commit. The head's staged commit differs from that tree in no `.lean` file, lakefile, manifest, lock or root test [run on my VM: `git diff --name-only`].
+
+**Your 05:49Z ask: with #9651, no map of mine needs the exclusion of `tests/test_tree.py`** [run `r20261113-055430-5b8f`, cpu-3, rc 0].
+- Base `321fc48d5160`: `main` `b843a10af48a`, #9602's head, the world's branch and #9651's head `16e8b7a60af1`, merged with no conflict, and `configurations_map.toml` without that exclusion.
+- The three maps in order certify: compose 19 renames and 33 edits, configurations 13 and 33, the world 6 and 11. Each run again changes nothing; `resolve_check.py` 0 issues on each.
+- None of the three moves edits `tests/test_tree.py` or `tests/tree.toml` [read: the staged diff].
+- `repository` on that moved tree with its pins (`87bd76ec4de5`): 390 passed. `tests/test_tree.py` by name there: 6 passed [run on my VM].
+- **Which map still names it:** `configurations_map.toml` in #9602, and only that one. I have not taken it out: #9651 is not on `main`, and without it the exclusion is what keeps the test passing. I take it out in the merge of `main` into #9602 that follows #9651's landing, unless you want it now.
+
+**Correction to my 05:59Z entry:** `main` gained 90 commits between `99cc585fa8f2` and `b843a10af48a`, 12 of them the queue's; I wrote 87. No file of them is one the move renames or edits [run on my VM: the two name lists have nothing in common].
+
+**#9602:** `r20261113-041521-46a8` is still running, 9 of 13 suites passed. Ratchet gate `origin/main..c0ebc52445e2`: passed [run on my VM]. `main` `8ef93f01963c` is in its head; `main`'s tip merges into it with no conflict [derived from the scratch merge above].
+
+**Scratch branches I pushed for this, mine to delete:** `cursor/proofs-scratch-world-interface-moved-bdb3`, `cursor/proofs-scratch-chain-tree-fix-51a7`.
