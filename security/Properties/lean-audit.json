@@ -2391,7 +2391,8 @@
   "Properties.Accounting.Registration": {
    "imports": ["Definitions.Accounting.Registration", "CoreProtocol.Registration", "Properties.Core.Site"],
    "except": [],
-   "why": "the registration log's code is stated against its own functions (`Core.Registration`, `CoreProtocol.Registration`) and the spec's view it copies (`Definitions.Accounting.Registration.View`), over the Site's denotations (`Properties.Core.Site`), never a proof"
+   "why": "the registration log's code is stated against its own functions (`Core.Registration`, `CoreProtocol.Registration`) and the spec's view it copies (`Definitions.Accounting.Registration.View`), over the Site's denotations (`Properties.Core.Site`), never a proof",
+   "sealed": true
   },
   "Properties.Remote": {
    "imports": [
