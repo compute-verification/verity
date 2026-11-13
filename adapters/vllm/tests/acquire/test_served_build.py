@@ -478,6 +478,8 @@ def test_a_piece_returns_a_symbol_and_a_column_range_of_an_argument() -> None:
     (HOOK, f"{HOOK}        buf1 = buf9; del buf9  # reuse\n", "'buf1 = buf9; del buf9  # reuse': reuse of an unknown buffer"),
     (HOOK, f"{HOOK}        buf1 = reinterpret_tensor(buf0, (s7, 32), (32, 1), 0); del buf0  # reuse\n",
      "'buf1 = reinterpret_tensor(buf0, (s7, 32), (32, 1), 0); del buf0  # reuse': reuse beyond the dead buffer's rows"),
+    (HOOK, f"{HOOK}        buf1 = reinterpret_tensor(buf0, (s7, s7), (16, 1), 0); del buf0  # reuse\n",
+     "'buf1 = reinterpret_tensor(buf0, (s7, s7), (16, 1), 0); del buf0  # reuse': reuse beyond the dead buffer's rows"),
     (HOOK, HOOK + HOOK, f"{HOOK.strip()!r}: hooks a buffer no launch of this wrapper wrote, or twice"),
     (f"arg1_1, {WEIGHT}", "arg1_1", "extern_kernels.mm with 1 operands"),
     (WEIGHT, "arg2_1", "mm(arg1_1, arg2_1): an activation's whole rows against a transposed weight is modelled"),
@@ -486,7 +488,7 @@ def test_a_piece_returns_a_symbol_and_a_column_range_of_an_argument() -> None:
     (HOOK, f"{HOOK}        triton_poi_fused_0.run(buf0, s7, stream=raw_stream0)\n", "triton_poi_fused_0.run: no async_compile.triton block defines it"),
 ], ids=["no-call", "no-return", "strides", "symbol-in-a-buffers-row", "symbol-in-an-arguments-row", "symbol-in-a-constant-shape", "view-of-no-shape",
         "view-past-the-rows", "weight-not-transposed", "written-without-tokens", "written-in-place", "second-token-count", "float32",
-        "reuse-of-no-buffer", "reuse-past-the-rows", "hooked-twice", "one-operand", "weight-as-stored", "columns", "rows", "no-kernel-source"])
+        "reuse-of-no-buffer", "reuse-past-the-rows", "reuse-of-a-symbols-rows", "hooked-twice", "one-operand", "weight-as-stored", "columns", "rows", "no-kernel-source"])
 def test_a_piece_of_another_form_is_refused(old: str, new: str, why: str) -> None:
     assert old in PIECE
     with pytest.raises(Unmodelled, match=re.escape(f"piece.py: {why}")):
