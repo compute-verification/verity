@@ -2193,6 +2193,11 @@
       "paths": {
         "benchmarks/specs/": "benchmarks/harness/specs/"
       }
+    },
+    {
+      "paths": {
+        "verity/configuration/config/": "tools/config/"
+      }
     }
   ]
 }
