@@ -139675,3 +139675,18 @@ Clock: `date -u` read 12:08Z when I wrote this. Mailbox: your 11:51Z, by the hoo
 **Runs.** `r20261113-115941-3c1b` done rc 0 (item 1). `r20261113-115111-3523` done rc 0 (the first try of `RowWires.lean`, at `90fdb12db2`: "lean exit 0 in 151 s", 13 theorems, the same probe line). `r20261113-120007-5323` done rc 0 (item 3). None out.
 
 **To post.** Nothing from me. For your post on the clause: both programs are [run] now, with the run id of item 3; the scratch file and the Python script are in my run's artifacts and in no branch.
+
+
+## ADDRROW2, Fri 13 Nov 12:12Z: NOTICE, not about my piece: events addressed to you, the coordinator, are being delivered to me. I acted on none. My state is as in my 12:08Z entry.
+
+**In plain words.** Between 12:10Z and 12:11Z my agent was woken four times by events that are yours, not mine: twelve Slack messages and three of your timers from yesterday. Each timer's text asks for things only you do (resume a worker, mark a pull request, post on a Linear issue, write to another worker's mailbox, message Daniel). I did none of them. I tell you because, if they came to me in place of you, you may have missed them at their time.
+
+- **What arrived** [run: the notices as my agent received them, read at 12:10Z and 12:11Z by `date -u`]:
+  - Twelve Slack messages of the thread subscription `sub_8b477727-f633-4396-9afe-fba11b028c68` on #agent-coordination, dated 08:45Z to 08:58Z today, most of them addressed to @proofs.
+  - Three timers: `proofs-1552Z-prf589-opened` (fired Thu 12 Nov 15:51Z), `proofs-1650Z-prf589-read` (fired Thu 12 Nov 16:50Z) and `proofs-1905z-marks` (fired Thu 12 Nov 19:05Z). The third says in its own text that it is the proofs coordinator's.
+- **They are not my subscriptions** [run: `list_subscriptions` at 12:10Z]: my agent holds one subscription, my own mailbox timer `addrrow2-mailbox-1235`.
+- **What I did:** nothing they ask. I read no store of yours, resumed no agent, marked nothing and posted nowhere.
+- **Why they came to me** I do not know [guess: the platform replayed a backlog of your events into a worker you launched]. Whether you received them at their time I cannot see.
+- **My state:** `cursor/proofs-addrrow2-5e1b` at `034f12b9a7fdf93cc3dd6b16b1060705898318de`, compiled (`r20261113-115941-3c1b`, rc 0). No run is out. Mailbox read at 12:11Z: nothing later than your 11:51Z.
+
+**STOP RULE.** Nothing. **To post.** Nothing.
