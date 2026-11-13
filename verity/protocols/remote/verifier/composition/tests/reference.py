@@ -52,6 +52,7 @@ from verity_difftest import protocol as P
 
 from verity.protocols.pouw.verifier import core_check, credit, period_check
 from verity.protocols.spot.device import challenger as CH
+from verity.protocols.spot.verifier.one_stage import registration as REG
 
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 
@@ -312,6 +313,30 @@ POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(can
 SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, spot, blobs=True)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
+#: Pearl+'s run verdict, remote's work in its composite of record: on the served run a test records for it
+#: (`pearl_plus_answer`), and else it refuses a commitment that isn't JSON, as Pearl+'s decoder does, and has no answer
+#: to any other case
+PEARL_PLUS = Recorded("verity/pouw/pearl-plus/v1")
+#: `PouwCheck.PearlPlus.Protocol.commitmentTag`
+PEARL_PLUS_TAG = "verity/pouw/pearl-plus/manifests/v1"
+
+
+def pearl_plus_answer(commitment: bytes, verified: dict) -> dict:
+    """Pearl+'s outcome on a served run whose Python verdict ``served_passes.py verify`` recorded (`verified`, its
+    ``verify.json``), framed as `PouwCheck.PearlPlus.Protocol` frames the check's: its digest SHA-512(`PEARL_PLUS_TAG` ‖
+    0 ‖ the commitment's bytes), and on acceptance its public the credit at δ (`publicJson`) and its profile the draws
+    asked for, the tiles drawn and the passes (`profileJson`)."""
+    a, digest = verified["answer"], hashlib.sha512(PEARL_PLUS_TAG.encode() + b"\0" + commitment).digest()
+    if a["verdict"] != ACCEPT:
+        return P.outcome(PEARL_PLUS.id, a["verdict"], a["reason"], digest)
+    w, pr = a["public"]["work"], a["profile"]
+    public = {"credited": w["credited"], "credited_tiles": w["credited_tiles"], "delta": pr["delta"],
+              "epsilon": w["epsilon"], "macs": w["macs"], "rho": w["rho"]}
+    profile = {"draws": verified["draws"], "drawn": len(pr["tiles"]) - pr["exclusion_tiles"],
+               "passes": len(a["public"]["passes"])}
+    return P.outcome(PEARL_PLUS.id, ACCEPT, None, digest, public, profile)
+
+
 BANDWIDTH = Recorded("verity/remote-bandwidth/p2/v0")
 #: The wipe, `MemoryChallenger.WipeProtocol.protocol`.
 WIPE = Ported("verity/wipe/v0", WIPE_CASES.answer)
@@ -536,11 +561,72 @@ def window_records(commitment: bytes, evidence: bytes) -> list[bytes] | core_che
     return out
 
 
+def _nats(x: Any) -> bool:
+    return isinstance(x, list) and all(isinstance(n, int) and not isinstance(n, bool) and n >= 0 for n in x)
+
+
+def pearl_commitment(commitment: bytes) -> tuple[bytes, bytes] | Reject | None:
+    """The registration record's digest and the window record W's digest Pearl+'s commitment names, as Pearl+ decodes
+    it (`PouwCheck.PearlPlus.Protocol.commitmentOf`: exactly ``manifests``, a nonempty list, ``record``, a SHA-512
+    digest in lowercase hex, and ``window``, exactly ``dropped``, a list of nonnegative integers, ``record``, W, an
+    object, and ``rounds``, null or such a list); else what refused it, or None when it doesn't decode."""
+    try:
+        j = P.canonical_json(commitment)
+        if not isinstance(j, dict) or sorted(j) != ["manifests", "record", "window"]:
+            return None
+        if not isinstance(j["manifests"], list) or not j["manifests"] or not isinstance(j["record"], str):
+            return None
+        record = P.unhex(j["record"])
+    except Reject as e:
+        return e
+    w = j["window"]
+    if len(record) != 64 or not isinstance(w, dict) or sorted(w) != ["dropped", "record", "rounds"]:
+        return None
+    if not isinstance(w["record"], dict) or not (w["rounds"] is None or _nats(w["rounds"])) or not _nats(w["dropped"]):
+        return None
+    return record, bytes.fromhex(REG.digest(w["record"]))
+
+
+def run_record(commitment: bytes, evidence: bytes) -> list[bytes] | Reject | None:
+    """`Core.Remote.V1.runRecord`: the digest of the registration record Pearl+'s run is on, its commitment's
+    ``record``, as Pearl+ decodes the commitment (`pearl_commitment`); else what refused it, or None when it doesn't
+    decode, either of which reads as no value."""
+    got = pearl_commitment(commitment)
+    return [got[0]] if isinstance(got, tuple) else got
+
+
+def run_window(commitment: bytes, evidence: bytes) -> list[bytes] | Reject | None:
+    """`Core.Remote.V1.runWindow`: the digest of the window record W Pearl+'s check holds the run's passes to, as
+    Pearl+ decodes its commitment (`pearl_commitment`); else what refused it, or None, either of which reads as no
+    value."""
+    got = pearl_commitment(commitment)
+    return [got[1]] if isinstance(got, tuple) else got
+
+
+def policy_previous(commitment: bytes, evidence: bytes) -> list[bytes] | Exception:
+    """`Core.Remote.V1.policyPrevious`: the record the policy's record is chained right after, its ``previous``, as the
+    policy decodes its record; the empty bytes when it names none (no record's digest, so a stray); else what refused
+    the commitment, which reads as no value."""
+    try:
+        record, _ = INFERENCE.commitment(commitment)
+    except (Reject, ValueError, KeyError, TypeError) as e:
+        return e
+    prev = record.get("previous")
+    try:
+        return [P.unhex(prev) if isinstance(prev, str) else b""]
+    except Reject:
+        return [b""]
+
+
 #: `Core.Onsite.store`: PoUS's setup's root of `C*` and the root PoUB-P2's registration names (`p2_case.store_root`).
 STORE = Tie("store", (("verity/pous/p2/v4/run", _commitment_hex("root")),
                       ("verity/remote-bandwidth/p2/v0", _commitment_hex("root"))))
 #: `Core.Remote.windows`: every window of PoUW's period on the policy's record, remote's tie and onsite's.
 WINDOWS = Tie("record", ((INFERENCE_ONLY.id, policy_record), (POUW_PERIOD.id, window_records)))
+#: `Core.Remote.V1.run`: Pearl+'s run on the policy's record.
+RUN = Tie("record", ((INFERENCE_ONLY.id, policy_record), (PEARL_PLUS.id, run_record)))
+#: `Core.Remote.V1.window`: Pearl+'s passes on the window record the policy's record is chained right after.
+WINDOW = Tie("window", ((INFERENCE_ONLY.id, policy_previous), (PEARL_PLUS.id, run_window)))
 
 
 @dataclass(frozen=True)
@@ -576,9 +662,12 @@ class TiedSame(Same):
                 and (got := t.values(ev)) is not None]
 
 
-#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their subprotocols in the order of their ids: each one's
-#: policy and integrity committing to one registration record, every window of each one's PoUW period naming the
-#: policy's record, and onsite's PoUS and PoUB-P2 on one store (`Core.Onsite.ties`, in its order).
+#: `Core.Remote.V1.protocol`, `Core.Remote.protocol` and `Core.Onsite.protocol`, over their subprotocols in the order
+#: of their ids: each one's policy and integrity committing to one registration record, remote's composite of record's
+#: Pearl+ run naming the policy's record, every window of its development composite's PoUW period and of onsite's naming
+#: it too, and onsite's PoUS and PoUB-P2 on one store (`Core.Onsite.ties`, in its order).
+REMOTE_V1 = TiedSame("verity/remote/v1", (INFERENCE_ONLY, PEARL_PLUS, SAMPLED_PROOFS),
+                     (INFERENCE_ONLY.id, SAMPLED_PROOFS.id), (RUN, WINDOW))
 REMOTE = TiedSame("verity/remote/v0", (INFERENCE_ONLY, POUW_PERIOD, SAMPLED_PROOFS), (INFERENCE_ONLY.id, SAMPLED_PROOFS.id),
                   (WINDOWS,))
 ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE),

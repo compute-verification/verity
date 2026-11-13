@@ -48,17 +48,19 @@ W = R.WORKLOADS["glm53"]
 CENSUS = {
     "tokens": {"prefill": 3, "decode": 1}, "per_request": {"circuit_macs": 4000, "macs": 3600},
     "definitions": {
-        'Gemm_v1{K=64,N=1,DOT={"fn":"Dot_v1"}}': {"k_log": 20, "of": {"Linear_v1": "row"}, "prefill": 6, "decode": 2},
-        "Gemm_v1{K=32,N=1}": {"k_log": 19, "of": {"Linear_v1": "row"}, "prefill": 3, "decode": 1},
-        'Norm_v1{N=8,EPS={"f64":"0x1.0p-3"},FMA=true,TREE=[0,[1,2]]}': {"k_log": 22, "of": {"Norm_v1": "row", "Add_v1": "part"},
+        'Gemm_v1{K=64,N=1,DOT={"fn":"Dot_v1"}}': {"k_log": 20, "ands": 1000, "of": {"Linear_v1": "row"}, "prefill": 6,
+                                                  "decode": 2},
+        "Gemm_v1{K=32,N=1}": {"k_log": 19, "ands": 400, "of": {"Linear_v1": "row"}, "prefill": 3, "decode": 1},
+        'Norm_v1{N=8,EPS={"f64":"0x1.0p-3"},FMA=true,TREE=[0,[1,2]]}': {"k_log": 22, "ands": 3000,
+                                                                    "of": {"Norm_v1": "row", "Add_v1": "part"},
                                                                     "prefill": 1, "decode": 1},
         "Idle_v1{N=1}": {"k_log": 18, "of": {"Idle_v1": "row"}, "prefill": 0, "decode": 0},
     },
 }
 GEMM64, GEMM32, NORM = (name for name in CENSUS["definitions"] if not name.startswith("Idle"))
 CUT = {"name": "split", "label": "a toy cut", "replaces": ["Add_v1, Norm_v1"],
-       "strata": [{"block": "Half_v1{N=4}", "kind": "Half_v1", "per_token": 1.0, "k_log": 21},
-                  {"block": "Bare_v1{N=4}", "kind": "Bare_v1", "per_token": 0.25},
+       "strata": [{"block": "Half_v1{N=4}", "kind": "Half_v1", "per_token": 1.0, "k_log": 21, "ands": 2000},
+                  {"block": "Bare_v1{N=4}", "kind": "Bare_v1", "per_token": 0.25, "ands": 500},
                   {"block": "Unused_v1{N=4}", "kind": "Unused_v1", "per_token": 0, "k_log": 21}]}
 #: single sessions: the K=64 GEMM's own, and another Definition's, both at 2 s a statement's fixed cost
 SESSIONS = (P.Session(GEMM64, 20, 0.5, 2.0, 1 << 15), P.Session("Other_v1{N=2}", 22, 2.0, 2.0, 1 << 13))
@@ -603,10 +605,16 @@ def lean(definition: str, run: str, seconds: tuple[float, ...], size: int, *, k_
     return P.LeanVerify(definition, k_log, blocks, full, seconds, size, run, "node-a (64 cores, a CPU)", L.COVER_LABEL)
 
 
-def test_the_lean_verifiers_seconds_and_the_proofs_bytes_are_one_types_and_scaled_to_the_rest():
+def lean_shares(measured: tuple[int, float], family: tuple[int, float], fitted: tuple[int, float]) -> dict:
+    return {source: {"block_types": n, "share": pytest.approx(share)}
+            for source, (n, share) in zip(P.LEAN_SOURCES, (measured, family, fitted), strict=True)}
+
+
+def test_the_lean_verifiers_seconds_and_the_proofs_bytes_are_one_types_and_priced_to_the_rest_by_size():
     """A block type the Lean verifier ran on takes its statement's median seconds and its proof's bytes over the
-    statement's blocks; every other type with a k_log takes the same seconds and bytes a witness bit; a type with none
-    takes nothing. The totals are modeled, and say how much of each the measured type holds."""
+    statement's blocks; another type of its Definition takes them a unit of size times its own, every other type the
+    rate fitted over the measured statements times its own: seconds by AND gates, bytes by witness bits. A type with
+    no size takes nothing of that figure. The totals are modeled, and say how much of each figure each source holds."""
 
     census = P.Census.of(CENSUS).recut(CUT)
     rows = (steady("gemm64", P.definition_id(GEMM64), "r20260102-000000-0002", 8, 8.0, verify=4.0),)
@@ -616,47 +624,105 @@ def test_the_lean_verifiers_seconds_and_the_proofs_bytes_are_one_types_and_scale
     table = P.Flock(rows, SESSIONS, "art:card", lean=timed).table(census)
     assert [v.run for v in table.lean] == ["r20260105-000000-0005"]
     by = {r.block: r.cost for r in table.rows}
-    assert [(by[n].lean_seconds, by[n].proof_bytes, by[n].lean_source) for n in (GEMM64, GEMM32, "Half_v1{N=4}", "Bare_v1{N=4}")] == [
-        (3.0, 500.0, P.LEAN_MEASURED), (1.5, 250.0, P.LEAN_SCALED), (6.0, 1000.0, P.LEAN_SCALED), (None, None, None)]
+    # 24 s over 8 blocks of 1000 ANDs: 0.003 s an AND; 4000 bytes over 8 blocks of 2^20 witness bits
+    assert [(by[n].lean_seconds, by[n].lean_source, by[n].proof_bytes, by[n].proof_bytes_source)
+            for n in (GEMM64, GEMM32, "Half_v1{N=4}", "Bare_v1{N=4}")] == [
+        (3.0, P.LEAN_MEASURED, 500.0, P.LEAN_MEASURED), (pytest.approx(1.2), P.LEAN_FAMILY, 250.0, P.LEAN_FAMILY),
+        (pytest.approx(6.0), P.LEAN_FITTED, 1000.0, P.LEAN_FITTED), (pytest.approx(1.5), P.LEAN_FITTED, None, None)]
+    assert table.lean_fitted == (pytest.approx(0.003), 4000 / 2**23)
     # the proof server's verifier's seconds stay the steady-state row's own
     assert by[GEMM64].verifier_seconds == 0.5
 
     doc = P.report(table, 1.0)
     t = doc["totals"]
+    total = 2.0 * 3.0 + 1.2 + 6.0 + 0.25 * 1.5
     assert t["lean_verifier_seconds_per_token"] == {
-        "value": 2.0 * 3.0 + 1.5 + 6.0, "status": "modeled", "measured_block_types": 1, "scaled_block_types": 2,
-        "unpriced_block_types": 1, "measured_share": 6.0 / 13.5, "basis": P.LEAN_SECONDS_BASIS}
+        "value": pytest.approx(total), "status": "modeled", "unpriced_block_types": 0, "fitted_rate": pytest.approx(0.003),
+        "sources": lean_shares((1, 6.0 / total), (1, 1.2 / total), (2, 6.375 / total)), "basis": P.LEAN_SECONDS_BASIS}
     assert t["proof_bytes_per_token"] == {
-        "value": 2250.0, "status": "modeled", "measured_block_types": 1, "scaled_block_types": 2, "unpriced_block_types": 1,
-        "measured_share": 1000.0 / 2250.0, "basis": P.PROOF_BYTES_BASIS}
+        "value": 2250.0, "status": "modeled", "unpriced_block_types": 1, "fitted_rate": 4000 / 2**23,
+        "sources": lean_shares((1, 1000.0 / 2250), (1, 250.0 / 2250), (1, 1000.0 / 2250)), "basis": P.PROOF_BYTES_BASIS}
     share = 2.0 * by[GEMM64].seconds / table.gpu_seconds_per_token()
     assert t["lean_verify"] == [{"block": GEMM64, "time_share": share, "k_log": 20, "blocks": 8, "full": 8,
                                  "seconds": [40.0, 16.0, 24.0], "statement_seconds": 24.0, "proof_bytes": 4000,
                                  "run": "r20260105-000000-0005", "host": "node-a (64 cores, a CPU)",
                                      "label": L.COVER_LABEL}]
     row = next(r for r in doc["rows"] if r["block"] == GEMM32)
-    assert (row["lean_verifier_seconds"], row["proof_bytes"], row["lean_source"]) == (1.5, 250.0, P.LEAN_SCALED)
+    assert (row["lean_verifier_seconds"], row["lean_source"], row["proof_bytes"], row["proof_bytes_source"]) == (
+        pytest.approx(1.2), P.LEAN_FAMILY, 250.0, P.LEAN_FAMILY)
     assert t["verifier_seconds_per_token"] == {"value": 1.0, "block_types": 1, "block_share": 2.0 / 4.25}
 
-    # with two types measured, the rest scale at the median of the two statements' seconds, and bytes, a witness bit
+    # with a second Definition measured, the family keeps its own rate and the rest take the pooled one: 88 s over
+    # 8 * 1000 + 2 * 2000 ANDs, and 20000 bytes over 2^23 + 2^22 witness bits
     two = P.Flock(rows, SESSIONS, "art:card", lean=(*timed, lean("Half_v1{N=4}", "r20260105-000000-0005", (64.0,), 16000,
-                                                                 k_log=21, blocks=4, full=4))).table(census)
+                                                                 k_log=21, blocks=2, full=4))).table(census)
     by = {r.block: r.cost for r in two.rows}
     assert (by["Half_v1{N=4}"].lean_seconds, by["Half_v1{N=4}"].proof_bytes, by["Half_v1{N=4}"].lean_source) == (
-        16.0, 4000.0, P.LEAN_MEASURED)
-    assert by[GEMM32].lean_seconds == pytest.approx((24.0 / 2**23 + 64.0 / 2**23) / 2 * 2**19)
-    assert by[GEMM32].proof_bytes == pytest.approx((4000 / 2**23 + 16000 / 2**23) / 2 * 2**19)
+        32.0, 8000.0, P.LEAN_MEASURED)
+    assert (by[GEMM32].lean_seconds, by[GEMM32].proof_bytes) == (pytest.approx(1.2), 250.0)
+    assert by["Bare_v1{N=4}"].lean_seconds == pytest.approx(88.0 / 12000 * 500)
+    assert two.lean_fitted == (pytest.approx(88.0 / 12000), pytest.approx(20000 / (2**23 + 2**22)))
     assert [x["block"] for x in P.report(two, 1.0)["totals"]["lean_verify"]] == [GEMM64, "Half_v1{N=4}"]
 
     # measured only when every block type has a record of its own; none of either with no record
     whole = P.Census.of({**CENSUS, "definitions": {GEMM64: CENSUS["definitions"][GEMM64]}})
     own = P.report(P.Flock(rows, SESSIONS, "art:card", lean=timed).table(whole), 1.0)["totals"]
     assert own["lean_verifier_seconds_per_token"] == {
-        "value": 6.0, "status": "measured", "measured_block_types": 1, "scaled_block_types": 0, "unpriced_block_types": 0,
-        "measured_share": 1.0, "basis": P.LEAN_SECONDS_BASIS}
+        "value": 6.0, "status": "measured", "unpriced_block_types": 0, "fitted_rate": pytest.approx(0.003),
+        "sources": lean_shares((1, 1.0), (0, 0.0), (0, 0.0)), "basis": P.LEAN_SECONDS_BASIS}
     none = P.report(P.Flock(rows, SESSIONS, "art:card").table(census), 1.0)
     assert none["totals"]["lean_verifier_seconds_per_token"] is None and none["totals"]["proof_bytes_per_token"] is None
     assert none["totals"]["lean_verify"] == [] and {r["lean_source"] for r in none["rows"]} == {None}
+
+
+#: one served token of a head block measured at two statics and at a third not, a GEMM measured, and a read of no
+#: measured Definition
+HEADS = {
+    "tokens": {"prefill": 1, "decode": 0}, "per_request": {"circuit_macs": 100, "macs": 100},
+    "definitions": {
+        "Head_v1{NVIS=64,FIRST=false}": {"k_log": 27, "ands": 37_000, "of": {"Attn_v1": "row"}, "prefill": 1, "decode": 0},
+        "Head_v1{NVIS=64,FIRST=true}": {"k_log": 27, "ands": 36_000, "of": {"Attn_v1": "row"}, "prefill": 1, "decode": 0},
+        "Head_v1{NVIS=8,FIRST=true}": {"k_log": 24, "ands": 4_500, "of": {"Attn_v1": "row"}, "prefill": 1, "decode": 0},
+        "Gemm_v1{K=64,N=1}": {"k_log": 25, "ands": 3_000, "of": {"Linear_v1": "row"}, "prefill": 1, "decode": 0},
+        "Read_v1{H=4}": {"k_log": 23, "ands": 1_800, "of": {"Read_v1": "row"}, "prefill": 1, "decode": 0},
+    },
+}
+
+
+def test_an_unmeasured_type_takes_its_definitions_measured_rate_by_its_ands_else_the_fitted_rate_never_a_median():
+    """A head block at other statics than its two measured siblings is priced at the dearer sibling's seconds an AND
+    times its own ANDs: its ANDs ratio to that sibling, not a median of unlike statements. A type whose Definition no
+    statement measured takes the rate fitted over all of them, their seconds over their ANDs, which is neither the
+    old median a witness bit nor the median rate an AND."""
+
+    statements = {"Head_v1{NVIS=64,FIRST=false}": (256, 27, 320.0, 2_400_000),
+                  "Head_v1{NVIS=64,FIRST=true}": (256, 27, 350.0, 2_380_000),
+                  "Gemm_v1{K=64,N=1}": (1024, 25, 16.0, 2_350_000)}
+    timed = tuple(lean(P.definition_id(name), "r20260105-000000-0005", (s,), size, k_log=k, blocks=n, full=n)
+                  for name, (n, k, s, size) in statements.items())
+    table = P.Flock((), (), None, lean=timed).table(P.Census.of(HEADS))
+    by = {r.block: r.cost for r in table.rows}
+
+    sibling = by["Head_v1{NVIS=8,FIRST=true}"]
+    assert sibling.lean_source == sibling.proof_bytes_source == P.LEAN_FAMILY
+    # the FIRST=true sibling is the dearer an AND (350 / 36000 over 320 / 37000), and its ANDs ratio prices the block
+    assert sibling.lean_seconds == pytest.approx(350.0 / 256 * 4_500 / 36_000)
+    # bytes by witness bits: the dearer sibling's a witness bit, at 2^24 of them
+    assert sibling.proof_bytes == pytest.approx(2_400_000 / 2**35 * 2**24)
+
+    read = by["Read_v1{H=4}"]
+    assert read.lean_source == read.proof_bytes_source == P.LEAN_FITTED
+    ands = 256 * 37_000 + 256 * 36_000 + 1024 * 3_000
+    assert read.lean_seconds == pytest.approx((320.0 + 350.0 + 16.0) / ands * 1_800)
+    assert read.proof_bytes == pytest.approx((2_400_000 + 2_380_000 + 2_350_000) / (3 * 2**35) * 2**23)
+    old_median = 320.0 / 2**35 * 2**23
+    median_per_and = 320.0 / (256 * 37_000) * 1_800
+    assert read.lean_seconds != pytest.approx(old_median) and read.lean_seconds != pytest.approx(median_per_and)
+
+    t = P.report(table, 1.0)["totals"]["lean_verifier_seconds_per_token"]
+    assert {k: v["block_types"] for k, v in t["sources"].items()} == {P.LEAN_MEASURED: 3, P.LEAN_FAMILY: 1, P.LEAN_FITTED: 1}
+    assert t["sources"][P.LEAN_FAMILY]["share"] == pytest.approx(sibling.lean_seconds / t["value"])
+    assert t["fitted_rate"] == pytest.approx((320.0 + 350.0 + 16.0) / ands)
 
 
 def test_spot_takes_the_lean_verifiers_seconds_at_the_blocks_its_plan_samples():
@@ -667,8 +733,9 @@ def test_spot_takes_the_lean_verifiers_seconds_at_the_blocks_its_plan_samples():
              {"block": NORM, "type": "norm", "taken": 0.8}]
     table = P.Spot(flock, plan(cells), P.Serving(0.5, 4000.0, "stated")).table(census)
     t = P.report(table, 1.0)["totals"]
-    # 40, 20 and 8 blocks sampled over 800 tokens, at 3 s a block and at its seconds a witness bit times 2^19 and 2^22
-    assert t["lean_verifier_seconds_per_token"]["value"] == pytest.approx((40 * 3.0 + 20 * 1.5 + 8 * 12.0) / 800)
+    # 40, 20 and 8 blocks sampled over 800 tokens, at 3 s a block and at its 0.003 s an AND times 400 and 3000 ANDs;
+    # bytes at its bytes a witness bit times 2^19 and 2^22
+    assert t["lean_verifier_seconds_per_token"]["value"] == pytest.approx((40 * 3.0 + 20 * 1.2 + 8 * 9.0) / 800)
     assert t["proof_bytes_per_token"]["value"] == pytest.approx((40 * 500 + 20 * 250 + 8 * 2000) / 800)
     assert t["lean_verifier_seconds_per_token"]["status"] == "modeled" and t["lean_verify"][0]["block"] == GEMM64
     assert t["lean_verify"][0]["time_share"] == pytest.approx(40 * 1.0 / sum(
@@ -1681,31 +1748,36 @@ def lean_ran(s: Store, tmp: Path, run: str, doc: dict | None, *, name: str = L.R
 
 
 def test_a_lean_verifier_run_of_record_gives_both_figures_as_modeled_and_says_what_was_measured(tmp_path):
-    """One block type's statement measured, on made-up figures: its row takes them, every other row with a k_log is
-    scaled a witness bit, and both lines say modeled, the measured type and its share of the proving time, the
-    statement, the run, the host and the basis. The proof server's verifier line stays."""
+    """One block type's statement measured, on made-up figures: its row takes them, every other row (no other type
+    of its Definition is in the census) takes the fitted rate, the seconds by its census ANDs and the bytes by its
+    witness bits, and both lines say modeled, the measured type and its share of the proving time, the statement, the
+    run, the host, each source's share and the basis. The proof server's verifier line stays."""
 
     s, arts = recorded(tmp_path)
     run = lean_ran(s, tmp_path, "r20261110-000000-0001", lean_record("r20261110-000000-0001"))
     doc = R.build("flock", "glm53", store=s.fresh(), root=REPO)
     rows = {r["block"]: r for r in doc["rows"]}
     own, t = rows[RMSNORM], doc["totals"]
+    ands = {b.name: b.ands for b in P.Census.of(fixture("census.json")).recut(fixture("partition.json")["value"]).blocks}
+    per_and = 520.0 / (256 * ands[RMSNORM])
     assert (own["lean_verifier_seconds"], own["proof_bytes"], own["lean_source"]) == (520.0 / 256, 2_000_000 / 256, "measured")
-    assert {r["lean_source"] for r in doc["rows"] if r is not own} == {"scaled"}
-    assert all(r["lean_verifier_seconds"] == pytest.approx(520.0 * 2 ** r["k_log"] / 2**35) for r in doc["rows"])
+    assert {(r["lean_source"], r["proof_bytes_source"]) for r in doc["rows"] if r is not own} == {("fitted", "fitted")}
+    assert all(r["lean_verifier_seconds"] == pytest.approx(per_and * ands[r["block"]]) for r in doc["rows"])
+    assert all(r["proof_bytes"] == pytest.approx(2_000_000 * 2 ** r["k_log"] / 2**35) for r in doc["rows"])
     seconds, size = t["lean_verifier_seconds_per_token"], t["proof_bytes_per_token"]
-    assert seconds["value"] == pytest.approx(sum(r["per_token"] * 520.0 * 2 ** r["k_log"] / 2**35 for r in doc["rows"]))
+    assert seconds["value"] == pytest.approx(sum(r["per_token"] * per_and * ands[r["block"]] for r in doc["rows"]))
     assert size["value"] == pytest.approx(sum(r["per_token"] * 2_000_000 * 2 ** r["k_log"] / 2**35 for r in doc["rows"]))
     assert (seconds["status"], size["status"]) == ("modeled", "modeled")
-    assert (seconds["measured_block_types"], seconds["scaled_block_types"], seconds["unpriced_block_types"]) == (1, 149, 0)
-    assert seconds["measured_share"] == pytest.approx(own["per_token"] * 520.0 / 256 / seconds["value"])
+    assert seconds["fitted_rate"] == pytest.approx(per_and) and seconds["unpriced_block_types"] == 0
+    measured = own["per_token"] * 520.0 / 256 / seconds["value"]
+    assert seconds["sources"] == lean_shares((1, measured), (0, 0.0), (149, 1 - measured))
     assert t["lean_verify"] == [{"block": RMSNORM, "time_share": own["time_share"], "k_log": 27, "blocks": 256, "full": 256,
                                  "seconds": [600.0, 500.0, 520.0], "statement_seconds": 520.0, "proof_bytes": 2_000_000,
                                  "run": run, "host": "cpu-node-0 (64 cores, A CPU 9000)", "label": L.COVER_LABEL}]
     assert doc["inputs"][-1] == {"slot": R.LEAN, "record": "prove-glm53-lean-verify", "targets": [run],
                                  "what": "the Lean verifier (its `verify`) on one statement of each of 1 block "
-                                         "type(s); every other type's Lean verifier seconds and proof bytes are scaled "
-                                         "from them"}
+                                         "type(s); every other type's Lean verifier seconds and proof bytes are priced "
+                                         "from them, its Definition's at its size, else at the rate fitted over them"}
     assert doc["refused"] == [] and t["verifier_seconds_per_token"]["block_types"] == 8
 
     text = R.render(doc)
@@ -1717,23 +1789,27 @@ def test_a_lean_verifier_run_of_record_gives_both_figures_as_modeled_and_says_wh
         f"`{RMSNORM}` ({share} of the proving time), in its statement of 256 blocks of 2^27 witness bits each (a full "
         "statement): accepted on the provisional unit cover, units as stated, the Program not held to the circuit, by the "
         "Lean verifier's `verify` in 520 s (the median of 3 runs: 600, 500, 520 s; a run is one "
-        f"process, the statement read and set up in it), in run {run} on cpu-node-0 (64 cores, A CPU 9000). Scaled: the "
-        f"other 149 block types, {1 - seconds['measured_share']:.1%} of this figure, each at the measured statement's "
-        f"seconds a witness bit times its 2^k_log bits: {P.LEAN_SECONDS_BASIS}.")
+        f"process, the statement read and set up in it), in run {run} on cpu-node-0 (64 cores, A CPU 9000). Of this "
+        f"figure: own 1 block type(s), {measured:.1%}; fitted 149 block type(s), {1 - measured:.1%}, each at "
+        f"{R._n(per_and)} seconds an AND gate (every measured statement's seconds over their AND gates) times its AND "
+        f"gates: {P.LEAN_SECONDS_BASIS}.")
+    bytes_measured = size["sources"]["measured"]["share"]
+    assert bytes_measured == pytest.approx(own["per_token"] * 2_000_000 / 256 / size["value"])
     assert lines["- proof bytes"] == (
         f"- proof bytes per token: {R._n(size['value'])}, modeled, not measured. Measured: one block type, `{RMSNORM}` "
         f"({share} of the proving time), in its statement of 256 blocks of 2^27 witness bits each (a full statement), "
-        f"whose proof files are 2.000e+06 bytes in all (run {run}). Scaled: the other 149 block types, "
-        f"{1 - size['measured_share']:.1%} of this figure, each at the measured statement's bytes a witness bit times "
-        f"its 2^k_log bits: {P.PROOF_BYTES_BASIS}.")
-    assert "per token: not measured" not in text
+        f"whose proof files are 2.000e+06 bytes in all (run {run}). Of this figure: own 1 block type(s), "
+        f"{bytes_measured:.1%}; fitted 149 block type(s), {size['sources']['fitted']['share']:.1%}, each at "
+        f"{R._n(2_000_000 / 2**35)} bytes a witness bit (every measured statement's bytes over their 2^k_log witness "
+        f"bits) times its 2^k_log witness bits: {P.PROOF_BYTES_BASIS}.")
+    assert "per token: not measured" not in text and "Scaled:" not in text
 
     # at the sampling plan: the same record at the blocks the plan samples, the type's share the plan's
     spot = R.build("spot", "glm53", store=s.fresh("second"), root=REPO)
     rows = {r["block"]: r for r in spot["rows"]}
     t = spot["totals"]
     assert t["lean_verifier_seconds_per_token"]["value"] == pytest.approx(
-        sum(r["per_token"] * 520.0 * 2 ** r["k_log"] / 2**35 for r in spot["rows"]))
+        sum(r["per_token"] * per_and * ands[r["block"]] for r in spot["rows"]))
     assert t["lean_verifier_seconds_per_token"]["status"] == "modeled" and t["proof_bytes_per_token"]["status"] == "modeled"
     assert t["lean_verify"][0]["time_share"] == rows[RMSNORM]["time_share"] != own["time_share"]
     assert [i["slot"] for i in spot["inputs"]][-2:] == [R.LEAN, R.SAMPLING]

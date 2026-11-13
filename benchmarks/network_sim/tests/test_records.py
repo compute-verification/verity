@@ -35,7 +35,7 @@ def setup(m):
     return report, m.ar.Setup(report)
 
 
-def window(frames: list[bytes], per_bucket: list[int], status: Status = grid.COMPLETE) -> grid.Record:
+def window(frames: list[bytes], per_bucket: list[int], status: Status = grid.COMPLETE) -> grid.BlockGrid:
     c = grid.Certifier("responses", GridParams(buckets=len(per_bucket), allocation=2, frame_bytes=8))
     k = 0
     for n in per_bucket:
@@ -44,7 +44,7 @@ def window(frames: list[bytes], per_bucket: list[int], status: Status = grid.COM
         k += n
         c.tick()
     r = c.close_window()
-    return grid.Record(r.link, r.window, r.grid, status)
+    return grid.BlockGrid(r.link, r.window, r.grid, status)
 
 
 def test_a_record_is_the_grids_occupancy_and_a_digest_of_its_status_and_real_frames(m):
