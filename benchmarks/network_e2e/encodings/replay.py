@@ -498,8 +498,9 @@ class _Egress:
     same step, which the certified egress shows; of any of them, since a frontend streams one step's outputs over some
     milliseconds. They are compared up to i's first change of bucket, where some earlier request's must change too (2: no
     earlier request's output to compare with). With a draft the fork keeps none of the drafts its rows carry (`_asked`),
-    so each of its rows emits one token: it is the served run only up to the first row that kept a draft, and past
-    that row this context tells less."""
+    so each of its rows emits one token, and it is the served run only up to the first of its rows that kept a draft
+    in the serve: from there its outputs fall behind the served ones, and their buckets need not line up under either
+    hypothesis."""
 
     def __init__(self, cert: Certified) -> None:
         _, self.out = _clocked(cert)
