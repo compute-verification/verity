@@ -36,9 +36,9 @@ select = ["ANN001", "ANN201", "ANN202", "ANN204", "B006", "B008", "B015", "B018"
 # compile-time value), so its arguments and return carry none of Python's. Ruff excepts by file, not by decorator, so
 # the other functions of these files are typed without these three rules holding them to it
 "benchmarks/hash/dither/dither_a.py" = ["ANN001", "ANN201", "ANN202"]
-"benchmarks/hash/exactlin/exactlin.py" = ["ANN001", "ANN201", "ANN202"]
-"benchmarks/torch_gpu/s8_linear/bench.py" = ["ANN001", "ANN201", "ANN202"]
-"benchmarks/torch_gpu/s8_linear/int_mm.py" = ["ANN001", "ANN201", "ANN202"]
+"benchmarks/kernels/exactlin/exactlin.py" = ["ANN001", "ANN201", "ANN202"]
+"benchmarks/kernels/s8_linear/bench.py" = ["ANN001", "ANN201", "ANN202"]
+"benchmarks/kernels/s8_linear/int_mm.py" = ["ANN001", "ANN201", "ANN202"]
 
 [format]
 exclude = ["*"]

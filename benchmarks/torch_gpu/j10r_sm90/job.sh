@@ -30,7 +30,7 @@ export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
 mkdir -p "$OUT"
 git rev-parse HEAD > "$OUT/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}" > "$OUT/commit.txt"
 # nvcc for the libraries below: their cubins don't follow where the tree or a source's directory sits
-JOB_NVCC=$ROOT/benchmarks/torch_gpu/job_nvcc.sh
+JOB_NVCC=$ROOT/benchmarks/kernels/job_nvcc.sh
 
 build() {
   local nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc} lib=$OUT/lib/sm_90a
@@ -86,7 +86,7 @@ h1u_build() {
   return $rc
 }
 
-# s8_linear's exact plain linear (benchmarks/torch_gpu/s8_linear), given as files in LIBS: its build.sh run unchanged
+# s8_linear's exact plain linear (benchmarks/kernels/s8_linear), given as files in LIBS: its build.sh run unchanged
 # from a scratch copy, with this tree's ship frame (ship.sh, ship_nvcc.sh, ship_probe.sh, ship_clock.c), which that
 # build.sh sources, and harness gate (verity/protocols/accounting/pouw/prover/sass_gate.py, its sass_gate.py's mma_gate) beside it.
 # $OUT/s8ship (the cubin, its SASS gate's sass.json, MANIFEST.sha256); prints the wgmma directory

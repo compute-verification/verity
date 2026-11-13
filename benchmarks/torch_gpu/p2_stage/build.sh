@@ -16,7 +16,7 @@
 # toolkit path reproduces the cubins, and so does one after a source or a header only moved (ship_nvcc.sh's header).
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
-. "$HERE/../ship.sh"
+. "$HERE/../../kernels/ship.sh"
 OUT=${1:-${OUT:?usage: build.sh OUT}}; ARCH=${ARCH:-sm_90a}
 P2=$(dirname verity/protocols/accounting/pous/prover/p2/p2_store/Makefile)
 ship_stage "$P2" "$(dirname verity/protocols/accounting/pous/prover/p2/p2_gpu/p2dec.cu)" verity/circuits/kernels
