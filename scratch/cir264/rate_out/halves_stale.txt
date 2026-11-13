@@ -1,0 +1,22 @@
+position 1: tiles holding a finite logit [0, 1, 7, 18], the draft token's tile 18, lane 0's log-sum-exp with all 32 lanes 0x40800000
+position 2: tiles holding a finite logit [0, 1, 7, 18], the draft token's tile 18, lane 0's log-sum-exp with all 32 lanes 0x40a00000
+position 3: tiles holding a finite logit [0, 1, 7, 18], the draft token's tile 18, lane 0's log-sum-exp with all 32 lanes 0x40c00000
+position 4: tiles holding a finite logit [0, 1, 7, 18], the draft token's tile 18, lane 0's log-sum-exp with all 32 lanes 0x40e00000
+stale
+  position 1: maximum  10.696698 sum      2.1503363 log-sum-exp 0x413765ac accepts False
+  position 2: maximum  10.696698 sum      2.1503363 log-sum-exp 0x413765ac accepts False (not reached)
+  position 3: maximum  10.696698 sum      2.1503363 log-sum-exp 0x413765ac accepts False (not reached)
+  position 4: maximum  10.696698 sum      2.1503363 log-sum-exp 0x413765ac accepts False (not reached)
+  the last position reached keeps 0x413765ac; the card's 0xc1af360a: differs
+zero
+  position 1: maximum        0.0 sum  1.5327269e-11 log-sum-exp 0xc1c7360b accepts True
+  position 2: maximum        0.0 sum  4.1663853e-11 log-sum-exp 0xc1bf360b accepts True
+  position 3: maximum        0.0 sum  1.1325414e-10 log-sum-exp 0xc1b7360a accepts True
+  position 4: maximum        0.0 sum   3.078568e-10 log-sum-exp 0xc1af360a accepts True
+  the last position reached keeps 0xc1af360a; the card's 0xc1af360a: equal
+padding
+  position 1: maximum      -26.0 sum            3.0 log-sum-exp 0xc1c7360b accepts True
+  position 2: maximum      -25.0 sum            3.0 log-sum-exp 0xc1bf360b accepts True
+  position 3: maximum      -24.0 sum            3.0 log-sum-exp 0xc1b7360b accepts True
+  position 4: maximum      -23.0 sum            3.0 log-sum-exp 0xc1af360b accepts True
+  the last position reached keeps 0xc1af360b; the card's 0xc1af360a: differs
