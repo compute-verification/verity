@@ -158,6 +158,27 @@ def test_parse_target_arg_overrides_the_default():
     assert TargetProfile.default().env() == {"VLLM_BATCH_INVARIANT": "1"} and TargetProfile(batch_invariant=False).env() == {"VLLM_BATCH_INVARIANT": "0"}
 
 
+L40S = {"multi_processor_count": 142, "compute_capability": "8.9"}
+NO_BACKENDS = object()
+
+
+@pytest.mark.parametrize("backends", [NO_BACKENDS, None, {}, [], 0, ""], ids=["left out", "null", "no backend", "an empty list", "zero", "an empty string"])
+def test_a_run_profile_whose_backends_are_left_out_or_empty_is_its_device_document(backends):
+    # a record that reports no attention backend forces no FA version: the target is the device's, with the selector's version
+    doc = {"gpu": L40S} if backends is NO_BACKENDS else {"gpu": L40S, "backends": backends}
+    assert TargetProfile.from_run_profile(doc) == TargetProfile.from_gpu_document(L40S)
+
+
+def test_a_run_profile_takes_a_reported_fa_version_only_where_it_is_not_the_selectors():
+    device = TargetProfile.from_gpu_document(L40S)
+    assert device.flash_attn_version is None and device.effective_flash_attn_version() == 2
+    assert TargetProfile.from_run_profile({"gpu": L40S, "backends": {"attention_backend": "FLASH_ATTN"}}) == device
+    assert TargetProfile.from_run_profile({"gpu": L40S, "backends": {"attention_flash_attn_version": 2}}) == device
+    for reported in (3, "3"):
+        forced = TargetProfile.from_run_profile({"gpu": L40S, "backends": {"attention_flash_attn_version": reported}})
+        assert forced == device.with_overrides(flash_attn_version=3)
+
+
 def test_compiled_profile_declares_the_execution_and_keeps_eager_digests():
     """`compilation="piecewise"` -> execution label `bi-compiled`, run-time engine args enforce_eager False + PIECEWISE CUDA
     graphs, derivation-side args unchanged (eager trace by construction), a declared engine block for GP-01/GM-01; eager profiles serialise

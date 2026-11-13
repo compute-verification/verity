@@ -10,6 +10,9 @@ from __future__ import annotations
 import ctypes
 import errno
 import logging
+import os
+import subprocess
+import sys
 import threading
 
 import pytest
@@ -27,6 +30,20 @@ def _rss_bytes() -> int:
         if line.startswith("VmRSS:"):
             return int(line.split()[1]) * 1024
     raise RuntimeError("no VmRSS")
+
+
+@pytest.mark.parametrize(("value", "exact"), [(None, True), ("", True), ("1", True), ("0", False), (" 0", True), ("false", True),
+                                              ("no", True), ("OFF", True), ("x", True)])
+def test_exact_mode_is_off_at_zero_alone_and_no_value_is_refused_at_import(value, exact):
+    """`VERITY_PINNED_EXACT` is read when the module is imported, so in a fresh interpreter a value: "0" is off, every other string
+    is on, and a string that is no flag is no exception in the module and in the ones that import it."""
+    env = {k: v for k, v in os.environ.items() if k != "VERITY_PINNED_EXACT"}
+    if value is not None:
+        env["VERITY_PINNED_EXACT"] = value
+    code = "from verity_vllm.commit.committer import pinned_pool; print(pinned_pool.PINNED_EXACT)"
+    child = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False, env=env)
+    assert child.returncode == 0, child.stderr
+    assert child.stdout.strip() == str(exact)
 
 
 @pytest.mark.skipif(not GPU, reason="needs CUDA (cudaHostRegister)")
