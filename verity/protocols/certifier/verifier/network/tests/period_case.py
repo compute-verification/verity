@@ -5,9 +5,9 @@ that runs it: its mirror, `answer` (as `reference`), and its cases, `build` and 
 (`verity_difftest.protocol.answer`): it decodes the protocol's formats (`NetworkCheck/Period.lean`'s module docstring)
 and checks a period with the Python the period's pieces already have: one-stage's answers and integrity profiles as PoUW
 reads them (`pouw.core_check.answer_of` and `integrity`), the network certifiers' certificates and clock certificates,
-each under the listed LMS key it names (`certifier.certificate`, `_listed`; a signer the parameters don't list is
-refused by name, `UNLISTED`), Σ_sync (`certifier.schedule`), one-stage's `registration.digest` (a
-registration record is ASCII-only, where its canonical JSON is Lean's), and in the rows form
+each under the listed LMS key it names and in that key's session (`certifier.certificate`, `_listed`; a signer the
+parameters don't list is refused by name, `UNLISTED`), Σ_sync (`certifier.schedule`), one-stage's
+`registration.digest` (a registration record is ASCII-only, where its canonical JSON is Lean's), and in the rows form
 the schedule (`warden.WardenParams`) and the verifier's read of each row registration
 (`warden_rows.check_registration`), and the scan's terms read off its Program's descriptor (`_scan`), as each compute
 audit's units and their committed bits are read off its own (`_audit`). Its verdict,
@@ -18,10 +18,13 @@ and `eps`, the union of those deltas as an exact ratio string, and in the rows f
 
 `build(m, seed, small)` makes a period with one change `m` (`EXPECT`, each aimed at one path of the check, or malformed
 parameters, commitments, evidence and cases). Its parameters list the signer's key, alone in a small period and
-otherwise among up to two more; `second-key` lists it second of two, `two-signers` lists two that both sign, and a
-certificate or a rows registration under a key that isn't listed is refused (`cert-unlisted`, `reg-unlisted`), as are
-parameters that list no key, two keys with one identifier, or one `"key"` (`bad_keys`). In the clock form: the
-link-windows of one link from the session's window
+otherwise among up to two more, and each listed key's session at its key's place; `second-key` lists the signer second
+of two, `two-signers` lists two that both sign, each in its own session, and a certificate or a rows registration
+under a key that isn't listed is refused (`cert-unlisted`, `reg-unlisted`), as is one under the second listed key in
+the first's session (`cert-other-session`, `reg-other-session`), and as are parameters that list no key, two keys
+with one identifier, or one `"key"` (`bad_keys`), sessions that are not one for each key, or one `"session"`
+(`bad_sessions`). In the clock form: the
+link-windows of one link from the sessions' window
 `first`, each registered under the link's Program with its provenance, certified at both ends by a small LMS key in a
 sampled network certifier session, its clock certificate signing a sync of Σ_sync salted (`clock_commitment`, the sync and
 the salt in no case), and answered by one-stage with its one unit proved. In the rows form (a change named `rows-…`):
@@ -106,14 +109,19 @@ OUT_BITS = 16
 UNIT = "unit"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
-PARAMS_KEYS = ["audits", "cells", "first", "jitter", "keys", "link", "lms", "program", "session", "sync_set", "windows"]
+PARAMS_KEYS = ["audits", "cells", "first", "jitter", "keys", "link", "lms", "program", "sessions", "sync_set",
+               "windows"]
 ROWS_PARAMS_KEYS = ["audits", "cells", "first", "jitter", "keys", "link", "lms", "program", "scan", "schedule",
-                    "session", "windows"]
+                    "sessions", "windows"]
 #: What `params` says, as `paramsOf` does, of a list of no key, of two keys with one identifier (a key's first 16
 #: bytes), and of the one-key form, `"key"`
 NO_KEY = "keys: no key"
 ONE_ID = "keys: two keys with one identifier"
 KEY_NOT_KEYS = 'key: write "keys"'
+#: What `params` says, as `paramsOf` does, of sessions that are not one for each listed key, and of the one-session
+#: form, `"session"`
+UNEQUAL = "list one session for each key"
+SESSION_NOT_SESSIONS = 'session: write "sessions"'
 #: What a refusal says, as Lean's does (`unlisted`), of a certificate or a rows registration whose signer the
 #: parameters don't list
 UNLISTED = "a signer that is not one of the listed keys"
@@ -192,7 +200,8 @@ class Params:
     jitter: int
     link: str
     keys: tuple[LmsKey, ...]
-    session: bytes
+    #: session i is key i's
+    sessions: tuple[bytes, ...]
     program: str
     #: the clock form's Σ_sync; None in the rows form
     sync_set: SyncSet | None
@@ -660,6 +669,8 @@ def params(j) -> Params:
         raise D.Reject("the object: not an object")
     if "key" in j:
         raise D.Reject(f"{KEY_NOT_KEYS}, the list of the trusted certifiers' LMS public keys")
+    if "session" in j:
+        raise D.Reject(f"{SESSION_NOT_SESSIONS}, the list of the certifiers' sessions, session i being key i's")
     if sorted(j) not in (PARAMS_KEYS, ROWS_PARAMS_KEYS):
         raise D.Reject(f"the object: the keys must be {PARAMS_KEYS} or {ROWS_PARAMS_KEYS}, not {sorted(j)}")
     audits = [_audit(a, "an audit") for a in _of(j["audits"], list, "audits")]
@@ -684,9 +695,12 @@ def params(j) -> Params:
         raise D.Reject(f"{NO_KEY}: list each certifier's LMS public key, at least one")
     if len({k.key_id for k in keys}) != len(keys):
         raise D.Reject(f"{ONE_ID} (a key's first 16 bytes), by which a certificate names its signer")
-    session = P.unhex(_of(j["session"], str, "session"))
-    if len(session) != lms.SESSION_BYTES:
+    sessions = tuple(P.unhex(_of(x, str, "sessions")) for x in _of(j["sessions"], list, "sessions"))
+    if any(len(x) != lms.SESSION_BYTES for x in sessions):
         raise D.Reject(f"a certifier session id is {lms.SESSION_BYTES} bytes")
+    if len(sessions) != len(keys):
+        raise D.Reject(f"sessions: a list of {len(sessions)}, the keys' of {len(keys)}: {UNEQUAL}, session i being "
+                       "key i's")
     program = _of(j["program"], str, "program")
     if not DIGEST.fullmatch(program):
         raise D.Reject("program: not a SHA-512 digest")
@@ -698,7 +712,7 @@ def params(j) -> Params:
     windows = _nat(j["windows"], "windows")
     if windows < 1:
         raise D.Reject("windows: a period has at least one link-window")
-    return Params(tuple(audits), cells, first, jitter, link, keys, session, program, sync_set, windows, schedule, scan)
+    return Params(tuple(audits), cells, first, jitter, link, keys, sessions, program, sync_set, windows, schedule, scan)
 
 
 def _registration(j, ctx: str) -> dict:
@@ -778,10 +792,11 @@ class Finding(Exception):
         self.verdict, self.reason = verdict, reason
 
 
-def _listed(p: Params, key_id: bytes) -> LmsKey | None:
+def _listed(p: Params, key_id: bytes) -> tuple[LmsKey, bytes] | None:
     """`listedKey`: the listed key whose identifier is `key_id`, the one a certificate or a rows registration names as
-    its signer (at most one: `params` refuses two keys with one identifier)."""
-    return next((k for k in p.keys if k.key_id == key_id), None)
+    its signer, with that key's session (at most one: `params` refuses two keys with one identifier, and sessions that
+    are not one for each key)."""
+    return next(((k, s) for k, s in zip(p.keys, p.sessions) if k.key_id == key_id), None)
 
 
 def _unlisted(p: Params, key_ids: list[bytes]) -> str:
@@ -790,8 +805,8 @@ def _unlisted(p: Params, key_ids: list[bytes]) -> str:
 
 
 def _certifies_on(p: Params, link: str, d: Direction, w: int, c: Certificate) -> bool:
-    key = _listed(p, c.key_id)
-    return c.direction is d and c.link == link and c.window == w and key is not None and c.verify(key, p.session)
+    listed = _listed(p, c.key_id)
+    return c.direction is d and c.link == link and c.window == w and listed is not None and c.verify(*listed)
 
 
 def _certifies(p: Params, d: Direction, w: int, c: Certificate) -> bool:
@@ -850,29 +865,16 @@ def _window_check(p: Params, clear: set[bytes], earlier: list[bytes], w: int, re
         raise Finding(REJECT, f"{what}: profile")
 
 
-class _NotListed(ValueError):
-    """A registration whose every field and head read, under a signer the parameters don't list."""
-
-
-class _Unlisted:
-    """The key of a signer the parameters don't list, as the registration's read takes a key (`_rows_check`): it asks
-    whose the certificate is last, after every field and the head, and that is the refusal by name, where `rowsCheck`
-    has it."""
-
-    @property
-    def key_id(self) -> bytes:
-        raise _NotListed
-
-
 def _rows_check(p: Params, w: int, d: Direction, doc: dict) -> None:
     """`rowsCheck`: the verifier's own read of the registration (`warden_rows.check_registration`) under the listed
-    key its certificate names."""
-    try:
-        WR.check_registration(doc, _listed(p, bytes.fromhex(doc["certificate"]["key"])) or _Unlisted(), p.session,
-                              p.schedule, p.link, d, w)
-    except _NotListed:
+    key its certificate names and in that key's session, which the registration's domain binds; a signer the
+    parameters don't list is refused by name."""
+    listed = _listed(p, bytes.fromhex(doc["certificate"]["key"]))
+    if listed is None:
         raise Finding(REJECT, f"window {w}: the {d.value} rows: the registration's certificate doesn't verify under a "
-                              f"listed key in the session: {UNLISTED}") from None
+                              f"listed key in its session: {UNLISTED}")
+    try:
+        WR.check_registration(doc, *listed, p.schedule, p.link, d, w)
     except ValueError as e:
         raise Finding(REJECT, f"window {w}: the {d.value} rows: {e}") from None
 
@@ -1217,7 +1219,7 @@ EXPECT = {
     "honest": ACCEPT, "second-key": ACCEPT, "two-signers": ACCEPT,
     "program": REJECT, "provenance": REJECT,
     "cert-swap": REJECT, "cert-count": REJECT, "cert-forged": REJECT, "cert-window": REJECT, "cert-link": REJECT,
-    "cert-session": REJECT, "cert-key": REJECT, "cert-unlisted": REJECT,
+    "cert-session": REJECT, "cert-key": REJECT, "cert-unlisted": REJECT, "cert-other-session": REJECT,
     "clock-ingress": REJECT, "clock-forged": REJECT, "clock-window": REJECT, "clock-session": REJECT,
     "clock-reused": REJECT, "clock-unsalted": REJECT,
     "answer-protocol": REJECT, "answer-other": REJECT, "answer-reject": REJECT, "answer-undecided": UNDECIDED,
@@ -1233,10 +1235,11 @@ EXPECT = {
     "rows-program": REJECT,
     "rows-cert-missing": REJECT, "rows-cert-swap": REJECT, "rows-cert-fails-link": REJECT,
     "rows-cert-direction": REJECT, "rows-cert-forged": REJECT, "rows-cert-window": REJECT, "rows-cert-session": REJECT,
-    "rows-cert-key": REJECT, "rows-cert-unlisted": REJECT, "rows-past-slots": REJECT,
+    "rows-cert-key": REJECT, "rows-cert-unlisted": REJECT, "rows-cert-other-session": REJECT,
+    "rows-past-slots": REJECT,
     "rows-reg-count": REJECT, "rows-reg-swap": REJECT, "rows-reg-forged": REJECT, "rows-reg-window": REJECT,
     "rows-reg-link": REJECT, "rows-reg-session": REJECT, "rows-reg-key": REJECT, "rows-reg-unlisted": REJECT,
-    "rows-reg-field": REJECT,
+    "rows-reg-other-session": REJECT, "rows-reg-field": REJECT,
     "rows-schedule": REJECT, "rows-capped": ACCEPT, "rows-cap-schedule": REJECT,
     "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
@@ -1252,9 +1255,12 @@ EXPECT = {
 }
 MUTATIONS = list(EXPECT)
 #: The changes to which keys the parameters list and which of them sign (`rows-…` in the rows form): the signer's key
-#: the second of two, two listed keys that both sign, and a certificate or a rows registration under a key that isn't
-#: listed. `case` aims at none (`AIMS`), so its period lists the one key that signs it.
-LISTS = ("second-key", "two-signers", "cert-unlisted", "reg-unlisted")
+#: the second of two, two listed keys that both sign, each in its own session, a certificate or a rows registration
+#: under a key that isn't listed, and one under the second of two listed keys in the first's session. `case` aims at
+#: none (`AIMS`), so its period lists the one key that signs it.
+LISTS = ("second-key", "two-signers", "cert-unlisted", "reg-unlisted", "cert-other-session", "reg-other-session")
+#: The changes whose parameters list two keys, the signer's second
+SECOND = ("second-key", "two-signers", "cert-other-session", "reg-other-session")
 
 
 def form_of(m: str) -> str:
@@ -1713,15 +1719,18 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     ki = 0 if small else r.randrange(len(KEYS))
     key = _key(ki)
     N, W, H, toy = KEYS[ki]
-    # the keys the parameters list, the signer's among them: second of two (`second-key`, and `two-signers`, where the
-    # two sign in turn), alone in a small period, else at any place among up to two more; seed 1's key is never listed
+    # the keys the parameters list, the signer's among them: second of two (`SECOND`: `second-key`, and `two-signers`,
+    # where the two sign in turn), alone in a small period, else at any place among up to two more; seed 1's key is
+    # never listed
     rk = random.Random(f"network-period keys {m} {seed}")
-    listed = [_key(ki, 2), key] if m in ("second-key", "two-signers") else [key]
+    listed = [_key(ki, 2), key] if m in SECOND else [key]
     if not small and len(listed) == 1:
         listed += [_key(ki, 2), _key(ki, 3)][:rk.randrange(3)]
         rk.shuffle(listed)
     signers = listed if m == "two-signers" else [key]
+    # each listed key's session, the signer's `session`; a key that isn't listed signs in the signer's
     session = r.randbytes(lms.SESSION_BYTES)
+    sessions = {k.I: session if k is key else rk.randbytes(lms.SESSION_BYTES) for k in listed}
     # every form binds the link in its window record's canonical JSON, whose strings are ASCII without DEL
     link = r.choice(["eth0", "a", "d-e"])
     program = hashlib.sha512(b"link program %d" % r.randrange(3)).hexdigest()
@@ -1772,25 +1781,29 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         a = ties[first + t]["audit"]
     tied = {x["audit"] for x in ties.values()}
     signed = iter(range(1 << 30))
+    turn = lambda n: signers[n % len(signers)]  # noqa: E731
 
     def sign(link: str, d: Direction, w: int, digest: bytes, k: lms.PrivateKey | None = None,
-             s: bytes = session) -> Certificate:
-        """A certificate under `k`, or under the signers in turn."""
-        n = next(signed)
-        k = signers[n % len(signers)] if k is None else k
+             s: bytes | None = None, n: int | None = None) -> Certificate:
+        """A certificate under `k`, or under the signers in turn, in session `s`, or in its key's."""
+        n = next(signed) if n is None else n
+        k = turn(n) if k is None else k
         c = Certificate(k.I, link, d, w, digest, b"")
+        s = sessions.get(k.I, session) if s is None else s
         return dataclasses.replace(c, signature=lms.sign_at(k, n % 2 ** k.params.H, c.message(s)).encode())
 
-    def registrations(w: int, s: WardenParams | None = None, on: str = link, ses: bytes = session) -> list[dict]:
-        """Link `on`'s ingress and egress rows at window `w`, committed under schedule `s` (the period's) in session
-        `ses` and registered, each head signed there."""
+    def registrations(w: int, s: WardenParams | None = None, on: str = link, ses: bytes | None = None) -> list[dict]:
+        """Link `on`'s ingress and egress rows at window `w`, each committed under schedule `s` (the period's) in
+        session `ses`, or in the session of the signer whose turn it is, and registered, its head signed there."""
         s = s or sched
         out = []
         for d in (INGRESS, EGRESS):
+            n = next(signed)
+            in_ses = sessions[turn(n).I] if ses is None else ses
             cells = WR.Cells.commit(on, d, w, [r.randbytes(WR.row_bytes(s)) for _ in range(s.window)],
-                                    WR.Wiring((), r.randbytes(WR.WIRING_SALT_BYTES)), s, ses,
+                                    WR.Wiring((), r.randbytes(WR.WIRING_SALT_BYTES)), s, in_ses,
                                     [r.randbytes(WR.SALT_BYTES) for _ in range(s.window)])
-            out.append(WR.registration(cells.head, sign(on, d, w, cells.head.digest(), s=ses), s))
+            out.append(WR.registration(cells.head, sign(on, d, w, cells.head.digest(), s=in_ses, n=n), s))
         return out
 
     def resigned(doc: dict, **kw) -> dict:
@@ -1829,7 +1842,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         elif aimed and m == "reg-swap":
             regs = regs[::-1]
         elif aimed and m in ("reg-forged", "reg-window", "reg-link", "reg-session", "reg-key", "reg-unlisted",
-                             "reg-field"):
+                             "reg-other-session", "reg-field"):
             doc, c = regs[i], regs[i]["certificate"]
             sig, dig = bytes.fromhex(c["signature"]), bytes.fromhex(c["digest"])
             if m == "reg-forged":
@@ -1848,6 +1861,10 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                 doc = resigned(doc, k=_key(ki, 1, r.random() < 0.5))
             elif m == "reg-unlisted":
                 doc = resigned(doc, k=_key(ki, 1))
+            elif m == "reg-other-session":
+                # the second key's, in the first key's session: its head alone signed there, or its rows committed there
+                ses = sessions[listed[0].I]
+                doc = resigned(doc, s=ses) if r.random() < 0.5 else registrations(w, ses=ses)[i]
             else:
                 lay = doc["layout"]
                 f = r.choice(LAYOUT_KEYS)
@@ -1882,6 +1899,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                 recs[j] = sign(on, d, w, recs[j].digest, k=_key(ki, 1, r.random() < 0.5))
             elif m == "cert-unlisted":
                 recs[j] = sign(on, d, w, recs[j].digest, k=_key(ki, 1))
+            elif m == "cert-other-session":
+                recs[j] = sign(on, d, w, recs[j].digest, s=sessions[listed[0].I])
         entries = [{"domain": x["domain"], "root": x["root"], "value": x["value"]} for x in named]
         entries.insert(r.randrange(len(entries) + 1),
                        {"domain": r.randbytes(64).hex(), "root": r.randbytes(64).hex(), "value": "decoy"})
@@ -1959,6 +1978,10 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                 i = r.randrange(3)
                 egress, ingress, clock = (sign(c.link, c.direction, w, c.digest, k=_key(ki, 1)) if n == i else c
                                           for n, c in enumerate((egress, ingress, clock)))
+            elif m == "cert-other-session":
+                i = r.randrange(3)
+                egress, ingress, clock = (sign(c.link, c.direction, w, c.digest, s=sessions[listed[0].I])
+                                          if n == i else c for n, c in enumerate((egress, ingress, clock)))
             elif m == "clock-ingress":
                 clock = sign(link, INGRESS, w, clock.digest)
             elif m == "clock-forged":
@@ -2079,8 +2102,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
 
     case_params = {"audits": audit_params, "cells": [r.randint(0, 100) for _ in range(r.randint(0, 3))], "first": first,
                    "jitter": r.randint(1, 5), "keys": [lms.public_key(k).hex() for k in listed], "link": link,
-                   "lms": {"H": H, "N": N, "W": W, "toy": toy}, "program": program, "session": session.hex(),
-                   "windows": n_windows}
+                   "lms": {"H": H, "N": N, "W": W, "toy": toy}, "program": program,
+                   "sessions": [sessions[k.I].hex() for k in listed], "windows": n_windows}
     if rows:
         case_params |= {"scan": scan, "schedule": schedule_json(bound)}
     else:
@@ -2115,8 +2138,7 @@ def _bad_params(p: dict, n: int) -> list:
     """Parameters `params` refuses, each one change to `p`."""
     out = [{k: v for k, v in p.items() if k != sorted(p)[n % len(p)]}, p | {"x": 0}, [p], p | {"windows": 0},
            p | {"jitter": 0}, p | {"jitter": True}, p | {"link": "x" * (1 << 16)}, p | {"link": 1},
-           *bad_keys(p).values(),
-           p | {"session": p["session"][:-2]}, p | {"session": ""}, p | {"program": p["program"][:-2]},
+           *bad_keys(p).values(), *bad_sessions(p).values(), p | {"program": p["program"][:-2]},
            p | {"program": p["program"].upper()}, p | {"program": 0},
            p | {"lms": p["lms"] | {"W": 3}}, p | {"lms": p["lms"] | {"H": 0}}, p | {"lms": p["lms"] | {"toy": 0}},
            p | {"lms": p["lms"] | {"x": 0}}, p | {"lms": {k: v for k, v in p["lms"].items() if k != "toy"}},
@@ -2151,6 +2173,20 @@ def bad_keys(p: dict) -> dict[str, dict]:
             "key": {x: v for x, v in p.items() if x != "keys"} | {"key": k}, "key-too": p | {"key": k},
             "no-list": p | {"keys": k}, "no-string": p | {"keys": [1]}, "short": p | {"keys": [k[:-2]]},
             "long": p | {"keys": [k + "00"]}, "upper": p | {"keys": [k.upper()]}}
+
+
+def bad_sessions(p: dict) -> dict[str, dict]:
+    """Parameters whose sessions `params` refuses, each one change to `p`, by what it is: sessions that are not one for
+    each listed key, none, one fewer or one more (`empty`, `fewer`, `more`: `UNEQUAL`), the one-session form,
+    `"session"` in place of `"sessions"` or beside it (`session`, `session-too`: `SESSION_NOT_SESSIONS`), and a list
+    or a session that doesn't read: one session that is no list, a session that is no string, a byte short, a byte
+    long, or in uppercase hex."""
+    ss = p["sessions"]
+    s, first = ss[0], lambda x: p | {"sessions": [x, *ss[1:]]}
+    return {"empty": p | {"sessions": []}, "fewer": p | {"sessions": ss[1:]}, "more": p | {"sessions": [*ss, s]},
+            "session": {x: v for x, v in p.items() if x != "sessions"} | {"session": s},
+            "session-too": p | {"session": s}, "no-list": p | {"sessions": s}, "no-string": first(1),
+            "short": first(s[:-2]), "long": first(s + "00"), "upper": first(s.upper())}
 
 
 def _bad_caps(s: dict, p: dict) -> list[dict]:
