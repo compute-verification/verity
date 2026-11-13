@@ -117645,3 +117645,80 @@ Size: 8 files, 1451 lines [read: wc]. Theorems left: `copiesRef_src` (fixed, com
 Not established: the source half is not compiled yet. The written half and `CopiesAt` are not written. `PortsOnce` is not proved. Branch `cursor/proofs-addrwc-60f3` at `91599c8785`.
 
 To post: none.
+
+## SESSIONCOINS, Fri 13 Nov 03:29Z: `SessionCoins.lean`, `SessionHeld.lean` and `SessionAgrees.lean` all compile in one run (`ce92`, vy-nebius-2, exit 0); `SessionAgrees.lean`'s probe is clean; the 07:00Z milestone is met but for two probes; `SessionFits.lean` is in the next try
+
+### In plain words
+
+In the two-stage audit, each inner block of the second stage is proved in a proof session whose coins come from the auditor's device. My piece shows those coins are that session's own.
+
+Three of my files now compile together on a node. The one theorem that ran out of Lean's work budget an hour ago compiles after I cut it in three. The third file, which says the device's releases at the sessions' rounds agree with the run's coins, was checked for extra axioms and has none. That check reaches back through the theorem I split, so it covers that too.
+
+What is left of the piece is two more files. One is small and holds the bound on how many coins an opening carries; it is in a run now. The other ties my statements to the coin map and cannot be built on my branch until the coin map's definitions are on it.
+
+### Branch
+
+`cursor/proofs-sessioncoins-e4a0` at `2607ff0783`, pushed; nothing unpushed. Since the 03:16Z addendum: `bcc5c72073` and `2607ff0783` (section 3). The tree is mine over TWOLEG's `059a9408fe59`, as your 03:13Z word asks.
+
+### Mailbox
+
+Read at 03:26Z: your 03:13Z word (merge `059a9408fe59`, not the tip). Done, in the 03:16Z addendum. Nothing after it.
+
+### 1. What `ce92` showed [run]
+
+`r20261113-030442-ce92`, vy-nebius-2, `SessionAgrees.lean --siblings` at `fb1dbe5e1d`. It waited 5 minutes for a check slot and 8 more for a Lean place, built from 03:18Z, and ended rc 0 at 03:24Z ("exit 0 in 1137 s wall").
+
+- `Built Proofs.Properties.Verity.SampledTwo.SessionCoins (12s)`, warnings only.
+- `Built Proofs.Properties.Verity.SampledTwo.SessionHeld (13s)`, no warning. This is the file that failed in `e062`. `interiorReads`, split into `accepted_ran`, `lines_read` and itself, compiles.
+- `Built Proofs.Properties.Verity.SampledTwo.DevAgrees (6.0s)`: TWOLEG's, as an import.
+- `SessionAgrees.lean`: "lean exit 0 in 292 s"; "axiom probe: none of its 4 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; the sibling check found no name declared twice.
+
+The probe is of `SessionAgrees.lean`'s four theorems and everything they use. `sessionsAgree_accepted` uses `interiorReads`, so `accepted_ran`, `lines_read`, `membersRun_held`, `named_exact` and `named_records` are under it. `located_own`, `closes_after`, `coinsRead_sessions` and `stmtReadsNone` are not: they compiled, with no probe yet. [read]
+
+### 2. The 07:00Z milestone [run, derived]
+
+"One session's coins compiled in a run": `located_own` (a session's located coins are its own tree's) is in `SessionCoins.lean`, and `located_own_accepted` (the same on what the form accepts) and `closes_after` (each tree closes after its evidence's SHA-512, and the trees open in the sessions' order) are in `SessionHeld.lean`. Both files built whole in `ce92`. What is missing is the axiom probe of those two files themselves. Each needs a try of its own, since a try probes one file. They follow `SessionFits.lean`, one at a time.
+
+### 3. What I wrote while `ce92` waited [read; each checked on a stand-in on the VM, not in a run]
+
+- `sessionsFit_of` and `SessionsFit` moved from `SessionDev.lean` to `SessionFits.lean` (`bcc5c72073`). They need nothing of the coin map, so they compile with my own chain. `SessionFits.lean` now holds `coinTreesOf_fits`, `readFits` and `sessionsFit_of`.
+- `SessionDev.lean` no longer imports COINMAP's `CoinStages.lean`, only its `CoinMap.lean` (the definitions, which COINMAP compiled in `6da9` [relayed]). The run's locator `runLocate A Ls tab` now takes the stages' locator `Ls` as an argument instead of naming `CoinMap.stageLocate`. Every theorem holds for any `Ls`.
+- New in `SessionDev.lean`: `dev_run_stage`. At a round up to the second stage's last, the coin map reads the same release at the run's locator as at the stages', provided the stages' locator puts no opening on a round. At `CoinMap.stageLocate ℓ₁ ℓ₂` that proviso is `fun _ _ _ _ _ => rfl`. This is what carries COINMAP's `devFirst_stage` and `devSecond_stage` to the run's locator; it was under "not established" at 03:10Z.
+- New in `SessionDev.lean` (`2607ff0783`), the piece as the assembly takes it, with the coin map's own release and agreement filled in:
+  - `coinsAgree_run`: `CoinsAgree` at the sessions' rounds, from CUT's `InteriorLogged` alone.
+  - `sessionsAgree_run`: `SessionsAgree` at `CoinMap.ElemAgrees (runLocate A Ls tab) A x (readsAt A.h)`, from `InteriorLogged` and `HeldSize`.
+- Stand-ins [run on the VM]: `SessionAgrees.lean` word for word, and `SessionDev.lean` with `sessionsFit_of` word for word, over copies of the definitions they read and their lemmas stubbed as axioms. Both elaborate with no error. `SessionAgrees.lean` has since compiled for real, so that stand-in was a fair one.
+
+### 4. Runs and machines [run]
+
+| Run | Machine | What | Wait | State |
+| --- | --- | --- | --- | --- |
+| `r20261113-030442-ce92` | vy-nebius-2 | `SessionAgrees.lean --siblings` at `fb1dbe5e1d` | 5 min for a check slot, 8 min for a Lean place | rc 0 at 03:24Z (section 1) |
+| `r20261113-032657-2580` | vy-nebius-2 | `SessionFits.lean --siblings` at `2607ff0783` | launched 03:27Z, in line | waiting |
+
+One try is out.
+
+### 5. Ready for soundness's reading
+
+`SessionCoins.lean`, `SessionHeld.lean` and `SessionAgrees.lean`, at `2607ff0783` (unchanged since `fb1dbe5e1d`, which is what `ce92` built). The first two with the caveat that their own probes have not run.
+
+### STOP RULE
+
+Nothing. No listed guarantee, lock, accept or `Sampled.lean` touched, and no file of another lane's edited.
+
+### NEEDS
+
+1. Coordinator or [COINMAP](bc-3253d1a3-1eb4-56a8-9297-080d9d938c5a): a head of `cursor/proofs-coinmap-8b0c` I may merge for `CoinMap.lean`. Its tip lists `CoinMapLaw`, `CoinMapAgree` and `CoinStages` as roots, and they have not compiled [relayed: COINMAP's 03:07Z entry], so I do not merge it on my own. Until I have `CoinMap.lean`, `SessionDev.lean` cannot be a root or have a try. Nothing else of mine waits on it.
+2. [COINMAP](bc-3253d1a3-1eb4-56a8-9297-080d9d938c5a), for your reading only: `runLocate` now takes `Ls`; where you wrote `runLocate A ℓ₁ ℓ₂ tab`, it is `runLocate A (CoinMap.stageLocate ℓ₁ ℓ₂) tab`.
+3. [ASSEMBLY](bc-20b18121-d066-5cc6-989c-3dbdcb1942b8), for your reading only: the two statements to take are `coinsAgree_run` and `sessionsAgree_run` (`SessionDev.lean`), and `stmtReadsNone` (`SessionCoins.lean`). `HeldSize` is `fun _ _ _ h => Verity.SampledTwo.held_size h` from CUT.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- No axiom probe of `SessionCoins.lean` or `SessionHeld.lean` themselves.
+- `SessionFits.lean` has not compiled in a run (`2580` is its try). `SessionDev.lean` has not compiled in a run and is not a root.
+- The session's table `tab t` is still a parameter of every statement; which string it is waits on MESSAGES.
+- A session whose member tree opened before an earlier session signed is not excluded by anything of mine. That is the earlier-signature hole, which is not mine to close.
