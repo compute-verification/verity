@@ -152664,3 +152664,72 @@ Nothing is pushed, launched or merged. What is here is by reading and by `git me
 - SESSIONOF2's `why` is accurate. I add the tactics its list of expansions leaves out (`clear`, `have`, `apply`, `assumption`, `trivial`, `done`), and I hash the file again at the carried head before I list it.
 
 To post: nothing. Run going on: none of mine. My timer is set for FRAME's report.
+
+
+## RATING, Fri 13 Nov 16:54Z: row 1 [run]: at sm_120 three of the four classes as found do not exist: their programs' words are wrong (0 of 16 on every small tile, 1 of 4,096 on the whole two-raiser tile). The dead pairs do exist (16 of 16, three salts). Row 2 [run]: the tile rule refuses the dead-pair tile on three salts at both price records, 12.7 to 12.8 times its cap, and an honest tile passes with 0 mends. All over #9735's old head `4d4950f1bb9`. Row 4 has nothing to run. Row 3 launches now
+
+**In plain words.** What I read at 14:43Z is now a run. The raised adder, the planted skip and my two-raiser tile are built on the H100's adder throwing small products away. sm_120's adder keeps them, so the cheap programs output wrong numbers there and there is nothing to rate. The dead pairs carry over: the program's numbers are right, it would be cheap enough to be the event, and the mend's rule refuses the tile. So at sm_120 the rating of the classes as found is one class, and the mend holds on it. That is not a red team of the 26-bit atom: nobody has built a class for it, and I design none.
+
+**Which head and which sweep.** Every run's clone is of `4d4950f1bb99` (#9735's head before FRAME's carry; `launch.json` of each run names it) with my sweep at `6d48b81e4e8` (`cursor/proofs-rating-09fd`) laid over. Scheme: `pearl-c-sm120-v1-h3`, cap 1/1,000. All `--on auto`, exit 0.
+
+### Row 1: does each class exist at sm_120 (`r20261113-164045-5309`)
+
+Words are the program's against the scheme's own (`checked`), at k = 8,192. No price enters a words check.
+
+| Class, as found at the H100 | Program | Tile | Words equal at sm_120 [run] | Same at the H100 [run] |
+| --- | --- | --- | --- | --- |
+| Raised adder | one atom a group | 4 × 4, 20 planted groups, fills `zero` and `gauss`, three salts | **0 of 16** on each of the six | 16 of 16 (same run, salt 0, both fills) |
+| Planted cross-group skip | skip only | the same six tiles | **0 of 16** on each of the six | 16 of 16 (same run) |
+| Two-raiser tile | one atom, and skip only | whole 64 × 64, 8192³, fill `edge`, 20 groups, salt 0 | **1 of 4,096** for each program; largest difference 191.6 and 159.7 | 4,096 of 4,096 (`r20261113-123655-6a3c`, this head) |
+| Dead pairs | dead pair | 4 × 4, 1 planted group, three salts | **16 of 16** on each of the three | 16 of 16 (same run, salt 0) |
+
+- The planted codes are as designed on all nine small tiles, so the wrong words are not a plant that failed to form.
+- The two-raiser tile itself is admitted and passes the tile rule at both price records (`Prices.sm120`: debit 3,326 against a cap of 36,438, 0 mends, 39 flagged atoms where the H100 flagged 246). What fails is the program. One planted code of that tile is off its design at this salt; at the H100 none was. One off code touches 64 words, not 4,095.
+- I did not look into which word is the one that is equal.
+- So row 4 (a class whose words are equal against my expectation) has nothing to run.
+
+### Row 2: the honest tile and the dead pairs under the rule, 8192³, whole 64 × 64 tiles, three salts (`r20261113-164107-4781`, `r20261113-164107-d06e`, `r20261113-164107-ab8f`)
+
+Each tile is run through the rule twice, once at each record. The caps: 36,438.0 at `devSm120v1 Prices.sm120` and 36,535.0 at `devSm120v1 Prices.sm120Loop` (the record `GapSm120v1LoopCast8p72Rev1Cap1000_8192` is stated at).
+
+**The honest tile** (Gaussian A and B from the sweep's generator, no plant; not served activations) [run]:
+
+| Salt | Flagged atoms | Mends | Debit at `Prices.sm120` | Debit at `Prices.sm120Loop` | Share of the cap | Rule, both records |
+| --- | --- | --- | --- | --- | --- | --- |
+| `ef58fa9e` | 23 | 0 | 782 | 784.2 | 2.1% | passes |
+| `1980ceec` | 20 | 0 | 680 | 681.9 | 1.9% | passes |
+| `92f061ee` | 18 | 0 | 612 | 613.7 | 1.7% | passes |
+
+- 0 debited elements, 0 later zeros. The flagged atoms are of 1,048,576 atom-words a tile.
+- The sweep's sm_120 adder gives the scheme's words on all 4,096, three salts. That is the control for row 1: the wrong words there are the programs', not the sweep's atom.
+- The reference program, priced as the sweep prices the others, is 100.06% of the credit at both records. No event.
+
+**The dead-pair tile** (1 planted group; the program priced at 256 units sharing a weight, as the pull request's own dead-pair test prices it) [run]:
+
+| Salt | Words equal | Mends | Debit at `Prices.sm120` | Over the cap | Debit at `Prices.sm120Loop` | Over the cap | Rule, both records |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `ef58fa9e` | 4,096 of 4,096 | 458,752 | 464,834 | 12.76 times | 464,844.6 | 12.72 times | **refuses** |
+| `1980ceec` | 4,096 of 4,096 | 458,752 | 466,160 | 12.79 times | 466,174.3 | 12.76 times | **refuses** |
+| `92f061ee` | 4,096 of 4,096 | 458,752 | 465,514 | 12.78 times | 465,526.5 | 12.74 times | **refuses** |
+
+- The rule's words: "the replayed debit 464834 exceeds the cap 36438 (ρ·the credited cells' credit)". The rows' own rules pass; the cap refuses.
+- The mends are 112 a word, as I expected at 14:43Z.
+- The program, a word: 8,805.6 at `Prices.sm120` (98.98% of the credit 8,896.0, 99.33% of the bound 8,864.9) and 8,829.4 at `Prices.sm120Loop` (98.99% of 8,919.7, 99.34% of 8,888.5). The bound is (1 − 1/400)(1 − 1/1,000) of the credit.
+- [inference, arithmetic on the rows] The refusal is by the mends alone. The debit adds the mends at one MAC each; without that term it is 6,082, 7,408 and 6,762, which is 17% to 20% of the cap. So without the mend this tile would pass at sm_120, with every word right and the program 0.7% under the bound. I did not run the rule of `main` at sm_120.
+- At 1 unit the same program is over the bound (8,973.0 and 8,997.0 a word). That is my local smoke on a 4 × 4 tile, not a row.
+
+### What these rows do not say
+
+- Nothing about a class built for the 26-bit atom. Three of the four as found do not exist there; that leaves the atom unrated, not safe.
+- The rule's verdicts are the batch forms' (`fast_tile`). I did not run the scalar reference of the rule at sm_120. The words agree with the scalar chain on the 64 words each row checks.
+- k = 8,192 only. k = 65,536 is row 3.
+- The costs are my sweep's copies of the test module's two cost functions, term for term, on sm_120's W1 prices (MAC 1, BF16 2, FP32 8 or 8.376, a cast 8 a code, INT32 16). The sweep asserts they equal the module's at the H100's prices. Nobody else has read them at sm_120's.
+
+### Next
+
+- **Row 3 launches now**, as you ordered once this is in your inbox: the honest tile and the dead pairs at 7 planted groups, k = 65,536, n = 8,192 and 65,536, three salts, three runs side by side, both records, over the same old head. About an hour each by the H100's laps (the rule runs four times on the honest tile).
+- #9735: I commit nothing on `cursor/proofs-rating-debit-4ba7` until you pass me FRAME's row.
+
+**Text for PRF-612, if you want it:** "RATING, by a run over #9735's `4d4950f1bb9` (`r20261113-164045-5309`): at sm_120 the raised adder, the planted skip and the two-raiser tile do not exist as found: their programs' words are wrong (0 of 16 on three salts; 1 of 4,096 on the whole two-raiser tile), where the same code is right on every word at the H100. The dead pairs carry over, and the tile rule refuses the tile on three salts at 8192³ at both `Prices.sm120` and `Prices.sm120Loop`, 12.7 to 12.8 times the cap, by its mends alone; an honest Gaussian tile passes with 0 mends at 1.7% to 2.1% of the cap. Rows as found by 20 Nov: yes; a red team at sm_120: not in that."
+
+Mailbox read at 16:54Z; nothing newer than your 16:16Z.
