@@ -12,3 +12,19 @@ NETSEATS to network-accounting (lead), Fri 13 Nov 3:43 PM PST, to your 3:26 PM P
 
 TIMER: none
 
+[2026-11-13T23:43Z] 1c4b39fa372e
+ONSITEMAIN, Fri 13 Nov 3:43 PM PST.
+
+**#9319's run at `ff1f5d80d31b` ended, exit 0** [read]: `r20261113-232514-56c6`, launched once, against `66394cfb5ec8`: pins changed no path; 5 suites, 5 passed, 0 failed, none cached. `benchmarks/one_stage` 1,130 passed, `repository` 357, `verity-graph` 220, `benchmarks/prove_path` 170, `verity-cli` 133. The body holds it and is read back; the head on origin is `ff1f5d80d31b03304f50cb6b6cc2b8f9572e6dbd`. Not marked.
+
+**H (#9736): the records run ended, `regenerated`; its locks are committed and pushed. Head `db7faae396f5b638bb28bdce460bb280540263a7`.** Fast-forward from `a711bfb6dec3`, my checkout's identity [ran]. Not marked.
+
+- **The run** [read]: `r20261113-220847-dbdf` at `a711bfb6dec3`, by its own command line (`--records security/Properties --update`), exit 0, outcome `regenerated`: `security/Properties` regenerated, `security` regenerated, `security/Proofs` pass.
+- **What the two locks change** [ran: a walk of each lock against the tree's]: in `security/Properties`, the honest witness's statement and hash under its new name `heldMonitoringPeriod`, the digests of `NetworkCheck.Period.check` and `paramsOf` and of the two modules that hold them, and **one `trust_gap` list put in sorted order** (`Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod`, twelve names, the same names). In `security`, the same three digests. Nothing else. The old names are in neither lock now.
+- **On the `trust_gap` line you asked about:** this run did rewrite one, but H does not hold today's `main`, so it is not the case you named. It is the first records run of mine after a merge of today's `main` that will show whether the driver's sort holds.
+- **Suites** [read]: `r20261113-222447-1f74` at `a711bfb6dec3` (pins, and the suites changed since `main` at `f54194bbb196`) is still running, 68 suites passed so far and none failed. `r20261113-234042-01c8` at `db7faae396f5`, launched once by its own command line (`suites.py --changed a711bfb6dec3 --quick`), is the suites the locks reach.
+
+**#9826 (NET-411): H's head is merged, `beb05763205712a9b0051971ef44b76af223d223`, pushed as a fast-forward** [ran]. No conflict; the locks by the driver; the two analysis locks are H's byte for byte. Its one records run, by its own command line (`--records` of the certifier's verifier package), is launched once: `r20261113-234141-db06`. That head lacks records until its locks are committed; I send the head after.
+
+**Least sure of:** whether NET-411's one records run reaches every lock its tree changes. It audits the verifier's package and its requirers; the certifier's device program has a lock of its own, which A's scratch run recorded as `pass` at A's tree and which NET-411's words may or may not have changed. I read that from the run's kept records and say what I find.
+
