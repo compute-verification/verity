@@ -33,8 +33,6 @@ no statement takes it then.
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-open private strOf from Spot.ChallengerSession
-
 namespace Verity.SampledTwo.Sessions
 
 open Lean (Json)
@@ -64,19 +62,14 @@ theorem ledgerOpens_of_opensOn {h : History} {pk : ByteArray} {w id : String} (h
   obtain ⟨line, hl, e, he, hk, hs, hid, hr, -⟩ := ho
   unfold LedgerOpens
   refine ⟨line, hl, e, he, hk, hid, ?_⟩
-  have hb : (e.schema == Spot.Challenger.LEDGER_SCHEMA) = true := by
-    first
-      | exact beq_iff_eq.2 hs
-      | simp [hs]
+  have hb : (e.schema == Spot.Challenger.LEDGER_SCHEMA) = true := beq_iff_eq.2 hs
   have h1 : Properties.Pouw.LiveSalt.openRoot e = Json.str w := by
     unfold Properties.Pouw.LiveSalt.openRoot
     rw [if_pos hb]
     exact hr
   unfold openedRoot
   rw [h1]
-  <;> first
-    | rfl
-    | simp only [strOf]
+  rfl
 
 /-! ## The two setups' ledger lines -/
 
