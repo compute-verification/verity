@@ -47,7 +47,8 @@ from typing import Any
 import numpy as np
 
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.properties.fa_tap_exactness import PAGE, cases as tap_cases
+from verity_vllm.properties.fa_tap_exactness import PAGE
+from verity_vllm.properties.fa_tap_exactness import cases as tap_cases
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/fa2-target-capture/v1"
@@ -77,7 +78,7 @@ def cpu_workers() -> int:
     """CPUs this container may use: the cgroup v2 quota when one is set (RunPod pods see the host's CPUs), else the affinity mask."""
     n = len(os.sched_getaffinity(0))
     try:
-        quota, period = open("/sys/fs/cgroup/cpu.max").read().split()
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()
         if quota != "max":
             n = min(n, max(1, int(quota) // int(period)))
     except (OSError, ValueError):
@@ -137,7 +138,7 @@ def binary() -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------------------------------------------------ mufu
 def mufu(work: Path, sm: str) -> dict[str, Any]:
-    from verity.definitions.circuits import library as L
+    from verity.circuits import library as L
     from verity.definitions.numerics import fa2_relation
 
     pinned = fa2_relation.tables()
@@ -152,7 +153,7 @@ def mufu(work: Path, sm: str) -> dict[str, Any]:
             continue
         out = work / f"tables_{tag}.bin"
         t = _run([str(exe), "table", str(out)])
-        words = np.fromfile(out, dtype="<u4")
+        words: np.ndarray = np.fromfile(out, dtype="<u4")
         n = 1 << 23
         ex2, rcp = words[:n], words[n:2 * n]
         v = _run([str(exe), "verify", str(ref)])
@@ -265,7 +266,7 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
     scale = b1.scale_log2_bits(D)
     nb = -(-T // BN)
     m = 0
-    l = [0] * 4
+    sums = [0] * 4
     o = [0] * D
     for b in range(nb - 1, -1, -1):
         first = b == nb - 1
@@ -291,7 +292,7 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
         for ln in range(4):
             cols = [c for c in range(nvis) if b1._lane(c) == ln]
             first_p = p[cols[0]] if cols else 0
-            acc = first_p if first else E(P.F32FmaFtz, sc, l[ln], first_p)
+            acc = first_p if first else E(P.F32FmaFtz, sc, sums[ln], first_p)
             for c in cols[1:]:
                 acc = E(P.F32AddFtz, acc, p[c])
             lanes.append(acc)
@@ -305,8 +306,8 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
             for d in range(D):
                 vcol = [int(v[lo + k0 + j, d]) if k0 + j < nvis else 0 for j in range(16)]
                 o[d] = E(DOT, o[d], prow, vcol)
-        m, l = m_new, lanes
-    total = E(P.F32AddFtz, E(P.F32AddFtz, l[0], l[2]), E(P.F32AddFtz, l[1], l[3]))
+        m, sums = m_new, lanes
+    total = E(P.F32AddFtz, E(P.F32AddFtz, sums[0], sums[2]), E(P.F32AddFtz, sums[1], sums[3]))
     inv = E(P.Fa2InvSum, total)
     return [E(P.F2fpBf16, E(P.F32MulFtz, o[d], inv)) for d in range(D)]
 
@@ -462,6 +463,7 @@ def run(out: str, min_driver: int, want_cc: str, want_sms: int, workers: int, on
     from torch.profiler import ProfilerActivity, profile, record_function
 
     op = torch.ops._vllm_fa2_C.varlen_fwd
+    jobs: list[dict[str, Any]]
     doc["launches"], jobs = [], []
     with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
         for i, c in enumerate(case_list()):

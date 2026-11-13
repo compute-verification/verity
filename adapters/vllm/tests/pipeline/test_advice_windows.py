@@ -9,10 +9,10 @@ import json
 from pathlib import Path
 
 import pytest
-
-from verity.protocols.certifier.verifier import advice as A
-from verity.protocols.spot.verifier.one_stage import registration as R
 from verity.commitments.windows import rows as CS
+from verity.protocols.accounting.certifier.verifier import advice as A
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline.tp import serving_rows as SRT
 
@@ -40,7 +40,7 @@ def advice_tp(tmp_path_factory):
     from tests.pipeline import served_tp as ST
 
     root = tmp_path_factory.mktemp("advice-tp")
-    c = ST.commit(root / "tp", world=2, I=256, law="subset:2", deferred=True)
+    c = ST.commit(root / "tp", world=2, inter=256, law="subset:2", deferred=True)
     c["compiler"] = AW.Traced.for_commit(c["commit"], c["build"])
     c["bytes"] = {"A": _advice(c), "A'": _advice(c, drop=("r1",))}
     c["advice"], c["reg"], c["opening"] = {}, {}, {}
@@ -322,7 +322,7 @@ def gated_tp(tmp_path_factory):
     from tests.pipeline import served_tp as ST
 
     root = tmp_path_factory.mktemp("gated-tp")
-    c = ST.commit(root / "tp", world=2, I=256, law="work:2", deferred=True, templates=(ROPE,))
+    c = ST.commit(root / "tp", world=2, inter=256, law="work:2", deferred=True, templates=(ROPE,))
     data = _advice(c)
     for name, gates in (("gated", (ROPE,)), ("bare", ())):
         comp = AW.Traced.for_commit(c["commit"], c["build"], gates)
@@ -354,7 +354,7 @@ class _Coins:
 
 def _draw(rec: dict, law: dict) -> dict:
     """A challenger's sample under the registration's expanded `law` (`service.select_draw` past its rule)."""
-    from verity.protocols.spot.device import coins as T
+    from verity.protocols.proofs.spot.device import coins as T
 
     n = rec["population"]
     return {**law, "population": n, "units": sorted(T.draw_first(T.OwnRandomness(_Coins()), law, n)["units"])}
@@ -363,7 +363,7 @@ def _draw(rec: dict, law: dict) -> dict:
 def test_the_compilers_transfer_gate_units_are_drawn_whole_beside_the_drawn_rest(gated_tp):
     """The window's work sampling design proves every RoPE head (work 0, its floor all 32: an All stratum) and samples 2 of the 8 SiluMul rows, as
     the registration's law states and the verifier's own window derives; a sample by it holds every transfer-gate unit."""
-    from verity.protocols.spot.verifier.one_stage import draw as D
+    from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 
     c = gated_tp
     mine, held = _gated_mine(c)
@@ -384,7 +384,7 @@ def test_the_compilers_transfer_gate_units_are_drawn_whole_beside_the_drawn_rest
 def test_a_transfer_gate_unit_left_out_of_the_proved_set_is_refused(gated_tp):
     """Each way of leaving a RoPE head unproved: the proved set less one (`check_proved`), a sample trading one for an unsampled SiluMul
     row (`check_draw`, the stratum's count), and a registration whose sampling design samples the RoPE heads as the rest is (R1)."""
-    from verity.protocols.spot.verifier.one_stage import draw as D
+    from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 
     c = gated_tp
     mine, _held = _gated_mine(c)

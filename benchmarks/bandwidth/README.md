@@ -1,6 +1,6 @@
 # Device ceilings for PoUB
 
-The measurements PoUB's timing cites (`verity/protocols/poub/verifier/timing.py`): how fast a node's writers can
+The measurements PoUB's timing cites (`verity/protocols/accounting/poub/verifier/timing.py`): how fast a node's writers can
 fill a tier with labels, and how much a card holds on chip. Each probe is one Attempt on a GPU node.
 
 **Run:** `verity bench bandwidth chip|write_gpu|write_host [ARGS]` (`run.sh`) runs one probe's script, named below, as
@@ -38,7 +38,7 @@ control that writes nothing rejected).
 
 ## A node's own report
 
-A node file (`verity/hardware/nodes/`) states what a node's registration does and no card states. `node.py` reads
+A node file (`hardware/nodes/`) states what a node's registration does and no card states. `node.py` reads
 three of those on the node, in one Attempt that writes nothing to a device:
 
 - the interfaces that carry traffic off the node, each with its line rate: every interface's own report, `ethtool`

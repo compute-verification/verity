@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 ROOT = Path(__file__).resolve().parents[3]
 TC_PROBE = ROOT / "benchmarks" / "tc_probe"
-FIXTURE = ROOT / "fixtures" / "bench-instances" / "v1"
+FIXTURE = ROOT / "benchmarks" / "numerical" / "bench-instances" / "v1"
 
 
 def _load(name: str, path: Path) -> ModuleType:
@@ -51,7 +51,7 @@ class FakeProbe:
 
     def __init__(self, ins: P.Instruction) -> None:
         self.ins = ins
-        from verity.definitions.silicon.total import tc_dot_total
+        from verity.circuits.silicon.total import tc_dot_total
 
         pipe = ins.models[0].pipeline
         self.step = (lambda c, a, b: tc_dot_total(pipe, c, a, b)) if ins.fmt is P.BF16 else (lambda c, a, b: S.tc_dot(pipe, c, a, b))
@@ -90,7 +90,7 @@ def test_store_declaration_registered_and_parses_flags() -> None:
     assert tool.name == "instances_hw" and tool.spec == "benchmarks.tc_probe.tool:INSTANCES_HW"
     assert "tc-evidence/v1" in tool.produces and "hw.family" in tool.key_conditions
     argv = ["python", "benchmarks/tc_probe/instances_hw.py", "--instances", "bench-instances/v1/vu-k1536", "--out", "/run", "--sass-check",
-            "--range", "0:64", "--manifest", "fixtures/bench-instances/v1/manifest.json", "--procs", "8"]
+            "--range", "0:64", "--manifest", "benchmarks/numerical/bench-instances/v1/manifest.json", "--procs", "8"]
     _, key = tool.resolve_params(argv, ROOT)
     assert key["instances"] == "bench-instances/v1/vu-k1536" and key["sass_check"] is True and key["range"] == "0:64" and key["repeat"] == 1
     assert "out" not in key and "procs" not in key and "instruction" not in key
@@ -239,7 +239,7 @@ def test_negative_tier_every_claimed_word_is_detected() -> None:
 
 
 def test_epilogue_words_are_the_targets_cast() -> None:
-    from verity.definitions.silicon.cast import f32_to_bf16_word
+    from verity.circuits.silicon.cast import f32_to_bf16_word
 
     acc = np.array([0x3F800000, 0x3F808000, 0x3F818000, 0x7F7FFFFF, 0xFF800000, 0x7FC00001, 0x80000000, 0x00000001], np.uint32)
     y = IH.epilogue_words("f32_to_bf16", acc)

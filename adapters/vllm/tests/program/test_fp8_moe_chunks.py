@@ -9,19 +9,19 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
-from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32 as BW
-from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32 as MV
 from verity.definitions import boolean as SW
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32 as BW
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32 as MV
 from verity.definitions.registry import boolean_fp8_moe as BM
 from verity.definitions.registry import fp8_moe_experts as X
+
 from tests.program.test_boolean_fp8 import _flat, _inputs
 
 
@@ -47,6 +47,7 @@ def _chunks(st: dict, KC: int, xq, sx, e: int, slab, ws) -> int:
         fn = bind(X.MoeExpertFp8CoordinateChunk, **{**st, "K": KC}, FIRST=c == 0, LAST=c == C - 1)
         lead = (xq[a:b].tolist(), sx[a // G:b // G].tolist(), e) + (() if acc is None else (acc,))
         (acc,) = evaluate(fn, *lead, slab[:, a:b].reshape(-1).tolist(), ws[:, a // G:b // G].reshape(-1).tolist())
+    assert acc is not None
     return acc
 
 

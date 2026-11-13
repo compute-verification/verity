@@ -1,7 +1,7 @@
 """`Q_word` v1's behaviour pinned beyond the six-Call vector (`qword_vectors.json`): the version's constants as data, programs that
 exercise every step of `verity.circuits.cut`'s algorithm (X packing narrow outputs, wide gates, returned wiring inputs, a source read
 twice, the dead-unit second pass, the separable branches, primitive Calls, all three wiring primitives), every refusal of `validate`
-and `verify`, and the seeded random corpus of the Lean port's conformance run (`verity/protocols/flock/agreement/qword_agree.py`, same
+and `verify`, and the seeded random corpus of the Lean port's conformance run (`verity/protocols/proofs/flock/prover/agreement/qword_agree.py`, same
 generator and seed), as digests of its cases and of core's answers.  Programs are descriptor bytes; the evaluation is from the bytes.
 `v2`: `Q_word` v2 on the same programs (v1's evaluation; a value computed in two units reported, not refused).
 Its `--write` rewrites the file; `REWRITE` names the command that runs it."""
@@ -23,8 +23,8 @@ from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinit
 from verity.circuits.program import Program
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity.definitions.ops.prims import Bf16ToF32, F32ToBf16Rn, const
-from verity.definitions.ops.scalar import BitAnd, Bf16GtStrict, F32BitsShl23, F32Fabs, F32Fmaxf, I32Add
+from verity.circuits.ops.prims import Bf16ToF32, F32ToBf16Rn, const
+from verity.circuits.ops.scalar import BitAnd, Bf16GtStrict, F32BitsShl23, F32Fabs, F32Fmaxf, I32Add
 
 PATH = Path(__file__).parent / "qword_vectors.json"
 REWRITE = ("the vectors differ from the tree's; a change meant to move them rewrites them with "
@@ -257,7 +257,7 @@ def served_cases(D, version: int = 1) -> list:
     return [[label, {str(j): v for j, v in s.items()}, _codes(PO.verify(obj, D, served=s))] for label, s in cases]
 
 
-# -- the Lean port's random corpus (verity/protocols/flock/agreement/qword_agree.py at 34b6fb0e: the same generator, seed and answers) ---------
+# -- the Lean port's random corpus (verity/protocols/proofs/flock/prover/agreement/qword_agree.py at 34b6fb0e: the same generator, seed and answers) ---------
 
 def _graph_json(rng, n):
     edges = [(p, q) for q in range(n) for p in range(q) if rng.random() < 2.0 / max(n, 1)]

@@ -14,7 +14,7 @@ from pathlib import Path
 from verity.hardware.cards import load, number
 
 ROOT = Path(__file__).resolve().parents[3]
-POLICY = "verity/protocols/inference_only/rho/data/hardware.toml"
+POLICY = "benchmarks/rho/data/hardware.toml"
 
 
 def test_the_policys_links_are_the_cards_connectx_ports() -> None:
@@ -24,6 +24,6 @@ def test_the_policys_links_are_the_cards_connectx_ports() -> None:
     assert links["unit"] == link["cluster"]["unit"] == link["storage"]["unit"]
     stated = {key: Fraction(str(links[key])) for key in ("low", "value", "high")}
     assert stated == {"low": cluster, "value": cluster + storage, "high": cluster + storage}, (
-        f"verity/hardware/cards/dgx-h200.toml (link.cluster, link.storage) and {POLICY} (location.h200-hgx.links) "
+        f"hardware/cards/dgx-h200.toml (link.cluster, link.storage) and {POLICY} (location.h200-hgx.links) "
         "state one figure, the line rate of the DGX H200's twelve ConnectX-7 ports and of its eight cluster ports "
         "alone: change both files or neither")

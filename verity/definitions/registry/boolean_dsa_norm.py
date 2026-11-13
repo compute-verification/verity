@@ -30,8 +30,8 @@ from types import SimpleNamespace
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.refs import Coll, concat, strided_view
 from verity.circuits.types import Array
 from verity.definitions.registry import boolean_rope as BR

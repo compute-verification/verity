@@ -50,7 +50,7 @@ own suite's directory from the root (`ROOT / "packages/verity/tests/x"`): such a
 hides until the suite next runs (`check.py --no-cache`, the nightly `audit-main` run). Locate a suite's own files from
 `__file__`.
 
-Fixtures too large for git are entries of `fixtures/artifacts.json` whose paths git does not track. Before the suites run, the
+Fixtures too large for git are entries of `artifacts.json` whose paths git does not track. Before the suites run, the
 entries under their inputs are fetched (`research data fetch-fixtures`: every byte checked against its id), and each suite's key
 adds the ids of those under its inputs, since git's tree ids leave ignored files out. A suite whose fixtures cannot be fetched
 fails without running.
@@ -220,15 +220,15 @@ CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY
 #: sees), and tests/test_after_lean.py holds every suite that is a Lake package or declares one's lakefile or `.lake` here.
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
               "verity-core-periods", "verity-core-evaluate", "verity-core-firewall",
-              "verity/protocols/recursion/verifier/vstar_cli", "verity/protocols/flock/sigma", "verity-core-sampled-proofs",
-              "verity/protocols/poub/verifier/lean",
-              "verity/protocols/certifier/verifier/network", "verity-pouw-window-difftest",
-              "verity-pouw-check-difftest", "verity/protocols/pouw/verifier/lean/commit", "benchmarks/pouw/pearlplus_lean",
+              "verity/protocols/proofs/recursion/verifier/vstar_cli", "verity/protocols/proofs/flock/sigma", "verity-core-sampled-proofs",
+              "verity/protocols/accounting/poub/verifier/lean",
+              "verity/protocols/accounting/certifier/verifier/network", "verity-pouw-window-difftest",
+              "verity-pouw-check-difftest", "verity/protocols/accounting/pouw/verifier/lean/commit", "benchmarks/pouw/pearlplus_lean",
               "memory-challenger-lean", "benchmarks/pous",
-              "verity/protocols/spot/verifier", "verity/protocols/certifier/verifier", "verity-pouw-benchmarks",
-              "verity/definitions/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "benchmarks/two_stage",
+              "verity/protocols/proofs/spot/verifier", "verity/protocols/accounting/certifier/verifier", "verity-pouw-benchmarks",
+              "verity/circuits/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "benchmarks/two_stage",
               "verity-network-e2e",
-              "verity/protocols/poub/device/live_verifier", "verity-network-traces", "verity-vllm", "benchmarks/verifier_cost")
+              "verity/protocols/accounting/poub/device/live_verifier", "verity-network-traces", "verity-vllm", "benchmarks/verifier_cost")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
@@ -245,7 +245,7 @@ UNCACHED_ENV = {"LAKE_ARTIFACT_CACHE": "false"}
 QUICK = ["-m", "not slow"]
 #: the guard's (`verity_suite_guard`): the tests of each test file the option names carry the mark, which `whole_args` keeps
 WHOLE_MARK, WHOLE_OPT = "verity_whole", "--verity-whole"
-REGISTRY = "fixtures/artifacts.json"
+REGISTRY = "artifacts.json"
 #: what a store fetch from inside the tree reads of it, which every suite may read: the registry, for repo replicas (indexing the
 #: remote's manifest on an empty local store), and the bucket pin, when the remote is the environment's (`R2_*`). Neither changes
 #: what a fetch returns, which is checked against its id whichever replica or remote serves it.
@@ -741,7 +741,7 @@ def roots(suite: Suite, pkgs: dict[str, str]) -> list[str]:
 
 def flock_lean() -> Path:
     """The Lean verifier, the package check's `lean-build` step builds (check.py's `FLOCK_LEAN`)."""
-    return ROOT / "verity" / "protocols" / "flock" / "verifier"
+    return ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 
 
 def lean_on_path() -> None:

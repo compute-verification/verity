@@ -1,7 +1,8 @@
-"""The tracked tree holds to its layout of record, `tests/tree.toml` (its header says what each part holds), at four
-levels: the root, `verity/`, `verity/protocols/` and each protocol's directory. Every tracked entry at those levels is in
-the tree or on the not-yet list; every not-yet line names a path the tree still holds, with where it goes, its owner and
-its day; and an entry the tree has that main doesn't hold yet names its owner and day until it lands. A stray entry
+"""The tracked tree holds to its layout of record, `tests/tree.toml` (its header says what each part holds), at five
+levels: the root, `verity/`, `verity/protocols/`, each group's directory there (a directory of `verity/protocols/` that
+holds protocols: `proofs/`, `accounting/`, `policy/`) and each protocol's directory. Every tracked entry at those levels
+is in the tree or on the not-yet list; every not-yet line names a path the tree still holds, with where it goes, its
+owner and its day; and an entry the tree has that main doesn't hold yet names its owner and day until it lands. A stray entry
 fails; a line or an entry whose move landed only warns (`BOOKKEEPING` in `tests/conftest.py`), so a move is never
 reverted for a line of this file: top deletes landed lines, and the metric counts them until then. The not-yet list
 only shrinks: it holds at most `NOT_YET_MAX` lines, at most `UNOWNED_MAX` of them unowned and `ARRIVING_MAX` arriving.
@@ -29,6 +30,8 @@ ARRIVING_MAX = 1
 UNOWNED = "unowned"
 #: the tree's entries under this prefix are what each protocol's directory may hold
 NAME = "verity/protocols/NAME/"
+#: the tree's entries under this prefix are what each group's directory may hold beside its protocols
+GROUP = "verity/protocols/GROUP/"
 _DAY = re.compile(r"^\d{4}-\d{2}-\d{2}( \d{2}:\d{2} PST)?$")
 _KEYS = {"tree": ({"path", "means"}, {"protocol", "owner", "day"}),
          "not_yet": ({"path", "to", "owner", "day"}, {"note", "arriving"}),
@@ -48,25 +51,33 @@ def _protocols(doc: dict) -> set[str]:
     return {_p(t["path"]) for t in doc["tree"] if t.get("protocol")}
 
 
+def _groups(doc: dict) -> set[str]:
+    return {p.rsplit("/", 1)[0] for p in _protocols(doc)} - {"verity/protocols"}
+
+
 def tree(doc: dict) -> set[str]:
-    """The tree's paths, each protocol's directory's entries written out for each protocol."""
+    """The tree's paths, each protocol's directory's entries written out for each protocol and each group's for each
+    group."""
     out = set()
     for t in doc["tree"]:
         path = _p(t["path"])
-        out |= {f"{p}/{path[len(NAME):]}" for p in _protocols(doc)} if path.startswith(NAME) else {path}
+        if path.startswith(NAME):
+            out |= {f"{p}/{path[len(NAME):]}" for p in _protocols(doc)}
+        elif path.startswith(GROUP):
+            out |= {f"{g}/{path[len(GROUP):]}" for g in _groups(doc)}
+        else:
+            out.add(path)
     return out
 
 
 def entries(doc: dict, tracked: list[str]) -> set[str]:
-    """The tracked entries at the four levels: each file's first component, its second under `verity/`, its third under
-    `verity/protocols/` and its fourth under a protocol's directory."""
-    protocols, out = _protocols(doc), set()
+    """The tracked entries at the five levels: each file's first component, and the component below `verity/`,
+    `verity/protocols/`, a group's directory and a protocol's directory."""
+    levels, out = {"verity", "verity/protocols"} | _groups(doc) | _protocols(doc), set()
     for f in tracked:
         parts = f.split("/")
         out.add(parts[0])
-        for k, under in ((2, lambda q: q == "verity"), (3, lambda q: q == "verity/protocols"), (4, protocols.__contains__)):
-            if len(parts) >= k and under("/".join(parts[:k - 1])):
-                out.add("/".join(parts[:k]))
+        out |= {"/".join(parts[:k]) for k in range(2, len(parts) + 1) if "/".join(parts[:k - 1]) in levels}
     return out
 
 
@@ -86,7 +97,8 @@ def landed(doc: dict, tracked: list[str]) -> list[str]:
     gone = [f"{n['path']}: main no longer holds it, so its move landed: delete its [[not_yet]] line"
             for n in doc["not_yet"] if not n.get("arriving") and not holds(tracked, n["path"])]
     here = [f"{t['path']}: main holds it now: drop its owner and day from its [[tree]] entry"
-            for t in doc["tree"] if "owner" in t and not t["path"].startswith(NAME) and holds(tracked, t["path"])]
+            for t in doc["tree"] if "owner" in t and not t["path"].startswith((NAME, GROUP))
+            and holds(tracked, t["path"])]
     return gone + here
 
 
@@ -168,30 +180,36 @@ def test_no_line_is_still_arriving() -> None:
 
 
 def test_each_check_names_its_fix() -> None:
+    """Its paths are made up: no tree holds them and no layout map names them, so a move leaves this test as it is. Only
+    the levels the checks read (`verity/`, `verity/protocols/`) are real."""
     doc = {"tree": [{"path": "verity/", "means": "m"}, {"path": "verity/protocols/", "means": "m"},
-                    {"path": "verity/protocols/flock/", "means": "m", "protocol": True},
-                    {"path": "verity/protocols/NAME/verifier/", "means": "m"},
-                    {"path": "verity/party.py", "means": "m", "owner": "top", "day": "2026-11-19"}],
-           "not_yet": [{"path": "verity/claims/", "to": "deleted", "owner": "top", "day": "2026-11-19"},
-                       {"path": "verity/gone.py", "to": "x", "owner": "top", "day": "2026-11-19"},
-                       {"path": "verity/periods/", "to": UNOWNED, "owner": UNOWNED, "day": UNOWNED, "arriving": True}]}
-    tracked = ["verity/claims/a.py", "verity/party.py", "verity/protocols/flock/verifier/V.lean",
-               "verity/protocols/flock/pod/x.py", "verity/protocols/remote/verifier/R.lean", "stray.md"]
+                    {"path": "verity/protocols/made-up-protocol/", "means": "m", "protocol": True},
+                    {"path": "verity/protocols/NAME/made-up-part/", "means": "m"},
+                    {"path": "verity/made-up-coming.py", "means": "m", "owner": "top", "day": "2026-11-19"}],
+           "not_yet": [{"path": "verity/made-up-dir/", "to": "deleted", "owner": "top", "day": "2026-11-19"},
+                       {"path": "verity/made-up-gone.py", "to": "x", "owner": "top", "day": "2026-11-19"},
+                       {"path": "verity/made-up-arriving/", "to": UNOWNED, "owner": UNOWNED, "day": UNOWNED,
+                        "arriving": True}]}
+    tracked = ["verity/made-up-dir/a.py", "verity/made-up-coming.py",
+               "verity/protocols/made-up-protocol/made-up-part/V.lean",
+               "verity/protocols/made-up-protocol/made-up-stray/x.py",
+               "verity/protocols/made-up-stray/made-up-part/R.lean", "made-up-stray.md"]
     assert strays(doc, tracked) == [f"{e}: move it to its place in {LAYOUT}'s [[tree]], {ASK}"
-                                    for e in ("stray.md", "verity/protocols/flock/pod", "verity/protocols/remote")]
+                                    for e in ("made-up-stray.md", "verity/protocols/made-up-protocol/made-up-stray",
+                                              "verity/protocols/made-up-stray")]
     assert landed(doc, tracked) == [
-        "verity/gone.py: main no longer holds it, so its move landed: delete its [[not_yet]] line",
-        "verity/party.py: main holds it now: drop its owner and day from its [[tree]] entry"]
-    assert still_arriving(doc, tracked + ["verity/periods/__init__.py"]) == [
-        "verity/periods/: main holds it now: drop its line's `arriving` and lower ARRIVING_MAX"]
-    bad = {"tree": [{"path": "hardware/", "means": "m", "owner": "top"}],
+        "verity/made-up-gone.py: main no longer holds it, so its move landed: delete its [[not_yet]] line",
+        "verity/made-up-coming.py: main holds it now: drop its owner and day from its [[tree]] entry"]
+    assert still_arriving(doc, tracked + ["verity/made-up-arriving/__init__.py"]) == [
+        "verity/made-up-arriving/: main holds it now: drop its line's `arriving` and lower ARRIVING_MAX"]
+    bad = {"tree": [{"path": "made-up-root/", "means": "m", "owner": "top"}],
            "not_yet": [{"path": "a/", "to": UNOWNED, "owner": "top", "day": "Thu 19 Nov"},
                        {"path": "b/", "to": "", "owner": "nobody", "day": UNOWNED, "colour": 1}],
            "open": [{"what": "w", "answers": "top"}]}
     assert malformed(bad, {"top"}) == [
         "[[not_yet]] b/: colour is no key of [[not_yet]] (its keys: arriving, day, note, owner, path, to)",
         "[[not_yet]] b/: its to is empty: write it", "[[open]] w: give it its by",
-        "[[tree]] hardware/: an entry main doesn't hold yet names both its owner and its day",
+        "[[tree]] made-up-root/: an entry main doesn't hold yet names both its owner and its day",
         "[[not_yet]] a/: an owned line names its to: write it, or the owner is unowned",
         "[[not_yet]] b/: an owned line names its day: write it, or the owner is unowned",
         "[[not_yet]] a/: its day 'Thu 19 Nov' is a date (2026-11-19), with a time where it isn't 6 PM PST (2026-11-13 "

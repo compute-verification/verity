@@ -18,7 +18,7 @@ prefix: the served bytes (``copy``), zeros (``zero``), or NaN, with every other 
 (``nan``: then nothing outside a computed prefix may be read). The served arm must have kept the K/V file of both edges
 (serve_tax's ``--save-kv FROM,TO``). The served generators are put back, each re-added request gets its served seed
 when the runner adds it (`carry_rng`), and one the served engine had preempted is resumed rather than new
-(`keep_preempted`), so unseeded sampling draws as serving drew.
+(`keep_preempted`), so unseeded sampling samples as serving drew.
 
 The fresh engine's prefix cache holds only the re-added requests' pages, so a request the served engine served from a
 finished request's cached pages would miss. ``--hits forced`` (the default) takes each request's prefix-cache hit from
@@ -89,9 +89,9 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path.insert(0, str(ROOT / "verity" / "configuration" / "config"))
+sys.path.insert(0, str(ROOT / "tools" / "config"))
 sys.path.append(str(ROOT))
-from verity_config.settings import SHARED  # noqa: E402 (from the tree's verity/configuration/config, put on sys.path above)
+from verity_config.settings import SHARED  # noqa: E402 (from the tree's tools/config, put on sys.path above)
 import boundary as B  # noqa: E402 (beside this file)
 import restore as R  # noqa: E402
 import serve_tax as S  # noqa: E402
@@ -643,7 +643,7 @@ def common_prefix(a: list[int], b: list[int]) -> int:
 
 
 def substitute(tokens: list[int], bs: int, keep: set[bytes], ids: tuple[int, int] = SUBSTITUTE_IDS) -> tuple[list[int], int]:
-    """A dummy's tokens: each full page whose chain hash is in ``keep`` as it is, every other page replaced by tokens drawn
+    """A dummy's tokens: each full page whose chain hash is in ``keep`` as it is, every other page replaced by tokens sampled
     from its chain hash, so two requests' pages are equal here exactly where they were; and how many pages were kept."""
     import random
 
@@ -831,7 +831,7 @@ def served_stops(steps: dict[int, dict]) -> dict[str, int]:
 
 
 def served_seeds(st: dict[str, Any]) -> dict[str, int]:
-    """Each request the served runner held at the edge: its sampling seed (Model Runner V2's, drawn from numpy's global
+    """Each request the served runner held at the edge: its sampling seed (Model Runner V2's, sampled from numpy's global
     generator when the request reached the runner, unless the request set one)."""
     leaves = (st.get("runner") or {}).get("leaves", {})
     if "sampler.sampling_states.seeds" not in leaves:
@@ -844,7 +844,7 @@ def served_seeds(st: dict[str, Any]) -> dict[str, int]:
 def carry_rng(runner: Any, st: dict[str, Any] | None = None, start: dict[str, Any] | None = None) -> dict[str, Any]:
     """The served generators put back and each re-added request's served seed given to it when the runner adds it
     (`tp_state.SeedHook`), from an edge's state (``st``) or a mirror's start (``start``, `start_state`'s ``rng``): a
-    re-added unseeded request would draw a new seed from numpy's generator, and shift every later request's."""
+    re-added unseeded request would sample a new seed from numpy's generator, and shift every later request's."""
     if start is not None:
         if "rng" not in start:
             raise SystemExit("the mirror's start state holds no generators: take it again (--at-step --mirror-out)")
@@ -858,7 +858,7 @@ def carry_rng(runner: Any, st: dict[str, Any] | None = None, start: dict[str, An
 
 def keep_preempted(q: Any, status: str) -> None:
     """A re-added request the served engine had preempted keeps that status, so the fresh scheduler resumes it as serving
-    did: Model Runner V2 adds a step's resumed requests after its new ones, and an unseeded request draws its seed when
+    did: Model Runner V2 adds a step's resumed requests after its new ones, and an unseeded request samples its seed when
     the runner adds it."""
     if status == "PREEMPTED":
         q.status = type(q.status).PREEMPTED

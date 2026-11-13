@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # stop_audit.py end to end on a CPU node, on a stop class at small statics (stop_audit_small.py: no engine):
-# flock-circuit, flock-verify and SPOT's Lean verifier built from this tree as two_stage_small.sh builds them, then
-# `two_stage.py first --stop` (the boundary registration, the stop registration and both samples on a local challenger
-# session) and five audits of the stop population:
+# flock-circuit, the Flock verifier's Lean binaries and SPOT's Lean verifier built from this tree as
+# two_stage_small.sh builds them, then `two_stage.py first --stop` (the boundary registration, the stop registration
+# and both samples on a local challenger session) and five audits of the stop population:
 #   accept      the class as served: the audit record accepts on Lean's verdict of record, and is not complete
 #   length      a class registered with stop words that are not the rule's: Lean refuses its session
 #   unlogged    a stop record on a boundary record the boundary stream never logged: refused before any session
@@ -13,7 +13,7 @@
 # prover file, a private body or salts, or a challenger's key or secret).
 #   research run --on auto --cwd clone --cpus 16 --mem-gb 64 --max-min 120 -- bash benchmarks/one_stage/stop_audit_small.sh
 #   SMALL_FLOCK_WORK=DIR keeps flock-circuit's build there across runs (default: scratch); SMALL_ARGS="--serve NONCE"
-#   passes stop_audit_small.py serve more; SMALL_AUDIT="--firewall PATH" passes stop_audit.py more
+#   passes stop_audit_small.py serve more; SMALL_AUDIT="--zk-server PATH" passes stop_audit.py more
 set -euo pipefail
 REPO=$(git rev-parse --show-toplevel); cd "$REPO"
 O=${OUT:?research run sets OUT}; mkdir -p "$O"
@@ -24,19 +24,19 @@ command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/de
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 
-{ (cd verity/protocols/flock/verifier && lake build flock-verify flock-firewall) \
-    && (cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier); } > "$O/build-lean.log" 2>&1 &
+{ (cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall) \
+    && (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
 FW=${SMALL_FLOCK_WORK:-$W}
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/flock/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
+RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
   || { tail -40 "$O/m0-build/build.log"; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
-LEAN=$REPO/verity/protocols/flock/verifier/.lake/build/bin/flock-verify
+LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify
 sha256sum "$BIN" "$LEAN" | tee "$O/binaries.sha256"
 
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/flock/prover/python:$REPO/adapters/vllm
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
 export RAYON_NUM_THREADS=$(nproc) PYTHONPATH=$M0PATH
 # a local challenger session's pin is held to main's first-parent line: a run's clone has the shipped tree as its origin,
 # which holds main as its own main or origin/main
@@ -58,10 +58,10 @@ first() {  # NAME CLASSDIR: the class's boundary and stop registrations and thei
     --challenger local --main "$O/main.txt" --out "$W/$1" > "$O/$1.log" 2>&1 || { tail -20 "$O/$1.log"; exit 3; }
   tail -2 "$O/$1.log"
 }
-audit() {  # NAME STAGE1 CLASSDIR [more]: one audit of the stop population; its exit code beside its records
-  local name=$1 stage1=$2 class=$3 rc=0; shift 3
+audit() {  # NAME HANDOFF CLASSDIR [more]: one audit of the stop population; its exit code beside its records
+  local name=$1 handoff=$2 class=$3 rc=0; shift 3
   # shellcheck disable=SC2086
-  "${PY[@]}" benchmarks/one_stage/stop_audit.py --stage1 "$stage1" --boundary "$class" --stop "$STOP" --design "$DESIGN" \
+  "${PY[@]}" benchmarks/one_stage/stop_audit.py --handoff "$handoff" --boundary "$class" --stop "$STOP" --design "$DESIGN" \
     --bin "$BIN" --lean "$LEAN" --out "$W/$name" "$@" ${SMALL_AUDIT:-} > "$O/$name.log" 2>&1 || rc=$?
   grep '^STOP ' "$O/$name.log" || tail -30 "$O/$name.log"
   echo "$name rc=$rc" | tee -a "$O/machine.txt"

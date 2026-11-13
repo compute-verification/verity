@@ -694,16 +694,18 @@ def test_a_record_that_states_tf32_on_and_names_a_gemm_float32_is_refused_with_t
     of it a record states, while its op log names a GEMM float32 has its products at a price that isn't its job's:
     the grade stops, and says which record, which ops and the way out, the job run again with the switch off.
 
-    A Shampoo job's float32 GEMMs are its optimizer's, outside M. With those rows named `tf32` the same record
+    A Shampoo job's float32 GEMMs on a CPU are its optimizer's and attention's, which a job on a CPU runs under the
+    math kernel, in float32 (`run.cpu_attention`); M holds none of them. With those rows named `tf32` the same record
     grades, its ρ too, at the TF32 GEMM's price; with the switch off it grades at the exact one; and counted as if
     its log named no dtype it is one that names none."""
     config = CONFIG | {"start": "tiny", "seeds": {"search": [0], "final": []}}
     starts = registry("tiny", synthetic.SHAPE)
     run = {"seed": 0, "split": "search", "record": preconditioned}
-    assert gates.exact_under_tf32(stating(run, on)["record"]) == ["other mm"]
+    assert gates.exact_under_tf32(stating(run, on)["record"]) == ["bwd bmm", "fwd bmm", "other mm"]
     assert not [r for r in preconditioned["trace"]["rows"] if work.in_m(r) and products.traced_dtype(r) == "float32"]
     with pytest.raises(ValueError, match=r"^grade: the record at seed 0, search states torch's TF32 switch on, and "
-                                         r"its op log names GEMM ops float32, the exact product \(other mm\): ") as e:
+                                         r"its op log names GEMM ops float32, the exact product "
+                                         r"\(bwd bmm, fwd bmm, other mm\): ") as e:
         G.grade(config, starts, [stating(run, on)], [run])
     assert str(e.value).endswith(f"at another price. {G.TF32_FIX}") and "`tf32`" not in str(e.value)
     assert "fp32_precision = 'ieee'" in G.TF32_FIX and "allow_tf32 = False" in G.TF32_FIX
@@ -731,7 +733,7 @@ def test_a_product_of_m_named_tf32_is_priced_apart_from_its_trace(adapted):
     starts = registry("tiny", synthetic.SHAPE)
     run = {"seed": 0, "split": "search", "record": adapted}
     with pytest.raises(ValueError, match=r"states torch's TF32 switch on, and its op log names GEMM ops float32, "
-                                         r"the exact product \(other mm\)") as e:
+                                         r"the exact product \(bwd bmm, fwd bmm, other mm\)") as e:
         G.grade(config, starts, [stating(run, ON[0])], [run])
     assert str(e.value).endswith(G.TF32_FIX)
     renamed = stating(as_tf32(run), ON[0])
@@ -788,14 +790,14 @@ def test_a_jobs_own_record_is_graded_from_the_trace_its_job_took(ran):
 def test_a_record_that_names_dtypes_has_one_price_with_its_own_trace_and_with_an_earlier_captures(ran):
     """Where the two rules of one price meet, on a record whose op log names dtypes. `two_pricings` is about records
     among themselves, C over H. `work.repriced` is about a slowdown over a trace's own circuit, which the grade never
-    takes: it divides the trace's products by the record's count, so their one price is that each product the trace
-    prices is priced in the dtype the record names for it.
+    takes: it divides the trace's products of M by the record's count, so their one price is that each of them is
+    priced in the dtype the record names for it.
 
-    With the trace its job took, of this capture: neither rule speaks, and every traced product is priced in the
-    dtype the record's log names for it. A product outside an attention call is priced in the dtype it was traced
-    in. Attention's are float32 in the trace, as the math kernel computes them, and bf16 in the rows the counter
-    writes for a fused kernel; the trace states the bf16 their call computes in (a row's `attention`), which is
-    their price.
+    With the trace its job took, of this capture: neither rule speaks. Every traced product with fewer than two
+    token dims, which M's all are, is priced in the dtype it was traced in, the one the record's log names for it.
+    Attention's products, which M leaves out for their two token dims, are float32 in the trace, as the math kernel
+    computes them, and in the record's log, since a job on a CPU runs that kernel too (`run.cpu_attention`); the
+    trace states the bf16 their call computes in on a card (a row's `attention`), which is their price.
 
     With the same rows as an earlier capture's, which states no call, that capture's rule prices those float32
     products at bf16 too, so the work is priced as it is with the job's own trace; but that capture's circuit
@@ -817,8 +819,9 @@ def test_a_record_that_names_dtypes_has_one_price_with_its_own_trace_and_with_an
     others = [r for r in tr["rows"] if r not in attentions]
     assert others and all(named_for(r) == {products.traced_dtype(r)} == {"bfloat16"} for r in others)
     assert attentions and all((r["op"], products.traced_dtype(r), r["attention"], named_for(r)) == (
-        "bmm", "float32", "bfloat16", {"bfloat16"}) for r in attentions)
-    assert all({products.priced_dtype(r, tr["capture"])} == named_for(r) for r in tr["rows"])
+        "bmm", "float32", "bfloat16", {"float32"}) for r in attentions)
+    assert all({products.priced_dtype(r, tr["capture"])} == named_for(r) for r in others)
+    assert {products.priced_dtype(r, tr["capture"]) for r in attentions} == {"bfloat16"}
 
     def no_call(rows: list) -> list:
         return [{k: v for k, v in r.items() if k != "attention"} for r in rows]

@@ -14,32 +14,43 @@ import json
 import random
 from fractions import Fraction
 from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity.protocols.pouw.verifier import core_check as CC  # noqa: E402
-from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
-from verity.protocols.pouw.verifier import salt as PS  # noqa: E402
-from verity.protocols.pouw.verifier import window as Wd  # noqa: E402
-from verity.protocols.pouw.prover.circuit import seeds as SD  # noqa: E402
-from verity.protocols.pouw.verifier.coins import Challenger  # noqa: E402
-from verity.protocols.spot.device import challenger as LC  # noqa: E402
-from verity.protocols.spot.device import remote as R  # noqa: E402
-from verity.protocols.spot.device.challenger import CoinError, LiveRecord  # noqa: E402
-from verity.circuits.refs import runs  # noqa: E402
-from verity_vllm import protocols as PO  # noqa: E402
-from verity_vllm.engine import hooks  # noqa: E402
-from verity_vllm.engine import int8_exact as E  # noqa: E402
-from verity_vllm.protocols import pouw  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import hooks as PHK  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import challenger as PHC  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import requests as RQ  # noqa: E402
+from verity.circuits.refs import runs
+from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import verifier
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import HM96, commit_rows, salt_of
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
+from verity.protocols.proofs.spot.device import challenger as LC
+from verity.protocols.proofs.spot.device import remote as R
+from verity.protocols.proofs.spot.device.challenger import CoinError, LiveRecord
 
-from tests.protocols import challenger_host as CH  # noqa: E402
+from tests.protocols import challenger_host as CH
+from verity_vllm import llm as L
+from verity_vllm import protocols as PO
+from verity_vllm.engine import hooks
+from verity_vllm.engine import int8_exact as E
+from verity_vllm.engine import int8_experts as X
+from verity_vllm.engine import vllm_adapter as va
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity_vllm.protocols.pouw.h1 import hooks as PHK
+from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1 import served as SV
+from verity_vllm.protocols.pouw.h1 import window as PHW
 
 K = 64
 ROW = K * PH.I8_BITS
@@ -68,6 +79,12 @@ class Int8Arm:
 
 
 class Linear:
+    #: a router's, as vLLM's linear holds them
+    quant_config: object
+    output_size: int
+    #: the layer's method: the int8 arm, or what a test puts in its place
+    quant_method: Any
+
     def __init__(self, n, seed):
         g = torch.Generator().manual_seed(seed)
         self.weight = torch.randint(-127, 128, (n, K), generator=g, dtype=torch.int8)
@@ -314,7 +331,7 @@ def test_z_is_the_exact_product_on_each_units_cells():
     w = rng.integers(-127, 128, (40, K), dtype=np.int8)
     y = xq.astype(np.int64) @ w.astype(np.int64).T
     call = PH.Call(0, 0, 0, "q", 33, K, 40, 0, 64)
-    full = np.zeros((64, 64), np.int64)
+    full: np.ndarray = np.zeros((64, 64), np.int64)
     full[:33, :40] = y
     for n, u in enumerate(call.compiled().units):
         z = call.z(y.astype(np.int32), n)
@@ -435,7 +452,6 @@ def test_the_served_setting_reaches_the_run_and_its_entries_the_commitment():
     """The pouw setting ``served`` is the window's `pouw_h1_served.Served`: the install hands it to the run, which commits
     its trees at its close and carries their entries and refusals in the commitment (here refused: n = 40 is no whole
     block of the tile's 32 B rows)."""
-    from verity_vllm.protocols.pouw.h1 import served as SV
     with pytest.raises(ValueError, match="a fresh pouw_h1_served.Served"):
         pouw.Settings.of({"served": object()})
     served = SV.Served(window=bytes(64))
@@ -445,7 +461,6 @@ def test_the_served_setting_reaches_the_run_and_its_entries_the_commitment():
 
 
 def test_the_window_connects_on_the_port_the_gate_answers():
-    from verity_vllm.protocols.pouw.h1 import window as PHW
     assert PHW.at_port("127.0.0.1:7811", 7812) == "127.0.0.1:7812" and PHW.at_port("h:1", None) == "h:1"
     with pytest.raises(ValueError, match="not a TCP port"):
         PHW.at_port("h:1", "7811")
@@ -463,11 +478,9 @@ def _vllm_with(runner):
 def engine(monkeypatch):
     """`verity_vllm.LLM`'s engine build replaced by a toy int8_exact model and a stand-in vLLM whose model runner is
     ``engine["runner"]``; the in-process coins' entropy is seeded."""
-    from verity.protocols.pouw.verifier import verifier
-    from verity_vllm.engine import vllm_adapter as va
     rng = random.Random(1)
     monkeypatch.setattr(verifier, "coins", rng.randbytes)
-    got = {"runner": Runner(), "model": Model(Linear(32, 1), Linear(40, 2)), "builds": 0}
+    got: dict[str, Any] = {"runner": Runner(), "model": Model(Linear(32, 1), Linear(40, 2)), "builds": 0}
 
     def build_engine(checkpoints, **kw):
         got["builds"] += 1
@@ -487,7 +500,6 @@ def test_llm_installs_h1_from_its_public_parameters_with_its_engines_runner(engi
     model runner and in-process coins: each step's admissions reach the window through that runner, the window's coins
     are recorded as in-process (they credit nothing), `reinstall` opens the next window with the next epoch's coins, and
     `close` restores the runner."""
-    from verity_vllm import llm as L
     llm = L.LLM(LLAMA[0], revision=LLAMA[1], protocols=_entry(), protocols_config={"pouw": dict(PUBLIC)})
     runner, model = engine["runner"], engine["model"]
     assert getattr(runner.execute_model, "__func__", None) is not Runner.execute_model and hooks.live(_entry())
@@ -515,8 +527,6 @@ def test_llm_refuses_h1_by_name_when_its_engine_cant_supply_the_runner(engine, m
     """Fail-closed: H1 without its public parameters is refused before any engine is built; an engine without an
     in-process model runner is refused naming the entry and the settings it couldn't supply; and an adapter that names a
     setting it then doesn't fill is refused by the install's own refusals.  None leaves a hook behind."""
-    from verity_vllm import protocols as PO
-    from verity_vllm import llm as L
     with pytest.raises(PO.Refused, match=r"'rows' \(T"):
         L.LLM(LLAMA[0], revision=LLAMA[1], protocols=_entry(), protocols_config={"pouw": {"admission": "per-round"}})
     assert engine["builds"] == 0
@@ -535,7 +545,6 @@ def test_llm_refuses_h1_by_name_when_its_engine_cant_supply_the_runner(engine, m
 def test_h1s_engine_settings_are_named_before_the_build_and_never_override_the_callers():
     """`pouw.fills`: H1's runner, and without a challenger its coins and (once S is set) its rounds; a setting the caller
     gives is never filled, nor anything for another scheme; the refusals before the build read the named ones as set."""
-    from verity_vllm import protocols as PO
     assert pouw.fills(PH.SCHEME, PUBLIC) == ("runner", "coins", "rounds")
     assert pouw.fills(PH.SCHEME, {"rows": 64}) == ("runner", "coins")
     assert pouw.fills(PH.SCHEME, {**PUBLIC, "challenger": "h:1"}) == ("runner",)
@@ -582,7 +591,6 @@ class MoE:
     experts are int8 (`Experts`), or `method` if given."""
 
     def __init__(self, experts, seed, method=None):
-        from verity_vllm.engine import int8_experts as X
         g = torch.Generator().manual_seed(seed)
         w13, w2 = (torch.randint(-127, 128, s, generator=g, dtype=torch.int8) for s in ((experts, 32, K), (experts, K, 16)))
         s13, s2 = ((torch.rand(*s, generator=g) * 0.01 + 1e-4).float() for s in ((experts, 32, 1), (experts, K, 1)))
@@ -600,7 +608,6 @@ def test_a_moe_layer_records_every_expert_gemm_in_static_order_and_not_its_route
     """A MoE layer's routed experts record as their sites, (e, gate_up) then (e, down), every forward: an expert no token
     routed to is a call of zero rows, so each step is the same calls at the same public positions; its bf16 router is no
     call. The served y is the arm's, and only served calls count."""
-    from verity_vllm.engine import int8_experts as X
     moe = MoE(2, 5)
     dense = Linear(32, 1)
     model = Model(dense, moe, moe.router, moe.runner)
@@ -958,9 +965,11 @@ def test_the_batch_order_is_model_runner_v2s():
 AUDITOR = "vy-challenger-1:7811"
 #: where a window's sample session is reached (`challenger_host.DRAW_PORT`, the gate's answer's ``port``)
 DRAW_AT = f"vy-challenger-1:{CH.DRAW_PORT}"
+#: the challenge phase `_host` serves unless told another
+_FIRST_SESSION = CH.session_id(1)
 
 
-def _host(tmp_path, monkeypatch, name="auditor", seed=1, rounds=3, challenger=None, session=CH.session_id(1),
+def _host(tmp_path, monkeypatch, name="auditor", seed=1, rounds=3, challenger=None, session=_FIRST_SESSION,
           leaves=None, ledger=None, gated=True, reserved=True):
     """A challenger host serving one challenge phase over a live epoch of `rounds` round coins, reached at `AUDITOR`, whose coin
     commitment `SESSION` (ncp-v2's gate answer) names; `RESERVED` (H1's reserve answer) names its challenge phase, which the
@@ -1028,7 +1037,6 @@ def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp
     withheld on the window's sample root; the verifier, reading the challenger's own directories under its key, trusts the
     window's coins (`trusted_rounds_reason`) only with the host's pins log and the sample's directory, and every request
     entry and slot still opens under its round's root. Without ``draw_session`` the install is refused."""
-    from verity_vllm.protocols.pouw.h1 import window as PHW
     host = _host(tmp_path, monkeypatch)
     assert PO.refusals(PO.Context(stage="serve", enabled=(_entry(),), settings=_remote())) == ()
     no_draw = {k: v for k, v in _remote()["pouw"].items() if k != "draw_session"}
@@ -1073,7 +1081,6 @@ def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp
 def test_the_record_is_one_manifest_under_its_coins(tmp_path, monkeypatch):
     """`pouw_h1_challenger.manifest_reason` holds a served window's record to its coins: the honest record passes, and one with a
     call's table root, a served tree's entry or a round's root changed is refused."""
-    from verity_vllm.protocols.pouw.h1 import served as SV
     _host(tmp_path, monkeypatch)
     _serve_window(_remote(transcript_dir=str(tmp_path / "w"), served=SV.Served(window=bytes(64))))
     record = json.loads((tmp_path / "w" / PH.CALLS_FILE).read_text())
@@ -1194,8 +1201,6 @@ def test_a_reserved_session_opens_on_its_epochs_root_and_its_salt_coin_after_it(
     answer naming another root or another challenge phase is refused before any coin, and so is a challenge phase of
     H1's layout (salt and round coins: one a Pearl-C pass would leave incomplete), which is closed before its first
     coin."""
-    from verity.protocols.pouw.verifier.audit import salt_of
-    from verity_vllm.protocols.pouw.h1 import window as PHW
 
     salt_only = LC.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, CH.entropy(1))
     host = _host(tmp_path, monkeypatch, challenger=salt_only)
@@ -1245,7 +1250,6 @@ def test_a_session_whose_tunnel_never_listens_is_refused_by_name_once_its_wait_i
     """`pouw_h1_window.opened` on the injected clock: a session the gate opened whose port refuses every connection is
     tried every half second until `remote.TUNNEL_WAIT_S` has passed, then refused (`CoinError`, naming the address)
     with no hello sent and no coin opened."""
-    from verity_vllm.protocols.pouw.h1 import window as PHW
 
     sid, root, tries, waits, now = CH.session_id(1), PS.epoch_open_root(bytes(range(64)), 0), [], [], [0.0]
 
@@ -1271,7 +1275,6 @@ def test_an_open_whose_challenger_signed_no_commitment_is_refused_without_its_se
     """The gate answers an open with the hello's secret even when its challenger signed no commitment, and ``status``
     then has none either: `pouw_h1_window.opened` refuses the answer naming the session and what it lacks, and neither
     that refusal nor `session_of`'s own holds the secret, which a kept log would otherwise publish."""
-    from verity_vllm.protocols.pouw.h1 import window as PHW
 
     sid, root, secret, calls = CH.session_id(1), PS.epoch_open_root(bytes(range(64)), 0), "5e" * 32, []
 
@@ -1452,7 +1455,6 @@ def test_the_challenger_setting_is_h1s_one_coin_source(tmp_path, monkeypatch):
 def test_hiding_rows_is_core_commit_rows_with_its_salts_drawn_as_one_stream(n, width, nonce):
     """`pouw_h1_requests.hiding_rows`, which H1's tables commit through, is `audit.commit_rows` under hm96 at the same salt
     key and nonce, leaf for leaf: its one RFC 8439 stream is `audit.hm96_salt`'s chunks."""
-    from verity.protocols.pouw.verifier.audit import HM96, commit_rows
     rng, key = random.Random(n), hashlib.sha256(b"key").digest()
     values = [rng.randbytes(width) for _ in range(n)]
     want = commit_rows(SALT, 5, values, hash=HM96, salt_key=key, nonce=nonce)
@@ -1464,7 +1466,6 @@ def test_a_rounds_request_and_slot_tables_are_core_commit_rows():
     """A round's request table (entries of their own lengths, then `EMPTY_REQUEST` again and again) and slot table (each
     owner over its rows, then `EMPTY_SLOT`), whose repeated preimages `hiding_rows` digests once, are `audit.commit_rows`'
     trees of the same leaves: the root and every opening."""
-    from verity.protocols.pouw.verifier.audit import HM96, commit_rows
     rng, t, r = random.Random(7), 40, 3
     entries = [RQ.RequestEntry(i, r, 5 * i, 16, tuple(rng.randrange(1 << 17) for _ in range(1 + 3 * i))) for i in range(4)]
     owners = [0] * 5 + [1] * 5 + [2] * 5 + [3] * 7 + [None] * 3

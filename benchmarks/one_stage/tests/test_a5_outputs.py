@@ -15,12 +15,12 @@ import pytest
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
-from verity.protocols.spot.verifier import service as S
-from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registration as R
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "spot" / "verifier" / "tests"))
+sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
 import a5 as A5  # noqa: E402
 import fake_challenger as FC  # noqa: E402
 
@@ -93,6 +93,19 @@ def outcome(stream: S.Stream, draw: S.Draw) -> tuple[S.Outcome, dict | None]:
 def test_an_output_class_is_refused_before_the_sample():
     assert A5.output_refusal(args()) == {"output-class-needs-a-closure-map": {"units": len(OUTS)}}
     assert A5.output_refusal(args(outputs=None)) is None and A5.output_refusal(args(outputs=[])) is None
+
+
+def test_an_output_class_the_design_samples_whole_needs_no_closure_map():
+    """A design that samples every unit of the class's stratum (`D.derive` at k = N) puts the class in every sample, so
+    a5 takes it; at K of N the same class is refused, and a class split across a whole stratum and a sampled one is refused
+    for the sampled one's units alone."""
+    table = S.selection_table(RULE, program(), QUERY, TABLE)
+    whole, part = (D.derive(program(), QUERY, D.parse_design(f"work:{k}"), table) for k in (N, K))
+    assert [s["k"] for s in whole["strata"]] == [N]
+    assert A5.output_refusal(args(), whole) is None
+    assert A5.output_refusal(args(), part) == {"output-class-needs-a-closure-map": {"units": len(OUTS)}}
+    split = {"strata": [{"units": [[0, 24]], "k": 24}, {"units": [[24, 32]], "k": 2}]}
+    assert A5.output_refusal(args(), split) == {"output-class-needs-a-closure-map": {"units": 8}}
 
 
 @pytest.mark.parametrize("seed", range(3))

@@ -15,11 +15,12 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-
-from verity.protocols.spot.verifier.one_stage import registered as G
 from verity.commitments import hm96
 from verity.commitments.merkle import tree_levels
 from verity.commitments.rowleaf import ROLE_X, sha512_row_layout
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+
+__all__ = ["commit"]
 
 #: the widest row `row_width` picks, in leaves
 MAX_WORDS = 4096

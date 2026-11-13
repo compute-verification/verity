@@ -8,15 +8,26 @@ places with the others: SDPA's math path's `_safe_softmax`, `_softmax_backward_d
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.defs import bind
-from verity.definitions.ops import scalar as SC
 from verity.circuits.refs import Coll, Strided
 from verity.circuits.types import Array
+from verity.circuits.ops import scalar as SC
 from verity.definitions.registry import prims as P
 from verity.definitions.registry import ref_prims as R
-from verity_vllm.program.frontend.rules.training_emit import (BIT, F32, _batch, _const, _ones, _operand_ok, _per_row, _rows, _shape,
-                                                              _TrainRule, aten)
+
+from verity_vllm.program.frontend.rules.training_emit import (
+    BIT,
+    F32,
+    _batch,
+    _const,
+    _ones,
+    _operand_ok,
+    _per_row,
+    _rows,
+    _shape,
+    _TrainRule,
+    aten,
+)
 from verity_vllm.program.frontend.rules.training_views import _info
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of
@@ -70,7 +81,7 @@ class SoftmaxBackward(_TrainRule):
     def targets(self):
         return {aten._softmax_backward_data.default}
 
-    def applies(self, node, ctx):
+    def applies(self: _TrainRule, node, ctx):
         for a in node.args[:2]:
             why = _operand_ok(ctx, a)
             if why or not isinstance(ctx.val(a), Coll):

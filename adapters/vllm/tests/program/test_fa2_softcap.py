@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.defs import bind
-from verity_vllm.program.frontend.target_profile import TargetProfile
+from verity.circuits.evaluation.reference import evaluate
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.registry import b1, dense, hopper
 from verity.definitions.registry import fa2_check_inf as F2
 from verity.definitions.registry import fa2_softcap as F2S
 from verity.definitions.registry import prims as P
+
 from verity_vllm.program.frontend import targets as TG
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 FA2 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": P.Fa2InvSum}
 PRO6000 = TargetProfile(compute_capability=(12, 0), num_sms=188)
@@ -116,7 +116,7 @@ def test_the_capture_compare_accepts_the_definitions_own_rows(tanh_table, tmp_pa
     keys = np.arange(sk)
     kseq, vseq = k[bt[0, keys // 16], keys % 16], v[bt[0, keys // 16], keys % 16]
     BN = b1.fa2_kblock_n(D)
-    out = np.zeros((sq, H, D), dtype=np.uint16)
+    out: np.ndarray = np.zeros((sq, H, D), dtype=np.uint16)
     for r in range(sq):
         T = r + 1 + sk - sq
         spec = bind(F2S.AttentionSoftcapV2, T=T, NH=H, KVH=Hk, D=D, BN=BN, CAP=CAP, MASKED_FROM=S.C.guarded_from(sq, sq, sk, r, BN), **FA2)
@@ -183,7 +183,7 @@ def test_the_builder_kind_binds_the_softcap_chain_only_with_fa2_masked_from():
 
 
 def test_the_partition_rule():
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     statics = {"T": 40, "NH": 2, "KVH": 1, "D": 16, "BN": 16, "CAP": CAP, "DOT": {"fn": "HopperBF16WgmmaDot16_v1"},
                "INV": {"fn": "Fa2InvSum_v1"}}

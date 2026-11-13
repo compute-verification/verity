@@ -145,7 +145,7 @@ keeps or drops from and never adds to.
   than the kernel checks), each an exempt module that passes when it exits 0, on data used only with the SHA-256
   under `data` (`tests`, `run_paths`; `--no-runs` skips them). Generated data stays out of Git and out of the key of
   `check`'s audit step, so a test of the package's own checks that the generator still writes the recorded data
-  (PoUW's `verity/protocols/pouw/verifier/tests/test_lean_package.py`).
+  (PoUW's `verity/protocols/accounting/pouw/verifier/tests/test_lean_package.py`).
 - `axioms` (optional): the allowed axioms.
 - `assumptions_module`, `assumptions`, `domain`, `open`: the premises the guarantees take, by kind
   (`assumption_records`, `unfolding`, `read_props`). A named assumption is declared in a module `assumptions_module`
@@ -160,7 +160,8 @@ keeps or drops from and never adds to.
 - `trust`: `base` ({premise: the trust assumption it states}, the same in every lock) and `extra` ({deployed guarantee:
   {premise: the ruling's rule}}, what it alone may rest on). `deployed`: the guarantees that state the deployed system.
   `trust_gap`: {deployed guarantee: its premises outside its trust}, which only a person adds to and `--update` drops
-  from; the report prints each gap (`trust_failures`, `trust_gaps`).
+  from; the report prints each gap (`trust_failures`, `trust_gaps`). `verity lean deployed [--rev REV]` prints every lock's
+  deployed guarantees with each one's gap and its premises, counted once by name across the locks, as JSON from git alone.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside (`record_scope`).
 - `escapes`: every declaration a proof cannot unfold (`opaque`, which a `partial def` is, `unsafe`,

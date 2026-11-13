@@ -12,22 +12,21 @@ import json
 
 import numpy as np
 import pytest
-
-from verity_flock import class_statement as CS
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.circuits import evaluation as E
-from verity.circuits.evaluation import bits as BS
-from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits import boolean as BL
 from verity.circuits import codec
-from verity.circuits.defs import REGISTRY, bind
+from verity.circuits import evaluation as E
 from verity.circuits.boolean.trace import word_of
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.definitions import boolean as BB
+from verity.circuits import word as W
 from verity.definitions.registry import boolean_fp8_moe as BFM
 from verity.definitions.registry import boolean_gather as BGA
 from verity.definitions.registry import prims as P
 from verity.definitions.registry import ref_prims as RP
-from verity.definitions import word as W
+from verity_flock import class_statement as CS
 
 SERVED_VOCAB = 49152
 #: the training step's vocabulary, over which it gathers an f32 word (`GatherF32x50304_v1`)

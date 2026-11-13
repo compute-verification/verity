@@ -1,4 +1,4 @@
-"""`verity.definitions.circuits.boolean.memcheck`: MemCheck_v1 accepts exactly the consistent logs (`consistent`, the multisets
+"""`verity.circuits.boolean.memcheck`: MemCheck_v1 accepts exactly the consistent logs (`consistent`, the multisets
 themselves) on random small logs and on each with one thing wrong, the circuits agree with their references, and on the RAM
 pool's own logs (`fixtures/memcheck_pool.json`, three windows of `pool_ram`'s log over the encodings' traces with every
 operation kind and evictions, written by `benchmarks/mempool/vectors.py`) the parts' fingerprints are the ones pool_ram's own
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.definitions.circuits.boolean import memcheck as MC
+from verity.circuits.boolean import memcheck as MC
 from verity.circuits.boolean.gf128 import mul
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits

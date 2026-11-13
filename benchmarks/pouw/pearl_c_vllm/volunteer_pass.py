@@ -5,7 +5,7 @@ replayed word by word from the pass's own files, the rows that leave a tile or a
   python benchmarks/pouw/pearl_c_vllm/volunteer_pass.py DIR/manifest.json --coins COINS.json [--jobs J]
                                                          [--device DEBIT_CUBIN [--cross-check N]]
 
-- **When it runs.** Exactly while the verdict rejects a run on a drawn tile whose credited debit, or a credited row's, is
+- **When it runs.** Exactly while the verdict rejects a run on a sampled tile whose credited debit, or a credited row's, is
   over its cap, its over-cap rule ``reject`` (`served_passes.over_cap_rule`): the pipelines ask ``served_passes.py
   volunteer-needed`` before they serve and refuse to skip the give-up then.  Under ``uncredited``, where the verdict
   credits such a row nothing instead, the give-up is off the prover's path, and this module stays for whoever runs it by
@@ -45,15 +45,15 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "pouw" / "clear"))
+sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "clear"))
 import fast_tile as FT  # noqa: E402
 import verify_run as VR  # noqa: E402
 import clear_work as CW  # noqa: E402
-from verity.protocols.pouw.verifier.audit import opened_value  # noqa: E402
-from verity.protocols.pouw.verifier.coins import CoinCommitment  # noqa: E402
-from verity.protocols.pouw.verifier.protocol import Context  # noqa: E402
-from verity.protocols.pouw.prover.schemes import pearl_c as C  # noqa: E402
-from verity.protocols.pouw.prover.schemes import pearl_c_work as PW  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.audit import opened_value  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.protocol import Context  # noqa: E402
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C  # noqa: E402
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW  # noqa: E402
 
 #: the device's counts are held to the CPU replay's on every Nth tile id
 CROSS_CHECK = 1024

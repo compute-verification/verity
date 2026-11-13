@@ -9,18 +9,21 @@ kept from them, and a deferred capture's forks and joins over stand-in streams).
 from __future__ import annotations
 
 import contextlib
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from verity.protocols.pouw.verifier.protocol import Matmul, Shape
-from verity.protocols.pouw.verifier.serving import SERIAL
+from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.accounting.pouw.verifier.serving import SERIAL
+
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols.linear.api import Arm, PassSpec, Stack
-from verity_vllm.protocols.pouw.pearl_c import passes as PP
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c import graphs as PG
+from verity_vllm.protocols.pouw.pearl_c import lanes as L
+from verity_vllm.protocols.pouw.pearl_c import passes as PP
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 from verity_vllm.protocols.pouw.pearl_c.ends import PassEnds
 from verity_vllm.protocols.pouw.pearl_c.host import joined
@@ -80,7 +83,7 @@ class Run:
         self.replays: list = []
         self.replayed: list = []
         self.begun: list = []
-        self.details = {"passes": []}
+        self.details: dict[str, list] = {"passes": []}
         self.eager = 0
 
     def eager_forward(self):
@@ -157,7 +160,8 @@ def test_vllms_own_graphs_serve_while_no_pearl_c_arm_executes():
 
 
 CALLS = tuple(PG.WholeCall(w, 32, 4096, 4096, 32, 64) for w in (0, 1, 2))
-HASHED, RETAINED = (True, frozenset(), "serial", False), (True, frozenset(), "serial", True)
+HASHED: tuple = (True, frozenset(), "serial", False)
+RETAINED: tuple = (True, frozenset(), "serial", True)
 
 
 def test_an_arm_runs_eagerly_until_prepared_then_replays_its_own_graphs_with_the_captured_calls():
@@ -275,7 +279,8 @@ class Calls(PG.GraphCalls, PP.EpochCalls, PassEnds):
     call."""
 
     def __init__(self, torch):
-        self.entry, self.hashing, self.graphs, self.omit = "test", True, True, frozenset()
+        self.entry, self.hashing, self.graphs = "test", True, True
+        self.omit: frozenset[str] = frozenset()
         self.schedule, self.capacity = PPD.schedule_of(SERIAL, PPD.scheme_of(PPD.SCHEMES[0])), PPD.LEAF_CAPACITY
         self.order, self.nb = {7: 0, 8: 1, 9: 2}, 64
         self.roots = {w: bytes([w]) * 32 for w in self.order}
@@ -310,9 +315,14 @@ def test_a_replay_uploads_every_calls_slot_once_and_appends_its_records():
 
 def test_a_replay_uploads_the_slots_the_last_one_staged_only_from_where_they_were_staged_for():
     torch = pytest.importorskip("torch")
-    run, made = Calls(torch), []
+    run = Calls(torch)
+    made: list[tuple] = []
     make = run.keys
-    run.keys = lambda *a: made.append(a[1:]) or make(*a)
+
+    def counted(*a):
+        made.append(a[1:])
+        return make(*a)
+    run.keys = counted
     calls = (PG.WholeCall(9, 32, 4096, 1024, 32, 8), PG.WholeCall(7, 32, 1024, 4096, 32, 32))
     run.whole_replay(calls)
     assert made == [(0, 32), (1, 32)]
@@ -357,9 +367,13 @@ def test_a_replay_over_the_passs_capacity_is_refused():
 def test_inside_vllms_capture_a_call_is_recorded_and_launched_into_it(monkeypatch):
     torch = pytest.importorskip("torch")
     run = Calls(torch)
-    into = []
+    into: list[tuple] = []
+
+    def _into(*a):
+        into.append(a)
+        return "y", True
     monkeypatch.setattr(PG, "_capturing", lambda: True)
-    monkeypatch.setattr(run, "_into", lambda *a: into.append(a) or ("y", True), raising=False)
+    monkeypatch.setattr(run, "_into", _into, raising=False)
     sh = type("Sh", (), {"m16": 32, "k": 1024, "n": 4096})()
     run.whole_capture_begin()
     assert run._graph_call(7, sh, "pipe", 0, 32, 32, 0, None) == ("y", True)
@@ -466,7 +480,8 @@ def test_a_retained_kinds_capture_copies_each_calls_a_words_tree_and_y_to_the_st
 
 def test_an_enabled_statement_is_in_the_key_stages_each_captured_call_and_commits_after_each_replay(monkeypatch):
     torch = pytest.importorskip("torch")
-    run, capturing, log = Calls(torch), [False], []
+    run, capturing = Calls(torch), [False]
+    log: list[tuple] = []
     monkeypatch.setattr(PG, "_capturing", lambda: capturing[0])
     for name in ("_into", "_replay", "_slot"):
         monkeypatch.setattr(run, name, lambda *a: ("y", True))
@@ -641,7 +656,8 @@ def _lanes(monkeypatch, torch, log):
 
 def test_a_deferred_capture_runs_each_calls_tile_hashing_beside_the_next_calls_a_tree(monkeypatch):
     torch = pytest.importorskip("torch")
-    run, log = Calls(torch), []
+    run = Calls(torch)
+    log: list = []
     run.whole_defer, run.device, run._graphs = True, "cuda", {}
     run.kernel = SimpleNamespace(dev=SimpleNamespace(stream=None))
     current = _lanes(monkeypatch, torch, log)
@@ -699,7 +715,8 @@ def test_a_deferred_a_capture_runs_each_calls_a_tree_beside_its_forming_and_gemm
     to its stage.  The forward's last call joins the tree stream, and a call
     joining a call of its shape joins that call's tree through its side steps."""
     torch = pytest.importorskip("torch")
-    run, log = Calls(torch), []
+    run = Calls(torch)
+    log: list = []
     run.whole_defer, run.whole_defer_a, run.device, run._graphs = True, True, "cuda", {}
     run.kernel = SimpleNamespace(dev=SimpleNamespace(stream=None))
     current = _lanes(monkeypatch, torch, log)
@@ -762,7 +779,8 @@ def test_a_shape_joining_capture_joins_a_calls_side_steps_only_before_the_next_c
     events before it (the one side stream ran them first); at the last pending call's it waits for the side stream itself,
     and the forward's last call joins the side and tree streams.  Every step keeps its stream and order."""
     torch = pytest.importorskip("torch")
-    run, log = Calls(torch), []
+    run = Calls(torch)
+    log: list = []
     run.whole_defer, run.whole_defer_a, run.whole_shape_joins, run.device, run._graphs = True, True, True, "cuda", {}
     run.kernel = SimpleNamespace(dev=SimpleNamespace(stream=None))
     current = _lanes(monkeypatch, torch, log)
@@ -803,7 +821,8 @@ def test_a_stats_forking_capture_runs_each_calls_a_scales_beside_its_a_commitmen
     are launched there before the commitment, the join not waiting for the prefetch, which the forward's last call joins;
     alone, the prefetch forks only itself."""
     torch = pytest.importorskip("torch")
-    run, log = Calls(torch), []
+    run = Calls(torch)
+    log: list = []
     run.whole_defer, run.whole_defer_a, run.whole_fork_stats, run.device, run._graphs = True, True, True, "cuda", {}
     run.kernel = SimpleNamespace(dev=SimpleNamespace(stream=None))
     current = _lanes(monkeypatch, torch, log)
@@ -871,7 +890,8 @@ def test_a_stats_forking_capture_widens_a_calls_a_words_beside_its_commitment_wh
     call's rows set on the pipeline (`rows_bf16`, cleared after) and the widening goes on the stats stream before
     ``stats_a``, plainly; else the widening runs first on the capturing stream, as `_stage_a` launches it."""
     torch = pytest.importorskip("torch")
-    run, log = Calls(torch), []
+    run = Calls(torch)
+    log: list = []
     run.whole_defer, run.whole_defer_a, run.whole_fork_stats, run.device, run._graphs = True, True, True, "cuda", {}
     current = _lanes(monkeypatch, torch, log)
     monkeypatch.setattr(PG, "_capturing", lambda: True)
@@ -925,7 +945,8 @@ def test_a_tree_sm_capture_launches_the_steps_beside_each_calls_a_tree_with_the_
     see the pipeline's ``beside`` at 1, so its persistent GEMMs leave the tree's CTA its SM; its A commitment before them,
     its tile hashing after them, and every step without the option or without a forked tree see 0."""
     torch = pytest.importorskip("torch")
-    run, log = Calls(torch), []
+    run = Calls(torch)
+    log: list = []
     run.whole_defer, run.whole_defer_a, run.whole_tree_sm, run.device, run._graphs = True, True, True, "cuda", {}
     run.kernel = SimpleNamespace(dev=SimpleNamespace(stream=None))
     _lanes(monkeypatch, torch, log)
@@ -1096,7 +1117,6 @@ def test_a_calls_a_words_are_one_widen_a_where_the_kernel_has_it_else_torchs_cop
     stream over the call's rows and the padding up to `filled`, or none, left to the call's `_into` (`_widening`), where
     `GraphCalls._widen_later`; with an older cubin, torch's copy and fill, the same words."""
     torch = pytest.importorskip("torch")
-    from verity_vllm.protocols.pouw.pearl_c import lanes as L
     monkeypatch.setattr(L, "_stream", lambda device: 77)
     x, launched = torch.arange(24, dtype=torch.float32).reshape(3, 8).to(torch.bfloat16), []
     for has, later in ((True, False), (True, True), (False, True)):
@@ -1121,8 +1141,6 @@ def test_a_lagged_end_gets_its_commitment_in_place_at_the_next_end_and_only_an_e
     `finish`'s.  It waits for the event once and fills the ended pass's own dict, the one `details["passes"]` and the
     stack hold, and `commits`.  The executor's pass end and `end_pass` with ``step`` lag where the run's `lag_ends` is
     set; `end_pass` without it (a caller's) never does."""
-    import hashlib
-
     import torch
 
     run = PPD.PearlCDeviceRun.__new__(PPD.PearlCDeviceRun)
@@ -1151,8 +1169,12 @@ def test_a_lagged_end_gets_its_commitment_in_place_at_the_next_end_and_only_an_e
     run.finish()
     assert waited == [2, 4] and out["transcript_root"] == root.hex() and run.commits["tiles"] == 9
 
-    lags = []
-    run.end, run.begin = (lambda lag=False, behind=False: lags.append(lag) or {}), (lambda *a, **kw: None)
+    lags: list[bool] = []
+
+    def end(lag=False, behind=False):
+        lags.append(lag)
+        return {}
+    run.end, run.begin = end, (lambda *a, **kw: None)
     run.cur = PPD._Pass(None, matmuls=[None])
     for flag in (False, True):
         run.lag_ends = flag
