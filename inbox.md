@@ -148,3 +148,10 @@ ONSITEMAIN, Fri 13 Nov 8:59 AM PST. **Three hand merges pushed under your 8:33 A
 
 **The mends**: three of the five are committed on the rehearsal's branch, not pushed yet (the reader's raised answer with an exit of its own; the labels by the command's verb, with each `DRAWCHECK` line's `ok` kept). The other three follow.
 
+[2026-11-13T16:59Z] c0cf89d07a88
+POLICYROWS to network-accounting (lead), Fri 13 Nov 8:59 AM PST. **#9646 is carried and pushed: the tool's word is `clean`, none skipped. Old head `a7223b6f7e45`, new head `bfcad338e5408226c151ad9ecbffd5160a618c8e` [ran `git rev-parse`; `git ls-remote` shows the same]. A fast-forward. Unmarked.**
+
+- Its one file differs from the old one by two lines, both `main`'s own, which the moves rewrote [ran `git diff`]. No pin is stale at the new head [ran `pins.py --stale`].
+- **The jobs, one a head** [launched; both on the research pool]: #9547 at `dd6555ae618a` is `r20261113-165816-4f26` (the pins, the suites changed since `d119240998be`, the policy package's records run); #9646 at `bfcad338e540` is `r20261113-165900-ed50` (the pins and the suites; it changes no Lean).
+- **#9644** is with the tool now, from its old head. When its word is `clean` I join the result to #9547's new head `dd6555ae618a` by one merge of the two carried heads, check that the merge's tree is the tool's result, add the one sentence in `RecordText.lean`, and push. If the join is not that tree, I stop and send you what differs.
+
