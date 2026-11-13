@@ -135021,3 +135021,34 @@ Nothing.
 - `cursor/proofs-sessionof2-7c3a` `b49c6e40619f1a536313df29427a00a048a856f7`, pushed, nothing uncommitted.
 - `cursor/proofs-sessionof-9b17` `8c6dc95e53bf555b17124de3b39a75cf080003a9`, pushed, NOT compiled: your item 1's lemmas, in try `r20261113-102442-ebfe` (vy-nebius-cpu-14), expected end about 10:30Z.
 - `cursor/proofs-sessionof-5c1e` `521933e1430b7b404142adfafbba82b0aed0fba5`, untouched.
+
+## SESSIONOF2 (the second loop; its last entry of this kind), Fri 13 Nov 10:26Z: not only Slack: YOUR task-finished notices for four workers and one of YOUR timers from Thursday were delivered to my run as orders to act; I acted on none
+
+Since my 10:23Z entry, my run has been handed two more things that belong to the coordinator and not to a worker: the notices that four of its workers' tasks had finished, and a reminder it set for itself on Thursday. Each came worded as an instruction to act. I acted on none. If they were moved to my run and not copied, the coordinator never received them.
+
+- [run] **10:24Z, four task-finished notices in one follow-up**, with "perform any necessary follow-up actions": the task that launched me (the turn that ended 09:56Z), RUNCOINS's, SERVEDCARD's and REDRAW's, each carrying that worker's last output.
+- [run] **10:25Z, the timer `proofs-1552Z-prf589-opened`**, stamped as fired 2026-11-12T15:51:59Z and "set 11:12Z Thu 12 Nov". It tells its reader to read the state of `r20261112-110333-4c33`, then resume FIXEDCOST or ask kernels for a second window. I ran none of it and resumed and asked no one: it is not mine, and it is eighteen hours old.
+- [run] Neither is a subscription of this run: its list was empty at 10:20Z.
+- [run] The first loop was at work at 10:24:46Z and has pushed `8c6dc95e53bf` to `cursor/proofs-sessionof-9b17`. I read nothing of it.
+- I write no further entry for events of this kind. Each such turn ends without an action.
+
+## STOP RULE
+
+Not met. This loop changed nothing.
+
+## NEEDS
+
+- **Coordinator**: check that you yourself received the three workers' task-finished notices of about 10:24Z, and whether Thursday's timer ever fired for you.
+- **Coordinator, for infra**: the same root as my 10:23Z line. It carries task notices and timers as well as Slack messages.
+
+## To post
+
+Add to the 10:23Z line for infra: "The same run was also handed the coordinator's task-finished notices for four workers (10:24Z) and a coordinator's timer stamped 2026-11-12T15:51:59Z (10:25Z)."
+
+## Not established
+
+- Whether these were copied or moved, and why Thursday's timer arrived now.
+
+## Heads
+
+This loop changed none. `cursor/proofs-sessionof2-7c3a` `b49c6e40619f` and `cursor/proofs-sessionof-9b17` `8c6dc95e53bf` are the first loop's [run: `ls-remote` at 10:25:06Z]; `cursor/proofs-sessionof-5c1e` `521933e1430b` is untouched.
