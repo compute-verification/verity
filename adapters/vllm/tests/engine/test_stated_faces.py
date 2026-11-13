@@ -74,8 +74,8 @@ def test_the_modules_no_cpu_loads_state_a_face_and_are_read(module: str) -> None
 @pytest.mark.parametrize("text, found", [
     ("x = 1\n", []),
     ("__all__ = ['f', 'K', 'm', 'n', 'T']\nimport m\nfrom p import q as n\nK = 1\ndef f(): ...\nclass T: ...\n", []),
-    ("__all__ = ['a', 'b', 'c', 'd', 'e']\nif K:\n    a = 1\nelse:\n    b = 2\ntry:\n    import c\nexcept ImportError:\n    c = None\n"
-     "else:\n    d = 1\nwith open(p) as h:\n    e = h.read()\n", []),
+    (("__all__ = ['a', 'b', 'c', 'd', 'e']\nif K:\n    a = 1\nelse:\n    b = 2\ntry:\n    import c\nexcept ImportError:\n    c = None\n"
+      "else:\n    d = 1\nwith open(p) as h:\n    e = h.read()\n"), []),
     ("__all__ = ['f', 'g']\ndef f(): ...\n", ["lists 'g', which its top level does not bind"]),
     ("__all__ = ['g']\ndef f():\n    g = 1\n", ["lists 'g', which its top level does not bind"]),
     ("__all__ = ['g']\nclass C:\n    def g(self): ...\n", ["lists 'g', which its top level does not bind"]),
