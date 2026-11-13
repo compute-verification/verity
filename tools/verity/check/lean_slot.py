@@ -21,6 +21,11 @@ otherwise. In a `research run`, the run's timeout moves later by the time it wai
 Who asked is --by, else RESEARCH_LANE, else whoever holds the check slot this runs in (slot.py's `check-NAME.who`), else
 RESEARCH_AGENT_URL.
 
+`NAME 0` closes a pool on this machine. A request that arrives while its pool reads 0 is refused before it joins the line,
+where it would hold its run's cores for a slot that can't come: the refusal names the pool, SLOTS and the `#` comment on the
+pool's line, where the steward says why, and the fix, a machine whose `--status` lists a slot of that pool. A waiter already
+in line when the steward lowers its pool to 0, for a timed window, stays there and takes a slot once the N is raised again.
+
 `python3 tools/verity/check/lean_slot.py --status [--json]`: each pool's slots and holders, then its waiters; --json, the same as one
 JSON object (`status_doc`), which `check.py --slots` reads from every machine. Stdlib only: it runs before uv.
 
@@ -77,6 +82,17 @@ def parse(text: str) -> dict[str, int]:
             raise Refused(f"{SLOTS}: {line.strip()!r} is not `POOL N`")
         pools[f[0]] = int(f[1])
     return pools
+
+
+def notes(text: str) -> dict[str, str]:
+    """Each pool's `#` comment on its line of SLOTS, where the steward says why the pool has its N."""
+    rows = (line.partition("#") for line in text.splitlines())
+    return {body.split()[0]: note.strip() for body, _, note in rows if body.split() and note.strip()}
+
+
+def closing(pool: str, note: str | None) -> str:
+    """The line of SLOTS that closes ``pool``, as a refusal quotes it: `POOL 0`, with its comment (``note``)."""
+    return f"`{pool} 0{'  # ' + note if note else ''}`"
 
 
 def resolve(pools: dict[str, int], pool: str, or_any: bool = True) -> tuple[str, int]:
@@ -158,10 +174,16 @@ def wait(pool: str, by: str | None = None, now=lambda: datetime.now(timezone.utc
     """Wait for a slot of ``pool`` (SLOTS exists; `resolve`); return the pool it came from, its index and the descriptor
     holding it. In a `research run`, the time it waited moves the run's timeout as much later (`slot.defer_run`): with every
     slot busy a wait can outlast a run's whole --timeout, which then ended the run before its audit began. Without ``queue``,
-    a request that would wait is `Refused` at once, naming why."""
+    a request that would wait is `Refused` at once, naming why. So is every request whose pool reads 0 when it arrives, before
+    it joins the line: no slot can come to it while the pool is closed. One already in line when the N goes to 0 stays there."""
     d = SLOTS.parent
-    pools = parse(SLOTS.read_text())
+    text = SLOTS.read_text()
+    pools = parse(text)
     name, n = resolve(pools, pool, or_any)
+    if not n:
+        raise Refused(f"{SLOTS} reads {closing(name, notes(text).get(name))}: pool {name!r} is closed on this machine, so this "
+                      "request takes no slot and joins no line; run it on a machine whose `lean_slot.py --status` lists a slot "
+                      f"of pool {' or '.join(map(repr, dict.fromkeys((pool, name))))}")
     began = mono()
     ticket, tfd = SLOT.join(d, who=asker(by), line=line_name(name))
     told, since, slept, joined = None, 0, False, now()
