@@ -25,11 +25,11 @@ what the word maps of ``tools/move/`` keep: a domain tag or format id (``verity/
 key's value (``goal = "vllm/serving-cost-benchmark"``, ``GOAL``); the tree holds no list of goal ids, so the same id
 elsewhere still counts.  A word's other senses aren't counted: by the words about it (``OTHER_SENSES``: a power law,
 nvidia-smi's ``power.draw``, ``AUDIT_CAP``, ``cap_bits``), by the code around it (hypothesis's ``draw``) and by the
-file's place (``OWN_CAPS``: PoUS's and PoUB's own caps).  Sites are counted per file: an entry ``{"file", "count"}`` allows
-``count`` sites in its file, a file with more fails, and ``--prune`` lowers what the tree no longer holds.  The ratchet gate
-(``adapters/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file it touches, grows this list, or
-leaves a renamed file's entry behind; it loads this module alone from the change's base, so the module imports only the
-standard library and reads ``GLOSSARY.md`` from the tree it runs in.
+file's place (``OWN_CAPS``: PoUS's and PoUB's own caps, a row table's size).  Sites are counted per file: an entry
+``{"file", "count"}`` allows ``count`` sites in its file, a file with more fails, and ``--prune`` lowers what the tree
+no longer holds.  The ratchet gate (``adapters/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file
+it touches, grows this list, or leaves a renamed file's entry behind; it loads this module alone from the change's
+base, so the module imports only the standard library and reads ``GLOSSARY.md`` from the tree it runs in.
 
     python3 tests/lint/test_repo_retired_terms.py --move OLD NEW   # a file (or directory) moved: its entry follows it
     python3 tests/lint/test_repo_retired_terms.py --prune          # delete and lower what this tree no longer holds
@@ -92,10 +92,11 @@ OTHER_SENSES = re.compile(r"(?i:power[- ]laws?|laws? of large numbers|(?:Amdahl|
                           r"|schedule_cap|SCHEDULE_CAP|cap_bits|CAP_BITS)(?![^\W_])"
                           r"|(?<!\w)(?:R_cap(?:_phase|_node(?:_by_class_peak)?)?|caps\.total|FoolingCap|compute_cap"
                           r"|grid_cap|cap ℓ)(?!\w)")
-#: the files whose "cap" is their protocol's own, by path prefix, with each reason; Pearl's spellings still count there
+#: the files whose "cap" is their own, by path prefix, with each reason; Pearl's spellings still count there
 OWN_CAPS = {
     "verity/protocols/accounting/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
     "verity/protocols/accounting/poub/": "PoUB's lifetime cap on a schedule's bits; Pearl's is PoUW's",
+    "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table": "a row table's `cap` counts its leaves",
 }
 #: Pearl's `CAP`, which the table spells as a word, so no longer term holds it ("over-cap", "cap check", `capOK` and
 #: `Device.cap` are terms of their own)
@@ -575,6 +576,21 @@ def test_a_cap_of_pous_or_poub_is_another_sense_and_pearl_s_beside_it_is_not() -
         assert said(theirs + pearls, path) == pearl
     assert said(theirs + pearls, "verity/protocols/accounting/pouw/verifier/pearl.py") == [(1, "cap"), (1, "cap"), (1, "caps"), *pearl]
     assert [w.split("'")[1] for _, w in sites(pearls, "verity/protocols/accounting/poub/verifier/audit.py")] == [o for _, o in pearl]
+
+
+def test_a_row_table_s_cap_is_its_number_of_leaves_and_pearl_s_beside_it_is_not() -> None:
+    """A row table's ``cap`` in its kernel's three files; Pearl's spellings there too, and the same word in a kernel
+    beside them."""
+    table = "uint64_t cap;  // its leaves\nif (p < t->cap) return 2 * cap;"
+    pearls = "\n// Pearl's: capOK, CAP, an over-cap tile"
+    pearl = [(3, "capOK"), (3, "CAP"), (3, "over-cap")]
+    for path in ("verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cu",
+                 "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cuh",
+                 "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table_host.cpp"):
+        assert Path(ROOT, path).is_file(), f"{path} is gone: move its line of OWN_CAPS with it"
+        assert said(table + pearls, path) == pearl
+    beside = "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/pearl_tile.cu"
+    assert said(table + pearls, beside) == [(1, "cap"), (2, "cap"), (2, "cap"), *pearl]
 
 
 def test_two_terms_on_one_span_name_the_same_one_in_every_process() -> None:
