@@ -50,7 +50,7 @@ if TYPE_CHECKING:
 CANARY_SEED = 20260922
 CANARY_N_RANDOM = 64      # families() n_random for the canary samples: every family then has >= CANARY_TILES tiles
 CANARY_TILES = 4          # tiles kept per family (M x 8 elements each: 512 for mma, 2048 for wgmma)
-REPLAY_ROOTS = ("verity/definitions/ops/tests/fixtures/golden", "verity/definitions/ops/tests/fixtures/tc-total-2026-09-07", "verity/definitions/silicon/captures")
+REPLAY_ROOTS = ("verity/circuits/ops/tests/fixtures/golden", "verity/circuits/ops/tests/fixtures/tc-total-2026-09-07", "verity/circuits/silicon/captures")
 
 
 @dataclass(frozen=True)
@@ -76,7 +76,7 @@ class CanaryPlan:
 def _repo_root(start: Path | None = None) -> Path | None:
     here = (start or HERE).resolve()
     for p in [here, *here.parents]:
-        if (p / "verity" / "definitions" / "silicon" / "discrepancy_log.json").is_file():
+        if (p / "verity" / "circuits" / "silicon" / "discrepancy_log.json").is_file():
             return p
     return None
 
