@@ -15,9 +15,11 @@
 # - No reader imports either by a dotted name: the benchmarks that import `rho` put its directory on `sys.path` by its
 #   path, which the rewrite follows.
 # - One Lean file is rewritten, in a doc comment: `security/Definitions/Nci/Guarantees/Remote.lean` names
-#   `nci/tiers.py` from the root, and `tests/test_doc_paths.py` reads that path ([rewrite] include). No Lean module,
-#   declaration or lock record changes; `security/lean-audit.json` changes in the `test` paths of the three conjectures
-#   whose tests are `nci`'s.
+#   `nci/tiers.py` from the root, and `tests/test_doc_paths.py` reads that path ([rewrite] include). A second is
+#   included for the same reason, `security/Definitions/Nci/Remote.lean`: where its doc comments name the two
+#   directories by the paths this map moves they are rewritten, and where they name `benchmarks/` already nothing
+#   changes. No Lean module, declaration or lock record changes; `security/lean-audit.json` changes in the `test`
+#   paths of the three conjectures whose tests are `nci`'s.
 # - One file that names `rho/` is left as it is ([rewrite] exclude):
 #   `benchmarks/training_slowdown/tests/test_one_calculator.py`. It writes the calculator's path in parts inside a toy
 #   source, which the rewrite would shorten from six parts to four, and `move_check` takes no such edit as a path's.
@@ -48,8 +50,8 @@ paths = []
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
 # archive), files whose bytes a digest pins, and Lean sources. A module's source is in its build key, so a path
 # rewritten in a comment would compile the module again, and every module that imports it. A `.lean` file that writes
-# a path outside a comment is still rewritten (`include`), and so is the one whose doc comment names a moved file from
-# the root; lakefiles and Lake manifests are too. The last entry is the test the header names.
+# a path outside a comment is still rewritten (`include`), and so are the two whose doc comments name a moved file or
+# directory from the root; lakefiles and Lake manifests are too. The last entry is the test the header names.
 exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
            "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
            "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/definitions/silicon/captures/**",
@@ -65,7 +67,7 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
            "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean",
            "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean",
            "verity/protocols/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean",
-           "security/Definitions/Nci/Guarantees/Remote.lean"]
+           "security/Definitions/Nci/Guarantees/Remote.lean", "security/Definitions/Nci/Remote.lean"]
 
 [modules]
 # the renames [paths] implies (`layout.py --modules`): each directory as a dotted path. No file names either.
