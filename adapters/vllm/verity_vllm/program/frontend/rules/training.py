@@ -37,7 +37,7 @@ import numpy as np
 import torch
 
 from verity.circuits.defs import bind
-from verity.definitions.ops import scalar as SC
+from verity.circuits.ops import scalar as SC
 from verity.circuits.refs import Affine, Coll, Strided, broadcast, concat
 from verity.circuits.types import Array, Value
 from verity.definitions.registry import int8_exact as IE

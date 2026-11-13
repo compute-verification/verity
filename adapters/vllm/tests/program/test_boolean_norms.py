@@ -24,15 +24,15 @@ from verity.circuits import boolean as BL
 from verity.circuits import codec
 from verity.circuits.defs import PrimitiveDefinition, bind
 from verity.circuits.parts import n_members
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.silicon import fp
-from verity.definitions.ops.boolean import mufu as MU
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.silicon import fp
+from verity.circuits.ops.boolean import mufu as MU
 from verity.circuits.boolean import trace as TR
 from verity.definitions.registry import b1
 from verity.definitions.registry import boolean_norms as BN
 from verity.definitions.registry import prims as P
-from verity.definitions import word as QW
-from verity.definitions.cross_call import members_check
+from verity.circuits import word as QW
+from verity.circuits.cross_call import members_check
 
 FULL = os.environ.get("VERITY_VLLM_BOOLEAN_NORMS_FULL")
 
@@ -294,7 +294,7 @@ def _special_rows(rng, N: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return tuple(np.stack([row[k] for row in rows]) for k in range(3))
 
 
-#: the MUFU statics as proofs' Boolean Definitions (`verity.definitions.ops.boolean.mufu`), which the switch binds
+#: the MUFU statics as proofs' Boolean Definitions (`verity.circuits.ops.boolean.mufu`), which the switch binds
 CUDA_BITS = {"RSQRT": bind(MU.RsqrtApprox)}
 TRITON_BITS = {"SQRT": bind(MU.MufuSqrtFtz), "SCALEA": bind(MU.DivFullScaleA), "RCP": bind(MU.DivFullRcp)}
 

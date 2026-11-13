@@ -1078,8 +1078,8 @@ def _reference(job: dict[str, Any], a: dict[str, np.ndarray], r: int, n: int, fm
     from verity.circuits.boolean.trace import word_of
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate
-    from verity.definitions.ops import gemm as CG
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops import gemm as CG
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.definitions.registry import cublas_bf16 as CB
     from verity.definitions.registry import ll_bf16 as LL
 
@@ -1180,8 +1180,8 @@ def bind_check(models: list[str] = list(MODELS), launches: list[dict[str, Any]] 
     from verity.circuits.boolean.trace import word_of
     from verity.circuits.defs import bind
     from verity.circuits.evaluation.batch import type_shape
-    from verity.definitions.ops import gemm as CG
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops import gemm as CG
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.definitions.registry import bf16_gemm_check as BC
     from verity.definitions.registry import cublas_bf16 as CB
     from verity.definitions.registry import ll_bf16 as LL

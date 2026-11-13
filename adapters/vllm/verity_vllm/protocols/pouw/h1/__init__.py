@@ -84,7 +84,7 @@ from verity.protocols.pouw.verifier.credit import CREDIT
 from verity.protocols.spot.device.challenger import CoinError
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, Refs, Strided, concat
 from verity.circuits.types import Array

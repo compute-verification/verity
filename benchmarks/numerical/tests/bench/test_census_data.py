@@ -8,7 +8,7 @@ import re
 
 import pytest
 
-from verity.definitions.silicon.instructions import INSTRUCTIONS
+from verity.circuits.silicon.instructions import INSTRUCTIONS
 from verity.definitions.circuits.targets.target import FP8_HOPPER_WGMMA, TARGETS
 from verity_numerical.bench import census, contract
 

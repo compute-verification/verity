@@ -42,7 +42,7 @@ from collections.abc import Sequence as _SequenceABC
 from dataclasses import dataclass
 from typing import Any, Iterable, Iterator, Sequence
 
-from verity.definitions.call_scope import spec_base, spec_statics
+from verity.circuits.call_scope import spec_base, spec_statics
 from verity_vllm.query.type_repr import parse_type_repr
 from verity_vllm.query.units import ValueRef
 

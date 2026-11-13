@@ -20,8 +20,8 @@ from verity.circuits import codec
 from verity.circuits import partition_object as PO
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.boolean import trace as TR
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.silicon import fp
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.silicon import fp
 from verity.definitions.registry import b1
 from verity.definitions.registry import boolean_dense as BD
 from verity.definitions.registry import dense as D

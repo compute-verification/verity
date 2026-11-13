@@ -21,7 +21,7 @@ import torch
 from torch.fx.experimental.proxy_tensor import make_fx
 
 from tests.program.test_train_step import _program
-from verity.definitions.ops import scalar as SC
+from verity.circuits.ops import scalar as SC
 from verity.definitions.numerics import torch_kernels as TK
 from verity.definitions.numerics.serve3_reference import materialize
 from verity.definitions.registry import cublas_bf16 as CB

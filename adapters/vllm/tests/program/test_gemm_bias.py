@@ -32,7 +32,7 @@ from verity.definitions.registry import b1, gemm_bias, hopper
 from verity_vllm.program.frontend import targets as TG
 from verity.definitions.numerics.serve3_reference import materialize
 from verity_vllm.query import required as RQ
-from verity.definitions import word as W
+from verity.circuits import word as W
 
 BF = torch.bfloat16
 M, K, N = 3, 32, 8

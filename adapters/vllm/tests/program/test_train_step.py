@@ -26,7 +26,7 @@ from verity.circuits.boolean.trace import word_of
 from verity.circuits.boundary import gate_width
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.ops import scalar as SC
+from verity.circuits.ops import scalar as SC
 from verity.circuits.parts import Part, n_members
 from verity.circuits.program import is_input
 from verity.circuits.query_ast import GateSet, evaluate, parse

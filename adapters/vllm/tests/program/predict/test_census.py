@@ -24,8 +24,8 @@ from verity.definitions.circuits.census import PRODUCTS, SILICON, NoBooleanWork,
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
-from verity.definitions.ops import prims as P
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops import prims as P
+from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.program import Program, is_input
 from verity.definitions.circuits.requirement import census_gates, census_schedule, from_census, upper_bound
 from verity_vllm.program.predict.build import build_program, model_shape

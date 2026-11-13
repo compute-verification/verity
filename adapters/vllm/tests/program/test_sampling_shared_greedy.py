@@ -14,7 +14,7 @@ from verity.circuits.defs import bind
 from verity.definitions.registry import sampling as SM
 from verity.definitions.registry import sampling_vocab
 from verity.circuits.cut import call_scope
-from verity.definitions import word as W
+from verity.circuits import word as W
 
 PAIRS = [(SM.GumbelTokenSelect, SM.GumbelTokenSelectSharedGreedy), (SM.GumbelTopPTokenSelect, SM.GumbelTopPTokenSelectSharedGreedy)]
 SPECIAL_TEMPS = [0x00000000, 0x80000000, 0x3F800000, 0xBF800000, 0x7F800000, 0xFF800000, 0x7FC00000, 0xFFC00000, 0x7F800001,

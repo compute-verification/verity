@@ -203,7 +203,7 @@ paths = ["verity/definitions/registry", "verity/protocols/flock/prover/python/ve
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_flock_rows.py"]
-paths = ["verity/definitions/ops", "verity/definitions/registry", "verity/protocols/flock/prover/python/verity_flock"]
+paths = ["verity/circuits/ops", "verity/definitions/registry", "verity/protocols/flock/prover/python/verity_flock"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_keyed.py"]
@@ -284,7 +284,7 @@ paths = [
 [[tool.verity.tests.reads]]
 tests = ["tests/test_sha512_leaves.py"]
 # nvcc's build of sha512_leaves.cu includes cuda/sha512.cuh, which includes the GPU's one SHA-512
-paths = ["verity/definitions/kernels/sha512.cuh"]
+paths = ["verity/circuits/kernels/sha512.cuh"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_security_inputs.py"]

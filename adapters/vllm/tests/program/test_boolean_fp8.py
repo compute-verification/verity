@@ -14,7 +14,7 @@ from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits import boolean as BL
 from verity.circuits import codec
 from verity.circuits.defs import bind
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.boolean import trace as TR
 from verity.definitions import boolean as SW
 from verity.definitions.registry import boolean_fp8 as BF

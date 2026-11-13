@@ -24,10 +24,10 @@ from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
 from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.boolean import trace as TR
-from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32 as BW
-from verity.definitions.ops.prims import HopperE4m3QgmmaDot32 as HP
+from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32 as BW
+from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
 from verity.definitions import boolean as SW
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity.definitions.numerics import fp8_moe_rows as MR

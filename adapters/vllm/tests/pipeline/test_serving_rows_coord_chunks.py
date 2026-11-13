@@ -10,8 +10,8 @@ import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock.class_statement import UnitStager
 from verity.commitments.windows import rows as CS

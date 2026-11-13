@@ -32,7 +32,7 @@ from verity.circuits.boolean.forms import Circuit
 from verity.definitions.registry import gumbel_boolean as GB
 from verity.definitions.registry import sampling as SM
 from verity.definitions.registry import sampling_boolean as SB
-from verity.definitions import word as W
+from verity.circuits import word as W
 
 F32 = GB.F32
 

@@ -65,7 +65,7 @@ Python and CUDA: the provers, and Python that mirrors the Lean
 
 ### Circuits
 
-`verity.circuits` defines circuits. A program is one circuit, stored compressed as Definitions called from a root body, with a canonical layout that locates any gate without expanding it and a SHA-512 digest that names it. `verity.definitions.ops` holds the primitive circuits for NVIDIA accelerators, `verity.definitions.silicon` their exact hardware semantics, and `verity.circuits.evaluation` evaluates any circuit exactly. A circuit describes logical computation, never a GPU schedule, a proof system, a commitment layout or a sampling policy. Circuits are total: they match the hardware on every input bit pattern, NaN and infinity included. Applications define only their own Definitions.
+`verity.circuits` defines circuits. A program is one circuit, stored compressed as Definitions called from a root body, with a canonical layout that locates any gate without expanding it and a SHA-512 digest that names it. `verity.circuits.ops` holds the primitive circuits for NVIDIA accelerators, `verity.circuits.silicon` their exact hardware semantics, and `verity.circuits.evaluation` evaluates any circuit exactly. A circuit describes logical computation, never a GPU schedule, a proof system, a commitment layout or a sampling policy. Circuits are total: they match the hardware on every input bit pattern, NaN and infinity included. Applications define only their own Definitions.
 
 A partition divides a circuit's computed gates into proof blocks and fixes what the developer commits (Glossary, "Partition").
 

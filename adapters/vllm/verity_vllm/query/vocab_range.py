@@ -54,7 +54,7 @@ def shard_fn(VS: int, H: int, START: int) -> Any:
 def slots(VS: int, H: int, START: int) -> tuple[int, ...]:
     """The shard Call's committed interior gates under `Q_word_v1{16,32}` (offsets in its canonical layout, in gate order): word i of a
     row is the value of gate `slots(...)[i]`.  Refuses a partition whose cut fails, that recomputes a gate, or that commits other values."""
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     G = W.Graph(shard_fn(VS, H, START))
     R = W.units(G, 16, 32)

@@ -42,7 +42,7 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import NOT, ZERO, and_reduce, const_bits, mux
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.definitions.ops.prims import const
+from verity.circuits.ops.prims import const
 from verity.circuits.refs import Coll, Explicit, concat
 from verity.circuits.types import Array, Value
 from verity.commitments.gates import sha512 as H

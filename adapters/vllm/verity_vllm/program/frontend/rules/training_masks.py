@@ -23,7 +23,7 @@ import operator
 
 import torch
 
-from verity.definitions.ops import scalar as SC
+from verity.circuits.ops import scalar as SC
 from verity.circuits.refs import Coll, Strided, broadcast
 from verity.circuits.types import Array, Value
 from verity.definitions.registry import prims as P

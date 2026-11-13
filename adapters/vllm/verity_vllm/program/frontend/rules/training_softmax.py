@@ -10,7 +10,7 @@ from __future__ import annotations
 import torch
 
 from verity.circuits.defs import bind
-from verity.definitions.ops import scalar as SC
+from verity.circuits.ops import scalar as SC
 from verity.circuits.refs import Coll, Strided
 from verity.circuits.types import Array
 from verity.definitions.registry import prims as P

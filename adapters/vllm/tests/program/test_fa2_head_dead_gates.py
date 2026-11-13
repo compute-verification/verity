@@ -12,7 +12,7 @@ import pytest
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.liveness import dead_gates
-from verity.definitions.ops.prims import ZERO32
+from verity.circuits.ops.prims import ZERO32
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array

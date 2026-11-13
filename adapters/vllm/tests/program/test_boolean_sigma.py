@@ -21,9 +21,9 @@ from verity.circuits import boolean as BL
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, evaluate_words
-from verity.definitions.ops import fp32 as W
-from verity.definitions.ops import prims as MP
-from verity.definitions.ops import scalar as S
+from verity.circuits.ops import fp32 as W
+from verity.circuits.ops import prims as MP
+from verity.circuits.ops import scalar as S
 from verity.circuits.types import Array, Value
 from verity.definitions import boolean as BB
 from verity.definitions.registry import b1, b1_tp2, dsv4_decode_indices as DI, hopper, inductor as I, marlin_moe as MM, moe

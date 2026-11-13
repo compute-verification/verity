@@ -27,7 +27,7 @@ from verity.definitions.registry import boolean_fp8_moe as BFM
 from verity.definitions.registry import boolean_gather as BGA
 from verity.definitions.registry import prims as P
 from verity.definitions.registry import ref_prims as RP
-from verity.definitions import word as W
+from verity.circuits import word as W
 
 SERVED_VOCAB = 49152
 #: the training step's vocabulary, over which it gathers an f32 word (`GatherF32x50304_v1`)

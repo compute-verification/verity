@@ -18,7 +18,7 @@ import math
 
 import torch
 
-from verity.definitions.ops.sqrt import PouwF32SqrtRn
+from verity.circuits.ops.sqrt import PouwF32SqrtRn
 from verity.circuits.refs import Coll, concat, strided_view
 from verity.circuits.types import Array
 from verity.definitions.numerics import torch_kernels as TK

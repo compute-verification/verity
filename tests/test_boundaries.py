@@ -39,7 +39,7 @@ string (`RUN_TIME_READ`, matched in the text, f-strings too).
 
 numpy is a core dependency (architecture decision: `verity.circuits.evaluation` batches over numpy arrays).  The
 plain-integer references stay numpy-free on purpose, because they are the specification the Rust guest, the Lean vectors and
-the probes are checked against: the rest of `verity.circuits` (the tensor-core step in `verity.definitions.silicon`
+the probes are checked against: the rest of `verity.circuits` (the tensor-core step in `verity.circuits.silicon`
 among them).  `verity.commitments.randomness` is exact stdlib arithmetic too.
 """
 
@@ -76,7 +76,7 @@ DEPENDENCIES = {"numpy"}
 #: device's directory (a protocol composes no third-party package into a verdict), and these: the scalar references,
 #: the hardware's cards, record and registration log, the Site's types, SPOT's planning beside its verifier, and the
 #: reporting grid.  Within them, what may use numpy.
-STDLIB_ONLY = ("verity/circuits", "verity/definitions/circuits", "verity/definitions/silicon", "verity/commitments/randomness",
+STDLIB_ONLY = ("verity/circuits", "verity/definitions/circuits", "verity/circuits/silicon", "verity/commitments/randomness",
                "verity/claims", "verity/hardware", "verity/device.py", "verity/protocols/spot",
                "verity/protocols/reporting.py")
 NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
@@ -151,7 +151,7 @@ BENCHMARKS_IMPORTERS = {
                      "verity/protocols/pous/verifier/check/tests/test_timed_audit.py"),
                     "memory-accounting: P2's reference and wire (`benchmarks/pous/p2_v1`) and the harness's control "
                     "responder (`benchmarks/pous/band_gpu/harness.py`)"),
-    "verity/definitions/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
+    "verity/circuits/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
     **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
@@ -199,7 +199,7 @@ TEST_ONLY = {
 #: Modules that only a prover's or developer's build turns on, which nothing under ``verity/`` outside their own package
 #: names (an import, an attribute or a string), each with the module and why a verifier must not read it.
 PROVER_ONLY = {
-    "trace_cache": ("verity/definitions/ops/boolean/trace_cache.py",
+    "trace_cache": ("verity/circuits/ops/boolean/trace_cache.py",
                     "traced circuits reused across a prover's builds: a verifier reading them would take a stale or tampered "
                     "entry for a Definition's gates"),
 }
@@ -298,7 +298,7 @@ def test_a_run_time_read_is_found() -> None:
     distribution; ``verity``'s own package data is not."""
     src = ('P = resources.files("verity_vllm") / "pins"\nm = importlib.import_module("verity_vllm.pins")\n'
            "n = import_module(f'verity_vllm.{x}')\no = __import__('research')\n"
-           'q = resources.files("verity.definitions.ops") / "tables"\nr = resources.files(__package__)\n')
+           'q = resources.files("verity.circuits.ops") / "tables"\nr = resources.files(__package__)\n')
     assert _run_time_reads(src) == [(1, "verity_vllm"), (2, "verity_vllm"), (3, "verity_vllm"), (4, "research")]
 
 
@@ -1533,11 +1533,11 @@ def test_verity_loads_no_distribution_of_its_own() -> None:
 ORDER_TREE = {
     "verity/__init__.py": "",
     "verity/circuits/__init__.py": "",
-    "verity/circuits/at_load.py": "from verity.definitions import ops\n",
-    "verity/circuits/in_function.py": "def f():\n    import verity.definitions.ops\n",
-    "verity/circuits/in_string.py": "TOOL = 'verity.definitions.ops:run'\n",
-    "verity/circuits/tests/test_a.py": "import verity.definitions.ops\n",
-    "verity/circuits/at_load.circuit-check.py": "import verity.definitions.ops\n",
+    "verity/circuits/at_load.py": "from verity.circuits import ops\n",
+    "verity/circuits/in_function.py": "def f():\n    import verity.circuits.ops\n",
+    "verity/circuits/in_string.py": "TOOL = 'verity.circuits.ops:run'\n",
+    "verity/circuits/tests/test_a.py": "import verity.circuits.ops\n",
+    "verity/circuits/at_load.circuit-check.py": "import verity.circuits.ops\n",
     "verity/commitments/__init__.py": "",
     "verity/commitments/crypto/__init__.py": "",
     "verity/commitments/crypto/lms.py": "",
@@ -1683,7 +1683,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     pair = ("verity/circuits", "verity/definitions")
     with pytest.raises(AssertionError, match=r"no file needs any more; delete them: \['verity/commitments/windows -> tools'\]"):
         _hold_order(loads, held._replace(against=held.against | {("verity/commitments/windows", "tools"): {"verity/commitments/windows/rows.py"}}))
-    with pytest.raises(AssertionError, match="only shrinks.*\n.*in_string.py:1: python string verity.definitions.ops loads"):
+    with pytest.raises(AssertionError, match="only shrinks.*\n.*in_string.py:1: python string verity.circuits.ops loads"):
         _hold_order(loads, held._replace(against=held.against | {pair: held.against[pair] - {"verity/circuits/in_string.py"}}))
     with pytest.raises(AssertionError, match="only shrinks.*\n.*test_run.py:1: python import infra.cluster.usage loads"):
         _hold_order(loads, held._replace(against={p: files for p, files in held.against.items() if p[1] != "infra"}))

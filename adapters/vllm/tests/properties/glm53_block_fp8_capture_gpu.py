@@ -162,7 +162,7 @@ def launch_dot(config: dict[str, Any], swap: bool):
 
 def dot_definition(dot_id: str):
     """The DOT a launch record names, by id."""
-    from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+    from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
 
     return {d.id: d for d in (HopperE4m3QgmmaDot32, HopperE4m3MmaV2Dot32)}[dot_id]
 
@@ -272,7 +272,7 @@ def _chunks(n: int, cost: int):
 def _halves_step(model, halves) -> Callable:
     """A k32 e4m3 step of `fp8_moe_rows.TWIN_DOTS`' signature: the bytes widened to bf16, then `model`'s k16 step over each index
     set of `halves` in turn, each from the previous one's result."""
-    from verity.definitions.kernels.tc import group_sum_total_batch
+    from verity.circuits.kernels.tc import group_sum_total_batch
     from verity.definitions.numerics.fp8_moe_rows import E4M3_AS_BF16, E4M3_NAN
 
     def step(acc, a, b):
@@ -289,7 +289,7 @@ def _halves_step(model, halves) -> Callable:
 
 def _fma_chain(acc, a, b):
     """Thirty-two IEEE FMAs in k order, each product exact: a dot with no grouped adder."""
-    from verity.definitions.silicon.cast import e4m3_to_f32_word
+    from verity.circuits.silicon.cast import e4m3_to_f32_word
     from verity.definitions.numerics.derived_rows import fma_rn
     from verity.definitions.numerics.fp8_moe_rows import E4M3_NAN
 
@@ -305,7 +305,7 @@ def _fma_chain(acc, a, b):
 def mmav2_alternatives() -> dict[str, Callable]:
     """The models of `HopperE4m3MmaV2Dot32_v1` the MMAv2 probe must refute, each a k32 step: the twin is core's
     `HOPPER_BF16_M16N8K16` (one group of 16, adder width 26) over `MMAV2_HALVES` (k mod 4 < 2, then >= 2)."""
-    from verity.definitions.silicon.models import AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16
+    from verity.circuits.silicon.models import AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16
     from verity.definitions.numerics.derived_rows import tc_dot32_e4m3
     from verity.definitions.numerics.fp8_moe_rows import MMAV2_HALVES
 

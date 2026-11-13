@@ -36,7 +36,7 @@ from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
 
-from verity.definitions.ops.prims import AmpereBF16TcDot16
+from verity.circuits.ops.prims import AmpereBF16TcDot16
 from verity_vllm.commit import challenge as CH
 from verity.definitions.numerics import dense_rows as DRW
 from verity.definitions.numerics import derived_rows as DR

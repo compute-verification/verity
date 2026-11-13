@@ -29,8 +29,8 @@ from verity.definitions.registry import fp8_moe_experts as X
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32
 
 E, K, N, G, KB, KC_ = 3, 128, 5, 32, 32, 32
 NB, KG, C = -(-N // G), K // G, K // KC_

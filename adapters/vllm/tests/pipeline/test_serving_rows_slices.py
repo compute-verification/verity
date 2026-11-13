@@ -16,8 +16,8 @@ import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.ops import gemm as G
-from verity.definitions.ops.prims import HopperBF16WgmmaDot16
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock.class_statement import UnitStager
 from verity_vllm.pipeline import chunk_rows as CR

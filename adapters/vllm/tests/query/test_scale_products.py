@@ -61,7 +61,7 @@ def test_a_ragged_n_commits_its_partial_blocks_products_in_the_sources_order():
 
 
 def test_a_ragged_n_site_is_named_with_its_partial_block():
-    from verity.definitions import word as W_
+    from verity.circuits import word as W_
 
     g = {"family": fp8.ScaledMmFp8BlockSharedScale.id, "statics": {"K": 256, "N": 320, "G": 128},
          "definition": f"{fp8.ScaledMmFp8BlockSharedScale.id}{{K=256,N=320,G=128}}", "calls": 3, "where": DN}
@@ -113,7 +113,7 @@ def test_the_family_is_in_every_vocabulary():
     from verity_vllm.check import oracle_compare as OC
     from verity_vllm.check.replay import coverage
     from verity_vllm.pipeline import manifest as M
-    from verity.definitions import word as W_
+    from verity.circuits import word as W_
 
     assert SP.FAMILY in fmt.FAMILIES and plan.ROUTE_OF_FAMILY[SP.FAMILY] == "scale_tap" and SP.FAMILY in coverage.QUERY_FAMILY_MECHANISM
     assert M.DEFAULT_TAPS == (SP.POLICY,)

@@ -46,7 +46,7 @@ from verity.protocols.spot.verifier.one_stage import draw as D, registered as RE
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch, evaluate_words
-from verity.definitions.ops import gemm as G
+from verity.circuits.ops import gemm as G
 from verity.commitments.windows import interface as IF, rows as CS
 
 HERE = Path(__file__).resolve().parent

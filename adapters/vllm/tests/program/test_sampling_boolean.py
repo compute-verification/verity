@@ -26,7 +26,7 @@ from verity.definitions.numerics import rows
 from verity.definitions.registry import b1
 from verity.definitions.registry import sampling as SM
 from verity.definitions.registry import sampling_boolean as SB
-from verity.definitions import word as W
+from verity.circuits import word as W
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {

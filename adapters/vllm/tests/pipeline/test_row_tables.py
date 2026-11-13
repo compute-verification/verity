@@ -18,7 +18,7 @@ import pytest
 
 from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
-from verity.definitions.ops import gemm as OG
+from verity.circuits.ops import gemm as OG
 from verity.commitments import row_table as RT
 from verity.protocols.spot.verifier.one_stage import draw as D, registered as REG, registration as R
 from verity_vllm.commit import index as IX, row_tables as RTB

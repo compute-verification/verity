@@ -67,7 +67,7 @@ def slots(E: int, TOPK: int, VPT: int, renormalize: bool) -> tuple[int, ...]:
     """The router Call's committed interior gates under `Q_word_v1{16,32}`, as offsets in the Call's canonical layout, in gate order:
     word i of a tapped row is the value of gate `slots(...)[i]`.  Refuses a partition whose cut fails, that recomputes a gate, or whose
     committed interior values are not `layout`'s, class by class."""
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     G = W.Graph(router_fn(E, TOPK, VPT, renormalize))
     R = W.units(G, 16, 32)

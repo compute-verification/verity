@@ -165,7 +165,7 @@ def test_the_dot_roles_bind_the_pair_forms_under_a_block_and_keep_their_notes():
     """The block-FP8 forms are optional statics of the `_dot` roles: the roles and their notes, and with them the vocabulary's
     version, are unchanged, and without `G` the roles bind what they always did."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops.prims import HopperBF16WgmmaDot16
+    from verity.circuits.ops.prims import HopperBF16WgmmaDot16
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as V
     from verity.definitions.registry import moe
     from verity_vllm.program.frontend.targets import FP8_DOTS

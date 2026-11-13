@@ -26,7 +26,7 @@ from verity_vllm.program.predict.tp_steps import compile_tp
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import Builder, bind
-from verity.definitions.ops import gemm as GE
+from verity.circuits.ops import gemm as GE
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import Array
 from verity.definitions.registry import moe, tp_allreduce as TA

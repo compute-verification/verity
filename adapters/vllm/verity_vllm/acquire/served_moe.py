@@ -33,7 +33,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any, Callable
 
-from verity.definitions.ops.prims import HopperBF16WgmmaDot16
+from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity.definitions.registry import act
 from verity.definitions.registry import moe as M
