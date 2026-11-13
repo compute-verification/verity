@@ -27,10 +27,11 @@ reads them (`read_push`: options anywhere, by any prefix, with their values), an
 is judged as one to them (`judged`): run outside a repository, a first word that is neither a remote, a URL nor a path, an
 option git doesn't know, or git configuration another command in the line may set.
 A git command runs, for every rule, in the event's cwd (else the workspace root) joined with its own `git -C DIR`, and
-nowhere else (`indexed_invocations`). A `cd`, `pushd`, `popd` or `source` anywhere in the command, run or not, or a repository
-named by `GIT_DIR`, `GIT_WORK_TREE` or `--git-dir`, makes its directory unknown (`moves`): a push is then judged as one to
-the queue's repositories with every branch its current one, refused for what the guard can't tell unless its own words name
-a protected branch (`unplaced_reason`), and a branch switch is refused.
+nowhere else (`indexed_invocations`). A `cd`, `pushd` or `popd` anywhere in the command, run or not, makes its directory
+unknown (`moves`) unless its own `-C` is absolute, the directory git runs in wherever the shell is; a `source` or `.`, which
+can change what git reads too, or a repository named by `GIT_DIR`, `GIT_WORK_TREE` or `--git-dir`, makes it unknown whatever
+its `-C`. A push is then judged as one to the queue's repositories with every branch its current one, refused for what the
+guard can't tell unless its own words name a protected branch (`unplaced_reason`), and a branch switch is refused.
 The registry is `$AGENT_GUARD_STATE/branches.json` (default /tmp/agent-guard), one VM's: an agent on a VM of its own is never
 judged.
 """
@@ -124,6 +125,8 @@ DIRECTORY_OPTIONS = {"--git-dir", "--work-tree"}
 DIRECTORY_VARIABLES = {"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"}
 #: what moves the shell to another directory, wherever it sits in a command and whether or not it runs
 MOVES = {"cd", "pushd", "popd", "source"}
+#: those that change the shell's directory and nothing else git reads: a git with an absolute `-C` runs there after them
+DIRECTORY_ONLY = {"cd", "pushd", "popd"}
 #: the words after which the shell starts a command
 HEADS = {"{", "(", "then", "do", "else", "elif", "!", "time"}
 
@@ -136,42 +139,47 @@ class Git(NamedTuple):
     unknown: str            # why `d` may not be where it runs or what it reads, or ""
 
 
-def moves(commands: list[list[str]]) -> str:
+def moves(commands: list[list[str]], absolute: bool = False) -> str:
     """Why no git command among `commands` (unwrapped simple commands) can be placed by the hook's cwd and its own `-C`, or "":
     a `cd`, `pushd`, `popd` or `source` anywhere among them (in any list, pipeline, subshell, body, function or carrier, run or
-    not), a `.`, or a command the shell names only later (`$C DIR`)."""
+    not), a `.`, or a command the shell names only later (`$C DIR`). A git whose own `-C` is `absolute` runs in that directory
+    wherever the shell is, so of these only what can change more than the directory (`source`, `.`, `$C`) leaves it unplaced."""
     for words in commands:
         heads = [w for j, w in enumerate(words) if j == 0 or words[j - 1] in HEADS]
-        if hit := next((w for w in words if w in MOVES), None):
-            return f"the command has a `{hit}` in it, and the guard follows none, wherever it sits"
+        if hit := next((w for w in words if w in MOVES and not (absolute and w in DIRECTORY_ONLY)), None):
+            return (f"the command has a `{hit}` in it, and the guard follows none, wherever it sits" if hit in DIRECTORY_ONLY else
+                    f"the command has a `{hit}` in it, which can change what git reads as well as where it runs")
         if hit := next((w for w in heads if w == "." or any(c in w for c in UNEXPANDED)), None):
-            return f"the command runs `{hit}`, which may move it to another directory"
+            return f"the command runs `{hit}`, which may move it to another directory or change what git reads"
     return ""
 
 
 def indexed_invocations(commands: list[list[str]], cwd: str, envs: list[dict[str, str]] | None = None) -> list[Git]:
     """Each `git` among `commands` (unwrapped simple commands), run in the hook's `cwd` and its own `git -C DIR`, nothing else;
     `envs[i]` is the git variables command `i` runs under (shell_hook.git_env). Its directory is unknown (`Git.unknown`) when
-    the command moves (`moves`), or when it names its repository by DIRECTORY_OPTIONS or DIRECTORY_VARIABLES."""
-    moved, out = moves(commands), []
+    the command moves (`moves`), unless its own `-C` is absolute (it starts with `/` and holds nothing the shell has yet to
+    expand: the directory git then runs in whatever the shell's), or when it names its repository by DIRECTORY_OPTIONS or
+    DIRECTORY_VARIABLES."""
+    moved, out = {absolute: moves(commands, absolute) for absolute in (False, True)}, []
     for i, words in enumerate(commands):
         if not words or os.path.basename(words[0]) != "git":
             continue
         env = envs[i] if envs is not None and i < len(envs) else {}
-        d, args, options = cwd, words[1:], []
-        unknown = moved or next((f"the command sets `{n}`" for n in sorted(DIRECTORY_VARIABLES & set(env))), "")
+        d, args, options, absolute, named = cwd, words[1:], [], False, ""
         while args and args[0].startswith("-"):
             a, valued = args[0], args[0] in GIT_VALUED and len(args) > 1
             name = a.partition("=")[0]
             if a == "-C" and valued:
+                absolute = (absolute or args[1].startswith("/")) and not any(c in args[1] for c in UNEXPANDED)
                 d = os.path.normpath(os.path.join(d, os.path.expanduser(args[1])))
             elif name in GIT_CONFIGURING:
                 options += args[:1 + valued]
             elif name in DIRECTORY_OPTIONS:
-                unknown = unknown or f"it names its repository with `{name}`"
+                named = named or f"it names its repository with `{name}`"
             args = args[1 + valued:]
         if args:
-            out.append(Git(i, d, args, options, unknown))
+            unknown = moved[absolute] or next((f"the command sets `{n}`" for n in sorted(DIRECTORY_VARIABLES & set(env))), "")
+            out.append(Git(i, d, args, options, unknown or named))
     return out
 
 
@@ -336,15 +344,16 @@ def judged_note(why: str) -> str:
     """What a refusal of a push judged for `why` (`judged`) adds: how to name the repository so the guard can tell it."""
     return (f" The guard judged it as a push to verity or infra because {why}. It places a push only by the directory the "
             f"command starts in, git's own `-C` and a URL or path given as the repository, and a push to another repository "
-            f"passes once it can: name the checkout and the remote on git itself, with no `cd` in the command, `git -C "
-            f"<checkout> push <remote> <refspec>`.") if why else ""
+            f"passes once it can: name the checkout and the remote on git itself, the checkout by its absolute path or with no "
+            f"`cd` in the command, `git -C <checkout> push <remote> <refspec>`.") if why else ""
 
 
 def unplaced_reason(why: str) -> str:
     """The refusal of a push whose current branch the guard can't tell, for `why` (Git.unknown), and the push it accepts."""
     return (f"the guard can't tell which checkout this push runs in, so which branch it pushes, because {why}. It places a push "
-            f"only by the directory the command starts in and git's own `-C`: name the checkout on git itself, with no `cd` in "
-            f"the command, `git -C <checkout> push -u origin HEAD`, or name the branch, `git push -u origin <your-branch>`.")
+            f"only by the directory the command starts in and git's own `-C`: name the checkout on git itself, by its absolute "
+            f"path or with no `cd` in the command, `git -C <checkout> push -u origin HEAD`, or name the branch, `git push -u "
+            f"origin <your-branch>`.")
 
 #: `git config` forms that list keys: an installation token sits in http.*.extraheader's value and in url.*.insteadof's name,
 #: so even `--name-only` prints it
@@ -442,8 +451,8 @@ def reason(commands: list[list[str]], agent: str, cwd: str, next_ok: list[str] |
         sub = args[0]
         if unknown and sub in ("checkout", "switch") and switches_branch(d, sub, args[1:], known=False):
             return (f"the guard can't tell whose checkout this `git {sub}` switches, because {unknown}. Name the checkout on git "
-                    f"itself, with no `cd` in the command: `git -C <checkout> {sub} ...` (files: `git -C <checkout> checkout -- "
-                    f"PATH`). One agent per checkout (AGENTS.md).")
+                    f"itself, by its absolute path or with no `cd` in the command: `git -C <checkout> {sub} ...` (files: `git -C "
+                    f"<checkout> checkout -- PATH`). One agent per checkout (AGENTS.md).")
         gitdir = None if unknown else git(d, "rev-parse", "--absolute-git-dir")
         if gitdir is None and not unknown:
             continue

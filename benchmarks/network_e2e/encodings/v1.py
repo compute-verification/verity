@@ -3,7 +3,8 @@ traces.
 
 The codec is `verity_vllm.pipeline.advice_code.codec` (`encode`, `decode`, `bits_by_window`; its docstring states what
 is certified, replayed, derived and sent, the windows and the string), re-exported here for the modules and tests that
-load this one by path. This module adds a trace's certified record (`record_of`) and its I1 v0 advice (`advice_of`),
+load this one by path. This module adds a trace's certified record (`record_of`), its I1 v0 advice (`advice_of`) and,
+for a trace served with a draft, which no I1 v0 says, its schedule (`schedule_of`, `schedule_code`'s),
 a trace's residual windows (`windows_of`) and the books held out from it (`held_out_books`), and the table
 (`measure`, `render`):
 
@@ -28,9 +29,11 @@ from verity.protocols.certifier.verifier import advice as I1
 from verity_vllm.pipeline.advice_code.codec import (
     advice_of_replay as advice_of_replay, AdviceCodeError, arrival_order as arrival_order, bits_by_window, book_of, CAPS as CAPS,
     charged as charged, check_record as check_record, Decision as Decision, decode as decode,
-    decode_bits as decode_bits, decode_full, encode, length_tails, Record, Registered, release_order as release_order,
+    decode_bits as decode_bits, decode_full, encode, kept_terms as kept_terms, length_tails,
+    length_widths as length_widths, Record, Registered, release_order as release_order,
     replay_record as replay_record, Request, residual, streams, string_of, TICK_CAPS as TICK_CAPS, windows,
 )
+from verity_vllm.pipeline.advice_code.schedule_code import Schedule
 
 HERE = Path(__file__).resolve().parent
 T = TypeVar("T")
@@ -126,6 +129,17 @@ def advice_of(trace: Any, record: Record) -> I1.Advice:
                 kept[j] += 1
         steps.append(I1.StepAdvice(tuple(out)))
     return I1.Advice(requests, tuple(steps), tuple(release))
+
+
+def schedule_of(trace: Any, record: Record) -> Schedule:
+    """The trace as v1's schedule: the order its engine took the requests in and each step's rows, by the record's
+    ordinals, with the drafts each request's emitting rows kept, one 0 an output for a trace served without a draft.
+    The trace's requests are the record's, by id."""
+    ordinal = {q.id: k for k, q in enumerate(record.requests)}
+    arrival = [ordinal[i] for i in trace.ids]
+    kept = {k: tuple(io.kept) if io.kept is not None else (0,) * io.output_len for k, io in zip(arrival, trace.requests)}
+    return Schedule(tuple(arrival), tuple(tuple((arrival[i], start, n) for i, start, n in st.rows) for st in trace.steps),
+                    tuple(kept[k] for k in range(len(arrival))))
 
 
 # --- the corpus table --------------------------------------------------------------------------------------------------
