@@ -388,8 +388,8 @@ def test_the_commits_session_refuses_engines_it_does_not_serve_and_sets_the_rest
 
 def test_the_phases_summary_is_each_phases_quantiles_over_the_closed_intervals_in_ms():
     """`Phases.summary` over the closed intervals: a phase an interval didn't run counts 0 there, the quantile at q is
-    the sorted list's entry at ⌊q·n⌋ (its last at 1.0), the mean is over every interval, all in ms to 3 places, and the
-    phases come sorted by name."""
+    the sorted list's entry at ⌊q·n⌋ (its last at 1.0, which p99 is not past 100 intervals), the mean is over every
+    interval, all in ms to 3 places, and the phases come sorted by name."""
     phases = remote.Phases()
     assert phases.summary() == {}
     phases.closed = [{"encode": 2_000_000, "wall": 10_000_000, "other": 8_000_000}, {"wall": 4_000_000, "other": 4_000_000},
@@ -401,6 +401,8 @@ def test_the_phases_summary_is_each_phases_quantiles_over_the_closed_intervals_i
                                 "wall": {"p50": 6.0, "p99": 10.0, "max": 10.0, "mean": 6.667}}
     phases.closed = [{"wall": 1_234_567}]
     assert phases.summary() == {"wall": {"p50": 1.235, "p99": 1.235, "max": 1.235, "mean": 1.235}}
+    phases.closed = [{"wall": ms * 1_000_000} for ms in range(101, 0, -1)]
+    assert phases.summary() == {"wall": {"p50": 51.0, "p99": 100.0, "max": 101.0, "mean": 51.0}}
 
 
 def test_a_prover_that_fails_closes_its_connection_even_when_the_shutdown_fails(monkeypatch):
@@ -499,15 +501,15 @@ def built(core: Any = True, asynchronous: bool = False, prefix: bool = False, tp
 
 def test_the_commits_session_checks_the_built_engine_and_registers_its_filler():
     """`CommitSession.check` after the build: it refuses, with every reason in order, an engine whose core is in
-    another process, that schedules asynchronously, caches prefixes or runs tensor parallel, and a store that
-    registered a KV pool; else it registers ``filler_gib`` GiB of filler on the runner's device (none at 0), logs the
-    binder's stats and returns them."""
+    another process, that schedules asynchronously, caches prefixes or has a tensor parallel size other than 1, and a
+    store that registered a KV pool; else it registers ``filler_gib`` GiB of filler on the runner's device, in whole
+    bytes rounded down (none at 0), logs the binder's stats and returns them."""
     said: list[str] = []
-    cs = remote.CommitSession("127.0.0.1:7781", filler_gib=0.5, log=said.append)
+    cs = remote.CommitSession("127.0.0.1:7781", filler_gib=0.3, log=said.append)
     cs.binder = Binding()
     runner = type("Runner", (), {"device": "cuda:0"})()
     assert cs.check(built(), runner) == {"weights": 3}
-    assert cs.binder.calls == [("register_filler", 1 << 29, "cuda:0"), "stats"]
+    assert cs.binder.calls == [("register_filler", 322_122_547, "cuda:0"), "stats"]
     assert said == ["[delta] remote session: the store binder on the engine, {'weights': 3}"]
 
     cs = remote.CommitSession("127.0.0.1:7781", log=said.append)
@@ -517,7 +519,7 @@ def test_the_commits_session_checks_the_built_engine_and_registers_its_filler():
     head = "--remote-verifier: the engine is not one the session serves: "
     whys = [("the engine core in another process", built(core=None)), ("the engine core in another process", built(client=False)),
             ("async scheduling resolved on", built(asynchronous=True)), ("prefix caching on", built(prefix=True)),
-            ("tensor parallel size 2", built(tp=2)),
+            ("tensor parallel size 2", built(tp=2)), ("tensor parallel size 0", built(tp=0)),
             ("the engine core in another process; async scheduling resolved on; prefix caching on; tensor parallel size 4",
              built(core=None, asynchronous=True, prefix=True, tp=4))]
     for why, llm in whys:
