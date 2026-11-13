@@ -7,7 +7,8 @@ and checks a period with the Python the period's pieces already have: one-stage'
 reads them (`pouw.core_check.answer_of` and `integrity`), the network certifiers' certificates and clock certificates,
 each under the listed LMS key it names and in that key's session (`certifier.certificate`, `_listed`; a signer the
 parameters don't list is refused by name, `UNLISTED`), Σ_sync (`certifier.schedule`), one-stage's
-`registration.digest` (a registration record is ASCII-only, where its canonical JSON is Lean's), and in the rows form
+`registration.digest` (a
+registration record is ASCII-only, where its canonical JSON is Lean's), and in the rows form
 the schedule (`warden.WardenParams`) and the verifier's read of each row registration
 (`warden_rows.check_registration`), and the scan's terms read off its Program's descriptor (`_scan`), as each compute
 audit's units and their committed bits are read off its own (`_audit`). Its verdict,
