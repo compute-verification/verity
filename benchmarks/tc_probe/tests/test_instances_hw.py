@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 ROOT = Path(__file__).resolve().parents[3]
 TC_PROBE = ROOT / "benchmarks" / "tc_probe"
-FIXTURE = ROOT / "fixtures" / "bench-instances" / "v1"
+FIXTURE = ROOT / "benchmarks" / "numerical" / "bench-instances" / "v1"
 
 
 def _load(name: str, path: Path) -> ModuleType:
@@ -90,7 +90,7 @@ def test_store_declaration_registered_and_parses_flags() -> None:
     assert tool.name == "instances_hw" and tool.spec == "benchmarks.tc_probe.tool:INSTANCES_HW"
     assert "tc-evidence/v1" in tool.produces and "hw.family" in tool.key_conditions
     argv = ["python", "benchmarks/tc_probe/instances_hw.py", "--instances", "bench-instances/v1/vu-k1536", "--out", "/run", "--sass-check",
-            "--range", "0:64", "--manifest", "fixtures/bench-instances/v1/manifest.json", "--procs", "8"]
+            "--range", "0:64", "--manifest", "benchmarks/numerical/bench-instances/v1/manifest.json", "--procs", "8"]
     _, key = tool.resolve_params(argv, ROOT)
     assert key["instances"] == "bench-instances/v1/vu-k1536" and key["sass_check"] is True and key["range"] == "0:64" and key["repeat"] == 1
     assert "out" not in key and "procs" not in key and "instruction" not in key
