@@ -1,4 +1,4 @@
-"""GF(2^128) = GF(2)[x]/(x^128 + x^7 + x^2 + x + 1), C-Flock's F, as integers and over `forms`: the field every fingerprint
+"""GF(2^128) = GF(2)[x]/(x^128 + x^7 + x^2 + x + 1), Flock's F, as integers and over `forms`: the field every fingerprint
 under a live coin works in, here so that each unit that may import `verity.circuits` (the verifiers' circuits in
 `verity.core` among them) reaches one product.
 

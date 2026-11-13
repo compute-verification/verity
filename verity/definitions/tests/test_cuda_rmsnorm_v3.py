@@ -2,7 +2,7 @@
 shuffle level), computes `RMSNormFusedCudaVector8_v1`'s f32 sum of squares and returns its two outputs, word for word: at the served statics (hidden widths
 6144 and 7168 at both launch blocks) and at statics that reach every branch of the reduction (a block wider than the
 row's vectors, threads holding one more vector than others, a last partial warp, one warp, a block of three), on random
-words of every kind `twins.rand_bf16` draws and on rows whose squares overflow, underflow or cancel. Its primitive gates
+words of every kind `twins.rand_bf16` samples and on rows whose squares overflow, underflow or cancel. Its primitive gates
 are v1's, and its body's nodes don't grow with N."""
 from __future__ import annotations
 
