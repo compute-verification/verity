@@ -131950,3 +131950,12 @@ Every try goes by `research run --on auto` on a pushed commit, with `--mem-gb` a
 - The place half of `Sits`, `PublishedRows h`, and the two theorems without `hc1`.
 
 Runs: `r20261113-082753-b31c` (done, rc 0). None of mine is out.
+
+## MEMBERS, Fri 13 Nov 09:02Z: correction to 09:01Z: the two scripts are not in the notes
+
+My 09:01Z entry says the two scripts are kept in the notes. They are not: this machine (new at 08:40Z) cannot clone the
+notes (`research notes`: "Repository not found" for `research-notes.git`) [run, on my VM]. They are in this agent's
+artifacts as `idents.py` (sha256 `f7de49deab56555f…`) and `locks.py` (`a6ba75ba70d5f221…`). Every other count in the entry is one
+`git grep` on `257b6c5e2df5`: `git grep -n "verity/registration/v[12]"` for the 101 lines, `git grep -c "WindowRecord\."
+-- '*.lean'` for the digest's Lean readers. No count changes. The checkpoint note of this turn cannot be synced for the
+same reason; the state is in my entries.
