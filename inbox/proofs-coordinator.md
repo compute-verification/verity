@@ -120402,3 +120402,54 @@ Size: 10 files, 1948 lines. Theorems not yet compiled: 15 in `CopyOut` and 9 in 
 Not established: neither `CopyOut` nor `PortsOnceOf` has compiled. `Wiring h` and `RowFact` stay inputs. The base's 03:51Z move (`e033bfc14be4`) is not merged.
 
 To post: nothing.
+
+## SESSIONCOINS, Fri 13 Nov 04:32Z: `SessionFits.lean` compiled in `r20261113-032657-2580` (lean exit 0 in 517 s; "axiom probe: none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"); the five-file run is out as `r20261113-042931-a226` at my head `68faced794`; by reading, `SessionHeld.lean` still has all it reads at TWOLEG's tip `1f211470c7`
+
+### In plain words
+
+The file that bounds each session's round to one coin's elements builds, and its proofs use only the three allowed axioms. The run that builds my other five files, `SessionDev.lean` among them (the file ASSEMBLY waits on), is in line on vy-nebius-2. TWOLEG's new last step of the form does not touch the steps my proofs read. I found that by reading, not by building.
+
+### 1. `r20261113-032657-2580` [run]
+
+`SessionFits.lean --siblings` at `2607ff0783`, done, rc 0. From its stdout:
+- `lean-try: security/Proofs/Properties/Verity/SampledTwo/SessionFits.lean: lean exit 0 in 517 s`
+- `block_le`, `coinTreesOf_fits`, `readFits_of`, `readFits` and `sessionsFit_of` each `depends on axioms: [propext, Classical.choice, Quot.sound]`
+- siblings: "no built module of its package that doesn't import Proofs.Properties.Verity.SampledTwo.SessionFits declares a name it does"
+- `axiom probe: none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`
+
+`SessionFits.lean` is the same at `68faced794`, so this verdict holds at my head [read: no commit since `2607ff0783` touches it].
+
+### 2. The five-file run [run]
+
+`r20261113-042931-a226`, vy-nebius-2, pool proofs, `--cwd clone`, source `tree_sha=68faced794cc79be18eadcf9b9fdb860963fb4c1`, launched 04:29Z. It is one `sh -c` loop of `lean_changed.py --try`, in this order: `SessionDev --siblings`, `SessionOpened --siblings`, `SessionRecord --siblings`, `SessionCoins`, `SessionHeld`. It prints `TRY <file> exit <rc>` after each try and `ALL rc=<rc>` at the end. At 04:31Z it was `submitted`, not started. Expected end, which I derived from `2580` (20 minutes in line for a slot, 517 s of Lean) and the coin map's four new modules that `SessionDev` builds first: about 05:45Z. The two probes owed for 07:00Z (`SessionCoins.lean`, `SessionHeld.lean`) are its last two tries.
+
+When `SessionDev.lean` passes there, I put `68faced794` in an entry's title for ASSEMBLY.
+
+### 3. `SessionHeld.lean` at TWOLEG's tip [read, in a scratch worktree that I deleted afterwards; my branch did not move]
+
+TWOLEG's tip at 04:30Z is `1f211470c7` (later than the `9b300c2d3ea2` you named). I merged it onto `68faced794` in a scratch worktree. It had one conflict, in `VStarRecursive/SampledTwo.lean`, which comes from my two reverts. I took TWOLEG's side there. What my files read:
+- `inputAt_ok`: the same statement at both heads.
+- `accepted_steps`: only its last conjunct changes (`OneStage.checkAt p.audit.base …` becomes `∃ law, secondLawOf p run = .ok law ∧ secondCheck … = .accept pub prof`). Both my uses (`SessionHeld.lean:274`, `:313`) bind `⟨-, c₂, ξ₂, r, i, run, hin, -⟩`, so the last `-` drops the changed part whichever form it has.
+- `Params`, `Evidence` and `inputAt` are the same. `paramsOfJson` and `evidenceOf` changed, but my files take them only as equations (`hp`, `he`) and unfold neither.
+- `Reading.lean` (`AcceptsOn`, `FormAccepts`) and `Spot/OneStageZk.lean` (`membersRun`) are the same.
+
+So `SessionHeld.lean` should build at TWOLEG's tip unchanged. That is a reading; it has not been built there.
+
+### Standing
+
+- Every theorem of mine that takes `FormAccepts C o` is true and empty until a run accepts TWOLEG's honest play: `sessionsFit_of`, `located_own_accepted`, `located_opened`, `coin_record`, `coinsAgree_run`, `sessionsAgree_run`, `stmtReadsNone`.
+- TWOLEG's two reverts (`2b92d76759`, `016c9128dc`) stay on my branch [read: `accepted_fits` and `stagesFit` have compiled nowhere, per your 04:28Z word, relayed].
+- This turn started on a fresh machine with no `~/wt/.pen`, and its reflog held only the clone [run]. One loop.
+
+### STOP RULE
+
+Nothing. No lock edits; no file of another worker's touched.
+
+### NEEDS
+
+Nothing.
+
+### Not established
+
+- `SessionDev.lean`, `SessionOpened.lean` and `SessionRecord.lean` in any run; `a226` decides them.
+- `SessionHeld.lean` built at TWOLEG's tip.
