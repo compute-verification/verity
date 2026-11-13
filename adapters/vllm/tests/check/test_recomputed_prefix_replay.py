@@ -82,13 +82,19 @@ def test_a_read_below_c_is_the_replay_s_and_one_past_it_is_serving_s_c_rows_earl
         RP.RecomputedPrefix(CommittedStore(bmap, committed), pi, "r1", 2, world.prompts["r1"], _weights(world))
 
 
-def test_a_replay_needs_the_weights_and_a_plan_runs_none_whatever_it_is_given(world):
+def test_a_replay_given_no_weights_fails_at_the_first_it_reads_and_a_plan_runs_none_whatever_it_is_given(world):
     pi = IX.ProgramIndex(world.inst)
     bmap, committed = _warm(world)
     store = CommittedStore(bmap, committed)
-    with pytest.raises(TypeError, match="none are given"):
-        RP.RecomputedPrefix(store, pi, "r1", C, world.prompts["r1"], None)
     op, w = "model.layers.0.mlp.down_proj", RP.positions(pi)[("model.layers.0.mlp.down_proj", "out")]
+    unweighted = RP.RecomputedPrefix(store, pi, "r1", C, world.prompts["r1"], None)
+    assert unweighted.replay is not None and unweighted.replay.weights is None
+    got, _ = unweighted.words("r1", 0, op, "out", w, 2 * w)                       # past C: serving's, no weight read
+    assert np.array_equal(got, world.blocks[(0, "r1", op, "out")][w:])
+    ids, _ = unweighted.words("r1", 0, pi.embed_op_path(), "in", 0, 1)           # below C, of the prompt: no weight read either
+    assert list(ids) == world.prompts["r1"][:C]
+    with pytest.raises(LookupError, match=r"of request r1: .*'NoneType' object is not callable"):
+        unweighted.words("r1", 0, op, "out", 0, w)
     for weights in (None, _weights(world)):
         plan = RP.RecomputedPrefix(store, pi, "r1", C, world.prompts["r1"], weights, plan=True)
         got, _ = plan.words("r1", 0, op, "out", 0, w)

@@ -116,11 +116,12 @@ class Replay:
         fam = d["family"]
         t0 = time.perf_counter()
         self.busy.add(i)
+        got: Any                                                                 # outputs where `why` is None, whatever the evaluator gave
         try:
             got, why = EV.evaluated(self.pi, self, self.weights, r, self.rid, self.arrive, [])
         finally:
             self.busy.discard(i)
-        if got is None:
+        if why is not None:
             raise LookupError(f"row {i} ({fam}, {d['op_path']}, step {d['step']}) of request {self.rid}: {why}")
         if len(got) > 1:
             got = EV.by_member(got, self.pi.member_of_port(i) or EV.plane_ports(d))

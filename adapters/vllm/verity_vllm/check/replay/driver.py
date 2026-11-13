@@ -568,9 +568,9 @@ def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: di
         indices[rid] = pi
     for rid, pc in (cached_prefixes or {}).items():
         pi = indices.get(rid)
-        kv = pi.kv_prefix if pi is not None else None
-        if pi is None or kv is None or not int(pc.get("cached") or 0) or rid in pi.recomputed:
+        if pi is None or not int(pc.get("cached") or 0) or rid in pi.recomputed:
             continue                                                              # no hit, or one its Program recomputes (`RP.adopt`, above)
+        kv: Any = pi.kv_prefix                                                    # a hit the Program takes: its cached prefix's layout
         if int(kv["C"]) != int(pc["cached"]):
             raise ValueError(f"{rid} is served {pc['cached']} cached prompt rows but its Program of record takes a cached prefix of "
                              f"{kv['C']}")
