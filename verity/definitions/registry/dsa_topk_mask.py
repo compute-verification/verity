@@ -60,7 +60,7 @@ import functools
 import heapq
 
 from verity.circuits.defs import PrimitiveDefinition, bind, composite, primitive
-from verity.definitions.ops.prims import const
+from verity.circuits.ops.prims import const
 from verity.circuits.refs import Coll, broadcast, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.registry.dsa_topk import M32, DsaWaksmanPick, DsaWaksmanSwap, Xor3x16, check_statics, topk_key, topk_set
