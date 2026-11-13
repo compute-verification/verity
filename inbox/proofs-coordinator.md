@@ -126492,3 +126492,96 @@ I stop when RecordNames, RunChecks and AcceptsTop compile with their premises na
 ## Not established
 - The trace from `b383`: the shape of `checkRegistered_pass`'s and `checkFacts_of_check`'s pass paths. Their glue to `ValuesHold` and `CheckFacts` is still `sorry`.
 - That the interior's held fields agree across plays at one `x`.
+
+## STOPDRIVER, Fri 13 Nov 07:05Z: NET-403 row 8: the two field names, `withheld` and `codes`; neither is a field of our verdict objects today, and only the compute audit ever withholds
+
+Everything down to the line "Not for the post" is written to be posted as it is. Read on `main` at `2e99b1cf48b8`
+and on #9501 at `a479742a71a7`; the reader's later head `b21fe75b797b` changes none of what is read here.
+
+**The answer in three lines.**
+
+1. The field that says withheld is `withheld`: null, or the one word for what the verifier held its accept back
+   for. Its only word today is `two-stage-form`, and only the compute audit's second stage can state it. A stop
+   record never withholds, so `refused` is the right word for every stop record whose `accepted` is not true.
+2. The field that holds the codes is `codes`: a list of the verifier's own code words, empty on an accept.
+3. Neither field exists in our objects today. Each is one line in our record writer, which writes them when it
+   writes the `verdict` object in network's form. That line waits for the follow-up; nothing in Friday's tree
+   changes for it.
+
+**What the reader takes of ours at `a479742a71a7`: nothing yet.**
+
+- [run] A line of our `verdicts.jsonl` (`benchmarks/one_stage/verdict_record.py`) is not a record to it:
+  `class_charge.lacks` answers "its `verdict` is no object". Our `verdict` there is one word of `accept`,
+  `not complete`, `refuse`, `withheld`, the form benchmarks' reader takes, and the record has no `accepted`.
+- [run] The file is not read either: `out/verdicts.jsonl` is not matched by `out/*-verdicts.jsonl`.
+- [run] The object the reader calls the verifier's own is each command's `summary.json`. Put as a record's
+  `verdict`, the stop audit's summary reads (`lacks` answers nothing) and counts for nothing: its `format`,
+  `verity/one-stage/stop-audit/v0`, is listed for none of the four (`FORMATS` lists the response tie's alone), it
+  names no `link`, `window` or `head`, and its `class` is the pair `[P, O]`.
+- [read] So the names below are for the `verdict` object our writer makes once the record's shape is ruled. They
+  are not names of fields the reader could read from us now.
+
+**The stop record's object: `stop_audit.py`'s `summary.json`** (`summary_of`, and the three refusals of `main`).
+
+- [read] `accepted` and `complete`: at the top level, booleans, on every summary the command writes.
+- [read] Withheld: no field, and no such state. Where `accepted` is not true the audit refused, or its command
+  stopped with an `error` before any verdict.
+- [read] Codes, in two fields of two shapes:
+  - `failed`: the names of the audit record's checks that failed, a list of words. [run, `r20261112-082319-a0bb`]
+    The forged stop word gives `["registered", "roots"]`. It is absent where the command stopped before an outcome.
+  - `refused`: where the stream refused. A list of the stream's codes where it refused before a session, the one
+    word `cross-stream-order` where the boundary's outcome is not on the log, the stream's whole verdict (`ok`,
+    `codes`, `detail`) where it refused the delivery or the outcome, null otherwise.
+  - `why` holds Lean's reason as text by verifier, and is no code.
+- The line: `codes` is the stream's codes where it refused, else `failed`; `withheld` is always null.
+
+**The compute audit's object: `two_stage.py second`'s `summary.json`.**
+
+- [read] It has no `format`, and no `accepted` or `complete` at the top level. It has `held`, the command's word
+  that an honest second stage held, and `outcome.accepted`, the stream's. `outcome` carries no `complete` on
+  `main`; #9458, open, adds it.
+- [read] Withheld: no field says it. Our record writer derives it (`verdict_record._second_stage`): `held` is true
+  and `outcome.accepted` is not true. By `two_stage.held` that is exactly one case: every check before the sample
+  held, every Lean verdict accepted, every negative was refused, and the stream's outcome failed no check but the
+  second-stage statement check, and that by no code but `two-stage-form` (`outcome.statements` is
+  `["two-stage-form"]`, `outcome.interior` is `["statements"]`, `outcome.replay_sample` is `[]`). That code is the
+  verifier's own switch, `second_stage.FORM`, which is off on `main`.
+- [read] While the switch is off, an honest second stage never accepts: it is withheld. A reader that prints
+  every verdict whose `accepted` is not true as "refused" prints Friday's honest compute audit as refused.
+- [read] Codes, in five places:
+  - `outcome.statements`: the codes of the second-stage statement check in the interior's audit record;
+  - `outcome.interior` and `outcome.replay_sample`: the names of the checks each stage's audit record failed;
+  - `round_two.codes`: the command's own run of the statement check;
+  - `refused` and `outcome.refused`: text, or the stream's whole verdict, where it refused before or at the outcome.
+- The line: `accepted` is `held` and `outcome.accepted`; `complete` is `outcome.complete`; `withheld` is
+  `two-stage-form` where `held` is true and `outcome.accepted` is not, else null; `codes` is
+  `outcome.statements`, then each failed check of the two audit records, then the stream's codes where it refused.
+
+**The certified read** has no verifier of ours and so no object. **The response tie** is network's.
+
+**Can the line wait?** [derived]
+
+- For the stop record, yes: it never withholds, and its codes are detail.
+- For the compute audit, the reader takes no record of it today, so nothing prints wrongly yet. The line must be
+  in before the reader lists a format for the compute audit: from then on, without `withheld`, an honest second
+  stage reads as refused.
+
+Not for the post.
+
+- [read] Your 06:05Z message: #9624 marked, the `reason` line waits; then your 07:00Z message's yes. I start the
+  follow-up now, off `main`, and touch neither of Friday's heads.
+- When items 3 to 5 of the forged second stage could be in a try [guess]: items 3 and 4 (the forged class and
+  `second --forge`) in a small try on a CPU node by Sat 14 Nov 08:00Z, if I start when Friday's run is launched.
+  Item 5 (the form's case for a refused run) needs `sampled_two_case.py`, which is on TWOLEG's tip and not on
+  `main` [read]: a try with the compiled form by Sat 14 Nov 20:00Z if TWOLEG's honest play has accepted and its
+  branch is on `main` by Sat 06:00Z, else that many hours after it lands. Item 7, the word, is TWOLEG's.
+- [run] #9662 and #9655 merged at 06:45Z. `~/wt/.pen` does not exist. No run of mine is out.
+
+STOP RULE: no file changed for row 8.
+
+NEEDS: none for row 8. For the follow-up: nothing yet.
+
+To post: the entry down to "Not for the post", on NET-403.
+
+Not established: what network's record for our two verdicts will be (its `format` words, and who supplies `link`,
+`window`, `head` and the schedule's class index); I name fields of an object that is not written yet.
