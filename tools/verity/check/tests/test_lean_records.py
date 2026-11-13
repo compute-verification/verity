@@ -29,8 +29,8 @@ def no_store(monkeypatch):
     monkeypatch.setattr(LC, "stored", lambda *a, **k: None)
 
 #: `check.py` as far as `--records` sees it: its arguments, working directory, threads, Lean slot and the lock files it holds
-#: open logged; a report on each package it is named under `--out` as `--no-replay` leaves them (no replay time);
-#: `--update` writing each one's record
+#: open logged; a report on each package it is named under `--out` as `--no-replay` leaves them (no replay time), with
+#: what `AUDIT_SAID` adds; `--update` writing each one's record
 FAKE_AUDIT = """\
 import json, os, sys
 held = []
@@ -47,7 +47,8 @@ out, pkgs = sys.argv[sys.argv.index("--out") + 1], sys.argv[sys.argv.index("--ou
 reps = []
 for pkg in pkgs:
     bad = int(os.environ.get("AUDIT_RC", "0")) or int(os.path.basename(pkg) == os.environ.get("AUDIT_FAILS"))
-    reps.append({"package": pkg, "seconds": {"build": 1.0, "audit": 2.0}, "failures": ["audit: no"] if bad else []})
+    reps.append({"package": pkg, "seconds": {"build": 1.0, "audit": 2.0}, "failures": ["audit: no"] if bad else [],
+                 **json.loads(os.environ.get("AUDIT_SAID", "{}"))})
     os.makedirs(os.path.join(out, "audit-" + os.path.basename(pkg)), exist_ok=True)
     with open(os.path.join(out, "audit-" + os.path.basename(pkg), "report.json"), "w") as f:
         json.dump(reps[-1], f)
@@ -86,7 +87,7 @@ def repo(tmp_path, monkeypatch) -> Path:
     monkeypatch.setenv("AUDIT_LOG", str(tmp_path / "audit.log"))
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache"))
     for k in (LC.LEAN_SLOT.HELD, "LEAN_SLOT_POOL", "RESEARCH_LANE", "RESEARCH_RUN_DIR", "RESEARCH_RUN_ID", "CHECK_SLOT",
-              "AUDIT_RC", "AUDIT_FAILS"):
+              "AUDIT_RC", "AUDIT_FAILS", "AUDIT_SAID"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", tmp_path / "no-lean-slots")
     monkeypatch.setattr(LC, "reused", lambda *a, **k: {})
@@ -254,6 +255,29 @@ def test_in_a_run_the_bundles_research_run_sent_go_into_the_artifact_cache_befor
         else:
             assert len(taken) == 1 and "taken from other nodes' bundles" not in out
     assert LC.sent_urls(None) == {} and LC.sent_urls(str(tmp_path / "run-True")) == {}
+
+
+def test_a_build_whose_sampled_recompile_differs_is_refused_by_the_records_step_s_put_reported_or_killed(repo, tmp_path,
+                                                                                                         monkeypatch):
+    """A build whose sampled recompile differs stores nothing, in this node's cache either: the records step hands `put`
+    check.py's word on it, its report (`put_built`) or, from a run killed mid-way, what check.py wrote beside the build
+    (`put_left`), and `put` refuses either for the sample's failure."""
+    real, handed, logged = LC.LA.LakeArtifacts.put, [], []
+    monkeypatch.setattr(LC.LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: handed.append(reports) or 0)
+    said = {"sandbox": True, "failures": ["sampled: Aa: the build's olean differs from its recompile"]}
+    tree = tmp_path / "cache" / "lean-records" / "tree"
+    monkeypatch.setenv("AUDIT_RC", "1")
+    monkeypatch.setenv("AUDIT_SAID", json.dumps(said))
+    assert LC.audit_records("a", tmp_path / "deps", tree, out=tmp_path / "reports") == 1
+    left = tmp_path / "left"
+    (left / "audit-a").mkdir(parents=True)
+    (left / "audit-a" / LC.LA.BUILDING).write_text(json.dumps({"package": str(tree / "a"), **said}))
+    LC.put_left(tree, {"since": 0, "package": "a", "phase": "check", "out": str(left)}, LC.LA.LakeArtifacts(tmp_path / "s"),
+                log=logged.append)
+    assert [{p: r["failures"] for p, r in reps.items()} for reps in handed] == [{tree / "a": said["failures"]}] * 2
+    for reps in handed:
+        assert real(LC.LA.LakeArtifacts(tmp_path / "s"), reps, log=logged.append) == 0
+    assert sum("(`sampled`)" in ln for ln in logged) == 2
 
 
 def test_the_copy_is_taken_from_hard_links_after_the_dependencies_lock_is_released(repo, tmp_path, monkeypatch):

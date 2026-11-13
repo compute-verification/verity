@@ -865,6 +865,28 @@ def test_what_a_failed_or_a_killed_audit_compiled_goes_into_the_artifact_cache_o
     assert put_with[1:] == [{"a": {"sandbox": True}, "b": {"sandbox": False}}], "killed: no report, so what each build began with"
 
 
+def test_a_build_whose_sampled_recompile_differs_stores_nothing_though_check_py_is_killed(tmp_path, monkeypatch):
+    """The one build a sandboxed audit keeps out of this node's cache: one whose sampled recompile differs. check.py writes
+    that failure beside what the build began with, so a check.py killed before its report hands it to `_audit`'s `finally`,
+    whose `put` refuses it."""
+    root = _tree(tmp_path, monkeypatch)
+    real, handed = LA.LakeArtifacts.put, []
+    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: handed.append(
+        {p.name: {k: v for k, v in rep.items() if k != "package"} for p, rep in reports.items()}) or 0)
+    sampled = {"sandbox": True, "failures": ["sampled: P: the build's olean differs from its recompile"]}
+    (root / "tools/verity/lean/check.py").write_text(FAKE_AUDIT.replace(
+        'reps, failed = [], []', 'reps, failed = [], []\nfor n, pkg in enumerate(named):\n'
+        '    (out / f"audit-{n}").mkdir()\n'
+        f'    (out / f"audit-{{n}}" / "{LA.BUILDING}").write_text(json.dumps({{"package": str(pkg), **{sampled!r}}}))\n'
+        'sys.exit(137)'))
+    assert LA.run(tmp_path / "out", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",
+                  log=lambda s: None) == 1
+    assert handed == [{"a": sampled, "b": sampled}]
+    pkg = _package(tmp_path / "built")
+    assert real(LA.LakeArtifacts(tmp_path / "store"), {pkg: sampled}, log=lambda s: None) == 0
+    assert real(LA.LakeArtifacts(tmp_path / "store"), {pkg: SANDBOXED}, log=lambda s: None) == 3, "without it, all three go in"
+
+
 def test_what_check_py_said_of_a_build_is_its_report_or_what_it_wrote_as_the_build_began(tmp_path):
     out, a, b = tmp_path / "out", tmp_path / "pkg" / "a", tmp_path / "pkg" / "b"
     assert LA.built(out) == {}

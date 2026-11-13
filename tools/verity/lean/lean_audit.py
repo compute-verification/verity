@@ -1606,9 +1606,10 @@ BUILDING = "building.json"
 def built(out: Path) -> dict[Path, dict]:
     """{package: what check.py said of its build} for each package the check.py with its reports under ``out`` built, or
     began to build: its report in `audit.json`, which says `sandbox` of a package it built, else what it wrote as the build
-    began (`BUILDING`: the package, and whether its builds run in the sandbox), which is all a check.py that was killed
-    leaves, and which is the later of the two when an earlier check.py left its report there. `LakeArtifacts.put` takes
-    either. Both are check.py's own words: ``out`` is outside every directory a build in the sandbox can write."""
+    began (`BUILDING`: the package, and whether its builds run in the sandbox, with the failure once its sampled recompile
+    differs), which is all a check.py that was killed leaves, and which is the later of the two when an earlier check.py
+    left its report there. `LakeArtifacts.put` takes either, and refuses both for a sampled failure. Both are check.py's
+    own words: ``out`` is outside every directory a build in the sandbox can write."""
     found: dict[Path, tuple[int, dict]] = {}
 
     def said(f: Path) -> tuple[int, dict]:

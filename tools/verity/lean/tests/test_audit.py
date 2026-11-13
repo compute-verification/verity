@@ -6440,8 +6440,10 @@ def test_without_the_sandbox_the_sample_follows_the_build_and_its_failure_fails_
 def test_in_the_sandbox_the_sample_runs_on_the_seal_after_the_announcement_and_nothing_is_written_before_it_matched(
         tmp_path, monkeypatch, matches, facts_to):
     """In the sandbox the sample starts once the build is announced (`built`), beside the replay, given the seal and the
-    build's threads, and the verdict waits for it: a sample that differs fails the package, `matched` hears False, and no
-    facts document is written (`--facts-only`) or stored (`--facts-cache`); one that matches lets both happen."""
+    build's threads, and the verdict waits for it: a sample that differs fails the package, `matched` hears False, no
+    facts document is written (`--facts-only`) or stored (`--facts-cache`), and its failure is written beside what the
+    build began with (`BUILDING`), which is all a check.py killed before its report leaves for the artifact cache's `put`;
+    one that matches lets both happen and leaves that as the build began."""
     pkg = tmp_path / "p"
     pkg.mkdir()
     (pkg / "lean-toolchain").write_text("leanprover/lean4:v0\n")
@@ -6489,6 +6491,9 @@ def test_in_the_sandbox_the_sample_runs_on_the_seal_after_the_announcement_and_n
     assert rep["failure_codes"] == ([] if matches else ["sampled"])
     assert wrote == ([] if not matches else [("stored", "key")] if facts_to == "cache" else [("written", out)])
     assert ("facts_document" in rep) is (matches and facts_to == "cache")
+    began = json.loads((tmp_path / "out" / "audit-p" / A.BUILDING).read_text())
+    assert began == {"package": str(pkg), "sandbox": True, "bound": rep["bound"],
+                     **({} if matches else {"failures": ["sampled: P.B: planted"]})}
 
 
 def test_a_heavy_sample_beside_its_replay_takes_its_jobs_out_of_the_replay_s_share(tmp_path, monkeypatch):
