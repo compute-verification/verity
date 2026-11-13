@@ -2,7 +2,7 @@
 # epoch_row.sh: one re-baseline workload inside its `research run` job on a pod, with every stop its outcome depends on in the job.
 #
 #   research run --on <pod> --project verity --campaign <campaign> --custody-r2 --custody-ttl <T> --timeout <S> \
-#     --source <clean worktree at EPOCH_SHA> --cwd source/integrations/vllm \
+#     --source <clean worktree at EPOCH_SHA> --cwd source/adapters/vllm \
 #     --env ROW=<workload id> --env ROWNUM=<n> --env CLASS=<GREEN|FAIL> --env EPOCH_SHA=<sha> [--env K=V ...] \
 #     -- bash verity_vllm/ops/epoch_row.sh
 #
