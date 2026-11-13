@@ -30,9 +30,23 @@ which `install.sh` puts ahead of the system's), and `settings.py` (every environ
 The event log (`settings.record_event`; `$AGENT_GUARD_EVENT_LOG`, default `/tmp/agent-guard-events.jsonl`) holds one line
 for each run of the shell, Task and stop hooks: when, which hook, the event's name, its conversation id and tool name, the
 payload's key names, and of the payload's other values only `model` and `generation_id` (the turn's id), each where the
-payload has it as a string, cut at 64 characters; never the command, a path or an address. Past about 1 MB it is renamed
+payload has it as a string, cut at 64 characters; never the command, a path or an address. Past about 4 MB it is renamed
 to `.1` and started again. `inbox.py check`, `selftest` and `guard` read from it whether a shell hook has run for an agent,
 and `inbox.py turns` the model each of an agent's turns names there. Each VM's log is its own.
+
+A checkout belongs to the first agent that runs git in it, and the stamp outlives the agent. `worktree_guard.py reclaim
+DIR` gives the checkout holding DIR, and every branch registered to its owner, to the VM's coordinator once that owner
+is gone. Both tests read what the VM records and nothing the caller says, so a running worker is never evicted on a
+guess and a worker can't take another's checkout. The coordinator is an agent that holds a handle in origin/main's
+Slack registry, which the hook and the command both read (a checkout's own copy decides only where origin/main can't
+be read): the hook takes the caller from Cursor's event, which no command line sets, and refuses a `reclaim` typed by
+any other agent; the command stamps only an id that holds a handle, so a made-up id gives the checkout to a
+coordinator, never to the agent that made it up. Gone is no hook run in two hours, six times the 20 minutes one
+command may block, in the record every hook run adds a line to (`settings.EVENT_LOG`: each shell command, each Task,
+dynamic-tool and MCP call, each turn's end). The record must reach back those two hours, since it rotates by size, and
+must hold a shell-hook run of the caller's within them, since where no shell hook runs every agent would read as gone;
+short of either, nothing is taken back. A worker whose turn ended over two hours ago reads as gone: its files stay, and
+`hand` gives a branch back. A refused branch switch or push names `reclaim` to a coordinator once it would succeed.
 
 The push rules, typed (`worktree_guard.py`) or in `pre_push.py`, cover the queue's two repositories alone
 (`worktree_guard.queue_remote`: their GitHub URLs exactly, in https, ssh or scp form, with or without `.git` and a credential;
@@ -76,7 +90,8 @@ python3 tools/agent-guard/inbox.py check AGENT_ID                  on its own VM
 python3 tools/agent-guard/inbox.py turns [AGENT_ID]                on its own VM: the model each of its turns names in the event log
 python3 tools/agent-guard/procs.py [PATTERN]                       processes and their command lines, tokens cut
 python3 tools/agent-guard/worktree_guard.py hand BRANCH AGENT_ID   give a branch you created to another agent
-python3 tools/agent-guard/worktree_guard.py list                   each worktree's owner
+python3 tools/agent-guard/worktree_guard.py reclaim DIR            a coordinator: take back a gone agent's checkout
+python3 tools/agent-guard/worktree_guard.py list                   each registered branch's owner
 python3 tools/agent-guard/oom_watch.py scan                        the OOM kills still in the kernel's buffer
 tmux new-session -d -s vm-secrets                                  the session this VM keeps, by hand (boot starts it)
 uv run tools/verity/check/suites.py tools/agent-guard              its tests
