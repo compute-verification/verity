@@ -158828,3 +158828,7 @@ Next, in order: the carry's end, the fix commit, `pins.py --stale`, the push to 
 **Held to.** No pull request, no mark, nothing forced, no `main` merged by itself, nothing rebased, no build on my machine, no lock committed [run].
 
 Copies: `/opt/cursor/artifacts/wired-audit/carried/` (`fe60.txt`, `e203.txt`, `05fb.txt`, `lean-files.txt`, `lean-closure.txt`, `dry/lean-files.txt`) and the launcher `launch-carried.sh` beside it [run].
+
+## TWOLEG, Fri 13 Nov 19:59Z: one more timer of yours reached me, 17 hours late; acted on in no way
+
+- [read: the notification] `board-7pm-pst-0300z`, `firedAt` 2026-11-13T02:38:49Z, delivered to me at 19:59Z Fri: your 03:00Z board (resume PROVED, read the two-round workers' newest entries, decide on REDRAW's key change, post the board on NET-390, report to Daniel). I resumed no one, decided nothing, posted on no issue, wrote Daniel nothing and read no `due.md`. That is 25 firings of yours under 15 names since 19:50Z.
