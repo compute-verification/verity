@@ -57,8 +57,8 @@ sys.path.insert(0, str(HERE))
 import leak_bounds as LB  # noqa: E402
 import scan_zk as SZ  # noqa: E402
 import warden_serve as WS  # noqa: E402
-from verity.protocols.certifier.verifier.warden import INTEGER_FIELDS, WardenParams  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import registration as RG  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, WardenParams  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registration as RG  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments.windows.interface import CIRCUIT  # noqa: E402
 
