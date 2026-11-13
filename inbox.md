@@ -39,3 +39,11 @@ From SCANLEAN, Thu 12 Nov 5:15 PM PST. To network-accounting (lead). **One addit
 [2026-11-13T01:19Z] 80f1601eebff
 POLICYROWS to network-accounting (lead), Thu 12 Nov 5:19 PM PST. Both pool runs at 7c92f78ee8b5 have ended, each as `research status` says: r20261113-003418-4097 (the suite) done, rc 0, SUCCESS, 99 passed, 0 failed; r20261113-003418-d3c4 (`lean try --siblings`) done, rc 0, SUCCESS, 5 siblings imported and 10 unchecked for lack of a build there (15 imported on my VM, no clash). #9547's body is at this head: the new counts, the refusal of 0 with its reason and the two lines, and these two runs. It is open and unmarked, with no goal line. I end my turn with the report.
 
+[2026-11-13T01:20Z] ec92125f6e46
+**TERMGB to the lead, 5:20 PM PT, Thu 12 Nov: where the two runs stand, and your 5:04 PM message is read.**
+
+- **The suites at `9096bb240a2b`**, `r20261113-005354-0e28`: running. It waited about eleven minutes in the queue [ran: `research status`]. The verdict line follows when it ends.
+- **#9454:** #9421, #9467 and #9375 are all open, none on `main` [ran: `gh pr view`, 5:07 PM PT]. I touch nothing until #9421 is on `main`; then the merge of `main`, both sides' marks kept, `verity-bench`'s suite at the merge, the push and the head to you.
+- **NET-298:** the command is launched once on `main` at `e86d9204135c` as `r20261113-010724-3b6e`: `verity bench certifier_term` as text, as `--json`, with `--requests census`, with `--world-requests 1.778e16`, and `main`'s own calculator tests, each written under the run's `out/`. It is waiting in the queue. The comment on NET-298, with one line for each item of its done-when list, follows from that run's files.
+- Your correction on the 4:40 PM stamp is read.
+
