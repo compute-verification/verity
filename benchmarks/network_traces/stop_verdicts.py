@@ -27,14 +27,15 @@ readers are the harness's). A run holds, each one JSON object a line:
 
 **A superseded run** adds no accept and takes away no refusal. The caller hands `read` every run that carries the
 record and says which of them another run replaces. A superseded run's files are read as any run's, but for its
-verdict records that are accepted and complete, which fill no verdict, and its control records that are refused,
-which count for nothing: nothing retries a verdict, so what a run refused on a head stands whatever is labelled
-later, as does an accept of its that is not complete, a control it did not refuse, a record of its that doesn't
-read and a registration it kept. An accept of its is still read on its head (`stop`'s ``spent``): the serve and
+verdict records that are accepted and complete, which fill no verdict, and its control records that count for
+their verifier ("A negative control"), which count for nothing: nothing retries a verdict, so what a run refused on
+a head stands whatever is labelled later, as does an accept of its that is not complete, a control it did not
+refuse or refused for another reason than the control's word, a record of its that doesn't read and a
+registration it kept. An accept of its is still read on its head (`stop`'s ``spent``): the serve and
 the registration it names, the rate it states and its verifier are held to what holds any record's, so it can keep
 a class at its whole schedule, as it did before its run was superseded, and can never help hold one. A record
-counts as a superseded run's where that run's files hold it, or it names that run as the one that produced it or
-as the serve it is of. So superseding a run never raises what is held. A superseded run that is not among the runs
+counts as a superseded run's where that run's files hold it or it names that run as the one that produced it; so
+does a verdict record that names that run as the serve it is of. So superseding a run never raises what is held. A superseded run that is not among the runs
 handed holds everything at its whole schedule: what it refused was not read.
 
 **A head** (`head_of`) is the registration's own: its link, execution phase, parameters digest and tables as listed,
@@ -81,16 +82,19 @@ thing that verifier checks (`CONTROLS`). The guarantee rests on the verifier's c
 is what shows that the verifier which ran refuses what it must, so that its accept is no pass for the wrong reason.
 A control record names the run that produced it, its verifier's module and commit, what was changed (``control``),
 the verifier's own verdict, whose ``format`` says which of the four it is a control of, and the verifier's own word
-for why it refused (``reason``). A control without that field doesn't read, and neither does a refused one whose
-reason is no text; the reason is printed in the line of each class its verifier's accept is counted in, and is
-held to no value. A verifier's refusal at
-a commit is a fact of that code, so one control a verifier a commit serves every execution phase checked under that
-commit, and a control names no head, class or serve. A control at another commit, by another verifier, or of a
-thing its verifier doesn't owe counts for nothing. One its verifier did not refuse (``accepted`` anything but
-false) leaves that verifier without its control at that commit, whatever other control it refused. An execution
-phase whose verifier lacks its control is charged its whole schedule, with a line that names the verifier. A
-control record that doesn't read holds no execution phase at all. Of a superseded run, a control that was refused
-counts for nothing and one that was not refused stands, as its verdicts do.
+for why it refused (``reason``). A control counts only where it is refused for the reason its change aims at: the
+reader holds ``reason`` to that control's word (`REASONS`), which is declared here and is no field of the record.
+A control without the field doesn't read, and neither does a refused one whose reason is no text; the reason a
+verifier gave is printed in the line of each class its accept is counted in. A verifier's refusal at a commit is a
+fact of that code, so one control a verifier a commit serves every execution phase checked under that commit, and
+a control names no head, class or serve: of a control record the reader reads its five fields and no other. A
+control at another commit, by another verifier, or of a thing its verifier doesn't owe counts for nothing. One its
+verifier did not refuse (``accepted`` anything but false), and one it refused for another reason than the
+control's word, leave that verifier without its control at that commit, whatever other control it refused. An
+execution phase whose verifier lacks its control is charged its whole schedule, with a line that names the
+verifier and, for a control refused for another reason, the reason given and the control's word. A control record
+that doesn't read holds no execution phase at all. Of a superseded run, a control that counts is left out, and one
+that was not refused, or was refused for another reason, stands, as its verdicts do.
 
 **The rate.** The stop record's and the response tie's populations, and the rate each is proved at, are the serve's
 to register before any coin, and a class is held only where every block of both is proved: the registration its
@@ -137,8 +141,13 @@ CONTROLS = {CC.STOP_RECORD: ("stop_word", "a stop word changed, the count off by
             CC.RESPONSE_TIE: ("id", "a released id changed"),
             CC.CERTIFIED_READ: ("max_tokens", "a request word changed, `max_tokens`"),
             CC.COMPUTE_AUDIT: ("output", "a committed output changed")}
-#: the rate a record says its verdict ran at, and the one rate at which a class is held: every block proved
-RATE, EVERY_BLOCK = "rate", "rate:1/1"
+#: the word each verdict's control is refused for where its verifier refuses it for what was changed: a control
+#: refused for any other reason is none of its verifier's
+REASONS = {CC.STOP_RECORD: "stop_word", CC.RESPONSE_TIE: "id", CC.CERTIFIED_READ: "max_tokens",
+           CC.COMPUTE_AUDIT: "output"}
+#: the rate a record says its verdict ran at, and the one rate at which a class is held: every block proved. A
+#: rate's text is `NUM/DEN` in lowest terms, with no prefix
+RATE, EVERY_BLOCK = "rate", "1/1"
 #: where a serve's registration states the rate each sampled population is registered at, by the verdict over that
 #: population: the keys from the registration down to the rate. The names are the registration's writer's to give
 RATES = {CC.STOP_RECORD: ("rates", "stop_record"), CC.RESPONSE_TIE: ("rates", "response_tie")}
@@ -281,7 +290,7 @@ def _unrated(read: Read, served: Mapping[str, Mapping[str, Any]]) -> list[str]:
 def _uncontrolled(kind: str, record: Mapping[str, Any],
                   owed: Mapping[tuple[str, str, str], Sequence[Mapping[str, Any]]]) -> str | None:
     """What the verifier of a verdict counted lacks of its negative control (the module docstring's "A negative
-    control"), or None where it has one of record at its commit and refused every one."""
+    control"), or None where it has one of record at its commit and refused every one for the control's word."""
     module, commit = (record[CC.VERIFIER][k] for k in CC.NAMES)
     name, what = CONTROLS[kind]
     who = f"the {kind}'s verifier {module} at {commit}"
@@ -290,7 +299,16 @@ def _uncontrolled(kind: str, record: Mapping[str, Any],
         return f"{who} has no negative control of record at that commit (`{name}`: {what})"
     if kept := sorted({r[CC.RUN] for r in its if r[CC.VERDICT].get(CC.ACCEPTED) is not False}):
         return f"{who} did not refuse its negative control (`{name}`: {what}) on {', '.join(kept)}"
+    if other := sorted({(r[REASON], r[CC.RUN]) for r in its if r[REASON] != REASONS[kind]}):
+        return f"{who}: " + "; ".join(f"control {name} refused for {reason!r}, not {REASONS[kind]!r}, on {run}"
+                                      for reason, run in other)
     return None
+
+
+def _counts(kind: str, record: Mapping[str, Any]) -> bool:
+    """Whether a control record of the control ``kind``'s verifier owes counts for it: refused, for that control's
+    word."""
+    return record[CC.VERDICT].get(CC.ACCEPTED) is False and record[REASON] == REASONS[kind]
 
 
 def _refused(read: Read, owed: Mapping[tuple[str, str, str], Sequence[Mapping[str, Any]]]) -> str:
@@ -299,7 +317,7 @@ def _refused(read: Read, owed: Mapping[tuple[str, str, str], Sequence[Mapping[st
     said = []
     for kind, record in read:
         its = owed.get((kind, *(record[CC.VERIFIER][k] for k in CC.NAMES)), ())
-        if its and all(r[CC.VERDICT].get(CC.ACCEPTED) is False for r in its):
+        if its and all(_counts(kind, r) for r in its):
             said.append(f"the {kind}'s `{CONTROLS[kind][0]}` for "
                         + ", ".join(json.dumps(reason) for reason in sorted({r[REASON] for r in its})))
     return f"; its verifiers refused their negative controls: {'; '.join(dict.fromkeys(said))}" if said else ""
@@ -457,7 +475,8 @@ def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[s
         back = [f"{n} by {what}" for n, what in (
             (by_serve, "its serve, one named by all of a head's verdict records"),
             (by_rate, f"the rate, `{EVERY_BLOCK}` as registered and as run"),
-            (by_control, "a negative control, one refused by each verifier that accepted, at its commit")) if n]
+            (by_control, "a negative control, one refused by each verifier that accepted, at its commit, for the "
+                         "control's word")) if n]
         first = (f"each connection is charged its whole schedule: {ruled} of the {of} have the {len(CC.VERDICTS)} "
                  f"verdicts of each class that holds a row, and none of them is held: {' and '.join(back)}")
     else:
@@ -488,9 +507,12 @@ def _adds(record: Any) -> bool:
             and record[CC.VERDICT].get(CC.COMPLETE) is True)
 
 
-def _refuses(record: Any) -> bool:
-    """Whether a record counts toward a verifier's control: a control record whose verdict is refused."""
-    return control_lacks(record) is None and record[CC.VERDICT].get(CC.ACCEPTED) is False
+def _backs(record: Any) -> bool:
+    """Whether a record counts toward a verifier's control: a control record of the control its verdict's verifier
+    owes, refused for that control's word."""
+    if control_lacks(record) is not None or (kind := _kind(record[CC.VERDICT])) is None:
+        return False
+    return record[CONTROL] == CONTROLS[kind][0] and _counts(kind, record)
 
 
 def read(store: Any, runs: Iterable[str], superseded: Iterable[str] = ()
@@ -500,10 +522,10 @@ def read(store: Any, runs: Iterable[str], superseded: Iterable[str] = ()
     runs' control records and serves' registrations; and the superseded runs' accepts: `stop`'s arguments, in its
     order.
     ``superseded`` are the runs among them that another run replaces: a verdict record of one that is accepted and
-    complete is handed apart, as one that fills no verdict, and a control record of one that is refused is left
-    out, each with a line that counts them (the module docstring's "A superseded run" and "A negative control").
-    A record is a superseded run's where that run's files hold it or it names that run as its ``run`` or its
-    ``serve``.
+    complete is handed apart, as one that fills no verdict, and a control record of one that counts for its
+    verifier is left out, each with a line that counts them (the module docstring's "A superseded run" and "A
+    negative control"). A record is a superseded run's where that run's files hold it or it names that run as its
+    ``run``, or, a verdict record, as its ``serve``.
     ``store`` is the evidence store as the harness reads it (`get_attempt`, `listing`, `fetch`)."""
     registrations: list[Any] = []
     records: list[Any] = []
@@ -530,9 +552,10 @@ def read(store: Any, runs: Iterable[str], superseded: Iterable[str] = ()
                 continue
             control = fnmatch.fnmatchcase(path, CONTROLS_FILES)
             for record in _lines(at / path):
-                named = [record.get(key) for key in (CC.RUN, CC.SERVE)] if isinstance(record, Mapping) else []
+                keys = (CC.RUN,) if control else (CC.RUN, CC.SERVE)
+                named = [record.get(key) for key in keys] if isinstance(record, Mapping) else []
                 old = run in superseded or any(isinstance(name, str) and name in superseded for name in named)
-                if old and control and _refuses(record):
+                if old and control and _backs(record):
                     uncounted += 1
                 elif old and not control and _adds(record):
                     spent.append(record)
@@ -543,8 +566,9 @@ def read(store: Any, runs: Iterable[str], superseded: Iterable[str] = ()
         left.append(f"{len(spent)} verdict record(s) {of} are accepted and complete, and fill no verdict: a "
                     "superseded run adds no accept, and what it refused stands")
     if uncounted:
-        left.append(f"{uncounted} control record(s) {of} are refused, and count for nothing: a superseded run adds "
-                    "no control, and one it did not refuse stands")
+        left.append(f"{uncounted} control record(s) {of} are refused for their control's word, and count for "
+                    "nothing: a superseded run adds no control, and one it did not refuse, or refused for another "
+                    "reason, stands")
     return registrations, records, left, controls, served, spent
 
 

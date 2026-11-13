@@ -70,7 +70,7 @@ def registration(of: C.Head) -> dict:
 
 #: a serve's registration that registers both sampled populations at every block, and another serve's; each with
 #: the digest a record names it by
-SERVED = {"format": "a serve's registration", "rates": {"stop_record": "rate:1/1", "response_tie": "rate:1/1"}}
+SERVED = {"format": "a serve's registration", "rates": {"stop_record": "1/1", "response_tie": "1/1"}}
 OTHERS = SERVED | {"window": "another serve's"}
 REGISTERED, OTHER = SV.digest_of(SERVED), SV.digest_of(OTHERS)
 
@@ -84,17 +84,17 @@ def four(of: C.Head, cls: int = 0, proved_by: object = None, **over: object) -> 
              CC.VERDICT: {SV.FORMAT: FORMATS[kind], CC.LINK: of.link, CC.WINDOW: of.window, CC.CLASS: cls,
                           CC.HEAD: of.digest().hex(), "registration": "a digest", CC.ACCEPTED: True,
                           CC.COMPLETE: True, "codes": []} | over,
-             CC.PROVED_BY: proved_by} | ({SV.RATE: "rate:1/1"} if kind in SV.RATES else {}) for kind in CC.VERDICTS]
+             CC.PROVED_BY: proved_by} | ({SV.RATE: "1/1"} if kind in SV.RATES else {}) for kind in CC.VERDICTS]
 
 
 def the_controls() -> list[dict]:
-    """The negative control each of the four verifiers owes, as `four` names the verifiers: each refused, with
-    the verifier's own word for why."""
+    """The negative control each of the four verifiers owes, as `four` names the verifiers: each refused, for the
+    control's word."""
     return [{CC.RUN: f"control run of the {kind}",
              CC.VERIFIER: {"module": f"the {kind}'s verifier", "commit": "a commit"},
              SV.CONTROL: SV.CONTROLS[kind][0],
              CC.VERDICT: {SV.FORMAT: FORMATS[kind], CC.ACCEPTED: False, "codes": ["a refusal"]},
-             SV.REASON: f"the {kind}'s own word"}
+             SV.REASON: SV.REASONS[kind]}
             for kind in CC.VERDICTS]
 
 
@@ -102,7 +102,7 @@ def refused(*kinds: str) -> str:
     """What a class's line says of the controls of `the_controls` that its verifiers refused: all four's, or
     those of ``kinds``."""
     return "; its verifiers refused their negative controls: " + "; ".join(
-        f"the {kind}'s `{SV.CONTROLS[kind][0]}` for \"the {kind}'s own word\"" for kind in kinds or CC.VERDICTS)
+        f"the {kind}'s `{SV.CONTROLS[kind][0]}` for \"{SV.REASONS[kind]}\"" for kind in kinds or CC.VERDICTS)
 
 
 def stop(registrations: list, records: list, left: list[str] | tuple = (), controls: list | None = None,
@@ -138,7 +138,7 @@ def test_a_head_is_the_registrations_own_and_held_to_the_digest_its_certificate_
 
 #: the answer's first line where some execution phase read is held
 EVERY_OTHER = (": each class that holds a row in one of them has its 4 verdicts, accepted and complete, at the "
-               "registered rate `rate:1/1`, each by a verifier that refused its negative control. Every other "
+               "registered rate `1/1`, each by a verifier that refused its negative control. Every other "
                "execution phase of a monitoring period is charged its whole schedule, one no registration was read "
                "for among them")
 
@@ -164,9 +164,9 @@ def test_an_execution_phase_is_held_only_with_the_verdicts_of_every_class_that_h
     assert (tie[CC.RUN], tie[CC.VERIFIER], tie[CC.HEAD], tie[CC.ACCEPTED], tie[CC.COMPLETE], tie[CC.WINDOW]) == (
         "run of the response tie", {"module": "the response tie's verifier", "commit": "a commit"},
         first.digest().hex(), True, True, 3)
-    assert (tie[CC.SERVE], tie[CC.REGISTRATION], tie[SV.RATE]) == ("the serve", REGISTERED, "rate:1/1")
+    assert (tie[CC.SERVE], tie[CC.REGISTRATION], tie[SV.RATE]) == ("the serve", REGISTERED, "1/1")
     # the stop record and the response tie say the rate they ran at; the other two are over no sampled population
-    assert [v[SV.RATE] for v in got.verdicts[:4]] == ["rate:1/1", "rate:1/1", None, None]
+    assert [v[SV.RATE] for v in got.verdicts[:4]] == ["1/1", "1/1", None, None]
     # a proof named in a record changes no mark here
     proved = stop(both[:1], four(first, proved_by="a theorem"))
     assert proved.held == 1 and {v["mark"] for v in proved.verdicts} == {LB.RUN_NOT_PROVED}
@@ -310,8 +310,9 @@ def test_four_verdicts_that_are_not_one_classs_hold_nothing_and_the_first_line_n
 def held_back(ruled: int, phases: int, rate: int = 0, control: int = 0, serve: int = 0) -> str:
     """The answer's first line where execution phases have their verdicts and none of them is held."""
     back = ([f"{serve} by its serve, one named by all of a head's verdict records"] if serve else []) + (
-        [f"{rate} by the rate, `rate:1/1` as registered and as run"] if rate else []) + (
-        [f"{control} by a negative control, one refused by each verifier that accepted, at its commit"] if control else [])
+        [f"{rate} by the rate, `1/1` as registered and as run"] if rate else []) + (
+        [f"{control} by a negative control, one refused by each verifier that accepted, at its commit, for the "
+         "control's word"] if control else [])
     return (f"each connection is charged its whole schedule: {ruled} of the {phases} execution phase(s) read have the "
             f"4 verdicts of each class that holds a row, and none of them is held: {' and '.join(back)}")
 
@@ -327,11 +328,14 @@ def test_an_execution_phase_is_held_only_where_each_verifier_that_accepted_refus
     control of record that it refused: the one that verifier owes. Without one the four are read and handed on
     and hold nothing, and the line names the verifier. One control a verifier a commit serves every execution
     phase under that commit; one at another commit, by another verifier or of another thing serves none; and one
-    the verifier did not refuse leaves it without, whatever other it refused."""
+    the verifier did not refuse, or refused for another reason than the control's word, leaves it without,
+    whatever other it refused."""
     assert SV.CONTROLS == {CC.STOP_RECORD: ("stop_word", "a stop word changed, the count off by one"),
                            CC.RESPONSE_TIE: ("id", "a released id changed"),
                            CC.CERTIFIED_READ: ("max_tokens", "a request word changed, `max_tokens`"),
                            CC.COMPUTE_AUDIT: ("output", "a committed output changed")}
+    assert SV.REASONS == {CC.STOP_RECORD: "stop_word", CC.RESPONSE_TIE: "id", CC.CERTIFIED_READ: "max_tokens",
+                          CC.COMPUTE_AUDIT: "output"}
     assert SV.CONTROL_FIELDS == ("run", "verifier", "control", "verdict", "reason") and SV.REASON == "reason"
     first, second, whole = head(3, 5, 0), head(4, 2, 0), LB.table(LB.inputs())
     one, both = [registration(first)], [registration(first), registration(second)]
@@ -341,9 +345,9 @@ def test_an_execution_phase_is_held_only_where_each_verifier_that_accepted_refus
     # with each verifier's control, the class's line gives each verifier's own word for why it refused
     got = stop(one, four(first))
     assert got.held == 1 and got.why[2] == below + (
-        "; its verifiers refused their negative controls: the stop record's `stop_word` for \"the stop record's own "
-        "word\"; the response tie's `id` for \"the response tie's own word\"; the certified read's `max_tokens` for "
-        "\"the certified read's own word\"; the compute audit's `output` for \"the compute audit's own word\"")
+        "; its verifiers refused their negative controls: the stop record's `stop_word` for \"stop_word\"; the "
+        "response tie's `id` for \"id\"; the certified read's `max_tokens` for \"max_tokens\"; the compute audit's "
+        "`output` for \"output\"")
     # no control at all: the four are read and handed on, and hold nothing; the line names each verifier
     got = stop(one, four(first), controls=[])
     assert got.held == 0 and len(got.verdicts) == 4 and got.why[0] == held_back(1, 1, control=1)
@@ -374,7 +378,7 @@ def test_an_execution_phase_is_held_only_where_each_verifier_that_accepted_refus
                         "negative control (`id`: a released id changed) on ")
     others = refused(CC.STOP_RECORD, CC.CERTIFIED_READ, CC.COMPUTE_AUDIT)
     for accepted in (True, None, "false", 0):
-        for reason in ("the response tie's own word", None, ""):
+        for reason in ("id", None, ""):
             controls = [c | {SV.REASON: reason} if i == 1 else c for i, c in enumerate(control_but(accepted=accepted))]
             got = stop(one, four(first), controls=controls)
             assert got.held == 0 and got.why[4] == not_refused + "control run of the response tie", (accepted, reason)
@@ -384,12 +388,43 @@ def test_an_execution_phase_is_held_only_where_each_verifier_that_accepted_refus
     again = control_but(accepted=True)[1] | {CC.RUN: "a second control run"}
     got = stop(one, four(first), controls=the_controls() + [again])
     assert got.held == 0 and got.why[4] == not_refused + "a second control run" and got.why[2] == below + others
-    # the reason is the verifier's own word and is held to no value: two controls of one verifier, each refused in
-    # its own words, serve it, and the class's line gives both
-    again = tie | {CC.RUN: "a second control run", SV.REASON: "another word"}
+    # a control counts only where it is refused for the reason its change aims at, the control's word: one refused
+    # for another reason leaves its verifier without its control, the line names the reason given and the word,
+    # and the class's line gives the other three's
+    for i, kind in enumerate(CC.VERDICTS):
+        name = SV.CONTROLS[kind][0]
+        for reason in ("parse", name.upper(), f"{name} ", "refused"):
+            controls = [c | {SV.REASON: reason} if j == i else c for j, c in enumerate(the_controls())]
+            got = stop(one, four(first), controls=controls)
+            assert got.held == 0 and len(got.verdicts) == 4 and got.why[0] == held_back(1, 1, control=1), (kind, reason)
+            assert got.why[4] == at + (f"the {kind}'s verifier the {kind}'s verifier at a commit: control {name} "
+                                       f"refused for {reason!r}, not {name!r}, on control run of the {kind}"), reason
+            assert got.why[2] == below + refused(*CC.VERDICTS[:i], *CC.VERDICTS[i + 1:]) and len(got.why) == 5
+    assert stop(one, four(first), controls=[c | {SV.REASON: "parse"} if j == 0 else c
+                                            for j, c in enumerate(the_controls())]).why[4] == at + (
+        "the stop record's verifier the stop record's verifier at a commit: control stop_word refused for 'parse', "
+        "not 'stop_word', on control run of the stop record")
+    # so does one refused for the control's word beside one refused for another reason, whichever is read first,
+    # and the line names each control that was refused for another
+    again = tie | {CC.RUN: "a second control run", SV.REASON: "parse"}
+    third = tie | {CC.RUN: "a third control run", SV.REASON: "no head"}
+    wrong = at + ("the response tie's verifier the response tie's verifier at a commit: control id refused for "
+                  "'parse', not 'id', on a second control run")
+    for controls in (the_controls() + [again], [again] + the_controls()):
+        got = stop(one, four(first), controls=controls)
+        assert got.held == 0 and got.why[4] == wrong and got.why[2] == below + others
+    got = stop(one, four(first), controls=the_controls() + [again, third])
+    assert got.held == 0 and got.why[4] == at + (
+        "the response tie's verifier the response tie's verifier at a commit: control id refused for 'no head', not "
+        "'id', on a third control run; control id refused for 'parse', not 'id', on a second control run")
+    # two controls of one verifier, each refused for the control's word, serve it
+    again = tie | {CC.RUN: "a second control run"}
     got = stop(one, four(first), controls=the_controls() + [again])
-    assert got.held == 1 and got.why[2] == below + refused().replace(
-        "`id` for \"the response tie's own word\"", "`id` for \"another word\", \"the response tie's own word\"")
+    assert got.held == 1 and got.why[2] == below + refused()
+    # a control with more fields reads, and none of them is read: not as a head, a class, a serve or a rate
+    more = {"registration": OTHER, "serve": "another serve", "class": "w3/p0-o0", "rate": "1/8", "piece": "tie"}
+    got = stop(one, four(first), controls=[c | more for c in the_controls()])
+    assert (got.held, got.why) == (1, stop(one, four(first)).why)
     # one control a verifier a commit serves every execution phase checked under that commit
     assert stop(both, four(first) + four(second)).held == 2
     # where the second execution phase's tie was accepted at another commit, it owes a control at that commit
@@ -454,9 +489,9 @@ def test_a_class_is_held_only_at_the_rate_its_registration_registers_for_both_po
     class's verdicts name, and holds the class only where it registers every block of the stop record's and the
     response tie's populations and each of those verdicts says it ran at that. A registration that was not handed
     or states no rate, another rate registered, and a verdict that names no rate or another than the registered one
-    are each refused by name: among them a verdict that states `rate:1/1` under a registration that says
+    are each refused by name: among them a verdict that states `1/1` under a registration that says
     otherwise."""
-    assert (SV.RATE, SV.EVERY_BLOCK) == ("rate", "rate:1/1")
+    assert (SV.RATE, SV.EVERY_BLOCK) == ("rate", "1/1")
     assert SV.RATES == {CC.STOP_RECORD: ("rates", "stop_record"), CC.RESPONSE_TIE: ("rates", "response_tie")}
     assert REGISTERED == R.digest(SERVED) != OTHER and len(REGISTERED) == 128
     first, second, whole = head(3, 5, 0), head(4, 2, 0), LB.table(LB.inputs())
@@ -480,49 +515,57 @@ def test_a_class_is_held_only_at_the_rate_its_registration_registers_for_both_po
             got = stop(one, under(doc, four(first)), served=[doc])
             assert got.held == 0 and got.why[4] == at + (
                 f"the registration `{SV.digest_of(doc)}` states no rate for the {kind} (`rates.{key}`)"), (key, rates)
-    for doc in ({k: v for k, v in SERVED.items() if k != "rates"}, SERVED | {"rates": "rate:1/1"},
-                SERVED | {"rates": ["rate:1/1"] * 2}):
+    for doc in ({k: v for k, v in SERVED.items() if k != "rates"}, SERVED | {"rates": "1/1"},
+                SERVED | {"rates": ["1/1"] * 2}):
         got, name = stop(one, under(doc, four(first)), served=[doc]), SV.digest_of(doc)
         assert got.held == 0 and got.why[4] == at + (
             f"the registration `{name}` states no rate for the stop record (`rates.stop_record`); the registration "
             f"`{name}` states no rate for the response tie (`rates.response_tie`)"), doc
     for key, kind in (("stop_record", CC.STOP_RECORD), ("response_tie", CC.RESPONSE_TIE)):
-        # a registration that registers another rate holds nothing, and a verdict that states `rate:1/1` under it
+        # a registration that registers another rate holds nothing, and a verdict that states `1/1` under it
         # is refused by name
-        doc = SERVED | {"rates": SERVED["rates"] | {key: "rate:1/8"}}
+        doc = SERVED | {"rates": SERVED["rates"] | {key: "1/8"}}
         got = stop(one, under(doc, four(first)), served=[doc])
         assert got.held == 0 and got.why[0] == held_back(1, 1, rate=1) and got.why[4] == at + (
-            f"the registration registers the {kind} at `rate:1/8`, not `rate:1/1`; the {kind} of run of the {kind} "
-            "states `rate:1/1` under a registration that registers `rate:1/8`"), kind
+            f"the registration registers the {kind} at `1/8`, not `1/1`; the {kind} of run of the {kind} "
+            "states `1/1` under a registration that registers `1/8`"), kind
         # a verdict that says it ran at the registered rate is not refused, and its class is not held
-        got = stop(one, at_rate(kind, "rate:1/8", under(doc, four(first))), served=[doc])
+        got = stop(one, at_rate(kind, "1/8", under(doc, four(first))), served=[doc])
         assert got.held == 0 and got.why[4] == at + (
-            f"the registration registers the {kind} at `rate:1/8`, not `rate:1/1`"), kind
-        # under a registration at `rate:1/1`, a verdict that states another rate, or none, is refused by name
-        for rate, says in (("rate:1/8", "states `rate:1/8`"), ("rate:2/2", "states `rate:2/2`"),
+            f"the registration registers the {kind} at `1/8`, not `1/1`"), kind
+        # under a registration at `1/1`, a verdict that states another rate, or none, is refused by name
+        for rate, says in (("1/8", "states `1/8`"), ("2/2", "states `2/2`"), ("rate:1/1", "states `rate:1/1`"),
                            (None, "names no rate (`rate`)"), (1, "names no rate (`rate`)"),
                            ("", "names no rate (`rate`)"), (..., "names no rate (`rate`)")):
             got = stop(one, at_rate(kind, rate, four(first)))
             assert got.held == 0 and got.why[4] == at + (
-                f"the {kind} of run of the {kind} {says} under a registration that registers `rate:1/1`"), (kind, rate)
+                f"the {kind} of run of the {kind} {says} under a registration that registers `1/1`"), (kind, rate)
+        # a rate's text is `NUM/DEN` in lowest terms with no prefix: a registration that states every block in
+        # another text registers another rate, whatever its verdicts state
+        for text in ("2/2", "rate:1/1", "1/1 ", "1 / 1", "01/1", "1"):
+            doc = SERVED | {"rates": SERVED["rates"] | {key: text}}
+            for records in (under(doc, four(first)), at_rate(kind, text, under(doc, four(first)))):
+                got = stop(one, records, served=[doc])
+                assert got.held == 0 and got.why[4].startswith(at + (
+                    f"the registration registers the {kind} at `{text}`, not `1/1`")), (kind, text)
     # the certified read and the compute audit are over no sampled population: a rate on their records is not read
-    assert stop(one, [r | {SV.RATE: "rate:1/8"} if i >= 2 else r for i, r in enumerate(four(first))]).held == 1
+    assert stop(one, [r | {SV.RATE: "1/8"} if i >= 2 else r for i, r in enumerate(four(first))]).held == 1
     # `complete` holds no class to a rate: four complete accepts under a registration at an eighth hold nothing
-    eighth = OTHERS | {"rates": {"stop_record": "rate:1/1", "response_tie": "rate:1/8"}}
-    theirs = at_rate(CC.RESPONSE_TIE, "rate:1/8", under(eighth, four(second)))
+    eighth = OTHERS | {"rates": {"stop_record": "1/1", "response_tie": "1/8"}}
+    theirs = at_rate(CC.RESPONSE_TIE, "1/8", under(eighth, four(second)))
     assert all(r[CC.VERDICT][CC.COMPLETE] is True for r in theirs)
     # two execution phases under two registrations: the one whose serve registered every block is held
     got = stop(one + [registration(second)], four(first) + theirs, served=[SERVED, eighth])
     assert got.held == 1 and got.why[0].startswith("1 of the 2 execution phase(s) read are charged below")
     assert got.why[6] == (f"the link {LINK}, execution phase 4, class 0: held to its whole schedule by the rate: the "
-                          "registration registers the response tie at `rate:1/8`, not `rate:1/1`") and len(got.why) == 7
+                          "registration registers the response tie at `1/8`, not `1/1`") and len(got.why) == 7
     # each class that holds a row is held to the rate of its own registration
     wide = head(3, 5, 2)
-    wider = four(wide) + at_rate(CC.RESPONSE_TIE, "rate:1/8", under(eighth, four(wide, 1)))
+    wider = four(wide) + at_rate(CC.RESPONSE_TIE, "1/8", under(eighth, four(wide, 1)))
     got = stop([registration(wide)], wider, served=[SERVED, eighth])
     assert got.held == 0 and got.why[4] == (
         f"the link {LINK}, execution phase 3, class 1: held to its whole schedule by the rate: the registration "
-        "registers the response tie at `rate:1/8`, not `rate:1/1`")
+        "registers the response tie at `1/8`, not `1/1`")
     assert stop([registration(wide)], four(wide) + four(wide, 1)).held == 1
     # held back by the rate and by a control: the first line counts each
     got = stop(one, four(first), controls=[], served=[])
@@ -861,6 +904,11 @@ def control_but(**over: object) -> list[dict]:
     return [r | {CC.VERDICT: r[CC.VERDICT] | over} if i == 1 else r for i, r in enumerate(the_controls())]
 
 
+def reason_but(reason: object) -> list[dict]:
+    """The four verifiers' controls, the tie's refused for ``reason``."""
+    return [r | {SV.REASON: reason} if i == 1 else r for i, r in enumerate(the_controls())]
+
+
 def by_another(records: list[dict]) -> list[dict]:
     """The four verdicts' records, the tie's by a verifier that has no control of record."""
     return [r | {CC.VERIFIER: {"module": "a second tie's verifier", "commit": "a commit"}} if i == 1 else r
@@ -873,8 +921,9 @@ def dropped(n: int, *runs: str) -> str:
 
 
 def uncounted(n: int, *runs: str) -> str:
-    return (f"{n} control record(s) of the superseded run(s) {', '.join(runs)} are refused, and count for nothing: a "
-            "superseded run adds no control, and one it did not refuse stands")
+    return (f"{n} control record(s) of the superseded run(s) {', '.join(runs)} are refused for their control's word, "
+            "and count for nothing: a superseded run adds no control, and one it did not refuse, or refused for "
+            "another reason, stands")
 
 
 def test_a_superseded_run_adds_no_accept(tmp_path):
@@ -920,13 +969,18 @@ def test_a_superseded_run_adds_no_accept(tmp_path):
     got = SV.of_runs(alone, ["old", "new"], ["old"])
     assert got.held == 0 and len(got.verdicts) == 4 and got.why[-1] == uncounted(4, "old")
     assert got.why[0].endswith("and none of them is held: 1 by a negative control, one refused by each verifier that "
-                               "accepted, at its commit")
+                               "accepted, at its commit, for the control's word")
     # nor does a copy of it in a later run's files, which names the superseded run as the one that produced it
     copied = [c | {CC.RUN: "old"} for c in the_controls()]
     alone = Store(tmp_path / "copies", {"old": held_files(first, [], controls=[]),
                                         "new": held_files(first, records, controls=copied)})
     assert SV.of_runs(alone, ["old", "new"]).held == 1
     assert SV.of_runs(alone, ["old", "new"], ["old"]).held == 0
+    # a control names no serve: one that carries a `serve` naming a superseded run is not that run's
+    carried = [c | {CC.SERVE: "old"} for c in the_controls()]
+    alone = Store(tmp_path / "carried", {"old": held_files(first, [], controls=[]),
+                                         "new": held_files(first, records, controls=carried)})
+    assert SV.of_runs(alone, ["old", "new"]).held == SV.of_runs(alone, ["old", "new"], ["old"]).held == 1
     # an accept that names a superseded run as its serve is that run's, whichever run produced it and holds it
     kept = {SV.REGISTRATIONS_FILE: jsonl([registration(first)]), SV.SERVES_FILE: jsonl([SERVED])}
     judged = {"out/the-verdicts.jsonl": jsonl(of_serve("s1", records)), "out/the-controls.jsonl": jsonl(the_controls())}
@@ -1002,6 +1056,15 @@ def test_a_superseded_run_takes_away_no_refusal(tmp_path):
             "verifier the response tie's verifier at a commit did not refuse its negative control (`id`: a released "
             "id changed) on control run of the response tie")
     assert got.why[-1] == uncounted(3, "old")
+    # so does a control a superseded run's verifier refused for another reason than the control's word
+    store = Store(tmp_path / "reason", {"old": held_files(first, [], controls=reason_but("parse")), "new": accepts})
+    for superseded in ((), ["old"]):
+        got = SV.of_runs(store, ["old", "new"], superseded)
+        assert got.held == 0 and got.why[4] == (
+            f"the link {LINK}, execution phase 3: held to its whole schedule by a control: the response tie's "
+            "verifier the response tie's verifier at a commit: control id refused for 'parse', not 'id', on control "
+            "run of the response tie")
+    assert got.why[-1] == uncounted(3, "old")
     # an accept of a superseded run fills no verdict and still stands against the others on its head: the serve
     # and the registration it names, the rate it states and its verifier are held to what holds any record's, so
     # what kept the class at its whole schedule before its run was superseded keeps it there after
@@ -1013,9 +1076,9 @@ def test_a_superseded_run_takes_away_no_refusal(tmp_path):
         "a registration": (under(OTHERS, four(first)),
                            f"{at}, class 0: charged its whole schedule on each of its 5 rows: its verdicts on this "
                            f"head name 2 `registration`s, not one ({', '.join(sorted((REGISTERED, OTHER)))})"),
-        "a rate": (at_rate(CC.RESPONSE_TIE, "rate:1/8", four(first)),
+        "a rate": (at_rate(CC.RESPONSE_TIE, "1/8", four(first)),
                    f"{at}, class 0: held to its whole schedule by the rate: the response tie of run of the response "
-                   "tie states `rate:1/8` under a registration that registers `rate:1/1`"),
+                   "tie states `1/8` under a registration that registers `1/1`"),
         "a verifier": (by_another(four(first)),
                        f"{at}: held to its whole schedule by a control: "
                        + no_control(CC.RESPONSE_TIE, module="a second tie's verifier"))}
@@ -1036,11 +1099,12 @@ def test_a_superseded_run_takes_away_no_refusal(tmp_path):
             "a record that doesn't read": held_files(first, [{CC.VERDICT: {}}]),
             "the four and no control": held_files(first, four(first), controls=[]),
             "the four and a control accepted": held_files(first, four(first), controls=control_but(accepted=True)),
+            "the four and a control refused for another reason": held_files(first, four(first), controls=reason_but("parse")),
             "the four and a control that doesn't read": held_files(first, four(first), controls=[{CC.VERDICT: {}}]),
             "the four and no serve's registration": held_files(first, four(first), served=[]),
             "the four of another serve": held_files(first, of_serve("another serve", four(first))),
             "the four under another registration": held_files(first, under(OTHERS, four(first)), served=[OTHERS]),
-            "the four, the tie at another rate": held_files(first, at_rate(CC.RESPONSE_TIE, "rate:1/8", four(first))),
+            "the four, the tie at another rate": held_files(first, at_rate(CC.RESPONSE_TIE, "1/8", four(first))),
             "the four, the tie by a verifier with no control": held_files(first, by_another(four(first))),
             "the four of the run old as their serve": held_files(first, of_serve("old", four(first))),
             "the four of the run new as their serve": held_files(first, of_serve("new", four(first))),
@@ -1054,4 +1118,4 @@ def test_a_superseded_run_takes_away_no_refusal(tmp_path):
                 got = SV.of_runs(store, ["old", "new"], superseded).held
                 assert got <= both, (a, b, superseded)
                 seen, lowered, most = seen + 1, lowered + (got < both), max(most, both)
-    assert (seen, most) == (3 * len(kept) ** 2, 2) == (1323, 2) and lowered
+    assert (seen, most) == (3 * len(kept) ** 2, 2) == (1452, 2) and lowered

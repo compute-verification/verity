@@ -173,7 +173,7 @@ The records are in the evidence store, in the run files of the runs that carry
 - `out/*-controls.jsonl`: a control record, `run`, `verifier` (its `module` and `commit`), `control` (what was
   changed), `verdict`, the verifier's own, whose `format` says which of the four it is a control of, and `reason`,
   the verifier's own word for why it refused. A control without `reason`, or a refused one whose reason is no
-  text, doesn't read; the reason is printed in the class's line and held to no value;
+  text, doesn't read. Of a control record the reader reads these five fields and no other;
 - `out/serve-registrations.jsonl`: each serve's registration, which the verdict records name by its digest and which
   states the rate each sampled population is registered at.
 
@@ -183,14 +183,19 @@ The reader holds what the rule charges below to two more things, which the rule 
   a control of record that it refused: a run with the one thing changed that the verifier checks. The stop record's
   owes `stop_word` (a stop word changed, the count off by one), the response tie's `id` (a released id changed), the
   certified read's `max_tokens` (a request word changed) and the compute audit's `output` (a committed output
-  changed). One control a verifier a commit serves every execution phase under that commit. A control at another
-  commit, by another verifier or of another thing serves none, and one the verifier did not refuse leaves it
-  without, whatever other it refused. The line names the verifier that lacks its control.
+  changed). A control counts only where it is refused for the reason its change aims at: its `reason` is held to
+  the control's own word, `stop_word`, `id`, `max_tokens` or `output`, which the reader declares
+  (`stop_verdicts.REASONS`). One control a verifier a commit serves every execution phase under that commit. A
+  control at another commit, by another verifier or of another thing serves none, and one the verifier did not
+  refuse, or refused for another reason, leaves it without, whatever other it refused. The line names the verifier
+  that lacks its control, with the reason given beside the control's word; the class's line prints the reason each
+  verifier gave.
 - **The rate.** A class is held only where every block of the stop record's and the response tie's populations is
-  proved: the registration its verdicts name registers `rate:1/1` for both, and each of those two verdicts' records
-  says in `rate` that it ran at the registered rate. The rate is the registration's and never the verdict's own
-  word, so a verdict that states `rate:1/1` under a registration that says otherwise is refused by name, as is a
-  registration that was not handed or states no rate. Where a registration states the two rates is its writer's to
+  proved: the registration its verdicts name registers `1/1` for both, and each of those two verdicts' records
+  says in `rate` that it ran at the registered rate. A rate's text is `NUM/DEN` in lowest terms with no prefix, so
+  a registration that states `2/2` or `rate:1/1` registers another rate. The rate is the registration's and never
+  the verdict's own word, so a verdict that states `1/1` under a registration that says otherwise is refused by
+  name, as is a registration that was not handed or states no rate. Where a registration states the two rates is its writer's to
   name; the reader holds it in one constant (`stop_verdicts.RATES`).
 
 The reader is handed every run that carries the record, with those another run replaces. A superseded run adds no
