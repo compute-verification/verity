@@ -23,7 +23,7 @@ definitions each needs that the tree does not hold. No body is `sorry`.
   the challenger is one of the covering set, and adds its record's `K` and a jitter share. Form (b),
   `leak_le_sum_K_sinks` and `leak_le_sum_K_sealed`: the challenger is a sink inside the location, and adds
   nothing while no declared link joins it to the outside (`Sealed`, `not_sealed_of_link`). At a node:
-  `Site.challengersOf`,
+  `Site.challengersOf` (`Site.mem_challengersOf`, `Site.auditorsOf_empty`),
   `Site.auditorsOf`, `Site.uncovered`, `Site.uncertified_registered_eq`, `Site.leak_le_sum_K_auditors`,
   `Site.leak_le_sum_K_sinks_registered`.
 * The runs: `onsite_node0_covered` (the example site), `oneNode_charged` and `twoNodes_charged` (two hosts with a
@@ -82,6 +82,30 @@ noncomputable def challengersOf (pinned : Finset String) (i : String) : Finset S
 /-- **The auditor's devices at node `i`**: its certifiers and the memory challengers that cover it. -/
 noncomputable def auditorsOf (pinned : Finset String) (i : String) : Finset String :=
   S.certifiersOf i ∪ S.challengersOf pinned i
+
+/-- **Only a pinned, registered memory challenger at a link's end covers**: each of the challengers that cover node
+`i` is registered as a memory challenger, is among `pinned`, and is at an end of a registered link whose other end
+is one of `i`'s prover places. -/
+theorem mem_challengersOf {pinned : Finset String} {i y : String} (h : y ∈ S.challengersOf pinned i) :
+    S.kind? y = some .challenger ∧ y ∈ pinned ∧
+      ∃ k ∈ S.links, (k.ends.1 = y ∧ k.ends.2 ∈ S.proverUnder i) ∨ (k.ends.2 = y ∧ k.ends.1 ∈ S.proverUnder i) := by
+  classical
+  unfold challengersOf at h
+  exact (Finset.mem_filter.1 h).2
+
+/-- **With nothing pinned, no memory challenger covers a link**: the auditor's devices at a node are then its
+certifiers alone, and (2)'s covered form is (2) as it stood. -/
+theorem auditorsOf_empty (i : String) : S.auditorsOf ∅ i = S.certifiersOf i := by
+  classical
+  have h : S.challengersOf ∅ i = ∅ := by
+    ext y
+    constructor
+    · intro hy
+      exact absurd (S.mem_challengersOf hy).2.1 (by simp)
+    · intro hy
+      exact absurd hy (by simp)
+  unfold auditorsOf
+  rw [h, Finset.union_empty]
 
 /-- The registered links as the model's, by their position in the Site: link `e`'s two ends. -/
 def linkEnds (e : Fin S.links.length) : String × String := (S.links.get e).ends
