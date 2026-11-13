@@ -22,6 +22,7 @@ from verity_vllm.pipeline import boundary_tables as BT
 from verity_vllm.pipeline.boundary_rows import (
     FINISH,
     FORMAT,
+    ONE_RETURN,
     TABLES_UNDER_A_RULE,
     Layout,
     Span,
@@ -54,9 +55,10 @@ def _built(layout: Layout, kept: dict[int, tuple[SpecializedDefinition, dict[int
     block, which reads its class through ``n_rho`` alone, by ``n_rho``; and its program, grain and partition, and in a
     stop class its stop population's, by that and its count of spans. So only the run and what binds it (each value's
     domain) are a window's own. ``kept`` is one serve's, whose layouts differ in class, whether it is a stop class,
-    spans and run alone: its stop rule is one. It holds the replay blocks used last whose instances sum to `KEEP` at
-    most, the least recently used leaving first, and for each its programs at the `COUNTS` counts of spans used last; a
-    replay block of more than `KEEP` instances is built for its layout alone."""
+    spans and run alone: its stop rule is one, and so is what its classes commit of their blocks' return. It holds
+    the replay blocks used last whose instances sum to `KEEP` at most, the least recently used leaving first, and for
+    each its programs at the `COUNTS` counts of spans used last; a replay block of more than `KEEP` instances is built
+    for its layout alone."""
     if layout.n_rho > KEEP:
         return layout
     replay, counts = kept.pop(layout.n_rho, None) or (layout.replay, {})
@@ -80,10 +82,10 @@ class BoundaryWindows:
     holds a finished one (``drained``), and at `stop`; its finished spans are committed class by class (`commit`, `write`)
     on a thread of their own, under ``out``/w<window>/, before anything can sample them, and each class's
     ``commit.json`` goes to ``sink`` too. ``check`` is the check template, or a callable giving it on that thread, and
-    ``inline`` and ``verdicts`` its `Layout`'s. With ``tables`` (a `boundary_tables.Channel` or `LocalChannel` to rank 0),
-    each class's commitment first assigns its spans their slots and waits for their history tables' roots at ``layers``,
-    of ``capacity`` leaves. ``stop``: the serve's registered stop rule, with no tables; the spans it ends as they were served
-    are committed in the stop classes, (P, T), and the rest by size class without a stop block, under
+    ``inline``, ``verdicts`` and ``ids`` its `Layout`'s. With ``tables`` (a `boundary_tables.Channel` or `LocalChannel`
+    to rank 0), each class's commitment first assigns its spans their slots and waits for their history tables' roots at
+    ``layers``, of ``capacity`` leaves. ``stop``: the serve's registered stop rule, with no tables; the spans it ends as
+    they were served are committed in the stop classes, (P, T), and the rest by size class without a stop block, under
     ``p<P>-o<O>-nostop`` (`filed`). ``release``: for a serve behind a network certifier, a request's release by its engine
     id, (run, N) or None for a request the certifier didn't release (`serve_admit.release_of`'s, as the serve's admission
     keeps it); each span keeps its own, and one without is in no stop class. Under a rule every line of a window says
@@ -95,14 +97,17 @@ class BoundaryWindows:
                  sink: Callable[[dict], None] | None = None, clock: Callable[[], float] = time.monotonic,
                  serve: str | None = None, tables: Any = None, layers: Sequence[int] = (),
                  capacity: int = HT.CAPACITY, stop: Stop | None = None,
-                 release: Callable[[str], tuple[str, int] | None] | None = None, verdicts: bool = False) -> None:
+                 release: Callable[[str], tuple[str, int] | None] | None = None, verdicts: bool = False,
+                 ids: bool = False) -> None:
         if (tables is None) != (not layers):
             raise ValueError("history tables need both rank 0's channel and their layers")
         if stop is not None and layers:
             raise ValueError(TABLES_UNDER_A_RULE)
+        if verdicts and ids:
+            raise ValueError(ONE_RETURN)
         self.out, self.per_prompt, self.per_output = Path(out), int(per_prompt), int(per_output)
         self.window_s, self.drained, self.inline, self.stop_rule = float(window_s), drained, inline, stop
-        self.verdicts = verdicts
+        self.verdicts, self.ids = verdicts, ids
         self.tables, self.layers, self.capacity = tables, tuple(int(x) for x in layers), int(capacity)
         self.sink, self.clock, self.release = sink, clock, release
         self.serve = serve or secrets.token_hex(32)
@@ -117,19 +122,23 @@ class BoundaryWindows:
     def of(cls, cfg: Mapping[str, Any], out: Path, sink: Callable[[dict], None] | None = None,
            release: Callable[[str], tuple[str, int] | None] | None = None, public: Sequence[Path] = ()) -> BoundaryWindows:
         """From a serve's configuration: ``check``, a serving template's descriptor id (`check_template`), and
-        ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline`` and ``verdicts``; ``tables``, rank 0's history
-        tables (`boundary_tables.Channel.of`: its private directory, never under ``out`` or ``public``); and ``stop`` (`Stop.of`:
-        the registered model's stop ids and length and T, the most ids a response has). A stop rule the serve can't
-        register (a T the word can't hold, or one beside history tables) is refused here, as the serve starts."""
+        ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline``, ``verdicts`` and ``ids``; ``tables``, rank 0's
+        history tables (`boundary_tables.Channel.of`: its private directory, never under ``out`` or ``public``); and
+        ``stop`` (`Stop.of`: the registered model's stop ids and length and T, the most ids a response has). A stop rule
+        the serve can't register (a T the word can't hold, or one beside history tables) is refused here, as the serve
+        starts, and so is a configuration that says both ``verdicts`` and ``ids``."""
         t, tc, stop = str(cfg["check"]), cfg.get("tables"), Stop.of(cfg.get("stop"))
         if stop is not None and tc:
             raise ValueError(TABLES_UNDER_A_RULE)
+        if cfg.get("verdicts") and cfg.get("ids"):
+            raise ValueError(ONE_RETURN)
         ch = BT.Channel.of(tc, out, *public) if tc else None
         return cls(out, lambda: check_template(t), int(cfg.get("per_prompt", 0)), int(cfg.get("per_output", 1)),
                    float(cfg.get("window_s", 600)), drained=bool(cfg.get("drained", True)),
                    inline=bool(cfg.get("inline", False)), sink=sink, tables=ch,
                    layers=BT.layers_of(tc["layers"]) if tc else (), capacity=int((tc or {}).get("capacity", HT.CAPACITY)),
-                   stop=stop, release=release, verdicts=bool(cfg.get("verdicts", False)))
+                   stop=stop, release=release, verdicts=bool(cfg.get("verdicts", False)),
+                   ids=bool(cfg.get("ids", False)))
 
     @property
     def check(self) -> SpecializedDefinition:
@@ -203,7 +212,7 @@ class BoundaryWindows:
                 try:
                     layout = _built(Layout(self.check, self.per_prompt, self.per_output, p, o, len(mine),
                                            run_root(self.serve, window), self.inline, self.layers, self.capacity,
-                                           stop=rule, held=held, verdicts=self.verdicts), kept)
+                                           stop=rule, held=held, verdicts=self.verdicts, ids=self.ids), kept)
                     c = commit(mine, layout, window, tables=self._tables(window, layout, mine))
                     write(c, self.out / f"w{window}" / f"p{p}-o{o}{'-nostop' if unheld else ''}")
                     line = {**c.public(), "serve": self.serve, "open_s": opened, "close_s": closed, "carried": carried,

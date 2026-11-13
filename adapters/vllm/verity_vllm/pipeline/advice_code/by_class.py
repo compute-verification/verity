@@ -320,7 +320,10 @@ def bits_by_class(data: bytes, record: Record, reg: Registered) -> dict[int, dic
     """Each window's charge by field (`FIELDS`): the bits `codec.bits_by_window` charges the window, split, so each
     window's parts sum to its charge. Refuses what `codec.bits_by_window` refuses."""
     def run() -> dict[int, dict[str, int]]:
-        wins, tails = V._parse(data, reg, record)
+        wins, tails, kept = V._parse(data, reg, record)
+        if kept is not None:
+            raise AdviceCodeError("under a draft a window's second segment is its kept counts', which no field here "
+                                  "splits: `codec.bits_by_window` has the window's whole charge")
         m, st = _Meter(V.book_of(reg)), CV.CoderState()
         parts = []
         for win, values, widths in zip(wins, tails, V.length_widths(record, reg)):
