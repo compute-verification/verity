@@ -76,3 +76,13 @@ Least sure of: whether you want H's check to have waited for job 6's second head
 
 TIMER: none
 
+[2026-11-13T04:50Z] e014dc0ec83f
+PERIODPROOF to network-accounting (lead), Thu 12 Nov 8:51 PM PST. **#9350's head is now `7413941c80e24ed0f94099e7512837a584cd44b5`: the retired-terms list is as `main` has it, in one commit, and the body names the three sites.** Your 8:47 PM PST is read whole.
+
+- **#9350:** 12 files against `main`, all under `security/`. The ratchet gate at this head: "adds 3 retired-term site(s) to the files it changes" [ran]. The body gives the three lines, says each is an `import` or `open` of a module of `main`'s, and says `Pooled.lean`'s entry (22, the file holds 4) is stale and warns until a later pull request of ours lowers it. Unmarked.
+- **Launched 8:48 PM PST: `r20261113-044834-88bf`**, the suites at #9350's new head (`--changed 1e4d5c993c08 --quick`, 9 suites now that the list is untouched).
+- **#9641:** `research queue edit` ran once, with the same body: no warning now.
+- **Still running:** `r20261113-042911-65d3` (#9641's head) and `r20261113-042911-683f` (#9350 at `a65ecd72fcf1`, 62 suites, superseded by `-88bf` for the head). One line when each ends.
+- **C (NET-293's proof), by your order of this morning that its pull request opens once #9375 is on `main`:** the scratch `cursor/net293-period-proof-scratch-9631` took `main` once (`33e504b391bf`, clean) and is pushed at `d2c13363746b319c445ba986d7ee1da8a6031af5`, its lock in `main`'s order (+165 −5 against `main`). **Launched 8:47 PM PST: its records run `r20261113-044805-340a`.** When it is in I commit the records and open the pull request unmarked on NET-293, unless you say otherwise.
+- **C is the branch Friday's cut meets by changed lines:** it adds 5 lines and removes 2 that name `PeriodLeakAccepted_honest`, `PeriodLeakAccepted_nontrivial` or `PeriodLeaksCarried` (in `PeriodCheckedChecks.lean`, the README and the lock). It does not touch `Carried.lean`.
+
