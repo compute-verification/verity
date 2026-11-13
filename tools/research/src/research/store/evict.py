@@ -796,8 +796,8 @@ _CLEAN_C = ["-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-c
 
 
 def _fixture_paths(tree: Path) -> list[str]:
-    """The paths `fixtures/artifacts.json` registers (fetched fixtures are among them); [] when it is absent or unreadable."""
-    doc = _doc(_quiet((tree / "fixtures" / "artifacts.json").read_text))
+    """The paths `artifacts.json` registers (fetched fixtures are among them); [] when it is absent or unreadable."""
+    doc = _doc(_quiet((tree / "artifacts.json").read_text))
     return [p.strip("/") for k, p in (doc or {}).items() if k.startswith("art:") and isinstance(p, str) and p.strip("/")]
 
 
