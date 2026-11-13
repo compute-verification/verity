@@ -121991,3 +121991,25 @@ Not mine, acted on none: none since 05:12Z.
 - That `main` will still merge cleanly when the queue builds its candidate.
 
 **Else:** the two lists stay at `1b478b7fdf27`, waiting on #9268 (open at 03:31Z). #9312 `b034e9d200b5` and #9313 `19474e53e4f7` stay unmarked. Mailbox read at 05:16Z: 355 lines, nothing since your 03:02Z.
+
+## SESSIONOF, Fri 05:17Z: both tries are sent again on vy-nebius-2 and hold places (`r20261113-051428-7214`, `r20261113-051449-dfaa`), expected end about 06:00Z; the thread failure on cpu-9 was most likely my own address-space cap, not the node; nothing new compiled
+
+In plain words. The two tries that died on vy-nebius-cpu-9 are sent again on vy-nebius-2, where both took a Lean place within seconds at 05:14Z. I think the cause of the crash was the address-space limit I put in the jobs after the 247 GB runaway, not the node. A thread's stack is address space, and a capped process that cannot map one gets exactly "failed to create thread: Resource temporarily unavailable". The new jobs have no such limit; a watchdog kills any process of the try that holds more than 32 GB resident instead. My machine was replaced twice this hour (05:09Z and 05:16Z); I hold `~/wt/.pen` on the present one (made 05:16:57Z).
+
+**The tries** [run: `research run`, then `slot.json` at 05:16Z]
+- `r20261113-051428-7214` on vy-nebius-2, place p2 since 05:14:53Z: `Sampled/ParamsProgram.lean` then `Sampled/AcceptedChecks.lean`, at `cursor/proofs-sessionof-5c1e` `826344e2c7` (pushed, not compiled).
+- `r20261113-051449-dfaa` on vy-nebius-2, place p3 since 05:15:16Z: `SampledTwo/MemberChecks.lean`, at `cursor/proofs-sessionof-9b17` `98ba037e04` (pushed, not compiled). They take separate places, so they share no build tree.
+- Expected end about 06:00Z [guess: about 25 minutes of dependency build, then the files]. vy-nebius-2's line was empty for both, so I did not move them to cpu-11.
+- The watchdog: the job runs `lean_changed.py --try` in the background and every 5 s kills any descendant above 32,000,000 kB resident. [run: tested on this VM on a stand-in holding 400 MB under a 200 MB threshold: killed, the loop's exit 1.] The job text is in this entry's commit history only through these lines; it is `bash -lc` of a loop over the files, with no `ulimit`.
+
+**Why I think the cap, not the node** [derived, not tested on a node]. Both `8403` and `b01d` ran under `ulimit -Sv 48000000`, which I added after `c0e3`'s runaway; they are the first of my tries with it that started. Lean reserves address space per worker thread, and lake runs many lean processes at once on 22 cores. The runs of mine that compiled tonight (`c879`, `d6f5`, `72d4`, `0a7f`) had no cap. If the new runs build their dependencies, that confirms it; INF-786 may then be closed as ours. I don't know whether other jobs on cpu-9 failed the same way at 04:24Z.
+
+**`ReadsBack`** (in `MemberChecks.lean`), in two lines:
+- It asks that `flock-verify`'s JSON parser, run on the session statement's partition, registered-reads and sample bytes, return exactly the member's partition object, the member's registered reads, and (after `Flock.norm`) the session record's sample.
+- It can be discharged by whoever builds the statement's bytes. HELDOF took it at 04:36Z, since `memberRaw` is theirs; it can be done either by a print-then-parse lemma giving equality, not just `Same`, or as MESSAGES proposes at 04:30Z, by having the statement carry the bytes the check parsed.
+
+**Not mine, acted on in no way:** this hour's Slack thread messages, the Linear issue PRF-613 and older timers.
+
+Not established: whether either file compiles; whether the cap was the cause; `ReadsBack` and the reference's shape stay hypotheses of `memberSession_ok`, which is empty until the form accepts a play. No lock entry is added (your 05:16Z item 3).
+
+**STOP RULE.** Nothing done. **NEEDS.** None new. **To post.** For INF-786, if you like: "the cpu-9 thread failures of 8403 and b01d were most likely the job's own `ulimit -Sv`; resent without it."
