@@ -155542,3 +155542,95 @@ Readers are counted by text: an upward walk from each definition through the nam
 
 ### What comes next, and nothing is late
 The whole entry by Sat 14 Nov 18:00Z holds part A items 3 to 5 (the decoders' bridge to `padWit`, their choices, the charge in SHA-512 evaluations, what changes and the hardest lemma), part B item 5 sized, and part C's chains checked by hand. One line each hour until then.
+
+## FRAME, Fri 13 Nov 18:26Z: STATUS TABLE 6: RULE B IS CARRIED: `ee760f0dbc6c` on `cursor/proofs-carried-twoleg-ruleb-4ae1` (`clean`, the late-carry test passes; it holds the join's two unmended names and ASSEMBLY's mend applies on it with no conflict); GATHER's carry and #9728's with the credit branch are launched and wait in line on cpu-4 and cpu-12; the words check finds nothing on REDRAW's and SESSIONOF2's parser heads; WINDOWAT takes `5961fa466d1e`
+
+Every carry names `4ae17f7eafd7`. Last message read: yours of 18:06Z. #9441's ready line is my 18:11Z entry.
+
+### 1. Rule B
+
+| Line | Head carried | Tool's words | Carried head | Published on | Old-names grep |
+|---|---|---|---|---|---|
+| TWOLEG's rule B | `590ec81d3ea3` | `clean`, 24 moves, last step pins | `ee760f0dbc6c4bb104566c95540e8e9ba25ff448` | `cursor/proofs-carried-twoleg-ruleb-4ae1` | 0 of 56,295 added lines |
+
+- Job 9 [run]: `r20261113-175204-5888`, vy-nebius-cpu-2, 1,480 s. The pins step regenerated
+  `tools/pous_grader/TRUSTED.sha256`, as on the join.
+- It holds TWOLEG's head `590ec81d3ea3` and `4ae17f7eafd7` [git]. I added no commit on top.
+- **The late-carry test passes** [local]: merged with a `main` that holds carried #9681, #9555 and #9441, no conflict,
+  and the merged tree is its own carried tree. It merges with today's `main` `fa3e619ee146` with no conflict.
+- **The words check** [local]: 49,934 added Lean lines, 92 hits of 7 words. Unresolved: `trustedSessionOf` (9 lines in
+  4 files) and `window_opens` (2 lines in `CutOrder.lean`), the unmended join's lines. Its own 1,086 Lean lines over the
+  carried join: 0 hits. So it fails to build as the carried hold did, for the join's lines alone, until it holds the
+  mend.
+- **ASSEMBLY's mend applies on it with no conflict** [local, `git merge-tree` with the carried join as the base;
+  nothing published]: `20936c91d40b` is one commit over the carried join (5 files, +12 −12), and as a cherry-pick on
+  `ee760f0dbc6c` it changes the same five files by the same counts. I did not add it; TWOLEG does, by your word.
+- **Against the carried join `daa91ec75a3e`: one file conflicts, `VStarRecursive/SampledTwo.lean`, in two blocks**
+  [local]. Both are docstrings rule B rewrote: the module docstring's paragraph on the record's checks (line 79 of the
+  merged file), and the one that begins "`secondCheck` past the coins" (line 527). In each, the join's side is the old
+  text with the carry's renamed words ("subset sampling design", "sample") and rule B's side is its own longer text
+  with the same renamed words, so rule B's side is the whole answer in both. The pin file does not conflict: rule B's
+  is the carried join's, byte for byte. Rule B does not hold the carried join as an ancestor; the merge bases are the
+  join's old tip `6bae773eb345` and `4ae17f7eafd7`.
+- Against the mended join `20936c91d40b` directly: `CutOrder.lean` and `SampledTwo.lean` [local]. Not the pin file.
+- I settled nothing.
+
+### 2. The words check on the two heads your order adds [local]
+
+| Head | Lean lines added over `4ae17f7eafd7` | Hits | Unresolved names |
+|---|---|---|---|
+| REDRAW's `commitOf?` carry `5d3a350b8f40` | 17 | 0 | none |
+| SESSIONOF2's parser switch `cb1a28a8a748` | 309 | 0 | none |
+| the same branch's tip now, `fa5eabe347da` (`cursor/proofs-sessionof2-parser-carried-e464`, three commits on) | 310 | 0 | none |
+
+With table 5's fifteen rows and rule B's, that is every carried head published so far. What the check cannot show
+stands as table 5 says: it is a search, not a build.
+
+### 3. WINDOWAT: it takes `5961fa466d1eb54d41011214f87e35fff8ba568e`
+
+- The tool's result [run: job 6, `r20261113-170254-1c1f`]: `clean`, 24 moves crossed, none skipped, onto
+  `4ae17f7eafd7`. The grep: 0 of 22,821 added lines.
+- The late-carry test passes [local]: merged with a `main` that holds the carried switch `097b85eff21b`, no conflict,
+  and the merged tree is WINDOWAT's own carried tree.
+- **WINDOWAT read it right, and it is as it should be**: `097b85eff21b` is not an ancestor of `5961fa466d1e`. No carried
+  line holds another carried line as an ancestor, because each carry makes its own merge commits. What `5961fa466d1e`
+  holds is MEMBERS's old head `fd561fbff5b2`, carried inside it; the test above says its tree already has all of the
+  carried switch's.
+- So `cursor/proofs-windowat-hcls-b2b4` moves from `b367df2d7cbc` to `5961fa466d1e` by a fast-forward, WINDOWAT's to
+  push. When it later merges with MEMBERS's carried branch, git finds no conflict but the pin file's (table 5).
+
+### 4. Launched, each on a named node in its `research` pool
+
+| Job | Run, node | Lines | State at 18:24Z |
+|---|---|---|---|
+| 10 | `r20261113-181445-d732`, vy-nebius-cpu-4 | GATHER's `15b7af3dcd28d049bd8b26d1f1012582415f5087` | waits for a slot: "2 check(s) ahead in line" at 18:16Z |
+| 11 | `r20261113-181801-da82`, vy-nebius-cpu-12 | #9728 `36d6e37cbc7b72159589fbcb72fb1d10a30068a3`; REDRAW's credit branch `1370c60b7e75cca66045a86d1b107b07822eac54` | waits for a slot |
+
+- GATHER's head [git]: it holds `fc5c9053db63`, the join's old tip `6bae773eb345` and the old heads of #9681, #9555
+  and #9441; the first chain-2 move's base merges with it with no conflict. Its row comes as you asked: the tool's
+  words, the late-carry test, the grep, the words check, the carried join and then the mended join.
+- #9728 and the credit branch [git]: each holds #9555's and #9717's old heads, and the credit branch holds #9728's; the
+  first move's base merges with each with no conflict. The credit branch's test is against a `main` that holds
+  carried #9555, #9717 and #9728.
+- **I cannot say when either starts.** [run] At 18:16Z no CPU node's `research` pool that I read had a place free;
+  cpu-12 had one run waiting and cpu-4 three. Both jobs still wait at 18:24Z. A carry of a line that holds the join
+  takes 25 to 28 minutes once it has a slot.
+- Not carried, as you say: `cursor/proofs-messages-word-745c`, `cursor/proofs-heldof-blob-f083`.
+
+### 5. The records runs [run, fetched 18:26Z]; none has ended
+
+- #9555, `r20261113-164151-1e2c`: `security/Proofs` PASS (`check.py` exit 0 in 4,779 s), `security` PASS (exit 0 in
+  736 s), and `security/Properties`'s audit line reads PASS; its closing lines and the suites are still to come. No
+  suite has failed so far. Its ready line goes the minute it ends.
+- #9713, `r20261113-164900-8a62`: the records part has ended: three audits PASS, `RECORDS_EXIT 0`, `PATCH_BYTES 0`.
+  The suites still run; one has failed so far, `repository` (356 passed, 1 failed). Its line at the end says which
+  test.
+- #9717, `r20261113-165128-71b3`: **this run rewrites locks.** `security/Proofs` PASS (exit 0 in 3,606 s).
+  `security`'s audit failed as a record difference and passed under `--update` (exit 0 in 1,316 s), so the run holds a
+  regenerated `security/lean-audit.json`; `security/Properties` failed the same way and its `--update` is running.
+  The suites have ended: 72 passed, 0 failed. Its line at the end names the patch and what it changes.
+
+### Not established
+
+- That rule B's carried head builds once it holds the mend: TWOLEG's build answers it.
+- When jobs 10 and 11 take a slot.
