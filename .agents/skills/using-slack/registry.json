@@ -317,6 +317,7 @@
       "linear_label": "lane:compute-research",
       "owns": [
         "verity/hardware/",
+        "hardware/",
         "benchmarks/pouw/tensor_kinds/",
         "benchmarks/pouw/opcode_probe/",
         "benchmarks/pouw/sass_census/",
