@@ -140918,3 +140918,408 @@ Mailbox read to line 521, your 12:19Z [read]: #9728's ready line is taken, no re
 **I wait on:** `r20261113-123455-52b2` (about 12:50Z [guess]); then your word on point 4's base, and "carry".
 
 ## HELDOF, Fri 13 Nov 12:39Z: trial head `cursor/proofs-heldof-joinswitch-f684` at `befd2767122` (the join `4e986e339ad` with the switch `ad3efc0ca19` merged; the PoUS pin by `pins.py --merged`, no pin stale); the build of the 84 modules under `Properties/Verity/SampledTwo/` is `r20261113-123857-9798` on vy-nebius-cpu-1 (`lean_changed.py --build`), launched 12:38Z, expected end 13:10Z to 13:40Z [guess], timeout 13:39Z plus slot wait. This VM is new since 12:34Z: the pen at `~/wt/.pen` was gone with `~/wt`, and I took it again at 12:35Z.
+
+## STOPDRIVER, Fri 13 Nov 12:40Z: order 3: one boundary record takes two stop records; the file; the index
+
+Read only. Nothing is written to a branch but this entry. One run on a node, no build on the VM.
+
+### STOP RULE
+
+**Question 1's answer is yes.** [run] One boundary record took two stop records, with two digests, through the
+first stage's own function and through the verifier's half of the stop audit, and each was accepted. No prover
+ran: the session verdicts were stand-ins, as in the tree's tests.
+
+**Two lines I gave you are wrong, and you passed both on.**
+
+- [run] 11:43Z, "a new stop record needs a new first stage, whose own root also opens once": false. One first
+  stage, in its one session, registered two stop records on one boundary record.
+- [run] "A class has no other root to open", as confirmed for the second stage: false in the same way. One
+  boundary record was sampled twice in one session. Each sample gives the second stage a root of its own.
+- [run] Also false: 11:43Z's "the first stage's root is the boundary record's own `window.run`", read as a
+  check. It is true of an honest run. The verifier's half accepted a hand-off whose session opened on another root.
+
+**No listed guarantee is false or empty by what I read.** [read] I read no lock for this entry. The Lean I read
+(`RecordAcross.lean`) says in its own words that the caller names the family (line 9), and it holds what it says.
+
+**Two docstrings on `main` say more than the two-stage commands hold.** No record on `main` is involved.
+
+- [read] `coins.py` 15 to 16: "a prover that reads a sample and commits again has a sample no verifier takes".
+- [read] `coins.py` 351 to 352: the label "is the verifier's family ... so a prover that reserved several
+  families picks none of them after reading".
+- [read] Both are true where the verifier names the family. In `two_stage.resume` (386) and `stop_audit.resume`
+  (284, 326) the family is the hand-off's own word, and so is the session's root (276, 324).
+
+**Friday's demo is not touched.** [read] Its commands run `--challenger local`, where every run has a ledger of
+its own. I change nothing in its trees.
+
+### In short
+
+1. **Yes**, by one freedom with two forms: nothing the verifier reads says how many families of challenges the
+   first stage's session holds, or which of them a record's sample came from. Closure, three parts: the stop
+   audit's root from D_b alone (no line more); the verifier names the family and the root itself (about 25
+   lines, 80 of tests); and, for what neither covers, the reader's rule over every session the ledger shows.
+2. **`out/serve-registrations.jsonl`**: one registration record a line, bare. The writer has each in hand.
+   About 22 lines and 45 of tests.
+3. **Both passages of network-accounting's worker are so.** Our third check should take the index from the
+   network certifier's own filing function, not from "exactly one index has (P, O)". About 9 lines more: the
+   115 become about 124, the tests about 240. One question goes back with it: which verdict counts the rows.
+4. **The registrations' file's first line** (your 12:34Z addition): passing over it is one line; refusing a
+   file without it is about 6 lines and 25 of tests, and I would refuse; our own file should not carry one.
+
+### Words
+
+- **Boundary record**: the registration record of one class of one window, built from the class's
+  `commit.json`. **D_b** is its digest.
+- **Stop block**: the block that computes, for one request, how many ids its response releases under the stop
+  rule. **`b.stop`** is the committed value that holds each request's result. Its **root** is its tree's top hash.
+- **Stop record**: the registration record of a class's stop blocks. It names D_b as `previous`. **D_s** is
+  its digest.
+- **Session**: one challenger session on the auditor's devices, opened on a **root**. The gate opens a root once.
+- **Family**: a named group of challenges inside a session. The challenger releases a family's challenges
+  after it has received one digest for that family.
+- **Hand-off**: `stage1.json`, the file the first stage's command writes for a class.
+- **The verifier's half** of the stop audit: `stop_audit.resume`, Lean's `across`, and `decide`.
+- **Head**: what the network certifier signs for an execution phase. **Schedule**: its registered list of
+  classes. A class's **index** is its place in that list.
+
+### How I know
+
+- [run] Run `r20261113-121708-a074`, on vy-nebius-cpu-5, tree `053b8e50fe8a`, exit 0, six minutes. It built the
+  Lean verifier's executable there and ran a one-off script, `q1_two_stop.py`, which is not in the tree. Its
+  output and the script are in the run's `out/` and in my note.
+- [run] What was real in it: the first stage's own function (`two_stage._first_all`), `stop_audit.resume`,
+  Lean's `across`, and `stop_audit.decide`. What stood in: the tree's own test challenger, and session verdicts
+  with no proof behind them, as `test_stop_audit.py` uses. No gate and no prover ran.
+- [read] Everything else is `main` at `053b8e50fe8a` and #9501's head `f4d2e20e290d`, with line numbers.
+
+### 1. What holds one stop record to one boundary record: nothing does
+
+**Who writes and registers it.** [read] `two_stage.py first --stop`: `_first_all` gives each stop class one
+family more in the window's one session (900 to 902), and `stop_first` builds the record with
+`boundary_stop.stop_record`, registers it and commits the family to D_s (430 to 434). The stop audit registers
+nothing new: it builds the same record again and refuses another digest (`stop_audit.py` 289 to 292).
+
+**What D_s is a function of.** [read] `boundary_stop.stop_record` (194 to 206) and `registration.record` (181):
+
+| part of the stop record | where it comes from |
+|---|---|
+| program, query, partition, population | the class's layout, which `commit.json` names and D_b's domains bind |
+| `law` | the verifier's own sampling design |
+| `window` | the boundary record's `window`, with `population: "stop"` |
+| `previous` | D_b |
+| `registered` | the boundary record's `b.request` and `b.egress`, held to its roots (174 to 191) |
+| `roots`: one entry, `b.stop` | its leaves and domain from the layout; **its root from `commit.json`** |
+
+**What the prover is free to choose once the boundary record is fixed: one thing, `b.stop`'s root.**
+
+- [read] The boundary record does not name it: its roots are `Layout.ports()`, the values and tables, and
+  `b.stop` is not among them (`boundary_rows.py` 621 to 631, 498 to 500).
+- [read] The root moves with the salts of `b.stop`'s leaves, which are fresh from the operating system at each
+  commitment (634 to 650), and with the words themselves.
+- [read] Nothing else is free. The record holds no nonce, no time and no order of anything. The sample's bytes
+  are not in it. The receipt holds a time and is not part of the digest (`registration.py` 215 to 218).
+- [run] Two `commit.json` files of one class that differ only in `b.stop`'s leaf salts differ in `seconds` and
+  in `values["b.stop"]` and nowhere else. They gave one D_b (`1fd1a58ead07`) and two D_s (`c9c35a98f678`,
+  `092ecab2d0cd`).
+
+**What refuses a stop record that is not the one the session produced.**
+
+- **`stop_audit.resume`**: [read] it holds the hand-off's stop record to the one the hand-off's own
+  `commit.json` gives, and the sample to the bytes the hand-off says were read (263 to 300). Every input is the
+  hand-off's or the verifier's own copy. It knows no other stop record, so it refuses none.
+- **The registration check**, Python and Lean: [read] `R6-previous` and `R6-window` refuse a second record on
+  one window in one stream's log (`registration.py` 383 to 385, `Registration.lean` 597 to 598). [read] Each
+  stop stream is built new with a log of the boundary record alone (`two_stage.py` 428 to 429, `stop_audit.py`
+  285 to 286). So the rule is never shown two stop records.
+- **`Record.across`** (Lean): [read] it holds that the stop record's `previous` is in the boundary stream's log,
+  that every challenge released after D_b comes before the first released after D_s, and that the sample read
+  exactly the challenges of the family "which the caller names and the evidence does not" (line 9), all of them
+  released after D_s. It reads every family's lines for the order and refuses no other root in them.
+- **The challenger's signed log**: [read] a family follows one digest (`coins.FAMILY_ROOT`, 286), and a
+  session's labels are distinct. [run] The log itself showed both stop records: family `draw/2` received
+  `c9c35a98f678` and `draw/3` received `092ecab2d0cd`. Nothing reads the log for that, and from a digest alone
+  no reader can tell that it is a stop record on D_b.
+
+**Yes or no: yes.** [run] Each of the four cases below was accepted by `resume` (both digests held), by the
+first stage's own order check, by Lean's `across` (the log and the order both accepted) and by `decide`
+(symbol `accept`, no failed check). Six requests a class, two sampled.
+
+| case | D_b | D_s | family and sample of the class | family and sample of the stop blocks |
+|---|---|---|---|---|
+| one directory (control) | `1fd1…` | `c9c3…` | `draw/0`: 1, 4 | `draw/1`: 1, 5 |
+| two stop records, hand-off 1 | `1fd1…` | `c9c3…` | `draw/0`: 0, 4 | `draw/2`: 2, 5 |
+| two stop records, hand-off 2 | `1fd1…` | `092e…` | `draw/1`: 2, 5 | `draw/3`: 2, 3 |
+| same directory twice, 1 | `1fd1…` | `c9c3…` | `draw/0`: 1, 5 | `draw/2`: 3, 5 |
+| same directory twice, 2 | `1fd1…` | `c9c3…` | `draw/1`: 3, 4 | `draw/3`: 2, 4 |
+| a session on another root | `92f1…` | `281b…` | `draw/0`: 3, 5 | `draw/1`: 4, 5 |
+
+- [run] In the last row the boundary record's `window.run` is `a7a7…` and the session opened on `1111…`.
+- [run] In rows 2 to 5 one boundary record has two samples, so two second-stage roots: `c3193eb12392` and
+  `3202dc578c67`, then `249c40d9bba5` and `c0e007584afa`.
+- [derived] Both stop records can be the honest words under other salts, so both prove. I ran no prover.
+
+**By which freedom.** One freedom, the count of families, reached two ways. A third way is beside the question.
+
+1. **More directories than classes.** [read] `two_stage.py first` takes any list of directories, holds them
+   only to one run and one window index (1141), gives each a family, and writes each hand-off under its
+   directory's name (1161). Nothing refuses one class twice. [derived] So the prover's files alone do it, even
+   where the auditor runs the unchanged command, if the launcher hands it the window's directories as found.
+2. **The prover's own client.** [read] The gate's client is the prover's lane: "only such a key reserves and
+   opens a window: the reserve records that name as `by`, its prover" (`auditor.py` 30 to 31). It names the
+   families (`--families JSON`, 1078 to 1085) and the root. [read] The verifier's half takes both from the
+   hand-off. [run] The last row stands for this form. The first stage's function ran unchanged on a
+   `commit.json` that the script made read as one run for the session and as another for the record.
+3. **Another boundary record of the same requests.** [read] A window's run is a hash of the serve's nonce and
+   the window's index (`boundary_rows.py` 260 to 262), and the nonce is the serve's own word
+   (`stop_audit_small.py` 162). [derived] The same requests committed under another nonce are another D_b, with
+   its own first-stage root. That is outside "holds one boundary record". The reader meets it all the same.
+
+**What the freedom is worth.**
+
+- [derived] At network-accounting's rate, every block (`1/1`), the stop sample is the whole class. A second
+  stop sample gains nothing there. A second stop record still gives the second try they describe, once the
+  stop audit's root is a function of D_s.
+- [derived] Below `1/1` it is a choice among samples. That is the compute audit: its first stage samples 2 of
+  6 here, and the prover hands on the sample that misses its wrong requests. [read] Their reader does not hold
+  the second stage's rate (`stop_verdicts.py` 226: the rated verdicts are the stop record and the response tie).
+- [read] Today the stop audit opens no challenger session at all (`stop_audit.py` 480 to 546). It can run any
+  number of times on one hand-off: `stop_audit_small.sh` runs three audits on one (76, 79, 80).
+
+**Which of their two holds: neither, today.** The closure I would take, in three parts.
+
+| part | what changes | lines | tests |
+|---|---|---|---|
+| A | the stop audit's root: SHA-512(tag, 0x00, `{"boundary":"D_b"}`) | 0 more | 0 more |
+| B | the verifier names the family and the root itself | about 25 | about 80 |
+| C | the reader accounts for every session in the ledger; our records name the first stage's | about 6 | about 15 |
+
+- **A. The root from the boundary's digest alone.** [derived] It is the body of the 11:43Z design with one key
+  changed, inside the same 55 lines. The gate then refuses a second stop audit on a boundary record whatever
+  stop records exist. A reader computes the root from the boundary record it is handed, with no stop record,
+  so it can name the class of an opened root that has no record. That is what their reader's rule needs.
+- **A, with D_s beside D_b in the body**: [derived] no. Two stop records are two roots again, and the reader
+  computes nothing without the stop record. With D_s alone the reader's rule cannot be applied either: a root
+  of a stop record the reader never saw maps to no class.
+- **B. One family a record, named by the verifier.** [derived, nothing written] A class's rank in the session
+  becomes a function of its layout: its two sizes, whether it has a stop block, and whether the sample is of
+  the stop blocks. `_first_all` reserves by it and refuses two directories of one rank before any session.
+  `two_stage.resume` and `stop_audit.resume` name the family from the layout and refuse a hand-off that names
+  another, and `resume` refuses a hand-off whose `window_root` is not its record's `window.run`.
+  `two_stage.py` about 18 lines, `stop_audit.py` about 7. No Lean changes: `across` is handed the family, and
+  the caller now hands its own. [read] Two tests name a family by its number today
+  (`test_two_stage_driver.py` 599, `test_stop_audit.py` 255).
+- [derived] With B, one session per window run (the gate), one family per class and kind (the labels are
+  distinct), one digest per family (`FAMILY_ROOT`): one sample a boundary record and one stop record on it.
+- **C. For form 3, and for a first stage that was killed.** [derived] Neither A nor B sees a session whose
+  records are never handed over. Only the ledger does. The rule that covers it is the reader's: every session
+  the ledger shows the prover opened in the monitoring period is named by a record handed, or the execution
+  phase stays at its whole schedule. For that our verdict records name the first stage's session beside their
+  own (its root and id are in the hand-off): about 6 lines in the writer. The rule is network-accounting's.
+
+**What "one stop audit a boundary record, ever" costs an honest run.**
+
+- [derived] Any failure after the open returns and before the record is written loses that class's stop
+  verdict for that window, with no second run: a prover's crash, an out-of-memory kill, a machine replaced, a
+  proof deadline missed, a wrong `--bin`.
+- [read] Their reader then keeps the class at its whole schedule, and "one class at its whole schedule keeps
+  its execution phase at its whole schedule" (`stop_verdicts.py` 114 to 115). "Nothing retries a verdict": the
+  mend is a new serve (53 to 54).
+- [derived] A negative control cannot share the honest run's boundary record. [read] `stop_audit_small.sh`
+  runs its `unaccepted` and `incomplete` audits on the honest hand-off (79 to 80). [derived] Under a gate only
+  the first of the three would open. [read] Its `length` control already has a serve of its own
+  (`stop_audit_small.py` 15, 89).
+- [derived] In lines: nothing more than part A.
+
+### 2. `out/serve-registrations.jsonl`: the writer can write it
+
+**What their reader expects** [read: `stop_verdicts.py` at `f4d2e20e290d`].
+
+- One JSON object a line, each a registration record itself, with no wrapper. The reader finds a record by
+  `one_stage.registration.digest` of the line (319 to 327, 653 to 660).
+- Two kinds of record (24 to 27, 362 to 396):
+  1. the class's boundary record, which every verdict record names as `registration`;
+  2. for a stop record's verdict and a response tie's, the record of the verdict's own stream, which the
+     verdict record names as `stream_registration`. Its `previous` must be the boundary record's digest. Its
+     `law` must be `{"law": "subset", "k": K}` over its `population`, K over the population must be `1/1`, and
+     the verdict record's `rate` must say the same.
+- A line that is twice in the file does no harm, and a record no verdict names is ignored. A line that does not
+  digest is a record that doesn't read: in a run that is not superseded it holds no execution phase at all.
+
+**Whether the writer has each in hand: yes** [read: `verdict_record.py` on `main`].
+
+| record | where the writer holds it | held to |
+|---|---|---|
+| boundary record | `--first`'s `record` (109 to 116) | the digest the record names |
+| stop record | `--first`'s `stop.record` (119 to 130) | its digest, and `previous` is D_b |
+| second stage's interior record | `--stream` (133 to 176) | the summary's digest, and `previous` is D_b |
+
+- [read] The stop record's `law` is the rate design as a subset of K, and the writer's `rate` is `NUM/DEN` in
+  lowest terms (84 to 97, `service.py` 740 to 761). So their rate test reads our record as it is.
+- [read] The response tie's stream record is network-accounting's own. Our writer never holds it.
+
+**Lines and tests** [derived, nothing written].
+
+- `verdict_record.py`, about 22 lines: a name for the file; `record` hands back the two registration records
+  with the verdict record; a function that appends each once, by digest; the call in `main` after the verdict
+  record's line is written; the docstring.
+- `test_verdict_record.py`, about 45 lines: a stop record's run writes two lines, each digesting to what the
+  verdict record names; a second verdict on the class adds its own stream's record and not the boundary's
+  again; the stop record's line passes their rate test's three conditions; a run that writes no verdict record
+  writes no line.
+- [derived] It belongs in the writer's follow-up, which already renames the verdicts' file.
+
+**Two things beside it.**
+
+- [read] Their reader takes verdict records from files named `out/*-verdicts.jsonl` (201). Ours is
+  `verdicts.jsonl` (`verdict_record.py` 76), which that pattern does not match. The follow-up names the file.
+- [read] At that head their list of verdict formats holds the response tie's alone (206). A stop record's
+  verdict and a compute audit's read as missing until their formats are listed.
+
+### 3. The two ways a schedule can fail "exactly one index has the class's (P, O)"
+
+**Passage 1, two classes of one (P, O): it is so.**
+
+- [read] The schedule may list them: "a list, in order, which may hold two of one (P, O), a stop class and a
+  no-stop class of one size" (the certifier's `PROTOCOL.md`, "The classes"). A class in the schedule is its
+  sizes at its place. It has no field for its kind (`content_rows.py` 236 to 271).
+- [read] The adapter files a request the rule ends as served under (P, T) with a stop block, and every other
+  under its own sizes without one (`boundary_stop.py` 161 to 171). The two have one (P, O) where the other's
+  own output size is T.
+- [read] The network certifier files by sizes alone, the first listed class that holds the release
+  (`content_rows.py` 314 to 321). [derived] So of two listed classes of one size the second never gets a
+  release, and the first one's count is of both kinds.
+- [derived] Our check as I worded it at 10:46Z refuses that schedule.
+
+**Passage 2, the two sides size a class differently: it is so.**
+
+- [read] A stop class is (P, T) whatever a request was served (`boundary_stop.py` 170). The network certifier
+  asks only whether a class holds the request's bytes and the ids released.
+- [derived] So a stop class's releases all file at one index only where no class listed before it holds its
+  least release. Its least release has the fewest prompt ids of its P and no ids out. That is: every class
+  listed before (P, T) has a smaller P. Their worker's wording says the same.
+- [derived] One thing more in it. The network certifier's test of P is on the request's bytes
+  (`request_room`, 136 to 143), the adapter's on the count of prompt ids. They agree for a canonical id
+  request, whose length grows with each id (`active.id_request` 568 to 599). For any other request they need
+  not.
+
+**What our third check should do: ask the network certifier's own filing function.**
+
+- [derived] Neither refuse a schedule for listing a size twice, nor pick by a kind the schedule does not carry.
+  The check builds the class's least release and its greatest, passes both to `content_rows.file`, and refuses
+  unless both file at one index whose sizes are the class's. Every release between them then files there too,
+  because an earlier class that holds a larger release holds the smaller ones.
+- What it does in each case [derived]:
+
+| the schedule | a stop class (P, T) | a class without a stop block |
+|---|---|---|
+| lists its size once, nothing earlier holds it | its index | its index |
+| lists its size twice | the first of the two | the first of the two |
+| lists (P, smaller O) before (P, T) | refused, naming that class | its index |
+| lists (P, T) before (P, smaller O) | its index | the smaller one is refused: it files at (P, T) |
+| lists a larger P before it | refused, naming that class | refused where that class's O holds it |
+
+- [read] Where a stop class and its sibling both name the first index, their rule already keeps that class at
+  its whole schedule: the class's records name two registrations (`class_charge.py`, "One serve, one
+  registration", at #9501's head).
+- [derived] A refused class is "a class the schedule does not list" in the sense they accepted: the launcher
+  leaves it out, or the whole window is refused before the session.
+
+**What it does to the 115 lines.**
+
+- [derived] The function with the three checks grows from about 45 lines to about 54: the two releases, the
+  two calls, the sizes, and a refusal that names the earlier class. So about 124 lines in all, and about 240
+  of tests: the five rows above, each one test.
+- [derived] If you would rather refuse a schedule with a size listed twice: no line changes, and passage 2
+  stays open, since "exactly one index has (P, O)" says nothing of where a short response files.
+- [read] The check would import `content_rows` from the certifier's verifier. A command of
+  `benchmarks/one_stage` already imports that package (`a5_warden.py` 82 to 86).
+
+**The question that goes back with it: which verdict counts the rows.**
+
+- [derived] The network certifier's class at index i holds every release of those sizes. Our stop class holds
+  only the requests the rule ended as served. A request that was cut short, with the same prompt size and at
+  most T ids, is in their class i and not in our stop class. So our stop record's "complete" is of our class's
+  requests, and the head's count can be larger.
+- [derived] Something has to hold the two counts equal before class i is charged below its schedule. Either
+  the response tie refuses a release that has no stop word, or our records state the class's count of requests
+  (the summary has it as `spans`) and their reader compares it with the head's. The second is one line in the
+  writer. Under a schedule that fixes a class's rows whatever the load, the head's count is not the load, and
+  I do not know what is compared.
+
+### 4. The registrations' file gains a first line (your 12:34Z addition)
+
+**What I read.** [read] The draft at `0ffd4a4716d1` was committed at 12:05Z, before the 12:17Z ruling. Its writer
+(`connection_rows_run.keep_registrations`) writes registrations only, one a line, and no first line. So the
+first line's own field names are not in it. [relayed] The first line names the SHA-512 of the network
+certifier's public key and the session.
+
+**1. What passing over the first line costs.**
+
+- [derived, nothing written] Our commands do not read that file yet. The read is in the function with the
+  three checks, which the first stage calls once for a window. Passing over the first line is one line there
+  and one test of about 8 lines.
+- [derived] With answer 2's refusal it is about 6 lines and about 25 of tests. The head's sizing is then
+  about 130 lines and about 265 of tests.
+
+**2. Refuse a file that has no such first line: yes.**
+
+- [read] Every registration's line is an object whose `format` is
+  `verity-network-certifier/connection-rows-registration/v1` (`connection_rows.py` 156 and 501). Their reader
+  tells a registration by that word (`head_of`, 269 at the draft).
+- [derived] So our commands can tell today, with what is ruled: a first line whose `format` is the
+  registration's is the older shape, and the command refuses it by name. It refuses before any session, so it
+  spends no root. A first line that is no object, or names no key's hash or no session, is refused too.
+- [derived] That test says what the first line is not. One word from network-accounting makes it say what it
+  is: a `format` of the first line's own. Then one comparison refuses every other shape, an empty file and a
+  file cut short among them. I would ask for it.
+- [derived] Our commands still check no signature and hold no key. They could copy the first line's two
+  values into their summary, so a record says under which key and session its head was checked: 2 lines. That
+  is yours and theirs to want.
+- [read] One thing for them: at the draft's head their own reader passes every line of this file to `head_of`
+  (661 to 663, 734 to 735). A first line that is no registration is there a record that doesn't read.
+
+**3. Should `out/serve-registrations.jsonl` carry the same first line: no.**
+
+- [derived] The first line of their file says under which key the lines' signatures were checked. A line of
+  ours has no signature. A reader finds it by its digest, which a verdict record names, so a line no record
+  names counts for nothing and a changed line is not found.
+- [read] What says a boundary record was registered is the challenger's signed log. [relayed] By the 11:57Z
+  ruling each verdict record names the SHA-512 of the key that evidence was checked under. [derived] So the
+  word a first line would carry is already in each record, beside the verdict it belongs to. A second copy at
+  the head of a file can only disagree with it.
+- [derived] The file has more than one writer in a run: our writer adds lines after each verdict, and the
+  response tie's stream record is theirs to add. A first line needs one writer that creates the file.
+- [read] Their reader at `f4d2e20e290d` digests every line of the file (`digest_of`, 319 to 327), and any JSON
+  object digests. [derived] So a first line there would read as a record no verdict names: harmless, and
+  meaning nothing.
+- [derived] What would change my answer: a reader that must refuse the whole file, before it reads a verdict
+  record, where it was made under another challenger's key. Then about 8 lines and 15 of tests, and the file's
+  one creator has to be named.
+
+### Branches
+
+Unchanged, nothing pushed but this entry and the note: #9699 `725720f8a4a0`, #9624 `64364792ed70`, the cards
+branch `08b5d4b3c0a6`, #9458 `049c5875989c`. Run `r20261113-121708-a074` has ended. No timer is set.
+
+### Not established
+
+1. The gate itself was not run for this entry. That its reserve takes the families its client names is read
+   (`auditor.py` 1078 to 1085). The run used the tree's test challenger.
+2. The command line `two_stage.py first --boundary A B` with two directories of one class was read, not run.
+   The run called the function it calls.
+3. No prover ran and no second stage ran. That two stop records on one boundary record both prove is derived,
+   and the two second-stage roots were computed, not opened.
+4. Whether any listed guarantee takes "one sample a registration" as a premise that the two-stage commands
+   are meant to supply. I read no lock and no guarantee's statement for this entry.
+5. What registers a boundary record before its sampling challenge, other than the first stage's own session,
+   so that a second one of the same requests (form 3) would be seen. Not read.
+6. Whether the one-stage audit (`a5.py`) holds the root and the family where the two-stage commands do not. Its
+   docstrings say the verifier names both. I did not read its verifier's half line by line.
+7. Part B's sizes are from reading. Whether `a5_coins.start` takes ranks that are not 0 to n-1 without a
+   change was read (it takes a list and compares sets, 780 to 782) and not run.
+8. Where the network certifier's side learns whether class i is a stop class. The schedule does not say, and
+   the response tie has one block for each kind.
+9. Whether a served stop class's requests are canonical id requests, on which passage 2's agreement rests.
+10. Whether network-accounting's reader will read the ledger at all. Part C is theirs to take or leave.
+11. Whether the launcher of a served class is the auditor's or the prover's. No launcher is in the tree.
+12. The first line's field names and whether it has a `format` of its own. The draft read holds no first line.
