@@ -207,6 +207,83 @@ private def charged (place : String) (β : Nat) :
 #guard egress [named (period "up4") 0 600000 [audit 0], audit 0] ==
   [("leak", "up4", "certified", some 6000000, some 5960064, some 39936, "1/25"), charged "up0, up2" 1400000]
 
+/-! ## Each guard above with the fact it reads changed
+
+Every `#guard` from here to the section's end is one of the guards above with one fact changed, and is to fail: the
+form, the protocol's id, the example's figures, what the check publishes, the reading, and the rows. The first three
+below are controls and are to pass. -/
+
+/-- `account` with its amount changed by `f`. -/
+private def amountAt (f : Core.Account.Amount → Core.Account.Amount) : Core.Account :=
+  { account with amounts := account.amounts.map f }
+
+private def bySecond : Core.Account.Time := .steps (.run (.published "start_ms") (.published "span_ms")) ⟨1, 1⟩
+private def one : List Core.Answer := [named today 120000 240000 [audit 0], audit 0]
+private def two : List Core.Answer :=
+  [named today 120000 240000 [audit 0], named today 360000 240000 [audit 0], audit 0]
+private def apart : List Core.Answer :=
+  [named today 120000 240000 [audit 0], named today 360000 240000 [audit 0] "s1", audit 0]
+private def oneRow : List (String × String × String × Option Nat × Option Nat × Option Nat × String) :=
+  [("leak", "up0", "certified", some 600000000, some 239960064, some 360039936, "1/25"), charged "up2, up4" 410000]
+private def twoRow : List (String × String × String × Option Nat × Option Nat × Option Nat × String) :=
+  [("leak", "up0", "certified", some 600000000, some 479920128, some 120079872, "2/25"), charged "up2, up4" 410000]
+private def apartRow : List (String × String × String × Option Nat × Option Nat × Option Nat × String) :=
+  [("leak", "up0", "certified", some 600000000, some 239920128, some 360079872, "2/25"), charged "up2, up4" 410000]
+private def onUplink : List Core.Answer := [named (period "up4") 0 600000 [audit 0], audit 0]
+private def bareRow : List (String × String × String × Option Nat × Option Nat × Option Nat × String) :=
+  [("leak", "up4", "certified", some 6000000, some 5960064, some 39936, "1/25"), charged "up0, up2" 1400000]
+
+-- controls, to pass: the account unchanged is the account, and the rows above under their new names
+#guard amountAt id == account
+#guard egress one == oneRow ∧ egress two == twoRow ∧ egress apart == apartRow ∧ egress onUplink == bareRow
+#guard egressOf account site "h" 600 one == oneRow
+-- the form: an egress at a moment; a share beside a free amount
+#guard (amountAt fun m => { m with time := .moment }).Formed
+#guard (amountAt fun m => { m with share := some (.published "share") }).Formed
+-- the protocol's id
+#guard ({ account with protocol := oneStage } : Core.Account).protocol == protocol.id
+-- the example's figures: five link-windows
+#guard (publishedAt 5).K == 4 * (9088 + 896) ∧ (publishedAt 5).eps.toString == "1/25"
+-- what the check publishes: a profile with no link; a public output with no `K`; an answer that holds the five keys
+#guard publishes ({ today with profile := some (Json.mkObj []) } : Core.Answer)
+  [.published "K", .published "eps", .profile "link"] == [true, true, true]
+#guard publishes ({ today with published := some (Json.mkObj []) } : Core.Answer)
+  [.published "K", .published "eps", .profile "link"] == [true, true, true]
+#guard publishes (named today 120000 240000 [audit 0]) [.published "registration_head", .published "start_ms",
+    .published "span_ms", .published "session", .published "rests"] == [false, false, false, false, false]
+-- the reading: another public output; the amount under another key; a step of a second
+#guard reading (periodOf (publishedAt 5) "up0") == [some (some "up0", 39936, "1/25", 0, none)]
+#guard readingOf (amountAt fun m => { m with key := .published "cells" }) today ==
+  [some (some "up0", 39936, "1/25", 0, none)]
+#guard readingOf (amountAt fun m => { m with time := bySecond }) (named today 120000 240000 [audit 0]) ==
+  [some (some "up0", 39936, "1/25", 240, some (120000, 360000))]
+-- the rows, by what `rows` is given: the link's registered capacity; the period's ticks; the head; a rejected period;
+-- no bare uplink
+#guard egressOf account (siteAt 999999) "h" 600 one == oneRow
+#guard egressOf account site "h" 601 one == oneRow
+#guard egressOf account site "g" 600 [named today 120000 240000 [audit 0] "s0" "g", audit 0] ==
+  egressOf account site "g" 600 []
+#guard egress [named ({ today with verdict := .reject } : Core.Answer) 120000 240000 [audit 0], audit 0] == oneRow
+#guard egressOf account (siteAt 1000000 false) "h" 600 onUplink == bareRow
+-- the rows, by the account's own fields: the head's key; the answers it rests on, and their protocols
+#guard egressOf { account with head := none } site "h" 600 one == oneRow
+#guard egressOf { account with rests := none } site "h" 600 [named today 120000 240000 [audit 0]] == egress []
+#guard egressOf { account with rests := some ⟨.published "rests", []⟩ } site "h" 600 one == oneRow
+-- and by its amount's: the metric, the part, the place, the unit, the side, the series, the error's key, the pool, what
+-- it holds when it certifies nothing, and the terms it does not price
+#guard egressOf (amountAt fun m => { m with metric := "sent" }) site "h" 600 one == oneRow
+#guard egressOf (amountAt fun m => { m with part := .compute }) site "h" 600 one == oneRow
+#guard egressOf (amountAt fun m => { m with place := none }) site "h" 600 one == oneRow
+#guard egressOf (amountAt fun m => { m with unit := Core.Account.bytes }) site "h" 600 one == oneRow
+#guard egressOf (amountAt fun m => { m with side := .verified }) site "h" 600 one == oneRow
+#guard egressOf (amountAt fun m => { m with series := none }) site "h" 600 apart == apartRow
+#guard egressOf (amountAt fun m => { m with error := .published "cells" }) site "h" 600 one == oneRow
+#guard egressOf (amountAt fun m => { m with pool := .once }) site "h" 600 two == twoRow
+#guard egressOf (amountAt fun m => { m with uncertified := .flagged (.published "certified") }) site "h" 600 one ==
+  oneRow
+#guard unpricedOf (amountAt fun m => { m with unpriced := [] }) one ==
+  [["each audit's knowledge error", "each audit's collision errors"]]
+
 end AccountExample
 
 end NetworkCheck.Period
