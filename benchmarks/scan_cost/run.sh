@@ -56,7 +56,7 @@ if [ -d "$KEPT" ]; then
       done
   echo "scan_cost: $(du -sm "$KEPT" | cut -f1) MB of the scan's files kept, without the verifier's copies a kept log names"
 fi
-export PYTHONPATH=$ROOT:$ROOT/benchmarks/harness:$ROOT/verity/configuration/config
+export PYTHONPATH=$ROOT:$ROOT/benchmarks/harness:$ROOT/tools/config
 PY=(python3)   # the result's writer is the harness kit's, which this job's python3 may be too old to import
 python3 -c 'import verity_bench.kit' 2>/dev/null || PY=(uv run -q --no-project --python 3.12 python)
 PATH=$PATH:$HOME/.local/bin:$HOME/.cargo/bin "${PY[@]}" benchmarks/scan_cost/result.py write "$RESEARCH_RUN_DIR" --scan-exit "$rc"
