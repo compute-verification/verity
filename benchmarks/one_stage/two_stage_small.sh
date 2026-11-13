@@ -26,7 +26,7 @@
 #   the select's inputs beside the ids, kept in the scratch serve's private/ (boundary_logits.load), which `second`
 #   takes as --kept: the honest play in 20 units, which takes no negative case's name
 #   SMALL_GPU=1 builds flock-circuit with its device prover (on CUDA 13.3's toolkit: CUDA_TK, the node's own, or the one
-#   verity/protocols/flock/pod/cuda-13.3.sh finds or unpacks beside flock-circuit's build) and runs `second` with
+#   verity/protocols/flock/prover/pod/cuda-13.3.sh finds or unpacks beside flock-circuit's build) and runs `second` with
 #   --devices, so its sessions prove on a card: the cards the run already holds (the indices in CUDA_VISIBLE_DEVICES, as
 #   research run --gpus N sets them), else one that gpu-lease hands `second` alone, for at most SMALL_LEASE_MIN minutes
 #   (30), so the builds and the first stage hold none
@@ -61,9 +61,9 @@ GPU=0; ON_CARDS=()
 if [ -n "${SMALL_GPU:-}" ]; then
   # the unpacking runs in a subshell, under its own shell options; sourced again, the script only names the toolkit it
   # finds. With the toolkit named, the build installs nothing on the node, and the prover finds its runtime beside it
-  ( set +euo pipefail; FLOCK_WORK=$FW . verity/protocols/flock/pod/cuda-13.3.sh ) > "$O/cuda.log" 2>&1 \
+  ( set +euo pipefail; FLOCK_WORK=$FW . verity/protocols/flock/prover/pod/cuda-13.3.sh ) > "$O/cuda.log" 2>&1 \
     || { tail -20 "$O/cuda.log"; echo "SMALL_GPU=1: the node has no CUDA 13.3 toolkit and none could be unpacked" >&2; exit 8; }
-  set +euo pipefail; FLOCK_WORK=$FW . verity/protocols/flock/pod/cuda-13.3.sh >> "$O/cuda.log" 2>&1; set -euo pipefail
+  set +euo pipefail; FLOCK_WORK=$FW . verity/protocols/flock/prover/pod/cuda-13.3.sh >> "$O/cuda.log" 2>&1; set -euo pipefail
   TK=${CUDA_TK:-/usr/local/cuda-13.3}
   [ -x "$TK/bin/nvcc" ] || { echo "SMALL_GPU=1: no nvcc under $TK" >&2; exit 8; }
   export CUDA_TK=$TK LD_LIBRARY_PATH=$TK/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
@@ -76,7 +76,7 @@ if [ -n "${SMALL_GPU:-}" ]; then
   fi
   echo "toolkit $TK" | tee -a "$O/machine.txt"
 fi
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=$GPU bash verity/protocols/flock/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
+RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=$GPU bash verity/protocols/flock/prover/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
   || { tail -40 "$O/m0-build/build.log"; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
