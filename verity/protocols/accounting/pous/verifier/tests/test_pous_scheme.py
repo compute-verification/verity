@@ -23,8 +23,16 @@ from verity.protocols.accounting.pous.verifier.labels import (
     w_value,
 )
 from verity.protocols.accounting.pous.verifier.oracle import run
-from verity.protocols.accounting.pous.verifier.params import LEAN_P3_MEETS, OPERATING_POINT, Params
-from verity.protocols.accounting.pous.verifier.primitives import heuristic_arx, ideal, reference
+from verity.protocols.accounting.pous.verifier.params import (
+    LEAN_P3_MEETS,
+    OPERATING_POINT,
+    Params,
+)
+from verity.protocols.accounting.pous.verifier.primitives import (
+    heuristic_arx,
+    ideal,
+    reference,
+)
 from verity.protocols.accounting.pous.verifier.scheme import (
     decode,
     decode_prog,
