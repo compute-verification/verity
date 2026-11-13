@@ -60,7 +60,7 @@ def test_results_skips_a_file_it_cannot_read_and_keeps_the_rest(tmp_path, capsys
     assert capsys.readouterr().err.count("[rebaseline] unreadable") == 3
 
 
-def test_write_takes_v2_values_keeps_shape_and_records_the_decision(monkeypatch, tmp_path):
+def test_write_takes_v2_values_keeps_shape_and_records_the_decision():
     row = _row()
     old: dict = {"row": 57, "class": "FAIL", "reference": {"tag": "v1-reference", "commit": "89af", "release": "r19-int-21", "branch": "lane/vllm-integration"},
            "checks": {"manifest_digest": {"applies": True, "tier": "T0", "strength": "strong"}, "executed_prefix": {"applies": True, "tier": "T0", "strength": "strong"}},
