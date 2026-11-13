@@ -132458,3 +132458,63 @@ Runs: none out. No timer held. The join is at `82ad1c6cb5`, as in my 09:10Z entr
 - That `served_verdicts.sh` itself runs with the two settings: I ran its audit step's command by hand.
 
 Branches: `cursor/proofs-scratch-firstaccept-standin-7e41` at `e08e751243`, pushed, no pull request (scratch, not for landing). `cursor/proofs-firstaccept-5a1c` at `9049e2c572` (#9594, unmarked), untouched. Runs: `r20261113-084751-efc6` and `r20261113-082057-587b` done, exit 0, preserved. None out. No timer held. Next entry: your 09:14Z items, by 12:00Z.
+
+## STAGECOINS: `5f7eec4add` COMPILES at TWOLEG's 1e20910586 (all seven files, `r20261113-091054-308d`; the pattern edits alone at `07319646f7`, `r20261113-082544-630d`); no statement the join reads changed, one theorem added; 4a: `FirstDrawn` is a field of the join, defined in my `StageCut`, and is now my lemma `firstDrawn_of` from `CaseIsSent` and `RECORD_DIGEST`; 4b: only the first stage's read-back record is held to its digest, and the second stage's `j₂` to `c₂.digest` is missing
+
+I merged TWOLEG's `1e20910586` alone. It brings nothing above it on TWOLEG's branch and nothing of `main`; all 25 commits it brings are off `main` [run: `git log 244bca0793..1e20910586 ^origin/main`]. My two proofs that take `inputAt_ok` apart now take the read-back records and the digest conjunct. All seven of my files compile together at `07319646f7` [run: `r20261113-082544-630d`]. No statement changed. With the comparison in, `FirstDrawn` is now a theorem: on an accepted play the run's challenge check reads exactly the cut's first draw. I wrote it as `firstDrawn_of (C) (hC : CaseIsSent C) : FirstDrawn C` in my `StageAlone.lean`. All seven files compile with it at `5f7eec4add` [run: `r20261113-090048-6678` for `StageAlone`, `r20261113-091054-308d` for all seven]. So the join's field `firstDrawn` can go: the join already holds `CaseIsSent`. For the second stage the form compares nothing: no check holds the second stage's read-back record to the commitment's digest.
+
+Heads pushed on `cursor/proofs-stagecoins-71b1`. Nothing unpushed.
+- `b9b1794565`: the merge of `1e20910586`.
+- `07319646f7`: the pattern edits.
+- `d9016b6fd8`, `adb9eba761` and `5f7eec4add`: `firstDrawn_of`, and two mends of it.
+The machine was replaced again before this turn; I rebuilt `~/wt` from the pushed branch. I did not merge `main`.
+
+**1–3. The merge, the pattern edits, the try** [run]
+- `FirstCoins.sourceRead_holds`: `⟨-, -, -, -, vs, received₂, j₁, j₂, -, rfl, -, -, -⟩`. `StageCut.secondShown_of`: `⟨⟨s, hs, hc₂⟩, hξ₂, -, -, vs, received₂, j₁, j₂, -, hieq, -, -, -⟩`. No lemma they call changed.
+- `r20261113-082544-630d`: `research run --on auto --as proofs --mem-gb 32 --cwd source`, `lean_changed.py --try …/StageCoins.lean --siblings`, at `07319646f7`. It spilled to vy-nebius-cpu-3, started at once at 08:26Z on `build-2` (62 files changed) and ended rc 0 at 08:40Z.
+- It printed `Built … FirstCoins`, `StageLog`, `SecondCoins`, `StageCut`, `CoinBytes`, `StageAlone`; `Build completed successfully (11637 jobs).`; `lean exit 0 in 773 s`; siblings: no clash; `axiom probe: none of its 3 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`.
+
+**4a. `FirstDrawn`**
+- **Who holds it today** [read: `origin/cursor/proofs-join-42b8`]: the join. `JoinsAt.lean:242` has the field `firstDrawn : FirstDrawn C`, and `JoinsAt.lean:319` carries it to `goodCase` (`firstDrawn_goodCase`). Its definition is mine (`StageCut.lean`), and so is `firstShown_of`, which takes it.
+- **It is now a lemma** [run: `r20261113-090048-6678`]. It is in my `StageAlone.lean`, a file already on the join, so it needs no new root:
+  - `inputOf_coinsRead`: the run's `key`, `main`, `coins`, `family`, `record`, `params` and `source` as `inputOf` sets them.
+  - `firstDrawn_of (C : CaseOf) (hC : CaseIsSent C) : FirstDrawn C`. On an accepted play it uses:
+    - `inputOn_accepts` and `CaseIsSent`, so the case's decoding is the cut's;
+    - `inputAt_ok`'s last conjunct `Registration.digest j₁ = .ok c.digest`, the form's `digestIs` with refusal `RECORD_DIGEST`;
+    - `keyOf_challenger`, so the run's key is the cut's;
+    - `inputOf`, so the window and family are the boundary's, the cut's draw's;
+    - `Spot.Run.coinsCode`, unfolded. Either the first stage read no byte (empty bits, a prefix of anything), or `coinsReason` gave no reason, and `Coins.coinsReason_none` gives `drawCoins … = .ok ξ` with `ξ.extract 0 read.size = read`. Then `bitsOf_extract_prefix`.
+- **The try's lines** [run]: vy-nebius-cpu-14, at `5f7eec4add`, started at once at 09:01Z, rc 0 at 09:10Z.
+  - `Build completed successfully (11483 jobs).`; `lean exit 0 in 304 s`; siblings: no clash (3871 imported, peak 5329 MB).
+  - `axiom probe: none of its 12 theorems uses an axiom beyond propext, Classical.choice and Quot.sound` (`StageAlone`'s 12, `firstDrawn_of` and `inputOf_coinsRead` among them).
+- **The two failed tries before it** [run]:
+  - `r20261113-084043-434d` (vy-nebius-cpu-3, at `d9016b6fd8`) failed rc 1. `cases` kept the cut's names `p c e`, not the case's `p' c' e'`; mended in `adb9eba761`.
+  - `r20261113-084728-0005` (vy-nebius-cpu-11, placed there by `--on auto`) failed rc 1 on one line: `FirstRead`'s four witnesses come before its challenge check; mended in `5f7eec4add`.
+- **All seven at `5f7eec4add`** [run]: `r20261113-091054-308d`, `StageCoins.lean --siblings`, vy-nebius-cpu-2, `build-0` (87 files changed), started at once at 09:11Z, rc 0 at 09:17Z. It printed `Build completed successfully (11639 jobs).`, `lean exit 0 in 268 s` and `axiom probe: none of its 3 theorems uses an axiom beyond propext, Classical.choice and Quot.sound` (`coinsAgree_first_log`, `coinsAgree_second_log`, `coinsAgree_second_matches`). `5f7eec4add` adds to `07319646f7` only `firstDrawn_of`, `inputOf_coinsRead` and two imports (`Challenger.Coins`, `Sampled.RecordDraw`) in `StageAlone`.
+- **For ASSEMBLY** [derived]: once you say so, `JoinsAt`'s field `firstDrawn` becomes `firstDrawn_of C h.caseIsSent` (or the field's name for `CaseIsSent`) at `goodCase`, through `firstDrawn_goodCase`. I add no field and remove none.
+
+**4b. The second stage's record** [read: the form's file at `1e20910586`, lines 309–340 and 384–392, and `OneStage.commitmentOf`]
+- `inputAt` holds only the first stage's read-back record to the commitment's digest (`digestIs j₁ c.digest`). For the second stage it computes `c₂ ← commitmentOf (canon e.record)`, which parses with `Core.canonicalJson`, and then `j₂ ← readBack e.record`, which parses with `Flock.JsonParse.parse`, and compares neither digest with the other.
+- The second stage's digests read today:
+  - `OneStageZk.coinsOf` reads `c₂.digest`;
+  - the run of record's interior challenge check reads `Registration.digest j₂` (its interior `record := j₂`);
+  - `interiorUnshown` reads `Registration.digest e.record`.
+  Two parsers are involved, so CUT's tag counterexample applies here too [derived].
+- **The comparison that is missing, as a fact for soundness**: the form does not refuse when the second stage's read-back record's digest `Registration.digest j₂` differs from the interior commitment's `c₂.digest` (as `digestIs j₂ c₂.digest` would), and `interiorUnshown` reads the digest of `e.record`, not that one.
+- With both, my `SessionMatches`' first conjunct would follow as `RECORD_DIGEST` made `FirstDrawn` follow, and `SessionMatches` would be a theorem [derived]. I changed no statement and added no field for it.
+
+Every theorem over the form's accept is true and empty until #9555 is merged and TWOLEG's honest play is accepted in a test.
+
+## STOP RULE
+Kept: no listed guarantee's statement or premises changed, nothing the verifier accepts changed, no switch, no lock, nothing wired into `Sampled.lean`, no `main` merged, no new file or root. The earlier-period signature hole is noted, not worked around. The device's ledger facts stay hypotheses.
+
+## NEEDS
+- Coordinator, to soundness: 4b's comparison for the second stage.
+- ASSEMBLY: take `5f7eec4add` in place of `244bca0793`. When the coordinator says so, replace the field `firstDrawn` with `firstDrawn_of`.
+
+## To post
+Nothing.
+
+## Not established
+- `SessionMatches` is a hypothesis.
+- That every honest play passes `RECORD_DIGEST`: TWOLEG's replay ran three plays [relayed]; I ran none.
