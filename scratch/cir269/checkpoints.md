@@ -12,3 +12,4 @@
 - 10:04Z (02:04 PST): body drafts in bodies/; ffde (verity-flock) and 667c (lock wait) left. Pass 6.
 - 10:25Z (02:25 PST): ffde in verity-flock (scope 27.8 GiB); 667c still waiting. Pass 7.
 - 10:45Z (02:45 PST): ffde in verity-flock (scope 33.2 GiB); 667c still waiting. Pass 8.
+- 11:06Z (03:06 PST): ffde in verity-flock, bound peak 22.4 GiB (scope figure 43.7 includes more than anon); 667c still waiting; inbox unchanged. Pass 9.
