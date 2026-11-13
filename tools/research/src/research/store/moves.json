@@ -2223,6 +2223,21 @@
         "verity/hardware/site/pyproject.toml": "verity/tests/pyproject.toml",
         "verity/hardware/site/tests/test_site.py": "verity/tests/tests/test_device.py"
       }
+    },
+    {
+      "paths": {
+        "security/Definitions/Accounting/Guarantees/JointBridge/CommOfPeriodLeakAccepted.lean": "security/Definitions/Accounting/Guarantees/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean",
+        "security/Definitions/Accounting/JointBridge/CommOfPeriodLeakAccepted.lean": "security/Definitions/Accounting/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean",
+        "security/Proofs/Accounting/Actual/Windows.lean": "security/Proofs/Accounting/Actual/ServerBlocks.lean",
+        "security/Proofs/Accounting/JointBridge/CommOfPeriodLeakAccepted.lean": "security/Proofs/Accounting/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean",
+        "security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityPeriod.lean": "security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityMonitoringPeriod.lean",
+        "security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityPeriod.lean": "security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityMonitoringPeriod.lean",
+        "security/Proofs/Accounting/JointBridge/WorkOfH1CheckedCreditPeriod.lean": "security/Proofs/Accounting/JointBridge/WorkOfH1CheckedCreditMonitoringPeriod.lean",
+        "security/Proofs/Accounting/RateAudit/Session.lean": "security/Proofs/Accounting/RateAudit/Run.lean",
+        "security/Proofs/Accounting/RegisteredCircuit/Session.lean": "security/Proofs/Accounting/RegisteredCircuit/Run.lean",
+        "security/Proofs/Properties/Accounting/Remote/Session.lean": "security/Proofs/Properties/Accounting/Remote/Run.lean",
+        "security/Properties/Accounting/JointBridge/WorkOfH1CheckedCreditPeriod.lean": "security/Properties/Accounting/JointBridge/WorkOfH1CheckedCreditMonitoringPeriod.lean"
+      }
     }
   ]
 }
