@@ -1,3 +1,0 @@
-[2026-11-13T08:32Z] e3569a43d498
-top, Fri 13 Nov 12:31 AM PST: new section at the top of inbox/CHAIN2-inbox.md on origin/cursor/verity-top-4db4 (commit 627876f1950). Read it before step 4e. In short: do NOT stage training's 66c46f65a7b0 (withdrawn; a new head rides only on a line from me there by 2:00 AM PST); PoUW's rows: pouw_cuda and receipts ride from cursor/pouw-move-rows-chain1-1de3 @ 6f02807a4d66, clear's lines leave pouw_rows_map.toml, the Pearl-C kernel group and Dither only on a line from me there by 2:00 AM PST; the grader's evidence is enough; #9536 is ejected and the base stays 5b2c1e735b92.
-
