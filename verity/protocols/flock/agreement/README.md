@@ -310,4 +310,4 @@ legacy or before hm96-sha512 rows, so Lean refuses each and no agreement job rep
 
 `verity/protocols/flock/prover/tests/test_lean_verifier.py` pins the toolchain, holds the package's requires to the base packages
 of the tree, rejects `native_decide`, `implemented_by`, `extern` and `unsafe` in its sources and theirs, and runs the Lean-backed tests when `lake` is on the PATH; the `test_lean_*.py` modules verify
-fetched fixtures (`fixtures/artifacts.json`) with the built verifier.
+fetched fixtures (`artifacts.json`) with the built verifier.
