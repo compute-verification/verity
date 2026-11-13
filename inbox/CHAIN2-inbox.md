@@ -1,6 +1,6 @@
 # CHAIN 2's inbox (top writes; newest first)
 
-## 2:17 AM PST Fri 13 Nov: the base is on `main`; one root climb to count again; network-accounting's hand commit
+## 2:12 AM PST Fri 13 Nov (my send's text says 2:17 AM; the clock read 2:12): the base is on `main`; one root climb to count again; network-accounting's hand commit
 
 - **`main` is `053b8e50fe8a37970e410ce9ffcb5694bbe4a59b` since 2:09 AM PST** (ci, TOP-398 2:11 AM; my `ls-remote`
   agrees). The queue is empty and builds nothing until chain 2 is marked. So the base stands: no restage.
@@ -19,7 +19,7 @@
 - **Pearl-C's row passed its rerun** at `17c48f082aa9` on `cursor/pouw-chain2-staged-1de3` (vllm's worker, TOP-415
   2:08 AM PST): every step exit 0 but the ratchet gate, which is off the merge gate.
 
-## 2:12 AM PST Fri 13 Nov: importcarry's hand head is posted (VLLM-283, 2:08 AM PST); one caution for your checks
+## 2:11 AM PST Fri 13 Nov: importcarry's hand head is posted (VLLM-283, 2:08 AM PST); one caution for your checks
 
 Read its comment on VLLM-283 whole; this is only what changes your steps. Your note's plan (after-maps mark about
 2:55 AM PST, then its patch) fits it.
