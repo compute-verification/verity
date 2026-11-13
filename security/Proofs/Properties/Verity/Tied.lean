@@ -7,6 +7,10 @@ public import Proofs.Nci.Untied
 # The tied circuit's blocks: the placement from below, lean's form of the policy on it, and the period's pooling
 
 * `blocks_unit_emb`: a tied cell's y gate is in its home block.
+* `into_blocks_sub`, `compliesBut_of_file`: where the homes hold the tied cells' A rows (`Tying.Homes`), a block of
+  the tied circuit reads no fresh input its registered block doesn't, so a registered file whose blocks comply makes
+  the tied circuit's comply (`Tying.CompliesBut`) at the same `Γ` and `α`, whatever cells are untied: the honest
+  prover passes.
 * `fromBelow`: the placement is from below (`Verity.ValueTie.Tying.FromBelow`) at every blocks, homes and untied
   cells.
 * `novelReads_asInputs_eq`: a block of the tied circuit with the untied gates `T` as inputs
@@ -91,6 +95,142 @@ theorem fromBelow {m : ℕ} (Q : Verity.Partition C m) (home : Cell → Fin m) (
         cases h'
     · rw [ite_eq_right hc] at h
       cases h
+
+/-- **A served gate but a tied y keeps its registered block.** -/
+theorem blocks_unit_served {m : ℕ} (Q : Verity.Partition C m) (home : Cell → Fin m) {g : Fin C.N}
+    (hg : g ∉ L.yOf T.cells) : (T.blocks Q home).unit (T.emb g) = Q.unit g := by
+  have hs : ∃ g', T.emb g' = T.emb g := ⟨g, rfl⟩
+  have hc : hs.choose = g := T.emb_inj hs.choose_spec
+  unfold Tying.blocks
+  simp only []
+  rw [dite_eq_left hs, hc, ite_eq_right hg]
+
+/-- **A computed gate the tied circuit adds is in its cell's home block.** -/
+theorem blocks_unit_added {m : ℕ} (Q : Verity.Partition C m) (home : Cell → Fin m) {h : Fin T.tied.D.N}
+    (hna : ∀ g, T.emb g ≠ h) (hi : T.tied.D.isInput h = false) :
+    (T.blocks Q home).unit h = some (home (T.owner h)) := by
+  have hs : ¬ ∃ g, T.emb g = h := fun ⟨g, e⟩ => hna g e
+  have hn : ¬ T.tied.D.isInput h = true := by simp [hi]
+  unfold Tying.blocks
+  simp only []
+  rw [dite_eq_right hs, ite_eq_right hn]
+
+private theorem width_map (S : Finset (Fin C.N)) :
+    T.tied.D.width (S.map ⟨T.emb, T.emb_inj⟩) = C.width S := by
+  show ∑ x ∈ S.map ⟨T.emb, T.emb_inj⟩, T.tied.D.w x = ∑ g ∈ S, C.w g
+  rw [sum_map]
+  simp only [Function.Embedding.coeFn_mk, T.emb_w]
+
+/-- **A block of the tied circuit reads no fresh input its registered block doesn't**, where the homes hold the A
+rows: what it reads outside itself and `θ` is the registered block's fresh input, embedded. The tie reads its A row in
+its own block and the weights, registered, and a y crosses to a block reading it as the registered file's block read
+it, an input outside `θ`. -/
+theorem into_blocks_sub {m : ℕ} (Q : Verity.Partition C m) (home : Cell → Fin m) (hH : T.Homes Q home)
+    (u : Fin m) :
+    T.tied.D.into ((T.blocks Q home).gates u) \ T.tied.θ ⊆
+      (C.into (Q.gates u) \ θ).map ⟨T.emb, T.emb_inj⟩ := by
+  intro a ha
+  obtain ⟨haI, haθ⟩ := mem_sdiff.1 ha
+  obtain ⟨haB, h, hhB, hah⟩ := Nci.Cut.SecurityProofs.mem_into.1 haI
+  have hhu : (T.blocks Q home).unit h = some u := ((T.blocks Q home).mem_gates).1 hhB
+  have haB' : (T.blocks Q home).unit a ≠ some u := fun e => haB (((T.blocks Q home).mem_gates).2 e)
+  have hθa : ∀ g', T.emb g' = a → g' ∉ θ := fun g' hg' hθ => haθ (hg' ▸ (T.theta_emb g').2 hθ)
+  have hrow : ∀ c, home c = u → c ∈ T.cells → (∃ g' ∈ T.row c, T.emb g' = a) → False := by
+    rintro c hcu hc ⟨g', hg', rfl⟩
+    rcases hH c hc g' hg' with hθ' | hq
+    · exact hθa g' rfl hθ'
+    · have hgi : C.isInput g' = false := by
+        cases hi : C.isInput g'
+        · rfl
+        · rw [(Q.input_iff g').2 hi] at hq
+          cases hq
+      have hgy : g' ∉ L.yOf T.cells := fun hy => by
+        rw [L.y_input g' (L.mem_yOf.1 hy).1] at hgi
+        cases hgi
+      exact haB' (by rw [T.blocks_unit_served Q home hgy, hq, hcu])
+  have hadd : ∀ c, home c = u → (∀ g', T.emb g' ≠ a) →
+      (T.tied.D.isInput a = false → T.owner a = c) → False := by
+    intro c hcu hna hown
+    cases hi : T.tied.D.isInput a
+    · exact haB' (by rw [T.blocks_unit_added Q home hna hi, hown hi, hcu])
+    · exact haθ (T.added_registered a hna hi)
+  by_cases hs : ∃ g, T.emb g = h
+  · obtain ⟨g, rfl⟩ := hs
+    by_cases hg : g ∈ L.yOf T.cells
+    · rw [T.blocks_unit_emb Q home hg] at hhu
+      have hcu : home (L.cellOf g) = u := Option.some.inj hhu
+      have hc : L.cellOf g ∈ T.cells := (L.mem_yOf.1 hg).2
+      rcases T.reads_y g hg a hah with hr | ⟨hna, hown⟩
+      · exact (hrow _ hcu hc hr).elim
+      · exact (hadd _ hcu hna hown).elim
+    · rw [T.blocks_unit_served Q home hg] at hhu
+      have hgc : C.isInput g = false := by
+        cases hi : C.isInput g
+        · rfl
+        · rw [(Q.input_iff g).2 hi] at hhu
+          cases hhu
+      rw [T.reads_emb g hgc] at hah
+      obtain ⟨g', hg', hga⟩ := mem_map.1 hah
+      have hga' : T.emb g' = a := hga
+      subst hga'
+      refine mem_map.2 ⟨g', mem_sdiff.2 ⟨Nci.Cut.SecurityProofs.mem_into.2 ⟨fun hg'Q => ?_, g,
+        (Q.mem_gates).2 hhu, hg'⟩, hθa g' rfl⟩, rfl⟩
+      have hq := (Q.mem_gates).1 hg'Q
+      have hgy : g' ∉ L.yOf T.cells := fun hy => by
+        rw [(Q.input_iff g').2 (L.y_input g' (L.mem_yOf.1 hy).1)] at hq
+        cases hq
+      exact haB' (by rw [T.blocks_unit_served Q home hgy, hq])
+  · have hna : ∀ g, T.emb g ≠ h := fun g e => hs ⟨g, e⟩
+    have hhi : T.tied.D.isInput h = false := Nci.Cut.SecurityProofs.reader_computed hah
+    rw [T.blocks_unit_added Q home hna hhi] at hhu
+    have hcu : home (T.owner h) = u := Option.some.inj hhu
+    rcases T.reads_tie h hna hhi a hah with hr | ⟨hna', hown⟩
+    · exact (hrow _ hcu (T.owner_cell h hna hhi) hr).elim
+    · exact (hadd _ hcu hna' hown).elim
+
+/-- **The honest prover passes the policy on the tied circuit**: where the registered file's circuit divides into
+blocks `Q` of at most `Γ` rows, each reading at most `α` fresh bits a row, and the homes hold the tied cells' A rows,
+the tied circuit's blocks comply at the same `Γ` and `α` whatever cells are untied. -/
+theorem compliesBut_of_file {Γ : ℕ} {α : ℝ} {m : ℕ} (Q : Verity.Partition C m) (home : Cell → Fin m)
+    (hH : T.Homes Q home)
+    (hQ : ∀ u, C.size (Q.gates u) ≤ Γ ∧ (C.width (C.into (Q.gates u) \ θ) : ℝ) ≤ α * C.size (Q.gates u))
+    (U : Finset Cell) : T.CompliesBut Γ α U := by
+  refine ⟨m, Q, home, hH, fun u => ⟨(hQ u).1, ?_⟩⟩
+  have hsub : T.tied.D.into ((T.blocks Q home).gates u \ T.untiedGates U) \ T.tied.θ ⊆
+      (T.tied.D.into ((T.blocks Q home).gates u) \ T.tied.θ) ∪ (T.untiedGates U ∩ (T.blocks Q home).gates u) := by
+    intro a ha
+    obtain ⟨haI, haθ⟩ := mem_sdiff.1 ha
+    obtain ⟨haB, h, hhB, hah⟩ := Nci.Cut.SecurityProofs.mem_into.1 haI
+    by_cases hB : a ∈ (T.blocks Q home).gates u
+    · have hT : a ∈ T.untiedGates U := by
+        by_contra hT
+        exact haB (mem_sdiff.2 ⟨hB, hT⟩)
+      exact mem_union_right _ (mem_inter.2 ⟨hT, hB⟩)
+    · exact mem_union_left _ (mem_sdiff.2 ⟨Nci.Cut.SecurityProofs.mem_into.2
+        ⟨hB, h, (mem_sdiff.1 hhB).1, hah⟩, haθ⟩)
+  have hle : Nci.novelReads T.tied ((T.blocks Q home).gates u \ T.untiedGates U) ≤
+      C.width (C.into (Q.gates u) \ θ) + T.tied.D.width (T.untiedGates U ∩ (T.blocks Q home).gates u) := by
+    show T.tied.D.width _ ≤ _
+    calc T.tied.D.width (T.tied.D.into ((T.blocks Q home).gates u \ T.untiedGates U) \ T.tied.θ)
+        ≤ T.tied.D.width ((T.tied.D.into ((T.blocks Q home).gates u) \ T.tied.θ) ∪
+            (T.untiedGates U ∩ (T.blocks Q home).gates u)) := by
+          unfold Verity.Circuit.width
+          exact sum_le_sum_of_subset hsub
+      _ ≤ T.tied.D.width (T.tied.D.into ((T.blocks Q home).gates u) \ T.tied.θ) +
+            T.tied.D.width (T.untiedGates U ∩ (T.blocks Q home).gates u) := by
+          unfold Verity.Circuit.width
+          exact le_of_le_of_eq (Nat.le_add_right _ _) sum_union_inter
+      _ ≤ T.tied.D.width ((C.into (Q.gates u) \ θ).map ⟨T.emb, T.emb_inj⟩) +
+            T.tied.D.width (T.untiedGates U ∩ (T.blocks Q home).gates u) :=
+          Nat.add_le_add_right (by
+            unfold Verity.Circuit.width
+            exact sum_le_sum_of_subset (T.into_blocks_sub Q home hH u)) _
+      _ = C.width (C.into (Q.gates u) \ θ) + T.tied.D.width (T.untiedGates U ∩ (T.blocks Q home).gates u) := by
+          rw [T.width_map]
+  have hle' : (Nci.novelReads T.tied ((T.blocks Q home).gates u \ T.untiedGates U) : ℝ) ≤
+      C.width (C.into (Q.gates u) \ θ) + T.tied.D.width (T.untiedGates U ∩ (T.blocks Q home).gates u) := by
+    exact_mod_cast hle
+  linarith [(hQ u).2]
 
 end Tying
 

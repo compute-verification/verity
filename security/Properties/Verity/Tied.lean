@@ -18,13 +18,15 @@ definition; that its gates compute Pearl+'s product at W's entries is `Verity.Va
   gate as served; the gates it adds are each cell's tie, reading only the cell's A row (served gates), the weights
   (added inputs, registered) and the cell's own tie gates.
 * **Its blocks** (`Tying.blocks`): the registered file's blocks, each cell's y gates and its tie's gates in the cell's
-  home block (`home`), the block holding the cell's linear output in the registered file (`Cut.Homes`): a block that
-  reads the cell's y there, where one does.
+  home block (`home`), the block holding the cell's A row in the registered file (`Tying.Homes`), so the tie reads
+  nothing from outside its block but the weights. The cell's y then crosses to the blocks that read it as a value
+  those blocks read, as they read it in the registered file.
 * **The untied gates** (`Tying.untiedGates`): the y gates of the cells whose y is not the tie's output, each cell's
   whole word; the placement from below (`Tying.place`, `Tying.FromBelow`) puts each cell at its home block and its y
   gates, so an untied cell's gates are untied gates and distinct cells sit at disjoint gates.
 * **The policy on it** (`Tying.CompliesBut`): `Γ` bounds each block's registered rows alone (the tie's gates are PoUW's
-  credited work), and the untied y gates count as fresh input, 32 gates a word on a Boolean circuit.
+  credited work), a block's reads of another block's gates count as fresh input as in the registered file, a y word
+  included, and the untied y gates count as fresh input too, 32 gates a word on a Boolean circuit.
 * **A monitoring period** (`Charges`, `PeriodOutsideG`): the blocks outside each window's `G`, those holding more than
   `w` untied words, charged whole, summed over the period's windows.
 -/
@@ -61,11 +63,6 @@ def yAt (c : Cell) : Finset (Fin C.N) := L.y.filter fun g => L.cellOf g = c
 
 /-- The y gates of the cells `U`. -/
 def yOf (U : Finset Cell) : Finset (Fin C.N) := L.y.filter fun g => L.cellOf g ∈ U
-
-/-- **The cell `c`'s home is the block `home c` of the registered file's blocks `Q`**: where a gate of `C` reads one
-of the cell's y gates, a gate of block `home c` does; that block holds the cell's linear output. -/
-def Homes {m : ℕ} (Q : Verity.Partition C m) (home : Cell → Fin m) : Prop :=
-  ∀ c ∈ L.cells, (∃ h, ∃ g ∈ L.yAt c, g ∈ C.reads h) → ∃ h, ∃ g ∈ L.yAt c, g ∈ C.reads h ∧ Q.unit h = some (home c)
 
 /-- The layout with no cells, of a circuit that is not cut. -/
 def empty (C : Verity.Circuit) : Cut C where
@@ -162,7 +159,8 @@ def untiedGates (U : Finset Cell) : Finset (Fin T.tied.D.N) := (L.yOf U).map ⟨
 
 open Classical in
 /-- **The tied circuit's blocks** from the registered file's blocks `Q` and the cells' homes `home`: a served computed
-gate is in its block of `Q`; a cell's y gates and its tie's computed gates are in its home block; the input gates,
+gate is in its block of `Q`; a cell's y gates and its tie's computed gates are in its home block, the block that holds
+its A row (`Tying.Homes`); the input gates,
 the served ones and the weights, are in none. -/
 noncomputable def blocks {m : ℕ} (Q : Verity.Partition C m) (home : Cell → Fin m) : Verity.Partition T.tied.D m where
   unit h :=
@@ -183,8 +181,13 @@ noncomputable def blocks {m : ℕ} (Q : Verity.Partition C m) (home : Cell → F
       · simp [hi]
       · simp [hi]
 
-/-- **The placement from below**: a cell the circuit ties at its home block and its y gates in the tied circuit; none
-elsewhere. Compute-accounting's placement of W's y entries reads this. -/
+/-- **The cells' homes hold their A rows**: each gate of a tied cell's A row is a registered input or a gate of the
+registered file's block `home c` of `Q`. -/
+def Homes {m : ℕ} (Q : Verity.Partition C m) (home : Cell → Fin m) : Prop :=
+  ∀ c ∈ T.cells, ∀ a ∈ T.row c, a ∈ θ ∨ Q.unit a = some (home c)
+
+/-- **The placement from below**: a cell the circuit ties at its home block, the block holding its A row, and its y
+gates in the tied circuit; none elsewhere. Compute-accounting's placement of W's y entries reads this. -/
 def place {m : ℕ} (home : Cell → Fin m) (c : Cell) : Option (Fin m × Finset (Fin T.tied.D.N)) :=
   if c ∈ T.cells then some (home c, (L.yAt c).map ⟨T.emb, T.emb_inj⟩) else none
 
@@ -197,12 +200,15 @@ def FromBelow {m : ℕ} (Q : Verity.Partition C m) (home : Cell → Fin m) (U : 
   ∀ c c' u u' O O', c ≠ c' → T.place home c = some (u, O) → T.place home c' = some (u', O') → Disjoint O O'
 
 /-- **The inference-only policy on the tied circuit, the untied y's of `U` counted as fresh input.** The registered
-file's circuit divides into blocks `Q` of at most `Γ` registered rows each, the cells at homes that hold their linear
-outputs (`Cut.Homes`), and each block of the tied circuit's (`blocks`) but its untied gates reads at most `α` bits
-of fresh input a registered row, and the untied gates it holds, 32 bits a word. A block's tie gates count in no row,
-and their reads of the cell's A row count as fresh input wherever the block does not hold that row. -/
+file's circuit divides into blocks `Q` of at most `Γ` registered rows each, the cells at homes that hold their A rows
+(`Tying.Homes`), and each block of the tied circuit's (`blocks`) but its untied gates reads at most `α` bits
+of fresh input a registered row, and the untied gates it holds, 32 bits a word. A block's tie gates count in no row.
+What counts as fresh input to a block is every gate outside it that it reads and that is not registered: another
+block's gates, a cell's y among them where the block reads a y its home computes, as the registered file's block read
+that y as an input; the unregistered input gates; and the untied gates of `U` it reads, its own included. Its tie
+gates' reads of the cell's A row and the weights count in none. -/
 def CompliesBut (Γ : ℕ) (α : ℝ) (U : Finset Cell) : Prop :=
-  ∃ (m : ℕ) (Q : Verity.Partition C m) (home : Cell → Fin m), L.Homes Q home ∧ ∀ u,
+  ∃ (m : ℕ) (Q : Verity.Partition C m) (home : Cell → Fin m), T.Homes Q home ∧ ∀ u,
     C.size (Q.gates u) ≤ Γ ∧
       (Nci.novelReads T.tied ((T.blocks Q home).gates u \ T.untiedGates U) : ℝ) ≤
         α * C.size (Q.gates u) + T.tied.D.width (T.untiedGates U ∩ (T.blocks Q home).gates u)
