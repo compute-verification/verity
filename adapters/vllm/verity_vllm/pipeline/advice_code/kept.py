@@ -132,8 +132,9 @@ def coder(K: int, kept: Terms) -> Callable[[Any, int], None]:
 class Reader:
     """`replay.replay`'s ``kept`` off a string: each emitting row's count, read from its step's window's second segment
     when the replay asks for it. `d` is the string's `window_code.Decoder`, at its last window's tail's end;
-    `requests` are the replay's, in its order, each with its certified `output` and `release`; `emitted` is
-    `emitting`'s list, open over the same replay, whose length is the step that is executing."""
+    `requests` are the replay's, in its order, each with its certified `output` and `release`, whose buckets do not
+    decrease (`codec.Request` refuses a record's that do); `emitted` is `emitting`'s list, open over the same replay,
+    whose length is the step that is executing."""
 
     def __init__(self, d: Any, K: int, requests: Sequence[Any], T: int, W: int, emitted: R.Emitted) -> None:
         self.d, self.T, self.emitted = d, T, emitted
@@ -164,17 +165,15 @@ class Reader:
             self.w += 1
             self.d.segment(self.w)
 
-    def end(self, terms: Terms) -> Terms:
-        """The terms read, once the replay has run, which are `terms`, the replay's own (`terms`): closes the
-        segments left and ends the string, at most 7 zero bits of padding after it. Refuses (ValueError) counts that
-        don't add up to each request's outputs, and one read from another window's segment than its step's."""
+    def end(self) -> Terms:
+        """The terms read, once the replay has run: closes the segments left and ends the string, at most 7 zero bits
+        of padding after it. Refuses (ValueError) counts that don't add up to each request's outputs. They are the
+        replay's own (`terms`, on `codec.charged`'s windows): each request's release buckets are in order, so the
+        earliest window that releases an output not yet out is the earliest of each request's next output's."""
         self._to(len(self.windows) - 1)
         self.counts.end()
-        read = Terms(self.counts.outputs, tuple(tuple(w) for w in self.windows))
-        if read != terms:
-            raise ValueError("a kept count read from another window's segment than its step's")
         self.d.finish(True)
-        return read
+        return Terms(self.counts.outputs, tuple(tuple(w) for w in self.windows))
 
 
 @contextmanager

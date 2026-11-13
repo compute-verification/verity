@@ -42,7 +42,11 @@ from verity_vllm.commit import row_tables_device as RTD
 from verity_vllm.protocols.pouw.h1 import prover as PV
 from verity_vllm.protocols.pouw.h1 import records as ZR
 from verity_vllm.protocols.pouw.h1 import requests as RQ
-from verity_vllm.protocols.pouw.h1.requests import TABLE_NONCES, TABLE_TAGS, table_leaves
+from verity_vllm.protocols.pouw.h1.requests import (
+    TABLE_NONCES,
+    TABLE_TAGS,
+    table_leaves,
+)
 
 __all__ = ["FUSE", "MODE", "Pending", "STREAMS", "available", "commit_tables", "device_hash", "device_lib", "device_roots",
            "flush", "host_roots", "layout", "path", "record_rows", "row_words", "settle", "take_z"]
@@ -134,7 +138,7 @@ def device_lib(arch: str) -> ctypes.CDLL:
     dll = RTD._build(tool, RTD.DEVICE_SOURCES, (*RTD.NVCC_FLAGS, f"-gencode=arch=compute_{arch},code=sm_{arch}"),
                      "librow_table_cuda.so")
     dll.rt_midstates.argtypes = [_vp, _vp, _vp]
-    dll.rt_step.argtypes = [_vp, _vp, _vp, ctypes.c_uint64, ctypes.c_uint32, _vp, _vp, ctypes.POINTER(RTD.Args)] + [_vp] * 5
+    dll.rt_step.argtypes = [_vp, _vp, _vp, ctypes.c_uint64, ctypes.c_uint32, _vp, _vp, ctypes.POINTER(RTD.Args), *[_vp] * 5]
     dll.rt_midstates.restype = dll.rt_step.restype = ctypes.c_int
     return dll
 

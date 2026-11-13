@@ -93,7 +93,7 @@ goal = "vllm/production-vllm-reproducible"
 
 [[metric]]
 id = "vllm/prod-serving-cost-glm53"
-title = "GLM-5.3 served at vLLM's production settings: its serving cost over stock vLLM"
+title = "GLM-5.3 served at the settings vLLM publishes for serving it: its serving cost over stock vLLM"
 owner = "vllm"
 unit = "percent of stock's serving time"
 better = "lower"
@@ -101,6 +101,28 @@ command = "research run --on NODE --source . --cwd source -- bash benchmarks/pro
 every = "7d"
 floor = 1
 goal = "vllm/production-vllm-reproducible"
+
+[[metric]]
+id = "vllm/remote-demo-minutes"
+title = "The remote demo: minutes from its first command to its verdict"
+owner = "vllm"
+unit = "minutes"
+better = "lower"
+command = "research run --cwd source -- python3 demos/vllm/minutes.py FIRST_RUN [RUN ...] VERDICT_RUN"
+every = "7d"
+floor = 60
+goal = "demos/remote-demo"
+
+[[metric]]
+id = "vllm/onsite-demo-minutes"
+title = "The onsite demo: minutes from its first command to its verdict"
+owner = "vllm"
+unit = "minutes"
+better = "lower"
+command = "research run --cwd source -- python3 demos/onsite_served/minutes.py PROVER_RUN AUDITOR_RUN"
+every = "7d"
+floor = 60
+goal = "demos/onsite-demo"
 
 [[metric]]
 id = "network-accounting/scan-verifier-cost"
