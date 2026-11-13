@@ -12,11 +12,11 @@ and its `blockDigest` (`round_eq_roundSeen`), so a change to soundness's functio
 **The view.** One step of the device's code is one step of `seenCode` on the exchange's skeleton (`step_skeleton`), and
 both start from one state, so on any inputs they send the same messages (`messages_skeleton`). Under `Confined` the
 device emits its code's messages, under `Faithful` on its true inputs, and under `WitnessPathPrivate` nobody overhears
-its path to the prover, so the auditor sees what `seenCode` sends in the clear on the device's coins and the skeleton,
-at every `dest` (`auditorSeesSkeletonAt`); `auditorSeesDigests` is it at `reportPublic`.
+its path to the prover, so the auditor sees what `seenCode` sends in the clear on the device's challenges and the
+skeleton, at every `dest` (`auditorSeesSkeletonAt`); `auditorSeesDigests` is it at `reportPublic`.
 
 **Honest and nontrivial lemmas.** The premises hold of the device run as it is meant to run (`meantRun`), on any
-parameters, coins and session (`auditorSeesDigests_honest`). Without `WitnessPathPrivate` the conclusion fails: an
+parameters, challenges and session (`auditorSeesDigests_honest`). Without `WitnessPathPrivate` the conclusion fails: an
 observer on the path to the prover who overhears a warm-up's frame shows it to the auditor, though the code sends
 nothing in the clear on a warm-up (`auditorSeesDigests_nontrivial`). And the view is not less than the digest: on a
 one-round session (`oneRound`), two answers whose `blockDigest`s differ show the auditor different reports
@@ -75,7 +75,7 @@ theorem auditorSeesSkeletonAt (dest : Ch → Parties.Dest) : AuditorSeesSkeleton
 theorem auditorSeesDigests : AuditorSeesDigests := auditorSeesSkeletonAt reportPublic
 
 /-- **`AuditorSeesDigests`'s honest lemma**: its premises hold of the device run as it is meant to run, at any
-parameters, on any coins and any session's exchanges, answers included. -/
+parameters, on any challenges and any session's exchanges, answers included. -/
 theorem auditorSeesDigests_honest {Ω Wi A : Type} (p : Params Ω) (wire : Ch × Msg → Wi) (ω : Ω)
     (xs : List (Step ByteArray Observed)) :
     ∃ r : Parties.Run Ω (Ω × Recorded) (Step ByteArray Observed) Ch Msg Wi A,
@@ -91,7 +91,7 @@ def overheardRun {Ω : Type} (p : Params Ω) (ω : Ω) (answer : ByteArray) :
   { meantRun (code p) reportPublic id ω [.warmup answer] with overheard := [(Ch.challenge, Msg.warmup)] }
 
 /-- **`AuditorSeesDigests`'s nontrivial lemma**: without `WitnessPathPrivate` its conclusion fails: the device, at any
-parameters and coins, `Faithful` and `Confined` on one warm-up whose frame an observer on the path to the prover
+parameters and challenges, `Faithful` and `Confined` on one warm-up whose frame an observer on the path to the prover
 overhears, shows the auditor that frame, though its code sends nothing in the clear on a warm-up. -/
 theorem auditorSeesDigests_nontrivial {Ω : Type} (p : Params Ω) (ω : Ω) :
     ¬ ∀ r : Parties.Run Ω (Ω × Recorded) (Step ByteArray Observed) Ch Msg (Ch × Msg) Unit,
@@ -106,7 +106,7 @@ theorem auditorSeesDigests_nontrivial {Ω : Type} (p : Params Ω) (ω : Ω) :
 
 /-! ## The view is not less than the digest -/
 
-/-- The coins of a one-round session over one block: its one round challenges block 0. -/
+/-- The `CoinTree` of a one-round session over one block: its one challenge is block 0. -/
 def oneCoins : CoinTree := ⟨.empty, 1, #[0], .empty, #[.empty], #[], .empty⟩
 
 /-- A session of one round over one-byte answers, whose device signs every message with the empty signature. -/
