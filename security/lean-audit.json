@@ -46,11 +46,11 @@
   },
   "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8": {
    "owner": "@compute-accounting",
-   "digest": "06be74aee28e7d192d059266d2db6e3c8a7fff8b06ad70209ecd48eb7f4537fd"
+   "digest": "fe49e3195baf9dcbb880188e2a3bfa38957e336380ee55aed4a2002134f3a6a8"
   },
   "Pouw.PearlC.Assumptions.W1CompleteH100": {
    "owner": "@compute-accounting",
-   "digest": "72634d2d0e868ee06833965a2ac23f117d67c202dea87eb7dd89973b8b2020f7"
+   "digest": "f9366d44a492e1ea1c0a278e99a53f7f5e2d8caa203d8fbc6376d6488f229dc5"
   },
   "WeightSecurity.Assumptions.FaultedUseHard": {
    "owner": "@proofs",
@@ -24169,7 +24169,7 @@
     ]
    },
    "type_hash": "52e3280840ec061a3bb2e6a746632595df6ab017e28137c778dfe4a2e63e60a2",
-   "unfolded_hash": "99531869d61f27c25416053aa7f633a0317530b343ce5d316a2420fed767da48"
+   "unfolded_hash": "fca263a533fc7bcc74fb94b2a4401f80a1f165c7c7eeb66af0216093447f8c67"
   },
   "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8_8192": {
    "owner": "@compute-accounting",
@@ -24187,7 +24187,7 @@
     ]
    },
    "type_hash": "ce3335ef19a90b8475150d1906ef156c32d814329a9b7361da556d3637056808",
-   "unfolded_hash": "67f0d9084fb5f381f786d82368039f686053ee6110962e0e4aa9d6c444095596"
+   "unfolded_hash": "ff5ca5c11ad5dbb0e43e5e52dda43ba346d84a9638d753b07d170a0d152d4b28"
   },
   "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384": {
    "owner": "@compute-accounting",
@@ -34287,12 +34287,12 @@
    }
   },
   "Definitions.Assumptions.PearlC": {
-   "digest": "757f9901c82212a74fd4f9b0660278c82917591db91a3a90f15027f6aff97f02",
+   "digest": "6265923a6b14872310e8fa98b4ef473702a3f642e746d21f1be3e70184b5606a",
    "definitions": {
-    "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8": "06be74aee28e7d192d059266d2db6e3c8a7fff8b06ad70209ecd48eb7f4537fd",
-    "Pouw.PearlC.Assumptions.W1CompleteH100": "72634d2d0e868ee06833965a2ac23f117d67c202dea87eb7dd89973b8b2020f7",
+    "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8": "fe49e3195baf9dcbb880188e2a3bfa38957e336380ee55aed4a2002134f3a6a8",
+    "Pouw.PearlC.Assumptions.W1CompleteH100": "f9366d44a492e1ea1c0a278e99a53f7f5e2d8caa203d8fbc6376d6488f229dc5",
     "Pouw.PearlC.CostModel.DominatedBy": "7317cd3d2d21fd6ceb46a572845abfcc0b0a0c39a7399ee219bb5e724c5b5d52",
-    "Pouw.PearlC.W1.W1Device.s8H100Best": "9c479b8d299a6aaa1401343f98c462a9bb6e5747ca6283d5f5abff7fc2f1c956"
+    "Pouw.PearlC.W1.W1Device.s8H100Best": "8de5c71192e3bf6f3a11e89901258ab8dfc6baeb7f01f053679fd233668cd49f"
    }
   },
   "Definitions.Assumptions.Pouw": {
@@ -40307,10 +40307,10 @@
    }
   },
   "Definitions.Pouw.Guarantees.PearlCS8": {
-   "digest": "72e6744becd288f92b25d9c6cfede4cde27da1a7ceb3fd7f9241d788053a61b9",
+   "digest": "853b7df18a0f5c70afc196b7ebdf16baafb0096054e7f2d0113dbeb0e5530f8c",
    "definitions": {
-    "Pouw.Guarantees.PearlC.SampledH100Rev1S8Llama32_1b": "31835180bb7e44967595569b6ba577e471297771889f1175cdc41b9256da2fa2",
-    "Pouw.Guarantees.PearlC.SampledH100Rev1S8_8192": "c766c42532f9227851c60a50643877fb7d22a838e12b48e64ab5004a311e905d"
+    "Pouw.Guarantees.PearlC.SampledH100Rev1S8Llama32_1b": "a9198bb26202dca724e6cda1df26d573dd9dbca51d074a342d8206814057c746",
+    "Pouw.Guarantees.PearlC.SampledH100Rev1S8_8192": "ce49969cbfa08ca178fcce220c6511f0634bc702eeede5ec81100249d9169e57"
    }
   },
   "Definitions.Pouw.Guarantees.PearlCTileCheck": {
@@ -40783,7 +40783,7 @@
    }
   },
   "Definitions.Pouw.PearlC.Device": {
-   "digest": "1457f057d3bfadac30b6e3897ed288b484307f25f98af8eff144e9c18cd0fd22",
+   "digest": "5b663ee62abecd0602a0572b4623c0dc41390b1c36010823ba90cf6885f6a159",
    "definitions": {
     "Pouw.PearlC.PearlCDevice": "49b0746e634512b0ba15501dae4a8e1e7f5a92906eccf6db5291f7ed68f2dfd0",
     "Pouw.PearlC.PearlCDevice.G": "dbfc86330607b7c4760f02bf16a71635ec8b1b7775a76ee3bb4ebfcdf645e58b",
@@ -40800,12 +40800,16 @@
     "Pouw.PearlC.Prices.bf16": "0fa6711404e6117909176b090564e8b07f6a46acfdc89907f884b34b40278aeb",
     "Pouw.PearlC.Prices.costs": "e80c4e8e8d468ed4a4719b334755cef2f56cbe52697ed93e61b638ac25299993",
     "Pouw.PearlC.Prices.h100": "11e0f5cea3d574b561d311c463d384e45ea08ad98a0bdf43587da1063a2611ca",
+    "Pouw.PearlC.Prices.h100Tensor": "fc2627f60d7c35a1999aff37654c62a427e2ff615fb17a38208cb45bef0e2c75",
     "Pouw.PearlC.creditDev": "9afb51c265a332ac45a85411f9a4127dd9e9d9a99d85fee925a8562d2621addb",
     "Pouw.PearlC.debitDev": "5d35649e7854f34640190f26b02bf5e94e0be15469e978a3536b4ca2a1ad68b7",
     "Pouw.PearlC.devAt": "94a05321199e2480ef9144b73ac8172e53414bb0afd06fb9647b9568ceea03e6",
     "Pouw.PearlC.devH100": "5a43c1efe07cc2ac628095c95c6a205e1e584a4c451a1c7c0a8199510578dd0b",
+    "Pouw.PearlC.devH100Tensor": "7ff16414a22082392574a51c3b8819abb810358d0abc866c2374fded91c7be8f",
     "Pouw.PearlC.devSm120v1": "e8683e11423332331304d0a3f6ed4662ea00f45d4231727cd607dcd9712e8d34",
     "Pouw.PearlC.devSm120v2": "4f59d45fd7215c5db0568e89746297fc170061906445f41b418d7022ac26153a",
+    "Pouw.PearlC.h100SmMHz": "0f51528688f38ae5a08967cd1984ee94d52aacd585f7770743cf22c4b0334799",
+    "Pouw.PearlC.h100TensorMHz": "77b428dca9314f67b69b858e786bf9eba4b63a33a4627a10762d913c4c8c4cd6",
     "Pouw.PearlC.llama31_8bLinears": "33576ad425f7422cc95800869f043984dd86cf55d803af807f76e2b00f4a6ed3",
     "Pouw.PearlC.pearlCDomainDev": "30f9d9afd030d0011715c64c3eb31415ae766561630de7ad5b5ceeb3b57cf36b",
     "Pouw.PearlC.pearlCDomainDevAt": "402ff5676e5550b47d1280a8f49978fa59d12520c6d93eceb5d2a4b3eb81c6c9",
@@ -41621,7 +41625,7 @@
    }
   },
   "Definitions.Pouw.PearlC.W1": {
-   "digest": "78873e91f10995c36e42348fbb774e6fda4c3e302bc2e10be34149491f36f623",
+   "digest": "e28e0f8975e852e46b7986f75069ecc78865fcc7ebdf968882b7767356578cc4",
    "definitions": {
     "Pouw.PearlC.W1.Addr": "f874d9f13c441c566c9eb13426b94122d70bc31ea9e1d646825e675de38e9c30",
     "Pouw.PearlC.W1.Addr.off": "55814166b9f20bad081bb03f147091dee7afcfb346d37f30c4beea6d432a3704",
@@ -41720,8 +41724,8 @@
     "Pouw.PearlC.W1.W1Device.h100At": "5eb0e996a6e380b3198b0fadd5d32d6966c16e50e2e2cbd497b6320e61c6e9aa",
     "Pouw.PearlC.W1.W1Device.has": "166d9aac4c2896bdaf18f658d538fa61080babd63f651a4f92e3d5acb5bc4281",
     "Pouw.PearlC.W1.W1Device.prices": "c1d76fa7b3c71c021b7d908ca28b7ebfa3b47c20f191a06e03083d8e9f78ee7a",
-    "Pouw.PearlC.W1.W1Device.s8H100": "22d639b96490f475d64f92831071a72c5c8fefaf2006a1dd7162efc1cd9e2ec1",
     "Pouw.PearlC.W1.W1Device.s8H100At": "b8756492bacdeba83527637058a342527429182a4d5ae24a1aadce51bf140e17",
+    "Pouw.PearlC.W1.W1Device.s8H100Tensor": "df9227b7a84e556d89ebf6e235c5ca69442a7da35792a6c9a55f38952e6e3b25",
     "Pouw.PearlC.W1.W1Device.sm120": "b6c2e3b7e130758d5f07928e43ec6a24241f847e8c165351a97980a011b6252f",
     "Pouw.PearlC.W1.W1Device.sm120At": "19918e107d38a42e531e594770615d5c8188c6a3321fa2662bf3db8914139d5a",
     "Pouw.PearlC.W1.W1Device.sm120Loop": "268947dfd9f2596bd5e05387b8fa2161fc0fe10f113408fe78402646449bfc60",
@@ -41731,6 +41735,7 @@
     "Pouw.PearlC.W1.W1Prices.fp32": "cf0cced6538038df65423a289b211163e6c19ae268b12085bb5345d25d456094",
     "Pouw.PearlC.W1.W1Prices.fp4Sm120": "6c30ae5b45668564cf16efdbff216789a631fd1d514b7c93ddbc9f2f87aac165",
     "Pouw.PearlC.W1.W1Prices.h100": "12f7d46475640f769f1f1c4fe8e147e320b438c79b282a1f755202f0fbe38232",
+    "Pouw.PearlC.W1.W1Prices.h100Tensor": "3590b58fb4ee967bc30f9c1ff58692ffab4cae1b09d84e0ff5741b5338aefdd0",
     "Pouw.PearlC.W1.W1Prices.int32": "9c7f3a6f9decc4fb3791972b1a8499d221a2707abc4057862756c020aece2a96",
     "Pouw.PearlC.W1.W1Prices.mac": "a2f761e8bfd914c9738487f9e5816cd94be9d08047104b636a3f69bcb8ef60af",
     "Pouw.PearlC.W1.W1Prices.scale": "8063474a6885488cb0512513d2a29ffeb356b9c1e9c36585b53e5da5f37d51d2",
