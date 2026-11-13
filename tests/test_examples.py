@@ -52,6 +52,23 @@ def test_a_document_fault_is_named():
     _says(old, "level is retired", "add run, one of moved", "add proof, one of none")
 
 
+def test_each_composite_names_a_lake_package_this_tree_has():
+    """A composite's package is named by a path, which a move rewrites. One that names no package would drop the composite
+    from the vocabulary, and every demo whose protocol names it would fail."""
+    for name, package in E.COMPOSITES.items():
+        assert (ROOT / package / "lakefile.toml").is_file(), (
+            f"{name}: {package} holds no lakefile.toml: name the directory of its Lake package in {E.WHERE}'s COMPOSITES")
+    assert set(E.COMPOSITES) <= set(E.vocabulary(ROOT)[0])
+
+
+def test_a_composite_is_known_wherever_its_package_is(tmp_path, monkeypatch):
+    for d in ("verity/protocols/flock", "adapters", "elsewhere/remote"):
+        (tmp_path / d).mkdir(parents=True)
+    (tmp_path / "elsewhere" / "remote" / "lakefile.toml").write_text("")
+    monkeypatch.setattr(E, "COMPOSITES", {"onsite": "elsewhere/onsite", "remote": "elsewhere/remote"})
+    assert E.vocabulary(tmp_path)[0] == ["flock", "remote"], "remote's package is there, and onsite's is not"
+
+
 def test_a_file_with_the_retired_level_reads_as_its_two_axes(tmp_path):
     d = tmp_path / "demos" / "toy"
     d.mkdir(parents=True)
