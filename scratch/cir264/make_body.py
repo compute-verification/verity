@@ -63,7 +63,7 @@ swap("Each target, as the run printed it (`u` units, `b` committed bits):",
 # --- the head
 r = json.load(open(runs + SUITES + "/out/suites.json"))
 rr = json.load(open(runs + SUITES + "/out/repository/suites.json"))
-assert Counter(e["status"] for e in r) == Counter(passed=len(r)), Counter(e["status"] for e in r)
+assert set(e["status"] for e in r) <= {"passed", "cached"}, Counter(e["status"] for e in r)
 assert rr[0]["status"] == "passed" and len(rr) == 1
 tot = Counter()
 for e in r:
@@ -71,7 +71,11 @@ for e in r:
 assert tot["failed"] == 0 and tot["error"] == 0
 assert not any(e.get("outside") or e.get("child_outside") or e.get("failed_tests") for e in r + rr)
 by = {e["name"]: e["counts"] for e in r}
-cached = sum(1 for e in r if e.get("reused"))
+cached = [e["name"] for e in r if e["status"] == "cached"]
+ran = len(r) - len(cached)
+logs = runs + SUITES + "/out/"
+for log in ("repository/logs/repository.log", "logs/adapters_vllm.log"):
+    assert "sampled_accept" not in open(logs + log, errors="replace").read(), log
 gate = open(runs + SUITES + "/out/ratchet_gate.txt").read().strip().splitlines()
 m = re.match(r"ratchet gate (\w+)\.\.(\w+): (\d+) change\(s\), (\d+) failed", gate[0])
 assert m and m.group(2) == H12 and m.group(4) == "0", gate[0]
@@ -106,20 +110,22 @@ checks = (
     "those sentences, field for field but for timings and memory [compared by script].\n"
     f"- **`{SUITES}`, the suites this change reaches, `repository` whole, the ratchet gate and the pins, at the head `{H12}`** "
     f"({sw}, {sh}; 64 GB). `suites.py --changed af9b13440693 --quick`, the base named by the commit of `main` that the head "
-    f"holds: **{len(r)} suites: {len(r)} passed ({cached} cached), 0 failed**; {tot['passed']:,} tests passed and "
-    f"{tot['skipped']:,} skipped over the {len(r)} [summed by me from `out/suites.json`], with no read outside a suite's "
-    f"inputs. Among them `verity-vllm` {vllm['passed']:,} passed, {vllm['skipped']:,} skipped (it ran `test_sampled_accept.py` "
+    f"holds: **{len(r)} suites: {len(r)} passed ({len(cached)} cached), 0 failed**; {tot['passed']:,} tests passed and "
+    f"{tot['skipped']:,} skipped over the {ran} that ran in this run [summed by me from `out/suites.json`], with no read "
+    f"outside a suite's inputs. The {len(cached)} cached are passes the node kept from another commit's run, reused because "
+    f"every file that run read is as it was ({', '.join('`' + c + '`' for c in cached)}); none holds a file of this change. "
+    f"Among the {ran}: `verity-vllm` {vllm['passed']:,} passed, {vllm['skipped']:,} skipped (it ran `test_sampled_accept.py` "
     f"whole, slow tests included); `verity/definitions` {defs['passed']:,} passed (its `test_catalog.py` holds the registered "
     f"ids to `catalog_ids.json`); `verity/circuits` {circ['passed']:,} passed; `repository` {repo['passed']:,} passed. Then "
     f"`repository` whole: **{rr[0]['counts']['passed']:,} passed, 0 failed**. Then `adapters/vllm/tools/ratchet_gate.py "
     f"af9b13440693 HEAD`: **{m.group(3)} change, 0 failed** (no new environment read, silent except, lane-text site or "
     "retired-term site). Then `tools/verity/check/pins.py --stale`: exit 0, it names no pin. No line of the `repository` log "
-    "or of `verity-vllm`'s names a file of this change, so the three style findings the first head had under vLLM's rules are "
-    "gone [read: both logs searched]. `out/suites.json` and each suite's log are in the run.\n"
+    "or of `verity-vllm`'s names a file of this change [read: both logs "
+    "searched]. `out/suites.json` and each suite's log are in the run.\n"
     "- **The same checks one commit earlier, at `f1d2ecc7050a`** (before the docstring's two sentences): "
     "`r20261113-173733-65a2`, `pins.py --stale`, exit 0, no pin named (waited 22.5 min for a slot, held it under a second); "
     "`r20261113-180332-58cd`, circuit-check, the same report (waited 22 s, held 71 s); `r20261113-180800-47af`, the same "
-    "three steps (no wait, held 57.8 min): 62 suites passed, 0 failed, 39,156 tests passed and 570 skipped; `repository` "
+    "three steps (no wait, held 57.8 min): 62 suites passed (0 cached), 0 failed, 39,156 tests passed and 570 skipped; `repository` "
     "whole 361 passed; the ratchet gate 1 change, 0 failed.\n"
     "- **Before the carry, at the first head `66f957e940d7`:** `r20261113-042405-da93` (circuit-check, the same report), "
     "`r20261113-044914-2cc1` (`suites.py --changed 3498d4ad65 --quick`: 59 suites passed, 0 failed) and "
