@@ -6936,6 +6936,41 @@ def test_a_replay_reuses_only_modules_whose_olean_files_and_imports_passed_it(tm
     assert any(f.startswith(kernel["fails"]) for f in rep["failures"]), rep["failures"]
 
 
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_package_compiled_again_at_another_path_reuses_every_replay(tmp_path, sandboxed_node):
+    """On a real build of `module` files: a linter's warning keeps its source's absolute path in its module's server part,
+    so the package compiled again in a longer tree has other `.olean` bytes, yet the audit there checks nothing, since a
+    replay key leaves that path out (`replay_digest`); a declaration changed there is checked again."""
+    cache = tmp_path / "replay-cache"
+
+    def audit(pkg: Path) -> dict:
+        subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+        rep = A.audit(pkg, tmp_path / "out", update=True, runs=False, log=lambda *_: None, replay_cache=cache, store=True)
+        assert not [f for f in rep["failures"] if f.startswith("replay")], rep["failures"]
+        return rep
+
+    def copy(at: Path) -> Path:
+        shutil.copytree(A.FIXTURES / "modules", at, ignore=shutil.ignore_patterns(".lake"))
+        defs = at / "Modular" / "Defs.lean"
+        defs.write_text(defs.read_text().replace("end Modular", "public def unusedArg (m k : Nat) : Nat := k\n\nend Modular"))
+        return at
+
+    def server(pkg: Path) -> bytes:
+        return (pkg / ".lake" / "build" / "lib" / "lean" / "Modular" / "Defs.olean.server").read_bytes()
+
+    a = copy(tmp_path / "a" / "modules")
+    n = counts(audit(a))[0]
+    assert n > 1
+    b = copy(tmp_path / "a" / "much" / "longer" / "checkout" / "modules")
+    rep = audit(b)
+    assert b"/much/longer/checkout/modules/Modular/Defs.lean" in server(b) and server(a) != server(b)
+    assert counts(rep) == (0, n), rep["replay"]
+    defs = b / "Modular" / "Defs.lean"
+    defs.write_text(defs.read_text().replace(":= 3 * n", ":= n * 3"))
+    assert counts(audit(b))[0] >= 1
+
+
 #: the parts of a module a seal copies and a swap must overwrite to change what the kernel replays
 _BAD_PARTS = ("Bad.olean", "Bad.olean.server", "Bad.olean.private", "Bad.ir.sig", "Bad.ir")
 

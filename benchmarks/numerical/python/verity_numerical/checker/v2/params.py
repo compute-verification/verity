@@ -25,6 +25,7 @@ high half's scale (``params.py``-style bounds, checked in :func:`check_widths`).
 """
 from __future__ import annotations
 
+from ..ctx import Value
 from ..params import Params
 
 __all__ = ["V2", "check_widths"]
@@ -92,7 +93,7 @@ class V2:
         return (p.l_hi + 1) * (V2.last(p) - p.floor + 1)
 
     @staticmethod
-    def leadnorm_key(p: Params, l, E):
+    def leadnorm_key(p: Params, l: Value, E: Value) -> Value:
         return l + (p.l_hi + 1) * (E - p.floor)
 
     @staticmethod
