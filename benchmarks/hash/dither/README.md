@@ -7,7 +7,7 @@ and z against its CPU twin and the Definition (`h1tile.reference` and `h1tile.j1
 `verity/protocols/accounting/pouw/prover/circuit/h1tile.py`). Nothing a verifier runs reads this directory.
 
 The arms' names (`dither`, `dither-1s`, `dither-a`, ...) are identifiers the runs' records carry. What they serve are
-H1's and J10-R's folds, not Dither, PoUW's no-fold design (`verity/protocols/accounting/pouw/verifier/dither/`).
+H1's and J10-R's folds, not Dither, PoUW's no-fold design (`verity/protocols/experimental/dither/`).
 
 ## The arm of record
 
@@ -74,8 +74,7 @@ Each arm's module patches vLLM before `sbench.py` builds the arm's engine.
   `PYTHONPATH`).
 - `job.sh`: `h1u.cu`'s libraries built on a CPU node, then `benchmarks/pouw`'s partials tests on each build on a leased
   H200 or B200.
-- `dmmsweep.py`: dither-a's GEMM configs at the decode shapes, each gated before it is timed. `native.sh` (`native.py`):
-  vLLM serving the int8 pin natively, one arm a process.
+- `dmmsweep.py`: dither-a's GEMM configs at the decode shapes, each gated before it is timed.
 
 ## Tools
 
