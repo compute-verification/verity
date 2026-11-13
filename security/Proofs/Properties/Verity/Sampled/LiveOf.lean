@@ -5,6 +5,11 @@ public import Proofs.Flock.Bridge.DrawnLaw
 public import Proofs.Flock.Bridge.Refused
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 public import Proofs.Flock.Soundness.Discharge.ZkBind.Rate
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.SetupP
+public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+public import Proofs.Flock.Claims.ZK.MaskedTables
 
 /-!
 # What v2's acceptance gives of the session at the registered files (`liveOf`)
@@ -401,6 +406,79 @@ theorem lawOn_designAt {desc : Claims.Msg} {qr lj : Json} {tb : Option Json} {n 
   · exact Flock.Bridge.lawOn_drawsUnder hpop h (Flock.Bridge.notBernoulli_drawsUnder h)
   · rw [h]
     exact ⟨rfl, Nat.zero_le _⟩
+
+open FlockSoundness.Discharge.Composed (inputsJ nTab) in
+/-- **The session's reference setup**: at one table, the setup `verify --zk` makes at the record's subset print of
+`kd` units sets up a `--zk` table (`drawSetupHP_of_setupHiddenI`, `drawSetupZHJP_of`, at no sampled proof block) at
+`mPtsOf g kd` points, since the print decodes to a sample proving its `kd` units (`proved_of_recordDrawn`). -/
+theorem y₀_of_setup (n : ℕ) {I : FlockSoundness.Discharge.Exec.Inputs} {D : Flock.Desc} {kd n' : ℕ} {recS : String}
+    {units : Array ℕ} {st : Flock.Stmt} (hc1 : I.count = 1) (ht : I.tags.typed = false)
+    (hD : Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D)
+    (hrd : recordDrawn (.subset units.size) n' units recS) (hsize : units.size = kd)
+    (hst : Flock.Stmt.setupHidden (inputsJ I 0).tags (inputsJ I 0).circuitFile (inputsJ I 0).publicFile
+      (inputsJ I 0).coins (inputsJ I 0).tables (FlockSoundness.Discharge.Exec.recordDraw recS)
+      (inputsJ I 0).partition (inputsJ I 0).program none = .ok st)
+    (hshape : Flock.Zk.shapeOk st = .ok ()) :
+    ∃ (S₀ : Finset (Fin n)) (d₀ : Json),
+      Nonempty (FlockSoundness.Discharge.ZkHidden.DrawSetupZHJP (inputsJ I 0) none
+        (FlockSoundness.Discharge.Exec.mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀) := by
+  have hdj : FlockSoundness.Discharge.Exec.recordDraw recS =
+      some (Flock.Draw.UnitDraw.toJson ⟨.subset units.size, n', units, #[]⟩) :=
+    (exec_recordDraw recS).trans hrd.2
+  rw [hdj] at hst
+  have htJ : (inputsJ I 0).tags = FlockSoundness.Discharge.ZkExec.zkTags I := by
+    show FlockSoundness.Discharge.Exec.tagsAt _ I.count 0 = _
+    unfold FlockSoundness.Discharge.Exec.tagsAt
+    exact ite_eq_left (by omega)
+  have hn1 : nTab I = 1 := by
+    unfold nTab
+    simp [hc1]
+  obtain ⟨⟨sch, tPad⟩, hz⟩ := FlockSoundness.Discharge.ZkHidden.schedule_ok_of_shapeOk hshape
+  obtain ⟨sch₀, hf⟩ := FlockSoundness.Discharge.ZkHidden.fast100_of_schedule hz
+  have hst' := hst
+  rw [htJ] at hst'
+  have hmPts : st.mPts = FlockSoundness.Discharge.Exec.mPtsOf D.unroll.g (kd / nTab I) := by
+    rw [hn1, Nat.div_one, ← hsize]
+    exact FlockSoundness.Discharge.ZkHidden.setupHidden_mPts_of_proved (Flock.Desc.parse_flat hD)
+      (fun D' hD' => by rw [proved_of_recordDrawn hrd hD']) hst'
+  obtain ⟨pi', pop, -, -, hdr⟩ := FlockSoundness.Discharge.Hidden.setupHidden_drawnP hst
+  obtain ⟨Dd, hDd, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec
+    (c := { st.c with outPorts := if pi'.ports.isEmpty then #[] else #[("public inputs", pi'.words)] }) hdr
+  obtain ⟨xx, hxx⟩ := FlockSoundness.Discharge.HiddenExec.drawSetupHP_of_setupHiddenI (I := inputsJ I 0)
+    (own := none) (S := (∅ : Finset (Fin n))) (FlockSoundness.Discharge.Composed.typedJ ht 0) hst hf hDd
+    (fun v hv => by simp at hv) hmPts
+  obtain ⟨y, -, -, -⟩ := FlockSoundness.Discharge.ZkHidden.drawSetupZHJP_of xx (by rw [hxx]; exact hshape)
+    (sch := sch) (tPad := tPad) (by rw [hxx]; exact hz)
+  exact ⟨∅, _, ⟨y⟩⟩
+
+open FlockSoundness.Discharge.Composed (inputsJ) in
+/-- **The session's public file with no input ports**: at a circuit naming no public input port, the setup `verify
+--zk` makes loads the public file with none (`setupHidden_drawnP`, at the circuit `setupHidden_c_of_parse` parses), to
+the population the committed files' circuit reads (`loadPublic_inOut`), with no two ports of one published domain
+(`v5Files_of_checks`). -/
+theorem pub_of_setup {I : FlockSoundness.Discharge.Exec.Inputs} {D : Flock.Desc} {pubO : Flock.Public} {n : ℕ}
+    {d : Json} {st : Flock.Stmt} (hc1 : I.count = 1)
+    (hD : Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D)
+    (hpi : Flock.HmIn.parse D.unroll = .ok {})
+    (hst : Flock.Stmt.setupHidden (inputsJ I 0).tags (inputsJ I 0).circuitFile (inputsJ I 0).publicFile
+      (inputsJ I 0).coins (inputsJ I 0).tables (some d) (inputsJ I 0).partition (inputsJ I 0).program none = .ok st)
+    (hpubO : Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile = .ok pubO)
+    (hnO : pubO.n = n)
+    (hports : Flock.PortRoots.checkOf (.ok D.unroll) (FlockSoundness.Discharge.ZkExec.zkTags I) I.publicFile = .ok ()) :
+    ∃ pub, Flock.HmIn.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll {} I.publicFile = .ok pub ∧
+      Flock.PortRoots.dupId D.unroll pub = false ∧ pub.n = n := by
+  have htJ : (inputsJ I 0).tags = FlockSoundness.Discharge.ZkExec.zkTags I := by
+    show FlockSoundness.Discharge.Exec.tagsAt _ I.count 0 = _
+    unfold FlockSoundness.Discharge.Exec.tagsAt
+    exact ite_eq_left (by omega)
+  rw [htJ] at hst
+  have hc := FlockSoundness.Discharge.HiddenExec.setupHidden_c_of_parse (Flock.Desc.parse_flat hD) hst
+  obtain ⟨pi, pop, hpp, hlp, -⟩ := FlockSoundness.Discharge.Hidden.setupHidden_drawnP hst
+  rw [hc, hpi] at hpp
+  have hpi' : pi = {} := (Except.ok.inj hpp).symm
+  rw [hc, hpi'] at hlp
+  have hn : pop.n = n := (Flock.Bridge.loadPublic_inOut hlp hpubO).1.symm.trans hnO
+  exact ⟨pop, hlp, (Flock.Bridge.v5Files_of_checks hlp hn hports).1, hn⟩
 
 /-! ## An accepted play's session -/
 
