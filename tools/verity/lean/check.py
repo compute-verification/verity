@@ -520,6 +520,16 @@ def under(prefixes, name: str) -> bool:
     return any(name == p or name.startswith(p + ".") for p in prefixes)
 
 
+def layer_modules(layers: dict, modules) -> dict[str, list[str]]:
+    """{layer: the modules of ``modules`` it holds} for each of ``layers`` (a lock's `layers`): those under its prefix,
+    less each under a sealed layer that isn't under it, which that layer holds alone. A layer that holds none fails
+    (`layers.empty`)."""
+    sealed = sorted(k for k, r in layers.items() if r.get("sealed"))
+    return {layer: [m for m in sorted(modules) if under([layer], m)
+                    and not any(under([s], m) and not under([s], layer) for s in sealed)]
+            for layer in layers}
+
+
 def source_dirs(pkg: Path) -> list[Path]:
     """The directories module names are relative to, deepest first: each `lean_lib`'s `srcDir` under the package's
     (`lakefile.toml`; Lake's default `.` for each), so a nested package with `srcDir = ".."` names its modules from the
@@ -547,6 +557,12 @@ def lean_modules(pkg: Path) -> dict[str, str]:
                 src = next((s for s in srcs if path.is_relative_to(s)), pkg.resolve())
                 out[".".join(path.relative_to(src).with_suffix("").parts)] = str((here / f).relative_to(pkg))
     return out
+
+
+def audited_modules(pkg: Path, roots, exempt) -> list[str]:
+    """The package's modules under the lock's ``roots`` that are not under an ``exempt`` prefix (`lean_modules`): the set
+    the build builds, the seal takes (`Sealed.take`) and the facts' `modules` are."""
+    return sorted(m for m in lean_modules(pkg) if under(roots, m) and not under(exempt, m))
 
 
 _LEAN_SPECIAL, _TOML_SPECIAL = re.compile(r"/-|--|[\"']"), re.compile(r"[#\"]")
@@ -1498,9 +1514,9 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                 seen.add(x)
                 stack += graph.get(x, [])
         return seen
+    holds = layer_modules(layers, modules)
     for layer, rule in sorted(layers.items()):
-        inside = [m for m in sorted(modules) if under([layer], m)
-                  and not any(under([s], m) and not under([s], layer) for s in sealed)]
+        inside = holds[layer]
         if not inside:
             fails.append(Failure("layers.empty", layer, f"layers: {layer} matches no audited module; remove the entry"))
         for m in rule.get("except", []):
@@ -4867,7 +4883,7 @@ class Sealed:
         before the package's build is announced."""
         self.dir.mkdir(parents=True, exist_ok=True)
         lib = self.pkg / ".lake" / "build" / "lib" / "lean"
-        seeds = sorted(m for m in lean_modules(self.pkg) if under(roots, m) and not under(exempt, m))
+        seeds = audited_modules(self.pkg, roots, exempt)
         if missing := [m for m in seeds if not (lib / Path(*m.split(".")).with_suffix(".olean")).is_file()]:
             it = "it" if len(missing) == 1 else "them"
             raise RuntimeError(f"sealing {self.pkg.name}: no `.olean` for {', '.join(missing)} under the roots "

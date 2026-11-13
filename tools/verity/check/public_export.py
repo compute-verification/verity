@@ -33,7 +33,9 @@ A Lean lock (`lean-audit.json`) states only what the copied files hold (`tools/v
 only if a copied file declares the name it is under, is its module, or lies under its module prefix, and none carries an
 owner, an issue or a due date, so the Lean check reads it as an unowned lock; the `policy` of each of the check's controls
 loses them too (`rewrite_controls`). An entry that lists witnesses goes with a witness the export doesn't copy, and a runner's
-entry with a file of the command that writes its data. The export fails, naming them, on a kept entry that cites what it doesn't copy (a guarantee's premise), and on a lock it wrote that still
+entry with a file of the command that writes its data. A layer goes when it holds none of the modules the exported tree's
+Lean check audits there, by the check's own rule (`check.py`'s `audited_modules` and `layer_modules`): a module under a
+sealed layer is that layer's alone, so a layer whose only copied modules are under one is empty. The export fails, naming them, on a kept entry that cites what it doesn't copy (a guarantee's premise), and on a lock it wrote that still
 names what no copied file has.
 
 A lock's records of what its modules declare are the whole tree's, and only a build of the exported tree knows the
@@ -697,13 +699,15 @@ class Held:
 
 
 def rewrite_lock(text: str, here: str, held: Held, more: Callable[[dict], list[str]] = lambda lock: [],
-                 spare: dict[str, list[str]] | None = None) -> tuple[str, list[tuple[str, str]]]:
+                 spare: dict[str, list[str]] | None = None,
+                 audited: Callable[[dict], Iterable[str]] | None = None) -> tuple[str, list[tuple[str, str]]]:
     """A Lean lock without what the export doesn't hold, and each (section, name) dropped (`public_lock.public`): an entry
     named after a declaration, a namespace, a module or a package the copied files lack, an entry with a witness they
     lack, a runner's with a generator's file they lack, a premise only dropped guarantees took, and every `owner`, `issue`
     and `due`. Its roots lose the ones in ``spare`` (`spare_roots`), and gain each of their modules no root left covers and
-    then the roots ``more`` gives for the lock that leaves (`unreached`). The lock is laid out as the Lean check writes one, so
-    the rest of it reads as it did."""
+    then the roots ``more`` gives for the lock that leaves (`unreached`). With ``audited`` (the modules the exported tree's
+    check audits under the lock that leaves), each layer that holds none of them by the check's rule (`layer_modules`)
+    goes too. The lock is laid out as the Lean check writes one, so the rest of it reads as it did."""
     lock = json.loads(text)
     out, dropped = PUBLIC_LOCK.public(lock, lambda kind, name: held.has(here, kind, name))
     if gone := [r for r in out.get("roots", []) if r in (spare or {})]:
@@ -715,6 +719,10 @@ def rewrite_lock(text: str, here: str, held: Held, more: Callable[[dict], list[s
         dropped = {**dropped, "roots": [*dropped.get("roots", []), *gone]}
     if extra := more(out):
         out = {**out, "roots": [*out.get("roots", []), *extra]}
+    if audited is not None and (hollow := [k for k, inside in LEAN_CHECK.layer_modules(out.get("layers") or {},
+                                                                                      audited(out)).items() if not inside]):
+        out = {**out, "layers": {k: v for k, v in out["layers"].items() if k not in hollow}}
+        dropped = {**dropped, "layers": [*dropped.get("layers", []), *hollow]}
     if out == lock:
         return text, []
     new = LEAN_CHECK.text(out)
@@ -860,7 +868,8 @@ def export(tree, boundary, judgment, dest: Path, shipped: dict[str, list[str]]) 
                         else rewrite_manifest(old, here, copied) if name == "lake-manifest.json"
                         else rewrite_lock(old, here, held, lambda lock, here=here: unreached(
                             lambda f: roots[f] if f in roots else tree.text(f), built, here, lock, tracked),
-                            spare.get(here)) if name == LOCK
+                            spare.get(here), lambda lock, here=here: LEAN_CHECK.audited_modules(
+                                dest / here, lock.get("roots", []), lock.get("exempt", {}))) if name == LOCK
                         else rewrite_pyproject(old, here, copied, exported, set(dists), required,
                                                lambda m, f=f: tree._module(m, f), {r for g, r in unused if g == f}))
         if dropped or (name == LOCK or f in CONTROLS) and new != old:

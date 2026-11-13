@@ -1015,6 +1015,26 @@ def test_the_export_leaves_a_lock_that_is_public_as_it_stands(tmp_path_factory) 
     assert got["locks"]["lean/lean-audit.json"]["dropped"] == {} and got["locks"]["lean/lean-audit.json"]["roots_added"] == []
 
 
+def test_the_export_drops_a_layer_whose_copied_modules_are_all_a_sealed_layers(tmp_path_factory) -> None:
+    """The check gives a module under a sealed layer to that layer alone, so a layer whose only copied modules lie under
+    one holds none in the exported tree and would fail its check (`layers.empty`): the export drops it, by the check's
+    own rule over the copied files, and keeps the sealed layer and every layer with a copied module of its own."""
+    rule = {"imports": ["Lib", "Mathlib"], "why": "all of it"}
+    lock = {"format": 3, "roots": ["Lib"],
+            "layers": {"Lib": rule, "Lib.Hidden": rule, "Lib.Hidden.Open": rule | {"sealed": True}}}
+    tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), lock)
+    assert "lean/Lib/Hidden/Open.lean" in j.public and "lean/Lib/Hidden.lean" not in j.public
+    dest = tmp_path_factory.mktemp("export")
+    got = PE.export(tree, boundary, j, dest, {})
+    wrote = json.loads((dest / "lean/lean-audit.json").read_text(encoding="utf-8"))
+    assert list(wrote["layers"]) == ["Lib", "Lib.Hidden.Open"]
+    assert got["rewrites"]["lean/lean-audit.json"] == ["layers Lib.Hidden"]
+    assert got["locks"]["lean/lean-audit.json"]["dropped"] == {"layers": 1}
+    audited = PE.LEAN_CHECK.audited_modules(dest / "lean", wrote["roots"], {})
+    assert PE.LEAN_CHECK.layer_modules(wrote["layers"], audited) == {"Lib": ["Lib", "Lib.Shown"],
+                                                                     "Lib.Hidden.Open": ["Lib.Hidden.Open"]}
+
+
 def test_the_export_lists_a_module_only_a_file_it_leaves_out_imports_as_a_root(tmp_path_factory, monkeypatch) -> None:
     hidden = "import Lib.Hidden.Open\n" + LOCK_TREE["lean/Lib/Hidden.lean"]
     monkeypatch.setitem(LOCK_TREE, "lean/Lib/Hidden.lean", hidden)
@@ -1031,7 +1051,7 @@ def test_the_export_refuses_a_lock_it_wrote_that_names_what_no_copied_file_has(t
     """The export reads back each lock it wrote: one that still names a declaration or a module no copied file has, or
     carries an owner, fails by name rather than ship."""
     tree, boundary, j = _lean(tmp_path_factory.mktemp("tree"), _lock())
-    monkeypatch.setattr(PE, "rewrite_lock", lambda text, here, held, more=None, spare=None: (text, []))
+    monkeypatch.setattr(PE, "rewrite_lock", lambda text, here, held, more=None, spare=None, audited=None: (text, []))
     with pytest.raises(ValueError) as e:
         PE.export(tree, boundary, j, tmp_path_factory.mktemp("export"), {})
     said = str(e.value)
@@ -1400,7 +1420,8 @@ def test_this_trees_export_rewrites_every_manifest_it_copies(tmp_path: Path) -> 
     Each root file it writes under a tracked file's name replaces a file of imports alone. Where it drops a root of a
     lock (the identity package's `Identity.Domains`, whose file is the other protocols' table and stays behind), the
     check still seals every module it copies there: each is reached from a root the written lock keeps, the modules
-    `unreached` lists among them."""
+    `unreached` lists among them. No lock it writes holds a layer that the exported tree's check, by its own rule, finds
+    holds no module there (`layers.empty`): this reads only the copied files and the lock, with no build."""
     r = subprocess.run([sys.executable, str(EXPORT), str(tmp_path / "export"), "--report", str(tmp_path / "report.json")],
                        cwd=ROOT, capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -1414,6 +1435,15 @@ def test_this_trees_export_rewrites_every_manifest_it_copies(tmp_path: Path) -> 
     assert "Identity.Domains" in report["spare_roots"]["verity/commitments/identity"]
     for here in report["spare_roots"]:
         assert _unsealed(lambda f: (dest / f).read_text(encoding="utf-8"), copied, here) == [], here
+    locks = [f for f in copied if f.rpartition("/")[2] == PE.LOCK]
+    assert locks, "this tree's export copies Lean locks; the next lines hold each one's layers"
+    empty = {}
+    for f in locks:
+        lock = json.loads((dest / f).read_text(encoding="utf-8"))
+        audited = PE.LEAN_CHECK.audited_modules((dest / f).parent, lock.get("roots", []), lock.get("exempt", {}))
+        if layers := [k for k, held in PE.LEAN_CHECK.layer_modules(lock.get("layers") or {}, audited).items() if not held]:
+            empty[f] = layers
+    assert empty == {}, f"layers the exported tree's check would find empty: {empty}"
 
 
 def test_the_build_shares_one_set_of_dependencies_where_pins_agree(tmp_path: Path, monkeypatch) -> None:
