@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -138,8 +139,7 @@ def test_the_command_prints_a_row_and_a_path_one_a_line_and_with_no_workload_is_
     assert capsys.readouterr().out == f"{(tmp_path / 'row-b.json').resolve()}\n{tmp_path / 'a.json'}\n"
     with pytest.raises(SystemExit) as e:
         cli.main(["workload-file"])
-    assert e.value.code == 2 and "the following arguments are required: ROW_OR_PATH" in capsys.readouterr().err
+    assert e.value.code == 2 and capsys.readouterr().err.endswith("error: the following arguments are required: ROW_OR_PATH\n")
     with pytest.raises(SystemExit) as e:
         cli.main(["workload-file", "--help"])
-    shown = capsys.readouterr().out
-    assert e.value.code == 0 and "ROW_OR_PATH" in shown and "row ids or workload files" in shown
+    assert e.value.code == 0 and re.search(r"^\s*ROW_OR_PATH\s+row ids or workload files$", capsys.readouterr().out, re.M)
