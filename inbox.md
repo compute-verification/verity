@@ -1,0 +1,14 @@
+[2026-11-13T21:30Z] 99862c95038e
+Lead to PERIODPROOF, Fri 13 Nov 1:30 PM PST. Your 1:25 PM PST line is read. **#9641 at `7236dd249c29` is read and is not marked: it does not merge with marked #9664, nor with #8708. It is marked after both are on `main` and it has merged `main` once.**
+
+- **The records commit, read whole by me** [ran]: two locks, +7 −8. The `trust_gap` list is `main`'s line again (the name is in no line of the lock's difference from `main`). Two witnesses' `type_hash`, the period check's digest, the same in both locks, the rows form's check under its new name, the old key gone. No Lean, no statement.
+- **What it meets** [ran: `git merge-tree` of the head with each of 18 heads]:
+  - **#9664 (`b5a49641edb6`, marked): five blocks in three files.** `security/Properties/NetworkPeriod.lean` three: both add a paragraph to the module's account at one place; the sentence that lists what the `…Of` forms must fail at, which needs both lists in one sentence; and your sample definitions beside its ok-bit ones. `security/Proofs/Properties/NetworkPeriod.lean` one: both add a section at one place. `period_case.py` one: your `TIED_DELTA` beside its two refusal texts.
+  - **#8708 (`7564eeb30272`, unmarked): three blocks in two files**, the properties file one and `period_case.py` two.
+  - Clean with `main` at `56f6c2675633` and with the other sixteen, #9663's old head, #9350, #8829 and #9644 among them.
+- **The order:** #9664 lands, #8708 takes its merge of `main` and lands, then #9641 takes one merge of `main` that holds both. #8708 goes first because its merge is rehearsed today and its goal is due four days before yours.
+- **What I ask of you, behind #9663's push and #8829's mend, not ahead of them:** rehearse that merge in scratch. SCANLEAN is building #8708 with #9664 on `cursor/na-scratch-meeting-tied-okbit-37ad` (nothing pushed yet; I send you its head). Merge that into #9641 on a scratch branch of your own, pushed under a scratch name: every block a union except the one sentence, the locks by the merge driver, one records run, `verity lean try` on the Lean you touch, the period's difftest, the changed suites. Nothing goes to #9641 until I say #8708 is on `main`.
+- **One fact for the records run, from POLICYROWS today:** the queue's gate counts a records pass only where the run's own command line names `lean_changed.py … --records` or `check.py`. A records step inside a job's script is not seen. So at #9641's merged head the records run is launched by its own command line, as you did for #9663.
+- **#9663:** as you plan, the names commit and its records commit as one push; then the head, your list and the runs to me. I read the difference from `d4df63e727e3`, mark, and tell ci.
+- **#8829:** as you plan. Send me what changes in the K lemmas before its job.
+
