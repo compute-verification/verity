@@ -147,4 +147,44 @@ theorem StepKept.step_of (a : StepAt) (bs : Core.Blobs) (s : RunFiles) (r : Run)
         simp only [verdictOf_split]
         rfl
 
+/-- **What the plan's distinctness check holds where it passes**: no digest is one `seen` holds, their hex is
+distinct, and none is a pinned table's. -/
+theorem distinctFrom_ok : ∀ {seen : Std.HashSet String} {l : List ByteArray}, distinctFrom seen l = .ok () →
+    (∀ b ∈ l, seen.contains (Flock.hexOf b) = false) ∧ (l.map Flock.hexOf).Nodup ∧ ∀ b ∈ l, b ∉ pinned
+  | _, [], _ => ⟨by simp, List.nodup_nil, by simp⟩
+  | seen, b :: bs, h => by
+    unfold distinctFrom at h
+    by_cases hp : pinned.any (fun t => decide (t = b)) = true
+    · rw [if_pos hp] at h
+      cases h
+    rw [if_neg hp] at h
+    by_cases hs : seen.contains (Flock.hexOf b) = true
+    · rw [if_pos hs] at h
+      cases h
+    rw [if_neg hs] at h
+    obtain ⟨hseen, hnd, hpin⟩ := distinctFrom_ok h
+    have hne : ∀ b' ∈ bs, Flock.hexOf b ≠ Flock.hexOf b' ∧ seen.contains (Flock.hexOf b') = false := by
+      intro b' hb'
+      have := hseen b' hb'
+      rw [Std.HashSet.contains_insert, Bool.or_eq_false_iff] at this
+      exact ⟨fun he => by simp [he] at this, this.2⟩
+    refine ⟨?_, ?_, ?_⟩
+    · intro x hx
+      rcases List.mem_cons.1 hx with rfl | hx
+      · simpa using hs
+      · exact (hne x hx).2
+    · rw [List.map_cons, List.nodup_cons]
+      refine ⟨fun hm => ?_, hnd⟩
+      obtain ⟨b', hb', he⟩ := List.mem_map.1 hm
+      exact (hne b' hb').1 he.symm
+    · intro x hx
+      rcases List.mem_cons.1 hx with rfl | hx
+      · intro hm
+        exact hp (List.any_eq_true.2 ⟨x, hm, by simp⟩)
+      · exact hpin x hx
+
+/-- Digests whose hex is distinct are distinct. -/
+theorem nodup_of_hex {l : List ByteArray} (h : (l.map Flock.hexOf).Nodup) : l.Nodup :=
+  List.Pairwise.of_map Flock.hexOf (fun _ _ hne he => hne (congrArg Flock.hexOf he)) h
+
 end Spot.OneStageZk.Streamed
