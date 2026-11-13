@@ -176,7 +176,11 @@ def PeriodAdaptive {m : ℕ} {Ω Z : Type} (n : Fin m → ℕ) (acc : Z → Fin 
     (∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → W z ω i = W z ω' i) ∧ ∀ z ω i, W z ω i ⊆ Finset.range (n i)
 
 /-- **The conditional escape**: given the earlier windows' coins, window `i`'s audit accepts with probability at most
-`(1 - q)^|W_i| + e_i`, `q` the design's per-window detection probability. -/
+`(1 - q)^|W_i| + e_i`, `q` the design's per-window detection probability. `q` is a hypothesis: a window that samples a
+uniform `k`-subset of its `n` proof blocks misses `|W_i|` of them with probability at most `(1 - k/n)^|W_i|`, so the
+rule `rate:NUM/DEN`, whose count is at least `NUM/DEN` of whatever `n` a window registers, gives that term at
+`q = NUM/DEN`, while under a fixed count the largest `q` that holds falls as the prover pads `n`. That a window's audit
+samples so is not stated here. -/
 def PeriodEscapes {m : ℕ} {Ω Z : Type} [Fintype Ω] (Zs : Set Z) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
     (W : Z → (Fin m → Ω) → Fin m → Finset ℕ) (q : ℝ) (e : Fin m → ℝ) : Prop :=
   ∀ z ∈ Zs, ∀ i ω, Pr (acc z i ω) ≤ (1 - q) ^ (W z ω i).card + e i
