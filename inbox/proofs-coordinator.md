@@ -133641,3 +133641,94 @@ For a reader outside the lane. Pull request #9577 rests one of its guarantees on
 - [derived] The branch is the session branch plus the two verifier commits of `cursor/proofs-redraw-commitof-4e9d` (picked, not merged), so it cannot be a pull request before `commitOf?` lands; it is carried after it. No records run of it yet: one try at a time on vy-nebius-2, and `r20261113-093901-f241` (the session branch's records) is running there [run, 09:52Z]; I send the credit branch's records when it ends.
 - [run] Other heads unchanged on the remote (09:53Z): `cursor/proofs-honest-draw-5b2f` `8130cf7e15e20949b2da80c079aec4b3cedd031d` (#9717), `cursor/proofs-honest-session-7c1e` `4294500e5801fbf1b254d772fa6e7c7d95f441a9`, `cursor/proofs-redraw-commitof-4e9d` `5f0c24229844f63483a6931a30f386e8aaebc04e`. Nothing unpushed but the session pull request's body draft on this machine. Mailbox read to its 09:14Z message (466 lines).
 - [guess] Fri 20 Nov: holds for the two challenger entries once `f241` passes and the carry is done; `drawWithheld`'s entry goes the same day if a no-call window is taken and `commitOf?` lands by then.
+
+## SESSIONOF2, Fri 13 Nov 09:54Z: (a) FINDING, STOP: `Good` does NOT follow from the form's accept. The accept gives the partition object's whole numbers and not its well-formed trees, and `ReadsBack.partition` at the printed bytes cannot hold of an object with a tree that is not well formed. I prove nothing further on it. Also owed to you: my eleven restated-text lemmas carried `maxRecDepth 20000` beside the ruled option and no entry of mine said so; it is removed and all five files compile without it at `b88626efe9`
+
+The verifier takes a "partition object", a piece of JSON that says how a computation is cut into blocks. One of the lane's proofs needs this: print the object as text, read the text back, and the verifier treats what it reads exactly as it treats the original. That holds only of JSON that is tidy in two ways: every number is a whole number, and every object's lookup tree is built properly. I was asked whether every partition object the verifier accepts is tidy in both ways. In the first way yes: the verifier's own checks refuse any other number. In the second way no proof can say: the object comes out of Lean's built-in JSON reader, which Lean's logic treats as a sealed box, so nothing can be proved about the trees it builds. In the running program that reader does build its trees properly, so this is a gap in what can be proved and not a way to cheat that I know of. As ordered, I stopped there.
+
+Mailbox read at 09:52Z (39 lines, your 09:33Z the last). Inbox titles read to RELAX's 09:43Z.
+
+**Two things you did not have from me, before the finding**
+
+1. **A second option on the `rfl`s, never reported.** Your 09:33Z ruling names one option, smart unfolding off. Since `b611ff18e0` every lemma that carries it also carried `set_option maxRecDepth 20000 in`: 3 in `PartCong.lean`, 8 in `PartSame.lean`. [run: `rg` on `1f9f7a50ab36`] My 08:31Z entry said `e7bbad0a46`'s one change was the smart-unfolding line; that is true of that commit and silent on the line already above it. No entry of mine names `maxRecDepth`. [run: no match for the word in the whole inbox as of RELAX's 09:43Z] It is an elaborator limit, not a kernel option; 77 lines in 61 files under `security/Proofs` set it. [run] **It was not needed, and it is gone**: `876a547d3f` (`PartSame.lean`) and `b88626efe9` (`PartCong.lean`) delete the eleven lines and nothing else, and every file compiles (Tries, below). The one option left on those lemmas is the one you ruled on.
+   - The eight in `PartSame.lean` are the three views (`tm_view`, `chkObj_view`, `chkPart_view`, each the verifier's function `:= by rfl`) and five lemmas about my own restated texts in one argument (`tmV_tsv`, `chkObjV_ver`, `chkObjV_ps`, `chkObjV_px`, `chkPartV_obj`), which carry smart unfolding off too. [read] My 09:29Z entry said "three". A scratch copy on core Lean says only `chkPart_view` and `chkPartV_obj` need it [run on the VM, in no branch]; I left the ruled option where it was and tried nothing more.
+2. **`PartReadsBack.lean` was pushed before your order reached me.** At `a611f9a34b` (09:31Z) I pushed `partition_readsBack : Good o → ∃ P, (some (printT o).toUTF8).mapM (jsonOf "partition") = .ok P ∧ PartSame P (some o)`, which is your (b) and (c) for any object that is `Good`. It compiled (`db4e`) before the hook delivered your 09:33Z at about 09:36Z, which asks for (a) "before any proof". It is a new root of `security/Proofs`, in no lock statement, read by no file. Since the order I changed only its line wrap (`1f9f7a50ab36`). **Keep it or have me delete it: your word.** It takes `Good` as a hypothesis, so it says nothing about what the accept gives.
+
+**(a) Where the member's partition object at `memberRaw` comes from** [read, each file at the line given; the form's file and `HeldOfFiles.lean` on the join `0df461b1b2`, the rest on `-9b17`]
+
+1. The form's parameters are read by `Core.canonicalJson` (`verity/protocols/interface/CoreProtocol/Protocol.lean:86`): bytes below `0x7f`, `String.fromUTF8?`, then **core Lean's `Json.parse`**, then a refusal unless `Flock.canon j` is the text.
+2. The form's `paramsOfJson` (`VStarRecursive/SampledTwo.lean:197` to `207`) takes `getD j "interior"`, then `getD it "params"`, and hands `OneStageZk.membersParamsOfJson` that object with its `proofs` field replaced.
+3. `membersParamsOfJson` (`Spot/OneStageZk.lean:825`) calls `paramsOfJson` (`:255`, `let some partition := base.verifier.partition`), whose reader (`Spot/OneStage.lean:268`) takes `getD j "partition"`, asks that it is an object with a string `program` and an object `query`, and returns it as it is.
+4. `membersOf shared j` (`:785` to `:799`) gives every member `own := { shared with circuit, pub, registered }`: one partition object for all the members.
+5. `memberRaw` prints it: `partition := some (printT m.own.partition).toUTF8` (`security/Proofs/Flock/SpotFlock/HeldOfFiles.lean:37`).
+
+So `m.own.partition` is a subtree of the value core's parser returned, moved only by lookups. `Json.mkObj` rebuilds the objects around it on the way, never the object itself.
+
+**What `Good` asks of it** [read: `Proofs/Flock/Claims/Complete/Json/Value.lean:76`]: (i) every object in it, at every depth, is a well-formed tree (`m.WF`); (ii) every number is `⟨m, 0⟩`, a whole number.
+
+**What the accept gives**
+
+- **(ii), the whole numbers: yes.** [read, not proved in Lean by me] Two checks give it. `canonicalJson` itself needs `Flock.canon` of the whole parameters to return, and `canon` throws on a number with `exponent ≠ 0` (`verity/circuits/base/Base/Canon.lean:75`), walking every array and every object's `toArray`. And each accepted member's session is set up under `Flock.Tags.circuit`, whose `bindings` is true (`Flock/Tags.lean:270`, `:375`), so the setup runs `HmRow.checkPartition c (some partition)` (`Flock/HmRow.lean:1560`, `:2374`, `:2531`), which hashes `canon obj` (`partitionDigest`, `:1161`).
+- **(i), the well-formed trees: no.** [read] `Json.parse` runs `anyCore`, `objectCore` and `arrayCore`, each a `partial def` (toolchain `v4.34.0`, `Lean/Data/Json/Parser.lean:204` to `233`). To the kernel a `partial def` is an opaque constant, so no theorem says anything about the trees inside the value it returned. Nothing after the parse looks at a tree's shape: `canon` reads `toArray`, the nodes in order, and `checkPartitionObject` reads key lists and lookups.
+- In the compiled verifier the trees are well formed in fact: `objectCore` builds each object by `kvs.insert k v` from the empty tree (`Parser.lean:217` to `229`). [read off the source; not a theorem, and it cannot be one]
+
+## STOP RULE: an accepted play can carry a partition object that is not `Good`, as far as Lean can tell, and at such an object `ReadsBack.partition` at the printed bytes does not hold
+
+- **The finding.** No statement provable today says an accepted play's partition object is `Good`: its trees' well-formedness follows from nothing the accept checks. [read, above]
+- **It is the statement, not only my route.** [derived, not compiled] `FlockDeploy.jsonOf` reads the printed bytes with the total parser `Flock.JsonParse.parse`, whose every tree is well formed (`parse_wf`, `Proofs/Flock/Claims/Complete/Json/Parse.lean:172`). So at an object `o` with a tree that is not well formed, the value read back is not `o`, and it is not alike to `o` either, since `Same` asks both trees well formed at each object (`Value.lean:72`). Neither half of `PartSame` holds.
+- **What I did not do.** No proof on it since your order. No statement changed in this entry's commits. `SessionMatch`, `ReadsBack`, `PartSame` and `partition_readsBack` are in none of the three locks at `b88626efe9`; the locks' only lines naming my files are the three modules under `roots` of `security/Proofs/lean-audit.json`. [run: `rg` on the three files]
+- **The same root is already carried twice in the lane, as a premise.** [read on the join; relayed where said]
+  - The port names: HELDOF's 06:48Z item 7 found that `Core.canonicalJson` reads through `Lean.Json.parse` and that `parse_wf` holds for the total parser only; its 07:08Z entry records "`PortsDistinctAt` stays the named premise" and, under "After Friday", "`Core.canonicalJson` calls `Flock.JsonParse.parse`". [relayed]
+  - The registered reads: `HeldOf.ReadsWf` (`Proofs/Flock/SpotFlock/HeldOfReads.lean:36`) and `RefReadsWf` (`OwnReads.lean:384`) are premises that those trees are well formed. `ReadsCheck.lean:85` has `wf_of_checks : Spot.sortedKeys j = true → balancedKeys j = true → Wf j`, a decided check that gives the fact, and its own docstring says nothing runs it.
+- **Ways out, none of them mine to take.**
+  1. **A premise beside `ReadsWf`**: `Claims.Json.Wf` of the audit's one partition object, stated as itself, a hypothesis of the lemma at `memberRaw` and carried up as `ReadsWf` is. No verifier changes. A guarantee that reads the lemma then rests on one more premise, which is why it is your call and not mine. Given it, (c) is `Wf o → Flock.canon o = .ok s → ReadsBack.partition` at the printed bytes, through one lemma I would write, `Wf o → Flock.canon o = .ok s → Good o`; the tree has none. [run: `rg` under `Claims/Complete/Json`]
+  2. **The decided check** at the partition object, `Spot.sortedKeys o && balancedKeys o`, by `wf_of_checks`. It becomes a fact only where something runs it: the form (a verifier change) or `heldOf`'s decided conditions (HELDOF's).
+  3. **`Core.canonicalJson` through the total parser.** Then `parse_wf` gives `Wf` of the whole parameters and lookups carry it to the partition object (`wf_of_getObjVal`, `HeaderRoots.lean:135` on the join). A verifier change in the interface, already listed for after Friday [relayed]. It would discharge 1's premise, `ReadsWf` and the root under `PortsDistinctAt` together.
+  - What I would choose if it were mine: 1 now, since it is how the lane already carries this root, and 3 when the verifier may change. [guess]
+
+**Order 5, the unread ratchet** [read; the tool not run, it needs a build's `.olean` files]: the join's merge of my head does not trip it and no line is needed. Every declaration of a module under `Proofs.Properties.` is a seed (`tools/verity/lean/unread.py:115`, `SEEDED_PREFIXES`, applied at `:673`), a module a lock names under `roots` is a seed too (`MODULE_SECTIONS`, `:111`), and `unread-caps.json` has nine areas, none of them `Proofs/Properties`. `PartCong`, `PartSame` and `PartReadsBack` are all three both.
+
+**A second field with the defect the partition had** [read; not ordered, not started]: `ReadsBack.registered` (`SampledTwo/MemberChecks.lean:219`) asks that the registered reads' bytes read back as a value equal to `m.own.registered`. `refRawOf` hands `memberRaw` the reads printed with `printT`, and a printed value reads back alike, not equal. `HeldOfFiles.lean:20` names this open for both fields. Closing it means restating the field as I did the partition's and proving `Registered.ofJson` returns the same on alike values; it needs the same well-formedness, which there is `ReadsWf`, already a premise.
+
+**Tries** [run; all `--on auto --mem-gb 24`, all rc 0; each probe: no theorem past `propext`, `Classical.choice`, `Quot.sound`; peak is the one the try's `siblings` line prints, as in my earlier entries]
+
+| run | node | file | at | lean | theorems | peak |
+|---|---|---|---|---|---|---|
+| `r20261113-093152-db4e` | vy-nebius-cpu-3 | `PartReadsBack.lean` | `a611f9a34b` | 25 s | 1 | 3,897 MB |
+| `r20261113-094014-1e04` | vy-nebius-cpu-1 | `PartReadsBack.lean` | `1f9f7a50ab` | 78 s | 1 | 4,095 MB |
+| `r20261113-094503-fa7c` | vy-nebius-cpu-1 | `PartSame.lean`, no `maxRecDepth` | `876a547d3f` | 45 s | 35 | 4,099 MB |
+| `r20261113-094548-17cc` | vy-nebius-cpu-14 | `PartCong.lean`, no `maxRecDepth` | `b88626efe9` | 22 s | 5 | 4,813 MB |
+| `r20261113-094814-e854` | vy-nebius-cpu-14 | `MemberChecks.lean` | `b88626efe9` | 111 s | 11 | 5,321 MB |
+| `r20261113-094821-fefc` | vy-nebius-cpu-14 | `PartReadsBack.lean` | `b88626efe9` | 27 s | 1 | 5,316 MB |
+
+- `e854`'s dependency build compiled `PartCong`, `PartSame`, `Session` and `Accepts` at `b88626efe9` before `MemberChecks`, so all five of Task 2's files are compiled at the head. [run: its log's `Built` lines]
+- `pytest tests/test_lean_packages.py` at `b88626efe9`: 34 passed, 3 warnings (older caps above their counts). [run on the VM, 12 s]
+- The run's own sampler saw more than the printed peak on five of the six: its highest `rss_sum_bytes` was 6,423 MB (`e854`). [run: each run's `resources.jsonl`]
+- No failed try this session. The VM built nothing.
+
+## NEEDS
+
+- **Coordinator**: your answer on (a): way out 1, 2, 3 or another. Until it, nothing further on `ReadsBack.partition` at `memberRaw`.
+- **Coordinator**: keep `PartReadsBack.lean` or delete it.
+- **Coordinator**: is the restatement of `ReadsBack.registered` and its congruence mine?
+- **Coordinator, for ASSEMBLY**: the join holds `501cfcad28`. `b88626efe9` adds the eleven deleted option lines and the root `PartReadsBack`; whether it merges waits on your word on that file.
+- **HELDOF** (owner of `HeldOfFiles.lean`; I edit nothing there): nothing now. A file on `-9b17` cannot name `memberRaw`, which is on the join only. `(memberRaw m ..).partition` is `some (printT m.own.partition).toUTF8` by `rfl`, so once ruled the lemma applies there in one line. [derived, not compiled]
+
+## To post
+
+Nothing.
+
+## Not established
+
+- That the whole numbers follow from the accept: read in the verifier's text, not proved in Lean.
+- That core's parser builds well-formed trees: read off its source.
+- That `ReadsBack.partition` fails at an object that is not well formed: derived, not compiled.
+- The unread tool was not run.
+- No records run and no whole build of `security/Proofs` at `b88626efe9`: six tries, one file each with its dependencies. Each time includes what the dependency build left to do.
+- Whether fewer lemmas of `PartSame.lean` need smart unfolding off: a scratch on core Lean only.
+
+## Heads
+
+- `cursor/proofs-sessionof-9b17` `b88626efe916b39f26f3903229aba29d0e4b9174`, pushed, nothing uncommitted.
+- `cursor/proofs-sessionof2-7c3a` `d45f63a86c22e58989d6c0e88ab7309fe0a58c76`, unchanged, on the join.
+- `cursor/proofs-sessionof-5c1e` `521933e1430b7b404142adfafbba82b0aed0fba5`, untouched.
