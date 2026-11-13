@@ -114781,3 +114781,21 @@ Nothing.
   been compiled.
 
 Branch `cursor/proofs-coinmap-8b0c` at `28d9babc1b`, pushed; nothing unpushed.
+
+## RUNSAS, Fri 02:27Z: all three files compile in `r20261113-012007-9b9a` (done, rc 0) at `87d9f87c4a`: `Statements.lean`, `Round2.lean` and the bridge `RoundTwoOf.lean`, each with only the three permitted axioms; the base has moved since, so a recompile is next
+
+What compiled: everything I owe so far. The bridge is proved: at every set of held copies, a passing second-stage check gives the model's statement check, given the premises RUNCOINS's `RoundTwo` lists. The run compiled it against the model as it was two hours ago. FRAME has since changed the model's file, so I merged the new base and recompile next. FRAME's change also lets me drop two of the premises: the model's design now refuses a registration whose templates share a name or whose interior registration registers a value, so those two no longer need to be assumed. I am writing that as new lemmas in a new file; no existing statement changes.
+
+- [run] `r20261113-012007-9b9a` (vy-nebius-cpu-12, done rc 0, at `87d9f87c4a`), its last step `lean_changed.py --try security/Proofs/Flock/SpotFlock/RunsAs/RoundTwoOf.lean`: "lean exit 0 in 650 s"; `'SpotFlock.RunsAs.stmtOk_of_check' depends on axioms: [propext, Classical.choice, Quot.sound]`; "axiom probe: none of its 1 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". That try built `RunsAs.Statements`, `RunsAs.Round2` and RUNCOINS's `RunsAs.Statement` again, in a second tree.
+- [read] The bridge's statement is `theorem stmtOk_of_check (h : Held) : RoundTwo h` in namespace `SpotFlock.RunsAs`, against `RoundTwo` as RUNCOINS's `264cd595d8` has it. RUNCOINS's head `d4bb4a6585` leaves `Statement.lean` as it was, so `RoundTwo` has not moved.
+- [run] With my 02:07Z entry: `Round2.lean`'s 25 theorems and `Statements.lean` are compiled with the axiom check in the same run.
+- [read] The base moved to `6c1a87cc54`. It changes `SpotFlock/Code.lean`: `Held` gains `refHeaders`, `refsOf` reads it, and `two` now also decides `membersScoped h && wiringOk h`. It leaves `ownOf`, `codesOk`, `readsOk`, `stmtOkAt`, `stmtOk`, `recordsOk` and `Spot/SecondStage.lean` as they were. [guess] So my proofs, which unfold none of what changed, still elaborate; a run has not shown it.
+- [read] Merged, both clean, my files untouched: the base `6c1a87cc54` and RUNCOINS's `d4bb4a6585`. My head is `a079b6304c`, pushed. Nothing is compiled at this head yet.
+- [read] RUNCOINS's branch holds my `Round2.lean` as it was before the fix (`f47d4bd834`), so it does not build there until RUNCOINS merges my head.
+- [derived] Two premises of row B19 now follow from others, at the new base. `wiringOk` decides `namesOnce h` and `h.interiorNames.values.isEmpty`, and FRAME's `Facts.lean` has `names_nodup_of_two` and `wiring_of_two`. So where the design evaluates (`TwoHolds`), `NamesDistinct h` holds; and with `RecordsHeld` the interior record names exactly the registration's values, which are none, so `RegistersNone rec` and `InputsNone own` hold. Not compiled: I write these in a new file, `RunsAs/SecondStageOf.lean`, with a `stmtOk` lemma that takes neither premise.
+
+For RUNCOINS: once that file compiles, `RoundTwo` can drop `RegistersNone rec` and `NamesDistinct h`. That is a change to RUNCOINS's file, not mine; I will give the lemma's text in the entry that reports it compiled.
+
+NEEDS: none.
+
+Not established: that the three files compile at the merged head `a079b6304c`, with the new `Code.lean`; that the new file's lemmas compile. The package's Lean check with its lock has not run. Row B19's other premises are as before: `TwoHolds` and `RecordsHeld` with RUNCOINS and HELDOF, and `RoundsHeld`, `ScopeHeld` and `PinHeld` open.
