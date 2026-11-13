@@ -51,7 +51,9 @@ capacity, the certified amount with its error, and the other, which follows.
 * What no accepted answer covers is `Status.notAudited`: charged at capacity. So is the memory of a device's sheet
   that none of its leaves holds.
 * An answer certifies a link only where the link joins a network certifier and a node of the prover's
-  (`Part.certifiable`). A boundary link no certifier is on is covered by no answer, whatever answer names it.
+  (`Part.certifiable`). A boundary link no certifier is on is covered by no answer, whatever answer names it. A
+  link's steps are timed by the network certifier on the link: a series the auditor places on another device covers
+  no tick of the link and adds no amount (`Amount.timed`).
 
 The comparison of the rows with what an auditor states it accepts is not here.
 -/
@@ -177,6 +179,15 @@ def certifiable (p : Part) (S : Site) (place : Option String) : List String :=
   | .egress =>
     (p.leavesAt S place).filter fun i => S.links.any fun k => k.id == i && decide (S.Joins k .certifier .host)
   | _ => p.leavesAt S place
+
+/-- Device `device` can time the part's steps on the leaves `xs`: for links, it is a network certifier at an end of
+each of them, the device that saw what the link sent. For another part, any device. -/
+def times (p : Part) (S : Site) (xs : List String) (device : String) : Bool :=
+  match p with
+  | .egress =>
+    decide (S.kind? device = some .certifier) &&
+      xs.all fun i => S.links.any fun k => k.id == i && (k.ends.1 == device || k.ends.2 == device)
+  | _ => true
 
 /-- Device `d`'s tensor-core MACs a tick, the device model's (`Site.device`) under auditor `A`. -/
 def tensorRate (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (d : String) : Option Nat :=
@@ -438,7 +449,8 @@ def Origin.inside (o : Origin) (seconds : Ratio) (tick : Figure) (ticks : Nat) (
 /-- **A monitoring period, as `rows` reads it**: its length in ticks; every head the registration had in it, an answer
 counting when it names one of them; and where each series of steps lies in it (`Origin`), by the series' name as an
 answer writes it: the compact JSON under its amount's `series`, or the empty text where the amount names none. A series
-with no origin covers no tick and adds no amount. The three are the auditor's: no answer states them. -/
+with no origin covers no tick and adds no amount, and so does a link's series whose origin names a device that is not
+the network certifier on the link (`Amount.timed`). The three are the auditor's: no answer states them. -/
 structure Monitored where
   ticks : Nat
   heads : List String
@@ -582,12 +594,19 @@ private def certifiedRow (m : Amount) (place reading : String) (total : Option N
     free := if bounded then (match m.side with | .verified => other | .free => some n) else none,
     unpriced := m.unpriced }
 
+/-- **Where a series of amount `m`'s steps lies in the period, for an answer at `place`**: where the period says
+(`origin`), and nowhere when the series' device cannot time the part on the leaves the answer can certify
+(`Part.times`): a link's steps are timed by the network certifier on the link, and by no other device. -/
+def Amount.timed (m : Amount) (S : Site) (place : Option String) (origin : String → Option Origin)
+    (s : String) : Option Origin :=
+  (origin s).filter fun o => m.part.times S (m.part.certifiable S place) o.device
+
 /-- The rows of amount `m` at `place`, from its accepted answers' readings `rs`, at each reading of the capacity of the
 leaves it is about. None when the site holds no such leaf.
 
 A named span counts only where it surely lies in the period, which `origin` says for its series: a series with no
-origin, one whose device has no drift under `clock`, a step before the period and a step that might end past its last
-tick count for nothing. `clock` gives a device's drift: the Site's own for a row that takes no premise. A span that
+origin, one whose device has no drift under `clock`, a link's series whose device is not the network certifier on the
+link (`Amount.timed`), a step before the period and a step that might end past its last tick count for nothing. `clock` gives a device's drift: the Site's own for a row that takes no premise. A span that
 names no steps cannot be placed, and that it is the period's is the caller's to hold; it covers its length less its
 clock's drift.
 
@@ -623,6 +642,7 @@ def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Re
     | .sum, _ => rs.foldl (fun e r => plus e r.error) ⟨0, 1⟩
   if xs.isEmpty then [] else totals.flatMap fun (reading, total) =>
     if m.part.flow then
+      let origin : String → Option Origin := m.timed S place origin
       let good := rs.filter fun r => r.certified
       let unnamed : List Reading := good.filter fun r => r.steps.isNone
       let seconds : Ratio := match m.time with
@@ -717,7 +737,8 @@ registration's: the sheets' digest and the auditor, whose estimate compute's `bo
 Site states no unit of time. Where a link of the Site says no certifier splits it (`Site.mediated` is false),
 bits leave by a way no answer counts, so every row of a link prints no amount, a certified one too, and says why.
 An answer that names a boundary link no network certifier is on certifies nothing (`Part.certifiable`): it gives no
-row, and the link is charged at capacity with what no answer covers.
+row, and the link is charged at capacity with what no answer covers. A link's series that the period places on a
+device other than the network certifier on the link covers no tick and adds no amount (`Amount.timed`).
 
 A row that takes no premise reads a device's drift from the Site alone: the drift the auditor's host it is in states
 (`Site.drift?`), and a device at the site, or in a host that states none, times nothing. `premised` lists drifts taken
@@ -743,7 +764,7 @@ def rows (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) 
         let rs : List Reading := (cs.filter fun x => x.1 = g.1 ∧ x.2.place = g.2).map fun x => x.2
         let names : List String :=
           ((rs.filter fun r => r.certified).filterMap fun r =>
-            (period.origin r.series).bind fun o => (taken o.device).map fun q => q.premise).eraseDups
+            (g.1.timed S g.2 period.origin r.series).bind fun o => (taken o.device).map fun q => q.premise).eraseDups
         g.1.rows S digest A tick period.ticks period.origin stated g.2 rs ++
           (if g.1.part.flow && !names.isEmpty then
             (g.1.rows S digest A tick period.ticks period.origin assumed g.2 rs).map fun r =>
@@ -1244,6 +1265,23 @@ private def everywhere : Account := { sent with amounts := sent.amounts.map fun 
 #guard linkRows [everywhere] [onLink "up0"] ==
   [("sent", "", .certified, some 100000, some 37000, some 63000),
    ("not audited", "eth0", .notAudited, some 400000, some 0, some 400000)]
+-- a link's steps are timed by the network certifier on the link. A second certifier in the same auditor's host, on a
+-- second uplink of its own: a series the period places on it covers no tick of the first link and adds no amount, as
+-- a series with no origin; it times its own link; and an amount about both links is timed by neither certifier
+private def second : Site :=
+  ⟨[sheet], locs ++ (locs.filter (·.id == "cert0")).map fun x => { x with id := "cert1" },
+    links ++ [{ id := "up2", ends := ("node0", "cert1"), β := some 100000000000, latency := 1 },
+              { id := "up3", ends := ("cert1", Site.outside), β := some 100000000000, latency := 1 }]⟩
+private def placedOn (device : String) (accounts : List Account) (answers : List Answer) :
+    List (String × Status × Option Nat × Option Nat × Option Nat) :=
+  ((rowsOf second digest auditor (period (origin := fun _ => some ⟨0, 0, device⟩)) accounts answers).take 1).map
+    fun r => (r.place, r.status, r.capacity, r.verified, r.free)
+#guard second.drift? "cert1" == second.drift? "cert0" ∧ (second.drift? "cert1").isSome
+#guard Part.certifiable .egress second none == ["up0", "up2"]
+#guard placedOn "cert0" [sent] [onLink "up0"] == [("up0", .certified, some 100000, some 37000, some 63000)]
+#guard placedOn "cert1" [sent] [onLink "up0"] == [("up0", .certified, some 100000, some 0, some 100000)]
+#guard placedOn "cert1" [sent] [onLink "up2"] == [("up2", .certified, some 100000, some 37000, some 63000)]
+#guard placedOn "cert0" [everywhere] [onLink "up0"] == [("", .certified, some 200000, some 0, some 200000)]
 -- a drift taken on a premise. The example's certifier's host states no drift, so its row on no premise covers nothing:
 -- the link is charged at capacity over the week. With 1/2000 premised for the host, the same row follows, covered,
 -- and names the premise: of a week of steps of a thousandth of a second, 302,400 might end past the week, and what is
