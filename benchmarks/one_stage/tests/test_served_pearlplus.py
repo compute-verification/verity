@@ -27,7 +27,7 @@ HERE = Path(__file__).resolve().parent
 #: the toy venv's python: each served_passes.py step, debit.py and served_verdicts.py noted and answered as the real one
 #: writes its files; anything else (the script's inline checks) is the real interpreter
 STEP = r'''
-import json, sys
+import json, os, sys
 from pathlib import Path
 argv = sys.argv[1:]
 with open(sys.argv[0] + ".log", "a") as f:
@@ -43,7 +43,7 @@ elif script == "served_passes.py" and cmd == "volunteer":
     Path(opt("--out")).write_text(json.dumps({"s": 1.0, "jobs": 1, "passes": []}))
     print("volunteer PASS: 0 rows given up")
 elif script == "served_passes.py" and cmd == "retain":
-    if w := opt("--window-record"):
+    if (w := opt("--window-record")) and not os.environ.get("TOY_NO_W"):
         Path(w).write_text(json.dumps({"window": {"scheme": "pearl-c-h100-v1-h3"}}))
         print("retain PASS: 3 of 3 passes with calls retained")
         print(f"retain W: {w}, rounds 0..2 (3), 384 values, digest abcd…")
@@ -190,6 +190,34 @@ def test_under_pearlplus_tie_a_window_whose_epoch_failed_or_is_missing_gets_no_r
         said = [x for x in run.stdout.splitlines() if x.startswith("POUW window: ")]
         assert len(said) == 1 and (said[0].endswith("so round s isn't step s") if served else
                                    said[0].endswith("so there are no passes to tie")), said
+
+
+@pytest.mark.parametrize("case", ["tie fails", "no W"])
+def test_under_pearlplus_tie_a_window_whose_commit_tied_to_w_fails_gets_no_draw_verdict_or_line(tmp_path, case):
+    """The window commit tied to W is what holds the window to its class's fixed load, so where PEARLPLUS_TIE_CMD fails,
+    or `retain` wrote no W to tie, the piece says so and stops before the coin: no draw, no `verify` (tied or not), no
+    Lean, and a piece written over a verdict document that isn't there, which `served_verdicts.pearlplus` rejects, so no
+    Pearl+ line is published for a window nothing holds to its class."""
+    extra = ({"PEARLPLUS_TIE_CMD": 'echo "PEARL-TIE: window-commit class 4,32,4 refused: its rows by step"; exit 16'}
+             if case == "tie fails" else {"TOY_NO_W": "1"})
+    run, sd, _tree = _piece(tmp_path, _epoch(), **extra)
+    assert run.returncode == 0, (run.stdout, run.stderr)
+    names = [Path(a[0]).name + " " + a[1] for a in _steps(tmp_path)]
+    assert names == ["served_passes.py volunteer-needed", "debit.py --cubin", "served_passes.py volunteer",
+                     "served_passes.py retain", "served_verdicts.py pearlplus"], run.stdout
+    pearlplus = _steps(tmp_path)[-1]
+    assert not Path(pearlplus[pearlplus.index("--verify") + 1]).exists()
+    assert not (sd / "pearl" / "w7" / "coin.json").exists() and not (tmp_path / "tie.args").exists()
+    lines = run.stdout.splitlines()
+    if case == "tie fails":
+        assert any(x.startswith("POUW tie: served_verdicts.sh pearl-tie exit 16 after ") and
+                   x.endswith(": PEARL-TIE: window-commit class 4,32,4 refused: its rows by step") for x in lines), lines
+        assert ("POUW draw: refused before it: the window's commit tied to W failed (pearl-tie exit 16), so nothing holds "
+                "the passes to the window's class and no draw or Pearl+ line follows it") in lines
+    else:
+        assert ("POUW W: retain wrote no window record, so nothing ties the passes to the window and no draw or Pearl+ "
+                "line follows") in lines
+    assert not any(x.startswith(("POUW verdict: ", "POUW coin: ", "POUW lean: ")) for x in lines), lines
 
 
 @pytest.mark.parametrize("case", ["held", "unclosed", "refused", "unread"])
