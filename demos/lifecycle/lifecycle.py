@@ -894,6 +894,9 @@ IDS = {**parties.IDS, "pouw-period": period_check.ID, "wipe": wipe_period.PROTOC
 """Each subprotocol's id as the composites run it (`products`): integrity is sampled proofs (`VStar.Recursive.Sampled`,
 `verity/sampled-proofs/v1`, one-stage v2's audit or the recursive audit) in both, so is the work, PoUW's period,
 onsite's PoUB is the one over PoUS's P2 store, and onsite's memory challenger also runs a wipe."""
+SAMPLED = {"onsite": parties.SUBPROTOCOLS["verity/onsite/v0"]["sampled-proofs"], "remote": parties.COMPOSED}
+"""Each composite's integrity subprotocol, under whose id sampled proofs' answer goes: sampled proofs
+(`parties.COMPOSED`) in both."""
 
 
 def label(seed: str, i: int) -> str:
@@ -909,12 +912,13 @@ def answer(protocol: str, verdict: str, commitment: str | None, reason: str | No
             "public": public if ok else None, "profile": profile if ok else None}
 
 
-def spot(d: Declaration, blk: Block, units: Sequence[int], checks: Mapping[int, Mapping[str, Any]]
-                   ) -> dict[str, Any]:
-    """Sampled proofs' answer for the declaration: every sampled proof block's values check held."""
+def spot(d: Declaration, blk: Block, units: Sequence[int], checks: Mapping[int, Mapping[str, Any]],
+         protocol: str = IDS["sampled-proofs"]) -> dict[str, Any]:
+    """Sampled proofs' answer for the declaration, under the composite's id for it (`SAMPLED`): every sampled proof
+    block's values check held."""
     bad = [f"unit {u}: {checks[u]['values']}" for u in units if u not in checks or checks[u]["values"]]
     law = {"law": "subset", "k": len(units)}
-    return answer(IDS["sampled-proofs"], "reject" if bad else "accept", d.digest, "; ".join(bad) or None,
+    return answer(protocol, "reject" if bad else "accept", d.digest, "; ".join(bad) or None,
                   {"draw": {**law, "population": blk.n, "units": list(units)}},
                   {"law": law, "population": blk.n, "delta": str(DELTA)})
 
@@ -1399,7 +1403,7 @@ class Verifier:
         d, blk, proofs = self.declarations[k - 1], self.circuit[k - 1], self.parts[k]["proofs"]
         checks = {u: verify(self.statement(k, u), proofs.get(str(u), {})) for u in self.draws[k]}
         dk = Declaration(k, d["advice"], d["record"])
-        sp = spot(dk, blk, self.draws[k], checks)
+        sp = spot(dk, blk, self.draws[k], checks, SAMPLED[self.protocol])
         answers = {sp["protocol"]: sp, self.work: pouw_window(sp, blk, self.work),
                    IDS["inference-only"]: inference_only(dk, blk),
                    **self.answers(k, checks)}

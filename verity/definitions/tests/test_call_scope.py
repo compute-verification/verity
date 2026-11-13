@@ -23,12 +23,12 @@ def test_a_specialized_definition_valued_static_binds_to_its_family_at_its_own_r
 
 
 def test_the_family_is_the_one_the_handed_registry_holds():
-    from verity.circuits.defs import REGISTRY, Registry
+    from verity.circuits.defs import REGISTRY, DefinitionTable
     from verity.definitions import call_scope as CS
     from verity.definitions.registry import b1  # noqa: F401  (registers Gemm_v1)
 
-    reg = Registry()
+    reg = DefinitionTable()
     reg.add(REGISTRY.defs["Gemm_v1"])
     assert CS.specialization("Gemm_v1", {"K": 16, "N": 1}, reg).id == "Gemm_v1{K=16,N=1}"
     with pytest.raises(KeyError, match="Gemm_v1"):
-        CS.specialization("Gemm_v1", {"K": 16, "N": 1}, Registry())
+        CS.specialization("Gemm_v1", {"K": 16, "N": 1}, DefinitionTable())
