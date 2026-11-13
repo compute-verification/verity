@@ -120597,3 +120597,38 @@ Not established:
 - (c'): coordinator item 4 noted; a small-height fixture is the `_honest` witness I aim at.
 
 Head `7832486258` (cursor/proofs-twoleg-c5e5).
+
+## REDRAW, Fri 13 Nov 04:34Z: READY #9237 at a2c3831345e0 (`cursor/proofs-redraw-cc71`, full head `a2c3831345e0d15bbed424c321009c26b4a7500d`; the records run and the suites are at the head before, `459f5e2dd560`, and one Lean file of `main`'s differs between the two)
+
+**The line.** #9237 is ready to mark at `a2c3831345e0d15bbed424c321009c26b4a7500d`. It rests on what your ruling (a) names [relayed: your 03:58Z message and your 04:28Z resume]:
+
+**1. The records run, at the head before** (`459f5e2dd5601cc089e5c40b72eba52e011adf81`): `r20261113-030616-59c7`, done, rc 0.
+- [read] `result.json`: commit `459f5e2dd5601cc089e5c40b72eba52e011adf81`, outcome `pass`. `lean-audit/audit.json`: `passed` true, `failed` empty, `regenerated` empty; the same for the `security` package's `audit.json`.
+- [read] `stdout.log` line 12: `security/Proofs: PASS  204314 declarations in 4051 modules; axioms propext, Classical.choice, Quot.sound`. Line 576: `security/Properties: PASS  3485 declarations in 107 modules; axioms propext, Classical.choice, Quot.sound; 540 guarantees`. Line 1163: `security: PASS  27776 declarations in 730 modules; axioms propext, Classical.choice, Quot.sound; 1137 guarantees`. Line 1190, the outcome: `"outcome": "pass"` for `security`, `security/Proofs` and `security/Properties`.
+- [run] The `security/Properties` lock the run wrote equals the branch's at that commit, byte for byte (`cmp`). So the two half-entries this pull request adds under `unwitnessed` pass the witness rule as they stand, with no `--allow`.
+- [read] It is the records fast path: line 589 says "without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse". The train's own Lean check is the full one.
+
+**2. The suites the merge touched, at the head before:** `r20261113-030646-1057`, part one.
+- [read] `stdout.log` line 28: `4 suites: 4 passed (0 cached), 0 failed`; line 29: `PART-ONE rc=0`. Lines 7 to 13: `verity/protocols/spot/verifier` 912 passed; `verity-network-traces` 678 passed; `verity-core-sampled-proofs` 321 passed, 2 skipped; `benchmarks/one_stage` 1032 passed. The test modules the change reaches ran whole, slow tests included (lines 2 to 4).
+
+**3. At the head itself, on my machine** [run at 04:31Z, in a fresh worktree of `a2c3831345e0`, on the machine this turn started on]:
+- the four driver test files that need no Lean build: 41 passed, `benchmarks/one_stage/tests/test_a5_case_v2.py` (the file the merge stopped in) among them;
+- `main`'s layout test over the head (`python tests/test_tree.py HEAD`): exit 0.
+
+**4. The difference between the runs' head and the head you mark** [run: `git diff --name-only 459f5e2dd560 a2c3831345e0`]: 37 files, all of them files `main` changed between `4a7291116e11` and `8ef93f01963c`.
+- One is Lean: `security/Proofs/Properties/Nci/LeafWidthsPart.lean`, `main`'s own change, a bound name (`cap` to `bound`) in one theorem and its proof [read at 03:37Z; the file list read again now]. No run of mine built it.
+- No lock, lakefile, digest list, toolchain file or manifest is among the 37 [run: the same diff limited to those paths prints that one Lean file only].
+- One is the file the merge stopped in, `benchmarks/one_stage/tests/test_a5_case_v2.py`: `main`'s copy with the family passed to the case's writer at its three calls [run at 03:36Z]; it is in the 41 tests of point 3.
+
+**5. `main` since.** [run at 04:32Z] `main` is `33e504b391bf`; `git merge-tree --write-tree origin/main` against the head exits 0, so by your (c) I did not merge again. Between `8ef93f01963c` and `33e504b391bf`, `main` changed 102 files, none of them Lean, a lock, a lakefile or a digest list. GitHub's `mergeable` read `UNKNOWN` at 04:32Z, as it does while it recomputes. `9d4aec0111fb` is an ancestor of the head [run].
+
+**Not part of the line, so that it does not surprise you: the whole tier (part two of `1057`, at the head before) has one red suite and is still running.**
+- [read at 04:31Z] Of its 72 suites: 4 cached (part one's), 65 passed, 1 failed, 2 not yet reported.
+- [read] The failure is `research`: `4848 passed, 2 failed, 3 skipped` (line 75), the two being `tests/test_auto.py::test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_the_pool` and `tests/test_auto.py::test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen` (lines 99, 100).
+- [read] They are the same two that failed in `r20261113-005641-0e0d` on this node (its `stdout.log` lines 63, 64), the pair you passed to ci at 01:44Z.
+- [run at 04:32Z] Both pass on my machine at the head (2 passed in 0.68 s), and the branch changes no file under `tools/research` (`git diff --name-only origin/main...HEAD -- tools/research` prints nothing).
+- [derived] So the tier's exit will be 1 for a reason of the node, not of this change. I say the final count in my next entry.
+
+**Where things are.** #9237's body names these verdicts since 04:32Z [run: `research queue edit`]. Pushed heads, unchanged this turn: `cursor/proofs-redraw-cc71` `a2c3831345e0d15bbed424c321009c26b4a7500d`; `cursor/proofs-keyheld-3c9a` `38b7c6df38ba9ad5ccfd154ae316b76697157020`; `cursor/proofs-redraw-rate-5a71` `54d0d016ab7850e73ad933db5d7769dcf0c5811c` [run: the remote's refs at 04:28Z]. Nothing is unpushed; no code changed this turn. No `~/wt/.pen`; the remote's heads and my last entry (03:54Z) are as I left them, so I see no second loop of me [run at 04:28Z]. Mailbox read to your 03:58Z message [run].
+
+**#9555 next.** [read at 04:33Z] `r20261113-031530-8504` was still `running`, with all three packages' audits printed as PASS and both `check.py exit 0` lines out; `r20261113-031427-2558` is done, rc 0, `5 suites: 5 passed (0 cached), 0 failed`. Its ready line is my next entry, with the run's words on the restated statement's entry.
