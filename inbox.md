@@ -139,3 +139,24 @@ PERIODPROOF to the lead, Fri 13 Nov 2:53 PM PST. **#8829 and #9350 each hold #96
 - **The rehearsal:** SCANLEAN's branch is still at `080b7d735e95` [fetched 2:52 PM PST]; my scratch head `8429124757de` holds it. Its node runs go behind these six, three branches abreast.
 - Both bodies are written and are set when their runs end, with the runs' words.
 
+[2026-11-13T22:55Z] 688045842667
+ONSITEMAIN, Fri 13 Nov 2:55 PM PST.
+
+**#9319's head is `414707316988b188efe62f3c108ab0b12aa1b002`**, one commit on `66394cfb5ec8`, pushed as a fast-forward, its author and committer my checkout's own [ran]. Not marked.
+
+- **The form, as ruled** [read: `a5.py`]: `available_memory` is the least of the node's `MemAvailable` and, under each cgroup memory limit over the process, `memory.max` less `memory.current` with `memory.stat`'s `inactive_file` and `active_file` added back. Shared and anonymous memory stay counted. A level with no readable `memory.stat` counts all it holds.
+- **The addition** [read]: the reading carries its two terms. Each pool prints one `A5 {"memory": …}` line as it starts (workers, budget, the node's `MemAvailable`, the cgroup's room, the cgroup it is read at, which binds), and one line the first time a start is held back (what waits, the estimate, the term that held it: the budget with what runs in it, or the reading's terms and which binds). Once a pool, not once a poll. The Lean pool says it for a check and for a session; the negatives' pool for a worker.
+- **Tests on given files** [ran]: the two files, 52 passed; five named files that read `a5` and the driver, 478 passed; three root invariants, 31 passed. Each of these breaks them [ran]: `inactive_file` alone, `MemAvailable` alone, a line at every poll, no line from the session, no line from the workers.
+- **The driver's header and the prove-path README** say what is counted free and what is not.
+- **The body is up and read back** (goal line second, `Refs NET-331` last): a heading of its own, "What the audit reads as free", with the form, why both lists, what it risks, the three set aside and why, this VM's readings [ran], what the pools print and the tests; the rehearsal's fourth item says the head changed for it; the held list's table is at this head with the row "In, by commit"; the dirty pages are first under "Least sure of".
+- **This VM's readings at the head** [ran], GB of 10^9: `MemAvailable` 7.5; nothing added back 2.4; both lists 6.8; `inactive_file` alone 3.1. The cgroup binds. (When you ruled: 6.8, 1.4, 6.2, 2.7.)
+- **Its run:** `r20261113-225146-3921`, pins and the suites changed since `66394cfb5ec8`, launched once, running. The body says so; I put its outcome in when it ends and tell you.
+
+**Two things the commit does that you did not order, to strike if wrong:**
+1. The reading is an `int` that carries its terms (`a5.Free`), so every caller that takes a number is unchanged and no second read is made for the line. A caller's own callable (the tests') prints the bytes alone.
+2. The pool's start line reads `available()` once more than before, at construction.
+
+**Other runs** [read]: H's records run `r20261113-220847-dbdf`, H's suites `r20261113-222447-1f74` and A's scratch `r20261113-211315-84d5` are all still running.
+
+**Least sure of:** the dirty pages, as the body says: no run has measured how long the room over-reads after a stage that wrote many files, since the rehearsal ran before this commit. And one sentence in the body is [argued], not read from a run: that the form with nothing added back would have read no room through the rehearsal's audit.
+
