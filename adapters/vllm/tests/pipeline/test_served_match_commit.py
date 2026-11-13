@@ -246,6 +246,14 @@ def test_a_refused_build_is_recorded_and_its_process_is_held_to_the_winners_of_r
     assert capsys.readouterr().out == f"[delta] compile artifact {ARTIFACT['digest'][:16]}: this process's is the Build of record's\n"
 
 
+def test_a_refused_build_in_a_process_whose_own_compile_dirs_are_gone_is_refused_by_name(monkeypatch, process, tmp_path):
+    row = _row(process)
+    monkeypatch.delenv(engine_env.INDUCTOR_DIR_MARK)
+    with pytest.raises(UsageError, match="^this process was not given its own compile dirs "):
+        _rebuild(monkeypatch, row, Unmodelled("no template models kernel k9"), tmp_path)
+    assert [f.name for f in tmp_path.iterdir()] == ["build_rebuilt.json"]
+
+
 def test_a_refused_build_whose_process_has_other_winners_exits_3(monkeypatch, process, tmp_path, capsys):
     row, inductor = _row(process), process()
     (inductor / "k1").mkdir(parents=True)
