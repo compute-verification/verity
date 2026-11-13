@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled
 public import Proofs.Properties.Verity.Sampled.Trees
 import Proofs.Flock.Soundness.Refine.Walk
+meta import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # v2's own program is its verifier's (`ParamsProgram`)
@@ -24,6 +25,41 @@ namespace Verity.Sampled
 
 open FlockSoundness.Refine (Ret)
 
+open Lean Elab Tactic Meta in
+/-- At the goal `Ret (let x := v; b) Q` for a `let` that is not a join point, the goal `Ret (b v) Q`. -/
+meta def zetaStep (g : MVarId) : MetaM (Option MVarId) := g.withContext do
+  let ty ← instantiateMVars (← g.getType)
+  unless ty.isAppOfArity ``Ret 3 do return none
+  let γ := ty.getArg! 0
+  match (ty.getArg! 1).headBeta.consumeMData with
+  | .letE _ t v b _ =>
+      let vγ := mkApp2 (mkConst ``Except [0, 0]) (mkConst ``String) γ
+      if (← forallTelescopeReducing t fun _ r => isDefEq r vγ) && v.consumeMData.isLambda then return none
+      let g' ← mkFreshExprSyntheticOpaqueMVar (mkApp3 (mkConst ``Ret) γ (b.instantiate1 v) (ty.getArg! 2))
+      g.assign g'
+      return some g'.mvarId!
+  | _ => return none
+
+open Lean Elab Tactic Meta in
+/-- `ret_walk`, substituting each `let` that is not a join point rather than generalizing it, for a postcondition that
+reads a value the computation binds with `let`. Join points are walked once, as `ret_walk` walks them. -/
+elab "ret_walk_zeta" "[" cs:ident,* "]" : tactic => do
+  let mut keep := #[]
+  for c in cs.getElems do keep := keep.push (← realizeGlobalConstNoOverloadWithInfo c)
+  let mut todo ← getGoals
+  let mut left := #[]
+  while true do
+    match todo with
+    | [] => break
+    | g :: rest =>
+      match ← zetaStep g with
+      | some g' => todo := g' :: rest
+      | none =>
+        match ← FlockSoundness.Refine.retStep keep g with
+        | some new => todo := new ++ rest
+        | none => left := left.push g; todo := rest
+  setGoals left.toList
+
 /-- **`paramsParsed` parses its verifier's program from the `program` field's canonical text.** -/
 theorem paramsParsed_program {j : Lean.Json} {p : _root_.Spot.OneStage.Params}
     (h : _root_.Spot.OneStage.paramsParsed j = .ok p) :
@@ -43,8 +79,7 @@ theorem paramsParsed_program {j : Lean.Json} {p : _root_.Spot.OneStage.Params}
     clear * - h₄
     revert p
     show Ret _ fun q : _root_.Spot.OneStage.Params => q.verifier.program = prog
-    dsimp only
-    ret_walk []
+    ret_walk_zeta []
     all_goals rfl
   rw [hpp]
   exact hprog
