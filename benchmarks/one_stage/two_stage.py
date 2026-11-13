@@ -1098,11 +1098,15 @@ def _second(a: argparse.Namespace) -> int:
     if not sample:
         return done(0, refused="the first stage sampled no span: there is no interior to register")
     root = IR.interior_run(again.registration.digest, sample)
+    trees = bool(getattr(a, "interior_trees", False))
     manager, draws, finisher = AC.start(a.challenger, root, [0], out / "challenger", a.main, ssh_key=a.ssh_key,
-                                        peer=a.peer, key_record=a.challenger_key, host=host)
+                                        peer=a.peer, key_record=a.challenger_key, host=host,
+                                        stage=AC.SECOND if trees else "")
     ours = AC.held(draws)
     again.stream.key, again.stream.main = ours["key"], tuple(ours["main"])
     coins = AC.RankCoins(draws, 0)
+    if trees:
+        draws.hold(0)
     try:
         why = first_coins(again, stage1.get("evidence"), first_root(stage1), AC.lms_verify)
         if why is not None:
@@ -1116,7 +1120,9 @@ def _second(a: argparse.Namespace) -> int:
             return done(1, refused=e.verdict.to_json() if isinstance(e, S.Refused) else f"{type(e).__name__}: {e}")
         finally:
             segment = coins.drawn()
-            draws.skip(0)
+            if not trees:
+                draws.skip(0)
+        a.stage = {"coins": draws, "segment": segment, "family": coins.label, "window_root": root} if trees else None
         w = r.interior.committed.window
         summary.update(second_stage={"registration": r.registration.digest, "law": dict(r.draw.law), "draw": r.draw.units,
                                      "window_root": root},
@@ -1127,6 +1133,7 @@ def _second(a: argparse.Namespace) -> int:
                                  "returns": [[x.template, x.port, x.value] for x in r.design.returns]})
         s, got, stmts, proofs = prove(a, r, out, json.loads(Path(a.proofs).read_text()) if a.proofs else None)
         summary.update(got)
+        draws.release(0)
         published = draws.evidence()
         summary["challenger"] = {x: published.get(x) for x in ("trusted", "error", "plan")}
         evidence = [stage1.get("evidence"), AC.evidence(published, segment)]
@@ -1208,6 +1215,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                                              "(first's --challenger-host), required and reopened: both stages' coins "
                                              "are one challenger's, read under its one key")
     g.add_argument("--ssh-key")
+    g.add_argument("--interior-trees", action="store_true",
+                   help="the interior's sessions take their coin trees from this stage's challenger session, whose "
+                        "families carry the second stage's tag (a5_coins.SECOND), as the two-stage form's check reads "
+                        "two windows; needs FLOCK_CHALLENGER=1 and two members or more (a5.drawn_trees)")
     g.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     if a.cmd == "second":
