@@ -28,7 +28,12 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
   evidence, its receipt's place in the log and the bytes it read (hex); the interior audit's evidence in v2's
   per-member form (`OneStageZk.membersEvidenceOf`), whose sessions, statement, proved units, instances, served units,
   session roots and coins are the second stage's; the interior registration's record; and the second-stage sessions'
-  statements the second-stage statement check reads.
+  statements the second-stage statement check reads. Each stage's coin evidence names no key
+  (`Challenger.DRAW_FORM`): both are read under the parameters' challenger key, each stage's as coins of the family
+  its registration's parameters name. The copy of main's first-parent history they are read under is the first
+  stage's evidence's own, as one-stage v2 reads its evidence's, and the second stage's must be the same copy
+  (`Challenger.COINS_MAIN`); the verifier's own copy, as a parameter, is the open fix. The first stage's coin
+  evidence is never `null`, on one window as on two (`FIRST_COINS_NULL`): a two-stage audit's first stage reads coins.
 * **check** (`checkBlobsAt`), in order:
   1. the interior audit's commitment (`OneStage.commitmentOf` of the interior record) and its coins
      (`OneStageZk.coinsOf`);
@@ -39,12 +44,17 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
   3. each verdict stamped with what the second-stage statement check reads of it, as `flock-verify verify` writes it
      and the stream's driver hands it on (`stamped`): the delivered sessions, the session's public header's and
      registered reads' digests, its sample and one table;
+     neither stage's bytes run past one coin's (`stagesFit`, `STAGE_PAST`): the first stage's bytes are read as one
+     coin's first bytes and the second stage's as its coins' in order, so bytes past a coin's are none of theirs;
   4. the stream's run of record over both stages (`Run.run` of `inputOf`): the boundary audit over the replay
      sample at the boundary's session roots, and the interior audit over the second sample with the second-stage
      statement check, at the rest; the evidence's first-stage bytes are exactly the ones the run's first stage read
      (`sourceRead`, `SOURCE_READ`), since the run holds only those to the challenger's coins; and on two windows the
      first session's log shows no coin of the second stage's family after the interior's digest (`interiorUnshown`,
-     `INTERIOR_SHOWN`);
+     `INTERIOR_SHOWN`); and on two windows the stages' sessions are in order on one ledger (`stagesOrdered`): the
+     first stage's copy of the auditor's ledger is a prefix of the second stage's (`LEDGER_PREFIX`), and on the
+     second's, read under the parameters' challenger key, the first stage's session's `end` line has a lower `seq`
+     than the second stage's session's `reserve` line (`STAGES_ORDER`);
   5. the interior audit's verdict at its coins (`OneStage.checkAt`, as v2's per-member form decides it), which gives
      the public output and the integrity profile;
   6. last, the switch (`finish`): the run must accept, and the form is refused while `FORM` is off.
@@ -79,10 +89,11 @@ def ONE_DEFINITION : String :=
   "the boundary program's proof blocks under its query are not one stratum: the two-stage form's replay blocks are " ++
     "one Definition's, so a share of them by count is a share by weight"
 
-/-- The refusal of public outputs: no verdict this form computes reports any. -/
+/-- The refusal of a boundary and an interior whose parameters name two challenger keys, or none. -/
 def ONE_KEY : String :=
   "the boundary and the interior name one challenger key: both stages' coins are read under the run's one key"
 
+/-- The refusal of public outputs: no verdict this form computes reports any. -/
 def OUTPUTS_REFUSED : String :=
   "the two-stage form's check has no public outputs: the second stage's verdicts report none"
 
@@ -170,10 +181,15 @@ def paramsOfJson (j : Json) : V Params := do
          delta := getD j "delta", interior, circuits, replay,
          interiorValues := ← valuesOf (getD it "values") "the interior's values", audit, members }
 
+def FIRST_COINS_NULL : String :=
+  "the first stage's coin evidence is null: a two-stage audit's first stage reads the challenger's coins, on one " ++
+    "window as on two"
+
 /-- The evidence (module docstring, **evidence**). -/
 def evidenceOf (b : ByteArray) : V Evidence := do
   let j ← split (← Core.canonicalJson b) "evidence"
   keysAre j #["coins", "interior", "received", "record", "source", "statements"] "the evidence"
+  if getD j "coins" matches .null then throw FIRST_COINS_NULL
   let .str received := getD j "received" | throw "received is not a string"
   let .str source := getD j "source" | throw "source is not hex"
   let source ← Flock.unhex source
@@ -229,7 +245,10 @@ record, rule, values, declared items, challenger, receipt `received₁`'s place 
 second stage's sessions and the verdicts `vs`, no public outputs, the interior audit's statement, δ, the boundary's
 session roots and its coins; and the interior's parameters, replay block, values, record, receipt's place `received₂`,
 the bytes `ξ₂` it read, its coins, proved units, instances, served units, session roots, the statements and the
-templates' circuits. As the stream's two-stage outcome hands its run of record the same (`_audit_two`). -/
+templates' circuits. As the stream's two-stage outcome hands its run of record the same (`_audit_two`). The run reads
+both stages' coins under the interior audit's challenger key (`key`, the boundary's by `ONE_KEY`), the first stage's
+as coins of the family the boundary's parameters name and the second stage's as coins of the interior's (`family`),
+on the first stage's evidence's copy of main's first-parent history (`main`; module docstring, **evidence**). -/
 def inputOf (p : Params) (c : OneStage.Commitment) (ξ ξ₂ : ByteArray) (e : Evidence) (received₂ : String)
     (vs : Array (String × Json)) : Spot.Run.Input :=
   let b := e.interior.base
@@ -238,9 +257,11 @@ def inputOf (p : Params) (c : OneStage.Commitment) (ξ ξ₂ : ByteArray) (e : E
     challenger := p.challenger, received := e.received, source := ξ, closure := none,
     sessions := b.sessions.map Json.str, verdicts := vs, outputs := #[], statement := b.statement, delta := p.delta,
     provedUnits := none, instances := none, served := Json.null, sessionRoots := bRoots, coins := e.coins,
+    family := p.boundary.challenger.map (·.2), key := p.audit.base.challenger.map (·.1),
+    main := getD e.coins "main",
     interior := some
       { params := p.interior, replay := p.replay, values := p.interiorValues, record := e.record,
-        received := received₂, source := ξ₂, coins := b.coins,
+        received := received₂, source := ξ₂, coins := b.coins, family := p.audit.base.challenger.map (·.2),
         provedUnits := some (b.provedUnits.map Int.ofNat), instances := some (Int.ofNat b.instances),
         served := Lean.toJson b.served, sessionRoots := iRoots, statements := some e.stmts,
         circuits := p.circuits } }
@@ -269,40 +290,94 @@ def sourceRead (ξ : ByteArray) (run : Json) : V Unit :=
   | some read => if read < ξ.size then .error SOURCE_READ else .ok ()
   | none => .ok ()
 
+/-- One coin's bytes: 65,536 elements of 16 bytes. -/
+def STAGE_BYTES : Nat := 65536 * 16
+
+def STAGE_PAST (stage : String) : String :=
+  s!"the {stage} stage's bytes run past one coin's {STAGE_BYTES} bytes: a stage's sample reads one coin's bytes"
+
+/-- **Neither stage's bytes run past one coin's** (check, 3): the first stage's bytes `ξ` and the second stage's `ξ₂`
+are each at most `STAGE_BYTES` long (`STAGE_PAST`). A sampler that runs out of bytes draws fresh ones, and the coins'
+check takes a read over any number of whole coins, so nothing else bounds them. -/
+def stagesFit (ξ ξ₂ : ByteArray) : V Unit :=
+  if STAGE_BYTES < ξ.size then .error (STAGE_PAST "first")
+  else if STAGE_BYTES < ξ₂.size then .error (STAGE_PAST "second")
+  else .ok ()
+
 def INTERIOR_SHOWN : String :=
   "on two windows the first session's log shows coins of the interior's family released after the interior " ++
     "registration's digest: the second stage's coins are its own session's alone"
 
-/-- Whether the roots a session's log shows, by family (`Challenger.Roots`), show a coin of family `label` released after
-`after`. -/
+/-- Whether the roots a session's log shows, by family (`Challenger.Roots`), show a coin of family `label` released
+after `after`. -/
 def interiorShown (roots : Challenger.Roots) (label : String) (after : ByteArray) : Bool :=
   (((roots.find? (·.1 == label)).map (·.2)).getD []).contains after
 
 /-- **On two windows, the first session releases none of the second stage's coins** (check, 4): where the interior
-registration's window is not the boundary registration's, the first session's log (the session `e.coins` names on the
-boundary's window, `Challenger.trustedSessionOf`) shows no coin of the second stage's family released after the
-interior registration's digest (`INTERIOR_SHOWN`), so the coins of that family after that digest are the second
-session's alone. Where a piece is missing or unreadable the run has already refused, and this adds nothing. -/
+audit's window is not the boundary registration's, the first session's log (the session `e.coins` names on the
+boundary's window under the interior audit's challenger key, `Challenger.trustedSessionOf`) shows no coin of the
+second stage's family, the one the interior audit's parameters name, released after the interior registration's
+digest (`INTERIOR_SHOWN`), so the coins of that family after that digest are the second session's alone. The
+interior audit's parameters always name a challenger (`OneStageZk.NO_CHALLENGER`); where the boundary names no window
+the run of record refuses a first stage that read any byte (`Run.coinsCode`), and this adds nothing. -/
 def interiorUnshown (p : Params) (e : Evidence) : V Unit :=
-  match p.boundary.verifier.windowRoot, getD (getD e.interior.base.coins "segment") "label" with
-  | some w, .str label =>
-    if some w == p.interior.verifier.windowRoot then .ok () else do
+  match p.audit.base.challenger, p.boundary.verifier.windowRoot with
+  | some (k, label), some w =>
+    if some w == p.audit.base.verifier.windowRoot then .ok () else do
       let after ← Registration.digest e.record
-      let k ← Challenger.ChallengerKey.ofJson (getD e.coins "key")
       let (_, roots) ← Challenger.trustedSessionOf (getD e.coins "ledger") (Json.mkObj [("root", Json.str w)]) k
         (getD e.coins "pins") (getD e.coins "main") (getD e.coins "session")
       if interiorShown roots label after then .error INTERIOR_SHOWN else .ok ()
   | _, _ => .ok ()
 
+def LEDGER_PREFIX : String :=
+  "the first stage's copy of the auditor's ledger is not a prefix of the second stage's: both stages' sessions are " ++
+    "lines of one ledger"
+
+def STAGES_ORDER : String :=
+  "the first stage's session's end line is not before the second stage's session's reserve line on the auditor's " ++
+    "ledger: the second stage's session is reserved after the first stage's has ended"
+
+/-- Why the first stage's session, ended at `ended`, and the second stage's, reserved at `reserve`, are not in order
+on one ledger (`STAGES_ORDER`): the first has no end line, the second no reserve line, or the end's `seq` is not
+below the reserve's. -/
+def orderReason (ended reserve : Option Challenger.LedgerEntry) : Option String :=
+  match ended, reserve with
+  | some e, some r => if e.seq < r.seq then none else some STAGES_ORDER
+  | _, _ => some STAGES_ORDER
+
+/-- **On two windows, the stages' sessions are in order on one ledger** (check, 4): the first stage's copy of the
+auditor's ledger is a prefix of the second stage's (`Challenger.extendsHead`, `LEDGER_PREFIX`); on the second's, read
+under the interior audit's challenger key (`Challenger.checked`), the session opened for the boundary's window has an
+`end` line, the session opened for the interior audit's window a `reserve` line, and the end's `seq` is below the
+reserve's (`orderReason`). On one window both stages read one session, and this adds nothing. -/
+def stagesOrdered (p : Params) (e : Evidence) : V Unit :=
+  match p.audit.base.challenger, p.boundary.verifier.windowRoot, p.audit.base.verifier.windowRoot with
+  | some (k, _), some w₁, some w₂ =>
+    if w₁ == w₂ then .ok () else do
+      let (.arr first, .arr second) := (getD e.coins "ledger", getD e.interior.base.coins "ledger")
+        | throw LEDGER_PREFIX
+      if !Challenger.extendsHead first second then throw LEDGER_PREFIX
+      let (wins, _) ← Challenger.checked (.arr second) k
+      let ended := (wins.find? (·.root == w₁)).bind (·.ended)
+      let reserve := (wins.find? (·.root == w₂)).bind fun w =>
+        (second.filterMap Challenger.ledgerEntry?).find? fun l => l.kind == "reserve" && l.session == w.opened.session
+      match orderReason ended reserve with
+      | some why => throw why
+      | none => .ok ()
+  | _, _, _ => .ok ()
+
 /-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output, its second-stage
-statement check at the switch `form`, its first stage having read every byte of `ξ`, the first session releasing none
-of the second stage's coins. -/
+statement check at the switch `form`, neither stage's bytes past one coin's, its first stage having read every byte of
+`ξ`, the first session releasing none of the second stage's coins, the stages' sessions in order on one ledger. -/
 def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (Core.Outcome OneStage.Public Core.Integrity × Json) := do
   let (c₂, ξ₂, r, i) ← inputAt p c ξ e bs
+  stagesFit ξ ξ₂
   let run ← Spot.Run.run i form
   sourceRead ξ run
   interiorUnshown p e
+  stagesOrdered p e
   pure (OneStage.checkAt p.audit.base c₂ (some ξ₂) { e.interior.base with verdicts := r.out }, run)
 
 /-- **The last step** (check, 6) at the switch `form`: the interior audit's verdict where it doesn't accept; where it
@@ -389,6 +464,16 @@ def protocol : Core.BlobProtocol where
 #guard match evidenceOf "{\"form\":\"two-stage\"}".toUTF8 with
   | .error e => e.startsWith "the keys of the evidence"
   | .ok _ => false
+#guard match evidenceOf ("{\"coins\":null,\"form\":\"two-stage\",\"interior\":{},\"received\":\"r\",\"record\":{}," ++
+    "\"source\":\"\",\"statements\":[]}").toUTF8 with
+  | .error e => e == FIRST_COINS_NULL
+  | .ok _ => false
+#guard orderReason (some { (default : Challenger.LedgerEntry) with seq := 2 })
+  (some { (default : Challenger.LedgerEntry) with seq := 3 }) == none
+#guard orderReason (some { (default : Challenger.LedgerEntry) with seq := 3 })
+  (some { (default : Challenger.LedgerEntry) with seq := 3 }) == some STAGES_ORDER
+#guard orderReason none (some { (default : Challenger.LedgerEntry) with seq := 3 }) == some STAGES_ORDER
+#guard orderReason (some { (default : Challenger.LedgerEntry) with seq := 2 }) none == some STAGES_ORDER
 #guard rootsSplit (Json.mkObj [("roots", Json.arr #[Json.mkObj [("port", "b.ingress")]])])
     (some (Json.mkObj [("b.ingress", "r1"), ("t/x", "r2")])) ==
   (Json.mkObj [("b.ingress", "r1")], Json.mkObj [("t/x", "r2")])
@@ -402,6 +487,14 @@ def protocol : Core.BlobProtocol where
   | .ok _ => false
 #guard (sourceRead (ByteArray.mk #[1, 2]) (Json.mkObj [("read", Lean.toJson (2 : Nat))])).toOption.isSome
 #guard (sourceRead (ByteArray.mk #[1, 2]) (Json.mkObj [("step", "select")])).toOption.isSome
+#guard (stagesFit (ByteArray.mk (Array.replicate STAGE_BYTES 0))
+  (ByteArray.mk (Array.replicate STAGE_BYTES 0))).toOption.isSome
+#guard match stagesFit (ByteArray.mk (Array.replicate (STAGE_BYTES + 1) 0)) ByteArray.empty with
+  | .error why => why == STAGE_PAST "first"
+  | .ok _ => false
+#guard match stagesFit ByteArray.empty (ByteArray.mk (Array.replicate (STAGE_BYTES + 1) 0)) with
+  | .error why => why == STAGE_PAST "second"
+  | .ok _ => false
 #guard interiorShown [("boundary", [ByteArray.mk #[1]]), ("interior", [ByteArray.mk #[1], ByteArray.mk #[7]])]
   "interior" (ByteArray.mk #[7])
 #guard !interiorShown [("interior", [ByteArray.mk #[1]])] "interior" (ByteArray.mk #[7])
