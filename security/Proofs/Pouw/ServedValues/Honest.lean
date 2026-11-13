@@ -129,7 +129,7 @@ theorem right_values_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (
       rightSize Honest.scheme (circuit (tileCount σ sT)) ((blocks (tileCount σ sT)).size ∅) (fun w t =>
         (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n) opened
           (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)).Good
-          (periodMode (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
+          (monitoringPeriodMode (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
             (tileRun σ k hk sT unitOf (windows σ sT regOf evOf n) opened
               (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)))
           x w t) <
@@ -156,7 +156,7 @@ def skipStages (N : ℕ) : SplitStages Bool (Fin N) 1 :=
   .stage (fun _ _ => .whole) (fun _ _ => True) (fun _ _ => True) fun _ => .done
 
 /-- The skipping period of `n` windows: every tile live, each window's stages `skipStages`. -/
-def skipPeriod (Ω : Type) (N : ℕ) : (n : ℕ) → WindowPlay Bool Ω (Fin N) (circuit N).rounds n
+def skipPeriod (Ω : Type) (N : ℕ) : (n : ℕ) → ExecutionPhasePlay Bool Ω (Fin N) (circuit N).rounds n
   | 0 => .done
   | n + 1 => .window (fun _ => true) (skipStages N) fun _ => skipPeriod Ω N n
 
@@ -169,7 +169,7 @@ theorem liveAt_skipPeriod {Ω : Type} {N : ℕ} :
     · exact liveAt_skipPeriod n x.2 w'
 
 theorem stages_skipPeriod {Ω : Type} {N : ℕ} :
-    ∀ (n : ℕ) (x : Paths Ω n) (w : Fin n), (skipPeriod Ω N n).windowAt x w = skipStages N
+    ∀ (n : ℕ) (x : Paths Ω n) (w : Fin n), (skipPeriod Ω N n).executionPhaseAt x w = skipStages N
   | 0, _, w => w.elim0
   | n + 1, x, w => by
     refine Fin.cases ?_ (fun w' => ?_) w
@@ -179,8 +179,8 @@ theorem stages_skipPeriod {Ω : Type} {N : ℕ} :
 /-- **No block of the skipping period is paid.** -/
 theorem skip_not_paid {B V : Type} {s N n : ℕ} (pr : Outcomes Bool B (circuit N).rounds s N n V)
     (x : Paths (Paths Bool (circuit N).rounds × B) n) (u : Fin n × Fin N) :
-    periodMode (circuit N) (skipPeriod _ N n) pr x u ≠ .paid := by
-  unfold periodMode
+    monitoringPeriodMode (circuit N) (skipPeriod _ N n) pr x u ≠ .paid := by
+  unfold monitoringPeriodMode
   split_ifs
   · rw [stages_skipPeriod]
     simp [skipStages, SplitStages.joint, SplitStages.modeAt, tileStage, Declared.stageOf, circuit]
@@ -259,7 +259,7 @@ theorem right_values_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccep
         ((blocks (tileCount σ sT)).size ∅) (fun w t =>
         (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n) opened
           (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)).Good
-          (periodMode (circuit (tileCount σ sT)) (skipPeriod (Ω1 σ sT) (tileCount σ sT) n)
+          (monitoringPeriodMode (circuit (tileCount σ sT)) (skipPeriod (Ω1 σ sT) (tileCount σ sT) n)
             (tileRun σ k hk sT unitOf (windows σ sT regOf evOf n) opened
               (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)))
           x w t) <

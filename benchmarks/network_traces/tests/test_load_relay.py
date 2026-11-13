@@ -32,10 +32,10 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.certifier.verifier import transfer_rows as TR
-from verity.protocols.certifier.verifier.certificate import Direction, Issuer
-from verity.protocols.pous.verifier.schemes import p2 as P2
-from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.accounting.certifier.verifier import transfer_rows as TR
+from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer
+from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 HERE = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parents[3]

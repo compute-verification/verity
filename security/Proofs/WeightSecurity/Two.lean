@@ -103,9 +103,9 @@ noncomputable def twoRec [Fintype O] (H : Msg → Msg) (L : CompiledTwo Coin A) 
 /-- **The deployment's run over `T` two-stage windows** at the datacenter's strategy `s`, each window recorded by
 `twoRec`. -/
 noncomputable def twoRun [Fintype O] (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) (δ : ℝ) (T : ℕ)
-    (s : Strategy (periodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)) :
+    (s : Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)) :
     Verity.Game (List (Served O V Tick Adv)) :=
-  periodRun (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) (fun t _ => twoRec H (Lv t) δ) 0 T s
+  monitoringPeriodRun (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) (fun t _ => twoRec H (Lv t) δ) 0 T s
 
 /-- **A window's error at its strategy**: `KSLinOn`'s bound at the statement `x` and prover `P` it sends,
 `κ_δ(x) + √(γ(x)·Pr[B]) + Pr[B_ext]`. -/
@@ -200,9 +200,9 @@ theorem twoRec_incorrect_le [Fintype O] (H : Msg → Msg) (L : CompiledTwo Coin 
 at most `c`: the windows before the first sampled incorrect one count at most `c` each. -/
 theorem value_lead_eq_zero {β : ℕ → Type} (G : (i : ℕ) → Verity.Game (β i))
     (rec : (i : ℕ) → Strategy (G i) → β i → Served O V Tick Adv) (c : ℕ) :
-    ∀ (T i : ℕ) (s : Strategy (periodG G i T)) (M : ℕ),
+    ∀ (T i : ℕ) (s : Strategy (monitoringPeriodG G i T)) (M : ℕ),
       (∀ j, i ≤ j → j < i + T → ∀ τ b, ¬ (rec j τ b).sampledIncorrect → (rec j τ b).incorrect ≤ c) →
-      T * c < M → Verity.Game.value (fun l => M ≤ Served.lead l) (periodRun G rec i T s) = 0
+      T * c < M → Verity.Game.value (fun l => M ≤ Served.lead l) (monitoringPeriodRun G rec i T s) = 0
   | 0, _, _, M, _, hM => by
       classical
       show Verity.Game.value (fun l => M ≤ Served.lead l) (Verity.Game.ret []) = 0
@@ -215,8 +215,8 @@ theorem value_lead_eq_zero {β : ℕ → Type} (G : (i : ℕ) → Verity.Game (�
       have hM' : T * c < M - c := by
         have := Nat.add_one_mul T c
         omega
-      refine le_antisymm ((value_runBind_le_mul (fun _ => periodG G (i + 1) T)
-        (fun b s' => (periodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
+      refine le_antisymm ((value_runBind_le_mul (fun _ => monitoringPeriodG G (i + 1) T)
+        (fun b s' => (monitoringPeriodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
         (fun l => M ≤ Served.lead l) (fun _ => True) 0 (G i) s
         (atEnds_of_forall (fun b s' => ?_) (G i) s)).trans_eq (mul_zero _)) zero_le
       rw [ite_eq_left trivial, Verity.Game.value_map]
@@ -237,12 +237,12 @@ theorem two_undetected [Fintype O] (H : Msg → Msg) (Lv : ℕ → CompiledTwo C
     (hks : ∀ t < T, (Lv t).KS H)
     (href : ∀ t < T, ∀ x (P : Prover Unit) r, (run H P (Lv t).V x () r).out = .acc → (Lv t).Scope x)
     (hcap : ∀ t < T, WindowCap (Lv t) δ K) (ε : ℕ → ℝ)
-    (s : Strategy (periodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T))
-    (herr : ∀ t τ, PeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ →
+    (s : Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T))
+    (herr : ∀ t τ, MonitoringPeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ →
       twoErr H (Lv t) δ τ ≤ ε t) :
     Verity.Game.value (Served.Undetected (T * (K - 1) + 1)) (twoRun H Lv δ T s) ≤
       ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t) := by
-  have hs : PeriodGood (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
+  have hs : MonitoringPeriodGood (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
       (fun t τ => t < T ∧ twoErr H (Lv t) δ τ ≤ ε t) 0 T s :=
     periodGood_mono _ T 0 s (fun j τ _ hj h => ⟨by omega, h⟩)
       (periodGood_of_plays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
@@ -260,7 +260,7 @@ theorem two_undetected [Fintype O] (H : Msg → Msg) (Lv : ℕ → CompiledTwo C
   show Verity.Game.value (fun l => (∃ r ∈ l, r.accepted ∧ r.sampledIncorrect) ∨ T * (K - 1) + 1 ≤ Served.lead l)
     (twoRun H Lv δ T s) ≤ _
   refine (Verity.Game.value_or_le _ _ _).trans ?_
-  rw [show twoRun H Lv δ T s = periodRun (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
+  rw [show twoRun H Lv δ T s = monitoringPeriodRun (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
     (fun t _ => twoRec H (Lv t) δ) 0 T s from rfl, h2, add_zero]
   exact h1
 
@@ -274,14 +274,14 @@ theorem TheftServedTwo {Ω R Θ Q Θ' : Type} [Fintype Ω] [Fintype R] [Fintype 
     (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) (T L E K : ℕ) {δ : ℝ} (hδ : 0 ≤ δ) (ε : ℕ → ℝ)
     (C : Θ → Q × Adv → O → V) (gen : Ω → Θ) (Stolen : Θ → Θ' → Prop) (Aset : Set (Outsider R (Q × Adv) (O → V) Θ'))
     (p : ℝ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
-    (s : Θ → R → Strategy (periodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T))
+    (s : Θ → R → Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T))
     (hhon : HonestUseHard C gen Stolen T Aset p)
     (hsim : Simulable Aset Ou
       (servedChannel R Q Adv O V Tick T (E * (T * (K - 1) + 1) + (L + 1) * Fintype.card O)))
     (hks : ∀ t < T, (Lv t).KS H)
     (href : ∀ t < T, ∀ x (P : Prover Unit) r, (run H P (Lv t).V x () r).out = .acc → (Lv t).Scope x)
     (hcap : ∀ t < T, WindowCap (Lv t) δ K)
-    (herr : ∀ θ r t τ, PeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T (s θ r) t τ →
+    (herr : ∀ θ r t τ, MonitoringPeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T (s θ r) t τ →
       twoErr H (Lv t) δ τ ≤ ε t) :
     Verity.Game.avg (fun z : Ω × R => Verity.Game.value
         (fun l => Stolen (gen z.1) (Ou.out z.2 (Served.view Ou L z.2 l T))) (twoRun H Lv δ T (s (gen z.1) z.2))) ≤
@@ -294,7 +294,7 @@ theorem TheftServedTwo {Ω R Θ Q Θ' : Type} [Fintype Ω] [Fintype R] [Fintype 
     fun θ r => two_undetected H Lv hδ T K hks href hcap ε (s θ r) (herr θ r)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **The cap from the two stages' rates**: where each statement in scope draws its replay sample as a uniform
+/-- **The cap from the two stages' rates**: where each statement in scope samples its replay sample as a uniform
 `Q`-subset of its `N` correct-class replay blocks and every input replay block, and its second stage samples at least
 `r₂` of every cell, `WindowCap` holds at every `K` with `(1 − (Q/N)·r₂)^K ≤ δ`. -/
 theorem windowCap_of_rates (L : CompiledTwo Coin A) {δ r₂ : ℝ} {K : ℕ} (hr₂ : 0 ≤ r₂) (hr₂' : r₂ ≤ 1)

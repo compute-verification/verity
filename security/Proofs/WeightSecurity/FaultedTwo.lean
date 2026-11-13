@@ -39,7 +39,7 @@ theorem TheftFaultedTwo {Ω R Θ Q Θ' F : Type} [Fintype Ω] [Fintype R] [Finty
     (Typ : Set Θ) (Stolen : Θ → Θ' → Prop) (Aset : Set (Outsider R (Q × Adv) (O → V) Θ'))
     (Af : Set (Outsider R ((Q × Adv) × κ.Interiors Cf size φ₀) (O → V) Θ')) (p lam : ℝ)
     (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
-    (s : Θ → R → Strategy (periodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T))
+    (s : Θ → R → Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T))
     (hφ₀ : NoFault size φ₀)
     (hhon : HonestUseHard C gen (fun θ θ' => θ ∈ Typ ∧ Stolen θ θ') T Aset p)
     (hfh : FaultedUseHard C (fun θ (x : (Q × Adv) × κ.Interiors Cf size φ₀) => Cf θ (x.1, x.2.1))
@@ -51,7 +51,7 @@ theorem TheftFaultedTwo {Ω R Θ Q Θ' F : Type} [Fintype Ω] [Fintype R] [Finty
     (hks : ∀ t < T, (Lv t).KS H)
     (href : ∀ t < T, ∀ x (P : Prover Unit) r, (run H P (Lv t).V x () r).out = .acc → (Lv t).Scope x)
     (hcap : ∀ t < T, WindowCap (Lv t) δ K)
-    (herr : ∀ θ r t τ, PeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T (s θ r) t τ →
+    (herr : ∀ θ r t τ, MonitoringPeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T (s θ r) t τ →
       twoErr H (Lv t) δ τ ≤ ε t) :
     Verity.Game.avg (fun z : Ω × R => Verity.Game.value
         (fun l => Stolen (gen z.1) (Ou.out z.2 (Served.view Ou L z.2 l T))) (twoRun H Lv δ T (s (gen z.1) z.2))) ≤

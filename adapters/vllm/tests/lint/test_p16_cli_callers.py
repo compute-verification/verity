@@ -52,7 +52,13 @@ def commands() -> dict[str, str]:
     """``COMMANDS``: name -> the module it runs."""
     for node in R.parse(CLI).body:
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == "COMMANDS":
-            return {k.value: v.elts[0].value for k, v in zip(node.value.keys, node.value.values)}
+            table = node.value
+            assert isinstance(table, ast.Dict), f"{R.rel(CLI)}: COMMANDS is no dict literal"
+            out: dict[str, str] = {}
+            for k, v in zip(table.keys, table.values):
+                assert R.is_str(k) and isinstance(v, ast.Tuple) and R.is_str(v.elts[0]), f"{R.rel(CLI)}: a COMMANDS row is not `name: (module, help)`"
+                out[k.value] = v.elts[0].value
+            return out
     raise AssertionError(f"{R.rel(CLI)}: no COMMANDS table")
 
 

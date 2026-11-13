@@ -1,4 +1,4 @@
-"""The slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it: the one module here that
+"""The slowdown calculator (`benchmarks/rho`) as this package reads it: the one module here that
 names it, and the benchmark's one entry point to a slowdown.
 
 `slowdown(policy, step, run=None)` is that entry point: from a policy's block and a step's record to the lower bound
@@ -37,7 +37,7 @@ from . import work as W
 from .gates import per_and, per_mac
 
 #: the calculator's directory, whose name is its package's too
-CALCULATOR = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "inference_only" / "rho"
+CALCULATOR = Path(__file__).resolve().parents[2] / "rho"
 DEPLOYMENTS = Path(__file__).resolve().parents[2] / "census" / "deployments.json"
 #: the precision the registry's locations state their peak rate at: the census's dense FP8 E4M3
 FLEET_PRECISION = "e4m3"
@@ -118,7 +118,8 @@ def fleets() -> list[dict]:
 def _min_cut():
     """The calculator's module for the bound, its `min_cut`, loaded by its path: it is standard library only and
     imports nothing of its package, so reading it loads no registry and leaves the import path as it was."""
-    spec = importlib.util.spec_from_file_location("training_slowdown_min_cut", CALCULATOR / "rho" / "min_cut.py")
+    path = CALCULATOR / CALCULATOR.name / "min_cut.py"
+    spec = importlib.util.spec_from_file_location("training_slowdown_min_cut", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod

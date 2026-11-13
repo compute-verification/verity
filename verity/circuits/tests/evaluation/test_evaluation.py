@@ -19,14 +19,14 @@ from verity.circuits import evaluation as E
 from verity.circuits.evaluation.batch import _KERNELS
 from verity.circuits.defs import bind
 from verity.circuits.types import Array, Value
-from verity.definitions.ops import gemm as G
-from verity.definitions.kernels import tc as K
-from verity.definitions.ops import mufu as M
-from verity.definitions.ops import prims as P
-from verity.definitions.silicon.models import AMPERE_BF16_M16N8K16, GroupSum
-from verity.definitions.silicon.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
+from verity.circuits.ops import gemm as G
+from verity.circuits.kernels import tc as K
+from verity.circuits.ops import mufu as M
+from verity.circuits.ops import prims as P
+from verity.circuits.silicon.models import AMPERE_BF16_M16N8K16, GroupSum
+from verity.circuits.silicon.total import HOPPER_BF16_WGMMA_K16, tc_dot_total
 
-FIXTURES = Path(__file__).resolve().parents[3] / "definitions" / "ops" / "tests" / "fixtures"
+FIXTURES = Path(__file__).resolve().parents[2] / "ops" / "tests" / "fixtures"
 ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
 
 #: (target, instances) for every registered kernel; composites and bindable references at representative statics.
@@ -290,7 +290,7 @@ def test_hopper_step_replays_the_h100_record() -> None:
 
 
 def test_nvfp4_dot_replays_every_recorded_rtx5090_vector() -> None:
-    cases = json.loads((ROOT / "verity" / "definitions" / "silicon" / "captures" / "autoproof-probe-vectors.json").read_text())["nvfp4_m16n8k64"]["cases"]
+    cases = json.loads((ROOT / "verity" / "circuits" / "silicon" / "captures" / "autoproof-probe-vectors.json").read_text())["nvfp4_m16n8k64"]["cases"]
     by_k: dict[int, list] = {}
     for c in cases:
         by_k.setdefault(len(c["a"]), []).append(c)
@@ -321,8 +321,8 @@ def test_gemm_coordinate_replays_the_rtx4090_captures() -> None:
 
 def test_group_sum_kernel_covers_every_total_pipeline() -> None:
     """The kernel is parameterised by the model, so it is exact for the other E4M3 pipeline too (Ada's two groups)."""
-    from verity.definitions.silicon.models import ADA_E4M3_M16N8K32
-    from verity.definitions.silicon.total_fp8 import tc_dot_total_e4m3
+    from verity.circuits.silicon.models import ADA_E4M3_M16N8K32
+    from verity.circuits.silicon.total_fp8 import tc_dot_total_e4m3
 
     assert isinstance(ADA_E4M3_M16N8K32, GroupSum)
     ref = E.ScalarReference("test.ada_e4m3", lambda acc, a, b: tc_dot_total_e4m3(ADA_E4M3_M16N8K32, acc, a, b),
