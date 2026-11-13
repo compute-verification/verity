@@ -114,8 +114,7 @@ Program with no definitions), and a compiled sampled verifier has a statement in
 (`Claims.SamplingGeneric.Compiled.Scope`). The statement names no verifier; the proof stands at the toy verifier
 `Claims.Witness.SamplingGeneric.twoL`, which samples both of its proof blocks and accepts only two empty messages.
 The compiled sampled verifier's premise is a named assumption (`Properties.NetworkScan.Assumptions`).
-`scanOf`'s and `Flock.Program.decode`'s acceptances are not exhibited: both read `Lean.Json.parse`, a `partial def`
-the kernel can't unfold. -/
+`scanOf`'s and `Flock.Program.decode`'s acceptances are not exhibited: no descriptor is evaluated here. -/
 theorem scan_honest : Flock.canon .null = .ok "null" ∧ Flattens default ⟨[], []⟩ ∧
     ∃ (A : Claims.SamplingGeneric.Arg Bool) (D : Claims.SamplingGeneric.Compiled Bool A) (x : Claims.Msg),
       D.Scope x :=
@@ -125,8 +124,7 @@ theorem scan_honest : Flock.canon .null = .ok "null" ∧ Flattens default ⟨[],
 /-- **`ScanFits`' conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at a Program and a flattening of
 it, built by hand, which a scan check accepting everything would pass, the layout doesn't fit. The Program has no
 definitions, so its flattening returns nothing (`empty_flattens`, `not_fits_of_no_outs`). The instance is the model's:
-no file decoding to it can be exhibited, since `Flock.Program.decode` reads through `Lean.Json.parse`, a `partial def`
-the kernel can't unfold. -/
+it is built by hand, and no file decoding to it is exhibited. -/
 theorem scanFits_nontrivial :
     ∃ (P : Flock.Program.Prog) (C : Claims.Sampling.Prog) (s : NetworkCheck.Period.Schedule) (_ : Flattens P C),
       ¬ (scanLayout P s).Fits C s.window :=
