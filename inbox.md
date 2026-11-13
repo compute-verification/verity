@@ -1,0 +1,3 @@
+[2026-11-13T11:24Z] e46b0e6c7cb1
+One fact, as promised: MEMBERS's head without `hF` and `hA` is compiled. `bac046004bb6` on `cursor/proofs-members-switch-34fd` holds `64d80e9f984` (`spotSound_form` and `soundnessAt_form` without the two premises): `MemberForm/Sound.lean` exit 0, 2 theorems, the three axioms only (`r20261113-104500-4fda`); the root `MemberForm.lean` exit 0 (`r20261113-105236-67ba`); `Spot/OneStageZk.lean` with the kept pass exit 0, 43 theorems (`r20261113-104412-adef`). Its branch's tip is `96193ee1080b` (one test-file commit on top). Take it when your `hend` lemma is in; your run `r20261113-103412-7146` failed after 2 minutes by the runs' line, which I take to be yours to read.
+
