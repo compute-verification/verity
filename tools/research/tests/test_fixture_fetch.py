@@ -157,7 +157,7 @@ def _repo(tmp_path: Path, origin: LocalStore, remote: FsRemote) -> tuple[Path, d
     for art in (big, tset):
         _publish(origin, art, remote)
     doc = {tracked: "pkg/tests/fixtures/small.json", big: "pkg/tests/fixtures/big.proof", tset: "pkg/tests/fixtures/set"}
-    (repo / "fixtures" / "artifacts.json").write_text(F.dump_map(doc))
+    (repo / "artifacts.json").write_text(F.dump_map(doc))
     (repo / ".gitignore").write_text("pkg/tests/fixtures/big.proof\npkg/tests/fixtures/set/\n")
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
     subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
@@ -350,7 +350,7 @@ def test_export_recovers_superseded_ids_from_history_and_warns_on_lost_ones(tmp_
     doc = F.load_map(repo)
     doc[new] = doc.pop(old)
     doc["previous"] = {new: [lost, old]}
-    (repo / "fixtures" / "artifacts.json").write_text(F.dump_map(doc))
+    (repo / "artifacts.json").write_text(F.dump_map(doc))
     dest = FsRemote(tmp_path / "public")
     rep = F.export(_store(tmp_path, "exporter"), repo, dest, srcs=[private])
     assert rep["ok"] and not rep["errors"] and len(rep["warnings"]) == 1 and lost in rep["warnings"][0]

@@ -37,6 +37,9 @@ DEFINITIONS = REPO / "verity" / "definitions"
 #: what of ``DEFINITIONS`` moved out of the integration: the modules at its top and these packages of it. Any other package
 #: of that directory is core's
 MOVED_OUT = frozenset({"numerics", "registry", "tests"})
+#: the modules at its top that stay with core when the served Definitions leave it, so are no more the library's than its
+#: other packages
+CORE_TOPS = frozenset({"call_scope.py", "cross_call.py", "tiny.py", "word.py"})
 #: the scanned packages: the integration's, and the Definitions that moved out of it
 LIBRARY = (PKG, DEFINITIONS)
 ALLOWLISTS = HERE / "allowlists"
@@ -63,7 +66,7 @@ def in_library(p: Path) -> bool:
     integration (``MOVED_OUT``)."""
     if p.is_relative_to(DEFINITIONS):
         parts = p.relative_to(DEFINITIONS).parts
-        return len(parts) == 1 or parts[0] in MOVED_OUT
+        return (len(parts) == 1 and parts[0] not in CORE_TOPS) or parts[0] in MOVED_OUT
     return p.is_relative_to(PKG)
 
 
@@ -89,7 +92,7 @@ def rel(p: Path) -> str:
 
 
 def module_name(p: Path) -> str:
-    """``verity_vllm/a/b.py`` -> ``verity_vllm.a.b``, ``verity/definitions/tiny.py`` -> ``verity.definitions.tiny``; a
+    """``verity_vllm/a/b.py`` -> ``verity_vllm.a.b``, ``verity/circuits/tiny.py`` -> ``verity.circuits.tiny``; a
     package's ``__init__.py`` names the package."""
     parts = list(p.relative_to(ROOT if p.is_relative_to(ROOT) else REPO).with_suffix("").parts)
     if parts[-1] == "__init__":

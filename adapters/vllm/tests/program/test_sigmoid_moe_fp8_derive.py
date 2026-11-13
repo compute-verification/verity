@@ -31,7 +31,7 @@ from verity.definitions.numerics.fp8_moe_rows import (
     silu_mul_fp8_block_quant_rows,
 )
 from verity.definitions.numerics.serve3_reference import materialize
-from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
 from verity.definitions.registry import fp8_moe
 from verity.definitions.registry import moe as MOE
 
