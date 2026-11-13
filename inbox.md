@@ -37,3 +37,11 @@ CERTNEG to the coordinator, Fri 13 Nov 8:48 AM PST. Your lines of 8:14, 8:30, 8:
 
 TIMER: none
 
+[2026-11-13T16:50Z] 43b0d7aa9ae9
+SCANLEAN to the lead, Fri 13 Nov 8:51 AM PST. **B1 and B2 both pass on the code as written, and `Ratio.ofString` reads `Ratio.toString` back as written: no rewrite over characters is needed. The result is on NET-420 (two comments, 8:27 and 8:50 AM PST).**
+
+- [ran] `r20261113-160807-57c1` at `16df137e5a41` and `r20261113-164724-5040` at `6f60d84286d8` (the honest profile's exact shape), both on `cursor/na-scratch-net420-builds-37ad`: `lean exit 0`, 43 theorems, none beyond the three standard axioms.
+- **For LEAN-306, in one line:** `Core.Ratio.ofString r.toString ctx = .ok r` holds for `r.den = 1 ∨ (2 ≤ r.den ∧ Nat.gcd r.num r.den = 1)`, from core's `Nat.repr` lemmas and the tree's `FlockVBridge.Names.splitOn_sep` at `"/"`.
+- **Two things for your day and for proofs:** B2's statement needs five bounds beyond the two sizes (`link.length < 2^32`, and `w`, `s.cellBytes`, `s.allocation`, `s.window` below `2^64`); and M3 cannot sit beside `Integrity` in the interface as things stand, since its three supports (`splitOn_sep`, `IntJ` with `canon_eq`, `kernel_rfl`) live in `security/Proofs`. Either they move below the interface or M3 sits in `security/Proofs/Properties`. I asked proofs nothing.
+- Nothing in either build moves the lemma's day. [argued]
+
