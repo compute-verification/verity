@@ -119368,3 +119368,44 @@ For the table: R7 at `a287d4bf1247`; nine tries pass; waiting on `r20261113-0305
 Whether to mark it before `8074` ends is yours: the line above says which suites ran at which head. I say `8074`'s result in my next entry.
 
 **Since the 03:58Z entry.** Your 03:58Z message came by the hook; read. Its fourth point, a verdict record's class, `serve` and `registration`: the section of #9621 reads no verdict record, but it prints one, the audit's own, held to the command's reader. I am adding the three names to that record from the served run's files (the class as the run's files name it, the serve's run, the registration the second stage read), each null and said so where a file is not given. I use the key `class` for the first, network's name; say if the driver's writer uses another. #9551 moved to `f7cfb5c09b62` and holds #9476's "a fix may be a range" now; I merge it into #9621's branch with that change and relaunch its suites once, so `r20261113-034848-bc7f` will be cancelled as superseded.
+
+## CUT, Fri 13 Nov 04:06Z: `FirstReads θ` is now derived from the form's accept wherever the first stage's coin evidence is not `null` (`CutFirst.lean`, pushed, not compiled); TWOLEG's tip merged with no conflict; both rc 143s were manual cancels
+
+**In plain words.** The cut needed one premise about the form: that on an accepted play the first stage's coins are read under the parameters' key. With the key change now on TWOLEG's branch, the run of record reads them exactly that way, so I derive the premise from the form's acceptance, except on one kind of play: a first stage that read no byte and whose coin evidence is `null`. The form accepts that play today, and the cut can say nothing about it. That case is now the premise (`FirstShown θ`, a fact about the form, not about the device), and TWOLEG's planned refusal of `null` first-stage coin evidence would make it a theorem. Nothing has compiled since my 03:24Z entry. Every statement of mine at the form's accept is still empty, for both reasons TWOLEG gives (the reader key sets, and the last step's law) [relayed: TWOLEG 03:15Z, 04:05Z].
+
+**1. What I did** [run: `git push`]
+- Merged `origin/cursor/proofs-twoleg-c5e5` at `d06ec7c330` into `cursor/proofs-cut-9323` (merge `22a0197291`, no conflict). TWOLEG's commits since `4d19a7ad4f` change no Lean of the form [run: `git diff --stat`].
+- `fc93fee9c7`, which adapts two definitions to the form at that tip, adds one file and its root line:
+  - `Cut.lean`: `firstCoins e := e.coins` (the run of record hands its coin check the evidence's `coins` as they are), and `firstLabel p := p.boundary.challenger.map (·.2)` (`inputOf`'s `family`), so `firstDraws` reads the parameters' key, the boundary's window and family, and the commitment's digest. `CutPrints.firstDraws_window` changed by one word; `CutRead`'s docstring is rewritten.
+  - `CutFirst.lean` (new): `members_deployed`, `form_audit`, `paramsAt_form`, `keyOf_some` (`keyOf θ` is the interior audit's key, at `Lms.deployed` through `Limits.paramsOfJson_deployed`; TWOLEG's extra deployed-key line is not needed); `run_coins` (`Spot.Run.run` refuses at a step, or its coin check `coinsCode` gave no code); `refused_symbol` (a refusal has no `symbol`, by `rfl`); `coinsCode_none` (no code means `null` evidence, or `drawCoins` under the run's key, window and family after the record's digest, via `coinsReason_none`); `commitment_of_caseOf`; `FirstShown θ`; `firstReads_of_shown : FirstShown θ → FirstReads θ`; and `cutBound_shown` (`cutBound_read` with `FirstShown` in place of `FirstReads`).
+- `inputOf`'s new fields: by reading, they break no proof of mine. `CutHeld` and `CutRead` read `inputAt_ok` and `accepted_steps`, whose statements did not change, and use nothing of `interiorUnshown` [read]. Try 12 checks this.
+
+**2. The premises the cut still names** [read]
+- `FirstReads θ`: derived from `FirstShown θ` (`firstReads_of_shown`). `FirstShown` stays a premise until the form refuses `null` first-stage coin evidence.
+- `cutBound_read`: `PrintsTwo`. `cutBound_order`: `OrderShown θ` (until TWOLEG's order refusal and its step lemma exist) and `PrintsInOrder`, which HISTORY's `printsInOrder_dev₂` proves only under (a) to (c), which do not follow from `dev₂` [relayed: HISTORY 03:59Z]. I change neither `History` nor `PrintsInOrder`.
+- The known hole is unchanged: a genuine signature from an earlier period in the evidence counts as the forger's at a history of one play, so the error is ⊤ there.
+
+**3. Statements at the form's accept** [read]. `cutBound`, `cutBound_of`, `cutBound_read`, `cutBound_order`, `cutBound_shown`, `firstReads_of_shown`, `reads_or_break`, `order_binds` and `binds_of_accepts` all quantify over `Accepts` (the form's `checkBlobsAtWith true`), so none says anything about a run until TWOLEG's honest play passes. The device-side lemmas (`entry_device`, `printsTwo_of_order`, `line_device`) and the read lemmas over the `drawCoins` value (`first_reads`) do not read the accept.
+
+**4. Runs**
+- `r20261113-031548-ee00` (try 8): rc 143 is my own cancel at 03:27:53Z. Its failure record says `CANCELLED_MANUAL`, "waited more than ten minutes for a place without starting; resent", so it was neither a limit nor memory [run: `research fetch`, `failure.json`].
+- `r20261113-035300-807e` (try 11, vy-nebius-2, at `e242db0feb`): rc 143, `CANCELLED_MANUAL` at 03:55:12Z, "14 checks ahead in line on vy-nebius-2; the same try r20261113-034201-fe05 on vy-nebius-cpu-12 has 3 ahead, so that one is kept". It never started [run]. My previous session sent that cancel as this machine came up [guess].
+- `r20261113-034201-fe05` (try 10, vy-nebius-cpu-12, at `e242db0feb`: `CutOrder` and the four files before the merge): waiting since 03:42:23Z, first in line at 04:04Z ("every check slot is taken"). I kept it because it is next [run].
+- `r20261113-040419-e51c` (try 12, vy-nebius-2, at `fc93fee9c7`, the merged head): `CutFirst`, `CutOrder`, `Cut`, `CutPrints`, `CutHeld`, `CutRead`, launched 04:04Z, waiting [run]. If it waits 15 minutes unstarted I move it.
+
+**5. The base.** `cursor/proofs-two-round-base-84b5` at `e033bfc14be4` is not merged. RUNCOINS named its merged heads at 04:00Z, and I merge the base after try 12's verdict, so a failure can be pinned on one merge at a time [read: RUNCOINS 04:00Z]. No file of mine needs it.
+
+### STOP RULE
+Not reached. `FirstShown θ` is a hypothesis about the form's acceptance, not a named assumption, and no listed guarantee or lock record is touched. The form refuses nothing new because of me.
+
+### NEEDS
+1. TWOLEG: the refusal of `null` first-stage coin evidence, with a step lemma of the shape `checkBlobsAtWith true p c ξ e bs = .accept pub prof → e.coins ≠ Json.null` (any shape that gives this will do); `FirstShown θ` is then a short theorem. Also the order refusal's step lemma, for `OrderShown θ`.
+2. Soundness, through you: nothing new from me. HISTORY's 03:59Z paragraph is the one ask about the device.
+
+### To post
+Nothing.
+
+### Not established
+That `CutOrder.lean`, `CutFirst.lean`, or the four compiled files at TWOLEG's tip compile (tries 10 and 12 have not started). The highest-risk proofs are `CutOrder`'s two `mvcgen` lemmas and `CutFirst`'s `run_coins`/`form_audit` case splits, and its `rfl` for `refused_symbol`. `FirstShown θ`, `OrderShown θ` and `PrintsInOrder` at any deployment. Anything about a run.
+
+Head: `cursor/proofs-cut-9323` at `fc93fee9c7`, pushed. Nothing unpushed except local scratch.
