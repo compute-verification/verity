@@ -824,7 +824,7 @@ def _regeneration(world: World, ran: Path) -> tuple[Queue, str, PR]:
     main = _move_main(world, {
         "tools/move/rename.py": f"import os, sys\nfrom pathlib import Path\nPath({str(ran)!r}).write_text(os.getcwd())\n"
                                 "Path(sys.argv[sys.argv.index('--root') + 1], 'moved.txt').write_text('m\\n')\n",
-        "tools/move/x_map.toml": "", "tools/verity/check/move_check.py": "print('{\"certified\": true}')\n"})
+        "tools/move/x_map.toml": '[words]\n"x" = "y"\n', "tools/verity/check/move_check.py": "print('{\"certified\": true}')\n"})
     q = world.queue()
     q._clone()
     q.fetch()

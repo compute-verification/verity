@@ -44,7 +44,7 @@ def world(tmp_path, monkeypatch):
     monkeypatch.setattr(Q, "MERGED_ROOT", tmp_path / "scratch")
     w = World(tmp_path)
     w.with_store_remote()
-    _push_main(w, w.change({**{p: (ROOT / p).read_text() for p in SCRIPTS}, "tools/verity/check/pins.py": "PINS = ()\n",
+    _push_main(w, w.change({**{p: (ROOT / p).read_text() for p in (*SCRIPTS, Q.MOVE_CHECK)}, "tools/verity/check/pins.py": "PINS = ()\n",
                             "tools/research/src/research/store/moves.json": '{"moves": []}\n',
                             MAP: '[rewrite]\nexclude = ["tools/move/**", "tools/research/src/research/store/moves.json"]\n\n'
                                  '[words]\n"old_proto" = "new_proto"\n',
@@ -174,6 +174,44 @@ def test_a_restack_across_a_path_move_keeps_the_mark_and_verdict_and_one_more_ed
     q.fetch(world.gh.open_prs())
     assert q.mapped_change(old, extra) == q.own_change(new) != q.own_change(extra)
     assert _kept(StoreLabels(world.store, change=q.own_change, moved=q.mapped_change), 1, extra) == (False, [])
+
+
+def test_a_path_move_pr_the_queue_regenerates_with_main_s_scripts_is_certified_and_an_open_pr_crosses_it(world):
+    """The queue's rerun of a move PR whose map is a path map (`Queue._regenerated`), with this checkout's `layout.py` and
+    `move_check.py` as `main` holds them: `layout.py` moves `old_proto/` and rewrites its import, and `move_check.py`
+    certifies the commit, reading the map's rows by its `Layout-move:` line.  Landed, an open PR that imports the old module
+    is carried across it by `restack.py`, which reruns `layout.py` by that line, and keeps its mark and verdict."""
+    _push_main(world, world.change({"b.py": "from old_proto.a import f\n\nX = f()\n"}))
+    world.gh.put(1, old := world.change({"c.py": "import old_proto.a\n\nW = 1\n"}), ready=False)
+    _mark(world, 1, old)
+    world.gh.put(2, world.change({"x.txt": "only the request\n"}), body=f"Lane `lane-2`.\nMove: {PATHS}\n", ready=False)
+    q = _queue(world)
+    main = _git(q.workdir, "rev-parse", "refs/remotes/origin/main")
+    commit, why, report = q._regenerated(main, world.gh.prs[2], main)
+    assert why == "" and (report["certified"], report["refusals"]) == (True, []), (why, report)
+    assert _git(q.workdir, "log", "-1", "--format=%B", commit).endswith(f"Owner: lane-2\nLayout-move: {PATHS} --no-lock")
+    assert _git(q.workdir, "show", f"{commit}:b.py") == "from new_proto.a import f\n\nX = f()"
+    assert _git(q.workdir, "show", f"{commit}:new_proto/a.py") == A.strip()
+    assert "x.txt" not in _git(q.workdir, "ls-tree", "-r", "--name-only", commit).split()
+
+    _git(world.dev, "fetch", "-q", q.workdir, commit)
+    _land(world, commit)
+    world.gh.put(1, new := _restack(world, old), ready=False)
+    q.fetch(world.gh.open_prs())
+    assert _git(q.workdir, "show", f"{new}:c.py").startswith("import new_proto.a")
+    assert _kept(StoreLabels(world.store, change=q.own_change, moved=q.mapped_change), 1, new) == (True, [("land", "reviewer")])
+
+
+def test_a_path_move_pr_whose_rerun_move_check_py_refuses_is_refused_naming_the_file(world):
+    """`main`'s `b.py` calls `old_proto.a.f()` after `import old_proto.a`: `layout.py` rewrites the import and not the call, and
+    `move_check.py` refuses the edit, so the queue's rerun of the path map isn't certified, and says which file and why."""
+    world.gh.put(2, world.change({"x.txt": "only the request\n"}), body=f"Lane `lane-2`.\nMove: {PATHS}\n", ready=False)
+    q = _queue(world)
+    main = _git(q.workdir, "rev-parse", "refs/remotes/origin/main")
+    commit, why, report = q._regenerated(main, world.gh.prs[2], main)
+    assert (commit, report) == (None, None) and why.startswith(f"its move regenerated on {main[:12]} as "), why
+    assert f"isn't certified (`{Q.MOVE_CHECK} {main[:12]} " in why and why.endswith(
+        "b.py: edit beyond moved paths and module names"), why
 
 
 def test_a_pr_based_before_main_moved_on_keeps_both_across_two_moves_landed_as_one_pr(world):
