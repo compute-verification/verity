@@ -237,10 +237,12 @@ def test_a_lock_conflict_beside_a_content_conflict_is_still_a_conflict(repo):
     assert (r["status"], r["step"], r["files"]) == ("conflicted", "moved", ["app/core/util.py", "pkg/lean-audit.json"])
 
 
-def test_a_branch_based_after_the_moves_base_is_refused_with_the_plain_merge(repo, monkeypatch, capsys):
+def test_a_branch_based_after_the_moves_base_is_refused_with_the_command_that_carries_it_against_the_move(
+        repo, monkeypatch, capsys):
     """A branch based on a main past the move's base would restack `clean` with duplicate imports and lock entries, because
     the last merge, based on the move, brings main's commits since the base in from both sides. Here main
-    adds an import after the base, and the moved main has it at the top of the file."""
+    adds an import after the base, and the moved main has it at the top of the file. The refusal says a plain merge of main
+    is clean and wrong, and gives the command that carries the branch with the move's own commit as `--main`."""
     git(repo, "checkout", "-q", "-b", "later", "base")
     later = commit(repo, "main after the move's base", {"app/main.py": MAIN + "from app.util import f3\n"})
     git(repo, "checkout", "-q", "-b", "pr-later", later)
@@ -251,15 +253,67 @@ def test_a_branch_based_after_the_moves_base_is_refused_with_the_plain_merge(rep
     onto = commit(repo, "carry later's import across the move", {"app/main.py": "from app.core.util import f3\n" + landed})
     r = RS.restack("pr-later", "move", onto=onto, cwd=str(repo))
     assert r["status"] == "based-after" and "result" not in r and "steps" in r and not r["steps"], r
-    assert f"has {later[:12]}" in r["error"] and f"`git merge {onto[:12]}`" in r["error"]
+    move = RS.rev("move", str(repo))
+    assert r["carry"] == ["python3", "tools/move/restack.py", "pr-later", "--move-commit", move, "--main", move]
+    assert f"has {later[:12]}" in r["error"] and "a plain `git merge` of main is clean and wrong" in r["error"]
+    assert f"\n  {shlex.join(r['carry'])}\nthen merge today's main into the carried result, " in r["error"]
+    assert "git merge main" not in r["error"] and f"git merge {onto[:12]}" not in r["error"]
     assert RS.restack("pr", "move", onto=onto, cwd=str(repo))["status"] == "clean", "a branch based before the base still restacks"
     assert RS.restack("pr-later", "move", cwd=str(repo), main="later")["status"] == "based-after", "main shows it before --onto does"
     monkeypatch.chdir(repo)
     assert RS.main(["pr-later", "--move-commit", "move", "--onto", onto, "--main", "main"]) == 1
-    assert "pr-later: based-after  [plain merge" in (o := capsys.readouterr().out) and "`git merge main`" in o
+    o = capsys.readouterr().out
+    assert o.startswith("pr-later: based-after  [plain merge") and "clean and wrong" in o
+    assert f"\n      {shlex.join(r['carry'])}\n    then merge today's main" in o
     monkeypatch.setattr(RS, "based_after", lambda *a: None)
     dup = RS.restack("pr-later", "move", onto=onto, cwd=str(repo))
     assert dup["status"] == "clean" and show(repo, dup["result"], "app/main.py").count("import f3") == 2, "what it refuses"
+
+
+#: the package moved under `lib/`, with a file the move writes left in `app/`: git sees no directory renamed, so a plain merge
+#: has no reason to move a file a branch adds there
+SPLIT = '[paths]\n"app" = "lib/app"\n\n[modules]\n"app" = "lib.app"\n\n[create]\n"app/MOVED" = "see lib\\n"\n'
+
+
+def test_a_line_stacked_on_a_head_that_crossed_the_move_and_landed_is_carried_by_the_command_its_refusal_gives(
+        repo, monkeypatch, capsys):
+    """Line `x` is stacked on head `pr`'s old commit. `pr` crosses the move and lands, so main holds that old commit, which
+    the move's base lacks: `x` is refused `based-after`. A plain merge of main into `x` is clean and wrong, leaving the file
+    it adds at its old path with its old import. The command the refusal gives carries `x` against the move's own commit,
+    with which it shares no late commit, and the carried line merges with main without a conflict, inside the new layout."""
+    monkeypatch.setattr(RS, "SCRIPT_ARGS", RS.SCRIPT_ARGS)
+    git(repo, "checkout", "-q", "-B", "main", "base")
+    commit(repo, "the split map", {"tools/move/layout_map.toml": SPLIT})
+    move = generate(repo, LINE)
+    assert {"app/MOVED", "lib/app/util.py"} <= paths(repo, move) and "app/util.py" not in paths(repo, move)
+    on(repo, "pr", ("the head's own", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
+    git(repo, "branch", "x", "pr")
+    on(repo, "x", ("the line's own", {"app/added.py": "import app.util\n"}))
+    monkeypatch.chdir(repo)
+    assert RS.main(["pr", "--main", "main", "--json"]) == 0
+    [head] = json.loads(capsys.readouterr().out)
+    commit(repo, "main moves on", {"NOTES.md": "notes 2\n"})
+    git(repo, "merge", "-q", "--no-ff", "-m", "land the head", head["result"])
+
+    plain, conflicts = RS.merge_trees(RS.rev("x", str(repo)), RS.rev("main", str(repo)), str(repo))
+    assert conflicts == [] and show(repo, plain, "app/added.py") == "import app.util\n", "the fault: clean, and wrong"
+    assert "lib/app/added.py" not in paths(repo, plain)
+
+    assert RS.main(["x", "--main", "main", "--json"]) == 1
+    [refused] = json.loads(capsys.readouterr().out)
+    assert (refused["status"], refused["move"], refused["late"]) == ("based-after", move, git(repo, "rev-parse", "pr"))
+    assert refused["carry"] == ["python3", "tools/move/restack.py", "x", "--main", move]
+    assert f"\n  {shlex.join(refused['carry'])}\nthen merge today's main into the carried result, " in refused["error"]
+
+    assert RS.main([*refused["carry"][2:], "--json"]) == 0
+    [carried] = json.loads(capsys.readouterr().out)
+    assert (carried["status"], carried["crossed"], carried["skipped"]) == ("clean", [move], [])
+    merged, conflicts = RS.merge_trees(carried["result"], RS.rev("main", str(repo)), str(repo))
+    assert conflicts == []
+    assert show(repo, merged, "lib/app/added.py") == "import lib.app.util\n"
+    assert "app/added.py" not in paths(repo, merged) and not any("added" in p for p in paths(repo, merged) - {"lib/app/added.py"})
+    assert show(repo, merged, "lib/app/util.py") == edit(UTIL, "return 5", "return 50")
+    assert paths(repo, merged) == paths(repo, carried["result"]) and show(repo, merged, "NOTES.md") == "notes 2\n"
 
 
 @pytest.fixture
@@ -447,10 +501,14 @@ def test_a_branch_based_after_a_named_move_the_last_move_found_or_one_no_later_b
     assert RS.main(["pr", "--move-commit", first, "--move-commit", second, "--main", "main", "--dry-run", "--json"]) == 1
     [named] = json.loads(capsys.readouterr().out)
     assert (named["status"], named["move"], named["crossed"], named["skipped"]) == ("based-after", first, [], [])
+    assert named["carry"] == ["python3", "tools/move/restack.py", "pr", "--move-commit", first, "--main", first]
+    assert f"\nthen carry the result across the later move {second[:12]} with restack.py too, " in named["error"]
     assert RS.moves_on(late["landed"], "pr", str(repo)) == RS.moves_on("main", "pr", str(repo))[:1]
     assert RS.main(["pr", "--main", late["landed"], "--dry-run", "--json"]) == 1
     [last] = json.loads(capsys.readouterr().out)
     assert (last["status"], last["move"], last["crossed"], last["skipped"]) == ("based-after", first, [], [])
+    assert last["carry"] == ["python3", "tools/move/restack.py", "pr", "--main", first]
+    assert "\nthen merge today's main into the carried result, " in last["error"]
     assert f"has {late['beside'][:12]}" in last["error"] and "skipped" not in RS.line(last)
     line = ("tools/move/layout.py", ("--map", "tools/move/layout_map.toml"))
     assert not RS.contains(first, f"{apart}~1", str(repo))
