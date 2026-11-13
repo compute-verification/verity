@@ -1378,14 +1378,17 @@ GLOBAL_IDENTITY = [
     "cd /tmp && git config --global user.name a", "bash -lc 'git config --global user.email a@a'",
     "GIT_DIR=/nowhere git config --global user.name a", "XDG_CONFIG_HOME=/tmp/x git config --global user.name a",
 ]
-GLOBAL_FIX = "the machine's identity is already configured"
+#: what its refusal says to do, which holds on a machine that has an identity and on one that was given none
+GLOBAL_FIX = ("`git config --global user.name` and `git config --global user.email` read the identity the machine has; if either "
+              "prints nothing, the machine was not given it: stop and tell your coordinator rather than set one.")
 
 
 @pytest.mark.parametrize("form", GLOBAL_IDENTITY)
 def test_a_git_config_that_writes_the_machines_global_identity_is_refused_wherever_it_is_typed(clones, tmp_path, form):
     """The identity every checkout on a machine commits with sits in its global configuration, so one `git config --global
     user.name VALUE` typed anywhere changes the author of verity's and infra's commits. It is refused in every repository and
-    outside one, and the refusal says where a scratch repository's name goes instead."""
+    outside one. The refusal says how to read the identity the machine has, to stop and tell the coordinator where it was given
+    none rather than set one, and where a scratch repository's name goes instead."""
     subprocess.run(["/usr/bin/git", "init", "-q", str(tmp_path / "scratch")], check=True, capture_output=True,
                    env={**os.environ, **GIT_ENV})
     for clone in ("verity", "infra", "notes", "scratch", "state"):

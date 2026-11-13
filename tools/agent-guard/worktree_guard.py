@@ -458,11 +458,13 @@ def identity_reason(indexed: list[Git], envs: list[dict[str, str]]) -> str | Non
         written = [a for a in rest if a not in CONFIG_SCOPE]
         wrote = written[:1] if sub == "config" and len(written) == 2 and written[0].lower() in IDENTITY_KEYS else []
         if wrote and "--global" in rest and not GLOBAL_FILE & set(env):
-            return (f"this `git config --global` writes `{wrote[0]}` to the machine's global configuration, the identity every "
-                    f"checkout on this machine commits with, verity's and infra's among them: the machine's identity is already "
-                    f"configured, so leave it as it is (`git config --global {wrote[0]}` reads it). A scratch repository that "
-                    f"needs a name takes it in its own configuration, `git -C <scratch> config user.name NAME`, or on the "
-                    f"command, `git -C <scratch> -c user.name=NAME -c user.email=ADDRESS commit ...`.")
+            return (f"this `git config --global` writes `{wrote[0]}` to the machine's global configuration, which every checkout "
+                    f"on this machine takes its identity from, verity's and infra's among them: leave it as the machine was "
+                    f"given it. `git config --global user.name` and `git config --global user.email` read the identity the "
+                    f"machine has; if either prints nothing, the machine was not given it: stop and tell your coordinator "
+                    f"rather than set one. A scratch repository that needs a name takes it in its own configuration, `git -C "
+                    f"<scratch> config user.name NAME`, or on the command, `git -C <scratch> -c user.name=NAME -c "
+                    f"user.email=ADDRESS commit ...`.")
         given = [*(k for k in keys if k.lower() in IDENTITY_KEYS),
                  *(n for n in sorted(IDENTITY_VARIABLES) if env.get(n, "$") != "$"),
                  *(a.partition("=")[0] for a in rest if sub == "commit" and a.partition("=")[0] == "--author"),
