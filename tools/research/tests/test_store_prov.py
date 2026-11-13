@@ -302,9 +302,9 @@ def test_registry_loads_repo_declarations_and_file_fallback(tmp_path):
 
 
 def test_former_modules_map_a_module_back_through_each_move():
-    moves = [{"verity/protocols/flock/agreement/tool.py": "tools/lean_agreement/tool.py", "old/gkr": "attic/gkr"},
+    moves = [{"verity/protocols/flock/prover/agreement/tool.py": "tools/lean_agreement/tool.py", "old/gkr": "attic/gkr"},
              {"tools/lean_agreement/": "tools/agree/"}]
-    assert tools_registry.former_modules("tools.agree.tool", moves) == ["tools.lean_agreement.tool", "verity.protocols.flock.agreement.tool"]
+    assert tools_registry.former_modules("tools.agree.tool", moves) == ["tools.lean_agreement.tool", "verity.protocols.flock.prover.agreement.tool"]
     assert tools_registry.former_modules("attic.gkr.gpu.tool", moves) == ["old.gkr.gpu.tool"]
     assert tools_registry.former_modules("attic.gkrx.tool", moves) == []
     assert tools_registry.former_modules("tools.verity.check.tool", moves) == []
@@ -378,19 +378,19 @@ def test_a_tree_from_before_a_move_still_declares_its_tools(tmp_path, monkeypatc
     from research import merge, remote
 
     moves = tmp_path / "moves.json"
-    moves.write_text(json.dumps({"moves": [{"paths": {"verity/protocols/flock/agreement/tool.py": "tools/agree/tool.py"}}]}))
+    moves.write_text(json.dumps({"moves": [{"paths": {"verity/protocols/flock/prover/agreement/tool.py": "tools/agree/tool.py"}}]}))
     monkeypatch.setattr(tools_registry, "MOVES", moves)
     monkeypatch.setitem(tools_registry.REGISTRY, "agree", "tools.agree.tool:AGREE")
     decl = ("from research.store.tool import Tool\nAGREE = Tool(name='agree', version='1', command=['true'], "
             "preflight=['echo', '{tag}'], after_land=['echo', 'landed'])\n")
-    for tree, rel in (("old", "verity/protocols/flock/agreement/tool.py"), ("new", "tools/agree/tool.py")):
+    for tree, rel in (("old", "verity/protocols/flock/prover/agreement/tool.py"), ("new", "tools/agree/tool.py")):
         (tmp_path / tree / rel).parent.mkdir(parents=True)
         (tmp_path / tree / rel).write_text(decl.replace("{tag}", tree))
     (tmp_path / "none").mkdir()
 
     old, new, none = tmp_path / "old", tmp_path / "new", tmp_path / "none"
     assert tools_registry.locate("agree", new) == ("tools.agree.tool", "AGREE")
-    assert tools_registry.locate("agree", old) == ("verity.protocols.flock.agreement.tool", "AGREE")
+    assert tools_registry.locate("agree", old) == ("verity.protocols.flock.prover.agreement.tool", "AGREE")
     assert tools_registry.locate("agree", none) is None
     assert tools_registry.load("agree", old).name == "agree" and tools_registry.load("agree", old).spec == "tools.agree.tool:AGREE"
     assert remote.tool_preflight(["--tool", "agree"], old) == ["echo", "old"]
