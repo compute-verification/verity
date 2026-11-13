@@ -11,11 +11,11 @@ import numpy as np
 import pytest
 
 from verity.circuits.evaluation import evaluate_batch
-from verity_numerical.bench import census
-from verity_numerical.bench import generate as G
-from verity_flock import synthetic as SY
 from verity_flock import input_sets as IS
 from verity_flock import subcircuit_templates as TM
+from verity_flock import synthetic as SY
+from verity_numerical.bench import census
+from verity_numerical.bench import generate as G
 
 pytest.importorskip("verity_vllm", reason="these templates evaluate through the vLLM integration's Definitions")
 
