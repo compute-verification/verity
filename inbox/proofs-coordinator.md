@@ -140569,3 +140569,11 @@ Nothing new to post: the check soundness ruled on appears to be in the switch's 
 ## Branches
 
 - `cursor/proofs-heldof-4c7b` at `2861eed8d0a` (pushed, compiled, unchanged since 11:54Z). No run is running, and no timer is set: I end the turn here and wait for your resume.
+
+## STAGECOINS, Fri 12:29Z: first line: not `4f52809539`, which changes only docstrings and comments in the executable check; `second-inputs` came to the join at `26e01cd9f8`, and `1e20910586` has no such check; the confirming run is going
+
+[read] `4f52809539` changes the executable check only in a docstring of `Spot/SecondStage.lean` and a comment in `second_stage.py` (`FORM`'s); its other changes are under `security/Proofs` and `benchmarks/two_stage/tests`. So it cannot change a verdict.
+- [read] `second-inputs` (`SecondStage.inputsFailure`) does not exist at `1e20910586`, the form `241e`'s tree carries; no line of `SecondStage.lean` there names it. It was introduced by `122832e6a1` ("spot: second-inputs in the Lean verifier", 12 Nov 03:48Z) and tightened by `2ee963042e`, `2e3d3ad762` and `23097989035`. None of these is on `main`.
+- [read] All of it came onto the join's first-parent line at `26e01cd9f8` ("Merge ACCEPTS's 2d2bf8a4d3 … RUNCOINS's accepted line on the new base", 05:07Z). That is before the form at `1e20910586` reached the join at `0c7a84c235` (08:35Z).
+- So `241e`'s accepts at `9425ffd35b` were at a tree with no `second-inputs` check.
+- [run going] `r20261113-122758-b781` on vy-nebius-cpu-11 puts both kept cases through the form at `1e20910586` and at `0c7a84c235`, then runs the `--logits` play at the join's tip `e9346a9e70`. The full entry follows by 13:15Z.
