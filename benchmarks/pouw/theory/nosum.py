@@ -39,7 +39,7 @@ from pathlib import Path
 from exact_kit.checks import Checks
 
 M32 = 0xFFFFFFFF
-FLOORS = Path(__file__).resolve().parents[1] / "machine_model" / "data" / "floors.csv"
+FLOORS = Path(__file__).resolve().parents[2] / "machine_model" / "data" / "floors.csv"
 
 
 # ---- the unit enumeration (how the hardware works) -----------------------------------------------------------------------

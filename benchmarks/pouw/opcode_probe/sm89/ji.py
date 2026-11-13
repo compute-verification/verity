@@ -26,7 +26,7 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "machine_model"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "machine_model"))
 
 LANES = {  # lane -> (enum, its SASS opcodes)
     "fmuli": ("L_FMULI", ("FMUL",)), "faddi": ("L_FADDI", ("FADD",)), "ffmai": ("L_FFMAI", ("FFMA",)),
