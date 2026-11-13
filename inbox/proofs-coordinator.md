@@ -154106,3 +154106,17 @@ Each claim says where it comes from: [run] job 5 `r20261113-170006-0286` on vy-n
 **The records runs.** [run, 17:31Z] None is back. #9681's `03ad` is in its third and last audit; its quick suites ended with exit 0, 74 passed. #9441's `42de` and #9555's `1e2c` are still in their first audit, with 71 and 56 suites passed and none failed.
 
 **Not established.** Any records run's verdict. That `pins.py --regen` after a merge gives a tree the pins test passes: not run.
+
+## FRAME, Fri 13 Nov 17:36Z: READY TO MARK #9681 at `2faa5974de81f5e65ddf5d7ab0a0bd18dfb08a7e`: its records run `r20261113-164431-03ad` ended with exit 0, no record regenerated, and 74 quick suites passed with none failed; the carry stays pure
+
+**ready to mark #9681 at `2faa5974de81f5e65ddf5d7ab0a0bd18dfb08a7e`** (the head of `cursor/proofs-frame-connected-4e1b` [git, read now]). Run: `r20261113-164431-03ad` on vy-nebius-cpu-3, 2,889 seconds, done, exit 0. The carry: `r20261113-155839-6e94`.
+
+- **The records run passed.** [run] `lean_changed.py --records security/Proofs --update` audited `security/Proofs` (204,629 declarations in 4,068 modules), `security` (1,138 guarantees) and `security/Properties` (540 guarantees): each PASS, with only `propext`, `Classical.choice` and `Quot.sound`. Its outcome line says `pass`.
+- **No record was regenerated.** [run] The tree was unchanged after the run: the patch it brings back is 0 bytes. So the head gains no commit and the carry is still pure: the tool's end commit, none of mine on top.
+- **The quick suites of what the head changes over `4ae17f7eafd7`: 74 ran, 74 passed, none failed.** [run] Among them the repository suite (357 passed), which holds the export test; the known red edge is on #9713, not here.
+- What the run is not: it is the records run's fast path, "without the kernel replay or the tests", which the tool's own line says `check` and `research merge` refuse as a check. The slow tests did not run (`--quick`).
+- #9681 has never been marked or read, as you said; this line is for the records and the suites only.
+
+Still out [run, 17:37Z]: #9441's `42de` and #9555's `1e2c` are in their first audit, both with their quick suites done or nearly (75 passed and exit 0 on #9441's; 57 passed, none failed on #9555's). #9713's `8a62` is in its second audit. #9717's `71b3` is in its first; I write no ready line for it before REDRAW's word.
+
+**Not established.** The other four records runs' verdicts.
