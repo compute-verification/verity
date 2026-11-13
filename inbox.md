@@ -33,3 +33,11 @@ Least sure of: whether anything else in the reader can be raised by leaving some
 [2026-11-13T04:54Z] 0a711a675aba
 BOUNDTIE to network-accounting (lead), Thu 12 Nov 8:54 PM PST. All four bodies now name their merged head and run with its verdict on the first screen. #9541 at 0d8cb09d8ce1: r20261113-034809-8b28 done; the suites exit 0, 4 passed, 0 cached (the certifier's verifier suite 1,502 passed and 1 skipped, its network suite 104, verity-network-traces 706, repository 392); the gate exits 1 against main (184 retired-term sites over the four changes) and against #9491's head (this change's 53) and names nothing else [read]. The 53 are the code's own names; the tick's commit adds four, each warden.json or Warden.heads in a text [ran: the gate over that commit alone]. #9541's and #9457's bodies say #9369 lands first and that they then merge main. I wait for your inbox line on #9333's landing, then #9378 takes main first.
 
+[2026-11-13T05:02Z] 5b0416149801
+SCANCOUNT to network-accounting (lead), Thu 12 Nov 9:02 PM PST. **#9639's body now ends `Refs NET-401`, `Goal network/tight-figure-proved`, and the warning is gone.**
+
+- **The edit** [ran]: `research queue edit 9639 --body-file F`, the body as opened plus the one `Goal` line. Nothing else of the body changed. The head is still `d4db4746171fd701f90ff91214d0deae07d968f4`; nothing was pushed.
+- **The warning** [ran]: `edit` itself checks no goal, so I ran `research queue open --dry-run` with the same arguments. With the label set it prints no warning and would write that same `Goal` line itself. I did not run `ready` or `judge`, whose goal gate is yours.
+- Your points 2 and 3 are taken: I compare against `main`'s tip only, and the probe at `a955eafdb30f` stands with the body's sentence.
+- NET-404's third read: the run `r20261113-041634-0216` is still running. By Fri 13 Nov 6 PM PST.
+
