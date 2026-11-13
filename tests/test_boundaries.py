@@ -1533,16 +1533,16 @@ def test_verity_loads_no_distribution_of_its_own() -> None:
 ORDER_TREE = {
     "verity/__init__.py": "",
     "verity/circuits/__init__.py": "",
-    "verity/circuits/at_load.py": "from verity.definitions import ops\n",
-    "verity/circuits/in_function.py": "def f():\n    import verity.definitions.ops\n",
-    "verity/circuits/in_string.py": "TOOL = 'verity.definitions.ops:run'\n",
-    "verity/circuits/tests/test_a.py": "import verity.definitions.ops\n",
-    "verity/circuits/at_load.circuit-check.py": "import verity.definitions.ops\n",
+    "verity/circuits/at_load.py": "from verity.definitions import toy\n",
+    "verity/circuits/in_function.py": "def f():\n    import verity.definitions.toy\n",
+    "verity/circuits/in_string.py": "TOOL = 'verity.definitions.toy:run'\n",
+    "verity/circuits/tests/test_a.py": "import verity.definitions.toy\n",
+    "verity/circuits/at_load.circuit-check.py": "import verity.definitions.toy\n",
     "verity/commitments/__init__.py": "",
     "verity/commitments/crypto/__init__.py": "",
     "verity/commitments/crypto/lms.py": "",
     "verity/definitions/__init__.py": "",
-    "verity/definitions/ops.py": "import verity.circuits.at_load\n",
+    "verity/definitions/toy.py": "import verity.circuits.at_load\n",
     "verity/protocols/flock/__init__.py": "",
     "verity/protocols/flock/prover/stage.py": "import verity.protocols.pouw.verifier.check\n",
     "verity/protocols/flock/verifier/__init__.py": "",
@@ -1650,7 +1650,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     direct, reach, loaders = found[verifier]
     assert sorted(direct) == ["verity/circuits", "verity/commitments/crypto", prover], direct
     assert sorted(reach) == ["verity/circuits", "verity/commitments/crypto", "verity/definitions", prover], reach
-    assert reach["verity/definitions"] == [f"{verifier}/check.py", "verity/circuits/at_load.py", "verity/definitions/ops.py"]
+    assert reach["verity/definitions"] == [f"{verifier}/check.py", "verity/circuits/at_load.py", "verity/definitions/toy.py"]
     assert sorted(loaders) == ["verity/protocols/flock/prover/stage.py", f"{prover}/build.py"], loaders
     assert [sorted(x) for x in found[device]] == [[verifier], sorted([*reach, verifier]), [f"{prover}/tests/test_build.py"]], found[device]
     assert [sorted(x) for x in found["verity/protocols/flock/verifier"]] == [[], [], ["verity/configuration/package_above.py"]]
@@ -1678,7 +1678,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     pair = ("verity/circuits", "verity/definitions")
     with pytest.raises(AssertionError, match=r"no file needs any more; delete them: \['verity/commitments/windows -> tools'\]"):
         _hold_order(loads, held._replace(against=held.against | {("verity/commitments/windows", "tools"): {"verity/commitments/windows/rows.py"}}))
-    with pytest.raises(AssertionError, match="only shrinks.*\n.*in_string.py:1: python string verity.definitions.ops loads"):
+    with pytest.raises(AssertionError, match="only shrinks.*\n.*in_string.py:1: python string verity.definitions.toy loads"):
         _hold_order(loads, held._replace(against=held.against | {pair: held.against[pair] - {"verity/circuits/in_string.py"}}))
     with pytest.raises(AssertionError, match="only shrinks.*\n.*test_run.py:1: python import infra.cluster.usage loads"):
         _hold_order(loads, held._replace(against={p: files for p, files in held.against.items() if p[1] != "infra"}))
