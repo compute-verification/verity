@@ -177,7 +177,9 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   (`Claims.Sampling.Partition`, `Deploy.checked`).
 - **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `Spot/OneStageZk.lean`, the executable
   `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters, evidence, refusals
-  and check are in the module's docstring. It reads the
+  and check are in the module's docstring; the parameters, one statement's check and a member's statement and files
+  are in `Spot/OneStageZkStatement.lean`, which it imports, and the run over the members and the checks in the
+  module itself, all in the namespace `Spot.OneStageZk`. It reads the
   sample's coins as v1 does (`OneStage.coinsOf`; `oneStageZkReads` in `security/Properties/Challenger.lean`) and holds
   the session's record to the coin trees the signed release log shows the challenger sampled and opened
   (`Spot/ChallengerTrees.lean`, `challenger.sessions_tree_reason`, `order_why`).
