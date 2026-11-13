@@ -76,7 +76,9 @@ The proofs of the properties are in `security/Proofs/Properties/Pous/` (`MemoryC
 - `challenger_session.py` and `challenger_party.py`: a run of timed rounds, from the node's side and as the challenger's
   party on its own host.
 - `timed_audit.py`: the timed audit's client, its record and the two verdicts on it.
+- `wipe_challenger.py`: the streamed wipe's memory challenger as a party of the party runtime (`verity/runtime`), over
+  `verity/protocols/accounting/pous/verifier/wipe_parties.py`'s messages; the prover's party is
+  `verity/protocols/accounting/pous/prover/wipe_prover.py`.
 - `verity/protocols/accounting/pous/verifier/streamed_wipe.py`: the streamed-label wipe's device (`Challenger`) and `verdict`;
-  `wipe_party.py` beside it, the wipe as a party of its own on the challenger's host, and `wipe_parties.py`, the wipe's
-  parties on the party runtime (`verity/runtime`).
+  `wipe_party.py` beside it, the wipe as a party of its own on the challenger's host.
 - `lean/tests/`: the difftests of both verdicts and of the record formats against the Python.
