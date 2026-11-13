@@ -1675,8 +1675,8 @@ def _output_entries(rp: random.Random, i: int, ties: dict, nb: int, aimed: int, 
 
 
 def _by_template(r: random.Random, desc: dict, m: str) -> tuple[dict, list[dict]]:
-    """A tied audit's stratified law and its profile's strata, a stratum a template of its Program (`templates_of`):
-    its slot entries' and scan slots' templates drawn whole and its first other template in part (`tied-partial`), or
+    """A tied audit's stratified sampling design and its profile's strata, a stratum a template of its Program (`templates_of`):
+    its slot entries' and scan slots' templates sampled whole and its first other template in part (`tied-partial`), or
     with its slot entries' (`tied-entries-sampled`) or its scan slots' (`tied-slots-sampled`) template in part too."""
     ts = templates_of(desc)
     whole, broken = (*ENTRY_IDS, SCAN_SLOTS), {"tied-entries-sampled": ENTRY_IDS, "tied-slots-sampled": (SCAN_SLOTS,)}
@@ -1844,7 +1844,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             c["root"] = rp.choice([None, 7, False])
     # the lane whose wiring the aimed link-window's `unwire` breaks
     hit = rp.randrange(lanes) if lanes else 0
-    # the changes that draw the aimed link-window's audit stratified by its templates, its slot entries' and scan slots'
+    # the changes that sample the aimed link-window's audit stratified by its templates, its slot entries' and scan slots'
     # whole (`tied-partial`) or one of them in part
     by_template = m in ("tied-partial", "tied-entries-sampled", "tied-slots-sampled")
     if m in ("tied-sampled", "tied-oversampled", "tied-stratum-oversampled", "tied-strata-sizes") or by_template:

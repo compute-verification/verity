@@ -7,7 +7,7 @@ public import Proofs.Flock.Claims.Deploy
 # v2's verdict on its one session is the record's decision at that session
 
 One-stage v2 (`Spot.OneStageZk`) decides its one session with `verdictOf`: the session set up at its record's
-draw (`setupAt`: `sessionAt`'s `buildSessionOf` and `verifyCmd`'s checks, then the draw's law), the rep files its
+sample (`setupAt`: `sessionAt`'s `buildSessionOf` and `verifyCmd`'s checks, then the sample's law), the rep files its
 `reps` name (`filesOf`), `Zk.verify`, the scope check and the refusals after it. The record's session is flock-verify
 `--zk` in public-coin form (`FlockDeploy.V true`), which at SHA-512 accepts exactly when `Zk.verify` at its statement's
 setup accepts the last message's record and proof files and `FlockDeploy.checks` pass (`next_decide_sha512`).
@@ -19,7 +19,7 @@ setup accepts the last message's record and proof files and `FlockDeploy.checks`
   session. v2 makes every call `Ins.setup` makes and more (`checkProgram`, `checkComplete`, `checkCover`,
   `KnownRead.check`, `RecSetup.oneFull`, `checkTopRows`, `checkLink`), so this direction is the one that holds.
 * `decide_of_verdictOf`: where v2's verdict on the session is `.ok ()` and the model decides on the last message `f`,
-  the model accepts, given that `si` matches, `si`'s draw is the record's, `f`'s statement is the session's, its record
+  the model accepts, given that `si` matches, `si`'s sample is the record's, `f`'s statement is the session's, its record
   the session's record and its proof files the session's rep files (`Shows`), and the record's live session is the
   session's messages and coins (`LiveCoins`).
 -/
@@ -93,7 +93,7 @@ theorem SessionMatch.read_coins (hm : SessionMatch si I rd) : si.read.coins = Fl
   rw [hm.tags, hm.count]
 
 /-- **Both readings set the session up on one call**: the model's `Read.setup` is v2's `Stmt.setupTables` at `I`'s
-`--zk` tags and coins and the model's draw. -/
+`--zk` tags and coins and the model's sample. -/
 theorem SessionMatch.read_setup (hm : SessionMatch si I rd) {draw : Option Json} (hdraw : si.read.draw = draw) :
     si.read.setup = Flock.Stmt.setupTables (Flock.Witness.zkTags I) I.circuitFile I.publicFile
       (Flock.Witness.zkCoins I) I.count I.tables draw I.partition I.program := by
@@ -122,7 +122,7 @@ def scopeOf (I : Flock.Witness.Inputs) (rd : Spot.OneStageZk.Reads) : V Unit := 
 
 /-- **`buildSessionOf`, unfolded**: an hm96-sha512 row statement, `Stmt.setupTables` (under hidden outputs, on
 `ProvedScope.circuitOf`'s parse, which is it: `Stmt.setupTables_eq`), each table's registered reads and the identifier's
-absence (`noIdentifier`), and `Registered.checkFull` at the draw. -/
+absence (`noIdentifier`), and `Registered.checkFull` at the sample. -/
 theorem setupTables_of_build {tags : Flock.Tags} {cB pB : ByteArray} {coins : Flock.Coins}
     {tables : List (String × ByteArray)} {count : ℕ} {draw partition : Option Json} {program : Option ByteArray}
     {registered : Option (Array Flock.Registered.Port)} {spec : SessionSpec} {sts : Array Stmt}
@@ -188,7 +188,7 @@ theorem sessionAt_ok {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {dr
   exact ⟨hprog, hinner, hb, hsc, hsh, hrc⟩
 
 /-- **`setupAt`, unfolded**: `sessionAt`'s session `(spec, sts)`, whose tables' verifier-side setups are the model's
-(`FlockDeploy.tabsOf`), and the draw's law where there is a draw. -/
+(`FlockDeploy.tabsOf`), and the sample's law where there is a sample. -/
 theorem setupAt_ok {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {draw : Option Json}
     {spec : SessionSpec} {tabs : Array Setup} {p o : Json}
     (h : Spot.OneStageZk.setupAt I rd draw = .ok (spec, tabs, p, o)) :
@@ -224,10 +224,10 @@ theorem setupChecks_checks {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Read
 
 /-! ## The model's setup -/
 
-/-- **The model's setup passes where v2's does**, with the same session: where `si` matches v2's inputs and its draw is
+/-- **The model's setup passes where v2's does**, with the same session: where `si` matches v2's inputs and its sample is
 the one v2 set up at, v2's `setupAt` being `.ok` gives each call `FlockDeploy.Ins.setup` makes (the hm96-sha512 rows
 check, the inner checks, `Read.setup`, each table's registered reads and identifier, the full registration,
-`RecSetup.checks`, `Zk.shapeOk`, check 5, the public rows and the draw's law). -/
+`RecSetup.checks`, `Zk.shapeOk`, check 5, the public rows and the sample's law). -/
 theorem setup_of_setupAt {si : Ins} {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads}
     {draw : Option Json} {spec : SessionSpec} {tabs : Array Setup} {p o : Json} (hm : SessionMatch si I rd)
     (hdraw : si.read.draw = draw) (h : Spot.OneStageZk.setupAt I rd draw = .ok (spec, tabs, p, o)) :
@@ -255,10 +255,10 @@ theorem setup_of_setupAt {si : Ins} {I : Flock.Witness.Inputs} {rd : Spot.OneSta
 /-! ## The decision -/
 
 /-- **v2's verdict on its one session is the record's decision there.** Where v2's `verdictOf` on the session is
-`.ok ()` (its record `record`, set up at the record's draw, its rep files `q`'s on the blobs `bs`) and the model decides
+`.ok ()` (its record `record`, set up at the record's sample, its rep files `q`'s on the blobs `bs`) and the model decides
 on the last message `f` with its reading `si` of the statement `x` and session `(spec, sts)`, flock-verify `--zk` in
 public-coin form accepts at SHA-512, given:
-* the inputs: `si` holds v2's inputs and registered reads (`SessionMatch`), and its draw is the record's (`hdraw`);
+* the inputs: `si` holds v2's inputs and registered reads (`SessionMatch`), and its sample is the record's (`hdraw`);
 * `Shows`: `f`'s statement is `x` (`hstmt`), its record the session's record (`hrec`) and its proof files the session's
   rep files (`hfiles`);
 * `LiveCoins`: the record's live session is the session's messages and coins (`hlive`). -/
