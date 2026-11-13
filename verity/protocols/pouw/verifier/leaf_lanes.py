@@ -399,6 +399,7 @@ __all__ = [
     "LANE",
     "LANE_COLS",
     "LANE_ROWS",
+    "LEAST_K",
     "OK",
     "OKS",
     "OK_ROW",
