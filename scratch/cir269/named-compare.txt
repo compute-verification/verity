@@ -1,0 +1,152 @@
+1 LogSoftmaxNllBackwardRow_v1{V=12288}
+  keys compared 13; differences 0; failures [('block', 'past-range', 'block/past-range LogSoftmaxNllBackwardRow_v1{V=12288} the unit needs a block of 2^29 bits (304,349,184): its slot of 2^28 (215,744,513 cells for 215,044,464 AND')]
+  vectors 4 edge 2 via ['c-flock:ir_lower']; q_call {'X': 32, 'checked': False}; unchecked [('vectors', 'none')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
+2 AllReduceMnnvl_v1{WORLD=8,N=258048,SHOT=2}
+  keys compared 14; differences 0; failures [('block', 'past-range', 'block/past-range AllReduceMnnvl_v1{WORLD=8,N=258048,SHOT=2} the unit needs a block of 2^33 bits (7,466,647,552): its slot of 2^32 (2,311,061,505 cells for 2,270')]
+  vectors 2 edge 2 via ['c-flock:ir_lower']; q_call {'X': 32, 'checked': False}; unchecked [('vectors', 'none')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families']}
+3 AllReduceMnnvl_v1{WORLD=8,N=196608,SHOT=2}
+  keys compared 14; differences 0; failures [('block', 'past-range', 'block/past-range AllReduceMnnvl_v1{WORLD=8,N=196608,SHOT=2} the unit needs a block of 2^33 bits (4,564,189,184): its slot of 2^31 (1,769,996,289 cells for 1,729')]
+  vectors 2 edge 2 via ['c-flock:ir_lower']; q_call {'X': 32, 'checked': False}; unchecked [('vectors', 'none')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families']}
+4 AllReduceMnnvl_v1{WORLD=8,N=135168,SHOT=2}
+  keys compared 14; differences 0; failures [('block', 'past-range', 'block/past-range AllReduceMnnvl_v1{WORLD=8,N=135168,SHOT=2} the unit needs a block of 2^32 bits (3,809,214,464): its slot of 2^31 (1,228,931,073 cells for 1,189')]
+  vectors 3 edge 3 via ['c-flock:ir_lower']; q_call {'X': 32, 'checked': True, 'units': 135168, 'committed': 135168, 'committed_bits': 2162688, 'recomputed_across': 0, 'redundant_gates': 0, 'codes': []}; unchecked [('vectors', 'none')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families']}
+5 AllReduceMnnvl_v1{WORLD=8,N=122880,SHOT=2}
+  keys compared 14; differences 0; failures [('block', 'past-range', 'block/past-range AllReduceMnnvl_v1{WORLD=8,N=122880,SHOT=2} the unit needs a block of 2^32 bits (3,658,219,520): its slot of 2^31 (1,101,004,801 cells for 1,081')]
+  vectors 4 edge 4 via ['c-flock:ir_lower']; q_call {'X': 32, 'checked': True, 'units': 122880, 'committed': 122880, 'committed_bits': 1966080, 'recomputed_across': 0, 'redundant_gates': 0, 'codes': []}; unchecked [('vectors', 'none')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families']}
+6 AllReduceMnnvl_v1{WORLD=8,N=61440,SHOT=1}
+  keys compared 14; differences 0; failures [('block', 'past-range', 'block/past-range AllReduceMnnvl_v1{WORLD=8,N=61440,SHOT=1} the unit needs a block of 2^31 bits (1,292,632,064): its slot of 2^29 (494,927,873 cells for 484,454,')]
+  vectors 4 edge 4 via ['c-flock:ir_lower']; q_call {'X': 32, 'checked': True, 'units': 61440, 'committed': 61440, 'committed_bits': 983040, 'recomputed_across': 0, 'redundant_gates': 0, 'codes': []}; unchecked [('vectors', 'none')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families']}
+7 MoeExpertFp8Gemm_v1{E=256,K=6144,N=512,G=128,KB=128,SWAP=False,DOT=HopperE4m3QgmmaDot32_v1}
+  keys compared 14; differences 0; failures [('block', 'past-range', 'block/past-range MoeExpertFp8Gemm_v1{E=256,K=6144,N=512,G=128,KB=128,SWAP=False,DOT=HopperE4m3QgmmaDot32_v1} the unit needs a block of 2^40 bits (567,077,240,83')]
+  vectors 4 edge 1 via ['kernel:rows', 'c-flock:ir_lower']; q_call None; unchecked [('vectors', 'none')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families']}
+8 MoeExpertFp8Gemm_v1{E=256,K=6144,N=512,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}
+  keys compared 14; differences 0; failures [('block', 'past-range', 'block/past-range MoeExpertFp8Gemm_v1{E=256,K=6144,N=512,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1} the unit needs a block of 2^40 bits (567,077,240,832')]
+  vectors 4 edge 1 via ['kernel:rows', 'c-flock:ir_lower']; q_call None; unchecked [('vectors', 'none')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families']}
+9 AllReduceMnnvl_v1{WORLD=8,N=55296,SHOT=2}
+  keys compared 14; differences 0; failures [('block', 'past-range', 'block/past-range AllReduceMnnvl_v1{WORLD=8,N=55296,SHOT=2} the unit needs a block of 2^31 bits (1,217,134,592): its slot of 2^29 (495,976,449 cells for 486,494,')]
+  vectors 4 edge 4 via ['c-flock:ir_lower']; q_call {'X': 32, 'checked': True, 'units': 55296, 'committed': 55296, 'committed_bits': 884736, 'recomputed_across': 0, 'redundant_gates': 0, 'codes': []}; unchecked [('vectors', 'none')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families']}
+10 AllReduceMnnvl_v1{WORLD=8,N=55296,SHOT=1}
+  keys compared 14; differences 0; failures [('block', 'past-range', 'block/past-range AllReduceMnnvl_v1{WORLD=8,N=55296,SHOT=1} the unit needs a block of 2^31 bits (1,217,134,592): its slot of 2^29 (445,644,801 cells for 436,008,')]
+  vectors 4 edge 4 via ['c-flock:ir_lower']; q_call {'X': 32, 'checked': True, 'units': 55296, 'committed': 55296, 'committed_bits': 884736, 'recomputed_across': 0, 'redundant_gates': 0, 'codes': []}; unchecked [('vectors', 'none')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families']}
+11 MoeExpertFp8GemmW_v1{E=256,K=256,N=6144,G=128,KB=128,SWAP=True,DOT=HopperE4m3MmaV2Dot32_v1}
+  keys compared 14; differences 0; failures [('block', 'past-range', 'block/past-range MoeExpertFp8GemmW_v1{E=256,K=256,N=6144,G=128,KB=128,SWAP=True,DOT=HopperE4m3MmaV2Dot32_v1} the unit needs a block of 2^39 bits (283,545,960,44')]
+  vectors 5 edge 4 via ['kernel:rows', 'c-flock:ir_lower']; q_call None; unchecked [('vectors', 'none')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families']}
+12 AllReduceMnnvl_v1{WORLD=8,N=30720,SHOT=2}
+  keys compared 14; differences 0; failures [('block', 'past-range', 'block/past-range AllReduceMnnvl_v1{WORLD=8,N=30720,SHOT=2} the unit needs a block of 2^30 bits (915,144,704): its slot of 2^29 (275,251,201 cells for 270,274,56')]
+  vectors 4 edge 4 via ['c-flock:ir_lower']; q_call {'X': 32, 'checked': True, 'units': 30720, 'committed': 30720, 'committed_bits': 491520, 'recomputed_across': 0, 'redundant_gates': 0, 'codes': []}; unchecked [('vectors', 'none')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families']}
+13 SparseMlaHeadValues_v2{NVIS=64,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,G=64}
+  keys compared 14; differences 0; failures []
+  vectors 4 edge 2 via ['c-flock:ir_lower', 'word:SparseMlaHeadValues_v1{NVIS=64,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v1,G=64}']; q_call {'X': 32, 'checked': False}; unchecked []
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
+14 Fp8GroupQuant_v2{K=64,G=32}
+  keys compared 13; differences 0; failures []
+  vectors 4 edge 2 via ['c-flock:ir_lower', 'word:Fp8GroupQuant_v1{K=64,G=32}']; q_call {'X': 32, 'checked': True, 'units': 258, 'committed': 6720, 'committed_bits': 6720, 'recomputed_across': 65609, 'redundant_gates': 22731, 'codes': []}; unchecked [('redundant-gates', 'ir')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families'], 'boolean_version': ['certified_boolean_calls'], 'kernels': ['_kernel_roots']}
+15 Lifted[Gemm_v1]_v2{K=16,N=4,ORD=0}
+  keys compared 13; differences 0; failures []
+  vectors 64 edge 6 via ['c-flock:ir_lower']; q_call {'X': 32, 'checked': True, 'inapplicable': {'definition': 'Lifted[Gemm_v1]_v2{K=16,N=4,ORD=0}', 'gate': 0, 'primitive': 'Lifted[Const32[0x00000000]_v1]_v2', 'width': 33, 'X': 32, 'why': 'gate-too-wide'}}; unchecked [('redundant-gates', 'ir'), ('vectors', 'none')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'lift_composite': ['composite_lift'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
+16 Lifted[SiluMul_v1]_v2{I=16,ORD=0}
+  keys compared 13; differences 0; failures []
+  vectors 64 edge 6 via ['c-flock:ir_lower']; q_call {'X': 32, 'checked': True, 'units': 16, 'committed': 16, 'committed_bits': 272, 'recomputed_across': 0, 'redundant_gates': 0, 'codes': []}; unchecked [('vectors', 'none')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'lift_composite': ['composite_lift'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
+17 Lifted[BiasAdd_v1]_v2{N=64,ORD=2}
+  keys compared 13; differences 0; failures []
+  vectors 64 edge 26 via ['c-flock:ir_lower']; q_call {'X': 32, 'checked': True, 'units': 64, 'committed': 64, 'committed_bits': 1088, 'recomputed_across': 0, 'redundant_gates': 0, 'codes': []}; unchecked [('vectors', 'none')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'lift_composite': ['composite_lift'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
+18 Lifted[AmpereBF16TcDot16_v2]_v2
+  keys compared 13; differences 0; failures []
+  vectors 64 edge 6 via ['c-flock:ir_lower']; q_call {'X': 32, 'checked': True, 'inapplicable': {'definition': 'Lifted[AmpereBF16TcDot16_v2]_v2', 'gate': 0, 'primitive': 'Lifted[AmpereBF16TcDot16_v2]_v2', 'width': 33, 'X': 32, 'why': 'gate-too-wide'}}; unchecked [('partition', 'q-call-inapplicable'), ('vectors', 'none')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
+19 TableRead27x2_v1
+  keys compared 13; differences 0; failures [('block', 'past-range', 'block/past-range TableRead27x2_v1 the unit needs a block of 2^39 bits (383,685,230,592): its slot of 2^34 (8,589,934,721 cells for 0 ANDs and its ports, read of')]
+  vectors 76 edge 17 via ['c-flock:ir_lower']; q_call None; unchecked [('partition', 'unchecked'), ('vectors', 'none')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families'], 'tanh_rn': ['_tanh_rn_probe']}
+20 TanhF32Rn_v2
+  keys compared 13; differences 0; failures [('block', 'past-range', 'block/past-range TanhF32Rn_v2 the unit needs a block of 2^39 bits (383,685,230,592): its slot of 2^34 (8,589,935,105 cells for 288 ANDs and its ports, read off ')]
+  vectors 76 edge 17 via ['c-flock:ir_lower']; q_call None; unchecked [('partition', 'unchecked'), ('vectors', 'none')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families'], 'tanh_rn': ['_tanh_rn_probe', '_tanh_rn_word']}
+21 TanhF32Rn_v3
+  keys compared 13; differences 0; failures []
+  vectors 6 edge 2 via ['c-flock:ir_lower', 'word:TanhF32Rn_v1']; q_call {'X': 32, 'checked': True, 'units': 1, 'committed': 32, 'committed_bits': 32, 'recomputed_across': 0, 'redundant_gates': 0, 'codes': []}; unchecked []
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
+22 Const16[0x0100]_v1
+  keys compared 13; differences 0; failures []
+  vectors 64 edge 0 via ['c-flock:ir_lower']; q_call {'X': 32, 'checked': True, 'units': 0, 'committed': 0, 'committed_bits': 0, 'recomputed_across': 0, 'redundant_gates': 0, 'codes': []}; unchecked []
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
+23 Const16[0x0101]_v1
+  keys compared 13; differences 0; failures []
+  vectors 64 edge 0 via ['c-flock:ir_lower']; q_call {'X': 32, 'checked': True, 'units': 0, 'committed': 0, 'committed_bits': 0, 'recomputed_across': 0, 'redundant_gates': 0, 'codes': []}; unchecked []
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
+24 GatherF32x2_v1
+  keys compared 13; differences 0; failures []
+  vectors 64 edge 17 via ['c-flock:ir_lower']; q_call {'X': 32, 'checked': True, 'units': 1, 'committed': 1, 'committed_bits': 32, 'recomputed_across': 0, 'redundant_gates': 0, 'codes': []}; unchecked [('lowering', 'unpinned')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
+25 GatherI32x2_v1
+  keys compared 13; differences 0; failures []
+  vectors 64 edge 17 via ['c-flock:ir_lower']; q_call {'X': 32, 'checked': True, 'units': 1, 'committed': 1, 'committed_bits': 32, 'recomputed_across': 0, 'redundant_gates': 0, 'codes': []}; unchecked [('vectors', 'none')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
+26 RMSNormTriton_v1{N=64,EPS=1e-05}
+  keys compared 13; differences 0; failures []
+  vectors 64 edge 26 via ['kernel:rows', 'kernel:twin', 'c-flock:ir_lower']; q_call {'X': 32, 'checked': True, 'units': 1034, 'committed': 910, 'committed_bits': 28096, 'recomputed_across': 491, 'redundant_gates': 0, 'codes': []}; unchecked [('dead-gates', 'ir')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families']}
+27 Fa2TrainFirst_v2{D=16,BN=16,NVIS=5}
+  keys compared 13; differences 0; failures []
+  vectors 4 edge 2 via ['c-flock:ir_lower', 'word:Fa2TrainFirst_v1{D=16,BN=16,NVIS=5}']; q_call {'X': 32, 'checked': True, 'units': 55, 'committed': 1525, 'committed_bits': 1525, 'recomputed_across': 41762, 'redundant_gates': 26173, 'codes': []}; unchecked [('redundant-gates', 'ir')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
+28 Fp8GroupScale_v2{G=32}
+  keys compared 13; differences 0; failures []
+  vectors 9 edge 2 via ['c-flock:ir_lower', 'word:Fp8GroupScale_v1{G=32}']; q_call {'X': 32, 'checked': True, 'units': 1, 'committed': 32, 'committed_bits': 32, 'recomputed_across': 0, 'redundant_gates': 9722, 'codes': []}; unchecked [('redundant-gates', 'ir')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
+29 Fp8RowAbsMax_v2{K=256}
+  keys compared 13; differences 0; failures []
+  vectors 4 edge 2 via ['c-flock:ir_lower', 'word:Fp8RowAbsMax_v1{K=256}']; q_call {'X': 32, 'checked': True, 'units': 1, 'committed': 32, 'committed_bits': 32, 'recomputed_across': 0, 'redundant_gates': 314988, 'codes': []}; unchecked [('redundant-gates', 'ir')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
+30 Fp8ActQuant_v2{K=256}
+  keys compared 13; differences 0; failures []
+  vectors 4 edge 2 via ['c-flock:ir_lower', 'word:Fp8ActQuant_v1{K=256}']; q_call {'X': 32, 'checked': True, 'units': 1026, 'committed': 26688, 'committed_bits': 26688, 'recomputed_across': 255318, 'redundant_gates': 337960, 'codes': []}; unchecked [('redundant-gates', 'ir')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
+31 F32ToE4m3Sat_v2
+  keys compared 13; differences 0; failures []
+  vectors 64 edge 2 via ['c-flock:ir_lower', 'word:F32ToE4m3Sat_v1']; q_call {'X': 32, 'checked': True, 'units': 1, 'committed': 8, 'committed_bits': 8, 'recomputed_across': 0, 'redundant_gates': 0, 'codes': []}; unchecked []
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
+32 Fp8RowScale_v2
+  keys compared 13; differences 0; failures []
+  vectors 42 edge 2 via ['c-flock:ir_lower', 'word:Fp8RowScale_v1']; q_call {'X': 32, 'checked': True, 'units': 1, 'committed': 32, 'committed_bits': 32, 'recomputed_across': 0, 'redundant_gates': 342, 'codes': []}; unchecked []
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
+33 F32LtFtz_v2
+  keys compared 13; differences 0; failures []
+  vectors 64 edge 2 via ['c-flock:ir_lower', 'word:F32LtFtz_v1']; q_call {'X': 32, 'checked': True, 'units': 1, 'committed': 1, 'committed_bits': 1, 'recomputed_across': 0, 'redundant_gates': 0, 'codes': []}; unchecked []
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
+34 Fp8GroupQuantUe8m0_v2{K=64,G=32}
+  keys compared 13; differences 0; failures []
+  vectors 4 edge 2 via ['c-flock:ir_lower', 'word:Fp8GroupQuantUe8m0_v1{K=64,G=32}']; q_call {'X': 32, 'checked': True, 'units': 126, 'committed': 2152, 'committed_bits': 2152, 'recomputed_across': 0, 'redundant_gates': 0, 'codes': []}; unchecked []
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families'], 'boolean_version': ['certified_boolean_calls'], 'kernels': ['_kernel_roots']}
+35 DeepGemmFp8Linear_v2{K=128,N=2}
+  keys compared 13; differences 0; failures []
+  vectors 4 edge 2 via ['c-flock:ir_lower', 'word:DeepGemmFp8Linear_v1{K=128,N=2}']; q_call {'X': 32, 'checked': True, 'units': 256, 'committed': 4372, 'committed_bits': 4372, 'recomputed_across': 26, 'redundant_gates': 8547, 'codes': []}; unchecked [('redundant-gates', 'ir')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families'], 'boolean_version': ['certified_boolean_calls'], 'kernels': ['_kernel_roots']}
+36 FlashInferFp8Linear_v2{K=128,N=2}
+  keys compared 13; differences 0; failures []
+  vectors 4 edge 2 via ['c-flock:ir_lower', 'word:FlashInferFp8Linear_v1{K=128,N=2}']; q_call {'X': 32, 'checked': True, 'units': 1, 'committed': 32, 'committed_bits': 32, 'recomputed_across': 0, 'redundant_gates': 6730, 'codes': []}; unchecked [('redundant-gates', 'ir')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families'], 'boolean_version': ['certified_boolean_calls'], 'kernels': ['_kernel_roots']}
+37 FlashInferFp8Quant1x128GroupCore_v2
+  keys compared 13; differences 0; failures []
+  vectors 7 edge 2 via ['c-flock:ir_lower']; q_call {'X': 32, 'checked': True, 'units': 41748, 'committed': 52914, 'committed_bits': 52914, 'recomputed_across': 0, 'redundant_gates': 0, 'codes': []}; unchecked [('lowering', 'unpinned')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
+38 FlashInferFp8Quant1x128GroupIn_v2{V=0}
+  keys compared 13; differences 0; failures []
+  vectors 64 edge 2 via ['c-flock:ir_lower']; q_call {'X': 32, 'checked': True, 'units': 1, 'committed': 22, 'committed_bits': 22, 'recomputed_across': 0, 'redundant_gates': 0, 'codes': []}; unchecked [('lowering', 'unpinned')]
+  hooks {'enumerators': ['load_registries'], 'load_catalog': ['load_registries'], 'row_families': ['word_call_families'], 'boolean_table': ['boolean_call_candidates'], 'made_on_demand': ['on_demand_boolean_families']}
