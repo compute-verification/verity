@@ -194,6 +194,59 @@ def test_a_copy_that_a_file_in_the_jobs_dir_names_stays(tmp_path, vault_store):
     assert named.exists() and by_path(plan)[RUN]["reason"].startswith("in use: cannot read the job scripts") and plan["stored"] == stored()
 
 
+def test_a_copy_named_or_written_while_the_remote_is_asked_stays(tmp_path, vault_store):
+    """Asking the remote about a copy's blobs takes a while, and the answer is about what the copy held and who named it before.
+    A copy the service names meanwhile, and one a fetch writes into meanwhile, stay though the remote said yes; the pass after
+    takes the one nobody names once its 48 hours have run again."""
+    root, names = tmp_path / "launcher", tmp_path / "named-runs"
+    named, grown = copy(root, ran(tmp_path)[0]), copy(root, ran(tmp_path, RUN2)[0])
+    names.mkdir()
+    (names / "runs").write_text("")
+    ask = R.launcher_check(clock)
+
+    def meanwhile(p: Path) -> R.Stored:
+        found = ask(p)
+        if p == named:
+            (names / "runs").write_text(f"{RUN}\n")
+        else:
+            (p / "out" / "late.json").write_text("{}")
+            written(p, NOW - timedelta(minutes=1))
+        return found
+
+    plan = collect(root, in_use=R.JobScripts([names], root), copy_check=meanwhile)
+    acts = by_path(plan)
+    assert named.exists() and grown.exists() and plan["stored"] == stored(verified=2), "the remote said yes to both"
+    assert acts[RUN]["action"] == "skip" and acts[RUN]["reason"] == f"in use: {names / 'runs'} names it"
+    assert acts[RUN2]["action"] == "skip" and acts[RUN2]["reason"] == "it was written while the remote was asked about it: run gc again"
+    (names / "runs").write_text("")
+    assert by_path(collect(root, in_use=R.JobScripts([names], root)))[RUN]["action"] == "delete" and not named.exists() and grown.exists()
+
+
+def test_a_deletion_cut_short_leaves_a_copy_the_next_pass_still_takes(tmp_path, vault_store, monkeypatch):
+    """A copy has its record by its remote.json alone. A deletion that stops partway (the pass killed at its time limit, a
+    reboot) and had taken that file first would leave a directory with no record, which no pass ever deletes. It goes last:
+    what is left is still a copy, and it goes once its 48 hours have run again."""
+    root = tmp_path / "launcher"
+    d = copy(root, ran(tmp_path)[0])
+    rmtree = shutil.rmtree
+
+    def cut_short(path, *a, **kw):
+        if Path(path) == d / "out":
+            rmtree(d / "out" / "work")
+            raise OSError("the pass was stopped here")
+        return rmtree(path, *a, **kw)
+
+    monkeypatch.setattr(R.shutil, "rmtree", cut_short)
+    a = by_path(collect(root))[RUN]
+    assert a["action"] == "delete" and a["error"] == "OSError: the pass was stopped here"
+    left = sorted(p.name for p in d.iterdir())
+    assert left == ["out", CU.LAUNCHER_RECORD, "status.json", "stdout.log"], "what sorts before `out` went, and remote.json is still there"
+    monkeypatch.setattr(R.shutil, "rmtree", rmtree)
+    assert R.record_at(d, RUN, launcher=True).source == R.LAUNCHER
+    written(d, OLD)
+    assert by_path(collect(root))[RUN]["action"] == "delete" and not d.exists()
+
+
 def test_a_copy_holding_a_file_the_run_record_lacks_stays(tmp_path, vault_store):
     """The copy may hold the only bytes of a file: one something wrote into it under `out/`, one whose size is not the record's,
     and one custody trimmed, which the record only lists. A log at the copy's top that the machine went on writing is the

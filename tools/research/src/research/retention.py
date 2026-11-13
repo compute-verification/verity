@@ -63,6 +63,8 @@ in the pass's lines: no attempt, a run not over or an attempt without a run reco
 the pass). What a person loses is the tree on the launcher: after the 48 hours a failed run's files are read from the store
 (`research data fetch`), for as long as the store keeps a run record's blobs (`store.gc.TTL_DAYS`). `research keep COPY ...` keeps
 one longer, and so does a file in a --jobs-dir that names its run id, which is how a service says which runs it still needs.
+Asking takes a while, so the copy's record and the job scripts are read once more after the answer: a copy written or named
+meanwhile stays. Its `remote.json` is deleted last (`_delete`), so a deletion cut short leaves a copy the next pass still takes.
 
 Policy `default` (POLICY) acts when the root's filesystem is over high-pct (or with --force) and deletes, lowest priority first and
 then the oldest expiry, until it is under low-pct. A filesystem's use is the larger of its blocks' and its inodes' (`inode_usage`):
@@ -1100,10 +1102,12 @@ def lean_in_use(path: Path, root: Path) -> str | None:
         return f"can't read all of it ({e}), so whether a Lean build works in it is unknown"
 
 
-def _delete(root: Path, path: Path) -> str | None:
+def _delete(root: Path, path: Path, last: str | None = None) -> str | None:
     """Remove a recorded path with its sidecar; the error, or None. A tree holding a directory this process can't write into is
     left whole, since rmtree would stop partway; a sealed run dir (store.sealed) is deleted whole by vy-seal-runs, as root. The
-    locks of the Lean records trees it is, lies in or holds are held throughout (`_lean_locks`), and one a run holds refuses it."""
+    locks of the Lean records trees it is, lies in or holds are held throughout (`_lean_locks`), and one a run holds refuses it.
+    `last` is the file at the path's top that gives it its record (a launcher's copy's remote.json): it goes after everything
+    else, so a deletion cut short leaves a path that still has its record, which a later pass takes."""
     try:
         if root not in Path(os.path.abspath(path)).parents:
             return f"{path} is not under {root}"
@@ -1120,6 +1124,9 @@ def _delete(root: Path, path: Path) -> str | None:
             elif os.path.isdir(path) and not os.path.islink(path):
                 if ro := _read_only_dir(path):
                     return f"{ro} is read-only: its owner makes it writable, or keeps it"
+                for e in sorted(os.scandir(path), key=lambda e: e.name) if last else ():
+                    if e.name != last:
+                        shutil.rmtree(e.path) if e.is_dir(follow_symlinks=False) else os.unlink(e.path)
                 shutil.rmtree(path)
             else:
                 os.unlink(path)
@@ -1221,6 +1228,10 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
             plan["stored"][found.state] += 1
             if found.state not in COLLECTED:
                 why = f"the remote doesn't say that its run is over and stored: {found.why}"
+            elif (again := record_at(p, row.path, launcher)) is None or again.record != row.record:
+                why = "it was written while the remote was asked about it: run gc again"
+            elif u := in_use(p):
+                why = f"in use: {u}"
         if why:
             acts.append(Action(row, "skip", why, stored=found and found.state))
             continue
@@ -1232,7 +1243,7 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
             acts.append(Action(row, "delete", "would delete: " + _why_deletable(row, None), round(pct, 2)))
             plan["freed_bytes"] += row.bytes
             continue
-        err = _delete(root, p)
+        err = _delete(root, p, CU.LAUNCHER_RECORD if row.source == LAUNCHER else None)
         total, used, _ = usage(root)
         itotal, iused = inodes(root) if inodes else (0, 0)
         pct = fullness()
