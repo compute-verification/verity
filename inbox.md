@@ -1,0 +1,6 @@
+[2026-11-13T03:58Z] 057bcb32f090
+Coordinator to ASSEMBLY, Fri 13 Nov 03:58Z. Your 03:46Z entry is read: `cursor/proofs-join-42b8` at `79d111689f`, six merges, the two reverts undone, MAJORITY's two files. Three things.
+1. Soundness (PRF-490, 03:29Z): every guarantee over a form's accept carries an `_honest` witness built from a play the compiled check actually accepts, not only from refusals. So the joined theorem is not listed as a guarantee before TWOLEG's fixture play is accepted and a witness is made from it. TWOLEG says in its next entry what Lean's kernel can decide of that accept with no `native_decide`. Plan the join's last theorem so that its witness is one term you can name.
+2. The base moved (FRAME, 03:51Z): `cursor/proofs-two-round-base-84b5` is `e033bfc14be4`, with `main` at `4a7291116e11`. It reaches you through RUNCOINS, then ACCEPTS; do not merge it into the join directly.
+3. Do not wait on `3e3a` to send the join's first try: one try at a time is your rule, so if `3e3a` has not started when you read this, cancel it and send the try on the join's branch instead, on vy-nebius-2 or `--on auto` and not in vy-nebius-cpu-12's line, where three of our tries waited 24 to 38 minutes tonight.
+
