@@ -8,9 +8,9 @@ public import Proofs.Properties.Verity.SampledTwo.CouplingOf
 # The two-stage leg's coupling at the form's accept, from the coin map's law
 
 `coupling_at` (`CouplingOf.lean`) gives `CouplingTargetTwo`'s body (`CouplingTwoAt`) from a projection's bound and a
-majority's at one commitment and strategy. Here the projection's is the join's (`joinedOfLaw`, at the join's frame `joinFrame`), and the
-majority's is MAJORITY's at that frame (`majorityBound_opens`), with the two bounds' sum as the coupling's terms
-(`joinCRBound`: `joinBound` with the blob finder's term under `ecr/sha-512`, `blobCR`; `bindBound`).
+majority's at one commitment and strategy. Here the projection's is the join's (`joinedOfLaw`, at the join's frame
+`joinFrame`), and the majority's is MAJORITY's at that frame (`majorityBound_opens`), with the two bounds' sum as the
+coupling's terms (`joinCRBound`: `joinBound` with the blob finder's term under `ecr/sha-512`, `blobCR`; `bindBound`).
 
 **One premise a commitment and strategy.** `joinedCouplingOfLaw` takes the coin map's law (`CoinMap.CoinMapHolds`) and,
 at each commitment `c` and strategy `σ`, one structure, `CouplesAt`: the join's premise (`JoinsAt`), what the majority's
@@ -26,9 +26,10 @@ computes. So the instance's `openOf` reads each witness's openings, `dColl` coun
 and `hashedAll`, and `exists_opensBy` discharges no `opens` field.
 
 **Not established**: every field of `CouplesAt` is a premise. Those of `JoinsAt` are as `JoinsAt.lean` lists them; the
-majority's (`extract`, `parse`, `partition`, `two`, `units`, `caps`, `opens`, `collisionResistant`) are MAJORITY's and the
-instance's; `blobCR` is `ecr/sha-512` at the blob finder; `scope` and `delta` are the coupling's at the deployment. Every one is over the form's accept or the
-period's game at the deployment, so the theorem says nothing about a run of record until the form accepts a play.
+majority's (`extract`, `parse`, `partition`, `two`, `units`, `caps`, `opens`, `collisionResistant`) are MAJORITY's and
+the instance's; `blobCR` is `ecr/sha-512` at the blob finder; `scope` and `delta` are the coupling's at the deployment.
+Every one is over the form's accept or the period's game at the deployment, so the theorem says nothing about a run of
+record until the form accepts a play.
 -/
 
 @[expose] public section
@@ -116,8 +117,8 @@ structure CouplesAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
       V.delta θ .sampled (V.cost θ F c σ)
 
 /-- **The two-stage leg's coupling at one commitment and strategy, from the coin map's law**: `coupling_at` at the
-join's frame, with the join's projection bound (`joinedOfLaw`, its blob term under `blobCR`) and MAJORITY's majority bound there
-(`majorityBound_opens`), from the coin map's law and `CouplesAt` there. -/
+join's frame, with the join's projection bound (`joinedOfLaw`, its blob term under `blobCR`) and MAJORITY's majority
+bound there (`majorityBound_opens`), from the coin map's law and `CouplesAt` there. -/
 theorem joinedCouplingAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
     (F : Array ByteArray) {c : ByteArray} {σ : Verity.Game.Strategy (V.game θ F c)} (x : Msg) (C : CaseOf)
     (Ms : SessionReading) (tab : ℕ → String) (ℓ₁ ℓ₂ : String) (Dg : Verity.Exchange → ℕ → Option Msg) (q : ℕ)
@@ -139,8 +140,12 @@ theorem joinedCouplingAt (V : Vocab d α) (k : Verity.Registration.Composite) (A
     (bindBound V A x θ F c σ
       (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg) openOf dColl)
     h.scope (by
-      have hP := joinedOfLaw V k A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' hHolds h.joins
-      unfold ProjectionBound at hP ⊢
+      have hP : ProjectionBound V k A x θ F c σ
+          (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
+          (joinBound V A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut) :=
+        joinedOfLaw V k A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' hHolds h.joins
+      unfold ProjectionBound joinBound at hP
+      unfold ProjectionBound joinCRBound
       exact le_trans hP (add_le_add le_rfl (add_le_add le_rfl (add_le_add le_rfl (blobPr_le h.blobCR)))))
     (majorityBound_opens V A x θ F c σ
       (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)

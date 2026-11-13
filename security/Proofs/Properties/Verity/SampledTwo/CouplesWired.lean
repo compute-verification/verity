@@ -7,8 +7,8 @@ public import Proofs.Properties.Verity.SampledTwo.WiredScope
 
 `couplesAt_wired`: an instance of `CouplesAt` at a commitment and strategy, at the statement `JoinsAt` fixes (`stmtX`)
 and at the audit statement, partition and design the session's verifier reads of it. Its `scope` is a lemma of
-`JoinsAt` and `TwoHolds` (`scope_wired`), and `parse`, `partition` and `two` are what the verifier computes (`WiredParse.lean`), under
-two premises stated once:
+`JoinsAt` and `TwoHolds` (`scope_wired`), and `parse`, `partition` and `two` are what the verifier computes
+(`WiredParse.lean`), under two premises stated once:
 
 * `RecordWf c`: the record the commitment carries is a well-formed tree, which the proved verifier's reader reads back
   from the bytes `Flock.canon` prints of it (`decode_of_stmtOf`);
@@ -21,9 +21,9 @@ units are the replay blocks under `readX`. `joins`, `extract`, `caps`, `opens`, 
 
 ## What this does not show
 
-`RecordWf`, `TwoHolds` where no play with no such collision is accepted, and `UnitsWired`: each is a hypothesis. `JoinsAt` at a commitment
-whose bytes don't decode (`stmtOf c = none`), where its `stmtX` fails, so the instance is at the commitments that
-decode.
+`RecordWf`, `TwoHolds` where no play with no such collision is accepted, and `UnitsWired`: each is a hypothesis.
+`JoinsAt` at a commitment whose bytes don't decode (`stmtOf c = none`), where its `stmtX` fails, so the instance is at
+the commitments that decode.
 -/
 
 @[expose] public section

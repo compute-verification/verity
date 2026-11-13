@@ -87,8 +87,8 @@ noncomputable def joinMiss (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteAr
 /-- **The projection's bound, joined over any acceptance**: at the join's frame and reading, the wiring, the coin map's
 law, the stages' bytes within their rounds' releases, the sessions' releases' agreement, the three groups' coins, the
 messages opening their digests, each digest fixed by the coins shown before it, the cut, the accept on the rounds a run
-reaches at the plays `Acc` and `Good` hold of, and the statement read give the projection's bound at the hiding term, the join's `miss` and the cut's
-`terms`. -/
+reaches at the plays `Acc` and `Good` hold of, and the statement read give the projection's bound at the hiding term,
+the join's `miss` and the cut's `terms`. -/
 theorem joined (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf)
     (S : SessionReading) (L : CoinMap.Locate) (Dg : Verity.Exchange → ℕ → Option Msg) (q : ℕ)

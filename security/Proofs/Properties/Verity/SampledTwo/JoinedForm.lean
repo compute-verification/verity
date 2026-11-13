@@ -6,13 +6,15 @@ public import Proofs.Properties.Verity.SampledTwo.CoinMapAgree
 /-!
 # The two-stage leg's projection at the form's accept
 
-`joinedForm`: the projection's bound at the form's acceptance, `JoinGood` and the run's locator, at the cut's terms at
-the deployed two-session history, from the join's one premise (`JoinsAt`, `JoinsAt.lean`) and nothing else. It is
+`joinedForm`: the projection's bound at the form's acceptance, `JoinGood` with no collision of the play's blobs with
+the registered files, and the run's locator, at the cut's terms at the deployed two-session history plus the blob
+finder's collision probability, from the join's one premise (`JoinsAt`, `JoinsAt.lean`) and nothing else. It is
 `joinedOfLaw` at COINMAP's proof of the coin map's law (`CoinMap.coinMapHolds`, `CoinMapAgree.lean`).
 
-`joinedCoupling`: the two-stage leg's coupling (`CouplingTargetTwo`) with the join's projection bound and MAJORITY's
-majority bound as its terms, from one `CouplesAt` (`JoinedCoupling.lean`) at each commitment and strategy and nothing
-else. It is `joinedCouplingOfLaw` at the same proof of the law.
+`joinedCoupling`: the two-stage leg's coupling (`CouplingTargetTwo`) with the join's projection bound, its blob term
+under `ecr/sha-512` (`joinCRBound`), and MAJORITY's majority bound as its terms, from one `CouplesAt`
+(`JoinedCoupling.lean`) at each commitment and strategy and nothing else. It is `joinedCouplingOfLaw` at the same proof
+of the law.
 
 What `JoinsAt` holds, what the join discharges and what is not established are in `JoinsAt.lean`'s docstring. Every
 field of `JoinsAt` is over the form's accept, so the theorem says nothing about a run of record until the form accepts

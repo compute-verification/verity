@@ -382,19 +382,23 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
   -- The cut, at the deployed two-session history, with `FreshWide` joined to its event and the plays whose blobs
   -- collide with the registered files left out.
   have hw : Wired V k θ := fun o hθ hv => accepts_of_form h.caseIsSent (h.wiring o hθ hv)
+  have hCut₀ : CutBound V k θ F c σ (fun o => ReadIsDevice o ∧ CoinMap.FreshWide o.log)
+      (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ) :=
+    cutBound_and (fun o hr => CoinMap.freshWide_play V θ F c σ hr)
+      (Sessions.cutOrder_dev₂ V k P fs₁ fs₂ cut θ F c σ hw (firstReads θ) (orderShown θ) h.ledgerInOrder h.signer)
   have hCut : CutBound V k θ F c σ (fun o => JoinGood o ∧ ¬ BlobsCollide o.sent.blobs (V.registered θ))
       (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ +
         ENNReal.ofReal ((blobFinder V θ F c σ (V.registered θ)).Pr Verity.sha512Msg)) :=
-    cutBound_avoid (V.registered θ)
-      (cutBound_and (fun o hr => CoinMap.freshWide_play V θ F c σ hr)
-        (Sessions.cutOrder_dev₂ V k P fs₁ fs₂ cut θ F c σ hw (firstReads θ) (orderShown θ) h.ledgerInOrder h.signer))
+    cutBound_avoid (V.registered θ) hCut₀
   -- The run of record's accept, at the case kept on the plays whose blobs don't collide with the registered files.
   have hHeld : HeldOfAt A (goodCase C (NoCollide (V.registered θ))) := heldOfAt_goodCase h.heldOfAt
   have hParts : PartsHeldAt A (goodCase C (NoCollide (V.registered θ))) :=
     partsHeldAt_of_accepts hHeld fun K hK => partsSizedAt_goodCase (h.partsSizedAt K hK)
-  have hReached : ReachedAccepts A x (formReading A C (joinSessions A C Ms tab ℓ₁ ℓ₂) (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)))
+  have hReached : ReachedAccepts A x
+      (formReading A C (joinSessions A C Ms tab ℓ₁ ℓ₂) (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)))
       (fun o => FormAccepts C o ∧ NoCollide (V.registered θ) o) :=
-    reachedAccepts_goodCase (reachedAccepts A x _ _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) P' (sourcesFit A _)
+    reachedAccepts_goodCase (reachedAccepts A x (goodCase C (NoCollide (V.registered θ)))
+      (joinSessions A C Ms tab ℓ₁ ℓ₂) (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) P' (sourcesFit A _)
       (playAccepts_form A _ _ P' hParts hHeld (portsDistinctAt_goodCase h.portsDistinctAt)
         (stmtsRead_goodCase h.stmtsRead) (roundsHeldAt_goodCase h.roundsHeldAt) (scopeHeldAt_goodCase h.scopeHeldAt)
         (pinHeldAt_goodCase h.pinHeldAt) (sessionsRun_goodCase h.sessionsRun)) (sessionMsgs_goodCase h.sessionMsgs))

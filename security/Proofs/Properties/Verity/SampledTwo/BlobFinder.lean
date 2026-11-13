@@ -108,7 +108,9 @@ noncomputable abbrev blobBound (V : Vocab d α) (θ : ByteArray) (F : Array Byte
 theorem blobPr_le {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {σ : Verity.Game.Strategy (V.game θ F c)} {F₀ : Array ByteArray}
     (h : Claims.ExpectedCR FlockDeploy.sha512 (blobFinder V θ F c σ F₀)) :
-    ENNReal.ofReal ((blobFinder V θ F c σ F₀).Pr Verity.sha512Msg) ≤ blobBound V θ F c σ F₀ :=
-  ENNReal.ofReal_le_ofReal h
+    ENNReal.ofReal ((blobFinder V θ F c σ F₀).Pr Verity.sha512Msg) ≤ blobBound V θ F c σ F₀ := by
+  have e : Verity.sha512Msg = FlockDeploy.sha512 := funext fun _ => rfl
+  rw [e]
+  exact ENNReal.ofReal_le_ofReal h
 
 end Verity.SampledTwo

@@ -41,7 +41,7 @@ theorem scope_wired {V : Vocab d α} {k : Verity.Registration.Composite} {A : Li
     obtain ⟨o, ⟨hθ, -, hc⟩, hv⟩ := hE
     have hA : FormAccepts C o := h.wiring o hθ hv
     obtain ⟨kk, hk, hAcc⟩ := hA
-    obtain ⟨cm, i, hcm, hi, hrb, -, -, -, -⟩ := input_of_accepts hAcc
+    obtain ⟨cm, i, hcm, -, hrb, -⟩ := input_of_accepts hAcc
     have hkc : kk.commitment = c := (h.caseCommits o kk hk).trans hc
     have hrec : recordMsg i.record = recordMsg cm.record := by
       obtain ⟨s, hs, -, hs'⟩ := VStar.Recursive.SampledTwo.readBack_ok hrb
