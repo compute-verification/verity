@@ -111,7 +111,7 @@ theorem mem_rb (hr : r.Ok h) {t p : ℕ} (ht : t < h.ms.length) (hp : p < h.reg.
     · simp [hlb] at hw
     · rcases hsu : sb.unit with _ | u0
       · simp [hlb, hsu] at hw
-      · simp only [hlb, hsu, Option.bind_some]
+      · simp only [hsu, Option.bind_some]
         rw [(hfit r.ρ sb hlb u0 hsu).1]
         exact (_root_.Flock.Bridge.Members.mem_filesUnits h.ms).2 ⟨t, ht, p, hp, rfl⟩
   · show g ∈ (membersPart h.ms).blocks.getD (unitBase h.ms t + (r.ρ * h.reg.ns.getD t 0 + p)) []
@@ -138,10 +138,8 @@ theorem per_of_wire (hr : r.Ok h) {name port : String} {w : Spot.SecondStage.Wir
   obtain ⟨p, hp, hpt, hpr⟩ := wiresOk_writer hdes.2 hwm
   obtain ⟨t₂, ht₂, hpe⟩ :
       ∃ t₂, t₂ < h.ms.length ∧ partAt h (ownOf h st rec draw r.c₀).sample.size t₂ = p := by
-    have hp' : p ∈ (List.range h.ms.length).map (partAt h (ownOf h st rec draw r.c₀).sample.size) := by
-      first
-        | exact Array.mem_toList_iff.2 hp
-        | simpa [partsAt] using hp
+    have hp' : p ∈ (List.range h.ms.length).map (partAt h (ownOf h st rec draw r.c₀).sample.size) :=
+      Array.mem_toList_iff.2 hp
     obtain ⟨t₂, ht₂m, hpe⟩ := List.mem_map.1 hp'
     exact ⟨t₂, List.mem_range.1 ht₂m, hpe⟩
   subst hpe
