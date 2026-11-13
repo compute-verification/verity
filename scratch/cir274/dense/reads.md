@@ -30,10 +30,82 @@ readers' rows are free. None is cured by a Definition or by a hunk in vllm's fil
 - **What is left free.** At LP = 32 and 1 layer, the all-reduce's own partial: row 0 of `AllReduceMnnvl` `parts`, cut
   8 ways. That is 1,056 unit ports of 192 words, 202,752 words [test]. At 43 ids and 4 layers it is the decode's
   all-reduce only (the prefill's is `AllReduceMultimem`, piece 2): 32 unit ports, 6,144 words [r20261113-015207-eb58].
-- **What would cure it, not done.** A registration of the table transposed, i.e. column-major rows of 19360. Or the
-  embedding as a table read at the token's key (`window_circuit._Embedding`'s `b.table` / `EmbeddingRead_v1`), which
-  is not the `SLICES` split. Either is vllm's or a Definition's call. The lead also said to lower table reads last, as
-  `_Builder.merged` / `openings` change under #9375.
+- **What fits a shard (item 6), written, not applied.**
+  - *How `window_circuit._Embedding` reads the embedding on main.*
+    - One `EmbeddingRead_v1{V, H}` unit a position, whose `tok` is fed from the position's token.
+    - Its table is `b.table(self.weight(refs, V·H), H, V)`: the weights record's [V, H] rows, registered as a table.
+    - Its `root` and `domain` are two `IF.TableRead`s.
+    - Its `row`, `salt` and `path` are an `IF.Opening` at the hidden key `tok`, pinned by its verdict `o1`.
+    - Its `h` (`o0`) is the position's row.
+  - *What #9375 changes there (head `34c5cbb3705c`, fetched, not merged).*
+    - `IF.Opening` is renamed `IF.TableOpening` with no alias (interface.py), and so are `_Builder.openings`,
+      `merged()` and `_Embedding`'s append.
+    - `_Builder.value` gains `count` (`radix=(count,)`, `step=(words,)`).
+    - The read itself, its table and its key are unchanged.
+    - `node_window_sparse._table_reads` builds `IF.Opening` and breaks once #9375 lands (census-all.md).
+  - *Why a shard can't take `EmbeddingRead` as `_Embedding` does.* The two differ off the rows they own:
+    - `EmbeddingShard_v1` gives `table[tok - START]` on [START, START + VS) and **zeros** elsewhere;
+    - `EmbeddingRead_v1{V, H}` gives its row on [0, V) and **0x7FFF** in every word elsewhere (`FILL`).
+
+    So a table of the shard's VS rows keyed by `tok - START` gives NaN where the Program gives 0: on a token another
+    rank owns, which is most tokens. The all-reduce then sums NaN.
+  - *The form that fits, with existing Definitions.*
+    - **Units:** per column block b of G = 192 words (`_cols(H, grain.norm)`, 32 blocks at H = 6144), one
+      `EmbeddingRead_v1{V=154880, H=192}` unit a member, keyed by the token as it is (no `- START`).
+    - **Key:** the token itself.
+    - **Table:** a registered parameter of its own. It has V rows of 192 words: the shard's rows at START, **zero
+      rows elsewhere**.
+    - **Rows outside the shard:** they read 0, as the Program does.
+    - **What the all-reduce reads:** its column block b reads block b's `o0` row (192 words) by wire, its own partial
+      on row 0 of `parts`, which is today's free `EmbeddingShard` port: 32 unit ports, 6,144 words, at 43 ids and 4
+      layers [r20261113-022750-b23e]. A 6144-word `h` would have to be cut, which `Piece.rows` refuses.
+  - *Its costs.*
+    - V - VS = 135,520 zero rows a rank: 832,634,880 zero words, 1.67 GB as u16, committed in the table's tree.
+    - D = merkle_depth(V) = 18 against 15 for the shard.
+    - A token ∉ [0, V) reads 0x7FFF against the Program's 0. That is completeness only: vLLM refuses such ids
+      [inferred].
+    - The tie between the registered table and the weights record is unproved, as with the experts' tables.
+  - *Why not applied.*
+    - V is not among `EmbeddingShard_v1`'s statics, so `serving_templates` must list `EmbeddingRead_v1{V, H=G}` for
+      it.
+    - The prover must commit the padded table (`records`, as `expert_tables` does).
+    - Both files are on `main` (@vllm), so their hunk is `needs-vllm.md`, and this item stops there.
+    - The hunk below also builds `IF.TableOpening`, which exists only after #9375, a path #9375 changes.
+  - *The hunk:* `adapters/vllm/verity_vllm/program/predict/node_window_dense.py` (@circuits; not on `main`). A draft
+    that has not been run; it needs `needs-vllm.md`'s `ST.shard_vocab` and `ST.shard_param`.
+
+    ```python
+    def _shard_reads(w: NodeWindow, tid: str, at: int, units: int, label: str, V: int, G: int, block: int) -> None:
+        """Units ``[at, at + units)`` of the read ``tid`` read column block ``block`` of the embedding shard ``label`` as a
+        table of V rows of G words, the shard's rows at its START and zero rows elsewhere: a registered parameter of its
+        own (`serving_templates.shard_param`), its root and domain id table reads, and its row, salt and path an opening
+        at the key ``tok`` that the verdict ``o1`` holds."""
+        param = ST.shard_param(label, G, block)
+        w.b.params[param] = V * G
+        w.b.tables.setdefault(("shard", label, G, block), IF.Table(param, param, 0, G, V))
+        w.b.roots += [IF.TableRead(tid, "root", param, "root", at, units),
+                      IF.TableRead(tid, "domain", param, "domain", at, units)]
+        w.b.openings.append(IF.TableOpening(tid, param, "tok", ("row", "salt", "path"), "o1", at, units))
+
+
+    def embedding_shard(w: NodeWindow, j: int, node: Any) -> None:
+        """`EmbeddingShard_v1{VS, H, START}` as H / G column blocks of `EmbeddingRead_v1{V, G}`, member m's block b at unit
+        ``a + b M``, each keyed by the token itself over block b's table, which reads 0 off the shard as the node does;
+        the all-reduce reads block b's ``o0`` by wire."""
+        spec, fam, M = descriptor_id(node.fn), _family(node), w.members(node)
+        VS, H = int(node.fn.bindings["VS"]), int(node.fn.bindings["H"])
+        V, G = ST.shard_vocab(spec), _cols(H, w.b.grain.norm)
+        A, label = H // G, w.label(node.args[1].refs, VS * H)
+        t, a = w.unit(fam, _part(spec, ST.READ, V=V, H=G), A * M)
+        tok = w.take(node, 0)
+        w.feed(t, "tok", a, tok if isinstance(tok, _Free) else [tok[i % M] for i in range(A * M)], (A, M))
+        for b in range(A):
+            _shard_reads(w, t, a + b * M, M, label, V, G, b)
+        w.out(j, node, [Piece(0, H, Row(t, a, "o0", G), M, 1)])
+    ```
+
+    `FAMILIES["EmbeddingShard"] = embedding_shard`. Owners (`research msg owners`): `node_window_dense.py` @circuits,
+    `serving_templates.py` @vllm.
 
 ## 2. `TokenSelect_v4{V=154880}`: no proof block holds its unit
 
