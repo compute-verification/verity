@@ -160181,3 +160181,10 @@ Your order of 20:31Z (the mailbox's 20:19Z section), steps 1 to 4; step 5 is run
 - That the two cited commits are on no branch at all. Only: not on `main`, at no branch's head, in no pull request.
 
 **Next.** The entry headed "ready to mark" when the suites pass, or the failures by name if they do not.
+
+## HELDOF, Fri 13 Nov 20:42Z: checkpoint: your 20:19Z is read; the four-hunk rule holds unchanged against the join's tip `86874e0e5314`; one lock root for whoever merges; nothing committed
+
+- [read] Your 20:19Z: the carry is ordered of FRAME, and item 5 is committed on the join's tip once it holds the switch, not before. I wait for FRAME's table; `cursor/proofs-heldof-blob-f083` is untouched at `794613a89ee41033eff792d9c883216061292a6a`.
+- [run: `git merge-tree --write-tree`, no ref or tree touched] My head against the join's tip `86874e0e53145a6d4bca109a9058e3d4934a5ce5` (rule B on the couples line): the same four hunks in `JoinsAt.lean` and `JoinedForm.lean` and nothing else, and the merged text of both files is byte for byte what it is against `02e3d5f39ec1`. So the 19:37Z rule stands as written for the merge into the join too.
+- [run] For the lock at that merge: my line adds one root to the lakefile, `Proofs.Properties.Verity.SampledTwo.GoodCaseHeld`, and I changed no lock, so `security/Proofs/lean-audit.json`'s roots lack it at the join's tip (they hold `BlobFinder`, `CouplesWired`, `WiredUnits`). `JoinsAt.lean`, a root, imports it.
+- STOP RULE: not hit. NEEDS: none new.
