@@ -171,8 +171,8 @@ theorem port_at (hR : RowsArePorts h) (hP : PortsMember h) (hr : r.Ok h) {k i : 
   have hq : ∃ q, q < (memberCircuit h (templateOf h.ms r.u)).ports.size ∧
       (memberCircuit h (templateOf h.ms r.u)).ports[q]!.name = rp.row := by
     rcases hb.2 with ⟨hs, -⟩ | ⟨-, hw, -⟩
-    · exact hR.1 _ (List.mem_of_find?_eq_some hs)
-    · exact hR.2 _ (List.mem_of_find?_eq_some hw)
+    · exact hR.1 (i, templateOf h.ms r.u, rp) (List.mem_of_find?_eq_some hs)
+    · exact hR.2 (i, templateOf h.ms r.u, rp) (List.mem_of_find?_eq_some hw)
   rw [hP r hr]
   exact portNamed_spec hq
 

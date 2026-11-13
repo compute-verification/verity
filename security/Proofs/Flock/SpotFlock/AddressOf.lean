@@ -36,13 +36,6 @@ open Claims Claims.Sampling SamplingDeploy
 
 variable (h : Held)
 
-/-- **Member `t`'s circuit**: its reference statement's statement circuit (`Held.ms`). -/
-def memberCircuit (t : ℕ) : _root_.Flock.Circuit := stmtOf (h.xS₀ t)
-
-/-- **The first port of member `t`'s circuit named `name`**; port `0` where none is. -/
-def portNamed (t : ℕ) (name : String) : ℕ :=
-  ((List.range (memberCircuit h t).ports.size).find? fun q => (memberCircuit h t).ports[q]!.name == name).getD 0
-
 /-- **A gate's commitment position**: its member and its row position at the member's own units, as a source bit
 (`sourceBits`), else as a written bit (`writtenBits`); none for a gate that is neither. -/
 def bitAtGate (i : ℕ) : Option (ℕ × Spot.Bits.RowPos) :=
