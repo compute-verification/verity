@@ -114972,3 +114972,122 @@ Nothing: no change of mine alters a listed guarantee or what the verifier accept
 ### To post
 
 Nothing.
+
+## GATHER, Fri 13 Nov 02:32Z: `240a` and `7b90` passed every check by name (20 sessions accepted by Lean in each, 18 negatives refused, 43 tests); at the served vocabulary the audit's two commands run end to end on made-up logits at 2 of 8 requests; `c6bd` and `b025` are inside their second command, neither building nor waiting
+
+Second try: `cursor/proofs-gather-second-try-5a28` at `5ad83c84ef5efe9a65082c3da087cf7ce38e753d`, the head I stand behind, rehearsed at it by `7b90` (exit 0). First try: `cursor/proofs-gather-served-select-b88b` at `496aa183544bdf647b2e98943cb1c1bc6c193210`, rehearsed at it by `ab11` and `240a`. Both are pushed and clean; no tree code changed this turn. [run: `git rev-parse HEAD` in each worktree, rebuilt from `origin` on a new machine, 02:12Z]
+
+**What of Friday's two-stage run runs end to end, and at what size.** The audit's two commands run from start to finish on CPU nodes, with made-up logits standing in for the engine. The first command commits the class of requests and samples outer blocks on the challenger's coins. The second commits the sampled outer blocks' inner blocks, samples inner blocks, proves each sampled inner block in zero knowledge, has Lean verify each session, checks the statements against the two records, and computes the outcome. At the served model's vocabulary (154,880) and Friday's 8 requests of 64 tokens under the stop rule, this has run once, at 2 of 8 outer blocks and 1 of 64 inner blocks a cell: 40 inner blocks proved in 20 sessions, all accepted by Lean, 55 minutes for the two commands and a peak of 58 GiB (`b876`, at `bdf9fd1086`, whose three driver files are byte for byte the first try's head's). At a small vocabulary (2,560) it has run with all 8 outer blocks and 32 of 64 a cell: 5,120 inner blocks proved, 256 a session (`240a`). The second try's tree, which reads the select's inputs where the serve committed them, has run at the small vocabulary under the stop rule (`7b90`) and at the served vocabulary on 6 requests of 2 tokens (`b032`). In every one the outcome is refused by `two-stage-form` alone, as it must be while the accept is off. A try's outcome can be printed again from its kept files, with the same record digest (`3391` and `f574` at the first try's head, `bf1a` at the second try's). [run: each run's `second/summary.json`, read 02:14Z to 02:17Z; `git diff --stat bdf9fd1086 496aa18354` over `two_stage.py`, `a5.py`, `a5_coins.py`, empty, 02:20Z; my 01:50Z entry and section 3 for the rerun]
+
+**What is still missing.**
+
+1. **The engine.** Nothing of mine has run on GLM-5.3 as vLLM serves it: every run above uses made-up logits of the right shape. Serving's serve on cards launches between 02:40Z and 02:50Z, and serving's own worker then runs the two commands over that served class on a CPU node, with its line due 06:30Z. [read: Linear VLLM-300, comments of 01:34Z and 02:14Z, and VLLM-412, comments of 01:34Z to 01:53Z, read between 02:14Z and 02:17Z]
+2. **The accept.** The switch is off, so every run ends in the refusal by the form. The accept waits on the lane's proof, not on these runs.
+3. **Friday's shape at each try's own design.** Both are running now. The first try's (4 of 8 outer blocks, 1 a cell, 80 inner blocks: `c6bd`) has proved its 20 sessions, its prover peaking at 59 GiB of the 72 GB asked, and is in the checks that follow. The second try's (8 of 8, 4 a cell, 640 inner blocks, 32 a session: `b025`) has not reached its prover. Until one ends, the largest session that has ended at the served vocabulary is 2 inner blocks. [run: section 2]
+4. **Proving on cards.** Neither tree has it. Both tries prove on CPUs, where the second command took 51 minutes at 2 of 8. STOPDRIVER proved both statements on one card at the served size and Lean accepted them; its branch has no ready line yet. [relayed: `## STOPDRIVER, Fri 13 Nov 01:13Z`; run: `git log -1` of its branch, still `2c5806b33e`, 02:17Z]
+5. **In the first try, nothing ties the select's inputs to the serve.** The prover names the logits after the first stage's sample (the second-stage record registers one value). The second try's tree closes this: the serve commits them before any coin, and each inner block reads them there (it registers none). In neither try does anything tie the logits to the model's forward pass: the audit is of the select alone. [run: `interior.registered` has 1 entry in `240a` and `b876`, none in `7b90` and `b032`]
+6. **Smaller things.** Below 8 of 8 the run's record does not print the class's figure (my 01:50Z entry, section 2). The command that prints an outcome again is a script outside the tree. Both tries use a local challenger, by Daniel's ruling.
+
+### 1. Each run's own verdict
+
+"Passed" below means each of these, read from the run's own record and not from its exit code. [run: `second/summary.json`, `expect.txt`, `build-lean.log`, `machine.txt` of each, read 02:14Z to 02:17Z]
+
+- **The Lean these runs compile** is two packages' executables, built from the run's tree: `flock-verify` and `flock-firewall` (376 jobs) and `sampled-proofs-verifier` (483 jobs). Each log ends `Build completed successfully`, with deprecation warnings and no error. These runs compile no proof file: no theorem's verdict comes from them.
+- **22 checks before the sample**, by name `m0` to `m19` (each template's partition, program, unit indices and roots, held to the verifier's own), `registration` and `source`: all true.
+- **60 verdicts, 3 for each of the 20 sessions**, one session a template (`GreedyChunk_v2` at 19 offsets and `GreedyCombine_v2`): `m0-verifier` (the session's own recorded verdict, its roots the registered ones), `lean-draw` (Lean's check of the session's sample of inner blocks) and `lean-verify` (`flock-verify verify --zk --archive`, Lean's verdict on the session's proof, the verdict of record): all accepted. [read: `benchmarks/one_stage/a5.py:966–979` at `496aa18354`]
+- **18 negatives**, each a changed input that must be refused, all refused: `chunk-wired-to-another-unit`, `chunk-without-registered-reads`, `domains-bound-to-another-run-root`, `draw-outside-the-partition`, `no-verifier-of-record`, `partial-wired-to-another-combine-slot`, `proved-set-short-of-the-draw`, `public-body-not-the-registered-leaf-layer`, `registered-read-against-another-root`, `registered-read-opened-against-another-root`, `registered-reads-another-row`, `registered-reads-leaving-a-port-committed-afresh`, `registration-partition-mismatch`, `served-share-not-the-verifier's-draw`, `session-root-not-registered`, `verdict-reports-another-registered-root`, `verifier-of-record-did-not-run`, `wired-row-not-its-writer-s-output`.
+- **The 20 circuit files** are the ones the params name (`pins`): all true.
+- **The second stage's check on the statements**: `ok`, no code.
+- **The outcome**: not accepted; the second stage's audit record fails `statements` alone, with `two-stage-form`; the first stage's fails nothing.
+
+| Run, at | What | Sampled | Verdict | The record's bound at δ = 1/2 |
+|---|---|---|---|---|
+| `240a`, first try's head | V = 2,560; 8 requests of 64 tokens under a stop rule | 8 of 8 outer blocks, 32 of 64 a cell: 5,120 inner blocks | passed, all of the above | 1 of 10,240 |
+| `7b90` part 1, second try's head | V = 2,560; 6 requests of 4 tokens; a stop rule; the serve commits the select's inputs | 6 of 6, 1 of 4 a cell: 120 | passed, all of the above | 2 of 480 |
+| `7b90` part 2, second try's head | the same with history tables beside the inputs | 2 of 6: 40 | passed, all of the above | 2 of 160 |
+| `7b90` part 3 | three test files, 43 tests | | 43 passed, none failed, none skipped | |
+
+Nothing failed in either run. The 43 tests by name are at the end of this entry. [run: `out/pytest.log`, "43 passed in 60.66s"; the names from `pytest --collect-only` of the same three files at the same head on my VM, 43 collected, 02:18Z]
+
+### 2. The two still running: neither is building, neither is waiting for a place
+
+Both hold a place on vy-nebius-2, both finished their builds, and both are inside the second command. The second command writes its log only when it ends, so the log is empty until then; what I can read is the files' times, the memory and the names of the run's processes. [run: `research fetch --all` of each, `slot.json`, file times under `out/`, each sample's process names in `resources.jsonl`, read 02:13Z and 02:30Z]
+
+| | `r20261113-005324-c6bd` | `r20261113-011443-b025` |
+|---|---|---|
+| Tree | first try's head | second try's head |
+| Design | Friday's shape, 4 of 8 outer blocks, 1 a cell | Friday's shape, 8 of 8, 4 a cell, the serve commits the select's inputs |
+| Waited for a place | 17 min, to 01:10:08Z | 7.5 min, to 01:22:42Z |
+| Builds ended | 01:15:29Z, both Lean builds completed | 01:28:07Z, both completed |
+| Made-up serve | to 01:40:35Z | to 01:53:37Z |
+| First command | ended 01:44:15Z: sampled outer blocks 0, 1, 2, 4; the stop blocks' order held | ended 01:57:16Z: all 8; the order held |
+| Second command | running since 01:44:18Z | running since 01:57:19Z |
+| Memory so far | 4 GiB to 02:13Z; 59 GiB from 02:14Z to 02:17Z; 4 to 11 GiB since | 6 GiB, flat |
+| State at 02:30Z | proved: the prover (`flock-circuit`) ran from 02:14Z to 02:17Z and Lean's verifier (`flock-verify`) from 02:14Z to 02:17Z and 02:23Z to 02:25Z; the sampled-proofs verifier and Python since, which I take for the negatives and the statements' check [guess] | before its proofs: one Python process since 01:57Z, no prover and no verifier yet |
+| Expected end | 02:40Z to 03:05Z [guess] | 03:15Z to 04:20Z [guess] |
+
+The guesses come from `b876`, the same shape at 2 of 8: its second command reached the prover after 27 minutes and ended 24 minutes later. `c6bd` reached its prover after 30 minutes. How long `b025` runs before its prover is the open number: it has 8 times `c6bd`'s inner blocks to prepare and twice its outer blocks, and I have no run that separates the two. Its memory at the prover is the other: `c6bd`'s 59 GiB at 4 inner blocks a session against `b876`'s 58 GiB at 2 says the peak hardly moves with the session's size, and `b025` asks 96 GB. [run: `b876`'s saved profile, `job-memory.txt`; derived; the last sentence's reading is a guess]
+
+### 3. For serving: my list of kept files against its `KEEP_WORK=1` table
+
+Serving posted what `KEEP_WORK=1` keeps (VLLM-300, 02:14Z) and said it checks my list against it. I checked it the other way. Seven of my eight kinds are in its `work` directory by name: `coins.json`, `statements.json`, `proofs.json`, `summary.json`, `audit/summary.json`, `interior/registration.json` and `interior/m<i>-public.bin`. The eighth, `stage1.json`, is in `first`'s kept directory. So Friday's launch, as serving's lead set it at 01:35Z (`KEEP_WORK=1`, then `second_form_check.py`), keeps everything the rerun reads. The rerun does not read `references/` (1.1 GB in serving's rehearsal) or anything else under `audit/`. Checking the sessions again would read `audit/session-m<i>/` and `audit/m<i>/` too, which are also there. The kept directory stays on serving's proving node, so the later rerun runs there. [read: Linear VLLM-300, comments of 01:35Z and 02:14Z; derived]
+
+The rerun now works at the second try's head too. `bf1a` printed `7b90`'s outcome again from its kept files, where the second-stage record registers no value: the same outcome and the same record digest, both registrations and both samples the same, and each of three changed copies refused for its own reason (a verdict of record set to not accepted: `second-verified`; a statement dropped: `second-order` and `second-cover`; one bit of the second stage's bytes: both audit records fail `run`). It ran on vy-nebius-2, where the kept files are, waited 2 minutes for a place, and took 02:22:45Z to 02:28:03Z at a peak of 4.0 GiB, most of it the verifier's Lean build. Each rerun's summary in the reader's shape (`f574` over the first try's `240a`, `bf1a` over the second try's `7b90`) passes serving's `second_form_check.py` unchanged, exit 0. [run: `r20261113-022044-bf1a` at `5ad83c84ef`, `again.txt` and `slot.json` read 02:29Z; `python3 second_form_check.py second-again.json` on each, 02:27Z and 02:29Z]
+
+To post, if you want it on VLLM-300 unchanged:
+
+> proofs, to round2's 6:14 PM PST: of `work`'s entries, the later rerun reads `coins.json`, `statements.json`, `proofs.json`, `summary.json`, `audit/summary.json`, `interior/registration.json` and each `interior/m<i>-public.bin`, and `first`'s `stage1.json`. All are in what `KEEP_WORK=1` and `first`'s output keep. It also needs the tree's commit and the rule's text as typed, so write both beside `work`. It reads no private file. Keep `audit/` whole all the same: checking the sessions again reads `audit/session-m<i>/` and `audit/m<i>/`.
+
+### 4. What I do next
+
+- When `c6bd` ends: its verdict by the same names, its times and peak memory, and the rerun over its kept files at once.
+- When `b025` ends, or at 05:00Z: my word on the second try's design, and whether its `statements.json` passed 63 MiB.
+- After 03:15Z: serving's lines on VLLM-412 and VLLM-300.
+- By 05:30Z: the estimate for Friday's shape.
+
+### 5. Not established
+
+- Anything on the served engine, and anything on cards, in my runs.
+- Friday's shape at 4 of 8 and at 8 of 8 with 4 a cell: running.
+- The accept, and that a later tree's verifier reads today's kept files.
+- How long `b025` runs before its prover, and its peak memory with 32 inner blocks a session.
+- That the changed start check of the merge works on the engine: of what I ran, only `test_boundary_logits.py` reaches it.
+
+### The 43 tests of `7b90`, by name
+
+- `test_two_stage_second.py`, 17 passed:
+  - `test_a_class_whose_block_makes_no_wires_has_no_second_stage_and_one_of_instances_has_its_design`
+  - `test_the_interior_is_registered_after_round_1_under_no_name_round_1_has_and_sampled`
+  - `test_the_replay_side_refuses_a_capture_that_is_not_the_sampled_spans_or_a_return_round_1_did_not_commit`
+  - `test_the_interior_commits_the_return_under_the_serves_salts_and_its_header_opens_round_1s_rows`
+  - `test_a_serve_under_another_nonce_commits_under_another_run`
+  - `test_round_2_takes_the_hand_over_with_the_return_read_at_round_1s_rows_but_for_the_logits_the_prover_registers`
+  - `test_a_second_stage_whose_interior_gives_a_replay_block_an_input_never_held`
+  - `test_the_small_rehearsal_expects_the_inputs_code_of_a_linked_run_and_not_of_an_unlinked_one`
+  - `test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses_its_wires`
+  - `test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_takes_its_hand_over` (2 cases)
+  - `test_a_class_whose_record_commits_the_selects_inputs_registers_no_value_and_round_2_has_no_code` (3 cases)
+  - `test_the_kept_rows_of_the_selects_inputs_are_held_to_the_class_root`
+  - `test_the_serves_hook_and_the_samplers_capture_give_a_class_of_the_greedy_select_in_units`
+  - `test_under_a_stop_rule_the_serves_hook_gives_a_stop_class_of_the_greedy_select_in_units_committing_its_ids`
+- `test_interior_inputs.py`, 5 passed:
+  - `test_links_leave_out_a_parameter_round_1s_record_commits_and_inputs_give_it`
+  - `test_the_interior_commits_an_input_under_the_serves_salts_and_its_header_opens_round_1s_rows`
+  - `test_an_input_that_is_not_round_1s_is_refused_by_name`
+  - `test_a_greedy_selects_units_each_read_their_lanes_of_round_1s_logits`
+  - `test_the_interior_opens_the_select_inputs_rank_0_kept_at_round_1s_root`
+- `test_boundary_logits.py`, 21 passed:
+  - `test_a_class_lists_its_select_inputs_after_its_return_at_the_rows_round_2s_links_read`
+  - `test_a_class_commits_select_inputs_only_beside_its_ids_of_the_greedy_select_inlined`
+  - `test_a_spans_rows_are_its_tokens_logits_as_its_units_read_them_and_its_last_tokens_again_past_its_ids`
+  - `test_the_sampler_hook_keeps_each_emitting_requests_row_in_order_and_nothing_of_a_prefill_chunk`
+  - `test_a_call_the_hook_cant_read_fails_the_logits_and_every_later_build_says_why`
+  - `test_no_row_is_kept_while_a_cuda_graph_is_captured`
+  - `test_the_builder_refuses_a_span_whose_rows_dont_match_its_ids` (3 cases)
+  - `test_an_aborted_span_may_hold_a_row_past_its_ids_served`
+  - `test_the_channel_carries_an_assignment_to_rank_0_and_its_answer_back_and_tells_a_stop_class_from_its_sibling`
+  - `test_each_classs_commitment_waits_for_its_select_inputs_and_round_2_opens_them_at_its_root`
+  - `test_under_a_stop_rule_the_stop_class_and_its_sibling_each_commit_and_keep_their_own`
+  - `test_a_class_registers_nothing_when_rank_0_committed_no_logits`
+  - `test_a_serve_of_select_inputs_is_refused_as_it_starts_without_ids_of_the_greedy_select_inlined` (4 cases)
+  - `test_a_serve_of_select_inputs_is_refused_by_the_definition_its_check_names_not_by_how_the_name_starts` (3 cases)
