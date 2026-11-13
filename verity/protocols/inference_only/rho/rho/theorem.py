@@ -1,8 +1,8 @@
-"""The exclusion bound: the serving-block bound with its local minima (the working draft's §8, which states it).
+"""The exclusion bound: the server-block bound with its local minima (the working draft's §8, which states it).
 
 Everything here is in gates and counted weight. A **block** has a budget `(c, k)` (`Budget`): its gates and its
 unregistered input bits. A training class gives a per-block cap `q_T(c, k)` (`Cap`), the most counted weight a block
-with that budget holds; an attack gives a construction's count instead. A **serving block** (`ServerBlock`) is one
+with that budget holds; an attack gives a construction's count instead. A **server block** (`ServerBlock`) is one
 server between two consecutive wipes, padded to `c_S` gates; each `Cut` of it is one valid partition, its blocks plus
 its uncertified gates `U` by route, and an argument of the bound's minimum:
 
@@ -10,30 +10,30 @@ its uncertified gates `U` by route, and an argument of the bound's minimum:
 * `inference`, its `n_S` inference blocks `(c, k)` and `U_S`, so `n_S q_T(c, k) + q_U(U_S)`.
 
 `q_U(U) = ω_max U / s_×` is the elementary uncertified cap, `u U` with `u` the most weight a gate can hold (`ω_max /
-s_×`, `classes.Structure`), and no block holds more than `u c`. Under a bound each serving block contributes the least
-of its cuts (the local minimum), and the dark leaves `q_U(|A[L_dark]|)`:
+s_×`, `classes.Structure`), and no block holds more than `u c`. Under a bound each server block contributes the least
+of its cuts (the local minimum), and the unregistered leaves `q_U(|A[L_unreg]|)`:
 
-    Σ_v ω_v ≤ Σ_S min{q_T(c_S, k_S), n_S q_T(c, k) + q_U(S)} + q_U(dark)
+    Σ_v ω_v ≤ Σ_S min{q_T(c_S, k_S), n_S q_T(c, k) + q_U(S)} + q_U(unregistered)
 
-With `aggregate=True` the minimum is of the global sums instead (each cut name summed over every serving block), the
-bound to use where only aggregate bounds exist. Remote has no wipe or certifier, so its serving blocks are a server over
-the monitoring period with only the inference cut. An attack is a construction, so it is evaluated on a serving block's
-*layout* (what a protocol-abiding strategy gets), at the share `mfu` of the gates a construction uses, and the dark
+With `aggregate=True` the minimum is of the global sums instead (each cut name summed over every server block), the
+bound to use where only aggregate bounds exist. Remote has no wipe or certifier, so its server blocks are a server over
+the monitoring period with only the inference cut. An attack is a construction, so it is evaluated on a server block's
+*layout* (what a protocol-abiding strategy gets), at the share `mfu` of the gates a construction uses, and the unregistered
 leaves at theirs.
 
-The padded size ratio is `|A| / T_0` for the actual circuit `A` that reaches the target, each serving block padded to
+The padded size ratio is `|A| / T_0` for the actual circuit `A` that reaches the target, each server block padded to
 its capacity: the bound's weight per gate of the inventory, against the reference's `w` per gate (its counted weight
 over its gates, `κ / 2G`), gives
 
-    |A| / T_0 ≥ μ / ((u/w) ε_dark + (1 − ε_dark) g),   g = Σ_S n_S · share_S / Σ_S n_S
+    |A| / T_0 ≥ μ / ((u/w) ε_unreg + (1 − ε_unreg) g),   g = Σ_S n_S · share_S / Σ_S n_S
 
-with `share_S` each serving block's local minimum over the reference's weight in it, `w c_S` (so at most `u/w`), and
+with `share_S` each server block's local minimum over the reference's weight in it, `w c_S` (so at most `u/w`), and
 `μ` the gates the algorithm needs in multiples of the reference's. `u = w` is `s_×` at the reference's gates per
 counted product; a construction runs the reference's operations, so an attack is at `w` throughout.
 
 The **slowdown** is the hardware multiple over the reference training algorithm at its MFU, `MFU₀`: the adversary's
 GPU-hours over the reference's, `T_0 / (MFU₀ Φ)`, at least 1 (Lean's `hardwareMultiple`). A bound's is
-`multiple_bound(MFU₀, s, x)`, `max(1, 1/(s + a x))`, with the dark leaves `s` training like the reference and the
+`multiple_bound(MFU₀, s, x)`, `max(1, 1/(s + a x))`, with the unregistered leaves `s` training like the reference and the
 monitored share `x` converted into the reference's work at `a`: 1 under reference efficiency (`GLOSSARY.md`'s task
 assumption: no run uses the hardware more efficiently than the reference, so free compute counts at `MFU₀`), and
 `1/MFU₀` without it, free compute at peak, which is Lean's `remoteDampener` (`Nci.Guarantees.DampenerRemote` states it
@@ -42,7 +42,7 @@ the capacity it leaves idle (it trains at `MFU₀`, as the assumption has it).
 The time to the target, wall-clock, is then at least the overhead times `T_0 / (MFU₀ Φ_total)`
 (`scenario.Scenario.seconds`).
 
-This module knows no GPU, protocol or training class: `envelopes` builds the serving blocks from the physical model,
+This module knows no GPU, protocol or training class: `envelopes` builds the server blocks from the physical model,
 `classes` and `attacks` give the caps, and `families` the algorithm's profile.
 """
 
@@ -72,7 +72,7 @@ Cap = Callable[[Budget], float]
 
 @dataclass(frozen=True)
 class Blocks:
-    """`count` blocks of one kind in a serving block, each with `budget`."""
+    """`count` blocks of one kind in a server block, each with `budget`."""
 
     kind: str
     budget: Budget
@@ -81,7 +81,7 @@ class Blocks:
 
 @dataclass(frozen=True)
 class Cut:
-    """One valid partition of a serving block: its blocks, and its uncertified gates by route (`U`, which no block
+    """One valid partition of a server block: its blocks, and its uncertified gates by route (`U`, which no block
     constrains), valid under `cites` (the Lean guarantees and premises that put every gate in a block or in `U`)."""
 
     name: str
@@ -92,7 +92,7 @@ class Cut:
 
 @dataclass(frozen=True)
 class ServerBlock:
-    """`count` serving blocks of one kind over the monitoring period, each of `gates` (`c_S`, at capacity): its cuts
+    """`count` server blocks of one kind over the monitoring period, each of `gates` (`c_S`, at capacity): its cuts
     (the arguments of the bound's minimum) and its layout (what a protocol-abiding strategy gets, for attacks; None:
     unconstrained), and `mfu`, the share of its gates a construction uses."""
 
@@ -106,17 +106,17 @@ class ServerBlock:
 
 @dataclass(frozen=True)
 class Partition:
-    """The actual circuit as serving blocks, and the dark leaves: `eps_unreg` of the inventory's capacity, of which a
-    construction uses `dark_mfu`."""
+    """The actual circuit as server blocks, and the unregistered leaves: `eps_unreg` of the inventory's capacity, of which a
+    construction uses `unreg_mfu`."""
 
     serving: tuple[ServerBlock, ...]
     eps_unreg: float
-    dark_mfu: float = 1.0
+    unreg_mfu: float = 1.0
 
 
 @dataclass(frozen=True)
 class Share:
-    """What one serving block holds, as a share of its weight at capacity (`w c_S`): the total, the cut that set it,
+    """What one server block holds, as a share of its weight at capacity (`w c_S`): the total, the cut that set it,
     and the cut's terms (by block kind and uncertified route)."""
 
     value: float
@@ -139,7 +139,7 @@ def terms(block: ServerBlock, cut: Cut, cap: Cap, w: float, u: float | None = No
 
 
 def local(block: ServerBlock, cap: Cap, w: float, side: Side = "bound", u: float | None = None) -> Share:
-    """The serving-block bound's local minimum: under a bound, the least of `block`'s cuts; under an attack, its layout
+    """The server-block bound's local minimum: under a bound, the least of `block`'s cuts; under an attack, its layout
     at `mfu`. Never more than the block's own gates hold (`u c_S`, or `mfu` of `w c_S` for a construction)."""
     u = w if u is None or side == "attack" else u
     ceiling = u / w if side == "bound" else block.mfu
@@ -155,7 +155,7 @@ def local(block: ServerBlock, cap: Cap, w: float, side: Side = "bound", u: float
 
 
 def aggregate(partition: Partition, cap: Cap, w: float, u: float | None = None) -> dict[str, Share]:
-    """The minimum of the global bounds: each cut name's terms summed over every serving block (a block without that
+    """The minimum of the global bounds: each cut name's terms summed over every server block (a block without that
     cut, or whose cut holds more than its capacity, at its capacity), the least of those sums, as each block's share."""
     u = w if u is None else u
     capacity = Share(u / w, "capacity", {"capacity": u / w})
@@ -178,15 +178,15 @@ def aggregate(partition: Partition, cap: Cap, w: float, u: float | None = None) 
 @dataclass(frozen=True)
 class Overhead:
     """The overhead for one algorithm under one cap, `rho` (the hardware multiple at `mfu`), from the padded size ratio
-    `padded = efficiency / (dark + (1 − ε_dark) g)`, with each serving block's share and `g`'s terms summed over serving
-    blocks (each a share of the reference's weight in the monitored fleet at capacity). `dark` is the dark leaves'
-    weight over the reference's in the whole inventory: `(u/w) ε_dark` under a bound (`q_U(dark)`), and `ε_dark` times
+    `padded = efficiency / (unregistered + (1 − ε_unreg) g)`, with each server block's share and `g`'s terms summed over server
+    blocks (each a share of the reference's weight in the monitored fleet at capacity). `unregistered` is the unregistered leaves'
+    weight over the reference's in the whole inventory: `(u/w) ε_unreg` under a bound (`q_U(unregistered)`), and `ε_unreg` times
     what a construction uses of them under an attack."""
 
     padded: float
     g: float
     eps_unreg: float
-    dark: float
+    unregistered: float
     efficiency: float
     serving: Mapping[str, Share]
     terms: Mapping[str, float]
@@ -204,36 +204,36 @@ class Overhead:
     @property
     def monitored(self) -> float:
         """The share of the adversary's counted weight held on monitored gates: the protocols do their job for this
-        algorithm when it is small (`g ≪ ε_dark`), and not when it is near 1."""
-        rate = self.dark + (1 - self.eps_unreg) * self.g
+        algorithm when it is small (`g ≪ ε_unreg`), and not when it is near 1."""
+        rate = self.unregistered + (1 - self.eps_unreg) * self.g
         return (1 - self.eps_unreg) * self.g / rate if rate > 0 else 0.0
 
     def multiple(self, mfu: float) -> float:
         """The hardware multiple over the reference training algorithm at `mfu`. Under a bound, `multiple_bound`: the
-        dark leaves train like the reference, and the monitored share `(1 − ε_dark) g` counts at `a` (1 under
+        unregistered leaves train like the reference, and the monitored share `(1 − ε_unreg) g` counts at `a` (1 under
         reference efficiency, so the multiple is `max(1, padded)`; `1/mfu` without it), each per the algorithm's
         `efficiency`. A construction's is `max(1, mfu · padded)`: its padded circuit already holds the capacity it leaves
         idle."""
         if self.side == "attack":
             return max(1.0, mfu * self.padded)
-        return multiple_bound(mfu, self.dark / self.efficiency, (1 - self.eps_unreg) * self.g / self.efficiency,
+        return multiple_bound(mfu, self.unregistered / self.efficiency, (1 - self.eps_unreg) * self.g / self.efficiency,
                               self.reference_efficiency)
 
     def rates(self) -> dict[str, float]:
-        """The slowdown's rate, `1 / rho` before its floor at 1, by part: the dark leaves (`dark`) and `g`'s terms.
-        Under a bound the dark leaves count at 1 and the rest at `a` (`multiple_bound`'s `s + a x`); under an attack
+        """The slowdown's rate, `1 / rho` before its floor at 1, by part: the unregistered leaves (`unregistered`) and `g`'s terms.
+        Under a bound the unregistered leaves count at 1 and the rest at `a` (`multiple_bound`'s `s + a x`); under an attack
         every part counts at `1 / mfu`."""
         attack = self.side == "attack"
         scale = 1 / (self.efficiency * (self.mfu if attack or not self.reference_efficiency else 1.0))
-        dark = self.dark * (scale if attack else 1 / self.efficiency)
-        return {"dark": dark} | {t: (1 - self.eps_unreg) * v * scale for t, v in self.terms.items()}
+        unregistered = self.unregistered * (scale if attack else 1 / self.efficiency)
+        return {"unregistered": unregistered} | {t: (1 - self.eps_unreg) * v * scale for t, v in self.terms.items()}
 
 
 def overhead(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, side: Side = "bound",
              aggregate_only: bool = False, u: float | None = None, mfu: float = 1.0,
              reference_efficiency: bool = True) -> Overhead:
-    """The overhead from the serving-block bound: each serving block's local minimum (or, with `aggregate_only`, the
-    minimum of the global sums), and the dark leaves. `w` is the reference's weight per gate, `u` the most a gate holds
+    """The overhead from the server-block bound: each server block's local minimum (or, with `aggregate_only`, the
+    minimum of the global sums), and the unregistered leaves. `w` is the reference's weight per gate, `u` the most a gate holds
     under a bound (`q_U`'s, default `w`), `mfu` the reference training algorithm's MFU, and `reference_efficiency`
     whether a bound counts free compute at it (`multiple_bound`)."""
     u = w if u is None or side == "attack" else u
@@ -248,15 +248,15 @@ def overhead(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, 
         for term, v in s.terms.items():
             out[term] = out.get(term, 0.0) + weights[name] * v / total
     g = math.fsum(weights[n] * s.value for n, s in shares.items()) / total if total else 0.0
-    dark = partition.eps_unreg * (u / w if side == "bound" else partition.dark_mfu)
-    return Overhead(padded(dark, g, efficiency, partition.eps_unreg), g, partition.eps_unreg, dark, efficiency, shares,
+    unregistered = partition.eps_unreg * (u / w if side == "bound" else partition.unreg_mfu)
+    return Overhead(padded(unregistered, g, efficiency, partition.eps_unreg), g, partition.eps_unreg, unregistered, efficiency, shares,
                     out, side, mfu, reference_efficiency)
 
 
-def padded(dark: float, g: float, efficiency: float = 1.0, eps_unreg: float | None = None) -> float:
-    """The padded size ratio `|A| / T_0` when the dark leaves hold `dark` of the inventory's weight at capacity and the
-    monitored `1 − ε_dark` hold `g` of theirs (`eps_unreg` defaults to `dark`)."""
-    rate = dark + (1 - (dark if eps_unreg is None else eps_unreg)) * g
+def padded(unregistered: float, g: float, efficiency: float = 1.0, eps_unreg: float | None = None) -> float:
+    """The padded size ratio `|A| / T_0` when the unregistered leaves hold `unregistered` of the inventory's weight at capacity and the
+    monitored `1 − ε_unreg` hold `g` of theirs (`eps_unreg` defaults to `unregistered`)."""
+    rate = unregistered + (1 - (unregistered if eps_unreg is None else eps_unreg)) * g
     return efficiency / rate if rate > 0 else math.inf
 
 
