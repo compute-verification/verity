@@ -1,1 +1,1 @@
-2026-11-13T05:54Z GEMMCALL: records control r20261113-034352-d28a: base on cpu-6 took 1753 s (host records don't match); control then head-with-records next
+2026-11-13T06:30Z GEMMCALL: PR #9683 open, unmarked, head c00bf07b22584705513ad11879f5b3d0a014ab95; CIR-258 comments posted; done
