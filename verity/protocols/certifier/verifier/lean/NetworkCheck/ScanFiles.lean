@@ -30,14 +30,15 @@ Then, a file (`fileWhy`):
 * Bits lays it out as its template (`Spot.Bits.check`): its input rows are the template's parameters in order, its
   output rows the template's return, one template instance a unit, and every returned output bit sits on a computed
   row. This reads the unit net's header and never its rows;
-* for a template with ingress rows, the unit's rows read every bit of them, and read no input column that no port
-  holds (`Spot.Bits.readsWhy` on `Spot.Bits.unitReads`). In Bits' layout a source bit no row reads is the constant
-  false, so an ingress bit no row read would be no input gate. `unitReads` is the one pass over a unit's rows, and it
-  runs once a file with ingress rows: a template with none has no pass.
+* the unit's rows read no input column that no port holds, and, for a template with ingress rows, read every bit of
+  them (`Spot.Bits.readsWhy` on `Spot.Bits.unitReads`). In Bits' layout an input column no port holds, once a row
+  reads it, is an input gate of the unit's proof block with no commitment position, a free input no commitment binds;
+  and a source bit no row reads is the constant false, so an ingress bit no row read would be no input gate.
+  `unitReads` is the one pass over a unit's rows, and it runs once a file.
 
 `why` is the scan's finding: the first of its templates, in the root's order, whose file is not held. Two templates
-naming one file are refused, so the passes over rows are as many as the templates with ingress rows (`passes`),
-whatever the link-window's buckets or the period's link-windows.
+naming one file are refused, so the passes over rows are as many as the scan's templates, whatever the link-window's
+buckets or the period's link-windows.
 -/
 
 @[expose] public section
@@ -75,25 +76,22 @@ def circuitOf (key : String) (b : ByteArray) : V Flock.Circuit := do
   (Flock.ProvedScope.circuitOf (tagsOf b) b []).mapError fun e => s!"scan: the circuit file of template {key}: {e}"
 
 /-- **Why the circuit file `c` is not template `key` of the Program `P`**, or none: Bits doesn't lay it out as the
-template (`Spot.Bits.check`), or, `rows` being the template's ingress rows' parameters, its unit's rows don't read
-every bit of them or read an input column no port holds (`Spot.Bits.readsWhy`). The unit's rows are read only where
-`rows` names a parameter, once (`Spot.Bits.unitReads`). -/
+template (`Spot.Bits.check`), or its unit's rows read an input column no port holds or, `rows` being the template's
+ingress rows' parameters, don't read every bit of them (`Spot.Bits.readsWhy`). The unit's rows are read once
+(`Spot.Bits.unitReads`). -/
 def fileWhy (P : Flock.Program.Prog) (key : String) (rows : List String) (c : Flock.Circuit) : Option String :=
   match Spot.Bits.check c P key with
   | some why => some why
   | none =>
-    if rows.isEmpty then none
-    else match P.defs.find? (·.key == key) with
-      | some d => Spot.Bits.readsWhy c d (Spot.Bits.unitReads c) rows
-      | none => some s!"the circuit file's template {key} is no Definition of the Program"
-
-/-- **The passes over a unit's rows** `why` makes at templates `ts`: one a template with ingress rows. -/
-def passes (ts : Array Template) : Nat := (ts.filter fun t => !t.rows.isEmpty).size
+    match P.defs.find? (·.key == key) with
+    | some d => Spot.Bits.readsWhy c d (Spot.Bits.unitReads c) rows
+    | none => some s!"the circuit file's template {key} is no Definition of the Program"
 
 /-- **Why the scan's circuit files are not its templates'**, or none: two templates name one file, or, at the first
 template in order whose file is not held, no blob is the named file, the file is templated or doesn't parse
-(`circuitOf`), or it is not the template as Bits lays it out with its ingress rows read (`fileWhy`). The files are
-read one after another, none held past its own finding. -/
+(`circuitOf`), or it is not the template as Bits lays it out, its rows reading no input padding and every bit of its
+ingress rows (`fileWhy`). The files are read one after another, none held past its own finding, and each file's
+unit's rows once. -/
 def why (P : Flock.Program.Prog) (ts : Array Template) (bs : Core.Blobs) : Option String :=
   if !decide (ts.toList.map (·.circuit)).Nodup then
     some "scan: two templates name one circuit file: a template has a circuit file of its own"
@@ -151,11 +149,12 @@ private def toyFile (x y : String) (r : Nat → Array Nat) : Flock.Circuit :=
     outPorts := #[("o", 1)], leavesIn := #[#[0, 1]], leavesOut := #[#[0]] }
 
 /-- An ingress file whose rows read both parameters, one whose rows read only `sin`, one whose rows read an input
-column no port holds, and an egress file whose rows read only `state`. -/
+column no port holds, an egress file whose rows read only `state`, and one whose rows read that column too. -/
 private def toyIngress : Flock.Circuit := toyFile "row" "sin" fun i => #[i, 16 + i]
 private def toyUnread : Flock.Circuit := toyFile "row" "sin" fun i => #[16 + i]
 private def toyPad : Flock.Circuit := toyFile "row" "sin" fun i => #[i, 40]
 private def toyEgress : Flock.Circuit := toyFile "state" "pad" fun i => #[i]
+private def toyEgressPad : Flock.Circuit := toyFile "state" "pad" fun i => #[i, 40]
 
 #guard fileWhy toyP "TIngress_v1" ["row"] toyIngress == none &&
   refuses "no row of the circuit file's unit reads bit 0 of its parameter row"
@@ -167,9 +166,12 @@ private def toyEgress : Flock.Circuit := toyFile "state" "pad" fun i => #[i]
   refuses "the circuit file's template TOther_v1 is no Definition of the Program"
     (fileWhy toyP "TOther_v1" ["row"] toyIngress)
 
--- a template with no ingress row has no pass over its unit's rows: a parameter bit no row reads is not refused
+-- a template with no ingress row: a parameter bit no row reads is not refused, a row reading input padding is
 #guard fileWhy toyP "TEgress_v1" [] toyEgress == none && fileWhy toyP "TIngress_v1" [] toyUnread == none &&
-  fileWhy toyP "TIngress_v1" [] toyPad == none
+  refuses "a row of the circuit file's unit reads its input column 40, which no port holds"
+    (fileWhy toyP "TEgress_v1" [] toyEgressPad) &&
+  refuses "a row of the circuit file's unit reads its input column 40, which no port holds"
+    (fileWhy toyP "TIngress_v1" [] toyPad)
 
 private def digestOf (b : ByteArray) : String := Flock.hexOf (Flock.Sha512.hash b)
 
@@ -178,9 +180,6 @@ private def noFile : ByteArray := "x\n".toUTF8
 
 private def toyTs (a b : ByteArray) : Array Template :=
   #[⟨"TIngress_v1", ["row"], digestOf a⟩, ⟨"TEgress_v1", [], digestOf b⟩]
-
-#guard passes (toyTs tmplFile noFile) == 1 && passes #[] == 0 &&
-  passes #[⟨"A", ["row"], ""⟩, ⟨"B", ["row"], ""⟩, ⟨"C", [], ""⟩] == 2
 
 #guard why toyP #[] (Core.Blobs.ofArray #[]) == none &&
   refuses "scan: the circuit file of template TIngress_v1: no blob has the SHA-512"
