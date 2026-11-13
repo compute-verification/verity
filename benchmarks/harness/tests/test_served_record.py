@@ -167,6 +167,7 @@ def served(tmp_path, *, outcome=WITHHELD, held=True, verdicts=None, units=(2,), 
               "draw": {"k": 1, "law": "subset", "population": 8, "units": list(units)}}
     summary = {
         "first_stage": {"registration": REGISTRATION, "units": [2]}, "unlinked": False, "held": held, "outcome": outcome,
+        "stage1": "/made/up/first/p4-o2/stage1.json",
         "accepted": sessions_record, "record": {"failed": [] if sessions_record else ["registered"]},
         "pins": {"m0": True, "m1": True}, "round_two": {"ok": True, "codes": []}, "second_stage": {"draw": [1, 2, 3]},
         "interior": {"population": 16, "registered": list(registered),
@@ -211,7 +212,9 @@ def test_what_the_audit_showed_is_counted_from_the_four_runs_files(tmp_path):
     assert shown["first_stage"] == {"registration": REGISTRATION, "rule": "rate:1/8", "sampled": [2], "of": 8,
                                     "check": {"error": None, "session_error": None, "coins_reason": None,
                                               "said": "FIRST: ACCEPTED"}}
-    assert [t["holds"] for t in shown["ties"]] == [True, True, True, True]
+    assert [t["holds"] for t in shown["ties"]] == [True, True, True, True, True]
+    # what a verdict of this audit is of: the class as the second stage names it, and the registration it read
+    assert (shown["class"], shown["registration"]) == ("p4-o2", REGISTRATION)
     # the one-stage record over the interior is kept apart: it is not the stream's outcome
     assert shown["one_stage_record"] == {"accepted": False, "record": {"failed": ["registered"]}}
 
@@ -220,10 +223,21 @@ def test_files_that_are_not_one_runs_are_said_not_to_hold(tmp_path):
     dirs = served(tmp_path, units=(5,))
     (dirs["serve"] / "out/boundary/w1/p4-o2/commit.json").write_text(json.dumps(LAYOUT | {"spans": 9}))
     record, _ = R.read(**dirs)
-    assert [t["holds"] for t in record["audit"]["ties"]] == [True, False, True, False]
+    assert [t["holds"] for t in record["audit"]["ties"]] == [True, True, False, True, False]
     # with the second stage alone nothing is held to anything, and nothing is said to hold
     alone, _ = R.read(dirs["second"])
-    assert [t["holds"] for t in alone["audit"]["ties"]] == [None, None, None, None]
+    assert [t["holds"] for t in alone["audit"]["ties"]] == [None, None, None, None, None]
+    assert (alone["audit"]["class"], alone["audit"]["registration"]) == ("p4-o2", REGISTRATION)
+    # a first stage of another class is not the one the second stage names, and the class stays the second stage's
+    (dirs["first"] / "out/stage1/p4-o2").rename(dirs["first"] / "out/stage1/p8-o2")
+    other, _ = R.read(**dirs)
+    assert other["audit"]["ties"][1] == {"what": "the first stage's class is the one the second stage names", "holds": False}
+    assert other["audit"]["class"] == "p4-o2"
+    # a summary that names no first stage's file leaves the class to the first stage's run
+    summary = json.loads((dirs["second"] / "out/second.json").read_text())
+    del summary["stage1"]
+    (dirs["second"] / "out/second.json").write_text(json.dumps(summary))
+    assert R.read(**dirs)[0]["audit"]["class"] == "p8-o2" and R.read(dirs["second"])[0]["audit"]["class"] is None
     assert alone["audit"]["layout"] is None and alone["audit"]["first_stage"] is None
     assert alone["runs"] == {"serve": None, "first": None, "replay": None, "second": record["runs"]["second"]}
 

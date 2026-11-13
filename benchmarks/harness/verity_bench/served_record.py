@@ -36,7 +36,9 @@ The record is `exfiltration.served_share`'s object, with what the audit showed b
   its own run's file. A count of 0 GPUs is kept as written: that part started no process on a card.
 * ``run`` and ``commit``, the second stage's run and the commit it ran; ``runs``, each of the four runs' id and
   commit (`run_of`).
-* ``audit``, what the audit showed (`shown`): the sessions' verdicts counted by kind, the driver's checks, the
+* ``audit``, what the audit showed (`shown`): the class the second stage audited, as its summary names the first
+  stage's file (``class``, the directory that holds it), and the digest of the registration it read
+  (``registration``); the sessions' verdicts counted by kind, the driver's checks, the
   stream's outcome and its codes, the layout the serve committed, what the interior registered, the first stage's
   sample and check, what holds the runs' files to each other (`ties`), the sessions' seconds as the files hold
   them, and the cards the proof server's provers ran on (``audit.proof_server.busy``, each prover's ``device``, its
@@ -162,10 +164,22 @@ def _count(values: Sequence[Any]) -> dict:
     return {"accepted": sum(1 for v in values if v is True), "of": len(values)}
 
 
-def ties(summary: Mapping, stage1: Mapping | None, check: Mapping | None, published: Any) -> list[dict]:
+def _class(path: Any, within: Path | None = None) -> str | None:
+    """The class a first stage's file is of, as the run's files name it: the directory that holds its
+    ``stage1.json``. None for no such file, and for one directly in the run's directory ``within``."""
+
+    if not isinstance(path, (str, Path)) or Path(path).name != "stage1.json":
+        return None
+    parent = Path(path).parent
+    return None if within is not None and parent == Path(within) else parent.name or None
+
+
+def ties(summary: Mapping, stage1: Mapping | None, check: Mapping | None, published: Any,
+         first_class: str | None = None) -> list[dict]:
     """What holds the runs' files to each other, each with whether it does (None: a file it reads is not given).
     ``published`` is the serve's ``commit.json`` for the first stage's class: the object, False where the serve
-    published none equal to it, None where no serve is given."""
+    published none equal to it, None where no serve is given. ``first_class`` is the class the first stage's run
+    names its file by."""
 
     first = summary.get("first_stage") or {}
     registration = None if stage1 is None else stage1.get("registration")
@@ -177,6 +191,8 @@ def ties(summary: Mapping, stage1: Mapping | None, check: Mapping | None, publis
 
     return [{"what": "the first stage's registration is the one the second stage read",
              "holds": same(first.get("registration"), registration)},
+            {"what": "the first stage's class is the one the second stage names",
+             "holds": same(_class(summary.get("stage1")), first_class)},
             {"what": "both stages name the same sampled spans", "holds": same(first.get("units"), sampled)},
             {"what": "the first stage's check is of that registration",
              "holds": None if None in (short, registration) else registration.startswith(short)},
@@ -184,8 +200,11 @@ def ties(summary: Mapping, stage1: Mapping | None, check: Mapping | None, publis
              "holds": None if stage1 is None or published is None else published is not False}]
 
 
-def shown(summary: Mapping, stage1: Mapping | None, check: Mapping | None, published: Any, machine: Path | None) -> dict:
-    """What the audit showed, as its files hold it: counts and codes, no verdict of the reader's own."""
+def shown(summary: Mapping, stage1: Mapping | None, check: Mapping | None, published: Any, machine: Path | None,
+          first_class: str | None = None) -> dict:
+    """What the audit showed, as its files hold it: counts and codes, no verdict of the reader's own. Its ``class``
+    is the one the second stage's summary names its first stage's file by, else the first stage's run's
+    (``first_class``)."""
 
     audit = summary.get("audit") or {}
     inner, timing = audit.get("audit") or {}, audit.get("timing") or {}
@@ -223,7 +242,9 @@ def shown(summary: Mapping, stage1: Mapping | None, check: Mapping | None, publi
     if machine is not None and (words := machine.read_text().split()) and words[0].isdigit():
         cores = int(words[0])
     return {
-        "ties": ties(summary, stage1, check, published),
+        "class": _class(summary.get("stage1")) or first_class,
+        "registration": (summary.get("first_stage") or {}).get("registration"),
+        "ties": ties(summary, stage1, check, published, first_class),
         "first_stage": None if stage1 is None else {
             "registration": stage1.get("registration"), "rule": (stage1.get("rule") or {}).get("replay"),
             "sampled": draw.get("units"), "of": draw.get("population"),
@@ -324,7 +345,8 @@ def read(second: Path, *, first: Path | None = None, serve: Path | None = None, 
         else:
             lacks(field, f"`{key}` is absent: the two-stage audit reads no clock over it")
 
-    stage1 = _json(_find(first, STAGE1, "a first stage's run"))
+    its = _find(first, STAGE1, "a first stage's run")
+    stage1 = _json(its)
     check = None
     if first is not None and Path(first).is_dir():
         check = check_of(next((p for pattern in CHECK for p in sorted(Path(first).glob(pattern))), None))
@@ -342,7 +364,8 @@ def read(second: Path, *, first: Path | None = None, serve: Path | None = None, 
               **parts, "serving": _load(serving, "serving", absent), "stock": _load(stock, "stock", absent)}
     if record["stock"] is None and serving_cost is not None:
         record |= {"serving_cost": serving_cost, "serving_cost_source": serving_cost_source}
-    record["audit"] = shown(summary, stage1, check, published, machine)
+    record["audit"] = shown(summary, stage1, check, published, machine,
+                            None if its is None or Path(first).is_file() else _class(its, Path(first)))
     return record, absent
 
 
