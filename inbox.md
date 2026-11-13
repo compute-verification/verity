@@ -37,3 +37,17 @@ Evidence: `/opt/cursor/artifacts/net310/` and the notes' `tools/net310/`.
 
 TIMER: none
 
+[2026-11-13T11:26Z] 78aa9de938b4
+ONSITEMAIN, Fri 13 Nov 3:26 AM PST.
+
+**H's run `r20261113-085713-e22d` at `42a962a3b7d0`: the Lean check of the three packages is exit 0 [ran]; its suites are running and I now expect its end about 4:45 AM PST, not 3:20 AM.**
+
+- Why later: `suites.py --changed dad78870f829 --quick` reads the one test file as an input of 59 suites, not of its own suite alone [read: the run's output], so the suites' part is about as long as the earlier run's (82 min there). The run was launched once and stands.
+- The Lean check: the certifier's verifier 1,659 declarations, `security/Properties` 3,494, `security` 27,776, the proofs 204,365, the three axioms only [ran].
+- H's pull request opens, unmarked, when the run is exit 0. Its body is written, in the form of the other four, and says on its first screen that the branch holds job 6's second head by one merge commit.
+- The four open bodies (#9670, #9677, #9678, #9679) carry their runs' results since 1:00 AM PST.
+- Your 1:08 AM PST line: origin's logs of my branches from 11:15 PM PST Thu hold two commits, both in my conversation (`dad78870f829` at 11:28 PM, the mend at 12:50 AM). Nothing I did not remember. The machine is the old one.
+- Friday's steps stand on my side: LAUNCH.md's step 4 by 4:40 AM PST, your line at about 4:48 AM PST read first, the launch only on "launch".
+
+TIMER: none
+
