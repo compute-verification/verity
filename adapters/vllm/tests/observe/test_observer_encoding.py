@@ -4,6 +4,7 @@ without torch): encode_arg, StorageAdapter.view_of / generations / pending drain
 from __future__ import annotations
 
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -64,6 +65,16 @@ def test_encode_symbolic_scalars():
     for x in (env.create_unbacked_symint(), env.create_unbacked_symfloat(), env.create_unbacked_symbool()):
         assert encode_arg(x, st) == {"$repr": repr(x)[:200]}
     assert encode_arg([backed, env.create_unbacked_symint()], st)[0] == 7
+
+
+def test_encode_a_dict_by_its_keys_as_strings_and_tritons_constants_by_their_type_names():
+    st, t = StorageAdapter(), torch.zeros(2)
+    assert encode_arg({"a": t, 3: (1, None)}, st) == {"a": st.view_of(t), "3": [1, None]}
+    constexpr = type("constexpr", (), {"__init__": lambda self, value: setattr(self, "value", value)})
+    assert encode_arg(constexpr([4, torch.int8]), st) == [4, "torch.int8"]
+    assert set(encode_arg(type("constexpr", (), {})(), st)) == {"$repr"}, "a constexpr with no value is its repr"
+    assert encode_arg(type("dtype", (), {"__module__": "triton.language.core", "__str__": lambda self: "fp32"})(), st) == "fp32"
+    assert set(encode_arg(type("dtype", (), {"__module__": "numpy"})(), st)) == {"$repr"}, "a dtype that is not triton's is its repr"
 
 
 def test_view_of_fields_and_shared_storage():
@@ -274,6 +285,42 @@ def test_exception_survives_with_a_note():
     assert notes and notes[0].text == "exception in dispatcher call" and notes[0].data["op"] == "aten.mm.default"
     assert [e for e in events if isinstance(e, DispatchExit)][-1].outs is None
     assert rec.open == []
+
+
+def test_an_encoding_failure_is_noted_and_the_call_runs_all_the_same(monkeypatch):
+    rec, events = _rec()
+    a, b = torch.randn(2, 3), torch.randn(3, 2)
+
+    def no_view(t):
+        raise ValueError("no view")
+
+    monkeypatch.setattr(rec.storage, "view_of", no_view)
+    with Observer(rec):
+        c = torch.mm(a, b)
+    assert torch.equal(c, a @ b)
+    [enter] = [e for e in events if isinstance(e, DispatchEnter)]
+    [exit_] = [e for e in events if isinstance(e, DispatchExit)]
+    assert (enter.op, enter.args, enter.kwargs, exit_.id, exit_.outs) == ("aten.mm.default", [], {}, enter.id, None)
+    said = {"id": enter.id, "op": "aten.mm.default", "error": "ValueError('no view')"}
+    assert [(e.text, e.data) for e in events if isinstance(e, Note)] == [("encode error (args)", said), ("encode error (outs)", said)]
+    assert [type(e).__name__ for e in events] == ["Note", "DispatchEnter", "Note", "DispatchExit"]
+    assert rec.counts["notes"] == 2 and rec.open == []
+
+
+def test_the_recorders_stream_is_the_current_cuda_streams_and_minus_one_where_cuda_cannot_say(monkeypatch):
+    rec, _ = _rec()
+    rec._cuda = False
+    monkeypatch.setattr(torch.cuda, "current_stream", lambda: pytest.fail("a recorder without CUDA asked for its stream"))
+    assert rec.stream() == 0
+    rec._cuda = True
+    monkeypatch.setattr(torch.cuda, "current_stream", lambda: SimpleNamespace(cuda_stream=77))
+    assert rec.stream() == 77
+
+    def no_stream():
+        raise RuntimeError("CUDA error: initialization error")
+
+    monkeypatch.setattr(torch.cuda, "current_stream", no_stream)
+    assert rec.stream() == -1
 
 
 def test_missing_reentry_impl_keeps_why_each_path_failed(monkeypatch):
