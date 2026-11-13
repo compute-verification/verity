@@ -111,11 +111,12 @@ import math
 import os
 import subprocess
 import sys
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any
 
 import numpy as np
 from verity.circuits.program import Program
@@ -243,9 +244,9 @@ def items_of(params: dict, ell: int, root_w: str | None, length: Mapping[str, An
 #: what one-stage's record shows besides the two salted roots, each declared to the service's rule with its reason
 LAYOUT = (
     ("population", "structure", "N, the padded tile count g_(ℓ+1): the draw's range, a function of the registered level"),
-    ("window", "output", "PoUW's registered items, exactly `pouw.window.REGISTERED` (work, check, sampling, length, root_W), "
-                         "each the verifier's own recomputation at the registered level, the length its fixed max_tokens "
-                         "(`public_problem`)"),
+    ("window", "output", ("PoUW's registered items, exactly `pouw.window.REGISTERED` (work, check, sampling, length, "
+                          "root_W), each the verifier's own recomputation at the registered level, the length its "
+                          "fixed max_tokens (`public_problem`)")),
     (f"leaves:{PORT}", "structure", "P, the public bound on a window's entries"),
     (f"domain:{PORT}", "structure", "the entries' served domain: the window's program, partition and context"),
     ("leaves:W", "structure", "|W|, the deployment's weight rows at k = n = K"),

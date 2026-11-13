@@ -25,9 +25,10 @@ from __future__ import annotations
 
 import copy
 import json
+from collections.abc import Callable, Mapping
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any
 
 import verity_difftest as D
 
@@ -197,7 +198,7 @@ class Record:
         `Verdict`, whose fan-out and tied values are held to Lean's with its codes (`registration_answer`)."""
         out = self._piece("registration", "sampled-proofs-difftest", PIECES, "registration",
                           {"params": params, "record": record}, lambda _: registration_answer(python()))
-        return out["codes"] if "codes" in out else ["registration"]
+        return out.get("codes", ["registration"])
 
     def public(self, x: dict, python: Callable[[], dict]) -> dict:
         """The service's public-items rule's ``{"ok", "codes", "detail"}`` on `x` (`public_params`), or ``{"refused"}``
