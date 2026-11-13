@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # CIR-258: whether the circuit_check suite's extra time at the head is its catalog built in-session because no catalog record
 # counts for an edited targets.py (conftest.py `_from_records`), not anything the new entries or spots check.
+#   base:    the base's three files, suite whole and fresh (records from the host's cache), so this machine's baseline is known.
 #   control: the base's three files plus one comment line in targets.py, suite whole and fresh (records from the host's cache).
 #   head:    records for this tree made first (`circuit-check --all --records-only`, into a cache of the run's own), then the suite
 #            whole and fresh with them handed (CIRCUIT_CHECK_RECORDS), as the graph's test-file runner hands them.
@@ -24,12 +25,14 @@ suite() {  # name, then env assignments
   return $r
 }
 for i in 0 1 2; do cp "$I/${B[$i]}" "${F[$i]}"; done
+log "base: $(git diff --stat | tail -1)"
+suite base; rc=$?
 printf '\n# CIR-258 control: a comment line, so no catalog record counts\n' >> "${F[0]}"
 log "control: $(git diff --stat | tail -1)"
-suite control; rc=$?
+suite control; rc=$(( rc || $? ))
 git checkout -q -- "${F[@]}"; log "head: $(git diff --stat | tail -1)"
 s=$(date +%s)
-uv run python -m circuit_check --all --records-only -q --cache "$T/cc" --jobs "$JOBS" --mem-gb "$MEMGB" > "$O/records.log" 2>&1
+uv run python -m circuit_check --all --records-only -q --cache "$T/cc" --jobs "$JOBS" --mem-gb "$RECMEM" > "$O/records.log" 2>&1
 r=$?; log "records for the head rc $r in $(( $(date +%s) - s )) s"; tail -3 "$O/records.log" | tee -a "$O/job.log"
 suite head-records CIRCUIT_CHECK_RECORDS="$T/cc"; rc=$(( rc || $? ))
 exit $rc
