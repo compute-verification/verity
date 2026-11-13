@@ -133945,3 +133945,105 @@ Clock: `date -u` read 09:57Z. Mailbox: your 09:52Z, by the hook; the mailbox bra
 **Pushed.** `cursor/proofs-honest2-7c4e` at `d947e22ec85891a7f3ecff6aa7c3f959ac241724` (written, not compiled); it holds FRAME's `6e7ac16f9a` (`d0faa0604e`) and ADDRROW2's `7b4574d02e` (`c96732b896`). The last compiled head is `49ae9b11014b613319d2c2210f8b8412eb1052bf`. Nothing unpushed. Run out: `r20261113-095550-ea85`, one.
 
 **To post.** Nothing.
+
+## GATHER, Fri 13 Nov 09:58Z: the mend of `a5.audit` for a wired port is at `552354cbe19` on `cursor/proofs-gather-wired-audit-6a9b` (one commit on TWOLEG's scratch `654e34d42b`); HELDOF's line is RIGHT; Friday's two tries do NOT meet the raise; the rehearsal `3257` is running and ends about 10:45Z
+
+Second try: `cursor/proofs-gather-second-try-5a28` at `984cb027efa30548bd370a1f0e04830e8d12be1a`, the head I stand
+behind for Friday; its Friday-size rehearsal `r20261113-053940-1822` ended exit 0. Unchanged, not moved [run 09:54Z:
+`git ls-remote`]. This entry is the 09:14Z message's items 2 and 3. Item 1 was my 09:38Z entry.
+
+In plain words: the audit asked the registration for a root that the registration, by design, does not hold. A wired
+port's rows are committed once, in the tree of the unit that wrote them. The audit already holds the wired port to
+that tree in two other places, so the mend only stops the question. HELDOF's line does the same thing. Friday's two
+tries run at trees from before the question was added. Any later run of the twenty files will meet it, unless its tree
+holds this commit.
+
+**1. The head** [run]
+- Branch `cursor/proofs-gather-wired-audit-6a9b`, head `552354cbe19f8e374148566a2151a622fb994fb1`, pushed 09:52Z.
+- It is one commit on TWOLEG's scratch head `654e34d42be5`. Your message names `de592c42ef`; the scratch moved to
+  `654e34d42b`, which holds it, and that is the head TWOLEG tells ASSEMBLY to merge [read: TWOLEG's 09:33Z entry].
+- Two files: `benchmarks/one_stage/a5.py` (a function `bound_reads` of three lines and its one call) and
+  `benchmarks/one_stage/tests/test_a5_wiring.py` (one test). No pull request; I mark nothing.
+
+**2. The test that fails without it** [run, on my VM, the named file only]
+- `test_a_wired_port_with_no_tree_of_its_own_is_a_read_of_its_writers_tree_and_never_bound`: a window of two layers
+  whose second reads the first's output rows, its members given no tree for a wired port.
+- Against the lookup as it was (09:44Z): `KeyError: 'Gemm_v2{K=16,N=16,DOT={"fn":"AmpereBF16TcDot16_v2"}}/c2/x'`,
+  "1 failed, 6 deselected". That is HELDOF's `KeyError`, on another Definition.
+- With the mend (09:50Z): "7 passed in 0.68s", the file whole.
+- The test also holds two things the mend must not lose: a file that leaves the wired port out is refused
+  (`ValueError`, from `REG.bind_ports`), and a port with a tree of its own that a file leaves out is still bound at
+  the registration's root and the window's domain.
+
+**3. Is HELDOF's line right? Yes** [read, at `552354cbe19` unless a line says otherwise]
+- "No root for a wired port" is what the registration means. The interior window of a two-stage audit gives a member
+  with a wire no tree of its own for the wired port (`interior_rows.py:392`, `wired_trees=not h`). The verifier's
+  window then derives no port for it (`CS.expected_ports`, `a5.py:790`), and the record holds the writer's
+  `<writer>/<out>` only. `rows.py:242` states the rule: the port's rows are its writer's output rows, whole.
+- What the raise was: `a5.py` built `roots[m.port(p)]` for every port of the member's header before it called
+  `REG.bind_ports`. `bind_ports` reads a root only for a port the verifier's file names no read for
+  (`registered.py:684`). The file names the wired port, so no root was ever needed there.
+- HELDOF's line (`508b06a084`) filters the same lookup by "the registration holds a root under this name". Mine is
+  that filter in a function with a docstring and a test. Neither changes a byte of any file the audit writes
+  [derived: the file is returned as it is when it names every port, `registered.py:685–686`].
+- I set aside handing `bind_ports` the writer's root for the wired port. It would let a file that leaves the wired
+  port out pass, by binding the port instead of reading it. A bound port is checked against the member's own header;
+  a read is checked against the writer unit's leaf. Only the second is the wire.
+
+**4. The checks that hold the wire, with no root read at that call** [read]
+- Before the sample, `root:<port>` (`a5.py:855–858`): for each port of the member's header it takes the tree that
+  holds the port (`mine.held`, the writer's output tree for a wired port) and requires the header's root and domain
+  id to equal the registration's for that tree. This is where the audit holds the writer's output root.
+- In each session, the verifier's own file names the wired port a read of the writer's tree, each unit at its writer
+  unit's leaf (`two_stage.py:757–758` in the two-stage audit; `rows.own_reads`, `rows.py:974`, in the one-stage
+  audit). The Lean verifier opens each row of the port against that root and holds each instance to the position the
+  file gives its unit (`Flock/Registered.lean:219` `opensLeaf`, `:262` `badInstance`, `:270` `checkPort`).
+- After the sample, the wiring check on the sampled units (`a5.py:944`, `WI.check_drawn`): each sampled inner block's
+  wired strings are its writer's output strings.
+- After the sessions, `TB.reported_reads` (`a5.py:1170`): each verdict reports exactly the ports, values and roots of
+  the verifier's file.
+- So the answer to "by the wiring check?" is: the wiring check is the third of four. The root itself is held by the
+  first, and the read by the second.
+
+**5. The rehearsal** [run]
+- `r20261113-095312-3257`, sent with `--on auto`, placed on vy-nebius-cpu-1, launched 09:53:12Z; its slot is held
+  from 09:53:36Z [read: `slot.json`], so it waited 24 s. 16 CPUs, 32 GB asked, limit 120 minutes. At 09:56Z it was
+  building, at head `552354cbe19` [read: `out/head.txt`].
+- It runs `two_stage_small.sh` with `SMALL_ARGS="--inline --units 20 --v 2560 --logits"`, then the tests that call the
+  audit (`test_a5_wiring.py`, `test_two_stage_second.py`, `test_a5_tp_gates.py`).
+- Expected end about 10:45Z [guess, from HELDOF's runs of the same play and my earlier pytest legs]. Its lines go in
+  a short entry then.
+- What it can and cannot show: that `second` no longer raises and what `two_stage_small.sh` exits at this tree. It
+  does not run TWOLEG's form; HELDOF's `b1b3` [relayed] had the second stage accept and the form refuse a session,
+  which is TWOLEG's question (TWOLEG's 09:33Z item 7), not this mend's.
+
+**6. Does Friday's launch meet this? No** [run 09:54Z unless tagged]
+- `git merge-base --is-ancestor ca2e80f1ed H` is false for all three of Friday's trees: `984cb027efa3` (the 20:00Z
+  try), `1536ba03d343` (the 13:10Z try, serve and audit [relayed: serving on VLLM-300, in my 07:43Z entry]) and `496aa183544b` (#9480). `a5.py` at each has no
+  `bind_ports` call at all.
+- `main` (`6b1483bbb2a6`) and the join (`cursor/proofs-join-42b8`, `0df461b1b2`) both hold the lookup (`a5.py:888`
+  and `:894`). `main` also holds the rule that gives a wired port no tree (`interior_rows.py:359`).
+- The twenty files' class is not on `main`: `two_stage_small.py` there has no `--units`. It is on my three trees and
+  on the trees that merged them (TWOLEG's scratch, HELDOF's scratch, the join).
+- **What tree the next served run of the twenty files runs at:** Friday's two, as pinned, and they do not raise. For
+  any run after Friday I have read no tree named [not known]. It cannot be Friday's
+  trees once #9480 is carried over `main`, so it will be a tree after `ca2e80f1ed`: the class carried over `main`, or
+  the join. **It raises there**, in `second`, after the serve and the first stage pass and before any session
+  [relayed: HELDOF's `62dc`], unless that tree holds `552354cbe19` or its change.
+- What to tell serving: Friday's launches stand as they are. Run neither try at a newer tree. A tree for a later run
+  must hold this commit.
+- How it gets there [run: `git merge-tree`, nothing written]: the commit merges into the join's head with no
+  conflict. On `main` it conflicts in one line, the `collections.abc` import (`main` already imports `Mapping`); the
+  call site is the same. I merge no `main` and move nothing until you say; say whether you want it as a pull request
+  of its own on `main` or carried with #9480.
+
+**Not established**
+- The rehearsal's result (item 5).
+- Whether `second` can be run again on a served directory after it raised. I did not try it.
+- A one-stage audit of a window whose members have no tree for a wired port. Only the two-stage interior and the toy
+  (`benchmarks/two_stage/toy.py:242`) make such members [read], and I ran neither's one-stage audit.
+- Whether TWOLEG's form accepts the 20-template play. Not mine.
+
+**Mailbox.** Your 09:42Z message (vllm's answers on the weights' root) contradicts nothing in my 08:58Z entry [read]:
+vllm's "the adapter commits every weight again in each window" is my point that a served window's weight rows are
+committed afresh.
