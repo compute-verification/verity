@@ -258,6 +258,45 @@ def _dead_pair_cost(s: Shape, groups: int, atoms: int, units: int) -> Fraction:
     return Fraction(units * (chain + fused + peel + forming + rows) + job)
 
 
+def _running(group_words: np.ndarray) -> np.ndarray:
+    """Each word's promoted total after each group (FP32, nearest even), from its group words."""
+    total, out = np.zeros(group_words.shape[0], dtype=np.float32), []
+    for g in range(group_words.shape[1]):
+        total = (total + group_words[:, g].astype(np.float32)).astype(np.float32)
+        out.append(total)
+    return np.stack(out, 1)
+
+
+def _dead_pair_case(k: int, n: int, groups: int, units: int, m: int = 8192, run: int = 1) -> dict:
+    """One 64 x 64 audit tile of the dead-pair family at depth `k`, in `units` units of shape (m, k, n) that share one
+    weight: whether its rows pass the rules, whether the program's words are the reference's, the tile's replayed debit
+    (flagged atom-words, later promotions into +0, and at least every salt-dead element) against its cap, and the
+    program's cost against TT_OUT's bound, per word."""
+    C.set_atom("hopper")
+    sch = PC.PearlC(forming="v1", device=H100)
+    s = Shape(m, k, n)
+    sch.check(Matmul(0, s, 0))
+    A, B, XA, _, _, ok = _dead_pair_tile(k, groups, run=run)
+    P = A.shape[0]
+    group_words, honest = C.group_sums(A, B, G)
+    words, atoms = _dead_pair_program(A, B, groups)
+    flags, _ = C.debit(A, B, G)
+    flagged = int(flags.sum())
+    later_zero = int((_running(group_words)[:, :-1] == 0).sum())
+    dead = _dead_over_count(XA, groups)
+    unread = 32 * int(flags.reshape(64, 64, -1).all(1).sum())
+    debit = ((32 + Fraction(H100.prices.fadd, G)) * flagged + H100.prices.fadd * later_zero
+             + H100.prices.forming_credited * Fraction(64, n) * (dead + unread))
+    per_word = Fraction(sch.credit_of(s), s.m * s.n)
+    cost, credit = _dead_pair_cost(s, groups, atoms, units), units * Fraction(sch.credit_of(s))
+    return {"shape": (m, k, n), "groups": groups, "units": units, "run": run, "rules": bool(ok),
+            "words": P, "equal": int((words == honest).sum()), "atoms": atoms, "reference_atoms": k // 32,
+            "flagged": flagged, "later_zero": later_zero, "dead": dead, "designed_dead": 64 * 112 * groups,
+            "unread": unread, "debit": float(debit), "cap": float(RHO * per_word * P),
+            "cost": float(cost / (units * s.m * s.n)), "credit": float(per_word),
+            "bound": float((1 - G0) * (1 - RHO) * per_word), "fires": _fires(credit, cost)}
+
+
 def test_dead_pairs_stay_within_the_gap():
     """Dead pairs: positions where a row of A and a row of B are both dead, so the product is fixed before the salt. On
     rows that put liveness's k/64 dead entries in whole promotion groups, at the same positions in A and B, with signs
@@ -266,37 +305,11 @@ def test_dead_pairs_stay_within_the_gap():
     against the reference's, checks the tile's replayed debit against the cap with every element that could be salt-dead
     charged, prices the program on the unit (`_dead_pair_cost`) and asserts TT_OUT's bound. The bound fails: this is a
     reviewer's falsification of the conjecture as stated, kept failing until the credit or the debit answers it."""
-    C.set_atom("hopper")
-    sch = PC.PearlC(forming="v1", device=H100)
-    k, n, groups, units = 8192, 8192, 1, 256
-    s = Shape(8192, k, n)
-    sch.check(Matmul(0, s, 0))
-    A, B, XA, a, _, ok = _dead_pair_tile(k, groups)
-    assert ok
-    P = A.shape[0]
-    honest = C.group_sums(A, B, G)
-    words, atoms = _dead_pair_program(A, B, groups)
-    assert (words == honest[1]).all()
-    flags, _ = C.debit(A, B, G)
-    later_zero = int((_running(honest[0])[:, :-1] == 0).sum())
-    elems = _dead_over_count(XA, groups) + 32 * int(flags.reshape(64, 64, -1).all(1).sum())
-    debit = (32 + Fraction(H100.prices.fadd, G)) * int(flags.sum()) + H100.prices.fadd * later_zero \
-        + H100.prices.forming_credited * Fraction(64, n) * elems
-    tile_credit = Fraction(sch.credit_of(s), s.m * s.n) * P
-    assert debit <= RHO * tile_credit, (float(debit), float(RHO * tile_credit))
-    cost = _dead_pair_cost(s, groups, atoms, units)
-    credit = units * Fraction(sch.credit_of(s))
-    assert not _fires(credit, cost), (
-        f"dead pairs at {s}: the program costs {float(cost / (units * s.m * s.n)):.1f} units a word against a credit of "
-        f"{float(credit / (units * s.m * s.n)):.1f}, under (1 - g0)(1 - rho) of it "
-        f"({float((1 - G0) * (1 - RHO) * credit / (units * s.m * s.n)):.1f}); the tile's debit is {float(debit):.0f} of a "
-        f"cap of {float(RHO * tile_credit):.0f}")
-
-
-def _running(group_words: np.ndarray) -> np.ndarray:
-    """Each word's promoted total after each group (FP32, nearest even), from its group words."""
-    total, out = np.zeros(group_words.shape[0], dtype=np.float32), []
-    for g in range(group_words.shape[1]):
-        total = (total + group_words[:, g].astype(np.float32)).astype(np.float32)
-        out.append(total)
-    return np.stack(out, 1)
+    case = _dead_pair_case(k=8192, n=8192, groups=1, units=256)
+    assert case["rules"], case
+    assert case["equal"] == case["words"], case
+    assert case["debit"] <= case["cap"], case
+    assert not case["fires"], (
+        f"dead pairs at {case['shape']}: the program costs {case['cost']:.1f} units a word against a credit of "
+        f"{case['credit']:.1f}, under (1 - g0)(1 - rho) of it ({case['bound']:.1f}); the tile's debit is "
+        f"{case['debit']:.0f} of a cap of {case['cap']:.0f}")
