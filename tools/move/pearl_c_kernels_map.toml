@@ -90,8 +90,6 @@ paths = ["benchmarks/pouw/pearl_c/", "benchmarks/pouw/harness/ieee_pin.cu"]
 "benchmarks/torch_gpu/s8_linear/s8_wgmma.cu: benchmarks/pouw/pearl_c_sm90" = "the sm_90a kernel's plain GEMM"
 "tests/test_public_boundary.py: benchmarks/pouw/pearl_c_sm120" = "PEARL_C_KERNELS, the kernel directories"
 "tests/test_public_boundary.py: benchmarks/pouw/pearl_c_sm90" = "PEARL_C_KERNELS, the kernel directories"
-"tools/verity/check/public_boundary.toml: benchmarks/pouw/pearl_c_sm120" = "the kernel's sources"
-"tools/verity/check/public_boundary.toml: benchmarks/pouw/pearl_c_sm90" = "the kernel's sources"
 "verity/definitions/registry/pearl_c_tile.py: benchmarks/pouw/pearl_c_sm90" = "store_y in the kernel's sources"
 
 [drop]
@@ -120,7 +118,10 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
            # header `PD_HOST_EXTRA` names, which `pearl_c_sm120/hash_decode_host.cpp` includes from its own directory
            "benchmarks/pouw/pearl_c/simt_twin.py", "verity/protocols/accounting/pouw/prover/kernels/pearl_c/simt_twin.py",
            "benchmarks/pouw/pearl_c_sm90/hash_prefill_host.cpp",
-           "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/hash_prefill_host.cpp"]
+           "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/hash_prefill_host.cpp",
+           # the public boundary, whose brace lists the move splits: the hand commit writes its rows, the kernels
+           # being `pouw`'s and what of them was private staying so
+           "tools/verity/check/public_boundary.toml"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
            "adapters/vllm/manifests/definitions.json"]
 
