@@ -24,6 +24,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
@@ -34,15 +35,17 @@ from verity.circuits import codec
 from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate_call
 from verity.circuits.program import Program
+from verity.definitions.numerics import ref_prims_twins
 from verity.definitions.registry import b1
 from verity.definitions.registry import prims as P
 from verity.definitions.registry import ref_prims as R
-from verity.definitions.numerics import ref_prims_twins
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 F = torch.nn.functional
 
-REPO = Path(__file__).resolve().parents[2]
 RECORD_DIR = Path(os.environ.get("REF_PRIMS_RECORD_DIR") or tempfile.mkdtemp(prefix="ref-prims-"))
 SEED = 20260909
 LABEL = "conformance over tested domain, not universal correctness"
@@ -273,7 +276,9 @@ def test_linear_ref_vs_torch(DT):
             xa, wa = np.abs(ref_prims_twins.np_widen(x, DT).astype(np.float64)), np.abs(ref_prims_twins.np_widen(w, DT).astype(np.float64))
             scale = xa @ wa.T + (0.0 if b is None else np.abs(ref_prims_twins.np_widen(b, DT).astype(np.float64)))
             tol = reassoc_tol(ref, DT, K, scale)
-            total_ref.append(ref.ravel()), total_got.append(got.ravel()), total_tol.append(tol)
+            total_ref.append(ref.ravel())
+            total_got.append(got.ravel())
+            total_tol.append(tol)
             stats.append({"K": K, "N": N, "BIAS": bias, **compare(ref, got, DT, tol=tol, tol_formula=formula)})
     # the body is the definition: check twin == gates on one small shape from the same domain
     K, N = 16, 8
@@ -304,7 +309,9 @@ def test_rmsnorm_ref_vs_torch(DT):
             ref = ref_prims_twins.np_rmsnorm_ref(x, w, eps, DT)
             got = t_words(hf_rmsnorm(words_t(x, DT), words_t(w, DT), eps))
             tol = reassoc_tol(ref, DT, N, row_scale(ref, DT, (rows, N)), c=4.0)
-            refs.append(ref.ravel()), gots.append(got.ravel()), tols.append(tol)
+            refs.append(ref.ravel())
+            gots.append(got.ravel())
+            tols.append(tol)
             per.append({"N": N, "scale": sc, **compare(ref, got, DT, tol=tol, tol_formula=formula)})
     x, w = rand_words(rng, 16, DT), rand_words(rng, 16, DT)
     out, n_gates = gates(bind(R.RMSNormRef, N=16, EPS=eps, DT=DT), x, w)
@@ -332,7 +339,9 @@ def test_layernorm_ref_vs_torch(DT):
             ref = ref_prims_twins.np_layernorm_ref(x, g, b, eps, DT)
             got = t_words(F.layer_norm(words_t(x, DT), (N,), words_t(g, DT), words_t(b, DT), eps))
             tol = reassoc_tol(ref, DT, N, row_scale(ref, DT, (rows, N)), c=8.0)
-            refs.append(ref.ravel()), gots.append(got.ravel()), tols.append(tol)
+            refs.append(ref.ravel())
+            gots.append(got.ravel())
+            tols.append(tol)
             per.append({"N": N, "scale": sc, **compare(ref, got, DT, tol=tol, tol_formula=formula)})
     x, g, b = rand_words(rng, 16, DT), rand_words(rng, 16, DT), rand_words(rng, 16, DT)
     out, n_gates = gates(bind(R.LayerNormRef, N=16, EPS=eps, DT=DT), x, g, b)
@@ -350,7 +359,7 @@ def test_layernorm_ref_vs_torch(DT):
 def _elementwise_domain(rng, DT: str) -> np.ndarray:
     """Every finite bf16 word (exhaustive) for DT=bf16; 65,536 random f32 values ~ N(0, 4) plus edge words for f32."""
     if DT == "bf16":
-        w = np.arange(1 << 16, dtype=np.uint16)
+        w: np.ndarray = np.arange(1 << 16, dtype=np.uint16)
         finite = (w & 0x7F80) != 0x7F80
         return w[finite]
     x = (rng.standard_normal(1 << 16) * 4).astype(np.float32).view(np.uint32)
@@ -437,7 +446,9 @@ def test_softmax_ref_vs_torch(DT):
             ref = ref_prims_twins.np_softmax_ref(x, DT)
             got = t_words(F.softmax(words_t(x, DT), dim=-1, dtype=torch.float32).to(tdt(DT)))
             tol = reassoc_tol(ref, DT, N, np.abs(ref_prims_twins.np_widen(ref, DT).astype(np.float64)), c=4.0)
-            refs.append(ref.ravel()), gots.append(got.ravel()), tols.append(tol)
+            refs.append(ref.ravel())
+            gots.append(got.ravel())
+            tols.append(tol)
             per.append({"N": N, "scale": sc, **compare(ref, got, DT, tol=tol, tol_formula=formula)})
     x = rand_words(rng, 16, DT)
     out, n_gates = gates(bind(R.SoftmaxRef, N=16, DT=DT), x)
@@ -466,7 +477,8 @@ def test_rope_ref_vs_torch(DT):
         cos, sin = emb.cos().to(tdt(DT)), emb.sin().to(tdt(DT))  # the model's derived cos/sin rows (Inputs of the kind)
         ref = ref_prims_twins.np_rope_ref(x, t_words(cos), t_words(sin), DT)
         got = t_words(hf_rope(words_t(x, DT), cos, sin))
-        refs.append(ref.ravel()), gots.append(got.ravel())
+        refs.append(ref.ravel())
+        gots.append(got.ravel())
         per.append({"D": D, **compare(ref, got, DT)})
     D = 8
     x, c, s = rand_words(rng, D, DT), rand_words(rng, D, DT), rand_words(rng, D, DT)
@@ -497,7 +509,9 @@ def test_eager_attention_head_ref_vs_torch(DT, scale_op):
         got = t_words(hf_eager_attention_head(words_t(q, DT), words_t(k, DT), words_t(v, DT), scale_op))
         vmax = np.abs(ref_prims_twins.np_widen(v, DT).astype(np.float64)).reshape(rows, -1).max(axis=1)  # |out| <= max|v| (convex combination)
         tol = reassoc_tol(ref, DT, T + D, np.broadcast_to(vmax[:, None], (rows, D)), c=16.0)
-        refs.append(ref.ravel()), gots.append(got.ravel()), tols.append(tol)
+        refs.append(ref.ravel())
+        gots.append(got.ravel())
+        tols.append(tol)
         per.append({"T": T, "D": D, **compare(ref, got, DT, tol=tol, tol_formula=formula)})
     T, D = 5, 8
     q, k, v = rand_words(rng, D, DT), rand_words(rng, (T, D), DT), rand_words(rng, (T, D), DT)
@@ -602,7 +616,8 @@ def test_rope_interleaved_ref_vs_torch_gptj(DT):
         cos, sin = freqs.cos().to(tdt(DT)), freqs.sin().to(tdt(DT))  # (rows, D/2)
         ref = ref_prims_twins.np_rope_interleaved_ref(x, t_words(cos), t_words(sin), DT)
         got = t_words(gptj_apply_rotary(words_t(x, DT), sin, cos))
-        refs.append(ref.ravel()), gots.append(got.ravel())
+        refs.append(ref.ravel())
+        gots.append(got.ravel())
         per.append({"D": D, **compare(ref, got, DT)})
     D = 8
     x, c, s = rand_words(rng, D, DT), rand_words(rng, D // 2, DT), rand_words(rng, D // 2, DT)

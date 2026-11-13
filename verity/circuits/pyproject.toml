@@ -11,7 +11,9 @@ untraced = ["tests/test_ruff.py"]
 # Lean's registry, and tests/test_lean_gates recomputes the circuit model's rows from s8, census/v1 and property/v1.
 # tests/test_ruff runs ruff, which the guard doesn't trace, under the repository's one configuration (ruff.toml).
 inputs = ["verity", "verity/circuits", "verity/definitions/kernels", "security/Definitions/Accounting/Gates/Registry.lean",
-          "security/Proofs/Accounting/Gates/Rows.lean", "ruff.toml"]
+          "security/Proofs/Accounting/Gates/Rows.lean", "ruff.toml",
+          # `verity`'s settings registry, which tests/test_settings.py tests, with the package it sits in
+          "tools/config/verity_config/verity_settings.py", "tools/config/verity_config"]
 parallel = true
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
