@@ -206,7 +206,7 @@ protocols = [
 ]
 # the auditor host's challenger service: it links the network certifier's coins beside SPOT's challenger, and its gate and
 # units are the team's pods'
-challenger_service = ["verity/composite/device/live_challenger"]
+challenger_service = ["verity/protocols/compose/device/live_challenger"]
 # vLLM's tests that read a private protocol (NCI, the bandwidth audit, PoUS)
 protocol_tests = [
     "adapters/vllm/tests/pipeline/test_memory_map.py",
