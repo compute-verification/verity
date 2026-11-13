@@ -7,7 +7,8 @@ beside the kept audit's by name with its codes, and the most disk the job's dire
 refused only where a verdict said so: one whose code is ``disagree``, or that Lean gave no verdict line for, is listed as
 not answered. For the memory: each sampled member's circuit, program and partition files' bytes, each command its session
 logged with its exit and seconds, the line it owes by its verb and whether it gave one (of the sample's check, each
-case's ``ok``), the job's cgroup's limit, kills and peak as the job read them, the node's MemAvailable at the
+case's ``ok``), the job's cgroup's limit, kills and peak as the job read them, of the memory scope that limits it
+the times it reached its limit and what its processes and its file cache hold, the node's MemAvailable at the
 job's start and at its lowest with the stage that was seen in, and what the audit's stderr says of a fork with more than
 one thread alive. Of a job that stopped itself: the stage it stopped in, why, and the sampled member's circuit file's
 bytes. No count or index of the window is written, and no size but those files': of
@@ -178,9 +179,13 @@ def mem_available(start_kb: int | None, low_kb: int | None, low_stage: str | Non
             "most_taken_bytes": (start_kb - low) * 1024, "stops_at_taken_bytes": None if stop_gb is None else stop_gb * 10 ** 9}
 
 
-def stop_reason(stopped: int | None, stop_gb: int | None) -> str | None:
+def stop_reason(stopped: int | None, stop_gb: int | None, said: str | None = None) -> str | None:
+    """Why the job stopped itself, by its exit; ``said`` is the job's own reason where its stop wrote one (which of the
+    two memory stops it was)."""
     if stopped is None:
         return None
+    if said and stopped == 72:
+        return said
     return {71: "the disk ran low: less than the job's floor was free under its work directory",
             72: f"the memory ran low: MemAvailable fell more than {stop_gb} GB under its value at the job's start",
             143: "the job was told to stop"}.get(stopped, f"exit {stopped}")
@@ -277,12 +282,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--audit-err", type=Path, default=None, help="the audit's stderr")
     ap.add_argument("--warnings", default=None, help="the audit's PYTHONWARNINGS, as the job set it")
     ap.add_argument("--memory", default=None,
-                    help="JSON: the job's cgroup's limit, kills and peak as the job read them at its start and now")
+                    help="JSON: the job's cgroup's limit, kills and peak, and the memory scope's max events and what its "
+                         "processes and file cache hold, as the job read them at its start and now")
     ap.add_argument("--stage", default=None, help="the job's stage as this is written")
     ap.add_argument("--mem-start-kb", type=int, default=None, help="MemAvailable at the job's start, /proc/meminfo's kB")
     ap.add_argument("--mem-low-kb", type=int, default=None, help="the lowest MemAvailable the job read")
     ap.add_argument("--mem-low-stage", default=None, help="the stage the lowest was read in")
     ap.add_argument("--mem-stop-gb", type=int, default=None, help="the job stops itself once MemAvailable is more than this under its start")
+    ap.add_argument("--stop-reason", default=None, help="the reason the job's own stop wrote, where it wrote one")
     a = ap.parse_args(argv)
     row, a5 = load(a.audit / "summary.json") or {}, load(a.audit / "window" / "summary.json") or {}
     kept_a5 = load(a.kept / "window" / "summary.json") or {}
@@ -302,7 +309,7 @@ def main(argv: list[str] | None = None) -> int:
             "how": "sent as an input and held to this commit and tree id before the job ran in it; the run's source "
                    "is the launcher's and is not the tree audited"},
         "audit_ended": a.exit is not None, "stopped": a.stopped, "stage": a.stage,
-        "stop_reason": stop_reason(a.stopped, a.mem_stop_gb),
+        "stop_reason": stop_reason(a.stopped, a.mem_stop_gb, a.stop_reason),
         "sampled_circuit_bytes": [m["circuit_bytes"] for m in sampled],
         "mem_available": mem_available(a.mem_start_kb, a.mem_low_kb, a.mem_low_stage, a.mem_stop_gb),
         "exit": a.exit, "audit_seconds": a.audit_seconds, "workers_asked": a.workers, "warm_jobs": a.warm_jobs,

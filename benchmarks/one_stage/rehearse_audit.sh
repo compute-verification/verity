@@ -20,11 +20,22 @@
 #   MIN_FREE_GB           default 600: the job starts only with that much free under WORK_PARENT; rehearsal.json
 #                         holds the value and what was free at the start
 #   FLOOR_GB              default 15: the job ends (exit 71) once less than that is free there, read every 5 s
-#   MEM_STOP_GB           default 650 (GB of 10^9 bytes): the job ends (exit 72) once the node's MemAvailable, read every
-#                         5 s beside the disk, is more than that under its value at this script's start; rehearsal.json
-#                         then holds the stage, the sampled member's circuit file's bytes and the reason, and on every
-#                         way out the lowest value seen and the stage it was seen in
+#   MEM_ROOM_GB           default 32 (GB of 10^9 bytes): the memory stop. The job ends (exit 72) once the processes of
+#                         the memory scope that limits it hold more than the scope's limit less that much. The scope is
+#                         the level of the job's cgroup, from its own up, whose memory.max is the tightest; what its
+#                         processes hold is its memory.current less its memory.stat's file cache, which the kernel
+#                         drops at the limit and which MemAvailable counts as free (shmem, part of `file` and dropped
+#                         by no reclaim, stays counted). Read every 5 s beside the disk; where no level has a limit
+#                         this stop reads nothing. At each stage's start one line says the scope's `max` events (the
+#                         times it reached its limit), what its processes and its file cache hold, and MemAvailable
+#   MEM_STOP_GB           default 650 (GB of 10^9 bytes): the second reading, and a stop of its own. The job ends (exit
+#                         72) once the node's MemAvailable, read every 5 s, is more than that under its value at this
+#                         script's start; rehearsal.json then holds the stage, the sampled member's circuit file's
+#                         bytes and the reason (which of the two stops), and on every way out the lowest value seen
+#                         and the stage it was seen in
 #   MEMINFO               default /proc/meminfo: the file MemAvailable is read from (a test names its own)
+#   CGROUP                default the job's own cgroup (v2), from /proc/self/cgroup: the directory the memory scope
+#                         is looked for from (a test names its own)
 #   TREE_INPUT            a file sent with the job: a tar of one bare git directory (NAME.git) holding the commit to audit
 #                         and its history down to main's line. With it TREE_COMMIT, TREE_ID and TREE_PIN, 40 hex
 #                         each: the job clones the directory (git recomputes each object's id as it receives it) and
@@ -46,7 +57,8 @@
 # disk the job's directory held. The audit's own directory, its logs and its composed circuits stay in the job's directory
 # and go with it. For the memory it also keeps: each sampled member's circuit, program and partition files' bytes, each Lean
 # command's exit and seconds, every negative with its codes (one whose code is disagree, or that Lean gave no verdict line
-# for, as not answered, never as refused), and the job's cgroup's limit, kills and peak read at the start and at the end.
+# for, as not answered, never as refused), and the job's cgroup's limit, kills and peak read at the start and at the end,
+# with the memory scope's max events and what its processes held at the most.
 #   AUDIT_WARNINGS        the audit's PYTHONWARNINGS (default::DeprecationWarning shows Python's warning of a fork with
 #                         more than one thread alive, which it hides otherwise); unset, the audit runs as it did
 # Where the public copy fails, or the reader's answer on the honest arm raises, the audit ended and no row of a record can
@@ -61,7 +73,7 @@ set -uo pipefail
 K=${K:-0} CLASS=${V3C_CLASS:-8,32,4,4,16} LAW=${V3C_LAW:-subset:1}
 WORKERS=${V3C_NEGATIVE_WORKERS:-7} MEM_GB=${AUDIT_MEM_GB:-650} JOB_S=${JOB_SECONDS:-12600}
 MIN_FREE_GB=${MIN_FREE_GB:-600} FLOOR_GB=${FLOOR_GB:-15}
-MEM_STOP_GB=${MEM_STOP_GB:-650} MEMINFO=${MEMINFO:-/proc/meminfo}
+MEM_STOP_GB=${MEM_STOP_GB:-650} MEMINFO=${MEMINFO:-/proc/meminfo} MEM_ROOM_GB=${MEM_ROOM_GB:-32}
 # the table: a member of TABLE_BYTES took TABLE_MEMBER_S s in its session, its Lean check and the registered reads' four
 # checks at once; the outcome and the negatives' workers take TABLE_WORKERS_S whatever the member: the outcome, then the
 # negatives' twelve tasks in one wave, as six workers took them. The table has that stage at six workers alone: five
@@ -85,23 +97,42 @@ avail_kb() { awk '/^MemAvailable:/ {print $2; exit}' "$MEMINFO" 2>/dev/null; }
 gb() { awk -v k="$1" 'BEGIN {printf "%.1f", k * 1024 / 1e9}'; }  # /proc/meminfo's kB (1024 bytes) -> GB of 10^9 bytes
 MEM0_KB=$(avail_kb)
 # the job's cgroup (v2): a scope of its own, or a login session's, which other jobs share and whose peak then is not this job's
-CG=/sys/fs/cgroup$(awk -F: '$1 == "0" {print $3}' /proc/self/cgroup 2>/dev/null)
+CG=${CGROUP:-/sys/fs/cgroup$(awk -F: '$1 == "0" {print $3}' /proc/self/cgroup 2>/dev/null)}
 case ${CG##*/} in check-*) CG_KIND="a scope of its own";; session-*) CG_KIND="a login session's scope, shared";; *) CG_KIND="another kind";; esac
 kills() { local k; k=$(awk '$1 == "oom_kill" {print $2}' "$CG/memory.events" 2>/dev/null); echo "${k:-unread}"; }
-limit() {  # the tightest memory.max from the job's cgroup up to the root, in bytes; none where no level has one
-  local d=$CG m low=''
+scope() {  # the memory scope: the level from the job's cgroup up to the root whose memory.max is the tightest; empty where none has one
+  local d=$CG m low='' at=''
   while [ -n "$d" ] && [ "$d" != /sys/fs/cgroup ] && [ "$d" != /sys/fs ]; do
     m=$(cat "$d/memory.max" 2>/dev/null)
-    if [[ $m =~ ^[0-9]+$ ]] && { [ -z "$low" ] || [ "$m" -lt "$low" ]; }; then low=$m; fi
+    if [[ $m =~ ^[0-9]+$ ]] && { [ -z "$low" ] || [ "$m" -lt "$low" ]; }; then low=$m at=$d; fi
     d=${d%/*}
   done
-  echo "${low:-none}"
+  echo "$at"
 }
-KILLS0=$(kills)
-memory() {  # one JSON object: what the job reads of its cgroup now
-  printf '{"cgroup": "%s", "limit_bytes": "%s", "oom_kill_at_start": "%s", "oom_kill_now": "%s", "peak_bytes": "%s", "current_bytes": "%s", "audit_mem_gb": "%s"}' \
+limit() {  # the scope's memory.max, in bytes; none where no level has one
+  local d; d=$(scope)
+  if [ -n "$d" ]; then cat "$d/memory.max"; else echo none; fi
+}
+stat_of() { local v; v=$(awk -v k="$2" '$1 == k {print $2; exit}' "$1/memory.stat" 2>/dev/null); echo "${v:-unread}"; }
+held() {  # held DIR: what the processes of the cgroup at DIR hold, in bytes: its memory.current less its file cache, shmem left in
+  local cur file shmem
+  cur=$(cat "$1/memory.current" 2>/dev/null) file=$(stat_of "$1" file) shmem=$(stat_of "$1" shmem)
+  if [[ $cur =~ ^[0-9]+$ ]] && [[ $file =~ ^[0-9]+$ ]] && [[ $shmem =~ ^[0-9]+$ ]]; then echo $((cur - file + shmem)); else echo unread; fi
+}
+maxed() { local n; n=$(awk '$1 == "max" {print $2}' "${1:-$CG}/memory.events" 2>/dev/null); echo "${n:-unread}"; }  # the times a cgroup reached its limit
+bgb() { if [[ $1 =~ ^[0-9]+$ ]]; then awk -v b="$1" 'BEGIN {printf "%.1f GB", b / 1e9}'; else echo "$1"; fi; }  # bytes -> GB of 10^9 bytes
+KILLS0=$(kills) SCOPE0=$(scope)
+MAXED0=$(maxed "${SCOPE0:-$CG}")
+memory() {  # one JSON object: what the job reads of its cgroup and of the memory scope now
+  local d peak='' peak_stage=''
+  d=$(scope)
+  IFS=$'\t' read -r peak peak_stage 2>/dev/null < "${WORK:-/nonexistent}/.held"
+  printf '{"cgroup": "%s", "limit_bytes": "%s", "oom_kill_at_start": "%s", "oom_kill_now": "%s", "peak_bytes": "%s", "current_bytes": "%s", "audit_mem_gb": "%s", ' \
     "$CG_KIND" "$(limit)" "$KILLS0" "$(kills)" "$(cat "$CG/memory.peak" 2>/dev/null || echo unread)" \
     "$(cat "$CG/memory.current" 2>/dev/null || echo unread)" "$MEM_GB"
+  printf '"scope": "%s", "scope_max_events_at_start": "%s", "scope_max_events_now": "%s", "scope_processes_bytes": "%s", "scope_file_bytes": "%s", "scope_processes_most_bytes": "%s", "scope_processes_most_stage": "%s", "stops_at_room_gb": "%s"}' \
+    "$([ -z "$d" ] && echo 'no level of the cgroup has a limit' || { [ "$d" = "$CG" ] && echo "the job's own cgroup" || echo 'a level above the job'"'"'s cgroup'; })" \
+    "$MAXED0" "$(maxed "${d:-$CG}")" "$(held "${d:-$CG}")" "$(stat_of "${d:-$CG}" file)" "${peak:-unread}" "${peak_stage:-unread}" "$MEM_ROOM_GB"
 }
 
 SENT=''
@@ -110,6 +141,7 @@ step "a rehearsal on a local development session: no audit of record, no verdict
 [[ $WORKERS =~ ^[1-9][0-9]*$ ]] || { step "PREFLIGHT: V3C_NEGATIVE_WORKERS is a positive integer"; exit 64; }
 [[ $JOB_S =~ ^[1-9][0-9]*$ ]] || { step "PREFLIGHT: JOB_SECONDS is a positive integer"; exit 64; }
 [[ $MEM_STOP_GB =~ ^[1-9][0-9]*$ ]] || { step "PREFLIGHT: MEM_STOP_GB is a positive integer"; exit 64; }
+[[ $MEM_ROOM_GB =~ ^[1-9][0-9]*$ ]] || { step "PREFLIGHT: MEM_ROOM_GB is a positive integer"; exit 64; }
 [[ $MEM0_KB =~ ^[0-9]+$ ]] || { step "PREFLIGHT: no MemAvailable line in ${MEMINFO##*/}"; exit 64; }
 MEM_STOP_KB=$((MEM_STOP_GB * 1000000000 / 1024))
 [ -z "${WARM_JOBS:-}" ] || [[ $WARM_JOBS =~ ^[1-9][0-9]*$ ]] || { step "PREFLIGHT: WARM_JOBS is a positive integer"; exit 64; }
@@ -166,7 +198,12 @@ free=$(free_gb)
 [ "${free:-0}" -ge "$MIN_FREE_GB" ] || { step "PREFLIGHT: ${free:-?} GB free under WORK_PARENT, under MIN_FREE_GB $MIN_FREE_GB"; exit 70; }
 step "disk: $free GB free under WORK_PARENT; memory: $(awk '/^MemAvailable:/ {print int($2 / 1048576)}' /proc/meminfo) GiB available of $(awk '/^MemTotal:/ {print int($2 / 1048576)}' /proc/meminfo); $(nproc) cores"
 step "memory limit: $(memory)"
-step "memory stop: MemAvailable is $(gb "$MEM0_KB") GB now; the job ends (exit 72) once it is more than $MEM_STOP_GB GB under that$([ "$MEM0_KB" -gt "$MEM_STOP_KB" ] || echo ', which it cannot be: less than that is available now')"
+if [ -n "$SCOPE0" ]; then
+  step "memory stop: the memory scope's processes hold $(bgb "$(held "$SCOPE0")") and its file cache $(bgb "$(stat_of "$SCOPE0" file)") of its limit $(bgb "$(limit)"); the job ends (exit 72) once its processes hold more than the limit less $MEM_ROOM_GB GB; its max events so far: $MAXED0"
+else
+  step "memory stop: no level of the job's cgroup has a memory limit, so the stop on the scope's processes reads nothing"
+fi
+step "memory stop, the second reading: MemAvailable is $(gb "$MEM0_KB") GB now; the job ends (exit 72) once it is more than $MEM_STOP_GB GB under that$([ "$MEM0_KB" -gt "$MEM_STOP_KB" ] || echo ', which it cannot be: less than that is available now')"
 
 WORK=$(mktemp -d "$WORK_PARENT/rehearse-audit.XXXXXXXX") || exit 70
 CHILD='' WATCH='' PEAK_GB=0 warm=() warn=() COPY=ok ANSWER=ok
@@ -205,7 +242,7 @@ trap 'stop 72' USR2
 touch "$WORK/.start"
 at "the build"
 printf '%s\t%s\n' "$MEM0_KB" "the preflight" > "$WORK/.mem"
-(low=$MEM0_KB said='' neg=0 neg_t0=0 neg_m0=0 neg_low=0
+(low=$MEM0_KB said='' neg=0 neg_t0=0 neg_m0=0 neg_low=0 was='' most=0
  while sleep 5; do
    for d in "$WORK"/audit/window/session-m*; do  # each sampled member, once, as its session's directory appears
      [ -d "$d" ] || continue
@@ -224,8 +261,24 @@ printf '%s\t%s\n' "$MEM0_KB" "the preflight" > "$WORK/.mem"
    f=$(free_gb)
    [ "${f:-0}" -ge "$FLOOR_GB" ] || { printf 'REHEARSAL LOW DISK: %s GB free under WORK_PARENT, under FLOOR_GB %s\n' "${f:-?}" "$FLOOR_GB"; kill -USR1 $$; exit 0; }
    m=$(avail_kb)
-   [[ $m =~ ^[0-9]+$ ]] || continue
    s=$(stage)
+   sd=$(scope)
+   h=$(held "${sd:-$CG}")
+   if [ "$s" != "$was" ]; then  # a stage's start: the scope's max events, and what its processes and its file cache hold
+     was=$s
+     printf "REHEARSAL +%ss %s: the memory scope's max events %s, %s at the job's start; its processes hold %s, its file cache %s, of its limit %s; MemAvailable %s GB\n" \
+       "$(($(date +%s) - T0))" "$s" "$(maxed "${sd:-$CG}")" "$MAXED0" "$(bgb "$h")" "$(bgb "$(stat_of "${sd:-$CG}" file)")" "$(bgb "$(limit)")" "$([[ $m =~ ^[0-9]+$ ]] && gb "$m" || echo unread)"
+   fi
+   if [[ $h =~ ^[0-9]+$ ]]; then
+     if [ "$h" -gt "$most" ]; then most=$h; printf '%s\t%s\n' "$h" "$s" > "$WORK/.held.new" && mv -f "$WORK/.held.new" "$WORK/.held"; fi
+     l=$([ -n "$sd" ] && cat "$sd/memory.max" 2>/dev/null)
+     if [[ $l =~ ^[0-9]+$ ]] && [ "$h" -gt $((l - MEM_ROOM_GB * 1000000000)) ]; then
+       why="the memory scope's processes held $(bgb "$h"), more than its limit $(bgb "$l") less MEM_ROOM_GB $MEM_ROOM_GB"
+       echo "the memory ran low: $why" > "$WORK/.stop"
+       printf 'REHEARSAL LOW MEMORY: %s, in %s\n' "$why" "$s"; kill -USR2 $$; exit 0
+     fi
+   fi
+   [[ $m =~ ^[0-9]+$ ]] || continue
    if [ "$m" -lt "$low" ]; then low=$m; printf '%s\t%s\n' "$m" "$s" > "$WORK/.mem.new" && mv -f "$WORK/.mem.new" "$WORK/.mem"; fi
    if [ "$s" = "$NEG_STAGE" ]; then  # the stage's own seconds and its lowest MemAvailable, as read here every 5 s
      if [ "$neg" = 0 ]; then neg=1 neg_t0=$(date +%s) neg_m0=$m neg_low=$m; elif [ "$m" -lt "$neg_low" ]; then neg_low=$m; fi
@@ -234,7 +287,7 @@ printf '%s\t%s\n' "$MEM0_KB" "the preflight" > "$WORK/.mem"
      printf "REHEARSAL +%ss the outcome and the negatives' workers ended: %s s in the stage; MemAvailable's lowest in it %s GB, %s GB under the job's start and %s GB under the stage's own start\n" \
        "$(($(date +%s) - T0))" "$(($(date +%s) - neg_t0))" "$(gb "$neg_low")" "$(gb $((MEM0_KB - neg_low)))" "$(gb $((neg_m0 - neg_low)))"
    fi
-   [ $((MEM0_KB - m)) -le "$MEM_STOP_KB" ] || { printf 'REHEARSAL LOW MEMORY: MemAvailable %s GB, more than MEM_STOP_GB %s under the %s GB at the start, in %s\n' "$(gb "$m")" "$MEM_STOP_GB" "$(gb "$MEM0_KB")" "$(stage)"; kill -USR2 $$; exit 0; }
+   [ $((MEM0_KB - m)) -le "$MEM_STOP_KB" ] || { printf 'REHEARSAL LOW MEMORY: MemAvailable %s GB, more than MEM_STOP_GB %s under the %s GB at the start, in %s\n' "$(gb "$m")" "$MEM_STOP_GB" "$(gb "$MEM0_KB")" "$s"; kill -USR2 $$; exit 0; }
  done) &
 WATCH=$!
 limited() {  # limited STDOUT STDERR CMD...: CMD with the job's seconds left as its limit, stopped with the job
@@ -256,6 +309,7 @@ read_out() {  # rehearsal.json, from whatever the job reached
     --min-free-gb "$MIN_FREE_GB" --free-at-start-gb "${free:-0}" --audit-err "$WORK/audit.err" \
     --warnings "${AUDIT_WARNINGS:-}" --memory "$(memory)" --stage "$(stage)" --mem-start-kb "$MEM0_KB" \
     --mem-low-kb "${low_kb:-$MEM0_KB}" --mem-low-stage "${low_stage:-unread}" --mem-stop-gb "$MEM_STOP_GB" \
+    --stop-reason "$(cat "$WORK/.stop" 2>/dev/null)" \
     ${TREE_INPUT:+--tree-commit "$TREE_COMMIT" --tree-id "$TREE_ID"} "$@"
   r=$?
   case $r in
