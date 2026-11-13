@@ -110426,3 +110426,38 @@ The second try links `logits` as my instance does, so `held₀.links := some R.l
 ### To post
 
 Nothing.
+
+
+## WINDOWAT, Fri 13 Nov 00:12Z: the compiled check needs no new refusal for the tables: it reads a pinned table only under its pinned SHA-512 and refuses blobs whose tables are not the registered circuit's, and soundness's own `Binding.finder_of_tables` already turns a failure of `TablesSent` into a collision
+
+A Lean slot on vy-nebius-2 took 38 minutes for the undrawn refusal's try (in line 23:19Z, started 23:57Z). Mailbox read at `8597e4ec05ee` (the 23:43Z and 23:51Z messages are in it). Heads unchanged since 23:31Z: soundness `3e26cac7596a`, lever `7d4e96a5fa07`, #9441 `ce41e7c92e8e`, `main` `7e70df68bd18`; all merged in mine.
+
+**(1) The tables. No check is missing.**
+
+- [read] The check reads a pinned table only under its pinned digest: `tablesOf` takes, for each pinned table, the first blob entry whose digest's hex is the table's `sha512` (`verity/protocols/spot/verifier/lean/Spot/OneStageZk.lean:390-392`), and a blob is entered under the SHA-512 the verifier computes of its bytes (`Core.Blobs.ofArray`, `verity/protocols/interface/CoreProtocol/Blobs.lean:34`; the live check builds its blobs with it, `OneStageZk.lean:1520`). A session's inputs and the lengths check take the tables from there (`:440`, `:1150`).
+- [read] It refuses blobs whose pinned tables, by name, are not exactly the ones the registered circuit looks up: `tablesHeld`, `OneStageZk.lean:410-414` (`NO_TABLES`, `:405-406`; the circuit's lookups, `lookupsOf`, `:396-402`). In the per-member form it is the first step of `statementOf` (`:1136`), which `Member.statement` (`:1158-1159`) runs for every member of the parameters, sampled or not (`Member.FilesHeld` `:1215-1218`, `membersRun_files` `:1417-1423`).
+- [read] `TablesSent` (`security/Proofs/Properties/Verity/Sampled.lean:743-744`) asks that each pinned table's first blob sent under its digest (`tableFile`, `:698`) is its registered file (`pinnedFile`, `:719-720`, a file of that digest). Both have the pinned digest (`tableFile_hash` `:710`, `pinnedFile_hash` `:722`), so where they differ they collide.
+- [read] Soundness has that proved on my base: `Binding.finder_of_tables` (`Sampled/Binding.lean:960-981`): at any play whose blobs sent fail `TablesSent`, the read finder outputs a SHA-512 collision; and `Binding.logged_tables_le` (`:1016-1021`) bounds the accepted plays where the read isn't the device's or `TablesSent` fails by the read finder's collision probability plus the forger's. Both read only the blobs sent, not the form, so they hold at the per-member form as they are. The window's assembled event already carries `TablesSent` beside `Logged` (`Sampled/Window/Assembled.lean:108-116`).
+- [derived] So `TablesSent` is neither assumed nor a missing check. It holds of every play short of a collision, accepted or not; what the accept adds is the names (`tablesHeld`), and the two together give that the blobs' tables extend the registered ones (`pinnedTables_extend`, `Sampled/Accepts.lean:303`), which is what my `statesMember` reads (`MemberForm/States.lean:95`). Nothing to write in `runMembers` for it.
+
+**(2) The undrawn refusal.** Branch `cursor/proofs-windowat-undrawn-5e4b` at `fd0515e77f62`. [run] `r20261112-231926-e80f` (vy-nebius-2, 24 GB, 120 min) is running since 23:57Z on that head's tree (`7becbc4931d3`); no line of output fetched yet. The ready line follows when it passes; nothing to mark before.
+
+**`SetsUp.lean` and `States.lean`, the run and the head you asked for.** [run] `r20261112-231051-ac01`: `MemberForm/SetsUp.lean: lean exit 0 in 339 s`, "none of its 10 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; `MemberForm/States.lean: lean exit 0 in 78 s`, "none of its 4 theorems". The run as a whole is `failed` because `Files.lean` failed in it at one step, since fixed. Commits `7baa619f8e` (SetsUp) and `6ff56af5cf` (States).
+
+**Compiled and pushed since 23:44Z.** [run] `r20261112-234241-668b` (cpu-12, slot after 4 min), `ALL rc=0`: `MemberForm/Files.lean` 8 theorems, `MemberForm/Tree.lean` 12, `MemberForm/Opened.lean` 11, each `lean exit 0` with no axiom beyond the three; the aggregator `MemberForm.lean`, which imports `SetsUp` and `States`, `lean exit 0`. Commits `0499ecc660`, `d1bf2be81e`, `cfa8c4a5ca`, `876e2898a6`; branch `cursor/proofs-windowat-5e4b` at `876e2898a60a`. I cancelled `r20261112-232053-5e23` at 00:04Z (the same file before a rename; 43 min in line, never started).
+
+**(3) The bridge lemma, `FilesPass` of a member from the run's `Member.FilesHeld`: what it takes.** Not written yet; it is next.
+
+- [read] `ports`: the run's `ksFiles` is `PortRoots.checkOf` at the circuit read with the blobs' tables; the window's member parses with the registered ones (`Member.hD`), and tables that extend them parse to the same circuit (`parseCommit_okLe`, `parse_okLe`, `security/Proofs/Flock/Soundness/Refine/Lookups.lean:33,79`).
+- [read] `distinct`: `Flock.Bridge.v5Files_of_checks` (`security/Proofs/Flock/Bridge/V5/Accepted.lean:202`) at the member's load and `ports`.
+- [read] `loads`: the load from `PortRoots.checkOf_load`; that it has the member's count from the population check at the member's slice (`headerHeld`, the slice's population `Member.count`, `OneStageZk.lean:1003-1013`), as `population_of_checkBlobsAt` does for one statement (`security/Proofs/Properties/Spot/Credited.lean:426`, with `instances_of_loadPublic` `:377`).
+- [guess] Six to eight lemmas, about 150 lines, one file `MemberForm/Passes.lean`, tried tonight.
+
+**D.** The place lemma (session `j`'s tree is the `j`-th tree the read opens) passes in a model on the VM, not against the tree. The sessions' file is designed and unwritten; it follows (3).
+
+**To post, to soundness.**
+
+1. The tables: the lines above. `TablesSent` needs no new premise in the window's instance and no new check: `finder_of_tables` is theirs and already covers it.
+2. [derived, not compiled] `v5Files_of_checks` gives more than `distinct`: at a member whose files pass, `RootFixesDomainL` at the public file's leaf map, which is `Member.RootsFix` (`Sampled/Window.lean:179`) once the load's count is the member's, and `FilesPass.loads` has that. So under way (b), where the accept holds every member's files, sampled or not, `RootsFix` holds of every member of an accepted play with no collision term, and `Window.RootsCR` and the members' `rootsErr` terms would not be needed. I will prove `FilesPass.rootsFix` in my own file and drop the `hfix` hypothesis of my `FilesPass.checked`; whether the window's bound drops its roots terms is theirs.
+
+**Not established.** Nothing of (1) is compiled: it is a reading of the check and of soundness's two lemmas. The undrawn refusal's try has not reported. The bridge lemma is unwritten, and its `loads` step rests on my reading of `headerHeld` and `Member.slice`. D's place lemma has not compiled against the tree; D's sessions' file is unwritten. Finding L (link first) and Finding A (`WindowSessions.members`) stand without a ruling.
