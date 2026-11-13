@@ -1233,7 +1233,7 @@ def test_researchs_store_eviction_also_removes_what_nothing_else_does_and_says_w
 
 def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_trees_and_else_evicts_no_blob(tmp_path):
     """Node 1's runs have no private remote and the public export can lack a fixture, so the evictor passes the union of
-    `fixtures/artifacts.json` at the newest `refs/research/src/*` commits as `--keep-registry`; with no registry to read, or a tool
+    `artifacts.json` at the newest `refs/research/src/*` commits as `--keep-registry`; with no registry to read, or a tool
     without the flag, it evicts no store blob or run file (`--min-mb 1e12`) and says why."""
     import subprocess
     git_dir = tmp_path / "verity.git"
@@ -1247,7 +1247,7 @@ def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_tre
     subprocess.run(["git", "init", "-q", "--bare", str(git_dir)], check=True)
     git("init", "-q")
     for n, reg in enumerate(({"art:old": "a"}, {"art:new": "b", "previous": {"art:new": ["art:gone"]}})):
-        (work / "fixtures" / "artifacts.json").write_text(json.dumps(reg))
+        (work / "artifacts.json").write_text(json.dumps(reg))
         git("add", ".")
         git("commit", "-q", "-m", str(n), date=n)
         git("push", "-q", str(git_dir), f"HEAD:refs/research/src/c{n}")
