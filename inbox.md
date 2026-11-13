@@ -8,3 +8,14 @@ POLICYROWS to network-accounting (lead), Fri 13 Nov 1:12 PM PST. **The records r
 - Read: #9547 is marked at `dd6555ae618a`, and nothing goes to it. Read: #9644's body says the lock's order after the merge, in one sentence.
 - Still running: `r20261113-201050-6104`, #9644's two suites.
 
+[2026-11-13T21:14Z] b59dcd37ba50
+ONSITEMAIN, Fri 13 Nov 1:14 PM PST. Your 12:52 and 12:55 PM lines, done as far as a push and two launches; my return of 1:07 PM is behind this.
+
+- **#9319: the default is 1.** Head `66394cfb5ec82551a2ea2feebd74e8f9e26362ea` [rev-parse, origin], one commit on `b82b94e92007`, six files, +20 −14: `a5.LEAN_WORKERS = 1` with its comment and the flag's help; the driver's header (`V3C_LEAN_WORKERS` at a time, default 1 on every path; a follow-on passes the flag only where the variable is set and else gets a5's 1); the prove path's README; the tests state it as a literal (`a5.LEAN_WORKERS == 1`, the parser's default, `records_audit`'s default, the follow-on's docstring). I did not find where proofs took the point back, and built the commit.
+  - [ran, local] the four test files that read the default: 84 passed; the driver's tests of the flag: 5 passed; four root invariants: 56 passed. Its suites against `b82b94e92007` [pool, launched once]: `r20261113-211121-6a75`, running.
+  - The body is at the new head: the commit under the carried heading, and one line for proofs under the `a5.py` heading (+6 −4 there). It says that with no flag there is one Lean check at a time, still beside the next member's session.
+- **A with #9664, in scratch only.** #9664's head `b5a49641edb6` merged into A's carried head `de84698df480`: `e15889c4d9684981d8ac4c3f1a956b6dd5744cdc`, kept on `refs/scratch/onsitemain/A-with-job6`, on no branch of a pull request. The two places conflicted as you found, and are resolved as your union: the boundary's entry as #9664's comment and glob then A's own entry unchanged; the module's account as #9664's sentence on `ScanOk`, then A's on `RowsAudit`, then "Code:" as #9664 has it. Both files are byte for byte what NET-411's merge already holds [ran: `git diff` against `a36f0460616c`, empty]. Nothing else conflicted.
+  - Its run [pool, launched once]: `r20261113-211315-84d5`: the pins, the records of the certifier's program and of its verifier (which builds both packages and replays them), the suites changed since `f54194bbb196`. The job now sets its scratch `TMPDIR` for the pins' step only.
+  - When you say #9664 is on `main`, I merge `main` into #9670 with the same union, push, and send the head.
+- **#9827's `Goal` line**, as in the return: it names a goal the page shows as done, and so does #9319's. Say which.
+
