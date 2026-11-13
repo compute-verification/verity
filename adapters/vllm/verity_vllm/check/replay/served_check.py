@@ -43,7 +43,7 @@ from verity.definitions.numerics import inductor_rows as TW
 from verity.definitions.numerics.act_rows import silu_mul_expf_rows
 from verity.definitions.numerics.moe_router_rows import moe_router_topk
 from verity.definitions.numerics.rows import token_select_first_max
-from verity.definitions.ops.prims import AmpereBF16TcDot16
+from verity.circuits.ops.prims import AmpereBF16TcDot16
 from verity.definitions.registry import act, b1, cublas_bf16, cublas_gemv
 from verity.definitions.registry import bf16_gemm_check as BC
 from verity.definitions.registry import fa2_check_inf as F2
