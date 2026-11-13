@@ -56,7 +56,6 @@ def test_git_merges_two_branches_that_each_register_a_fixture_with_the_driver(tm
     (repo / "tools" / "verity" / "check" / "merge_map.py").write_text((ROOT / "tools/verity/check/merge_map.py").read_text())
     (repo / ".gitattributes").write_text("artifacts.json merge=fixture-map\n")
     m = repo / "artifacts.json"
-    m.parent.mkdir()
     _git(repo, "init", "-q", "-b", "main")
     _git(repo, "config", "merge.fixture-map.driver", "python3 tools/verity/check/merge_map.py %O %A %B %P")
     for name, extra in (("main", {}), ("a", {B: "f/b.json"}), ("b", {C: "f/c.json"})):
