@@ -368,4 +368,255 @@ Two patterns run through the rows, and each has one answer:
 - **One fact is stated in several layers, each sized to one user** (C2, G4, G5, S4, Y5). The answer: one owner states
   it, and every other layer takes it as a parameter.
 
-End of the first cut.
+## Part 3. The five that matter most
+
+Each is a group of rows with one cause. For each: what is wrong, in words a reader outside the field can follow; the
+smallest change that removes it; and what that buys.
+
+### 3.1 SPOT's record of a window is the hub of the system, and it carries its callers' facts (P1, F1, N1, P5, X1, A1)
+
+SPOT is the part that checks a random sample of a computation and bounds how much of the rest can be wrong. By
+Daniel's definition its public input is a circuit and a sampling rule, and nothing else. On `main` its input is a
+record with 24 fields. Ten are that input. Fourteen say things only a caller can mean: which day's circuit was
+declared, who the prover is, a salt for PoUW's noise, a pool of earlier windows with its weekly reset. Because the
+record holds everyone's facts, everyone reads it: PoUW's check, the certifier's period check (whose commitment is a
+list of these records), the policy's check, compose's remote check, the adapter in 24 files, and Flock's verifier,
+which holds the record's format so that the others can reach it. So a change to one caller's fact changes SPOT's
+verifier, and SPOT's theorem is about a record and not about a circuit and a rule.
+
+- **The smallest change:** split the record in two. SPOT's part holds the circuit's digest, its pieces, the sampling
+  rule and the committed roots with their domains. The caller's part is a second record in the caller's package: it
+  names SPOT's part by its digest and adds the caller's facts with the caller's checks. No check is dropped. About nine
+  check codes change package (R2's declared day, R6's kind, stream, prover, salt and pool, R7's look back).
+- **What it buys:** SPOT's code and its theorem match Protocol 1. A new protocol that calls SPOT changes nothing in
+  SPOT. The certifier, PoUW and compose compare roots and digests, and read no field of a record. The format string
+  leaves Flock.
+
+### 3.2 No accounting protocol's answer says which registered thing it is about (G2, U6, N7, X3, G4, G5, G6)
+
+Registration is where the developer says, once, what hardware it has, which circuit it runs and which weights. Each
+accounting protocol then measures one part of that hardware. On `main` no protocol reads what registration accepted.
+PoUW keeps its own table of a card's figures. PoUS and PoUB take the memory's size and read rate from their own
+parameters, and PoUB recomputes the store's root from the model's checkpoint. The certifier's period names one link
+and one key in its own parameters. The weights are committed three times with nothing tying the three roots. And no
+answer names the registration it was measured against. So compose cannot check that the compute, the memory and the
+network it adds up belong to the same registered devices, or that every registered device was measured at all. The
+three open ties in the security model (the circuit, the link, the memory leaf) are this one gap, seen three times.
+
+- **The smallest change:** every accounting protocol's answer gains two fields: the registration's head (64 bytes) and
+  the part it accounts for. The protocol is handed that part's figures from the registration, not from its own files.
+  Compose compares heads. A registered part with no answer is charged at its registered capacity, never at 0
+  (soundness's default [relayed]).
+- **What it buys:** the account means "of this registered hardware". A device's figures have one source. The three
+  ties become equalities of digests inside compose's theorem and need no premise.
+
+### 3.3 The auditor's devices do each other's jobs (P2, W1, U2, N5, N4, X5)
+
+The auditor has three kinds of device. The challenger draws challenges. The network certifier sits on a link, and
+counts and releases traffic. The memory challenger times answers from memory. Each is trusted for one thing. On
+`main` SPOT's challenger also keeps the auditor's ledger: it signs a period's open and close, a day's declared
+circuit, and which window counts toward which period. The network certifier's device also draws the salt that PoUW's
+noise is seeded from, and keeps the root of PoUW's weights. The memory challenger receives 24,576 blocks of the store
+a session, in the clear, and keeps them. So what one must trust a device for is wider than its name, and one
+protocol's guarantee rests on another protocol's device.
+
+- **The smallest change:** one device, one job, and three kinds of signed message in the shared channel: a challenge,
+  a count, a declaration. The period's ledger moves to compose and a day's declarations to registration. PoUW is handed
+  "a live salt from one of the auditor's devices", and compose says which device. The memory challenger's blocks need
+  the zero-knowledge session that is already on the page, so that part stays open.
+- **What it buys:** each device's trust is one named assumption with a stated scope. The security model can take the
+  devices as parties with one kind of message each. PoUW runs where no certifier stands, with no code that names one.
+
+### 3.4 The common ground holds single layers' things (G1, F2, Y1, Y4, Y5, L1, N2, M1)
+
+Two things are meant to be common ground: the interface package, which says what a protocol's check is, and `Core`,
+the vocabulary every guarantee reads. On `main` the interface package also holds the registered hardware, the
+registration, compose's account and the period: 2,245 of its 3,717 lines. Flock's Lean package also holds recursion
+and the ZK server, and 14 packages require it, several only to reach a hash or a byte format. `Core` reads an
+accounting module and holds 84 files, among them the site, the compiler, the wipe's blocks and one matrix algorithm.
+Because the common ground holds particular things, a second definition appears whenever a layer needs its own view:
+four data sheets, two resources, two lists of protocols, the period three times. One table in commitments holds every
+protocol's format strings, the adapter's among them.
+
+- **The smallest change:** three moves, and no new statement. Registration, the account and the period leave the
+  interface package. Recursion and the ZK server leave Flock's package, and the helpers go to the base packages.
+  `Core`'s files that one layer owns go to that layer's area. Then one rule on each: the interface requires only the
+  base packages, and `Core` imports no area.
+- **What it buys:** a change to registration rebuilds no proof system's package. Each duplicate has one home to merge
+  into. A lock's records follow the layer that owns them.
+
+### 3.5 The adapter holds protocol code and reads verifiers and devices, and protocols name the serving system (A1, A2, A3, N3, U1, F3, C1, C2)
+
+An adapter is meant to make one serving system speak Verity, by one call for each protocol, and to know nothing of
+how a protocol samples or decides. On `main` the vLLM adapter imports PoUW's verifier in 37 files and SPOT's
+device in 13, holds 16,908 lines of PoUW's serving code, and has 21,275 lines that decide accept and refuse. In
+the other direction, the certifier's advice format is defined as one pinned vLLM build's scheduler output, PoUB's
+verifier knows vLLM's layer order, Flock's verifier holds a table of model names, and the cut of a circuit into pieces
+is stated in the circuits, in the adapter and in the checker.
+
+- **The smallest change:** for each protocol, the one call its prover offers (the page states PoUW's and memory's).
+  The compiler and the advice format move to the adapter, and the certifier is handed a registered compiler circuit and
+  advice as bits. The cut is one function with the cap as a parameter.
+- **What it buys:** a second serving system is a new adapter and changes nothing in `verity/` [page]. A new vLLM build
+  changes no verifier. An auditor trusts no line of the adapter.
+
+## Part 4. The tests that would hold each rule of part 1
+
+Proposals, not code. Each test starts from today's findings as a list that only shrinks, each line with an owner and
+a day, in the form `tests/tree.toml` already uses for its 36 `not_yet` lines. A new finding fails. A listed line warns
+until its day.
+
+| id | The rule it holds | The test, and where | What it lists today |
+| --- | --- | --- | --- |
+| T1 | The layers' order | `tests/import_order.toml` takes the page's order: circuits, commitments, the shared files (a row of their own), flock, spot, recursion, registration, pouw, pous, poub, certifier, inference_only, compose, runtime, adapters, demos, benchmarks. | F4 (Flock's prover above SPOT), S1, S6 |
+| T2 | The proofs use neither layer | Each of the proofs' places has `loads` of circuits, commitments and the shared files only. | P3 (three loads) |
+| T3 | An accounting protocol uses no other, but PoUB on PoUS | `loads` of pouw, pous and certifier names no other accounting protocol and not the policy. The same for tests: a test under one protocol imports no other protocol. | Four test files: the certifier's on PoUW (`certifier/verifier/network/tests/period_case.py:82`), PoUW's on the certifier (`pouw/verifier/tests/test_pouw_salt.py:27-31`), SPOT's on PoUW, PoUB's on PoUW [read by me]. No other file today. |
+| T4 | A layer names nothing above it | One table, `MAY_NOT_NAME`, beside `SPOT_NOT_CERTIFIER` (`tests/test_boundaries.py:100-110`): for each layer, the whole words its files may not hold, in Python and Lean, comments and docstrings included. Circuits and commitments: every protocol's name, "window", "request". The proofs: pouw, pous, poub, certifier, nci, pool, lane, week, served, vllm. Each accounting protocol: the others' names. All of `verity/`: vllm, torch and model names (today's test of rule 1 reads imports only). Each layer and word starts at today's count. | P4, F5, C1, C5, N3, U1, W1 |
+| T5 | A package is used through its entry | Each protocol declares its entry modules, in its `pyproject.toml` and its `lean-audit.json`. A file outside the package that imports any other module of it fails. | P5 (9 Lean modules, 153 Python lines for SPOT) |
+| T6 | A format string has one owner | Every literal of the form `verity/.../vN` or `verity-.../vN` is defined once, in the directory of the layer its first part names. `verity/commitments/` defines none of a protocol's. All are distinct across the tree. | M1 (341 constants in one table) |
+| T7 | Lean packages follow the layers | A table `LEAN_REQUIRES` beside `REQUIRES_FLOCK_VERIFIER` and `BASE_LEAN`. The interface requires the base packages only. Flock's verifier requires the base packages only. SPOT requires Flock and the interface. An accounting check requires the interface, SPOT, registration and its own packages. None requires another protocol's. Compose requires all. `REQUIRES_FLOCK_VERIFIER` shrinks to the packages that verify a Flock proof. | N2, I1, P6, F2 (14 packages) |
+| T8 | The areas of `security/` | In `security/lean-audit.json`'s `layers`: `Definitions.Core` imports no area; `Definitions.Spot` imports `Core` only (it holds today); a protocol's area imports no other protocol's; the composition area imports a protocol's `Guarantees` modules only. `trees.except` only shrinks, as today. | Y1, Y2 (28), Y3, U5, X2 |
+| T9 | One definition of a shared concept | `tests/test_lean_vocabulary.py` gains the names `Sheet`, `Tier`, `Resource` and `Part`, `Audit` and `Subprotocol`, `Window`, `Period`: each defined once outside `Proofs`. | G5, Y5, S4 |
+| T10 | An accounting answer names the registration | For each accounting protocol on one of compose's lists, its declared account has a key for the head and a part. One case file: an answer that names another head is refused by compose. | G2, U6, N7 (no protocol passes today) |
+| T11 | A device does one job | A file under a `device/` imports no other protocol's `device/` or `verifier/`. A `verifier/` holds no socket or process code. The kinds of message a device signs are declared in `channel.py`, and a device signs only its own. | P2, W1, N4, N5, X5 |
+| T12 | The adapter makes one call | Under `adapters/`, an import of a protocol is allowed only for that protocol's declared workload module, and never of a `verifier/`, a `device/`, `verity.hardware`, `tools` or `benchmarks`. | A1 (195 import lines), A4 |
+| T13 | No code reads `security/` or the data sheets, and no Python writes under `security/` | A lint on path strings (`security/`, `hardware/cards`) in code under `verity/`, `adapters/` and `benchmarks/`. | U4, G5, Y6, Y8 |
+| T14 | The runtime | No file under `verity/protocols/` or `adapters/` imports the runtime, and no `verifier/` loads it. A row of T1 once the types move. | S1 (9 files) |
+| T15 | The configuration names no protocol | `config.py` holds no protocol's id as a literal. Whether a list is acceptable is asked of compose's Lean. | S2 |
+| T16 | The cut is stated once | No table of cuts outside the one function's module, and the cap appears only as a parameter. | C2 (three places) |
+
+## Part 5. What I am unsure of, and the questions
+
+### 5.1 What I am unsure of
+
+1. **Who calls SPOT on a remote run.** Compose's remote list holds SPOT itself, as `verity/sampled-proofs/v1` [read
+   by me]. If SPOT reads no registration, something must hand it the registered circuit and check the caller's facts
+   (the day, the kind of window, the pool). Either compose does, or a thin protocol on the list does: "the compute
+   audit" of the page's section 10, whose check is "SPOT accepted this registered circuit on these roots". I lean to
+   the second, so that compose never calls the proofs. Neither page settles it.
+2. **Whether recursion may require SPOT** (P6). The page draws both on Flock and neither on the other. If the outer
+   proof's statement is "SPOT's verifier accepted", recursion needs SPOT's verifier as a circuit. That is data, not an
+   import. I did not read recursion's Lean beyond two files.
+3. **The split of SPOT's 24 fields** (P1). I read the field comments, not the proofs that use the fields. `registered`,
+   `params`, `schemas`, `tied` and `members` may be SPOT's own. proofs has not read the anchors (R5) and the values the
+   verifier fills itself (R7-supplied) [relayed].
+4. **Which rows marked "to Daniel" change a statement, and which only move one.** I marked every row where a published
+   answer, a commitment's digest or a premise changes. soundness and lean can strike some.
+5. **Whose the period is** (S4): compose's, beside the account, or a shared file's. `tests/tree.toml` sends
+   `reporting.py` "into verity/protocol.py" [read by me].
+6. **Names against meaning.** A word count finds names, and a name in a docstring costs less than a field or an
+   import. I ranked by fields and imports first, and T4 would still hold the names.
+7. **Two counts that differ from the leads'.** PoUW's code in the adapter: 16,908 lines in 54 Python files under
+   `protocols/pouw/` by my count, 18,800 on the page, 20,500 by vllm. The adapter's `check/`: 78 files by my count, 86
+   by vllm's. I counted `.py` files that git tracks.
+
+### 5.2 Two questions the leads put to this document
+
+**circuits: is a tie to a registered root a circuit the builder writes, or a rule SPOT is handed with the roots?**
+Proposed: neither the builder nor SPOT owns it, and there are three cases.
+
+- **A read at a public position** (a weight's row, every time the same): it is no circuit. The piece's read names a
+  position under a root, the proof system opens it inside the proof, and SPOT is handed the root with the commitments.
+  The caller of SPOT checks that the root is the registered one, by comparing 64 bytes. Flock's "registered reads" do
+  the opening today (`flock/verifier/Flock/Registered.lean`) [read by me: the header]. To the proof system a root is a
+  root, and "registered" is the caller's word.
+- **A read at a private position** (the embedding's row for a token): it must be a circuit, because the position is a
+  value. The opening's gates are commitments' (`verity/commitments/gates/embedding.py` exists [read by me: the import
+  lines in the adapter, not the gate]). The builder places it as a named circuit and writes no hash gate itself.
+- **What a registered root stands for** (the weights' rows are one checkpoint's bytes:
+  `adapters/vllm/verity_vllm/program/predict/weights_tie.py:1-12` [read by me]): it is registration's proof, made
+  once. The adapter knows the checkpoint's file layout and hands it as data. It should not build the proof's window.
+- **What the choice costs.** SPOT's input gains, for each committed value, a root and a domain, and nothing in the
+  proof. The builder cannot read at a private position without a gate of commitments', and pays its gates. The model's
+  circuit holds no commitment scheme except at those reads, so a change of scheme changes the circuit's digest only
+  there. Daniel's rule holds in all three: a value is touched only inside a proof.
+
+**vllm: which of the adapter's `check/` is a verifier's work, and which is the developer's own test?** Proposed: one
+question sorts each file. Does a verifier, compose or a published answer read its accept or refuse?
+
+- **If yes**, it is a protocol's check. It goes to that protocol's `verifier/`, and it must be Lean, since Python never
+  returns accept or reject [page].
+- **If no**, it is the developer's own test that the circuit computes what the served system computes. That is
+  completeness: it decides only whether honest serving passes, and nobody proves it (`AGENTS.md`). It stays in the
+  adapter, under a name that does not read as a verdict.
+
+I did not read the 78 files, so I do not know how many fall on each side.
+
+### 5.3 What I did not read
+
+- Flock's Rust prover, and the two-stage form's Python beyond the lines cited.
+- Recursion's packages, beyond `Sampled.lean` and the Lake files. The ZK server's code.
+- The certifier's device program (`NetworkCertifier`), and PoUS's and PoUB's Lean beyond the lines cited.
+- `security/Proofs`, beyond counts. `security/Properties/Verity/Game.lean` beyond the lines cited.
+- `demos/` and `benchmarks/`, beyond their import lists. The reverse direction: what they import of the adapter's
+  insides.
+- The draft of registration's statements (#9701), which is not on `main`.
+- The two sweeps, which were not due when this cut was written.
+
+### 5.4 Questions, by lead
+
+**proofs**
+
+1. Of the 24 fields, which does SPOT's soundness proof read? Which theorem cites R2, R6 or R7, so that moving them
+   changes what it rests on?
+2. Does the outer proof's statement need SPOT's verifier? Can `Sampled.lean` move to SPOT's package (P6)?
+3. After the challenger is split (P2), which device signs a day's declaration?
+4. What is SPOT's entry, by name, in Lean and in Python (P5)?
+5. Who holds the Program to the circuit (F7)?
+6. Who calls SPOT on a remote run (5.1, item 1)?
+
+**soundness**
+
+1. Is the form of an accounting answer agreed: the head, the part, the amount, ε at δ, and the roots read?
+2. `DeclaredIsParams`, `CertifiedIsParams`, the memory leaf and the weights' root are one shape: an answer names a
+   registered thing. Is it one lemma over the form above? proofs says the first compares digests of two different
+   objects, the circuit file's and the program descriptor's [relayed]: which object does each layer name?
+3. What may the composition area import of a protocol: its `Guarantees` only (T8)?
+4. Which "to Daniel" rows only move a statement?
+
+**lean**
+
+1. Can a package's entry be held by Lake, or is it the lock's rule (T5)?
+2. What does splitting `flock_verifier` cost in records (F2)? Does `--moved` carry a record across packages?
+3. Which definitions of `Accounting.Device` does `Core` read (Y1)?
+4. The `Flock` namespace in the base packages (F8): leave it, as I propose?
+
+**compute-accounting**
+
+1. What does PoUW need of its salt's source: only that one of the auditor's devices drew it after the commitment (W1)?
+2. What does the check read of `models.json` (G6)? Can the registration hand it?
+3. Where does PoUW's served code import the two experimental schemes (W3)? I found no such import line.
+
+**memory-accounting**
+
+1. Which memory leaf does each answer name, once it names one (U6)?
+2. Can PoUB be handed the store's root from the registration, with the model's tie checked once there (U1)?
+3. What is the least the memory challenger must see (U2)?
+
+**network-accounting**
+
+1. Which fields of SPOT's record does the period check read today (N1)? Are roots enough?
+2. Is there a reason against `NciCheck.Desc` in `core_circuits` (N2)?
+3. With the compiler and the advice format in the adapter, what stays in the certifier: the circuit's check and the
+   charge (N3)?
+4. Which files of `certifier/verifier/` are the device's (N4)?
+
+**vllm**
+
+1. Of the 78 files of `check/`, which does a verifier or a published answer read (5.2)?
+2. Is "the adapter is handed roots" enough for the weights, or does the adapter need more back from registration (G4)?
+
+**circuits**
+
+1. Is the three-case answer of 5.2 right for the embedding's reads? Which reads are at a private position today?
+2. Can the cut be one function of a circuit and a cap (C2)? What besides the cap does it need from the proof system?
+
+**compute-research**
+
+1. Of the four Lean definitions of a data sheet (G5), which one stays?
+
+**training**
+
+1. Which figures does the slowdown calculator need handed to it as data, once it reads no protocol's module (I2)?
+
+**Daniel** (through top, after the leads' corrections): the 16 rows marked "to Daniel", and 5.1's item 1.
