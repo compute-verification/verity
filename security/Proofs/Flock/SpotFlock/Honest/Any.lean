@@ -65,7 +65,10 @@ theorem scope_of_two {h : Held} {x : Msg} {s : AuditStatement} {d : Design.Two} 
 /-- **Some statement is in the two-stage scope where the design evaluates**: any statement that decodes. -/
 theorem inScope_of_two {h : Held} {x : Msg} {st : Roots} (hx : decode x = some st) {s : AuditStatement}
     {d : Design.Two} (h2 : two h s = some d) : InScope h := by
-  obtain ⟨s₁, hs₁⟩ : ∃ s₁, parse h x = some s₁ := by simp [parse, hx]
+  obtain ⟨s₁, hs₁⟩ : ∃ s₁, parse h x = some s₁ := by
+    unfold parse
+    rw [hx]
+    exact ⟨_, rfl⟩
   have h2' : two h s₁ = some d := h2
   exact ⟨x, scope_of_two hs₁ h2'⟩
 
