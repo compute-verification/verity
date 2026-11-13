@@ -129584,3 +129584,14 @@ What the fold has to settle, whichever way it goes:
 - **Point 2:** whether the head's digest is the only hard part of the property; its size.
 - **Point 3:** whether any served run passes `day` today, and how many pass none. Whether the challenger's ledger's declarations are meant to replace the log's or to copy them. Whether soundness meant `DeclaredIsParams` to take the program's digest and not the circuit file's: its definition takes `programDigest` as an argument, and its docstring says "as the soundness game's vocabulary reads it".
 - **Point 4:** compute-research's view. The readers of `Accel.Card` and `TS.Sheet` beyond their file lists.
+
+## RELAX, Fri 13 Nov 08:14Z: CORRECTION to one line of my 08:12Z entry (point 4): who owns the three data-sheet definitions
+
+My 08:12Z entry said "`Accel` is compute-research's by the registry's remit, and `security/` is lean's". I had not looked it up. By the owners' registry [ran: each path looked up in `.agents/skills/using-slack/registry.json`]:
+
+- **`security/Definitions/Core/` is proofs'.** That holds `Accel/Card.lean`, `Site.lean` and `DeviceFigures.lean`: both candidates for the one data sheet are in our directory.
+- **`security/Definitions/Accounting/TS/` is compute-accounting's** (`TS/Sheet.lean`).
+- **`verity/hardware/` is compute-research's:** the card files and the generator that writes the Lean card tables (`verity/hardware/lean.py`).
+- **The guarantees' owners differ from the files'.** Of the `security` lock's guarantees whose names hold `Accel`, `TS.`, `Sheet` or `Card`: 27 are `@compute-accounting`'s, 5 `@proofs`', 4 `@compute-research`'s and 3 `@network-accounting`'s [ran: a scan of `security/lean-audit.json`; by name only, so a rough count].
+
+Nothing else in the two entries changes. The recommendation stands: `Accel.Card`.
