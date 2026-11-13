@@ -2387,6 +2387,8 @@ open(os.environ["ORDER"], "a").write(json.dumps(sys.argv[1:]) + "\\n")
 if os.environ.get("IO_FAIL"):
     print("inference_only.py: no torch", file=sys.stderr)
     sys.exit(2)
+if os.environ.get("IO_WRITE") and sys.argv[1] == "policy":
+    open(sys.argv[sys.argv.index("--out") + 1], "w").write(os.environ["IO_WRITE"])
 print("INFERENCE-ONLY POLICY at class 4,32,4: c 7 gates, k 3 fresh bits, n 16 sessions" if sys.argv[1] == "policy" else
       "INFERENCE-ONLY accept: session abab… (the registered one), 7 gates and 3 fresh bits a block, against c 7, k 3, n 16 "
       "(no count published: n is judged on the blocks' exact count, held on the node)")
@@ -2427,6 +2429,51 @@ def test_the_inference_only_policy_is_written_at_the_first_class_but_record_from
     assert calls == [["policy", "--class", cls, "--model", "verity-int8/Llama-3.2-1B-INT8", "--revision",
                       "15b0976d400d796ee589e7737d03a919526bf800", "--lease-min", lease, "--tree", SHA, "--out",
                       str(tmp_path / "out" / "inference-only-policy.json")]]
+
+
+LIMITS_SAID = (": fixed with the policy before the serve, written by the developer and signed by no auditor's device "
+               "(inference-only-limits.json)")
+
+
+def test_the_policys_limits_are_fixed_with_it_before_the_serve_from_its_own_c_and_k_or_the_runs_settings(tmp_path):
+    """Once the policy is written, the limits of its rate rule go beside it (inference-only-limits.json): α = k/c in
+    lowest terms and Γ = c of the policy's own numbers, in the unit of its c, with the count rule's (c, k, n) and the
+    policy file's SHA-512, or the run's ALPHA and GAMMA where both are set (in the unit LIMITS_UNIT states), and the
+    line says which, and that the developer wrote them. What the run's own two numbers prove is in the file and the
+    line where LIMITS_PROVE says it, and nowhere for the policy's own. A policy that names no c writes none and says
+    so, and the policy step still passes."""
+    policy = json.dumps({"c": 14, "k": 6, "n": 16})
+    rc, lines, _ = _inference_only(tmp_path / "own", "inference-policy", IO_WRITE=policy)
+    assert rc == 0 and lines[1:] == [
+        "INFERENCE-ONLY LIMITS alpha = 3/7 and gamma = 14, the policy's c and k (alpha = k/c, gamma = c)" + LIMITS_SAID]
+    assert json.loads((tmp_path / "own" / "out" / "inference-only-limits.json").read_text()) == {
+        "format": "verity-bench/inference-only-limits/v1", "alpha": [3, 7], "gamma": 14,
+        "unit": "Boolean gates by the policy's gate table, the unit of its c", "count": {"c": 14, "k": 6, "n": 16},
+        "from": "the policy's c and k (alpha = k/c, gamma = c)",
+        "policy_sha512": hashlib.sha512(policy.encode()).hexdigest(),
+        "written_by": "the developer"}
+    rc, lines, _ = _inference_only(tmp_path / "given", "inference-policy", IO_WRITE=policy, ALPHA="2/4", GAMMA="100",
+                                   LIMITS_UNIT="Program gates in a block")
+    assert rc == 0 and lines[1:] == ["INFERENCE-ONLY LIMITS alpha = 1/2 and gamma = 100, the run's ALPHA and GAMMA" + LIMITS_SAID]
+    got = json.loads((tmp_path / "given" / "out" / "inference-only-limits.json").read_text())
+    assert (got["alpha"], got["gamma"], got["unit"], got["from"]) == (
+        [1, 2], 100, "Program gates in a block", "the run's ALPHA and GAMMA")
+    assert "proves" not in got
+    none = "the class's own two numbers: the slowdown they prove is 1, that is none"
+    rc, lines, _ = _inference_only(tmp_path / "proves", "inference-policy", IO_WRITE=policy, ALPHA="2/4", GAMMA="100",
+                                   LIMITS_UNIT="Program gates in a block", LIMITS_PROVE=none)
+    assert rc == 0 and lines[1:] == [
+        f"INFERENCE-ONLY LIMITS alpha = 1/2 and gamma = 100, the run's ALPHA and GAMMA ({none})" + LIMITS_SAID]
+    assert json.loads((tmp_path / "proves" / "out" / "inference-only-limits.json").read_text())["proves"] == none
+    rc, lines, _ = _inference_only(tmp_path / "half", "inference-policy", IO_WRITE=policy, ALPHA="1/2", LIMITS_PROVE=none)
+    assert rc == 0 and lines[1] == (
+        "INFERENCE-ONLY LIMITS alpha = 3/7 and gamma = 14, the policy's c and k (alpha = k/c, gamma = c)" + LIMITS_SAID)
+    assert "proves" not in json.loads((tmp_path / "half" / "out" / "inference-only-limits.json").read_text())
+    rc, lines, _ = _inference_only(tmp_path / "none", "inference-policy", IO_WRITE=json.dumps({"k": 6}))
+    assert rc == 0 and lines[1].startswith("INFERENCE-ONLY LIMITS: none written, so the composite's inference-only case "
+                                           "is at the run's ALPHA and GAMMA, or at what it reads off the served "
+                                           "window's division:")
+    assert not (tmp_path / "none" / "out" / "inference-only-limits.json").exists()
 
 
 def test_with_no_class_but_record_there_is_no_inference_only_policy_or_verdict(tmp_path):
@@ -3936,6 +3983,17 @@ def test_a_deferral_under_day_carries_the_days_log_and_its_follow_on_audits_r2_a
                                         "--day-params": str(dd / "day-params.json")}
 
 
+def test_a_deferral_carries_the_limits_the_run_fixed_before_its_serve_as_alpha_and_gamma(tmp_path):
+    """The follow-on's settings name α and Γ as the run's limits file states them (IO_LIMITS, written with the policy
+    before the serve), whatever the environment says at the deferral, so the follow-on's composite reads none off the
+    served window's division."""
+    (limits := tmp_path / "limits.json").write_text(json.dumps({"alpha": [3, 7], "gamma": 14}))
+    run = _deferred(tmp_path, IO_LIMITS=str(limits), ALPHA="9", GAMMA="9")
+    assert run.returncode == 0, run.stderr
+    got = _deferral_settings(tmp_path)
+    assert (got["ALPHA"], got["GAMMA"]) == ("3/7", "14")
+
+
 @pytest.mark.parametrize("change", ["edited", "rehashed", "clash", "old-tree"])
 def test_a_follow_on_under_day_refuses_a_day_log_unlike_the_one_the_serve_declared_in(tmp_path, change):
     """The follow-on audits no day the serve didn't declare: an edited copy of the day's log fails the served node's
@@ -4176,6 +4234,20 @@ def test_the_served_nodes_compose_hand_off_lists_and_hashes_the_verifier_side_fi
     assert sorted(p.name for p in (dc / "pieces" / "pouw").iterdir()) == ["answer.json", "served.json"]
     assert (out / "verdicts.txt").read_text().splitlines() == [HANDOFF_LINE.replace("{d}", str(d))]
     assert not _window_data(out, 7) and oct(dc.stat().st_mode & 0o777) == "0o700"
+
+
+def test_a_hand_off_carries_the_limits_the_run_fixed_before_its_serve_as_alpha_and_gamma(tmp_path):
+    """The compose's settings name α and Γ as the run's limits file states them (IO_LIMITS, written with the policy
+    before the serve), whatever the environment says later; a run that wrote none hands its settings on as they are."""
+    (limits := tmp_path / "limits.json").write_text(json.dumps({"alpha": [3, 7], "gamma": 14}))
+    run = _handed(tmp_path, IO_LIMITS=str(limits), ALPHA="9", GAMMA="9")
+    assert run.returncode == 0, run.stderr
+    got = _env_of(tmp_path / "serve" / "private" / "compose" / "compose.env", COMPOSES)
+    assert (got["ALPHA"], got["GAMMA"]) == ("3/7", "14")
+    run = _handed(tmp_path / "none", ALPHA="9", GAMMA="9")
+    assert run.returncode == 0, run.stderr
+    got = _env_of(tmp_path / "none" / "serve" / "private" / "compose" / "compose.env", COMPOSES)
+    assert (got["ALPHA"], got["GAMMA"]) == ("9", "9")
 
 
 def test_a_hand_off_of_a_record_with_no_inference_only_verdict_lists_the_rest(tmp_path):
