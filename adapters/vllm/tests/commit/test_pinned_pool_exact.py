@@ -26,9 +26,10 @@ GPU = torch.cuda.is_available()
 
 
 def _rss_bytes(status: str = "/proc/self/status") -> int:
-    for line in open(status):
-        if line.startswith("VmRSS:"):
-            return int(line.split()[1]) * 1024
+    with open(status) as lines:
+        for line in lines:
+            if line.startswith("VmRSS:"):
+                return int(line.split()[1]) * 1024
     raise RuntimeError("no VmRSS")
 
 
@@ -78,7 +79,8 @@ def test_exact_pool_rss_equals_its_accounting_and_is_released():
 
 def _cgroup_anon_shmem(stat: str = "/sys/fs/cgroup/memory.stat") -> tuple[int, int] | None:
     try:
-        st = {stat_line.split()[0]: int(stat_line.split()[1]) for stat_line in open(stat)}
+        with open(stat) as lines:
+            st = {stat_line.split()[0]: int(stat_line.split()[1]) for stat_line in lines}
         return st["anon"], st["shmem"]
     except Exception:  # noqa: BLE001
         return None
