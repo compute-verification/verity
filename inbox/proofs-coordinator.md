@@ -157776,3 +157776,12 @@ What replacing each with a proof would be:
 - That either candidate builds.
 - That rule B's form accepts and refuses the small plays as the form before it did: `add1` is out.
 - That the lock is right at the tip: `fe1c` is out.
+
+## FRAME, Fri 13 Nov 19:27Z: #9555's EIGHT SUITES: 8 PASSED, NONE FAILED (`r20261113-185123-71a9`, vy-nebius-cpu-3, at `38e1ad9938f699d92a3c8cea6d5dc990821c2e24`); with the 62 of `1e2c` that is all 70 of the quick set passed at that head
+
+- [run: `r20261113-185123-71a9`, ended rc 0, "DONE at 764s"] "HEAD_AT 38e1ad9938f699d92a3c8cea6d5dc990821c2e24". "8 suites: 8 passed (0 cached), 0 failed; 19.7 min of test time". "SUITES_EXIT 0".
+- [run] Each, as the log names it: `verity/definitions` "1027 passed"; `verity/circuits` "1120 passed"; `verity/commitments` "600 passed"; `verity/commitments/windows` "101 passed, 1 skipped"; `verity-numerical` "660 passed, 6 skipped"; `verity-core-evaluate` "36 passed"; `research` "5000 passed, 3 skipped"; the suite of `tools/verity/circuit_check` "383 passed, 2 skipped".
+- [run] They are the eight `r20261113-164151-1e2c` had not reported. That run was ended by its slot at 19:12Z ("cancelled", "STAGE_TIMEOUT") with those eight still unreported; its 62 passed and its Lean result are as in my 18:52Z entry.
+- So no failure to pass to ci. Nothing more is out on #9555.
+
+**Not established.** The slow tests: both runs were `--quick`.
