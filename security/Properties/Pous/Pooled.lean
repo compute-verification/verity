@@ -10,7 +10,7 @@ public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 `PeriodHeld` bounds one window: at every value of the other audits' coins, the verifier's whole decision accepts the
 window's PoUS audit with no break in its data while its capacity account held fewer than `S · len` bit-ticks with
 probability at most `p = δ + ε_max` (`1% + 2^-128`) over the window's capacity coins. A monitoring period runs `U`
-windows whose capacity coins are drawn live, window after window: each window's joint run, its audit and the other
+windows whose capacity coins are flipped live, window after window: each window's joint run, its audit and the other
 audits' coins may depend on the earlier windows' capacity coins, never on its own (`FixedBefore`), and its strategy is
 any one under the device model, so `PeriodHeld` bounds each window whatever came before, and the windows pool.
 
@@ -43,10 +43,10 @@ set_option exponentiation.threshold 20000
 the period's capacity coins `x`, window `u`'s joint run `r u x`, its audit `P u x` and the other audits' coins `o u x`
 read only the earlier windows' coins `x i`, `i < u`.
 
-The memory challenger enforces it. Window `u`'s capacity coins are drawn on the auditor's device, which runs its stated
+The memory challenger enforces it. Window `u`'s capacity coins are flipped on the auditor's device, which runs its stated
 code on a host the prover doesn't control (`trusted-host`), and are released only after the window's commitment is in:
 each index after the previous answer, the coin root only after the last answer and the signature (`pous-ring-device`:
-the coins drawn online, after the server's state is fixed). So nothing fixed for window `u` reads its own coins, while
+the coins flipped online, after the server's state is fixed). So nothing fixed for window `u` reads its own coins, while
 the earlier windows' coins are out by then and may be read. -/
 def FixedBefore {U : ℕ} {ι α ΩW ΩQ : Type} [Fintype α] {d : Fin U → Accounting.Device ι}
     (r : (u : Fin U) → (Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) →
