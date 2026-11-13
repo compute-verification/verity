@@ -31,11 +31,11 @@ DRAFT_SET = {
     "onsite-h200-frontier": (798.713, "fanout-priced", 3.03946, "threaded"),
     "onsite-h200-llama405b": (479.492, "fanout-priced", 2.34097, "min-cut"),
     "onsite-no-pouw-h200-kimi": (892.212, "fanout-priced", 1, "cover"),
-    "onsite-h200-kimi-rl": (3.03935, "fanout-priced", 3.03754, "min-cut"),
+    "onsite-h200-kimi-rl": (3.03935, "fanout-priced", 3.03628, "min-cut"),
     "onsite-h200-kimi-sft": (3.03944, "output-premise", 2.95655, "threaded"),
     "onsite-h200-kimi-rlvr": (1.11, "covering", 1, "covering"),
     "remote-h200-frontier": (3.04005, "output-premise", 3.03946, "threaded"),
-    "remote-h200-kimi-rl": (3.03935, "fanout-priced", 3.03754, "min-cut"),
+    "remote-h200-kimi-rl": (3.03935, "fanout-priced", 3.03628, "min-cut"),
 }
 
 
