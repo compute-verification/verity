@@ -17,7 +17,7 @@ TESTS = Path(__file__).resolve().parent
 #: the suite NAME is another directory's (``run`` is the front door's), so a test that loads the script puts the
 #: script's own NAME in ``sys.modules`` first. Like a lint's list, an entry may stand before its script is in the tree,
 #: and it goes in the commit that makes the script load the file
-EXCUSED = frozenset({("pearl_c_sm90", "run")})
+EXCUSED: frozenset[tuple[str, str]] = frozenset()
 
 
 def imported(path: Path) -> set[str]:

@@ -363,7 +363,8 @@ def test_the_vllm_call_runs_on_the_schedules_lanes_from_rotating_sets(schedule):
     side = ("pd_tree_g_851", "pd_tiles_g_979")
     assert [(x[0], x[4]) for x in log] == [(x, lane if x in side else main) for lane in (1, 3, 1) for x in lane_steps(split)]
     by = {name: [x[5] for x in log if x[0] == name] for name in lane_steps(True)}
-    ptr = lambda j, x: g.sets[j][x].data_ptr()
+    def ptr(j, x):
+        return g.sets[j][x].data_ptr()
     for c, j in enumerate((0, 1, 0)):
         assert by["pd_commit_gm_851"][c] == (ptr(j, "meta"), ptr(j, "meta") + G.Grouped.map_at(us))
         assert by["pd_tiles_g_979"][c] == (ptr(j, "meta") + G.TILES_AT,)
