@@ -1,5 +1,5 @@
 """The recursion bench's environment variables, each declared once in a `verity_config.settings.Registry` and checked by
-its `Registry.check` (``verity/settings.py``): what ``job.sh`` reads (its own, and those of
+its `Registry.check` (``tools/config/verity_config/verity_settings.py``): what ``job.sh`` reads (its own, and those of
 ``verity/protocols/flock/pod/85-rec-reprice.sh``'s it sets a default for), and what ``run.py`` and ``forge_after.py`` read.
 
 ``job.sh`` takes its variables as ``KEY=VALUE`` arguments (``run.py``'s ``job_env``) and passes every one on to 85.  It runs
@@ -9,7 +9,7 @@ debug setting on a run of record (one with ``RESEARCH_RUN_ID``); then writes the
 their digest, which ``params.txt`` (so the result's ``params``) carries as ``settings``.  ``run.py`` refuses the same before it
 launches.  85's other variables (``LEVELS``, ``PCPUS``, ...) pass through undeclared: 85 owns them.
 
-Stdlib only, as ``run.py`` is, and so are ``verity_config`` and ``verity.settings``, which it imports from the tree:
+Stdlib only, as ``run.py`` is, and so are ``verity_config`` and ``verity_config.verity_settings``, which it imports from the tree:
 ``job.sh`` runs it with the pod's python3.
 """
 from __future__ import annotations

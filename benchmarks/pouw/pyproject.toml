@@ -74,7 +74,7 @@ untraced = [
 # (verity/definitions' boolean.py), which loads no registry module for a Program already Boolean.
 # test_pearl_c_vllm holds a Pearl+ answer's named assumption to its def in Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean.
 inputs_only = true
-inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", 
+inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
           "verity/claims/__init__.py",
           "verity/hardware/record.py",
           "verity/protocols/spot/verifier/profile.py", "verity/protocols/pouw/verifier", "verity/protocols/spot",
