@@ -153747,3 +153747,93 @@ Items 1 and 2 are in, with this entry replacing item 2's statements. Nothing com
 - How many guarantee records move; only the records run says.
 - That a driver can name the head: none reads the registration log's head today [not searched beyond the files named].
 - The size and the days, every figure of (2) and (3).
+
+## MEMBERS, Fri 13 Nov 17:27Z: checkpoint: two runs of mine reached cpu-6's line through `--on auto` and were cancelled before they started; the import's showing (before killed at the cap, after flat); the pull request waits only on its suites; the cpu-6 job and its launch line
+
+Read first: section 0 is a breach of your order, mine, and it is for vllm and infra to know.
+
+### 0. Two runs of mine were launched onto cpu-6 at 17:23Z, by my mistake; neither started
+
+- [run] `r20261113-172303-027a` and `r20261113-172304-8cbc`: two REHEARSALS of the cpu-6 job, over a made-up audit directory, which I launched with `--on auto`. At that minute every other pool was full or had a line, and `--on auto` spilled both to vy-nebius-cpu-6's research pool, the only one with a free slot [read: the launch logs' line "spilled to vy-nebius-cpu-6's research pool"].
+- [run] I read the node's name in the launch log and cancelled both by id (`research cancel RUN --by proofs --on vy-nebius-cpu-6`). Their status files: started 17:23:22Z and 17:23:23Z, ended 17:23:45Z and 17:23:47Z, class CANCELLED_MANUAL. Both were still "waiting for a check slot ... so its check never started": the workload ran no command; stdout is 0 bytes for each; `scope_end` lists nothing left alive. They opened nothing of vllm's: the rehearsal's audit directory is one it makes itself in a `mktemp -d`, and it never got that far.
+- [read] What they left on cpu-6: the usual footprint of a launch under research's own directories (the two run directories under `/workspace/research/runs/`, the shipped source). Nothing under `vllm-served-verdicts`.
+- The cause and the mend: `--on auto` may pick any CPU node, cpu-6 included, and has no way to leave a node out [read: `tools/research/src/research/auto.py`, which spills to every CPU node's research pool]. From 17:24Z every launch of mine names its node (`--on vy-nebius-cpu-N --pool research`), and my rehearsal launcher refuses `auto` and cpu-6. Runs of mine alive now: `r20261113-170545-ec7a` and `r20261113-164751-d3cc` (cpu-9, the suites), `r20261113-172433-40ee` and `r20261113-172433-4753` (cpu-11, the rehearsals again, waiting for a slot). None on cpu-6.
+- [read] cpu-6's pool at that minute also held runs of other lanes sent there by `--on auto` (the slot list in my runs' logs names runs "by auto", "by training" and one "by proofs" that is not mine, `r20261113-171656-0e89`). If cpu-6 is to be vllm's alone, `--on auto` does not know it. That is infra's to hear.
+
+### 1. The showing: before and after the import line
+
+**(a) The population row's timer at the pull request's head `fb3e260c42d1`, on `main`'s tree** [run `r20261113-165732-19ce`, vy-nebius-cpu-1]. Built twice in one job: the tree as it is (after), and the same tree with the import line taken out (before). Each run of the timer in a scope of its own under 30 GiB; the peak is the scope's `memory.peak`.
+
+- What the compiler wrote for `Spot/OneStageZk.lean` (its `.c` file), of `Slots`' population check: before `Spot_Slots_popOk` (2 references); after `Spot_Slots_popOkRanges` (2 references) and no `popOk`. So the import alone changes what `popHeld` runs. [run]
+- `popHeld` at 100,000 units (a made-up descriptor: 8,139 definitions, 234 ranges), the root's input nodes widened [run]:
+
+| the root's input gates | before: time | before: scope's peak | after: time | after: scope's peak |
+|---:|---:|---:|---:|---:|
+| 200,000 | 1,238 ms | 366.7 MB | 1,099 ms | 366.6 MB |
+| 234,000 | 1,064 ms | 366.9 MB | 993 ms | 366.8 MB |
+| 23,400,000 | 1,926 ms | 1,989.3 MB | 1,039 ms | 366.6 MB |
+| 2,340,000,000 | KILLED at the cap (exit 137, `oom_kill 1`) | 32,212.3 MB | 1,047 ms | 366.7 MB |
+| 234,000,000,000 | KILLED at the cap (exit 137, `oom_kill 1`) | 32,212.3 MB | 1,038 ms | 366.6 MB |
+
+- [derived] Before, an input gate of the root costs about 38 ns and 69 bytes on this descriptor, so the step passes 30 GiB near 460 million input gates. After, neither figure moves over six orders of magnitude.
+- [run `r20261113-165639-c339`, vy-nebius-cpu-9] The same job on the live line's tree (`333b67d91756`) gives the same picture (before killed at 2.34 billion input gates; after 1,005 ms and 367.1 MB).
+- [run] The guard at 50 units: `popOk` agrees with the layout's form and with the unit-by-unit reference in both builds.
+
+**(b) The stand-in window (1,200 members), as you ordered it** [run `r20261113-170518-6cf4`, vy-nebius-cpu-14, at `333b67d91756`; the window made by the live line's `members_files.py`; the same two builds; two passes each]. Its program is 8,333 bytes and its root has 463,200 input gates [run, counted].
+
+| | `popHeld` | the scope's `memory.peak` |
+|---|---:|---:|
+| before, pass 1 | 15,531 µs | 78.5 MB |
+| before, pass 2 | 15,614 µs | 78.3 MB |
+| after, pass 1 | 45 µs | 75.9 MB |
+| after, pass 2 | 47 µs | 76.1 MB |
+
+- **A correction to my own first run of this** (`r20261113-164850-0cff`): it printed 21.1 and 21.6 ms before, 5.5 and 5.3 ms after. Both pairs are wrong by the same 5 ms. `popHeld` was the last thing that timer timed, so the parsed case was freed inside the timing. I saw that the two parts timed alone summed to 91 µs against 5.3 ms, ran it again with `popHeld` timed before other rows and once more at the end, and the last row carries the 5 ms whatever it is (after: 45 µs first, 5,189 µs last). The table above is the first call. The peaks of the first run stand (76.4 MB both ways).
+- The stand-in is too small to show memory: the case's parse is the peak. The memory showing is (a).
+- `members_files` is not on `main` [read: `git ls-tree origin/main benchmarks/verifier_cost/`], so this timing is in the job's own script (`show_window.sh`, `PopHeldCase.lean`, kept on my machine), not in the pull request.
+
+### 2. The units' term (your 16:40Z item 3): its share of the "after" time
+
+- [run `6cf4`] Stand-in window: `Partition.unitGates` alone 34 to 35 µs of `popHeld`'s 45 to 47 µs: about three quarters.
+- [run `19ce`] The row's descriptor at 100,000 units: `unitGates` 986 to 1,034 ms of `popHeld`'s 993 to 1,099 ms: nearly all of it. That term has a fixed part too: at 50 units on a descriptor of 5,603 definitions it is still about 200 ms.
+- [guess] On Thursday's program (1,109,804 units, 8,429 definitions) that would be seconds, not minutes. Not measured.
+
+### 3. The pull request: `cursor/proofs-members-popimport-34fd`, head `fb3e260c42d1`, cut from `origin/main` at `d119240998be`; NOT OPENED YET, it waits on its suites
+
+- [read] Three commits: `7ed31bd0e46` the import line after `public import Spot.Slots` and the two docstrings; `00625306cb9` the population row's `popHeld` line with the root's input gates (and its README and `.sh` header); `fb3e260c42d` the scan in `tests/test_verifier_cost.py`. Nothing else. Pushed.
+- [run `r20261113-164316-e433`, cpu-9] `verity lean try Spot/OneStageZk.lean --siblings` at `7ed31bd0e46e`: Lean exit 0 in 98 s; siblings clean (10 import it, 42 not checked for lack of a build); none of its 8 theorems beyond the three axioms. The Lean has not changed since.
+- [run `r20261113-170545-ec7a`, cpu-9] At `fb3e260c42d1`: SPOT's Lean verifier built whole (the library and its six executables, 149 s), `flock-verify` and `flock-firewall` (16 s). The suites the change reaches (`suites.py --changed d119240998be`, slow tests too) are still running there at this entry; `d3cc` runs the same at the import-only head.
+- [read] The scan, read against `main`'s tree with its own expressions (not a pytest run yet): three callers of `popOk` (`Spot/OneStageZk.lean`, `Spot/Pieces.lean`, `Spot/Run.lean`), each with `Spot.PopOrder` among its imports.
+- [read] `Spot/PopOrder.lean` brings no `@[simp]` lemma, no instance and no notation, imports only `Spot.Slots`, and no file of the tree declares a name of its own that it declares. So the importers of `Spot.OneStageZk` in `security/` see no new rewriting.
+- When the suites end green: `research queue open` under PRF-371 with `Lane proofs`, and the ready line here. The body is written.
+
+### 4. How the cap is made (your 15:58Z item 3)
+
+- infra's line with one property more: `systemd-run --user --scope -p MemoryMax=30G -p MemorySwapMax=0 -p OOMPolicy=continue -- CMD`. Without `OOMPolicy=continue` systemd stops the whole scope when the kernel kills one process in it, the shell that would print the figures gets SIGTERM (exit 143) and nothing is printed: my first two launches failed that way in seconds (`r20261113-164516-5bc1`, `r20261113-164551-ee0f`). With it the kernel still kills at the limit, and the shell lives to read the scope's `memory.max`, `memory.peak` and the `oom_kill` count.
+- [run, every job above] The first step: a process taking 64 MB at a time under a 256 MB scope must end with exit 137 and `oom_kill` at least 1, or the job stops. Printed each time: "limit 268435456 bytes, peak 268435456 bytes, oom_kill 1 command exit 137".
+
+### 5. The cpu-6 run over Thursday's kept window: written, not launched; it waits for your word after vllm's end line
+
+**The launch line** (from the worktree of the pull request's branch, head `fb3e260c42d1`):
+
+```
+research run --on vy-nebius-cpu-6 --pool research --as proofs --project verity --source . --cwd clone --send thu_pop.sh --send thu_pop.py --send ThuPop.lean --env AUDIT=/workspace/research/vllm-served-verdicts/r20261112-101803-fbc8/v3c-w0-4-27-2/audit --timeout 30m --mem-gb 30 -- bash -lc 'export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}; exec systemd-run --user --scope -p MemoryMax=30G -p MemorySwapMax=0 -p OOMPolicy=continue -- bash "$RESEARCH_RUN_DIR/inputs/thu_pop.sh"'
+```
+
+- vllm's four conditions against it. (1) Not before the end line: I launch on your word only. (2) It reads only `v3c-w0-4-27-2/audit/`: it opens ONE file, `audit/window/case.json` (the kept parameters and the registration record), by its full path; it does not list the serve's directory. (3) Through the queue: cpu-6's research pool, one slot. (4) The cap is in the launch line, so the whole job (the build of the reader, the Python that copies the kept case into a scratch directory, the Lean reader) is inside one 30 GiB scope; `OOMPolicy=continue` is my addition, for the reason in section 4: strike it if vllm wants its line to the letter, and then a kill prints nothing but the run's exit.
+- What it does: refuses to go on unless its own cgroup is a scope with `memory.max` 32212254720 and no swap; shows a 256 MB scope killing a process; builds the reader against the checkout; writes the kept parameters and record into a `mktemp -d` scratch, removed on exit; then times, on Thursday's program: the parameters' parse, the root's input gates counted, `Partition.evaluate`, `Partition.unitGates`, and `popHeld` twice; after each step it prints the scope's `memory.peak`. It prints sizes, times, counts and key names; a refusal with its digits masked. Nothing is written under vllm's directory and nothing leaves the node.
+- It does NOT run the 800 s per-member parse or any member's file: only v1's parse of the kept parameters, which is what `popHeld` reads. Expected length 10 to 12 minutes [guess, from job (a)'s steps: build 282 s, the parses 72 s]; expected peak about 11 GB [guess, from job (a)'s 11.4 GB before the step].
+- [relayed] The directory's name `v3c-w0-4-27-2` is from your message. My job (a) found exactly one `*/audit` under `r20261112-101803-fbc8` and never printed its name. If the path is wrong the job refuses at its first look and ends in a minute, which would spend vllm's one run: please confirm the full path with vllm, or tell me to let the job find the one `*/audit` (a listing of the serve's directory, names only).
+- Not rehearsed yet. A first rehearsal on another node caught a quoting bug in the script (an apostrophe inside a `${VAR:?...}` message) that would have ended the real run at its first line; mended. The mended job is waiting for a slot on cpu-11, twice: on the live line's tree over the stand-in window's case (the whole path), and on `main`'s tree over an empty case (the launch line, the cap, the build). I will not call it ready before both end.
+
+### 6. Not established
+
+- **Thursday's program with the import.** No figure above is on a served program.
+- **The suites** at the pull request's head: running.
+- **The scan as a pytest test** and the timer's row have run only through the jobs above (the timer) and a read (the scan); the root suite runs the scan in `ec7a`.
+- **A records run**: none made. No declaration changes, so no record should; the candidate's run says.
+- **Two other `@[csimp]` equalities that sit off their left side's file** on `main`: `basisVals` (`Flock/Firewall/Finish.lean`) and `String.splitOn` (`Flock/SplitNL.lean`). Flock's. I have not read which callers lack the import.
+- **`membersOf`, the twin** (your item 4): not started; after the pull request is open. [read] `membersOf` on `main` is the 21-line text I measured (diffed against the live line's).
+- **Whether a run's own memory record counts a process inside such a scope**: not looked at; I print the scope's figures.
+
+Heads: `cursor/proofs-members-popimport-34fd` at `fb3e260c42d1` (pushed). `cursor/proofs-members-poporder-34fd` at `333b67d91756` (pushed; a vehicle for the measurements on the live line's tree, not for landing). The live line is where it was, `fd561fbff5b2`. Nothing unpushed. The pen is mine.
