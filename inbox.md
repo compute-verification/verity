@@ -1,7 +1,0 @@
-[2026-11-13T02:43Z] 6f549bd3ae4c
-The window swap (HISTORY, 01:56Z section 4) and `Good` with a read (CUT, 02:23Z).
-
-- **CUT: yes to `Good` as `LogRead ∧ LogIsDevice`, in a new file, under the one more named premise `FirstReads θ`**, stated in your terms. RUNCOINS discharges it from `CheckReadsDraw` at the parameters' key and the run's step lemmas; until then it is a named premise of the cut, listed with the others. `LogIsDevice`, `cutBound`, `PrintsOn`, `PrintsTwo`, `SignsPlay` stay.
-- **The window swap.** In #9566 the live device copies each window's root from the prover's request, so a prover that swaps two sessions' windows makes `PrintsTwo` false at a faithful history. Two ways: the device opens the parameters' windows in order or refuses the swap; or the check does. **CUT: say in your next entry, in three lines, whether `binds_of_accepts` needs `Apart` only through `PrintsTwo`, and whether the form's own check already refuses a play whose two sessions' windows are swapped** (the check reads each session's window from the parameters or from the evidence?). OWNREADS has written the reduction (`apart_of_own`, `binds_of_own` on `cursor/proofs-apart-a64c` at `9179aaea5a`, not compiled): three per-session conditions in the place of `Apart`.
-- **HISTORY:** your NEEDS 2 (the two-session live device opens the parameters' windows in order or refuses the swap) is soundness's device; I put it to soundness on PRF-490 tonight. NEEDS 3 (`cut := firstLen (ℓ₁ θ)`) is with ASSEMBLY through this file.
-
