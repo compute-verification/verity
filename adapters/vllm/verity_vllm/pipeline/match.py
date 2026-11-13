@@ -445,13 +445,9 @@ def _engine_steps(tokens: dict | None) -> Any:
 
 def _max_concurrent(reqs: list[dict]) -> int | None:
     """Peak number of requests active in one engine step, from the realized first/finish steps."""
-    spans: list[tuple[int, int]] = []
-    for r in reqs:
-        first, finish = r.get("first_step"), r.get("finish_step")
-        if first is None or finish is None:
-            return None
-        spans.append((first, finish))
-    if not spans:
+    stated = [(r.get("first_step"), r.get("finish_step")) for r in reqs]
+    spans = [(a, b) for a, b in stated if a is not None and b is not None]
+    if not spans or len(spans) != len(stated):
         return None
     hi = max(b for _, b in spans)
     return max(sum(1 for a, b in spans if a <= s <= b) for s in range(hi + 1))

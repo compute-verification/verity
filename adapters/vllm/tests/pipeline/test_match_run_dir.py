@@ -127,6 +127,21 @@ def test_a_request_that_never_ran_leaves_no_peak_and_no_capture_leaves_no_realiz
     assert RC._max_concurrent([]) is None
 
 
+@pytest.mark.parametrize("reqs, peak", [
+    ([{"first_step": 0, "finish_step": 2}, {"first_step": 1, "finish_step": 3}, {"first_step": 3, "finish_step": 3}], 2),
+    ([{"first_step": 0, "finish_step": 0}, {"first_step": 2, "finish_step": 2}], 1),
+    ([{"first_step": 0, "finish_step": 2}, {"first_step": None, "finish_step": 2}], None),
+    ([{"first_step": 0}], None),
+])
+def test_the_peak_of_requests_in_one_step_is_none_unless_every_request_states_both_its_steps(reqs, peak):
+    assert RC._max_concurrent(reqs) == peak
+
+
+def test_every_request_s_steps_are_read_before_any_is_found_missing():
+    with pytest.raises(AttributeError, match="'int' object has no attribute 'get'"):
+        RC._max_concurrent([{"first_step": None}, 7])
+
+
 NESTED = "[" * 100_000 + "]" * 100_000      # JSON nested past what Python's parser reads: `json` raises RecursionError, no ValueError
 
 
