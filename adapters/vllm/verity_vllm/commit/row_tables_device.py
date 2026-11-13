@@ -9,8 +9,8 @@ step waits on; the next step's compute does not wait on it.
 
 The kernels compute each row's ``sha512/row-seg/v1`` digest, its salt from the step's ChaCha20 stream (`serving_rows.segment_salts`),
 its ``hm96-sha512`` string and tree leaf and its ``frame-v3-sha512`` leaf, then each table's tree and the step's tree over their
-roots (`row_table.step_tree`): the row's digests with the GPU's one SHA-512 (`verity.definitions.kernels.SHA512`, through `ncp2.cuh`),
-the hm96 leaf and the frame's leaf, pad and node with the GPU's one row commitment (`verity.definitions.kernels.ROW_COMMIT`).  The host
+roots (`row_table.step_tree`): the row's digests with the GPU's one SHA-512 (`verity.circuits.kernels.SHA512`, through `ncp2.cuh`),
+the hm96 leaf and the frame's leaf, pad and node with the GPU's one row commitment (`verity.circuits.kernels.ROW_COMMIT`).  The host
 computes the domain ids, the rows' rank order and the tables' layout (`plan`).  `host_step` runs the same functions on the CPU
 (`row_table_host.cpp`, built with the system C++ compiler), the twin the CPU tests hold to `row_tables.step_roots` on machines
 without a GPU.  Builds are keyed by what they compile (sources, the shared headers, flags and the compiler's version) under
@@ -37,14 +37,15 @@ from verity.commitments import row_table as RT
 from verity.commitments.identity import tagged_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import domain_message
-from verity.definitions.kernels import ROW_COMMIT, SHA512
+from verity.circuits.kernels import ROW_COMMIT, SHA512
+from verity.protocols.accounting.pouw import prover
 
 from . import row_tables as RTB
 
 __all__ = ["CFLAGS", "DEVICE_SOURCES", "NVCC_FLAGS", "SEG_BYTES", "TAB_WORDS", "Args", "DeviceLibrary", "Pending", "Plan", "built",
            "device_lib", "host_lib", "host_step", "nvcc", "plan", "record_ready", "side_stream", "step_roots", "table_domain_id"]
 
-CUDA_DIR = Path(__file__).resolve().parents[1] / "protocols" / "pouw" / "pouw_cuda"
+CUDA_DIR = Path(prover.__file__).resolve().parent / "kernels" / "pouw_cuda"
 DEVICE_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table.cu")
 HOST_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table_host.cpp")
 #: the headers `ncp2.cuh` and `row_table.cuh` include by name from outside CUDA_DIR (the GPU's one SHA-512 and row commitment):

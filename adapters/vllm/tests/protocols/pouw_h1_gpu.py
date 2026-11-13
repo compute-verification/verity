@@ -128,11 +128,11 @@ from typing import Any
 
 import numpy as np
 import torch
-from verity.protocols.pouw.verifier import verifier
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.audit import salt_of
-from verity.protocols.pouw.verifier.coins import Challenger, CoinCommitment, CoinOpening
-from verity.protocols.spot.device.challenger import LiveRecord
+from verity.protocols.accounting.pouw.verifier import verifier
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import salt_of
+from verity.protocols.accounting.pouw.verifier.coins import Challenger, CoinCommitment, CoinOpening
+from verity.protocols.proofs.spot.device.challenger import LiveRecord
 
 from tests.engine.int8_exact_gpu import PROMPTS as SERVE_H1_PROMPTS
 from tests.engine.int8_exact_gpu import generate, pin, scratch_checkpoints
@@ -149,12 +149,12 @@ PROMPTS = ["The capital of France is", "def fibonacci(n):\n    \"\"\"Return the 
 
 PERIOD_DIGEST = """
 import json, resource, sys, time
-from verity.protocols.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity_vllm.protocols.pouw.h1 import served as SV
 shapes, modules, rows, steps, j10r, arch = json.loads(sys.argv[1])
 unit = None
 if j10r:
-    from verity.protocols.pouw.prover.circuit import h1tile as HT, h1window as HW
+    from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT, h1window as HW
     from verity_vllm.protocols.pouw import h1 as PH
     unit = lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5, **({"arch": arch} if arch else {}))
 t = time.monotonic()
@@ -171,8 +171,8 @@ def period_unit(j10r: bool, arch: str | None = None) -> Any:
     on ``arch`` (``--j10r``)."""
     if not j10r:
         return None
-    from verity.protocols.pouw.prover.circuit import h1tile as HT
-    from verity.protocols.pouw.prover.circuit import h1window as HW
+    from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+    from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
 
     from verity_vllm.protocols.pouw import h1 as PH
     return lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5, **({"arch": arch} if arch else {}))
@@ -1219,7 +1219,7 @@ def core_verdict(ev: dict[str, Any]) -> dict[str, Any]:
     (`record_reason`), each A table and input-ids table committed whole by its round's root (`credit._a_link`), and each
     the Commit's value of its rows (`credit._arow`), each at the rows the layout gives it (`credit.table_rows`: n chunk
     leaves a row past K = 4096). ``tied`` when none refuses."""
-    from verity.protocols.pouw.verifier import credit as CR
+    from verity.protocols.accounting.pouw.verifier import credit as CR
     c, raw = ev["commitment"], bytes.fromhex(ev["descriptor"])
     entries, rounds = (c.get("served") or {}).get("entries") or [], c.get("rounds")
     layout, why = CR.layout_of(raw)
@@ -1391,7 +1391,7 @@ def credit_check(h1: Any, served: Any, made: Any) -> dict[str, Any]:
     and the last step), their operands and receipts the producer's on the serving GPU; then each prover-side negative
     (`pouw_h1_credit.NEGATIVES`) at the first of them."""
     from tests.protocols import pouw_h1_credit as PC
-    from verity.protocols.pouw.verifier import credit as CR
+    from verity.protocols.accounting.pouw.verifier import credit as CR
     from verity_vllm.protocols.pouw.h1 import served as SV
     t0 = time.monotonic()
     w = PC.of_run(h1, served)
@@ -1474,7 +1474,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     its tree), from which its sampling coin is read (none refuses it). With `lean_answers` (a memo directory in the
     verifier's scratch) credit's verifier runs are `answers.Answers` on it: a run another step answered is taken by key,
     and its ``lean_answers`` says how many."""
-    from verity.protocols.spot.device import remote
+    from verity.protocols.proofs.spot.device import remote
 
     from verity_vllm.protocols.pouw.h1 import answers as A
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
@@ -1563,7 +1563,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--compile", action="store_true", help="compile every served shape in this process too")
     ap.add_argument("--compile-from", metavar="CALLS_JSON", help="no GPU: compile a served run's record (pouw-h1-calls.json)")
     ap.add_argument("--challenger", metavar="HOST:PORT", help="the window's salt and round coins from the auditor host's "
-                                                              "challenger (verity/composite/device/live_challenger/run.sh, SCHEME "
+                                                              "challenger (verity/protocols/compose/device/live_challenger/run.sh, SCHEME "
                                                               "verity/pouw/epoch-coins/live/v1, FAMILIES "
                                                               "pouw_h1_challenger.families(S)); else held in this process")
     ap.add_argument("--check-challenger", nargs=2, metavar=("CALLS_JSON", "CHALLENGER_DIR"),
@@ -1725,7 +1725,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.check_challenger:
         if not (a.key_sha512 and a.ledger):
             ap.error("--check-challenger needs --key-sha512 (the auditor's pin from config) and --ledger (once a head)")
-        from verity.protocols.spot.device import remote
+        from verity.protocols.proofs.spot.device import remote
         desc = gzip.decompress(Path(a.descriptor).read_bytes()) if a.descriptor else None
         main = None if a.main is None else remote.main_lines(a.main)
         statements = json.loads(Path(a.statements).read_text()) if a.statements else ()

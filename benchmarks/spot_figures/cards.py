@@ -15,7 +15,7 @@ token over its ranks; a stratum whose Definition has no cut on main, sized at th
 total parameters, scales the references that go as the model's size.  The `references` cards
 of a model add up: each is kept as `cards/references.MODEL.ART.json`, under the first twelve hex digits of its art id,
 and the figures plot every card's lines, with its `caption` appended to the caption of each panel it has lines on; a
-line at 0 is drawn along its panel's floor and named in its caption.  A `partition` card is another cut of the model's circuit: its
+line at 0 is sampled along its panel's floor and named in its caption.  A `partition` card is another cut of the model's circuit: its
 strata take the place of the `workload` card's strata of the kinds it `replaces`, each with the k_log it is staged at,
 which prices it until the `proof_overhead` card measures its type; they add up as `references` cards do, each Figure
 1's line of its own.  A `verifier_cost` card gives the verifier's core-seconds a statement by block prefix, a family's

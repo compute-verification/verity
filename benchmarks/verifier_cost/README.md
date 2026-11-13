@@ -138,7 +138,7 @@ research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd
 `whole_run.py` writes, per N, an accepted `run` input (`run`: a v1 audit on challenger coins with N/8 more ports) or the
 program and query alone (`desc`), over a template population of about N units: `toy`, the difftest's three templates,
 or `l5`, a GLM-5.3 MoE window's seven templates at the window's proportions (whose Python partition walks every gate,
-so `l5` takes `desc`). The audit's law is the stratified rate of two in the population, `stratified-rate:2/P` over its
+so `l5` takes `desc`). The audit's sampling design is the stratified rate of two in the population, `stratified-rate:2/P` over its
 P units, on `toy` the stratified sampling design at K = 3. Stated over P, it samples one unit of each template and two
 of `toy`'s largest at every N, so the sample stays four units while the population it is timed against grows.
 `whole_run/Main.lean` times the `run` piece and each of `Run.run`'s steps,

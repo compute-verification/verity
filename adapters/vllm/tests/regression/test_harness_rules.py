@@ -130,7 +130,7 @@ def test_the_listing_wraps_a_reason_and_a_need_to_a_line_of_132():
 def test_a_registered_fixture_is_found_by_its_path():
     reg = json.loads(resolver.REGISTRY.read_text())
     art, rel = next(iter(reg.items()))
-    assert resolver.registered(resolver.REGISTRY.parents[1] / rel) == art
+    assert resolver.registered(resolver.REGISTRY.parent / rel) == art
     assert resolver.registered(resolver.EXPECTED_DIR / "no-such-row.json") is None
     assert resolver.registered(resolver.FILES) is not None
 
