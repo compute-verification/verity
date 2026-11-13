@@ -159527,3 +159527,63 @@ So three module records of `reads` move, not one:
 - Running at `fb3e260c42d1`, both on cpu-14, 300 minutes each, output written as it goes: `verity-flock` alone [run `r20261113-195315-3f45`, in its slot since 19:53Z, builds done, the suite started]; the other eight [run `r20261113-200310-d959`, since 20:03Z].
 - The twin's run meets the same cut at 20:51Z; I do the same for it then.
 - My question of 19:54Z stands: (a) open the import's pull request now with this stated, or (b) wait for the nine. Without your word, (b).
+
+## ASSEMBLY, Fri 13 Nov 20:13Z: THE JOIN MOVED: `ce20e42ba47ac22d55419f4fe51932ee19bc5f63`, HELDOF's carried couples line merged and built; and the records run at the tip before it passes with no record regenerated; beyond the carried `a61b7adf0d83` the tip holds MESSAGES's `2658eaf78153` and replay line `24f63f743de2`, HONEST2's `552a41cb4df8`, the tool's pin, the mend, SESSIONOF2's `6b274de57993` and now HELDOF's couples line `02e3d5f39ec1`
+
+**1. The merge** [git]
+
+- `1bdb77ac7d99` to `ce20e42ba47a` by a fast-forward, pushed at 20:13Z. Two commits:
+
+| Commit | What |
+|---|---|
+| `fc0024c22ceb` | the line: `2bf213c2cdce` (it merged with the carried join) into the join; the pin file the one conflict, regenerated |
+| `ce20e42ba47a` | mine: the six roots the lock lacked for the line's six new files |
+
+- By your 18:31Z item 2: SESSIONOF2's merge was built at 19:12Z and no carried blob head was named to me, then or since. The blob line, when FRAME carries it, merges on top of this.
+- 12 files against the old tip, all under `security/Proofs` but the pin: `BlobFinder`, `CouplesWired`, `Undecodable`, `WiredParse`, `WiredScope`, `WiredUnits` new; `CouplingOf`, `JoinedCoupling`, `Leg`, `RefsOfSent` changed; the lakefile; the pin. And the lock in my commit.
+
+**2. Its build** [run `r20261113-191918-c5d6`, cpu-3, rc 0, ended 20:02Z]
+
+- A build of every `SampledTwo` file at the merged tree: `lake` exit 0 in 771 s, nothing failed.
+- A try of each of the ten files, each `lean exit 0`, and no theorem uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`:
+
+| File | Theorems | File | Theorems |
+|---|---|---|---|
+| `BlobFinder.lean` | 2 | `WiredUnits.lean` | 2 |
+| `CouplesWired.lean` | 1 | `CouplingOf.lean` | 2 |
+| `Undecodable.lean` | 3 | `JoinedCoupling.lean` | 2 |
+| `WiredParse.lean` | 5 | `Leg.lean` | 4 |
+| `WiredScope.lean` | 1 | `RefsOfSent.lean` | 22 |
+
+**3. On this machine at `ce20e42ba47a`** [run on this machine]
+
+- The five root test files 84 passed. `pins.py --stale` silent, `lock_roots.py --check` clean, `dup_names.py` the same 17.
+- The same 8 edges across the public boundary. The line adds none.
+- The scoped-words search over its 708 added Lean lines: 0 hits.
+
+**4. The records run at `1bdb77ac7d99`, the tip before this merge** [run `r20261113-191340-fe1c`, cpu-3, rc 0, ended 20:08Z]
+
+| Package | Verdict | Declarations, modules | Guarantees | `check.py` |
+|---|---|---|---|---|
+| `security/Proofs` | PASS | 210,740 in 4,245 | 0 | exit 0 in 1,278 s |
+| `security` | PASS | 27,782 in 731 | 1,138 | exit 0 in 754 s |
+| `security/Properties` | PASS | 3,485 in 107 | 540 | exit 0 in 804 s |
+
+- `OUTCOME` is `pass`. Each `audit.json`: passed, 0 failed, nothing regenerated.
+- So the lock stands as committed there, with the six new roots of the two lines and `DoWalk.lean`'s `compile_time` listing at its digest.
+- Against `4205` at the mended head: `security/Proofs` has 6 modules and 243 declarations more, the three files of MESSAGES's replay line and the three of SESSIONOF2's. The other two packages count the same.
+- It is a `lean-fast/v1` result: no kernel replay, no tests. It does not cover this merge's six roots; the next one does.
+
+**5. Rule B is next** [run]
+
+- Its candidate `86874e0e5314` sits on this tip. Two of its three runs are back, each rc 0:
+  - the accept test, `r20261113-192342-a8c1`: 66 passed;
+  - `sampled_two_small.sh`, `r20261113-192411-add1`: accepted with the switch on, refused by the shipped switch, the negative play refused by the same line as at the mended head (`0332`).
+- Its build with the seven tries, `r20261113-192310-8e89` on cpu-8, is still building `security/Proofs`; the form's package built, exit 0.
+- The join moves to it when `8e89` is rc 0. Then one records run at that tip and `two_stage_small.sh` once more, since rule B changes the form.
+
+**Not established**
+
+- That rule B's seven files compile at this tree: `8e89` is out.
+- That the lock is right at this tip.
+- A kernel replay at any head of the join.
