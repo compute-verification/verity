@@ -96,6 +96,11 @@ def keptOf (tags : Tags) (zk : Bool) (count : Nat) (own : Circuit → V Unit) (c
     unit := KsScope.unitWhy tags count c
     inputs := HmIn.parse c }
 
+/-- The units a proof block a parse names are its `Kept`'s. -/
+theorem keptOf_g (parsed : V Circuit) (tags : Tags) (zk : Bool) (count : Nat) (own : Circuit → V Unit) :
+    parsed.toOption.map (·.g) = (parsed.map (keptOf tags zk count own)).toOption.map (·.c.g) := by
+  cases parsed <;> rfl
+
 /-- `Flock.ProvedScope.checkOf` on a circuit's `Kept` (`checkOf_kept`). -/
 def checkOf (k : V Kept) (tags : Tags) (zk : Bool) (publicFile : ByteArray) (count : Nat)
     (publicInputs registered : Bool) : Except String Unit :=
@@ -122,7 +127,7 @@ theorem checkOf_kept (parsed : V Circuit) (tags : Tags) (zk : Bool) (publicFile 
     cases parsed with
     | error e => rfl
     | ok c =>
-      simp only [Except.map, keptOf, publicOf_bare, circuitRules_rulesOf]
+      simp only [Except.map, keptOf, publicOf_bare, circuitRules_rulesOf] <;> rfl
 
 /-- `Flock.PortRoots.checkOf` on a circuit's `Kept` (`portsOf_kept`). -/
 def portsOf (k : V Kept) (tags : Tags) (publicFile : ByteArray) : Except String Unit :=
@@ -145,7 +150,7 @@ theorem portsOf_kept (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray)
   cases parsed with
   | error e => rfl
   | ok c =>
-    simp only [Except.map, keptOf, loadPublic_bare, loadedWhy_bare]
+    simp only [Except.map, keptOf, loadPublic_bare, loadedWhy_bare] <;> rfl
 
 /-- `Flock.KsScope.sharedWhy` on a circuit's `Kept`: a shared-row public file's form, on the public input ports the
 circuit parsed with. -/
@@ -162,7 +167,7 @@ theorem sharedWhy_kept (tags : Tags) (zk : Bool) (count : Nat) (own : Circuit �
     (publicFile : ByteArray) :
     KsScope.sharedWhy tags c publicFile = sharedWhy (keptOf tags zk count own c) tags publicFile := by
   unfold KsScope.sharedWhy sharedWhy
-  simp only [keptOf, loadPublicIn_bare, collidesT_bare]
+  simp only [keptOf, loadPublicIn_bare, collidesT_bare] <;> rfl
 
 /-- `Flock.KsScope.filesOf` on a circuit's `Kept` (`filesOf_kept`). -/
 def filesOf (k : V Kept) (tags : Tags) (publicFile : ByteArray) : Except String Unit :=
@@ -192,6 +197,6 @@ theorem filesOf_kept (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray)
     | error e => rfl
     | ok c =>
       simp only [Except.map, KsScope.filesWhy, sharedWhy_kept tags zk count own c publicFile]
-      simp only [keptOf, loadPublic_bare]
+      simp only [keptOf, loadPublic_bare] <;> rfl
 
 end Spot.CircuitKept
