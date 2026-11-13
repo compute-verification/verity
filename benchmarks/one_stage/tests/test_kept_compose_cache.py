@@ -33,6 +33,13 @@ SERVED = {"Toy{N=1}": 16, "Toy{N=2}": 32}
 #: another window's: SERVED's first id at another Definition and statement, and its first Definition and statement at
 #: another id
 OTHER = {"Toy{N=1}": 64, "Toy{N=3}": 16}
+#: the limit the script runs the certifier's chain within where CERTIFIER_TIMEOUT is unset; no other step of V3c has it
+CHAIN_LIMIT = "4h"
+#: `test_served_verdicts.CHAIN` held until the script has written V3c's period line, the last before it waits for the
+#: chain
+HELD_CHAIN = SV.CHAIN.replace('; echo "chain',
+                              '; until grep -q "^V3C-PERIOD" "$OUT/verdicts.txt" 2>/dev/null; do :; done; echo "chain')
+assert HELD_CHAIN != SV.CHAIN, "test_served_verdicts.CHAIN no longer ends by echoing its line"
 
 
 def _toy_circuit(width: int, partition: str, program: str, rule: str) -> bytes:
@@ -171,24 +178,40 @@ def test_a_window_whose_templates_differ_takes_none_of_a_kept_cache_and_composes
     assert sorted(c for k, (_line, c) in after.items() if k not in entries) == sorted(_fresh(OTHER, B1).values())
 
 
+def _but_the_chain(order: list[str], limits: list[str], lines: list[str]) -> tuple[list[str], list[str], list[str], str]:
+    """A V3c run's steps, limits and verdict lines without the certifier's chain's, each in the order the script wrote
+    them, and the chain's line. The script starts the chain beside the warm and the audit (`v3c_proved`), so where the
+    chain's step, its limit and its line fall among theirs is the scheduler's, and two runs of the same script may
+    differ in it; each run has exactly one of each."""
+    chain = [x for x in lines if x.startswith("CERTIFIER-CHAIN")]
+    assert order.count("chain") == 1 and limits.count(CHAIN_LIMIT) == 1 and len(chain) == 1, (order, limits, lines)
+    return ([s for s in order if s != "chain"], [x for x in limits if x != CHAIN_LIMIT],
+            [x for x in lines if x != chain[0]], chain[0])
+
+
 def test_without_v3c_compose_cache_the_warm_and_the_audit_get_the_windows_own_directory_as_before(tmp_path):
     """Unset or empty, the warm's and the audit's arguments name $VW/compose-cache, the warm's whole line as it was; set,
-    the same arguments but for that one value at each, with the same steps in the same order, limits and verdict lines."""
+    the same arguments but for that one value at each, with the same steps in the same order, limits and verdict lines,
+    but for where the certifier's chain, which runs beside them, falls among them (`_but_the_chain`): a run whose chain
+    ends only after V3c's period line is written, its line after theirs, compares equal to one whose chain is not held."""
     kept, got = tmp_path / "kept", {}
-    for name, given in (("unset", None), ("empty", ""), ("set", str(kept))):
+    for name, given, chain in (("unset", None, SV.CHAIN), ("empty", "", SV.CHAIN), ("set", str(kept), SV.CHAIN),
+                               ("late", None, HELD_CHAIN)):
         root = tmp_path / name
-        rc, lines, order, limits = SV._v3c(root, V3C_WARM_JOBS="3", V3C_COMPOSE_CACHE=given)
+        rc, lines, order, limits = SV._v3c(root, V3C_WARM_JOBS="3", V3C_COMPOSE_CACHE=given, CERTIFIER_CHAIN_CMD=chain)
         assert rc == 0, lines
+        heads = [x.split(" ")[0] for x in lines]
+        assert name != "late" or heads.index("CERTIFIER-CHAIN") > heads.index("V3C-PERIOD"), lines
         here = lambda x, root=root: x.replace(str(root), "ROOT")  # noqa: E731
         argv = {s: [here(x) for x in json.loads((root / f"order.{s}").read_text())] for s in ("warm", "audit")}
-        got[name] = (argv, order, limits, [here(x) for x in lines])
-    argv, order, _limits, _lines = got["unset"]
+        got[name] = (argv, *_but_the_chain(order, limits, [here(x) for x in lines]))
+    argv, order, _limits, _lines, _chain = got["unset"]
     own = f"ROOT/serve/v3c-w7-{SV.VTAG}/compose-cache"
     assert argv["warm"] == ["warm", "--window", f"ROOT/serve/v3c-w7-{SV.VTAG}/window", "--law", "subset:1",
                             "--compose-cache", own, "--jobs", "3"]
     assert argv["audit"][argv["audit"].index("--compose-cache") + 1] == own and argv["audit"].count(own) == 1
     assert order.index("warm") < order.index("audit")
-    assert got["empty"] == got["unset"]
+    assert got["empty"] == got["unset"] == got["late"]
     named = {s: [str(kept) if x == own else x for x in a] for s, a in argv.items()}
     assert got["set"] == (named, *got["unset"][1:]) and named != argv
     assert not kept.exists()
