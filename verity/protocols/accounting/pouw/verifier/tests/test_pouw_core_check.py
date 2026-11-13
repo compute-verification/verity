@@ -15,16 +15,28 @@ import sys
 from fractions import Fraction
 from pathlib import Path
 
+import numpy as np
 import pytest
 
-from verity.protocols.accounting.pouw.verifier import coins as Co
-from verity.protocols.accounting.pouw.verifier import core_check as CC
-from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.proofs.spot.device import challenger as Ch
-from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.circuits.defs import bind
+from verity.circuits.ops.boolean import gemm as BG
 from verity.commitments.crypto import lms
 from verity.commitments.randomness import derive
+from verity.commitments.rowleaf import ROLE_W, ROLE_X
+from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
+from verity.protocols.accounting.pouw.prover.circuit import leaves as L
+from verity.protocols.accounting.pouw.prover.circuit import pc8
+from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
+from verity.protocols.accounting.pouw.verifier import coins as Co
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload, weights_root
+from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import partition as PT
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 
 ROOT = Path(__file__).resolve().parents[6]
 PKG = ROOT / "verity/protocols/accounting/pouw/verifier/lean/check"
@@ -365,10 +377,6 @@ def test_every_opening_mutation_hits_its_refusal():
 def _certified_pass(p: int) -> tuple[bytes, str, bytes, bytes, bytes, bytes]:
     """A certified pass of PoUW execution phase `p` (two certifier windows per PoUW execution phase) under a stream and a prover: its
     manifest, the execution phase's context, and the verifier's reveal, record, stream and prover."""
-    import hashlib
-    from verity.protocols.accounting.pouw.verifier import salt as PS
-    from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload, weights_root
-    from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
     roots, work = {2: hashlib.sha512(b"salt-bind weights").digest()}, Workload((Matmul(5, Shape(16, 128, 4), 2),))
     reveal, sid, prover = (hashlib.sha512(b"salt-bind " + x).digest() for x in (b"reveal", b"stream", b"prover"))
     man = {"run": "r-salt-bind", "matmuls": [{"index": 5, "m": 16, "k": 128, "n": 4, "weight": 2}],
@@ -386,8 +394,6 @@ def test_a_salted_unit_opens_only_under_its_certified_windows_salt():
     its public row formed under a salt the prover chose, which it can form before any certifier salt exists, is refused
     at its public row under the certified salt (and opens only under its own, which no verifier holds); with no salt, or
     in an execution phase the context doesn't certify, the opening refuses before it reads a row."""
-    import hashlib
-    from verity.protocols.accounting.pouw.verifier import salt as PS
     raw, ctx, reveal, committed, sid, prover = _certified_pass(1)
     assert CC.pass_epoch(None, raw, ctx, reveal=reveal, committed=committed, stream=sid, prover=prover) == (
         "certifier", None)
@@ -432,9 +438,6 @@ def test_the_public_row_is_the_compiled_programs_salt_position_and_roots():
     """`core_check.public_row`'s bits are the leaves `Compiled.inputs` fills for one unit: `pouw.salt`, the unit's
     position, then its group's two roots (`seeds.leaves`, `seeds.position_leaves`, Boolean), bit t of the row bit t % 8
     of byte t // 8."""
-    import hashlib
-    import numpy as np
-    from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
     salt, roots = hashlib.sha512(b"s").digest(), (hashlib.sha512(b"a").digest(), hashlib.sha512(b"b").digest())
     for pos in (0, 1, 5, 1 << 39, (1 << 64) - 1):
         bits = np.unpackbits(np.frombuffer(CC.public_row(salt, pos, roots), np.uint8), bitorder="little").tolist()
@@ -446,9 +449,6 @@ def test_a_j10r_public_row_is_then_its_call_and_blocks():
     """A J10-R unit's public row (`core_check.public_row` with ``j10r``) is the leaves `PouwH1Tile_v5`'s public parameters
     take, in order: today's row, then its ``call`` and its two ``blocks``, each a position's leaves
     (`seeds.position_leaves`, `seeds.POS_BITS`)."""
-    import hashlib
-    import numpy as np
-    from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
     salt, roots = hashlib.sha512(b"s").digest(), (hashlib.sha512(b"a").digest(), hashlib.sha512(b"b").digest())
     for pos, call, blocks in ((5, 0, (0, 64)), (1 << 39, 7, (3, (1 << 33) + 1)), ((1 << 64) - 1, 1 << 63, (1, 2))):
         row = CC.public_row(salt, pos, roots, (call, blocks))
@@ -464,7 +464,6 @@ def test_a_j10r_public_row_is_then_its_call_and_blocks():
 def test_the_verifiers_j10r_blocks_are_the_tiles():
     """`core_check.j10r_blocks`, the verifier's arithmetic, is `h1tile.j10r_blocks` (`h1tile.Layout`'s row and column
     blocks at call scale) at every slot, K, tile and unit tried, and `core_check.n_digits` is `segment.n_digits`."""
-    from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
     for k in (32, 64, 384, 416, 896, 4096, 14336, 1 << 20):
         assert CC.n_digits(k) == H.SG.n_digits(k // 32), k
         for m, (r, c) in ((4, (4, 8)), (8, (4, 8)), (32, (32, 32)), (64, (32, 32))):
@@ -476,8 +475,6 @@ def test_the_verifiers_j10r_blocks_are_the_tiles():
 def test_the_opening_reads_what_served_zk_writes():
     """`core_check.opening`'s constants are the ones served_zk commits under: one-stage's served domain, and the fp8-p
     A and B rows' schemas."""
-    from verity.protocols.accounting.pouw.prover.circuit import leaves as L
-    from verity.commitments.rowleaf import ROLE_W, ROLE_X
     assert CC.SERVED_DOMAIN == R.WINDOW_DOMAIN
     assert CC.OPENED == (("a", L.ROW_SCHEMA["fp8-p", ROLE_X]), ("b", L.ROW_SCHEMA["fp8-p", ROLE_W]))
     case = openings.honest(random.Random(1))
@@ -504,11 +501,6 @@ def test_the_pinned_tiles_are_their_templates():
     tile's. The leaf-H3 tile's Definition is retired, and its pin is its recorded execution phases'. The salted H1 tile unit at
     K = 64 (4 x 8 dot products of K) is pinned salted, its R and C its Definition's. The served circuit is tied to the build
     by benchmarks/pouw's staged-unit test, and the H1 unit's by its pin test (`test_h1_pin.py`)."""
-    from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
-    from verity.protocols.accounting.pouw.prover.circuit import pc8
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as PT
-    from verity.circuits.defs import bind
-    from verity.circuits.ops.boolean import gemm as BG
     pairs = tuple((i, j) for i in range(4) for j in range(8))
     h1 = bind(H.PouwH1Tile, EXACT=bind(BG.GemmAccumulatorS8, K=64, **BG.GEMM_SM120_S8), R=4, C=8, PAIRS=pairs)
     built = [pc8.side_tile(4096), pc8.side_tile(128), pc8.templates(4096, (1, 1), hidden=True, hashing="h0")["tile"], h1]
@@ -941,8 +933,6 @@ def test_one_session_salts_one_window():
     """Two execution phases of one model (one weights' root) with their own request tables: the salt opened in the first's
     session passes the first and is refused for the second, and a second session for the first execution phase has another open
     root."""
-    from verity.protocols.accounting.pouw.verifier import salt as PS
-
     d = rounds_cases.salt_instance(random.Random("one session, one window"))
     second = random.Random("the second window's requests").randbytes(64).hex()
     assert CC.salt(*rounds_cases.salt_args(d)) is None
@@ -954,8 +944,6 @@ def test_one_session_salts_one_window():
 def test_the_versioned_coin_rule_is_the_coins_on_the_current_version():
     """On `coins.SCHEME`, `core_check.coin_reason` and `weights_root` are `coins.coin_reason` and `audit.weights_root`;
     the recorded version differs from it in its binding and weights' root."""
-    from verity.protocols.accounting.pouw.verifier import coins as Co
-    from verity.protocols.accounting.pouw.verifier.audit import weights_root
     rng = random.Random(3)
     for seed in range(8):
         ch = Co.Challenger(seed % 3, rng.randbytes)

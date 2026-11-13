@@ -256,7 +256,7 @@ def serve(args: argparse.Namespace) -> int:
         raise SystemExit(SEEDED_ALONE)
     from verity_bench.vllm import arms as A
     from verity_bench.vllm import presets as P
-    from verity_bench.vllm import runner as RN
+    from verity_bench.vllm import engine as RN
     from verity_vllm.engine import env as engine_env
 
     spec = P.resolve_spec(args.spec)
