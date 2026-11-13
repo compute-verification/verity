@@ -247,6 +247,11 @@ PREDICT_NODE_SCHEMA = "verity-predict/node/v1"
 #: `registration.json`, which `program.predict.node_registration.register` writes
 NODE_REGISTRATION_SCHEMA = "verity-vllm/node-registration/v1"
 
+# --- the workload Program (`verity_vllm.program`)
+#: the workload Program's document, which `program.workload.WorkloadProgram.artifact` returns and
+#: `pipeline.global_program.build` writes as `workload_program.json`
+WORKLOAD_PROGRAM_SCHEMA = "verity/workload-program/v1"
+
 # --- PoUW's H1 (`verity_vllm.protocols.pouw.h1`)
 #: a served window's calls record, `pouw-h1-calls.json` (`protocols.pouw.h1.RECORD`), which `H1Run.finish` writes
 POUW_H1_CALLS_SCHEMA = "verity-vllm/pouw-h1-calls/v2"
