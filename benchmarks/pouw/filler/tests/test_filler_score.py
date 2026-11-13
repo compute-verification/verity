@@ -423,8 +423,8 @@ def test_kernel_facts_decide_the_filler_entry_with_the_declaration():
         for noise in ("bits01", "pm1"):
             applies, why = read(noise, K_TILE + [mma])
             assert applies == "unproven" and all(any("not all one of" in w for w in ws) for ws in why.values())
-    assert read("bits01", K_TILE + ["I2F.S32 R9, R28"])[1]["theorem-k"] == ["FP or conversion ops in the filler's "
-                                                                            "kernel: {'I2F.S32': 1}"]
+    assert read("bits01", K_TILE + ["I2F.S32 R9, R28"])[1]["theorem-k"] == [("FP or conversion ops in the filler's "
+                                                                             "kernel: {'I2F.S32': 1}")]
     assert read("pm1", E2M1_TILE + ["FFMA R9, R28, 0.5, RZ"])[1]["theorem-e"][0].startswith("FP or conversion")
     assert S.kernel_facts(sass((DFILL, K_TILE + ["HFMA2.MMA R3, -RZ, RZ, 0, 0"])))["fp_free"]  # a constant load
     for tile in (K_TILE, E2M1_TILE):  # FILL v1's accumulate into the chain's register: chained, whatever it declares
@@ -551,14 +551,14 @@ def test_program_facts_read_the_filler_wherever_it_is_called_from():
     assert pf["violations"] == [] and pf["filler"]["fp_free"] and pf["filler"]["path_helpers"] == [f"fscore: {rem}"]
     pf = S.program_facts({"fscore": nvd(serving(before=[f"CALL.REL.NOINC `({rem})"]), (WARP, False, WARP_BODY),
                                         (rem, False, ["STG.E desc[UR4][R4.64], R6", "RET.REL.NODEC R2 `(x)"]))})
-    assert pf["violations"] == [f"{rem} (fscore), called on the filler warps' path: STG.E at 0000 (a store that can "
-                                "write a receipt)"]
+    assert pf["violations"] == [(f"{rem} (fscore), called on the filler warps' path: STG.E at 0000 (a store that can "
+                                 "write a receipt)")]
     # what dfill_k itself calls is the filler's: its FP ops fail fp_free
     pf = S.program_facts({"fscore": nvd(serving(), (WARP, False, [f"CALL.REL.NOINC `({rem})", *WARP_BODY]),
                                         (rem, False, ["I2F.U64.RP R6, R4", "RET.REL.NODEC R2 `(x)"]))})
     assert not pf["filler"]["fp_free"] and pf["filler"]["helpers"] == [f"fscore: {rem}"]
-    assert S.filler_entry_v4("bits01", pf)["failed"]["theorem-k"] == ["FP or conversion ops in the filler's code: "
-                                                                      "{'I2F.U64.RP': 1}"]
+    assert S.filler_entry_v4("bits01", pf)["failed"]["theorem-k"] == [("FP or conversion ops in the filler's code: "
+                                                                       "{'I2F.U64.RP': 1}")]
     # FILL v1's chain in the clone reads chained; a split filler's kernel reads as v3 reads it
     chain = [x.replace("COL, RZ", "COL, R28") for x in WARP_BODY]
     assert S.filler_entry_v4("bits01", S.program_facts({"f": nvd(serving(), (WARP, False, chain))}))["applies"] == \
