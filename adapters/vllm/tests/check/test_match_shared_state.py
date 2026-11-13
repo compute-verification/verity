@@ -138,8 +138,8 @@ def _two_steps(compact: bool, weights: list[tuple]) -> RootView:
     """One request over two engine steps; `weights` is the second operand of the first step's embedding."""
     return reads._view(INPUTS, [
         (EMBED_0, reads.EMBED, [[("n", PROMPT, 0, 3)], weights]),
-        # an earlier instance of its step, then two windows of the embedding of step 1
-        (READ_0, reads.READER, [[("n", EMBED_0, 0, 2), ("n", EMBED_1, 0, 2), ("n", EMBED_1, 4, 6)]]),
+        # two windows of the embedding of step 1, which the compact form holds as one run of two, then an earlier instance of its step
+        (READ_0, reads.READER, [[("n", EMBED_1, 0, 2), ("n", EMBED_1, 4, 6), ("n", EMBED_0, 0, 2)]]),
         (SELECT_0, reads.SELECT, [[("n", READ_0, 0, 8)]]),
         # the select of step 0, then a run in the body's parameter space whose index is the weights node's
         (EMBED_1, reads.EMBED, [[("n", SELECT_0, 0, 1)], [("p", WTS, 0, 8)]]),
@@ -154,9 +154,10 @@ def _two_steps(compact: bool, weights: list[tuple]) -> RootView:
 @pytest.mark.parametrize(("weights", "reads_weights"), [([("n", WTS, 0, 8)], True), ([("p", WTS, 0, 8)], False)],
                          ids=["weights-node", "parameter-space"])
 def test_g5_counts_a_requests_producers_by_engine_step_alike_in_both_forms_and_on_the_fast_path(compact, fast, weights, reads_weights):
-    """A run of a later step's instance is named, a window each; a run of an earlier step's is counted under its consumer's
-    family; a run of the same step's is neither, and an instance in no engine step counts nothing.  Only a read of the weights
-    node makes the request one that reads the weights: a run in the body's parameter space does not, whatever its index."""
+    """A run of a later step's instance is named, a window each, also where the compact form holds the windows as one run of two; a
+    run of an earlier step's is counted under its consumer's family; a run of the same step's is neither, and an instance in no
+    engine step counts nothing.  Only a read of the weights node makes the request one that reads the weights: a run in the body's
+    parameter space does not, whatever its index."""
     checks, entry, facts = _checked(_two_steps(compact, weights), R0, list(range(6)), STEP_OF, ROWS, weights=WTS, fast=fast)
     assert checks["G5"]["problems"] == ([LATER] if reads_weights else [LATER, NO_WEIGHTS])
     assert checks["G5"]["cross_step_producer_classes"] == {"Embedding_v1": 1}
