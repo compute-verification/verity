@@ -1,7 +1,7 @@
 """kind_scan: what the network certifier's piece releases holds only fields of the four public kinds and the network
-certifier's certificates. A piece's DIR as it is released (the answer with the piece's placement, and the link-window's
-certificates as `certifier_piece.certificates` cuts them from a rows-form period's evidence, `period_case`'s accept)
-scans clean. The case, the period check's three input files and the scan's answers are witness: each is a finding where
+certifier's certificates. A piece's DIR as it is released (the answer with the piece's placement, and the execution
+phase's certificates as `certifier_piece.certificates` cuts them from a rows-form period's evidence, `period_case`'s
+accept) scans clean. The case, the period check's three input files and the scan's answers are witness: each is a finding where
 it lies in DIR, as any file DIR doesn't declare is, a log among them. A field no declaration names is a finding too: a
 count of requests in an answer, a registration's head beside a certificate. The chain's endpoint step (CR_ENDPOINT's
 rebuild), or any step the network certifier path doesn't run, is a finding naming the check.

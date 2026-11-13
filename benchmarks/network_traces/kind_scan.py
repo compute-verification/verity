@@ -7,8 +7,8 @@ a finding.
     python benchmarks/network_traces/kind_scan.py DIR
     python benchmarks/network_traces/kind_scan.py --received OUT
 
-DIR is a piece's DIR, or its hold as the leak guard reads it: `DOCS`' files, the link-window's certificates among them
-(`certifier_piece.CERTIFICATES`, the case's evidence's and nothing else of it). The piece's case
+DIR is a piece's DIR, or its hold as the leak guard reads it: `DOCS`' files, the execution phase's certificates among
+them (`certifier_piece.CERTIFICATES`, the case's evidence's and nothing else of it). The piece's case
 (`certifier_piece.CASE`), the period check's three input files and the scan's answers are witness and have no
 declaration: one left in DIR is a finding. Each file's JSON is walked to its leaves, and each leaf's key path (a list's
 items ``[]``) must match one its file declares: ``*`` is any one key (a Definition's, a port's, a stratum's, a δ's), and
@@ -113,8 +113,8 @@ ONE_STAGE = {
 }
 #: a certificate (`scan_period.CERTIFICATE_KEYS`), the network certifier's in the clear
 CERTIFICATE_DOC = dict.fromkeys(("digest", "direction", "key_id", "link", "signature", "window"), X)
-#: the link-window's certificates as the piece publishes them (`certifier_piece.certificates`): its records' and its row
-#: registrations', each with its own fields alone
+#: the execution phase's certificates as the piece publishes them (`certifier_piece.certificates`): its records' and
+#: its row registrations', each with its own fields alone
 CERTIFICATES = {**under("records[]", CERTIFICATE_DOC), **under("rows[]", CERTIFICATE_DOC)}
 #: ``verity/certifier/v0``'s answer (`Answer.toJson`) with the piece's placement: K, ε and their terms the protocol's
 #: outputs, the profile where each party ran
