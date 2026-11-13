@@ -161,7 +161,7 @@ def test_a_refused_fetch_prints_no_userinfo_of_origins_url_anywhere(tmp_path, re
         f'for a; do [ "$a" = "{url}" ] && {{ echo "fatal: unable to access \'{url}/\': refused" >&2; exit 128; }}; done\n'
         f'exec {shutil.which("git")} "$@"\n')
     (stub / "git").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{stub}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", str(stub), prepend=os.pathsep)
     p, out, calls = probe(tmp_path, repo)
     assert p.returncode == 3, p.stdout + p.stderr
     assert "can't fetch main's first-parent history from https://127.0.0.1:9/x.git (fetch.probe.log)" in p.stdout
