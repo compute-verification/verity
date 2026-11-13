@@ -59,7 +59,7 @@ stage() {   # stage TAG UNIT N: $W/TAG/B, its record under $OUT/TAG/B
   [ -f "$d/pub.bin" ] && head -c 400000 "$d/pub.bin" | head -1 > "$o/pub.head"
   [ -f "$d/circuit.txt" ] && sed -n 2p "$d/circuit.txt" | head -c 2000000 > "$o/META.line"
   ls -l "$d" > "$o/files.txt" 2>/dev/null
-  log "$1: stage.py $2 $3 --bind: rc $rc; $(grep -E 'Elapsed|Maximum resident' "$o/stage.time" | sed 's/^\s*//' | paste -sd ';'); $(tail -1 "$o/stage.err" | cut -c1-400)"
+  log "$1: stage.py $2 $3 (bound): rc $rc; $(grep -E 'Elapsed|Maximum resident' "$o/stage.time" | sed 's/^\s*//' | paste -sd ';'); $(tail -1 "$o/stage.err" | cut -c1-400)"
   return $rc
 }
 
