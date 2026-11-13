@@ -88,7 +88,7 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
             words equal to the tally's bits and a tampered one refused against the admit root, the tile's selected rows
             zeroed under a nonzero scale still admitted, a live unit's receipt the ungated one
 
-    cd adapters/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../verity/configuration/config:../../benchmarks/pouw/served_h1
+    cd adapters/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../tools/config:../../benchmarks/pouw/served_h1
     $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at <ISO time> --by LANE \
       --coins live --challenger 127.0.0.1:PORT --session ID
 """

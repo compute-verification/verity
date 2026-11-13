@@ -14,7 +14,8 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.check.c2_rules import _query_population_scope
-from verity_vllm.check.replay import coverage as COV, opening as OP
+from verity_vllm.check.replay import coverage as COV
+from verity_vllm.check.replay import opening as OP
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.records.fields import MissingField, RecordError
 from verity_vllm.records.required_manifest import SCHEMA, RequiredManifest
