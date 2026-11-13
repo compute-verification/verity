@@ -81,16 +81,16 @@ record whose verdict leaves one out or states one wrongly doesn't read, and the 
 and an accept that states a ``withheld`` word or a code.
 
 **Stopped.** A verifier's command that stopped with an error after its stream's session opened reached no verdict
-and was a try at one. Its record states ``accepted`` false, ``withheld`` null and one field more, ``stopped``, the
-command's own word for the error (`class_charge.STOPPED`). The line says "stopped" with the word, since no verifier
-refused; the charge is a refusal's, and it is final as a refusal is: it stands in a superseded run, and under
-another head it counts against its execution phase ("Another head"). So a second run over the same serve, which
-would fill the verdict the first never reached, holds nothing. A command that stopped before any challenge was
-sent writes no record: nothing was tried. ``stopped`` may be absent, which reads as null; it is handed on with each
-verdict read. A record doesn't read where its verdict's ``stopped`` is neither null nor a word, where an accept
-states one, and where a verdict states a ``withheld`` word too. A command that is killed writes nothing, and a
-second run then fills its verdict unseen: only a record of the sessions opened, which the command does not write
-itself, closes that, and the reader is handed none.
+and was a try at one. Its record states ``accepted`` false, ``withheld`` null, ``codes`` empty and one field more,
+``stopped``, the command's own word for the error (`class_charge.STOPPED`). The line says "stopped" with the word,
+since no verifier refused; the charge is a refusal's, and it is final as a refusal is: it stands in a superseded
+run, and under another head it counts against its execution phase ("Another head"). So a second run over the same
+serve, which would fill the verdict the first never reached, holds nothing. A command that stopped before any
+challenge was sent writes no record: nothing was tried. ``stopped`` may be absent, which reads as null; it is
+handed on with each verdict read. A record doesn't read where its verdict's ``stopped`` is neither null nor a
+word, where an accept states one, and where a verdict states a ``withheld`` word or a code too. A command that is
+killed writes nothing, and a second run then fills its verdict unseen: only a record of the sessions opened, which
+the command does not write itself, closes that, and the reader is handed none.
 
 **A head** (`head_of`) is the registration's own: its link, execution phase, parameters digest and tables as listed,
 held to the digest its certificate names. No signature is checked here: the certificate verifies under the network

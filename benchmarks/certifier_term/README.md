@@ -252,13 +252,14 @@ where its verdict leaves either out, and the line says which field to add; where
 nor a word; where its `codes` is no list of words; and where its verdict is accepted and states a word or a code.
 
 A verifier's command that stopped with an error after its stream's session opened reached no verdict, and it was
-a try at one. Its record states `accepted` false, `withheld` null and one field more, `stopped`, the command's own
-word for the error. The line says "stopped" with the word, the charge is a refusal's, and it is final as a refusal
-is, under any head and in a superseded run: a second run over the same serve fills nothing. A command that stopped
-before any challenge was sent writes no record. `stopped` may be absent. A record doesn't read where its
-verdict's `stopped` is neither null nor a word, where an accept states one, and where a verdict states a `withheld`
-word too. What this does not close: a command that is killed writes nothing, and a second run then fills its
-verdict unseen. Only a record of the sessions opened, which the command does not write itself, closes that.
+a try at one. Its record states `accepted` false, `withheld` null, `codes` empty and one field more, `stopped`, the
+command's own word for the error. The line says "stopped" with the word, the charge is a refusal's, and it is final
+as a refusal is, under any head and in a superseded run: a second run over the same serve fills nothing. A command
+that stopped before any challenge was sent writes no record. `stopped` may be absent. A record doesn't read where
+its verdict's `stopped` is neither null nor a word, where an accept states one, and where a verdict states a
+`withheld` word or a code too. What this does not close: a command that is killed writes nothing, and a second
+run then fills its verdict unseen. Only a record of the sessions opened, which the command does not write itself,
+closes that.
 
 An execution phase is one serve's: a serve, a link and the phase's number. A registration of connection rows names
 no serve, so a head's serve is the one its verdict records name, which is a run's word and no proof; the answer's

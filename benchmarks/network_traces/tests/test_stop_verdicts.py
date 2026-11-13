@@ -1123,7 +1123,8 @@ def run_files() -> dict[str, dict[str, str]]:
             "the four and no control": held_files(first, four(first), controls=[]),
             "the four and a control accepted": held_files(first, four(first), controls=control_but(accepted=True, codes=[])),
             "the four and a control withheld": held_files(first, four(first), controls=control_but(withheld=FORM)),
-            "the four and a control stopped": held_files(first, four(first), controls=control_but(stopped="session")),
+            "the four and a control stopped": held_files(
+                first, four(first), controls=control_but(stopped="session", codes=[])),
             "the four and a control refused for another reason": held_files(first, four(first), controls=reason_but("parse")),
             "the four and a control that doesn't read": held_files(first, four(first), controls=[{CC.VERDICT: {}}]),
             "the four and no serve's registration": held_files(first, four(first), served=[]),
@@ -1718,8 +1719,8 @@ def test_a_command_that_stopped_is_stopped_with_its_word_and_final_as_a_refusal_
     stream's session opened: the line says "stopped" with the word, the class is at its whole schedule, and it is
     final as a refusal is: under another head it counts against its execution phase, and in a superseded run it
     stands, so a second run over the same serve fills nothing. The word is handed on. A ``stopped`` that is
-    neither null nor a word, an accept that states one, and a verdict that states a ``withheld`` word too are each
-    a record that doesn't read; and a control whose command stopped is no refusal."""
+    neither null nor a word, an accept that states one, and a verdict that states a ``withheld`` word or a code
+    too are each a record that doesn't read; and a control whose command stopped is no refusal."""
     first, other = head(3, 5, 0), head(3, 6, 0)
     registrations = [registration(first)]
     at = f"the link {LINK}, execution phase 3"
@@ -1759,18 +1760,21 @@ def test_a_command_that_stopped_is_stopped_with_its_word_and_final_as_a_refusal_
            for accepted in (True, False) for value in ("", 0, False, True, ["session"], {"word": "session"})]
     off += [(True, {CC.STOPPED: "session"}, "its verdict is accepted and states `stopped`: an accept that also says "
                                             "why it is no accept says two things")]
-    off += [(False, {CC.STOPPED: "session", CC.WITHHELD: FORM},
-             "its verdict states `withheld` and `stopped`: a verifier that withheld its accept reached a verdict, "
-             "and a command that stopped reached none")]
+    none = "a command that stopped reached no verdict, so it states `withheld` null and `codes` empty"
+    off += [(False, {CC.STOPPED: "session"} | over, f"its verdict states `stopped` and {said}: {none}")
+            for over, said in (({CC.WITHHELD: FORM}, "`withheld`"), ({CC.CODES: ["a code"]}, "`codes`"),
+                               ({CC.WITHHELD: FORM, CC.CODES: ["a code"]}, "`withheld` and `codes`"))]
     for accepted, over, lack in off:
         records = audit_but(first, accepted=accepted, **over)
         assert CC.lacks(records[3]) == lack, (accepted, over)
         assert stop(registrations, records) == LB.Stop(0, (
             f"each connection is charged its whole schedule: {NO_RECORD}{lack}: {records[3]!r}",)), (accepted, over)
-        controls = control_but(accepted=accepted, codes=[], **over)
+        controls = control_but(**{CC.ACCEPTED: accepted, CC.CODES: []} | over)
         assert SV.control_lacks(controls[1]) == lack, (accepted, over)
-    # a control whose command stopped is no refusal, whatever reason its record gives
-    got = stop(registrations, four(first), controls=control_but(stopped="session"))
+    # a control whose command stopped is no refusal, whatever reason its record gives; it gives no code, and one
+    # that does is a control record that doesn't read
+    assert SV.control_lacks(control_but(stopped="session")[1]) == f"its verdict states `stopped` and `codes`: {none}"
+    got = stop(registrations, four(first), controls=control_but(stopped="session", codes=[]))
     assert got.held == 0 and got.why[4] == (
         f"{at}: held to its whole schedule by a control: the response tie's verifier the response tie's verifier at "
         f"a commit did not refuse its negative control (`id`: a released id changed) on control run of the response "

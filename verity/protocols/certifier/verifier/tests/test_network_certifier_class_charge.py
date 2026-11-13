@@ -168,13 +168,15 @@ def test_a_verdict_withheld_is_charged_as_one_refused_and_named_withheld_for_its
 def test_a_verdict_of_a_command_that_stopped_is_charged_as_one_refused_and_named_stopped_with_its_word():
     """A verdict may state the word of the error its verifier's command stopped with (`stopped`, null or a word,
     absent as null). It moves no charge: such a verdict is not accepted and leaves its class at its whole schedule,
-    and the line says "stopped" with the word. A `stopped` that is neither null nor a word, an accept that states
-    one, and a verdict that states a `withheld` word too are each a record that doesn't read."""
+    and the line says "stopped" with the word. It states `withheld` null and `codes` empty, as every verdict with
+    nothing to say there does. A `stopped` that is neither null nor a word, an accept that states one, and a
+    verdict that states a `withheld` word or a code too, or leaves either field out, are each a record that
+    doesn't read."""
     assert K.STOPPED == "stopped" and K.STOPPED not in K.SAID
     refused = K.charge(HEAD, 0, but(K.COMPUTE_AUDIT, record(K.COMPUTE_AUDIT, accepted=False)))
     for word in ("session", "another word"):
         for accepted in (False, ..., None, 1):
-            for more in ({}, {K.COMPLETE: False}, {K.CODES: ["a code"]}):
+            for more in ({}, {K.COMPLETE: False}, {K.WITHHELD: None, K.CODES: []}):
                 audit = record(K.COMPUTE_AUDIT, accepted=accepted, stopped=word, **more)
                 got = K.charge(HEAD, 0, but(K.COMPUTE_AUDIT, audit))
                 assert (got.below, got.count, got.schedules, got.differ) == (False, 5, 5, ()), (word, accepted)
@@ -207,9 +209,19 @@ def test_a_verdict_of_a_command_that_stopped_is_charged_as_one_refused_and_named
             for over, said in (({K.STOPPED: "session"}, "`stopped`"),
                                ({K.STOPPED: "session", K.CODES: ["a code"]}, "`codes` and `stopped`"),
                                ({K.STOPPED: "session", K.WITHHELD: "two-stage-form"}, "`withheld` and `stopped`"))]
-    off += [(accepted, {K.STOPPED: "session", K.WITHHELD: "two-stage-form"},
-             "its verdict states `withheld` and `stopped`: a verifier that withheld its accept reached a verdict, "
-             "and a command that stopped reached none") for accepted in (False, None, ...)]
+    # a command that stopped reached no verdict: it withheld none and gives no code
+    none = "a command that stopped reached no verdict, so it states `withheld` null and `codes` empty"
+    off += [(accepted, {K.STOPPED: "session"} | over, f"its verdict states `stopped` and {said}: {none}")
+            for accepted in (False, None, ...)
+            for over, said in (({K.WITHHELD: "two-stage-form"}, "`withheld`"), ({K.CODES: ["a code"]}, "`codes`"),
+                               ({K.WITHHELD: "two-stage-form", K.CODES: ["a code", "another"]},
+                                "`withheld` and `codes`"))]
+    # and it states both fields, as every verdict does
+    off += [(accepted, {K.STOPPED: "session"} | over, f"its verdict states no {said}: a verdict with nothing to say "
+                                                       "states `withheld` null and `codes` empty")
+            for accepted in (False, None, ...)
+            for over, said in (({K.WITHHELD: ...}, "`withheld`"), ({K.CODES: ...}, "`codes`"),
+                               ({K.WITHHELD: ..., K.CODES: ...}, "`withheld` and no `codes`"))]
     for accepted, over, lack in off:
         bad = record(K.RESPONSE_TIE, accepted=accepted, **over)
         assert K.lacks(bad) == lack and not K.reads(bad), (accepted, over)

@@ -41,12 +41,13 @@ accept says two things (`misstates`).
 
 **Stopped.** A verifier's command that stopped with an error after its stream's session opened reached no verdict,
 and it was a try: nothing retries a verdict, so a second run that then fills the verdict would be a second try
-nobody sees. Its record states `accepted` false, `withheld` null and one field more, `stopped`, the command's own
-word for the error (`STOPPED`). Such a verdict is no refusal by a verifier, so the line says "stopped" with the
-word; it is charged as a refused one is, and stands as one does. A command that stopped before any challenge was
-sent tried nothing and writes no record. `stopped` may be absent, which reads as null. A record doesn't read where
-its verdict's `stopped` is neither null nor a word, where its verdict is accepted and states one, and where it
-states a `withheld` word too: a verifier that withheld its accept reached a verdict.
+nobody sees. Its record states `accepted` false, `withheld` null, `codes` empty and one field more, `stopped`, the
+command's own word for the error (`STOPPED`). Such a verdict is no refusal by a verifier, so the line says
+"stopped" with the word; it is charged as a refused one is, and stands as one does. A command that stopped before
+any challenge was sent tried nothing and writes no record. `stopped` may be absent, which reads as null. A record
+doesn't read where its verdict's `stopped` is neither null nor a word, where its verdict is accepted and states
+one, and where it states a `withheld` word or a code too: a verifier that withheld its accept, or gave a code,
+reached a verdict.
 
 **All four or none.** A verdict counts where a record of it is of the class, in the head's execution phase, names
 this head's digest, and every such record is accepted and complete. Naming the head is what holds a verdict to the
@@ -187,7 +188,8 @@ def misstates(verdict: Mapping[str, Any]) -> str | None:
     """What a verdict states wrongly of `SAID` (the module docstring's "Withheld, and the codes"), or None where it
     states nothing wrongly: one of the two left out, a `withheld` that is neither null nor a word, `codes` that
     are no list of words, a `stopped` that is neither null nor a word ("Stopped"), an accept that states a
-    `withheld` word, a code or a `stopped` word, and a verdict that states both words."""
+    `withheld` word, a code or a `stopped` word, and a verdict that states a `stopped` word beside a `withheld`
+    word or a code."""
     if missing := [k for k in SAID if k not in verdict]:
         return (f"its verdict states no `{'` and no `'.join(missing)}`: a verdict with nothing to say states "
                 f"`{WITHHELD}` null and `{CODES}` empty")
@@ -200,9 +202,9 @@ def misstates(verdict: Mapping[str, Any]) -> str | None:
     if verdict.get(ACCEPTED) is True and (said := [k for k in (*SAID, STOPPED) if verdict.get(k)]):
         return (f"its verdict is accepted and states `{'` and `'.join(said)}`: an accept that also says why it is "
                 "no accept says two things")
-    if verdict[WITHHELD] and verdict.get(STOPPED):
-        return (f"its verdict states `{WITHHELD}` and `{STOPPED}`: a verifier that withheld its accept reached a "
-                "verdict, and a command that stopped reached none")
+    if verdict.get(STOPPED) and (said := [k for k in SAID if verdict[k]]):
+        return (f"its verdict states `{STOPPED}` and `{'` and `'.join(said)}`: a command that stopped reached no "
+                f"verdict, so it states `{WITHHELD}` null and `{CODES}` empty")
     return None
 
 
