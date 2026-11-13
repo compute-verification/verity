@@ -13,7 +13,7 @@ from hypothesis import strategies as st
 import verity_difftest as D
 from verity_difftest import protocol as P
 
-INTERFACE = Path(__file__).resolve().parents[2] / "protocols" / "interface"
+INTERFACE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "interface"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 ID = "verity/example/v0"
