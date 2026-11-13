@@ -104,13 +104,13 @@ theorem step_drawn {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads
     exact ⟨recB, record, hb, hrec, verdictOf_drawn (push_ok h hall)⟩
   · cases h
 
-/-- **Where v2's check accepts, the session's record holds a sample.** -/
+/-- **Where v2's check accepts on parameters that name no members, the session's record holds a sample.** -/
 theorem checkBlobsAt_drawn {p : _root_.Spot.OneStageZk.Params}
     {c : _root_.Spot.OneStage.Commitment} {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence}
     {bs : _root_.Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
-    (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    (hm : p.members = none) (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ record, sessionRecord e bs = some record ∧ (Flock.Witness.recordDraw record).isSome = true := by
-  obtain ⟨r, _, hsz, -, -, hrun, hall⟩ := checkBlobsAt_run h
+  obtain ⟨r, _, hsz, -, -, hrun, hall⟩ := checkBlobsAt_run hm h
   have hs := eq_single hsz
   rw [hs] at hrun
   obtain ⟨_, _, _, _, -, -, -, -, _, _, _, _, hstep, -⟩ := run_verified hrun
@@ -163,19 +163,20 @@ theorem setupTables_stratified {tags : Flock.Tags} {cf pf : ByteArray} {coins : 
   simp only [hD, hl, Except.map] at h
   cases partition <;> cases program <;> simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
 
-/-- **v2 accepts only a subset sample**: where composite `k` accepted what the prover sent and v2's case in it accepts,
-the record v2 reads holds a sample (`unit_draw`), which decodes to a sample by the subset sampling design. -/
+/-- **v2 accepts only a subset sample**: where composite `k` accepted what the prover sent and v2's case in it accepts
+on parameters that name no members, the record v2 reads holds a sample (`unit_draw`), which decodes to a sample by the
+subset sampling design. -/
 theorem recordDraw_subset {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
     {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : _root_.Properties.Challenger.Draws}
     (hS : Verity.SameAccepts k s) (hcase : V2Case k s a b e)
-    (hacc : V2Accepts (_root_.Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr) {record : String}
-    (hr : sentRecord s = some record) :
+    (hacc : V2Accepts (_root_.Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr) (hm : p.members = none)
+    {record : String} (hr : sentRecord s = some record) :
     ∃ dj D kd, Flock.Witness.recordDraw record = some dj ∧ Flock.Draw.UnitDraw.ofJson dj = .ok D ∧
       D.law = .subset kd := by
-  obtain ⟨record', _, _, _, _, -, hr', -, hv⟩ := sent_verified hS hcase hacc
+  obtain ⟨record', _, _, _, _, -, hr', -, hv⟩ := sent_verified hS hcase hacc hm
   obtain ⟨-, -, -, -, -, _, _, hck⟩ := hacc
-  obtain ⟨record'', hrec'', hdrawn⟩ := checkBlobsAt_drawn hck
+  obtain ⟨record'', hrec'', hdrawn⟩ := checkBlobsAt_drawn hm hck
   obtain rfl := Option.some.inj (hr'.symm.trans hr)
   obtain ⟨_, _, _, _, _, -, -, -, -, -, hrec, hst, -, -⟩ := hv
   obtain rfl := Option.some.inj (hrec''.symm.trans hrec)
@@ -584,16 +585,21 @@ theorem zk_closure {b : ByteArray} {e : _root_.Spot.OneStageZk.Evidence}
     | (cases h; done)
     | (cases h; exact oneStage_closure (by assumption))
 
-/-- **v2's evidence names no closure**: `OneStage.evidenceOf` refuses a sample with one. -/
+/-- **Evidence either form's parse returned names no closure**: its base is the base of evidence the one statement's
+parse returned (`Spot.OneStageZk.evidenceEitherOf_base`). -/
+theorem zkEither_closure {b : ByteArray} {e : _root_.Spot.OneStageZk.Evidence}
+    (h : _root_.Spot.OneStageZk.evidenceEitherOf b = .ok e) :
+    _root_.Spot.field? e.base.draw "closure" = none := by
+  obtain ⟨b', e', h', hb⟩ := _root_.Spot.OneStageZk.evidenceEitherOf_base h
+  rw [hb]
+  exact zk_closure h'
+
+/-- **v2's evidence names no closure**, in either form: `OneStage.evidenceOf` refuses a sample with one. -/
 theorem evidenceOf_closure {b : ByteArray} {ev : _root_.Spot.OneStageZk.Evidence}
     (h : VStar.Recursive.Sampled.evidenceOf b = .ok (.inl ev)) :
     _root_.Spot.field? ev.base.draw "closure" = none := by
-  unfold VStar.Recursive.Sampled.evidenceOf at h
-  simp only [bind, Except.bind] at h
-  repeat' split at h
-  all_goals first
-    | (cases h; done)
-    | (cases h; exact zk_closure (by assumption))
+  obtain ⟨b', hb'⟩ := dispatch_evidence h
+  exact zkEither_closure hb'
 
 /-- **The units v2 proves are the record sample's**: where the public file's unit indices are `0, …, N − 1`, the units
 `provedUnits` reads at the record's `unit_draw` are its units, sorted. -/
@@ -846,13 +852,13 @@ record's sample to its own. v2 accepts only a subset record sample (`recordDraw_
 (`recordDrawn_of_subset`). -/
 theorem drawHeld_of {k : Verity.Registration.Composite}
     (h : ∀ s dr L n ξ units record dj D kd, Verity.SameAccepts k s → Drew k s dr L n ξ units →
-      sentRecord s = some record → Flock.Witness.recordDraw record = some dj →
+      OneStatement s.params → sentRecord s = some record → Flock.Witness.recordDraw record = some dj →
       Flock.Draw.UnitDraw.ofJson dj = .ok D → D.law = .subset kd → D.population = n ∧ D.units = units) :
     DrawHeld k := by
-  intro s dr L n ξ units record hS hd hr
+  intro s dr L n ξ units record hS hd hone hr
   obtain ⟨a, b, e, p, c, ev, hcase, hacc, -⟩ := id hd
-  obtain ⟨dj, D, kd, hdj, hD, hl⟩ := recordDraw_subset hS hcase hacc hr
-  obtain ⟨rfl, rfl⟩ := h s dr L n ξ units record dj D kd hS hd hr hdj hD hl
+  obtain ⟨dj, D, kd, hdj, hD, hl⟩ := recordDraw_subset hS hcase hacc (single_of_case hS hcase hacc hone) hr
+  obtain ⟨rfl, rfl⟩ := h s dr L n ξ units record dj D kd hS hd hone hr hdj hD hl
   exact recordDrawn_of_subset hdj hD hl
 
 /-- **v2 holds the record's sample to its own**, for every composite `k`: the subset sample the record's decodes to is over
@@ -862,13 +868,14 @@ file's units the record samples (`provedUnits_eq`, at the indices the population
 `Properties.Spot.FilePart.check_indices`), v2 held them to the units v1 proved (`provedHeld_ok`), and v1's
 window check proves the units it drew (`checkAt_proved`). -/
 theorem drawHeld (k : Verity.Registration.Composite) : DrawHeld k := by
-  refine drawHeld_of fun s dr L n ξ units record dj D kd hS hd hr hdj hD hl => ?_
+  refine drawHeld_of fun s dr L n ξ units record dj D kd hS hd hone hr hdj hD hl => ?_
   obtain ⟨a, b, e, p, c, ev, hcase, hacc, ⟨_, _, _, -, hn, -⟩, hu, -⟩ := hd
-  obtain ⟨record', _, _, _, _, -, hr', -, hv⟩ := sent_verified hS hcase hacc
+  have hm : p.members = none := single_of_case hS hcase hacc hone
+  obtain ⟨record', _, _, _, _, -, hr', -, hv⟩ := sent_verified hS hcase hacc hm
   obtain rfl := Option.some.inj (hr'.symm.trans hr)
   obtain ⟨_, _, _, pubB, _, -, -, -, hpub, -, hrec, hst, -, -⟩ := hv
   obtain ⟨-, -, hev, -, -, _, _, hck⟩ := hacc
-  obtain ⟨r, pubB', hsz, hpub', hph, hrun, hall⟩ := checkBlobsAt_run hck
+  obtain ⟨r, pubB', hsz, hpub', hph, hrun, hall⟩ := checkBlobsAt_run hm hck
   obtain rfl := Except.ok.inj (hpub'.symm.trans hpub)
   rw [hdj] at hst
   obtain ⟨_, hss, -⟩ := setupAt_ok hst

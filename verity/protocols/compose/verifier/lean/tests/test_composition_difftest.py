@@ -131,7 +131,8 @@ def _v1(a: dict) -> dict:
 
 #: One change to v2's audit (`sessionless_draws`) that sampled proofs refuses at another step than its refusal of no
 #: session: the audit as v1's (refused by name at the params), v1's evidence under v2's params (refused by name at the
-#: evidence), v2's evidence naming verdicts, params naming no challenger or no partition, the public file named by the
+#: evidence), v2's evidence naming verdicts, params naming no challenger or no partition, params under a sampling design that is no
+#: subset one (refused by its kind, after a null partition), the public file named by the
 #: evidence rather than the params, one session whose coins are no tree the challenger logged, coins on another window
 #: or none. v2 reads no file and no proved unit before that refusal, so a change to those reaches it alone.
 V2_BREAKS = {
@@ -140,6 +141,10 @@ V2_BREAKS = {
     "verdicts": lambda a: {**a, "evidence": {**a["evidence"], "verdicts": {}}},
     "no-challenger": lambda a: {**a, "params": _without(a["params"], "challenger")},
     "no-partition": lambda a: {**a, "params": {**a["params"], "partition": None}},
+    "stratified": lambda a: {**a, "params": {**a["params"], "law": {"k": 1, "law": "stratified"}}},
+    "work": lambda a: {**a, "params": {**a["params"], "law": {"k": 1, "law": "work"}}},
+    "stratified-no-partition": lambda a: {**a, "params": {**a["params"], "law": {"k": 1, "law": "stratified"},
+                                                          "partition": None}},
     "public-in-evidence": lambda a: {**a, "evidence": {**a["evidence"], "proofs": {
         "public": a["params"]["proofs"]["public"], "sessions": []}}},
     "session": lambda a: {**a, "evidence": {**a["evidence"], "sessions": ["s"], "proofs": {
@@ -591,6 +596,34 @@ def test_spot_refuses_one_stage_v1(name, request):
             case = product_case(product, one_record(product, [by_id[C.id] for C in product.components]))
             assert product.answer(case)["verdict"] == R.REJECT
             out = server.exchange(case)
+            assert out["verdict"] == R.REJECT and f"{R.SAMPLED_PROOFS.id} reject: {why}" in out["reason"], out
+            seen[br] += 1
+    check()
+    assert set(seen) == set(want), dict(seen)
+
+
+def test_spot_refuses_a_law_that_is_no_subset(remote_server):
+    """Sampled proofs' one-stage form covers a subset sampling design alone: v2's audit under a `stratified` or a `work` law is
+    refused by the sampling design's kind (`OneStageZk.SUBSET_ONLY`) at its params, its last refusal there, so with no partition
+    too it is refused for the partition. Remote, every other subprotocol aimed at acceptance on the audit's record,
+    rejects with that refusal as sampled proofs' reason, in Lean as in Python."""
+    want = {"stratified": f"params: {OS.subset_only('stratified')}", "work": f"params: {OS.subset_only('work')}",
+            "stratified-no-partition": "params: partition is null: the sessions are verified against the verifier's own "
+                                       "partition object"}
+    others = [C for C in R.REMOTE.components if C is not R.SAMPLED_PROOFS]
+    seen = collections.Counter()
+
+    @settings(max_examples=3, database=None, deadline=None, suppress_health_check=list(HealthCheck))
+    @given(st.tuples(*[component_case(C, R.ACCEPT) for C in others]), sessionless_draws())
+    def check(drawn, audit):
+        for br, why in want.items():
+            sampled = broken_case(audit, br)
+            got = R.SAMPLED_PROOFS.answer({**sampled, "blobs": BLOBS})
+            assert (got["verdict"], got["reason"]) == (R.REJECT, why), got
+            by_id = {c["id"]: c for c in (*drawn, as_component(R.SAMPLED_PROOFS, sampled))}
+            case = product_case(R.REMOTE, one_record(R.REMOTE, [by_id[C.id] for C in R.REMOTE.components]))
+            assert R.REMOTE.answer(case)["verdict"] == R.REJECT
+            out = remote_server.exchange(case)
             assert out["verdict"] == R.REJECT and f"{R.SAMPLED_PROOFS.id} reject: {why}" in out["reason"], out
             seen[br] += 1
     check()

@@ -239,14 +239,15 @@ the blobs (`pubB`); the verifier's law derives (`law`) and the record names a po
 proves (`provedUnits`) are the units `ξ` samples under `law` over `n` (`drawnFrom`), ascending. -/
 theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
-    (he : OneStageZk.evidenceOf b = .ok e) (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    (he : OneStageZk.evidenceOf b = .ok e) (hm : p.members = none)
+    (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ s pubB B record law n units read, e.sessions = #[s] ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       bs.get s.record s!"session {s.name}'s record" = .ok B ∧ String.fromUTF8? B = some record ∧
       Draw.derive p.base.verifier.program p.base.verifier.query p.base.verifier.law p.base.verifier.workTable =
         .ok law ∧
       nat? (getD c.record "population") = some n ∧ OneStage.drawnFrom p.base.verifier law n ξ = .ok (units, read) ∧
       OneStageZk.provedUnits pubB record = .ok (units.qsort (· < ·)) := by
-  replace h := (OneStageZk.checkBlobsAt_accept h).1
+  replace h := (OneStageZk.checkBlobsAt_accept_one hm h).1
   unfold OneStageZk.checkOneAt at h
   dsimp only at h
   split at h
@@ -343,7 +344,8 @@ the parameters' public file and the sample the session's record reads (`Flock.Wi
 `ξ` samples under the verifier's law as derived over the registered population, ascending. -/
 theorem unitsAt_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
-    (he : OneStageZk.evidenceOf b = .ok e) (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    (he : OneStageZk.evidenceOf b = .ok e) (hm : p.members = none)
+    (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ s pubB B record law n units read, e.sessions = #[s] ∧ bs.get p.own.pub "public file" = .ok pubB ∧
       bs.get s.record s!"session {s.name}'s record" = .ok B ∧ String.fromUTF8? B = some record ∧
       Draw.derive p.base.verifier.program p.base.verifier.query p.base.verifier.law p.base.verifier.workTable =
@@ -353,7 +355,7 @@ theorem unitsAt_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : One
         Flock.HmIn.loadPublic tags cc pi pubB = .ok P → Flock.Witness.recordDraw record = some D →
           Units.unitsAt P.header D = some (units.qsort (· < ·)) := by
   obtain ⟨s, pubB, B, record, law, n, units, read, hs, hp, hB, hr, hder, hn, hd, hc⟩ :=
-    credited_of_checkBlobsAt he h
+    credited_of_checkBlobsAt he hm h
   exact ⟨s, pubB, B, record, law, n, units, read, hs, hp, hB, hr, hder, hn, hd,
     fun _ _ _ _ _ hl hD => Units.unitsAt_of_provedUnits hl hD hc⟩
 
@@ -426,11 +428,11 @@ public file on the blobs (`pubB`) and any load of it (`P`), the record names the
 file's header counts. -/
 theorem population_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
-    (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) {pubB : ByteArray}
+    (hm : p.members = none) (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) {pubB : ByteArray}
     (hpB : bs.get p.own.pub "public file" = .ok pubB) {tags : Flock.Tags} {cc : Flock.Circuit}
     {pi : Flock.HmIn.Ports} {P : Flock.Public} (hl : Flock.HmIn.loadPublic tags cc pi pubB = .ok P) :
     nat? (getD c.record "population") = some P.n := by
-  replace h := (OneStageZk.checkBlobsAt_accept h).1
+  replace h := (OneStageZk.checkBlobsAt_accept_one hm h).1
   unfold OneStageZk.checkOneAt at h
   dsimp only at h
   split at h
@@ -511,12 +513,12 @@ the parameters' public file on the blobs (`pubB`) and any load of it (`P`), the 
 `indicesHeld`). -/
 theorem units_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
-    (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) {pubB : ByteArray}
+    (hm : p.members = none) (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) {pubB : ByteArray}
     (hpB : bs.get p.own.pub "public file" = .ok pubB) {tags : Flock.Tags} {cc : Flock.Circuit}
     {pi : Flock.HmIn.Ports} {P : Flock.Public} (hl : Flock.HmIn.loadPublic tags cc pi pubB = .ok P) :
     ∃ n, nat? (getD c.record "population") = some n ∧
       _root_.Spot.FilePart.indicesOf P.header = .ok (Array.range n) := by
-  replace h := (OneStageZk.checkBlobsAt_accept h).1
+  replace h := (OneStageZk.checkBlobsAt_accept_one hm h).1
   unfold OneStageZk.checkOneAt at h
   dsimp only at h
   split at h

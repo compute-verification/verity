@@ -90,9 +90,10 @@ parameters' own partition object and program, and the lookup tables the blobs ho
 def inputsAt (A : Live) (p : _root_.Spot.OneStageZk.Params) (bs : Core.Blobs) : Flock.Witness.Inputs :=
   _root_.Spot.OneStageZk.inputsOf A.I.tags p.own A.I.circuitFile A.I.publicFile bs
 
-/-- **v2 reads `A`'s and `o`'s inputs** at the parameters `p` and the blobs `bs`: the committed circuit and public
-files are `A`'s, so are the lookup tables the blobs hold and the program; `o`'s partition object and registered file
-read (`FlockDeploy.jsonOf`) as the parameters' own; and the statement's tags are `A`'s. -/
+/-- **v2 reads `A`'s and `o`'s inputs** at the parameters `p` and the blobs `bs`: the parameters name no members,
+so the session is the one statement's on their own files; the committed circuit and public files are `A`'s, so are
+the lookup tables the blobs hold and the program; `o`'s partition object and registered file read
+(`FlockDeploy.jsonOf`) as the parameters' own; and the statement's tags are `A`'s. -/
 structure Names (A : Live) (o : Own) (p : _root_.Spot.OneStageZk.Params) (bs : Core.Blobs) : Prop where
   circuit : bs.get p.own.circuit "circuit" = .ok A.I.circuitFile
   pub : bs.get p.own.pub "public file" = .ok A.I.publicFile
@@ -101,6 +102,7 @@ structure Names (A : Live) (o : Own) (p : _root_.Spot.OneStageZk.Params) (bs : C
   partition : FlockDeploy.jsonOf "partition" o.partition = .ok p.own.partition
   registered : o.registered.mapM (FlockDeploy.jsonOf "registered reads") = .ok p.own.registered
   tags : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags
+  single : p.members = none
 
 /-- **The blobs show the run's session.** Where the run reaches the sample file round, at each session `s` the evidence
 names, `s`'s record is on the blobs and its sample is the run's sample file, as the session's statement reads it
@@ -267,7 +269,7 @@ theorem verdict_of_accepts (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev
         (_root_.Spot.OneStageZk.coinKeyOf record
           (_root_.Spot.OneStageZk.setupAt (inputsAt A p bs) rd (Flock.Witness.recordDraw record))) =
         .ok () := by
-  replace hacc := (_root_.Spot.OneStageZk.checkBlobsAt_accept hacc).1
+  replace hacc := (_root_.Spot.OneStageZk.checkBlobsAt_accept_one hn.single hacc).1
   unfold _root_.Spot.OneStageZk.checkOneAt at hacc
   dsimp only at hacc
   split at hacc
@@ -350,7 +352,7 @@ theorem lengths_of_accepts (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev
       (∀ t ∈ A.I.tables, t.1.toUTF8.size < 2 ^ 64 ∧ t.2.size < 2 ^ 64) ∧ (∀ b ∈ A.I.program, b.size < 2 ^ 64) ∧
       _root_.Spot.OneStageZk.printedSize p.own.partition < 2 ^ 64 ∧
       (∀ j ∈ p.own.registered, _root_.Spot.OneStageZk.printedSize j < 2 ^ 64) := by
-  replace hacc := (_root_.Spot.OneStageZk.checkBlobsAt_accept hacc).1
+  replace hacc := (_root_.Spot.OneStageZk.checkBlobsAt_accept_one hn.single hacc).1
   unfold _root_.Spot.OneStageZk.checkOneAt at hacc
   dsimp only at hacc
   split at hacc
