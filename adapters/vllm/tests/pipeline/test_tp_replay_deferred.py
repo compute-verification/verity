@@ -751,3 +751,16 @@ def test_a_tp_row_runs_at_the_world_its_file_says_unless_the_flag_names_one(tmp_
         o = _opts(tmp_path, *flags, row=row)
         assert run_row(o, o.stages) == 0
     assert worlds == [8, 2, 4]
+
+
+def test_a_tp_row_refuses_a_world_of_one_rank_and_runs_nothing(tmp_path, monkeypatch):
+    ran: list[int] = []
+
+    def run(self):
+        ran.append(self.W)
+        return 0
+
+    monkeypatch.setattr(TpRow, "run", run)
+    with pytest.raises(UsageError, match="--world 1: a tensor-parallel row needs a world of at least 2 ranks"):
+        run_row(_opts(tmp_path, "--world", "1", row=TP_DENSE), "build")
+    assert ran == []
