@@ -58,6 +58,9 @@ from verity.definitions.circuits.constants import REGISTRATION
 from verity_vllm.program.sampling_event import is_sampling_event
 from verity_vllm.program.shared_definitions import canonicalize
 
+__all__ = ["Edge", "LAG_VALUES", "RequestComponent", "SCHEMA", "WorkloadProgram", "WorkloadRequest", "edge_ports",
+           "eos_lag_rows_declared", "program_component", "request_component"]
+
 SCHEMA = "verity/workload-program/v1"
 
 
