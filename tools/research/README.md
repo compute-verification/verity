@@ -437,7 +437,7 @@ What `research run` does:
   errors` with one line per error class). A configured-but-unusable remote
   (credential env vars unset here) does not stop a local publish: the attempt
   is written, `preserve_error` records why nothing was pushed.
-- Repo replicas: `fixtures/artifacts.json` maps `art:` ids to tracked files
+- Repo replicas: `artifacts.json` maps `art:` ids to tracked files
   registered with `research data put --kind fixture/v1 --file PATH`; `where`
   lists the `repo` replica when the file still hashes to its id.
 - With `--on`, the flags travel to the machine, which runs the same code in
