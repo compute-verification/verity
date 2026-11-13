@@ -91,14 +91,14 @@ theorem egressLimit_eq (i : String) : S.egressLimit i = ((S.crossing (S.under i)
     | cons k l ih =>
       rw [List.filter_cons]
       by_cases hk : p k = true
-      · rw [if_pos hk, List.map_cons, List.sum_cons, List.map_cons, List.sum_cons, if_pos hk, ih]
-      · rw [if_neg hk, List.map_cons, List.sum_cons, if_neg hk, ih, Nat.zero_add]
+      · rw [ite_eq_left hk, List.map_cons, List.sum_cons, List.map_cons, List.sum_cons, ite_eq_left hk, ih]
+      · rw [ite_eq_right hk, List.map_cons, List.sum_cons, ite_eq_right hk, ih, Nat.zero_add]
   unfold egressLimit Accounting.linkCapacity Accounting.boundary crossing
   rw [hl, Finset.sum_filter, ← Fin.sum_univ_fun_getElem]
   refine Finset.sum_congr rfl fun e _ => ?_
   by_cases h : ((S.links[e.1]).ends.1 ∈ S.under i ↔ (S.links[e.1]).ends.2 ∉ S.under i)
   · simp [linkEnds, linkβ, h]
-  · simp [linkEnds, linkβ, h]
+  · simp [linkEnds, h]
 
 /-- A place of the Site as a leaf of the model: the model's bound on what the outside does (`B4`) takes a finite,
 ordered type of leaves. -/
@@ -221,8 +221,8 @@ theorem records_encard_le {Ω L : Type*} (S : Ω → Actual.Run L) (cert : Finse
       obtain ⟨g, hg, rfl⟩ := (Set.mem_image _ _ _).1 hp
       have hx : (S r).A.x g ∈ cert := by
         have hrec := (Finset.mem_filter.1 (Finset.mem_coe.1 hg)).1
-        rw [Actual.Run.record, Finset.mem_filter] at hrec
-        exact hrec.2.1
+        simp only [Actual.Run.record, Finset.mem_filter, Finset.mem_univ, true_and] at hrec
+        exact hrec.1
       exact Set.mem_iUnion.2 ⟨⟨(S r).A.x g, hx⟩, (Set.mem_inter_iff _ _ _).2 ⟨Set.mem_image_of_mem _ hg, rfl⟩⟩
   · intro j
     refine le_of_eq_of_le (congrArg Set.encard ?_) (hK j.1 j.2)
@@ -287,12 +287,8 @@ theorem leak_le_sum_K_registered {Ω : Type*} (i : String) (R : Ω → Accountin
         jitter * ((Finset.Ico a b).image bucket).card * (S.loc (S.certifiersOf i)).card +
         Accounting.uncertifiedCapacity S.placeEnds S.linkβ (S.loc (S.certifiersOf i)) (S.loc (S.proverUnder i)) *
           (b - a)) : ℕ) : ℕ∞) := by
-  first
-    | exact Accounting.leak_le_sum_K R ℓ S.placeEnds S.linkβ link 𝒱 (S.loc (S.certifiersOf i))
-        (S.loc (S.proverUnder i)) spec record bucket jitter a b K hcs hdl hT hsec hK
-    | (convert Accounting.leak_le_sum_K R ℓ S.placeEnds S.linkβ link 𝒱 (S.loc (S.certifiersOf i))
-        (S.loc (S.proverUnder i)) spec record bucket jitter a b K hcs hdl hT hsec hK
-       trace "leak_le_sum_K_registered: closed by convert, the exact form having failed")
+  exact Accounting.leak_le_sum_K R ℓ S.placeEnds S.linkβ link 𝒱 (S.loc (S.certifiersOf i))
+    (S.loc (S.proverUnder i)) spec record bucket jitter a b K hcs hdl hT hsec hK
 
 end Verity.Site
 
