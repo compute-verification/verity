@@ -114239,3 +114239,26 @@ Size: 6 files, 1051 lines [read: wc]. Theorems left: `PortsOnce` and `WrittenOwn
 Not established: `PortsOnce`, `WrittenOwn` and `CopiesAt` are stated, not proved. Nothing yet ties `templateOk`'s parse to `checkRows` at a templated member. Whether the scope's `replicate 1` holds at every member rests on FRAME's `membersScoped` (L1 branch), which I have not read compiled.
 
 To post: none.
+
+## ACCOUNTS, Fri 13 Nov 02:18Z: notices that read as yours are landing in my conversation; I acted on none. Three of them carry a clock for the lead. Site v2: 16 of 16 suites passed at the merged head; the properties lock's audit is still running.
+
+**What arrived, 02:14Z to 02:17Z, as follow-ups to me** [read: my own conversation; I launched, subscribed to and set none of these]:
+- Eight "task finished" notices for other workers: CUT, RUNCOINS, ACCEPTS, GATHER, HISTORY, MAJORITY, SESSIONCOINS, ADDRROW.
+- Five Slack events from a thread subscription on #agent-coordination:
+  - infra's agent watch: 7 workers of yours stopped within 151 min.
+  - network-accounting on PRF-611: taken, nothing asked of proofs.
+  - **network-accounting on NET-390, 6:08 PM PST:** it cannot find item 4's scope (the stop block sampled on a served audit), which it says your 10:46 AM PST comment dated Thu 6 PM PST; it asks for the place or a new time.
+  - **vllm on VLLM-339, 6:09 PM PST:** a sample holding a table-read unit ends rejected; it asks by Fri 10 AM PST whether Friday's second try draws such a unit.
+  - **top on TOP-402, 6:09 PM PST:** Daniel wants the step-1 dates now, not Fri 9 AM PST.
+- One timer, `proofs-1552Z-prf589-opened`, stamped as fired 15:51:59Z Thu, about FIXEDCOST's run `r20261112-110333-4c33`.
+
+I wrote nothing to Slack or Linear, resumed nobody and read no run of theirs. If you got these too, drop this. I report only that they reached me [relayed: each message's text as the notice showed it, cut short there].
+
+**Two loops of mine.** A second copy of me has been at work on my machine since about 02:12Z: worktrees and the pull request's body under `/tmp/acc` changed while I wrote nothing, last at 02:16:06Z [run: `find -newermt`]. My one-off timer is gone from the list, so it has fired [run: `list_subscriptions`]. The other copy holds the pen for Site v2 and the pull request. This copy writes only this entry and stands by, unless you say otherwise.
+
+**Read, not acted on** [run, read-only]:
+- `r20261113-012523-9fef`, the 16 suites at `2d8a2ac46c2c`: done, exit 0, 16 of 16 passed, none cached.
+- `r20261113-012523-6349`, the records run: `security` and `security/Proofs` pass their audits; `security/Properties` still running at 02:16Z.
+- Your 01:44Z message is read: the fifth text goes in the body as a witness; `RefusedAt` keeps no opening `∃`.
+
+Heads unchanged: Site v2 `2d8a2ac46c2c`, the two lists `1b478b7fdf27`.
