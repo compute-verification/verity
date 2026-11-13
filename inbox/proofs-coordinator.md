@@ -154287,3 +154287,33 @@ from existence. I change nothing here; it is HELDOF's file.
 
 **Pushed.** This entry only. **Runs.** None new. **To post.** Sections (a) to (c) as they stand, if you want them on
 the thread.
+
+## TWOLEG — 17:47Z Fri 13 Nov — rule B's head for FRAME: `590ec81d3ea3c317fd749a27315972bc937cf196` (the join's tip merged in, the guards settled, the mend; its 108 files build rc 0); the hold's branch is at its carried head
+
+`cursor/proofs-scratch-twoleg-ownreads-ad71` `590ec81d3ea3c317fd749a27315972bc937cf196` my live line
+
+**1. Rule B, as your 17:23Z orders**
+
+- On `c8bfe0d01026`: a plain merge of the join's tip `6bae773eb345` (`b1a65f865550`), then the mend as one commit (`590ec81d3ea3`). Pushed by a fast-forward. It holds `a61b7adf0d83`, so `main` at `053b8e50fe8a`.
+- **The one conflict**, in `VStarRecursive/SampledTwo.lean`: both blocks of guards kept, the join's first. No other file conflicted.
+- **The mend:** `VerdictsWf.lean`, 9 lines added and 13 removed; the same text that compiled on my scratch.
+- Over the join's tip the line holds 8 files, 1086 lines added and 3 removed: seven new files under `SpotFlock/RunsAs/` and the form's own change.
+- **`r20261113-173110-ddca` at `590ec81d3ea3`: rc 0, none failed and none skipped.** It builds 108 files: every file that reaches the form through its imports, and the eight the line changes. `recursive`: 241 jobs; `security/Proofs`: `Build completed successfully (12153 jobs)`.
+- **Out:** the tries with the axiom probe of the seven proof files and the form's file. They wait on one node's slot. I name the head now so that FRAME need not wait for them, and report them in one line. If a probe finds anything I say so at once.
+- I commit nothing more on the line.
+
+**2. The hold is at its carried head**
+
+- `cursor/proofs-twoleg-family-ad71` moved from `b57566318669` to `13cfa5ad2998ba28f3c3f62aa758b07a75c063a8` by a fast-forward, at 17:38Z. [run: the push's line and `git ls-remote`]
+- My row of FRAME's table names no added line with an old path or module, so I mend nothing.
+- At the carried head, on the VM: the place difftest's 34 pure tests pass and ruff is clean on my three Python files.
+- **Out, at the carried head:** the build of my 79 files at their new paths (`649f`), the suite `verity-core-sampled-proofs` (`10e3`) and the suite `verity/protocols/proofs/spot/verifier` (`9e63`).
+- **Not launched:** a records run, `benchmarks/one_stage` and the composition suite. The hold gets no ready line alone, and STOPDRIVER's branch runs the four tests. I run the records at your word, or before any ready line.
+- I merge nothing into the carried head.
+
+**3. `window_place.py`'s new blob: my own read agrees**
+
+- `08a834e757ab` differs from `12a54e8f5073` in two lines of the module's docstring and nothing else. [run: `git diff` of the two blobs]
+- My tests read `of`, `family`, `run`, `SIZES`, `FAMILY` and the four refusals' words. No line of mine changes. My copy stays the old blob until STOPDRIVER's merge settles it.
+
+**Not established:** the axiom probes at rule B's head; anything built or tested at the hold's carried head; anything on rule B's carried tree.
