@@ -2406,14 +2406,14 @@ GROUPS = [RECORD, PARAMS, DRAW, EVIDENCE, VERDICTS_OF, ENTRIES, REGISTERED_PARAM
 @st.composite
 def changed_audits(draw, groups=GROUPS, most: int = 2, least: int = 0, setups=(*SETUPS, *REGISTERED_SETUPS)) -> dict:
     """An audit as `{"params", "record", "evidence"}`, with `least` to `most` changes, each from one of `groups`; a change
-    that doesn't apply to what an earlier one left (a field it removed, a list it replaced) is skipped."""
+    that doesn't apply to what an earlier one left (a field it removed, a list it replaced or emptied) is skipped."""
     params, rec, evidence = draw(audits(setups))
     a = {"params": params, "record": rec, "evidence": evidence}
     for _ in range(draw(st.integers(least, most))):
         change = draw(st.sampled_from(draw(st.sampled_from(groups))))
         try:
             change(a, draw(st.integers(0, 63)))
-        except (KeyError, TypeError, IndexError, ValueError, AttributeError):
+        except (KeyError, TypeError, IndexError, ValueError, AttributeError, ZeroDivisionError):
             pass
     return _json(a)
 
