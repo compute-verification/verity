@@ -58,7 +58,7 @@ def test_the_honest_world_reconciles_against_its_manifest_identity_by_identity(w
     assert qt["source"].startswith("required manifest: Q_module_body_v1(P)")
     # the query of record BY ID with its definition digest: on the header, on the record, on the scope line
     assert man["query"]["query_id"] == "Q_module_body_v1" and man["query"]["boundary"] == "module-body"
-    assert qt["query_id"] == "Q_module_body_v1" and qt["query_id_digest"] == man["query"]["query_id_digest"] and len(qt["query_id_digest"]) == 64
+    assert qt["query_id"] == "Q_module_body_v1" and qt["query_id_digest"] == man["query"]["query_id_digest"] and len(qt["query_id_digest"]) == 128
     assert rep["population"]["scope"].startswith("Q_module_body_v1(P) = ")
     # every family of this world has an evaluator: the reach is every instance output + every sampled id, and the sample evaluated some
     n_rows_fams = sum(v for k, v in qt["by_family"].items() if k in COV.QUERY_FAMILIES_WITH_ROWS)
