@@ -1,6 +1,7 @@
 module
 
 public import Mathlib.Data.List.Forall2
+public import Mathlib.Data.Finset.Basic
 
 /-!
 # One range of units, and lists in one order
@@ -27,7 +28,10 @@ in one order, with no verifier and no window in it: arrays and lists of natural 
   the members' ranges share no unit, the statements' members are members in order, each session's units are in its
   statement's member's range and the units wanted are the sessions', the statements' members are the members with
   a wanted unit, in the members' order, and a unit of a statement's member's range is wanted exactly when that
-  statement's session proved it.
+  statement's session proved it. Members related to members pairwise apart are apart (`forall₂_apart`).
+* **A range's proof blocks in a sample** (`emb_mem`, `range_sampled`): where a range's proof block `u` sits at
+  unit `lo + u` and the sample holds the proof blocks at the wanted units, the range has a proof block in the
+  sample exactly when a wanted unit is in the range.
 -/
 
 @[expose] public section
@@ -248,6 +252,39 @@ theorem forall₂_pairwise {α β : Type} {R : α → β → Prop} {P : β → �
     obtain ⟨b', hb', hr⟩ := forall₂_at_left ht i _ (List.getElem?_eq_getElem hi)
     exact hPQ _ _ _ _ hab hr (hb b' (List.mem_of_getElem? hb'))
 
+/-- A member of the first of two lists related member by member is related to a member of the second. -/
+theorem forall₂_left {α β : Type} {R : α → β → Prop} {l : List α} {l' : List β} (h : List.Forall₂ R l l') (a : α)
+    (ha : a ∈ l) : ∃ b ∈ l', R a b := by
+  obtain ⟨i, hi⟩ := List.getElem?_of_mem ha
+  obtain ⟨b, hb, hr⟩ := forall₂_at_left h i a hi
+  exact ⟨b, List.mem_of_getElem? hb, hr⟩
+
+/-- **Members related to members apart are one member**: of two lists related member by member, the second
+pairwise apart under a symmetric relation, two members of the first, each related only to members not apart from
+what the other is related to, are equal. -/
+theorem forall₂_apart {α β : Type} {R : α → β → Prop} {P : β → β → Prop} (hsym : ∀ b b', P b b' → P b' b) :
+    ∀ {l : List α} {l' : List β}, List.Forall₂ R l l' → l'.Pairwise P →
+      ∀ a ∈ l, ∀ a' ∈ l, (∀ b b', R a b → R a' b' → ¬ P b b') → a = a'
+  | _, _, .nil, _, _, ha, _, _, _ => nomatch ha
+  | _, _, .cons (a := a₀) (b := b₀) (l₁ := l) (l₂ := l') hr t, hp, a, ha, a', ha', hn => by
+    obtain ⟨hhead, htail⟩ := List.pairwise_cons.1 hp
+    rcases List.mem_cons.1 ha with e | ht
+    · rcases List.mem_cons.1 ha' with e' | ht'
+      · exact e.trans e'.symm
+      · obtain ⟨b', hb', hr'⟩ := forall₂_left t a' ht'
+        exact absurd (hhead b' hb') (hn b₀ b' (e ▸ hr) hr')
+    · rcases List.mem_cons.1 ha' with e' | ht'
+      · obtain ⟨b, hb, hr'⟩ := forall₂_left t a ht
+        exact absurd (hsym _ _ (hhead b hb)) (hn b b₀ hr' (e' ▸ hr))
+      · exact forall₂_apart hsym t htail a ht a' ht' hn
+
+/-- A member of the second of two lists of one length is zipped with a member of the first, at its place. -/
+theorem zip_at {α β : Type} {l : List α} {l' : List β} (h : l.length = l'.length) {j : ℕ} {b : β}
+    (hb : l'[j]? = some b) : ∃ a, (l.zip l')[j]? = some (a, b) := by
+  obtain ⟨hj, -⟩ := List.getElem?_eq_some_iff.1 hb
+  have hj' : j < l.length := h ▸ hj
+  exact ⟨l[j], List.getElem?_zip_eq_some.2 ⟨List.getElem?_eq_getElem hj', hb⟩⟩
+
 /-! ## The sessions' units over the members' ranges -/
 
 /-- A member of a list strictly ascending under a key is at one place. -/
@@ -339,5 +376,30 @@ theorem mem_units (h : UnitsOver lo hi vms held U want) {j : ℕ} {a : α} {us :
     exact (h.want x).2 ⟨us, List.mem_of_getElem? hu, hx⟩
 
 end UnitsOver
+
+/-! ## A range's proof blocks in a sample -/
+
+/-- **A proof block of a range is in the sample of the units `want` exactly when its unit is wanted**: where the
+range's proof block `u` sits at unit `lo + u` of the population and the sample holds the proof blocks at the
+units `want`. -/
+theorem emb_mem {nJ n lo : ℕ} {emb : Fin n → Fin nJ} (place : ∀ u, (emb u).val = lo + u.val)
+    {S : Finset (Fin nJ)} {want : Array ℕ} (hS : ∀ v, v ∈ S ↔ v.val ∈ want) (u : Fin n) :
+    emb u ∈ S ↔ lo + u.val ∈ want := by
+  rw [hS, place]
+
+/-- **A range has a proof block in the sample exactly when a wanted unit is in the range.** -/
+theorem range_sampled {nJ n lo : ℕ} {emb : Fin n → Fin nJ} (place : ∀ u, (emb u).val = lo + u.val)
+    {S : Finset (Fin nJ)} {want : Array ℕ} (hS : ∀ v, v ∈ S ↔ v.val ∈ want) :
+    (∃ u : Fin n, emb u ∈ S) ↔ ∃ x ∈ want, lo ≤ x ∧ x < lo + n := by
+  constructor
+  · rintro ⟨u, hu⟩
+    exact ⟨lo + u.val, (emb_mem place hS u).1 hu, Nat.le_add_right _ _, Nat.add_lt_add_left u.isLt _⟩
+  · rintro ⟨x, hx, hlo, hhi⟩
+    have hlt : x - lo < n := by omega
+    refine ⟨⟨x - lo, hlt⟩, (emb_mem place hS _).2 ?_⟩
+    have e : lo + (x - lo) = x := by omega
+    show lo + (x - lo) ∈ want
+    rw [e]
+    exact hx
 
 end Verity.Sampled.MemberForm
