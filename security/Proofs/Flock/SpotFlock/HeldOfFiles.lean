@@ -82,4 +82,31 @@ theorem refStmtsOf_length {p : VStar.Recursive.SampledTwo.Params} {bs : Core.Blo
   unfold refStmtsOf at h
   rw [length_of_mapM _ h, List.length_range]
 
+theorem getElem?_of_mapM {α β : Type} {f : α → Option β} (l : List α) :
+    ∀ {l' : List β}, l.mapM f = some l' → ∀ {t : ℕ} (ht : t < l.length), ∃ b, f l[t] = some b ∧ l'[t]? = some b := by
+  induction l with
+  | nil =>
+    intro l' _ t ht
+    simp at ht
+  | cons a l ih =>
+    intro l' h t ht
+    simp only [List.mapM_cons, Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def,
+      Option.some.injEq] at h
+    obtain ⟨b, hb, bs, hbs, rfl⟩ := h
+    cases t with
+    | zero => exact ⟨b, hb, rfl⟩
+    | succ t =>
+      obtain ⟨c, hc, hc'⟩ := ih hbs (Nat.lt_of_succ_lt_succ ht)
+      exact ⟨c, by simpa using hc, by simpa using hc'⟩
+
+/-- **Template `t`'s entry of the reference statements is its `refRawOf`'s bytes.** -/
+theorem refStmtsOf_getElem? {p : VStar.Recursive.SampledTwo.Params} {bs : Core.Blobs} {xs : List Msg} {t : ℕ}
+    (h : refStmtsOf p bs = some xs) (ht : t < p.circuits.size) :
+    ∃ r, refRawOf p bs t = some r ∧ xs[t]? = some r.encode := by
+  unfold refStmtsOf at h
+  obtain ⟨b, hb, hx⟩ := getElem?_of_mapM _ h (t := t) (by simpa using ht)
+  simp only [List.getElem_range, Option.map_eq_some_iff] at hb
+  obtain ⟨r, hr, rfl⟩ := hb
+  exact ⟨r, hr, hx⟩
+
 end SpotFlock.HeldOf

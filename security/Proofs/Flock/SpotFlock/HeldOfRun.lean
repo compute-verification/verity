@@ -23,6 +23,8 @@ the run refuses a boundary registration whose population is not its `n` units in
   member's (`templateOk`, through `templateOk_facts`), so `two` at the copies (`two_held₀`) takes no `Built`.
 * `twoHolds_of`, `twoHolds_of_files`: a held copy `heldOf` builds, or the form's check of them, gives RUNCOINS's
   `TwoHolds` where the run's population check passes.
+* `xS₀_of_files`: a held copy built from the form's members and blobs has template `t`'s reference statement
+  `refRawOf`'s bytes.
 -/
 
 @[expose] public section
@@ -316,5 +318,25 @@ theorem twoHolds_of_files {p : VStar.Recursive.SampledTwo.Params} {bs : Core.Blo
     rw [hx] at hk
     obtain ⟨h, hh, ht⟩ := twoHolds_of_ok ⟨desc, query, xs, c₀, more⟩ hk hp
     exact ⟨_, h, by simp [unreadOf, hx], hh, ht⟩
+
+/-- **A held copy's reference statements are the form's** (`refRawOf`'s bytes, template by template) where `heldOf`
+builds it from what the form's members and blobs give (`unreadOf`). -/
+theorem xS₀_of_files {p : VStar.Recursive.SampledTwo.Params} {bs : Core.Blobs} {i : Spot.Run.Input}
+    {it : Spot.Run.Interior} {desc : Msg} {query : Query} {c₀ : Code} {more : ℕ} {u : Unread} {h : Held} {t : ℕ}
+    (hu : unreadOf p bs desc query c₀ more = some u) (hh : heldOf i it u = some h) (ht : t < p.circuits.size) :
+    ∃ r, refRawOf p bs t = some r ∧ h.xS₀ t = r.encode := by
+  obtain ⟨first, ns, ks, l, hz, -, -, -, rfl, -⟩ := heldOf_spec hh
+  rw [xS₀_withFrame]
+  unfold unreadOf at hu
+  cases hx : refStmtsOf p bs with
+  | none => rw [hx] at hu; cases hu
+  | some xs =>
+    rw [hx] at hu
+    cases hu
+    obtain ⟨r, hr, hxt⟩ := refStmtsOf_getElem? hx ht
+    refine ⟨r, hr, ?_⟩
+    show refStmt xs t = r.encode
+    rw [refStmt, List.getD_eq_getElem?_getD, hxt]
+    rfl
 
 end SpotFlock.HeldOf
