@@ -381,6 +381,6 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
         args.out.mkdir(parents=True, exist_ok=True)
         (args.out / "inference_only.json").write_text(text + "\n")
         if stated.label == "served":
-            kit.writer(args.out).measurement(METRIC, doc["value"], UNIT)
+            kit.writer(args.out).measurement(METRIC, doc["value"], UNIT, mark="modeled")
     print("\n" + text)
     return doc
