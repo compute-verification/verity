@@ -17,9 +17,9 @@ import partials as PT
 import pytest
 import torch
 
-from verity.protocols.pouw.prover.circuit import h1tile as HT
-from verity.protocols.pouw.prover.circuit import seeds as SD
-from verity.protocols.pouw.prover.circuit import segment as SG
+from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
+from verity.protocols.accounting.pouw.prover.circuit import segment as SG
 
 RC = PT.RC
 COM = types.SimpleNamespace(root=bytes(range(7, 71)), epoch=3)

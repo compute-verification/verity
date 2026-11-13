@@ -42,9 +42,9 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits
 from verity.commitments.windows.interface import proof_block_k_log
 from verity.definitions.registry.boolean_stop_rule import StopRule16V2
-from verity.protocols.certifier.prover import response_tie
-from verity.protocols.spot.prover.optimize import Candidate
-from verity.protocols.spot.verifier.profile import WINDOW_DELTA, Stratified, Stratum
+from verity.protocols.accounting.certifier.prover import response_tie
+from verity.protocols.proofs.spot.prover.optimize import Candidate
+from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA, Stratified, Stratum
 
 CARD = Path(__file__).with_name("glm53_blocks.json")
 QUANTITIES = ("blocks", "out_bits", "ands", "macs", "row_bytes")

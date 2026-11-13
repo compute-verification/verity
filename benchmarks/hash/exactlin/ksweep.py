@@ -15,7 +15,7 @@ split-K config's workspace and counters zero again), and the last copy's y after
 config's gate also runs the served zy path (`int8_fused.scaled_mm_zy`, H1's fused z/y check) at that config into 0xA5
 twice: y equal to the reference and the records over T = M rounded up to 32 slots byte-identical to
 `int8_exact.scaled_mm_zy`'s, its PTX `ptx_check`ed; the winner and vLLM's tiles are then timed on the zy path too
-(`reps` interleaved items), and each winner's plain and zy cubins go through `verity/protocols/pouw/prover/sass_gate.py`.  A
+(`reps` interleaved items), and each winner's plain and zy cubins go through `verity/protocols/accounting/pouw/prover/sass_gate.py`.  A
 config that fails to compile (shared memory) or fails its gate is recorded and not timed.  The quantizer, at each of the
 models' K: each (num_warps, rows a program) plan gated (`quant`) and timed over copies of plain rows past the L2.
 
@@ -48,7 +48,7 @@ import kgate
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-SASS_GATE = Path(__file__).resolve().parents[3] / "verity/protocols/pouw/prover/sass_gate.py"
+SASS_GATE = Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pouw/prover/sass_gate.py"
 BKS = (128, 256, 512)
 WARPS = (4, 8)
 STAGES = (2, 3, 4, 5)
