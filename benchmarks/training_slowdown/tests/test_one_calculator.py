@@ -1,4 +1,4 @@
-"""The benchmark reaches the slowdown calculator (`benchmarks/rho`) through one module,
+"""The benchmark reaches the slowdown calculator (`benchmarks/slowdown`) through one module,
 `training_slowdown.calculator`, and computes a slowdown in one function of it, `calculator.slowdown`.
 
 - One door: no other module or test under this directory imports a module of the calculator or names its directory
@@ -37,7 +37,7 @@ NAMED_ONLY = {"training_slowdown/config.py": "its refusal of a policy says where
 def reaches(source: str) -> list[str]:
     """`line: what` for each place `source` reaches the calculator: an import of one of its modules, or a string
     outside a docstring that names its directory as a part of a path: one of the parts of a path written whole
-    (`benchmarks/rho/data`), or the name alone where `/` joins it (a path in parts). The name alone anywhere else is the
+    (`benchmarks/slowdown/data`), or the name alone where `/` joins it (a path in parts). The name alone anywhere else is the
     benchmark's own key."""
     tree = ast.parse(source)
     scopes = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)

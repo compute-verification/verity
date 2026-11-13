@@ -447,7 +447,7 @@ day = "2026-11-14 12:00 PST"
 
 [[not_yet]]
 path = "verity/protocols/inference_only/rho/"
-to = "benchmarks/rho/"
+to = "benchmarks/slowdown/"
 owner = "network-accounting"
 day = "2026-11-14 12:00 PST"
 
