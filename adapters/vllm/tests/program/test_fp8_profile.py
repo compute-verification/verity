@@ -10,16 +10,39 @@ import importlib
 import json
 
 import pytest
+from verity.definitions.registry import b1
 
-from verity_vllm.program import model as analytic
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, ViewDesc
-from verity_vllm.observe.fold.patterns import ALIAS_OPS, classify_transparent
-from verity_vllm.observe.fold.patterns.fp8 import CutlassScaledMmFp8Block, PerTokenGroupFp8Quant
 from verity_vllm.engine.profiles import dense_generic as dg
-from verity_vllm.observe.fold.profiles import generic
-from verity_vllm.observe.fold.profiles import profile_for_case, profile_module_for_case
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Shared, StepContext, Transparent, Unsupported, spec_label
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    StepStart,
+    ViewDesc,
+)
+from verity_vllm.observe.fold.patterns import ALIAS_OPS, classify_transparent
+from verity_vllm.observe.fold.patterns.fp8 import (
+    CutlassScaledMmFp8Block,
+    PerTokenGroupFp8Quant,
+)
+from verity_vllm.observe.fold.profiles import (
+    generic,
+    profile_for_case,
+    profile_module_for_case,
+)
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    PerRow,
+    Shared,
+    StepContext,
+    Transparent,
+    Unsupported,
+    spec_label,
+)
 from verity_vllm.observe.fold.tree import build_trees
+from verity_vllm.program import model as analytic
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 ROLE = "QWEN3_4B_FP8"
 CFG_PATH = dg.HF_CONFIG_DIR / f"{ROLE}.config.json"
@@ -83,7 +106,6 @@ def test_weights_record_carries_e4m3_weights_block_scales_and_head_norms():
     # a bf16 Llama-architecture configuration is untouched by the two facts
     C0 = dict(C)
     C0.pop("QK_NORM"), C0.pop("FP8_BLOCK")
-    from verity.definitions.registry import b1
     assert analytic.weights_type(C0) == analytic.weights_type(C0) and dict(analytic.weights_type(C0).fields)["layers"].elem == b1.layer_weights_type(C0)
 
 
@@ -229,8 +251,6 @@ def test_cutlass_scaled_mm_blockwise_resolves_over_a_ragged_n():
 
 
 def test_cutlass_scaled_mm_binds_the_declared_scale_construction():
-    from verity_vllm.program.frontend.target_profile import TargetProfile
-
     node = _node("_C.cutlass_scaled_mm.default", MM_SCHEMA, mm_args())
     specs = {}
     for scale in (None, "shared-per-block"):

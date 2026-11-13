@@ -5,15 +5,15 @@ and a row template's input port counts every run of the progression."""
 from __future__ import annotations
 
 import numpy as np
-
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity_flock.class_statement import UnitStager
-from verity_vllm.pipeline import chunk_rows as CR
-from verity_vllm.pipeline import serving_rows as SRW
 from verity.definitions.registry import boolean_moe as BMOE
 from verity.definitions.registry import moe as M
+from verity_flock.class_statement import UnitStager
+
+from verity_vllm.pipeline import chunk_rows as CR
+from verity_vllm.pipeline import serving_rows as SRW
 
 TOPK, W, w, P0 = 3, 8, 2, 100
 OP = "model.layers.3.mlp.experts"
@@ -61,13 +61,13 @@ def test_moe_sum_s_expert_outputs_as_one_progression_read_as_their_runs():
 
 
 def test_a_row_template_s_port_counts_every_run_of_a_progression():
-    I = 4
+    width = 4
     vals = experts(2)
-    vals["model.layers.3.mlp.act_fn"] = np.arange(I, dtype=np.uint16)
-    r = {"i": 9, "spec": f"SiluMul_v2{{I={I}}}", "args": [[["N", P0, 0, I, 1, 0, 0, 2]]]}
-    row = ("r0", Index(), r, {"statics": {"I": I}, "op_path": "model.layers.3.mlp.act_fn", "members": [("out", I, "bf16")],
+    vals["model.layers.3.mlp.act_fn"] = np.arange(width, dtype=np.uint16)
+    r = {"i": 9, "spec": f"SiluMul_v2{{I={width}}}", "args": [[["N", P0, 0, width, 1, 0, 0, 2]]]}
+    row = ("r0", Index(), r, {"statics": {"I": width}, "op_path": "model.layers.3.mlp.act_fn", "members": [("out", width, "bf16")],
                               "row": 0, "step": 16})
     (m,) = SRW.members([r["spec"]], [[row]], [1])
-    assert (m.rows, m.outs) == ((("in0", 2 * I),), (("out.out", I),))
+    assert (m.rows, m.outs) == ((("in0", 2 * width),), (("out.out", width),))
     data, _entries = SRW.read(m, [row], Store(vals), None)
-    assert data["rows"]["in0"].reshape(-1).tolist() == [*vals[f"p{P0}"][:I].tolist(), *vals[f"p{P0 + 1}"][:I].tolist()]
+    assert data["rows"]["in0"].reshape(-1).tolist() == [*vals[f"p{P0}"][:width].tolist(), *vals[f"p{P0 + 1}"][:width].tolist()]

@@ -37,21 +37,22 @@ from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
-
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import NOT, ZERO, and_reduce, const_bits, mux
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.definitions.ops.prims import const
 from verity.circuits.refs import Coll, Explicit, concat
 from verity.circuits.types import Array, Value
 from verity.commitments.gates import sha512 as H
 from verity.commitments.gates.lms import Sha512Compress
+from verity.definitions.ops.prims import const
 from verity.definitions.registry.sampling import bit_at
+
 from verity_vllm.engine import served_seed
 
 __all__ = ["COIN", "NAME", "PARAMS", "SeedBlocks", "SeedCheck", "SeedCheckWord", "SeedEqual", "SeedSelect", "SeedWord", "ServedSeed",
-           "blocks", "check", "check_reference", "definition", "in_derive", "params", "reference", "rid_entry", "rid_of", "values"]
+           "blocks", "check", "check_reference", "definition", "in_derive", "params", "reference", "rid_entry", "rid_of", "values",
+           "rid_of_ids", "rid_in", "inputs"]
 
 BIT = BL.BIT
 U8 = Array(8, BIT)
@@ -226,8 +227,8 @@ def check(B: Any, seed: Coll, ins: Sequence[Coll]) -> tuple[Coll, str]:
                          f"the id's bytes, not {[str(c.type) for c in ins]}")
     fn = definition(RID)
     return (B.call(fn, Coll(I64, seed.refs), *ins, name=NAME),
-            f"the seed rule ({fn.id} of SeedCheck_v1): the sampler's seed is the body's, else derived from the window's seed salt "
-            f"and the request's id")
+            (f"the seed rule ({fn.id} of SeedCheck_v1): the sampler's seed is the body's, else derived from the window's seed salt "
+             f"and the request's id"))
 
 
 def in_derive(ctx: Any, at: Any) -> None:
