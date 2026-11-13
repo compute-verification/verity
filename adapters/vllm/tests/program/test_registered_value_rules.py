@@ -8,14 +8,20 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from verity.definitions.circuits.constants import program_data
 from verity.circuits.program import Program
-from verity_vllm.program.frontend.derive import derive_report
-from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, vllm_ruleset
+from verity.definitions.circuits.constants import program_data
+from verity.definitions.numerics.serve3_reference import materialize
 from verity.definitions.registry import dense as DN
 from verity.definitions.registry import prims as P
-from verity.definitions.numerics.serve3_reference import materialize
+
+from verity_vllm.program.frontend import targets as TG
+from verity_vllm.program.frontend.derive import derive_report
+from verity_vllm.program.frontend.rules.vllm_bindings import (
+    clear_observations,
+    vllm_ruleset,
+)
+from verity_vllm.program.frontend.rules.vocab import PROFILES
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 BF = torch.bfloat16
 
@@ -158,10 +164,6 @@ PRO6000 = dict(compute_capability=(12, 0), num_sms=188)
 def test_every_attention_chain_has_its_value_input_twin(target, cap, const_base, value_base):
     """`targets.attention_spec(..., scale_input=True)` is the constant chain's twin with its statics, less `CAP`; the builder's kind for
     the target names the same Definition."""
-    from verity_vllm.program.frontend.rules.vocab import PROFILES
-    from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity_vllm.program.frontend import targets as TG
-
     tp = TargetProfile(**target)
     T, NH, KVH, D = 33, 8, 4, 64
     const = TG.attention_spec(tp, T, NH, KVH, D, 1, row=0, own_rows=1, cap=cap)
