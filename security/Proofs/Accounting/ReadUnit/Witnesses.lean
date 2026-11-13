@@ -463,7 +463,7 @@ theorem returns₀ (i : Unit) :
   rw [R₀_table, R₀_unit, R₀_port, localEval₀, hOf₀]
   decide
 
-/-- What the drawn read hashed at the counterexample: `L₀`, its opening's and its table's checks. -/
+/-- What the sampled read hashed at the counterexample: `L₀`, its opening's and its table's checks. -/
 theorem drawnHashed₀ (ω : Unit) :
     R₀.drawnHashed (Flock.Bridge.partsOf D₀ hU₀ 1) Verity.sha512 key₀ (fun _ : Unit => Finset.univ) (fun _ => tr₀) ω =
       L₀ := by
@@ -475,7 +475,7 @@ theorem drawnHashed₀ (ω : Unit) :
   rw [R₀_unit, R₀_port, R₀_domain, localEval₀, tokOf₀, opening₀, R₀_table, verifier₀]
   rfl
 
-/-- The reads' collision finder at the counterexample: every unit drawn, the trace `tr₀`, no cost. -/
+/-- The reads' collision finder at the counterexample: every unit sampled, the trace `tr₀`, no cost. -/
 noncomputable abbrev finder₀ : Claims.Finder :=
   R₀.finder (Flock.Bridge.partsOf D₀ hU₀ 1) Verity.sha512 key₀ (fun _ : Unit => Finset.univ) (fun _ => tr₀) fun _ => 0
 

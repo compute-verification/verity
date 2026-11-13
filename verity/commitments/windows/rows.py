@@ -1,6 +1,6 @@
 """A window's rows: the ``frame-v3-sha512`` + ``hm96-sha512/v1`` commitment of a window's units in Flock's statement row leaf
 format (``verity_flock.circuit``'s statement rows), with the registration, Flock's public and prover files and the
-labels the one-stage audit binds (``verity.protocols.spot.verifier.one_stage``).
+labels the one-stage audit binds (``verity.protocols.proofs.spot.verifier.one_stage``).
 
 The population is the verifier's: its program is ``TemplateInstances`` / ``TemplatePopulations`` over the members' templates and
 counts (``verity.commitments.windows.population``, over the builders core's ``one_stage.partition`` names too), its
@@ -22,7 +22,7 @@ value: no output word is ever public).  A bit-row member
 
   row     the words, u16 little-endian
   inner   ``x = SHA-512(sha512_row_prefix(role 1, 16, n) || row)``                              (``sha512/row/v1``)
-  salt    ``y`` = 192 fresh bytes from the OS generator, drawn for this row alone.  The salts are kept only in the prover's
+  salt    ``y`` = 192 fresh bytes from the OS generator, sampled for this row alone.  The salts are kept only in the prover's
           files and never logged.  Under a test's salt key (``commit``'s ``salt_key``) they are instead ChaCha20 (RFC 8439)
           under it, nonce = the row port's index over all members (12 bytes LE), at stream offset ``192 i``
   string  ``b || c = hm96.SHA512.commit_string(default_key, x, y)``                               (public, 128 bytes)

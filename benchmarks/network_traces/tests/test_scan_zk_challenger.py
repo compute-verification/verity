@@ -17,7 +17,7 @@ from types import SimpleNamespace
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-STUB = HERE.parents[1] / "verity" / "composite" / "device" / "live_challenger" / "tests" / "stub_serve.py"
+STUB = HERE.parents[1] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "tests" / "stub_serve.py"
 
 
 def _load():
@@ -35,7 +35,7 @@ sz = _load()
 def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_form_and_draws(tmp_path, monkeypatch):
     """The stream holds the registration's R1-R7 against its own copy of the round's Program, the generator form the
     round registers (`scan_root`, `stream_of`), so it registers and samples the round: a stratified sample of 4 with
-    each template's stratum sampled, a session for each member holding a sampled unit and only for those, a
+    each template's stratum sampled, a session for each member holding a sampled proof block and only for those, a
     registration of the generator form's digest and partition, and coins whose evidence holds against the group's root
     and the registration's digest. A stream that rebuilt the templates' mixed population instead refused it at R2
     (``R2-program``, ``R2-partition``) and drew nothing. Each member's registered reads, the verifier's file and its
@@ -53,8 +53,8 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
       challenger's stream rebuilds (the stream's own window tests use toy templates, never `scan_root`);
     - a port of a staged member left out of its registered reads, which Lean's `checkComplete` refuses, so that every
       session fails Lean's verify.
-    The test class is the smallest, the group is one link-window, and the draw is one more than the three strata: the
-    sessions are stubbed, so a smaller draw saves nothing."""
+    The test class is the smallest, the group is one link-window, and the sample is one more than the three strata: the
+    sessions are stubbed, so a smaller sample saves nothing."""
     setup, k = sz.TEST, 4
     h = sz.host(tmp_path / "warden", draw=k, setup=setup)
     at = h.at
@@ -64,7 +64,7 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     pg = sz.program(M, setup.cls, sz.TEMPLATES, at.G, at.T, tmp_path / sz.PROGRAMS[sz.TEMPLATES])
     members = [sz.stage(M, pg, mr, tmp_path / "honest" / f"stage-{mr.name}") for mr in h.rounds["honest"]]
 
-    A = AC._module("a5_auditor", AC.TREE / "verity" / "composite" / "device" / "live_challenger" / "auditor.py")
+    A = AC._module("a5_auditor", AC.TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
     real = A.serve_argv
     monkeypatch.setattr(A, "serve_argv", lambda *a, **kw: [sys.executable, str(STUB), *real(*a, **kw)[2:]])
     monkeypatch.setenv("COINS_LOG", str(tmp_path / "coins.log"))

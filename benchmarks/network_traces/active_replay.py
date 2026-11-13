@@ -1,4 +1,4 @@
-"""The active certifier on recorded traces, in real time: `verity.protocols.certifier.verifier.active` serving a replay of honest traces'
+"""The active certifier on recorded traces, in real time: `verity.protocols.accounting.certifier.verifier.active` serving a replay of honest traces'
 configurations over localhost, then the audit of the records it published.
 
 Each configuration is one run of three processes on the host's monotonic clock, from an origin they share:
@@ -107,8 +107,8 @@ from pathlib import Path
 
 import covert
 import replay
-from verity.protocols.certifier.verifier import online
-from verity.protocols.certifier.verifier.active import (
+from verity.protocols.accounting.certifier.verifier import online
+from verity.protocols.accounting.certifier.verifier.active import (
     CANONICAL_STREAM,
     DATA,
     HEADER,
@@ -141,11 +141,11 @@ from verity.protocols.certifier.verifier.active import (
     wait_until,
     worker,
 )
-from verity.protocols.certifier.verifier.lean_audit import Audit
-from verity.protocols.certifier.verifier.calibration import choose_syncs
-from verity.protocols.certifier.verifier.release import release_head, release_of, with_release
-from verity.protocols.certifier.verifier.commitment import CommittedRecord, commit
-from verity.protocols.certifier.verifier.grid import (
+from verity.protocols.accounting.certifier.verifier.lean_audit import Audit
+from verity.protocols.accounting.certifier.verifier.calibration import choose_syncs
+from verity.protocols.accounting.certifier.verifier.release import release_head, release_of, with_release
+from verity.protocols.accounting.certifier.verifier.commitment import CommittedRecord, commit
+from verity.protocols.accounting.certifier.verifier.grid import (
     COMPLETE,
     GridParams,
     Reason,
@@ -154,16 +154,16 @@ from verity.protocols.certifier.verifier.grid import (
     Certifier,
     row_count,
 )
-from verity.protocols.certifier.verifier.schedule import (
+from verity.protocols.accounting.certifier.verifier.schedule import (
     ClockSync,
     LogicalFrame,
     SyncSet,
     handing_buckets,
     run_shaper,
 )
-from verity.protocols.certifier.verifier.served import Admission, ServedProfile, admits
-from verity.protocols.spot.verifier.one_stage import registration as R
-from verity.protocols.spot.verifier.service import WindowCommitmentRecord
+from verity.protocols.accounting.certifier.verifier.served import Admission, ServedProfile, admits
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.service import WindowCommitmentRecord
 
 MODEL = "llama-3.1-8b-instruct"
 HTTP_HEAD = b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncache-control: no-cache\r\n\r\n"
