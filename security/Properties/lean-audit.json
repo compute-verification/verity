@@ -441,6 +441,7 @@
   },
   "MemoryChallenger.Properties.MarksOnce": {
    "owner": "@network-accounting",
+   "digest": "57205edaecc45d069c4fb20d2f44071a7153be01c274adbf6b4d1d5e0bb186a9",
    "issue": "NET-409",
    "due": "2026-11-30"
   },
@@ -2815,6 +2816,7 @@
     "domain": [],
     "open": [
      "MemoryChallenger.Properties.CountRan",
+     "MemoryChallenger.Properties.MarksOnce",
      "MemoryChallenger.Properties.SentWithinCapacity",
      "NetTiming.DeviceIntact",
      "NetTiming.Guarantees.SpanCovers"
@@ -2822,7 +2824,7 @@
     "reads": []
    },
    "type_hash": "71674ec6ae3e8db0252a2761fc7d53f0e81b64af71d2169b4da5dc342b10a371",
-   "unfolded_hash": "7a71e39f606ced9ab7b553ec8854e193d64f776c82e4cc74bbfe8440e96c3131"
+   "unfolded_hash": "efbe341293c72b6b0e970e8b96778a9a089dd0d41273ecf44dfda3917a55ad30"
   },
   "MemoryChallenger.Properties.SecurityProofs.wipeCountTied_honest": {
    "owner": "@soundness",
@@ -2850,7 +2852,8 @@
     "                    (And",
     "                      (MemoryChallenger.Properties.CountRan MemoryChallenger.Properties.markedCount Unit.unit",
     "                        (fun x x_1 => False) MemoryChallenger.Properties.markedDevice)",
-    "                      (MemoryChallenger.Properties.SentWithinCapacity MemoryChallenger.Properties.markedDevice)))"
+    "                      (And (MemoryChallenger.Properties.SentWithinCapacity MemoryChallenger.Properties.markedDevice)",
+    "                        (MemoryChallenger.Properties.MarksOnce MemoryChallenger.Properties.markedDevice))))"
    ],
    "assumptions": [],
    "premises": {
@@ -2859,7 +2862,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "dbab79be4979937187b022b4f9aa7a0f4d051f260c2d9a603de853b319cee4ca"
+   "type_hash": "02aa122ecafa1b11ae97c306d1146e545c02e4c3edcb4de902491b026fe7cfc8"
   },
   "MemoryChallenger.Properties.SecurityProofs.wipeCountTied_nontrivial": {
    "owner": "@soundness",
@@ -22292,7 +22295,7 @@
    }
   },
   "Properties.Pous.WipeCount": {
-   "digest": "51848c485c4453e0f2ddc0905cb3b6be964374858ae2aab52649ec0b1c08b63e",
+   "digest": "302e93ae54c500c8f044af490969452bbb27d1015416dacc7a87857df9dbd665",
    "definitions": {
     "MemoryChallenger.Properties.CountRan": "66f196d62b33779470a9ec56706791c4173c341bd0e0c4bfc66e7917f402695a",
     "MemoryChallenger.Properties.Mark": "0da5dad50149f17392c9567e07db482b3de03886c698a57031c00f22f31992ed",
@@ -22307,6 +22310,7 @@
     "MemoryChallenger.Properties.MarkDevice.schedule": "38566b5a419c9e83160f1e4ed573382ab85c9d6f3fd6c3bee026ab1248d405e7",
     "MemoryChallenger.Properties.MarkDevice.sentBits": "4fe459af14830f19b39d1244011ad365d1854c91915a90c52544ed2eb12791a8",
     "MemoryChallenger.Properties.MarkDevice.stamp": "c01488893c8fbec7db8d8585409b16f2e0d9a4c77974391822ee51e43cf304cd",
+    "MemoryChallenger.Properties.MarksOnce": "57205edaecc45d069c4fb20d2f44071a7153be01c274adbf6b4d1d5e0bb186a9",
     "MemoryChallenger.Properties.SentWithinCapacity": "6931fb905bb3cc0a03944feb4a009d53e40c0b4b8d552bd9a8540020da6c08b2",
     "MemoryChallenger.Properties.SpanCount": "fb4d890ba1aafc45af6f2299ae370dfd94868e61c9aaccafd629f127cccbf791",
     "MemoryChallenger.Properties.SpanCount.Of": "1e2df253f1a199cb43cb83e7ab7c3408aa3ae7fa970d87694744138121f49c42",
@@ -22319,8 +22323,8 @@
     "MemoryChallenger.Properties.SpanCount.startMessage": "094ff8f3c4e42fbd5ec0b4fcc03081d9781e7b5e4e2c3252c9fcd0086d3d9950",
     "MemoryChallenger.Properties.SpanCount.startPhase": "b36e562b5e343832f735598180c27f7f8b7bada1fff8958271c69ed26492e1f2",
     "MemoryChallenger.Properties.SpanCount.tail": "645a9512cd76f68604cd3f083fc44f03c2c8e0e68112e85689dd4c5e499807b9",
-    "MemoryChallenger.Properties.SpanCounted": "54c6fdce70285381944179d75e90f5e0986b6a488fbf00a9bf8e4a6f569fa6df",
-    "MemoryChallenger.Properties.WipeCountTied": "c41b84e75216e4be6cc215e8b0341879042bfdb622a4fa68fa7105216c135ccc",
+    "MemoryChallenger.Properties.SpanCounted": "bcf37e61739bf01d254e97f268e1d7aff907c0869fef4a1fd29a144a158e5f7c",
+    "MemoryChallenger.Properties.WipeCountTied": "6c6bba628d3682c05b5b1873428ad42fc3b5662b3e5cd0fba11d5c0cf923d84d",
     "MemoryChallenger.Properties.WipeMarks": "dcbf8bc3e3c8aa12881b655bc4ac074bd395f2e4c8e33e2036695e29e0b554f8",
     "MemoryChallenger.Properties.WipeMarks.endMessage": "12cd85af5f9da1143db35ca099b50e48c2575651528191925e6fbe473ea77256",
     "MemoryChallenger.Properties.WipeMarks.startMark": "12cf77adb0bd0c4ccc6491b33c92ac1dd89dc390dbdafc15e6f380a2b980bbcf",
