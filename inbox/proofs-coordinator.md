@@ -158033,3 +158033,39 @@ Started after #9792 was open (18:58Z), as ordered. Body: `Lane proofs`, `Refs PR
 `main`'s tip at 19:31Z: `f479876a8758` [run: `git ls-remote`]; what it added since each branch's base touches no file of either [script].
 
 To post: nothing. Runs going on: L1's two suites runs; the changed suites for #9803 (`r20261113-193050-3c00`, 4 suites). Next entry by 20:32Z, sooner when a suites run ends.
+
+## WINDOWAT, Fri 13 Nov 19:33Z: the records at the carried head (`fbb7`, rc 1, as ruled): `security/Proofs` passes with no record changed; `security` fails on the three `witnesses.unwitnessed-changed` and on record differences only; `security/Properties` was regenerated, all of it from MEMBERS's switch, and I do not commit it without your word; the four suites are out (`6058`)
+
+**In plain words.** `fbb7` ended at 19:28Z. Nothing in it is new against the scratch's printout of my 15:00Z entry: the carry changed no hash of mine.
+
+1. **`security/Proofs`: pass.** [run] `AUDIT … PASS`, 206,674 declarations in 4,110 modules, only `propext`, `Classical.choice` and `Quot.sound`. Its outcome is `pass`, nothing regenerated, and the lock the run wrote is the tree's `security/Proofs/lean-audit.json`, equal as JSON [my comparison].
+2. **`security`: failed, 11 failures, of which three take a person.** [run: `check.py exit 1 in 885 s`, 1,137 guarantees]
+   - `witnesses.unwitnessed-changed`, three: `JointSampledV5`, `JointShareV5`, `JointHorizonV5`. These are the ones your 13:29Z ruling lets stand.
+   - `guarantees.unfolded-hash`, the same three, with the hashes of my 15:00Z table, before and after: `374675d926db…` to `2fed8082c773…`, `120b414dc3c2…` to `0b2ed06f8fc9…`, `0c8033f67689…` to `d122e1504ca8…`.
+   - `guarantees.reads-changed`, five modules. One is mine, `Proofs.Flock.EndToEnd.Joint.V5.Statement` (17 definitions changed, 3 new: `EndΩ`, `ended`, `sampleEnded`). Four come with the heads my line holds: `Proofs.Properties.Verity.Sampled` (`SetsUp` changed, `OneStatement` new), `Spot.ChallengerTrees`, `Spot.OneStageZk`, `VStarRecursive.Sampled`.
+   - The run's word: "its records fail on this build, not only on record differences, which take a person". So it kept no regenerated `security` lock.
+   - The trust gap line is the one of `7bef`: "35 premises outside their trust over the 14 deployed guarantees, 26 distinct".
+3. **Why 11 here and 3 in `7bef`.** `7bef` was `--records security --update`, which rewrites `security`'s own records and leaves only what takes a person. This run is `--records security/Proofs --update`, FRAME's line, where `security` is audited as a requirer and its record differences print as failures. The eight are the differences my 15:00Z entry read out of `7bef`'s regenerated lock.
+4. **`security/Properties`: regenerated.** [run] First pass: five failures, "every failure of its records is a record difference". Then `check.py --update exit 0 in 2095 s`, `AUDIT … PASS`, outcome `regenerated`, and the run's line "commit it over `security/Properties/lean-audit.json`".
+   - What the regenerated record changes against the tree's [my comparison of the two files]: `tablesRegistered`'s `unfolded_hash` (`9ee635bcdf3e…` to `931db8952124…`); the `reads` of `Properties.Spot.Tables`, `Spot.ChallengerTrees`, `Spot.OneStageZk` and `VStarRecursive.Sampled`; and the order of one `trust_gap` entry, `h1CheckedCreditPeriod`: the same 12 premises, now in `main`'s order at `4ae17f7eafd7` (the carry renamed one premise in place). 39 lines added, 22 removed. No premise is added anywhere.
+   - None of the five is in a file of mine: they are the per-member form's definitions (`AcceptHoldsTables` new, `TablesRegistered` changed, the `Spot` files).
+5. **I have not committed it.** It is in the run's reports (`lean-audit/record/security/Properties/lean-audit.json`, sha256 `36766e29a7d18c2e…`) and in no tree. My reading is that it is not my line's to carry: the five are the switch's, MEMBERS has made no records run of its branches ("the candidate's makes one", its 18:16Z), and a candidate's records commit regenerates them in any case. If you want it on my line now, say so: it is one commit of the tool's file, no hand edit.
+
+### STOP RULE
+
+This entry restates nothing. Nothing is committed on top of `5961fa466d1e`, nothing is merged into it, no lock is edited or committed, no pull request is opened or marked, and #9576 is untouched.
+
+### The run [run: `r20261113-180600-fbb7`, vy-nebius-cpu-3, 18:06:44Z to 19:28:09Z, `failed rc=1`, at `5961fa466d1e`, the tree not dirty]
+
+`lean_changed.py --records security/Proofs --update`, `--mem-gb 64`; it peaked at 49.5 GiB [run: `research status`]. Its result is `lean-fast/v1`: in its words "without the kernel replay or the tests … which check and research merge refuse".
+
+### Not established
+
+- The kernel replay and the whole check at the carried head.
+- That a records run of MEMBERS's carried switch `097b85eff21b` alone gives the same `security/Properties` record, byte for byte: derived from the five being outside my files, not compared, since no such run exists.
+- That a candidate's records run lists the three again in `unwitnessed`: still my reading of `repaired`, as at 15:00Z.
+- The four quick suites my files reach: `r20261113-193052-6058` on vy-nebius-cpu-9, launched 19:30Z at `5961fa466d1e`: `suites.py --changed 4ae17f7eafd7 --quick repository verity-graph verity/circuits/ops verity/protocols/accounting/pouw/verifier`. One line when it ends.
+
+### Next
+
+The suites' line. Then I wait for your word on three things: the merge of #9520's new head (it changes no file, my 18:49Z point 4), the regenerated `security/Properties` record, and the pull request.
