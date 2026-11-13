@@ -35,6 +35,8 @@ the audit once and outputs the pair where the outcome's history has one.
   search of the sessions and their positions; under `cr/sha-512` (`Finder.CR` at `qX`), the audit's outcome has
   such a history with probability at most `qX²/2^513`, once per audit;
 * `VBridgeOff`, `VBridge.off`: `VBridge` at the histories and registrations where `Bad` fails; `VBridge` gives it;
+* `VBridgeOffOut`, `VBridgeOff.out`, `outerV_le_out`: the same with `Bad` reading the sessions' outcomes, for a bad
+  event that an outcome's own registration and transcript state (`LeafColl`);
 * `zk_sessions_recursive_upto_off`, `zk_sessions_recursive_read_off`: `zk_sessions_recursive_upto` and
   `zk_sessions_recursive_read` on `VBridgeOff`, with `Bad`'s probability (for `RegColl`, `qX²/2^513`) added to the
   outer term;
@@ -196,6 +198,48 @@ theorem VBridge.off {Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → P
     {N k Rw : ℕ} {x : Reg → L.Ω → I.Stmt} {wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg}
     (h : Recursion.VBridge zs dg N k Rw x wmsg) : VBridgeOff Bad zs dg N k Rw x wmsg :=
   fun R ω t R₂ _ τ o _ => h R ω t R₂ τ o
+
+/-- **`VBridgeOff` at a `Bad` of the sessions' outcomes**: as `VBridgeOff`, with `Bad` reading the record `o` of
+genuine session-game outcomes too, so asked only at the records where `Bad R ω t R₂ o` fails. -/
+def VBridgeOffOut
+    (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ →
+      ((j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript) → Prop)
+    (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (x : Reg → L.Ω → I.Stmt)
+    (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg) : Prop :=
+  ∀ R ω t R₂ (τ : (j : Fin S) → Strategy ((zs R ω t R₂ j).game dg N))
+    (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
+    (∀ j, Game.Outcome ((zs R ω t R₂ j).game dg N) (τ j) (o j)) → ¬ Bad R ω t R₂ o →
+    (∀ j, LiveAcceptsZKR (zs R ω t R₂ j).I (zs R ω t R₂ j).own (o j) ∧
+      (zs R ω t R₂ j).Good ((zs R ω t R₂ j).layer dg N k Rw (τ j))) →
+    I.accepts (x R ω) ((wmsg fun j => (zs R ω t R₂ j).layer dg N k Rw (τ j)).zip (t.map Prod.snd))
+
+/-- `VBridgeOff` is `VBridgeOffOut` at a `Bad` that reads no outcome. -/
+theorem VBridgeOff.out {Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → Prop}
+    {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
+    {N k Rw : ℕ} {x : Reg → L.Ω → I.Stmt} {wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg}
+    (h : VBridgeOff Bad zs dg N k Rw x wmsg) :
+    VBridgeOffOut (fun R ω t R₂ _ => Bad R ω t R₂) zs dg N k Rw x wmsg :=
+  fun R ω t R₂ τ o hout hb => h R ω t R₂ hb τ o hout
+
+/-- `outerV_le` with `Q` reading the registration the prover sends and the sessions' outcomes. -/
+theorem outerV_le_out
+    (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
+    {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
+    (hr : ∀ R₂ j S' R' i, rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R₂ j).dj (zs R₂ j).y₀ S' R') i k ≤ ρ)
+    {t' : ℝ} (ht' : 0 ≤ t') (qF qS qW qR : ℝ)
+    (Q : Reg₂ → ((j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript) →
+      ((j : Fin S) → (Vs j).Bits) → Prop)
+    (hQ : ∀ R₂ (τ : (j : Fin S) → Strategy ((zs R₂ j).game dg N))
+      (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
+      (∀ j, Game.Outcome ((zs R₂ j).game dg N) (τ j) (o j)) →
+      (∀ j, LiveAcceptsZKR (zs R₂ j).I (zs R₂ j).own (o j) ∧ (zs R₂ j).Good ((zs R₂ j).layer dg N k Rw (τ j))) →
+      Q R₂ o fun j => (zs R₂ j).layer dg N k Rw (τ j))
+    (s : Strategy (outerV zs dg N)) :
+    prob (fun o => AcceptsV zs o ∧ ¬ Q o.1 (fun j => (o.2 j).2) (layers (zs o.1) dg N k Rw o.2)) (outerV zs dg N) s ≤
+      sumV zs dg N (fun R₂ j τ => (zs R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s := by
+  rw [prob_outerV]
+  exact sessions_le_out (zs s.1) dg N hk hRw hM hρ (hr s.1) ht' qF qS qW qR (Q s.1) (hQ s.1) (sessOf zs dg N s)
 
 /-- `outerV_le` with `Q` reading the registration the prover sends. -/
 theorem outerV_le_dep

@@ -573,24 +573,25 @@ noncomputable def sumS (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray 
   exG (fun rs => ∑ j, F j ((zs j).ofBase dg N (rs j).1)) (sessions zs dg N) s
 
 /-- **V*'s sessions at one history**: when every outcome at which every session accepts and every layer is `Good`
-satisfies `Q` of the layers, the sessions accept with `Q` failing at most the expected sum of the sessions' `boundIf`
-(`accepts_le`, `prob_seqC_exists_le`). -/
-theorem sessions_le
+satisfies `Q` of the sessions' outcomes and the layers, the sessions accept with `Q` failing at most the expected sum
+of the sessions' `boundIf` (`accepts_le`, `prob_seqC_exists_le`). -/
+theorem sessions_le_out
     (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ j S' R' i, rateZ (planZHJ (Reg := Reg') (zs j).dj (zs j).y₀ S' R') i k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
-    (qF qS qW qR : ℝ) (Q : ((j : Fin S) → (Vs j).Bits) → Prop)
+    (qF qS qW qR : ℝ)
+    (Q : ((j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript) → ((j : Fin S) → (Vs j).Bits) → Prop)
     (hQ : ∀ (τ : (j : Fin S) → Strategy ((zs j).game dg N))
       (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
       (∀ j, Game.Outcome ((zs j).game dg N) (τ j) (o j)) →
       (∀ j, LiveAcceptsZKR (zs j).I (zs j).own (o j) ∧ (zs j).Good ((zs j).layer dg N k Rw (τ j))) →
-      Q fun j => (zs j).layer dg N k Rw (τ j))
+      Q o fun j => (zs j).layer dg N k Rw (τ j))
     (s : Strategy (sessions zs dg N)) :
-    prob (fun b => Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b)) (sessions zs dg N) s ≤
+    prob (fun b => Accepts zs b ∧ ¬ Q (fun j => (b j).2) (layers zs dg N k Rw b)) (sessions zs dg N) s ≤
       sumS zs dg N (fun j τ => (zs j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s := by
   classical
   have hmono : ∀ b : VRec Vs Reg' dg N, Game.Outcome (sessions zs dg N) s b →
-      Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b) →
+      Accepts zs b ∧ ¬ Q (fun j => (b j).2) (layers zs dg N k Rw b) →
       ∃ j, LiveAcceptsZKR (zs j).I (zs j).own (b j).2 ∧
         ¬ (zs j).Good ((zs j).layer dg N k Rw ((zs j).ofBase dg N (b j).1)) := by
     rintro b hout ⟨hacc, hnq⟩
@@ -611,6 +612,22 @@ theorem sessions_le
     (prob_seqC_exists_le S _ _ (fun j r => LiveAcceptsZKR (zs j).I (zs j).own r.2 ∧
         ¬ (zs j).Good ((zs j).layer dg N k Rw ((zs j).ofBase dg N r.1)))
       (fun j τ₀ => (zs j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR ((zs j).ofBase dg N τ₀)) hB s)
+
+/-- **`sessions_le_out` at a `Q` of the layers alone.** -/
+theorem sessions_le
+    (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
+    {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
+    (hr : ∀ j S' R' i, rateZ (planZHJ (Reg := Reg') (zs j).dj (zs j).y₀ S' R') i k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
+    (qF qS qW qR : ℝ) (Q : ((j : Fin S) → (Vs j).Bits) → Prop)
+    (hQ : ∀ (τ : (j : Fin S) → Strategy ((zs j).game dg N))
+      (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
+      (∀ j, Game.Outcome ((zs j).game dg N) (τ j) (o j)) →
+      (∀ j, LiveAcceptsZKR (zs j).I (zs j).own (o j) ∧ (zs j).Good ((zs j).layer dg N k Rw (τ j))) →
+      Q fun j => (zs j).layer dg N k Rw (τ j))
+    (s : Strategy (sessions zs dg N)) :
+    prob (fun b => Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b)) (sessions zs dg N) s ≤
+      sumS zs dg N (fun j τ => (zs j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s :=
+  sessions_le_out zs dg N hk hRw hM hρ hr ht' qF qS qW qR (fun _ => Q) hQ s
 
 variable {Reg₂ : Type}
 

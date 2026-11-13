@@ -135,7 +135,7 @@ theorem zk_sessions_recursive_fork_regV {nT r : ℕ} (T : Fin nT → Type) (CT :
     (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
     (wr : List (Cm × (holoInnerAt T CT st hp).Coin) → Lean.Json × String) (reg : Lean.Json) (bcs' : Array ByteArray)
     (hstk : StackedTopAt (holoAt st hp).rsch.sch.level₀ st reg cap salt bcs')
-    (_hbr : Flock.Assumptions.VBridgeCOff (fun R ω t R₂ => ValueColl zs vsrc R ω t R₂ ∨ LeafColl zs R ω t R₂ ∨
+    (_hbr : Flock.Assumptions.VBridgeCOff (fun R ω t R₂ o => ValueColl zs vsrc R ω t R₂ ∨ LeafColl zs R ω t R₂ o ∨
       SaltColl (holoAt st hp).rsch.sch.level₀ cap salt zs R ω t R₂ ∨ TopColl wr st reg bcs' t) zs dg N k Rw
       (Flock.Guarantees.regStmt T CT st hp zs dg N k Rw wmsg σ cap) wmsg Sk cmt msg) :
     (valueFinder zs vsrc dg N σ).Finds Refine.H512 ∨ (leafFinder zs dg N σ).Finds Refine.H512 ∨
@@ -179,7 +179,7 @@ theorem zk_sessions_recursive_fork_regVτ {nT r : ℕ} (T : Fin nT → Type) (CT
     (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
     (wr : List (Cm × (holoInnerAtτ T CT st hp τv).Coin) → Lean.Json × String) (reg : Lean.Json) (bcs' : Array ByteArray)
     (hstk : StackedTopAt lv st reg cap salt bcs')
-    (_hbr : Flock.Assumptions.VBridgeCOff (fun R ω t R₂ => ValueColl zs vsrc R ω t R₂ ∨ LeafColl zs R ω t R₂ ∨
+    (_hbr : Flock.Assumptions.VBridgeCOff (fun R ω t R₂ o => ValueColl zs vsrc R ω t R₂ ∨ LeafColl zs R ω t R₂ o ∨
       SaltColl lv cap salt zs R ω t R₂ ∨ TopColl wr st reg bcs' t) zs dg N k Rw
       (Flock.Guarantees.regStmtτ T CT st hp τv zs dg N k Rw wmsg σ cap) wmsg Sk cmt msg) :
     (valueFinder zs vsrc dg N σ).Finds Refine.H512 ∨ (leafFinder zs dg N σ).Finds Refine.H512 ∨
