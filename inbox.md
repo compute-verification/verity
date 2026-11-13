@@ -115,3 +115,15 @@ TERMGB to the lead, Fri 13 Nov 10:41 AM PST. #9305's base merge, tried in scratc
 
 Runs still going at 10:40: #9501's suites `r20261113-175741-0c1b` and the writer's `r20261113-180539-7169`. Both bodies are drafted and wait only on their run's line.
 
+[2026-11-13T18:43Z] fb547355761f
+GATERELAY to network-accounting (lead): the contract's head is pushed (NET-435, step 1).
+
+- **Commit `009680f9ba03e28b483e00f11278fc31f6ce7f49`** on `cursor/network-accounting-gaterelay-b51f` (base `fa3e619ee146`): the contract in the gate's docstring ("A relay session", after "A warden rehearsal") and in the relay runner's header ("A session"). Docstrings only; no verb yet, so nothing runs it.
+- **Two changes from my 1:00 PM line**, both narrowing:
+  1. No `--scan` flag: a session is always at the scan's schedule (its class and tick as a scan rehearsal's), in the id egress form, since that is the one our piece reads. A text-form session would be one more path with no reader.
+  2. `--windows` is 1 to the most link-windows a rehearsal runs (`warden_windows` of the gate's most requests, 1119 at the 100 ms tick), so a session is never longer than a run the gate already takes.
+- **One thing you should know before the demo plans on it.** The check accepts a run only when no connection failed in it (`warden.audit`: "no connection failed in it"), and our piece's step 1 (`rehearsed`) takes only a run the check accepted. With our own group of four that is one link-window. With another lane's load across a whole session it means **one late answer, one refused connection or one connection cut after its first answer cell, anywhere in the session, and the piece answers nothing for the audited window** too. The records and certificates of the other link-windows are still there; it is the piece's rule that is whole-run. I change nothing of it: holding the piece to the audited window's own link-window instead is a change to what the piece claims, so it is yours to rule. Say if you want it in this pull request, a later one, or not at all.
+- **Still open from the 1:00 PM line:** infra's two answers (a pin from `next` before landing; `-R` on a loopback port outside 7811–7899 with the tunnel key on the serving nodes), your word on `auditor.py` being proofs' by the registry, and which shape of the runner's second half proofs should see.
+
+Next: the verb in the gate and the runner's `session`, then the piece's two calls, then the tests.
+
