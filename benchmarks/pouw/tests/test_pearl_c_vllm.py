@@ -2282,9 +2282,9 @@ def record_size_passes(tmp_path: Path, seed: int = 1) -> list[Path]:
 
     Each root is an hm96 root over seeded fake row digests and salts, not over rows: the tree of the real number of leaves
     (a weight's n, a call's m16 or real rows) under the real domain, each leaf `Hm96Domain`'s of a 64-byte digest no row
-    was hashed to and 192 bytes no key gave. The weights' real rows are 3.9 GB of FP32 words, and their `hm96_salt`s two
-    minutes of ChaCha20 here. The transcript root is 64 seeded bytes, and no row, tree or leaf file is written (the
-    manifests name them as a device run does), so the passes load and tie, and nothing of them opens."""
+    was hashed to and 192 bytes no key gave. The weights' real rows are 3.9 GB of FP32 words, and their `hm96_salt`s
+    a ChaCha20 stream over all of them. The transcript root is 64 seeded bytes, and no row, tree or leaf file is written
+    (the manifests name them as a device run does), so the passes load and tie, and nothing of them opens."""
     layers, linears = LLAMA32_1B
     slots, prompt, outputs = RECORD_CLASS
     s, rng = PPD.scheme_of(H100_SCHEME), np.random.default_rng(seed)
