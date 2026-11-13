@@ -115821,3 +115821,79 @@ Mailbox read at `ebd237cdb3`: nothing for me after your 02:00Z three answers.
 - Nothing of A28's two statements is assembled yet.
 
 **To post:** nothing.
+
+## PERIODREAD, Fri 13 Nov 02:50Z: the check (PR 2) is open as #9595 with 60 of 61 suites; the one red, `research`, is two tests reading vy-nebius-2's own hold file, red on `main` too, and fixed in #9596; your eight rulings on STOPS's reading are placed below
+
+In plain words. The second pull request, the period's check itself, is open and unmarked. Its quick tier passed 60 of 61 suites. The one that failed is not about the check: two tests of our own run-placing tool read the "keep off this node" file that infra put on vy-nebius-2 for us, and fail on any tree while it is there. I showed that on `main`'s tree, fixed the two tests in a pull request of their own, and the fixed file passes on the held node. Your rulings on the second reading: six go into PR 3 as statements and wording, their proofs into PR 4, and the signature one is sized later in its own change. No served registration is known to pass the period's check today; why, and what form would, is below.
+
+Mailbox read at `ebd237cdb3` (02:43:49Z), and the hook's 02:43Z word (`4e5c2e62fb47`). STOPS's 02:22Z and 02:24Z entries read whole.
+
+### PR 2 is #9595, unmarked; no ready line yet
+
+- **#9595**, https://github.com/compute-verification/verity/pull/9595, `cursor/proofs-prf600-period-audit-9c4e` at `5dacc95eab9eb704c24e05aa42206f864b0585eb`, `Lane proofs` [run: `research queue open`].
+- **Quick tier, `r20261112-232219-a005`, at that head, vy-nebius-2:** "61 suites: 60 passed (0 cached), 1 failed; 133.4 min of test time" [run].
+- **The red suite is `research`**: `test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_the_pool` and `test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen`, both in `tools/research/tests/test_auto.py` [run].
+- **Cause.** Both run the probe on the machine they are on. The probe answers node 2's share with the hold when `/etc/vy/auto-hold` is there (`tools/research/src/research/auto.py:89`, `share()`), before it reads claims or the slot-only marker [read]. vy-nebius-2 carries the file since INF-767's hold. The diff the tests print is the hold's own text, "proofs alone uses this node ... until Fri 6 PM PST" [run: `r20261113-023120-7179`].
+- **Not PR 2's:** the same two fail on `main`'s tree at `8c11a1d5ab` on that node, 2 failed and 74 passed [run: `r20261113-023127-b5e6`]. Before the hold the suite passed there, 4771 passed [run: `r20261112-203704-77ca`].
+- **Records.** PR 4's records run holds PR 2's change. Its `security` stage names four guarantees whose record moves with the split of `auditedOpen`: `Flock.SecurityProofs.RecursiveAuditC3`, `Verity.Sampled.remote_soundness_deployedReady`, and its `_honest` and `_nontrivial`; "changed: `Spot.Challenger.auditedOpen`; new: `Spot.Challenger.auditedIn`"; "every failure is a record difference" [run: `r20261113-015344-d333`, still in `security/Properties`]. #9595's body says two records; I correct it when the run ends, and give the ready line then.
+
+### The fix is #9596, unmarked; its ready line comes with one more run
+
+- **#9596**, https://github.com/compute-verification/verity/pull/9596, `cursor/proofs-auto-hold-tests-7d2e` at `7764f46a6233e908a76ed22307a63439ec687b89`, from `main` at `8c11a1d5ab`, `Lane proofs`. Two lines, tests only: each test points `auto.HOLD_FILE` at a path that does not exist, as the idle-machines test beside them does [read].
+- **With the fix, on the held node:** `tests/test_auto.py`, 76 passed [run: `r20261113-023857-2380`].
+- **Out:** the whole `research` suite at that head, `r20261113-024735-2bee`, in line since 02:47Z. The suite takes about 7 minutes.
+- Until #9596 lands, every quick tier that runs `research` on vy-nebius-2 is red on these two while the hold stands. PR 3's (`r20261113-021125-efae`) already is: "2 failed, 4769 passed" in `research`, the other suites so far pass [run].
+
+### Your rulings of 02:43Z: where each goes
+
+Statements and wording go into PR 3 (#9581), before its records run, since that run is not started. Proofs go into PR 4.
+
+| ruling | PR 3 | PR 4 |
+|---|---|---|
+| 1, (a) and (k) | the corollary as a named statement: accept and `pub.others = #[]` give that each root the lane committed in the run is the root of exactly one published window, whose one audit is `AuditedAt`; `CommittedOnce`'s title and both modules' opening sentences reworded to "one audit entry" and "every root on a session with the sample's family" | its proof, from `CommittedOnce` and `AcceptMeans` |
+| 2, (f) | the decoder's statement: `AuditParams.of j = .ok p` gives that `p.keyJ` reads as `p.ledger.key` and that `p.audit` names none of the five keys | its proof |
+| 3, (g) | the statement that the audited session is the window's | its proof; I say if it is long |
+| 5, (i) (j) (b) (c) (d) (e) | one sentence each under "what this does not say", in STOPS's words | none |
+| 7, (o) | `Numbered` weakened to: a line of the device's that is an entry numbered `i` is at place `i` | `LedgerOfDevice`'s proof against it |
+| 8 | `periods` removed from `CommittedOnce` | the proof's binder |
+| 6, (l) | neither | neither: sized in a later entry, its own change (it adds strings to the finder of `security/Properties/Challenger.lean`) |
+
+The check's own opening sentence is in `Spot/PeriodAudit.lean`, PR 2's file. I reword it in PR 3, a comment only, so #9595's head does not move [derived: a comment moves no record].
+
+### Ruling 4, (h): why `caseAt` refuses `shared_rows`, and what a period could audit today
+
+- **Why.** One-stage v2 takes the public file's digest from the verifier's parameters, taken before the sample. The period's check takes it from the case, after the sample (`paramsAt`, `Spot/PeriodAudit.lean:92-97`) [read]. So the file must be fixed by the registration. One-stage v2 holds the header to the record (`publicHeld`) and each row to the header's roots [read]. A shared-row file's body also says which row of a table each instance reads, and I found that held to nothing: the loader only bounds a ref by its table's size (`Flock/HmRow.lean:1361-1363`), an output row's ref is fixed (`:1947`), and a registered read's rows are opened at the verifier's own positions [read; I did not read all of Flock's verifier]. A case could then pick the refs after its coins. Second, Flock covers a shared-row file only with the verifier's registered reads (`Flock/ProvedScope.lean:342-357`), which name a window's own roots, and the period holds one registered file for every window [read]. I gave both at Thu 20:10Z and you ruled the refusal.
+- **What would pass.** What one-stage v2 itself accepts, less shared rows: a registration of one statement (one circuit file, one public file) under `--zk`, with no registered read of a window's own. One-stage v2 already refuses a population of several members (`MULTI_REFUSED`, `Spot/OneStageZk.lean:57-60`) and a windowed registration whose ports are its members' (`benchmarks/one_stage/a5.py:1241-1242`) [read].
+- **Which served registration: none that I can name.** Friday's second-stage statements share rows [relayed: GATHER by you]. The vLLM adapter's drawn stager stages with `share_rows=True` (`adapters/vllm/verity_vllm/protocols/pouw/h1/drawn.py:445`) [read]. The one-stage audit's windows of record have no row tables (`benchmarks/one_stage/a5.py:155`), so their files name no `shared_rows` (`a5.py:776-777`) [read]; whether one of them is a single member under `--zk` whose v2 case accepts I have not traced, and I hold no such case. The candidate is `a5.py`'s `out/case-v2.json` of a one-member window. Nothing I ran accepts at the real audit: the difftest's accepted periods use the stand-in.
+- **To lift the refusal** it takes the refs held to the registration (a root over the refs in the record, or the proof that Flock's registered reads fix them) and a registered file per window. Neither is in PR 2 to PR 4.
+
+### A23's day
+
+My first reading: the rulings do not move it. `CommittedOnce` compiles with its proof since 01:26Z (`r20261113-012610-3281`); the new work is three short statements with proofs over lemmas that exist, one weakened premise and one binder. I give the firm word before Fri 12:00Z, after the first try of the new proofs.
+
+### Machines and waits
+
+All on vy-nebius-2. `7179` waited 4.6 min for its place, `b5e6` 5.1 min, `2380` 3.4 min [run: each `slot.json`]. `2bee` is in line since 02:47:42Z, one check ahead. No Lean try of mine is out besides the records run `d333`, which waited 11 s.
+
+### Runs
+
+| run | what | state |
+|---|---|---|
+| `r20261113-015344-d333` | PR 4's records at `36dc4d568f` | running: SPOT's verifier PASS, the certifier's PASS, `security` four record differences, in `security/Properties`; I expect it by about 03:10Z |
+| `r20261113-021125-efae` | PR 3's quick tier at `43fde9d046` | running; `research` red as above |
+| `r20261113-024735-2bee` | `research` suite at #9596's head | in line |
+
+### Not established
+
+- That #9596's head passes the whole `research` suite on the held node: `2bee` is out.
+- Which records move in `security/Properties` with PR 2: `d333` has not reached its verdict.
+- That any served registration passes the period's check: none traced, none run.
+- That a shared-row file's refs are held nowhere in Flock's verifier: I read the loader, the output rows and the registered reads, not all of it.
+- None of the rulings' statements is written yet; nothing of them is compiled.
+- PR 3's statement files will change, so `efae` and the exe run `0c67` are evidence for `43fde9d046` and not for the head with the rulings in.
+
+To post: for infra on INF-767, by you if you see fit: "While `/etc/vy/auto-hold` is on vy-nebius-2, two tests of `tools/research/tests/test_auto.py` fail there on every tree, `main`'s included (`r20261113-023127-b5e6`), so each quick tier run on that node shows `research` red. #9596 fixes the tests."
+
+Can I pause: no. Next: the rulings' statements into PR 3, a try, then PR 3's records run when `d333` ends.
+
+Heads pushed: #9537 `44b84839217d`; #9546 `ee245a981c3e`; #9595 `5dacc95eab9e`; #9581 `43fde9d04680`; PR 4's branch `41cbecec62af`; #9596 `7764f46a6233`; scratch `a63a0eda4e`. Unpushed: the scratch notes' update for #9595 and #9596, which I push next.
