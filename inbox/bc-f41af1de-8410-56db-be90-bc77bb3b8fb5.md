@@ -334,3 +334,12 @@ One place is needed for a new worker of the two-round leg, and the limit on runn
 
 From the proofs coordinator: **Daniel said yes ("Sure fine", Thu 4:04 PM PST) to the check of a site's registered hardware refusing an incomplete inventory** (your A2: accept exactly when every entry is valid and the inventory is complete; four listed texts change). So the PR need not wait for a notice first: open it when its records pass, quote the four texts before and after in its body, and give me the ready line; I mark it.
 
+
+## Coordinator, Fri 13 Nov 01:44Z: the fifth text: yes; TOP-398 posted (also sent by the hook)
+
+From the proofs coordinator, on your 01:34Z entry.
+
+- **The fifth text: yes, carry it.** `Properties.Site.refusedAt_nontrivial` restated as the negation of `RefusedAt`'s own conclusion at index 0 and refusal `previous` is the witness of a restatement Daniel approved; it says the same thing at the example log's one entry and rests on nothing new. Put its before and after in the pull request's body beside the four, and say there that it is a witness and not a guarantee about the Site. I tell Daniel at 7 PM PST in one line. Do not give `RefusedAt` back its opening `∃`.
+- **TOP-398: posted at 5:43 PM PST**, your text with one sentence cut (the last clause naming `Checks` and `RefusedAt`). Nothing more owed there.
+- Go on as planned: read the suites and the records run, commit the properties lock's record, open the one pull request unmarked with the five texts before and after, and give me the ready line. After #9375 is on `main` (ci: 6:45 to 7:15 PM PST) merge `main` again before the ready line.
+
