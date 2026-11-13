@@ -54,8 +54,8 @@ play's first stage is of a count `K` (`firstK_of_formAccepts`): the form's parse
 rate law (`Select.Rule.ofJson`), which `Select.resolve` makes `subset:K` at `1 ≤ K ≤ n`, so `PartsSizedAt` at each
 such `K` gives `PartsHeldAt` with nothing else asked (`partsHeldAt_of_accepts`). The run refuses an interior whose
 strata are not the parts its replay block's cells give the check's templates (`interior-parts`), so an accepted
-play gives `PartsSizedAt` too (`partsSizedAt_of_formAccepts`), given that the templates' circuits the parser returns
-name those templates (`TemplateCircuitsNamed`). Asked at every
+play gives `PartsSizedAt` too (`partsSizedAt_of_formAccepts`): the templates' circuits the parser returns name
+those templates (`templateCircuits_names`). Asked at every
 size it would hold of no held copy (`HeldOf.not_partsAre`: no stratum makes a part of a sample of no block).
 
 `playAccepts_form` is `PlayAccepts` from what is left. Nothing here turns the form on, and none of the premises says
@@ -354,13 +354,69 @@ theorem replayCells_size {p : Spot.Program} {q : Lean.Json} {ns : Array ℕ}
     | split at h
     | dsimp only at h
 
-/-- **`Run.templateCircuits` names the check's templates, in its order, or returns none**: a property of the
-parser's code, which throws unless `named.map (·.1)` is `Select.templateIds`' and returns none only for no `proofs`.
-Not proved here: `split` generates no equations for its match on `#["templates"]`. -/
-def TemplateCircuitsNamed : Prop :=
-  ∀ (proofs query : Lean.Json) (cs : Array (String × String × Lean.Json × Lean.Json)),
-    Spot.Run.templateCircuits proofs query = .ok cs →
-      cs = #[] ∨ Spot.Select.templateIds query = .ok (cs.map (·.1))
+private theorem eq_of_not_bne_true {α : Type} [BEq α] [LawfulBEq α] {a b : α} (h : ¬(a != b) = true) : a = b := by
+  cases hab : a == b
+  · exact absurd (by simp [bne, hab]) h
+  · exact eq_of_beq hab
+
+/-- Unfold the matcher `m` at `h` and name `d` the test of a key against `"templates"` it exposes; fails where `m`
+is not the matcher that makes that test. -/
+local macro "key_test " m:ident " at " h:ident " as " d:ident : tactic =>
+  `(tactic| (delta $m:ident at $h:ident
+             conv at $h:ident => lhs; whnf
+             generalize instDecidableEqString _ "templates" = $d:ident at $h:ident
+             fail_if_success clear $d))
+
+/-- **`Run.templateCircuits` names the check's templates, in its order, or returns none**: the parser throws unless
+`named.map (·.1)` is `Select.templateIds`' and returns none only for no `proofs`. Its match on `#["templates"]` has
+no equations `split` can use, so the matcher is unfolded by name (`key_test`, at whichever of the parser's
+matchers makes the test) and the test is cased on. -/
+theorem templateCircuits_names {proofs query : Lean.Json} {cs : Array (String × String × Lean.Json × Lean.Json)}
+    (h : Spot.Run.templateCircuits proofs query = .ok cs) :
+    cs = #[] ∨ Spot.Select.templateIds query = .ok (cs.map (·.1)) := by
+  unfold Spot.Run.templateCircuits at h
+  generalize Spot.keys? proofs = kk at h
+  generalize Spot.getD proofs "templates" = gg at h
+  split at h
+  · exact Or.inl (Except.ok.inj h).symm
+  · obtain ⟨ids, hids, h⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 h
+    rcases kk with _ | ⟨⟨_ | ⟨s, _ | ⟨s2, l2⟩⟩⟩⟩
+    · cases h
+    · cases h
+    · first
+      | key_test Spot.Run.templateCircuits.match_20 at h as d
+      | key_test Spot.Run.templateCircuits.match_19 at h as d
+      | key_test Spot.Run.templateCircuits.match_18 at h as d
+      | key_test Spot.Run.templateCircuits.match_17 at h as d
+      | key_test Spot.Run.templateCircuits.match_16 at h as d
+      | key_test Spot.Run.templateCircuits.match_15 at h as d
+      | key_test Spot.Run.templateCircuits.match_14 at h as d
+      | key_test Spot.Run.templateCircuits.match_13 at h as d
+      | key_test Spot.Run.templateCircuits.match_12 at h as d
+      | key_test Spot.Run.templateCircuits.match_11 at h as d
+      | key_test Spot.Run.templateCircuits.match_10 at h as d
+      | key_test Spot.Run.templateCircuits.match_9 at h as d
+      | key_test Spot.Run.templateCircuits.match_8 at h as d
+      | key_test Spot.Run.templateCircuits.match_7 at h as d
+      | key_test Spot.Run.templateCircuits.match_6 at h as d
+      | key_test Spot.Run.templateCircuits.match_5 at h as d
+      | key_test Spot.Run.templateCircuits.match_4 at h as d
+      | key_test Spot.Run.templateCircuits.match_3 at h as d
+      | key_test Spot.Run.templateCircuits.match_2 at h as d
+      | key_test Spot.Run.templateCircuits.match_1 at h as d
+      cases d with
+      | isFalse hn => cases h
+      | isTrue ht =>
+        have hs : s = "templates" := ht
+        subst hs
+        cases gg <;> first | (cases h; done) | skip
+        obtain ⟨named, hnamed, h⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 h
+        split at h
+        · cases h
+        · rename_i hne
+          cases h
+          exact Or.inr (hids.trans (congrArg Except.ok (eq_of_not_bne_true hne).symm))
+    · cases h
 
 /-- **The form's parameters' circuits are `Run.templateCircuits`'** at the interior's query. -/
 theorem paramsOfJson_circuits {j : Lean.Json} {p : VStar.Recursive.SampledTwo.Params}
@@ -462,11 +518,10 @@ theorem partsAt_heldOf {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : SpotFl
     | (simp only [Array.size_map]
        first | done | rfl)
 
-/-- **An accepted play's templates' circuits name the check's templates, in its order**, given the parser's
-property `TemplateCircuitsNamed`: the form's parser reads them so or reads none, and where it reads none the held
-copies have no cell (`cells_size_heldOf`), so the check names no template (`replayCells_size`). -/
-theorem names_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) (hT : TemplateCircuitsNamed)
-    {o : Verity.Exchange}
+/-- **An accepted play's templates' circuits name the check's templates, in its order**: the form's parser reads
+them so or reads none (`templateCircuits_names`), and where it reads none the held copies have no cell
+(`cells_size_heldOf`), so the check names no template (`replayCells_size`). -/
+theorem names_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o : Verity.Exchange}
     {i : Spot.Run.Input} {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i)
     (hit : i.interior = some it) {ns : Array ℕ} {ids : Array String}
     (hns : Spot.Select.replayCells it.replay it.params.verifier.query = .ok ns)
@@ -479,7 +534,7 @@ theorem names_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) (hT
   have hsize : ns.size = it.circuits.size := by
     rw [← cells_heldOf hu hns]
     exact cells_size_heldOf hu
-  rcases hT _ _ _ hpj with h0 | h1
+  rcases templateCircuits_names hpj with h0 | h1
   · have h3 : ids.size = 0 := by
       rw [← hsz, hsize, h0]
       first | done | rfl
@@ -487,11 +542,10 @@ theorem names_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) (hT
     first | done | rfl | simp
   · exact Except.ok.inj (h1.symm.trans hids)
 
-/-- **`PartsSizedAt` is a lemma of the accept**, given the parser's property `TemplateCircuitsNamed`: an accepted
-play's interior passed `interior-parts` (`interiorSteps_parts`), whose parts are the held copies' (`partsAt_heldOf`,
+/-- **`PartsSizedAt` is a lemma of the accept**: an accepted play's interior passed `interior-parts` (`interiorSteps_parts`), whose parts are the held copies' (`partsAt_heldOf`,
 `names_of_formAccepts`), at its replay sample, which has `K` blocks where the held first stage samples a `K`-subset
 (`SpotFlock.select_subset_size`). -/
-theorem partsSizedAt_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) (hT : TemplateCircuitsNamed) :
+theorem partsSizedAt_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) :
     ∀ K, SpotFlock.firstK A.h.reg.first = some K → PartsSizedAt A C K := by
   intro K hK o i it strata hA hi hit hst
   obtain ⟨u, hu⟩ := hof o i it hA hi hit
@@ -511,7 +565,7 @@ theorem partsSizedAt_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A
     obtain ⟨ns, ids, strata', hns, hids, hst', hparts⟩ := interiorSteps_parts hx
     have hss : strata' = strata := Except.ok.inj (hst'.symm.trans hst)
     subst hss
-    have hnames := names_of_formAccepts hof hT hA hi hit hns hids
+    have hnames := names_of_formAccepts hof hA hi hit hns hids
     have hsel0 := hsel
     rw [hcl] at hsel0
     have hproved : (Spot.Draw.proved draw).map Int.toNat = rest :=
