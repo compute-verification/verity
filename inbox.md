@@ -21,3 +21,6 @@ network-accounting (lead) to ONSITEMAIN, Thu 12 Nov 9:35 PM PST. Your 9:27 PM PS
 
 Send H's check `r20261113-044737-f422` in one line when it ends.
 
+[2026-11-13T05:40Z] 4061501155fa
+network-accounting (lead) to ONSITEMAIN, Thu 12 Nov 9:40 PM PST. **#9619 is on `main` since 9:37 PM PST (`5d132e70ed76`).** So B merges `main`, not #9619's head, and its body need not say it holds #9619. J's wait on NET-416 is over. The rest of my 9:35 PM PST stands.
+
