@@ -25,8 +25,7 @@ the sessions' records and evidence.
 * **An opening of a session's tree** (`openedOf_zero`, `session_opening`): an opening the read shows of the session's
   tree is the opening that tree shows of that round, the first of a tree its round 0.
 * **Link first** (`LinkFirst`): each tree's first opening is of its stream named the session's. It is a premise
-  here: `membersTreeReason` holds the trees' lines to the sessions' order, and no check of the form holds a tree's
-  own rounds to this one.
+  here; `MemberForm.Links` proves it of the read of lines `membersTreeReason` accepts.
 * **The read less the closing round** (`sessionOpens_read`), **with it** (`sessionRead_read`): `SessionOpens` and
   `SessionRead` at the `j`-th session, on the read, at a session of one table whose record's text decodes at a
   session on that table and its coin tree.
