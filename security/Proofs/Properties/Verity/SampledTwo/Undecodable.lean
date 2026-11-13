@@ -10,8 +10,9 @@ At a commitment `c` whose bytes carry no statement (`stmtOf c = none`) no `Joins
 (`prob_zero_of_stmtOf_none`): an accepted play's case carries a commitment whose record reads back, so its record
 prints, and `stmtOf c` is that print.
 
-`couplingTwo_of_stmtOf_none` is `CouplingTargetTwo`'s body at such a `c`, at any statement `x` and `terms`, from those
-two and its `δ` clause, which it takes as it stands.
+`couplingTwo_of_stmtOf_none` is `CouplingTargetTwo`'s body at such a `c`, at any `terms`, from those two alone, and
+`joinedCouplingOfLaw_decoded` is the two-stage leg's coupling with `CouplesAt` taken only where the commitment carries
+a statement.
 -/
 
 @[expose] public section
@@ -45,26 +46,46 @@ theorem prob_zero_of_stmtOf_none {V : Vocab d α} {k : Verity.Registration.Compo
   rw [hs'] at hn
   cases hn
 
-/-- **`CouplingTargetTwo`'s body at a commitment that does not decode**: at any statement `x` and `terms`, from the
-composite's wiring at `θ`, `CaseCommits` and the target's `δ` clause at `x`. -/
+/-- **`CouplingTargetTwo`'s body at a commitment that does not decode**, at any `terms`, from the composite's wiring
+at `θ` and `CaseCommits`: the sampled verdict never accepts there. -/
 theorem couplingTwo_of_stmtOf_none {V : Vocab d α} {k : Verity.Registration.Composite} {A : Live₂} {θ : ByteArray}
-    {F : Array ByteArray} {c : ByteArray} {σ : Verity.Game.Strategy (V.game θ F c)} {C : CaseOf}
-    (terms : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → ℝ≥0∞) (x : Msg)
+    {F : Array ByteArray} {c : ByteArray} {C : CaseOf} (t : ℝ≥0∞)
     (hwire : ∀ o : Verity.Exchange, o.params = θ → V.Verdict k .sampled o → FormAccepts C o)
-    (hcc : CaseCommits C) (hn : stmtOf c = none)
-    (hδ : ∃ (Ω : Type) (_ : Fintype Ω) (_ : Nonempty Ω) (P : Prover Ω),
-      V.finderCR .sampled θ F c σ → V.premises .sampled θ F c σ →
-        ENNReal.ofReal (A.errAt x P) + terms c σ ≤ V.delta θ .sampled (V.cost θ F c σ)) :
-    ∃ (x : Msg) (Ω : Type) (_ : Fintype Ω) (_ : Nonempty Ω) (P : Prover Ω),
-      (A.L.Scope x ∨ Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ = 0) ∧
-      Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ ≤
-          ENNReal.ofReal (PrBad FlockDeploy.sha512 A.L.V A.R A.L.E x P) + terms c σ ∧
-        (V.finderCR .sampled θ F c σ → V.premises .sampled θ F c σ →
-          ENNReal.ofReal (A.errAt x P) + terms c σ ≤ V.delta θ .sampled (V.cost θ F c σ)) := by
-  obtain ⟨Ω, hF, hN, P, hd⟩ := hδ
-  have h0 := prob_zero_of_stmtOf_none hwire hcc hn σ
-  refine ⟨x, Ω, hF, hN, P, .inr h0, ?_, hd⟩
-  rw [h0]
-  exact zero_le
+    (hcc : CaseCommits C) (hn : stmtOf c = none) (σ : Verity.Game.Strategy (V.game θ F c)) :
+    CouplingTwoAt V k A θ F c σ t :=
+  .inl (prob_zero_of_stmtOf_none hwire hcc hn σ)
+
+/-- **The two-stage leg's coupling, with `CouplesAt` only where the commitment decodes**: `joinedCouplingAt` at each
+commitment that carries a statement, and `couplingTwo_of_stmtOf_none` at each that carries none, from the composite's
+wiring at `θ` and `CaseCommits`, which read no commitment. -/
+theorem joinedCouplingOfLaw_decoded (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
+    (F : Array ByteArray) (x : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → Msg) (C : CaseOf)
+    (Ms : SessionReading) (tab : ℕ → String) (ℓ₁ ℓ₂ : String) (Dg : Verity.Exchange → ℕ → Option Msg) (q : ℕ)
+    (P : Sessions.Deployment) (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Verity.Release → ℕ)
+    (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
+    (s : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → Claims.Sampling.AuditStatement)
+    (Pt : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → Claims.Sampling.Partition)
+    (dd : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → Claims.Sampling.Design.Two)
+    (readX : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) →
+      Claims.Sampling.Wit → Verity.Circuit.Trace (V.circuitOf θ F))
+    (openOf : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) →
+      Claims.Sampling.Wit → Fin (V.circuitOf θ F).N → Option Hash.RowLeaf.Opening)
+    (dColl : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → ℕ)
+    (hHolds : CoinMap.CoinMapHolds (d := d) (α := α))
+    (hwire : ∀ o : Verity.Exchange, o.params = θ → V.Verdict k .sampled o → FormAccepts C o)
+    (hcc : CaseCommits C)
+    (h : ∀ c σ, stmtOf c ≠ none →
+      CouplesAt V k A (x c σ) θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' (s c σ) (Pt c σ) (dd c σ)
+        (readX c σ) (openOf c σ) (dColl c σ)) :
+    CouplingTargetTwo V k A θ F fun c σ =>
+      joinBound V A (x c σ) θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut +
+        bindBound V A (x c σ) θ F c σ
+          (joinFrame V A (x c σ) θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
+          (openOf c σ) (dColl c σ) := by
+  intro c σ hI
+  by_cases hn : stmtOf c = none
+  · exact couplingTwo_of_stmtOf_none _ hwire hcc hn σ
+  · exact joinedCouplingAt V k A θ F (x c σ) C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' (s c σ) (Pt c σ) (dd c σ)
+      (readX c σ) (openOf c σ) (dColl c σ) hHolds (h c σ hn) hI
 
 end Verity.SampledTwo
