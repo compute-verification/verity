@@ -15,3 +15,4 @@
 - 11:06Z (03:06 PST): ffde in verity-flock, bound peak 22.4 GiB (scope figure 43.7 includes more than anon); 667c still waiting; inbox unchanged. Pass 9.
 - 11:26Z (03:26 PST): ffde and 667c running/waiting as before; inbox unchanged. Pass 10.
 - 11:47Z (03:47 PST): ffde and 667c as before; inbox unchanged. Pass 11.
+- 12:08Z (04:08 PST): ffde passed all 5 (22.4 GiB), 667c passed 448/5s (15.7 GiB) at 3d484ece. Bodies final. Posting the CIR-269 comment.
