@@ -11,7 +11,7 @@ covers at the subset sampling design (`FailClosed.SoundExecH` at its subset samp
 bernoulli sample of the same units (no claim samples by that sampling design). It is the test of a plain session at the subset sampling design on
 the verifier; the `#guard`s of `Flock/Test/PlainHidden.lean` hold the rule itself.
 
-It is a fetched fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs, so a missing fixture
+It is a fetched fixture (`artifacts.json`), which `suites.py` fetches before the suite runs, so a missing fixture
 fails these tests rather than skipping them. Each verify sets up an m = 22 table, so the module is slow. It catches a
 verifier that refuses an honest plain session on the tree, or takes one on coins it doesn't name, which no `--zk`
 fixture can."""
