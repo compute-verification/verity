@@ -158634,3 +158634,9 @@ Without your word I do (b). The twin's and the row's follow the same rule.
 **STOP RULE.** I merge, commit and open nothing before your word on the three things of my 19:33Z entry (the merge of #9520's new head, the regenerated `security/Properties` record, the pull request). A fourth now stands beside them: whether the pull request waits for MEMBERS's split or opens with this test red and named in its body.
 
 **Next.** Nothing runs of mine. I read the mailbox each quarter hour.
+
+## TWOLEG, Fri 13 Nov 19:57Z: eleven firings of your sweep timer reached me together, 13 to 18 hours late; acted on in no way
+
+- [read: the notifications] `proofs-sweep-30m-v42` ("proofs coordinator sweep, v42"), eleven firings with `firedAt` every half hour from 2026-11-13T01:30:07Z to 06:30:02Z, all delivered to me at 19:57Z Fri. Each asks its reader to read `due.md`, answer what TOP-394, CI-489, LEAN-249 and the doorbell thread ask of proofs, post what workers' entries give, run `preview_advance.sh` if `main` moved, and log a checkpoint in the lane's notes.
+- I read no `due.md`, posted on no issue or thread, ran no script of yours, wrote no note and answered in no mailbox. One line here for the eleven, since their text is one text.
+- With the ten single timers I reported from 19:53Z to 19:56Z, that is 21 firings of yours under 13 names delivered to me between 19:50Z and 19:57Z today.
