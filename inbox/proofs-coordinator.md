@@ -133393,3 +133393,141 @@ Runs: `r20261113-082753-b31c`, `r20261113-090552-1d81`, `r20261113-093259-3922`:
 - The second window of run `cae1` (K 8192, 16384), still running as I write.
 
 Branches: `cursor/proofs-scratch-firstaccept-standin-7e41` at `98ae150c015`, pushed, no pull request (scratch, not for landing). `cursor/proofs-firstaccept-5a1c` at `9049e2c572` (#9594, unmarked), untouched. Run: `r20261113-092111-cae1` on vy-nebius-cpu-11, running its second window; I add its row when it ends. No timer held.
+
+## RELAX, Fri 13 Nov 09:43Z: the split at `verity/protocols/accounting/registration/`: three modules must leave the interface, `Period` stays, the Site is your choice; four pull requests
+
+**The answer.** Three modules must leave the interface's package with registration: `Registration`, `RegistrationMain` and `Account` (1,404 lines). `Period` stays. `Site` is not forced either way, and I would leave it for a later pull request. The package is `registration_check` at `verity/protocols/accounting/registration/verifier/lean/`. The interface's toy needs no change. The Site's test port leaves SPOT's package for registration's. The Python goes first, by the map, with one row of the listing and four suites' inputs by hand. I give no hour for a ready mark: it would rest on a pre-mark run on a tree with chain 2, which does not exist yet, and the trial's own pre-mark run (79 suites) did not finish inside its 60 minutes. Section 6 says what the runs do support.
+
+Tags: [run ID] is a `research run`; [VM] is a command on my own machine, with no run id; [read] names the place; [relayed], [derived] and [guess] as you use them. Everything read is at `468878c8f37c` (chain 1 with our three maps). `main` is `e4da505fe488` since chain 1 landed at 08:44Z, and differs from what I read in one line of the interface's README [VM: `git diff --stat` over the interface, SPOT's port, the listing, `verity/hardware` and `verity/device.py`]. No Lean was built for this entry.
+
+### 1. Which modules leave the interface's package
+
+| Module (lines) | Imports of the interface or of registration [read: its import lines] | Read outside the interface's package [VM: `git grep` of import lines] | Leaves? |
+|---|---|---|---|
+| `Registration.lean` (535) | `Protocol`, `Site` | by no package | yes: it is the log |
+| `RegistrationMain.lean` (8) | `Cli`, `Registration` | by no package | yes |
+| `Account.lean` (861) | `Example`, `Protocol`, `Ratio`, `Registration`, `Site` | by no package | yes: it imports the log (lines 6 and 11) and its toy opens the log's example (line 591) |
+| `Period.lean` (147), `PeriodDifftest.lean` (52), `PeriodDifftestMain.lean` (7) | none of the above; `Base.Canon` and Lean's JSON (lines 19 to 22) | `security/Properties/Core/Period.lean:3` only | no |
+| `Site.lean` (702) | `Ratio` only (lines 3 to 6) | `NetworkCheck/Registered.lean:3-4`, `security/Properties/Core/Site.lean:4`, `Spot/SiteDifftest.lean:3` | your choice, below |
+
+- **`Account.lean` goes.** It cannot stay: the interface would import registration's package back. Nothing else reads it: no other package, no Python mirror, no executable, no property [VM: `git grep` for the module and for `Core.Account`]. Its `rows` is what reads the accepted Site and the protocols' answers into accounting rows, which by Daniel's ruling is what compose reads. If you want it in compose's package, that is one more `require` there, and compose's directory moves in chain 2, so I would put it with registration first.
+- **`Period` stays.** No module of registration imports it, and registration runs before any period [relayed]. Its Python mirror `verity/periods` has its own suite [read: `verity/periods/tests/test_periods_difftest.py`]. Whether it belongs somewhere else is a question about the interface's package, not about registration.
+- **`Site.lean`: two cuts, and the short one is a subset of the long one.**
+  - *The short cut* leaves `Site.lean` in the interface. It matches the Python on `main`: the Site is the shared file `verity/device.py` (862 lines), which `registration.py` loads [read: its place in the listing, `loads`], and the spec's Site is `security/Definitions/Core/Site.lean`. No other package's lakefile or manifest changes, and no file under `security/` changes.
+  - *The long cut* moves `Site.lean` too. Then the interface holds no registration at all. Today `Site.lean` holds the Site's types and views and also the check of site entries (`Site.Registration`, lines 282 to 430). The long cut would let "SPOT reads no registration" be held on Lake's requires, as "SPOT never imports the certifier" is held today (`tests/test_boundaries.py:104-110` and `370-375`).
+  - The long cut costs, beyond the short one: one file moved (702 lines); one new `require`, in the certifier's verifier (`security_properties` requires the certifier's verifier already, and reaches the interface only through such packages [read: its lakefile]); five manifests (`security/Proofs`, `security/Properties`, `certifier/device/lean`, `certifier/verifier/lean`, `onsite/verifier`) [VM: closure over the 36 lakefiles]; both of `security`'s locks (the key `reads/CoreProtocol.Site`, two `meaning` entries, one `layers` entry); and `tests/test_lean_vocabulary.py:78`.
+  - Going from the short cut to the long one later re-edits five import lines and nothing else of the short cut's work.
+  - Lean's hand-over says registration's package "holds those" [relayed]. If "those" includes `Site`, lean means the long cut. I need your word on which.
+
+### 2. The package
+
+- **Directory:** `verity/protocols/accounting/registration/verifier/lean/` [derived: a protocol's `verifier/` holds its Lean check, and SPOT's, the certifier's and PoUB's packages sit at `verifier/lean`; VM: the lakefiles' directories].
+- **Name:** Lake package `registration_check`, library and module root `RegistrationCheck`. This is my proposal [guess]: its siblings are `pous_check`, `pouw_check`, `network_check` and `nci_check` [VM: the 36 lakefiles]. I withdraw `core_registration` from my 08:05Z entry: `core_` marks the packages that came from the old `verity/core/`. No package has the root `RegistrationCheck` [VM], which `tests/test_lean_packages.py:138` requires.
+- **Modules:** `RegistrationCheck.Registration`, `.RegistrationMain`, `.Account`, `.SiteDifftest`, `.SiteDifftestMain`: 1,495 lines of Lean, file names kept. The Lean namespaces stay (`Core.Registration`, `Core.Account`), so no declaration is renamed. No guarantee is listed in these modules: the interface's lock names them only under `exempt` (`CoreProtocol.RegistrationMain`) [VM: a walk of the interface's and SPOT's locks].
+- **Requires:** `core_base`, `core_protocol` (the interface) and `verity_difftest`, at `../../../../../circuits/base`, `../../../../interface` and `../../../../../difftest/lean` [derived by counting directories; top's group map leaves `interface/` where it is, read at `a21f150fcce8`]. It does not require Flock's verifier, so `REQUIRES_FLOCK_VERIFIER` (`tests/test_boundaries.py:116`) is untouched.
+- **Executables keep their names:** `core-registration` and `site-difftest`. So `tests/test_lean_vocabulary.py:163-165`, which names the Site's port by its executable, and the `exe=` of both Python tests need no edit [read].
+- **Its suite:** a `pyproject.toml` and `tests/` at the package, laid out as SPOT's Lean suite is (`verity/protocols/spot/verifier/lean/pyproject.toml`). It holds `test_site_difftest.py` (384 lines) and `test_registration_difftest.py` (350 lines, from compose's tests). It is a new workspace member (the root `pyproject.toml`, `uv.lock`) and one more name in `AFTER_LEAN` (`tools/verity/check/suites.py:221-231`) [read].
+- **Its lock:** a new `lean-audit.json`, owner proofs, with the two one-line mains under `exempt`, taken from the interface's lock and SPOT's.
+
+### 3. What `Example` needs so the interface keeps its toy
+
+Nothing. `Example.lean` (163 lines) imports `Cli`, `Profile`, `Protocol` and Lean's JSON [read: lines 10 to 16]. `core-protocol-example` stays, and compose's `CoreComposition/Stubs.lean:9` goes on importing `CoreProtocol.Example` [VM: `git grep`].
+
+What leaves is the toy's account, which is in `Account.lean` (`Core.Account.Example`, lines 589 to 857, with all 54 of the file's `#guard`s). It reads the toy's public names only (`Core.Example.protocol`, `Core.Example.check`, lines 597 and 609 to 615) and keeps a private `root` of its own (line 606) [read]. It will import `CoreProtocol.Example` across the package boundary, as `NetworkCheck/Registered.lean:3-4` imports `CoreProtocol.Site` across one today. [derived: I built nothing, so that the 54 `#guard`s evaluate across the boundary is not established.]
+
+### 4. The three SPOT test files
+
+1. **`Spot/SiteDifftest.lean` (83 lines) with `Spot/SiteDifftestMain.lean` (8):** to registration's package. It imports `CoreProtocol.Site` and the harness and nothing of SPOT's [read: its import lines]. SPOT's package loses one import (`Spot.lean:54`), the executable and its default target (`lakefile.toml:8` and `57-61`) and one `exempt` entry of its lock. Its namespace `Spot.SiteDifftest` (lines 24 and 83) should lose `Spot`: three lines by hand.
+2. **`spot/verifier/lean/tests/test_site_difftest.py` (384 lines):** to the new suite. Its `PACKAGE = parents[1]` (line 29) then names registration's package with no edit [read]. SPOT's Lean suite does not list it under `untraced` [read], so SPOT's `pyproject.toml` is untouched.
+3. **`spot/verifier/tests/test_one_stage.py:260`:** stays until R2's declared-day check leaves SPOT, then goes with it. The test (lines 255 to 274) checks SPOT's own codes `R2-declared`, `R2-undeclared` and `R2-declared-twice`. It uses the registration log for two things: to build the declarations it passes in (lines 262 to 263), and to assert that the log itself refuses a second declaration of a day (lines 267 to 268). The second assertion is registration's own and belongs in registration's suite [read].
+   - Until then the map rewrites the one import [VM: the trial tree's line 260], and the listing accepts it, because a test is no loader [VM: `tests/test_boundaries.py` passes with it].
+   - To have no SPOT test read registration sooner: replace lines 260 to 263 by the literal list (the test writes one already at line 269) and move lines 267 to 268. About six lines of a test, no verifier code. I would not do it tonight.
+
+### 5. The Python half: what the trial established
+
+The trial is on the scratch branch `cursor/proofs-scratch-registration-trial-cd24` at `17b7c96aa233`, for the record only. It has no group map under it.
+
+- **The map:** one `[paths]` row and one `[modules]` row. The mover takes 59 s and changes 32 files: 1 moved, 3 `__init__.py` made, 28 rewritten [VM]. The certificate passes on the mover's commit alone: "certified `4a02d06c69..17b7c96aa2` is a pure move (0 renames, 32 path-only edits)", in 1.9 s [VM: `move_check.py`].
+- **The one row of `order`, and where it sits:** `["verity/protocols/accounting/registration"],` directly after `["verity/protocols/recursion"],` (line 28 of `tests/import_order.toml`) and before `["verity/protocols/pous"],`. With it the generator without `--grow` exits 0 and only re-sorts one place entry [VM, 34 s].
+  - Why there: after the shared files' row, which the Python loads, and the interface's, which the Lean package requires. After Flock's, SPOT's and recursion's rows, so the listing itself refuses a load of registration by code of any of the three. Before every accounting protocol, the policy and compose, which may read it.
+  - After the group map its neighbours are `verity/protocols/proofs/recursion` and `verity/protocols/accounting/pous` [derived from top's map as read; not applied].
+  - **The row cannot go ahead in a pull request of its own:** the listing's test refuses a row the tree does not hold (`tests/test_boundaries.py:1424`: "paths tests/import_order.toml lists that the tree doesn't hold; delete them") [VM]. So the row rides with the move.
+- **The three suite inputs that name the file:** `benchmarks/certifier_term/pyproject.toml:44`, `benchmarks/pouw/pyproject.toml:180` and compose's `pyproject.toml:45`. The mover rewrites each to the new path [read on the trial tree]. That is not enough: the mover makes three `__init__.py` files above the moved file, and no suite's inputs name them.
+- **`verity/hardware`'s `test_package.py`, tried first:** alone it passes, 2 of 2 [VM]. In its suite the tests pass and the suite is refused [run r20261113-090011-101a, vy-nebius-cpu-14, 11 s, on `17b7c96aa233`; `where.txt` shows the shipped tree's `verity`]:
+  - `verity/hardware`: 178 passed, then "processes its tests started read outside its inputs": the interpreter `test_package.py` starts reads five files, the moved `registration.py` and the four `__init__.py` above it. Before the move the file was inside the suite's own directory.
+  - `benchmarks/certifier_term`: 15 passed, then "its tests read 3 files outside its inputs": the three new `__init__.py`.
+  - The fix is by hand in each `pyproject.toml`: name the directory `verity/protocols/accounting/registration` and the `__init__.py` files above it. For `verity/hardware` the other fix is to take the registration log out of that test, since it is no longer hardware's.
+- **The other importers' suites** [run r20261113-092411-35c0, vy-nebius-cpu-14, 14 min 57 s, on `17b7c96aa233`, quick tier]: six suites, five pass and one is refused.
+  - Pass: `benchmarks/one_stage` (1,068 tests), PoUW's verifier (2,007), SPOT's verifier (910), `benchmarks/prove_path` (170) and `benchmarks/datacenter` (49). Each has `verity` whole among its inputs [read: their `pyproject.toml`].
+  - Refused: compose's suite, 21 passed, then "its tests read 3 files outside its inputs", the same three `__init__.py`.
+- **So four `pyproject.toml` files are edited by hand**, as far as the runs show: `verity/hardware`'s, `benchmarks/certifier_term`'s and compose's [run], and `benchmarks/pouw`'s, which names the file the same way and which I did not run [derived].
+- On a tree with the group map the first of the three files, `verity/protocols/accounting/__init__.py`, exists already: the map's header says the mover writes the groups' `__init__.py` [read at `a21f150fcce8`]. So a suite may lack two files there, not three. Not run.
+- **The whole pre-mark tier** [run r20261113-090401-5901, vy-nebius-cpu-3, started 09:04Z, on `17b7c96aa233`]: `suites.py --changed` from the map's commit, quick tier, is 79 suites, since the move rewrites the handle registry and other files that most suites read. At 09:42Z, 38 minutes in, 10 of the 79 had ended: 9 passed and 1 was refused (certifier_term again). Its 60-minute limit cuts it at about 10:05Z. I add its last tally in one line then.
+
+### 6. The order of the pull requests, and what each waits on
+
+1. **The Python, by the map.** It holds the map, the row of `order`, the generator's output and four suites' inputs. It waits on chain 2 on `main`, and on the tree file naming `verity/protocols/accounting/` (top's, asked) and `verity/protocols/accounting/registration/` (#9702 adds it; open at `f2a6d393ac47` at 09:05Z [read]). It is an ordinary pull request, since the row and the inputs are by hand; its move commit certifies alone.
+2. **The Lean, the short cut:** the package, its suite, the Site's port out of SPOT. It waits on the first: both edit seven files (`tests/import_order.toml`, compose's `pyproject.toml` and its `test_registration_difftest.py`, the moved `registration.py`, the interface's README, `repo_retired_terms.json`, the handle registry) [VM: the trial's 32 files against this cut's list]. It also waits on your word on the name and on `Site`, and on lean's other cuts of the interface (`Record.lean`, `Live.lean` [relayed: your 08:34Z comment]), which edit the same `CoreProtocol.lean`, lakefile, lock and README. It changes Lean, so lean-audit runs first on its candidate. It changes no file under `security/` [derived from the list in section 7].
+3. **Only under the long cut: `Site.lean` follows.** It waits on the second and on lean. It changes both of `security`'s locks, so it should not be in the queue beside #9701.
+4. **R2's declared-day check leaves SPOT**, with `test_one_stage.py:255-274`. It waits on the day settled with soundness after the chains [relayed]. Not sized here.
+
+Registration's own statements (#9701, to `security/*/Accounting/Registration/`) are soundness's and ours at review [relayed]. Under the short cut they share no file with the first two.
+
+**No hour for the first one's mark.** What the runs support:
+- Its mechanical steps take minutes: the mover 59 s, the generator 34 s, the certificate 2 s, and the listing's tests 54 s up to their first failure [VM].
+- The six suites that import the file take 15 minutes [run r20261113-092411-35c0].
+- Its whole pre-mark tier does not fit one 60-minute slot as I launched it [run r20261113-090401-5901]. It needs parts (`--files K/M`) or a longer limit.
+- Not run: any of this on a tree with chain 2, or after the hand edits. So the branch can be pushed soon after its base exists [guess], and the mark waits on a pre-mark run whose length there I have not measured.
+
+### 7. Does "about 45 files, 2,106 lines" stand
+
+No, on two counts. Counts are from `git grep` of the modules', executables' and tests' names (24 files name them [VM]) plus the files a new package and a new suite need. Nothing was built.
+
+| | Lean lines moved | Files | Requires gained elsewhere | Manifests changed elsewhere |
+|---|---|---|---|---|
+| My 08:05Z sizing | 2,106 | about 45 | 3 | 12 |
+| The short cut | 1,495 | about 31: 7 moved, 8 new, 16 edited | 0 | 0 |
+| The long cut | 2,197 | 43 or 44 | 1 or 2 | 5 |
+
+- **The new place changes it:** SPOT's package may require no registration, so the Site's port leaves SPOT. That adds 91 lines of Lean and 384 of its Python test to what moves, and takes the manifests from 12 to 5 and the requires from 3 to 1 or 2 under the long cut.
+- **My own change:** the 2,106 lines moved `Site.lean` (702 lines) without asking whether it must go. It need not. What must go is 1,404 lines.
+- Both cuts also move 734 lines of Python tests into the new suite.
+
+### 8. Memory-accounting's gap: checked against the tree, and it is not in the plan as decided
+
+Both of their statements hold.
+
+- **The Lean Site holds no rate for a leaf under a `host` location** [read]. A location has `id`, `kind`, `parent`, `owner`, `sheet`, `tier`, `bytes` and `key` (`Site.lean:161-170`; the spec's is the same eight, `security/Definitions/Core/Site.lean:149-157`; the Python's too, `verity/device.py:334-345`). The only read rate is a device's sheet's `bw` (`Site.lean:150-154`). `Part.capacity` says so itself: "no sheet states one for a leaf under a host, so the list is empty where a leaf has none" (`Account.lean:171-176`, the code at `186-190`), and two `#guard`s pin the empty list (`Account.lean:720`).
+- **What the account then does** [read]: the row of what no answer covers has `capacity := none` and `free := none` (`Account.lean:538-551`: "Their capacity is none where the registration holds none"). It is a row with no number, not a charge at capacity.
+- **The node files hold the rates** [read]. Each `memory.NAME` states `rate`, a ceiling in B/s (`verity/hardware/nodes/rtx-pro-6000-server-x8.toml:29, 34, 39, 44`). `verity.hardware.nodes.leaves` returns each leaf's `bw` in whole bits a second and each tier's bound, the server card's `memory.bandwidth_max` and `disk.read_max` (`verity/hardware/nodes/__init__.py:147-160`; `verity/hardware/cards/xeon-6776p-2s.toml:40, 58`). The registration entry drops them: `node_entry` reads a leaf's tier and bytes only (`verity/device.py:499-500`).
+- **The server's CPU is the same gap** [read]. The compute part's leaves are the locations of kind `device` (`Site.lean:439`, `Account.lean:154`). The server card has the figures (`xeon-6776p-2s.toml:13-27`: cores, clocks, `rate.amx`, `rate.ops`); the Site has nowhere to put them.
+
+**What registration would have to carry** [guess at design; no code]:
+
+| For | Field | Unit | Read from |
+|---|---|---|---|
+| Memory read at DRAM or disk | a read rate on each memory leaf under a `host` location | bits a tick, a natural number, as a sheet's `bw` and a link's `β` are | the node file's `memory.NAME.rate` through `nodes.leaves`, times the tick, rounded up, as `node_entry` already does for a link's rate; the entry check holds it to its tier's bound |
+| The server's CPU compute | a sheet named by the `host` location: its SKU, clock and peak rate of each operand class | MACs a second, as `DeviceFigures.peakRate` | the server card's `[cpu]`, `[clock]` and `[rate]` |
+
+**This is under the STOP RULE heading.** Either field changes lock records and a format [read]:
+- The locks record the hash of `Verity.Site.Loc` (`security/lean-audit.json` and `security/Properties/lean-audit.json`, under `reads/Definitions.Core.Site`) and of `Core.Site.Loc` with each of its eight fields (`security/Properties/lean-audit.json`, under `reads/CoreProtocol.Site`). A new field changes those records. How many guarantees' own records change with them I did not establish: it takes the Lean check's `--update`.
+- A location's JSON has exactly eight keys, and a reader refuses any other (`Site.lean:577-579` and `645`; `verity/device.py:360-366`). A ninth key changes every site entry's digest, so every registration head, under the format `verity/registration/site/v1` (`Site.lean:528`).
+- It also changes `Properties.Core.Site` (the code's Site is the spec's, clause by clause), the two `#guard`s above and the difftest.
+
+So it is a change to what a guarantee reads, for memory-accounting and soundness to put to you ahead of any pull request. It does not depend on which cut is taken, and neither cut makes it harder.
+
+### 9. Not established
+
+- No Lean was built: the package, its manifest, the 54 `#guard`s across the package boundary.
+- The trial has no group map under it. The certificate on a base with chain 2 is not run.
+- Whether the tree test reads inside `verity/protocols/accounting/` once the group map is applied.
+- The file counts in section 7 are from names and lists, not from a diff.
+- `benchmarks/pouw`'s suite and the adapter's suite on the trial tree; the wide run's other suites.
+- Any suite after the hand edits: I made none of them.
+
+### 10. What I need from you
+
+1. **`Site.lean`: the short cut or the long one.** I would take the short one first.
+2. **The name:** `registration_check` and `RegistrationCheck`, or another.
+3. **`Account.lean`'s home:** registration's package (my default), or compose's.
+4. **The suites' inputs:** whether a suite names the directory `verity/protocols/accounting/registration` or each file. It decides how many lines the first pull request edits by hand.
