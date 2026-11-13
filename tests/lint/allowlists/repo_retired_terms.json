@@ -4509,7 +4509,6 @@
     {"file": "verity/protocols/pouw/verifier/coins.py", "count": 2},
     {"file": "verity/protocols/pouw/verifier/core_check.py", "count": 140},
     {"file": "verity/protocols/pouw/verifier/credit.py", "count": 254},
-    {"file": "verity/protocols/pouw/verifier/dither/PROTOCOL.md", "count": 18},
     {"file": "verity/protocols/pouw/verifier/lean/check/PouwCheck.lean", "count": 1},
     {"file": "verity/protocols/pouw/verifier/lean/check/PouwCheck/Check.lean", "count": 32},
     {"file": "verity/protocols/pouw/verifier/lean/check/PouwCheck/CommittedFiles.lean", "count": 1},
@@ -5454,6 +5453,7 @@
     {"file": "benchmarks/machine_model/verity_machine_model/lean_headline_dc.py", "count": 10},
     {"file": "benchmarks/pouw/h1_lanes/leaf.py", "count": 4},
     {"file": "benchmarks/pouw/h1_prove/recorded.py", "count": 46},
-    {"file": "verity/protocols/pouw/prover/kernels/pearl_c_sm90/pearl_c_sm90.cu", "count": 3}
+    {"file": "verity/protocols/pouw/prover/kernels/pearl_c_sm90/pearl_c_sm90.cu", "count": 3},
+    {"file": "verity/protocols/experimental/dither/PROTOCOL.md", "count": 18}
   ]
 }

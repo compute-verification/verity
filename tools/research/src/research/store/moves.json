@@ -2246,6 +2246,15 @@
         "benchmarks/pouw/pearl_c_sm90/fixture.py": "verity/protocols/pouw/prover/kernels/pearl_c_sm90/fixture.py",
         "benchmarks/pouw/pearl_c_sm90/sass_gate.py": "verity/protocols/pouw/prover/kernels/pearl_c_sm90/sass_gate.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/pouw/prover/circuit/dither.py": "verity/protocols/experimental/dither/prover/dither.py",
+        "verity/protocols/pouw/prover/circuit/dither.circuit-check.py": "verity/protocols/experimental/dither/prover/dither.circuit-check.py",
+        "verity/protocols/pouw/prover/circuit/dither.circuit-check.json": "verity/protocols/experimental/dither/prover/dither.circuit-check.json",
+        "verity/protocols/pouw/verifier/dither/": "verity/protocols/experimental/dither/",
+        "verity/protocols/pouw/verifier/tests/test_circuit_dither.py": "verity/protocols/experimental/dither/tests/test_circuit_dither.py"
+      }
     }
   ]
 }
