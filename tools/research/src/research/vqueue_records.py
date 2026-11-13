@@ -49,9 +49,10 @@ NAMED = (("guarantees", re.compile(r"^guarantee (\S+): ")), ("assumptions", re.c
          ("domain", re.compile(r"^domain hypothesis (\S+): ")), ("open", re.compile(r"^open premise (\S+): ")))
 #: a review line of a definition the build's guarantees read, which names them
 READ_BY = re.compile(r"^definition .*, read by (.+): (?:new|gone|changed|in a changed module)$")
-#: a failed step's log saying its machine ran out of disk or memory: the machine's fault, not the change's (`machine_fault`)
+#: a failed step's log saying its machine ran out of disk or memory: the machine's fault, not the change's (`machine_fault`);
+#: pytest's `mktemp` drops the errno of a full disk, saying only that its numbered directory could not be made
 FAULT_RE = re.compile(r"No space left on device|\bENOSPC\b|\[Errno 28\]|Cannot allocate memory|\[Errno 12\]|\bMemoryError\b"
-                      r"|\b[Oo]ut of memory\b")
+                      r"|\b[Oo]ut of memory\b|could not create numbered dir with prefix \S+ in \S+ after \d+ tries")
 #: a Lake package's lock, which a lock run may regenerate (`merge.LOCK`)
 LOCK = "lean-audit.json"
 #: the subject a lock commit opens with (`lock_message`), before the PRs whose records it regenerated

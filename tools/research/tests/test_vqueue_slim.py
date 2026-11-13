@@ -23,11 +23,11 @@ from research.merge import REPAIRED
 from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, LOST_AFTER_S, NOT_STARTED, PLAN_WAIT_S,
                               SIGTERM_RC, SLIM_STEPS, Landing, shard_machines, step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
-                             Red, Snapshot, Verdict, _inherited, decide, meets)
+                             Red, Snapshot, Verdict, _inherited, _reading, decide, meets)
 from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, OWN_TRAIN, WHOLE, Read,
                                   _json, _text, abandon, audit_built, audit_failures, audited, audits, based, combine, failures,
                                   judge, key, lean_inputs, lean_reads, left, read_step, read_suite, reads, replaced,
-                                  shard_count, start, step_test, suite_kind, traced_reads, unnamed)
+                                  joined, shard_count, start, step_test, suite_kind, traced_reads, unnamed)
 from test_policy import LIVE, TEST
 from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
@@ -1348,6 +1348,43 @@ def test_a_suite_failed_by_its_machine_is_infra_by_what_its_run_printed_not_by_w
     assert suite_kind({**row, "nondeterministic": row["failed_tests"]}, "") == "flaky"
 
 
+NUMBERED_DIR_LOG = """==================================== ERRORS ====================================
+_________________ ERROR at setup of test_random_chains[synth] __________________
+
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/workspace/tmp/verity-suite-2306m276_5z3t/b'))
+
+    @pytest.fixture(autouse=True)
+    def _host_isolated(monkeypatch, tmp_path_factory):
+>       _without_host(str(tmp_path_factory.mktemp("host")), env)
+E       OSError: could not create numbered dir with prefix host in /workspace/tmp/verity-suite-2306m276_5z3t/b after 10 tries
+
+../../../../tools/verity/check/guard/verity_suite_guard.py:232: OSError
+=========================== short test summary info ============================
+ERROR tests/test_network_certifier_compile_slice_v6.py::test_random_chains[synth]
+"""
+
+
+def test_a_suite_whose_tests_pytest_could_give_no_temporary_directory_is_failed_by_its_machine():
+    """A full disk reaches a suite's tests as pytest's own error, which drops the errno: `mktemp` could not create its numbered
+    directory under the basetemp after its tries.  That is the machine's (or its shared scratch's) fault, never the change's."""
+    row = _row("verity/protocols/certifier/verifier", "verity/protocols/certifier/verifier",
+               "tests/test_network_certifier_compile_slice_v6.py::test_random_chains[synth]", step="lean-suites")
+    assert suite_kind(row, NUMBERED_DIR_LOG) == "infra"
+    assert suite_kind(row, NUMBERED_DIR_LOG.replace("could not create numbered dir", "could not parse its config")) == "own"
+
+
+def test_a_step_failed_by_its_change_beside_suites_its_machine_failed_is_named_by_the_change_s_suites_alone():
+    """lean-suites failed one suite on its own test and another whose tests a full disk errored: the step's failure is its own
+    work, every test of both kept, so the base's word on it reads all of them; but only the suite that failed on its own
+    names the culprit, so a member whose files a test the disk broke names isn't ejected for it."""
+    own = Read(frozenset({"pouw::tests/test_a.py::t"}), frozenset({"benchmarks/pouw/tests/test_a.py"}), frozenset(), "own")
+    disk = Read(frozenset({"vllm::tests/test_b.py::t"}), frozenset({"integrations/vllm/tests/test_b.py"}), frozenset(), "infra")
+    got = joined([disk, own], "rest")
+    assert got.kind == "own" and got.tests == own.tests | disk.tests
+    assert got.named == own.named
+    assert joined([disk, disk._replace(named=frozenset({"x.py"}))], "rest").named == {"integrations/vllm/tests/test_b.py", "x.py"}
+
+
 def test_a_lean_build_s_failure_is_read_as_its_failed_modules_alike_in_every_run_and_its_reads_their_imports():
     """lean-audit failed Security/Proofs's build on one module and Security/Properties for reading its facts: read as lake's
     failed module and the audit's lines, the same in every run whatever its scratch tree and timings, named by the module's
@@ -1426,6 +1463,20 @@ def test_a_lean_audit_failure_is_inherited_only_while_it_prints_no_more_than_the
     assert f.key != f.base_key and f.inputs == {"security/Proofs/A.lean"} and _inherited(f) is (not more)
     assert f.tests - f.base_tests == ({"security/Proofs::record: the statement of G changed"} if more else set())
     assert unnamed(f.key) not in f.tests
+
+
+@pytest.mark.parametrize("kind, inherited", [("infra", False), ("timeout", False), ("own", True)])
+def test_a_base_whose_machine_failed_a_step_says_nothing_of_the_tests_its_candidate_fails_there(kind, inherited):
+    """The run beside `main` failed pytest where its disk filled, erroring every test that wanted a temporary directory; a
+    candidate on `main` fails one of those tests on a sound machine.  The base's word on that test is unknown, not a failure,
+    so the candidate's failure is its own and it doesn't land; a base that failed the test on its own work still answers."""
+    tests = ["prove_path::tests/test_a.py::t", "prove_path::tests/test_b.py::t"]
+    base = {"verdict": {"state": FAIL, "failed": [{"task": "step pytest", "key": "kb", "inputs": [], "tests": tests,
+                                                   "kind": kind}]}}
+    v = Verdict(FAIL, (Failed("step pytest", "kc", frozenset(), "kb0", frozenset(tests[:1]), kind="own"),), ended=True)
+    (f,) = (got := based(v, base)).failed
+    assert f.base_tests == (frozenset(tests) if inherited else None)
+    assert _inherited(f) is inherited and _reading(got) == (PASS if inherited else FAIL)
 
 
 # -- lean-audit taken from the base's check
