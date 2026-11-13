@@ -165,7 +165,10 @@ def test_an_execution_phase_left_out_of_a_runs_files_charges_what_it_would_refus
     verdicts, the answer holds two, as it does with that execution phase there and its tie refused, and the
     calculator's rows are the same either way, at every scope, monitoring period and jitter bound. With every
     registration left out they are the rows of no record at all. A registration nobody signed, with no verdict on
-    its head, holds nothing, whatever counts it states."""
+    its head, holds nothing, whatever counts it states. The answer names no head's time, the reader holding its
+    registrations to no schedule's, so under a schedule that sets no offset the rows whose check reads no head
+    follow it and the row whose check reads one, `design`, is charged its whole schedules; under a schedule that
+    sets one no row follows it."""
     heads = [head(window, 5, 0) for window in (3, 4, 5)]
     registrations = [registration(h) for h in heads]
     records = [r for h in heads for r in four(h)]
@@ -176,7 +179,7 @@ def test_an_execution_phase_left_out_of_a_runs_files_charges_what_it_would_refus
     refused = SV.stop(registrations, four(heads[0]) + four(heads[2]) + [
         r | {CC.VERDICT: r[CC.VERDICT] | {CC.ACCEPTED: False}} if r[CC.RUN] == "run of the response tie" else r
         for r in four(middle)])
-    assert left_out.held == without.held == refused.held == 2
+    assert left_out.held == without.held == refused.held == 2 and left_out.head is None
     assert left_out.why[0] == f"2 of the 2 execution phase(s) read are charged below their schedule{EVERY_OTHER}"
     assert refused.why[0] == f"2 of the 3 execution phase(s) read are charged below their schedule{EVERY_OTHER}"
     assert refused.why[3] == (f"the link {LINK}, execution phase 4, class 0: charged its whole schedule on each of its "
@@ -189,8 +192,13 @@ def test_an_execution_phase_left_out_of_a_runs_files_charges_what_it_would_refus
     for r in held:
         bare = by[r.scope.name, r.period, r.name]
         for dj in LB.JITTERS:
-            share = 1 - Fraction(2) / r.phases if LB.ROWS[r.name].verdicts else 1
+            follows = LB.ROWS[r.name].verdicts and not LB.ROWS[r.name].count
+            share = 1 - Fraction(2) / r.phases if follows else 1
             assert r.terms[dj] == bare.terms[dj]._replace(schedules=share * bare.terms[dj].schedules)
+    assert [name for name, kind in LB.ROWS.items() if kind.verdicts and kind.count] == ["design"]
+    # under a schedule that sets its head's time, registrations held to no schedule's hold no row's execution phase
+    timed = LB.inputs(head_offset=1_280, head_wait=0)
+    assert LB.table(timed, left_out) == LB.table(timed) == LB.table(timed, refused)
     # every registration left out is no record at all, as far as a row is charged
     assert LB.table(inp, SV.stop([], records)) == whole
     # an unsigned registration with no verdict on its head holds nothing: not with counts, and not with none
@@ -306,12 +314,25 @@ def test_the_run_files_are_read_from_the_store_and_no_run_is_the_whole_schedule(
                                                    "don't read: ")
     # the calculator's rows follow the answer: the one execution phase held is one of a node's week, the rest of
     # the week is charged its whole schedule, and what the row would be with every one held is held apart
-    doc = LB.document(LB.inputs(), stop=SV.of_runs(store, ["r1", "r2"]), only=["node"], periods=["week"])
+    answer = SV.of_runs(store, ["r1", "r2"])
+    doc = LB.document(LB.inputs(), stop=answer, only=["node"], periods=["week"])
     by = {r["row"]: r for r in doc["rows"]}
     assert (doc["stop"]["held_phases"], doc["stop"]["below"]) == (1, False)
-    phases, bare = by["design"]["phases"], by["design, no stop block"]["schedules"]["bits"]
-    assert by["design"]["schedules"]["bits"] == pytest.approx(bare * (1 - 1 / phases), rel=1e-12) and phases > 1
-    apart = {w["row"]: w for w in doc["stop"]["with_verdicts"]}
+    phases, bare = by["lengths"]["phases"], by["scan"]["schedules"]["bits"]
+    assert by["lengths"]["schedules"]["bits"] == pytest.approx(bare * (1 - 1 / phases), rel=1e-12) and phases > 1
+    # the answer names no head's time, so the row whose check reads the head is charged its whole schedules: under a
+    # schedule that sets no offset nothing shows it below them, and under one that sets one no row takes the answer
+    # and each is held apart
+    assert answer.head is None and by["design"]["schedules"] == by["design, no stop block"]["schedules"]
+    assert doc["stop"]["whole"] == {"design": LB.NO_OFFSET}
+    assert {w["row"] for w in doc["stop"]["with_verdicts"]} == {"lengths", "all three"}
+    timed = LB.document(LB.inputs(head_offset=1_280, head_wait=0), stop=answer, only=["node"], periods=["week"])
+    why = ("the verdict records were held to no schedule's head's time, and its schedule's head is due 1,280 "
+           "bucket(s) after the close that hands it, and accepted at that tick and no later")
+    assert timed["stop"]["whole"] == dict.fromkeys(doc["stop"]["rows"], why)
+    at = {r["row"]: r for r in timed["rows"]}
+    assert all(at[name]["schedules"] == at["scan"]["schedules"] for name in doc["stop"]["rows"])
+    apart = {w["row"]: w for w in timed["stop"]["with_verdicts"]}
     assert set(apart) == set(doc["stop"]["rows"]) and apart["design"]["schedules"]["bits"] == 0
     whole = LB.document(LB.inputs(), stop=SV.of_runs(store, ["r2"]), only=["node"], periods=["week"])
     at = {r["row"]: r for r in whole["rows"]}
