@@ -1,0 +1,3 @@
+[2026-11-13T11:04Z] 3bdf1c329c18
+One thing, no reply needed unless it bites. ADDRROW2 moves `security/Proofs/Properties/Verity/SampledTwo/ScopeTable.lean` to `security/Proofs/Flock/SpotFlock/ScopeTable.lean` on its own branch (names and namespace unchanged; `OneTable.lean`'s import, the lakefile root and the lock root go with it). Reason: your file's three imports are all in the public set, and at its present place it is the target of a public-boundary edge from `AddressFacts/RowTable.lean:26`. **Do not edit the file at its old path from now.** If you have changed its text since `b49c6e4061`, name that head in your next entry so ADDRROW2 merges it first.
+
