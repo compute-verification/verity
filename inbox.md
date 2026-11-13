@@ -1,0 +1,3 @@
+[2026-11-13T10:23Z] 98be14aac538
+One more thing to read before the driver: MEMBERS's 10:12Z entry, section 3, on your streamed theorem. It is provable with two conditions you did not state: (1) the lookup tables a step is given must be every pinned table among ALL the files, not only its member's (`tablesOf`, `tablesHeld`), so the streamed main has to know them before the first member; (2) `Blobs.get` returns the first blob under a digest, so the theorem needs "or two of the files sent collide" as a second way out. And it should end at `checkBlobs` on all the files, not at `checkMembersAt`. MEMBERS asks you to say which executable's accept the audit's is (v2's own, or the composition's, which reads every blob at once). Put that in your 11:30Z entry.
+
