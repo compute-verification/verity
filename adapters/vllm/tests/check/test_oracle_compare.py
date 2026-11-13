@@ -765,3 +765,20 @@ def test_a_padded_records_bot_by_enablement_entries_are_stated_apart_never_unver
     res0 = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))
     assert res0["result"] is None and res0["grade"] == "partial" and res0["not_compared"]["identity without a byte range (dtype/range)"] == 4
     assert "padding" not in res0 and len(res0["attribution"]["unverified"]) == 2
+
+
+SUPERSCRIPT_TWO = "\u00b2"   # str.isdigit() says yes to it and str.isdecimal() no; int() does not read it
+
+
+def test_a_port_int_does_not_read_is_no_port_view(tmp_path):
+    """A member of a several-output op whose port is a digit `int` does not read is read as a member with no port is (view 0),
+    whether the port is the member's last part or its manifest row's `port`.  A port `int` reads, in any script, is still that view."""
+    d, vals = make_match(str(tmp_path))
+    oracle, op = OC.MatchOracle(d), "model.layers.0.post_attention_layernorm"
+    r0 = slice(ROWS[U1] * H * 2, None)              # r0's rows follow r1's in the engine's row order; a bf16 row is H * 2 bytes
+    view0, view1 = (vals[(op, "0")][r0], None, ROWS[U0]), (vals[(op, "1")][r0], None, ROWS[U0])
+    assert oracle.member_bytes(0, op, "x", "r0") == view0 and oracle.member_bytes(0, op, "1", "r0") == view1
+    assert oracle.member_bytes(0, op, SUPERSCRIPT_TWO, "r0") == view0
+    assert oracle.member_bytes(0, op, "norm." + SUPERSCRIPT_TWO, "r0") == view0
+    assert oracle.member_bytes(0, op, "x", "r0", producer={"port": SUPERSCRIPT_TWO}) == view0
+    assert oracle.member_bytes(0, op, "\u0661", "r0") == view1        # ARABIC-INDIC DIGIT ONE: a decimal, which int() reads as 1
