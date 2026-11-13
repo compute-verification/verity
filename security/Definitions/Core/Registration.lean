@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Core.Digest
 public import Definitions.Core.Site
 
 /-!
