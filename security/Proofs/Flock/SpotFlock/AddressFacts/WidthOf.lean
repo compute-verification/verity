@@ -97,8 +97,8 @@ theorem target_of_wiring (W : Wiring h) (hB : BitsInPorts h) (hr : r.Ok h) {i : 
     cases hl : heldLink h (h.names.getD (templateOf h.ms r.u) "") rp.row with
     | some l =>
       have hfix : wireMap h i = i := wireMap_of_no_target h (wireTarget_of_linked hs hl)
-      exact ⟨rp, templateOf h.ms r.u, rp, hb, by rw [hfix]; exact bitAtGate_of_bitOf hb, rfl, hB.1 _ hsm,
-        rfl⟩
+      have hin := hB.1 (i, templateOf h.ms r.u, rp) hsm
+      exact ⟨rp, templateOf h.ms r.u, rp, hb, by rw [hfix]; exact bitAtGate_of_bitOf hb, rfl, hin, rfl⟩
     | none =>
       obtain ⟨y, hxy⟩ := wireTarget_of_sourcesNamed h W.named W.move hsm hl
       obtain ⟨tw, wport, u', hwu, -, hym, -⟩ := wireTarget_at hs hxy
@@ -109,12 +109,14 @@ theorem target_of_wiring (W : Wiring h) (hB : BitsInPorts h) (hr : r.Ok h) {i : 
       have hbit : bitAtGate h (wireMap h i) = some (tw, Spot.Bits.RowPos.mk w.wport u' rp.bit) := by
         rw [wireMap_of_target h hxy]
         simp only [bitAtGate, source_none_of_written htop hym, written_find W.once hym, Option.map_some]
-      exact ⟨rp, tw, Spot.Bits.RowPos.mk w.wport u' rp.bit, hb, hbit, rfl, hB.2 _ hym,
+      have hin := hB.2 (y, tw, Spot.Bits.RowPos.mk w.wport u' rp.bit) hym
+      exact ⟨rp, tw, Spot.Bits.RowPos.mk w.wport u' rp.bit, hb, hbit, rfl, hin,
         (wiresAlike_spec W.alike hR.lt hwire htw').1.symm⟩
   · -- a written bit
     have hwm : (i, templateOf h.ms r.u, rp) ∈ writtenBits h.ms := List.mem_of_find?_eq_some hw
+    have hin := hB.2 (i, templateOf h.ms r.u, rp) hwm
     exact ⟨rp, templateOf h.ms r.u, rp, hb, by rw [wireMap_of_not_source h hs]; exact bitAtGate_of_bitOf hb, rfl,
-      hB.2 _ hwm, rfl⟩
+      hin, rfl⟩
 
 /-- **The width at every gate a checked unit needs**, at the address map. -/
 theorem widthAt_of_wiring (W : Wiring h) (hB : BitsInPorts h) (hr : r.Ok h) {i : ℕ}
