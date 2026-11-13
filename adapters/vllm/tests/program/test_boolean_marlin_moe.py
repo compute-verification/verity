@@ -22,7 +22,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.program import Program
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.types import Array
 from verity.definitions import boolean as SW
 from verity.definitions.numerics import marlin_moe_rows as MR
