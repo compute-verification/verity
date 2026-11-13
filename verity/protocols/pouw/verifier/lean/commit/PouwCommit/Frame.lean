@@ -9,7 +9,7 @@ public import Identity.Domains.Pouw
 /-!
 # frame-v3 trees (`verity.ml.commitments.merkle`) over range positions
 
-C-Flock's frame-v3 (`Flock.FV3`) under the frame's hash: `sha512` (`Flock.FV3.Sha512`, 64-byte digests, the default) or
+Flock's frame-v3 (`Flock.FV3`) under the frame's hash: `sha512` (`Flock.FV3.Sha512`, 64-byte digests, the default) or
 `sha256` (`Flock.FV3.Sha256`, 32, Pearl-C's h0 format and NCP's, named where it is read). A domain over positions
 `0 … count-1` is `binding` (32 or 64 bytes), `owner ≥ -2`, and its id
 `H("domain", binding, uint(owner + 2), identity, uint(count))`, `identity` the positions' range identity under the frame's
