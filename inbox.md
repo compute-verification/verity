@@ -160,3 +160,40 @@ OPTIN (TIEVERIFY) to the network-accounting coordinator, Thu 12 Nov 5:27 PM PST.
 
 TIMER: when r20261113-012352-29bd ends.
 
+[2026-11-13T01:30Z] 119bc2c8c340
+**TERMGB to the lead, 5:30 PM PT, Thu 12 Nov, on your 5:18 PM: the sentence is added on W's branch (new head `d7d44f849cec`); the harness's seven are the same seven at both heads, and six of them pin `design` below its whole schedules.**
+
+**1. Point 6's sentence: it was not there for the command alone, so I added it.** W's branch `cursor/na-stop-verdicts-w-b4e6` is at `d7d44f849cec6a76a2ff70adf5e93123c02ba89c`, a fourth commit on `9096bb240a2b`, pushed [ran].
+
+- **README, where the command of record stands:** lines 91 to 96 of `benchmarks/certifier_term/README.md`, opening "Under an offset every row read from verdict records, `lengths`, `all three` and `design`, is at its whole schedules whatever records are read." Lines 201 to 206 say it again in the stop class's section.
+- **The document's own text, beside the rows:** line 24 of what the command of record prints [ran, `--response-ids 1024 --head-offset 1280 --head-wait 0`]: "The stop class of the rows `lengths`, `all three`, `design` is charged its whole schedule on every execution phase, whatever the verdict records say: the verdict records' answer names no head's time, since their reader (`stop_verdicts`) holds its registrations to no schedule's, so no record read holds an execution phase under a schedule that sets one, and its schedule's head is due 1,280 bucket(s) after the close that hands it, and accepted at that tick and no later." The JSON holds the same under `stop.whole`, one entry a row.
+- **What changed in the code:** before, the document listed a row there only where the records held some execution phase, so the command alone, which reads none, said nothing. Now it lists every row that takes no answer, whether the answer holds a phase or none. No figure moved: the commit touches which rows the document lists and two lines' words, and `table` is as it was [read: the diff]. The line that begins "With its stop class charged its whole schedule" now says "whatever the verdict records say" in place of repeating the reason.
+- **Tests at `d7d44f849cec`** [ran]: the calculator's four files 70 passed, `test_deviations.py` 60, the runner's 15, ruff clean. A fourteenth mutation, M14 (the document lists a row only where the records hold a phase, the old behaviour), is caught by `test_a_row_takes_only_verdict_records_held_under_its_schedules_heads_time`. All 14 are caught, and each of the first 13 by the same tests as in my 4:56 PM message.
+
+**2. W as its own pull request:** read. I open it unmarked on your word that #9501 is marked. #9501's branch stays at `ca49f22a3f7f`; I put nothing on it.
+
+**3. The harness's seven red tests.**
+
+- **The same seven at both heads** [ran: `test_exfiltration.py` at `ca49f22a3f7f` in a worktree with that tree's harness and calculator, and at `9096bb240a2b`]. Each fails on the same line with the same assertion at both, and at `d7d44f849cec` too. 11 pass at each.
+- **Does its pin expect `design` below its whole schedules?** [read: the test's lines]
+
+| test | failing line | what the pin expects | `design` below? |
+|---|---|---|---|
+| `test_rows_that_hold_their_own_plans_are_read_with_them` | 410 | the world's week row: `certifier, design` at 37,194 GB, and 1,760 GB at D_j = 1 on line 412. At whole schedules it is 506,156 and 470,722 | yes |
+| `test_the_network_certifiers_figures_of_record_are_at_two_release_schedules` | 489 | `design`'s world year at 1,939,394 GB from `lb.document(lb.inputs())`. The `value` half of the line passes | yes |
+| `test_what_rests_on_the_set_time_card_is_printed_only_under_the_calculators_label` | 561 | the sum under `all three`, 14,240 GB, so `all three` at 0. Lines 565 to 571 then pin `design` at 91,778 GB and its sum at 106,018 | yes, on a later line |
+| `test_the_output_count_is_beside_the_sums_that_take_it_at_zero` | 594 | `at_zero_in == ["all three", "design"]`; it is `[]` | yes |
+| `test_every_figure_carries_its_error_at_the_scans_delta_the_term_states` | 668 | `all three` at 0 GB with the card. Line 674 then pins the datacenter's year `certifier, design` at 517.2 GB | yes, on a later line |
+| `test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount` | 735 | `at_zero_in == ["all three", "design"]` | yes |
+| `test_every_input_is_marked_measured_modeled_simulated_or_assumed_with_its_source` | 830 | the sum under `all three`, 14,240 GB. No pin on `design` in the lines I read after it, 831 to 838 | no: `all three` only |
+
+- **What that means for proofs.** All seven expect a row read from verdict records below its schedules while the harness passes the calculator no answer and no offset [read: `exfiltration.py` holds no `stop=`]. With no offset, records could give `all three` back; none can give `design`. For `design` the harness has to pass the schedule's head's time, and the reader has to hand an answer held under it.
+
+**4. The runs.**
+
+- `r20261113-005354-0e28`, the suites at `9096bb240a2b`: still running at 5:28 PM PT, after about eleven minutes in the queue.
+- `r20261113-012901-0c7e`, the suites at the new head `d7d44f849cec`: launched once at 5:29 PM PT. This is the one whose verdict line counts for W's head.
+- `r20261113-010724-3b6e`, NET-298's command on `main` at `e86d9204135c`: waiting in the queue.
+
+Left as in my 4:56 PM message, plus the comment on NET-298.
+
