@@ -8,7 +8,7 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
   served_passes.py volunteer --passes DIR --out volunteer.json [--jobs J] [--device DEBIT_CUBIN [--device-check N]]
   served_passes.py volunteer-needed [--over-cap reject|uncredited] [--verdict run|pass]
   served_passes.py retain --passes DIR [--volunteer volunteer.json] [--drop ROUND ...]
-                          [--window-record W [--previous-record FILE]]
+                          [--window-record W [--previous-record FILE] [--day-declaration FILE]]
   served_passes.py verify --passes DIR [--manifest M ...] [--tie W] --out verify.json [--answer answer.json]
                           [--draws 459] [--delta 1/100] [--jobs J] [--fast] [--coin-record R]
   served_passes.py lean --passes DIR --verify verify.json --exe pouw-pearlplus --out pearlplus-lean.json [--check C]
@@ -76,7 +76,10 @@ declared.  It refuses once the coin is flipped.  With ``--window-record W`` (a t
 over the rounds it retains, each under its round (`pearl_c.window.write`), for ``verify --tie W`` and the one-stage
 audit tied to it.  With ``--previous-record FILE`` W is chained after that registration record (its ``previous`` the
 record's digest): the record a serve's registration log holds before W, as the deployment's first, which registers the
-weights (``prove_path.py weights-registration --deployment-record``); without it W is chained after nothing.
+weights (``prove_path.py weights-registration --deployment-record``); without it W is chained after nothing.  With
+``--day-declaration FILE`` (the serve dir's ``declaration.json``, which a serve that declared a day's program wrote) W's
+header names that day and its declaration's digest as the one-stage windows' registrations do, so the audit tied to W
+holds it to the day it audits; without it W names no day.
 
 ``verify`` is Pearl+'s PoUW verdict on the run (`verify_run.verify_passes`): the passes ``--manifest`` names (a capture's
 ``prefill/`` and ``decode/`` beside its ``coins.json``), else those with calls that ``DIR/served.json`` names, each at its
@@ -542,13 +545,16 @@ def retain(args: argparse.Namespace) -> int:
 
         try:
             before = REG.digest(json.loads(Path(args.previous_record).read_text())) if args.previous_record else None
-            w = PWR.write(args.window_record, served["passes"], rounds, before)
-        except (KeyError, OSError, ValueError) as e:
+            day = json.loads(Path(args.day_declaration).read_text()) if args.day_declaration else None
+            w = PWR.write(args.window_record, served["passes"], rounds, before,
+                          None if day is None else {k: day[k] for k in PWR.NAMING})
+        except (KeyError, OSError, TypeError, ValueError) as e:
             print(f"retain FAIL: W: {type(e).__name__}: {e}", flush=True)
             return 1
         print(f"retain W: {args.window_record}, rounds {rounds[0]}..{rounds[-1]} ({len(rounds)}), {len(w['registered'])} "
               f"values, digest {REG.digest(w)[:16]}…, chained after "
-              f"{'nothing' if before is None else before[:16] + '…'}", flush=True)
+              f"{'nothing' if before is None else before[:16] + '…'}"
+              + ("" if day is None else f", naming day {day['day']}'s declaration {day['declaration'][:16]}…"), flush=True)
     return 0
 
 
@@ -881,6 +887,8 @@ def main(argv: list[str] | None = None) -> int:
                    "record W over the rounds retained, after the retention (pearl_c.window), for verify --tie W")
     r.add_argument("--previous-record", metavar="FILE", help="with --window-record: the registration record W is chained "
                    "after, its `previous` that record's digest (default: W is chained after nothing)")
+    r.add_argument("--day-declaration", metavar="FILE", help="with --window-record: the serve's declaration.json, whose "
+                   "day and declaration digest W's header names (default: W names no day)")
     v = sub.add_parser("verify")
     v.add_argument("--passes", required=True)
     v.add_argument("--manifest", action="append", type=Path,
@@ -924,6 +932,8 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     if args.cmd == "retain" and args.previous_record and not args.window_record:
         p.error("retain --previous-record names the record W is chained after: it is read only beside --window-record")
+    if args.cmd == "retain" and args.day_declaration and not args.window_record:
+        p.error("retain --day-declaration names the day W's header names: it is read only beside --window-record")
     return {"serve": serve, "same": same, "volunteer": volunteer, "volunteer-needed": volunteer_needed, "retain": retain,
             "verify": verify, "lean": lean, "case": case, "arm": arm, "uncredited": uncredited}[args.cmd](args)
 

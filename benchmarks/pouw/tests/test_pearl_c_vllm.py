@@ -1953,7 +1953,9 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
     to); once the coin is flipped ``retain`` refuses to write W again.  With ``--previous-record FILE`` the W it writes is
     the same record chained after that one (its ``previous`` the record's digest, as a serve chains W after its first
     registration record, the weights'), which the tie holds to the same passes under W's own digest; the flag without
-    ``--window-record`` is a usage error, and a record that can't be read leaves no W."""
+    ``--window-record`` is a usage error, and a record that can't be read leaves no W.  With ``--day-declaration FILE``
+    (a serve's declaration.json) W's header names the file's day and declaration digest and is otherwise that record, tied
+    to the same passes; the flag without ``--window-record`` is a usage error, and a file that states no day leaves no W."""
     SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
     warm, a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("w", (0, 1)), ("a", (2, 3)), ("b", (4, 5))))
     d = _serve_dir(tmp_path, [warm, a, b])
@@ -1984,6 +1986,18 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
         SP.main(["retain", "--passes", str(d), "--previous-record", str(first)])
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(tmp_path / "none.json"),
                     "--previous-record", str(tmp_path / "absent.json")]) == 1 and not (tmp_path / "none.json").exists()
+    declared, named = tmp_path / "declaration.json", tmp_path / "w-named.json"
+    declared.write_text(json.dumps({"day": 3, "declaration": "5d" * 64, "program": "ab" * 64, "blocks": [], "head": "cd" * 64}))
+    assert SP.main(["retain", "--passes", str(d), "--window-record", str(named), "--previous-record", str(first),
+                    "--day-declaration", str(declared)]) == 0
+    wn = json.loads(named.read_text())
+    assert wn == {**wc, "window": {**wc["window"], "day": 3, "declaration": "5d" * 64}}
+    assert VR.tie(wn, [VR.load(x, published(x)) for x in (a, b)], [1, 2], (0,)) == {"record": REG.digest(wn), "tables": 10}
+    with pytest.raises(SystemExit):
+        SP.main(["retain", "--passes", str(d), "--day-declaration", str(declared)])
+    declared.write_text(json.dumps({"day": 3}))
+    assert SP.main(["retain", "--passes", str(d), "--window-record", str(tmp_path / "none.json"),
+                    "--day-declaration", str(declared)]) == 1 and not (tmp_path / "none.json").exists()
     rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile))
     assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 10}, doc["line"]
     assert (answer["public"]["rounds"], answer["public"]["dropped"], doc["timed"]["passes"]) == ([1, 2], [0], 2)
