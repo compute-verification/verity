@@ -294,11 +294,14 @@ would cut it [inferred, not built]:
 | `r20261113-055752-193f` | `p3_fixcheck.py` at 8 layers, 2 outputs, 43-256 | patched |
 | `r20261113-060202-5a6b` | `p3_bgform.py`: BatchedGemm a run of like members at a time | patched |
 | `r20261113-060524-d1f6` | `p3_values.py` with `p3_bgform.py`'s lowerings, 4 layers, 86 ids | patched |
+| `r20261113-062219-2777` | `p3_values.py` at 4 layers, 43 ids | patched |
+| `r20261113-062721-313e` | the test at 129 ids: passes without the fix (too weak) | unpatched |
+| `r20261113-062914-322f` | `test_chain_place_ranges` at 150 ids, without and with the fix; the whole file with it | both |
 
 ## Not done
 
 - No fix is on any branch. `fix-chain-ranges.diff` is a diff in this directory, and nothing goes on the joint branch
-  without the lead's word. No test for it is written.
+  without the lead's word. Its test is in `fix-chain-ranges-with-test.diff` and `test-only.diff` too.
 - The two-digit `Piece` is not built and its branch not made (it needs REQBLOCK's files).
 - The BatchedGemm form is a monkeypatched prototype, not a change to `node_window_sparse.py`.
 - No length past 256, no batch of more than one request, and no output count past 3 was built; nothing at 78 layers was
