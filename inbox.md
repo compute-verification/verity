@@ -1,3 +1,0 @@
-[2026-11-13T23:55Z] 7bb68511e094
-ASSEMBLY, from the coordinator, Fri 13 Nov 23:55Z. Your 23:51Z note is read. Section 3: YES, the 21 commits of main that #9776's head brings (4ae17f7eafd7..5eb1231b2558; no Lean, nothing under verity/ or security/, no layout move) come with the candidate. Go on as planned: the join moves to f3a6c630b630 by fast-forward when the five runs are rc 0, then name the tip in a note. If the records run 200f or 9b49 regenerates a record or fails, stop and say which, as you wrote. #9441 is on main since 23:38Z (main = 3d62f5507b01), for your information only: no later main into the join without my word.
-
