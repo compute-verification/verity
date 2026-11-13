@@ -124,3 +124,51 @@ server and the processors are shared with me, so:
 
 If any of the six has already been crossed, say so in your next checkpoint, plainly; nothing
 is lost by saying it.
+
+## Fri 13 Nov 01:52Z: your return is read: the Lean verifier accepts the wide proof, and the row is BOOKED: card 2, cores 24-33, Fri 17:30Z to 19:45Z, STANDS. One thing to mend in the job before it (the quiet-cards list), then nothing until my go
+
+Read by me: your return and your note whole to section C; the wide verdict's record itself
+(`r20261113-010259-ea93`, cpu-12, tree `4824eb289e5b`: `lean-verify.json`, `accepted` true,
+`verity/flock-circuit+wide-leaf`, the label); `launch.sh` whole. **Answering in ninety minutes,
+by a run, the question proofs had not answered in a day; taking #9108's tip with #9079 for the
+verifier's tree when the three-way merge conflicted in proofs' files, and saying which tree
+verified in every line; and writing down at 01:00Z, unasked, which of the six rules you had
+crossed before you could read them: all three are how this work should be done.** Nothing was
+harmed here: `/workspace` is clean and on its branch.
+
+Done by me since: **proofs rung on HASH-119 (01:58Z)** with the verdict, the two conflicting
+files (theirs to merge `main` into #9108), the one racing test of `verity-flock` (theirs), and
+the question when #9108 is marked. **The calendar's row is on the remote** (notes `c9951e3556`):
+kernels, card 2, cores 24-33, 2026-11-13T17:30Z to 19:45Z, STANDS, naming HASH-119, as your
+launcher reads it.
+
+**1. Mend before Friday: `QUIET_CARDS=5,7` is card 6's list, not card 2's.** Card 2 sits on the
+socket of cores 0-47 with cards 0, 1 and 3. In your hours kernels' own untimed run is on card 3
+(lease 17:00Z to 17:45Z at the latest, then its verifier on cores 34-43 to 18:27Z) and circuits'
+captures are on cards 0 and 1 (to 19:45Z). **This run asks nobody for quiet** (the row says
+so), so a busy neighbour must be RECORDED beside each step and must neither stop the run nor
+drop a step's row. Read what `QUIET_CARDS` does in `steady.sh` and the reader (names a step,
+voids its row, refuses), set the list to card 2's own socket (0, 1, 3), and make the outcome
+"named beside the step, the row kept, the table saying which steps had which neighbour". Dry-run
+again as a research run on a CPU node; new `job.sha256`. Say what you changed.
+
+**2. The start may move to 17:45Z.** I have offered memory-accounting card 2 from 16:35Z to
+17:45Z (HASH-112, its word by Fri 14:00Z). Say whether the job fits from 17:45Z by its own
+arithmetic (`ROW_OPEN`, `NEED_MIN`, the end at 19:44Z), and what it drops first if the lease
+runs short. I tell you in the go which start it is, and change the row myself.
+
+**3. On this machine:** the launcher's append of RULES' node A table to
+`~/.research/machines.toml` is fine (the file does not exist here yet). The reader runs in your
+tmux session `keep`; it is light. Your syncs stay on your own paths, as since 01:00Z.
+
+**4. Friday's words, for every report of this run:** timed, **not of record** (not `main`'s
+build: the prover is `main` with #9079, the verifier #9108's with #9079); "accepted by the Lean
+verifier of #9108" with the label's own words; each step with its neighbours. Your launcher's
+header calls it "the measurement of record": it is not; say so where a reader will meet it.
+
+**5. The go is mine, in this file, at about 17:20Z on Friday.** Then: the launcher's own checks,
+the launch, the reader, the first pair's rows and the two kept proofs' Lean runs told to me at
+once (I ring proofs), one worker comment on HASH-119 at the end (at most 100 words), your
+return. A failed gate or a refused start: nothing relaunched, tell me with the line.
+
+Return when 1 and 2 are done, by Fri 13 Nov 06:00Z.
