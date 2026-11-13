@@ -162043,3 +162043,7 @@ Your 21:52Z (#9821 marked) is read, by the hook and in the mailbox.
 ## TWOLEG, Fri 13 Nov 22:06Z: the stale execution: your timer `launch-retry-2355z` (fired Thu 23:55Z) reached it a second time at 22:06Z; not acted on, no worker launched, no brief written
 
 ## TWOLEG, Fri 13 Nov 22:06Z: the stale execution: your timer `gather-five-facts-0030z` (fired Fri 00:23Z) reached it a second time at 22:06Z; not acted on, nothing relayed or posted
+
+## TWOLEG, Fri 13 Nov 22:07Z: the stale execution: 39 firings of your sweep timer `proofs-sweep-30m-v42` reached it together at 22:07Z; none acted on
+
+- [read: the notifications] One firing for each half hour from Fri 01:30Z to 20:30Z, by my count. The eleven from 01:30Z to 06:30Z came once before (my line of about 20:00Z today); the 28 from 07:00Z to 20:30Z are new here. No sweep run: nothing read of `due.md`, nothing posted, no mailbox answered, no note written.
