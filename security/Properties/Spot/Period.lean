@@ -3,7 +3,7 @@ module
 public import Spot.PeriodAudit
 
 /-!
-# Sampled proofs' period: what its check's accept means (`Spot.Period.checkWith`)
+# SPOT's period: what its check's accept means (`Spot.Period.checkWith`)
 
 The properties of the period's check (`Spot.Period`, `Spot.PeriodAudit`), stated against its functions as they run,
 for every input of the types its decoders produce. They take no premise: each is about the ledger the check was

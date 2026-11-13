@@ -4,7 +4,7 @@ public import Properties.Challenger
 public import Properties.Spot.Period
 
 /-!
-# Sampled proofs' period: the ledger its check reads is the auditor's device's own (`Spot.Period.read`)
+# SPOT's period: the ledger its check reads is the auditor's device's own (`Spot.Period.read`)
 
 `Properties.Spot.Period`'s statements are about the ledger the check was presented. These two say whose it is,
 against the device model of `Properties.Challenger` (`History`: the device's runs and its ledger's lines under a
