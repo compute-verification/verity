@@ -165,3 +165,36 @@ Entries: last `9be616f60c` (02:12Z).
   A23's day: firm word due Fri 12:00Z.
 - After the statement edits: one try of the two Properties files and PR 4's two proof files; then PR 3's records run
   (after `d333`), then PR 4's.
+
+## State at Fri 03:46Z (read this first on a new machine)
+
+Governing words: coordinator 03:00Z (`1616d4b1a91a`: the refusal goes into #9595; PR 3 stated once against it) and
+03:35Z (`8401237762b7`: leave `auditedOpen` word for word as `main`, `auditedIn` its own copy of the 24 lines, tied by
+a lemma proved by `rfl`; (i) to (iv) stand; wording for soundness under `To post` once the refusal has a run).
+
+Heads:
+- #9595 `cursor/proofs-prf600-period-audit-9c4e` at `41a71836c3`: the refusal (`registeredIn`, parameter
+  `registration`), `auditedOpen` as `main`, `auditedIn` + `auditedOpen_eq_auditedIn := rfl`. Nothing under
+  `security/` differs from PR 1's head. Body NOT updated (`/tmp/periodread/pr2-body.md` is gone on a new machine:
+  rewrite from `gh pr view 9595 --json body`).
+- #9581 `cursor/proofs-prf600-period-statements-e2a7` at `a441d99476`: `CommittedOnce` restated, `EveryRootAudited`
+  gone, `OthersElsewhere` added (my addition, the coordinator has not ruled on it). Not compiled.
+- PR 4 `cursor/proofs-prf600-period-proofs-4c9a` at `4ee128adc1`: proofs redone, not compiled. Lock lines are still
+  PR 3's (`unstated … it takes no premise`): once a try passes, write "proved with no premise in security_proofs by
+  Properties.Spot.Period.<name>" on each (LedgerOfDevice: "proved … from Numbered").
+- #9596 marked at `7764f46a62`. #9537 marked at `44b84839217d`, still open. #9546 at `ee245a981c`.
+
+Runs:
+- `r20261113-031857-3061` done rc 0 at `4f6a8f3d81` (the refusal, with the split): build ok, 28 passed.
+- `r20261113-034210-2101` at `41a71836c3` on vy-nebius-2 (build Spot + difftest exe, both period difftests): waiting.
+- `r20261113-034343-e626` on vy-nebius-cpu-11: try of PR 4's `security/Proofs/Properties/Spot/Period.lean` at
+  `4ee128adc1` (fetch with `--on vy-nebius-cpu-11`). Then try `PeriodLedger.lean` the same way.
+- Cancelled: `d333` (53 records moved with the split: 4 in `security`, 49 in `security/Properties`), `efae`, `cd66`.
+
+Next: read 2101 and e626; fix; #9595's body and ready line (quick tier first: `run-pr2-quick.sh` = suites.py
+--quick --fresh over the changed suites); PR 3's body; PR 4 lock lines, records, open PR 4; R8 sentence PR (#9375
+merged 03:01Z); (l) sizing; A23 word by Fri 12:00Z.
+
+Scratch facts: on core-only stand-ins `registeredIn_ok` and the `rfl` tie both elaborate (`Reg2.lean`, `Tie.lean`
+under `/tmp/periodread/scratch`, gone on a new machine); `match` on `(xs.find? …).map (·.circuit)` with
+`some (.str d)` does not elaborate, `.bind fun mp => match mp.circuit with …` does.
