@@ -27,7 +27,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity import settings
+from verity_config import verity_settings as settings
 from verity.circuits import evaluation as E
 from verity.circuits.boolean.trace import Traced, trace
 from verity.circuits.defs import bind
