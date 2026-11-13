@@ -2,6 +2,8 @@
 declaration puts it at, the weights once, and no attention stream, since a request manifest names none (`query.required`)."""
 from __future__ import annotations
 
+import pytest
+
 from verity_vllm.query.compose import compose_global
 from verity_vllm.query.manifest import format as fmt
 
@@ -31,3 +33,17 @@ def test_each_requests_step_rows_land_at_their_engine_step_and_no_attention_stre
     assert attn[("r0", 0)] == [0, 168 * 64] and attn[("r0", 4)] == [0, 64] and attn[("r1", 4)] == [0, 40 * 64] and attn[("r1", 13)] == [0, 64]
     assert [e["rows"] for e in m["engine_steps"]][:5] == [168, 1, 1, 1, 41]
     assert m["manifest_digest"] == fmt.manifest_digest(m["identities"])
+
+
+def test_the_parts_unmodelled_families_are_kept_and_a_part_that_names_none_adds_none():
+    reqs = [{"request_id": "r0", "workload_request_id": "a", "index": 0, "prompt_len": 8, "max_tokens": 2, "arrive_step": 0},
+            {"request_id": "r1", "workload_request_id": "b", "index": 1, "prompt_len": 8, "max_tokens": 2, "arrive_step": 1}]
+
+    def unmodelled(**parts: dict) -> dict:
+        return compose_global({"fixture": "t"}, {rid: {**_part(rid, 8, 1), **more} for rid, more in parts.items()}, reqs, workload_digest=None)["unmodelled"]
+    assert unmodelled(r0={"unmodelled": {"Conv_v1": 2}}, r1={"unmodelled": {"Abs_v1": 1, "Conv_v1": 3}}) == {"Conv_v1": 3, "Abs_v1": 1}
+    nones: tuple[dict, ...] = ({}, {"unmodelled": None}, {"unmodelled": {}}, {"unmodelled": 0}, {"unmodelled": ""}, {"unmodelled": []})
+    for none in nones:
+        assert unmodelled(r0={"unmodelled": {"Conv_v1": 2}}, r1=none) == {"Conv_v1": 2}, none
+    with pytest.raises(AttributeError, match="'list' object has no attribute 'items'"):     # what is there and not empty is read as the dict it has to be
+        unmodelled(r0={"unmodelled": [["Conv_v1", 2]]}, r1={})

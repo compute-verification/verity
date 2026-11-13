@@ -16,20 +16,22 @@ from verity_vllm.check.replay.compare import _tp_member_alias
 
 
 def test_moesum_sum_is_the_ranks_partial():
-    y = np.arange(4, dtype=np.uint16)
+    y: np.ndarray = np.arange(4, dtype=np.uint16)
     assert _tp_member_alias({"sum": y}, "part_rank0") is y
     assert _tp_member_alias({"sum": y}, "part_rank1") is y
 
 
 def test_gemm_zero_and_out_still_win_and_shard_members_too():
-    a, b = np.zeros(2, dtype=np.uint16), np.ones(2, dtype=np.uint16)
+    a: np.ndarray = np.zeros(2, dtype=np.uint16)
+    b: np.ndarray = np.ones(2, dtype=np.uint16)
     assert _tp_member_alias({"0": a}, "part_rank0") is a
     assert _tp_member_alias({"out": b}, "shard_rank1") is b
     assert _tp_member_alias({"0": a, "sum": b}, "part_rank0") is a  # the named output wins over the one-output rule
 
 
 def test_never_a_guess_between_two_outputs_and_never_a_non_tp_member():
-    a, b = np.zeros(2, dtype=np.uint16), np.ones(2, dtype=np.uint16)
+    a: np.ndarray = np.zeros(2, dtype=np.uint16)
+    b: np.ndarray = np.ones(2, dtype=np.uint16)
     assert _tp_member_alias({"up": a, "down": b}, "part_rank0") is None
     assert _tp_member_alias({"sum": a}, "out") is None
     assert _tp_member_alias({"sum": a}, "down") is None

@@ -10,19 +10,38 @@ from __future__ import annotations
 import gzip
 import json
 import random
+from typing import Any
 
 import pytest
-from verity_vllm.query.units import PartitionError, ValueRef, VerificationUnit, boundary, partition_by
+
+from verity_vllm.program import compact as C
 from verity_vllm.query import module_body as mb
 from verity_vllm.query import program_view as pv
-from verity_vllm.query.module_body import boundary_without_literals, literal_calls, without_literals
-from verity_vllm.query.program_view import CallView, ProgramView, from_instances, param_reads, reads_any_of
+from verity_vllm.query.module_body import (
+    boundary_without_literals,
+    literal_calls,
+    without_literals,
+)
+from verity_vllm.query.program_view import (
+    CallView,
+    ProgramView,
+    from_instances,
+    param_reads,
+    reads_any_of,
+)
+from verity_vllm.query.units import (
+    PartitionError,
+    ValueRef,
+    VerificationUnit,
+    boundary,
+    partition_by,
+)
 
 EPS = '{"f64":"0x1p-17"}'
 PARAMS = [["prompt", "Array<4,Value<32>>"],
           ["weights", "{m.a.weight: Array<4,Array<8,Value<16>>>, m.b.weight: Array<8,Array<4,Value<16>>>, m.n.weight: Array<4,Value<16>>}"]]
 # weights leaves: m.a.weight [0, 32), m.b.weight [32, 64), m.n.weight [64, 68)
-ROWS = [
+ROWS: list[dict[str, Any]] = [
     {"i": 0, "spec": "Embedding_v1{V=8,H=4}", "form": "call", "name": "m.embed/embedding[0]", "args": [[["p", 0, 0, 1]], [["p", 1, 0, 32]]]},
     {"i": 1, "spec": "Gemm_v1{K=4,N=8}", "form": "call", "name": "m.a/linear[0]", "args": [[["n", 0, 0, 4]], [["p", 1, 0, 32]]]},
     # a fused norm: TWO ports ("0" = normed, "1" = residual); reads Call 1 and the norm weight (a range inside the record)
@@ -193,10 +212,10 @@ def test_the_columnar_boundary_without_literals_is_boundarys(monkeypatch, step, 
     again in a later one keeps its first read), on Programs with outputs among the crossing Values, beside them and made by a literal."""
     monkeypatch.setattr(mb, "_READS_PER_STEP", step)
     P0 = from_instances(doc(attention_like_rows(60, seed)))
-    lit = literal_calls(P0)
+    lit, none = literal_calls(P0), frozenset[int]()
     outs = (ValueRef(len(P0.calls) - 1, "out"), ValueRef(2, "1"), ValueRef(-1, "out"), *(ValueRef(k, "out") for k in sorted(lit)[:1]))
     for P in (P0, ProgramView(P0.calls, P0.params, outs, P0.digest, P0.source)):
-        for literals in (lit, frozenset()):
+        for literals in (lit, none):
             a, b = boundary_without_literals(P, QUERIES[q], literals), without_literals(boundary(P, QUERIES[q]), literals)
             assert a.read_by._d is None
             assert list(a.produced_in.items()) == list(b.produced_in.items()) and a.values == b.values
@@ -241,7 +260,6 @@ def test_a_wide_record_resolves_by_bisection_to_the_linear_scans_ports():
 def test_stored_progressions_resolve_to_the_columns_of_their_runs():
     """v2 rows (node and parameter progressions, `compact.file_items_from_runs`) build the same columns as their per-leaf v1 runs:
     every Value in the same order, for strided weight reads of a wide record, gathers over producer Calls and overlapping runs."""
-    from verity_vllm.program import compact as C
     rng = random.Random(9)
     edges = sorted(rng.sample(range(1, 40_000), 199))
     wide = tuple(pv.Port(f"f{k}", lo, hi, hi - lo, 16) for k, (lo, hi) in enumerate(zip([0] + edges, edges + [40_000])))
@@ -279,7 +297,6 @@ def test_weight_read_progressions_resolve_to_the_columns_and_reads_of_their_runs
     builds the columns its per-leaf runs build and the reads the reader this replaced gives them, beside progressions that cross
     fields, sit in a gap between fields, are empty, have one run or none, step backwards or over parameters, on a single-port and
     an overlapping table."""
-    from verity_vllm.program import compact as C
     rng = random.Random(11)
     edges = sorted(rng.sample(range(1, 30_000), 149))
     gapped = []
@@ -356,7 +373,6 @@ def test_a_repeated_parameter_operand_resolves_once_to_the_columns_and_reads_of_
     """The memo of a document's parameter operands builds the columns the Builder without it builds and the reads the reader this
     replaced gives, for operands that are one list again, a copy of it, equal runs that are other objects, more operands sharing a
     first run than the memo keeps, parameter runs then a Call's, and a Call reading a weight port before the repeat; under any cap."""
-    from verity_vllm.program import compact as C
     monkeypatch.setattr(pv, "RESOLVE_MEMO_RUNS", cap)
     monkeypatch.setattr(pv, "RESOLVE_MEMO_MIN", least)
     rng = random.Random(13)
@@ -404,3 +420,11 @@ def test_a_repeated_parameter_operand_resolves_once_to_the_columns_and_reads_of_
         want: list[ValueRef] = []
         _resolve_reads_ref([C.runs_from_file_items(o) for o in ops], port_of, ins, ["call"] * len(rows), want)
         assert tuple(P.call(i).reads) == tuple(want), i
+
+
+def test_a_spec_the_registry_does_not_hold_has_no_ports_and_says_so():
+    with pytest.raises(KeyError, match="NoSuch_v1 is not a registered Definition"):
+        pv.definition_ports("NoSuch_v1{N=1}")
+    assert "NoSuch_v1{N=1}" not in pv._PORTS_CACHE
+    with pytest.raises(TypeError, match=r"Gemm_v1: statics \['N'\] are not in the spec"):
+        pv.definition_ports("Gemm_v1{K=4}")

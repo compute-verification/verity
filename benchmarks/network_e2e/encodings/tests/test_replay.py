@@ -33,6 +33,8 @@ def _load(name: str):
 
 
 R = _load("replay")
+from verity_vllm.pipeline.advice_code import kept as KP  # noqa: E402
+
 CASES = sorted(p.stem for p in FIXTURES.glob("*.jsonl"))
 DRAFT = Path(__file__).parent / "fixtures_draft"
 DRAFT_CASES = sorted(p.stem for p in DRAFT.glob("*.jsonl"))
@@ -386,23 +388,51 @@ def test_kept_outputs_with_a_draft_are_the_traces_emissions(name):
     assert [len(r.kept) + sum(r.kept) for r in t.requests] == [r.output_len for r in t.requests]
 
 
+def _own_terms(t) -> KP.Terms:
+    """Every emitting row's count as the trace itself records it, in one window: its steps in order, a step's rows as
+    it lists them, each row's `emitted` less its own token."""
+    return KP.Terms(tuple(q.output_len for q in t.requests),
+                    (tuple((i, em[i] - 1) for st, em in zip(t.steps, t.emitted) for i, _, _ in st.rows if em.get(i)),))
+
+
 @pytest.mark.parametrize("name", DRAFT_CASES)
 @pytest.mark.parametrize("contexts", R.CONTEXTS)
 def test_residual_decodes_to_the_trace_with_a_draft(name, contexts):
-    """Where the arrivals are not certified, the residual advice is still each request's admission alone: with the
-    drafts each row kept beside the certified I/O, it decodes back to the trace's steps."""
+    """Where the arrivals are not certified, the residual advice is still each request's admission alone, and the
+    drafts each row kept are advice beside it: the certified record carries none of them, and the residual decodes
+    back to the trace's steps with each count asked once, by the row that emits it, in the trace's order, so no fork
+    is given one. A decoder handed the counts as lists (`RequestIO.kept`) is refused by name, and so is one handed
+    no counts."""
     t = trace(name, DRAFT)
     code = R.encode(t, contexts=contexts)
-    back = R.decode(t.certified(code.bucket_s), code)
+    cert = t.certified(code.bucket_s)
+    assert all(q.kept is None for q in cert.requests) and all(q.kept is not None for q in t.requests)
+    asked = []
+
+    def kept(i: int, row: int) -> int:
+        asked.append((i, row))
+        return t.requests[i].kept[row]
+
+    back = R.decode(cert, code, kept)
     assert [(s.rows, s.drafts) for s in back.steps] == [(s.rows, s.drafts) for s in t.steps]
+    assert [i for i, _ in asked] == [i for i, _ in _own_terms(t).windows[0]]
+    assert all([row for j, row in asked if j == i] == list(range(len(q.kept))) for i, q in enumerate(t.requests))
     assert all(len(b) <= code.ideal[w] + 2 for w, b in code.bits.items())
+    K, n = t.engine.num_speculative_tokens, len(t.requests)
+    with pytest.raises(ValueError, match=f"^the engine drafts {K} tokens a row, and the certified record carries what {n} "
+                                         "requests' rows kept \\(`RequestIO.kept`; request 0 the first\\): a kept count "
+                                         "is advice, asked as its row emits \\(`kept`\\)$"):
+        R.decode(dataclasses.replace(cert, requests=t.requests), code, kept)
+    with pytest.raises(ValueError, match=f"^request 0: the engine drafts {K} tokens a row, so the replay needs the drafts"):
+        R.decode(cert, code)
 
 
 @pytest.mark.parametrize("name", DRAFT_CASES)
-def test_kept_count_is_charged_at_its_code_or_derived(name):
-    """The kept count's class, both ways: charged, the bits of the counts' code, which decode back to the trace's counts
-    from K and the output lengths alone, and from which the replay gives the trace's steps; derived, nothing is sent.
-    The entropy of the counts each alone, at most log2(K + 1) a row, is beside it and is not what is charged."""
+def test_kept_count_is_charged_at_advice_v1s_code_or_derived(name):
+    """The kept count's class, both ways: charged, the bits of advice v1's code for the counts in the trace's own
+    order, from which the replay, asking each count as its row emits, reads the trace's counts and gives the trace's
+    steps; derived, nothing is sent. The entropy of the counts each alone, at most log2(K + 1) a row, is beside it and
+    is not what is charged."""
     t = trace(name, DRAFT)
     K = t.engine.num_speculative_tokens
     # the trace's own record: a row's `drafts`, and `emitted` less the row's own token
@@ -412,16 +442,31 @@ def test_kept_count_is_charged_at_its_code_or_derived(name):
     assert b["derived"] == 0 and b["max"] == math.log2(K + 1)
     assert b["entropy"] == pytest.approx(-sum(c / len(kept) * math.log2(c / len(kept)) for c in b["counts"] if c))
     assert 0 < b["entropy"] <= b["max"] and b["alone"] == pytest.approx(b["rows"] * b["entropy"])
-    bits, ideal = R.kept_encode(K, t.requests)
-    assert b["charged"] == len(bits) <= ideal + 2 and b["ideal"] == ideal
-    back = R.kept_decode(K, [q.output_len for q in t.requests], bits)
-    assert back == [q.kept for q in t.requests]
-    reqs = [dataclasses.replace(q, kept=k) for q, k in zip(t.requests, back)]
-    again = R.replay(t.engine, reqs, admit=t.before_step, passed=t.passed)
-    assert [(s.rows, s.drafts) for s in again.steps] == [(s.rows, s.drafts) for s in t.steps]
+    own = _own_terms(t)
+    assert own.by_request() == [q.kept for q in t.requests]
+    code, ideal = R.kept_code(K, own)
+    assert b["charged"] == code.nbits == code.lens[0] and b["ideal"] == ideal and ideal <= code.nbits <= ideal + 2
+    assert R.kept_read(t, code) == own
+    # from the two strings and the certified record alone: the arrivals' advice decodes on the counts read off the kept string
+    assert all(R.kept_read(t, code, R.encode(t, contexts=c)) == own for c in R.CONTEXTS)
     d = R.draft_table(t, contexts=R.CONTEXTS)
     assert d["kept_count"] == b and not d["tick"] and (d["requests"], d["steps"]) == (len(t.requests), len(t.steps))
+    assert d["output_tokens"] == sum(q.output_len for q in t.requests)
     assert d["arrivals"] == {c: sum(len(x) for x in R.encode(t, contexts=c).bits.values()) for c in R.CONTEXTS}
+
+
+def test_kept_read_takes_only_the_traces_own_string():
+    """`kept_read` reads nothing of `RequestIO.kept`: off another trace's string, a string cut short and one with a
+    byte after it, it refuses rather than give the trace's counts."""
+    t, other = trace("sync-draft5", DRAFT), trace("sync-draft5-tight", DRAFT)
+    K = t.engine.num_speculative_tokens
+    code = R.kept_code(K, _own_terms(t))[0]
+    blind = dataclasses.replace(t, requests=[dataclasses.replace(q, kept=None) for q in t.requests])
+    assert R.kept_read(blind, code) == _own_terms(t)
+    for bad in (R.kept_code(K, _own_terms(other))[0], code._replace(bits=code.bits[:-2], nbits=8 * (len(code.bits) - 2)),
+                code._replace(bits=code.bits + b"\0", nbits=8 * (len(code.bits) + 1))):
+        with pytest.raises(ValueError):
+            R.kept_read(t, bad)
 
 
 def test_kept_count_refuses_a_trace_it_cannot_read_it_from():
@@ -435,12 +480,13 @@ def test_kept_count_refuses_a_trace_it_cannot_read_it_from():
         R.kept_bits(other)
 
 
-def test_kept_code_round_trips_and_pays_less_for_runs():
-    """The kept count's code on counts no fixture has: outputs of every length from none, a request's last rows, whose
-    counts its output bounds, and counts that come in runs, which cost less than the same counts shuffled."""
+def test_kept_code_pays_less_for_runs_and_ends_each_window_apart():
+    """`kept_code` on counts no fixture has: outputs of every length from none, a request's last rows, whose counts its
+    output bounds, and counts that come in runs, which cost less than the same counts shuffled. The same counts over
+    several windows are charged window by window, each within 2 bits of what an ideal coder would spend on it."""
     rng = random.Random(7)
 
-    def requests(K: int, stay: float, n: int = 40) -> list:
+    def counts(K: int, stay: float, n: int = 40) -> list[list[int]]:
         out = []
         for _ in range(n):
             left, kept, c = rng.randint(0, 200), [], rng.randint(0, K)
@@ -448,27 +494,31 @@ def test_kept_code_round_trips_and_pays_less_for_runs():
                 c = c if rng.random() < stay else rng.randint(0, K)
                 kept.append(min(c, left - 1))
                 left -= 1 + kept[-1]
-            out.append(R.RequestIO(prompt_len=1, max_tokens=256, output_len=len(kept) + sum(kept), eos=False,
-                                   kept=tuple(kept)))
+            out.append(kept)
         return out
+
+    def terms(kept: list[list[int]], W: int = 1) -> KP.Terms:
+        """The requests' counts, one request after another, cut into W windows."""
+        rows = [(i, c) for i, ks in enumerate(kept) for c in ks]
+        cuts = sorted(rng.randint(0, len(rows)) for _ in range(W - 1))
+        return KP.Terms(tuple(len(ks) + sum(ks) for ks in kept),
+                        tuple(tuple(rows[a:b]) for a, b in zip([0, *cuts], [*cuts, len(rows)])))
 
     for K in (1, 2, 5, 8):
         for stay in (0.0, 0.5, 0.95):
-            reqs = requests(K, stay)
-            bits, ideal = R.kept_encode(K, reqs)
-            assert R.kept_decode(K, [q.output_len for q in reqs], bits) == [q.kept for q in reqs]
-            assert len(bits) <= ideal + 2
-    runs = requests(5, 0.95, n=200)
-    shuffled = []
-    for q in runs:
-        kept = list(q.kept)
-        rng.shuffle(kept)
-        shuffled.append(dataclasses.replace(q, kept=tuple(kept)))
-    assert len(R.kept_encode(5, runs)[0]) < 0.8 * len(R.kept_encode(5, shuffled)[0])
-    none = [R.RequestIO(prompt_len=1, max_tokens=4, output_len=0, eos=False, kept=())]
-    assert R.kept_encode(5, none) == ([], 0.0) and R.kept_decode(5, [0], []) == [()]
-    with pytest.raises(ValueError, match="add up to 4 outputs, not its 3"):
-        R.kept_encode(5, [R.RequestIO(prompt_len=1, max_tokens=4, output_len=3, eos=False, kept=(3,))])
+            for W in (1, 3):
+                kept = terms(counts(K, stay), W)
+                code, ideal = R.kept_code(K, kept)
+                assert len(code.lens) == W and sum(code.lens) == code.nbits and ideal <= code.nbits <= ideal + 2 * W
+                assert all(n == 0 for n, w in zip(code.lens, kept.windows) if not w)
+    runs = counts(5, 0.95, n=200)
+    shuffled = [rng.sample(ks, len(ks)) for ks in runs]
+    assert R.kept_code(5, terms(runs))[0].nbits < 0.8 * R.kept_code(5, terms(shuffled))[0].nbits
+    assert R.kept_code(5, KP.Terms((0,), ((),))) == ((b"", 0, (0,)), 0.0)
+    with pytest.raises(ValueError, match="kept 3 drafts where it can keep 0 to 2"):
+        R.kept_code(5, KP.Terms((3,), (((0, 3),),)))
+    with pytest.raises(ValueError, match="add up to 2 outputs, not its 3"):
+        R.kept_code(5, KP.Terms((3,), (((0, 1),),)))
 
 
 def _second_serve(recs: list[dict], after: int, empty: int) -> list[dict]:
@@ -557,6 +607,11 @@ def test_a_draft_needs_what_each_row_kept():
     moved = (1, *io.kept[1:-1], *((io.kept[-1] - 1,) if io.kept[-1] else ()))     # one output from its last row to its first
     with pytest.raises(ValueError, match=f"request {i}: emitting row 0 kept 1 drafts, but the row the replay schedules"):
         R.replay(t.engine, with_kept(moved), **how)
+    # `encode` asks each count as its row emits, and refuses the row a request has none for
+    for bad, row in ((None, 0), (io.kept[:-1], len(io.kept) - 1)):
+        with pytest.raises(ValueError, match=f"^request {i}: the engine drafts {K} tokens a row, and the request has no kept "
+                                             f"count for its emitting row {row}$"):
+            R.encode(dataclasses.replace(t, requests=with_kept(bad)))
 
 
 def test_refuses_the_drafts_it_does_not_model():

@@ -22,6 +22,16 @@ public import Spot.Draw
 meta import Flock.Net
 meta import Spot.Draw
 
+/-!
+# A member's link points over the samples that end
+
+`nbl`, the link points of a session past `PT_LOCAL`; `ended`, the fewest and most of a member's units a sample under a
+sampling design holds when it ends; `bounds` and `refused`, each member's counts and the members whose fewest and most
+give different link points; `ends` and `NEVER_ENDS`, a sampling design no sample of which ends; `lawOf`, the sampling
+design the sample runs on. `Registration.check` fails a registration `link-points` through `refused`
+(`linkRefused`), and `Pieces.table`'s `link_points` serves `piece` to the difftest.
+-/
+
 @[expose] public section
 
 namespace Spot.LinkPoints

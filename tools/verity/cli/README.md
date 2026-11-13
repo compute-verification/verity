@@ -15,6 +15,7 @@ tools beside it and holds no check of its own. `uv run verity --help` prints the
 | `verity run CONFIG` | the parties a deployment configuration places on this machine, and its verdict |
 | `verity config new\|check\|hash` | write, check or hash a deployment configuration |
 | `verity lean try FILE` | `lake env lean FILE` in the Lake package that holds it, the Lean edit loop; with `--on NODE` on a project machine |
+| `verity lean deployed [--rev REV] [--today YYYY-MM-DD]` | the deployed guarantees' rows as one JSON object, read from the locks at REV by git alone: each one's gap as `check.trust_gaps` computes it beside the lock's `trust_gap` and the witness halves its lock shows it lacks (`lacks_witness`), and each open or gap premise once by name (`verity_cli/deployed.py` has the keys). The gap is computed by the running checkout's Lean check, on REV's locks |
 
 In a NAME, a `-` stands for a `_`.
 
@@ -23,6 +24,7 @@ In a NAME, a `-` stands for a `_`.
 | Module | What it holds |
 | --- | --- |
 | `verity_cli/__init__.py` | the dispatch, `verity check` and `verity lean try` |
+| `verity_cli/deployed.py` | `verity lean deployed`, over `tools/verity/lean/check.py`'s `trust_gaps` |
 | `verity_cli/run.py` | `verity run` and `verity config`, over `verity.config` |
 | `verity_cli/examples.py` | the examples' ladder, read from each `demos/<name>/example.toml` |
 | `verity_cli/settings.py` | the environment variables `verity run` reads, declared once |
