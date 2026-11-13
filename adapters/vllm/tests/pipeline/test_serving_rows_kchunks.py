@@ -21,8 +21,8 @@ from verity.commitments.windows import rows as CS
 from verity.commitments.windows import wiring as WI
 from verity.definitions.numerics import fp8_moe_rows as FR
 from verity.definitions.numerics.derived_rows import f2fp_bf16
-from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32
 from verity.definitions.registry import boolean_fp8_moe as BFM
 from verity.definitions.registry import fp8_moe as FM
 from verity.definitions.registry import fp8_moe_experts as X
