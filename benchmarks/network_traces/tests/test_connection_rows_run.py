@@ -3,10 +3,12 @@ content rows as flags that `rehearse` passes to its `serve`, and a run without t
 publisher queue's items, a slot stride each; a run of the network certifier on a `VirtualClock` whose publisher,
 inline and in `serve`'s process, lays, commits and signs each handed execution phase's tables, which the offline
 check holds to the records' own reading of the same cells and refuses when a registration, a salt, a kept line or a
-record isn't the run's; the registrations' file, which a check that found no problem writes, a line for each
-registration it held and each the publisher's own bytes, and which the reader of the stop verdicts takes its heads
-from, so that a registration with a wrong signature or with tables that aren't its records' leaves no file and
-every class at its whole schedule; an execution phase that isn't handed has no line; under the lengths rows' form 2
+record isn't the run's; the registrations' file, which a check that found no problem writes when it is handed the
+SHA-512 of the network certifier's public key and its session: a first line that names the two, then a line for
+each registration it held and each the publisher's own bytes, which the reader of the stop verdicts takes its
+heads from, so that a deployment record of another key or session, a registration with a wrong signature or with
+tables that aren't its records' leaves no file and every class at its whole schedule, and a check handed neither
+is refused the file; an execution phase that isn't handed has no line; under the lengths rows' form 2
 every execution phase has one line, its registration or the network certifier's word that it has no head, the run's
 last included, and the check holds each to the one that is due, also past an execution phase that isn't complete;
 and the cost's load and its measurement at a small schedule."""
@@ -14,6 +16,7 @@ and the cost's load and its measurement at a small schedule."""
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 
 import pytest
@@ -110,13 +113,13 @@ def served(out, key, *, windows: int = 4, process: bool = False, params: WardenP
                 process=process, **kw), requests
 
 
-def refused(out, edit, registrations=None) -> list[str]:
+def refused(out, edit, registrations=None, under=None) -> list[str]:
     """The check's problems of the run in `out` once `edit` has changed its files, which are then put back; the
-    check is given `registrations` as its registrations' file."""
+    check is given `registrations` as its registrations' file and is handed `under`."""
     saved = {p: p.read_bytes() for p in out.iterdir()}
     edit()
     try:
-        return ws.check(out, registrations)["problems"]
+        return ws.check(out, registrations, under)["problems"]
     finally:
         for p in set(out.iterdir()) - set(saved):
             p.unlink()
@@ -232,33 +235,149 @@ def answer(tmp, file, registrations: list[dict]) -> TSV.LB.Stop:
     return SV.of_runs(TSV.Store(tmp, {"a run": files}), ["a run"])
 
 
-def test_the_check_writes_each_registration_it_held_and_a_line_is_the_publishers_own(tmp_path, monkeypatch):
-    """Given a file, a check that accepts the run writes it one line for each registration it held to both: every
-    handed execution phase's, in order. A line is byte for byte the registration as the publisher kept it in
-    `rows.jsonl`, and the head the reader's `head_of` reads from it is the head `check_registration` verified
-    under the key, the session and the schedule. The reader, handed that file with the four verdicts of each
-    head's classes, holds all three execution phases. `check --registrations FILE` writes the same file, and a
-    check that is given no file writes none."""
+def handed(out) -> tuple[bytes, bytes]:
+    """What the auditor hands the check of a run made under the network certifier's own key: the SHA-512 of the key
+    the run's deployment record names, and its session."""
+    key, session = device_key(out)
+    return crr.key_sha512(key), session
+
+
+def command(out, under=None, file=None) -> list[str]:
+    """The `check` command of the run in `out`, handed `under` and given `file` as its registrations' file."""
+    return ["check", "--run", str(out), *([] if under is None else ["--key-sha512", under[0].hex(), "--session",
+                                                                    under[1].hex()]),
+            *([] if file is None else ["--registrations", str(file)])]
+
+
+def test_the_check_writes_what_it_was_checked_under_then_each_registration_as_the_publisher_kept_it(
+        tmp_path, monkeypatch):
+    """Handed the SHA-512 of the network certifier's public key and the session, and given a file, a check that
+    accepts the run writes it. The first line names the hash and the session it was handed, and the reader's
+    `checked_under` reads them from it; the hash is over the LMS public key ``I ‖ T[1]``, the bytes the deployment
+    record writes in hex. Each line after it is one registration the check held to both, every handed execution
+    phase's, in order: byte for byte the registration as the publisher kept it in `rows.jsonl`, and the head the
+    reader's `head_of` reads from it is the head `check_registration` verified under the key, the session and the
+    schedule. The reader, handed that file with the four verdicts of each head's classes, holds all three
+    execution phases and prints what the file names. `check --key-sha512 HEX --session HEX --registrations FILE`
+    writes the same file; a check that is given no file writes none, handed the two or not."""
     monkeypatch.setattr(SV, "FORMATS", {form: kind for kind, form in TSV.FORMATS.items()})
     out, file = tmp_path / "run", tmp_path / "out" / "registrations.jsonl"
     served(out, tmp_path / "key")
-    assert ws.check(out)["accepted"] and not file.parent.exists()
-    assert ws.check(out, file)["accepted"]
+    under = handed(out)
+    public = bytes.fromhex(json.loads((out / "deployment.json").read_text())["key"]["public"])
+    assert under[0] == hashlib.sha512(public).digest() and len(public) == 16 + 64
+    assert ws.check(out)["accepted"] and ws.check(out, None, under)["accepted"] and not file.parent.exists()
+    assert ws.check(out, file, under)["accepted"]
     written, kept = file.read_text(), (out / crr.ROWS).read_text().splitlines()
-    lines = written.splitlines()
-    assert len(lines) == len(kept) == 3 and written == "".join(line + "\n" for line in lines)
+    first, *lines = written.splitlines()
+    names = (under[0].hex(), under[1].hex())
+    assert first == json.dumps({"checked_under": {"key_sha512": names[0], "session": names[1]}})
+    assert SV.checked_under(first) == names
+    assert len(lines) == len(kept) == 3 and written == "".join(line + "\n" for line in (first, *lines))
     key, session = device_key(out)
     for w, (line, publishers) in enumerate(zip(lines, kept)):
         assert publishers.startswith(f'{{"registration": {line}, "cost": ')
         verified, _ = CR.check_registration(json.loads(line), key, session, ROWS, ws.LINK, w)
         assert SV.head_of(json.loads(line)) == verified and verified.window == w
     held = answer(tmp_path / "read", file, [json.loads(line) for line in lines])
-    assert held.held == 3, held.why
+    assert held.held == 3 and TSV.names_under("a run", under=names) in held.why, held.why
     by_command = tmp_path / "out" / "by-command.jsonl"
-    assert ws.main(["check", "--run", str(out), "--registrations", str(by_command)]) == 0
-    assert by_command.read_text() == written
-    assert ws.main(["check", "--run", str(out)]) == 0 and sorted(p.name for p in file.parent.iterdir()) == [
-        "by-command.jsonl", "registrations.jsonl"]
+    assert ws.main(command(out, under, by_command)) == 0 and by_command.read_text() == written
+    assert ws.main(command(out)) == ws.main(command(out, under)) == 0
+    assert sorted(p.name for p in file.parent.iterdir()) == ["by-command.jsonl", "registrations.jsonl"]
+
+
+def test_a_run_under_another_key_gets_no_file_under_the_keys_hash_and_one_under_its_own(tmp_path, monkeypatch):
+    """A run directory whose deployment record names another key than the network certifier's, a rehearsal's own:
+    its certificates and its registrations are signed under that key and verify under it. Handed the hash of the
+    network certifier's key, the check names the problem, the key and not the session, as its only one, and leaves
+    no file; so does its command, which exits 1. Handed the hash of the run's own key, the same directory is
+    accepted and its file is written, naming that hash: the reader holds all three execution phases on it and
+    prints the hash, which it is not told to refuse."""
+    monkeypatch.setattr(SV, "FORMATS", {form: kind for kind, form in TSV.FORMATS.items()})
+    out, file = tmp_path / "run", tmp_path / "out" / "registrations.jsonl"
+    served(out, tmp_path / "a rehearsal's key")
+    own, session = handed(out)
+    ws.cs.load_key(tmp_path / "key", 5)
+    true = crr.key_sha512(ws.cs.read_public(json.loads((tmp_path / "key" / "public.json").read_text())))
+    assert true != own and ws.check(out, file, (own, session))["accepted"]
+    earlier = file.read_text()
+    result = ws.check(out, file, (true, session))
+    assert result["problems"] == ["the deployment record's key's SHA-512 is not the one the check was handed: "
+                                  f"{own.hex()}, not {true.hex()}"]
+    s = result["summary"]["connection_rows"]
+    assert (s["registered"], s["of"]) == (3, 3) and not result["accepted"] and not file.exists()
+    assert ws.main(command(out, (true, session), file)) == 1 and not file.exists()
+    assert json.loads((out / "check.json").read_text())["problems"] == result["problems"]
+    # under its own key's hash: the file, which says so
+    assert ws.main(command(out, (own, session), file)) == 0 and file.read_text() == earlier
+    first, *lines = earlier.splitlines()
+    assert SV.checked_under(first) == (own.hex(), session.hex()) and len(lines) == 3
+    held = answer(tmp_path / "read", file, [json.loads(line) for line in lines])
+    assert held.held == 3 and TSV.names_under("a run", under=(own.hex(), session.hex())) in held.why
+
+
+def test_a_deployment_record_of_another_session_than_the_one_handed_gets_no_file(tmp_path):
+    """Handed the hash of the run's key and another session than its deployment record names, the check names the
+    problem, the session and not the key, as its only one, and leaves no file, removing an earlier check's; handed
+    another key's hash too, it names both. A deployment record changed to name another session than the one handed
+    is the same problem by name, beside its certificates, which verify under no other session."""
+    out, file = tmp_path / "run", tmp_path / "out" / "registrations.jsonl"
+    served(out, tmp_path / "key")
+    key, session = handed(out)
+    other, wrong = bytes([session[0] ^ 1]) + session[1:], bytes([key[0] ^ 1]) + key[1:]
+    of_session = ("the deployment record's session is not the one the check was handed: "
+                  f"{session.hex()}, not {other.hex()}")
+    assert ws.check(out, file, (key, session))["accepted"] and file.exists()
+    result = ws.check(out, file, (key, other))
+    assert result["problems"] == [of_session] and not result["accepted"] and not file.exists()
+    assert ws.check(out, file, (key, session))["accepted"] and file.exists()
+    assert ws.check(out, file, (wrong, other))["problems"] == [
+        f"the deployment record's key's SHA-512 is not the one the check was handed: {key.hex()}, not {wrong.hex()}",
+        of_session] and not file.exists()
+    assert ws.main(command(out, (key, other), file)) == 1 and not file.exists()
+
+    def another_session() -> None:
+        dep = json.loads((out / "deployment.json").read_text())
+        (out / "deployment.json").write_text(json.dumps(dep | {"session": other.hex()}))
+
+    assert ws.check(out, file, (key, session))["accepted"] and file.exists()
+    problems = refused(out, another_session, file, (key, session))
+    assert ("the deployment record's session is not the one the check was handed: "
+            f"{other.hex()}, not {session.hex()}") in problems and not file.exists()
+    assert "responses window 0 isn't certified" in problems and not any("key's SHA-512" in p for p in problems)
+
+
+def test_a_registrations_file_without_the_hash_or_the_session_is_refused_before_the_run_is_read(tmp_path):
+    """A check given a registrations' file and not handed the key's hash and the session refuses, by name, before
+    it reads the run: of a directory that holds no run it is that refusal, not the missing deployment record. A
+    file already at the path is removed first, so none stands from an earlier check. The command refuses the file
+    without both, with the hash alone and with the session alone, and it refuses the one without the other, and a
+    hash that is no SHA-512, whether a file is asked or not; it writes no `check.json`."""
+    none, file = tmp_path / "no run", tmp_path / "out" / "registrations.jsonl"
+    file.parent.mkdir()
+    key, session = bytes(64), bytes(32)
+    for check in (lambda: ws.check(none, file), lambda: crr.check(none, {}, PLAIN, [], [], [], ws.LINK, file)):
+        file.write_text("an earlier check's\n")
+        with pytest.raises(ValueError, match="only by a check that is handed the SHA-512 of the network certifier's "
+                                             "public key and its session"):
+            check()
+        assert not file.exists()
+    with pytest.raises(FileNotFoundError):
+        ws.check(none, file, (key, session))
+    for flags in ([], ["--key-sha512", key.hex()], ["--session", session.hex()]):
+        for asked in (["--registrations", str(file)], []):
+            if not flags and not asked:
+                continue
+            file.write_text("an earlier check's\n")
+            with pytest.raises(SystemExit) as refusal:
+                ws.main(["check", "--run", str(none), *flags, *asked])
+            assert refusal.value.code == 2 and file.exists() == (not asked), (flags, asked)
+    for short in (key.hex()[2:], "5a", key.hex() + "00", "no hex"):
+        with pytest.raises(SystemExit) as refusal:
+            ws.main(["check", "--run", str(none), "--key-sha512", short, "--session", session.hex()])
+        assert refusal.value.code == 2
+    assert sorted(p.name for p in tmp_path.rglob("*")) == ["out", "registrations.jsonl"]
 
 
 def test_a_registration_with_a_wrong_signature_gives_no_file_and_the_reader_holds_nothing(tmp_path, monkeypatch):
@@ -271,9 +390,10 @@ def test_a_registration_with_a_wrong_signature_gives_no_file_and_the_reader_hold
     monkeypatch.setattr(SV, "FORMATS", {form: kind for kind, form in TSV.FORMATS.items()})
     out, file = tmp_path / "run", tmp_path / "out" / "registrations.jsonl"
     served(out, tmp_path / "key")
-    assert ws.check(out, file)["accepted"]
+    under = handed(out)
+    assert ws.check(out, file, under)["accepted"]
     written = file.read_text()
-    signed = [json.loads(line) for line in written.splitlines()]
+    signed = [json.loads(line) for line in written.splitlines()[1:]]
 
     def other_signature(lines, salts) -> None:
         cert = lines[1]["registration"]["certificate"]
@@ -281,7 +401,7 @@ def test_a_registration_with_a_wrong_signature_gives_no_file_and_the_reader_hold
         forged.append(json.loads(json.dumps(lines[1]["registration"])))
 
     forged: list[dict] = []
-    problems = refused(out, lambda: edit_rows(out, other_signature), file)
+    problems = refused(out, lambda: edit_rows(out, other_signature), file, under)
     assert forged[0] != signed[1] and SV.head_of(forged[0]) == SV.head_of(signed[1])
     assert ("execution phase 1's connection rows: the registration's certificate doesn't verify under the network "
             "certifier's key in the session") in problems
@@ -289,10 +409,11 @@ def test_a_registration_with_a_wrong_signature_gives_no_file_and_the_reader_hold
     assert not file.exists()
     left = answer(tmp_path / "left", file, signed)
     assert left.held == 0 and "verdict record(s) were read and no registration" in left.why[0]
-    # the reader alone holds a head nobody signed: only the check's file keeps it from one
-    file.write_text(TSV.jsonl(forged))
+    # the reader alone holds a head nobody signed, under a first line anybody wrote: only the check's file keeps it
+    # from one
+    file.write_text(TSV.checked(*forged))
     assert answer(tmp_path / "forged", file, forged).held == 1
-    assert ws.check(out, file)["accepted"] and file.read_text() == written
+    assert ws.check(out, file, under)["accepted"] and file.read_text() == written
 
 
 def test_a_registration_whose_tables_arent_its_records_releases_gives_no_file(tmp_path):
@@ -320,9 +441,10 @@ def test_a_registration_whose_tables_arent_its_records_releases_gives_no_file(tm
         for r in (ws.replace(record, grid=grid), *records[1:]):
             ws.ar.write_blobs(out / "responses.records", ws.ar.pack_record(r))
 
+    under = handed(out)
     for w, edit in ((1, lambda: edit_rows(out, other_salt)), (0, other_id)):
-        assert ws.check(out, file)["accepted"] and len(file.read_text().splitlines()) == 3
-        assert f"execution phase {w}'s connection rows aren't its records' releases" in refused(out, edit, file)
+        assert ws.check(out, file, under)["accepted"] and len(file.read_text().splitlines()) == 1 + 3
+        assert f"execution phase {w}'s connection rows aren't its records' releases" in refused(out, edit, file, under)
         assert not file.exists()
 
 
@@ -337,31 +459,38 @@ def test_a_check_that_finds_any_problem_writes_no_file(tmp_path):
     served(out, tmp_path / "key", params=dataclasses.replace(ROWS, queue=5))
     file.parent.mkdir()
     file.write_text("an earlier check's\n")
-    result = ws.check(out, file)
+    under = handed(out)
+    result = ws.check(out, file, under)
     s = result["summary"]["connection_rows"]
     assert (s["registered"], s["of"]) == (2, 2) and not any("connection rows" in p for p in result["problems"])
     assert not result["accepted"] and not file.exists()
-    assert ws.main(["check", "--run", str(out), "--registrations", str(file)]) == 1 and not file.exists()
+    assert ws.main(command(out, under, file)) == 1 and not file.exists()
     # a problem of the client's side alone, which the check finds past the certificates and the records
     whole = tmp_path / "whole"
     served(whole, tmp_path / "whole-key")
-    assert ws.check(whole, file)["accepted"] and len(file.read_text().splitlines()) == 3
+    under = handed(whole)
+    assert ws.check(whole, file, under)["accepted"] and len(file.read_text().splitlines()) == 1 + 3
 
     def failed() -> None:
         client = json.loads((whole / "client.json").read_text())
         client["connections"][0]["error"] = "the connection was cut"
         (whole / "client.json").write_text(json.dumps(client))
 
-    problems = refused(whole, failed, file)
+    problems = refused(whole, failed, file, under)
     assert problems == ["client connection 0: the connection was cut"] and not file.exists()
     plain = tmp_path / "plain"
     served(plain, tmp_path / "plain-key", windows=2, params=PLAIN)
+    under = handed(plain)
     file.write_text("an earlier check's\n")
-    assert ws.check(plain, file)["accepted"] and not file.exists()
+    assert ws.check(plain, file, under)["accepted"] and not file.exists()
+    # a run without lengths rows is held to what the check was handed all the same
+    other = (under[0], bytes([under[1][0] ^ 1]) + under[1][1:])
+    assert ws.check(plain, None, other)["problems"] == [
+        f"the deployment record's session is not the one the check was handed: {under[1].hex()}, not {other[1].hex()}"]
     file.write_text("an earlier check's\n")
     (plain / "deployment.json").unlink()
     with pytest.raises(FileNotFoundError):
-        ws.check(plain, file)
+        ws.check(plain, file, under)
     assert list(file.parent.iterdir()) == []
 
 

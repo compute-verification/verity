@@ -68,6 +68,24 @@ def registration(of: C.Head) -> dict:
             "certificate": {"key": "", "digest": of.digest().hex(), "signature": ""}}
 
 
+#: what the registrations' files of these tests say they were checked under: a key's SHA-512 and a session, in hex
+UNDER = ("5a" * 64, "c3" * 32)
+
+
+def checked(*registrations: object, under: tuple[object, object] = UNDER) -> str:
+    """A registrations' file as the offline check of a network certifier's run writes it: the line of what it was
+    checked under, then the registrations, one a line."""
+    return "".join(json.dumps(x) + "\n" for x in (
+        {SV.CHECKED_UNDER: {SV.KEY_SHA512: under[0], SV.SESSION: under[1]}}, *registrations))
+
+
+def names_under(*runs: str, under: tuple[str, str] = UNDER) -> str:
+    """The answer's line on what the registrations' files of `runs` say they were checked under."""
+    return (f"`out/registrations.jsonl` of {', '.join(runs)} says its registrations were checked under the network "
+            f"certifier's key whose SHA-512 is {under[0]}, in the session {under[1]}: the reader holds neither, and "
+            "compares them with nothing")
+
+
 #: the registration a serve registered its class under, and another serve's; each with the digest a record names
 #: it by
 SERVED = {"format": "a serve's registration"}
@@ -913,17 +931,17 @@ def test_the_run_files_are_read_from_the_store_and_no_run_is_the_whole_schedule(
         "r1": {"out/stop-verdicts.jsonl": jsonl([stop_record]) + "\n", "out/certified-read-verdicts.jsonl": jsonl([read]),
                "out/compute-audit-verdicts.jsonl": jsonl([audit]), "verdicts.jsonl": "not read",
                "out/stop-controls.jsonl": jsonl([of_stop, of_read, of_audit]), "controls.jsonl": "not read"},
-        "r2": {"out/response-tie-verdicts.jsonl": jsonl([tie]), SV.REGISTRATIONS_FILE: jsonl(registrations),
+        "r2": {"out/response-tie-verdicts.jsonl": jsonl([tie]), SV.REGISTRATIONS_FILE: checked(*registrations),
                "out/response-tie-controls.jsonl": jsonl([of_tie]), SV.SERVES_FILE: jsonl(with_streams(SERVED)),
                "out/another.json": "{}"},
         "r3": {"out/another.json": "{}"}, "r4": None})
-    assert SV.read(store, ["r1", "r2"]) == (registrations, [read, audit, stop_record, tie], [],
+    assert SV.read(store, ["r1", "r2"]) == (registrations, [read, audit, stop_record, tie], [names_under("r2")],
                                             [of_stop, of_read, of_audit, of_tie], with_streams(SERVED), [], [])
     neither = ("holds none of `out/*-verdicts.jsonl`, `out/registrations.jsonl`, `out/*-controls.jsonl`, "
                "`out/serve-registrations.jsonl`")
     got = SV.of_runs(store, ["r1", "r2", "r3", "r4", "r5"])
     assert got.held == 1 and len(got.verdicts) == 4 and got == stop(registrations, records, [
-        f"r3 is not read: it {neither}", "r4 is not read: it kept no run files",
+        names_under("r2"), f"r3 is not read: it {neither}", "r4 is not read: it kept no run files",
         "r5 is not read: it is not in the store or on its remote"])
     # the tie's run alone: one verdict of the four, so the whole schedule
     assert SV.of_runs(store, ["r2"]).held == 0
@@ -962,7 +980,7 @@ def test_the_run_files_are_read_from_the_store_and_no_run_is_the_whole_schedule(
 def held_files(of: C.Head, records: list, controls: list | None = None, served: list | None = None) -> dict[str, str]:
     """A run's files: the registration of a head, verdict records, and, unless they are given, the four verifiers'
     controls and the serve's registration."""
-    return {SV.REGISTRATIONS_FILE: jsonl([registration(of)]), "out/the-verdicts.jsonl": jsonl(records),
+    return {SV.REGISTRATIONS_FILE: checked(registration(of)), "out/the-verdicts.jsonl": jsonl(records),
             "out/the-controls.jsonl": jsonl(the_controls() if controls is None else controls),
             SV.SERVES_FILE: jsonl(with_streams(SERVED) if served is None else served)}
 
@@ -1016,6 +1034,89 @@ def kept_whole(at: str, newest: str, n: int = 1) -> str:
             f"{newest}, the newest of the superseded runs that hold one ({n} such record(s))")
 
 
+def test_a_registrations_file_that_doesnt_say_what_it_was_checked_under_gives_no_head(tmp_path):
+    """The first line of the registrations' file says what the check that wrote it was handed, and the answer
+    prints the hash and the session it names. A file without that line gives no head, so the class is charged its
+    whole schedule, and the line names the file, its run and what its first line is: a file of bare registrations,
+    whose first line is a registration; one with no line; one whose first line is no JSON, is no object, names
+    another field besides or lacks one of the two; one whose hash is not the hex of a SHA-512 or whose session is
+    no hex. A line of that form past the first is no registration. The same run with the line holds its execution
+    phase. The reader compares what a file names with nothing: two runs whose files name two keys are both read,
+    and the answer prints each."""
+    first, second = head(3, 5, 0), head(4, 5, 0)
+    reg, under = registration(first), {SV.KEY_SHA512: UNDER[0], SV.SESSION: UNDER[1]}
+    line = json.dumps({SV.CHECKED_UNDER: under}) + "\n"
+    assert (SV.CHECKED_UNDER, SV.KEY_SHA512, SV.SESSION) == ("checked_under", "key_sha512", "session")
+    assert checked(reg) == line + jsonl([reg]) and SV.checked_under(line) == UNDER
+
+    def of(text: str, n: int = 0) -> LB.Stop:
+        files = held_files(first, four(first)) | {SV.REGISTRATIONS_FILE: text}
+        return SV.of_runs(Store(tmp_path / f"case-{n}", {"a run": files}), ["a run"])
+
+    def printed(answer: LB.Stop) -> tuple[str, ...]:
+        return tuple(w for w in answer.why if "says its registrations were checked under" in w)
+
+    got = of(checked(reg))
+    assert got.held == 1 and len(got.verdicts) == 4 and printed(got) == (names_under("a run"),)
+    a_registration = ("its first line is a registration, not an object with the one field `checked_under`, an "
+                      "object with the two fields `key_sha512` and `session`")
+    another = a_registration.replace("a registration", "another thing")
+    lacks = {
+        jsonl([reg]): a_registration,
+        jsonl([reg]) + line: a_registration,
+        "": "it holds no line",
+        "\n \n": "it holds no line",
+        "{not json\n" + jsonl([reg]): "its first line is no JSON: ",
+        jsonl([[under], reg]): another,
+        jsonl([under, reg]): another,
+        jsonl([{SV.CHECKED_UNDER: under, "more": 1}, reg]): another,
+        jsonl([{SV.CHECKED_UNDER: [UNDER[0], UNDER[1]]}, reg]): another,
+        jsonl([{SV.CHECKED_UNDER: {SV.KEY_SHA512: UNDER[0]}}, reg]): another,
+        jsonl([{SV.CHECKED_UNDER: {SV.SESSION: UNDER[1]}}, reg]): another,
+        jsonl([{SV.CHECKED_UNDER: under | {"more": 1}}, reg]): another,
+        checked(reg, under=(UNDER[0][2:], UNDER[1])): "its first line's `key_sha512` is not the hex of a SHA-512",
+        checked(reg, under=(UNDER[0] + "5a", UNDER[1])): "its first line's `key_sha512` is not the hex of a SHA-512",
+        checked(reg, under=(UNDER[0].upper(), UNDER[1])): "its first line's `key_sha512` is not the hex of a SHA-512",
+        checked(reg, under=(bytes(64).hex()[:-1] + "g", UNDER[1])):
+            "its first line's `key_sha512` is not the hex of a SHA-512",
+        checked(reg, under=(None, UNDER[1])): "its first line's `key_sha512` is not the hex of a SHA-512",
+        checked(reg, under=(UNDER[0], "")): "its first line's `session` is not the hex of a session",
+        checked(reg, under=(UNDER[0], "c3c")): "its first line's `session` is not the hex of a session",
+        checked(reg, under=(UNDER[0], 7)): "its first line's `session` is not the hex of a session"}
+    assert len(lacks) == 20
+    for n, (text, lack) in enumerate(lacks.items(), 1):
+        got = of(text, n)
+        assert got.held == 0 and got.verdicts == () and len(got.why) == 1, (n, lack)
+        assert got.why[0].startswith(
+            "each connection is charged its whole schedule: the records of a run don't read: "
+            f"`out/registrations.jsonl` of a run does not say what it was checked under: {lack}"), (n, got.why[0])
+        with pytest.raises(ValueError, match="does not say what it was checked under: "):
+            SV.checked_under(text.splitlines()[0] if text.strip() else None)
+    # a session of any length reads; a second line of the form is no registration, and holds nothing
+    short = of(checked(reg, under=(UNDER[0], "c3")), 30)
+    assert short.held == 1 and printed(short) == (names_under("a run", under=(UNDER[0], "c3")),)
+    twice = of(line + checked(reg), 31)
+    assert twice.held == 0 and "a registration of connection rows doesn't read" in twice.why[0]
+    assert SV.UNSAID not in twice.why[0] and printed(twice) == (names_under("a run"),)
+    # two files that name two keys: both read, each printed, neither refused
+    other = ("a5" * 64, "3c" * 16)
+    store = Store(tmp_path / "two", {
+        "r1": held_files(first, four(first)),
+        "r2": {SV.REGISTRATIONS_FILE: checked(registration(second), under=other),
+               "out/the-verdicts.jsonl": jsonl(four(second))},
+        "r3": {SV.REGISTRATIONS_FILE: checked(under=UNDER)}})
+    got = SV.of_runs(store, ["r1", "r2", "r3"])
+    assert got.held == 2 and printed(got) == (names_under("r1", "r3"), names_under("r2", under=other))
+    # a superseded run's file without the line is one record that doesn't read, and its lines are not read
+    old = Store(tmp_path / "old", {"old": {SV.REGISTRATIONS_FILE: jsonl([reg, "no registration"])},
+                                   "new": held_files(first, four(first))})
+    got = SV.of_runs(old, ["old", "new"], ["old"])
+    assert got.held == 0 and printed(got) == (names_under("new"),) and dont_read(
+        1, "old", where=f"`out/registrations.jsonl` of old does not say what it was checked under: {a_registration}"
+    ) in got.why
+    assert SV.of_runs(old, ["new"]).held == 1
+
+
 def test_a_superseded_run_adds_no_accept(tmp_path):
     """The reader is handed every run that carries the record, with which of them another run replaces. A
     superseded run's accepts count for nothing: not alone, not to fill in a verdict a later run lacks, and not as a
@@ -1049,9 +1150,11 @@ def test_a_superseded_run_adds_no_accept(tmp_path):
     assert (got.held, got.verdicts, got.why[-2:]) == (0, (), (dropped(8, "r1"), uncounted(4, "r1")))
     # `read` hands the accepts apart, leaves the refused controls out and keeps the registrations
     assert SV.read(store, ["r1", "r3"], ["r1"]) == (
-        [registration(first)] * 2, records[:1] + records[2:], [dropped(4, "r1"), uncounted(4, "r1")],
-        the_controls(), with_streams(SERVED) * 2, records, [])
-    assert SV.read(store, ["r1", "r3"]) == ([registration(first)] * 2, records + records[:1] + records[2:], [],
+        [registration(first)] * 2, records[:1] + records[2:],
+        [names_under("r1", "r3"), dropped(4, "r1"), uncounted(4, "r1")], the_controls(), with_streams(SERVED) * 2,
+        records, [])
+    assert SV.read(store, ["r1", "r3"]) == ([registration(first)] * 2, records + records[:1] + records[2:],
+                                            [names_under("r1", "r3")],
                                             the_controls() * 2, with_streams(SERVED) * 2, [], [])
     # a superseded run's refused control backs no verifier: the four of a later run are then held back by a control
     alone = Store(tmp_path / "controls", {"old": held_files(first, []), "new": held_files(first, records, controls=[])})
@@ -1070,28 +1173,29 @@ def test_a_superseded_run_adds_no_accept(tmp_path):
     stray = [c | {SV.CONTROL: "max_tokens"} if i == 1 else c for i, c in enumerate(the_controls())]
     alone = Store(tmp_path / "stray", {"old": held_files(first, [], controls=stray),
                                        "new": held_files(first, records, controls=[])})
-    assert SV.of_runs(alone, ["old", "new"], ["old"]).why[-2:] == (
+    assert SV.of_runs(alone, ["old", "new"], ["old"]).why[-3:] == (
         "1 control record(s) read are of a format listed for none of the 4 verdicts, or are not the control their "
-        "verdict's verifier owes, and count for nothing", uncounted(3, "old"))
+        "verdict's verifier owes, and count for nothing", names_under("old", "new"), uncounted(3, "old"))
     # a control names no serve: one that carries a `serve` naming a superseded run is not that run's
     carried = [c | {CC.SERVE: "old"} for c in the_controls()]
     alone = Store(tmp_path / "carried", {"old": held_files(first, [], controls=[]),
                                          "new": held_files(first, records, controls=carried)})
     assert SV.of_runs(alone, ["old", "new"]).held == SV.of_runs(alone, ["old", "new"], ["old"]).held == 1
     # an accept that names a superseded run as its serve is that run's, whichever run produced it and holds it
-    kept = {SV.REGISTRATIONS_FILE: jsonl([registration(first)]), SV.SERVES_FILE: jsonl(with_streams(SERVED))}
+    kept = {SV.REGISTRATIONS_FILE: checked(registration(first)), SV.SERVES_FILE: jsonl(with_streams(SERVED))}
     judged = {"out/the-verdicts.jsonl": jsonl(of_serve("s1", records)), "out/the-controls.jsonl": jsonl(the_controls())}
     served = Store(tmp_path / "serve", {"s1": kept, "v1": judged})
     assert SV.of_runs(served, ["s1", "v1"]).held == 1
     got = SV.of_runs(served, ["s1", "v1"], ["s1"])
     assert (got.held, got.verdicts) == (0, ()) and got.why[0] == LACK and got.why[-1] == dropped(4, "s1")
     assert SV.read(served, ["s1", "v1"], ["s1"]) == (
-        [registration(first)], [], [dropped(4, "s1")], the_controls(), with_streams(SERVED), of_serve("s1", records), [])
+        [registration(first)], [], [names_under("s1"), dropped(4, "s1")], the_controls(), with_streams(SERVED),
+        of_serve("s1", records), [])
     # a superseded serve's head refuses only within its own serve: a later serve's head of the same number of the
     # link, another session's, is held, and the superseded one is named with what it lacks
     theirs = head(3, 5, 0, domain=bytes([1]) * 64)
     two = Store(tmp_path / "serves", {
-        "s1": kept, "v1": judged, "s2": {SV.REGISTRATIONS_FILE: jsonl([registration(theirs)])},
+        "s1": kept, "v1": judged, "s2": {SV.REGISTRATIONS_FILE: checked(registration(theirs))},
         "v2": {"out/the-verdicts.jsonl": jsonl(of_serve("s2", four(theirs)))}})
     runs = ["s1", "v1", "s2", "v2"]
     assert SV.of_runs(two, runs).held == 2
@@ -1144,9 +1248,11 @@ def run_files() -> dict[str, dict[str, str]]:
             "a record of no listed format, of another serve": held_files(
                 first, [unlisted(of_serve("another serve", four(first))[0])]),
             "the four and a registration that doesn't read": held_files(first, four(first)) | {
-                SV.REGISTRATIONS_FILE: jsonl([registration(first), {"format": "another's"}])},
+                SV.REGISTRATIONS_FILE: checked(registration(first), {"format": "another's"})},
             "the four and a serve's registration that doesn't read": held_files(
-                first, four(first), served=[*with_streams(SERVED), "no object"])}
+                first, four(first), served=[*with_streams(SERVED), "no object"]),
+            "the four and registrations that don't say what they were checked under": held_files(first, four(first)) | {
+                SV.REGISTRATIONS_FILE: jsonl([registration(first)])}}
 
 
 def test_a_superseded_run_takes_away_no_refusal(tmp_path):
@@ -1183,7 +1289,8 @@ def test_a_superseded_run_takes_away_no_refusal(tmp_path):
     assert kept_whole(f"the link {LINK}, execution phase 3", "old") in got.why
     # it is handed apart, as its run alone, and is none of the run's accepts
     handed = SV.read(store, ["old", "new"], ["old"])
-    assert handed[1] == four(first) and handed[5] == four(first) and handed[2][0] == dropped(4, "old")
+    assert handed[1] == four(first) and handed[5] == four(first)
+    assert handed[2][:2] == [names_under("old", "new"), dropped(4, "old")]
     assert handed[6] == ["old"]
     # and the registration it kept is read as any run's: another head for the execution phase holds nothing
     other = head(3, 6, 0)
@@ -1248,7 +1355,7 @@ def test_a_superseded_run_takes_away_no_refusal(tmp_path):
                 got = SV.of_runs(store, ["old", "new"], superseded).held
                 assert got <= both, (a, b, superseded)
                 seen, lowered, most = seen + 1, lowered + (got < both), max(most, both)
-    assert (seen, most) == (3 * len(kept) ** 2, 2) == (3267, 2) and lowered
+    assert (seen, most) == (3 * len(kept) ** 2, 2) == (3468, 2) and lowered
 
 
 #: run ids in the order of their launch; `RUN` and `TWIN` state one second
@@ -1288,24 +1395,39 @@ def test_a_superseded_runs_record_that_doesnt_read_keeps_whole_each_serve_not_la
     at = f"the link {LINK}, execution phase 3"
     record, text = {CC.VERDICT: {}}, "{no json"
     no_json = "it is no JSON: " + why_not(json.loads, text)
+    # a registrations' file that does not say what it was checked under is one such record, whatever it holds: one
+    # whose first line is a registration, one with no line, and one whose first line names no SHA-512
+    unsaid = {name: (SV.REGISTRATIONS_FILE, bad, why_not(SV.checked_under, bad.splitlines()[0] if bad else None))
+              for name, bad in (("registrations with no first line", jsonl([registration(first)])),
+                                ("registrations with no line", ""),
+                                ("registrations checked under no hash",
+                                 checked(registration(first), under=("5a", "c3"))))}
     lines = {"a verdict record": ("out/a-verdicts.jsonl", jsonl([record]), CC.lacks(record)),
              "a control record": ("out/a-controls.jsonl", jsonl([record]), SV.control_lacks(record)),
-             "a registration of connection rows": (SV.REGISTRATIONS_FILE, jsonl([{"format": "another's"}]),
+             "a registration of connection rows": (SV.REGISTRATIONS_FILE, checked({"format": "another's"}),
                                                    why_not(SV.head_of, {"format": "another's"})),
              "a serve's registration": (SV.SERVES_FILE, jsonl(["no object"]), why_not(SV.digest_of, "no object")),
-             **{f"no JSON in {path}": (path, text + "\n", no_json) for path in (
-                 "out/a-verdicts.jsonl", "out/a-controls.jsonl", SV.REGISTRATIONS_FILE, SV.SERVES_FILE)}}
-    assert len(lines) == 8 and all(lack for _, _, lack in lines.values())
+             **{f"no JSON in {path}": (path, (checked() if path == SV.REGISTRATIONS_FILE else "") + text + "\n",
+                                       no_json)
+                for path in ("out/a-verdicts.jsonl", "out/a-controls.jsonl", SV.REGISTRATIONS_FILE, SV.SERVES_FILE)},
+             **unsaid}
+    assert len(lines) == 11 and all(lack for _, _, lack in lines.values())
+    assert all(lack.startswith("does not say what it was checked under: ") for _, _, lack in unsaid.values())
     after = 0
     for i, (name, (path, bad, lack)) in enumerate(lines.items()):
-        last = dont_read(1, RUN, where=f"line 1 of `{path}` of {RUN}: {lack}")
+        # where it is: a line of its file, the second of a registrations' file, or the file itself
+        of = ("`{path}` of {run} {lack}" if name in unsaid else
+              f"line {1 + (path == SV.REGISTRATIONS_FILE)} of `{{path}}` of {{run}}: {{lack}}")
+        last = dont_read(1, RUN, where=of.format(path=path, run=RUN, lack=lack))
         for j, serve in enumerate((EARLY, RUN, TWIN, LATE, "the serve")):
             store = Store(tmp_path / f"{i}-{j}", {RUN: {path: bad}, "old": {path: bad},
                                                   LAST: held_files(first, of_serve(serve, four(first)))})
             assert SV.of_runs(store, [LAST]).held == 1
-            # in a run that is not superseded: nothing is held, and the one line says what doesn't read
+            # in a run that is not superseded: nothing is held, and the first line says what doesn't read; one
+            # refused once its files were read is followed by what the registrations' files were checked under
             live = SV.of_runs(store, [RUN, LAST])
-            assert live.held == 0 and len(live.why) == 1 and lack.removeprefix("it is ") in live.why[0], (name, serve)
+            assert live.held == 0 and lack.removeprefix("it is ") in live.why[0], (name, serve)
+            assert live.why[1:] in ((), (names_under(LAST),), (names_under(RUN, LAST),)), (name, serve)
             got = SV.of_runs(store, [RUN, LAST], [RUN])
             if serve == RUN:
                 # the superseded run as the serve: the accepts that name it fill no verdict, as built
@@ -1320,7 +1442,7 @@ def test_a_superseded_runs_record_that_doesnt_read_keeps_whole_each_serve_not_la
             # a superseded run whose name is no run id: no serve is launched after it
             worded = SV.of_runs(store, ["old", LAST], ["old"])
             assert worded.held == 0 and kept_whole(at, "old") in worded.why, (name, serve)
-            assert worded.why[-1] == dont_read(1, "old", where=f"line 1 of `{path}` of old: {lack}")
+            assert worded.why[-1] == dont_read(1, "old", where=of.format(path=path, run="old", lack=lack))
     assert after == len(lines)
     # an execution phase is held only where its serve was launched after each such run, and the line names those
     # it was not launched after
@@ -1342,7 +1464,7 @@ def test_a_superseded_runs_record_that_doesnt_read_keeps_whole_each_serve_not_la
         assert got.held == 0 and kept_whole(at, "old", 4) in got.why
     # two serves' execution phases: the one launched after the run is held, the one launched before it is not
     second = head(4, 2, 0)
-    both = {SV.REGISTRATIONS_FILE: jsonl([registration(first), registration(second)]),
+    both = {SV.REGISTRATIONS_FILE: checked(registration(first), registration(second)),
             "out/the-verdicts.jsonl": jsonl(of_serve(EARLY, four(first)) + of_serve(LATE, four(second))),
             "out/the-controls.jsonl": jsonl(the_controls()), SV.SERVES_FILE: jsonl(with_streams(SERVED))}
     store = Store(tmp_path / "serves", {RUN: bad, LAST: both})
@@ -1359,7 +1481,8 @@ def test_a_superseded_runs_record_that_doesnt_read_keeps_whole_each_serve_not_la
     store = Store(tmp_path / "named", {RUN: {"out/another.json": "{}"},
                                        LAST: held_files(first, [*of_serve(LATE, four(first)), {CC.RUN: RUN}])})
     got = SV.of_runs(store, [RUN, LAST], [RUN])
-    assert got.held == 0 and len(got.why) == 2 and got.why[1].startswith(f"{RUN} is not read: ")
+    assert got.held == 0 and len(got.why) == 3 and got.why[1] == names_under(LAST)
+    assert got.why[2].startswith(f"{RUN} is not read: ")
 
 
 def test_a_run_has_no_accept_on_a_serve_launched_after_it(tmp_path):
@@ -1831,7 +1954,7 @@ def test_withheld_and_codes_move_no_charge(tmp_path):
                         {k: v for k, v in x.items() if k not in fields} for x in was.verdicts]
                     said[how] += got.why != was.why
                 seen += 1
-    assert seen == 4 * len(kinds) ** 2 == 3844
+    assert seen == 4 * len(kinds) ** 2 == 4096
     assert said["withheld"] == said["stopped"] > 0 == said["nothing"] == said["codes"]
 
 
@@ -1861,16 +1984,38 @@ def test_superseding_a_run_raises_what_is_held_only_on_a_serve_launched_after_it
                     serves = {r[CC.SERVE] for r in handed[1] + handed[5] if CC.reads(r)}
                     assert any(SV.launched_after(s, run) for run in handed[6] for s in serves), (a, b, superseded)
                     raised[serve] += 1
-        assert seen == 3 * len(kinds) ** 2 == 3468
+        assert seen == 3 * len(kinds) ** 2 == 3675
     assert raised[EARLY] == 0 and raised[LATE]
 
 
+#: the kinds of thing a registrations' file holds besides a registration: its first line, which says what it was
+#: checked under and refuses nothing, and a line of a file without that first line, which is no registration read
+UNDER_LINE, UNCHECKED = "what a registrations' file was checked under", "a line of a file that doesn't say it"
+
+
 def things(files: dict[str, str]) -> list[tuple[str, object]]:
-    """What a run's files hold that the reader reads, each with the kind of file that holds it."""
+    """What a run's files hold that the reader reads, each with the kind of file that holds it. A registrations'
+    file's first line, where it says what the file was checked under, is `UNDER_LINE`; where it doesn't, each of
+    the file's lines is `UNCHECKED`."""
     kinds = ((SV.REGISTRATIONS_FILE, "registration"), (SV.SERVES_FILE, "serve"), (SV.CONTROLS_FILES, "control"),
              (SV.RECORDS_FILES, "verdict"))
-    return [(kind, json.loads(line)) for path, text in files.items() for pattern, kind in kinds
-            if fnmatch.fnmatchcase(path, pattern) for line in text.splitlines()]
+    out: list[tuple[str, object]] = []
+    for path, text in files.items():
+        for pattern, kind in kinds:
+            if fnmatch.fnmatchcase(path, pattern):
+                lines = text.splitlines()
+                said = kind == "registration" and bool(lines) and _reads(SV.checked_under, lines[0])
+                out += [(kind if kind != "registration" else UNCHECKED if not said else UNDER_LINE if i == 0 else kind,
+                         json.loads(line)) for i, line in enumerate(lines)]
+    return out
+
+
+def _reads(read, x: object) -> bool:
+    try:
+        read(x)
+    except ValueError:
+        return False
+    return True
 
 
 def less_by_one(files: dict[str, str]):
@@ -1912,7 +2057,8 @@ STANDS = ("a registration of connection rows that doesn't read", "a second head 
           "a verdict that is refused or not complete",
           "an accept of another serve, or under another registration, than a record that stays on its head",
           "an accept at another rate than every block, as its stream's registration registers it",
-          "an accept by a verifier without its control")
+          "an accept by a verifier without its control",
+          "a registrations' file that doesn't say what it was checked under")
 
 
 def stands_against(kind: str, x: object, stays: list[tuple[str, object]], controls: list[object],
@@ -1920,6 +2066,8 @@ def stands_against(kind: str, x: object, stays: list[tuple[str, object]], contro
     """How a thing of a ``kind`` of file stands against what ``stays`` when it is left out, one of `STANDS`, or
     None where it refuses nothing; ``controls`` are every control record handed, and ``served`` every serve's
     registration."""
+    if kind in (UNDER_LINE, UNCHECKED):
+        return STANDS[10] if kind == UNCHECKED else None
     if kind == "registration":
         if (head := _head(x)) is None:
             return STANDS[0]
@@ -1983,11 +2131,14 @@ def left_out(tmp: Path, olds: dict[str, dict[str, str]], news: dict[str, dict[st
                     stood = {why for kind, x in gone if (why := stands_against(kind, x, stays, controls, served))}
                     assert stood, (a, b, superseded, what, before, after)
                     ways |= stood
-                    # of a file or a run left out, the records that stand against what stays, alone put back
+                    # of a file or a run left out, the records that stand against what stays, alone put back, a
+                    # registrations' file with the line that says what it was checked under
                     if whole := old.keys() - (less or {}).keys():
-                        back = {path: "".join(line for line in old[path].splitlines(keepends=True)
-                                              for kind, x in things({path: line})
-                                              if stands_against(kind, x, stays, controls, served)) for path in whole}
+                        back = {path: "".join(
+                            line for line, (kind, x) in zip(old[path].splitlines(keepends=True),
+                                                            things({path: old[path]}))
+                            if kind == UNDER_LINE or stands_against(kind, x, stays, controls, served))
+                            for path in whole}
                         only = SV.of_runs(Store(tmp, runs | {"old": (less or {}) | back}), ["old", "new"], superseded)
                         assert only.held <= before, (a, b, superseded, what, before, only.held)
                         files += 1
@@ -2003,7 +2154,7 @@ def test_leaving_a_thing_out_raises_what_is_held_only_where_it_stood_against_one
     kinds = run_files()
     # the things one run's files can be left without: the run, each file and each record, over the kinds
     cases = sum(1 + len(list(less_by_one(files))) for files in kinds.values())
-    assert (len(kinds), cases) == (33, 519)
+    assert (len(kinds), cases) == (34, 567)
     seen, ways, files = left_out(tmp_path, kinds, {name: kinds[name] for name in ("nothing", "the four")})
     assert (seen, ways) == (2 * 3 * cases, set(STANDS)) and files
 
@@ -2013,4 +2164,4 @@ def test_leaving_a_thing_out_of_any_two_runs_raises_what_is_held_only_where_it_s
     """The same over every pair of the kinds of run files, with neither, the one or the other superseded."""
     kinds = run_files()
     seen, ways, files = left_out(tmp_path, kinds, kinds)
-    assert (seen, ways) == (3 * 519 * len(kinds), set(STANDS)) and files
+    assert (seen, ways) == (3 * 567 * len(kinds), set(STANDS)) and files

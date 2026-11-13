@@ -18,9 +18,11 @@ readers are the harness's). A run holds, each one JSON object a line:
   read, whatever its format, and the line says which it lacks). Which of the four verdicts a record is, is read from
   its verdict's ``format`` (`FORMATS`). A verdict whose verifier's format is not listed there reads as missing, and
   a record of such a format is counted in a line and charges nothing;
-- `REGISTRATIONS_FILE`: the registration of each execution phase's connection rows that its verdicts were decided
-  under, as `connection_rows.registration` writes it and as the offline check of the network certifier's run kept
-  it ("A head", below). A record names its head by digest alone, and a class's count is read from the head;
+- `REGISTRATIONS_FILE`: its first line, what the offline check of the network certifier's run that wrote the file
+  was handed to check it under (`CHECKED_UNDER`: the SHA-512 of the network certifier's public key and the
+  session), then the registration of each execution phase's connection rows that its verdicts were decided under,
+  as `connection_rows.registration` writes it and as that check kept it ("A head", below). A record names its head
+  by digest alone, and a class's count is read from the head;
 - its control records, in every file named as `CONTROLS_FILES`: an object with the fields `CONTROL_FIELDS` ("A
   negative control", below);
 - `SERVES_FILE`: each registration record its verdict records name by digest (`digest_of`): the one a serve
@@ -52,7 +54,8 @@ judged. So an execution phase is held only where its serve was launched after ev
 record that doesn't read: after the newest of them, which the line of an execution phase so kept whole names, with
 how many such records there are. A bad file is mended by a new serve with new verifier runs and never by a second
 run over the old serve, since nothing retries a verdict. Such a record is any line of the run's files read here
-that doesn't read, one rule for the four kinds of file and for a line that is no JSON; a control record names no
+that doesn't read, one rule for the four kinds of file and for a line that is no JSON, and a registrations' file
+that does not say what it was checked under, which is one such record whatever it holds; a control record names no
 serve, so one that doesn't read keeps whole the serves launched at or before its run, and a new control run mends
 the serves launched after it. In a run that is not superseded a record that doesn't read holds no execution phase
 at all, and a line that is no JSON names its line, its file and its run.
@@ -96,11 +99,16 @@ the command does not write itself, closes that, and the reader is handed none.
 held to the digest its certificate names. No signature is checked here: the certificate verifies under the network
 certifier's key and session, which a calculator doesn't hold. The signature is checked where `REGISTRATIONS_FILE` is
 written, by the offline check of the network certifier's run (`warden_serve.py check --registrations`,
-`connection_rows_run.check`): it verifies each registration under the deployment's key and session
-(`connection_rows.check_registration`), lays its tables again from the run's own records, and writes the file, a
-line for each registration it held to both, only where it found no problem. The file is unsigned, and the reader
-can't tell who wrote the one it is handed: a head read here is as good as the run of that check, and a file from
-any other writer is a head nobody checked.
+`connection_rows_run.check`). The auditor hands that check the SHA-512 of the network certifier's public key and
+the session; it holds the run's deployment record to them, verifies each registration under that key and session
+(`connection_rows.check_registration`), lays its tables again from the run's own records, and writes the file only
+where it found no problem: a first line that names the hash and the session it was handed, then a line for each
+registration it held to both. The reader reads the first line (`checked_under`). A file without it gives no head:
+in a run that is not superseded nothing is held and the line says the file does not say what it was checked under,
+and in a superseded run the file is one record that doesn't read ("The order of runs"). The answer prints the
+hash and the session each file names, and the reader compares them with nothing: it is told no key. The file is
+unsigned, and the reader can't tell who wrote the one it is handed: a head read here is as good as the run of that
+check and as what that run was handed, and a file from any other writer is a head nobody checked.
 
 **An execution phase is one serve's**: a serve, a link and the phase's number. A registration of connection rows
 names no serve, so a head's serve is the one its verdict records name (those on its digest, counted or not), which
@@ -206,6 +214,12 @@ RECORD = "exfiltration-glm53-stop-verdicts"
 RECORDS_FILES, REGISTRATIONS_FILE = "out/*-verdicts.jsonl", "out/registrations.jsonl"
 CONTROLS_FILES, SERVES_FILE = "out/*-controls.jsonl", "out/serve-registrations.jsonl"
 FILES = (RECORDS_FILES, REGISTRATIONS_FILE, CONTROLS_FILES, SERVES_FILE)
+#: the first line of a registrations' file, as the check that wrote it writes it (`connection_rows_run`'s "The
+#: registrations' file"): what its registrations were checked under, the SHA-512 of the network certifier's public
+#: key and the session, each in hex
+CHECKED_UNDER, KEY_SHA512, SESSION = "checked_under", "key_sha512", "session"
+#: what the reader says of a registrations' file without that line
+UNSAID = "does not say what it was checked under"
 #: which of the four verdicts a record is, or a control record is a control of, by the ``format`` of its verdict
 FORMAT = "format"
 FORMATS = {"verity-network-certifier/response-tie-verdict/v1": CC.RESPONSE_TIE}
@@ -278,6 +292,34 @@ def head_of(doc: Mapping[str, Any]) -> C.Head:
     if signed != head.digest().hex():
         raise ValueError("the registration's certificate doesn't name its head's digest")
     return head
+
+
+def _hex(x: object, size: int | None = None) -> bool:
+    """Whether ``x`` is the lowercase hex of at least one byte, of ``size`` bytes where it is given."""
+    return type(x) is str and bool(re.fullmatch(r"(?:[0-9a-f]{2})+", x)) and size in (None, len(x) // 2)
+
+
+def checked_under(first: str | None) -> tuple[str, str]:
+    """What a registrations' file says it was checked under (the module docstring's "A head"), from its first
+    line, None for a file that holds no line: the SHA-512 of the network certifier's public key and the session,
+    each the hex the line holds. ValueError, saying why the file does not say it, for no line and for a first
+    line that is anything else, a registration among them."""
+    if first is None:
+        raise ValueError(f"{UNSAID}: it holds no line")
+    try:
+        doc = json.loads(first)
+    except ValueError as e:
+        raise ValueError(f"{UNSAID}: its first line is no JSON: {e}") from None
+    under = doc.get(CHECKED_UNDER) if isinstance(doc, Mapping) and set(doc) == {CHECKED_UNDER} else None
+    if not isinstance(under, Mapping) or set(under) != {KEY_SHA512, SESSION}:
+        what = "a registration" if isinstance(doc, Mapping) and doc.get("format") == C.REGISTRATION else "another thing"
+        raise ValueError(f"{UNSAID}: its first line is {what}, not an object with the one field `{CHECKED_UNDER}`, "
+                         f"an object with the two fields `{KEY_SHA512}` and `{SESSION}`")
+    if not _hex(under[KEY_SHA512], 64):
+        raise ValueError(f"{UNSAID}: its first line's `{KEY_SHA512}` is not the hex of a SHA-512")
+    if not _hex(under[SESSION]):
+        raise ValueError(f"{UNSAID}: its first line's `{SESSION}` is not the hex of a session")
+    return under[KEY_SHA512], under[SESSION]
 
 
 def classes(head: C.Head) -> list[int]:
@@ -490,8 +532,9 @@ def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[s
          served: Iterable[Mapping[str, Any]] = (), spent: Iterable[Mapping[str, Any]] = (),
          unread: Iterable[str] = ()) -> LB.Stop:
     """How the stop class is charged (the module docstring's "The answer"), from registrations, verdict records,
-    control records and serves' registrations as `read` returns them; ``left`` are lines on what was not read,
-    which the answer carries, and ``spent`` the accepts that fill no verdict, a superseded run's and those on a
+    control records and serves' registrations as `read` returns them; ``left`` are lines on what the
+    registrations' files were checked under and on what was not read, which the answer carries, and ``spent`` the
+    accepts that fill no verdict, a superseded run's and those on a
     serve launched after their run, which are held to what holds any record on their head (the module docstring's
     "A superseded run"). ``unread`` is the run of each record of a superseded run that doesn't read: an execution
     phase is held only where its serve was launched after the newest of them ("The order of runs")."""
@@ -656,6 +699,13 @@ def _lines(path: Path) -> list[tuple[int, str]]:
     return [(n, line) for n, line in enumerate(path.read_text().splitlines(), 1) if line.strip()]
 
 
+def _said(key: str, session: str, runs: Sequence[str]) -> str:
+    """The answer's line on what the registrations' files of ``runs`` say they were checked under."""
+    return (f"`{REGISTRATIONS_FILE}` of {', '.join(runs)} says its registrations were checked under the network "
+            f"certifier's key whose SHA-512 is {key}, in the session {session}: the reader holds neither, and "
+            "compares them with nothing")
+
+
 def _lack(path: str, record: Any) -> str | None:
     """What keeps a record of a run's file ``path`` from reading, as `stop` refuses it, or None where it reads."""
     if path in (REGISTRATIONS_FILE, SERVES_FILE):
@@ -684,9 +734,13 @@ def _backs(record: Any) -> bool:
 def read(store: Any, runs: Iterable[str], superseded: Iterable[str] = ()
          ) -> tuple[list[Any], list[Any], list[str], list[Any], list[Any], list[Any], list[str]]:
     """The registrations and the verdict records in the run files of ``runs``, in the runs' order and each run's
-    files by name; a line for each run that is not in the store, kept no run files or holds no such file; the
-    runs' control records and serves' registrations; the accepts that fill no verdict; and the run of each record
-    of a superseded run that doesn't read: `stop`'s arguments, in its order.
+    files by name; a line on what the registrations' files say they were checked under (`checked_under`), then a
+    line for each run that is not in the store, kept no run files or holds no such file; the runs' control records
+    and serves' registrations; the accepts that fill no verdict; and the run of each record of a superseded run
+    that doesn't read: `stop`'s arguments, in its order.
+    A registrations' file is read past its first line, and one that does not say what it was checked under gives
+    no registration: in a run that is not superseded it is a ValueError that names the file and the run, and in a
+    superseded run the file is one record that doesn't read.
     ``superseded`` are the runs among them that another run replaces: a verdict record of one that is accepted and
     complete is handed apart, as one that fills no verdict, and a control record of one that counts for its
     verifier is left out, each with a line that counts them (the module docstring's "A superseded run" and "A
@@ -705,6 +759,7 @@ def read(store: Any, runs: Iterable[str], superseded: Iterable[str] = ()
     left: list[str] = []
     later: list[str] = []
     unread: list[tuple[str, str]] = []
+    said: dict[tuple[str, str], list[str]] = {}
     superseded = set(superseded)
     uncounted = 0
     for run in runs:
@@ -720,7 +775,18 @@ def read(store: Any, runs: Iterable[str], superseded: Iterable[str] = ()
         at = Path(store.fetch(files, paths=held))
         for path in held:
             control = fnmatch.fnmatchcase(path, CONTROLS_FILES)
-            for n, line in _lines(at / path):
+            lines = _lines(at / path)
+            if path == REGISTRATIONS_FILE:
+                # its first line is what it was checked under, and a file without one gives no head
+                try:
+                    said.setdefault(checked_under(lines[0][1] if lines else None), []).append(run)
+                except ValueError as e:
+                    if run not in superseded:
+                        raise ValueError(f"`{path}` of {run} {e}") from None
+                    unread.append((run, f"`{path}` of {run} {e}"))
+                    continue
+                lines = lines[1:]
+            for n, line in lines:
                 where = f"line {n} of `{path}` of {run}"
                 try:
                     record, lack = json.loads(line), None
@@ -746,6 +812,7 @@ def read(store: Any, runs: Iterable[str], superseded: Iterable[str] = ()
                     later += [] if old else own[:1]
                 else:
                     (controls if control else records).append(record)
+    left[:0] = [_said(key, session, runs) for (key, session), runs in said.items()]
     of = f"of the superseded run(s) {', '.join(sorted(superseded))}"
     if len(spent) > len(later):
         left.append(f"{len(spent) - len(later)} verdict record(s) {of} are accepted and complete, and fill no "
