@@ -12,7 +12,7 @@
 # changes: the lander's rule for a train that adds or changes a guarantee (`lean-audit.json`) anywhere.
 # It prints the run ids (`RUN ID...`); `research merge COMMIT` lands it on a pass. `research merge --train --prepare` builds
 # COMMIT's branch. With MACHINE `auto` or a list, check.py launches twins, one run per machine that can take it (`slot.py
-# --twin`; when its pick had a slot free, those on the others join their lines only after a delay, `--twin-after`): the first to
+# --twin`; when its pick had a slot free, on two others at most, which join their lines only after a delay, `--twin-after`): the first to
 # take a slot runs the check and the others exit 75, not started, so RUN names one id per twin. When every twin exits 75
 # (check.py's own exit 75), none of them ran: rerun the train.
 #

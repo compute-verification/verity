@@ -267,6 +267,26 @@ def test_with_a_slot_free_on_its_pick_a_check_twins_on_every_other_machine_that_
     assert CHECK.slot_wrap(False, "p1") == ["python3", "tools/verity/check/slot.py", "--twin", "p1", "--"]
 
 
+def test_with_a_slot_free_at_home_late_twins_go_to_the_two_machines_with_most_slots_free_and_with_none_to_every_machine():
+    """Each delayed twin ships its tree and makes its clone at the launch, though it mostly never joins a line, on machines
+    whose inodes run short: a check with a free slot at home twins on LATE_TWINS others at most, those with the most slots free
+    for it (free, less the waiters ahead), ties in its list's order. A check with none free at home twins on every machine at
+    once, as before."""
+    assert CHECK.LATE_TWINS == 2
+    m = ["m0", "m1", "m2", "m3", "m4", "m5"]
+    docs = {"m0": machine([slot("a")]),                                            # home: a slot free
+            "m1": machine([slot("a", HOLDER)]),                                     # 0 free
+            "m2": machine([slot("a"), slot("b")], [waiter(priority=True)]),         # 2 free, 1 ahead: 1
+            "m3": machine([slot("a"), slot("b"), slot("c", HOLDER)]),               # 2 free
+            "m4": machine([slot("a")]),                                            # 1 free, after m2 in the list
+            "m5": machine([slot("a", HOLDER)], [waiter(priority=True), waiter()])}   # 0 free, 1 ahead (a train's): -1
+    assert [CHECK.spare(docs[n], True) for n in m] == [1, 0, 1, 2, 1, -1]
+    assert CHECK.twins(m, docs, "m0", True) == (["m0", "m3", "m2"], CHECK.TWIN_AFTER_S)
+    assert CHECK.twins(["m0", "m1"], docs, "m0", True) == (["m0", "m1"], CHECK.TWIN_AFTER_S)
+    docs["m0"] = machine([slot("a", HOLDER)])                                       # home full: every machine, at once
+    assert CHECK.twins(m, docs, "m0", True) == (m, 0)
+
+
 def test_a_quick_tier_on_auto_goes_where_a_check_slot_is_free_whatever_its_lean_audit_slots():
     """A quick tier must not wait past its timeout in one machine's line while another has free check slots. The quick tier
     takes no Lean audit slot, so a machine whose Lean slots are all held, or can't be read, is no worse for it."""
@@ -436,7 +456,7 @@ def test_a_candidates_shards_launched_together_each_take_a_free_slot_and_never_o
             got = CHECK.place(names, sha, True, read=lambda ns: json.loads(json.dumps({n: docs[n] for n in ns})), path=path,
                               now=lambda: t[0], min_mem=CHECK.TRAIN_GB, shard=spec)
             both, after = CHECK.twins(names, got[0], got[1], True, CHECK.TRAIN_GB)
-            assert both == [got[1], *(m for m in names if m != got[1])]             # twins over every machine, its pick first
+            assert both[0] == got[1] and len(both) == (1 + CHECK.LATE_TWINS if after else len(names))   # its pick first
             out.append((got[1], after))
         return out[0], out[1]
 

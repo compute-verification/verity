@@ -58,8 +58,8 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
                                                             fewest waiters ahead (priority ones only, with --priority), and
                                                             refuses when no machine's slots can be read; and twins: the check
                                                             on each machine it can run on (`twins`), the first to take a slot
-                                                            runs, those off M joining their lines after TWIN_AFTER_S when M
-                                                            had a slot free; exit 75 when none ran: rerun
+                                                            runs; when M had a slot free, on LATE_TWINS others at most, which
+                                                            join their lines after TWIN_AFTER_S; exit 75 when none ran: rerun
     uv run python tools/verity/check/check.py --record --on auto|M --pool NAME [--deferred STEP,...]
                                                             the same in a slot of M's NAME pool (`research run --pool`'s pools),
                                                             not its merge-check slots, which on the CPU nodes take train checks
@@ -476,13 +476,29 @@ def slot_wrap(priority: bool = False, twin: str | None = None, after: int = 0) -
 #: launch (`slot.py --twin-after`): a check that took that slot costs no other line a waiter, and one that lost it to a check or
 #: to memory taken after the launch joins every line then
 TWIN_AFTER_S = 600
+#: the most machines besides home a check twins on with that delay: each delayed twin ships its tree and makes its clone on
+#: its machine at the launch (tens of thousands of inodes), on machines whose inodes run short, though it mostly never joins
+LATE_TWINS = 2
+
+
+def spare(doc: dict, priority: bool = False, min_mem: int | None = None) -> int:
+    """How many check slots of a machine whose `read_slots` documents are ``doc`` are free for a check (free, unblocked, its
+    kind's and holding ``min_mem``, as `placement` counts them), less the live waiters ahead of it; 1 with no slots file (a
+    check runs unpinned there at once)."""
+    check = doc["check"]
+    if check["slots"] is None:
+        return 1
+    ahead = len([w for w in check["waiters"] if w["priority"] or not priority])
+    return len([s for s in check["slots"] if (priority or not s.get("trains")) and s["holder"] is None and not s["blocked"]
+                and (not min_mem or s.get("mem") is None or s["mem"] >= min_mem)]) - ahead
 
 
 def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bool = False,
           min_mem: int | None = None) -> tuple[list[str], int]:
-    """The machines among ``names`` to launch twins of a check on (`slot.py --twin`), ``home``, `choose`'s pick, first: every
-    one a check can run on (`placement` refuses none), none when that is ``home`` alone (it runs there); and the seconds the
-    twins off ``home`` wait before joining their lines: `TWIN_AFTER_S` when ``home`` has a slot free for it, else 0."""
+    """The machines among ``names`` to launch twins of a check on (`slot.py --twin`), ``home``, `choose`'s pick, first, and the
+    seconds the twins off ``home`` wait before joining their lines. When ``home`` has no slot free for it: every machine a
+    check can run on (`placement` refuses none), at once (0). When it has one: the LATE_TWINS of those with the most `spare`
+    slots (ties in ``names``' order), after `TWIN_AFTER_S`. None when that leaves ``home`` alone: it runs there."""
     def runs(name: str) -> bool:
         try:
             placement(docs[name], priority, min_mem)
@@ -490,10 +506,12 @@ def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bo
             return False
         return True
 
-    out = [home, *(n for n in names if n != home and runs(n))]
-    if len(out) < 2:
+    rest = [n for n in names if n != home and runs(n)]
+    if not rest:
         return [], 0
-    return out, TWIN_AFTER_S if placement(docs[home], priority, min_mem)[0] else 0
+    if not placement(docs[home], priority, min_mem)[0]:
+        return [home, *rest], 0
+    return [home, *sorted(rest, key=lambda n: -spare(docs[n], priority, min_mem))[:LATE_TWINS]], TWIN_AFTER_S
 
 
 #: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots (the CPU nodes' are
@@ -1269,7 +1287,7 @@ def record(argv: list[str]) -> int:
     (`landable`) gets a warning and is checked anyway. `--on auto` or a list takes the machine `choose` picks, first of all, and
     launches `twins` there and on the others (one `research run` each, waited on together: 0 when one passed, the exit of the
     one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it); when the pick
-    had a slot free, the others join their lines only after TWIN_AFTER_S (`slot.py --twin-after`).  With
+    had a slot free, on LATE_TWINS others at most, which join their lines only after TWIN_AFTER_S (`slot.py --twin-after`).  With
     `--deferred STEP,...` it is a `research run` without `--tool check` of those steps alone (no gate reads it), with the
     verdict packs' URLs and no upstream build or Lean dependencies.  `--pool NAME` (with `--on MACHINE`, or `--on auto` or none for
     the machine `lane_machine` picks) waits for a slot of that machine's NAME pool instead of its merge-check slots (`pool_env`);
