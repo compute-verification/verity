@@ -65,17 +65,23 @@ def paramsAt (θ : ByteArray) : Flock.V VStar.Recursive.SampledTwo.Params := do
   let some x := ps.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) | throw "the parameters name no sampled proofs"
   _root_.Core.canonicalJson x.params.toUTF8 >>= VStar.Recursive.SampledTwo.paramsOfJson
 
+/-- The registration and the evidence of the case the composition's evidence names under the sampled proofs' id,
+each read by the two-stage form's decoder. -/
+def caseIn (s : Verity.Sent) : Flock.V (Spot.OneStage.Commitment × VStar.Recursive.SampledTwo.Evidence) := do
+  let ev ← _root_.Core.Composition.decodeEvidence s.evidence
+  let some y := ev.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) | throw "the evidence holds no sampled proofs case"
+  let c ← Spot.OneStage.commitmentOf y.commitment
+  let e ← VStar.Recursive.SampledTwo.evidenceOf y.evidence
+  pure (c, e)
+
 /-- **The two-stage case in what the prover sent**: the sampled component's parameters (`paramsAt`), and the
 registration and the evidence of the case the composition's evidence names under its id, each read by the two-stage
 form's decoder. -/
 def caseOf (s : Verity.Sent) : Flock.V (VStar.Recursive.SampledTwo.Params × Spot.OneStage.Commitment ×
     VStar.Recursive.SampledTwo.Evidence) := do
   let p ← paramsAt s.params
-  let ev ← _root_.Core.Composition.decodeEvidence s.evidence
-  let some y := ev.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) | throw "the evidence holds no sampled proofs case"
-  let c ← Spot.OneStage.commitmentOf y.commitment
-  let e ← VStar.Recursive.SampledTwo.evidenceOf y.evidence
-  pure (p, c, e)
+  let ce ← caseIn s
+  pure (p, ce.1, ce.2)
 
 /-- **The form accepts, with its switch on**: the form's check at the switch on (`checkBlobsAtWith true`) accepts the
 case at the first stage's bytes the evidence carries, as `Reading.AcceptsOn` reads a case. -/
@@ -94,7 +100,6 @@ theorem atDeployed_eq {key : ChallengerKey} (h : atDeployed key = true) : key.pa
   obtain ⟨⟨N, W, H⟩, pub⟩ := key
   simp only [atDeployed, Bool.and_eq_true, beq_iff_eq] at h
   obtain ⟨⟨h1, h2⟩, h3⟩ := h
-  simp only at h1 h2 h3
   subst h1 h2 h3
   rfl
 
@@ -118,8 +123,8 @@ def firstLabel (e : VStar.Recursive.SampledTwo.Evidence) : Option String :=
   | _ => none
 
 /-- The boundary registration's parameters, as the form and the run of record read them. -/
-def boundaryOf (p : VStar.Recursive.SampledTwo.Params) : Flock.V Spot.OneStage.Params := do
-  Spot.OneStage.paramsParsed (← _root_.Core.canonicalJson (← Flock.canon p.boundary).toUTF8)
+def boundaryOf (p : VStar.Recursive.SampledTwo.Params) : Flock.V Spot.OneStage.Params :=
+  pure p.boundary
 
 /-- **What the first session's coins are read under**: the parameters' key (the interior audit's challenger's), the
 boundary registration's window, the family its segment names, after the boundary registration's digest. -/
@@ -251,6 +256,28 @@ theorem readFinder_out (V : Vocab d α) (dev : Exchange → History) (θ : ByteA
           fun uv => (uv.1.data.toList, uv.2.data.toList))) :=
   rfl
 
+open Classical in
+/-- What `findBreak` finds at the history `dev` in the two sessions' records under the parameters' key (`keyOf θ`). -/
+noncomputable def forgeryFinds (dev : History) (θ : ByteArray) (s : Verity.Sent) : List Finding :=
+  (records s).filterMap fun x => if keyOf θ = some x.1.key then findBreak dev x.1.key x.1.label x.2 else none
+
+theorem mem_forgeryFinds {dev : History} {θ : ByteArray} {s : Verity.Sent} {f : Finding} :
+    f ∈ forgeryFinds dev θ s ↔
+      ∃ x ∈ records s, keyOf θ = some x.1.key ∧ findBreak dev x.1.key x.1.label x.2 = some f := by
+  unfold forgeryFinds
+  rw [List.mem_filterMap]
+  constructor
+  · rintro ⟨x, hx, h⟩
+    by_cases hk : keyOf θ = some x.1.key
+    · rw [if_pos hk] at h
+      exact ⟨x, hx, hk, h⟩
+    · rw [if_neg hk] at h
+      cases h
+  · rintro ⟨x, hx, hk, h⟩
+    refine ⟨x, hx, ?_⟩
+    rw [if_pos hk]
+    exact h
+
 /-- **The forger at a strategy**, against the parameters' key (`keyOf`), at the device's history at each play `dev`:
 on a uniform tape of the play, the first forgery `findBreak` finds in one of the two sessions' records under that key.
 -/
@@ -261,8 +288,7 @@ noncomputable def forger (V : Vocab d α) (dev : Exchange → History) (θ : Byt
   signed t := (Verity.Game.Tape.out _ σ t).signed.map Prod.fst
   out t :=
     let o := Verity.Game.Tape.out _ σ t
-    ((records o.sent).filterMap fun x =>
-      if keyOf θ = some x.1.key then findBreak (dev o) x.1.key x.1.label x.2 else none).findSome? forgeryOf
+    (forgeryFinds (dev o) θ o.sent).findSome? forgeryOf
   cost t :=
     let o := Verity.Game.Tape.out _ σ t
     V.cost θ F c σ + breakCalls (dev o) o.sent
@@ -352,29 +378,18 @@ theorem finders_of_break (V : Vocab d α) (dev : Exchange → History) (θ : Byt
     right
     have hd : x.1.key.params = Lms.deployed := keyOf_deployed θ _ hk
     let o := Verity.Game.Tape.out _ σ t
-    let l := (records o.sent).filterMap fun x' =>
-      if keyOf θ = some x'.1.key then findBreak (dev o) x'.1.key x'.1.label x'.2 else none
-    have hfx : (if keyOf θ = some x.1.key then findBreak (dev o) x.1.key x.1.label x.2 else none) =
-        some (Finding.forgery m sig) := by
-      rw [if_pos hk]
-      exact hw
-    have hmem : Finding.forgery m sig ∈ l := List.mem_filterMap.2 ⟨x, hx, hfx⟩
-    have hl : ∀ m' sig', Finding.forgery m' sig' ∈ l →
+    have hmem : Finding.forgery m sig ∈ forgeryFinds (dev o) θ o.sent := mem_forgeryFinds.2 ⟨x, hx, hk, hw⟩
+    have hl : ∀ m' sig', Finding.forgery m' sig' ∈ forgeryFinds (dev o) θ o.sent →
         LmsVerifies x.1.key m' sig' ∧ ¬ Signed (dev o) x.1.key.pub m' := by
       intro m' sig' h
-      obtain ⟨x', -, hx'⟩ := List.mem_filterMap.1 h
-      have hx'' : (if keyOf θ = some x'.1.key then findBreak (dev o) x'.1.key x'.1.label x'.2 else none) =
-          some (Finding.forgery m' sig') := hx'
-      by_cases hk' : keyOf θ = some x'.1.key
-      · rw [if_pos hk'] at hx''
-        have e : x'.1.key = x.1.key := Option.some.inj (hk'.symm.trans hk)
-        have hv : LmsVerifies x'.1.key m' sig' ∧ ¬ Signed (dev o) x'.1.key.pub m' := findBreak_valid hx''
-        exact e ▸ hv
-      · rw [if_neg hk'] at hx''
-        cases hx''
+      obtain ⟨x', -, hk', hx'⟩ := mem_forgeryFinds.1 h
+      have e : x'.1.key = x.1.key := Option.some.inj (hk'.symm.trans hk)
+      have hv : LmsVerifies x'.1.key m' sig' ∧ ¬ Signed (dev o) x'.1.key.pub m' := findBreak_valid hx'
+      exact e ▸ hv
     obtain ⟨_, v, hf, hv, m', sig', hm', rfl⟩ :=
       Verity.Sampled.Binding.findSome_forgeryOf hd (fun m' sig' h => (hl m' sig' h).1) hmem
-    refine ⟨_, v, hf, fun hu => ?_, ?_⟩
+    have hout : (forger V dev θ F c σ).out t = (forgeryFinds (dev o) θ o.sent).findSome? forgeryOf := rfl
+    refine ⟨_, v, hout.trans hf, fun hu => ?_, ?_⟩
     · have hu' : m'.data.toList ∈ o.signed.map Prod.fst := hu
       obtain ⟨p, hp, hpu⟩ := List.mem_map.1 hu'
       have hsg := hs o (Verity.Game.Tape.reaches_out _ σ t) x.1.key hk p hp
