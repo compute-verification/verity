@@ -6,14 +6,14 @@
 # Everything but PIECE_DIR's files goes to SERVE_DIR/private/pouw, each step's log among it:
 #   1. h1_prove/live.sh proves the window's live rounds from serve-openai's --h1-prover dump (SERVE_DIR/private/h1/w<K>/live)
 #      into live/: its live-evidence.json, credit's live evidence, and the proof files it names;
-#   2. h1_prove/drawn.sh stages and proves the window's drawn units (H1_DRAWN_ONLY=1, and H1_DRAWN_CHECK=0 since steps 3
+#   2. h1_prove/drawn.sh stages and proves the window's sampled proof blocks (H1_DRAWN_ONLY=1, and H1_DRAWN_CHECK=0 since steps 3
 #      and 4 verify the statements), its scratch kept in drawn-work/ (H1_DRAWN_WORK): it holds the proof files
 #      drawn/statements.json names, and the staged witness;
 #   3. `served_verdicts.py pouw` writes the piece in PIECE_DIR with those --statements and --live-evidence (the window's
 #      gate sessions, ledger and pins among it);
 #   4. `pouw_piece.py period` writes the period's case and its Lean answer (pouw-period, built here) in period/, from the
 #      records step 3 fetched, where served_composite.sh finds it for remote's Lean.
-# Steps 3 and 4 share one set of the verifier of record's answers (`answers.Answers`, --lean-answers): each run's answer
+# Steps 3 and 4 share one set of the verifier's answers (`answers.Answers`, --lean-answers): each run's answer
 # is kept, as credit asks for it, under the SHA-512 of all its inputs in the verifier's own scratch (a 0700 directory
 # under VERIFIER_TMP, never the serve dir, removed on exit), so each statement is verified once, step 4 takes step 3's
 # answers by key (its line: "it took the piece's Lean answers by key"), and each step judges every answer itself.
