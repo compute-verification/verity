@@ -24,7 +24,7 @@ def is_hidden_value_row(name: str) -> bool:
 
 def tp_partials_bad(man: dict[str, Any], names: Counter[str]) -> dict[str, int]:
     """TP rank-local collective inputs: exactly one `tp/<site>/{part,shard}_rank<r>` per expected site, none from elsewhere
-    (`NativeHostCommitter.identity_check`'s per-step TP rule over the step's tensor names)."""
+    (`identity_check`'s per-step TP rule over the step's tensor names)."""
     tp_bad: dict[str, int] = {}
     tp_sites = man.get("tp_sites")                                    # none for a run with no TP source: left out, null or empty
     tp_counts = Counter(n.rsplit("/", 1)[0] for n in names.elements() if TP_PARTIAL_RE.search(n))

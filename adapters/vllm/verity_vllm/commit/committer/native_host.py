@@ -70,7 +70,6 @@ from verity_vllm.commit.committer.identity_check import (
     TP_PARTIAL_RE,
     is_hidden_value_row,
 )
-from verity_vllm.commit.committer.identity_check import tp_partials_bad as tp_partials_bad
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
 from verity_vllm.commit.committer.staging_bounds import _ARENA_MIN, step_bound_bytes
@@ -1430,11 +1429,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
 
     # ------------------------------------------------------------------ identities: expected manifest vs committed identities
 
-    @staticmethod
-    def _module_of(name: str) -> str:
-        """Committed tensor name -> the producing module name (`identity_check.module_of`)."""
-        return identity_check.module_of(name)
-
     def expected_manifest(self) -> dict[str, Any]:
         """The identities every committed step MUST cover (`identity_check.expected_manifest`), from this committer's install-time
         module set (`_select_modules`), its attached sources and its engine's runner."""
@@ -1451,10 +1445,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         return identity_check.identity_check(manifest or self.expected_manifest(), self._layouts, self.sources,
                                              getattr(self, "attention_layer_decls", None) or [],   # the Program's per-layer attention Call statics (driver-supplied)
                                              getattr(self, "step_rows", None), getattr(self, "plane_policy", None))
-
-    def _step_sequences(self, step: int, metas: list) -> Any:
-        """The step's active-sequence set (`identity_check.step_sequences`), from the collector's row record where there is one."""
-        return identity_check.step_sequences(getattr(self, "step_rows", None), step, metas)
 
     def layouts_dump(self) -> dict[int, list[dict[str, Any]]]:
         """The published per-step layouts as plain dicts ({step: [{name, dtype, shape, nbytes, numel, first_leaf, n_leaves, stream_off}]}) --
