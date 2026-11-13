@@ -57,7 +57,7 @@ theorem size_le_sizePerWord {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np
   rwa [div_le_iff₀ (Nat.cast_pos.mpr (Nat.pos_of_ne_zero h))] at hle
 
 theorem creditLive_nonneg {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : WindowPlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
+    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
     (x : Paths (Paths C Cd.rounds × B) n) : 0 ≤ creditLive Sc Cd Wp ws x := by
   unfold creditLive
   refine Finset.sum_nonneg fun w _ => ?_
@@ -65,7 +65,7 @@ theorem creditLive_nonneg {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {
   exacts [Finset.sum_nonneg fun t _ => Nat.cast_nonneg _, le_rfl]
 
 theorem creditedSize_nonneg {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : WindowPlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
+    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
     (sz : Fin Np → ℕ) (x : Paths (Paths C Cd.rounds × B) n) : 0 ≤ creditedSize Sc Cd Wp ws sz x := by
   unfold creditedSize
   refine Finset.sum_nonneg fun w _ => ?_
@@ -83,7 +83,7 @@ theorem rightSize_nonneg {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n 
 /-- **The size the right blocks miss is at most `σ` times the words they miss**, when every right block is live in a
 credited window. -/
 theorem creditedSize_sub_le {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : WindowPlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
+    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
     (sz : Fin Np → ℕ) (x : Paths (Paths C Cd.rounds × B) n) (good : Fin n → Fin Np → Prop)
     (hgood : ∀ w t, good w t → ws.AcceptedUpTo x w ∧ Wp.liveAt x w t = true) :
     creditedSize Sc Cd Wp ws sz x - rightSize Sc Cd sz good ≤
@@ -139,19 +139,19 @@ theorem creditFloor_le {N S σ ε Gw Gs : ℝ} (hN : 0 ≤ N) (hS : 0 ≤ S) (h�
       rw [hS']
       linarith
 
-/-- **A good block is live in a credited window**: it is paid, and `periodMode` skips every other block whole. -/
+/-- **A good block is live in a credited window**: it is paid, and `monitoringPeriodMode` skips every other block whole. -/
 theorem good_live {ι C Ξ V : Type} (Cd : Declared ι) {nB mB n : ℕ} (hr : 0 < Cd.rounds) (σ : Fin nB → Fin mB)
     (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ) (hKd : 0 < k sT)
     (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → (ℕ → V) → Prop)
-    (Wp : WindowPlay C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
+    (Wp : ExecutionPhasePlay C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
     (x : Paths (Coin C Ξ Cd.rounds σ sT) n) (w : Fin n) (t : Fin (tileCount σ sT))
     (hg : (tileLayer Cd hr σ k hk sT unitOf ws opened rel right).Good
-      (periodMode Cd Wp (tileRun σ k hk sT unitOf ws opened rel right)) x w t) :
+      (monitoringPeriodMode Cd Wp (tileRun σ k hk sT unitOf ws opened rel right)) x w t) :
     ws.AcceptedUpTo x w ∧ Wp.liveAt x w t = true := by
   have hp := hg (w, t) Relation.ReflTransGen.refl
-  unfold periodMode at hp
+  unfold monitoringPeriodMode at hp
   split_ifs at hp with hc
   exact ⟨(credited_iff σ k hk sT unitOf hKd ws opened rel right x w).1 hc.1, hc.2⟩
 
@@ -160,7 +160,7 @@ theorem rightValues : RightValues := by
     place tile Wp Pl ρ δs δbind δks hS hρ hρ1 hρN hwmax hlk hG hDD hPre hMoved hReg hDraw hServ hSalt hLucks
   classical
   let pf := tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile) (j10rAtCoin hr enc place tile)
-  let mode := periodMode Cd Wp (tileRun σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
+  let mode := monitoringPeriodMode Cd Wp (tileRun σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
     (j10rAtCoin hr enc place tile))
   let Gw : Paths (Coin C Ξ Cd.rounds σ sT) n → ℝ := fun x =>
     rightWords Sc Cd (Np := tileCount σ sT) fun w t => pf.Good mode x w t
