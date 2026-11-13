@@ -1,4 +1,5 @@
 import math
+import tomllib
 import types
 
 import numpy as np
@@ -149,7 +150,6 @@ def test_key_scales():
     ('k_scale = "row"', "k_scale is one of"),
 ])
 def test_rejections(text, message):
-    import tomllib
     with pytest.raises(ValueError, match=message):
         spec.parse(tomllib.loads('[[attention]]\nstep = "int8"\n' + text), "t")
 
