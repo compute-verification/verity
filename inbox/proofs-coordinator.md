@@ -155445,3 +155445,16 @@ Pushed: `cursor/proofs-members-popimport-34fd` at `fb3e260c42d1`, `cursor/proofs
 - Why the compiler's code for `membersOf` is quadratic: the measurement says the loop's place decides it; I have not read the intermediate code.
 - The per-member parse of a served window with the twin (the members above are made up).
 - The check of Thursday's window whole: this run is the population step alone, on the kept parameters and record. It checks no challenge and reads no blob.
+
+## HELDOF, Fri 13 Nov 18:17Z: checkpoint: the three old forms are deleted (own commit), delta's docstring says it; `3a9b64f5590` compiles; eight tries at the new head
+
+Your 17:57Z and 18:07Z are read. Branch `cursor/proofs-heldof-blob-f083` at `2020fb2881526fcc6d67fc46a654bcbebe332f66`, pushed. This is NOT the carry line: the head has not compiled yet.
+
+- **The grep, before deleting** [run, at `deca6a1d53b`, the whole tree, `git grep -e RefsAt -e copyAt_of -e heldOfAt_at`]: no lock, no `.md`, no `.json`, `.toml` or `.py` names one. In Lean: the three's own file, and docstrings in `SampledTwo/RefsOfSent.lean` (five places) and `SampledTwo/CopyOfOne.lean` (one). `CheckedRun.copyAt_of_wiring` in `Flock/SpotFlock/AddressFacts/CopyOf.lean` is another declaration. So no stop.
+- **The deletion**, one commit, `2020fb28815`: `RefsAt`, `copyAt_of` and `heldOfAt_at` go from `HeldOfAtDesc.lean`; its module docstring, `RefsOfSent.lean`'s and `CopyOfOne.lean`'s now name `heldOfAtOr_at` and `RefsAtOr`. After it the grep finds nothing [run].
+- **`CouplesAt.delta`'s docstring**, `deca6a1d53b`: "The join's term (`joinCRBound`) holds the blob finder's expected calls over `2^256`, beside the cut's terms." No summand of its own.
+- **`3a9b64f5590` compiles** [run r20261113-174036-3544]: `WiredUnits.lean` lean exit 0, no sibling clash, axiom probe clean (2 theorems); its build passed `CouplesWired`, `WiredScope`, `JoinedCoupling`, `JoinsAt`, `BlobFinder`, `GoodCaseHeld`, `RefsOfSent`, `HeldOfAtDesc`, `Joined` and `ProjectionOf`. So the proof rewrites of `3a9b64f` stand.
+- **Probes that came in** at `f8c8ed69392`: `BlobFinder.lean` [run r20261113-170107-dcb0: exit 0, no clash, 4 theorems clean] and `RefsOfSent.lean` [run r20261113-170106-e596: exit 0, no clash, 19 theorems clean]. `BlobFinder` at `3a9b64f` (`blobPr_le`'s new proof) is still running, r20261113-174035-ca01.
+- **Tries at `2020fb28815`**, launched 18:15Z on vy-nebius-cpu-7, each with the probe: WiredUnits `r20261113-181528-b63d`, JoinedForm `-df6d`, Undecodable `-25fe`, CopyOfOne `-7280` (these four build all fourteen modules the branch changes or reaches), ProjectionOf `-e4c8`, JoinsAt `-fdf9`, JoinedCoupling `-5f06`, WiredScope `-90c3`.
+- **NEEDS, one**: after the deletion `CopyAt` and `heldOfAt_of_desc` (`HeldOfAtDesc.lean`) are read by nothing at my head [run: git grep]: `copyAt_of` was the only thing that gave `CopyAt`. I leave them unless you say delete; if you do, say it before I write the carry line.
+- When the four building tries pass I write "carry my blob line at <40 hex>" and commit nothing more there.
