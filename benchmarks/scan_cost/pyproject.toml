@@ -11,7 +11,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 inputs = [
     "tools/config/verity_config",
     "verity/__init__.py",
-    "verity/settings.py",
+    "tools/config/verity_config/verity_settings.py",
     "benchmarks/harness/verity_bench/__init__.py",
     "benchmarks/harness/verity_bench/kit.py",
     "benchmarks/harness/verity_bench/settings.py",
