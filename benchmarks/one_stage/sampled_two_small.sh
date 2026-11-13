@@ -17,7 +17,7 @@ export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
 uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 
 { (cd verity/protocols/flock/verifier && lake build flock-verify flock-firewall) \
-    && (cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier) \
+    && (cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier sampled-proofs-difftest) \
     && (cd verity/protocols/recursion/verifier/recursive && lake build sampled-two sampled-two-on); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"

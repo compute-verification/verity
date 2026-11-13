@@ -1108,7 +1108,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                    {"draw": union_draw, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
                    served=sorted(served_units), v2=v2_proof(done, not plain(a)), partition=part,
-                   per_member=members_proof(members, done, not plain(a)), **stage_case(a, relay is not None))
+                   per_member=members_proof(members, done, not plain(a), one=drawn is not None and trees),
+                   **stage_case(a, relay is not None))
         if drawn is not None:
             summary["handed"] = {"verdicts": verdicts, "statement": statement, "sessions": sessions,
                                  "proved_units": sorted(proved), "instances": instances, "served": sorted(served_units),
@@ -1464,15 +1465,16 @@ def looked_up_tables(st_dir: Path) -> list[Path]:
     return sorted(f for f in tdir.glob("*.u32") if f.is_file() and f.stem in looked_up)
 
 
-def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool) -> dict | str | None:
+def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: bool = False) -> dict | str | None:
     """`case_members`'s members and tables from the window's staged ``members``, every one of them, and the sampled
     members' sessions (`member_checks`'s ``done``): each member's circuit and public files' digests as staged before
     the sample, its registered file, its units and its circuit's ``vus_per_block``, and a sampled member's session and
     the tables its circuit looks up, one path a table. None for a window of one member, whose form is the one
-    statement's (`v2_proof`); or why the audit has no per-member case."""
+    statement's (`v2_proof`), unless ``one`` (its sessions ran on a caller's stage's challenger session,
+    `drawn_trees`); or why the audit has no per-member case."""
     from verity.protocols.spot.verifier.one_stage import proofs as PF
 
-    if len(members) < 2:
+    if len(members) < 2 and not one:
         return None
     if not zk:
         return "v2 verifies --zk sessions; this audit's are plain"
@@ -1529,9 +1531,9 @@ def window_trees(a: argparse.Namespace, members: Sequence[dict]) -> bool:
 def drawn_trees(a: argparse.Namespace, members: Sequence[dict]) -> bool:
     """`window_trees` for a caller's drawn sample (``drawn``): the sessions take their coin trees from the caller's
     stage's own challenger session (``a.stage``, `two_stage`'s ``--interior-trees``), held for them since before its
-    sample ended; without ``a.stage`` the sessions keep a challenger of their own."""
-    return (getattr(a, "stage", None) is not None and len(members) >= 2 and not plain(a)
-            and a0.own_challenger(zk=True))
+    sample ended, a window of one member's too: that caller's case is the per-member form's at any number of members
+    (`members_proof`'s ``one``). Without ``a.stage`` the sessions keep a challenger of their own."""
+    return getattr(a, "stage", None) is not None and bool(members) and not plain(a) and a0.own_challenger(zk=True)
 
 
 def tree_coins(a: argparse.Namespace) -> Any:
