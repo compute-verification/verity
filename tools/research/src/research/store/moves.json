@@ -2229,6 +2229,12 @@
         "verity/protocols/inference_only/nci/": "benchmarks/nci/",
         "verity/protocols/inference_only/rho/": "benchmarks/rho/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/nci/slowdown.py": "benchmarks/nci/bracket.py",
+        "benchmarks/nci/tests/test_slowdown.py": "benchmarks/nci/tests/test_bracket.py"
+      }
     }
   ]
 }
