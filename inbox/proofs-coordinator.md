@@ -161632,3 +161632,125 @@ A claim is one sentence of lean's with its cited lines; a "Missing" line counts 
 ### Next
 
 The docs pull request for `LC/README.md:19`, then (c) from the entry points and (d) against #9717, #9810, #9555, #9441, #9574, #9776 and the join's branch. Next entry within 60 minutes.
+
+## ADDRROW2, Fri 13 Nov 21:51Z: your 21:32Z rulings are read; #9824's mends 1 and 2 are pushed at 597ccdf1763fb and out on a try, no lock committed; the `upIn` move changes three module records that 83 listed guarantees read, 4 of them deployed
+
+Markers: [read] I read it, [run] a run shows it, [derived] follows from those, [guess] not checked.
+
+**1. Your 21:32Z message** (76dc983e5873) reached me through the shell hook at 21:32Z. I act on it as written. #9824
+stays unmarked by me.
+
+**2. #9824, mends 1 and 2** (`cursor/proofs-addrrow2-pairs-681e`, now `597ccdf1763`, pushed 21:46Z; was `071cba3fba4b`).
+- `09858eb609e` [read, not yet run]: `upIn` is in `Definitions/Flock/Merkle.lean`, and `up` is `H (upIn E idx acc sib)`.
+  `walkPair` returns `(upIn E idx a s, upIn E idx a' s')`. GK's own `upIn` and `up_eq` are deleted; `walkPairs`,
+  `walkK` and `walkIns` read the one definition. Three proofs that unfolded `up` unfold `upIn` with it
+  (`Soundness/Merkle.lean:46`, `Refine/Paths.lean:168`, `Exec/SessionLDecisive.lean:674`), and `walkPair_spec`
+  unfolds `upIn` alone. I searched every `unfold` line and every bracketed lemma list in the tree's Lean for this
+  `up`; those and GK's are all there are.
+- `597ccdf1763` [read, not yet run]: `openPair` and `openPairL` are `openCollPair` and `openCollPairL`, with their
+  `_spec` lemmas.
+- [run] Try `r20261113-214413-cc36` (vy-nebius-cpu-3, launched 21:44Z), 9 files, the two `MerklePair.lean` with
+  `--siblings`. [guess] back by 23:00Z: `Definitions/Flock/Merkle.lean` is under every C-Flock proof, so the try
+  rebuilds the imports of `SessionLDecisive.lean` and `CoinBind.lean`.
+- Mend 3 (the body) follows the try: `#print axioms` of `walkPair`, `openCollPair` and `openCollPairL`, "will be,
+  after the second pull request", and the day in the unread table.
+
+**3. Which records the `upIn` move changes.** No lock is committed. Source: the lock at `597ccdf1763` [read], and
+the `readers` table of the records run `r20261113-185209-f829` at `071cba3fba4b` [run]. That table is per module,
+not per definition.
+- **`reads["Definitions.Flock.Merkle"]`** in `security/lean-audit.json`. `FlockSoundness.Merkle.up`'s record
+  changes: a read definition is hashed by its type and its value (`Facts.lean:285-291`), and the value is now
+  `H (upIn E idx acc sib)`. `FlockSoundness.Merkle.upIn` joins as a new record. The module's digest changes.
+  **83 listed guarantees read this module**:
+  - `Accounting.SecurityProofs.Bridge` (2): `IntegrityOfIntegrityBlock`, `IntegrityOfIntegrityMonitoringPeriod`
+  - `Accounting.SecurityProofs.TS` (6): `CheckedSessionSound`, `HeldSessionSound`, `LeafGroupSound`,
+    `LeafLanesSound`, `SessionSoundAt`, `TileSessionSound`
+  - `Claims.Sampling` (2): `Binding_meets`, `Binding_meets_one`
+  - `Claims.Witness.Flock` (1): `ZK_meets`
+  - `Flock.SecurityProofs` (65): `EndToEnd`, `EndToEndDrawn`, `EndToEndHidden`, `EndToEndHiddenDrawn`,
+    `EndToEndHiddenDrawnFlat`, `EndToEndHiddenFlat`, `EndToEndRegistered`, `EndToEndRegisteredDrawn`,
+    `EndToEndRegisteredDrawnFlat`, `EndToEndRegisteredDrawn_honest`, `EndToEndRegisteredDrawn_nontrivial`,
+    `EndToEndRegisteredFlat`, `EndToEndRegisteredRows`, `EndToEndRegisteredRowsFlat`, `EndToEndRegistered_honest`,
+    `EndToEndRegistered_nontrivial`, `IntegrityBlock`, `IntegrityBlockCarried`, `IntegrityBlocks`,
+    `IntegrityHorizon`, `IntegrityHorizonBlocks`, `IntegrityHorizonCarried`, `IntegrityPeriod`,
+    `IntegrityPeriodLog`, `JointHorizonV5`, `JointSampledV5`, `JointShareV5`, `JointStratified`,
+    `JointStratifiedHorizon`, `JointStratifiedHorizonMT`, `JointStratifiedMT`, `LoopInnerRound0Own`,
+    `LoopInnerRound0Own_honest`, `LoopInnerRound0Own_nontrivial`, `MaskedZK`, `PublicAudit`, `RecursiveAuditC3`,
+    `RecursiveRanRegistered`, `RecursiveRanRegisteredExec`, `RecursiveZKLoop`, `RecursiveZKLoopAnySum`,
+    `RecursiveZKLoopAnySumDeployed`, `RecursiveZKLoopAnySum_honest`, `RecursiveZKLoopAnySum_nontrivial`,
+    `RecursiveZKLoop_honest`, `RecursiveZKLoop_nontrivial`, `SampledAuditAnyDeployed`,
+    `SampledAuditAnyDeployed_nontrivial`, `SampledKSLivePub`, `SampledKSLiveStated`, `SampledKSLiveV2`,
+    `SampledKSLiveV3`, `SampledKSLiveV5`, `SampledKSTwo`, `SampledKSTwo_honest`, `ServedRowsLinked`,
+    `SessionLoopZK`, `SessionLoopZKAnyDeployed`, `SessionLoopZKAnyDeployed_honest`,
+    `SessionLoopZKAnyDeployed_nontrivial`, `SessionLoopZKDeployed`, `SoundAtBridge`, `SpotExfilTwo`,
+    `SpotFirstHitTwo`, `SpotKSTwo`
+  - `FlockSoundness.Discharge.FailClosed` (2): `flock_verify_sound`, `flock_verify_sound_205`
+  - `NetTiming.Witness` (4): `MonitoringPeriodLeakAccepted_honest`, `PooledLeakAccepted_honest`,
+    `SampledAuditAccepted_honest`, `SampledLeakCarried_honest`
+  - `Verity.Sampled` (1): `remote_soundness_deployedReady`
+- **Deployed among the 83** (the lock's `deployed` list): 4. `Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed`,
+  `Flock.SecurityProofs.SampledKSLiveV3`, `Flock.SecurityProofs.SampledKSLiveV5`,
+  `Flock.SecurityProofs.SessionLoopZKDeployed`.
+- **Owners of the 83** (the lock's `owner`): @proofs 73, @lean 6 (the two `Bridge` ones and the four
+  `JointStratified*`), @network-accounting 2 (`MonitoringPeriodLeakAccepted_honest`, `PooledLeakAccepted_honest`),
+  @soundness 1 (`remote_soundness_deployedReady`), @compute-accounting 1 (`TS.SessionSoundAt`). So the change
+  crosses owners.
+- **`reads["Proofs.Flock.Soundness.ZK.GK.Extract"]`**: `FlockSoundness.ZK.GK.upIn`'s record leaves, and the digest
+  changes. **19 listed guarantees read it**, all @proofs, all among the 83: `Claims.Witness.Flock.ZK_meets`, and of
+  `Flock.SecurityProofs`: `LoopInnerRound0Own` and its `_honest` and `_nontrivial`, `MaskedZK`, `RecursiveZKLoop`
+  and its two, `RecursiveZKLoopAnySum` and its two, `RecursiveZKLoopAnySumDeployed`, `SampledAuditAnyDeployed` and
+  its `_nontrivial`, `SessionLoopZK`, `SessionLoopZKAnyDeployed` and its two, `SessionLoopZKDeployed`. Two of the
+  four deployed ones are here.
+- **`reads["Proofs.Flock.Claims.ZK.CoinCheck"]`**: the same 19 read it [run]. `Claims.ZKMal.walkK`'s value names
+  the constant that moved, so [guess] its record changes with the digest. `walkIns` and `walkPairs` have no record.
+- [guess] No guarantee's own `signature`, `type_hash` or `unfolded_hash` moves: I expect none to name `up` or
+  `upIn` in its statement, and I have not checked each.
+- [read] `security/Properties/lean-audit.json` records nothing of `Definitions.Flock.Merkle`.
+- [derived] What I cannot say from a per-module table: which of the 83 read `up` itself, and which only `Enc` or
+  `Leaf`. The module's digest changes for all 83 either way.
+- [derived] The value is the same function: `H (if even then a ‖ s else s ‖ a)` in place of
+  `if even then H (a ‖ s) else H (s ‖ a)`. It is still a changed record of a definition that 4 deployed guarantees
+  read, so its landing sends Daniel the lock's message.
+- **What I do next unless you say otherwise:** when the try passes I run `--records security --update` at that head
+  (it replaces every [guess] above with the run's own list), and I commit the lock it writes to #9824's branch. If
+  you or soundness want the move out of #9824 and in a pull request of its own, say so before the lock is committed
+  and I split it: mend 2 and the body stand without mend 1.
+
+**4. The sampled half** (`cursor/proofs-addrrow2-sampled-files-681e` at `e44c1faf080b`).
+- [run] The changed suites pass, 4 of 4, 0 cached: `r20261113-212433-b85a` (vy-nebius-cpu-3).
+- [run] `r20261113-210211-518f` failed, exit 2, and the fault was mine: I typed the base's hash wrongly, and the
+  shipped tree had no such commit. `b85a` is the same command with the merge base expanded by the shell
+  (`f479876a87581c572c7b7b74ba2f23aa95785851`).
+- [run] The records run `r20261113-210310-60ae` was still building at 21:39Z.
+- Your rulings add two edits here: `Instance.extractOf` as a `match` on the option, and `Deployed.digests` deleted.
+  So `60ae` and `b85a` are of the head before them, and I run both again after the edits. Its pull request opens
+  after that, unmarked.
+
+**5. The C-Flock half** (`cursor/proofs-addrrow2-cflock-pairs-681e` at `034c06c143a`, committed 21:35Z and
+pushed).
+- [run] The L family compiles: try `r20261113-211422-27b5` (vy-nebius-cpu-3), `Definitions/Flock/Merkle.lean`,
+  `Exec/CompiledL.lean` with `--siblings` and `Exec/StrictCRL.lean`, each `lean exit 0`, the three axioms only.
+- [read, not yet run] Three commits since 21:06Z:
+  - `87ea70b8d5d`: the two pickers of the played outcomes search a list. `clashPickCL` searches `clashCandsCL`,
+    `clashPickHL` searches `clashCandsHL`. `ClashCL.collision`, `RegClash.collision`, `ClashHL.collision` and
+    `ClashRunHL.collision` are deleted. `outCL` and `outHL` still take their unique outcome by `choose`; that is
+    the replay you ruled, and I size it by Sat 22:00Z.
+  - `02d53562de4`: the dead chain is deleted (`holoInnerCLO`, `clashPickHLO`, `holo_inner_sound_compiled`,
+    `holoForkSound_holoAt`), and `C3.lean`'s piece (a) names `holo_runs_sound`.
+  - `034c06c143a`: `regFinder` searches `regCands`. `ReadsX.Clash.collision` and `RegColl.collision` are deleted.
+- [read] On soundness's last point: at this head `Leaf` has no `bind`. Its fields are `leaf`, `pair` and `pair_spec`,
+  and `pair_spec` concludes `Hash.Collision H (pair c s c' s').1 (pair c s c' s').2`. `Leaf.hm96`'s `pair` is
+  `hm96LeafPair`, an `if` over the three cases, with `hm96LeafPair_spec`
+  (`Definitions/Flock/Merkle.lean:66-145`). `Leaf`, `Leaf.hm96` and `Leaf.leaf` have records in the same module,
+  so this half moves that module's record too; its body will list the readers as above.
+- Left: `saltFinder`, `topFinder` with `topRoot_collision`, `leafFinder` with the mend you ruled (`LeafColl` at the
+  outcome's own registration and the header's paths), `Exec/Headline.lean:68`, the documents that name deleted
+  lemmas, the merge of #9824's new head, and then the tries of everything since `c9e3d95a667`. This tree does not
+  compile whole until those are in.
+
+**6. Order from here.** #9824's try, records and body first. Then the sampled half's two edits and its runs. Then
+the C-Flock half. The sizing of `outCL` and `outHL`, with the second `outCL` in `Exec/FlockLinkL.lean` and whether
+the `flock_verify_sound` statements that read it are listed or deployed, is an entry of its own by Sat 22:00Z.
+
+**7. Timers.** Two one-off timers stand: one at about 22:01Z, which I use to read `cc36`, and one at about 22:46Z
+for `60ae`.
