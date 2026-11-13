@@ -37,3 +37,24 @@ With `FORMATS` empty #9501's reader holds no execution phase at all, so none of 
 
 Carries: #9533 `r20261113-165355-bd86` and #9501 `r20261113-165436-acea` are running. The writer's first four moves crossed clean, result `c44b3a8d67a2` (`r20261113-165449-44b7`); its hand merge is last, as ordered. Your 9:02 AM PST addition (#9305, #9329) is read: after the brief's jobs.
 
+[2026-11-13T17:10Z] 95891c39e08b
+NETSEATS to network-accounting (lead), Fri 13 Nov 9:10 AM PST. **The word's certificate is in #9656 as its own commit and pushed; #9741 holds it by one merge with two hand-resolved text hunks; the third entry's branch is cut from that head and its chain record run is launched once. Nothing is marked.**
+
+1. **#9656 head `ace1b5b855dafe4e044fd494e24b65a279e521df`** [rev-parse of the remote branch], one commit on `e88c1006f6bdd0d994ebcbad27b5c78b060f2da1`, 3 files, +75 −4. [ran]
+   - The gate's `row_certificate` reads a `rows.jsonl` line's `no_head` where it has no `registration` and gives the same six fields (key id, link, direction, execution phase, digest, signature), and no cost. One line of code, one constant, the text.
+   - The text of `main` that makes the word public, named in the commit's message (at `5eb1231b2558`): `verity/protocols/accounting/certifier/verifier/connection_rows.py` lines 88, 92 and 590, and that directory's `PROTOCOL.md` lines 2119 to 2126. [read]
+   - Tests [ran, locally]: the gate's test publishes the word's certificate and shows that the key `no_head`, the line's cost and its figure are in neither `out/` nor the end (102 passed in that file); a second test makes a real form-2 run, rebuilds the word from the published fields and the schedule's digest, and `check_no_head` accepts it for its own execution phase, refuses it for the next, and refuses a head's certificate read as the word (7 passed in that file). Control: without the one line the gate's test fails. [ran]
+2. **#9741 head `c374af7a519f4707eb15ab87c2a45d58b565341f`** [rev-parse of the remote branch], a merge of #9656's head above into `b5760d18033fa9af7d062e69497ab88a369d6063`. No move is crossed by it. **It needed a hand merge, in one file:** `verity/protocols/compose/device/live_challenger/auditor.py`, two hunks, both text:
+   - the module's paragraph on what a rehearsal publishes: #9741's sentence stands whole, and after it one sentence is added, "Of the word that an execution phase has no head, `out/` holds its certificate likewise." #9656's clause read "of the word that an execution phase has no head, its certificate likewise"; I gave it a subject so it stands as a sentence. If you want #9656's clause letter for letter, say so and I change it in the next push.
+   - the comment on `ROW_CERTIFICATES`: #9741's words stand, and #9656's clause "and of the word that an execution phase has no head (`ROWS_NO_HEAD`) the same" is added, letter for letter.
+   - No code is in a conflict. Against #9656's head the branch now changes 22 files, +436 −95 (it was +434 −94 before the merge: the two added lines of text above). Tests at the merge [ran, locally]: 133 passed (the gate's two files), 147 passed (seven files of the chain's suite).
+3. **The third entry's branch: `cursor/na-guard-usage-cpu-ranges-edc6`, head `70dd2b1721dd82b0fcf49609300be1bbb828a7a8`** [rev-parse of the remote branch], one commit on #9741's head above: 6 files, +63 −10, the same lines as the commit I built before the carry [ran: the two diffs' lines hash alike]; none of its added lines names a retired path [ran]. The guard's file holds two entries, both by file. 127 passed in five files of the chain's suite [ran, locally].
+4. **Runs, each id from its launch's own line, all `--on auto`:**
+   - chain record at `70dd2b1721dd`: `r20261113-170731-980c`, launched once at 9:07 AM PST;
+   - changed suites since `5eb1231b25581a1c9e87191d28cd5cf591f6033b`: #9656's head `r20261113-170821-058b`, #9741's head `r20261113-170856-5f0b`, the third branch's head `r20261113-170930-e4fe`.
+5. **Next:** the three bodies while the runs go; the second pull request opened unmarked when its chain record run ends; the return by 1:00 PM PST.
+
+**Least sure of:** whether the sentence I gave a subject in item 2 counts as a third wording under your rule of 8:33 AM PST. **Not looked at:** #9369's branch since its mark.
+
+TIMER: none
+
