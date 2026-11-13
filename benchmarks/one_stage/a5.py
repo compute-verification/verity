@@ -1704,33 +1704,28 @@ def cgroup_room(cgroup: Path = Path("/proc/self/cgroup"), root: Path = Path("/sy
     (`file_cache`), which the kernel drops under the limit before it kills, as it does the node's, where MemAvailable
     counts it free; shared memory and anonymous memory stay counted. A dirty page is in that cache and is freed only
     once written, so the room can read high for a moment. None where no level states a limit or the machine has no
-    cgroup v2 file."""
-    try:
-        here = next(x[3:] for x in cgroup.read_text().splitlines() if x.startswith("0::"))
-    except (OSError, StopIteration):
+    cgroup v2 file. A level's file that is there and doesn't read as the kernel writes it raises: no reading is guessed."""
+    here = next((x[3:] for x in cgroup.read_text().splitlines() if x.startswith("0::")), None) if cgroup.is_file() else None
+    if here is None:
         return None
     parts = [x for x in here.split("/") if x]
     rooms = []
     for n in range(0 if ".." in parts else len(parts), -1, -1):
         level = root.joinpath(*parts[:n])
-        try:
-            limit = (level / "memory.max").read_text().strip()
-            if limit != "max":
-                rooms.append((max(0, int(limit) - int((level / "memory.current").read_text()) + file_cache(level)),
-                              "/" + "/".join(parts[:n])))
-        except (OSError, ValueError):
-            pass
+        limit = (level / "memory.max").read_text().strip() if (level / "memory.max").is_file() else "max"
+        if limit != "max":
+            rooms.append((max(0, int(limit) - int((level / "memory.current").read_text()) + file_cache(level)),
+                          "/" + "/".join(parts[:n])))
     return min(rooms, default=None)
 
 
 def file_cache(level: Path) -> int:
     """The file cache a cgroup holds, in bytes: its `memory.stat`'s `inactive_file` and `active_file` (shared memory is
-    in neither); 0 where the file can't be read, so all of the level's `memory.current` then counts as held."""
-    try:
-        stat = dict(x.split() for x in (level / "memory.stat").read_text().splitlines() if len(x.split()) == 2)
-        return int(stat.get("inactive_file", 0)) + int(stat.get("active_file", 0))
-    except (OSError, ValueError):
+    in neither); 0 where the level has no such file, so all of its `memory.current` then counts as held."""
+    if not (level / "memory.stat").is_file():
         return 0
+    stat = dict(x.split() for x in (level / "memory.stat").read_text().splitlines() if len(x.split()) == 2)
+    return int(stat.get("inactive_file", 0)) + int(stat.get("active_file", 0))
 
 
 class Free(int):

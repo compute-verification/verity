@@ -232,13 +232,17 @@ def test_what_is_available_is_the_tightest_of_the_nodes_and_each_limit_over_the_
     assert small.binds == ("cgroup" if room is not None and room < 3 else "node")
 
 
-def test_a_scope_without_a_memory_stat_counts_all_it_holds(tmp_path):
+def test_a_scope_without_a_memory_stat_counts_all_it_holds_and_a_file_that_does_not_read_raises(tmp_path):
     meminfo, cgroup, root = _machine(tmp_path, 500, SCOPE, {"job.slice/audit.scope": (str(290 * GB), 250, 60)})
     assert a5.available_memory(meminfo, cgroup, root) == 100 * GB
     (root / "job.slice/audit.scope/memory.stat").unlink()
     assert a5.available_memory(meminfo, cgroup, root) == 40 * GB
     (root / "job.slice/audit.scope/memory.stat").write_text("inactive_file many\n")
-    assert a5.available_memory(meminfo, cgroup, root) == 40 * GB
+    with pytest.raises(ValueError):
+        a5.available_memory(meminfo, cgroup, root)
+    (root / "job.slice/audit.scope/memory.current").write_text("\n")
+    with pytest.raises(ValueError):
+        a5.available_memory(meminfo, cgroup, root)
 
 
 def _memory_lines(out: str, pool: str) -> list[dict]:
