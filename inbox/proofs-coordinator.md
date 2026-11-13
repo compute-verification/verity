@@ -119515,3 +119515,80 @@ Not established: that `paramsParsed_program` compiles on the real file (only a t
 **Not established.** #9595's quick tier at its final head. That #9581's executable builds at `a441d994760b` (`87ae` waits). That R8's file elaborates after the edit (`775d` waits), and that no record moves, by a run. Any Lean check, kernel replay or quick tier of #9625. Whether `OthersElsewhere` stays: it waits for your word.
 
 **Heads pushed:** #9595 `41a71836c34823cc2f7dcc54396ed776c7c8c5a9`; #9581 `a441d994760b31af1be31043257ccc00f93ff971`; #9625 `73ab10a29a5fa5173e873bc64444f7fb2245f375`; R8 `73a3f2fea226cb0ddff70fc2a687678bfcf1ce8e`; scratch `a8ae5dd4ef`. Unpushed: nothing. I can pause at any time. Mailbox read at `4adc7e8915` (03:36:03Z).
+
+
+## HONEST2, Fri 13 Nov 04:13Z: nine of the instance's ten files build on the base that decides the wiring (`6c1a87cc54d3`), the width from the port names among them; `Wiring.lean` stopped at one unqualified name, now fixed; no axiom probe yet; the new base `e033bfc14be4` is merged and pushed at `3d609fe08185`, not compiled
+
+**In plain words.** My one-template registration was rewritten at 03:21Z for the base that makes the proved verifier check the wiring. A run has now built it there: nine of the ten files build. The tenth, the file that proves the wiring check passes at this registration, stopped on a name I had not written out in full. It is one word to fix and is fixed. What the run has not given yet is the second half of each verdict, the line that says which axioms each theorem rests on. Those ten checks each wait their own turn for a Lean place, and the run will reach its time limit after three or four of them. Meanwhile the base moved again to take in `main`. I merged it; it changes one line of mine, and nothing of mine has compiled on it.
+
+Clock: `date -u` read 04:13Z. Mailbox read at 03:56Z: nothing after 00:23Z. Your 03:59Z word to every worker came by the hook at 04:00Z; its lines 1, 3 and 6 are answered below.
+
+### What the run gave
+
+[run: `r20261113-031311-97b2`, vy-nebius-2, head `ec1ac520fa0d`, base `6c1a87cc54d3`; took its place 03:27:38Z after 14 minutes]
+- The build of the ten files: "exit 1 in 1948 s", 11,145 jobs.
+- Built: `Honest/Instance`, `Addresses`, `Roots`, `Entry`, `Width`, `Rows`, `Copy`, `Five`, `Once`. One warning: `Roots.lean:230`, `if_neg` is deprecated.
+- Failed: `Honest/Wiring.lean:125:39`, "Unknown identifier `filesReplay`", in the statement of the file's last theorem, `two_of_ref`. The build printed no other error in the file.
+- No axiom probe yet. The tries come after the build and each takes a Lean place of its own. At 04:11Z the first has waited six minutes with three ahead and all twelve places held.
+
+[derived] So on that base these now build, where at 03:21Z they were only written:
+- `two_held` and `scope_held` with the two new guard clauses as hypotheses, and `inScope_of_accepts` and `honest_of_owed` with no new hypothesis (`Instance`).
+- `widthFact_of_once`, `five_of_once`, `addressesConnected_of_once`: the width, the five facts and the address premise with `PortsOnce` where they took `RefWidths R` (`Once`).
+- The files that compiled before (`Addresses`, `Roots`, `Entry`, `Width`, `Rows`, `Copy`, `Five`) build again unchanged, over ADDRWC's and ADDRROW's heads of 03:02Z.
+
+Not yet built: `wiringOk_held` and `two_of_ref`. The file holding them failed, so nothing in it counts until the next try.
+
+### Fixed and pushed, not compiled
+
+- `Wiring.lean`: the name is `Properties.Spot.filesReplay`; the statement now says so. `Roots.lean:230`: `ite_eq_right`, which has `if_neg`'s signature [read: the toolchain's `Init/Core.lean`].
+- The new base `e033bfc14be4` is merged, no conflict; none of the four Python files stopped it. `Honest/Instance.lean:73` names the layout's type `Spot.Slots.SlotOrder`. `main`'s other rename (`Collision` to `HasCollision`) touches none of my files or the address facts' [run: `grep`].
+- ADDRROW's head `df9a5d5ec0c6` is merged. It changes three files I do not import. I took it for one reason: the build's audit line says `AddressFacts/RowRead.lean:28` "runs code while it compiles (macro)", so "0 module version(s) new in the artifact cache": the 33-minute build cached nothing. ADDRROW removed the macro at `de20c9e35a`.
+
+### My mistake in the run's shape
+
+I sent one build and then ten one-file tries in a row. Each try waits in the Lean line again, about ten minutes tonight, so the run's 90 minutes (to 04:57Z) will cover three or four probes [guess]. The next run tries `Once.lean` first, whose imports are eight of the other nine files, then `Wiring.lean`, then the rest for their probes, with a longer limit.
+
+### What moved under my hypotheses
+
+| Hypothesis at the instance | State | What I do |
+|---|---|---|
+| `NeededBits (held …)` | NEEDEDBITS compiled `neededBits_held (h : Held) : NeededBits h` [relayed: its 03:14Z entry, `ab80`, `0a2a205017`] | It discharges mine in one line. Not merged: see NEEDS. |
+| `CopiesHeld` | ADDRWC wrote `copiesAt_of_two (hd) (hO : PortsOnce h) : CopiesAt h` at 03:45Z [read: `CopyOut.lean` at `0bde1c0d254b`]; not compiled | I take it when it compiles; `CopiesHeld` then follows from `PortsOnce`. |
+| `AddressRow.RowGoal` | ADDRROW: stated, not proved [read: `df9a5d5ec0c6`] | wait |
+| `PortsOnce (held …)` | L1 decides it in `wiringOk`; not on the base | wait |
+| `RefPorts R`, `RefReadsNamed R B`, `scopeOkH (stmtOf R.x)` | facts of one concrete circuit; none is defined in Lean | not started |
+
+### NEEDS
+
+- **ADDRWC and FRAME, the double `PortsOnce`, now exact.** NEEDEDBITS's compiled commit `0a2a205017` holds L1's `a6ccdd66a6`, whose `WiringOk.lean:155` declares `SpotFlock.PortsOnce`. ADDRWC's `AddressFacts/BitsIn.lean:25` declares the same name, and imports `WiringOk` through `WidthOf` and `EntryRoots` [read]. So in any tree that holds both, `BitsIn.lean` itself stops ("already declared"), and with it `BitsOwn`, `WrittenOf`, `CopySrc`, `CopyOut` and my `Once.lean` [derived, not run]. The fix is ADDRWC's: delete its four lines when it merges L1; the texts are the same. Until then I cannot merge `neededBits_held`.
+
+### Your 03:59Z lines
+
+- Line 1: my theorems are at an accepted run of the proved verifier at a held code (`CheckedRun.Ok h r`). None is stated at the form's accept, and none reads the form. They are empty for their own reason, as said since Thursday: no run is shown accepted at this registration (`Accepts`).
+- Line 3: done above. Line 6: the next try goes to vy-nebius-2.
+
+### Events of yours that reached me
+
+[run: `cursor-cloud run-info`, `list_subscriptions`] Since 03:02Z my conversation received seven task completions of other workers, five Slack messages to leads, and fifteen timer notifications of yours (fourteen timers, the 30-minute sweep twice), fired Thu 15:52Z to Fri 02:00Z. This run is `bc-a5cbdecf…` and holds one timer, its own. I acted on none of them: I launched, resumed, marked and posted nothing. NEEDEDBITS reports the same at 03:34Z.
+
+### Run plan
+
+`97b2` is started, so I leave it; it ends by 04:57Z. Then one run at `3d609fe08185` on vy-nebius-2, `--timeout 9000`: tries of `Once`, `Wiring`, `Instance`, `Five`, `Copy`, `Rows`, `Width`, `Entry`, `Roots`, `Addresses`. Timer set for 04:58Z.
+
+### STOP RULE
+
+Nothing.
+
+### Pushed
+
+[run] `cursor/proofs-honest2-7c4e` at `3d609fe08185`; nothing unpushed.
+
+### Not established
+
+- Any axiom probe on either base for the files as they stand.
+- That `Wiring.lean` builds: `wiringOk_held`, `membersScoped_held`, `two_of_ref`.
+- That anything of mine builds on `e033bfc14be4`.
+
+### To post
+
+Nothing.
