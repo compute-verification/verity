@@ -6,9 +6,24 @@ import json
 import random
 
 import pytest
-
-from verity.circuits import (Array, FunctionCall, Program, Tuple, Value, bind, composite, decode_program, descriptor_size,
-                       encode_program, primitive, program_digest, query, query_ast, QueryError, REGISTRY)
+from verity.circuits import (
+    REGISTRY,
+    Array,
+    FunctionCall,
+    Program,
+    QueryError,
+    Tuple,
+    Value,
+    bind,
+    composite,
+    decode_program,
+    descriptor_size,
+    encode_program,
+    primitive,
+    program_digest,
+    query,
+    query_ast,
+)
 from verity.circuits.evaluation import evaluate_call, evaluate_region
 from verity.circuits.query_ast import oracle_gateset, oracle_in, oracle_out
 

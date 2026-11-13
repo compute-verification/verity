@@ -5,7 +5,10 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.query.required import _profile
+from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
+from verity_vllm.query.required import _profile, request_manifest
+from verity_vllm.query.units import ValueRef as R
 
 
 def _res(cc=None, fa=None):
@@ -30,9 +33,6 @@ def _attention_program(attention: str):
     """One GLM-5.3-shaped attention layer (the DSA indexer's families and Call names, `vllm_dsa`) over a one-token prefill and a
     one-token decode step; `attention` is the layer's attention Call: `SparseMla_v1` (MLA + DSA) or `Attention_v3` (a FlashAttention
     launch, the FA3 twin)."""
-    from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
-    from verity_vllm.query.units import ValueRef as R
-
     W, A = "model.model", "model.model.layers.0.self_attn"
     weights = InputView(-1, "weights", "{...}", (Port(f"{W}.embed.weight", 0, 8, 8, 16), Port(f"{W}.lm_head.weight", 8, 16, 8, 16)))
     ids = InputView(-2, "ids", "Value<32>", (Port("ids", 0, 1, 1, 32),))
@@ -62,9 +62,6 @@ def _attention_program(attention: str):
 
 
 def _hopper_manifest(attention: str, impl: dict):
-    from verity_vllm.correspondence.reader_for_query import Correspondence
-    from verity_vllm.query.required import request_manifest
-
     P = _attention_program(attention)
     res = {"program": {"digest": "d0", "function": "f"}, "target": {"declared": {"compute_capability": [9, 0]}},
            "attention_impls_observed": {"model.layers.0.self_attn.attn": impl}}

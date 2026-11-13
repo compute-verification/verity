@@ -22,6 +22,8 @@ from typing import Any
 
 from verity_vllm.config import option
 
+__all__ = ["Options", "main"]
+
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
@@ -93,7 +95,7 @@ def _serve(conn: Connection, args: Any) -> None:
     reqs, sampling = wl["requests"], wl["sampling"]
     manifest = require_partition(json.loads(Path(args.required_manifest).read_text()), args.programs_root, args.program_dir) if args.required_manifest else None
     rl = {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
-    loaded, _digs = C2.programs_of_record(SimpleNamespace(args=args, manifest=manifest, reqs=reqs, sampling=sampling), rl, definitions=False)
+    loaded, _digs = C2.programs_of_record(C2.ProgramSources(args, manifest, reqs, sampling), rl, definitions=False)
     progs = {k: v["instances"] for k, v in loaded.items()}
     dirs = {k: v["dir"] for k, v in loaded.items() if v.get("dir")}
     ring = int(args.window_slots) if args.window_slots and args.window_mb else None
@@ -111,7 +113,7 @@ def _serve(conn: Connection, args: Any) -> None:
         reads.append((int(step), str(name), int(lo), int(hi)))
         return bytes(int(hi) - int(lo))
 
-    sr = SR.sampled_replay(progs, json.loads(Path(f["binding_map"]).read_text()), committed, None, arrivals=f["arrivals"], per_stratum=int(args.replay_per_stratum),
+    sr = SR.sampled_replay(progs, json.loads(Path(f["binding_map"]).read_text()), committed, C2.no_weights, arrivals=f["arrivals"], per_stratum=int(args.replay_per_stratum),
                            seed=f["seed"], seed_source=f["seed_source"], seed_challenge=f["seed_challenge"], max_evaluate=int(args.replay_max),
                            targets=list(args.replay_target or []), replay_k=args.replay_k, replay_draw=C2.draw_of(args), ring_slots=ring, manifest=q, program_dirs=dirs, plan=True,
                            memo=memo, cached_prefixes=warm, **f["sr_kw"])

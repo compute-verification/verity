@@ -16,18 +16,22 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, evaluate_words
+from verity.circuits.types import Array, Value
+from verity.definitions import boolean as BB
 from verity.definitions.ops import fp32 as W
 from verity.definitions.ops import prims as MP
 from verity.definitions.ops import scalar as S
-from verity.circuits.types import Array, Value
-from verity.definitions import boolean as BB
-from verity.definitions.registry import b1, b1_tp2, dsv4_decode_indices as DI, hopper, inductor as I, marlin_moe as MM, moe
-from verity.definitions.registry import prims as P, ref_prims as R, tp_allreduce as TA
+from verity.definitions.registry import b1, b1_tp2, hopper, moe
+from verity.definitions.registry import dsv4_decode_indices as DI
+from verity.definitions.registry import inductor as I
+from verity.definitions.registry import marlin_moe as MM
+from verity.definitions.registry import prims as P
+from verity.definitions.registry import ref_prims as R
+from verity.definitions.registry import tp_allreduce as TA
 
 F32 = Value(32)
 SPECIAL32 = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 0x7FFFFFFF, 0xFFC00001, 0x00000001, 0x807FFFFF, 0x3F800000,

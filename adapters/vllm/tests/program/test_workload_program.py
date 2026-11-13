@@ -3,12 +3,18 @@ global address space and a declared chronology. Toy request Programs stand in fo
 lowering (`Program(fn)` -> Input batches + body), the same descriptor codec."""
 
 import pytest
-
-from verity.circuits.codec import SCHEMA_V1, _encode_body, _Tables, encode_program, program_digest
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, REGISTRY
+from verity.circuits.codec import (
+    SCHEMA_V1,
+    _encode_body,
+    _Tables,
+    encode_program,
+    program_digest,
+)
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
 from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, RecordType, Value
+
 from verity_vllm.program import workload as W
 
 _ADD = PrimitiveDefinition("GpTestAdd16", 1, (("a", Value(16)), ("b", Value(16))), Value(16), lambda a, b: (a + b) & 0xFFFF)
@@ -148,13 +154,13 @@ def test_a_growing_key_value_sequence_composes_to_the_same_workload_through_its_
         body = W.request_component(desc, REGISTRY, _WP(12)).fn.body
         return body, _encode_body(body, SCHEMA_V1, _Tables())
 
-    body, enc = component()
-    shared = [a.refs for n in body.nodes for a in n.args if getattr(a.refs, "prefix", None) is not None]
+    built, enc = component()
+    shared = [a.refs for n in built.nodes for a in n.args if getattr(a.refs, "prefix", None) is not None]
     assert len(shared) >= 10 and len({id(r.prefix[0]) for r in shared}) == 1
     plain = W._remap
     monkeypatch.setattr(W, "_remap", lambda r, K, logs=None: plain(r, K))
-    body0, enc0 = component()
-    assert [[a.refs.to_json() for a in n.args] for n in body.nodes] == [[a.refs.to_json() for a in n.args] for n in body0.nodes]
+    built0, enc0 = component()
+    assert [[a.refs.to_json() for a in n.args] for n in built.nodes] == [[a.refs.to_json() for a in n.args] for n in built0.nodes]
     assert enc == enc0
 
 
@@ -170,7 +176,9 @@ def test_record_weights_lower_to_several_input_batches_shared_as_one_group():
         return coll_concat(Array(1, Value(16)), [B.call(_ADD, x, weights.field("wa")[0])])
 
     d = REGISTRY["ToyRecReq_v1"] if "ToyRecReq_v1" in REGISTRY else CompositeDefinition("ToyRecReq", 1, ("LP",), sig, body)
-    wp = lambda LP: [("prompt", f"Array<{LP},Value<16>>"), ("weights", "{wa: Array<2,Value<16>>, wb: Array<3,Value<32>>}")]
+    def wp(LP):
+        return [("prompt", f"Array<{LP},Value<16>>"), ("weights", "{wa: Array<2,Value<16>>, wb: Array<3,Value<32>>}")]
+
     ca = W.request_component(encode_program(Program(d.bind(LP=2))), REGISTRY, wp(2))
     cb = W.request_component(encode_program(Program(d.bind(LP=4))), REGISTRY, wp(4))
     assert ca.groups == ("prompt", "weights", "weights") and [n for n, _ in ca.params] == ["prompt", "weights[0]", "weights[1]"]
@@ -204,8 +212,8 @@ def _registered_component(LP: int, values_n: int = 2, registered=("values",)):
 def test_registered_values_are_shared_once_and_registered_at_the_root():
     """A registered_values component's `values` are the program's (bound once, at registration), not the request's: the workload
     Program holds them once as `shared.values`, a registered root parameter, beside `shared.weights` bound per run."""
-    from verity.definitions.circuits.constants import REGISTRATION, RUN, inputs
     from verity.circuits.ports import facts
+    from verity.definitions.circuits.constants import REGISTRATION, RUN, inputs
     ca, cb = _registered_component(2), _registered_component(5)
     assert ca.bindings == (RUN, REGISTRATION, RUN)
     wl = W.WorkloadProgram([W.WorkloadRequest("a", 0, 2, 1, 0, ca), W.WorkloadRequest("b", 1, 5, 1, 0, cb)], lag=0)
@@ -234,9 +242,9 @@ def test_theta_registered_binds_the_weights_at_registration_and_moves_only_the_w
     """The inference-only check reads only registered inputs as θ (nci-check's `theta-not-registered`): `theta_registered` lowers the
     weights as `RegisteredInput<w>_v1`, still θ, and every other input as before. The components are the same Definitions, so
     their request digests stand and only the workload digest moves; off, it is the digest pinned above."""
-    from verity.definitions.circuits.constants import REGISTRATION, RUN
     from verity.circuits.ports import facts
     from verity.circuits.program import INPUT_ID, REGISTERED_ID
+    from verity.definitions.circuits.constants import REGISTRATION, RUN
     off, on = _wl([(3, 2), (5, 0)]), _wl([(3, 2), (5, 0)], theta_registered=True)
     assert off.digest == _wl([(3, 2), (5, 0)], theta_registered=False).digest
     assert on.registered == on.theta == ("shared.weights",) and on.digest != off.digest
@@ -457,6 +465,7 @@ def test_a_window_edge_is_registered_values_its_carried_requests_read_and_output
     field; R1 (`check.batch.separable` over `predict.batch.workload_labels`) holds each field its request's own, and a field
     handed to another request is the crossing it names."""
     from verity.circuits.evaluation.reference import evaluate
+
     from verity_vllm.check.batch import SHARED, Fields, own, separable
     from verity_vllm.program.predict.batch import workload_labels
     out = _edge_wl({0: (3, 0, 0, False), 1: (3, 0, 2, False), 2: (3, 0, 4, False)}, W.Edge(outs=((1, _groups(2)), (2, _groups(4)))))
@@ -545,6 +554,7 @@ def test_canon_is_per_compose_conflicts_refused_inside_one_never_across_composes
     disagree on a definition under the same id are refused (E_IDENTITY, fail closed); a LATER compose in the same process with its own
     canon is compared against its own components only, never against an earlier compose's definitions."""
     import copy
+
     from verity.circuits.defs import IdentityConflict
     da = encode_program(Program(_stepped_request(3, 2)))
     sid = next(k for k, v in da["definitions"].items() if v["form"] == "composite" and k.startswith("GpTestStep"))
@@ -573,8 +583,10 @@ def test_repointing_keeps_every_id_and_refuses_a_substitute_of_another_id():
     the same id: a complete specialization formats its id once, so `Outer{F=..}`'s would go stale under a substitute of another id.
     Such a substitute is refused (E_IDENTITY, naming both ids) before anything is re-pointed, through the callee or the static."""
     import re
+
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import IdentityConflict, SpecializedDefinition
+
     from verity_vllm.program.shared_definitions import repoint
 
     def sig(S):
@@ -643,7 +655,8 @@ def test_two_requests_with_one_root_id_over_different_bodies_compose_by_digest()
     assert am["requests"][0]["specialization"] != am["requests"][1]["specialization"]
     assert wl.program.root.body.nodes[-2].fn.gates == 3 and wl.program.root.body.nodes[-1].fn.gates == 4   # T+1 tokens each
     # the same two shapes with DISTINCT root ids compose to the same workload digest: the root id is not part of the workload identity
-    d24b = encode_program(Program(_derived_like(3, 2, {**src, "T": 2}))); d36b = encode_program(Program(_derived_like(3, 3, {**src, "T": 3})))
+    d24b = encode_program(Program(_derived_like(3, 2, {**src, "T": 2})))
+    d36b = encode_program(Program(_derived_like(3, 3, {**src, "T": 3})))
     assert d24b["root"] != d36b["root"]
     c24b, c36b = W.request_component(d24b, REGISTRY, _WP(3), canon={}), W.request_component(d36b, REGISTRY, _WP(3), canon={})
     wlb = W.WorkloadProgram([W.WorkloadRequest("r0", 0, 3, 3, 0, c24b, T=2), W.WorkloadRequest("r1", 1, 3, 4, 0, c36b, T=3)], manifest_digest="m" * 8, lag=0)

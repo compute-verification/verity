@@ -17,6 +17,9 @@ Greedy is not stochastic: the families are distinct Definitions with distinct di
 """
 from __future__ import annotations
 
+import json
+import os
+
 #: the greedy selects: no runtime input beside the logits
 GREEDY_SELECTS = ("TokenSelect_v1", "TokenSelect_v3", "TokenSelect_v4")
 SAMPLING_EVENT_FAMILIES = (*GREEDY_SELECTS, "GumbelTopPTokenSelect_v1", "GumbelTokenSelect_v1", "GumbelTopPTokenSelect_v2",
@@ -67,12 +70,11 @@ def sampler_construction_of(specs) -> str | None:
 def program_sampler_construction(program_dirs) -> str | None:
     """The sampler construction the Build's Program dirs declare, read off each one's root instances (`result.json` spec_histogram, the
     nodes the Match compares); None when none has a stochastic select.  A dir without the histogram is refused by name (SystemExit)."""
-    import json
-    import os
     specs: list[str] = []
     for d in program_dirs:
         try:
-            specs += list(json.load(open(os.path.join(d, "result.json")))["spec_histogram"])
+            with open(os.path.join(d, "result.json")) as f:
+                specs += list(json.load(f)["spec_histogram"])
         except (OSError, ValueError, KeyError, TypeError) as e:
             raise SystemExit(f"{d}: no spec_histogram in result.json ({type(e).__name__}): the Program's sampler construction is unknown") from None
     try:
