@@ -22,7 +22,7 @@ inputs = ["verity/protocols/flock/prover/python", "verity/circuits", "verity/com
           "verity/protocols/interface", "verity/protocols/spot/verifier/lean", "verity/commitments/lms/lean",
           # `research data fetch`, which test_vstar_recursive runs under VERITY_VSTAR_RECURSIVE_DATA=fetch
           "tools/research/src/research",
-          "verity/definitions/circuits", "verity/circuits/ops", "verity/circuits/silicon", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py",
+          "verity/circuits/ops", "verity/circuits/silicon", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py",
           "verity/definitions/__init__.py"]
 # Each test builds what it runs (`verity_difftest.build`, one at a time across processes) and opens its own server, so the
 # 2100 s of tests (the longest 440 s) spread over workers.
