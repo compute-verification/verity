@@ -28,12 +28,33 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
-from verity.circuits.codec import decode_program, descriptor_id, encode_program, program_digest
-from verity.circuits.defs import Body, CompositeDefinition, BodyNode, SpecializedDefinition
-from verity.definitions.circuits.constants import REGISTRATION
+from verity.circuits.codec import (
+    decode_program,
+    descriptor_id,
+    encode_program,
+    program_digest,
+)
+from verity.circuits.defs import (
+    Body,
+    BodyNode,
+    CompositeDefinition,
+    SpecializedDefinition,
+)
 from verity.circuits.program import Program, is_input
-from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, coll_concat
-from verity.circuits.types import Array, Tuple as TupleT, Type, Value, field_starts, field_types
+from verity.circuits.refs import (
+    Affine,
+    Coll,
+    Concat,
+    Explicit,
+    PartLog,
+    Refs,
+    Strided,
+    coll_concat,
+)
+from verity.circuits.types import Array, Type, Value, field_starts, field_types
+from verity.circuits.types import Tuple as TupleT
+from verity.definitions.circuits.constants import REGISTRATION
+
 from verity_vllm.program.sampling_event import is_sampling_event
 from verity_vllm.program.shared_definitions import canonicalize
 
@@ -181,7 +202,7 @@ def program_component(root: SpecializedDefinition, digest: str, program_fn: str,
     cached = _REQUEST_CACHE.get(key)
     body = root.body
     K = 0
-    while K < len(body.nodes) and _is_input_node(body.nodes[K]):
+    while len(body.nodes) > K and _is_input_node(body.nodes[K]):
         K += 1
     if any(_is_input_node(n) for n in body.nodes[K:]):
         raise ValueError("Input gates after the first body node: not a derive_step root")
@@ -510,7 +531,7 @@ class WorkloadProgram:
                                  f"and the components carry non-request-local groups {foreign}; refused")
         shared_idx = idx[0]
         for r in requests:
-            if r.T is not None and r.T != r.cap - 1:
+            if r.T is not None and r.cap - 1 != r.T:
                 raise ValueError(f"request {r.request_id}: T={r.T} is not cap-1={r.cap - 1}: the Program must be built from the declared "
                                  "cap, never from a served length")
         if edge is not None:
