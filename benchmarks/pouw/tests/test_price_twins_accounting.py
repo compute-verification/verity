@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.hardware.cards import load, number
+from verity.device import load_card, number
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.accounting.pouw.prover.schemes import get
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
@@ -160,7 +160,7 @@ def test_the_served_prices_are_the_card_files():
     the BF16 MAC (`weight.bf16`), the credited forming, the k32 noise atom's 32 MACs and half a two-code cast at an ALU
     lane's share of the tensor rate, and the forming that reads the activations alone, one FFMA on every 8th element,
     both rounded up. A card whose numbers move fails here until the served record moves with it."""
-    card = load("rtx-pro-6000-server")
+    card = load_card("rtx-pro-6000-server")
     unit = number(card["weight"]["e4m3"])
     add = number(card["price"]["fp32_loop"]) / unit
     cast = number(card["rate"]["tensor"]) / number(card["rate"]["alu"]) / unit
