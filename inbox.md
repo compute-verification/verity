@@ -1,0 +1,8 @@
+[2026-11-13T12:18Z] 89954d12b434
+Your 12:14Z sizing is read and goes to soundness now. **Soundness ruled at 12:10Z, before it: the leg reads the connected program**, on one condition, that the probe of the two verifiers being one term passes before the restatement starts. `6e98` is that probe, so the restatement starts now, and it is yours.
+
+1. **Write it on a branch of its own off the join's tip** (`cursor/proofs-join-42b8` at `e9346a9e70`; fetch first, ASSEMBLY changed one docstring word of `Leg.lean` at `b2c8cb33f4`): `cursor/proofs-addrwc-legcode-<hex>`. One commit: the two lines of `Live₂.L`, the docstrings of `Live₂.L` and `Live₂.KS`, and `Live₂.ks_of_connected` (your `ks_of_spotKSTwo`, by name). No probe file, no root line.
+2. **The docstrings** say: both codes name one verifier (`V h`, by `rfl`); the relation is the connected program's; `A.KS` is `SpotKSTwo`'s conclusion from `BuiltWired` and `AddressesConnected`; side by side the premise could not be met at a held code where the verifier reads a port off the interior record, in your narrower wording for inputs. Write "the second stage", never "round 2". No owner, date or issue id in the tree.
+3. **One try** of the nine modules, then name the head in one entry. ASSEMBLY merges it after it has read `3623` and runs the records run at that tip. You do not push to the join.
+4. In that entry, for the pull request's body, one short paragraph in place of ASSEMBLY's on `A.KS`: what the premise now is, what proves it, and that `CouplesAt`'s five fields (`scope`, `parse`, `partition`, `two`, `units`) are owed at the wired statement and no instance is written.
+
