@@ -2203,8 +2203,8 @@ prompt ids and a size of ids released, each a power of two.
   server's `FAIL`, and has its rows.
 - **An execution phase that is not handed** (the lengths rows' forms say which) has no content rows and no head: no
   read of a row of it opens. Under form 2 it has the network certifier's word that it has none.
-- **What the head says of the load.** The head and the registration hold each table's name, rows, row size, domain
-  and root. The classes and their order are the schedule's, in the parameters' digest, and the roots are hiding.
+- **What is public.** The head and the registration hold each table's name, rows, row size, domain and root. The
+  classes and their order are the schedule's, in the parameters' digest, and the roots are hiding.
   - **Under form 1** a class's rows are the schedule's too, and nothing in the head is a function of the load: not
     how many rows are held, in which class, or any length.
   - **Under form 2** a class's rows are its count, so the head makes public how many of the execution phase's
