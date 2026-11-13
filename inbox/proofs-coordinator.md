@@ -146958,3 +146958,320 @@ Nothing is launched yet. Nothing here runs on the served engine. Sources: [run] 
 
 - At about 15:30Z I read the calendar, the memory and the dry run again, then launch at about 15:33Z. Late, not now, because the node is vllm's until 15:45Z: until the fetch the job is one sleeping shell on core 91 and a 100 GB reservation.
 - I do not launch if the calendar shows another's row on card 7 or cores 82-91, the dry run prints `LATE`, or it is past 15:39Z.
+
+## REDRAW, Fri 13 Nov 14:52Z: Y2 sized on main `053b8e50fe8a`, nothing built: 253 listed statements (six deployed) read 6,035 definitions that sit in 679 files of the proofs tree; ending that moves about 37,900 lines of definitions out of 233,476, names kept, in about 14 pull requests, and by the check's code no guarantee's text or hash changes; seven records typed over ArkLib's Reed-Solomon code are not a move (72 readers, four deployed); where each definition may go (definitions tree or properties tree) is bounded here, not established: it needs one read-only run
+
+Asked by the coordinator's message of 14:11Z; due 17:00Z. Read on `origin/main` `053b8e50fe8a` [run: `git fetch`,
+14:17Z]. Nothing built, no branch, no lock change. The numbers are from short scripts over the tree's import lines
+and the three locks; the scripts are scratch on my machine, the two full tables are in the notes (below).
+
+### 0. The order's premise is older than main [read]
+
+- The sentence the order quotes ("C-Flock has no `Definitions/` area yet: its guarantees are
+  `Models/Flock/Guarantees` …") is not in AGENTS.md at this tip, and the tree has no `Models/`. By `git log -S` it
+  was last in AGENTS.md on 25 Oct.
+- `security/Definitions/Flock` exists: 35 files, 4,555 lines, with 453 recorded definitions in 27 read groups of the
+  security lock. `security/Definitions/Flock.lean` says how it was made: definitions extracted from `Proofs/Flock`
+  "without its proofs, bottom-up … the definitions keep their names … every other lemma stays in `Proofs/Flock` and
+  imports the definitions it is about". 105 proof files already import a `Definitions.Flock` file [run: grep].
+- So Y2 is the rest of an extraction that is about one fourteenth done by definitions (453 of 453 + 6,035).
+- What says it is not done: `trees.except` in `security/lean-audit.json`, 28 prefixes (21 under `Proofs.Flock`,
+  4 under `Proofs.Accounting`, 1 `Proofs.Pouw.OnsiteFreed`, 2 under `Proofs.Properties.Verity`), each with the
+  reason "C-Flock is excepted until its spec is extracted" or what it reads of C-Flock. I wrote 30 in my note at
+  14:26Z; 28 is the count [run].
+- There are three trees, and that decides the cut:
+  - the definitions tree (package `security`, `security/lakefile.toml`) requires Mathlib only;
+  - the properties tree (`security_properties`) requires `security` and the code's Lean packages;
+  - the proofs tree (`security_proofs`) alone requires ArkLib (VCVio comes with it).
+  A definition over the code's Lean (`Flock.*`, `Spot.*`, `VStar.*`) can sit only in the properties tree. One typed
+  over ArkLib can sit in neither.
+
+### 1. The guarantees and the modules
+
+**By lock** [run: scripts over the locks]:
+
+| lock | guarantees | read groups | groups under `Proofs.` |
+|---|---|---|---|
+| `security/lean-audit.json` | 1,137 (14 deployed) | 1,530 | 679 (623 `Proofs.Flock`, 28 `Proofs.Accounting`, 27 `Proofs.Properties`, 1 `Proofs.Pouw`) |
+| `security/Properties/lean-audit.json` | 540 | 480 | 0 |
+| `verity/protocols/flock/verifier/lean-audit.json` | 11 | 8 | 0 |
+
+**Who reads the proofs tree** [run: the readers by module in the report of `r20261113-112700-682b`, a records run
+of my credit branch whose 1,530 read groups have the same keys as main's lock]:
+
+- 253 of the 1,137 guarantees read at least one module of the proofs tree.
+- By owner: 225 `@proofs`, 17 `@network-accounting`, 6 `@lean`, 2 `@compute-research`, 2 `@soundness`, 1
+  `@compute-accounting`.
+- By name: 95 of the 98 `Flock.SecurityProofs.*`, the 4 `Flock.Guarantees.*`, 60 `Claims.Witness.*`, 29
+  `Claims.SamplingGeneric.*`, 13 `FlockSoundness.*`, 12 `NetTiming.*`, 10 `Accounting.SecurityProofs.*`, and 30
+  others.
+- A guarantee reads from 1 to 221 such modules, 27 at the median.
+- 199 of the 253 also read a module of a code package.
+- Six of the 14 deployed guarantees are among them:
+
+| deployed guarantee | modules of the proofs tree it reads | definitions recorded in those modules |
+|---|---|---|
+| `Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed` | 146 | 1,797 |
+| `Flock.SecurityProofs.SampledKSLiveV5` | 143 | 1,253 |
+| `Flock.SecurityProofs.SampledKSLiveV3` | 138 | 1,213 |
+| `Flock.SecurityProofs.SessionLoopZKDeployed` | 137 | 1,720 |
+| `Flock.SecurityProofs.RecursiveKSDeployed` | 132 | 1,353 |
+| `Flock.SecurityProofs.DeltaPubDeployed` | 3 | 7 |
+
+**The modules, by area** [run]. "Whole" counts files with no theorem and no unread definition. The last column is
+what a file's public imports let its text name, the widest of the three; it is an upper bound, see section 2.
+
+| area | modules | lines | recorded definitions | lines of the read declarations | whole | guarantees reading it | can name: Mathlib only / code / ArkLib |
+|---|---|---|---|---|---|---|---|
+| `Proofs.Flock.Claims` | 214 | 82,049 | 1,965 | 10,952 | 15 | 173 | 18 / 35 / 161 |
+| `Proofs.Flock.Soundness` | 231 | 72,925 | 1,961 | 12,301 | 6 | 147 | 18 / 25 / 188 |
+| `Proofs.Flock.Recursive` | 52 | 20,251 | 478 | 3,302 | 2 | 50 | 1 / 9 / 42 |
+| `Proofs.Properties` (`Verity.Recursive`, `Verity.Sampled`) | 27 | 13,759 | 409 | 2,412 | 2 | 3 | 0 / 1 / 26 |
+| `Proofs.Flock.SessionLoop` | 24 | 8,957 | 139 | 1,308 | 0 | 17 | 0 / 4 / 20 |
+| `Proofs.Flock.SamplingGeneric` | 15 | 6,369 | 41 | 427 | 1 | 10 | 3 / 0 / 12 |
+| `Proofs.Flock.Bridge` | 24 | 5,924 | 109 | 1,045 | 2 | 18 | 1 / 3 / 20 |
+| `Proofs.Flock.ZkAny` | 8 | 5,351 | 98 | 612 | 0 | 5 | 0 / 2 / 6 |
+| `Proofs.Flock.SpotFlock` | 14 | 4,458 | 220 | 1,116 | 0 | 3 | 0 / 0 / 14 |
+| `Proofs.Accounting` | 28 | 3,882 | 132 | 1,167 | 17 | 10 | 0 / 0 / 28 |
+| `Proofs.Flock.Level3` | 12 | 2,316 | 51 | 163 | 1 | 127 | 1 / 11 / 0 |
+| `Proofs.Flock.EndToEnd` | 8 | 2,019 | 298 | 1,397 | 3 | 18 | 1 / 0 / 7 |
+| `Proofs.Flock.RecGeneric` | 5 | 1,015 | 34 | 379 | 0 | 8 | 2 / 0 / 3 |
+| `Proofs.Flock.EndToEndRegistered` | 4 | 1,007 | 23 | 392 | 0 | 8 | 0 / 0 / 4 |
+| `Proofs.Flock.SoundAtBridge` | 4 | 615 | 53 | 219 | 1 | 8 | 1 / 0 / 3 |
+| nine single files (`VBridge`, `Verifier`, `Bytes`, `Masked`, `EndToEndDrawn`, `EndToEndHidden`, `EndToEndRegisteredRows`, `ZeroKnowledgeHidden`, `Proofs.Pouw.OnsiteFreed`) | 9 | 2,579 | 24 | 675 | 4 | 1 to 42 each | 1 / 2 / 6 |
+| all | 679 | 233,476 | 6,035 | 37,867 | 54 | 253 | 47 / 92 / 540 |
+
+- The 6,035 recorded names are 4,511 declarations by a text parse (a structure's fields and generated constants are
+  recorded beside it); 32 names found no parent in the parse.
+- For scale: all of `security/Proofs/Flock` is 2,803 files and 854,025 lines.
+- The files read by most guarantees are small and at the bottom: the 12 of `Proofs.Flock.Level3` (field arithmetic,
+  2,316 lines, 51 definitions) are read by 127 guarantees; `Proofs.Flock.Soundness.Discharge.Exec.Event` (100 lines)
+  by 130.
+- **The two full tables** are in the notes, `lanes/proofs/20261113T1447Z-report-redraw-y2-tables.md`:
+  - by module (679 rows): lines, recorded definitions, lines of the read declarations, theorems, readers, and import
+    lines by what they import;
+  - by guarantee (253 rows): owner, deployed or not, modules read, by area.
+  The lock gives reads by module, so "the definitions a statement reads" is, for each guarantee, the definitions
+  recorded in the modules it reads: an upper bound for that guarantee.
+
+**What the 679 import** [run], in import lines, by what is imported:
+
+| imported | lines | in how many of the 679 |
+|---|---|---|
+| Mathlib and other pinned libraries | 8,740 | 483 |
+| unread files of the proofs tree | 1,472 | 451 |
+| other read files of the proofs tree | 1,126 | 569 |
+| code packages (`Flock` 233, `VStar` 7, `PouwWindow` 5, `Spot` 4, others 5) | 254 | 107 |
+| `Definitions.*` | 96 | 74 |
+| `VCVio.Prelude.Core` | 35 | 35 |
+| `Properties.*` | 20 | 19 |
+| ArkLib | 9 | 6 |
+
+- The 35 VCVio lines are private imports in files that name nothing of VCVio (the import line is the file's only
+  mention) [run: grep]. A definitions file would not carry them. Why they are there I did not find.
+- The six that import ArkLib directly: `Claims.Decode`, `Claims.GS.Interp`, `Soundness.ListSize` (public imports),
+  `Soundness.LigeritoPadLevel0`, `Soundness.LigeritoPhase`, `Soundness.PadCode` (private imports, so only their
+  proofs can name it).
+
+### 2. The cut
+
+**The shape that works is the one the first extraction used** [derived]:
+
+- The read declarations of a proof file go, with their names, into a new file of a spec tree.
+- The proof file keeps its lemmas and `public import`s the new file, so no file that imports it changes.
+- Whole files cannot move as they are: 625 of the 679 hold theorems, and theorems stay in the proofs tree. The 54
+  with no theorem and no unread definition (6,307 lines) can move whole.
+
+**Counts** [derived from the tables]:
+
+- Files: 679 new or moved files at most (625 new beside their proof file, 54 moved whole); fewer if small ones are
+  merged.
+- Lines that move: about 37,900 (the read declarations by the text parse, 16% of the 233,476), plus each new file's
+  header.
+- Import lines:
+  - 625 added, one `public import` in each proof file left behind;
+  - 128 rewritten in 113 files, the importers of the 54 that move whole;
+  - in the new files, at most the 1,126 lines between read files, which name the new files instead.
+- Import lines that must be lost: the 1,472 of unread proof files, the 35 of VCVio and the 9 of ArkLib have no
+  place in a new file.
+- If instead every read file were renamed whole, 3,247 import lines in 1,678 files under `security/` would change,
+  and 62 files outside `security/` (245 lines) name `Proofs.Flock` or `Proofs/Flock`. That is not on offer, for the
+  theorems.
+
+**Which tree each definition goes to: bounded, not established.**
+
+- Reads are closed under use: a recorded definition uses only recorded definitions, pinned libraries, code, and
+  theorems, which the walk does not follow [read: `tools/verity/lean/Facts.lean` 409 to 438, `readsWhere`]. So no
+  read definition needs an unread definition. What it may need is a lemma inside a proof it carries, or ArkLib or
+  the code in its type.
+- Lower bound for ArkLib [run: a scan of the read declarations' text for ArkLib's and VCVio's names, comments
+  stripped]: seven records, the case below. A scan by name misses a use through an opened namespace or a notation.
+- Upper bound [run: closure of public imports through every file under `security/`]: the text of 540 of the 679
+  could name ArkLib, of 92 the code but not ArkLib, of 47 neither. The 540 come through 8 files with a public ArkLib
+  import, 3 of them read.
+- Code: 199 of the 253 guarantees read a code package's module beside the proofs tree, and 107 of the 679 files
+  import one directly. So a large part of the definitions is about the code's Lean and belongs in
+  `security/Properties/Flock` (today 3 files: `Circuit`, `Nets`, `ReadNet`), not in `security/Definitions/Flock`.
+- The true split, by definition, is what the elaborator knows. The records run writes it (each statement's reads
+  and the pinned names it reads, in its facts document), but my read-only job for it failed: `r20261113-142206-90e8`
+  exit 3, the document was not at the path the report names.
+
+**What cannot move as it is, and what each needs:**
+
+1. **Seven records typed over ArkLib** (not a move; section 3). Each holds one field of the form
+   `hδ : δ ≤ Code.relativeUniqueDecodingRadius (ReedSolomon.code dom k : Set (Fin N → F))` [read]:
+
+   | record | file under `security/Proofs/Flock/` | guarantees reading the file |
+   |---|---|---|
+   | `FlockSoundness.Discharge.ZkSession.TabZK` | `Soundness/Discharge/ZkSession/Session.lean` 65 (field at 95) | 68 |
+   | `ZkLink.DrawSetupZK.tabAt` | `Soundness/Discharge/ZkLink/TablesAt.lean` 223 | 65 |
+   | `Composed.DrawSetupZJ.tabAt` | `Soundness/Discharge/Composed/DefsJ.lean` 114 | 51 |
+   | `ZkHidden.DrawSetupZHJ.tabAt` | `Soundness/Discharge/ZkHidden/DefsJ.lean` 245 | 50 |
+   | `ZkHidden.DrawSetupZHJP.tabAt` | `Soundness/Discharge/ZkHidden/DefsJP.lean` 210 | 41 |
+   | `ZkHidden.ZkTab.table` | `Claims/ZK/MaskedTables.lean` 157 | 16 |
+   | `ZkHidden.DrawSetupZKH.tabAt` | `Soundness/Discharge/ZkHidden/Defs.lean` 84 | 3 |
+
+   - 72 guarantees read at least one of the seven files [run]: 63 `@proofs`, 6 `@lean`, 2 `@soundness`, 1
+     `@compute-accounting`. Four are deployed: `SampledKSLiveV3`, `SampledKSLiveV5`, `SessionLoopZKDeployed`,
+     `RecursiveZKLoopAnySumDeployed`. My note's 81 at 14:26Z counted three files whose `Code.` is our own namespace.
+   - What each needs: the field restated over Mathlib alone (our own Reed-Solomon code and its unique-decoding
+     radius in `Definitions/Flock`, or the bound as arithmetic in `N` and `k`), and a lemma in the proofs tree that
+     it is ArkLib's.
+2. **Definitions that carry a proof**: 155 of the read declarations hold a `by` [run: text]. A lemma such a proof
+   uses moves with it or the proof is rewritten on Mathlib. Which of the 155 use a lemma of the proofs tree: not
+   established.
+3. **The layer's import list.** `layers` lets `Definitions.Flock` import Mathlib, `Definitions.Core.Boolean`,
+   `Definitions.Hash.Basic`, `Definitions.Core.Game`, `Definitions.Core.Draw`, `Definitions.Core.Rewinding` and
+   itself [read]. The read files import 25 other areas of the definitions tree today, in 45 import lines [run]:
+   `Definitions.Claims.*` 26, `Definitions.Accounting.*` 6, `Definitions.Pouw.*` 5, `Definitions.Core.Interaction`,
+   `.Compose` and `.Hm96` 4, `Definitions.Assumptions.Flock` 2, `Definitions.Hash.RowLeaf` and `.Tree` 2. A
+   definition that uses one of them needs the list widened (a lock line, `@lean`'s) or a layer of its own.
+4. **The statements themselves.** `Flock.Guarantees.G` are definitions in proof files (for example
+   `Proofs/Flock/Bridge/ScopeGate.lean`) and move like the rest. The layer `Definitions.Flock.Guarantees` is sealed
+   and imports only Mathlib and `Definitions.Claims`, so it cannot hold a statement over `Definitions.Flock` as its
+   line stands.
+
+### 3. The locks
+
+**What a move alone changes** [read: `tools/verity/lean/check.py` 1302 to 1318 and 4176 to 4283;
+`tools/verity/lean/Facts.lean` 1355 to 1380; not run]:
+
+- A guarantee's `type_hash` and `unfolded_hash` are SHA-256 of the canonical text of its type, written by
+  declaration names. A file's name is not in it. So moving a definition to another file under the same name changes
+  no guarantee's `signature`, `type_hash` or `unfolded_hash`.
+- `--moved` maps old declaration names to new ones. With every name kept it is not needed; `check.py --update`
+  alone records the move. It is needed only if a namespace is renamed, which I would not do.
+- `reads` is keyed by module. Every moved definition leaves its group and joins one under the new module's name:
+  up to 679 groups change, each with its `digest`. A definition found under its old name with its old hash is
+  counted on one line of the review ("definitions read in another module or under another name: the same under their
+  old names") and is not listed as a change.
+- None of the 6,035 recorded names is a private one (a private name carries its module, and would change) [run].
+- Lines of the lock a person edits (`@lean`'s file), each a hand edit that needs a records run by the fast path
+  before the mark:
+  - `trees.except`: an entry that excepts nothing fails (`trees.stale-except`), so the pull request that empties a
+    prefix removes its entry; 28 to remove in all. `tests/test_lean_packages.py` holds the cap (`TREES_EXCEPT`, 41;
+    `@top`'s file), which only shrinks.
+  - `meaning` and `layers`: the new modules' prefixes.
+  - `roots` of `security/Proofs/lean-audit.json` and of `security/Proofs/lakefile.toml` name 20 and 23 of the read
+    files; a root that moves whole changes both, and a changed lakefile makes PoUS's `TRUSTED.sha256` stale.
+- The Properties lock records no read under `Proofs.` today. It changes only if definitions land in
+  `security/Properties/Flock`: then its roots and layers gain them.
+- `reads_exempt.Flock` in the security lock is a second exception with the same words. It excuses reads of the
+  code's own modules outside Flock's verifier's spec layers (99 groups, 3,577 definitions). This move does not end
+  it.
+
+**Cases that are not a move** [derived]:
+
+1. The seven records above. Restating the field changes each record's hash, so the review lists seven changed
+   definitions, read by 72 guarantees, four deployed. The guarantees' own text and hashes stay, since they name the
+   record and not its field; what they say changes only if the restated bound is not the same number. That is a
+   statement change to put to soundness before its pull request.
+2. A definition whose carried proof is rewritten: its type stays, its value changes, so its recorded hash changes
+   and the review lists it as changed though it says the same. How many of the 155: not established.
+3. Any definition that would be renamed to fit a layer. None is needed by what I read.
+
+No guarantee's own text changes in any of the three; I found no case where an `unfolded_hash` must change. This is
+read from the check's code, not shown by a run.
+
+### 4. The order of pull requests
+
+| # | what | size | waits on | others' files |
+|---|---|---|---|---|
+| 0 | No pull request: one read-only run that prints, for each recorded definition under `Proofs.`, whether it uses ArkLib or VCVio, a code package, or a lemma of the proofs tree | a records run's build of `security/Proofs`, or a read of its facts document | the stop rule, a machine | none |
+| 1 | The rule: where code-typed definitions and statements go (`Properties/Flock`), the layer lists | a few lock lines | `@lean`'s yes | `security/lean-audit.json`, `security/Properties/lean-audit.json` (`@lean`) |
+| 2 | The seven records restated over Mathlib | 7 files, 1 new definitions file, 1 lemma file | soundness's yes; chain 2 | `security/Definitions/Flock` (`@lean`) |
+| 3 | The bottom: `Level3`, `Bytes`, `Verifier`, `VBridge` | 15 files, about 230 lines moved; 127 guarantees stop reading `Level3` in the proofs tree | chain 2; 1 | `security/Properties/Flock` or `Definitions/Flock`, the lock (`@lean`) |
+| 4 to 7 | `Soundness`, in import order | 231 files, about 12,300 lines | 2, 3 | same |
+| 8 to 10 | `Claims` | 214 files, about 11,000 lines | 4 to 7; the parser switch for the files that read the parsed tree | same |
+| 11 | `Recursive`, `RecGeneric` | 57 files, about 3,700 lines | 8 to 10 | same |
+| 12 | `SessionLoop`, `ZkAny`, `Bridge`, `SoundAtBridge`, `EndToEnd*`, `Masked`, `ZeroKnowledgeHidden` | 77 files, about 5,600 lines | 11 | same |
+| 13 | `SamplingGeneric`, `SpotFlock` | 29 files, about 1,500 lines on main, more after the join | the join on `main` | same |
+| 14 | The other owners' entries: `Proofs.Accounting.TS.Session` (25 files) and `Proofs.Pouw.OnsiteFreed` (`@compute-accounting`); `Proofs.Accounting.JointBridge.Guarantees`, `ReadUnit.Guarantees`, `Proofs.Properties.Verity.Recursive` and `.Sampled` (30 files, `@lean`) | 56 files, about 3,600 lines | 4 to 13; their owners | theirs |
+
+- "About 14" is a guess at 3,000 to 4,000 moved lines a pull request [guess]. Each one rebuilds most of the proofs
+  tree, since the files at the bottom move first.
+- Every one is cut from a `main` that holds chain 2. Chain 2 (#9734 at `031af1f38001`) changes 349 files under
+  `security/`: 23 renames, 54 files under `security/Proofs/Flock`, 31 of the 679, and all three locks (1,584 lines
+  of the security lock) [run: `git diff` against its head].
+- The join (`cursor/proofs-join-42b8` at `4824a13de878`) changes 220 files under `security/`: 88 new and 9 changed
+  under `Proofs/Flock/SpotFlock` and `SamplingGeneric`, 96 new and 17 changed under `Proofs/Properties`, and the
+  three locks. It changes 2 of the 679. Its new guarantees will read new files of the proofs tree, so 13 and part of
+  14 wait for it, and the count 679 will be larger after it [run: `git diff`; the growth not measured].
+- #9441 touches no file under `security/Proofs`; it changes both locks, `Flock/KsScope.lean` and
+  `Spot/OneStageZk.lean` [run: `gh pr view`]. The Y2 pull requests meet it only in the locks, where the merge
+  driver settles records.
+- The parser switch changes the code's parser, so the hashes of code definitions the statements read. Which of the
+  679 read the parsed tree I did not count.
+- Whose files [run: `research msg owners`]: all 623 read files under `security/Proofs/Flock` are `@proofs`'; the
+  other 56 are `@compute-accounting`'s (26) and `@lean`'s (30); every destination (`security/Definitions/Flock`,
+  `security/Properties/Flock`), the three locks, the lakefiles and `security/README.md` are `@lean`'s;
+  `tests/test_lean_packages.py` is `@top`'s; PoUS's `TRUSTED.sha256` is `@memory-accounting`'s.
+- Soundness owns none of the files. Its two guarantees among the 253 (`Verity.Sampled.remote_soundness_deployedReady`
+  and one more) keep their text; their read groups are rewritten by the records run.
+
+### 5. What A costs (the 14:39Z message) [guess, from reading the reader on main]
+
+- Lean: one refusal and its word in `Spot/ChallengerDraw.lean` (about 4 lines); the statement `FamilyAlone` (9
+  lines) in `security/Properties/Challenger.lean`; its proof beside `familyOneCommitment`'s in
+  `security/Proofs/Properties/Challenger/Drawn.lean` with the honest and nontrivial witnesses (40 to 80 lines).
+- Python: the same refusal in `draw_coins` (`verity/protocols/spot/device/coins.py` 376), about 4 lines; two
+  difftest rows in `verity/protocols/spot/verifier/lean/tests/test_challenger_difftest.py` (one refused, one
+  accepted), about 20 lines.
+- Tests to run: the spot verifier's suite (`test_challenger_coins.py`, `test_registered.py`, the two Lean
+  difftests) and PoUW's verifier's (`test_pouw_credit.py`, whose seed salt and draw go through the reader); the
+  records of `security/Properties` and `security`.
+
+### 6. What I did not read
+
+- The facts document of any records run, so no read by definition and no pinned name a statement reads.
+- Any of the 679 files whole. I read `Definitions/Flock.lean`, `security/README.md`, `security/Proofs/README.md`,
+  one of the seven records in full and the other six at their field.
+- `check.py`'s `lift` and `--moved` code past its docstrings; `merge.py`; how a candidate's records run treats a
+  review with only moved reads.
+- The join's and chain 2's diffs beyond their file lists; #9441's switch and the parser switch beyond #9441's file
+  list and two entries of this inbox.
+- The Properties lock's `layers` and `roots`, to see what `Properties/Flock` may import.
+
+### Not established
+
+- That no guarantee's hash changes under a move that keeps names: read from the check's code, not run.
+- Where each definition can go. The bounds are 47 files that can name only Mathlib and 540 that could name ArkLib;
+  the truth is between, by definition, and needs step 0.
+- Whether the seven are all the definitions typed over ArkLib: found by names in the text.
+- Whether the restated bound of the seven is the same number as ArkLib's radius for every `N` and `k`: not worked.
+- The line counts of the read declarations: a text parse, which missed parents for 32 recorded names.
+- The readers by module come from a build of my credit branch, not of main's tip; the group keys are equal, the
+  readers of each group were not compared.
+- Which lock lists a statement that sits in the properties tree. The security lock already records 16 read groups
+  under `Properties`, so the check admits the read; whether such a guarantee stays in the security lock I did not
+  read.
+- The count of pull requests and every line count in section 5: guesses.
+
+### State
+
+- No code written, no branch made, no lock touched. Heads unchanged: #9717 `8130cf7e15e2`, #9728 `36d6e37cbc7b`,
+  the credit branch `1370c60b7e75`, the `commitOf?` branch `779936dea335`; nothing unpushed.
+- No run in flight.
+- Mailbox read 14:44Z: 560 lines, to the 14:39Z message (A yes, B no). No "carry" yet.
+- Next: wait for "carry"; then the restack by FRAME's steps, then point 4 with `PinnedOnMain` and `FamilyAlone`,
+  both proved.
