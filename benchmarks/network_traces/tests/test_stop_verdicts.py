@@ -758,6 +758,9 @@ def test_anything_less_is_the_whole_schedule_with_a_line_that_says_why():
     assert got.held == 0 and got.why[0].startswith(whole + "the head states [5, 6] rows for class 0's three tables")
     # the same head given twice is one head, and one execution phase
     assert stop([registration(first), registration(first)], four(first)).held == 1
+    # a superseded run's accept that is no verdict record holds nothing at all, as any record that is none does
+    got = stop([registration(first)], four(first), spent=["accept"])
+    assert (got.held, got.verdicts, got.why) == (0, (), (f"{whole}{NO_RECORD}it is no object: 'accept'",))
 
 
 class Store:
@@ -977,6 +980,9 @@ def test_a_superseded_run_takes_away_no_refusal(tmp_path):
     for superseded in ((), ["old"]):
         got = SV.of_runs(store, ["old", "new"], superseded)
         assert got.held == 0 and got.why[0].endswith(f"{NO_RECORD}it is no object: 'accept'")
+    # it is handed on as a record of the run's, and is none of its accepts
+    handed = SV.read(store, ["old", "new"], ["old"])
+    assert handed[1] == ["accept", *four(first)] and handed[5] == four(first) and handed[2][0] == dropped(4, "old")
     # and the registration it kept is read as any run's: another head for the execution phase holds nothing
     other = head(3, 6, 0)
     store = Store(tmp_path / "heads", {"old": held_files(other, four(other)), "new": accepts})
