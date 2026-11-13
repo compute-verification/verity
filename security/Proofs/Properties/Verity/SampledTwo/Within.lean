@@ -25,7 +25,7 @@ namespace Verity.SampledTwo
 
 open Claims
 open Lean (Json)
-open Properties.Spot.SecurityProofs (take_run bind_error bind_eq_ok throw_bind_ne onWith_take StopsAt)
+open Properties.Spot.SecurityProofs (bind_error bind_eq_ok throw_bind_ne onWith_take StopsAt)
 open SpotFlock.RunsAs (run_pure_eq HeldMatches RoundTwo)
 open SpotFlock.RunsAs.Round2 (NamesDistinct TwoHolds)
 
