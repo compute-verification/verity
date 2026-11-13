@@ -53,6 +53,8 @@ P02 = "adapters/vllm/tests/lint/allowlists/p02_more.json"
 LINT = "adapters/vllm/tests/lint/test_p01_core.py"
 REPO_RUFF_LINT = "tests/lint/test_repo_ruff.py"
 REPO_RUFF_JSON = "tests/lint/allowlists/repo_ruff.json"
+#: a toy file's line whose finding its comment suppresses, as a fix names it
+SUPPRESSED = "import sys  # noqa: F401"
 #: a stand-in for move_check: certified when every change is a 100% rename. Like move_check, it finds the root by where its
 #: own file is and loads the move script and the pins list from there
 MOVE_CHECK = """\
@@ -449,9 +451,9 @@ def test_a_branch_with_two_merge_bases_is_judged_against_their_merge(repo):
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["noqa_added"], c["touched"]) == ("untouched", 0, [])
     repo.git("checkout", "-q", "pr")
-    repo.commit("pr's own noqa", {"adapters/vllm/verity_vllm/e.py": "import sys  # noqa: F401\n"})
+    repo.commit("pr's own noqa", {"adapters/vllm/verity_vllm/e.py": f"{SUPPRESSED}\n"})
     [c] = G.gate("main", "pr")["changes"]
-    assert (c["verdict"], c["fix"]) == ("failed", ["verity_vllm/e.py:1: import sys  # noqa: F401"])
+    assert (c["verdict"], c["fix"]) == ("failed", [f"verity_vllm/e.py:1: {SUPPRESSED}"])
 
 
 def test_merge_bases_that_conflict_are_refused_with_how_to_leave_one(repo):
@@ -1563,16 +1565,19 @@ NEW_C = f'{P01}: new {G.key(_entry("verity_vllm/c.py", "C"))}'
 
 def test_a_change_fails_by_each_rule_it_breaks_that_reads_no_lint(repo):
     repo.git("checkout", "-q", "-b", "pr")
-    repo.commit("a new entry and a new noqa", {"adapters/vllm/verity_vllm/c.py": "import sys  # noqa: F401\n", P01: P01_WITH_C})
+    repo.commit("a new entry and a suppressed finding", {"adapters/vllm/verity_vllm/c.py": f"{SUPPRESSED}\n", P01: P01_WITH_C})
     [c] = G.gate("main", "pr")["changes"]
-    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {P01} 2 -> 3 entries: no change adds"), c["why"]
-    assert "; and adds 1 `# noqa` line(s) under adapters/vllm/ and removes 0: a noqa is an exception" in c["why"], c["why"]
-    assert c["fix"] == [NEW_C, "verity_vllm/c.py:1: import sys  # noqa: F401"]
+    first, second = c["why"].split("; and ")
+    assert c["verdict"] == "failed" and first.startswith(f"grows {P01} 2 -> 3 entries: no change adds"), c["why"]
+    assert second.startswith("adds 1 ") and " line(s) under adapters/vllm/ and removes 0: a noqa is an exception" in second, c["why"]
+    assert c["fix"] == [NEW_C, f"verity_vllm/c.py:1: {SUPPRESSED}"]
     repo.git("checkout", "-q", "-b", "broken", "main")
-    repo.commit("an unreadable list and a new noqa", {P01: "{", A_PY: "A = 1  # noqa: E1\n"})
+    repo.commit("an unreadable list and a suppressed finding", {P01: "{", A_PY: f"{SUPPRESSED}\n"})
     [c] = G.gate("main", "broken")["changes"]
-    assert c["verdict"] == "failed" and c["why"].startswith(f"leaves {P01} unreadable as an allowlist"), c["why"]
-    assert "; and adds 1 `# noqa` line(s) under adapters/vllm/" in c["why"] and c["fix"] == ["verity_vllm/a.py:1: A = 1  # noqa: E1"]
+    first, second = c["why"].split("; and ")
+    assert c["verdict"] == "failed" and first.startswith(f"leaves {P01} unreadable as an allowlist"), c["why"]
+    assert second.startswith("adds 1 ") and " line(s) under adapters/vllm/ and removes 0" in second, c["why"]
+    assert c["fix"] == [f"verity_vllm/a.py:1: {SUPPRESSED}"]
 
 
 def test_a_change_one_rule_fails_is_judged_no_further_and_every_rule_names_what_the_bases_lints_find(linted):
