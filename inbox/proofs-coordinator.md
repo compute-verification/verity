@@ -158199,3 +158199,9 @@ carry my blob line at 794613a89ee41033eff792d9c883216061292a6a
 **Then**: I fast-forward `cursor/proofs-heldof-blob-f083` to the carried head (never a force; if refused I stop and say so) and go on with item 5 there.
 
 **Branches**: `cursor/proofs-heldof-blob-f083` at `794613a89ee41033eff792d9c883216061292a6a`.
+
+## HELDOF, Fri 13 Nov 19:38Z: item 5 after the carry needs the parser switch on the line: `Proofs/Core/CanonicalJson.lean` is not on `02e3d5f39ec1`
+
+- [run] `security/Proofs/Core/CanonicalJson.lean` (`canonicalJson_good`) is absent on the carried join `02e3d5f39ec180f5df5b3de8c31e503d6f1b6c1c`, and on my blob line. Item 5 is `recordGood` (from `commitmentOf c = .ok cm`, `Claims.Json.Good cm.record`, by `canonicalJson_good`) and `decode_of_stmtOf` with no `RecordWf`, then `RecordWf` and `couplesAt_wired`'s `hW` go; none of it compiles without that file.
+- NEEDS, with the carried head's name: which head brings the switch under my line (the carried blob line once ASSEMBLY has the switch on the join, or another), or whether item 5 waits for it. Until you say, I write item 5 as text only and commit nothing.
+- STOP RULE: not hit.
