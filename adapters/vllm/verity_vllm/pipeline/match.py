@@ -42,31 +42,40 @@ from __future__ import annotations
 
 import hashlib
 import importlib
-import importlib.util
 import json
-import os
 import shlex
 import subprocess
 import sys
 import time
 from collections import Counter, defaultdict
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.check import gates as G
-from verity_vllm.config import RowEngine, UsageError, option, workload_arg
+from verity_vllm.config import (
+    RowEngine,
+    UsageError,
+    option,
+    row_execution,
+    workload_arg,
+)
 from verity_vllm.engine.served import ENFORCE_EAGER
+from verity_vllm.log import init_logger
 from verity_vllm.observe.fold.supplied import program_registered_values
 from verity_vllm.pipeline import experiment as EXP
 from verity_vllm.pipeline import gpu_lease as GL
+from verity_vllm.pipeline.timeline import Timeline
 from verity_vllm.program.sampling_event import program_sampler_construction
 from verity_vllm.query.manifest.format import RUN_FAMILY, RUN_PARAM, canonical_identity
 
+logger = init_logger(__name__)
+
 DEFAULT_SNAPSHOT_STEPS = "all"        # evidence for every specialization (h1: attention T at non-snapshot steps was uncovered)
-DEFAULT_TIER_B_STEPS = "0,1,2,3"       # --full-replay (diagnostic): prefill + three decode steps
+TIER_B_STEPS = (0, 1, 2, 3)            # --full-replay (diagnostic): prefill + three decode steps
 DEFAULT_K = 10                         # tier a: instances per (specialization, regime) stratum (gate minimum TIER_A_K)
-DEFAULT_CHAINS = 3                     # tier chain: connected slices replayed with computed intermediate values
+SAMPLING_CHAINS = 3                       # run.json's sampling.chains (no stage reads it)
 DEFAULT_PARALLEL_REPLAY = 4            # run.json's `parallel_replay` (1 with --laptop)
 DEFAULT_CHECKPOINTS = "manifests/checkpoints.json"
 SNAPSHOT_CAP_FLOOR = 32 << 20          # m1_capture's fixed per-tensor snapshot cap, the floor of the derived one
@@ -81,10 +90,6 @@ SKIP_GROUPS = {
     "nonint": {"nonint", "nonint_compare"},
     "fold": {"fold", "fold_2", "fold_other"},
 }
-#: Stages whose module may be missing in a worktree; a missing module is recorded
-#: as `missing_module`, not run.
-OPTIONAL_MODULES = {"golden": "verity_vllm.properties.golden"}
-
 
 # ---------------------------------------------------------------------------------------------------------
 # plan
@@ -96,7 +101,7 @@ class Plan:
 
     def __init__(self, a: Options) -> None:
         self.a = a
-        self.run = Path(a.out)
+        self.run = Path(required(a, "out"))
         self.py_gpu = a.python_gpu or sys.executable
         self.py_cpu = a.python_cpu or sys.executable
         if str(a.snapshot_steps).strip().lower() == "all":
@@ -104,7 +109,7 @@ class Plan:
             # exceed max(max_tokens)), else max(max_tokens); a listed step that never happens costs nothing
             n = a.max_tokens if a.max_tokens is not None else _workload_expected_steps(a.workload)
             if not n:
-                print("[plan] --snapshot-steps all: workload max_tokens unknown, falling back to 0,1,2,3", file=sys.stderr)
+                logger.warning("[plan] --snapshot-steps all: workload max_tokens unknown, falling back to 0,1,2,3")
                 n = 4
             self.steps = list(range(int(n)))
         else:
@@ -112,9 +117,7 @@ class Plan:
         if not self.steps or self.steps[0] != 0 or self.steps != list(range(len(self.steps))):
             raise SystemExit(f"--snapshot-steps must be contiguous from 0 (got {a.snapshot_steps}): replay of step N needs every earlier KV producer")
         # --full-replay (diagnostic): tier b replays step 0 and these decode steps; every one must be a snapshot step
-        tb = [int(x) for x in str(a.tier_b_steps).split(",") if x.strip() != ""] if a.tier_b_steps else list(self.steps)
-        self.tier_b_steps = sorted({0, *tb} & set(self.steps)) if getattr(a, "full_replay", False) else []
-        self.verify_weights = not a.no_verify_weights
+        self.tier_b_steps = sorted({0, *a.tier_b_steps} & set(self.steps)) if getattr(a, "full_replay", False) else []
         self.parallel = 1 if (a.laptop or a.parallel is not None and a.parallel <= 1) else (a.parallel or DEFAULT_PARALLEL_REPLAY)
         self.capture_dir = self.run / "capture"
         self.log = Path(a.log).resolve() if a.log else self.capture_dir / "log.jsonl.gz"
@@ -178,45 +181,46 @@ class Plan:
 
     def cmd(self, stage: str) -> list[str] | None:
         a, run = self.a, self.run
-        common_gpu = ["--workload", a.workload, "--case", a.case, "--max-num-seqs", str(a.max_num_seqs), "--checkpoints", a.checkpoints]
+        workload, case, profile = required(a, "workload"), required(a, "case"), required(a, "profile")
+        common_gpu = ["--workload", workload, "--case", case, "--max-num-seqs", str(a.max_num_seqs), "--checkpoints", a.checkpoints]
         if a.max_tokens is not None:
             common_gpu += ["--max-tokens", str(a.max_tokens)]
         common_gpu += [f"--engine-arg={x}" for x in self.engine_args()]   # [GEN batch SHARED-CODE] scheduler/memory knobs -> build_engine
         if stage == "capture":
             return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "m1-capture", *common_gpu, "--out", str(self.capture_dir),
-                    "--snapshot-steps", ",".join(map(str, self.steps))] + (["--verify-weights"] if self.verify_weights else []) + \
+                    "--snapshot-steps", ",".join(map(str, self.steps)), "--verify-weights"] + \
                    (["--snapshot-max-bytes", str(a.snapshot_max_bytes)] if a.snapshot_max_bytes is not None else []) + \
                    (["--snapshot-max-bytes-op", str(a.snapshot_max_bytes_op)] if a.snapshot_max_bytes_op is not None else [])
         if stage == "control":
             return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "m1-capture", *common_gpu, "--out", str(self.control_dir), "--no-observer"]
         if stage == "census":
-            return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "census", *common_gpu, "--out", str(self.census_dir)] + ([] if a.keep_traces else ["--no-traces"])
+            return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "census", *common_gpu, "--out", str(self.census_dir), "--no-traces"]
         if stage == "nonint":
             return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "noninterference", *common_gpu, "--out", str(self.nonint_dir), "--python", self.py_gpu,
                     "--accepted-ctl", str(self.control_tokens_path())]
         if stage == "resolve":
-            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "resolve-log", str(self.log), "--profile", a.profile, "--out", str(run / "resolution"), "--quiet"]
+            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "resolve-log", str(self.log), "--profile", profile, "--out", str(run / "resolution"), "--quiet"]
         if stage == "census_reconcile":
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "census", "--reconcile", str(self.census_dir / "census.json"), "--log", str(self.log),
-                    "--profile", a.profile, "--report", str(run / "census_reconcile")]
+                    "--profile", profile, "--report", str(run / "census_reconcile")]
         if stage == "nonint_compare":
-            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "noninterference", "--compare", "--out", str(self.nonint_dir), "--workload", a.workload,
-                    "--case", a.case, "--accepted-ctl", str(self.control_tokens_path())]
+            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "noninterference", "--compare", "--out", str(self.nonint_dir), "--workload", workload,
+                    "--case", case, "--accepted-ctl", str(self.control_tokens_path())]
         if stage == "compare":
-            c = [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "fold-compare", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", a.profile,
+            c = [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "fold-compare", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", profile,
                  "--out", str(self.p("compare"))]
             g = self.safetensors_glob()
             if g:
                 c += ["--safetensors", g]
             return c
-        MC = fold_construction_args(a.workload, a.program_dir or ())
+        MC = fold_construction_args(workload, a.program_dir or ())
         if stage in ("fold", "fold_2"):   # --persist-dir writes program.json / instances.jsonl / accesses.jsonl.gz
-            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", str(self.log), "--profile", a.profile,
+            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", str(self.log), "--profile", profile,
                     "--out", str(self.p("fold_summary" if stage == "fold" else "fold_summary_2"))] + MC + (["--persist-dir", str(run)] if stage == "fold" else [])
         if stage == "fold_other":
             if not a.other_log:
                 return None
-            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", a.other_log, "--profile", a.profile, "--out", str(self.p("fold_summary_other"))] + MC
+            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", a.other_log, "--profile", profile, "--out", str(self.p("fold_summary_other"))] + MC
         if stage == "golden":
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "golden", "--check", "--out", str(self.p("golden"))]
         return None
@@ -234,21 +238,20 @@ class Plan:
         return gpu + cpu
 
 
+def required(a: Options, name: str) -> str:
+    """An option the driver doesn't run without, refused by name when absent."""
+    v = getattr(a, name)
+    if v is None:
+        raise UsageError(f"--{name.replace('_', '-')} is required")
+    return v
+
+
 def profile_config(name: str) -> dict | None:
     try:
         return G.load_profile_config(name)
-    except Exception:  # noqa: BLE001 - the profile may not exist in this worktree (dry runs)
+    except Exception as e:  # noqa: BLE001 - the profile may not exist in this worktree (dry runs)
+        logger.info("profile %s: no configuration (%s: %s)", name, type(e).__name__, e)
         return None
-
-
-def module_available(py: str, module: str) -> bool | None:
-    """Whether `module` imports under `py`; None when `py` is another interpreter (not checked)."""
-    if Path(py).resolve() != Path(sys.executable).resolve():
-        return None
-    try:
-        return importlib.util.find_spec(module) is not None
-    except (ImportError, ValueError):
-        return False
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -273,9 +276,8 @@ def run_stage(stage: str, cmd: list[str], log_path: Path, *, max_rss_gb: float |
     # the Match phase's sub-steps on the row timeline (VERITY_TIMELINE, else no-op): capture / control = one engine
     # process each (`work.*`), the CPU phases (fold, resolve, ...) are validation
     try:
-        from verity_vllm.pipeline.timeline import Timeline
         _tl = Timeline.from_env("run_config", hot=False)
-    except Exception:  # noqa: BLE001
+    except OSError:   # the telemetry file's directory can't be made: the stage runs without it
         _tl = None
     _tl_stage = f"match.{stage}" if stage not in ("capture", "control") else f"work.match_{stage}"
     if _tl is not None:
@@ -283,7 +285,7 @@ def run_stage(stage: str, cmd: list[str], log_path: Path, *, max_rss_gb: float |
     with open(log_path, "w") as lf:
         lf.write(f"$ {shlex.join(cmd)}\n")
         lf.flush()
-        proc = subprocess.Popen(cmd, stdout=lf, stderr=subprocess.STDOUT, cwd=str(cwd) if cwd else None, env=dict(os.environ, PYTHONUNBUFFERED="1"))
+        proc = subprocess.Popen(cmd, stdout=lf, stderr=subprocess.STDOUT, cwd=str(cwd) if cwd else None, env=dict(settings.environ(), PYTHONUNBUFFERED="1"))
         while True:
             rc = proc.poll()
             if rc is not None:
@@ -323,11 +325,7 @@ def _sha256_file(p: Path) -> str | None:
 
 
 def _hf_config_of(a: Options, C: dict | None) -> dict | None:
-    """`analytic.config_of(<hf config.json>)` when the integrator's module and an HF config are available."""
-    try:
-        an = importlib.import_module("verity_vllm.program.model")
-    except ImportError:
-        return None
+    """`program.model.config_of(<hf config.json>)` when an HF config is available."""
     cfg = None
     if a.hf_config:
         cfg = Path(a.hf_config)
@@ -336,16 +334,18 @@ def _hf_config_of(a: Options, C: dict | None) -> dict | None:
     else:
         repo = (C or {}).get("model")
         if repo:
-            home = Path(os.environ.get("HF_HOME") or (Path.home() / ".cache" / "huggingface"))
+            home = Path(settings.HF_HOME or (Path.home() / ".cache" / "huggingface"))
             base = home / "hub" / f"models--{repo.replace('/', '--')}" / "snapshots"
             cands = sorted(base.glob("*/config.json")) if base.exists() else []
             cfg = cands[-1] if cands else None
     if cfg is None or not cfg.exists():
         return None
+    an = importlib.import_module("verity_vllm.program.model")   # at its one use: it loads numpy and the Definitions' registry
     try:
         hf_C, _prov = an.config_of(str(cfg))      # (C, provenance) — `dict()` of the pair raised, so every card field read "hand"
         return dict(hf_C)
-    except Exception:  # noqa: BLE001 - provenance falls back to "hand"
+    except Exception as e:  # noqa: BLE001 - provenance falls back to "hand"
+        logger.warning("%s: no configuration read, so provenance falls back to \"hand\" (%s: %s)", cfg, type(e).__name__, e)
         return None
 
 
@@ -363,19 +363,19 @@ def _engine_arg_dict(items: list[str]) -> dict:
 
 def write_manifest(plan: Plan, a: Options) -> dict:
     from verity_vllm.pipeline.report import workload_summary
-    C = profile_config(a.profile)
+    C = profile_config(required(a, "profile"))
     man = {
         "schema": "verity-gen/run/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "config_id": a.config_id,
         "profile": a.profile, "case": a.case, "workload_path": a.workload, "workload": workload_summary(a.workload),
         "C": C, "hf_config": _hf_config_of(a, C), "laptop": plan.laptop, "snapshot_steps": plan.steps, "tier_b_steps": plan.tier_b_steps,
-        "verify_weights": plan.verify_weights, "parallel_replay": plan.parallel, "phase": a.phase,
-        "sampling": {"seed": a.seed, "k": a.k, "chains": a.chains, "full_replay": bool(getattr(a, "full_replay", False))},
+        "verify_weights": True, "parallel_replay": plan.parallel, "phase": a.phase,
+        "sampling": {"seed": a.seed, "k": a.k, "chains": SAMPLING_CHAINS, "full_replay": bool(getattr(a, "full_replay", False))},
         "python_gpu": plan.py_gpu, "python_cpu": plan.py_cpu,
         "engine_args_requested": {"max_num_seqs": a.max_num_seqs, "enforce_eager": _workload_enforce_eager(a.workload), **_engine_arg_dict(plan.engine_args())},   # from the workload's execution
         "declared_execution": _workload_execution(a.workload),
         "engine_args_required_by_workload": _workload_engine_args(a.workload),     # merged into engine_args_requested
         "snapshot_max_bytes": a.snapshot_max_bytes if a.snapshot_max_bytes is not None else 32 << 20,
-        "snapshot_cap_derivation": getattr(a, "snapshot_cap_derivation", None),   # None = an explicit CLI cap
+        "snapshot_cap_derivation": a.snapshot_cap_derivation,   # None = an explicit CLI cap
         "snapshot_max_bytes_op": a.snapshot_max_bytes_op,       # cov-moe: lower cap at dispatcher-call events (None = the cap above)
         "checkpoints": a.checkpoints, "checkpoint_dir": a.checkpoint_dir, "artifacts": plan.artifacts_override(),
         "skip": sorted(plan.skip), "argv": sys.argv[1:], "family": a.family, "mechanism_notes": [], "notes": [],
@@ -405,10 +405,10 @@ def write_spec_for(plan: Plan, a: Options, man: dict) -> dict | None:
                 if c.get("role") == a.case or (a.case == "B1" and str(c.get("role", "")).startswith("B1")):
                     ck = {k: c.get(k) for k in ("repo", "revision", "role", "files", "sha256", "digest", "local_path") if c.get(k) is not None}
                     break
-        except Exception:  # noqa: BLE001 - no manifest on this host: the checkpoint_dir still identifies the weights
+        except (OSError, ValueError, RecursionError, AttributeError, TypeError):   # no manifest on this host, or not one: the checkpoint_dir still identifies the weights
             pass
         wl_doc = _workload_doc(a.workload)
-        spec = EXP.build_spec(config_id=a.config_id, case=a.case, profile=a.profile, workload_path=a.workload, workload_doc=wl_doc,
+        spec = EXP.build_spec(config_id=required(a, "config_id"), case=required(a, "case"), profile=a.profile, workload_path=a.workload, workload_doc=wl_doc,
                               checkpoint=ck, checkpoint_dir=a.checkpoint_dir, hf_config=man.get("hf_config"),
                               engine_args=_engine_arg_dict(plan.engine_args()), max_num_seqs=a.max_num_seqs,
                               sampling={}, tp=int(getattr(a, "tp", 1) or 1), dtype=None, snapshot_steps=plan.steps,
@@ -420,11 +420,12 @@ def write_spec_for(plan: Plan, a: Options, man: dict) -> dict | None:
             spec["reconstructed_after_execution"] = True
             spec["digest"] = EXP._digest_doc({k: v for k, v in spec.items() if k != "digest"})
         note = EXP.write_spec(plan.run, spec)
-        print(f"[spec] {'written' if note.get('written') else 'kept'} digest={(note.get('digest') or note.get('existing_digest') or '')[:12]}"
-              f"{'' if note.get('same', True) else '  (this phase would have produced a DIFFERENT spec; not rewritten)'}", file=sys.stderr)
+        logger.info("[spec] %s digest=%s%s", "written" if note.get("written") else "kept",
+                    (note.get("digest") or note.get("existing_digest") or "")[:12],
+                    "" if note.get("same", True) else "  (this phase would have produced a DIFFERENT spec; not rewritten)")
         return note
     except Exception as e:  # noqa: BLE001 - informational
-        print(f"[spec] not written: {type(e).__name__}: {e}", file=sys.stderr)
+        logger.warning("[spec] not written: %s: %s", type(e).__name__, e)
         return {"written": False, "error": f"{type(e).__name__}: {e}"}
 
 
@@ -437,19 +438,20 @@ def write_realized(plan: Plan) -> dict | None:
     ctl_p = plan.control_tokens_path()
     try:
         cap = json.loads(cap_p.read_text()) if cap_p.exists() else None
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError, RecursionError):   # unreadable, not JSON, or nested past what the parser reads: no record
         cap = None
     try:
         ctl = json.loads(ctl_p.read_text()) if ctl_p.exists() else None
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError, RecursionError):
         ctl = None
-    if cap is None and ctl is None:
-        return None
     src = cap or ctl
+    if src is None:
+        return None
     reqs = []
     for r in src.get("requests", []):
-        reqs.append({"request_id": r.get("request_id"), "prompt_len": r.get("prompt_len", len(r.get("prompt_token_ids") or [])),
-                     "max_tokens": r.get("max_tokens"), "n_generated": r.get("n_generated", len(r.get("generated_token_ids") or [])),
+        prompt, generated = r.get("prompt_token_ids"), r.get("generated_token_ids")   # counted where the record states no count
+        reqs.append({"request_id": r.get("request_id"), "prompt_len": r.get("prompt_len", len(prompt) if prompt else 0),
+                     "max_tokens": r.get("max_tokens"), "n_generated": r.get("n_generated", len(generated) if generated else 0),
                      "arrive_step": r.get("arrive_step", 0), "arrive_step_realized": r.get("arrive_step_realized"),
                      "first_step": r.get("first_step"), "finish_step": r.get("finish_step"), "finish_reason": r.get("finish_reason")})
     snaps = None
@@ -457,12 +459,12 @@ def write_realized(plan: Plan) -> dict | None:
     if sp.exists():
         try:
             sj = json.loads(sp.read_text())
-            snaps = sorted({int(s) for s in (sj.get("steps") or sj.get("snapshot_steps") or [])}) or None
-        except Exception:  # noqa: BLE001
+            kept = sj.get("steps") or sj.get("snapshot_steps")   # the capture's list of the steps it kept, under either name
+            snaps = (sorted({int(s) for s in kept}) or None) if kept else None
+        except (OSError, ValueError, RecursionError, OverflowError, AttributeError, TypeError):   # unreadable, or no list of whole steps (an infinite one is none)
             snaps = None
     real = {"requests": reqs, "prompt_lens": [r["prompt_len"] for r in reqs], "n_generated": [r["n_generated"] for r in reqs],
-            "engine_steps_capture": (cap or {}).get("engine_steps") or ((cap or {}).get("timing") or {}).get("engine_steps"),
-            "engine_steps_control": (ctl or {}).get("engine_steps") or ((ctl or {}).get("timing") or {}).get("engine_steps"),
+            "engine_steps_capture": _engine_steps(cap), "engine_steps_control": _engine_steps(ctl),
             "expected_engine_steps_declared": src.get("expected_engine_steps"), "serving_profile": src.get("serving_profile"),
             "context_class": src.get("context_class"), "snapshot_steps_realized": snaps,
             "max_concurrent_requests": _max_concurrent(reqs)}
@@ -473,10 +475,21 @@ def write_realized(plan: Plan) -> dict | None:
     return real
 
 
+def _engine_steps(tokens: dict | None) -> Any:
+    """The engine steps a tokens record states, at its top or under its `timing`; None with no record, or one that states neither."""
+    timing = tokens.get("timing") if tokens else None
+    return (tokens.get("engine_steps") if tokens else None) or (timing.get("engine_steps") if timing else None)
+
+
 def _max_concurrent(reqs: list[dict]) -> int | None:
     """Peak number of requests active in one engine step, from the realized first/finish steps."""
-    spans = [(r.get("first_step"), r.get("finish_step")) for r in reqs]
-    if not spans or any(a is None or b is None for a, b in spans):
+    spans: list[tuple[int, int]] = []
+    for r in reqs:
+        first, finish = r.get("first_step"), r.get("finish_step")
+        if first is None or finish is None:
+            return None
+        spans.append((first, finish))
+    if not spans:
         return None
     hi = max(b for _, b in spans)
     return max(sum(1 for a, b in spans if a <= s <= b) for s in range(hi + 1))
@@ -494,8 +507,8 @@ def load_stages(run: Path) -> list[dict]:
         # over the preserved capture: set the unreadable record aside under a stamped name and start the stage list empty.
         aside = p.with_name(p.name + f".unreadable-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}")
         p.replace(aside)
-        print(f"[stages] {p.name} unreadable ({e.__class__.__name__}: {e}; {len(text)} bytes) -> set aside as {aside.name}; resuming with no stage records",
-              file=sys.stderr)
+        logger.warning("[stages] %s unreadable (%s: %s; %d bytes) -> set aside as %s; resuming with no stage records",
+                       p.name, e.__class__.__name__, e, len(text), aside.name)
         return []
     return list(d.get("stages", d) if isinstance(d, dict) else d)
 
@@ -532,23 +545,24 @@ class Options:
     config_id: str | None = option("--config-id", default=None)
     profile: str | None = option("--profile", default=None)
     workload: str | None = option("--workload", type=workload_arg, default=None)
-    case: str | None = option("--case", default=None, help="checkpoint role (B0, B1, QWEN05, ... any role in checkpoints.json with a profile module)")
+    case: str | None = option("--case", default=None, help="checkpoint role (B0, B1, ... any role in checkpoints.json with a profile module)")
     out: str | None = option("--out", default=None, help="RUN_DIR (driver) or fold_summary.json (--worker fold)")
-    run_dir: str | None = option("--run-dir", default=None, help="an existing RUN_DIR: --out plus case/workload/profile/config-id/checkpoint-dir/steps from its run.json " "(the sealed verifier re-runs the CPU phase this way from a fresh checkout)")
+    run_dir: str | None = option("--run-dir", default=None, help="an existing RUN_DIR: --out plus case/workload/profile/config-id/checkpoint-dir/steps from its run.json (the sealed verifier re-runs the CPU phase this way from a fresh checkout)")
     phase: str = option("--phase", choices=["gpu", "cpu", "all"], default="all")
     python_gpu: str | None = option("--python-gpu", default=None, help="the pod's torch venv python (default: sys.executable)")
     python_cpu: str | None = option("--python-cpu", default=None, help="the torch-free 3.12 python (default: sys.executable)")
     snapshot_steps: str = option("--snapshot-steps", default=DEFAULT_SNAPSHOT_STEPS, help="contiguous from 0, or `all` = every step of the workload (default all)")
     full_replay: bool = option("--full-replay", default=False, action="store_true", help="run.json's sampling.full_replay (no stage reads it)")
-    tier_b_steps: str = option("--tier-b-steps", default=DEFAULT_TIER_B_STEPS, help="with --full-replay: run.json's tier_b_steps (default 0,1,2,3; must be snapshot steps)")
-    chains: int = option("--chains", type=int, default=DEFAULT_CHAINS, help="run.json's sampling.chains (no stage reads it)")
-    no_verify_weights: bool = option("--no-verify-weights", default=False, action="store_true", help="skip the checkpoint sha verification at engine build (root policy weight identity then fails)")
+    #: with --full-replay: run.json's tier_b_steps; no flag sets it, and a --run-dir re-run keeps the ones its run.json records
+    tier_b_steps: tuple[int, ...] = field(default=TIER_B_STEPS, init=False)
     parallel: int | None = option("--parallel", type=int, default=None, help="run.json's parallel_replay (default 4; 1 with --laptop)")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     engine_arg: list[str] = option("--engine-arg", action="append", default=[], help="LLM(**kw) override key=value (JSON value) for every GPU stage, repeatable; e.g. max_num_batched_tokens=64, enable_prefix_caching=true")
     max_tokens: int | None = option("--max-tokens", type=int, default=None, help="override the workload's max_tokens (passed to the GPU stages)")
-    snapshot_max_bytes: int | None = option("--snapshot-max-bytes", type=int, default=None, help="(capture) per-tensor snapshot cap in bytes (m1_capture default 32 MiB; a " "prefill MLP row block above the cap has no snapshot evidence -- raise it for long / batched prefills, the run.json records the value)")
-    snapshot_max_bytes_op: int | None = option("--snapshot-max-bytes-op", type=int, default=None, help="(capture) lower per-tensor cap at dispatcher-call events; Triton " "launch events keep --snapshot-max-bytes, so a large launch output is copied once (cov-moe: the fused-MoE intermediates of a " "2048-token prefill otherwise exceed the pod's pinned host memory; the run.json records the value)")
+    snapshot_max_bytes: int | None = option("--snapshot-max-bytes", type=int, default=None, help="(capture) per-tensor snapshot cap in bytes (m1_capture default 32 MiB; a prefill MLP row block above the cap has no snapshot evidence -- raise it for long / batched prefills, the run.json records the value)")
+    #: how `main` derived the cap (run.json's snapshot_cap_derivation); None under a --snapshot-max-bytes given; no flag sets it
+    snapshot_cap_derivation: dict | None = field(default=None, init=False)
+    snapshot_max_bytes_op: int | None = option("--snapshot-max-bytes-op", type=int, default=None, help="(capture) lower per-tensor cap at dispatcher-call events; Triton launch events keep --snapshot-max-bytes, so a large launch output is copied once (cov-moe: the fused-MoE intermediates of a 2048-token prefill otherwise exceed the pod's pinned host memory; the run.json records the value)")
     checkpoints: str = option("--checkpoints", default=DEFAULT_CHECKPOINTS)
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="HF snapshot dir or model*.safetensors glob (compare --safetensors)")
     hf_config: str | None = option("--hf-config", default=None, help="HF config.json for per-field C provenance (analytic.config_of)")
@@ -562,8 +576,8 @@ class Options:
     stage_timeout: float | None = option("--stage-timeout", type=float, default=None, help="kill a stage above this wall time in s (default 180 with --laptop)")
     dry_run: bool = option("--dry-run", default=False, action="store_true", help="print the exact command lines, run nothing")
     skip: str = option("--skip", default="", help="comma list of stages/groups to skip")
-    keep_traces: bool = option("--keep-traces", default=False, action="store_true", help="census: keep the per-step Chrome traces")
     cards_dir: str = option("--cards-dir", default="out/gen/cards")
+    tree: str = option("--tree", default=".", help="the tree that runs, whose version experiment.json records: its EXPORT.json, else its git head (default: the working directory)")
     k: int = option("--k", type=int, default=DEFAULT_K, help="run.json's sampling.k (no stage reads it)")
     seed: int | None = option("--seed", type=int, default=None, help="run.json's sampling.seed (no stage reads it)")
     no_program: bool = option("--no-program", default=False, action="store_true", help="(--worker fold) skip Program(): no digest")
@@ -571,7 +585,8 @@ class Options:
     program_dir: list[str] | None = option("--program-dir", action="append", default=None, help="the Build's Program dir(s) the Match compares against; the fold binds the top-p select under the construction they declare (sampling_event.program_sampler_construction)")
     sampler_construction: str | None = option("--sampler-construction", default=None, help="(--worker fold) the Programs' sampler construction (the driver passes it from --program-dir)")
     registered_values: bool = option("--registered-values", default=False, action="store_true", help="(--worker fold) the program's values are inputs (Profile.registered_values); the driver passes what the --program-dir Programs register")
-    moe_construction: str | None = option("--moe-construction", default=None, help="(--worker fold) the workload's DECLARED MoE construction " "(manifest target.moe_construction: indexed-read | indexed-read-ordered | padded); the driver passes it from --workload")
+    match_pipeline: str = option("--match-pipeline", env="MATCH_PIPELINE", default="", help="(--worker fold) the row's Match pipeline: under `shared` the access journal is compressed at level 1 (the same lines, a larger file)")
+    moe_construction: str | None = option("--moe-construction", default=None, help="(--worker fold) the workload's DECLARED MoE construction (manifest target.moe_construction: indexed-read | indexed-read-ordered | padded); the driver passes it from --workload")
 
 
 def main(a: Options) -> int:
@@ -583,25 +598,22 @@ def main(a: Options) -> int:
         try:
             from verity_vllm.observe.fold.profiles import profile_module_for_case
             a.profile = profile_module_for_case(a.case)
-        except Exception as e:  # noqa: BLE001
-            raise UsageError(f"--profile not given and no profile module declares case {a.case!r}: {e}")
+        except Exception as e:
+            raise UsageError(f"--profile not given and no profile module declares case {a.case!r}: {e}") from e
     if a.config_id is None and a.case and a.workload:
         a.config_id = f"{a.case}-{Path(a.workload).stem}"
     for req in ("config_id", "profile", "workload", "case", "out"):
-        if getattr(a, req) is None:
-            raise UsageError(f"--{req.replace('_', '-')} is required")
+        required(a, req)
     # no explicit --snapshot-max-bytes: derive the cap from the workload's largest forward and the checkpoint's widths
     # (snapshot_cap_bytes) instead of m1_capture's fixed 32 MiB, which leaves the prefill MLP rows of every 1024-class workload without
     # snapshot evidence.  An explicit value still wins; the run.json records the derivation either way.
-    if not hasattr(a, "snapshot_cap_derivation"):
-        a.snapshot_cap_derivation = None          # an explicit CLI cap (or --run-dir already carried the capture's)
     if a.snapshot_max_bytes is None:
-        C0 = profile_config(a.profile)
+        C0 = profile_config(required(a, "profile"))
         cap, why = snapshot_cap_bytes(_workload_doc(a.workload), _hf_config_of(a, C0), _engine_arg_dict(a.engine_arg))
         a.snapshot_max_bytes, a.snapshot_cap_derivation = cap, why
         if why["raised"]:
-            print(f"[plan] --snapshot-max-bytes derived: {cap} B ({why['rows']} rows [{why['rows_source']}] x {why['row_bytes']} B "
-                  f"[{why['row_bytes_source']}]; the 32 MiB cap of record skips the prefill MLP rows of 1024-class workloads)", file=sys.stderr)
+            logger.info("[plan] --snapshot-max-bytes derived: %s B (%s rows [%s] x %s B [%s]; the 32 MiB cap of record skips the prefill MLP "
+                        "rows of 1024-class workloads)", cap, why["rows"], why["rows_source"], why["row_bytes"], why["row_bytes_source"])
 
     plan = Plan(a)
     stages = plan.stage_list(a.phase)
@@ -616,7 +628,7 @@ def main(a: Options) -> int:
                 continue
             if st == "gates":
                 print(f"[gates] in-process: gates.evaluate_gates({plan.run}) -> {plan.p('gates')}; card -> {plan.p('card')}, {plan.run / 'CARD.md'}, "
-                      f"{Path(a.cards_dir) / (a.config_id + '.json')}")
+                      f"{Path(a.cards_dir) / (required(a, 'config_id') + '.json')}")
                 continue
             cmd = plan.cmd(st)
             if cmd is None:
@@ -637,7 +649,7 @@ def main(a: Options) -> int:
         try:
             write_realized(plan)             # an existing capture's realized shape is in run.json before the gates / card read it
         except Exception as e:  # noqa: BLE001
-            print(f"[realized] not written: {type(e).__name__}: {e}", file=sys.stderr)
+            logger.warning("[realized] not written: %s: %s", type(e).__name__, e)
     for st in stages:
         if plan.skipped(st):
             recs.append({"stage": st, "status": "skipped", "returncode": None, "seconds": 0.0, "log": None, "cmd": None, "reason": "--skip"})
@@ -647,7 +659,7 @@ def main(a: Options) -> int:
             try:
                 write_realized(plan)         # realized shape into run.json before the card is built
             except Exception as e:  # noqa: BLE001
-                print(f"[realized] not written: {type(e).__name__}: {e}", file=sys.stderr)
+                logger.warning("[realized] not written: %s: %s", type(e).__name__, e)
             try:
                 recs.append(gates_stage(plan, a))
             except Exception as e:  # noqa: BLE001 - the driver reports, never crashes on the last stage
@@ -658,23 +670,17 @@ def main(a: Options) -> int:
         cmd = plan.cmd(st)
         if cmd is None:
             continue
-        mod = OPTIONAL_MODULES.get(st)
-        py = cmd[0]
-        if mod and module_available(py, mod) is False:
-            recs.append({"stage": st, "status": "missing_module", "returncode": None, "seconds": 0.0, "log": None, "cmd": shlex.join(cmd),
-                         "reason": f"{mod} not importable under {py}"})
-            print(f"[{st}] missing module {mod}", file=sys.stderr)
-            save_stages(plan.run, recs)
-            continue
-        print(f"[{st}] {shlex.join(cmd)}", file=sys.stderr)
+        logger.info("[%s] %s", st, shlex.join(cmd))
         rec = run_stage(st, cmd, logs / f"{st}.log", max_rss_gb=max_rss, timeout_s=timeout)
-        print(f"[{st}] {rec['status']} in {rec['seconds']} s", file=sys.stderr)
+        logger.info("[%s] %s in %s s", st, rec["status"], rec["seconds"])
         recs.append(rec)
         save_stages(plan.run, recs)
     if a.phase in ("gpu", "all"):
         gd = {"utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "seconds": round(time.time() - t_phase, 3), "config_id": a.config_id,
               "stages": {r["stage"]: {"status": r["status"], "seconds": r.get("seconds")} for r in recs if r["stage"] in GPU_STAGES}}
         plan.p("gpu_done").write_text(json.dumps(gd, indent=1) + "\n")
+    # the phase's last word on the realized shape is a print, with no logger's head: `ops/cov_pod.sh` shows a GPU phase's
+    # first "[realized]" line as it is written, and these two are the ones a GPU phase writes
     try:
         real = write_realized(plan)          # realized lengths / steps into run.json (also on a --phase cpu re-run over an old capture)
         if real:
@@ -683,16 +689,16 @@ def main(a: Options) -> int:
     except Exception as e:  # noqa: BLE001 - informational
         print(f"[realized] not written: {type(e).__name__}: {e}", file=sys.stderr)
     try:
-        EXP.write_experiment(plan.run, repo=Path.cwd(), spec_note=spec_note)   # the Experiment index over the run directory
+        EXP.write_experiment(plan.run, repo=Path(a.tree), spec_note=spec_note)   # the Experiment index over the run directory
     except Exception as e:  # noqa: BLE001 - informational
-        print(f"[experiment] not written: {type(e).__name__}: {e}", file=sys.stderr)
+        logger.warning("[experiment] not written: %s: %s", type(e).__name__, e)
     bad = [r for r in recs if r["stage"] in stages and r["status"] not in ("ok", "skipped")]
     return 1 if bad else 0
 
 
 def _defaults_from_run_dir(a: Options) -> None:
     """Fill unset arguments from RUN_DIR/run.json (the manifest the GPU phase wrote)."""
-    run = Path(a.run_dir)
+    run = Path(required(a, "run_dir"))
     man_p = run / G.ARTIFACTS.get("run", "run.json")
     if not man_p.exists():
         raise UsageError(f"--run-dir {run}: no {man_p.name} (the GPU phase writes it)")
@@ -704,8 +710,8 @@ def _defaults_from_run_dir(a: Options) -> None:
             setattr(a, arg, man[key])
     if a.snapshot_steps == DEFAULT_SNAPSHOT_STEPS and man.get("snapshot_steps"):
         a.snapshot_steps = ",".join(map(str, man["snapshot_steps"]))
-    if a.tier_b_steps == DEFAULT_TIER_B_STEPS and man.get("tier_b_steps"):
-        a.tier_b_steps = ",".join(map(str, man["tier_b_steps"]))
+    if man.get("tier_b_steps"):
+        a.tier_b_steps = tuple(int(s) for s in man["tier_b_steps"])
     if a.snapshot_max_bytes is None and man.get("snapshot_max_bytes"):
         # a CPU-phase re-run keeps the cap the capture RAN with (and its derivation), never a re-derived one
         a.snapshot_max_bytes = int(man["snapshot_max_bytes"])
@@ -726,7 +732,7 @@ def _workload_doc(path: str | None) -> dict | None:
         return None
     try:
         return json.loads(Path(path).read_text())
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError, RecursionError):   # unreadable, not JSON, or nested past what the parser reads
         return None
 
 
@@ -765,7 +771,8 @@ def snapshot_cap_bytes(doc: dict | None, hf: dict | None, engine_args: dict | No
     --snapshot-max-bytes-op contract is unchanged; OLMoE stays at the 32 MiB floor).  Returns (cap, derivation) -- the derivation
     goes into run.json so a reader sees why the record's cap is what it is."""
     doc = doc or {}
-    reqs = doc.get("requests") or []
+    stated = doc.get("requests")   # a workload read for its engine arguments alone states no requests
+    reqs = stated if stated else []
     ea = {**dict(RowEngine.of(doc).args), **dict(engine_args or {})}
     rows_src = None
     mnbt = ea.get("max_num_batched_tokens")
@@ -784,7 +791,7 @@ def snapshot_cap_bytes(doc: dict | None, hf: dict | None, engine_args: dict | No
             if isinstance(v, (int, float)) and int(v) > 0:
                 widths[k] = int(v)
     if widths:
-        wk = max(widths, key=widths.get)
+        wk = max(widths, key=widths.__getitem__)
         row_bytes, width_src = widths[wk] * 2, f"hf config {wk}={widths[wk]} x bf16"
     else:
         row_bytes, width_src = SNAPSHOT_ROW_BYTES_FALLBACK, "no HF config: 64 KiB per row"
@@ -823,12 +830,14 @@ def fold_construction_args(workload: str | None, program_dirs) -> list[str]:
 
 def _workload_execution(path: str | None) -> str | None:
     doc = _workload_doc(path) or {}
-    sw = doc.get("sweep") if isinstance(doc.get("sweep"), dict) else {}
+    sw = doc.get("sweep")
+    if not isinstance(sw, dict):
+        sw = {}
     for v in (doc.get("execution"), sw.get("execution")):
         if isinstance(v, str) and v:
             return v
     rid = sw.get("row_id") or doc.get("row_id")
-    return rid.rsplit("__", 1)[1] if isinstance(rid, str) and "__" in rid else None
+    return row_execution(rid) if isinstance(rid, str) else None
 
 
 def _workload_enforce_eager(path: str | None) -> bool:
@@ -943,13 +952,14 @@ def instances_form() -> str:
     `runs()` expansion at write; ~3 % of the text), parameter-space runs unchanged.  Lossless either way.  The LIBRARY default stays `runs`
     (tests and ad-hoc folds unchanged); the rows of record set VERITY_INSTANCES_FORM=progressions in row_pod.sh's Match phase ("compact
     refs stay compact end to end": readers accept both forms)."""
-    v = (os.environ.get(INSTANCES_FORM_ENV) or "runs").strip().lower()
+    v = settings.get(INSTANCES_FORM_ENV)
+    v = "runs" if v is None else v
     if v not in ("runs", "progressions"):
         raise SystemExit(f"{INSTANCES_FORM_ENV}={v!r}: expected runs | progressions")
     return v
 
 
-def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: str | Path) -> dict:
+def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: str | Path, journal_level: int = 9) -> dict:
     """Freeze the candidate.  `program.json` is the Verity Program through the existing codec (`verity.circuits.codec`,
     digest == `fold_summary.digest`); `instances.jsonl` is the runtime-correspondence record the fold already holds in
     memory -- one line per Compute instance (step, root event id, pattern, spec id, rows, operand/output `ViewDesc`s, and
@@ -959,9 +969,10 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
     import dataclasses
     import gzip
 
-    from verity_vllm.observe.events import ViewDesc
     from verity.circuits import codec
     from verity.circuits.refs import runs
+
+    from verity_vllm.observe.events import ViewDesc
 
     # the writer converts by SHAPE, not by a generic walk: a ViewDesc is six known fields (the
     # same dict, in field order, that dataclasses.asdict + _jsonable produced), an operand_refs item is a list of a str and ints already
@@ -972,7 +983,7 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
         if type(v) is ViewDesc:
             return {"alloc": int(v.alloc), "offset": int(v.offset), "shape": [int(s) for s in v.shape], "strides": [int(s) for s in v.strides],
                     "dtype": v.dtype, "device": v.device}
-        return _jsonable(dataclasses.asdict(v)) if dataclasses.is_dataclass(v) else _jsonable(v)
+        return _jsonable(dataclasses.asdict(v)) if dataclasses.is_dataclass(v) and not isinstance(v, type) else _jsonable(v)
 
     def run_items(rs):      # runs(): [(space, idx, lo, hi), ...] -> the stored lists, ints coerced exactly as _jsonable's tolist() did
         return [[r[0], int(r[1]), int(r[2]), int(r[3])] for r in rs]
@@ -1010,10 +1021,11 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
     # decomposition always fell through to the data-flow / row-count channels).
     reqs_tab = []
     for i, r in enumerate(getattr(result, "requests", None) or []):
-        rid = r.get("request_id")
-        reqs_tab.append({"index": i, "request_id": rid, "prompt_len": len(r.get("prompt_token_ids") or []),
-                         "served_samples": len((getattr(result, "sampled", None) or {}).get(rid) or []),
-                         "max_tokens": r.get("max_tokens")})
+        rid, prompt = r.get("request_id"), r.get("prompt_token_ids")
+        prompt_len = len(prompt) if prompt else 0
+        served = (getattr(result, "sampled", None) or {}).get(rid)   # request id -> its served samples; a fold of no sampler has none
+        reqs_tab.append({"index": i, "request_id": rid, "prompt_len": prompt_len,
+                         "served_samples": len(served) if served else 0, "max_tokens": r.get("max_tokens")})
     _form = instances_form()
     if _form == "progressions":
         from verity_vllm.program.compact import file_items_from_refs as _file_items
@@ -1034,8 +1046,9 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
             if m.get("collective"):
                 rec["collective"] = m["collective"]           # kind/step/k/site/rank/world + the peers field the row reads
             rec = _jsonable(rec)                              # the meta fields only (small; may carry tuples / numpy scalars / objects)
-            rec["operand_views"] = [view(v) for v in m.get("operand_views") or []]
-            rec["output_views"] = [view(v) for v in m.get("output_views") or []]
+            operand_views, output_views = m.get("operand_views"), m.get("output_views")   # an instance may list no view of a side
+            rec["operand_views"] = [view(v) for v in operand_views] if operand_views else []
+            rec["output_views"] = [view(v) for v in output_views] if output_views else []
             if node is not None:
                 if _form == "progressions":   # from the fold's own Refs objects: no runs() expansion, no to_json() tree
                     rec["operand_refs"] = [_file_items(arg.refs) for arg in node.args]   # (== file_items_from_refs_json(refs.to_json()))
@@ -1049,10 +1062,9 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
     if acc:
         p = run_dir / "accesses.jsonl.gz"
         # the journal is 22 % of the fold phase at B8 1024/128 (161 s: jsonable + dumps + gzip; 237 MB) and no
-        # Match-pipeline stage reads it (the regression fixtures pin it).  Under row_pod's MATCH_PIPELINE=shared
-        # it is compressed at level 1 (same lines, ~4x less compressor time, a larger file); unset = level 9 as before.
-        level = 1 if os.environ.get("MATCH_PIPELINE", "") == "shared" else 9
-        with gzip.open(p, "wt", compresslevel=level) as f:
+        # Match-pipeline stage reads it (the regression fixtures pin it).  The fold worker under row_pod's
+        # MATCH_PIPELINE=shared compresses it at `journal_level` 1 (same lines, ~4x less compressor time, a larger file).
+        with gzip.open(p, "wt", compresslevel=journal_level) as f:
             for r in acc:
                 # the journal entry (fold._journal): view -> the six fields, refs -> its runs() lists, everything else by the generic conversion;
                 # key order is the entry's own (unchanged bytes)
@@ -1070,20 +1082,22 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
 
 
 def fold_worker(a: Options) -> int:
-    for req in ("log", "profile", "out"):
-        if getattr(a, req) is None:
-            raise SystemExit(f"--worker fold needs --{req}")
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level; content-neutral (VERITY_GC_THRESHOLDS)
+    log, profile, summary = a.log, a.profile, a.out
+    if log is None or profile is None or summary is None:
+        raise SystemExit(f"--worker fold needs --{next(req for req in ('log', 'profile', 'out') if getattr(a, req) is None)}")
+    # process-level; content-neutral (VERITY_GC_THRESHOLDS)
+    from verity_vllm.gc_tuning import tune as _gc_tune
     _gc_tune()
-    doc, result = fold_summary_result(a.log, a.profile, with_program=not a.no_program, moe_construction=getattr(a, "moe_construction", None), sampler_construction=getattr(a, "sampler_construction", None), registered_values=bool(getattr(a, "registered_values", False)))
-    out = Path(a.out)
+    doc, result = fold_summary_result(log, profile, with_program=not a.no_program, moe_construction=getattr(a, "moe_construction", None), sampler_construction=getattr(a, "sampler_construction", None), registered_values=bool(getattr(a, "registered_values", False)))
+    out = Path(summary)
     out.parent.mkdir(parents=True, exist_ok=True)
-    if getattr(a, "persist_dir", None):
-        doc["persisted"] = persist_program(result, Path(a.persist_dir), profile_name=a.profile, log_path=a.log)
+    if a.persist_dir:
+        doc["persisted"] = persist_program(result, Path(a.persist_dir), profile_name=profile, log_path=log,
+                                           journal_level=1 if a.match_pipeline == "shared" else 9)
     out.write_text(json.dumps(_jsonable(doc), indent=1) + "\n")
-    print(f"{out}  digest={doc['digest'][:16]}  instances={doc['n_instances']}  steps={doc['n_steps']}  unresolved={doc['unresolved']}  "
-          f"unknown_roots={len(doc['unknown_roots'])}  rss={doc['max_rss_gb']} GB"
-          + (f"  persisted={sorted(doc['persisted'])}" if doc.get("persisted") else ""), file=sys.stderr)
+    logger.info("%s  digest=%s  instances=%s  steps=%s  unresolved=%s  unknown_roots=%d  rss=%s GB%s", out, doc["digest"][:16],
+                doc["n_instances"], doc["n_steps"], doc["unresolved"], len(doc["unknown_roots"]), doc["max_rss_gb"],
+                f"  persisted={sorted(doc['persisted'])}" if doc.get("persisted") else "")
     return 0
 
 

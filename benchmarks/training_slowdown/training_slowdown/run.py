@@ -85,14 +85,22 @@ the names that run code it never reads: `exec`, `eval` and `compile` (called or 
 `__import__`, `marshal`, pickle, `FunctionType`, `CodeType`, `__code__` and `sys.meta_path`; while the job runs no
 bytecode cache is read, so what runs is the source that was screened.
 
-On a CPU each of the job's two processes limits oneDNN's instruction set to below AMX before torch computes anything
-(`limit_cpu`, `CPU_ISA`): oneDNN's AMX kernels can return a wrong bf16 product on a virtual CPU, so that one step run
-twice gives two results, and a job's products are to be the same every time. The record names the variable and the
-value the route's process set (`cpu_isa`; null on any other device, where nothing is set).
+A job's products are to be the same every time it runs on the same device at the same thread count. On a CPU two
+kernels break that, so before torch computes anything each of the job's two processes does two things:
+
+- It limits oneDNN's instruction set to below AMX (`limit_cpu`, `CPU_ISA`), since oneDNN's AMX kernels can return
+  a wrong bf16 product on a virtual CPU.
+- It holds attention at the math kernel (`cpu_attention`, `CPU_ATTENTION`), since torch's fused CPU attention
+  kernel can return a wrong tile of its result at more than one thread. The job's own process needs this too,
+  because it scores the checkpoints with the model's forward.
+
+A run in which the fused CPU kernel still runs at more than one thread is invalid (`flops.CPU_FUSED_ATTENTION`).
+The record names what the route's process set: `cpu_isa` (the variable and its value) and `cpu_attention` (the
+kernel). On any other device neither is set and both are null.
 
 Each of the two processes also holds torch at the job's CPU thread count (`--threads`, `THREADS`; `set_threads`)
-before torch computes anything, the route's process at the count the job's own process holds: what a job trains on
-a CPU follows its thread count, and the cores it runs on change only its speed. The record states the count
+before torch computes anything, the route's process at the count the job's own process holds. What a job trains
+on a CPU is to be a function of its thread count, never of the cores it runs on. The record states the count
 (`threads`), and a stopped job continues only at the count its kept record states (`Kept.load`).
 """
 from __future__ import annotations
@@ -120,6 +128,7 @@ os.environ["TORCHDYNAMO_DISABLE"] = "1"
 import numpy as np
 import torch
 import torch.nn.modules.module as nn_module
+from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from . import BUDGET_SLACK, NOTHING, SCHEMA, STOPPED, VERSION, config, gates, sandbox, starts, stop_record
 from .codecs import Identity, Plan, Unencodable
@@ -139,11 +148,17 @@ E_KEEP_BYTES = 50 * 2**20
 #: the `trace.failed` of the record the route's process writes before it takes the trace: what a process that ends
 #: there leaves
 UNTRACED = "the route's process ended before it wrote the trace"
-#: the variable that limits oneDNN's instruction set and the limit of a job on a CPU (`limit_cpu`), the widest below
-#: AMX: oneDNN's AMX kernels return a wrong bf16 product now and then when the process is preempted on a virtual CPU,
-#: on one thread or several, so two calls of one product on one input differ; below AMX it is the same every time
+#: the variable that limits oneDNN's instruction set, and the limit for a job on a CPU (`limit_cpu`): the widest below
+#: AMX, since oneDNN's AMX kernels return a wrong bf16 product now and then when the process is preempted on a
+#: virtual CPU, on one thread or several. It holds oneDNN's products only; torch's own fused attention kernel is
+#: held by `CPU_ATTENTION`
 CPU_ISA = ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE_BF16")
-#: a job's CPU thread count unless `--threads` gives another (`set_threads`): what a job trains on a CPU follows it
+#: the attention kernel a job runs on a CPU, the record's `cpu_attention` (`cpu_attention`): torch's fused CPU kernel
+#: can return a wrong tile of its result at more than one thread, and the math kernel computes attention as the
+#: products a step's trace holds
+CPU_ATTENTION = "math"
+#: a job's CPU thread count unless `--threads` gives another (`set_threads`); what a job trains on a CPU is to be a
+#: function of it
 THREADS = 8
 
 
@@ -548,6 +563,11 @@ class Harness:
             problems.append(f"ops outside torch's own, whose work the counter can't see: {list(rec['foreign_ops'])[:4]}")
         if rec["unknown_ops"]:
             problems.append(f"ops that compute products training_slowdown has no formula for: {list(rec['unknown_ops'])[:4]}")
+        if rec["unrepeatable_ops"]:
+            problems.append(f"torch's fused CPU attention kernel ran at more than one thread, where a call can return "
+                            f"a wrong tile: {list(rec['unrepeatable_ops'])[:2]}. A job on a CPU runs attention under "
+                            f"the math kernel (`cpu_attention`): leave the kernel to the job (no `sdpa_kernel` in the "
+                            f"route), or run the job at `--threads 1`")
         leaks = [s["step"] for s in [rec["setup"], *rec["steps"], rec["tail"]] if leaked(s)]
         if leaks:
             problems.append(f"token data read out of torch (numpy, tolist, DLPack) at a value per token or more, in steps "
@@ -1047,6 +1067,7 @@ def joined(prior: dict | None, rec: dict) -> dict:
         "new_weights": sorted({*prior["new_weights"], *rec["new_weights"]}),
         "unknown_ops": _added(prior["unknown_ops"], rec["unknown_ops"]),
         "foreign_ops": _added(prior["foreign_ops"], rec["foreign_ops"]),
+        "unrepeatable_ops": _added(prior["unrepeatable_ops"], rec["unrepeatable_ops"]),
         "invalid": prior["invalid"] + [p for p in rec["invalid"] if p not in prior["invalid"]],
         "flags": flags(totals, float(rec.get("peak_macs_per_s", 0))), "segments": prior["segments"] + [segment]}
 
@@ -1274,7 +1295,7 @@ def inside(a: argparse.Namespace) -> int:
                                           "sha256": file_sha256(route.__file__)},
         "label": f"{config.LABEL_KEY}={config.Job(cfg, a.seed, a.split).label}", "commit": git_commit(),
         "hardware": torch.cuda.get_device_name() if torch.cuda.is_available() else "cpu",
-        "cpu_isa": a.cpu_isa,
+        "cpu_isa": a.cpu_isa, "cpu_attention": a.cpu_attention,
         "peak_macs_per_s": a.peak_macs_per_s,
         "sandbox": {"interfaces": sandbox.interfaces(),
                     "final_sets": {str(d): "empty" if d.exists() else "absent" for d in hidden}}}
@@ -1313,6 +1334,18 @@ def limit_cpu(device: str) -> dict[str, str] | None:
     return dict([CPU_ISA])
 
 
+@contextmanager
+def cpu_attention(device: str):
+    """Holds this process's attention at the math kernel (`CPU_ATTENTION`) where the job's device is a CPU, and gives
+    the kernel it holds, the record's `cpu_attention`. On any other device it holds nothing and gives None. Each of a
+    job's processes enters it before torch computes anything (`main`)."""
+    if torch.device(device).type != "cpu":
+        yield None
+        return
+    with sdpa_kernel([SDPBackend.MATH]):
+        yield CPU_ATTENTION
+
+
 def set_threads(n: int) -> int:
     """Holds torch at `n` CPU threads in this process and returns `n`, the count the record states; a process in
     which torch then holds another count is refused. What a job trains on a CPU follows the count, so each of a
@@ -1328,7 +1361,8 @@ def main(argv=None) -> int:
     a = parse(argv)
     a.cpu_isa = limit_cpu(a.device)
     set_threads(a.threads)
-    return inside(a) if a.inside is not None else outside(a, argv)
+    with cpu_attention(a.device) as a.cpu_attention:
+        return inside(a) if a.inside is not None else outside(a, argv)
 
 
 def report(rec: dict) -> int:
