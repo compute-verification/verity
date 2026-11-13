@@ -128,12 +128,12 @@ def test_muons_defaults_and_state_are_as_before_unless_it_keeps_a_low_width_stat
     assert torch.equal(again.state[v]["codes"], low.state[v]["codes"])
 
 
-def test_muons_low_width_state_steps_by_its_rule_on_the_generators_draws():
-    """`Muon`'s `low_state` against its rule written out, over two steps, on the same draws of torch's generator:
+def test_muons_low_width_state_steps_by_its_rule_on_the_generators_values():
+    """`Muon`'s `low_state` against its rule written out, over two steps, on the same values of torch's generator:
     the momentum decoded from its codes, times 0.95, plus the gradient, coded again at one bf16 scale a row (the
-    row's largest magnitude over 127) by adding one uniform draw an entry and taking the floor; the update the
+    row's largest magnitude over 127) by adding one uniform value an entry and taking the floor; the update the
     Nesterov sum through Newton-Schulz, scaled by the shape; the parameter plus it rounded to bf16 up in magnitude
-    exactly where the 16 bits a bf16 drops and 16 random bits overflow, else cut. The momentum's draws come first."""
+    exactly where the 16 bits a bf16 drops and 16 random bits overflow, else cut. The momentum's random values come first."""
     gen = torch.Generator().manual_seed(1)
     grads = [torch.randn(8, 16, generator=gen).bfloat16() for _ in range(2)]
     v = torch.nn.Parameter(torch.randn(8, 16, generator=gen).bfloat16())
@@ -561,7 +561,7 @@ def test_a_qat_runs_checkpoints_are_the_start_plus_the_codes_it_trained(tmp_path
 def test_a_qat_step_with_a_coded_gradient_and_a_low_width_state_traces_at_their_widths(tmp_path, bits):
     """Route `qat` under `grad_code` and `low_state` through the harness. The gradient's cut is the codes as they
     pass, B bits an entry and a 16-bit scale a row; the carried state is the bf16 latents, Muon's int8 codes and
-    their 16-bit scale a row; the update's cut is the codes', as without the dials. The roundings' draws reach
+    their 16-bit scale a row; the update's cut is the codes', as without the dials. The roundings' random values reach
     the next forward only through the latents' codes, so no token op reads a random op and the trace charges no
     seed (`tau_other_bits`). The capture runs on tensors without data and leaves torch's generator as it was."""
     targets = ("blocks.0.wq.weight", "blocks.0.w_up.weight")

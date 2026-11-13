@@ -3,7 +3,7 @@ nearest at a few bits under one bf16 scale a row and packed into bytes (`row_cod
 float32 rounded stochastically to bf16 (`round_bf16`) or to int8 codes at one bf16 scale a row (`round_int8`). Not a
 route: a route imports it as a sibling (`from ._codes import row_codes`).
 
-The stochastic roundings draw from torch's global generator, which a stopped job keeps and its continuation takes back
+The stochastic roundings take their random values from torch's global generator, which a stopped job keeps and its continuation takes back
 (`routes/__init__.py`), and nothing else: a generator of a route's own would start again at `build`.
 """
 from __future__ import annotations

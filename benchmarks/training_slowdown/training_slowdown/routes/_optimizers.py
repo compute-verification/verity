@@ -31,7 +31,7 @@ class Muon(torch.optim.Optimizer):
     With `low_state` each parameter is a bf16 matrix and its state is low-width: the momentum is kept as int8 codes at
     one bf16 scale a row, decoded for the step and coded again stochastically (`_codes.round_int8`), and the
     parameter's update is rounded to bf16 stochastically (`_codes.round_bf16`). For each parameter in turn the step
-    draws the buffer's rounding, then the parameter's, from torch's global generator."""
+    takes the buffer's random values, then the parameter's, from torch's global generator."""
 
     def __init__(self, params, lr: float, momentum: float = 0.95, weight_decay: float = 0.0, low_state: bool = False):
         super().__init__(params, {"lr": lr, "momentum": momentum, "weight_decay": weight_decay}

@@ -15,9 +15,9 @@ V's, straight through the rounding, and Muon steps V.
 - `low_state`: the latents are bf16, each latent's update rounded to it stochastically, and Muon's momentum is int8
   codes at one bf16 scale a row, coded again stochastically after each step (`_optimizers.Muon`'s `low_state`).
 
-The step's only random draws are `low_state`'s roundings, from torch's global generator, which a stopped job keeps and
-its continuation takes back: Muon takes the latents in `targets`' order (the model's), and for each draws its
-momentum's rounding, one uniform an entry, then its update's, 16 random bits an entry.
+The step's only random values are `low_state`'s roundings', from torch's global generator, which a stopped job keeps
+and its continuation takes back: Muon takes the latents in `targets`' order (the model's), and for each takes its
+momentum's rounding's, one uniform value an entry, then its update's, 16 random bits an entry.
 
 A step decodes each matrix from the codes the step before left (`SparseTernary.apply` on θ's own copy of the
 matrix; the first step's codes are zero, so it reads θ), runs its forwards and backwards on that, steps the latents,
