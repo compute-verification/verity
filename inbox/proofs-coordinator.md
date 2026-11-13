@@ -110642,3 +110642,41 @@ One session's coins in a run by 07:00Z stands [guess]. My word on all sessions: 
 **To post.** Nothing.
 
 **Not established.** Nothing of mine has compiled in a run. The one-file check covers stand-in definitions, not the tree's. `MembersAccepted`, `InteriorReads`, `InteriorLogged`, `DevLocal`, `DevElems` and `LocatesSessions` are premises, not proved. The brief's third clause, that each tree closes after its session's evidence's SHA-512, is on main as `Verity.Sampled.MemberForm.members_read`'s closing part; I do not yet restate it at the form's acceptance, because that needs the evidence digest `membersTreesHeld` names (`named_exact`, in step 2). The earlier period's challenger signature hole is open and nothing here reads a signature.
+
+## HISTORY, Fri 13 Nov 00:39Z: the history, `PrintsTwo` and `SignsPlay` are written in full and pushed (630 lines, no `sorry`); not compiled yet; the try waited 18 minutes on vy-nebius-2 and then started at once on vy-nebius-cpu-12
+
+**In plain words.** In a two-stage audit, the auditor's device runs two challenger sessions. The first stage's session picks which outer blocks get replayed. The second stage's session (the interior's) picks inner blocks inside them. CUT's cut needs two facts about the device's record of those sessions: the device printed the play's log, and it signed everything the play's signatures are on. I wrote that record and proofs of both facts, and a try is waiting for a slot to check them. The first fact needs one condition that I name: each session's own ledger lines open its run only on its own window. The second fact needs the device to run both sessions under the parameters' one key.
+
+Clock: `date -u` read 00:39Z. Mailbox read at 00:37Z: your 00:16Z ("stage", not "round"; I use it from here on, and every new name and docstring of mine says "session" or "stage") and your 00:23Z (my tries go to vy-nebius-cpu-12, below).
+
+**1. Pushed** [run]. `cursor/proofs-history-d2e7` at `4fc3f75d04`. It merges `origin/cursor/proofs-twoleg-c5e5` and `origin/cursor/proofs-cut-9323`, and both are still ancestors of it at 00:20Z. It adds one file, `security/Proofs/Properties/Verity/SampledTwo/Device.lean` (630 lines), and one lakefile line. Nothing is unpushed.
+
+**2. Runs** [run].
+- `r20261113-003714-5988`, vy-nebius-cpu-12 (your 00:23Z split), a try of `Device.lean --siblings` at `4fc3f75d04`. It took slot `p0` at 00:37:36Z, one second after launch, and was running at 00:38Z.
+- `r20261113-001915-2be9`, vy-nebius-2, the same try at `5f2e46d14f`. It waited from 00:19Z to 00:37Z (18 min) and never started; its `slot.json` said "4 check(s) ahead in line" at 00:35Z and "11 check(s) ahead in line" at 00:37Z. I cancelled it.
+- `r20261113-001145-ab1f` and `r20261113-001606-d89b` (vy-nebius-2): I cancelled both while they waited, each replaced by a try at a newer head. Neither started a check.
+
+**3. What the file states** [read: my file at `4fc3f75d04`]. Every statement below has a full proof in the file, not yet compiled.
+- `dev₂ S₁ S₂ cut o : History`. On one window it is the one-stage history at the whole log. On two windows it holds the first session's run at `o.log.take (cut o.log)` under `S₁ o` and the interior's run at `o.log.drop (cut o.log)` under `S₂ o`, plus both setups' ledger lines. Each run is the one-stage `Sampled.Device.dev`'s, kept only where its release log reads as coin trees (`treesOk`).
+- `printsTwo_dev₂ : windowsOf o.params = some (w₁, w₂) → (w₁ ≠ w₂ → Apart (S₁ o) (S₂ o) w₁ w₂) → PrintsTwo (dev₂ S₁ S₂ cut o) w₁ w₂ o.log`. This is CUT's `PrintsTwo`, unchanged. `Apart S₁ S₂ w₁ w₂` says that wherever the two setups' ledger lines open the first setup's run id, the window is `w₁`, and the second's, `w₂`.
+- `binds_dev₂ : Binds (dev₂ S₁ S₂ cut) θ`, from CUT's `binds_of_accepts`, under `Apart` at every play after `θ`.
+- `holdsTwo_dev₂` and `holdsTwo_play`: on two windows, at a play of the device's game, the history holds both runs, each under its setup's key. The conditions are `NoHello (o.log.take (cut o.log))`, the setups' layouts equal to the play's, and `TreesRead` for each part. This answers COINMAP's first problem (`PrintsTwo` holds vacuously at an empty history).
+- `Deployment` (two one-stage `Sampled.Device.Deployment`s), `Deployment.signer`, and `Deployment.signs_le` (the signer signs at most `ledgerLines₁ + ledgerLines₂ + 4` messages a play).
+- `signsPlay_dev₂ : V.signer θ = P.signer fs₁ fs₂ cut θ → SignsPlay V (devOf P fs₁ fs₂ cut) θ F c`, which is CUT's `SignsPlay`, unchanged.
+- `cut_dev₂`: `Cut.cutBound` at this history, from `binds_dev₂` and `signsPlay_dev₂`.
+
+**4. Two findings.**
+- [read: `verity/protocols/spot/device/challenger.py:1967`, `:1972`, `:1994`] The deployed challenger refuses a nonce that isn't 32 bytes, a root or key sampled twice, and an `after` that isn't 64 bytes. The game lets the prover send all three. [derived] So when the history drops a run whose log doesn't read as coin trees (`treesOk`), it matches a device that never signs such a log. The drop is needed because CUT's `PrintsOn` asks every run for `coinTreesOf r.log = .ok _`.
+- [derived] `Apart` is a fact about the deployment's ledger lines (which run ids each session's open lines name), not about the prover. It has to be proved by whoever builds the two-session deployment, from how each stage's command writes its open line. I take it as a hypothesis of `binds_dev₂` and `cut_dev₂`, and it is not a named assumption.
+
+**5. Left.** No theorem is left to write. What is left is compiling and fixing what the try reports. [guess] One or two fix rounds, so `PrintsTwo` and `SignsPlay` at the history compile by 04:00Z, well before your 07:30Z mark.
+
+STOP RULE: nothing. No listed guarantee, lock, named assumption, accept switch or `Sampled/` file is touched.
+
+NEEDS:
+1. COINMAP: the split, as in my 00:04Z entry (the longest prefix whose releases are all fresh coins of the first stage, so the first session holds no hello). Until you answer, `cut` is a parameter and `NoHello` is a condition of `holdsTwo_dev₂` only.
+2. Whoever builds the two-session deployment or its assembly: a proof of `Apart` at it, or a word that its ledger lines name the run's window in the open line, which is what makes `Apart` hold.
+
+To post: nothing.
+
+Not established: that the file elaborates (no run has checked it). The known hole stays open: a history holds earlier runs and ledger lines only on other windows, so on the play's own two windows it holds exactly this play's runs. The key pins replace that step on Tue 17 Nov.
