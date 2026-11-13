@@ -547,6 +547,14 @@ def coinsWhy (p : Params) (c : Commitment) (e : Evidence) (src : ByteArray) : Op
   | .ok law => coinsReason v law c.record e.draw src
   | .error _ => none
 
+/-- Whether the coins `src` run out before the sample under the verifier's law as derived ends (`drawnFrom` refused with
+`Draw.RAN_OUT`); false when the sampling design doesn't derive or the record names no population, which `check` refuses. -/
+def ranOut (p : Params) (c : Commitment) (src : ByteArray) : Bool :=
+  let v := p.verifier
+  match Draw.derive v.program v.query v.law v.workTable, nat? (getD c.record "population") with
+  | .ok law, some n => match Draw.ranOutOf (drawnFrom v law n src) with | .ok b => b | .error _ => false
+  | _, _ => false
+
 /-- The check at the coins `ξ` (module docstring, **check**): with coins, a refusal when they don't sample the sample
 (`coinsWhy`), then `check`. -/
 def checkAt (p : Params) (c : Commitment) (ξ : Option ByteArray) (e : Evidence) : Core.Outcome Public Core.Integrity :=
