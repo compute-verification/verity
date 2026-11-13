@@ -26,7 +26,7 @@ is over circuit-check's partition budget.
 from __future__ import annotations
 
 from verity.circuits import boolean as BL
-from verity.definitions.circuits.census import silicon_step
+from verity.circuits.census import silicon_step
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
 from verity.circuits.ops.boolean import elementwise as EW
