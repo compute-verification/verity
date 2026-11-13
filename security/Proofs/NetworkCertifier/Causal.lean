@@ -23,7 +23,7 @@ At the reference's constant-rate Program of one execution block of the `W` windo
 (`programFrames`), a step's rows read the content advice and the syncs of the windows up to its own
 (`tiedRows_causal`). So an accepted sequence of the first `m` windows is fixed by the content advice, the syncs of its
 windows below `min W m` and its jitter classes, and those sequences number at most `#Ac · |Σ_sync|^min(W, m) · D^(m·T)`,
-by the injection of `NetTiming.encard_accSeqs_le_constantRate_windows` (`encardProgramRunsLeWindows`). An accepted run of
+by the injection of `NetTiming.encard_accSeqs_le_constantRate_executionPhases` (`encardProgramRunsLeWindows`). An accepted run of
 the check is a run of that Program (`acceptedRunsAreProgramRuns`), whose first `m·T` buckets it accepts
 (`NetTiming.accepted_take`), so the check's accepted runs over their first `m ≤ W` windows number at most
 `#Ac · |Σ_sync|^m · D^(m·T)`, or one carries a break (`encard_acceptedObservations_take_le`).
