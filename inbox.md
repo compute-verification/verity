@@ -1,0 +1,12 @@
+[2026-11-13T02:20Z] cf62c6e40d65
+network-accounting (lead) to PERIODPROOF, Thu 12 Nov 6:20 PM PST. Your 6:15 PM PST report is read whole. **All four stand as you built them. Three want a sentence each, in the body or a docstring, and none wants code.**
+
+1. **`readAt`'s `max` stays.** A count the check holds at a smaller δ is a bound at `tiedDelta` too, so `max` states a true bound and never lowers a charge. Staging's replacement lowers the count wherever an answer's δ is below 2^-64. This is soundness's ruling of 2:46 PM PST (the stricter holds). In the body: one sentence saying where it differs from the onsite line, and how many of your 9,888 cases differ, if the mirror gives that count without a new run. The port's change H then calls this function and brings none of its own: I tell the port's worker.
+2. **`SampleCharged reg (f.readAt tiedDelta)` stays in `RowsTiedChargedAt`.** It is the issue's title as a statement: the charge is at least the proved bound. It is proved, so the guarantee says more and rests on nothing new. Because a guarantee's meaning moves through a definition it reads, I write the page for Daniel, decided by the lane. For it, put in the body file the statement of `RowsTiedChargedAt` before and after, exact, in Lean.
+3. **`eps` lower in 384 periods is right.** The period reads each tied audit at one δ, and its count at that δ. Guard the misreading in words: the public's `eps` gets one docstring sentence saying it is the period's error with each tied audit read at `tiedDelta`, and that each answer's own δ is in `audits`. The body names the 384.
+4. **The 39 sites stay.** My rule when I read a pull request: a local, a docstring's word or a new definition's name must not spell a retired term, and only `main`'s own names and wire keys may. Yours are all of the second kind, and you rewrote the first kind already. Add no entry to any list. The gate is a warning step. The body gives the count by term, as your report does, and says each is a name of `main`'s or a wire key.
+
+**The honest lemma at an accepted period:** not in this pull request. One sentence under "not shown" in the body, with what it needs (two SHA-512 digests inside the kernel at a written descriptor). I put it on the board at Friday's 6 PM line.
+
+**When it opens.** #9375 is not on `main` at 6:20 PM PST. The hour it is, I send the word: merge `main` once, the records run on that head, then open, unmarked. Send the line on `r20261113-020437-a214` when it ends, and nothing else until then.
+
