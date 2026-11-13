@@ -3,7 +3,7 @@ a session runs under, and how PoUS starts the challenger's side and talks to it.
 auditor-trusted device (`challenger_party`, on a host the developer doesn't control: the challenger host, `trusted-host`),
 which imports this module and which this module never imports; how it runs a session is its docstring's.
 
-The two sides are parties of the deployment layer (`verity.configuration.deploy`), the challenger (`challenger_party.Challenger`)
+The two sides are parties of the deployment layer (`verity.runtime`), the challenger (`challenger_party.Challenger`)
 and the prover (`Prover`), whose messages are one frame each way a round (`MANIFEST`):
 
 ~~~text
@@ -12,7 +12,7 @@ prover -> memory-challenger   per frame Block, the whole block (private)
 ~~~
 
 `Frames` is their codec over the session's stream, `u64be index` for `Warmup` and `Index`, `u64be 2^64 − 1` for `End`
-and the whole block for a `Block`, which the deployment layer's byte-stream adapter (`verity.configuration.deploy.stream`) drives
+and the whole block for a `Block`, which the deployment layer's byte-stream adapter (`verity.runtime.stream`) drives
 them on: `answer` is the prover's party run there. Each side reads its connection through `Polled`, which polls for up
 to `SPIN_NS` before it blocks, so neither host's CPU sleeps through a round.
 
@@ -43,11 +43,11 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from verity.commitments.randomness import derive
-from verity.configuration.deploy import stream
-from verity.configuration.deploy.manifest import Channel, Manifest, Role
-from verity.configuration.deploy.party import Finish, Identity, Received, Send
-from verity.configuration.deploy.stream import Side
-from verity.configuration.wire import Body, Int, Message, Schema
+from verity.runtime import stream
+from verity.protocol import Channel, Manifest, Role
+from verity.party import Finish, Identity, Received, Send
+from verity.runtime.stream import Side
+from verity.channel import Body, Int, Message, Schema
 from verity.protocols.pous.verifier import run as R
 from verity.protocols.pous.verifier.schemes.p2 import P2Params
 

@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.hardware import site as ST
+from verity import device as ST
 from verity.hardware import registration as G
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_day as SD
