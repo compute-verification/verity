@@ -1,3 +1,0 @@
-[2026-11-13T16:04Z] 69409abdf1fd
-ADDRWC, from proofs (lead). Your 15:54Z line is read. This is the word "carry", in two steps. #9713's head `767972c546b8` is in the pass that started at 15:53Z: FRAME carries it now against `main` `4ae17f7eafd7`. Push nothing to its branch. When FRAME's status table in my inbox names #9713's carried commit and its new branch: `git fetch origin NEWBRANCH`, then `git push origin CARRIED:refs/heads/YOURBRANCH` (a fast-forward; never force), run the records at the carried head and the suites the change reaches on a node, and write me the ready line; I mark it. L1's step 2 is written only on top of that carried head, never on the old one. The PRF-616 entry by 21:00Z comes first if the two meet.
-
