@@ -39,15 +39,15 @@ import Mathlib.Topology.Sheaves.Init
 # The leak through the network certifier over a monitoring period of sampled audits
 
 `Guarantees.MonitoringPeriodLeakAccepted` is the instance of `Guarantees.MonitoringPeriodLeakChecked` at no checked input, at a check every
-run passes (`periodLeak_of_checked`); `monitoringPeriodLeak` is that at `periodLeakChecked`.
+run passes (`monitoringPeriodLeak_of_checked`); `monitoringPeriodLeak` is that at `monitoringPeriodLeakChecked`.
 
 **Each window's bound** is the checked statement's at the period of no windows, whose first part reads none of the
 period: the check misses with probability `0` (`checkedWitness_true`), and the leak relation at the network
 certifier's rows with a valid run gives the leak relation there (`rLeakCertifier_of_rLeakCertifierChecked`).
 
 **The count.** At a check every run passes, a window that meets `ExecutionPhaseGood` meets `ExecutionPhaseGoodChecked`
-(`windowGoodChecked_of_windowGood`), and with no checked input every check pins the rows where the layout fits
-(`checkedUnique_empty`), which it does at each window once one secret is good (`fits_of_windowGood`). The record
+(`executionPhaseGoodChecked_of_executionPhaseGood`), and with no checked input every check pins the rows where the layout fits
+(`checkedUnique_empty`), which it does at each window once one secret is good (`fits_of_executionPhaseGood`). The record
 format reads back under its own schedule as the parameter (`RecordFormat.readsBy_read`), so the registered parameters
 are the schedules `Ss`, and each window's operator is the checked statement's, at the windows before it
 (`runsBefore`). The checked count is then `#Ss` times the windows' count at `reg`; the statement's `∏_c (cap_c + 1)`
@@ -71,7 +71,7 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **A window that meets its good event is registered at a layout that fits.** -/
-theorem fits_of_windowGood {H : Msg → Msg} {D : Compiled Coin A} {L K S : ℕ}
+theorem fits_of_executionPhaseGood {H : Msg → Msg} {D : Compiled Coin A} {L K S : ℕ}
     {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ} {reg : AuditStatement → Finset ℕ}
     {Dj : ℕ} {s₀ : AuditStatement} {ρ : ℕ → Bool} {tops : AuditStatement → List (Opening Bool)} {x : Msg} {w : Wit}
     {o : List (Obs L K S)} (h : ExecutionPhaseGood H D L K S lay k δ reg Dj s₀ ρ tops x w o) :
@@ -82,7 +82,7 @@ theorem fits_of_windowGood {H : Msg → Msg} {D : Compiled Coin A} {L K S : ℕ}
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **At a check every run passes, a window's good event is its checked form.** -/
-theorem windowGoodChecked_of_windowGood {H : Msg → Msg} {D : Compiled Coin A} {L K S : ℕ}
+theorem executionPhaseGoodChecked_of_executionPhaseGood {H : Msg → Msg} {D : Compiled Coin A} {L K S : ℕ}
     {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ} {reg : AuditStatement → Finset ℕ}
     {valid : AuditStatement → (ℕ → Bool) → Prop} (hv : ∀ s r, valid s r) {Dj : ℕ} {s₀ : AuditStatement}
     {ρ : ℕ → Bool} {tops : AuditStatement → List (Opening Bool)} {x : Msg} {w : Wit} {o : List (Obs L K S)}
@@ -97,7 +97,7 @@ end Compiled
 /-- **`MonitoringPeriodLeakAccepted` is `MonitoringPeriodLeakChecked` at no checked input**, at the check every run passes, the record
 format's own read-back with the schedule as the parameter, and the same operators. Each window's bound is the checked
 statement's first part at the period of no windows, which reads none of the period. -/
-theorem periodLeak_of_checked (hsrc : Guarantees.MonitoringPeriodLeakChecked) : Guarantees.MonitoringPeriodLeakAccepted := by
+theorem monitoringPeriodLeak_of_checked (hsrc : Guarantees.MonitoringPeriodLeakChecked) : Guarantees.MonitoringPeriodLeakAccepted := by
   intro Coin _ _ _ A H D hks L K S lay k δ hδ reg Dj n sw Pw hPw ρ op β hβ Conn Cell Srv Dev Zt _
     arr f tap run htrust cap Ss hcap hfit Zs schedOf srvOf hs dec hdz x wit tops hb
   refine ⟨fun m hm Ω _ _ P => ?_, fun htap => ?_⟩
@@ -128,20 +128,20 @@ theorem periodLeak_of_checked (hsrc : Guarantees.MonitoringPeriodLeakChecked) : 
     rcases G.eq_empty_or_nonempty with he | ⟨z₀, hz₀⟩
     · rw [he, Set.encard_empty]
       exact zero_le
-    have hfits : ∀ i, (lay (sw i)).Fits (sw i).prog (k (sw i)) := fun i => fits_of_windowGood (hz₀.2 i)
+    have hfits : ∀ i, (lay (sw i)).Fits (sw i).prog (k (sw i)) := fun i => fits_of_executionPhaseGood (hz₀.2 i)
     have h := ((hsrc H D hks L K S lay k δ hδ reg (fun _ => ∅) (fun _ _ => True) (fun _ _ => True) (fun _ => 0)
       (fun _ => 0) Dj sw Pw β ⟨hPw, hβ⟩ (fun i => checkedUnique_empty (Pw i) (sw i).design (hfits i) _) ρ
       op arr f tap run htrust f.read (fun θ s => θ = s) (RecordFormat.readsBy_read f) Ss Zs schedOf
       srvOf dec ⟨fun z hz => ⟨hfit _ (hs z hz), schedOf z, hs z hz, rfl⟩, hdz⟩ x wit tops hb).2 htap).2
     have hcap1 : 0 < ∏ c, (cap c + 1) := Finset.prod_pos fun c _ => Nat.succ_pos _
     refine (Set.encard_le_encard fun z hz => ?_).trans (h.trans (mul_le_mul' le_rfl ?_))
-    · exact ⟨hz.1, fun i => windowGoodChecked_of_windowGood (fun _ _ => ⟨trivial, trivial⟩) (hz.2 i)⟩
+    · exact ⟨hz.1, fun i => executionPhaseGoodChecked_of_executionPhaseGood (fun _ _ => ⟨trivial, trivial⟩) (hz.2 i)⟩
     · simp only [windowsCount, Finset.union_empty]
       exact_mod_cast Nat.le_mul_of_pos_left _ hcap1
 
 /-- **The leak through the network certifier over a monitoring period**: `Guarantees.MonitoringPeriodLeakAccepted`, the instance
-of `periodLeakChecked` at no checked input (`periodLeak_of_checked`). -/
-theorem monitoringPeriodLeak : Guarantees.MonitoringPeriodLeakAccepted := periodLeak_of_checked periodLeakChecked
+of `monitoringPeriodLeakChecked` at no checked input (`monitoringPeriodLeak_of_checked`). -/
+theorem monitoringPeriodLeak : Guarantees.MonitoringPeriodLeakAccepted := monitoringPeriodLeak_of_checked monitoringPeriodLeakChecked
 
 open Claims.SamplingGeneric (Arg Compiled) in
 set_option linter.unusedVariables false in

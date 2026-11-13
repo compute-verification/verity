@@ -118,12 +118,12 @@ RecordRows.lean  the rows format reads back the code's cells on every schedule t
 TapRows.lean    at the network certifier's rows: the trace filled in with its values carries its records
     (carries_fillTrace), and a disagreement between the two is a collision
     (certifierColl_of_disagree, Pr_certifierColl_le_Btap)
-PeriodChecked.lean  the period's leak with the checked inputs left out (periodLeakChecked): each window's
+MonitoringPeriodChecked.lean  the period's leak with the checked inputs left out (monitoringPeriodLeakChecked): each window's
     bound at the network certifier's rows with a valid run
-    (periodChecked_first), and the records counted by Carried's count at the
-    empty pool (encard_periodChecked_le, periodChecked_second)
-Period.lean     MonitoringPeriodLeakAccepted as MonitoringPeriodLeakChecked's instance at no checked input
-    (periodLeak_of_checked, monitoringPeriodLeak; monitoringPeriodLeak_fixed at operators fixed
+    (monitoringPeriodChecked_first), and the records counted by Carried's count at the
+    empty pool (encard_monitoringPeriodChecked_le, monitoringPeriodChecked_second)
+MonitoringPeriod.lean  MonitoringPeriodLeakAccepted as MonitoringPeriodLeakChecked's instance at no checked input
+    (monitoringPeriodLeak_of_checked, monitoringPeriodLeak; monitoringPeriodLeak_fixed at operators fixed
     before the period)
 PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
     period's windows by a union bound (Pr_exists_mem_le_sum, monitoringPeriodLeak_le_sum)
@@ -279,7 +279,7 @@ that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `All
 
 The lock (`lean-audit.json`'s `guarantees`) holds the 18 statements of `Guarantees.lean`, the sampled audit's charge
 (`../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`), the monitoring period's leak through the network certifier
-(`Guarantees/Period.lean`) with its bound with checked inputs (`Guarantees/PeriodChecked.lean`), the monitoring period's
+(`Guarantees/MonitoringPeriod.lean`) with its bound with checked inputs (`Guarantees/MonitoringPeriodChecked.lean`), the monitoring period's
 incorrect proof blocks
 (`../../Definitions/NetworkCertifier/Guarantees/Pooled.lean`) and the leak over a monitoring period
 (`../../Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`), each listed as
@@ -409,11 +409,11 @@ The other 26 are the rest of the Capacity table's bounds and the schedule's caus
     bound its miss discharges them. `SampledLeakCarried`'s honest lemma is its premises at the toy code, with a run
     that opens its row at its circuit's input gates (`SampledLeakCarried_honest`). `PooledLeakCarried`'s waits on the
     pool circuit, which pins its closing row (`CheckedClosing`), and on its period's inputs.
-- **The period's bound with checked inputs** (`PeriodChecked.lean`):
+- **The period's bound with checked inputs** (`MonitoringPeriodChecked.lean`):
   `MonitoringPeriodLeakChecked` is `MonitoringPeriodLeakAccepted` with each window's checked inputs left out of the count and the client's
   view read from the records under a registered parameter (`RecordFormat.ReadsBy`), so the count is `#Θ` times the
   windows'. Its check is held to the run at the network certifier's rows (`CheckedWitness` at `certifierRun`): held
-  to the trace's run the statement is false (`PeriodCheckedChecks.lean`). `RegisteredInputsHeld` names that the trace
+  to the trace's run the statement is false (`MonitoringPeriodCheckedChecks.lean`). `RegisteredInputsHeld` names that the trace
   holds the registration's values at the registered inputs. Its count is `Carried`'s at the empty pool, and
   `MonitoringPeriodLeakAccepted` is its instance at no checked input (`checkedUnique_empty`, `checkedWitness_true`).
 
