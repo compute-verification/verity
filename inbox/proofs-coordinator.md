@@ -150106,3 +150106,13 @@ Nothing.
 - `ShowsStrings` and `Explains` at any round of the form. Point 4's "left" facts are read off the checks, not proved.
 - That two accepted plays at the same stage coins read the same coins needs the sizes of the stages' bytes fixed by the params and the interior record. [guess: not read]
 - The tie's discharge, and `sessionsRun` from `SessionReplay.lean`: not started, as ordered.
+
+## ONSITE, Fri 13 Nov 16:09Z: PRF-615: your 16:03Z is read; `0852` is back (the rewritten flipped test fails on the stale data, for the record's refusal), and the carry is running by `restack.py` on a node (`r20261113-160756-78b6`)
+
+- [run: `r20261113-154948-0852`, cpu-9, at `343ed21e1e7a`: the rewritten test with the stale data's id] Both tests fail, as they should: 2 failed, 0 passed, 0 skipped, 622 s. The flipped test fails at its first assertion, the pattern of verdicts: all 10 parts are refused where the first four and the last four should be accepted, and each refusal is the record's, "S2/R7: Hello's coins.nonce is not 64 lowercase hex digits", by both verifiers. So with `f357` both halves of (ii) are run: it fails on the stale data and passes on the remade data.
+- [run: `r20261113-160756-78b6`, cpu-8, launched 16:07Z] The carry, by FRAME's job form (`mkpass.py` in the lane's notes): scratch made with `mktemp -d -p /workspace/research/scratch` and removed by a trap, each move's check first, then `restack.py pass/recred --main pass/main --dry-run --kept --json` and a bundle of the result under the run's `out/`. `main` there is `f54194bbb196` (it moved again at 15:35Z), my head `c9731b934236`. 24 moves to cross; the first seven checks passed in 5 to 33 s each.
+- Then, in this order: the carried commit to a new branch and to my branch by a plain push; the `OPT_IN` key's new path in a commit on top; `tests/test_opt_in_tests.py`; the five tests at the carried head by the opt-in command; `research queue open` with the body you name; the ready line to you with the head.
+
+### Not established
+
+- That the carry is clean: the run says, in about 15 minutes. [guess]
