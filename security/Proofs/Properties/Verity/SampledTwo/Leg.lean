@@ -83,8 +83,9 @@ registrations' roots, the two-stage design at that program (`SpotFlock.twoConnec
 (`SpotFlock.rsConnected`) and the replay cap. It is the compiled verifier `Flock.Guarantees.SpotKSTwo` is stated of.
 
 The code at the members' programs side by side (`SpotFlock.code`) names the same verifier, `SpotFlock.V` at the held
-copies, by `rfl`: every run, message and accept is one. The two codes differ in the program a statement parses to,
-its partition and its design, so in the relation (`Live₂.R`) and in the roots each opening is read under. -/
+copies, by `rfl`, so a run, its messages and its accept are the same at both. The two codes differ in the program a
+statement parses to, its partition and its design, so in the relation (`Live₂.R`) and in the roots each opening is
+read under. -/
 noncomputable abbrev L (A : Live₂) :=
   SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.codeConnected A.h)
     SpotFlock.iroots (SpotFlock.twoConnected A.h) (SpotFlock.rsConnected A.h) (SpotFlock.cap A.h)
@@ -95,14 +96,19 @@ connected program of the held copies (`Live₂.L`). The leg takes it as a hypoth
 program (`SpotFlock.BuiltWired`) and each gate's value sits where the second stage reads it
 (`SpotFlock.AddressesConnected`): `Live₂.ks_of_connected`.
 
-The relation is the connected program's because the verifier holds a prover to no other. Side by side every gate a
-proof block needs, an input or a written bit, counts only when it is opened under the statement's roots. The second
-stage reads some of a session's ports off the interior record, under the replay block's roots: a port no registered
-read names; and a registered read (`SpotFlock.readsInterior`) at a port a link names where the interior registration
-registers its value, or at a port no link names where the interior record has a port of the value's name or where
-neither record has one and the boundary record registers no such value. At a held code with an accepted run that
-checks a unit with such a port, the side-by-side statement's premise `SpotFlock.Addresses` is false
-(`SpotFlock.CheckedRun.not_addresses_of_boundary`), and `SpotFlock.ksTwo_spot` reaches that statement from no other. -/
+The relation is the connected program's (`Live₂.R`), not that of the members' programs side by side. Side by side
+`SpotFlock.ksTwo_spot` proves its statement from the sessions' openings, which `SpotFlock.sessionOpensTwo_of_frameIs`
+and `SpotFlock.frameIs_built` give from `SpotFlock.Built` and `SpotFlock.Addresses`, and `SpotFlock.Addresses` cannot
+be met at a held code where the second stage reads a checked unit's port off the interior record. Every gate a
+checked unit needs is on its replay block's boundary there (`SpotFlock.sideBySide_of_held`,
+`SpotFlock.CheckedRun.needs_boundary`), so an address holds at it only through a registered read that the second
+stage reads under the statement's roots (`SpotFlock.CheckedRun.addressHolds_reads`). The second stage reads a
+registered read off the interior record, under the replay block's roots (`SpotFlock.readsInterior`): at a port a link
+names, where the interior registration registers its value; and at a port no link names, an input's among them, where
+the interior record has a port of the value's name, or where neither record has one and the boundary record registers
+no such value. One accepted run with a checked unit that needs a gate, every registered read named like a port whose
+row holds the gate's bit read under the replay block's roots, refutes `SpotFlock.Addresses`
+(`SpotFlock.CheckedRun.not_addresses_of_boundary`). -/
 def KS (A : Live₂) : Prop := A.L.KS FlockDeploy.sha512
 
 /-- **The session's knowledge soundness, from SPOT[Flock]'s two-stage guarantee**: `Flock.Guarantees.SpotKSTwo` at
