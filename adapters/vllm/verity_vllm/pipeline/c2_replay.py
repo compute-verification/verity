@@ -3,7 +3,9 @@
 One implementation for both places it runs: the Commit, in process, right after the committed run (`pipeline.commit`), and the CPU
 replay of a deferred Commit's bundle (`pipeline.replay_bundle`, `row stage replay`).  What differs between them is passed in on the
 `ReplaySources`: the committed store to read (the committer, or the bundle's `commit.store_dump`), the weights provider (the live model, or the
-checkpoint opened against the committed weights root), the weights check and the VU export hook.
+checkpoint opened against the committed weights root), the weights check and the VU export hook.  In both places it's the prover's
+pre-flight check: it reads committed values in the clear, so it's no verifier's check.  A verifier checks the sampled proof
+blocks' proofs (`sampled_proofs.one_stage`).
 
 For a seeded stratified sample of Program instance rows (spec x request x phase), read
 the COMMITTED bytes of the row's inputs (the Program's dataflow -> the manifest's member rule -> the binding map), evaluate the registered
@@ -34,7 +36,6 @@ from verity_vllm.commit import opened as OV
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.pipeline import vu_store as VUX
 from verity_vllm.query.manifest import format as MF
 
 logger = init_logger(__name__)
@@ -108,6 +109,11 @@ def live_weights(model: Any, prefix: str) -> Callable:
 
 def vu_export(args: Any, pair: int, rc: Any, manifest: Any, versions: dict[str, Any], eng: Any) -> Callable:
     """The in-process replay's VU export hook (`pipeline.vu_store.after_replay`)."""
+    # Importing `vu_store` turns the driver's `keep_population` on, and only this hook's `after_replay` takes what a replay then
+    # keeps.  So it is imported here, where the Commit makes the hook: a process whose replay has no hook (the CPU replay of a
+    # bundle, a rank's) loads this module, never loads `vu_store`, and keeps no population after its replay.
+    from verity_vllm.pipeline import vu_store as VUX
+
     return lambda sr, progs, bm, rd, wp, arr, sr_kw, loaded, digs: VUX.after_replay(
         args.vu_export_dir, sr, pair, rc.run_root, progs, bm, rd, wp, arr, manifest, sr_kw, loaded, digs, versions, eng)
 

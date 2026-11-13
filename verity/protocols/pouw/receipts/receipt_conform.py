@@ -24,14 +24,20 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
+from typing import Any
+
+# Its sibling under the name this module has: the package's (`verity.protocols.pouw.receipts.receipt_folds`), or the bare
+# name when this file is run or imported from its own directory on `sys.path`.
+if __package__:
+    from . import receipt_folds as F
+else:
+    import receipt_folds as F
 
 HERE = Path(__file__).resolve().parent
 VECTORS = HERE / "vectors.json"
-_spec = importlib.util.spec_from_file_location("receipt_folds", HERE / "receipt_folds.py")
-F = sys.modules.setdefault("receipt_folds", importlib.util.module_from_spec(_spec))
-if not hasattr(F, "FOLDS"):
-    _spec.loader.exec_module(F)
 
 M32 = F.M32
 SCHEMA = "pouw-receipts/v1"
@@ -242,7 +248,7 @@ def _keyargs(fold: str, keys: dict) -> list[int]:
     return [u(keys[k]) for k in F.FOLDS[fold]["keys"]]
 
 
-def check_steps(impl: dict, v: dict | None = None, cast=int) -> int:
+def check_steps(impl: dict, v: dict | None = None, cast: Callable[[int], Any] = int) -> int:
     """impl: fold -> step with receipt_folds' signature; `cast` wraps each argument (np.uint32 for numpy steps). Returns
     the steps checked."""
     v = v or load()
@@ -377,7 +383,7 @@ def check_reference(v: dict | None = None) -> int:
 
 # ---- the existing implementations ---------------------------------------------------------------------------------------
 
-def p2ff_r9(rf, v: dict | None = None) -> int:
+def p2ff_r9(rf: ModuleType, v: dict | None = None) -> int:
     """The r9 twin (receipt_folds_r9.py): its key rules and its two steps (numpy)."""
     import numpy as np
 
@@ -388,7 +394,7 @@ def p2ff_r9(rf, v: dict | None = None) -> int:
     return n
 
 
-def pfill_ref(pr, v: dict | None = None) -> int:
+def pfill_ref(pr: ModuleType, v: dict | None = None) -> int:
     """pfill_ref.py (pfill.cuh's twin): its key rules, `keys` and `absorb` at each NC its builds run. An older copy is
     checked on what it has: no `absorb` (steps inline in its `fold`), no r9 rule, XIN (rotl 7) in place of XIN13."""
     import numpy as np
@@ -535,7 +541,7 @@ def pfill_cuh(path: Path | str, compiler: str = "g++", v: dict | None = None) ->
     return n
 
 
-def egemm_ref(er, v: dict | None = None) -> int:
+def egemm_ref(er: ModuleType, v: dict | None = None) -> int:
     """egemm_ref.py: xin_keys, xin13_receipts and the duo tile_receipts on one whole tile (TILE_TAG's rule), every thread
     against receipt_folds' egemm-xin13 and served-duo schedules."""
     import numpy as np
@@ -565,7 +571,7 @@ def egemm_ref(er, v: dict | None = None) -> int:
     return n
 
 
-def e2e_segment(sg, v: dict | None = None) -> int:
+def e2e_segment(sg: ModuleType, v: dict | None = None) -> int:
     """E2E's segment.py (PouwSegCheck's word twins): its constants, key rule, init and both folds' absorb and final."""
     v = v or load()
     sc = v["served_constants"]
@@ -595,10 +601,11 @@ def e2e_segment(sg, v: dict | None = None) -> int:
     return n
 
 
-def e2e_definitions(sg, v: dict | None = None) -> int:
+def e2e_definitions(sg: ModuleType, v: dict | None = None) -> int:
     """E2E's Boolean Definitions themselves (PouwDuoAbsorb_v2, PouwXinAbsorb_v2 and their finals, `segment.FOLDS`),
     evaluated on bits over the served-duo and e2e-xin vectors."""
     import numpy as np
+
     from verity.circuits.defs import bind
     from verity.circuits.evaluation.bits import evaluate_bits
 
@@ -645,7 +652,7 @@ def scorer_folds(folds: dict, tags: dict) -> int:
     return len(folds)
 
 
-def _load(path: str, name: str):
+def _load(path: str, name: str) -> ModuleType:
     spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[name] = mod
@@ -675,6 +682,11 @@ def main(argv: list[str]) -> int:
         if shutil.which(cxx):
             print(f"receipt_folds.cuh ({cxx}): {check_header(compiler=cxx, v=v)} operations agree")
     return 0
+
+
+__all__ = ["R5_KEYS", "R5_WORDS", "build", "check_header", "check_key_rules", "check_reference", "check_steps",
+           "e2e_definitions", "e2e_segment", "egemm_ref", "load", "main", "p2ff_r9", "pfill_cuh", "pfill_ref",
+           "scorer_folds"]
 
 
 if __name__ == "__main__":
