@@ -176,7 +176,8 @@ noncomputable def innerCapacity (ends : E → L × L) (β : E → ℕ) (P : Fins
 
 /-- The links between two different parts of `insert p P` are those between two parts of `P` and those between part
 `p` and the rest. -/
-theorem innerCapacity_insert (ends : E → L × L) (β : E → ℕ) {P : Finset ι} {p : ι} (X : ι → Finset L) (hp : p ∉ P)
+theorem innerCapacity_insert [DecidableEq ι] (ends : E → L × L) (β : E → ℕ) {P : Finset ι} {p : ι}
+    (X : ι → Finset L) (hp : p ∉ P)
     (hd : ((insert p P : Finset ι) : Set ι).PairwiseDisjoint X) :
     innerCapacity ends β (insert p P) X =
       innerCapacity ends β P X + betweenCapacity ends β (X p) (P.biUnion X) := by
