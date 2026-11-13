@@ -8,8 +8,8 @@
 #          the circuit, `verity/remote-bandwidth/v0 verifier tree <tree>` of COMMIT's remote_bandwidth tree (auditor_line's
 #          `descriptor`). COMMIT, and so the verifier host's pin, must be on main's first-parent line, fetched from the
 #          repository main is pushed to (in a run's clone, the node's bare repository behind the source root, never the
-#          source root's own copy; main.probe.txt; a fetch that fails refuses), since a session credits only under a
-#          verifier there. Writes probe.json; exit 3 on any mismatch, before anything is written to either host.
+#          source root's copy; main.probe.txt; a fetch that fails refuses), since a session credits only under a verifier
+#          there. Writes probe.json; exit 3 on any mismatch, before anything is written to either host.
 #   open   `period-open --name PERIOD --cap CAP --circuit CIRCUIT --model MODEL`, the ledger read before and after.
 #   host   the verifier gate's `run`, gate run 7's request (PROVER_NODE as its peer, PORT, PERIOD, PIN, PACED at
 #          PACE_PASS_MS, MINUTES, JITTER_MS, QUANTILE, MODEL with ENGINES arenas of ARENA_BLOCKS); its `status` every 30 s
