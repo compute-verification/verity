@@ -138,7 +138,7 @@ from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_pearl as SPL,
                                    serve_release as RL, serve_day as SD, serve_remote as SR, serve_row as RW, serve_seal as SS)
-from verity_vllm.pipeline.serve_admit import (ADMIT, RUN_HEADER, WATERMARK_PATH, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
+from verity_vllm.pipeline.serve_admit import (ADMIT, WATERMARK_PATH, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
                                               engine_id_of, keep_scheduler_rows, new_http_id)
 from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, advice_trace, param_of,
                                                records_mirror, served_statics, user_of)
@@ -304,8 +304,12 @@ class Server:
 
     async def watermark(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, headers: Mapping[str, str]) -> None:
         """The network certifier's watermark (``--admit tick``): its chunked body's lines go to the gate as they come, and
-        its end is answered 200 (400 for a malformed stream)."""
-        w = self.order.watermark(headers.get(RUN_HEADER, "").strip())
+        its end is answered 200 (400 for a malformed stream). A POST that isn't a run's one stream (a client's, a run's
+        second: `TickAdmit.watermark`) is answered 400 with its body unread."""
+        try:
+            w = self.order.watermark(headers)
+        except ValueError as e:
+            return await self._json(writer, 400, error_body(str(e), 400, "BadRequestError"))
         try:
             if "chunked" not in headers.get("transfer-encoding", "").lower():
                 w.close("the watermark's body is chunked")

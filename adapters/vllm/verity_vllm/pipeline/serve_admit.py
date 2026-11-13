@@ -17,7 +17,9 @@ active_replay.LiveServer`, and `warden_serve.py serve --watermark` beside it). T
 ``x-verity-release-bucket: A``, the release's bucket counted from 0 at the run's origin, and the watermark: one
 ``POST /verity/watermark`` a run, naming it, whose chunked body has the line ``t n`` (`watermark_line`) once bucket t has
 closed, the releases of buckets up to t being exactly those numbered below n, followed on that line by each release of
-bucket t that its server connection lost on the way; its end ends the run.
+bucket t that its server connection lost on the way; its end ends the run. A frontend takes one such stream a run, and
+none that carries ``x-verity-release``, which the network certifier puts on every request it releases and never on its
+own stream (`open_watermark`): any other POST to that route is answered 400, and feeds the gate nothing.
 
 What a request without the header gets: it is forwarded at once (``unordered``), as the served plan's probes are. A
 malformed or repeated ordinal is refused (`ValueError`, the server's 400). A released request that never reaches the
@@ -685,18 +687,35 @@ class Watermark:
         return why is None
 
 
+def open_watermark(headers: Mapping[str, str], runs: set[str], emit: Callable[[dict[str, Any]], Any]) -> Watermark:
+    """The watermark stream a ``POST /verity/watermark`` of these lower-cased headers opens for the run they name, into
+    ``emit``; ``runs`` holds the runs whose stream this frontend has had, and gets this one. `ValueError` (the frontend's
+    400), with nothing emitted, for the two POSTs that aren't the network certifier's stream. One that carries
+    ``x-verity-release`` is a client's request: the network certifier puts that header on every request it releases
+    and never on its own stream. And a run's second: the network certifier sends one a run, so a second, whether
+    the first is still open or has ended, would be read beside it or after it, and its lost releases acted on."""
+    if RELEASE_HEADER in headers:
+        raise ValueError(f"{WATERMARK_PATH}: a POST that carries {RELEASE_HEADER} is a client's request, not the network "
+                         f"certifier's watermark")
+    run = headers.get(RUN_HEADER, "").strip()
+    if run in runs:
+        raise ValueError(f"{WATERMARK_PATH}: run {run!r} has had its watermark stream, and a run has one")
+    runs.add(run)
+    return Watermark(run, emit)
+
+
 class TickAdmit:
     """serve-openai's frontend under ``--admit tick``: `key` reads a request's release headers (`ValueError` on a malformed
     or repeated N, the server's 400), `submit` hands the engine loop's gate the release (through ``take``, the loop's
     queue) just before the request itself (``forward``), `passed` says a numbered request won't be submitted, and the
-    server's watermark route feeds `watermark` streams. A release a watermark line names lost is the gate's to drop and
-    this frontend's to answer, since the engine never finishes a request its scheduler never saw: a request of it that
-    is in the engine is answered with that error and aborted, and one that comes later is refused (`key`). A watermark
-    that breaks forgets its run's lost releases: the gate is open then, and adds every request at once. The frontend
-    sees no other opening of the gate (a watermark that stalls past the hold, the engine loop's drain), so after one a
-    line still has it abort or refuse the requests of the releases it names lost, which the open gate adds at once like
-    any other: no admission order rests on which, since an open gate orders nothing. All of it runs on the HTTP server's
-    event loop."""
+    server's watermark route feeds `watermark` streams, one a run and none of a client's (`open_watermark`). A release
+    a watermark line names lost is the gate's to drop and this frontend's to answer, since the engine never finishes a
+    request its scheduler never saw: a request of it that is in the engine is answered with that error and aborted, and
+    one that comes later is refused (`key`). A watermark that breaks forgets its run's lost releases: the gate is open
+    then, and adds every request at once. The frontend sees no other opening of the gate (a watermark that stalls past
+    the hold, the engine loop's drain), so after one a line still has it abort or refuse the requests of the releases it
+    names lost, which the open gate adds at once like any other: no admission order rests on which, since an open gate
+    orders nothing. All of it runs on the HTTP server's event loop."""
 
     LOST = RELEASE_HEADER + ": {n} of run {run!r} was lost on the way to the server, as the watermark says"
 
@@ -707,6 +726,7 @@ class TickAdmit:
         self.buckets: dict[tuple[str, int], int | None] = {}
         self.submitted: dict[tuple[str, int], Any] = {}     # (run, N) -> its admission, until its answer ends
         self.lost: dict[str, set[int]] = {}                 # run -> the N its watermark named lost
+        self.streams: set[str] = set()                      # the runs whose watermark stream has come
         self.counts = {"numbered": 0, "unordered": 0, "passed": 0, "lost": 0, "watermarks": 0}
 
     def key(self, headers: Mapping[str, str]) -> tuple[str, int] | None:
@@ -742,9 +762,15 @@ class TickAdmit:
         self.counts["passed"] += 1
         self.take({"run": key[0], "n": key[1], "passed": True})
 
-    def watermark(self, run: str) -> Watermark:
+    def watermark(self, headers: Mapping[str, str]) -> Watermark:
+        """The stream a watermark POST of these lower-cased headers opens (`open_watermark`); `ValueError`, the server's
+        400, for a client's and for a run's second. A client's is the request of the release it carries, which won't
+        be submitted: its release is read and passed as a refused completion's is, so the gate doesn't wait for it."""
+        if RELEASE_HEADER in headers:
+            self.passed(self.key(headers))
+        w = open_watermark(headers, self.streams, self._record)
         self.counts["watermarks"] += 1
-        return Watermark(run, self._record)
+        return w
 
     def _record(self, rec: dict[str, Any]) -> None:
         """One watermark record, to the gate: before it, a line's lost releases are marked, and after it the requests of
