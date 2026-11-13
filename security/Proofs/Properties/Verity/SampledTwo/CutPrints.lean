@@ -244,16 +244,12 @@ theorem paramsAt_of_caseOf {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Par
     {e : VStar.Recursive.SampledTwo.Evidence} (h : caseOf s = .ok (p, c, e)) : paramsAt s.params = .ok p := by
   unfold caseOf at h
   obtain ⟨p', hp, h⟩ := bind_ok h
-  obtain ⟨ev, -, h⟩ := bind_ok h
-  dsimp only at h
-  split at h
-  · obtain ⟨c', -, h⟩ := bind_ok h
-    obtain ⟨e', -, h⟩ := bind_ok h
-    have hpe : p' = p := congrArg Prod.fst (Except.ok.inj h)
-    rw [hp, hpe]
-  · first
-      | cases h
-      | simp [throw, throwThe, MonadExceptOf.throw] at h
+  obtain ⟨ce, -, h⟩ := bind_ok h
+  have hpe : p' = p := by
+    first
+      | exact congrArg Prod.fst (Except.ok.inj h)
+      | (simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h; exact h.1)
+  rw [hp, hpe]
 
 theorem firstDraws_window {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.Params}
     {c : Spot.OneStage.Commitment} {e : VStar.Recursive.SampledTwo.Evidence} {d : Draws}
@@ -398,7 +394,7 @@ theorem binds_of_prints (dev : Exchange → History) (θ : ByteArray)
   | cons l₀ ls₀ =>
   obtain ⟨p, c, e, key, d₁, ξ, c₂, d₂, ξ₂, r₁, r₂, h1, h2, h3, h4, h5, h6, h7, h8, h9, hE⟩ :=
     readsLogs_cases (s := o.sent) (l := l₀) (by rw [hR]; simp)
-  have hk₁ : d₁.key = key := (firstDraws_window h3).2.2.2
+  obtain ⟨-, -, -, hk₁⟩ := firstDraws_window h3
   have hk₂ : d₂.key = key := key_second h1 h2 h5 h6
   have hm₁ : (d₁, firstCoins e) ∈ records o.sent := by rw [records_eq h1 h2, h3]; simp
   have hm₂ : (d₂, e.interior.base.coins) ∈ records o.sent := by rw [records_eq h1 h2, h6]; simp

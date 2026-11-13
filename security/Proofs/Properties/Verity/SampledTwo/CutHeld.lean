@@ -9,11 +9,12 @@ public import Proofs.Properties.Verity.SampledTwo.Steps
 
 `CutPrints.binds_of_prints` takes, of each accepted play, that the interior's records are held to the coin trees its
 session's lines hold (`InteriorHeld`). The form's check reads them so: where it accepts, it ran the interior audit's
-per-member sessions (`accepted_steps`, `inputAt_ok`: `OneStageZk.membersRun`), which reads the challenger's trees from the interior's coin evidence (`treesOf`) and
-holds every statement's session's record to them (`membersTreesHeld`): `membersTreeReason` accepts each as
-`memberTreeReason` does (`MemberForm.membersTreeReason_none`), a logged tree whose last round closes the session and which,
-less that round, passes `sessionTreeReason` (`MemberForm.memberTreeReason_none`). The trees `treesOf` reads are those
-`coinTreesOf` reads from the lines `linesOf` reads (`Binding.trees_of`).
+per-member sessions (`accepted_steps`, `inputAt_ok`: `OneStageZk.membersRun`), which reads the challenger's trees
+from the interior's coin evidence (`treesOf`) and holds every statement's session's record to them
+(`membersTreesHeld`): `membersTreeReason` accepts each as `memberTreeReason` does (`MemberForm.membersTreeReason_none`),
+a logged tree whose last round closes the session and which, less that round, passes `sessionTreeReason`
+(`MemberForm.memberTreeReason_none`). The trees `treesOf` reads are those `coinTreesOf` reads from the lines `linesOf`
+reads (`Binding.trees_of`).
 
 * `members_trees`: an accepted `membersRun` read its trees and held its statements' sessions to them.
 * `held_size`: the statements' members (`membersHeld`) are one a statement, so every statement is in `sts.zip held`.
