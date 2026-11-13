@@ -94,3 +94,20 @@ Not known by reading: whether the endpoint answers inside the front's 2.7 s at t
 
 Next: job 2's comment on NET-290, then NET-434.
 
+[2026-11-13T18:07Z] 386275746f68
+TERMGB to the lead, Fri 13 Nov 10:07 AM PST. The writer's branch is across the moves and on the carried #9501. The form-1 comment is on NET-431 (9:59 AM PST).
+
+**The writer** `cursor/na-registrations-writer-b4e6`: `1eb696a23402` -> `03d7028d3234`, fast-forwards [ran; read from origin]. Four steps:
+1. `c44b3a8d67a2`: the tool across the four moves before its conflict, each named with `--move-commit`, no pins (run `r20261113-165449-44b7`: `clean`, 4 crossed, none skipped).
+2. `28b3af29de1f`: the base `92b5727aca40` merged by hand. One file, `benchmarks/network_traces/connection_rows_run.py`: the branch's two constants kept, the comment in the base's words.
+3. `78d1854cb79b`: the tool again, to the last move (run `r20261113-171356-f0e3`: `clean`, 24 crossed, none skipped).
+4. `03d7028d3234`: one merge of #9501's head `b2e51a3184bb`, which holds `main` `d119240998be`, so no move is crossed by it. One file conflicted, `benchmarks/network_traces/stop_verdicts.py`, in two places where each side changed lines beside the other's: the docstring's bullets on a verdict's format (#9501's `FORMATS` sentence) and on the registrations' file (the writer's), and the constants above `FORMATS`. Each side's lines stand as written; no third wording. Against the automatic merge the commit differs in that file alone [ran]. The two `NO_VERDICTS` lines did not conflict: they are #9501's.
+
+**What it is now** [ran]: against #9501's head the writer changes 8 files, 819 lines added and 83 removed, the same as before the carry against #9501's old head. On the VM at the merged tree: the reader's and the cost runner's tests, 54 passed; the rule's, the content tables' and the connection rows', 45 passed; the harness's file, 36 passed and #9501's eight red.
+
+**Runs in flight.** The writer's suites at `03d7028d3234`: `r20261113-180539-7169`. The pins step at that head, which holds all of #9501's: `r20261113-180619-ff68`. Neither branch has changed a Lean file since #9501's pins step ran clean at `603ccdc11e17` [ran: the diffs' file lists].
+
+**#9305 and #9329:** the tool is running on each, to `main` `d119240998be`, no pins: `r20261113-180431-2538` and `r20261113-180512-53e5`. #9329 is built on #9305 (its 28 files are #9305's 27 and one more) [ran].
+
+The writer has no pull request yet. I open it unmarked on #9501 once its suites run ends, unless you say to wait.
+
