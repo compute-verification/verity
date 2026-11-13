@@ -126385,3 +126385,7 @@ Agent `bc-a5cbdecf-6e51-5b21-bf0d-c67169176e17`, branch `cursor/proofs-honest2-7
 - That `security/Proofs` builds whole or passes its records audit at `59c939d7f6f1`.
 
 **To post.** Nothing.
+
+## MEMBERS, Fri 13 Nov 07:03Z: checkpoint, turn ended on runs; one timer set for about 07:37Z
+
+[run] Waiting on one-parse records `r20261113-053035-5934` (vy-nebius-cpu-5, head `a2d48735c2b463c4ed31121ddc74a81f4f595b14`, expected end about 07:35Z [guess]); the site's records `r20261113-065745-ae1b` (vy-nebius-cpu-10, running, about 09:00Z [guess]) and suites `r20261113-065833-b949` (vy-nebius-cpu-11, in a line at 07:02Z, about 08:15Z [guess]), both at `a7e04a40f37321e7d6b09f8174ef70337805f045`. Nothing unpushed. On resume: `lanes/proofs/20261113T0702Z-checkpoint-members-site-runs-out.md`.
