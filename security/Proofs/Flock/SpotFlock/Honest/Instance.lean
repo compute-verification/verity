@@ -157,9 +157,6 @@ variable (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code)
 
 theorem ms_held : (held R B desc q c₀).ms = ms2 R.x := rfl
 
-/-- **The one template's circuit is `R`'s statement's.** -/
-theorem memberCircuit_held (t : ℕ) : memberCircuit (held R B desc q c₀) t = stmtOf R.x := rfl
-
 /-! ## The design's premises -/
 
 /-- **Each wire's writer is first**: there are no wires. -/
