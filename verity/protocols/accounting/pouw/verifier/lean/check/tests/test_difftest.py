@@ -30,6 +30,9 @@ auditor's ledger and its windows, a window's A trees under its round roots, a wi
 open root, then one mutation each aimed at every refusal), compared output for output: the credited calls, the sampled
 proof blocks, the weights' root or null, or the same refusal.
 
+Its `commit-parsers` against `json.loads`: one `Port`, over those cases' Commit records, honest and mutated: the value
+Lean's own JSON parser and the total one, which `Credit.commitOf?` reads the record with, each read its text as.
+
 Its `rounds` against `core_check.rounds`: one `Port`, over the live windows `pouw_rounds_cases` generates (a live epoch's
 round coins, each opened after its recorded round root, read through the challenger's signed session the auditor's signed
 ledger opens and ends for the window, then one mutation each aimed at every refusal), compared output for output: null, or the same refusal.
@@ -519,6 +522,53 @@ def test_honest_j10r_windows_are_credited(pass_server):
         assert kind == "output" and "credited" in json.loads(out), out
         credited.append(json.loads(out)["credited"])
     assert any(credited), credited
+
+
+def commit_parsers(case: dict) -> dict:
+    """A Commit record's text read once (`json.loads`, as `credit._loads` reads it): the value each of the Lean's two
+    JSON parsers reads it as, or none when the record is not bytes in lowercase hex of UTF-8 JSON."""
+    c = case["commit"]
+    if not (type(c) is str and Cr._HEX.fullmatch(c)):
+        return {"core": [], "total": []}
+    try:
+        v = [json.loads(bytes.fromhex(c).decode(), parse_constant=Cr._no_constant)]
+    except (ValueError, RecursionError):
+        return {"core": [], "total": []}
+    return {"core": v, "total": v}
+
+
+#: a window case's honest Commit record (``window``), then each mutation of a Commit record: a credit case's
+#: (``commit-form``) and a window case's
+COMMIT_NAMES = ["window", "commit-form", "commit-missing", "commit-twice", "commit-missing-expert", "commit-unbound",
+                "credit-commit-form"]
+
+
+def commit_case(rng: random.Random, name: str = "honest") -> dict:
+    """The Commit record of one credit case (``honest``, ``commit-form``) or of one window case (the other names)."""
+    if name in ("honest", "commit-form"):
+        return {"commit": credit_cases.credit_instance(rng, name)["commit"]}
+    return {"commit": credit_cases.window_instance(rng, "honest" if name == "window" else name)["commit"]}
+
+
+COMMIT_PARSERS = _port("commit-parsers", commit_parsers, commit_case, COMMIT_NAMES)
+
+
+def test_a_commit_record_reads_alike_under_both_parsers(pass_server):
+    """`Credit.commitOf?` reads a Commit record with the total JSON parser (`Flock.JsonParse.parse`), which a proof can
+    read through, and no longer with Lean's own. Every Commit record the case writer writes (`commit_record`: a credit
+    case's and a window case's honest ones, one with a registered value dropped, registered twice or added) is read by
+    both parsers, as one value, Python's; a record whose form is broken (``commit-form``) is read alike by both or
+    refused by both."""
+    stats = D.run(COMMIT_PARSERS, examples=150, server=pass_server)
+    read = Counter()
+    for name in ["honest", *COMMIT_NAMES]:
+        for seed in range(8 if name.endswith("commit-form") else 4):
+            case = commit_case(random.Random(f"{name}/{seed}"), name)
+            out = json.loads(D.replay(COMMIT_PARSERS, case, pass_server)[1])
+            assert out["core"] == out["total"] and (out["core"] or name.endswith("commit-form")), (name, seed, out)
+            read[name, bool(out["core"])] += 1
+    print(f"pouw-check-difftest commit-parsers: {stats}; and {sum(read.values())} swept ({dict(read)})")
+    assert all(read[name, True] for name in ["honest", *COMMIT_NAMES]) and any(not ok for _name, ok in read)
 
 
 def leaf_words(case: dict) -> dict:

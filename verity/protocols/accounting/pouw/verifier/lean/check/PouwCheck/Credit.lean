@@ -313,10 +313,10 @@ def commitOf? (commit : Json) : Option (ByteArray × Array Json) :=
   if isHexBytes s then
     (hex? commit).bind fun raw =>
     (String.fromUTF8? raw).bind fun text =>
-    (Json.parse text).toOption.bind fun j =>
+    (Flock.JsonParse.parse text).toOption.bind fun j =>
     (Spot.PyJson.canonical j).toOption.bind fun t =>
     (Json.getArr? (get j "registered")).toOption.bind fun xs =>
-    if t == text && isObj j && get j "format" == Json.str COMMIT_FORMAT && xs.all isObj then
+    if t == text && isObj j && jsonStrIs (get j "format") COMMIT_FORMAT && xs.all isObj then
       some (Flock.Sha512.hash ((COMMIT_FORMAT.toUTF8.push 0) ++ raw), xs)
     else none
   else none
