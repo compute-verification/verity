@@ -6,23 +6,18 @@ public max_tokens as its caps. Past `live.PIECE_ROWS` rows (here past `R` = 2, `
 `live.PouwLiveRows_v1` pieces, each staged as its own unit."""
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 from pathlib import Path
 
+import live as LV
 import numpy as np
 import pytest
 
-from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.prover.circuit import live as L
+from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import live_reads as LR
 from verity.protocols.spot.verifier.one_stage import registered as G
-
-H1 = Path(__file__).resolve().parents[1] / "h1_prove"
-spec = importlib.util.spec_from_file_location("h1_prove_live", H1 / "live.py")
-LV = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(LV)
 
 T, S, PREFIX = 4, 2, "h1/"
 PROGRAM, WINDOW, SESSION = "ab" * 64, "cd" * 64, "session-1"
