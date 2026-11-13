@@ -126780,3 +126780,55 @@ NEEDS: none. Resume me when CUT names a head over TWOLEG's next one, if you want
 To post: nothing.
 
 Not established: that all four compile in one run at one head (the join's build is that run; three of my runs and the import check give it at `219bc2bd1f`, and `c350` gives the two files that changed or import the change at `d77791cc13`). My files over the base `3b05c3a3b1` or over CUT's `680b549018`, outside the join. `LedgerInOrder` and `Apart` at any deployment (taken as hypotheses). My files over TWOLEG's next head. The known hole, which I do not close: on the play's own two windows the history holds exactly this play's runs.
+
+## FRAME, Fri 13 Nov 07:15Z: the swap COMPILES. For HELDOF: the five per-template forms are at `cursor/proofs-frame-l1-9c4e` `013955525dbe759a75548e8933366850e8977b4b` (the Lean of `792e9b6086e8`, built whole by `464b`: `Proofs.Flock`, 12760 jobs; the merge adds the base's lock alone). Its lock is NOT regenerated: records run `r20261113-070739-f8f8`, expected end about 08:40Z
+
+**In plain words.** The change that asks "does each wired source bit have a gate to go to" once per template, inside the model's own check, went through Lean whole. HELDOF can merge the head in the title. One thing is not done at that head: the lock still has the old records of the guarantees that read the changed check, so a records check there fails until my records run ends and I commit what it regenerates. The guard on the toy and on Friday's files, and the five tries with their axiom probes, are still running.
+
+### 1. What compiled (run `r20261113-065524-464b`, at `792e9b6086e8`, slot `build/6`)
+
+- [run] "lean-build: security/Proofs: exit 0 in 386 s", "BUILD_EXIT_L1 0 at 386s": the 75 `SpotFlock` files that read `Code.lean`, with `SamplingGeneric/Guarantees` and `SpotFirstHit`.
+- [run] "✔ [12760/12760] Built Proofs.Flock (3.0s)", "Build completed successfully (12760 jobs).", "BUILD_EXIT_FLOCK 0 at 721s": the root `Proofs.Flock` whole, so no import clash and no name declared twice.
+- [run] The guard's Lean (`TwoGuard.lean`, with `wiresMoveRows` among `wiringClauses` and `wiringClausesAt`, and `wiringClausesAt_eq` by `rfl`) compiled and linked: "guard-node: … leanc -shared -o …/twoguard/libtwoguard.so", then "guard-node: run 0: …/honest files". The toy's result is not out yet.
+- [run: `git diff --stat 792e9b6086e8 013955525dbe`] "security/lean-audit.json | 162 …", "1 file changed": the merge head differs from the compiled one in the lock alone (the base's, #9681's records).
+- [mine, wrong] I guessed "about an hour" for the build, then "09:10Z" for the run. The build took 386 s and the root 335 s more.
+
+### 2. For HELDOF: the five forms, by name, at `013955525dbe`
+
+| what the proof reads | decided once per template | theorem |
+|---|---|---|
+| `sourcesNamed` | `sourceRowsNamed` (a clause of `wiringOk`) | `sourcesNamed_of_rows` (`WiringRows.lean`) |
+| `writtenUnwired` | `writtenRowsUnwired` (a clause) | `writtenUnwired_of_rows` (`WiringRows.lean`) |
+| `writtenRead` | `writtenRowsRead` (a clause) | `writtenRead_of_rows` (`WiringRows.lean`) |
+| `returnedWhole` | no clause: from `WrittenOnce h` | `returnedWhole_of_once` (`WiringOk.lean`) |
+| `wiresMove` | `wiresMoveRows` (a clause, new tonight, the fourth) | `wiresMove_of_rows`, `wiresMove_of_two` (`WiresMoveRows.lean`) |
+
+- `wiringOk` has no clause that walks a member's bits now. `wiresMove` is still a definition, and no clause.
+- What changes at the merge is section 2 of my 07:00Z entry, unchanged: `HeldOfDesc.lean`'s `walksOk h := wiresMove h` and its `rw [namesOnce_eq, …, hw]` under `unfold wiringOk` (line 518 at `dc45145249`) read the fourth clause as `wiresMove h`; it is `wiresMoveRows h`. `import Proofs.Flock.SpotFlock.WiresGo` is gone (its eight definitions are in `Code.lean`, same names).
+- The `BlockSize.lean:73` fix is `8e282166e9`, under that head.
+- [derived] **A records check of `security/Proofs` fails at this head** until the lock is regenerated: `SpotFlock.two` reads another clause, so the records of the guarantees that read `two` moved. A build and a try do not read the lock.
+
+### 3. Your 06:58Z rulings
+
+- `portsOnce`: I change nothing tonight. Owed after the join's first whole compile: an entry saying whether the clause can go, and what of `SampledTwoDesc.wiringOk` goes with it.
+- INF-782: [run: `grep ulimit` over my two scripts and the scripts note] No run of mine carries `ulimit -Sv`, waiting or running.
+
+### 4. Running
+
+- `r20261113-065524-464b` (asked 64 GB, limit 09:25Z): the guard's `files` mode on the toy, then on Friday's twenty files, five tries with the axiom probe (`WiresMoveRows`, `AddressesGive`, `AddressesHeld`, `Facts`, `WiredCode`), then the guard's tests `-k 'honest or wiring'` if 20 minutes remain. [guess] End about 08:15Z.
+- `r20261113-070739-f8f8` (asked 64 GB, limit 10:07Z, slot `build/0`, at `013955525dbe`): `lean_changed.py --records security/Proofs --update`, with `suites.py --changed HEAD^2 --quick` beside it. [guess] End about 08:40Z; `a971`, the same run for #9681, took 68 minutes.
+
+### State
+
+- Pushed: `cursor/proofs-frame-l1-9c4e` `013955525dbe759a75548e8933366850e8977b4b`. The base and #9681's branch are unmoved at `3b05c3a3b1a775a5f322964e8effd75f3289ccc1`; I move the base only at a head whose records run passed. Nothing unpushed.
+- #9681 is open at `3b05c3a3b1a7`, unmarked. No ready line from me.
+- One loop, the pen is mine (`~/wt/.pen`).
+
+**Not established.**
+- What `wiresMoveRows` says of the toy and of Friday's files as the model's own clause: the guard is running.
+- That the five changed files' theorems use no axiom beyond the three: the build compiled them; the probes are in the tries, not yet run.
+- That the guard's test file passes, at any head.
+- Which lock records move, and whether any `unwitnessed` entry is added or moved: `f8f8` says.
+- That the per-template form refuses no honest play other than Friday's.
+
+NEEDS: nothing of you. To HELDOF: the head in the title is safe to merge for building and tries; its lock is stale until I say `f8f8`'s records are committed.
