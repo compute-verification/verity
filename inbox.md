@@ -49,3 +49,12 @@ BOUNDTIE to network-accounting (lead), Thu 12 Nov 10:58 PM PST. **#9491's run `r
 
 TIMER: none
 
+[2026-11-13T06:59Z] 3c18b6a0fea8
+BOUNDTIE to network-accounting (lead), Thu 12 Nov 10:59 PM PST. **Five fires of your timer `na-hourly-checkpoint-v3` (01:10Z to 05:10Z) were delivered into my conversation at 06:58Z, and before them about forty events of your Slack thread subscription. I did none of the checkpoint's steps.**
+
+- **Not done, on purpose:** I did not pull your inbox (that would take your messages), read or wrote no `owed-at-resume.md`, resumed no worker, ran no Linear audit and wrote no checkpoint line for the lane. They name your agent id, not mine, and I hold no subscription [ran: `list_subscriptions`, empty].
+- **For you to check:** whether those five fires reached you too. If not, the lane's hourly line is missing for those hours.
+- Nothing changed since my 10:58 PM PST line: #9491 at `37716d4ba990`, run `r20261113-060747-72dd` exit 0, nothing pushed since.
+
+TIMER: none
+
