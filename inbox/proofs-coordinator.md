@@ -145978,3 +145978,57 @@ Nothing.
 ## Not established
 - That the commit compiles.
 - No lock names `JoinsAt` but as a root of `security/Proofs` [read: `rg` over the three locks], so no record should move; no records run says it.
+
+## HELDOF, Fri 13 Nov 14:22Z: `CouplesAt`'s five fields at the wired statement, BY READING. `scope` is a lemma of the accept; `partition` holds at every statement; `two` and `parse` hold under one premise each on things nobody checks (`SpotFlock.TwoHolds A.h`, and that the commitment's record is a well-formed JSON tree); `units` has nothing behind it and stays a named premise. One finding outside the five: `JoinsAt.stmtX` cannot hold at commitment bytes that don't decode, so no instance of `CouplesAt` exists at every commitment as `joinedCoupling` asks
+
+Clock: `date -u` read 14:21Z. The pen is mine (fresh VM again, re-taken 14:13Z). My mailbox has nothing after 12:54Z.
+
+**In plain words.** "The wired statement" is the `x` that `JoinsAt` fixes: `stmtX : stmtOf c = some x`, the boundary registration's record that the commitment `c` carries, read by the verifier at the connected program (`Live₂.L` is `SpotFlock.Honest.compiled A.h`, by `rfl`). Four of the five fields are about the verifier's parsing of that statement, and three of those four fall out of definitions or of lemmas already on the join. The fifth, `units`, says the accounting's units are the session's replay blocks; it ties the registered circuit to the held copies' design, and nothing on the join or any branch I read touches it.
+
+**The branch** [run]: `cursor/proofs-heldof-couples-f083`, made off the join's tip `ff6ea109e06f`, which already holds ADDRWC's leg (`62c8e57f950`, the merge of `79b8b4ec6e2`), HONEST2's `2012857f64f`, ACCEPTS's, SESSIONCOINS's and ADDRROW2's batch, and my #9441 merge. No commit on it yet.
+
+| field | where it stands, in plain words | what gives it, or part of it [read] | what is missing |
+| --- | --- | --- | --- |
+| `scope` | `A.L.Scope x ∨ prob(sampled verdict) = 0`: the statement parses, its partition and design evaluate and are in scope, or the verdict never accepts | `Verity.prob_play_eq_zero` (no play at `c` with a verdict ⇒ zero); `JoinsAt.wiring` (verdict ⇒ `FormAccepts`), `caseCommits`, `stmtX`, `heldOfAt`; `input_of_accepts` and `stmtAt`'s step (accepted ⇒ `recordMsg i.record = x`); `jsonMsg_of_readBack`; `acceptedTwo_of_formAccepts` + `RunsAs.population_of_accepted` + `twoHolds_of_pop`; `SpotFlock.Honest.scope_of_two` | nothing: a lemma of `JoinsAt` alone |
+| `parse` | `A.L.parse x = some s`: the record reads as JSON (`SpotFlock.decode`) | where some play at `c` is accepted: the `scope` chain; everywhere: `FlockComplete.JsonRT.parse_canon` + `Flock.PartCong.good_of_canon` (the proved reader reads back any well-formed value `Flock.canon` prints) | `Claims.Json.Wf cm.record` where no play at `c` is accepted; `Core.canonicalJson` parses with Lean's `Json.parse`, and no lemma says it builds well-formed trees (`parse_wf` is for `Flock.JsonParse.parse`) |
+| `partition` | `A.L.partition s = some Pt` | definitions: `partitionWired h ω s = (partition h s).map _` and `partition h _ = some (membersPart h.ms)`, so it holds at every `s` | nothing |
+| `two` | `A.L.two s = some dd` | `SpotFlock.TwoHolds A.h` (`∀ s, (two A.h s).isSome`), through `twoConnected` = `twoWired`; `TwoHolds` from `HeldOfAt` and one accepted play anywhere (`twoHolds_of_pop`) | `SpotFlock.TwoHolds A.h` where no play at all is accepted: a fact of the fixed held copies, which only an accepted play ties to `heldOf` |
+| `units` | `UnitsAreReplay V θ F c sha512 A.L.commit s Pt dd readX`: an injection of the vocabulary's units into the replay blocks such that each unit unbound in `readX w` is a replay block not correct at `w` | parts only: ACCEPTS's `PartsSizedAt` and `partsHeldAt_of_accepts` (the held copies' parts are the interior program's strata at the sample); SESSIONOF2's `ReadsBack.partition` with `PartReadsBack.lean` (a session reads its member's partition back alike); my `heldOf` (the held copies come from the play's input and interior); TWOLEG's `acceptedTwo_of_check` gives only the population | the whole bridge from the registered circuit's partition (`V.partsOf θ F`, read from the files `F`) and its openings (`V.Opens θ F c`) to the connected program's replay partition and `ReplayCorrect`, through the instance's own `readX` |
+
+**What is missing, as Lean text** [derived]:
+
+- `parse`, at a commitment no accepted play reaches: `∀ cm, Spot.OneStage.commitmentOf c = .ok cm → Claims.Json.Wf cm.record`. It follows from no accept. It is a statement about Lean's `Json.parse`, true of its code [guess] and provable by unfolding that parser, so it can be stated once by name and discharged later.
+- `two`, where nothing is accepted: `SpotFlock.TwoHolds A.h`. It follows from `HeldOfAt A C` and one `FormAccepts C o` with its input and interior; with no accepted play it is a premise on the held copies.
+- `units`: `UnitsAreReplay` itself, at `s c σ`, `Pt c σ`, `dd c σ` and the instance's `readX c σ`. It would follow from the held copies' replay blocks being the registered circuit's units (a premise on the parameters: the files `F` and the held copies), together with a `readX` that reads a witness's replay values into the circuit's trace so that a correct replay block is a correct unit whose ports open. Nobody holds either half.
+
+**My order of work, cheapest first:**
+1. `partition` (definitions only).
+2. `scope` (a lemma of `JoinsAt`, which every input already carries).
+3. `two` (one lemma `twoHolds_of_formAccepts`, then the field under `TwoHolds A.h`).
+4. `parse` (the `parse_canon` route under the `Wf` premise, and the `readBack` route where a play is accepted).
+5. An instance of `CouplesAt` at the wired statement with `s`, `Pt` and `dd` chosen as what `parse`, `partition` and `two` return, taking `units` and the other fields (`joins`, `extract`, `caps`, `opens`, `collisionResistant`, `delta`) as hypotheses.
+
+I expect **`units`** to be a named premise at the end, with `TwoHolds A.h` and the record's `Wf` as two small premises on the held copies and on Lean's parser.
+
+### STOP RULE
+- Not on my five. None of them forces `CouplesAt`'s own text to change.
+- But `joins` does, by reading: `JoinsAt.stmtX : stmtOf c = some x` is false at every `c` whose bytes don't decode as a commitment. Such bytes exist: `Core.canonicalJson` refuses the empty array, since `Json.parse ""` fails [derived]. `joinedCoupling` and `joinedCouplingOfLaw` take `h : ∀ c σ, CouplesAt …`, so as stated no instance exists.
+  - At such a `c` the form accepts nothing, so `CouplingTargetTwo` itself holds by `scope`'s second disjunct, except its `δ` clause, which `CouplesAt.delta` carries.
+  - The two texts to choose between: today's `(h : ∀ c σ, CouplesAt V k A (x c σ) … )`, or a guarded `(h : ∀ c σ, (∃ x', stmtOf c = some x') → CouplesAt V k A (x c σ) …)` with the undecodable case discharged in `joinedCouplingOfLaw`. The guarded text would still need the `δ` clause at undecodable `c` from somewhere: a `delta` premise outside `CouplesAt`.
+  - `JoinsAt` is not mine, so I bring the texts and write my fields as lemmas that take what they need from `JoinsAt`. They stand whichever text you choose.
+
+### NEEDS
+Your choice between the two texts above, for whoever holds `JoinsAt` and `joinedCoupling`. It does not hold my writing.
+
+### To post
+Nothing.
+
+### Not established
+- Everything in this entry is by reading; nothing is written or built yet.
+- That `Live₂.L` and `SpotFlock.Honest.compiled A.h` are one term by `rfl` [read, from HONEST2's 13:46Z entry and ADDRWC's scratch `rfl`; not tried by me].
+- That Lean's `Json.parse` builds well-formed trees [guess].
+- Whether `units` could be cut into a premise on the parameters plus a lemma about a particular `readX` [guess: yes, but `extract` constrains `readX` too, and `extract` is not one of my five].
+
+### Branches
+- `cursor/proofs-heldof-couples-f083` at `ff6ea109e06` (no commit yet).
+- `cursor/proofs-heldof-join9441-f684` at `b755ba133f9`, now on the join.
