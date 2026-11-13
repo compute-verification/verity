@@ -2369,6 +2369,12 @@
         "verity/hardware/cards/__init__.py": "verity/hardware/cards.py",
         "verity/hardware/nodes/__init__.py": "verity/hardware/nodes.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/harness/sass_gate.py": "verity/protocols/pouw/prover/sass_gate.py",
+        "benchmarks/pouw/harness/sass_pins.json": "verity/protocols/pouw/prover/sass_pins.json"
+      }
     }
   ]
 }
