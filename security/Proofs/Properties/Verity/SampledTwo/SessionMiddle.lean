@@ -298,13 +298,15 @@ def LogOpened (A : Live₂) (C : CaseOf) (Good : Exchange → Prop) (L : CoinMap
       CoinMap.locAt L q rl.frame rl.answers = some (SpotFlock.off A.h t + j)
 
 /-- **Each session's record gives coins of each of its rounds before the last**: on a play the form accepts whose log
-the check read is the device's, the `t`-th of the sessions' records the check read (`sessionRecords`) gives coins of
-the stream and round `slotStream` gives round `j`, for each `j` before the session's last round. -/
+the check read is the device's, each round `j` of template `t`'s session before its last is the link's or a rep's
+(`j ≤ 2 * repsOf (k₀ t)`), and the `t`-th of the sessions' records the check read (`sessionRecords`) gives coins of
+the stream and round `slotStream` gives it. -/
 def RoundsRecorded (A : Live₂) (C : CaseOf) (Good : Exchange → Prop) (tab : ℕ → String) : Prop :=
   ∀ o, FormAccepts C o → Good o → ∀ t j, t < A.h.ms.length → j + 1 < SpotFlock.k₀ A.h t →
-    ∃ recs rc cs, sessionRecords C o = some recs ∧ recs[t]? = some rc ∧
-      Verity.Sampled.recordRound rc (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).1
-        (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).2 = some cs
+    j ≤ 2 * repsOf (SpotFlock.k₀ A.h t) ∧
+      ∃ recs rc cs, sessionRecords C o = some recs ∧ recs[t]? = some rc ∧
+        Verity.Sampled.recordRound rc (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).1
+          (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).2 = some cs
 
 /-- **`LogOpened`, from the records' rounds** (`RoundsRecorded`), at a locator that agrees with the session-round
 locator at the sessions' rounds: the log the check read has a release on the round (`MembersHeld.opened`), and the
@@ -314,7 +316,7 @@ theorem logOpened_of {A : Live₂} {C : CaseOf} {Good : Exchange → Prop} {L : 
     (hL : LocatesSessions A tab (CoinMap.locAt L)) (hsz : HeldSize) (hI : InteriorLogged C Good)
     (hG : RoundsRecorded A C Good tab) : LogOpened A C Good L := by
   intro o hacc hgood t j ht hj
-  obtain ⟨recs, rc, cs, hrecs, hrc, hcs⟩ := hG o hacc hgood t j ht hj
+  obtain ⟨hjR, recs, rc, cs, hrecs, hrc, hcs⟩ := hG o hacc hgood t j ht hj
   obtain ⟨l, hl⟩ := interiorReads C hsz o hacc
   obtain ⟨label, after, ξ, lines, trees, records, hTr, hRd, hMR, hS⟩ :=
     membersAccepted (membersNamed C hsz) o hacc l hl
@@ -327,7 +329,7 @@ theorem logOpened_of {A : Live₂} {C : CaseOf} {Good : Exchange → Prop} {L : 
     | some y => rw [hy] at hrc; exact ⟨y, rfl, Option.some.inj hrc⟩
   obtain ⟨tree, H⟩ := membersHeld_of hTr hRd hMR
   obtain ⟨pre, r, post, rfl, hloc⟩ := H.opened hTr hRd hMR (off := SpotFlock.off A.h) (K := SpotFlock.k₀ A.h)
-    (M := A.h.ms.length) (tab := tab) hx ht (show j < SpotFlock.k₀ A.h t by omega) hcs
+    (M := A.h.ms.length) (tab := tab) hx ht (show j < SpotFlock.k₀ A.h t by omega) hjR hcs
   obtain ⟨q, l', hlog, hq, hF⟩ := hI o hacc hgood _ hl
   obtain ⟨a', y, rest', rfl, ha, hy, -⟩ := forall₂_split_left (frames_of_read hF)
   refine ⟨q ++ a', y, rest', hlog.trans (List.append_assoc q a' (y :: rest')).symm, ?_⟩
@@ -390,9 +392,9 @@ theorem midDigests_of {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Ex
   rw [hR]
   exact mid_digest hs hv h512 hT hm hJ h0 (by omega) ((hS j).symm.trans hmsg)
 
-/-- **`RoundsRecorded`, from `RecordsCover` and `MsgsOfRecords`**: each round before the last is a round the record
-gives (`slot_lt_rounds`), and a record the members' check accepts gives coins of each round it gives
-(`Verity.Sampled.recordRound_isSome`). -/
+/-- **`RoundsRecorded`, from `RecordsCover` and `MsgsOfRecords`**: a session of `2 + 2 · repRounds` rounds has the
+link's round and the two reps' before its last, each is a round the record gives (`slot_lt_rounds`), and a record the
+members' check accepts gives coins of each round it gives (`Verity.Sampled.recordRound_isSome`). -/
 theorem roundsRecorded_of {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Exchange → Prop}
     {tab : ℕ → String} (hsz : HeldSize) (hcov : RecordsCover A C Good) (hmsgs : MsgsOfRecords A C S Good tab) :
     RoundsRecorded A C Good tab := by
@@ -405,6 +407,7 @@ theorem roundsRecorded_of {A : Live₂} {C : CaseOf} {S : SessionReading} {Good 
     omega
   have hlt := slot_lt_rounds hs hv hT hm hJ (j := j) (by omega)
   rw [← hR] at hlt
+  refine ⟨by omega, ?_⟩
   obtain ⟨l, hl⟩ := interiorReads C hsz o hacc
   obtain ⟨label, after, ξ, lines, trees, records, hTr, hRd, hMR, hS⟩ :=
     membersAccepted (membersNamed C hsz) o hacc l hl
