@@ -2,7 +2,6 @@ module
 
 public import Definitions.Pouw.Guarantees.Deadline
 public import Proofs.Pouw.Lemmas.Deadline
-public import Proofs.Pouw.PearlC.DevGap
 public import Proofs.Pouw.Game
 public import Proofs.Pouw.Break
 public import Proofs.Pouw.PearlC.DeviceCapRev1Gap
@@ -20,8 +19,7 @@ the same preprocessing, at a cost within the run's spending between the salt and
 the budget `EndToEnd` (or `GGapSampled`) reads, and its accepted transcripts include every one the verifier accepts by the
 deadline.
 
-`PearlC.SampledDevRev1KByDeadline` is `PearlCSampledByDeadline` at `PearlC.SampledDevRev1K`'s instance. The sm_120
-instances (`Proofs.Pouw.Lemmas.Deadline`) are stated at W1: each is `PearlCSampledByDeadline` at
+The sm_120 instances (`Proofs.Pouw.Lemmas.Deadline`) are stated at W1: each is `PearlCSampledByDeadline` at
 `CM := W1.w1Priced dv salt`, with its sampled g from the old reduction at that cost model (`Proofs.Pouw.PearlC.TTOutW1`).
 
 The honest clock is stated once over `Adversaries`; at each game's `CostModel.adversaries` it unfolds to that game's own
@@ -122,12 +120,3 @@ theorem PearlCSm120Rev1Cap1000ByDeadline_llama31_8b : Pouw.Guarantees.PearlCSm12
         (PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT))
 
 end Pouw.SecurityProofs
-
-namespace Pouw.SecurityProofs.PearlC
-
-theorem SampledDevRev1KByDeadline : Pouw.Guarantees.PearlC.SampledDevRev1KByDeadline :=
-  fun Q R S _ _ _ _ dv salt d sem ρ c Ss ω hK hTT =>
-    Pouw.SecurityProofs.PearlCSampledByDeadline Q R S (Pouw.PearlC.W1.w1Priced dv salt) _ _ _ _ _
-      (Pouw.SecurityProofs.PearlC.SampledDevRev1K dv salt d sem ρ c Ss ω hK hTT)
-
-end Pouw.SecurityProofs.PearlC

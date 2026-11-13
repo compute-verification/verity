@@ -9,7 +9,6 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 public import Definitions.Pouw.Game.Params
 public import Definitions.Pouw.PearlC.Deadline
 public import Definitions.Pouw.PearlC.DeviceKernelWref
-public import Definitions.Pouw.PearlC.DeviceWithin
 public import Definitions.Pouw.PearlC.Tile
 public import Definitions.Pouw.Game.Deadline
 public import Definitions.Pouw.PearlC.Game
@@ -28,12 +27,9 @@ timed run and verifier's rule, and time meets the cost model through one named a
   (`Adversary.BoundedBy`), and the clock.
 * `SpareCapacityAtDeadline`: remote's exhaustion. A declared fleet that can spend `C·(td − ts)` in the window has at most
   `C·(td − ts) − (1 − g)(1 − ε_s)·W` of it to spare for undeclared work, except with the same probability.
-* `PearlCSampledByDeadline`: the same in Pearl-C's game, from `GGapSampled`.
-* `PearlC.SampledDevRev1KByDeadline`: `PearlCSampledByDeadline` at the served form over every device record, from
-  `PearlC.SampledDevRev1K`. It is stated at W1: its cost model is `W1.w1Priced dv salt`, and its hypotheses are the record's
-  `KernelWithin`, TT_OUT rev1 per audit tile at W1 (`TTOutTilePearlCDevRev1W1`) and the honest clock at that cost model.
-  Its instances at the served record's numbers, on the four layouts the sampled g is pinned at, are lemmas
-  (`Proofs.Pouw.Lemmas.Deadline`).
+* `PearlCSampledByDeadline`: the same in Pearl-C's game, from `GGapSampled`, so at every device record from
+  `PearlC.SampledDevRev1K`. Its instances at the served record's numbers, on the four layouts the sampled g is pinned
+  at, are lemmas (`Proofs.Pouw.Lemmas.Deadline`).
 -/
 
 @[expose] public section
@@ -108,25 +104,3 @@ def PearlCSampledByDeadline : Prop :=
         ≤ (1 - εs) ^ t + δ q U.layout.N
 
 end Pouw.Guarantees
-
-namespace Pouw.Guarantees.PearlC
-
-open Pouw.PearlC Pouw.PearlC.Assumptions
-
-/-- **The served form's sampled audit by the deadline, at every device record**: `PearlCSampledByDeadline` at
-`SampledDevRev1K`'s instance. For every W1 setting `dv`, salt bytes `salt`, device record `d`, semantics `sem`, inert-work
-share `ρ`, kernel forming `c` and shapes `Ss`: if the honest kernel's `W_ref` is within `ω` of the credit left after the
-inert-work share on `Ss` (`KernelWithin`), TT_OUT rev1 per audit tile at W1 and the honest clock at
-`W1.w1Priced dv salt` give the sampled audit by the deadline (`SampledByDeadline`) on the domain restricted to `Ss`, at
-`g = 1 − (1 − 1/400)/ω`. -/
-def SampledDevRev1KByDeadline : Prop :=
-  ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : Pouw.PearlC.W1.W1Device)
-    (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (Ss : Pouw.PearlC.Shape → Prop) (ω : ℚ),
-    KernelWithin d ρ c Ss ω → TTOutTilePearlCDevRev1W1 dv salt d sem ρ →
-    ∀ U : Pouw.PearlC.Workload, U.InDomain (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevOn d Ss) →
-    ∀ (A : Pouw.PearlC.Adversary (Pouw.PearlC.W1.w1Priced dv salt)) (run : TimedRun Q R S) (td : ℝ),
-    Pouw.Assumptions.HonestClock ((Pouw.PearlC.W1.w1Priced dv salt).adversaries U) A run td →
-    SampledByDeadline (pearlCProtocolDevRev1K d sem ρ c) (pearlCTilesDevRev1K d sem ρ c) U A run td
-      ((1 - (1 - 1 / 400) / ω : ℚ) : ℝ) δPearlC
-
-end Pouw.Guarantees.PearlC

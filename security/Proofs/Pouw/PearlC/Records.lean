@@ -13,7 +13,7 @@ record (`devH100`, `Prices.h100`), `pearl-c-sm120` v2's (`devSm120v2`), the RTX 
 (`Prices.sm120`, `W1Prices.sm120`), Pearl-C4's issue-bound prices (`Fp4Prices.sm120Issue`), the other W1 settings
 (`W1Device.h100`, `.sm120`, `.fp4Sm120`, the S8 settings `.s8Sm120` and `.s8H100`, and their fragment lists), and the
 TT_OUT conjectures stated at them. No listed statement reads one: the listed forms are stated over every device record
-(`Definitions.Pouw.Guarantees.PearlCDev`, `PearlC.SampledDevRev1KByDeadline`), and these are the numbers the lemmas at
+(`Definitions.Pouw.Guarantees.PearlCDev`, and `PearlCSampledByDeadline` from them), and these are the numbers the lemmas at
 device records (`Proofs.Pouw.Lemmas.PearlCRecords`, `Proofs.Pouw.Lemmas.Deadline`) and their proofs instantiate them at.
 `benchmarks/pouw/tests/test_price_twins_accounting.py` holds the served prices to the RTX PRO 6000's card file.
 Pearl-C4's record on sm_120 (`devFp4Sm120`, `Fp4Prices.sm120`) stays in `Definitions.Pouw.PearlC.DeviceFp4`, since

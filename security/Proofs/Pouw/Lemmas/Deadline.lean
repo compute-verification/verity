@@ -8,8 +8,8 @@ public import Proofs.Pouw.PearlC.Records
 
 `PearlCSampledByDeadline` at v1 under rev1 on sm_120 at the cap 1/1,000 (FP32 at 8.376, the honest cast at 8.72), on the
 four layouts its sampled g is pinned at, each a `def G : Prop` under the guarantees' namespace, proved by the theorem
-`Pouw.SecurityProofs.G` (`Proofs.Pouw.Deadline`) and audited with the proofs: no record pins it. The listed form is the
-same statement over every device record (`Pouw.Guarantees.PearlC.SampledDevRev1KByDeadline`).
+`Pouw.SecurityProofs.G` (`Proofs.Pouw.Deadline`) and audited with the proofs: no record pins it. The listed forms are
+over every device record: `PearlCSampledByDeadline` from `PearlC.SampledDevRev1K`'s `GGapSampled`.
 
 Each is stated at W1: its cost model is `W1.w1Priced (W1Device.sm120Loop sha fetch) salt`, and its hypotheses are TT_OUT
 rev1 per audit tile at 1/1,000 at W1 (`TTOutTilePearlCDevRev1W1`) and the honest clock at that cost model. `sha`,
