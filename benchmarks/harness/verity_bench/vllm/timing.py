@@ -8,7 +8,7 @@ import os
 import resource
 import statistics
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 # A step's host time may carry device work its own forward didn't enqueue; past this share of the decode time the
@@ -46,7 +46,7 @@ def decode_time_per_token(
     return seconds / tokens
 
 
-def inter_token_latencies(returns: list[tuple[float, Mapping[str, int]]]) -> list[float]:
+def inter_token_latencies(returns: Sequence[tuple[float, Mapping[str, int]]]) -> list[float]:
     """One latency per generated token after each request's first: the time from the step that returned the request's
     previous tokens to the step that returned this one, shared evenly by the tokens a step returned at once. ``returns``
     holds, per engine step, the clock reading as it returned and each returned request's tokens generated so far. This
@@ -102,9 +102,10 @@ class HostProbe:
 
     def __init__(self, counters: Callable[[], Mapping[str, float]] | None = None) -> None:
         self._counters = counters
-        self.counted = dict(counters()) if counters is not None else None
+        self.counted: dict[str, float] | None = dict(counters()) if counters is not None else None
         self.load = os.getloadavg()[0]
-        self.gc_s, self._gc_at = 0.0, None
+        self.gc_s = 0.0
+        self._gc_at: float | None = None
         gc.callbacks.append(self._on_gc)
         self.thread = time.thread_time()
         self.usage = resource.getrusage(resource.RUSAGE_SELF)
@@ -122,8 +123,9 @@ class HostProbe:
         if self._on_gc in gc.callbacks:
             gc.callbacks.remove(self._on_gc)
         b = self.usage
-        counted = ({"device": {k: v - self.counted.get(k, 0) for k, v in self._counters().items()}}
-                   if self._counters is not None else {})
+        start = self.counted
+        counted = ({"device": {k: v - start.get(k, 0) for k, v in self._counters().items()}}
+                   if self._counters is not None and start is not None else {})
         return {
             "loadavg_1m": round(self.load, 2),
             "process_cpu_s": round(after.ru_utime + after.ru_stime - b.ru_utime - b.ru_stime, 6),

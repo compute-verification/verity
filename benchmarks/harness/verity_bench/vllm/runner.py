@@ -51,6 +51,11 @@ class BenchEngine(Protocol):
     def close(self) -> None: ...
 
 
+class _Named(Protocol):
+    @property
+    def id(self) -> str: ...
+
+
 class EngineFactory(Protocol):
     def create(self, arm: Arm, preset: Preset, *, resident: bool) -> BenchEngine: ...
 
@@ -296,14 +301,16 @@ def _warm(engine: BenchEngine, point: SweepPoint, warmups: int, max_warmups: int
 
 
 def _agree(walls: list[float | None]) -> bool:
-    if len(walls) != 2 or None in walls:
+    if len(walls) != 2:
         return False
     a, b = walls
+    if a is None or b is None:
+        return False
     return abs(a - b) <= WARMUP_AGREEMENT * min(a, b)
 
 
 def _aggregate(
-    arms: tuple[Arm, ...],
+    arms: tuple[_Named, ...],
     points: tuple[SweepPoint, ...],
     baseline: str,
     samples: Mapping[tuple[str, str], list[dict[str, Any]]],
@@ -414,7 +421,7 @@ def run_benchmark(
         raise ValueError("an arm cannot be its own control: its greedy gate would compare it with itself")
     baseline = "stock-fp8" if any(a.id == "stock-fp8" for a in arms) else "stock" if any(a.id == "stock" for a in arms) else arms[0].id
     schedule: list[dict[str, Any]] = []
-    samples = {(a.id, p.id): [] for a in arms for p in points}
+    samples: dict[tuple[str, str], list[dict[str, Any]]] = {(a.id, p.id): [] for a in arms for p in points}
     versions: dict[str, Mapping[str, Any]] = {}
     engines: dict[str, BenchEngine] = {}
     resident_failure: str | None = None

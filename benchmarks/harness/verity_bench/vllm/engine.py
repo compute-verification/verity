@@ -18,7 +18,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 from verity.protocols.pouw.verifier.salt import epoch_open_root
 from verity_vllm import LLM
@@ -332,7 +332,7 @@ class _VllmEngine:
             got = _callback(self.obj, "spans", self.target, None)
             if got is not None:
                 return got
-        info = {} if self.llm.protocols is None else self.llm.protocols.info()
+        info: Mapping[str, Any] = {} if self.llm.protocols is None else self.llm.protocols.info()
         return info if self.pearl_c is None else {**info, "pearl_c": _pass_totals(self.pearl_c)}
 
     def _run(self, point: SweepPoint, phase: str) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
@@ -341,15 +341,16 @@ class _VllmEngine:
 
         if self.h1 is None:
             return self._serve(point, phase)
+        llm = cast(LLM, self.llm)  # an H1 arm's: a local checkpoint serves no protocol arm
         start = time.perf_counter()
-        self.llm.reinstall(h1_config(self.h1["config"], window_steps(point, self.h1["rows"])))
+        llm.reinstall(h1_config(self.h1["config"], window_steps(point, self.h1["rows"])))
         install_s = time.perf_counter() - start
         run = pouw.h1_run(H1)
         try:
             tokens, out = self._serve(point, phase)
         finally:
             start = time.perf_counter()
-            self.llm.close()
+            llm.close()
             window = {"point": point.id, "phase": phase, **h1_summary(run), "install_s": round(install_s, 3),
                       "close_s": round(time.perf_counter() - start, 3)}
             self.h1["windows"].append(window)
@@ -403,7 +404,7 @@ class _VllmEngine:
         generated = sum(map(len, tokens.values()))
         after = self._spans()
         extras = _callback(self.obj, "extras", self.target, {}) if self.obj is not None else {}
-        metrics = {
+        metrics: dict[str, float | None] = {
             "time_per_output_token_s": wall / generated,
             "time_to_first_token_s": statistics.fmean(ttft),
             "tokens_per_s": generated / wall,
