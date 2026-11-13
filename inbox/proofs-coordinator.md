@@ -134495,3 +134495,90 @@ the Lean per-member form untouched); or B in the form, with A in the per-member 
 registration's root at each value its own registered file reads from another member's port, which is the rule my
 what-if ran, computed from the parameters and the record alone). The what-ifs say only that nothing else refuses; they
 are not a proof that either rule is sound.
+
+## FIRSTACCEPT, Fri 10:05Z: on the tree that carries #9441 an accept needs the circuit and the public file of every member, sampled or not, and parses a circuit once for each member that names it; on Thursday's window that is 102,781 members and at least 6.3 TB of circuit text parsed; your figures for today's form check out
+
+**FIRSTACCEPT: the sizing entry, with the finding first.** Your 09:57Z items. Read only, no run started. Mailbox read through 09:57Z.
+
+### Finding for MEMBERS and soundness, before the switch: every member's circuit
+
+**Yes. On the tree that carries #9441, an accept needs the circuit file and the public file of every member the parameters name, sampled or not.** A member whose circuit is not among the blobs refuses the whole case. vllm is right that the case names all 102,781 members. Today's form, on `main` and on #9594, reads the sampled members' files only.
+
+Tree read: `origin/cursor/proofs-windowat-5e4b` at `e977fbc96f6`, file `verity/protocols/spot/verifier/lean/Spot/OneStageZk.lean`. Every line below is [read] there unless marked.
+
+**Where.**
+- `runMembers` calls `membersFiles slice bs ms.toList` (`:1249`). `ms` is the parameters' members, all of them. The check before it, `sampledHeld` (`:1248`), is about the statements only.
+- `membersFiles` (`:1200-1202`) runs `Member.files` on each member in order. A refusal on any member refuses the run.
+- The docstrings say it: "Every member's files, sampled or not" (`:1198`); "Every member's files are read once, whichever members the sample holds" (`:1243-1244`).
+- The proofs state it: `runMembers_files` (`:1345-1347`) and `membersRun_files` (`:1489-1491`): where the run returns, `∀ m ∈ ms, m.FilesHeld …`.
+
+**Which files of an unsampled member the check asks for by digest.** Two, and the lookup tables.
+1. **Its circuit file**, under the digest the parameters name for the member: `bs.get p.circuit "circuit"`, twice (`tablesHeld`, `:434`, called at `:1160`; and `:1172`).
+2. **Its public file**, under the member's digest: `bs.get p.pub "public file"` (`:1173`).
+3. **The pinned lookup tables**, found among the blobs by their pinned digests (`tablesOf`, `:413-415`).
+- Nothing else. No session, no record, no rep file. Its registered file is in the parameters, not a blob.
+- A digest no blob has refuses: "no blob has the SHA-512 …". [read: `verity/protocols/interface/CoreProtocol/Blobs.lean:39-44`, the same file on that tree and on #9594]
+
+**What it does with them** (`Member.files`, `:1195-1196`; `Member.statement`, `:1182-1183`; `statementOf`, `:1159-1177`).
+- **The circuit's META line:** the tables it looks up must be exactly the pinned tables among the blobs (`tablesHeld`, `:433-437`).
+- **The lengths** of the circuit and the public file, under 2^64 (`fitsWhy`, `:1174`).
+- **One parse of the whole circuit** (`Flock.ProvedScope.circuitOf`, in `StepAt.ofOwn`, `:1145`).
+- **On that parse, with the member's public file:** the scope check (`scopeAt`, `:1115-1117`, at `:1146`), the files' ports and roots (`Flock.PortRoots.checkOf`, `:1147`), and the form the knowledge soundness covers (`Flock.KsScope.filesOf`, `:1148`).
+- **The units a proof block** the circuit parses with, held to the parameters' (`Member.blockHeld`, `:1105-1111`).
+- **The population check on the public file's header:** its strata are the registration's at the member's units, and its scheme, roots, domains and instances are the member's slice of the registration (`Member.population`, `:1096-1100`).
+- All four results must pass (`StepAt.filesHeld`, `:1189-1190`).
+
+**Members may share a circuit file.** The parameters' members must share no unit (`membersOf`, `:812-830`). Nothing stops two members naming one circuit digest, and one blob then serves both. But the parse and the checks run once for each member, not once for each file: `membersFiles` calls `Member.files` member by member and keeps nothing by digest.
+
+**The case's writer on that tree lists them.** `members_v2` adds "the circuit and public files of each member with no session, since the form's check reads every member's files". [read: same tree, `verity/protocols/spot/verifier/one_stage/proofs.py:566-594`, the line `:593`] It adds two paths a member and does not drop a repeated file. `case_members` passes those paths on as the blobs. [read: same tree, `benchmarks/one_stage/a5.py:1348`]
+
+**Thursday's window, as far as vllm's listing lets me say.** [relayed: vllm's note `20261113T0943Z-report-rehearsal3-circuit-sizes`, its run `r20261113-093755-9faa`]
+- **Members:** 102,781. Sampled, with a session: 298.
+- **Public files the check would ask for:** 102,781, of 4,866,143,777 bytes. Today 298 of them are blobs.
+- **Circuit files the check would ask for:** one for each of the 102,781 members, by digest. On disk only 391 members have one: the 298 sampled, and 93 others that share a sampled member's file. There are 298 distinct circuit files, 332,770,759,993 bytes.
+- **Do members share circuit files: yes, some.** Those 93 unsampled members share 93 of the 298 files, 316,373,339,178 bytes of them, the largest included. So the large circuits have more than one member each.
+- **Whether the 298 files are every member's circuit, the listing cannot say.** vllm derives that the compose cache holds one entry a template and the audit drew one member of each. With `V3C_WARM_JOBS` set, serving's script composes every template of the committed window into that cache [read: #9594's head, `benchmarks/one_stage/served_verdicts.sh:367`]; whether Thursday's run set it, I did not read. If the cache is every template, the 298 files serve all 102,781 members. If not, the other members' circuits were never written, and a case has nothing to name for them.
+- **The blobs, if the 298 serve all:** the 298 circuits, 102,781 public files, and the sessions' files: 338.47 GB, where today's form reads 333.80 GB. [derived]
+- **Memory, if each file is held once:** 357 GB held, 449 to 482 GB at the peak, by my ratios. [derived] Almost as today's form.
+- **Work: 102,781 parses, where today's form parses for 298 members.** The circuit text parsed is the sum over members of each member's circuit. Its floor is the 298, the 93 known sharers, and every other member at the smallest circuit: 332.77 + 316.37 + 102,390 × 0.0556 GB = 6.34 TB. [derived] It is more if the large circuits have many members; the listing does not say.
+- **Time:** at 11 to 15 s a GB parsed, that floor is 19 to 26 hours for the files' pass alone, in one process. [guess: the rate is my windows' seconds over about seven passes a member, on #9594's tree; I have not run the carried tree]
+- **As the writer stands, it would not run at all.** It would pass 206,456 blob paths. The main reads every path it is given (`Blobs.lean:96`), so a circuit that n members share would be read n times: at least 6.3 TB in memory. And 206,456 paths do not fit one command line (2 MB here). [derived; `getconf ARG_MAX` run on my VM, not on a node]
+
+**What this touches, for MEMBERS and soundness to rule on.** I change nothing.
+- **The cost rule.** AGENTS.md: a verifier "summarizes once per specialized Definition and multiplies through batches", never a walk of every batch member. The files' pass parses a shared circuit once for each member that names it. Whether `tests/test_verifier_cost.py` lists it, I did not read.
+- **What must be once a member and what could be once a file.** The parse reads the circuit alone. The scope check, the ports and roots, the knowledge soundness form and the population check read the member's public file too. So a parse kept for the members that share a file would cut 102,781 parses to 298. What each check on a kept parse costs, I have not measured.
+- **The streamed run of my 09:41Z entry fits this.** One member at a time, with its circuit loaded once for the members that share it, keeps memory at the largest member's. It does not cut the parses by itself.
+- **The driver's side is mine once you rule:** list each file once, pass the blobs by a file and not by the command line, and link each member to its template's circuit.
+
+### 1. Your arithmetic for today's form: it checks
+
+- **In one process:** 0.07 + 1.054 × 333.80 = 351.9 GB held. Plus 4.2 to 5.7 × 21.93 = 92 to 125 GB. So 444 to 477 GB: "about 445 to 480 GB" is right. [derived]
+- **One member at a time:** 0.07 + 1.054 × 21.93 + (4.2 to 5.7) × 21.93 = 115 to 148 GB: "about 115 to 150 GB" is right. [derived]
+- **Time:** six of my seven windows ran at 84 to 113 s a GB read, and the smallest window at 153. At 84 to 112, 333.80 GB is 7.8 to 10.4 hours: "about 8 to 10 hours" is right. [derived, linear from windows of at most 1.4 GB]
+- **What I would word otherwise:**
+  - **"Floor 352 GB" is a measured level, not a floor.** The floor that needs no measurement is the bytes, 334 GB. 352 GB is what the files took in two windows (1.05 bytes a byte).
+  - **The low end is the likelier one.** 5.7 was at a 0.26 GB circuit. At 0.95 GB it is 4.2, now measured directly (item 2). So I would say "about 445 GB, at most about 480". I have no size past 0.95 GB, and the largest here is 23 times that.
+  - **It fits one class of node only.** 445 to 480 GB is under the 604.7 GiB cap of cpu-7 and cpu-11, and over the 402.9 GiB cap of cpu-8. [run: `research status`, earlier]
+  - **It is today's form.** With #9441 the memory barely moves if files are held once, and the time grows as the finding says.
+  - **No pinned table is staged, and that is consistent:** the check wants the blobs' tables to be exactly each circuit's lookups, so none staged passes only if no circuit looks one up. [read: `tablesHeld`] vllm's listing cannot say what the circuits look up.
+
+### 2. The second window of run `r20261113-092111-cae1`: 4.2 bytes a byte at 0.95 GB, measured
+
+[run: vy-nebius-cpu-11, exit 0, preserved; window K = 8192, 16384; two members, 1,435,085,269 bytes of files, largest circuit 951,726,982]
+
+- Audit: exit 0, accepted, 339.4 s, peak 7,840,008 kB. `refusal`: exit 1, `ALL_PASSED`, 120.8 s, peak 5,458,920 kB by the probe and 5,455,796 kB by `time -v`.
+- **By the rows (2,369 at 50 ms):** 1.54 GB with every file read, at 0.35 s. Files alone until 5.4 s, at 1.54 to 1.62 GB. Peak 5.59 GB at 118.9 s of 119.7 s.
+- **So the files are held at 1.02 to 1.08 bytes a byte** (less the 0.07 GB), as on the six-member window.
+- **The one member's working memory is 3.97 to 4.05 GB: 4.17 to 4.25 bytes per byte of its circuit.** My 09:41Z table had 4.2 by subtraction; this is the same figure read directly.
+- **Between members the level does not fall to the files' level.** It stays 0.5 to 1.2 GB over it here, and 0.15 to 0.4 GB over it on the six-member window. The code keeps little between members [read], so I take the rest for memory the runtime has not given back. [guess]
+- **A correction to 09:41Z, small:** on the six-member window the working memory is 5.3 to 5.6 bytes a byte, where I wrote 5.4 to 5.6. The low end takes the highest files-alone level, 0.88 GB.
+
+**Not established.**
+- That the 298 circuit files are every member's circuit. It rests on vllm's derivation, one cache entry a template.
+- How many members each large circuit has. That sets the time, and the listing does not have it.
+- The time and memory of the carried tree's files' pass. I read it; I ran only #9594's tree.
+- The ratio past a 0.95 GB circuit.
+- What a check on a kept parse costs for one more member.
+- A node's command-line limit.
+
+Branches: none changed since `98ae150c015` on the scratch branch. #9594 untouched at `9049e2c572`. No run is live.
