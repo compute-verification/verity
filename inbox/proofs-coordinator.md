@@ -117773,3 +117773,46 @@ Each fact carries how I know it: [run], [read], [derived], [relayed].
 **Runs out:** `r20261113-032249-91f3` (the certificate, done; its pins step running, about 10 min more); `r20261113-032430-9441` (#9486's three suites on the merged head, on vy-nebius-cpu-1); `r20261113-032649-32ce` (scratch: the two moves with `compose/` already there); `r20261113-032917-8294` (scratch: top's three maps of tonight picked onto `main`, the hand commit of the `verity_config` root, then our two maps and the world's). Each should end by 03:50Z if it holds a slot [derived: the first three took a slot within a second].
 
 Next entry by 04:30Z, sooner when the runs end.
+
+## ACCOUNTS, Fri 13 Nov 03:31Z: #9593 holds `main` with #9375, at `eeef8331792a` (merged without a conflict; the same lock records move). No ready line yet: its records run, the 16 suites and a build of its eleven Lean files are in line for a slot
+
+**To act on:** nothing yet. The ready line follows when the three runs below are read. If you want it on the build and the suites alone, say so: the lean-proofs skill says the records run is not owed before a mark, and the candidate's own records run regenerates the locks. Without your word I wait for the records run, because only it builds everything that imports the Site's files.
+
+**What I did**
+
+- [run] Merged `main` at `1e4d5c993c08` into `cursor/proofs-site-v2-1dc6`. It holds #9375 (`66dce017d8`) and its lock records (`06365af5a3`). No conflict. Pushed head: `eeef8331792a`, which is #9593's head (`gh pr view 9593`, 03:31Z: open, no label).
+- [run] No commit on `main` between my two merges has a `Layout-move:` or `Move:` line, so this is a merge and not a carry with `tools/move/restack.py`. #9575 is still open (03:31Z).
+- [run] `main` moved once more since (`8ef93f01963c`, a registry line, no Lean). I do not merge again for it.
+
+**The merge, read**
+
+| What | Finding | Tag |
+|---|---|---|
+| Files both sides changed | 4: `security/lean-audit.json`, `security/Properties/lean-audit.json`, the interface's root `CoreProtocol.lean`, the interface's README. The root keeps both sides' imports (`CoreProtocol.Period` and the Site's four) | [run] |
+| Main lock against `main`'s, keys sorted | 11 lines differ: `reads` of `Definitions.Core.Site` (2 definitions changed, 1 new). 1137 guarantees | [run] |
+| Properties lock against `main`'s, keys sorted | 279 lines differ: the five `Properties.Site` records (`checks`, `checks_honest`, `checks_nontrivial`, `refusedAt`, `refusedAt_nontrivial`) and `reads` of `CoreProtocol.Site` (19 changed, 36 new), `Definitions.Core.Site` (18, 36) and `Properties.Core.Site` (12, 4). 536 guarantees | [run] |
+| Proofs lock | equal to `main`'s | [run] |
+| Order | Three lists hold `main`'s items in another order (`shape.premises` in the main lock; `meaning` and `roots` in the properties lock): the merge driver keeps the branch's order. No item is added or dropped. As text the two locks differ from `main`'s by 353 and 1307 lines until a records run rewrites them | [run]; that the records run restores `main`'s order is a [guess] |
+| What `main` brought that could break the Site's Lean | Of the 708 Lean files `main` changed since my last merge, four name the Site and each only imports it as before (`security/Properties/Verity/Game.lean`, two roots of `security`, the interface's root). None opens a namespace of mine, and my files name none of the new `Core.Tick`, `TickSpan`, `MonitoringPeriod` | [run] a text search, not a build |
+
+So the lock records that move are the ones #9593's body lists. Nothing new moves.
+
+**Runs, all at `eeef8331792a`**
+
+| Run | What | Node, memory | State at 03:30Z | Expected |
+|---|---|---|---|---|
+| `r20261113-032506-d8fc` | records: `lean_changed.py --records security --update` | vy-nebius-2, 115 GB | waiting, 8 checks ahead (12 at 03:27Z) | about 67 min once it holds a slot [derived: the last records run took 2077 s and 1905 s] |
+| `r20261113-032506-f3bd` | the 16 suites, `--quick` | vy-nebius-2, 32 GB | waiting, 7 ahead | under 30 min in a slot [guess] |
+| `r20261113-032911-eac0` | `lean_changed.py --build` of the eleven Lean files the branch changes | vy-nebius-cpu-12, 24 GB | waiting, 4 ahead; the oldest in that line has waited 33 min | [guess] under 40 min in a slot |
+
+The third run is not a second copy of the first: it builds only my eleven modules and their imports, to say early whether they build on `main` with #9375.
+
+**Then**
+
+1. Read the three. If the records run kept a lock under `lean-audit/record/` that differs from the tree's, commit it and push; the head moves once.
+2. Bring #9593's "Checked" section up to date (run ids, head, counts) with `research queue edit`.
+3. Give you the ready line with the head, the runs and the five texts.
+
+**Not mine:** eight notices of finished tasks (CUT, RUNCOINS, ACCEPTS, GATHER, HISTORY, MAJORITY, SESSIONCOINS, ADDRROW) reached my conversation at 03:21Z. They are your workers'. I acted on none.
+
+**Not established:** that the merged tree builds; the records and the suites at `eeef8331792a`; the whole `check` and the kernel replay, which I have never run on this branch. The two lists: unchanged at `1b478b7fdf27`, waiting on #9268 (open at 03:31Z).
