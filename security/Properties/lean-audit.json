@@ -6947,7 +6947,7 @@
     "reads": []
    },
    "type_hash": "90efc0f384a07f296425b858eeab58b576755ec019e505e27a543b218c5533e9",
-   "unfolded_hash": "b966b16be3f40123776bf8d70a1d13eb46fc9ff818bea8fc3f4495742a4e5d3f"
+   "unfolded_hash": "68d1ac83536d2b937622bf4370ed90b0edb6cbfdbaa0c1469222cbc34baaad79"
   },
   "Properties.Pouw.PearlPlus.acceptMeans_drawn": {
    "owner": "@proofs",
@@ -7174,7 +7174,7 @@
     "reads": []
    },
    "type_hash": "04a994afa72912a80e8367b3a327cd717d628c83ee8ad19f3ec1f9c4a2ff6feb",
-   "unfolded_hash": "c36f71532e6d56c238890b77c9a54db9c4a53ff1d783832036022a7a53c92bba"
+   "unfolded_hash": "ade4d9d6c46cd584c016c47f9adb3324f4ff4a50709eb94ec00984101794c2c3"
   },
   "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest": {
    "owner": "@proofs",
@@ -7200,7 +7200,8 @@
     "      (Properties.Pouw.PearlPlus.acceptAllCheck Properties.Pouw.PearlPlus.emptyRun Properties.Pouw.PearlPlus.noOpening)",
     "      { accept := Bool.false, reason := Option.some Properties.Pouw.PearlPlus.emptyRefusal.reason,",
     "        refused := Properties.Pouw.PearlPlus.emptyRefusal.refused,",
-    "        overCap := Properties.Pouw.PearlPlus.emptyRun.overCap, tie := Properties.Pouw.PearlPlus.emptyRefusal.tie })"
+    "        overInertBound := Properties.Pouw.PearlPlus.emptyRun.overInertBound,",
+    "        tie := Properties.Pouw.PearlPlus.emptyRefusal.tie })"
    ],
    "assumptions": [],
    "premises": {
@@ -7209,7 +7210,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "b25b21e56b09973bff4f05593902302657cf412286f5f37961c0e92fd577e160"
+   "type_hash": "34c6267f139c6dfdf018a121f77a24d0b5e241f4fa219a87dec14b3112e83c1d"
   },
   "Properties.Pouw.PearlPlus.tileAcceptMeans": {
    "owner": "@proofs",
@@ -7222,7 +7223,7 @@
     "reads": []
    },
    "type_hash": "1265aedc4151ebc55099699be6188cabde6f3925129e6028d774eb1198a9630d",
-   "unfolded_hash": "ad0d55120f815377e48fd930f6aa897ee90225386bddfab49e0f67908afeba0c"
+   "unfolded_hash": "0d64622bc2de35d1fa70ea455be5590772be31941c2035fa0d14da21199e659b"
   },
   "Properties.Pouw.PearlPlus.tileAcceptMeans_derived": {
    "owner": "@proofs",
@@ -7278,9 +7279,9 @@
    },
    "type_hash": "f6522f83f590a78455ff5e47b169d9663ce4de4f9fcc77ffd0b90b56535ee51b"
   },
-  "Properties.Pouw.PearlPlus.tileKeepsTheCap": {
+  "Properties.Pouw.PearlPlus.tileKeepsTheInertBound": {
    "owner": "@proofs",
-   "signature": ["Properties.Pouw.PearlPlus.tileKeepsTheCap : Properties.Pouw.PearlPlus.TileKeepsTheCap"],
+   "signature": ["Properties.Pouw.PearlPlus.tileKeepsTheInertBound : Properties.Pouw.PearlPlus.TileKeepsTheInertBound"],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7288,20 +7289,24 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "23077127b35df41a81f887f61bef24cba194bd4dc3c51edf05eeeef7cb548407",
-   "unfolded_hash": "77ba71b4f5d9229c59d4a747ca41378441f4cc1e679a40939bc9a7a408580577"
+   "type_hash": "bbafa896e73d248c8703f2b98390ae19ff08b318dc2bb5dc6925313d26fa1412",
+   "unfolded_hash": "4288569f2547c24a44e9f0af55f0c49dbf18ec060818095f4d7462f36a0e67b6"
   },
-  "Properties.Pouw.PearlPlus.tileKeepsTheCap_honest": {
+  "Properties.Pouw.PearlPlus.tileKeepsTheInertBound_honest": {
    "owner": "@proofs",
    "signature": [
-    "Properties.Pouw.PearlPlus.tileKeepsTheCap_honest :",
+    "Properties.Pouw.PearlPlus.tileKeepsTheInertBound_honest :",
     "  And",
     "    (Eq",
-    "      (PouwCheck.PearlPlus.Rule.checkOpened Properties.Pouw.PearlPlus.capScheme Properties.Pouw.PearlPlus.capRecord",
-    "        (List.cons 0 List.nil) (List.cons 0 List.nil) Properties.Pouw.PearlPlus.capOps)",
+    "      (PouwCheck.PearlPlus.Rule.checkOpened Properties.Pouw.PearlPlus.capScheme",
+    "        Properties.Pouw.PearlPlus.inertBoundRecord (List.cons 0 List.nil) (List.cons 0 List.nil)",
+    "        Properties.Pouw.PearlPlus.inertBoundOps)",
     "      Option.none)",
-    "    (And (Ne (Properties.Pouw.PearlPlus.capRecord.credited (List.cons 0 List.nil) (List.cons 0 List.nil)).fst List.nil)",
-    "      (Ne (Properties.Pouw.PearlPlus.capRecord.credited (List.cons 0 List.nil) (List.cons 0 List.nil)).snd List.nil))"
+    "    (And",
+    "      (Ne (Properties.Pouw.PearlPlus.inertBoundRecord.credited (List.cons 0 List.nil) (List.cons 0 List.nil)).fst",
+    "        List.nil)",
+    "      (Ne (Properties.Pouw.PearlPlus.inertBoundRecord.credited (List.cons 0 List.nil) (List.cons 0 List.nil)).snd",
+    "        List.nil))"
    ],
    "assumptions": [],
    "premises": {
@@ -7310,15 +7315,15 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "0fb3fdd9afb9bea2ecd0801900a52cc996350e8dd5aa15cd02509c611ee5ef31"
+   "type_hash": "9d3d9155ed9feb922d3c951f404463f4c767dd7ab7e22a82f2bd5a4530ee082e"
   },
-  "Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial": {
+  "Properties.Pouw.PearlPlus.tileKeepsTheInertBound_nontrivial": {
    "owner": "@proofs",
    "signature": [
-    "Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial :",
+    "Properties.Pouw.PearlPlus.tileKeepsTheInertBound_nontrivial :",
     "  Not",
-    "    (Properties.Pouw.PearlPlus.TileKeepsTheCap.match_1 (fun x => Prop)",
-    "      (Properties.Pouw.PearlPlus.capRecord.credited (List.cons 0 List.nil) (List.cons 0 List.nil)) fun cr cc =>",
+    "    (Properties.Pouw.PearlPlus.TileKeepsTheInertBound.match_1 (fun x => Prop)",
+    "      (Properties.Pouw.PearlPlus.inertBoundRecord.credited (List.cons 0 List.nil) (List.cons 0 List.nil)) fun cr cc =>",
     "      Ne cr List.nil →",
     "        Ne cc List.nil →",
     "          Exists fun words =>",
@@ -7352,30 +7357,31 @@
     "                      (cr.zip words))",
     "                    (Except.ok elems))",
     "                  (have credit :=",
-    "                    PouwCheck.PearlPlus.creditOf 1 Properties.Pouw.PearlPlus.capRecord.kKept",
-    "                      Properties.Pouw.PearlPlus.capRecord.matmul.n;",
-    "                  have rowDebit :=",
+    "                    PouwCheck.PearlPlus.creditOf 1 Properties.Pouw.PearlPlus.inertBoundRecord.kKept",
+    "                      Properties.Pouw.PearlPlus.inertBoundRecord.matmul.n;",
+    "                  have rowInertWork :=",
     "                    List.map",
     "                      (fun we =>",
-    "                        PouwCheck.PearlPlus.Rule.debitUnits Properties.Pouw.PearlPlus.capRecord.matmul.n cc.length",
-    "                          (List.foldl (fun t w => instHAdd.hAdd t (Array.filter id w.fst).size) 0 we.fst)",
+    "                        PouwCheck.PearlPlus.Rule.inertWorkUnits Properties.Pouw.PearlPlus.inertBoundRecord.matmul.n",
+    "                          cc.length (List.foldl (fun t w => instHAdd.hAdd t (Array.filter id w.fst).size) 0 we.fst)",
     "                          (List.foldl (fun t w => instHAdd.hAdd t w.snd) 0 we.fst) we.snd)",
     "                      (words.zip elems);",
     "                  And",
     "                    (instLENat.le",
-    "                      (instHMul.hMul (List.foldl (fun x1 x2 => instHAdd.hAdd x1 x2) 0 rowDebit)",
-    "                        PouwCheck.PearlPlus.Rule.CAP_DEN)",
-    "                      (instHMul.hMul (instHMul.hMul (instHMul.hMul PouwCheck.PearlPlus.Rule.CAP_NUM credit) cr.length)",
+    "                      (instHMul.hMul (List.foldl (fun x1 x2 => instHAdd.hAdd x1 x2) 0 rowInertWork)",
+    "                        PouwCheck.PearlPlus.Rule.INERT_BOUND_DEN)",
+    "                      (instHMul.hMul",
+    "                        (instHMul.hMul (instHMul.hMul PouwCheck.PearlPlus.Rule.INERT_BOUND_NUM credit) cr.length)",
     "                        cc.length))",
     "                    (∀ (d : Nat),",
-    "                      List.instMembership.mem rowDebit d →",
-    "                        instLENat.le (instHMul.hMul d PouwCheck.PearlPlus.Rule.CAP_DEN)",
+    "                      List.instMembership.mem rowInertWork d →",
+    "                        instLENat.le (instHMul.hMul d PouwCheck.PearlPlus.Rule.INERT_BOUND_DEN)",
     "                          (instHMul.hMul",
-    "                            (instHMul.hMul (instHMul.hMul PouwCheck.PearlPlus.Rule.CAP_NUM credit) cc.length)",
+    "                            (instHMul.hMul (instHMul.hMul PouwCheck.PearlPlus.Rule.INERT_BOUND_NUM credit) cc.length)",
     "                            (ite",
     "                              (Eq",
     "                                (Properties.Pouw.PearlPlus.capScheme.censusKs.contains",
-    "                                  Properties.Pouw.PearlPlus.capRecord.matmul.k)",
+    "                                  Properties.Pouw.PearlPlus.inertBoundRecord.matmul.k)",
     "                                Bool.true)",
     "                              4 1))))))"
    ],
@@ -7386,7 +7392,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "2b6191f28ac6753de639a214d86d4b254eeb6594d2872a6c67a3b015f60bdf9f"
+   "type_hash": "39038ee2b9bcbe1ed4b1537d369485ad930be9df455cddb5507637fc9a8fa136"
   },
   "Properties.Pouw.PearlPlus.yIsTheUnscale": {
    "owner": "@proofs",
@@ -22988,27 +22994,27 @@
    }
   },
   "PouwPearlPlus.Check": {
-   "digest": "80d1d2f5c9fb342459b7d484213cce2f8c7045232b3af94365817fd74979d0f1",
+   "digest": "86adc94cca6d81145b728a0ed215e19bf9e56cdddef9e5a8e0e39b1857931852",
    "definitions": {
-    "PouwCheck.PearlPlus.Input": "ff4cf9cbd33d2c3de090f7073e1b3daedbaa3448ee0d77504f109c7a40d3fe2e",
+    "PouwCheck.PearlPlus.Input": "72a96f5c88f4b48ba6c0ec4e98c86cbfcdc59f61e4651d9b8548793f94c93b9d",
     "PouwCheck.PearlPlus.Input.coins": "067d591381d374afc7ed7804e3af2ff51e6473d72504f73fd64ce1e59c46506b",
     "PouwCheck.PearlPlus.Input.draws": "2d0a4c7aaae5daf34743fc20d0ab417b3e526c15805b6f7e4b85abf1c8ed4615",
     "PouwCheck.PearlPlus.Input.dropped": "680923a886a6f695f080d9c2c8a52726d43c533b5d7099c5f7a7e56f19e4f7cf",
     "PouwCheck.PearlPlus.Input.held": "001ff2ce7efa52a80c7a733cf4b9c335f8bf4fabcd41bd7fcdc349fa6500c7a2",
     "PouwCheck.PearlPlus.Input.manifests": "41f291a6486549e548e7bb3773b99c93fae154574e3c26a55c01aa62cfa33fce",
     "PouwCheck.PearlPlus.Input.ofRecord": "767c82fb25ee6dc774a292f5ee88d348f3b12f216c439fdaa43139e27f33cfb7",
-    "PouwCheck.PearlPlus.Input.overCap": "5ccd68b958cd0c42bfdf05904ba0144595ed7255dbc2b99aecd4b9ddfca399eb",
+    "PouwCheck.PearlPlus.Input.overInertBound": "9929ba62de724596223d9572af5539fd4a7d37070689da2a5c7cd4085719ae04",
     "PouwCheck.PearlPlus.Input.rounds": "202c64d40a80f4b16d3789ad1ec5c8875f1ed11a25d6c4b15a0b2d0c9fea8d5a",
     "PouwCheck.PearlPlus.Input.source": "97a0900382a2f8b70017a2078d61aaaa1f4621664a76d59e476cba350ec03614",
     "PouwCheck.PearlPlus.Input.testInstance": "21652e8be9df13aae9d97cb8e9ff0eb8d85b94ad25bbbb47364dd1eb97a8d000",
     "PouwCheck.PearlPlus.Input.tie": "6c733f2e8f3ee6ca8de9abd2ac1b0c46877851b929821079f10f521edee8f4c3",
     "PouwCheck.PearlPlus.K_MIN": "17d46ad5d5329f65b531b1d561efd6b72ec0585dbe9716d12407df2b06f4a733",
-    "PouwCheck.PearlPlus.OverCap": "950f8ea92a5a3d9ae644e9764b831bba097b93bc114fd5f9a22c7a22ba0e5df9",
-    "PouwCheck.PearlPlus.OverCap.casesOn": "4ecd12a9df91aa2c429b45f785334265846a952f3b218049263afa5c288c5606",
-    "PouwCheck.PearlPlus.OverCap.ctorIdx": "d3b0b4e685a4745a7965400259c60e9494c8be046f834ac456b97e26d2006060",
-    "PouwCheck.PearlPlus.OverCap.rec": "261302cb96123a593a3f79ffc1b4833f98ce7947aff35d56d3a736fff0f3b901",
-    "PouwCheck.PearlPlus.OverCap.reject": "3a74c84ed58c3345cbbce6ee2be009d6cc677784501bc5866bbf63aaccca9658",
-    "PouwCheck.PearlPlus.OverCap.uncredited": "e0e53ca3c7fdb9c3c7cf7974614d90258dcab7dd90dc8a05f7b30a0a37c64112",
+    "PouwCheck.PearlPlus.OverInertBound": "1a6a0fc93f89cb9251e965aee6ee01a7f96df5b3330843d82ed66eba73e4560e",
+    "PouwCheck.PearlPlus.OverInertBound.casesOn": "eda66a0d5c9e91e4b6d136bd65b25869cb293fb338cb551d49ed394bf4177e39",
+    "PouwCheck.PearlPlus.OverInertBound.ctorIdx": "f11f701c0a5e2f1bd95523f231716b04b941642dd88ffe117421ffa5262b93cb",
+    "PouwCheck.PearlPlus.OverInertBound.rec": "1a1dc003179fdff31f295ded9bd81511e8d62d81bd355ca14652579f08b1bc7d",
+    "PouwCheck.PearlPlus.OverInertBound.reject": "c3f3b850d3ab906a4d7c5a32762b8144abbcf103c36b6857363c6bd568834271",
+    "PouwCheck.PearlPlus.OverInertBound.uncredited": "6dd0463a633179b5f95ecf8c55e91f8950f90ecec7fb1be404f79413f4f23f26",
     "PouwCheck.PearlPlus.Plan": "116dd2a4117b32b95689926230f42efa967b78e8b3d6cd22caa303eae32cae09",
     "PouwCheck.PearlPlus.Plan.drawn": "fcd41917c0173c46d698970372da5f3b6b662d760d6a514c2dc7452d569e9d48",
     "PouwCheck.PearlPlus.Plan.passes": "1e62ff0f5f29344e33babd01d4aafd369b1dedea6e15132f82ef1a7a37da5595",
@@ -23017,28 +23023,28 @@
     "PouwCheck.PearlPlus.Plan.source": "c69c0b66d21be79dd21d87f4a4aaf32e17fe005ff60a1bcfebf3bea280c5c62b",
     "PouwCheck.PearlPlus.Plan.tie": "9657b25c657d6e94087e8cc6ae275397fec51e8735a7359cffb07fc78d051ec0",
     "PouwCheck.PearlPlus.Plan.todo": "53b9fb2af0900684742948ad50c4a94333c02e40e74c850d4cf636562731b2f7",
-    "PouwCheck.PearlPlus.RunAnswer": "0e34c169bff9fcb40d7aa3c5509a2cbfe5b53097fec826540634584d85973ca1",
+    "PouwCheck.PearlPlus.RunAnswer": "2bf0b119fe24a377ebf37a9a032e7658fed5f4fb0d9b0bdc31d676388a08c041",
     "PouwCheck.PearlPlus.RunAnswer.accept": "2d174d66e576e1b1e603a397d6a93d8a4dae3a207f76a1452f98cae6239244cb",
-    "PouwCheck.PearlPlus.RunAnswer.overCap": "e4d09967c9639441d1cb3e7e3edcedc4dd380c2ab64a66f8a8269f67898e554a",
+    "PouwCheck.PearlPlus.RunAnswer.overInertBound": "6878fb6095e48228a975bcbe92d6d4bcd0fb27dba94485b5feb3c1fa1e69750c",
     "PouwCheck.PearlPlus.RunAnswer.plan": "0b44f05aed3396c99a1a9b1a8e181a940c4740c836748d7a5dbfa881882b77dd",
     "PouwCheck.PearlPlus.RunAnswer.reason": "e44d816492ad68a42951e8074b10d5f811b9e4f4b4462fdbe83a9474dd8f9300",
     "PouwCheck.PearlPlus.RunAnswer.verdicts": "c368a0d61a86817b18425b2e4744c4f3c9aa61e80a583d504765e95c2e156e04",
     "PouwCheck.PearlPlus.RunAnswer.work": "d55da5b57611dfa61cd53274f027977d9f03a6feea039d868f129ee3ffeaefe6",
     "PouwCheck.PearlPlus.TILE": "b33c17467d24e5f18e56b4722687bdd93f19b484db9b190d9e0feb421f6f2f55",
     "PouwCheck.PearlPlus.TileVerdict": "abc2c4ae64fd74d67f8f9710ab1c41cfcc1acf8e84b3589ad8bfeddf08bcd517",
-    "PouwCheck.PearlPlus.TileVerdict.ok": "16ed63f5e11d46ede7ca2ecf914d1db8525b9345c581d329226c78c03a57731e",
+    "PouwCheck.PearlPlus.TileVerdict.ok": "a2cd9623bb0a331c663458244f348fd8534e53ef657ffe54c61ac2d72c2a9927",
     "PouwCheck.PearlPlus.TileVerdict.outcome": "8ffecb8a1a6ede81b6157916b80d17f68a5c1510b120b6880c159b05d3bcc318",
     "PouwCheck.PearlPlus.TileVerdict.pass": "6b3c620c244f6da9cd7ea2bd47a8196b8e0a45a50cf65848e94a47eb6fd028f2",
-    "PouwCheck.PearlPlus.TileVerdict.reason": "329e0b8bc767b13611f8130f6b8d312b723ba45ac952421c25d8b7e1b2db351b",
+    "PouwCheck.PearlPlus.TileVerdict.reason": "36858286618bd8bf2f2894e5b2cc9e216bec100ccd84684ea5fdd70f6cbd4748",
     "PouwCheck.PearlPlus.TileVerdict.tile": "db1fb11348cbfa451f5ddd3964c76577a8c77659af354645cc19054368014a57",
     "PouwCheck.PearlPlus.afterTie": "fbf9c281fa34879c5463e9e9bb01e7c3e72bfd52e007c694d50b536d3991b6cd",
-    "PouwCheck.PearlPlus.check": "03cadaad28a3c5497657f55d593a1c88211d6e498671cfacb5f4c9e271abd7e3",
-    "PouwCheck.PearlPlus.instBEqOverCap": "4a619ba4bfc845a6dc1ac71b34e03637a6141809633054bb5a4ce9a3ed971024",
-    "PouwCheck.PearlPlus.instBEqOverCap.beq": "ca02ec6c1b0073300ae140354e2311f05a891214865ddab89fff4f55563d8179",
-    "PouwCheck.PearlPlus.overCapDraws": "ce3cb499931d0452f7b36e7f7171b81a6c22668f2af6f078ef3edafb6662d353",
+    "PouwCheck.PearlPlus.check": "46a8cf92bfb1ca071353b3291ae09942d0dbb1d331759d38473f4ede85d21961",
+    "PouwCheck.PearlPlus.instBEqOverInertBound": "e770b199b6ce7006e1ddff68fee40325b933e1ac47ae644477f54faf9d8d24bf",
+    "PouwCheck.PearlPlus.instBEqOverInertBound.beq": "eb843990a0580df54e460b65e4b6efd3f6e06a5b9256b805ac57a57938413296",
+    "PouwCheck.PearlPlus.overInertBoundDraws": "96d208f733a355d0a7e05c696676922c20d43c90c7e890ed9440f34c9aeb1c5e",
     "PouwCheck.PearlPlus.plan": "94d4b6c7010d2e4198da09c4af870ded34969844a5e4ba37c7f985304e516416",
     "PouwCheck.PearlPlus.replay": "8b4e986fa5b82c4fbd0cd2f30020cf79ab0247ba404c5dc61a72dd7271ab8b85",
-    "PouwCheck.PearlPlus.testCredit": "9b2de1bcdfc918762f9ea8b38be15d7795d5401057ca27016d35237d0ccf1292"
+    "PouwCheck.PearlPlus.testCredit": "2d1af10e595f14a3990292df5ac215aecbb4c7fab496866b060626d330d34cb4"
    }
   },
   "PouwPearlPlus.Coins": {
@@ -23067,17 +23073,17 @@
    }
   },
   "PouwPearlPlus.Credit": {
-   "digest": "9544b3bad0a4949093e167d855f2fdd816b8059296fda661296cc2a550542e03",
+   "digest": "8f13ff7dc58d0f9cb78fe3a8133a5aff477e888b8b5777abb58455cfaf855c24",
    "definitions": {
     "PouwCheck.PearlPlus.Credit": "6e02b9fe723eeb5935c92e3b26ad9ba8052ecd4b87697fbc848f214b1b29dfdb",
     "PouwCheck.PearlPlus.Credit.credited": "aa5cfac0a92203b2cf865d6dd1744635681f8b95eb7b5909903228ed20c1f52c",
     "PouwCheck.PearlPlus.Credit.creditedTiles": "c722860be88cfc9432b8511eb142a5f48a0f22565e42e81b1c7095ddebe658b9",
     "PouwCheck.PearlPlus.Credit.epsilon": "88fe0a0ef2ba9663476a65ac80c1f401e6efd652a78b631f2b61f9befe0cbdb9",
     "PouwCheck.PearlPlus.Credit.macs": "a5cf0a86fd035f6dc5b9f31e22178021eb0198ced7de34cb7630cf32c6f8271d",
-    "PouwCheck.PearlPlus.Credit.overCapDraws": "c1633db357a68772bcfad33d3bd249cb910e05b0fdbf4e4ea4f37f59277cd465",
+    "PouwCheck.PearlPlus.Credit.overInertBoundDraws": "14b81a3568a40f40fb0640488eba73489384d170ca6ce452c9b569e52933180b",
     "PouwCheck.PearlPlus.Credit.rho": "e97c571b1522146fdf3777856384b82bd8105bf19e24fdff70df077d1c486330",
     "PouwCheck.PearlPlus.DELTA": "76f0296d8378d22f0db57ea8f8e300a39a2a38caf6d2c764d2e0085f6b787eec",
-    "PouwCheck.PearlPlus.creditAtAssumption": "96194c0497a2669ad636a0003eced25108f51d52b1c743da73a52ab0e89ffb33",
+    "PouwCheck.PearlPlus.creditAtAssumption": "e7ae6221fb9f2e8f45093beecd89707125f2b183111a42b36980343c51f0cfe0",
     "PouwCheck.PearlPlus.epsilon": "cd7e921e198ab2b1a7200594c8b46abd50b94183bf06592af6148cc970ab9b97",
     "PouwCheck.PearlPlus.missMass": "b3bc865bcc100a1ff34d5119132cd1f2d0d833a8c6f84951bbd72283c5c82724"
    }
@@ -23124,7 +23130,7 @@
    }
   },
   "PouwPearlPlus.Protocol": {
-   "digest": "cb1e4cc522efa6a526cc3a3c32c374ac2bfa5b48a75062f445ecbb835b22fbba",
+   "digest": "324ab987149ac626649979fb5e2af80f8bd0d20bc54959978fba0d9e0d01cf96",
    "definitions": {
     "PouwCheck.PearlPlus.Protocol.Commitment": "6262e453055f79f1089169a714d3211302907610edcd3374c241fe638a34c695",
     "PouwCheck.PearlPlus.Protocol.Commitment.bytes": "cebea5da186a1d73d6d90277d17fdb235a70ef141d43302251bd89afb838267e",
@@ -23152,7 +23158,7 @@
     "PouwCheck.PearlPlus.Protocol.commitmentTag": "dc4d4695000847189d5d80f95fbdbacc77da22f2dd06a050c061dd92a2215452",
     "PouwCheck.PearlPlus.Protocol.evidenceKeys": "d0cf3986bde58e0a439f0d0f70faa9c4a9981edca2cfef8c0f8ae41cc16b45b2",
     "PouwCheck.PearlPlus.Protocol.evidenceOf": "d0c7323a93bf8e1d585a5f879c902f3b41228d56a480c7a6a887b8400994ff37",
-    "PouwCheck.PearlPlus.Protocol.inputOf": "eaf3977e9e2c847b6fb09304445c7ad0b3aab09b5346fdc682d9c3bed7f4d480",
+    "PouwCheck.PearlPlus.Protocol.inputOf": "9a04de40517aea61d1dfe70d5e644574caf2ae73f9e823271465b93bfb6dc2ff",
     "PouwCheck.PearlPlus.Protocol.keys?": "1672c79a4eae220be435fa222a989595e0c22b24b85d3517d344f18e12a43f67",
     "PouwCheck.PearlPlus.Protocol.opener": "e055c8a28505bea29c8cc6892dea1c174aed231879c8fed3e4b0573dc490272d",
     "PouwCheck.PearlPlus.Protocol.paramsKeys": "e26777a97cfadd7c46c21b2a79c96169e47866a8d0a970ea0e69f2971e6e7e04",
@@ -23224,14 +23230,14 @@
    }
   },
   "PouwPearlPlus.Rule": {
-   "digest": "04adf3501d37ff1c50fecf17fc430e2c2580edfe2fcdb45a575dbf87379e650a",
+   "digest": "1566bab47f7bc535b0615aea54a842145268ff525975ce136ea7909dece928ef",
    "definitions": {
-    "PouwCheck.PearlPlus.Rule.CAP_DEN": "99dcb14c409cf24823be6faeb0ce2eb4a67dd8441c5a8815c2dcf0cabe8d06f9",
-    "PouwCheck.PearlPlus.Rule.CAP_NUM": "471ae5289d0a8b40f7bccbe5a2dd8b12ad09bbeb273613eded437d14b08ee837",
     "PouwCheck.PearlPlus.Rule.E_FLAT": "2f1eb8a9915bbe5ea95f1508d4b552dac8f41583223074810bd832c32f15274c",
     "PouwCheck.PearlPlus.Rule.FS": "bc6a81d00faeffea2b376b036f7959126818ee504538899197b5c7b870d71ed8",
     "PouwCheck.PearlPlus.Rule.F_MINUS": "8f9c54f25483031972acf7a4de1830ced1abbb43502d19c10c49cfd8dcfd2182",
     "PouwCheck.PearlPlus.Rule.F_PLUS": "b303c634c9a399271d5311393f113e6881de296726ecee9de89124b992d1e625",
+    "PouwCheck.PearlPlus.Rule.INERT_BOUND_DEN": "24d2f30972d700ca5d60e69343c78d8948517370ffeaed556159e799f5040839",
+    "PouwCheck.PearlPlus.Rule.INERT_BOUND_NUM": "55e64e70ca54a96f68ae31222cf30dde030616a2dc9cb04ceeca47448c3b0e27",
     "PouwCheck.PearlPlus.Rule.Kind": "0546beab7b26e3f1c417923c6a981505166650cc9c670e5661eb81cd81088d78",
     "PouwCheck.PearlPlus.Rule.Kind.casesOn": "272162f11470857cf01b573461377219ab36eed73231f9fa0f6e282aae95a7f6",
     "PouwCheck.PearlPlus.Rule.Kind.credited": "ea5db65d8faeb97ec905adb47b56fefc4bfdc7ab006a6012faf0a1c86eecf4d4",
@@ -23243,14 +23249,14 @@
     "PouwCheck.PearlPlus.Rule.Kind.voluntary": "241035dfce25634b649e42a5bd2c0d375deb4b832688351ed08a96e963bfdaef",
     "PouwCheck.PearlPlus.Rule.TOP": "a8ddb845c0dedda83c79eb3b44c3abed341e357cee3ef3b817f048258a231387",
     "PouwCheck.PearlPlus.Rule.UNSCALE_ONE": "a12ff12dd0435f908d1381bc34e27af649784aa13bfdf5c3a78742467ccd3265",
-    "PouwCheck.PearlPlus.Rule.capCheck": "d0ddcad427cb28aeee4bd152c0b5d9d289add663e2af26ee3882ed8bfdd71118",
-    "PouwCheck.PearlPlus.Rule.capFailure": "72991384af213b8359bec04911ac4575a6d2af33be8c9a9b6653a9ddb222ff47",
     "PouwCheck.PearlPlus.Rule.carried": "1e8a391f35ee433644906474fcf02ad3e7c5b27000a5f5b4b61828a500ddcc29",
-    "PouwCheck.PearlPlus.Rule.checkOpened": "39a400545f72450799b75a44dc78c8fc7a90188004aff81df5c4d15b18534aaf",
-    "PouwCheck.PearlPlus.Rule.debitUnits": "ce2d8164d25074b9ea610fd484c82ce3671fe6c1f17377e06296972b6e23e011",
+    "PouwCheck.PearlPlus.Rule.checkOpened": "896c9014a69e25bf863e9855a84467fd7f8944ea2f1c52d2f58e9b61fc654c49",
     "PouwCheck.PearlPlus.Rule.endsAgree": "eb6ba1804dbc26790e9359f5111a7441fe180970a4f65fc3ed87c15ff3603622",
     "PouwCheck.PearlPlus.Rule.flatCode": "a5f7646aead2e0cc3d47b6970ca744809e9d1ab4fc7c560996838f08c5d9b9f7",
     "PouwCheck.PearlPlus.Rule.floorOK": "3a1f35c518cd0e1c999e6af4ba6e96e1c3cc7992db42219d8dab6c02c47d7d3c",
+    "PouwCheck.PearlPlus.Rule.inertBoundCheck": "62ddbfd4817551999fc165a3d9664d98ea66b72f3f362cd6b6d77e71004e014e",
+    "PouwCheck.PearlPlus.Rule.inertBoundFailure": "cb1626bac30d85b5a9721b105993039ba2025260e9f22595af86055e6beaf38c",
+    "PouwCheck.PearlPlus.Rule.inertWorkUnits": "aaa0cdbee6a0bf5277c6f640ec3b8c592ad25bdd56cc91d7c5d83daed0fa8dd0",
     "PouwCheck.PearlPlus.Rule.instBEqKind": "817bfa8edabd544b136e287a62a4563260c8eee2369975287ec18c59c3334d15",
     "PouwCheck.PearlPlus.Rule.instBEqKind.beq": "e6c64c3e0b698446a8822b9e721761ac219b494df80401948e9a7da3a84a8128",
     "PouwCheck.PearlPlus.Rule.isInf": "ed9d1af6815ec3738e65575300ca1aae03e2acfd384a4db566cc9557207ddaae",
@@ -23345,7 +23351,7 @@
    }
   },
   "PouwPearlPlus.Tile": {
-   "digest": "e882d81bdcd89f8f18cf4f0da13e5ced31dcb9e2b15c4b2dd826f90104fad877",
+   "digest": "ff0d5b5cc8a26cbcc264fcac65f50cdb0009d38bdb7f3b61840bcd152bf3cd30",
    "definitions": {
     "PouwCheck.PearlPlus.HM96": "ff87bcce1aae782b5cfd37be1933cf7d6023d5d1bf66f3ffd333a3749f7018b7",
     "PouwCheck.PearlPlus.LeafOpening": "33b856b6c2d4cd1a7eb5dda8abe961e700a5d4af8166b4fd439b01d2a36d1969",
@@ -23358,14 +23364,14 @@
     "PouwCheck.PearlPlus.TileOpening.leaf": "9e344fb3cb28d61d6841f57d32f2b391c8610600f39677209fbda20904a4541e",
     "PouwCheck.PearlPlus.TileOpening.y": "29f1fb171a3c7056964925563cab44449d9c852a404e82690ae3b5ee90a0d6f9",
     "PouwCheck.PearlPlus.TileOutcome": "3f11640d32864c1ad6a88f9fc4b820e49b565c3228ab714a589c274ce67435ab",
-    "PouwCheck.PearlPlus.TileOutcome.casesOn": "474c36d73e667145dbf3c44b8bf4d18ce80edad91ed6186929ac405485ef8844",
+    "PouwCheck.PearlPlus.TileOutcome.casesOn": "dc17f72d296b52181f07302e037be590f373876291b4ee289c613ae4374142e1",
     "PouwCheck.PearlPlus.TileOutcome.ctorIdx": "94c4575eb2c0d1e6505965d1f12970d977da8620a07a2365bc4ef91ccb42d0a3",
     "PouwCheck.PearlPlus.TileOutcome.fail": "c522250bf5a2c1f4c2d503807eb88b41d39ef46170ff4874a77a5c8fab5b7166",
-    "PouwCheck.PearlPlus.TileOutcome.overCap": "d8077cf3de8885cd1fa224fbbadf242078ff1983b36214748a1650131350dbe0",
+    "PouwCheck.PearlPlus.TileOutcome.overInertBound": "afb444f75c0f3978a50036896823ea5d774f26fd696198091eb9229b44001560",
     "PouwCheck.PearlPlus.TileOutcome.pass": "a83af9cced1c64ec0efaac2a01638a752e9924d60f6b34049bdce78610a6cd5b",
-    "PouwCheck.PearlPlus.TileOutcome.rec": "fb5fe207827dd57e6551a44b4d9398e3e21115d6c4a43ea9816e5cf420cad672",
+    "PouwCheck.PearlPlus.TileOutcome.rec": "c6518c0f0468e2ef06080847856084cf53659635403d950de463bfa433d57731",
     "PouwCheck.PearlPlus.Y_ROWS_TAG": "9e5dbb86f5552b7dec35c6836f068382b8d7a6c9d4449f7001e8f95fe9986154",
-    "PouwCheck.PearlPlus.checkTile": "cc8f3c0afdf0bd954195e285e5ec03eefacafc6de64acca68bd328dcdcb3fc7b",
+    "PouwCheck.PearlPlus.checkTile": "a75f3774603b890f03dce0c53a9f3c7d8ebd394a9c7e2aa451b16d73ee5b7f1e",
     "PouwCheck.PearlPlus.openedValue": "80e35f076938711a3f52fb9e7eb7e15f0f9da41717b29a63626167b1af22adad",
     "PouwCheck.PearlPlus.opens": "17edcb6de5386bef971f4ac8f6e7e5a78b0b38a9cf10b69f6da2af9fe7992875",
     "PouwCheck.PearlPlus.words32": "b0a75e9e9bb49c20ebb11518c9a7617e4ba5c9981300196f3173a89f497fe718",
@@ -25045,15 +25051,15 @@
    }
   },
   "Properties.Pouw.PearlPlus": {
-   "digest": "09cb42809d491f6ae593eafc43d3b58b2324db34bcd2ec680f462ab460aef459",
+   "digest": "d31793aec03c22e1ac11b90d0f22206be7a62db09c311f39d0fc9874e5bc5101",
    "definitions": {
-    "Properties.Pouw.PearlPlus.AcceptMeans": "435c497d2018dd7e575720ecf7868e8139bef52b00bd09985b450b0f85ec33c3",
+    "Properties.Pouw.PearlPlus.AcceptMeans": "44114751cde4d8e639eb51878d628a5003325318ae8136b8fda3223e1e19eb74",
     "Properties.Pouw.PearlPlus.LoadedGivesUp": "8b0af154a9cedb29f081c72ae7bc31952aec4d5e94989d25ed0cfd2191a71533",
     "Properties.Pouw.PearlPlus.OpeningBinds": "b2f1dce6218a432639f3f9b7cef28b2721123e5cffeb590de3f792ffbeef5795",
     "Properties.Pouw.PearlPlus.PlanMeans": "fe60c9162376b74768b2150fb69345421bf96990fd0a62857320cdab7cea4d72",
-    "Properties.Pouw.PearlPlus.RefusedBeforeTheCoin": "6ed1ce3dc8d6d5b501c7a1030569614f745b81b8c360374da15ce9eb167b9ec2",
-    "Properties.Pouw.PearlPlus.TileAcceptMeans": "2a58e2b374060347ee4e111b3bfd207404553bdf4e1b1632bf6cfadec635fc29",
-    "Properties.Pouw.PearlPlus.TileKeepsTheCap": "e29d55f2d934f047e775d00bc2065b5939de82b2f4731c8f66665a27854431fd",
+    "Properties.Pouw.PearlPlus.RefusedBeforeTheCoin": "a56b973269f408e0c78a5573a832a7c429933f26e0382a9054a170613ef29509",
+    "Properties.Pouw.PearlPlus.TileAcceptMeans": "c2b2e50b76478cefa112b4c35d66a06bfed752b0edd17f65fd002f6ac0596e39",
+    "Properties.Pouw.PearlPlus.TileKeepsTheInertBound": "be32ca34509160852cf88e18d3b01dc04157d9278094ef64ca59b0147b7c5e82",
     "Properties.Pouw.PearlPlus.YIsTheUnscale": "56d4b9563eca3102b2afb37caf66d36cffd74ce63794c79fa179c5c1c89321a2",
     "Properties.Pouw.PearlPlus.formed": "7bf6769ad60757a9959ee99ac343e7eac97819cfe353436bb8b584ea1e83ca59",
     "Properties.Pouw.PearlPlus.noiseOf": "40bffdfb7ce740d2bd663434c7cd7011d28e211f2aa88fa766f75014dc3d1b15",
@@ -25062,19 +25068,17 @@
    }
   },
   "Properties.Pouw.PearlPlus.Witnesses": {
-   "digest": "6992be9b68cd347ec28ba82179bf90bb1e4ac058058c97ce9c3c626e48e06974",
+   "digest": "ca25c208a2adef341c6010352cdf96f26e6d78c4a9fe137eeaa5a45916ce346a",
    "definitions": {
-    "Properties.Pouw.PearlPlus.acceptAllCheck": "d384012f96f2f9145d1c405925d04f3e6f2bad392599e81010d6f204326909cc",
+    "Properties.Pouw.PearlPlus.acceptAllCheck": "723c3f3c8287be710cba2d111b37078083320cc6b5da422d1493619ad2b5e016",
     "Properties.Pouw.PearlPlus.acceptAllPlan": "fb188deed17e7fc2a2c8021a21e34b88c8c4b05b758316aef3982a3d55d07972",
     "Properties.Pouw.PearlPlus.acceptAllRecord": "1eb3a5f8dad4ed5af1abe5557950418add2bdc388dcf17d1edd4faad0082f324",
     "Properties.Pouw.PearlPlus.acceptAllYOf": "f1c2d3ea035be424901ce8b3dc9b74f3d135907634a3ba104ceee56c82d0342d",
     "Properties.Pouw.PearlPlus.beBytes": "3e285aaf7dca2464aafc1f16b6f233eb67f0f5402f312fd624752f4894a3e9cf",
-    "Properties.Pouw.PearlPlus.capOps": "8a7c41df93af341ee2d973715095c0d9c03f6c835b7976ce300b08bdbf2da5d5",
-    "Properties.Pouw.PearlPlus.capRecord": "cdeb45cc3c838da93edce117033c5bc9c954eb6ef7c1312a96eb42b0b5c28ee1",
     "Properties.Pouw.PearlPlus.capScheme": "a59b094395e157f6f3130fcbbc1aec6222b9530d9628153fb92fa1dc077d680f",
     "Properties.Pouw.PearlPlus.capSide": "4e5646d6386c7d3794012279bf7159f096f095905478f731a2c4b6bf354f6e01",
     "Properties.Pouw.PearlPlus.emptyRefusal": "83e46e08a47dd68d4bc9a7b6cfa392bc6cf0accdac97ef578495698fd0cf2292",
-    "Properties.Pouw.PearlPlus.emptyRun": "8a09cd23c73fff3f3c15d66926aaf05b00be18ce06007c8cef1d8b5fb9ed8dd3",
+    "Properties.Pouw.PearlPlus.emptyRun": "71d0d54ad1cff5c2c62aff6292eae3219b9af251d57b607566262d1a0b120b0d",
     "Properties.Pouw.PearlPlus.hexBytes": "c73d60e76fe40cd7aefaceb89e1917ec08657b83ca628e08edaddd827124ef60",
     "Properties.Pouw.PearlPlus.honestCoinSibling": "dbe72d0f9d1f5a0d5f73d608f3e97c2915465dc1372fa116e6db15d94a392f95",
     "Properties.Pouw.PearlPlus.honestCoins": "bfc1ae99431003c2c0ef8cd672c2673048f84492b8cb95a678ba305f76f98af1",
@@ -25085,11 +25089,13 @@
     "Properties.Pouw.PearlPlus.honestRecordsRoot": "4195f329faed0eb764b85dc4b656fbf139f31528b241f5c03e6aae69c5853e01",
     "Properties.Pouw.PearlPlus.honestRootA": "4dfabe569d5b86745e89292f5ff6650793450ff4a5f0a2e5295dd40114f4e59a",
     "Properties.Pouw.PearlPlus.honestRootB": "c2b5de09e47a572e4bc073471ae2c20def5b7ae74d74a5ee1a7a25362a68e921",
-    "Properties.Pouw.PearlPlus.honestRun": "97aaa9b2a1676fc3fd4fb75e648613a08cbbe60675b8bbedcc55b9d483924244",
+    "Properties.Pouw.PearlPlus.honestRun": "4e74060acc10c23db0019b404a7eac3dbb40c36c81f545622e614ee448c4264e",
     "Properties.Pouw.PearlPlus.honestSalt": "6769e046e07fa8362d3f6ccafb18e8d236bfe848ee2300f0f733365163eedec2",
     "Properties.Pouw.PearlPlus.honestSource": "e1e6e3495595c2a0ffc47248d6f5572c0bbc359e85902b10caeaaef5ace3fa3c",
     "Properties.Pouw.PearlPlus.honestTranscriptRoot": "421df51d263796f5e2320613539ec2069e2fb7e4f461deeb989e9686296cf9e4",
     "Properties.Pouw.PearlPlus.honestWeightsRoot": "671c0b1fb7d23ce74e55cc96994a504c3a14b3401be30e93da6420881a7f5060",
+    "Properties.Pouw.PearlPlus.inertBoundOps": "e1c26290a28c766c32b0c928ae2ab9f3cb6644a3b03b350004023d1c1cc7c028",
+    "Properties.Pouw.PearlPlus.inertBoundRecord": "b6064c564cb24cd760ba83ce941b8d16ac1300389c4f73a25683a6fc5b6c1c19",
     "Properties.Pouw.PearlPlus.noCallsPass": "21c58cfc57e9fdf1c7de270a620945eddb7dfeb55bc6b51430350420f51e3bee",
     "Properties.Pouw.PearlPlus.noOpening": "3c9c1055057858b78747cc934a1fd5c1c2ab4e406c4ddbfe5ea081df8d3754a4",
     "Properties.Pouw.PearlPlus.shortOps": "19e81b657cd20878a93b3d176514c22d272f5340af06bec2385ccc10106f85d2",
@@ -25102,13 +25108,13 @@
     "Properties.Pouw.PearlPlus.testNoise": "251bf7da4b517677e63041e56df55335a91859e45ce6f201b0da03c8c6c9fd98",
     "Properties.Pouw.PearlPlus.testOpener": "04b5706bd27ca21d0a9024132347e24e16133c7dcde2c03bb29b3d83b950ece0",
     "Properties.Pouw.PearlPlus.testOpening": "78bae182da2447fcc58abd1237fb7857addc6275d33303a477c548df43d2cc27",
-    "Properties.Pouw.PearlPlus.testPass": "f4ff50f5ca008fd7974aea7d3a93f96f87f935ea53f187fc5fd4684206ccbefb",
+    "Properties.Pouw.PearlPlus.testPass": "e68cbfc5742a6ac021b8a3c638c4bed272c54184e8e9312b384a4d119560fcdb",
     "Properties.Pouw.PearlPlus.testRecordsRoot": "8806ad69399772d78bdea98e632a7f757451a2126cce7a24439441cf5b65956d",
     "Properties.Pouw.PearlPlus.testRootA": "763bb39bf8b28c60de5ff827ee67bec6f9a392f70e58bcda338e49f984933c74",
     "Properties.Pouw.PearlPlus.testRootB": "74cd43be6debd5ab0caf02f2ef52b0c52e33ebfe8774dc1a3c51d9dca5968a38",
     "Properties.Pouw.PearlPlus.testRowA": "e56939533a77192154d77530f50ac9a62462397fbe5d9ba53fdc4bfd0e81e607",
     "Properties.Pouw.PearlPlus.testRowB": "3923b176659a53e33398a7dced5db4fdaf04669d54590e90abc8659f4c9e5181",
-    "Properties.Pouw.PearlPlus.testRun": "1df597abc11cd07ba8058f421e626974a12fa6003a873324a0ce12fff80b2f1c",
+    "Properties.Pouw.PearlPlus.testRun": "76ae3e99274ba8e36be84c70504a65dcd90226b74fdf7bc4b222188f82070393",
     "Properties.Pouw.PearlPlus.testSalt": "108520d874b6a10285a997f4e7346cfc85220c0f820eaee1b6e5e4aa78345681",
     "Properties.Pouw.PearlPlus.testSeedB": "4e43adb39a6b7fbce66866324a627cadfa66c398080019804873f22446d0d3d0",
     "Properties.Pouw.PearlPlus.testTranscriptRoot": "5538978c4cde9cbe5acabafeebab0a50e199a5bf704ae06be29d1ba73dbe10ff",
