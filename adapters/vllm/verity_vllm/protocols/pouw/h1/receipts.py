@@ -68,11 +68,11 @@ from typing import Any
 
 import numpy as np
 import torch
-from verity.protocols.pouw.prover.circuit import h1tile as HT
-from verity.protocols.pouw.prover.circuit import h1window as HW
-from verity.protocols.pouw.prover.circuit import seeds as SD
-from verity.protocols.pouw.prover.circuit import segment as SG
-from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
+from verity.protocols.accounting.pouw.prover.circuit import segment as SG
+from verity.protocols.accounting.pouw.verifier import credit as CR
 
 M32 = (1 << 32) - 1
 R = C_ = 32

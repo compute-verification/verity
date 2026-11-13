@@ -8,7 +8,7 @@ plain arm (`verity.circuits.ops.s8`), each instance's operand rows and output ro
 Files:
 
 - `program.py`: the statement's Program, N instances of the template (`K`, `ROWS`, `N` from the environment).
-- `run.sh`: builds the CUDA prover (CUDA 13.3, `verity/protocols/flock/prover/pod/cuda-13.3.sh`), stages each `K:N[:R]` of `STATEMENTS`, and
+- `run.sh`: builds the CUDA prover (CUDA 13.3, `verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh`), stages each `K:N[:R]` of `STATEMENTS`, and
   runs a session set per statement on the GPU (one lease, with GPU, DCGM and prover-core sampling, and an optional Nsight
   Systems session) and per statement of `CPU_STATEMENTS` on the CPU; `PLAIN_STATEMENTS` and `CPU_PLAIN_STATEMENTS` run the
   same sets without `--zk`. Each set passes only if the verifier recorded and accepted every session. Its header lists the
