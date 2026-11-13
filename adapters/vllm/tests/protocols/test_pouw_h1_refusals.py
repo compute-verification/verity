@@ -291,8 +291,8 @@ def test_a_model_key_answer_without_a_hex_key_or_its_digests_is_refused():
 
 @pytest.fixture
 def served(tmp_path, monkeypatch):
-    """A window served under the auditor host's challenger (`test_pouw_h1._serve_window`), its session and its draw
-    session ended: the host, the window's commitment, and its record."""
+    """A window served under the auditor device's challenger (`test_pouw_h1._serve_window`), its session and its draw
+    session ended: the harness's host, the window's commitment, and its record."""
     monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
     host = _host(tmp_path, monkeypatch)
     commitment, _run = _serve_window(_remote(transcript_dir=str(tmp_path / "w"), served=SV.Served(window=bytes(64))))
