@@ -1719,11 +1719,21 @@ def read(j: Any) -> Any:
 
 
 def draw_coins(j: Any) -> Any:
-    _request(j, ["after", "coins", "read", "window"])
+    _request(j, ["after", "coins", "key", "label", "main", "read", "window"])
     after, bytes_read = _hex(j["after"]), _hex(j["read"])
     if type(j["window"]) is not str:
         raise D.Reject("window is not a string")
-    return {"reason": T.coins_reason(j["coins"], j["window"], after, bytes_read, lms_verify)}
+    if type(j["label"]) is not str:
+        raise D.Reject("label is not a string")
+    def reason() -> dict:
+        key = Ch.ChallengerKey.from_json(j["key"])
+        why = T.coins_reason(key, j["main"], j["coins"], j["window"], j["label"], after, bytes_read, lms_verify)
+        if why is None:  # one object for both readers: a component's check reads, from the same evidence, the bytes read
+            drawn = T.draw_coins(key, j["window"], j["label"], after, j["coins"], lms_verify)
+            assert drawn[:len(bytes_read)] == bytes_read
+        return {"reason": why}
+
+    return _refusing(reason)
 
 
 def _pairs(log: Sequence[dict]) -> list[str]:
@@ -1735,8 +1745,10 @@ def _pairs(log: Sequence[dict]) -> list[str]:
 
 class Drawn:
     """A sample's coins from family `draw` of a ledger session's challenger, as `ChallengerCoins` opens them after `after`
-    (one read, or a read and a rerun's extension), between other roots: the other family's, `draw` coins opened before
-    the commitment (at least one when `before`), and later ones. `ledger` opens the session for its window. `after` is
+    (one read, or a read and a rerun's extension), the family's only coins, between the other family's roots. A client
+    that commits twice in the family leaves `draw` coins after other roots, which the verifier refuses the family for
+    (`coins.FAMILY_ROOT`): ones opened before the sample's (`early`, one or two when `before`, the segment starting
+    past them) and after it (when `later`). `ledger` opens the session for its window. `after` is
     the commitment (sampled, by default), and `reads` reads the coins (`reads(coins)`, the bytes read), by default in one
     or two reads of random lengths.  The ledger opens the session withheld unless `withheld` is false.  The challenger
     samples and opens `trees` coin trees too (`TreeSession` on `tables`, its link opened after `keys`; sampled, by
@@ -1744,12 +1756,12 @@ class Drawn:
     by default).  Its key is the key of `seed` at one of `params`.  The session's window is `window` (sampled, unless
     given)."""
 
-    def __init__(self, rng: random.Random, before: bool = False, after: bytes | None = None,
+    def __init__(self, rng: random.Random, before: bool = False, after: bytes | None = None, *, later: bool = False,
                  reads: Callable[[Callable[[int], bytes]], bytes] | None = None, withheld: bool = True,
                  trees: int | None = None, tables: list[str] | None = None, keys: list[str] | None = None,
                  params=LEDGER_PARAMS, seed: int = 0, order: str = "honest", window: dict | None = None) -> None:
         s = self.s = _ledger_session(rng, params=params, seed=seed)
-        s.ch = _challenger(rng, [("other", 2), ("draw", 12)])
+        s.ch = _challenger(rng, [("other", 4), ("draw", 12)])
         s.ch.sign_record(s.host, s.pub, lambda m: lms.sign_at(s.k, s.q, m).encode())
         c = s.ch.commitment
         s.lines = [canonical_json_text({"event": "commitment", "root": c.root.hex()})]
@@ -1758,11 +1770,12 @@ class Drawn:
         for _ in range(rng.randint(0, 2)):
             self._step("other", lambda: self.records["other"].record(rng.randbytes(64)))
         draw = self.records["draw"]
-        self.early = [self._step("draw", lambda: draw.record(rng.choice([rng.randbytes(64), bytes(64)])))
-                      for _ in range(rng.randint(1 if before else 0, 2))]
         self.after = rng.randbytes(64) if after is None else after
-        coins = T.ChallengerCoins(self.records["draw"])
+        coins = T.ChallengerCoins(draw)
         self.segment = coins.commit(self.after)
+        self.early = [self._step("draw", lambda: draw.record(rng.choice([rng.randbytes(64), bytes(64)])))
+                      for _ in range(rng.randint(1, 2) if before else 0)]
+        self.segment.start = len(self.early)
         if reads is None:
             self.read = b"".join(self._step("draw", lambda: coins(rng.randint(1, 3 * 64)))
                                  for _ in range(rng.choice([1, 1, 2])))
@@ -1770,7 +1783,9 @@ class Drawn:
             self.read = self._step("draw", lambda: reads(coins))
         cut = len(s.lines)
         for _ in range(rng.randint(0, 2)):
-            self._step("draw", lambda: self.records["draw"].record(rng.randbytes(64)))
+            self._step("other", lambda: self.records["other"].record(rng.randbytes(64)))
+        for _ in range(rng.randint(1, 2) if later else 0):
+            self._step("draw", lambda: draw.record(rng.randbytes(64)))
         self.trees = [TreeSession(rng, s.ch, tables, keys)
                       for _ in range(rng.choice([0, 0, 1, 2]) if trees is None else trees)]
         s.lines = _release_log(rng, s.lines, cut, [t.lines for t in self.trees], order)
@@ -1788,8 +1803,13 @@ class Drawn:
         return [r.hex() for r in self.records["draw"].roots]
 
     def evidence(self, segment: dict) -> dict:
-        return {"key": self.s.key.to_json(), "ledger": self.ledger.lines(), "main": self.main, "pins": self.pins,
-                "segment": segment, "session": self.s.files()}
+        return {"ledger": self.ledger.lines(), "main": self.main, "pins": self.pins, "segment": segment,
+                "session": self.s.files()}
+
+    def held(self) -> dict:
+        """What a verifier of this session's coins holds: the challenger's key, which its evidence doesn't name, and
+        its own copy of main's first-parent history, which the evidence's must be."""
+        return {"key": self.s.key.to_json(), "main": self.main}
 
     def other_window(self, rng: random.Random) -> str:
         """The root of a window the ledger opens for another session, when it has one, else a window it doesn't open."""
@@ -1801,6 +1821,14 @@ class Drawn:
 #: each a mutation of the sample's segment or bytes, which both pieces refuse
 DRAW_MUTATIONS = ["skipped", "wrong-opening", "before", "unread", "read-tampered", "other-after", "segment-form",
                   "opening-form"]
+#: the sample's own segment and bytes in a family that holds another root, before the sample's coins or after them:
+#: refused against the challenger's log for that alone (`coins.FAMILY_ROOT`)
+FAMILY_ROOTS = ["root-before", "root-after"]
+
+
+def _drawn(rng: random.Random, name: str, **kwargs: Any) -> Drawn:
+    """Case `name`'s session: the family's coins the sample's alone, but for the cases that put another root in it."""
+    return Drawn(rng, before=name in ("before", "root-before"), later=name == "root-after", **kwargs)
 
 
 def _mutated(rng: random.Random, d: Drawn, name: str) -> tuple[dict, bytes, bytes]:
@@ -1858,7 +1886,7 @@ def _mutated(rng: random.Random, d: Drawn, name: str) -> tuple[dict, bytes, byte
     return seg, read_, after
 
 
-READ_NAMES = ["honest"] + DRAW_MUTATIONS + ["commitment-form", "request"]
+READ_NAMES = ["honest"] + DRAW_MUTATIONS + FAMILY_ROOTS + ["commitment-form", "request"]
 
 
 def _seeded(rng: random.Random) -> random.Random:
@@ -1868,10 +1896,13 @@ def _seeded(rng: random.Random) -> random.Random:
 
 
 def read_case(rng: random.Random, name: str) -> Any:
+    """A read against the challenger's log (`roots`), or, some honest ones, without it: those hold wherever the family's
+    other coins lie."""
     rng = _seeded(rng)
-    d = Drawn(rng, before=name == "before")
+    logged = name != "honest" or rng.random() < 0.7
+    d = _drawn(rng, name) if logged else Drawn(rng, before=rng.random() < 0.5, later=rng.random() < 0.5)
     seg, read_, after = _mutated(rng, d, name)
-    roots = d.roots() if name != "honest" or rng.random() < 0.7 else None
+    roots = d.roots() if logged else None
     j = {"after": after.hex(), "commitment": d.s.ch.commitment.to_json(), "read": read_.hex(), "roots": roots,
          "segment": seg}
     match name:
@@ -1886,17 +1917,26 @@ def read_case(rng: random.Random, name: str) -> Any:
     return j
 
 
-DRAW_COINS_NAMES = ["honest"] + DRAW_MUTATIONS + ["log-tampered", "other-window", "window-form", "key-form",
-                                                   "off-main", "no-pins", "coins-form", "unwithheld", "request"]
+DRAW_COINS_NAMES = ["honest"] + DRAW_MUTATIONS + FAMILY_ROOTS + [
+    "other-family", "log-tampered", "other-window", "window-form", "key-form", "other-key", "off-main", "other-main",
+    "main-form", "no-pins", "coins-form", "named", "unwithheld", "request"]
 
 
 def draw_coins_case(rng: random.Random, name: str) -> Any:
+    """A sample's coins (`Drawn`) with their evidence, the challenger's key and main's history, which the reader takes
+    from its caller, or mutation `name`: among them a malformed key, another key than the session's (`other-key`),
+    a history without the session's pin on both sides (`off-main`), the caller's history or the evidence's another
+    than the other's (`other-main`) or malformed (`main-form`), and evidence that names a key of its own (`named`),
+    which the reader refuses in form whatever it is."""
     rng = _seeded(rng)
-    d = Drawn(rng, before=name == "before", withheld=name != "unwithheld")
+    d = _drawn(rng, name, withheld=name != "unwithheld")
     seg, read_, after = _mutated(rng, d, name)
     coins = d.evidence(seg)
-    j = {"after": after.hex(), "coins": coins, "read": read_.hex(), "window": d.ledger.window["root"]}
+    j = {"after": after.hex(), "coins": coins, "label": "draw", "read": read_.hex(), "window": d.ledger.window["root"],
+         **d.held()}
     match name:
+        case "other-family":
+            j["label"] = rng.choice(["other", "draw/0", ""])
         case "log-tampered":
             log = coins["session"]["log"]
             coins["session"]["log"] = _set(log, rng.randrange(1, len(log)), **{"x": 1})
@@ -1905,20 +1945,37 @@ def draw_coins_case(rng: random.Random, name: str) -> Any:
         case "window-form":
             j["window"] = rng.choice(["", "AB" * 64, j["window"][:-2]])
         case "key-form":
-            coins["key"] = key_case(rng, rng.choice(KEY_NAMES[1:]))
+            j["key"] = key_case(rng, rng.choice(KEY_NAMES[1:]))
+        case "other-key":
+            j["key"] = {**j["key"], "public": lms.public_key(_key(d.s.w, d.s.h, 1)).hex()}
         case "off-main":
-            coins["main"] = [c for c in coins["main"] if c != d.ledger.opened["pinned"]]
+            j["main"] = coins["main"] = [c for c in d.main if c != d.ledger.opened["pinned"]]
+        case "other-main":
+            other = rng.choice([[*d.main, "0" * 40], d.main[:-1], [*d.main[1:], d.main[0]], []])
+            if rng.random() < 0.5:
+                j["main"] = other
+            else:
+                coins["main"] = other
+        case "main-form":
+            other = rng.choice([None, "\n".join(d.main), {"main": d.main}, 5, [c.upper() for c in d.main], [d.main]])
+            if rng.random() < 0.5:
+                j["main"] = other
+            else:
+                coins["main"] = other
         case "no-pins":
             coins["pins"] = None
         case "coins-form":
             j["coins"] = rng.choice([_body(coins, segment=DROP), {**coins, "window": d.ledger.window}, None,
                                      [coins]])
+        case "named":
+            j["coins"] = {**coins, "key": rng.choice([j["key"], None])}
         case "request":
             if rng.random() < 0.5:
                 del j[rng.choice(sorted(j))]
             else:
-                k = rng.choice(["after", "read", "window"])
-                j[k] = rng.choice(["AB", "0", 5]) if k != "window" else rng.choice([5, None, {"root": j["window"]}])
+                k = rng.choice(["after", "label", "read", "window"])
+                j[k] = rng.choice(["AB", "0", 5]) if k in ("after", "read") else \
+                    rng.choice([5, None, {"root": j["window"]}])
     return j
 
 
@@ -1941,7 +1998,7 @@ class Salted(Drawn):
     `T.SEED_SALT_FAMILY`, opened after the window's open root, between other families' roots; the ledger opens the
     session for that window. As a server picking its salt would, `early` opens a coin of the family after another root
     first and then the salt's after the window's root, and `twice` a second coin after the window's root (`second`).
-    `_step` and `other_window` are `Drawn`'s, and the evidence carries no key (`seed_salt_of`'s, `draw_coins`')."""
+    `_step`, `other_window` and the evidence are `Drawn`'s (`seed_salt_of`'s, `draw_coins`')."""
 
     def __init__(self, rng: random.Random, early: bool = False, twice: bool = False, withheld: bool = True) -> None:
         s = self.s = _ledger_session(rng)
@@ -1956,8 +2013,8 @@ class Salted(Drawn):
         salt = self.records[T.SEED_SALT_FAMILY]
         coins = T.ChallengerCoins(salt)
         if early:
+            coins.commit(root).start = 1
             self._step(T.SEED_SALT_FAMILY, lambda: salt.record(rng.randbytes(64)))
-            coins.commit(root)
             self.salt = self._step(T.SEED_SALT_FAMILY, lambda: coins(Ch.COIN_BYTES))
         else:
             self.salt = self._step(T.SEED_SALT_FAMILY, lambda: T.draw_seed_salt(coins, self.window["root"]))
@@ -1971,10 +2028,6 @@ class Salted(Drawn):
     def _others(self, rng: random.Random) -> None:
         for label in rng.choices(["other", "draw"], k=rng.randint(0, 2)):
             self._step(label, functools.partial(self.records[label].record, rng.randbytes(64)))
-
-    def evidence(self, segment: dict) -> dict:
-        return {k: v for k, v in super().evidence(segment).items() if k != "key"}
-
 
 SEED_SALT_NAMES = ["honest", "twice", "both", "early", "none", "forged", "other-family", "other-window", "window-form",
                    "key-form", "unwithheld", "coins-form", "log-tampered", "request"]
@@ -2036,14 +2089,14 @@ WITHIN_NAMES = ["honest", "log", "hellos", "ledger", "pins", "openings", "path",
 
 
 def within_case(rng: random.Random, name: str) -> Any:
-    """A sample's coin evidence (`Drawn`, with or without its key) and limits each at or past what it holds: at null,
+    """A sample's coin evidence (`Drawn`, with or without a key of its own) and limits each at or past what it holds: at null,
     v2's (`LIMITS`), sometimes with a list replaced by what isn't one or the evidence by what isn't an object, either
     holding none; then one size one past its limit, or a malformed request."""
     rng = _seeded(rng)
     d = Drawn(rng)
     coins = d.evidence(d.segment.to_json())
     if rng.random() < 0.5:
-        del coins["key"]
+        coins["key"] = d.s.key.to_json()
     session, openings = coins["session"], coins["segment"]["openings"]
     if name == "hellos" and not session["hellos"]:
         session["hellos"] = [rng.choice(HELLOS)]
@@ -2615,6 +2668,7 @@ def test_a_challenger_piece_agrees(pieces, port, make, names, examples):
             clean = kind == "output" and '"refused"' not in text and '"reason":"' not in text
             outcomes[name, clean] += 1
             assert clean == (name == "honest"), (port.fn, name, seed, kind, text)
+            assert name not in FAMILY_ROOTS or json.loads(text) == {"reason": T.FAMILY_ROOT}, (port.fn, name, seed, text)
             assert name != "link-tables" or f": {Ch.LINK_TABLES}" in text, (port.fn, seed, text)
             assert name != "link-root-len" or f": {Ch.LINK_ROOT_LEN}" in text, (port.fn, seed, text)
     print(f"{port.fn}: {stats}; swept {sum(outcomes.values())}")
