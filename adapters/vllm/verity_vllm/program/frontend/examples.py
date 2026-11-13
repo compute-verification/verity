@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import numpy as np
 import torch
-
-from verity.circuits.defs import CompositeDefinition, bind as ir_bind
+from verity.circuits.defs import CompositeDefinition
+from verity.circuits.defs import bind as ir_bind
 from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.registry import b1
 from verity.definitions.registry.prims import BF16, F32, I32
-from verity.circuits.types import Array, Tuple, Value
+
 from verity_vllm.program.frontend.schemas import Arr, Tup
 from verity_vllm.program.frontend.torch_frontend import batch, function, ops, scan
 

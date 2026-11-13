@@ -3,15 +3,15 @@ read: where a member's time goes that is neither proving nor checking, on an aud
 session behind the ZK server or not.
 
     python benchmarks/one_stage/member_seconds.py wrap DIR PROVER VERIFIER LOOP
-        # a stamping wrapper of each binary under DIR (`PROGRAMS`: the prover, Lean's verifier and the ZK server's Lean
-        # loop), their three paths printed: give the audit these
+        # a stamping wrapper of each binary under DIR, named by its role (`PROGRAMS`: the prover, Lean's verifier and
+        # the ZK server's Lean loop), their three paths printed: give the audit these
     python benchmarks/one_stage/member_seconds.py measure ROOT --stamped DIR [--reps 3] [--no-alone]
         # every audit under ROOT (a directory holding session-m<k>/): <audit>/member-seconds.json and a MEMBER-SECONDS line;
         # run it before the audit's logs are copied, which loses their modification times
 
 `a5_tp.sh` does both under ``A5_MEMBER_SECONDS=1``.
 
-* **Stamps** (`wrap`): each wrapper appends its start (``NAME PID PPID EPOCH ARGV``) to DIR/stamps.txt and execs the
+* **Stamps** (`wrap`): each wrapper appends its start (``ROLE PID PPID EPOCH ARGV``) to DIR/stamps.txt and execs the
   binary, so a process keeps its pid and its signals. A process's end is its log's modification time, which the audit
   writes when the process exits (`a0.run`).
 * **The session** (`session`), per member with a process pair. Before the prover's clock: the verifier's process ahead of
@@ -64,8 +64,9 @@ from collections.abc import Callable
 from decimal import Decimal
 from pathlib import Path
 
-#: the audit's three programs: the prover, Lean's verifier and the ZK server's Lean loop
-PROGRAMS = PROVER, VERIFIER, LOOP = ("flock-circuit", "flock-verify", "flock-firewall")
+#: the audit's three programs by role, which names each one's wrapper and its stamps, whatever its binary is called:
+#: the prover, Lean's verifier and the ZK server's Lean loop
+PROGRAMS = PROVER, VERIFIER, LOOP = ("prover", "verifier", "loop")
 #: the verifier's command that checks a session's sample, and the names its `verify` gives its setup's line
 SAMPLE_CHECK, SETUP = "draw-test", ("setup (drawn)", "setup")
 STAMPS, REAL = "stamps.txt", "real.json"

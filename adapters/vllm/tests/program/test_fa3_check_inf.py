@@ -7,17 +7,16 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from tests.program import test_dead_free as TD
-
-from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.defs import bind
+from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.refs import runs
-from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.registry import b1, hopper
+from verity.definitions.registry import attention_vocab, b1, hopper
 from verity.definitions.registry import fa3_check_inf as F3
-from verity.definitions.registry import attention_vocab
+
+from tests.program import test_dead_free as TD
 from verity_vllm.program.frontend import targets as TG
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 NEG_INF, NAN = 0xFF800000, 0x7FFFFFFF
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
@@ -66,9 +65,9 @@ def test_on_finite_rows_every_construction_is_v2():
     rng = np.random.default_rng(3)
     D, BN = 16, 16
     q, k, v = _bf16(rng, D).tolist(), _bf16(rng, BN * D).tolist(), _bf16(rng, BN * D).tolist()
-    m, l, o = 0x3F000000, [0x3F800000] * 4, _bf16(rng, D).astype(np.uint32).tolist()
-    v2 = evaluate(bind(b1.AttnBlockV2, D=D, NVIS=BN, FIRST=False, BN=BN, DOT=hopper.HopperBF16WgmmaDot16), q, k, v, m, l, o)
-    assert evaluate(_block(True), q, k, v, m, l, o) == evaluate(_block(False), q, k, v, m, l, o) == v2
+    m, ell, o = 0x3F000000, [0x3F800000] * 4, _bf16(rng, D).astype(np.uint32).tolist()
+    v2 = evaluate(bind(b1.AttnBlockV2, D=D, NVIS=BN, FIRST=False, BN=BN, DOT=hopper.HopperBF16WgmmaDot16), q, k, v, m, ell, o)
+    assert evaluate(_block(True), q, k, v, m, ell, o) == evaluate(_block(False), q, k, v, m, ell, o) == v2
 
 
 def test_the_first_block_must_run_check_inf():
@@ -133,7 +132,7 @@ def test_the_partition_rule_commits_the_running_max_where_the_block_is_unguarded
     for mf, guards in ((2, 0), (0, 4)):
         r = W.unit_rule(W.specialization("Attention_v4", dict(statics, MASKED_FROM=mf)))
         assert r["violations"] == [] and r["max_out_bits"] <= 32
-        heads = {}
+        heads: dict[str, int] = {}
         for i in r["committed_interior"]:
             heads[i["head"]] = heads.get(i["head"], 0) + i["words"]
         assert heads.get("GuardNegInfZero_v1", 0) == guards and heads["F32MulFtz_v1"] == 6

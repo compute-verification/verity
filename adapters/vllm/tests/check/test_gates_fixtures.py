@@ -7,11 +7,12 @@ import itertools
 import json
 import shutil
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from verity_vllm.pipeline import report as CARD
 from verity_vllm.check import gates as G
+from verity_vllm.pipeline import report as CARD
 
 RID = "req-0"
 NL = 28
@@ -35,10 +36,10 @@ def passing_artifacts() -> dict[str, dict]:
                      "count_mismatches": 0, "count_mismatch_kernels": [], "count_exempt": {}},
           "steps_aligned": True, "census_steps": MAX_TOKENS, "log_steps": MAX_TOKENS, "residue_zero": True,
           "kernels": [{"kernel": "matmul_kernel_persistent"}, {"kernel": "rms_norm_kernel"}], "steps": []}
-    res = {"totals": {"steps": MAX_TOKENS, "unsupported": 0, "errors": 0, "computes": 1000, "compute_rows": 1200},
-           "primary_report": {"by_pattern": {"Gemm": 500, "Attention": 100}, "unsupported_ops": {}},
-           "by_spec": {"Gemm_v1{K=1536,N=1536}": 200, "Attention_v3{T=33,NH=12,KVH=2,D=128,BN=64}": 28},
-           "roots": {"classes": {"weight": 300, "ignored": 100, "prompt_token": 32}, "unknown": []}, "header_mismatches": [], "unsupported_examples": []}
+    res: dict[str, Any] = {"totals": {"steps": MAX_TOKENS, "unsupported": 0, "errors": 0, "computes": 1000, "compute_rows": 1200},
+                           "primary_report": {"by_pattern": {"Gemm": 500, "Attention": 100}, "unsupported_ops": {}},
+                           "by_spec": {"Gemm_v1{K=1536,N=1536}": 200, "Attention_v3{T=33,NH=12,KVH=2,D=128,BN=64}": 28},
+                           "roots": {"classes": {"weight": 300, "ignored": 100, "prompt_token": 32}, "unknown": []}, "header_mismatches": [], "unsupported_examples": []}
     hist_decode = {"Gemm_v1{K=1536,N=1536}": 28, "Attention_v3{T=33,NH=12,KVH=2,D=128,BN=64}": 28, "TokenSelect_v1{V=151936}": 1}
     per_step = [{"step": 0, "phase": "prefill", "n_instances": 5000, "spec_histogram": {"Gemm_v1{K=1536,N=1536}": 28}}]
     for s in range(1, MAX_TOKENS):
@@ -97,7 +98,7 @@ def write_run(tmp: Path, arts: dict[str, dict]) -> Path:
 
 def gate(tmp: Path, arts: dict, gid: str) -> G.GateResult:
     write_run(tmp, arts)
-    return getattr(G, f"gate_{gid}")(G.RunArtifacts(tmp))
+    return G._GATE_FNS[gid](G.RunArtifacts(tmp))
 
 
 def by_id(results):
@@ -271,7 +272,7 @@ def test_G1_malformed_is_error(tmp_path):
     assert r.status == "error" and "totals" in r.reason
     write_run(tmp_path, arts)
     (tmp_path / "nonint/noninterference.json").write_text("{not json")
-    assert G.gate_G1(G.RunArtifacts(tmp_path)).status == "error"
+    assert G.gate_observation(G.RunArtifacts(tmp_path)).status == "error"
 
 
 # --- G2 --------------------------------------------------------------------------------------------------
@@ -698,7 +699,16 @@ def test_G8_malformed_is_error_not_skipped(tmp_path):
     assert r.status == "error" and "width" in r.reason
     write_run(tmp_path, arts)
     (tmp_path / "query_use.json").write_text("{not json")
-    assert G.gate_G8(G.RunArtifacts(tmp_path)).status == "error"
+    assert G.gate_vu_partition(G.RunArtifacts(tmp_path)).status == "error"
+
+
+def test_reference_integrity_names_error_classes_it_cannot_sum():
+    counts = {"errors": 0, "unresolved": 0, "unsupported": 0}
+    status, problems, detail = G.fold_integrity({**counts, "error_classes": {"TokenWiring": "one"}})
+    assert (status, problems, detail["unverified"]) == ("unverified", [], ["fold_summary.error_classes has non-integer counts"])
+    status, problems, detail = G.fold_integrity({**counts, "error_classes": {"TokenWiring": 1}})
+    assert (status, problems, detail["unverified"]) == ("unverified", [], ["fold_summary.error_classes sums to 1, errors = 0"])
+    assert G.fold_integrity({**counts, "error_classes": {"TokenWiring": 0}})[0] == "pass"
 
 
 def test_G8_never_changes_G1_G7_or_their_frozen_set():
