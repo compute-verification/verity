@@ -49,13 +49,18 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
      coin's first bytes and the second stage's as its coins' in order, so bytes past a coin's are none of theirs;
   4. the stream's run of record over both stages (`Run.run` of `inputOf`): the boundary audit over the replay
      sample at the boundary's session roots, and the interior audit over the second sample with the second-stage
-     statement check, at the rest; the evidence's first-stage bytes are exactly the ones the run's first stage read
+     statement check, at the rest; it reads each registration's record as the verifier's own parser reads the
+     record's canonical text, which must print back to that text (`readBack`, `RECORD_READ`);
+     the evidence's first-stage bytes are exactly the ones the run's first stage read
      (`sourceRead`, `SOURCE_READ`), since the run holds only those to the challenger's coins; and on two windows the
      first session's log shows no coin of the second stage's family after the interior's digest (`interiorUnshown`,
      `INTERIOR_SHOWN`); and on two windows the stages' sessions are in order on one ledger (`stagesOrdered`): the
      first stage's copy of the auditor's ledger is a prefix of the second stage's (`LEDGER_PREFIX`), and on the
      second's, read under the parameters' challenger key, the first stage's session's `end` line has a lower `seq`
-     than the second stage's session's `reserve` line (`STAGES_ORDER`);
+     than the second stage's session's `reserve` line (`STAGES_ORDER`); and on two windows no line of the first
+     session's log is a coin tree's (`firstTreeless`, `FIRST_TREE`): the first stage's session only draws its
+     sample, so every coin tree of the play is on the second stage's session, where the interior audit reads them
+     in order from its log's first;
   5. the interior audit's verdict at its coins under the second stage's law (`secondCheck`), which gives the public
      output and the integrity profile;
   6. last, the switch (`finish`): the run must accept, and the form is refused while `FORM` is off.
@@ -291,8 +296,24 @@ def inputOf (p : Params) (c : OneStage.Commitment) (ξ ξ₂ : ByteArray) (e : E
         served := Lean.toJson b.served, sessionRoots := iRoots, statements := some e.stmts,
         circuits := p.circuits } }
 
+def RECORD_READ : String :=
+  "a registration's record is not the one the verifier's parser reads from its canonical text: the run of record " ++
+    "reads each record as that parser reads it"
+
+/-- **A registration's record as the verifier's own parser reads it** (check, 4): the record's canonical text
+(`Flock.canon`) as `Flock.JsonParse.parse` reads it, which must print back to that text (`RECORD_READ`). The run of
+record reads this value, so an accepted audit's records are values of a parser the kernel unfolds, each with the
+canonical text it was read from. `Flock.JsonParse.parse` returns the value `Lean.Json.parse` does, so it is the
+record the form parsed. -/
+def readBack (record : Json) : V Json := do
+  let s ← Flock.canon record
+  let j ← Flock.JsonParse.parse s
+  let s' ← Flock.canon j
+  if s' == s then pure j else throw RECORD_READ
+
 /-- Check steps 1 to 3: the interior audit's commitment and the bytes its sample read, its sessions' run, every
-session accepting, and the run of record's input over the stamped verdicts. -/
+session accepting, and the run of record's input over the stamped verdicts, each registration's record as the
+verifier's parser reads it (`readBack`). -/
 def inputAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (OneStage.Commitment × ByteArray × OneStageZk.Run × Spot.Run.Input) := do
   let c₂ ← OneStage.commitmentOf (← Flock.canon e.record).toUTF8
@@ -301,7 +322,9 @@ def inputAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidenc
   if !r.all then throw "proofs: a session's verifier did not accept"
   let vs ← stamped p e bs r.out
   let .str received₂ := getD e.interior.base.receipt "received" | throw "the interior's receipt names no place"
-  pure (c₂, ξ₂, r, inputOf p c ξ ξ₂ e received₂ vs)
+  let j₁ ← readBack c.record
+  let j₂ ← readBack e.record
+  pure (c₂, ξ₂, r, inputOf p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs)
 
 def SOURCE_READ : String :=
   "the evidence's first-stage bytes run past what the first stage read: the run holds only the bytes it read to the " ++
@@ -392,6 +415,33 @@ def stagesOrdered (p : Params) (e : Evidence) : V Unit :=
       | none => .ok ()
   | _, _, _ => .ok ()
 
+def FIRST_TREE : String :=
+  "on two windows the first session's log holds a coin tree's line: the first stage's session only draws its " ++
+    "sample, and the play's coin trees are the second stage's session's"
+
+/-- Whether the release log lines `ls` hold a coin tree's line (`Challenger.treeLine`). -/
+def treeShown (ls : List String) : Bool := ls.any Challenger.treeLine
+
+/-- The lines of the first stage's session's release log, as its coin evidence carries them. -/
+def firstLines (e : Evidence) : V (List String) := do
+  let .arr ls := getD (getD e.coins "session") "log" | throw "the session's log is not a list of lines"
+  ls.toList.mapM fun | .str l => pure l | _ => throw "a line of the session's log is not a string"
+
+/-- **On two windows, the first session's log holds no coin tree's line** (check, 4): where the interior audit's
+window is not the boundary registration's, no line of the first stage's session's release log (`firstLines`) is a
+coin tree's, one the challenger wrote when it sampled a tree or opened a round of one (`FIRST_TREE`). The interior
+audit reads its sessions' coin trees in order from its own session's log's first, and the first stage's coin check
+drops such lines unread (`Challenger.releasedRootsOf`), so nothing else refuses a first session that sampled one. A
+first stage only draws its sample, so no honest play has such a line. On one window both stages read one session,
+whose log holds the second stage's trees, and this adds nothing. -/
+def firstTreeless (p : Params) (e : Evidence) : V Unit :=
+  match p.boundary.verifier.windowRoot with
+  | some w =>
+    if some w == p.audit.base.verifier.windowRoot then .ok () else do
+      let ls ← firstLines e
+      if treeShown ls then .error FIRST_TREE else .ok ()
+  | none => .ok ()
+
 /-- **The second stage's law** (check, 5), computed and never read: `Select.secondLaw` of the first stage's sample, the
 proved units of the draw the run of record `run` decided (its `draw`), over the cells the replay block's program has
 under the interior's query (`Select.replayCells`) at the rule's counts (`Select.Counts.over`), as the run of record's
@@ -449,7 +499,8 @@ def secondCheck (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage.C
 
 /-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output, its second-stage
 statement check at the switch `form`, neither stage's bytes past one coin's, its first stage having read every byte of
-`ξ`, the first session releasing none of the second stage's coins, the stages' sessions in order on one ledger. -/
+`ξ`, the first session releasing none of the second stage's coins, the stages' sessions in order on one ledger, the
+first session's log holding no coin tree's line. -/
 def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (Core.Outcome OneStage.Public Core.Integrity × Json) := do
   let (c₂, ξ₂, r, i) ← inputAt p c ξ e bs
@@ -458,6 +509,7 @@ def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray
   sourceRead ξ run
   interiorUnshown p e
   stagesOrdered p e
+  firstTreeless p e
   let law ← secondLawOf p run
   pure (secondCheck p.audit.base.verifier p.audit.base.delta c₂ law ξ₂ { e.interior.base with verdicts := r.out }, run)
 
@@ -575,6 +627,17 @@ def protocol : Core.BlobProtocol where
   | .ok _ => false
 #guard match stagesFit ByteArray.empty (ByteArray.mk (Array.replicate (STAGE_BYTES + 1) 0)) with
   | .error why => why == STAGE_PAST "second"
+  | .ok _ => false
+#guard treeShown ["{\"event\":\"root\"}", "{\"event\":\"coin-tree\"}"]
+#guard treeShown ["{\"event\":\"tree-open\"}"]
+#guard !treeShown ["{\"event\":\"root\"}", "{\"event\":\"release\"}", "coin-tree"]
+#guard !treeShown []
+#guard (readBack (Json.mkObj [("b", Json.arr #[Json.str "x"]), ("a", Json.null)])).toOption ==
+  some (Json.mkObj [("a", Json.null), ("b", Json.arr #[Json.str "x"])])
+#guard (readBack (Json.num ⟨1, 1⟩)).toOption.isNone
+-- an object whose tree holds one key twice, which no parser returns: its text reads back as one key
+#guard match readBack (Json.obj ⟨⟨.inner 2 "a" (Json.num 1) (.inner 1 "a" (Json.num 2) .leaf .leaf) .leaf⟩⟩) with
+  | .error why => why == RECORD_READ
   | .ok _ => false
 #guard interiorShown [("boundary", [ByteArray.mk #[1]]), ("interior", [ByteArray.mk #[1], ByteArray.mk #[7]])]
   "interior" (ByteArray.mk #[7])

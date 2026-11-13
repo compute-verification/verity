@@ -172,8 +172,8 @@ def test_the_form_accepts_one_honest_play_with_its_switch_on() -> None:
     d = Path(at)
     files = [str(d / f) for f in ("params.json", "commitment.json", "evidence.json")]
     files += [str(b) for b in sorted((d / "blobs").iterdir())]
-    bin_dir = R.ROOT / "verity/protocols/recursion/verifier/recursive/.lake/build/bin"
-    on = subprocess.run([str(bin_dir / "sampled-two-on"), "check", *files], capture_output=True, text=True, check=False)
+    exes = [D.build(PORT.package, exe) for exe in ("sampled-two-on", "sampled-two")]
+    on = subprocess.run([str(exes[0]), "check", *files], capture_output=True, text=True, check=False)
     assert on.returncode == 0, (on.stdout + on.stderr)[-4000:]
-    off = subprocess.run([str(bin_dir / "sampled-two"), "check", *files], capture_output=True, text=True, check=False)
+    off = subprocess.run([str(exes[1]), "check", *files], capture_output=True, text=True, check=False)
     assert off.returncode == 1 and any(x in off.stdout for x in BY_THE_SWITCH), (off.stdout + off.stderr)[-4000:]
