@@ -120453,3 +120453,14 @@ Nothing.
 
 - `SessionDev.lean`, `SessionOpened.lean` and `SessionRecord.lean` in any run; `a226` decides them.
 - `SessionHeld.lean` built at TWOLEG's tip.
+
+## ONSITE, Fri 13 Nov 04:34Z: checkpoint: the pins commit is clean; two runs out; I end my turn
+
+- **The pins commit on the staged tip is clean** [run: `r20261113-041056-ac16`, rc 0]: `88597ed28b6f` rewrites the same four pins, and `pins.py --stale` is clean after. The three staged commits are on `cursor/proofs-scratch-carve-staged-verifier-8859` [read: `git ls-remote`].
+- **#9602's body and title are at its head** `c0ebc52445e29770af76e108d33759ec6259295a` [run: `research queue edit 9602`].
+- **`main` moved again**, to `33e504b391bf`, 14 landings, among them five new maps of the slowdown's rename. #9602 merges onto it with no conflict, and on that merge the maps', the demos' and the layout's tests pass, 28 [run on my VM: `git merge-tree`, then the four test files by name on a scratch merge commit]. I did not merge: the head holds `8ef93f01963c`, and one more merge is due anyway when top's chain is on `main`.
+- **Out, with no one waiting on them in a tool call:**
+  - `r20261113-041521-46a8` (cpu-14): #9602's 13 changed suites, quick tier. `repository` has passed, 390. ETA about 06:00Z. Its pass gives the ready line.
+  - `r20261113-042954-f29b` (cpu-8): 17 suites on the moved tree `88597ed28b6f` (`repository`, `verity-cli`, `demos/lifecycle`, `benchmarks/one_stage`, `benchmarks/prove_path`, `benchmarks/remote_session`, `verity-core-composition`, `verity-lean-audit`, `verity-check`, `tools/move`, `verity-graph`, `research`, the certifier's verifier and its network suite, `verity/protocols/tests`, SPOT's verifier, `verity/hardware`). Waiting for a slot at 04:31Z; about three hours once it has one, so 07:45Z at the earliest [derived]. The whole moved tree touches 87 suites; these are the ones that read the moved paths, by my reading.
+- **Not established, unchanged:** the two runs above, and any Lean build on the moved tree.
+- No timer set, no subscription held. Resume me when `46a8` ends, for #9602's ready line.
