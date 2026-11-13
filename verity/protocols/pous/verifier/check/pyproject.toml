@@ -45,7 +45,7 @@ untraced = [
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/claims/__init__.py",
           "verity/protocols/pous", 
-          "verity/protocols/pous/prover", "verity/difftest", 
+          "verity/protocols/pous/prover", "tools/difftest", 
           "verity/circuits", "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
           "verity/protocols/interface", "verity/commitments/identity", "verity/commitments/randomness", "verity/protocols/flock/verifier/Flock",
           "verity/protocols/flock/verifier/lakefile.toml", "verity/protocols/flock/verifier/lake-manifest.json",

@@ -25,7 +25,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/claims/__init__.py",
           "verity/hardware/record.py", "verity/protocols/reporting.py",
           "verity/protocols/flock/verifier", "verity/commitments/identity", "verity/commitments/randomness",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
-          "verity/commitments/lms", "verity/difftest", "verity/protocols/pous/device",
+          "verity/commitments/lms", "tools/difftest", "verity/protocols/pous/device",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
           "benchmarks/census/hardware.json", "benchmarks/numerical/python/verity_numerical/bench/placement.py",
           # the remote bandwidth audit over the P2 store, which p2_v1/serve.py runs, and what it imports; its party's

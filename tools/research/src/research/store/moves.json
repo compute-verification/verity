@@ -2218,6 +2218,12 @@
       "paths": {
         "verity/composite/": "verity/protocols/compose/"
       }
+    },
+    {
+      "paths": {
+        "verity/difftest/": "tools/difftest/",
+        "verity/difftest/lean/": "verity/circuits/difftest/"
+      }
     }
   ]
 }
