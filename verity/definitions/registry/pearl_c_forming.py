@@ -37,7 +37,7 @@ The reference rejects a non-finite accumulator where these compute on (a NaN is 
 admission (`Pc8RowA`'s ``ok``) is not one of these Definitions.
 
 On bits each is σ of its word form (`verity.definitions.boolean.sigma_lift`): the same Calls, each of the Boolean version
-of its Definition. `PearlCSqrt_v2` is `verity.definitions.ops.boolean.sqrt.f32_sqrt_rn` traced, and `PearlCBf16Neg_v2` one
+of its Definition. `PearlCSqrt_v2` is `verity.circuits.ops.boolean.sqrt.f32_sqrt_rn` traced, and `PearlCBf16Neg_v2` one
 NOT.
 """
 from __future__ import annotations
@@ -48,11 +48,11 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import CompositeDefinition, bind, composite, primitive
-from verity.definitions.ops.boolean.sqrt import f32_sqrt_rn
-from verity.definitions.ops.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
-from verity.definitions.ops.prims import E4m3ToF32, F2fpBf16, F32ToE4m3Sat, const
-from verity.definitions.ops.scalar import F32Fabs, F32Fmaxf, F32Neg, I32Le, SelectI32
-from verity.definitions.ops.sqrt import PouwF32SqrtRn
+from verity.circuits.ops.boolean.sqrt import f32_sqrt_rn
+from verity.circuits.ops.fp32 import F32AddV2, F32DivV2, F32FmaV2, F32MulV2
+from verity.circuits.ops.prims import E4m3ToF32, F2fpBf16, F32ToE4m3Sat, const
+from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Neg, I32Le, SelectI32
+from verity.circuits.ops.sqrt import PouwF32SqrtRn
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.boolean import sigma_lift
@@ -301,7 +301,7 @@ def bindings() -> list:
     the H100's atom, the forming of a row of eight and the chain over a window and a short one (K = 160), as the tile's
     read calls it; and the peel at rank 32. But for the forming of a row, each is within the size circuit-check lowers a
     Definition whole at."""
-    from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
+    from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
     from verity.definitions.boolean import boolean_version
 
     out = []

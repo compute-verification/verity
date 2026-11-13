@@ -28,8 +28,8 @@ def _rand_e4m3(rng, n: int, p_zero: float = 0.1, p_sub: float = 0.1) -> np.ndarr
 # ------------------------------------------------------------------------------------------------------------ the k32 step
 
 def test_tc_dot32_e4m3_matches_the_total_model_on_random_operands_and_accumulators() -> None:
-    from verity.definitions.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32 as PIPE
-    from verity.definitions.silicon.total_fp8 import tc_dot_total_e4m3
+    from verity.circuits.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32 as PIPE
+    from verity.circuits.silicon.total_fp8 import tc_dot_total_e4m3
 
     rng = np.random.default_rng(7)
     n = 4000
@@ -46,8 +46,8 @@ def test_tc_dot32_e4m3_matches_the_total_model_on_random_operands_and_accumulato
 
 def test_tc_dot32_e4m3_cancellation_and_subnormal_accumulators() -> None:
     """The 14-bit adder's truncation of the ACCUMULATOR (`acc + 0 != acc`) and the denormalisation path below 2^-126."""
-    from verity.definitions.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32 as PIPE
-    from verity.definitions.silicon.total_fp8 import tc_dot_total_e4m3
+    from verity.circuits.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32 as PIPE
+    from verity.circuits.silicon.total_fp8 import tc_dot_total_e4m3
 
     rng = np.random.default_rng(3)
     n = 2000
