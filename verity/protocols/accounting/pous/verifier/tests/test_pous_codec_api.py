@@ -16,7 +16,11 @@ from verity.protocols.accounting.pous.verifier.audit import (
     challenge_key,
     run_timed,
 )
-from verity.protocols.accounting.pous.verifier.codec import Codec, encode_segments, split
+from verity.protocols.accounting.pous.verifier.codec import (
+    Codec,
+    encode_segments,
+    split,
+)
 from verity.protocols.accounting.pous.verifier.layout import TensorLayout, decode_tensor
 from verity.protocols.accounting.pous.verifier.params import Params
 from verity.protocols.accounting.pous.verifier.primitives import reference

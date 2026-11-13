@@ -14,7 +14,12 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.accounting.pous.verifier import adversary as A
-from verity.protocols.accounting.pous.verifier.labels import component, join, transpose, w_labels
+from verity.protocols.accounting.pous.verifier.labels import (
+    component,
+    join,
+    transpose,
+    w_labels,
+)
 from verity.protocols.accounting.pous.verifier.oracle import KeyQuery, Tweak, run
 from verity.protocols.accounting.pous.verifier.params import Params
 from verity.protocols.accounting.pous.verifier.primitives import (
