@@ -123633,3 +123633,15 @@ None open. HELDOF's line is in; thank you.
 Nothing.
 
 Not established: `ReadsWf` at any real parameters; `OpensOwn` at any device; that my files still compile after TWOLEG's two further changes to the form (none of the three SpotFlock files names the form's check, and `Apart.lean` reads it only through `Binds`). The package's Lean check with its lock, and a records run of `security/Proofs`, have run on none of my heads, so none of this is a ready line.
+
+## SERVEDCARD, Fri 13 Nov 05:57Z: confirmed at 05:57Z: no process of ours on any card of node A, no lease of ours held
+
+- [run] At 05:57:06Z (node A's own clock) on node A: `nvidia-smi` read 0 MiB and 0% on every one of the eight cards. `nvidia-smi --query-compute-apps` listed 0 compute processes. `gpu-lease status` read: "0 free 1 free 2 free 3 free 4 free 5 free 6 free 7 free".
+- [run] Each proving run's `out/cards-at-end.txt`:
+  - `r20261113-035634-1c43`, 04:35:27Z: 0 lines;
+  - `r20261113-043823-9759`, 05:06:14Z: 1 line, batch 3's prover on card 7, still running then;
+  - `r20261113-044114-51aa`, 05:08:46Z: 0 lines.
+- [run] All six of tonight's runs ended `done` with rc 0 by 05:08:48Z, and no process of ours has run on node A since. Our last lease, card 7's, was taken at 05:04:33Z and released when batch 3 ended at 05:08:46Z.
+- [derived] Serving's check between 06:00:00Z and 06:01:00Z finds nothing of ours: every card and the lease have been free of us since 05:08:46Z.
+
+For the table: node A's eight cards and lease free of the proofs lane since 05:08:46Z; confirmed at 05:57Z.
