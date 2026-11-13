@@ -50,13 +50,14 @@ import argparse
 import json
 import sys
 from collections import Counter
+from collections.abc import Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 #: E, the nonlinear units (the gate model's: budgeted units plus data products) an encode of one 1024-bit word costs over 3
 #: rounds of 1,021 squarings: SquaringFloor and ChainSum at ε = 2^-40 and at the carrier threshold 2^-20, and the
-#: cheapest construction found, the seam square at 16,544 a squaring, which no E exceeds. No E is proved: counting caps a
+#: cheapest construction found, the seam square at 16,544 a squaring, which no E exceeds. No E is proved: counting holds a
 #: squaring's bound near its output bits (`FoolingCap`).
 E_WORD = {"2^-40": 1_145_562, "2^-20": 1_151_688, "best found": 16_544 * 3 * 1021}
 LIFETIMES = {"10 min": 600, "1 h": 3600}
@@ -147,7 +148,7 @@ def trace_requests(mix: Mapping[str, Any]) -> list[dict]:
     """The trace mix.json served: `serve.trace` again from its arguments (seeded, so the same requests)."""
     here = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(here / "kv_filler"))
-    from serve import trace  # noqa: E402
+    from serve import trace
 
     a = mix["args"]
     reqs = trace(a["seed"], a["seconds"], a["burst_gap_s"], a["burst_mean"], a["prompts"], a["outputs"])
@@ -186,11 +187,11 @@ def exact(mix: Mapping[str, Any], requests: Sequence[Mapping[str, int]]) -> dict
     T = sum(s["tokens"] for s in steps)
     K = sum(s["kv_tokens"] for s in steps)
     P = [r["prompt"] for r in requests]
-    O = [r["output"] for r in requests]
-    dec_keys = sum((o - 1) * p + (o - 1) * o // 2 for p, o in zip(P, O))
+    outs = [r["output"] for r in requests]
+    dec_keys = sum((o - 1) * p + (o - 1) * o // 2 for p, o in zip(P, outs))
     Q = sum(p * (p + 1) // 2 for p in P) + dec_keys
-    if T != sum(P) + sum(o - 1 for o in O):
-        raise ValueError(f"the steps compute {T} token rows, the requests {sum(P)} prompt and {sum(o - 1 for o in O)} decode rows")
+    if sum(P) + sum(o - 1 for o in outs) != T:
+        raise ValueError(f"the steps compute {T} token rows, the requests {sum(P)} prompt and {sum(o - 1 for o in outs)} decode rows")
     budget = mix["args"]["max_batched_tokens"]
     if max(P) >= budget:
         raise ValueError(f"a prompt of {max(P)} tokens can split more than once under a budget of {budget}")
@@ -199,7 +200,7 @@ def exact(mix: Mapping[str, Any], requests: Sequence[Mapping[str, int]]) -> dict
     if not 0 <= excess <= splits * (max(P) - 1):
         raise ValueError(f"the steps' requests read {K} keys, one prefill a prompt reads {K - excess}: {splits} splits of prompts "
                          f"under {max(P)} tokens can't account for the difference")
-    return {"T": T, "X": sum(O), "Q": Q, "K": K, "n": sum(s["decode_reqs"] for s in steps) + len(requests) + splits,
+    return {"T": T, "X": sum(outs), "Q": Q, "K": K, "n": sum(s["decode_reqs"] for s in steps) + len(requests) + splits,
             "n0": len(requests), "Qp": sum(padded_keys(requests)), "split_keys": excess, "splits": splits}
 
 
@@ -208,14 +209,14 @@ def steps(mix: Mapping[str, Any], requests: Sequence[Mapping[str, int]], split_k
     """Each step's T, X, Q, K, n, n0 and Qp: measured, but for a step's prefill, whose keys, requests and splits are the trace's
     means over its prompt tokens, and its rows' padding, the trace's mean a prompt row and a decode row."""
     P = [r["prompt"] for r in requests]
-    O = [r["output"] for r in requests]
+    outs = [r["output"] for r in requests]
     q_pre = Fraction(sum(p * (p + 1) // 2 for p in P) - split_keys, sum(P))
     per_req = Fraction(len(P), sum(P))
     per_call = Fraction(len(P) + splits, sum(P))
     pad_pre, pad_dec = padded_keys(requests)
     ex_pre = Fraction(pad_pre - sum(p * (p + 1) // 2 for p in P), sum(P))
-    dec_rows = sum(o - 1 for o in O)
-    ex_dec = Fraction(pad_dec - sum((o - 1) * p + (o - 1) * o // 2 for p, o in zip(P, O)), dec_rows) if dec_rows else Fraction(0)
+    dec_rows = sum(o - 1 for o in outs)
+    ex_dec = Fraction(pad_dec - sum((o - 1) * p + (o - 1) * o // 2 for p, o in zip(P, outs)), dec_rows) if dec_rows else Fraction(0)
     out = []
     for s in mix["steps"]:
         pre, dec = s["prefill_tokens"], s["decode_reqs"]

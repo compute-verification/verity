@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import numpy as np
 
+#: what `theory/fold_kernel_check.py`, `edited_gemm/egemm_depthr_check.py` and the tests read
+__all__ = ["rotl", "rotr"]
+
 
 def _is_int(x) -> bool:
     return isinstance(x, (int, np.integer)) and not isinstance(x, bool)

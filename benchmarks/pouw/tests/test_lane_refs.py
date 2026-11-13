@@ -11,17 +11,13 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import types
-from pathlib import Path
 
+import lane_refs as LR
 import numpy as np
+import partials as PT
 import pytest
 import torch
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_h1"))
-import lane_refs as LR
-import partials as PT
 
 RC = PT.RC
 COM = types.SimpleNamespace(root=bytes(range(7, 71)), epoch=3)
