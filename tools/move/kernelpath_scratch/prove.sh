@@ -170,7 +170,9 @@ EOF
   H=$(git rev-parse HEAD); lint "the result" || rc=1
   echo "the list's diff across the scratch mover's commit:"; git diff "$X" "$M" -- "$list" | grep '^[+-] ' | cut -c1-140
   echo "tree of the result: $(git rev-parse "$H^{tree}"); tree of $REMEDY_SAME: $(git rev-parse "$REMEDY_SAME^{tree}")"
-  [ "$(git rev-parse "$H^{tree}")" = "$(git rev-parse "$REMEDY_SAME^{tree}")" ] || rc=1
+  echo "files that differ from $REMEDY_SAME: $(git diff --name-only "$H" "$REMEDY_SAME" | tr '\n' ' ')"
+  [ "$(git show "$H:$list" | sort | sed 's/,$//')" = "$(git show "$REMEDY_SAME:$list" | sort | sed 's/,$//')" ] \
+    && echo "the list holds the same entries as at $REMEDY_SAME" || { echo "the list's entries differ from $REMEDY_SAME's"; rc=1; }
   $PY python tools/verity/check/move_check.py "$X" "$M" < /dev/null; r=$?; echo "move_check $X $M: exit $r"; [ $r -eq 0 ] || rc=1
   gate "$REMEDY_BASE" "$X" "the entries at the old path, alone" || rc=1
   gate "$X" "$M" "the mover's commit carrying them, alone" || rc=1
