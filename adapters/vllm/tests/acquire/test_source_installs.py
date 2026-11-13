@@ -152,6 +152,8 @@ def test_the_scale_products_source_installed_commits_from_its_site_and_uninstall
     model.down_proj(xs, ws)
     assert [name for name, _ in com.acquired] == [f"down_proj/{SP.MEMBER}"] and len(c_ops.launches) == 3
     assert torch.equal(com.acquired[0][1].view(torch.int32), S.products(torch, xs, ws).view(torch.int32))
+    module = ".".join(S.fp8_twins.__name__.split(".")[-2:])       # the function's module as the Definitions' package names it
+    assert f"({module}.scale_products;" in src.declaration_classes()[0]["evidence"]
     src.uninstall()
     assert not src.active and c_ops.cutlass_scaled_mm is installed and hooks.live() == live
     assert _hooked(model.down_proj) == 0 and _hooked(model.other) == 0
