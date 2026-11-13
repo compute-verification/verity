@@ -10,7 +10,7 @@ public import PouwPearlPlus.Records
 /-!
 # A tile's words under Pearl-C v1 -h3 on the H100 (`pearl_c.PearlC.encode`, `checked`, `leaf`)
 
-The words a drawn tile's openings determine, each step in the Python's order and exact semantics (`pearl_c`, `pearl_kw`;
+The words a sampled tile's openings determine, each step in the Python's order and exact semantics (`pearl_c`, `pearl_kw`;
 FP32 steps `verity.definitions.silicon.fp32`, here `Evaluate.Fp32`'s; the FP8 atom and BF16 step the H100's,
 `HOPPER_E4M3_K32` and `HOPPER_BF16_WGMMA_K16`, here `Evaluate.TC`'s):
 
