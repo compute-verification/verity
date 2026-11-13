@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from pathlib import Path
 
 import pytest
@@ -51,9 +50,9 @@ def _flag(cmd: list[str], name: str) -> str:
 # ---------------------------------------------------------------------------------------------------------------- the comparison
 
 def test_a_single_request_is_compared_against_the_program_of_the_shape_it_was_served_at(tmp_path, monkeypatch):
-    """B=1: the request Program is the Build's when the fold ran every decode step the row asks for, and the one of the served shape
-    (derived when not on disk) when the request stopped early; ``match_shape.json`` holds, in this order, LP, the served T, the row's T
-    and the Program dir either way, under the names its reader looks them up by."""
+    """B=1: the request Program is the Build's when the fold ran every decode step the row asks for or none, and the one of the served
+    shape (derived when not on disk) when the request stopped early; ``match_shape.json`` holds, in this order, LP, the served T, the
+    row's T and the Program dir either way, under the names its reader looks them up by, and the reader says the early shape whole."""
     r, ran = _match_row(tmp_path, monkeypatch, rcs={"match_compare.log": 7})
     d = r.d
     assert r.compare(60) == (7, None, False)
@@ -68,8 +67,9 @@ def test_a_single_request_is_compared_against_the_program_of_the_shape_it_was_se
     Path(d, "match", "fold_summary.json").write_text(json.dumps({"n_steps": 3}))      # two decode steps served of the row's three
     assert r.compare(60) == (7, None, False)
     early = f"{d}/build_request_LP8_T2"
-    assert list(json.loads(Path(d, "match_shape.json").read_text()).values()) == [8, 2, 3, early]
-    assert re.findall(r"\d+", R.served_shape(d)) == ["8", "2", "3"]
+    record = json.loads(Path(d, "match_shape.json").read_text())
+    assert list(record.values()) == [8, 2, 3, early]
+    assert R.served_shape(d) == f"LP=8 T_r=2 {list(record)[2]}=3"                     # the row's T under the record's name for it
     (derive, dcmd), (name, cmd) = ran
     assert derive == "build_request_LP8_T2.log" and (_flag(dcmd, "--LP"), _flag(dcmd, "--T"), _flag(dcmd, "--out")) == ("8", "2", early)
     assert name == "match_compare.log" and _flag(cmd, "--a") == early
@@ -79,6 +79,11 @@ def test_a_single_request_is_compared_against_the_program_of_the_shape_it_was_se
     os.makedirs(early)
     Path(early, "result.json").write_text("{}")                                       # the served shape's Program is on disk
     assert r.compare(60) == (7, None, False) and [name for name, _ in ran] == ["match_compare.log"]
+
+    ran.clear()
+    Path(d, "match", "fold_summary.json").write_text(json.dumps({"n_steps": 1}))      # no decode step served: the Build's Program
+    assert r.compare(60) == (7, None, False) and [(name, _flag(cmd, "--a")) for name, cmd in ran] == [("match_compare.log", f"{d}/build_request")]
+    assert list(json.loads(Path(d, "match_shape.json").read_text()).values()) == [8, 0, 3, f"{d}/build_request"] and R.served_shape(d) == ""
 
 
 def test_a_batchs_comparison_runs_inside_the_global_match_and_derives_the_shapes_it_names_once(tmp_path, monkeypatch):
