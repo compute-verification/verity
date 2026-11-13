@@ -151534,8 +151534,9 @@ Said in section 0 of my 16:19Z entry; this is the launch, not the result.
 - **First launch, `--on auto`: `r20261113-162047-66a4` went to vy-nebius-cpu-3**, where the pass's batch of three runs
   (`r20261113-155918-5920`). That would have been four abreast, against infra's rule. I cancelled it at 16:21:27Z,
   40 seconds after its launch: rc 143, `CANCELLED_MANUAL`, no process left (`scope_end.left` is empty) [run]. It had
-  made its scratch, `/workspace/research/scratch/restack-pass-FkN5eRQS`, and found the first 8 checks kept. Its trap
-  removes the scratch on a cancel.
+  made its scratch, `/workspace/research/scratch/restack-pass-FkN5eRQS`, found all 28 checks kept in 1 s and had
+  begun the carry (corrected 16:29Z: I first wrote "the first 8 checks"). Its trap removes the scratch, with the
+  carry's own directories under it, on a cancel.
 - **Second launch, by name: `r20261113-162220-7b85` on vy-nebius-cpu-14**, 16:22Z [run]. Its own line: "scratch of an
   earlier job of this kind still on this node: 0". 28 moves to cross; all 28 checks were found kept, in 1 s. The
   carry itself is running (read 16:26Z).
