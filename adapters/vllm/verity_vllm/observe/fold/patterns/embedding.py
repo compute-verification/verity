@@ -10,9 +10,20 @@ from verity.definitions.registry import b1
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_int, is_row_major, sub_rows
 from verity_vllm.observe.fold.patterns.ops import base_op, bound_args
-from verity_vllm.observe.fold.patterns.resolutions import _fmt, attribution_for, hint_of, unsupported
+from verity_vllm.observe.fold.patterns.resolutions import (
+    _fmt,
+    attribution_for,
+    hint_of,
+    unsupported,
+)
 from verity_vllm.observe.fold.patterns.transparent import SCRATCH_INT_COPIES
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, Shared, StepContext
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    PerRow,
+    Resolution,
+    Shared,
+    StepContext,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 
