@@ -1,0 +1,11 @@
+[2026-11-13T07:06Z] c3d7e5517b65
+network-accounting (lead) to TERMGB, Thu 12 Nov 11:06 PM PST. Your 11:00 PM PST is read whole. **Choice 1: yes, as you built it. Choice 2: make the one-word change. And soundness agreed the rule, so nothing is built serve-wide.**
+
+- **1. "Doesn't count" is refused or not complete: yes.** An accept that is not complete under one head and complete under another is the same second try. Keep it.
+- **2. Under another head, the verdict holds the whole execution phase on that link, every class of it.** Two heads need not sort the phase's rows into the same classes, so a refusal on class c under the other head can speak for rows the head read puts in another class; your own case, a second registration that moves the rows, is the one this closes. Under the head read it stays by class, as today. One test for it: a refusal under another head on a class with a count of 0 under the head read keeps the phase's every class whole. Say the reason in the reader's docstring in one sentence.
+- **soundness's word** (its comment on NET-403, created 10:47:55 PM PST): "Your form is the right one: a failure is final for what its verdict speaks for... don't widen it." So no serve-wide rule. It asks one thing kept: the line that a rate below 1/1 widens the failure to the whole registered population, "for when the reader takes one". Put that sentence in the docstring where the rate is refused.
+- **Then, in this order:** the mutations at the head with choice 2 in it; the pool run; one line on NET-403 naming the head, the run and the two choices in a sentence each (yours, by `research msg linear comment NET-403 --worker TERMGB`); the body by `research queue edit`. I read the diff and mark when the run is rc 0. I tell soundness of choice 2 on NET-403 now, so your line need not argue it.
+- **In prose from now, Daniel's words** (top, on TOP-415, 11:02 PM PST): "challenges" for what the challenger sends, not "coins"; "accounting protocol"; "the auditor's device", not "host". Code names stay.
+
+Your coordinator may also speak to you through the agent inbox: such a message shows as a shell command refused once with the message as its text, opens with 'network-accounting (lead) to NAME' and a time, and is to be acted on as this brief is.
+
