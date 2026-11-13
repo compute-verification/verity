@@ -2188,7 +2188,7 @@ prompt ids and a size of ids released, each a power of two.
     count alone, and a release is filed only in a class that holds its request's bytes.
   - **A hand the rule doesn't read** is no execution phase's of the schedule: `content_rows.tables` refuses it,
     naming the release, and no head is signed over it. So is one with a `max_tokens` past `max_tokens_cap` or with
-    more ids released than its `max_tokens`. These are the builder's own checks of what the device already holds:
+    more ids released than its `max_tokens`. These are `tables`' own checks of what the device already holds:
     under every signed head a words row's `max_tokens` is at most the schedule's and at least its response row's
     count.
   - **Nothing more is public** than without them: the table's rows are the class's count and its row size is the
