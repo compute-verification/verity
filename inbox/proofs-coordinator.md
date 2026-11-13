@@ -114179,3 +114179,45 @@ All three fixes pass in a core-only scratch file with a stand-in coin on the VM 
 The inner-block statements come next, in a new file beside `Claim.lean`, with no change to `TwoLeg`, `UnitsAreReplay` or #9574. They go in the 02:50Z entry.
 
 STOP RULE: not reached. NEEDS: nothing. To post: nothing. Not established: that `DevAgrees` builds (`3081` is running).
+
+## STOPDRIVER, Fri 13 Nov 02:17Z: #9458's ready line at `049c5875989c` (65 of 66 quick suites pass; the one red is the node's hold file, not the change); the cards branch passes 57 of 58 the same way but does NOT merge onto the second try's branch: three driver files conflict, and I resolve that now, before I call it ready
+
+In plain words: both test runs I waited on have ended. Each passed everything except one suite, and that suite fails on two tests that read a file the machine carries tonight, whichever branch runs there; the same two tests pass on my own machine at both heads. So the pull request that makes an accepted audit say whether it is complete is ready to mark. The branch that lets the audit prove on GPUs is not ready yet, for a reason the test run could not show: the branch it must be merged into for Friday's second try has changed the same three files since, so the two do not merge as they stand. Joining them is my work, and I do it next.
+
+Mailbox read to its last heading, "Coordinator, Fri 13 Nov 00:30Z: #9458 conflicts with main: merge and give a new ready line" [run: `git show origin/cursor/proofs-inbox:inbox/<my id>.md`, 02:16Z].
+
+**Ready line: #9458 at `049c5875989caf2890b9e1dfa1578833cf3dbc4d`**, https://github.com/compute-verification/verity/pull/9458, unmarked, `Lane proofs`. I do not mark.
+
+- [run `r20261113-005103-99bb`, vy-nebius-2, `suites.py --changed 4352bffdc16b --quick` at this head, ended 01:48:56Z, exit 1] **66 suites: 65 passed, none cached, 1 failed.** The one is `research`: 4,783 passed, 2 failed, 3 skipped. The two are `tools/research/tests/test_auto.py::test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_the_pool` and `::test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen` (`KeyError: 'error'` at line 661), the two of my 00:40Z entry.
+- **The red is the machine's, not the change's.**
+  - [run: `research pods ssh vy-nebius-2 -- cat /etc/vy/auto-hold`, 02:03Z] The node carries the hold file, written 22:56Z Thu, until `2026-11-14T02:00:00Z`.
+  - [read: `origin/main` at `636d15d041b5`, `tools/research/tests/test_auto.py` lines 528 to 576 and 677 to 699] Neither test sets `auto.HOLD_FILE`, so the probe each runs answers "held" on that node. `main` holds the same two tests.
+  - [run: `git diff --name-only origin/main...HEAD -- tools/research`, empty] The change touches no file there.
+  - [run, my VM, which has no such file, 02:05Z: `pytest tests/test_auto.py -k '<the two>'` with `PYTHONPATH=src` in a worktree at `049c5875989c`] **2 passed**; `research.auto` was imported from that worktree.
+  - [derived] So every test of the 66 suites has a pass at this head: all but two in `99bb`, those two off the node.
+- [run: `git merge-tree --write-tree 636d15d041b5 049c5875989c`, exit 0, one line, 02:07Z] **It merges onto `main` at `636d15d041b5`**, which is 37 landings past the `main` it holds (`4352bffdc16b`). One file is changed on both sides, `verity/protocols/spot/verifier/lean/tests/test_difftest.py`: mine before line 2400 (locals renamed, and the one new test), `main`'s after line 4600 (#9497's new helpers and test). [derived] The suites ran on this head, so not over those 37 landings.
+- [run: `git diff --name-only dbb268ce3009 049c5875989c`, no `.lean`, lock, lakefile or toolchain file] **No Lean moved since the records run `c8f1`.** [run] In those 37 landings `main` changed 11 `.lean` files, all under `security/Proofs/Properties/Nci`, none of the three this change edits and none under the spot verifier's Lean. I have not rerun the Lean check at this head; the candidate's run is the Lean verdict.
+- [run 00:46Z, unchanged head] The ratchet gate passes. [run: `research queue status`, 02:08Z] #9375 is still at `34c5cbb3`, so the body's note that this head merges onto it stands [derived: both heads unchanged since my 01:04Z merge-tree].
+- [run: `research queue edit 9458`, 02:11Z, read back with `gh pr view`] The body's last lines now say this: 65 of 66, the two tests and why, the 37 landings.
+
+**The cards branch `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `2c5806b33e8c`: its suites pass, and it is NOT ready.**
+
+- [run `r20261112-234519-8cc3`, vy-nebius-2, ended about 01:54Z, exit 1] **58 suites: 57 passed, none cached, 1 failed**, `research`, on the same two tests (4,769 passed, 2 failed, 3 skipped). [run, my VM, 02:05Z, worktree at `2c5806b33e8c`] Both pass off the node. [run: `git rev-list --no-merges HEAD ^origin/main ^496aa183544b -- tools/research`, empty] None of the branch's own commits (15 beyond `main` and GATHER's `496aa183544b`) touches `tools/research`; the 23 files that differ from `main` there come with the tree it sits on.
+- [run: `git merge-tree --write-tree 5ad83c84ef5e 2c5806b33e8c`, exit 1, 02:12Z] **It conflicts with the second try's branch**, `cursor/proofs-gather-second-try-5a28` at `5ad83c84ef5e` (GATHER's 01:12Z entry names that branch as the one my piece goes into; its head has moved once since, by the merge of the serve's logits port at 01:13Z). Three files, ten places [run: `git merge --no-commit` in a scratch worktree]:
+  - `benchmarks/one_stage/two_stage.py`, 7: the module docstring (my section on what the second stage cost, its section on the block's inputs), the usage line and its legend (`--devices`, `--replay-record` against `--kept`), `replayed`'s signature, docstring and call (`clock` against `kept`), and two functions added at the same place (`_a5`, `read_record`).
+  - `benchmarks/one_stage/two_stage_small.py`, 2: the module docstring and `expect`'s docstring.
+  - `benchmarks/one_stage/two_stage_small.sh`, 1: the header comment (`SMALL_GPU=1` against `--logits`).
+- [read: the ten places] Each is two additions at one place, and I see none where the two sides want different behaviour. [guess] What the text cannot show is whether `expect`'s checks and the summary's cost fields still agree where both sides changed code that merged without a conflict (`two_stage_small.py`, `test_two_stage_second.py`, `benchmarks/two_stage/audit.py`); the tests say.
+- [derived: `git log --first-parent` of the three branches] The cause: at 23:39Z I merged GATHER's served-select branch (`496aa183544b`), and the second try's branch is another line from the same point (`bdf9fd1086`), 52 commits past what it shares with mine, the logits port among them.
+- **What I do now, unless you say otherwise:** merge `5ad83c84ef5e` into the cards branch, keeping both sides at each place. No `main` comes with it: all three branches sit on `main` at `b39caa2b3e` [run: `git merge-base`]. Then the driver's test files on my VM, then the quick suites, and one rehearsal at V = 2,560 on one card with the second try's `--logits`, under your 21:07Z yes for one-card runs at that size. After my merge GATHER's merge of the cards branch is a clean one while the second try's branch stays at `5ad83c84ef5e` in those files.
+- [guess] The merge and the local tests are pushed by 03:15Z; the ready line by 06:00Z if the suites take a place as tonight's did (18 and 72 minutes in line, then 40 and 56 to run), which leaves Fri 10:00Z standing. I say so at once if either slips.
+
+**For GATHER** [to relay]: do not merge `2c5806b33e8c` into the second try's branch; it conflicts in the three driver files above. Take the head my next entry names. If your branch must move again before then in `two_stage.py`, `two_stage_small.py` or `two_stage_small.sh`, say so, and I merge that head instead.
+
+**My machine restarted at 02:10Z** (uptime 0 at 02:11Z; `/tmp` empty, the checkout back on `main`). [run: `uptime`, `git worktree list`, a fetch of both branches] Nothing was lost: both branches were pushed at the heads above and I had committed nothing since. The notes checkout is gone with it; my 01:05Z note was synced.
+
+**The second build** (the read across a tie's streams; first entry due Fri 22:00Z): unchanged since 01:13Z. It follows the cards branch's ready line.
+
+STOP RULE: not reached. NEEDS: nothing. To post: nothing new (the note for infra on the two `test_auto.py` tests is in my 00:40Z entry, worded to send; it holds at `main` `636d15d041b5`). Not established: the cards branch joined with the second try's branch (no test has run on the join); `second --devices` with `--kept` on a card; the Lean check at #9458's head.
+
+**Pushed.** `cursor/proofs-stopdriver-answer-complete-ffc6` at `049c5875989caf2890b9e1dfa1578833cf3dbc4d`; `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `2c5806b33e8cb4db0359554bd0e3903d2dac6d9d`. Unpushed: nothing.
