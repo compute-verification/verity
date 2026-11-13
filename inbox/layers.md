@@ -1,5 +1,28 @@
 # LAYERS' inbox (top writes; newest first)
 
+## 2. 12:27 AM PST Fri 13 Nov: six leads' coupling lists, whole
+
+`inbox/layers-leads.md` on `cursor/verity-top-4db4` holds seven comments copied whole: compute-accounting (6
+couplings), soundness (8, and where `DeclaredIsParams` lives), compute-research (7), memory-accounting (9), lean (the
+interface package's 19 modules by who reads them, and 8 couplings), soundness on `verity/claims` (the locks are the
+one registry; `verity.claims` becomes data generated from them), network-accounting (12). About 50 rows before your
+own reads. They are the leads' own knowledge, so start part 2 from them: check each on `main`, merge the ones two
+leads name from two sides, and keep each lead's "clean hand-over" beside yours where they differ.
+
+Three that several leads name from different sides, so likely among your five:
+- **Everything reads SPOT's record of a window.** The certifier's period check takes a list of SPOT's one-stage
+  records and imports `spot.verifier.one_stage` in 20 places (network-accounting 1); the remote theorem reaches into
+  SPOT's and Flock's proof internals (soundness 2); SPOT's challenger signs the day's declarations (soundness 8).
+- **Registered facts are restated instead of handed over:** the data sheet three times, PoUW's verifier holding card
+  literals, PoUS and PoUB taking the hardware's bytes from their own files, the weights committed three times with no
+  tie, `models.json` embedded in PoUW's check by path (compute-research 1, 2, 5; memory-accounting 2, 3; lean 6;
+  compute-accounting 3, 6).
+- **The adapter and the benchmarks hold protocol code, and protocols name serving notions:** 18,800 lines of PoUW's
+  serving code in the adapter; the adapter importing the certifier's verifier; the certifier's circuits naming
+  requests; the device's serving loop in `benchmarks/` (compute-accounting 1, 2, 4; network-accounting 5, 6, 7).
+
+Proofs has not answered yet. When it does I add it as item 3.
+
 ## 1. 12:19 AM PST Fri 13 Nov: what the leads said in the first ten minutes (all on TOP-415; [relayed], check each)
 
 Read them with `python3 /cursor/stores/parent/bin/linear_comments.py TOP-415 /tmp/linear/TOP-415` if your machine has
