@@ -50,7 +50,7 @@ own suite's directory from the root (`ROOT / "packages/verity/tests/x"`): such a
 hides until the suite next runs (`check.py --no-cache`, the nightly `audit-main` run). Locate a suite's own files from
 `__file__`.
 
-Fixtures too large for git are entries of `fixtures/artifacts.json` whose paths git does not track. Before the suites run, the
+Fixtures too large for git are entries of `artifacts.json` whose paths git does not track. Before the suites run, the
 entries under their inputs are fetched (`research data fetch-fixtures`: every byte checked against its id), and each suite's key
 adds the ids of those under its inputs, since git's tree ids leave ignored files out. A suite whose fixtures cannot be fetched
 fails without running.
@@ -245,7 +245,7 @@ UNCACHED_ENV = {"LAKE_ARTIFACT_CACHE": "false"}
 QUICK = ["-m", "not slow"]
 #: the guard's (`verity_suite_guard`): the tests of each test file the option names carry the mark, which `whole_args` keeps
 WHOLE_MARK, WHOLE_OPT = "verity_whole", "--verity-whole"
-REGISTRY = "fixtures/artifacts.json"
+REGISTRY = "artifacts.json"
 #: what a store fetch from inside the tree reads of it, which every suite may read: the registry, for repo replicas (indexing the
 #: remote's manifest on an empty local store), and the bucket pin, when the remote is the environment's (`R2_*`). Neither changes
 #: what a fetch returns, which is checked against its id whichever replica or remote serves it.
