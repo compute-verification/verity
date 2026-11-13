@@ -52,7 +52,7 @@ SUBJECTS = ("v0", "admit", "residual")
 def adv_spec():
     """The advice module (I1 v0's canonical layout and its charge), or None where it isn't installed."""
     try:
-        import verity.protocols.certifier.verifier.advice as A
+        import verity.protocols.accounting.certifier.verifier.advice as A
     except ImportError:
         return None
     return A
