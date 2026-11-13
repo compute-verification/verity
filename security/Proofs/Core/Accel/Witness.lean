@@ -137,7 +137,7 @@ theorem run_plan (plan : List Ins) (σ : (hm c).State ℕ) (hpc : ∀ θ, σ.pc 
     simpa using filterMap_range_getElem id plan
   rw [sched, this]
 
-theorem code_prog (plan : List Ins) : Machine.code (prog plan) (sched plan) = plan.length := by
+theorem code_prog (c : Card) (plan : List Ins) : Machine.code (prog (c := c) plan) (sched plan) = plan.length := by
   unfold Machine.code sched
   rw [List.Nodup.dedup List.nodup_range,
     List.map_congr_left (g := fun _ => 1) (fun θ hθ => by
@@ -255,7 +255,7 @@ theorem le_rho_mul {ρ q T : ℚ≥0} (hρ : 0 < ρ) (h : q / ρ ≤ T) : q ≤ 
 fetched, are within its rate over the run (G2). -/
 theorem kernel_fits (c : Card) (hf : GemmFigures c) (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048) (σ : (hm c).State ℕ)
     (hpc : ∀ θ, σ.pc θ = 0) : Machine.Fits (prog (kernel n)) σ (sched (kernel n)) (secs c n) := by
-  have hcode := code_prog (c := c) (kernel n)
+  have hcode := code_prog c (kernel n)
   have hlen := kernel_length n
   refine ⟨?_, fun r => ?_⟩
   · rw [hcode, hlen]
