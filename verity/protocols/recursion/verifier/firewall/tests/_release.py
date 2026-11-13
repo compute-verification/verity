@@ -92,8 +92,8 @@ def e2e_record() -> list[str]:
 
 @functools.cache
 def firewall_agree():
-    """`verity/protocols/flock/agreement/firewall_agree.py`, the contract check's sessions."""
-    spec = importlib.util.spec_from_file_location("firewall_agree", ROOT / "verity/protocols/flock/agreement/firewall_agree.py")
+    """`verity/protocols/flock/prover/agreement/firewall_agree.py`, the contract check's sessions."""
+    spec = importlib.util.spec_from_file_location("firewall_agree", ROOT / "verity/protocols/flock/prover/agreement/firewall_agree.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
