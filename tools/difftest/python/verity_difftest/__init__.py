@@ -4,7 +4,7 @@ distribution's directory).
 A port is a Lean executable that answers one canonical JSON line per request, the Python it must agree with (`reference`),
 and a Hypothesis strategy of inputs, invalid ones included. There are two kinds, sharing the server, the run and the shrinking:
 
-* `Port`: one function behind `Difftest.serve` (`lean/Difftest.lean`), requests `{"fn", "input"}`. Lean and Python must
+* `Port`: one function behind `Difftest.serve` (`../../verity/circuits/difftest/Difftest.lean`), requests `{"fn", "input"}`. Lean and Python must
   give the same output as canonical JSON (`canonical`: compact, keys sorted, integers only), or both reject (reject parity:
   the reasons need not match).
 * `ProtocolPort`: a core protocol's executable in `serve` mode (`Core.Protocol.main`, the interface of
@@ -120,7 +120,7 @@ def canonical(value: Any) -> str:
 #: Lake builds a path require in place, and ports share theirs (`lean/` here, the core protocol interface), so two ports'
 #: builds at once, as two suites in one `check` run them, compile one module's C in one directory together, and clang
 #: reads it while the other rewrites it.  Written from the root, as each verifier that takes it writes it
-BUILD_LOCK = Path(__file__).resolve().parents[4] / "verity/difftest/lean" / ".lake" / "harness-build.lock"
+BUILD_LOCK = Path(__file__).resolve().parents[4] / "verity/circuits/difftest" / ".lake" / "harness-build.lock"
 
 
 @functools.cache
