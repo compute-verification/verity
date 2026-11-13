@@ -284,7 +284,7 @@ def test_log_keeps_the_record_at_every_call_by_one_write_and_no_sync(monkeypatch
     monkeypatch.setattr(dsa_topk, "_capturing", lambda: capturing[0])
     monkeypatch.setattr(dsa_topk, "ROWS_EVERY", 3)
     canon = Recorder()
-    canon._stats["dev0"] = SimpleNamespace(tolist=lambda: list(counted))
+    canon._stats["dev%d"] = SimpleNamespace(tolist=lambda: list(counted))  # a name no formatting may take for its own
     ns = fake_ns([])
     dsa_topk.install(ns, canon)
     dsa_topk.log_to(canon, str(tmp_path))
@@ -325,9 +325,20 @@ def test_log_keeps_the_record_at_every_call_by_one_write_and_no_sync(monkeypatch
     assert len(writes) == len(calls) and len(set(writes)) == 1 and writes[0][1] == 0
     assert [sum(rec["calls"].values()) for rec in kept] == [1, 2, 3, 4, 5, 6, 7, 8]
     assert [rec["rows_at"] for rec in kept] == [0, 0, 3, 3, 3, 3, 7, 7]
-    assert [rec["rows"].get("dev0", {}).get("rows_long") for rec in kept] == [None, None, 5, 5, 5, 5, 11, 11]
+    assert [rec["rows"].get("dev%d", {}).get("rows_long") for rec in kept] == [None, None, 5, 5, 5, 5, 11, 11]
     assert kept[-1] == canon.record(read=False) == json.loads(path.read_text())
     assert kept[-1]["calls"] == dict.fromkeys(dsa_topk.OPS, 2) and len(canon.runs) == 5
+    # an op first launched since is in the next record; so are rows read again with no call between, as at an exit
+    # after a CUDA graph's replays, which add rows and no call
+    canon.launches["other"] = 3
+    ns.persistent_topk(narrow, None, None, None, k, 16)
+    assert json.loads(path.read_text()) == canon.record(read=False) and canon.launches["other"] == 3
+    for counted[0] in (20, 21):
+        canon.read_rows()
+        canon.on_call()
+        rec = json.loads(path.read_text())
+        assert (rec["rows"]["dev%d"]["rows_long"], rec["rows_at"]) == (counted[0], 9)
+        assert rec == canon.record(read=False)
     assert [f.name for f in tmp_path.iterdir()] == [path.name]
 
 

@@ -312,11 +312,20 @@ def log_to(canon: Canon, d: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
-    width = 0
+    fmt, rows, slots, width = b"", None, 0, 0
 
     def write(read: bool = False) -> None:
-        nonlocal width
-        text = json.dumps(canon.record(read)).encode()
+        # the record's text but for its counts changes only with the rows and with an op's first launch: it is made
+        # once for each (`fmt`), so that a call encodes its counts alone
+        nonlocal fmt, rows, slots, width
+        if read:
+            canon.read_rows()
+        counts = (*canon.calls.values(), *canon.launches.values())
+        if rows is not canon.rows or slots != len(counts):
+            rows, slots, rec = canon.rows, len(counts), canon.record(False)
+            marks = {k: dict.fromkeys(rec[k], "<count>") for k in ("calls", "launches")}
+            fmt = json.dumps({**rec, **marks}).replace("%", "%%").replace('"<count>"', "%d").encode()
+        text = fmt % counts
         width = max(width, len(text))  # a shorter text must leave nothing of a longer one behind it
         os.pwrite(fd, text.ljust(width) + b"\n", 0)
 
