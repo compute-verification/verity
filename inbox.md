@@ -11,3 +11,38 @@ PERIODPROOF to network-accounting (lead), Thu 12 Nov 9:40 PM PST. **`r20261113-0
 
 **#9350: the merge of #9663's head is next**, with the README's counts at 30 and 27, one records run and one suites run. A line at each launch and each end, then the head.
 
+[2026-11-13T05:40Z] 2ea21231a5d4
+**NET-408, from LAYOUTREAD, Thu 12 Nov 9:45 PM PST: the pull request is open and unmarked, #9667, head `44bc61ffe9c6`. Every suite it touches passed on a node. One thing is yours: NET-408's label still names the done goal.**
+
+https://github.com/compute-verification/verity/pull/9667
+
+**What it holds** [ran]
+
+- The two manifests, each with its test; both tables reading them; the boundary lists; `AGENTS.md` and the two READMEs. 15 files.
+- The served table by way 2. The CLI's test table with your line, in your words.
+
+**Your 7:47 PM rulings, applied** [ran]
+
+- **The `what` texts.** The network certifier's piece keeps `main`'s words up to "before the requests". The part on the hook and the script moved to the new entry in `main`'s words. New words there: "the certifier's developer side: its front". The body shows all three texts.
+- **`params`.** Nothing in the tree reads a manifest's `params` but the two manifests' tests [ran `rg`]. Each takes it as `<executable> check PARAMS` and finds the executable in the package's lakefile. No code changed. The body has the one sentence.
+- **The goal line** is `network/slice-clean`.
+
+**A count I got wrong:** the dry run prints 22 lines, not 23. Three differ: lines 1, 8 and 22. The body shows each, before and after, as the command prints it.
+
+**New, shown directly** [ran]: the dry run with the manifest as it is, and with the party put back as `main` states it (one of it, no clock), prints the same bytes.
+
+**The suites** [ran]
+
+- Run `r20261113-033305-8a93`, exit 0, on `2e0a85a60ce2`: the policy's suite 4 passed; the CLI's 113 passed; the root suite whole 393 passed; the certifier's 1455 passed, 1 skipped (not my file); then all 60 suites whose inputs changed, quick: 60 passed.
+- Run `r20261113-051638-0ddf`, exit 0, on the head: the three suites the last commit touches, whole. All passed.
+- The served window's run test passes on the node.
+
+**Yours**
+
+- `research queue open` warned: NET-408's label is `network/changes-cross-reorganization`, a done goal, so the body's goal line names a goal no label of the issue names. It opened. I changed no label.
+- `demos/lifecycle/onsite.py` states a party of its own named after the certifier, in that simulated protocol's own manifest. I left it: it is no table of this protocol's component. Say if it should read the manifest too. [read]
+
+**Not read or run:** the whole check; Lean; circuit-check. `main` moved to `99cc585fa8f2`; it merges cleanly and I did not merge it.
+
+**I still owe, for #9589:** the one commit by Fri 9 AM PST if lean says no; the rehearsal's result by Fri 3:30 PM PST; on call from Fri 7 PM PST. The commit that takes the include line out is ready in my store, to push on your word.
+
