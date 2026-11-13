@@ -45,7 +45,7 @@ starts the segment from the honest state (`state_congr`); the warp's checkpoint 
 (`redux_eq`, XOR is associative), and the run's chains differ from the honest ones in one word of one half step of one
 chain (`ofFn_split`, three times), so `Pouw.SecurityProofs.Receipt.LiCheckpointWordInjective` gives the word right.
 
-`windowUnbound`: at width `n + 1` the top bit `T` passes through a half step with an odd multiplier as XOR
+`executionPhaseUnbound`: at width `n + 1` the top bit `T` passes through a half step with an odd multiplier as XOR
 (`(x ⊕ T)·a = x·a ⊕ T`, `Pouw.ReceiptProofs.add_twoPow_top`, `twoPow_mul_odd`), so a flip of `d₀`'s top bit moves the
 state by `T`, and a second flip of the next segment's `d₀` takes it back.
 -/
@@ -241,9 +241,9 @@ theorem state_one {Ω U : Type} {n S : ℕ} (D : LiUnits Ω U n S 1 1 1) (ω : �
   simp [LiUnits.state, LiUnits.steps, liChain, List.ofFn_succ]
 
 /-- **One receipt word a window does not bind li's words.** -/
-theorem windowUnbound {Ω U : Type} (n : ℕ) (D : LiUnits Ω U (n + 1) 2 1 1 1) (ω : Ω)
+theorem executionPhaseUnbound {Ω U : Type} (n : ℕ) (D : LiUnits Ω U (n + 1) 2 1 1 1) (ω : Ω)
     (h : ∀ u, ∀ s < 2, D.pos ω u s = 0 ∧ D.value ω u s = D.honest ω u s 0 ^^^ BitVec.twoPow (n + 1) n) :
-    D.sameWindow ω ∧ ∀ u, (∀ s < 2, D.value ω u s ≠ D.honest ω u s (D.pos ω u s)) ∧
+    D.sameExecutionPhase ω ∧ ∀ u, (∀ s < 2, D.value ω u s ≠ D.honest ω u s (D.pos ω u s)) ∧
       D.checkpoint ω u (D.word ω u) 0 ≠ D.checkpoint ω u (D.honest ω u) 0 := by
   have hw : ∀ u, ∀ s < 2, D.word ω u s (0, 0, 0, 0) = D.honest ω u s (0, 0, 0, 0) ^^^ BitVec.twoPow (n + 1) n ∧
       D.word ω u s (0, 0, 0, 1) = D.honest ω u s (0, 0, 0, 1) := by
