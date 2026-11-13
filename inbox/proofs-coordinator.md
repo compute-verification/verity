@@ -145264,3 +145264,191 @@ Three places of that draft wait on a measurement and say so in capitals. The dif
 ### State
 
 Scratch at `dea72a0f1f7`, pushed. One run in flight or just ended, as said under 1. Next: the build of the docstring commits, then the draft's records run if you want it. I carry nothing onto the draft branch before #9520 is on `main`.
+
+## STOPDRIVER, Fri 13 Nov 14:12Z: B's draft `b7e15e1d4ccb` (tests pass one commit below; head's run pending); key; `b.stop`; carry
+
+Order 4 part 2, and the 13:29Z and 13:47Z messages, in one entry. No pull request, no mark, no Lean. [run]
+
+### The draft: `cursor/proofs-stopdriver-family-ffc6` at `b7e15e1d4ccb`
+
+- Base: `origin/main` `053b8e50fe8a`, seven commits. `main` holds `stop_audit.py`, `two_stage.py` and all four test
+  files, so the draft needs no other head; and Sunday's serve takes B from `main`. [read]
+- **One definition, a module of its own** (soundness's word, 13:47Z): `benchmarks/one_stage/window_place.py`. [read]
+  `of(window)` reads four items of a record's window and no other and gives the sample's place:
+  `((prompt · 2^32 + outputs) · 2 + stopped) · 2 + blocks`, `blocks` 1 where `population` is "stop". [read]
+  `family(window)` is `draw/<place>`, the place in decimal. `of_layout`, `family_of` give the same from a layout. [read]
+  A window with any other word in one of the four has no place and is refused: a size that is no natural number
+  below 2^32, a `stopped` that is neither true nor false, a `population` other than "stop", the stop blocks of a
+  class that is no stop class. [read] This is stricter than the text of my 13:33Z line, which did not say what an
+  odd `stopped` or `population` gives; TWOLEG should take this one. [read]
+- **Every Python caller uses it.** [read] `two_stage._first_all` reserves by it (954, 956) and checks its stop
+  samples' order on it (1034); `two_stage.resume` names the family by it (411) and refuses a hand-off that names
+  another (413); `stop_audit.resume` the same for the stop blocks (291, 293); `stop_audit.link` hands Lean's `across`
+  the family by it (337). The stream's two-stage run does not call it itself: the stream names a sample's family
+  from its challenge source's label (`service.py` 2182 to 2186, `_family`), and `resume` sets that label by the
+  function, so the family the stream names to the verifier's run at `second` is the function's. [read]
+- **Why under `benchmarks/one_stage/` and not under `verity/`.** [read] All its Python callers are there, and no
+  Python under `verity/protocols/spot` or `recursion` reads a record's window's `prompt`, `outputs` or `stopped`
+  today (grep). If soundness wants `service.py` itself to call it, the module moves to
+  `verity/protocols/spot/verifier/`, a new file in a trusted place that imports nothing: say the word. [derived]
+- **The first stage** (`_first_all`): every class's layout and place are computed before the session opens; a
+  class with no layout, or two directories of one place, refuse the whole window before any session
+  (`_unopened`, 916); the session reserves the places of the classes and of the stop classes' stop blocks. [read]
+- **`resume`** (383): the root is the record's window's `run` (`first_root`, 1048), and refused are a hand-off that
+  names another root, a record whose run is not its commitment's, a caller's root that is not the record's, a record
+  whose window names another class than its commitment's layout (406, new with the module), and a hand-off that
+  names another family. A hand-off that names neither resumes. [read]
+- **The docstring sentence** in `coins.py` (module docstring and `coins_reason`): written as what is true at this
+  commit, not as "false of these two commands", since the same commit makes the two commands hold both. It says the
+  rule holds of a verifier that names the family and the root itself, that nothing in `coins.py` can check that,
+  and that a caller that builds its stream again from a prover's hand-off names both from the record and layout
+  (`two_stage.resume`, `stop_audit.resume`). If soundness wants the sentence on `main` before B, it is a different
+  sentence and a pull request of its own. [read]
+- **`first` and `second` must be of one commit.** A hand-off written by today's `first` names the family of its
+  directory's order (`draw/0`, `draw/1`), and B's `second` refuses it. [derived]
+
+### Rows for TWOLEG
+
+`PLACES` in `benchmarks/one_stage/tests/test_two_stage_driver.py`: 28 windows, 11 with a place and 17 refused,
+each also tried with five more items in the window that must not move it. [run] The ones with a place: [run]
+
+~~~text
+{"prompt":4,"outputs":4}                                        68719476752
+{"prompt":4,"outputs":4,"stopped":false}                        68719476752
+{"prompt":4,"outputs":4,"stopped":true}                         68719476754
+{"prompt":4,"outputs":4,"stopped":true,"population":"stop"}     68719476755
+{"prompt":4,"outputs":2}                                        68719476744
+{"prompt":2,"outputs":8}                                        34359738400
+{"prompt":8,"outputs":2}                                        137438953480
+{"prompt":0,"outputs":0}                                        0
+{"prompt":0,"outputs":1}                                        4
+{"prompt":1,"outputs":0}                                        17179869184
+{"prompt":4294967295,"outputs":4294967295,"stopped":true,"population":"stop"}   73786976294838206463
+~~~
+
+Refused: a size of 2^32, of -1, "4", 4.0, true, null or absent; `stopped` 1, "true" or null; `population` "stop"
+without `stopped` true, "spans", null or 1. [run] Three rows are about how a reader takes JSON (4.0, true for a
+number, an explicit null) and are Python's verdicts: if Lean's reader cannot tell 4.0 from 4, say so and I drop
+the row and state the rule for it. [guess]
+
+### Tests
+
+- `r20261113-134455-b5b3` (vy-nebius-cpu-3), head `86738ac34c21`, the six commits before the module: the four
+  `benchmarks/one_stage/tests` files 40 passed in 432.55 s, `spot/verifier/tests/test_two_stage.py` 98 passed, exit
+  0. [run]
+- `r20261113-135815-9945` (vy-nebius-cpu-14), head `b7e15e1d4ccb`, the same five files and the root's
+  `tests/test_boundaries.py` and `tests/test_repository.py`: running since 13:58Z, expected by 14:30Z. Its result
+  follows in one line; until then the module's commit is tested only by the place test on the VM. [run]
+- On the VM: the place test alone (1 passed) and ruff on the six files (clean). [run]
+
+### What B's pull request sits on, and what it crosses (13:47Z, item 2)
+
+- **It sits on `main` alone.** It needs neither #9699 nor #9458. A trial merge with `origin/main` `053b8e50fe8a`
+  is clean. [run] (All trial merges here are `git merge-tree`, which writes to no branch.)
+- **#9699** (`725720f8a4a0`): conflicts in `stop_audit.py` and `tests/test_stop_audit.py`. [run]
+- **#9458** (`049c5875989c`): a conflict in `tests/test_stop_audit.py` only; `stop_audit.py`, `two_stage.py` and
+  `test_two_stage_driver.py` merge by themselves. [run]
+- **Chain 2** (#9734, now at `031af1f38001`, on `main`): it moves two of B's files,
+  `verity/protocols/spot/device/coins.py` and `verity/protocols/spot/verifier/tests/fake_challenger.py`, to
+  `verity/protocols/proofs/spot/...`, and rewrites lines in `two_stage.py` (11), `stop_audit.py` (3) and the four
+  test files (1 to 4 each). [read] A trial merge conflicts in `two_stage.py` only. [run] By the rule B is carried
+  with `tools/move/restack.py` once chain 2 is on `main`, not by hand.
+- **Friday's commit `984cb027efa3` is not on `main`.** [run] B's own files merge with it by themselves; the three
+  conflicts of that trial merge are in files B does not touch (`sampler_capture.py`, `a5.py`, `test_difftest.py`),
+  so they are between that commit and `main`. [run] So "B on `main` for Sunday" also needs the cards piece on
+  `main`, or Sunday runs the cards branch and B is carried onto it: which is the case is not mine to say. [derived]
+- **The hour.** B has a head now, `b7e15e1d4ccb`, which I would name as a draft only. [read] The head that can be marked
+  exists one carry after the last of chain 2, #9699 and #9458 to land before it. A carry is one restack (chain 2) or
+  a resolution in two files (#9699, #9458) and one node run of the five test files, which took 13 minutes end to
+  end. [run] So: within the hour after chain 2 is on `main` if B goes ahead of #9699 and #9458; within the hour
+  after the later of those two if it goes behind them. [guess] It depends on: your word to open it; chain 2's
+  hour; the order of B against #9699 and #9458; TWOLEG's rows agreeing with `PLACES`; and soundness's word on where
+  the module lives. [derived] It does not depend on part A or C. [derived]
+
+### The second session's root at `984cb027efa3` (13:47Z, item 3)
+
+Derived, by `second` itself: it is no field of the hand-off, and it is not from the committed interior either.
+[read] `benchmarks/one_stage/two_stage.py` 1163: `root = IR.interior_run(again.registration.digest, sample)`, the
+SHA-512 of the boundary registration's digest and the first stage's sample (`interior_rows.py` 341 to 344). [read]
+The session opens on it with the one family 0 (1164, 1166), and the interior is committed afterwards, under it
+(1171, `window_root=root`). [read] Its two inputs are the first stage's: `again` is `resume`'s (1154), which at that
+commit takes the first session's root from the hand-off's `window_root` or its commitment's run (1118 to 1120), and
+`sample` is the stream's selection again on the hand-off's bytes (1157). [read] So a prover that picked among first
+stage samples picked the second session's root with it; nothing else chooses it. [derived]
+
+### Who holds the challenger's key (13:29Z, item 3)
+
+- **On `main`: nothing.** The first stage's evidence names its own key, ledger, `main` and pins, and
+  `coins.coins_reason` reads them from the evidence (`verity/protocols/spot/device/coins.py`, the call of
+  `trusted_session_of` with `ChallengerKey.from_json(coins["key"])`); Lean the same (`Spot/ChallengerCoins.lean` 117
+  to 121). [read] `two_stage._second` hands `stage1.get("evidence")` to the stream's outcome, and `stop_order` uses
+  `evidence["key"]`. [read] So a hand-off written under any key verifies under that key. It is the same kind of
+  finding. [derived]
+- **On the join's branch (`4e986e339ad2`), the Python second stage holds it.** `coins_reason(key, main, ...)` takes
+  both from its caller (`coins.py` 383); `two_stage.first_coins` (1168 to 1179) gives the stream's own, set from
+  `a5_coins.held(draws)` (416 to 422). [read] Under a gate that key is `--challenger-key`'s record
+  (`a5_coins.py` 709, `served_h1/coins.py` 567 to 571, `challenger.key_of_record` 598 to 609). [read] That reader
+  checks the record's form and that the public key's SHA-512 is the one the record itself names, and nothing more:
+  that the file is the one the auditor's operator published is the caller's, by its docstring. [read] Under
+  `--challenger local` the key is the local challenger's own, from the directory `first` kept (429 to 447). [read]
+- **The compiled form holds it to nothing.** Its parameters' key is `run["key"]`, the run's own input
+  (`sampled_two_case.assemble` 65 to 70 writes `boundary.challenger = {"key": key, "label": run["family"]}`), and
+  the form reads no key record and compares the key with nothing. [read] So in the compiled form the key is the
+  parameters' word, as the family and the root are: a third item for the same refusal, or a named premise. [derived]
+- Friday's two small scripts run `--challenger local` (`sampled_two_small.sh` 70, 76, 108, 113;
+  `two_stage_small.sh` 97, 102), where the challenger is the prover's own process and no key means anything. [read]
+
+### Network's question: which entries of `b.stop` the stop audit covers
+
+**Every entry of `b.stop`, and no request outside it.** The audit does not read the finish. [read]
+
+- `b.stop` is a stop class's alone (`boundary_rows.py` 30). A span the rule ends as it was served is filed in the
+  stop class of its prompt's size; every other span is filed `-nostop` "with no `b.stop` and no stop block": an
+  abort, an error, a request still running, one the rule runs past T (finish 0), a body's own stop strings, a
+  `min_tokens` other than 0, a request the certifier did not release (`boundary_stop.py` 6 to 14, `filed` 161 to
+  172). [read]
+- The audit's population is one stop block a span of the class, slot r its r-th span's (`boundary_rows.py` 382 to
+  387; `two_stage.stop_spec` 432). Block i reads rows i of the boundary record's `b.request` and `b.egress` and its
+  output is row i of `b.stop`, each a registered read under the root its record registers (`stop_audit.py` 8 to 13;
+  `boundary_stop.stop_registration` 174 to 192, `stop_record` 194 to 206). [read]
+- The design is a rate over those blocks, `subset:K` with K = ceil(NUM · n / DEN) (`service.py` 753 to 754,
+  `draw.rate_count` 112 to 116). At `rate:1/1` K = n: every block, so every row of `b.stop` under the stop record's
+  root is proved to be the rule's word on its span's committed rows. [read]
+- **Finish 0 among them.** The rule's word can say finish 0: "When no length up to T stops, n = T and finish is 0"
+  (`stop_rule.py` 13 to 14). [read] An honest serve files no such span in a stop class (`Stop.word` gives None, 141
+  to 158, and `port_rows` raises, `boundary_rows.py` 538 to 543), but that is the serve's code. [read] A serve that
+  files one there commits a row whose word says finish 0; the audit proves that word and accepts it, since
+  `stop_audit.py` has no line that reads a finish. [run: grep] So the refusal of finish 0 is the tie's
+  (`response_tie.py` 35), and it is needed. [derived]
+- **So network's argument holds at 1/1, under four conditions.** [derived] (1) The tie reads `stop` under the root
+  the stop record registers for `b.stop`: that root is in the stop record, not the boundary record
+  (`Layout.stop_ports`, 498 to 500). (2) The stop audit's record accepted and is complete at `rate:1/1`; below 1/1
+  an unsampled row is not audited, and until B and its Lean are in, below 1/1 the prover picks the sample.
+  (3) The word is the rule's on the committed rows, and nothing yet holds those rows to the certified request:
+  the audit's `request-row` and `stop-rule` entries are null (`stop_audit.py` 49 to 50), and "a serve that writes
+  any length there has a correct stop block" (`boundary_stop.py` 26 to 28). A request cut short with a short
+  `max_tokens` written into `b.request` has an audited stop word that says length. (4) Nothing in the stop audit
+  holds the filing: that a request filed `-nostop` is one the rule does not end. Those have no stop word, so the
+  tie's no-stop form is all that reads them.
+
+### Branches
+
+- `cursor/proofs-stopdriver-family-ffc6` `b7e15e1d4ccb` (B's draft; no pull request).
+- Unchanged: #9699 `725720f8a4a0`, #9624 `64364792ed70`, #9458 `049c5875989c`, cards `08b5d4b3c0a6`.
+
+### Not established
+
+- No run under a gate: the places are large numbers (`draw/68719476752`), and only a local challenger and the test
+  challenger have reserved and released on such labels. [run]
+- `first()` and `stop_first()` still take their caller's challenge source and do not hold its label to the place:
+  `_first_all` reserves by place and `resume` refuses, and a caller of `first()` alone is not held.
+- The second stage's own session (the interior's root, family `draw/0`) is outside B: see the root's read above.
+- Nothing here is Lean. Lean's `across` still takes the family from its input, which `link` now names; the compiled
+  form's refusal is TWOLEG's, and I have not read TWOLEG's branch.
+- Whether Lean's reader gives the same verdict as Python on the three JSON rows (4.0, true, null).
+- The module's place in the tree is my choice, not soundness's word.
+- The carry: B has not been restacked or merged with anything; the conflicts above are from trial merges only.
+- The key: I read `key_of_record` and its callers, not who publishes the record or how a verifier gets it.
+- Network's question: I read our side and the tie's docstring on `main`; I did not read network's branch or run
+  the tie.
+- Part A is not in the draft; part C is network's.
