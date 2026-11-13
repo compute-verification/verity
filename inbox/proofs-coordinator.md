@@ -133062,3 +133062,49 @@ theorem heldOf_of_descOk (u₀ : Unread) (hd : SampledTwoDesc.descOk p bs i it =
 ## Branches
 - `cursor/proofs-heldof-4c7b` at `68dc23428a`; compiled up to `b1afc9fffa`. No pull request: it lands through the join.
 - Scratch, runs only: `cursor/proofs-heldof-logitsrun-f684` at `828e59d30d`.
+
+## [2026-11-13T09:37Z] ACCEPTS: NO statement changed; ASSEMBLY's row 10 cannot be made an instance "at every size": `PartsAre` holds of NO held copy where the interior program has a stratum (HELDOF's `not_partsAre`, on the join); the form that reads no byte of the play is at the ONE size `K` a first stage of count `K` samples: new `PartsSizedAt` and `partsHeldAt_of_sized` at `413f769e2d` on `cursor/proofs-accepts-7d08` which COMPILES WHOLE (`r20261113-092912-932d`: `AcceptsTop.lean` "lean exit 0 in 327 s", 16 theorems, probe clean); ASSEMBLY: `413f769e2d` is yours to take when convenient (no conflict on `854e4f245e`, one file, nothing in `JoinsAt.lean` changes)
+
+**In plain words.** The join holds my head `82c77292dd` and its `JoinsAt.lean` is mended as I wrote (ASSEMBLY 09:00Z). I changed no statement since. ASSEMBLY's 09:10Z table says `partsHeldAt` becomes a premise on the parameters alone "if asked at every size". Asked at every size it is false, so that move would make the join's theorem empty. I added the form that is not false: where the first stage samples a fixed number `K` of replay blocks, the parts need only be right at `K`.
+
+**Row 10, what is wrong with "every size"** [read: `HeldOf.lean` at the join's `854e4f245e`, the same blob as at my head].
+- `PartsAre it h` asks `Spot.SecondStage.parts q strata = some (partsAt h q)` at every `q`. At `q = 0` every stratum is refused (`partOf` asks `0 < q`; `partOf_zero`), so `parts 0 strata` is `none` as soon as there is one stratum. HELDOF proved exactly this: `not_partsAre : strata it… = .ok strata → strata ≠ #[] → ¬ PartsAre it h`.
+- At other sizes it fails too [derived]: `partOf q` asks `(hi - lo) % q = 0` and gives `n = (hi - lo) / q`, so one interior program gives the held copy's `n_t` at one `q` only. The interior program is registered for one sample size.
+- So `partsAt_of_partsAre` is true and of no use: its hypothesis holds only of an interior program with no stratum.
+
+**What I added** [read: `git diff 82c77292dd 413f769e2d`, one file, `AcceptsTop.lean`; no existing statement, premise or proof touched].
+- `PartsSizedAt A C K`: at each accepted play, where the interior program's strata are `strata`, `Spot.SecondStage.parts K strata = some (SpotFlock.partsAt A.h K)`. It reads the play's parameters (the interior program and query) and the held copy. It reads no byte of the play: not the challenges, not the replay sample.
+- `partsHeldAt_of_sized (hK : SpotFlock.firstK A.h.reg.first = some K) (hs : PartsSizedAt A C K) : PartsHeldAt A C`. The proof is the one line the join already holds: `SpotFlock.select_subset_size` (`Cap.lean`) says a first stage with `firstK = some K` proves `K` units on any bytes, so the play's replay sample has size `K`.
+- `AcceptsTop` imports `Proofs.Flock.SpotFlock.Cap` by name (it was already in its closure). No new module, so no root.
+
+**Row 10 after it** [derived].
+- `firstK A.h.reg.first = some K`: kind instance. It reads the held copy's first-stage registration only: no closure map, a rule that is not `All`, and a law Flock reads over the population as a uniform `K`-subset. SpotFlock's counts already take this same hypothesis on `h.reg.first` (`Counts.lean`, `ClassCounts.lean`, `Drawn.lean`, `FirstHitClassCaps.lean`), and the honest instance has `firstK g = some 1` (`Honest/Instance.lean`) [read: `git grep firstK` at the join's `854e4f245e`]. No file under `SampledTwo/` names it yet.
+- `PartsSizedAt A C K`: kind instance in the sense rows 11 and 12 are (it reaches the parameters through the accepted play, as `HeldOfAt` does). HELDOF's `partsFit A.h K strata` decides it, one comparison per template (`parts_of_fit`).
+- What it costs [read: `SampledTwo.paramsOfJson`, `Spot.Select.textOver`]: the form's parser takes any two-stage rule. `firstK` is `some` where the first stage's law is a rate law (`textOver` resolves it to `subset:k`) or `subset:K` itself. Under a `bernoulli` first stage the replay sample's size varies with the challenges, and one interior program fits one size, so `PartsHeldAt` itself fails there as soon as two accepted plays' samples differ in size [derived]. Under `stratified:K` or `work:K` the size is fixed but `firstK` is `none`; this lemma does not reach them.
+
+**Compiled** [run], vy-nebius-cpu-3, `r20261113-092912-932d` at `413f769e2d` (worktree clean, pushed before launch), rc 0:
+- "lean-try: security/Proofs/Properties/Verity/SampledTwo/AcceptsTop.lean: lean exit 0 in 327 s"
+- "axiom probe: none of its 16 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"
+- "siblings: no built module of its package that doesn't import Proofs.Properties.Verity.SampledTwo.AcceptsTop declares a name it does"
+- No warning on `AcceptsTop.lean`'s own lines.
+
+**ASSEMBLY.** `413f769e2d` merges into `854e4f245e` with no conflict [run: `git merge-tree --write-tree 854e4f245e 413f769e2d`, rc 0; the one file that differs from the join's tip is `AcceptsTop.lean`, +22 −1, and it is my head's blob]. It adds two names and one import and changes nothing the join calls, so `JoinsAt.lean` stays as it is. When the coordinator says row 10 moves, the field `partsHeldAt` becomes two, `firstK A.h.reg.first = some K` and `PartsSizedAt A C K`, and line 390 passes `(partsHeldAt_of_sized hK h.partsSizedAt)`. Do not move row 10 to `PartsAre`.
+
+**HELDOF.** `PartsAre` and `partsAt_of_partsAre` are yours; I touch neither. Your `not_partsAre` is what this entry rests on. `dc45145249` is not on the join [run: `git merge-base --is-ancestor`], so `twoHolds_at` keeps its population line.
+
+**STOP RULE.** Nothing. No listed guarantee's statement, no named assumption and nothing the verifier accepts changed by my hand. The two new names are listed nowhere in the lock.
+
+**NEEDS.**
+- Coordinator: whether row 10 moves to the two instance premises above. I change no caller until you say; `playAccepts_form` and the four over it still take `PartsHeldAt`.
+- ASSEMBLY: take `413f769e2d` when convenient; nothing rests on it until row 10 moves.
+
+**Not established.**
+- That any of the nine premises holds of a real play.
+- Whether an accepted run already decides `PartsSizedAt`. I read [read: `Spot.Run.interiorAudit`, `SecondStage`'s uses of `own.parts`] that the run computes `parts sample.size strata` itself and checks the interior record's population is `sample.size · Σ n_t`; I found no check that holds each stratum's size to its template's cells in the replay block, and I have not read `SecondStage.check` to its end for one.
+- That `firstK` is `some` at Friday's parameters: I read the parser, not the parameters.
+- That `twoHolds_at` compiles on HELDOF's `dc45145249`: reasoned, not run.
+- The join's whole compile `4d80`: not mine, not read.
+
+**Runs.** Ended, rc 0: `932d`. Nothing out.
+
+**Machine** [run]: the VM built nothing; pen `~/wt/.pen` mine since 07:13:21Z; inbox titles read to SESSIONOF2's 09:29Z, none since my 08:47Z entry asks anything of me. No `main` merged.
