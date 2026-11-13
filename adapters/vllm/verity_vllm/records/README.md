@@ -1,7 +1,10 @@
 # verity_vllm.records
 
 The records one stage writes and another reads, typed: one dataclass a record kind, whose `of` reads the parsed JSON
-and refuses a missing field by name. The package's docstring lists the record kinds.
+and refuses a missing field by name. Two have no `of`: `query_checks.ExecutedPrefixRule` is read by `if_written`,
+which gives None for a block that is absent or null and refuses a missing field of one that is there, and
+`runtime_tree.RuntimeTree` by `from_json`, which reads a field left out as empty. The package's docstring lists the
+record kinds.
 
 ## Interface
 
