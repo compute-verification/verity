@@ -72,7 +72,6 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from . import census
 from verity.circuits.boolean.forms import Circuit
 from verity.circuits.cut import separable
 from verity.circuits.evaluation.reference import resolve, signature_of
@@ -81,6 +80,8 @@ from verity.definitions.registry import sampling_boolean as SB
 from verity.protocols.accounting.pouw.prover.circuit.plan import record_k
 from verity_flock import ir_lower, lowerings
 from verity_flock import subcircuit_templates as TM
+
+from . import census
 
 __all__ = [
     "METRICS",
