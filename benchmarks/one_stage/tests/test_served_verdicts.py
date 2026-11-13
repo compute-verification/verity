@@ -2537,12 +2537,12 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     exit status, the verdict lines, the steps in order and the limits."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
     for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "protocols" / "flock" / "verifier",
-              tree / "verity" / "protocols" / "spot" / "verifier" / "lean", tree / "verity" / "protocols" / "flock" / "pod", bin_, venv,
+              tree / "verity" / "protocols" / "spot" / "verifier" / "lean", tree / "verity" / "protocols" / "flock" / "prover" / "pod", bin_, venv,
               d / "advice" / "w7" / "private", tmp_path / "row"):
         p.mkdir(parents=True, exist_ok=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(prove_path)
     (tree / "benchmarks" / "prove_path" / "records_audit.py").write_text(records_audit)
-    (tree / "verity" / "protocols" / "flock" / "pod" / "60-circuit.sh").write_text("exit 0\n")
+    (tree / "verity" / "protocols" / "flock" / "prover" / "pod" / "60-circuit.sh").write_text("exit 0\n")
     for f in (d / "advice" / "w7" / "private" / "advice.bin", tmp_path / "row" / "manifest.json",
               tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
         f.write_text("")

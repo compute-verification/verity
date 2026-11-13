@@ -83,7 +83,7 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "benchmarks/network_e2e/encodings/tests/fixtures",
           "verity/protocols/certifier/verifier/network/tests/fixtures/slot_entry.json",
           "verity/protocols/certifier/verifier/network/tests/fixtures/select_entry.json",
-          "verity/protocols/flock/agreement/redigest.py", "verity/protocols/flock/agreement/transcript_check.py",
+          "verity/protocols/flock/prover/agreement/redigest.py", "verity/protocols/flock/prover/agreement/transcript_check.py",
           "benchmarks/one_stage/interfaces/verity_e2e_demo/schemas/block-record.v2.schema.json",
           "benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py", "benchmarks/census/deployments.json",
           "benchmarks/one_stage/interfaces/verity_e2e_demo/__init__.py", "benchmarks/one_stage/served_verdicts.py",
