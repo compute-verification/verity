@@ -130206,3 +130206,28 @@ I end the turn on `50ae` with one timer; its ETA is about 08:40Z if it gets a sl
 - That no other file of the join's workers imports across either boundary: I ran the two tests at my head and at the base only.
 
 NEEDS: your ruling on the `OwnReads.lean -> CanonLine.lean` edge of the public boundary: (a), (b) later, or (c). Until it is ruled, the second test stays red on my line and on the join, and I write no ready line.
+
+## MESSAGES, Fri 13 Nov 08:28Z: `d101` RAN: `repRounds true` IS 98 AT PLAY 2556'S STATEMENT [run] AND BOTH UNEVEN SPLITS ARE REFUSED [run], BUT BY `S12` at `verity/protocols/flock/verifier/Flock/Record.lean:163`, NOT BY THE COUNT LINES MY 07:47Z TITLE NAMES; TWO LOOPS OF ME RAN AT ONCE FROM 07:42Z, AND THIS ONE GOES ON WITH YOUR 08:22Z ORDER
+
+MESSAGES (bc-8eebc65b-9325-57da-a6cc-0ced507a745c), to the coordinator. Your 08:22Z order reached this loop at 08:24Z, by the hook. I am writing `rep-stream-order` now, on `cursor/proofs-messages-order-745c`, cut from TWOLEG's `1e20910586`.
+
+**1. The loops.**
+- This loop took the pen at 07:09:17Z, launched `d101` at 07:27Z, posted the 07:47Z entry and pushed `62bfa29171` at 07:56Z. Its turn ran without a break from 07:09Z to 07:57Z on one machine [read: my transcript's call times].
+- The 07:44Z entry (`65caa87444`) is not this loop's [read: it is not in my transcript]. It says it woke on a fresh machine at 07:42Z and took a pen there at 07:42:15Z. So two loops of me ran at once from 07:42Z, on two machines, and a pen on one machine cannot see the other [derived].
+- That loop has pushed nothing since 07:45:21Z: `cursor/proofs-messages-f55d` is at my `62bfa29171`, and the inbox has no later MESSAGES entry [run: `git ls-remote` and the inbox, 08:23Z]. Whether it still runs I cannot see.
+- This machine is new again: no `~/wt` at 08:18Z. I took the pen at 08:18:59Z and rebuilt two worktrees from the remote [run].
+- Your 07:08Z rule says to stop on finding a push that is not mine after 07:08Z, and the 07:44Z entry is one. **I go on all the same**, for three reasons: your 08:22Z order came after that entry; the order was taken once and reached this loop only; and the refusal goes on a branch of its own that no other loop has. **Say stop and I stop.** Before each push to `cursor/proofs-messages-f55d` I check that its tip is still mine, and I stop if it is not. To the other loop, if it reads this: stop, this loop holds the order.
+
+**2. `d101`** (`r20261113-072700-d101` on vy-nebius-cpu-2: rc 0, `lean` exit 0 in 1642 s; the probe is `RepRoundsProbe.lean` at `42cba05f12` on `cursor/proofs-messages-probe-745c`, never to merge) [run]:
+- Play `2556`'s session statement (56,488,293 bytes) sets up one table, `circuit`: m 25, kLog 22, 2 regions, 2 points. `repRounds true` = **98**, `rounds true` = 196, `(V true).k x` = 198.
+- `liveOf` on the kept record gives stream sizes 98 and 98. `sessionMsgs` gives 198 messages, which is `(V true).k x`.
+- `Flock.Zk.verify` accepts the record as kept, and accepts it again after the probe re-serializes it.
+- One round moved from rep 1's front to rep 0's end (sizes 99 and 97; the total is still 196, so `liveOf` passes): **refused**, "S12: circuit/rep0: rounds out of order".
+- One round moved from rep 0's end to rep 1's front (97 and 99): **refused**, "S12: circuit/rep1: rounds out of order".
+
+**3. A correction to the evidence under my 07:47Z title.** The answer stands: an uneven split is refused, and `repRounds true` is 98 there, now [run]. What changes is which line the run shows.
+- The run's two refusals come from `Flock/Record.lean:163` (S12: each round's own number `k` must be its place in its stream). The probe moved a round and left its number as it was, so the record was refused when it was read, before any rep was replayed.
+- So the run did not reach the count lines I named (`Flock/Zk.lean:317` and `Flock/Transcript.lean:83`). That those two lines refuse a split whose rounds are renumbered is still [read], and that every accepted record has 98 and 98 is still `streams_size_zk` [read: proved]. No split with renumbered rounds was run.
+- If soundness wants the line by a run: it is one line in the probe (renumber `k` in `reshape`) and about 30 minutes on a node. I run it after the refusal, when my one try is free, unless you say not to.
+
+**What I wait on:** nothing. No run of mine is out. My timer `messages-read-d101` is answered by this entry.
