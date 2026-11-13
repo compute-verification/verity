@@ -129,8 +129,9 @@ run on it, so that failure costs seconds; and the source checks aren't run on a 
 ``why`` then ends by saying the rules after weren't judged.  ``--every-rule`` judges those too and names what each finds,
 in the change's ``why`` and ``fix``, so one run tells a change all it fails.  Every verdict and the exit are as without
 it: it adds to a failed change's text alone, and lints or checks that can't run on a change another rule fails are named
-there, where they exit 2 on a change nothing else fails.  It costs the lints' time on each failed change (over a minute on
-one that touches a lint or a list), which the preflight's budget may not have.
+there, where they exit 2 on a change nothing else fails.  It costs the lints' time on each failed change (minutes on one
+that touches a lint or a list), which the preflight's budget may not have: it is for the run a failed change's author makes
+before marking the branch again.
 
 It runs on git, in the repository of the current directory, and runs no code but the base's (its lints and the ruff it pins,
 and BASE's move_check, beside the scripts it loads).  The ready mark's preflight runs it on the PR's merge, as BASE has it,
@@ -156,8 +157,7 @@ judgement reads only its own commits (and BASE), so the changes the cache doesn'
 process of its own, its worktree and ruff cache with it, up to ``$RATCHET_GATE_JOBS`` at a time (default the lesser of 16 and
 this process's CPUs; 1 judges them in turn), and reported in chain order, as judging them in turn reports them.  git keeps
 no lock on a repository's worktrees, so each process adds and removes its own in its turn (`worktree_turn`).  Before
-marking a branch, run ``python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD --every-rule``.  Exit 0 when every
-change passes,
+marking a branch, run ``python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes,
 1 when one fails (with the fix), 2 on a usage or git error, or when the base's lints or ruff can't run (with the fix for the
 host), which fails the check's step: the gate never passes what it couldn't judge.  ``--json`` prints `KIND`, whose
 ``failures`` name each failing change's top ``commit``.
