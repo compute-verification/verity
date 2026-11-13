@@ -15,6 +15,8 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.Place
 public import Proofs.Properties.Verity.Sampled.MemberForm.Sessions
 public import Proofs.Properties.Verity.Sampled.MemberForm.Links
 public import Proofs.Properties.Verity.Sampled.MemberForm.Read
+public import Proofs.Properties.Verity.Sampled.MemberForm.Ranges
+public import Proofs.Properties.Verity.Sampled.MemberForm.Sample
 
 /-!
 # The per-member form of one-stage v2, as its proofs read it
@@ -61,4 +63,10 @@ the lock) give of the bytes and the release log they accept, each stated at the 
 * `MemberForm.Read`: v2's read at an accept of the form (`accept_read`): the releases it read the release log as,
   whose reads are the device's log's, the trees `membersTreeReason` accepts the sessions against, each statement's
   one session as the structure names it, and the device's log in order at the sample's family and digest.
+* `MemberForm.Ranges`: one range of units and lists in one order, over natural numbers alone: a range's first
+  unit, count and units, lists strictly ascending under a key with the same members (`eq_of_sorted`), and the
+  place of a member a filter keeps (`filter_at`).
+* `MemberForm.Sample`: the sample a session's record holds at its member's statement, and the units it proved
+  (`session_sample`): the subset print of slots ascending below the member's count, the units the member's first
+  unit plus each slot.
 -/
