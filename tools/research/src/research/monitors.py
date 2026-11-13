@@ -613,17 +613,28 @@ def n2_parts(names: set[str] | frozenset[str]) -> dict[str, list]:
 
 # ---- relay-side: GitHub, the evidence store, Slack, and node 2 itself -------------------------------------------------------------
 
+COPY_BEHIND_S = 7 * 86400       # a whole tree's copy is main's code and may be behind it; a week of readings behind is a finding
+COPY_BEHIND = {"stale": "{} stale", "missing": "{} of main's missing", "dropped": "{} main has dropped"}   # by drift's state
+
+
 def deploy_drift(ctx: Ctx) -> list[Finding]:
     """Files on the nodes that aren't main's, still run old code, or stray (`research deploy drift --json`; it fetches origin,
-    which the nodes can't): one incident per node and kind.  A node whose null device isn't the character device 1,3 with mode
-    666 is a page of its own, with the command that repairs it: every redirect to /dev/null fails there for a user who isn't
-    root.  A node ssh can't connect to (a stopped VM) is skipped; any other read that fails, or every node unreachable, is the
-    monitor's error."""
+    which the nodes can't): one incident per node and kind.  What a whole tree's copy differs from main by (deploy.toml's
+    `whole = true`: a copy of main's code a node runs, installed in deploy rounds and so behind main between them) is not
+    the node's drift: its stale files, those main has dropped since (`dropped`) and, where a copy is installed, those main
+    has added (`missing`) are one finding per node, tree and installed directory (`copy`: each install makes a new one, so
+    its week starts at the install), an incident only once every reading for a week has found that copy behind, with what
+    differs counted and the command that installs main's.  A file of the copy that a branch has (`ahead`) or no commit has
+    (`unknown`) is the node's own, at once: a copy of main's code holds neither.  A node whose null device isn't the
+    character device 1,3 with mode 666 is a page of its own, with the command that repairs it: every redirect to /dev/null
+    fails there for a user who isn't root.  A node ssh can't connect to (a stopped VM) is skipped; any other read that
+    fails, or every node unreachable, is the monitor's error."""
     reps = json.loads(ctx.sh([*ctx.research, "deploy", "drift", "--json"], ok=(0, 1), timeout=900))
     none_read = all("error" in r for r in reps.values())
     if bad := sorted(n for n, r in reps.items() if "error" in r and (none_read or not r.get("unreachable"))):
         raise RuntimeError(f"deploy drift can't read {', '.join(bad)}: {str(reps[bad[0]]['error'])[:200]}")
     groups: dict[tuple[str, str], list[str]] = {}
+    behind: dict[tuple[str, str, str], dict[str, int]] = {}
     broken = []
     for n, rep in sorted(reps.items()):
         if "error" in rep:
@@ -633,12 +644,21 @@ def deploy_drift(ctx: Ctx) -> list[Finding]:
                                   severity="page", cleared=f"*Cleared:* {n}'s null device is the character device 1,3 with "
                                                            "mode 666 again."))
         for e in rep["entries"]:
-            if e["state"] not in ("ok", "held") and not (e["state"] == "missing" and e.get("tree")):
+            if e.get("whole") and e["state"] in COPY_BEHIND and (e["state"] != "missing" or e.get("copy")):
+                kinds = behind.setdefault((n, e["tree"], e.get("copy") or ""), {})
+                kinds[e["state"]] = kinds.get(e["state"], 0) + 1
+            elif e["state"] not in ("ok", "held") and not (e["state"] == "missing" and e.get("tree")):
                 groups.setdefault((n, e["state"]), []).append(e["path"])
             if e.get("restart"):
                 groups.setdefault((n, "restart"), []).append(e["path"])
         for p in rep["strays"]:
             groups.setdefault((n, "stray"), []).append(p)
+    broken += [Finding(f"{n}:copy-behind:{t}" + (f"@{c}" if c else ""), f"*{n}: the copy of main's code at `{t}` is behind main* by "
+                       f"{sum(k.values())} file{'' if sum(k.values()) == 1 else 's'}: "
+                       f"{', '.join(w.format(k[s]) for s, w in COPY_BEHIND.items() if s in k)} (an incident once every reading "
+                       f"for a week has found it behind). Install main's: `research deploy install {n} --by WHO --apply {t}`.",
+                       for_s=COPY_BEHIND_S, cleared=f"*Cleared:* {n}'s copy at `{t}` was installed again.")
+               for (n, t, c), k in sorted(behind.items())]
     return broken + [Finding(f"{n}:{kind}", f"*Deploy drift on {n}: {len(ps)} {kind}*: {', '.join(f'`{p}`' for p in ps[:5])}"
                              + (f" and {len(ps) - 5} more" if len(ps) > 5 else "") + ".")
                      for (n, kind), ps in sorted(groups.items())]
@@ -726,7 +746,7 @@ def public_missing(arts: list[str], url: str, jobs: int = 16) -> list[str]:
 
 
 def fixtures_public(ctx: Ctx) -> list[Finding]:
-    """A fixture main's `fixtures/artifacts.json` registers that the public export, where nodes and pods without the store's key
+    """A fixture main's `artifacts.json` registers that the public export, where nodes and pods without the store's key
     fetch fixtures, doesn't hold (its manifest, by anonymous HEAD). The control pod's export loop copies new ones every 5 min."""
     from .store import fetchset, fixtures
 

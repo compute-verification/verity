@@ -110,7 +110,7 @@ def test_every_consumers_registry_holds_every_registered_definition():
     assert want.returncode == 0, want.stderr[-2000:]
     n = int(want.stdout.split()[-1])
     for setup in ("import verity_vllm.pipeline.global_program as m; from verity.circuits.defs import REGISTRY as R",
-                  ("from verity.definitions import word as W; W.specialization('GumbelTopPTokenSelect_v2', {'V': 16, 'S': 4}); "
+                  ("from verity.circuits import word as W; W.specialization('GumbelTopPTokenSelect_v2', {'V': 16, 'S': 4}); "
                    "from verity.circuits.defs import REGISTRY as R")):
         p = _run(setup + "\nfor k in ('GumbelTopPTokenSelect_v2', 'TopPMask_v2', 'TopPKeepWord_v1', 'NvLogf_v1', 'TopPNumkeep_v1'):\n"
                  "    assert k in R.defs, k\nprint(len(R.defs))")

@@ -24,7 +24,7 @@ What this module does **not** vectorize: the inactive step *bodies* ("canonical 
 values are the registered gate semantics on the actual inputs (tensor-core k-chains, FA2 online softmax,
 MUFU tables), whose bit-exact reference is the circuit evaluator itself; `materialize(prog, inputs)` runs it
 and returns the full transcript, which is how a prover materializes `canonical, not captured` leaves
-(spec §12).  Vectorized twins of those kernels are the C++ models of `numerics/cpp/`, not a padding concern.
+(spec §12).  Vectorized twins of those kernels are the C++ models of `verity/definitions/numerics/cpp/`, not a padding concern.
 """
 
 from __future__ import annotations

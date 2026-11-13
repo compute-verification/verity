@@ -15,9 +15,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import onsite_periods as P
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "onsite_periods"
-STATEMENT = "NetTiming.Guarantees.PeriodLeakAccepted"
-LOCK = {"guarantees": {"NetTiming.SecurityProofs.PeriodLeakAccepted": {
-    "signature": [f"NetTiming.SecurityProofs.PeriodLeakAccepted : {STATEMENT}"]}}}
+STATEMENT = "NetTiming.Guarantees.MonitoringPeriodLeakAccepted"
+LOCK = {"guarantees": {"NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted": {
+    "signature": [f"NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted : {STATEMENT}"]}}}
 
 
 def stand_in(name: str) -> dict:
@@ -37,8 +37,8 @@ def test_the_reader_imports_only_the_standard_library():
 
 
 def test_a_signature_wrapped_after_its_colon_is_locked():
-    wrapped = {"guarantees": {"NetTiming.SecurityProofs.PeriodLeakAccepted": {
-        "signature": ["NetTiming.SecurityProofs.PeriodLeakAccepted.{u_1, u_2} :", f"  {STATEMENT}"]}}}
+    wrapped = {"guarantees": {"NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted": {
+        "signature": ["NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted.{u_1, u_2} :", f"  {STATEMENT}"]}}}
     assert P.locked(wrapped, STATEMENT) and P.locked(LOCK, STATEMENT)
     assert not P.locked(wrapped, "NetTiming.Guarantees.Period")
     assert P.check(stand_in("m1-week"), wrapped) == []
