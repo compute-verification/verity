@@ -42,7 +42,8 @@ the two pieces about it, `CallsLe` and `MessagesFixed`.
 * **The messages' bound** (`MessagesBound`, `messagesBound`): `MessagesFixed` at the sum over the rounds of those
   square roots.
 
-`Proofs.Properties.Verity.SampledTwo.MessagesShown` proves `RunShown` and imports this module; nothing else does.
+`Proofs.Properties.Verity.SampledTwo.MessagesShown`, which proves `RunShown`, and
+`Proofs.Properties.Verity.SampledTwo.SessionMsgs` import this module.
 -/
 
 @[expose] public section

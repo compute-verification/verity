@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Verity.SampledTwo.Reading
+public import Proofs.Properties.Verity.SampledTwo.Messages
 public import Proofs.Flock.Claims.Deploy
 public import Proofs.Flock.Claims.Complete.Encode
 
@@ -30,7 +30,8 @@ messages `SpotFlock.V h` reads: SpotFlock's tagged Flock messages, not the recor
   session's reps name, `Final.encode`), at the session that the statement sets up. None where the record doesn't parse
   or a round retained no bytes, so no reading defaults.
 * **The reading** (`sessionReading`): `stmts` and `msg` on the play's case; the coins and their agreement are the
-  coins' piece's, parameters here.
+  coins' piece's, parameters here. Each session's prover that sends those messages whatever the answers is
+  `replayProver`, a prover that reads its messages off its tape (`Messages.proverOf`).
 -/
 
 @[expose] public section
@@ -131,6 +132,11 @@ def sessionReading (C : CaseOf) (coin : Verity.Exchange → ℕ → ℕ → Opti
   msg o t i := (C o).bind fun k => msgAtCase k t i
   coin := coin
   agree := agree
+
+/-- **Template `t`'s session's prover that replays what the check read**: at a history of `n` rounds it sends the
+session's `n`-th message on the play's case, whatever the answers, and `[]` where there is none. -/
+def replayProver (C : CaseOf) (o : Verity.Exchange) (t : ℕ) : Claims.Prover Unit :=
+  Messages.proverOf fun _ hist => ((C o).bind fun k => msgAtCase k t hist.length).getD []
 
 /-! ## Read back -/
 
