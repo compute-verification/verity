@@ -1362,6 +1362,19 @@ private def weekRows (S : Site) (premised : List Premised) : List Row :=
 private def twoHosts : Site := ⟨[sheet], hostedBy none ++ [vm "vm1" none], links⟩
 private def other : List Premised := [{ host := "vm1", drift := fig 1 2000, premise := "ClockRateWithin(vm1, 5e-4)" }]
 #guard weekRows twoHosts other == weekRows bare [] ∧ weekRows twoHosts (other ++ onPremise) == weekRows bare onPremise
+-- nor does a premise for the host of a certifier that is not on the answer's link: a second certifier, in the second
+-- host, on an uplink of its own. A series placed on it takes the premise for its own link, and for the first link none
+private def apart : Site :=
+  ⟨[sheet], hostedBy none ++ [vm "vm1" none] ++
+      (locs.filter (·.id == "cert0")).map fun x => { x with id := "cert1", parent := some "vm1" },
+    links ++ [{ id := "up2", ends := ("node0", "cert1"), β := some 100000000000, latency := 1 },
+              { id := "up3", ends := ("cert1", Site.outside), β := some 100000000000, latency := 1 }]⟩
+private def onSecond (link : String) : List (List String × Option Nat) :=
+  ((rowsOf apart digest auditor (period week (origin := fun _ => some ⟨0, 0, "cert1"⟩)) [paced]
+    [{ check 1000000000000000 604800000 "1/1000" with profile := some (Json.mkObj [("link", .str link)]) }]
+    other).filter fun r => r.metric = "sent").map fun r => (r.premises, r.verified)
+#guard onSecond "up0" == [([], some 0)]
+#guard onSecond "up2" == [([], some 0), (["ClockRateWithin(vm1, 5e-4)"], some 59419535120000000)]
 -- a premise for a host that is no auditor's host of the Site is refused by name, and no row is printed: one the Site
 -- does not hold, the auditor's device, the prover's host; a certifier at the site is in no host, so no premise times
 -- it and its row covers nothing
