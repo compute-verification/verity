@@ -12,7 +12,7 @@ import Proofs.Flock.Soundness.Game
 # A period's run: the union bound and the pooled escape
 
 * `period_union`: if every sampling block's event has probability at most `ε i` at every strategy satisfying `good i`,
-  then in a period whose prover satisfies `good` at every sampling block on every run (`PeriodGood`), some sampling
+  then in a period whose prover satisfies `good` at every sampling block on every run (`MonitoringPeriodGood`), some sampling
   block's event happens with probability at most `Σ_i ε i`.
 * `period_horizon`: if at every such strategy the sampling block's records all carry one weight `w` and the sampling
   block's "miss" event has probability at most `x ^ w`, then every sampling block misses with total weight at least `M`
@@ -211,8 +211,8 @@ theorem value_runBind_le_mul (f : α → Game δ) (k : (a : α) → Strategy (f 
 variable {β : ℕ → Type}
 
 theorem periodGood_mono (G : (i : ℕ) → Game (β i)) {good good' : (i : ℕ) → Strategy (G i) → Prop} :
-    ∀ (T i : ℕ) (s : Strategy (periodG G i T)), (∀ j τ, i ≤ j → j < i + T → good j τ → good' j τ) →
-      PeriodGood G good i T s → PeriodGood G good' i T s
+    ∀ (T i : ℕ) (s : Strategy (monitoringPeriodG G i T)), (∀ j τ, i ≤ j → j < i + T → good j τ → good' j τ) →
+      MonitoringPeriodGood G good i T s → MonitoringPeriodGood G good' i T s
   | 0, _, _, _, _ => trivial
   | T + 1, i, s, h, hs =>
       ⟨h i _ le_rfl (by omega) hs.1,
@@ -226,27 +226,27 @@ theorem atEnds_of_atSomeEnd {ι : Type} {f : α → Game δ} {P : ι → (a : α
   | .send _ kk, s, h => atEnds_of_atSomeEnd hQ (kk s.1) s.2 h
   | @Game.coin _ _ _ _ kk, s, h => fun c => atEnds_of_atSomeEnd hQ (kk c) (s c) fun x hx => h x ⟨c, hx⟩
 
-/-- **`PeriodGood` from its flat form**: `good` at every strategy the period plays a sampling block with
-(`PeriodPlays`). -/
+/-- **`MonitoringPeriodGood` from its flat form**: `good` at every strategy the period plays a sampling block with
+(`MonitoringPeriodPlays`). -/
 theorem periodGood_of_plays (G : (i : ℕ) → Game (β i)) (good : (i : ℕ) → Strategy (G i) → Prop) :
-    ∀ (T i : ℕ) (s : Strategy (periodG G i T)), (∀ j τ, PeriodPlays G i T s j τ → good j τ) →
-      PeriodGood G good i T s
+    ∀ (T i : ℕ) (s : Strategy (monitoringPeriodG G i T)), (∀ j τ, MonitoringPeriodPlays G i T s j τ → good j τ) →
+      MonitoringPeriodGood G good i T s
   | 0, _, _, _ => trivial
   | T + 1, i, s, h =>
       ⟨h i _ (Or.inl ⟨rfl, HEq.rfl⟩),
         atEnds_of_atSomeEnd (ι := (j : ℕ) × Strategy (G j))
-          (P := fun x _ s' => PeriodPlays G (i + 1) T s' x.1 x.2) (good := fun x => good x.1 x.2)
+          (P := fun x _ s' => MonitoringPeriodPlays G (i + 1) T s' x.1 x.2) (good := fun x => good x.1 x.2)
           (fun _ s' h' => periodGood_of_plays G good T (i + 1) s' fun j τ hp => h' ⟨j, τ⟩ hp) (G i) s
           fun x hx => h x.1 x.2 (Or.inr hx)⟩
 
 /-- **The expectation of `f` at sampling block `i + d`** of the period played by `s`, at the strategy that plays it
 there, over the coins of the sampling blocks before it; `0` past the period's end. -/
 noncomputable def periodE (G : (i : ℕ) → Game (β i)) (f : (j : ℕ) → Strategy (G j) → ℝ)
-    (d i T : ℕ) (s : Strategy (periodG G i T)) : ℝ :=
+    (d i T : ℕ) (s : Strategy (monitoringPeriodG G i T)) : ℝ :=
   match T, s, d with
   | 0, _, _ => 0
   | _ + 1, s, 0 => f i (Strategy.ofBind _ (G i) s)
-  | T + 1, s, d + 1 => endsE (fun _ => periodG G (i + 1) T) (fun _ s' => periodE G f d (i + 1) T s') (G i) s
+  | T + 1, s, d + 1 => endsE (fun _ => monitoringPeriodG G (i + 1) T) (fun _ s' => periodE G f d (i + 1) T s') (G i) s
 termination_by structural T
 
 section PeriodE
@@ -254,14 +254,14 @@ section PeriodE
 variable (G : (i : ℕ) → Game (β i))
 
 theorem periodE_nonneg {f : (j : ℕ) → Strategy (G j) → ℝ} (hf : ∀ j τ, 0 ≤ f j τ) :
-    ∀ (d i T : ℕ) (s : Strategy (periodG G i T)), 0 ≤ periodE G f d i T s
+    ∀ (d i T : ℕ) (s : Strategy (monitoringPeriodG G i T)), 0 ≤ periodE G f d i T s
   | _, _, 0, _ => le_rfl
   | 0, i, _ + 1, _ => hf i _
   | d + 1, i, T + 1, s => endsE_nonneg (fun _ s' => periodE_nonneg hf d (i + 1) T s') (G i) s
 
 /-- `periodE` is monotone in `f` at the strategies satisfying `good`, on a period whose prover satisfies it. -/
 theorem periodE_mono {good : (i : ℕ) → Strategy (G i) → Prop} {f f' : (j : ℕ) → Strategy (G j) → ℝ} :
-    ∀ (d i T : ℕ) (s : Strategy (periodG G i T)), PeriodGood G good i T s →
+    ∀ (d i T : ℕ) (s : Strategy (monitoringPeriodG G i T)), MonitoringPeriodGood G good i T s →
       (∀ j τ, j = i + d → good j τ → f j τ ≤ f' j τ) → periodE G f d i T s ≤ periodE G f' d i T s
   | _, _, 0, _, _, _ => le_rfl
   | 0, i, _ + 1, _, hs, h => h i _ rfl hs.1
@@ -269,7 +269,7 @@ theorem periodE_mono {good : (i : ℕ) → Strategy (G i) → Prop} {f f' : (j :
       periodE_mono d (i + 1) T s' hg fun j τ hj => h j τ (by omega)) (G i) s hs.2)
 
 theorem periodE_const_le (r : ℕ → ℝ) (hr : ∀ j, 0 ≤ r j) :
-    ∀ (d i T : ℕ) (s : Strategy (periodG G i T)), periodE G (fun j _ => r j) d i T s ≤ r (i + d)
+    ∀ (d i T : ℕ) (s : Strategy (monitoringPeriodG G i T)), periodE G (fun j _ => r j) d i T s ≤ r (i + d)
   | _, _, 0, _ => hr _
   | 0, _, _ + 1, _ => le_rfl
   | d + 1, i, T + 1, s => by
@@ -277,14 +277,14 @@ theorem periodE_const_le (r : ℕ → ℝ) (hr : ∀ j, 0 ≤ r j) :
         (le_of_eq ?_)
       exact (endsE_const _ (r (i + 1 + d)) (G i) s).trans (congrArg r (by omega))
 
-theorem periodE_zero : ∀ (d i T : ℕ) (s : Strategy (periodG G i T)), periodE G (fun _ _ => 0) d i T s = 0
+theorem periodE_zero : ∀ (d i T : ℕ) (s : Strategy (monitoringPeriodG G i T)), periodE G (fun _ _ => 0) d i T s = 0
   | _, _, 0, _ => rfl
   | 0, _, _ + 1, _ => rfl
   | d + 1, i, T + 1, s =>
       (endsE_congr (fun _ s' => periodE_zero d (i + 1) T s') (G i) s).trans (endsE_const _ 0 (G i) s)
 
 theorem periodE_add (f f' : (j : ℕ) → Strategy (G j) → ℝ) :
-    ∀ (d i T : ℕ) (s : Strategy (periodG G i T)),
+    ∀ (d i T : ℕ) (s : Strategy (monitoringPeriodG G i T)),
       periodE G (fun j τ => f j τ + f' j τ) d i T s = periodE G f d i T s + periodE G f' d i T s
   | _, _, 0, _ => (add_zero 0).symm
   | 0, _, _ + 1, _ => rfl
@@ -292,7 +292,7 @@ theorem periodE_add (f f' : (j : ℕ) → Strategy (G j) → ℝ) :
       (endsE_congr (fun _ s' => periodE_add f f' d (i + 1) T s') (G i) s).trans (endsE_add _ _ _ (G i) s)
 
 theorem periodE_mul (a : ℕ → ℝ) (f : (j : ℕ) → Strategy (G j) → ℝ) :
-    ∀ (d i T : ℕ) (s : Strategy (periodG G i T)),
+    ∀ (d i T : ℕ) (s : Strategy (monitoringPeriodG G i T)),
       periodE G (fun j τ => a j * f j τ) d i T s = a (i + d) * periodE G f d i T s
   | _, _, 0, _ => (mul_zero _).symm
   | 0, _, _ + 1, _ => rfl
@@ -302,7 +302,7 @@ theorem periodE_mul (a : ℕ → ℝ) (f : (j : ℕ) → Strategy (G j) → ℝ)
       exact congrArg (· * periodE G f (d + 1) i (T + 1) s) (congrArg a (by omega))
 
 theorem periodE_sum {ι : Type} (t : Finset ι) (f : ι → (j : ℕ) → Strategy (G j) → ℝ) :
-    ∀ (d i T : ℕ) (s : Strategy (periodG G i T)),
+    ∀ (d i T : ℕ) (s : Strategy (monitoringPeriodG G i T)),
       periodE G (fun j τ => ∑ x ∈ t, f x j τ) d i T s = ∑ x ∈ t, periodE G (f x) d i T s
   | _, _, 0, _ => Finset.sum_const_zero.symm
   | 0, _, _ + 1, _ => rfl
@@ -319,18 +319,18 @@ theorem period_unionE {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : �
     (bad : ρ → Prop) (good : (i : ℕ) → Strategy (G i) → Prop) (ε : ℕ → ℝ≥0∞) (f : (j : ℕ) → Strategy (G j) → ℝ)
     (hf : ∀ j τ, 0 ≤ f j τ)
     (hstage : ∀ i τ, good i τ → prob (fun b => bad (rec i τ b)) (G i) τ ≤ ε i + ENNReal.ofReal (f i τ)) :
-    ∀ (T i : ℕ) (s : Strategy (periodG G i T)), PeriodGood G good i T s →
-      value (fun l => ∃ r ∈ l, bad r) (periodRun G rec i T s) ≤
+    ∀ (T i : ℕ) (s : Strategy (monitoringPeriodG G i T)), MonitoringPeriodGood G good i T s →
+      value (fun l => ∃ r ∈ l, bad r) (monitoringPeriodRun G rec i T s) ≤
         ∑ t ∈ Finset.range T, ε (i + t) + ENNReal.ofReal (∑ d ∈ Finset.range T, periodE G f d i T s)
   | 0, i, s, _ => by
       classical
       show value (fun l => ∃ r ∈ l, bad r) (Game.ret []) ≤ _
       simp
   | T + 1, i, s, hs => by
-      have hc : ∀ (b : β i) (s' : Strategy (periodG G (i + 1) T)), 0 ≤ ∑ d ∈ Finset.range T, periodE G f d (i + 1) T s' :=
+      have hc : ∀ (b : β i) (s' : Strategy (monitoringPeriodG G (i + 1) T)), 0 ≤ ∑ d ∈ Finset.range T, periodE G f d (i + 1) T s' :=
         fun _ s' => Finset.sum_nonneg fun d _ => periodE_nonneg G hf d (i + 1) T s'
-      have h := value_runBind_le_add (fun _ => periodG G (i + 1) T)
-        (fun b s' => (periodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
+      have h := value_runBind_le_add (fun _ => monitoringPeriodG G (i + 1) T)
+        (fun b s' => (monitoringPeriodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
         (fun l => ∃ r ∈ l, bad r) (fun b => bad (rec i (Strategy.ofBind _ (G i) s) b))
         (∑ t ∈ Finset.range T, ε (i + 1 + t)) (fun _ s' => ∑ d ∈ Finset.range T, periodE G f d (i + 1) T s') hc
         (G i) s
@@ -342,19 +342,19 @@ theorem period_unionE {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : �
           · exact absurd hbr hnb
           · exact ⟨r, hr, hbr⟩) (G i) s hs.2)
       have hE : ∑ d ∈ Finset.range (T + 1), periodE G f d i (T + 1) s = f i (Strategy.ofBind _ (G i) s) +
-          endsE (fun _ => periodG G (i + 1) T) (fun _ s' => ∑ d ∈ Finset.range T, periodE G f d (i + 1) T s') (G i) s := by
+          endsE (fun _ => monitoringPeriodG G (i + 1) T) (fun _ s' => ∑ d ∈ Finset.range T, periodE G f d (i + 1) T s') (G i) s := by
         rw [Finset.sum_range_succ', add_comm]
         exact congrArg (fun x => f i (Strategy.ofBind _ (G i) s) + x)
           (endsE_sum (Finset.range T) _ (fun d _ s' => periodE G f d (i + 1) T s') (G i) s).symm
       have hε : ∑ t ∈ Finset.range (T + 1), ε (i + t) = ε i + ∑ t ∈ Finset.range T, ε (i + 1 + t) := by
         rw [Finset.sum_range_succ', Nat.add_zero, add_comm]
         exact congrArg (ε i + ·) (Finset.sum_congr rfl fun t _ => congrArg ε (by omega))
-      calc value (fun l => ∃ r ∈ l, bad r) (periodRun G rec i (T + 1) s)
+      calc value (fun l => ∃ r ∈ l, bad r) (monitoringPeriodRun G rec i (T + 1) s)
           ≤ prob (fun b => bad (rec i (Strategy.ofBind _ (G i) s) b)) (G i) (Strategy.ofBind _ (G i) s) +
-              (∑ t ∈ Finset.range T, ε (i + 1 + t) + ENNReal.ofReal (endsE (fun _ => periodG G (i + 1) T)
+              (∑ t ∈ Finset.range T, ε (i + 1 + t) + ENNReal.ofReal (endsE (fun _ => monitoringPeriodG G (i + 1) T)
                 (fun _ s' => ∑ d ∈ Finset.range T, periodE G f d (i + 1) T s') (G i) s)) := h
         _ ≤ (ε i + ENNReal.ofReal (f i (Strategy.ofBind _ (G i) s))) +
-              (∑ t ∈ Finset.range T, ε (i + 1 + t) + ENNReal.ofReal (endsE (fun _ => periodG G (i + 1) T)
+              (∑ t ∈ Finset.range T, ε (i + 1 + t) + ENNReal.ofReal (endsE (fun _ => monitoringPeriodG G (i + 1) T)
                 (fun _ s' => ∑ d ∈ Finset.range T, periodE G f d (i + 1) T s') (G i) s)) := by
             gcongr; exact hstage i _ hs.1
         _ = ∑ t ∈ Finset.range (T + 1), ε (i + t) +
@@ -366,8 +366,8 @@ theorem period_unionE {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : �
 theorem period_union {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → Strategy (G i) → β i → ρ)
     (bad : ρ → Prop) (good : (i : ℕ) → Strategy (G i) → Prop) (ε : ℕ → ℝ≥0∞)
     (hstage : ∀ i τ, good i τ → prob (fun b => bad (rec i τ b)) (G i) τ ≤ ε i)
-    (T i : ℕ) (s : Strategy (periodG G i T)) (hs : PeriodGood G good i T s) :
-    value (fun l => ∃ r ∈ l, bad r) (periodRun G rec i T s) ≤ ∑ t ∈ Finset.range T, ε (i + t) := by
+    (T i : ℕ) (s : Strategy (monitoringPeriodG G i T)) (hs : MonitoringPeriodGood G good i T s) :
+    value (fun l => ∃ r ∈ l, bad r) (monitoringPeriodRun G rec i T s) ≤ ∑ t ∈ Finset.range T, ε (i + t) := by
   have h := period_unionE G rec bad good ε (fun _ _ => 0) (fun _ _ => le_rfl)
     (fun j τ hτ => by rw [ENNReal.ofReal_zero, add_zero]; exact hstage j τ hτ) T i s hs
   rwa [Finset.sum_congr rfl fun d _ => periodE_zero G d i T s, Finset.sum_const_zero, ENNReal.ofReal_zero,
@@ -378,8 +378,8 @@ theorem period_horizon {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : �
     (miss : ρ → Prop) (wt : ρ → ℕ) (good : (i : ℕ) → Strategy (G i) → Prop) (x : ℝ≥0∞) (hx : x ≤ 1)
     (hstage : ∀ i τ, good i τ →
       ∃ w : ℕ, (∀ b, wt (rec i τ b) = w) ∧ prob (fun b => miss (rec i τ b)) (G i) τ ≤ x ^ w) :
-    ∀ (T i : ℕ) (s : Strategy (periodG G i T)) (M : ℕ), PeriodGood G good i T s →
-      value (fun l => (∀ r ∈ l, miss r) ∧ M ≤ (l.map wt).sum) (periodRun G rec i T s) ≤ x ^ M
+    ∀ (T i : ℕ) (s : Strategy (monitoringPeriodG G i T)) (M : ℕ), MonitoringPeriodGood G good i T s →
+      value (fun l => (∀ r ∈ l, miss r) ∧ M ≤ (l.map wt).sum) (monitoringPeriodRun G rec i T s) ≤ x ^ M
   | 0, i, s, M, _ => by
       classical
       show value (fun l => (∀ r ∈ l, miss r) ∧ M ≤ (l.map wt).sum) (Game.ret []) ≤ _
@@ -388,8 +388,8 @@ theorem period_horizon {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : �
       · simp [Nat.pos_iff_ne_zero.1 hM]
   | T + 1, i, s, M, hs => by
       obtain ⟨w, hw, hp⟩ := hstage i _ hs.1
-      have h := value_runBind_le_mul (fun _ => periodG G (i + 1) T)
-        (fun b s' => (periodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
+      have h := value_runBind_le_mul (fun _ => monitoringPeriodG G (i + 1) T)
+        (fun b s' => (monitoringPeriodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
         (fun l => (∀ r ∈ l, miss r) ∧ M ≤ (l.map wt).sum) (fun b => miss (rec i (Strategy.ofBind _ (G i) s) b))
         (x ^ (M - w)) (G i) s
         (atEnds_mono (fun b s' hg => by
@@ -406,7 +406,7 @@ theorem period_horizon {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : �
           · rw [if_neg hm]
             refine (value_mono (q := fun _ => False) (fun l hl => hm (hl.1 _ List.mem_cons_self)) _).trans_eq ?_
             exact value_false _) (G i) s hs.2)
-      calc value (fun l => (∀ r ∈ l, miss r) ∧ M ≤ (l.map wt).sum) (periodRun G rec i (T + 1) s)
+      calc value (fun l => (∀ r ∈ l, miss r) ∧ M ≤ (l.map wt).sum) (monitoringPeriodRun G rec i (T + 1) s)
           ≤ prob (fun b => miss (rec i (Strategy.ofBind _ (G i) s) b)) (G i) (Strategy.ofBind _ (G i) s) *
               x ^ (M - w) := h
         _ ≤ x ^ w * x ^ (M - w) := by gcongr
@@ -417,7 +417,7 @@ theorem period_horizon {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : �
 expectation at the strategy that plays sampling block `i + d`. -/
 theorem expect_compTo {γ : Type} (G : (i : ℕ) → Game (β i)) (F : γ → ℝ) (K : (j : ℕ) → Strategy (G j) → Game γ)
     (KS : (j : ℕ) → (τ : Strategy (G j)) → Strategy (K j τ)) :
-    ∀ (d i T : ℕ) (h : d < T) (s : Strategy (periodG G i T)),
+    ∀ (d i T : ℕ) (h : d < T) (s : Strategy (monitoringPeriodG G i T)),
       expect F (compTo G K d i T h s) (compStrat G K KS d i T h s) =
         periodE G (fun j τ => expect F (K j τ) (KS j τ)) d i T s
   | _, _, 0, h, _ => absurd h (Nat.not_lt_zero _)
