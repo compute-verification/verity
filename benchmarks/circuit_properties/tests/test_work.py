@@ -836,8 +836,8 @@ def _guarded_attention(kind: str) -> Program:
     word of the row's scores is not −inf, else 0, the condition an and, one node a word, of the row's compares with −inf.
     ``kind`` "split" writes both rows' constants 0, row 1's from two constants of one value; "input-word" reads row
     1's first mask word from an input, and "unguarded-input-word" too without the guard; "repeated-base" has one and
-    read a word of the row twice and another not at all; "masked-row" masks row 1 wholly; "finite" gives row 1's second
-    word the constant 1.0."""
+    read a word of the row twice and another not at all; "masked-row" masks row 1 wholly; "finite" gives row 1 row 0's
+    constants plus 1.0, which a softmax doesn't tell from row 0's."""
     neg = 0xFF800000
 
     def mask_word(B, zn, zeros, p: int, j: int):
@@ -845,8 +845,8 @@ def _guarded_attention(kind: str) -> Program:
             return zn[0].refs
         if kind == "masked-row" and p == 1:
             return B.call(const(32, neg)).refs
-        if kind == "finite" and (p, j) == (1, 1):
-            return B.call(const(32, 0x3F800000)).refs
+        if kind == "finite" and p == 1:
+            return B.call(const(32, 0x3F800000 if j == 0 else neg)).refs
         if kind == "split" and p == 1:
             return zeros[j < D // 2].refs
         return B.call(const(32, 0 if j <= p or (kind == "split" and p == 0) else neg)).refs
