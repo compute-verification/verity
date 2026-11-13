@@ -254,8 +254,8 @@ theorem SessionKept.of_congr {b₁ b₂ : Core.Blobs} {m : Member} {s : RunFiles
     (hc : Alike b₁ b₂ m.own.circuit) (hp : Alike b₁ b₂ m.own.pub) (ht : tablesOf b₁ = tablesOf b₂) (a : V StepAt) :
     SessionKept.of m a b₁ s = SessionKept.of m a b₂ s := by
   unfold SessionKept.of
-  rw [h.1, sessionEvidence_congr h, StepKept.of_congr h]
-  simp only [rootBTables_congr hc hp ht]
+  rw [h.1, sessionEvidence_congr h]
+  simp only [StepKept.of_congr h, rootBTables_congr hc hp ht]
 
 /-- A member's files on what is kept of its circuit file and program read the blobs for its public file alone. -/
 theorem Member.filesOn_congr {b₁ b₂ : Core.Blobs} (m : Member) (hp : Alike b₁ b₂ m.own.pub) (tags0 : Flock.Tags)
