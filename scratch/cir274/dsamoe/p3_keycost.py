@@ -86,8 +86,7 @@ families = {**NW.FAMILIES, **ND.FAMILIES, **NS.FAMILIES}
 try:
     t0 = time.perf_counter()
     w = NW.NodeWindow(fn, families, NW._GRAIN, NW.NAME, 1, True).lower()
-    rec["lower"] = {"wall_s": round(time.perf_counter() - t0, 1), "peak_gib": peak(), "rss_gib": rss(),
-                    "wires_before_coalesce": len(w.b.wires)}
+    rec["lower"] = {"wall_s": round(time.perf_counter() - t0, 1), "peak_gib": peak(), "rss_gib": rss()}
     save("lower", rec["lower"])
     t0 = time.perf_counter()
     circuit = w.circuit()
@@ -132,7 +131,7 @@ try:
     lays = circuit.layouts
     by_fam: Counter = Counter(w.family_of(x.reader, x.at) for x in circuit.wires)
     rec["keys"] = {
-        "wires": len(circuit.wires),
+        "wires": len(circuit.wires), "wires_before_coalesce": len(w.b.wires),
         "key_wires": len(key), "g_wires": len(g),
         "key_wires_before_coalesce": sum(1 for x in w.b.wires if is_key(x)),
         "g_wires_before_coalesce": sum(1 for x in w.b.wires if is_g(x)),
