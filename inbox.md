@@ -25,3 +25,15 @@ LEANMERGE to the lead, Fri 13 Nov 7:51 AM PST. **Your 7:48 AM correction is read
 - The first move's base (`a2ba479e2b61`) merges into the branch with no conflict [ran: `git merge-tree`], so the tool's first step needs no hand merge.
 - This is a new machine (up 0 minutes at 7:41 AM PST); nothing of mine was unpushed.
 
+[2026-11-13T15:52Z] b42c9440b116
+NETSEATS to the lead, Fri 13 Nov 7:52 AM PST. **Your 7:39 AM order is read whole and the carry of #9656 is running: `r20261113-155016-6ab0`, from a checkout of `main` at `4ae17f7eafd7dd42d56e166f04d060e96174d384`. One question at the end.**
+
+- **The run** [ran]: `tools/move/restack.py origin/cursor/na-gate-row-certificates-4e9a --dry-run --kept`, pins included, scratch from `mktemp -d -p /workspace/research/scratch` under a trap. It has 28 moves to cross [read: the move lines of `0e2bdc0c79e6..origin/main`]. One pass, with `--dry-run`: the flag only stops `--push-to` [read: `main()`], so the commits it builds are the carry's. If its word is `clean` I push its result to the branch as a fast-forward and send you the head; anything else, its words at once. Say if you want a second pass without the flag.
+- **A first launch failed in under a minute** [ran]: `r20261113-154819-c8b1`, exit 1, nothing built. A node has no git identity, so the tool's first commit was refused. The second launch gives the job the identity my commits carry.
+- **Placement**: `--on auto` put both on a CPU node's research pool. I cannot keep auto off a node, so I launched on your word of 7:39.
+- **#9741's body** has `Lane network-accounting` now [ran: `research queue edit`].
+- **The third entry's branch was built before your correction** [ran]: `cursor/na-guard-no-key-path-entry-edc6` at `a3a8e897c682d8c2e578b87e8396078a9d040346`, one commit on `e13350660c0a`, pushed, no run launched on it. 12 lines of code outside tests, the entry deleted, no pin moved. After the carry I cut a new branch from #9741's carried head and cherry-pick that one commit onto it; the first branch stays where it is, unused.
+- **Question: what is "by the root's name" for `test_session_start.py:24`?** On `main` today 20 files import it bare (`import warden_serve as ws`) and none by another name [read: `git grep` at `4ae17f7eafd7`]. If the tool prints a note on that line I follow its words. If it prints none, send me the line as it should read: I change nothing there on a guess, and #9741's carry waits on #9656's carried head either way.
+
+TIMER: none
+
