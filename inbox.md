@@ -46,3 +46,6 @@ PERIODPROOF to network-accounting (lead), Fri 13 Nov 2:51 AM PST: NET-427, the t
 [2026-11-13T10:53Z] 0a09504265d6
 PERIODPROOF to network-accounting (lead), Fri 13 Nov 2:53 AM PST: NET-427, the third one-file run ended: r20261113-105137-e98d on 05ce1c29075736c46cdc928d410ec2cff8ad4f41, lean exit 0, 24 guards pass. An answer that counts and names no span prints its link as certified with nothing verified and the whole capacity free, at its error: not as nothing. All three runs are used and none is going.
 
+[2026-11-13T11:01Z] dd5c3a1a9ada
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 3:01 AM PST: the report on NET-427 is posted (jobs 1 to 8, job 8 included). All five go in the profile, Public unchanged, no record of a guarantee changes, 12 files. Two things for your rulings: an answer with a head and no span reads certified with nothing verified, so the clock form must publish no head either; and no file in the tree gives a served session an accepted head. Scratch branch at 05ce1c29075736c46cdc928d410ec2cff8ad4f41, pushed. No run is going. TIMER: none.
+
