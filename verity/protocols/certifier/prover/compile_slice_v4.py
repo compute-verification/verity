@@ -114,6 +114,8 @@ CLASSES = {"adv": "advice", "ing": "ingress", "req": "registered", "srv": "regis
            "coin": "coin", "chk": "checked"}
 #: the rows padded to whole words (`compile_slice.WORD`)
 PADDED = tuple(r for r in ROWS if CLASSES[r] == "registered")
+#: ReplayStep_v1's name, in `replay_step.Req` and in an arrival's row, for the bit that says a request's O is its max_tokens
+O_IS_MAX_TOKENS = "cap"
 T3 = V3S.TAGS
 F = Array(128, BIT)
 
@@ -674,8 +676,8 @@ def tap(S, st: RS.State, inp: RS.Inputs) -> SimpleNamespace:
     R, W, A, B, H, L, AS = S.R, S.W, S.A, S.B, S.H, S.L, S.AS
 
     def rec(r: RS.Req, comp: int, running: bool) -> dict:
-        return {"id": r.id, "P": r.P, "O": r.O, "out": r.out, "comp": comp, "max_tokens": r.cap if AS else 0,
-                "fin": r.fin if AS and running else 0}
+        return {"id": r.id, "P": r.P, "O": r.O, "out": r.out, "comp": comp,
+                "max_tokens": getattr(r, O_IS_MAX_TOKENS) if AS else 0, "fin": r.fin if AS and running else 0}
 
     run = [rec(r, r.comp, True) for r in st.running] + [None] * (R - len(st.running))
     wait = [rec(r, 0, False) for r in st.waiting]
@@ -1033,7 +1035,7 @@ def arguments(S, sl: CS.Slice, coins: Sequence[int] = COINS, srv: Sequence[int] 
         srv = (ref.srv if ref else [0] * nb["srv"]) if srv is None else srv
         cout = (ref.cout if ref else [0] * nb["cout"]) if cout is None else cout
         chk = (ref.chk if ref else [0] * nb["chk"]) if chk is None else chk
-    req = (col("O", Z.LW) + (col("cap", 1) if S.AS else [])
+    req = (col("O", Z.LW) + (col(O_IS_MAX_TOKENS, 1) if S.AS else [])
            + [b for t in toks for v in list(t) + [0] * (n - len(t)) for b in CS._bits(v, S.CTW)])
     return {"adv": [int(d) for d in sl.decisions] + CS._bits(sl.steps, Z.PW),
             "ing": [int(x is not None) for x in arr] + col("id", S.IW) + col("P", Z.LW),
