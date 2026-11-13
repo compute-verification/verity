@@ -13,7 +13,7 @@ public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 # A session row opens its population's published tree
 
 A session statement's public file publishes a frame-v3 root per port (`frame_v3.roots`), which Flock's `checkPublic`
-recomputes over the population the statement's instances are drawn from: port `q`'s tree has `PortRoots.countOf` leaves,
+recomputes over the population the statement's instances are sampled from: port `q`'s tree has `PortRoots.countOf` leaves,
 each the frame-v3 leaf, at the port's schema and published domain (`PortRoots.idOf`), of a row's `b ‖ c`
 (`PortRoots.digOf`), and its root is `PortRoots.pubRoot`. A session's instance `n` is its sample's `n`-th proved unit of
 that population (`unitOf`), whose row at port `q` is leaf `rowAt` of the tree (`Bridge.LeafMap.ofPublic`'s ref).

@@ -12,7 +12,7 @@ from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import RegisteredTable, evaluate
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value
-from verity.definitions.circuits.constants import REGISTRATION, inputs
+from verity.circuits.constants import REGISTRATION, inputs
 from verity.definitions.registry import dense as D
 from verity.definitions.registry import tables as T
 
@@ -102,7 +102,7 @@ def test_the_strict_lift_of_a_table_read_holds_its_widths_as_runs():
     """The strict lift's operand widths (`operand_widths.leaf_widths`) are one run per parameter for `TableRead27x2_v1`, not a list
     of 2^28, and a list for a narrow primitive; the lift of `TableRead16x1_v1` (past the layout's wide fan-in too) still maps an
     active, a ⊥ and an invalid table word as the flat widths do."""
-    from verity.definitions.ops import scalar as SC
+    from verity.circuits.ops import scalar as SC
     from verity.definitions.registry import lifted as L
     from verity.definitions.registry import operand_widths as OW
 

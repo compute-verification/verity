@@ -74,9 +74,9 @@ import numpy as np
 
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, FunctionDefinition, SpecializedDefinition, bind, composite
-from verity.definitions.ops.boolean.elementwise import specialized
+from verity.circuits.ops.boolean.elementwise import specialized
 from verity.circuits.refs import tuple_of
-from verity.definitions.silicon import fp
+from verity.circuits.silicon import fp
 from verity.circuits.types import Array, Tuple
 from verity.definitions.registry.boolean_moe import nv_expf_in, nv_expf_out
 

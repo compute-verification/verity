@@ -1,4 +1,4 @@
-"""The advice code (advice v1): I1 v0 (`verity.protocols.certifier.verifier.advice`) sent as only what the certified record,
+"""The advice code (advice v1): I1 v0 (`verity.protocols.accounting.certifier.verifier.advice`) sent as only what the certified record,
 the scheduler replay (`replay`) and the derived rules (`derived`) leave, in a prefix-free, self-delimiting code
 (`window_code`) under the registered codebook. A registration that selects it has the compiler
 (`verity_vllm.program.predict.steps`) read these bits, decoded here, and its cap ℓ bound them.
@@ -40,7 +40,7 @@ records (the tie: prompt and output lengths against the certified ids, `finish` 
 The hits, the resumes and the order of new requests that `derived.walk_steps` would otherwise read are the replay's, so
 v1 sends none. Every prefix-cache lookup's hit is the replay's block pool's (`pool.BlockPool`, its LRU and eviction
 included), past the cumulative pool bound too, as the compile slice's pool derives it
-(`verity.protocols.certifier.prover.compile_slice_v2`), so no hit is the prover's choice. The registered caps hold the
+(`verity.protocols.accounting.certifier.prover.compile_slice_v4`), so no hit is the prover's choice. The registered caps hold the
 hits, the resumes and the lag bits at 0 (`CAPS`), so their counts code in 0 bits. The KV pool's size is registered
 before the run, never sent: a prover that chose it could declare a bigger pool and buy hits with it.
 
@@ -91,7 +91,7 @@ from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, replace
 from typing import Any, NamedTuple, TypeVar
 
-from verity.protocols.certifier.verifier import advice as I1
+from verity.protocols.accounting.certifier.verifier import advice as I1
 from verity_vllm.pipeline.advice_code import arith as C
 from verity_vllm.pipeline.advice_code import derived as D
 from verity_vllm.pipeline.advice_code import kept as KP

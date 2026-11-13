@@ -1,13 +1,13 @@
 """The serving rows' window law: the partition file's law as one-stage's law object (`law_of`), a rate resolved over the
 window's population by `serving_rows.population` (`service.params_law`), and the verifier's work table for a window under
-the work law (`work_table_of`), from the registered compiler's transfer-gate templates (`pipeline.advice_windows`)."""
+the work sampling design (`work_table_of`), from the registered compiler's transfer-gate templates (`pipeline.advice_windows`)."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from verity.protocols.spot.verifier.one_stage import draw as DR
+from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
 
 
 def law_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
