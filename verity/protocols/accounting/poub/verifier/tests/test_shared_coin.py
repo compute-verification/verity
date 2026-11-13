@@ -14,7 +14,13 @@ from test_ledger import node
 from test_remote_bandwidth import SCHEDULE, Entropy, N, drive, params, store  # noqa: F401
 from test_remote_coins import APPENDS, Service, sign  # noqa: F401
 
-from verity.protocols.accounting.poub.verifier import audit, codec, coins, ledger, timing
+from verity.protocols.accounting.poub.verifier import (
+    audit,
+    codec,
+    coins,
+    ledger,
+    timing,
+)
 from verity.protocols.accounting.poub.verifier.audit import AuditRun, SessionError
 
 SCHEDULE8 = timing.honest(1000, 8, 300, gap_ns=10, down_ns=20, up_ns=30, jitter_ns=5)

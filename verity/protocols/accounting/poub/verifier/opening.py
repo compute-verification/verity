@@ -31,7 +31,9 @@ from verity.commitments import CommitmentDomain, hm96
 from verity.commitments.merkle import merkle_depth, tree_levels
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
-from verity.protocols.accounting.poub.verifier.commitments.gates import block_check as BC
+from verity.protocols.accounting.poub.verifier.commitments.gates import (
+    block_check as BC,
+)
 
 from . import audit, codec, receipts
 from .receipts import PER_LEAF

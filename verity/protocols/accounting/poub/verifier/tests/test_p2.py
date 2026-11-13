@@ -14,7 +14,14 @@ import pytest
 from remote_bandwidth_fakes import Clock, Entropy
 
 from verity.commitments.randomness import frame
-from verity.protocols.accounting.poub.verifier import audit, codec, coins, p2, receipts, timing
+from verity.protocols.accounting.poub.verifier import (
+    audit,
+    codec,
+    coins,
+    p2,
+    receipts,
+    timing,
+)
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.schemes import p2 as pous_p2
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
