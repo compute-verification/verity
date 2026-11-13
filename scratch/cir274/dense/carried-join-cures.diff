@@ -1,0 +1,51 @@
+diff --git a/adapters/vllm/tests/census_roots.txt b/adapters/vllm/tests/census_roots.txt
+index 9898ed0bf14..19999540d9f 100644
+--- a/adapters/vllm/tests/census_roots.txt
++++ b/adapters/vllm/tests/census_roots.txt
+@@ -38,6 +38,13 @@ verity_vllm.program.predict.window_rows      # a window's rows: a library entry
+ verity_vllm.program.predict.window_weights      # the window circuit's weights: a library entry point (the committer's `weights_registration`, the verifier's `weights_record` and `registration_pins`), called from outside the package
+ verity_vllm.program.predict.inference_blocks      # B's partition of a window circuit into inference blocks: a library entry point (`commit`, with `records.inference_blocks` its public statement), for the window commit and the network certifier's audit
+ verity_vllm.program.predict.step_needs      # one served engine step's needs: a library entry point (`StepNeeds`, `workload_phi`), for benchmarks/route_capture's gap
++# the node window's family sets: library entry points (each module's `FAMILIES`), which a caller joins in `node_window.node_window(fn, families=...)`
++verity_vllm.program.predict.node_window_dense
++verity_vllm.program.predict.node_window_sparse
++verity_vllm.program.predict.node_window_multimem
++verity_vllm.program.predict.node_window_embed
++verity_vllm.program.predict.node_window_select
++verity_vllm.program.predict.node_window_values      # a node window's value check: a library entry point (`made_up`, `Values`, `Check`, `run`)
+ verity_vllm.properties.fa_tap_exactness
+ verity_vllm.properties.norm_tap_exactness
+ verity_vllm.properties.router_tap_exactness
+diff --git a/adapters/vllm/verity_vllm/program/predict/node_window_values.py b/adapters/vllm/verity_vllm/program/predict/node_window_values.py
+index fcc2bc7cbde..ddc7f16abab 100644
+--- a/adapters/vllm/verity_vllm/program/predict/node_window_values.py
++++ b/adapters/vllm/verity_vllm/program/predict/node_window_values.py
+@@ -48,15 +48,13 @@ def _bf16(x: np.ndarray) -> np.ndarray:
+ 
+ 
+ def _field(label: str, shape: tuple[int, ...], bits: int, rng: np.random.Generator) -> np.ndarray:
+-    """Made-up elements of weight ``label`` as their ``bits``-bit words: bf16 matrices at 1/sqrt(fan-in), norms near 1, the
+-    rotary cache in [-1, 1]; e4m3 bytes of magnitude 2^-3 .. 2^2 (never NaN); f32 block scales powers of two near the fan-in's
+-    inverse square root, attention scales 1, biases small."""
++    """Made-up elements of weight ``label`` as their ``bits``-bit words: bf16 matrices (the rotary cache too) at
++    1/sqrt(fan-in), norms near 1; e4m3 bytes of magnitude 2^-3 .. 2^2 (never NaN); f32 block scales powers of two near the
++    fan-in's inverse square root, biases small, other f32 scales near 1."""
+     n = math.prod(shape)
+     fan = shape[-1] if shape else 1
+     if bits == 16:
+-        if label.endswith("cos_sin_cache"):
+-            x = rng.uniform(-1, 1, n)
+-        elif "norm" in label:
++        if "norm" in label:
+             x = 1 + rng.normal(0, 0.05, n)
+         else:
+             x = rng.normal(0, fan ** -0.5, n)
+@@ -69,8 +67,6 @@ def _field(label: str, shape: tuple[int, ...], bits: int, rng: np.random.Generat
+     if bits == 32:
+         if "scale_inv" in label:
+             x = np.exp2(rng.integers(-8, -5, n)).astype(np.float32)
+-        elif label.split(".")[-1].startswith("_") and label.endswith("_scale"):
+-            x = np.ones(n, np.float32)
+         elif label.endswith("bias"):
+             x = rng.normal(0, 0.05, n).astype(np.float32)
+         else:

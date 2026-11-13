@@ -25,3 +25,4 @@
 - 20:12Z e5ca passed (windows 103, commitments 649); 694b c8b6 running
 - 20:29Z passed: 91ed definitions, 5556 circuits+core-evaluate, ec34 circuit-check (running numerical, research, flock); 694b verity-vllm running
 - 20:45Z waiting 694b (verity-vllm), ec34 (numerical, research, flock)
+- 21:09Z 694b verity-vllm: 2 failed (test_no_dead_modules, test_no_by_name_rules), both pass at main c68135b49 (ceb5); cure diff carried-join-cures.diff (sha256 e80b2263af91…) in scratch, testing in clone
