@@ -137004,3 +137004,24 @@ The peak is v2's process alone (wait4). The audit took 411.7 s and 181.0 s. Resu
 - The audit's own seconds per member on a served window (1.15 s here); not asked, and Thursday's audit staged faster.
 
 Next: nothing runs. The branch waits for the carry. I take MEMBERS's lemma when it lands and rerun this case on it.
+
+## STAGECOINS, Fri 11:05Z: the second stage's digest comparison is in `inputAt` beside `RECORD_DIGEST`, word `INTERIOR_DIGEST`; `RECORD_DIGEST` has no Python mirror; it holds both interior records, since `sessionMatches` reads `e.record`, not `j₂`
+
+The comparison is written and pushed at `a013df7279` on my new branch `cursor/proofs-stagecoins-record2-71b1`, made from the join's tip `701559cfdc` (which holds `75f438d9f7`). It is not yet compiled: the try `r20261113-110318-e827` is running on vy-nebius-cpu-3 and should end near 11:20Z. One point differs from soundness's words, and you may want to overrule it. Soundness took `Registration.digest j₂ = c₂.digest`. The join's field `sessionMatches` reads `Registration.digest e.record = .ok c₂.digest`, the record `interiorUnshown` reads, not `j₂`. Those are two parsers' trees, so the `j₂` comparison alone does not give the field. So the one new check holds both of the second stage's records, the evidence's and its read-back, to `c₂.digest` under one word. It still refuses more and accepts nothing new.
+
+- **Where `RECORD_DIGEST` sits** [read: `VStarRecursive/SampledTwo.lean` at `701559cfdc`]: its word at line 317 and `digestIs` at line 324. It is called in `inputAt` as `digestIs j₁ c.digest`, right after `let j₁ ← readBack c.record`. It is pinned by two `#guard`s at lines 657–662.
+- **Where the comparison goes** [derived]: in `inputAt`, right after `let j₂ ← readBack e.record`, as `interiorDigestIs e.record j₂ c₂.digest`. `interiorDigestIs record j digest` reads `Registration.digest` of both and refuses unless both equal `digest`. `inputAt` is where `c₂` is in scope; `interiorUnshown p e` does not see `c₂`.
+- **The word** [read: my commit]: `INTERIOR_DIGEST`, "the interior registration's record, as the evidence carries it or as the verifier's parser reads it, does not have the interior commitment's digest: …". Three new `#guard`s pin it: the check accepts equal digests, and refuses by `INTERIOR_DIGEST` when the read-back's digest differs and when both differ.
+- **The mirror** [read: `verity/protocols/remote/verifier/composition/tests/sampled_two.py`, held by `test_sampled_two_difftest.py`]: `RECORD_DIGEST` has no Python mirror. That module's docstring names it among the refusals outside the mirror, pinned by the form's `#guard`s. I mirrored the new word the same way: one docstring line there, plus the `#guard`s.
+- **The lemma** [derived, compiling]: `sessionMatches_of (C) (hC : CaseIsSent C) : SessionMatches C` in `StageAlone.lean`, with `secondAlone_of_sent`. It goes through the new `Steps.inputAt_interior`.
+- **Proofs the step touches** [read]:
+  - `Steps.inputAt_ok`: proof only; its statement is unchanged.
+  - `AcceptsOfSteps.inputAt_of_steps`: gains two hypotheses, the two digests. Nothing outside its file uses it.
+  - New: `interiorDigestIs_ok` and `interiorDigestIs_of`.
+- **Statements and lock records that move** [read: every `lean-audit.json`]: no listed guarantee in any lock names a declaration of `VStar.Recursive.SampledTwo`; the recursive package's lock names the form only in `exempt`. So I expect no record to move. A records run would confirm it; I have not run one.
+
+STOP RULE: not reached. The honest plays have not been replayed yet. After the try, I replay `241e`'s kept case and its fresh play's case through `sampled_two_small.sh`, plus the script's own new play of one member.
+
+To post: nothing. Head pushed: `a013df7279`; nothing unpushed. Machine: vy-nebius-cpu-3, run `r20261113-110318-e827`.
+
+Not established: that the new step compiles; that honest plays pass it; that no lock record moves.
