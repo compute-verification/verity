@@ -68,7 +68,6 @@
     {"file": "verity_vllm/program/predict/steps.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/compiled-steps/v2"},
     {"file": "verity_vllm/program/predict/steps.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/program/prefix_plan.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 6},
-    {"file": "verity_vllm/program/workload.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/workload-program/v1"},
     {"file": "verity_vllm/properties/admission.py", "kind": "schema-literal", "symbol": "check", "detail": "verity-gen/difftest/v1"},
     {"file": "verity_vllm/properties/admission.py", "kind": "schema-literal", "symbol": "main", "detail": "verity-gen/quarantine/v1"},
     {"file": "verity_vllm/properties/admission.py", "kind": "schema-literal", "symbol": "produce", "detail": "verity-gen/difftest-produce/v1"},
