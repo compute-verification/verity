@@ -5484,7 +5484,7 @@
     {"file": "security/Proofs/Properties/Nci/LeafWidths.lean", "count": 4},
     {"file": "security/Proofs/Properties/Nci/LeafWidthsBody.lean", "count": 3},
     {"file": "security/Proofs/Properties/Nci/LeafWidthsDecoded.lean", "count": 4},
-    {"file": "security/Proofs/Properties/Nci/LeafWidthsPart.lean", "count": 10},
+    {"file": "security/Proofs/Properties/Nci/LeafWidthsPart.lean", "count": 5},
     {"file": "security/Proofs/Properties/Nci/LeafWidthsRange.lean", "count": 4},
     {"file": "security/Proofs/Properties/Nci/LeafWidthsResolve.lean", "count": 5},
     {"file": "security/Proofs/Properties/Nci/LeafWidthsType.lean", "count": 2},
