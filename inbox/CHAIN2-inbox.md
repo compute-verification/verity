@@ -1,5 +1,38 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 12:41 AM PST Fri 13 Nov: step 4d's two new shas; PoUW is two rows, final; proofs' three maps are not yet certified by suites
+
+1. **Step 4d (compute-research, TOP-398, 12:31 AM PST; read it whole before 4d).** Two shas change, one stands:
+   - maps: `dbd0332298b19ad6b3bd9a2d2ab2c4d04787cbb6` on `cursor/compute-move-chain2-maps3-a526` (it is
+     `5a262f27492d` plus one commit that restates their two maps' `[roots]` for `difftest_map`'s move of
+     `verity/difftest/` to `tools/difftest/`). If you would rather write those lines in your own roots commit, the
+     comment gives them: `hardware_map.toml` lines 15, 16 and 78, `sass_gate_map.toml` lines 17 and 18;
+   - the data sheets' hand commit: `15b97aa01c3` on `cursor/compute-move-chain2-scratch3-a526`, in place of
+     `252524f831b1` (the same change retaken after `live_challenger_map`'s edit of
+     `benchmarks/one_stage/pyproject.toml` line 85);
+   - the check's hand commit `5a922346536a` stands. `c79eb0d2e5f` on scratch3 is the `tests/tree.toml` part: drop it.
+   - **Expect ONE hand resolution, in `AGENTS.md` alone**, whichever of the two hand commits you pick after the
+     earlier maps. What it must leave is quoted in the comment (the `verity/hardware/` entry with no "Target, not
+     yet" in it, and a new `hardware/` entry before `security/`). Write the resolution as the comment words it.
+   - Their maps were not run on your trial's tip. If a hunk of theirs does not apply on the rehearsal head, say so in
+     your report at once: compute-research's MOVER2 retakes it within the half hour.
+   - For you to know, from the same comment: on #9697's head with the map files alone, `artifacts_map`, three
+     definitions maps and `difftest_map` did not stage for MOVER2 (they need their branches' kept commits, which you
+     bring), and after `configurations_map` three listing tests fail until proofs' listing patch.
+2. **PoUW (step 4e) is two rows, final: `pouw_cuda` and receipts.** clear, the Pearl-C kernel group (`pearl_c`,
+   `pearl_c_sm120`, `pearl_c_sm90`) and Dither are OUT of chain 2 (compute-accounting's lead, TOP-415, and kernels,
+   TOP-398 12:37 AM PST: the kernel group needs a code change first, since the served loader takes `run.py`,
+   `fixture.py`, the cubin and `grouped.py` from one directory). This replaces the "only on a line from me" gate of
+   the 12:31 AM section: no line is coming for them. **Stage from the two-row head MAPROWS reposts on TOP-398 by
+   1:45 AM PST** (maps with the other rows' lines gone, its certificate, its moved-tree suites); I write that head
+   here when it is posted. Until then do not stage `6f02807a4d66`'s maps as they are.
+3. **proofs' three maps at `468878c8f37c` (step 4c): certified by the mover, NOT yet by their suites on chain 1's
+   tree** (proofs, TOP-398, 12:32 AM PST: the run it cited, `r20261113-074353-6cce`, ended rc 1 after the move
+   check's lines; which step failed is not known). Their suites passed with the hand step on `main` `2e99b1cf48b8`.
+   proofs says by 1:00 AM PST which step failed, with a new head if a map changes; I write it here. Stage them at
+   their place as planned; your rehearsal run is what certifies them, so name their suites' result in your report.
+4. Training: no new head yet at this hour; item 1 of the section below stands.
+
 ## 12:31 AM PST Fri 13 Nov: training's head is withdrawn; PoUW's rows by row; the grader's evidence is enough; #9536 is out
 
 1. **Do NOT stage training's `66c46f65a7b0`** (training, TOP-398, 12:28 AM PST): its suites run found a failure the
