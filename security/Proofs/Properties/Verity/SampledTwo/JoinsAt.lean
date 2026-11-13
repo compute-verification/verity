@@ -68,9 +68,10 @@ back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase` and `secondFits_goodC
 * **On two windows each session shows the other stage's family after that stage's digest alone** (`otherRoots`,
   CUT's `OtherRoots`): the form's accept does not give it.
 * **The first stage read the cut's draw** (`firstDrawn`) and **the check's first session is the cut's**
-  (`sessionMatches`). That the first stage's coins are read under the parameters' key and that an accepted play on two
-  windows shows its sessions' order are theorems of the form's accept (`firstReads`, `orderShown`, CUT's
-  `CutAccept.lean`), no longer fields.
+  (`sessionMatches`), each asked at the kept case, so of the accepted plays `JoinGood` holds of; a fact of every
+  accept gives it (`firstDrawn_goodCase`, `sessionMatches_goodCase`). That the first stage's coins are read under
+  the parameters' key and that an accepted play on two windows shows its sessions' order are theorems of the form's
+  accept (`firstReads`, `orderShown`, CUT's `CutAccept.lean`), no longer fields.
 * **The messages** (`msgOpens`, `digestBefore`, MESSAGES): no check gives either; their docstrings say what each
   holds of. That on two windows the first session samples no challenge tree is a theorem of the form's accept
   (`SessionCoins.firstTreeless_of_check`, from the form's refusal of a tree's line in the first session's log and
@@ -245,10 +246,10 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   /-- On two windows each session shows the other stage's family after that stage's digest alone (CUT's
   `OtherRoots`), on the accepted plays `JoinGood` holds of. -/
   otherRoots : ∀ o, FormAccepts C o ∧ JoinGood o → OtherRoots o.sent
-  /-- The first stage read the draw the cut reads. -/
-  firstDrawn : FirstDrawn C
-  /-- The check's first session is the cut's. -/
-  sessionMatches : SessionMatches C
+  /-- The first stage read the draw the cut reads, on the accepted plays `JoinGood` holds of. -/
+  firstDrawn : FirstDrawn (goodCase C JoinGood)
+  /-- The check's first session is the cut's, on the accepted plays `JoinGood` holds of. -/
+  sessionMatches : SessionMatches (goodCase C JoinGood)
   /-- The message the check reads at each round opens the digest the play records. Holds of a strategy whose message
   at each round is fixed before the round's coin; no check gives it: at the digests the device signs (the link's
   `after`, a rep round's SHA-512 of its retained bytes, the closing's SHA-512 of the session's evidence; the
@@ -320,8 +321,8 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
   -- The stages' pieces, at the case kept on the plays `JoinGood` holds of.
   have hC' : CaseIsSent (goodCase C JoinGood) := caseIsSent_goodCase h.caseIsSent
   have hR' : CutReads (goodCase C JoinGood) := cutReads_goodCase fun o (hg : JoinGood o) => hg.1.1
-  have hD' : FirstDrawn (goodCase C JoinGood) := firstDrawn_goodCase h.firstDrawn
-  have hM' : SessionMatches (goodCase C JoinGood) := sessionMatches_goodCase h.sessionMatches
+  have hD' : FirstDrawn (goodCase C JoinGood) := h.firstDrawn
+  have hM' : SessionMatches (goodCase C JoinGood) := h.sessionMatches
   have hcase : ∀ o k p c e, C o = some k → Decoded k p c e → caseOf o.sent = .ok (p, c, e) :=
     fun o k p c e hk hd => (h.caseIsSent o k p c e hk hd).1
   have hA : ∀ o, FormAccepts C o ∧ JoinGood o → FormAccepts C o ∧ ReadIsDevice o ∧ OtherRoots o.sent :=
