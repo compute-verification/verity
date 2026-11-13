@@ -26,13 +26,13 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.ports import In, Out, Ports
 from verity.circuits.refs import Coll, coll_concat
 from verity.circuits.types import Value
-from verity.protocols.pouw.prover.circuit import h1tile as HT
-from verity.protocols.pouw.prover.circuit import h1window as HW
-from verity.protocols.pouw.prover.circuit import h1zy as Z
-from verity.protocols.pouw.verifier import core_check as PCC
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import leaf_lanes as LL
-from verity.protocols.spot.verifier.one_stage import proofs as PF
+from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
+from verity.protocols.accounting.pouw.verifier import core_check as PCC
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
 from tests.pipeline.test_commit_coins import GATE, PEER
 from tests.pipeline.test_serve_h1 import PROMPTS, _PeriodAuditor, _Server

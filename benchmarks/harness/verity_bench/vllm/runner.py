@@ -13,7 +13,7 @@ import subprocess
 from collections.abc import Mapping
 from typing import Any, Protocol
 
-from verity.protocols.pouw.verifier.salt import epoch_open_root
+from verity.protocols.accounting.pouw.verifier.salt import epoch_open_root
 
 from verity_bench.vllm import result as result_format
 from verity_bench.vllm.arms import Arm
