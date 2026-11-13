@@ -231,9 +231,10 @@ class ServedCommit:
     weight: Callable[[str], Any] | None
 
     def __init__(self, build: dict[str, Any], fault: str | None) -> None:
-        from verity_vllm.acquire.sources.served_compiled_source import ServedCompiledSource
-
         from verity_vllm.acquire import served_artifact as SA
+        from verity_vllm.acquire.sources.served_compiled_source import (
+            ServedCompiledSource,
+        )
 
         if engine_env.compile_dirs() is None:
             raise UsageError("--compiled-taps served: the Build reads this process's own compile artifact; export its own "
