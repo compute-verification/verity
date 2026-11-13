@@ -1,7 +1,7 @@
 """Values the pouw protocols' own lines never hand these functions, and what each function does with one: it checks nothing
 of its own, so the value goes on as it is and the line that reads it decides.  A pass before its first call has no base, a
-kernel file is a Python file, a manifest's schema is a string, a whole step's sets are keyed by a pass kind's key and a
-committed linear's weight has two dimensions; each test hands the other value."""
+run without graphs has no driver, a kernel file is a Python file, a manifest's schema is a string, a whole step's sets are
+keyed by a pass kind's key and a committed linear's weight has two dimensions; each test hands the other value."""
 from __future__ import annotations
 
 import re
@@ -15,6 +15,7 @@ from verity_vllm.protocols import pouw as P
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c import graphs as PG
 from verity_vllm.protocols.pouw.pearl_c import kernel as PK
+from verity_vllm.protocols.pouw.pearl_c import lanes as L
 from verity_vllm.protocols.pouw.pearl_c import manifest as PM
 from verity_vllm.protocols.pouw.pearl_c.whole import WholeStep
 
@@ -94,6 +95,41 @@ def test_a_dispatch_without_a_key_asks_the_sets_for_none():
     held = {desc: "a graph"}
     whole.sets[None] = held
     assert dispatch() == desc and whole.counts["eager"] == 1 and mgr.graphs is held
+
+
+class Uploads:
+    def __init__(self):
+        self.put: list = []
+
+    def put_raw(self, ptr, data, lane, driver):
+        self.put.append((ptr, data, lane, driver))
+
+
+def test_lane_graphs_without_a_driver_upload_the_slot_and_fail_at_the_first_launch():
+    """`_replay_lanes` hands the run's driver on unchecked.  With none, the slot's upload is asked of none, and the main
+    graph's launch is where it fails."""
+    uploads = Uploads()
+    lane = SimpleNamespace(raw=9, event=object(), tree_event=object())
+    graph = SimpleNamespace(slot_ptr=7, execs=("main", None, "side"), ev_tree=object())
+    with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'launch'"):
+        L.LaneCalls._replay_lanes(SimpleNamespace(driver=None, uploads=uploads), graph, SimpleNamespace(done=[None]), 0, lane,
+                                  lane, 5, None, b"slot")
+    assert uploads.put == [(7, b"slot", 5, None)]
+
+
+def test_forked_steps_without_a_driver_are_built_and_fail_when_the_first_runs(monkeypatch):
+    """`_forked` builds the lane's steps around the run's driver unchecked.  With none it still returns them, the caller's
+    own in their order; the first to run is where it fails."""
+    monkeypatch.setattr(PG, "_event", object)
+    ran: list = []
+    steps = [lambda: ran.append("a"), lambda: ran.append("b")]
+    run = SimpleNamespace(fork=SimpleNamespace(raw=3, stream=None), driver=None, device="cpu",
+                          kernel=SimpleNamespace(dev=SimpleNamespace(stream=5)))
+    out = PG.GraphCalls._forked(run, steps, [lambda: ran.append("beside")], 1)
+    assert len(out) == 5 and out[1] is steps[0] and out[3] is steps[1]
+    with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'record'"):
+        out[0]()
+    assert ran == [] and run.kernel.dev.stream == 5
 
 
 class Refused(Exception):

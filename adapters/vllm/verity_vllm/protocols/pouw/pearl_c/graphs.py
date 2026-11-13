@@ -23,10 +23,16 @@ Inside vLLM's own capture of a whole decode forward, a call launches the same st
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from verity_vllm.protocols.pouw.pearl_c.ends import _RunState
-from verity_vllm.protocols.pouw.pearl_c.host import _event, _Lane, _zeros, torch_uint8
+from verity_vllm.protocols.pouw.pearl_c.host import (
+    _Driver,
+    _event,
+    _Lane,
+    _zeros,
+    torch_uint8,
+)
 from verity_vllm.protocols.pouw.pearl_c.screen import scatter_into
 from verity_vllm.protocols.pouw.pearl_c.whole_calls import WholeCall, WholeCalls
 
@@ -196,8 +202,7 @@ class GraphCalls(WholeCalls, _RunState):
         import torch
         if self.fork is None:
             self.fork = _Lane(self.device, "greatest", -2)
-        D, dev, fork = self.driver, self.kernel.dev, self.fork
-        assert D is not None
+        D, dev, fork = cast("_Driver", self.driver), self.kernel.dev, self.fork   # no driver is unchecked: its steps fail
         start, first, end = _event(), _event(), _event()
 
         def go():
