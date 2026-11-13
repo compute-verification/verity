@@ -297,14 +297,26 @@ theorem memberFiles_eq {C : Ctx} {S : State} {full : Core.Blobs} {m : Member} {t
 fed, by its place. -/
 def FilesKept (C : Ctx) (full : Core.Blobs) (S : State) : Prop :=
   S.files.size = C.ms.size ∧
-    ∀ i m, C.ms[i]? = some m → S.files[i]? = some (m.files (C.slice m) full >>= fun _ => pure ())
+    ∀ i (m : Member), C.ms[i]? = some m → S.files[i]? = some (m.files (C.slice m) full >>= fun _ => pure ())
 
 /-- **What the stream keeps of every statement's session, after the feed**: what is kept of it on all the blobs fed,
 at its member's files' verdict there, by its place. -/
 def SessionsKept (C : Ctx) (full : Core.Blobs) (S : State) : Prop :=
-  ∀ held, membersHeld C.ms C.sts = .ok held → ∀ k st m s, C.sts[k]? = some st → held[k]? = some m →
+  ∀ held, membersHeld C.ms C.sts = .ok held → ∀ k (st : StatementFiles) (m : Member) (s : RunFiles), C.sts[k]? = some st → held[k]? = some m →
     st.sessions[0]? = some s →
       S.sessions[k]? = some (some (SessionKept.of m (m.files (C.slice m) full) full s))
+
+/-- **A statement's session at the finish is its session in `runMembers`' fold**, where the stream kept it as it reads
+on all the blobs and the files' pass read its member's statement `a`. -/
+theorem stepKept_eq {S : State} {full : Core.Blobs} {files : List (String × StepAt)} {st : StatementFiles}
+    {m : Member} {s : RunFiles} {k : Nat} {slice : Json} {a : StepAt} {r : Run} (hs : st.sessions = #[s])
+    (hk : S.sessions[k]? = some (some (SessionKept.of m (m.files slice full) full s)))
+    (ha : m.files slice full = .ok a) (hst : statementAt files m = .ok a) :
+    stepKept S r ((st, m), k) = stepMember (statementAt files) full r (st, m) := by
+  unfold stepKept stepMember runFrom
+  rw [hk, hst, ha, hs]
+  simp only [SessionKept.of, Except.toOption, Option.map_some, StepKept.step_of, ok_bind]
+  simp [← Array.foldlM_toList]
 
 /-- **The fold's half of `StreamSound`, stated and not proved**: on a feed in the per-member stream's order, its
 state after every step keeps every member's files and every statement's session as they read on all the blobs fed. -/
