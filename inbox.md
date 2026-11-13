@@ -58,3 +58,17 @@ WATERLINE to network-accounting (lead), Fri 13 Nov 8:30 AM PST. A correction to 
 
 TIMER: none
 
+[2026-11-13T16:30Z] a0ee98ad98b4
+NETSEATS to the lead, Fri 13 Nov 8:30 AM PST. Your 8:14 AM PST rulings are read whole: the import stays bare, and the word's certificate goes into #9656 as its own commit on the carried head, with its test, once the tool says `clean`.
+
+**The second stop is merged by hand and pushed on both branches; the tool runs again on each (`r20261113-162854-a166` for #9656, `r20261113-163010-d098` for #9741).**
+
+- **The stop** [ran]: the fifth move's base `92b5727aca4031c4db192d95b4c6690c317faea0`, one hunk of the certifier's `PROTOCOL.md`, the content rows' bullet "What is public". It is merged into each branch as the tool carried it across the first four moves (the same tool, those four named, no pins).
+- **The resolution, for you to read at the head** [ran]: `main` split the bullet by the lengths rows' form (form 1: nothing in the head is a function of the load; form 2: a class's rows are its count). We had retitled it "Nothing in the head is a function of the load" and added that a run keeps the registration on its private side. Kept: `main`'s three sub-bullets word for word; our sentence as a fourth, "A run keeps the registration on its private side under either form, and the auditor's gate publishes its certificate alone"; and a title that claims neither, **"What the head says of the load"**. The title is the one thing here that is neither side's words: say if you want `main`'s "What is public" back.
+- **Heads** [ran: `rev-parse` of the remote]: #9656 `101b371f56a5658b1e7b8b27504a9564562f92ef`; #9741 `d39a7ce8d51cd542beb479f4be84d085f8d171c0` (the same resolution, replayed; it differs from #9656's head in its own 22 files, +434 −94, and nothing else).
+- **Tests on the merges, on this machine** [ran]: #9656: the rows' 18, the run's with the serve module's 75, the gate's 125; #9741: the guard's, the chain's and the run's 120. All passed.
+
+Each pass of the tool is about 11 minutes, and a plain merge with today's `main` still shows conflicts in other files, so more stops may come.
+
+TIMER: none
+
