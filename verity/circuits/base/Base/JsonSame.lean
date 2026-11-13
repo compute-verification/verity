@@ -3,12 +3,14 @@ One comparison of two JSON values that a proof can read: `jsonSame a b` is true 
 value (`jsonSame_iff`). A check compares by it, never by `Lean.Json`'s `==`, which is a `partial def` that neither the
 kernel nor a lemma can unfold.
 
-It compares constructor by constructor: a number by its mantissa and exponent, an array element by element, and an object
-by its tree, node by node. On an object it is stricter than `==`, which reads an object as a map: two objects with the
-same fields whose keys were inserted in another order can be different trees, and `jsonSame` then says false where `==`
-says true. Against a string, a number, a boolean, `null`, or an array of those it says what `==` says. Where two parsed
-objects must compare as maps, compare what does not depend on the order their keys arrived in: their canonical texts
-(`Flock.canon`), or the values rebuilt in key order.
+It is structural equality of trees: constructor by constructor, a number by its mantissa and exponent, an array element
+by element, and an object by its tree, node by node. So on objects it is stricter than value equality: the same fields
+in another insertion order compare false, where `==`, which reads an object as a map, says true. That is safe for
+soundness, since it refuses more. It is right for completeness only where both sides come from one parse of one
+canonical text, or from literals (a string, a number, a Boolean, `null`, an array of those). Two values from two sources
+are compared by their canonical texts (`Flock.canon`), never by `jsonSame`.
+
+The rule: compare canonical texts, or trees of the same canonical parse.
 -/
 module
 
@@ -24,9 +26,11 @@ open Lean (Json)
 abbrev JsonTree := Std.DTreeMap.Internal.Impl String (fun _ => Json)
 
 mutual
-/-- **Whether `a` and `b` are the same JSON value** (`jsonSame_eq`, `jsonSame_refl`). Total by structural recursion: an
-array is compared as its list (`jsonSameList`) and an object as its tree (`jsonSameTree`), which are the two types
-`Json` holds itself in. -/
+/-- **Whether `a` and `b` are the same JSON value** (`jsonSame_eq`, `jsonSame_refl`): structural equality of trees, so on
+objects it is stricter than value equality, and the same fields in another insertion order compare false. It is for
+trees of the same canonical parse and for a value against a literal; two values from two sources are compared by their
+canonical texts. Total by structural recursion: an array is compared as its list (`jsonSameList`) and an object as its
+tree (`jsonSameTree`), which are the two types `Json` holds itself in. -/
 def jsonSame : Json → Json → Bool
   | .null, .null => true
   | .bool a, .bool b => a == b
