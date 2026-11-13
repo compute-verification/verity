@@ -310,6 +310,7 @@
   "Proofs.Properties.Verity.SampledTwo.CopyOfOne",
   "Proofs.Properties.Verity.SampledTwo.RefsOfSent",
   "Proofs.Properties.Verity.SampledTwo.RoundsRise",
+  "Proofs.Flock.SpotFlock.HeldOfWires",
   "Proofs.Flock.SpotFlock.AddressFacts.Row",
   "Proofs.Flock.SpotFlock.AddressFacts.RowRead",
   "Proofs.Flock.SpotFlock.AddressFacts.RowKind",
