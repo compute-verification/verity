@@ -16,7 +16,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity_vllm.config import WORKLOADS, UsageError
+from verity_vllm.config import WORKLOADS, UsageError, workload_file
 from verity_vllm.pipeline import cli, row, source_identity
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import research as R
@@ -63,7 +63,7 @@ class _Research:
 @pytest.fixture(autouse=True)
 def capped(tmp_path, monkeypatch) -> Path:
     """ROW's file done only at its public cap, as the file of a row the chain publishes must be; returns its path."""
-    doc = json.loads((WORKLOADS / f"{ROW}.json").read_text())
+    doc = json.loads(workload_file(WORKLOADS / f"{ROW}.json").read_text())
     p = tmp_path / "workloads" / f"{ROW}.json"
     p.parent.mkdir()
     p.write_text(json.dumps({**doc, "sampling": {**doc["sampling"], "ignore_eos": True}}))
@@ -175,7 +175,7 @@ def test_what_the_record_needs_is_refused_before_any_stage_runs(tmp_path, resear
 
 
 def test_a_chain_that_would_publish_a_row_not_done_only_at_its_public_cap_is_refused_before_any_stage_runs(tmp_path, research, capped):
-    capped.write_text((WORKLOADS / f"{ROW}.json").read_text())
+    capped.write_text(workload_file(WORKLOADS / f"{ROW}.json").read_text())
     fake = research()
     with pytest.raises(UsageError, match=rf"{ROW}: a row of record \(records\.json\) is done only at its public cap, and its done source "
                                          r"is 'eos-token'.*the chain would publish it as one \(or --no-publish\)"):
