@@ -23,7 +23,7 @@ import inspect
 import json
 from pathlib import PosixPath
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -83,9 +83,9 @@ class Staged(Committer):
         self.chunk, self.win_bytes, self.learn_budget_bytes, self.pool = 256, 2 * MIB, 4 * MIB, SimpleNamespace(exact=True)
         self.sizing = sizing
         self.sized: list[Record] = []
-        self.asz: Record | None = None
-        self.ring_of: Record | None = None
-        self.host_admission: Record | None = None
+        self.asz: Any = None
+        self.ring_of: Any = None
+        self.host_admission: Any = None
 
     def size_arena(self, envelope: Record, *, hidden_m1: bool) -> Record:
         self.calls.append("size_arena")
@@ -105,8 +105,14 @@ class Staged(Committer):
 
 def committer(eng: SimpleNamespace, run_id: str) -> Staged:
     """``--committer plugin:<this module>:committer``."""
-    M.MADE.append(Staged(eng, run_id, **M.MAKE))
-    return M.MADE[-1]
+    com = Staged(eng, run_id, **M.MAKE)
+    M.MADE.append(com)
+    return com
+
+
+def made() -> list[Staged]:
+    """`M.MADE` as what this module's `committer` put there."""
+    return cast("list[Staged]", M.MADE)
 
 
 #: The host's memory files by path; one it does not name is not there.  `host` empties it.
@@ -192,7 +198,7 @@ def test_a_staging_block_is_sized_and_its_run_admitted_under_the_containers_limi
     HOST[V2] = f"{64 * GIB}\n"
     host.verdicts = [(True, None)]
     ended = staged(tmp_path, capsys)
-    [com] = M.MADE
+    [com] = made()
     assert ended.exit is None and com.calls == ["size_arena", "register_weights", *WARMUP, *RUN, *RUN, "close"]
     assert com.sized == [{"envelope": ENVELOPE, "hidden_m1": False}]
     limited = {**SIZING, SIZING_SOURCE: V2, SIZING_LIMIT: 64 * GIB,
@@ -227,7 +233,7 @@ def test_the_limit_is_the_containers_or_else_the_machines_memory_and_its_source_
     HOST.update(files)
     host.verdicts = [(True, None)]
     ended = staged(tmp_path, capsys)
-    [com] = M.MADE
+    [com] = made()
     assert ended.exit is None and (com.asz[SIZING_LIMIT], com.asz[SIZING_SOURCE]) == (limit, source)
     assert handed(host, "committer_resident")[0][1] == limit and handed(host, "admission")[0][2] == limit
     assert ended.doc(f"admission_{KIND}.json") == as_json(admission_doc(host, source)) and host.gave["admission"]["admitted"]
@@ -248,7 +254,7 @@ def test_a_host_retaining_run_predicted_over_the_limit_is_refused_before_the_wei
     is warned of first, and a limit equal to it is not."""
     HOST[V2] = f"{limit}\n"
     ended = staged(tmp_path, capsys)
-    [com] = M.MADE
+    [com] = made()
     why = host.gave["admission"]["why"]
     assert ended.exit == 3 and com.calls == ["size_arena"] and not host.gave["admission"]["admitted"]
     assert [name for name, _ in host.calls] == ["build_engine", "attach_of_record"]
@@ -262,7 +268,7 @@ def test_an_override_launches_a_run_over_the_limit_and_is_named_on_its_admission
     monkeypatch.setenv("VERITY_ADMIT_OVER_BOUND", "1")
     host.verdicts = [(True, None)]
     ended = staged(tmp_path, capsys)
-    [com] = M.MADE
+    [com] = made()
     assert ended.exit is None and com.calls == ["size_arena", "register_weights", *WARMUP, *RUN, *RUN, "close"]
     assert ended.doc(f"admission_{KIND}.json") == as_json(admission_doc(host, V2, override=True)) and not host.gave["admission"]["admitted"]
     assert setup_lines(ended) == [SIZED_LINE, WARNING_LINE, admission_line(host, 16), OVERRIDDEN_LINE]
@@ -274,7 +280,7 @@ def test_a_run_that_keeps_no_values_on_the_host_is_recorded_over_the_limit_and_n
     M.MAKE.update(retain="none")
     host.verdicts = [(True, None)]
     ended = staged(tmp_path, capsys)
-    [com] = M.MADE
+    [com] = made()
     adm = host.gave["admission"]
     assert ended.exit is None and com.asz["admission_of_record"] == of_record(None, "none") and handed(host, "admission")[1]["retain"] == "none"
     assert adm["admitted"] and adm["would_exceed_by_bytes"] > 0 and adm["why"].startswith("retain=none: outside the refusal domain")
@@ -301,7 +307,7 @@ def test_an_admission_that_cannot_be_computed_refuses_a_host_retaining_run(tmp_p
     monkeypatch.setenv("VERITY_ADMIT_OVER_BOUND", override)
     host.verdicts = [(True, None)]
     ended = staged(tmp_path, capsys)
-    [com] = M.MADE
+    [com] = made()
     assert (ended.exit, com.calls[:2]) == ((3, ["size_arena"]) if refused else (None, ["size_arena", "register_weights"]))
     assert "admission" not in host.gave and setup_lines(ended) == [SIZED_LINE, line]
     assert ended.doc(f"admission_{KIND}.json") == com.asz["admission"] == {
@@ -318,7 +324,7 @@ def test_a_committer_with_no_block_or_a_block_left_unchecked_is_not_sized(tmp_pa
     M.MAKE.update(make)
     host.verdicts = [(True, None)]
     ended = staged(tmp_path, capsys, *argv)
-    [com] = M.MADE
+    [com] = made()
     assert ended.exit is None and com.calls == [*(["size_arena"] if sized else []), "register_weights", *WARMUP, *RUN, *RUN, "close"]
     assert bool(host.handed) == bool(setup_lines(ended)) == bool([n for n in ended.files() if KIND in n]) == sized
 
@@ -332,7 +338,7 @@ def test_the_sizing_counts_the_hidden_rows_of_a_tap_the_attachment_did_not_rule_
     monkeypatch.setattr(commit, "attach_of_record", lambda *a, **kw: SimpleNamespace(**{**vars(attach(*a, **kw)), "hidden_required": required}))
     host.verdicts = [(True, None)]
     ended = staged(tmp_path, capsys, *argv)
-    assert ended.exit is None and M.MADE[0].sized == [{"envelope": ENVELOPE, "hidden_m1": hidden}]
+    assert ended.exit is None and made()[0].sized == [{"envelope": ENVELOPE, "hidden_m1": hidden}]
 
 
 def test_the_engines_token_budget_and_context_reach_the_sizing_and_the_budget_the_admission(tmp_path, host, capsys):
@@ -342,7 +348,7 @@ def test_the_engines_token_budget_and_context_reach_the_sizing_and_the_budget_th
     host.verdicts = [(True, None)]
     ended = staged(tmp_path, capsys)
     assert ended.exit is None
-    assert M.MADE[0].sized == [{"envelope": {**ENVELOPE, "max_num_batched_tokens": 4, "max_model_len": 32}, "hidden_m1": False}]
+    assert made()[0].sized == [{"envelope": {**ENVELOPE, "max_num_batched_tokens": 4, "max_model_len": 32}, "hidden_m1": False}]
     assert handed(host, "admission")[1]["max_num_batched_tokens"] == 4 and host.gave["admission"]["scheduled_raw_bytes"] == 22 * MIB
 
 
@@ -351,7 +357,7 @@ def test_a_windowed_committer_is_handed_the_sizing_for_its_ring_after_the_admiss
     M.MAKE.update(windowed=True)
     host.verdicts = [(True, None)]
     ended = staged(tmp_path, capsys)
-    [com] = M.MADE
+    [com] = made()
     assert ended.exit is None and com.calls[:3] == ["size_arena", "enable_windows", "register_weights"]
     assert com.ring_of is com.asz and "admission" in com.asz and ended.doc(f"window_ring_{KIND}.json") == RING
     assert setup_lines(ended) == [SIZED_LINE, admission_line(host, 65536), RING_LINE]
@@ -417,7 +423,7 @@ def test_a_bounded_committers_host_bound_is_computed_before_its_weights_and_gove
     M.MAKE.update(bounded=True)
     host.verdicts = [(True, None)]
     ended = staged(tmp_path, capsys)
-    [com] = M.MADE
+    [com] = made()
     assert ended.exit is None and com.calls == ["size_arena", "register_weights", *WARMUP, *RUN, *RUN, "close"]
     assert [name for name, _, _ in host.handed] == ["schedule_stream_bound", "c2_programs_forecast", "bounded_host_bound", "committer_resident",
                                                     "admission"]
@@ -456,7 +462,7 @@ def test_a_bounded_run_of_one_pair_with_no_sampled_replay_counts_no_forecast_no_
     M.MAKE.update(bounded=True)
     host.verdicts = [(True, None)]
     ended = staged(tmp_path, capsys, "--pairs", "1", "--replay-per-stratum", "0", "--replay-cache")
-    [com] = M.MADE
+    [com] = made()
     assert ended.exit is None and [name for name, _, _ in host.handed] == ["schedule_stream_bound", "bounded_host_bound", "committer_resident",
                                                                            "admission"]
     assert handed(host, "bounded_host_bound")[1] == bound_kw(fork_children_bytes=0, pool_carry_bytes=0, replay_cache=True, pairs=1)
@@ -473,7 +479,7 @@ def test_the_forecast_of_the_replays_programs_is_a_term_of_the_bound_and_a_share
     monkeypatch.setattr(commit, "c2_programs_forecast", lambda root, one: dict(FORECAST))
     host.verdicts = [(True, None)]
     ended = staged(tmp_path, capsys)
-    assert ended.exit is None and M.MADE[0].asz["c2_programs_forecast"] == FORECAST
+    assert ended.exit is None and made()[0].asz["c2_programs_forecast"] == FORECAST
     assert handed(host, "bounded_host_bound")[1] == bound_kw(c2_programs_bytes=100 * MIB, c2_residual_bytes=45 * MIB)
     assert setup_lines(ended)[1] == FORECAST_LINE
 
@@ -485,7 +491,7 @@ def test_a_bounded_run_over_the_limit_with_no_margin_asked_is_launched_and_not_w
     M.MAKE.update(bounded=True)
     host.verdicts = [(True, None)]
     ended = staged(tmp_path, capsys)
-    [com] = M.MADE
+    [com] = made()
     said = setup_lines(ended)
     assert ended.exit is None and com.calls[:2] == ["size_arena", "register_weights"] and com.host_admission["margin_bytes"] < 0
     assert WARNING_LINE not in said and said[0] == SIZED_LINE and said[2] == STREAM_LINE
@@ -504,7 +510,7 @@ def test_a_bounded_run_to_be_admitted_by_a_margin_is_refused_over_it_or_with_no_
     M.MAKE.update(bounded=True, exclude=exclude)
     host.verdicts = [(True, None)]
     ended = staged(tmp_path, capsys, "--host-admit", margin)
-    [com] = M.MADE
+    [com] = made()
     source = V2 if limit else None
     bound = bound_doc(host, source, 3.0)
     assert handed(host, "bounded_host_bound")[1] == bound_kw(**{LIMIT: limit}, retain_exclude=set(exclude))
