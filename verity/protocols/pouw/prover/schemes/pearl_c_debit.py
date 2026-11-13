@@ -50,9 +50,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 from fractions import Fraction
 
-from verity.definitions.silicon import fp32
-from verity.definitions.silicon.models import group_sum
-from verity.definitions.silicon.term import FP32_MAX_EXPONENT, FP32_SIGNIFICAND_WIDTH, Term, fp32_term
+from verity.circuits.silicon import fp32
+from verity.circuits.silicon.models import group_sum
+from verity.circuits.silicon.term import FP32_MAX_EXPONENT, FP32_SIGNIFICAND_WIDTH, Term, fp32_term
 
 from . import pearl_kw as P
 from .pearl_c_device import H100, Device, Prices

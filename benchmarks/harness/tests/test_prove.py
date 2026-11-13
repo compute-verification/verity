@@ -1562,7 +1562,7 @@ def registered(block: str) -> str:
     """The id of the Definition the tree registers as a census type's Boolean version, asked of the registry itself."""
 
     from verity.definitions import boolean
-    from verity.definitions.call_scope import spec_base, spec_statics, specialization
+    from verity.circuits.call_scope import spec_base, spec_statics, specialization
 
     return boolean.boolean_version(specialization(spec_base(block), spec_statics(block))).id
 

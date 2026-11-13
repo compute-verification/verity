@@ -13,7 +13,7 @@ from verity.circuits import partition_object
 from verity.definitions.circuits.census import census
 from verity.circuits.codec import program_digest
 from verity.circuits.defs import bind
-from verity.definitions.ops.boolean.gemm import GEMM_SM120_E4M3, GemmCoordinateE4m3
+from verity.circuits.ops.boolean.gemm import GEMM_SM120_E4M3, GemmCoordinateE4m3
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.commitments import advice
