@@ -17,6 +17,8 @@ ARGV = ["/venv/bin/python", "-m", "the.cli", "build", "--model", "m", "--workloa
 KEYED = ('{"argv":["build","--model","m","--workload",{"batch":2,"requests":3,"sampling":"named","sampling_params":{"top_p":0.5},'
          '"sampling_seeds":null},"--T","31"],"device":{"compute_cap":"8.9","name":"NVIDIA L40S"},"tree":"t1"}')
 NO_WORKLOAD = '{"argv":["build","--model","m"],"device":{"at":"/dev/gpu0"},"tree":"t1"}'
+BY_HAND = ('{"argv":["build","--workload",{"batch":null,"requests":0,"sampling":null,"sampling_params":null,"sampling_seeds":null}],'
+           '"device":{"compute_cap":"8.9","name":"NVIDIA L40S"},"tree":"t1"}')
 
 
 def _workload(tmp_path, name="workload.json"):
@@ -47,6 +49,13 @@ def test_a_derives_key_is_the_sha256_of_its_command_from_build_on_without_its_ou
     assert PC.key([*argv[3:6]], workload="/no/such/file", tree="t1", device={"at": Path("/dev/gpu0")}) == _sha(NO_WORKLOAD)
 
 
+@pytest.mark.parametrize("doc", [{}, {"requests": []}, {"sweep": {}, "requests": None}, {"sweep": None, "variants": {"v": {}}}])
+def test_a_workload_that_states_no_sweep_block_and_no_requests_keys_by_nulls_and_none(tmp_path, doc):
+    w = tmp_path / "by-hand.json"
+    w.write_text(json.dumps(doc))
+    assert PC.key(["build", "--workload", str(w)], workload=str(w), tree="t1", device=DEV) == _sha(BY_HAND)
+
+
 @pytest.mark.parametrize("change", [{"tree": None}, {"tree": ""}, {"device": None}, {"device": {}}, {"argv": ["python", "-m", "the.cli", "manifest"]}])
 def test_a_derive_with_no_tree_no_device_or_no_build_in_its_command_is_not_keyed(tmp_path, change):
     given = {"argv": ["build", "--model", "m"], "tree": "t1", "device": DEV, **change}
@@ -73,26 +82,30 @@ def test_an_entry_is_found_only_with_its_entry_file_and_a_program_whose_result_i
 
 def test_a_derive_that_succeeded_is_published_whole_under_its_key_with_its_entry_file(tmp_path):
     derived, root = _derived(tmp_path / "row" / "build_request"), tmp_path / "a" / "cache"
-    stale = root / f".k1.tmp-{os.getpid()}"
-    (stale / "program").mkdir(parents=True)
-    (stale / "program" / "left by a run that died").write_text("")
-    assert PC.publish(str(root), "k1", str(derived), {"row": "r", "stage": Path("build_request"), "device": DEV}) == root / "k1"
+    assert PC.publish(str(root), "k1", str(derived), {"row": "r", "stage": Path("build_request"), "device": DEV}) == root / "k1", \
+        "under a root none of whose directories was there"
     assert sorted(p.name for p in root.iterdir()) == ["k1"]
     assert sorted(p.name for p in (root / "k1").rglob("*")) == ["ENTRY.json", "instances.json.gz", "program", "result.json"]
     assert (root / "k1" / "ENTRY.json").read_text() == ('{\n "device": {\n  "compute_cap": "8.9",\n  "name": "NVIDIA L40S"\n },\n "key": "k1",\n "row": "r",\n'
                                                        ' "schema": "verity-vllm/program-cache-entry/v1",\n "stage": "build_request"\n}\n')
     assert (root / "k1" / "program" / "instances.json.gz").read_bytes() == b"program" and PC.lookup(root, "k1") == root / "k1"
-    assert PC.publish(root, "k2", derived, {}) == root / "k2", "a second key in a root that is there"
+    stale = root / f".k2.tmp-{os.getpid()}"
+    (stale / "program").mkdir(parents=True)
+    (stale / "program" / "left by a run that died").write_text("")
+    assert PC.publish(root, "k2", derived, {}) == root / "k2", "a second key in a root that is there, over what a run that died left"
+    assert sorted(p.name for p in root.iterdir()) == ["k1", "k2"]
+    assert sorted(p.name for p in (root / "k2").rglob("*")) == ["ENTRY.json", "instances.json.gz", "program", "result.json"]
     assert json.loads((root / "k2" / "ENTRY.json").read_text()) == {"schema": "verity-vllm/program-cache-entry/v1", "key": "k2"}
 
 
-def test_a_derive_that_did_not_succeed_is_not_published_and_an_entry_that_is_there_is_kept(tmp_path):
+def test_a_derive_that_did_not_succeed_is_not_published_and_an_entry_that_is_there_is_kept_with_no_copy_made(tmp_path, monkeypatch):
     root = tmp_path / "cache"
     assert PC.publish(root, "k1", _derived(tmp_path / "failed", ok=False), {}) is None and not root.exists()
     assert PC.publish(root, "k1", tmp_path / "absent", {}) is None and not root.exists()
     first = PC.publish(root, "k1", _derived(tmp_path / "first"), {"row": "first"})
     second = _derived(tmp_path / "second")
     (second / "instances.json.gz").write_bytes(b"another program")
+    monkeypatch.setattr(PC.shutil, "copytree", lambda *a, **kw: pytest.fail(f"copied {a}"))
     assert PC.publish(root, "k1", second, {"row": "second"}) == first == root / "k1"
     assert json.loads((first / "ENTRY.json").read_text())["row"] == "first" and (first / "program" / "instances.json.gz").read_bytes() == b"program"
     assert sorted(p.name for p in root.iterdir()) == ["k1"]
