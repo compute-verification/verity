@@ -153202,3 +153202,106 @@ Each claim says where it comes from: [run] jobs 4 `r20261113-165520-a7b8`, 5 `r2
 - That a line merged with the join's tip crosses all 24 moves: only the first move's base was tried locally. The dry run answers it.
 - Any records run's verdict.
 - #9713's records run `8a62`: its files did not come back on my last fetch; I read it again now.
+
+## REDRAW, Fri 13 Nov 17:18Z: the `commitOf?` carry is back: `clean-skipped`, pure, `5d3a350b8f40` on a new branch, my 67 lines byte for byte and no old name in them; its records run and its 59 suites are out. #9717: FRAME moved the branch and launched its records, so I launch none; by reading, its two carried locks hold six of `main`'s records where my change's belong and two records under retired names, so `71b3` should come back `regenerated`
+
+Each claim says where it comes from: [run] a node's run, [git] or [local] this machine (git and reading only), [read] an entry.
+
+**My lines, and who holds each** [git, 17:05Z]
+
+| Line | Branch | Head | State |
+|---|---|---|---|
+| #9717 | `cursor/proofs-honest-draw-5b2f` | `ec2749859711` | carried and fast-forwarded by FRAME, 16:50Z; I push nothing |
+| #9728 | `cursor/proofs-honest-session-7c1e` | `36d6e37cbc7b` | live, waits for FRAME's carry; I push nothing |
+| credit | `cursor/proofs-honest-credit-9d1e` | `1370c60b7e75` | live, waits for FRAME's carry; I push nothing |
+| `commitOf?` | `cursor/proofs-redraw-commitof-4e9d` | `779936dea335` | not moved (section 1) |
+| `commitOf?`, carried | `cursor/proofs-redraw-commitof-carried-4de2` | `5d3a350b8f40ddcd569154da24ee5b59b93201d4` | new, pushed 17:06Z |
+
+### 1. The `commitOf?` carry (`r20261113-162220-7b85`, vy-nebius-cpu-14, exit 0, 1,420 s)
+
+- **The tool's result** [run]: `status clean-skipped, result 5d3a350b8f40, crossed 24, skipped 4`. The four skipped are the
+  ones `main` holds: `config_map`, `settings_map`, `bench_instances_map`, `flat_files_map`. All 28 checks were found
+  kept. Not `locks-stale`, not `pins-stale`; `plain` (an ordinary merge) is `clean` too. The tool exits 1 on a skipped
+  move by its own rule; the job's exit is 0.
+- **Pure** [git]: the carried head holds `5eb1231b2558` and the old head `779936dea335`; above the old head it has the
+  tool's 59 commits (`restack carry <noreply@invalid>`) and none of mine.
+- **The change is the same** [git]: three files, 67 lines added and 3 removed, before and after. The hunks, file
+  headers left out, are byte for byte the same (one sha256, `97eec1cd3256…`). Only the paths moved:
+  `verity/protocols/pouw/verifier/lean/check/` is now `verity/protocols/accounting/pouw/verifier/lean/check/`
+  (`PouwCheck/Credit.lean`, `PouwCheck/CreditDifftest.lean`, `tests/test_difftest.py`).
+- **The look for old names** [local]: the 67 added lines against every old path, module, split and token of each
+  layout map. The four skipped maps: 35 old names, 0 hits. The 17 crossed layout maps: 188 old names, 0 hits. The
+  added lines name no path and import nothing.
+- **Against today's `main`** [git, 17:03Z]: `main` is `af9b13440693`. No file under `tools/move/` changed since
+  `5eb1231b2558`, so no new move. The carried head merges with it with no conflict (`git merge-tree`).
+- **The old branch is not moved.** I wrote "only on a `clean` result", and the tool never calls a carry with a skipped
+  move `clean`. By your rule to FRAME (the tool ended `clean` or `clean-skipped`, no commit on top, the grep empty) it
+  may move. I fast-forward `cursor/proofs-redraw-commitof-4e9d` to `5d3a350b8f40` with the ready line unless you say
+  no. I did not run the confirming command: it is a second 24-minute carry for the same commit.
+- **No pull request** (your 08:30Z: you say when it is opened).
+
+### 2. Runs out at `5d3a350b8f40` [run]
+
+| Run | Node | What | State at 17:14Z |
+|---|---|---|---|
+| `r20261113-170726-4267` | vy-nebius-cpu-9 | `lean_changed.py --records verity/protocols/accounting/pouw/verifier/lean/check --update`: PoUW's check, then `security` (with `security/Proofs`), then `security/Properties` (with `security/Proofs`) | holds Lean slot `build/0` since 17:11Z, after a two-minute wait |
+| `r20261113-170942-cb9f` | vy-nebius-cpu-14 | `suites.py --changed 5eb1231b2558 --quick`: 59 suites; the five test modules of PoUW's check's difftest run whole, slow tests included | running |
+
+- This is the first records run on this change: at the old head only `repository` and PoUW's verifier suite ran (my
+  13:11Z). Back about 18:10Z for the records and about 18:25Z for the suites [guess: `87d9` took 55 minutes, `032e`'s 62 suites 73].
+
+### 3. #9717 at its carried head `ec2749859711`
+
+- **Who did what** [read: FRAME's 16:53Z; your 16:16Z to FRAME]: your 16:03Z gave me the push, the records and the
+  ready line; your 16:16Z gave FRAME the same, and FRAME did the first two (the push at 16:50Z,
+  `r20261113-165128-71b3` on vy-nebius-cpu-8). **I launch no second records run**: it would hold a Lean slot for the
+  same verdict. I push nothing to the branch. FRAME commits what `71b3` regenerates, as its entry says, and I say in
+  one title whether that commit is the list below.
+- **My Lean is carried whole** [git]: over carried #9555 (`38e1ad9938f6`) the five Lean files change by the same
+  counts as before (17/0, 1/1, 1/1, 19/18, 9/0). Of the 187 lines of hunks, two context lines differ, by the terms
+  move's own renames (`sessionOf` → `challengePhaseOf`, `isSessionId` → `isChallengePhaseId`). No changed line differs.
+- **The two locks are not what a records run wrote** [git, by reading the four heads' locks as JSON]. #9717 changes 13
+  definition records and adds one, in each of `security/lean-audit.json` and `security/Properties/lean-audit.json`.
+  `main` changed six of those 13 too since my base `a2c3831345e0` (two of them it renamed). The lock's merge took
+  `main`'s side for each of the six, the same in both locks:
+
+  | Record under `reads/Spot.ChallengerSession/definitions` | old #9555 | old #9717 | `main` | carried #9717 |
+  |---|---|---|---|---|
+  | `auditedOpen` | `8b85d907bb` | `9a0a22072d` | `6fe3726e73` | `6fe3726e73` |
+  | `verifyLedger` | `f6f3f39947` | `f19d997141` | `51e446b211` | `51e446b211` |
+  | `isBodyOf` (private) | `f210728a7a` | `a3e39a3ce0` | `dd116acfb9` | `dd116acfb9` |
+  | `isOutcome` (private) | `142f2de133` | `17fb5bad93` | `5927b4a83f` | `5927b4a83f` |
+  | `sessionOf`, now `challengePhaseOf` | `93326ce627` | `b1bc9ffe7b` | `d91ebdb6dd` | `d91ebdb6dd` |
+  | `sessionNamed`, now `challengePhaseNamed` | `0753410740` | `d961252165` | `033e2c9d49` | `033e2c9d49` |
+
+  - The carried Lean holds my change to these six, so `main`'s hashes are not theirs.
+  - The properties lock also keeps `Spot.Challenger.sessionOf` and `Spot.Challenger.sessionNamed`, at my old hashes,
+    beside the two new names. The carried Lean declares neither old name.
+  - The module's `digest` is `d4f27e2cc0c6…` in one lock and `375920ada257…` in the other. At the other five heads I
+    read, the two locks agree on it.
+  - The other seven changed records and the added one (`Spot.jsonBoolIs`) are carried as they were.
+  - Order only: `shape.premises` (the same nine) and the keys of `witnesses` and `layers` are in another order than in
+    carried #9555.
+- **So I expect `71b3` to end `regenerated`**: in each lock those six records and the module's digest, and in the
+  properties lock the two old names gone. The head then gains a records commit. #9717 holds no verdict (my ready line
+  of 09:01Z was taken, not marked), so nothing is lost by that.
+- **The same will show on #9728 and the credit branch** when FRAME carries them: each changes records of
+  `Spot.ChallengerSession` or `PouwCheck.Credit` on top of #9717's [guess, from this one].
+- **By the same reading, not my lines:** #9441's two locks change over `main` exactly as they did over its old base
+  (6 added, 5 changed, the same values). #9555's one lock too (3 removed, 6 added, 9 changed), but for one value, the
+  `digest` of `reads/Spot.ChallengerDraw`. A reading of the locks is not a records verdict.
+
+### Not established
+
+- Any verdict of `4267`, `cb9f` or `71b3`.
+- That a record's hash moves with its definition's body under the new name: I infer it from the old pair, where
+  each of the six moved with my edit. `71b3` says.
+- Whether the merge that took `main`'s side is the lock driver's rule or the tool's: I read the result, not
+  `merge.py`.
+- That PoUW's difftest passes on every case at the carried paths: `cb9f` runs it.
+
+### State
+
+- Pushed this turn: the new branch `cursor/proofs-redraw-commitof-carried-4de2` at `5d3a350b8f40`. Nothing else.
+- Runs in flight: `r20261113-170726-4267` (vy-nebius-cpu-9), `r20261113-170942-cb9f` (vy-nebius-cpu-14).
+- Mailbox read 17:16Z: 581 lines, nothing after your 16:03Z. Timer `redraw-mailbox`, every 30 minutes, next 17:30Z.
