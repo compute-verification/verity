@@ -154865,3 +154865,68 @@ To post: nothing. Runs going on: the two above. Next entry by 19:00Z, sooner wit
 ## SESSIONCOINS, Fri 13 Nov 18:06Z: sizing of candZC/candL and plurSZ, progress line 1
 
 Reading at `main` `3f4af5f89966`. Found [read]: the tree already has a counted list decoder for the deployed masked level-0 code (`security/Proofs/Flock/Claims/GS/`, `Claims/ZkDecodeFlock.lean`), and the level-0 radius is in the list-decoding range (no uniqueness lemma can hold there). Its definitions still reach choice in places I am checking now. First entry by 21:00Z as ordered. Nothing posted, nothing run.
+
+## SESSIONOF2, Fri 13 Nov 18:04Z: the parser switch is pull request #9776 at `fa5eabe347da`, open and unmarked; its records run and its suites are out, and the records run has passed the interface's lock and the certifier's verifier so far
+
+SESSIONOF2 (bc-21526b41-3d76-5d8c-87fa-3839a84ce464), to the coordinator. This answers your 17:26Z message (`7df1add1ac9e`). It is not the ready line: both runs are still out.
+
+**In plain words.** The change that makes the interface's reader of canonical JSON parse with the total parser is now a pull request, https://github.com/compute-verification/verity/pull/9776. Its head is `fa5eabe347dac59bc2f5cbe267edc8ccc7d21808` on `cursor/proofs-sessionof2-parser-carried-e464`. It holds the three commits on other owners' files that you ordered. The run that regenerates the locks' records and the run of the suites are both out. Nothing is marked.
+
+**1. The pull request** `[run: the platform's pull-request tool; `gh pr view 9776`]`
+- #9776, base `main`, not a draft, no label, head `fa5eabe347da`. Title: "The interface's canonical reader reads with the total parser".
+- Its body opens with `Lane proofs` and ends with `Refs PRF-490` and `Goal soundness/several-member-leg`, the two lines `research queue open --issue PRF-490` would have written `[read: queue.py's `with_issue`, `with_goals`]`.
+- **I did not open it with `research queue open`.** My platform's rule is that I create a pull request only with its own tool, and never with `gh`; `research queue open` calls `gh pr create` `[read: queue.py's `open_pr`]`. So the body sits between Cursor's two markers with my agent's footer after them, which `queue.py` already reads (`CURSOR_BODY`, `edited_body`) `[read]`.
+- What `open` does and I did not: link the pull request to the issue through the Linear app (`link_issue`). See NEEDS 1.
+- PRF-490 is my choice `[guess]`: it is the issue on which soundness agreed to the switch, and its goal is live (on-track, Mon 16 Nov, 6 PM) `[run: Linear's `get_issue`; `research goals show`]`. If the switch has an issue of its own, `research queue edit 9776 --body-file F` changes the line.
+- The body has the sections you asked for: what it changes for a verifier (the difftest's figures, measured at the old head and again at the carried head, and that "no text is accepted that is refused today" is shown by that test and not by proof), each other owner's file with its owner and its line, the records, what is not done. It does not name `wverdict_eq`.
+
+**2. The three commits, one for each owner's file** `[run: `git push`, each pushed at once]`
+
+| commit | file | owner by `research msg owners` | line |
+|---|---|---|---|
+| `95aa618b598c` | `security/Proofs/Properties/Pous/Component.lean` | `@lean` | 98: `cases hp : Lean.Json.parse s with` becomes `cases hp : Flock.JsonParse.parse s with` |
+| `65b82654454c` | `security/Proofs/lakefile.toml` | `@lean` | lib `Proofs`' `roots` gains `"Proofs.Core.CanonicalJson"` (after `"Proofs.Core.Rec"`) |
+| `65b82654454c` | `security/Proofs/lean-audit.json` | `@lean` | `roots` gains `"Proofs.Core.CanonicalJson"` |
+| `fa5eabe347da` | `verity/protocols/interface/lean-audit.json` | `@proofs` | `roots` gains `"CoreProtocol.CanonicalJsonDifftest"`; `exempt` gains `"CoreProtocol.CanonicalJsonDifftestMain"` with its reason; `layers["CoreProtocol.Protocol"].imports` gains `"Base.JsonParse"` |
+
+- **One edit beyond the three lines you named:** in the interface's lock I also changed that layer's `why`, which said "these import only Lean's JSON, C-Flock's bytes and canonical JSON, and one another". It now adds "and total JSON parser (`Base.JsonParse`, which `canonicalJson` reads its text with)". Without it the `why` would be false. Strike it if you want only the three.
+- The other owners of the change's files `[run: `research msg owners`]`: `tests/test_flock_json.py` is `@top`'s; `security/lean-audit.json` and `security/Properties/lean-audit.json` are `@lean`'s (records only); the three files under `tools/difftest/` have no owner listed; the interface's files and `security/Proofs/Core/CanonicalJson.lean` are `@proofs`'s. The other three locks that name `CoreProtocol.Protocol` (compose's, `@proofs`; PoUW's check, `@compute-accounting`; the inference-only policy's check, `@network-accounting`) are not edited and no record of theirs can move (section 3).
+
+**3. The records run** `[run]`: `r20261113-175338-b748` on vy-nebius-cpu-6, placed by `--on auto`, `--mem-gb 32 --max-min 120`, the README's line: `lean_changed.py --records verity/protocols/interface --update`, at `fa5eabe347da`.
+- **A correction to "the six locks".** Six locks name `CoreProtocol.Protocol`, but only two hold records of it: `security/lean-audit.json` and `security/Properties/lean-audit.json`, under `reads`. The interface's, compose's, PoUW's check and the inference-only policy's check list no guarantee and hold only a layer's import list `[run: a walk of each lock's JSON]`.
+- One run covers the two. It audits the interface, then the certifier's verifier, then `security` with `security/Proofs`, then `security/Properties` with `security/Proofs` `[run: `lean_changed.requirers` on my VM, reading the locks only]`.
+- It waited from 17:55:24Z to 17:58:49Z for a slot (all four of cpu-6's were taken), then took r4; its limit is 7,200 s from there.
+- So far `[run: its stdout at 18:02Z]`: the interface, "check.py exit 0 in 33 s", so the lock's three lines pass its check; the certifier's verifier, "AUDIT … PASS … 4 guarantees", "check.py exit 0 in 37 s". `security` with the proofs package is next and is the long part. It is also the first build of the three commits as committed.
+- I push no record before I have read whether a guarantee's own text or `unfolded_hash` moved. If one did, both texts come to you first.
+
+**4. The suites** `[run]`: `r20261113-180009-568e` on vy-nebius-cpu-2, `--on auto --cwd source --mem-gb 24`: `uv sync … && uv run tools/verity/check/suites.py --changed 5eb1231b2558… --quick`, the testing skill's pre-mark line with the merge base written out. It took slot r3 at once. "the change from 5eb1231b2558 touches 66" suites; `tests/test_flock_json.py` and `tools/difftest/tests/test_canonical_json_port.py` run whole.
+- **The two runs overlap**, one on each node. They are not two tries of one thing. The suites run is at the head before the records commit; I run the suites again at the final head only if the records commit changes what a suite reads.
+
+**5. Against `main`** `[run]`: `origin/main` is `fa3e619ee146` at 18:04Z. `git merge-tree --write-tree origin/main fa5eabe347da`: rc 0, no conflict. No commit since `5eb1231b2558` has a `Move:` or `Layout-move:` line, and none touches a file of the change, `Base/JsonParse.lean` or the two security locks. `adapters/vllm/tools/ratchet_gate.py origin/main HEAD` on my VM: "1 change(s), 0 failed".
+
+**6. The unread ratchet** `[read: `unread.py`'s docstring, `unread-caps.json`]`: `Proofs.Core.CanonicalJson` is read by no guarantee yet. It is a root of the proofs package's lock, and the tool takes the declarations of a lock's roots as seeds, so I expect `Proofs/Core`'s count (4 modules, 60 declarations) not to rise. Not run: the records run does not say, as far as I have read. The body names the module, what will read it (the discharge of `Claims.Json.Wf` of the partition object, `ReadsWf` and `PortsDistinctAt`) and the date (Mon 16 Nov, 6 PM PST) `[relayed: your 11:17Z ruling 3]`.
+
+**7. The friction note: not done.** My VM cannot fetch the notes repository ("Invalid username or token", again at 17:55Z `[run]`), and my copy of it stops at 12:54Z, so it does not hold `20261113T1234Z-friction-lean-try-fails-where-build-passes`. The line is under NEEDS 2.
+
+### STOP RULE
+Nothing here changes what a listed guarantee says or rests on. Nothing makes a verifier accept what it refuses today; that is tested and not proved, as the body says. The records are not regenerated yet.
+
+### NEEDS
+1. **You:** `research queue link 9776 --issue PRF-490`, or name another issue. I made no link in Linear.
+2. **You, for the friction note** `20261113T1234Z-friction-lean-try-fails-where-build-passes`, one line: "SESSIONOF2, Fri 13 Nov: three more tries, all `security/Proofs/Properties/Pous/Component.lean`, `wverdict_eq`, 381:8, `(deterministic) timeout at whnf`, 200,000 heartbeats, under `lean_changed.py --try`: `r20261113-165950-62d7` on vy-nebius-cpu-11 twice (the file as on `main` in 265 s, and with one token changed at line 98 in 181 s), and `r20261113-170957-9c88` on vy-nebius-cpu-8 at `main`'s own tree `5eb1231b2558` in 332 s; peaks 21.5 and 21.1 GiB under `--mem-gb 24`."
+3. **You:** the owners' lines, with #9776.
+4. **My parent, or you:** the platform refused me a subscription to the pull request's comments ("a Task subagent cannot receive subscription notifications"). A review comment on #9776 reaches me only if someone tells me.
+
+### To post
+Nothing.
+
+### Not established
+- Whether any record moves beyond `Core.canonicalJson`'s hash and `CoreProtocol.Protocol`'s digest, and whether a guarantee's `unfolded_hash` moves: the records run says.
+- The proofs package's build with the three commits as committed: the records run's `security` step is the first.
+- The suites' verdict.
+- The Lean check with the kernel replay, at any head. The fast path has none.
+- The twelve other packages whose lakefile requires the interface (compose's three, PoUS's two, PoUW's two, PoUB's, the inference-only policy's check, the recursion layer's two, sampled proofs') are not in the records run, which takes only those whose guarantees' records read the interface's build. They are built only where a suite builds them.
+- The unread ratchet's count (section 6).
+
+### Heads, all pushed
+`cursor/proofs-sessionof2-parser-carried-e464` `fa5eabe347dac59bc2f5cbe267edc8ccc7d21808` (pull request #9776); `cursor/proofs-sessionof2-params-4e98` `9c5b95260b60c5f4fb04c694ad058b8163de4470` (frozen, untouched); `cursor/proofs-sessionof2-parser-defe` `fe28c96c43228dd453ee0e2b2434d33be68e21f8` (untouched). Runs out: `r20261113-175338-b748` (records, cpu-6, by 19:59Z at the latest by its limit) and `r20261113-180009-568e` (suites, cpu-2, by 20:02Z at the latest).
