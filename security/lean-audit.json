@@ -3119,6 +3119,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Verity.Assumptions.CardWithinAccel": {
+   "owner": "@compute-research",
+   "digest": "9d73b1740229779284c240d9e487ea982e6a0a169e8413d50dc4edb5d69fa993",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Verity.Assumptions.ChallengerLogsCoins": {
    "owner": "@soundness",
    "digest": "8c09825011781cb4d73b14f1056b1887cea82faad845141e6d826075010c94fa",
@@ -5466,6 +5472,10 @@
   "Pouw.SecurityProofs.Dither.WorkSoundNoFold": {
    "type_hash": "67f3658934c74720d65f6dee7ae0d77df683c3dadfdce0ae498b9bbc899090b2",
    "unfolded_hash": "d4824e5c59af9a1967b1c2082686a2aa9211e16aefa093f3d264fe03c304d6d0"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardTables": {
+   "type_hash": "e76586bcde2aa46e84b954eb7d5c2d6d3b9935a6be70267acc54e6cd9b6edf33",
+   "unfolded_hash": "9173d9c152051a4544b110b95bee8ee2f27eb2fccd2790d0fa18ca413a71a3ec"
   },
   "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore": {
    "type_hash": "76e1dd28768cc1a4ef30251a9db63bda229915b3c2d50ff921394a143c179cdf",
@@ -21981,6 +21991,37 @@
    },
    "type_hash": "d816654bcfc06b4dc49bd9cefb252347f1d151851ae3f49ab85f13299c889854"
   },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardTables": {
+   "owner": "@compute-research",
+   "signature": [
+    "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardTables : Pouw.Guarantees.DitherInstance.WorkSoundOnCardTables"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Pouw.Dither.CallsAtPub", "Pouw.Dither.HostsCounted", "Pouw.Dither.OnCard"],
+    "open": [
+     "Pouw.Assumptions.AnswerAfterWork",
+     "Pouw.Assumptions.CertifierSeesImports",
+     "Pouw.Assumptions.CommitAfterWork",
+     "Pouw.Assumptions.ExtractAdv",
+     "Pouw.Assumptions.OutsourceWithinEgress",
+     "Pouw.Assumptions.ProofSystemSound",
+     "Pouw.Assumptions.RootAfterCoin",
+     "Pouw.Assumptions.SAKMatmul",
+     "Pouw.Assumptions.SAKSha",
+     "Pouw.Dither.Accel.G1",
+     "Pouw.Dither.Accel.G2",
+     "Pouw.Dither.Accel.G3",
+     "Pouw.Dither.Period.DualOpt",
+     "Pouw.Dither.Prover.Passes",
+     "Verity.Assumptions.CardWithinAccel"
+    ],
+    "reads": ["Pouw.Assumptions.ExtractAdvAt", "Verity.Assumptions.AccelProductForm"]
+   },
+   "type_hash": "e76586bcde2aa46e84b954eb7d5c2d6d3b9935a6be70267acc54e6cd9b6edf33",
+   "unfolded_hash": "9173d9c152051a4544b110b95bee8ee2f27eb2fccd2790d0fa18ca413a71a3ec"
+  },
   "Pouw.SecurityProofs.EndToEnd": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.EndToEnd : Pouw.Guarantees.EndToEnd"],
@@ -26229,6 +26270,7 @@
    "Nci.Cut.Guarantees.HECharged_honest": "unstated: HECharged's premises holding together at the toy Nci.Cut.Toy, stated with HECharged; its theorem Nci.Cut.SecurityProofs.HECharged_honest is proved and is listed with HECharged's once that is.",
    "Nci.Cut.Guarantees.HECharged_nontrivial": "unstated: the toy beating HECharged's bound once the total T is dropped, stated with HECharged; its theorem Nci.Cut.SecurityProofs.HECharged_nontrivial is proved and is listed with HECharged's once that is.",
    "Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables": "frozen (verdict): a probability statement over a quantified proof-system verdict whose soundness is the premise ProofSystemSound, not a property of one function, over every card table, menu and host row; it gets the shape when the proof system's verdict is a named Lean function the event reads.",
+   "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardTables": "frozen (verdict): as WorkSoundAtTables, at the open parameters the card premise gives at each table.",
    "NetTiming.Guarantees.PeriodLeakChecked": "unstated: PeriodLeakAccepted with each window's checked inputs left out of the count (the check held to the run at the network certifier's rows, CheckedWitness at certifierRun) and the client's view read from the records under a registered parameter (RecordFormat.ReadsBy), so the count is the registered parameters' times the windows'; stated first, and its theorem NetTiming.SecurityProofs.PeriodLeakChecked is not proved yet.",
    "Accounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted": "frozen (no-function): The network audit's PeriodRun.Sound on a run that realizes the network certifier's monitoring period of sampled audits, pooled (RealizesCommOfPooledLeakAccepted), from PooledLeakAccepted's first conjunct at the run's coins: the verdicts and the claim are fields of the run (security/Definitions/Accounting/JointPeriod.lean), not a Lean function, and it bounds a Pouw.pr event, which shape.events does not list.",
    "Verity.SecurityProofs.NaiveBeatsStrassenAny": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model rather than a Lean function's acceptance.",
@@ -33055,9 +33097,10 @@
    }
   },
   "Definitions.Core.Assumptions.Accel": {
-   "digest": "36c8140e51413c28c82aa8950674650449968ec6fd15b16885719ac58bf2afa3",
+   "digest": "1b0d3cf773514c04e2b7c178a3115946832fe93be3367c583b5a56daa1dc7b0b",
    "definitions": {
-    "Verity.Assumptions.AccelProductForm": "8170b6ae8d6653b52c6c1f5f02f1ab5e7e043ab78e08cec154e7601e33be41be"
+    "Verity.Assumptions.AccelProductForm": "8170b6ae8d6653b52c6c1f5f02f1ab5e7e043ab78e08cec154e7601e33be41be",
+    "Verity.Assumptions.CardWithinAccel": "9d73b1740229779284c240d9e487ea982e6a0a169e8413d50dc4edb5d69fa993"
    }
   },
   "Definitions.Core.Assumptions.Challenger": {
@@ -37178,9 +37221,10 @@
    }
   },
   "Definitions.Pouw.DitherInstance": {
-   "digest": "70de0c3aba1ec21abca029533d2280e457b9147b725bae73133188298b4ecb1a",
+   "digest": "0149997e136c97db3ffcccebc361eb95b3e2268c3b1e2216ff0c064db5039cde",
    "definitions": {
     "Pouw.Dither.CallsAtPub": "4fd27c18ca3eb07b2fbafa6e459b881abf4047e92bf2b8cf73523cc83ddf7201",
+    "Pouw.Dither.CardRunsAt": "5e79c94717cbf271888e33bd189df60cf3592130f9c4be689ee6811157bd382b",
     "Pouw.Dither.Counted": "2aca8a06e043bede3f684224ad4d8a42e69fec40aba2dabd0a679ef2bea04a88",
     "Pouw.Dither.Devices": "a74747ef2457ed30c2c325a3d082d30fde47bda8fc136682bc16a9c3855dbf89",
     "Pouw.Dither.Devices.machine": "623a62273796b06ca50abd1c81568d71c70e2cec0b0362d6d2af00c375f0564c",
@@ -37524,11 +37568,13 @@
    }
   },
   "Definitions.Pouw.Guarantees.DitherInstance": {
-   "digest": "f80fd8cb78db6472a79d2fdacb9990c6b2920db1a34a1dda8cfa6ebb839ed1f1",
+   "digest": "44d3099374c0a36aae25b8f8dde9147542157648759ac12d4a820d7278fd9204",
    "definitions": {
     "Pouw.Guarantees.DitherInstance.WorkSoundAt": "368f1f2ade0dfbd379aca0aea8c44ba2f8fed6749da5f05b73a1224b7a2fbff9",
     "Pouw.Guarantees.DitherInstance.WorkSoundAtTables": "f9721093634376c559e60de454d87cf204b2137c18cf883687b9ac1e55a5d128",
-    "Pouw.Guarantees.DitherInstance.WorkSoundAtX": "ea50640c7748b4f4aa3d0fdb3ecdee95ce1219de67c0a97061ddf24058f1e493"
+    "Pouw.Guarantees.DitherInstance.WorkSoundAtX": "ea50640c7748b4f4aa3d0fdb3ecdee95ce1219de67c0a97061ddf24058f1e493",
+    "Pouw.Guarantees.DitherInstance.WorkSoundOnCard": "60d9c1b01c7f3715ecf4a3ef33d4feeceaabca5b72bb5a144bbbd8612c98aafa",
+    "Pouw.Guarantees.DitherInstance.WorkSoundOnCardTables": "5ae2777aed220cbdce59baf47b66bb04b157311273028fab345c7a589b6472b9"
    }
   },
   "Definitions.Pouw.Guarantees.Eps1": {
