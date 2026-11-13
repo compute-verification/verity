@@ -42,14 +42,11 @@ from verity_bench.vllm.engine import (
     ProcessEngineFactory,
     _kv_cache_tokens,
     _pass_totals,
-    _pearl_c_gate,
     _pearl_c_run,
     _ProcessEngine,
     _VllmEngine,
     arm_execution,
     engine_args,
-    h1_gate,
-    h1_summary,
 )
 from verity_bench.vllm.presets import (
     ENGINE_SETTINGS,
@@ -79,8 +76,11 @@ from verity_bench.vllm.runner import (
     PER_PASS_TOKENS,
     ResidentCapacityError,
     _aggregate,
+    _pearl_c_gate,
     _token_digest,
     _warm,
+    h1_gate,
+    h1_summary,
     run_benchmark,
     summarize,
 )

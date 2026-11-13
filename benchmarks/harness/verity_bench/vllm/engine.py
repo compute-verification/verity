@@ -19,7 +19,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
-from verity.protocols.pouw.verifier.salt import epoch_open_root
 from verity_vllm import LLM
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine import handle, int8_ranks
@@ -45,7 +44,10 @@ from verity_bench.vllm.runner import (
     BenchEngine,
     ResidentCapacityError,
     _numeric_leaves,
+    _pearl_c_gate,
     _token_digest,
+    h1_gate,
+    h1_summary,
 )
 from verity_bench.vllm.timing import (
     HostProbe,
@@ -118,61 +120,6 @@ def _pass_totals(run: Any) -> dict[str, int]:
 
     passes = run.details["passes"]
     return {"passes": len(passes), **{key: sum(int(p.get(key) or 0) for p in passes) for key in PASS_COUNTS}}
-
-
-def _pearl_c_gate(run: Any) -> dict[str, Any]:
-    """The experimental arm's own gate, `e2e.gate`'s call check, on the protocol arm's installed run: at every distinct
-    (n, k), served y against x·Wᵀ within `bench_arm.ERR`, the commitment twice, and the ``hash_leaf``-omitted negative
-    control. Pearl-C's y carries the epoch's live salt, so no stock arm is its token control, and each call's index across
-    the epoch, so no two of its own engine's passes need agree either (`PER_PASS_TOKENS`). Its ``coins`` are the
-    installed run's: a live challenge phase's (``challenger``, its salt epoch ``pass_index`` and the root its salt coin follows,
-    `salt.epoch_open_root` of the weights' root and that epoch) when the option took its salt from one, else
-    ``in-process``."""
-
-    # The experimental arm's module is the tree's (`benchmarks/`, on a run's path, not this distribution's), and it
-    # imports this package's runner.
-    from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm
-
-    check = PearlCArm()
-    check.run, check.schedule = run, run.schedule.name
-    c = run.commits
-    check.coins = ({"source": c["coin_source"], "session": c.get("session"), "pass_index": c["pass_index"],
-                    "salt_after": epoch_open_root(bytes.fromhex(c["weights_root"]), c["pass_index"]).hex()}
-                   if c.get("coin_source", "in-process") != "in-process" else {"source": "in-process"})
-    check.weights = {w: x.tensor for w, x in run.weights.items()}
-    got = check.gate(None)
-    # The check begins and ends its own passes; the next forward's calls need an open pass, as the adapter's hook leaves
-    # one between steps.
-    run.begin(stepped=True)
-    return {**got, "provided": True}
-
-
-def h1_summary(run: Any) -> dict[str, Any]:
-    """One closed H1 window (`pouw_h1.H1Run`): ``ok`` when every call fell inside its S steps and T rows at its public
-    position, in order (``static``), the credit gate passed every served call (its y the GEMM that wrote its z/y
-    records), every admitted request has its entry and the salt opened. Its coins are in-process, so it credits nothing."""
-
-    verdicts = list(run.verdicts.values())
-    passed = sum(bool(v.get("credit")) for v in verdicts)
-    gaps = run.request_gaps()
-    out = {"steps": run.steps, "steps_served": run.details.get("steps_served"), "rows": run.rows, "calls": len(run.calls),
-           "served_calls": len(verdicts), "refused_calls": len(run.refused), "order_ok": bool(run.order_ok),
-           "static": bool(run.details.get("static")), "credit_gate_passed": passed,
-           "credit_gate_refusals": sorted({str(v.get("reason")) for v in verdicts if not v.get("credit")})[:3],
-           "requests": len(run.requests), "refused_requests": len(run.refused_requests), "request_gaps": len(gaps),
-           "unopened": run.details.get("unopened"), "u": run.details.get("u"), "coin_source": run.coin_source}
-    out["ok"] = bool(verdicts and out["static"] and not run.refused and passed == len(verdicts) and not gaps
-                     and not run.refused_requests and out["unopened"] is None)
-    return out
-
-
-def h1_gate(windows: list[Mapping[str, Any]]) -> dict[str, Any]:
-    """An H1 arm's own gate: every window its engine has closed so far is `h1_summary`'s ``ok``."""
-
-    bad = [w for w in windows if not w.get("ok")]
-    return {"passed": bool(windows) and not bad, "provided": True, "windows": len(windows),
-            "failed": [dict(w) for w in bad[:2]],
-            "coins": "in-process: each window credits nothing (pouw_h1.IN_PROCESS); this arm measures cost only"}
 
 
 def _kv_cache_tokens(llm: Any) -> int | None:
