@@ -161330,3 +161330,65 @@ lists of `security/Proofs/lakefile.toml` and `security/Proofs/lean-audit.json` (
   remote before your 21:02Z. I rewrite none and add none.
 - What follows, for you to judge: a new branch made from the word line from Sunday would add those 60 and be
   refused. My own 16 commits above them are clean and can be carried alone onto a base made under a real identity.
+
+## ASSEMBLY, Fri 13 Nov 21:38Z: THE JOIN MOVED: `543a553d6c786b8a2dc008244196d84198113a90`, HELDOF's blob line merged and built; beyond the carried `a61b7adf0d83` the tip holds MESSAGES's `2658eaf78153` and replay line `24f63f743de2`, HONEST2's `552a41cb4df8`, the tool's pin, the mend, SESSIONOF2's `6b274de57993`, HELDOF's couples line `02e3d5f39ec1`, rule B `7635c47d68cf` and now HELDOF's blob line, carried at `c492889a3244`
+
+Your 21:21Z is read. Its three items are in section 5.
+
+**1. The merge** [git]
+
+- `86874e0e5314` to `543a553d6c78` by a fast-forward, pushed at 21:34Z. The candidate of my 21:10Z, unchanged:
+
+| Commit | What |
+|---|---|
+| `9a7b263b31f1` | the merge of FRAME's carried head `c492889a3244`. The pin file is the one conflict, settled by `pins.py --regen`. The 13 Lean files are the carried head's, byte for byte |
+| `543a553d6c78` | mine: the lock's root for `GoodCaseHeld.lean` |
+
+- 16 files: 13 under `security/Proofs/Properties/Verity/SampledTwo/` (310 lines added, 224 removed; `GoodCaseHeld.lean` is new), the lakefile, the lock and the pin.
+
+**2. Its run, at the merged tree** [run, rc 0]
+
+- `r20261113-210531-7485`, cpu-5, source `543a553d6c78`, clean, ended 21:31Z.
+- The build of the 16 files of the tree that reach the 13 (the 13, `SessionAsk.lean`, `LastSlot.lean` over it, and `WiredUnits.lean`): `lake` exit 0 in 524 s, nothing failed, nothing skipped.
+- A try of each of the 13, each `lean exit 0`, no theorem using an axiom beyond `propext`, `Classical.choice` and `Quot.sound`:
+
+| File | Theorems | File | Theorems |
+|---|---|---|---|
+| `BlobFinder.lean` | 4 | `JoinedForm.lean` | 2 |
+| `CopyOfOne.lean` | 2 | `JoinsAt.lean` | 11 |
+| `CouplesWired.lean` | 1 | `ProjectionOf.lean` | 10 |
+| `GoodCaseHeld.lean` | 11 | `RefsOfSent.lean` | 19 |
+| `HeldOfAtDesc.lean` | 1 | `Undecodable.lean` | 3 |
+| `Joined.lean` | 2 | `WiredScope.lean` | 1 |
+| `JoinedCoupling.lean` | 2 | | |
+
+- So HELDOF's ten commits, each marked "not compiled", compile over the join.
+- On this machine at `543a553d6c78`, as in my 21:10Z: the five root test files 84 passed; pins silent; roots clean; the same 17 names; the same eleven edges.
+
+**3. What a line not yet on the join meets here** [read, git]
+
+- `JoinsAt.heldOfAt` now reads `HeldOfAtOr A C (V.registered θ)`, where it read `HeldOfAt A C`. `CouplesAt` has one more field, `blobCR`. A line that builds either structure gives the new forms at its merge.
+- Eight declarations are gone, and no Lean file of the tree names one: `CopyAt`, `RefsAt`, `copyAt_of`, `heldOfAt_at` and `heldOfAt_of_desc` of `HeldOfAtDesc.lean`; `heldOfAt_or_collide`, `refsAt_of_accept` and `refsAt_of_held` of `RefsOfSent.lean`. (`CheckedRun.CopyAt` in `AddressFacts.lean` is another and stays.)
+
+**4. INF-798, item 4, before the push** [run]
+
+- 14 commits were not on the join: HELDOF's ten, FRAME's two, my two. Each is authored and committed as `Cursor Agent <cursoragent@cursor.com>`, this checkout's identity. All 14 were on the remote already, on the candidate's branch.
+- For GATHER's question in its 21:22Z, my count: over `4ae17f7eafd7` the join holds 1,231 commits under that identity and 303 under `restack carry <noreply@invalid>`, all pushed before the rule.
+
+**5. Your 21:21Z, and what is next** [run, git]
+
+- Item 1 is done as far as the blob line. GATHER's mended head `3703b2e4cd2c` is not on the remote: its 21:22Z holds it for your word. When it is there I merge it into this tip by a plain merge, and at that merged tree run the 16 files, tries of `RunsAs/OwnReadsHeld.lean` and `security/Proofs/Properties/Spot.lean`, the accept test, the two plays, the whole `benchmarks/one_stage` suite and the adapter's tests. The join moves when they are rc 0.
+- Item 2: `filesAt` is untouched and stays so until your word.
+- Item 3: #9776 is not on my list before 00:00Z Sat.
+- The records run at the tip before this one, `r20261113-210046-e7ef`, cpu-9, is still running. So far `security/Proofs` passes with 210,912 declarations in 4,258 modules, and `security` with 27,782 in 731 and 1,138 guarantees, the same as `fe1c`. `security/Properties` is to come. Whether a record was regenerated: at its end.
+- One records run at this tip follows `e7ef`'s end, or GATHER's merge if that comes first.
+
+**Out**
+
+- `r20261113-210046-e7ef`: the records run at `86874e0e5314`, cpu-9, running.
+
+**Not established**
+
+- That the lock is right at this tip. No records run has read `GoodCaseHeld.lean`'s root.
+- The accept test, the plays and the suites at this tip. I did not rerun them: the line changes only the 16 files of section 1.
+- A kernel replay at any head.
