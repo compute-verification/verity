@@ -1335,6 +1335,11 @@ theorem ProgramKept.same (pk : ProgramKept) {partition : Json} (e : partition = 
   rw [← pk.held]
   exact sameStrata_refl pk.strata
 
+/-- What `withPtrEq` answers is what its continuation answers. -/
+theorem withPtrEq_answer {α : Type} (a b : α) (k : Unit → Bool) (h : a = b → k () = true) :
+    withPtrEq a b k h = k () := by
+  simp only [withPtrEq]
+
 /-- **What is kept of `pk`'s program for a member whose partition is `partition`**: `pk`'s strata where `partition`
 is the partition `pk` evaluated them under, else the strata of `partition`'s query on `pk`'s parse. Compiled, the
 partition the members share is one object, which `withPtrEq` sees without reading it, so no query is evaluated; a
@@ -1344,7 +1349,8 @@ def ProgramKept.under (pk : ProgramKept) (partition : Json) : ProgramKept :=
   if h : withPtrEq partition pk.partition (fun _ => sameStrata (strataOn pk.parsed partition) pk.strata)
       (fun e => pk.same e) = true then
     { bytes := pk.bytes, parsed := pk.parsed, sha := pk.sha, partition, strata := pk.strata
-      held := (sameStrata_eq (a := strataOn pk.parsed partition) (b := pk.strata) h).symm }
+      held := (sameStrata_eq (a := strataOn pk.parsed partition) (b := pk.strata)
+        ((withPtrEq_answer _ _ _ _).symm.trans h)).symm }
   else programRead pk.bytes pk.parsed pk.sha partition
 
 /-- What `ProgramKept.under` keeps is `pk`'s program with the strata of `partition`'s query on its parse. -/
