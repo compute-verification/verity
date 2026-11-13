@@ -32,7 +32,10 @@
 # unknown, with why; it names the runs whose request or clone went (the first twenty: nothing else records them). One that
 # could not establish its conditions fails the unit like the source-tree pass; a tool too old for one still runs the rest, and
 # the line says so.
-#   VY_RESEARCH_TOOL: the research tool to run (default the newest snapshot under /workspace/research/tool).
+#   VY_RESEARCH_TOOL: the directory holding the `research` package to run. The units set it to main's copy, the whole tree
+#   `research deploy install` places (deploy.toml: /usr/local/lib/vy-monitoring/clean-up, a link to one commit's directory). It is
+#   resolved once, here, so a pass runs that one commit's code to its end whatever is installed meanwhile, and the line names
+#   the directory. There is no default: a snapshot under /workspace/research/tool is whatever branch a `research run` shipped.
 set -uo pipefail
 FREE=${VY_EVICT_FREE_GB:-2500}
 STORE=${VY_EVICT_STORE:-/workspace/jobs/store}
@@ -40,10 +43,10 @@ RUNS=${VY_EVICT_RUNS:-/workspace/jobs/runs}
 SRCDIR=${VY_EVICT_SRC:-}
 GITDIR=${VY_EVICT_GIT:-/workspace/research/git/verity.git}
 KEEP_REFS=${VY_EVICT_KEEP_REFS:-20}
-TOOL=${VY_RESEARCH_TOOL:-$(ls -td /workspace/research/tool/*/ 2> /dev/null | head -1)}
-TOOL=${TOOL%/}
+TOOL=$(readlink -e -- "${VY_RESEARCH_TOOL:-}" 2> /dev/null)
 if [ -z "$TOOL" ] || [ ! -d "$TOOL/research" ]; then
-  echo "vy-store-evict: no research tool (VY_RESEARCH_TOOL, or a snapshot under /workspace/research/tool)" >&2
+  echo "vy-store-evict: no research package at VY_RESEARCH_TOOL (${VY_RESEARCH_TOOL:-unset}): the unit sets it to main's copy," \
+    "which \`research deploy install\` places on the node; nothing was deleted" >&2
   exit 1
 fi
 args=(--target-free-gb "$FREE" --runs --runs-dir "$RUNS")

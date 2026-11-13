@@ -981,6 +981,31 @@ nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy
 run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
 
+# The collector on vy-nebius-2 alone also deletes the runs custody did not preserve, once their record has expired
+# (`--unpreserved-runs`): no other node passes the flag.
+[[file]]
+path = "/etc/systemd/system/vy-retention-gc.service.d/20-unpreserved-runs.conf"
+src = "tools/research/src/research/pods/nebius/sky/retention_gc_unpreserved.conf"
+nodes = ["vy-nebius-2"]
+run = ["systemd:vy-retention-gc.timer"]
+owner = "infra"
+
+# The code the three clean-up units run (vy-store-evict, vy-store-evict-research, vy-retention-gc): main's `research` package,
+# whole, at the commit installed, on every node that has one of them. They delete, so they never run a snapshot a `research
+# run` shipped (a branch's code, under a directory any run can write): each unit names this link (VY_RESEARCH_TOOL) and
+# resolves it once when a pass starts. Root's, where no run can write. A change to the package reaches a node only by `research
+# deploy install NODE`, so drift lists its files as stale from the change's landing until then.
+[[tree]]
+path = "/usr/local/lib/vy-monitoring/clean-up"
+src = "tools/research/src"
+required = true
+whole = true
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5",
+         "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-8", "vy-nebius-cpu-9", "vy-nebius-cpu-10", "vy-nebius-cpu-11",
+         "vy-nebius-cpu-12", "vy-nebius-cpu-13",
+         "vy-nebius-cpu-14", "vy-nebius-cpu-15", "vy-nebius-cpu-16", "vy-nebius-cpu-17"]
+owner = "infra"
+
 [[file]]
 path = "/etc/systemd/system/vy-store-evict.service.d/timed.conf"
 src = "tools/research/src/research/pods/nebius/sky/store_evict_timed.conf"
