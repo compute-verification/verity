@@ -18,9 +18,9 @@ from __future__ import annotations
 
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.definitions.ops import fp32 as W
-from verity.definitions.ops import prims as P
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops import fp32 as W
+from verity.circuits.ops import prims as P
+from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.types import Array
 from verity.definitions.registry import cublas_bf16 as CB
 from verity.definitions.registry import ll_bf16 as LL
