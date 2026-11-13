@@ -321,13 +321,14 @@ via = ["package"]
 
 [[needed]]
 why = "the errors and settings every unit of `verity` shares"
-paths = ["verity/{errors,settings}.py"]
+paths = ["verity/errors.py", "verity/settings.py"]
 from = "*"
 
 [[needed]]
 why = "the challenger and service code SPOT needs"
 paths = [
     "verity/{claims,commitments,configuration,definitions,difftest,hardware,protocols}",
+    "verity/{channel.py,config.py,device.py,party.py,protocol.py,runtime,tests}",
     "security/{Properties,Proofs/Properties}/{Spot,Challenger}{,.lean}",
 ]
 from = ["spot"]
