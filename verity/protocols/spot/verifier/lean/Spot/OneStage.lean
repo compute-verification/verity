@@ -71,12 +71,16 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   under the sampling design (`drawnFrom`), every coin opened read (`coinsWhy`); then (`check`) R1–R8 (`Registration.check`), then the
   record's checks (`Record.checks`: the sample, the proved units, the receipt, the served sample, the sessions' roots, and the
   roots the verifiers report opening the sessions' registered reads against, `Record.sessionRegistered`, each
-  the registered one). It rejects when one fails or
+  the registered one; and `Record.certifiedCheck`: each value the verifier holds a certified entry for has such a
+  read). It rejects when one fails or
   a verdict that ran did not accept; it is undecided when they all hold but no verifier accepted because none
   is named or one has not run; and it accepts exactly when `audit_record` does;
 * on acceptance, **public** is the sampled and proved units with the exact bounds on incorrect proof blocks at δ (`Bound.boundOf`,
-  and each template's own under a stratified or work sampling design), and the **profile** is `audit.profile`'s `IntegrityProfile`:
-  one level `unit`, the partition's units, sampled by the verifier's law.
+  and each template's own under a stratified or work sampling design) and `complete`, whether every verdict ran
+  (`Record.allRan`, the audit record's own `complete`): an accept waits on the verdicts of record and on no other, so
+  one that is not of record may not have run, and a reader for which every one must have reads accept and `complete`,
+  an answer without the field as not complete; and the **profile** is `audit.profile`'s `IntegrityProfile`: one level
+  `unit`, the partition's units, sampled by the verifier's law.
 -/
 module
 
@@ -125,6 +129,8 @@ structure Public where
   proved : Array Nat
   bound : Nat
   perTemplate : Option (Array (String × Nat))
+  /-- every verdict ran (`Record.allRan`); false when one that is not of record has not -/
+  complete : Bool
 
 private def exactly (j : Json) (ks : Array String) (what : String) : V Unit :=
   if keys? j != some (sortStrings ks) then throw s!"the keys of {what} are not {", ".intercalate (sortStrings ks).toList}"
@@ -490,15 +496,16 @@ def evidenceOf (b : ByteArray) : V Evidence := do
     throw "the draw carries a closure, which the sampled audit's soundness statement doesn't cover"
   return e
 
-/-- `audit_record`'s checks after the sample's (`Record.checks`): the names of those that fail. The registered roots the
+/-- `audit_record`'s checks after the sample's (`Record.checks`, then `Record.certifiedCheck` over `certified`, the names
+of the values the verifier holds certified entries for): the names of those that fail. The registered roots the
 sessions' reads were opened against are the verdicts' own (`Record.sessionRegistered`), for the registration's own
 values (`Record.ownRegistered`). -/
-def recordChecks (rec : Json) (digest : String) (e : Evidence) : Array String :=
+def recordChecks (rec : Json) (digest : String) (e : Evidence) (certified : Array String) : Array String :=
   let units := match getD e.draw "units" with | .arr us => us.filterMap int? | _ => #[]
   let roots := e.sessionRoots.map entries
+  let opened := Record.ownRegistered rec (Record.sessionRegistered e.verdicts)
   let cs := Record.checks rec e.receipt e.draw Json.null units (e.provedUnits.map Lean.toJson) (Lean.toJson e.instances)
-    digest (e.served.map (·.map fun (n : Nat) => (n : Int))) roots
-    (Record.ownRegistered rec (Record.sessionRegistered e.verdicts))
+    digest (e.served.map (·.map fun (n : Nat) => (n : Int))) roots opened ++ Record.certifiedCheck certified opened
   (cs.filter fun (n, c) => n != "draw" && !c.codes.isEmpty).map (·.1)
 
 
@@ -564,7 +571,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
   | .ok law =>
   let drawCodes := Draw.checkDraw e.draw (getD rec_ "population") law
   if !drawCodes.isEmpty then .reject s!"draw: {", ".intercalate drawCodes.toList}" else
-  let failed := recordChecks rec_ (Flock.hexOf c.digest) e
+  let failed := recordChecks rec_ (Flock.hexOf c.digest) e (v.certified.map (·.1.value))
   if !failed.isEmpty then .reject s!"the audit's checks failed: {", ".intercalate failed.toList}" else
   match verdictOf e.verdicts with
   | .reject r => .reject r
@@ -579,7 +586,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
       strata.map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none
     .accept
       { drawn := units, proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
-        bound := Bound.boundOf population draw p.delta, perTemplate }
+        bound := Bound.boundOf population draw p.delta, perTemplate, complete := Record.allRan e.verdicts }
       { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
         levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := population, draw := some draw }],
         delta := p.delta, drawn := #[(Record.LEVEL, units.size)] }
@@ -617,7 +624,8 @@ def publicJson (x : Public) : Json :=
     ("bound", Lean.toJson x.bound),
     ("per_template", match x.perTemplate with
       | some ts => Json.mkObj (ts.toList.map fun (t, m) => (t, Lean.toJson m))
-      | none => Json.null)]
+      | none => Json.null),
+    ("complete", Json.bool x.complete)]
 
 def protocol : Core.Protocol where
   id := Registration.PROTOCOL

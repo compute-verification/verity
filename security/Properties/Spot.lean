@@ -22,14 +22,16 @@ decoders produce. It takes no premise: the check is a function of its three inpu
   (`RL`);
 * **the sample** is a sample of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work sampling design, its strata and closure;
-* **the units** were proved and served as sampled, under the registered roots, and the verifiers opened the
-  registered values' reads against the registered roots (`UnitsProved`), and the receipt names the commitment's digest
-  (`Receipt`);
+* **the units** were proved and served as sampled, under the registered roots, and each read the verifiers report of
+  one of the record's own values is of a registered value, opened against its registered root (`UnitsProved`; a
+  registered value needs no reported read, except each value the verifier holds a certified entry for, which has one:
+  `CertifiedRead`), and the receipt names the commitment's digest (`Receipt`);
 * **the verdicts** accepted: one of record at least, every one of record ran, and none that ran refused
   (`VerdictsAccept`);
 * the sampling design has a profile's sample and the population is a natural number;
 
-and it then publishes the sampled and proved units with the exact bounds at δ (`publicOf`), and the profile of one level
+and it then publishes the sampled and proved units with the exact bounds at δ and whether every verdict ran, those not
+of record too (`publicOf`), and the profile of one level
 `unit`, the partition's units, sampled by the sampling design at δ (`profileOf`). That the check accepts every such commitment and
 evidence is completeness, `Properties.Spot.acceptMeans_complete`.
 
@@ -384,27 +386,34 @@ to null; none when no such verdict reports any (`audit.session_registered`, whic
 def openedRoots (rec : Json) (vs : Array (String × Json)) : Option (Array (String × Json)) :=
   Record.ownRegistered rec (Record.sessionRegistered vs)
 
-/-- Two `{value: root}` dicts with distinct keys are equal (Python's `==`): the same size, and each entry of the first has
-the same key and root in the second. -/
-def SameRoots (a b : Array (String × Json)) : Prop :=
-  a.size = b.size ∧ ∀ x ∈ a, ∃ y ∈ b, x.1 = y.1 ∧ jeq x.2 y.2
+/-- Each opened read is of a registered value at its registered root: every entry of `opened`, a `{value: root}`, has its
+value and root in `registered`. It asks nothing of a registered value that `opened` lacks. -/
+def OpenedRegistered (opened registered : Array (String × Json)) : Prop :=
+  ∀ x ∈ opened, ∃ y ∈ registered, x.1 = y.1 ∧ jeq x.2 y.2
+
+/-- Each value `certified` names has a read among `opened`, a `{value: root}`: an entry of `opened` is of that value. A
+read reported under another value's name is no read of it. -/
+def CertifiedRead (certified : Array String) (opened : Array (String × Json)) : Prop :=
+  ∀ v ∈ certified, ∃ y ∈ opened, y.1 = v
 
 /-- The units, as the record holds them (`audit_record`'s checks after the sample's): the proved statement's instances are
 exactly the units the sample proves (its units and a work sample's closure, ascending); the receipt names the commitment's
 digest; the sessions were served exactly the sampled proof blocks, when they were handed the sample; the sessions' roots, when
 given, name at least one port, each port's root the one the record registers for it (`Record.byPort`, the last root of
-each port); and, when the record registers values or the verifiers report reads of the record's own values,
-those reads were opened against exactly the record's `{value: root}` (`Record.registeredRoots`, each value's last
-entry). -/
-def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
+each port); and each of the record's own values the verifiers report a read of is a value the record registers, the read
+opened against the record's root for it (`Record.registeredRoots`, each value's last entry). A registered value no
+verifier reports a read of is not required to have one, except the values the verifier holds certified entries for
+(`Registration.Verifier.certified`): the verifiers report a read of each of them (`CertifiedRead`), which, being one of
+the record's own values, is then opened against the record's root for it. -/
+def UnitsProved (p : Params) (c : Commitment) (e : Evidence) : Prop :=
   e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
   Receipt c e ∧
   (∀ served, e.served = some served →
     (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (drawnInts e.draw).qsort (· < ·)) ∧
   (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
     ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧ jeq (getD reg.2 "root") pr.2) ∧
-  ((field? c.record "registered").isSome ∨ (openedRoots c.record e.verdicts).isSome →
-    SameRoots ((openedRoots c.record e.verdicts).getD #[]) (Record.registeredRoots c.record))
+  OpenedRegistered ((openedRoots c.record e.verdicts).getD #[]) (Record.registeredRoots c.record) ∧
+  CertifiedRead (p.verifier.certified.map (·.1.value)) ((openedRoots c.record e.verdicts).getD #[])
 
 /-- The verdicts accept (`verdict` of `audit_record`): every verdict that ran (`accepted` not null) accepted; at least
 one is of record (`of_record` truthy); and every verdict of record ran. -/
@@ -421,7 +430,8 @@ def drawnNats (draw : Json) : Array Nat :=
   | .arr us => us.filterMap nat?
   | _ => #[]
 
-/-- The public outputs at δ, for the sampling design `law` with its profile's sample `d` over `n` units: the sampled proof blocks, the proved
+/-- The public outputs at δ, for the sampling design `law` with its profile's sample `d` over `n` units: whether every
+verdict ran (`Record.allRan`, which `VerdictsAccept` asks only of the verdicts of record), the sampled proof blocks, the proved
 ones, the exact bound on incorrect proof blocks (`Bound.boundOf`: `Bound.countBound` over the sample's strata, `Bound.bernoulliBound`
 for a Bernoulli sample), and for a stratified or work sampling design each template's own (`Bound.stratumBound`). -/
 def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.SamplingDesign) (n : Nat) : Public :=
@@ -429,7 +439,8 @@ def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.SamplingDesign) 
     proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
     bound := Bound.boundOf n d p.delta,
     perTemplate := if jeq (getD law "law") "stratified" || jeq (getD law "law") "work" then
-      (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none }
+      (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none,
+    complete := Record.allRan e.verdicts }
 
 /-- The integrity profile at δ: the record's program; one level `unit`, the record's partition, of `n` units, sampled by
 `d`; and the number of units sampled. -/
@@ -441,14 +452,14 @@ def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.SamplingDes
 
 /-- What the check accepts: the registration keeps R1–R8 with `law` the verifier's agreed law as derived, the sample is a
 sample of `law` over the registered population, the units were proved and served as sampled under the registered roots and
-values with the receipt naming the commitment's digest, and the verdicts accept; `law` has a profile's sample `d`
-(`Record.profileDraw`) and the registered population is a natural number `n`, and the check publishes `publicOf` and
-the profile `profileOf`. -/
+values, each certified value read, with the receipt naming the commitment's digest, and the verdicts accept; `law` has
+a profile's sample `d` (`Record.profileDraw`) and the registered population is a natural number `n`, and the check
+publishes `publicOf` and the profile `profileOf`. -/
 def AcceptMeans : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     OneStage.check p c e = .accept pub prof →
       ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
-        UnitsProved c e ∧ VerdictsAccept e.verdicts ∧
+        UnitsProved p c e ∧ VerdictsAccept e.verdicts ∧
         Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
         pub = publicOf p e law d n ∧ prof = profileOf p c e d n
 

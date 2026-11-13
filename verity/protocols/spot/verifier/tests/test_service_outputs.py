@@ -117,10 +117,11 @@ def _refused(f) -> tuple[str, ...]:
     return e.value.verdict.codes
 
 
-def _close(stream: S.Stream, reg: S.WindowCommitmentRecord, registered: Mapping[str, str] | None = None) -> S.Outcome:
+def _close(stream: S.Stream, reg: S.WindowCommitmentRecord, registered: Mapping[str, str] | None = None,
+           verdicts: Mapping | None = None) -> S.Outcome:
     draw = stream.select(reg)
     assert stream.deliver(draw, [SESSION]) is None
-    return stream.outcome(draw, _lean(registered), {"statement": "stub"})
+    return stream.outcome(draw, _lean(registered) if verdicts is None else verdicts, {"statement": "stub"})
 
 
 def _three_windows(stream: S.Stream) -> str:
@@ -217,6 +218,27 @@ def test_the_run_of_record_reads_the_certified_entries(monkeypatch):
     monkeypatch.setattr(S.V, "run", lambda *a, certified=None, **kw: run(*a, **kw))
     outcome = _close(stream, reg, {ROWS.name: CERTIFIED[ROWS.name]["root"]})
     assert not outcome.accepted and stream.records[-1]["audit"]["checks"]["run"]["codes"] == [V.DISAGREE]
+
+
+def test_a_stream_holds_a_certified_value_to_a_reported_read():
+    """A window's record registers a link's certified rows, and the stream took the verifier's entry for them. Its
+    outcome is refused by the audit record's check `certified`, naming the rows, when the verdict of record reports no
+    read of them, or reports their port under a value the record does not list and at another root; the run of record
+    is the Lean's own and agrees (no `run` failure). With a read of the rows at their root the outcome is accepted
+    (`test_a_stream_takes_the_verifiers_certified_entries`)."""
+    for reads in (None, {ROWS.name: {"value": "unlisted", "root": "ab" * 64}}):
+        stream = _stream(_spec((STATE, ROWS)))
+        cand, ports = _window(0, None, [ROWS_ENTRY])
+        reg = stream.register(cand, ports, certified=CERTIFIED)
+        verdicts = _lean()
+        if reads is not None:
+            verdicts["lean"]["registered"] = reads
+        outcome = _close(stream, reg, verdicts=verdicts)
+        checks = stream.records[-1]["audit"]["checks"]
+        assert not outcome.accepted and not stream.records[-1]["audit"]["accepted"]
+        assert checks["certified"] == {"ok": False, "codes": ["certified"],
+                                       "detail": {"certified": [ROWS.name], "unread": [ROWS.name]}}
+        assert "run" not in checks and "registered" not in checks
 
 
 def _two_stage(spec: S.Spec):

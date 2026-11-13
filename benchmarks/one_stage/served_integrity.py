@@ -3,9 +3,10 @@
 
 `answer` turns what the audit wrote into sampled proofs' core answer (``verity/sampled-proofs/one-stage/v1``): the
 commitment is the registration's digest, the verdict the audit record's, and on acceptance the profile is
-`audit.profile` as `Core.Integrity` (δ an exact ratio) and the public outputs are the four `Spot.OneStage.check` makes
+`audit.profile` as `Core.Integrity` (δ an exact ratio) and the public outputs are the five `Spot.OneStage.check` makes
 public (``drawn`` and ``proved``, the sampled and proved units; ``bound``, the bound on incorrect proof blocks at δ;
-``per_template``, each template's under a stratified or work sampling design) and two the Lean's answer doesn't have,
+``per_template``, each template's under a stratified or work sampling design; ``complete``, the audit record's own:
+whether every verdict ran, which `audit.answer_complete` reads) and two the Lean's answer doesn't have,
 ``coins`` and ``case_v2``. A refusal before the
 sample (the records, a check on the registration, the sample) rejects with its codes; an audit record that doesn't accept,
 with its failed checks and the first of Lean's refusals by member (a registered read that doesn't open its root names
@@ -193,8 +194,8 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
     profile = A.profile(reg, draw, wrong["delta"]).to_json()
     profile["delta"] = str(delta)
     per_template = wrong.get("per_template")
-    public = {"bound": wrong["bound"], "case_v2": kind, "coins": coins, "drawn": sorted(draw["units"]),
-              "per_template": per_template, "proved": sorted(rec["proved_units"])}
+    public = {"bound": wrong["bound"], "case_v2": kind, "coins": coins, A.COMPLETE: rec.get("complete") is True,
+              "drawn": sorted(draw["units"]), "per_template": per_template, "proved": sorted(rec["proved_units"])}
     return {"commitment": R.digest(reg), "profile": profile, "protocol": PROTOCOL, "public": public, "reason": None,
             "verdict": "accept"}
 

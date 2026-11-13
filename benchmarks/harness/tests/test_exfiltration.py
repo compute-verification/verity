@@ -4,8 +4,10 @@ real store with a directory remote that holds the planner's runs as `fixtures/ex
 names the runs they were cut from: one run's rows, cut to the fields the command reads and to the case it takes plus
 two it must pass over; the run of that case's plan over the world's year, its plan cut to each cell's block and
 share; and a run whose rows hold their own plans, cut to two scopes): the figures a hand computation gave on those
-rows; the network certifier's part beside them at the requests its calculator counts by default, the sampling plan's;
-its figures of record at two release schedules, held to its own document; what rests on the set-time card printed
+rows. The runs' case is row (i); here its rows stand for the command's row, the plan of record's, under that row's name
+(`as_row`), and row (i) is made up from them at `ASSUMED` times their bound (`as_assumed`), printed only under its
+label, with what prices each row's proving or that its rows don't record it. Then the network certifier's part beside
+them at the requests its calculator counts by default, the sampling plan's; its figures of record at two release schedules, held to its own document; what rests on the set-time card printed
 only under the calculator's label; the output count beside the sums that take it at 0; every figure's error, summed
 over everything it covers, at the scans' δ the term states, and no amount where it is 1 or more, on term documents
 with made-up errors; every input's mark; each refusal by name; and the command."""
@@ -27,8 +29,23 @@ REPO = Path(__file__).resolve().parents[3]
 FIXTURES = Path(__file__).parent / "fixtures" / "exfiltration"
 RECORDS = json.loads((FIXTURES / "records.json").read_text())["compute-audit"]
 ROWS, PLAN, PLANNED = RECORDS["rows"], RECORDS["plan"], RECORDS["planned"]
-#: the world year's figure a hand computation gave on the fixture's rows, in GB
+#: the world year's figure a hand computation gave on the fixture's rows, in GB: the command's row's here
 YEAR_GB = 14239.837095861332
+#: the row the fixture's runs were cut from, and the bound of the row (i) the tests make up from its rows over theirs
+CUT_ROW = "(i) honest"
+ASSUMED = 1.25
+
+
+def as_row(x: dict) -> dict:
+    """A row or a plan of the fixture's case as the command's row."""
+
+    return x | {"row": E.ROW} if x.get("row") == CUT_ROW else x
+
+
+def as_assumed(x: dict) -> dict:
+    """A row of the fixture's case as a made-up row (i), its bound `ASSUMED` times theirs."""
+
+    return x | {"row": E.ASSUMED_ROW, "bound_bits": ASSUMED * x["bound_bits"]}
 
 
 def term():
@@ -172,16 +189,18 @@ class Store:
 
         return LocalStore(self.tmp / name, config_path=self.config)
 
-    def ran(self, run: str, rows: list[dict] | None, *, plan: dict | None = None, name: str = E.ROWS_FILE) -> str:
-        """A run's attempt on the remote, its run record holding `rows` as the planner's rows and `plan` as its plan
-        (neither: it kept no files)."""
+    def ran(self, run: str, rows: list[dict] | Mapping[str, list[dict]] | None, *, plan: dict | None = None,
+            name: str = E.ROWS_FILES[0]) -> str:
+        """A run's attempt on the remote, its run record holding `rows` as the planner's rows, in the file `name` or
+        by file, and `plan` as its plan (neither: it kept no files)."""
 
         from research.store import canon
 
         record = None
         if rows is not None or plan is not None:
             tree = self.tmp / "run-files" / f"{run}-{self._ts}"
-            for path, text in ((name, rows and "".join(json.dumps(r) + "\n" for r in rows)),
+            files = rows if isinstance(rows, Mapping) else {name: rows}
+            for path, text in (*((f, its and "".join(json.dumps(r) + "\n" for r in its)) for f, its in files.items()),
                                (E.PLAN_FILE, plan and json.dumps(plan))):
                 if text:
                     (tree / path).parent.mkdir(parents=True, exist_ok=True)
@@ -211,20 +230,25 @@ def rows(run: str = ROWS) -> list[dict]:
 
 
 def plan() -> dict:
-    return json.loads((FIXTURES / PLAN / "mix.json").read_text())
+    """The fixture's plan, the command's row's."""
+
+    return as_row(json.loads((FIXTURES / PLAN / "mix.json").read_text()))
 
 
 def mine(scope: str | None = None) -> list[dict]:
-    """The fixture's rows of the case the command takes: the row's variant on one request count, at eight heads."""
+    """The fixture's rows of the case the command takes, as its row: the row's variant on one request count, at eight
+    heads."""
 
-    return [r for r in rows() if (r["world"], r["row"], r["h8"]) == (E.WORLD, E.ROW, "h8lin") and r["step"].startswith(E.STEP)
-            and scope in (None, r["scope"])]
+    return [as_row(r) for r in rows() if (r["world"], r["row"], r["h8"]) == (E.WORLD, CUT_ROW, "h8lin")
+            and r["step"].startswith(E.STEP) and scope in (None, r["scope"])]
 
 
-def record() -> list[dict]:
-    """What a run of record holds of the fixture's rows: one variant of each row."""
+def record() -> dict[str, list[dict]]:
+    """What a run of record holds of the fixture's rows, one variant of each row, by file as the planner's driver
+    writes them: row (i) (made up) and the rows it must pass over in the first, the command's row in the second."""
 
-    return [r for r in rows() if (r["row"], r["h8"]) != (E.ROW, "h8")]
+    other = [r for r in rows() if r["row"] != CUT_ROW]
+    return {E.ROWS_FILES[0]: [as_assumed(r) for r in mine()] + other, E.ROWS_FILES[1]: mine()}
 
 
 def recorded(tmp: Path, *, planned: bool = True) -> Store:
@@ -234,7 +258,7 @@ def recorded(tmp: Path, *, planned: bool = True) -> Store:
     s = Store(tmp)
     s.label(s.ran(ROWS, record()))
     if planned:
-        s.label(s.ran(PLAN, rows(PLAN), plan=plan()))
+        s.label(s.ran(PLAN, [as_row(r) for r in rows(PLAN)], plan=plan()))
     return s
 
 
@@ -279,14 +303,14 @@ def test_the_rows_requests_are_the_count_they_are_priced_over(tmp_path):
     assert "The row is priced over 1.778e+16 requests, the count the network certifier's part is over." in E.render(doc)
 
     s = Store(tmp_path / "other")
-    s.label(s.ran(ROWS, [r for r in rows() if (r["row"], r["h8"]) == (E.ROW, "h8")]))
+    s.label(s.ran(ROWS, [as_row(r) for r in rows() if (r["row"], r["h8"]) == (CUT_ROW, "h8")]))
     with pytest.raises(ValueError, match="the two parts cover different compute over the world year: 2.11575e\\+16 requests on "
                                          "the compute audit's side and 1.7784e\\+16 on the network certifier's"):
         E.build(store=s.store, root=REPO)
     # the run as the planner's driver wrote it, several variants of the row in one scope, is refused by name, and
     # read at the variant named
     both = Store(tmp_path / "both")
-    both.label(both.ran(ROWS, rows()))
+    both.label(both.ran(ROWS, [as_row(r) for r in rows()]))
     with pytest.raises(ValueError, match=f"{ROWS}'s world year rows are 2 variants of the row \\(h8, h8lin\\), each on its own "
                                          "premises: a run of record holds one, or --variant names the one meant"):
         E.build(store=both.store, root=REPO)
@@ -356,7 +380,7 @@ def test_rows_that_hold_their_own_plans_are_read_with_them(tmp_path):
     by its row at the pinned budget nearest, and the rows' `requests` the count they are priced over."""
 
     s = Store(tmp_path)
-    s.label(s.ran(PLANNED, rows(PLANNED)))
+    s.label(s.ran(PLANNED, [as_row(r) for r in rows(PLANNED)]))
     doc = E.build(store=s.fresh(), root=REPO)
     week, year = doc["compute_audit"]
     assert (doc["runs"], doc["refused"], week["scope"], year["scope"]) == ([PLANNED], [], "world week", "world year")
@@ -805,7 +829,7 @@ def test_every_input_is_marked_measured_modeled_or_assumed_with_its_source(tmp_p
             "as the scan's check charges it today") in text
     assert "14,240 GB with the lengths held by a stop block, the timing taken once and the entries charged through the compute audit" in text
     assert "the audit budget is β = 5.243% and the compute audit's part 15,054 GB." in text
-    assert f"- compute-audit: {PLAN}, {ROWS} (`{E.RECORD}`): the planner's rows, 18 of row `(i) honest`" in text
+    assert f"- compute-audit: {PLAN}, {ROWS} (`{E.RECORD}`): the planner's rows, 18 of row `(ii) honest`" in text
     marks = {m: sum(i["mark"] == m for i in doc["inputs"]) for m in E.MARKS}
     assert f"of {len(doc['inputs'])} inputs, {marks['measured']} are measured, {marks['modeled']} modeled and {marks['assumed']} assumed" in text
     assert "| world year | " + ROWS + " | 5.542% | 13,562 | 14,240 | 37.81 | 1.778e+16 | 4.339% | 2.293% | 5.372% |" in text
@@ -816,7 +840,7 @@ def test_every_input_is_marked_measured_modeled_or_assumed_with_its_source(tmp_p
 
 def test_an_unlabelled_superseded_or_ambiguous_record_is_refused_by_name(tmp_path):
     s = Store(tmp_path)
-    held, planned = s.ran(ROWS, record()), s.ran(PLAN, rows(PLAN), plan=plan())
+    held, planned = s.ran(ROWS, record()), s.ran(PLAN, [as_row(r) for r in rows(PLAN)], plan=plan())
     year = s.ran("r20261111-000000-0000", mine("world year"))
 
     def build(**kw) -> dict:
@@ -865,8 +889,9 @@ def test_an_unlabelled_superseded_or_ambiguous_record_is_refused_by_name(tmp_pat
     s.label(s.ran("r20261112-000000-0004", [r | {"error": "timed out"} for r in mine("world year")]))
     s.label("r20261112-000000-0005")
     assert {x["target"][-1]: x["why"] for x in build()["refused"] if x["target"].startswith("r20261112") and x["target"][-1] < "a"} == {
-        "2": "kept no run files", "3": "holds no planner rows (`out/rows.jsonl`) and no plan (`out/mix.json`)",
-        "4": "holds no row `(i) honest` at a step `+ the verifier as measured...` of the world `ours`",
+        "2": "kept no run files", "3": "holds no planner rows (`out/rows.jsonl`, `out/three/rows.jsonl`) and no plan "
+                                                "(`out/mix.json`)",
+        "4": "holds no row `(ii) honest` at a step `+ the verifier as measured...` of the world `ours`",
         "5": "not in the store or on its remote"}
 
     # another row of the plan, a step two steps begin with, and a row no run holds
@@ -876,7 +901,7 @@ def test_an_unlabelled_superseded_or_ambiguous_record_is_refused_by_name(tmp_pat
     assert third["compute_audit"][0]["priced"] is None
     steps = Store(tmp_path / "steps")
     steps.label(steps.ran(ROWS, [r | {"step": r["step"] + more} for r in mine("world year") for more in ("", ", again")]))
-    with pytest.raises(ValueError, match=f"`\\+ ` begins 2 steps of {ROWS}'s row `\\(i\\) honest`: give more of the one meant"):
+    with pytest.raises(ValueError, match=f"`\\+ ` begins 2 steps of {ROWS}'s row `\\(ii\\) honest`: give more of the one meant"):
         E.build(store=steps.store, root=REPO, step="+ ")
     with pytest.raises(ValueError, match="no run of record holds the planner's rows: .*holds no row `\\(iv\\)`"):
         build(row="(iv)")
@@ -901,6 +926,114 @@ def test_the_two_parts_must_cover_the_same_compute_and_weights(tmp_path):
         build("weights", weights_bits=3_000_000_000_000, target_bits=3_000_000_000_000 / 1.05)
 
 
+def test_the_figure_is_the_plan_of_records_row_and_row_i_is_only_under_its_label(tmp_path):
+    """The figure is the plan of record's row, and `together` sums it. Row (i), whose proving the planner prices at its
+    assumed prices, is read over the world's year beside it and printed only under its label, and the document holds
+    it as a field of its own; as the row read, the figure carries the label. A run holds its rows in two files, a
+    case's over a scope read from the first that holds them, and a later file that holds other ones leaves the run
+    out. A row (i) no run of record holds, or that covers other compute, is said to be unread, and the figure stands."""
+
+    doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
+    head, year = next(p for p in doc["compute_audit"] if p["scope"] == "world year"), doc["periods"][-1]
+    assert (E.ROW, E.ASSUMED_ROW, doc["row"], doc["label"]) == ("(ii) honest", "(i) honest", "(ii) honest", None)
+    assert doc["value"] == head["GB"] == year["compute_audit"]["GB"] == pytest.approx(YEAR_GB, rel=1e-12)
+    for t in year["together"].values():
+        assert t["GB"] == pytest.approx(t["certifier_GB"] + YEAR_GB) and t["with_set_time_card"]["GB"] == pytest.approx(
+            t["with_set_time_card"]["certifier_GB"] + YEAR_GB)
+    a = doc["at_assumed_prices"]
+    assert (a["row"], a["label"], a["run"], a["delta"], a["inside"], a["why"], a["sources"]) == (
+        E.ASSUMED_ROW, E.ASSUMED_LABEL, ROWS, 0.01, True, None, None)
+    assert a["GB"] == pytest.approx(ASSUMED * YEAR_GB, rel=1e-12) and a["beta"] == pytest.approx(head["beta"], rel=1e-12)
+    assert json.loads(json.dumps(doc))["at_assumed_prices"]["GB"] == a["GB"] != doc["value"]
+
+    text = E.render(doc)
+    assert "- **the compute audit's part: 14,240 GB** (modeled)" in text
+    assert "It is the planner's row `(ii) honest`, the plan of record's row, with every modeled lever at its measured value" in text
+    line = (f"- row `(i) honest`, at the planner's assumed prices: 17,800 GB, at β = 5.542% ({ROWS}), failing with at most "
+            "δ = 0.01 over the monitoring period. It is not the figure. What prices its proving time: own row not recorded, "
+            "family row not recorded, planner's price not recorded; at the planner's assumed default (`reprice.DEFAULT`) "
+            "not recorded.")
+    assert [x for x in text.splitlines() if "(i) honest" in x or "17,8" in x] == [line]
+
+    own = E.build(store=recorded(tmp_path / "own").fresh(), root=REPO, row=E.ASSUMED_ROW)
+    assert (own["label"], own["at_assumed_prices"]) == (E.ASSUMED_LABEL, None)
+    assert own["value"] == pytest.approx(ASSUMED * YEAR_GB, rel=1e-12)
+    text = E.render(own)
+    assert "- **the compute audit's part, at the planner's assumed prices: 17,800 GB** (modeled)" in text
+    assert "- row `(i) honest`, at" not in text
+
+    s = Store(tmp_path / "alone")
+    s.label(s.ran(ROWS, mine()))
+    alone = E.build(store=s.store, root=REPO)
+    assert alone["value"] == pytest.approx(YEAR_GB) and alone["at_assumed_prices"]["GB"] is None
+    assert (f"- row `(i) honest`, at the planner's assumed prices: not read: no run of record holds the planner's rows: "
+            f"{ROWS} holds no row `(i) honest` at a step") in E.render(alone)
+    files = record()
+    s = Store(tmp_path / "other")
+    s.label(s.ran(ROWS, files | {E.ROWS_FILES[0]: [r | {"gpu_seconds": 1e16} for r in files[E.ROWS_FILES[0]]
+                                                   if r["row"] == E.ASSUMED_ROW]}))
+    other = E.build(store=s.store, root=REPO)
+    assert other["value"] == pytest.approx(YEAR_GB)
+    assert other["at_assumed_prices"]["why"] == "its rows differ from the figure's in gpu_seconds"
+
+    # the driver writes row (i)'s world year to both files: the same rows, in any order, are read once
+    twice = [r for r in files[E.ROWS_FILES[0]] if r["row"] == E.ASSUMED_ROW and r["scope"] == "world year"]
+    s = Store(tmp_path / "same")
+    s.label(s.ran(ROWS, files | {E.ROWS_FILES[1]: files[E.ROWS_FILES[1]] + twice[::-1]}))
+    assert E.build(store=s.store, root=REPO)["at_assumed_prices"]["GB"] == pytest.approx(a["GB"], rel=1e-12)
+    s = Store(tmp_path / "differ")
+    s.label(s.ran(ROWS, files | {E.ROWS_FILES[1]: files[E.ROWS_FILES[1]] + [r | {"bound_bits": 2 * r["bound_bits"]}
+                                                                           for r in twice]}))
+    with pytest.raises(ValueError, match=f"no run of record holds the planner's rows: {ROWS} holds row `\\(i\\) honest` over "
+                                         "the world year in `out/rows.jsonl` and in `out/three/rows.jsonl`, and the two "
+                                         "differ"):
+        E.build(store=s.store, root=REPO)
+
+
+def test_what_prices_the_rows_proving_is_printed_by_source_or_not_recorded(tmp_path):
+    """Beside each row printed, the share of its proving each source prices, as its own plan records it: its `sources`,
+    else its `basis` by source, each of own row, family row and the planner's price at 0 where it prices none, and the
+    share at the planner's assumed default. A row whose plan records neither, or that is read with a plan of record,
+    prints "not recorded" for each."""
+
+    assert E._sources({"families": {}}) is None
+    basis = {"reprice.DEFAULT": 0.25, "steady": 0.5, "steady: art:00": 0.125, "family": 0.0625, "reprice.FAMILY": 0.03,
+             "reprice.CACHE": 0.0124, "headline.copy_stratum": 0.0201}
+    assert E._sources({"basis": basis}) == {
+        "by": {"own row": 0.625, "family row": 0.0625, "planner's price": pytest.approx(0.2924), "headline.copy_stratum": 0.0201},
+        "default": 0.25}
+    sources = {"own row": 0.99, "planner's price": 0.01}
+    assert E._sources({"sources": sources, "basis": basis}) == {
+        "by": {"own row": 0.99, "family row": 0.0, "planner's price": 0.01}, "default": 0.25}
+    assert E._sources({"sources": sources})["default"] is None
+
+    s = Store(tmp_path)
+    s.label(s.ran(PLANNED, [as_row(r) | {"split": r["split"] | {"basis": basis}} for r in rows(PLANNED)]
+                  + [as_assumed(r) | {"split": r["split"] | {"basis": {"reprice.DEFAULT": 0.979, "reprice.CACHE": 0.021}}}
+                     for r in rows(PLANNED)]))
+    doc = E.build(store=s.fresh(), root=REPO)
+    assert doc["at_assumed_prices"]["sources"] == {
+        "by": {"own row": 0.0, "family row": 0.0, "planner's price": pytest.approx(1.0)}, "default": 0.979}
+    text = E.render(doc)
+    assert (f"- what prices the row's proving time, as its rows record it (its own plan at β = 5.500%, {PLANNED}): own row "
+            "62.5%, family row 6.25%, planner's price 29.24%, headline.copy_stratum 2.01%; at the planner's assumed default "
+            "(`reprice.DEFAULT`) 25%.\n") in text
+    assert ("What prices its proving time: own row 0%, family row 0%, planner's price 100%; at the planner's assumed default "
+            "(`reprice.DEFAULT`) 97.9%.\n") in text
+
+    # the fixture's own plans record no source, and a plan of record none either
+    none = ("own row not recorded, family row not recorded, planner's price not recorded; at the planner's assumed default "
+            "(`reprice.DEFAULT`) not recorded.\n")
+    s = Store(tmp_path / "bare")
+    s.label(s.ran(PLANNED, [as_row(r) for r in rows(PLANNED)]))
+    bare = E.build(store=s.store, root=REPO)
+    assert next(p for p in bare["compute_audit"] if p["scope"] == "world year")["priced"]["sources"] is None
+    assert "- what prices the row's proving time, as its rows record it: " + none in E.render(bare)
+    planned = E.build(store=recorded(tmp_path / "planned").fresh(), root=REPO)
+    assert planned["compute_audit"][1]["priced"]["of"] == "plan"
+    assert "- what prices the row's proving time, as its rows record it: " + none in E.render(planned)
+
+
 # ---- the command -------------------------------------------------------------------------------------------------------------
 
 
@@ -921,10 +1054,14 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     code, out, _ = run()
     assert code == 0 and out.startswith("# verity bench exfiltration: GLM-5.3's exfiltration capacity")
     assert "- **the compute audit's part: 14,240 GB** (modeled)" in out and "## Inputs" in out
+    assert "- row `(i) honest`, at the planner's assumed prices: 17,800 GB, at β = 5.542%" in out
     assert "- **the network certifier's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids a response)" in out
     code, out, _ = run("--json", "--share", "0.097", "--network-check-share", "0")
     doc = json.loads(out)
     assert code == 0 and doc["schema"] == E.SCHEMA and doc["value"] == pytest.approx(15053.889111429447)
+    assert doc["at_assumed_prices"]["GB"] == pytest.approx(ASSUMED * doc["value"], rel=1e-12)
+    code, out, _ = run("--row", "(i) honest")
+    assert code == 0 and "- **the compute audit's part, at the planner's assumed prices: 17,800 GB** (modeled)" in out
     code, out, _ = run("--json", "--response-ids", "4096")
     assert code == 0 and json.loads(out)["periods"][-1]["together"]["scan"]["certifier_GB"] == pytest.approx(59_645_644, abs=0.5)
     # at the δ the calculator assumes by default, a scan's 2^-20, every row printed sums to 1 or more: no amount of the

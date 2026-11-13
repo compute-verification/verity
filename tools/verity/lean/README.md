@@ -49,7 +49,8 @@ python tools/verity/lean/merge.py --install
   once per clone: git merges lean-audit.json with merge.py, by origin/main's copy of it (fetch main first)
 verity lean try FILE [--siblings] [--on NODE]
   the edit loop: `lake env lean FILE` in FILE's package against its built imports, the axiom probe's line last; neither
-  runs this audit nor writes a record (`verity lean try --help`, `lean_changed.py`)
+  runs this audit nor writes a record (`verity lean try --help`, `lean_changed.py`). `--siblings` checks each sibling
+  as it is built: one built against an older build of an import is rebuilt when a refusal names it, and not otherwise
 research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone \
   --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records PKG --update
   the fast path (the lean-proofs skill): PKG's records and its requirers'
@@ -287,6 +288,10 @@ Lean's job in `check` and the tools around the audit:
   beside the rest: the other executables' roots, and every module under an `exempt` prefix of the package's lock (the
   name or below it, as the audit matches it), so two scripts that each declare `main` don't clash. It never fails on
   the lock: with none, or one that can't be read (which it says on stderr), it leaves out the executables' roots alone.
+  A sibling is checked as it is built. One built against an older build of an import is rebuilt when a refusal names
+  it, and not otherwise: the stub's first refusal has Lake rebuild the siblings it names, once, with a line that says
+  so, and what the stub says once more is the verdict. That is the step's limit, and the full check, which builds
+  every module, has none.
 - `unread.py`, `unread-caps.json`, `unread_gate.py`: the Lean nothing reads, its ratchet's caps, and the queue's
   landing gate on its seeds (drive.toml's `landing_gates`). A PR that adds proof modules no guarantee reads yet sets
   its area's entry in the JSON file to the check's count in its own diff, with no room, and lists in its body each

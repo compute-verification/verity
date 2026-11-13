@@ -69,7 +69,8 @@ commits a schedule (``window.schedule``) that is no schedule of its replay block
 commits none passes.
 
 `FORM` is `SecondStage.FORM`, which the run of record reads: off, every two-stage run is refused last
-(``two-stage-form``), and the Python flipped alone disagrees with the run of record."""
+(``two-stage-form``), and the Python flipped alone disagrees with the run of record. `complete` is what a two-stage
+outcome may say of itself: nothing while `FORM` is off or its replay block is a stand-in for the request Definition."""
 
 from __future__ import annotations
 
@@ -120,6 +121,17 @@ MAX_LEAVES = 2 ** 64
 #: blocks.
 RUN_FIELDS = (("instances",), ("units", "indices"), ("units", "blocks"), ("frame_v3", "roots"), ("frame_v3", "domain_ids"),
               ("registered",))
+
+
+def complete(form: bool, request_definition: bool, records: Sequence[Mapping[str, Any] | None]) -> bool:
+    """Whether a two-stage outcome is complete, in the sense one-stage's accept publishes (`one_stage.audit.COMPLETE`:
+    every verdict ran). It is only when all three hold. The two-stage form is allowed (`form`: `FORM` in a run of
+    record, on only once the soundness proof covers the form). The replay block is the registered request Definition
+    (`request_definition`): a sample of a stand-in audits the stand-in, never the request. Each stage's audit record
+    (`records`, at least one, none missing) accepted and is itself complete. So it is false of every two-stage outcome
+    while `FORM` is off, and of every one whose replay block is a stand-in, whatever its audit records say."""
+    return (form is True and request_definition is True and len(records) > 0
+            and all(r is not None and r.get("accepted") is True and r.get("complete") is True for r in records))
 
 
 @dataclass(frozen=True)
@@ -1275,7 +1287,7 @@ def attach(rec: Mapping[str, Any], v: Verdict, reads: Sequence[Mapping[str, str]
 
 __all__ = ["FORM", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "RETURN_WHY", "Checked", "Link", "Own", "Part", "Rows", "Run",
            "Wire",
-           "at_run", "attach", "blank_reads", "blank_run", "check", "interior_order_ok", "interior_reads",
+           "at_run", "attach", "blank_reads", "blank_run", "check", "complete", "interior_order_ok", "interior_reads",
            "interior_root", "link_runs", "links_of",
            "own_draw", "parts", "port_binding", "replay_links", "replay_returns", "replay_rows", "replay_wires",
            "returns_ok", "row_at", "rows_of",

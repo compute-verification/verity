@@ -60003,17 +60003,18 @@
    }
   },
   "Spot.Record": {
-   "digest": "f6fbfc71cb66dd40a007d18d73b8a88e1fb533b6b48b21cc65f4bb03d874963c",
+   "digest": "3e4d31b46384b0b6da97190092ebfab36790e3d2875473805e8ad9b53c83e1bf",
    "definitions": {
     "Spot.Record.LEVEL": "543751b14b271912e0fe9a6f2605542d4a14d342e5c2194177433aed58d48227",
     "Spot.Record.byPort": "ae4fc391218602d26959d85b062979a9d7cfe9a586a0faa77704e796ab5427dd",
-    "Spot.Record.checks": "8db4480581cba7c6ecf7a304fd8ca4fb9146180ae4432a97c2ff00d6946fb547",
+    "Spot.Record.checks": "b42822058c307232f68e6a3813318013a1b12903ff6d670d422b0d90014c0282",
     "Spot.Record.matchesPublic": "5de1bd56b8d6a840f9a559c86835a74cb4da804de8d82f1b7a6ca7f5be3fa505",
     "Spot.Record.ownRegistered": "c03c7e82007dc6ab74231e65106159ac61cb6b9298b162f53c8660713912aade",
     "Spot.Record.profileDraw": "f7a6fc1ab1e8055e2a1e933f3d5c50187688bda0439a73c28b0ba75412dcdf22",
     "Spot.Record.registeredRoots": "ca7ef2ef9ae75a22514ae05bdde77d50484dd042185e0ed93cbca6a993002e3e",
     "Spot.Record.sameDict": "dc8951f114bf6c71379d648bbe69a35f07777dadb14417b9bd43671019cb3519",
     "Spot.Record.sessionRegistered": "2e5a86a59035f84280bb1b7adc72eeecf6b58d56a9f7d748f3c6345e8526e5f0",
+    "Spot.Record.subDict": "72f1a3b91c7e09b5a45f3490a5a993825a60120294a8ec45046e99d16efea8c8",
     "_private.Spot.Record.0.Spot.Record.failed": "d55fc8844ca5c91c47f11e28b86a3941419893c4f633709f8ba627b826c577a9",
     "_private.Spot.Record.0.Spot.Record.obj": "2e5e71022a7378856e0d9e8e3328bf61403799cf34a93d813f4814d0cabc9eaf",
     "_private.Spot.Record.0.Spot.Record.sortedInts": "6665aeaa977690a9d60d1a35ee09ffac6dbc4ab9362b8f54110f36bdecda3fb5"

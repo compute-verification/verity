@@ -33,6 +33,8 @@ POS = (3, 3, 0, 2, 1, 3)
 TABLE = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]]
 SCHEME = "frame-v3-sha512/hm96-sha512"
 LAW = {"law": "subset", "k": 2}
+#: the sample the audit record's tests hand it: units 1 and 4 of six
+SAMPLE = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
 SERVED = {"kind": "served", "row": 7, "run": "r-registered"}
 #: a 16-bit registration's root: three 64-word rows, salts 01.., 02.., 03..
 ROOT_16 = ("511a71aa555f05f2b992997f7d6fe2af8e225c2a378ace51d54c18642f73193e"
@@ -732,15 +734,20 @@ def test_the_audit_record_holds_the_roots_the_reads_were_opened_against():
     prog = _program()
     reg = _registered(prog)
     rec, _ = _record(prog, reg)
-    d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
+    d = SAMPLE
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
     args = (rec, R.receipt(rec, "verifier-test"), d, D.parse_design("subset:2"), [1, 4], 2, {}, {"lean": lean}, 0.25)
     ok = audit.audit_record(*args, session_registered={"W": reg.root.hex()})
     assert ok["accepted"] and "registered" not in ok["checks"]
     assert ok["integrity_profile"]["inputs"]["registered"] == [{k: reg.entry()[k] for k in ("value", "root", "leaves", "domain")}]
-    for opened in (None, {}, {"W": "cd" * 64}, {"W": reg.root.hex(), "V": "cd" * 64}):
+    for opened in (None, {}):
+        unread = audit.audit_record(*args, session_registered=opened)
+        assert unread["accepted"] and "registered" not in unread["checks"], "a registered value needs no reported read"
+        assert unread["integrity_profile"] == ok["integrity_profile"]
+    for opened, wrong in (({"W": "cd" * 64}, ["W"]), ({"W": reg.root.hex(), "V": "cd" * 64}, ["V"]), ({"W": None}, ["W"])):
         r = audit.audit_record(*args, session_registered=opened)
         assert not r["accepted"] and r["checks"]["registered"]["codes"] == ["registered"] and r["integrity_profile"] is None
+        assert r["checks"]["registered"]["detail"] == {"registered": ["W"], "opened": sorted(opened), "wrong": wrong}
     v1 = R.record(prog, Q, LAW, SCHEME, rec["roots"], SERVED)
     plain = audit.audit_record(v1, R.receipt(v1, "verifier-test"), *args[2:])
     assert plain["accepted"] and "registered" not in plain["integrity_profile"]["inputs"]
@@ -749,11 +756,12 @@ def test_the_audit_record_holds_the_roots_the_reads_were_opened_against():
 
 def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
     """`session_registered` reads the Lean verdict's `registered` finding, only on an accepted verdict of record: a v2 audit
-    passes on what the verifier opened, and fails closed on anything else."""
+    passes on what the verifier opened and on a verdict that reports no read, and fails on a read reported at another
+    root, by one verdict or by one of two."""
     prog = _program()
     reg = _registered(prog)
     rec, _ = _record(prog, reg)
-    d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
+    d = SAMPLE
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64, "registered": {"w": {"value": "W", "root": reg.root.hex()}}}
     assert audit.session_registered({"lean": lean}) == {"W": reg.root.hex()}
     for v in ({**lean, "accepted": False}, {**lean, "accepted": None}, {**lean, "of_record": False}, {**lean, "registered": None},
@@ -768,9 +776,11 @@ def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
                                   0.25, session_registered=audit.session_registered(verdicts))
 
     assert decide({"lean": lean})["accepted"]
-    for verdicts in ({"lean": other}, {"lean": lean, "lean-2": other}, {"lean": {k: x for k, x in lean.items() if k != "registered"}}):
+    assert decide({"lean": {k: x for k, x in lean.items() if k != "registered"}})["accepted"]
+    for verdicts in ({"lean": other}, {"lean": lean, "lean-2": other}):
         r = decide(verdicts)
         assert not r["accepted"] and r["checks"]["registered"]["codes"] == ["registered"], verdicts
+        assert r["checks"]["registered"]["detail"]["wrong"] == ["W"], verdicts
 
 
 # -- supplied values ---------------------------------------------------------------------------------------------------------
@@ -1267,6 +1277,48 @@ def test_r7_takes_the_verifiers_certified_entries():
                   {"schemas": {value: G.SCHEMA_V2}}, {"outputs": {value: {"record": "ee" * 64, "port": "x"}}}):
         with pytest.raises(ValueError):
             R.check(both, prog, Q, **kw, **named, certified=CERTIFIED)
+
+
+def test_the_audit_record_holds_a_certified_value_to_a_reported_read():
+    """A value the verifier holds a certified entry for needs a read the accepting verdicts of record report. The record
+    accepts when they report one at the registered root. It fails `certified`, naming the value, when they report none:
+    no read at all, or the value's port named under a value the record does not list and at another root, which is
+    none of the record's own values, so the registered roots' check never sees it. A read at another root fails
+    `registered` as any registered value's does. Without the certified names the record asks no read of the value, and
+    each of the unread records is accepted."""
+    _, check, _, _ = _seeded_case()
+    design = {k: x for k, x in check.items() if k not in ("program", "query", "ports", "registered", "supplied")}
+    lone = _program(w=16)
+    served, ports = _record(lone, _registered(_program()))
+    (value, mine), = CERTIFIED.items()
+    rec = {**served, "registered": [{"value": value, **mine}]}
+    assert R.check(rec, lone, Q, **design, ports=ports, certified=CERTIFIED).ok
+    d = SAMPLE
+    base = {"accepted": True, "of_record": True, "digest": "dd" * 64}
+    read = {**base, "registered": {"rows.0": {"value": value, "root": mine["root"]}}}
+    renamed = {**base, "registered": {"rows.0": {"value": "unlisted", "root": "ab" * 64}}}
+
+    def decide(verdicts, certified=CERTIFIED):
+        return audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, D.parse_design("subset:2"), [1, 4], 2, {},
+                                  verdicts, 0.25, session_registered=audit.session_registered(verdicts, rec),
+                                  certified=sorted(certified))
+
+    ok = decide({"lean": read})
+    assert ok["accepted"] and "certified" not in ok["checks"] and "registered" not in ok["checks"]
+    assert audit.session_registered({"lean": renamed}, rec) == {}, "the record lists no such value: the read is dropped"
+    for verdicts in ({"lean": base}, {"lean": {**base, "registered": {}}}, {"lean": renamed}):
+        r = decide(verdicts)
+        assert not r["accepted"] and r["integrity_profile"] is None and "registered" not in r["checks"], verdicts
+        assert r["checks"]["certified"] == {"ok": False, "codes": ["certified"],
+                                            "detail": {"certified": [value], "unread": [value]}}, verdicts
+        assert decide(verdicts, certified={})["accepted"], "without the certified names nothing asks the read"
+    assert decide({"lean": read, "lean-2": renamed})["accepted"], "another session's read of the value itself"
+    moved = decide({"lean": {**base, "registered": {"rows.0": {"value": value, "root": "ab" * 64}}}})
+    assert not moved["accepted"] and moved["checks"]["registered"]["detail"]["wrong"] == [value]
+    assert "certified" not in moved["checks"]
+    two = decide({"lean": renamed}, certified=[value, "other", value])
+    names = sorted([value, "other", value])
+    assert two["checks"]["certified"]["detail"] == {"certified": names, "unread": names}
 
 
 def test_r7_holds_a_windows_history_to_the_previous_records_port():

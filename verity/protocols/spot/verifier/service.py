@@ -2356,7 +2356,7 @@ class Stream:
                session_roots: Mapping[str, str] | None, coins: Mapping[str, Any] | None = None
                ) -> tuple[dict[str, Any], dict[str, Any]]:
         """`outcome`'s audit record, once the verdicts hold (failing `run` where the whole run isn't the verifier's),
-        and the public outputs."""
+        each value the registration's certified entries name held to have a reported read, and the public outputs."""
         assert e.sessions is not None
         outputs = self.spec.check.public_outputs
         of_record = sorted(k for k in verdicts if verdicts[k].get("of_record"))
@@ -2365,7 +2365,8 @@ class Stream:
         proved = list(proved_units) if proved_units is not None else D.proved(draw.draw)
         instances = len(proved) if instances is None else instances
         rec = V.audit_record(draw.registration.record, draw.registration.receipt, draw.draw, draw.law, proved, instances,
-                             statement, verdicts, self.delta, e.sessions, served, session_roots)
+                             statement, verdicts, self.delta, e.sessions, served, session_roots,
+                             certified=sorted(e.certified or ()))
         accepted = rec["accepted"]
         if e.read is not None and rec["verifiers"]["agree"]:
             reg = draw.registration
@@ -2403,7 +2404,8 @@ class Stream:
         (`second_stage.verified_of`), and the reference header and registered reads the params `proofs` give each
         template, `template_circuits`), and the registration's
         over the replay sample, each taking the sessions' reads of its own ports at their own roots (`own_reads`), both
-        failing `run` where the whole run isn't the verifier's; and the public outputs."""
+        failing `run` where the whole run isn't the verifier's, the registration's holding each value its certified
+        entries name to have a reported read; and the public outputs."""
         assert e.sessions is not None and e.draw is not None and e.interior is not None and e.second is not None
         reg, first, ireg, second = e.registration, e.draw, e.interior, e.second
         outputs = self.spec.check.public_outputs
@@ -2430,7 +2432,8 @@ class Stream:
                      returns=SS.replay_returns(e.program, descriptor_id(self.replay), reg.record))
         rec = SS.attach(rec, SS.check(SS.FORM, own, statements), SS.interior_reads(own, statements or ()))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
-                                  verdicts, self.delta, e.sessions, None, replay_session_roots, own_reads=True)
+                                  verdicts, self.delta, e.sessions, None, replay_session_roots, own_reads=True,
+                                  certified=sorted(e.certified or ()))
         accepted = rec["accepted"] and boundary["accepted"]
         if e.read is not None and e.second_read is not None and rec["verifiers"]["agree"] and \
                 boundary["verifiers"]["agree"]:
