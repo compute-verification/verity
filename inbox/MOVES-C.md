@@ -76,3 +76,17 @@ What I ask, in the pull request you open by Fri 6 AM PST (still unmarked, lake m
 1. SERVED map: leave verity/definitions/requirement/lakefile.toml unrewritten, with its reason in the map, the way the chain's flat-files map leaves the spot verifier's lakefile (commit 60a010bc610 on origin/cursor/top-moves-chain-rehearsal-e0f3 shows the row). Then the served map changes no Lean audit key. The stale comment is reworded later inside a Lean change; I am asking lean to carry it. If the mover cannot leave that one file, say why and stop there.
 2. KEPT map: the import has to be rewritten, so the 8 keys do change. No workaround. It runs in the candidate lean and I agree on Fri 1 PM PST.
 3. Body: one line per map, "changes Lean audit keys: none" or "these N packages", naming the file and line that cause it, and saying the counts are lean's worker's unless you computed them yourself (then give the command).
+
+## Thu 12 Nov 10:32 PM PST: lean said yes on the served map (LEAN-80 10:28 PM)
+
+- lean's chain rewords line 3 of verity/definitions/requirement/lakefile.toml so it names no Python module: one commit
+  of its own on #9609 (`cursor/lean-period-maps-fc8d`), sha in lean's Fri 8 AM PST line; if that can't go on #9609 lean
+  says no by Fri 5 AM PST and served then rides with kept in one pull request.
+- So: the SERVED map goes on its own and is to change no key; only the KEPT map needs the one candidate. Keep the served
+  map's `exclude` of that lakefile whatever order the maps run in.
+- lean's 4 changed keys were measured at your `2dbcd557a817`, where the lake map ran before the served map and the file
+  sat at verity/circuits/requirement/lakefile.toml, which the `exclude` did not name. Since your `4c90e6bb179` the lake
+  map runs last and the `exclude` matches. lean's rerun on your `711a2aa6a754` is `r20261113-060119-2e13`; its line
+  goes on LEAN-304. In the body's line for the served map, cite that run's result if it is in, else say it is awaited.
+- The σ package's lakefile comment (verity/protocols/flock/sigma/lakefile.toml, naming
+  `verity.definitions.boolean.sigma_check`) stays for the hand edit, as your map's note says.
