@@ -111663,3 +111663,135 @@ Not established:
 - `RefReadsWf` at the real `heldOf`, which does not exist on the base yet.
 - That the cleanup head `90bbf657c8` compiles; its run is in progress.
 - The lemma has not gone through the full Lean check (`check.py`). No guarantee or lock record reads it yet, so nothing in a lock changes. [derived]
+
+## GATHER, Fri 13 Nov 01:12Z: for the second try take every outer block and 4 of 64 inner blocks a cell (`--replay rate:1/1 --k 4`): at most 10 of the class's 10,240 inner blocks incorrect at δ = 1/2, against 1,280 at serving's default; that design has not run at Friday's shape yet and its rehearsal on the second try's branch is in line
+
+**The second try's branch: `cursor/proofs-gather-second-try-5a28`, head `957d763fb52498aa1e2f1b4410b50ad32f0b80a7`**, rehearsed at that head at V = 2,560 (`3ba5`, `b032`) and at V = 154,880 (`b032`'s second part), all exit 0. **My one recommended design for the second try: `--replay rate:1/1 --k 4`.** The first stage takes all 8 outer blocks; the second stage draws 4 of the 64 inner blocks in each of the 160 cells: 640 inner blocks, proved in 20 sessions of 32. An audit that accepts then says: except with probability 1/2, at most 10 of the class's 10,240 inner blocks are incorrect (0.10%); at δ = 1/10, at most 35 (0.34%). **At serving's default (`rate:1/2 --k 1`) the same sentence reads 1,280 (12.5%)**: one request of the eight can be incorrect at every token and the audit still accepts half the time, whatever k is. With only 8 outer blocks the first stage's count decides what the audit establishes; k matters only once every outer block is taken. **The condition:** the recommended design has not run at Friday's shape. Its rehearsal on the second try's branch is `r20261113-010820-1237`, in line on vy-nebius-2. If it has not ended exit 0 by 05:00Z, my word for the second try is serving's default, whose rehearsal `c6bd` is in line too. **Is the branch the tree serving should run at 20:00Z? The branch yes; this head no.** Your 01:10Z message gives me serving's `c201ac0dcb59` to merge. I merge it next, rehearse at V = 2,560, move `1237` to the merged head, and name that head in my next entry.
+
+### 1. In plain words
+
+Friday's class is 8 requests. Each request is one outer block. Inside it, each of the 64 tokens is selected by 20 small circuits (19 that each find the largest logit in one slice of the vocabulary, one that combines them): 20 templates, 64 inner blocks of each, so 1,280 inner blocks an outer block and 10,240 in the class. The first stage draws some of the 8 outer blocks. The second stage draws, in each sampled outer block and for each template, k of that template's 64 inner blocks, and those are proved. The 64 inner blocks of one template in one outer block are a cell.
+
+An incorrect inner block is caught only if its outer block is drawn and it is then drawn in its cell. So two things can go unseen: a whole outer block that the first stage did not draw, and a few inner blocks that the second stage did not draw. With 8 outer blocks the first matters far more. Drawing 4 of 8 leaves a wholly incorrect request unseen half the time. Drawing all 8 leaves only the second.
+
+### 2. The table
+
+[run: `rate-k-table.py` and `two-stage-bound.py`, 01:06Z, exact fractions; the bound at 8 of 8 agrees with the verifier's own `profile.Stratified.count_bound` in all 8 cells; nothing in this table is a measurement]
+
+"ε at δ" is the largest number of incorrect inner blocks, placed before the coins, that the audit still accepts with chance at least δ, and that number as a share of the 10,240.
+
+| First stage | k of 64 a cell | Inner blocks drawn | In one session | ε at δ = 1/2 | ε at δ = 1/10 | Accepts with one incorrect inner block in ONE outer block | Accepts with one in EVERY outer block | Accepts with one outer block wholly incorrect |
+|---|---|---|---|---|---|---|---|---|
+| 2 of 8 | 1 | 40 | 2 | 2,573 (25.1%) | 6,406 (62.6%) | 99.61% | 96.90% | 75% |
+| 2 of 8 | 4 | 160 | 8 | 2,563 (25.0%) | 6,401 (62.5%) | 98.44% | 87.89% | 75% |
+| 2 of 8 | 16 | 640 | 32 | 2,560 (25.0%) | 6,400 (62.5%) | 93.75% | 56.25% | 75% |
+| 2 of 8 | 32 | 1,280 | 64 | 2,560 (25.0%) | 6,400 (62.5%) | 87.50% | 25.00% | 75% |
+| 4 of 8 (serving's `rate:1/2`) | 1 (serving's) | 80 | 4 | 1,280 (12.5%) | 2,632 (25.7%) | 99.22% | 93.89% | 50% |
+| 4 of 8 | 4 | 320 | 16 | 1,280 (12.5%) | 2,577 (25.2%) | 96.88% | 77.25% | 50% |
+| 4 of 8 | 16 | 1,280 | 64 | 1,280 (12.5%) | 2,564 (25.0%) | 87.50% | 31.64% | 50% |
+| 4 of 8 | 32 | 2,560 | 128 | 1,280 (12.5%) | 2,561 (25.0%) | 75.00% | 6.25% | 50% |
+| 8 of 8 | 1 | 160 | 8 | 44 (0.43%) | 146 (1.43%) | 98.44% | 88.16% | 0% |
+| **8 of 8** | **4** | **640** | **32** | **10 (0.10%)** | **35 (0.34%)** | 93.75% | 59.67% | 0% |
+| 8 of 8 | 16 | 2,560 | 128 | 2 (0.02%) | 8 (0.08%) | 75.00% | 10.01% | 0% |
+| 8 of 8 | 32 | 5,120 | 256 | 1 (0.01%) | 3 (0.03%) | 50.00% | 0.39% | 0% |
+
+- **Sessions: 20 in every row**, one a template [read: `two_stage.py`, one session a member; run: every rehearsal's summary]. A session proves s·k inner blocks.
+- **Taking all 8 outer blocks is not refused** [run: `rate:6/6` on a class of 6 spans in `ab11` and `b032`, exit 0]. `rate:1/1` is the same count [read: the spot verifier's `one_stage/draw.py:111` to `115`].
+- **64 of 64 in every cell is refused** [read: `service.py:973` on the first try's tree, "prove every cell … whole, and so whole replay blocks"].
+- **No row catches one incorrect inner block with a chance above one half.** Sampling 640 of 10,240 cannot; that is what ε at δ is for.
+- **The run that exists at Friday's shape, `b876`, is the first row**: 2 of 8, 1 a cell.
+
+### 3. The formulas
+
+- N = 8 outer blocks. Each has 20 cells of T = 64 inner blocks.
+- First stage: a uniform s-subset of the N. `rate:NUM/DEN` gives s = ⌈NUM·N/DEN⌉ [read: `draw.py:111` to `115`].
+- Second stage: in each cell of a sampled outer block, a uniform k-subset of its 64, each cell on its own [read: `service.py:937` to `950`; `randomness/__init__.py:142`].
+- w incorrect inner blocks in one cell are all missed with chance esc(w) = C(64 − w, k) / C(64, k).
+- For incorrect counts w[b][t] fixed before the coins, the audit accepts with chance (1 / C(8, s)) · Σ over the s-subsets S of ∏ over b in S and t of esc(w[b][t]).
+- One incorrect inner block: 1 − (s/8)(k/64). One in every outer block: (1 − k/64)^s. One outer block wholly incorrect: 1 − s/8.
+- ε at δ: the largest total of w with that chance at least δ, the convention of the verifier's own bound [read: `profile.py:543` to `553`].
+  - [derived] I searched placements of one shape: some outer blocks wholly incorrect, the rest spread evenly. Each placement's chance is exact. So below 8 of 8 the figure is a floor on the true worst case; at 8 of 8 it is the verifier's own number.
+- **What the run's own record prints** [run: `b876`'s `summary.json`, `audit.audit.wrong_units`]: only the second stage's bound over the sampled outer blocks' inner blocks, at δ = 0.5: "at most 43 wrong units of 2,560, at most 32 in any one cell". It prints nothing about the outer blocks the first stage did not draw. The ε column above is my counting, not a field of the record.
+
+### 4. Wall time and peak memory
+
+**Measured, all on CPU nodes, V = 154,880** [run: each run's `out/` file times and `job-memory.py` on its `resources.jsonl`]:
+
+| Run | Tree | Class | Design | Inner blocks drawn (a session) | `first` | `second` | Peak memory |
+|---|---|---|---|---|---|---|---|
+| `c30d` | first try's, at `08528b27dcc8` | 6 spans of 2 tokens | 2 of 6, k = 1 | 40 (2) | 4.0 min | 40.8 min | 57.4 GiB |
+| `8cac` | first try's, at `bdf9fd1086` | 6 spans of 4 tokens | 2 of 6, k = 3 | 120 (6) | 3.8 min | 35.1 min | 57.8 GiB |
+| `b876` | first try's, at `bdf9fd1086` | 8 spans of 64 tokens, stop rule | 2 of 8, k = 1 | 40 (2) | 4.2 min | 50.9 min | 57.9 GiB |
+| `b032`, second part | second try's, at `957d763fb5` | 6 spans of 2 tokens, logits committed | 2 of 6, k = 1 | 40 (2) | 4.4 min | 40.8 min | 57.9 GiB |
+
+- **`f58a` gave nothing: it never started.** It waited 28 minutes on vy-nebius-cpu-11 for 120 GB that the machine did not have, and I cancelled it at 01:07Z [run: `research cancel`]. Its middle part, the recommended design at Friday's shape, is now `1237`, on the second try's branch.
+- **What moves the time is the tokens of the sampled outer blocks, not k** [derived: the four rows]. `second` took 35 to 41 minutes with 4 to 8 tokens in the sampled spans and 51 with 128. Three times the inner blocks a session (`8cac`) cost nothing visible.
+- **Where `b876`'s 51 minutes went** [run: its `summary.json`]: the 20 provers 27 seconds in all; Lean's 20 verifications 10.4 minutes; composing the 20 circuits 5.7 minutes; the rest, 34 minutes, is the driver replaying and committing the sampled outer blocks and checking, which the summary does not time.
+
+**Estimates for Friday's shape** [derived: two slopes through the four rows, 0.08 and 0.13 minutes a token of the sampled outer blocks; runs of nearly the same size differ by 6 minutes]:
+
+| First stage | Tokens replayed | `first` + `second`, CPU node | Peak memory |
+|---|---|---|---|
+| 2 of 8 | 128 | 55 minutes [run: `b876`] | 58 GiB [run] |
+| 4 of 8 | 256 | 65 to 75 minutes | about 58 GiB [guess: the peak did not move from 4 to 128 tokens] |
+| 8 of 8 | 512 | 85 to 110 minutes | not known; `1237` asks 96 GB |
+
+- **k adds to these only what the provers and the openings add.** [run] From 2 to 6 inner blocks a session a chunk's prover went from 1.26 to 1.39 seconds and Lean's verification did not move. [guess] At 32 a session that is seconds more a session. No run has proved more than 6 in one session at any vocabulary; `240a` proves 256 a session at V = 2,560 and `1237` 32 at V = 154,880.
+- **All of the table fits the window of 14:00Z to 19:00Z on time alone**, if the 8-of-8 estimate holds. What limits the choice is what has been rehearsed, not the clock.
+- **On Friday's cards** [relayed: STOPDRIVER's 00:40Z entry; one RTX PRO 6000, V = 154,880, 2 inner blocks a session]: a chunk's session 0.15 seconds warm and 2.25 the first time, the combine's 0.41 and 2.50; staging the 20 members' public files 339 seconds on CPUs. [derived] So the proving itself is under a minute for 20 sessions at any design measured, on cards or on CPUs. Cards do not shorten the 85 to 110 minutes: those are replay, composing and Lean.
+
+### 5. What Friday's draw establishes, and what it does not
+
+**At serving's default, 4 of 8 and 1 a cell**, an audit that accepts shows:
+- The two commands ran end to end on a class the engine committed, and 80 sampled inner blocks were proved and verified by Lean.
+- [derived] Except with probability 1/2, at most 1,280 of the 10,240 inner blocks are incorrect. That is one request of eight.
+
+**At `rate:1/1 --k 4`** it shows the same path with 640 inner blocks proved, and [derived, and the verifier's own bound] except with probability 1/2 at most 10 incorrect inner blocks in the class.
+
+**Neither says, on either tree:**
+- **That the stream's outcome is "accept".** [run: every rehearsal] The outcome's symbol is `reject`, refused by the one code `two-stage-form`, because the verifier's two-stage form is off until its proof lands. Exit 0 means everything else held.
+- **Anything about the model.** The audit covers the select: from logits to the token id. Nothing ties the logits to the model's rows.
+- **On the first try's tree, that the logits were fixed before the coins.** [run: `ab11`, `b876`] There the prover registers the sampled outer blocks' logits after the first stage's sample. On the second try's branch the serve commits them before it [run: `b032`, `interior.registered` is `[]`].
+- **That any request stopped where the rule says.** [read: `two_stage.py:27` to `28`] The stop blocks are sampled and none is proved.
+- **Coins from an auditor's device.** Both tries run `--challenger local`, by Daniel's ruling a demo.
+- **Anything beyond this one class of 8 requests in one execution phase.** Nothing here is scaled to a monitoring period or to a datacenter.
+
+**Assumed in the table, and not established for the real serve:**
+- That Friday's 8 requests are one class of 8 spans. [read: `boundary_rows.py:33` to `36`] A span is filed in the stop class of its prompt's size. Requests whose prompts fall in different size classes are different classes, each sampled on its own, and a class of one span is always taken whole. **Ask serving how many classes Friday's 8 requests make.**
+- That every cell has 64 inner blocks, as the stand-in's do. What a request that stops early commits past its last token I have not read on the engine.
+- That a session holding an incorrect inner block is refused. The proof system's own error is not in these numbers.
+
+### 6. Why 8 of 8, and the other choice
+
+- **For:** it is the only row group in which ε is small. It costs [derived] 20 to 35 minutes more of `second` than the default.
+- **Against:** the first stage then draws nothing. The run still goes through both commands and both sessions, but it shows no sample of outer blocks. If the demonstration must show a first-stage sample, the choice is `rate:1/2` with any k, and its sentence is "one request in eight" whatever k.
+- **k = 4 and not more:** 4 is what `1237` rehearses tonight. If `240a` and `1237` both end clean, k = 16 at 8 of 8 (2,560 inner blocks, 128 a session, ε = 2 at δ = 1/2) is the next step, and I say so then.
+- **The first try (13:10Z):** I would leave it at serving's default. It is the nearest to what has run, and `c6bd` rehearses it exactly.
+
+### 7. Is the second try's branch the tree for 20:00Z?
+
+- **The branch: yes.** It is the only tree where the logits a sampled inner block reads are committed before the first stage's coins. [run] At its head `957d763fb5` it has ended exit 0 at V = 2,560 with history tables (`3ba5`) and under a stop rule with every span sampled (`b032`), and at V = 154,880 (`b032`'s second part: 40 inner blocks, Lean 20 of 20, the second stage's check clean, `second-inputs` passing).
+- **This head: no; it moves twice more at most.** First now, by the merge of `cursor/vllm-logitsport-interior-4e51` at `c201ac0dcb59` that your 01:10Z message asks for [relayed: it fixes the adapter's by-name lint on `boundary_windows.py`, and the adapter's quick tier passes at it]. Then once more if `cursor/proofs-stopdriver-prove-on-cards-ffc6` says ready by Fri 10:00Z; it has no ready line yet [read: STOPDRIVER's 00:55Z entry]. I name the final head by Fri 11:00Z.
+- **Not yet shown on it:**
+  - Friday's shape, 8 spans of 64 tokens under a stop rule with committed logits at V = 154,880. `1237` is that run.
+  - The engine's own `logits` port on cards. Serving's job 2 runs it after 02:40Z if job 1 passes, else at 08:15Z [read: Linear VLLM-412, 00:59Z].
+
+### 8. Runs and machines
+
+| Run | What | Head | Machine, memory asked | Waited | State |
+|---|---|---|---|---|---|
+| `r20261113-010820-1237` | Friday's shape with committed logits, `rate:1/1 --k 4` | second try's `957d763fb5`; I launch it again at the merged head and cancel this one if it has not started | vy-nebius-2, 96 GB, 5 h | since 01:08Z | waiting |
+| `r20261113-005324-c6bd` | Friday's shape, serving's `rate:1/2 --k 1` | first try's `496aa18354` | vy-nebius-2, 72 GB, 3 h | since 00:53Z | waiting, 5 ahead at 01:06Z |
+| `r20261113-005510-240a` | V = 2,560, 8 of 8 and 32 a cell: 256 inner blocks a session | first try's `496aa18354` | vy-nebius-2, 40 GB, 3 h | since 00:55Z | waiting, 6 ahead at 01:06Z |
+
+- [run: `research fetch` on each, 01:06Z to 01:08Z] The line on vy-nebius-2 took `c6bd` from 10 ahead to 5 in 9 minutes, and cpu-11 had no memory for `f58a`, so I left `c6bd` and `240a` where they are past your 15 minutes.
+- Cancelled, never started: `f58a` (cpu-11, 28 minutes waiting) and `827e` (vy-nebius-2, 1 minute; the same design on the first try's tree, which I moved to the second try's branch as `1237`).
+- [guess] Once each starts: `240a` about 40 minutes; `c6bd` about 1 hour 45 minutes; `1237` about 2 hours 30 minutes. I read each as it ends and write the estimate you asked for by 05:30Z from them.
+
+### 9. Not established
+
+- The recommended design at Friday's shape: time, memory, exit.
+- More than 6 inner blocks in one session, at any vocabulary.
+- How many classes Friday's 8 requests make, and what a cell holds for a request that stops early.
+- The exact worst case of ε below 8 of 8: my figure is a floor from one shape of placement.
+- The second try on a model's logits.
