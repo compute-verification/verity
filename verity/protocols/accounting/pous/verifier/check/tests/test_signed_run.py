@@ -18,6 +18,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import re
 import shutil
 from dataclasses import dataclass
 from functools import cache
@@ -301,6 +302,17 @@ def test_setup_accepted_is_the_certificates_hypothesis() -> None:
     assert signed["certificate"]["hypotheses"] == [*v0["certificate"]["hypotheses"], period.SETUP_ACCEPTED], signed
     assert signed["certificate"] | {"hypotheses": None} == v0["certificate"] | {"hypotheses": None}
     assert signed["gaps"] == [*v0["gaps"], *period.SIGNED_GAPS]
+
+
+def test_setup_accepted_is_one_string() -> None:
+    """The Lean's `SETUP_ACCEPTED`, its string literals joined, is the Python's: no served case reaches a point with a
+    certificate, so this holds the two to one value, and each side's own test holds its profile to it."""
+    lean = (LEAN / "PousCheck" / "SignedRun.lean").read_text()
+    body = re.search(r"^def SETUP_ACCEPTED : String :=\n((?:  .*\n)+)", lean, re.M)
+    literal = r'"(?:[^"\\]|\\.)*"'
+    assert body and re.fullmatch(rf"(?:\s*{literal}\s*(?:\+\+)?)+\s*", body.group(1)), \
+        "SignedRun.lean's SETUP_ACCEPTED is no longer string literals joined by `++`: hold it to the Python's another way"
+    assert "".join(json.loads(s) for s in re.findall(literal, body.group(1))) == period.SETUP_ACCEPTED
 
 
 @pytest.mark.slow
