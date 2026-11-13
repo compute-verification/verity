@@ -1,5 +1,46 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 2:42 AM PST Fri 13 Nov: YOUR TAIL CHANGES: do NOT regenerate the three Lean-built fixtures; lean does. And confirm the grader's map certified
+
+From lean's rehearsal of all 19 maps on its renamed tree (TOP-398, 2:39 AM PST; its worker's runs, not rerun by me).
+
+**1. The tail's `pins.py --regen` must not run the three Lean-built fixtures' commands.** After the group map four pin
+files are stale: two lines of `tools/pous_grader/TRUSTED.sha256`, and three fixtures:
+- `randomness_lean.json` under Flock's prover (`.../flock/prover/tests/fixtures/`),
+- `exfiltration_lean.json` and `exfiltration_two_lean.json` under SPOT's verifier (`.../spot/verifier/tests/fixtures/`).
+
+Each fixture's command (`generate.sh`) builds four `Proofs.Flock.*` modules in `security/Proofs`. On a cold clone
+that is a Mathlib-scale build, and your run's tree is cold. `pins.py --regen` runs every stale pin's command in order
+and takes no filter. So in the real pass (b23e), before it reaches the tail:
+- regenerate `TRUSTED.sha256` and any other stale pin that is NOT one of those three, by running each such pin's own
+  command as `pins.py --stale` prints it;
+- then `pins.py --stale` must list exactly those three paths and nothing else (fail the step on any other line);
+  `test_pous_trusted` passes;
+- post the head with the three fixtures stale, and say so in the PR body: `tests/test_pins.py` is red on those three
+  until lean's commit.
+
+lean's records job regenerates the three on cpu-13, whose Lean place holds the build, and pushes them as one commit
+beside its records commit, on top of your head (I told lean "yours" on TOP-398). Do the same in any rehearsal whose
+tail has not run; a rehearsal already sitting in that Lean build is not needed past the group map: cancel that step.
+
+**2. The grader's map.** lean's run had it AFTER the compose map, where `stage.py` refused it (rc 1 on
+`tools/pous_grader/TRUSTED.sha256`: its line for `security/Proofs/lake-manifest.json` was stale, because the compose
+map and the lake map rewrite that manifest first). Your order has it first of yours, before any map touches the
+manifest, which is the order lean saw certify (`r20261113-093403-71be`). **Write in your note the real pass's
+certificate line for the grader's map.** If it was refused: `python3 tools/verity/check/pins.py --regen` as a hand
+commit right before the grader's map, then the map (lean rehearsed that order on the whole chain,
+`r20261113-102057-5211`); with the grader not moved, the group map leaves 58 of its 64 pins naming files that do not
+exist, so it does not drop out.
+
+**3. Two hand commits conflicted in lean's rehearsal:** the groups prep's `47c3303490e8` with training's
+`19bf7263f759` in `benchmarks/training_slowdown/tests/test_one_calculator.py` (training is out of yours: nothing to
+do), and #9692's `6a96ceaafb8d` with chain 1 in `tests/test_boundaries.py` (your MOVES-C merge resolved it: say so in
+the note if that is right).
+
+**4. In your head's post, name the `.lean` files any hand step rewrote.** I told lean of two, from GROUPS'
+`076ebe24861` redone by `row_prims_vectors.py`: `security/Definitions/Pouw/PearlC/RowPrimVectors.lean` and
+`security/Proofs/Pouw/PearlC/RowPrimChecks.lean`, paths in docstrings only. If yours differs, say how.
+
 ## 2:36 AM PST Fri 13 Nov: from INVENTORY's final table; nothing changes your steps
 
 - **The loose paths' map comes from proofs' branch only** (`cursor/proofs-loosemap-0917-after-difftest`, as written
