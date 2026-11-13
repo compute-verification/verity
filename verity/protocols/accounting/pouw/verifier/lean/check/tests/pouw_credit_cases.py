@@ -44,7 +44,8 @@ tile's A and B ports at its K's values and their registered roots); its mutation
 a call the manifest lacks, prove units the prover chose under its own stream, fail or drop a sampled proof block, break K's form
 or give one past the execution phase's units, pass a `credited` refusal through, and break the descriptor (`DESC_NAMES`): its
 form, its program function's record, a template, a K no linear has, the root's nodes, a composite keyed with an input id
-that the root also calls (``decoy``, `decoy`; a live Program's ``live-decoy``), the record's layout, a record
+that the root also calls (``decoy``, `decoy`; a live Program's ``live-decoy``) or a template's body calls
+(``decoy-nested``), a root node whose callee is an input id with no definition (``input-undefined``), the record's layout, a record
 naming another layout over the same nodes (``alt-layout``), a template's A or B row of bits reading the root's 16-bit
 input words (``reinterpret``, the decoder's ``E_REINTERPRET``), or an H1 execution phase's whole descriptor with a linear, so a
 tile, at a K the tile's proof doesn't cover (``tile-k``: 2^17 or past, or no multiple of 32). Its mutations of the
@@ -758,12 +759,25 @@ def _rekey(desc: dict, old: str, new: str) -> None:
 DECOY_IDS = ["Input8_v1", "RegisteredInput8_v1"]
 
 
-def decoy(desc: dict, fid: str, body: dict) -> dict:
-    """`desc` with a composite of body `body` keyed with the input id `fid`, and one call of it at the end of its root: a
-    node an input by its callee's id alone, which a reader of ids would skip."""
+def decoy(desc: dict, fid: str, body: dict, at: str | None = None) -> dict:
+    """`desc` with a composite of body `body` keyed with the input id `fid`, and one call of it at the end of its root's
+    body (of definition `at`'s when given, a decoy below the root): a node an input by its callee's id alone, which a
+    reader of ids would skip."""
     desc["callees"].append(fid)
     desc["definitions"][fid] = {"form": "composite", "id": fid, "bindings": {}, "body": body}
-    desc["definitions"][desc["root"]]["body"]["nodes"].append({"form": "call", "fn": len(desc["callees"]) - 1})
+    desc["definitions"][at or desc["root"]]["body"]["nodes"].append({"form": "call", "fn": len(desc["callees"]) - 1})
+    return desc
+
+
+def input_undefined(rng: random.Random, desc: dict) -> dict:
+    """`desc`, wired (`_wired`), with one more root node calling an input id that no definition keys: a node an input by
+    its callee's id alone, whose definition a reader that looks the id up finds missing."""
+    fid, types = rng.choice([x for x in DECOY_IDS if x not in desc["definitions"]]), desc["types"]
+    if (t := ["Value", 8]) not in types:
+        types.append(t)
+    desc["callees"].append(fid)
+    desc["definitions"][desc["root"]]["body"]["nodes"].append(
+        {"form": "primitive", "fn": len(desc["callees"]) - 1, "args": [], "out": types.index(t)})
     return desc
 
 
@@ -957,6 +971,10 @@ def _break_desc(rng: random.Random, lay: dict, name: str, j10r: bool = False, ti
                     root[i] = {"form": "primitive", "fn": 1}
         case "decoy":
             decoy(desc, rng.choice(DECOY_IDS), {"params": [], "ret_type": ["Value", 16], "nodes": []})
+        case "decoy-nested":
+            decoy(desc, rng.choice(DECOY_IDS), {"params": [], "ret_type": ["Value", 16], "nodes": []}, tid)
+        case "input-undefined":
+            return desc_bytes(input_undefined(rng, desc)).hex()
         case "layout-form":
             lin = lay["linears"]
             desc["program_fn"] = record(tiles, rng.choice([
@@ -983,8 +1001,8 @@ def _break_desc(rng: random.Random, lay: dict, name: str, j10r: bool = False, ti
 
 
 #: each way an execution phase's committed descriptor is no H1 execution phase's, or not the one its record says
-LAYOUT_DESC_NAMES = ["descriptor-form", "not-window", "template", "tile-ks", "body", "decoy", "layout-form",
-                     "record-layout", "alt-layout", "reinterpret"]
+LAYOUT_DESC_NAMES = ["descriptor-form", "not-window", "template", "tile-ks", "body", "decoy", "decoy-nested",
+                     "input-undefined", "layout-form", "record-layout", "alt-layout", "reinterpret"]
 #: and an H1 execution phase's, its record and its nodes alike, with a tile at a K its proof doesn't cover
 DESC_NAMES = [*LAYOUT_DESC_NAMES, "tile-k"]
 
@@ -1791,19 +1809,33 @@ def window_instance(rng: random.Random, name: str = "honest", lay: dict | None =
     return {k: d[k] for k in WINDOW_KEYS}
 
 
-def decoy_window(rng: random.Random, live: bool = False) -> dict:
-    """A `window` case honest in everything but a decoy (`decoy`) in its circuit's root, or with `live` in its live
-    Program's: its commitments, proof outcomes and ledger are over that descriptor, as a prover who built its execution phase on
-    it presents them. A reader of ids alone skips the node and credits the execution phase."""
-    if live:
+#: where `decoy_window` puts its decoy: its circuit's root, a template's body below it, a root node calling an input id
+#: with no definition (`input_undefined`), or its live Program's root
+DECOY_WHERE = ["root", "template", "undefined", "live"]
+
+
+def decoy_window(rng: random.Random, where: str = "root") -> dict:
+    """A `window` case honest in everything but a decoy (`decoy`) where `where` (`DECOY_WHERE`) puts it: its commitments,
+    proof outcomes and ledger are over that descriptor, as a prover who built its execution phase on it presents them. A
+    reader of ids alone skips the node and credits the execution phase."""
+    if where == "live":
         d = window_instance(rng, "live-decoy")
         program = hashlib.sha512(bytes.fromhex(d["live"]["descriptor"])).hexdigest()
         d["live"]["proofs"] = [{**p, "program": program} for p in d["live"]["proofs"]]
         return d
     lay, prefix = layout(rng), f"h1/w-{rng.randrange(100)}/"
-    desc = decoy(window_desc(rng, lay, prefix), rng.choice(DECOY_IDS),
-                 {"params": [], "ret_type": ["Value", 16], "nodes": []})
-    return window_instance(rng, "honest", lay, desc_bytes(_wired(desc)).hex(), prefix)
+    desc, body = window_desc(rng, lay, prefix), {"params": [], "ret_type": ["Value", 16], "nodes": []}
+    match where:
+        case "root":
+            raw = desc_bytes(_wired(decoy(desc, rng.choice(DECOY_IDS), body)))
+        case "template":
+            tid = rng.choice(json.loads(dict(Cr._record(desc["program_fn"]))["TILES"]))[1]["fn"]
+            raw = desc_bytes(_wired(decoy(desc, rng.choice(DECOY_IDS), body, tid)))
+        case "undefined":
+            raw = desc_bytes(input_undefined(rng, desc))
+        case _:
+            raise ValueError(where)
+    return window_instance(rng, "honest", lay, raw.hex(), prefix)
 
 
 #: each way an execution phase's registered weights are not the ones its credit period's open signed and its open root binds

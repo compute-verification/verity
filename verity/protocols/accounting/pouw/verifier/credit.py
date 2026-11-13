@@ -939,10 +939,10 @@ def _misreads(body: Any, types: list) -> bool:
 
 
 def _undecoded(d: dict) -> bool:
-    """Whether `Flock.Program.decode` refuses a definition it reads of the descriptor `d` (one `_parsed` accepted): one
-    keyed with an input id that is no primitive (the codec's "an input id keys only the input primitive"), or a
-    composite that reads a word at another width than it was committed with (`_misreads`, the codec's
-    ``E_REINTERPRET``).
+    """Whether `Flock.Program.decode` refuses a definition it reads of the descriptor `d` (one `_parsed` accepted): an
+    input id whose entry is no primitive's, missing or not an object among them (`program.is_input_entry`; the codec's
+    "an input id keys only the input primitive"), or a composite that reads a word at another width than it was
+    committed with (`_misreads`, the codec's ``E_REINTERPRET``).
     The definitions it reads are the root and the ones its program function's record names, then each composite's
     binding statics' functions and its nodes' callees, as the decoder follows them."""
     defs, callees, seen = d["definitions"], d["callees"], set()
@@ -956,7 +956,7 @@ def _undecoded(d: dict) -> bool:
     while todo:
         fid = todo.pop()
         x = defs.get(fid) if type(fid) is str and fid not in seen else None
-        if isinstance(x, dict) and x.get("form") != "primitive" and input_id(fid) is not None:
+        if type(fid) is str and input_id(fid) is not None and not is_input_entry(fid, defs.get(fid)):
             return True
         if not (isinstance(x, dict) and x.get("form") == "composite"):
             continue
