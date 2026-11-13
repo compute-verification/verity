@@ -824,7 +824,7 @@ def test_the_export_ships_the_fetched_fixtures_its_boundary_names(judged, tmp_pa
                                            ("3", "verity/pub/other.bin"), ("4", "tools/secret/s.json"),
                                            ("5", "verity/pub/imports.py"))}
     (root / "fixtures").mkdir()
-    (root / "fixtures" / "artifacts.json").write_text(json.dumps(reg), encoding="utf-8")
+    (root / "artifacts.json").write_text(json.dumps(reg), encoding="utf-8")
     sizes = {"verity/pub/data/w.json": 3, "verity/pub/data/set/a": 1, "verity/pub/data/set/b/c": 2}
     asked: list[list[str]] = []
 
