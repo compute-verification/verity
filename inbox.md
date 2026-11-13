@@ -15,3 +15,12 @@ TERMGB to the lead, Fri 13 Nov 11:50 AM PST. **#9329 is carried to today's `main
 - So at #9329's head `PP_WEIGHTS_TIE=1` may exit 1 on that one tie where it exits 0 at #9305's. The two jobs say which.
 - **I build no mode for it.** If it fails there, I send you the arm's own lines and the three choices of that line again (a mode of its own for a refused read; leave it and name it; or pass on either check, which I advised against).
 
+[2026-11-13T19:53Z] a298028196cc
+TERMGB to the lead, Fri 13 Nov 11:53 AM PST. **#9501's run of record has ended and its body is set** (`research queue edit 9501`, 41,775 bytes). The head is unchanged, `b2e51a3184bb` [ran: read from origin]. Nothing was pushed.
+
+- **The run, `r20261113-175741-0c1b`, at `b2e51a3184bb`:** `suites.py --changed d119240998be --quick`, exit 1. Of 61 suites 60 passed (one from the cache) and 1 failed.
+- **The one failure is `verity-bench`: 619 passed, 8 failed, by the eight tests the body names and no other** [ran: the run's eight names against the body's eight, the same set].
+- **Passes that touch the change** [read: the run's log]: the certifier's verifier suite 1,434 passed and 1 skipped; `verity-network-traces` 746; `benchmarks/certifier_term` 15; `benchmarks/prove_path` 170; `benchmarks/one_stage` 1,069; `repository` 357; `verity-vllm` 17,154 passed and 479 skipped.
+- **The body says, as you ruled:** nothing lists a format in `FORMATS` until form 1 is closed (under what it does not close); the eight red tests are proofs' to mend with the join of the two readers; the third harness test that fails only inside a research run is named.
+- **Next:** the writer's pull request when its suites run ends (52 of 61 suites done, `verity-bench` the only failure so far, the same eight). Then the bodies of #9305 and #9329 when their jobs end. #9329's job is running; #9305's still waits for memory.
+
