@@ -1612,7 +1612,7 @@ def test_a_lean_package_s_lean_file_and_its_lock_are_lean_inputs_and_its_prose_a
     Its README, its pytest files and their settings and its .gitignore, which no audit reads, are not, nor a file beside or
     above the package or in a directory named like it."""
     pouw, rand, pous = ("verity/protocols/pouw/verifier/lean/check", "verity/commitments/randomness",
-                        "verity/protocols/pous/lean")
+                        "tools/pous_grader")
     lean = [f"{pouw}/lakefile.toml", f"{pouw}/lake-manifest.json", f"{pouw}/lean-toolchain", f"{pouw}/PouwCheck/Credit.lean",
             f"{pouw}/models.json", f"{pouw}/tests/pouw_check_cases.py", f"{pouw}/inner/lakefile.toml", f"{pouw}/inner/data.json",
             f"{rand}/lakefile.lean", f"{rand}/__init__.py", f"{rand}/tests/vectors.json",
