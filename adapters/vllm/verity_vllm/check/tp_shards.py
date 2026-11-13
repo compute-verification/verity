@@ -8,6 +8,8 @@ from typing import Any
 
 import numpy as np
 
+__all__ = ["kv_heads_replicated", "replicated_qkv", "rows_of", "shard_dim", "shard_dim0"]
+
 
 def shard_dim0(a: np.ndarray, world: int, rank: int) -> np.ndarray:
     return shard_dim(a, 0, world, rank)
