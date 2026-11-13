@@ -58,7 +58,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from verity.definitions.circuits.census import FAMILY_COUNTS, serves_none
+from verity.circuits.census import FAMILY_COUNTS, serves_none
 from verity.circuits.defs import bind, composite
 from verity.circuits.ports import In, Ports
 from verity.circuits.refs import Coll, broadcast, concat
