@@ -1,8 +1,9 @@
 """`verity_vllm.pipeline.tp.fold_match` where a stage stops or a command line is refused: a stage's subprocess that outlives its
 timeout, a rank whose fold is not ok, a GM-01 that fails, a GP-01 Program given without a workload, the shared X-09 (GM-01 before
 the compare, and once), a rank's further request Programs in the spelling for any world, a provenance record that cannot be read
-or holds none, and the command lines `main` refuses.  No stage's subprocess runs here: `subprocess.run` is a stand-in where
-`_run` is the subject, and `main` runs on the stand-in stages of `test_tp_fold_match_records`."""
+or holds none, a stage's document that parses and is not a mapping, and the command lines `main` refuses.  No stage's
+subprocess runs here: `subprocess.run` is a stand-in where `_run` is the subject, and `main` runs on the stand-in stages of
+`test_tp_fold_match_records`."""
 from __future__ import annotations
 
 import hashlib
@@ -51,6 +52,47 @@ def test_a_stage_that_ends_exits_with_its_own_code_and_its_log_names_no_timeout(
     assert FM._run(["py", "-m", "stage"], log, 7) == 3 and log.read_text() == "$ py -m stage\n"
     assert (asked["cmd"], asked["timeout"], asked["stderr"]) == (["py", "-m", "stage"], 7, subprocess.STDOUT)
     assert FM._run(["py"], log) == 3 and asked["timeout"] is None
+
+
+# a stage's document that is not a mapping
+
+#: JSON that parses to something no stage writes: each stage's document is a mapping
+NOT_MAPPINGS = ["[1]", "[]", '"fold"', "7", "true"]
+
+
+@pytest.mark.parametrize("text", NOT_MAPPINGS)
+def test_a_stages_document_that_is_not_a_mapping_reads_as_none_written(tmp_path, text):
+    (tmp_path / "document.json").write_text(text)
+    assert FM._load(tmp_path / "document.json") is None
+    (tmp_path / "document.json").write_text('{"verdict": "PASS"}')
+    assert FM._load(tmp_path / "document.json") == {"verdict": "PASS"}
+
+
+@pytest.mark.parametrize("text", NOT_MAPPINGS)
+def test_a_fold_summary_that_is_not_a_mapping_states_no_rank_and_no_collective(tmp_path, monkeypatch, text):
+    fold = FR._fold(tmp_path, monkeypatch, None, text=text)
+    assert (fold["tp"], fold["collectives"], fold["collectives_by_kind"], fold["error_examples"], fold["errors"]) == (None, 0, None, [], None)
+
+
+@pytest.mark.parametrize("text", NOT_MAPPINGS)
+def test_a_compare_a_decomposition_or_a_global_match_that_is_not_a_mapping_fails_as_one_that_wrote_none(tmp_path, monkeypatch, text):
+    for name in ("match_compare", "match_dag", "match_decomp", "global_match"):
+        (tmp_path / f"{name}.json").write_text(text)
+    assert FR._compare(tmp_path, monkeypatch, 0, [])["verdict"] == "FAIL canonical_equal=None dag_multiset_equal=False steps=None/None operands_different=None rc=0"
+    assert FR._compare(tmp_path, monkeypatch, 0, ["d1"])["verdict"] == "FAIL batch_decomp None rc=0: "
+    got = FM.global_match_rank("py", tmp_path, tmp_path / "gp.json", tmp_path / "wl.json", "dag", None)
+    assert (got["verdict"], got["ok"], got["checks"], got["generated_lengths"]) == ("rc=0", False, {}, {})
+
+
+@pytest.mark.parametrize("text", NOT_MAPPINGS)
+def test_under_reuse_legs_a_document_that_is_not_a_mapping_is_not_kept_and_its_stage_runs_again(tmp_path, monkeypatch, text):
+    ran: list[list[str]] = []
+    monkeypatch.setattr(FM, "_run", lambda cmd, log, timeout=None: ran.append(cmd) or 5)
+    document = tmp_path / "match_compare.json"
+    document.write_text(text)
+    assert FM._run_unless(True, document, ["py", "-m", "stage"], tmp_path / "match_compare.log", None) == 5 and ran == [["py", "-m", "stage"]]
+    document.write_text("{}")
+    assert FM._run_unless(True, document, ["py", "-m", "stage"], tmp_path / "match_compare.log", None) == 0 and len(ran) == 1
 
 
 # a rank's stages
@@ -250,8 +292,10 @@ def test_the_provenance_record_read_is_named_by_its_path_its_digest_and_the_reco
     assert doc["tp2_match"] == {"path": str(path), "sha256": hashlib.sha256(text.encode()).hexdigest(), "recorder_sha256": {"0": "aa", "1": "bb"}}
 
 
-@pytest.mark.parametrize("text", ["{}", '{"provenance": null}', "{", "[]", FR.NESTED],
-                         ids=["no provenance", "a null provenance", "not JSON", "an empty list", "nested past the parser's depth"])
+@pytest.mark.parametrize("text", ["{}", '{"provenance": null}', "{", FR.NESTED, *NOT_MAPPINGS,
+                                  '{"provenance": [1]}', '{"provenance": []}', '{"provenance": "pass"}', '{"provenance": 0}', '{"provenance": true}'],
+                         ids=["no provenance", "a null provenance", "not JSON", "nested past the parser's depth", *NOT_MAPPINGS,
+                              "a list for it", "an empty list for it", "text for it", "a number for it", "true for it"])
 def test_a_match_record_that_holds_no_provenance_is_named_by_its_digest_and_fails_the_cross_rank_check_by_name(tmp_path, monkeypatch, text):
     rc, doc, rank_match, given, path = _provenance(tmp_path, monkeypatch, lambda p: p.write_text(text))
     assert rc == 1 and doc["problems"] == [f"{path}: no provenance record"]
