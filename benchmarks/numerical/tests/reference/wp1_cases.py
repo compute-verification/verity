@@ -1,4 +1,4 @@
-"""Case sources shared by the WP1 tests and the recorded exhaustive driver: fixture loaders, structured and random transition-unit
+"""Case sources shared by this directory's tests and the recorded exhaustive driver: fixture loaders, structured and random transition-unit
 cases, boundary groups for ``group_sum``.  Stdlib only; deterministic (fixed seeds)."""
 
 from __future__ import annotations

@@ -1,7 +1,18 @@
 """`verity bench exfiltration`: GLM-5.3's exfiltration capacity over a monitoring period at a share of total compute
-(10% by default), in GB, as two parts side by side with every input labelled measured, modeled or assumed. It
-computes neither part itself: it composes the two calculators that do, and runs on any machine that reaches the
-store, with no GPU and no node.
+(10% by default), in GB, as two parts side by side with every input labelled measured, modeled, simulated, assumed,
+missing or run, not proved. It computes neither part itself: it composes the two calculators that do, and runs on any
+machine that reaches the store, with no GPU and no node.
+
+* **The share of total compute** is given (`--share`) and assumed. Beside it the command prints the share a served
+  two-stage run measures (`served_share`, `--served-run`): the audit's GPU-seconds on the run (its proving, staging,
+  replay and interior commitment, and the serving charge over stock vLLM on the same load) over the window's serving
+  GPU-seconds, each read from the run's record and marked measured, a field the record lacks marked missing with its
+  gap and the share then not claimed; and where it is claimed, the compute audit's part at it beside the part at the
+  given share. A part whose entries are all on 0 GPUs adds no GPU-seconds and is printed `ON_CPUS` beside its 0.
+  Proving read from its sessions' seconds, their wait included (`PROVE_SOURCE`), is measured, at most, and so is the
+  share that sums it. Without a record it prints the share as `NO_RUN`. With a record the resampling holes are read at the served run's
+  own commits (`spot_status.served`), and where the tree holds `served_row`, its section on what the audit showed
+  is printed between the figures and the holes.
 
 * **The compute audit's part** is the break-even planner's bound, read from its rows of record. A record is named in
   the store, never in code (`served_table`'s rule): the runs that carry `run_of_record=RECORD` and no `superseded_by`,
@@ -14,9 +25,12 @@ store, with no GPU and no node.
   in β, a least-squares line over the pinned budgets, and ln(bound) is linear in ln β between the two that bracket
   it. The row plans for the weights / λ (`weights_bits / target_bits`), and the part is λ times its bound. The requests
   a row is priced over are its sampled replays over the probability a request is sampled (`replay_sample / q`); its
-  `requests` field is the planner's default scope's count, another request's, and is not read.
+  `requests` field is the planner's default scope's count, another request's, and is not read. That part is the
+  headline figure; the planner's driver prints the same rows' bound at the plan's own budget (`headline plan`) and,
+  times λ, at the share between the two pinned budgets that bracket it (`headline rows`), and the print says so.
 * **How that part's proving is priced** is read from the row's plan: each block family's share of the plan's proving
-  time, each family priced as the rows say (`split.families`, `priced`). A row's `split` is its own plan where it says
+  time, each family priced as the rows say (`split.families`: its share by way, `ways`, else its ways, `priced`); a
+  way is marked measured only where it is one of `MEASURED_WAYS`. A row's `split` is its own plan where it says
   the `q` and the sampled replays it is the plan of and they are the row's; the command then reads the row at the
   pinned budget nearest the one it reads the bound at. A `split` that doesn't is not the row's plan (it is written
   before the row's levers multiply its blocks) and its shares are not read. A run of record may instead hold the plan
@@ -24,7 +38,8 @@ store, with no GPU and no node.
   held to the rows it is read with: the same requests, and the rows' bound at its budget. With neither the command
   says so and marks no proving measured.
 * **What prices that part's proving** is read from the row's own plan too (`_sources`): the share each source prices
-  (`SOURCES`: a block type's own steady-state row, its Definition's family row, the planner's price), as the row's
+  (`SOURCES`: a block type's own steady-state row, its Definition's family row, the planner's price, and any other
+  the row names, such as the Lean verifier's seconds that no row times), as the row's
   `split.sources` records it, else by its `split.basis`, and the share at the planner's assumed default
   (`DEFAULT_BASIS`). A row whose plan records neither is printed as "not recorded".
 * **Row `ASSUMED_ROW`** prices its proving at the planner's assumed prices. Beside another row it is read at the
@@ -36,6 +51,11 @@ store, with no GPU and no node.
   at the calculator's jitter bound of record (`OF_RECORD`, two release schedules). A figure at its other jitter
   bound, and every figure of a row that carries the calculator's label (the row's `with_set_time_card`), is printed
   only under that label, which the command reads from the document and never spells itself.
+* **The security level** is the row's binding bound, the planner's (`_binding`: the row's `verification_phase`'s
+  `binding`): the two-stage first-hit finder's bound over one verification phase of the row's design and over the
+  world's year of them, each counted in calls and in compressions, the inputs it assumes, and what Lean proves of
+  each, a theorem of `LEAN_NUMBERS` by name or `NOT_PROVED`. The command computes none of it, names each figure by
+  what it is over, and says so where the rows hold no bound.
 * **Every figure carries the error summed over everything it covers**, and a figure whose error is 1 or more is
   printed as `NO_BOUND`, with that error and no amount. The compute audit's part fails with at most its rows' δ over
   the monitoring period. The network certifier's fails with at most the ε of its row (`eps`): its scans' δ summed over
@@ -59,6 +79,15 @@ sums under the rows whose schedules are 0, the lengths held by a stop block, tak
 Until a served audit has sampled a stop block the server chooses that count, which the network certifier's row
 `OUTPUT_COUNT` charges as its schedules: the command prints it beside those sums, marked assumed.
 
+* **The stop class's verdicts** move that mark, and only that one. A record named in the store (`VERDICTS`), its runs
+  each holding verdicts' records in `VERDICTS_FILE`, one a line in the shape `VERDICT_FIELDS` (a record lacking a
+  field is refused by its name), gives the four verdicts a stop class needs (`PIECES`) and the negative controls
+  (`CONTROLS`). Where every piece is accepted and complete and every control refused by the verifier that accepted
+  its piece (`stop_class`), the output count's 0 is marked `RUN_NOT_PROVED`, printed "run (Python verifier, not
+  proved)" with each verdict's run and verifier and counted apart from `measured`; it is `measured` only where every
+  piece's record names the Lean guarantee that proves its verifier (`proved_by`). Otherwise the print names what is
+  missing and the mark stays assumed. With no such record the print is as it was without one.
+
 The command refuses a record nothing carries and a scope two unsuperseded runs both hold, and says how to label it.
 A run of record that is superseded, or holds no rows of the case, is left out and listed under "Refused".
 """
@@ -67,15 +96,17 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import importlib.util
 import json
 import math
+import re
 import sys
 from collections.abc import Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from verity_bench import jobs
+from verity_bench import jobs, spot_status
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, record_runs, records
 
 SCHEMA = "exfiltration/v3"
@@ -111,6 +142,10 @@ VARIANT = "h8"
 CASE_KEYS = ("world", "row", "step", "scope", VARIANT)
 #: how a block family is priced where the rows don't say
 UNSTATED = "in no stated way"
+#: the ways of the rows' `split.priced` whose proving time is measured: the planner's measured price, and a block
+#: type's own steady-state row in `verity bench prove`'s table (`steady`); a family's row times another type and is
+#: modeled, as is every other way
+MEASURED_WAYS = ("measured", "steady")
 #: what prices a plan's proving, by the planner's driver's names (`split.sources`): a block type's own steady-state
 #: row, its Definition's at the same static K, and the planner's price
 SOURCES = ("own row", "family row", "planner's price")
@@ -148,10 +183,85 @@ TOGETHER = {"scan": "as the scan's check charges it today", "N2": "as N2 charges
 #: it: the design before a served audit has sampled a stop block
 OUTPUT_COUNT = "design, no stop block"
 GB = 8e9
-MARKS = ("measured", "modeled", "assumed")
+#: an input whose value a run's verdicts give, each checked by a verifier no Lean proof covers yet, and how it prints
+RUN_NOT_PROVED = "run, not proved"
+PRINTED = {RUN_NOT_PROVED: "run (Python verifier, not proved)"}
+#: a served run's proving read from a session's seconds, waiting included, and every share that sums it: an upper bound
+AT_MOST = ", at most"
+#: an input's marks: `missing` is a served run's field its record lacks, which the share it would measure is not claimed
+#: without; `RUN_NOT_PROVED` is never `measured`, which a verdict is only where its record names the Lean guarantee
+#: that proves its verifier (`proved_by`)
+MARKS = ("measured", "modeled", "simulated", "assumed", "missing", RUN_NOT_PROVED, "measured" + AT_MOST,
+         "modeled" + AT_MOST)
+#: how the count of inputs names the upper bounds' marks
+BOUNDS = {"measured" + AT_MOST: "measured upper bounds", "modeled" + AT_MOST: "modeled upper bounds"}
+#: the record whose runs hold the verdicts on the stop class, each verdict's record one JSON object a line of
+#: `VERDICTS_FILE` in a run's files
+VERDICTS = "exfiltration-glm53-stop-verdicts"
+VERDICTS_FILE = "out/verdicts.jsonl"
+#: the four verdicts on a stop class (a verdict's `piece`), each accepted and complete, before the sums under the rows
+#: whose schedules are 0 take a response's output count at 0 on a run: one missing or not accepted, and none does
+PIECES = {"stop_record": "the stop record", "response_tie": "the response tie", "request_tie": "the request tie",
+          "second_stage": "the compute audit's second stage"}
+#: the negative controls (a verdict's `control`; null on the honest run): a run on the same path with one thing changed,
+#: each refused by the verifier that accepted the honest run's verdict on the same piece
+CONTROLS = {"id": "a changed id", "max_tokens": "a changed `max_tokens`"}
+#: a verdict: accepted and complete, accepted and not complete (which moves no figure), refused, or withheld: the
+#: verifier held back its last accept itself because the form it would accept is not yet proved (every SPOT proof
+#: accepted, every check before the sample held, every tampered input refused), which is neither an accept nor a refusal
+VERDICT_READS = ("accept", "not complete", "refuse", "withheld")
+#: a verdict's record: its `piece` and `control`, the `run` that produced it, the `verifier` that checked it (its
+#: `module` and `commit`), the `verdict`, `proved_by` (the Lean guarantee whose proof covers that verifier, null until
+#: one does) and `open` (while `proved_by` is null, what stands between the verdict and proved, stated in words)
+VERDICT_FIELDS = ("piece", "control", "run", "verifier", "verdict", "proved_by", "open")
+VERIFIER_FIELDS = ("module", "commit")
+#: an issue's id, which the print never carries: `open` states what is open, and the issue is on the board (SHA-512
+#: is a hash's name, not an issue)
+ISSUE_ID = re.compile(r"\b(?!SHA-)[A-Z]+-[0-9]+\b")
+#: the audit's GPU time on a served two-stage run, by part, which the share of compute it measures sums: what each part
+#: is, and why a run's record lacks it where it does
+SERVED_PARTS = {
+    "prove": ("the sessions' proving", "the two-stage audit's record keeps each session's proving seconds "
+              "(`audit.timing`) and not the GPUs it held"),
+    "staging": ("staging the sampled proof blocks for their sessions", "the one-stage audit times its staging "
+                "(`staged_s`) and its summary leaves the seconds out"),
+    "replay": ("the replay of the sampled spans", "the two-stage audit reads no clock over its replay"),
+    "interior": ("the interior commitment of the sampled spans' proof blocks",
+                 "the two-stage audit reads no clock over its interior commitment"),
+    "serving_charge": ("serving under Verity over stock vLLM serving the same load", "no stock serve of the window's "
+                       "load (`stock`) and no serving cost of the served arm over stock (`serving_cost`, "
+                       "`verity bench serve_tax`)"),
+}
+#: the record's field that says which seconds a session's proving is (`prove`): ``busy``, the proof server's busy
+#: seconds on a card, measured; or ``session``, a session's seconds, its wait behind the others of its prover included,
+#: measured, at most
+PROVE_SOURCE = "prove_seconds_source"
+PROVE_SOURCES = {"busy": ("measured", "the proof server's busy seconds a card"),
+                 "session": ("measured" + AT_MOST, "a session's seconds, its wait included: an upper bound")}
+PROVE_SOURCE_GAP = ("the record doesn't say whether a session's proving seconds are the proof server's busy seconds or "
+                    "the whole session's, its wait included (`audit.timing`'s `prove_seconds_source`)")
+#: why a run's record lacks the window's serving, which the share is of
+SERVING_GAP = ("the window's serve is not tied to the audit's record: its load's seconds and GPUs (serve_tax's "
+               "`meta.json`: `wall_s`, `gpu`) are in the serve's own run")
+#: what the command prints for the share a served run measures where no record is given
+NO_RUN = "not measured: no served run's record"
+#: what the command prints beside a served run's part whose entries are all on 0 GPUs, so its 0 doesn't read as GPU
+#: time given free
+ON_CPUS = "on CPUs: no GPU-seconds"
 #: the inputs both parts read: the fleet and what a request of the plan is, which give the requests, and the weights
 SHARED = ("world_machines", "datacenter_machines", "machine_gpus", "mfu_serve", "peak_flops", "request_tokens",
           "token_macs", "world_requests", "request_count", "weights")
+#: the part of the inputs a row's binding bound assumes, and what the bound is called
+SECURITY = "security level"
+#: where the Lean instances a binding bound names are declared
+LEAN_NUMBERS = "Claims.Flock.Numbers"
+#: a Lean instance's numerals, as a binding bound names them (`lean.past`), in the bound's own symbols
+NUMERALS = {"T": "calls a run", "e": "reruns a session (e_s)", "Ns": "sessions (N_s)", "Ks": "classes of gates (K_s)",
+            "Km": "classes of gates, session by session (K_m)", "c": "calls of the run's own opening checks (c)"}
+#: the Lean statement whose right-hand side a binding bound counted in calls is
+LEAN_BOUND = "CompiledTwo.eventTwoX_le_cls_at_budget"
+#: printed where no Lean theorem gives a number at a design's sizes
+NOT_PROVED = "not proved at these sizes"
 
 
 def _load(root: Path, directory: str, module: str) -> Any:
@@ -170,22 +280,31 @@ def _label(key: str = RUN_OF_RECORD, value: str = RECORD) -> str:
     return f"`research data label RUN {key} {value} --by LANE`"
 
 
+def _run_files(store: Any, run: str, names: Sequence[str]) -> tuple[Path | None, list[str], str | None]:
+    """Where the files ``names`` of a run's files that it holds are fetched to, and which it holds; or why it has none:
+    the run is not in the store, or kept no run files."""
+
+    attempt = store.get_attempt(run)
+    if attempt is None:
+        return None, [], "not in the store or on its remote"
+    out = attempt.get("outputs") or {}
+    files = out.get("run_files") or out.get("run_record")
+    if not files:
+        return None, [], "kept no run files"
+    held = [name for name in names if store.listing(files, [name])]
+    return (Path(store.fetch(files, paths=held)) if held else None), held, None
+
+
 def read_run(store: Any, run: str) -> tuple[list[dict], dict | None, str | None]:
     """The planner's rows and the plan in a run's files, either of which it may lack, or why the run holds neither or
     is not read. The rows are its rows files' (`ROWS_FILES`), a case's over a scope the first file's that holds them; a
     later file that holds other rows of that case and scope leaves the run unread."""
 
-    attempt = store.get_attempt(run)
-    if attempt is None:
-        return [], None, "not in the store or on its remote"
-    out = attempt.get("outputs") or {}
-    files = out.get("run_files") or out.get("run_record")
-    if not files:
-        return [], None, "kept no run files"
-    held = [name for name in (*ROWS_FILES, PLAN_FILE) if store.listing(files, [name])]
-    if not held:
+    at, held, why = _run_files(store, run, (*ROWS_FILES, PLAN_FILE))
+    if why:
+        return [], None, why
+    if at is None:
         return [], None, f"holds no planner rows ({', '.join(f'`{n}`' for n in ROWS_FILES)}) and no plan (`{PLAN_FILE}`)"
-    at = Path(store.fetch(files, paths=held))
     rows: list[dict] = []
     first: dict[tuple, tuple[str, list[str]]] = {}
     for name in (n for n in ROWS_FILES if n in held):
@@ -297,14 +416,20 @@ def _requests(x: Mapping) -> float | None:
 def _priced(shares: Mapping[str, float], said: Mapping) -> dict[str, dict]:
     """A plan's proving time by how its block families are priced: each way's share of it and its families with
     theirs, largest first. ``shares`` are the plan's, by family; how a family is priced is the rows' account
-    (``said``, their `split.families`, `priced`), and `UNSTATED` for a family they don't name."""
+    (``said``, their `split.families`): its share by way (`ways`), split in their proportion, else its ways
+    (`priced`) joined, and `UNSTATED` for a family they don't name."""
 
     out: dict[str, dict] = {}
     for family, its in sorted(shares.items(), key=lambda kv: -kv[1]):
-        ways = (said.get(family) or {}).get("priced")
-        way = out.setdefault(" and ".join(sorted(ways, reverse=True)) if ways else UNSTATED, {"share": 0.0, "families": {}})
-        way["share"] += its
-        way["families"][family] = its
+        f = said.get(family) or {}
+        by = {k: v for k, v in (f.get("ways") or {}).items() if v > 0}
+        total = sum(by.values())
+        ways = ({k: v / total for k, v in sorted(by.items(), key=lambda kv: -kv[1])} if total > 0 else
+                {" and ".join(sorted(f["priced"], reverse=True)) if f.get("priced") else UNSTATED: 1.0})
+        for name, w in ways.items():
+            way = out.setdefault(name, {"share": 0.0, "families": {}})
+            way["share"] += its * w
+            way["families"][family] = its * w
     return out
 
 
@@ -398,7 +523,156 @@ def at_share(scope: str, run: str, rows: Sequence[Mapping], share: float,
             "bound": {"bits": bits, "GB": bits / GB}, "bits": bits * lam, "GB": bits * lam / GB,
             "parts": {p: _between(rows, p, beta) for p in PARTS if all(r.get(p) is not None for r in rows)},
             "priced": _held(scope, run, rows, counts[0], *plan) if plan
-            else _own(run, min(rows, key=lambda r: abs(r["b10"] - beta)))}
+            else _own(run, min(rows, key=lambda r: abs(r["b10"] - beta))),
+            "binding": _binding(run, min(rows, key=lambda r: abs(r["b10"] - beta)))}
+
+
+def _binding(run: str, row: Mapping) -> dict | None:
+    """A row's binding bound as the planner wrote it (its `verification_phase`'s `binding`): the two-stage first-hit
+    finder's bound of one verification phase of the row's design and of its scope of them, each counted in calls and
+    in compressions, with the inputs it assumes and what Lean proves of one phase; beside it the row's budget and the
+    phase's counts it is at. None for a row written before the planner computed one. The command computes none."""
+
+    phase = row.get("verification_phase") or {}
+    if not (bound := phase.get("binding")):
+        return None
+    return {"run": run, "beta": row["b10"], "scope": row["scope"],
+            **{k: phase.get(k) for k in ("name", "seconds", "machines", "sampled", "sessions")}, **bound}
+
+
+# ---- the stop class's verdicts ---------------------------------------------------------------------------------------
+
+
+def verdict(x: Any, where: str) -> dict:
+    """A verdict's record (`VERDICT_FIELDS`), refused where it lacks a field, by the field's name, or where a field
+    holds what that field can't."""
+
+    if not isinstance(x, Mapping):
+        raise ValueError(f"{where} is a verdict's record, one JSON object, not {type(x).__name__}")
+    if lacks := [f"`{k}`" for k in VERDICT_FIELDS if k not in x]:
+        raise ValueError(f"{where} lacks {', '.join(lacks)}: a verdict's record holds "
+                         f"{', '.join(f'`{k}`' for k in VERDICT_FIELDS)} (`VERDICT_FIELDS` in "
+                         "benchmarks/harness/verity_bench/exfiltration.py)")
+    v = x["verifier"]
+    if lacks := [f"`verifier.{k}`" for k in VERIFIER_FIELDS
+                 if not (isinstance(v, Mapping) and isinstance(v.get(k), str) and v[k])]:
+        raise ValueError(f"{where} lacks {', '.join(lacks)}: a verdict's verifier is its module and the commit it ran at")
+
+    def text(k: str) -> bool:
+        return isinstance(x[k], str) and bool(x[k])
+
+    for ok, why in ((x["piece"] in PIECES, f"`piece` is one of {', '.join(PIECES)}"),
+                    (x["control"] is None or x["control"] in CONTROLS,
+                     f"`control` is null on the honest run, else one of {', '.join(CONTROLS)}"),
+                    (text("run"), "`run` is the id of the run that produced the verdict"),
+                    (x["verdict"] in VERDICT_READS, f"`verdict` is one of {', '.join(VERDICT_READS)}"),
+                    (x["proved_by"] is None or text("proved_by"),
+                     "`proved_by` is null, or the Lean guarantee whose proof covers the verifier"),
+                    (x["proved_by"] is not None or text("open"),
+                     "`open` states what stands between the verdict and proved, while `proved_by` is null"),
+                    (x["verdict"] != "withheld" or text("open"),
+                     "`open` states what the verifier withheld its accept for, on a `withheld` verdict"),
+                    (not (isinstance(x["open"], str) and ISSUE_ID.search(x["open"])),
+                     "`open` names an issue, and the print carries no issue's id: state what is open in words (e.g. "
+                     "`the two-round form's soundness is not proved`), and put the issue on the board")):
+        if not ok:
+            raise ValueError(f"{where} holds {', '.join(f'`{k}` {x[k]!r}' for k in VERDICT_FIELDS if k != 'verifier')}: "
+                             f"{why}")
+    return {k: x[k] for k in VERDICT_FIELDS} | {"verifier": {k: v[k] for k in VERIFIER_FIELDS}}
+
+
+def _what(v: Mapping) -> str:
+    return PIECES[v["piece"]] + ("" if v["control"] is None else f", the control with {CONTROLS[v['control']]}")
+
+
+def stop_verdicts(store: Any) -> tuple[list[dict], list[str], list[dict]] | None:
+    """The stop class's verdicts of record (`verdict`), the runs read and the runs left out with why; None where
+    nothing in the store carries `run_of_record=VERDICTS`. Every labelled run not superseded is read, each verdict's
+    record a line of its `VERDICTS_FILE`, and a verdict on one piece and control that two records hold is refused."""
+
+    labelled = record_runs(store, records(store).get(VERDICTS, []))
+    if not labelled:
+        return None
+    held: dict[tuple, tuple[str, dict]] = {}
+    runs, refused = [], []
+    for run in sorted({run for run, _ in labelled}):
+        at, why = None, None
+        if superseded := [str(lab.value) for lab in store.labels(run, key=SUPERSEDED_BY)]:
+            why = f"superseded by {', '.join(superseded)}"
+        else:
+            at, _, why = _run_files(store, run, (VERDICTS_FILE,))
+            why = why or (None if at else f"holds no verdicts (`{VERDICTS_FILE}`)")
+        if why:
+            refused.append({"target": run, "record": VERDICTS, "why": why})
+            continue
+        for n, line in enumerate((at / VERDICTS_FILE).read_text().splitlines(), 1):
+            if not line.strip():
+                continue
+            where = f"{run}'s `{VERDICTS_FILE}` line {n}"
+            try:
+                v = verdict(json.loads(line), where)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"{where} is no JSON object: {e}") from e
+            key = (v["piece"], v["control"])
+            if key in held:
+                other = held[key][0]
+                raise ValueError(f"{run} holds two verdicts on {_what(v)}" if other == run else
+                                 f"{other} and {run} both hold a verdict on {_what(v)} and neither is superseded: label "
+                                 f"the one the other replaces ({_label(SUPERSEDED_BY, 'NEWER')})")
+            held[key] = (run, v)
+        runs.append(run)
+    order = list(PIECES)
+    return sorted((v for _, v in held.values()), key=lambda v: (order.index(v["piece"]), v["control"] or "")), runs, refused
+
+
+def _by(v: Mapping) -> str:
+    return f"`{v['verifier']['module']}` at {v['verifier']['commit']}"
+
+
+def _read(v: Mapping) -> str:
+    return f"on {v['run']}, withheld: {v['open']}" if v["verdict"] == "withheld" else f"is `{v['verdict']}` on {v['run']}"
+
+
+def stop_class(verdicts: Sequence[Mapping], runs: Sequence[str]) -> dict:
+    """Whether the stop class's ``verdicts`` (`stop_verdicts`) let the sums under the rows whose schedules are 0 take a
+    response's output count at 0 on a run (`complete`): each of `PIECES` accepted and complete on its honest run, and
+    each of `CONTROLS` refused, on a piece, by the verifier that accepted that piece, and none accepted; a `withheld`
+    verdict is neither, so it keeps the class short of complete and names what it was withheld for, and a control on a
+    withheld piece refused by that piece's verifier counts as refused. Where it is,
+    `mark` is what the output count's 0 is marked: `measured` only where every piece's record names the Lean guarantee
+    that proves its verifier (`proved_by`), else `RUN_NOT_PROVED`. Where it is not, `lacks` names what is missing, the
+    mark is None and the output count keeps its own. `said` is what the print says of the class."""
+
+    honest = {v["piece"]: v for v in verdicts if v["control"] is None}
+    lacks = []
+    for piece, what in PIECES.items():
+        if piece not in honest:
+            lacks.append(f"no verdict on {what}")
+        elif (v := honest[piece])["verdict"] != "accept":
+            lacks.append(f"{what} {_read(v)}")
+    for control, what in CONTROLS.items():
+        tried = [v for v in verdicts if v["control"] == control]
+        if not tried:
+            lacks.append(f"no negative control with {what}")
+        for v in tried:
+            accepted = honest.get(v["piece"])
+            if v["verdict"] != "refuse":
+                lacks.append(f"the control with {what} on {PIECES[v['piece']]} {_read(v)}, not refused")
+            elif (accepted is None or accepted["verdict"] not in ("accept", "withheld")
+                  or accepted["verifier"] != v["verifier"]):
+                lacks.append(f"the control with {what} is refused on {v['run']} by {_by(v)}, not by a verifier that "
+                             f"accepted the honest run's verdict on {PIECES[v['piece']]}")
+    out = {"record": VERDICTS, "runs": list(runs), "complete": not lacks, "mark": None, "lacks": lacks,
+           "verdicts": list(verdicts)}
+    if lacks:
+        return out | {"said": "not complete: " + "; ".join(lacks)}
+    unproved = [piece for piece in PIECES if honest[piece]["proved_by"] is None]
+    if not unproved:
+        return out | {"mark": "measured", "said": "complete (measured: proved by "
+                      + _listed([f"`{g}`" for g in dict.fromkeys(honest[p]["proved_by"] for p in PIECES)]) + ")"}
+    return out | {"mark": RUN_NOT_PROVED,
+                  "said": f"complete (run, not proved: {_listed(list(dict.fromkeys(honest[p]['open'] for p in unproved)))}"
+                          f"; Python verifier for {_listed([PIECES[p] for p in unproved])})"}
 
 
 # ---- the network certifier's part, and the requests both parts count over --------------------------------------------
@@ -446,6 +720,115 @@ def certifier(root: Path, response_ids: int = RESPONSE_IDS, scan_delta: Fraction
                                      "value": default["value"] if head["eps"] < 1 else None, "unit": default["unit"]}}
 
 
+# ---- the share of compute a served run measures ----------------------------------------------------------------------
+
+
+def _gpu_s(entries: Any, field: str, run: str) -> tuple[float | None, list[str]]:
+    """The GPU-seconds a record's field holds, a list of what held GPUs for it (one entry a session or a step, each
+    `{"seconds": s, "gpus": g}`) or one such entry, and the keys an entry lacks. None and the gap where it holds none.
+    An entry on 0 GPUs is a step that started no process on a card: it is read, and adds no GPU-seconds."""
+
+    if not entries:
+        return None, [field]
+    lacks, total = [], 0.0
+    for e in [entries] if isinstance(entries, Mapping) else entries:
+        seconds, gpus = e.get("seconds"), e.get("gpus")
+        lacks += [f"{field}.{k}" for k, v in (("seconds", seconds), ("gpus", gpus)) if v is None]
+        if None not in (seconds, gpus):
+            if not (seconds >= 0 and isinstance(gpus, int) and not isinstance(gpus, bool) and gpus >= 0):
+                raise ValueError(f"{run}'s record holds {field} at {seconds!r} seconds on {gpus!r} GPUs: an entry is "
+                                 "seconds of 0 or more on a whole count of GPUs, 0 or more")
+            total += seconds * gpus
+    return (None if lacks else total), sorted(set(lacks))
+
+
+def _on_cpus(entries: Any) -> bool:
+    """Whether every entry of a record's field is on 0 GPUs: the part ran on CPUs alone, and its 0 GPU-seconds are not
+    GPU time it was given free."""
+
+    its = [entries] if isinstance(entries, Mapping) else entries or []
+    return bool(its) and all(isinstance(e, Mapping) and e.get("gpus") == 0 for e in its)
+
+
+def served_share(record: Mapping[str, Any] | None) -> dict:
+    """The audit's share of compute on a served two-stage run, from its ``record`` (the reader of a served run's
+    record gives it): its GPU-seconds over the window's serving GPU-seconds. Each part of the audit (`SERVED_PARTS`)
+    is read from the record and marked measured, and where the record lacks it, its gap is named and the share is not
+    claimed. None: no record, and the share is `NO_RUN`.
+
+    The record is one object: ``run``, the served run's id; ``prove``, ``staging``, ``replay`` and ``interior``, each
+    a list of what held GPUs for that part, one entry a session or a step, each ``{"seconds": s, "gpus": g}`` (the
+    seconds it held them and how many it held); ``serving``, one such entry, the window's load: the seconds it was
+    served over and the GPUs its engine held; and for the serving charge, ``stock``, one such entry for stock vLLM
+    serving the same load at the same launch settings save Verity's changes, or else ``serving_cost``, `verity bench
+    serve_tax`'s cost of the served arm over stock on its own loads, as a fraction (stock's output tokens a second over
+    the arm's, less one), with its ``serving_cost_source`` (the run and load it is of). A field absent or None is one
+    the record lacks; so is an entry's key. The serving charge is the served GPU-seconds less stock's, measured; or
+    from the serving cost c, the served GPU-seconds times c / (1 + c), modeled, since its loads are not the window's.
+    A part whose entries are all on 0 GPUs is read as 0 GPU-seconds and held `on_cpus`, which the print says beside
+    its 0 (`ON_CPUS`).
+
+    ``prove_seconds_source`` says which seconds ``prove``'s are (`PROVE_SOURCES`): ``busy``, the proof server's busy
+    seconds a card, measured; ``session``, a session's seconds with its wait included, so the proving and the share
+    that sums it are marked measured, at most. Absent, ``prove`` lacks it and the share is not claimed; any other
+    value is refused. On both, a part's GPU-seconds are the seconds held times the GPUs held."""
+
+    if record is None:
+        return {"run": None, "value": None, "mark": None, "why": NO_RUN, "serving_gpu_s": None, "parts": {},
+                "missing": []}
+    if not isinstance(record, Mapping):
+        raise ValueError(f"a served run's record is one JSON object, not {type(record).__name__}")
+    run = str(record.get("run") or "the served run")
+    said = record.get(PROVE_SOURCE)
+    if said is not None and said not in PROVE_SOURCES:
+        raise ValueError(f"{run}'s record holds `{PROVE_SOURCE}` {said!r}: one of "
+                         + ", ".join(f"{k} ({why})" for k, (_, why) in PROVE_SOURCES.items()))
+    serving, missing = _gpu_s(record.get("serving"), "serving", run)
+    gaps = [{"field": "serving", "lacks": missing, "why": SERVING_GAP}] if missing else []
+    parts: dict[str, dict] = {}
+    for name, (what, why) in SERVED_PARTS.items():
+        if name == "serving_charge":
+            stock, lacks = _gpu_s(record.get("stock"), "stock", run)
+            cost = record.get("serving_cost")
+            if record.get("stock") is not None or cost is None:
+                gpu_s, mark = (None if None in (stock, serving) else serving - stock), "measured"
+                source = "the served GPU-seconds less those of stock vLLM serving the same load (`stock`)"
+            else:
+                if not (isinstance(cost, (int, float)) and cost > -1):
+                    raise ValueError(f"{run}'s record holds a serving cost of {cost!r}: a fraction over -1")
+                lacks, mark = [], "modeled"
+                gpu_s = None if serving is None else serving * cost / (1 + cost)
+                source = (f"the serving cost of the served arm over stock, {_pct(cost)} (`serving_cost`, "
+                          f"{record.get('serving_cost_source') or 'its run and load unnamed'}), on its own loads, not "
+                          "the window's: the served GPU-seconds times c / (1 + c)")
+        else:
+            (gpu_s, lacks), mark, source = _gpu_s(record.get(name), name, run), "measured", f"`{name}`"
+        if name == "prove":
+            if said is None:
+                gap = [why] if lacks else []
+                lacks, why = [*lacks, PROVE_SOURCE], "; ".join([*gap, PROVE_SOURCE_GAP])
+            else:
+                mark, held = PROVE_SOURCES[said]
+                source += f", {held} (`{PROVE_SOURCE}`: `{said}`)"
+        if lacks:
+            gaps.append({"field": name, "lacks": lacks, "why": why})
+        parts[name] = {"what": what, "gpu_s": gpu_s, "mark": "missing" if gpu_s is None or lacks else mark,
+                       "source": source,
+                       "share": None if None in (gpu_s, serving) or not serving else gpu_s / serving,
+                       "on_cpus": name != "serving_charge" and gpu_s is not None and _on_cpus(record.get(name))}
+    if serving is not None and not serving > 0:
+        raise ValueError(f"{run}'s record holds the window's serving at {serving!r} GPU-seconds: the share is of more "
+                         "than none")
+    claimed = not gaps
+    return {"run": run, "value": sum(p["share"] for p in parts.values()) if claimed else None,
+            "mark": (("modeled" if any(p["mark"] == "modeled" for p in parts.values()) else "measured")
+                     + (AT_MOST if any(p["mark"].endswith(AT_MOST) for p in parts.values()) else "")
+                     if claimed else None),
+            "why": None if claimed else "not measured: " + "; ".join(
+                f"{run}'s record lacks {', '.join(f'`{k}`' for k in g['lacks'])} ({g['why']})" for g in gaps),
+            "serving_gpu_s": serving, "parts": parts, "missing": gaps}
+
+
 # ---- the document ----------------------------------------------------------------------------------------------------
 
 
@@ -454,10 +837,14 @@ def _same(a: float, b: float) -> bool:
 
 
 def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, count: Mapping, share: float,
-            network_check: float, row: str) -> list[dict]:
+            network_check: float, row: str, served: Mapping, stop: Mapping | None = None) -> list[dict]:
     """Every input with its mark and source: the compute audit's from its rows of record, the network certifier's
     as its calculator marks them, and those both read, among them the request the calculator counts and what it is.
-    ``count`` is the world year's output count (`build`'s `output_count`), which the sums it names take at 0."""
+    ``count`` is the world year's output count (`build`'s `output_count`), which the sums it names take at 0.
+    ``served`` is the share a served run measures (`served_share`): with a run's record, each of its fields with its
+    mark, a field the record lacks marked missing with its gap. ``stop`` is the stop class's verdicts of record
+    (`stop_class`): where it is complete the output count's 0 carries its mark and names each verdict, its run and
+    its verifier; otherwise, and with none, the output count is as without it."""
 
     head = points["world year"]
     budgets = sorted({b for p in points.values() for b in p["pinned"]})
@@ -471,7 +858,9 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
         one(audit, "planner_rows", sum(len(p["pinned"]) for p in points.values()), "row", "modeled",
             f"{where}: the planner's row `{row}` at its step `{head['step']}`, each of {len(points)} scopes at "
             f"audit budgets pinned from {min(budgets):.3g} to {max(budgets):.3g}"),
-        one(audit, "compute_share", share, "", "assumed", "the share of total compute the figure is read at (--share)"),
+        one(audit, "compute_share", share, "", "assumed", "the share of total compute the figure is read at (--share); "
+            + ("the share a served run measures is " + served["why"] if served["value"] is None else
+               f"the share {served['run']} measures is beside it (`served_compute_share`)")),
         one(audit, "delta", head["delta"], "", "assumed",
             f"{where} `delta_seen`: the audit's δ over the monitoring period, a stated parameter"),
         one(audit, "lambda", head["lambda"], "", "assumed",
@@ -479,7 +868,7 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
             "bound, a premise no run measures"),
         one(audit, "output_bits", head["output_bits"], "bit/request", "assumed",
             f"{where} `S`: the most bits a request's output holds, which no check certifies"),
-        *(one(audit, f"proving priced {way}", p["share"], "of proving time", "measured" if way == "measured" else "modeled",
+        *(one(audit, f"proving priced {way}", p["share"], "of proving time", "measured" if way in MEASURED_WAYS else "modeled",
               f"`{RECORD}` ({head['priced']['run']}) {_plan(head['priced'])}, "
               f"block {'families' if len(p['families']) > 1 else 'family'} {', '.join(list(p['families'])[:2])}"
               f"{f' and {len(p["families"]) - 2} smaller' if len(p['families']) > 2 else ''}; how each is priced is the "
@@ -488,13 +877,41 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
             "no run: the network check's own proving as a share of total compute, which the planner's rows don't "
             "count (--network-check-share)"),
         one(audit, "advice", 0, "bit", "assumed", "not counted: no input here prices the advice"),
-        one(net, "output_count", 0, "bit/request", "assumed",
-            f"not counted in the sums under {_names(count['at_zero_in'])}: until a served audit has sampled a stop block "
-            f"the server chooses a response's output count, which the network certifier's row `{OUTPUT_COUNT}` "
-            f"charges {'' if count['GB'] is None else _n(count['bits_a_request']) + ' bits a request '}as its schedules"),
     ]
+    charged = f"{'' if count['GB'] is None else _n(count['bits_a_request']) + ' bits a request '}as its schedules"
+    if stop and stop["complete"]:
+        out.append(one(net, "output_count", 0, "bit/request", stop["mark"],
+                       f"taken at 0 in the sums under {_names(count['at_zero_in'])}: the stop class's verdicts of record, "
+                       f"`{VERDICTS}` ({', '.join(stop['runs'])}), are {stop['said']}: "
+                       + "; ".join(f"{_what(v)}, `{v['verdict']}` on {v['run']} by {_by(v)}, "
+                                   + (f"proved by `{v['proved_by']}`" if v["proved_by"] else f"not proved: {v['open']}")
+                                   for v in stop["verdicts"])
+                       + ". Without them the server chooses a response's output count, which the network certifier's "
+                       f"row `{OUTPUT_COUNT}` charges {charged}"))
+    else:
+        out.append(one(net, "output_count", 0, "bit/request", "assumed",
+                       f"not counted in the sums under {_names(count['at_zero_in'])}: until a served audit has sampled a "
+                       "stop block the server chooses a response's output count, which the network certifier's row "
+                       f"`{OUTPUT_COUNT}` charges {charged}"))
+    if served["run"] is not None:
+        gaps = {g["field"]: g for g in served["missing"]}
+        whose = f"{served['run']}'s record"
+        out += [one(audit, "served_serving_gpu_s", served["serving_gpu_s"], "GPU-second",
+                    "missing" if "serving" in gaps else "measured",
+                    f"{whose} `serving`: the window's serving, which the share is of"
+                    + (f"; it lacks {', '.join(gaps['serving']['lacks'])}: {SERVING_GAP}" if "serving" in gaps else "")),
+                *(one(audit, f"served_{name}_gpu_s", p["gpu_s"], "GPU-second", p["mark"],
+                      f"{whose}: {p['what']}, {p['source']}" + (f"; {ON_CPUS}" if p["on_cpus"] else "")
+                      + (f"; it lacks {', '.join(gaps[name]['lacks'])}: {gaps[name]['why']}" if name in gaps else ""))
+                  for name, p in served["parts"].items()),
+                one(audit, "served_compute_share", served["value"], "", served["mark"] or "missing",
+                    f"{whose}: the audit's GPU-seconds over the window's serving GPU-seconds"
+                    + ("" if served["value"] is not None else f", {served['why']}"))]
     for name, i in term["inputs"].items():
         out.append(one(both if name in SHARED else net, name, i["value"], i["unit"], i["mark"], i["source"]))
+    for i in (head.get("binding") or {}).get("assumed", ()):
+        out.append(one(SECURITY, i["input"], i["value"], i["unit"], "assumed",
+                       f"`{RECORD}` ({head['binding']['run']}) `verification_phase.binding`: {i['source']}"))
     if off := sorted(i["input"] for i in out if i["mark"] not in MARKS or not i["source"]):
         raise ValueError(f"an input is marked one of {', '.join(MARKS)}, with its source: {', '.join(off)}")
     return out
@@ -521,7 +938,8 @@ def at_assumed_prices(store: Any, head: Mapping, share: float, step: str, varian
 
 def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, row: str = ROW, step: str = STEP,
           variant: str | None = None, response_ids: int = RESPONSE_IDS, scan_delta: Fraction | None = None,
-          store: Any = None, root: Path | None = None, local_only: bool = False) -> dict:
+          served: Mapping[str, Any] | None = None, store: Any = None, root: Path | None = None,
+          local_only: bool = False) -> dict:
     """The two parts from the store's rows of record and the tree: the inputs with their marks, the compute audit's
     part at ``share`` of total compute for each scope of record, the network certifier's rows at the world's year
     for a class of at most ``response_ids`` ids a response with each execution phase's scan at ``scan_delta`` (None:
@@ -544,16 +962,30 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     the rows whose sums take it at 0 (`at_zero_in`: those whose schedules are 0).
 
     Beside a ``row`` other than `ASSUMED_ROW`, `at_assumed_prices` holds that row's world year at ``share``
-    (`at_assumed_prices()`), which is never the figure; as ``row`` itself, the figure's `label` is `ASSUMED_LABEL`."""
+    (`at_assumed_prices()`), which is never the figure; as ``row`` itself, the figure's `label` is `ASSUMED_LABEL`.
+
+    ``served`` is a served two-stage run's record (`served_share`), from which the document's `compute_share` is the
+    share of compute that run measures, with each of its parts, and where it is claimed the compute audit's part over
+    the world's year at that share (`GB`, with its β), beside the figure at ``share``, which stays given and assumed
+    (`given`). Without a record, or where it lacks a field, the share is not claimed, and `why` says so.
+
+    Where the store holds the stop class's verdicts (`stop_verdicts`), `stop_class` is their account (`stop_class`),
+    and where it is complete the output count's input carries its mark; the runs left out are among `refused`. With
+    none the document holds no `stop_class`, and is as it was without one."""
 
     if not (0 < share < 1 and 0 <= network_check < share):
         raise ValueError(f"the share of total compute is in (0, 1) and the network check's own below it, not {share!r} "
                          f"and {network_check!r}")
+    measured = served_share(served)
     root = root or jobs.repository_root()
     completion = jobs.StoreCompletion(store, root=root, local_only=local_only)
     if not local_only:
         completion.pull_labels()
     scopes, plans, runs, refused = rows_of_record(completion.store, row=row, step=step, variant=variant)
+    stop = None
+    if (verdicts := stop_verdicts(completion.store)) is not None:
+        stop = stop_class(*verdicts[:2])
+        refused = [*refused, *verdicts[2]]
     points = {scope: at_share(scope, run, its, share, plans.get(scope)) for scope, (run, its) in scopes.items()}
     if "world year" not in points:
         held = sorted({run for run, _ in scopes.values()})
@@ -562,6 +994,14 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     head = points["world year"]
     less = at_share("world year", *scopes["world year"], share - network_check)
     assumed = None if row == ASSUMED_ROW else at_assumed_prices(completion.store, head, share, step, variant)
+    measured["given"] = {"share": share, "mark": "assumed", "GB": head["GB"]}
+    measured.update(GB=None, beta=None, inside=None, no_GB=None)
+    if measured["value"] is not None:
+        try:
+            there = at_share("world year", *scopes["world year"], measured["value"])
+            measured.update(GB=there["GB"], beta=there["beta"], inside=there["inside"])
+        except ValueError as e:
+            measured["no_GB"] = str(e)
 
     term = certifier(root, response_ids, scan_delta)
     of, set_time, card = term["of_record"], term["set_time"], term["with_set_time_card"]["label"]
@@ -620,7 +1060,8 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
             "value": head["GB"], "unit": "GB", "status": "modeled", "share": share, "row": row, "variant": variant,
             "label": ASSUMED_LABEL if row == ASSUMED_ROW else None, "at_assumed_prices": assumed, "record": RECORD,
             "runs": runs, "refused": refused, "weights": {"bits": weights, "GB": weights / GB, "label": term["weights"]["label"]},
-            "inputs": _inputs(points, runs, term, year["output_count"], share, network_check, row),
+            "inputs": _inputs(points, runs, term, year["output_count"], share, network_check, row, measured, stop),
+            "compute_share": measured, **({} if stop is None else {"stop_class": stop}),
             "compute_audit": sorted(points.values(), key=lambda p: (p["scope"] not in order, order.get(p["scope"], 0))),
             "network_check": {"share": network_check, "beta": less["beta"], "inside": less["inside"], "GB": less["GB"]},
             "certifier": {"schema": term["schema"], "request_count": term["request_count"],
@@ -683,6 +1124,16 @@ def _plan(priced: Mapping) -> str:
     return f"`{PLAN_FILE}`: the row's plan at β = {_part(priced['beta'])}"
 
 
+def _readers(share: float) -> str:
+    """Which of the three readers of the planner's rows is the headline figure, and why the other two differ."""
+
+    return (f"this is the headline figure: λ times the bound where the row's total is {_pct(share)} of compute, on a "
+            "least-squares line of the total through every pinned budget. The planner's driver reads the same rows two "
+            "other ways: `headline plan` prints the bound at one pinned budget, the plan's, whose total is that row's and "
+            f"not set to {_pct(share)}, at λ = 1; `headline rows` prints λ times the bound at {_pct(share)}, with the total read "
+            "between the two pinned budgets that bracket it alone.")
+
+
 def _how(priced: Mapping | None) -> str:
     """How a scope's proving time is priced, by its plan: each way's share and the largest families; or that no plan
     says."""
@@ -710,11 +1161,16 @@ def _by_source(sources: Mapping | None) -> str:
             + f"; at the planner's assumed default (`{DEFAULT_BASIS}`) {NOT_RECORDED if default is None else _pct(default)}")
 
 
+def _listed(items: Sequence[str]) -> str:
+    """Items in a sentence."""
+
+    return " and ".join(items) if len(items) < 3 else ", ".join(items[:-1]) + f" and {items[-1]}"
+
+
 def _names(names: Sequence[str]) -> str:
     """Rows' names in a sentence."""
 
-    quoted = [f"`{name}`" for name in names]
-    return " and ".join(quoted) if len(quoted) < 3 else ", ".join(quoted[:-1]) + f" and {quoted[-1]}"
+    return _listed([f"`{name}`" for name in names])
 
 
 def _labelled(year: Mapping, key: str, set_time: str) -> list[str]:
@@ -735,6 +1191,86 @@ def _labelled(year: Mapping, key: str, set_time: str) -> list[str]:
             for label in dict.fromkeys((*own, *other))]
 
 
+def _lean(lean: Mapping) -> str:
+    """What Lean proves at numbers of one verification phase's conflict and first-hit part, as a binding bound says
+    it: the instance the phase is within and its bits, or `NOT_PROVED` with the nearest instance and each numeral
+    the phase is past."""
+
+    if lean["theorem"]:
+        return (f"`{LEAN_NUMBERS}.{lean['theorem']}` holds the part of it that is linear in the prover's calls to at "
+                f"most 2^-{lean['bits']}, beside each session's knowledge error and the rewinding part")
+    past = "; ".join(f"{NUMERALS.get(name, name)} at most {v['instance']:,} there and {v['design']:,} here"
+                     for name, v in lean["past"].items())
+    return (f"{NOT_PROVED}: the nearest instance, `{LEAN_NUMBERS}.{lean['nearest']}`, at most 2^-{lean['bits']}, has "
+            f"{past}")
+
+
+def _security(bound: Mapping | None) -> list[str]:
+    """The security level's lines: a row's binding bound (`_binding`) over one verification phase and over its scope
+    of them, each counted in calls and in compressions, what it assumes, and what Lean proves of each; or that the
+    rows hold none."""
+
+    if bound is None:
+        return [f"- **the {SECURITY}**: not read. The rows of record hold no binding bound (`verification_phase.binding`): "
+                f"the planner wrote them before it computed one. Run it again and label its run ({_label()})."]
+    design, (calls, compressions) = bound["design"], (bound["counted"][c] for c in ("calls", "compressions"))
+    scope = bound["scope"].replace(" ", "-")
+    return [
+        f"- **the {SECURITY}** (modeled): the probability that an accepted run opens a value off the committed trace, by "
+        f"the bound Lean states of a two-stage sample counted by classes of gates (`{LEAN_BOUND}`), every run at "
+        f"{design['calls_a_run']} calls of SHA-512, at the row's own design at the pinned budget nearest, β = {_part(bound['beta'])} ({bound['run']}). "
+        f"**Over one verification phase: at most {calls['phase']['bound']}** counted in calls, as the Lean counts, and "
+        f"{compressions['phase']['bound']} in compressions. **Over a {scope} of phases**, {_n(design['phases'])} of "
+        f"them: **at most {calls['phases']['bound']}** in calls and {compressions['phases']['bound']} in compressions. "
+        f"A verification phase is a {bound['name']}'s {_n(bound['seconds'])} s on {_n(bound['machines'])} machines: its "
+        f"first stage samples {_n(bound['sampled'])} replay blocks, and its second {_n(bound['proof_blocks'])} of their "
+        f"proof blocks in {_n(design['sessions'])} sessions, the largest of {_n(bound['tables'])} "
+        f"table{'s' * (bound['tables'] != 1)}.",
+        f"- the {SECURITY} assumes: "
+        + "; ".join(i["input"] if i["value"] is None else f"{_n(i['value'])} {i['input']}" for i in bound["assumed"])
+        + ". It counts each session's knowledge error and the run's own opening checks as 0.",
+        f"- what Lean proves of the {SECURITY}: over one verification phase counted in calls, {_lean(calls['lean'])}. "
+        f"Counted in compressions, {_lean(compressions['lean'])}. Over a {scope} of phases, {NOT_PROVED}: no theorem "
+        "sums a monitoring period's verification phases."]
+
+
+def _share(cs: Mapping) -> tuple[list[str], list[str]]:
+    """The share of compute a served run measures (`build`'s `compute_share`), beside the given share every other
+    figure is read at: a line, and with a run's record a table of its parts."""
+
+    given = f"the given {_pct(cs['given']['share'])} of total compute ({cs['given']['mark']})"
+    if cs["value"] is None:
+        lines = [f"**The audit's share of compute: {cs['why']}.** Every figure below is read at {given}.", ""]
+    else:
+        parts = ", ".join(f"{name.replace('_', ' ')} {_part(p['share'])}" + (f" ({ON_CPUS})" if p["on_cpus"] else "")
+                          for name, p in cs["parts"].items())
+        there = (f"its part has no figure at that share: {cs['no_GB']}" if cs["GB"] is None else
+                 f"at that share, β = {_part(cs['beta'])}{'' if cs['inside'] else ' (extrapolated)'}, the compute "
+                 f"audit's part over the world's year is {_n(cs['GB'])} GB")
+        lines = [f"**The audit's share of compute: {_part(cs['value'])} ({cs['mark']})**, on {cs['run']}: the audit's "
+                 f"GPU-seconds over the window's serving, {_n(cs['serving_gpu_s'])} GPU-seconds, in parts {parts}. "
+                 f"{there[0].upper()}{there[1:]}, beside {_n(cs['given']['GB'])} GB at {given}, which every figure "
+                 "below is read at.", ""]
+    if cs["run"] is None:
+        return lines, []
+    gaps = {g["field"]: g for g in cs["missing"]}
+
+    def source(name: str, said: str) -> str:
+        return said + (f"; lacks {', '.join(f'`{k}`' for k in gaps[name]['lacks'])}: {gaps[name]['why']}"
+                       if name in gaps else "")
+
+    return lines, [f"## The audit's share of compute on {cs['run']}", "",
+            "Each part of the audit's GPU time on the served run, and the window's serving it is a share of, read from "
+            "the run's record. A part the record lacks is marked missing with its gap, and the share is not claimed "
+            "without it.", "",
+            *_table(("part", "what", "GPU-seconds", "share of the window's serving", "mark", "source"),
+                    [("serving", "the window's serving", _n(cs["serving_gpu_s"]), "",
+                      "missing" if "serving" in gaps else "measured", source("serving", "`serving`")),
+                     *((name, p["what"], _n(p["gpu_s"]) + (f", {ON_CPUS}" if p["on_cpus"] else ""), _part(p["share"]),
+                        p["mark"], source(name, p["source"]))
+                       for name, p in cs["parts"].items())]), ""]
+
+
 def render(doc: Mapping[str, Any]) -> str:
     """``doc`` (`build`) as text: the figure and what it is, the inputs with their marks, each part, and the two side
     by side for every scope and monitoring period. The network certifier's figures of record come first; a figure
@@ -751,6 +1287,8 @@ def render(doc: Mapping[str, Any]) -> str:
     record = [name for name in TOGETHER if not sums[name]["label"]]
     labels = {name: sums[name]["label"] for name in TOGETHER if sums[name]["label"]}
     marks = {m: sum(i["mark"] == m for i in doc["inputs"]) for m in MARKS}
+    stop = doc.get("stop_class")
+    measured, parts = _share(doc["compute_share"])
     outside = "" if head["inside"] else ", outside the pinned budgets: extrapolated"
     what = ", the plan of record's row, with every modeled lever at its measured value" if doc["row"] == ROW else ""
     what += f", in its variant `{doc['variant']}`" if doc["variant"] else ""
@@ -797,6 +1335,7 @@ def render(doc: Mapping[str, Any]) -> str:
     lines = [
         f"# verity bench exfiltration: {doc['model']}'s exfiltration capacity over a monitoring period, at "
         f"{_pct(share)} of total compute", "",
+        *measured,
         f"Over the world's year, at {_pct(share)} of total compute, in two parts:", "",
         f"- **the compute audit's part{label}: {_n(head['GB'])} GB** (modeled), {_n(head['GB'] / w['GB'])} copies of the weights "
         f"({w['label']}, {_n(w['GB'])} GB) and {_n(year['compute_audit']['bits_a_request'])} bits a request. It is the "
@@ -804,6 +1343,7 @@ def render(doc: Mapping[str, Any]) -> str:
         f"β = {_part(head['beta'])}{outside}: its bound, "
         f"{_n(head['bound']['GB'])} GB, times λ = {_n(head['lambda'])}. The row is priced over "
         f"{_n(head['requests'])} requests, the count the network certifier's part is over.",
+        f"- {_readers(share)}",
         f"- {_how(head['priced'])}.",
         f"- what prices the row's proving time, as its rows record it{plan}: {_by_source(sources)}.",
         *assumed,
@@ -814,7 +1354,9 @@ def render(doc: Mapping[str, Any]) -> str:
            f"{NO_BOUND} ({count['mark']}), under the network certifier's ε")
         + ". Until a served audit has sampled a stop block the server chooses a response's output count, and the network "
         f"certifier's row `{count['row']}` charges it as its schedules. The sums under {_names(count['at_zero_in'])} "
-        "take it at 0, as they price no advice.",
+        "take it at 0, as they price no advice."
+        + ("" if stop is None else f" The stop class's verdicts of record (`{stop['record']}`, "
+           f"{', '.join(stop['runs']) or 'no run read'}): {stop['said']}."),
         f"- the compute audit's part fails with at most δ = {_n(head['delta'])} over the monitoring period. The network "
         f"certifier's ε over the world's year is each execution phase's scan's δ ({delta['mark']}), "
         f"{_p(delta['value'])}, summed over every link's execution phases, {_n(year['phases'])} of them: {_p(eps)}. "
@@ -823,19 +1365,27 @@ def render(doc: Mapping[str, Any]) -> str:
         f"- with the network check's own proving at {_pct(net['share'])} of total compute, which the planner's rows "
         f"don't count (assumed, no run), the audit budget is β = {_part(net['beta'])} and the compute audit's part "
         f"{_n(net['GB'])} GB.",
+        *_security(head["binding"]),
         f"- of {len(doc['inputs'])} inputs, {marks['measured']} {'is' if marks['measured'] == 1 else 'are'} measured, "
-        f"{marks['modeled']} modeled and {marks['assumed']} assumed.", "",
+        + _listed([f"{marks['modeled']} modeled", f"{marks['simulated']} simulated", f"{marks['assumed']} assumed",
+                   *(f"{marks[m]} {BOUNDS.get(m) or PRINTED.get(m, m)}"
+                     for m in (*BOUNDS, "missing", RUN_NOT_PROVED) if marks[m])]) + ".", "",
         f"Inputs, each a labelled record of the store (`{RUN_OF_RECORD}`):", "",
         f"- compute-audit: {', '.join(doc['runs'])} (`{doc['record']}`): the planner's rows, "
         f"{sum(len(p['pinned']) for p in doc['compute_audit'])} of row `{doc['row']}` at step `{head['step']}` over "
         f"{len(doc['compute_audit'])} scopes"
         + "".join(f", and the {p['scope']}'s plan ({p['priced']['run']})" for p in planned if p["priced"]["of"] == "plan"),
+        *([] if stop is None else [
+            f"- the stop class: {', '.join(stop['runs']) or 'no run read'} (`{stop['record']}`): "
+            f"{len(stop['verdicts'])} verdicts, {stop['said']}"]),
         "- the network certifier's part and the requests both parts count over (modeled or assumed, read from the tree, "
         "not records): `verity bench certifier_term`'s inputs, among them the request it counts and what that request "
         "is, in the table below", "",
         "## Inputs", "",
         *_table(("part", "input", "value", "unit", "mark", "source"),
-                [(i["part"], i["input"], _n(i["value"]), i["unit"], i["mark"], i["source"]) for i in doc["inputs"]]), "",
+                [(i["part"], i["input"], _n(i["value"]), i["unit"], PRINTED.get(i["mark"], i["mark"]), i["source"])
+                 for i in doc["inputs"]]), "",
+        *parts,
         f"## The compute audit's part at {_pct(share)} of total compute", "",
         "Each scope's rows of record, read at the audit budget β where their total is the share. The requests are the "
         "count the rows are priced over. The parts are shares of total compute; the wait is part of serving.", "",
@@ -920,7 +1470,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         description=f"{MODEL}'s exfiltration capacity in GB over a week, a month and a year of the world's and a "
                     "datacenter's compute, at a share of total compute: the compute audit's part, from the break-even "
                     "planner's rows of record in the evidence store, beside the network certifier's part, with every "
-                    "input labelled measured, modeled or assumed. Every figure carries the error summed over "
+                    "input labelled measured, modeled, simulated, assumed, missing or run, not proved. Every figure "
+                    "carries the error summed over "
                     f"everything it covers, and one whose error is 1 or more is printed as \"{NO_BOUND}\", with no "
                     "amount.")
     ap.add_argument("--json", action="store_true", help="print the document (value, unit, inputs, parts, periods)")
@@ -941,15 +1492,30 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help="the δ of each execution phase's scan of the network certifier, which its rows' ε sum (default: "
                          "the δ at which the row printed that sums the most execution phases, the world's year, carries "
                          f"an ε of {PERIOD_ERROR}, assumed; no term depends on it)")
+    ap.add_argument("--served-run", type=Path, metavar="FILE",
+                    help="a served two-stage run's record as its reader gives it, one JSON object (`served_share`): the "
+                         "share of compute it measures is printed beside the given share, with the compute audit's part "
+                         f"at it (default: none, and the share is \"{NO_RUN}\")")
     ap.add_argument("--local-only", action="store_true", help="read this machine's catalog alone, not the store's remote")
     a = ap.parse_args(argv)
     try:
+        served = None if a.served_run is None else json.loads(a.served_run.read_text())
         doc = build(share=a.share, network_check=a.network_check_share, row=a.row, step=a.step, variant=a.variant,
-                    response_ids=a.response_ids, scan_delta=a.scan_delta, local_only=a.local_only)
-    except (ValueError, RuntimeError) as e:
+                    response_ids=a.response_ids, scan_delta=a.scan_delta, served=served, local_only=a.local_only)
+        doc["spot_holes"] = spot_status.status(doc["runs"]) if served is None else spot_status.served(served)
+    except (ValueError, RuntimeError, OSError) as e:
         print(f"verity bench exfiltration: {e}", file=sys.stderr)
         return 2
-    print(json.dumps(doc, indent=1, ensure_ascii=False) if a.json else render(doc))
+    shown = None
+    if served is not None and importlib.util.find_spec("verity_bench.served_row") is not None:
+        from verity_bench import served_row  # it reads this module's names
+
+        shown = served_row.account(served)
+    if shown is not None:
+        doc["served_run"] = shown
+    print(json.dumps(doc, indent=1, ensure_ascii=False) if a.json else
+          render(doc) + ("" if shown is None else "\n\n" + served_row.render(shown))
+          + "\n\n" + spot_status.render(doc["spot_holes"]))
     return 0
 
 
