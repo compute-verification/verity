@@ -1,5 +1,5 @@
 // cuda/zc_round1.cuh against the table kernel it replaces (cuda-ghash/zerocheck_round1_cpustyle.cuh), for test_zc_round1.py.
-// zr_check draws a packed witness of n_out outer chunks (128 columns of a, b and z each), eq_out, the extension's columns and
+// zr_check samples a packed witness of n_out outer chunks (128 columns of a, b and z each), eq_out, the extension's columns and
 // the scale from seed, runs launch_zerocheck_first_round_cpu_structured and one of round 1's launchers on them (path 0:
 // launch_zc_round1's choice, 1: zc_round1_zlin's, 2: zc_round1_sm90's), and counts the words that differ: bad[0] of the 64 a·b
 // sums, bad[1] of the 64 c sums. zr_takes_sm90 is launch_zc_round1's choice. zt_check does the same for the lincheck's z transpose
@@ -42,7 +42,7 @@ struct ZrCase {
     F128 scale{};
 };
 
-// GF(2^8)'s products and φ8 as the prover uploads them, and the extension's 64 columns drawn from seed
+// GF(2^8)'s products and φ8 as the prover uploads them, and the extension's 64 columns sampled from seed
 static cudaError_t zr_setup(ZrCase& c, long long n_out, uint64_t seed) {
     c.n_out = n_out;
     cudaError_t e = cudaSuccess;
@@ -118,7 +118,7 @@ __global__ void zr_zlin_bytewise(const F128* __restrict__ z, int k_log, long lon
     }
 }
 
-// z of n_stripes stripes at k_log drawn from seed, transposed on a grid of `grid` blocks and by the reference into buffers
+// z of n_stripes stripes at k_log sampled from seed, transposed on a grid of `grid` blocks and by the reference into buffers
 // poisoned 4 KiB past their end: the bytes that differ, in *bad
 extern "C" int zt_check(int k_log, long long n_stripes, int grid, uint64_t seed, long long* bad) {
     const size_t words = (size_t)n_stripes << (k_log - 4), bytes = words * 16 + 4096;

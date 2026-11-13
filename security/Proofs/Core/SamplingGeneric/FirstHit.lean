@@ -42,7 +42,7 @@ of the first further tape that opens the node (`firstHit`), and it finds a pair 
   reads only the first run and a further run that is the first to open a node the first run opened, which the loop
   charges (`le_loopCost`).
 * **The prover's tape** (`tapeFinder`, `pr_off_tape_le_of_expectedCR`): the table and its plurality depend on a tape
-  that the finder draws once, keeps in its seed and never redraws. The bounds hold on average over the tape under the
+  that the finder samples once, keeps in its seed and never resamples. The bounds hold on average over the tape under the
   linear expected-time bound at that one finder, with `w` the number of nodes.
 * **The sample** (`sampleFinder`, `pr_off_sample_le_of_expectedCR`, `pr_off_sample_le_of_coll`): `chk` reads a run's
   coins, and what the finder keeps (the tape `t`), and says which nodes its sample holds; a run opens only nodes of
@@ -551,7 +551,7 @@ theorem miss_le_sum [Fintype P] (op : Ω → P → Option V) (K : ℕ) (ω : Ω)
   · rw [ite_eq_right hm]
     exact Nat.zero_le _
 
-/-- One draw in a set of `a` and `K` draws in its complement of `b` are at most one in `K + 1` of the `K + 1` draws. -/
+/-- One sample in a set of `a` and `K` samples in its complement of `b` are at most one in `K + 1` of the `K + 1` samples. -/
 theorem succ_mul_mul_pow_le (a b K : ℕ) : (K + 1) * (a * b ^ K) ≤ (a + b) ^ (K + 1) := by
   induction K with
   | zero => simp
@@ -747,9 +747,9 @@ theorem outOf_collision (H : Msg → Msg) (op : Ω → P → Option V) (coll : �
   rw [outOf, dite_eq_left hex]
   exact huv
 
-/-! ## The prover's tape, outside the redraws
+/-! ## The prover's tape, outside the resamples
 
-The table of openings and its plurality depend on a tape `t` the finder draws once and keeps: `op t` is the table at
+The table of openings and its plurality depend on a tape `t` the finder samples once and keeps: `op t` is the table at
 `t` and `vstar t` a plurality table of it. The finder's seed is the tape, a first run's coins and `K` further runs'
 coins, and the bounds above hold on average over the tape, with one finder for all tapes. -/
 

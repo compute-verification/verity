@@ -1,4 +1,4 @@
-"""The replay's pure parts: a trace's arrivals (times from its start, breaks drawn or from reverts) and the old path's
+"""The replay's pure parts: a trace's arrivals (times from its start, breaks sampled or from reverts) and the old path's
 figures from the same trace."""
 import fake_vqueue as vq
 import pytest
