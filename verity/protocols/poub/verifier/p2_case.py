@@ -43,6 +43,7 @@ from typing import Any
 
 from verity.commitments import domains
 from verity.commitments.identity import canonical_json_bytes
+from verity.protocols.pous.verifier.run import Setup
 
 from . import p2_party
 
@@ -125,8 +126,6 @@ def same_store(case: Mapping[str, Any], pous_case: Mapping[str, Any]) -> str | N
     """Onsite's one store: None when PoUB-P2's case `case` names (`store_root`) the store PoUS's run case `pous_case` is
     committed to, the root of `C*` its setup published (`pous.run.Setup.root`, in the run case's commitment), else why
     not."""
-    from verity.protocols.pous.verifier.run import Setup
-
     try:
         ours = store_root(case)
     except ValueError as e:
@@ -192,6 +191,6 @@ def write(private: Path, case: Mapping[str, Any], answer_: Mapping[str, Any]) ->
     return private
 
 
-__all__ = ["ANSWER", "CASE", "CLOSE_TAG", "COIN_BYTES", "DIGEST_DOMAIN", "EXE", "PROTOCOL", "STORE_ROOT", "answer",
-           "case_of", "chain", "close_of", "close_record", "digest", "judged", "same_store", "serve", "store_root",
-           "write"]
+__all__ = ["ANSWER", "CASE", "CLOSE_TAG", "COIN_BYTES", "DIGEST_DOMAIN", "EPS_TERMS", "EXE", "PROTOCOL", "STORE_ROOT",
+           "answer", "case_of", "chain", "close_of", "close_record", "digest", "judged", "same_store", "serve",
+           "store_root", "write"]

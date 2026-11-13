@@ -445,24 +445,13 @@ def test_overhead_paired_is_the_kits_by_overheads_name_until_serving_cost_names_
 
 # ---- the fingerprint and the files ---------------------------------------------------------------------------------------
 
-#: PoUW's own writer of a run's whole result, whose keys and shapes the kit's three calls write
-RUN_RESULT = Path(__file__).resolve().parents[3] / "benchmarks/pouw/run_result.py"
-
-
-def _run_result():
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location("pouw_run_result", RUN_RESULT)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
 
 @pytest.mark.parametrize("sha", [SHA, None])
 def test_the_fingerprint_and_the_files_are_the_keys_and_shapes_pouws_own_writer_writes(tmp_path, no_gpu, monkeypatch, sha):
-    """For the same gates, numbers and record, the kit's result holds the keys `run_result.write` writes, each the same
-    value; the kit's measurements hold more than its name, value and unit, and those three are the same. `research` takes
-    both, and reads the same fingerprint and files from each."""
+    """For the same gates, numbers and record, the kit's result holds the keys of `theirs`, the document PoUW's writer
+    of a run's whole result writes, each the same value; the kit's measurements hold more than its name, value and
+    unit, and those three are the same. `research` takes both, and reads the same fingerprint and files from each.
+    PoUW's suite holds its writers to the kit's keys (benchmarks/pouw/tests/test_run_result.py)."""
 
     from research import result as research_result
 
@@ -472,9 +461,12 @@ def test_the_fingerprint_and_the_files_are_the_keys_and_shapes_pouws_own_writer_
     out = run_dir / "out"
     out.mkdir(parents=True)
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
-    _run_result().write(out, True, "a benchmark", "4 of 4 gates hold", [("gamma", 0.5, "ratio"), ("wall", 1.5, "s")])
-    theirs = _result(run_dir)
-    (run_dir / kit.RESULT).unlink()
+    theirs = {"schema": "research/result/v0.1", "run_id": RUN, "workload_fingerprint": {"source_sha": sha},
+              "validation": {"status": "passed", "checker": "a benchmark", "detail": "4 of 4 gates hold",
+                             "evidence": ["out"]},
+              "measurements": [{"name": "gamma", "value": 0.5, "unit": "ratio"},
+                               {"name": "wall", "value": 1.5, "unit": "s"}],
+              "measurement_files": ["out"], "artifacts": []}
     w = kit.writer(out)
     assert w.fingerprint() == {"source_sha": sha}
     assert w.measurement_file("out") == "out"
