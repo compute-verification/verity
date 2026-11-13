@@ -2,6 +2,7 @@
 (record-neutral; off unless the directory is set)."""
 from __future__ import annotations
 
+import os
 from typing import Any
 
 import numpy as np
@@ -17,7 +18,6 @@ def dump_row_words(fam: str, rid: str, step: int, op_path: str, row: int, member
     the committed words and the evaluated words of every evaluated row of those families (equal or not; <= VERITY_REPLAY_DUMP_MAX files,
     default 1024) so a reader can test, offline, WHICH committed invocation an evaluated row matches (the aliased shared module: layer L's
     rope output vs the canonical path's invocation L).  Off unless the directory is set; nothing on the record changes."""
-    import os
     dd = settings.VERITY_REPLAY_DUMP_DIR
     if not dd:
         return

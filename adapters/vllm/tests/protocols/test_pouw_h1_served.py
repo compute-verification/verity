@@ -19,34 +19,47 @@ import hashlib
 import io
 import pickle
 from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity.protocols.pouw.verifier import core_check as CC  # noqa: E402
-from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
-from verity.protocols.pouw.verifier import salt as PS  # noqa: E402
-from verity.protocols.pouw.verifier import weights as Wt  # noqa: E402
-from verity.protocols.pouw.verifier.audit import hm96_salt  # noqa: E402
-from verity.protocols.pouw.prover.circuit import h1tile as HT  # noqa: E402
-from verity.protocols.pouw.prover.circuit import h1window as HW  # noqa: E402
-from verity.protocols.pouw.prover.circuit import h1zy as Z  # noqa: E402
-from verity.protocols.pouw.prover.circuit import seeds as SD  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import partition as P, registered as G  # noqa: E402
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind  # noqa: E402
-from verity.circuits.ports import In, Out, Ports  # noqa: E402
-from verity.circuits.refs import Coll, coll_concat  # noqa: E402
-from verity.circuits.types import Array, RecordType, Value  # noqa: E402
-from verity.commitments import hm96  # noqa: E402
-from verity.commitments.merkle import tree_levels  # noqa: E402
-from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest  # noqa: E402
-from verity_vllm.engine import int8_ops as OPS  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import registered as NR  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import requests as RQ  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import served as SV  # noqa: E402
+from verity.circuits.codec import canonical_json
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.ports import In, Out, Ports
+from verity.circuits.refs import Coll, coll_concat
+from verity.circuits.types import Array, RecordType, Value
+from verity.commitments import hm96
+from verity.commitments.merkle import tree_levels
+from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
+from verity.protocols.pouw.prover.circuit import h1tile as HT
+from verity.protocols.pouw.prover.circuit import h1window as HW
+from verity.protocols.pouw.prover.circuit import h1zy as Z
+from verity.protocols.pouw.prover.circuit import seeds as SD
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.verifier import weights as Wt
+from verity.protocols.pouw.verifier.audit import hm96_salt
+from verity.protocols.spot.verifier.one_stage import partition as P
+from verity.protocols.spot.verifier.one_stage import registered as G
+
+from verity_vllm.engine import hooks
+from verity_vllm.engine import int8_experts as X
+from verity_vllm.engine import int8_ops as OPS
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import handoff as HO
+from verity_vllm.protocols.pouw.h1 import hooks as PHK
+from verity_vllm.protocols.pouw.h1 import records as ZR
+from verity_vllm.protocols.pouw.h1 import registered as NR
+from verity_vllm.protocols.pouw.h1 import registered_device as D
+from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1 import served as SV
 
 TILE = PH.TILE
 T, STEPS, SERVED = 64, 2, 5
@@ -145,7 +158,7 @@ def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=S
     held, moved = [(on(c), on(s)) for c, s in ws], None if changed is None else on(changed)
     got = {}
     for s in range(served):
-        xs = {}
+        xs: dict = {}
         for b, (_n, k) in zip(blocks, shapes):
             xs[b] = xs[b] if b in xs else _codes(rng, SERVED, k)
         inputs = [xs[b] for b in blocks]
@@ -190,7 +203,7 @@ def _records(z, y, m, n, tile=TILE):
     return out
 
 
-def _served_call(got, c, n, k):
+def _served_call(got, c, n, k) -> tuple[Any, Any, Any, Any]:
     """Call c's served (a, s_a, z, y), zeros for an empty call."""
     return got.get(c) or (torch.zeros(0, k, dtype=torch.int8), torch.zeros(0), torch.zeros(0, n), torch.zeros(0, n).bfloat16())
 
@@ -303,9 +316,6 @@ def test_each_expert_gemm_registers_its_tables_as_a_dense_linears_call_does():
     ``a/<K>@<s>`` (the step's experts' calls of K, call after call) and registers ``zy@<c>``, whose roots recompute from
     each expert's own served rows (an idle expert's zero-row call from zeros), and its manifest row carries its served
     rows m."""
-    from verity_vllm.engine import hooks
-    from verity_vllm.engine import int8_experts as X
-    from verity_vllm.protocols.pouw.h1 import hooks as PHK
     g, rng = torch.Generator().manual_seed(3), np.random.default_rng(3)
     w13, w2 = _codes(rng, 2 * 32, 32).reshape(2, 32, 32), _codes(rng, 2 * 32, 16).reshape(2, 32, 16)
     s13, s2 = (torch.rand(2, 32, 1, generator=g) * 0.01 + 1e-4 for _ in range(2))
@@ -489,7 +499,6 @@ def test_register_writes_each_calls_file(tmp_path):
     assert reg.window_root == W1.hex() and [e["value"] for e in reg.registered] == list(run.served.registered)
     assert sorted(p.name for p in tmp_path.iterdir()) == [SV.file_name(0), SV.file_name(2)] == [
         "pouw-h1-registered-c0.json", "pouw-h1-registered-c2.json"]
-    from verity.circuits.codec import canonical_json
     assert (tmp_path / SV.file_name(2)).read_bytes() == canonical_json(SV.reads_file(run, 2)) == canonical_json(reg.files[2])
 
 
@@ -653,7 +662,7 @@ def test_a_weight_is_copied_to_the_host_and_held_to_its_periods_rows_once_a_proc
     assert all(a is b for a, b in zip(SV.host_weight(*ws[1]), got[1]))
     assert not (w.flags.writeable or s.flags.writeable) and not np.shares_memory(w, ws[1][0].numpy())
     assert (s.dtype, s.shape) == (np.dtype("<f4"), (32,)) and np.array_equal(s, ws[1][1].numpy().reshape(-1))
-    a = np.zeros((2, 2), np.int8)
+    a: np.ndarray = np.zeros((2, 2), np.int8)
     assert SV.host_weight(a, np.ones(2))[0] is not SV.host_weight(a, np.ones(2))[0] and a.flags.writeable
     gone = torch.zeros(2, 2, dtype=torch.int8)
     SV.host_weight(gone, torch.ones(2))
@@ -663,8 +672,14 @@ def test_a_weight_is_copied_to_the_host_and_held_to_its_periods_rows_once_a_proc
 
     period, fresh = SV.register_weights(_period(ws).circuit, SHAPES, got, WKEY), _period(ws)
     assert (period.root(), period.entries()) == (fresh.root(), fresh.entries()) and sorted(period.held) == [0, 1, 2]
-    compared, real = [], SV.chunk_words
-    monkeypatch.setattr(SV, "chunk_words", lambda codes, *x: (compared.append(codes), real(codes, *x))[1])
+    compared: list = []
+    real = SV.chunk_words
+
+    def chunk_words(codes, *x):
+        compared.append(codes)
+        return real(codes, *x)
+
+    monkeypatch.setattr(SV, "chunk_words", chunk_words)
     windows, checked = [], []
     for weights in (period, period, fresh, fresh):
         compared.clear()
@@ -788,7 +803,7 @@ def test_each_calls_public_table_and_the_ok_rows_are_the_ones_credit_builds_and_
     raw = SV.descriptor(served.program)
     (lay, why), program, shape = CR.layout_of(raw), hashlib.sha512(raw).hexdigest(), CR.shape_of(raw)
     assert why is None and program == served.program_digest
-    roots = {}
+    roots: dict = {}
     for e in served.entries():
         roots.setdefault(e["value"], []).append(e["root"])
     files = SV.register(run).files
@@ -921,8 +936,6 @@ def test_a_producer_with_stage_is_handed_each_served_calls_device_rows_before_it
 def test_zy_words_are_record_words_of_the_records_split():
     """`zy_words` is `record_words` of `pouw_h1_records.split`: the records' own words where the Program's tile is their
     proof block and they cover every slot, taken apart otherwise (fewer rows than slots, another tile)."""
-    from verity_vllm.protocols.pouw.h1 import records as ZR
-
     rng = np.random.default_rng(3)
     for rows, n, slots, tile in ((64, 96, 64, (32, 32)), (32, 64, 64, (32, 32)), (64, 64, 64, (16, 32))):
         records = rng.integers(0, 256, ((rows // 32) * (n // 32), ZR.ZY_BYTES), dtype=np.uint8)
@@ -934,11 +947,8 @@ def test_zy_words_are_record_words_of_the_records_split():
 def test_an_empty_calls_z_table_is_record_words_of_no_rows(monkeypatch, mode):
     """An empty call's z table (`Served._empty_zy`) is `record_words` of no rows: zeros on the host, and on the GPU a CUDA
     u16 tensor of the same words, made on the hash's stream; a window whose last step is empty registers it either way."""
-    if mode == "gpu":
-        from verity_vllm.protocols.pouw.h1 import registered_device as D
-
-        if not D.available():
-            pytest.skip("no CUDA device the kernels build for")
+    if mode == "gpu" and not D.available():
+        pytest.skip("no CUDA device the kernels build for")
     monkeypatch.setattr(NR, "MODE", mode)
     run, *_ = _window(W1)
     served = run.served
@@ -989,7 +999,7 @@ def test_receipts_off_the_units_receipt_width_are_refused():
 
 #: Llama-3.1-8B's two contractions on a small slice of it: up_proj's K = 4096, one leaf a row, and down_proj's
 #: K = 14336, 4 chunk leaves a row (SPLITK)
-LLAMA = {"shapes": [(64, 4096), (32, 14336)], "modules": {0: "up_proj", 1: "down_proj"}, "blocks": (0, 1)}
+LLAMA: dict[str, Any] = {"shapes": [(64, 4096), (32, 14336)], "modules": {0: "up_proj", 1: "down_proj"}, "blocks": (0, 1)}
 
 
 def _chunk_rows(rows: list[bytes], k: int) -> list[bytes]:
@@ -1027,7 +1037,8 @@ def test_a_step_tables_words_are_each_calls_rows_padded_to_m_in_call_order(k):
     rows = [(rng.integers(-128, 128, (r, k), dtype=np.int8), (rng.random(r) + 0.5).astype("<f4")) for r in (3, 0, 5)]
 
     def padded(codes, scales):
-        full, sc = np.zeros((m, k), np.int8), np.zeros(m, "<f4")
+        full = np.zeros((m, k), np.int8)
+        sc: np.ndarray = np.zeros(m, "<f4")
         full[:len(codes)], sc[:len(codes)] = codes, scales
         return SV.row_words(full.reshape(n * m, k // n), np.repeat(sc, n))
 
@@ -1087,7 +1098,7 @@ def _shake(part: bytes, n: int) -> bytes:
 def _vector_rows(case: str, k: int, rows: int) -> tuple[np.ndarray, np.ndarray]:
     """A vector case's int8 codes (rows, K) and f32 scales: row r the r-th K + 4 bytes of SHAKE256(label, NUL, case),
     its scale's bits set into [2^-7, 2^-6)."""
-    b = np.frombuffer(_shake(case.encode(), rows * (k + 4)), np.uint8).reshape(rows, k + 4)
+    b: np.ndarray = np.frombuffer(_shake(case.encode(), rows * (k + 4)), np.uint8).reshape(rows, k + 4)
     bits = 0x3C000000 | (np.ascontiguousarray(b[:, k:]).view("<u4").reshape(rows) & 0x007FFFFF)
     return np.ascontiguousarray(b[:, :k]).view(np.int8), bits.astype("<u4").view("<f4")
 
@@ -1216,7 +1227,7 @@ def test_a_j10r_llama_window_at_k_14336_is_credited_at_its_whole_k_and_core_ties
     (layout, why), program, shape = CR.layout_of(raw), hashlib.sha512(raw).hexdigest(), CR.shape_of(raw)
     assert why is None and program == served.program_digest
     assert {k: (t["j10r"], t["n"]) for k, t in shape["tiles"].items()} == {4096: (True, 1), 14336: (True, 4)}
-    roots = {}
+    roots: dict = {}
     for e in served.entries():
         roots.setdefault(e["value"], []).append(e["root"])
     files = SV.register(run).files
@@ -1257,8 +1268,6 @@ def test_a_public_table_is_built_again_on_read_and_registers_what_its_held_rows_
     J10-R Llama window): read whole, in any order or one at a time, on the host or as a torch tensor, they are its rows
     and core's salts, and committing them held, as bytes, registers its root, strings and levels; it pickles as it is,
     with no tensor, so a window's saved state holds it."""
-    from verity_vllm.protocols.pouw.h1 import handoff as HO
-
     run = _llama(defn=StandInJ10R)[0] if j10r else _window(W1)[0]
     served, pre = run.served, SV.PREFIX
     assert not served.refused and HW.is_j10r(served.program) == j10r
