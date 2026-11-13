@@ -171,7 +171,10 @@ The records are in the evidence store, in the run files of the runs that carry
   stop record's and a response tie's record name two things more, `stream_registration` and `rate` ("The rate",
   below);
 - `out/registrations.jsonl`: the registration of each execution phase's connection rows that the verdicts name by
-  its head's digest, from which a class's count is read;
+  its head's digest, from which a class's count is read. Its one writer is the offline check of the network
+  certifier's run (`benchmarks/network_traces/warden_serve.py check --registrations`), which writes each
+  registration it verified under the deployment's key and session and laid again from the run's records, and no
+  file where it found a problem;
 - `out/*-controls.jsonl`: a control record, `run`, `verifier` (its `module` and `commit`), `control` (what was
   changed), `verdict`, the verifier's own, whose `format` says which of the four it is a control of, and `reason`,
   the verifier's own word for why it refused. A control without `reason`, or a refused one whose reason is no
@@ -293,8 +296,9 @@ schedules and says so. A caller that reaches the store names the runs and passes
 The lines print how the rows are charged, one line for each class of each head read, and each verdict read under the
 mark `run, not proved`: a verifier judged it on a run, and no proof of that verifier is read here, whatever the
 record's `proved_by` says. A head is read as its registration lists it, held to the digest its certificate names; its
-signature is not checked here. Nothing but verdicts that name a head's digest holds an execution phase, so a
-registration nobody signed holds none.
+signature is not checked here, but by the offline check that writes `out/registrations.jsonl`, and that file is
+unsigned: a head is as good as the run of that check. Nothing but verdicts that name a head's digest holds an
+execution phase, so a registration no verdict names holds none.
 
 Where some execution phase is charged its whole schedule, the document holds apart what each row would be with every
 one held: its `stop`'s `with_verdicts`, in a row's own fields, and one line over the world's year. No record read

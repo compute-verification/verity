@@ -19,8 +19,8 @@ readers are the harness's). A run holds, each one JSON object a line:
   its verdict's ``format`` (`FORMATS`). A verdict whose verifier's format is not listed there reads as missing, and
   a record of such a format is counted in a line and charges nothing;
 - `REGISTRATIONS_FILE`: the registration of each execution phase's connection rows that its verdicts were decided
-  under, as `connection_rows.registration` writes it. A record names its head by digest alone, and a class's count
-  is read from the head;
+  under, as `connection_rows.registration` writes it and as the offline check of the network certifier's run kept
+  it ("A head", below). A record names its head by digest alone, and a class's count is read from the head;
 - its control records, in every file named as `CONTROLS_FILES`: an object with the fields `CONTROL_FIELDS` ("A
   negative control", below);
 - `SERVES_FILE`: each registration record its verdict records name by digest (`digest_of`): the one a serve
@@ -94,8 +94,13 @@ the command does not write itself, closes that, and the reader is handed none.
 
 **A head** (`head_of`) is the registration's own: its link, execution phase, parameters digest and tables as listed,
 held to the digest its certificate names. No signature is checked here: the certificate verifies under the network
-certifier's key and session, which a calculator doesn't hold, so a head read here is as good as the run that kept it.
-A verdict's own verifier checks the certificate before it accepts.
+certifier's key and session, which a calculator doesn't hold. The signature is checked where `REGISTRATIONS_FILE` is
+written, by the offline check of the network certifier's run (`warden_serve.py check --registrations`,
+`connection_rows_run.check`): it verifies each registration under the deployment's key and session
+(`connection_rows.check_registration`), lays its tables again from the run's own records, and writes the file, a
+line for each registration it held to both, only where it found no problem. The file is unsigned, and the reader
+can't tell who wrote the one it is handed: a head read here is as good as the run of that check, and a file from
+any other writer is a head nobody checked.
 
 **An execution phase is one serve's**: a serve, a link and the phase's number. A registration of connection rows
 names no serve, so a head's serve is the one its verdict records name (those on its digest, counted or not), which
@@ -118,7 +123,7 @@ Every other execution phase is charged its whole schedule, one whose registratio
 calculator counts a row's execution phases from its monitoring period (`leak_bounds.Stop.share`), never from the
 registrations read here. So a run's files with an execution phase left out charge what they would with that
 execution phase refused, and since nothing but verdicts on a head's digest holds an execution phase, a
-registration nobody signed holds none. A verdict is held to a head by the digest it names, so an accept decided
+registration no verdict names holds none. A verdict is held to a head by the digest it names, so an accept decided
 under another head, another serve's among them, counts for nothing. Registrations or records that don't read, in a run
 that is not superseded ("The order of runs"), and two
 heads given for one execution phase ("An execution phase is one serve's"), hold no execution phase at all. Each
@@ -258,7 +263,8 @@ def launched_after(a: object, b: object) -> bool:
 
 def head_of(doc: Mapping[str, Any]) -> C.Head:
     """The head a registration of an execution phase's connection rows lists, held to the digest its certificate
-    names, or ValueError naming what doesn't read. Its signature is not checked (the module docstring's "A head")."""
+    names, or ValueError naming what doesn't read. Its signature is not checked here, but where the registrations'
+    file is written (the module docstring's "A head")."""
     try:
         if doc["format"] != C.REGISTRATION:
             raise ValueError(f"its format is {doc['format']!r}, not {C.REGISTRATION!r}")

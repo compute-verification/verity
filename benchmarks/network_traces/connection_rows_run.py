@@ -34,6 +34,16 @@ execution phase with neither, with both, or with the one where the other is due 
 release's place in the release order from the run's `warden.json` where there is one, since the records stop
 counting it at an execution phase that isn't complete.
 
+**The registrations' file** (`check`'s ``registrations``, `keep_registrations`). The check writes each registration
+that passed both of its holds, as the publisher kept it, one JSON object a line and in the execution phases' order.
+It is the file a reader of connection rows takes its heads from (`stop_verdicts.REGISTRATIONS_FILE`), and the one
+place the network certifier's signature on such a head is checked: that reader holds no key. A refusal, the word
+that no head comes and a registration that fails either hold give no line. Where the check, or the caller's check
+it is part of, found any problem, or did not end, there is no file at all, and one already at that path is removed
+before the check reads anything: a run its check refused vouches for no head, and an execution phase with no line
+is charged its whole schedule. The file is unsigned. It is as good as the run of the check that wrote it, and that
+check verifies under the key and session the run's own deployment record names.
+
 **The cost** of a close, for a schedule and its classes:
 
     python connection_rows_run.py cost --out FILE [--classes P,O,ROWS ...] [--load grid|rows] [--phases 5]
@@ -209,12 +219,32 @@ def _spread(xs: list[float]) -> dict:
             "max": round(max(xs), 3) if xs else None}
 
 
+def keep_registrations(path: Path | None, held: Sequence[Mapping] = (), problems: Sequence[str] = ()) -> None:
+    """The registrations' file at `path` (the module docstring's "The registrations' file"): `held`, the
+    registrations the check held to both, one a line, where there is one and the check found no problem; else no
+    file. One already there is removed first, so that none stands from an earlier check, and a check calls this
+    with no registration before it reads anything, so that one that doesn't end leaves none. Nothing for no path."""
+    if path is None:
+        return
+    path.unlink(missing_ok=True)
+    if problems or not held:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    whole = path.with_name(path.name + ".part")
+    whole.write_text("".join(json.dumps(doc) + "\n" for doc in held))
+    whole.replace(path)
+
+
 def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[BlockGrid],
-          egress: Sequence[BlockGrid], fails: Sequence[BlockGrid], link: str) -> tuple[dict | None, list[str]]:
+          egress: Sequence[BlockGrid], fails: Sequence[BlockGrid], link: str, registrations: Path | None = None,
+          found: Sequence[str] = ()) -> tuple[dict | None, list[str]]:
     """The module docstring's check of a run's connection rows under its deployment record `dep`: the summary (the
     registered execution phases, of those that have connection rows, the cost, and under form 2 the execution phases
     with the word that they have no head, of those that have none) and the problems. None, and no problem, for a
-    schedule without lengths rows."""
+    schedule without lengths rows. With ``registrations`` it leaves the registrations' file there
+    (`keep_registrations`), written only where neither it nor its caller found a problem: ``found`` is the problems
+    of the caller's own check, of which this one is the last part."""
+    keep_registrations(registrations)
     if params.lengths is None:
         return None, []
     key, session, windows = cs.read_public(dep["key"]), bytes.fromhex(dep["session"]), dep["windows"]
@@ -247,7 +277,7 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
     except ValueError as e:
         held = {}
         problems.append(f"connection rows: the records don't read as releases: {e}")
-    costs, registered, worded = [], 0, 0
+    costs, registered, worded, passed = [], 0, 0, []
     for w in sorted(set(want) | set(kept) | set(without)):
         doc, salts = kept.get(w, (None, None))
         if w not in want and not params.closes:
@@ -279,8 +309,11 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
             except ValueError as e:
                 problems.append(f"execution phase {w}'s connection rows: {e}")
         registered += ok
-        if not ok:
+        if ok:
+            passed.append(doc["registration"])
+        else:
             problems.append(f"execution phase {w}'s connection rows aren't registered")
+    keep_registrations(registrations, passed, [*found, *problems])
     summary = {"registered": registered, "of": len(want), "tables": sorted({c["tables"] for c in costs}),
                "rows": sorted({c["rows"] for c in costs}), "row_bytes": sorted({c["row_bytes"] for c in costs}),
                **{k: _spread([c[k] for c in costs]) for k in ("build_ms", "commit_ms", "sign_ms")}}

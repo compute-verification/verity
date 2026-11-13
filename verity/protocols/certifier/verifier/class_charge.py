@@ -67,8 +67,10 @@ Where the records name two of either, the class is at its whole schedule and `ch
 0 has no connection to charge and owes no verdict. Where the schedule fixes a class's rows whatever the load, the
 head states those rows, and the class owes its verdicts whatever it holds.
 
-`head` is the verifier's read of the registration (`connection_rows.check_registration`), which holds it to the
-network certifier's certificate; `charge` checks no signature."""
+`charge` checks no signature, and `head` is its caller's. The network certifier's signature on a registration is
+checked by `connection_rows.check_registration`, under the deployment's key and session, in the offline check of a
+network certifier's run, which keeps each registration it held in a file; a caller's heads are to be read from that
+file and from nowhere else."""
 
 from __future__ import annotations
 

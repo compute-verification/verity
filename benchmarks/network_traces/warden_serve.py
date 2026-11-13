@@ -57,7 +57,7 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
         --windows N [--start-in 5] [--load-heads FILE] [--paced-ms 50] [--watermark] [schedule] [--egress id|bytes]
         [--max-tokens-cap N]
     python warden_serve.py client --deployment DIR/deployment.json --traffic TRAFFIC.json --out DIR
-    python warden_serve.py check --run DIR
+    python warden_serve.py check --run DIR [--registrations FILE]
     python warden_serve.py rehearse (--upstream HOST:PORT | --fake) --out DIR [--requests 100] [--temperature T]
         [--top-p P] [--ids [--users NAME] [--prompts FILE [--window-per-group]]] [--paced-ms 50] [--watermark] [--load-store DIR --load-sinks HOST:PORT,...
         --load-program HEX [--load-shape h200|tiny] [--load-workers N] [--load-ready-s 900]] [schedule]
@@ -93,7 +93,8 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   record's, every window of the wire's two has a registration that verifies whose root is its record's rows under
   their salts (`check_cells`), the audit (`warden.audit`) accepts the records, and every connection's client got
   exactly its egress record's cells, each in its bucket, its request is the ingress record's and its response the
-  egress record's; `check.json`.
+  egress record's; `check.json`. With `--registrations FILE` a check that found no problem writes there each
+  registration of connection rows it held, one a line (`connection_rows_run`'s "The registrations' file").
 - `rehearse` makes a key in a scratch directory, writes the traffic, starts the fake endpoint when `--fake`, and runs
   `serve` and `client` as processes, then `check`.
 
@@ -995,8 +996,11 @@ def check_load(run: Path, dep: dict, key: LmsKey, session: bytes) -> tuple[dict 
     return summary | {"relayed": relayed}, problems + found
 
 
-def check(run: Path) -> dict:
-    """The offline check of a served run (the module docstring's `check`)."""
+def check(run: Path, registrations: Path | None = None) -> dict:
+    """The offline check of a served run (the module docstring's `check`). With ``registrations`` it leaves the
+    registrations' file there: each registration of connection rows it held, where it found no problem at all, and
+    no file where it found one or didn't end."""
+    crr.keep_registrations(registrations)
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])
     key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
@@ -1022,8 +1026,7 @@ def check(run: Path) -> dict:
                 problems.append(f"{name} window {w}: {r.status.reason.value}")
     cells_summary, cells_problems = check_cells(run, dep, params, records)
     problems += cells_problems
-    rows_summary, rows_problems = crr.check(run, dep, params, records[INGRESS], records[EGRESS], records[FAILS], LINK)
-    problems += rows_problems
+    rows_at = len(problems)
     verdict = audit(params, records[INGRESS], records[EGRESS], records[FAILS])
     if not verdict["accepted"]:
         problems += [f"audit: {p}" for w in verdict["windows"] for p in w["problems"]]
@@ -1076,8 +1079,14 @@ def check(run: Path) -> dict:
         "finish_reasons": {f: sum(r.get("finish_reason") == f for r in served)
                            for f in sorted({str(r.get("finish_reason")) for r in served})},
         **({} if load is None else {"load": load}),
-        **({} if rows_summary is None else {"connection_rows": rows_summary}),
     }
+    # the connection rows last, their problems at their old place: the registrations' file is written only where
+    # the whole check found no problem, so nothing of the check comes after it
+    rows_summary, rows_problems = crr.check(run, dep, params, records[INGRESS], records[EGRESS], records[FAILS], LINK,
+                                            registrations, problems)
+    problems[rows_at:rows_at] = rows_problems
+    if rows_summary is not None:
+        summary["connection_rows"] = rows_summary
     return {"accepted": not problems, "problems": problems[:50], "summary": summary, "windows": windows,
             "connections": rows}
 
@@ -1327,6 +1336,10 @@ def parser() -> argparse.ArgumentParser:
     c.add_argument("--deployment", required=True, type=Path)
     c.add_argument("--traffic", required=True, type=Path)
     x.add_argument("--run", required=True, type=Path)
+    x.add_argument("--registrations", type=Path,
+                   help="the registrations' file (connection_rows_run's \"The registrations' file\"): each "
+                        "registration of connection rows the check held, one a line, written only where the check "
+                        "found no problem; a job names $OUT/registrations.jsonl")
     return ap
 
 
@@ -1384,7 +1397,7 @@ def main(argv=None) -> int:
         asyncio.run(client(json.loads(args.deployment.read_text()), traffic, args.out))
         return 0
     if args.command == "check":
-        result = check(args.run)
+        result = check(args.run, args.registrations)
         (args.run / "check.json").write_text(json.dumps(result, indent=1))
         print(table(result))
         return 0 if result["accepted"] else 1

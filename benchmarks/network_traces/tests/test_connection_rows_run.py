@@ -3,10 +3,13 @@ content rows as flags that `rehearse` passes to its `serve`, and a run without t
 publisher queue's items, a slot stride each; a run of the network certifier on a `VirtualClock` whose publisher,
 inline and in `serve`'s process, lays, commits and signs each handed execution phase's tables, which the offline
 check holds to the records' own reading of the same cells and refuses when a registration, a salt, a kept line or a
-record isn't the run's; an execution phase that isn't handed has no line; under the lengths rows' form 2 every
-execution phase has one line, its registration or the network certifier's word that it has no head, the run's last
-included, and the check holds each to the one that is due, also past an execution phase that isn't complete; and
-the cost's load and its measurement at a small schedule."""
+record isn't the run's; the registrations' file, which a check that found no problem writes, a line for each
+registration it held and each the publisher's own bytes, and which the reader of the stop verdicts takes its heads
+from, so that a registration with a wrong signature or with tables that aren't its records' leaves no file and
+every class at its whole schedule; an execution phase that isn't handed has no line; under the lengths rows' form 2
+every execution phase has one line, its registration or the network certifier's word that it has no head, the run's
+last included, and the check holds each to the one that is due, also past an execution phase that isn't complete;
+and the cost's load and its measurement at a small schedule."""
 
 from __future__ import annotations
 
@@ -19,9 +22,12 @@ from verity.protocols.certifier.verifier import connection_rows as CR
 from verity.protocols.certifier.verifier import content_rows as CT
 from verity.protocols.certifier.verifier.warden import Released, WardenParams
 
+import test_stop_verdicts as TSV
 from test_warden_serve import _run, ws
 
 crr = ws.crr
+#: the reader of the registrations' file, and its tests' records
+SV = TSV.SV
 #: a schedule with lengths rows and three classes, two of one size: 16 buckets an execution phase, a slot stride of 2
 PLAIN = WardenParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=6, window=16, ingress_cells=4,
                      ingress_buckets=3, egress_cells=9, every=2)
@@ -104,12 +110,13 @@ def served(out, key, *, windows: int = 4, process: bool = False, params: WardenP
                 process=process, **kw), requests
 
 
-def refused(out, edit) -> list[str]:
-    """The check's problems of the run in `out` once `edit` has changed its files, which are then put back."""
+def refused(out, edit, registrations=None) -> list[str]:
+    """The check's problems of the run in `out` once `edit` has changed its files, which are then put back; the
+    check is given `registrations` as its registrations' file."""
     saved = {p: p.read_bytes() for p in out.iterdir()}
     edit()
     try:
-        return ws.check(out)["problems"]
+        return ws.check(out, registrations)["problems"]
     finally:
         for p in set(out.iterdir()) - set(saved):
             p.unlink()
@@ -210,6 +217,152 @@ def test_the_check_refuses_rows_that_arent_the_runs(tmp_path):
             ws.ar.write_blobs(out / "responses.records", ws.ar.pack_record(r))
 
     assert "execution phase 0's connection rows aren't its records' releases" in refused(out, other_id)
+
+
+def answer(tmp, file, registrations: list[dict]) -> TSV.LB.Stop:
+    """The reader's answer (`stop_verdicts.of_runs`) on a run that holds the registrations' file as the check left
+    it at `file`, or none where it left none, with the four verdicts of every class of each of `registrations`'
+    heads, their verifiers' controls and the serve's registrations."""
+    heads = [SV.head_of(doc) for doc in registrations]
+    files = {"out/the-verdicts.jsonl": TSV.jsonl([r for h in heads for cls in SV.classes(h) for r in TSV.four(h, cls)]),
+             "out/the-controls.jsonl": TSV.jsonl(TSV.the_controls()),
+             SV.SERVES_FILE: TSV.jsonl(TSV.with_streams(TSV.SERVED))}
+    if file.exists():
+        files[SV.REGISTRATIONS_FILE] = file.read_text()
+    return SV.of_runs(TSV.Store(tmp, {"a run": files}), ["a run"])
+
+
+def test_the_check_writes_each_registration_it_held_and_a_line_is_the_publishers_own(tmp_path, monkeypatch):
+    """Given a file, a check that accepts the run writes it one line for each registration it held to both: every
+    handed execution phase's, in order. A line is byte for byte the registration as the publisher kept it in
+    `rows.jsonl`, and the head the reader's `head_of` reads from it is the head `check_registration` verified
+    under the key, the session and the schedule. The reader, handed that file with the four verdicts of each
+    head's classes, holds all three execution phases. `check --registrations FILE` writes the same file, and a
+    check that is given no file writes none."""
+    monkeypatch.setattr(SV, "FORMATS", {form: kind for kind, form in TSV.FORMATS.items()})
+    out, file = tmp_path / "run", tmp_path / "out" / "registrations.jsonl"
+    served(out, tmp_path / "key")
+    assert ws.check(out)["accepted"] and not file.parent.exists()
+    assert ws.check(out, file)["accepted"]
+    written, kept = file.read_text(), (out / crr.ROWS).read_text().splitlines()
+    lines = written.splitlines()
+    assert len(lines) == len(kept) == 3 and written == "".join(line + "\n" for line in lines)
+    key, session = device_key(out)
+    for w, (line, publishers) in enumerate(zip(lines, kept)):
+        assert publishers.startswith(f'{{"registration": {line}, "cost": ')
+        verified, _ = CR.check_registration(json.loads(line), key, session, ROWS, ws.LINK, w)
+        assert SV.head_of(json.loads(line)) == verified and verified.window == w
+    held = answer(tmp_path / "read", file, [json.loads(line) for line in lines])
+    assert held.held == 3, held.why
+    by_command = tmp_path / "out" / "by-command.jsonl"
+    assert ws.main(["check", "--run", str(out), "--registrations", str(by_command)]) == 0
+    assert by_command.read_text() == written
+    assert ws.main(["check", "--run", str(out)]) == 0 and sorted(p.name for p in file.parent.iterdir()) == [
+        "by-command.jsonl", "registrations.jsonl"]
+
+
+def test_a_registration_with_a_wrong_signature_gives_no_file_and_the_reader_holds_nothing(tmp_path, monkeypatch):
+    """A registration whose signature is changed still names its own head's digest, so the reader's `head_of` reads
+    the head it read before, and a reader handed that registration would hold its execution phase: the reader
+    checks no signature. The check refuses it under the key, so it writes no file and removes the one an earlier
+    check wrote, with the lines of the two execution phases it still holds; the reader, handed what the check left,
+    charges every class its whole schedule and says no registration was read. With the run's files put back the
+    check writes the file it wrote before."""
+    monkeypatch.setattr(SV, "FORMATS", {form: kind for kind, form in TSV.FORMATS.items()})
+    out, file = tmp_path / "run", tmp_path / "out" / "registrations.jsonl"
+    served(out, tmp_path / "key")
+    assert ws.check(out, file)["accepted"]
+    written = file.read_text()
+    signed = [json.loads(line) for line in written.splitlines()]
+
+    def other_signature(lines, salts) -> None:
+        cert = lines[1]["registration"]["certificate"]
+        cert["signature"] = ("1" if cert["signature"][0] == "0" else "0") + cert["signature"][1:]
+        forged.append(json.loads(json.dumps(lines[1]["registration"])))
+
+    forged: list[dict] = []
+    problems = refused(out, lambda: edit_rows(out, other_signature), file)
+    assert forged[0] != signed[1] and SV.head_of(forged[0]) == SV.head_of(signed[1])
+    assert ("execution phase 1's connection rows: the registration's certificate doesn't verify under the network "
+            "certifier's key in the session") in problems
+    assert not any("execution phase 0" in p or "execution phase 2" in p for p in problems)
+    assert not file.exists()
+    left = answer(tmp_path / "left", file, signed)
+    assert left.held == 0 and "verdict record(s) were read and no registration" in left.why[0]
+    # the reader alone holds a head nobody signed: only the check's file keeps it from one
+    file.write_text(TSV.jsonl(forged))
+    assert answer(tmp_path / "forged", file, forged).held == 1
+    assert ws.check(out, file)["accepted"] and file.read_text() == written
+
+
+def test_a_registration_whose_tables_arent_its_records_releases_gives_no_file(tmp_path):
+    """A registration that verifies under the key and whose tables, laid again from the run's own records under the
+    kept salts, aren't its head's (a row's salt changed; an id changed in the egress record) fails the check's
+    second hold: the check writes no file and removes the one an earlier check wrote."""
+    out, file = tmp_path / "run", tmp_path / "out" / "registrations.jsonl"
+    served(out, tmp_path / "key")
+    key, session = device_key(out)
+
+    def other_salt(lines, salts) -> None:
+        salts[1] = salts[1][:-1] + bytes([salts[1][-1] ^ 1])
+        CR.check_registration(lines[1]["registration"], key, session, ROWS, ws.LINK, 1)
+
+    def other_id() -> None:
+        records = ws.read_records(out, ROWS)["responses"]
+        record = records[0]
+        row = next(b for b, r in enumerate(record.grid) if any(f is not None and f[0] == ws.DATA for f in r))
+        frames = list(record.grid[row])
+        k = next(i for i, f in enumerate(frames) if f is not None and f[0] == ws.DATA)
+        read = ws.IT.parse_cell(frames[k])
+        frames[k] = ws.IT.data_cell(read.id + 1, read.stream, ROWS.cell_bytes)
+        grid = record.grid[:row] + (tuple(frames),) + record.grid[row + 1:]
+        (out / "responses.records").unlink()
+        for r in (ws.replace(record, grid=grid), *records[1:]):
+            ws.ar.write_blobs(out / "responses.records", ws.ar.pack_record(r))
+
+    for w, edit in ((1, lambda: edit_rows(out, other_salt)), (0, other_id)):
+        assert ws.check(out, file)["accepted"] and len(file.read_text().splitlines()) == 3
+        assert f"execution phase {w}'s connection rows aren't its records' releases" in refused(out, edit, file)
+        assert not file.exists()
+
+
+def test_a_check_that_finds_any_problem_writes_no_file(tmp_path):
+    """The registrations' file is a whole check's or none: a run whose first execution phase's records were withheld
+    has two registrations that the check holds, with no problem of the connection rows, and the check refuses the
+    run, so it writes no file, removes one that was there, and its command exits 1. So does a run whose every
+    registration holds and whose client says a connection failed, a problem the check finds after its records'. A
+    run without lengths rows has no registration, so its check, which accepts it, leaves no file either; nor does a
+    check that doesn't end, of a run without its deployment record, and none leaves a part of a file beside it."""
+    out, file = tmp_path / "run", tmp_path / "out" / "registrations.jsonl"
+    served(out, tmp_path / "key", params=dataclasses.replace(ROWS, queue=5))
+    file.parent.mkdir()
+    file.write_text("an earlier check's\n")
+    result = ws.check(out, file)
+    s = result["summary"]["connection_rows"]
+    assert (s["registered"], s["of"]) == (2, 2) and not any("connection rows" in p for p in result["problems"])
+    assert not result["accepted"] and not file.exists()
+    assert ws.main(["check", "--run", str(out), "--registrations", str(file)]) == 1 and not file.exists()
+    # a problem of the client's side alone, which the check finds past the certificates and the records
+    whole = tmp_path / "whole"
+    served(whole, tmp_path / "whole-key")
+    assert ws.check(whole, file)["accepted"] and len(file.read_text().splitlines()) == 3
+
+    def failed() -> None:
+        client = json.loads((whole / "client.json").read_text())
+        client["connections"][0]["error"] = "the connection was cut"
+        (whole / "client.json").write_text(json.dumps(client))
+
+    problems = refused(whole, failed, file)
+    assert problems == ["client connection 0: the connection was cut"] and not file.exists()
+    plain = tmp_path / "plain"
+    served(plain, tmp_path / "plain-key", windows=2, params=PLAIN)
+    file.write_text("an earlier check's\n")
+    assert ws.check(plain, file)["accepted"] and not file.exists()
+    file.write_text("an earlier check's\n")
+    (plain / "deployment.json").unlink()
+    with pytest.raises(FileNotFoundError):
+        ws.check(plain, file)
+    assert list(file.parent.iterdir()) == []
 
 
 @pytest.mark.parametrize("process", [False, True])
