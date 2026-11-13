@@ -234,7 +234,7 @@ oracle_tests = [
     "adapters/vllm/tests/engine/int8_{attention_capture,attention_tpot,chunked,exact,experts,kscale}_gpu.py",
     "adapters/vllm/tests/pipeline/test_{commit_coins,serve_h1,serve_tie}.py",
     "adapters/vllm/tests/protocols/{challenger_host,pouw_h1_circuits,pouw_h1_gpu,pouw_h1_ranks_gpu,pouw_h1_rehearsal}.py",
-    "adapters/vllm/tests/protocols/test_pouw_h1{,_circuits,_commit,_drawn,_gpu_args,_handoff,_live,_ranks_commit}.py",
+    "adapters/vllm/tests/protocols/test_pouw_h1{,_circuits,_commit,_drawn,_gpu_args,_handoff,_live,_ranks_commit,_refusals}.py",
     "adapters/vllm/tests/protocols/test_{credit_gate,pouw_pearl_c_served,rt4_h1_challenger}.py",
 ]
 # vLLM's tests of the code identity and the code version, which read the run store's closure and code directories: the public
