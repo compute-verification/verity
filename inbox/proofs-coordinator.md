@@ -110225,3 +110225,73 @@ NEEDS:
 To post: nothing.
 
 Not established: nothing is written or compiled. The known hole is not closed: a history may hold earlier runs and ledger lines only on other windows; on the play's own two windows it holds exactly this play's runs. Soundness replaces that step with the key pins on Tue 17 Nov.
+
+## FRAME, Fri 13 Nov 00:05Z: A SLOT ON vy-nebius-2 KEPT MY TRY `b82b` WAITING 43 MINUTES (29 for a check slot, 14 more for a Lean build slot; cancelled, its files moved to `--on auto`). `NeededBits.lean` compiles. The entry and one-tree facts at the address map are written in full and pushed (base `e3652d8de382`), compiling now; condition (a) is withdrawn and replaced; (e) becomes no condition; `two h` as stated is not decidable at the cost of the description
+
+**In plain words.** Two of the five facts about where each bit sits are mine to prove, and both are now written from start to end: for every bit a checked unit needs, the entry the verifier reads it from and the tree it is opened under are the ones the address map names. They rest on a short list of conditions about the registered wiring, each one named. Lean has not checked them yet: one run is compiling the first half now. Three corrections to what I said before are below, and one of them changes what the row fact's owner must cover. The design's evaluation as the model states it cannot be run by a verifier at the cost of the circuit's description; I name which parts walk every bit.
+
+Clock: `date -u` read 00:05Z. Mailbox read at 00:04Z (your 23:27Z, 23:43Z, 23:52Z). The base `cursor/proofs-two-round-base-84b5` is at `e3652d8de382`, pushed; nothing of mine is unpushed except scratch scripts under `/tmp`.
+
+**1. What compiled since 23:23Z** [run].
+- `r20261112-231115-cc88` (vy-nebius-2, base `be14a7d24856`): done, exit 0. The whole SpotFlock build with `Run.run`'s `form` argument passes; `NeededBits.lean`, `AddressOf.lean`, `AddressFactsGive.lean`, `ReadsDesign.lean`, `Honest.lean` built in it. So NEEDEDBITS proves against a file that elaborates.
+- `r20261112-230048-af8a` (cpu-7): "Build completed successfully" for `NeededBits.lean` and `AddressOf.lean`.
+- Not compiled: `WiringOk.lean`, `ReadWays.lean`, `EntryRoots.lean`, and `AddressOf.lean` with `slotAt`'s schema as changed at `4deaf713899b`.
+
+**2. Runs now** [run].
+- `r20261112-231910-b82b` (vy-nebius-2): cancelled at 00:02Z. It waited 29 minutes for a check slot and then 14 more for a Lean build slot, second in that line; `6c94` covers its files at a newer head. For infra: at 00:01Z all four Lean build slots there were held by records runs (`--records security --update` and `--records security/Properties --update`), for 12, 28, 30 and 50 minutes so far. Tries wait behind records runs, not behind tries.
+- `r20261112-234543-6c94` (`--on auto`, went to cpu-3, base `5dfcaf56e3ce`): `ReadWays.lean` and `WiringOk.lean`. Got a slot at once; cpu-3's tree was cold, so it rebuilt Proofs.Flock first (job 10,293 of 11,120 at 23:59Z). [guess] ends by 00:20Z.
+- Next, when `6c94` says `ReadWays.lean` elaborates: one try of `EntryRoots.lean` and `PortsMember.lean` at the head above.
+
+**3. The base moved** [read]. `241c9bf91ac2` → `5dfcaf56e3ce` (`ReadWays.lean`) → `fc4539be32e6` (`EntryRoots.lean`) → `e3652d8de382` (`PortsMember.lean`). Workers merge it in. Each new file is one `public import` line of its own in `security/Proofs/Flock.lean`.
+
+**4. What is written** [derived; no run has compiled it].
+- `SpotFlock/ReadWays.lean` (359 lines): from round 2's check of one registered read.
+  - `registeredEntry_none_of_inputs`: at what the model holds of the run, `second-inputs` passes only where round 1's record registers no value.
+  - `readsInterior_linked`, `readsInterior_port`: which record round 2 reads the value off, and the entry.
+  - `readOk_own`: at a port no link or wire names, a read of a port of the interior record is of the template's own port.
+  - `read_of_reg`: the entry round 2 passes for each registered read of a checked unit's session.
+  - `schema_of_setup`: a registered read of a session that sets up has the schema of the circuit's first port of its name.
+- `SpotFlock/EntryRoots.lean` (441 lines): `entryFact_of_wiring : Wiring h → EntryFact h (wireMap h) (returned h) (addressOf h)` and `oneTreeFact_of_wiring : Wiring h → OneTreeFact h (wireMap h) (returned h) (addressOf h)`.
+  - `Wiring h` is twelve named conditions: `NeededBits`, `Inside`, `WrittenOnce`, `RowsArePorts`, `PortsMember`, `OwnReads`, `sourcesNamed`, `wiresMove`, `WiresFirst`, `wiresAlike`, `returnedWhole`, `writtenUnwired`.
+  - The proof is four cases of a needed bit: an input at a linked port, an output at a linked port (both opened under the statement's roots, read off the boundary port the link names), an input at a wired port (sent to its writer's output bit, read off the writer's port of the interior record), an output at a port no link names (read off the template's own port of the interior record).
+- Of the twelve, who owns each:
+  - `NeededBits`: NEEDEDBITS.
+  - `sourcesNamed`, `wiresMove`, `WiresFirst`, `wiresAlike`, `returnedWhole`, `writtenUnwired`: decided; they go into the design's evaluation in L1's one change.
+  - `OwnReads`: from `refReadsOwn` (decided), the worker you are launching.
+  - `PortsMember`: written, with no hypothesis (`SpotFlock/PortsMember.lean`, `portsMember h`): it is the step `v2Row_port` already makes inside its proof, from `pinOk`.
+  - `Inside`, `WrittenOnce`, `RowsArePorts`: facts of the members' programs, owned by nobody. See NEEDS.
+
+**5. Your three points of 23:27Z.**
+1. The conjunct `Flock.ProvedScope.scopeOkH r.stmt` goes in `templateOk`, not `sessionOk` [derived]. `NeededBits h` is about `bitsProgs h.ms`, the registered members, and `templateOk` is the check of the registration's reference statements; `sessionOk` is about a run's statement and would leave the registration unconstrained. It is in L1's one change. NEEDEDBITS: `MembersRowed h` stays a named hypothesis until then, mine; the lemma from `scopeOkH r.stmt = true` to `MemberRowed` of that member is yours, since both sides are in your file.
+2. The model stays as it is: the proof is of the second try's design [relayed, GATHER].
+3. Condition (a): I meant a wire's reader end. So (a) as I stated it at 22:32Z is false at Friday's 19 ports, and I withdraw it [derived].
+   - What replaces it: `refReadsOwn h`, decided on the registration. Each reference read at a port that no link names and no wire reads must read a port of the interior registration. Through round 2's `second-values` that gives `OwnReads h`, and then round 2's last arm holds the value to the template's own port (`readOk_own`).
+   - Why it is needed for soundness and is not only bookkeeping: without it, a session could read its output port at a value the boundary registration registers. Round 2's last arm passes that read with `sameAt` only, under the statement's roots, while the connected program opens that bit under the replay block's roots. The two trees would differ.
+   - The other direction (a port a link or a wire names is read registered) is `named_port_of_stmtOk`, proved.
+   - Condition (e): it becomes no condition. `h.reg.always` is a field of the model that no check reads. The facts are proved at the registration with that field emptied (`h.noAlways`, `NoAlways.lean`, compiled: `V_noAlways`, `two_noAlways`, `parse_noAlways` are `rfl`), where ADDRROW's premise `∀ v, h.reg.always v = false` holds by `rfl` (`noAlways_always`), and `ksTwo_noAlways` carries the conclusion back.
+
+**6. ADDRROW: the kind `ownPort` occurs at needed gates** [derived from GATHER's read].
+- On Friday's design each chunk's `o0` is in its template's reference reads and is read at the interior record's own port. So `NeededKinds` (only `boundaryLink` or `wired`) and `refPortsNamed` are false there. Your point 2 was right, and the answer is the first of your two ways: the map covers it.
+- The row at such a read: the slot is sized, so its leaf count is `q · n_t` (`unitsAt`), and the row fact needs `reg.leaves = q · n_t`. Round 2's `rowsOk` gives only `leaves % (q · n_t) = 0`.
+- The way that changes no verifier: the reader's check of the wire that reads the port. `readOk`'s wired arm at the reading template has `placedOk` with `l == q · r.per` and `pw.n == r.per`, and the entry it checks is the same interior port. That needs one more decided condition on the registration: every written port no link names is some wire's writer port (true on Friday's design: each `o0` is wire k's writer). I add it to L1's change as `writtenRead` if you say you take this way.
+- The other ways: the running `rowsOk` refuses `leaves ≠ units` (one comparison, refuses more, needs the Python twin and its difftest: not tonight); or serving stops registering own-port reads (honest runs then fail `rootsOk` unless serving changes too).
+- Your point 3 (`x` is the writer's place and `per = n_w` at `addressOf`): prove it in your file. At a wired input bit, `addressOf`'s slot is `slotAt h tw ⟨w.wport, k / n_t · n_tw + x, bit⟩` with `x` from `wireCell` (`cellRow r (k % n_t)`): `pos = (k / n_t · n_tw + x) % n_tw`, `stride = n_tw`. What you need of mine is on the base: `addressAt_of_bitOf` (`NeededBits.lean`), `wireTarget_at` and `wireUnit_wire` (`WiringOk.lean`), `wireCell_wire` (`WireMap.lean`), and `wired_read` gives `n_tw = r.per`. `holds_of_wiring` in `EntryRoots.lean` shows the four cases and the address in each.
+
+**7. Your point 4 of 23:43Z: is `two h` decidable at the cost of the description? No, not as stated** [read, `Code.lean`; derived].
+- Walks the unrolled program:
+  - `scopeOk (bitsProgs h.ms) (membersPart h.ms) …`: `topoOk`, `partitionsOk`, the `Nodup` and the replays range over every gate of the members' bit programs, all units.
+  - `filesOk`: every replay block × template × position of the block.
+  - Of the conditions L1 adds: `sourcesNamed`, `wiresMove`, `returnedWhole`, `writtenUnwired` range over every source or written bit.
+- Sized by the description: `templateOk` (with `scopeOkH`), the lengths and `k`, `writersFirst`, `namesOnce`, `wiresAlike`, `refReadsOwn`, `writtenRead`, and the interior registration's empty `values`.
+- What the form can do instead: decide a check sized by the description that is proved to give `two h = some d`. What exists toward it: each member's program is topological from its template's built unit (`topological_memberProg`, used by `topological_of_two`); NEEDEDBITS's `blocksClosed_bitsProgs` holds with no hypothesis. The four bit conditions each depend only on a bit's template and row, except `wiresMove`, which also reads the unit's position in its cell; no lemma states those reductions yet. [guess] That is a file of its own, for HELDOF or a second worker; I do not take it tonight.
+
+**8. L1's rest.** Not made. It now holds: `sourcesNamed`, `wiresMove`, `writersFirst`, `namesOnce`, `wiresAlike`, `returnedWhole`, `writtenUnwired`, `refReadsOwn`, `writtenRead` (if ADDRROW takes it), `scopeOkH` in `templateOk`, `h.interiorNames.values = []`. I make it after `EntryRoots.lean` compiles, as one change with one whole build, and the entry that names its head carries the premises' list before and after, with the two lock entries that came due (`ReplayCap`, `RegMatchesTwo`).
+
+**NEEDS.**
+- You: an owner for `Inside`, `WrittenOnce` and `RowsArePorts` (their exact text is in `WiringOk.lean`). `Inside` is the large one: a wire's writer unit is in its reader's replay block and the connected program does not commit that bit; it is close to what `Prog.Rewires` and the layout (`filesOk_sound`) already give. `WrittenOnce` and `RowsArePorts` are about `sourceBits` and `writtenBits`, near NEEDEDBITS's file. If no worker is free I take them after L1's rest, which puts the assembly past 07:00Z [guess].
+- ADDRROW: say which way for the leaf count at an own-port read (point 6).
+- More Lean trees on vy-nebius-2, as everyone asks.
+
+**STOP RULE.** Nothing changed in this entry's commits: the base's new files state and prove lemmas; no listed guarantee's statement or premises moved, and the verifier accepts nothing new. L1's rest will move three lock records; its before and after come with its head.
+
+**Not established.** That `WiringOk.lean`, `ReadWays.lean`, `EntryRoots.lean` or `PortsMember.lean` elaborates. `Inside`, `WrittenOnce`, `RowsArePorts` and `OwnReads`: stated, unproved. That `refReadsOwn`, `wiresAlike` and `scopeOkH` hold at the second try's registration (GATHER and HONEST2 are reading). That a check sized by the description gives `two h`.
