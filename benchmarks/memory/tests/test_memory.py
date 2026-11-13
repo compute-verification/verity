@@ -649,8 +649,9 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
         "error": [RUN, "ledger.declared.gamma.spec.error.windows"]}
     for n, m in got.items():
         assert (m["run"], m["commit"], m["host"]) == (BENCH, STAMP["commit"], STAMP)
-        assert (m["target"], m["verdict"], m["ci95"]) == ((0.14, "past target; the verifier held no checkpoint", None)
-                                                          if n == M.METRIC else (None, None, None))
+        assert (m["target"], m["verdict"], m["ci95"]) == (
+            (0.14, "past target; the verifier held no checkpoint; its error is above 2^-100", None) if n == M.METRIC
+            else (None, None, None))
         assert m.get("bound", "absent") == (False if n == M.METRIC else "absent")
     assert got[M.METRIC]["unit"] == M.UNIT
 
@@ -805,7 +806,9 @@ def test_the_metrics_tabs_row_holds_the_number_against_its_target(gamma, verdict
     row = rows[M.METRIC]
     assert (row["owner"], row["unit"], row["better"]) == ("memory-accounting", M.UNIT, "lower")
     assert "benchmarks/memory/run.py --from" in row["command"]
-    (m,) = [m for m in M.amounts({"value": gamma, "unit": M.UNIT, "run": RUN, "bound": True}, {}) if m["name"] == M.METRIC]
+    within = {"declared": {"gamma": {"spec": {"error": {"windows": 2.0 ** -100}}}}}
+    doc = {"value": gamma, "unit": M.UNIT, "run": RUN, "bound": True}
+    (m,) = [m for m in M.amounts(doc, within) if m["name"] == M.METRIC]
     assert (m["value"], m["target"], m["verdict"]) == (gamma, M.TARGET, verdict) and M.TARGET == 0.14
     assert "extra" not in m
 
@@ -815,11 +818,44 @@ def test_an_unbound_sessions_row_is_written_and_says_its_verifier_held_no_checkp
     """A session whose verifier bound its store to no checkpoint still writes the Metrics tab's row; the entry carries
     `"bound": false` and its verdict names the premise, which the console and `research metrics` show as written. A
     document with no `bound` (a record from before it) reads as unbound."""
+    within = {"declared": {"gamma": {"spec": {"error": {"windows": 2.0 ** -101}}}}}
     doc = {"value": 0.127, "unit": M.UNIT, "run": RUN, **({} if bound is None else {"bound": bound})}
-    (m,) = [m for m in M.amounts(doc, {}) if m["name"] == M.METRIC]
+    (m,) = [m for m in M.amounts(doc, within) if m["name"] == M.METRIC]
     assert m["verdict"] == "within target; the verifier held no checkpoint" and m["extra"] == {"bound": False}
-    store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session()), binding={"name": "SOME_ROLE", "bound": True})})
+    store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session(), error=2.0 ** -100),
+                                                  binding={"name": "SOME_ROLE", "bound": True})})
     held = a_run(monkeypatch, tmp_path)
     assert bench(store, "--from", RUN) == 0
     bound_row = written(held)[M.METRIC]
     assert bound_row["verdict"] == "past target" and "bound" not in bound_row
+
+
+@pytest.mark.parametrize("ledger, why", [
+    ({"declared": {"gamma": {"spec": {"error": {"windows": 2.0 ** -31}}}}}, "the whole error, today's"),
+    ({"declared": {"gamma": {"spec": {"error": {"windows": 2.0 ** -99}}}}}, "the whole error, just above"),
+    ({"spec": {"error": {"windows": 2.0 ** -40}}}, "no declared error: the ledger's own"),
+    ({}, "no error at all"),
+], ids=["today", "just-above", "ledger-only", "none"])
+def test_a_row_whose_error_is_above_2_to_the_minus_100_says_so_in_its_verdict(ledger, why):
+    """The goal holds the number at an error of at most 2^-100: a row whose error the record holds above it, the
+    declared error where it has one and else the ledger's own, or holds none, names that premise after the
+    checkpoint's, so a share under 0.14 never reads "within target" alone."""
+    for bound, held_none in ((True, ""), (False, "; the verifier held no checkpoint")):
+        doc = {"value": 0.127, "unit": M.UNIT, "run": RUN, "bound": bound}
+        (m,) = [m for m in M.amounts(doc, ledger) if m["name"] == M.METRIC]
+        assert m["verdict"] == f"within target{held_none}; its error is above 2^-100", why
+    assert M.ABOVE_BOUND == "its error is above 2^-100" and M.ERROR_BOUND_LOG2 == -100
+
+
+def test_a_declared_error_at_the_bound_is_preferred_to_the_ledgers_own_and_holds_no_premise():
+    """The declared error (the ledger's with the sketch's and the draw's) decides where the record holds it: a ledger's
+    own error above the bound beside a declared one at it adds nothing; the declared one above it, beside a ledger's own
+    under it, does."""
+    doc = {"value": 0.127, "unit": M.UNIT, "run": RUN, "bound": True}
+
+    def verdict(declared: float, own: float) -> str:
+        ledger = {"declared": {"gamma": {"spec": {"error": {"windows": declared}}}}, "spec": {"error": {"windows": own}}}
+        return next(m["verdict"] for m in M.amounts(doc, ledger) if m["name"] == M.METRIC)
+
+    assert verdict(2.0 ** -100, 2.0 ** -31) == "within target"
+    assert verdict(2.0 ** -31, 2.0 ** -120) == "within target; its error is above 2^-100"
