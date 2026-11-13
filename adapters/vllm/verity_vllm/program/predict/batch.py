@@ -48,8 +48,9 @@ request's Program is built at its launch context, which the advice fixes, and th
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable, Mapping
 from functools import cache
-from typing import Any, Callable, Mapping
+from typing import Any
 
 from verity_vllm.check.batch import BATCH, SHARED, Fields, Template, own, separable
 from verity_vllm.pipeline import window_advice as WA

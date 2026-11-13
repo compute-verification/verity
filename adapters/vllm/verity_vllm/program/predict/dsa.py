@@ -43,7 +43,8 @@ chunk is sure to hold, a GEMM, all-reduce or MoE tile no record covers) when the
 from __future__ import annotations
 
 import re
-from typing import Any, Mapping, NamedTuple, NoReturn, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any, NamedTuple, NoReturn
 
 from verity.circuits.defs import Builder
 from verity.circuits.refs import Coll, Concat, PartLog, Refs, concat, strided_view
@@ -228,10 +229,10 @@ class Net:
         return [("prefix", _arr((self.NL, C, row), 16)), ("prefix_ik", _arr((NI, C, int(self.C["INDEX_HEAD_DIM"])), 8)),
                 ("prefix_iks", _arr((NI, C), 32))]
 
-    def model(self, B: Builder, W: Coll, peers: _Peers) -> "_Model":
+    def model(self, B: Builder, W: Coll, peers: _Peers) -> _Model:
         return _Model(self, B, W, peers)
 
-    def dense_plan(self, k, M: int, pos0: int, context: int, dense: list[tuple[int, int]]) -> "DensePlan":
+    def dense_plan(self, k, M: int, pos0: int, context: int, dense: list[tuple[int, int]]) -> DensePlan:
         """The selections of a dense-MHA prefill of M rows at pos0.. after `context` history rows (`_Model._dense_prefill`), each
         kind `k(role, **statics)`'s, or the refusal."""
         import numpy as np
