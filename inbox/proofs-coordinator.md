@@ -112839,3 +112839,88 @@ Not established
 - The earlier-signature hole: at a history of one play, an earlier period's genuine signature in the evidence makes the error ⊤. Soundness's change of Tue 17 Nov closes it.
 
 Pushed head: `bb96dbb00a`. Nothing is left unpushed.
+
+## STOPS, Fri 13 Nov 01:47Z: COMPILED: the second stage's rule for a statement of only its sampled inner blocks, with nineteen theorems about it in the code's own file (standard axioms only) and its Python mirror held by the difftest; none of it is in Friday's run or in the proof owed for it. FRIDAY'S `complete`: neither of Friday's trees prints the field (it is in an open change), and where it is it is false; to be true it takes (1) the two-stage form's switch on, which only the form's proof turns, (2) the outer block being the class's registered request Definition and not the token select, (3) both stages' audit records accepted with every verdict run. (2) cannot be had by Friday
+
+**In plain words, for Daniel.** Friday's audit will not say `complete`, and it should not. An audit earns that word when it checked the whole served request and every one of its checks ran. Friday's audit samples outer blocks and then inner blocks inside them, but its outer block is not the request: it is the last step alone, the choice of each token from a row of scores, and nothing ties that row to the prompt. Three things are needed before the word is true. The verifier must be allowed to accept a two-stage audit at all, which it is not until the proof of that form is finished: today it runs every check and then withholds the last accept. The outer block must be the registered circuit of the whole request, which waits on that circuit being cut the way serving cuts it and on the serving side recording a sampled request's values; that is not Friday's. And both stages' records must have run every check, which the rehearsals already do. The field itself is also not yet in the code Friday runs. On my side, what compiled tonight is the next form of the second stage: after the second draw the prover stages only the inner blocks the draw picked, not all of them, and the verifier's rule for that form now has nineteen machine-checked facts about what it enforces, the last of them saying which sampled inner block each instance of a session is. That form is what keeps the verifier's work small when the outer block grows to a whole request. It is not part of Friday's run or of the proof owed for Friday, and it stays behind the same switch.
+
+Clock: `date -u` read 01:47Z before the push. Mailbox read at 01:46Z: 158 lines, nothing after your 00:17Z message; circuits' list and date have not been relayed to me. `main` is `e86d9204135c`, and my branch holds it. Pushed head of `cursor/proofs-stops-drawn-7b3e`: `7c776d1125f7`. Nothing is unpushed. Tags: [run] a command of mine and its output; [read]; [derived]; [relayed] with whose; [guess]. No run here is a run of record: made-up logits, no engine, local challenger sessions, the form's switch off.
+
+### 1. What has compiled
+
+- [run] `Spot/SecondStage.lean` at `de2a89468eb2`: `r20261113-012113-1f69` on vy-nebius-2, `lean exit 0 in 165 s`; `axiom probe: none of its 46 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`. `main`'s file has 27 theorems [run: `rg -c '^theorem '` on both]; the 19 the branch adds are `checkAny_eq_check`, `sampledCodes_nil`, `codes_nil_shared`, `getD_mem_of_lt`, `anySampled_false`, `checkAny_ok`, `checkAny_ok_refs`, `checkAny_ok_wired`, `checkAny_ok_values`, `mem_sampledSlots`, `sampledOk_indices`, `sampledHeaderOk_ref`, `checkAny_ok_sampled`, and since my 01:00Z entry `map_eq_at`, `mem_of_at`, `at_of_mem`, `sampled_at`, `sampled_slot`, `checkAny_ok_slots` (`:1989-2087`).
+- [read] What the six new ones say. `checkAny_ok_slots`: at a passing `checkAny`, for each statement that holds only its part's sampled proof blocks, with `is` its header's `units.indices`: (a) for every place `j` of the part's sampled slots (`sampledSlots`, the second draw's units that fall in the part, in the draw's order) with slot `u` there, `u` is a unit of the second draw, in the part, and `is[j]` is the number `u`; (b) for every unit `u` of the second draw in the part there is a place `j` below the count with `is[j] = u`. With `checkAny_ok_sampled` (the `instances` are that count; the session's sample is every unit) this is the code's half of the row fact at the second map: instance `j` of the session is the part's `j`-th sampled slot, each sampled slot is an instance, and every instance is a checked one. The map from a slot to its instance is its place among the part's sampled slots, where today's form has `u - lo`.
+- [run] The first try of the six, `r20261113-010613-d9b2`, failed in 177 s on two binders I had left without a type (a list read at a place Lean could not type); fixed in `de2a89468eb2`, one more try, the pass above.
+- [run, from my earlier entries] The Python mirror agrees with the compiled Lean on the made-up cases of both shapes (`r20261112-231113-f4b0`, 67 passed in the Lean difftest's suite, 121 in the Python suite), and a rehearsal's compiled second stage gives the Python check's verdict (`r20261112-234010-dddd`).
+- **Not compiled, not written:** no theorem under `security/` reads any of this. The model's second shape (`SpotFlock/Code.lean` runs `stmtCodes` only) is not written. That Flock parses the session's sample of such a statement (`wholeDraw K`) to units `0..K-1` is not written: it is the same kind of lemma ADDRROW's 23:31Z entry says it writes for today's form (`ownDraw`), and I do not write it twice (NEEDS).
+
+### 2. What Friday's `complete` will take
+
+- [read] **Where the field is.** `second_stage.complete(form, request_definition, records)` and its use in `two_stage.py`'s `outcome_of` are in pull request #9458 (open, head `049c5875989c`): `second_stage.py:126-134`, `two_stage.py:137` (`REQUEST_DEFINITION = False`), `:828`. It is not on `main` `e86d9204135c` and in neither of Friday's trees: `496aa183544b` and `cursor/proofs-gather-second-try-5a28` at `5ad83c84ef5e` have no `complete` in either file [run: `git grep` on the three refs]. At those trees a two-stage outcome prints `accepted`, `record`, `symbol`, `interior`, `replay_sample`, `registered` and `statements` (`two_stage.py:905-926` at `5ad83c84ef5e`), and no `complete`.
+- [read] **Its value where it is:** `form is True and request_definition is True and len(records) > 0 and all(r is not None and r.get("accepted") is True and r.get("complete") is True for r in records)`, under `o.accepted is True`. The records are the interior's audit record and the replay sample's; a record's own `complete` is "every verdict ran" (`one_stage/audit.py:187` at that head).
+- **The three conditions, and where each stands.**
+  1. *The form's switch on.* `FORM = False` (`second_stage.py:90`); every two-stage outcome is refused by `two-stage-form` and so is not an accept [run: every rehearsal of mine]. Only the proof of the two-stage form turns it (your 21:02Z: the switch is not built ahead of its proof). The proof is the lane's chain, not mine to size; nothing of mine stands in it.
+  2. *The outer block is the class's registered request Definition.* It is a constant of the driver, false, because the outer block of the class Friday serves is `boundary_rows`' stand-in, one token select an output (`two_stage.py:85` at Friday's tree says so in its own words). To make it true: circuits' request Program emitted in its serving cut and in the registered form, the padded class and the ranks joined; the serving side committing an outer block's inputs before the first sample and capturing every template's values of a sampled request; and on our side the verifier's passes of a member's size gone (section 3). This is the condition that cannot be had by Friday [derived: my 20:17Z and 23:30Z entries; none of its parts has landed].
+  3. *Both stages' audit records accepted and complete.* In my rehearsals the interior's record fails only `statements`, by `two-stage-form`, and the replay sample's fails nothing [run: `dddd`: `interior: ["statements"]`, `replay_sample: []`]. So with the switch on this one holds on the rehearsal's class. I have not read the two records' own `complete` in a run (Not established).
+- [read: `stop_audit.py:430-431` at `5ad83c84ef5e`; relayed: GATHER 00:01Z] **The stop class.** Its stop record's `request-row` and `stop-rule` verdicts are written with `accepted: None`, so that record is not complete on any run, and no driver on any tree proves a sampled stop block [relayed]: the stop sample is registered and drawn and its order held, nothing more. For the stop class `complete` takes a fourth thing, a driver that proves the sampled stop blocks.
+- [derived] **So Friday's board line, as I would write it:** the two-stage audit of Friday runs every check of both stages and withholds the last accept; it does not print `complete`, and when the field lands it prints `false`, by design, until the form is proved and the outer block is the request.
+
+### 3. The verifier's passes of a member's size: three of the four that were ours to remove are gone on my branch
+
+| Pass (my 23:30Z section 2) | State now |
+| --- | --- |
+| The session's verifier: a row and a path for every proof block of a template | gone in the sampled-only form [run: `r20261112-221849-db0f`] |
+| Before the sample: the leaf layer over every member's public body, the row tables, the wiring reference | gone under `--roots-only` [run: `dddd`: `public_files: 0`, record `leaf_layer` null, 22 checks before the sample pass] |
+| The auditor's reference statement staged at the member's size | **gone since 01:13Z**: `references(d, q, out, counts)` stages a sampled-only run's reference at its `q·counts[k]` sampled proof blocks, one zero row a table (`two_stage.py:682-721`, `:926-928`, commit `b383b50391`). The second stage's check is unchanged. A member sampled whole keeps the whole reference. [run] The rehearsal with it holds: `r20261113-013057-f12e`, tree `461aa3a56c57`: the 20 references have `instances` 2 where `dddd`'s had 8, one row a table; `lean-verify` 20 of 20, `lean-draw` 20 of 20, 15 of 15 negatives refused, the second stage's check clean in Python and in compiled Lean (`agrees: true`), the outcome refused by `two-stage-form` alone; then the whole of `test_two_stage_second.py`, `10 passed in 29.14s`, my corrected test of the registration with no leaf layer among them |
+| The verifier's own reads list, dense: a number for every slot of a port | still there; the change is in Flock's verifier (`Flock/Registered.lean`) with its fact proved again, and I have not started it |
+
+- [run, on this VM] `test_a_reference_staged_at_the_sampled_count_is_the_whole_one_at_any_sampled_slots` (`tests/test_two_stage_second.py:269`) passes in 20 s: on the class of whole instances and on the greedy select in units (four templates, three wires), each template's reference staged at the sampled count names the same circuit and registered reads as the whole one, and placed at any sampled slots (`at_sampled`) its header is the whole one's but for the run's fields and the bindings, which the second stage computes itself (`at_run`).
+- Still of the member's size in the auditor's params: the registered-values rule (a weight's rows the same in every run, held slot by slot to the reference). It is my 23:30Z item 3, not started.
+
+### 4. Runs since 01:00Z: machine, wait, verdict
+
+All on vy-nebius-2. Its line moved again from about 01:10Z: my waits fell from 69 and 73 minutes earlier tonight to 15, 10, 7, 5, 5, 4 and 2.
+
+| Run | What, tree | Waited | Verdict |
+| --- | --- | --- | --- |
+| `r20261113-005847-8842` | four suites, `161cf0038b87` | 15 min | rc 2 in under a minute: my command put `--extra torch-cpu` on `uv run` of the suites script, which has no such extra. My error, a place wasted |
+| `r20261113-010613-d9b2` | try of the six lemmas, `a6ef1178f7` | 10 min | `lean exit 1 in 177 s`, two untyped binders |
+| `r20261113-012113-1f69` | the try again, `de2a89468eb2` | 5 min | `lean exit 0 in 165 s`, axioms clean |
+| `r20261113-011436-f202` | rehearsal `SMALL_ROOTS=1` and the test file, `b383b50391` | 7 min | `rehearsal=7 test=1`: the tree's Lean did not build (it held the six lemmas before their fix). My error: I shipped it before the try's verdict |
+| `r20261113-011849-16b9` | four suites, `82a34abb14cc` | 5 min | `suites=1`: one suite passed, three failed, for the same reason as `f202`: the shipped tree's Lean did not build, so every test that needs the compiled second stage failed (`lake build sampled-proofs-verifier ... Spot.SecondStage ... build failed`). Not a verdict on the change |
+| `r20261113-013057-f12e` | the rehearsal again, `461aa3a56c57` | 4 min | `rehearsal=0 test=0` (section 3) |
+| `r20261113-013420-372b` | four suites again, `7c776d1125f7` | 2 min | running at 01:47Z. So far: `verity/commitments/windows` 94 passed, 1 skipped; `benchmarks/one_stage` 649 passed; `benchmarks/two_stage` 9 passed, 6 skipped. `verity-vllm` is still running (it took 19 minutes in `16b9`) |
+
+At 01:14Z `8842` had waited 15 minutes with one check ahead of it; I kept its place and did not move it to vy-nebius-cpu-11, which had refused a run of mine for memory at 00:58Z. It started within the minute.
+
+### 5. The plan of 23:30Z, amended
+
+- Section 3, "Open, ours": items 1 (no pass before the sample) and 4 (the reference at K) are done as development changes on the branch, with the runs above. Items 2, 3, 5, 6 stand as written.
+- Section 4, item 2: the thirteen theorems are compiled and pushed, and the code's half of item 4 (the slots) is too. Item 3 (the model's second shape) and the row fact at the second map are not written.
+- Section 5, "Not ours", gains one line [relayed: GATHER 00:01Z, B1]: the stop class needs a driver that proves a sampled stop block; no tree has one.
+- Circuits' list and its date: not in. The plan's dates for the whole request stay as I wrote them: none of my own.
+- [read: `service.py`'s `second_counts`; `two_stage.py:551-560`] One fact the plan did not state: the second stage's law is a count of proof blocks in each cell (an outer block's blocks of one template), so a template's statement in the sampled-only form holds `q·k_t` blocks, known before the run; a design that proves every cell whole is refused.
+
+### NEEDS
+
+- From ADDRROW (`bc-` id not known to me; its branch is `cursor/proofs-addrrow-d318`): its lemma that a draw `jeq` to the second stage's own (`ownDraw`) parses in Flock to the proved units. The sampled-only form needs the same of `wholeDraw K` (units `0..K-1`, no closure). If its lemma is stated for any subset draw's JSON, mine is a corollary; if it is stated for `ownDraw` only, the second case is about thirty lines beside it [guess].
+
+### STOP RULE
+
+Nothing new. The note of my 22:34Z entry stands: `checkAny` takes a statement shape `check` refuses, so it is on my branch only, with no pull request, `FORM` off, and no lock touched. `references` at the sampled count and `--roots-only` change no check.
+
+One change I have not made because it falls under the rule, for your word. **Before:** `flock-verify verify --registered FILE` takes, for each port, `reads` as a dense list, slot `reads_from + k` reads row `reads[k]` (`Flock/Registered.lean:76-105`); the second stage's `rowsOk`, `placedOk` and `rowsRead` walk the same list. At a whole request that is a number for every proof block of a template, read though not hashed. **After:** the file gives a port's reads as runs `[unit, count, row, step]` (the shape `SecondStage.Rows` already has for links and wires) or as one (unit, row) pair for each instance of the statement, and `readAt` evaluates them. That is a file the session's verifier refuses today, in Flock's verifier, which the one-stage session reads too; `check_ok` (`security/Proofs/Flock/Verifier/Registered.lean:88-94`) would be proved again of the new reader. Not started.
+
+### Not established
+
+- That the two audit records' own `complete` is true in a two-stage rehearsal: I read only which checks they fail.
+- The replay sample's audit record's own `complete`: not read. The interior's is true in a5's summary of both rehearsals (`complete: True`, `accepted: False`) [run: `dddd`, `f12e`].
+- `verity-vllm`'s suite at the branch's head: running. Its red in `16b9` (20 failed, 11 errors) is on the tree whose Lean did not build; I have not read each failure, so until `372b` ends I do not know that all of them are the build's.
+- The six new theorems are the code's half only: nothing ties them to Flock's parse of the session's sample or to the model.
+- Nothing here has run with an engine, real logits or a challenger on the auditor's host.
+- `verity/commitments/windows/rows.py` (the registration with no leaf layer) has had no reviewer of `verity/commitments`; it is needed before any pull request, not before.
+
+### Next
+
+- `372b`'s last suite; its verdict in a short entry by 02:30Z, with this entry's first line again so the newest entry carries it.
+- Then I have no work that needs no word of yours: what is left of the plan's own items is the dense reads list, which is a new form for Flock's verifier (STOP RULE, below), and the registered-values rule, which changes the rule OWNREADS and HELDOF are proving facts about tonight. Say which, if either, you want started.
