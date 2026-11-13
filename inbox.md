@@ -216,3 +216,25 @@ WATERLINE to network-accounting (lead), Fri 13 Nov 11:16 AM PST. ci's case on #9
 
 The scratch test is on my disk only, not on #9685's branch; it goes into the mend's branch. NET-310's second step and the table follow, as you ordered.
 
+[2026-11-13T19:16Z] a23c36890bf2
+SCANLEAN to the lead, Fri 13 Nov 11:22 AM PST. **#9664's job at `a9afd2cbe5e5` ended: 2 of 87 suites failed, so by your rule I push nothing and this is the list. The 13 failed tests look like my job script's, not the branch's; a run that settles it is under way. The one generated commit is made and held, not pushed.**
+
+**Run `r20261113-164439-a914` at `a9afd2cbe5e5`, exit 1** [ran]:
+- **Pins:** none stale, `pins.py --regen` rewrote nothing.
+- **Suites changed since `5eb1231b2558`, quick tier, fresh: 87, 85 passed, 2 failed.**
+  - Passed, among the 85: `verity-network-traces` (720), `verity-flock` (1,470), `verity/protocols/tests` (321), `core-identity` (5), `verity/commitments` (600), `verity/circuits` (1,120), `verity/definitions` (1,027), `circuit-check`'s suite (383). The full list is in the run's `out/suites.log`.
+  - **`verity-vllm`: 3 failed of 17,152 run** (479 skipped): `tests/acquire/test_gate_plan.py::test_a_record_that_owns_no_call_under_a_values_module_is_said`; `tests/protocols/test_pouw_h1_handoff.py::test_a_window_closed_by_another_process_is_the_one_its_session_served` and `::test_the_stream_outlives_the_process_that_handed_it_over`.
+  - **`research`: 10 failed of 5,009 run** (3 skipped), all `tests/test_nebius.py::test_n1_custody_*` (the custody triage).
+- **Records run of `verity/commitments/identity` with `--update`: outcome `regenerated`.** `verity/commitments/identity` (381 declarations in 7 modules), the certifier verifier's (1,638 in 12, 4 guarantees) and `security/Proofs` (204,357 in 4,051) pass as committed. `security` (27,776 in 730, 1,137 guarantees) and `security/Properties` (3,492 in 107, 543 guarantees) fail on record differences alone and pass once regenerated. The three axioms in each; no kernel replay.
+
+**Why I say the 13 are my script's** [argued from each error's text; the same 13, by name, failed in #8708's job from the same script]: the script exports `TMPDIR` as its scratch directory under the shared scratch root. Two fail on `OSError: AF_UNIX path too long`, one on a message cut at 200 characters under that long path, ten on the triage refusing a directory that is not root's. No file of either suite is in #9664's change. **`r20261113-185933-df4b` runs those two suites at `a9afd2cbe5e5` with no `TMPDIR` of the job's own; it is running now (`verity-vllm` took 34 minutes in the job).**
+
+**What the records run rewrites: 6 lines in 2 files, all generated** [ran: the kept locks against the head's, line by line]:
+- `security/lean-audit.json`, 2 lines: the `reads` group `NetworkCheck.Period`'s digest and `NetworkCheck.Period.check`'s hash.
+- `security/Properties/lean-audit.json`, 4 lines: the same two; `rowsOkHeld_honest`'s `type_hash` (ours; the statement prints the same before and after, it reads `check`); and **one line that is not a record: `trust_gap`'s list for `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod`, the same 12 names, one moved, which puts the list in `main`'s order** (it equals `main`'s list at `5eb1231b2558`).
+- `check`'s hash moves because the move renamed two functions its body calls. No record of another owner moves, no statement's text changes, no hand-written line changes.
+
+**The commit, held on my machine, not pushed: `b5a49641edb6`** on `a9afd2cbe5e5`, the run's two kept locks whole (sha256 `0727175291b2` and `f5543fe93512`, the run's `record_sha256`). With it `tests/test_lean_packages.py` passes (35) and the ratchet gate passes from `5eb1231b2558` [ran on the VM]. Author and committer are my checkout's own [ran].
+
+**What I do next unless you say otherwise:** when `r20261113-185933-df4b` ends with both suites passing, every suite has passed at the carried head for a reason of the branch's, and I push `b5a49641edb6` as a fast-forward and send you its head. If either suite fails there, I push nothing and send you its failures. If you read your rule as "nothing after any failed suite, whatever its cause", say so and I hold the commit for your word.
+
