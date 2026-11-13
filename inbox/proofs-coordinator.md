@@ -127937,3 +127937,54 @@ So the first real accept needs a second switch: the per-member form's accept in 
 - That the five-head merge builds (text only).
 
 **NEEDS**: your word on whether to run 2 (#9594's verifier over the 13:10Z try's kept evidence) once it is kept, and from whom to take its path. **To post**: the "For TOP-415" section above, as it is.
+
+## RATING, Fri 13 Nov 07:40Z: the k = 65,536 rows you asked for: on three salts, whole tiles of the raised adder and the skip-only class go through the scheme's own forming, check and tile rule, and both programs still beat the bound
+
+In plain words. Review 1 found two cheap programs that compute a Pearl-C tile's ticket words while skipping part of the work: one runs a single atom in each planted group (the "raised adder"), the other only skips two atoms in each planted group. Compute accounting asked whether these hold at an inner dimension of 65,536 when the tile is formed and checked by the scheme's own code and not by my copy of it. They do. On every one of 18 whole 64 × 64 tiles (inner dimensions 8,192, 16,384 and 65,536; three salts; two fills) the scheme admits the rows, its deployed tile rule passes the tile, both programs produce the scheme's own 4,096 words bit for bit, and both cost less than the bound allows. At 65,536 the one-atom program costs 82.5% of the credit and the skip-only program 89.1%, against a bound of 99.5%; the margin is slightly wider than at 8,192. It cost about 17 minutes of one slot for each salt, so well under an hour of one node.
+
+### The rows [run: the run ids are under the table]
+
+Each tile is 64 × 64 words on H100, m = 8,192, one unit. "Share" is the program's cost over the credit. The bound is the conjecture's: the credit less its two allowances of 1/400 each (the gap γ₀ and the inert-work share ρ), which is 99.5% of the credit; a program fires when its cost is under it (`_fires` in the request's test file). The two fills (Gaussian, and zero between the planted groups) give the same costs, so each line is six tiles: three salts times two fills.
+
+| k | n | planted groups | one-atom program: atoms run, cost a word, share | skip-only program: atoms run, cost a word, share | credit a word | bound a word | fires |
+|---|---|---|---|---|---|---|---|
+| 8,192 | 8,192 | 20 | 196 of 256, 8,757.4, 83.95% | 216 of 256, 9,397.4, 90.08% | 10,432 | 10,379.9 | 12 of 12 |
+| 16,384 | 8,192 | 42 | 386 of 512, 17,209.5, 82.87% | 428 of 512, 18,553.5, 89.34% | 20,768 | 20,664.3 | 12 of 12 |
+| 16,384 | 16,384 | 42 | 386 of 512, 17,091.9, 82.68% | 428 of 512, 18,435.9, 89.18% | 20,672 | 20,568.8 | 12 of 12 |
+| 65,536 | 8,192 | 170 | 1,538 of 2,048, 68,305.7, 82.51% | 1,708 of 2,048, 73,745.7, 89.08% | 82,784 | 82,370.6 | 12 of 12 |
+| 65,536 | 65,536 | 170 | 1,538 of 2,048, 67,490.8, 82.19% | 1,708 of 2,048, 72,930.8, 88.82% | 82,112 | 81,702.0 | 12 of 12 |
+
+On every one of the 18 tiles, and at each n of its line:
+- `PearlC.encode` at forming v1 forms the rows with the SHA-512 row seeds and lines, and `admissible` is true.
+- The planted codes come out as designed in every planted group, on both sides.
+- `clear_work.check_opened` returns no failure: the per-row rules pass, and the replayed debit is under the inert-work bound on the tile and on every credited row. At k = 65,536 the tile's debit is 145,960 to 168,440 units against a cap of 847,708 at n = 8,192, and 117,400 to 139,880 against 840,827 at n = 65,536.
+- The replay flags 2,833 to 3,395 atoms a tile at k = 65,536 and none of them is in a planted group. The deployed debit sees nothing of what the two programs skip.
+- Both programs' words equal `checked`'s on 4,096 of 4,096 words.
+- The scalar chain (`pearl_c.chain`, the reference) agrees with `checked`'s batch form on 64 of 64 sampled words.
+
+Runs, all finished with exit code 0 at my branch's head `098a6d9eb5d5370ec92669f3ab4dc413057ef164`: `r20261113-071508-7f29` on cpu-10 (k = 8,192 and 16,384, 07:15Z to 07:35Z); `r20261113-071548-3f9f` on cpu-10, `r20261113-071602-16c3` and `r20261113-071630-cba7` on cpu-14 (k = 65,536, one salt each, 16 to 18 minutes each, memory peak 1.5 GiB).
+
+The same two programs on whole tiles by the census's forming at k = 65,536, three seeds, give the same costs and fire on all 18 tiles, with 4,096 of 4,096 words equal on each: `r20261113-071643-4e3f` on cpu-14 (one-atom: both fills at n = 8,192, Gaussian at n = 65,536) and `r20261113-071657-2176` on cpu-11 (skip-only, the same cases), both exit code 0 [run].
+
+### What "through the scheme's own code" covers here, and what it does not
+
+- Covered by the scheme's code: the forming, the admission, the ticket words and the whole tile rule. They ran on the batch forms of `benchmarks/pouw/pearl_c_vllm/fast_tile.py`, which are what the served verifier runs under `--fast` (`verify_run.py:809`) [read].
+- The scalar reference of the tile rule did not run at these depths; it would take hours a tile. What ties the batch forms to it is the repository's own three tests (`test_pearl_c_vllm.py:2910-2990`). I sent them at my head as `r20261113-073837-b00d` on cpu-10; at 07:39Z it was waiting for a slot, expected end about 07:50Z. Until it reports, that tie is [read], not [run].
+- The two programs' words are computed by the census's bit-exact atom on the scheme's own codes, not by an interpreter of the cost model, and their costs are my count at the cost model's prices, as in review 1. Nothing ran on a GPU.
+- A smaller case behaves differently, and I report it so nobody is surprised: at k = 1,024, on my VM, one whole tile of eight (zero fill, the second salt) is refused by the row cap ("A row 0's replayed debit 246 exceeds its cap 222"), from flags outside the planted groups. At k = 8,192 and above no tile of the 18 is refused [run locally for k = 1,024].
+
+### To post (for compute accounting, on the request's thread)
+
+1. [run] At k = 65,536, through `pearl_c.PearlC` with SHA-512 lines on three salts and two fills, whole 64 × 64 tiles: the one-atom program of the raised-adder class costs 68,305.7 units a word at n = 8,192 against a credit of 82,784 and a bound of 82,370.6 (82.5% of the credit), and 67,490.8 against 82,112 and 81,702.0 at n = 65,536. The skip-only class costs 73,745.7 and 72,930.8 (89.1% and 88.8%). Both produce the scheme's words on 4,096 of 4,096 on every tile. Runs `r20261113-071548-3f9f`, `r20261113-071602-16c3`, `r20261113-071630-cba7`.
+2. [run] On the same tiles the scheme admits the rows and its deployed tile rule (`clear_work.check_opened`: the per-row rules and the inert-work bound on the tile and on each row) passes; the replay flags no atom in a planted group. Same runs.
+3. [run] The same holds at k = 16,384 (82.9% and 89.3% at n = 8,192) and at 8192³ (84.0% and 90.1%) on whole tiles through the scheme's own code: `r20261113-071508-7f29`.
+4. [derived] The margin does not shrink with depth: the one-atom program's share falls from 84.0% at k = 8,192 to 82.5% at 65,536. So the k = 65,536 figure holds for these two classes as it did for the dead-pair class, and a debit of one unit for each dead pair does not reach them: none of the atoms they skip is flagged.
+5. [read] The tile rule ran on the served verifier's batch forms; the scalar reference at this depth was not run.
+
+### Not established
+
+- The repository's batch-against-scalar tests at my head: run `r20261113-073837-b00d`, not finished.
+- A third program I have not thought of may be cheaper; these are two points, not a minimum.
+- Other shapes of m, and the device records other than H100.
+
+Mailbox read at 07:39Z: the coordinator's 07:22Z and 07:29Z messages are read. From now my prose says "challenges" for what the challenger sends, "accounting protocol" and "the auditor's devices"; I merge nothing from `main`; and my runs go with `--on auto`.
