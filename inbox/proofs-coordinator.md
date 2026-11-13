@@ -112562,3 +112562,31 @@ In plain words: the change compiles and its own tests pass. One thing stops the 
 **Not established:** the properties lock (no record of it was regenerated); the four suites at the merged head (`1c6d` running); anything at a head that holds `main` with #9375; Option A's Lean (not yet compiled); whether the unfolded hash returns to the lock's under A (I expect it: the body is `main`'s again).
 
 For the table: R7 with the refusal | `cursor/proofs-r7-certified-b6a0` at `df7342a16519` | tries pass, definitions lock regenerated, properties lock stopped by the witnesses rule | your word on A or B by 02:30Z, else A | ready line about 05:30Z.
+
+## NEEDEDBITS, Fri 13 Nov 01:38Z: `scopeOkH` with `templateOk` gives `MemberRowed` with no new condition, so `NeededBits h` needs no premise at an accepted run; `WrittenOnce h` holds with no hypothesis and `RowsArePorts h` from the design's check; sizes below, writing now
+
+Every condition I left open at 01:26Z is already checked by the verifier, so the proof that every gate an inner block needs is its own unit's bit will carry no premise. A member's unit reads one input group, and its reads are port bits (the scope check). Its circuit file parses as a hidden-output statement (the template check). Together these mean every source a row reads is a real port's message bit: padding, a wire and a literal never reach a read source gate. The parse also gives every returned output a row. Of the two facts with no owner, one (`WrittenOnce`) needs nothing at all. The other (`RowsArePorts`) follows from the same two checks. I am writing all three on my branch merged with FRAME's L1 head; nothing of it has compiled yet.
+
+- [read] Merged `cursor/proofs-frame-l1-9c4e` at `8ac0c5490e` into `cursor/proofs-neededbits-2597` (merge `3a8cc381e9`, clean). FRAME's latest entry is 00:47Z: its branch had not compiled then. I write against its statements.
+- [derived] **Input half of `MemberRowed`, from what each member has where `two h s = some d`:**
+  - `templateOk_of_two` gives `Desc.parseStmt … = .ok D` at untyped tags, with the member's circuit `D.unroll`; `Desc.parseStmt_stmt` turns it into `HmOut.parseStmt … = .ok D.unroll`, and `Hidden.built_of_parseStmt` gives `Built`.
+  - `scoped_of_two` gives `scopeOkH`, and `FailClosed.scopeOkH_eq` and `Layout.scopeOkH_spec` give `inGroups.size = 1` and `PortReads`.
+  - `Hidden.keysRow_stmt` then gives `Layout.KeysRow c hU (portRowW c)`: every input a row reads has `srcKey` the zero or `.msg q byte bit` with `q < ports.size` and `8·byte + bit < 16·words`.
+  - A free source gate is owned, so some row reads it (`exists_of_owner`); its key is not the zero (`keyIdx` is some), so it is a `.msg`, and `rowBit` is some.
+  - So `.pad`, `.lit` and `.wire` are refused by `scopeOkH`: `portReadsB` refuses a read padding column, and `inGroups.size == 1` makes `srcAt` take the leaf branch, so it never yields `.wire` or `.lit`. No clause of `wiringOk` is needed.
+- [derived] **Output half:** the same parse gives `RowsFitS` (`HiddenExec.rowsFit_of_stmt`), so `outRowPorts = replicate outPorts.size 1`. `commit_of_parseStmt`, `Committed.check` and `Layout.check_out` (with `scopeOkH`'s `outNet = unitNet`) give every output leaf below `outWords`. So `outPos` is some (`Bridge.outPos_eq`).
+- [derived] **`WrittenOnce h`, no hypothesis:** two written bits at one gate are of one member (`pos_eq`) and one row gate (`eq_of_off`). That gate fixes the unit (`unitOf_row`), and its offset fixes the instance and the output column (division by `nComp+1`); the column `16 j + t`, `t < 16`, fixes the leaf and the bit. So both are `outRowBit` of the same arguments.
+- [derived] **`RowsArePorts h`, given `two h s = some d`:** a source bit's row is port `q`'s name with `q < ports.size` (the `KeysRow` above). A written bit's row is port `nIn c + outPortOf c w`, below `ports.size` by `RowsFitS`'s second conjunct and `outPortOf_spec`.
+- [derived] **ADDRWC's `BitsInPorts`:** for source bits, `KeysRow` already gives `8·byte + bit < 16·words` of port `q`, and for written bits `outPos_eq` gives `16·(w − outAt) + t` inside the output port's words. That is a few lines more, but only at port `q` itself. The "first port of its name" step needs FRAME's `namesOnce`, which I have not read. So ADDRWC keeps it, unless it wants these two bounds from me.
+
+Sizes [guess]:
+- `MemberRowed` from the checks, with `MembersRowed` and `NeededBits h` at an accepted run with no premise: about 180 lines, in a new file `NeededBitsHeld.lean`.
+- `RowsArePorts h` from `two h s = some d`: about 60 lines, in the same file.
+- `WrittenOnce h`: about 70 lines, in a new file `WrittenOnceOf.lean`.
+- The first try goes to vy-nebius-cpu-12 by 02:15Z, and the 02:30Z entry says what compiled.
+
+Names FRAME's assembly can take: `SpotFlock.neededBits_held (h : Held) : NeededBits h`, `SpotFlock.writtenOnce_held (h : Held) : WrittenOnce h`, and `SpotFlock.rowsArePorts_of_two (hd : two h s = some d) : RowsArePorts h`. `RowsArePorts` is stated with no run, so FRAME gives it the design's evaluation from any accepted run (`CheckedRun.Ok`'s `two` conjunct). If FRAME wants it as a theorem with no hypothesis, `RowsArePorts` must be stated under an accepted run; I flag it and change nothing of FRAME's.
+
+STOP RULE: nothing listed changes; no verifier change.
+
+Not established: any of this compiled; that FRAME's L1 branch builds (I find out in my try, which builds its files).
