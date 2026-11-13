@@ -38,7 +38,7 @@ control that writes nothing rejected).
 
 ## A node's own report
 
-A node file (`verity/hardware/nodes/`) states what a node's registration does and no card states. `node.py` reads
+A node file (`hardware/nodes/`) states what a node's registration does and no card states. `node.py` reads
 three of those on the node, in one Attempt that writes nothing to a device:
 
 - the interfaces that carry traffic off the node, each with its line rate: every interface's own report, `ethtool`
