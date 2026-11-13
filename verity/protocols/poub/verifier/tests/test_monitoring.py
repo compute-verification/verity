@@ -1,6 +1,6 @@
 """The monitoring period's pooled step (`monitoring`): the count is the least within δ of the count bound's C(T, M)·p^M, the
 reference year at 10⁻⁶ leaves one session uncovered where the union T·eps doesn't reach δ, the per-window figure is the
-session's openings bound at δ/T, its error charging each session's draw term at its `samples`, and a rejected session
+session's openings bound at δ/T, its error charging each session's sample term at its `samples`, and a rejected session
 pools nothing."""
 
 from __future__ import annotations
@@ -15,15 +15,15 @@ from verity.protocols import reporting
 from verity.protocols.poub.verifier import audit, codec, monitoring, pooled
 
 EPS = Fraction(2 ** 24 + 2 * audit.SAMPLES, 2 ** 64)
-ALL_DRAWN = {"verdict": "accept", "reason": None, "public": {"eps": str(EPS), "q_bytes": 34 * codec.BLOCK_BYTES},
+ALL_SAMPLED = {"verdict": "accept", "reason": None, "public": {"eps": str(EPS), "q_bytes": 34 * codec.BLOCK_BYTES},
              "profile": {"delta": str(Fraction(1, 2 ** 40)), "gaps": [], "receipts": 34, "windows": [[17, 17], [17, 17]],
                          "wrong": "0"}}
-"""An accepted run of the subprotocol at 64 KiB: two windows of 17 receipts, every one drawn, at the eps `certify`
+"""An accepted run of the subprotocol at 64 KiB: two windows of 17 receipts, every one sampled, at the eps `certify`
 publishes for it, its two openings coins at `samples` each."""
 
 
-def partly_drawn() -> dict:
-    """A session whose two windows of 100,000 receipts drew 33,273 each, its outputs as `certify` makes them."""
+def partly_sampled() -> dict:
+    """A session whose two windows of 100,000 receipts sampled 33,273 each, its outputs as `certify` makes them."""
     windows = [(100_000, 33_273), (100_000, 33_273)]
     b = pooled.bound(windows, Fraction(1, 2 ** 40))
     wrong = -(-b.wrong.numerator // b.wrong.denominator)
@@ -54,7 +54,7 @@ def test_one_short_session_is_ruled_out_exactly_when_the_union_is():
 def test_the_reference_year_at_one_in_a_million_leaves_one_session_uncovered():
     """12,500 machines with a session every 600 s: T·eps ≈ 6·10⁻⁴ is within 1% but not 10⁻⁶, where the count still
     certifies all but one session."""
-    year = monitoring.table(ALL_DRAWN, 12_500, 600)["periods"]["year"]
+    year = monitoring.table(ALL_SAMPLED, 12_500, 600)["periods"]["year"]
     t = 12_500 * (365 * 86400 // 600)
     assert year["sessions"] == t
     one, tiny = year["1/100"]["pooled"], year["1/1000000"]["pooled"]
@@ -65,7 +65,7 @@ def test_the_reference_year_at_one_in_a_million_leaves_one_session_uncovered():
 
 
 def test_a_week_of_one_machine_certifies_every_session():
-    week = monitoring.table(ALL_DRAWN, 1, 600)["periods"]["week"]
+    week = monitoring.table(ALL_SAMPLED, 1, 600)["periods"]["week"]
     assert week["sessions"] == 1008
     for d in ("1/100", "1/1000000"):
         assert week[d]["pooled"]["q_bytes_at_least"] == 1008 * 34 * codec.BLOCK_BYTES
@@ -73,7 +73,7 @@ def test_a_week_of_one_machine_certifies_every_session():
 
 
 def test_the_per_window_figure_is_the_openings_bound_at_delta_over_t():
-    a = partly_drawn()
+    a = partly_sampled()
     r = monitoring.table(a, 12_500, 600)
     for row in r["periods"].values():
         t = row["sessions"]
@@ -87,10 +87,10 @@ def test_the_per_window_figure_is_the_openings_bound_at_delta_over_t():
             assert each <= q if d / t <= d0 else each >= q
 
 
-def test_the_per_window_error_charges_each_sessions_draw_term_at_its_samples():
-    """`ALL_DRAWN` drew 34 receipts, but its eps charges its two openings coins at `samples` each, and the per-window
-    figure's error charges that term once a session, not the draws made (2.4·10⁻⁶ over the year, not 1.2·10⁻⁹)."""
-    year = monitoring.table(ALL_DRAWN, 12_500, 600)["periods"]["year"]
+def test_the_per_window_error_charges_each_sessions_sample_term_at_its_samples():
+    """`ALL_SAMPLED` sampled 34 receipts, but its eps charges its two openings coins at `samples` each, and the per-window
+    figure's error charges that term once a session, not the samples made (2.4·10⁻⁶ over the year, not 1.2·10⁻⁹)."""
+    year = monitoring.table(ALL_SAMPLED, 12_500, 600)["periods"]["year"]
     t = year["sessions"]
     for d in monitoring.DELTAS:
         want = d + t * Fraction(2 * audit.SAMPLES, 2 ** 64)
@@ -105,9 +105,9 @@ def test_a_rejected_session_pools_nothing():
     assert r["except_also"] == monitoring.EXCEPT, "a table that pools nothing still says what its δ leaves out"
 
 
-def test_the_cli_reads_a_legs_bandwidth_json(tmp_path, capsys):
+def test_the_cli_reads_a_bandwidth_json_carrying_the_answer(tmp_path, capsys):
     f = tmp_path / "bandwidth.json"
-    f.write_text(json.dumps({"answer": ALL_DRAWN, "q_bytes": ALL_DRAWN["public"]["q_bytes"]}))
+    f.write_text(json.dumps({"answer": ALL_SAMPLED, "q_bytes": ALL_SAMPLED["public"]["q_bytes"]}))
     assert monitoring.main([str(f), "--machines", "1", "--window-s", "600", "--out", str(tmp_path / "m.json")]) == 0
     got = json.loads((tmp_path / "m.json").read_text())
     assert got == json.loads(capsys.readouterr().out)
@@ -117,7 +117,7 @@ def test_the_cli_reads_a_legs_bandwidth_json(tmp_path, capsys):
 def test_each_period_is_labelled_as_one_session_scaled_up():
     """No period is measured: each row says it is the one session scaled to the period's sessions, and the statement
     is named by its Lean declaration and file alone."""
-    r = monitoring.table(ALL_DRAWN, 12_500, 600)
+    r = monitoring.table(ALL_SAMPLED, 12_500, 600)
     for name, row in r["periods"].items():
         assert row["basis"] == f"one session scaled up to {row['sessions']} sessions, not a measured {name}"
     assert set(r["statement"]) == {"name", "file"}
