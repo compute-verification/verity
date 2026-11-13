@@ -51,7 +51,7 @@ def test_the_capture_and_the_stored_records_capture_are_the_two_that_are_read():
     and this capture's rows state the attention call each is of. Moving `CAPTURE` moves the grader's with it, and
     dropping 4.12.9 from `READS` needs every stored record traced again."""
     assert products.READS == ("4.12.9", products.CAPTURE)
-    assert (products.PRICED_AS_TRACED_FROM, products.CAPTURE) == ("4.23.0", "4.25.0")
+    assert (products.PRICED_AS_TRACED_FROM, products.CAPTURE) == ("4.23.0", "4.26.0")
 
 
 def test_a_product_is_priced_in_its_traced_dtype_and_an_earlier_captures_wider_one_in_bf16():

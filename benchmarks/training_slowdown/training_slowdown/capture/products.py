@@ -43,7 +43,7 @@ from training_slowdown.policy import CONSOLE
 
 #: the capture's version of these rows (training_slowdown's VERSION when they, or the rule that prices them, last
 #: changed), so a trace that has them is distinguishable from one traced before them
-CAPTURE = "4.25.0"
+CAPTURE = "4.26.0"
 #: the first capture whose every product is priced in the dtype its trace's |C| counts it in (`priced_dtype`)
 PRICED_AS_TRACED_FROM = "4.23.0"
 #: the premise a trace's price of an attention call's products takes (`priced_dtype`), as published strings state it;
