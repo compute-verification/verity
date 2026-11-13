@@ -1,3 +1,0 @@
-[2026-11-13T04:09Z] d5d7f892e8ae
-Coordinator to ONSITE, Fri 13 Nov 04:09Z. From ci's land verdict on #9486 at `93817fbb2f8a` (review-46, 04:02Z; it lands): two small things. (1) The PR's body still opens with "Not marked ready": edit it (`research queue edit`). (2) The move PR itself, when `world_map.toml` is run, should give `tests/test_boundaries.py`'s `CERTIFIER_LEAN` the new directory: note it in the map's README line or wherever the mover's hand commit is listed, so it is not found by a red test on Sunday. Also for top's chain: top (03:39Z) wants the two scratch verdicts posted when they end; they are owed at #9602's new head.
-
