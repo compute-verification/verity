@@ -78,7 +78,7 @@ def main() -> int:
     ap.add_argument("--T", type=int, default=1)
     ap.add_argument("--out", default=os.environ.get("OUT"))
     a = ap.parse_args()
-    rows = [row("Gemm_v3{K=32,N=4}", R.boolean_gemm(32, 4), "verity.definitions.ops.boolean.gemm", 1, None)]
+    rows = [row("Gemm_v3{K=32,N=4}", R.boolean_gemm(32, 4), "verity.circuits.ops.boolean.gemm", 1, None)]
     print(json.dumps({k: rows[0][k] for k in ("circuit", "gates", "products", "s_x", "a_out", "a_in")}), flush=True)
     configs = R.configs()
     for name in a.models.split(","):

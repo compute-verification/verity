@@ -105,7 +105,7 @@ def _statics(body: str) -> dict:
 
 def resolve(key: str, defs: dict[str, object]):
     """The Definition a spec id names: the registry's binding (`query.call_scope.specialization`), else a family module's own."""
-    from verity.definitions.call_scope import specialization
+    from verity.circuits.call_scope import specialization
 
     m = re.fullmatch(r"([^{]+)(?:\{(.*)\})?", key)
     assert m is not None, key
@@ -121,7 +121,7 @@ def resolve(key: str, defs: dict[str, object]):
 
 
 def pin(key: str, defs: dict[str, object]) -> dict:
-    from verity.definitions.word import closure_digest
+    from verity.circuits.word import closure_digest
 
     fn = resolve(key, defs)
     return {"id": fn.id, "digest": closure_digest(fn)}
