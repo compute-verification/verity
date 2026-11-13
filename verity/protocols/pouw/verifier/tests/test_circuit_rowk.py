@@ -24,7 +24,7 @@ from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
 from verity.circuits.types import Value
 from verity.commitments.rowleaf import ROLE_W, ROLE_X, bit_row, row_bytes
-from verity.definitions.ops.scalar import BitAnd, SelectBf16
+from verity.circuits.ops.scalar import BitAnd, SelectBf16
 from verity.protocols.pouw.prover.circuit import leaves as L
 from verity.protocols.pouw.prover.circuit import pc4, pc8, plan, rowk
 from verity.protocols.pouw.prover.circuit.anchors import ANCHORED, Derivation, TileAnchors, public_ports

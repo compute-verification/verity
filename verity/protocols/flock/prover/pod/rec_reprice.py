@@ -36,7 +36,7 @@ def template():
     """``GemmCoordinate_v2{K, DOT}`` at Hopper's step (`gemm.GEMM_HOPPER`): the Definition each unit of the inner statement is one
     instance of."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops import gemm as G
+    from verity.circuits.ops import gemm as G
 
     return bind(G.GemmCoordinate, K=int(os.environ["K"]), **G.GEMM_HOPPER)
 
