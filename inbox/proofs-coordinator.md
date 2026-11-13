@@ -124395,3 +124395,18 @@ NEEDS: nothing from you for my files. The ruling on `Steps.lean`'s private names
 To post: nothing.
 
 Not mine, acted on none: between 05:29Z and 05:32Z, 24 of your timers (seven of them the half-hourly sweep) and the completion notices of GATHER and RUNCOINS a second time.
+
+## WINDOWAT, Fri 13 Nov 06:14Z: checkpoint, turn ended: my records run `r20261113-055755-5849` has waited 15 minutes for a Lean slot on vy-nebius-cpu-5; `MemberForm/Leg.lean` is now `MemberForm/Sound.lean` (same two statements, compiled again); every lock root of mine is under a lakefile root; I wait on #9576's two runs
+
+Mailbox read at `f0ead86120` (06:11:45Z): your 06:09Z (the lakefile half of the roots rule) and 06:11Z (#9576 being marked). No `~/wt/.pen`. Head `61b9b9e10f` on `cursor/proofs-windowat-5e4b`, pushed.
+
+- **The rename** [run `r20261113-060827-9270`, cpu-12, started at once, rc 0, 06:09Z to 06:11Z, at `61b9b9e10f`]. The ratchet gate counts "leg" as a retired term (the Glossary says subprotocol), and my 06:06Z entry's file `MemberForm/Leg.lean` added it eight times with a ninth phrase, "instance sets". The file is `MemberForm/Sound.lean` now, with its root in the lock renamed in the same commit; `spotSound_form` and `soundnessAt_form` are word for word what the 06:06Z entry quotes. `Sound.lean` 2 theorems, `ClaimReads.lean` 7, each on the three axioms only, and the aggregator compiles. `ratchet_gate.py 48ba498185 61b9b9e10f`: 1 change, 0 failed [run on the VM].
+- **Your 06:09Z, checked** [run: a script over `security/Proofs/lakefile.toml` and the lock at `61b9b9e10f`]. The lakefile has one library with 211 roots and no globs. All 220 names in the lock's `roots` are a lakefile root or under one: my 25 under `MemberForm/` are under `Proofs.Properties.Verity.Sampled.MemberForm` (the aggregator, which imports each of them), and `Proofs.Core.QSortPerm` is under `Proofs.Core`. Nothing to change. [derived] That is also why the tries could build each of them by name.
+- **No name of mine can clash at the package root** [run: `rg` and the import lines]: the 28 files that declare in `Verity.Sampled.MemberForm`, soundness's three among them, are all imported by the aggregator, which compiles.
+- **Waiting, nothing left to write.**
+  - `r20261113-055755-5849` (cpu-5): `lean_changed.py --records security/Proofs --update` at `61f3d467a1` (25 of my 26 files; not `Sound.lean`). In line for one of that node's two Lean audit slots since 05:58Z; the older holder is a records run of 05:32Z, so my run should start about 06:40Z and end about 07:50Z [guess]. I did not move it: it holds its place and reads nothing yet.
+  - `r20261113-055558-8c61` (cpu-8): #9576's records run, running since 05:57Z; `spot/verifier/lean` and `certifier/verifier/lean` printed `check.py exit 0` by 06:11Z; expected end about 07:00Z [guess].
+  - `r20261113-054307-ec73` (cpu-1): #9576's quick tier, 75 suites, 3 passed and 0 failed at 06:11Z; expected end about 07:15Z [guess].
+- One timer, for 07:00Z. If `8c61` or `ec73` is red I say so in that entry's title.
+
+Not established: the three runs' verdicts; everything my 06:06Z entry lists.
