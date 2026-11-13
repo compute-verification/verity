@@ -310,6 +310,7 @@
   "Proofs.Properties.Verity.SampledTwo.MemberChecks",
   "Proofs.Properties.Verity.Sampled.Record.PartCong",
   "Proofs.Properties.Verity.Sampled.Record.PartSame",
+  "Proofs.Properties.Verity.Sampled.Record.PartReadsBack",
   "Proofs.Properties.Verity.SampledTwo.RecordNames",
   "Proofs.Properties.Verity.SampledTwo.JpWalk",
   "Proofs.Properties.Verity.SampledTwo.AtStmt",

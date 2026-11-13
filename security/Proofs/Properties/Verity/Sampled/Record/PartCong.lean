@@ -250,7 +250,6 @@ def setupTablesV (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coi
   return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
             unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := coins.tree? }, sts)
 
-set_option maxRecDepth 20000 in
 set_option smartUnfolding false in
 theorem setupH_view (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins)
     (tables : List (String × ByteArray)) (draw partition : Option Json) (program : Option ByteArray) :
@@ -258,7 +257,6 @@ theorem setupH_view (tags : Tags) (circuitFile publicFile : ByteArray) (coins : 
       setupHV tags circuitFile publicFile coins tables draw (partition.map view) program := by
   cases partition <;> rfl
 
-set_option maxRecDepth 20000 in
 set_option smartUnfolding false in
 theorem setupHidden_view (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins)
     (tables : List (String × ByteArray)) (draw partition : Option Json) (program publicInputs : Option ByteArray) :
@@ -266,7 +264,6 @@ theorem setupHidden_view (tags : Tags) (circuitFile publicFile : ByteArray) (coi
       setupHiddenV tags circuitFile publicFile coins tables draw (partition.map view) program publicInputs := by
   cases partition <;> rfl
 
-set_option maxRecDepth 20000 in
 set_option smartUnfolding false in
 theorem setupTables_view (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray)) (draw partition : Option Json) (program : Option ByteArray)
