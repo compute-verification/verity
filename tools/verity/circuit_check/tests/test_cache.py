@@ -739,9 +739,11 @@ def test_an_unpinned_target_reruns_when_its_pin_is_added_where_it_goes_or_to_its
 
 def test_a_new_pin_goes_to_the_sidecar_of_its_definitions_module(tmp_path):
     """`sidecars.pin_file`: a pin is written where it is, and a new one to the pins file of the module that defines its
-    Definition, a module without a sidecar getting one beside it."""
+    Definition, a module without a sidecar getting one beside it.  The owners are found by `targets.load_registries`, which reads
+    the tree's catalog from the sidecar that hands it (`targets.HOOKS`): a stand-in that loads nothing more."""
     root = _tree(tmp_path)
     _sidecar(root)
+    (root / "syn/catalog.circuit-check.py").write_text("def enumerators():\n    return set()\n\n\ndef load_catalog():\n    pass\n")
     code = HARNESS.split("CC.trace(root)")[0] + """
 import syn.kdef, syn.other, syn.top  # noqa: E401
 CK.load_pins()
