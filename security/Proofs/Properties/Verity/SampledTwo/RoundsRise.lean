@@ -694,10 +694,10 @@ theorem membersRun_ran {p : Spot.OneStageZk.Params} {ms : Array Spot.OneStageZk.
 
 /-- **The session `--zk` sets up at one table is on that table's coin tree**: where `setupAt` sets a session up at
 inputs of one table and hidden outputs, the session's coin tree is `Flock.Zk.coinSpec` at the statement's table. -/
-theorem setupAt_coinTree {W : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {draw : Option Json}
+theorem setupAt_coinTree {W : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {dr : Option Json}
     {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {x : Json × Json}
     (hh : (Flock.Witness.zkTags W).hiddenOutputs = true) (hc : W.count = 1)
-    (h : Spot.OneStageZk.setupAt W rd draw = .ok (spec, tabs, x)) :
+    (h : Spot.OneStageZk.setupAt W rd dr = .ok (spec, tabs, x)) :
     spec.coinTree = some (Flock.Zk.coinSpec #[W.tags.table]) := by
   obtain ⟨sts, hs, -⟩ := Verity.Sampled.setupAt_ok h
   obtain ⟨hset, -⟩ := Verity.Sampled.sessionAt_ok hs
@@ -828,7 +828,7 @@ theorem located_rising (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hsz : 
 
 /-- A source the parameters name is of their challenger's family, after the registration's digest. -/
 theorem source_family {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment}
-    {d : Properties.Challenger.Draws} (h : Properties.Challenger.oneStageZkSource p c = some d) :
+    {d} (h : Properties.Challenger.oneStageZkSource p c = some d) :
     ∃ key, p.base.challenger = some (key, d.label) ∧ d.after = c.digest := by
   unfold Properties.Challenger.oneStageZkSource Properties.Challenger.oneStageSource at h
   rcases hch : p.base.challenger with _ | ⟨key, label⟩ <;> rcases hw : p.base.verifier.windowRoot with _ | w <;>
@@ -848,7 +848,7 @@ of a coin tree's round, and the first round opened is of the session stream. -/
 def ReadLinkFirst (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → ∀ l, interiorRead C o = some l →
     ∃ (k : Case) (p : VStar.Recursive.SampledTwo.Params) (e : VStar.Recursive.SampledTwo.Evidence) (s : String)
-      (c₂ : Spot.OneStage.Commitment) (d : Properties.Challenger.Draws),
+      (c₂ : Spot.OneStage.Commitment), ∃ d,
       C o = some k ∧ (Core.canonicalJson k.params >>= VStar.Recursive.SampledTwo.paramsOfJson) = .ok p ∧
         VStar.Recursive.SampledTwo.evidenceOf k.evidence = .ok e ∧ Flock.canon e.record = .ok s ∧
         Spot.OneStage.commitmentOf s.toUTF8 = .ok c₂ ∧
