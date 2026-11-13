@@ -38,12 +38,13 @@ as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts re
 `verify`'s. `order_why` mirrors its refusal of a challenger release log out of the order the sample, then the link,
 then the other rounds (`OneStageZk.orderHeld`). The registered circuit names the lookup tables its session reads (its
 META's ``lookups``, `lookups_of`), and v2 refuses blobs whose pinned MUFU tables are other than those (`tables_why`,
-`OneStageZk.tablesHeld`). `statements_v2` is the evidence's per-member form, one statement a sampled member, which v2
-refuses at parse: its evidence's ``proofs`` is exactly the sessions (`OneStageZk.proofsOf`).
+`OneStageZk.tablesHeld`). `statements_v2` is the evidence's per-member form, one statement a sampled member
+(`OneStageZk.membersEvidenceOf`).
 
 A window of several members has v2's per-member form of ``proofs`` (`members_v2`: every `Member` in the parameters, one
-statement for each member with a session in the evidence), which the audit parses and refuses. `members_parsed` is what
-its parsers read of a case's parameters and evidence, with no check and no verdict.
+statement for each member with a session in the evidence), which the audit's check reads beside the one statement's
+and decides by `OneStageZk.checkMembersAt` (`members.check`). `members_parsed` is what its parsers read of a case's
+parameters and evidence, with no check and no verdict.
 
 Building takes the lock `verifier.BUILD_LOCK` takes: Lake builds the flock package in place for `sampled-proofs-verifier`
 too, and two builds at once would rewrite one module's C under each other.
@@ -530,7 +531,7 @@ def evidence_v2(proof: Proof, names: Sequence[str] | None = None) -> tuple[dict,
 
 
 def statements_v2(statements: Sequence[tuple[str, Proof]], names: Sequence[str]) -> tuple[dict, list[Path]]:
-    """The v2 evidence's ``proofs`` in the per-member form, which v2 refuses at parse (`OneStageZk.proofsOf`): per
+    """The v2 evidence's ``proofs`` in the per-member form (`OneStageZk.membersEvidenceOf`): per
     statement, its member's name and `evidence_v2`'s on its files, its sessions named by the next of `names` (the v1
     evidence's ``sessions``, statement by statement); and the blobs that hold them."""
     names, out, blobs = list(names), [], []

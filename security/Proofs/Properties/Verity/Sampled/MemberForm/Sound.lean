@@ -18,8 +18,8 @@ and the proof files decoded from it at the statement's table, so that what is le
 * the registered files hold each member's file (`RegisteredHolds`);
 * each member's commitment is ready for its openings (`Commit.Ready`).
 
-The check as it is accepts no parameters that name members (`formAccepts_refused`), so no accepted play has a
-window of members and both statements are empty until the per-member form accepts such parameters.
+The check accepts parameters that name members, and its accepts hold the second line (`formAccepts`,
+`formApart`); the other three are premises no refusal of the check enforces.
 -/
 
 @[expose] public section

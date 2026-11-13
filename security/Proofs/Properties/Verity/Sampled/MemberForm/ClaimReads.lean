@@ -24,9 +24,8 @@ of the windows the verifier sets up at the per-member form (`WindowInstance.wind
   published share and the units are the window's, and the committed files are read at the claim at every strategy,
   where each member's commitment is ready for its openings (`Commit.Ready`).
 
-The verifier's parameters as it parses them name no members (`Spot.OneStageZk.paramsOfJson_members`), so it sets
-up no window of members today and `claimReads` is empty until the per-member form accepts parameters that name
-members. Its proof reads none of that.
+The verifier parses parameters in either form (`Spot.OneStageZk.paramsEitherOfJson`), so it sets up a window of
+members where they name members, and `claimReads` speaks of those windows. Its proof reads none of that.
 -/
 
 @[expose] public section

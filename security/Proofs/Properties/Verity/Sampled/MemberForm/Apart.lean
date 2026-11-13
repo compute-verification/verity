@@ -19,9 +19,8 @@ no unit is in two members' ranges (`Apart`).
 * **The parse's members share no unit** (`membersOf_apart`, `membersParamsOfJson_apart`,
   `paramsEitherOfJson_apart`: in either form, as the one statement's parse names no members).
 * **The form's accepts' members share no unit** (`FormApart`): of everything v2 accepts at the coins it read
-  (`V2Accepts`) on parameters that name members. It holds of the check as it is, which accepts no such parameters
-  (`formApart_refused`); a check that accepts the form reads them by `paramsEitherOfJson`, and its accept carries
-  that parse.
+  (`V2Accepts`) on parameters that name members. It holds of the check (`formApart`), which reads them by
+  `paramsEitherOfJson`: its accept carries that parse.
 -/
 
 @[expose] public section
