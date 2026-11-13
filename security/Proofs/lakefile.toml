@@ -156,4 +156,5 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.Majority", "Proofs.Properties.Verity.SampledTwo.Majority",
   "Proofs.Properties.Verity.SampledTwo.Binding", "Proofs.Properties.Verity.SampledTwo.JoinElems",
   "Proofs.Properties.Verity.SampledTwo.Joined", "Proofs.Properties.Verity.SampledTwo.SessionDev",
-  "Proofs.Properties.Verity.SampledTwo.SessionOpened", "Proofs.Properties.Verity.SampledTwo.GoodCase"]
+  "Proofs.Properties.Verity.SampledTwo.SessionOpened", "Proofs.Properties.Verity.SampledTwo.GoodCase",
+  "Proofs.Properties.Verity.SampledTwo.ClaimInner", "Proofs.Properties.Verity.SampledTwo.SecondRead"]
