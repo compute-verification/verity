@@ -7,8 +7,8 @@ id):
   verifier holds the challenger's live coins and signed log, with the challenger on its side, and runs the Lean verifier.
   There is no ZK server and no recursion: the proof server talks only to the verifier.
 - **SPOT[Flock] in two stages** (`SPOT_TWO_ID`: `SPOT_TWO_MANIFEST`, `SPOT_TWO_PROTOCOL`), the same three roles under a
-  two-stage sampling design. The draw samples replay blocks; the proof server replays them and registers their interiors
-  (the interior registration), and the verifier then draws the second stage on fresh coins and audits both stages.
+  two-stage sampling design. The sample samples replay blocks; the proof server replays them and registers their interiors
+  (the interior registration), and the verifier then samples the second stage on fresh coins and audits both stages.
 - **The core deployment** (`ID`: `MANIFEST`, `PROTOCOL`), which wraps SPOT[Flock] for both composites (remote and onsite).
   Its workers are the inference server and the proof server on one machine, proving behind the ZK server, whose pin the
   verifier holds. Its verifier composes each block's audit with the composite's other subprotocols.
@@ -21,12 +21,12 @@ SPOT[Flock]
 challenger       -> verifier          Challenger {address, pin}: where its host answers the open and finish of a session
 inference server -> verifier          Registration {block}, the execution phase's registration record its body
 inference server -> proof server      Replay {block}, the values the block's proof blocks read its body; one way
-verifier         -> proof server      Draw {block, address}, the block's sample its body, once its registration is in
+verifier         -> proof server      Sample {block, address}, the block's sample its body, once its registration is in
 proof server     -> verifier          Proof {block}, the proofs of the sample's proof blocks its body
 verifier         -> challenger        Done, once every execution phase is decided
 
-SPOT[Flock] in two stages: SPOT[Flock]'s messages, with two between Draw and Proof
-proof server     -> verifier          Interior {block}, the interior registration of the drawn replay blocks its body
+SPOT[Flock] in two stages: SPOT[Flock]'s messages, with two between Sample and Proof
+proof server     -> verifier          Interior {block}, the interior registration of the sampled replay blocks its body
 verifier         -> proof server      Second {block, address}, the second stage's sample its body, once its interior is in
 proof server     -> verifier          Proof {block}, the proofs of the second stage's proof blocks its body
 
@@ -80,9 +80,9 @@ deployment's (`params_of`) also list the configuration's subprotocols (``compone
 `SUBPROTOCOLS`, `verity.config.COMPOSITES`), SPOT[Flock]'s, in one stage or two (`spot_params_of`), none.
 
 Every verifier takes block ``i``'s coins only once its registration and the challenger's address are in, in order of the
-blocks, so no coin is flipped for a block before its registration (live coins, after the commitment). SPOT[Flock]'s draws
+blocks, so no coin is flipped for a block before its registration (live coins, after the commitment). SPOT[Flock]'s samples
 block ``i``'s sample then and sends it to the proof server, and audits the block once its proof is in. In two stages it
-draws block ``i``'s second stage only once the block's interior registration is in, so no second-stage coin is flipped
+samples block ``i``'s second stage only once the block's interior registration is in, so no second-stage coin is flipped
 before the interiors are committed, and audits the block once its proof is in. The core deployment's audits it once the
 ZK server's pin is in too. Each holds the audit's commitment to the registration it was sent, and in two stages the
 answer's ``interior`` to the interior registration the proof server sent: an accepting audit of another record rejects.
@@ -96,14 +96,14 @@ Each block's line is an output entry of the record and the verifier's outcome:
 In the core deployment a listed subprotocol with no answer is ``absent``, its case `NO_CASE`, which its own decoders
 refuse, so the composite never accepts over it, and an accepting audit of another record has its case withheld from the
 composite. An audit or a product that is `Unavailable` is that block's ``error``, never a verdict (an audit's reason a
-private entry of the record); a draw or a second-stage draw that is `Unavailable` ends SPOT[Flock]'s verifier refused
+private entry of the record); a sample or a second-stage sample that is `Unavailable` ends SPOT[Flock]'s verifier refused
 ``draw`` or ``second``. A verifier refuses by name a block out of range or registered twice (``schema``,
 ``out-of-phase``), a second address or pin, an interior registration that isn't a JSON object (``schema``) or is of a
-block not drawn or already registered, or a proof of a block not drawn (in two stages, not drawn a second time) or
+block not sampled or already registered, or a proof of a block not sampled (in two stages, not sampled a second time) or
 already proved (``out-of-phase``), and a peer that leaves before it said what the verifier waits on (``closed``); it
 tells the challenger ``Done`` before it finishes, however it finishes, and the challenger stops its host on ``Done`` or
-when the verifier leaves. The proof server refuses a draw, a second-stage draw or a replay of a block out of range
-(``schema``), sent twice, or, for a second-stage draw, of a block whose interior it hasn't registered (``out-of-phase``),
+when the verifier leaves. The proof server refuses a sample, a second-stage sample or a replay of a block out of range
+(``schema``), sent twice, or, for a second-stage sample, of a block whose interior it hasn't registered (``out-of-phase``),
 and a peer that leaves before it sent what the proof server waits on (``closed``).
 
 What stays the machine's (the capabilities above): the serving, the replay and the prover's sessions, the challenger's
@@ -344,10 +344,10 @@ class InferenceServer:
 
 
 class ProofServer:
-    """SPOT[Flock]'s proof server: each block proved once its replay inputs and its draw are in, and its proof sent to the
+    """SPOT[Flock]'s proof server: each block proved once its replay inputs and its sample are in, and its proof sent to the
     verifier (module docstring)."""
 
-    #: whether each block's interior is registered on its draw and the block proved on its second-stage draw
+    #: whether each block's interior is registered on its sample and the block proved on its second-stage sample
     TWO = False
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
@@ -410,8 +410,8 @@ class ProofServer:
 
 
 class TwoStageProofServer(ProofServer):
-    """SPOT[Flock]'s proof server in two stages: each block's interior registered once its replay inputs and its draw are
-    in, and the block proved once its second-stage draw is in (module docstring)."""
+    """SPOT[Flock]'s proof server in two stages: each block's interior registered once its replay inputs and its sample are
+    in, and the block proved once its second-stage sample is in (module docstring)."""
 
     TWO = True
 
@@ -567,11 +567,11 @@ class Verifier(_Verifier):
 
 
 class SpotVerifier(_Verifier):
-    """SPOT[Flock]'s verifier: each block's sample drawn on the challenger's coins once its registration is in and sent to
+    """SPOT[Flock]'s verifier: each block's sample sampled on the challenger's coins once its registration is in and sent to
     the proof server, and the block audited once its proof is in (module docstring)."""
 
     SERVER = INFERENCE_SERVER
-    #: whether each block is proved on a second-stage draw over its interior registration
+    #: whether each block is proved on a second-stage sample over its interior registration
     TWO = False
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
@@ -659,7 +659,7 @@ class SpotVerifier(_Verifier):
 
 
 class TwoStageVerifier(SpotVerifier):
-    """SPOT[Flock]'s verifier in two stages: each block's sample drawn as SPOT[Flock]'s is, its second stage drawn on the
+    """SPOT[Flock]'s verifier in two stages: each block's sample sampled as SPOT[Flock]'s is, its second stage sampled on the
     challenger's coins once its interior registration is in and sent to the proof server, and the block audited on both
     stages once its proof is in (module docstring)."""
 
