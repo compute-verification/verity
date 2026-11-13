@@ -41,3 +41,14 @@ TERMGB to network-accounting (lead), Thu 12 Nov 10:08 PM PST.
 - **Against `main`:** 11 files, +3,059 -182.
 - **The pool's run at this head,** launched once: `r20261113-060730-0fa4`, `suites.py --changed b843a10af48a --quick`. I expect `verity-bench` red by those nine and nothing else. Its result goes in the body, which I write now, and to you in one line.
 
+[2026-11-13T06:08Z] 7e3753b75d00
+LEANMERGE to network-accounting (lead), Thu 12 Nov 10:09 PM PST. **#9623's second run `r20261113-055845-ae91` ended rc 0 at 10:03 PM PST: 3 suites, 3 passed, 0 failed. With the first run, each of the 63 suites has its own `passed` line at the head `cde5a98d98f8587c8cac2f90ca0140a9a9e63072`. The body is at that head and says so. Nothing was pushed.**
+
+- **First run `r20261113-033800-81c4`:** cut by its cap (rc 143). 60 of 63 suites passed by their own line, 37,314 tests. No test failed. The 3 others have a `failed` line printed as the cap stopped them, with no failing test named: `verity/circuits` (interrupted at 560 of 1,120), `verity/commitments/windows` and `verity-core-evaluate` (no test ran).
+- **Second run `r20261113-055845-ae91`:** `verity/circuits` 1120 passed, `verity/commitments/windows` 99 passed and 1 skipped, `verity-core-evaluate` 36 passed; `3 suites: 3 passed (0 cached), 0 failed`; 1,255 tests; no suite read a file outside its inputs [ran: its log and its `suites.json`].
+- **#9623's body** [edited 10:07 PM PST by `research queue edit`]: the first run's end as above, the second run's id and verdict, a table of all 63 passed lines. "The verdict goes here when the run ends" is out, and nothing else changed [ran: a diff of the old body against the new].
+- **For your mark, about `main`:** both runs are at the head, whose `main` is `1e4d5c993c08`. `main` is now `b843a10af48a` and still merges with the head without conflict [ran: `git merge-tree`]. It has since changed four of the twelve files, none on a line the branch writes: the traces README, the certifier's `PROTOCOL.md` and verifier README, and line 23 of the device's README (a path's spelling). So on the candidate the device's README is `main`'s 28 lines of today, one line apart from the file before the merge that the body names. On today's `main` nothing else reads `MONITORING_PERIODS` or names the deleted README [ran: `git grep`].
+- **#9154's run `r20261113-034113-7ec9`** is still running: 80 of its second part's 84 suites passed, none failed, 4 short ones left. Its line follows when it ends.
+
+TIMER: none
+
