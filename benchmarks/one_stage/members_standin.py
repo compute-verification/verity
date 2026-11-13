@@ -10,7 +10,8 @@ challenger, ``--deployed-key``, FLOCK_CHALLENGER=1) audits it and writes the cas
 ``refusal`` on it. Per window, OUT/m<MEMBERS>-k<K>-<K>/result.json holds the audit's exit, seconds and peak, the members' staged
 directories with no circuit file of their own (each a file the per-member case named before each member named its
 template's), and the refusal's line, exit, seconds and peak, with ``all_passed`` whether the line is
-`members.ALL_PASSED` (every check before the per-member form's refusal passed)."""
+`members.ALL_PASSED` (every check before the per-member form's refusal passed). The case is kept beside it
+(``case-v2-members.json``, its blobs' paths the run's scratch, which it removes)."""
 from __future__ import annotations
 
 import hashlib
@@ -87,7 +88,7 @@ def one(root: Path, members: int, flock: Path, lean: Path) -> dict:
     staged = [x for x in (work / "audit" / "window").glob("m*") if x.is_dir() and x.name[1:].isdigit()]
     res["staged"] = {"members": len(staged), "no_own_circuit": sum(not (x / "circuit.txt").exists() for x in staged)}
     cfile = work / "audit" / "window" / "case-v2-members.json"
-    for name in ("case-v2-members-error.txt", "summary.json"):
+    for name in ("case-v2-members.json", "case-v2-members-error.txt", "summary.json"):
         if (work / "audit" / "window" / name).is_file():
             (d / name).write_bytes((work / "audit" / "window" / name).read_bytes())
     if cfile.is_file():
