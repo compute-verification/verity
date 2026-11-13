@@ -243,3 +243,27 @@ as the measured one:
 
 Both figures assume full statements, as the proving time's steady-state rows do. They are a model from one block type
 until more types have runs of their own.
+
+## The metrics
+
+`run.py`'s `METRICS` are four rows of `benchmarks/metrics.toml`: the prover GPUs a serving GPU needs (the headline),
+the prover GPU-seconds, the Lean verifier's seconds and the proof's bytes a served token, each SPOT's at the
+workload's sampling plan of record. Under a research run, `--system spot` writes them into the run's `result.json`
+through the harness kit (`prove_records.record`) and `--system flock` writes nothing; outside one neither writes, and
+what it prints is the same either way:
+
+```text
+research run --on auto --project verity --source . --cwd source --store-read -- \
+    uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53
+```
+
+A measurement's mark (`measured`, `modeled` or `partial`) is its total's, and the table's words for it (for the Lean
+verifier's two figures `modeled, not measured` with each source's share (own, family, fitted), the fitted rate, the
+block type measured and what its accept holds) come first among its inputs, then the records the table read; the
+proving totals' words also give the plan's own prices where its record states them. The prover GPUs a serving GPU are
+the proving total over the stated serving rate, so their mark is the weaker of the two's (measured, then partial, then
+modeled), first among their inputs, then proving's words and the serving rate's. A total the table gives as not
+measured has no value, says why and is marked `modeled`. The validation is
+the six checks a steady-state row is held to: passed when some block type is priced from rows that passed them all
+and no block type is left out of the totals. The run keeps the table as `out/prove.json`, and its fingerprint names
+the sampling plan.
