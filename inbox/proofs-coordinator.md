@@ -161525,3 +161525,33 @@ Your 21:02Z, 21:05Z and 21:20Z are read, and `origin/main`'s AGENTS.md is reread
 **Not established.** No play and no test at the merged tree, no lock record, nothing through the compiled form, nothing built over the join's new tip [run].
 
 **Held to.** No pull request, no mark, no lock committed, no build on my machine, nothing forced, nothing rebased, no `main` merged by itself; Friday's two unmoved at `984cb027efa3` and `496aa183544b` [run: `git ls-remote` 21:41:51Z].
+
+## [2026-11-13T21:50Z] ACCEPTS: ADDITION 1'S LEAN TRY PASSES AT `f52115107cf` (`r20261113-211611-a58d`); THE CHANGE'S SUITES BEFORE ADDITION 1: 67 OF 69 PASS, THE TWO RED ARE THE KEPT FIXTURE'S TEST AND A PUBLIC-BOUNDARY TEST THE JOIN'S OWN FILES FAIL
+
+STOP RULE: this entry holds two verdicts and one correction. The six suites at `f52115107cf` (`r20261113-211632-70d4`) are still running; I send their verdict when it ends. Nothing else is in hand.
+
+**0. Your 21:32Z is read.** I build no deployed writer. The body's line on it is noted.
+
+**1. The Lean try passes [run].** `r20261113-211611-a58d` on `vy-nebius-cpu-11` at `f52115107cf`, rc 0, 703 s.
+
+- `Spot.Registration` built in 56 s with no warning. So `check_eq_checkRef` holds under its present limits with the new term in both copies.
+- `Properties.Spot`, `Proofs.Properties.Spot` (`registration_nil` with `RunHead`) and `SampledTwo.RecordNames` (`checkFacts_of_check`, 55 s) built with no warning.
+- `AcceptsTop.lean`: lean exit 0 in 540 s. None of its 35 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`. Siblings clean.
+- Not covered: 1,112 modules of the package had no build and are unchecked.
+
+Correction to my 21:18Z entry: the try did not run on `vy-nebius-cpu-2` from 21:14Z. `r20261113-211441-c50b` waited there one minute for a slot and moved to `vy-nebius-cpu-11` as `r20261113-211611-a58d`. `c50b` is void (rc 75).
+
+**2. The change's suites at `d6b69f623dc`, before Addition 1 [run].** `r20261113-205153-695b`, `suites.py --changed 20936c91d40b --quick`, 69 suites in 44 minutes, rc 1: 67 passed, 2 failed.
+
+- `verity-core-composition`: the kept fixture's one test, as before. It is a slow test; the run took its module whole because link 1 changes it.
+- `repository`: `tests/test_public_boundary.py::test_no_public_file_needs_one_the_export_does_not_copy`. Seven edges, all imports in `security/Proofs/Flock/SpotFlock/` of modules the export does not copy:
+  - `OwnReads.lean` imports `Proofs.Properties.Challenger.CanonLine` and `CanonWf`.
+  - `ReadsCheck.lean` imports `Proofs.Properties.Challenger.CanonRead`.
+  - `RunsAs/Coins.lean` imports `Proofs.Properties.Challenger.Drawn`.
+  - `RunsAs/OfCheck.lean` imports `Proofs.Properties.Verity.SampledTwo.Steps`.
+  - `RunsAs/Proved.lean` imports `Proofs.Properties.Spot.Credited`.
+  - `RunsAs/Statement.lean` imports `Properties.Challenger`.
+
+This second one is not link 1's: link 1 touches none of those files, and the join `20936c91d40b` holds the same import lines [read]. I did not run the test on the join itself. It will be red at any head cut from the join until the edges are cut or the needed files move to the public side in `public_boundary.toml`. Not fixed by me: it is a boundary decision and the join's.
+
+**3. Next [ran].** `r20261113-211632-70d4` (six suites at `f52115107cf`) has run since 21:16Z. After its verdict I run the change's suites again at the head that passes it, because Addition 1 changed `registration.py`, which most of the 69 read.
