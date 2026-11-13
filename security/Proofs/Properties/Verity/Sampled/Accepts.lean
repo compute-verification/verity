@@ -288,14 +288,19 @@ theorem get_named {F B : Array ByteArray} {s what : String} {h : Option Hash.Dig
   · obtain ⟨f, hf, hfh⟩ := hreg
     exact ⟨f, hf, decide_eq_true hfh⟩
 
-/-- **An accepted play's blobs hold the registered circuit's lookup tables and no other pinned table**: v2's case in it
-accepts on the blobs sent, the committed files then the evidence's (`Properties.Spot.TablesRegistered`). -/
+/-- **An accepted play's blobs hold the registered circuit's lookup tables and no other pinned table**, on parameters
+that name no members: v2's case in it accepts on the blobs sent, the committed files then the evidence's
+(`Properties.Spot.TablesRegistered`, the one statement's clause). -/
 theorem tables_registered {V : Vocab d α} {k : Verity.Registration.Composite} {o : Verity.Exchange}
-    {p₀ : _root_.Spot.OneStageZk.Params} (hθ : ParamsAt o.params p₀) (hv : V.Verdict k .sampled o) :
+    {p₀ : _root_.Spot.OneStageZk.Params} (hθ : ParamsAt o.params p₀) (hone : OneStatement o.params)
+    (hv : V.Verdict k .sampled o) :
     Properties.Spot.HoldsRegisteredTables p₀.own (_root_.Core.Blobs.ofArray o.sent.blobs) := by
   obtain ⟨_, _, _, p, _, _, _, _, hcase, hp, -, -, -, -, pub, prof, hck⟩ := case_drew hv.2.1 hθ (verdict_case hv)
   cases params_of_case hv.2.1 hcase hp hθ
-  exact Properties.Spot.SecurityProofs.tablesRegistered.2 _ _ _ _ _ _ _ hck
+  have h := Properties.Spot.SecurityProofs.tablesRegistered.2 _ _ _ _ _ _ _ hck
+  unfold Properties.Spot.AcceptHoldsTables at h
+  rw [hone _ hθ] at h
+  exact h
 
 /-- **The tables the blobs sent hold extend the ones a circuit file registers**, where the circuit file looks up
 exactly the pinned tables the blobs hold (`Spot.OneStageZk.lookupsOf`) and each the blobs hold is its
@@ -358,7 +363,7 @@ theorem filesOn_of {V : Vocab d α} {θ : ByteArray} {F B : Array ByteArray} {A 
   · obtain ⟨circuitB, hg, hl⟩ := hheld
     have h : A.I.tables = pinnedTables A.I.circuitFile := by
       rw [hA.circuit]
-      exact (congrArg Verity.FileRead.tables hA.read).symm.trans (hD.tables F)
+      exact (congrArg (fun r : Verity.WindowFiles => r.first.tables) hA.read).symm.trans (hD.tables F)
     rw [h, ← hc p₀ hp₀ circuitB hg]
     exact pinnedTables_extend hl rfl ht
 
@@ -379,7 +384,8 @@ theorem accepts_sent {V : Vocab d α} {k : Verity.Registration.Composite} {A : L
   obtain ⟨a, b, e, p, c, ev, ξ, dr, hcase, hacc⟩ := case_drew hv.2.1 hp' (verdict_case hv)
   have hpp : p' = p := paramsAt_case hv.2.1 hcase hacc hp'
   rw [hpp] at hp' hpart hprog
-  obtain ⟨record, spec, tabs, rest, proofs, -, hrec, hpr, hver⟩ := sent_verified hv.2.1 hcase hacc
+  obtain ⟨record, spec, tabs, rest, proofs, -, hrec, hpr, hver⟩ :=
+    sent_verified hv.2.1 hcase hacc (single_of_case hv.2.1 hcase hacc hA.single)
   obtain ⟨tags0, circuitB, pubB, sts, ht0, hc, hpb, hs, hat⟩ := v2Verified_accepts hver
   have hz := zkInputs_toExec (W := _root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB
       (_root_.Core.Blobs.ofArray o.sent.blobs)) (Option.some.inj (ht0.symm.trans hA.tags))
@@ -491,7 +497,7 @@ theorem filesOn_play {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
   have hp₀' : ParamsAt (Verity.Game.CoinTape.run (V.game θ F c) σ x).params p₀ := by rw [hp]; exact hp₀
   exact filesOn_of hA hD hreg hp (B := (Verity.Game.CoinTape.run (V.game θ F c) σ x).blobs)
     (by show (Verity.Game.CoinTape.run (V.game θ F c) σ x).files ++ _ = _; rw [hf]) hp₀'
-    (tables_registered hp₀' hv) ht
+    (tables_registered hp₀' (by rw [hp]; exact hA.single) hv) ht
 
 /-- **The decoders' premise, pointwise, at the vocabulary's digests** (`decodes_of` with `filesOn_play`): where v2's
 parameters name the vocabulary's digests and the vocabulary reads the lookup tables the circuit file registers
