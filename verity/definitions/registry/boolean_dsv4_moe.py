@@ -12,7 +12,7 @@
     SiluMulClampBf16_v2{LIMIT}          (g, u: BF16) -> BF16                      word view: SiluMulClampBf16_v1{LIMIT}
     SiluMulClamp_v2{I,LIMIT}            (gu: Array<2I, BF16>) -> Array<I, BF16>   word view: SiluMulClamp_v1{I,LIMIT}
 
-`MufuLg2Mantissa_v2` reads the interpolator the way `verity.definitions.ops.boolean.mufu.table_word` reads a MUFU table: ``2v =
+`MufuLg2Mantissa_v2` reads the interpolator the way `verity.circuits.ops.boolean.mufu.table_word` reads a MUFU table: ``2v =
 2 C0 + 2 C1 u + 2 C2 Q(u)`` is one carry-save sum over 39 columns, each product a row ``x XOR n_k`` per digit of ``2c + 1`` (no
 AND), the digits' signs and the bits of C0 (the digits' constants folded in) functions of the six segment bits, each the XOR of
 the monomials in its algebraic normal form; G is bits 3 .. 38 of the sum.  The word is then G's: its leading-zero count z
@@ -57,13 +57,13 @@ from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.ops.boolean import mufu as BM
-from verity.definitions.silicon import fp
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import mufu as BM
+from verity.circuits.silicon import fp
 from verity.circuits.boolean.forms import (NOT, ONE, OR, ZERO, and_reduce, compress_columns, const_bits, lzc, mux, or_reduce,
                                               shl_window, sub)
 from verity.circuits.boolean.trace import definition
-from verity.definitions.ops.boolean.sqrt import f32_sqrt_rn
+from verity.circuits.ops.boolean.sqrt import f32_sqrt_rn
 from verity.definitions.registry import boolean_silu as BSL
 from verity.definitions.registry import dsv4_moe as D
 from verity.definitions.registry import moe as M

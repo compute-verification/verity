@@ -122,8 +122,8 @@ from fractions import Fraction
 from functools import lru_cache
 
 from verity.commitments import domains
-from verity.definitions.silicon import fp32
-from verity.definitions.silicon.models import BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16, BlockScaledAlignAdd
+from verity.circuits.silicon import fp32
+from verity.circuits.silicon.models import BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16, BlockScaledAlignAdd
 from verity.errors import InvalidArtifact
 
 from verity.protocols.pouw.verifier.protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
@@ -422,7 +422,7 @@ def hw_scales(fmt: Fmt, scales: Sequence[int]) -> list[int]:
     scales through it, though the domain (`scale_bytes_ok`) never lets bit 7 reach one.  It is the decode the Lean
     `scaleDyadic` proposal pins, whose `nvf4Specials` table has 28 rows.  Four of them are NaN
     accumulators whose scale bytes set bit 7: valid scales under this decode, which the pinned model
-    (`verity.definitions.silicon.models._scale_dyadic`) shares, as all 17 bit-7 vectors replay on the card,
+    (`verity.circuits.silicon.models._scale_dyadic`) shares, as all 17 bit-7 vectors replay on the card,
     and outside the model through the accumulator (the card writes 0x7FFFFFFF)."""
     return [s & 0x7F for s in scales] if fmt is NVFP4 else list(scales)
 
