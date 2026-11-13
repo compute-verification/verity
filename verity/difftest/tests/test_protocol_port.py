@@ -65,6 +65,8 @@ VALID = st.fixed_dictionaries({
                           st.builds(lambda d, p, x: {"drawn": d, "passed": p, "x": x}, SMALL, SMALL, JSON))
                   .map(lambda e: D.canonical(e).encode().hex()),
     "params": st.fixed_dictionaries({"k": SMALL})})
+#: The example's evidence that two proof blocks were sampled and both passed, in canonical JSON.
+TWO_OF_TWO = b'{"drawn":2,"passed":2}'
 
 
 def _upper(field):
@@ -103,7 +105,7 @@ def test_the_example_protocol_agrees(server):
 
 def test_the_outcome_is_compared_field_by_field(server):
     root = bytes(range(32))
-    case = {"commitment": root.hex(), "evidence": b'{"drawn":2,"passed":2}'.hex(), "params": {"k": 2}}
+    case = {"commitment": root.hex(), "evidence": TWO_OF_TWO.hex(), "params": {"k": 2}}
     kind, line = D.replay(port(), case, server)
     assert kind == "accept" and D.canonical(example(case)) == line
 
@@ -132,14 +134,14 @@ def test_a_lenient_hex_decoder_is_caught(server):
 def test_hex_and_evidence_past_ascii_are_refused_as_lean_refuses_them(server):
     """What `unhex` and `canonical_json` scan a megabyte at a time: a hex digit past ASCII (which `str.isdigit` and
     `int` take), and DEL or a byte past it inside evidence that is canonical JSON otherwise."""
-    case = {"commitment": bytes(range(32)).hex(), "evidence": b'{"drawn":2,"passed":2}'.hex(), "params": {"k": 2}}
+    case = {"commitment": bytes(range(32)).hex(), "evidence": TWO_OF_TWO.hex(), "params": {"k": 2}}
     for digits in ("\uff10\uff10", "0\u0660", "\xe90"):
         with pytest.raises(D.Reject, match="not lowercase hex"):
             P.unhex(digits)
         for field in ("commitment", "evidence"):
             kind, line = D.replay(port(), case | {field: digits + case[field][2:]}, server)
             assert kind == "reject" and '"commitment":null' in line
-    for text in (b'{"drawn":2,"passed":2,"x":"\x7f"}', b'{"drawn":2,"passed":2,"x":"\xc3\xa9"}'):
+    for text in (TWO_OF_TWO[:-1] + b',"x":"\x7f"}', TWO_OF_TWO[:-1] + b',"x":"\xc3\xa9"}'):
         with pytest.raises(D.Reject, match="not ASCII without DEL"):
             P.canonical_json(text)
         kind, line = D.replay(port(), case | {"evidence": text.hex()}, server)
