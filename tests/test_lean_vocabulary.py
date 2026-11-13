@@ -909,7 +909,7 @@ KNOWN: dict[str, str] = {
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
     "verity/protocols/spot/verifier/one_stage/verdict.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (proofs)",
-    "verity/protocols/spot/optimize.py::Commitment": "homonym, a tensor's commit cost: rename (proofs)",
+    "verity/protocols/spot/prover/optimize.py::Commitment": "homonym, a tensor's commit cost: rename (proofs)",
     "verity/protocols/spot/device/remote.py::Session": "homonym, the challenger's host session: rename (proofs)",
     "verity/protocols/spot/verifier/service.py::Outcome":
         "duplicate of `Core.Verdict`: becomes a reading of it (proofs)",
