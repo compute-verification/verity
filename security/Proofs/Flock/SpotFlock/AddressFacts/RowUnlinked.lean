@@ -15,9 +15,10 @@ check passes is a property of the copies wherever a run is accepted.
 
 `ReadersUnlinked` is that property of the check: it passes no design in which a link names a wire's reader port.
 `SecondStage.wiresOk` asks of a wire's writer port that no link names it and asks nothing of its reader port, so
-`ReadersUnlinked` is a premise here. Under it an accepted run gives `wiresUnlinked` (`CheckedRun.wiresUnlinked_of_ok`),
-and the row fact and the addresses premise take the equation "the wires are the derived ones" in place of
-`wiresChecked` (`rowFact_of_derived`, `addressesConnected_of_derived`).
+`ReadersUnlinked` is false of the check as it stands and is a premise here; it is deleted once the check asks the same
+of the reader port, where it is a lemma of the check. Under it an accepted run gives `wiresUnlinked`
+(`CheckedRun.wiresUnlinked_of_ok`), and the row fact and the addresses premise take the equation "the wires are the
+derived ones" in place of `wiresChecked` (`rowFact_of_derived`, `addressesConnected_of_derived`).
 -/
 
 @[expose] public section
@@ -29,8 +30,9 @@ open Claims Claims.Sampling SamplingDeploy
 namespace AddressRow
 
 /-- **The design check passes no design in which a link names a wire's reader port**: wherever `SecondStage.wiresOk`
-passes, no link of the design names the template and port a wire is read at. A premise on the check's code, which
-asks this of a wire's writer port only. -/
+passes, no link of the design names the template and port a wire is read at. A premise on the check's code: it is
+false of `SecondStage.wiresOk` as it stands, which asks this of a wire's writer port only, and this definition is
+deleted once the check asks it of the reader port too. -/
 def ReadersUnlinked : Prop :=
   ∀ (ps : Array Spot.SecondStage.Part) (own : Spot.SecondStage.Own), Spot.SecondStage.wiresOk ps own = true →
     ∀ w ∈ own.wires.getD #[], (Spot.SecondStage.linkOf own w.template w.port).isNone = true
