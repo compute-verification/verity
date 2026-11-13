@@ -3,17 +3,20 @@
 the Match and Build records' fields
 (`missing_derived`, `fold_steps`, `served_shape`, `snapshot_steps_of_record`, `program_digest_of_record`, `manifest_verify_ok`),
 the workload's (`is_stochastic`, `tp_world`), a
-manifest build that fails (`verity_vllm.pipeline.row_build.required_manifest`), the launch contexts a workload's shapes are built
-under (`verity_vllm.pipeline.launch_context`: `main`, `batch_dispatch_of`, `bad_chunks`), the card's line for a stage that is not ok
+manifest build that fails and its wait for the derives (`verity_vllm.pipeline.row_build`: `required_manifest`, `wait_derived`), the
+launch contexts a workload's shapes are built under (`verity_vllm.pipeline.launch_context`: `main`, `batch_dispatch_of`,
+`missing_batch`, `bad_chunks`), the card's line for a stage that is not ok
 (`verity_vllm.pipeline.report.summarize_md`), the gate whose detail each of its counts reads (`build_card`) and its reading of a
 log's first record (`log_header`), the line `verdict from-record` prints (`verity_vllm.pipeline.verdict_record.main`), the config
-record of a row that
-ran nothing (`verity_vllm.pipeline.config_record.record`), the timeline report's window and its command, which report a file's
-last attempt (`verity_vllm.pipeline.timeline`: `report`, `main`), the
+record of a row that ran nothing and the circuit database's index (`verity_vllm.pipeline.config_record`: `record`, `load_index`),
+the timeline report's window and its command, which report a file's last attempt (`verity_vllm.pipeline.timeline`: `report`,
+`main`), the
 experiment index's entries for the captured values and the query-use document (`verity_vllm.pipeline.experiment`), the command
-a stage's end declares its outputs with (`verity_vllm.pipeline.research_outputs.main`) and the one that writes the rows' digests
+a stage's end declares its outputs with (`verity_vllm.pipeline.research_outputs`: `main`, and `build_outputs` for a link, a failed
+replay and a stage it does not know) and the one that writes the rows' digests
 (`verity_vllm.pipeline.epoch`: `main` for `digests`).  The last tests are of a field its document may leave out, null or empty:
-a TP Build's rank blocks, a Commit's decision document, a job's inputs (`research_outputs`), a run's source identity
+a TP Build's rank blocks, a Build's correspondence digest, a Commit's decision document, a job's inputs (`research_outputs`), a
+run's source identity
 (`verity_vllm.pipeline.research_result.build_result`), the replay bundles a Commit's verdict names
 (`verity_vllm.pipeline.row_config`: `commit_verdict`, `replay`), and what `verity_vllm.pipeline.epoch` reads of a run's status, a
 row file, a manifest, a Build's summary and a verdict.
@@ -46,7 +49,7 @@ import verity_vllm.pipeline.timeline as TL
 from tests.check.test_verdict import _base, _row_dir
 from tests.pipeline.test_row import STAGE_START, _summary_row
 from verity_vllm.check.gates import GateResult
-from verity_vllm.config import CHECKPOINTS, WORKLOADS, workload_file
+from verity_vllm.config import CHECKPOINTS, WORKLOADS, UsageError, workload_file
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.program import prefix_plan as PP
@@ -237,6 +240,38 @@ def test_the_launch_context_command_prints_each_shapes_context(tmp_path, capsys)
     assert capsys.readouterr().out == "\n"
 
 
+def test_a_request_program_is_refused_for_its_launch_batch_only_when_it_was_given_none():
+    declared = {"max_seqlen_q_by_step": {0: 8}, "conflict": False, "declared": True}
+    assert LC.missing_batch({**declared, "batch_by_step": {0: [(8, 0), (5, 0)]}}, 8, 3) is None
+    without: list[dict[str, Any] | None] = [None, {}, declared, {**declared, "batch_by_step": {}}]
+    for launch in without:
+        refusal = LC.missing_batch(launch, 8, 3)
+        assert refusal is not None and (refusal["reason"], refusal["phase"]) == ("launch_context", "applicability"), launch
+        assert f"was given {launch!r}, not its launch batch" in refusal["hint"] and "launch-context <workload> 8 3" in refusal["hint"]
+
+
+def test_the_manifest_waits_for_every_shape_and_gives_up_once_the_derives_end_without_one(tmp_path, monkeypatch):
+    """`wait_derived` is True once every shape is derived, whether or not the derives' end is marked yet, and False when they ended
+    without one, when one failed, or when the row was signalled; none of these waits."""
+    def never(seconds):
+        raise AssertionError("waited where the answer was already decided")
+    monkeypatch.setattr(RB, "time", SimpleNamespace(sleep=never))
+    done, stop, dirs = tmp_path / "done", tmp_path / "failed", [str(tmp_path / "a"), str(tmp_path / "b")]
+
+    def waited(signalled: bool = False) -> bool:
+        return RB.wait_derived(SimpleNamespace(signalled=signalled), dirs, str(done), str(stop))
+    _put(tmp_path / "a" / "result.json", {"ok": True})
+    _put(tmp_path / "b" / "result.json", {"ok": False})
+    done.touch()
+    assert waited() is False
+    _put(tmp_path / "b" / "result.json", {"ok": True})
+    assert waited() is True
+    done.unlink()
+    assert waited() is True and waited(signalled=True) is False
+    stop.touch()
+    assert waited() is False
+
+
 def test_the_card_names_each_stage_that_is_not_ok():
     def card(stages: dict[str, dict[str, Any]]) -> str:
         return CARD.summarize_md(CARD.ReportCard(schema="s", utc="u", config_id="c", model={}, C={}, engine_args={}, workload={}, kappa={},
@@ -278,6 +313,16 @@ def test_the_verdict_command_says_the_outcome_first_and_takes_the_commits_exit_c
 def test_the_config_record_of_a_row_that_ran_nothing_fails_at_its_build(tmp_path):
     rec = CR.record(tmp_path, "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager")
     assert (rec["schema"], rec["outcome"], rec["why"]) == ("verity-vllm/config-record/v1", "FAIL", "build FAIL")
+
+
+def test_the_circuit_databases_index_is_empty_without_its_file_and_refused_under_another_schema(tmp_path):
+    index = tmp_path / "records.json"
+    assert CR.load_index(index) == {"schema": CR.INDEX_SCHEMA, "about": CR.INDEX_ABOUT, "rows": {}} and CR.aot_of("a-row", index) is None
+    CR.write_index({"schema": CR.INDEX_SCHEMA, "rows": {"b": {"aot": {"trace": "t"}}, "a": {}}}, index)
+    assert list(CR.load_index(index)["rows"]) == ["a", "b"] and (CR.aot_of("a", index), CR.aot_of("b", index)) == (None, {"trace": "t"})
+    _put(index, {"schema": "verity-vllm/records/v0", "rows": {}})
+    with pytest.raises(UsageError, match=f"records.json: schema 'verity-vllm/records/v0', not {CR.INDEX_SCHEMA}$"):
+        CR.load_index(index)
 
 
 def test_a_row_dispatches_by_batch_when_its_target_is_not_batch_invariant_and_it_has_several_requests(tmp_path):
@@ -334,6 +379,10 @@ def test_the_timeline_report_command_reports_the_files_last_attempt(tmp_path, ca
 def test_the_experiment_index_counts_the_captured_values_and_their_steps(tmp_path):
     absent = EXP._transcript_values(tmp_path)
     assert absent["snapshot_index"] == {"path": "capture/snapshots.json", "present": False} and "snapshot_steps" not in absent
+    assert absent["values_dir"] == {"path": "capture/values", "present": False}
+    _put(tmp_path / "capture" / "values" / "a.bin", "abc")
+    _put(tmp_path / "capture" / "values" / "step0" / "b.bin", "de")
+    assert EXP._transcript_values(tmp_path)["values_dir"] == {"path": "capture/values", "present": True, "dir": True, "files": 2, "bytes": 5}
     entries = [{"step": 2, "path": "a"}, {"step": "0", "skipped": "oversize", "path": "b", "shape": [1]}, {"path": "c"}, "not an entry", {"step": 2}]
     for doc in ({"snapshots": entries}, {"entries": entries}, entries):
         _put(tmp_path / "capture" / "snapshots.json", doc)
@@ -468,6 +517,35 @@ def test_a_tp_builds_digests_read_a_summary_whose_rank_blocks_are_not_all_there(
     for rank0 in left_out:
         got = digests({"rank1": whole, **rank0})
         assert (got["program_digest"], got["step_digest"], got["rank_workload_digests"]) == (None, None, [None, "w" * 64]), rank0
+
+
+def test_a_builds_digests_carry_its_correspondence_digest_and_a_summary_that_is_no_document_has_none(tmp_path):
+    none = {"program_digest": None, "request_digest": None, "step_digest": None, "workload_digest": None}
+    _put(tmp_path / "build_summary.json", ["not a summary"])
+    assert RO.program_digest(tmp_path) == none
+    named: list[dict[str, Any]] = [{"correspondence_digest": "c" * 64}, {"correspondence": {"digest": "c" * 64}},
+                                   {"correspondence": {"correspondence_digest": "c" * 64}}]
+    for summary in named:
+        _put(tmp_path / "build_summary.json", summary)
+        assert RO.program_digest(tmp_path) == {**none, "correspondence_digest": "c" * 64}, summary
+
+
+def test_a_stages_outputs_leave_a_link_out_by_name_say_which_decision_document_a_failed_replay_lacks_and_refuse_an_unknown_stage(tmp_path):
+    """A listed file that is a link is never staged and is named as skipped.  A replay that did not pass and left no decision document
+    still declares the Commit's files, with the document it lacks named.  A stage with no outputs of its own is refused by name."""
+    row, d, run = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager", tmp_path / "row", tmp_path / "run"
+    _put(d / "stages.txt", "build FAIL 2026-09-23T00:00:00Z rc=1\nreplay FAIL 2026-09-23T00:00:01Z rc=1\n")
+    _put(d / "tree.json", {})
+    (d / "build_summary.json").symlink_to(_put(tmp_path / "elsewhere.json", {}))
+    build = RO.build_outputs(d, row, "build", run, {})["outputs"][0]
+    assert (build["name"], build["meta"]["files"], build["meta"]["skipped"]) == ("build", 1, ["build_summary.json"])
+    assert [p.name for p in (run / "outputs" / "build").iterdir()] == ["tree.json"]
+    _put(d / "commit" / "commit.log", "no replay ran\n")
+    verdict = RO.build_outputs(d, row, "replay", run, {})["outputs"][0]
+    assert (verdict["name"], verdict["meta"]["verdict"], verdict["meta"]["decision_record"]) == ("verdict", "FAIL", "config_record.json")
+    assert verdict["meta"]["decision_record_missing"] == "config_record.json" and "outcome" not in verdict["meta"]
+    with pytest.raises(ValueError, match="^unknown stage 'serve'$"):
+        RO.build_outputs(d, row, "serve", run, {})
 
 
 def test_a_commits_verdict_entry_reads_a_decision_document_without_its_replay_or_its_runs(tmp_path):
