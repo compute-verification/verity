@@ -315,7 +315,8 @@ def pinned_challenger_key(record: Path | None = None) -> Ch.ChallengerKey:
     unless `record` is its file): refused (ValueError) unless the record is a challenger-key/v1 record whose public key's
     SHA-512 is `CHALLENGER_KEY_SHA512`, both the one the record names and the one the public key hashes to."""
     if record is None:
-        from research.store.local import LocalStore  # only the verifier's own reading fetches
+        # only the verifier's own reading fetches
+        from research.store.local import LocalStore
         record = LocalStore().fetch(CHALLENGER_KEY_PIN)
     try:
         doc = json.loads(Path(record).read_bytes())
