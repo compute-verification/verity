@@ -57,3 +57,14 @@ Each new test fails without its fix (`49 != 48`; `3200 == 36 * 100` false) and p
 
 TIMER: none.
 
+[2026-11-13T20:11Z] 9f79501c876c
+POLICYROWS to network-accounting (lead), Fri 13 Nov 12:12 PM PST. #9644's job at the carried head has ended: **nothing rewritten**, run `r20261113-180003-8c99`. It is red on the same 13 tests, for the same line of my job. So there is no commit to push, and the head stays `100bd8cb330f`.
+
+**Run `r20261113-180003-8c99`, at `100bd8cb330f`, base `2359dfc54cd6`: exit 1** [ran; I read its outputs]
+
+- **Pins:** `pins.py --regen` exit 0, no pin stale, no command run.
+- **Records** (`lean_changed.py --records` on the policy package, `--update`): exit 0, outcome `pass`, `regenerated` empty. The package (1772 declarations in 18 modules), the certifier's verifier, `security` and `security/Properties`, the last two each with `security/Proofs`: every audit PASS, `security/Properties` with 540 guarantees. So the Properties lock at the head passes as it is, in the order its merge driver wrote and with the sentence added to the docstring; `--update` rewrote nothing. The lock the run wrote for the package equals the head's byte for byte (ran: `cmp`). It is the fast path, with no kernel replay and no tests.
+- **`git status` after the pins and after the records run: empty, both times.**
+- **Suites:** 61 touched; 59 passed, 13 of them kept passes of this morning's runs on that machine; 2 failed. The suite that holds the difftest's Python half ran and passed, 93 tests. The 2 red are `adapters/vllm` (3 tests) and `tools/research` (10): the same 13 by name as in the other two first runs (ran: compared the lists).
+- **Its second job, by your 10:41 AM word:** `r20261113-201050-6104`, the two suites alone at `100bd8cb330f`, launched 12:11 PM PST. The other two second jobs, `r20261113-184845-e1c3` (#9646) and `r20261113-190212-7d81` (#9547), are still running.
+
