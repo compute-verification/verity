@@ -24,18 +24,26 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from pathlib import Path
 
 import numpy as np
 import pytest
 
-from verity_vllm.commit import binding as B
-from verity_vllm.check import weights_of_record as WR
-from verity_vllm.pipeline import cli
-from verity_vllm.pipeline import row_records as R
 from tests.check.test_sampled_replay import _program as _wired_program
 from tests.check.test_sampled_replay import v2_manifest
-from tests.check.test_weights_of_record import (PREFIX, _program, _served, _write_program, checkpoint,  # noqa: F401 (fixture)
-                                                                live_digests, write_safetensors)
+from tests.check.test_weights_of_record import (  # noqa: F401 (fixture)
+    PREFIX,
+    _program,
+    _served,
+    _write_program,
+    checkpoint,
+    live_digests,
+    write_safetensors,
+)
+from verity_vllm.check import weights_of_record as WR
+from verity_vllm.commit import binding as B
+from verity_vllm.pipeline import cli
+from verity_vllm.pipeline import row_records as R
 
 pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
 
@@ -60,8 +68,8 @@ def _row(tmp_path, name, prog, shapes, *, workload_digest, default=(9, 2)):
     ddig = hashlib.sha512(f"{name}/default".encode()).hexdigest()
     _write_program(root / "build_request", prog, ddig, *default)
     (root / "build_workload").mkdir()
-    json.dump({"workload_digest": workload_digest}, open(root / "build_workload" / "workload_program.json", "w"))
-    json.dump({"program_digest": workload_digest, "component_digests": sorted(set(cdig)), "components": comps}, open(root / "manifest.json", "w"))
+    (root / "build_workload" / "workload_program.json").write_text(json.dumps({"workload_digest": workload_digest}))
+    (root / "manifest.json").write_text(json.dumps({"program_digest": workload_digest, "component_digests": sorted(set(cdig)), "components": comps}))
     return root, {workload_digest, *cdig}, ddig
 
 
@@ -130,14 +138,14 @@ def test_the_row_derives_the_pin_from_the_first_manifest_component_at_b_ge_2(che
     assert WR.check(rec, live, program_digests_of_record=set8)["result"] is True
     # a row whose r0 has the default shape and whose Build wrote only build_request for it: the pick is build_request (declared (LP, T) match)
     rd, setd, ddig = _row(tmp_path, "bdef", prog, [(4, 1)], workload_digest="a" * 128, default=(9, 2))
-    m = json.load(open(rd / "manifest.json"))
+    m = json.loads((rd / "manifest.json").read_text())
     m["components"] = {"r0": {"program_digest": ddig, "LP": 9, "T": 2}, "r1": m["components"]["r0"]}
     m["component_digests"] = sorted(set(m["component_digests"]) | {ddig})
-    json.dump(m, open(rd / "manifest.json", "w"))
+    (rd / "manifest.json").write_text(json.dumps(m))
     assert os.path.basename(_pick(rd)) == "build_request"
     assert WR.check(WR.build_record(_pick(rd), str(d), checkpoints_manifest=str(man)), live, program_digests_of_record=set(m["component_digests"]) | {"a" * 128})["result"] is True
     # a component dir whose result.json is not ok (a failed derive) is skipped, the next candidate taken
-    json.dump({"program_digest": "x" * 64, "ok": False, "LP": 9, "T": 1}, open(r8 / "build_request_LP9_T1" / "result.json", "w"))
+    (r8 / "build_request_LP9_T1" / "result.json").write_text(json.dumps({"program_digest": "x" * 64, "ok": False, "LP": 9, "T": 1}))
     assert os.path.basename(_pick(r8)) == "build_request_LP8_T2"
     # the pick never depends on a previous Commit's files: a stale record beside the default shape changes nothing
     (r8 / "build_request" / "weights_of_record.json").write_text("{}")
@@ -192,7 +200,7 @@ def test_wrong_registered_root_and_wrong_checkpoint_context_are_refused_by_name_
     assert ok["result"] is True and ok["why"] is None
     # wrong registered root: the manifest pins another sha for the shard
     bad_man = tmp_path / "bad.json"
-    json.dump({"checkpoints": [{"repo": "test/tiny", "revision": "abc", "local_path": str(d), "files": {"model.safetensors": {"sha256": "f" * 64}}}]}, open(bad_man, "w"))
+    Path(bad_man).write_text(json.dumps({"checkpoints": [{"repo": "test/tiny", "revision": "abc", "local_path": str(d), "files": {"model.safetensors": {"sha256": "f" * 64}}}]}))
     rec_w1 = WR.weights_of_record(prog, WR.CheckpointIndex(str(d), checkpoints_manifest=str(bad_man)), prefix=PREFIX)
     w1 = WR.check(rec_w1, live)
     assert w1["result"] is False and "not the pinned ones (W1)" in w1["why"] and "model.safetensors" in w1["why"]
@@ -238,10 +246,10 @@ def test_substituted_weight_input_is_named_whether_in_memory_or_on_disk(checkpoi
     sub_dir.mkdir()
     t2 = {k: (dt, (WR._f32_to_bf16_bits(rng.random(a.shape, dtype=np.float32)) if dt == "BF16" else a)) for k, (dt, a) in t.items()}
     write_safetensors(str(sub_dir / "model.safetensors"), t2)
-    json.dump(json.load(open(d / "config.json")), open(sub_dir / "config.json", "w"))
+    (sub_dir / "config.json").write_text(json.dumps(json.loads((d / "config.json").read_text())))
     man_sub = tmp_path / "ck_sub.json"                                     # the pin still names the ORIGINAL sha for this path
-    orig_sha = json.load(open(man))["checkpoints"][0]["files"]["model.safetensors"]["sha256"]
-    json.dump({"checkpoints": [{"repo": "test/tiny", "revision": "abc", "local_path": str(sub_dir), "files": {"model.safetensors": {"sha256": orig_sha}}}]}, open(man_sub, "w"))
+    orig_sha = json.loads(Path(man).read_text())["checkpoints"][0]["files"]["model.safetensors"]["sha256"]
+    Path(man_sub).write_text(json.dumps({"checkpoints": [{"repo": "test/tiny", "revision": "abc", "local_path": str(sub_dir), "files": {"model.safetensors": {"sha256": orig_sha}}}]}))
     rec_sub = WR.weights_of_record(prog, WR.CheckpointIndex(str(sub_dir), checkpoints_manifest=str(man_sub)), prefix=PREFIX)
     assert rec_sub["of_record"] is False and rec_sub["checkpoint"]["shards"]["model.safetensors"]["pinned"] is False
     # the engine served exactly the substituted disk bytes: self-consistent, yet refused -- 'served == disk' is not the pin
@@ -295,11 +303,14 @@ def test_missing_metadata_field_is_not_a_pin_mismatch(checkpoint):
     prog, fields = _program()
     rec = WR.weights_of_record(prog, WR.CheckpointIndex(str(d), checkpoints_manifest=str(man)), prefix=PREFIX)
     legacy = json.loads(json.dumps(rec))
-    legacy.pop("engine_assumptions"); legacy.pop("n_analytic", None); legacy.pop("analytic_fields", None)
+    legacy.pop("engine_assumptions")
+    legacy.pop("n_analytic", None)
+    legacy.pop("analytic_fields", None)
     for f in legacy["fields"]:                                    # the older record shape: the kv scale listed by name, no digest
         if f["field"].endswith("attn._k_scale"):
             f.update({"digest": None, "pinned": False, "why": "engine constant (not a checkpoint tensor)"})
-            f.pop("rule", None); f.pop("sources", None)
+            f.pop("rule", None)
+            f.pop("sources", None)
     legacy["unpinned"] = ["model.model.layers.0.self_attn.attn._k_scale"]
     legacy["n_pinned"] = rec["n_pinned"] - 1
     served = _served(t, fields)
@@ -329,7 +340,7 @@ def test_pin_record_is_built_once_per_row_not_per_request(checkpoint, tmp_path, 
     root, ofr, _ = _row(tmp_path, name, prog, shapes, workload_digest="c" * 128)
     out = root / "weights_of_record.json"
     rc = cli.main(["weights-of-record", "--programs-root", str(root), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(out)])
-    rec = json.load(open(out))
+    rec = json.loads(Path(out).read_text())
     assert rc == 0 and rec["of_record"] is True and set(rec["of_record_set"]["program_digests"]) == ofr
     live = live_digests(_served(t, fields))
     n_reads = {"n": 0}

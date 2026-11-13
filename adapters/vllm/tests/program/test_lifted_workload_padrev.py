@@ -6,16 +6,29 @@ this module's own."""
 from __future__ import annotations
 
 import pytest
-
 from verity.circuits import Program
-from verity_vllm.program import workload as W
 from verity.circuits.codec import encode_program
 from verity.circuits.defs import REGISTRY
-from verity.definitions.registry import b1, lifted as L
-from verity_vllm.program.lifting import lifted_compose
-from tests.program import test_lifted_mixed as PM
-from tests.program.test_lifted_mixed import BOUNDARY, CAP, EOS, LP, TINY, _inputs, _inputs_for, _prompt_b, _request_outs, _requests, _run
 from verity.circuits.types import Array, Value
+from verity.definitions.registry import b1
+from verity.definitions.registry import lifted as L
+
+from tests.program import test_lifted_mixed as PM
+from tests.program.test_lifted_mixed import (
+    BOUNDARY,
+    CAP,
+    EOS,
+    LP,
+    TINY,
+    _inputs,
+    _inputs_for,
+    _prompt_b,
+    _request_outs,
+    _requests,
+    _run,
+)
+from verity_vllm.program import workload as W
+from verity_vllm.program.lifting import lifted_compose
 
 I32 = Value(32)
 
@@ -45,8 +58,8 @@ def test_r1_the_lifted_workload_root_is_one_partitioned_namespace_and_every_guar
     am = wl.address_map()
     intervals = sorted([tuple(i["gates"]) for i in am["inputs"]] + [tuple(r["gates"]) for r in am["requests"]])
     assert intervals[0][0] == 0 and intervals[-1][1] == am["gates"] == wl.program.gates
-    for (a0, a1), (b0, b1) in zip(intervals, intervals[1:]):
-        assert a1 == b0, f"gap or overlap between {(a0, a1)} and {(b0, b1)}"
+    for (a0, a1), (b0, b_hi) in zip(intervals, intervals[1:]):
+        assert a1 == b0, f"gap or overlap between {(a0, a1)} and {(b0, b_hi)}"
     assert all(a < b for a, b in intervals)
     sh = am["shared"]
     assert sh["group"] == "weights"
