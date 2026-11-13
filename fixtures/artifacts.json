@@ -26,7 +26,7 @@
   "art:8e64204959f3943541eaaa2eb7e980a7b6d09a470d6f3ccb4b17f676efcdffa7": "verity/protocols/flock/prover/tests/fixtures/hidden-outputs",
   "art:4274bdf17e6fe0cbb00d0605644a955182a0f4fbe4c84d2f0263d0e26f838260": "verity/protocols/flock/prover/tests/fixtures/public-inputs",
   "art:73260dcd0a485e06024b588ddc499bbe904c599cae142960e980148f13ebcdeb": "verity/protocols/flock/prover/tests/fixtures/public-inputs-blocks",
-  "art:a093dd5b2963d1ad15ac8fe580d5240acee3aa157791b2e4d0131a4a013e67c4": "verity/protocols/inference_only/nci/sources",
+  "art:a093dd5b2963d1ad15ac8fe580d5240acee3aa157791b2e4d0131a4a013e67c4": "benchmarks/nci/sources",
   "art:c1170d49b98fb7ece129c26db47d316e359f5d79067f35e2035f6100e7153d60": "adapters/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json",
   "art:5ccc6114ed48964f5b74b4766f80afa61a6e3c987482a6bf6390468ad38bb489": "adapters/vllm/tests/regression/expected/mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
   "art:a543911dde6922d7fd11923f0344589e951e5502da9da84c19838e6dcb8c6a3a": "adapters/vllm/tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager.json",
