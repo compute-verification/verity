@@ -50,6 +50,7 @@ ml = [
     "verity/commitments/{identity.py,indexed.py,layout.py,limits.py,merkle.py,multiproof.py,pyproject.toml}",
     "verity/commitments/{pool_row.py,row_table.py,rowleaf.py,scheme.py,tests,window.py,windows}",
     "verity/{circuits,definitions}",
+    "adapters/vllm/verity_vllm/definitions",
 ]
 # PoUW: the integrity profile, the protocol, and its part of the security analysis (the accounting it reads is `needed`)
 pouw = [
@@ -187,7 +188,9 @@ protocols = [
     # PoUB's opening unit's test, which holds it to PoUB's Python verifier
     "verity/commitments/tests/test_block_check.py",
     # PoUB's plan unit and memory-map unit, with their test
-    "verity/definitions/circuits/requirement_units*",
+    "verity/definitions/circuits/requirement_units.py",
+    "verity/definitions/circuits/requirement_units.circuit-check.json",
+    "verity/definitions/circuits/requirement_units.circuit-check.py",
     "verity/circuits/tests/test_requirement_units.py",
     # the population programs' circuit-check bindings, whose example templates are PoUB's plan units
     "verity/circuits/population.circuit-check.py",
@@ -291,6 +294,7 @@ flock_bench = [
 # what a public directory holds that is not its own: another area's package or tool that sits under it, and is no part
 # of the public tree
 nested = [
+    "verity/circuits/{evaluate,requirement}",
     "verity/definitions/{evaluate,requirement}",
     "verity/hardware/tests/test_lean.py",
     "verity/hardware/tests/test_nodes.py",

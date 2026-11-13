@@ -155,16 +155,17 @@ PLACE: dict[str, tuple[str, ...]] = {
                     "definitions/circuits/constants.py", "definitions/circuits/library.py",
                     "definitions/circuits/operations.py", "definitions/circuits/requirement.py",
                     "definitions/circuits/requirement_units.py", "definitions/circuits/stacking.py"),
-    "ml.circuits.ops": ("definitions/ops",),
-    "ml.circuits.silicon": ("definitions/silicon",),
-    "ml.circuits.targets": ("definitions/circuits/targets",),
+    "ml.circuits.ops": ("definitions/ops", "circuits/ops"),
+    "ml.circuits.silicon": ("definitions/silicon", "circuits/silicon"),
+    "ml.circuits.targets": ("definitions/circuits/targets", "circuits/targets"),
     "ml.commitments": ("commitments", "definitions/commitments/gates/attest.py",
                        "definitions/commitments/gates/block_key.py",
                        "protocols/poub/verifier/commitments/gates/block_check.py"),
     "ml.crypto": ("commitments/crypto",),
-    "ml.definitions": ("definitions",),
-    "ml.kernels": ("definitions/kernels",),
-    "ml.private_circuits": ("definitions/private_circuits",),
+    "ml.definitions": ("definitions", "circuits/call_scope.py", "circuits/cross_call.py", "circuits/tiny.py",
+                       "circuits/word.py"),
+    "ml.kernels": ("definitions/kernels", "circuits/kernels"),
+    "ml.private_circuits": ("definitions/private_circuits", "circuits/private_circuits"),
     "ml.protocols.certifier": ("protocols/certifier/prover",),
     "ml.protocols.pous": ("protocols/pous/prover",),
     "ml.protocols.pouw": ("protocols/pouw/prover",),
@@ -191,7 +192,8 @@ _LISTED = {*_UNIT_AT, *NO_UNIT}
 #: what else is core's, from ``verity/``.
 ML_TREES = ("protocols/flock/agreement", "protocols/flock/pod", "protocols/flock/prover", "protocols/flock/tool.py",
             "protocols/poub/verifier/commitments/gates/block_check.circuit-check.py")
-CORE_TREES = ("commitments/identity", "commitments/lms", "definitions/evaluate", "definitions/requirement", "difftest",
+CORE_TREES = ("circuits/evaluate", "circuits/requirement", "commitments/identity", "commitments/lms", "definitions/evaluate",
+              "definitions/requirement", "difftest",
               "protocols/certifier/device", "protocols/compose", "protocols/flock/sigma", "protocols/inference_only/verifier",
               "protocols/recursion", "protocols/remote", "protocols/tests")
 _SIDE_AT = {t: side for side, trees in (("ml", ML_TREES), ("core", CORE_TREES)) for t in trees}
@@ -210,8 +212,10 @@ DEPENDENCIES = {"numpy"}
 SEPARATE = ("protocols/flock/agreement", "protocols/flock/pod", "protocols/flock/prover", "protocols/flock/tool.py",
             "difftest", "protocols/pous/verifier/check", "configuration/config", "protocols/inference_only/rho",
             "protocols/inference_only/nci")
-#: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
-NUMPY_FREE = ("circuits", "definitions/circuits", "definitions/silicon", "commitments/randomness", "claims", "hardware")
+#: The units that must stay stdlib-only, the scalar references (``PLACE`` says where their files are), and within them what
+#: may use numpy.
+NUMPY_FREE = ("ml.circuits", "ml.circuits.silicon", "ml.circuits.targets", "ml.randomness", "core.claims", "hardware",
+              "core.site", "core.protocols.record", "core.protocols.registration")
 NUMPY_USERS = ("circuits/evaluation", "circuits/boolean/forms.py")
 #: ml builds on no verifier: core's frozen edges into ml (``CORE_ML_EDGES``) never run the other way.  The files of
 #: ``verity/ml/`` that import core anyway
@@ -353,11 +357,18 @@ BENCHMARKS_IMPORTERS = {
 #: the workspace.  What a check needs of one, that distribution hands it in a sidecar it owns (`circuit_check.sidecars`).
 CIRCUIT_CHECK = "tools/verity/circuit_check/src"
 #: The files of circuit-check that still import another distribution of the workspace, each with the packages it imports:
-#: Flock's lowerings and templates, which its lowering and template checks hold each Definition's Boolean circuit to.  It
-#: only shrinks.
+#: Flock's lowerings and templates, which its lowering and template checks hold each Definition's Boolean circuit to.  An
+#: entry that is a module (``verity.definitions.registry``) covers that module and the ones under it, not its package:
+#: the served circuits circuit-check checks, listed ahead of their move into the vLLM adapter, which makes them another
+#: distribution's; circuits' to remove, as circuit-check is handed them.  It only shrinks.
 CIRCUIT_CHECK_IMPORTS = {
-    f"{CIRCUIT_CHECK}/circuit_check/{name}.py": {"verity_flock"}
-    for name in ("ambient", "checks", "sidecars", "structural", "targets")
+    f"{CIRCUIT_CHECK}/circuit_check/ambient.py": {"verity_flock"},
+    f"{CIRCUIT_CHECK}/circuit_check/checks.py": {"verity_flock"},
+    f"{CIRCUIT_CHECK}/circuit_check/sidecars.py": {"verity_flock", "verity.definitions.registry"},
+    f"{CIRCUIT_CHECK}/circuit_check/structural.py": {"verity_flock"},
+    f"{CIRCUIT_CHECK}/circuit_check/targets.py": {"verity_flock", "verity.definitions.boolean", "verity.definitions.numerics",
+                                                  "verity.definitions.registry"},
+    f"{CIRCUIT_CHECK}/circuit_check/units.py": {"verity.definitions.boolean"},
 }
 #: Functions past a guard, which tests alone may name, since a guard never fails open (AGENTS.md "Working principles"): each
 #: with the file that defines it and why tests need it.
@@ -540,10 +551,12 @@ def test_every_source_directory_is_a_package() -> None:
     assert not missing, missing
 
 
-@pytest.mark.parametrize("subtree", NUMPY_FREE)
-def test_scalar_references_are_stdlib_only(subtree: str) -> None:
+@pytest.mark.parametrize("unit", NUMPY_FREE)
+def test_scalar_references_are_stdlib_only(unit: str) -> None:
+    files = [p for p in _sources() if _unit(_dotted(p)) == unit]
+    assert files, f"unit {unit!r} has no source: remove it from NUMPY_FREE"
     offenders = [f"{path.relative_to(SRC)}:{line}: {name}"
-                 for path in _sources(SRC / subtree)
+                 for path in files
                  if not any(path.relative_to(SRC).as_posix().startswith(u) for u in NUMPY_USERS)
                  for name, line, _ in _imports(path)
                  if name.split(".")[0] == "numpy"]
@@ -851,6 +864,12 @@ def _circuit_check_imports(texts: dict[str, str], packages: Set[str]) -> dict[st
     return found
 
 
+def _import_listed(name: str, entries: Set[str]) -> bool:
+    """Whether the imported module ``name`` is one ``CIRCUIT_CHECK_IMPORTS``' ``entries`` for its file list: its package, or
+    a module entry that is it or holds it."""
+    return name.split(".")[0] in entries or any(name == e or name.startswith(e + ".") for e in entries if "." in e)
+
+
 def test_circuit_check_imports_no_workspace_distribution_but_verity() -> None:
     """A check that needs another distribution's code would make ``verity``'s tool depend on what attaches to it: an
     integration, a benchmark, the team's tooling.  The dependency points the other way, through a sidecar."""
@@ -858,15 +877,19 @@ def test_circuit_check_imports_no_workspace_distribution_but_verity() -> None:
     assert {"verity_vllm", "verity_numerical", "verity_flock", "research"} <= packages, packages
     texts = {rel: (ROOT / rel).read_text(encoding="utf-8") for rel in _tracked(f"{CIRCUIT_CHECK}/*.py")}
     assert len(texts) > 10, sorted(texts)
-    found = _circuit_check_imports(texts, packages)
-    offenders = [f"{f}: {pkg}" for f, pkgs in sorted(found.items()) for pkg in sorted(pkgs - CIRCUIT_CHECK_IMPORTS.get(f, set()))]
+    names = {rel: {name for name, _line, _imported in _imports(ROOT / rel, ROOT / CIRCUIT_CHECK, (),
+                                                                   ast.walk(ast.parse(text, filename=rel)))}
+             for rel, text in texts.items()}
+    offenders = [f"{f}: {name}" for f, found in sorted(names.items()) for name in sorted(found)
+                 if name.split(".")[0] in packages and not _import_listed(name, CIRCUIT_CHECK_IMPORTS.get(f, set()))]
     assert not offenders, ("circuit-check imports `verity` and itself, and no other distribution of the workspace. Have the "
                            "distribution hand circuit-check what the check needs, in a sidecar it owns beside the module that "
                            "defines it (`<module>.circuit-check.py`: a binding in `circuit_check.targets`' forms, or a reader "
                            "as `request_program`; `circuit_check.sidecars` finds it without naming the package), or, if the "
                            "check is the distribution's own, run it from that distribution's command and suite. "
                            "CIRCUIT_CHECK_IMPORTS only shrinks.\n" + "\n".join(offenders))
-    stale = sorted(f"{f}: {pkg}" for f, pkgs in CIRCUIT_CHECK_IMPORTS.items() for pkg in pkgs - found.get(f, set()))
+    stale = sorted(f"{f}: {entry}" for f, entries in CIRCUIT_CHECK_IMPORTS.items() for entry in entries
+                   if not any(_import_listed(name, {entry}) for name in names.get(f, set())))
     assert not stale, f"CIRCUIT_CHECK_IMPORTS entries circuit-check no longer imports; remove them: {stale}"
 
 
