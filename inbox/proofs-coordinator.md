@@ -130280,3 +130280,27 @@ Why the ten lines at `ad1c6637c1` stand at `6e1696929a` [run]: those ten files a
 **To post.** Nothing.
 
 **Not established.** My files on the join's own tree: every try of mine ran on my branch, which holds TWOLEG's form and not the rest of the join; ASSEMBLY's whole compile at a tip with `143082c828` is the first to say. A records run of `security/Proofs` at any head with my files. That ACCEPTS's older `SampledTwo/Accepts.lean`, which my branch still holds, compiles at `6e1696929a`: by reading it does not, and I did not try it.
+
+## ADDRROW, Fri 13 Nov 08:29Z: `RowTable.lean` did NOT compile at `fddc438a08` (`c127`: 7 of its 8 theorems elaborated, `unitIndices_of_units` failed in one `simp`); MENDED at `c9ba3542f8`, WRITTEN and NOT compiled, in try `r20261113-082753-b31c` (`--on auto`, vy-nebius-cpu-11); `RowOf` and `RowLeaves` stay COMPILED (`0c37`)
+
+**In plain words.** The half of `Sits` that says the session's instances carry their slots as labels failed to build, in one small step: reading the list of unit indices out of the header's `units` entry. The other seven theorems of the file went through. I rewrote that step and sent the file again. The place half of `Sits` is next, while the try runs.
+
+**Pen** [run]. This machine was replaced: `uptime -s` 08:24:05Z, no `~/wt`, the checkout on a fresh `main`. I made `~/wt/.pen` at 08:25:00Z, one loop, and rebuilt `~/wt/addrrow` from the pushed branch at `fddc438a08`. Nothing unpushed was lost.
+
+**`r20261113-075317-c127`** [run: `research status`, its `stdout.log`], vy-nebius-cpu-7, `failed rc=1`:
+- "Build completed successfully (11128 jobs)" (every import, `RowOf` among them).
+- `RowTable.lean:120:45: error: unsolved goals`, in `ha` of `unitIndices_of_units`: `simp [J.arr, J.get, hi, bind, Except.bind, J.asArr, Json.getArr?]` left `match pure (xs.map toJson) with | .ok s => .ok s | .error … = .ok (xs.map toJson)` open.
+- "lean exit 1 in 473 s"; "axiom probe: 1 of its 8 theorems failed, with Lean's error above on its own lines: SpotFlock.AddressRow.unitIndices_of_units; no axioms are shown for a file lean refuses".
+- So `drawn_of_ok` and `labelled_of_ok` elaborated against a failed lemma and are not named compiled.
+
+**The mend** [derived, not compiled], `c9ba3542f8`, pushed: `ha` now proves `J.get (unitsEntry c xs) "indices" _ = .ok (.arr …)` by the same `simp [J.get, hi]` that `hg` passes with, then `unfold J.arr; rw; rfl`, the step form `arr_ok` reads `J.arr` by. No statement changed.
+
+**One-table step.** `hc1 : r.ins.read.I.count ≤ 1` stays a hypothesis of `drawn_of_ok` and `labelled_of_ok` until SESSIONOF2 names a compiled head; I write no second lemma.
+
+**STOP RULE.** No listed guarantee, named assumption or verifier touched; nothing in FRAME's files.
+
+**NEEDS.** Nothing new; the ask to SESSIONOF2 of my 07:56Z item 3 stands.
+
+**Not established.** That `RowTable.lean` compiles (`b31c` holds Lean slot build/1 on cpu-11 since 08:28Z; `c127` took 473 s of Lean, so I read it at about 08:45Z). All of the place half of `Sits`.
+
+Branch `cursor/proofs-addrrow-d318` at `c9ba3542f8`, pushed; nothing unpushed. Runs: `r20261113-075317-c127` (failed), `r20261113-082753-b31c` (running). Mailbox read at 08:26Z: nothing after your 07:29Z mails.
