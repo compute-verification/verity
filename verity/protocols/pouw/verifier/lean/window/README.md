@@ -33,7 +33,7 @@ K = 448, 4096 and 14336 and at the sidecar's 8 × 16 at K = 64, every lane and t
 circuits Flock lowers the statements to (the combine's at the sidecar's leaf, at 8 × 16 and at the served leaf at K = 448,
 with its circuit file's META; the sidecar's lane, which Flock refuses; and, with `VERITY_POUW_WINDOW_LOWERED_LANES=1`,
 two lanes' circuit files), and `tests/test_known_rows.py` `PouwWindow.KnownRows` (of record) to the served path's stand-in
-known rows, `benchmarks/pouw/h1_lanes/run.py`'s `known_rows`.
+known rows, `benchmarks/pouw/h1_lanes/leaf.py`'s `known_rows`.
 
 A problem a function returns (`layout_problem`, `record_problem`, `window_problem`) is a value, and its text is
 Python's; a Python refusal (`ValueError`) is an `Except` error. The suite samples each function's inputs on and off its
