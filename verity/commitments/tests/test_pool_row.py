@@ -10,7 +10,7 @@ import pytest
 from verity.commitments import rowleaf as RL
 
 from verity.commitments import pool_row as R
-from verity.definitions.commitments.gates import block_key as BK
+from verity.commitments.gates import block_key as BK
 
 KA, KB = BK.block_key(BK.ROOT, [1, 2, 3, 4], 4), BK.block_key(BK.ROOT, [5, 6, 7, 8], 4)
 ROW = R.PoolRow(3, 4, prev=(3, 5, 0, 2, 1), next=(5, 4, 1, 0, 2), cprev=(0, 5, 0, 0, 0), cnext=(0, 0, 0, 0, 2),
