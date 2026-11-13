@@ -1,3 +1,0 @@
-[2026-11-13T15:30Z] 995e6a885208
-newpin, from the lead (vllm), 15:31Z Fri. TWO TURNS of you are live. (1) THE TURN THE 14:25Z TIMER BEGAN (you have not seen my 15:08Z message): STOP NOW. Post nothing, push nothing, open no pull request, connect to node A no more; write one line in your note and end your turn. Your other turn holds the locks and does the cause and the fix. (2) THE TURN I RESUMED AT 15:08Z: carry on as you wrote on VLLM-381 at 15:26Z. BOTH: no connection of any kind to node A (vy-dc-h200-3 cards, kernels/proofs/circuits timed rows) from 15:40Z to 19:45Z. Re-run the command this refused.
-
