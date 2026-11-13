@@ -130873,3 +130873,61 @@ What else names the file or the module [my VM: the same commit]:
 ### What I need from you
 
 Nothing for tonight. For the split: who keeps the listing's `order`, so the one row goes in with the map and is not a surprise at review.
+
+## LOOSEMAP, Fri 13 Nov 08:45Z: CERTIFIED: `cursor/proofs-loosemap-0917` at `56561c89bb4a`, on chain 2's base `5b2c1e735b92`: a pure move (34 renames, 217 path-only edits), with the four root tests and the listing's check passing on the moved tree with `PYTHONPATH` cleared. After the lane's other three maps on that base: running, about 09:10Z
+
+**In plain words.** The map of the seven loose paths is certified on the tree chain 2 starts from: run there, the certificate accepts it as a move that changes nothing but paths, the hand patch applies by `git am`, and the checks of the whole tree pass on the result. That run stages this map alone on the base. The run that stages the lane's other three maps first and then this one, which is the order the stager uses, has not ended; I write once more when it does. My 08:41Z entry holds the rest (where the stager takes the map, the order, the hand commit as steps, the listing, the Lean finding, `fixtures/`), and it stands with the one correction below.
+
+Clock: `date -u` read 08:45Z. Mailbox read at 08:45Z: nothing after your 08:30Z message.
+
+**What ran** [run `r20261113-083812-b2d4`, cpu-8, rc 0; base `18203bab2789`, which is `5b2c1e735b92` and the map's one file, the bytes of `56561c89bb4a`'s]
+- `stage.py`: rc 0, "staged 1 move on HEAD 18203bab2789: b73b48dc64ba3ff3caf13b6e590b7bb2b2f05aa2".
+- **The certificate:** "move-check: certified 18203bab2789c761d94581d8ec65dd267b06dfc9..b73b48dc64ba3ff3caf13b6e590b7bb2b2f05aa2 is a pure move (34 renames, 217 path-only edits)". Git's own count of the same commit: 79 files renamed, 1 made, 171 rewritten.
+- `resolve_check.py`: "0 of 5608 files compared identifier by identifier", "0 issue(s)".
+- **The hand patch:** `git am` of `proofs_loose_map_hand.patch` (the file on `cursor/proofs-loosemap-0917-hand-patch`, `0d456883ef9d`) on the staged commit: applied, commit `546575e05f79`, one README, 4 lines in and 3 out.
+- **On the moved tree with the hand commit, in a scratch copy with `PYTHONPATH` cleared:**
+  - the four root tests by name: "69 passed, 6 warnings in 83.52s". The six warnings are the tree file's bookkeeping, three caps of `tests/test_lean_packages.py` that are above their counts, and the doc paths' list;
+  - `import_order.py --check`: "tests/import_order.toml: the same". The move rewrites nine lines of it, as on chain 1's tree;
+  - `pins.py --stale`: rc 0, nothing stale;
+  - `tests/test_tree.py HEAD`: rc 0, with one bookkeeping line for each of the seven not-yet lines whose move landed.
+- **Lean:** the same four audit keys change (`core_firewall`, `security`, `security_properties`, `security_proofs`), no package's path changes, and the move with the hand commit changes 0 Lean sources, lakefiles, manifests, locks or toolchain files.
+- **Old paths left:** the same three lines as on chain 1's tree (two docstrings of `security/Definitions/Claims.lean`, one comment of SPOT's Lean lakefile).
+
+**Which tree the tests imported, the two lines you asked for** [the same run]
+- With the runner's `PYTHONPATH` as it was (19 entries), in the scratch copy:
+  - `verity file /workspace/tmp/tmp.LRPa8D7fAY/wt/verity/__init__.py`: the scratch copy;
+  - `verity_flock file /workspace/research/scratch/r20261113-083812-b2d4/tree/verity/protocols/flock/prover/python/verity_flock/__init__.py`: **the run's clone, the tree before the move.** Kernels' trap is real here.
+- With it cleared, as every step of this run was:
+  - `verity file /workspace/tmp/tmp.LRPa8D7fAY/wt/verity/__init__.py`;
+  - `verity_flock file /workspace/tmp/tmp.LRPa8D7fAY/wt/verity/protocols/flock/prover/python/verity_flock/__init__.py`: both the scratch copy, the moved tree.
+- So the root tests of my three earlier rehearsals (`r20261113-081843-4ce0`, `r20261113-081914-984a`, `r20261113-082856-7ea9`) could have imported `verity_flock` from the tree before the move. This run gives the same "69 passed" and "the same" with the trap closed.
+
+**Correction to my 08:41Z entry.** I wrote that the no-growth lints and the suites (`r20261113-082338-f6dc`) run "with `--cwd clone`". They run with `--cwd source` on the pushed commit `edea1506d5a7`: the tree they run in and import from is that commit's, the moved tree on chain 1 [read: the run's `job.json`, `run.cwd_basis` "source", cwd `/workspace/research/src/edea1506d5a7…`].
+
+**The whole order on chain 2's base, to read:** `cursor/proofs-loosemap-0917-on-chain2` at `546575e05f79`: `5b2c1e735b92`, the map (`18203bab2789`), the node's staged commit (`b73b48dc64ba`), the hand commit by `git am`.
+
+**Runs going**
+- `r20261113-083849-4498` (cpu-14): on `5b2c1e735b92` with `468878c8f37c` merged in and the map (`1cefb506b2ae`), it stages `compose_map.toml`, `configurations_map.toml`, `world_map.toml`, applies ONSITE's listing commit after the carve, then stages this map and runs the same checks, the listing's check and the four tests before and after this map. It is staging the three.
+- `r20261113-084411-37ea` (cpu-14): the no-growth lints and `suites.py --changed 18203bab2789 --quick` on the pushed `546575e05f79`, `--cwd source`. It prints the two `__file__` lines first.
+- `r20261113-082338-f6dc` (cpu-7): the same on chain 1's moved tree, running.
+
+**NEEDS**
+1. Nothing to go on. Tell me if you want the Lean fast path of the four packages run on the moved tree tonight.
+
+**To post** (as it is):
+
+> Proofs' loose paths, rows 29 to 36 less `flock/sigma/`: `tools/move/proofs_loose_map.toml` on `cursor/proofs-loosemap-0917` at `56561c89bb4ac412d580313b31963169e4515079`, seven rows. On chain 2's base `5b2c1e735b92` it certifies: "a pure move (34 renames, 217 path-only edits)"; the four root tests pass on the moved tree (69 passed) and the import listing needs no step (the generator's check says "the same"). It runs after chain 1 and before the group map, in either order against proofs' other three maps. One hand commit goes right after it and before the group map: `proofs_loose_map_hand.patch` on `cursor/proofs-loosemap-0917-hand-patch` (`0d456883ef9d`), three lines of one README, by `git am`. Take this file, not the one of the same name on `cursor/top-tree-inventory-485d`. `flock/sigma/` is not in it and keeps its not-yet line. Four Lean packages' inputs change through one test helper that names a moved script (`core_firewall`, `security`, `security_properties`, `security_proofs`); no Lean file changes. The order to read: `cursor/proofs-loosemap-0917-on-chain2` at `546575e05f79`.
+
+**Not established**
+- The certificate after the lane's other three maps on chain 2's base (running). On chain 1's tree it holds after them [run `r20261113-082856-7ea9`].
+- The suites on either moved tree (both running).
+- The Lean check of the four packages whose key changes.
+- The hand patch and any test after the group map.
+- Anything on top's trial branch `cursor/top-moves-chain2-trial-0c4c` (`f14ded183a6`), which also merges top's other maps: I have not run there.
+
+**Pushed heads**
+- `cursor/proofs-loosemap-0917` `56561c89bb4a` (the map alone).
+- `cursor/proofs-loosemap-0917-hand-patch` `0d456883ef9d` (the patch file at its root).
+- `cursor/proofs-loosemap-0917-on-chain2` `546575e05f79` (the order on chain 2's base).
+- `cursor/proofs-loosemap-0917-on-chain1` `edea1506d5a7` (the order on chain 1's head).
+- `cursor/proofs-loosemap-0917-moved` `3fa6c6c82dc6` (superseded: `main`'s tree, with `sigma/` moved).
