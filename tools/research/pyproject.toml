@@ -122,6 +122,7 @@ untraced = [
     "tests/test_vqueue_loop.py",
     "tests/test_vqueue_moves.py",
     "tests/test_vqueue_records.py",
+    "tests/test_vqueue_signed.py",
     "tests/test_vqueue_slim.py",
 ]
 # Test-only, and to move: some tests exercise this repository's Tools, workspace and fixtures rather than the tool itself.
