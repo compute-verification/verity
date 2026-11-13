@@ -572,9 +572,6 @@
     {"file": "verity_vllm/protocols/pouw/pearl_c/host.py", "kind": "B023", "symbol": "_Arena.take", "detail": "Function definition does not bind loop variable `got`"},
     {"file": "verity_vllm/protocols/pouw/pearl_c/host.py", "kind": "B023", "symbol": "_Arena.take", "detail": "Function definition does not bind loop variable `ring`"},
     {"file": "verity_vllm/protocols/pouw/pearl_c/served_y.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/protocols/pouw/pearl_c/window.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/query/norm_scales.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/query/router_softmax.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/query/vocab_range.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"}
+    {"file": "verity_vllm/protocols/pouw/pearl_c/window.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"}
   ]
 }

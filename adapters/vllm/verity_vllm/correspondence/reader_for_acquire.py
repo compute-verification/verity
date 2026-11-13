@@ -37,11 +37,9 @@ from verity_vllm.query.manifest.format import collector_path, split_name
 from verity_vllm.records.runtime_tree import (
     RUNNER_PATH,
     RuntimeTree,
-    mro_names,
     runtime_tree_from_paths,
     runtime_tree_of,
 )
-from verity_vllm.records.runtime_tree import SCHEMA as RUNTIME_TREE_SCHEMA
 
 FALLBACK_READ = "the identity row's op_path: required_manifest.split_name(annotations.node_hints)[0] -> collector_path(wrapper_prefix) -> op_path_aliases"
 
@@ -188,4 +186,4 @@ class AcquireCorrespondence:
 
 
 __all__ = ["FALLBACK_READ", "ReturnSlot", "ArgSlot", "AcquireCorrespondence",
-           "RuntimeTree", "RUNTIME_TREE_SCHEMA", "RUNNER_PATH", "mro_names", "runtime_tree_of", "runtime_tree_from_paths", "RuntimeCorrespondence"]
+           "RuntimeTree", "RUNNER_PATH", "runtime_tree_of", "runtime_tree_from_paths", "RuntimeCorrespondence"]
