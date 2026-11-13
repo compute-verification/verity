@@ -245,7 +245,7 @@ structure Window where
   Lb : Fin 1 → ℕ
   src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256
   hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src
-  hcls : ∀ m ∈ ms, ∀ ω : Ω,
+  hcls : ∀ m ∈ ms, ∀ ω : Ω, Flock.Guarantees.sampleEnded src law nJ ω = true →
     mPtsOf m.D.unroll.g (m.part ((Flock.Bridge.execSel (n := nJ) src law nJ).draw ω)).card =
       mPtsOf m.D.unroll.g (m.kd / nTab m.I)
   /-- the claim's share: at most an `ε` share of the population's proof blocks unbound -/
@@ -275,10 +275,10 @@ noncomputable def joint (t : ℕ) : Flock.Guarantees.JointAuditV5 where
   nonemptyΩ := W.nΩ
   Lb := W.Lb
   src := W.src
-  hcls := fun k ω => by
+  hcls := fun k ω hω => by
     obtain ⟨m, hm, he⟩ := List.mem_map.1 (List.get_mem (W.ms.map fun m => m.toV5 t) k)
     rw [← he]
-    exact W.hcls m hm ω
+    exact W.hcls m hm ω hω
 
 /-- **The window with the sample's coins widened by the coins `S`**: the sample reads only the device's bytes, so its
 sampling design is the window's and A3 holds at the widened coins (`uniform_fst`). -/
@@ -289,7 +289,7 @@ noncomputable def extend (S : Widening) : Window where
   nΩ := inferInstance
   src ω := W.src ω.1
   hA3 := uniform_fst W.hA3
-  hcls := fun m hm ω => W.hcls m hm ω.1
+  hcls := fun m hm ω hω => W.hcls m hm ω.1 hω
 
 /-- **The window's sample's law**: the registration's law over the population, as `Spot.Draw.drawUnits` samples it on
 the device's bytes in order (`Flock.Bridge.execSel`); a sample that fails samples every proof block. -/
@@ -298,8 +298,9 @@ noncomputable def L : FlockSoundness.Audit.Law W.nJ := Flock.Bridge.execSel (n :
 /-- The window's sample is Flock's window's, at any budget. -/
 theorem joint_L (t : ℕ) : (W.joint t).L = W.L := rfl
 
-/-- The window's audit's outcome: the registration, the sample and the members' transcripts in order. -/
-abbrev Out : Type := ByteArray × Finset (Fin W.nJ) × List FlockSoundness.Discharge.Exec.Transcript
+/-- The window's audit's outcome: the registration with whether the sample ended, the sample and the members'
+transcripts in order. -/
+abbrev Out : Type := (ByteArray × Bool) × Finset (Fin W.nJ) × List FlockSoundness.Discharge.Exec.Transcript
 
 /-- **The rounds the device opens after a digest of the prover's message, over the window**: every member's
 session's (`Member.rounds`). -/
@@ -361,7 +362,8 @@ end Window
 /-- **`JointShareV5`'s per-finder SHA-512 premises at a window's audit `w` and a strategy `τ` of it**: `cr/sha-512` at
 each table's knowledge finders (`TableCRZAt`) and `ecr/sha-512` at the link finders (`LinkCRZCAt`), at each member's
 session played alone at `τ`, at the member's budgets. -/
-structure JointFinderCR (w : Flock.Guarantees.JointAuditV5) (τ : FlockSoundness.Game.Strategy w.game) : Prop where
+structure JointFinderCR (w : Flock.Guarantees.JointAuditV5) [Nonempty w.EndΩ]
+    (τ : FlockSoundness.Game.Strategy w.game) : Prop where
   table : ∀ k ω j, Assumptions.TableCRZAt execArith hs512
     (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberLaw τ k).draw ω) (reg (w.memberSim τ k))) j
     (zcStrat execArith hs512 (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (cont (w.memberSim τ k) ω))
@@ -396,13 +398,16 @@ session played alone and each member's roots finder meets its own (`Window.Roots
 `Flock.SecurityProofs.JointShareV5` at the window, the sample's miss and the members' terms summed, under the roots
 guard (`le_add_rootsErr`), which costs each member's roots term. -/
 theorem Window.ks (W : Window) (t : ℕ) (τ : FlockSoundness.Game.Strategy (W.joint t).game)
-    (hF : JointFinderCR (W.joint t) τ) (hcr : W.RootsCR)
-    (hI : W.RootsFix → W.ε * W.nJ < (((W.joint t).wrongSet τ).card : ℝ)) :
-    Verity.Game.prob (fun o => (W.joint t).Accepts o) (W.joint t).game τ ≤ W.sessionDelta t :=
-  show _ ≤ W.drawMiss + (W.joint t).eps + (W.ms.map Member.rootsErr).sum from
-    le_add_rootsErr (Verity.Game.prob_le_one _ _ τ) W.ms (W.drawMiss + (W.joint t).eps) hcr fun hR =>
-      (Verity.Game.prob_mono (fun _ ho => ⟨ho, hI hR⟩) _ τ).trans
-        (Flock.SecurityProofs.JointShareV5 (W.joint t) W.hA3 τ hF.table hF.link W.ε)
+    (hF : ∀ _ : Nonempty (W.joint t).EndΩ, JointFinderCR (W.joint t) τ) (hcr : W.RootsCR)
+    (hI : ∀ _ : Nonempty (W.joint t).EndΩ, W.RootsFix → W.ε * W.nJ < (((W.joint t).wrongSet τ).card : ℝ)) :
+    Verity.Game.prob (fun o => (W.joint t).Accepts o) (W.joint t).game τ ≤ W.sessionDelta t := by
+  by_cases he : Nonempty (W.joint t).EndΩ
+  · exact show _ ≤ W.drawMiss + (W.joint t).eps + (W.ms.map Member.rootsErr).sum from
+      le_add_rootsErr (Verity.Game.prob_le_one _ _ τ) W.ms (W.drawMiss + (W.joint t).eps) hcr fun hR =>
+        (Verity.Game.prob_mono (fun _ ho => ⟨ho, hI he hR⟩) _ τ).trans
+          (Flock.SecurityProofs.JointShareV5 (W.joint t) W.hA3 τ (fun h => (hF h).table) (fun h => (hF h).link)
+                W.ε)
+  · exact ((W.joint t).prob_accepts_of_not_ends he τ).trans_le zero_le
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
@@ -446,7 +451,8 @@ strategy and the strategy's calls (`JointFinderCR`), `cr/sha-512` as the strict 
 two-continuation finder, and `ecr/sha-512` at each member's roots finder at its calls (`Window.RootsCR`). -/
 structure WindowFinderCR (V : Vocab d α) (K : WindowConstructions V) (W : Window) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) : Prop where
-  session : JointFinderCR ((K.live W θ F c σ).joint (V.cost θ F c σ)) (K.project W θ F c σ)
+  session : ∀ _ : Nonempty ((K.live W θ F c σ).joint (V.cost θ F c σ)).EndΩ,
+    JointFinderCR ((K.live W θ F c σ).joint (V.cost θ F c σ)) (K.project W θ F c σ)
   msg : ∀ j, Claims.StrictBirthday Verity.sha512Msg (K.msgFinder W θ F c σ j)
   record : Claims.StrictBirthday Verity.sha512Msg (K.recordFinder W θ F c σ)
   bind : Claims.StrictBirthday Verity.sha512Msg (K.bindFinder W θ F c σ)
@@ -494,6 +500,7 @@ structure WindowDeployed (V : Vocab d α) (K : WindowConstructions V)
   loss : ∀ θ x, V.loss .sampled θ x = 0
   claim : ∀ θ F W, S θ F = some W → W.RootsFix → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
     ¬ Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε →
+    ∀ _ : Nonempty ((K.live W θ F c σ).joint (V.cost θ F c σ)).EndΩ,
       (K.live W θ F c σ).ε * (K.live W θ F c σ).nJ <
         ((((K.live W θ F c σ).joint (V.cost θ F c σ)).wrongSet (K.project W θ F c σ)).card : ℝ)
   finderCR : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
@@ -538,7 +545,7 @@ theorem spotSound_of_window {K : WindowConstructions V} {S : ByteArray → Array
   | some W =>
     have hFin := hD.finderCR θ F W hS c σ hfs hpr
     have hks := (K.live W θ F c σ).ks (V.cost θ F c σ) (K.project W θ F c σ) hFin.session
-      ((W.rootsCR_extend _).2 hFin.roots) (fun hR => hD.claim θ F W hS hR c σ hI)
+      ((W.rootsCR_extend _).2 hFin.roots) (fun he hR => hD.claim θ F W hS hR c σ hI he)
     have hdel := hD.delta θ F W hS c σ
     unfold Window.delta at hdel
     rw [Window.extend_rounds, Window.extend_qM, Window.extend_hidingTerm] at hdel
