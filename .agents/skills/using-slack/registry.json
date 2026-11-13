@@ -207,7 +207,8 @@
         "adapters/vllm/tests/program/",
         "adapters/vllm/tests/commit/",
         "adapters/vllm/tests/acquire/",
-        "adapters/vllm/tests/query/"
+        "adapters/vllm/tests/query/",
+        "benchmarks/definitions/"
       ],
       "branch_suffixes": [
         "8c79",
@@ -528,7 +529,8 @@
         "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
-        "tools/research/src/research/merge.py"
+        "tools/research/src/research/merge.py",
+        "benchmarks/landing/"
       ],
       "branch_suffixes": [
         "4292",
