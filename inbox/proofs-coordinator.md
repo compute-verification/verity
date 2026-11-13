@@ -160970,3 +160970,28 @@ So link 1's own Python shows no fault. The change's suites (`suites.py --changed
 
 - The Lean try: `r20261113-211441-c50b` on `vy-nebius-cpu-2` since 21:14Z, `lean_changed.py --try security/Proofs/Properties/Verity/SampledTwo/AcceptsTop.lean --siblings`. Its closure holds every file Addition 1 touches. The named risk is `check_eq_checkRef`: its `simp` unfolds one more term in each copy, and how near its step limit it ran is not known.
 - The suites at `f52115107cf`: `r20261113-211632-70d4` on `vy-nebius-cpu-11` since 21:16Z, limit 150 minutes. Six parts: the two-stage drivers with the stop audit and the verdict record (slow included), the records audit, `verity-core-composition`, `verity-core-sampled-proofs`, the verifier's own suite, the adapter's boundary rows. The fixture's one test stays red there until the fresh headed case replaces it.
+
+## FRAME, Fri 13 Nov 21:18Z: THE IDENTITY RULE IS READ; ITEM 4: my two commits not yet pushed are under my checkout's own identity; `mkpass.py`'s line IS MENDED IN THE NOTE AND SYNCED; one fact you should have: every carried head I published today holds 59 to 61 commits under "restack carry", all already on the remote
+
+**In plain words.** Your 21:02Z and 21:03Z orders are done. Nothing I hold unpushed is under a made-up name. The script in the note now takes the launching checkout's identity and refuses to run without it. The carries of today were made before the rule reached me, under the old name; they are on the remote already, which the rule does not judge, and I rewrite none of them.
+
+- **Item 4** [run: `git log --format='%h %an <%ae> | %cn <%ce>' origin/cursor/proofs-frame-l1-9c4e..HEAD`, compared with `git config user.name` and `user.email`]. Two commits, way (b)'s `46bf6a8081e` and `bc4e4982fe8`: author and committer are my checkout's. [run: the same over every worktree of mine, against every remote branch] No other commit of mine is off the remote.
+- **The blob line's carry** of my 20:51Z table, `716c3d802c08` and `c492889a3244`: both under my checkout's identity; they were made on this machine, not by a job.
+- **No job of mine that is out makes a commit.** `r20261113-204108-963b` (way (b)) tries, runs the records and the suites, and writes a patch file; I commit on this machine.
+- **The note** `20261113T1510Z-report-frame-pass-jobs` [run: `research notes sync --path lanes/proofs`, "committed 8ba54e6a0e (1 paths); pushed"; read back from the notes' `main`]. Three changes:
+  - The job's line that exported "restack carry" and "noreply@invalid" is gone. In its place the job reads the four `GIT_*` variables from its environment, refuses with the launch line in its message when one is missing, and prints the identity it commits under.
+  - The launch line passes `env GIT_AUTHOR_NAME="$(git config user.name)" GIT_AUTHOR_EMAIL="$(git config user.email)" GIT_COMMITTER_NAME=... GIT_COMMITTER_EMAIL=...` ahead of the job's command, read on the VM at launch.
+  - One paragraph, dated, says why (a push that adds a commit under another identity is refused from Sunday, and a refused push is cured only on a new branch) and tells whoever copied the script before 21:13Z to replace the line.
+- **The mended script was tried** [run on this machine: `mkpass.py` writing a job, `bash -n` on it; then the job's identity lines alone]. Without the variables: "REFUSED: GIT_AUTHOR_NAME is not set: launch with your checkout's own identity ahead of the job's command ...". With them it goes on to the next line. It has not run on a node in this form.
+- `after.py` (the late-carry test) set the same made-up name for its test merges, which are never pushed; that line is gone too, in my copy and in my artifacts.
+- **What is already on the remote under the old name** [run: `git log --format='%an|%cn'` of each `cursor/proofs-carried-*-4ae1` over `4ae17f7eafd7`]. Each of the 17 carried heads holds 59 to 61 commits whose author and committer are "restack carry": the tool's merge and regeneration commits of each move it crossed, made by my jobs between 15:10Z and 19:30Z. 42 remote branches hold such commits by now, the join and the lines that went on from a carried head among them. I did not ask infra whether a later push that carries these on to another branch counts as adding them; if it does, the cure is a carry made again under an identity, for which the kept checks on the nodes still count.
+
+### What is out
+
+| Run | State |
+| --- | --- |
+| `r20261113-204108-963b` (way (b) on #9713: tries, records, quick suites; cpu-7) | still waiting for a slot at 21:17Z, one check ahead of it in line since 20:41Z |
+
+**Not established.**
+- Whether the push rule, from Sunday, treats a commit that is on the remote under another branch as already there. Its text says commits on the remote are not judged; I have not tested it and it is not in force yet.
+- That the mended job runs on a node: only its identity lines were run, here.
