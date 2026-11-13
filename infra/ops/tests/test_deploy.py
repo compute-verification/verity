@@ -464,7 +464,8 @@ def test_a_whole_tree_is_a_new_directory_at_each_change_and_its_link_is_renamed_
     v2 = _push(repo, {"sub/b.py": "b2\n", "sub/gone.py": None, "new.py": "n2\n"})
     seen = tmp_path / "at-the-rename.json"
     dry = deploy.install(n, "origin/main", "lane-x", [str(path)], local, repo=repo)
-    assert {Path(f["path"]).name: f["changed"] for f in dry["files"]} == {"a.py": False, "b.py": None, "new.py": None, "run.sh": False}
+    assert {Path(f["path"]).name: f["changed"] for f in dry["files"]} == {
+        "a.py": False, "b.py": None, "gone.py": "would drop", "new.py": None, "run.sh": False}
     assert Path(os.readlink(path)) == first and [p.name for p in first.parent.iterdir()] == [first.name], "a dry run swaps nothing"
     hook = (f"import json, os\n_rename = os.replace\ndef _look(a, b):\n    d = os.path.realpath(a)\n"
             f"    json.dump({{'files': sorted(os.path.relpath(os.path.join(t, f), d) for t, _, fs in os.walk(d) for f in fs), "
@@ -476,7 +477,8 @@ def test_a_whole_tree_is_a_new_directory_at_each_change_and_its_link_is_renamed_
     assert json.loads(seen.read_text()) == {"files": sorted(want), "link": str(first)}        # complete before the link moved
     assert _files(first) == {"a.py": "a1\n", "run.sh": "r1\n", "sub/b.py": "b1\n", "sub/gone.py": "g1\n"}
     assert (second / "a.py").stat().st_mtime == 1000 and (second / "sub/b.py").stat().st_mtime != 1000
-    assert {Path(f["path"]).name: f["changed"] for f in done["files"]} == {"a.py": False, "b.py": True, "new.py": True, "run.sh": False}
+    assert {Path(f["path"]).name: f["changed"] for f in done["files"]} == {
+        "a.py": False, "b.py": True, "gone.py": "dropped", "new.py": True, "run.sh": False}
     rep = deploy.drift(n, "origin/main", local, repo)
     assert {e["state"] for e in rep["entries"] if e.get("tree") == str(path)} == {"ok"} and not [s for s in rep["strays"] if "whole" in s]
     assert len(list(first.parent.iterdir())) == 2       # both directories are there, and neither is a stray of the tree around them
@@ -486,6 +488,56 @@ def test_a_whole_tree_is_a_new_directory_at_each_change_and_its_link_is_renamed_
     third = Path(os.readlink(path))
     assert third != second and stat.S_IMODE((third / "run.sh").stat().st_mode) == 0o755 and _files(third) == want
     assert [Path(f["path"]).name for f in done["files"] if f["changed"]] == ["run.sh"]
+
+
+def test_a_commit_that_only_drops_a_file_of_a_whole_tree_moves_its_link_to_a_directory_without_it(world, capsys):
+    """The directory the link names is the commit's tree and nothing more: a file it holds and the commit lacks is a change
+    with no other, so the link moves to a new directory without it, the old one is left as it was, the run and the record name
+    the dropped path, a dry run says it would be dropped, and drift is left no stray to move out of a directory a pass runs
+    from. Bytecode a run wrote there is no file of the tree: it alone moves nothing and is not carried over."""
+    repo = world["repo"]
+    n, path = _whole(world, {"a.py": "a1\n", "sub/b.py": "b1\n", "sub/gone.py": "g1\n"})
+    deploy.install(n, "origin/main", "lane-x", [str(path)], local, apply=True, repo=repo)
+    first = Path(os.readlink(path))
+    (first / "sub/__pycache__").mkdir()
+    (first / "sub/__pycache__/b.cpython-312.pyc").write_bytes(b"\0")
+    (first / "a.pyc").write_bytes(b"\0")
+    for apply in (False, True):
+        assert not [f for f in deploy.install(n, "origin/main", "lane-x", [str(path)], local, apply=apply, repo=repo)["files"] if f["changed"]]
+    assert Path(os.readlink(path)) == first, "bytecode is not a change"
+    record = world["node"] / "research/deploy/record.jsonl"
+    before, held = record.read_text(), _files(first)
+
+    v2 = _push(repo, {"sub/gone.py": None})
+    gone = str(path / "sub/gone.py")
+    dry = deploy.install(n, "origin/main", "lane-x", [str(path)], local, repo=repo)
+    assert {Path(f["path"]).name: f["changed"] for f in dry["files"]} == {"a.py": False, "b.py": False, "gone.py": "would drop"}
+    assert Path(os.readlink(path)) == first and _files(first) == held and record.read_text() == before, "a dry run drops nothing"
+    done = deploy.install(n, "origin/main", "lane-x", [str(path)], local, apply=True, repo=repo)
+    second = Path(os.readlink(path))
+    assert second != first and second.name.startswith(v2[:12] + "."), "the link moved, though no file of the commit differs"
+    assert _files(second) == {"a.py": "a1\n", "sub/b.py": "b1\n"} and _files(first) == held
+    assert (second / "a.py").stat().st_mtime_ns == (first / "a.py").stat().st_mtime_ns     # so drift asks no restart for the drop
+    assert [(f["path"], f["src"], f["changed"]) for f in done["files"] if f["changed"]] == [(gone, "src/w/sub/gone.py", "dropped")]
+    assert not done["restarts"]
+    new = [json.loads(ln) for ln in record.read_text()[len(before):].splitlines()]
+    assert [{k: v for k, v in r.items() if k != "at"} for r in new] == [
+        {"path": gone, "blob": None, "commit": v2, "ref": "origin/main", "by": "lane-x"}]
+    rep = deploy.drift(n, "origin/main", local, repo)
+    assert [(e["path"], e["state"]) for e in rep["entries"] if e.get("tree") == str(path)] == [
+        (str(path / "a.py"), "ok"), (str(path / "sub/b.py"), "ok")]
+    assert not [s for s in rep["strays"] if s.startswith(str(path))], "no stray is left under the tree"
+    assert not [f for f in deploy.install(n, "origin/main", "lane-x", [str(path)], local, apply=True, repo=repo)["files"] if f["changed"]]
+    assert Path(os.readlink(path)) == second
+
+    (second / "left.py").write_text("made by hand\n")      # a file no commit has, put into the live directory
+    assert deploy.main(["install", "n", "--ref", "origin/main", "--by", "lane-x", "--no-fetch", str(path)], run=local,
+                       manifest=world["manifest"], repo=repo) == 0
+    assert f"would drop (origin/main lacks it) {path}/left.py  <- src/w/left.py" in capsys.readouterr().out.splitlines()
+    assert deploy.main(["install", "n", "--ref", "origin/main", "--by", "lane-x", "--apply", "--no-fetch", str(path)], run=local,
+                       manifest=world["manifest"], repo=repo) == 0
+    assert f"dropped (origin/main lacks it) {path}/left.py  <- src/w/left.py" in capsys.readouterr().out.splitlines()
+    assert Path(os.readlink(path)) != second and _files(Path(os.readlink(path))) == {"a.py": "a1\n", "sub/b.py": "b1\n"}
 
 
 @pytest.mark.parametrize("names", ["cwd", "environ", "cmdline"])

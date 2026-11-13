@@ -41,10 +41,12 @@ and mode (a running script keeps its inode; a new file gets the entry's `mode`, 
 under `.deploy-prev/` in its directory. A tree with `whole = true` is never changed file by file: its `path` is a link, every
 file of it at the commit is written into a new directory under `.deploy-tree/` beside the link, and one rename then points the
 link at it. So what resolves the link once when it starts (`readlink -e`) runs one commit's tree from start to end, whatever is
-installed meanwhile, and an install that dies leaves the link on the directory it named, untouched. Afterwards every older
-directory goes, but the one just replaced and any a live process names (its cwd, command line or environment). One line per changed file
-goes to the node's record (path, blob, commit, ref, who, when). A changed unit under /etc/systemd/system/ (or research's
-~/.config/systemd/user/) is loaded with `systemctl [--user] daemon-reload`. Then each service the entry's `run` names whose unit
+installed meanwhile, and an install that dies leaves the link on the directory it named, untouched. A file the directory holds
+and the commit lacks is a change too, alone or with others: the new directory is without it and `install` says `dropped`
+(`would drop` without `--apply`); bytecode a run wrote there is no file of the tree. Afterwards every older directory goes,
+but the one just replaced and any a live process names (its cwd, command line or environment). One line per changed file
+goes to the node's record (path, blob, commit, ref, who, when), and one per dropped path, its blob null. A changed unit
+under /etc/systemd/system/ (or research's ~/.config/systemd/user/) is loaded with `systemctl [--user] daemon-reload`. Then each service the entry's `run` names whose unit
 file deploy.toml installs from `src` is restarted with `try-restart`, so a stopped one stays stopped, when the changed file is its
 unit or an environment file (/etc/vy/env/), or a process of that service still runs the old file; a node's `quiet` command
 must succeed first (node 2's: no timed window runs or waits), else nothing restarts. Each restart is a line of the record. A
@@ -89,12 +91,22 @@ DISTRUSTED_ROOTS = ("emSign_ECC_Root_CA_-_G3", "Comodo_AAA_Services_root")
 TRUST_FIX = "sudo apt-get update && sudo apt-get install -y --only-upgrade ca-certificates 'libnss3*'"
 NULL = "/dev/null"             # the character device 1,3 with mode 666: what a shell's `2>/dev/null` opens for writing
 
+# On the node: the files under a tree's directory, as drift lists them and as a whole tree's install compares them with the
+# commit's: bytecode a run of the tree wrote is none of them, nor is what an install keeps aside.
+WALK = r'''
+import os
+def tree_files(top):
+    for d, dirs, names in os.walk(top):
+        dirs[:] = [x for x in dirs if x not in ("__pycache__", ".deploy-prev", ".deploy-tree")]
+        yield from (os.path.join(d, n) for n in names if not n.endswith(".pyc"))
+'''
+
 # Runs on the node (stdlib): each path's git blob, mtime, the oldest start of a process whose argv names it and every such
 # process's start and service (its cgroup's last component, `systemd:NAME` or `user-systemd:NAME`, else null), the files the
 # managed patterns and trees hold, the record's last line per path, the trust store's files that name a distrusted root, and
 # the null device's mode and device numbers (or why it can't be read).
-PROBE = r'''
-import glob, hashlib, json, os, sys
+PROBE = WALK + r'''
+import glob, hashlib, json, sys
 req = json.loads(sys.argv[1])
 def blob(p):
     with open(p, "rb") as f:
@@ -122,9 +134,7 @@ found = set()
 for pat in req["globs"]:
     found.update(p for p in glob.glob(pat) if os.path.isfile(p))
 for t in req["trees"]:
-    for d, dirs, names in os.walk(t):
-        dirs[:] = [x for x in dirs if x not in ("__pycache__", ".deploy-prev", ".deploy-tree")]
-        found.update(os.path.join(d, n) for n in names if not n.endswith(".pyc"))
+    found.update(tree_files(t))
 btime = next(int(ln.split()[1]) for ln in open("/proc/stat") if ln.startswith("btime"))
 hz, want, procs, running = os.sysconf("SC_CLK_TCK"), set(req["paths"]), {}, {}
 for pid in filter(str.isdigit, os.listdir("/proc")):
@@ -182,8 +192,9 @@ def append(rec, lines):
 
 # Runs on the node as root: write each file beside its target, keep the old one's owner, link the old one under .deploy-prev/,
 # rename over it, and append the record. The whole trees go first, each as one new directory its link is renamed onto (the
-# module's docstring); a file of one that is unchanged keeps its date, so drift asks no restart of what runs it.
-INSTALL = APPEND + r'''
+# module's docstring); a file of one that is unchanged keeps its date, so drift asks no restart of what runs it. A file its
+# directory holds and the commit lacks is a change like any other: the new directory is without it, and the path is `dropped`.
+INSTALL = APPEND + WALK + r'''
 import base64, shutil, tempfile
 req = json.load(sys.stdin)
 stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
@@ -197,7 +208,7 @@ def named(d):
             if d in seen:
                 return True
     return False
-whole, trees = {}, sorted({f["tree"] for f in req["files"] if "tree" in f})
+whole, dropped, trees = {}, [], sorted({f["tree"] for f in req["files"] if "tree" in f})
 if made := [t for t in trees if os.path.lexists(t) and not os.path.islink(t)]:
     sys.exit(f"{made[0]} is not the link a whole tree is installed as: move what is there away first")
 for path in trees:
@@ -213,8 +224,10 @@ for path in trees:
             return False
     kept = [live is not None and same(f) for f in files]
     whole.update({f["path"]: not k for f, k in zip(files, kept)})
-    if all(kept):
+    gone = sorted({os.path.join(path, os.path.relpath(p, live)) for p in tree_files(live)} - {f["path"] for f in files}) if live else []
+    if all(kept) and not gone:
         continue
+    dropped += gone
     held = os.path.join(os.path.realpath(os.path.dirname(path)), ".deploy-tree", os.path.basename(path))
     os.makedirs(held, exist_ok=True)
     os.chmod(os.path.dirname(held), 0o755)
@@ -276,9 +289,10 @@ for f in req["files"]:
             pass
     os.replace(tmp, p)
     out.append(True)
-append(req["record"], [{"at": stamp, "path": f["path"], "blob": f["blob"], "commit": req["commit"], "ref": req["ref"], "by": req["by"]}
-                       for f, changed in zip(req["files"], out) if changed])
-print(json.dumps(out))
+append(req["record"], [{"at": stamp, "path": p, "blob": blob, "commit": req["commit"], "ref": req["ref"], "by": req["by"]}
+                       for p, blob in [*((f["path"], f["blob"]) for f, changed in zip(req["files"], out) if changed),
+                                       *((p, None) for p in dropped)]])
+print(json.dumps({"changed": out, "dropped": dropped}))
 '''
 
 # Runs on the node as root: move each stray to <record's directory>/attic/<stamp>/<its path>, and append the record.
@@ -686,7 +700,8 @@ def restart(node: Node, plan: dict[str, list[str]], run: Runner, apply: bool) ->
 def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: bool = False, repo: Path = REPO) -> dict:
     """Install `node`'s entries (or those whose path or repo path is in `only`) from `ref` and restart what they name (the
     docstring's rule); without `apply`, only say what would change. {"commit", "files": [{path, src, changed, run}], "restarts":
-    [{unit, why, state}]}: a file's `run` is what still runs its old version."""
+    [{unit, why, state}]}: a file's `run` is what still runs its old version, and a path a whole tree's directory holds that
+    `ref` lacks is among the files, its `changed` "dropped" ("would drop" without `apply`)."""
     commit = git("rev-parse", f"{ref}^{{commit}}", repo=repo).strip()
     if not origin_branches(commit, repo, most=1):
         raise Refused(f"{ref} ({commit[:12]}) is on no origin branch: push it first, so what runs is in a pushed commit")
@@ -711,6 +726,13 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
               "data": base64.b64encode(subprocess.run(["git", "-C", str(repo), "cat-file", "blob", sha], capture_output=True,
                                                       check=True).stdout).decode()}
              for p, (_, sha, mode, e) in sorted(want.items())]
+    trees = {e.path.rstrip("/"): e for _, _, _, e in want.values() if e.whole}
+
+    def lost(paths: list[str], how: str) -> list[dict]:
+        """The files a whole tree's directory holds and `commit` lacks, which its install drops."""
+        return [{"path": p, "src": f"{e.src.rstrip('/')}/{os.path.relpath(p, t)}", "changed": how, "run": []}
+                for p in sorted(paths) for t, e in trees.items() if p.startswith(t + "/")]
+
     if not apply:
         seen = probe(node, [f["path"] for f in files], run)
         same = {f["path"] for f in files if (seen["files"].get(f["path"]) or {}).get("blob") == f["blob"] and f["mode"] is None}
@@ -718,12 +740,12 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
         plan = restarts(node, would, {p: [u for _, u in seen["running"].get(p, [])] for p in would})
         return {"commit": commit, "restarts": restart(node, plan, run, apply=False),
                 "files": [{"path": f["path"], "src": want[f["path"]][0], "run": [], "changed": False if f["path"] in same else None}
-                          for f in files] + skipped}
+                          for f in files] + lost([p for p in seen["found"] if p not in want], "would drop") + skipped}
     req = {"files": files, "commit": commit, "ref": ref, "by": by, "record": node.record}
     r = run(node.name, ["sudo", "-n", "python3", "-c", INSTALL], json.dumps(req).encode())
     if r.returncode != 0:
         raise RuntimeError(f"{node.name}: install failed (exit {r.returncode}): {r.stderr.decode(errors='replace').strip()[-400:]}")
-    changed = json.loads(r.stdout)
+    changed, dropped = (json.loads(r.stdout)[k] for k in ("changed", "dropped"))
     now = [f["path"] for f, c in zip(files, changed) if c]
     for prefix, cmd in ((UNITS, ["systemctl", "daemon-reload"]), (USER_UNITS, ["systemctl", "--user", "daemon-reload"])):
         if any(p.startswith(prefix) for p in now):
@@ -756,7 +778,7 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
 
     return {"commit": commit, "restarts": done,
             "files": [{"path": f["path"], "src": want[f["path"]][0], "changed": c, "run": stale(f["path"]) if c else []}
-                      for f, c in zip(files, changed)] + skipped}
+                      for f, c in zip(files, changed)] + lost(dropped, "dropped") + skipped}
 
 
 def attic(node: Node, ref: str, by: str, paths: list[str], backups: bool, run: Runner, apply: bool = False,
@@ -868,7 +890,7 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
         return 1
     for f in done["files"]:
         mark = {None: "would install", True: "installed", False: "unchanged", "absent": f"skipped ({ns.ref} lacks it)",
-                "held": "held"}[f["changed"]]
+                "held": "held", "dropped": f"dropped ({ns.ref} lacks it)", "would drop": f"would drop ({ns.ref} lacks it)"}[f["changed"]]
         print(f"{mark:13} {f['path']}  <- {f['src']}" + (f"  ({f['hold']})" if f.get("hold") else ""))
     hint = {"not running": "; it stays stopped", "not quiet": f"; the node isn't quiet (`{nodes[ns.node].quiet}`): restart it once it is"}
     for d in done["restarts"]:
