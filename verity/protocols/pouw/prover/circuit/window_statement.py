@@ -37,8 +37,9 @@ from __future__ import annotations
 
 import functools
 import struct
+from collections.abc import Sequence
 from types import SimpleNamespace
-from typing import Any, Sequence
+from typing import Any
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import (NOT, ONE, OR, ZERO, add, and_reduce, const_bits, multiply, mux, shl_window,

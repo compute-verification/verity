@@ -66,9 +66,10 @@ from __future__ import annotations
 import hashlib
 import struct
 from array import array
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from operator import mul
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, ONE, ZERO, add, and_reduce, compress_columns
