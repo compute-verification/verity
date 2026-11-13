@@ -50,6 +50,7 @@ public import Spot.ChallengerInnerTrees
 public import Flock
 public import Flock.RecLinkPart
 public import Spot.OneStageZk
+public import Base.JsonSame
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 meta import CoreProtocol.Blobs
@@ -496,6 +497,53 @@ def roundTrips (h : InnerHeld) (o : Own) (pr : Proofs) (bs : Core.Blobs) : V Boo
     ok := ok && drawOk && regOk && (← back id p.partition) && (← back id p.bindings)
   pure ok
 
+/-- SCRATCH, not for `main`: `roundTrips` as it stood before the mend, word for word (`==` on JSON). -/
+def roundTripsBefore (h : InnerHeld) (o : Own) (pr : Proofs) (bs : Core.Blobs) : V Bool := do
+  let back (j : Json) : V Bool := do pure ((Flock.JsonParse.parse (← Flock.canon j)).toOption == some j)
+  let shapeOk := (do Flock.RecVStar.Inner.ofJson (← Flock.JsonParse.parse (← Flock.canon h.shape.toJson))).toOption == some h.shape
+  let mut ok := shapeOk && (← back o.partition)
+  let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
+  for (p, s) in o.parts.zip pr.parts do
+    let circuitB ← bs.get p.circuit "a part's circuit"
+    let tags := Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1
+    let record := (String.fromUTF8? (← bs.get s.record "a part's record")).getD ""
+    let draw := if tags.hm96Rows then Flock.Witness.recordDraw record else none
+    let drawOk ← match draw with
+      | none => pure true
+      | some d => do pure ((Flock.JsonParse.parse (← Flock.canon d)).toOption.map Flock.norm == some d)
+    let regOk ← match p.registered with
+      | none => pure true
+      | some r => back r
+    ok := ok && drawOk && regOk && (← back p.partition) && (← back p.bindings)
+  pure ok
+
+/-- SCRATCH, not for `main`: for each comparison `roundTrips` makes, its field and what `==` (`beq`), `Core.jsonSame`
+(`same`) and the canonical texts (`text`) say of its two sides. -/
+def roundTripsProbe (o : Own) (pr : Proofs) (bs : Core.Blobs) : V Json := do
+  let probe (name : String) (through : Json → Json) (j : Json) : V Json := do
+    let text ← Flock.canon j
+    pure (match Flock.JsonParse.parse text with
+      | .ok j' => Json.mkObj [("field", Json.str name), ("beq", Json.bool (through j' == j)),
+          ("same", Json.bool (Core.jsonSame (through j') j)), ("text", Json.bool (jeq (through j') j)),
+          ("bytes", Lean.toJson text.utf8ByteSize)]
+      | .error e => Json.mkObj [("field", Json.str name), ("parse", Json.str e)])
+  let mut out : Array Json := #[← probe "inner partition" id o.partition]
+  let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
+  let mut i := 0
+  for (p, s) in o.parts.zip pr.parts do
+    let circuitB ← bs.get p.circuit "a part's circuit"
+    let tags := Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1
+    let record := (String.fromUTF8? (← bs.get s.record "a part's record")).getD ""
+    let draw := if tags.hm96Rows then Flock.Witness.recordDraw record else none
+    if let some d := draw then
+      out := out.push (← probe s!"part {i} sample" Flock.norm d)
+    if let some r := p.registered then
+      out := out.push (← probe s!"part {i} registered" id r)
+    out := out.push (← probe s!"part {i} partition" id p.partition)
+    out := out.push (← probe s!"part {i} bindings" id p.bindings)
+    i := i + 1
+  pure (Json.arr out)
+
 /-- **The recursive session's verdict**: the inner session held (`innerHeld`), one part per V* statement at its shape
 (`RecVStar.statements`), in order, and each part's verdict (`partVerdict`), and the statement the inputs name under
 `FIELD_MAX` bytes (`statementFits`). Each part's verdict, by its statement's name, and the session's: accepted exactly when
@@ -658,7 +706,8 @@ def main (args : List String) : IO UInt32 := do
         | .ok () => ""
         | .error e => e
       pure (Json.mkObj [("size", Lean.toJson (← statementSize h o pr bs)), ("round_trips", Json.bool (← roundTrips h o pr bs)),
-        ("fits", Json.str fitsWhy)])
+        ("fits", Json.str fitsWhy), ("round_trips_before", Json.bool (← roundTripsBefore h o pr bs)),
+        ("probe", ← roundTripsProbe o pr bs)])
     let line := match r with
       | .ok j => j
       | .error e => Json.mkObj [("refused", Json.str e)]

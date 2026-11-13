@@ -321,6 +321,7 @@ def test_the_honest_statement_fits_and_is_refused_at_a_limit_of_its_own_size(ses
     `Names` pins hold at the honest session). A statement of `2^56` bytes can't be staged, so the oversized case is the
     honest statement at a limit of exactly its size: refused, and accepted one byte above."""
     got = lean_statement(session.exe, session.inner, session.parts, tmp_path, 2 ** 56)
+    print("PROBE " + json.dumps(got, sort_keys=True))  # SCRATCH, not for main
     assert got.get("round_trips") is True and 0 < got["size"] < 2 ** 56 and got["fits"] == "", got
     n = got["size"]
     assert lean_statement(session.exe, session.inner, session.parts, tmp_path, n + 1)["fits"] == ""
