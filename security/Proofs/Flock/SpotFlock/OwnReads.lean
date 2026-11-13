@@ -77,7 +77,7 @@ theorem wf_mkObj {l : List (String × Json)} (hd : FlockComplete.JsonRT.Distinct
 theorem wf_blank : ∀ (ks : List String) (e : Json), Wf e →
     Wf (ks.foldl (fun e k => Spot.SecondStage.setKey e k .null) e)
   | [], _, he => he
-  | k :: ks, e, he => wf_blank ks _ (wf_setKey he Wf.null k)
+  | k :: ks, _, he => wf_blank ks _ (wf_setKey he Wf.null k)
 
 /-! ## Fields under `setKey` -/
 
@@ -89,7 +89,7 @@ theorem field?_setKey_ne {j v : Json} (hj : Wf j) {k k' : String} (hk : k ≠ k'
     show Spot.field? (.obj (m.insert k v)) k' = Spot.field? (.obj m) k'
     rw [Properties.Challenger.CanonLine.field?_obj, Properties.Challenger.CanonLine.field?_obj,
       Std.TreeMap.Raw.get?_eq_getElem?, Std.TreeMap.Raw.get?_eq_getElem?, Std.TreeMap.Raw.getElem?_insert hm,
-      if_neg (fun he => hk (Std.LawfulEqOrd.compare_eq_iff_eq.1 he))]
+      ite_eq_right (fun he => hk (Std.LawfulEqOrd.compare_eq_iff_eq.1 he))]
   | _ => rfl
 
 theorem field?_setKey_self {m : Std.TreeMap.Raw String Json compare} (hj : Wf (.obj m)) (k : String) (v : Json) :
@@ -337,15 +337,10 @@ theorem wf_of_jsonOf {what : String} {b : ByteArray} {j : Json} (h : FlockDeploy
     cases hp : Flock.JsonParse.parse s with
     | error e =>
       rw [hp] at h
-      first
-        | cases h
-        | simp [Except.mapError] at h
+      cases h
     | ok j' =>
       rw [hp] at h
-      have hj : j' = j := by
-        first
-          | exact Except.ok.inj h
-          | simpa [Except.mapError] using h
+      have hj : j' = j := Except.ok.inj h
       subst hj
       exact FlockComplete.JsonRT.parse_wf s j' hp
 
