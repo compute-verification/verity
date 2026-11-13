@@ -32,7 +32,8 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
   (`Challenger.DRAW_FORM`): both are read under the parameters' challenger key, each stage's as coins of the family
   its registration's parameters name. The copy of main's first-parent history they are read under is the first
   stage's evidence's own, as one-stage v2 reads its evidence's, and the second stage's must be the same copy
-  (`Challenger.COINS_MAIN`); the verifier's own copy, as a parameter, is the open fix.
+  (`Challenger.COINS_MAIN`); the verifier's own copy, as a parameter, is the open fix. The first stage's coin
+  evidence is never `null`, on one window as on two (`FIRST_COINS_NULL`): a two-stage audit's first stage reads coins.
 * **check** (`checkBlobsAt`), in order:
   1. the interior audit's commitment (`OneStage.commitmentOf` of the interior record) and its coins
      (`OneStageZk.coinsOf`);
@@ -50,7 +51,10 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
      statement check, at the rest; the evidence's first-stage bytes are exactly the ones the run's first stage read
      (`sourceRead`, `SOURCE_READ`), since the run holds only those to the challenger's coins; and on two windows the
      first session's log shows no coin of the second stage's family after the interior's digest (`interiorUnshown`,
-     `INTERIOR_SHOWN`);
+     `INTERIOR_SHOWN`); and on two windows the stages' sessions are in order on one ledger (`stagesOrdered`): the
+     first stage's copy of the auditor's ledger is a prefix of the second stage's (`LEDGER_PREFIX`), and on the
+     second's, read under the parameters' challenger key, the first stage's session's `end` line has a lower `seq`
+     than the second stage's session's `reserve` line (`STAGES_ORDER`);
   5. the interior audit's verdict at its coins (`OneStage.checkAt`, as v2's per-member form decides it), which gives
      the public output and the integrity profile;
   6. last, the switch (`finish`): the run must accept, and the form is refused while `FORM` is off.
@@ -177,10 +181,15 @@ def paramsOfJson (j : Json) : V Params := do
          delta := getD j "delta", interior, circuits, replay,
          interiorValues := ← valuesOf (getD it "values") "the interior's values", audit, members }
 
+def FIRST_COINS_NULL : String :=
+  "the first stage's coin evidence is null: a two-stage audit's first stage reads the challenger's coins, on one " ++
+    "window as on two"
+
 /-- The evidence (module docstring, **evidence**). -/
 def evidenceOf (b : ByteArray) : V Evidence := do
   let j ← split (← Core.canonicalJson b) "evidence"
   keysAre j #["coins", "interior", "received", "record", "source", "statements"] "the evidence"
+  if getD j "coins" matches .null then throw FIRST_COINS_NULL
   let .str received := getD j "received" | throw "received is not a string"
   let .str source := getD j "source" | throw "source is not hex"
   let source ← Flock.unhex source
@@ -321,9 +330,46 @@ def interiorUnshown (p : Params) (e : Evidence) : V Unit :=
       if interiorShown roots label after then .error INTERIOR_SHOWN else .ok ()
   | _, _ => .ok ()
 
+def LEDGER_PREFIX : String :=
+  "the first stage's copy of the auditor's ledger is not a prefix of the second stage's: both stages' sessions are " ++
+    "lines of one ledger"
+
+def STAGES_ORDER : String :=
+  "the first stage's session's end line is not before the second stage's session's reserve line on the auditor's " ++
+    "ledger: the second stage's session is reserved after the first stage's has ended"
+
+/-- Why the first stage's session, ended at `ended`, and the second stage's, reserved at `reserve`, are not in order
+on one ledger (`STAGES_ORDER`): the first has no end line, the second no reserve line, or the end's `seq` is not
+below the reserve's. -/
+def orderReason (ended reserve : Option Challenger.LedgerEntry) : Option String :=
+  match ended, reserve with
+  | some e, some r => if e.seq < r.seq then none else some STAGES_ORDER
+  | _, _ => some STAGES_ORDER
+
+/-- **On two windows, the stages' sessions are in order on one ledger** (check, 4): the first stage's copy of the
+auditor's ledger is a prefix of the second stage's (`Challenger.extendsHead`, `LEDGER_PREFIX`); on the second's, read
+under the interior audit's challenger key (`Challenger.checked`), the session opened for the boundary's window has an
+`end` line, the session opened for the interior audit's window a `reserve` line, and the end's `seq` is below the
+reserve's (`orderReason`). On one window both stages read one session, and this adds nothing. -/
+def stagesOrdered (p : Params) (e : Evidence) : V Unit :=
+  match p.audit.base.challenger, p.boundary.verifier.windowRoot, p.audit.base.verifier.windowRoot with
+  | some (k, _), some w₁, some w₂ =>
+    if w₁ == w₂ then .ok () else do
+      let (.arr first, .arr second) := (getD e.coins "ledger", getD e.interior.base.coins "ledger")
+        | throw LEDGER_PREFIX
+      if !Challenger.extendsHead first second then throw LEDGER_PREFIX
+      let (wins, _) ← Challenger.checked (.arr second) k
+      let ended := (wins.find? (·.root == w₁)).bind (·.ended)
+      let reserve := (wins.find? (·.root == w₂)).bind fun w =>
+        (second.filterMap Challenger.ledgerEntry?).find? fun l => l.kind == "reserve" && l.session == w.opened.session
+      match orderReason ended reserve with
+      | some why => throw why
+      | none => .ok ()
+  | _, _, _ => .ok ()
+
 /-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output, its second-stage
 statement check at the switch `form`, neither stage's bytes past one coin's, its first stage having read every byte of
-`ξ`, the first session releasing none of the second stage's coins. -/
+`ξ`, the first session releasing none of the second stage's coins, the stages' sessions in order on one ledger. -/
 def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (Core.Outcome OneStage.Public Core.Integrity × Json) := do
   let (c₂, ξ₂, r, i) ← inputAt p c ξ e bs
@@ -331,6 +377,7 @@ def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray
   let run ← Spot.Run.run i form
   sourceRead ξ run
   interiorUnshown p e
+  stagesOrdered p e
   pure (OneStage.checkAt p.audit.base c₂ (some ξ₂) { e.interior.base with verdicts := r.out }, run)
 
 /-- **The last step** (check, 6) at the switch `form`: the interior audit's verdict where it doesn't accept; where it
@@ -417,6 +464,16 @@ def protocol : Core.BlobProtocol where
 #guard match evidenceOf "{\"form\":\"two-stage\"}".toUTF8 with
   | .error e => e.startsWith "the keys of the evidence"
   | .ok _ => false
+#guard match evidenceOf ("{\"coins\":null,\"form\":\"two-stage\",\"interior\":{},\"received\":\"r\",\"record\":{}," ++
+    "\"source\":\"\",\"statements\":[]}").toUTF8 with
+  | .error e => e == FIRST_COINS_NULL
+  | .ok _ => false
+#guard orderReason (some { (default : Challenger.LedgerEntry) with seq := 2 })
+  (some { (default : Challenger.LedgerEntry) with seq := 3 }) == none
+#guard orderReason (some { (default : Challenger.LedgerEntry) with seq := 3 })
+  (some { (default : Challenger.LedgerEntry) with seq := 3 }) == some STAGES_ORDER
+#guard orderReason none (some { (default : Challenger.LedgerEntry) with seq := 3 }) == some STAGES_ORDER
+#guard orderReason (some { (default : Challenger.LedgerEntry) with seq := 2 }) none == some STAGES_ORDER
 #guard rootsSplit (Json.mkObj [("roots", Json.arr #[Json.mkObj [("port", "b.ingress")]])])
     (some (Json.mkObj [("b.ingress", "r1"), ("t/x", "r2")])) ==
   (Json.mkObj [("b.ingress", "r1")], Json.mkObj [("t/x", "r2")])
