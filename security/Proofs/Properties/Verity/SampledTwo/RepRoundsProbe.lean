@@ -1,16 +1,20 @@
 module
 
 public import Proofs.Properties.Verity.SampledTwo.SessionMsgs
+public import Proofs.Flock.Claims.Recursion.IrDep
 meta import Proofs.Properties.Verity.SampledTwo.SessionMsgs
+meta import Proofs.Flock.Claims.Recursion.IrDep
 
 /-!
 # `repRounds` at a recorded two-stage play, and the masked verifier on an uneven split
 
 A probe run by hand, not a proof. On a play's form case (`params.json`, `commitment.json`, `evidence.json`, `blobs/`
 with `blobs.txt`, as `sampled_two_small.sh` keeps it under `$OUT/form`), for each template whose session statement the
-case gives (`SessionMsgs.stmtAtCase`): the statement's setup (`FlockDeploy.setupOf true`), each table's
-`FlockDeploy.repRounds true`, the session's `FlockDeploy.rounds true` and `(FlockDeploy.V true).k`, the record's streams'
-sizes (`FlockDeploy.liveOf`) and `SessionMsgs.msgsAtCase`'s length; then `Flock.Zk.verify` on the record as kept, on it
+case gives (`SessionMsgs.stmtAtCase`): the statement's setup (`RecDeploy.VStarBuild.setupB true`, which is
+`FlockDeploy.setupOf true` by `setupB_eq` and compares the re-encoding by a loop), each table's
+`FlockDeploy.repRounds true`, the session's `FlockDeploy.rounds true` and `2 +` it, which is `(FlockDeploy.V true).k`
+where the statement sets up, the record's streams' sizes (`FlockDeploy.liveOf`) and `SessionMsgs.sessionMsgs`'s length
+(`msgsAtCase`'s at that setup); then `Flock.Zk.verify` on the record as kept, on it
 re-serialized, and on two uneven splits with the same total: one round moved from rep 1's front to rep 0's end, and one
 from rep 0's end to rep 1's front.
 
@@ -70,23 +74,24 @@ def reshape (record : String) (a b : String) (f : Array Json → Array Json → 
     (streams[ib]!.setObjVal! "rounds" (Json.arr rb'))
   pure (j.setObjVal! "streams" (Json.arr streams')).compress
 
-def template (t0 : Nat) (k : Case) (p : VStar.Recursive.SampledTwo.Params) (e : VStar.Recursive.SampledTwo.Evidence)
-    (t : Nat) : IO Unit := do
+def template (verify : Bool) (t0 : Nat) (k : Case) (p : VStar.Recursive.SampledTwo.Params)
+    (e : VStar.Recursive.SampledTwo.Evidence) (t : Nat) : IO Unit := do
   let some x := stmtAtCase k t | say t0 s!"template {t}: the case gives no session statement"
   say t0 s!"template {t}: session statement of {x.length} bytes"
-  let (_, spec, sts) ← ofO s!"template {t}: setupOf true" (FlockDeploy.setupOf true x)
+  let (_, spec, sts) ← ofO s!"template {t}: setupB true" (RecDeploy.VStarBuild.setupB true x)
   say t0 s!"template {t}: set up: {sts.size} table(s) {spec.tables}, points {spec.points}, rep streams {spec.repStreams.map (·.2.2)}"
   for st in sts do
     say t0 s!"template {t}: table: m {st.m}, kLog {st.c.kLog}, regions {st.regions.size}, repRounds true = {FlockDeploy.repRounds true spec st}"
-  say t0 s!"template {t}: rounds true = {FlockDeploy.rounds true spec sts}, (V true).k x = {(FlockDeploy.V true).k x}"
+  say t0 s!"template {t}: rounds true = {FlockDeploy.rounds true spec sts}, 2 + rounds = (V true).k x = {2 + FlockDeploy.rounds true spec sts}"
   let s ← ofO s!"template {t}: filesAt" (filesAt p e t)
   let record ← ofO s!"template {t}: recordAt" (recordAt k.blobs s)
   let lv ← ofV s!"template {t}: liveOf" (FlockDeploy.liveOf spec record)
   say t0 s!"template {t}: liveOf: stream sizes {lv.streams.map (·.size)}, total {(lv.streams.map (·.size)).foldl (· + ·) 0}"
-  match msgsAtCase k t with
-  | some ms => say t0 s!"template {t}: msgsAtCase: {ms.length} messages"
-  | none => say t0 s!"template {t}: msgsAtCase: none"
   let proofs ← ofV s!"template {t}: filesOf" (Spot.OneStageZk.filesOf k.blobs s (.ok (spec, #[], Json.null, Json.null)))
+  match sessionMsgs spec x record proofs with
+  | some ms => say t0 s!"template {t}: sessionMsgs: {ms.length} messages"
+  | none => say t0 s!"template {t}: sessionMsgs: none"
+  if !verify then return
   let tabs := FlockDeploy.tabsOf sts
   say t0 s!"template {t}: Zk.verify, the record as kept: {verdict (Flock.Zk.verify spec tabs record proofs)}"
   let names := spec.repStreams.map (·.2.2)
@@ -104,20 +109,26 @@ def template (t0 : Nat) (k : Case) (p : VStar.Recursive.SampledTwo.Params) (e : 
     | .error err => say t0 s!"template {t}: {what}: liveOf refused: {err}"
     say t0 s!"template {t}: {what}: Zk.verify: {verdict (Flock.Zk.verify spec tabs r proofs)}"
 
-def main (args : List String) : IO UInt32 := do
+def main (verify : Bool) (args : List String) : IO UInt32 := do
   let [dir] := args | IO.eprintln "usage: RepRoundsProbe.lean FORM_DIR" *> pure 2
+  say 0 s!"pass: {if verify then "the verdicts" else "the counts"}"
   let t0 ← IO.monoMsNow
   let k ← readCase dir
   say t0 s!"read the case: {k.blobs.entries.size} blobs"
   let (p, e) ← ofO "formOf" (formOf k)
   say t0 s!"templates {p.circuits.size}, stmts {e.stmts.size}, statements {e.statements.size}"
   for t in List.range p.circuits.size do
-    template t0 k p e t
+    template verify t0 k p e t
   pure 0
 
 end Verity.SampledTwo.RepRoundsProbe
 
 #eval show IO Unit from do
   if let some a := (← IO.getEnv "VERITY_REPROUNDS_DIR") then
-    let rc ← Verity.SampledTwo.RepRoundsProbe.main [a]
+    let rc ← Verity.SampledTwo.RepRoundsProbe.main false [a]
+    if rc != 0 then throw (IO.userError s!"RepRoundsProbe: exit {rc}")
+
+#eval show IO Unit from do
+  if let some a := (← IO.getEnv "VERITY_REPROUNDS_DIR") then
+    let rc ← Verity.SampledTwo.RepRoundsProbe.main true [a]
     if rc != 0 then throw (IO.userError s!"RepRoundsProbe: exit {rc}")
