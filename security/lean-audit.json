@@ -27690,8 +27690,8 @@
    "Proofs.Flock.Soundness.Premises",
    "Definitions.Nci.Assumptions.Fit",
    "Definitions.Core.Assumptions.DeviceFigures",
-   "Proofs.Accounting.TS.Session.Group.Premises",
-   "Definitions.Pouw.Assumptions.LeadCommit"
+   "Definitions.Pouw.Assumptions.LeadCommit",
+   "Proofs.Accounting.TS.Session.Group.Premises"
   ],
   "properties": {
    "Flock.SecurityProofs.PublicAudit": {
