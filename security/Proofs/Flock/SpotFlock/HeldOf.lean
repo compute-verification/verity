@@ -38,7 +38,8 @@ the run's input does not decide, taken as a named hypothesis: `PartsAt`, `HeldMa
 strata making the held copy's parts at the replay sample the first stage selects on the run's bytes. `PartsAre`, the
 same at every sample's size, gives it (`partsAt_of_partsAre`), but no held copy meets `PartsAre` where the interior
 program has a stratum (`not_partsAre`: at `q = 0`, `SecondStage.partOf` refuses). `HeldMatches.refs` (`RefsAre`)
-holds by construction (`refsAre_of`): the held copy's reference headers are the params'.
+holds by construction (`refsAre_of`): the held copy's reference headers are the params'. So do the names the run's
+records must hold to (`namesHeld_of`): the boundary and interior registrations' ports and registered values.
 
 ## What this does not show
 
@@ -362,6 +363,16 @@ theorem refsAre_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h
   unfold RefsAre refsOf
   rw [ms_withFrame, ms_length_held₀]
   exact refHeaders_eq it.circuits
+
+/-- **The held names are the two registrations'**, at a held copy `heldOf` builds: the boundary registration's ports
+and registered values (`namesOf` at the params' verifier) and the interior registration's (at the interior's), the
+names the run's records must hold to (`recordsOk`). -/
+theorem namesHeld_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h : Held}
+    (hh : heldOf i it u = some h) :
+    h.boundaryNames = namesOf i.params.verifier ∧ h.interiorNames = namesOf it.params.verifier := by
+  obtain ⟨first, ns, ks, l, hz, -, -, -, rfl, -⟩ := heldOf_spec hh
+  unfold withFrame
+  exact ⟨rfl, rfl⟩
 
 /-- **A held copy `heldOf` builds agrees with what the run reads** (`HeldMatches`), given the clause `PartsAt`, which
 the run's input does not decide. Every other clause holds by `heldOf`'s construction. -/
