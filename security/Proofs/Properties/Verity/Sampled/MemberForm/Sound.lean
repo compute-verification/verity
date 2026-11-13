@@ -4,10 +4,10 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.ClaimReads
 public import Proofs.Properties.Verity.Sampled.MemberForm.WindowPasses
 
 /-!
-# SPOT's leg at the per-member form's accepts
+# SPOT's soundness at the per-member form's accepts
 
-SPOT's leg at the deployment's windows (`WindowInstance.spotSound`) and remote's soundness over windows of several
-members (`remote_soundness_window`) take three facts of the verifier: what the claim reads of the window
+SPOT's soundness at the deployment's windows (`WindowInstance.spotSound`) and remote's soundness over windows of
+several members (`remote_soundness_window`) take three facts of the verifier: what the claim reads of the window
 (`WindowInstance.ClaimReads`), the verifier's window at an accepted play (`WindowInstance.WindowAt`) and what the
 verifier's acceptance gives of each play (`WindowInstance.WindowReads`). This module gives them the three as proved
 of the per-member form (`claimReads`, `windowAt_form`, `windowReads_members`), at the evidence sent for each session
@@ -28,11 +28,11 @@ namespace Verity.Sampled.MemberForm
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-- **SPOT's leg at the per-member form's accepts** (`WindowInstance.spotSound`, at `claimReads`, `windowAt_form`
-and `windowReads_members`): where the window is the parameters' members on the registered files, the form's accepts
-hold `MembersAccept` with members that share no unit, the registered files hold each member's file and each
-member's commitment is ready for its openings. The check as it is accepts no parameters that name members, so the
-statement is empty until the per-member form accepts such parameters. -/
+/-- **SPOT's soundness at the per-member form's accepts** (`WindowInstance.spotSound`, at `claimReads`,
+`windowAt_form` and `windowReads_members`): where the window is the parameters' members on the registered files,
+the form's accepts hold `MembersAccept` with members that share no unit, the registered files hold each member's
+file and each member's commitment is ready for its openings. The check as it is accepts no parameters that name
+members, so the statement is empty until the per-member form accepts such parameters. -/
 theorem spotSound_form (I : WindowInstance d α) (K₀ : WindowConstructions I.base)
     (k : Verity.Registration.Composite) (reg : Option Claims.Msg → ByteArray)
     (record₀ : Window → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Claims.Msg)

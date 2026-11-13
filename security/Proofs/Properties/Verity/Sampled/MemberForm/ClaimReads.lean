@@ -11,7 +11,7 @@ The claim's transfer at a window reads the committed files member by member (`Wi
 `Flock.Guarantees.ReadsWith`): each member's files pass the verifier's files check, the vocabulary's read is the
 member's, the vocabulary's openings hold wherever the member's deployed commitment opens and at its files'
 constants, and the extracted transcript is, at the member's gates, the member's transcript. This module proves it
-of the windows a deployment's instance sets up at the per-member form (`MemberForm.MembersSetUp`):
+of the windows the verifier sets up at the per-member form (`WindowInstance.windows`, `MemberForm.MembersSetUp`):
 
 * **The seats' traces side by side are each seat's own** (`traceLeft_beside`, `traceRight_beside`,
   `seat_trace_heq`): the first's at the first member's gates and the rest's at theirs, and a seat's trace at its
