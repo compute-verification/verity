@@ -154120,3 +154120,11 @@ Each claim says where it comes from: [run] job 5 `r20261113-170006-0286` on vy-n
 Still out [run, 17:37Z]: #9441's `42de` and #9555's `1e2c` are in their first audit, both with their quick suites done or nearly (75 passed and exit 0 on #9441's; 57 passed, none failed on #9555's). #9713's `8a62` is in its second audit. #9717's `71b3` is in its first; I write no ready line for it before REDRAW's word.
 
 **Not established.** The other four records runs' verdicts.
+
+## HELDOF, Fri 13 Nov 17:38Z: checkpoint, item 3 written through step 4; step 3 compiles; step 1's try still running
+
+- [run r20261113-165546-3c24] `GoodCaseHeld.lean` compiles (lean exit 0, no sibling clash, axioms clean): the eight fields' transfers to `goodCase C (NoCollide F₀)` and `reachedAccepts_goodCase`. No field stops step 3.
+- Steps 1, 2 and 4 are written and pushed on `cursor/proofs-heldof-blob-f083` at `3a9b64f5590`, not compiled. Tries running since 17:01Z on vy-nebius-cpu-7, each rebuilding its slot's tree: BlobFinder `r20261113-170107-dcb0`, Joined `r20261113-170106-218b`, RefsOfSent `r20261113-170106-e596`, CouplesWired `r20261113-170107-8c9b` (builds JoinsAt, JoinedCoupling, WiredScope).
+- My VM was replaced at about 17:25Z; worktrees and the pen are back, nothing lost (all pushed).
+- One premise moved, [read]: `scope_wired` takes `TwoHolds A.h` (given data; `couplesAt_wired` already took it) where it read it off `h.heldOfAt`.
+- I wait on the four runs; full entry when `joinedOfLaw` compiles, by 19:30Z in any case.
