@@ -51,7 +51,7 @@ it is not a job.
 `../pearl_c_sm90/` and `../served_zk/` load this directory's Python by path, and `../served_zk/`'s jobs start
 `window.sh`; `benchmarks/vllm_encoded/stack.sh` sources `flashinfer_env.sh`; the harness loads `bench_arm.py` by its
 module name, `pearl_c_vllm.bench_arm` with `benchmarks/pouw` on `PYTHONPATH` and
-`benchmarks.pouw.pearl_c_vllm.bench_arm` from the repository's root (its two Pearl-C specs under `benchmarks/specs/`,
-its vLLM runner and its tests); the tests in `../tests/` run the arm on a stand-in driver. A replay here opens rows and
-words in the clear, a development shortcut: its ACCEPT is never the protocol's verdict, which is a zero-knowledge proof.
-Nothing here is read by a verifier.
+`benchmarks.pouw.pearl_c_vllm.bench_arm` from the repository's root (its two Pearl-C specs under
+`benchmarks/harness/specs/`, its vLLM runner and its tests); the tests in `../tests/` run the arm on a stand-in driver.
+A replay here opens rows and words in the clear, a development shortcut: its ACCEPT is never the protocol's verdict,
+which is a zero-knowledge proof. Nothing here is read by a verifier.

@@ -328,4 +328,5 @@ def PouwHopperE4m3SaltDead(acc: int, cb: int) -> int:
 
 
 __all__ = ["A16", "BETA", "BF16", "E2M1", "F32", "F_ENDS", "I7", "M32", "MASKED", "MASKS", "U32", "U8", "WINDOW", "sx",
-           "ends_agree", "i32_to_f32_rn", "masked_words", *sorted(n for n in list(globals()) if n.startswith("Pouw"))]
+           "ends_agree", "i32_to_f32_rn", "masked_words", "sq300", "up48",
+           *sorted(n for n in list(globals()) if n.startswith("Pouw"))]
