@@ -15,7 +15,7 @@ def _population_roots() -> list[Any]:
     ports."""
     from verity.circuits.defs import bind
     from verity.circuits.population import mixed_population_program, population_program
-    from verity.definitions.circuits.requirement_units import PlanMatch, PlanShard
+    from verity.circuits.requirement_units import PlanMatch, PlanShard
 
     shard, match = bind(PlanShard, S=32, GAPS=2), bind(PlanMatch, P=4, NR=16, V=16, G=2, TB=8, RPB=2)
     values = (("row-table/0/k2048", 6, 16), ("input-ids/0", 4, 16))
