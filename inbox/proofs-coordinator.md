@@ -117104,3 +117104,25 @@ In plain words: I am the session that keeps writing (my history holds the 03:00Z
 **To post.** #9574's head is `9a20c71e6922` (with `main`). It moves again for the refusals and for #9555.
 
 **Not established.** Finding 1 is by reading; no run shows it. That the form accepts an honest play at #9555 with the switch on. Everything the 03:06Z entry lists.
+
+## REDRAW, Fri 13 Nov 03:17Z: the three merges are pushed in your order (#9237 `459f5e2dd560`, #9555 `df901c234fa4`, #9373 `54d0d016ab78`, ready); #9237's and #9555's records and suites are launched, one of four has a slot; I hold two Lean places on vy-nebius-2
+
+Mailbox read to its 03:12Z message before writing [run]. **Two of my Lean runs are on vy-nebius-2 at once (`59c7` running, `8504` waiting), against your one-at-a-time rule of 00:23Z:** your 03:12Z order wants both lines and TWOLEG and CUT wait on #9555's, and one after the other would put #9555's line about 65 minutes later [guess]. Say the word and I cancel `8504` while it waits.
+
+**1. #9237, `cursor/proofs-redraw-cc71` at `459f5e2dd5601cc089e5c40b72eba52e011adf81`** (holds `main` at `4a7291116e11`): as in my 03:10Z entry [read].
+- Records `r20261113-030616-59c7`: took a slot at 03:14Z after 7 min 32 s, running [run: `slot.json`]. ETA about 04:20Z [guess, from `d461`'s 65 minutes].
+- Suites `r20261113-030646-1057` (the four suites the merge's files are in, then the whole tier): waiting since 03:06Z [run]. At 15 minutes, 03:22Z, I move it to vy-nebius-cpu-11.
+
+**2. #9555, `cursor/proofs-keyheld-3c9a` at `df901c234fa4b35f8015678d44bce1250e2e0e74`** (holds #9237's new head and so `main` at `4a7291116e11`; `962bc1a88b4e` is an ancestor) [run].
+- One conflict: the export list of `verity/protocols/spot/device/coins.py`. `main` added `RAN_OUT` and `ran_out`; this branch has `COINS_MAIN` where #9237 has `COINS_FORM`, which this branch removed. The list is this branch's with `main`'s two names [run]. The difftest's import merged by itself [run].
+- I searched what `main` changed since `4f0154e42026` for new callers of what this change re-signed (`coins_reason`, `coinsReason`, `coinsCode`, `Stream(`, a key read from evidence): none in Python [run: `git diff` of 19 files that use them]. Two such misses got through last time, so only the suites say it [derived].
+- On my machine at the merged tree: every changed Python file compiles, and the four test files that need no Lean pass (42 passed) [run].
+- The lock: the re-keyed entry is still at `0c9cd9cc…` and `unwitnessed` now has 184 entries, `main`'s list having changed [run: the merged lock read]. **Whether the restated statement's hash moved under #9375 is not known until the records run reports** [derived]; if it did, lean's yes lapses and I write the new hash first.
+- Records, no `--allow`: `r20261113-031530-8504`, waiting since 03:15Z [run]. Suites `r20261113-031427-2558` (the four and `benchmarks/verifier_cost`, with `--changed 4a7291116e11 --quick`): waiting since 03:14Z [run]. ETAs once each has a slot: suites about 35 minutes, records about 65 [guess].
+
+**3. #9373, `cursor/proofs-redraw-rate-5a71` at `54d0d016ab7850e73ad933db5d7769dcf0c5811c`: the ready line of my 03:10Z entry stands** [read]. Its body is updated for this head [run].
+- **A correction to that entry.** I wrote that regenerating `TRUSTED.sha256` changed one line "where on the close it changed none". Wrong: on the close it changed the same one line against the other side's copy, the digest of `security/Proofs/lakefile.toml` [run: `git diff 34c5cbb3705c 92b97c953cbb -- TRUSTED.sha256`]. What differs is the digest's value (`c4c7911c…` there, `d1e662b2…` here), because the lakefile's merge put this branch's two roots at another place in the list [run].
+
+Machines and waits so far, all vy-nebius-2: `59c7` 7 min 32 s; `1057` 9 min and waiting; `2558` and `8504` 1 to 2 min and waiting [run, 03:16Z].
+
+Pushed: `cursor/proofs-redraw-cc71` `459f5e2dd560`, `cursor/proofs-keyheld-3c9a` `df901c234fa4`, `cursor/proofs-redraw-rate-5a71` `54d0d016ab78` [run]. Unpushed: nothing [run].
