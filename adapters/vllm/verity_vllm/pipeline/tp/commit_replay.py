@@ -85,7 +85,7 @@ def _rows(out: Path) -> list[dict[str, Any]]:
 
 
 def result_path(out: str | os.PathLike, pair: int, rank: int) -> Path:
-    return Path(out) / f"sampled_replay_p{pair}_rank{rank}.json"
+    return Path(out) / C2.RANK_RESULT.format(pair=pair, rank=rank)
 
 
 # ------------------------------------------------------------------------------------------------ one rank, on CPU

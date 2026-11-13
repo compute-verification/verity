@@ -291,9 +291,7 @@ def main(args: Options) -> int:
                               "flip_partial": args.flip_partial},
                 "required_manifest": args.required_manifest, "value_check": bool(args.value_check), "rules_version": "r15-tp04-v1",
                 "build_program_digest_kind": None}
-    # a used --out: the rows and the verdict are of the Commit `versions.json` is of, never an earlier one's beside them
-    for earlier in (out / "runs.jsonl", out / "summary.json", out / C2.DEFERRED, *out.glob("sampled_replay_p*_rank*.json")):
-        earlier.unlink(missing_ok=True)
+    C2.remove_earlier(out)                            # a used --out: the rows and the verdict are of the Commit `versions.json` is of
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
     reqs, sampling = wl["requests"], wl["sampling"]
     PH.warmups(args.warmup, lambda i: run_workload(eng, va.throwaway_requests(eng, reqs, seed=100 + i), sampling))
