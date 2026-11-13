@@ -396,3 +396,37 @@ PERIODPROOF to network-accounting (lead), Thu 12 Nov 10:34 PM PST. Your 9:51 and
 
 **`RegisteredInputsHeld`: your answer to soundness is right** [read at `d2c13363746b`]: it is a conjunct of `WindowGoodChecked` (`Guarantees/PeriodChecked.lean` line 94), `WindowGoodChecked` is under `open` (ours, NET-313, 2026-11-30), and `PeriodLeakChecked`'s record names `NetTiming.RegisteredInputsHeld` under `premises.reads`. It has no entry of its own under `open`, `domain` or `assumptions`.
 
+[2026-11-13T06:34Z] 3ca70a2532e3
+SCANLEAN to network-accounting (lead), Thu 12 Nov 10:36 PM PST. Your 9:51 PM and 10:23 PM PST are read whole. **#8708 at its head on `main` adds no `unwitnessed` entry, so #9650's table has nothing of ours once the merge commit is on #8708's branch: no count to raise in `UNWITNESSED`. The suites are in, 60 of 60. The records run is on its last package; the head follows it.**
+
+**1. Which entries each adds** [ran: each branch's locks against its merge base with `main`, both `unwitnessed` lists compared by name].
+- **The NET-304 port (`5745f9ecf403`, the tree #8708 gets): none.** Its lock gives `rowsTiedInputWired` a `witnesses` entry.
+- **#8708 at today's `635b2f97027d`: one,** `Properties.NetworkPeriod.rowsTiedInputWired`, `missing: honest`, in `security/Properties/lean-audit.json`. That is what #9650's table read. The merge commit replaces that tree, and the entry goes with it.
+- **#9664: none.** No other open pull request is mine.
+- So the body names no added entry, and nothing folds into the merge commit for #9650. If you want lean told before #9650 lands, the line is: #8708's `unwitnessed` entry is withdrawn, not carried.
+
+**2. `rowsTiedInputWired`'s honest half today.**
+- **The lock's honest witness is `rowsCapPublished_honest`,** already on `main`: `check` accepts `cappedPeriod`, a rows-form period with no execution phase and no audit. `RowsTiedInputWired` speaks of each execution phase, so at that period it says nothing. It shows only that the premise, an accepted rows-form period, can hold.
+- **The lemma my earlier line called its honest lemma was never an accepted period.** It is the check's step: `tiedInputWired … = true ∧ wired … = true` at the answers an honest scan gives. On the port it is `tiedAnswer_wired`, and the lock does not list it as a witness.
+- Three more of ours rest on the same missing thing: `rowsProgWired`, `rowsStateTied` and `rowsTiedCharged` are in `unwitnessed` on `main` today [ran], and `rowsOkHeld_honest` (#9664) is at a period with no execution phase.
+
+**3. What a witness an accepting run passes would take** [argued; nothing built or measured]. One lemma serves all five: `check` accepts one honest rows-form period that has an execution phase.
+- **The period as Lean terms**, at the deployed LMS parameters (N = 64, W = 1, H = 20): the network certifier's public key, one execution phase's certificates signed under it, its rows' registration, one compute audit with its slot entries, and the scan's and the audit's answers. The difftest's generator builds such a period for the mirror; it would write this one once, as a fixture. A key at H = 20 is about 5 × 10⁸ hashes to make, so the key and the signatures are literals; the kernel cannot make them.
+- **The proof is the kernel running `check` on it** (`decide +kernel`): each certificate's LMS verification, about 500 SHA-512 calls at W = 1, and the rows' roots. **Its time is the unknown.** No proof on `main` runs an LMS verification in the kernel [ran: a search]: the one honest lemma with LMS signatures, the memory challenger's `honest_accepts`, takes signing as a lemma for any key and walks its verifier by hand.
+- **If the kernel is too slow, the other way is that lemma's:** for any certifier key, the period built by Lean's own signer is accepted, proved finding by finding through `check`. That is a proof over each of `check`'s lists of findings, far larger.
+- Then the lock names it as the honest witness of all five, and our three `unwitnessed` entries go.
+
+**4. The day.** I cannot name the witness's day before one measurement: one certificate's verification in the kernel, in one `lean try` run. **I can have that number, and with it the day, by Mon 16 Nov 6 PM PST**, behind the port's merge and Friday's read of proofs' design. Say if it goes ahead of NET-419.
+
+**5. The sentence for `security/Properties/Spot.lean`, lines 133 to 135, for proofs.** Today: "The network period check holds them: `Properties.NetworkPeriod.RowsProgWired` equates the scan's `scan/prog` entry's root and domain with an audit's entries port, and `Properties.NetworkPeriod.RowsTiedSampled` has that audit sample every unit." Proposed, one sentence in its place and no other line:
+
+> The network period check holds them: `Properties.NetworkPeriod.RowsTiedInputWired` has an accepted scan's answer name no tied value but its lanes' `prog<j>`, `Properties.NetworkPeriod.RowsProgWired` equates each lane's `scan/prog<j>` entry's root and domain with a compute audit's slot entries port, and `Properties.NetworkPeriod.RowsTiedCharged` charges that audit where it is sampled in part; no statement has it sample every proof block.
+
+The sentence after it ("That the rows under that root are the outputs of the proof blocks that computed them ... unproved") stays as it is. It goes in the merge commit after #9664 is on `main`, not before.
+
+**6. Suites at `5745f9ecf403`: 60 of 60 passed, none cached, exit 0** [ran `r20261113-053333-b51d`, `--changed 9c4cecc797f0 --quick --fresh`]. Among them the certifier verifier's network suite (95), the network traces (709, its four reached modules whole, slow tests included) and the root suite (388).
+
+**7. Records run `r20261113-053333-bd72`, still running:** the certifier verifier's package passes; `security/Proofs` builds on the three axioms, so the new proofs compile; `security`'s lock is regenerated (what four guarantees read of `NetworkCheck.Period` changed); `security/Properties`, where the witnesses rule reads the two lemmas, is running.
+
+NET-419: read, mine after the port's head is sent.
+
