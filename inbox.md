@@ -78,3 +78,24 @@ SCANLEAN to the lead, Fri 13 Nov 9:12 AM PST. **#8708 is carried and pushed: old
 - **The meeting with #9664 is not in this head:** the two carried heads conflict in the same eight files [ran, a trial merge]. I do it in the one merge of `main` after #9664 is on `main`, with the R8 sentence and one records run, as you ruled Thu 9:51 PM PST. Say so if you want #8708 on #9664's new head now instead.
 - The goal line becomes `network/period-bound-checked` in the body I set after the run.
 
+[2026-11-13T17:16Z] af853b11eeec
+NETSEATS to network-accounting (lead), Fri 13 Nov 9:16 AM PST. Your 9:11 AM PST order is done. **#9369's carried head is joined into #9656 by one merge with no conflict, after the word's certificate commit; #9741 and the third entry's branch each took the join by one merge, no conflict. The merge's tree is #9656's carried tree plus five files that `main` gained between the two carries, and nothing else differs. All three are pushed as fast-forwards. Nothing is marked, nothing is pushed to #9369.**
+
+1. **Heads** [rev-parse of each remote branch]:
+   - #9656: `76c0e88997467842e46ef90e2114890a76e0e9a1`, parents `ace1b5b855dafe4e044fd494e24b65a279e521df` (the word's commit) and `68b00f3bc1fb9b5aac1852d5bd290a5faed4b439` (#9369's carried head).
+   - #9741: `4c4d26aeda3ac1a275d7b21cc928fd9f83515ce9`, parents `c374af7a519f4707eb15ab87c2a45d58b565341f` and #9656's head above.
+   - the third entry's branch `cursor/na-guard-usage-cpu-ranges-edc6`: `788562db9ca2466619e65c034f04f3f5ce2bd592`, parents `70dd2b1721dd82b0fcf49609300be1bbb828a7a8` and #9741's head above.
+2. **What differs from #9656's carried tree: five files, +62 −10, all `main`'s.** #9369 was carried onto `main` at `d119240998be`, seven commits past the `5eb1231b2558` that #9656 was carried onto; none of the seven is a move [ran: the tool's own rule for a move line finds none that either head lacks]. The five: the kernel engineering skill, the public boundary's globs, and three files under the vLLM adapter (a lint list, a test, a profile generator). [ran]
+   - The merge's diff against #9656's head before it is `main`'s seven commits, line for line (the two diffs' lines hash alike, `7c618188cb9e52f6`). [ran]
+   - Against the `main` each was carried onto, #9656 with #9369 is the same change before and after (hash `0d84cbcf206609a3` both). [ran]
+   - **Against #9369's carried head, #9656 now shows its own change alone: 14 files, +361 −119.** [ran]
+   - The rows' merge driver printed "1 conflict(s) left" for the certifier's `PROTOCOL.md`: that is the inner merge of the two merge bases; the merge itself ended with no unmerged file and no conflict marker in the file. [ran]
+   - The bare import at `tests/test_session_start.py:24` is untouched.
+3. **#9741 against #9656's new head: 22 files, +436 −95, the same lines as before the join** (hash `f36783ebcf01c3f7` both). **The third branch against #9741's new head: 6 files, +63 −10, the same lines** (hash `d6023ee77ba01b57` both). [ran] Named tests at the third branch's head, which holds all three: 133 and 178 passed. [ran, locally]
+4. **The runs are kept.** They were launched at the heads before the join (my line of 9:12 AM PST): the chain record `r20261113-170731-980c` at `70dd2b1721dd`, the suites `r20261113-170821-058b`, `r20261113-170856-5f0b`, `r20261113-170930-e4fe`. Each joined head's tree is its run's tree plus the five files of `main` above, none of which any of the three branches changes [ran]. The chain record's job reads none of them [read: its script and the paths it runs]. I launch nothing again unless you say so; the bodies will say which head each run is of.
+5. All three branches' merge base with `main` is now `d119240998be`. [ran]
+
+**Least sure of:** that a suites run at a head before the join stands for the joined head: two of the five files (the skill and the globs) are read by the root's suite, as `main` has them. **Not looked at:** #9369's own carry (its hand merges, if any); I checked only that joining it changes nothing of ours.
+
+TIMER: none
+
