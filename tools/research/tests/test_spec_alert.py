@@ -471,7 +471,7 @@ def test_a_record_that_moved_with_its_package_is_compared_at_its_old_path(tmp_pa
 
 def test_a_fixture_of_the_audits_tests_is_no_record(tmp_path):
     """A layout move renamed a test fixture named `lean-audit.json` under the audit's directory, whose `reads` are lists:
-    read as a record it failed the DM, and Daniel was told the records couldn't be read."""
+    read as a record it failed the DM, which then said the records couldn't be read."""
     repo = _repo(tmp_path)
     toy = {"guarantees": {"Core.G": {"owner": "@lean"}}, "reads": {"Core.G": ["Core.helper"]}}
     old = _commit(repo, "tools/verity/lean/tests/fixtures/unread/Old/lean-audit.json", toy, "base")

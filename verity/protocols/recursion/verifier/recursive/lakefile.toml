@@ -2,7 +2,8 @@
 # v1's live audit with its verdict of record V*'s compiled check (`flock-verify verify --zk` once per V* part, at that part's
 # recursive inputs) on the blobs; and sampled proofs (`verity/sampled-proofs/v1`), whichever of one-stage v2 and the
 # recursive audit the auditor's params name, one-stage v1 refused. `vstar-recursive` is its command (`id | check | serve |
-# verdicts`). Code, not analysis: Lean core, C-Flock, the interface and the one-stage audit.
+# verdicts`, and sampled proofs' as `vstar-recursive sampled id | check | serve`). Code, not analysis: Lean core, C-Flock,
+# the interface and the one-stage audit.
 name = "core_vstar_recursive"
 defaultTargets = ["VStarRecursive", "vstar-recursive"]
 

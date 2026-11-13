@@ -43,6 +43,17 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     ]
 
 
+def _merge_calls_roots() -> list[Any]:
+    """The merge written as Calls at the traced one's bindings (one list, three, and the served 8 blocks of 2,048 slots, held
+    to its digest pin), and its pieces, the two offsets at a small K and the served one."""
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import dsa_topk_reads as R
+
+    return [*(bind(R.DsaPositionsMergeV2, M=m, K=k) for m, k in ((1, 4), (3, 4), (8, 2048))),
+            bind(R.DsaPositionsKeep), bind(R.DsaPositionsShift), bind(R.DsaPositionsShiftIn),
+            *(bind(d, K=k) for d in (R.DsaPositionsFirstOffset, R.DsaPositionsOffset) for k in (4, 2048))]
+
+
 def _by_calls_roots() -> list[Any]:
     """`DsaTopKReadRows_v1` at the served statics, checked by its calls: its 2,048 reads are past what circuit-check builds
     whole.  The first class, the last whole one (`dsa_topk_mask_cut.WHOLE_MAX`), the first cut one and the longest row."""
@@ -53,3 +64,16 @@ def _by_calls_roots() -> list[Any]:
 
     return [bind(R.DsaTopKReadRows, N=n, TOPK=2048, BLOCK=R.BLOCK, READ=read(1 << 17, 576))
             for n in (4096, X.WHOLE_MAX, X.WHOLE_MAX + 2048, 131072)]
+
+
+def _positions_calls_roots() -> list[Any]:
+    """The positions as Calls (`DsaMaskPositions_v2`) at the `_v1` units' bindings, which reach the tags and the count as one
+    tree (`DsaButterflyTagsCount_v1`) and the runs of positions (`DsaIndexBits_v1`, `DsaPositionWord_v1`); a block off a
+    multiple of its length; and the two the long row serves, a block of the cut and the longest row masked whole, each held to
+    its digest pin."""
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import dsa_topk_mask_cut as X
+    from verity.definitions.registry import dsa_topk_reads as R
+
+    return [*(bind(R.DsaMaskPositionsV2, N=n, AT=at, K=k) for n, at, k in ((8, 0, 4), (6, 8, 4), (14, 0, 4), (37, 5, 9))),
+            bind(R.DsaMaskPositionsV2, N=X.BLOCK, AT=X.BLOCK, K=2048), bind(R.DsaMaskPositionsV2, N=X.WHOLE_MAX, AT=0, K=2048)]

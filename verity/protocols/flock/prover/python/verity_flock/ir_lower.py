@@ -893,30 +893,47 @@ def _library_table(name: str) -> bool:
     return library.table_label(hashlib.sha512(raw).hexdigest()) == library.LIBRARY
 
 
+def _table_words(table: str, n: int) -> np.ndarray:
+    from . import gf2
+
+    words = np.asarray(gf2.table(table), dtype=np.uint32)
+    assert len(words) == 1 << n
+    return words
+
+
+def table_const_bits(table: str, bits: Sequence[int], words: np.ndarray | None = None) -> dict[int, int]:
+    """Of a read's value ``bits``, those constant over the whole table, with their value, for a library table (a program
+    table's layout shows nothing of its content, so none of its bits is); ``words`` the table's, else read."""
+    if not _library_table(table):
+        return {}
+    if words is None:
+        from . import gf2
+
+        words = np.asarray(gf2.table(table), dtype=np.uint32)
+    out: dict[int, int] = {}
+    for j in bits:
+        col = (words >> np.uint32(j)) & np.uint32(1)
+        if not col.any():
+            out[j] = 0
+        elif col.all():
+            out[j] = 1
+    return out
+
+
 class _Read:
     """A table read ``out = table[idx]`` laid out inline as plain rows of the unit (the one-hot construction of
     :func:`fp.lookup`): the low and high index halves decode to one-hot minterms (each an AND of two half-minterms, recursively),
     row ``(j, h)`` is ``hi_h AND (XOR of the low minterms l with bit j of table[h * 2^lo + l] set)`` (omitted when that XOR is
     empty), and value bit j is the copy row ``(XOR over h of row (j, h)) AND 1``. Only the live value bits get rows, and a
-    library table's bits that are constant over the whole table get none: they are wired to the constant (``const_bits``).
+    library table's bits that are constant over the whole table get none: they are wired to the constant (`table_const_bits`).
     A program table keeps a row for every live bit, so its layout shows nothing of its content. Every row reads earlier rows,
     the index forms or the constant, so the index fixes every row."""
 
     def __init__(self, C: Circuit, g: int, bits: Sequence[int], at: int):
-        from . import gf2
-
         self.table, self.idx, _width = C.lookups[g]
         n = len(self.idx)
-        words = np.asarray(gf2.table(self.table), dtype=np.uint32)
-        assert len(words) == 1 << n
-        self.const_bits: dict[int, int] = {}
-        if _library_table(self.table):
-            for j in bits:
-                col = (words >> np.uint32(j)) & np.uint32(1)
-                if not col.any():
-                    self.const_bits[j] = 0
-                elif col.all():
-                    self.const_bits[j] = 1
+        words = _table_words(self.table, n)
+        self.const_bits = table_const_bits(self.table, bits, words)
         bits = [j for j in bits if j not in self.const_bits]
         self.lo = READ_LO.get(n) or min(range(2, n - 1), key=lambda lb: (1 << lb) + (1 << (n - lb)) * (len(bits) + 1))
         self.hi = n - self.lo

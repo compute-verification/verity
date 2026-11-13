@@ -1,7 +1,9 @@
 {
+ "format": 1,
  "roots": ["CoreRemote"],
  "exempt": {
-  "RemoteMain": "the remote executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
+  "RemoteMain": "the remote executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
+  "RemoteV1Main": "the remote-v1 executable's entry point, one line; its command is Core.BlobProtocol.main, audited under CoreProtocol"
  },
  "layers": {
   "CoreRemote": {
@@ -13,12 +15,14 @@
     "PouwCheck.Period",
     "Spot.OneStage",
     "Spot.OneStageZk",
+    "PouwPearlPlus.Protocol",
     "VStarRecursive.Sampled"
    ],
    "except": [],
    "why": "the program is code: the core interface, C-Flock's Lean and its components' ports, no Mathlib and nothing of Security"
   }
  },
+ "guarantees": {},
  "dependencies": {
   "toolchain": "d5ca9d1164aa2cf25419881c4ec5c6a1486192af7c11e9d1704efd15e3fbd2fa"
  }

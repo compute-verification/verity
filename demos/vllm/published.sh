@@ -2,7 +2,7 @@
 # What a Commit run publishes, sourced by commit.sh and benchmarks/one_stage/a5_llama1b_h200.sh. `research run` publishes
 # every file a script leaves under $OUT, so a script puts a file there only when PUBLISHED lists it, with the reason it
 # holds nothing of a request: no prompt, token id, seed, salt or key, no digest of one that a guess could confirm, and
-# none of the requests' lengths, caps or step rows. A file with no entry stays on the node, and the run names it.
+# none of the requests' lengths, limits or step rows. A file with no entry stays on the node, and the run names it.
 # A record whose passing copy is clean and whose failing copy can quote a served token has no entry either: a row's
 # stages.txt and row.log and every stage's log, whose last lines a FAIL copies into them.
 # An entry is `WHOSE|PATTERN|why`. WHOSE is `row`, a record `publish` copies from the row dir, or `run`, a file the

@@ -17,8 +17,8 @@ schemas, kinds and bodies, which key signs, its sessions) is its own check; the 
 -/
 module
 
-public import Flock.Bytes
-public import Flock.Hash
+public import Base.Bytes
+public import Base.Hash
 public import Lean.Data.Json.FromToJson.Basic
 
 @[expose] public section

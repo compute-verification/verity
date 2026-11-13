@@ -41,14 +41,9 @@ def iter {α : Type} (k : Nat) (f : α → α) (x : α) : α := Nat.rec (motive 
 
 /-- An entry no table reaches (`2^56 - 1`). -/
 def CAP : Nat := 72057594037927935
-/-- The atom table's entry where no atom holds. -/
-def BIG : Nat := 65536
 
-/-- The least weight of an atom of `fs` that holds operands over `a` and `b` values (`BIG` if none). -/
-def atomMin (fs : List Atom) (a b : Nat) : Nat :=
-  fs.foldl (fun acc f => if f.holds a b then min acc f.weight8 else acc) BIG
-
-/-- The atom table on the whole grid, on the RTX PRO 6000's data sheet. -/
+/-- The atom table on the whole grid, on the RTX PRO 6000's data sheet (`atomMin`, whose entry where no atom holds is
+`BIG`). -/
 @[irreducible] def atomT : Nat := packRows (fun i => packF (fun j => atomMin rtx6000Sheet (g i) (g j)) gsz) gsz gsz
 
 /-- Strassen's products' `(‖u‖₁, ‖v‖₁)`. -/

@@ -70,9 +70,12 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation, and these:
 
 The Lean predates these names. Its round is an execution phase, and its word is a proof block's committed value. Its `k`
 and `nsb` are k, and `k_draw` is q. Its `C` is W_reg, `H` is W_b, `H_o` is W_ans and `δ` is δ_coin. Its fleet's unit is
-a replica, and θ is 𝓜. A rename is to follow. Two premises have new names, which the Lean is to take: SHA-512's
-premise is SAK for SHA, `SAKSha` (the Lean's `ShaSpeed`), and the proof system's premise, "the proof system is sound", is
-`ProofSystemSound` (the Lean's `ServiceSound`).
+a replica, and θ is 𝓜. A rename is to follow. Two premises already have their new names in the Lean (GLOSSARY.md's
+older names give the old ones): SHA-512's premise is SAK for SHA, `SAKSha`, and the proof system's premise, "the proof
+system is sound", is `ProofSystemSound` (`Pouw.Assumptions.ProofSystemSound`): the verdict accepts a period only where
+each block's instance is registrable and the selected blocks' checks pass, in Flock's proofs. It is not H1's
+`ServiceSound` (in `security/Properties/lean-audit.json`), a different premise, about the one-stage Flock sessions over a
+window's sampled units, which keeps its name.
 
 ## What is committed
 
@@ -105,8 +108,8 @@ compressions a KiB, against 8.9 for an 8-chunk leaf in a 16-ary tree, so Dither 
   The sampled output cells are opened after it.
 - The weights are in the period's weight root, bound once a period, before any coin of the period is flipped.
 
-**The value root's layout**, pinned for kernels. It is the `v31.py` layout at 16 KiB rows,
-under Dither's tag and without segment S's rows:
+**The value root's layout**, pinned for kernels, at 16 KiB rows, under Dither's tag and without
+segment S's rows:
 - A call's m × N output is cut into 128 × 128 tiles, tile t = t_m·(N/128) + t_n, each tile's output cells row-major
   (c = 128 r + col). m and N are multiples of 128, and L′ a multiple of 32 dividing K.
 - A tile's words of segment s, for s = 1..S − 1, are its 16,384 T_s as little-endian u16 (32 KiB, two rows). Its O
@@ -581,8 +584,13 @@ week and 4.76e26 a year at H200 V4, and 1.70e26 and 7.32e26 at RTX PRO 6000 V4.
 - **The challenger's and the certifier's specs** (network-accounting, infra and proofs): the challenger on the
   certifier's device (the MVP), the exact exclusion, re-clocking, one clock and the multi-node private links, as
   implemented.
-- **Keyed transport**, in place of `WitnessPathPrivate`'s private links (pre-shared keys, ML-KEM for transport only, or
-  keys set at provisioning), and whether ML-KEM may bend the one-hash rule.
+- **Keyed transport**, for a channel that can't meet `WitnessPathPrivate c`, the per-channel premise:
+  `verity.commitments.crypto.transport`, with `Guarantees.TransportPassiveZk` taking either that premise or `ChannelHides`
+  (`security/Definitions/Core/Guarantees/Transport.lean`). An onsite device holds an imprint key (a shared secret
+  installed over the cable once per device, then a SHA-512 ratchet), and a remote party with no cable adds ML-KEM-1024,
+  the one-hash rule's exception for transport, always XORed with the SHA-512 chain key's PRF output and never on pair
+  links. The premise here is the zero-knowledge one: it lets the prover's own machines read a private frame, so where
+  a coin must not reach an outside machine early, `CoinsConfidential` still needs the MVP's placement.
 - **The ZK server** (with Flock's ZK server):
   - that it proves a replica's answers concurrently, and its release schedule. If it can't, queued check coins are the
     fix, and `Timed` must then read the check coin's time apart from the selection's;

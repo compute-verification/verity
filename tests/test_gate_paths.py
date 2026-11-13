@@ -2,7 +2,10 @@
 
 A stale path in one of these doesn't fail anything by itself: a `merge_requires` prefix or a queue grant that matches no file
 stops requiring its step or its grant, a Tool's closure glob that matches nothing leaves its identity weaker, and the queue
-skips a Lean build whose package isn't there. So a directory move that misses one fails here instead.
+skips a Lean build whose package isn't there. So a directory move that misses one fails here instead. Nor does a file a Lean
+key holds (`lean_audit.inputs`, `lean_changed.closure_inputs`), or a program check's lean-audit step runs, that the queue's
+loop doesn't count as a Lean input (`vqueue_slim.lean_inputs`): a candidate changing only it takes its base's verdict on
+lean-audit, so that fails here too.
 
 Paths resolve against `git ls-files`: a tracked file, or a directory holding one. What a gate names that is never tracked
 (build output, a file a shipped tree is given, a directory of entry files that holds none yet) is in `EXEMPT` with its
@@ -19,6 +22,8 @@ import subprocess
 import sys
 import tomllib
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -136,6 +141,103 @@ def test_the_queues_lean_builds_are_lake_packages_here():
     assert not (bad := [d for d in queue.LEAN_BUILDS if f"{d}/lakefile.toml" not in tracked()]), bad
 
 
+@functools.cache
+def _lean_keys():
+    """(`lean_audit`, `lean_changed`) of this tree: the modules an audit's key and a records key are built in."""
+    changed = _module("gate_paths_lean_changed", ROOT / "tools" / "verity" / "lean" / "lean_changed.py")
+    return changed.LA, changed
+
+
+def _lean_inputs(files: list[str]) -> set[str]:
+    """Those of ``files`` that are Lean inputs of the queue's loop in the tree holding them (`vqueue_slim.lean_inputs`)."""
+    from research.vqueue import meets
+    from research.vqueue_slim import lean_inputs
+
+    inputs = frozenset(lean_inputs(files))
+    return {f for f in files if meets((f,), inputs)}
+
+
+def test_the_lean_inputs_of_the_queues_loop_are_the_files_a_lean_key_holds_or_a_lock_run_writes():
+    """The queue's loop lets a candidate built on another in flight take that one's verdict on lean-audit unless a member
+    changes a Lean input of its tree (`vqueue_slim.lean_inputs`), so a change to a file an audit reads that they miss would
+    land on a verdict that never read it.  Every file an audit's key (`lean_audit.inputs`) or a records key
+    (`lean_changed.closure_inputs`) declares here is one, and every file a lock run's commit writes (each package's lock,
+    `merge.REPAIRED`).  The loop counts nothing else but what `lean_inputs` names beside the keys: the code that runs the
+    lean-audit step (check's, `LEAN_AUDIT_STEP`, and the unread ratchet), the caps a lock run repairs, and a Lean source no
+    key holds."""
+    from research.merge import REPAIRED
+    from research.vqueue_slim import LEAN_AUDIT_STEP
+
+    audit, changed = _lean_keys()
+    files = sorted(tracked())
+    pkgs = audit.packages(files)
+    keyed = {f for p in pkgs for f in (*audit.inputs(p, files), *changed.closure_inputs(p, files))}
+    written = {*(f"{p}/{changed.LOCK}" for p in pkgs), *REPAIRED}
+    lean = _lean_inputs(files)
+    assert pkgs and written <= tracked() and not (out := sorted((keyed | written) - lean)), (
+        f"files a Lean key holds or a lock run writes that the queue's loop counts as no Lean input, so a change to one "
+        f"would take a verdict or carry records that never read it (`vqueue_slim.lean_inputs` must name them): {out}")
+    beside = {*LEAN_AUDIT_STEP, audit.UNREAD, audit.UNREAD_CAPS, audit.CAPS_TEST}
+    assert not (more := sorted(f for f in lean - keyed - beside if not f.endswith(".lean"))), (
+        f"Lean inputs of the queue's loop that no audit's key and no records key holds: a Lake package no audit reads "
+        f"(`tests/test_lean_packages.py` has every one audited), or a file `vqueue_slim.lean_inputs` should not name: {more}")
+
+
+def test_the_programs_check_s_lean_audit_step_runs_are_lean_inputs_of_the_queues_loop(tmp_path):
+    """A candidate that takes its base's verdict on lean-audit never runs the step, so a change to a program the step runs
+    that is no Lean input would land unrun and fail in the next candidate that audits, on that one's members.  The programs
+    are the ones `check.py` itself names: those of the step's command (`lean_steps`: its own `--lean-slot` entry around
+    `lean_audit.py`) and of the wrapper that entry runs an audit in (`LEAN_SLOT_WRAP`).  Each is a Lean input, and the ones
+    no key holds are `vqueue_slim.LEAN_AUDIT_STEP`, so a wrapper that moves to another file fails here until it is named."""
+    from research.vqueue_slim import LEAN_AUDIT_STEP
+
+    check = _module("gate_paths_check", ROOT / "tools" / "verity" / "check" / "check.py")
+    audit, _ = _lean_keys()
+    files = sorted(tracked())
+    step = next(argv for name, argv, _ in check.lean_steps(tmp_path) if name == "lean-audit")
+    words = [Path(w) for w in (*step, *check.LEAN_SLOT_WRAP)]
+    programs = {str(w.relative_to(ROOT)) for w in words if w.is_absolute() and w.is_relative_to(ROOT)} & tracked()
+    assert programs - set(audit.tool_files(files)) == set(LEAN_AUDIT_STEP), programs
+    assert programs <= _lean_inputs(files) and len(programs) > len(LEAN_AUDIT_STEP), programs
+
+
+@pytest.mark.slow
+def test_changing_every_file_that_is_no_lean_input_of_the_queues_loop_changes_no_lean_key():
+    """What the loop rests on when it calls a change no Lean input: the change moves no audit's key, so its base's verdict
+    on lean-audit is its own, and no records key, so the records a lock run regenerated on one tree are the other's.  On
+    this tree, with every tracked file that is no Lean input changed at once, and then with all of them deleted, each
+    package's audit key (`lean_audit.components`) and records key (`lean_changed.inputs_key`) is what it was, and the Lean
+    inputs of the tree without them are the tree's, so a hash over a tree's Lean inputs doesn't move either.  A change to
+    check's `common.py`, which is one, moves every records key, and one to a package's lock its audit key."""
+    from research.vqueue_slim import lean_inputs
+
+    audit, changed = _lean_keys()
+    files = sorted(tracked())
+    lean = _lean_inputs(files)
+    kept, outside, pkgs = sorted(lean), tracked() - lean, audit.packages(files)
+    here = functools.cache(changed.read_here)
+
+    def edited(names):
+        return lambda f: None if (b := here(f)) is None else b + b"\n" if f in names else b
+
+    def records(listed: list[str], read=here) -> dict[str, str]:
+        return {p: changed.inputs_key(p, listed, read) for p in pkgs}
+
+    def audits(listed: list[str], stand_in: dict[str, bytes] | None = None, of: list[str] = pkgs) -> dict[str, str]:
+        return {p: audit.key_of(audit.components(p, listed, audit.FLAGS, stand_in)) for p in of}
+
+    assert pkgs == audit.packages(kept) and len(outside) > len(kept)
+    assert set(lean_inputs(kept)) == set(lean_inputs(files))
+    was = records(files)
+    assert records(files, edited(outside)) == was and records(kept) == was
+    common = "tools/verity/check/common.py"
+    assert common in lean and not [p for p, k in records(files, edited({common})).items() if k == was[p]]
+    was = audits(files)
+    assert audits(files, dict.fromkeys(outside, b"changed\n")) == was and audits(kept) == was
+    lock = f"{pkgs[0]}/{changed.LOCK}"
+    assert lock in lean and audits(files, {lock: b"changed\n"}, pkgs[:1]) != {pkgs[0]: was[pkgs[0]]}
+
+
 def _path_tokens(argv: list[str]) -> list[str]:
     """The repository paths an argv names: tokens with a `/` that aren't flags, absolute paths or `$` expansions."""
     return [t for t in argv if "/" in t and not t.startswith(("-", "/", "$", "~")) and "://" not in t]
@@ -214,7 +316,7 @@ def _anchors():
 
 def path_constants(rel: str, text: str, tops: frozenset[str]) -> list[tuple[int, str, str]]:
     """(line, the path, how it's written) for each repository path a module-level assignment of ``rel`` names: a string
-    whose first segment is one of ``tops``, or a join anchored on `__file__` (`tools/verity/check/anchors.py` evaluates it)."""
+    whose first segment is one of ``tops``, or a join anchored on the file's place (`tools/verity/check/anchors.py` evaluates it)."""
     anchor = _anchors().anchor
     out, names = [], {}
     for node in ast.parse(text).body:

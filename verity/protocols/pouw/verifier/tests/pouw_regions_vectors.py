@@ -18,10 +18,10 @@ from pathlib import Path
 
 from verity.protocols.pouw.prover.circuit import pc4, pc8, rowk
 from verity.protocols.pouw.prover.circuit.anchors import TileAnchors, region_bytes
-from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c4 as F
 from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape
 
 OUT = Path(__file__).with_name("vectors") / "pouw_regions.json"
 ROWS, COLS = (7, 300), (2, 41)

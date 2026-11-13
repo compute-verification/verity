@@ -1,6 +1,6 @@
 {
  "model": "GLM-5.3 as served: vLLM eager, H200, TP8, block FP8, greedy",
- "source": "art:471350fa6bf26f5e2e149c4f084b195ba03fdf8018d02960b9ad6a5e4bf5a138",
+ "source": "art:4bb214110ad9bc7f64d35ee82e700930073e51d3b0d14f2c568935e818b8c391",
  "build": "art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35",
  "prompt_len": 256,
  "decode_steps": 31,
@@ -214,25 +214,44 @@
     "BatchedGemm_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 1916928,
    "decode": 0,
-   "out_bits": 16544,
-   "ands": 37568903,
-   "macs": 69632,
+   "out_bits": 1216,
+   "ands": 19413383,
+   "macs": 36864,
    "rows": [
     1024,
     128,
     73728,
     4,
     16,
-    2048,
     4,
     16,
-    2048
+    128,
+    4
    ],
    "k_log": 27,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=64,FIRST=false,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 15335424,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 2269440,
+   "macs": 4096,
+   "rows": [
+    128,
+    8192,
+    4,
+    256,
+    256
+   ],
+   "k_log": 24,
    "of": [
     "SparseMlaSplit_v1"
    ]
@@ -252,26 +271,6 @@
    "k_log": 25,
    "of": [
     "CublasSplitKGemm_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=64,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 619008,
-   "out_bits": 16544,
-   "ands": 36251588,
-   "macs": 69632,
-   "rows": [
-    1024,
-    128,
-    73728,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 27,
-   "of": [
-    "SparseMlaSplit_v1"
    ]
   },
   "RMSNormFusedCudaVector8_v1{N=6144,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},BLOCK=256}": {
@@ -348,6 +347,26 @@
     "Fp8GroupQuantUe8m0_v1"
    ]
   },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=64,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 619008,
+   "out_bits": 1184,
+   "ands": 19390404,
+   "macs": 36864,
+   "rows": [
+    1024,
+    128,
+    73728,
+    4,
+    16,
+    128
+   ],
+   "k_log": 27,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
   "AllReduceMultimem_v1{WORLD=8,SIZE=96,TREES=[[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7]],FTZ=false}": {
    "family": "AllReduceMultimem_v1",
    "prefill": 20578304,
@@ -362,6 +381,23 @@
    "k_log": 22,
    "of": [
     "AllReduceMultimem_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=64,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 4952064,
+   "out_bits": 2048,
+   "ands": 2107648,
+   "macs": 4096,
+   "rows": [
+    128,
+    8192,
+    256
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
    ]
   },
   "DsaMqaLogits_v3{N=1,H=32,D=128}": {
@@ -485,21 +521,21 @@
     "SparseMlaSplit_v1"
    ]
   },
-  "RmsNormMnnvl_v1{N=6144,SHOT=1,CLUSTER=8,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},FMA=true}": {
-   "family": "RmsNormMnnvl_v1",
-   "prefill": 0,
-   "decode": 38688,
-   "out_bits": 98304,
-   "ands": 48307434,
+  "SparseMlaHeadEnd_v1{DV=64,INV={\"fn\":\"Fa3InvSum_v1\"}}": {
+   "family": "SparseMlaHeadEnd_v1",
+   "prefill": 9864192,
+   "decode": 0,
+   "out_bits": 1024,
+   "ands": 169842,
    "macs": 0,
    "rows": [
-    12288,
-    12288,
-    12288
+    16,
+    256,
+    128
    ],
-   "k_log": 27,
+   "k_log": 21,
    "of": [
-    "AllReduceRmsNormMnnvl_v1"
+    "SparseMlaSplit_v1"
    ]
   },
   "Fp8GroupQuantUe8m0_v1{K=256,G=128}": {
@@ -520,23 +556,6 @@
     "Fp8GroupQuantUe8m0_v1"
    ]
   },
-  "SparseMlaHeadEnd_v1{DV=512,INV={\"fn\":\"Fa3InvSum_v1\"}}": {
-   "family": "SparseMlaHeadEnd_v1",
-   "prefill": 1233024,
-   "decode": 0,
-   "out_bits": 8192,
-   "ands": 1336882,
-   "macs": 0,
-   "rows": [
-    16,
-    2048,
-    1024
-   ],
-   "k_log": 23,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
   "DsaIndexerQ_v1{H=32,D=128,ROPE=64}": {
    "family": "DsaIndexerQ_v1",
    "prefill": 43008,
@@ -554,6 +573,43 @@
    "k_log": 26,
    "of": [
     "DsaIndexerQ_v1"
+   ]
+  },
+  "RmsNormMnnvlApply_v1{G=192,SHOT=1}": {
+   "family": "RmsNormMnnvlApply_v1",
+   "prefill": 0,
+   "decode": 1238016,
+   "out_bits": 3072,
+   "ands": 1148544,
+   "macs": 0,
+   "rows": [
+    384,
+    384,
+    4,
+    384
+   ],
+   "k_log": 22,
+   "of": [
+    "AllReduceRmsNormMnnvl_v1"
+   ]
+  },
+  "SparseMlaSplitEnd_v1{DV=64,INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaSplitEnd_v1",
+   "prefill": 0,
+   "decode": 6190080,
+   "out_bits": 2080,
+   "ands": 173297,
+   "macs": 0,
+   "rows": [
+    4,
+    16,
+    256,
+    256,
+    4
+   ],
+   "k_log": 22,
+   "of": [
+    "SparseMlaSplit_v1"
    ]
   },
   "DsaRMSNorm_v1{N=512,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}": {
@@ -605,306 +661,6 @@
    "k_log": 26,
    "of": [
     "FlashInferFp8Linear_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 35948590,
-   "macs": 69056,
-   "rows": [
-    1024,
-    128,
-    72576,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 27,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=62,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 35645592,
-   "macs": 68480,
-   "rows": [
-    1024,
-    128,
-    71424,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 27,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=61,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 35342594,
-   "macs": 67904,
-   "rows": [
-    1024,
-    128,
-    70272,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 27,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=60,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 35039596,
-   "macs": 67328,
-   "rows": [
-    1024,
-    128,
-    69120,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 27,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=59,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 34736598,
-   "macs": 66752,
-   "rows": [
-    1024,
-    128,
-    67968,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 27,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=58,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 34433600,
-   "macs": 66176,
-   "rows": [
-    1024,
-    128,
-    66816,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 27,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=57,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 34130602,
-   "macs": 65600,
-   "rows": [
-    1024,
-    128,
-    65664,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 27,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=56,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 33827604,
-   "macs": 65024,
-   "rows": [
-    1024,
-    128,
-    64512,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 27,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=55,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 33524606,
-   "macs": 64448,
-   "rows": [
-    1024,
-    128,
-    63360,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 27,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=54,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 33221608,
-   "macs": 63872,
-   "rows": [
-    1024,
-    128,
-    62208,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 27,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=53,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 32918610,
-   "macs": 63296,
-   "rows": [
-    1024,
-    128,
-    61056,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 27,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=52,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 32615612,
-   "macs": 62720,
-   "rows": [
-    1024,
-    128,
-    59904,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 27,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=51,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 32312614,
-   "macs": 62144,
-   "rows": [
-    1024,
-    128,
-    58752,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 27,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=50,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 32009616,
-   "macs": 61568,
-   "rows": [
-    1024,
-    128,
-    57600,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 27,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=49,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 31706618,
-   "macs": 60992,
-   "rows": [
-    1024,
-    128,
-    56448,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 27,
-   "of": [
-    "SparseMlaSplit_v1"
    ]
   },
   "SiluMul_v2{I=256}": {
@@ -1059,640 +815,511 @@
     "EmbeddingShard_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=48,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "RmsNormMnnvlSumSq_v1{N=6144,SHOT=1,CLUSTER=8,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},FMA=true}": {
+   "family": "RmsNormMnnvlSumSq_v1",
+   "prefill": 0,
+   "decode": 38688,
+   "out_bits": 32,
+   "ands": 11554026,
+   "macs": 0,
+   "rows": [
+    12288,
+    4
+   ],
+   "k_log": 25,
+   "of": [
+    "AllReduceRmsNormMnnvl_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 19968,
    "decode": 0,
-   "out_bits": 16544,
-   "ands": 27188324,
-   "macs": 52224,
+   "out_bits": 1168,
+   "ands": 19087406,
+   "macs": 36288,
    "rows": [
     1024,
     128,
-    55296,
+    72576,
     4,
     16,
-    2048
+    126
    ],
    "k_log": 27,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=47,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=62,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 19968,
    "decode": 0,
-   "out_bits": 16544,
-   "ands": 26885326,
-   "macs": 51648,
+   "out_bits": 1152,
+   "ands": 18784408,
+   "macs": 35712,
    "rows": [
     1024,
     128,
-    54144,
+    71424,
     4,
     16,
-    2048
+    124
    ],
    "k_log": 27,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=46,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=61,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 19968,
    "decode": 0,
-   "out_bits": 16544,
-   "ands": 26582328,
-   "macs": 51072,
+   "out_bits": 1136,
+   "ands": 18481410,
+   "macs": 35136,
    "rows": [
     1024,
     128,
-    52992,
+    70272,
     4,
     16,
-    2048
+    122
    ],
    "k_log": 27,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=45,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=60,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 19968,
    "decode": 0,
-   "out_bits": 16544,
-   "ands": 26279330,
-   "macs": 50496,
+   "out_bits": 1120,
+   "ands": 18178412,
+   "macs": 34560,
    "rows": [
     1024,
     128,
-    51840,
+    69120,
     4,
     16,
-    2048
+    120
    ],
    "k_log": 27,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=44,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=59,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 19968,
    "decode": 0,
-   "out_bits": 16544,
-   "ands": 25976332,
-   "macs": 49920,
+   "out_bits": 1104,
+   "ands": 17875414,
+   "macs": 33984,
    "rows": [
     1024,
     128,
-    50688,
+    67968,
     4,
     16,
-    2048
+    118
    ],
    "k_log": 27,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=43,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=58,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 19968,
    "decode": 0,
-   "out_bits": 16544,
-   "ands": 25673334,
-   "macs": 49344,
+   "out_bits": 1088,
+   "ands": 17572416,
+   "macs": 33408,
    "rows": [
     1024,
     128,
-    49536,
+    66816,
     4,
     16,
-    2048
+    116
    ],
    "k_log": 27,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=42,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=57,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 19968,
    "decode": 0,
-   "out_bits": 16544,
-   "ands": 25370336,
-   "macs": 48768,
+   "out_bits": 1072,
+   "ands": 17269418,
+   "macs": 32832,
    "rows": [
     1024,
     128,
-    48384,
+    65664,
     4,
     16,
-    2048
+    114
    ],
    "k_log": 27,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=41,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=56,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 19968,
    "decode": 0,
-   "out_bits": 16544,
-   "ands": 25067338,
-   "macs": 48192,
+   "out_bits": 1056,
+   "ands": 16966420,
+   "macs": 32256,
    "rows": [
     1024,
     128,
-    47232,
+    64512,
     4,
     16,
-    2048
+    112
    ],
    "k_log": 27,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=40,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "SparseMlaHeadValues_v1{NVIS=49,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 2107648,
+   "macs": 4096,
+   "rows": [
+    98,
+    6272,
+    256
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=50,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 2107648,
+   "macs": 4096,
+   "rows": [
+    100,
+    6400,
+    256
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=51,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 2107648,
+   "macs": 4096,
+   "rows": [
+    102,
+    6528,
+    256
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=52,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 2107648,
+   "macs": 4096,
+   "rows": [
+    104,
+    6656,
+    256
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=53,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 2107648,
+   "macs": 4096,
+   "rows": [
+    106,
+    6784,
+    256
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=54,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 2107648,
+   "macs": 4096,
+   "rows": [
+    108,
+    6912,
+    256
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=55,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 2107648,
+   "macs": 4096,
+   "rows": [
+    110,
+    7040,
+    256
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=56,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 2107648,
+   "macs": 4096,
+   "rows": [
+    112,
+    7168,
+    256
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=57,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 2107648,
+   "macs": 4096,
+   "rows": [
+    114,
+    7296,
+    256
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=58,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 2107648,
+   "macs": 4096,
+   "rows": [
+    116,
+    7424,
+    256
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=59,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 2107648,
+   "macs": 4096,
+   "rows": [
+    118,
+    7552,
+    256
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=60,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 2107648,
+   "macs": 4096,
+   "rows": [
+    120,
+    7680,
+    256
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=61,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 2107648,
+   "macs": 4096,
+   "rows": [
+    122,
+    7808,
+    256
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=62,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 2107648,
+   "macs": 4096,
+   "rows": [
+    124,
+    7936,
+    256
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 2107648,
+   "macs": 4096,
+   "rows": [
+    126,
+    8064,
+    256
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=55,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 19968,
    "decode": 0,
-   "out_bits": 16544,
-   "ands": 24764340,
-   "macs": 47616,
+   "out_bits": 1040,
+   "ands": 16663422,
+   "macs": 31680,
    "rows": [
     1024,
     128,
-    46080,
+    63360,
     4,
     16,
-    2048
+    110
    ],
    "k_log": 27,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=39,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=54,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 19968,
    "decode": 0,
-   "out_bits": 16544,
-   "ands": 24461342,
-   "macs": 47040,
+   "out_bits": 1024,
+   "ands": 16360424,
+   "macs": 31104,
    "rows": [
     1024,
     128,
-    44928,
+    62208,
     4,
     16,
-    2048
+    108
    ],
    "k_log": 27,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=38,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=53,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 19968,
    "decode": 0,
-   "out_bits": 16544,
-   "ands": 24158344,
-   "macs": 46464,
+   "out_bits": 1008,
+   "ands": 16057426,
+   "macs": 30528,
    "rows": [
     1024,
     128,
-    43776,
+    61056,
     4,
     16,
-    2048
+    106
    ],
-   "k_log": 27,
+   "k_log": 26,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=37,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=52,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 19968,
    "decode": 0,
-   "out_bits": 16544,
-   "ands": 23855346,
-   "macs": 45888,
+   "out_bits": 992,
+   "ands": 15754428,
+   "macs": 29952,
    "rows": [
     1024,
     128,
-    42624,
+    59904,
     4,
     16,
-    2048
-   ],
-   "k_log": 27,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=36,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 23552348,
-   "macs": 45312,
-   "rows": [
-    1024,
-    128,
-    41472,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 26,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=35,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 23249350,
-   "macs": 44736,
-   "rows": [
-    1024,
-    128,
-    40320,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 26,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=34,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 22946352,
-   "macs": 44160,
-   "rows": [
-    1024,
-    128,
-    39168,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 26,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=33,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 22643354,
-   "macs": 43584,
-   "rows": [
-    1024,
-    128,
-    38016,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 26,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=31,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 17822062,
-   "macs": 34240,
-   "rows": [
-    1024,
-    128,
-    35712,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 26,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=30,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 17519064,
-   "macs": 33664,
-   "rows": [
-    1024,
-    128,
-    34560,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 26,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=29,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 17216066,
-   "macs": 33088,
-   "rows": [
-    1024,
-    128,
-    33408,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 26,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=28,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 16913068,
-   "macs": 32512,
-   "rows": [
-    1024,
-    128,
-    32256,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 26,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=27,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 16610070,
-   "macs": 31936,
-   "rows": [
-    1024,
-    128,
-    31104,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 26,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=26,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 16307072,
-   "macs": 31360,
-   "rows": [
-    1024,
-    128,
-    29952,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 26,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=25,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 16004074,
-   "macs": 30784,
-   "rows": [
-    1024,
-    128,
-    28800,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 26,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=24,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 15701076,
-   "macs": 30208,
-   "rows": [
-    1024,
-    128,
-    27648,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 26,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=23,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 15398078,
-   "macs": 29632,
-   "rows": [
-    1024,
-    128,
-    26496,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 26,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=22,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 15095080,
-   "macs": 29056,
-   "rows": [
-    1024,
-    128,
-    25344,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 26,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=21,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 14792082,
-   "macs": 28480,
-   "rows": [
-    1024,
-    128,
-    24192,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 26,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=32,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 0,
-   "out_bits": 16544,
-   "ands": 18125060,
-   "macs": 34816,
-   "rows": [
-    1024,
-    128,
-    36864,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 26,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=20,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 14489084,
-   "macs": 27904,
-   "rows": [
-    1024,
-    128,
-    23040,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 26,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=19,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 14186086,
-   "macs": 27328,
-   "rows": [
-    1024,
-    128,
-    21888,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 26,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=18,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 13883088,
-   "macs": 26752,
-   "rows": [
-    1024,
-    128,
-    20736,
-    4,
-    16,
-    2048
-   ],
-   "k_log": 26,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=17,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 19968,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 13580090,
-   "macs": 26176,
-   "rows": [
-    1024,
-    128,
-    19584,
-    4,
-    16,
-    2048
+    104
    ],
    "k_log": 26,
    "of": [
@@ -1716,6 +1343,46 @@
     "RoPEHeadGptJ_v2"
    ]
   },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=51,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 0,
+   "out_bits": 976,
+   "ands": 15451430,
+   "macs": 29376,
+   "rows": [
+    1024,
+    128,
+    58752,
+    4,
+    16,
+    102
+   ],
+   "k_log": 26,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=50,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 0,
+   "out_bits": 960,
+   "ands": 15148432,
+   "macs": 28800,
+   "rows": [
+    1024,
+    128,
+    57600,
+    4,
+    16,
+    100
+   ],
+   "k_log": 26,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
   "FlashInferFp8Quant1x128_v1{K=2048}": {
    "family": "FlashInferFp8Quant1x128_v1",
    "prefill": 0,
@@ -1733,352 +1400,1204 @@
     "FlashInferFp8Linear_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=16,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=49,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 19968,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 9061796,
-   "macs": 17408,
+   "decode": 0,
+   "out_bits": 944,
+   "ands": 14845434,
+   "macs": 28224,
    "rows": [
     1024,
     128,
-    18432,
+    56448,
     4,
     16,
-    2048
+    98
    ],
    "k_log": 26,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=15,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=48,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 0,
+   "out_bits": 928,
+   "ands": 14542436,
+   "macs": 27648,
+   "rows": [
+    1024,
+    128,
+    55296,
+    4,
+    16,
+    96
+   ],
+   "k_log": 26,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=47,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 0,
+   "out_bits": 912,
+   "ands": 14239438,
+   "macs": 27072,
+   "rows": [
+    1024,
+    128,
+    54144,
+    4,
+    16,
+    94
+   ],
+   "k_log": 26,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=46,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 0,
+   "out_bits": 896,
+   "ands": 13936440,
+   "macs": 26496,
+   "rows": [
+    1024,
+    128,
+    52992,
+    4,
+    16,
+    92
+   ],
+   "k_log": 26,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=45,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 0,
+   "out_bits": 880,
+   "ands": 13633442,
+   "macs": 25920,
+   "rows": [
+    1024,
+    128,
+    51840,
+    4,
+    16,
+    90
+   ],
+   "k_log": 26,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=44,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 0,
+   "out_bits": 864,
+   "ands": 13330444,
+   "macs": 25344,
+   "rows": [
+    1024,
+    128,
+    50688,
+    4,
+    16,
+    88
+   ],
+   "k_log": 26,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=43,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 0,
+   "out_bits": 848,
+   "ands": 13027446,
+   "macs": 24768,
+   "rows": [
+    1024,
+    128,
+    49536,
+    4,
+    16,
+    86
+   ],
+   "k_log": 26,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=42,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 0,
+   "out_bits": 832,
+   "ands": 12724448,
+   "macs": 24192,
+   "rows": [
+    1024,
+    128,
+    48384,
+    4,
+    16,
+    84
+   ],
+   "k_log": 26,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=33,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 1580736,
+   "macs": 3072,
+   "rows": [
+    66,
+    4224,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=34,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 1580736,
+   "macs": 3072,
+   "rows": [
+    68,
+    4352,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=35,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 1580736,
+   "macs": 3072,
+   "rows": [
+    70,
+    4480,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=36,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 1580736,
+   "macs": 3072,
+   "rows": [
+    72,
+    4608,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=37,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 1580736,
+   "macs": 3072,
+   "rows": [
+    74,
+    4736,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=38,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 1580736,
+   "macs": 3072,
+   "rows": [
+    76,
+    4864,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=39,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 1580736,
+   "macs": 3072,
+   "rows": [
+    78,
+    4992,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=40,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 1580736,
+   "macs": 3072,
+   "rows": [
+    80,
+    5120,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=41,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 1580736,
+   "macs": 3072,
+   "rows": [
+    82,
+    5248,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=42,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 1580736,
+   "macs": 3072,
+   "rows": [
+    84,
+    5376,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=43,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 1580736,
+   "macs": 3072,
+   "rows": [
+    86,
+    5504,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=44,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 1580736,
+   "macs": 3072,
+   "rows": [
+    88,
+    5632,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=45,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 1580736,
+   "macs": 3072,
+   "rows": [
+    90,
+    5760,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=46,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 1580736,
+   "macs": 3072,
+   "rows": [
+    92,
+    5888,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=47,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 1580736,
+   "macs": 3072,
+   "rows": [
+    94,
+    6016,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=48,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 1580736,
+   "macs": 3072,
+   "rows": [
+    96,
+    6144,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=41,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 0,
+   "out_bits": 816,
+   "ands": 12421450,
+   "macs": 23616,
+   "rows": [
+    1024,
+    128,
+    47232,
+    4,
+    16,
+    82
+   ],
+   "k_log": 26,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=40,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 0,
+   "out_bits": 800,
+   "ands": 12118452,
+   "macs": 23040,
+   "rows": [
+    1024,
+    128,
+    46080,
+    4,
+    16,
+    80
+   ],
+   "k_log": 26,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=39,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 0,
+   "out_bits": 784,
+   "ands": 11815454,
+   "macs": 22464,
+   "rows": [
+    1024,
+    128,
+    44928,
+    4,
+    16,
+    78
+   ],
+   "k_log": 26,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=31,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 19968,
    "decode": 4992,
-   "out_bits": 16544,
-   "ands": 8758798,
-   "macs": 16832,
+   "out_bits": 656,
+   "ands": 9391470,
+   "macs": 17856,
    "rows": [
     1024,
     128,
-    17280,
+    35712,
     4,
     16,
-    2048
+    62
    ],
-   "k_log": 25,
+   "k_log": 26,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=14,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=38,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 0,
+   "out_bits": 768,
+   "ands": 11512456,
+   "macs": 21888,
+   "rows": [
+    1024,
+    128,
+    43776,
+    4,
+    16,
+    76
+   ],
+   "k_log": 26,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=30,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 19968,
    "decode": 4992,
-   "out_bits": 16544,
-   "ands": 8455800,
-   "macs": 16256,
+   "out_bits": 640,
+   "ands": 9088472,
+   "macs": 17280,
    "rows": [
     1024,
     128,
-    16128,
+    34560,
     4,
     16,
-    2048
+    60
    ],
-   "k_log": 25,
+   "k_log": 26,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=13,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=37,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 0,
+   "out_bits": 752,
+   "ands": 11209458,
+   "macs": 21312,
+   "rows": [
+    1024,
+    128,
+    42624,
+    4,
+    16,
+    74
+   ],
+   "k_log": 26,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=29,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 19968,
    "decode": 4992,
-   "out_bits": 16544,
-   "ands": 8152802,
-   "macs": 15680,
+   "out_bits": 624,
+   "ands": 8785474,
+   "macs": 16704,
    "rows": [
     1024,
     128,
-    14976,
+    33408,
     4,
     16,
-    2048
+    58
    ],
-   "k_log": 25,
+   "k_log": 26,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=12,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=36,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 0,
+   "out_bits": 736,
+   "ands": 10906460,
+   "macs": 20736,
+   "rows": [
+    1024,
+    128,
+    41472,
+    4,
+    16,
+    72
+   ],
+   "k_log": 26,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=35,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 0,
+   "out_bits": 720,
+   "ands": 10603462,
+   "macs": 20160,
+   "rows": [
+    1024,
+    128,
+    40320,
+    4,
+    16,
+    70
+   ],
+   "k_log": 26,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=28,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 19968,
    "decode": 4992,
-   "out_bits": 16544,
-   "ands": 7849804,
-   "macs": 15104,
+   "out_bits": 608,
+   "ands": 8482476,
+   "macs": 16128,
    "rows": [
     1024,
     128,
-    13824,
+    32256,
     4,
     16,
-    2048
+    56
    ],
-   "k_log": 25,
+   "k_log": 26,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=11,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "SparseMlaHeadValues_v1{NVIS=17,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 1053824,
+   "macs": 2048,
+   "rows": [
+    34,
+    2176,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=18,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 1053824,
+   "macs": 2048,
+   "rows": [
+    36,
+    2304,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=19,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 1053824,
+   "macs": 2048,
+   "rows": [
+    38,
+    2432,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=20,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 1053824,
+   "macs": 2048,
+   "rows": [
+    40,
+    2560,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=21,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 1053824,
+   "macs": 2048,
+   "rows": [
+    42,
+    2688,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=22,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 1053824,
+   "macs": 2048,
+   "rows": [
+    44,
+    2816,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=23,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 1053824,
+   "macs": 2048,
+   "rows": [
+    46,
+    2944,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=24,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 1053824,
+   "macs": 2048,
+   "rows": [
+    48,
+    3072,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=25,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 1053824,
+   "macs": 2048,
+   "rows": [
+    50,
+    3200,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=26,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 1053824,
+   "macs": 2048,
+   "rows": [
+    52,
+    3328,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=27,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 1053824,
+   "macs": 2048,
+   "rows": [
+    54,
+    3456,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=28,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 1053824,
+   "macs": 2048,
+   "rows": [
+    56,
+    3584,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=29,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 1053824,
+   "macs": 2048,
+   "rows": [
+    58,
+    3712,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=30,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 1053824,
+   "macs": 2048,
+   "rows": [
+    60,
+    3840,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=31,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 1053824,
+   "macs": 2048,
+   "rows": [
+    62,
+    3968,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=34,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 0,
+   "out_bits": 704,
+   "ands": 10300464,
+   "macs": 19584,
+   "rows": [
+    1024,
+    128,
+    39168,
+    4,
+    16,
+    68
+   ],
+   "k_log": 26,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=27,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 19968,
    "decode": 4992,
-   "out_bits": 16544,
-   "ands": 7546806,
-   "macs": 14528,
+   "out_bits": 592,
+   "ands": 8179478,
+   "macs": 15552,
    "rows": [
     1024,
     128,
-    12672,
+    31104,
     4,
     16,
-    2048
+    54
    ],
-   "k_log": 25,
+   "k_log": 26,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=10,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=33,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 0,
+   "out_bits": 688,
+   "ands": 9997466,
+   "macs": 19008,
+   "rows": [
+    1024,
+    128,
+    38016,
+    4,
+    16,
+    66
+   ],
+   "k_log": 26,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=26,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
    "prefill": 19968,
    "decode": 4992,
-   "out_bits": 16544,
-   "ands": 7243808,
-   "macs": 13952,
+   "out_bits": 576,
+   "ands": 7876480,
+   "macs": 14976,
    "rows": [
     1024,
     128,
-    11520,
+    29952,
     4,
     16,
-    2048
+    52
    ],
    "k_log": 25,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=9,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 14976,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 6940810,
-   "macs": 13376,
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=32,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 0,
+   "out_bits": 672,
+   "ands": 9694468,
+   "macs": 18432,
    "rows": [
     1024,
     128,
-    10368,
+    36864,
     4,
     16,
-    2048
+    64
+   ],
+   "k_log": 26,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=25,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 4992,
+   "out_bits": 560,
+   "ands": 7573482,
+   "macs": 14400,
+   "rows": [
+    1024,
+    128,
+    28800,
+    4,
+    16,
+    50
    ],
    "k_log": 25,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaSplitEndCols_v1{DV=512,G=64,C=0,INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaSplitEndCols_v1",
-   "prefill": 0,
-   "decode": 773760,
-   "out_bits": 2080,
-   "ands": 173297,
-   "macs": 0,
-   "rows": [
-    4,
-    16,
-    2048,
-    256,
-    4
-   ],
-   "k_log": 22,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaSplitEndCols_v1{DV=512,G=64,C=1,INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaSplitEndCols_v1",
-   "prefill": 0,
-   "decode": 773760,
-   "out_bits": 2080,
-   "ands": 173297,
-   "macs": 0,
-   "rows": [
-    4,
-    16,
-    2048,
-    256,
-    4
-   ],
-   "k_log": 22,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaSplitEndCols_v1{DV=512,G=64,C=2,INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaSplitEndCols_v1",
-   "prefill": 0,
-   "decode": 773760,
-   "out_bits": 2080,
-   "ands": 173297,
-   "macs": 0,
-   "rows": [
-    4,
-    16,
-    2048,
-    256,
-    4
-   ],
-   "k_log": 22,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaSplitEndCols_v1{DV=512,G=64,C=3,INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaSplitEndCols_v1",
-   "prefill": 0,
-   "decode": 773760,
-   "out_bits": 2080,
-   "ands": 173297,
-   "macs": 0,
-   "rows": [
-    4,
-    16,
-    2048,
-    256,
-    4
-   ],
-   "k_log": 22,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaSplitEndCols_v1{DV=512,G=64,C=4,INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaSplitEndCols_v1",
-   "prefill": 0,
-   "decode": 773760,
-   "out_bits": 2080,
-   "ands": 173297,
-   "macs": 0,
-   "rows": [
-    4,
-    16,
-    2048,
-    256,
-    4
-   ],
-   "k_log": 22,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaSplitEndCols_v1{DV=512,G=64,C=5,INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaSplitEndCols_v1",
-   "prefill": 0,
-   "decode": 773760,
-   "out_bits": 2080,
-   "ands": 173297,
-   "macs": 0,
-   "rows": [
-    4,
-    16,
-    2048,
-    256,
-    4
-   ],
-   "k_log": 22,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaSplitEndCols_v1{DV=512,G=64,C=6,INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaSplitEndCols_v1",
-   "prefill": 0,
-   "decode": 773760,
-   "out_bits": 2080,
-   "ands": 173297,
-   "macs": 0,
-   "rows": [
-    4,
-    16,
-    2048,
-    256,
-    4
-   ],
-   "k_log": 22,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaSplitEndCols_v1{DV=512,G=64,C=7,INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaSplitEndCols_v1",
-   "prefill": 0,
-   "decode": 773760,
-   "out_bits": 2080,
-   "ands": 173297,
-   "macs": 0,
-   "rows": [
-    4,
-    16,
-    2048,
-    256,
-    4
-   ],
-   "k_log": 22,
-   "of": [
-    "SparseMlaSplit_v1"
-   ]
-  },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=8,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 14976,
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=24,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
    "decode": 4992,
-   "out_bits": 16544,
-   "ands": 6637812,
-   "macs": 12800,
+   "out_bits": 544,
+   "ands": 7270484,
+   "macs": 13824,
    "rows": [
     1024,
     128,
-    9216,
+    27648,
     4,
     16,
-    2048
+    48
    ],
    "k_log": 25,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=7,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 14976,
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=23,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
    "decode": 4992,
-   "out_bits": 16544,
-   "ands": 6334814,
-   "macs": 12224,
+   "out_bits": 528,
+   "ands": 6967486,
+   "macs": 13248,
    "rows": [
     1024,
     128,
-    8064,
+    26496,
     4,
     16,
-    2048
+    46
+   ],
+   "k_log": 25,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=32,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 0,
+   "out_bits": 2048,
+   "ands": 1053824,
+   "macs": 2048,
+   "rows": [
+    64,
+    4096,
+    256
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=22,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 4992,
+   "out_bits": 512,
+   "ands": 6664488,
+   "macs": 12672,
+   "rows": [
+    1024,
+    128,
+    25344,
+    4,
+    16,
+    44
+   ],
+   "k_log": 25,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=21,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 4992,
+   "out_bits": 496,
+   "ands": 6361490,
+   "macs": 12096,
+   "rows": [
+    1024,
+    128,
+    24192,
+    4,
+    16,
+    42
+   ],
+   "k_log": 25,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=20,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 4992,
+   "out_bits": 480,
+   "ands": 6058492,
+   "macs": 11520,
+   "rows": [
+    1024,
+    128,
+    23040,
+    4,
+    16,
+    40
+   ],
+   "k_log": 25,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=19,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 4992,
+   "out_bits": 464,
+   "ands": 5755494,
+   "macs": 10944,
+   "rows": [
+    1024,
+    128,
+    21888,
+    4,
+    16,
+    38
+   ],
+   "k_log": 25,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=18,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 4992,
+   "out_bits": 448,
+   "ands": 5452496,
+   "macs": 10368,
+   "rows": [
+    1024,
+    128,
+    20736,
+    4,
+    16,
+    36
+   ],
+   "k_log": 25,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=17,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 4992,
+   "out_bits": 432,
+   "ands": 5149498,
+   "macs": 9792,
+   "rows": [
+    1024,
+    128,
+    19584,
+    4,
+    16,
+    34
    ],
    "k_log": 25,
    "of": [
@@ -2105,20 +2624,20 @@
     "DsaIndexerKRow_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=6,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 14976,
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=16,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
    "decode": 4992,
-   "out_bits": 16544,
-   "ands": 6032760,
-   "macs": 11648,
+   "out_bits": 416,
+   "ands": 4846500,
+   "macs": 9216,
    "rows": [
     1024,
     128,
-    6912,
+    18432,
     4,
     16,
-    2048
+    32
    ],
    "k_log": 25,
    "of": [
@@ -2142,100 +2661,452 @@
     "RMSNormCudaVector8_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=5,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 14976,
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=15,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
    "decode": 4992,
-   "out_bits": 16544,
-   "ands": 5729762,
-   "macs": 11072,
+   "out_bits": 400,
+   "ands": 4543502,
+   "macs": 8640,
    "rows": [
     1024,
     128,
-    5760,
+    17280,
     4,
     16,
-    2048
+    30
    ],
    "k_log": 25,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=4,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 14976,
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=14,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
    "decode": 4992,
-   "out_bits": 16544,
-   "ands": 5427708,
-   "macs": 10496,
+   "out_bits": 384,
+   "ands": 4240504,
+   "macs": 8064,
    "rows": [
     1024,
     128,
-    4608,
+    16128,
     4,
     16,
-    2048
+    28
+   ],
+   "k_log": 25,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=10,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 526912,
+   "macs": 1024,
+   "rows": [
+    20,
+    1280,
+    256
+   ],
+   "k_log": 22,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=11,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 526912,
+   "macs": 1024,
+   "rows": [
+    22,
+    1408,
+    256
+   ],
+   "k_log": 22,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=12,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 526912,
+   "macs": 1024,
+   "rows": [
+    24,
+    1536,
+    256
+   ],
+   "k_log": 22,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=13,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 526912,
+   "macs": 1024,
+   "rows": [
+    26,
+    1664,
+    256
+   ],
+   "k_log": 22,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=14,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 526912,
+   "macs": 1024,
+   "rows": [
+    28,
+    1792,
+    256
+   ],
+   "k_log": 22,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=15,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 526912,
+   "macs": 1024,
+   "rows": [
+    30,
+    1920,
+    256
+   ],
+   "k_log": 22,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=16,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 159744,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 526912,
+   "macs": 1024,
+   "rows": [
+    32,
+    2048,
+    256
+   ],
+   "k_log": 22,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=13,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 4992,
+   "out_bits": 368,
+   "ands": 3937506,
+   "macs": 7488,
+   "rows": [
+    1024,
+    128,
+    14976,
+    4,
+    16,
+    26
+   ],
+   "k_log": 25,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=12,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 4992,
+   "out_bits": 352,
+   "ands": 3634508,
+   "macs": 6912,
+   "rows": [
+    1024,
+    128,
+    13824,
+    4,
+    16,
+    24
    ],
    "k_log": 24,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=3,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 14976,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 5124710,
-   "macs": 9920,
+  "SparseMlaHeadValues_v1{NVIS=1,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 119808,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 526912,
+   "macs": 1024,
    "rows": [
-    1024,
+    2,
     128,
-    3456,
-    4,
-    16,
-    2048
+    256
    ],
-   "k_log": 24,
+   "k_log": 22,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=2,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 14976,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 4822656,
-   "macs": 9344,
+  "SparseMlaHeadValues_v1{NVIS=2,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 119808,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 526912,
+   "macs": 1024,
    "rows": [
-    1024,
-    128,
-    2304,
     4,
-    16,
-    2048
+    256,
+    256
    ],
-   "k_log": 24,
+   "k_log": 22,
    "of": [
     "SparseMlaSplit_v1"
    ]
   },
-  "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=1,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
-   "family": "SparseMlaHeadBlock_v1",
-   "prefill": 14976,
-   "decode": 4992,
-   "out_bits": 16544,
-   "ands": 4519658,
-   "macs": 8768,
+  "SparseMlaHeadValues_v1{NVIS=3,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 119808,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 526912,
+   "macs": 1024,
    "rows": [
+    6,
+    384,
+    256
+   ],
+   "k_log": 22,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=4,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 119808,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 526912,
+   "macs": 1024,
+   "rows": [
+    8,
+    512,
+    256
+   ],
+   "k_log": 22,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=5,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 119808,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 526912,
+   "macs": 1024,
+   "rows": [
+    10,
+    640,
+    256
+   ],
+   "k_log": 22,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=6,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 119808,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 526912,
+   "macs": 1024,
+   "rows": [
+    12,
+    768,
+    256
+   ],
+   "k_log": 22,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=7,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 119808,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 526912,
+   "macs": 1024,
+   "rows": [
+    14,
+    896,
+    256
+   ],
+   "k_log": 22,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=8,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 119808,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 526912,
+   "macs": 1024,
+   "rows": [
+    16,
     1024,
-    128,
+    256
+   ],
+   "k_log": 22,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadValues_v1{NVIS=9,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},G=64}": {
+   "family": "SparseMlaHeadValues_v1",
+   "prefill": 119808,
+   "decode": 39936,
+   "out_bits": 2048,
+   "ands": 526912,
+   "macs": 1024,
+   "rows": [
+    18,
     1152,
+    256
+   ],
+   "k_log": 22,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=11,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 4992,
+   "out_bits": 336,
+   "ands": 3331510,
+   "macs": 6336,
+   "rows": [
+    1024,
+    128,
+    12672,
     4,
     16,
-    2048
+    22
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=10,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 19968,
+   "decode": 4992,
+   "out_bits": 320,
+   "ands": 3028512,
+   "macs": 5760,
+   "rows": [
+    1024,
+    128,
+    11520,
+    4,
+    16,
+    20
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=9,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 14976,
+   "decode": 4992,
+   "out_bits": 304,
+   "ands": 2725514,
+   "macs": 5184,
+   "rows": [
+    1024,
+    128,
+    10368,
+    4,
+    16,
+    18
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=8,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 14976,
+   "decode": 4992,
+   "out_bits": 288,
+   "ands": 2422516,
+   "macs": 4608,
+   "rows": [
+    1024,
+    128,
+    9216,
+    4,
+    16,
+    16
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=7,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 14976,
+   "decode": 4992,
+   "out_bits": 272,
+   "ands": 2119518,
+   "macs": 4032,
+   "rows": [
+    1024,
+    128,
+    8064,
+    4,
+    16,
+    14
    ],
    "k_log": 24,
    "of": [
@@ -2331,6 +3202,26 @@
     "SparseMlaSplit_v1"
    ]
   },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=6,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 14976,
+   "decode": 4992,
+   "out_bits": 256,
+   "ands": 1817464,
+   "macs": 3456,
+   "rows": [
+    1024,
+    128,
+    6912,
+    4,
+    16,
+    12
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
   "SparseMlaSplit_v1{T=5,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
    "family": "SparseMlaSplit_v1",
    "prefill": 624,
@@ -2403,6 +3294,26 @@
     "SparseMlaSplit_v1"
    ]
   },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=5,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 14976,
+   "decode": 4992,
+   "out_bits": 240,
+   "ands": 1514466,
+   "macs": 2880,
+   "rows": [
+    1024,
+    128,
+    5760,
+    4,
+    16,
+    10
+   ],
+   "k_log": 24,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
   "SparseMlaSplit_v1{T=1,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
    "family": "SparseMlaSplit_v1",
    "prefill": 624,
@@ -2417,6 +3328,46 @@
     8192
    ],
    "k_log": 27,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=4,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 14976,
+   "decode": 4992,
+   "out_bits": 224,
+   "ands": 1212412,
+   "macs": 2304,
+   "rows": [
+    1024,
+    128,
+    4608,
+    4,
+    16,
+    8
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=3,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 14976,
+   "decode": 4992,
+   "out_bits": 208,
+   "ands": 909414,
+   "macs": 1728,
+   "rows": [
+    1024,
+    128,
+    3456,
+    4,
+    16,
+    6
+   ],
+   "k_log": 23,
    "of": [
     "SparseMlaSplit_v1"
    ]
@@ -2469,6 +3420,26 @@
    "k_log": 27,
    "of": [
     "RMSNormCudaVector8_v1"
+   ]
+  },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=2,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 14976,
+   "decode": 4992,
+   "out_bits": 192,
+   "ands": 607360,
+   "macs": 1152,
+   "rows": [
+    1024,
+    128,
+    2304,
+    4,
+    16,
+    4
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
    ]
   },
   "AllReduceMnnvl_v1{WORLD=8,N=96,SHOT=1}": {
@@ -3035,6 +4006,26 @@
     "DsaMqaLogits_v3"
    ]
   },
+  "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=1,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}": {
+   "family": "SparseMlaHeadScores_v1",
+   "prefill": 14976,
+   "decode": 4992,
+   "out_bits": 176,
+   "ands": 304362,
+   "macs": 576,
+   "rows": [
+    1024,
+    128,
+    1152,
+    4,
+    16,
+    2
+   ],
+   "k_log": 23,
+   "of": [
+    "SparseMlaSplit_v1"
+   ]
+  },
   "DsaMqaLogits_v3{N=32,H=32,D=128}": {
    "family": "DsaMqaLogits_v3",
    "prefill": 168,
@@ -3204,6 +4195,23 @@
    "k_log": 26,
    "of": [
     "DsaMqaLogits_v3"
+   ]
+  },
+  "GreedyChunk_v1{N=16384,FIRST=false}": {
+   "family": "GreedyChunk_v1",
+   "prefill": 64,
+   "decode": 1984,
+   "out_bits": 32,
+   "ands": 2080752,
+   "macs": 0,
+   "rows": [
+    32768,
+    2,
+    2
+   ],
+   "k_log": 25,
+   "of": [
+    "TokenSelect_v1"
    ]
   },
   "DsaMqaLogits_v3{N=23,H=32,D=128}": {
@@ -3622,6 +4630,23 @@
     "DsaMqaLogits_v3"
    ]
   },
+  "GreedyChunk_v1{N=16384,FIRST=true}": {
+   "family": "GreedyChunk_v1",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 32,
+   "ands": 2080641,
+   "macs": 0,
+   "rows": [
+    32768,
+    2,
+    2
+   ],
+   "k_log": 25,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
   "DsaMqaLogits_v3{N=2,H=32,D=128}": {
    "family": "DsaMqaLogits_v3",
    "prefill": 168,
@@ -3640,15 +4665,42 @@
    "of": [
     "DsaMqaLogits_v3"
    ]
-  }
- },
- "gaps": {
-  "TokenSelect_v1": {
-   "definitions": 1,
+  },
+  "GreedyCombine_v1{V=154880,N=16384}": {
+   "family": "GreedyCombine_v1",
    "prefill": 8,
    "decode": 248,
-   "ands": 6898930176,
-   "why": "its rows alone need a 2^28 block"
+   "out_bits": 32,
+   "ands": 944208,
+   "macs": 0,
+   "rows": [
+    14848,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2
+   ],
+   "k_log": 25,
+   "of": [
+    "TokenSelect_v1"
+   ]
   }
- }
+ },
+ "gaps": {}
 }

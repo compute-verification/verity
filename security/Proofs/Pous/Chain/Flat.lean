@@ -22247,7 +22247,6 @@ theorem seedAtCut_causal
       ⟨q, Finset.mem_filter.2 ⟨hmem, (Finset.mem_filter.1 hq).2⟩, rfl⟩)
 
 
-set_option maxHeartbeats 2000000 in
 /-- A realized seed has a causal program source by the first crossing. -/
 theorem realizedSeed_source_at_cut
     (hP : ∀ i, (R.P i).Bounded R.D R.Q)
@@ -23447,7 +23446,6 @@ theorem sourceCommitRound_le_of_causal
   have hmin := R.sourceCommitRound_min hP s π hcross a (x := x) (τ := τ) (by rw [← hdd]; exact hx)
   omega
 
-set_option maxHeartbeats 2000000 in
 /-- **`sourceRound ≤ chargeRound`, home-pair form.** The selected crediting show's round starts
 no later than the first fresh step of the seed's home pair in the truncated run. -/
 theorem v6_source_round_le_home_step
@@ -23863,7 +23861,6 @@ theorem commit_inv {π : Equiv.Perm (Bits (ℓ + (ℓ + c)))} {i : Fin B} {k : �
     rfl
 
 
-set_option maxHeartbeats 2000000 in
 /-- **Backing.** A transfer's partner is decided no earlier than the inverse step that transfers
 to it. -/
 theorem pinNext_step_le (hP : ∀ i, (R.P i).Bounded R.D R.Q)
@@ -24026,7 +24023,6 @@ namespace ChainReplay
 
 variable {B ℓ c : ℕ} (R : ChainReplay B ℓ c)
 
-set_option maxHeartbeats 2000000 in
 /-- A basis commit's program slot is readable exactly from its commit cut on, provided that cut
 is no later than the first crossing. -/
 theorem basis_positionReady_iff
@@ -24191,7 +24187,6 @@ theorem advThenLab_hist_length (π : Equiv.Perm (Bits (ℓ + (ℓ + c)))) {d : �
     List.length_map, List.length_take, min_eq_left]
   simpa [programSteps] using hd
 
-set_option maxHeartbeats 2000000 in
 /-- An adversary step before the cut is readable exactly from the end of its round. -/
 theorem stepReady_iff (hP : ∀ i, (R.P i).Bounded R.D R.Q)
     {cut τc : ℕ} {π : Equiv.Perm (Bits (ℓ + (ℓ + c)))}
@@ -25049,7 +25044,6 @@ theorem qEntry_ans_eq {π π' : Equiv.Perm (Bits (ℓ + (ℓ + c)))} {h : Histor
     ans (fun _ : Unit => π') (bandEnc d) = ans (fun _ : Unit => π) (bandEnc d) :=
   (hc' _ hd).symm
 
-set_option maxHeartbeats 1000000 in
 /-- **Reader determinacy.** Two oracles whose program-prefix histories agree through the start of
 round `τ`, and that are both consistent with `h`, read the same slot direction and values. -/
 theorem read_det (hP : ∀ i, (R.P i).Bounded R.D R.Q)
@@ -25545,7 +25539,6 @@ theorem read'_lab_pad (K : ChainKnow B) {u : Fin B} (hu : u ∈ (read' R.G K).la
   · exact Or.inr ⟨u, hu, rfl⟩
   · exact Or.inl hu
 
-set_option maxHeartbeats 4000000 in
 /-- **`valueSlot_round_le` for a held partner.** If an inverse step fixes the pair of a cell whose
 partner `b` is a realized seed, `b`'s selected show starts no later than that step: once the pair
 is revealed, its input atoms are credited in the next round, so `b` cannot be fresh later. -/
@@ -25848,7 +25841,6 @@ theorem slotFwd_of_tr {π : Equiv.Perm (Bits (ℓ + (ℓ + c)))} {o : Fin B × F
   simp only [slotFwd, hq]
   rcases te.2 with x | y <;> rfl
 
-set_option maxHeartbeats 2000000 in
 /-- **Direct charges** read the seed's crediting show. -/
 theorem sound_direct (a : {a // a ∈ R.realizedSeeds s π})
     (hf : R.pairForward (R.firstCrossing s π) π
@@ -26018,7 +26010,6 @@ theorem fixSlot_last {cut d : ℕ} (hcut : cut ≤ R.programSteps π) {X : Bits 
   · have h := List.mem_singleton.1 h
     exact (Sigma.mk.inj_iff.1 h).1
 
-set_option maxHeartbeats 4000000 in
 /-- **Transfers** read the answer of the chain's last inverse step. -/
 theorem sound_transfer (a : {a // a ∈ R.realizedSeeds s π})
     (hf : R.pairForward (R.firstCrossing s π) π
@@ -26125,7 +26116,6 @@ theorem sound_transfer (a : {a // a ∈ R.realizedSeeds s π})
       rw [heh, hyc]
       exact (R.ovH_xin_prev π hqy h2).symm
 
-set_option maxHeartbeats 4000000 in
 /-- **Inverse stops with no partner** pin a public constant: `padBlk` or `IV`. -/
 theorem sound_stop0 (a : {a // a ∈ R.realizedSeeds s π})
     (hf : R.pairForward (R.firstCrossing s π) π
@@ -26195,7 +26185,6 @@ theorem sound_stop0 (a : {a // a ∈ R.realizedSeeds s π})
       rw [hec]
       exact R.ovH_xin_first π hqe h1
 
-set_option maxHeartbeats 8000000 in
 /-- **Inverse stops on a known partner** read where the partner's value was shown. -/
 theorem sound_stop1 (a : {a // a ∈ R.realizedSeeds s π})
     (hf : R.pairForward (R.firstCrossing s π) π
@@ -26663,7 +26652,6 @@ section Ready
 variable (hP : ∀ i, (R.P i).Bounded R.D R.Q) (s : ℕ) (π : Equiv.Perm (Bits (ℓ + (ℓ + c))))
   (hcross : ∃ cut ≤ R.programSteps π, R.crosses s π cut)
 
-set_option maxHeartbeats 4000000 in
 /-- A transfer's pointer is the slot of its last inverse step `d`: that step's own entry. -/
 theorem transfer_slot (a : {a // a ∈ R.realizedSeeds s π})
     (hf : R.pairForward (R.firstCrossing s π) π
@@ -26707,7 +26695,6 @@ theorem transfer_slot (a : {a // a ∈ R.realizedSeeds s π})
     by omega, hdcut, R.pinNextN_step_ge hP hcut hend hτc k (R.realized_atom_valid s π a.2) hk,
     _, hte2, hyfix.2.1⟩
 
-set_option maxHeartbeats 4000000 in
 /-- **Exact readiness of one realized name.** It is ready from a point `X ≤ cut` on, and exactly
 from the cut for a seed whose show commits at the cut. -/
 theorem seed_ready6 (i : Fin (R.realizedSeeds s π).card) :
@@ -27122,7 +27109,6 @@ theorem histCons_of_hist (S : Strategy (BandAlpha ℓ c)) (π : Equiv.Perm (Bits
     R.HistCons π (S.hist (fun _ : Unit => π) n) :=
   fun _ he => S.mem_hist he
 
-set_option maxHeartbeats 4000000 in
 /-- **Fiber determinacy.** Two oracles realizing the same pattern, with one history before a
 named step, pin the same part of that step's answer to the same value. -/
 theorem v6_fiber_det {P : R.V6Pattern} {π π₀ : Equiv.Perm (Bits (ℓ + (ℓ + c)))}
@@ -27335,7 +27321,6 @@ theorem tgtAt_card (P : R.V6Pattern) (nP : ℕ) (f : Fin (nPos B R.Q)) (h : Hist
   | some π₀ =>
       exact v6_slot_target_le _ _ (R.partsAt hP s P f h) h q nP
 
-set_option maxHeartbeats 4000000 in
 /-- **A realizing oracle hits every assigned step and is assigned every field.** -/
 theorem realizes6_hits {P : R.V6Pattern} {π : Equiv.Perm (Bits (ℓ + (ℓ + c)))}
     (hr : R.Realizes6 hP s P π) :
@@ -27520,7 +27505,6 @@ theorem fields_width_sum (hnc : R.NoCollU π) :
     simp only [Finset.coe_filter, Finset.mem_univ, true_and, Set.mem_setOf_eq] at hi hi'
     exact R.field_part_inj hP s π hcross hnc (hi.trans hi'.symm) hp
 
-set_option maxHeartbeats 2000000 in
 /-- At a field's step, the representative's decoded parts are the realized seeds' parts. -/
 theorem partsAt_realized (hnc : R.NoCollU π) {f : Fin (nPos B R.Q)} {n : ℕ}
     (hf : f ∈ R.fields6 (R.realizedPattern6 hP s π hcross))
@@ -27649,7 +27633,6 @@ theorem v6_fp_small {ι : Type} [DecidableEq ι] (Z : Finset ι) (w : ι → ℕ
                 ENNReal.mul_inv_cancel two_ne_zero ENNReal.ofNat_ne_top, one_mul]
             rw [h2, ← ENNReal.inv_pow, Nat.cast_pow, Nat.cast_ofNat]
 
-set_option maxHeartbeats 2000000 in
 /-- **The fixed-pattern bound.** Realizing a (c′) pattern whose realizations all have seed width at
 least `W` costs at most `2·2^{-W}`. -/
 theorem prob_realizes6_le (hP : ∀ i, (R.P i).Bounded R.D R.Q) (s : ℕ) (P : R.V6Pattern) (W : ℕ)

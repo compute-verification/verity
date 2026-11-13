@@ -7,10 +7,9 @@ the evidence for the bandwidth audit's (PoUB, `verity/protocols/poub/verifier`) 
 (`sass_mix.py`) and Nsight Compute's counts. `ifma.c` (run by `ifma.sh`) is the host's AVX-512 IFMA rate, and `gamma.py`
 turns the rates into x₁ and γ tables.
 
-**Status: active.** `benchmarks/word_codec/encode_rate.sh` builds and runs `sq.cu`, `sq_gate.py` and `sass_mix.py`;
-`benchmarks/word_codec/kv.cu` and `benchmarks/codec_tensor/wt.cu` take their FOLD 6 form from `sq.cu`; and the audit's
-`timing.py` cites `gamma.py`. Decided by `rg rate_squaring` over `verity/`, `benchmarks/`, `demos/`, `tests/` and
-`adapters/`. `gamma.py` is a finished study beside the parts others run.
+**Status: active.** `benchmarks/word_codec/kv.cu` and `benchmarks/codec_tensor/wt.cu` take their FOLD 6 form from
+`sq.cu`, and the audit's `timing.py` cites `gamma.py`. Decided by `rg rate_squaring` over `verity/`, `benchmarks/`,
+`demos/`, `tests/` and `adapters/`. `gamma.py` is a finished study.
 
 **Run:** `uv run tools/verity/check/suites.py benchmarks/rate_squaring` runs the GPU forms' CPU twins, the IFMA build's
 gate (with `gcc`), and `gamma.py`. `sq.sh` needs one GPU and `ifma.sh` an AVX-512 IFMA host.

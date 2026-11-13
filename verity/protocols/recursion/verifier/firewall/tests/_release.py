@@ -106,7 +106,7 @@ PART = st.one_of(st.sampled_from(NAMES), st.sampled_from(NAMES), st.sampled_from
 STREAM = st.one_of(st.sampled_from(["s", "t"]), st.sampled_from(["s", "t"]), TEXT)
 VALID_PARTS = st.lists(st.sampled_from(NAMES), min_size=1, max_size=3, unique=True)
 PARTS = st.one_of(VALID_PARTS, VALID_PARTS, VALID_PARTS, st.lists(PART, max_size=4))
-BUDGET = st.one_of(st.none(), st.none(), st.integers(0, 3))
+BUDGET = st.one_of(st.none(), st.none(), st.integers(0, 5))
 NAT = st.integers(0, 2**40)
 JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 2**40) | TEXT,
                     lambda inner: st.lists(inner, max_size=3) | st.dictionaries(TEXT, inner, max_size=3), max_leaves=6)
@@ -168,12 +168,14 @@ def torn(draw, text: str) -> str:
 
 
 @st.composite
-def scene(draw, kinds=("served", "budget", "served", "budget", "none", "registered")) -> tuple[str, str, str, list[list]]:
+def scene(draw, kinds=("served", "budget", "unended", "served", "budget", "unended", "none", "registered"),
+          ) -> tuple[str, str, str, list[list]]:
     """A record, an outer session to ask of it, and the ops aimed at the two, `(record, session, part, aimed)`. Most often
     a recursive session opened and finished, its first k statements released and the next one asked (sometimes after a
     slot of it whose holder died); or a stream's sessions stopped up to its budget, or one short of it, and the stream
-    opened again; or registrations numbered and a recursive session's first k statements admitted, each admitting the
-    registrations it reads, and the next one admitted; or nothing; then a few ops of any kind."""
+    opened again; or a stream's sessions opened up to its budget, or one short of it, each left unended, released whole or
+    stopped, and the stream opened again; or registrations numbered and a recursive session's first k statements admitted,
+    each admitting the registrations it reads, and the next one admitted; or nothing; then a few ops of any kind."""
     ops, ask, again = [], None, None
     kind = draw(st.sampled_from(kinds))
     parts, stream = draw(VALID_PARTS), draw(STREAM)
@@ -186,25 +188,30 @@ def scene(draw, kinds=("served", "budget", "served", "budget", "none", "register
         ask = ("r0000", parts[k])
         ops.append(["admit", *ask])
     elif kind == "served":
-        again = ["open", stream, parts, draw(st.one_of(st.none(), st.integers(1, 3))),
+        again = ["open", stream, parts, draw(st.one_of(st.none(), st.integers(FW.BUDGET_MIN, 4))),
                  draw(st.one_of(st.none(), valid_schedule(len(parts))))]
         k = draw(st.integers(0, len(parts)))
         ops += [again, ["finish", "r0000"]] + [["release", "r0000", p] for p in parts[:k]]
         ask = ("r0000", parts[k] if k < len(parts) else parts[0])
         if draw(st.sampled_from([False, False, False, True])):
             ops.append(["slot", *ask])
-    elif kind == "budget":
-        budget = draw(st.integers(1, 2))
+    elif kind in ("budget", "unended"):
+        budget = draw(st.integers(FW.BUDGET_MIN, 4))
         again = ["open", stream, parts, budget, None]
         n = draw(st.integers(budget - 1, budget))
         for i in range(n):
-            ops += [again, ["finish", f"r{i:04d}"], ["stop", f"r{i:04d}", parts[0], "cut"]]
+            ops += [again, ["finish", f"r{i:04d}"]]
+            end = "stopped" if kind == "budget" else draw(st.sampled_from(["unended", "unended", "released", "stopped"]))
+            if end == "stopped":
+                ops.append(["stop", f"r{i:04d}", parts[0], "cut"])
+            elif end == "released":
+                ops += [["release", f"r{i:04d}", p] for p in parts]
         ask = (f"r{max(n - 1, 0):04d}", parts[0])
     ops += draw(st.lists(st.one_of(OP, REG_OP) if kind == "registered" else OP,
                          max_size=draw(st.sampled_from([0, 0, 0, 2, 5]))))
     s, p = ask if ask is not None and draw(st.sampled_from([True, True, True, False])) else (draw(SESSION), draw(PART))
     aimed = [["admit", s, p], ["slot", s, p], ["release", s, p], ["finish", s], ["stop", s, p, "cut"]]
-    if kind == "budget":
+    if kind in ("budget", "unended"):
         aimed = [again, ["admit", s, p], ["failures", stream]]
     elif kind == "registered":
         aimed = [["registrations", s, p, draw(READS)], ["registrations", s, p, draw(READS)], ["register", draw(HEX)],
@@ -230,6 +237,6 @@ SEND = st.one_of(st.just(True), st.just(True), st.just(False), st.builds(lambda 
 @st.composite
 def outer_input(draw) -> dict:
     """`{"now_ms", "part", "prove", "ready", "record", "send", "session"}`: one outer session of a scene."""
-    text, s, p, _ = draw(scene(("served", "served", "served", "budget", "none")))
+    text, s, p, _ = draw(scene(("served", "served", "served", "budget", "unended", "none")))
     return {"now_ms": draw(st.integers(0, 150)), "part": p, "prove": draw(STEP), "ready": draw(STEP), "record": text,
             "send": draw(SEND), "session": s}

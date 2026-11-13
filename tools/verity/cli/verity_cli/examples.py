@@ -123,10 +123,12 @@ def _names(v) -> list[str]:
 
 
 def vocabulary(root: Path) -> tuple[list[str], list[str]]:
-    """The known protocols (packages under verity/protocols/, the composites among them) and workloads."""
+    """The known protocols and configurations (packages under verity/protocols/ and verity/configurations/) and
+    workloads."""
     def dirs(p: Path) -> list[str]:
         return sorted(d.name for d in p.iterdir() if d.is_dir() and not d.name.startswith((".", "_")) and d.name != "tests")
-    return dirs(root / "verity" / "protocols"), [*dirs(root / "adapters"), "none"]
+    named = [p for p in (root / "verity" / "protocols", root / "verity" / "configurations") if p.is_dir()]
+    return sorted(n for p in named for n in dirs(p)), [*dirs(root / "adapters"), "none"]
 
 
 def schema(ex: Demo, root: Path) -> list[str]:
@@ -148,7 +150,7 @@ def schema(ex: Demo, root: Path) -> list[str]:
     if not ps or not all(isinstance(x, str) for x in ps) or (isinstance(p, list) and len(ps) < 2):
         out.append(f"protocol: give a protocol or composite ({', '.join(protocols)}) or a list of two or more")
     elif unknown := [x for x in ps if x not in protocols]:
-        out.append(f"protocol {unknown} is no package under verity/protocols/: one of {', '.join(protocols)}")
+        out.append(f"protocol {unknown} is no package under verity/protocols/ or verity/configurations/: one of {', '.join(protocols)}")
     if d.get("workload") not in workloads:
         out.append(f"workload {d.get('workload')!r}: one of {', '.join(workloads)} (a directory under adapters/, or none)")
     for axis, steps in AXES.items():

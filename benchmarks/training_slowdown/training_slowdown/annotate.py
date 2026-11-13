@@ -1,5 +1,5 @@
-"""The maximal structure annotation A of a run, read from the harness's count (flops.Counter.record) and its traced step
-circuit (training_slowdown.capture, `with_structures`), never from the program.
+"""The maximal structure annotation A of a run, read from the harness's count (flops.Counter.record), never from the
+program.
 
 - multiplication blocks: MACs, as counted;
 - token blocks: one token's computation in one step;
@@ -9,8 +9,8 @@ circuit (training_slowdown.capture, `with_structures`), never from the program.
   isn't θ or token data). A gather of a dependent table makes its rows dependent with no MAC; a cache computed only
   from θ and token data is not dependent. So the merged (W + BA)x and unmerged Wx + BAx forms of one update have the
   same U up to the adapter products. Backward products are left out of U; the training formalism's affected gates A,
-  which count them and the optimizer's, are measured on the step's circuit (training_slowdown.capture.circuit, through
-  `with_structures`).
+  which count them and the optimizer's, are measured on the step's circuit (training_slowdown.capture.circuit, which
+  `grade.with_circuit` puts on a record's steps).
 
 Per step t it gives the updated MACs, the updated MACs per token block (the smaller of the per-row sum over updated nodes
 and the step's updated MACs over its tokens, so neither hiding tokens from the count nor routing tokens to some weights
@@ -25,12 +25,7 @@ before 4.0) and no cut; its MAC count stays |C|.
 """
 from __future__ import annotations
 
-import json
-import math
-import re
 from dataclasses import dataclass
-
-from .formalism import READ_BACKS, TRACED_STRUCTURE, of_trace
 
 
 @dataclass(frozen=True)
@@ -95,90 +90,6 @@ def _step(rec: dict, struct: dict) -> StepAnnotation:
         depth=max((n[1] for n in nodes), default=0), profile=tuple(sorted((n[1], n[2]) for n in nodes)),
         bits=min((n[4] for n in nodes), default=0), weights=rec.get("weights", {}), shapes=rec.get("shapes", {}),
         beta=struct.get("beta") if updated else None)
-
-
-def with_structures(record: dict, traced: dict[str, dict]) -> dict:
-    """A record counted by the runtime counter with its U, cut and training-formalism quantities from the traced step
-    circuit: `traced` maps a structure id of the record to a traced structure (training_slowdown.capture's
-    `StepGraph.structure()`), whose per-token rows are scaled to each step's tokens. Only steps whose own structure has updated MACs take its U and cut (a step before the run's first
-    update reads θ only), and |C| stays the runtime count. A traced structure's `formalism`
-    (training_slowdown.capture.circuit.measure) gives its steps' σ, affected share, token factor and Δ_grad (training_slowdown.formalism's
-    `TRACED_STRUCTURE`), a step that updates nothing included where a step that does is traced too: its Δ_grad, 0, is
-    a measurement, not a missing value. The record's `formalism` block takes the per-token quantities of the updating
-    traced structure its steps spend the most MACs in (`formalism.of_trace`), with its `trace`'s read-back lists
-    (`formalism.READ_BACKS`) those of every traced structure its steps take, and none (unchecked) where one of them has
-    none."""
-    out = dict(record, structures=dict(record["structures"]), steps=[dict(s) for s in record["steps"]])
-    weight: dict[str, int] = {}
-    idle: dict[str, dict] = {}
-    for s in out["steps"]:
-        sid, struct = s.get("struct"), record["structures"].get(s.get("struct"))
-        if sid not in traced or not struct or not s.get("tokens"):
-            continue
-        t, n = traced[sid], s["tokens"]
-        f = t.get("formalism")
-        measured = {k: f[k] for k in TRACED_STRUCTURE if k in f} if f else {}
-        if not struct["updated"]:
-            if measured:
-                idle[sid] = dict(struct, **measured)
-            continue
-        rows = [[r[0], r[1], round(r[0] * n), n, r[4]] for r in t["updated"]]
-        new = f"{sid}+traced{n}"
-        out["structures"][new] = dict(struct, updated=rows, beta=t.get("beta"), cut_bits=t.get("cut_bits"), **measured)
-        s["struct"] = new
-        if f:
-            weight[sid] = weight.get(sid, 0) + s.get("macs", 0)
-    if weight:
-        for s in out["steps"]:
-            if s.get("struct") in idle and s.get("tokens"):
-                out["structures"][f"{s['struct']}+traced"] = idle[s["struct"]]
-                s["struct"] = f"{s['struct']}+traced"
-        f = of_trace(traced[max(weight, key=weight.get)]["formalism"])
-        trace = {k: v for k, v in f["trace"].items() if k not in READ_BACKS}
-        for k in READ_BACKS:
-            lists = [traced[sid]["formalism"].get(k) for sid in [*weight, *idle]]
-            if all(x is not None for x in lists):
-                trace[k] = list({json.dumps(e, sort_keys=True): e for x in lists for e in x}.values())
-        f["trace"] = trace
-        own = dict(record.get("formalism") or {})
-        out["formalism"] = own | f | {"labels": own.get("labels", {}) | f["labels"]}
-    return out
-
-
-#: the first training_slowdown whose counter prices a lookup of an updated table (`flops.gather_macs`)
-LOOKUPS_FROM = (3, 6)
-
-_BITS = {"float64": 64, "float32": 32, "bfloat16": 16, "float16": 16}
-
-
-def with_lookups(record: dict, tables: list[str]) -> dict:
-    """A record counted before training_slowdown 3.6 with its token lookups added as 3.6's counter has them: in each step whose
-    updated weights include a table `tables` names (regexes: the start's lookup), a node at position 0 of
-    `flops.gather_selects(rows) · cols` MACs per token, with every other updated node downstream of it (each reads the
-    lookup's output) and the lookup's MACs in the step's count. A lookup of an updated table the record doesn't list (an
-    untied lookup that nothing else reads, or an adapter's own table) can't be seen here."""
-    from .flops import gather_selects
-
-    out = dict(record, structures=dict(record["structures"]), steps=[dict(s) for s in record["steps"]])
-    for key in ("setup", "tail"):
-        if key in record:
-            out[key] = dict(record[key])
-    for s in [out["setup"], *out["steps"], *([out["tail"]] if "tail" in out else [])]:
-        struct = out["structures"].get(s.get("struct"))
-        names = [n for n in s.get("weights", {}) if any(re.fullmatch(t, n) for t in tables)]
-        if not struct or not names or not s.get("tokens"):
-            continue
-        lk, bits = 0, []
-        for n in names:
-            dtype, shape = s["shapes"][n]
-            lk += gather_selects(shape[0]) * math.prod(shape[1:])
-            bits.append(_BITS.get(dtype, 32))
-        nodes = [[n[0], n[1] + lk, *n[2:]] for n in struct["updated"]]
-        sid = f"{s['struct']}+lookup{lk}x{s['tokens']}"
-        out["structures"][sid] = dict(struct, updated=[[lk, 0, lk * s["tokens"], s["tokens"], min(bits)], *nodes])
-        s["struct"], s["macs"] = sid, s["macs"] + lk * s["tokens"]
-        s["by"] = dict(s.get("by", {}), **{"fwd/updated": s.get("by", {}).get("fwd/updated", 0) + lk * s["tokens"]})
-    return out
 
 
 def annotate(record: dict, through: int | None = None) -> Annotation:

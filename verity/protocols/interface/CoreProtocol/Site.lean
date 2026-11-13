@@ -1,8 +1,8 @@
 module
 
 public import Lean.Data.Json
-public import Flock.Canon
-public import Flock.Hash
+public import Base.Canon
+public import Base.Hash
 public import CoreProtocol.Ratio
 
 /-!
@@ -667,6 +667,14 @@ def Registration.Entry.ofJson (j : Json) : V Registration.Entry := do
   let locs ← (← Flock.J.arr j "locs" "an entry").toList.mapM Loc.ofJson
   let links ← (← Flock.J.arr j "links" "an entry").toList.mapM Link.ofJson
   pure (.site (← Flock.J.str j "previous" "an entry") ⟨sheets, locs, links⟩)
+
+/-- A Site as `toJson` writes it, and only so: what a check that takes the registered hardware as a parameter reads. -/
+def ofJson (j : Json) : V Site := do
+  exactly j ["links", "locs", "sheets"] "a site"
+  let sheets ← (← Flock.J.arr j "sheets" "a site").toList.mapM Sheet.ofJson
+  let locs ← (← Flock.J.arr j "locs" "a site").toList.mapM Loc.ofJson
+  let links ← (← Flock.J.arr j "links" "a site").toList.mapM Link.ofJson
+  pure ⟨sheets, locs, links⟩
 
 def Registration.Composite.ofJson (j : Json) : V Registration.Composite :=
   byName [.onsite, .remote] Registration.Composite.name j "the log's composite"
