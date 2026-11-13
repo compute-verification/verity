@@ -1,7 +1,7 @@
 """A plain hidden-output session on the keyed coin tree, end to end (`Flock.ProvedScope`, `plain_hidden.py`, `--coins
 tree`, `Flock.CoinTree`): a RoPE d64 statement with hidden outputs whose 32 units read their own rows (no shared rows, no
 registered value), proved by Flock in one loopback session without `--zk` under a subset sample of 16
-(`../pod/91-plain-hidden.sh`), its coins committed at `Hello` in a `coin-tree/hm96-sha512/v2` tree that the auditor's
+(`pod/91-plain-hidden.sh`), its coins committed at `Hello` in a `coin-tree/hm96-sha512/v2` tree that the auditor's
 challenger sampled and opened (`flock-circuit serve --tree-from`, the prover checking each opening).
 
 The session's coins are the ones the challenger's release log shows it sampled and opened. The compiled Lean verifier
