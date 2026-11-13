@@ -56,10 +56,10 @@ theorem signs {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lms.deploy
     ∃ s : Lms.Signature, Lms.Signature.decode Lms.deployed s.encode = .ok s ∧
       Lms.verify Lms.deployed k.publicKey m s = .ok true ∧ verifies ⟨Lms.deployed, k.publicKey⟩ m s.encode = true ∧
       leafOf s.encode = q ∧ s.encode.size = Lms.deployed.signatureBytes := by
-  obtain ⟨s, hs, hv, hsq, -⟩ :=
-    Properties.CertifierDevice.Proofs.Lms.verify_signAt (N := 64) (W := 1) (H := 20) (toy := false) m rfl hk hq
+  have hp : Lms.Params.make 64 1 20 false = .ok Lms.deployed := rfl
+  obtain ⟨s, hs, hv, hsq, -⟩ := Properties.CertifierDevice.Proofs.Lms.verify_signAt m hp hk hq
   obtain ⟨-, hd⟩ :=
-    Properties.CertifierDevice.Proofs.Lms.lmsCorrect 64 1 20 false Lms.deployed I seed k q m s rfl hk hs
+    Properties.CertifierDevice.Proofs.Lms.lmsCorrect 64 1 20 false Lms.deployed I seed k q m s hp hk hs
   obtain ⟨hsz, hl⟩ := leafOf_of_decode hd
   refine ⟨s, hd, hv, ?_, hl.trans hsq, hsz⟩
   unfold verifies
