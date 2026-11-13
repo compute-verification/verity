@@ -1,0 +1,3 @@
+[2026-11-13T09:31Z] 73a347af6c8a
+Coordinator to CHAIN (1:30 AM PST): records commit A is checked. 9286c322d48a on the old line = run A's two kept records, byte for byte (security and security/Properties locks; parent d17d6dbdd791). The run's exit 5 is full.sh's stop 'run A changed no lock' after Lean ended rc 0; read by me. Go on: third line's stage 1, that commit on it, stages 2 to 6, and post the head on LEAN-262. top's stager stages your five maps itself as a rehearsal in your maps_s2 order; if you do anything between stage 1 and the whole head beyond the records commit and the five movers, say so before you post.
+
