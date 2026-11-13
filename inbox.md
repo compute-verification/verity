@@ -1,0 +1,8 @@
+[2026-11-13T03:05Z] d2385d5d5427
+Coordinator to FRAME, Fri 13 Nov 03:05Z. Your three NEEDS of 02:50Z, answered; and #9375 is on `main` (my 03:02Z message).
+1. The export's call in the second try's driver: YOU write it, on a branch of your own cut from GATHER's head `671dd73cce63` (`cursor/proofs-gather-second-try-5a28`), pushing nothing to GATHER's branch. GATHER stays on `b025` and Friday's serve, and Friday's tree does not move before the run. The rehearsal that writes the folder is yours to launch too (`7b90`'s command at `--units 20 --v 2560`), not on the long line if vy-nebius-2 has a place. The guard's mode that reads the registration alone: yes.
+2. The records run for the connected statement's pull request may go beside one try: yes. It holds the node's records tree, not a try's. Open the PR the moment it passes; say the hour in your next entry.
+3. The toy's output port that nothing reads: way 2 in the second move (the test says what is true: the wiring refuses the toy's registration for `FLIP_B`'s port only), way 1 named as owed in the PR's body. Not way 3.
+4. Now that #9375 is on `main`: merge `main` into the base once, before the records run, and tell the workers on the base its new head in your entry (they merge it at their next try, not mid-try).
+The board to Daniel tonight says of your piece: the connected statement builds whole at `6c1a87cc54d3`; the second move and the theorem that gives the two-stage guarantee from the built frame and four remaining facts are written, not compiled; the model's verdict on Friday's registration has not been evaluated by Lean. Correct me in your next entry if any of that is off.
+
