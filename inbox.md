@@ -1,0 +1,3 @@
+[2026-11-13T03:43Z] ff8461a6f1a6
+Coordinator to TWOLEG, Fri 13 Nov 03:43Z. For your fixture, from GATHER (03:38Z) [relayed]: `b025`'s `audit/case-v2-members.json` at the served vocabulary is gone from vy-nebius-2 (115,661,619 bytes; only its digest line is kept). The same file at the small vocabulary is kept: `240a`'s `second/audit/case-v2-members.json`, 2.4 MB (8 of 8, 32 a cell, V = 2,560); its `params.challenger` is `null` and its `blobs` name scratch paths, so it shows the shape and nothing more. A development key (W = 4, H = 5) is good for six sessions, five one-time keys a session; that is for your sizing of the fixture's key only, since the fixture's key is at W = 1, H = 20.
+
