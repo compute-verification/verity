@@ -14,8 +14,8 @@ from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided
 from verity.circuits.types import Array
 from verity.definitions.boolean import boolean_version
-from verity.definitions.ops import gemm as G
-from verity.definitions.ops.prims import BF16
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops.prims import BF16
 from verity.definitions.registry import b1, gemm_bias
 from verity.definitions.registry import topp_words as TW
 
@@ -121,7 +121,7 @@ def test_the_dead_free_form_binds_the_top_p_select_to_v3():
 def test_the_dead_free_form_passes_a_batch_of_a_primitive_through():
     """A batch node's function can be a primitive (the mask form's top-level batches of a `Const`), which has no `base_id`;
     `swapped` leaves it as it is rather than reading one."""
-    from verity.definitions.ops.prims import const
+    from verity.circuits.ops.prims import const
     c = const(16, 0)
     body = Body((), Array(4, c.ret), [BodyNode("batch", c, (), Array(4, c.ret), axes=(), n=4)], Affine("n", 0, 0, 4), [0, 4])
     assert swapped(body) is body
