@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from . import fetchset, ids
-from .local import REPLICA_MAP, LocalStore, _rel_files, manifest_key, object_key, sha256_file
+from .local import REPLICA_MAP as REPLICA_MAP, LocalStore, _rel_files, manifest_key, object_key, replica_map_file, sha256_file
 from .model import ArtifactManifest, Payload, TreeFile
 from .remote import HttpRemote, Remote
 
@@ -66,7 +66,7 @@ def fixture_id(path: Path) -> str:
 
 
 def load_map(repo: Path) -> dict[str, Any]:
-    p = Path(repo) / REPLICA_MAP
+    p = replica_map_file(Path(repo))
     doc = json.loads(p.read_text(encoding="utf-8"))
     if not isinstance(doc, dict):
         raise ValueError(f"{p}: the replica map must be a JSON object")
@@ -106,7 +106,7 @@ def refresh(store: LocalStore, repo: Path, *, preserve: bool = False, dry_run: b
     repo = Path(repo)
     doc = load_map(repo)
     prev = previous(doc)
-    rep: dict[str, Any] = {"repo": str(repo), "map": str(repo / REPLICA_MAP), "dry_run": dry_run, "preserve": preserve, "entries": [],
+    rep: dict[str, Any] = {"repo": str(repo), "map": str(replica_map_file(repo)), "dry_run": dry_run, "preserve": preserve, "entries": [],
                            "changed": 0, "missing": 0, "unchanged": 0, "written": False}
     new_doc: dict[str, Any] = {}
     new_prev: dict[str, list[str]] = dict(prev)
@@ -156,7 +156,7 @@ def refresh(store: LocalStore, repo: Path, *, preserve: bool = False, dry_run: b
     if new_prev:
         new_doc[PREVIOUS] = new_prev
     if rep["changed"] and not dry_run:
-        (repo / REPLICA_MAP).write_text(dump_map(new_doc), encoding="utf-8")
+        replica_map_file(repo).write_text(dump_map(new_doc), encoding="utf-8")
         rep["written"] = True
     return rep
 
