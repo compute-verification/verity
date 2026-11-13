@@ -4928,6 +4928,62 @@ def test_under_gate_check_a_red_ratchet_gate_rings_the_lane_of_each_member_whose
     assert [r["posting"] for r in env.lines() if r["action"] == "posting"] == ["ring"]
 
 
+def _landed(env: Env, monkeypatch, *numbers: int, fails: bool = False) -> list[int]:
+    """Each of ``numbers`` closed on GitHub, as a member is once its candidate lands: out of the open PRs, with GitHub's read of
+    one PR (`GitHub.pr`) answering it, or failing (``fails``).  Returns the numbers that read is asked, in order."""
+    gh, read = env.o.gh, []
+    closed = {n: gh.prs.pop(n) for n in numbers}
+
+    def pr(n: int) -> Q.PR:
+        read.append(n)
+        if fails:
+            raise Q.QueueError(f"gh api repos/{gh.repo}/pulls/{n}: HTTP 502")
+        return closed[n]
+
+    monkeypatch.setattr(gh, "pr", pr)
+    return read
+
+
+def test_under_gate_check_a_red_ratchet_gate_rings_the_lane_of_each_member_it_fails_that_has_landed(env, monkeypatch):
+    """What a candidate fails off the gate is read once its runs end, after it landed, when GitHub has closed its members: the
+    lane of each member whose merge ratchet-gate fails is read from GitHub's PR (`World.handle`), not from the open ones."""
+    loop, runs, main, sha = _off(env, monkeypatch, OTHER, {"b.txt": "2\n"}, {"c.txt": "3\n"})
+    read = _landed(env, monkeypatch, 1, 2, 3)
+    runs.end(main)
+    runs.end(sha, also={"ratchet-gate": _ratchet(1, 2)})
+    (ring,) = [r for r in loop.tick() if r["action"] == "ring"]
+    assert (ring["failures"], ring["to"]) == (["#1", "#2"], ["@lane-1", "@lane-2", "@vllm"]) and sorted(read) == [1, 2]
+    assert env.posts == ["@lane-1 @lane-2 @vllm vqueue: " + _off_said(
+        sha, "#1 #2 #3", "ratchet-gate", main, "#1 (000000000001): grows p01.json", "#2 (000000000002): grows p01.json")]
+
+
+def test_under_gate_check_a_landed_member_github_can_t_read_rings_the_step_s_owner_and_is_logged_once(env, monkeypatch):
+    """A landed member whose PR GitHub doesn't answer for names no lane: the ring goes to ratchet-gate's owner in ci.toml, as
+    for a member no lane owns, with one line logged, and the tick goes on."""
+    loop, runs, main, sha = _off(env, monkeypatch, OTHER)
+    read = _landed(env, monkeypatch, 1, fails=True)
+    runs.end(main)
+    runs.end(sha, also={"ratchet-gate": _ratchet(1)})
+    (ring,) = [r for r in loop.tick() if r["action"] == "ring"]
+    assert (ring["to"], ring["done"], read) == (["@vllm"], True, [1])
+    assert loop.world.handle(1) is None and read == [1]
+    assert [x for x in env.out if "#1" in x and "HTTP 502" in x] == [
+        f"research queue vqueue: #1 isn't open and its PR can't be read, so it names no lane: gh api repos/{env.o.gh.repo}"
+        "/pulls/1: HTTP 502"]
+
+
+def test_a_pr_no_longer_open_is_read_from_github_once_a_tick(env, monkeypatch):
+    """`World.handle` of a PR that isn't open reads GitHub's PR once a number until the next tick's fetch, however often it is
+    asked, and an open PR's handle reads none."""
+    loop, _, _, _ = _off(env, monkeypatch, OTHER, {"b.txt": "2\n"})
+    read = _landed(env, monkeypatch, 1)
+    w = loop.world
+    w.fetch()
+    assert [w.handle(n) for n in (1, 1, 2, 1)] == ["lane-1", "lane-1", "lane-2", "lane-1"] and read == [1]
+    w.fetch()
+    assert w.handle(1) == "lane-1" and read == [1, 1]
+
+
 def test_under_gate_check_with_the_graph2_shadow_off_no_graph2_verdict_is_read_and_the_check_alone_judges(env, monkeypatch):
     """--no-graph2-shadow: the check gates as before, and no tick reads graph2's verdict of a candidate or of a followed
     drop (`World.verdict`, `World._verdict_of`), each of which lists every task of a check and pulls each pending task's

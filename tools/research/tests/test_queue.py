@@ -72,6 +72,11 @@ class FakeGitHub:
     def open_prs(self) -> list[PR]:
         return list(self.prs.values())
 
+    def pr(self, n: int) -> PR:
+        if n not in self.prs:
+            raise QueueError(f"gh api repos/{self.repo}/pulls/{n}: Not Found (HTTP 404)")
+        return self.prs[n]
+
 
 class World:
     def __init__(self, tmp: Path):
