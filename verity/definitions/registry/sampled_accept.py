@@ -65,8 +65,9 @@ no longer run it.  The Definition is lane 0's arithmetic there too; `sampled_acc
 honest request meets it at a rate of 3.1e-10 +- 0.3e-10 a request on rows where the draft token holds 50% to 99.9% of the
 mass and 8.9e-11 +- 1.6e-11 on the tests' `random_rows`, both over synthetic rows at K = 5, V = 154,880 and TILE = 8192
 (exact over the uniform's 2^32 words given the rows); the share of a served model's rows whose two sums differ is not
-measured, and were every row's two sums to differ the rate would be about 1.4e-6 a request (9.35e-11 a reached position
-over the 2.31e-4 of them whose sums differ, times 3.55 reached positions a request).  When a step in the case is sampled, an
+measured, and were every row's two sums to differ the rate would be about 1.4e-6 a request on the rows where the draft token
+holds 50% to 99.9% of the mass (9.35e-11 a reached position over the 2.31e-4 of them whose sums differ, times 3.55 reached
+positions a request: a mean over those rows, not a ceiling).  When a step in the case is sampled, an
 honest server's proof of it can fail, since what the card stores after the split need not be lane 0's arithmetic: there is
 no retry, and the verifier cannot tell that failure from a dishonest server's.
 
