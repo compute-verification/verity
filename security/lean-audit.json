@@ -16564,24 +16564,6 @@
    },
    "type_hash": "b1b8da0e8ecbf5e4890926e53f753248e83ae2e68cc8f323b6675fa1e54aed47"
   },
-  "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial": {
-   "owner": "@proofs",
-   "signature": [
-    "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial :",
-    "  Not",
-    "    (Claims.ZKServer.Loop.ZkAnyAt Claims.ZKServer.Loop.noTables Claims.ZKServer.Loop.noVals",
-    "      (Claims.ZKServer.Loop.leakL (Claims.ZKServer.Loop.constRel Claims.ZKServer.Loop.NT)) Claims.ZKServer.Loop.noReal",
-    "      Claims.ZKServer.Loop.noWk (fun x x_1 => True) 2)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "4506aaf50fe9d724a2ecc5ccff7ae1a40d56f6a54eaa63d3409e35ea9944a3d2"
-  },
   "Flock.SecurityProofs.SessionLoopZKDeployed": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.SessionLoopZKDeployed : Flock.Guarantees.SessionLoopZKDeployed"],
