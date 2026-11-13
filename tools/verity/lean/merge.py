@@ -72,8 +72,8 @@ a conflict is seen and resolved, while a silent loss lands.
 
 The layer rules (`layers`), which two branches that each widen a layer for a guarantee both change, merge field by field: `imports`
 and `except` as lists, `why` as a list of its `; ` clauses (`layers`). Every list of names (the roots, `meaning`, `proved_in`,
-`claims.modules`, `shape.premises`...), which two branches that each add a module both change, merges as a list (`items`).
-A move is a change, and the side that made it applies: a map's keys outside `SORTED` stand in ours' order with theirs' new
+`claims.modules`, `shape.premises`...), which two branches that each add a module both change, merges as a list (`items`),
+written sorted where `check.py --update` writes it sorted (`SORTED_NAMES`: each `trust_gap` entry's premises). A move is a change, and the side that made it applies: a map's keys outside `SORTED` stand in ours' order with theirs' new
 ones after them, and a list of names in ours' order with each of theirs' new items after the item theirs has before it,
 unless ours holds the members it shares with the base in the base's order and theirs doesn't (`reordered`): then the roles
 swap, theirs' order with ours' new members placed so (`keys`, `ordered`). Where both sides moved, ours' order stands, named
@@ -150,11 +150,14 @@ CAP_LINE = re.compile(rf'(\s*(?:{"|".join(CAP_NAMES)}) = )\{{([^{{}}]*)\}}\s*$')
 CAP_ENTRY = re.compile(r'\s*"([^"\\]*)"\s*:\s*(\d+)\s*')
 #: where a merged string array wraps
 WIDTH = 120
-#: the sections `check.py --update` writes in sorted order (`shape[inline]`: `shape.inline`, by guarantee); the others keep
-#: ours' order, with theirs' new entries after it, unless ours kept the base's order and theirs moved entries (`reordered`):
-#: then theirs' order, with ours' new entries after it
+#: the sections `check.py --update` writes in sorted order (`shape[inline]`: `shape.inline`, by guarantee), and the sections
+#: whose entries are lists of names it writes sorted (`SORTED_NAMES`: each `trust_gap` entry's premises, `trust_gap_kept`);
+#: the others keep ours' order, with theirs' new entries after it, unless ours kept the base's order and theirs moved
+#: entries (`reordered`): then theirs' order, with ours' new entries after it.  `--update` writes `shape.inline`'s inner maps
+#: in their statement's order and `trust`, `claims`, `trees`, `upstream` and `deployed` as the lock has them
 SORTED = {"assumptions", "domain", "open", "guarantees", "reads", "dependencies", "compile_time", "trust_gap", "unwitnessed",
           "shape[inline]"}
+SORTED_NAMES = {"trust_gap"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`, `shape`'s `properties`,
 #: `frozen` and `conjectures`, `trees`' `except`, `trust`'s `base` and `extra`), or lists of names merged as lists
 #: (`trust_gap`'s premises, so a side's discharge and the other's new premise both apply)
@@ -232,6 +235,8 @@ def entries(path: str, o: dict, a: dict, b: dict, why: list[str], depth: int = 1
             v = ordered([] if x is MISSING else x, y, z)
         else:
             v = one(f"{path}[{k}]", x, y, z, why)
+        if path in SORTED_NAMES and isinstance(v, list) and all(isinstance(i, str) for i in v):
+            v = sorted(v)
         if v is not MISSING:
             out[k] = v
     return out
