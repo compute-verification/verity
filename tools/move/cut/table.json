@@ -193,6 +193,12 @@
    "old": "#: what the relay's runner still imports from the older form's files, by the file: the certificate's JSON and the\n#: endpoint's model from the older runner, a record's bytes on disk and its process's runtime and usage from its replay,\n#: and the id request's writer from the older form's protocol file. Each leaves its file in a change of its own, so this\n#: only shrinks.\n",
    "new": "#: what the relay's runner still imports from the older form's files, by the file: the id request's writer from the\n#: older form's protocol file, and nothing from the older runner or its replay. Each leaves its file in a change of its\n#: own, so this only shrinks.\n",
    "why": "the comment says what the list holds"
+  },
+  {
+   "file": "benchmarks/one_stage/tests/test_a5_warden.py",
+   "old": "    \"\"\"This audit's process holds `network_traces`' `replay` under that name (its imports reach `active_replay`, which\n    imports it), a module with none of what a5 writes an audit's case with. a5 reads the `replay.py` beside it by its\n    path, so the case is written and no error stands in its place.\"\"\"\n    import a5\n    import active_replay\n",
+   "new": "    \"\"\"A process that holds `network_traces`' `replay` under that name (one that imports `active_replay`, which imports\n    it) holds a module with none of what a5 writes an audit's case with. a5 reads the `replay.py` beside it by its\n    path, so the case is written and no error stands in its place.\"\"\"\n    import a5\n    monkeypatch.syspath_prepend(str(HERE.parent / \"network_traces\"))\n    import active_replay\n",
+   "why": "the audit's program no longer imports the relay's file, so `active_replay` is first imported by this test, and it finds its own directory's `replay` only with that directory first on the path"
   }
  ],
  "files": {},

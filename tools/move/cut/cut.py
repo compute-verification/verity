@@ -281,14 +281,17 @@ def file(rel: str) -> File | None:
 
 def module_file(mod: str, at: str) -> str | None:
     """The tracked file a module name written in the file `at` is: by its path, or for a bare name the file beside
-    `at`, else the one tracked file of that name where it is in `bare`."""
+    `at`, else the nearest one in a directory above it (a test reaches its package's files so), else the one tracked
+    file of that name, where the tree has one and the standard library none."""
     if "." in mod:
         rel = mod.replace(".", "/") + ".py"
         return rel if rel in TEXT else None
-    beside = str(Path(at).parent / (mod + ".py"))
-    if beside in TEXT:
-        return beside
-    return f"{BARE}/{mod}.py" if BY_NAME.get(mod + ".py") == [f"{BARE}/{mod}.py"] else None
+    for above in Path(at).parents:
+        rel = str(above / (mod + ".py"))
+        if rel in TEXT:
+            return rel
+    hits = BY_NAME.get(mod + ".py", [])
+    return hits[0] if len(hits) == 1 and mod not in sys.stdlib_module_names else None
 
 
 def alias_target(stmt: ast.stmt, a: ast.alias, at: str) -> tuple[str, str | None] | None:
