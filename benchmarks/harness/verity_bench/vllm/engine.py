@@ -19,7 +19,14 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity_vllm.engine.env import INDUCTOR_DIR_MARK, apply_target
+from verity.protocols.pouw.verifier.salt import epoch_open_root
+from verity_vllm import LLM
+from verity_vllm.engine import env as engine_env
+from verity_vllm.engine import handle, int8_ranks
+from verity_vllm.engine.arrivals import run_requests_arrivals
+from verity_vllm.engine.hooks import Hooks, live
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import pearl_c as PPD
 
 from verity_bench import settings
 from verity_bench.vllm.arms import (H1, Arm, Target, build_bound, h1_config, is_h1, plugin, protocols_config,
@@ -62,8 +69,6 @@ class _DirectLLM:
     """The subset of ``verity_vllm.LLM`` needed for a content-bound local checkpoint."""
 
     def __init__(self, llm: Any, engine_overrides: Mapping[str, Any]) -> None:
-        from verity_vllm.engine import handle
-
         runner = handle.model_runner(llm)
         self.vllm, self.model = llm, runner.get_model()
         self.engine_record = {"engine_overrides": dict(engine_overrides)}
@@ -82,8 +87,6 @@ def _pearl_c_run(llm: Any) -> Any | None:
     """The arm's Pearl-C device run, the owner of its option's ``end_pass``; None when the arm runs none. The adapter ends
     a pass each time the model runner's ``execute_model`` returns (`pouw.install`), so the harness only reads the passes
     (`_pass_totals`) and gates the run (`_pearl_c_gate`)."""
-
-    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     option = llm.protocols.get("pouw") if llm.protocols is not None else None
     run = getattr(getattr(option, "end_pass", None), "__self__", None)
@@ -106,8 +109,9 @@ def _pearl_c_gate(run: Any) -> dict[str, Any]:
     `salt.epoch_open_root` of the weights' root and that epoch) when the option took its salt from one, else
     ``in-process``."""
 
+    # The experimental arm's module is the tree's (`benchmarks/`, on a run's path, not this distribution's), and it
+    # imports this package's runner.
     from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm
-    from verity.protocols.pouw.verifier.salt import epoch_open_root
 
     check = PearlCArm()
     check.run, check.schedule = run, run.schedule.name
@@ -220,16 +224,11 @@ class _VllmEngine:
     def __init__(self, arm: Arm, preset: Preset, resident: bool, eager: bool) -> None:
         if preset.revision is None and preset.model_digest is None:
             raise ValueError(f"preset {preset.id} has no pinned checkpoint revision")
-        from verity_vllm.engine import env as engine_env
-
         if preset.engine_settings.get("serving_defaults"):
             engine_env.apply_compile_fresh()
         engine_env.apply_engine(None)
         import torch
         import vllm
-
-        from verity_vllm.engine.hooks import Hooks, live
-        from verity_vllm import LLM
 
         self.arm, self.obj, self.installed, self.pearl_c, self.h1 = arm, plugin(arm), None, None, None
         self.target = Target(arm, None, None, Hooks(tag=f"bench:{arm.id}"))
@@ -248,7 +247,6 @@ class _VllmEngine:
         engine = engine_args(preset, precision, resident=resident, eager=eager)
         if precision == "int8_exact":
             # `engine.build.register_int8_parts` registers a TargetProfile's parts, and verity_vllm.LLM builds with none
-            from verity_vllm.engine import int8_ranks
             int8_ranks.register(INT8_EXACT_PARTS)
         overrides = _callback(self.obj, "engine_overrides", self.target, {}) if self.obj is not None else {}
         engine.update(overrides or {})
@@ -288,7 +286,8 @@ class _VllmEngine:
                     kernel_digest = hashlib.sha256(Path(cubin).read_bytes()).hexdigest()
         self.target.engine, self.target.model = self.llm, self.llm.model
         if precision == "int8_exact":
-            from verity_vllm.program.frontend.kernel_readback import int8_exact_of
+            from verity_vllm.program.frontend.kernel_readback import int8_exact_of  # imports torch
+
             got = int8_exact_of(self.llm.model)
             if got != INT8_EXACT_SCOPE:
                 raise RuntimeError(f"{arm.id}: an int8_exact engine whose layers run int8 scope {got!r}, not "
@@ -343,8 +342,6 @@ class _VllmEngine:
 
         if self.h1 is None:
             return self._serve(point, phase)
-        from verity_vllm.protocols import pouw
-
         start = time.perf_counter()
         self.llm.reinstall(h1_config(self.h1["config"], window_steps(point, self.h1["rows"])))
         install_s = time.perf_counter() - start
@@ -364,8 +361,6 @@ class _VllmEngine:
     def _serve(self, point: SweepPoint, phase: str) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
         import torch
         from vllm import SamplingParams
-
-        from verity_vllm.engine.arrivals import run_requests_arrivals
 
         measured = phase == "measure"
         requests = self._requests(point)
@@ -595,10 +590,10 @@ class ProcessEngineFactory:
                     "spec)")
         if resident and not arm.resident:
             raise ResidentCapacityError(f"arm {arm.id!r} requires an isolated engine lifetime")
-        if preset.engine_settings.get("serving_defaults") and os.environ.get(INDUCTOR_DIR_MARK) != "1":
+        if preset.engine_settings.get("serving_defaults") and os.environ.get(engine_env.INDUCTOR_DIR_MARK) != "1":
             # Every arm's process compiles on its own, and the kernel configurations Inductor autotunes reach the numerics
             # (a reduction's tile size): one cache directory gives every arm the configurations the first one picked.
-            apply_target({"TORCHINDUCTOR_CACHE_DIR": tempfile.mkdtemp(prefix="verity_bench_inductor_"), INDUCTOR_DIR_MARK: "1"})
+            engine_env.apply_target({"TORCHINDUCTOR_CACHE_DIR": tempfile.mkdtemp(prefix="verity_bench_inductor_"), engine_env.INDUCTOR_DIR_MARK: "1"})
         parent, child = self.context.Pipe()
         process = self.context.Process(target=_worker, args=(child, arm, preset, resident, eager))
         process.start()

@@ -3,6 +3,9 @@ percentiles, the run's own trace of where its time went, and the host's probe ar
 
 from __future__ import annotations
 
+import gc
+import os
+import resource
 import statistics
 import time
 from collections.abc import Callable, Mapping
@@ -98,11 +101,6 @@ class HostProbe:
     given, is read at both ends and its deltas kept under `device`."""
 
     def __init__(self, counters: Callable[[], Mapping[str, float]] | None = None) -> None:
-        import gc
-        import os
-        import resource
-
-        self._gc, self._resource = gc, resource
         self._counters = counters
         self.counted = dict(counters()) if counters is not None else None
         self.load = os.getloadavg()[0]
@@ -119,10 +117,10 @@ class HostProbe:
             self._gc_at = None
 
     def close(self) -> dict[str, Any]:
-        after = self._resource.getrusage(self._resource.RUSAGE_SELF)
+        after = resource.getrusage(resource.RUSAGE_SELF)
         thread = time.thread_time() - self.thread
-        if self._on_gc in self._gc.callbacks:
-            self._gc.callbacks.remove(self._on_gc)
+        if self._on_gc in gc.callbacks:
+            gc.callbacks.remove(self._on_gc)
         b = self.usage
         counted = ({"device": {k: v - self.counted.get(k, 0) for k, v in self._counters().items()}}
                    if self._counters is not None else {})
