@@ -515,11 +515,10 @@ theorem charged_eq {p : Params} {c : Commitment} {s : Schedule} {sd : ByteArray}
   | none => rfl
   | some y =>
     obtain ⟨f, rfl⟩ := findingOf_none (has y (Array.mem_of_getElem? hi))
-    have hf : Except.toOption (Except.ok f : Found Facts) = some f := rfl
+    have hf : (some (Except.ok f : Found Facts)).bind Except.toOption = some f := rfl
     simp only [hform, tiedOf, hf, Option.filter]
-    by_cases h : (tiedIn c.audits c.windows i && decide (f.drawn < f.units)) = true
-    · first | (rw [if_pos h, if_pos h]; rfl) | (simp [h]; done) | simp_all
-    · first | (rw [if_neg h, if_neg h]; rfl) | (simp [h]; done) | simp_all
+    by_cases h : (tiedIn c.audits c.windows i && decide (f.drawn < f.units)) = true <;>
+      simp only [h, ↓reduceIte] <;> rfl
 
 theorem rowsTiedCharged : RowsTiedCharged := by
   intro p c e pub prof h s sd scan hform
