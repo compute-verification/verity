@@ -15,7 +15,7 @@ from verity.circuits.cut import call_scope
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.layout import resolve
-from verity.definitions import word as W
+from verity.circuits import word as W
 from verity.definitions.registry import fp8, fp8_vocab
 
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile

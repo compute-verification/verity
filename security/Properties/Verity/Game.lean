@@ -105,8 +105,8 @@ The statement's form is the causal game, the committed files, one fixed extracto
   their window's coin, over the period's windows (`computed`), with no pricing. At remote, Pearl+'s claim reads the
   credit its compiled check publishes on its case (`PearlPlusCredits`): the play computed at least `(1 − ρ)(1 − ε) · W`
   MACs on the served run's matmul tiles after the run's coin, each tile that passes Pearl+'s rule at its credited
-  cells' MACs (`macs`), for the run's claimed MACs `W`, the cap's share `ρ` and the draw's `ε` it published: the
-  tolerant audit's event (`Pouw.GγSampledTol`) with no drawn tile credited nothing.
+  cells' MACs (`macs`), for the run's claimed MACs `W`, the cap's share `ρ` and the sample's `ε` it published: the
+  tolerant audit's event (`Pouw.GγSampledTol`) with no sampled tile credited nothing.
 
 Each subprotocol's target (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
 `NetworkCertifierSound`, `WipeSound`) is `Target k a`: at every `θ`, `F`, `c` and strategy, the probability that `a`'s
@@ -843,7 +843,7 @@ own coins choose neither. The inference-only policy's: the declaration complies 
 published survivor threshold (`Verity.Wipe.OfRun.Kept`). PoUW's at remote is Pearl+'s, in MACs, not a period claim: a
 credit `w` Pearl+'s check published on the blobs sent (`PearlPlusCredits`), with the play computing at least
 `(1 − ρ)(1 − ε) · W` MACs on the run's tiles (`macs`), where `W` is the credit's `macs` (the MACs of the cells its passes
-credit), `ρ` its cap share `rho` and `ε` its `epsilon`, the miss table's value at `X_O`, the draws that landed on tiles over
+credit), `ρ` its cap share `rho` and `ε` its `epsilon`, the miss table's value at `X_O`, the samples that landed on tiles over
 their inert-work bound (credited nothing under `over_cap` `uncredited`; `X_O = 0` in a run `reject` accepts). -/
 def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) :
     Subprotocol → Exchange → Prop
@@ -861,7 +861,7 @@ def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteAr
 /-- **The log subprotocol `a`'s check read is the device's whole log**: every release, in order, and no other
 (`coinsRead`; a check that reads none binds nothing). The device signs its log's line count and the lines' SHA-512 chain
 at its close (`close_session`), and v2 refuses a session whose signed close is missing or doesn't match its log
-(`Spot.Challenger.sessionOf`), so any other log a check read is a forgery of the device's LMS signature, on a
+(`Spot.Challenger.challengePhaseOf`), so any other log a check read is a forgery of the device's LMS signature, on a
 message the device didn't sign in the play (`Exchange.signed`), which `a`'s error bounds where its forger meets
 `Hash.Assumptions.LmsUnforgeable` (`Vocab.Unforgeable`, `Vocab.epsForge`), or a SHA-512 collision of the chain, which
 its finder outputs. -/

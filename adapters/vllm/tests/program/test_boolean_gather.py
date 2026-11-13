@@ -21,7 +21,7 @@ from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.definitions import boolean as BB
-from verity.definitions import word as W
+from verity.circuits import word as W
 from verity.definitions.registry import boolean_fp8_moe as BFM
 from verity.definitions.registry import boolean_gather as BGA
 from verity.definitions.registry import prims as P

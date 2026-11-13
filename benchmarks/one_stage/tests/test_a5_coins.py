@@ -13,9 +13,9 @@ import pytest
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
-from verity.protocols.spot.device import coins as CC
-from verity.protocols.spot.verifier import service as S
-from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V
+from verity.protocols.proofs.spot.device import coins as CC
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -99,7 +99,8 @@ def test_the_challengers_bytes_with_no_evidence_are_rejected_by_the_lean_run():
     assert not got.accepted and not audit["checks"]["run"]["ok"]
     side = AC.lean_side(audit)
     assert (side["step"], side["codes"]) == AC.SELECT_COINS
-    assert CC.coins_reason(None, ROOT, bytes.fromhex(draw.registration.digest), b"\x5a", AC.lms_verify) is not None
+    assert CC.coins_reason(None, ROOT, AC.family(0), bytes.fromhex(draw.registration.digest), b"\x5a",
+                           AC.lms_verify) is not None
 
 
 def test_the_replay_reads_no_more_than_the_honest_draw():
