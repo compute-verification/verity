@@ -123,6 +123,63 @@ def test_generation_bump_on_pointer_reuse_raw():
     assert st.live_count() == 1
 
 
+def test_a_null_pointer_or_an_empty_range_is_its_devices_null_allocation_raw():
+    st = StorageAdapter(use_weakrefs=False)
+    null = st.observe_raw(0x1000, 0, "cpu")
+    assert st.observe_raw(0, 64, "cpu", key=1) == null and st.observe_raw(0, 0, "cpu") == null
+    assert st.events_pending() == [StorageAlloc(null, 0, 0, "cpu", 0, "null")] and st.live_count() == 0
+    assert st.view_of(torch.empty(0)).alloc == null and not st.has_pending()         # the allocation an empty tensor has
+    other = st.observe_raw(0, 64, "cuda:0")
+    assert other != null and st.events_pending() == [StorageAlloc(other, 0, 0, "cuda:0", 0, "null")]
+    assert (st.stats["observed"], st.stats["allocs"]) == (4, 0)
+
+
+def test_an_allocation_seen_first_without_its_storage_takes_the_key_it_is_seen_with_next_raw():
+    st = StorageAdapter(use_weakrefs=True)
+    a = st.observe_raw(0x1000, 64, "cpu")
+    st.events_pending()
+    assert st.observe_raw(0x1000, 64, "cpu", key=7) == a and st.observe_raw(0x1000, 64, "cpu") == a and not st.has_pending()
+    b = st.observe_raw(0x1000, 64, "cpu", key=8)           # another storage object in the keyed allocation's range: a new one
+    ev = st.events_pending()
+    assert b != a and ev[0] == StorageFree(a, True) and (ev[1].alloc, ev[1].generation) == (b, 1) and len(ev) == 2
+
+    st = StorageAdapter(use_weakrefs=True)
+    a = st.observe_raw(0x1000, 64, "cpu")
+    assert st.observe_raw(0x1000, 64, "cpu", key=7) == a
+    st.events_pending()
+    c = st.observe_raw(0x9000, 64, "cpu", key=7)           # the keyed storage at a new pointer: its allocation is freed
+    ev = st.events_pending()
+    assert ev[0] == StorageFree(a, True) and ev[1].alloc == c and len(ev) == 2 and st.live_count() == 1
+
+
+def test_a_new_range_frees_every_live_allocation_that_starts_inside_it_raw():
+    st = StorageAdapter(use_weakrefs=False)
+    a, b, c = (st.observe_raw(p, 16, "cpu") for p in (0x2000, 0x2010, 0x2030))
+    elsewhere = st.observe_raw(0x2000, 16, "cuda:0")
+    st.events_pending()
+    d = st.observe_raw(0x1ff0, 0x40, "cpu")                # [0x1ff0, 0x2030): `a` and `b` start inside it, `c` at its end
+    assert st.events_pending() == [StorageFree(a, True), StorageFree(b, True), StorageAlloc(d, 0x1ff0, 0x40, "cpu", 0, "op")]
+    assert st.live_count() == 3 and st.stats["frees_implied"] == 2
+    assert st.observe_raw(0x2030, 16, "cpu") == c and st.observe_raw(0x2000, 16, "cuda:0") == elsewhere and not st.has_pending()
+    e = st.observe_raw(0x2028, 9, "cpu")                   # [0x2028, 0x2031): `c` starts at its last byte, and `d` reaches into it
+    assert st.events_pending() == [StorageFree(d, True), StorageFree(c, True), StorageAlloc(e, 0x2028, 9, "cpu", 0, "op")]
+
+
+def test_a_pointer_seen_with_another_size_or_a_storage_seen_on_another_device_is_a_new_allocation_raw():
+    st = StorageAdapter(use_weakrefs=False)
+    a = st.observe_raw(0x1000, 64, "cpu", origin="param")
+    assert st.events_pending() == [StorageAlloc(a, 0x1000, 64, "cpu", 0, "param")], "the origin is the caller's"
+    b = st.observe_raw(0x1000, 32, "cpu")                  # the same pointer and no storage object to tell by: the size does
+    assert st.events_pending() == [StorageFree(a, True), StorageAlloc(b, 0x1000, 32, "cpu", 1, "op")]
+    assert st.observe_raw(0x1000, 32, "cpu") == b and (st.stats["allocs"], st.live_count()) == (2, 1)
+
+    st = StorageAdapter(use_weakrefs=True)
+    a = st.observe_raw(0x1000, 64, "cpu", key=7)
+    st.events_pending()
+    b = st.observe_raw(0x1000, 64, "cuda:0", key=7)        # the same storage object and pointer, on another device
+    assert st.events_pending() == [StorageFree(a, True), StorageAlloc(b, 0x1000, 64, "cuda:0", 0, "op")] and st.live_count() == 1
+
+
 def test_weakref_probe_answers_no_without_torch_or_weakrefs(monkeypatch):
     """`use_weakrefs` is off where torch is absent, where a storage is not one preserved object, and where it takes no
     weakref; a `StorageAdapter` made there falls back to implied frees."""
