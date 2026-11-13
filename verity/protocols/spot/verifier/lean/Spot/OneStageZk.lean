@@ -586,7 +586,7 @@ def push (I : Flock.Witness.Inputs) (rd : Reads) (programSha : Option String) (w
   | .error why =>
     pure { coinKeys, all := false, proved := r.proved, out := r.out.push (verdictJson rd programSha s st false why #[]) }
   | .ok () =>
-    if (programSha.map Json.str) != some want then
+    if !(match programSha with | some sha => jsonStrIs want sha | none => false) then
       throw s!"session {s.name}'s verdict names program {programSha.getD "none"}, not the partition object's {want.compress}"
     else do
       let units ← provedUnits I.publicFile record

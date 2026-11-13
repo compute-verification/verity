@@ -322,21 +322,20 @@ theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : On
     split at hstep
     · obtain rfl := Except.ok.inj hstep
       cases hall
-    · split at hstep
-      · cases hstep
-      · obtain ⟨us, hus, hstep⟩ := bind_ok hstep
-        obtain rfl := Except.ok.inj hstep
-        have hus' : OneStageZk.provedUnits pB record = .ok us := hus
-        have hq : (#[] ++ us).qsort (· < ·) = e.base.provedUnits := by
-          unfold OneStageZk.provedHeld at hheld
-          dsimp only at hheld
-          split at hheld
-          · cases hheld
-          · rename_i hne
-            simpa only [bne_iff_ne, ne_eq, not_not] using hne
-        refine ⟨s, pB, B, record, law, n, units, read, hs, hpB, hB, hu, hder, hn, hd, ?_⟩
-        obtain ⟨xs, rfl⟩ := provedUnits_sorted hus'
-        rw [hus', ← hpu', ← hq, Array.empty_append, qsort_qsort]
+    · split_ifs at hstep
+      obtain ⟨us, hus, hstep⟩ := bind_ok hstep
+      obtain rfl := Except.ok.inj hstep
+      have hus' : OneStageZk.provedUnits pB record = .ok us := hus
+      have hq : (#[] ++ us).qsort (· < ·) = e.base.provedUnits := by
+        unfold OneStageZk.provedHeld at hheld
+        dsimp only at hheld
+        split at hheld
+        · cases hheld
+        · rename_i hne
+          simpa only [bne_iff_ne, ne_eq, not_not] using hne
+      refine ⟨s, pB, B, record, law, n, units, read, hs, hpB, hB, hu, hder, hn, hd, ?_⟩
+      obtain ⟨xs, rfl⟩ := provedUnits_sorted hus'
+      rw [hus', ← hpu', ← hq, Array.empty_append, qsort_qsort]
 
 /-- **v2's credit, as `Units.unitsAt` reads it**: where v2 accepts evidence it parsed at the coins `ξ`, at any load of
 the parameters' public file and the draw the session's record reads (`Flock.Witness.recordDraw`), `unitsAt` is the units
