@@ -536,7 +536,7 @@ Its `periods.py` gives the slowdown bound for monitoring periods of a week, a mo
   MFU₀ (`Nci.Dampener.hardwareMultiple`): at least 1, and 1 with no protocol.
 - **Their status.** Draft (`draft:no-straddle`). `min-cut` sets them, `reference-remote-h200-pouw`'s and
   `reference-remote-h200-sampled`'s at inference blocks of 2·10⁷ fresh bits, with `training-cut-hardness` and
-  `training-cut-exports` assumed. `cover` sets `reference-remote-h200-elementary`'s 1, contested via `output-premise`.
+  `training-cut-exports` assumed. `cover` sets `reference-remote-h200-elementary`'s 1, conditional, premises assumed.
 - **What sets them.** The share of GPU time outside credited work (ε_undecl) sets nearly all of each figure (96% to
   98%): the figures are the composition's, and with PoUW crediting nothing the same scenario gives 1.
 - **Their range.** The range takes each parameter to either end of its plausible range; the worst corner takes them all
