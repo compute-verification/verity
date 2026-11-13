@@ -151823,3 +151823,21 @@ diff --git a/benchmarks/one_stage/tests/test_a5_wiring.py b/benchmarks/one_stage
 **Not established.** The play of two templates and the two-stage toy were not run on the scratch [run: neither job has them]. `security/Proofs` was not built on the merge, and no records run was made on it [run]. No play went through the compiled form, which is STAGECOINS's [relayed: your 14:18Z]. That a registered file without the wired port is bound on the unmended merge is by reading: the unmended test stops one assertion before it [derived]. The scratch is the tree before chain 2, so the same hunks sit at other paths in the carried join [guess]. What the Lean verifier does with a wired port bound at its writer's root is not known to me [guess: no run reached it].
 
 **What I do next.** Nothing on the live line [relayed: your rule]. I read FRAME's table for my carried commit at each timer, the next at 17:00Z [run: set].
+
+## STREAMKEPT, Fri 13 Nov 16:34Z: launched; I take over the streamed check's proof from FIRSTACCEPT on `cursor/proofs-streamkept-2eb0`, at `d54128792abd95bd359f754a924ceffcad12e1d5`, nothing of mine committed yet
+
+In plain words: I am the worker that finishes the proof that the streamed check (blobs read one at a time) decides what the whole check decides. The one lemma still open is `StepsKept`; nothing below is proved by me yet.
+
+- Agent id `bc-2eb0a6ef-c9c5-51a7-bea5-58b7f8b8ca12` [run: `run-info`]. Mailbox `inbox/bc-2eb0a6ef-c9c5-51a7-bea5-58b7f8b8ca12.md` on `cursor/proofs-inbox` does not exist yet [run: `git show`, 16:33Z].
+- Branch `cursor/proofs-streamkept-2eb0`, cut from `d54128792abd95bd359f754a924ceffcad12e1d5`, the remote head of `cursor/proofs-firstaccept-streamed-5a1e` [run: `git fetch`, 16:31Z]. Not pushed yet: it holds no commit of mine.
+- One thing off the brief, said at once: `mkdir ~/wt/.pen` failed on its first try, but with "No such file or directory", not "File exists": this machine had no `~/wt` at all [run]. So no other loop held the pen. I made `~/wt`, then `mkdir ~/wt/.pen` alone, which passed [run]; a later loop on this machine is still refused by it. If you read the rule as "any failure ends the turn", say so and I stop.
+- Read so far: `origin/main`'s `AGENTS.md` and lean-proofs skill (main at `5eb1231b2558`), the three sections of `COMMON.md`, FIRSTACCEPT's 15:05Z entry whole, and the three Lean files of the stream at the head (`CoreProtocol/Stream.lean`, `Spot/OneStageZkStream.lean`, `Spot/OneStageZkStreamSound.lean`) [read].
+
+**The plan, five lines.**
+1. The plan's shape: `groupsOf` (and `planOf`'s `stOf`, also a `HashMap` fold) as list functions; I decide "replace" or "prove equal" once I have read what the invariant needs of them, and say which. If replaced, `stream_case.sh` runs again on the 300-member stand-in and its line is compared with `check`'s.
+2. The invariant on a step, stated first as a Lean `def … : Prop` on my branch (the blobs held are a sublist of the feed; at each role the held blobs answer as the feed does for what that role reads), then `step` keeps it, then `StepsKept` from it with `distinctFrom_ok` and the congruence lemmas.
+3. Every try through `research run --on auto` (`lean_changed.py --try FILE --siblings`), launched as soon as a file is written; nothing built on this machine.
+4. Items 2 and 3 of the brief (the 155 GB figure by reading the imports; the templates knob on `members_standin.py`, sized first) while tries wait in line.
+5. The carry: merge MEMBERS's "my live line" head when it is named, name mine by 20:00Z, then only FRAME's carried head.
+
+**Not established:** everything about `StepsKept`. I have not yet checked FIRSTACCEPT's claim that distinct names of the members with statements follow wherever the plan passes [derived, his], nor that no step is false.
