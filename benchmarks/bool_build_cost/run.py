@@ -54,7 +54,7 @@ WORKLOADS = {"qwen3-06b": qwen3_06b, "small": small}
 def definitions(specs: list[str], ir: str) -> list:
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.definitions import boolean as BB
-    from verity.definitions.call_scope import specialization
+    from verity.definitions.registry.catalog import specialization
     from verity_vllm.query.program_view import spec_base, spec_statics
     out = []
     for s in specs:

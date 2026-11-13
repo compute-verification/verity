@@ -13,7 +13,7 @@ import pytest
 from verity.circuits import cut
 from verity.circuits.defs import bind
 from verity.definitions import word as W
-from verity.definitions.call_scope import specialization
+from verity.definitions.registry.catalog import specialization
 
 
 def _spec(fam: str, **statics):

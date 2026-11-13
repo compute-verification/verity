@@ -40,6 +40,7 @@ from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.pipeline.vu_export import template_of
 from verity.definitions.encoding import encode_specialization, word_values
 from verity.definitions import word as word_query
+from verity.definitions.registry.catalog import specialization as _specialization
 from verity_vllm.query.program_view import ProgramView, _read_instance_header, from_instances, iter_instance_rows, spec_base, spec_statics
 
 SCHEMA = "vllm-program-graph/v1"
@@ -443,9 +444,6 @@ def fold_hints(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
             runs.append({"start": k, "count": j - k, "fn": nodes[k]["fn"], "form": nodes[k]["form"], "chained": chained})
         k = j
     return runs
-
-
-_specialization = word_query.specialization
 
 
 def definitions(roots: Iterable[tuple[str, dict[str, Any]]]) -> tuple[dict[str, dict[str, Any]], list[str | None]]:

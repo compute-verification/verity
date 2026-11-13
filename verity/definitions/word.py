@@ -789,10 +789,12 @@ def call_groups(P: Any, Q: Any) -> list[dict[str, Any]]:
 
 
 def check_query(P: Any, Q: Any, X: int = 16, W: int = 32, extras: int = 0, *, strict: bool = True,
-                acquired: Mapping[str, int] | None = None, max_gates: Limits = None) -> dict[str, Any]:
-    """Check the Program `P` against `Q_word_v1{X,W}` refining the population `Q` (see `call_groups`; `acquired`, `max_gates`: see
-    `check_calls`); `strict` raises `QueryRuleViolation` naming every violating (Definition, class)."""
-    return check_calls(call_groups(P, Q), X, W, extras, strict=strict, acquired=acquired, max_gates=max_gates)
+                acquired: Mapping[str, int] | None = None, max_gates: Limits = None,
+                specialize: Callable[[str, dict], Any] = specialization) -> dict[str, Any]:
+    """Check the Program `P` against `Q_word_v1{X,W}` refining the population `Q` (see `call_groups`; `acquired`, `max_gates`,
+    `specialize`: see `check_calls`); `strict` raises `QueryRuleViolation` naming every violating (Definition, class)."""
+    return check_calls(call_groups(P, Q), X, W, extras, strict=strict, specialize=specialize, acquired=acquired,
+                       max_gates=max_gates)
 
 
 __all__ = ["QUERY_ID", "WIRING", "RULE", "MAX_GATES", "MAX_GATES_ENV", "RULE_CACHE_ENV", "committed_today", "tap_kernel", "QueryRuleViolation",

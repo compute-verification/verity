@@ -18,6 +18,7 @@ from verity.definitions.registry import b1, hopper
 from verity.definitions.registry import fa3_check_inf as F3
 from verity.definitions.registry import attention_vocab
 from verity_vllm.program.frontend import targets as TG
+from verity.definitions.registry import catalog
 
 NEG_INF, NAN = 0xFF800000, 0x7FFFFFFF
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
@@ -131,13 +132,13 @@ def test_the_partition_rule_commits_the_running_max_where_the_block_is_unguarded
 
     statics = {"T": 40, "NH": 2, "KVH": 1, "D": 16, "BN": 16, "DOT": {"fn": "HopperBF16WgmmaDot16_v1"}, "INV": {"fn": "Fa3InvSum_v1"}}
     for mf, guards in ((2, 0), (0, 4)):
-        r = W.unit_rule(W.specialization("Attention_v4", dict(statics, MASKED_FROM=mf)))
+        r = W.unit_rule(catalog.specialization("Attention_v4", dict(statics, MASKED_FROM=mf)))
         assert r["violations"] == [] and r["max_out_bits"] <= 32
         heads = {}
         for i in r["committed_interior"]:
             heads[i["head"]] = heads.get(i["head"], 0) + i["words"]
         assert heads.get("GuardNegInfZero_v1", 0) == guards and heads["F32MulFtz_v1"] == 6
-    g = W.Graph(W.specialization("AttentionHead_v4", {k: v for k, v in dict(statics, MASKED_FROM=2).items() if k not in ("NH", "KVH")}))
+    g = W.Graph(catalog.specialization("AttentionHead_v4", {k: v for k, v in dict(statics, MASKED_FROM=2).items() if k not in ("NH", "KVH")}))
     R = W.units(g, 16, 32)
     assert R["cut"].ok and not g.recomputed and bool(R["ok"].all())
 
