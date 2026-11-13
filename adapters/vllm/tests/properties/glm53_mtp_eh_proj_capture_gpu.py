@@ -157,8 +157,8 @@ def bind_check(splits: list[int]) -> dict[str, Any]:
     from verity.circuits.boolean.trace import word_of
     from verity.circuits.defs import bind
     from verity.circuits.evaluation.batch import type_shape
-    from verity.definitions.ops import gemm as CG
-    from verity.definitions.ops.boolean import gemm as BGO
+    from verity.circuits.ops import gemm as CG
+    from verity.circuits.ops.boolean import gemm as BGO
     from verity.definitions.registry import cublas_bf16 as CB
 
     hop = word_of(BGO.HopperBF16WgmmaDot16)

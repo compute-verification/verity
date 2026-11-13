@@ -34,8 +34,8 @@ from __future__ import annotations
 from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
-from verity.definitions.ops.prims import const
-from verity.definitions.ops.scalar import BitAnd, SelectBf16
+from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import BitAnd, SelectBf16
 from verity.definitions.registry import dsa as D
 from verity.definitions.registry import dsa_norm as DN
 from verity.definitions.registry.prims import BF16, F32

@@ -23,9 +23,9 @@ from verity.circuits.defs import bind
 from verity.circuits.refs import Coll, concat, strided_view
 from verity.circuits.types import Array
 from verity.definitions.boolean import boolean_version
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.ops.prims import const
-from verity.definitions.ops.scalar import BitAnd, SelectBf16
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import BitAnd, SelectBf16
 from verity.definitions.registry import boolean_dsa_norm as BDN
 from verity.definitions.registry import dsa as D
 from verity.definitions.registry import dsa_norm as DN
