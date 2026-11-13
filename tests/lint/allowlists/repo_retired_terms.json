@@ -4491,7 +4491,7 @@
     {"file": "verity/protocols/pous/verifier/tests/test_pous_audit.py", "count": 3},
     {"file": "verity/protocols/pous/verifier/tests/test_pous_band.py", "count": 1},
     {"file": "verity/protocols/pous/verifier/tests/test_pous_challenger_loop.py", "count": 3},
-    {"file": "verity/protocols/pous/verifier/tests/test_pous_challenger_party.py", "count": 6},
+    {"file": "verity/protocols/pous/verifier/tests/test_pous_challenger_party.py", "count": 5},
     {"file": "verity/protocols/pous/verifier/tests/test_pous_dense.py", "count": 1},
     {"file": "verity/protocols/pous/verifier/tests/test_pous_memory_challenger.py", "count": 2},
     {"file": "verity/protocols/pous/verifier/tests/test_pous_period.py", "count": 5},
