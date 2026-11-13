@@ -183,7 +183,7 @@ def test_seed_records_hash_to_the_seeds():
         assert got == [SD.seed(st.salt, p, *roots), SD.receipt_seed(st.salt, p, *roots)]
 
 
-@pytest.mark.skipif(not (torch.cuda.is_available() and SETTINGS.PARTIALS_LIB),
+@pytest.mark.skipif(not (SETTINGS.PARTIALS_LIB and torch.cuda.is_available()),
                     reason="the gpu backend needs CUDA and PARTIALS_LIB (an h1u.cu build with kh_lanes)")
 def test_gpu_is_the_cpu_byte_for_byte():
     kern = PT.Kernel(SETTINGS.PARTIALS_LIB)

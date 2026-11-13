@@ -138,7 +138,7 @@ def test_a_saved_capture_is_checked_after_serving(tmp_path):
     _served_ok(json.loads((tmp_path / "doc.json").read_text()))
 
 
-@pytest.mark.skipif(not (torch.cuda.is_available() and SETTINGS.PARTIALS_LIB),
+@pytest.mark.skipif(not (SETTINGS.PARTIALS_LIB and torch.cuda.is_available()),
                     reason="the gpu backend needs CUDA and PARTIALS_LIB (an h1u.cu build with kh_lanes)")
 def test_gpu_rows_are_serve_regs_lane_rows():
     kern = PT.Kernel(SETTINGS.PARTIALS_LIB)
