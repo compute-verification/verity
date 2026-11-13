@@ -10,8 +10,10 @@ No registration entry retires anything: a site entry adds sheets, locations and 
 and a declaration adds a day's circuit. So what the view of a prefix of the log holds, the view of every longer prefix
 holds too (`view_take_prefix`): its θ, its declarations and its Site's sheets, locations and links extend. A part of the
 registered hardware registered at a prefix is registered at every longer one (`parts_take_mono`), and each tie that
-holds at the view of a prefix holds at the view of every longer one (`declaredIn_take_mono`, `certifiedIn_take_mono`,
-`rootIn_take_mono`), since the set it reads only grows (`NamesRegistered.mono`).
+holds at the view of a prefix holds at the view of every longer one (`declaredIn_take_mono`, `rootIn_take_mono`),
+since the set it reads only grows (`NamesRegistered.mono`). The certified links only grow too
+(`certifiedKeys_take_mono`), but `CertifiedIn` is an equality with them, so it holds at the prefix its head names and
+not at every longer one.
 -/
 
 @[expose] public section
@@ -94,11 +96,6 @@ theorem declaredIn_take_mono (V : Vocab d α) (θ : ByteArray) (F : Array ByteAr
   refine ⟨j, hw, p, hp, hn.mono fun e he => ?_⟩
   simp only [Set.mem_ofPred_eq] at he ⊢
   exact ⟨hdecl.subset he.1, he.2⟩
-
-theorem certifiedIn_take_mono (p : NetworkCheck.Check.Params) (D : Digests) (c : Composite) (log : Registration)
-    {n m : ℕ} (h : n ≤ m) (hc : CertifiedIn p (view D c (log.take n))) :
-    CertifiedIn p (view D c (log.take m)) :=
-  fun l hl => (hc l hl).mono (certifiedKeys_take_mono D c log h)
 
 theorem rootIn_take_mono (t : Theta) (D : Digests) (c : Composite) (log : Registration) {n m : ℕ}
     (h : n ≤ m) (hr : RootIn t (view D c (log.take n))) : RootIn t (view D c (log.take m)) := by
