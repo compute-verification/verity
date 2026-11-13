@@ -14,7 +14,7 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import or_reduce
 from verity.circuits.boolean.trace import emit
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.definitions.ops.boolean import rolled as RO
+from verity.circuits.ops.boolean import rolled as RO
 from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import boolean_deepgemm as BDG
 from verity_flock import struct_lower as SL
