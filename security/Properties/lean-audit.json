@@ -1173,6 +1173,10 @@
    "honest": ["Properties.Site.entryValid_honest"],
    "nontrivial": "Properties.Site.entryValid_nontrivial"
   },
+  "Properties.Registration.checks": {
+   "honest": ["Properties.Registration.checks_honest"],
+   "nontrivial": "Properties.Registration.checks_nontrivial"
+  },
   "Properties.Site.checks": {
    "honest": ["Properties.Site.checks_honest"],
    "nontrivial": "Properties.Site.checks_nontrivial"
@@ -9381,6 +9385,15 @@
    "type_hash": "4eda244e871db8f10d252cf426606eb73ab8ae55c86ca35968158571dee735d5",
    "unfolded_hash": "d54ce5e55b0eb1169fa600b83cb1082b8a79773f6cbacd24e520c08181762100"
   },
+  "Properties.Registration.checks": {
+   "owner": "@proofs"
+  },
+  "Properties.Registration.checks_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.Registration.checks_nontrivial": {
+   "owner": "@proofs"
+  },
   "Properties.Site.checks": {
    "owner": "@lean",
    "signature": ["Properties.Site.checks : Properties.Site.Checks"],
@@ -12770,6 +12783,10 @@
    },
    "Properties.Composition.bindCollision": {
     "function": "Core.Composition.bind",
+    "outcome": "none"
+   },
+   "Properties.Registration.checks": {
+    "function": "Core.Registration.check",
     "outcome": "none"
    },
    "Properties.Site.checks": {

@@ -34,7 +34,8 @@ def step (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration.Compos
   | none => .ok (s.add e)
 
 theorem check_eq (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration.Composite)
-    (l : Core.Registration.Log) : Core.Registration.check A c l = l.foldlM (step A c) (Core.Registration.State.empty c) :=
+    (l : Core.Registration.Log) :
+    Core.Registration.check A c l = l.foldlM (step A c) (Core.Registration.State.empty c) :=
   rfl
 
 theorem nodup_iff : ∀ l : List String, Core.Registration.nodup l = true ↔ l.Nodup
@@ -53,6 +54,7 @@ theorem entry_refusal_sheet {D₁ D₂ : Verity.Registration.Digests} (h : D₁.
   | site p s =>
     simp only [Verity.Registration.Entry.refusal, Verity.Registration.Entry.kindRefusal, Verity.Site.Entry.refusal,
       Verity.Site.Entry.Fresh, Verity.Site.Entry.Sheets, Verity.Site.Entry.Capacity, h]
+    split_ifs <;> rfl
   | information => rfl
   | declaration => rfl
 
@@ -91,9 +93,9 @@ theorem inv_add (c : Core.Site.Registration.Composite) {p : Core.Registration.Lo
       simp only [Core.Registration.State.add, entry]
       rw [Properties.Site.site_add, Properties.Site.regEntry_added]
     | information p items =>
-      simp [Core.Registration.State.add, entry, Verity.Registration.Entry.added, Verity.Site.add]
+      simp [Core.Registration.State.add, entry, Verity.Registration.Entry.added, Verity.Site.add, Properties.Site.site]
     | declaration p d =>
-      simp [Core.Registration.State.add, entry, Verity.Registration.Entry.added, Verity.Site.add]
+      simp [Core.Registration.State.add, entry, Verity.Registration.Entry.added, Verity.Site.add, Properties.Site.site]
   · rw [show log B [e] = [entry B e] from rfl, Verity.Registration.items, List.flatMap_append,
       ← Verity.Registration.items, hI]
     cases e with
@@ -127,7 +129,8 @@ theorem refusal_eq (A : Core.Site.Registration.Auditor) (c : Core.Site.Registrat
     have hr := Properties.Site.refuses Core.Site.Registration.sha512 A c s.site s.head x
     have hf : refusal ∘ Core.Registration.Refusal.site = Properties.Site.refusal := rfl
     rw [Core.Registration.Entry.refusal, Option.map_map, hf, hr,
-      entry_refusal_sheet (D₂ := digests E) rfl, hS, hH, Verity.Registration.refusal]
+      entry_refusal_sheet (D₁ := Properties.Site.digests Core.Site.Registration.sha512) (D₂ := digests E) rfl, hS, hH,
+      Verity.Registration.refusal]
     cases x
     simp [entry, regEntry, Verity.Registration.Entry.ItemsOnce, Verity.Registration.Entry.DayOnce,
       Verity.Registration.Entry.items, Verity.Registration.Entry.declared?, hI, hn]
@@ -141,7 +144,7 @@ theorem refusal_eq (A : Core.Site.Registration.Auditor) (c : Core.Site.Registrat
       Verity.Registration.Entry.items, Verity.Registration.Entry.declared?, hH, hI, hk, ← nodup_iff]
     by_cases hq : q = s.head
     · cases h : Core.Registration.nodup ((s.items ++ items).map Core.Registration.Item.key) <;>
-        simp [hq, h, refusal]
+        simp [hq, refusal]
     · simp [hq, refusal, Properties.Site.refusal]
   | declaration q d =>
     simp only [Core.Registration.Entry.refusal, Verity.Registration.refusal, Verity.Registration.Entry.refusal,
@@ -153,13 +156,16 @@ theorem refusal_eq (A : Core.Site.Registration.Auditor) (c : Core.Site.Registrat
       · have ha : s.declared.any (·.day == d.day) = true := by
           obtain ⟨x, hx, hxd⟩ := List.mem_map.mp hd
           exact List.any_eq_true.mpr ⟨x, hx, by simpa using hxd⟩
-        simp [hq, ha, hd, refusal, declared]
+        simp [hq, ha, refusal, declared]
+        exact List.mem_map.mp hd
       · have ha : s.declared.any (·.day == d.day) = false := by
           rw [Bool.eq_false_iff]
           intro ha
           obtain ⟨x, hx, hxd⟩ := List.any_eq_true.mp ha
           exact hd (List.mem_map.mpr ⟨x, hx, by simpa using hxd⟩)
-        simp [hq, ha, hd, declared]
+        simp [hq, ha, declared]
+        intro x hx hxd
+        exact hd (List.mem_map.mpr ⟨x, hx, hxd⟩)
     · simp [hq, refusal, Properties.Site.refusal]
 
 /-- What a check's result says of the log it checked: an accepted log is valid, with the State the spec's of it; a
@@ -169,8 +175,8 @@ def Says (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration.Compos
   | .ok s => Verity.Registration.Valid (digests E) (auditor A) (composite c) (log B l) ∧ Inv B E c l s
   | .error _ => ¬Verity.Registration.Valid (digests E) (auditor A) (composite c) (log B l)
 
-/-- **The check follows the spec one entry at a time**: from a valid prefix `p` and its State, the check of the rest says
-what the spec says of the whole log. -/
+/-- **The check follows the spec one entry at a time**: from a valid prefix `p` and its State, the check of the rest
+says what the spec says of the whole log. -/
 theorem go_says (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration.Composite) :
     ∀ (rest p : Core.Registration.Log) (s : Core.Registration.State), Names B E (p ++ rest) → Inv B E c p s →
       Verity.Registration.Valid (digests E) (auditor A) (composite c) (log B p) →
@@ -195,6 +201,7 @@ theorem go_says (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration
       simp at hpre
     | none =>
       simp only [step, h]
+      show Says B E A c (p ++ e :: rest) (rest.foldlM (step A c) (s.add e))
       have hv' : Verity.Registration.Valid (digests E) (auditor A) (composite c) (log B (p ++ [e])) := by
         rw [log_append]
         exact Verity.Registration.valid_append_singleton_iff_refusal.mpr ⟨hv, by rw [← hr, h]; rfl⟩
@@ -227,7 +234,10 @@ theorem checks : Checks := by
   revert hs
   cases List.foldlM (step A c) (Core.Registration.State.empty c) l with
   | ok s => rintro ⟨hv, hi⟩; simp [Except.toOption, hv, view_eq B E c hi]
-  | error ir => intro hnv; simp [Except.toOption, hnv]
+  | error ir =>
+    intro hnv
+    have hnv' : ¬Verity.Registration.Valid (digests E) (auditor A) (composite c) (log B l) := hnv
+    simp [Except.toOption, hnv']
 
 /-! ## Witnesses
 
@@ -240,10 +250,11 @@ theorem honestLog_names (B : Core.Registration.Builder → Verity.Compiler) : Na
   simp only [honestLog, List.mem_cons, List.not_mem_nil, or_false] at he
   rcases he with rfl | rfl <;> rfl
 
-theorem check_honestLog : (Core.Registration.check Properties.Site.witnessAuditor .remote honestLog).toOption.isSome := by
+theorem check_honestLog :
+    (Core.Registration.check Properties.Site.witnessAuditor .remote honestLog).toOption.isSome := by
   simp [honestLog, infoEntry, dayEntry, Core.Registration.check, Core.Registration.Entry.refusal,
     Core.Registration.State.empty, Core.Registration.State.add, Core.Registration.nodup, Core.Registration.Item.key,
-    Except.toOption, bind, Except.bind]
+    Except.toOption, bind, Except.bind, pure, Except.pure]
 
 theorem checks_honest (B : Core.Registration.Builder → Verity.Compiler) :
     (Core.Registration.check Properties.Site.witnessAuditor .remote honestLog).toOption.isSome = true ∧
@@ -261,7 +272,8 @@ theorem checks_honest (B : Core.Registration.Builder → Verity.Compiler) :
     by_contra hv
     simp [Except.toOption, hv] at h
 
-theorem twiceLog_invalid (B : Core.Registration.Builder → Verity.Compiler) (E : Verity.Registration.Entry → String) :
+theorem twiceLog_invalid (B : Core.Registration.Builder → Verity.Compiler)
+    (E : Verity.Registration.Entry → String) :
     ¬Verity.Registration.Valid (digests E) (auditor Properties.Site.witnessAuditor) (composite .remote)
       (log B twiceLog) := by
   intro h
@@ -269,13 +281,13 @@ theorem twiceLog_invalid (B : Core.Registration.Builder → Verity.Compiler) (E 
   simp [log, twiceLog, entry, item, theta, Verity.Registration.Entry.ItemsOnce, Verity.Registration.items,
     Verity.Registration.Entry.items, Verity.Registration.Item.key] at this
 
-theorem checks_nontrivial (B : Core.Registration.Builder → Verity.Compiler) (E : Verity.Registration.Entry → String) :
+theorem checks_nontrivial (B : Core.Registration.Builder → Verity.Compiler)
+    (E : Verity.Registration.Entry → String) :
     ¬((acceptAllCheck .remote twiceLog).toOption.map (fun s => view B s.view) =
       if Verity.Registration.Valid (digests E) (auditor Properties.Site.witnessAuditor) (composite .remote)
           (log B twiceLog) then
         some (Verity.Registration.view (digests E) (composite .remote) (log B twiceLog))
       else none) := by
-  rw [if_neg (twiceLog_invalid B E)]
-  simp [acceptAllCheck, Except.toOption]
+  simp [twiceLog_invalid B E, acceptAllCheck, Except.toOption]
 
 end Properties.Registration
