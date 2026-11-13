@@ -380,7 +380,7 @@ theorem proved_of_recordDrawn {m n : ℕ} {units : Array ℕ} {record : String}
   simp only [Array.isEmpty_empty, ite_true]
   exact hS
 
-/-- **The design `designAt` reads draws `lawK` of it** wherever the registration's population is the descriptor's
+/-- **The design `designAt` reads samples `lawK` of it** wherever the registration's population is the descriptor's
 (`Live.hlaw`'s proof, at any parameters). -/
 theorem lawOn_designAt {desc : Claims.Msg} {qr lj : Json} {tb : Option Json} {n : ℕ}
     (hpop : Flock.Bridge.PopMatches desc qr n) :
