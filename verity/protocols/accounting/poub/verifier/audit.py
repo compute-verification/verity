@@ -1930,7 +1930,8 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     `link` is a binding record's only: an unbound receipt is of its block alone, and the record says nothing of where
     its read was made.  `wrong` is the profile's bound on wrong receipts (`IntegrityProfile.bound`; pass an
     approximation for a large store).  A sketch-sha512 record's receipts also rest on `SketchBound`
-    (`Accounting.Guarantees.Remote.SketchBoundDeployed`), whose terms add to the failure probability, not to γ:
+    (`Accounting.Guarantees.Remote.SketchBoundDeployed` at 64 rows, `SketchBoundRun` at 16), whose terms add to the
+    failure probability, not to γ:
     `timing.sketch_failure` of the prover's SHA-512 compressions over the session (`PROTOCOL.md` §4).
     The record credits the receipts of registered blocks, and those of blocks appended after the codec seed only on
     `credit_post_seed`, the stacking property's verdict on the circuits that wrote them (None credits none, and a verdict

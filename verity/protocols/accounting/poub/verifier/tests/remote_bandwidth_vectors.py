@@ -23,7 +23,9 @@ chain is the default registration's: sketch-sha512, the default receipt kind, at
 `variants` holds every other: the same store registered under each other kind and `bind`, and sketch-sha512 at 64 rows
 (named "kind", "kind/bind" for receipts that bind the stub tiles' z, "sketch-sha512/rows64"), with the same nonce, so
 the same codec seed and blocks (none of them is in the seed's context) under another digest, so another window R, and
-other seeds, signs and roots.
+other seeds, signs and roots.  At 64 rows the signs are `SIGN_DOMAIN_WIDE`'s under a 512-bit key, at 16
+`SIGN_DOMAIN`'s under a 256-bit one (`receipts.sign_key`); `sketch.zero_seed` holds each row count's key and rows at a
+seed of 64 zero bytes.
 """
 
 from __future__ import annotations
@@ -156,6 +158,17 @@ def variant(kind: str, bind: bool, rows: int) -> dict:
             "openings": {"coin": coins.coin(opening).hex(), "draws": draws(reg, opening)}}
 
 
+def zero_seed_signs() -> dict:
+    """The signs' key and rows at a seed of 64 zero bytes, at each row count: the key, row 0's first 16 bytes and the
+    last row's last 16."""
+    out = {}
+    for rows in receipts.ROWS:
+        signs = receipts.sign_bits(bytes(receipts.DIGEST_BYTES), rows)
+        out[str(rows)] = {"key": receipts.sign_key(bytes(receipts.DIGEST_BYTES), rows).value.hex(),
+                          "row_0": signs[0][:16].hex(), "row_last": signs[-1][-16:].hex()}
+    return out
+
+
 def draws(reg: audit.Registration, opening: coins.LiveOpening) -> list[int]:
     key = derive(coins.coin(opening), audit.OPENINGS_DOMAIN, {"registration": reg.digest, "window": 0})
     return list(key.subset(PARAMS.samples, sum(p.length for p in PLANS), "openings"))
@@ -208,8 +221,9 @@ def generate() -> dict:
         "openings": {"coin": coins.coin(opening).hex(), "label": opening.label, "index": opening.index,
                      "position": c.position(opening.label, opening.index), "after": opening.after.hex(),
                      "units": sum(p.length for p in PLANS), "draws": draws(reg, opening)},
-        "sketch": {"sign_domain": receipts.SIGN_DOMAIN, "receipt_domain": receipts.SKETCH_RECEIPT_DOMAIN.decode(),
-                   "rows": receipts.SKETCH_ROWS, "rows_allowed": list(receipts.ROWS)},
+        "sketch": {"sign_domain": receipts.SIGN_DOMAIN, "sign_domain_wide": receipts.SIGN_DOMAIN_WIDE,
+                   "wide_rows": receipts.WIDE_ROWS, "receipt_domain": receipts.SKETCH_RECEIPT_DOMAIN.decode(),
+                   "rows": receipts.SKETCH_ROWS, "rows_allowed": list(receipts.ROWS), "zero_seed": zero_seed_signs()},
         "variants": {name(*v): variant(*v) for v in VARIANTS},
     }
 

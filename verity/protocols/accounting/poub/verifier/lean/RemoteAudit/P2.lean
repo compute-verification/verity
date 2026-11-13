@@ -12,7 +12,7 @@ unit g        blocks 4g … 4g + 3, 8,224 bytes: 257 whole 32-byte sectors; U = 
 digest        SHA512(REGISTRATION_DOMAIN ‖ frame(node) ‖ u32be w ‖ u32be c0 ‖ u32be blocks_per_segment ‖
               u64be segments ‖ frame(expander) ‖ commitment ‖ salt ‖ root ‖ frame(layout) ‖ frame("sketch-sha512") ‖
               u32be k_s)
-S_i           k_s rows of 8,224 signs: K = derive(seed, SIGN_DOMAIN, {"tag": "sketch-sha512", "k": k_s, "n": 8224}),
+S_i           k_s rows of 8,224 signs: K = signKey(seed, k_s, 8224), under {"tag": "sketch-sha512", "k": k_s, "n": 8224},
               row c the first 1,028 bytes of K.stream(("row", c)), bit u (byte u / 8, LSB first) 1 → −1
 π_(i,j)       Σ_x S_i[c][2056·(j mod 4) + x] · int8(block_j[x]), k_s int32 little-endian
 σ_(i,g)       S_i · int8(unit g's bytes) = Σ π over its blocks, k_s int32 little-endian
@@ -92,8 +92,7 @@ def Registration.checkPath (r : Registration) (j : Nat) (block : ByteArray) (pat
 
 /-- `receipts.sign_bits(seed, rows, 8224)`: S_i's rows of 1,028 bytes. -/
 def unitSigns (seed : ByteArray) (rows : Nat) : Array ByteArray :=
-  let key := FlockSoundness.Randomness.derive seed SIGN_DOMAIN
-    [("tag", .str "sketch-sha512"), ("k", .int rows), ("n", .int UNIT_BYTES)]
+  let key := signKey seed rows UNIT_BYTES
   (Array.range rows).map fun c => FlockSoundness.Randomness.stream key [.str "row", .int c] (UNIT_BYTES / 8)
 
 private def int8 (x : UInt8) : Int := if x.toNat ≥ 128 then (x.toNat : Int) - 256 else x.toNat
