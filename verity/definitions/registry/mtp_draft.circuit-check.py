@@ -11,7 +11,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     (`dsa_norm.DsaRMSNormApply_v1{G=64}`, the apply, is `dsa_norm`'s binding). Then `eh_proj`, the replicated bf16 linear from
     12288 to 6144 that the H200 runs on cuBLAS: core's `Gemm_v2` where cuBLAS does not split K, and `cublas_bf16`'s
     `CublasSplitKGemm_v1` at the one split count its route table takes up to 8192 tokens, 2
-    (`glm53_mtp_eh_proj_capture_gpu`)."""
+    (`glm53_mtp_eh_proj_capture_gpu`). A whole row of either is past Flock's proved block range, and a served row is cut along
+    N into slices, each the same Definition at N = 1 on x and one row of W; so each is bound at its slice too."""
     from verity.circuits.boolean.trace import word_of
     from verity.circuits.defs import bind
     from verity.circuits.ops import gemm as G
@@ -27,4 +28,6 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("TritonBlockRMSNormSumSq_v1/glm53-mtp-eh", lambda: bind(MD.TritonBlockRMSNormSumSq, N=6144, **eh)),
         ("Gemm_v2/glm53-mtp-eh-proj", lambda: bind(G.Gemm, **proj)),
         ("CublasSplitKGemm_v1/glm53-mtp-eh-proj-2", lambda: bind(CB.CublasSplitKGemmWord, SPLIT_K=2, **proj)),
+        ("Gemm_v2/glm53-mtp-eh-proj-slice", lambda: bind(G.Gemm, **{**proj, "N": 1})),
+        ("CublasSplitKGemm_v1/glm53-mtp-eh-proj-2-slice", lambda: bind(CB.CublasSplitKGemmWord, SPLIT_K=2, **{**proj, "N": 1})),
     ]
