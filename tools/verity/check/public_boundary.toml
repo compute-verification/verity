@@ -136,8 +136,6 @@ benchmarks = [
     "benchmarks/pouw/pearl_c_sm90/{pearl_c_sm90.cu,hash_prefill.cuh,acc.h,debit_sm90.cu}",
     # the -h3 hashing both cubins include, and the wide rows' that sm_90a's does
     "benchmarks/pouw/pearl_c/{hash_h3.cuh,hash_wide.cuh,sha512.cuh}",
-    # the PoUW harness's SASS gate, whose `mma_gate` each build's gate runs, and the pins it reads
-    "benchmarks/pouw/harness/{sass_gate.py,sass_pins.json}",
 ]
 # public files that no row above covers and no public file needs
 standalone = [
@@ -215,7 +213,8 @@ protocol_tests = [
 ]
 # vLLM's test of GLM-5.3's served templates at TP 8, which reads the records `benchmarks/one_stage`'s served window wrote
 served_records = ["adapters/vllm/tests/pipeline/test_served_unit_rows.py"]
-# vLLM's test of its int8 attention kernels' PTX and SASS, which runs the PoUW kernels' SASS gate (`benchmarks/pouw/harness`)
+# vLLM's test of its int8 attention kernels' PTX and SASS, which runs the PoUW kernels' SASS gate
+# (`verity/protocols/accounting/pouw/prover/sass_gate.py`)
 kernel_gates = ["adapters/vllm/tests/engine/{int8_attention_sass,test_int8_attention_sass}.py"]
 # vLLM's adapter of PoUS and driver of the bandwidth audit, which `verity_vllm.protocols.adapter` and `driver` load by name
 # and refuse as not on this tree where they are absent
@@ -303,14 +302,18 @@ flock_bench = [
 # of the public tree
 nested = [
     "verity/circuits/requirement",
-    "verity/circuits/requirement",
+    # the evaluator's package sits under the public `verity/circuits` since its move: its files that no public file
+    # imports stay private, as they were under `verity/definitions`, and the rest stay public
+    "verity/circuits/evaluate/{Evaluate.lean,README.md,lean-audit.json,pyproject.toml,tests}",
+    "verity/circuits/evaluate/Evaluate/{Main,Serve,Walk}.lean",
     "verity/hardware/tests/test_lean.py",
     "verity/hardware/tests/test_nodes.py",
     "verity/protocols/proofs/flock/sigma",
     "verity/protocols/policy/inference_only",
     "verity/protocols/accounting/poub/device/live_verifier",
     "verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py",
-    "verity/protocols/accounting/pouw/{clear,receipts}",
+    "verity/protocols/accounting/pouw/clear",
+    "verity/protocols/accounting/pouw/verifier/receipts",
 ]
 
 # Each entry: globs exported only as far as public files need them, the public groups whose files may pull them in
