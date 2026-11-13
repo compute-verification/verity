@@ -78,7 +78,7 @@ product's rule and its difftest are the composition's ([README](composition/READ
    blocks are B's output on the log's θ and the advice; the committed trace is `Verity.Committed`.
 2. **Execution phase** j. The hardware runs, and the developer commits every value it computes under hiding commitments
    in SHA-512 trees: the committed trace.
-3. **Verification phase** j, one per execution phase (`ARCHITECTURE.md`, "How an audit works"):
+3. **Verification phase** j, one per execution phase (`ARCHITECTURE.md`, section 3, "One period, step by step"):
    1. The developer reports its advice a_j, at most ℓ_a bits, committed. B(a_j) outputs the execution block E_j,
       partitioned into inference blocks, each of which is partitioned into proof blocks, with its placement. The
       developer proves through the ZK server that it ran B correctly on the committed advice of at most ℓ_a bits, and
