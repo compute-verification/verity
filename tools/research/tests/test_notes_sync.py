@@ -225,6 +225,33 @@ def test_two_syncs_of_one_clone_at_the_same_moment_both_publish_and_leave_it_on_
     assert "the other machine's line" in _git(origin, "show", f"main:{DOC}")
 
 
+def test_lines_appended_under_another_sync_s_rebase_are_published_not_reset_away(machines, held):
+    """What lost two lines on a shared clone.  A reader's sync is inside its rebase, HEAD detached at the remote's commit, when
+    another agent appends two lines to a file the reader's commit also changed, and syncs.  The reader's rebase then stops at
+    that file (its pick would overwrite the two lines), and ending it with `git rebase --abort` alone resets the file: the
+    lines are in no file and no commit.  Here they are put back, the reader's sync rebases again, and both syncs publish."""
+    origin, shared, other = machines
+    _insert_after(other / DOC, "<!-- b -->", "the other machine's line")
+    assert NS.sync(other, secrets=[])["pushed"]
+    _insert_after(shared / DOC, "<!-- a -->", "the reader's line")
+    held.hold(shared)
+    reader = _start(shared, "sync", "-m", "the reader's sync")
+    held.reached(reader)
+    with (shared / DOC).open("a") as f:
+        f.write("appended line 1\nappended line 2\n")
+    appender = _start(shared, "sync", "-m", "the appender's sync")
+    held.started.append(appender)
+    said = appender.stderr.readline()
+    held.go.release()
+    out1, out2 = reader.communicate(), appender.communicate()
+    text = (shared / DOC).read_text()
+    assert "appended line 1\nappended line 2\n" in text, f"the two lines left the file: {(out1, said, out2)}"
+    assert (reader.returncode, appender.returncode) == (0, 0), (out1, said, out2)
+    published = _git(origin, "show", f"main:{DOC}")
+    assert published == text and all(x in published for x in ("the reader's line", "the other machine's line", "appended line 2"))
+    assert _state(shared) == ("main", False, []) and _git(shared, "status", "--porcelain") == ""
+
+
 def test_a_sync_waits_a_bounded_time_for_another_sync_of_its_clone_and_then_commits_nothing(machines, monkeypatch, capsys):
     """One sync of a clone at a time: a sync that finds another at work waits for it, saying once whom it waits for, and
     after LOCK_WAIT_S gives up with nothing committed."""

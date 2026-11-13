@@ -16,11 +16,12 @@ LOCK_WAIT_S, saying on stderr whom it waits for (the holder's pid, machine and a
 1.  Before it commits, a sync puts right what an earlier git left in the clone (`settle`), each with one `SYNC-WARN` line: a
 rebase or merge in progress that no git process is running is ended, and a HEAD left detached with nothing in progress and the
 branch at or behind it gets the branch checked out where it is.  A HEAD detached anywhere else is refused (exit 2).  Ending a
-rebase it found never loses what was written under it: `git rebase --abort` resets every tracked file, so the files changed
-in the working tree are saved first and put back after (`end_operation`).  What cannot be put back (the file changed on both
-sides since, a conflicted file someone wrote into, a file written where the rebase had taken one out of the tree, a commit
-made on its detached HEAD) stays on a local branch `rescue-<UTC time>`, and the sync fails naming it.  Other git commands in
-a clone (the watcher's `snapshot`, the standby's `pull`, the archive) do not take the lock.
+rebase, a found one or the sync's own, never loses what was written under it: `git rebase --abort` resets every tracked file,
+so the files changed in the working tree are saved first and put back after (`end_operation`), and the sync's own rebase is
+run again when what stopped it was such a file.  What cannot be put back (the file changed on both sides since, a conflicted
+file someone wrote into, a file written where a found rebase had taken one out of the tree, a commit made on its detached
+HEAD) stays on a local branch `rescue-<UTC time>`, and the sync fails naming it.  Other git commands in a clone (the watcher's
+`snapshot`, the standby's `pull`, the archive) do not take the lock.
 
 A commit made here is the clone's own (`identity_env`: `sync`'s and its rebase's, the archive's, `snapshot`'s): where the
 configuration git reads in the clone names an author and a committer, git is not handed the calling shell's GIT_AUTHOR_NAME,
@@ -998,10 +999,14 @@ def _sync(root: Path, gitdir: Path, paths: list[str] | None, message: str | None
             rb = _run(root, "rebase", "--autostash", tracking, timeout=300)
             if rb.returncode:
                 conflict = [x for x in (_out(root, "diff", "--name-only", "--diff-filter=U") or "").splitlines() if x]
-                _run(root, "rebase", "--abort")
-                if not _out(root, "symbolic-ref", "-q", "HEAD"):
+                ended = end_operation(root, gitdir, "rebase") if in_progress(gitdir) else {"over": True, "put_back": 0, "lost": None}
+                if not _branch(root) and not in_progress(gitdir):
                     # an abort that lost its rebase-merge directory (as on NFS) leaves HEAD detached at the remote branch
                     _run(root, "checkout", "-q", branch)
+                if ended["lost"]:
+                    return {**rep, "rc": 3, "conflict": conflict, "error": f"the rebase stopped, and {ended['lost']}; then sync again"}
+                if ended["put_back"] and not conflict and n < retries:
+                    continue                                    # it stopped at a file someone wrote under it: again, with that stashed
                 return {**rep, "rc": 3, "conflict": conflict,
                         "error": "rebase conflict; nothing was dropped (the local commit is kept, the rebase aborted): resolve "
                                  + (", ".join(conflict) or rb.stderr.strip()[-200:]) + ", then sync again"}
