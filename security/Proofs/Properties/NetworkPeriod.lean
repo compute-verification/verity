@@ -12,7 +12,7 @@ import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
-# Each form's `K` bounds `PeriodLeakAccepted`'s count: the proofs of `ClockKBoundsCount` and `RowsKBoundsCount`
+# Each form's `K` bounds `MonitoringPeriodLeakAccepted`'s count: the proofs of `ClockKBoundsCount` and `RowsKBoundsCount`
 
 Each factor is at most 2 to the power of the ceiling of its `log2` (`le_two_pow_clog2`), and `K`'s sums over the
 connections and the windows (the compute audits, or the scans) are sums over `Fin m` and `Fin n` (`Array.ofFn`), so
@@ -32,7 +32,7 @@ of a registered stratified sample that is sampled whole are of every stratum sam
 `RegisteredSampleHeld` and `SampleBoundCharged` read the same public in both forms (`check_clock`, `check_rows`): what
 `factsOf` gives of every answer (`factsOf_sample`: facts of the registered sample, with a count at least its bound,
 the larger of the stated one and `sampleBound`) holds of each audit's facts and each scan's
-(`rowsWindowCheck_facts`), position for position (`answersAt`).
+(`rowsExecutionPhaseCheck_facts`), position for position (`answersAt`).
 
 `RowsCapPublished` reads the public off the acceptance, in each form.
 -/
@@ -147,7 +147,7 @@ theorem rowsProgWired : RowsProgWired := by
     · cases h0
 
 /-- A link-window's window record whose `prog` is at the root `r` and the domain `d`. -/
-def tiedWindow : Lean.Json :=
+def tiedExecutionPhase : Lean.Json :=
   Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")]])]
 
 /-- A compute audit whose Program has one `SlotEntry_v1` template of one member, a pinned Definition (its closure
@@ -164,7 +164,7 @@ def slotReg : Lean.Json :=
 /-- Its honest side: a link-window whose scan's `prog` is at that port's root and domain is wired, and the slot audit
 is tied to it, so its free inputs are in the link-window's term. -/
 theorem rowsProgWired_honest :
-    wired #[slotAudit] slotSchedule #[slotReg] tiedWindow = true ∧ tiedIn #[slotReg] #[tiedWindow] 0 = true := by
+    wired #[slotAudit] slotSchedule #[slotReg] tiedExecutionPhase = true ∧ tiedIn #[slotReg] #[tiedExecutionPhase] 0 = true := by
   decide +kernel
 
 /-- A compute audit whose Program has one `SelectEntry_v1` template of one member, a pinned Definition (its closure
@@ -179,10 +179,10 @@ def selectReg : Lean.Json :=
 /-- Its honest side: a link-window whose scan's `prog` is at that port's root and domain is wired, and the audit is
 tied to it. -/
 theorem rowsProgWired_select :
-    wired #[selectAudit] slotSchedule #[selectReg] tiedWindow = true ∧ tiedIn #[selectReg] #[tiedWindow] 0 = true := by
+    wired #[selectAudit] slotSchedule #[selectReg] tiedExecutionPhase = true ∧ tiedIn #[selectReg] #[tiedExecutionPhase] 0 = true := by
   decide +kernel
 
-theorem tiedWindow_unwired : wired #[] slotSchedule #[] tiedWindow = false := by
+theorem tiedExecutionPhase_unwired : wired #[] slotSchedule #[] tiedExecutionPhase = false := by
   decide +kernel
 
 /-- **No period check that accepts every period has `RowsProgWired`'s property** (its nontrivial lemma): such a check
@@ -191,9 +191,9 @@ theorem rowsProgWired_nontrivial : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
   let p : Params :=
     ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
-  have hw : wired #[] slotSchedule #[] tiedWindow = true :=
-    h p ⟨#[], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
-  rw [tiedWindow_unwired] at hw
+  have hw : wired #[] slotSchedule #[] tiedExecutionPhase = true :=
+    h p ⟨#[], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedExecutionPhase rfl
+  rw [tiedExecutionPhase_unwired] at hw
   cases hw
 
 /-- `slotAudit` with its template's body another than every pinned one: a template under `SlotEntry_v1`'s name and
@@ -202,7 +202,7 @@ def renamedAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, "")]�
 
 /-- A renamed body is no slot entries: the link-window `slotAudit` wires is unwired when its audit's template has
 another body, with its port, root, domain and members unchanged. -/
-theorem renamedAudit_unwired : wired #[renamedAudit] slotSchedule #[slotReg] tiedWindow = false := by
+theorem renamedAudit_unwired : wired #[renamedAudit] slotSchedule #[slotReg] tiedExecutionPhase = false := by
   decide +kernel
 
 /-- **No period check that accepts every period has `RowsProgWired`'s property at a renamed body** (its nontrivial
@@ -212,8 +212,8 @@ theorem rowsProgWired_renamed : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
   let p : Params := ⟨#[renamedAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
     .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
-  have hw : wired #[renamedAudit] slotSchedule #[slotReg] tiedWindow = true :=
-    h p ⟨#[slotReg], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
+  have hw : wired #[renamedAudit] slotSchedule #[slotReg] tiedExecutionPhase = true :=
+    h p ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedExecutionPhase rfl
   rw [renamedAudit_unwired] at hw
   cases hw
 
@@ -258,22 +258,22 @@ def stateReg (root : String) : Lean.Json :=
 
 /-- A link-window whose scan's `prog` is at the slot audit's entries port's root and domain, and whose state, the tree
 its units read and register their states in, is at the root `s` and the domain `e`. -/
-def stateWindow : Lean.Json :=
+def stateExecutionPhase : Lean.Json :=
   Lean.Json.mkObj [("roots", Lean.Json.arr #[
     Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")],
     Lean.Json.mkObj [("port", "scan/state"), ("root", "s"), ("domain", "e")]])]
 
 /-- Its honest side: a slot audit whose `SCAN_STATE` is the scan's state, at its root and domain, ties it. -/
-theorem rowsStateTied_honest : stateTied #[slotAudit] slotSchedule #[stateReg "s"] stateWindow = true := by
+theorem rowsStateTied_honest : stateTied #[slotAudit] slotSchedule #[stateReg "s"] stateExecutionPhase = true := by
   decide +kernel
 
 /-- A slot audit whose `SCAN_STATE` skips or alters one of the scan's transitions: a tree of other rows, at another
 root (`t`) than the scan's state's, so its Programs compute on states the scan never reached. -/
-theorem stateWindow_skipped : stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateWindow = false := by
+theorem stateExecutionPhase_skipped : stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateExecutionPhase = false := by
   decide +kernel
 
-/-- A link-window whose scan's `prog` is wired, but whose registration names no state (`tiedWindow`), is not tied. -/
-theorem tiedWindow_unstated : stateTied #[slotAudit] slotSchedule #[stateReg "s"] tiedWindow = false := by
+/-- A link-window whose scan's `prog` is wired, but whose registration names no state (`tiedExecutionPhase`), is not tied. -/
+theorem tiedExecutionPhase_unstated : stateTied #[slotAudit] slotSchedule #[stateReg "s"] tiedExecutionPhase = false := by
   decide +kernel
 
 /-- **No period check that accepts every period has `RowsStateTied`'s property** (its nontrivial lemma): such a check
@@ -283,10 +283,10 @@ theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
   intro h
   let p : Params :=
     ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
-  have hs : stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateWindow = true :=
-    h p ⟨#[stateReg "t"], #[stateWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
-      stateWindow rfl
-  rw [stateWindow_skipped] at hs
+  have hs : stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateExecutionPhase = true :=
+    h p ⟨#[stateReg "t"], #[stateExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
+      stateExecutionPhase rfl
+  rw [stateExecutionPhase_skipped] at hs
   cases hs
 
 /-! ## The rows form charges a tied audit sampled in part -/
@@ -328,7 +328,7 @@ theorem findingOf_none {α : Type} {y : Found α} (h : findingOf y = none) : ∃
 def rowsWindows (p : Params) (c : Commitment) (e : Evidence) (s : Schedule) (sd : ByteArray) :
     Array (Found (Option (Facts × ℕ))) :=
   (c.windows.zip e.windows).zipIdx.map fun ((reg, x), i) =>
-    some <$> rowsWindowCheck p s sd c.audits (p.first + i) reg x
+    some <$> rowsExecutionPhaseCheck p s sd c.audits (p.first + i) reg x
 
 /-- What acceptance in the rows form gives: the sizes, no finding of a link-window or an audit, and the public, the
 rows form's (`rowsPublic`) with the schedule's response cap. -/
@@ -459,10 +459,10 @@ theorem sampleHeld_whole {reg : Lean.Json} {f : Facts} {n : ℕ} {ss : Array Cor
       hk).2 st (Array.mem_toList_iff.mpr m)
 
 /-- The rows form's check of a scan, where it accepts, has the scan's answer's facts. -/
-theorem rowsWindowCheck_facts {p : Params} {s : Schedule} {sd : ByteArray} {audits : Array Lean.Json} {w : ℕ}
-    {reg : Lean.Json} {x : Window} {u : Facts × ℕ} (h : rowsWindowCheck p s sd audits w reg x = .ok u) :
+theorem rowsExecutionPhaseCheck_facts {p : Params} {s : Schedule} {sd : ByteArray} {audits : Array Lean.Json} {w : ℕ}
+    {reg : Lean.Json} {x : Window} {u : Facts × ℕ} (h : rowsExecutionPhaseCheck p s sd audits w reg x = .ok u) :
     ∃ (what : String) (prof : Core.Integrity) (pub : Lean.Json), factsOf what reg prof pub = .ok u.1 := by
-  unfold rowsWindowCheck at h
+  unfold rowsExecutionPhaseCheck at h
   simp only [bind, Except.bind, pure, Except.pure, refuse] at h
   repeat' split at h
   all_goals cases h
@@ -476,7 +476,7 @@ theorem rowsWindows_ok {p : Params} {c : Commitment} {e : Evidence} {s : Schedul
   obtain ⟨v, rfl⟩ := findingOf_none (hws y hy)
   unfold rowsWindows at hy
   obtain ⟨z, -, hz⟩ := Array.mem_map.mp hy
-  cases hr : rowsWindowCheck p s sd c.audits (p.first + z.2) z.1.1 z.1.2 with
+  cases hr : rowsExecutionPhaseCheck p s sd c.audits (p.first + z.2) z.1.1 z.1.2 with
   | error r => simp [hr, Functor.map, Except.map] at hz
   | ok u => exact ⟨u, by simpa [hr, Functor.map, Except.map] using hz.symm⟩
 
@@ -559,7 +559,7 @@ theorem rowsTiedCharged : RowsTiedCharged := by
       have hz : (c.windows.zip e.windows)[w]? = some (wreg, e.windows[w]'(by omega)) :=
         Array.getElem?_zip_eq_some.mpr ⟨hw, hxw⟩
       have hwget : (rowsWindows p c e s sd)[w]? =
-          some (some <$> rowsWindowCheck p s sd c.audits (p.first + w) wreg (e.windows[w]'(by omega))) := by
+          some (some <$> rowsExecutionPhaseCheck p s sd c.audits (p.first + w) wreg (e.windows[w]'(by omega))) := by
         simp [rowsWindows, Array.getElem?_zipIdx, hz]
       obtain ⟨u, hu⟩ := rowsWindows_ok hws _ (Array.mem_of_getElem? hwget)
       rw [hu] at hwget
@@ -589,18 +589,18 @@ def chargedParams : Params :=
   ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 7⟩, 1⟩
 
 /-- Its commitment: the slot audit's registration and the link-window whose scan's `prog` is its entries port. -/
-def chargedCommitment : Commitment := ⟨#[slotReg], #[tiedWindow], .empty⟩
+def chargedCommitment : Commitment := ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩
 
-/-- Its honest side, at the slot audit tied to `tiedWindow`: sampled 1 of its 2 units with a bound of one incorrect
+/-- Its honest side, at the slot audit tied to `tiedExecutionPhase`: sampled 1 of its 2 units with a bound of one incorrect
 proof block, the audit is charged, read at the period's own δ, where the one unit it leaves may be incorrect, and its
 link-window's `β_w` is the scan's every entry bit; sampled whole, it is not charged and `β_w` is 0. -/
 theorem rowsTiedCharged_honest :
     (chargedOf chargedParams chargedCommitment #[.ok ⟨2, 1, ⟨0, 1⟩, 1, .subset 1⟩] 0).isSome = true ∧
       faultyEntries chargedParams chargedCommitment #[.ok ⟨2, 1, ⟨0, 1⟩, 1, .subset 1⟩] ⟨0, 0, 0, 0, 7⟩
-        tiedWindow = 7 ∧
+        tiedExecutionPhase = 7 ∧
       (chargedOf chargedParams chargedCommitment #[.ok ⟨2, 2, ⟨0, 1⟩, 0, .subset 2⟩] 0).isNone = true ∧
       faultyEntries chargedParams chargedCommitment #[.ok ⟨2, 2, ⟨0, 1⟩, 0, .subset 2⟩] ⟨0, 0, 0, 0, 7⟩
-        tiedWindow = 0 := by
+        tiedExecutionPhase = 0 := by
   decide +kernel
 
 /-- **No period check that accepts every period has `RowsTiedCharged`'s property** (its nontrivial lemma): such a check
@@ -610,7 +610,7 @@ theorem rowsTiedCharged_nontrivial : ¬ RowsTiedChargedOf acceptAllRows := by
   intro h
   let p : Params :=
     ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
-  obtain ⟨-, h1⟩ := h p ⟨#[slotReg], #[tiedWindow], .empty⟩ ⟨#[otherAnswer], #[]⟩ _ _ rfl slotSchedule .empty
+  obtain ⟨-, h1⟩ := h p ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩ ⟨#[otherAnswer], #[]⟩ _ _ rfl slotSchedule .empty
     ⟨0, 0, 0, 0, 0⟩ rfl
   obtain ⟨x, f, -, -, hf, -⟩ := h1 0 slotReg rfl rowsProgWired_honest.2
   simp [rowsTerms] at hf
@@ -741,11 +741,11 @@ theorem answersAt {P : Lean.Json → Facts → Prop}
     have hz : (c.windows.zip e.windows)[w]? = some (reg, e.windows[w]'(by omega)) :=
       Array.getElem?_zip_eq_some.mpr ⟨hw, hxw⟩
     have hwget : (rowsWindows p c e s sd)[w]? =
-        some (some <$> rowsWindowCheck p s sd c.audits (p.first + w) reg (e.windows[w]'(by omega))) := by
+        some (some <$> rowsExecutionPhaseCheck p s sd c.audits (p.first + w) reg (e.windows[w]'(by omega))) := by
       simp [rowsWindows, Array.getElem?_zipIdx, hz]
     obtain ⟨u, hu⟩ := rowsWindows_ok hws _ (Array.mem_of_getElem? hwget)
-    have hrc : rowsWindowCheck p s sd c.audits (p.first + w) reg (e.windows[w]'(by omega)) = .ok u := by
-      cases hr : rowsWindowCheck p s sd c.audits (p.first + w) reg (e.windows[w]'(by omega)) with
+    have hrc : rowsExecutionPhaseCheck p s sd c.audits (p.first + w) reg (e.windows[w]'(by omega)) = .ok u := by
+      cases hr : rowsExecutionPhaseCheck p s sd c.audits (p.first + w) reg (e.windows[w]'(by omega)) with
       | error r => simp [hr, Functor.map, Except.map] at hu
       | ok v => simpa [hr, Functor.map, Except.map] using hu
     rw [hu] at hwget
@@ -758,7 +758,7 @@ theorem answersAt {P : Lean.Json → Facts → Prop}
       rfl
     have hzip : (((rowsWindows p c e s sd).filterMap (·.toOption.join)).zip c.windows)[w]? = some (u, reg) :=
       Array.getElem?_zip_eq_some.mpr ⟨hscan, hw⟩
-    obtain ⟨_, _, _, hfo⟩ := rowsWindowCheck_facts hrc
+    obtain ⟨_, _, _, hfo⟩ := rowsExecutionPhaseCheck_facts hrc
     exact ⟨scan.terms u.1 u.2 (faultyEntries p c (auditChecks p c e) scan reg) p.jitter,
       by simp [rowsPublic, rowsTerms, hzip], hP _ _ _ _ _ hfo⟩
 
