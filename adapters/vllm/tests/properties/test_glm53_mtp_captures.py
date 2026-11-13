@@ -165,6 +165,7 @@ def _stub_eh_proj(monkeypatch, flip_m: int | None) -> dict:
 
     def launch(work, weights, gates, model, phase, name, M, seed, served_default, scan_split=None):
         assert (model, phase, name, served_default) == (EP.MODEL, EP.PHASE, EP.NAME, True)
+        assert EP.BG.MODELS[model].linear == ((name, EP.K, EP.N),)                     # the shape the real launch reads
         seen["launches"].append((M, scan_split))
         x = _bf16(np.random.default_rng(seed), (M, EP.K))
         out = BC.linear_rows(x, w) if scan_split is None else BC.cublas_splitk_rows(x, w, scan_split, out="bf16")
@@ -189,6 +190,18 @@ def _stub_eh_proj(monkeypatch, flip_m: int | None) -> dict:
     return seen
 
 
+def test_eh_proj_s_shape_is_in_the_sibling_capture_s_models_only_while_a_run_lasts() -> None:
+    """Importing the capture leaves `glm53_bf16_gemm_capture_gpu.MODELS` the sibling's own, whose tests and captures read every
+    model in it; a run or a scan process holds this shape there, and one that raises takes it out again."""
+    before = dict(EP.BG.MODELS)
+    assert EP.MODEL not in before
+    with pytest.raises(RuntimeError, match="a phase that raises"), EP.registered():
+        assert EP.BG.MODELS[EP.MODEL].linear == ((EP.NAME, EP.K, EP.N),)
+        assert EP.BG.route_key(EP.MODEL, EP.PHASE, EP.NAME) == f"linear {EP.K} {EP.N}"
+        raise RuntimeError("a phase that raises")
+    assert before == EP.BG.MODELS
+
+
 def test_eh_proj_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> None:
     """`main` with the scan's routes and the launches stood in for at a small shape: the launch list the routes give (LAUNCH_M, each
     route class's first M, the first M past ROWS_ALL, M_MAX), each launch at its route's split, the jobs through the spawned worker
@@ -211,6 +224,7 @@ def test_eh_proj_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, caps
     assert doc["totals"]["rows"] == sum(rows.values()) and doc["totals"]["reference_coords"] > 0 and doc["totals"]["twin_mismatch"] == 0
     assert sorted(p.name for p in (out / "words").iterdir()) == sorted([*rows, "w.npy"])
     assert f"GLM53-MTP-EH-PROJ GO {doc['digest']}" in capsys.readouterr().out
+    assert EP.MODEL not in EP.BG.MODELS
     _stub_eh_proj(monkeypatch, 5)
     assert EP.main(["--out", str(out), "--scratch", str(tmp_path), "--workers", "1"]) == 1
     doc = json.loads((out / EP.RECORD).read_text())

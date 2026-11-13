@@ -39,11 +39,13 @@ from __future__ import annotations
 __models__ = ("zai-org/GLM-5.3",)
 
 import argparse
+import contextlib
 import json
 import multiprocessing
 import subprocess
 import sys
 import tempfile
+from collections.abc import Iterator
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -60,13 +62,23 @@ SCHEMA = mtp_captures.EH_PROJ
 RECORD = "glm53_mtp_eh_proj_capture.json"
 MODEL, PHASE, NAME = "glm53-mtp", "linear", "mtp.eh_proj"
 K, N = 2 * 6144, 6144
-BG.MODELS.setdefault(MODEL, BG.Model(6144, 256, (), (), ((NAME, K, N),), (), ()))
 #: the route table's m_max: the largest launch served (`bf16_gemm_check.CUBLAS_ROUTES`)
 M_MAX = 8192
 SCAN_CHUNKS = ((1, 1024), (1025, 2048), (2049, 4096), (4097, 8192))
 LAUNCH_M = (1, 2, 3, 4, 5, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024)
 ROWS_ALL, WINDOW, CHUNK = 1024, 128, 64
 TOTALS = ("rows", *BG.TOTALS)
+
+
+@contextlib.contextmanager
+def registered() -> Iterator[None]:
+    """This capture's shape as `MODEL` in the sibling capture's `MODELS` while one run or one scan process lasts: its scan, its
+    launches and its route key read the shape there, and outside it `MODELS` holds the sibling's own models alone."""
+    BG.MODELS[MODEL] = BG.Model(6144, 256, (), (), ((NAME, K, N),), (), ())
+    try:
+        yield
+    finally:
+        del BG.MODELS[MODEL]
 
 
 # -------------------------------------------------------------------------------------------------------------------------- scan
@@ -87,6 +99,7 @@ def scan_chunk(a: argparse.Namespace, outdir: Path, lo: int, hi: int) -> dict[st
     return doc
 
 
+@registered()
 def scan_run(lo: int, hi: int, out: str, scratch: str | None) -> int:
     BG.SCAN_M = range(lo, hi + 1)
     return BG.scan_run(argparse.Namespace(only=PHASE, models=MODEL, out=out, scratch=scratch, served_default=True))
@@ -171,6 +184,7 @@ def _verdict(doc: dict[str, Any]) -> bool:
                 and sorted(int(k[1:]) for k in doc["cases"]) == doc["expected"] and all(_case_ok(c) for c in doc["cases"].values()))
 
 
+@registered()
 def run(a: argparse.Namespace) -> dict[str, Any]:
     outdir = Path(a.out)
     outdir.mkdir(parents=True, exist_ok=True)
