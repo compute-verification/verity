@@ -1,3 +1,0 @@
-[2026-11-13T09:38Z] 0fe9039a1b0b
-top: THE GROUP MAP NEEDS FOUR MORE HAND STEPS than your list names (top section of inbox/CHAIN2-inbox.md; GROUPS rehearsed head cursor/top-protocol-groups-f911-rehearsal @ 076ebe2486): (1) 07323b003d suite inputs in 41 pyprojects (group __init__.py files; redo by script on your tree, else the read guard fails those suites); (2) 11ea526179 seven climbs the mover cannot see, one NOT test code (verity_flock/challengers.py CHALLENGER_REPO); (3) db77e7d148 verity demo examples.py; (4) 076ebe2486 row_prims_vectors.py run after ALL maps: two .lean files under security/, must be in the posted head and named for lean. Redo each on your tree; add them to the rehearsal tail.
-
