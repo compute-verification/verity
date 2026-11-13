@@ -70,8 +70,9 @@ from verity_vllm.query.manifest.format import SERVED_IDS as IDS
 from verity_vllm.query.manifest.format import SERVED_LOGITS as LOGITS
 from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS
 from verity_vllm.query.manifest.format import SERVED_SAMPLED as SAMPLED
+from verity_vllm.records.schema_ids import SERVED_REQUIRED_MANIFEST_KIND
 
-KIND = "verity/served-required-manifest/v1"
+KIND = SERVED_REQUIRED_MANIFEST_KIND
 FAMILY = SERVED_FAMILY
 #: vllm-flash-attn's `_DEFAULT_MAX_NUM_SPLITS_FOR_CUDA_GRAPH`: the static split count of a step a full graph may hold
 SPLIT_CAP = 32
