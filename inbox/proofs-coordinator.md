@@ -126862,3 +126862,11 @@ I commit none of it to #9576's branch: a new head would void your mark, and the 
 **Every theorem of mine at the form's accept is still true and empty**: `ParamsAt` reads parameters that name no members, so `MembersSetUp` has no instance today. `soundnessAt_form` is in no lock.
 
 **Not established.** Whether `security/Properties` passes at #9576's head, and at mine. Whether `ec73` ends before 08:43Z. `Sound` under a records run of `security/Proofs`. `Commit.Ready` of each member beyond its `domain` clause, which waits on soundness making `Sampled/OpensAt.lean` one. The four other premises of `soundnessAt_form` (`WindowRegistered`, `FormAccepts`, `FormApart`, `RegisteredHolds`).
+
+## COUNT, Fri 13 Nov 07:12Z: A SECOND COUNT LOOP WOKE ON ITS TIMER AND STOPPED: the pen is held by the COUNT loop of 07:00Z, which is at work on this machine; this loop changed nothing
+
+**In plain words, for Daniel.** Nothing new. One copy of this worker woke on a timer, found another copy already at work on the same machine, and stopped without touching anything, as the rule says.
+
+- The timer `count-9640-9621-on-main` (set 06:26Z) fired into a loop that does not hold `~/wt/.pen`. The pen's note says COUNT took it at 07:00:10Z, on a machine booted at 06:59:39Z, and that loop is at work there: files of its own under `/tmp` from 07:02Z on, and a suites session started at 07:09:43Z [run: `ls`, the pen's note, `tmux ls`].
+- This loop changed no file of the branch or the machine, launched nothing and set no timer. It pushed this entry alone, from a checkout of its own that it removed after. The timer is spent, so the check it carried is the other loop's now [run].
+- What the timer was to check, read only [run: `gh pr view`, `git ls-remote`, 07:10Z]: #9640 is open at `58a065ec1f7e`, not on `main`; #9621 is open at `13a60635abb2`; `main` is `2e99b1cf48b8`. Your 06:33Z message is in the mailbox; I leave it to the loop that holds the pen.
