@@ -54,7 +54,7 @@ def test_the_ask_is_the_slot_s_booking_then_the_queue_job_s_memory_then_the_run_
     held = {"state": "held", "slot": "p0", "took": _utc(0), "reserves_gib": 193}
     pool = {"env": {memmark.RUN_MEM_ENV: "24"}}
     assert memmark.ask(pool, held) == (193 * GIB, "slot"), "what slot.py reserved for the run, not the run's --mem-gb"
-    assert memmark.ask(pool, {"state": "held", "slot": "p0"}) == (24 * GB, "--mem-gb"), "a slot record that states no booking"
+    assert memmark.ask(pool, {"state": "held", "slot": "p0", "reserves_gib": 0}) == (24 * GB, "--mem-gb"), "a slot that reserves nothing"
     assert memmark.ask(pool, {**held, "state": "left"}) == (24 * GB, "--mem-gb"), "a slot it never took booked nothing"
     assert memmark.ask({"mem_gb": 24.5}, {}) == (int(24.5 * GB), "--mem-gb")
     assert memmark.ask({"mem_gb": None, "queue": {"job": {"memory_gib": 16}}}, {}) == (16 * GIB, "queue")
@@ -110,6 +110,17 @@ def test_a_run_whose_figure_can_t_be_computed_says_why_and_holds_no_zero():
         assert got["reason"] == why
         assert (got["peak_held_bytes"], got["peak_utc"], got["samples"], got["over_limit"], got["over_limit_utc"]) == (None, None, 0, None, None)
         assert (got["ask_bytes"], got["limit_bytes"]) == (24 * GB, 152 * GB), "what it asked and its limit are known all the same"
+
+
+def test_a_run_whose_slot_py_predates_the_mark_is_marked_from_neither_its_own_mem_gb_nor_its_samples():
+    """Such a slot.py wrote neither what its slot reserved nor the scope a check left for: the run's own --mem-gb is not known
+    to be its ask, and its samples may be of the runner alone."""
+    old = {"state": "held", "slot": "t", "cores": "0-31", "took": _utc(0)[:19] + "Z", "copy": {"of": "machine"}}
+    got = memmark.mark({"env": {memmark.RUN_MEM_ENV: "24"}}, old, {}, [_rec(1, 0.1)])
+    assert got == {"reason": memmark.OLD_SLOT}
+    assert memmark.line(got) == f"peak not recorded: {memmark.OLD_SLOT}"
+    now = memmark.mark({"env": {memmark.RUN_MEM_ENV: "24"}}, {**old, "reserves_gib": 0}, {}, [_rec(1, 5)])
+    assert (now["peak_held_bytes"], now["ask_from"]) == (5 * GB, "--mem-gb"), "a slot that reserves nothing, by a slot.py that says so"
 
 
 def test_a_check_in_its_own_scope_has_no_held_figure_and_gets_its_scope_s_peak_with_the_cache(tmp_path):

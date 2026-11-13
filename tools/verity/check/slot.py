@@ -109,8 +109,8 @@ process's age counts its wait too (`holding`, which keeps that start and age as 
 the record's `took`, `held_minutes`, `joined` and `waited_minutes`). A waiting check prints the same lines, the waiters
 before it only, each time its reason to wait changes, so its log says whom it waits behind. Inside a `research run`
 (RESEARCH_RUN_DIR) it also keeps the run's RUN_SLOT: waiting (since when and why), held (which slot, since when it waited and
-when it took the slot, the last `why` it waited for when it waited, the GiB the slot reserves for it, `reserves_gib`, and
-the scope its check runs in on a `scope=1` slot, `scope`) or left (why), so `research status` shows a run
+when it took the slot, the last `why` it waited for when it waited, the GiB the slot reserves for it, `reserves_gib` (0 for
+none), and the scope its check runs in on a `scope=1` slot, `scope`) or left (why), so `research status` shows a run
 whose check waits here as `waiting`, not running, what a run waited behind outlasts its wait, and the run's record can say
 what it asked of its slot and where its check ran (research.memmark).
 
@@ -1299,8 +1299,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     env.update(LEASE_DEADLINE_FILE="/nonexistent/research-deadline", CHECK_SLOT=slot["name"],
                VERITY_TEST_CACHE=str(Path.home() / ".cache" / "verity" / f"tests-slot-{slot['name']}"),
                **({SLOT_MEM_ENV: str(plan)} if (plan := max(slot.get("mem") or 0, budget or 0)) else {}))
-    held = {"state": "held", **since, "slot": slot["name"], "cores": slot["cpus"], "took": took,
-            **({"reserves_gib": book} if (book := booked(slot)) else {}), **({"why": told} if told else {})}
+    held = {"state": "held", **since, "slot": slot["name"], "cores": slot["cpus"], "took": took, "reserves_gib": booked(slot) or 0,
+            **({"why": told} if told else {})}
     record_slot(run_dir, held)
     print(f"slot: check slot {slot['name']} (cores {slot['cpus']})", file=sys.stderr, flush=True)
     if said := reserve(slot, now(), priority):

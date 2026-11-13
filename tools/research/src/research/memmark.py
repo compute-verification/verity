@@ -5,7 +5,8 @@ run's end (`of_run`, which `research run` hands the harness), and one line of `r
 lane sizes `--mem-gb` from.
 
     ask      what the run asked, in bytes: the booking of the check slot it holds (its slot.json's `reserves_gib`, what
-             slot.py reserved for it), else its queue job's memory, else its `--mem-gb`, else none
+             slot.py reserved for it), else, in no slot or one that reserves nothing, its queue job's memory, else its
+             `--mem-gb`, else none
     limit    the ask and HEADROOM_BYTES more; HEADROOM_BYTES for a run with no ask; or what its launch stated
              (`--mem-limit-gb`, and who stated it: `limit_by`). Never more than `bound`, the least memory.max over the
              cgroup the runner started in and its ancestors, as job.json recorded it
@@ -21,7 +22,8 @@ workload out: a check slot with `scope=1` (its slot.json's `scope`), `--job-user
 of the workload, and the mark holds no peak and says where the workload ran (`reason`). For a check in its own scope it
 holds the scope's memory.peak as the check's spans recorded it (`scope_peak_bytes`, to 0.1 GB): that counts the page
 cache, so it bounds what the check held from above and is not the held figure. A figure that can't be computed is null
-with its reason, never zero.
+with its reason, never zero. A slot.py that writes no `reserves_gib` took the slot before it wrote either key: its run's
+mark is the reason alone (OLD_SLOT), since its ask and where its workload ran are both unknown.
 
 A GB is 10^9 bytes; a slot's booking and a queue job's memory are GiB, 2^30 bytes. The mark holds bytes.
 """
@@ -43,6 +45,10 @@ SAMPLES = "resources.jsonl"
 #: what a pool run's `--mem-gb` reaches its slot as (tools/verity/check/slot.py's RUN_MEM_ENV)
 RUN_MEM_ENV = "CHECK_RUN_MEM_GB"
 FROM_ASK = f"ask+{HEADROOM_BYTES // GB}GB"
+#: a held slot record without `reserves_gib`: neither the ask nor where the workload ran is known, so nothing is marked
+OLD_SLOT = ("the slot.py that took the run's slot predates the mark: its record of the slot says neither what the slot reserved "
+            "for the run nor whether the workload left the sampled cgroup (`research deploy install` places the current slot.py "
+            "on a machine that keeps a copy of its own)")
 
 
 def ask(request: dict[str, Any], slot: dict[str, Any]) -> tuple[int | None, str]:
@@ -115,6 +121,8 @@ def mark(request: dict[str, Any], slot: dict[str, Any], cgroup: dict[str, Any], 
     job.json's `environment.cgroup`, `records` its cgroup records in order (None without a resources.jsonl), `stated` a
     launch's `{"gb", "by"}`, `elsewhere` where the workload ran when not in the runner's cgroup, and `scope_peak` the bytes a
     check's own scope peaked at."""
+    if slot.get("state") == "held" and "reserves_gib" not in slot:
+        return {"reason": OLD_SLOT}
     asked, ask_from = ask(request, slot)
     out = {"ask_bytes": asked, "ask_from": ask_from, **limit(asked, stated, bound(cgroup))}
     took = slot.get("took") if slot.get("state") == "held" else None
