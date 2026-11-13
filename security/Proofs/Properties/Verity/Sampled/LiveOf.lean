@@ -32,8 +32,8 @@ open FlockSoundness.Refine (ebind_ok)
 /-! ## The parameters -/
 
 /-- A do block's `if c then throw e` before the rest `jp` accepts only where the rest does. -/
-theorem jp_ok {ε β γ : Type} {c : Prop} [Decidable c] {e : ε} {jp : β → Except ε γ} {u : β} {p : γ}
-    (h : (if c then (throw e : Except ε β) >>= jp else jp u) = .ok p) : jp u = .ok p := by
+theorem jp_ok {ε γ : Type} {c : Prop} [Decidable c] {e : ε} {jp : Unit → Except ε γ} {p : γ}
+    (h : (if c then (throw e : Except ε Unit) >>= jp else jp ()) = .ok p) : jp () = .ok p := by
   split at h
   · cases h
   · exact h
@@ -280,7 +280,7 @@ theorem desc_of_ports {I : FlockSoundness.Discharge.Exec.Inputs}
     unfold Flock.Desc.parse
     rw [hp]
   refine ⟨.single c, pubO, hD, ?_, hl, hp⟩
-  refine FlockSoundness.Discharge.Hidden.built_of_parseStmt (D := .single c) ?_ ht
+  refine FlockSoundness.Discharge.Hidden.built_of_parseStmt (cf := I.circuitFile) (tables := I.tables) (D := .single c) ?_ ht
   unfold Flock.Desc.parseStmt
   rw [if_neg (by simp [hflat.2])]
   exact hD
