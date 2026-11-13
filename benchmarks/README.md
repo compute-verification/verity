@@ -113,6 +113,10 @@ records it under (`serve_tax`'s `Model.metric`), so a value without a run doesn'
 - `every`: how often it is measured (`7d`, `12h`); a value older than that is stale.
 - Optional: `floor`, the number it must not cross; `goal`, the plan's goal it serves; `tags`, a list of words.
 
+Each value carries its mark, how it was had, which the tab shows beside it: the measurement's `mark`, which the kit's
+writer requires (`measured`, `modeled` or `partial`, `kit.MARKS`; a value of None takes the one it would have had)
+and also writes as the first of its `inputs`, where the tab reads it until it reads `mark`.
+
 `tests/test_metrics_registry.py` refuses an id declared twice across all the files, an unknown owner, an id outside its
 owner's prefix, a `better` other than `lower` or `higher`, a command whose script is missing or whose directory never
 names the id, a row whose command's first script is outside the directory of the file declaring it, and a shared

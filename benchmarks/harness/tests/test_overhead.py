@@ -428,7 +428,8 @@ def test_the_node_sweeps_for_the_points_in_rounds_of_bench_py(tmp_path):
     assert {m["name"]: m["value"] for m in result["measurements"]} == {"C": want.c, "L": want.lat}
     for m in result["measurements"]:
         assert (m["unit"], m["run"], m["commit"], m["host"]) == ("m", "r20261104-020000-0001", SHA, STAMP)
-        assert m["inputs"] == ["out/points.json"] and m["ci95"] is None and m["verdict"] is None
+        assert m["inputs"] == ["measured", "out/points.json"] and m["mark"] == "measured"
+        assert m["ci95"] is None and m["verdict"] is None
 
 
 def test_the_node_refuses_a_sweep_without_every_library_the_card_chooses_among(tmp_path):
@@ -466,7 +467,7 @@ def test_the_result_holds_a_callers_whole_entries_as_given_and_its_own_through_t
                                measured=[{"name": "C", "value": 512, "unit": "m"}])
     held, own = json.loads((run_dir / "result.json").read_text())["measurements"]
     assert held == whole and (own["name"], own["value"], own["run"], own["host"]) == ("C", 512, "r1", STAMP)
-    assert own["inputs"] == ["out/record.json"]
+    assert (own["mark"], own["inputs"]) == ("measured", ["measured", "out/record.json"])
 
 
 def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_with_its_controls(tmp_path, scheme):
@@ -522,7 +523,8 @@ def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_
     for name, p in doc["points"].items():
         m = written[f"gamma_{name}"]
         assert (m["value"], m["ci95"], m["unit"]) == (p["gamma"]["gamma"], p["gamma"]["ci95"], "ratio")
-        assert (m["target"], m["verdict"], m["inputs"]) == (None, None, ["out/overhead.json"])
+        assert (m["target"], m["verdict"], m["mark"]) == (None, None, "measured")
+        assert m["inputs"] == ["measured", "out/overhead.json"]
         assert (m["run"], m["commit"], m["host"]) == (run_dir.name, SHA, STAMP)
 
 
