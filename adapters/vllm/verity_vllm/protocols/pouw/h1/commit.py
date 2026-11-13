@@ -500,7 +500,7 @@ def record_of(run: Any) -> str | None:
 def bind(run: Any) -> str | None:
     """Bind the window's Commit record into ``run``'s commitment at its close (`pouw_h1.H1Run.finish`, before its
     `calls_root`): ``commit_record``'s (`named`, what the run records of it in ``details.commit_record``), else its
-    tap's. When ``commit_record`` names none, the window's refusal: ``finish`` binds no record, opens no draw coin and,
+    tap's. When ``commit_record`` names none, the window's refusal: ``finish`` binds no record, opens no sampling coin and,
     once its transcript is written, raises it as ValueError. Else None."""
     if run.commit_record is not None:
         run.commits["commit"], run.details["commit_record"] = named(run)
