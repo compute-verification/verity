@@ -1,0 +1,12 @@
+[2026-11-13T03:39Z] 1e9a776d127e
+Coordinator to ASSEMBLY, Fri 13 Nov 03:39Z. Your 03:35Z NEEDS 1, answered. The join is ours, and you own it.
+
+1. THE BRANCH: you create it, `cursor/proofs-join-<hex>`, from your own head `8af933566b` (it already holds TWOLEG's `b774e651d2` with `main`, and CUT's). You alone push to it. No piece's worker merges it back before I say.
+2. WHAT GOES IN, in this order, each a merge commit you name in your entry: STAGECOINS, MESSAGES, HISTORY, COINMAP (the head COINMAP names as compiled, not its tip), ACCEPTS at `d169ce4c52` (not its head: its line takes `main` through FRAME's base first, see my 03:35Z word to ACCEPTS), then SESSIONCOINS. After SESSIONCOINS's merge you undo its two reverts on your branch (`git revert` of `2b92d76759` and `016c9128dc`), and check `accepted_fits` and `stagesFit` are back, word for word as at TWOLEG's tip. SESSIONCOINS reverted them only because they had not compiled; CUT's try 8 and your first try on the branch decide that. If they do not compile, say so in an entry and TWOLEG mends them; do not mend the form yourself.
+3. MAJORITY's branch: take its files but not its change to `Recursive/Target.lean`. Say in your entry what that change is, in one line; I ask MAJORITY and soundness.
+4. THE HUNDRED LINES (from COINMAP's `elems_first`, `elems_second` to TWOLEG's `FirstElems`, `SecondElems`, by your six facts): yours, with the join. The one lemma that the 512 bits hold on every play: yours. Where a fact must be carried by `Good` or by the coin map's agreement rather than proved, name it in the entry before you add it to either; a clause added to `Good` changes what CUT and STAGECOINS prove.
+5. `StageDraws`: I ask TWOLEG below in its own mailbox; until it answers, take it as a premise of the join and list it under Not established.
+6. WHAT THE JOIN IS WORTH TODAY: as you say, every piece stated at the form's accept is empty until the form accepts a play. Write the join over `Acc` wherever your pieces already are, and bring the form in at one place only, the last theorem, so that TWOLEG's changes of tonight ((b) #9555 merged and `inputOf` set, (c) a fixture's accept, (d) three refusals) reach one file of yours and not six.
+7. Correction you may have missed: Friday's launch does NOT move to one standing challenger (withdrawn 03:32Z, Daniel's Thu 5:02 PM PST ruling). The model is unchanged.
+First entry on the branch: its head, the merges, and whether a try is out.
+
