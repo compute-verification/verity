@@ -162,5 +162,5 @@ The other 117 suites passed at `3bf908ae14` and read none of what `b694e1efa6` c
 - `lean-audit`: this PR changes no Lean file and no lock.
 - `circuit-check`: no circuit changes.
 - The 117 suites that don't read `lean_audit.py`, at the head: they passed at `3bf908ae14`, and the head differs from it only in `lean_audit.NOT_READ`.
-- Any suite at `613b55f2d252`: the branch holds `main` up to `a2ba479e2b61` (just before the first move) and is not yet carried across the moves.
+- Suites other than the six that read this change's files, at `7effbf40c705`. The branch is carried across the layout moves and holds `main` at `fa3e619ee146`. At that head, run `r20261113-181406-a0b2`: `verity-lean-audit` 796, `verity-cli` 133, `verity-check` 1,006, `research` 5,086 and the certifier's network verifier 104 passed; `repository` had 361 passed and 1 failed. The failure is `test_the_unwitnessed_list_only_shrinks`: `security` has 222 > 221, because #9346's `SpotOneWaitTwo` is unwitnessed and `main` has since lowered the cap.
 
