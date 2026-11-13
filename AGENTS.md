@@ -7,16 +7,16 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 
 ## Map and commands
 
-The tree is in the layout below. The move that made it changed paths, not code, so a line marked "Target, not yet" says
-what the layout's design has and the tree does not.
+The tree is in the layout below. `tests/tree.toml` is the layout of record, and `tests/test_tree.py` holds the tree to
+it; a line marked "Target, not yet" says what the layout of record has and the tree does not.
 
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.circuits import Program`); `verity` re-exports nothing.
   - `verity/protocols/`: one directory per protocol, the list flat: `flock`, `spot`, `recursion`, `pouw`, `pous`, `poub`,
-    `certifier` and `inference_only`. Beside them, `remote` and `onsite` are configurations, not protocols: remote is
-    what an auditor with no devices at the datacenter runs, and onsite what an auditor with devices there runs. Target,
-    not yet: `compose/` (today's `remote/verifier/composition/`), a ninth protocol on top of the audits; `remote/` and
-    `onsite/` under `verity/configurations/`, which no protocol imports; and `experimental/NAME/` for a whole directory
+    `certifier` and `inference_only`. Beside them, `remote` and `onsite` are the two lists of protocols compose accepts:
+    remote is what an auditor with no devices at the datacenter runs, and onsite what an auditor with devices there
+    runs. Target, not yet: `compose/` (today's `remote/verifier/composition/`), a ninth protocol on top of
+    the audits, holding both lists; and `experimental/NAME/` for a whole directory
     no configuration lists. Inside a protocol, `verifier/` is trusted code (a Python verifier until its Lean verifier,
     its `lean/`, replaces it), `prover/` is what its prover builds and its verifier doesn't read, and `device/` is the
     auditor's device (the network certifier, the memory challenger, the challenger).
@@ -38,13 +38,13 @@ what the layout's design has and the tree does not.
   - `verity/commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms`
     and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `windows` (what an adapter hands
     the prover for each execution phase).
-  - `verity/hardware/`: the registered hardware: `cards/` (one TOML data sheet per GPU, host or server model), `nodes/` (one per kind of node), `site` (its
+  - `verity/hardware/`: the registered hardware: `cards/` (one TOML data sheet per GPU, host or server model, or time base), `nodes/` (one per kind of node), `site` (its
     types), `registration` (the registration log) and `record` (a record entry). Target, not yet: the data sheets in a
-    top-level `hardware/` that holds data only, and the types in one file of `verity/`.
-  - `verity/configuration/` (not `verity/configurations/`): `wire` (the wire every party speaks), `deploy` (parties,
-    channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: four files
-    directly under `verity/` (what a party is, the registered hardware, what a protocol declares, the configuration)
-    and `verity/runtime/`, which runs parties over channels.
+    top-level `hardware/` that holds data only, and the types in `verity/`'s `device.py`.
+  - `verity/configuration/`: `wire` (the messages every party speaks), `deploy` (parties,
+    channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: five files
+    directly under `verity/` (`party.py`, `channel.py` for the wire, `device.py`, `protocol.py` and `config.py`, which
+    reads a configuration) and `verity/runtime/`, which runs parties over channels.
   - `verity/claims/`: the security claims' ids. `verity/difftest/`: the Python held to each Lean (target, not yet: under
     `tools/`). `verity/composite/device/live_challenger/`: the auditor host's challenger service, from `benchmarks/` too.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).

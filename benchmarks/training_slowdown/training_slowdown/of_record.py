@@ -45,6 +45,9 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   logging line's arithmetic) is no rule's: the entry of `of_record.toml` names it (`record_only`: the line, the
   count and MACs the record's step has of it over the config's, and why), and it is printed as named and taken out
   of the differences. A named line that the record's step does not have over the config's as named is a difference.
+- **The thread count.** A config's step is counted at the CPU thread count its record states (`threads`), set
+  before the count (`run.set_threads`): what a job trains on a CPU follows the count. A record that states none
+  is counted at a job's default (`run.THREADS`), and the output says the record names none.
 - **The encoding.** Each codec of the config's plan must be of the record's kind (`E_KINDS`: the record's `format`
   beside the codecs of that kind); E's size after the counted steps is printed beside the record's last
   checkpoint's, with how a codec packs the same encoding another way than the record's program did (`E_PACKING`).
@@ -469,6 +472,10 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
         r["differences"].append(f"the batch: the config's {batch} rows are no whole number of the record's {rows} "
                                 "rows a forward")
         return r
+    threads = rec.get("threads")
+    r["facts"] = [("threads", f"{threads}, the record's" if threads is not None else
+                   f"{run.THREADS}, a job's default: the record names no count")]
+    run.set_threads(run.THREADS if threads is None else threads)
     mine = counted(cfg, rows, out)
     if why := refusal(mine):
         return r | {"refused": why, "expected": [], "differences": []}
@@ -485,7 +492,7 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
     r["expected"] += found["expected"]
     r["named"] = found["named"]
     r["differences"] += found["differences"]
-    r["facts"] = [
+    r["facts"] += [
         ("start", f"{cfg.start.name} ({cfg.start.digest[:12]})"),
         ("steps", f"{cfg.budget['steps']}"),
         ("step", f"the config's step {STEPS}, {_plural(batch // rows, 'forward')} of one row, counted on a CPU, "
@@ -560,6 +567,8 @@ def main(argv=None) -> int:
     ap.add_argument("--starts", type=Path, default=starts.REGISTRY, help="the starts registry")
     ap.add_argument("--out", type=Path, default=None, help="where of_record.json and each entry's counted records go")
     a = ap.parse_args(argv)
+    run.limit_cpu("cpu")
+    run.set_threads(run.THREADS)
     runs, reg = held(a.held), starts.registry(a.starts)
     paths = library.entries(a.entry or sorted(runs))
     if unheld := [p.stem for p in paths if p.stem not in runs]:

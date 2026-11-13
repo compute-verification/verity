@@ -47,13 +47,17 @@ public import Proofs.Flock.SampledGeneric
 public import Proofs.Flock.Claims
 public import Proofs.Flock.SamplingClaims
 public import Proofs.Flock.SamplingGeneric
+public import Proofs.Flock.SamplingGeneric.KSTable
 public import Proofs.Flock.SamplingGeneric.Masked
+public import Proofs.Flock.SamplingGeneric.MaskedKSTable
+public import Proofs.Flock.SamplingGeneric.OneVerifierTables
 public import Proofs.Flock.SamplingGeneric.MaskedTrunc
 public import Proofs.Flock.SamplingGeneric.TwoCode
 public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Proofs.Flock.SamplingGeneric.Guarantees
 public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassNumbersTables
 public import Proofs.Flock.SamplingGeneric.TwoOffClassAt
+public import Proofs.Flock.SamplingGeneric.SpotFirstHit
 public import Proofs.Flock.SpotFlock.Cap
 public import Proofs.Flock.SpotFlock.Code
 public import Proofs.Flock.Claims.Sampling.Refused

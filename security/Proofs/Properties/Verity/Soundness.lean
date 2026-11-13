@@ -29,9 +29,10 @@ evidence's blobs with the evidence, and the composite reads both, so every input
 files is what some strategy sends (`sent_reachable`), and every acceptance of the compiled verifier on such an input
 at files that pass the commit phase's check lies in the event with probability one (`Vocab.accepts_reachable`).
 
-The premises at a subprotocol's further finders (`Vocab.finderCR`) are what `ecr/sha-512` gives them: each finder's
-calls are within its budget on every coin, so where it meets `Claims.ExpectedCR` it finds a collision with probability
-at most its budget over `2^256` (`finderCROf_of_expectedCR`).
+The premises at a subprotocol's further finders (`Vocab.finderCR`) are what each finder's named claim gives it: under
+`ecr/sha-512` its calls are within its budget on every coin, so where it meets `Claims.ExpectedCR` it finds a collision
+with probability at most its budget over `2^256`, and under `cr/sha-512` the premise is `Claims.StrictBirthday` itself
+(`finderCROf_of_expectedCR`).
 
 The witnesses of each of the three theorems are at the idle deployment (`Properties.Verity.Idle`), at the compiled
 composites: its hypotheses hold at `Idle.unbounded` (`soundness_at_of_targets_honest`, `soundness_of_subprotocols_honest`,
@@ -370,12 +371,13 @@ theorem namedFinder_calls (h : Option Hash.Digest) (F R : Array ByteArray) (x : 
     (namedFinder h F R).cost x ≤ 0 * n + 2 := by
   simp [namedFinder]
 
-/-- **`ecr/sha-512` at a further finder gives its premise**: its calls are within its budget on every coin
-(`FinderSpec.calls`), so where it meets `Claims.ExpectedCR` it finds a collision with probability at most its budget
-over `2^256`. -/
+/-- **`ecr/sha-512` at a further finder asked under it gives its premise**: its calls are within its budget on every
+coin (`FinderSpec.calls`), so where it meets `Claims.ExpectedCR` it finds a collision with probability at most its
+budget over `2^256`. -/
 theorem FinderSpec.cr_of_expectedCR {G : Game Exchange} {cost : Game.Strategy G → ℕ} (f : FinderSpec G cost)
-    (σ : Game.Strategy G) (h : Claims.ExpectedCR sha512Msg (f.finder σ)) : f.CR σ := by
+    (hc : f.claim = .ecr) (σ : Game.Strategy G) (h : Claims.ExpectedCR sha512Msg (f.finder σ)) : f.CR σ := by
   unfold FinderSpec.CR
+  rw [hc]
   unfold Claims.ExpectedCR at h
   have hex : Claims.Ex (fun s => ((f.finder σ).cost s : ℝ)) ≤ (f.budget (cost σ) : ℝ) :=
     calc Claims.Ex (fun s => ((f.finder σ).cost s : ℝ))
@@ -384,11 +386,19 @@ theorem FinderSpec.cr_of_expectedCR {G : Game Exchange} {cost : Game.Strategy G 
       _ = (f.budget (cost σ) : ℝ) := Claims.Ex_const _
   exact h.trans (div_le_div_of_nonneg_right hex (Real.rpow_nonneg (by norm_num) _))
 
-/-- **`ecr/sha-512` at every further finder gives their premises** (`finderCROf`). -/
+/-- **Each further finder's named claim gives their premises** (`finderCROf`): `ecr/sha-512` at each asked under it,
+and `cr/sha-512` at each asked under the strict birthday bound. -/
 theorem finderCROf_of_expectedCR {G : Game Exchange} {cost : Game.Strategy G → ℕ} (fs : List (FinderSpec G cost))
-    (σ : Game.Strategy G) (h : ∀ f ∈ fs, Claims.ExpectedCR sha512Msg (f.finder σ)) : finderCROf fs σ := by
+    (σ : Game.Strategy G)
+    (h : ∀ f ∈ fs, (f.claim = .ecr ∧ Claims.ExpectedCR sha512Msg (f.finder σ)) ∨
+      (f.claim = .cr ∧ Claims.StrictBirthday sha512Msg (f.finder σ))) : finderCROf fs σ := by
   unfold finderCROf
-  exact List.forall_iff_forall_mem.2 fun f hf => f.cr_of_expectedCR σ (h f hf)
+  refine List.forall_iff_forall_mem.2 fun f hf => ?_
+  rcases h f hf with ⟨hc, he⟩ | ⟨hc, hs⟩
+  · exact f.cr_of_expectedCR hc σ he
+  · unfold FinderSpec.CR
+    rw [hc]
+    exact hs
 
 /-- **`B^τ`'s collision premise gives its bound**: where subprotocol `a`'s finder meets `Claims.ExpectedCR`
 (`Vocab.FinderCR`), its calls within its budget (`Vocab.finderSpec`) put its collision probability at most `crBound`
@@ -396,7 +406,7 @@ at the strategy's calls. -/
 theorem Vocab.finderPr_le_crBound {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α) {a : Subprotocol}
     {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
     (h : V.FinderCR a θ F c σ) : (V.finder a θ F c σ).Pr sha512Msg ≤ V.crBound θ a (V.cost θ F c σ) :=
-  (V.finderSpec a θ F c).cr_of_expectedCR σ h
+  (V.finderSpec a θ F c).cr_of_expectedCR rfl σ h
 
 namespace Idle
 
@@ -428,7 +438,7 @@ theorem forger_pr (verify : Hash.Msg → Hash.Msg → Hash.Msg → Bool) : forge
 theorem error_exact (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (exact.game θ F c)) :
     exact.error a θ F c σ = 0 := by
   unfold Vocab.error Accounting.condError
-  rw [if_pos ⟨trivial, (finder_pr _).trans_le
+  rw [if_pos ⟨trivial, trivial, (finder_pr _).trans_le
     (div_nonneg (Claims.Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)), fun _ _ => le_of_eq (forger_pr _)⟩]
   simp [exact, vocab]
 
