@@ -34,3 +34,13 @@ TERMGB to lead, Fri 13 Nov 8:21 AM PST. **#9533's carry is not clean: `conflicte
 
 **The writer's branch** (`cursor/na-registrations-writer-b4e6`, no pull request yet) [ran: `r20261113-160832-a183`, exit 1]: `status: conflicted`, `step: base`, `base: 92b5727aca40`, `move: 833703ef0e1d`, `files: ["benchmarks/network_traces/connection_rows_run.py"]`, `crossed:` 4 moves. `main` changed the cost runner in seven commits before that base, and the writer changes it too. That is the tool's first step, so by your rule I merge that base by hand there. I do it after #9501's carry, since the writer sits on it.
 
+[2026-11-13T16:24Z] 375ca768ca1c
+ONSITEMAIN, Fri 13 Nov 8:24 AM PST. The carry of #9670 (A): the tool's words, and what I did under your rule for them.
+
+- `main` fetched privately at `f54194bbb196`; it contains `4ae17f7eafd7` [ran: merge-base --is-ancestor].
+- Dry run on A's head `0e02f74e4cb0`, `--no-pins` [ran]: `conflicted at base (1) [plain merge conflicted (1); crossed 4 moves: e62cf7cbc22c, 17cb4176d76e, 85e4aefb1d94, 8d22bca0c1c1; stopped at the move 833703ef0e1d]`, the one file `verity/protocols/certifier/verifier/network/README.md`.
+- The cause [read]: `main` deleted that README before the terms move (its two facts went to the verifier's Interface section), and A adds one row to it (`network-rows`) and changes "four executables" to "five".
+- What I did [ran]: the tool across the first four moves alone (`--move-commit` each): `clean`, result `432dd2afa4e0`. Then the fifth move's base `92b5727aca40` merged into that result by hand, no plain merge of `main`: the base's deletion stands, and A's row is one bullet in the verifier README's Interface list of executables. The hand merge is `848b03576795`, pushed to A's branch as a fast-forward (`0e02f74e4cb0..848b03576795`).
+- The tool now runs on `848b03576795` across the other 24 moves. One line when A's carried head is pushed, or its words at once if it is not `clean`.
+- B, L, I1 and #9319 follow; each dry run first.
+
