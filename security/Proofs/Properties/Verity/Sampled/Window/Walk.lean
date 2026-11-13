@@ -651,6 +651,13 @@ noncomputable def windowReg (W : Window) (rd : Reading W.rounds) (σ : Strategy 
     (D : WindowDecoders V θ F c W σ) : ByteArray :=
   (D 0).reg ((recordCut V θ F c rd).cut.modeHere σ)
 
+/-- **The window's audit's outcome** at the widened coins `ω` and the transcripts `ts`: the decoded registration
+beside whether the sample ended at `ω`, the sample at `ω`, and `ts`. -/
+noncomputable abbrev windowOut (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+    (D : WindowDecoders V θ F c W σ) (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds)
+    (ω : (W.extend M.widening).L.Ω) (ts : List FlockSoundness.Discharge.Exec.Transcript) : W.Out :=
+  ((windowReg V θ F c W rd σ D, ((W.extend M.widening).joint t).ended ω), (W.extend M.widening).L.draw ω, ts)
+
 /-- **The window's projection** of `σ` at the window `W`, `t` SHA-512 calls, the reading `rd`, the members' decoders
 `D` and the coin map `M`: the registration decoded from the record's most likely message; on the sample's widened
 coins `ω`, the sessions' projection in the members' order from the play's start on `M`'s tape at `ω`, at the rounds'
@@ -671,7 +678,7 @@ noncomputable def windowG (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : S
   .coin (W.extend M.widening).L.Ω fun ω =>
     (seqW D M ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) 0 ((W.extend M.widening).joint t).ms
       (Pos.root (roundCuts V θ F c rd) (M.start ω))).map
-      fun o => ((windowReg V θ F c W rd σ D, (W.extend M.widening).L.draw ω, o.1), o.2)
+      fun o => (windowOut V θ F c W t rd σ D M ω o.1, o.2)
 
 /-- **The window's projected play's events have their probabilities under the joint law.** -/
 theorem prob_windowP (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
@@ -683,11 +690,11 @@ theorem prob_windowP (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strate
   exact (FlockSoundness.Discharge.Exec.prob_strategy_map _ _ _ _).trans
     ((prob_seqP D M ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D)
         ((W.extend M.widening).joint t).ms
-        (fun ts => E (windowReg V θ F c W rd σ D, (W.extend M.widening).L.draw ω, ts)) 0
+        (fun ts => E (windowOut V θ F c W t rd σ D M ω ts)) 0
         (Pos.root (roundCuts V θ F c rd) (M.start ω)) (Strategy.ofMap _ _ (w ω))).trans
       (prob_map (fun o : W.Out × CoinTape (V.game θ F c) σ => E o.1)
         (fun o : List FlockSoundness.Discharge.Exec.Transcript × CoinTape (V.game θ F c) σ =>
-          ((windowReg V θ F c W rd σ D, (W.extend M.widening).L.draw ω, o.1), o.2)) _ (w ω)).symm)
+          (windowOut V θ F c W t rd σ D M ω o.1, o.2)) _ (w ω)).symm)
 
 /-- The joint law's strategy: it has no message to send. -/
 noncomputable def windowGS (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
@@ -702,7 +709,8 @@ outcome's transcripts and tape. -/
 def WindowReaches (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : WindowDecoders V θ F c W σ) (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : WindowLinkHold)
     (B : WindowRoundHold) (o : W.Out × CoinTape (V.game θ F c) σ) : Prop :=
-  ∃ ω : (W.extend M.widening).L.Ω, o.1.1 = windowReg V θ F c W rd σ D ∧
+  ∃ ω : (W.extend M.widening).L.Ω,
+    o.1.1 = (windowReg V θ F c W rd σ D, ((W.extend M.widening).joint t).ended ω) ∧
     o.1.2.1 = (W.extend M.widening).L.draw ω ∧
     SeqReach D M BL B ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) 0
       ((W.extend M.widening).joint t).ms (Pos.root (roundCuts V θ F c rd) (M.start ω)) (o.1.2.2, o.2)
@@ -727,13 +735,13 @@ theorem windowOff_le_prob (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : S
   avg_mono fun ω =>
     (seqOff_le_prob D M BL B ((W.extend M.widening).L.draw ω) (windowReg V θ F c W rd σ D) Q
         ((W.extend M.widening).joint t).ms
-        (fun ts => E (windowReg V θ F c W rd σ D, (W.extend M.widening).L.draw ω, ts)) 0
+        (fun ts => E (windowOut V θ F c W t rd σ D M ω ts)) 0
         (Pos.root (roundCuts V θ F c rd) (M.start ω)) (Strategy.ofMap _ _ (w ω))
-        fun o ho hQ => h ((windowReg V θ F c W rd σ D, (W.extend M.widening).L.draw ω, o.1), o.2)
+        fun o ho hQ => h (windowOut V θ F c W t rd σ D M ω o.1, o.2)
           ⟨ω, rfl, rfl, ho⟩ hQ).trans_eq
       (prob_map (fun o : W.Out × CoinTape (V.game θ F c) σ => E o.1)
         (fun o : List FlockSoundness.Discharge.Exec.Transcript × CoinTape (V.game θ F c) σ =>
-          ((windowReg V θ F c W rd σ D, (W.extend M.widening).L.draw ω, o.1), o.2)) _ (w ω)).symm
+          (windowOut V θ F c W t rd σ D M ω o.1, o.2)) _ (w ω)).symm
 
 /-! ## The logged coupling at the window's projection -/
 

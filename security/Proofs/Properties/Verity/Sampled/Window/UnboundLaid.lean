@@ -50,7 +50,7 @@ namespace JointAuditV5
 
 open Classical
 
-variable (w : JointAuditV5)
+variable (w : JointAuditV5) [Nonempty w.EndΩ]
 
 theorem seats_length (τ : Strategy w.game) : (w.seats τ).length = w.ms.length := by
   simp [seats]
@@ -139,6 +139,6 @@ namespace Verity.Sampled
 
 /-- **Across a window's members, the units its trace doesn't bind are its incorrect proof blocks**, at every cost
 (`Window.UnboundWrong`). -/
-theorem Window.unboundWrong (W : Window) : W.UnboundWrong := fun t => (W.joint t).unboundWrong
+theorem Window.unboundWrong (W : Window) : W.UnboundWrong := fun t _ => (W.joint t).unboundWrong
 
 end Verity.Sampled

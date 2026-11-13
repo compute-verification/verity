@@ -24,8 +24,7 @@ coins are the sample's at which the sample ended and the earlier sessions' sampl
   (`MemberV5.accepted_drawnWrong_le` at `memberLaw`).
 
 `JointAuditV5.hcls_of_bounds` gives `JointAuditV5.hcls` from the registration check's refusal of a member whose fewest
-and most sampled proof blocks have different link points (`mPtsOf_mono`), and `JointAuditV5.hend_of_stream` gives
-`JointAuditV5.hend` under A3 from one stream of bytes that ends the sample.
+and most sampled proof blocks have different link points (`mPtsOf_mono`).
 -/
 
 @[expose] public section
@@ -76,6 +75,10 @@ theorem avg_ite_subtype {C : Type} [Fintype C] (p : C → Prop) [DecidablePred p
 
 /-- **The share of the sample's coins at which the sample ended.** -/
 noncomputable def endShare : ℝ≥0∞ := (Fintype.card w.EndΩ : ℝ≥0∞) / Fintype.card w.L.Ω
+
+section Ended
+
+variable [Nonempty w.EndΩ]
 
 /-- **Where the sample ended, member `k`'s session in the window's audit is its session played alone**: an event `E` of
 member `k`'s part of the sample and its session's transcript, with the sample ended, has in the window's audit the
@@ -254,6 +257,8 @@ theorem member_accepted_drawnWrong_le (τ : Strategy w.game) (k : Fin w.ms.lengt
   rw [mul_add]
   exact add_le_add (w.endShare_mul_epsKs_le τ k) (w.endShare_mul_link_le τ k)
 
+end Ended
+
 /-- **`hcls` from the registration's refusal**: if at every sample that ended member `k`'s part holds between `lo k` and
 `hi k` of its proof blocks, its record's count `kd / nTab I` lies between them too, and `lo k` and `hi k` give the same
 link points (the registration check refuses a member whose fewest and most sampled proof blocks don't), then the part
@@ -276,33 +281,5 @@ theorem hcls_of_bounds {Reg : Type} {nJ : ℕ} (ms : List (MemberV5 Reg nJ)) {Ω
   have h4 := mPtsOf_mono (ms.get k).D.unroll.g (hrec k).2
   have h5 := hends k
   omega
-
-/-- **`hend` from A3 and one stream that ends the sample**: under A3 every stream of bytes is an outcome's, so if the
-deployed sample ends on one stream `s` (a stream of zeros, where the sampling design ends on it), some outcome's sample
-ends. A3 alone does not give it: a stream too short for the sampling design runs out at every outcome. -/
-theorem hend_of_stream {nJ : ℕ} {Ω : Type} [Fintype Ω] {Lb : Fin 1 → ℕ}
-    (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    (law : Flock.Draw.Law) (s : (i : Fin 1) → Fin (Lb i) → Fin 256) {r : Array ℕ × ℕ}
-    (hs : Spot.Draw.drawUnits law nJ (Properties.Spot.bytesOf (s 0)) = .ok r) :
-    ∃ ω : Ω, sampleEnded src law nJ ω = true := by
-  have hex : ∃ ω, src ω = s := by
-    by_contra hno
-    have hall : ∀ ω, ¬ src ω = s := fun ω hω => hno ⟨ω, hω⟩
-    have h1 : Verity.Game.prCoin (fun ω => src ω = s) =
-        Verity.Game.prCoin (fun x : (i : Fin 1) → Fin (Lb i) → Fin 256 => x = s) := hA3 fun x => x = s
-    have hF : (fun ω => src ω = s) = fun _ : Ω => False := funext fun ω => eq_false (hall ω)
-    rw [hF, Verity.Game.prCoin_false] at h1
-    have h0 := h1.symm
-    rw [Verity.Game.prCoin_eq_card] at h0
-    have hpos : 0 < (Finset.univ.filter fun x : (i : Fin 1) → Fin (Lb i) → Fin 256 => x = s).card :=
-      Finset.card_pos.mpr ⟨s, Finset.mem_filter.mpr ⟨Finset.mem_univ s, rfl⟩⟩
-    have hne : ((Finset.univ.filter fun x : (i : Fin 1) → Fin (Lb i) → Fin 256 => x = s).card : ℝ≥0∞) ≠ 0 := by
-      exact_mod_cast hpos.ne'
-    exact (ENNReal.div_pos_iff.2 ⟨hne, ENNReal.natCast_ne_top _⟩).ne' h0
-  obtain ⟨ω, hω⟩ := hex
-  have h : Spot.Draw.drawUnits law nJ (Properties.Spot.bytesOf (src ω 0)) = .ok r := by
-    rw [hω]
-    exact hs
-  exact ⟨ω, by simp only [sampleEnded, h]⟩
 
 end Flock.Guarantees.JointAuditV5

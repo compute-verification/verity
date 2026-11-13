@@ -33,8 +33,8 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-- **What the verifier's acceptance gives of the play `x`, at a window**: every release of the family `label`
 answering `after` precedes every opening (`fresh`), and wherever the play's coins of that family agree with `nc`
-frames' coins `κ` whose bytes are the window's at `ω`, the play has the sessions of the window's sample at `ω`
-(`sessions`, `WindowSessions`). -/
+frames' coins `κ` whose bytes are the window's at `ω`, the window's sample at `ω` ended
+(`Flock.Guarantees.sampleEnded`) and the play has its sessions (`sessions`, `WindowSessions`). -/
 structure WindowRead (W : Window) (tb : String) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray) (label : String) (after : ByteArray) (nc : ℕ) (x : Exchange) :
     Prop where
@@ -42,7 +42,8 @@ structure WindowRead (W : Window) (tb : String) (ev : ℕ → Exchange → Optio
     ∀ q ∈ post, ¬ (q.frame = .fresh label ∧ q.answers = after)
   sessions : ∀ (κ : Fin nc → Fin 512 → Bool) (ω : W.Ω),
     _root_.Properties.Spot.bytesOf (W.src ω 0) = _root_.Properties.Spot.bytesOf (coinBytes nc 64 κ 0) →
-    CoinsAgree (freshCoins label after x.log) (fillCoins κ) → WindowSessions W tb ev filesDec (W.L.draw ω) x
+    CoinsAgree (freshCoins label after x.log) (fillCoins κ) →
+    Flock.Guarantees.sampleEnded W.src W.law W.nJ ω = true ∧ WindowSessions W tb ev filesDec (W.L.draw ω) x
 
 /-- The window's sessions at an equal sample. -/
 theorem WindowSessions.of_eq {W : Window} {tb : String} {ev : ℕ → Exchange → Option Claims.Msg}
@@ -83,7 +84,7 @@ theorem windowSessions_of_reach (W : Window) (rd : Reading W.rounds) (hrd : Pick
       (windowFirstStop V θ F c W rd σ (windowSampleMap fieldEnc V θ F c W rd σ label after (W.srcCoinsAt nc)) ω).s'
       x)
     (hR : WindowRead W tb ev filesDec label after nc x) :
-    WindowSessions W tb ev filesDec
+    Flock.Guarantees.sampleEnded W.src W.law W.nJ ω.1 = true ∧ WindowSessions W tb ev filesDec
       ((W.extend (windowSampleMap fieldEnc V θ F c W rd σ label after (W.srcCoinsAt nc)).widening).L.draw ω) x := by
   rw [windowFirstStop_sampleMap fieldEnc V θ F c W rd σ label after (W.srcCoinsAt nc) ω] at hreach
   obtain ⟨L, hc, hO⟩ := walkFill_req (label := label) (after := after) hrd (frames (V.families θ)) (V.families θ)
@@ -95,8 +96,8 @@ theorem windowSessions_of_reach (W : Window) (rd : Reading W.rounds) (hrd : Pick
     rw [hlog] at hP ⊢
     rw [freshCoins_of_stopTail hP htail]
     exact hc
-  exact (hR.sessions (W.srcCoinsAt nc ω.1) ω.1 (Window.bytesOf_srcCoinsAt hL ω.1) hc').of_eq
-    (W.sample_extend _ ω).symm
+  obtain ⟨hE, hS⟩ := hR.sessions (W.srcCoinsAt nc ω.1) ω.1 (Window.bytesOf_srcCoinsAt hL ω.1) hc'
+  exact ⟨hE, hS.of_eq (W.sample_extend _ ω).symm⟩
 
 /-- **The sessions of the sample, on a tape through the sample-coupled first stop** (`windowSessions_of_reach`, at
 the play on the tape, `playReaches_through`). -/
@@ -108,7 +109,7 @@ theorem windowSessions_firstStop (W : Window) (rd : Reading W.rounds) (hrd : Pic
     (hz : ∃ w, z = (windowFirstStop V θ F c W rd σ
       (windowSampleMap fieldEnc V θ F c W rd σ label after (W.srcCoinsAt nc)) ω).back w)
     (hR : WindowRead W tb ev filesDec label after nc (CoinTape.run (V.game θ F c) σ z)) :
-    WindowSessions W tb ev filesDec
+    Flock.Guarantees.sampleEnded W.src W.law W.nJ ω.1 = true ∧ WindowSessions W tb ev filesDec
       ((W.extend (windowSampleMap fieldEnc V θ F c W rd σ label after (W.srcCoinsAt nc)).widening).L.draw ω)
       (CoinTape.run (V.game θ F c) σ z) := by
   obtain ⟨w, hw⟩ := hz

@@ -114,7 +114,7 @@ theorem readsWith_members {Reg : Type} {nJ : ℕ} (r : Verity.FileRead) (rs : Li
     (fun s hs => hc s.m (List.mem_map.2 ⟨s, hs, rfl⟩)) ho hk
 
 /-- **A window's seats' members are the window's**, in order. -/
-theorem seats_members (w : JointAuditV5) (τ : FlockSoundness.Game.Strategy w.game) :
+theorem seats_members (w : JointAuditV5) [Nonempty w.EndΩ] (τ : FlockSoundness.Game.Strategy w.game) :
     (w.seats τ).map (·.m) = w.ms := by
   unfold Flock.Guarantees.JointAuditV5.seats
   rw [List.map_ofFn]
@@ -133,7 +133,7 @@ theorem claimReads (I : WindowInstance d α) (K : WindowConstructions I.base)
   laid θ F W hW := (show MembersSetUp I.base θ F W from (I.windows_some hW).2).laid
   share θ F W hW := (show MembersSetUp I.base θ F W from (I.windows_some hW).2).toWindowOn.share
   units θ F W hW := (show MembersSetUp I.base θ F W from (I.windows_some hW).2).toWindowOn.units
-  reads θ F W hW hfix c σ := by
+  reads θ F W hW hfix c σ _ := by
     have h : MembersSetUp I.base θ F W := (I.windows_some hW).2
     exact readsWith_members (I.base.read θ F).first (I.base.read θ F).rest (I.base.Opens θ F c) _
       (seats_members _ _) (h.toWindowOn.reads_toV5 _) (fun _ hM => h.checked hfix _ hM)

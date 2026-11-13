@@ -350,6 +350,10 @@ theorem Laid.prCoin_parts (h : w.Laid) (E : Finset (Fin w.nJ) → Prop) :
 
 variable (w)
 
+section Ended
+
+variable [Nonempty w.EndΩ]
+
 /-- **The design member `k`'s session is played alone at is the window's marginal where the sample ended**: the earlier
 sessions' coins it samples with the window's don't move its sample, so the ended share of an event's probability at it
 is at most the probability the window's one sample gives the event at member `k`'s part. -/
@@ -364,6 +368,8 @@ theorem memberLaw_escape (τ : Strategy w.game) (k : Fin w.ms.length) (B : Finse
     w.endShare * (w.memberLaw τ k).escape B ≤ w.L.escape (B.image (w.ms.get k).emb) :=
   (w.prCoin_memberLaw τ k fun S => Disjoint S B).trans_eq (w.design_escape k B)
 
+end Ended
+
 /-- **Member `k`'s design misses a set of its proof blocks** with probability at most the window's sampling design's
 own miss `P_a` of their places in the population, under A3. -/
 theorem design_escape_le (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (k : Fin w.ms.length)
@@ -371,11 +377,16 @@ theorem design_escape_le (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (k : 
     (w.design k).escape B ≤ ENNReal.ofReal (w.pa (B.image (w.ms.get k).emb)) :=
   (w.design_escape k B).trans_le (Bridge.execSel_escape_le w.src hA3 w.hlaw w.hns _)
 
+section Ended
+
+variable [Nonempty w.EndΩ]
+
 /-! ### The window's incorrect proof blocks are its members' -/
 
 theorem wrongSet_eq_join (τ : Strategy w.game) : w.wrongSet τ = w.join (w.memberWrong τ) := by
   ext u
-  simp only [JointAuditV5.wrongSet, JointAuditV5.join, Finset.mem_biUnion, Finset.mem_univ, true_and,
+  rw [w.wrongSet_eq τ]
+  simp only [JointAuditV5.join, Finset.mem_biUnion, Finset.mem_univ, true_and,
     Finset.mem_image]
 
 variable {w}
@@ -399,5 +410,7 @@ theorem Laid.mem_wrongSet (h : w.Laid) (τ : Strategy w.game) (u : Fin w.nJ) :
     have e : (w.ms.get k).emb v = u := Fin.ext ((h.emb k v).trans hu.symm)
     rw [← e, ← w.mem_part k, h.part_wrongSet τ k]
     exact hv
+
+end Ended
 
 end Flock.Guarantees.JointAuditV5

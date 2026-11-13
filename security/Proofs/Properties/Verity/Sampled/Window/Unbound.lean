@@ -210,7 +210,7 @@ namespace JointAuditV5
 
 open Classical
 
-variable (w : JointAuditV5)
+variable (w : JointAuditV5) [Nonempty w.EndΩ]
 
 /-- **The trace member `k`'s session fixes at the joint registration** at `τ`, the one `memberWrong` reads. -/
 noncomputable def memberX (τ : Strategy w.game) (k : Fin w.ms.length) : Fin (w.ms.get k).Cc.N → Bool :=
@@ -261,6 +261,6 @@ namespace Verity.Sampled
 /-- **The claim at a window** at every budget of SHA-512 calls: the units the window's trace doesn't bind are the
 incorrect proof blocks of Flock's window (`Window.joint`), the set the window's bound and the claim's transfer
 (`WindowInstance.ClaimTransfers`) read. -/
-def Window.UnboundWrong (W : Window) : Prop := ∀ t : ℕ, (W.joint t).UnboundWrong
+def Window.UnboundWrong (W : Window) : Prop := ∀ (t : ℕ) [Nonempty (W.joint t).EndΩ], (W.joint t).UnboundWrong
 
 end Verity.Sampled
