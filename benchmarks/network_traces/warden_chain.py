@@ -40,13 +40,13 @@ from collections import defaultdict
 from fractions import Fraction
 from pathlib import Path
 
-from verity.protocols.certifier.verifier import io_tie as IT
-from verity.protocols.certifier.verifier import lean_audit as LA
-from verity.protocols.certifier.verifier import service as SVC
-from verity.protocols.certifier.verifier import warden as W
-from verity.protocols.certifier.verifier.active import DATA, id_request
-from verity.protocols.certifier.verifier.certificate import Direction
-from verity.protocols.certifier.verifier.schedule import SyncSet
+from verity.protocols.accounting.certifier.verifier import io_tie as IT
+from verity.protocols.accounting.certifier.verifier import lean_audit as LA
+from verity.protocols.accounting.certifier.verifier import service as SVC
+from verity.protocols.accounting.certifier.verifier import warden as W
+from verity.protocols.accounting.certifier.verifier.active import DATA, id_request
+from verity.protocols.accounting.certifier.verifier.certificate import Direction
+from verity.protocols.accounting.certifier.verifier.schedule import SyncSet
 from verity.commitments.crypto import lms
 
 HERE = Path(__file__).resolve().parent
