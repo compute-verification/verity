@@ -107,7 +107,8 @@ structure CouplesAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
   /-- `ecr/sha-512` at the blob finder at the registered files: the plays whose blobs collide with them, which the
   join's cut leaves out (`cutBound_avoid`). -/
   blobCR : Claims.ExpectedCR FlockDeploy.sha512 (blobFinder V θ F c σ (V.registered θ))
-  /-- The published `δ` covers the frame's prover's error and both bounds. -/
+  /-- The published `δ` covers the frame's prover's error and both bounds. The join's term (`joinCRBound`) holds the
+  blob finder's expected calls over `2^256`, beside the cut's terms. -/
   delta : V.finderCR .sampled θ F c σ → V.premises .sampled θ F c σ →
     ENNReal.ofReal (A.errAt x
         (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg).P) +
