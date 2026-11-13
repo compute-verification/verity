@@ -20,10 +20,10 @@ from verity.circuits.evaluation.bits import evaluate_words
 from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
 from verity.definitions.boolean import boolean_version
 from verity.definitions.registry import pearl_c_forming as F
-from verity.protocols.pouw.prover.circuit import pc8
-from verity.protocols.pouw.prover.schemes import pearl_c as C
-from verity.protocols.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.accounting.pouw.prover.circuit import pc8
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES
 
 #: each device record's atom and promotion period as the Definitions' statics (G = 0: no promotion)
 ATOMS = {"h100": (HopperE4m3QgmmaDot32, 4), "sm120": (BlackwellE4m3QmmaDot32, 4), "sm120-unpromoted": (BlackwellE4m3QmmaDot32, 0)}
