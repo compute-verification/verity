@@ -126199,3 +126199,49 @@ file; the lock's only edit is one name in `roots`; nothing listed.
 - `hDev₁`, `hDev₂` compiled (the join's `6e8c`).
 
 Branch `cursor/proofs-coinmap-8b0c` at `41ff648dbd`, pushed; nothing unpushed.
+
+## FRAME, Fri 13 Nov 07:00Z: the swap is WRITTEN and pushed, NOT compiled: `cursor/proofs-frame-l1-9c4e` `792e9b6086e8b6c75f91dd978318ec358be8444d` (`wiringOk` decides `wiresMoveRows` where it decided `wiresMove`; its try is `r20261113-065524-464b`, expected end about 09:10Z); `5caf` ended: `AddressesHeld.lean` compiles at `1ab2eea6de13`, and the guard's test file ran out of its 35 minutes with no verdict
+
+**In plain words.** Three things. (1) The change I said was next is written and pushed, and no line of it has been through Lean yet. The model's check of the registered wiring had one question left that walks every source bit of every member ("does each wired source bit have a gate to go to"). That question is now asked once per template inside the check itself, and the bit-by-bit statement the proofs read is a theorem wherever the design evaluates. So every clause of the check now reads the registration's description once per template, and HELDOF's descriptor check can decide all of it. (2) HELDOF should NOT merge this head yet: I name it in a title when it has compiled. What will change for anyone who reads `wiringOk` is listed in section 2, so that nobody is surprised at the merge. (3) My last run ended. The one file it still had to try compiled. Its last step, the guard's own test file on the toy, was stopped by my 35-minute limit before pytest printed anything: that is no failed assertion and no pass. The file makes six separate guard runs of the toy and each now takes about six minutes, so 35 minutes was too few.
+
+### 1. The swap, at `792e9b6086e8` (written, not compiled, not run)
+
+- [read: my diff] `SpotFlock/Code.lean`: the eight definitions of `WiresGo.lean` (`sourceCells`, `outBit`, `wireBit`, `bitGoes`, `cellGoes`, `wireGoes`, `rowGoes`, `wiresMoveRows`) stand above `wiringOk`, unchanged, and `WiresGo.lean` is deleted (its line of `Proofs/Flock.lean` too). `wiringOk`'s fourth clause is `wiresMoveRows h`. `wiresMove` stays a definition, and is no clause.
+- [read] `Facts.lean`: `wiringOk_iff` and `wiring_of_two` say `wiresMoveRows h = true` in the fourth place. `WiresMoveRows.lean`: `wiresMove_of_two (hd : two h s = some d) : WiresMove h`, from `wiresMove_of_rows` and that clause; it left `WiredCode.lean`, same name and statement.
+- [read] `AddressesGive.lean`: `wiring_of_wiringOk` read `wiresMove` off the check; it now takes `(hM : WiresMove h)` after `hw`, and both callers give it from the accepted run (`CheckedRun.wiresMove_of_ok`, new). For that the file imports `WiresMoveRows`. [run: a script over the import lines] No cycle: `AddressesGive` is not in `WiresMoveRows`'s closure. No declaration name is declared twice among the `SpotFlock` files.
+- [read] The guard (`TwoGuard.lean`): `wiresMoveRows` is one of `wiringClauses` and of `wiringClausesAt`, so `twoFilesOk` reads it and the result has it under `wiring`. The result's own `wiresMoveRows` field is gone; `unmoved` (the rows, with why) stays as a diagnostic beside the clause.
+- [derived] The model accepts nothing it refused: where the new `two` evaluates, `wiresMove_of_two` gives the old clause, and the other ten are the same. It may refuse what it accepted: the per-template form is sufficient for `wiresMove`, and I have not shown it necessary.
+- [derived] **This moves lock records.** `SpotFlock.two` reads another clause, so the records of the guarantees whose statements read `two` change (`SpotKSTwo`, `SpotExfilTwo`, and I have not listed the rest). The lock on my line is not regenerated; that is the second move's records run, after this compiles. It is the change #9681's body announces ("A following change decides them once per template and port").
+
+### 2. What changes for a reader of `wiringOk` at the merge (HELDOF, and RUNSAS's `SecondStageOf.lean`)
+
+- [read: `HeldOfDesc.lean` at HELDOF's `dc45145249`] `walksOk h := wiresMove h` becomes `wiresMoveRows h` (or goes: the descriptor check can decide it, as it does `sourceRowsNamed`, by a `SampledTwoDesc.wiresMoveRows` with a `wiresMoveRows_eq … := rfl`). Its `rw [namesOnce_eq, …, hw]` under `unfold wiringOk` (line 518) then needs the clause in that form. What the clause reads beyond what `sourceRowsNamed` reads: `h.rows` (`heldRows`), `h.reg.ns`, each template's count of units (`(h.vus.getD t #[]).size`), `Spot.SecondStage.fits`, and the writer's `outPorts` and port names.
+- [read: `RunsAs/SecondStageOf.lean` there] `values_nil_of_two` unfolds `wiringOk` and reads its clause "wherever it stands": unchanged by this.
+- An `import Proofs.Flock.SpotFlock.WiresGo` anywhere must go. [run: `git grep` at `dc45145249`] None there but my own two.
+
+### 3. `r20261113-053435-5caf` ended (06:54:23Z, rc 0, at `1ab2eea6de13`)
+
+- [run] "TRY_EXIT_AddressesHeld 0"; "AddressesHeld.lean: lean exit 0 in 176 s"; "axiom probe: none of its 4 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". So `ksTwo_of_facts` and `exfilTwo_of_facts` (the two-stage guarantees from the built frame and four facts) compile at that head.
+- [run] "PYTEST_EXIT 124": `timeout 35m` stopped `guard_node.py --pytest`. pytest printed no line before it (its output is captured), so no test is known to have passed or failed. [derived] The file runs the guard six times on the toy (honest, altered, one byte flipped, a dropped port, a value registered once, twice), and one run of the toy read `held` in 104 s, the circuits in 53 s and `templateOk` in about 22 s a template in `dd56`, before the run's own conjuncts.
+- [run] Memory: asked 128 GB, sampled peak 48.4 GiB.
+
+### 4. The try: `r20261113-065524-464b` (vy-nebius-2, asked 64 GB, launched 06:55Z, at `792e9b6086e8`)
+
+- It took Lean slot `build/6`, not `build/0` where my last three runs built, so its tree may not hold my line's files built. [guess] End about 09:10Z; the slot's limit is 150 minutes (09:25Z).
+- In order: the build of the 70 `SpotFlock` files that read `Code.lean`, `SamplingGeneric/Guarantees` and `SpotFirstHit`; then `Proofs/Flock.lean` (the aggregator, which would show an import clash); the guard's `files` mode on the toy; the guard's `files` mode on Friday's twenty files (`r20261113-041053-1338`'s export), where `wiring.wiresMoveRows` is now the model's own clause; five tries with the axiom probe (`WiresMoveRows`, `AddressesGive`, `AddressesHeld`, `Facts`, `WiredCode`); and, if 20 minutes are left, the guard's test file for the honest run's two tests only (`-k 'honest or wiring'`).
+- The script is in the lane's notes (`note:20261113T0650Z-report-frame-scripts`).
+
+### State
+
+- Pushed: `cursor/proofs-frame-l1-9c4e` `792e9b6086e8b6c75f91dd978318ec358be8444d`. The base and #9681's branch are unmoved at `3b05c3a3b1a775a5f322964e8effd75f3289ccc1`. Nothing unpushed.
+- #9681 is open at `3b05c3a3b1a7`, unmarked. I write no ready line: yours to mark or not.
+- One loop, the pen is mine (`~/wt/.pen`, 06:05Z). No message of yours after 06:09Z in my mailbox at 06:57Z.
+
+**Not established.**
+- That any line of the swap elaborates: `Code.lean` with the moved definitions, `wiresMove_of_two`, `CheckedRun.wiresMove_of_ok`, the guard's `wiringClausesAt_eq` (by `rfl`) with the new clause.
+- What `wiresMoveRows` says of the toy. If it refuses the toy, way 2's test (which says the wiring refuses the toy for `FLIP_B`'s port only) is wrong as written, and I change it to say what is true.
+- That the guard's test file passes at way 2, at any head: `5caf` gave no verdict.
+- That the model's own clause passes Friday's files: `5caf`'s `wiresMoveRows: true` there was the guard's list (`unmovedAt`), which no theorem ties to the clause.
+- That `security/Proofs` builds whole at this head, and which lock records move.
+
+NEEDS: nothing of you. To HELDOF: section 2 is what to expect; do not merge `792e9b6086e8` before a title of mine says it compiled.
