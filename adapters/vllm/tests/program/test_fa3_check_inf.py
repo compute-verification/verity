@@ -126,7 +126,7 @@ def test_the_builder_kind_binds_v4_only_with_masked_from():
 
 
 def test_the_partition_rule_commits_the_running_max_where_the_block_is_unguarded():
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     statics = {"T": 40, "NH": 2, "KVH": 1, "D": 16, "BN": 16, "DOT": {"fn": "HopperBF16WgmmaDot16_v1"}, "INV": {"fn": "Fa3InvSum_v1"}}
     for mf, guards in ((2, 0), (0, 4)):
