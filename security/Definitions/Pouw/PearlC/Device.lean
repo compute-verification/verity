@@ -64,9 +64,10 @@ def h100TensorMHz : ℚ := 1830
 /-- **The H100's prices per second at the tensor clock**: a unit is a dense FP8 MAC's time at `h100TensorMHz`, and the
 SM pipes' prices are `Prices.h100`'s times `h100TensorMHz / h100SmMHz = 61/66`. An FP32 add costs `976/33`, a BF16 MAC
 2, and the forming `fs = ⌈32 + 976/33⌉ = 62` (the noise atom and half a cast at `1952/33`) and `qa = ⌈122/33⌉ = 4`,
-`W1.W1Prices.h100Tensor`'s coarse record (`Proofs.Pouw.PearlC.W1Checks.toPrices_h100Tensor`). It holds at either clock
-reading under a mixed load: with both pipes at the SM clock an SM-pipe instruction takes 32 units, more than it is
-charged here; with the tensor pipe at 1830 MHz and the SM pipes at 1980 MHz it takes exactly what it is charged. -/
+`W1.W1Prices.h100Tensor`'s coarse record (`Proofs.Pouw.PearlC.W1Checks.toPrices_h100Tensor`). A unit is an FP8 MAC's
+time at the tensor clock. An SM-pipe instruction takes 32 MACs' time at the SM clock, which is `32 · 1830/1980 = 976/33`
+(29.58) of those units with the tensor pipe at 1830 MHz beside SM pipes at 1980 MHz, exactly its charge here; with both
+pipes at one clock it takes 32 units, more than its charge. -/
 def Prices.h100Tensor : Prices := ⟨32 * h100TensorMHz / h100SmMHz, 2, ⟨62, 4⟩⟩
 
 /-- **A device record** for Pearl-C: the promotion period `G` (0: none), the prices, and the device's maps on a unit's

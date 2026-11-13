@@ -201,9 +201,10 @@ def W1Prices.h100 (sha fetch : ℚ) : W1Prices where
 /-- **The H100's W1 prices per second at the tensor clock**: `W1Prices.h100` with FP32, a cast and INT32 times
 `h100TensorMHz / h100SmMHz` (1830/1980 = 61/66, the card file's `clock.tensor` over `clock.sm`): FP32 `976/33`, a cast
 `1952/33` per instruction and INT32 `1952/33`; the tensor-core prices, a compression and a first fetch are
-`W1Prices.h100`'s. A unit is a dense FP8 MAC's time at the tensor clock, so a program's cost bounds its time at either
-reading of the clocks under a mixed load: both pipes at one SM clock (an SM-pipe instruction then takes 32 units,
-more than charged) or the tensor pipe at 1830 MHz beside SM pipes at 1980 MHz (it takes exactly what is charged). -/
+`W1Prices.h100`'s. A unit is an FP8 MAC's time at the tensor clock. An SM-pipe instruction takes 32 MACs' time at the
+SM clock, which is `32 · 1830/1980 = 976/33` (29.58) of those units with the tensor pipe at 1830 MHz beside SM pipes at
+1980 MHz, exactly its charge here; with both pipes at one clock it takes 32 units, more than its charge. So a program's
+time is at least its cost at either reading. -/
 def W1Prices.h100Tensor (sha fetch : ℚ) : W1Prices :=
   { W1Prices.h100 sha fetch with
     fp32 := 32 * h100TensorMHz / h100SmMHz
