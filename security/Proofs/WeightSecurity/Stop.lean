@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Game
 /-!
 # A period of served windows: the lead and the incorrect proof blocks left undetected
 
-A deployment's monitoring period is a run of windows (`FlockSoundness.Game.periodRun`), each recorded as a
+A deployment's monitoring period is a run of windows (`FlockSoundness.Game.monitoringPeriodRun`), each recorded as a
 `WeightSecurity.Served`.
 
 * `period_lead`: if at every strategy satisfying `good` a window's records all carry one number `w` of incorrect proof
@@ -32,8 +32,8 @@ theorem period_lead (G : (i : ℕ) → Verity.Game (β i)) (rec : (i : ℕ) → 
     (good : (i : ℕ) → Strategy (G i) → Prop) (x : ℝ≥0∞) (hx : x ≤ 1)
     (hstage : ∀ i τ, good i τ → ∃ w : ℕ, (∀ b, (rec i τ b).incorrect = w) ∧
       prob (fun b => ¬ (rec i τ b).sampledIncorrect) (G i) τ ≤ x ^ w) :
-    ∀ (T i : ℕ) (s : Strategy (periodG G i T)) (M : ℕ), PeriodGood G good i T s →
-      value (fun l => M ≤ Served.lead l) (periodRun G rec i T s) ≤ x ^ M
+    ∀ (T i : ℕ) (s : Strategy (monitoringPeriodG G i T)) (M : ℕ), MonitoringPeriodGood G good i T s →
+      value (fun l => M ≤ Served.lead l) (monitoringPeriodRun G rec i T s) ≤ x ^ M
   | _, _, _, 0, _ => by
       rw [pow_zero]
       exact value_le_one _ _
@@ -43,8 +43,8 @@ theorem period_lead (G : (i : ℕ) → Verity.Game (β i)) (rec : (i : ℕ) → 
       simp [Served.lead]
   | T + 1, i, s, M + 1, hs => by
       obtain ⟨w, hw, hp⟩ := hstage i _ hs.1
-      have h := value_runBind_le_mul (fun _ => periodG G (i + 1) T)
-        (fun b s' => (periodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
+      have h := value_runBind_le_mul (fun _ => monitoringPeriodG G (i + 1) T)
+        (fun b s' => (monitoringPeriodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
         (fun l => M + 1 ≤ Served.lead l) (fun b => ¬ (rec i (Strategy.ofBind _ (G i) s) b).sampledIncorrect)
         (x ^ (M + 1 - w)) (G i) s
         (atEnds_mono (fun b s' hg => by
@@ -59,7 +59,7 @@ theorem period_lead (G : (i : ℕ) → Verity.Game (β i)) (rec : (i : ℕ) → 
               (period_lead G rec good x hx hstage T (i + 1) s' (M + 1 - w) hg)
             simp only [Served.lead, ite_eq_right hm, hw b] at hl
             omega) (G i) s hs.2)
-      calc value (fun l => M + 1 ≤ Served.lead l) (periodRun G rec i (T + 1) s)
+      calc value (fun l => M + 1 ≤ Served.lead l) (monitoringPeriodRun G rec i (T + 1) s)
           ≤ prob (fun b => ¬ (rec i (Strategy.ofBind _ (G i) s) b).sampledIncorrect) (G i) (Strategy.ofBind _ (G i) s) *
               x ^ (M + 1 - w) := h
         _ ≤ x ^ w * x ^ (M + 1 - w) := by gcongr
@@ -71,9 +71,9 @@ theorem period_undetected (G : (i : ℕ) → Verity.Game (β i)) (rec : (i : ℕ
     (hacc : ∀ i τ, good i τ → prob (fun b => (rec i τ b).accepted ∧ (rec i τ b).sampledIncorrect) (G i) τ ≤ ε i)
     (hstage : ∀ i τ, good i τ → ∃ w : ℕ, (∀ b, (rec i τ b).incorrect = w) ∧
       prob (fun b => ¬ (rec i τ b).sampledIncorrect) (G i) τ ≤ x ^ w)
-    (T i : ℕ) (s : Strategy (periodG G i T)) (M : ℕ) (hs : PeriodGood G good i T s) :
-    value (Served.Undetected M) (periodRun G rec i T s) ≤ ∑ t ∈ Finset.range T, ε (i + t) + x ^ M := by
-  show value (fun l => (∃ r ∈ l, r.accepted ∧ r.sampledIncorrect) ∨ M ≤ Served.lead l) (periodRun G rec i T s) ≤ _
+    (T i : ℕ) (s : Strategy (monitoringPeriodG G i T)) (M : ℕ) (hs : MonitoringPeriodGood G good i T s) :
+    value (Served.Undetected M) (monitoringPeriodRun G rec i T s) ≤ ∑ t ∈ Finset.range T, ε (i + t) + x ^ M := by
+  show value (fun l => (∃ r ∈ l, r.accepted ∧ r.sampledIncorrect) ∨ M ≤ Served.lead l) (monitoringPeriodRun G rec i T s) ≤ _
   exact (value_or_le _ _ _).trans (add_le_add
     (period_union G rec (fun r => r.accepted ∧ r.sampledIncorrect) good ε hacc T i s hs)
     (period_lead G rec good x hx hstage T i s M hs))
