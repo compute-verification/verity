@@ -46,7 +46,8 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   stream gave: a quiet stream whose agent moved since is a broken stream, so nothing is judged and the run is followed
   afresh, which replays it; stalled is judged by the `updatedAt` read then. A run the watch can't read so is not
   cancelled: it is recorded once as **unjudged**, with why, and judged again at each sweep; so is one whose agent has
-  moved after its stream's last event at the `REOPENS`th time it is followed afresh. While `CANCEL_OFF`
+  moved after its stream's last event at the `REOPENS`th time it is followed afresh. That record's owner is infra,
+  whatever its agent: it needs someone who reads the agent and its run by the API and cancels it by hand. While `CANCEL_OFF`
   (`/data/agent-watch/cancel.off`, a file a person makes on the pod) exists, nothing is cancelled: each finding is
   recorded once, for a person, and cancelled once the file is gone if it still holds;
 - **in a long call** when a tool call the parent waits on has been running for `LONG_CALL_S` (recorded, never cancelled: a
@@ -250,7 +251,8 @@ relaunched at most once every `RELAUNCH_EVERY_S`. Relaunching
 needs a key the GitHub broker trusts (Daniel's user key; a service account's agents can't push), which the watch reads,
 only when it relaunches, from `launch.env` beside `--log` (root, 0600, one `CURSOR_API_KEY=` line) and passes only in the
 launch's environment; until that file exists every relaunch is recorded as not done. Each failure record names its `owner`
-(`top` for a coordinator, the launcher's handle for a worker or an agent a coordinator launched), whose inbox the relay rings.
+(`top` for a coordinator, the launcher's handle for a worker or an agent a coordinator launched; infra for a run the watch
+could not judge), whose inbox the relay rings.
 
 A sweep's reads stop `SWEEP_READS_S` after it began (`Api.reads_until`), and no read goes past that, so a sweep reads
 what it acts on first: the agents, each live one's runs, and, as it restarts, continues, wakes and judges, what each of
@@ -1725,7 +1727,9 @@ class Watch:
         that has did something the stream never gave, so the stream is broken, and the run is dropped for the next sweep
         to follow afresh, which replays it; at the `REOPENS`th time for one run that is recorded, `unjudged`. A stalled run
         must be stalled by the `updatedAt` read now. When a read fails nothing is judged, and the run is recorded
-        `unjudged`, once, with why."""
+        `unjudged`, once, with why. An `unjudged` record's owner is infra, whose inbox the relay rings for it, a
+        coordinator's run included: it needs someone who reads the agent and its run by the API and cancels it by hand."""
+        found = {**found, "owner": "infra"}
         try:
             a = self.api.get(f"/v1/agents/{r.agent}", timeout=GUARD_TIMEOUT_S) or {}
             x = self.api.get(f"/v1/agents/{r.agent}/runs/{r.run}", timeout=GUARD_TIMEOUT_S) or {}

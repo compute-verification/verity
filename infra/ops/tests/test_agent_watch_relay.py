@@ -787,22 +787,24 @@ def test_a_holder_held_unread_is_posted_and_rings_top(relay):
     assert [r["thread_ts"] for r in rings(relay)] == [TOP_INBOX["inbox_ts"]]
 
 
-def test_a_run_the_watch_could_not_judge_rings_top_with_why(relay):
-    """`unjudged`: a run its stream shows held, of which the watch cancelled nothing because it could not read it afresh:
-    left for a person, so top is rung, with why."""
-    top = relay.slack.tag(relay.slack.entry(relay.REG, "top"))
+def test_a_run_the_watch_could_not_judge_rings_infra_with_why_and_not_top(relay):
+    """`unjudged`: a run its stream shows held, of which the watch cancelled nothing because it could not read it afresh.
+    It needs someone who reads the agent and its run by the API and cancels it by hand, so infra is rung, with why, and
+    top is not: by the record's kind, whatever owner it names."""
+    infra = relay.slack.tag(relay.slack.entry(relay.REG, "infra"))
     co = PROOFS_INBOX["holder"]
     why = ("the watch could not read its agent and the run afresh (TimeoutError: this sweep's reads are spent (12 min); the "
            "next sweep reads again)")
-    relay.log_text["text"] = json.dumps({"kind": "unjudged", "agent": co, "name": "verity: proofs", "run": "run-h",
-                                         "rule": "held", "since": "2026-10-24T17:25:00Z", "minutes": 15, "why": why,
-                                         "owner": "top"}) + "\n"
+    rec = {"kind": "unjudged", "agent": co, "name": "verity: proofs", "run": "run-h", "rule": "held",
+           "since": "2026-10-24T17:25:00Z", "minutes": 15, "why": why, "owner": "infra"}
+    relay.log_text["text"] = json.dumps(rec) + "\n"
     relay.once()
     link = f"<https://cursor.com/agents/{co}|{co}>"
     assert relay.posts == [
-        f"{top} *Agent watch:* verity: proofs ({link}, run run-h) was found held by its stream since 2026-10-24T17:25:00Z "
+        f"{infra} *Agent watch:* verity: proofs ({link}, run run-h) was found held by its stream since 2026-10-24T17:25:00Z "
         f"(15 min), but {why}: the watch cancelled nothing, and judges it again each sweep; look at it if it can't wait."]
-    assert [r["thread_ts"] for r in rings(relay)] == [TOP_INBOX["inbox_ts"]]
+    assert [r["thread_ts"] for r in rings(relay)] == [INFRA_INBOX["inbox_ts"]], "infra's inbox, and not top's"
+    assert {relay.rung({**rec, "owner": owner}) for owner in ("top", "proofs", None)} == {"infra"}
 
 
 def test_an_agent_that_went_on_by_itself_is_posted_and_rings_no_one(relay):

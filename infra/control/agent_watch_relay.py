@@ -2,8 +2,7 @@
 /data/agent-watch/events.jsonl (on the pod itself with $AGENT_WATCH_ON_POD, else over ssh) and posts each in #agent-alerts: a
 held run the watch cancelled and continued, a tool call running 45 minutes, a crashed run, a coordinator ready to wake. An agent that holds a handle
 (the Slack registry's `holder`) is named by its handle. What the watch leaves for a person (`TOP`: erroring, stuck, a refused
-cancel, held again within the hour, a run unreadable for an hour, a run its stream shows held that the watch could not judge
-(`unjudged`: it could not read it afresh, or its stream keeps breaking), and an outage, which names the registry's human too; the first unreadable
+cancel, held again within the hour, a run unreadable for an hour, and an outage, which names the registry's human too; the first unreadable
 line is posted nowhere) leads with top's handle, and rings top's inbox thread as `ring_decision` does for a decided card (the inbox is in the front door, so the post's
 own route can't ring it); an erroring worker, which its record's `owner` relaunches, rings that handle instead. A cloud worker (a Task subagent) that went idle, or has been ACTIVE for hours, leads with its lane's
 handle and rings that inbox the same way, for its coordinator to resume it with Task (the watch can't start a worker's run;
@@ -12,7 +11,9 @@ the doorbell also counts toward the coordinator's own ready-to-wake rule). A wor
 saying so, for infra to find its launcher; its alerts, which the watch marks `quiet`, are posted with no handle and no lane
 and ring no one.
 An alert of a worker whose registered lane no handle owns, which the watch doesn't mark, leads with infra's handle and says
-its lane is unknown. A silent worker (ACTIVE 90 min with no note
+its lane is unknown. A run its stream shows held that the watch could not judge (`unjudged`: it could not read it afresh, or
+its stream keeps breaking) leads with infra's handle and rings infra's inbox too, whatever its agent: it needs someone who
+reads the agent and its run by the API and cancels it by hand. A silent worker (ACTIVE 90 min with no note
 and no push) leads with the record's handle and rings it the same way; a silent coordinator (in one turn, with no note, no
 push and no assistant text for 60 min; its record's owner top) rings top, its sentence giving the turn's length, and saying
 so when its conversation went unread and its text unchecked. A `research run` that ended on a node leads with its
@@ -126,7 +127,7 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
                    "and judges it again each sweep; look at it if it can't wait",
        "continued_itself": "went on by itself (its run {own_run} is going), so the run the watch had waiting for it since "
                            "{since}, which the API refused, was dropped"}
-TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable", "no_step", "outage", "unjudged"}
+TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable", "no_step", "outage"}
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
 HANDLE = WORKER | {"silent", "run_ended", "workers_failed", "archived", "handin_waiting"}     # rung to the record's handle
 FAIL = {"held", "stalled", "crashed", "dropped", "idle_after_run", "relaunch", "held_unread"}  # rung to the record's owner: who follows it up
@@ -135,7 +136,8 @@ FAIL = {"held", "stalled", "crashed", "dropped", "idle_after_run", "relaunch", "
 SILENT_LEAD = "has been in one turn for {active_minutes} min, with no note, no push and no assistant text for {minutes} min"
 SILENT_LEAD_UNREAD = ("has been in one turn for {active_minutes} min, with no note and no push for {minutes} min; the API "
                       "wouldn't read its conversation for {unread_minutes} min, so its assistant text is unchecked")
-UNROUTED = "infra"      # rung once for a worker the watch can't place, and for one whose lane no handle owns
+UNROUTED = "infra"      # rung once for a worker the watch can't place, for one whose lane no handle owns, and for a run the
+#                         watch could not judge
 UNSENT_LISTED = 12      # runs of unknown senders one post names; the rest are counted
 RING_RUN = [sys.executable, "-m", "research", "msg", "ring-run"]
 RUNBELL_RE = re.compile(r"^from runs, run \S+ rc ")      # ring-run's doorbell
@@ -181,7 +183,8 @@ def renderable(rec: dict) -> bool:
 def rung(rec: dict) -> str | None:
     """The handle whose inbox the alert rings, if any. A worker's is its lane's: only its coordinator can resume it. One the
     watch could place under no lane (`unplaced`) goes to infra (`UNROUTED`), who finds its launcher, and so does an alert of a
-    worker whose lane no handle owns, and a record `text` can't render."""
+    worker whose lane no handle owns, a run the watch could not judge (`unjudged`), which someone must read by the API and
+    cancel by hand, and a record `text` can't render."""
     if not renderable(rec):
         return UNROUTED
     if rec.get("quiet"):        # the watch's own judgement that nobody must act: a run its lane cancelled, a relaunch declined,
@@ -201,7 +204,7 @@ def rung(rec: dict) -> str | None:
         return handle
     if is_worker(rec):
         return lane_of(rec) or UNROUTED
-    if rec.get("kind") == "run_ended":
+    if rec.get("kind") in ("run_ended", "unjudged"):
         return UNROUTED
     return None
 

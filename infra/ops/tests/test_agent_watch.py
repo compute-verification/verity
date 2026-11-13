@@ -1023,8 +1023,8 @@ def test_a_run_its_stream_shows_held_is_not_cancelled_by_sweeps_whose_reads_are_
         w.sweep(started.append)
     assert api.posts == [], "nothing is cancelled on a view the watch could not refresh"
     (rec,) = records(tmp_path)
-    assert {k: rec[k] for k in ("kind", "rule", "run", "since", "minutes")} == {
-        "kind": "unjudged", "rule": "held", "run": "run-1", "since": W.iso(heard), "minutes": 15}
+    assert {k: rec[k] for k in ("kind", "rule", "run", "since", "minutes", "owner")} == {
+        "kind": "unjudged", "rule": "held", "run": "run-1", "since": W.iso(heard), "minutes": 15, "owner": "infra"}
     assert "could not read its agent and the run afresh (TimeoutError: this sweep's reads are spent" in rec["why"]
     assert status(tmp_path)["bc-a"]["watch_state"] == "unjudged" and [r.run for r in started] == ["run-1"]
     undo()
@@ -1071,6 +1071,22 @@ def test_a_run_followed_afresh_twice_for_an_agent_that_keeps_moving_is_recorded_
     assert api.posts == [] and len(started) == W.REOPENS + 2
     (rec,) = records(tmp_path)
     assert (rec["kind"], rec["rule"], rec["minutes"]) == ("unjudged", "held", 15) and "a stream that keeps breaking" in rec["why"]
+    assert rec["owner"] == "infra"
+
+
+def test_a_coordinators_run_the_watch_could_not_judge_names_infra_its_owner_and_not_top(tmp_path):
+    """A coordinator's records name top their owner, whose inbox the relay rings. A run the watch could not judge needs
+    someone who reads the agent and its run by the API and cancels it by hand: its record names infra, a coordinator's
+    included."""
+    api, clock, w, co, _ = relaunchable(tmp_path)
+    w.sweep(lambda r: None)
+    held_tool_call(w)
+    clock.t += W.HELD_S
+    after(api, 1, spent)
+    w.sweep(lambda r: None)
+    (rec,) = records(tmp_path)
+    assert (rec["kind"], rec["rule"], rec["owner"]) == ("unjudged", "held", "infra") and api.posts == []
+    assert w.owned(co) == {"owner": "top"}, "as its other records name it"
 
 
 @pytest.mark.parametrize("now, followed", [("FINISHED", False), ("WAITING_FOR_BACKGROUND_WORK", True)])
