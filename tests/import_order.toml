@@ -175,6 +175,7 @@ files = [
 paths = [
     "verity/channel.py",
     "verity/runtime/handshake.py",
+    "verity/tests/tests/test_channel.py",
 ]
 trusted = true
 
@@ -321,6 +322,7 @@ loads = [
 [[place]]
 paths = [
     "verity/device.py",
+    "verity/tests/tests/test_device.py",
 ]
 trusted = true
 loads = [
