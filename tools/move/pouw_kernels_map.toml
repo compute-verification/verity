@@ -34,6 +34,30 @@ new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 paths = ["verity/protocols/pouw/receipts/", "benchmarks/pouw/pearl_c/", "benchmarks/pouw/pearl_c_sm90/",
          "benchmarks/pouw/pearl_c_sm120/", "benchmarks/pouw/pearl_c4/"]
 
+[split]
+# A reference to a directory the map splits follows its larger part; each one here says why that is what it means
+# (`layout.py` fails on any other, and on an entry no reference needs): "old file: old directory" = why.
+"benchmarks/pouw/README.md: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
+"benchmarks/pouw/filler/README.md: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
+"benchmarks/pouw/filler/arms.py: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
+"benchmarks/pouw/filler/capfill_co_probe.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
+"benchmarks/pouw/filler/capfill_fit_probe.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
+"benchmarks/pouw/filler/capfill_fold_probe.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
+"benchmarks/pouw/filler/capfill_fstep_probe.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
+"benchmarks/pouw/filler/dcap.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
+"benchmarks/pouw/filler/dfill.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
+"benchmarks/pouw/filler/fill.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
+"benchmarks/pouw/filler/flin.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
+"benchmarks/pouw/filler/fold_probe.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
+"benchmarks/pouw/filler/pfill_probe.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
+"benchmarks/pouw/filler/psched.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
+"benchmarks/pouw/filler/psched_probe.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
+"benchmarks/pouw/filler/pyproject.toml: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
+"benchmarks/pouw/filler/tile_probe.sh: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
+"benchmarks/pouw/pearl_c/README.md: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
+"benchmarks/pouw/pearl_c_sm120/README.md: benchmarks/pouw/served_zk" = "served_zk's benchmark as a whole, which stays; only its kernel hm96_rows.cu moves"
+"tools/research/tests/test_landing.py: benchmarks/pouw/filler" = "the filler as a whole, its kernels, scripts and suite, which move; only its measurement comm/ stays in benchmarks/"
+
 [drop]
 paths = []
 
