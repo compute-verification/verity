@@ -9,9 +9,9 @@ cut at its `out = {}` line, with this tree's slot.py and lean_slot.py inlined as
 the placer count memory, floors and Lean slots with one code. A machine that has its own copy of slot.py
 (`slot_only.NODE_SLOT`, the one its pools' runs wait by) reads its pools with that copy, as the placer does. Its ending reads
 every pool the machine has (`locks/slots` is pool `check`, `locks/NAME/slots` pool NAME), each in POOL_S of its own, the Lean
-slots, the disk floor, the memory available, the names in /etc/vy/peers, and of each waiter's request.json the `auto` key alone (why `research run --on auto` put it there).
-Every `cmd` key is dropped on the machine before the document leaves it. A machine or a pool that can't be read is listed with
-why (`unread`), never dropped, so the counts beside it read as a floor.
+slots, the disk floor, the memory available, the names in /etc/vy/peers, and of each waiter's request.json the `auto` key
+alone (why `research run --on auto` put it there). Every `cmd` key is dropped on the machine before the document leaves it. A
+machine or a pool that can't be read is listed with why (`unread`), never dropped, so the counts beside it read as a floor.
 
 A place (`analyse`) is a slot the launcher's own rule would start the job in now, on a machine where the job has no line:
 
