@@ -1,7 +1,8 @@
 """`verity-vllm manifest-verify` (`verity_vllm.pipeline.manifest_verify`): the manifest a Commit used against the one rebuilt from
 the Build's Programs, the builders stood in.  One request's Program is rebuilt by `manifest.build` and a batch's by
 `manifest.build_global`, each under the policies and the query the command line names; the record is printed, written where
-`--out` says, and the exit is its `ok`.  Neither a Program nor a fixture with its Programs' directory: refused."""
+`--out` says, and the exit is its `ok`.  Neither a Program nor a fixture with its Programs' directory: refused.  A rebuild
+that names no policy runs under none, as rank 0 of 1 and under the query of record."""
 from __future__ import annotations
 
 import json
@@ -78,6 +79,15 @@ def test_a_batch_s_manifest_is_rebuilt_from_its_fixture_and_programs_under_the_p
                                           "taps": ("router_softmax",), "query": QUERY_OF_RECORD}),
         ("build_global", (fixture, "D"), {"workload_digest": None, "rank": 0, "ranks": 1, "profile": None, "norm_scales": True,
                                           "taps": (), "query": QUERY_OF_RECORD})]
+
+
+def test_a_rebuild_that_names_no_policy_is_rank_0_of_1_under_none_and_the_query_of_record(tmp_path, monkeypatch):
+    for name in ("build", "build_global"):
+        monkeypatch.setattr(manifest, name, lambda *args, **kw: (args, kw))
+    unnamed = {"rank": 0, "ranks": 1, "profile": None, "norm_scales": False, "taps": (), "query": QUERY_OF_RECORD, "log": None}
+    assert MV.rebuild(program="D/build_request") == (("D/build_request",), {"workload": None, **unnamed})
+    (tmp_path / "fixture.json").write_text('{"requests": []}')
+    assert MV.rebuild(fixture=str(tmp_path / "fixture.json"), programs_root="D") == (({"requests": []}, "D"), {"workload_digest": None, **unnamed})
 
 
 def test_a_manifest_that_is_not_the_rebuilt_one_exits_1_and_says_why(tmp_path, built, capsys):
