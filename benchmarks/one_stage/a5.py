@@ -220,10 +220,10 @@ from verity.circuits.program import Program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Session, Statement  # noqa: E402
 from verity.commitments import row_table as RT  # noqa: E402
-from verity.protocols.spot.device import coins as CC
-from verity.protocols.spot.verifier import service as S  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import registered as REG  # noqa: E402
+from verity.protocols.proofs.spot.device import coins as CC
+from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
 from verity.commitments.windows import flock_inputs as FI, interface as IF, rows as CS, tables as TB  # noqa: E402
 from verity.commitments.windows import wiring as WI  # noqa: E402
 
@@ -779,7 +779,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     verifier's history tables from the members' public bodies by key (`ml.windows.history.params`), to which the
     registration's check holds the window's registered roots before the sample, and the stream's registrations for its run
     of record; None for a window with none."""
-    from verity.protocols.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
     out.mkdir(parents=True, exist_ok=True)
     program, query, part, pd, n_all, law = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
@@ -1392,7 +1392,7 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public:
     digest as the kept window's own v2 case names it, or, for a window that keeps none, the kept file's own, taken
     after the audit."""
     RP = own_replay()
-    from verity.protocols.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
     pr, blobs = PF.evidence_v2(proof, sessions)
     evidence = {k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"} | {"proofs": pr}
@@ -1412,7 +1412,7 @@ def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> di
     statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 parses this form and refuses it
     (`OneStageZk.MULTI_REFUSED`); `proofs.members_parsed` is what its parsers read of the case."""
     RP = own_replay()
-    from verity.protocols.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
     names = {m.name: [PF.file_sha512(s / "session.json") for s in m.proof.sessions] for m in members}
     pm, pe, blobs = PF.members_v2(members, names)
@@ -1476,7 +1476,7 @@ def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
     sampled proof blocks under the sampled law over the samples that end (one that runs out of coins fails the window:
     `draw_ran_out`), or why it refuses them all, a sampling design no sample of which ends among them (`link_points.NEVER_ENDS`).
     Recorded here; a registration whose verifier names its members refuses (`Registration.check`)."""
-    from verity.protocols.spot.verifier.one_stage import link_points as LP
+    from verity.protocols.proofs.spot.verifier.one_stage import link_points as LP
 
     ms = [([[mm["m"].base, mm["m"].base + mm["m"].n]], int(mm["st"]["meta"]["vus_per_block"])) for mm in members]
     try:
@@ -1495,7 +1495,7 @@ def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
 def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
     """`case_v2`'s files from the sampled members' sessions (`member_checks`'s), or why the audit has no v2 case: v2 verifies
     one table's one `--zk` session on its circuit and public file."""
-    from verity.protocols.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
     if not zk:
         return "v2 verifies --zk sessions; this audit's are plain"
@@ -1517,7 +1517,7 @@ def session_dirs(sdir: Path) -> tuple[Path, ...]:
 def looked_up_tables(st_dir: Path) -> list[Path]:
     """The pinned MUFU tables under a staged member's ``st_dir`` that its circuit looks up (`proofs.circuit_lookups`):
     v2 holds the blobs' tables to exactly those."""
-    from verity.protocols.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
     tdir = st_dir / "tables"
     looked_up = PF.circuit_lookups(st_dir / "circuit.txt") if tdir.is_dir() else []
@@ -1531,7 +1531,7 @@ def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: 
     the tables its circuit looks up, one path a table. None for a window of one member, whose form is the one
     statement's (`v2_proof`), unless ``one`` (its sessions ran on a caller's stage's challenger session,
     `drawn_trees`); or why the audit has no per-member case."""
-    from verity.protocols.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
     if len(members) < 2 and not one:
         return None

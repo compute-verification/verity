@@ -70,7 +70,7 @@ CONCEPTS = ("Circuit", "Prog", "Program", "Gate", "Op", "Netlist", "Partition", 
 PROPOSITIONS = ("Collision",)
 SLOT_FIELDS = ("Params", "Commitment", "Evidence", "Public")
 
-D, CORE, FLOCK = "security/Definitions/", "security/Definitions/Core/", "verity/protocols/flock/verifier/Flock/"
+D, CORE, FLOCK = "security/Definitions/", "security/Definitions/Core/", "verity/protocols/proofs/flock/verifier/Flock/"
 BASE, CIRCUITS, COMMITMENTS = ("verity/circuits/base/Base/", "verity/circuits/lean/Circuits/",
                                "verity/commitments/lean/Commitments/")
 PROTOCOL = "verity/protocols/interface/CoreProtocol/Protocol.lean"
@@ -82,9 +82,9 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Answer": (f"{PROTOCOL}::Core.Answer",),
     "Block": (f"{CORE}Blocks.lean::Verity.Block",),
     "Card": (f"{CORE}Accel/Card.lean::Verity.Accel.Card",),
-    "Certificate": ("verity/protocols/certifier/verifier/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Certificate",
-                    "verity/protocols/certifier/verifier/certificate.py::Certificate"),
-    "Challenger": ("verity/protocols/spot/verifier/parties.py::Challenger",),
+    "Certificate": ("verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Certificate",
+                    "verity/protocols/accounting/certifier/verifier/certificate.py::Certificate"),
+    "Challenger": ("verity/protocols/proofs/spot/verifier/parties.py::Challenger",),
     "Circuit": (f"{CORE}Circuit.lean::Verity.Circuit", f"{FLOCK}Circuit.lean::Flock.Circuit"),
     "CoinTree": ("verity/commitments/coin_tree.py::CoinTree",),
     "Coins": (f"{CORE}Draw.lean::Verity.Coins", f"{FLOCK}Statement.lean::Flock.Coins"),
@@ -93,14 +93,14 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Dag": (),
     "Device": (),
     "Digest": (f"{CORE}Digest.lean::Verity.Digest", f"{BASE}Hash.lean::Flock.Digest"),
-    "Draw": (f"{CORE}Draw.lean::Verity.Draw", "verity/protocols/spot/verifier/service.py::Draw"),
+    "Draw": (f"{CORE}Draw.lean::Verity.Draw", "verity/protocols/proofs/spot/verifier/service.py::Draw"),
     "Game": (f"{CORE}Game.lean::Verity.Game",),
     "Gate": (f"{CIRCUITS}Gate.lean::Flock.Program.Gate",),
     "Hardware": (),
     "Hash": (),
     "InteractiveDevice": (),
     "Law": (f"{CORE}Draw.lean::Verity.Law", f"{COMMITMENTS}Draw.lean::Flock.Draw.Law",
-            "verity/protocols/spot/verifier/service.py::Law"),
+            "verity/protocols/proofs/spot/verifier/service.py::Law"),
     "Layout": (),
     "Ledger": (),
     "Link": (f"{CORE}Site.lean::Verity.Site.Link", f"{SITE_LEAN}::Core.Site.Link", f"{SITE_PY}::Link"),
@@ -146,15 +146,15 @@ WHY = {"Extractor": "an extractor is a rerun program whose work `RP.eval` counts
                     "can open a hiding commitment to any trace, so it meets any contract",
        "Simulator": "a simulator is a program whose calls `SP.eval` counts, fixed before the witness"}
 
-RA, RA_PY = "verity/protocols/poub/verifier/lean/RemoteAudit/", "verity/protocols/poub/verifier/audit.py"
-MC, MC_PY = "verity/protocols/pous/device/lean/MemoryChallenger/", "verity/protocols/pous/"
+RA, RA_PY = "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/", "verity/protocols/accounting/poub/verifier/audit.py"
+MC, MC_PY = "verity/protocols/accounting/pous/device/lean/MemoryChallenger/", "verity/protocols/accounting/pous/"
 #: A Python class held to a code-Lean declaration by a `verity_difftest` port, ``python key: (Lean key, port, reason)``: the
 #: pair counts once, as its Lean. The port is a `[[lean_exe]]` of a tracked lakefile.
 MIRRORS: dict[str, tuple[str, str, str]] = {
-    "verity/protocols/certifier/verifier/certificate.py::Certificate":
-        ("verity/protocols/certifier/verifier/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Certificate", "network-check",
+    "verity/protocols/accounting/certifier/verifier/certificate.py::Certificate":
+        ("verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Certificate", "network-check",
          "the network check's protocol port decodes the certificates the Python issues"),
-    "verity/protocols/spot/verifier/service.py::Law": (f"{COMMITMENTS}Draw.lean::Flock.Draw.Law", "sampled-proofs-difftest",
+    "verity/protocols/proofs/spot/verifier/service.py::Law": (f"{COMMITMENTS}Draw.lean::Flock.Draw.Law", "sampled-proofs-difftest",
                                                              "the service's port parses the Python's laws"),
     "verity/commitments/crypto/lms.py::Signature": ("verity/commitments/lms/lean/Lms/Verify.lean::Lms.Signature", "lms-difftest",
                                            "the LMS port verifies the Python's signatures"),
@@ -667,16 +667,16 @@ KNOWN: dict[str, str] = {
         "homonym, the simulator's model of one served block: rename (network-accounting)",
     "benchmarks/network_sim/workload/lab.py::Session":
         "homonym, the old word for a run, here a simulated read: rename (network-accounting)",
-    "verity/protocols/flock/prover/python/verity_flock/lowerings.py::Registry":
+    "verity/protocols/proofs/flock/prover/python/verity_flock/lowerings.py::Registry":
         "homonym, a table of benchmark lowerings: rename (compute-accounting)",
-    "verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py::Draw":
+    "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py::Draw":
         "homonym, one synthetic benchmark draw: rename (compute-accounting)",
     "benchmarks/one_stage/a5_coins.py::Gate": "homonym, infra's challenger gate (an SSH host): rename (proofs)",
     "benchmarks/pous/p2_v1/store.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a client of it (memory-accounting)",
-    "verity/protocols/pouw/clear/clear_audit.py::Transcript":
+    "verity/protocols/accounting/pouw/clear/clear_audit.py::Transcript":
         "homonym, what a clear audit's prover publishes: rename (compute-accounting)",
-    "verity/protocols/pouw/clear/clear_audit.py::Verdict":
+    "verity/protocols/accounting/pouw/clear/clear_audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a client of it (compute-accounting)",
     "benchmarks/pouw/dc/census.py::Device": "homonym, a census family's merged runs: rename (compute-accounting)",
     "benchmarks/pouw/filler/arms.py::Placement": "homonym, a filler arm's placement: rename (compute-accounting)",
@@ -685,7 +685,7 @@ KNOWN: dict[str, str] = {
     "benchmarks/pouw/harness/chain.py::Link":
         "homonym, one operand set's call in a kernel chain: rename (compute-accounting)",
     "benchmarks/pouw/harness/native.py::Device": "homonym, one CUDA device handle: rename (compute-accounting)",
-    "verity/protocols/pouw/prover/sass_gate.py::Gate": "homonym, a run's SASS gate: rename (compute-accounting)",
+    "verity/protocols/accounting/pouw/prover/sass_gate.py::Gate": "homonym, a run's SASS gate: rename (compute-accounting)",
     "benchmarks/machine_model/verity_machine_model/capacity.py::Window":
         "homonym, a capacity model's window and node cell: rename (compute-accounting)",
     "benchmarks/machine_model/verity_machine_model/eps.py::Machine":
@@ -780,167 +780,167 @@ KNOWN: dict[str, str] = {
     "verity/commitments/attest/__init__.py::Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's certification period (proofs)",
     "verity/party.py::Record": "homonym, a party's log entry: rename (proofs)",
-    "verity/protocols/certifier/device/lean/CertifierDevice/Issuer.lean::CertifierDevice.Certificate":
+    "verity/protocols/accounting/certifier/device/lean/CertifierDevice/Issuer.lean::CertifierDevice.Certificate":
         "duplicate of `NetworkCheck.Check.Certificate`: becomes it (deleted; it already requires `network_check`) (network-accounting)",
-    "verity/protocols/certifier/device/lean/CertifierDevice/Online.lean::CertifierDevice.Link":
+    "verity/protocols/accounting/certifier/device/lean/CertifierDevice/Online.lean::CertifierDevice.Link":
         "homonym, a link's online state: rename (network-accounting)",
-    "verity/protocols/pous/device/lean/MemoryChallenger/Records.lean::MemoryChallenger.CoinTree":
+    "verity/protocols/accounting/pous/device/lean/MemoryChallenger/Records.lean::MemoryChallenger.CoinTree":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
-    "verity/protocols/certifier/verifier/audit.py::Verdict":
+    "verity/protocols/accounting/certifier/verifier/audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (network-accounting)",
-    "verity/protocols/certifier/device/program/lean/NetworkCertifier/Run.lean::NetworkCertifier.Program":
+    "verity/protocols/accounting/certifier/device/program/lean/NetworkCertifier/Run.lean::NetworkCertifier.Program":
         "homonym, a Program's egress prediction: rename (network-accounting)",
-    "verity/protocols/certifier/device/program/lean/NetworkCertifier/WindowCharge.lean::NetworkCertifier.WindowCharge.Window":
+    "verity/protocols/accounting/certifier/device/program/lean/NetworkCertifier/WindowCharge.lean::NetworkCertifier.WindowCharge.Window":
         "homonym, one window's timing advice: rename (network-accounting)",
-    "verity/protocols/certifier/prover/window_charge.py::Window":
+    "verity/protocols/accounting/certifier/prover/window_charge.py::Window":
         "homonym, one sampling block's charge: rename (network-accounting)",
     "verity/protocols/interface/CoreProtocol/Profile.lean::Core.Draw":
         "homonym, how a profile level is drawn: rename (proofs)",
     "verity/protocols/interface/CoreProtocol/Record.lean::Core.Record":
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes a reading of it (proofs)",
-    "verity/protocols/certifier/verifier/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Link":
+    "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Link":
         "homonym, one egress link's opening: rename (proofs)",
-    "verity/protocols/certifier/verifier/lean/NetworkCheck/TransferBlocks.lean::NetworkCheck.TransferBlocks.Verdict":
+    "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/TransferBlocks.lean::NetworkCheck.TransferBlocks.Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (proofs)",
-    "verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Layout":
+    "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Layout":
         "homonym, the certifier's bucket and slot schedule: rename (proofs)",
-    "verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Registration":
+    "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Registration":
         "duplicate of the registration log (`Verity.Registration`): becomes the log's projection (deleted) (proofs)",
-    "verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Window":
+    "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Window":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a sampling period (proofs)",
-    "verity/protocols/pous/verifier/audit.py::Answer": "homonym, a challenge's answer: rename (memory-accounting)",
-    "verity/protocols/pous/device/challenger_party.py::Challenger":
+    "verity/protocols/accounting/pous/verifier/audit.py::Answer": "homonym, a challenge's answer: rename (memory-accounting)",
+    "verity/protocols/accounting/pous/device/challenger_party.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
-    "verity/protocols/pous/verifier/check/PousCheck/Certificate.lean::PousCheck.Certificate.Certificate":
+    "verity/protocols/accounting/pous/verifier/check/PousCheck/Certificate.lean::PousCheck.Certificate.Certificate":
         "homonym, what a PoUS audit establishes: rename (memory-accounting)",
-    "verity/protocols/pous/verifier/check/PousCheck/Certificate.lean::PousCheck.Certificate.Store":
+    "verity/protocols/accounting/pous/verifier/check/PousCheck/Certificate.lean::PousCheck.Certificate.Store":
         "duplicate of `CircuitRequirement.Store`: becomes `PousCheck.P2.Params` (deleted) (memory-accounting)",
-    "verity/protocols/pous/verifier/check/PousCheck/Run.lean::PousCheck.Run.Session":
+    "verity/protocols/accounting/pous/verifier/check/PousCheck/Run.lean::PousCheck.Run.Session":
         "homonym, the old word for a run, kept as one protocol's run type: rename (memory-accounting)",
-    "verity/protocols/pous/verifier/check/PousCheck/Verdict.lean::PousCheck.Verdict.Gate":
+    "verity/protocols/accounting/pous/verifier/check/PousCheck/Verdict.lean::PousCheck.Verdict.Gate":
         "duplicate of `Flock.Program`: becomes `Flock.Program` (deleted) (memory-accounting)",
-    "verity/protocols/pous/verifier/check/PousCheck/Verdict.lean::PousCheck.Verdict.Opening":
+    "verity/protocols/accounting/pous/verifier/check/PousCheck/Verdict.lean::PousCheck.Verdict.Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (memory-accounting)",
-    "verity/protocols/pous/verifier/check/PousCheck/Verdict.lean::PousCheck.Verdict.Prog":
+    "verity/protocols/accounting/pous/verifier/check/PousCheck/Verdict.lean::PousCheck.Verdict.Prog":
         "duplicate of `Flock.Program`: becomes `Flock.Program` (deleted) (memory-accounting)",
-    "verity/protocols/pous/verifier/check/timed_audit.py::Store":
+    "verity/protocols/accounting/pous/verifier/check/timed_audit.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
-    "verity/protocols/pous/verifier/layout.py::Layout":
+    "verity/protocols/accounting/pous/verifier/layout.py::Layout":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
-    "verity/protocols/pous/verifier/layout.py::Placement":
+    "verity/protocols/accounting/pous/verifier/layout.py::Placement":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
-    "verity/protocols/pous/verifier/period.py::Period":
+    "verity/protocols/accounting/pous/verifier/period.py::Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes one `Core` period case, not one per protocol (memory-accounting)",
-    "verity/protocols/pous/verifier/period.py::Store":
+    "verity/protocols/accounting/pous/verifier/period.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it: PoUS's view of the store entry (memory-accounting)",
-    "verity/protocols/pous/verifier/protocol.py::Certificate":
+    "verity/protocols/accounting/pous/verifier/protocol.py::Certificate":
         "homonym, what an accepted PoUS audit establishes: rename (memory-accounting)",
-    "verity/protocols/pous/verifier/streamed_wipe.py::Challenger":
+    "verity/protocols/accounting/pous/verifier/streamed_wipe.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
-    "verity/protocols/pous/verifier/wipe_parties.py::Challenger":
+    "verity/protocols/accounting/pous/verifier/wipe_parties.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
-    "verity/protocols/pouw/prover/circuit/anchors.py::Ledger":
+    "verity/protocols/accounting/pouw/prover/circuit/anchors.py::Ledger":
         "homonym, a window's admitted calls: rename (compute-accounting)",
-    "verity/protocols/pouw/prover/circuit/compile.py::Site":
+    "verity/protocols/accounting/pouw/prover/circuit/compile.py::Site":
         "homonym, a node of the served function and a kind of dot: rename (compute-accounting)",
-    "verity/protocols/pouw/prover/circuit/h1device.py::Device":
+    "verity/protocols/accounting/pouw/prover/circuit/h1device.py::Device":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: the card by digest (compute-accounting)",
-    "verity/protocols/pouw/prover/circuit/h1tile.py::Layout": "homonym, a tile shape: rename (compute-accounting)",
-    "verity/protocols/pouw/prover/circuit/plan.py::Layout": "homonym, the units a plan reads: rename (compute-accounting)",
-    "verity/protocols/pouw/verifier/coins.py::Challenger":
+    "verity/protocols/accounting/pouw/prover/circuit/h1tile.py::Layout": "homonym, a tile shape: rename (compute-accounting)",
+    "verity/protocols/accounting/pouw/prover/circuit/plan.py::Layout": "homonym, the units a plan reads: rename (compute-accounting)",
+    "verity/protocols/accounting/pouw/verifier/coins.py::Challenger":
         "duplicate of `parties.Challenger`: becomes it (deleted) (compute-accounting)",
-    "verity/protocols/pouw/verifier/lean/check/PouwCheck/Inputs.lean::PouwCheck.Law":
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Inputs.lean::PouwCheck.Law":
         "duplicate of `Flock.Draw.Law`: becomes it (deleted) (compute-accounting)",
-    "verity/protocols/pouw/verifier/lean/check/PouwCheck/Inputs.lean::PouwCheck.Window":
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Inputs.lean::PouwCheck.Window":
         "duplicate of the execution block (no canonical yet): becomes a reading of it: the execution block's record (compute-accounting)",
-    "verity/protocols/pouw/verifier/lean/check/PouwCheck/Pass.lean::PouwCheck.Coins":
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Pass.lean::PouwCheck.Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (compute-accounting)",
-    "verity/protocols/pouw/verifier/lean/commit/PouwCommit/Frame.lean::PouwCommit.Hash":
+    "verity/protocols/accounting/pouw/verifier/lean/commit/PouwCommit/Frame.lean::PouwCommit.Hash":
         "homonym, a frame's hash kind: rename (compute-accounting)",
-    "verity/protocols/pouw/verifier/protocol.py::Certificate":
+    "verity/protocols/accounting/pouw/verifier/protocol.py::Certificate":
         "homonym, what a scheme's guarantee rests on: rename (compute-accounting)",
-    "verity/protocols/pouw/prover/schemes/pearl_c_device.py::Device":
+    "verity/protocols/accounting/pouw/prover/schemes/pearl_c_device.py::Device":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: the card by digest; prices stay the scheme's (compute-accounting)",
-    "verity/protocols/pouw/prover/schemes/pearl_kw.py::Device":
+    "verity/protocols/accounting/pouw/prover/schemes/pearl_kw.py::Device":
         "homonym, a code's parameters: rename (compute-accounting)",
-    "verity/protocols/poub/verifier/audit.py::Ledger": "homonym, the γ cost terms: rename (memory-accounting)",
-    "verity/protocols/poub/verifier/audit.py::Record":
+    "verity/protocols/accounting/poub/verifier/audit.py::Ledger": "homonym, the γ cost terms: rename (memory-accounting)",
+    "verity/protocols/accounting/poub/verifier/audit.py::Record":
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes a reading of it (memory-accounting)",
-    "verity/protocols/poub/verifier/audit.py::Session":
+    "verity/protocols/accounting/poub/verifier/audit.py::Session":
         "homonym, the old word for a run, kept as one protocol's run type: rename (memory-accounting)",
-    "verity/protocols/poub/verifier/audit.py::Store":
+    "verity/protocols/accounting/poub/verifier/audit.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it: PoUB's view of PoUS's store (memory-accounting)",
-    "verity/protocols/poub/verifier/coins.py::Coins":
+    "verity/protocols/accounting/poub/verifier/coins.py::Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (the window's live challenge seeds its passes) (memory-accounting)",
-    "verity/protocols/poub/verifier/lean/RemoteAudit/P2.lean::RemoteAudit.P2.Opening":
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/P2.lean::RemoteAudit.P2.Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (memory-accounting)",
-    "verity/protocols/poub/verifier/lean/RemoteAudit/P2.lean::RemoteAudit.P2.Registration":
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/P2.lean::RemoteAudit.P2.Registration":
         "duplicate of the registration log (`Verity.Registration`): becomes the one store entry (merged) (memory-accounting)",
-    "verity/protocols/poub/verifier/lean/RemoteAudit/P2Protocol.lean::RemoteAudit.P2Protocol.Op":
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/P2Protocol.lean::RemoteAudit.P2Protocol.Op":
         "homonym, one request of the verifier's process as its log records it: rename (memory-accounting)",
-    "verity/protocols/poub/verifier/lean/RemoteAudit/Registry.lean::RemoteAudit.Registry":
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Registry.lean::RemoteAudit.Registry":
         "duplicate of the verification loop's record (no canonical yet; proofs holds it): becomes a reading of the verifier's record, its draws `Verity.Draw` on `Verity.Coins` (memory-accounting)",
-    "verity/protocols/poub/verifier/lean/RemoteAudit/Schedule.lean::RemoteAudit.Schedule.Block":
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Schedule.lean::RemoteAudit.Schedule.Block":
         "homonym, a chunk of the store: rename (memory-accounting)",
-    "verity/protocols/poub/verifier/lean/RemoteAudit/Window.lean::RemoteAudit.Opening":
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Window.lean::RemoteAudit.Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (memory-accounting)",
-    "verity/protocols/poub/verifier/lean/RemoteAudit/Window.lean::RemoteAudit.Verdict":
+    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Window.lean::RemoteAudit.Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (memory-accounting)",
-    "verity/protocols/poub/verifier/ledger.py::Draw": "homonym, a draw's cost terms: rename (memory-accounting)",
-    "verity/protocols/poub/verifier/ledger.py::Node":
+    "verity/protocols/accounting/poub/verifier/ledger.py::Draw": "homonym, a draw's cost terms: rename (memory-accounting)",
+    "verity/protocols/accounting/poub/verifier/ledger.py::Node":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: PoUB's projection (read and link rates) (memory-accounting)",
-    "verity/protocols/poub/verifier/opening.py::Draw":
+    "verity/protocols/accounting/poub/verifier/opening.py::Draw":
         "homonym, a PoUB position draw: rename (memory-accounting)",
-    "verity/protocols/poub/verifier/opening.py::Session":
+    "verity/protocols/accounting/poub/verifier/opening.py::Session":
         "duplicate of `remote_bandwidth`'s own type: becomes `audit.Session`, `audit.Store` (folded) (memory-accounting)",
-    "verity/protocols/poub/verifier/opening.py::Store":
+    "verity/protocols/accounting/poub/verifier/opening.py::Store":
         "duplicate of `remote_bandwidth`'s own type: becomes `audit.Session`, `audit.Store` (folded) (memory-accounting)",
-    "verity/protocols/poub/verifier/p2.py::Opening":
+    "verity/protocols/accounting/poub/verifier/p2.py::Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes it (one opening type, parameterised by codec) (memory-accounting)",
-    "verity/protocols/poub/verifier/p2.py::Registration":
+    "verity/protocols/accounting/poub/verifier/p2.py::Registration":
         "duplicate of the registration log (`Verity.Registration`): becomes the one store entry (memory-accounting)",
-    "verity/protocols/poub/verifier/p2.py::Session":
+    "verity/protocols/accounting/poub/verifier/p2.py::Session":
         "duplicate of `remote_bandwidth`'s own type: becomes one type per concept, parameterised by codec (memory-accounting)",
-    "verity/protocols/poub/verifier/p2.py::Store":
+    "verity/protocols/accounting/poub/verifier/p2.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
-    "verity/protocols/poub/verifier/period.py::Period":
+    "verity/protocols/accounting/poub/verifier/period.py::Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes one `Core` period case (memory-accounting)",
-    "verity/protocols/poub/verifier/store.py::Store":
+    "verity/protocols/accounting/poub/verifier/store.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
-    "verity/protocols/spot/verifier/one_stage/verdict.py::Verdict":
+    "verity/protocols/proofs/spot/verifier/one_stage/verdict.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (proofs)",
-    "verity/protocols/spot/prover/optimize.py::Commitment": "homonym, a tensor's commit cost: rename (proofs)",
-    "verity/protocols/spot/device/remote.py::Session": "homonym, the challenger's host session: rename (proofs)",
-    "verity/protocols/spot/verifier/service.py::Outcome":
+    "verity/protocols/proofs/spot/prover/optimize.py::Commitment": "homonym, a tensor's commit cost: rename (proofs)",
+    "verity/protocols/proofs/spot/device/remote.py::Session": "homonym, the challenger's host session: rename (proofs)",
+    "verity/protocols/proofs/spot/verifier/service.py::Outcome":
         "duplicate of `Core.Verdict`: becomes a reading of it (proofs)",
-    "verity/protocols/spot/verifier/service.py::Registration":
+    "verity/protocols/proofs/spot/verifier/service.py::Registration":
         "duplicate of the registration log (`Verity.Registration`): becomes a reading of it: the service's admitted log entry (proofs)",
-    "verity/protocols/spot/verifier/service.py::Session":
+    "verity/protocols/proofs/spot/verifier/service.py::Session":
         "homonym, the old word for a run, kept as one protocol's run type: rename (proofs)",
-    "verity/protocols/flock/verifier/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Transcript":
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Transcript":
         "duplicate of `Flock.Transcript`: becomes a reading of it (proofs)",
     "verity/circuits/lean/Circuits/Annot.lean::Flock.Annot.Verdict":
         "homonym, the description-level annotation check's verdict: rename (proofs)",
-    "verity/protocols/flock/verifier/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Verdict":
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Verdict":
         "homonym, the firewall's release decision: rename (proofs)",
-    "verity/protocols/flock/verifier/Flock/Firewall/Frames.lean::Flock.Firewall.Frames.Registry":
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Frames.lean::Flock.Firewall.Frames.Registry":
         "homonym, the firewall loop's frames: rename (proofs)",
-    "verity/protocols/flock/verifier/Flock/Firewall/Level0.lean::Flock.Firewall.Level0.Registry":
+    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Level0.lean::Flock.Firewall.Level0.Registry":
         "homonym, the firewall loop's tables: rename (proofs)",
-    "verity/protocols/flock/verifier/Flock/Layout.lean::Flock.Layout": "homonym, C-Flock's block-type layout: rename (proofs)",
+    "verity/protocols/proofs/flock/verifier/Flock/Layout.lean::Flock.Layout": "homonym, C-Flock's block-type layout: rename (proofs)",
     "verity/circuits/lean/Circuits/Program.lean::Flock.Program.Node":
         "homonym, a circuit program's node: rename (proofs)",
-    "verity/protocols/flock/verifier/Flock/RecLinks.lean::Flock.RecLinks.Link":
+    "verity/protocols/proofs/flock/verifier/Flock/RecLinks.lean::Flock.RecLinks.Link":
         "homonym, a recursion link from a reader to a port: rename (proofs)",
-    "verity/protocols/flock/verifier/Flock/RecRecord.lean::Flock.RecRecord.Record":
+    "verity/protocols/proofs/flock/verifier/Flock/RecRecord.lean::Flock.RecRecord.Record":
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes the challenger's live-coin entries (proofs)",
-    "verity/protocols/flock/verifier/VStar/In.lean::VStar.In.Opening": "homonym, a Ligerito opening: rename (proofs)",
-    "verity/protocols/flock/verifier/VStar/Stage.lean::VStar.Stmt": "homonym, one of V*'s statements: rename (proofs)",
-    "verity/protocols/spot/verifier/lean/Spot/Program.lean::Spot.Program":
+    "verity/protocols/proofs/flock/verifier/VStar/In.lean::VStar.In.Opening": "homonym, a Ligerito opening: rename (proofs)",
+    "verity/protocols/proofs/flock/verifier/VStar/Stage.lean::VStar.Stmt": "homonym, one of V*'s statements: rename (proofs)",
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Program.lean::Spot.Program":
         "duplicate of `program.Program`, read from its descriptor's bytes: becomes its code-Lean side once a difftest holds the two (proofs)",
-    "verity/protocols/spot/verifier/lean/Spot/Slots.lean::Spot.Slots.Layout":
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Slots.lean::Spot.Slots.Layout":
         "homonym, the claims' partition: rename (proofs)",
-    "verity/protocols/spot/verifier/lean/Spot/Wires.lean::Spot.Wires.Circuit":
+    "verity/protocols/proofs/spot/verifier/lean/Spot/Wires.lean::Spot.Wires.Circuit":
         "homonym, an execution block's wiring: rename (proofs)",
     # verity/ml/
     "verity/circuits/boolean/forms.py::Circuit":
@@ -959,9 +959,9 @@ KNOWN: dict[str, str] = {
     "verity/commitments/advice.py::Registration":
         "homonym, a hiding commitment to a private partition's rows: rename (`Advice.Committed`) (proofs)",
     "verity/ml/flock/pod/gf2.py::Circuit": "homonym, a pod prover's GF(2) gate recorder: rename (proofs)",
-    "verity/protocols/flock/prover/python/verity_flock/firewall_transcript.py::Session":
+    "verity/protocols/proofs/flock/prover/python/verity_flock/firewall_transcript.py::Session":
         "homonym, one inner proof through the firewall: rename (proofs)",
-    "verity/protocols/flock/prover/python/verity_flock/rec_links.py::Link":
+    "verity/protocols/proofs/flock/prover/python/verity_flock/rec_links.py::Link":
         "homonym, a recursion link from a reader to a port, `Flock.RecLinks.Link`'s pair: rename (proofs)",
     "verity/commitments/windows/interface.py::Circuit":
         "duplicate of `Flock.Circuit`: becomes a reading of it in proof blocks (proofs)",

@@ -17,8 +17,8 @@ import numpy as np
 import pytest
 import torch
 
-from verity.protocols.spot.verifier import second_stage as SS
-from verity.protocols.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
 from verity.circuits.codec import descriptor_id
 from verity.commitments.windows import rows as CS
 from verity_vllm.engine.hooks import Hooks
