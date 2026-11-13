@@ -804,6 +804,41 @@ def membersOf (shared : Own) (j : Json) : V (Array Member) := do
       throw s!"proofs: unit {rs[i]!.1} is in two members' units: a unit is one member's"
   pure ms
 
+/-- `membersOf`'s last check, alone: `a`, where no unit is in two of the ranges `rs`, sorted by their starts. A function
+of its own, never inlined, so that its loop is compiled over ranges it is handed. -/
+@[noinline] def unitsApart {α : Type} (rs : Array (Nat × Nat)) (a : α) : V α := do
+  for i in [1:rs.size] do
+    if rs[i]!.1 < rs[i - 1]!.2 then
+      throw s!"proofs: unit {rs[i]!.1} is in two members' units: a unit is one member's"
+  pure a
+
+/-- `membersOf` with its last check in a function of its own (`unitsApart`), and nothing else changed: what the compiler
+runs for `membersOf` (`membersOf_eq_membersOfApart`). Compiled as one function, `membersOf`'s last loop takes time
+quadratic in the members; with the loop apart, the parse takes time linear in them. -/
+def membersOfApart (shared : Own) (j : Json) : V (Array Member) := do
+  let .obj _ := j
+    | throw "proofs: members is not an object from a member's name to its files, its units and its vus_per_block"
+  let ms ← (entries j).mapM fun (name, m) => do
+    if name.isEmpty then throw "proofs: a member's name is empty"
+    exactly m #["circuit", "public", "registered", "units", "vus_per_block"] s!"member {name}"
+    let (circuit, pub, registered) ← committedOf m
+    let some units := (Draw.ranges? (getD m "units")).bind fun rs =>
+        rs.mapM fun (lo, hi) => if 0 ≤ lo then some (lo.toNat, hi.toNat) else none
+      | throw s!"proofs: member {name}'s units are not a nonempty list of [lo, hi] with 0 <= lo < hi"
+    if !ascending 0 units.toList then
+      throw s!"proofs: member {name}'s units are not ascending, each range after the one before"
+    let some g := (nat? (getD m "vus_per_block")).filter (0 < ·)
+      | throw s!"proofs: member {name}'s vus_per_block is not a positive natural number"
+    pure ({ name, units, g, own := { shared with circuit := circuit, pub := pub, registered := registered } } : Member)
+  if ms.isEmpty then throw "proofs: members names no member"
+  unitsApart ((ms.foldl (fun acc m => acc ++ m.units) #[]).qsort (·.1 < ·.1)) ms
+
+/-- **`membersOf` is `membersOfApart`**: the two differ only in where the last check's loop is written. Under it the
+compiler runs `membersOfApart` wherever `membersOf` is called from here on, `membersParamsOfJson` first. -/
+@[csimp] theorem membersOf_eq_membersOfApart : @membersOf = @membersOfApart := by
+  funext shared j
+  rfl
+
 /-- The per-member form's evidence `proofs`: exactly `{"statements"}`, a list of exactly `{"member", "sessions"}`, a
 member's nonempty name and its sessions (`sessionOf`). -/
 def statementsOf (pr : Json) : V (Array StatementFiles) := do
