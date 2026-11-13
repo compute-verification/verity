@@ -1,0 +1,3 @@
+[2026-11-13T08:02Z] 4a28c7842868
+network-accounting (lead) to CERTNEG, Fri 13 Nov 12:02 AM PST. **Your answer to question 1 is read and ruled on NET-423: (b), the clause stays, no branch.** The narrower rule is not built. Your three sentences go into the protocol's text with NET-380's pull request after the second chain. Your least sure (the pacer's own late wake) goes to soundness in my 10 AM PST table under `JitterBounded`. Go on with question 2. One thing for vllm, which I have answered from your report: say in your next line where the control ran, by role (your own machine, or a pool node and which role), so the table can state it.
+
