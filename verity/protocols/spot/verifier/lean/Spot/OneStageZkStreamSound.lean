@@ -297,12 +297,12 @@ theorem memberFiles_eq {C : Ctx} {S : State} {full : Core.Blobs} {m : Member} {t
 fed, by its place. -/
 def FilesKept (C : Ctx) (full : Core.Blobs) (S : State) : Prop :=
   S.files.size = C.ms.size ∧
-    ∀ i (m : Member), C.ms[i]? = some m → S.files[i]? = some (m.files (C.slice m) full >>= fun _ => pure ())
+    ∀ (i : Nat) (m : Member), C.ms[i]? = some m → S.files[i]? = some (m.files (C.slice m) full >>= fun _ => pure ())
 
 /-- **What the stream keeps of every statement's session, after the feed**: what is kept of it on all the blobs fed,
 at its member's files' verdict there, by its place. -/
 def SessionsKept (C : Ctx) (full : Core.Blobs) (S : State) : Prop :=
-  ∀ held, membersHeld C.ms C.sts = .ok held → ∀ k (st : StatementFiles) (m : Member) (s : RunFiles), C.sts[k]? = some st → held[k]? = some m →
+  ∀ held, membersHeld C.ms C.sts = .ok held → ∀ (k : Nat) (st : StatementFiles) (m : Member) (s : RunFiles), C.sts[k]? = some st → held[k]? = some m →
     st.sessions[0]? = some s →
       S.sessions[k]? = some (some (SessionKept.of m (m.files (C.slice m) full) full s))
 
@@ -316,7 +316,7 @@ theorem stepKept_eq {S : State} {full : Core.Blobs} {files : List (String × Ste
   unfold stepKept stepMember runFrom
   rw [hk, hst, ha, hs]
   simp only [SessionKept.of, Except.toOption, Option.map_some, StepKept.step_of, ok_bind]
-  simp [← Array.foldlM_toList]
+  simp
 
 /-- **The fold's half of `StreamSound`, stated and not proved**: on a feed in the per-member stream's order, its
 state after every step keeps every member's files and every statement's session as they read on all the blobs fed. -/
