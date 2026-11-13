@@ -153,7 +153,7 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
   from a sweep over many seeds, with margin past the worst seed's value; its docstring names the sweep (seeds and worst
   value).
 - **Fixtures:** small ones sit in the suite's own `fixtures/`, shared ones under the root `fixtures/`, registered in
-  `fixtures/artifacts.json`. One over the 256 KiB cap is registered there and gitignored instead: `research data put
+  `artifacts.json`. One over the 256 KiB cap is registered there and gitignored instead: `research data put
   --kind fixture/v1 --file|--tree PATH --preserve`, its id and path into the registry and its path into `.gitignore`.
   So is a benchmark's build input that only a rebuild of its data reads (the selection a stream is built from),
   whatever its size.
