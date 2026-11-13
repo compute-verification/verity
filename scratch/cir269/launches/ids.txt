@@ -18,3 +18,5 @@ n2-light r20261113-083621-f36b launched on vy-nebius-cpu-5
 n2-cc r20261113-083621-d445 launched on vy-nebius-cpu-5
 enum2-base r20261113-092459-d564 launched on vy-nebius-cpu-1
 enum2-head r20261113-092500-8212 launched on vy-nebius-cpu-1
+rs1 r20261113-142348-fa99 launched on vy-nebius-cpu-1 (1/4 at 1333bd53, declared 64)
+rbase r20261113-142346-aa58 launched on vy-nebius-cpu-9 (records-only at 8854b824, declared 48)
