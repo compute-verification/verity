@@ -207,6 +207,7 @@ import sys
 import tarfile
 import time
 from collections.abc import Callable, Mapping, Sequence
+from datetime import datetime
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -731,9 +732,13 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
     and credited cells' MACs and ε), the verifier's coin as published (its store id, whether the put preserved it and
     what it said if not, and the record's SHA-512), the prover's give-up (`give_up`), its shares at the tensor clock, the
     unretained serve's wall and declared share there, and the prover's replay's CPU seconds, cores, the cores it takes to
-    keep pace, the card's seconds, its node and the passes it finished (each None without one, or why it has none)."""
+    keep pace, the card's seconds, its node and the passes it finished (each None without one, or why it has none), the
+    execution phase as the challenger saw it (its start, end and seconds on the auditor host's clock, `execution_phase`,
+    with the serve's own wall beside it under ``prover``, the served node's clock), what Pearl+'s Python check and Lean
+    check each cost where they ran (`pearlplus_checks`) and the class with its requests and rounds (`pearlplus_class`)."""
     if doc.get("piece") == "pearlplus":
         shares = doc.get("shares") or {}
+        phase = doc.get("execution_phase")
         at = (shares.get("readings") or {}).get("tensor") or {}
         un, rp = shares.get("unretained"), shares.get("replay")
         credit, published = doc.get("credit"), doc.get("coin")
@@ -750,7 +755,11 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
                     "generate_s": un.get("wall_s"),
                     "declared_linears_at_tensor_clock": ((un.get("readings") or {}).get("tensor") or {}).get("declared_linears")},
                 "replay": None if rp is None else rp.get("error") or {
-                    k: rp.get(k) for k in ("s", "cpus", "cores_to_keep_pace", "device_s", "node", "finished", "of")}}
+                    k: rp.get(k) for k in ("s", "cpus", "cores_to_keep_pace", "device_s", "node", "finished", "of")},
+                "execution_phase": None if phase is None else {
+                    "clock": "the auditor host's", **{k: phase.get(k) for k in ("start_utc", "end_utc", "seconds", "why")},
+                    "prover": phase.get("prover")},
+                "checks": doc.get("checks"), "class": doc.get("class")}
     check, credit = doc.get("check") or {}, doc.get("credit") or {}
     return {"verdict": doc.get("verdict"), "development": True, "credited": False, "reasons": doc.get("reasons"),
             "coin_source": doc.get("coin_source"), "session": (doc.get("session") or {}).get("session"),
@@ -1411,6 +1420,76 @@ def pearlplus_why_tied(reserved: Mapping[str, Any] | None) -> str:
     return f"{_PEARLPLUS_TIED}; its epoch's salt coin is a live session's on vy-challenger-1, {joined}"
 
 
+#: whose clock `execution_phase` reads, and where
+PHASE_CLOCK = ("the auditor host's, to the second, in its signed ledger's entries as the gate answered them "
+               "(ledger.jsonl beside this document); none of these times is the served node's")
+#: whose clock the serve's own wall is on, which a piece holds beside `execution_phase`'s times
+PROVER_CLOCK = ("the served node's, the prover's: the serve's own wall for its timed call (generate_s), which no auditor "
+                "host measured")
+#: `served_passes.py lean`'s check document beside the piece's Lean verdict
+PEARLPLUS_LEAN_CHECK = "pearlplus-lean-check.json"
+#: where Pearl+'s two checks ran, which a piece says beside what each cost
+CHECKS_WHERE = ("on the served node, at the serve, over the passes it retained: the node each cost names is the served "
+                "node, not the node the audit runs on, and no auditor host runs either check again, since their case is "
+                "witness")
+#: what a tied piece's ``class`` says its two derived counts are
+CLASS_LOAD = ("the class's fixed load, which Pearl+'s check holds the passes to (verify --class): a request a slot "
+              "(n_requests) and a round an output (n_rounds), from the class alone; no request's own length is here")
+
+
+def execution_phase(ledger: Path, session: str | None, period: str | None) -> dict[str, Any]:
+    """The execution phase as the challenger saw it, read from the auditor's ledger at `ledger` (`pearlplus_coins`' copy,
+    which it held to the challenger's key): the times of the salt session `session`'s ``reserve`` (taken as its window
+    opened), ``open`` and ``end`` entries, and of the Pearl-C period `period`'s open and close, each None where the ledger
+    has no such entry. ``start_utc`` and ``end_utc`` are the session's reserve and end and ``seconds`` the span between
+    them, None without both; ``why`` says what the ledger lacks. Nothing in it is the served node's clock."""
+    got: dict[str, Any] = {"clock": PHASE_CLOCK, "start_utc": None, "end_utc": None, "seconds": None,
+                           "session": {"reserved_utc": None, "opened_utc": None, "ended_utc": None},
+                           "period": {"opened_utc": None, "closed_utc": None}, "why": None}
+    at = {"reserve": ("session", "reserved_utc", "started_utc"), "open": ("session", "opened_utc", "started_utc"),
+          "end": ("session", "ended_utc", "ended_utc"), "period-open": ("period", "opened_utc", "opened_utc"),
+          "period-close": ("period", "closed_utc", "closed_utc")}
+    try:
+        for line in ledger.read_text().splitlines():
+            e = json.loads(line) if line.strip() else {}
+            body = e.get("body") if isinstance(e.get("body"), Mapping) else {}
+            part, name, field = at.get(e.get("kind"), (None, None, None))
+            named = e.get("session") == session if part == "session" else body.get("period") == period
+            if part is not None and named and (session if part == "session" else period) and isinstance(body.get(field), str):
+                got[part][name] = body[field]
+        got.update(start_utc=got["session"]["reserved_utc"], end_utc=got["session"]["ended_utc"])
+        if got["start_utc"] and got["end_utc"]:
+            a, b = (datetime.strptime(x, "%Y-%m-%dT%H:%M:%SZ") for x in (got["start_utc"], got["end_utc"]))
+            got["seconds"] = int((b - a).total_seconds())
+        lacks = [f"{part}'s {name}" for part in ("session", "period") for name, v in got[part].items() if v is None]
+        got["why"] = f"the ledger has no entry for the {', '.join(lacks)}" if lacks else None
+    except (OSError, ValueError, AttributeError) as e:
+        got["why"] = f"the ledger can't be read: {type(e).__name__}: {e}"[:400]
+    return got
+
+
+def pearlplus_checks(verified: Mapping[str, Any] | None, lean_check: Path) -> dict[str, Any]:
+    """What each of Pearl+'s two checks cost where it ran (`served_passes.check_cost`: wall seconds and the node): the
+    Python check's from ``verify``'s document `verified`, the Lean check's from ``lean``'s check document at `lean_check`;
+    None for a check that recorded none (it didn't run). ``where`` says in words which node that is (`CHECKS_WHERE`)."""
+    lean = _json(lean_check)
+    return {"where": CHECKS_WHERE, "python": (verified or {}).get("check_cost"),
+            "lean": lean.get("check_cost") if isinstance(lean, Mapping) else None}
+
+
+def pearlplus_class(verified: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """The window's class as Pearl+'s check held the passes to it (``verify --class``'s SLOTS,PROMPT,OUTPUTS, its
+    document's ``class``), with the two counts its fixed load fixes (`CLASS_LOAD`): the requests, a slot each, and the
+    rounds, an output each. Each is the class's, public structure, written from the class alone and from nothing the
+    serve measured; None where the check held the passes to no class."""
+    cls = (verified or {}).get("class")
+    if not (isinstance(cls, (list, tuple)) and len(cls) == 3 and all(type(v) is int and v >= 1 for v in cls)):
+        return None
+    slots, prompt, outputs = cls
+    return {"slots": slots, "prompt_tokens": prompt, "outputs": outputs, "n_requests": slots, "n_rounds": outputs,
+            "of": CLASS_LOAD}
+
+
 def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str, Any] | None,
               unretained: Mapping[str, Any] | None = None, volunteered: Mapping[str, Any] | None = None, *,
               gate: str | None = None, key: str | None = None, main: Path | None = None,
@@ -1442,7 +1521,13 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     its ``error`` why it isn't ok), its epoch's coins are `PEARLPLUS_EPOCH_TIED`'s (or `PEARLPLUS_EPOCH_TIED_IN_PROCESS`'s),
     its ``load`` is the window's steps, ``tie`` names W's `registration.digest` as ``record`` (None, and ``why``, where W
     can't be read; the record holds the verdict to W, `pearlplus_of_record`), and why it credits nothing by itself names
-    the Pearl-C period the epoch's live salt session joined (`pearlplus_why_tied`, or `PEARLPLUS_WHY_TIED_IN_PROCESS`)."""
+    the Pearl-C period the epoch's live salt session joined (`pearlplus_why_tied`, or `PEARLPLUS_WHY_TIED_IN_PROCESS`).
+    ``execution_phase``, on a live session's coins, is the execution phase as the challenger saw it (`execution_phase`, of
+    the ledger `pearlplus_coins` fetched), with the serve's own wall beside it as the prover's (its ``prover``:
+    `PROVER_CLOCK` and ``generate_s``), and ``checks`` what Pearl+'s Python check and Lean check each cost on the node
+    this piece ran them on (`pearlplus_checks`); both are measurements and neither decides the verdict. ``class`` is the
+    class the check held the passes to with the requests and rounds its fixed load fixes (`pearlplus_class`), None
+    without one."""
     import served_shares as SS
     from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 
@@ -1484,7 +1569,14 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
         why = pearlplus_why_tied(((served or {}).get("coins") or {}).get("reserved")) if live else PEARLPLUS_WHY_TIED_IN_PROCESS
     doc: dict[str, Any] = {"piece": "pearlplus", "credited": False, "why": why, "coin_source": source, "coins": coins,
                            "scheme": None, "arm": None, "passes": None, "load": None, "dropped": None, "line": None,
-                           "credit": None, "coin": None, "give_up": None, "shares": None, "tie": None}
+                           "credit": None, "coin": None, "give_up": None, "shares": None, "tie": None,
+                           "execution_phase": None, "checks": pearlplus_checks(verified, out / PEARLPLUS_LEAN_CHECK),
+                           "class": pearlplus_class(verified)}
+    if served is not None and live and (out / "ledger.jsonl").is_file():
+        said = served.get("coins") or {}
+        doc["execution_phase"] = execution_phase(out / "ledger.jsonl", (said.get("session") or {}).get("session"),
+                                                 (said.get("reserved") or {}).get("period"))
+        doc["execution_phase"]["prover"] = {"clock": PROVER_CLOCK, "generate_s": served.get("generate_s")}
     if served is not None:
         arm = served.get("arm") or served.get("entry")
         doc.update(arm=arm, scheme=(arm or "").partition(":")[2] or None,
