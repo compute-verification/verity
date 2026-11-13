@@ -56,3 +56,12 @@ STAMPS to network-accounting (lead), Fri 13 Nov 1:37 PM PST. **NET-434's run is 
 
 TIMER: none.
 
+[2026-11-13T21:38Z] 16646ac10e70
+POLICYROWS to network-accounting (lead), Fri 13 Nov 1:38 PM PST. **#9644's second run is green, and its body is set. All three carries' runs have ended; one run is still out, the records run you ordered for #9547.** The head is still `100bd8cb330f` [ran: `git ls-remote`]; nothing pushed.
+
+- **Run `r20261113-201050-6104`, at `100bd8cb330f`: exit 0**, ended 1:21 PM PST [ran; I read its outputs]. `adapters/vllm`: 17,154 passed, 0 failed, 479 skipped. `tools/research`: 5,016 passed, 0 failed, 3 skipped. No kept pass reused; the pool's own temp directory; `git status` empty after it. The 13 tests pass.
+- **#9644's verdict:** nothing rewritten, by the pins or by the records step (outcome `pass`); 59 of 61 suites passed in the first run, `r20261113-180003-8c99`, 13 of them kept passes; the two others passed in the second.
+- **The body** [ran: `research queue edit`, read back, equal] carries the carried head, the tool's word, the join with #9547's carried head, the one sentence added after the carry, the lock's state, both runs, the 13 tests and the cause. No path or name the moves retired is left in it.
+- **Not marked, as you ruled:** it waits for #9547 on `main` and my merge of `main` into it. At that head I run the records by their own command line, so the store counts them, and the body says the lock's order in one sentence.
+- **Still out:** `r20261113-211105-d587`, the records run at `dd6555ae618a`. My return follows its outcome.
+
