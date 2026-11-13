@@ -159989,3 +159989,86 @@ Your 20:19Z reached me at 20:25Z by the hook [run].
 **Not established.** The red itself, and that the mend is enough: `6aec` answers both [run: it is out]. The plays and the tests at the merged tree: none ran there, and none of the eight commits changes a file they read [run: `git diff --name-only`]. Any lock record at either head [run]. The recursive verifier's change of `secondChecked` to `Record.checks` at the reads `Record.lessOwnReads` leaves is HELDOF's, and whether a wired port's read under the wired layout passes it in the compiled form is not something I ran: the compiled form is STAGECOINS's [relayed: your 14:18Z].
 
 **Held to.** No pull request, no mark, nothing forced, no `main` merged by itself (the join's tip holds `main` `4ae17f7eafd7`, as my head does [run]), nothing rebased, no build on my machine, no lock committed [run]. Copies: `/opt/cursor/artifacts/wired-audit/carried/dry/a2cf.txt`, `carried/tip/lean-files.txt` [run].
+
+## MESSAGES, Fri 13 Nov 20:42Z: checkpoint: step 3's three files compile on nodes, rc 0 each (the reps' rounds, the last round, the first round; 36 theorems, the three axioms only); `ShowsAt` is stated at every round of a session and `Explains` at the reps' rounds; `Explains` at a session's first and last rounds needs step 4's lemma, which I start now
+
+**In plain words.** A session's rounds now each have their "an accepted play shows a string that has the round's
+digest" statement, and all three files compile. They still rest on the two hypotheses I named at 19:50Z. What is
+missing for a session is that its first and last messages are functions of the string and the log: both read the
+session's statement, so both wait for the statements' round. That is step 4. I have read what it needs and written
+none of it.
+
+**1. The three tries** [run, each on a node, each `done 0 SUCCESS`]
+
+| File | Run | Lean | Theorems | Axioms | Siblings |
+| --- | --- | --- | --- | --- | --- |
+| `SessionMiddle.lean` | `r20261113-201156-07e3` | "lean exit 0 in 442 s" | 19 | the three only | no clash |
+| `SessionLast.lean` | `r20261113-202119-2697` | "lean exit 0 in 67 s" | 11 | the three only | no clash |
+| `SessionFirst.lean` | `r20261113-202411-2c33` | "lean exit 0 in 455 s" | 6 | the three only | no clash |
+
+- [run: `r20261113-194623-e1d2`, rc 1] The try of 19:46Z failed outside my files:
+  "VStarRecursive/SampledTwo.lean:412:23: Unknown identifier Challenger.trustedSessionOf". That is the name FRAME's
+  table 8 lists as unresolved on the carried head, which the mend cures.
+- [git] So the tries ran on a scratch branch, `cursor/proofs-messages-wordtry-745c`: the word line with the mend's
+  five files on top (`a06f9315307`, the text of ASSEMBLY's `20936c91d40b`). The word line itself holds no mend and
+  no merge: it is FRAME's `873a752808a1` and my commits. Nobody should carry or merge the scratch branch.
+- [git] The word line's head: `18bc15cb30f42cb71a65d84148cdea75bbf05c7e` on `cursor/proofs-messages-word-745c`.
+- [run, local] The tree's eleven lint files at that head: "129 passed".
+- `SessionAnswers.lean` was built again as a dependency of all three, on the carried text.
+
+**2. What step 3 states now**
+
+- `showsAt_session_first`: at a session's first round the digest is the bytes the release that ends the log before
+  the round answers, and the string is the link's `root_F` and each table's `root_B` (`linkShownAt`), whose SHA-512
+  `linkAfter` is.
+- `showsAt_session_mid`, `explains_session_mid`: at a rep's round, as at 19:50Z.
+- `showsAt_session_last`: at a session's last round no release is put on the round. The digest is the bytes the
+  session's closing answers, read off the log before the round (`closeOf`), and the string is the session's evidence
+  (`evidenceAt`). `logCloses_of` lifts `members_read`'s closing clause to the play's log; `MembersHeld` keeps its
+  statement.
+- Hypotheses, unchanged: `RecordsCover` and `MsgsOfRecords`. I changed neither `located_opened` nor `MembersHeld`.
+
+**3. Step 4, read and not written**
+
+- [read: `SessionMsgs.stmtsMsg`, `stmtAtCase`] The statements' message is, a template, the member's circuit and
+  public file (blobs under digests the params name), the blobs' lookup tables, the session's record's sample as
+  printed, and the member's partition, program and registered reads (the params').
+- [read: `SpotFlock.stmtOk`, `readsOk`, `pinOk`, `run_seenAt`, `PlayAccepts`] An accepted play's run of record is
+  a play `SpotFlock.V` accepts at any coins that start with the bytes the two stages read, so `stmtOk` holds there.
+  Its `pinOk` is fact 8. Its `second-sample` is fact 7, and the verifier's own sample reads only the held copies and
+  the two stages' coins.
+- [derived, a plan] The lemma: two accepted plays at one `θ` with one log before the statements' round read one
+  statements' message, or sent two blobs with one SHA-512 (the public file). `θ` enters as a string whose digest is
+  the same on every play of the frame. The same lemma then gives `ExplainsOr` at a session's first and last rounds.
+- What it needs that I have not found proved [read, not exhaustive]:
+  - that no coin of the first stage's family follows the first opening (the second family's is
+    `sample_before_openings`), so both stages' bytes are read off the log before the round;
+  - the step from one canonical text of the sample to the same printed bytes;
+  - that a statement's fields fit their length words, so it decodes back (a hypothesis in `stmtAt_stmtsMsg` today).
+- I say in my next entry which of the three I prove and which I name as hypotheses.
+
+**4. A timer of yours reached me, 28 hours late; acted on in no way**
+
+- [read: the notification] `proofs-1552Z-prf589-opened`, `firedAt` 2026-11-12T15:51:59Z, delivered at 20:31Z Fri.
+  It asks its reader to read `r20261112-110333-4c33` and resume FIXEDCOST. I read no run and resumed no one.
+
+## STOP RULE
+
+Nothing changed in a listed guarantee, a named assumption or a lock record. Two more module names are in the roots
+lists of `security/Proofs/lakefile.toml` and `security/Proofs/lean-audit.json` (`SessionLast`, `SessionFirst`).
+
+## NEEDS
+
+- Nothing new. ASSEMBLY's yes or no (your 20:19Z) decides whether `RecordsCover` and the order part of
+  `MsgsOfRecords` become theorems.
+- When the word line is next carried, it needs the mend below it to build; it is not on the line.
+
+## Not established
+
+- `RecordsCover` and `MsgsOfRecords`: hypotheses, not theorems.
+- `Explains` or `ExplainsOr` at a session's first and last rounds and at the statements' round; `ShowsAt` at the
+  statements' round.
+- The three points of section 3.
+- That the rounds' `Dg` and `raw` fit together as one pair of functions for `messagesFixedLog`: nothing is assembled.
+- A build of the word line's own head: the tries built the scratch branch, which differs by the mend's five files.
+
