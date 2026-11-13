@@ -24,6 +24,7 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.Laid
 public import Proofs.Properties.Verity.Sampled.MemberForm.WindowPasses
 public import Proofs.Properties.Verity.Sampled.MemberForm.Sent
 public import Proofs.Properties.Verity.Sampled.MemberForm.Reads
+public import Proofs.Properties.Verity.Sampled.MemberForm.OpensOwn
 
 /-!
 # The per-member form of one-stage v2, as its proofs read it
@@ -98,4 +99,7 @@ the lock) give of the bytes and the release log they accept, each stated at the 
   accepts, the window the verifier sets up is laid out and each member's files pass (`windowPasses_members`), so
   the verifier sets the deployment's window up at every accepted play (`windowAt_form`), and each play has the
   window's read (`windowReads_members`).
+* `MemberForm.OpensOwn`: a checked member whose commitment is ready for its openings opens only at its own files'
+  places (`opensOwn_of_ready`), so at a window the verifier sets up the vocabulary's openings hold wherever each
+  member's deployed commitment opens (`MembersSetUp.opensWith`), where each member's commitment is ready for them.
 -/
