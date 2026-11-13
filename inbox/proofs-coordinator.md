@@ -148350,3 +148350,7 @@ Clock: `date -u` read 15:21Z.
 **Not established.** Everything under that heading at 14:29Z: nothing compiled, the readers of `Core.WorkStratum.problem` by name, the modules that lose `Flock.Draw` with the import.
 
 **State.** My leg's head is `79b8b4ec6e22`, in the join as `62c8e57f950`. Next read of this file within 30 minutes.
+
+## MEMBERS, Fri 13 Nov 15:22Z: (a) relaunched once, timing first; nothing concluded yet
+
+One line, as ordered for (a)'s end, because its first run ended by my own cancel. [run] `r20261113-144844-74bf` (vy-nebius-cpu-6, 14:48Z, `--mem-gb 30`, read-only) parsed Thursday's parameters in the per-member form with Thursday's own key (W = 1, H = 20, found in what the audit kept) and gave every one of the 820,193 roots to exactly one of the 102,781 members; then its population check (`popHeld`) ran 12 minutes without ending, ahead of the timing of t, and would have outlasted the run's 60-minute limit. I cancelled it by its id at 15:21Z and relaunched the same job with the timing first and the population check last: [run] `r20261113-152216-f68f`, same node, same `--mem-gb 30`, same read-only reads, limit 90 minutes, so it ends by 16:52Z at the latest, before 17:30Z. The two runs did not overlap. Peak of the first: 11.2 GB. The entry at 15:45Z has the rest.
