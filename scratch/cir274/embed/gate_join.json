@@ -1,0 +1,57 @@
+{
+ "kind": "vllm-ratchet-gate/v2",
+ "base": "b3902993caeaef278eb966882ae5c50056d89032",
+ "top": "95784be3d25bb851cf63c51e1d94d7e9813a5dc3",
+ "changes": [
+  {
+   "name": "1e4d5c993c08..95784be3d25b",
+   "commit": "95784be3d25bb851cf63c51e1d94d7e9813a5dc3",
+   "base": "1e4d5c993c08a3ceee881d8c8563246b42243ea1",
+   "pr": null,
+   "verdict": "passed",
+   "why": "no lane-text site is new in the 12 file(s) it changes; no retired-term site is new in the 12 file(s) it changes",
+   "before": null,
+   "after": null,
+   "touched": [],
+   "lints": [],
+   "fix": [],
+   "noqa_added": 0,
+   "noqa_removed": 0,
+   "pooled": [],
+   "linted": [],
+   "counted": {
+    "repo_env_reads": [],
+    "repo_silent_excepts": [],
+    "repo_lane_text": [
+     "adapters/vllm/tests/program/predict/test_node_window.py",
+     "adapters/vllm/tests/program/predict/test_node_window_dense.py",
+     "adapters/vllm/tests/program/predict/test_node_window_embed.py",
+     "adapters/vllm/tests/program/predict/test_node_window_join.py",
+     "adapters/vllm/tests/program/predict/test_node_window_multimem.py",
+     "adapters/vllm/tests/program/predict/test_node_window_sparse.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_dense.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_embed.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_multimem.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_sparse.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_values.py"
+    ],
+    "repo_retired_terms": [
+     "adapters/vllm/tests/program/predict/test_node_window.py",
+     "adapters/vllm/tests/program/predict/test_node_window_dense.py",
+     "adapters/vllm/tests/program/predict/test_node_window_embed.py",
+     "adapters/vllm/tests/program/predict/test_node_window_join.py",
+     "adapters/vllm/tests/program/predict/test_node_window_multimem.py",
+     "adapters/vllm/tests/program/predict/test_node_window_sparse.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_dense.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_embed.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_multimem.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_sparse.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_values.py"
+    ]
+   }
+  }
+ ],
+ "failures": []
+}
