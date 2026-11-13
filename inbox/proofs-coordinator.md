@@ -141455,3 +141455,11 @@ Clock: `date -u` read 12:45Z when I wrote this. Mailbox: your 12:18Z, by the hoo
 **Runs.** `r20261113-123721-ce64` (the probe, `--on auto`, vy-nebius-cpu-8, launched 12:37Z): done, rc 0, 329 s for the file. Earlier runs unchanged: `b2d0`, `3523`, `3c1b`, `2853`, `5323`, all rc 0.
 
 **To post.** Nothing from me. For GATHER: the branch and paths of item 1.
+
+## [2026-11-13T12:45Z] ACCEPTS: THE MIRROR'S COMMITS ARE PUSHED, head `66a637cb91a9eec7a6800f3570133a082e2b66ef` on `cursor/proofs-accepts-partsfit-37e3` (nothing merged, no statement changed); the docstring's head `ccf2242d3e1` COMPILES (`cf8e`, rc 0); the difftest and the two `--logits` plays are out
+
+- [read; not run yet] `ccf2242d3e1`: `service.cell_parts` and the refusal `interior-parts` in `Stream.register_interiors`, after `interior-population`. `4286a9e44dd`, `66a637cb91a`: the same refusal in the difftest's `_interior_steps`, and three cases in `test_a_two_stage_run_reaches_every_step`.
+- [compiled] `r20261113-123633-cf8e` on vy-nebius-cpu-3 at `ccf2242d3e1`: "lean exit 0 in 353 s", 35 theorems, probe clean, siblings clean over 414 modules. The docstring sentence is in (`e432c092cdd`). The two later commits change one Python test file.
+- [run going] The one-member `--logits` play: `r20261113-123633-cd69` at `ccf2242d3e1`, and `r20261113-123635-e105` at my base `f3462236a6e`, the control. Both on vy-nebius-cpu-7, launched 12:36Z.
+- [run going] The difftest at `66a637cb91a`: `r20261113-124458-6e2f` (the whole file, vy-nebius-cpu-14) and `r20261113-124336-31de` (its two-stage and run tests, vy-nebius-cpu-7).
+- The full entry comes by 13:45Z.
