@@ -12,6 +12,8 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.Passes
 public import Proofs.Properties.Verity.Sampled.MemberForm.Tree
 public import Proofs.Properties.Verity.Sampled.MemberForm.Opened
 public import Proofs.Properties.Verity.Sampled.MemberForm.Place
+public import Proofs.Properties.Verity.Sampled.MemberForm.Sessions
+public import Proofs.Properties.Verity.Sampled.MemberForm.Read
 
 /-!
 # The per-member form of one-stage v2, as its proofs read it
@@ -50,4 +52,10 @@ the lock) give of the bytes and the release log they accept, each stated at the 
   rounds (`tree_recorded`).
 * `MemberForm.Place`: the `j`-th tree the read opens is the `j`-th session's, and the read opens as many trees as
   sessions (`members_place`, `members_count`).
+* `MemberForm.Sessions`: what the window's theorem asks of the `j`-th session on a device's log the read reads
+  (`sessionRead_logged`: the session's record's rounds on its own tree and its closing round answering its
+  evidence), at a read whose trees each open their `session` stream first (`LinkFirst`).
+* `MemberForm.Read`: v2's read at an accept of the form (`members_read`): the releases it read the release log as,
+  whose reads are the device's log's, the trees `membersTreeReason` accepts the sessions against, each statement's
+  one session as the structure names it, and the device's log in order at the sample's family and digest.
 -/
