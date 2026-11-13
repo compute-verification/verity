@@ -39,7 +39,7 @@ Fingerprint fields (all required; a sub-field whose value is not known is ``null
     preprocessing   what was amortised offline and is therefore not in the buckets (a string or an object)
     retention       retained | streamed | recomputed   (how the witness was held during proving)
     instances       which frozen instances were proved: {"dataset": "bench-instances/v1", "tier": "vu-k1536",
-                    "range": [lo, hi), "manifest_sha256"} (``fixtures/bench-instances/v1``; hi - lo = B_real if present
+                    "range": [lo, hi), "manifest_sha256"} (``benchmarks/numerical/bench-instances/v1``; hi - lo = B_real if present
                     else B; sub-batches are contiguous sub-ranges of it) or null = not measured on the shared set.  Two
                     results whose non-null ``instances`` disagree are never compared (:func:`compare_instances`); the
                     judge warns when either is null or absent.  Every A-GKR/B number at K=1536 carries it.
@@ -196,7 +196,7 @@ REQUIRED_FIELDS = (
     "profile", "domain", "K", "B", "proof_class", "authentication", "zk_mode", "security", "hardware", "software",
     "preprocessing", "retention", "instances",
 )
-#: The frozen input set every K=1536 number is measured on (``fixtures/bench-instances/v1``, ``verity_numerical.bench.instances``).
+#: The frozen input set every K=1536 number is measured on (``benchmarks/numerical/bench-instances/v1``, ``verity_numerical.bench.instances``).
 INSTANCES_DATASET = census.INPUT_SETS["bench-instances-v1"].dataset
 INSTANCES_FIELD = "instances"
 INSTANCES_TIERS = ("vu-k1536", "tu-k16", "vu-k1536-neg")

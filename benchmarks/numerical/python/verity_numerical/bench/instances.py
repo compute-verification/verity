@@ -7,7 +7,7 @@ prevent.  This module owns the dataset's byte layout, its loader, the build that
 sensitivity statistic of the negatives.  The relation is not restated here: expected words are ``silicon.tc_dot_chain``
 + ``cast.f32_to_bf16_word`` (``verity.definitions.circuits.targets.target.FIRST``), cross-checked against ``hawkeye_close``.
 
-Tiers (``fixtures/bench-instances/v1/``; the byte layout is in that directory's ``README.md``)::
+Tiers (``benchmarks/numerical/bench-instances/v1/``; the byte layout is in that directory's ``README.md``)::
 
     vu-k1536       4,096 valid VU instances, K=1536, ids 0..4095.  B=1 / 64 / 4096 are the prefixes [0:1], [0:64],
                    [0:4096]; sub-batches are contiguous id ranges.  Every 64-block holds 54 real and 10 corner instances.
@@ -79,7 +79,7 @@ __all__ = [
 
 DATASET = G.DATASET
 REPO = Path(__file__).resolve().parents[5]
-DEFAULT_ROOT = REPO / "fixtures" / "bench-instances" / "v1"
+DEFAULT_ROOT = REPO / "benchmarks" / "numerical" / "bench-instances" / "v1"
 K, STEP, STEPS = G.K, G.STEP, G.STEPS
 N_VU = 4096
 N_TU = 4096
