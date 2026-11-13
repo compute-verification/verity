@@ -5,29 +5,29 @@ public import Proofs.Pouw.Lead.PStar.Lanes
 /-!
 # The coin-lane walks under `-rot`: what the 127 weight opens (proofs)
 
-An entry's word after some steps is a value fixed before the draw (its data's products, tags and code) plus its lane's
+An entry's word after some steps is a value fixed before the sample (its data's products, tags and code) plus its lane's
 increments summed over the steps. Every test of a word is a test on such a sum: the word against a value fixed before
-the draw, a revisit (the word at one step against the word at an earlier one, the sum over the steps between), and a
+the sample, a revisit (the word at one step against the word at an earlier one, the sum over the steps between), and a
 coincidence with another row's word of the same tile, whose lanes read the same coins.
 
-* **A sum over independent steps is capped by any one step** (`steps_sum_fiber_le`): with each step's digits drawn
+* **A sum over independent steps is capped by any one step** (`steps_sum_fiber_le`): with each step's digits sampled
   independently from `S`, a sum over a set of steps containing step `u₀` takes a value on at most `P·|S|^(T−1)` of the
-  `|S|^T` draws when no value has more than `P` preimages under step `u₀`'s term. Its values may be in any additive
+  `|S|^T` samples when no value has more than `P` preimages under step `u₀`'s term. Its values may be in any additive
   group, so `k` words summed as one vector are one sum.
 * **An entry's own walk** (`rotWalk_share`): over any nonempty set of steps, so for the word and every revisit, the
-  summed increments hit a value fixed before the draw on at most a `p* = 65/2,097,152` share of the draws.
+  summed increments hit a value fixed before the sample on at most a `p* = 65/2,097,152` share of the samples.
 * **Rows of opposite classes** (`crossStep_fiber_le`, `crossStep_fiber_attained`, `crossStep_share`,
   `crossWalk_share`): an even row and an odd row of one tile read the same coins, and their step increments differ by
   `(c − c') + (b − b') + 126·(s₀ − s₁)`. As `b ∈ {0, 1}`, `b + 126·s₀` fixes `b` and `s₀`, so no value is that
-  difference for more than `2·128²` of the `4·128³` draws `(b, b', s)`, a `1/256` share, and `c − c'` is it for exactly
+  difference for more than `2·128²` of the `4·128³` samples `(b, b', s)`, a `1/256` share, and `c − c'` is it for exactly
   that many. The same share caps the difference summed over any nonempty set of steps.
 * **`k` words of one row pair** (`crossTile_fiber_le`, `crossTile_fiber_attained`, `crossTile_share`,
   `crossTileWalk_share`): the two rows' bits are shared by all their columns, so the columns' coincidences are not
   independent. Column 0's equation fixes `b` and its `s₀`, and each other column's equation then fixes its own `s₀`, so
-  `k` targets are hit together on at most a `(1/2)·(1/128)^k` share of the draws, `2^−29` for a 4-word tile, at one
+  `k` targets are hit together on at most a `(1/2)·(1/128)^k` share of the samples, `2^−29` for a 4-word tile, at one
   step (where `c − c'` in every column attains it) or summed over any nonempty set of steps.
-* **Over the tile** (`rot_sum_hits_le`): with row bits drawn per row and coins per column, every row reading its own
-  class by parity, targets fixed before the draw are hit on at most a `65/2,097,152` share of the entries on average.
+* **Over the tile** (`rot_sum_hits_le`): with row bits sampled per row and coins per column, every row reading its own
+  class by parity, targets fixed before the sample are hit on at most a `65/2,097,152` share of the entries on average.
 -/
 
 @[expose] public section
@@ -41,7 +41,7 @@ section Steps
 variable {ι γ G : Type*} [Fintype ι] [DecidableEq ι] [DecidableEq γ] [AddCommGroup G] [DecidableEq G]
 
 /-- **A sum over independent steps is capped by any one step**: if no value has more than `P` preimages under step
-`u₀`'s term, a sum over steps `I ∋ u₀` takes any value on at most `P·|S|^(T−1)` of the draws `w : ι → S`. -/
+`u₀`'s term, a sum over steps `I ∋ u₀` takes any value on at most `P·|S|^(T−1)` of the samples `w : ι → S`. -/
 theorem steps_sum_fiber_le (S : Finset γ) (f : ι → γ → G) (I : Finset ι) {u₀ : ι} (hu₀ : u₀ ∈ I) {P : ℕ}
     (hP : ∀ v, (S.filter fun x => f u₀ x = v).card ≤ P) (v : G) :
     ((Fintype.piFinset fun _ : ι => S).filter fun w => ∑ u ∈ I, f u (w u) = v).card
@@ -98,8 +98,8 @@ end Steps
 
 theorem card_bits : ({0, 1} : Finset ℤ).card = 2 := by decide
 
-/-- **An entry's own walk**: over any nonempty set of steps `I`, each step drawing the row's bit and the tile's coins
-afresh, the summed increments hit a value fixed before the draw on at most a `65/2,097,152` share of the draws. -/
+/-- **An entry's own walk**: over any nonempty set of steps `I`, each step sampling the row's bit and the tile's coins
+afresh, the summed increments hit a value fixed before the sample on at most a `65/2,097,152` share of the samples. -/
 theorem rotWalk_share {T : ℕ} (c : ℤ) (i : ℕ) (I : Finset (Fin T)) (hI : I.Nonempty) (v : ℤ) :
     2097152 * ((Fintype.piFinset fun _ : Fin T => ({0, 1} : Finset ℤ) ×ˢ triples).filter
         fun w => ∑ u ∈ I, rotLane c i (w u).1 (w u).2 = v).card ≤
@@ -125,7 +125,7 @@ theorem rotLane_sub_cross {c c' : ℤ} {i i' : ℕ} (hi : i % 2 = 0) (hi' : i' %
   simp only [rotLane, rotSum, hi, hi'', ite_true, ite_false, evenSum, oddSum]
   ring
 
-/-- **The cross-class step difference's largest fiber**: no value is it for more than `2·128²` of the draws
+/-- **The cross-class step difference's largest fiber**: no value is it for more than `2·128²` of the samples
 `(b, b', s)`. -/
 theorem crossStep_fiber_le (c c' : ℤ) {i i' : ℕ} (hi : i % 2 = 0) (hi' : i' % 2 = 1) (v : ℤ) :
     (((({0, 1} : Finset ℤ) ×ˢ ({0, 1} : Finset ℤ)) ×ˢ triples).filter fun x =>
@@ -145,7 +145,7 @@ theorem crossStep_fiber_le (c c' : ℤ) {i i' : ℕ} (hi : i % 2 = 0) (hi' : i' 
     obtain ⟨rfl, rfl⟩ := this
     rfl
 
-/-- **It is attained**: `c − c'` is the difference for `2·128²` draws, `b = b'` and `s₀ = s₁`. -/
+/-- **It is attained**: `c − c'` is the difference for `2·128²` samples, `b = b'` and `s₀ = s₁`. -/
 theorem crossStep_fiber_attained (c c' : ℤ) {i i' : ℕ} (hi : i % 2 = 0) (hi' : i' % 2 = 1) :
     32768 ≤ (((({0, 1} : Finset ℤ) ×ˢ ({0, 1} : Finset ℤ)) ×ˢ triples).filter fun x =>
       rotLane c i x.1.1 x.2 - rotLane c' i' x.1.2 x.2 = c - c').card := by
@@ -162,7 +162,7 @@ theorem crossStep_fiber_attained (c c' : ℤ) {i i' : ℕ} (hi : i % 2 = 0) (hi'
     rfl
 
 /-- **The cross-class share**: an even and an odd row of one tile have step words differing by a value fixed before
-the draw on at most a `1/256` share of the `4·128³` draws, and on exactly that share for `c − c'`. -/
+the sample on at most a `1/256` share of the `4·128³` samples, and on exactly that share for `c − c'`. -/
 theorem crossStep_share (c c' : ℤ) {i i' : ℕ} (hi : i % 2 = 0) (hi' : i' % 2 = 1) :
     (∀ v, 256 * ((((({0, 1} : Finset ℤ) ×ˢ ({0, 1} : Finset ℤ)) ×ˢ triples).filter fun x =>
         rotLane c i x.1.1 x.2 - rotLane c' i' x.1.2 x.2 = v).card) ≤
@@ -178,7 +178,7 @@ theorem crossStep_share (c c' : ℤ) {i i' : ℕ} (hi : i % 2 = 0) (hi' : i' % 2
   · have := crossStep_fiber_attained c c' hi hi'; omega
 
 /-- **The cross-class walk**: summed over any nonempty set of steps, the two rows' increments differ by a value fixed
-before the draw on at most a `1/256` share of the draws. -/
+before the sample on at most a `1/256` share of the samples. -/
 theorem crossWalk_share {T : ℕ} (c c' : ℤ) {i i' : ℕ} (hi : i % 2 = 0) (hi' : i' % 2 = 1)
     (I : Finset (Fin T)) (hI : I.Nonempty) (v : ℤ) :
     256 * ((Fintype.piFinset fun _ : Fin T => (({0, 1} : Finset ℤ) ×ˢ ({0, 1} : Finset ℤ)) ×ˢ triples).filter
@@ -209,7 +209,7 @@ theorem card_tileDigits (k : ℕ) : (tileDigits k).card = 4 * 2097152 ^ k := by
   rw [card_product, card_product, card_bits, card_steps, card_triples, Fintype.card_fin]; norm_num
 
 /-- **`k` words of one row pair at one step**: column 0's equation fixes `b` and its `s₀`, and each other column's its
-own `s₀`, so no `k` targets are hit together on more than `2·(128²)^k` of the draws. -/
+own `s₀`, so no `k` targets are hit together on more than `2·(128²)^k` of the samples. -/
 theorem crossTile_fiber_le {k : ℕ} (hk : 0 < k) (c c' : ℤ) {i i' : ℕ} (hi : i % 2 = 0) (hi' : i' % 2 = 1)
     (v : Fin k → ℤ) : ((tileDigits k).filter fun x => crossTile k c c' i i' x = v).card ≤ 2 * 16384 ^ k := by
   calc _ ≤ (({0, 1} : Finset ℤ) ×ˢ Fintype.piFinset fun _ : Fin k => coins ×ˢ coins).card :=
@@ -249,7 +249,7 @@ theorem crossTile_fiber_le {k : ℕ} (hk : 0 < k) (c c' : ℤ) {i i' : ℕ} (hi 
       exact Prod.ext (by omega) (Prod.ext (hs j).1 (hs j).2)
     rw [hst]
 
-/-- **It is attained**: `c − c'` in every column is hit by `2·(128²)^k` draws, `b = b'` and `s₀ = s₁` in each column. -/
+/-- **It is attained**: `c − c'` in every column is hit by `2·(128²)^k` samples, `b = b'` and `s₀ = s₁` in each column. -/
 theorem crossTile_fiber_attained (k : ℕ) (c c' : ℤ) {i i' : ℕ} (hi : i % 2 = 0) (hi' : i' % 2 = 1) :
     2 * 16384 ^ k ≤ ((tileDigits k).filter fun x => crossTile k c c' i i' x = fun _ => c - c').card := by
   calc 2 * 16384 ^ k = (({0, 1} : Finset ℤ) ×ˢ Fintype.piFinset fun _ : Fin k => coins ×ˢ coins).card := by
@@ -270,7 +270,7 @@ theorem crossTile_fiber_attained (k : ℕ) (c c' : ℤ) {i i' : ℕ} (hi : i % 2
     exact Prod.ext this.1 this.2.2
 
 /-- **The `k`-word share at one step**: `k` words of an even and an odd row of one tile all hit targets fixed before
-the draw on at most a `(1/2)·(1/128)^k` share of the draws (`2^−29` for `k = 4`), and on exactly that share for
+the sample on at most a `(1/2)·(1/128)^k` share of the samples (`2^−29` for `k = 4`), and on exactly that share for
 `c − c'` in every column. -/
 theorem crossTile_share {k : ℕ} (hk : 0 < k) (c c' : ℤ) {i i' : ℕ} (hi : i % 2 = 0) (hi' : i' % 2 = 1) :
     (∀ v, 2 * 128 ^ k * ((tileDigits k).filter fun x => crossTile k c c' i i' x = v).card ≤ (tileDigits k).card) ∧
@@ -289,7 +289,7 @@ theorem crossTile_share {k : ℕ} (hk : 0 < k) (c c' : ℤ) {i i' : ℕ} (hi : i
       _ ≤ 2 * 128 ^ k * _ := Nat.mul_le_mul_left _ (crossTile_fiber_attained k c c' hi hi')
 
 /-- **The `k`-word walk**: summed over any nonempty set of steps, `k` words of an even and an odd row of one tile all
-hit targets fixed before the draw on at most a `(1/2)·(1/128)^k` share of the draws. -/
+hit targets fixed before the sample on at most a `(1/2)·(1/128)^k` share of the samples. -/
 theorem crossTileWalk_share {T k : ℕ} (hk : 0 < k) (c c' : ℤ) {i i' : ℕ} (hi : i % 2 = 0) (hi' : i' % 2 = 1)
     (I : Finset (Fin T)) (hI : I.Nonempty) (v : Fin k → ℤ) :
     2 * 128 ^ k * ((Fintype.piFinset fun _ : Fin T => tileDigits k).filter
@@ -314,8 +314,8 @@ variable {r s : ℕ}
 def rotHits (c : ℤ) (v : Fin r → Fin s → ℤ) (D : (Fin r → ℤ) × (Fin s → ℤ × ℤ × ℤ)) : ℕ :=
   (univ.filter fun e : Fin r × Fin s => rotLane c e.1 (D.1 e.1) (D.2 e.2) = v e.1 e.2).card
 
-/-- **Over the tile**: with a bit drawn per row, a coin triple per column read by every row, and each row weighted by
-its class, targets fixed before the draw are hit on at most a `65/2,097,152` share of the `r·s` entries on average. -/
+/-- **Over the tile**: with a bit sampled per row, a coin triple per column read by every row, and each row weighted by
+its class, targets fixed before the sample are hit on at most a `65/2,097,152` share of the `r·s` entries on average. -/
 theorem rot_sum_hits_le (c : ℤ) (hr : 0 < r) (hs : 0 < s) (v : Fin r → Fin s → ℤ) :
     2097152 * ∑ D ∈ draws ({0, 1} : Finset ℤ) triples r s, rotHits c v D ≤
       65 * (r * s) * (draws ({0, 1} : Finset ℤ) triples r s).card := by
