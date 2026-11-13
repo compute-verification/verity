@@ -1,13 +1,18 @@
 """The canonical top-k row (`dsa_topk.reference`): rows of at most k keys are vLLM's, a longer row takes the registered
 relation's top-k set (`topk_set`: the fast kernels' key, ties to the smaller index) in ascending order; the torch
 reference agrees with it; the wrappers run the real op first and the pass only on calls that can hold a row longer than k, in
-the right row mode; install wraps once; the plugin is off unless asked; and, where Triton is importable, its kernels
-(in Triton's interpreter) rewrite any fast selection, right, wrong or garbage, into the reference."""
+the right row mode; install wraps once; the plugin is off unless asked; a process's kept counters are in its file after
+every call, by one write, and outlive its kill; and, where Triton is importable, its kernels (in Triton's interpreter)
+rewrite any fast selection, right, wrong or garbage, into the reference."""
+import builtins
+import io
 import json
 import math
 import os
 import random
+import signal
 import struct
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -261,22 +266,154 @@ def test_register_is_off_unless_asked(monkeypatch):
     assert calls == [()]
 
 
-def test_log_rewrites_its_record_while_serving(monkeypatch, tmp_path):
-    monkeypatch.setattr(dsa_topk, "_capturing", lambda: False)
-    monkeypatch.setattr(dsa_topk, "FLUSH_EVERY", 3)
-    canon = dsa_topk.Canon()
+def logits(rows: int, cols: int):
+    """A call's logits as far as a wrapper reads them: their shape and strides."""
+    return SimpleNamespace(shape=(rows, cols), stride=lambda i: (cols, 1)[i])
+
+
+#: what else on the host could write a file, make or rename one, or sync one to the disk
+OTHER_IO = ("write", "writev", "pwritev", "open", "replace", "rename", "ftruncate", "fsync", "fdatasync", "sync")
+
+
+def test_log_keeps_the_record_at_every_call_by_one_write_and_no_sync(monkeypatch, tmp_path):
+    """Under `log_to` the file holds the record from then on and after every call, a capture's too, and a call costs
+    the host one ``os.pwrite`` of the record: no other write, no file opened or renamed, and nothing synced to the
+    disk. The devices' counters are read every `ROWS_EVERY` calls and never in a capture: a read that falls due in
+    one is made at the first call after it, and the record says at how many calls its rows were read."""
+    capturing, counted = [False], [0, 0, 0]
+    monkeypatch.setattr(dsa_topk, "_capturing", lambda: capturing[0])
+    monkeypatch.setattr(dsa_topk, "ROWS_EVERY", 3)
+    canon = Recorder()
+    canon._stats["dev%d"] = SimpleNamespace(tolist=lambda: list(counted))  # a name no formatting may take for its own
+    ns = fake_ns([])
+    dsa_topk.install(ns, canon)
     dsa_topk.log_to(canon, str(tmp_path))
     path = tmp_path / f"dsa_topk.{os.getpid()}.json"
-    canon.note("persistent_topk")
-    canon.note("persistent_topk")
-    assert not path.exists()
-    canon.note("cooperative_topk")
-    rec = json.loads(path.read_text())
-    assert rec["calls"]["persistent_topk"] == 2 and rec["calls"]["cooperative_topk"] == 1
-    monkeypatch.setattr(dsa_topk, "_capturing", lambda: True)
-    for _ in range(3):
-        canon.note("persistent_topk")
-    assert json.loads(path.read_text())["calls"]["persistent_topk"] == 2
+    assert [f.name for f in tmp_path.iterdir()] == [path.name]
+    assert json.loads(path.read_text()) == {"pid": os.getpid(), "calls": dict.fromkeys(dsa_topk.OPS, 0),
+                                            "launches": dict.fromkeys(dsa_topk.OPS, 0), "rows": {}, "rows_at": 0}
+
+    k, wide, narrow, two = 4, logits(3, 16), logits(3, 4), SimpleNamespace(dim=lambda: 2)
+    calls = [  # the op, its arguments, whether a capture is on, the rows the device has counted by then
+        ("top_k_per_row_prefill", (narrow, None, None, None, 3, 4, 1, k), False, 0),
+        ("persistent_topk", (wide, None, None, None, k, 12), False, 2),
+        ("cooperative_topk", (wide, None, None, None, k, 5), False, 5),      # the third call: the rows are read
+        ("top_k_per_row_decode", (wide, 1, two, None, 3, 16, 1, k), True, 6),
+        ("persistent_topk", (narrow, None, None, None, k, 16), True, 6),
+        ("cooperative_topk", (wide, None, None, None, k, 4), True, 9),       # due again, inside the capture
+        ("top_k_per_row_prefill", (wide, None, None, None, 3, 16, 1, k), False, 11),  # so read here
+        ("top_k_per_row_decode", (wide, 1, two, None, 0, 16, 1, k), False, 12),
+    ]
+    reader, pwrite, writes, kept = os.open(path, os.O_RDONLY), os.pwrite, [], []
+
+    def refused(name):
+        def other(*args, **kw):
+            raise AssertionError(f"a call of the top-k ran {name}")
+        return other
+
+    with monkeypatch.context() as m:
+        m.setattr(os, "pwrite", lambda fd, data, at: writes.append((fd, at)) or pwrite(fd, data, at))
+        for name in OTHER_IO:
+            m.setattr(os, name, refused(f"os.{name}"), raising=False)
+        m.setattr(builtins, "open", refused("open"))
+        m.setattr(io, "open", refused("io.open"))
+        for name, args, capturing[0], counted[0] in calls:
+            getattr(ns, name)(*args)
+            kept.append(json.loads(os.pread(reader, 1 << 16, 0)))
+    os.close(reader)
+
+    assert len(writes) == len(calls) and len(set(writes)) == 1 and writes[0][1] == 0
+    assert [sum(rec["calls"].values()) for rec in kept] == [1, 2, 3, 4, 5, 6, 7, 8]
+    assert [rec["rows_at"] for rec in kept] == [0, 0, 3, 3, 3, 3, 7, 7]
+    assert [rec["rows"].get("dev%d", {}).get("rows_long") for rec in kept] == [None, None, 5, 5, 5, 5, 11, 11]
+    assert kept[-1] == canon.record(read=False) == json.loads(path.read_text())
+    assert kept[-1]["calls"] == dict.fromkeys(dsa_topk.OPS, 2) and len(canon.runs) == 5
+    # an op first launched since is in the next record; so are rows read again with no call between, as at an exit
+    # after a CUDA graph's replays, which add rows and no call
+    canon.launches["other"] = 3
+    ns.persistent_topk(narrow, None, None, None, k, 16)
+    assert json.loads(path.read_text()) == canon.record(read=False) and canon.launches["other"] == 3
+    for counted[0] in (20, 21):
+        canon.read_rows()
+        canon.on_call()
+        rec = json.loads(path.read_text())
+        assert (rec["rows"]["dev%d"]["rows_long"], rec["rows_at"]) == (counted[0], 9)
+        assert rec == canon.record(read=False)
+    assert [f.name for f in tmp_path.iterdir()] == [path.name]
+
+
+class NoKernel:
+    """A Triton kernel's stand-in: any grid, any arguments, nothing launched."""
+
+    def __getitem__(self, grid):
+        return lambda *args, **kw: None
+
+
+def test_a_launching_calls_one_write_holds_its_launch(monkeypatch, tmp_path):
+    torch = pytest.importorskip("torch")
+    monkeypatch.setattr(dsa_topk, "_capturing", lambda: False)
+    monkeypatch.setattr(dsa_topk, "kernels", lambda: dict.fromkeys(("canon_row", "count_seg", "emit_seg"), NoKernel()))
+    canon, ns = dsa_topk.Canon(), fake_ns([])
+    dsa_topk.install(ns, canon)
+    dsa_topk.log_to(canon, str(tmp_path))
+    k, wide = 4, torch.zeros(3, 16)
+    canon._sms[wide.device] = 64
+    pwrite, writes = os.pwrite, []
+    with monkeypatch.context() as m:
+        m.setattr(os, "pwrite", lambda fd, data, at: writes.append(at) or pwrite(fd, data, at))
+        ns.persistent_topk(wide, torch.zeros(3, dtype=torch.int32), torch.empty(3, k, dtype=torch.int32), None, k, 12)
+    rec = json.loads((tmp_path / f"dsa_topk.{os.getpid()}.json").read_text())
+    assert writes == [0]
+    assert rec["calls"]["persistent_topk"] == 1 and rec["launches"]["persistent_topk"] == 1
+    assert sum(rec["calls"].values()) == 1 and sum(rec["launches"].values()) == 1
+
+
+#: a process that loads the plugin as vLLM does (the entry point's `register`, under the two variables) over stand-in
+#: torch and vLLM modules, calls the wrapped ops, says so and then waits for its input's end, which it never sees
+#: when it is killed
+WORKER = """
+import sys
+import types
+
+ops = types.SimpleNamespace(**{name: lambda *args: None for name in sys.argv[2:]})
+torch = types.ModuleType("torch")
+torch.ops = types.SimpleNamespace(_C=ops)
+torch.cuda = types.SimpleNamespace(is_current_stream_capturing=lambda: False)
+sys.modules.update({"torch": torch, "vllm": types.ModuleType("vllm"),
+                    "vllm._custom_ops": types.ModuleType("vllm._custom_ops")})
+sys.path.insert(0, sys.argv[1])
+import dsa_topk
+
+dsa_topk.register()
+logits = types.SimpleNamespace(shape=(0, 16), stride=lambda i: (16, 1)[i])
+for _ in range(5):
+    ops.persistent_topk(logits, None, None, None, 4, 16)
+for _ in range(2):
+    ops.top_k_per_row_prefill(logits, None, None, None, 0, 16, 1, 4)
+print("served", flush=True)
+sys.stdin.read()
+"""
+
+
+@pytest.mark.parametrize("end", ["killed", "exits"])
+def test_counts_outlive_their_process(tmp_path, end):
+    """vLLM ends a serving worker with SIGKILL, which runs no exit handler. A process killed that way after its calls
+    leaves them in its file, as one that exits in order does; only the second reads its devices' rows once more."""
+    env = {**os.environ, dsa_topk.ENV: "canonical", dsa_topk.LOG_ENV: str(tmp_path)}
+    argv = [sys.executable, "-c", WORKER, str(Path(dsa_topk.__file__).parent), *dsa_topk.OPS]
+    with subprocess.Popen(argv, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE) as worker:
+        said = worker.stdout.readline()
+        if end == "killed":
+            worker.kill()
+        else:
+            worker.stdin.close()
+        code = worker.wait()
+    assert said == b"served\n" and code == (-signal.SIGKILL if end == "killed" else 0)
+    assert [f.name for f in tmp_path.iterdir()] == [f"dsa_topk.{worker.pid}.json"]
+    rec = json.loads((tmp_path / f"dsa_topk.{worker.pid}.json").read_text())
+    assert rec["calls"] == {**dict.fromkeys(dsa_topk.OPS, 0), "persistent_topk": 5, "top_k_per_row_prefill": 2}
+    assert rec == {"pid": worker.pid, "calls": rec["calls"], "launches": dict.fromkeys(dsa_topk.OPS, 0), "rows": {},
+                   "rows_at": 0 if end == "killed" else 7}
 
 
 def test_site_declares_the_plugin(tmp_path):

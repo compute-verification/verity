@@ -48,7 +48,8 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
                                                             --priority takes the next free slot ahead of waiting lane checks,
                                                             and one of TRAIN_GB or more when it runs pytest, lean-suites,
                                                             circuit-check, flock-circuit-build, lean-build or lean-audit
-                                                            (`train_gb`: a machine without one is skipped or refused, exit 75);
+                                                            (`train_gb`: a machine without one is skipped or refused, exit 75),
+                                                            booking what its shard's steps take (`shard_ask_gib`);
                                                             --agreement sends the upstream build's URLs whatever it changes
                                                             (a train that changes a guarantee elsewhere: `train.sh`);
                                                             a warning first when the commit can't land on REF as it is;
@@ -457,6 +458,41 @@ def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combinin
     if not priority or pool is not None or combining:
         return None
     return TRAIN_GB if parts is None or any(p.partition(":")[0] in TRAIN_STEPS for p in parts) else None
+
+
+#: what a train check's shard books in its slot (`shard_ask_gib`), in GiB as a slot's mem= and book= are: the first row all of
+#: whose names the shard's parts hold (a name with a colon is that part, one without any part of that job; lean-agreement
+#: counts only where it runs), each the most such a shard's check scope held (its memory.peak) plus 15%, up to the next 10
+#: GiB. ci.toml's plans place the parts; slot.py books the larger of this and the slot line's book= (`booked`), and no grant
+#: passes the booking (`slot_mem_gb`)
+SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
+    (("lean-agreement",), 390),                                  # the agreement beside lean-build, Flock suite: 339 + 15%
+    (("lean-audit:security/Proofs",), 330),                      # security/Proofs replayed beside pytest, suites: 282 + 15%
+    (("circuit-check",), 290),                                   # circuit-check granted the slot once alone: 251 + 15%
+    (("pytest:verity/definitions", "lean-suites:verity-vllm"), 170),   # its test beside the parallel suites: 144 + 15%
+    (("pytest", "lean-suites"), 240),                            # pytest whole beside the parallel suites: 208 + 15%
+    (("lean-build", "lean-audit"), 130),                         # lean-build, the rest of the audit, Flock suite: 110 + 15%
+    (("lean-build",), 110),                                      # lean-build and the Flock suite alone: 94 + 15%
+    (("pytest",), 110),                                          # pytest's other suites alone: 87 + 15%
+    (("flock-circuit-build",), 40),                              # the Rust build and tests, the rest of lean-suites: 30 + 15%
+)
+
+
+def shard_ask_gib(parts: list[str] | None, need: list[str]) -> int | None:
+    """The GiB a train check's shard of ``parts`` books (`SHARD_ASKS_GIB`), lean-agreement counting only when ``need`` (the
+    steps the run is sent what they need for) holds it; None for a whole check or a shard no row covers, where the slot
+    line's book= stands."""
+    if parts is None:
+        return None
+    held = {p for p in parts if p != "lean-agreement" or p in need}
+    held |= {p.partition(":")[0] for p in held}
+    return next((gib for names, gib in SHARD_ASKS_GIB if all(n in held for n in names)), None)
+
+
+def ask_gb(gib: int) -> str:
+    """``gib`` GiB as `slot.RUN_MEM_ENV`'s GB (10^9 bytes), cut to the MB below so slot.py's round-up (`slot.gib`) gives
+    ``gib`` back, not one more."""
+    return f"{gib * 2 ** 30 // 10 ** 6 / 1000:.3f}"
 
 
 def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
@@ -1313,8 +1349,9 @@ def record(argv: list[str]) -> int:
             parts = shard(spec, gated=deferred is None, jobs=jobs, plan_file=plan_file)["parts"]
         elif spec is not None:
             parts = shard(spec, gated=deferred is None)["parts"]
-            if deferred is not None:
-                parts = [p for p in parts if p in deferred_parts(deferred)]
+            if deferred is not None:                   # by job, as `main` keeps them: a plan names pytest's parts by suite
+                chosen = {p.partition(":")[0] for p in deferred_parts(deferred)}
+                parts = [p for p in parts if p.partition(":")[0] in chosen]
         elif deferred is not None:
             parts = deferred_parts(deferred)
     except DECLARATION.DeclarationError as e:
@@ -1358,7 +1395,8 @@ def record(argv: list[str]) -> int:
     # so each runs in its own clone of it
     cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None and not records else []), "--project", "verity",
            "--cwd", "clone" if on else "source", *(x for p in DECLARED for x in ("--declared-output", p)), *pooled,
-           *(["--env", f"{SLOT.MIN_MEM_ENV}={min_mem}"] if on and min_mem else [])]
+           *(["--env", f"{SLOT.MIN_MEM_ENV}={min_mem}"] if on and min_mem else []),
+           *(["--env", f"{SLOT.RUN_MEM_ENV}={ask_gb(ask)}"] if on and min_mem and (ask := shard_ask_gib(parts, need)) else [])]
     env = dict(os.environ)
     d = Path(tempfile.mkdtemp(prefix="check-lean-deps-"))
     if "lean-agreement" in need:
@@ -1752,6 +1790,13 @@ OPT_IN = {
         "tests/test_composition_difftest.py::test_remote_agrees",
         "tests/test_composition_difftest.py::test_onsite_agrees",
         "tests/test_composition_difftest.py::test_a_reference_without_reject_dominance_is_caught")},
+    # the whole recursive session: the kept run's data, fetched from the evidence store with the run's custody key
+    "verity/protocols/proofs/recursion/verifier/vstar_cli": {"VERITY_VSTAR_RECURSIVE_DATA": (
+        "tests/test_vstar_recursive.py::test_the_honest_recursive_session_is_accepted_part_for_part",
+        "tests/test_vstar_recursive.py::test_the_honest_statement_fits_and_is_refused_at_a_limit_of_its_own_size",
+        "tests/test_vstar_recursive.py::test_a_flipped_inner_coin_is_refused_where_flock_verify_refuses_it",
+        "tests/test_vstar_recursive.py::test_a_rep_file_one_bit_off_is_refused_at_its_part",
+        "tests/test_vstar_recursive.py::test_an_inner_statements_sample_that_does_not_parse_is_refused_by_both")},
     "adapters/vllm": {
         "VERITY_VLLM_INTERIOR_TABLE": (
             "tests/pipeline/test_interior_table.py::test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them",
@@ -1940,11 +1985,16 @@ def cc_records_in(spec: str, cache: Path, fetch=fetch_records) -> str | None:
 
 
 def slot_mem_gb() -> int | None:
-    return int(m) if (m := SETTINGS.get(SLOT.SLOT_MEM_ENV)).isdigit() else None
+    """The GiB the check's steps are granted between them: its slot's mem= (`slot.SLOT_MEM_ENV`), but never more than the slot
+    books for it (`slot.BOOK_ENV`), so a lowered book= hands out no more than it reserved."""
+    mem, book = SETTINGS.get(SLOT.SLOT_MEM_ENV), SETTINGS.get(SLOT.BOOK_ENV)
+    if not mem.isdigit():
+        return None
+    return min(int(mem), int(book)) if book.isdigit() else int(mem)
 
 
 def grant_when_alone(path: Path, beside: list[threading.Event], gb: int) -> None:
-    """Write ``gb`` (the slot's mem=) to ``path`` once every step beside circuit-check has ended: from then on it runs alone in
+    """Write ``gb`` (`slot_mem_gb`) to ``path`` once every step beside circuit-check has ended: from then on it runs alone in
     the slot, and the targets it has not started may take all of it (b103: pytest ended 83 minutes into its 125)."""
     for e in beside:
         e.wait()
