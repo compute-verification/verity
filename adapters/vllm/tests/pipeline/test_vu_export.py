@@ -4,14 +4,24 @@ from __future__ import annotations
 
 import dataclasses
 import json
+from typing import Any
 
 import numpy as np
 import pytest
 
+from tests.check.test_sampled_replay import (
+    H,
+    Honest,
+    I,
+    V,
+    _bf16,
+    _program,
+    _programs,
+    _weights,
+)
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.pipeline import vu_export as VX
 from verity_vllm.pipeline import vu_store as VS
-from tests.check.test_sampled_replay import H, I, V, Honest, _bf16, _program, _programs, _weights
 
 ROOT = bytes(range(32))
 
@@ -68,12 +78,12 @@ def test_the_export_is_fixed_by_the_root_and_content_addressed(attn_world, tmp_p
 
 
 def test_a_gemm_coordinate_is_the_row_word(attn_world, tmp_path):
-    _export(attn_world, tmp_path, limits=VX.Limits(per_family=64, gemm_coords_per_row=1000))
+    _export(attn_world, tmp_path, limits=VX.Limits(per_family=64, workers=1, gemm_coords_per_row=1000))
     d = tmp_path / "sets" / f"gemm-coordinate-ampere-bf16-k{H}"
     man = json.loads((d / "manifest.json").read_text())
-    x = np.frombuffer((d / "x.u16").read_bytes(), "<u2").reshape(man["n"], H)
-    w = np.frombuffer((d / "w.u16").read_bytes(), "<u2").reshape(man["n"], H)
-    y = np.frombuffer((d / "y.u16").read_bytes(), "<u2")
+    x: np.ndarray = np.frombuffer((d / "x.u16").read_bytes(), "<u2").reshape(man["n"], H)
+    w: np.ndarray = np.frombuffer((d / "w.u16").read_bytes(), "<u2").reshape(man["n"], H)
+    y: np.ndarray = np.frombuffer((d / "y.u16").read_bytes(), "<u2")
     idx = json.loads((d / "index.json").read_text())["rows"]
     rows: dict[tuple, dict] = {}
     for (_i, vu, *_ref, source, sub), xi, wi, yi in zip(idx, x, w, y):
@@ -137,19 +147,21 @@ class _Eng:
 
 def test_after_replay_exports_only_a_passing_pair_zero(attn_world, tmp_path):
     bmap, committed = attn_world.bmap_and_reader()
-    args = (_programs(attn_world), bmap, committed, _weights(attn_world), {}, None, {}, {}, {"r0": "d" * 64}, {"git_head": "f00"}, _Eng())
+    args: tuple[Any, ...] = (_programs(attn_world), bmap, committed, _weights(attn_world), {}, None, {}, {}, {"r0": "d" * 64}, {"git_head": "f00"}, _Eng())
     assert VS.after_replay(None, {"result": True}, 0, ROOT, *args) is None
     assert VS.after_replay(str(tmp_path), {"result": None}, 0, ROOT, *args) is None
     assert VS.after_replay(str(tmp_path), {"result": True}, 1, ROOT, *args) is None and not (tmp_path / "export.json").exists()
     (tmp_path / "provenance.json").write_text(json.dumps({"row": 101, "research_run": "r-test"}))
-    (tmp_path / "limits.json").write_text(json.dumps({"per_family": 3}))
+    (tmp_path / "limits.json").write_text(json.dumps({"per_family": 3, "workers": 1}))
     s = VS.after_replay(str(tmp_path), {"result": True}, 0, ROOT, *args)
     p = s["provenance"]
     assert p["row"] == 101 and p["research_run"] == "r-test" and p["model"] == "tiny/model" and p["versions"] == {"git_head": "f00"}
     assert all(c["drawn"] <= 3 for c in s["by_family"].values()) and VX.verify(tmp_path)["ok"]
 
 
+@pytest.mark.slow
 def test_a_spent_time_budget_stops_the_draw_by_name(attn_world, tmp_path):
+    """The forked pool's check of the budget (`Limits.workers` is 8 unless set); `test_vu_store_budget` holds the serial one's."""
     s = _export(attn_world, tmp_path, limits=VX.Limits(per_family=64, max_seconds=0.0))
     assert s["sets"] == [] and s["by_family"]
     assert all(c.get("drawn", 0) == 0 and c["not_drawn_time_budget"] > 0 for c in s["by_family"].values())
@@ -166,6 +178,7 @@ def test_families_are_interleaved_in_the_draw(attn_world):
     assert len(set(fams[:n])) == n                         # the first round holds one VU of every family
 
 
+@pytest.mark.slow
 def test_the_forked_pool_writes_the_serial_sets(attn_world, tmp_path):
     a = _export(attn_world, tmp_path / "serial")
     b = _export(attn_world, tmp_path / "forked", limits=VX.Limits(per_family=64, workers=2))
@@ -213,7 +226,8 @@ def _e4m3(rng, shape):
 
 def _store_one(tmp_path, fam, st, ops, out, refs, limits):
     """One evaluation stored as `vu_store` stores it (a unit of one evaluation), then the default extraction into `<tmp>/sets`."""
-    key, blobs = VX.selection_key(ROOT), {}
+    key = VX.selection_key(ROOT)
+    blobs: dict = {}
     ev = VS._evaluation((key, ("row", "r0", 0, 0)), fam, st, ops, out, refs, blobs, limits)
     root = tmp_path / "store"
     (root / "values").mkdir(parents=True)
@@ -233,7 +247,10 @@ def test_an_fp8_block_coordinate_is_the_row_word(tmp_path, N):
     """N = 192 ends mid-block: its last 64 coordinates read the weight-scale row cdiv(N, G) - 1."""
     rng = np.random.default_rng(7)
     K, G = 256, 128
-    f32 = lambda a: np.asarray(a, dtype=np.float32).view(np.uint32)       # noqa: E731
+
+    def f32(a) -> np.ndarray:
+        return np.asarray(a, dtype=np.float32).view(np.uint32)
+
     xq, w, sx, ws = _e4m3(rng, K), _e4m3(rng, (N, K)), f32(rng.uniform(1e-3, 0.1, K // G)), f32(rng.uniform(1e-3, 0.1, (-(-N // G), K // G)))
     st, ops = {"K": K, "N": N, "G": G}, [xq, sx, w.reshape(-1), ws.reshape(-1)]
     out = EV.evaluate("ScaledMmFp8BlockSharedScale_v1", st, [[xq], [sx], [], []], [None, None, ops[2], ops[3]])
@@ -257,8 +274,9 @@ def test_an_fp8_block_coordinate_is_the_row_word(tmp_path, N):
 def test_moe_expert_coordinates_are_the_row_words(tmp_path):
     rng = np.random.default_rng(11)
     E, K, N = 3, 32, 5
-    x, slab, e = _bf16(rng, K), _bf16(rng, E * N * K), np.asarray([1], dtype=np.uint32)
-    g = np.asarray([0.375], dtype=np.float32).view(np.uint32)
+    x, slab = _bf16(rng, K), _bf16(rng, E * N * K)
+    e: np.ndarray = np.asarray([1], dtype=np.uint32)
+    g: np.ndarray = np.asarray([0.375], dtype=np.float32).view(np.uint32)
     st, pick, lim = {"E": E, "K": K, "N": N}, (lambda n, k: list(range(min(n, k)))), VX.Limits(gemm_coords_per_row=N)
     up = EV.evaluate("MoeExpertGemm_v1", st, [[x], [e], []], [None, None, slab])
     down = EV.evaluate("MoeExpertGemmW_v1", st, [[x], [e], [g], []], [None, None, None, slab])
