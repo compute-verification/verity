@@ -224,7 +224,8 @@ def check_committed(build: dict[str, Any], com: Any, weight: Callable[[str], Any
     check = SC.ServedCheck(build, weight, rows=SC.ROWS if rows is None else rows, prompts=prompts, log=log, seed=seed)
     for s in sorted(com._layouts):
         values = {m.name: _words(S._committed(com, s, m.name)) for m in com._layouts[s]}
-        check.step(SC.Step(s, [(logical_request(rid, order), lo, hi) for rid, lo, hi in com.step_rows.get(s) or []], values))
+        filed = com.step_rows.get(s)    # a step the committer recorded no row order for is checked with no request rows
+        check.step(SC.Step(s, [(logical_request(rid, order), lo, hi) for rid, lo, hi in filed] if filed else [], values))
     return check.report()
 
 
@@ -318,7 +319,9 @@ class ServedCommit:
         pairs, unlinked, horizon, prompt_linked = 0, [], {}, {}
         for p in sorted(self.build["steps_plan"], key=lambda p: int(p["step"])):
             s = int(p["step"])
-            ids_ok = bool(((rep["steps"].get(str(s)) or {}).get(SERVED_IDS) or {}).get("ok"))
+            step = rep["steps"].get(str(s))                 # a step the check did not run has no report,
+            ids = step.get(SERVED_IDS) if step else None    # and one that did not check the served ids none of them
+            ids_ok = bool(ids.get("ok")) if ids else False
             for rq in p["requests"]:
                 pairs += 1
                 horizon.setdefault(rq["request_id"], [s, s])[1] = s
