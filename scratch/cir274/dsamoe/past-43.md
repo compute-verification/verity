@@ -186,4 +186,76 @@ The alternative is a frame change: `_whole` gathering the mixed members by one s
 
 ### SparseMlaSplit
 
-SMS_SECTION
+**The cause** [read: `sparse_mla_split`, `chain_rows.plan`; ran: the counts by reader template at 4 and 8 layers].
+- A prefill step has one SparseMlaSplit node a token, `T` its keys, with M = 1.
+- FA3 visits a chain's last, partial key block first: `HeadBlock{NVIS=T mod 64, FIRST=true}`, a template of its own for
+  each T mod 64. The full blocks follow, `HeadBlock{NVIS=64, FIRST=false}`, one template shared by every token, then
+  `HeadEnd`.
+- A wire reads one writer template at constant steps, so what reads a per-T template is a wire a token:
+  - the first full block's `l_prev`, `m_prev` and `o_prev` (3 a token with T > 64);
+  - `HeadEnd`'s reads of the partial block, when that block is the chain's only one (2 a token with T ≤ 64).
+- Later full blocks read the block before them in the shared template at a constant step, so they merge into 3 wires a
+  token, whatever their number (T > 128).
+- A split chain (NS ≥ 2) has 8 `SplitEndCols` a split and 8 `Combine`: 64 wires a layer, every one of them.
+
+**The count, a layer** [ran at 43, 86, 127 and 150 ids at 4 and 8 layers, `r20261113-053624-689e` and
+`r20261113-055752-193f`; formula inferred, then checked against them]:
+
+  SparseMlaSplit wires ≈ L · (2·min(LP, 64) + 3·u₆₄ + 3·u₁₂₈ + 64·s + 16 + d) + 130
+
+- u₆₄ and u₁₂₈: the unsplit prefill tokens with T > 64 and with T > 128;
+- s: the split prefill chains (0 outside the mixed bands; 22 at 86 ids);
+- d: the decode step's own chain, which splits once T > 64 (16 to 64 a layer);
+- 16: the partial blocks' `q_nope`, `q_rope` and `kv` reads, a layer;
+- 130: the per-T templates' wires, which merge across layers (about 2 for each value of T mod 64).
+
+| ids | measured a layer | formula a layer | parts |
+|---|---|---|---|
+| 43 | 97 | 86 + 11 = 97 | `HeadEnd` 86, first blocks 11 |
+| 86 | 1,616.5 | 128 + 64·23 + 16.5 = 1,616.5 | 22 split prefill chains and the decode's |
+| 127 | 354.5 | 130 + 3·63 + 19 + 16 = 354 | |
+| 150 | 544.5 | 132 + 3·86 + 3·22 + 16 + 64 = 536 | measured `FIRST=false` 332, against 324 |
+SMS_MORE
+
+**At 78 layers** [computed from the formula, past 256 ids extrapolated]:
+- unsplit: about 78 · 6 · LP. That is 70,000 at 150 ids, 120,000 at 256, and 480,000 at 1,024 (T is capped at the
+  index's top-k, 2,048);
+- at 86 ids (mixed): 78 × 1,616.5 + 130 ≈ 126,000.
+
+**A form ours alone: none.** What costs a wire a token is the per-T template, `NVIS` being a static of the Definition,
+together with one node a token in the Program. No unit order in `sparse_mla_split` makes two templates one writer. What
+would cut it [inferred, not built]:
+- a `HeadBlock` Definition taking NVIS as a value rather than a static, so all partial blocks share one template and their
+  readers merge across tokens of equal block count. That is a new Definition (`verity/definitions`, circuit-check), not
+  our file.
+- Visiting the blocks in another order would merge them but change FA3's online-softmax rounding, so it isn't served
+  exactly. It is not a form.
+
+## Runs
+
+| run | what | tree |
+|---|---|---|
+| `r20261113-052947-d805` | `p3_cycle.py analyze 150 2`: the stuck ranges and the loop | unpatched |
+| `r20261113-052948-b2a8` | `p3_cycle.py bisect`: 129 at 2 outputs; at 3 it assumed monotone and is superseded by the sweep | unpatched |
+| `r20261113-053624-689e` | `test_node_window_sparse.py`; `p3_fixcheck.py` at 2 outputs for 43-256, at 3 for 43, 127, 128 and 150 | patched |
+| `r20261113-053624-c962` | `p3_fixcheck.py` at 2 outputs for 43-129, at 3 for 127 and 128 | unpatched |
+| `r20261113-053624-1cb7` | `p3_values.py` at 4 layers, 150 and 43 ids | patched |
+| `r20261113-054823-8279` | `p3_cycle.py analyze 126 3` | unpatched |
+| `r20261113-054824-e596`, `r20261113-054824-5b84` | the sweep 87-150 at 2 and 3 outputs | unpatched |
+| `r20261113-054823-6dc1`, `r20261113-054824-a177` | the sweep 87-150 at 2 and 3 outputs | patched |
+| `r20261113-055056-8688` | `p3_parts.py`: the description's fields before and after | both |
+| `r20261113-055329-012c` | `p3_gcopy.py structure`: the `g` copies, refused | unpatched |
+| `r20261113-055538-ef0a` | `p3_splits.py`: the mixed lengths up to 4,096 | unpatched |
+| `r20261113-055752-193f` | `p3_fixcheck.py` at 8 layers, 2 outputs, 43-256 | patched |
+| `r20261113-060202-5a6b` | `p3_bgform.py`: BatchedGemm a run of like members at a time | patched |
+| `r20261113-060524-d1f6` | `p3_values.py` with `p3_bgform.py`'s lowerings, 4 layers, 86 ids | patched |
+
+## Not done
+
+- No fix is on any branch. `fix-chain-ranges.diff` is a diff in this directory, and nothing goes on the joint branch
+  without the lead's word. No test for it is written.
+- The two-digit `Piece` is not built and its branch not made (it needs REQBLOCK's files).
+- The BatchedGemm form is a monkeypatched prototype, not a change to `node_window_sparse.py`.
+- No length past 256, no batch of more than one request, and no output count past 3 was built; nothing at 78 layers was
+  built. The 78-layer figures are computed from 4- and 8-layer counts.
+- No form for SparseMlaSplit's growth was tried (none is ours alone).
