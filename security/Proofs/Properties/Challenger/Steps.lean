@@ -7,22 +7,22 @@ import all Init.Data.Ord.String
 /-!
 # The reader accepts where each of its steps does
 
-`Session.drawCoins_ok`, `Session.sessionNamed_ok` and their like read an acceptance back into what each step of the
+`ChallengePhase.drawCoins_ok`, `ChallengePhase.challengePhaseNamed_ok` and their like read an acceptance back into what each step of the
 reader returned. These are the converses, the steps a proof that the reader accepts a session assembles:
 
-* `drawCoins` reads the stream where the evidence has its five keys, `trustedSessionOf` returns a commitment and its
+* `drawCoins` reads the stream where the evidence has its five keys, `trustedChallengePhaseOf` returns a commitment and its
   roots, the ledger opens the window withheld, the segment is of the family and `challengerStream` reads it
   (`drawCoins_ok_of_steps`), and `coinsReason` gives no reason where the copy of main's history is the caller's and
   the bytes read are the start of that stream (`coinsReason_none_of_steps`);
-* `trustedSessionOf` returns what `sessionNamed` returns of the session `pinnedChallengePhase` returns
-  (`trustedSessionOf_ok_of_steps`), and `pinnedChallengePhase` the session `auditedOpen` returns where the pins log and the
+* `trustedChallengePhaseOf` returns what `challengePhaseNamed` returns of the session `pinnedChallengePhase` returns
+  (`trustedChallengePhaseOf_ok_of_steps`), and `pinnedChallengePhase` the session `auditedOpen` returns where the pins log and the
   copy of main's history give no reason (`pinnedChallengePhase_ok_of_steps`, `pinsReason_none_of` for a pins log of one line,
   `firstParentReason_none_of`);
 * `auditedOpen` returns the session of the window the checked ledger opens under v2 and ends closed, in no period
   (`auditedOpen_ok_of_steps`);
-* `sessionNamed` returns what `sessionOf` returns where the session's files are the ones the ledger's end names
-  (`sessionNamed_ok_of_steps`), and `sessionOf` the record's commitment, the log's roots and the close's session where
-  the record and the close are signed and the log is the one the close signs (`sessionOf_ok_of_steps`).
+* `challengePhaseNamed` returns what `challengePhaseOf` returns where the session's files are the ones the ledger's end names
+  (`challengePhaseNamed_ok_of_steps`), and `challengePhaseOf` the record's commitment, the log's roots and the close's session where
+  the record and the close are signed and the log is the one the close signs (`challengePhaseOf_ok_of_steps`).
 
 Under them, for the smallest session a challenger closes, one window whose one family holds one coin:
 
@@ -93,10 +93,10 @@ theorem releasedRootsOf_one {c : LiveCommitment} {a b label root : String} {r s 
   simp [hf, hta, htb, hr, hs, hkr, hks, her, hes, htr, hts, hl, hroot, hb, hir, his, hsl, hsa, hlen, pairs,
     Except.toOption, pure, Except.pure, bind, Except.bind, -Array.any_eq_true, -Array.any_eq_false]
 
-/-- `sessionOf` returns the record's commitment, the roots its release log shows and the close's session: the record is
+/-- `challengePhaseOf` returns the record's commitment, the roots its release log shows and the close's session: the record is
 signed under the key, the close's signature decodes and verifies over the close's message, the log has the lines the
 close counts and chains to its chain, and the session's client closed it. -/
-theorem sessionOf_ok_of_steps {key : ChallengerKey} {record close : Json} {lines : List String}
+theorem challengePhaseOf_ok_of_steps {key : ChallengerKey} {record close : Json} {lines : List String}
     {r : ChallengerRecord} {c : ChallengerClose} {m : ByteArray} {sig : Lms.Signature} {roots : Roots}
     (hrr : recordReason key record = .ok none) (hr : ChallengerRecord.ofJson record = .ok r)
     (hn : close.isNull = false) (hc : ChallengerClose.ofJson close = .ok c)
@@ -105,21 +105,21 @@ theorem sessionOf_ok_of_steps {key : ChallengerKey} {record close : Json} {lines
     (hv : Lms.verify key.params key.pub m sig = .ok true)
     (hl : lines.length = c.lines) (hch : logChain lines = c.chain) (he : c.ended = none)
     (hroots : releasedRootsOf r.commitment lines = .ok roots) :
-    sessionOf key record (.arr (lines.map Json.str).toArray) close = .ok (r.commitment, roots, c.session) := by
+    challengePhaseOf key record (.arr (lines.map Json.str).toArray) close = .ok (r.commitment, roots, c.session) := by
   rw [he] at hm
-  unfold sessionOf
+  unfold challengePhaseOf
   simp only [hrr, hr, hn, hc, hm, hd, hv, he, bind, Except.bind, pure, Except.pure, Except.toOption,
     beq_self_eq_true, Bool.false_eq_true, ite_false, ite_true]
   rw [mapM_strs (fun _ => rfl)]
   simp only [hl, hch, hroots, beq_self_eq_true, ite_true]
 
-/-- `sessionNamed` returns what `sessionOf` returns of the session's files: the close names the ledger's session, the
+/-- `challengePhaseNamed` returns what `challengePhaseOf` returns of the session's files: the close names the ledger's session, the
 record its host, the record is signed at the leaf the ledger's end names over the commitment it names, and the release
 log and the refused hellos are the ones the end sealed. -/
-theorem sessionNamed_ok_of_steps {a : Audited} {key : ChallengerKey} {session : Json} {c : LiveCommitment}
+theorem challengePhaseNamed_ok_of_steps {a : Audited} {key : ChallengerKey} {session : Json} {c : LiveCommitment}
     {roots : Roots} {r : ChallengerRecord} {lines hellos : List String}
     (hk : keys? session = some #["close", "hellos", "log", "record"])
-    (hs : sessionOf key (getD session "record") (getD session "log") (getD session "close") =
+    (hs : challengePhaseOf key (getD session "record") (getD session "log") (getD session "close") =
       .ok (c, roots, a.session))
     (hr : ChallengerRecord.ofJson (getD session "record") = .ok r) (hh : r.host = a.host)
     (hq : leafOf r.signature = a.recordLeaf) (hroot : Flock.hexOf c.root = a.commitment)
@@ -127,8 +127,8 @@ theorem sessionNamed_ok_of_steps {a : Audited} {key : ChallengerKey} {session : 
     (hld : jsonStrIs (getD a.files LOG_FILE) (logDigest lines) = true)
     (hhel : getD session "hellos" = .arr (hellos.map Json.str).toArray)
     (hhd : jsonStrIs (getD a.files HELLOS_FILE) (logDigest hellos) = true)
-    (hhn : hellos.length = a.refusedHellos) : sessionNamed a key session = .ok (c, roots) := by
-  unfold sessionNamed
+    (hhn : hellos.length = a.refusedHellos) : challengePhaseNamed a key session = .ok (c, roots) := by
+  unfold challengePhaseNamed
   simp only [hk, hs, hr, hh, hq, hroot, bind, Except.bind, pure, Except.pure, beq_self_eq_true, Bool.and_self,
     ite_true]
   simp only [hlog, hhel]
@@ -270,11 +270,11 @@ theorem pinnedChallengePhase_ok_of_steps {ledger window : Json} {key : Challenge
   simp only [ha, hp, hf, bind, Except.bind]
   rfl
 
-/-- `trustedSessionOf` returns what `sessionNamed` returns of the session `pinnedChallengePhase` returns. -/
-theorem trustedSessionOf_ok_of_steps {ledger window : Json} {key : ChallengerKey} {pins main session : Json}
+/-- `trustedChallengePhaseOf` returns what `challengePhaseNamed` returns of the session `pinnedChallengePhase` returns. -/
+theorem trustedChallengePhaseOf_ok_of_steps {ledger window : Json} {key : ChallengerKey} {pins main session : Json}
     {a : Audited} {r : LiveCommitment × Roots} (hp : pinnedChallengePhase ledger window key pins main = .ok a)
-    (hs : sessionNamed a key session = .ok r) : trustedSessionOf ledger window key pins main session = .ok r := by
-  unfold trustedSessionOf
+    (hs : challengePhaseNamed a key session = .ok r) : trustedChallengePhaseOf ledger window key pins main session = .ok r := by
+  unfold trustedChallengePhaseOf
   simp only [hp, hs, bind, Except.bind]
 
 /-! ## The sample -/
@@ -293,12 +293,12 @@ theorem challengerStream_one {c : LiveCommitment} {segment doc : Json} {after : 
     -Array.any_eq_false]
 
 /-- **`drawCoins` reads the stream where each of its steps accepts**: the evidence has its five keys,
-`trustedSessionOf` returns the session's commitment and roots, the ledger opens the window withheld, the segment is of
+`trustedChallengePhaseOf` returns the session's commitment and roots, the ledger opens the window withheld, the segment is of
 the family, and `challengerStream` reads the segment under that commitment and the family's roots. -/
 theorem drawCoins_ok_of_steps {key : ChallengerKey} {window label : String} {after ξ : ByteArray} {coins : Json}
     {c : LiveCommitment} {roots : Roots}
     (hk : keys? coins = some #["ledger", "main", "pins", "segment", "session"])
-    (ht : trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key (getD coins "pins")
+    (ht : trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key (getD coins "pins")
       (getD coins "main") (getD coins "session") = .ok (c, roots))
     (hw : withheldOn (getD coins "ledger") window = true)
     (hl : jsonStrIs (getD (getD coins "segment") "label") label = true)
