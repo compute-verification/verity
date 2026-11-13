@@ -111046,3 +111046,38 @@ STOP RULE: nothing I wrote changes a listed guarantee or what the verifier accep
 To post: nothing.
 
 Not established: that any of the three files elaborates (the try is running); that `memberRaw`'s bytes for the partition and registered reads (`RecordText.printT`) read back as the member's `Json`; that `heldOk` holds at an honest run; the summary lemma for `scopeOk`; my sizing of the piece (next entry).
+
+## WINDOWAT, Fri 13 Nov 00:49Z: the bridge lemma from `Member.FilesHeld` to `FilesPass` compiles (14 theorems, three axioms), so the files check gives each member's `RootsFix`; the undrawn refusal's two verifier files compile and its run goes on; D's second half is written and waits in line on cpu-11
+
+Mailbox read at `23c3e423bef4` (the 00:23Z message is in it now). Heads: soundness `3e26cac7596a`, the lever `7d4e96a5fa07`, #9441 `ce41e7c92e8e`, all as at 00:12Z, nothing to merge [read: `git rev-parse`]. My branch `cursor/proofs-windowat-5e4b` is at `28a530157d`.
+
+**(3) The bridge lemma is done.** `MemberForm/Passes.lean` at `6a818c200b6c`: `lean exit 0 in 111 s`, "none of its 14 theorems uses an axiom beyond propext, Classical.choice and Quot.sound" [run r20261113-002059-abf6, vy-nebius-cpu-12]. What it states [read: the file at that commit]:
+
+- `filesPass_of_held`: a member's `FilesPass` from the run's `vm.FilesHeld (vm.slice rec roots) (Blobs.ofArray s.blobs)`, where `s.blobs = F ++ B`, `TablesSent s`, `MemberOn F vm m`, and the member's circuit and public digests are files of `F`.
+- `WindowOn.passes`: every member of the window passes, from `HoldsFiles ms F` and each member's `FilesHeld`.
+- `FilesPass.rootsFix`, `FilesPass.checked_all`, `MembersSetUp.rootsFix`: a member whose files pass has `RootsFix` and `(m.toV5 t).Checked` at every `t`. This is what I gave soundness at 00:12Z as derived; it is compiled now. So `MembersSetUp` already gives `W.RootsFix`, and the window need not take it apart from the set-up.
+
+**(2) The undrawn-member refusal: no ready line yet.** Run r20261112-231926-e80f (vy-nebius-2, tree of `fd0515e77f62`) is at its third file: `Spot/OneStageZk.lean` `lean exit 0 in 825 s`, 18 theorems on the three axioms; `Spot/MembersParse.lean` `lean exit 0 in 507 s`, no theorems [run e80f]. `Spot/MembersRefusal.lean` and the `per_member_form` tests have not reported. The run's own limit ends at 01:57Z [read: its stderr.log, "the run's timeout is now 9455.12 s from its start", which was 23:19Z].
+
+**Machines, as you asked.** r20261113-002059-abf6 went to vy-nebius-cpu-12 at 00:20Z, before the 00:23Z message, and started within two minutes [run]. r20261113-002532-1804 on vy-nebius-2 waited 20 minutes (00:25Z to 00:46Z) with nine checks ahead and never started; I cancelled it and sent the same files plus one as r20261113-004621-39bb to vy-nebius-cpu-11 at 00:46Z [run]. At 00:47Z cpu-11 was not free either: three slots held, the other five "free; blocked: -150 GB of memory free (568 GB more is reserved by live runs that haven't reached it)", and three tries ahead of mine waiting 14, 7 and 2 minutes [read: 39bb's stderr.log]. So today a 12 GB try waits on cpu-11's memory reservations, not on its slots.
+
+**D's second half is written; nothing of it is compiled.** In r20261113-004621-39bb [run, waiting]:
+
+- `MemberForm/Place.lean` (`0a2ba3ca00`, 6 theorems): `members_place` (the `j`-th tree the read opens is the `j`-th session's) and `members_count` (the read opens as many trees as sessions).
+- `MemberForm/Sessions.lean` (`28a530157d`, 18 theorems): `sessionOpens_read`, `sessionRead_read` (`SessionOpens` and `SessionRead` at the `j`-th session, on the read), `sessionOpens_of_read`, `sessionRead_of_read` (from the read to a device's log the read reads), and `sessionRead_logged`, which is what `WindowSessions.session` asks for one member:
+
+  `SessionRead Lg #[tb] j text x.2.2.1 sess w`, from `coinTreesOf lines = .ok trees`, `readLog label after recs ξ lines = some lr`, `membersTreeReason trees lines records = none`, `recs = records.toList.map (·.2.2.1)`, `LinkFirst lr`, `List.Forall₂ Binding.Read.Of (lr.map Binding.Read.ofV2) Lg`, `records[j]? = some x`, `x.2.1 = #[(tb, n?)]`, `Flock.JsonParse.parse text = .ok x.2.2.1`, `Flock.Record.decode spec text = .ok sess`, `spec.coinTree = some (Flock.Zk.coinSpec #[tb])`, `spec.tables = #[tb]`, `spec.sha512Digests = true` and `x.2.2.2 = sha512Hex ⟨w.toArray⟩`.
+
+D's count so far, replacing my guess: `Tree.lean` 12 theorems (compiled), `Opened.lean` 11 (compiled), `Place.lean` 6 and `Sessions.lean` 18 (written): 47 theorems, 1,248 lines [read: `wc -l`, the theorem lines]. Friday 18:00Z's entry gives the whole.
+
+**`LinkFirst` is a premise of D, as Finding L said.** `sessionRead_logged` takes
+
+`def LinkFirst (log) : Prop := ∀ L₁ x L₂ i s n, log = L₁ ++ x :: L₂ → x.frame = .opening i s n → i ∉ openedTrees L₁ → ((helloSpecs L₁)[i]?.bind fun sp => sp.streams[s]?) = some TREE_SESSION`
+
+because `membersTreeReason` runs `membersOrder` only (`verity/protocols/spot/verifier/lean/Spot/ChallengerTrees.lean:419-460`), which orders the trees' lines by session and does not make a tree's first opening its `session` stream's; the one-statement form gets it from `sampleLinkFirst` (`security/Proofs/Properties/Verity/Sampled/LinkFirst.lean:114-178`) [read]. A28 as a statement about the form's accept cannot close while this stands as a premise: either the form's check refuses a tree whose first opening is not of `session` (a change to `checkMembersAt` or `membersTreeReason`, so not mine to make), or the window's theorem takes it. Still unruled.
+
+**Work that needs no run's answer:** E's statements (`sentEvidence`, the member form's analogue of `verdict_read` that supplies `sessionRead_logged`'s premises, `windowReads_members`). I go on with those.
+
+**Not established.** That `Place.lean` and `Sessions.lean` elaborate: neither has been through Lean, and `Sessions.lean`'s proofs were written against lemma statements I read, with only four small lemmas checked on the VM in a core-only model. That the undrawn refusal's third file and its tests pass. Who writes the link-first refusal. Whether `WindowSessions.members` is restated on the read (Finding A). I did not read whether cpu-11's memory reservations are other lanes' or ours.
+
+**To post:** nothing new.
