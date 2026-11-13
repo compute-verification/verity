@@ -160840,3 +160840,58 @@ To your 20:42Z items 2 and 3, your 20:19Z item 1 and your 21:02Z rule. Not the r
 - That either carry is clean: no `restack.py` run of mine has been made on #9458 or #9624.
 - Whether #9458's `second_stage.complete` still reads right once the hold turns the form on: not read.
 - B's suites at `12ee02ed7e12`: `3439` and `f175` have not ended.
+
+## STAGECOINS, Fri 13 Nov 21:13Z: PRF-549 fix 1, by read: not provable from the tree with no hypothesis; provable from `hash-derived-key` once one new lemma caps the deployed session's leaf count
+
+**Your 21:03Z identity rule (INF-798): read.** Item 4 showed nothing to hold back: neither of my checkouts has an unpushed commit, and the four commits of #9815 carry `Cursor Agent <cursoragent@cursor.com>` as author and committer, which is this checkout's `git config`. No `GIT_AUTHOR_*` or `GIT_COMMITTER_*` name is set in my environment [run 21:04Z].
+
+#9815 is as my 20:58Z entry left it: ready to mark at `9e97e224f56b9117b382c0eef0a586256481f707`, unmarked.
+
+**The answer** [read; I compiled nothing]
+
+The statement you wrote,
+
+`∃ vs, ∃ _ : (CoinLayer.session Loop.loopNr Masked.dataE).UnCausal vs, ¬ Loop.ZkAnyAt Masked.dataE vs (Loop.leakL L₀) real wk (fun _ _ => True) 2`,
+
+is not provable with no hypothesis from what the tree has. It is provable with one hypothesis, the named assumption `FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96` (hm96 hides at `2^-193` at the pinned key), once one new lemma caps the deployed session's leaf count. A witness that takes that assumption needs one line of the lock written by hand, which is yours to rule on (item 3 under "What is missing").
+
+**Why it needs the hypothesis**
+
+- The lemma on main works because a session without tables has no leaf, so the error `Loop.anyErr` loses its hiding term and is `2·3^-2` at each witness.
+- At `Masked.dataE` the hiding term stays. The leak the lemma uses needs a statement the setup parses with a reference round (`setupOf true x = some …`, `0 < refK x`). The only statement the tree proves that of, as far as I found, is `FlockDeploy.concreteStmt`. It is `Live` with one table (`concreteStmt_live`, `concreteStmt_jOf`), and a table has at least two leaves (`ZkView.LeafPos` ends in `⊕ Fin 2`).
+- So at `t = 2` the error at each witness is `24·n·δ + 2/9`, with `n` the deployed session's leaf count at the concrete statement and `δ = CROnly.hidingGap ZkView.My ZkView.saltHash`. `Loop.not_zkOut_leakL` needs the two errors to sum below 1, which is `n·δ < 5/432`. (At `t = 1` the sum is at least `4/3`, so `t = 2` stays.)
+- The tree bounds `δ` only on average over uniform keys (`sum_hidingGap_le`, `hm96_sha512_tail`). At the pinned key the bound is the assumption: `Hm96Sha512.lean`'s header says "That the pinned key is not among them is `hash-derived-key`". `hm96Hiding_gap` gives `Hm96Hiding` at `hidingGap` itself, which bounds nothing.
+
+**What exists, usable as it is**
+
+- `Loop.finS_unCausal : finS.UnCausal finS.honestVals` (`SessionLoop/Honest.lean`), where `finS` abbreviates `CoinLayer.session Loop.loopNr Masked.dataE`. This is the `UnCausal` instance at the deployed session, and the honest lemma already uses it.
+- `Loop.not_zkOut_leakL` (`SessionLoop/Leak.lean`) is stated for every table data `T`, so it applies at `Masked.dataE`. It leaves the one inequality above.
+- `Loop.fork_unP_helloRej` is stated for every session and every values, so the collision finder's term is 0 at the deployed session too.
+- `FlockDeploy.concreteStmt_setupOf` and `refK_pos`. `Loop.constRel` is generic in the tape. The two witnesses `⟨[]⟩` and `⟨[true]⟩` and the relation of every pair carry over.
+- `CROnly.hidingGap_le_of_hiding` (`SessionLoop/AnyErrBound.lean`): from `Hm96Hiding My c δ₁` with `δ₁ ≠ ⊤`, `hidingGap My c ≤ δ₁.toReal`. With `HashDerivedKeyHm96` it gives `δ ≤ 2^-193`.
+- For the cap: `Masked.tableData` has `J := jOf` and `C := tabC P`. `coinedOf`'s sizes are `withMask (szOf Tz st) …`, so a table's leaf count is `(tPad + (2^logLen − tPad)) + 2·(Q + (padN − Q)) + 2`. `padNOf (zkTab x j).table (stAt x j) = innerN (layOf …)` holds by `rfl` (three files use it inline), `ZkTab.hN` puts `innerN` below `2^64`, and `schedule_range` puts `m` in `[25, 35]`.
+
+**What is missing**
+
+1. **A cap on the leaf count.** No lemma computes or bounds `(CoinLayer.session Loop.loopNr Masked.dataE).nLeaves x`; `Loop.anyErr_le` takes `nLeaves x ≤ L` as a hypothesis. Needed: `nLeaves x ≤ jOf x · B` with `B` below `2^186`. [guess] `B` near `2^66` comes out, from `ZkTab.hN` and a bound on the level-0 code length and `t_pad` that `Zk.schedule m` gives at the eleven `m` in `[25, 35]`, proved by `interval_cases m <;> decide +kernel` as `scheduleOkB_all` is.
+2. **The lemma at the deployed session.** `noReal` and `noWk` restated at `Loop.Tp`, `vs := finS.honestVals`, the hypothesis `hKey`, and the arithmetic.
+3. **One line of the lock, by hand.** `check.py`'s `assumes` lets a nontrivial witness take a closed hypothesis only if it is a `Prop` constant listed under `assumptions` or `open`, or its head is in `witnesses_assumed`. `HashDerivedKeyHm96` is in none of the three: the lock names it only under `trust.extra`, for `SessionLoopZKDeployed` and `RecursiveZKLoopAnySumDeployed`. What it unfolds to, `Claims.Hm96Hiding`, is under `open` (LEAN-186). So `witnesses_assumed` would gain an entry with its sentence, as `Claims.ExpectedCR` has one ("a computational assumption about SHA-512 that no theorem concludes, so a witness takes it as it stands"). It widens what a witness may assume, so it is your ruling. Which of the two names the entry carries is what `Facts.lean` reports as the binder's head; I did not settle that by reading, and the branch's first records run says.
+
+Two precedents on main. `recursiveKSDeployed_nontrivial (h : RecDeploy.KSFixture)` is a nontrivial witness that takes a named premise (one listed under `open`). `RecursiveZKLoopAnySum_nontrivial` avoids the hiding term instead: it picks an instance with no leaf, `0 · hidingGap`.
+
+**The other way, which I would not take**
+
+With no hypothesis, the lemma needs a statement the setup parses at which the deployed session has no table: parsed, yet outside `Masked.Live`. The tree has none. Building one is a second `concreteStmt` with its parse and setup, far larger than the above. It would also show the conclusion failing only where the deployed session has no table, which is close to what the lemma on main shows.
+
+**Size** [guess]
+
+- Lean: two modules, 150 to 250 lines. The cap is a new module with most of the lines and all of the risk: unfolding `nLeaves` through `tabC`, `coinedOf`, `withMask` and `szOf` to arithmetic, and the eleven-case kernel computation. The lemma is about 50 lines in `ZkAnyNontrivial.lean`, where `noTables`, `NT`, `noVals` and `nLeaves_noTables` go and `constRel`, `pLog_unP_helloRej` and `fork_unP_helloRej` stay.
+- Lock: `witnesses[…].nontrivial` returns, the `unwitnessed` entry leaves, the cap returns to 221, `witnesses_assumed` gains its entry, and `reads` records return for what the new statement reads.
+- Checks: one records run and the Lean check of `security/Proofs`. No guarantee's statement changes.
+
+**Not checked**
+
+- Whether `check.py` reads `∃ _ : UnCausal vs` as the binding LEAN-273 asks for. The form is yours, so I took it as given.
+- The exact cap `B`, and the level-0 code length at each `m`.
+
+**Next for me:** nothing is owed but your word. I do not start fix 1 unless you say so. I keep a timer and read the mailbox at each firing.
