@@ -160292,3 +160292,62 @@ The split of `Spot/OneStageZk.lean`, now, on a branch of my own cut from `097b85
 
 - The quick tier's verdict for #9820 and #9821.
 - The full list of suites the twin's change reaches (the run prints it).
+
+## CARRIER, Fri 13 Nov 20:55Z: the stacks as I found them, my order, and the first ready line: #9496, between 23:15Z and 23:55Z, so 23:30Z is at risk; nothing is carried or pushed yet
+
+CARRIER (bc-770979f8-f27e-5abe-b9a5-a86b237c9257), to the coordinator. Clock: `date -u` read 20:53Z. Mailbox: `inbox/bc-770979f8-f27e-5abe-b9a5-a86b237c9257.md` does not exist on `cursor/proofs-inbox` at `45d60fb69092` [run]. `origin/main` is `f479876a87581c572c7b7b74ba2f23aa95785851` [run: `git ls-remote origin main`, 20:53Z]; `AGENTS.md` and `tools/move/restack.py`'s docstring are read at that commit.
+
+Each claim says where it comes from: [run] a command on my VM (git only) or a node's run, [read] the file, [derived] my reasoning, [guess].
+
+**1. The heads.** Each pull request's head is the one your list names [run: `gh pr view N --json headRefOid,headRefName`, all fourteen, 20:47Z].
+
+**2. The stacks, by `git merge-base --is-ancestor` over all fourteen heads** [run]. Two stacks, and no other containment.
+
+- #9537 (`44b84839`) is contained in #9595 (`41a71836`). So #9595 holds all of #9537's commits.
+- #9149 (`4a31b967`) is contained in #9332 (`5a6be198`), which is contained in #9346 (`949c03c3`), which is contained in #9513 (`0f850991`). So #9513 holds all the commits of the three under it.
+- By your step 1 I therefore carry the top of each stack only: **#9595** (then #9537 lands through it) and **#9513** (then #9149, #9332 and #9346 land through it). I do not carry #9537, #9149, #9332 or #9346 on their own. If you want the lowest carried instead, or as well, say so in my mailbox: a carry of one more branch is one more process in a job, about an hour.
+
+**3. What each lacks, and where its conflicts come from** [run: `git log HEAD..origin/main` searched for a `Move:` or `Layout-move:` line; `git merge-tree --write-tree` against `origin/main`, against `053b8e50fe8a` (`main` before chain 2) and against `92b5727aca40` (the base of chain 2's first move)].
+
+| Pull request | Head | Moves on `main` it lacks | Plain merge with `main` today | Plain merge with the tree before chain 2 |
+|---|---|---|---|---|
+| #9549 | `e0c95da4` | 29 | conflict: `spot/verifier/service.py` | no conflict |
+| #9584 | `ae80f367` | 28 | conflict: `compose/verifier/lean/tests/reference.py` | no conflict |
+| #9253 | `23ff2314` | 28 | conflicts: `flock/prover/agreement/README.md`, `Flock/CircuitRead.lean` | no conflict |
+| #9595 (holds #9537) | `41a71836` | 28 | conflicts: `Spot/Period.lean`, `Spot/PeriodAudit.lean`, `tests/test_period_audit_difftest.py`, `tests/test_period_difftest.py` (the first and last are #9537's two) | no conflict |
+| #9209 | `4c8742d0` | 30 | no conflict | no conflict |
+| #9496 | `92579572` | 29 | no conflict | no conflict |
+| #9513 (holds #9149, #9332, #9346) | `0f850991` | 29 | no conflict | no conflict |
+| #9373 | `54d0d016` | 28 | conflicts: the four files you named | no conflict |
+| #9576 | `338c4ad8` | 28 | conflict: `Spot/OneStageZk.lean` | no conflict |
+| #9593 | `9eec48aa` | 28 | conflicts: ten files | **conflicts: the same ten files** |
+
+- [derived] For every pull request but #9593 the conflicts are with what landed on `main` after the moves, not with the tree before them. So the tool will cross every move for them and stop, if it stops, at its last merge, in the new layout: by its docstring that is real content, and it is what your step 3 has me settle or stop on.
+- [derived] #9593's ten conflicts are with `main` as it stood before chain 2, so the tool stops for it at the first move's base, before any move. That one is only a report, as you said.
+- [run] My VM's clone may lack the repository's merge drivers (the hook refuses the command that lists them, rightly), so a lock or an import list may have merged here as text. The node's job registers them before any merge, and its result is the one that counts.
+
+**4. The tool and FRAME's job.**
+
+- [read] FRAME's job script is `mkpass.py`, in the lane's note `20261113T1510Z-report-frame-pass-jobs.md`. I use it: the git identity, the scratch under `/workspace/research/scratch` removed by a trap, each move's check first, at most three branches abreast on a node, `restack.py pass/NAME --main pass/main --dry-run --kept --json`, and a bundle of the carried commits under the run's `out/`.
+- [derived] Two changes of mine to it, and one to your step 6. (a) Where the tool stops at its last merge, the job also puts the branch as it stands after the last move's script (the commit the tool names in its `steps`) into the bundle, so that I can make that last merge on my VM with the move as the merge base, as the tool does, and settle it without a second hour's carry. (b) A named node and `--pool research`, as you order. (c) The carry jobs run with `--cwd clone`, as FRAME's did, not `--cwd source`: the job makes branches and commits in the repository it runs in, and a node's source tree is shared by every run of the same commit. The suites and Lean runs of step 5 use `--cwd source` as you wrote.
+- [run] **FRAME's kept checks count for nothing now.** A kept check's key includes the SHA-256 of `restack.py` itself [read: `generated_key`], and `restack.py` changed on `main` after FRAME's pass (`82ffd46c67b`, "a based-after refusal gives the carry against the move's own commit"; `git diff --stat 4ae17f7eafd7 origin/main -- tools/move/restack.py`: 51 insertions, 11 deletions). So each node I use pays for the checks once, about 12 minutes by FRAME's figure [relayed: FRAME 15:12Z], unless WIDELEAF's or TWOLEG's carry of this evening left them on that node.
+
+**5. My order: three jobs, launched now, one node each, three abreast** [derived].
+
+1. Job 1: #9549, #9584, #9253 (the three smallest with a conflict).
+2. Job 2: #9496, #9209 and #9595 (the two with no conflict, and the first stack's top).
+3. Job 3: #9513 (the second stack's top) and #9373.
+4. #9576 and #9593 are not carried: for #9576 I read WINDOWAT's line over `Spot/OneStageZk.lean` and tell you whether it is still wanted as itself; for #9593 I list the ten conflicts side by side and settle none. Both as entries, after the three jobs are out.
+
+The nodes are named in my next entry, from the launch lines. Never `--on auto`, never vy-nebius-cpu-6.
+
+**6. The first ready line** [guess, from FRAME's and WIDELEAF's times]. #9496 is the likeliest first: one file, no conflict, and it is in Spot's verifier's package, whose lock lists no guarantee, so its Lean check is a build and not a records run. A carry is about 12 minutes of checks and 40 of crossing, so job 2 ends about 22:10Z; the quick suites and the build at the carried head then take 30 to 60 minutes after the push to my branch. That gives **23:15Z to 23:55Z**. So 23:30Z is at risk, by the hour the carry itself takes, and I say so now. If #9496 crosses with a move skipped or stops, the first line is later and I write at once.
+
+**Not established.**
+
+- Anything of any carry: none has run.
+- Whether the three nodes take the jobs at once.
+- Whether #9595 and #9513, the tops, are the heads you want landed in place of the pull requests under them; I act on your step 1 as written.
+- The words check of your step 4: the queue's refusal text for each pull request is not read yet (`research queue status` had printed nothing after a minute on my VM; I read it again before the first push).
+
+**Pushed.** Nothing but this entry. **Runs.** None yet.
