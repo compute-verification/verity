@@ -38,9 +38,12 @@ store, with no GPU and no node.
   the row names, such as the Lean verifier's seconds that no row times), as the row's
   `split.sources` records it, else by its `split.basis`, and the share at the planner's assumed default
   (`DEFAULT_BASIS`). A row whose plan records neither is printed as "not recorded".
-* **Row `ASSUMED_ROW`** prices its proving at the planner's assumed prices. Beside another row it is read at the
-  world's year and printed only under `ASSUMED_LABEL`, never as the figure, and the document holds it as its own field
-  (`at_assumed_prices`); as the row read, its figure carries the label.
+* **Row `ASSUMED_ROW`** prices its proving at the planner's prices but where a table's rows price its blocks. Beside
+  another row it is read at the world's year and printed only under its label, never as the figure, and the document
+  holds it as its own field (`at_assumed_prices`); as the row read, its figure carries the label. Its label is what its
+  rows say of their pricing (`_row_label`): their note, which the planner's driver writes where no table's row priced
+  their proving or they priced under half of it; else the share of it the table's rows price; and `ASSUMED_LABEL`
+  where they record none.
 * **A row's note**, which the planner's driver writes on a row from the row's own data (that no table's row priced
   its proving, or what its scale reaches over the unscaled row of its case), is printed beside the figure where the
   figure carries no label, from the row at the pinned budget nearest the one it is read at.
@@ -158,7 +161,7 @@ NETWORK_CHECK_SHARE = 0.003
 #: modeled lever at its measured value, and the step of that row that prices the verifier as measured (a prefix of the
 #: step's name)
 WORLD, ROW, STEP = "ours", "(ii) honest", "+ the verifier as measured"
-#: the row the planner prices at its assumed prices, and what every figure of it is printed under
+#: the row the planner prices mostly at its own prices, and the label of its figures where its rows record no table's row
 ASSUMED_ROW = "(i) honest"
 ASSUMED_LABEL = "at the planner's assumed prices"
 #: the most ids a response holds in the network certifier's class the figure is read at: its class that holds the
@@ -838,10 +841,22 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
     return out
 
 
+def _row_label(point: Mapping) -> str:
+    """What row `ASSUMED_ROW`'s figure is printed under, from its rows read at a share (`at_share`): their note, else
+    the share of its proving the table's rows price (own and family rows, `_sources`), else `ASSUMED_LABEL`."""
+
+    if point.get("note"):
+        return point["note"]
+    by = ((point.get("priced") or {}).get("sources") or {}).get("by") or {}
+    table = by.get(SOURCES[0], 0.0) + by.get(SOURCES[1], 0.0)
+    return f"{_pct(table)} of its proving priced by the table's rows" if table else ASSUMED_LABEL
+
+
 def at_assumed_prices(store: Any, head: Mapping, share: float, step: str, variant: str | None) -> dict:
-    """Row `ASSUMED_ROW` over the world's year at ``share``, beside the figure ``head`` and under `ASSUMED_LABEL`: its
-    run, budget, δ and amount, and what prices its proving (`_sources`); or, with no amount, why it is not read: no run
-    of record holds it, or its rows cover other compute or weights than the figure's."""
+    """Row `ASSUMED_ROW` over the world's year at ``share``, beside the figure ``head`` and under its label
+    (`_row_label`, `ASSUMED_LABEL` where it is not read): its run, budget, δ and amount, and what prices its proving
+    (`_sources`); or, with no amount, why it is not read: no run of record holds it, or its rows cover other compute or
+    weights than the figure's."""
 
     out = {"row": ASSUMED_ROW, "label": ASSUMED_LABEL, "GB": None, "why": None}
     try:
@@ -854,7 +869,7 @@ def at_assumed_prices(store: Any, head: Mapping, share: float, step: str, varian
     if moved := [k for k in ("gpu_seconds", "requests", "weights_bits") if not _same(p[k], head[k])]:
         return out | {"why": f"its rows differ from the figure's in {', '.join(moved)}"}
     return out | {k: p[k] for k in ("run", "beta", "inside", "delta", "bits", "GB")} | {
-        "sources": p["priced"] and p["priced"]["sources"]}
+        "label": _row_label(p), "sources": p["priced"] and p["priced"]["sources"]}
 
 
 def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, row: str = ROW, step: str = STEP,
@@ -883,7 +898,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     the rows whose sums take it at 0 (`at_zero_in`: those whose schedules are 0).
 
     Beside a ``row`` other than `ASSUMED_ROW`, `at_assumed_prices` holds that row's world year at ``share``
-    (`at_assumed_prices()`), which is never the figure; as ``row`` itself, the figure's `label` is `ASSUMED_LABEL`.
+    (`at_assumed_prices()`), which is never the figure; as ``row`` itself, the figure's `label` is its (`_row_label`).
 
     ``served`` is a served two-stage run's record (`served_share`), from which the document's `compute_share` is the
     share of compute that run measures, with each of its parts, and where it is claimed the compute audit's part over
@@ -979,7 +994,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
             "name": f"{MODEL}'s exfiltration capacity over the world's year at {_pct(share)} of total compute: the "
                     "compute audit's part",
             "value": head["GB"], "unit": "GB", "status": "modeled", "share": share, "row": row, "variant": variant,
-            "label": ASSUMED_LABEL if row == ASSUMED_ROW else None, "at_assumed_prices": assumed, "record": RECORD,
+            "label": _row_label(head) if row == ASSUMED_ROW else None, "at_assumed_prices": assumed, "record": RECORD,
             "runs": runs, "refused": refused, "weights": {"bits": weights, "GB": weights / GB, "label": term["weights"]["label"]},
             "inputs": _inputs(points, runs, term, year["output_count"], share, network_check, row, measured, stop),
             "compute_share": measured, **({} if stop is None else {"stop_class": stop}),
@@ -1355,7 +1370,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help="the network check's own proving as a share of total compute, which the planner's rows don't "
                          f"count (default {NETWORK_CHECK_SHARE}, assumed)")
     ap.add_argument("--row", default=ROW, help=f"the planner's row (default `{ROW}`, the plan of record's; `{ASSUMED_ROW}` "
-                                               f"is printed only {ASSUMED_LABEL})")
+                                               "is printed only under its label, what its rows say of their pricing)")
     ap.add_argument("--step", default=STEP, help=f"the row's step, or the beginning of its name (default `{STEP}`)")
     ap.add_argument("--variant", help=f"the row's variant, as the planner's driver names it (`{VARIANT}`), where a run "
                                       "holds several (default: a run holds one)")
