@@ -771,9 +771,11 @@ def test_a_package_the_sources_fail_is_not_built_nor_one_whose_audit_rests_on_it
     assert "../proofs (its `proved_in` names)" in reports["spec"]["failures"][0]
     assert "../spec (it requires by path)" in reports["props"]["failures"][0]
     assert ran == [("other", True)] and slot == 1
-    assert said.index("sources: 4 packages judged") < said.index("AUDIT") and f"AUDIT {proofs}: FAIL" in said
-    code, codes, _, ran, slot, _ = run("--build", pkgs=(proofs,))
+    assert said.index("sources: 4 packages judged on their sources and locks in ") < said.index("AUDIT")
+    assert "before any build: 3 are not built (" in said and f"AUDIT {proofs}: FAIL" in said
+    code, codes, _, ran, slot, said = run("--build", pkgs=(proofs,))
     assert (code, codes, ran, slot) == (1, {"proofs": ["orphan.file"]}, [], 0), "nothing to build: no slot is asked for"
+    assert "sources: 1 package judged on its sources and lock in " in said and "before any build: 1 is not built (" in said
     # the spec fails and the proofs don't: the proofs would compile the spec's sources, and are not built
     A.dump(proofs, A.load(proofs) | {"exempt": {"Unused": "a scratch file"}})
     (spec / "Unused.lean").write_text("")
@@ -787,6 +789,9 @@ def test_a_package_the_sources_fail_is_not_built_nor_one_whose_audit_rests_on_it
     code, codes, _, ran, slot, said = run("--build")
     assert code == 0 and ran == [(q, True) for q in ("other", "proofs", "props", "spec")] and slot == 1
     assert "none fails, which decides nothing" in said
+    assert A.judged_line([spec], {}, 0.04) == ("sources: 1 package judged on its sources and lock in 0.0 s, before any build: "
+                                               "it does not fail, which decides nothing: each audit runs the same checks on "
+                                               "its build")
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

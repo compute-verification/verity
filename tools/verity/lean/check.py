@@ -5884,6 +5884,18 @@ def unbuilt_by_sources(pkgs: list[Path], updated: set[Path], repo: Path = ROOT, 
     return out
 
 
+def judged_line(pkgs: list[Path], unbuilt: dict[Path, list[Failure]], seconds: float) -> str:
+    """What a `--build` run says once `unbuilt_by_sources` has judged ``pkgs``, before it waits for a slot: how many it
+    judged, how long that took, and the packages it does not build (``unbuilt``), or that no failure decides nothing."""
+    one = len(pkgs) == 1
+    stopped = [str(p) for p in pkgs if p in unbuilt]
+    return (f"sources: {len(pkgs)} package{'' if one else 's'} judged on {'its' if one else 'their'} sources and "
+            f"lock{'' if one else 's'} in {seconds:.1f} s, before any build: "
+            + (f"{len(stopped)} {'is' if len(stopped) == 1 else 'are'} not built ({', '.join(stopped)})" if stopped else
+               f"{'it does not fail' if one else 'none fails'}, which decides nothing: each audit runs the same checks on "
+               f"its build"))
+
+
 def _open(pkg: Path, out: Path) -> tuple[dict, dict | None, Path | None]:
     """(rep, policy, work) for an audit of ``pkg`` into ``out``: the lock loaded and the work directory `audit-<tag>`
     made and cleared of a stale lock and review, shared by `audit` and `audit_from_facts`.  Returns (rep with a
@@ -6740,9 +6752,7 @@ def main(argv: list[str]) -> int:
     if a.build and a.facts_only is None and not lifts:
         t = time.monotonic()
         unbuilt = unbuilt_by_sources(pkgs, named if a.update else set(), a.repo.resolve())
-        print(f"sources: {len(pkgs)} packages judged on their sources and locks in {time.monotonic() - t:.1f} s, before any "
-              f"build: " + (f"{len(unbuilt)} are not built ({', '.join(str(p) for p in pkgs if p in unbuilt)})" if unbuilt
-                            else "none fails, which decides nothing: each audit runs the same checks on its build"), flush=True)
+        print(judged_line(pkgs, unbuilt, time.monotonic() - t), flush=True)
     try:
         if a.build and (a.all or len(unbuilt) < len(pkgs)):
             lean_slot(a.repo.resolve())                 # its descriptor stays open, and the slot held, until this process exits

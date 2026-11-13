@@ -360,6 +360,66 @@ def test_the_packages_whose_records_read_the_build_are_audited_after_it(repo, tm
     assert LC.audit_records("p", deps, tree) == 0 and len(_calls(tmp_path)) == 1
 
 
+#: `check.py` as `--records` sees it where the sources of the package $AUDIT_STOPS names fail before its build
+#: (`unbuilt_by_sources`): that package's report holds its failures and nothing of a build, beside the report of `p`, which
+#: its `proved_in` names and which built and passed; any other package's own audit builds and passes
+STOPPED_AUDIT = """\
+import json, os, sys
+with open(os.environ["AUDIT_LOG"], "a") as f:
+    f.write(json.dumps({"argv": sys.argv[1:]}) + "\\n")
+out, pkg = sys.argv[sys.argv.index("--out") + 1], sys.argv[-1]
+def built(at):
+    return {"package": at, "seconds": {"build": 1.0, "audit": 2.0}, "failures": [], "failure_codes": [], "sandbox": True,
+            "sampled": {}}
+stops = os.path.basename(pkg) == os.environ["AUDIT_STOPS"]
+reps = [built(pkg)] if not stops else [
+    built(os.path.join(os.path.dirname(pkg), "p")),
+    {"package": pkg, "seconds": {}, "failures": ["orphan: Planted.lean is not imported by the roots"],
+     "failure_codes": ["orphan.file"]}]
+os.makedirs(out, exist_ok=True)
+with open(os.path.join(out, "audit.json"), "w") as f:
+    json.dump({"passed": not stops, "failed": [pkg] if stops else [], "packages": reps}, f)
+sys.exit(int(stops))
+"""
+
+
+def test_a_package_its_sources_stopped_before_its_build_is_audited_once_and_keeps_no_record_and_no_pass(reuse, tmp_path,
+                                                                                                        monkeypatch, capsys):
+    """check.py builds no package whose sources already fail, and its report then holds `package`, `seconds` (empty),
+    `failures` and `failure_codes`, nothing of a build. `a`, a spec whose guarantees `p` proves, is stopped so in a
+    `--records p --update` run, its report beside `p`'s, which built. `a` is audited once: not again for a sampled recompile
+    (`mismatched`), nor with `--update` (`settles`). No record is kept, only `p`'s build is offered to the artifact cache,
+    and the run fails with `a`'s report as check.py left it. `p`'s pass is kept and `a`'s is not."""
+    tree, deps, out = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps", tmp_path / "reports"
+    (reuse / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}, "proved_in": ["../p"]}')
+    assert LC.requirers("p", LC.LA.packages(LC.LA.COMMON.tracked_files())) == ["a"]
+    (tmp_path / "check.py").write_text(STOPPED_AUDIT)
+    monkeypatch.setenv("AUDIT_STOPS", "a")
+    put: list[list[Path]] = []
+    monkeypatch.setattr(LC.LA.LakeArtifacts, "put",
+                        lambda self, reports, since=None, log=print: put.append(sorted(reports)) or 0)
+    assert LC.audit_records("p", deps, tree, update=True, out=out) == 1
+    assert [(c["argv"][-1], "--update" in c["argv"]) for c in _calls(tmp_path)] == [(str(tree / "p"), True),
+                                                                                  (str(tree / "a"), False)]
+    mine = out / "requirer-a"
+    assert LC.mismatched(mine, tree) == {} and not LC.settles(mine, tree / "a") and not (out / "mismatched").exists()
+    assert not (out / "record").exists(), "no lock is regenerated for a package that was not built"
+    assert put == [[tree / "p"], [tree / "p"]], "the stopped package says nothing of a build (`built`), so none of it is indexed"
+    assert [r for r in json.loads((mine / "audit.json").read_text())["packages"] if r["package"] == str(tree / "a")] == [
+        {"package": str(tree / "a"), "seconds": {}, "failures": ["orphan: Planted.lean is not imported by the roots"],
+         "failure_codes": ["orphan.file"], "kind": LC.FAST_KIND}], "the report as check.py left it, with the run's kind"
+    said = capsys.readouterr().out
+    assert f"lean-records: a requires p, and its records fail on this build, not only on record differences, which take a " \
+           f"person (reports in {mine})" in said
+    last = json.loads(said.splitlines()[-1].removeprefix(LC.OUTCOME_LINE))
+    assert last["outcome"] == LC.FAILED and {q: r["outcome"] for q, r in last["records"].items()} == {"p": LC.PASS,
+                                                                                                    "a": LC.FAILED}
+    assert set(last["passes"].values()) == {"p"} and "record" not in last["records"]["a"]
+
+    assert LC.audit_records("p", deps, tree, update=True, out=tmp_path / "again") == 1
+    assert [c["argv"][-1] for c in _calls(tmp_path)] == [str(tree / "a")], "p's pass is kept; a keeps none and runs again"
+
+
 def test_a_tree_keeps_the_dependencies_of_one_runs_packages(repo, tmp_path, capsys):
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     ka, kc = LC.LA.deps_key(repo / "a"), LC.LA.deps_key(repo / "c")
