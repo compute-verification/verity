@@ -29,14 +29,14 @@ open Claims Claims.Sampling Claims.SamplingGeneric
 open Claims.Witness (silentP prB_accV)
 open Claims.Witness.SamplingGeneric
 open Claims.Witness.Sampling (toyStmt toyPart)
-open FlockSoundness.Game (periodG)
+open FlockSoundness.Game (monitoringPeriodG)
 open scoped ENNReal
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} {O V Tick Adv : Type}
 
 /-- **One two-stage window's strategy**: release `m`, then send the statement `x` and the prover `P`. -/
 def twoStrat (L : CompiledTwo Coin A) {Rls : Type} (m : Rls) (x : Msg) (P : Prover Unit) :
-    Verity.Game.Strategy (periodG (fun _ : ℕ => twoGame L Rls) 0 1) :=
+    Verity.Game.Strategy (monitoringPeriodG (fun _ : ℕ => twoGame L Rls) 0 1) :=
   ⟨m, (x, P), fun _ => PUnit.unit⟩
 
 /-- **A period of one two-stage window**, played by `twoStrat`: the run flips the window's coins and records the
