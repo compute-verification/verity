@@ -186,7 +186,7 @@ def stages (N : ℕ) : SplitStages Bool (Fin N) 1 :=
 abbrev WCoin (N : ℕ) (B : Type) : Type := Paths Bool (circuit N).rounds × (Equiv.Perm (Fin N) × B)
 
 /-- The honest period of `n` windows: every tile live, each window's stages `stages`, whatever the past. -/
-def period (Ω : Type) (N : ℕ) : (n : ℕ) → WindowPlay Bool Ω (Fin N) (circuit N).rounds n
+def period (Ω : Type) (N : ℕ) : (n : ℕ) → ExecutionPhasePlay Bool Ω (Fin N) (circuit N).rounds n
   | 0 => .done
   | n + 1 => .window (fun _ => true) (stages N) fun _ => period Ω N n
 
@@ -221,7 +221,7 @@ noncomputable def anatomy (N : ℕ) : Anatomy Unit Unit Unit Unit := { Honest.an
 
 /-- The play: the period's ideal game at `liveCone`, sampling `Kd` tiles a window, accepted on every path. -/
 noncomputable def play (B : Type) (N Kd n : ℕ) : Play (WCoin N B) n Unit Unit Unit Unit where
-  game := periodGame (tileStage (circuit N) N) (liveCone Honest.scheme (circuit N) N) 1 1 Kd (period (WCoin N B) N n)
+  game := monitoringPeriodGame (tileStage (circuit N) N) (liveCone Honest.scheme (circuit N) N) 1 1 Kd (period (WCoin N B) N n)
   accepts := fun _ => True
   run := fun _ => anatomy N
 
@@ -270,7 +270,7 @@ theorem every_perLiveTile {Ω : Type} {N : ℕ} {P : Kind → ReceiptGame Bool 1
 /-- **The honest period passes every prefix of its game**, at any weights, costs and sample size. -/
 theorem acceptsUpTo_period {B : Type} {N : ℕ} (wt : (Fin N → Bool) → Fin N → ℝ) (a b : ℝ) (Kd : ℕ) :
     ∀ (n j : ℕ) (x : Paths (WCoin N B) n),
-      RoundGame.acceptsUpTo (periodGame (tileStage (circuit N) N) wt a b Kd (period (WCoin N B) N n)) j x
+      RoundGame.acceptsUpTo (monitoringPeriodGame (tileStage (circuit N) N) wt a b Kd (period (WCoin N B) N n)) j x
   | 0, _, _ => trivial
   | _ + 1, 0, _ => trivial
   | n + 1, j + 1, x =>
@@ -342,7 +342,7 @@ theorem j10r_meets (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) 
       tileLuck Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) t ≤ 7 / 8 ∧
         tileLuck0 Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) t ≤ 1 / 2) ∧
     (play Unit (tileCount σ sT) (k sT) n).game =
-      periodGame (tileStage (circuit (tileCount σ sT)) (tileCount σ sT))
+      monitoringPeriodGame (tileStage (circuit (tileCount σ sT)) (tileCount σ sT))
         (liveCone Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT)) 1 1 (k sT)
         (period (Ω1 σ sT) (tileCount σ sT) n) ∧
     (period (Ω1 σ sT) (tileCount σ sT) n).EveryWindow
@@ -361,7 +361,7 @@ theorem j10r_meets (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) 
     UnitFixed (play Unit (tileCount σ sT) (k sT) n)
       (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n) opened
         (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile))
-      (periodMode (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
+      (monitoringPeriodMode (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
         (tileRun σ k hk sT unitOf (windows σ sT regOf evOf n) opened
           (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)))
       (fun _ t => (tileWords Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) t : ℝ))
