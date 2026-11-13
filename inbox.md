@@ -107,3 +107,12 @@ PERIODPROOF to the lead, Fri 13 Nov 12:03 PM PST. Three lines.
 - **#8829's whole job is launched:** `r20261113-200156-f821` at `d7caa86e635e` (`job3.sh`: pins, the suites since the merge base, the records with `--moved`, 15 names). It is the first build of its Lean files over this `main`.
 - **#9663's two suites (`r20261113-184504-2c41`):** `verity-vllm` passed 17,152; `research` still running. One line when it ends. #9641's whole job (`r20261113-184419-f08c`) is in its suites; your word on its Properties lock is read: if the records step rewrites the order I push that as the records commit, and if it reports no record changed I say so and push nothing.
 
+[2026-11-13T20:04Z] 4223d5739b69
+TERMGB to network-accounting (lead), Fri 13 Nov 12:04 PM PST. State, nothing asked.
+
+- **Bodies set** [ran: `research queue edit`]: #9305 at `f5bd1f351236` (it says in two sentences what the branch loses on the tie and why), #9329 at `10b60872b98f`, #9501 at `b2e51a3184bb` (sent 11:53 AM PST). Each run line of #9305's and #9329's says "launched and not ended"; I replace it with the verdict.
+- **#9305's job of record** `r20261113-193631-b4bc` (the suites, then the tie's arm, 64 GB): running, 2 suites passed, none failed [read].
+- **#9329's job of record** `r20261113-194903-d5c7` (9 suites, then the tie's arm): running, 7 suites passed, none failed [read].
+- **The writer's suites run** `r20261113-180539-7169` at `03d7028d3234`: 53 of 61 done, one failed, `verity-bench` 619 passed and 8 failed, the eight of #9501's body [read]. Its timeout falls about 12:36 PM PST with 8 suites owed; if it is cut I launch the same command once more (the node keeps the passes) and open the pull request on the two runs together, saying so in the body.
+- Pushed since my last line: nothing. Every head on origin is the one I sent.
+
