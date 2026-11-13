@@ -10,29 +10,27 @@ import all Lean.Data.Json.Basic
 
 `DrawWithheld` says what a credited window's sample rests on: the auditor's ledger opens a session withheld on the
 window's sample root. This file builds a window `Internal.credited` accepts, on variables, so the property is about
-something: a window whose Commit record registers no value, with the honest session withheld of
-`Properties.Challenger.Withheld` opened on its sample root. Two windows are built: the smallest there is, of no call
-and no round, which `credited` accepts crediting nothing; and one of one call and one round, its manifest row the
-fourteen fields the serving process writes with the credit bit set, of which `credited` returns call 0.
+something: a window of one call and one round, its manifest row the fourteen fields the serving process writes with
+the credit bit set, whose Commit record registers no value, with the honest session withheld of
+`Properties.Challenger.Withheld` opened on its sample root. `credited` returns call 0 of it.
 
 * `pyFromHex_hex`, `digest_hex`, `isHexBytes_hex`: Python's `bytes.fromhex` reads lowercase hex back, a 64-byte
   digest's hex is a digest, and the hex of at least one byte is `credit._HEX`'s.
 * `commit_read`: `commitOf?` reads the canonical text of a plain record of the registration format with no
   registered value as its digest under the format.
 * `key_read`: `ChallengerKey.ofJson` reads a key of the deployed parameters back from its JSON.
-* `root_ok`, `root_one`, `draw_ok`: the two halves of `credited`, each from what its readers return: the sample
-  root of a window of no call, of a window of one credited call and one round, and the sample's session.
+* `root_one`, `draw_ok`: the two halves of `credited`, each from what its readers return: the sample root of a
+  window of one credited call and one round, and the sample's session.
 * `credited_play`: `credited` accepts an honest play of the family `pouw/draw` whose challenge answers the window's
   sample root and whose session the ledger opens on it, and returns the calls `creditedRoot` names.
 * `CallRow`, `roundOf`: a credited manifest row and a round's entry as their writers build them, with what
   `creditedRoot` reads of each (`row_plain`, `row_index`, `row_bit`, `row_z`, `round_root`, `round_coin`).
-* `credited_none`, `credited_one`: `credited_play` on the window of no call and on the window of one.
-* `drawWithheld_honest`, `drawWithheld_honest_call`: the two at a key `Lms.keygen` derives at the deployed
-  parameters.
+* `credited_one`: `credited_play` on the window of one call.
+* `drawWithheld_honest`: the same at a key `Lms.keygen` derives at the deployed parameters.
 
 `credited` is one step of the window's check: it reads a round's opened challenge and checks it against nothing,
 which is `roundsCheck`'s to do, and what it returns is the credit bits whatever the proofs' outcome. So
-`drawWithheld_honest_call` shows that this step returns call 0, and not that the window's check credits it.
+`drawWithheld_honest` shows that this step returns call 0, and not that the window's check credits it.
 
 SHA-512 stays opaque and no signature is evaluated: the play's signatures verify by LMS's correctness
 (`Properties.Challenger.Withheld.exists_honest`).
@@ -237,17 +235,6 @@ theorem pub_size {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lms.dep
 
 /-! ## The two halves of `credited` -/
 
-/-- **`creditedRoot` on a window of no call and no round**: the verifier's key and the sample root of the salt, the
-Commit record's digest and the receipts' root, with no call credited. -/
-theorem root_ok {key salt commit draw : Json} {k : ChallengerKey} {s rc : ByteArray} {cd : ByteArray × Array Json}
-    (hk : ChallengerKey.ofJson key = .ok k) (hs : digest? salt = some s) (hc : commitOf? commit = some cd)
-    (ho : PouwCheck.Credit.isObj draw = true) (hr : digest? (PouwCheck.get draw "receipts") = some rc) :
-    Internal.creditedRoot key salt (.arr #[]) .null commit (.arr #[]) draw =
-      .ok (k, [], PouwCommit.tagged DRAW_TAG [.bytes (callsRoot s [] none (some cd.1)), .bytes rc]) := by
-  unfold Internal.creditedRoot
-  simp only [hk, hs, hc, ho, hr, Except.mapError, bind, Except.bind, pure, Except.pure, List.zipIdx_nil,
-    List.forIn_nil, Option.elim, ite_true, List.append_nil]
-
 /-- **`creditedRoot` on a window of one credited call and one round**: for any manifest row that is a plain object,
 is call 0, has its credit bit set and commits its product's table, and any round whose root is a digest and whose
 opened challenge reads, the verifier's key, call 0, and the sample root of the salt, the row, the Commit record's
@@ -343,34 +330,6 @@ theorem credited_play {I : ByteArray} {p : Play} (h : p.Honest I) {salt calls se
   rw [hroot]
   simp only [bind, Except.bind, hdraw]
   rfl
-
-/-! ## A window of no call -/
-
-/-- The sample root of a window of no call and no round: its salt, its Commit record's text and its receipts' root. -/
-def rootOf (salt receipts : ByteArray) (text : String) : ByteArray :=
-  PouwCommit.tagged DRAW_TAG [.bytes (callsRoot salt [] none
-    (some (Flock.Sha512.hash ((COMMIT_FORMAT.toUTF8.push 0) ++ text.toUTF8)))), .bytes receipts]
-
-theorem rootOf_size (salt receipts : ByteArray) (text : String) : (rootOf salt receipts text).size = 64 := by
-  show (Flock.Sha512.hash _).size = 64
-  exact hash_size _
-
-/-- **`credited` accepts an honest play on a window of no call and no round**, its Commit record the text `text`
-`commitOf?` reads, when the play's one challenge answers the window's sample root and its session is opened on that
-root. No call is credited. -/
-theorem credited_none {I : ByteArray} {p : Play} (h : p.Honest I) {salt receipts : ByteArray} {text : String}
-    (hl : p.label = PouwWindow.DRAW) (hs : salt.size = 64) (hr : receipts.size = 64) (hps : p.pub.size = 80)
-    (hc : commitOf? (.str (Flock.hexOf text.toUTF8)) =
-      some (Flock.Sha512.hash ((COMMIT_FORMAT.toUTF8.push 0) ++ text.toUTF8), #[]))
-    (ha : p.after = rootOf salt receipts text) (hw : p.window = rootOf salt receipts text) :
-    Internal.credited p.key.toJson (.arr #[.str p.openText, .str p.endText]) (.arr #[.str p.pinText])
-      (.arr #[.str (Flock.hexOf p.pin)]) (.str (Flock.hexOf salt)) (.arr #[]) .null
-      (.str (Flock.hexOf text.toUTF8)) (.arr #[]) (drawOf p receipts) = .ok [] := by
-  have hroot := root_ok (draw := drawOf p receipts) (key_read hps) (digest_hex hs) hc rfl
-    (by
-      rw [draw_receipts]
-      exact digest_hex hr)
-  exact credited_play h hl (root := rootOf salt receipts text) hroot ha hw
 
 /-! ## A window of one call -/
 
@@ -510,47 +469,17 @@ namespace Properties.Pouw.Credit.SecurityProofs
 open Lean (Json)
 open _root_.Spot _root_.Spot.Challenger
 
-/-- **`DrawWithheld`'s honest lemma, on a window of no call, crediting nothing** (accepts, credits nothing shown):
-`credited` accepts at the honest deployed instance. A key `Lms.keygen` derives at the deployed LMS parameters signs
-an honest session withheld (`Properties.Challenger.Withheld.Play.Honest`) of the family `pouw/draw`: the auditor's
-device commits to one challenge, records the commitment, logs the window's sample root and the release after it and
-closes its log, and the auditor's ledger opens the session on that root and ends it closed. The window holds no call
-and no round, and its Commit record registers no value: `credited` under that key accepts it and credits no call.
-That a window holding a call is accepted is not shown here. -/
-theorem drawWithheld_honest :
-    ∃ (seed : ByteArray) (k : Lms.PrivateKey) (ledger pins main salt calls served commit rounds draw : Json)
-      (got : List Nat),
-      Lms.keygen Lms.deployed seed = .ok k ∧
-        PouwCheck.Credit.Internal.credited (ChallengerKey.toJson ⟨Lms.deployed, k.publicKey⟩) ledger pins main salt
-          calls served commit rounds draw = .ok got := by
-  obtain ⟨k, hkg, I, hk⟩ := Properties.Challenger.Withheld.keygen_ok (seed := ⟨Array.replicate 64 0⟩)
-    (Properties.Challenger.Withheld.zeros_size 64)
-  obtain ⟨text, htext⟩ := FlockComplete.JsonRT.canon_ok_some _
-    (Properties.Challenger.Entry.good_of_plain Withheld.commit_plain)
-  obtain ⟨p, hpub, hlab, -, haft, hwin, -, h⟩ := Properties.Challenger.Withheld.exists_honest hk Withheld.draw_name
-    Withheld.draw_plain Withheld.draw_short 0 (Properties.Challenger.Withheld.zeros_size 64)
-    (Properties.Challenger.Withheld.zeros_size 192)
-    (Withheld.rootOf_size ⟨Array.replicate 64 0⟩ ⟨Array.replicate 64 0⟩ text)
-    (Withheld.rootOf_size ⟨Array.replicate 64 0⟩ ⟨Array.replicate 64 0⟩ text)
-    (Properties.Challenger.Withheld.zeros_size 20) .empty .empty
-  have hps : p.pub.size = 80 := by
-    rw [hpub]
-    exact Withheld.pub_size hk
-  have hcr := Withheld.credited_none h hlab (Properties.Challenger.Withheld.zeros_size 64)
-    (Properties.Challenger.Withheld.zeros_size 64) hps (Withheld.commit_empty htext) haft hwin
-  have hkey : p.key = ⟨Lms.deployed, k.publicKey⟩ := congrArg (ChallengerKey.mk Lms.deployed) hpub
-  rw [hkey] at hcr
-  exact ⟨_, k, _, _, _, _, _, _, _, _, _, _, hkg, hcr⟩
-
 /-- **`DrawWithheld`'s honest lemma, on a window of one call**: `credited` returns call 0 at the honest deployed
-instance. The key and the session are `drawWithheld_honest`'s: a key `Lms.keygen` derives at the deployed LMS
-parameters signs an honest session withheld of the family `pouw/draw`, which the auditor's ledger opens on the
-window's sample root and ends closed. The window holds one call and one round: the manifest's one row is a call's
-fourteen fields as the serving process writes them, call 0 with its credit bit set and its product's table
-committed, the round log's one entry is a round's root and its opened challenge, and the Commit record registers no
-value. `credited` under that key accepts the window and returns call 0. It is one step of the window's check, which
-reads the round's challenge and does not check it: that the window's check credits the call is not shown here. -/
-theorem drawWithheld_honest_call :
+instance. A key `Lms.keygen` derives at the deployed LMS parameters signs an honest session withheld
+(`Properties.Challenger.Withheld.Play.Honest`) of the family `pouw/draw`: the auditor's device commits to one
+challenge, records the commitment, logs the window's sample root and the release after it and closes its log, and
+the auditor's ledger opens the session on that root and ends it closed. The window holds one call and one round:
+the manifest's one row is a call's fourteen fields as the serving process writes them, call 0 with its credit bit
+set and its product's table committed, the round log's one entry is a round's root and its opened challenge, and
+the Commit record registers no value. `credited` under that key accepts the window and returns call 0. It is one
+step of the window's check, which reads the round's challenge and does not check it: that the window's check
+credits the call is not shown here. -/
+theorem drawWithheld_honest :
     ∃ (seed : ByteArray) (k : Lms.PrivateKey) (ledger pins main salt calls served commit rounds draw : Json),
       Lms.keygen Lms.deployed seed = .ok k ∧
         PouwCheck.Credit.Internal.credited (ChallengerKey.toJson ⟨Lms.deployed, k.publicKey⟩) ledger pins main salt
