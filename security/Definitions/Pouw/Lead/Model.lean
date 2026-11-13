@@ -75,7 +75,7 @@ def coinAt {L : Layout} (ω : Coins L) : CoinIdx L → ℤ
   | .inr (.inr (.inr (t, k, ℓ, j))) => ω.s t k ℓ j
 
 /-- **The certifier's coin stream**: raw coins in an arrangement fixed before the coins (`ι`), each streamed word zero
-or one coin, each coin at one position at most, within the node's storage of tiles. The certifier draws the coins after
+or one coin, each coin at one position at most, within the node's storage of tiles. The certifier flips the coins after
 it reads `A_j`'s root and the strategy's tables are fixed (`Pouw.Assumptions.Lead.CertifierCoins`): `Strategy` fixes
 its tables and `A`'s root before the coins, `G` fixes the data before them, and every bound averages over the
 certifier's entropy uniformly, which `CertifierCoins` decodes one to one into `Coins`. -/
@@ -140,7 +140,7 @@ structure Commit (L : Layout) where
   root : (Hash.Msg → Hash.Digest) → (Fin L.m → Fin L.S → Fin L.n → ℤ) → Hash.Digest
   /-- The messages A's commitment hashes, fixed before the coins. -/
   aMsgs : List Hash.Msg
-  /-- A's honest root, fixed before the coins: the digest the certifier reads before it draws them. -/
+  /-- A's honest root, fixed before the coins: the digest the certifier reads before it samples them. -/
   aRoot : (Hash.Msg → Hash.Digest) → Hash.Digest
   /-- The words chunks: leaves holding at most `chunkWords` words each. -/
   chunks : ℕ

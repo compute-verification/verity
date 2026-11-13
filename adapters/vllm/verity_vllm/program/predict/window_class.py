@@ -36,7 +36,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.protocols.pouw.prover.schemes import SCHEMES
+from verity.protocols.accounting.pouw.prover.schemes import SCHEMES
 
 from verity_vllm.protocols.pouw.pearl_c import ROW_ALIGN
 from verity_vllm.protocols.pouw.pearl_c import window as PWR
@@ -226,7 +226,7 @@ def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | Non
         if u.policy != GREEDY:
             raise Unexpressible(f"request {u.request}: a {u.policy.get('kind')} request, and the class Program is greedy (a "
                                 "Program that reads a seed isn't lowered yet)")
-        if u.LP > cls.prompt or u.T + 1 > cls.outputs:
+        if cls.prompt < u.LP or cls.outputs < u.T + 1:
             raise Unexpressible(f"request {u.request}: {u.LP} prompt ids and {u.T + 1} outputs, past its class's {cls.prompt} and "
                                 f"{cls.outputs}")
     if tables is not None and (got := [[(r.request, r.start, r.n) for r in step] for step in compiled.steps]) \

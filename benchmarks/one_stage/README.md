@@ -1,6 +1,6 @@
 # One-stage audit runs
 
-The one-stage audit (`verity.protocols.spot.verifier.one_stage`) end to end: serving's committed values through registration, the verifier's
+The one-stage audit (`verity.protocols.proofs.spot.verifier.one_stage`) end to end: serving's committed values through registration, the verifier's
 sample, Flock's circuit prover and the Lean verifier, to the audit record with its integrity profile, then the
 negatives.
 
@@ -10,7 +10,7 @@ Figure 1 prices); and the challenger's live coins, its signed log and the Lean v
 server and no recursion on that path. The core protocols' path, every prover behind the Lean ZK server's send check, is
 `--firewall` on `a5.py`, its variants and `prove_bundle.py`, and `ZK_SERVER=1` on their shell entry points. The network
 certifier, where a run has one (`a5_warden.py`), is a layer of its own, whose signed stamp SPOT[Flock] reads as a certified
-input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
+input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/README.md`.
 
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it.
 - `compose_circuit.py`, `stage_subset.py`, `stage_tampered.py`: helpers that run inside the circuit prover's tree (its `verity_flock`).
@@ -81,6 +81,15 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   that request at the roots each owner registered, every registration read before any rank's coin. A received row moved one
   bit (`--altered`), two tokens' rows swapped, another collective's partial, another request's, and the receiving rank's own
   partial read as its peer's (`--made-for`) are each refused by Lean's registered reads on rank 1, rank 0 accepted.
+- `member_seconds.py` (`a5_tp.sh` with `A5_MEMBER_SECONDS=1`): an audit's seconds a member outside its prover's clock and
+  in Lean's verify before its first check, split by what is read. The audit runs on stamping wrappers of its three
+  programs (the prover, Lean's verifier and the ZK server's Lean loop); each member's seconds are its own processes'
+  starts and ends and its logs' lines, and each reader of its files is then run alone (the verifier's and the prover's
+  load, the ZK server's Lean loop's start with and without the window's partition and program, `archive-put` of each
+  file). Behind the ZK server (`ZK_SERVER=1`) one kept process of Lean's verifier (`verify-members`) verifies an audit's
+  members in turn (`a0.VerifyMembers`), and a member's seconds there are from its line to its answer. Among the readers
+  run alone is `verify` on each member's session, a process of its own: it must print the audit's verdict line for that
+  member, byte for byte, or the measurement fails, and its seconds are beside the audit's in one record.
 - `a5_glm53_commit.sh`, `a5_glm53_cpu.sh`: A5 on GLM-5.3 in its two halves. The first is the GPU job, from the source tree
   (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
@@ -131,7 +140,7 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   is a private directory (0700, files 0600) holding one subprotocol's `case.json` (its `serve` line, with `blobs` the
   paths of the files it reads) and its own Lean answer on it, `answer.json`, whose `commitment` is its digest (or a
   directory of such directories); for onsite, the inference-only policy's case is the registration. The composed params, commitment and
-  evidence (the composition's formats, `verity/protocols/remote/verifier/composition/README.md`) and every answer go to
+  evidence (the composition's formats, `verity/protocols/compose/verifier/lean/README.md`) and every answer go to
   `--private-out` (0700, files 0600), since a case's evidence and params are witness, and so are an answer's query,
   digests and profile. `--public-out` gets only the verdict lines (each piece's and Lean's id, verdict and refusal's
   name), the composite's commitment, and each case's params digest and commitment, and is refused when it shares a
@@ -177,7 +186,7 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   with the trees they come from. A later run with `PB_BINARIES=` that directory uses them while the stamp matches its own
   source, so M3's reserved window doesn't spend time on the build.
 - `server_rate.py`: SPOT's proof server's steady rate on one GPU, run inside a one-GPU `gpu-lease` with the GPU build of
-  `flock-circuit`. Each staged type (`served_units/stage.py TYPE full`, every unit drawn) is proved by
+  `flock-circuit`. Each staged type (`served_units/stage.py TYPE full`, every unit sampled) is proved by
   `ProofServer(provers=K)` at each K of `--provers` (a templated one, a table read, with its unit placed by
   `--tmpl-unit-bin`'s `flock-tmpl-unit`, and verified under `verity/flock-circuit/tmpl`), K streaming provers on the one device, each with a K-th of the job's
   threads (the proof server splits them). Every prover finishes its
@@ -214,12 +223,12 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   CUDA and OS calls traced, and an A/B of base and new.
   `phase_profile.py` cuts each rep's phase at the prover's synchronizes and splits it into GPU time by kernel family and the
   host's time with the GPU idle: its OS calls (a live coin's round trip), its CUDA calls and its own compute.
-- `forged_proofs.sh`: the fixture of Flock's forged-proof negatives (`verity/protocols/flock/prover/tests/test_lean_forged_proofs.py`),
+- `forged_proofs.sh`: the fixture of Flock's forged-proof negatives (`verity/protocols/proofs/flock/prover/tests/test_lean_forged_proofs.py`),
   on hidden_zk's cached builds (`forged_proofs.py`). A small A8 unit (`LlBf16DotprodDot_v1` at K = 128) staged bound to its partition,
   with one honest sampled `--zk` session and two whose committed output word is wrong, proved with the prover's self-check
   skipped (`FC_ZK_SELF_CHECK=skip`), so the Lean verifier gets a well-formed proof of a false statement.
 - `form_refusals.sh`: the fixture of `verify --zk`'s form refusals
-  (`verity/protocols/spot/verifier/tests/test_form_refusals.py`), on the same builds (`form_refusals.py`): honest
+  (`verity/protocols/proofs/spot/verifier/tests/test_form_refusals.py`), on the same builds (`form_refusals.py`): honest
   `--zk` sessions of that unit flat, of it as its template, and of a toy whose last stage returns the outputs, with the
   flat session's verdicts under four statements `verify --zk` must refuse.
 - `a11.sh`: run A11's entry point, on A6's builds. A11 is GLM-5.3 TP8 B1's served step, rank 0: `a11_kinds.py` censuses
@@ -294,15 +303,15 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
 - `served_pearlplus.sh SERVE_DIR WINDOW PIECE_DIR`: PoUW's piece with Pearl+ (`served_verdicts.sh`'s `POUW=pearlplus`).
   After the window's serve, it serves Llama-3.2-1B's BF16 checkpoint on the same card through `pouw:pearl-c-h100-v1-h3`
   (`benchmarks/pouw/pearl_c_vllm/served_passes.py`, a prefill-heavy load), retains every pass, and while Pearl+'s
-  verdict rejects a run on a drawn row over its debit cap (over-cap rule `reject`, which `served_passes.py
+  verdict rejects a run on a sampled row over its debit cap (over-cap rule `reject`, which `served_passes.py
   volunteer-needed` reports before anything is served) gives up the passes' rows over a debit cap before the verifier's
   coin (`served_passes.py volunteer --device`: every word's counts from the card's debit cubin, every
   `volunteer_pass.CROSS_CHECK`-th tile replayed on the CPU too; `PEARLPLUS_VOLUNTEER=cpu` replays every tile on the CPU,
   far too slow for the default load), refusing to serve with the give-up turned off then; under `uncredited`, where the
   verdict credits such a row nothing, the give-up is off unless `PEARLPLUS_VOLUNTEER` is set. It takes Pearl+'s verdict
   over all of them (`served_passes.py verify`, `--over-cap` from `PEARLPLUS_OVER_CAP`; its coin, where the lane's gate is
-  set, a draw session's of its own there, reserved as the lane's first reserve after its Pearl-C period closed, right
-  before the draw, and opened on the run's commitment, `bench_arm.LiveDraw`), and writes the piece through
+  set, a sample session's of its own there, reserved as the lane's first reserve after its Pearl-C period closed, right
+  before the sample, and opened on the run's commitment, `bench_arm.LiveDraw`), and writes the piece through
   `served_verdicts.py pearlplus`: the verdict, the linears' declared and credited shares
   (`served_shares.pearlplus_shares`), and why it credits nothing.
 - `served_compare.py`: the served compare, `served_verdicts.sh`'s step under `PEARLPLUS_TIE` once Pearl+'s piece wrote W

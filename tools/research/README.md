@@ -155,7 +155,7 @@ bare repo (120 s; `RESEARCH_MERGE_MIRROR`: host, empty skips); a failure logs th
 A tool's declaration may name result steps a merge needs by path (`Tool.merge_requires`, `{step: [path prefixes]}`, read from
 the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
 `passed` admits it; `!` patterns leave paths out (`!README.md`: every file of that name under the prefixes). `check` requires
-`lean-agreement` for `verity/protocols/flock/`'s `prover/`, `pod/`, `agreement/`, `verifier/` and `tool.py`, less README.md and
+`lean-agreement` for `verity/protocols/proofs/flock/`'s `prover/`, `pod/`, `agreement/`, `verifier/` and `tool.py`, less README.md and
 PROTOCOL.md; `--train --send FILE` ships what such a step needs. It may also name what runs after a landing
 (`Tool.after_land`, an argv): once `--push` has pushed, it starts detached
 in the checkout with the landed commit appended, and can't change the exit code; `check`'s is its `post_train.py`, the vLLM
@@ -377,7 +377,7 @@ The disk floor: `research run` and `research fetch --all` refuse (exit 3) while 
 --publish` removes the run's files of 1 MiB and more once custody holds (`--keep-local` keeps them); `run-files.evicted.json`
 names the fetch that restores them. `research data evict --src-dir DIR` (node 1's hourly unit) also deletes each
 shipped source tree that is exactly a commit on a ref of the node's `git/verity.git`, unused and unchanged for 2 h; any doubt
-keeps them all (`store/evict.py`).
+keeps them all (`store/evict.py`). Its other passes: `store/leftovers.py`.
 
 ### research data
 
@@ -437,7 +437,7 @@ What `research run` does:
   errors` with one line per error class). A configured-but-unusable remote
   (credential env vars unset here) does not stop a local publish: the attempt
   is written, `preserve_error` records why nothing was pushed.
-- Repo replicas: `fixtures/artifacts.json` maps `art:` ids to tracked files
+- Repo replicas: `artifacts.json` maps `art:` ids to tracked files
   registered with `research data put --kind fixture/v1 --file PATH`; `where`
   lists the `repo` replica when the file still hashes to its id.
 - With `--on`, the flags travel to the machine, which runs the same code in

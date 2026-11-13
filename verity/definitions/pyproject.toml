@@ -7,7 +7,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_cublas_train.py"]
 # The catalog's test loads every registry module, which reads `verity.ml`.
-inputs = ["verity"]
+# `verity`'s settings registry, whose opt-in flags (`VERITY_ML_*`) some tests read, with the package it sits in
+inputs = ["verity", "tools/config/verity_config/verity_settings.py", "tools/config/verity_config"]
 # its tests are independent, and in one process the suite is among the longest of a check's
 parallel = true
 
@@ -16,4 +17,4 @@ parallel = true
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_catalog.py"]
-paths = ["verity/definitions/ops/kv_cache.py"]
+paths = ["verity/circuits/ops/kv_cache.py"]

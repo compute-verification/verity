@@ -12,8 +12,8 @@
 # format is `layout_map.toml`'s.
 
 [roots]
-old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
-new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
 
 [paths]
 "verity/hardware/cards/b200-sxm-180gb.toml" = "hardware/cards/b200-sxm-180gb.toml"
@@ -40,12 +40,13 @@ paths = ["verity/hardware/cards/", "verity/hardware/nodes/"]
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), the
 # archive, files whose bytes a digest pins, every Lean file (a path in a Lean comment keeps the old name until an edit
-# of that file takes it: a rewritten Lean file recompiles every module that imports it), and every kernel source, whose
-# bytes change only with its owner's build check.
+# of that file takes it: a rewritten Lean file recompiles every module that imports it), every kernel source, whose
+# bytes change only with its owner's build check, and the tree file (`tests/tree.toml`), whose not-yet lines name each
+# path where it is before its move: a move doesn't edit it, and a line whose move landed is its owner's to delete.
 exclude = ["fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256",
            "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
            "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json", "**/*.lean",
-           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h"]
+           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "tests/tree.toml"]
 # Rewritten though a pattern above matches: the registry of fetched fixtures and the fixtures' READMEs.
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md"]
 
@@ -74,5 +75,5 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 "benchmarks/machine_model/verity_machine_model/model.py: verity/hardware/cards" = "the reference names the sheets (a card file, a node file or their directory), and they are where the `[tokens]` row sends it; the directory's other part, the loader, is named by its module"
 "benchmarks/machine_model/verity_machine_model/theta.py: verity/hardware/cards" = "the reference names the sheets (a card file, a node file or their directory), and they are where the `[tokens]` row sends it; the directory's other part, the loader, is named by its module"
 "benchmarks/pouw/theory/scope_offload.py: verity/hardware/cards" = "the reference names the sheets (a card file, a node file or their directory), and they are where the `[tokens]` row sends it; the directory's other part, the loader, is named by its module"
-"verity/hardware/site/__init__.py: verity/hardware/cards" = "the reference names the sheets (a card file, a node file or their directory), and they are where the `[tokens]` row sends it; the directory's other part, the loader, is named by its module"
+"verity/device.py: verity/hardware/cards" = "the reference names the sheets (a card file, a node file or their directory), and they are where the `[tokens]` row sends it; the directory's other part, the loader, is named by its module"
 "verity/hardware/tests/test_lean.py: verity/hardware/cards" = "the reference names the sheets (a card file, a node file or their directory), and they are where the `[tokens]` row sends it; the directory's other part, the loader, is named by its module"

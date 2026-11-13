@@ -30,8 +30,8 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.definitions.ops import gemm as G
-from verity.definitions.ops.boolean import cast as BC, gemm as BG
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops.boolean import cast as BC, gemm as BG
 from verity.circuits.types import Array, Tuple, Value
 from verity.commitments import history as HT, row_table as RT
 from verity.commitments.gates import embedding as E
@@ -137,9 +137,9 @@ def test_close_commits_every_unit_under_the_window_domain_rule():
 
 
 def test_a_windows_salts_are_the_operating_systems_bytes_one_draw_a_port(monkeypatch):
-    """With no test key, `rows.commit` takes every row's salt from the OS generator, 192 bytes a row in one draw a port in
+    """With no test key, `rows.commit` takes every row's salt from the OS generator, 192 bytes a row in one sample a port in
     the ports' order, and stretches none from a key: each port's salts are the bytes the generator gave for it. Two closes
-    of one window draw other salts, so other roots; a test's key still gives its ChaCha20 stream (`rows.salts`), the
+    of one window sample other salts, so other roots; a test's key still gives its ChaCha20 stream (`rows.salts`), the
     port's index its nonce."""
     win, _ins, _outs = window()
     ports = [m.port(p) for m in win.window.members for p, _ in m.all_rows]
@@ -857,7 +857,7 @@ def test_a_history_tables_writer_commits_each_row_as_the_tables_leaf():
     """A history table's writer's output rows, and the rows a wire fills from them, are ``hm96-sha512/row-seg/v1`` rows,
     each unit's under the table's salt at its position, so its public string is the table's leaf and the wiring check
     holds; the record states them so, and the verifier derives the same members from it, stated or listed, and the same
-    history tables, whose root the verifier of record computes from its writers' public bodies, the root the window
+    history tables, whose root the verifier computes from its writers' public bodies, the root the window
     registers and the verifier pins; a later window's positions follow the rows it holds of the earlier ones."""
     table = HT.HistoryTable("program", "latent", 8, 16)
     win, got, publics = history_window(table)
@@ -1131,6 +1131,19 @@ class Held:
                 {"value": self.name, "positions": list(positions), "paths": [self.path(p).hex() for p in positions]})
 
 
+class Bound(Held):
+    """`Held` with what core's ``Registered`` carries for a commit by reference (`rows.ValueRows`) and for rows committed in
+    full under its salts (`rows.commit`'s ``carried``): its row schema and each row's ``b || c`` under its salt, over the
+    row's bytes (a 32-bit leaf's two u16 words, low first)."""
+
+    def __init__(self, name: str, rows: np.ndarray, word_bits: int = 16, schema: str = V2) -> None:
+        super().__init__(name, rows, word_bits)
+        self.schema, inner = schema, CS._inner(schema, CS.value_words(self))
+        self.bcs = [CS.INST.commit_string(CS.INST.default_key,
+                                          inner(np.ascontiguousarray(r, dtype=f"<u{word_bits // 8}").tobytes()), s)
+                    for r, s in zip(rows, self.salts)]
+
+
 class Supplied(Held):
     """A supplied value as core's ``Registered.commit`` makes it for `interface.supplied`: its rows under the salts given,
     its entry's root and domain digests of what it was committed from."""
@@ -1158,13 +1171,13 @@ READ = I.Read(TID, "wrow", "w", 0, (6, 2), 0, (K // 2, 0))
 
 
 def registered(n: int = 12, cap: int = 4, params: dict | None = None, held: tuple = (), formats: dict | None = None,
-               by_reference: bool = False) -> tuple[I.Window, Held]:
+               by_reference: bool = False) -> tuple[I.Window, Bound]:
     """A window of ``n`` units reading ``w`` (`READ`), committed in its format's leaves; ``by_reference``: ``wrow`` recorded
     by reference, so the window commits it as the value's rows (`rows.ValueRows`)."""
     reg = I.Registered({"w": 6 * K // 2, **(params or {})}, reads=(READ,), values=held, formats=formats or {})
     schema, bits = I.value_format(reg, "w")
     rows = np.random.default_rng(1).integers(0, 1 << 16, (6, K // 2), dtype=np.uint16).view(f"<u{bits // 8}")
-    w = Bound("w", rows, bits, schema) if by_reference else Held("w", rows, bits)
+    w = Bound("w", rows, bits, schema)
     win = I.Window(I.Circuit("reads", ((COORD, n),), registered=reg), RUN, LAW, cap, registered={"w": w})
     ins, _ = values(n)
     ins[2] = w.rows[np.arange(n) // 2].view(np.uint8)
@@ -1437,7 +1450,7 @@ def test_a_wired_member_reading_a_registered_row_is_checked_through_its_refs():
     derives the same members, a wire moved to other writers is refused, and so is a ref moved to another unit's row."""
     ins, outs = chain_values()
     layer = REQUESTS * STEPS
-    w = Held("w", ins[1][::layer].reshape(LAYERS, 256))
+    w = Bound("w", ins[1][::layer].reshape(LAYERS, 256))
     read = I.Read(GID, "w", "w", at=0, radix=(LAYERS, layer), base=0, step=(256, 0))
     circuit = replace(chain(), registered=I.Registered({"w": LAYERS * 256}, reads=(read,)))
     win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
@@ -1459,18 +1472,6 @@ def test_a_wired_member_reading_a_registered_row_is_checked_through_its_refs():
     with pytest.raises(ValueError, match="own rows"):
         CS.Binding(win.window.program, win.window.query, LAW, RUN,
                   (*ms[:1], replace(ms[1], tables=(("x", 1), ("w", 1))), *ms[2:]))
-
-
-class Bound(Held):
-    """`Held` with what core's ``Registered`` carries for a commit by reference (`rows.ValueRows`): its row schema and each
-    row's ``b || c`` under its salt, over the row's bytes (a 32-bit leaf's two u16 words, low first)."""
-
-    def __init__(self, name: str, rows: np.ndarray, word_bits: int = 16, schema: str = V2) -> None:
-        super().__init__(name, rows, word_bits)
-        self.schema, inner = schema, CS._inner(schema, CS.value_words(self))
-        self.bcs = [CS.INST.commit_string(CS.INST.default_key,
-                                          inner(np.ascontiguousarray(r, dtype=f"<u{word_bits // 8}").tobytes()), s)
-                    for r, s in zip(rows, self.salts)]
 
 
 def _same_commit(full: I.Window, refd: I.Window, tmp_path) -> None:
@@ -1856,7 +1857,7 @@ def _beside_a_row_table(window: CS.Binding, data: list[dict]) -> CS.Binding:
     data[k]["rows"][CS.LINKED] = data[k]["rows"][CS.LINKED][:1]
     data[k]["refs"] = np.stack([np.zeros(m.n, dtype=np.int64) if p == CS.LINKED else np.arange(m.n) for p, _ in m.rows], axis=1)
     linked = replace(m, tables=tuple((p, 1 if p == CS.LINKED else m.n) for p, _ in m.rows), links=((0, 0),),
-                     link_units=(m.n,))
+                     link_units=(m.n,), schemas=tuple((p, CS.TABLE_SCHEMA if p == CS.LINKED else s) for p, s in m.schemas))
     table = CS.RowTable(0, "feed", m.template, dict(m.rows)[CS.LINKED], ((0,),))
     return replace(window, members=(*window.members[:k], linked, *window.members[k + 1:]), row_tables=(table,),
                    context="cd" * RT.DIGEST_BYTES)
@@ -1891,6 +1892,53 @@ def test_rows_given_by_reference_are_refused_unless_their_source_is_the_ports(mo
     CS.commit(window, data, salt_key=bytes(32))
     with pytest.raises(ValueError, match=re.escape(why)):
         CS.commit(edit(window, data), data, salt_key=bytes(32))
+
+
+def test_a_linked_members_x_rows_are_rows_of_the_row_tables_schema(monkeypatch):
+    """A linked member's ``x`` rows take their row table rows' salts, so `rows.Binding` refuses a linked ``x`` port of
+    another schema than the row tables': the same row under two schemas is two strings under one salt."""
+    window, data, _w = given_by_reference(monkeypatch)
+    linked = _beside_a_row_table(window, data)
+    k = _first(linked, SID)
+    m = linked.members[k]
+    assert m.schema(CS.LINKED) == CS.TABLE_SCHEMA != V2
+    with pytest.raises(ValueError, match=re.escape(f"its {CS.LINKED!r} rows are {V2} rows, a row table's are {CS.TABLE_SCHEMA}")):
+        replace(linked, members=(*linked.members[:k], replace(m, schemas=tuple((p, V2) for p, _ in m.schemas)),
+                                 *linked.members[k + 1:]))
+
+
+def test_a_row_committed_under_a_registered_values_salt_is_the_values_row(monkeypatch):
+    """An input row recorded in full is committed under its registered value's salt (`rows.commit`'s ``salts_of``), and
+    `Window.close` hands over the ``b || c`` that salt carries in the value's own tree (``carried``). `rows.commit`
+    refuses a row that makes another string, naming it, since a salt hides one row; the strings move no root; without
+    them the other row commits, to another root; and strings for a port ``salts_of`` doesn't name, or not one a row, are
+    refused."""
+    win, w = registered()
+    given = {}
+    with monkeypatch.context() as mp:
+        mp.setattr(CS, "commit", lambda window, data, **kw: given.update(window=window, data=data, **kw))
+        win.close(salt_key=bytes(32))
+    window, data, salts_of, carried = (given[k] for k in ("window", "data", "salts_of", "carried"))
+    port = window.members[1].port("wrow")
+    assert sorted(carried) == sorted(salts_of) == sorted(m.port("wrow") for m in window.members)
+    assert salts_of[port] == w.salts[2] + w.salts[3] and carried[port] == w.bcs[2] + w.bcs[3]
+    held = CS.commit(window, data, salt_key=bytes(32), salts_of=salts_of, carried=carried)
+    free = CS.commit(window, data, salt_key=bytes(32), salts_of=salts_of)
+    assert held.roots == free.roots and held.bc == free.bc and held.bc[port] == carried[port]
+    other = [dict(d, rows=dict(d["rows"])) for d in data]
+    other[1]["rows"]["wrow"] = data[1]["rows"]["wrow"].copy()
+    other[1]["rows"]["wrow"][1, 0] ^= 1
+    with pytest.raises(ValueError, match=re.escape(f"{port}: rows [1] are not the rows its salts already carry")):
+        CS.commit(window, other, salt_key=bytes(32), salts_of=salts_of, carried=carried)
+    assert CS.commit(window, other, salt_key=bytes(32), salts_of=salts_of).roots[port] != held.roots[port]
+    for no in ({"salts_of": {}, "carried": carried},
+               {"salts_of": salts_of, "carried": {**carried, port: carried[port][:-1]}}):
+        with pytest.raises(ValueError, match="carried .*: not one 128-byte"):
+            CS.commit(window, data, salt_key=bytes(32), **no)
+    moved, _ = registered()
+    moved._recorded[TID][0].words[2][:2, 0] ^= 1
+    with pytest.raises(ValueError, match=re.escape(f"{window.members[0].port('wrow')}: rows [0] are not the rows its salts")):
+        moved.close(salt_key=bytes(32))
 
 
 class Table(Held):
@@ -2141,7 +2189,7 @@ def test_the_catalog_resolves_a_descriptor_id_to_verity_s_definition():
 
 
 def test_a_template_whose_static_is_a_composite_definition_resolves():
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import gemm as BG
     fn = bind(BG.ScaledMmS8CoordinateRows, K=128, R=2, DOT=BG.GEMM_SM120_S8["DOT"])
     assert descriptor_id(I.resolve(descriptor_id(fn))) == descriptor_id(fn)
 

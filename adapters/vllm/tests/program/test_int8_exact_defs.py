@@ -10,13 +10,13 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import torch
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity_vllm.engine import int8_attention as IA
-from verity_vllm.engine import int8_exact as E
 from verity.definitions.registry import int8_exact as X
 from verity.definitions.registry.prims import bits_of, f32_of
+
+from verity_vllm.engine import int8_attention as IA
+from verity_vllm.engine import int8_exact as E
 
 
 def _bf16(t: torch.Tensor) -> list[int]:
@@ -97,10 +97,10 @@ def test_the_replay_linear_is_the_definition_and_the_served_linear(K, N, seed):
     """`kernels.int8_rows.scaled_mm` (the replay of `ScaledMmS8_v1`) word for word against `engine.int8_exact.plain_linear` on
     quantized rows (a zero row among them) and against the Definition, there and on codes the quantizer never makes (-128),
     with DOT spelt as the spec text, a bare id and the bound primitive; another DOT is declined by name."""
-    from verity.definitions.ops import gemm
     from verity.definitions.numerics import int8_rows as Q
     from verity.definitions.numerics import rows
     from verity.definitions.numerics.kernel_registry import Declined
+    from verity.circuits.ops import gemm
 
     g = torch.Generator().manual_seed(seed)
     x = _rows(g, 3, K)
@@ -130,9 +130,9 @@ def test_the_replay_linear_is_the_definition_and_the_served_linear(K, N, seed):
 def test_the_replay_linear_scales_by_the_token_first(Y, sx, sw):
     """Rows whose bf16 word tells the epilogue's order apart (searched: about 4 in 10^6 random ones do): the replay's word is the
     Definition's, (Y sx) sw, and not (Y sw) sx."""
-    from verity.definitions.ops import gemm
     from verity.definitions.numerics import derived_rows as D
     from verity.definitions.numerics import int8_rows as Q
+    from verity.circuits.ops import gemm
 
     x, w = [1] * 32, [127] * (Y // 127) + [Y % 127] + [0] * (31 - Y // 127)
     got = Q.scaled_mm({"K": 32, "N": 1, "DOT": "BlackwellS8ImmaDot32_v1"}, [np.asarray(x, np.uint8), np.asarray([sx], np.uint32),
@@ -146,11 +146,11 @@ def test_the_replay_linear_scales_by_the_token_first(Y, sx, sw):
 def test_the_replay_s8_chain_clamps_each_step():
     """`s8_chain` is the `BlackwellS8ImmaDot32_v1` chain step for step where a step clamps: 4,097 steps of 32 x (-128)^2 past
     2^31 - 1, then 64 of -(128 x 127) back down, one long row against its negation."""
-    from verity.definitions.ops import prims as CP
     from verity.definitions.numerics import int8_rows as Q
+    from verity.circuits.ops import prims as CP
 
     K = (4097 + 64) * 32
-    a = np.full(K, -128, dtype=np.int64)
+    a: np.ndarray = np.full(K, -128, dtype=np.int64)
     b = np.concatenate([np.full(4097 * 32, -128), np.full(64 * 32, 127)]).astype(np.int64)
     got = Q.s8_chain(a, np.stack([b, -b.clip(-127)]))
     for row, want in zip((b, -b.clip(-127)), got):
@@ -230,7 +230,7 @@ def test_int8_lut_attention_is_the_served_attention(n, s, h, g_heads, spread, ks
 def test_attention_row_binds_up_to_the_pv_window():
     """P V' steps over the keys zero-padded to 32: any S >= 1 binds while padded(S) <= 132,096 (LutPvWindow's 32·S, past the
     generic s8 cut of 2^17); past it, and a head dim off the 32-wide step, `bind` refuses by name."""
-    from verity.definitions.ops.gemm import S8_K_LIMIT
+    from verity.circuits.ops.gemm import S8_K_LIMIT
 
     sc = 128 ** -0.5
     for s in (1, 31, 33, S8_K_LIMIT - 31, S8_K_LIMIT, X.PV_KEY_LIMIT):
@@ -245,7 +245,7 @@ def test_attention_row_binds_up_to_the_pv_window():
 @pytest.mark.parametrize("s", [1, 2, 33, 257])
 def test_attention_rows_cut_under_q_word(s):
     """A prefill's first row (S = 1, its softmax over one key) cuts under Q_word like the longer ones: no gate recomputed."""
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     assert W.unit_rule(bind(X.Int8LutAttentionRow, D=128, S=s, SCALE=128 ** -0.5))["violations"] == []
 
@@ -270,8 +270,8 @@ def test_the_registered_table_forms_are_v1_reading_exp2_lut127():
     """`Exp2Lut127_v2` reads LUT[t] from the registered `exp2_lut127` (`TableRead8x2_v1` at the byte zero-extended, the 16-bit index
     the Lean evaluator decodes for every read of at most 16 index bits): every byte gives v1's word.
     `Int8LutSoftmax_v2` and `Int8LutAttentionRow_v2` compute v1's words, and a Program of them holds no table."""
-    from verity.definitions.circuits import operations as O
     from verity.circuits.program import Program
+    from verity.circuits import operations as O
     from verity.definitions.registry import tables as T
 
     table = X.exp2_lut127_words()
@@ -308,7 +308,7 @@ def test_the_int8_attention_rule_declares_the_table_only_over_an_int8_layer(monk
 
 
 def test_primitives_at_their_edges():
-    assert X.LUT == tuple(int(v) for v in IA.LUT)
+    assert tuple(int(v) for v in IA.LUT) == X.LUT
     for v, want in [(0.5, 0.0), (1.5, 2.0), (-2.5, -2.0), (126.5, 126.0), (-0.3, -0.0)]:
         assert X.F32Rint.evaluate(bits_of(v)) == bits_of(want)
     nan, inf = 0x7FC00000, 0x7F800000
@@ -329,7 +329,7 @@ def test_primitives_at_their_edges():
 
 
 def test_matmuls_are_the_plain_s8_arm():
-    from verity.definitions.ops import s8 as S8
+    from verity.circuits.ops import s8 as S8
 
     for K, N, A in [(4096, 6144, (-127, 127)), (14336, 4096, (-127, 127)), (X.padded(4096), 128, (0, 127))]:
         st = X.plain_arm(K, N, A)

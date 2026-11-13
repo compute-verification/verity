@@ -41,10 +41,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.protocols.certifier.verifier import audit, lean_audit
+from verity.protocols.accounting.certifier.verifier import audit, lean_audit
 
 HERE = Path(__file__).resolve().parents[1]
-PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
+PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
 BLOCK_SCHEMA = Path(__file__).resolve().parents[3] / "benchmarks/one_stage/interfaces/verity_e2e_demo/schemas/block-record.v2.schema.json"
 
 
@@ -157,7 +157,7 @@ def test_a_certified_record_is_the_lean_audits_and_a_reference_that_accepts_it_d
 
 def test_a_kept_certificate_is_the_lean_checks_and_a_reference_that_keeps_it_doesnt_keep_it(honest, tmp_path,
                                                                                             monkeypatch):
-    """The client check's refusals are the Lean's (`NetworkCheck.LinkWindow.refusals`): beside a reference that keeps
+    """The client check's refusals are the Lean's (`NetworkCheck.TransferBlocks.refusals`): beside a reference that keeps
     every certificate, the window whose kept certificate's signature is changed is refused whole, each of its
     certificates and its clock certificate as a disagreement, and the step refuses."""
     monkeypatch.setattr(audit, "certificate_refusals",
@@ -329,14 +329,15 @@ def _period(d: Path, case: dict, answer: dict) -> str:
 def _chain_of(tmp_path, case: dict) -> SimpleNamespace:
     """An accepted chain whose certifier session, execution phases, N2 registrations and compute audits are
     ``case``'s."""
-    from verity.protocols.spot.verifier.one_stage import registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import registration as R
     tmp_path.mkdir(parents=True, exist_ok=True)
     steps = _steps(tmp_path, {"profile": "advice", "rc": {"n2": "0", "scan": "0"}, "run": "r-chain"})
     Path(steps.custody).write_text(json.dumps({"verdict": "accepted", "gate_runs": [{"gate_run": "c1"}]}))
     p, c = case["params"], json.loads(bytes.fromhex(case["commitment"]))
     regs = {r["window"]["window"]: R.digest(r) for r in c["windows"]}
-    Path(steps.certs).write_text(json.dumps({"verdict": "accepted", "link": p["link"], "session": p["sessions"][0],
-                                             "key": {"public": p["keys"][0]},
+    Path(steps.certs).write_text(json.dumps({"verdict": "accepted", "link": p["link"],
+                                             "session": p["keys"][0]["session"],
+                                             "key": {"public": p["keys"][0]["key"]},
                                              "rows": [{"window": w, "certified": True} for w in regs]}))
     n2 = json.loads(Path(steps.n2).read_text())
     n2["members"]["honest"]["windows"] = [{"window": w, "registration": d, "accepted": True, "proof": {"proved": True},
@@ -362,7 +363,9 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
     import jsonschema
     from block_certifier import block_leg
     monkeypatch.setattr(cr, "decide_period", period.reference)
-    case = period.case("accept", 1, "clock")
+    # a chain's certifier session numbers its link-windows from 0: the first case whose one entry starts there
+    case = next(c for n in range(1, 64) for c in [period.case("accept", n, "clock")]
+                if [e["start"] for e in c["params"]["keys"]] == [0])
     answer = period.reference(case)
     steps = _chain_of(tmp_path, case)
     honest = steps.period_answer = _period(tmp_path / "period", case, answer)
@@ -391,16 +394,20 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
         return block["why"]
 
     foreign = period.case("accept", 0, "clock")
+    theirs = [k for k in ("link", "keys") if foreign["params"][k] != case["params"][k]]
+    assert "keys" in theirs
     assert why(period_answer=_period(tmp_path / "foreign", foreign, period.reference(foreign))) == (
-        "the case's link, sessions: not the chain's, so another certifier session's period")
+        f"the case's {', '.join(theirs)}: not the chain's, so another certifier session's period")
     assert why(period_answer=_period(tmp_path / "mixed", foreign, answer)) == (
         "the case isn't the answer's: its commitment's digest is another")
-    another = period.lms.public_key(period._key(0, 2)).hex()
-    trusting = case | {"params": case["params"] | {"keys": [*case["params"]["keys"], another],
-                                                   "sessions": [*case["params"]["sessions"], bytes(32).hex()]}}
+    # another entry listed after the period's link-windows: the verifier accepts it, and it is not this chain's
+    p = case["params"]
+    another = {"key": period.lms.public_key(period._key(0, 2)).hex(), "session": bytes(32).hex(),
+               "start": p["first"] + p["windows"]}
+    trusting = case | {"params": p | {"keys": [*p["keys"], another]}}
     assert period.reference(trusting) == answer
     assert why(period_answer=_period(tmp_path / "trusting", trusting, answer)) == (
-        "the case's sessions, keys: not the chain's, so another certifier session's period")
+        "the case's keys: not the chain's, so another certifier session's period")
     rows = period.build("rows-honest", 0, small=True)
     assert why(period_answer=_period(tmp_path / "rows", rows, period.reference(rows))).startswith("a rows-form answer")
     assert why(period_answer=_period(tmp_path / "k", case, answer | {"public": answer["public"] | {"K": 1}})) == (
@@ -650,7 +657,7 @@ def _gemm_window(external: bool = True) -> dict:
     units 2 and 3 read units 0 and 1's ``o0`` through a wire and units 0 and 1's ``x`` are free."""
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import bind
-    from verity.definitions.ops import gemm as G
+    from verity.circuits.ops import gemm as G
     from verity.commitments.windows import interface as I
 
     gemm = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
@@ -679,7 +686,7 @@ def test_free_inputs_take_out_a_cut_ports_wired_rows_as_the_period_counts_them()
     wires filling one row are refused."""
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import bind
-    from verity.definitions.ops import gemm as G
+    from verity.circuits.ops import gemm as G
     from verity.commitments.windows import interface as I
 
     gemm, g8 = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE), bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)
@@ -713,7 +720,7 @@ def test_free_inputs_hold_to_the_period_count_on_wires_and_registered_reads():
 
 def test_the_faulty_sets_bits_are_the_powers_without_computing_it():
     """`power_bits` is ``(m^f - 1).bit_length()``: computed on small cases, and read off the logarithm (forced with
-    ``exact_below=0``) it agrees with the power everywhere; at keep-591e's draw (``m`` 6,963,297, ``f`` 96,531,780) it
+    ``exact_below=0``) it agrees with the power everywhere; at keep-591e's sample (``m`` 6,963,297, ``f`` 96,531,780) it
     finishes, within one bit of ``f·log2 m``."""
     for m in [*range(1, 40), 1 << 20, 6_963_297, 10 ** 9 + 7]:
         for f in [*range(0, 12), 97, 1000, 4097]:

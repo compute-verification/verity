@@ -101,8 +101,9 @@ of `check.py` unless it says otherwise, or the lock's section below.
   the `.olean` files of a package audited earlier while the audit runs: the Lean files run from a copy taken before the
   first build, and everything is sealed and checked after each package (`tampered`, `Seals`).
 
-Where it runs: `--build` builds in the sandbox where the machine allows one (`sandbox.sh`, `sandboxed`), after taking
-one of the node's Lean audit slots (`lean_slot`), and is refused below a package's memory floor (`memory_refusal`,
+Where it runs: `--build` builds in the sandbox where the machine allows one (`sandbox.sh`, `sandboxed`), which reads
+the tree at one fixed path, so a module compiles to the same bytes wherever the tree is (`FIXED`, `--tree`, `bound`),
+after taking one of the node's Lean audit slots (`lean_slot`), and is refused below a package's memory floor (`memory_refusal`,
 `MEM_FLOOR_GIB`, `SPEC_FLOOR_GIB`), with threads as its memory holds (`build_threads`, `replay_threads`). Packages are
 audited side by side, each build after those of the packages it requires by path (`setup`, `writing`, `Seals`). `--all`
 first runs the controls, which test the auditor on fixtures that must pass clean and fail once per violation
@@ -144,7 +145,7 @@ keeps or drops from and never adds to.
   than the kernel checks), each an exempt module that passes when it exits 0, on data used only with the SHA-256
   under `data` (`tests`, `run_paths`; `--no-runs` skips them). Generated data stays out of Git and out of the key of
   `check`'s audit step, so a test of the package's own checks that the generator still writes the recorded data
-  (PoUW's `verity/protocols/pouw/verifier/tests/test_lean_package.py`).
+  (PoUW's `verity/protocols/accounting/pouw/verifier/tests/test_lean_package.py`).
 - `axioms` (optional): the allowed axioms.
 - `assumptions_module`, `assumptions`, `domain`, `open`: the premises the guarantees take, by kind
   (`assumption_records`, `unfolding`, `read_props`). A named assumption is declared in a module `assumptions_module`
@@ -159,7 +160,8 @@ keeps or drops from and never adds to.
 - `trust`: `base` ({premise: the trust assumption it states}, the same in every lock) and `extra` ({deployed guarantee:
   {premise: the ruling's rule}}, what it alone may rest on). `deployed`: the guarantees that state the deployed system.
   `trust_gap`: {deployed guarantee: its premises outside its trust}, which only a person adds to and `--update` drops
-  from; the report prints each gap (`trust_failures`, `trust_gaps`).
+  from; the report prints each gap (`trust_failures`, `trust_gaps`). `verity lean deployed [--rev REV]` prints every lock's
+  deployed guarantees with each one's gap and its premises, counted once by name across the locks, as JSON from git alone.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside (`record_scope`).
 - `escapes`: every declaration a proof cannot unfold (`opaque`, which a `partial def` is, `unsafe`,
@@ -297,7 +299,8 @@ Lean's job in `check` and the tools around the audit:
   landing gate on its seeds (drive.toml's `landing_gates`). A PR that adds proof modules no guarantee reads yet sets
   its area's entry in the JSON file to the check's count in its own diff, with no room, and lists in its body each
   module, the guarantee that will read it and the date that guarantee is listed by (`ratchet`, whose failure prints
-  the entry).
+  the entry). Two PRs that each raise an area merge without a conflict: `merge.py --caps` sums their changes
+  (`unread_caps`).
 - `trusted_size.py`: the size of a package's spec, per area.
 - `tool.py`: the store's declarations of the scheduled runs.
 - `tests/`: the suite `verity-lean-audit`, the controls' fixtures among it.

@@ -36,6 +36,8 @@ SLEEP_IN_SOURCE = re.compile(r"\bsleep\(")
 
 ALLOWED: dict[str, str] = {
     "benchmarks/numerical/tests/reference/exhaustive_driver.py": "the WP1 pod driver (a recorded run, not a test) reports its steps' wall time",
+    "benchmarks/pouw/tests/test_pearl_c_vllm.py::timed":
+        "reports the version-2 tie's seconds at the run of record's size, the Python's and the Lean's; the tests print them and assert none",
     "infra/ops/tests/test_agent_watch.py::test_api_get_takes_a_shorter_timeout_but_never_a_longer_one":
         "passes timeout values to a stubbed urlopen and asserts them; nothing waits",
     "adapters/vllm/tests/commit/test_commit_fail_closed.py::_WATCHDOG_PROG":
@@ -185,7 +187,7 @@ def test_only_the_suites_check_runs_after_its_lean_steps_skip_on_lean() -> None:
                  for line in lean_gates((ROOT / path).read_text(encoding="utf-8"))]
     assert not offenders, "tests that skip on what check's Lean steps build, outside the suites it runs after them:\n" + "\n".join(offenders)
     flock = names["verity-flock"][1]["tool"]["verity"]["tests"]
-    assert "verity/protocols/flock/verifier/.lake/build/bin/flock-verify" in flock.get("artifacts", []), "verity-flock runs the verifier"
+    assert "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify" in flock.get("artifacts", []), "verity-flock runs the verifier"
 
 
 def test_the_lean_gate_scan_sees_each_form() -> None:

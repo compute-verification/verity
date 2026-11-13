@@ -538,7 +538,8 @@ def _regenerated_in(run_id: str, audit) -> dict[str, str]:
 
 def fetch_run(rid: str, names: list[str], cwd: Path | None = None, refresh: bool = False) -> tuple[Path, dict] | None:
     """(run ``rid``'s local dir, its `research status --json` row) with ``names``, paths under its run dir, fetched from its node
-    (`research status RID --json --also NAME...`, as `landing.evidence` reads a running check), or None when it can't be read.
+    (`research status RID --json --also NAME...`; `landing.read_run` reads one so in the loop's process), or None when it
+    can't be read.
     ``refresh`` fetches them for a run that has ended too (`--refresh`), which a plain read answers from what is kept here."""
     also = [x for n in names for x in ("--also", n)]
     r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *(["--refresh"] if refresh else []), *also],
@@ -1006,7 +1007,7 @@ def required_steps(repo: Path, base: str, commit: str, tool: str) -> dict[str, l
 def rule_touches(rule: list[str], changed: list[str]) -> list[str]:
     """The prefixes of a `Tool.merge_requires` rule that ``changed`` touches.  A rule is path prefixes and `!` patterns: a
     changed file counts when it is under a prefix and matches no pattern (one without a `/` is matched against the file's name,
-    one with a `/` against its path), so `["verity/protocols/flock/prover/", "verity/protocols/flock/verifier/", "!README.md"]` leaves out every
+    one with a `/` against its path), so `["verity/protocols/proofs/flock/prover/", "verity/protocols/proofs/flock/verifier/", "!README.md"]` leaves out every
     README.md under either."""
     import fnmatch
 

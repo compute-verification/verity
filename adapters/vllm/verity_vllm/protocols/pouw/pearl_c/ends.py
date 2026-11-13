@@ -13,17 +13,32 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.pouw.verifier.audit import Epoch, Workload, transcript_domain
-from verity.protocols.pouw.verifier.core_check import MANIFEST_SCHEMA
-from verity.protocols.pouw.verifier.protocol import Matmul
-from verity.protocols.pouw.prover.schemes import pearl_c_work as PW
-from verity.protocols.pouw.verifier.serving import Schedule, SchemeId
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW
+from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload, transcript_domain
+from verity.protocols.accounting.pouw.verifier.core_check import MANIFEST_SCHEMA
+from verity.protocols.accounting.pouw.verifier.protocol import Matmul
+from verity.protocols.accounting.pouw.verifier.serving import Schedule, SchemeId
 
-from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _linked, _put, _zeros, joined, write_behind, write_manifest
+from verity_vllm.protocols.pouw.pearl_c import served_y as SY
+from verity_vllm.protocols.pouw.pearl_c.host import (
+    _bytes,
+    _Driver,
+    _Keys,
+    _Lane,
+    _linked,
+    _put,
+    _TorchStream,
+    _Uploads,
+    _zeros,
+    joined,
+    write_behind,
+    write_manifest,
+)
 from verity_vllm.protocols.pouw.pearl_c.host import behind as host_behind
+from verity_vllm.protocols.pouw.pearl_c.kernel import Kernel
 from verity_vllm.protocols.pouw.pearl_c.manifest import session_head
 from verity_vllm.protocols.pouw.pearl_c.screen import excluded, excluded_host
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 
 
 @dataclass
@@ -41,8 +56,83 @@ class _Pass:
     base: int | None = None          # its call at position p has index base + p; None until its first call (`call_index`)
     dirs: set[str] = field(default_factory=set)   # the directories under ``retain`` its retained calls have made
 
+    @property
+    def first(self) -> int:
+        """The index of the pass's first call: ``base``, which a pass has from its first call on."""
+        assert self.base is not None
+        return self.base
 
-class PassEnds:
+
+class _RunState:
+    """What `PearlCDeviceRun.__init__` sets and its four base classes (`PassEnds`, `passes.EpochCalls`,
+    `graphs.GraphCalls`, `lanes.LaneCalls`) read of each other and of the run, declared once: annotations only, so the
+    class holds no value and ``hasattr`` on a run reads as before.  A tensor, a weight's side and a graph are ``Any``."""
+    scheme: C.PearlC
+    entry: str
+    kernel: Kernel
+    device: Any
+    hashing: bool
+    graphs: bool
+    time_gemm: bool
+    lag_ends: bool
+    aside_ends: bool
+    capacity: int
+    nb: int
+    tree_hash: str
+    salt: bytes
+    salt_key: bytes | None
+    coins: Any
+    opening: Any
+    roots: dict[int, bytes]
+    weights: dict[int, Any]
+    schedule: Schedule
+    main: _Lane | None
+    sides: list[_Lane]
+    fork: _Lane | None
+    driver: _Driver | None
+    keys: _Keys
+    uploads: _Uploads
+    torch_stream: _TorchStream
+    stream: Callable[[], int]
+    const_keys: dict[str, int]
+    leaves: Any
+    roots_buf: Any
+    flag_buf: Any
+    order: dict[int, int]
+    key_slots: Any
+    offs: Any
+    omit: frozenset[str]
+    commits: dict[str, Any]
+    details: dict[str, Any]
+    cur: _Pass
+    _host_keys: Any
+    _host_offs: Any
+    _predicted: dict[int, tuple]
+    _graphs: dict[tuple, Any]
+    _side_turn: int
+    _side_cache: dict[tuple, frozenset[str]]
+    _lagged: Any
+    _end_side: Any
+    _weight_files: dict[str, tuple[Path, dict]]
+    begin: Callable[..., Any]
+    join_sides: Callable[..., Any]
+    settle: Callable[..., Any]
+    _call_names: Callable[..., Any]
+    _call_steps: Callable[..., Any]
+    _call_cuts: Callable[..., Any]
+    _call_tree: Callable[..., Any]
+    _call_stats: Callable[..., Any]
+    _capture_lanes: Callable[..., Any]
+    _defers_a: Callable[..., Any]
+    _end_aside: Callable[..., Any]
+    _ended: Callable[..., Any]
+    _graphed: Callable[..., Any]
+    _lane_graph: Callable[..., Any]
+    _offsets: Callable[..., Any]
+    _widen_later: Callable[..., Any]
+
+
+class PassEnds(_RunState):
     """`PearlCDeviceRun`'s pass ends, as its base class: the run's ``cur``, ``hashing``, ``kernel``, ``nb``, ``roots``,
     ``salt``, ``schedule``, ``leaves``, ``roots_buf``, ``flag_buf``, ``const_keys``, ``tree_hash``, ``details``,
     ``commits``, ``weights``, ``entry``, ``scheme``, ``coins``, ``opening``, ``salt_key``, ``device``, ``aside_ends``,

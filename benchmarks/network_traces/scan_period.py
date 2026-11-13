@@ -6,7 +6,8 @@ and its Lean.
         [--v3c PERIOD_JSON] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key and its
-  session, the one key and the one session the parameters list, and one schedule, its integer fields and its response
+  session, the one entry the parameters list, its stretch starting at link-window 0, so the period's numbers are the
+  run's own, and one schedule, its integer fields and its response
   cap when it has one: the period check reads the id egress form, and a run in another is refused),
   the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
@@ -53,8 +54,8 @@ sys.path.insert(0, str(HERE))
 import leak_bounds as LB  # noqa: E402
 import scan_zk as SZ  # noqa: E402
 import warden_serve as WS  # noqa: E402
-from verity.protocols.certifier.verifier.warden import INTEGER_FIELDS  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import registration as RG  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registration as RG  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 
 CERTIFICATE_KEYS = ("digest", "direction", "key_id", "link", "signature", "window")
@@ -106,10 +107,11 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     cap = dep["params"].get("max_tokens_cap")
     schedule = {k: dep["params"][k] for k in INTEGER_FIELDS} | ({} if cap is None else {"max_tokens_cap": cap})
     params = {"audits": [{k: a[k] for k in ("free", "program", "steps")} for a in audits], "cells": [],
-              "first": x["window"], "jitter": LB.JITTER_BOUND, "keys": [dep["key"]["public"]], "link": WS.LINK,
+              "first": x["window"], "jitter": LB.JITTER_BOUND,
+              "keys": [{"key": dep["key"]["public"], "session": dep["session"], "start": 0}], "link": WS.LINK,
               "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": schedule,
-              "sessions": [dep["session"]], "windows": 1}
+              "windows": 1}
     commitment = canonical_json({"audits": [a["registration"] for a in audits], "windows": [reg]})
     evidence = canonical_json({"audits": [a["answer"] for a in audits], "windows": [
         {"answer": answer, "certificates": certs, "registrations": x["registrations"]}]})

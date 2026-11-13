@@ -30,7 +30,8 @@ gives its outcome (`prove`, `outcome_of`).
   a stop class is audited with its stop blocks or not at all.
 * **The order** (`stop_order`, once the session has closed): read from the challenger's signed log as the session
   published it, never from a prover's file. Every coin a stop sample read was released after the challenger received
-  the stop registration, and the class's boundary registration's coins come before them. A window where one stop
+  the stop registration, and the class's boundary registration's coins come before them: another family's lines of
+  the same log, since a family's coins follow one commitment. A window where one stop
   class's order does not hold is refused whole, after its samples (``cross-stream-order``): no class of it hands a
   sample on, and the root's one session is spent, so nothing samples it again.
 * **The coins.** `first` takes a class's `ChallengerCoins` (a test's in-process challenger). The command opens one
@@ -61,7 +62,7 @@ gives its outcome (`prove`, `outcome_of`).
   (`interior_rows.write`); by template, the composer and Definition (`composer`: Flock's `member_stager` on the
   window's partition and program); by member key, the reads each port is verified against (`verifier_reads`: a link's
   port the value the interior registers for it, a wired port its writer's output, an output that writes a return
-  round 1 commits that port of round 1's record, any other its own); the second stage's draw, law and receipt; and the
+  round 1 commits that port of round 1's record, any other its own); the second stage's sample, law and receipt; and the
   auditor's params (``--proofs``; without them `references` builds a development run's, after the sample).
 * **The block's return.** The interior never registers the block's return, and round 2 reads it only at a port round
   1's record commits. Where the record commits one (`boundary_rows.Layout.ids`), the replay side opens that port from
@@ -73,7 +74,7 @@ gives its outcome (`prove`, `outcome_of`).
   reports it and exits 1. The serve's salts of those rows go to the prover's commitment alone: round 2 is handed none.
 
 Until the class's request Definition lands, the replay block is `boundary_rows`' stand-in (one check template's
-instances, or their bodies inlined, as the class's ``commit.json`` says), and so is every sample this draws. An inlined
+instances, or their bodies inlined, as the class's ``commit.json`` says), and so is every sample this samples. An inlined
 check whose body calls several templates needs core's two-stage over a window of templates. ``second`` replays a token
 select's spans from a capture of the sampler's inputs (`engine.sampler_capture`); a block whose ports read a table or a
 value the verifier supplies is not its yet.
@@ -99,7 +100,7 @@ params (``proofs.json``, ``references/``), a5's records (``audit/``), the sessio
 its challenger session's records (``challenger/``), both stages' coin evidence (``coins.json``) and ``summary.json``;
 it exits 0 when the second stage held (`held`). A ``local`` session's challenger reads its coins through
 ``sampled-proofs-verifier``, which must be built first (``lake build sampled-proofs-verifier`` in
-``verity/protocols/spot/verifier/lean``): building it on first use outlasts the local gate's start.
+``verity/protocols/proofs/spot/verifier/lean``): building it on first use outlasts the local gate's start.
 ``two_stage_small.sh`` runs both commands on a CPU node at small statics.
 """
 from __future__ import annotations
@@ -116,9 +117,9 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.spot.device import challenger as Ch, coins as CC
-from verity.protocols.spot.verifier import second_stage as SS, service as S
-from verity.protocols.spot.verifier.one_stage import audit as A, draw as D, partition as P, registered as REG
+from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
+from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
+from verity.protocols.proofs.spot.verifier.one_stage import audit as A, draw as D, partition as P, registered as REG
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.program import Program
@@ -266,6 +267,10 @@ class Recorded(CC.ChallengerCoins):
     def __init__(self, coins: CC.ChallengerCoins) -> None:
         self.coins, self.read = coins, bytearray()
 
+    @property
+    def label(self) -> str | None:
+        return self.coins.label
+
     def commit(self, after: bytes) -> Any:
         return self.coins.commit(after)
 
@@ -276,11 +281,18 @@ class Recorded(CC.ChallengerCoins):
 
 
 class Staged(CC.ChallengerCoins):
-    """The first stage's bytes read again, in order; then, once committed (`commit`, to the interior registration's
-    digest), ``then``'s: the second stage's live coins."""
+    """The first stage's bytes read again, in order, as coins of the family the first stage read them from
+    (``family``, set by `resume`); then, once committed (`commit`, to the interior registration's digest), ``then``'s:
+    the second stage's live coins, of its own family."""
+
+    family: str | None = None
 
     def __init__(self, read: bytes, then: CC.ChallengerCoins | None = None) -> None:
         self._read, self._at, self.then, self.live = bytes(read), 0, then, False
+
+    @property
+    def label(self) -> str | None:
+        return self.then.label if self.live else self.family
 
     def commit(self, after: bytes) -> Any:
         if self._at != len(self._read):
@@ -319,7 +331,8 @@ class First:
         """``stage1.json``: what `resume` and the replay side read."""
         return {"format": FORMAT, "commit": self.pub, "rule": self.rule.to_json(), "spec": self.stream.spec.digest(),
                 "record": self.record, "registration": self.registration.digest, "receipt": dict(self.registration.receipt),
-                "draw": self.sample.draw, "units": list(self.sample.units), "read": self.read.hex(), **self.extra}
+                "draw": self.sample.draw, "units": list(self.sample.units), "read": self.read.hex(),
+                "family": self.stream.family(self.sample), **self.extra}
 
     def second(self, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]],
                **kwargs: Any) -> tuple[S.WindowCommitmentRecord, S.Draw]:
@@ -370,6 +383,7 @@ def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, then: CC.Cha
     layout = BR.layout_of(pub, check, stop)
     coins = Staged(bytes.fromhex(stage1["read"]), then)
     stream = stream_of(layout, rule, coins, delta=delta, **kwargs)
+    coins.family = stage1.get("family")
     if stream.spec.digest() != stage1["spec"]:
         raise ValueError("the class's Spec isn't the one its first stage ran under")
     reg = stream.register(stage1["record"], layout.ports(), **({} if window_root is None else {"window_root": window_root}))
@@ -421,40 +435,43 @@ def stop_first(pub: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
     sample = stream.select(reg)
     return {"spec": stream.spec.digest(), "design": design, "record": rec, "registration": reg.digest,
             "receipt": dict(reg.receipt), "sample": sample.draw, "units": list(sample.units),
-            "read": bytes(coins.read).hex()}
+            "read": bytes(coins.read).hex(), "family": stream.family(sample)}
 
 
-def stop_order(evidence: Mapping[str, Any] | None, window_root: str, boundary: str, registration: str, read: bytes,
-               verify: Callable[..., bool]) -> str | None:
+def stop_order(evidence: Mapping[str, Any] | None, window_root: str, family: str | None, boundary: str,
+               registration: str, read: bytes, verify: Callable[..., bool]) -> str | None:
     """Why a stop class's sample doesn't hold the order its stop record rests on, or None when it does. The order is
     read from the challenger's signed log as its session published it at the close (``evidence``, the stop sample's
     `a5_coins.evidence`: the session's files under the verifier's challenger key, the auditor's ledger and the host's
-    pins, `challenger.trusted_session_of`), never from a prover's file. That log holds, for each coin in the order
-    released, the root the challenger had received when it released it. It holds:
+    pins, `challenger.trusted_session_of`), never from a prover's file. That log holds, for each coin of each family
+    in the order released, the root the challenger had received when it released it. It holds:
 
-    * every coin the stop sample read is one the log shows released after the stop registration ``registration`` (its
-      digest, hex), and the sample read all of those and no other (`coins.coins_reason` on the bytes ``read``): no
-      coin that sampled a stop block was released before the challenger received what fixes `b.stop` and the rows the
-      blocks read;
+    * every coin of the stop sample's family ``family`` (the stop stream's own, `stop_first`'s hand-off's) is one the
+      log shows released after the stop registration ``registration`` (its digest, hex), and the sample read all of
+      those and no other (`coins.coins_reason` on the bytes ``read``): no coin that sampled a stop block was released
+      before the challenger received what fixes `b.stop` and the rows the blocks read;
     * the log shows a coin released after the class's boundary registration ``boundary``, and the last of those comes
       before the first released after the stop registration: the record whose ports the stop record takes as output
-      values was received first.
+      values was received first. A family's coins follow one commitment, so the boundary registration's coins are
+      another family's, and the order is the log's own, over every family's lines.
 
     The stop population's stream is the one reader of `b.stop` in the session: a class's own stream commits and reads
     its `Layout.values`, which never hold it. So the stop sample's coins are every reader's."""
     if evidence is None:
         return "the challenger's session published no signed log to read the order from"
+    if family is None:
+        return "the stop sample read no coins of a challenger's family"
     after, before = bytes.fromhex(registration), bytes.fromhex(boundary)
-    why = CC.coins_reason(evidence, window_root, after, read, verify)
+    why = CC.coins_reason(evidence, window_root, family, after, read, verify)
     if why is not None:
         return f"the stop sample's coins: {why}"
     try:
-        _commitment, roots = Ch.trusted_session_of(evidence["ledger"], {"root": window_root},
-                                                   Ch.ChallengerKey.from_json(evidence["key"]), evidence["pins"],
-                                                   evidence["main"], evidence["session"], verify)
+        Ch.trusted_session_of(evidence["ledger"], {"root": window_root}, Ch.ChallengerKey.from_json(evidence["key"]),
+                              evidence["pins"], evidence["main"], evidence["session"], verify)
     except Ch.CoinError as e:
         return str(e)
-    received = roots.get(evidence["segment"]["label"], ())
+    received = [bytes.fromhex(e["root"]) for e in map(json.loads, evidence["session"]["log"][1:])
+                if e.get("event") == "root"]
     first_, then = ([i for i, r in enumerate(received) if r == x] for x in (before, after))
     for name, coins in (("class's boundary", first_), ("stop", then)):
         if not coins:
@@ -529,7 +546,7 @@ def rule_of(layout: BR.Layout, replay: str, k: int | Mapping[str, int],
 
 def second_need(stream: S.Stream, q: int) -> int:
     """The most coins the second stage's sample of ``q`` replay blocks reads, known before its session opens
-    (`a5_coins.need`'s rule): its cells' draws on a source of zeros, with the widest read again."""
+    (`a5_coins.need`'s rule): its cells' samples on a source of zeros, with the widest read again."""
     reads: list[int] = []
 
     def zeros(k: int) -> bytes:
@@ -665,7 +682,7 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
     port the value it reads (`verifier_reads`: a link's value, a return's that round 1 commits, else the port holding
     it), its words and schema. Both are
     a function of the class's layout and ``q`` alone, so an auditor fixes them before the run, one a sample size its
-    first-stage law can draw; this command builds them after the sample, which is why its run is a development run."""
+    first-stage law can sample; this command builds them after the sample, which is why its run is a development run."""
     from verity_flock.class_statement import member_stager
 
     window = d.window("00" * 64, range(q))
@@ -763,12 +780,12 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
                  tie: Mapping[str, Any] | None = None) -> tuple[dict, bool, dict, dict, list[dict] | None]:
     """The second stage over the interior registration ``irec`` of ``window`` (written at ``window_dir``), chained after
     the boundary registration ``brec`` and its replay sample: `a5.audit` of the stream's second sample ``second`` (its
-    draw, law and the interior registration's receipt), each member's session verified against ``reads`` (by member
+    sample, law and the interior registration's receipt), each member's session verified against ``reads`` (by member
     key, the verifier's own ``--registered`` files), the audit record, and each session's statement held to round 2
     (`round_two`, over the replay block ``replay``, its Program and descriptor id) at the params ``proofs``. ``tie``:
     the verifier's other copies the interior registration's check takes beside the boundary record (`a5.tie`: the
     values it registers, their schemas, its window root). -> (a5's summary, its acceptance, the audit record, what the
-    run reports, the sessions' statements: None without a draw). The report names what the proof server refused, in
+    run reports, the sessions' statements: None without a sample). The report names what the proof server refused, in
     flock-circuit's words, where a session never ran."""
     for d in (HERE.parent / "prove_path", HERE):
         if str(d) not in sys.path:
@@ -845,7 +862,7 @@ def prove(a: argparse.Namespace, r: Replayed, out: Path,
     """The verifier's half of the second stage on a registered interior ``r`` (`replayed`): the one-stage audit of the
     stream's second sample over the written window (`second_stage`). It hands over, by template, the composer and
     Definition (`composer`, on the check's own templates); by member key, the reads each port is verified against
-    (`verifier_reads`); the second stage's draw, law and receipt; and the verifier's own window (`Design.window`) and
+    (`verifier_reads`); the second stage's sample, law and receipt; and the verifier's own window (`Design.window`) and
     copies (``r.tie``). ``proofs``: the auditor's params, else a development run's built here (`references`).
     -> (a5's summary, what the run reports, the sessions' statements, the params)."""
     d, sample, layout = r.design, r.sample, r.first.layout
@@ -955,8 +972,8 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
             continue
         s["evidence"] = AC.evidence(published, s["segment"]) if s.get("segment") else None
         if "units" in s and "units" in o:
-            why = stop_order(s["evidence"], root, o["registration"], s["registration"], bytes.fromhex(s["read"]),
-                             AC.lms_verify)
+            why = stop_order(s["evidence"], root, s.get("family"), o["registration"], s["registration"],
+                             bytes.fromhex(s["read"]), AC.lms_verify)
             s["order"] = {"held": why is None, "reason": why}
             if why is not None:
                 wrong.append(f"class {k} (prompt {pubs[k].get('prompt')}, outputs {pubs[k].get('outputs')}): {why}")

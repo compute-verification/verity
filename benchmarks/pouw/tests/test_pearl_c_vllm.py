@@ -16,6 +16,7 @@ import shutil
 import socket
 import sys
 import threading
+import time
 import types
 from fractions import Fraction
 from pathlib import Path
@@ -23,19 +24,19 @@ from typing import ClassVar
 
 import numpy as np
 import pytest
-from verity.protocols.pouw.prover.schemes import pearl_c_u as PCU
-from verity.protocols.spot.verifier.one_stage import registration as REG
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_u as PCU
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 from verity_vllm.protocols.pouw.pearl_c import host as PH
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 from verity_vllm.protocols.pouw.pearl_c import window as PWR
 
-from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import core_check as CC
 
 torch = pytest.importorskip("torch")
 
 from verity.commitments import MerkleTree
 from verity.commitments.merkle import tree_levels
-from verity.protocols.pouw.verifier.audit import (
+from verity.protocols.accounting.pouw.verifier.audit import (
     HM96,
     HM96_TRANSCRIPT,
     HM96_WEIGHTS,
@@ -54,20 +55,20 @@ from verity.protocols.pouw.verifier.audit import (
     weight_binding,
     weights_root,
 )
-from verity.protocols.pouw.verifier import salt as PS
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.coins import Challenger, CoinCommitment
-from verity.protocols.pouw.verifier.credit import passes_distinct
-from verity.protocols.pouw.verifier.protocol import Context, DomainError, Matmul, Shape
-from verity.protocols.pouw.prover.schemes import pearl_c as C
-from verity.protocols.pouw.prover.schemes import pearl_c_work as PW
-from verity.protocols.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.pouw.verifier.serving import SchemeId
-from verity.protocols.spot.device import challenger as Ch
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.coins import Challenger, CoinCommitment
+from verity.protocols.accounting.pouw.verifier.credit import passes_distinct
+from verity.protocols.accounting.pouw.verifier.protocol import Context, DomainError, Matmul, Shape
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.pouw.verifier.serving import SchemeId
+from verity.protocols.proofs.spot.device import challenger as Ch
 from verity_vllm.protocols.pouw import pearl_c as PPD
 
-# the work sampling design and the clear audit are a reference tool's (verity/protocols/pouw/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "clear"))
+# the work sampling design and the clear audit are a reference tool's (verity/protocols/accounting/pouw/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "clear"))
 import clear_work as CW  # noqa: E402
 from clear_audit import Prover, Verifier  # noqa: E402
 
@@ -1056,8 +1057,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     h100 record (Hopper's 14-bit atom) 2 of the first 8 keys are, the zero key among them: at k = 128 a row's cap admits
     one flagged atom-word (at k = 2,048 and 6,144 the worst of 96 Gaussian rows each is at 0.27 and 0.11 of its cap).
     The calls have the execution phase's indices `indices`, and every pass built here is of the one execution phase (the same weights, key and
-    salt coin), as passes of one install are.  With `live` the salt coin is a live session's, opened after salt epoch
-    `live`'s root over the weights' root (`live_coin`), and the manifest names that epoch (``pass_index``).  `seed` draws
+    salt coin), as passes of one install are.  With `live` the salt coin is a live session's, opened after salt execution phase
+    `live`'s root over the weights' root (`live_coin`), and the manifest names that execution phase (``pass_index``).  `seed` samples
     the rows: under another, the weights are others, and so is the salt the one coin gives them.  With `spike`, credited
     row 9 of the first call holds one entry `spike` times its every-8th entries' RMS (ρ's positions), off them.  With
     `bad_b`, that row of the second call's weight fails liveness as the first call's row 5 does, and is excluded.  `tile`
@@ -1191,21 +1192,21 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
 
 
 def served_verify(d: Path, out: Path, *more: str) -> tuple[int, dict, dict]:
-    """``served_passes.py verify`` on serve dir `d` at 3 draws, a test instance's (`proved_pass`'s): its exit, its document
+    """``served_passes.py verify`` on serve dir `d` at 3 samples, a test instance's (`proved_pass`'s): its exit, its document
     and its core answer."""
     SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
     rc = SP.main(["verify", "--passes", str(d), "--out", str(out), "--jobs", "1", "--draws", "3", "--test-instance", *more])
     answer = json.loads((out.parent / "answer.json").read_text())
-    from verity.protocols.pouw.verifier import core_check as CC
+    from verity.protocols.accounting.pouw.verifier import core_check as CC
     CC.answer_of(answer)
     return rc, json.loads(out.read_text()), answer
 
 
 @pytest.mark.slow
 def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepted(honest_pass, tmp_path):
-    """``served_passes.py verify`` draws over the passes with calls that the serve's served.json names, skipping the empty
+    """``served_passes.py verify`` samples over the passes with calls that the serve's served.json names, skipping the empty
     one the run left open: it accepts an honest pass and credits its MACs at Pearl's assumption in a core answer, and the
-    same pass with a weight row flipped (opened on the excluded row's tile, whatever the draw) fails the whole run.  A
+    same pass with a weight row flipped (opened on the excluded row's tile, whatever the sample) fails the whole run.  A
     test instance's verdict credits nothing."""
     path, *_ = honest_pass
     served = {"run": RUN, "passes": [{"pass": 0, "units": 2, "tiles": 4, "manifest": str(path)},
@@ -1230,8 +1231,8 @@ def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepte
 
 @pytest.mark.slow
 def test_a_served_y_that_is_not_the_unscale_of_its_u_rejects_the_run(tmp_path):
-    """A pass whose y is not what its U unscales to fails the run, whichever tile is drawn: committed as it is (a new root,
-    so the run's commitment changes too) each drawn tile names a word that isn't its U's unscale, and left under the root
+    """A pass whose y is not what its U unscales to fails the run, whichever tile is sampled: committed as it is (a new root,
+    so the run's commitment changes too) each sampled tile names a word that isn't its U's unscale, and left under the root
     the pass published, the rows don't open."""
     path = proved_pass(tmp_path, PROMOTED[0])[0]
     man = json.loads(path.read_text())
@@ -1275,7 +1276,7 @@ def short_y(path: Path, pos: int, drop: int) -> None:
 def test_a_served_y_row_that_ends_before_its_tiles_columns_rejects_the_run(tmp_path):
     """A y row shorter than its tile is refused by its length, and never read past its end.  The opening binds a row's
     value and not how many words it has, so a prover can commit one: here the last real row of the first call, all +0
-    (its A row is zero, so it is excluded and its tile is opened whatever the draw), less its last 4 words, the tree and
+    (its A row is zero, so it is excluded and its tile is opened whatever the sample), less its last 4 words, the tree and
     root over the row as it is.  The row opens, and each word it lacks is one whose unscale is +0, the word a read past the
     end of the Lean's row gives: the run is refused naming the row's length, as it is on a row that is absent altogether."""
     path = proved_pass(tmp_path, PROMOTED[0], zero_a=19)[0]
@@ -1346,7 +1347,7 @@ def test_served_passes_verify_refuses_two_passes_of_one_salt_sharing_a_call_inde
 
 @pytest.mark.slow
 def test_served_passes_verify_accepts_an_epochs_passes_numbered_on(tmp_path):
-    """Two honest passes of one execution phase numbered on, 0, 1 then 2, 3, as the device numbers a serve's passes: one draw over
+    """Two honest passes of one execution phase numbered on, 0, 1 then 2, 3, as the device numbers a serve's passes: one sample over
     both, each pass's exclusion tile opened, accepted, its MACs over both (a test instance's, credited nothing)."""
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
     rc, doc, answer = served_verify(_serve_dir(tmp_path, [a, b]), tmp_path / "verify.json")
@@ -1382,7 +1383,7 @@ def test_verify_passes_reads_a_test_instance_only_as_one_and_a_runs_passes_of_on
 
 
 def test_a_runs_credit_at_pearls_assumption_is_its_credited_macs_less_epsilon(tmp_path):
-    """`verify_run.epsilon` is the least ε (on its 10^-9 grid) with (1 − ε)^t ≤ δ, and, with X_O draws over the
+    """`verify_run.epsilon` is the least ε (on its 10^-9 grid) with (1 − ε)^t ≤ δ, and, with X_O samples over the
     inert-work bound, with P[Binomial(t, ε) ≤ X_O] ≤ δ; a run's credit is at most (1 − ρ)(1 − ε) of its credited cells'
     MACs (each at |K|), the excluded row's and the filler rows' cells credited nothing."""
     eps = VR.epsilon(459, Fraction(1, 100))
@@ -1434,7 +1435,7 @@ def test_served_passes_verify_refuses_a_serve_that_retained_no_pass(tmp_path):
 
 
 def test_a_seeded_serve_draws_the_same_coins_and_salt_key_and_takes_no_retention_or_live_coins(tmp_path, monkeypatch):
-    """`serve --seeded`'s streams (`served_passes.seeded`) give one label's bytes however they are drawn, so two seeded
+    """`serve --seeded`'s streams (`served_passes.seeded`) give one label's bytes however they are sampled, so two seeded
     installs (`seed_install`) hold challengers of one coin commitment and take one hm96 salt key (`pearl_c.new_salt_key`,
     which the install's weight commitment calls); ``--seeded`` is refused beside retention and beside the challenger gate,
     before anything is built."""
@@ -1529,6 +1530,140 @@ def test_served_passes_counts_a_passs_linear_macs_and_verify_run_its_credited_ce
     assert VR.pass_macs(more) == VR.pass_macs(p) - (r.real_rows - len(r.excluded_a)) * block * r.k_kept
 
 
+def _split(got: dict) -> None:
+    """Each call's real MACs are its checked MACs and its causes, and its checked MACs its three terms and its credit,
+    exactly; the totals are the calls' sums, ``credited`` floored."""
+    sums: dict = {}
+    for c in got["calls"]:
+        terms = [Fraction(c[x]) for x in ("epsilon_macs", "over_bound_macs", "rho_macs", "credited_macs")]
+        assert c["macs"] == c["checked_macs"] + sum(c["uncredited_macs"].values()) and c["checked_macs"] == sum(terms), c
+        assert set(c["uncredited_macs"]) == set(VR.UNCREDITED_ROWS) and min(terms) >= 0
+        for x, v in (("macs", c["macs"]), ("checked_macs", c["checked_macs"]), *c["uncredited_macs"].items(),
+                     *((x, Fraction(c[x])) for x in ("epsilon_macs", "over_bound_macs", "rho_macs", "credited_macs"))):
+            sums[x] = sums.get(x, 0) + v
+    assert got["totals"] == {**{x: str(v) if isinstance(v, Fraction) else v for x, v in sums.items()},
+                             "credited": math.floor(sums["credited_macs"])}
+
+
+def test_uncredited_calls_split_each_calls_macs_by_cause_and_sum_to_the_runs_credit(tmp_path):
+    """`verify_run.uncredited_calls` splits each call's real MACs into its credited cells' (at |K|) and those the band rule
+    leaves out, by cause: the fixture's excluded A row (its filler rows are no call's real MACs); an excluded B row's block
+    of 64 columns, which takes the excluded A row's cells in it too; a voluntary A row's band, likewise.  Its terms sum to
+    `credit_at_assumption`'s credit exactly, with or without samples over the inert-work bound, which only move part of the
+    deduction to ``over_bound_macs``."""
+    path = proved_pass(tmp_path, PROMOTED[0])[0]
+    p = VR.load(path, published(path))
+    for over in (0, 3):
+        got = VR.uncredited_calls([p], 459, Fraction(1, 100), over)
+        credit = VR.credit_at_assumption([p], 459, Fraction(1, 100), over)
+        _split(got)
+        assert (got["totals"]["checked_macs"], got["totals"]["credited"]) == (credit["macs"], credit["credited"])
+        assert (Fraction(got["totals"]["over_bound_macs"]) > 0) == (over > 0) and got["over_cap_draws"] == over
+    calls = got["calls"]
+    assert [c["call"] for c in calls] == [r.matmul.index for r in p.records]
+    at = next(j for j, r in enumerate(p.records) if r.excluded_a)
+    r, n = p.records[at], p.records[at].matmul.shape.n
+
+    def changed(**kw) -> dict:
+        got = VR.uncredited_calls([dataclasses.replace(p, records=[dataclasses.replace(x, **kw) if j == at else x
+                                                                   for j, x in enumerate(p.records)])], 459, Fraction(1, 100))
+        _split(got)
+        return got["calls"][at]
+
+    assert calls[at]["rows"]["excluded_a"] == len(r.excluded_a) and calls[at]["macs"] == r.real_rows * n * r.k_kept
+    assert calls[at]["uncredited_macs"] == {"excluded_a": len(r.excluded_a) * n * r.k_kept, "excluded_b": 0,
+                                            "voluntary": 0, "kept_width": 0}
+    block = min(PW.BAND, n)
+    assert changed(excluded_b=(0,))["uncredited_macs"] == {"excluded_a": len(r.excluded_a) * (n - block) * r.k_kept,
+                                                           "excluded_b": r.real_rows * block * r.k_kept, "voluntary": 0,
+                                                           "kept_width": 0}
+    other = next(x for x in range(r.real_rows) if x not in r.excluded_a)
+    band = sum(1 for x in range(r.real_rows) if x // PW.BAND == other // PW.BAND)
+    inside = sum(1 for x in r.excluded_a if x // PW.BAND == other // PW.BAND)
+    assert changed(voluntary_a=(other,))["uncredited_macs"] == {"excluded_a": (len(r.excluded_a) - inside) * n * r.k_kept,
+                                                                "excluded_b": 0, "voluntary": band * n * r.k_kept,
+                                                                "kept_width": 0}
+
+
+def _uncredited_case(tmp_path: Path, monkeypatch, capsys):
+    """An accepted verdict over one proved pass in ``tmp_path/w0``, a test instance's verdict over it, and ``run(doc,
+    passes)``: ``served_passes.py uncredited`` on that document, its exit code and what it printed."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    path = proved_pass(tmp_path / "w0" / "pass-00000", PROMOTED[0])[0]
+    shutil.copy(path.parent / "coins.json", tmp_path / "w0" / "coins.json")
+    coins, source = published(path), b"verifier" * 4
+    test = VR.verify_passes([path], 3, 1, "test", coins, source, test_instance=True)
+    monkeypatch.setattr(VR, "K_MIN", 32)
+    monkeypatch.setattr(VR, "TILE", 16)
+    doc = VR.verify_passes([path], 3, 1, "test", coins, source)
+    verify, out = tmp_path / "verify.json", tmp_path / "uncredited.json"
+
+    def run(d: dict, passes: Path = tmp_path / "w0") -> tuple[int, str]:
+        verify.write_text(json.dumps(d))
+        rc = SP.main(["uncredited", "--passes", str(passes), "--verify", str(verify), "--out", str(out)])
+        return rc, capsys.readouterr().out
+
+    return doc, test, VR.load(path, coins), out, run
+
+
+def test_an_accepted_run_verdict_says_where_its_macs_went_uncredited_and_served_passes_recomputes_it(tmp_path, monkeypatch, capsys):
+    """An accepted verdict that credits carries `uncredited_calls` in its document (not in its answer); a test instance's
+    credits nothing and carries none.  ``served_passes.py uncredited`` recomputes it from the passes in DIR, found by the
+    document's SHA-256s, without sampling, and refuses a document that didn't accept, a DIR without its passes, passes of
+    another commitment and a credit the calls don't sum to."""
+    doc, test, held, out, run = _uncredited_case(tmp_path, monkeypatch, capsys)
+    assert test["answer"]["verdict"] == "accept" and "uncredited" not in test
+    work = doc["answer"]["public"]["work"]
+    assert doc["answer"]["verdict"] == "accept" and work["credited"] > 0, doc["line"]
+    assert doc["uncredited"] == VR.uncredited_calls([held], 3, VR.DELTA, work["over_cap_draws"])
+    assert "uncredited" not in doc["answer"] and "calls" not in json.dumps(doc["answer"])
+    _split(doc["uncredited"])
+    rc, said = run(doc)
+    got = json.loads(out.read_text())
+    assert rc == 0 and got["uncredited"] == doc["uncredited"] and got["commitment"] == doc["commitment"], said
+    assert got["records"] == [p["records"] for p in doc["answer"]["public"]["passes"]] and "the verdict's credit exactly" in said
+    renamed = tmp_path / "wK"
+    (tmp_path / "w0").rename(renamed)
+    assert run(doc, renamed)[0] == 0
+    for d, why in (({**doc, "answer": {**doc["answer"], "verdict": "reject"}}, "no accepted verdict"),
+                   ({**doc, "test_instance": True}, "no accepted verdict"),
+                   ({**doc, "commitment": "00" * 64}, "commitment is not the verify document's"),
+                   ({**doc, "answer": {**doc["answer"], "public": {**doc["answer"]["public"],
+                                                                     "work": {**work, "credited": work["credited"] + 1}}}},
+                    "the verdict's credit is")):
+        rc, said = run(d, renamed)
+        assert rc == 1 and why in said and not out.exists(), (why, said)
+    rc, said = run(doc, tmp_path)
+    assert rc == 1 and "no pass in" in said and not out.exists()
+
+
+def test_served_passes_uncredited_reads_the_grid_form_of_a_fixed_load_run(tmp_path, monkeypatch, capsys):
+    """A run held to its class's fixed load (`verify_run.grid_work`) publishes the passes' whole MACs (the checked MACs
+    and the excluded and voluntary cells') and their credit less the give-up padded up to the execution phase grid.
+    ``uncredited`` accepts it where the calls' credit lies between the published credit and that plus the give-up, the
+    padding past the calls' credit being the cause ``grid``, and refuses calls whose credit is past the give-up's room
+    or whose whole MACs are not the published ones."""
+    doc, _, _, out, run = _uncredited_case(tmp_path, monkeypatch, capsys)
+    t = doc["uncredited"]["totals"]
+    whole = t["checked_macs"] + t["excluded_a"] + t["excluded_b"] + t["voluntary"]
+    assert whole > t["checked_macs"] and t["credited"] > 3
+    credited = t["credited"] - 3
+
+    def held(give_up: int = 8, macs: int = whole) -> dict:
+        work = {**doc["answer"]["public"]["work"], "macs": macs, "credited": credited, "give_up": give_up}
+        return {**doc, "answer": {**doc["answer"], "public": {**doc["answer"]["public"], "work": work}}}
+
+    rc, said = run(held())
+    assert rc == 0 and json.loads(out.read_text())["uncredited"] == doc["uncredited"], said
+    assert "the verdict's grid form, 3 past its credit (grid)" in said
+    assert run(held(give_up=3))[0] == 0
+    for give_up, macs in ((2, whole), (8, whole + 1), (8, t["checked_macs"])):
+        rc, said = run(held(give_up, macs))
+        assert rc == 1 and not out.exists(), said
+        assert (f"the calls credit {t['credited']:,} of {whole:,} whole MACs, and the verdict's grid form "
+                f"{credited:,} of {macs:,} less a give-up of {give_up:,}") in said
+
+
 def test_verify_run_refuses_a_call_index_at_2_to_the_32_and_one_held_twice(tmp_path):
     """A pass whose call index is 2^32 (`pearl_c.CALL_RANGE`, past the row seed's range) is refused ``call-range``, and one
     holding an index twice ``repeated-call``, before anything is opened."""
@@ -1589,8 +1724,8 @@ def test_volunteer_pass_gives_up_the_rows_over_their_caps_and_every_tile_then_pa
 
 def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row_over_its_cap(tmp_path, capsys):
     """The pipelines give the rows over a debit cap up before the coin exactly where ``served_passes.py volunteer-needed``
-    says yes, so it says yes exactly where the verdict they call rejects a run on a drawn tile with a credited row over its
-    cap: on a pass with such rows (`proved_pass` under the h100 record's zero key) and a coin that draws them, ``verify``
+    says yes, so it says yes exactly where the verdict they call rejects a run on a sampled tile with a credited row over its
+    cap: on a pass with such rows (`proved_pass` under the h100 record's zero key) and a coin that samples them, ``verify``
     (the run's verdict, `served_pearlplus.sh`'s) and `verify_run.verify` (a pass at a time, `glm53_passes.py`'s) reject iff
     it says yes, under their own rule and each ``--over-cap`` they take.  A verifier whose over-cap rule changes moves the
     give-up onto or off the prover's path with it; one that takes no ``over_cap`` refuses any."""
@@ -1719,7 +1854,7 @@ def test_the_run_verdict_credits_no_given_up_row_and_refuses_a_give_up_past_v_ex
 
 
 def window_record(*paths: Path, version: int = 2) -> dict:
-    """Pearl+'s window record W over passes `paths`, pass s its round s, as the tie writes it: a v2 record at W's
+    """Pearl+'s execution phase record W over passes `paths`, pass s its round s, as the tie writes it: a v2 record at W's
     ``version`` whose registered values are each call's A rows (m16 rows of K FP32 words, A's domain) and y (its real rows
     of N, y's domain), then at version 2 each weight's B rows once (its n rows of K FP32 words at PoUW's root, its
     weights-tree domain), beside a value of another kind the verdict doesn't read. At version 1 its header states no
@@ -1744,9 +1879,9 @@ def window_record(*paths: Path, version: int = 2) -> dict:
 
 
 def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_weights_b_root_and_domain(tmp_path):
-    """``served_passes.py verify --tie W`` accepts a run whose window record registers each call's A rows and y at the roots
+    """``served_passes.py verify --tie W`` accepts a run whose execution phase record registers each call's A rows and y at the roots
     the verdict credits, under the domains it recomputes from the salt and the call's index, and each weight's B rows at
-    the root the epoch commits it under (PoUW's weights tree), and names W's digest in its answer.  A W whose root, domain
+    the root the execution phase commits it under (PoUW's weights tree), and names W's digest in its answer.  A W whose root, domain
     (another salt's, call's or weight's), rows, words or word bits differ for any call or weight, which misses one, names
     one twice or one the run doesn't hold, or which is not a v2 record, rejects the run before the coin.  So does a
     version-2 W that registers every call right and no weight: it reads as untied, by `UNTIED_WEIGHTS`, through
@@ -1815,7 +1950,7 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
     warm-up's round 0, retains rounds 1 and 2 (places among served.json's passes with calls), and writes W over those two
     under their numbers, so ``verify --tie W`` accepts the run tied to W's digest on its 8 tables and credits the timed
     passes alone.  The warm-up retained, W can't tie it (W registers none of round 0, and `pearl_c.window.write` refuses
-    to); once the coin is drawn ``retain`` refuses to write W again."""
+    to); once the coin is flipped ``retain`` refuses to write W again."""
     SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
     warm, a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("w", (0, 1)), ("a", (2, 3)), ("b", (4, 5))))
     d = _serve_dir(tmp_path, [warm, a, b])
@@ -1905,7 +2040,7 @@ def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_a
     """``retain`` drops passes before the coin (one ``--drop``, and with ``--volunteer`` each pass that step didn't finish or
     left over a cap): ``verify`` then reads the retained passes alone, each at its round, credits only them, and records
     its coin against their commitment (``coin.json``).  The same retention again takes the same source, never another;
-    ``retain`` and ``volunteer`` refuse once the coin is drawn, and a retention changed behind them is refused
+    ``retain`` and ``volunteer`` refuse once the coin is flipped, and a retention changed behind them is refused
     (``after-coin``) before any replay, whichever way it changed."""
     SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
@@ -1946,7 +2081,7 @@ def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_a
 def test_the_run_verdict_refuses_a_give_up_made_after_its_coin(tmp_path):
     """V-EX's give-up is the prover's before the coin: a pass whose records change after the verifier recorded its coin
     (`volunteer_pass` run past ``served_passes.py volunteer``'s refusal) is another run, and the verdict refuses it
-    (``after-coin``) rather than draw again over it."""
+    (``after-coin``) rather than sample again over it."""
     VP = load("pearl_c_vllm_volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
     coins, record = published(path), tmp_path / "coin.json"
@@ -1959,8 +2094,8 @@ def test_the_run_verdict_refuses_a_give_up_made_after_its_coin(tmp_path):
 
 
 def test_the_run_verdict_takes_its_source_from_its_draw_once_and_never_asks_a_draw_again(tmp_path):
-    """``verify_passes``' ``draw(C, asking)``: its source is the draw's coin on the run's commitment C, recorded (v2) with
-    the draw before any replay and reused by a later verdict without drawing; a draw that fails before it asks rejects
+    """``verify_passes``' ``draw(C, asking)``: its source is the sample's coin on the run's commitment C, recorded (v2) with
+    the sample before any replay and reused by a later verdict without sampling; a sample that fails before it asks rejects
     and may be asked again, while one that fails after ``asking`` marked the record is refused (``asked-once``) and
     never redrawn."""
     VP = load("pearl_c_vllm_volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
@@ -2007,9 +2142,9 @@ def test_the_run_verdict_takes_its_source_from_its_draw_once_and_never_asks_a_dr
 
 def test_the_live_draw_reserves_a_withheld_draw_session_outside_any_period_and_opens_it_on_the_runs_commitment(monkeypatch):
     """`bench_arm.LiveDraw` (``served_passes.py verify`` under PEARLC_CHALLENGER_GATE/PEER/LANE): with no period of the
-    lane's open, it reserves a draw session withheld (``reserve --peer P --scheme S --families [["pouw/draw",1]]
+    lane's open, it reserves a sample session withheld (``reserve --peer P --scheme S --families [["pouw/draw",1]]
     --withhold``), marks the record with the reserve before its open, and returns the session's ``pouw/draw`` coin 0
-    after C with the record's draw.  It refuses before reserving while the lane's period is open, and before its open
+    after C with the record's sample.  It refuses before reserving while the lane's period is open, and before its open
     when the gate reserves it plain or into a period; `live_draw` is None with neither setting and refused with one."""
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
     from verity_vllm.protocols.pouw.h1 import window as PHW
@@ -2070,7 +2205,7 @@ def test_the_live_draw_reserves_a_withheld_draw_session_outside_any_period_and_o
 
 
 def test_the_live_draw_after_the_runs_pearl_c_period_is_the_lanes_first_reserve_since_its_close_or_asks_no_coin(monkeypatch):
-    """Given the Pearl-C period P the run's salt session joined (``served.json``'s ``coins.reserved.period``), the draw
+    """Given the Pearl-C period P the run's salt session joined (``served.json``'s ``coins.reserved.period``), the sample
     is lane vllm's first reserve after P's close, the one a compose takes (`pouw_h1_window.after_close`): it is refused
     before reserving while the ledger doesn't close P or the lane (``for``, else ``by``) reserved since, and before its
     coin is asked when another reserve of the lane reached the gate first; another lane's reserve doesn't count."""
@@ -2147,7 +2282,7 @@ def test_a_tie_over_a_retention_holds_each_retained_pass_at_its_round_and_passes
 
 
 def test_a_tie_refuses_two_passes_that_commit_one_weight_under_two_roots(tmp_path):
-    """W registers each weight's B rows once, so a tie over passes whose epochs commit weight 0 under two roots (other
+    """W registers each weight's B rows once, so a tie over passes whose execution phases commit weight 0 under two roots (other
     weights, seed 12) has no one entry to hold them to.  `verify_passes` never gets here (one salt is one weights root,
     checked before the tie), so the tie is called directly."""
     a, b = proved_pass(tmp_path / "a", PROMOTED[0])[0], proved_pass(tmp_path / "b", PROMOTED[0], (2, 3), seed=12)[0]
@@ -2155,6 +2290,149 @@ def test_a_tie_refuses_two_passes_that_commit_one_weight_under_two_roots(tmp_pat
     assert passes[0].epoch.weight_roots[0] != passes[1].epoch.weight_roots[0]
     with pytest.raises(ValueError, match="pass 1 commits weight 0's B rows under another root or shape than an earlier"):
         VR.tie(window_record(a, b), passes)
+
+
+#: Llama-3.2-1B's cut linears as vLLM serves them: its layers, and a layer's four in its forward's order, each (n, k):
+#: qkv_proj, o_proj, gate_up_proj and down_proj (hidden 2,048, intermediate 8,192, q's 2,048 rows with k's and v's 512 each)
+LLAMA32_1B = (16, ((3072, 2048), (2048, 2048), (16384, 2048), (2048, 8192)))
+#: the execution phase class of the run of record: its slots, prompt ids and outputs
+#: (`window_class.WindowClass`), so 4 rounds under its fixed load
+RECORD_CLASS = (4, 32, 4)
+
+
+def timed(f):
+    """``f()`` and the seconds it took, for a test that reports a time and asserts none."""
+    start = time.perf_counter()
+    out = f()
+    return out, time.perf_counter() - start
+
+
+def record_size_passes(tmp_path: Path, seed: int = 1) -> list[Path]:
+    """The manifests of a served run of the run of record's size, one a round of class `RECORD_CLASS`'s fixed load
+    (`window_class.PearlTables`: round 0 every slot's prompt, 128 rows, and each later round a row a slot, 4 rows of the 16
+    its A commits), each calling `LLAMA32_1B`'s 64 cut linears at their real (n, k), weight 4·layer + linear and call
+    index 64·round + call: 4 passes, 256 calls, 64 weights, the served instance of the run of record's scheme (`H100_SCHEME`, 64 x 64
+    tiles), one execution phase under one salt coin, no row excluded.
+
+    Each root is an hm96 root over seeded fake row digests and salts, not over rows: the tree of the real number of leaves
+    (a weight's n, a call's m16 or real rows) under the real domain, each leaf `Hm96Domain`'s of a 64-byte digest no row
+    was hashed to and 192 bytes no key gave. The weights' real rows are 3.9 GB of FP32 words, and their `hm96_salt`s
+    a ChaCha20 stream over all of them. The transcript root is 64 seeded bytes, and no row, tree or leaf file is written
+    (the manifests name them as a device run does), so the passes load and tie, and nothing of them opens."""
+    layers, linears = LLAMA32_1B
+    slots, prompt, outputs = RECORD_CLASS
+    s, rng = PPD.scheme_of(H100_SCHEME), np.random.default_rng(seed)
+    shapes = {len(linears) * layer + j: nk for layer in range(layers) for j, nk in enumerate(linears)}
+
+    def root(binding: bytes, owner: int, count: int) -> str:
+        d, blob = rows_domain(binding, owner, count, HM96, digests=True), rng.bytes(256 * count)
+        return tree_levels(d, [d.leaf(i, i, ROW_SCHEMA, blob[256 * i:256 * i + 256]) for i in range(count)])[-1][0].hex()
+
+    def named(path: str, size: int) -> dict:
+        return {"path": path, "bytes": size}
+
+    def tree(path: str, count: int) -> dict:
+        return named(path, 64 * (2 * VR.pow2(count) - 1))
+
+    roots = {w: root(weight_binding(w), -2, n) for w, (n, _) in shapes.items()}
+    weights = {str(w): {"n": n, "k": k, "root": roots[w], "excluded_b": [],
+                        "rows": named(f"weights/{w}.rows.bf16", 2 * n * k), "tree": tree(f"weights/{w}.tree", n)}
+               for w, (n, k) in shapes.items()}
+    committed = {w: bytes.fromhex(r) for w, r in roots.items()}
+    coins, paths = salt_coin(committed), []
+    for r in range(outputs):
+        real = slots * prompt if r == 0 else slots
+        m = -(-real // PPD.ROW_ALIGN) * PPD.ROW_ALIGN
+        work = Workload(tuple(Matmul(len(shapes) * r + c, Shape(m, k, n), c) for c, (n, k) in shapes.items()))
+        epoch = Epoch.start(work, committed, *coins)
+        splits = {w: PW.Split(k) for w, (_, k) in shapes.items()}
+        records = [PW.UnitRecord(u, real, u.shape.k) for u in work.matmuls]
+        matmuls = [{"index": u.index, "m": m, "k": u.shape.k, "n": u.shape.n, "weight": u.weight, "real_rows": real,
+                    "k_kept": u.shape.k, "excluded_a": [],
+                    "root_a": root(activation_binding(epoch.salt, u.index), u.index, m),
+                    "rows": named(f"calls/{u.index}.rows.bf16", 2 * m * u.shape.k), "tree": tree(f"calls/{u.index}.tree", m),
+                    "y": {"root": root(SY.y_binding(epoch.salt, u.index), u.index, real),
+                          "rows": named(f"y/{u.index}.rows.bf16", 2 * real * u.shape.n), "tree": tree(f"y/{u.index}.tree", real)}}
+                   for u in work.matmuls]
+        count = sum(len(s.tiles(u.shape)) for u in work.matmuls)
+        head = {"schema": CC.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{s.name}", "scheme": s.name,
+                "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(), "salt": epoch.salt.hex(),
+                "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
+                "commitment": {"root": rng.bytes(64).hex(), "count": count},
+                "leaves": named("leaves", 64 * count), "tree_t": tree("tree_t", count), "hm96_salt_key": SALT_KEY.hex()}
+        (d := tmp_path / f"pass-{r:05d}").mkdir(parents=True)
+        paths.append(PPD.write_manifest(d, head, weights, matmuls))
+        (d / "coins.json").write_text(json.dumps(coins[0].to_json()))
+    return paths
+
+
+@pytest.mark.slow
+def test_the_version_2_tie_holds_a_run_of_the_run_of_records_size_to_its_64_weights(tmp_path, capsys):
+    """At the run of record's size (`record_size_passes`: class (4, 32, 4), 4 passes of Llama-3.2-1B's 64 cut linears,
+    256 calls, each weight at its real (n, k)), the producer's W at version 2 (`pearl_c.window.record`) registers 576
+    values: the 512 the run of record's version-1 W did, then each of the 64 weights' B rows once, at its n rows of K
+    words. `tie` accepts it on its 576 tables with every weight tied, each ``pearl-b/<w>`` the root its passes' execution phases
+    commit it under, and the run verdict with no sample (the passes retain no file to open) accepts tied to it. Refused, each
+    by name, through the tie and the run verdict before its coin: a W whose ``pearl-b/37`` is at another root than the
+    passes' rootB of weight 37, one that registers no ``pearl-b/37``, and one that registers no weight at all
+    (`UNTIED_WEIGHTS`); and through the tie alone (the run verdict refuses passes of two salts first), a pass whose rootB
+    of weight 37 is another than the other passes'.
+
+    Prints W's size and the tie's seconds at this size, and asserts neither. Slow on its trees alone (about 400,000 hm96
+    leaves in Python): the tie's own cost is what a cheaper test can't show at the size the verdict of record reads."""
+    paths = record_size_passes(tmp_path)
+    mans, coins = [json.loads(p.read_text()) for p in paths], published(paths[0])
+    w = PWR.record(mans, version=2)
+    names = [e["value"] for e in w["registered"]]
+    assert PWR.version_of(w) == 2 and len(names) == 576 and len(set(names)) == 576
+    assert names[:512] == [f"pearl-{x}/{s}/{c}" for s in range(4) for c in range(64) for x in "ay"]
+    assert names[512:] == [f"pearl-b/{x}" for x in range(64)]
+    assert PWR.record(mans, version=1)["registered"] == w["registered"][:512]
+    layers, linears = LLAMA32_1B
+    assert [(e["leaves"], e["words"], e["word_bits"]) for e in w["registered"][512:]] == [(n, k, 32) for n, k in linears] * layers
+    assert [(e["leaves"], e["words"]) for e in w["registered"][:8]] == [x for n, k in linears for x in ((128, k), (128, n))]
+    assert [(e["leaves"], e["words"]) for e in w["registered"][128:136]] == [x for n, k in linears for x in ((16, k), (4, n))]
+
+    passes = [VR.load(p, coins) for p in paths]
+    assert sum(len(p.records) for p in passes) == 256 and all(len(p.epoch.workload.weights()) == 64 for p in passes)
+    tied, seconds = timed(lambda: VR.tie(w, passes))
+    assert tied == {"record": REG.digest(w), "tables": 576}
+    want = VR.tie_entries(passes)
+    assert list(want) == names
+    for x in range(64):
+        e = next(e for e in w["registered"] if e["value"] == f"pearl-b/{x}")
+        assert all(p.epoch.weight_roots[x].hex() == e["root"] == mans[0]["weights"][str(x)]["root"] for p in passes)
+        assert want[f"pearl-b/{x}"] == {k: e[k] for k in ("root", "leaves", "words", "word_bits", "domain")}
+    assert len({e["root"] for e in w["registered"]}) == 576
+    r = VR.verify_passes(paths, 0, 1, "test", coins, b"verifier" * 4, window=w)
+    assert r["answer"]["verdict"] == "accept" and r["answer"]["public"]["tie"] == tied, r["line"]
+    assert "256 of 256 calls, tied to W" in r["line"] and "on its 576 tables;" in r["line"]
+
+    other = next(e["root"] for e in w["registered"] if e["value"] == "pearl-b/38")
+    cases = [({**w, "registered": [{**e, "root": other} if e["value"] == "pearl-b/37" else e for e in w["registered"]]},
+              "W's pearl-b/37: its root not the weight's"),
+             ({**w, "registered": [e for e in w["registered"] if e["value"] != "pearl-b/37"]}, "W registers no pearl-b/37"),
+             ({**w, "registered": w["registered"][:512]}, f"{VR.UNTIED_WEIGHTS}, so the run's rootB is no W's (pearl-b/0 first)")]
+    for bad, why in cases:
+        with pytest.raises(ValueError) as refused:
+            VR.tie(bad, passes)
+        assert str(refused.value) == why
+        r = VR.verify_passes(paths, 0, 1, "test", coins, b"verifier" * 4, window=bad)
+        assert (r["answer"]["verdict"], r["answer"]["reason"]) == ("reject", f"ValueError: {why}") and "source" not in r
+    p = passes[2]
+    another = dataclasses.replace(p, epoch=dataclasses.replace(p.epoch, weight_roots={**p.epoch.weight_roots,
+                                                                                    37: bytes.fromhex(other)}))
+    with pytest.raises(ValueError) as refused:
+        VR.tie(w, [*passes[:2], another, passes[3]])
+    assert str(refused.value) == ("pass 2 commits weight 37's B rows under another root or shape than an earlier pass, and W "
+                                  "registers one")
+
+    written = len(json.dumps(w, indent=1)) + 1
+    with capsys.disabled():
+        print(f"\nW v2 at the run of record's size: {len(names)} values (512 of 256 calls, 64 weights' B rows), {written:,} bytes as "
+              f"`window.write` writes it ({len(json.dumps(w, separators=(',', ':'))):,} compact), "
+              f"{written - len(json.dumps(PWR.record(mans, version=1), indent=1)) - 1:,} more than its v1; verify_run.tie on "
+              f"4 passes {seconds * 1e3:.1f} ms")
 
 
 def test_volunteer_words_gives_up_one_a_row_a_band_and_a_b_row_once_the_a_count_is_spent():
@@ -2452,8 +2730,8 @@ def test_a_retained_pass_salted_by_a_live_session_restarts_only_under_that_sessi
 def test_a_runs_coins_file_is_a_live_sessions_commitment_or_an_in_process_challengers(tmp_path):
     """`verify_run.epoch_coins`, the coins file every step of a served run reads (``served_passes.py volunteer`` and
     ``verify``, ``verify_run.py --coins``, ``volunteer_pass.py --coins``): a live session's commitment when its scheme is
-    `window.LIVE_SCHEME`, under which a pass salted by that session restarts its epoch, else an in-process challenger's;
-    a pass restarts under its own epoch's commitment only."""
+    `window.LIVE_SCHEME`, under which a pass salted by that session restarts its execution phase, else an in-process challenger's;
+    a pass restarts under its own execution phase's commitment only."""
     live = proved_pass(tmp_path / "live", PROMOTED[0], live=0)[0]
     plain = proved_pass(tmp_path / "plain", PROMOTED[0])[0]
     c, cp = VR.epoch_coins(live.parent / "coins.json"), VR.epoch_coins(plain.parent / "coins.json")
@@ -2469,7 +2747,7 @@ def test_a_runs_coins_file_is_a_live_sessions_commitment_or_an_in_process_challe
 
 @pytest.mark.slow
 def test_served_passes_verify_accepts_a_run_salted_by_a_live_session(tmp_path):
-    """A served run whose epoch's salt coin is a live session's (``serve`` with the challenger gate): ``verify`` reads its
+    """A served run whose execution phase's salt coin is a live session's (``serve`` with the challenger gate): ``verify`` reads its
     coins file as that session's commitment and accepts its honest pass."""
     path = proved_pass(tmp_path, PROMOTED[0], live=0)[0]
     (path.parent / "served.json").write_text(json.dumps({"run": RUN, "passes": [{"pass": 0, "units": 2, "tiles": 4,
@@ -3660,9 +3938,9 @@ def test_the_deferred_schedule_commits_what_the_serial_one_commits(device_run, t
 # ---- the hashing format, from the one table --------------------------------------------------------------------------
 
 def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
-    """Every tree's hash is the scheme's format's (`verity.protocols.pouw.verifier.serving.HASH_FORMATS`), not a
+    """Every tree's hash is the scheme's format's (`verity.protocols.accounting.pouw.verifier.serving.HASH_FORMATS`), not a
     literal: -h3's hm96-sha512, keyed by the prover's salt key; and the path runs only its own schemes."""
-    from verity.protocols.pouw.verifier.serving import HASH_FORMATS, SchemeId, hash_format
+    from verity.protocols.accounting.pouw.verifier.serving import HASH_FORMATS, SchemeId, hash_format
 
     make, *_ = device_run
     run = make()
@@ -3728,7 +4006,7 @@ def test_a_schedule_this_path_the_kernel_or_the_format_cannot_run_is_refused(dev
     """-h3's row seeds come from A's rows, not its root, so its format lets A's tree leave the main lane; this path moves the
     tile hashing, which reads C~ and U, and A's tree where the kernel's pipeline splits A's commitment (sm_90a's and
     sm_120's), each with the buffers it touches rotated.  The screen stays on the caller."""
-    from verity.protocols.pouw.verifier.serving import Schedule
+    from verity.protocols.accounting.pouw.verifier.serving import Schedule
     make, kernel, *_ = device_run
     s = PPD.scheme_of(SCHEME)
     assert PPD.schedule_of("deferred-a", s).name == "deferred-a" and PPD.splits(kernel)

@@ -18,18 +18,32 @@ import random
 import numpy as np
 import pytest
 import torch
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
 
-from verity.protocols.pouw.verifier.coins import Challenger
+from tests.program import test_pouw_lowering as LW
 from verity_vllm import protocols as PO
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepEnd, StepStart
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    StepEnd,
+    StepStart,
+)
 from verity_vllm.observe.fold.patterns.pouw import OP, PouwLinear, with_protocols
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Profile, Shared, StepContext, resolve_step
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    PerRow,
+    Profile,
+    Shared,
+    StepContext,
+    resolve_step,
+)
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.observe.observer import Observer, Recorder
 from verity_vllm.observe.storage import StorageAdapter
 from verity_vllm.program.frontend.rules.vllm_bindings import triton_launches as TL
 from verity_vllm.protocols import pouw
-from tests.program import test_pouw_lowering as LW
 
 M, K, NQ = LW.M, LW.K, LW.NQ
 BF = torch.bfloat16
@@ -80,6 +94,7 @@ def observed(linears):
     """The model's forward under the real observer, with PoUW installed as a Match capture installs it."""
     model, x = Model(), (torch.randn(M, K, generator=torch.Generator().manual_seed(11)) * 0.8).to(BF)
     comp = _install(model, "capture")
+    events: list
     events, storage = [], StorageAdapter()
     rec = Recorder(storage, events.append)
     rec.active, rec.step, rec.phase = True, 0, "forward"
@@ -199,7 +214,8 @@ def test_a_workloads_protocols_config_reaches_the_capture_and_the_commit(tmp_pat
 
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline import cli
-    doc = json.loads(open("workloads/workload_qwen05_32x16_1req.json").read())
+    with open("workloads/workload_qwen05_32x16_1req.json") as f:
+        doc = json.load(f)
     doc["protocols_config"] = {"pouw": {"draws": 8}}
     (tmp_path / "wl.json").write_text(json.dumps(doc))
     assert va.load_workload(tmp_path / "wl.json")["protocols_config"] == {"pouw": {"draws": 8}}

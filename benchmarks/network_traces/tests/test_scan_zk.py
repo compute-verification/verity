@@ -32,10 +32,10 @@ import pytest
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value as Bits
-from verity.protocols.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 
 HERE = Path(__file__).resolve().parents[1]
-PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
+PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
 
 
 def _load():
@@ -449,7 +449,7 @@ def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
     in its public when there are any (``rests_on_period_check``, an extra key the period check's parser takes); a
     refused audit a reject of the same registration naming why; an accepted record of another registration the driver's
     error."""
-    from verity.protocols.pouw.verifier import core_check as CC
+    from verity.protocols.accounting.pouw.verifier import core_check as CC
 
     G, T = 2, 4
     defs = {"first": FIRST, "ingress": ING, "egress": EG}
@@ -529,8 +529,8 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
 @pytest.mark.slow
 def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
     """`scan_period.rows_case` of one link-window in the rows form's formats (`NetworkCheck.Period`; its Lean checks the
-    case on a node: scan_period.sh): the deployment's key and session, the one of each listed, and its schedule (its
-    integer fields, the id egress form's), the registered Program and its
+    case on a node: scan_period.sh): the deployment's key and session, the one entry listed, from link-window 0, and
+    its schedule (its integer fields, the id egress form's), the registered Program and its
     descriptor (``joint/program.json``, the generator form, `scan_zk.scan_root`, whose one-stage reads are each unit's
     slot entries) as the scan, the block's audit (its descriptor, free inputs and no steps; its registration, whose
     ``SlotEntry_v1{…}/c<j>/o0`` is lane j's ``scan/prog<j>`` root and domain and whose ``scan/state`` is the scan's, and
@@ -612,8 +612,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     p = case["params"]
     assert sorted(p) == PC.ROWS_PARAMS_KEYS
     schedule = {k: dep["params"][k] for k in sz.W.INTEGER_FIELDS}
-    assert (p["keys"], p["sessions"], p["schedule"], p["link"]) == ([dep["key"]["public"]], [dep["session"]],
-                                                                    schedule, WS.LINK)
+    assert (p["keys"], p["schedule"], p["link"]) == (
+        [{"key": dep["key"]["public"], "session": dep["session"], "start": 0}], schedule, WS.LINK)
     assert (p["program"], p["windows"], p["first"]) == (reg["program"], 1, 0)
     assert p["audits"] == [{"free": E * sz.IS.entry_bits(cls), "program": encode_program(block), "steps": 0}]
     key = sz.PA.template_id(defs["block"])

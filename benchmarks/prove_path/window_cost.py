@@ -7,7 +7,7 @@ Costs. A fresh output row is its digest x (`class_rows.blocks(128 + b)`: P(8 nby
 (hm96's c and h, two each, the frame leaf, and a port-tree node); an input row a wire or a registered read fills is re-leafed in
 its reader's port tree for `Costs.reused` (h, the leaf, the node). `CENSUS` is class_rows' model, a node one compression;
 `ENGINE` is the commit engine's, a node two (`commit_slots`: nine compressions a one-block row-slot). Compressions are priced
-in AND rows at `SHA512_ROWS` each (`Sha512Compress_v1`'s pin, the copies C-Flock proves included); the served window is the
+in AND rows at `SHA512_ROWS` each (`Sha512Compress_v1`'s pin, the copies Flock proves included); the served window is the
 class circuit's ANDs (`unit_ands`).
 
 Levers (`LEVERS`), each a change to the circuit's layout or the commitment's format, not to what the model computes:
@@ -56,7 +56,7 @@ from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict.window_circuit import WindowClass
 
 from verity.protocols import reporting
-from verity.protocols.spot.optimize import SHA512_ROWS
+from verity.protocols.proofs.spot.prover.optimize import SHA512_ROWS
 from verity.circuits.defs import bind
 from verity.definitions.registry import io_shell as IO
 from verity.commitments.windows import interface as IF

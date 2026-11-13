@@ -26,7 +26,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["tests/test_bench.py", "tests/test_steady_point.py", "tests/test_steady_specs.py"]
+untraced = ["tests/test_bench.py", "tests/test_spot_status.py", "tests/test_steady_point.py", "tests/test_steady_specs.py"]
 # The harness is a user of the vLLM integration. Its fake-engine tests import
 # the public hook set and exercise the integration-facing arm contract, and
 # `build_bound` reads the protocol options' `requires_build` to refuse CUDA
@@ -93,7 +93,7 @@ inputs = [
     "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
     "adapters/vllm/verity_vllm/protocols/spot.py",
     "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/whole_calls.py",
-    "adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda",
+    "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda",
     "adapters/vllm/verity_vllm/protocols/pouw/h1/kept.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1/live.py",
     "adapters/vllm/verity_vllm/protocols/pouw/h1/served_files.py",
@@ -112,12 +112,12 @@ inputs = [
     "benchmarks/census/deployments.json",
     "benchmarks/census/adversary.json",
     "benchmarks/census/hardware.json",
-    "verity/protocols/inference_only/rho/data/hardware.toml",
+    "benchmarks/rho/data/hardware.toml",
     "benchmarks/overhead/run.py",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/engine/__init__.py", "tools/research/src/research/__init__.py", "tools/research/src/research/store/__init__.py",
     # the proof-system table prices serving at the reference fleet's assumed serving MFU, and `verity bench prove` is the
     # door's runner, which a test runs
-    "verity/protocols/inference_only/rho/data/reference.toml",
+    "benchmarks/rho/data/reference.toml",
     "benchmarks/prove/run.py",
     # `verity bench exfiltration` reads the network certifier's calculator of K for its term, which its tests run beside
     # fixture rows; the calculator counts the sampling plan's requests, which it reads from the break-even planner (its
@@ -136,12 +136,12 @@ inputs = [
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_bench.py"]
-paths = ["verity/protocols/pouw/verifier/lean/check/models.json"]
+paths = ["verity/protocols/accounting/pouw/verifier/lean/check/models.json"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_breakdown.py", "tests/test_overhead.py", "tests/test_prove.py", "tests/test_served_table.py",
          "tests/test_steady_point.py"]
-paths = ["fixtures/artifacts.json"]
+paths = ["artifacts.json"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_settings.py"]
