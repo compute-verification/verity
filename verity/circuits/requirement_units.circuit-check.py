@@ -1,4 +1,4 @@
-"""circuit-check's bindings of `verity.definitions.circuits.requirement_units`' Definitions, in `circuit_check.targets`' forms
+"""circuit-check's bindings of `verity.circuits.requirement_units`' Definitions, in `circuit_check.targets`' forms
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ def _boolean_roots() -> list[Any]:
     memory-map unit's whole lowering (about 100,000 ANDs) is over the default budget: its correspondence and pin are checked
     with ``--lower-max-ands 120000``."""
     from verity.circuits.defs import bind
-    from verity.definitions.circuits.requirement_units import MemoryMapStep, PlanMatch, PlanShard
+    from verity.circuits.requirement_units import MemoryMapStep, PlanMatch, PlanShard
 
     return [bind(PlanMatch, P=4, NR=16, V=16, G=2, TB=8, RPB=2), bind(PlanShard, S=32, GAPS=2),
             bind(MemoryMapStep, K=2, C=1, V=8, E=2, M=4, N=16, SLOTS=8, T=4)]
