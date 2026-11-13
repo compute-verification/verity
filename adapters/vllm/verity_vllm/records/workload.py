@@ -20,6 +20,8 @@ from typing import Any
 
 from verity_vllm.records.fields import RecordError, objects, only, optional, required
 
+__all__ = ["SCHEMA", "Workload", "WorkloadSampling"]
+
 SCHEMA = "verity-vllm/workload/v2"
 #: the layout before the `engine` block: `engine_args_required`, `env_required`, `target`, `tokenizer_revision` and
 #: `checkpoint_revision` at the top level (`config._V1_KEYS`)

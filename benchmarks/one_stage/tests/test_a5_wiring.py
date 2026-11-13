@@ -2,11 +2,13 @@
 (the torch loop's wired circuit, `--cap 1`) and on a fan-out (every reader unit reading writer unit 0), each negative is
 stated and the verifier's wiring check refuses it. In the last two, rotating a wire's writers is the honest wire. Where no
 other unit writes a row of the reader's words, the unit is rewired to a row of other words, and that is refused too. In a
-shared-row member whose wired port is not its first, the flipped string is the one unit 0 reads at that port."""
+shared-row member whose wired port is not its first, the flipped string is the one unit 0 reads at that port. And the
+verifier's reads of a member whose wired port has no tree of its own (`a5.bound_reads`)."""
 from __future__ import annotations
 
 import hashlib
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -16,9 +18,11 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.definitions.ops import gemm as G
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.commitments.windows import interface as I
 from verity.commitments.windows import rows as CS
 from verity.commitments.windows import wiring as WI
+from verity.protocols.spot.verifier.one_stage import registered as REG
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import a5
@@ -88,14 +92,17 @@ def test_a_shared_row_readers_flipped_wired_row_is_its_drawn_units_own():
 
 
 class Held:
-    """A registered value as the committer reads it: its rows of 16-bit leaves, one salt a row, a root and each row's path
-    (stand-ins)."""
+    """A registered value as the committer reads it: its rows of 16-bit leaves, one salt a row and each row's ``b || c``
+    under it in a ``row/v2`` row, a root and each row's path (stand-ins)."""
 
     def __init__(self, name: str, rows: np.ndarray) -> None:
         self.name = self.value = name
         self.rows, self.words, self.word_bits, self.leaves = rows, rows.shape[1], 16, len(rows)
         self.salts = [hashlib.shake_256(b"salt %d" % i).digest(WI.SALT_BYTES) for i in range(len(rows))]
         self.root = hashlib.sha512(b"root " + name.encode()).digest()
+        inner = CS._inner(V2, self.words)
+        self.bcs = [CS.INST.commit_string(CS.INST.default_key, inner(np.ascontiguousarray(r, dtype="<u2").tobytes()), s)
+                    for r, s in zip(rows, self.salts)]
 
     def path(self, position: int) -> bytes:
         return hashlib.sha512(b"path %d " % position + self.name.encode()).digest()
@@ -128,3 +135,32 @@ def test_a_wired_row_is_flipped_where_its_unit_reads_it_in_a_shared_row_member_w
     second = bytearray(publics[reader.key])
     second[WI.BC_BYTES] ^= 1
     assert WI.check(ms, {**publics, reader.key: bytes(second)}) == {}
+
+
+def test_a_wired_port_with_no_tree_of_its_own_is_a_read_of_its_writers_tree_and_never_bound():
+    """A reader whose wired port has no tree of its own (`rows.Member.wired_trees`): the verifier's window derives no port
+    for it and the registration holds no root under its name. The verifier's file (`rows.own_reads`) names it a read of
+    its writer's tree, each unit at its writer unit's leaf, and `a5.bound_reads` leaves that file as it is: it asks the
+    registration for no root of the wired port. A file that leaves the wired port out is refused, and a port with a tree
+    of its own that a file leaves out is bound at the registration's root and the window's domain for it."""
+    circuit = I.Circuit("chain", ((GEMM, 2 * UNITS),), external=(f"{GID}/x",),
+                        wires=(I.Wire(GID, "x", GID, "o0", at=UNITS, radix=(UNITS,), base=0, step=(1,)),),
+                        order=((GID, 0, UNITS), (GID, UNITS, UNITS)))
+    win = I.Window(circuit, "ab" * 64, {"law": "stratified", "k": 2}, 2)
+    ms = tuple(replace(m, wired_trees=False) for m in win.window.members)
+    mine = replace(win.window, members=ms)
+    want = CS.expected_ports(mine)
+    roots = {q: {"port": q, "root": hashlib.sha512(q.encode()).hexdigest(), **e} for q, e in want.items()}
+    writer, reader = ms[0], ms[2]
+    ports = [p for p, _w in reader.all_rows]
+    assert reader.wired == (("x", "o0", (0, 1)),) and ports == ["x", "w", "o0"] and reader.port("x") not in want
+    file = CS.own_reads({reader.key: {"format": REG.READS_V1, "ports": {}}}, mine, roots, registered=REG)[reader.key]
+    assert sorted(file["ports"]) == sorted(ports)
+    assert (file["ports"]["x"]["root"], file["ports"]["x"]["reads"]) == (roots[writer.port("o0")]["root"], [0, 1])
+    assert a5.bound_reads(file, reader, ports, roots, want) == file
+    less = {**file, "ports": {p: e for p, e in file["ports"].items() if p != "x"}}
+    with pytest.raises(ValueError, match=r"ports \['x'\] are neither registered ports of the file nor"):
+        a5.bound_reads(less, reader, ports, roots, want)
+    less = {**file, "ports": {p: e for p, e in file["ports"].items() if p != "w"}}
+    assert a5.bound_reads(less, reader, ports, roots, want) == {
+        **less, REG.BOUND: {"w": {"root": roots[reader.port("w")]["root"], "domain": want[reader.port("w")]["domain"]}}}

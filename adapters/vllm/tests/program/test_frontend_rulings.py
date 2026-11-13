@@ -9,15 +9,33 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.circuits import Program, bind, decode_program, encode_program, program_digest  # noqa: E402
+from verity.circuits import (  # noqa: E402
+    Program,
+    bind,
+    decode_program,
+    encode_program,
+    program_digest,
+)
 from verity.circuits.defs import REGISTRY  # noqa: E402
-from verity_vllm.program.frontend import (Arr, DeadGateWarning, FrontendError, Ops, batch, check_identity, export,  # noqa: E402
-                                export_report, function, ops, scan)
+from verity.circuits.refs import Concat, Explicit, Strided  # noqa: E402
+from verity.definitions.registry import b1  # noqa: E402
+from verity.definitions.registry.prims import BF16  # noqa: E402
+
+from verity_vllm.program.frontend import (  # noqa: E402
+    Arr,
+    DeadGateWarning,
+    FrontendError,
+    Ops,
+    batch,
+    check_identity,
+    export,
+    export_report,
+    function,
+    ops,
+    scan,
+)
 from verity_vllm.program.frontend import examples as ex  # noqa: E402
 from verity_vllm.program.frontend.correspond import correspond  # noqa: E402
-from verity.circuits.refs import Affine, Concat, Explicit, Strided  # noqa: E402
-from verity.definitions.registry import b1  # noqa: E402
-from verity.definitions.registry.prims import BF16, F32, I32  # noqa: E402
 
 meta = lambda *shape, dtype=torch.bfloat16: torch.empty(shape, dtype=dtype, device="meta")  # noqa: E731
 
@@ -183,10 +201,9 @@ def test_r1_two_bodies_in_one_program_are_rejected():
         export(Both, (meta(4),), dead_gates="ignore")
     assert ei.value.code == "E_IDENTITY" and "two different bodies claim Leaf1_v1{K=4}" in ei.value.message
     # and the program-level check catches the same conflict on an already-built program (no first-wins on decode paths)
-    from verity.circuits.defs import CompositeDefinition, Builder
-    from verity.circuits.refs import Coll
-    from verity.definitions.registry.prims import Bf16Add, Bf16AddF2fp
+    from verity.circuits.defs import CompositeDefinition
     from verity.circuits.types import Array
+    from verity.definitions.registry.prims import Bf16Add, Bf16AddF2fp
 
     def leaf(prim):
         return CompositeDefinition("Leaf1x", 1, ("K",), lambda S: ((("x", Array(S.K, BF16)),), Array(S.K, BF16)),

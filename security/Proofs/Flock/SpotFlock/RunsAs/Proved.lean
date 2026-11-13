@@ -1,7 +1,6 @@
 module
 
 public import Proofs.Flock.SpotFlock.RunsAs.Steps
-public import Proofs.Properties.Verity.Sampled.Held
 public import Proofs.Properties.Spot.Credited
 public import Proofs.Flock.Soundness.ExecDraw
 import all Lean.Data.Json.Basic

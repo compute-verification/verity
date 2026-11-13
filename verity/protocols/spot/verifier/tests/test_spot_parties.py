@@ -21,12 +21,12 @@ import json
 
 import pytest
 
-from verity.configuration.deploy.manifest import place, site_of
-from verity.configuration.deploy.party import Identity, Received
-from verity.configuration.deploy.runtime import run
+from verity.protocol import place, site_of
+from verity.party import Identity, Received
+from verity.runtime.runner import run
 from verity.protocols.spot.verifier import parties as P
 from verity.protocols.spot.verifier.one_stage import registration as R
-from verity.configuration.wire import Message, Refused
+from verity.channel import Message, Refused
 
 ROLES = [P.CHALLENGER, P.INFERENCE_SERVER, P.PROOF_SERVER, P.VERIFIER]
 ADDRESS = "127.0.0.1:4242"

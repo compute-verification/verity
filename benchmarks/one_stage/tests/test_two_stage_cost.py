@@ -61,7 +61,7 @@ def test_second_takes_its_cards_from_its_command_line_as_their_indices(ran):
     (["--devices", "0", "--firewall", "flock-firewall"], "drop --devices"),
 ])
 def test_second_stops_at_its_parser_on_cards_it_cannot_prove_on(ran, capsys, more, why):
-    """Cards named wrongly, or with sessions behind the ZK server (process pairs on the CPU), end the command before
+    """Cards named wrongly, or with sessions behind the ZK server (which prove on the CPU), end the command before
     anything runs: it never proves on the CPU in silence where a card was asked for."""
     with pytest.raises(SystemExit) as e:
         TS.main([*SECOND, *more])

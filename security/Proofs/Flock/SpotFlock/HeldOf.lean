@@ -28,7 +28,7 @@ session statement, the code the frame is built from, and the rounds past round 1
 layout's strata, the second stage has a cell and a count of at least `1` for each template, each template's
 reference statement reads as a member's, each member's circuit is in Flock's hidden-output scope and the registered
 wiring passes its check), the templates' names are distinct, and the interior registration registers no value. A held copy it builds discharges
-`NamesDistinct` (`namesDistinct_of`), with the run's population check RUNCOINS's `TwoHolds` (`HeldOfRun.twoHolds_of`),
+`NamesDistinct` (`namesDistinct_of`), with the run's population check RUNCOINS's `TwoHolds` (`HeldOfRun.twoHolds_of`, at an accepted run),
 and with `RecordsHeld` its `RegistersNone` (`registersNone_of`). The last is
 the second two-stage try's design, whose interior registration registers none; the first try's registers `logits`,
 and there `heldOf` is `none`.

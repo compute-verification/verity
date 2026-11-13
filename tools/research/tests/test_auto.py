@@ -533,6 +533,7 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     monkeypatch.setattr(cores, "CLAIMS", claims)
     monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")          # each CPU its own core
     monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))         # no such directory: the probe skips the disk check
+    monkeypatch.setattr(auto, "HOLD_FILE", str(tmp_path / "no-hold"))         # a held node 2 carries the real one
     monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))   # a slot-only host (cpu-1) carries the real one
     held = [cores.locked(claims / "r1.cpus", "48-91\n"), cores.locked(claims / "wait.01.r2", "4\n")]
     (claims / "gone.cpus").write_text("92-95\n")                               # nobody holds it: a run that ended
@@ -679,6 +680,7 @@ def test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen(tmp_
     monkeypatch.setattr(cores, "CLAIMS", tmp_path / "claims")
     monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")
     monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
+    monkeypatch.setattr(auto, "HOLD_FILE", str(tmp_path / "no-hold"))
     marker = tmp_path / "runs-via-slot"
     marker.write_text("slot only\n")
     monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(marker))

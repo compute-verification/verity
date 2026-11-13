@@ -1,5 +1,5 @@
 """An audit's cards: ``--devices`` is the one place it takes them from, SPOT's proof server proves on them (one CPU
-prover without them, as before), a session the proof server doesn't prove refuses them by name, and the summary says of
+prover without them, as before), a session that proves on the CPU refuses them by name, and the summary says of
 each session where it proved and which of its seconds are its proving's. No card is needed here: the proof server is a
 stand-in that keeps what it was given, and nvidia-smi's answer is handed in."""
 
@@ -77,9 +77,10 @@ def test_an_audits_cards_go_to_the_proof_server_numbered_as_nvidia_smi_numbers_t
 
 
 @pytest.mark.parametrize("how", [{"plain": True}, {"firewall": "flock-firewall"}])
-def test_a_session_the_proof_server_does_not_prove_takes_no_card_and_says_so(tmp_path, made, how):
-    """A plain session and one behind the ZK server are process pairs on the CPU: without cards they are as before (no
-    proof server), and with cards the audit is refused by name, never run on the CPU in silence."""
+def test_a_session_that_proves_on_the_cpu_takes_no_card_and_says_so(tmp_path, made, how):
+    """A plain session is a process pair on the CPU, and one behind the ZK server proves on the CPU too, on the proof
+    server's kept prover: without cards they are as before (here, with no sampled member, no proof server), and with
+    cards the audit is refused by name, never run on the CPU in silence."""
     assert a5.proof_server(_args(**how), tmp_path) is None and a5.devices_refusal(_args(**how)) is None
     a = _args(devices=[0], **how)
     assert "drop --devices" in a5.devices_refusal(a)

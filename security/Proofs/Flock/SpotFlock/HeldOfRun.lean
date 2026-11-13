@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.HeldOfCheck
 public import Proofs.Flock.SpotFlock.ScopeDesc
 public import Proofs.Flock.SpotFlock.Placement
+public import Proofs.Flock.SpotFlock.RunsAs.PopulationOf
 
 /-!
 # What the run's population check gives the held copies
@@ -21,8 +22,9 @@ the run refuses a boundary registration whose population is not its `n` units in
   naming one count per template.
 * `built_of_templates`: every member's unit net is built where every template's reference statement reads as a
   member's (`templateOk`, through `templateOk_facts`), so `two` at the copies (`two_held₀`) takes no `Built`.
-* `twoHolds_of`, `twoHolds_of_files`: a held copy `heldOf` builds, or the form's check of them, gives RUNCOINS's
-  `TwoHolds` where the run's population check passes.
+* `twoHolds_of_pop`: a held copy `heldOf` builds gives RUNCOINS's `TwoHolds` where the run's population check passes.
+* `twoHolds_of`, `twoHolds_of_ok`, `twoHolds_of_files`: the same at an accepted two-stage run, whose population check
+  passed (`RunsAs.population_of_accepted`).
 * `xS₀_of_files`: a held copy built from the form's members and blobs has template `t`'s reference statement
   `refRawOf`'s bytes.
 -/
@@ -262,7 +264,7 @@ theorem firstOf_program {i : Spot.Run.Input} {first : Reg} (hf : firstOf i = som
 /-- **The design evaluates** (RUNCOINS's `TwoHolds`) at a held copy `heldOf` builds, where the run's population check
 passes (`Slots.popOk` at the params' program and query, which `Run.run` refuses without: `population-order`): `heldOf`
 decides the descriptor's checks (`descCore`), and the population gives the layout's fit to the members' files. -/
-theorem twoHolds_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h : Held} {n : ℕ}
+theorem twoHolds_of_pop {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h : Held} {n : ℕ}
     (hh : heldOf i it u = some h)
     (hp : Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true) : TwoHolds h := by
   obtain ⟨first, ns, ks, l, hz, hf, -, hl, rfl, hd⟩ := heldOf_spec hh
@@ -299,24 +301,30 @@ theorem twoHolds_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {
     (fun x hx => of_decide_eq_true (List.all_eq_true.1 hk1 x hx))
     (fun t htl => List.all_eq_true.1 ht t (List.mem_range.2 htl)) hsc hw
 
-theorem twoHolds_of_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {n : ℕ} (u : Unread)
-    (hk : heldOk i it u = true)
-    (hp : Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true) :
+/-- **The design evaluates** at a held copy `heldOf` builds for an accepted two-stage run (`AcceptedTwo`), whose
+population check passed (`population_of_accepted`). -/
+theorem twoHolds_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h : Held} {j : Json}
+    (hh : heldOf i it u = some h) (ha : AcceptedTwo i it j) : TwoHolds h := by
+  obtain ⟨_, -, hp⟩ := population_of_accepted ha
+  exact twoHolds_of_pop hh hp
+
+theorem twoHolds_of_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (u : Unread)
+    (hk : heldOk i it u = true) (ha : AcceptedTwo i it j) :
     ∃ h, heldOf i it u = some h ∧ TwoHolds h := by
   obtain ⟨h, hh⟩ := heldOf_of_ok u hk
-  exact ⟨h, hh, twoHolds_of hh hp⟩
+  exact ⟨h, hh, twoHolds_of hh ha⟩
 
-/-- **The form's check of the held copies gives `TwoHolds`** where the run's population check passes. -/
+/-- **The form's check of the held copies gives `TwoHolds`** at an accepted two-stage run. -/
 theorem twoHolds_of_files {p : VStar.Recursive.SampledTwo.Params} {bs : Core.Blobs} {i : Spot.Run.Input}
-    {it : Spot.Run.Interior} {n : ℕ} (u₀ : Unread) (hk : heldOkDesc p bs i it u₀ = true)
-    (hp : Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true) :
+    {it : Spot.Run.Interior} {j : Json} (u₀ : Unread) (hk : heldOkDesc p bs i it u₀ = true)
+    (ha : AcceptedTwo i it j) :
     ∃ u h, unreadOf p bs u₀.desc u₀.query u₀.c₀ u₀.more = some u ∧ heldOf i it u = some h ∧ TwoHolds h := by
   unfold heldOkDesc at hk
   cases hx : refStmtsOf p bs with
   | none => rw [hx] at hk; simp at hk
   | some xs =>
     rw [hx] at hk
-    obtain ⟨h, hh, ht⟩ := twoHolds_of_ok { u₀ with xs } hk hp
+    obtain ⟨h, hh, ht⟩ := twoHolds_of_ok { u₀ with xs } hk ha
     exact ⟨_, h, by simp [unreadOf, hx], hh, ht⟩
 
 /-- **A held copy's reference statements are the form's** (`refRawOf`'s bytes, template by template) where `heldOf`

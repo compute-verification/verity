@@ -63,6 +63,9 @@ theorem membersRun_held {p : Spot.OneStageZk.Params} {ms : Array Spot.OneStageZk
       Spot.OneStageZk.linesOf e = .ok L ∧ Spot.OneStageZk.membersTreesHeld ts L (sts.zip held) bs = .ok () := by
   unfold Spot.OneStageZk.membersRun at h
   simp only [Verity.Sampled.bind_ok] at h
+  obtain ⟨_, h, -⟩ := h
+  unfold Spot.OneStageZk.membersStructure at h
+  simp only [Verity.Sampled.bind_ok] at h
   obtain ⟨held, hheld, h⟩ := h
   split at h
   · simp only [Verity.Sampled.bind_ok] at h
