@@ -17,8 +17,8 @@ many proof blocks as the member has units. This module reads, off one session's 
 * **A member of one range** (`first_one`, `count_one`, `indices_one`, `indices_at`, `sampled_one`,
   `laidHeld_one`, `laidHeld_sum`, `membersStructure_laid`): the form's check holds every member to one range of the
   registration's units and the members' counts to its population (`laidHeld`, which the form's structure check
-  runs), and at a member of the one range `[lo, hi)` its first unit is `lo`, its count `hi - lo`, its unit at slot `u` is
-  `lo + u`, and the sample holds one of its units exactly where it holds a unit from `lo` up to `hi`.
+  runs), and at a member of the one range `[lo, hi)` its first unit is `lo`, its count `hi - lo`, its unit at slot
+  `u` is `lo + u`, and the sample holds one of its units exactly where it holds a unit from `lo` up to `hi`.
 * **The record's sample is a subset sample** (`sessionVerdict_subset`): a session whose verdict passes has a record
   with a sample, which decodes by the subset sampling design; `verify --zk` refuses a session without a sample, and
   a session set up without a stratified input refuses a stratified one.
