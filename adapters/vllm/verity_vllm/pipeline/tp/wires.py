@@ -8,7 +8,7 @@ string. A peer row that isn't its writer's output is a wrong block of the window
 units a sample draws), never a free input: `interface.input_count` counts every peer row wired.
 
 **Units** (`grain.lower`). A site's units are:
-* its producers' units, per rank;
+* its producers' units, per rank, a batch's those of each member its partial reads;
 * at coordinate grain, each rank's gathers of its words into rows of K;
 * its combine units (one a chunk at coordinate grain, one a row at row grain, none for a gather), the gathers of a token
   row's chunks, and the fused all-reduce's norm, one unit for every rank;
@@ -275,14 +275,30 @@ class _Window:
                 self.unwired.append(f"{what} reads leaves [{l1}, {h1}): {why}")
 
 
+def _members(lo: int, hi: int, P: int) -> list[tuple[int, int, int]]:
+    """``[lo, hi)`` of a batch's argument or output, ``P`` leaves a member, cut where its members meet: (member, lo, hi)."""
+    return [(t, max(lo, t * P), min(hi, (t + 1) * P)) for t in range(lo // P, -(-hi // P))]
+
+
 def _member_reads(b: TB.RequestBinding, r: int, x: int, a: int, off: int, lo: int, hi: int) -> list[tuple[int, int]]:
     """The leaves of a site's output that rank ``r``'s reader ``(x, a, off, lo, hi)`` reads: ``[lo, hi)``, or for an argument
     a batch maps, cut where its members' arguments meet, so the token row is a member's read and not the batch's."""
     batch = b.batches.get(r, {}).get(x)
     if batch is None or batch[1][a] is None:
         return [(lo, hi)]
-    P, end = b.fns[r][x].signature()[0][a][1].leaves, off + hi - lo
-    return [(lo + max(t * P, off) - off, lo + min((t + 1) * P, end) - off) for t in range(off // P, -(-end // P))]
+    return [(lo + c - off, lo + d - off) for _t, c, d in _members(off, off + hi - lo, b.fns[r][x].signature()[0][a][1].leaves)]
+
+
+def _member_runs(b: TB.RequestBinding, p: int, runs: Sequence[TB.Run]) -> list[tuple[int, int, int]]:
+    """Rank ``p``'s partial ``runs`` of a site, a batch producer's cut at its members, each piece at its member's leaves."""
+    out = []
+    for n, lo, hi in runs:
+        if n not in b.batches.get(p, {}):
+            out.append((n, lo, hi))
+            continue
+        M = b.fns[p][n].signature()[1].leaves
+        out.extend((n, c - t * M, d - t * M) for t, c, d in _members(lo, hi, M))
+    return out
 
 
 def sites_circuit(bindings: Sequence[TB.RequestBinding | None], name: str, ranks: Sequence[int] | None = None) -> Sites:
@@ -317,13 +333,14 @@ def sites_circuit(bindings: Sequence[TB.RequestBinding | None], name: str, ranks
         for j, s in enumerate(b.sites):
             where = f"{name}: request {i}'s collective {s.k} [{s.lo}, {s.hi})"
             reads = [m for r, rd in enumerate(s.readers) for rdr in rd for m in _member_reads(b, r, *rdr)]
+            own = [_member_runs(b, p, s.own[p]) for p in range(world)]
             low = lowered[j] = G.lower(b.fns[0][s.combine[0][0]],
-                                       [[(b.fns[p][n], lo, hi) for n, lo, hi in s.own[p]] for p in range(world)], reads, where)
+                                       [[(b.fns[p][n], lo, hi) for n, lo, hi in own[p]] for p in range(world)], reads, where)
             win.site(i, j, low)
             segs[j] = win.writers(i, j, low)
             for r in rs:
                 q = 0
-                for (n, _lo, _hi), (*_, m) in zip(s.own[r], low.producers[r]):
+                for (n, _lo, _hi), (*_, m) in zip(own[r], low.producers[r]):
                     mine.setdefault((r, n), []).append((j, q, m))
                     q += m
                 for x in sorted(last.get((j, r), ())):
