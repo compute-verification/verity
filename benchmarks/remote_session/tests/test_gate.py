@@ -66,8 +66,10 @@ def off_main(repo: tuple[Path, str]) -> tuple[Path, str]:
 
 
 def probe(tmp_path: Path, repo: tuple[Path, str], *, ledger=CLOSED_7, pinned=None, busy=(), public=PUBLIC,
-          period="ma-remote-coins-8", circuit=None, dry=False) -> tuple[subprocess.CompletedProcess, Path, list[str]]:
-    """gate.sh probe against stub gates answering from these records; its result, $OUT and the calls ssh got."""
+          period="ma-remote-coins-8", circuit=None, dry=False, verb="probe",
+          **more: str) -> tuple[subprocess.CompletedProcess, Path, list[str]]:
+    """gate.sh VERB (default probe) against stub gates answering from these records, with MORE set; its result, $OUT
+    and the calls ssh got."""
     r, head = repo
     g, out, bin_ = tmp_path / "gates", tmp_path / "out", tmp_path / "bin"
     for d in (g, out, bin_):
@@ -87,7 +89,8 @@ def probe(tmp_path: Path, repo: tuple[Path, str], *, ledger=CLOSED_7, pinned=Non
         env["CIRCUIT"] = circuit
     if dry:
         env["DRY"] = "1"
-    p = subprocess.run(["bash", str(GATE), "probe"], cwd=r, env=env, capture_output=True, text=True)
+    env |= more
+    p = subprocess.run(["bash", str(GATE), verb], cwd=r, env=env, capture_output=True, text=True)
     calls = (g / "calls").read_text().splitlines() if (g / "calls").exists() else []
     return p, out, calls
 
@@ -200,7 +203,7 @@ def test_fire_goes_on_for_a_lease_begun_by_lease_by(tmp_path):
 
 
 FORM = ("PACED", "PACE_PASS_MS", "SESSIONS", "WINDOWS", "WINDOW_MS", "SAMPLES")
-REQUEST = ("MODEL", "ENGINES", "ARENA_BLOCKS", "PORT", "MINUTES", "JITTER_MS", "QUANTILE", "PROVER_NODE", "AUDITOR")
+REQUEST = ("MODEL", "BIND", "ENGINES", "ARENA_BLOCKS", "PORT", "MINUTES", "JITTER_MS", "QUANTILE", "PROVER_NODE", "AUDITOR")
 PACED = ("--paced 1:60000:33273:2 1:60000:33273:2 1:1000:2773:7 1:1000:2773:7 --pace-pass-ms 85 --minutes 30 "
          "--jitter-ms 50 --quantile max --model QWEN25_32B_BF16 --engines 8 --arena-blocks 16252928")
 
@@ -231,10 +234,17 @@ def host(tmp_path: Path, verb: str = "host", **form: str) -> tuple[subprocess.Co
     ({"SESSIONS": "2"},
      "--sessions 2 --minutes 30 --jitter-ms 50 --quantile max --model QWEN25_32B_BF16 --engines 8 "
      "--arena-blocks 16252928"),
-], ids=["default", "paced", "one-coin-a-window", "sessions-alone"])
+    ({"SESSIONS": "1", "WINDOWS": "7", "WINDOW_MS": "60000", "SAMPLES": "33273", "BIND": "0"},
+     "--sessions 1 --windows 7 --window-ms 60000 --samples 33273 --minutes 30 --jitter-ms 50 --quantile max"),
+    ({"BIND": "0"}, PACED.removesuffix(" --model QWEN25_32B_BF16 --engines 8 --arena-blocks 16252928")),
+    ({"BIND": "1", "MODEL": "TINY"}, PACED.replace("QWEN25_32B_BF16", "TINY")),
+], ids=["default", "paced", "one-coin-a-window", "sessions-alone", "one-coin-a-window-unbound", "paced-unbound",
+        "bound-named"])
 def test_the_hosts_run_is_asked_for_paced_sessions_or_with_sessions_for_one_coin_a_window(tmp_path, form, want):
     """The request names one form: PACED's words at PACE_PASS_MS, by default the four paced sessions, or SESSIONS
-    sessions with the WINDOWS, WINDOW_MS and SAMPLES that are set and nothing of a pace."""
+    sessions with the WINDOWS, WINDOW_MS and SAMPLES that are set and nothing of a pace. With BIND=1, the default, it
+    binds the store to MODEL with its engines' arenas; with BIND=0 it names no model, engines or arenas, so the
+    verifier holds no checkpoint."""
     p, sent = host(tmp_path, **form)
     assert p.returncode == 0, p.stdout + p.stderr
     assert sent == [f"run --peer vy-nebius-2 --port 7951 --period ma-remote-coins-9 --pin {PIN} {want}"]
@@ -251,6 +261,49 @@ def test_both_forms_at_once_or_a_window_without_sessions_is_refused_before_any_r
     p, sent = host(tmp_path, verb, **form)
     assert p.returncode == 2 and why in p.stdout, p.stdout + p.stderr
     assert sent is None
+
+
+@pytest.mark.parametrize("bind, model", [({}, " --model QWEN25_32B_BF16"), ({"BIND": "1", "MODEL": "TINY"}, " --model TINY"),
+                                         ({"BIND": "0"}, "")], ids=["default", "bound", "unbound"])
+def test_the_period_signs_the_model_only_when_the_run_binds_the_store_to_it(tmp_path, bind, model):
+    """`open` asks for `period-open` with MODEL where the host's run binds the store to it (BIND=1, the default), and
+    with no model under BIND=0, whose period the auditor's line then finds no model to bind the store to in."""
+    p, sent = host(tmp_path, "open", CIRCUIT="ab" * 64, **bind)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert sent == ["ledger", f"period-open --name ma-remote-coins-9 --cap 4 --circuit {'ab' * 64}{model}", "ledger"]
+
+
+@pytest.mark.parametrize("verb", ["host", "probe", "fire", "form"])
+@pytest.mark.parametrize("bind", ["2", "yes", ""], ids=["two", "a-word", "set-empty"])
+def test_a_bind_other_than_0_or_1_is_refused_before_any_request(tmp_path, verb, bind):
+    """An empty BIND is the default, 1, as every unset variable of gate.sh's is."""
+    p, sent = host(tmp_path, verb, BIND=bind)
+    if bind == "":
+        assert verb != "host" or p.returncode == 0, p.stdout + p.stderr
+        assert verb != "host" or "--model QWEN25_32B_BF16" in sent[0]
+        return
+    assert p.returncode == 2 and f"BIND is {bind}: 1 binds the store to MODEL's pinned checkpoint, 0 to none" in p.stdout
+    assert sent is None
+
+
+def test_a_dry_fire_that_cant_read_the_provers_leases_says_so_once_and_writes_every_request(tmp_path, repo):
+    """A stopped prover node answers no lease status: a dry fire says so, asks once and sends nothing, so the
+    requests it would send in the session are all in gate.requests."""
+    p, out, calls = probe(tmp_path, repo, dry=True, verb="fire", PROVER_SSH="research@192.0.2.9", PROVER_RUN="r1",
+                          ENGINES="8", BIND="0", SESSIONS="1", WINDOWS="7", WINDOW_MS="60000", SAMPLES="33273")
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert "DRY: can't read vy-nebius-2's leases; would wait until r1 holds 8" in p.stdout
+    asked = " ".join(calls)
+    assert asked.count("BatchMode") == 1 and "gpu-lease status" in asked, \
+        "one read of the leases, and no request"
+    sent = [line.split(" ", 2)[2] for line in (out / "gate.requests").read_text().splitlines()]
+    assert sent[:4] == ["pubkey", "pins", "ledger", "status"]
+    (run,) = [r for r in sent if r.startswith("run ")]
+    assert run.endswith("--sessions 1 --windows 7 --window-ms 60000 --samples 33273 --minutes 30 --jitter-ms 50 "
+                        "--quantile max")
+    (opened,) = [r for r in sent if r.startswith("period-open --name ma-remote-coins-8 ")]
+    assert "--model" not in opened, "a period of an unbound run signs no model"
+    assert any(r.startswith("period-close") for r in sent)
 
 
 @pytest.mark.parametrize("form", [{}, {"PACED": "1:1000:2773:7", "PACE_PASS_MS": "46"}, {"SESSIONS": "1"},

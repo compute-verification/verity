@@ -9,10 +9,14 @@
 #          `descriptor`). COMMIT, and so the verifier host's pin, must be on origin/main's first-parent line, fetched as
 #          auditor.sh does (main.probe.txt; a fetch that fails refuses), since a session credits only under a verifier
 #          there. Writes probe.json; exit 3 on any mismatch, before anything is written to either host.
-#   open   `period-open --name PERIOD --cap CAP --circuit CIRCUIT --model MODEL`, the ledger read before and after.
+#   open   `period-open --name PERIOD --cap CAP --circuit CIRCUIT --model MODEL`, the ledger read before and after;
+#          with BIND=0 no `--model`, so the period signs no model and the auditor's line finds none to bind the store to.
 #   host   the verifier gate's `run`, gate run 7's request (PROVER_NODE as its peer, PORT, PERIOD, PIN, PACED at
-#          PACE_PASS_MS, MINUTES, JITTER_MS, QUANTILE, MODEL with ENGINES arenas of ARENA_BLOCKS); its `status` every 30 s
-#          until it ends, then the run's directory without its transcripts (`fetch`) into host/RUN. Exits with the run's rc.
+#          PACE_PASS_MS, MINUTES, JITTER_MS, QUANTILE, and with BIND=1, the default, MODEL with ENGINES arenas of
+#          ARENA_BLOCKS: the store bound to MODEL's pinned checkpoint); its `status` every 30 s until it ends, then the
+#          run's directory without its transcripts (`fetch`) into host/RUN. Exits with the run's rc. BIND=0 asks for a
+#          run that binds the store to no model: the verifier holds no checkpoint, and the store is the developer's
+#          choice. BIND other than 0 or 1 is refused (exit 2) before any request, whatever the VERB.
 #          With SESSIONS the request asks for that many sessions of one coin a window in place of PACED's paced ones:
 #          WINDOWS windows of WINDOW_MS, SAMPLES openings a window (each the verifier's own default where unset). The
 #          host's run takes one form, so SESSIONS beside PACED or PACE_PASS_MS, or one of the three without SESSIONS, is
@@ -29,9 +33,14 @@
 #
 # With DRY=1 no request reaches either gate: each is written to gate.requests and printed, the key need not exist, and
 # what doesn't need it runs (the circuit, main's first-parent line, the peers line to PROVER_NODE and its lease status,
-# the verifier host's host key).
+# the verifier host's host key). A dry fire that can't read PROVER_NODE's leases (a stopped node) says so and goes on.
 set -u
 VERB=${1:?probe, open, host, close, audit, fire or form}
+BIND=${BIND:-1}
+case $BIND in
+  0 | 1) ;;
+  *) echo "BIND is $BIND: 1 binds the store to MODEL's pinned checkpoint, 0 to none"; exit 2 ;;
+esac
 if [ -n "${SESSIONS:-}" ]; then
   [ -z "${PACED:-}${PACE_PASS_MS:-}" ] || {
     echo "SESSIONS asks for sessions of one coin a window and PACED or PACE_PASS_MS for paced ones: the host's run" \
@@ -156,8 +165,10 @@ EOF
 }
 
 open_period() {
+  local model=()
+  [ "$BIND" = 0 ] || model=(--model "$MODEL")
   gate "$CHALLENGER" ledger > "$OUT/ledger.before.jsonl"
-  gate "$CHALLENGER" period-open --name "${PERIOD:?}" --cap "$CAP" --circuit "${CIRCUIT:?}" --model "$MODEL" \
+  gate "$CHALLENGER" period-open --name "${PERIOD:?}" --cap "$CAP" --circuit "${CIRCUIT:?}" "${model[@]}" \
     > "$OUT/period-open.out" 2> "$OUT/period-open.err"
   local r=$?
   echo "period-open rc $r"
@@ -168,7 +179,8 @@ open_period() {
 }
 
 host_run() {
-  local form words r run
+  local form words r run bound=()
+  [ "$BIND" = 0 ] || bound=(--model "$MODEL" --engines "$ENGINES" --arena-blocks "$ARENA_BLOCKS")
   if [ -n "${SESSIONS:-}" ]; then
     form=(--sessions "$SESSIONS" ${WINDOWS:+--windows "$WINDOWS"} ${WINDOW_MS:+--window-ms "$WINDOW_MS"}
       ${SAMPLES:+--samples "$SAMPLES"})
@@ -177,8 +189,8 @@ host_run() {
     form=(--paced "${words[@]}" --pace-pass-ms "$PACE_PASS_MS")
   fi
   gate "$AUDITOR" run --peer "$PROVER_NODE" --port "$PORT" --period "${PERIOD:?}" --pin "${PIN:?}" "${form[@]}" \
-    --minutes "$MINUTES" --jitter-ms "$JITTER_MS" --quantile "$QUANTILE" \
-    --model "$MODEL" --engines "$ENGINES" --arena-blocks "$ARENA_BLOCKS" > "$OUT/host-run.json" 2> "$OUT/host-run.err"
+    --minutes "$MINUTES" --jitter-ms "$JITTER_MS" --quantile "$QUANTILE" "${bound[@]}" \
+    > "$OUT/host-run.json" 2> "$OUT/host-run.err"
   r=$?
   echo "host run rc $r"
   cat "$OUT/host-run.json" "$OUT/host-run.err"
@@ -248,6 +260,7 @@ fire() {
   echo "fire $(date -u +%FT%TZ): waiting for $PROVER_RUN to hold $ENGINES GPUs on $PROVER_NODE${by:+, leased by $LEASE_BY}"
   for ((k = 0; ; k++)); do
     if ! l=$(leased); then
+      [ -n "${DRY:-}" ] && { echo "DRY: can't read $PROVER_NODE's leases; would wait until $PROVER_RUN holds $ENGINES"; break; }
       # one failed read waits for the next; ten running (five minutes) end the wait
       fails=$((fails + 1))
       [ $fails -lt 10 ] || { echo "can't read $PROVER_NODE's leases $fails times running: nothing opened"; exit 3; }

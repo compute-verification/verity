@@ -9,12 +9,15 @@ The text says how the number's error reads (`ERROR_FORM`): the ledger's δ for t
 
 The node run is `benchmarks/remote_session/gate_run.sh PERIOD` with one honest session: the prover on the whole GPU
 node serving ROLE (default Llama 3.2 1B as upstream holds it, the role core's pin names `LLAMA32_1B_BF16`), each
-engine's weights arena the store, the verifier on the auditor's verifier host bound to that role's pinned checkpoint,
-the coins from the challenger host. PACED is the session (default seven credited stretches of a second, each pass
+engine's weights arena the store, the verifier on the auditor's verifier host, the coins from the challenger host.
+BIND (default 0) is whether the verifier binds the store to the role's pinned checkpoint: with 0 it holds no
+checkpoint and the store is the developer's choice, which the text and the JSON (`bound`) say; with 1 it binds it, as
+`gate_run.sh`'s BIND. PACED is the session (default seven credited stretches of a second, each pass
 under a live coin of its own); UNPACED asks for a session of one coin a window in its place, as
 WINDOWS:WINDOW_MS:SAMPLES (`7:60000:33273` is seven windows of a minute with 33,273 openings each). `gate_run.sh`'s
-own variables (COMMIT, ARENA_GIB, UTIL, HOST_GIB, LEASE_BY, FETCH, ...) pass through: with HOST_GIB the store holds
-that many GiB of the node's host memory beside the arenas. It waits for the fire run to reach the evidence store and
+own variables (COMMIT, ARENA_GIB, UTIL, HOST_GIB, LEAF_CTAS, LEASE_BY, FETCH, ...) pass through: with HOST_GIB the
+store holds that many GiB of the node's host memory beside the arenas, and with LEAF_CTAS the node's passes are the
+leaf pass on that many reading CTAs. It waits for the fire run to reach the evidence store and
 prints from it as `--from` does; `--dry-run` sends nothing to either gate and prints no number.
 
 `--from RUN` reads the verifier's record of a run in the store: a gate run's fire run (its host run's `verifier.json`)
@@ -65,7 +68,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 RS = ROOT / "benchmarks" / "remote_session"
 
-#: this directory's registry: PACED, UNPACED, and the variables a research run sets
+#: this directory's registry: PACED, UNPACED, BIND, and the variables a research run sets
 SETTINGS = of(__file__)
 #: UNPACED's word: the windows, a window's milliseconds (to three places, as the verifier host takes them) and the
 #: openings a window
@@ -85,6 +88,8 @@ RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.jso
 LOOPBACK = ("loopback: both processes ran on this machine, the prover the CPU reference over a test store; it "
             "certifies nothing")
 NOTHING = "a share of 1 or more certifies nothing of the node's read rate"
+#: a node's store that its verifier bound to no model, in the store's line
+UNBOUND = "the verifier held no checkpoint: the store's bytes are the developer's choice"
 #: the readings of the verifier's ledger, each the key it holds one under and the read rate it takes for the node: the
 #: number is printed at the first
 READINGS = {"spec": "the data sheet's read bandwidth", "measured": "the measured read rate"}
@@ -194,7 +199,7 @@ def session(record: Path, k: int | None) -> dict:
             "store_bytes": blocks * BLOCK_BYTES,
             "node_gpu_bytes": (ledger.get("memory") or {}).get("hbm_bytes"),
             "model": binding.get("name") if binding.get("bound") is True else None,
-            "ledger": ledger}
+            "bound": binding.get("bound") is True, "ledger": ledger}
 
 
 def document(s: dict, commit: str | None, run: str | None, *, loopback: bool, host_run: str | None = None) -> dict:
@@ -285,6 +290,14 @@ def loopback(run: Callable = subprocess.run) -> dict:
 
 
 def form() -> dict[str, str]:
+    """The node run's one session as `gate_run.sh`'s variables: UNPACED's session of one coin a window where it is
+    set, else PACED's paced one, and BIND, whether its verifier binds the store."""
+    if (bind := SETTINGS.BIND) not in ("0", "1"):
+        raise Unreadable(f"BIND is {bind!r}: 0 binds the node's store to no model, 1 to {ROLE}'s pinned checkpoint")
+    return {"BIND": bind, **session_form()}
+
+
+def session_form() -> dict[str, str]:
     """The node run's one session as `gate_run.sh`'s variables: UNPACED's session of one coin a window where it is
     set, else PACED's paced one."""
     unpaced = SETTINGS.UNPACED
@@ -473,7 +486,8 @@ def text(doc: dict) -> str:
     whole = None if doc["loopback"] else doc.get("node_gpu_bytes")
     lines.append("  store: " + (f"{doc['store_bytes']:,} bytes, a test store" if doc["loopback"] else _gb(doc["store_bytes"]))
                  + (f", {doc['store_bytes'] / whole:.3f} of the node's {_gb(whole)} of GPU memory" if whole else "")
-                 + (f", bound to {doc['model']}'s pinned checkpoint" if doc.get("model") else ", bound to no checkpoint"))
+                 + (f", bound to {doc['model']}'s pinned checkpoint" if doc.get("model")
+                    else ", bound to no checkpoint" if doc["loopback"] else f"; {UNBOUND}"))
     for r in doc["beside"]:
         where = f"{r['run']}, {r.get('date') or 'no date'}, {r.get('card') or 'no card'}"
         lines.append(f"  beside it, {r['name']}: "
