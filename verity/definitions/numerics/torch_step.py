@@ -14,7 +14,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from verity.definitions.ops import mufu as MU
+from verity.circuits.ops import mufu as MU
 from verity.definitions.registry import bf16_gemm_check as GC
 from verity.definitions.registry import torch_train as TT
 

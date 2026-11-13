@@ -18,12 +18,12 @@ from verity.definitions.circuits import stacking as P
 from verity.definitions.circuits.census import census
 from verity.circuits.codec import canonical_json
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, _Widths
-from verity.definitions.ops import fp32, prims, scalar
-from verity.definitions.ops.s8 import S32LowByte
+from verity.circuits.ops import fp32, prims, scalar
+from verity.circuits.ops.s8 import S32LowByte
 from verity.circuits.ports import In, Leaves, Out, Ports
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, Strided, array_of, concat, tuple_of
-from verity.definitions.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, s32_value, s32_word
+from verity.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, s32_value, s32_word
 from verity.circuits.types import Array, Tuple as TupleT, Value
 
 S8, S16, S32, BIT = Value(8), Value(16), Value(32), Value(1)
