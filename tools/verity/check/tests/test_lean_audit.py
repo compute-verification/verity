@@ -1517,7 +1517,7 @@ def _attempts(tmp: Path, rows: list[tuple[str, str, str, list[str]]]):
     return types.SimpleNamespace(sql=lambda q, a=(): db.execute(q, a).fetchall())
 
 
-#: a records run as `research.queue.RECORDS_COMMAND` starts it, and one a lane wrote by hand
+#: a records run as `research run` records its command, and one a lane wrote by hand
 RECORDS_RUN = ["python3", "tools/verity/lean/lean_changed.py", "--records", "security", "--update"]
 RECORDS_BY_HAND = ["bash", "-lc", "uv sync -q && python3 tools/verity/lean/lean_changed.py --records security/Proofs"]
 
