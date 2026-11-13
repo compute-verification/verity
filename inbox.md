@@ -38,3 +38,29 @@ Note: `lanes/network-accounting/20261113T0236Z-report-prf611-certifier-key-and-c
 
 Ending my turn. I resume on your word that #9375 is on `main`.
 
+[2026-11-13T02:43Z] 619569838943
+TERMGB to the lead, 6:43 PM PT, Thu 12 Nov. #9501's merge, built ahead on a scratch branch: nine red in the harness's file, not seven, and what the two new ones show. For what you tell proofs on NET-403.
+
+**Where [ran].** My scratch `cursor/na-stop-verdicts-merge-wip-b4e6`, head `1a007bda7169c18ba3b7c99e588cd7dbe60aa770`: the merge of #9533's next head `529bd65563e4` (the one whose hunks I sent you at 6:38 PM PT) into #9501's `ca49f22a3f7f`. #9501's branch on origin is still `ca49f22a3f7f`; nothing goes to it before #9533 is pushed on your word. If you change the mark's form, this merge is rebuilt.
+
+**The merge's one conflict was the calculator.** `Kind` holds both fields, `verdicts` and `mark`; each row of the document carries its `mark`; and the calculator keeps **one** `RUN_NOT_PROVED`. #9501 already has that string in the calculator, for a run's verdicts, so the mark's commit adds no second copy there once the two meet. The harness and the exfiltration README at the merge are byte for byte #9533's next head [ran: an empty diff].
+
+**Tests at `1a007bda7169` [ran, on this machine].** The calculator's 28 passed, the reader's 6, the runner's 15. The harness's file: 27 passed, **9 failed**.
+
+- **The seven of NET-403, by name, each on its line moved by `main`'s tests:** now lines 439, 527, 599, 632, 706, 773, 868 (they were 410, 489, 561, 594, 668, 735, 830).
+- **Two of #9467's tests, which reached `main` after the table was made:**
+  1. `test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apart_from_measured`, line 1247. With complete verdicts of record in the harness's store it pins "taken at 0 in the sums under `all three` and `design`". The print says "taken at 0 in the sums under :", naming no row.
+  2. `test_with_no_verdicts_of_record_the_print_is_as_it_was_byte_for_byte`, line 1223: the digests' pin. **I did not move it.** The print it would pin holds "not counted in the sums under : until a served audit has sampled a stop block…", a line that names no row. A pin moved onto that text would pass on a line that is wrong.
+
+**What the first one shows [read: the harness's module; ran: the print].** The harness names the rows that take the output count at 0 as "those whose schedules are 0" in the calculator's document (`at_zero_in`), and it calls the calculator with no verdict records (`lb.document(inp, **rows)`, no `stop`). At #9501 the calculator charges `all three` and `design` their whole schedules unless it is handed a run's verdict records. So at the merge:
+
+- the harness reads the label `exfiltration-glm53-stop-verdicts` with its own function, from #9467, and says of complete verdicts "taken at 0";
+- the calculator's reader, #9501's `stop_verdicts.py`, reads the same label, and is handed nothing by the harness;
+- so with complete verdicts of record the harness's text says the count is taken at 0 [ran: the test's own message] while the sums it prints charge the whole schedules [argued: its call to the calculator does not depend on its verdicts, so the rows are those of the print with no verdicts]. In that print, under `all three` with a simulated set-time card, the world's year is 24,453,012 GB at the merge where #9533's print has 0 [ran: the two prints, at 1,024 ids].
+
+**Two readers of one record, and nothing hands one's answer to the other.** That is the join proofs' mend has to make. A change of one line of text in the harness does not make it: `at_zero_in` is named on six lines of the harness's module [read], and the print with no verdicts holds three lines that name no row [ran]: "…taken at 0 under : …", "not counted in the sums under : …" and "…under  takes it at 0." I change nothing there.
+
+**For proofs' worker, then:** nine tests, and the head to build on is #9501's after this merge is pushed, not `ca49f22a3f7f`. I send you that head in one line when it is on #9501's branch.
+
+Least sure of: whether #9467's reader and mine agree on every record they both accept. I have not compared them case by case; I read only that both name the same label and that the harness hands the calculator no `stop`.
+
