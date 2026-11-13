@@ -42,11 +42,11 @@ theorem walkPair_spec : ∀ (sibs sibs' : List D) (idx : ℕ) (a a' : D),
       · have hup' := E.dig_inj hup
         unfold up at hup'
         split_ifs at hup' with he
-        · simp only [walkPair, if_pos hup, if_pos he]
+        · simp only [walkPair, ite_eq_left hup, ite_eq_left he]
           exact ⟨fun h => hne (append_inj E h).1, hup'⟩
-        · simp only [walkPair, if_pos hup, if_neg he]
+        · simp only [walkPair, ite_eq_left hup, ite_eq_right he]
           exact ⟨fun h => hne (append_inj E h).2, hup'⟩
-      · simp only [walkPair, if_neg hup]
+      · simp only [walkPair, ite_eq_right hup]
         exact walkPair_spec rest rest' (idx / 2) _ _ (by simpa using hlen) (fun h => hup (congrArg E.dig h)) heq
 
 /-- **`openPair` is a collision**: two openings of one position that verify against one cap and carry different

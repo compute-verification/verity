@@ -49,6 +49,7 @@ theorem firstL_of_isSome {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf 
   rw [Option.isSome_map] at h
   exact Option.isSome_iff_exists.1 h
 
+open Classical in
 theorem firstL_some {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
     {lanes depth d : ℕ} {xs : List (ℕ × List F × Sl × List D)} {cap : Cap D} {p : Fin (2 ^ d)}
     {x : ℕ × List F × Sl × List D} (h : firstL H E Lf lanes depth d xs cap p = some x) :
@@ -80,7 +81,7 @@ theorem opOfL_conflict_pair {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {
   have e : opOfLPair H E Lf pairLf lanes depth d xs xs' cap p =
       Merkle.openPairL H E Lf.leaf pairLf p.val x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2 := by
     unfold opOfLPair
-    rw [hx, hy] <;> rfl
+    rw [hx, hy]
   rw [e]
   refine Merkle.openPairL_spec H E Lf pairLf hpair cap depth p.val x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2
     (fun hxy => hne ?_) (hxp ▸ hxv.2) (hyp ▸ hyv.2)
