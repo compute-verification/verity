@@ -30,7 +30,8 @@ gives its outcome (`prove`, `outcome_of`).
   a stop class is audited with its stop blocks or not at all.
 * **The order** (`stop_order`, once the session has closed): read from the challenger's signed log as the session
   published it, never from a prover's file. Every coin a stop sample read was released after the challenger received
-  the stop registration, and the class's boundary registration's coins come before them. A window where one stop
+  the stop registration, and the class's boundary registration's coins come before them: another family's lines of
+  the same log, since a family's coins follow one commitment. A window where one stop
   class's order does not hold is refused whole, after its samples (``cross-stream-order``): no class of it hands a
   sample on, and the root's one session is spent, so nothing samples it again.
 * **The coins.** `first` takes a class's `ChallengerCoins` (a test's in-process challenger). The command opens one
@@ -82,10 +83,10 @@ Usage::
 
     two_stage.py first --boundary DIR [DIR ...] --check TEMPLATE --replay rate:NUM/DEN --k K|COUNTS.json \\
         --challenger local --main FILE --out OUT [--interior FILE.json [--span-values VALUES.json]] [--advice REGISTRATION.json] \\
-        [--proof-deadline S] [--stop RULE [--stop-design rate:NUM/DEN]]
+        [--proof-deadline S] [--stop RULE [--stop-design rate:NUM/DEN]] [--challenger-host HOST]
     two_stage.py second --stage1 OUT/<class>/stage1.json --boundary DIR --capture CAPTURE --challenger local --main FILE \\
-        --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out OUT2 [--proofs PARAMS.json] [--rids IDS.json] [--firewall F] \\
-        [--unlinked] [--stop RULE]
+        --challenger-host HOST --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out OUT2 [--proofs PARAMS.json] \\
+        [--rids IDS.json] [--firewall F] [--unlinked] [--stop RULE]
 
 Each DIR a class's (``w<window>/p<P>-o<O>/``), every one of one window (``second``: one class's, with its private
 files); COUNTS.json each check template's own count in place of one for all, ``{descriptor id: k_t}`` (`counts`);
@@ -97,7 +98,20 @@ id, where they differ; RULE the stop rule as JSON, ``{"ids": [...], "max_model_l
 (`boundary_stop.Stop.of`). ``second`` writes under OUT2 the interior window (``interior/``, its private files too), the
 params (``proofs.json``, ``references/``), a5's records (``audit/``), the sessions' statements (``statements.json``),
 its challenger session's records (``challenger/``), both stages' coin evidence (``coins.json``) and ``summary.json``;
-it exits 0 when the second stage held (`held`). A ``local`` session's challenger reads its coins through
+it exits 0 when the second stage held (`held`).
+
+One challenger serves both commands, under one key, and the verifier holds that key itself: both stages' coin evidence
+is read under it (`Stream(key=)`), and neither ``stage1.json`` nor any evidence names one. Under ``gate:`` it is the
+deployment's key record (``--challenger-key``). Under ``local`` it is the development challenger's, which ``first``
+keeps in HOST (``OUT/challenger-host`` when it names none) and ``second`` reopens there: ``second --challenger local``
+without ``--challenger-host``, or with a directory that holds no challenger, is refused before it opens a session, since
+a challenger of its own would sign under another key and the first stage's coins would be refused under it. HOST
+holds that challenger's signing key, a development key of `a5_coins.LOCAL_PARAMS` whose one-time leaves each session
+spends a few of (a session past the last is refused): it is scratch, and no file of it belongs in a run's records. FILE is
+one file for both commands: each stage's evidence carries the copy of main's history its session was pinned on, and
+the stream holds both to the copy ``second`` is given.
+
+A ``local`` session's challenger reads its coins through
 ``sampled-proofs-verifier``, which must be built first (``lake build sampled-proofs-verifier`` in
 ``verity/protocols/spot/verifier/lean``): building it on first use outlasts the local gate's start.
 ``two_stage_small.sh`` runs both commands on a CPU node at small statics.
@@ -105,6 +119,7 @@ it exits 0 when the second stage held (`held`). A ``local`` session's challenger
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import sys
@@ -266,6 +281,10 @@ class Recorded(CC.ChallengerCoins):
     def __init__(self, coins: CC.ChallengerCoins) -> None:
         self.coins, self.read = coins, bytearray()
 
+    @property
+    def label(self) -> str | None:
+        return self.coins.label
+
     def commit(self, after: bytes) -> Any:
         return self.coins.commit(after)
 
@@ -276,11 +295,18 @@ class Recorded(CC.ChallengerCoins):
 
 
 class Staged(CC.ChallengerCoins):
-    """The first stage's bytes read again, in order; then, once committed (`commit`, to the interior registration's
-    digest), ``then``'s: the second stage's live coins."""
+    """The first stage's bytes read again, in order, as coins of the family the first stage read them from
+    (``family``, set by `resume`); then, once committed (`commit`, to the interior registration's digest), ``then``'s:
+    the second stage's live coins, of its own family."""
+
+    family: str | None = None
 
     def __init__(self, read: bytes, then: CC.ChallengerCoins | None = None) -> None:
         self._read, self._at, self.then, self.live = bytes(read), 0, then, False
+
+    @property
+    def label(self) -> str | None:
+        return self.then.label if self.live else self.family
 
     def commit(self, after: bytes) -> Any:
         if self._at != len(self._read):
@@ -319,7 +345,8 @@ class First:
         """``stage1.json``: what `resume` and the replay side read."""
         return {"format": FORMAT, "commit": self.pub, "rule": self.rule.to_json(), "spec": self.stream.spec.digest(),
                 "record": self.record, "registration": self.registration.digest, "receipt": dict(self.registration.receipt),
-                "draw": self.sample.draw, "units": list(self.sample.units), "read": self.read.hex(), **self.extra}
+                "draw": self.sample.draw, "units": list(self.sample.units), "read": self.read.hex(),
+                "family": self.stream.family(self.sample), **self.extra}
 
     def second(self, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]],
                **kwargs: Any) -> tuple[S.WindowCommitmentRecord, S.Draw]:
@@ -370,6 +397,7 @@ def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, then: CC.Cha
     layout = BR.layout_of(pub, check, stop)
     coins = Staged(bytes.fromhex(stage1["read"]), then)
     stream = stream_of(layout, rule, coins, delta=delta, **kwargs)
+    coins.family = stage1.get("family")
     if stream.spec.digest() != stage1["spec"]:
         raise ValueError("the class's Spec isn't the one its first stage ran under")
     reg = stream.register(stage1["record"], layout.ports(), **({} if window_root is None else {"window_root": window_root}))
@@ -421,40 +449,46 @@ def stop_first(pub: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
     sample = stream.select(reg)
     return {"spec": stream.spec.digest(), "design": design, "record": rec, "registration": reg.digest,
             "receipt": dict(reg.receipt), "sample": sample.draw, "units": list(sample.units),
-            "read": bytes(coins.read).hex()}
+            "read": bytes(coins.read).hex(), "family": stream.family(sample)}
 
 
-def stop_order(evidence: Mapping[str, Any] | None, window_root: str, boundary: str, registration: str, read: bytes,
-               verify: Callable[..., bool]) -> str | None:
+def stop_order(key: Ch.ChallengerKey | None, main: Sequence[str], evidence: Mapping[str, Any] | None, window_root: str,
+               family: str | None, boundary: str, registration: str, read: bytes, verify: Callable[..., bool]) -> str | None:
     """Why a stop class's sample doesn't hold the order its stop record rests on, or None when it does. The order is
     read from the challenger's signed log as its session published it at the close (``evidence``, the stop sample's
-    `a5_coins.evidence`: the session's files under the verifier's challenger key, the auditor's ledger and the host's
-    pins, `challenger.trusted_session_of`), never from a prover's file. That log holds, for each coin in the order
-    released, the root the challenger had received when it released it. It holds:
+    `a5_coins.evidence`: the session's files, the auditor's ledger and the host's pins), under the challenger key
+    ``key`` and the copy ``main`` of main's first-parent history the verifier holds (`challenger.trusted_session_of`),
+    never under a key a file names. That log holds, for each coin of each family
+    in the order released, the root the challenger had received when it released it. It holds:
 
-    * every coin the stop sample read is one the log shows released after the stop registration ``registration`` (its
-      digest, hex), and the sample read all of those and no other (`coins.coins_reason` on the bytes ``read``): no
-      coin that sampled a stop block was released before the challenger received what fixes `b.stop` and the rows the
-      blocks read;
+    * every coin of the stop sample's family ``family`` (the stop stream's own, `stop_first`'s hand-off's) is one the
+      log shows released after the stop registration ``registration`` (its digest, hex), and the sample read all of
+      those and no other (`coins.coins_reason` on the bytes ``read``): no coin that sampled a stop block was released
+      before the challenger received what fixes `b.stop` and the rows the blocks read;
     * the log shows a coin released after the class's boundary registration ``boundary``, and the last of those comes
       before the first released after the stop registration: the record whose ports the stop record takes as output
-      values was received first.
+      values was received first. A family's coins follow one commitment, so the boundary registration's coins are
+      another family's, and the order is the log's own, over every family's lines.
 
     The stop population's stream is the one reader of `b.stop` in the session: a class's own stream commits and reads
     its `Layout.values`, which never hold it. So the stop sample's coins are every reader's."""
     if evidence is None:
         return "the challenger's session published no signed log to read the order from"
+    if family is None:
+        return "the stop sample read no coins of a challenger's family"
+    if key is None:
+        return "the verifier holds no challenger key to read the stop sample's coins under"
     after, before = bytes.fromhex(registration), bytes.fromhex(boundary)
-    why = CC.coins_reason(evidence, window_root, after, read, verify)
+    why = CC.coins_reason(key, list(main), evidence, window_root, family, after, read, verify)
     if why is not None:
         return f"the stop sample's coins: {why}"
     try:
-        _commitment, roots = Ch.trusted_session_of(evidence["ledger"], {"root": window_root},
-                                                   Ch.ChallengerKey.from_json(evidence["key"]), evidence["pins"],
-                                                   evidence["main"], evidence["session"], verify)
+        Ch.trusted_session_of(evidence["ledger"], {"root": window_root}, key, evidence["pins"], list(main),
+                              evidence["session"], verify)
     except Ch.CoinError as e:
         return str(e)
-    received = roots.get(evidence["segment"]["label"], ())
+    received = [bytes.fromhex(e["root"]) for e in map(json.loads, evidence["session"]["log"][1:])
+                if e.get("event") == "root"]
     first_, then = ([i for i, r in enumerate(received) if r == x] for x in (before, after))
     for name, coins in (("class's boundary", first_), ("stop", then)):
         if not coins:
@@ -877,14 +911,18 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
     the verifier's own stop rule. A stop class's stop blocks are a rank more of the session (`stop_first`), planned
     with the class's own and sampled on the class's thread after its first stage: its ``stop``. Once the session has
     closed, each stop sample's order is read from the challenger's signed log (`stop_order`), and a window where one
-    does not hold is refused whole."""
+    does not hold is refused whole. Every stream is made with the challenger's key and the verifier's copy of main's
+    history as the session's start had them (`a5_coins.held`), and the order is read under them; a ``local``
+    challenger is kept where the second stage reopens it (`challenger_host`)."""
     import a5_coins as AC
 
     root = pubs[0]["run"]
     stops = {k: len(pubs) + j for j, k in enumerate(k for k, p in enumerate(pubs) if p.get("stopped") is True)}
     manager, turns, finisher = AC.start(a.challenger, root, list(range(len(pubs) + len(stops))),
                                         Path(a.out) / "challenger", a.main, ssh_key=a.ssh_key, peer=a.peer,
-                                        key_record=a.challenger_key)
+                                        key_record=a.challenger_key, host=challenger_host(a, Path(a.out) / HOST_DIR),
+                                        deployed=getattr(a, "deployed_key", False))
+    ours = AC.held(turns)
     out: list[dict] = [{} for _ in pubs]
     stop_design = a.stop_design or a.replay
     caught = (S.Refused, ValueError, KeyError, TypeError, OSError)
@@ -908,7 +946,9 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
                     AC.need(stop_design, layout.stop_program, layout.stop_query, layout.spans),))
                 planner.start()
             coins.plan(need)
-            got = first(pubs[k], check, mine, coins, window=window, delta=a.delta, window_root=root, stop=stop)
+            got = first(pubs[k], check, mine, coins, window=window, delta=a.delta, window_root=root, stop=stop, **ours)
+            if getattr(a, "first_tree", False) and k == 0:
+                turns.tree(FIRST_TREE_SPEC)
             out[k] = {**got.stage1(), "window_root": root}
         except caught as e:  # its stage1.json says why; the others go on
             out[k] = _refusal(pubs[k], e)
@@ -955,8 +995,8 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
             continue
         s["evidence"] = AC.evidence(published, s["segment"]) if s.get("segment") else None
         if "units" in s and "units" in o:
-            why = stop_order(s["evidence"], root, o["registration"], s["registration"], bytes.fromhex(s["read"]),
-                             AC.lms_verify)
+            why = stop_order(ours["key"], ours["main"], s["evidence"], root, s.get("family"), o["registration"],
+                             s["registration"], bytes.fromhex(s["read"]), AC.lms_verify)
             s["order"] = {"held": why is None, "reason": why}
             if why is not None:
                 wrong.append(f"class {k} (prompt {pubs[k].get('prompt')}, outputs {pubs[k].get('outputs')}): {why}")
@@ -969,6 +1009,48 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
     return out
 
 
+HOST_DIR = "challenger-host"
+#: `first --first-tree`'s coin tree: one stream of one round of one coin, which nothing opens
+FIRST_TREE_SPEC = {"block": 1, "rounds_log": 0, "scheme": Ch.CT.SCHEME, "streams": [Ch.CT.SESSION]}
+NO_HOST = ("--challenger local: --challenger-host names the directory the first stage kept its challenger in, and the "
+           "second stage reopens it there. One challenger serves both stages, under one key the verifier holds; a "
+           "challenger of this command's own would sign under another, and the first stage's coins are refused under it")
+
+
+def challenger_host(a: argparse.Namespace, made: Path | None = None) -> Path | None:
+    """Where a ``local`` challenger's host is: ``--challenger-host``, else ``made`` (the first stage's, which makes
+    it); None for a challenger on another machine, whose key the verifier has on record. `Ch.CoinError` (`NO_HOST`)
+    for a ``local`` one with neither, or, where the command makes none (``made`` None), for a directory that holds no
+    challenger."""
+    import a5_coins as AC
+
+    if a.challenger != "local":
+        return None
+    at = getattr(a, "challenger_host", None)
+    if at is None and made is None:
+        raise Ch.CoinError(NO_HOST)
+    if made is None:
+        AC.local_key(at)
+    return Path(made if at is None else at)
+
+
+FIRST_COINS = "first-coins"
+
+
+def first_coins(again: First, evidence: Mapping[str, Any] | None, window_root: str | None,
+                verify: Callable[..., bool]) -> str | None:
+    """Why the first stage's sample, as a hand-off gives it, did not read the challenger's coins, or None when it did:
+    `coins.coins_reason` on the hand-off's ``evidence`` under the key and the copy of main's history the resumed
+    stream holds, for the family, the registration and the bytes the stream sampled again on. The stream's outcome
+    holds the same at its run's select; the second stage asks before it opens a session, so a hand-off whose coins
+    are another key's, or name a key of their own, spends none of the interior's root."""
+    s = again.stream
+    if s.key is None or window_root is None:
+        return "the verifier holds no challenger key, or the hand-off names no window root"
+    return CC.coins_reason(s.key, list(s.main), evidence, window_root, s.family(again.sample),
+                           bytes.fromhex(again.registration.digest), again.read, verify)
+
+
 def first_root(stage1: Mapping[str, Any]) -> str:
     """The open root a class's first stage registered under: its ``stage1.json``'s ``window_root``, or, where the
     hand-off names none, its commitment's ``run``, the root `_first_all` opens the window's session on."""
@@ -979,8 +1061,13 @@ def _second(a: argparse.Namespace) -> int:
     """One class's second stage: its stream again from ``stage1.json`` (`resume`), a challenger session of its own on the
     interior window's run (the first stage's session closed with its sample, and a challenger opens a root once), the
     interior registered and sampled on that session's coins (`replayed`), the sessions (`prove`), and the stream's
-    outcome on both sessions' evidence (`outcome_of`). ``summary.json`` under ``--out`` says what happened; exit 0 when
-    the second stage held (`held`)."""
+    outcome on both sessions' evidence (`outcome_of`). Both sessions are one challenger's: the stream holds the
+    challenger's key and the verifier's copy of main's history as this command's session had them at its start
+    (`a5_coins.held`: the key of ``--challenger-key``, or of the ``local`` challenger the first stage kept,
+    `challenger_host`), and reads the first stage's evidence, ``stage1.json``'s, under them as it reads its own; no
+    key is read from that file, and a hand-off whose coins are not that challenger's is refused before the session
+    opens (`first_coins`). ``summary.json`` under ``--out`` says what happened; exit 0 when the second stage held
+    (`held`)."""
     import a5_coins as AC
 
     out = Path(a.out)
@@ -993,13 +1080,17 @@ def _second(a: argparse.Namespace) -> int:
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
         r2, o = summary.get("round_two"), summary.get("outcome") or {}
         print("TWO " + json.dumps({**{x: summary.get(x) for x in ("refused", "sample", "second_stage", "pins", "held",
-                                                                  "proof_server_refused")},
+                                                                  "proof_server_refused", "form_case")},
                                    "round_two": r2 and {"ok": r2.get("ok"), "codes": r2.get("codes")},
                                    "outcome": {x: o.get(x) for x in ("accepted", "interior", "replay_sample", "statements",
                                                                      "refused")}}, default=str))
         return code
     if "units" not in stage1:
         return done(1, refused=f"the first stage sampled nothing: {stage1.get('error')}")
+    try:
+        host = challenger_host(a)
+    except Ch.CoinError as e:
+        return done(1, refused=f"{type(e).__name__}: {e}")
     try:
         check, stop = template_fn(stage1["commit"]["check"]), _stop(a.stop)
         c = BR.reopen(Path(a.boundary), check, stop=stop)
@@ -1013,10 +1104,19 @@ def _second(a: argparse.Namespace) -> int:
     if not sample:
         return done(0, refused="the first stage sampled no span: there is no interior to register")
     root = IR.interior_run(again.registration.digest, sample)
+    trees = bool(getattr(a, "interior_trees", False))
     manager, draws, finisher = AC.start(a.challenger, root, [0], out / "challenger", a.main, ssh_key=a.ssh_key,
-                                        peer=a.peer, key_record=a.challenger_key)
+                                        peer=a.peer, key_record=a.challenger_key, host=host,
+                                        stage=AC.SECOND if trees else "", deployed=getattr(a, "deployed_key", False))
+    ours = AC.held(draws)
+    again.stream.key, again.stream.main = ours["key"], tuple(ours["main"])
     coins = AC.RankCoins(draws, 0)
+    if trees:
+        draws.hold(0)
     try:
+        why = first_coins(again, stage1.get("evidence"), first_root(stage1), AC.lms_verify)
+        if why is not None:
+            return done(1, refused=f"{FIRST_COINS}: the first stage's coins: {why}")
         try:
             coins.plan(second_need(again.stream, len(sample)))
             again.coins.then = coins
@@ -1026,7 +1126,9 @@ def _second(a: argparse.Namespace) -> int:
             return done(1, refused=e.verdict.to_json() if isinstance(e, S.Refused) else f"{type(e).__name__}: {e}")
         finally:
             segment = coins.drawn()
-            draws.skip(0)
+            if not trees:
+                draws.skip(0)
+        a.stage = {"coins": draws, "segment": segment, "family": coins.label, "window_root": root} if trees else None
         w = r.interior.committed.window
         summary.update(second_stage={"registration": r.registration.digest, "law": dict(r.draw.law), "draw": r.draw.units,
                                      "window_root": root},
@@ -1037,13 +1139,18 @@ def _second(a: argparse.Namespace) -> int:
                                  "returns": [[x.template, x.port, x.value] for x in r.design.returns]})
         s, got, stmts, proofs = prove(a, r, out, json.loads(Path(a.proofs).read_text()) if a.proofs else None)
         summary.update(got)
+        draws.release(0)
         published = draws.evidence()
         summary["challenger"] = {x: published.get(x) for x in ("trusted", "error", "plan")}
         evidence = [stage1.get("evidence"), AC.evidence(published, segment)]
         (out / "coins.json").write_text(json.dumps({"evidence": evidence, "read": [stage1["read"], coins.read.hex()]},
                                                    indent=1, sort_keys=True))
         if "handed" in s:
-            summary["outcome"] = outcome_of(again.stream, r.draw, s["handed"], evidence, stmts, proofs)
+            import sampled_two_case as SC
+            with SC.capture(out / "run-input.json") if getattr(a, "form_case", False) else contextlib.nullcontext():
+                summary["outcome"] = outcome_of(again.stream, r.draw, s["handed"], evidence, stmts, proofs)
+            if getattr(a, "form_case", False):
+                summary["form_case"] = SC.from_run(out)
         ok = held(s, summary.get("round_two"), summary.get("outcome"), summary.get("pins"))
         return done(0 if ok else 1, held=ok)
     finally:
@@ -1084,7 +1191,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     f.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`, a file")
     f.add_argument("--peer")
     f.add_argument("--challenger-key")
+    f.add_argument("--challenger-host", help="--challenger local: the directory its challenger is kept in for the "
+                                             f"second stage to reopen (default: OUT/{HOST_DIR})")
     f.add_argument("--ssh-key")
+    f.add_argument("--deployed-key", action="store_true", help="--challenger local: its key at the deployed LMS parameters (a5_coins.start's deployed), "
+                        "as SPOT's v2 and the two-stage form read keys; the first stage makes it, the second reopens it")
+    f.add_argument("--first-tree", action="store_true",
+                   help="a negative play: the first class's rank samples a coin tree on the first stage's session after "
+                        "its sample, so the session's log holds a coin tree's line, which the two-stage form refuses "
+                        "on two windows; nothing else of the play changes")
     f.add_argument("--out", required=True)
     g = sub.add_parser("second", help="one class's interior registration, second stage, proofs and outcome")
     g.add_argument("--stage1", required=True, help="the class's stage1.json (first)")
@@ -1108,10 +1223,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     g.add_argument("--port", type=int, default=0, help="the sessions' first port (0: a free block)")
     g.add_argument("--session-timeout", type=float, default=3600)
     g.add_argument("--challenger", required=True, help="local, loopback:HOST:PORT or gate:USER@HOST (a5_coins.start)")
-    g.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`, a file")
+    g.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`, a file: "
+                                                 "the one the first stage was given")
     g.add_argument("--peer")
     g.add_argument("--challenger-key")
+    g.add_argument("--challenger-host", help="--challenger local: the directory the first stage kept its challenger in "
+                                             "(first's --challenger-host), required and reopened: both stages' coins "
+                                             "are one challenger's, read under its one key")
     g.add_argument("--ssh-key")
+    g.add_argument("--deployed-key", action="store_true", help="--challenger local: its key at the deployed LMS parameters (a5_coins.start's deployed), "
+                        "as SPOT's v2 and the two-stage form read keys; the first stage makes it, the second reopens it")
+    g.add_argument("--interior-trees", action="store_true",
+                   help="the interior's sessions take their coin trees from this stage's challenger session, whose "
+                        "families carry the second stage's tag (a5_coins.SECOND), as the two-stage form's check reads "
+                        "two windows; needs FLOCK_CHALLENGER=1 and two members or more (a5.drawn_trees)")
+    g.add_argument("--form-case", action="store_true",
+                   help="write the two-stage form's case of this run under OUT/form (sampled_two_case.from_run)")
     g.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     if a.cmd == "second":
