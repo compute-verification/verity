@@ -30,7 +30,7 @@ pair body WITHOUT the expert-axis gather: `Gemm{K=H,N=2I}` (the w13 launch, `Moe
 fixed) -> `SiluMul{I}` (`_C.silu_and_mul`) -> `MoeSlotDown_v1{K=I,N=H}` (the w2 launch with MUL_ROUTED_WEIGHT=True:
 `bf16_rne(f32mul(DotBf16(a, W2[e][n,:]), g))`, the routed weight multiplied into the f32 accumulator before the ONE bf16 conversion --
 `MoeExpertCoordinateW_v1` minus `MoeExpertRow_v1`).  The multiplexing of the whole expert weight bank per pair (`GatherBf16x{E}` per
-weight element, the indexed-read construction) is gone: each slot owns its weights.  The indexed-read construction (`registry/moe.py`)
+weight element, the indexed-read construction) is gone: each slot owns its weights.  The indexed-read construction (`verity/definitions/registry/moe.py`)
 stays registered as the labelled ALTERNATIVE the OLMoE rows of record were built on.
 
 Weights enter as lifted `Input<17>` words checked Active at the boundary (pad's `LServe` convention, `check_boundary(prescribed=True)`);
