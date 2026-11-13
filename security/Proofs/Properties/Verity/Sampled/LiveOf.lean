@@ -4,6 +4,7 @@ public import Proofs.Properties.Verity.Sampled.SessionAt
 public import Proofs.Flock.Bridge.DrawnLaw
 public import Proofs.Flock.Bridge.Refused
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Rate
 
 /-!
 # What v2's acceptance gives of the session at the registered files (`liveOf`)
@@ -359,7 +360,8 @@ theorem accepted_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {
     rw [hs] at hpb
     exact get_named (hD.publicFile p₀ hp₀) hreg.2 hpb
   obtain ⟨circuitB', hg, hl⟩ := tables_registered hp₀' hv
-  obtain rfl : circuitB' = circuitB := Except.ok.inj (hg.symm.trans hc)
+  have e0 : circuitB' = circuitB := Except.ok.inj (hg.symm.trans hc)
+  rw [e0] at hl
   have htab := (pinnedTables_eq hl ht).symm
   obtain ⟨desc, hdesc⟩ := program_of_paramsAt hp₀
   obtain ⟨out, pub', prof', hat⟩ := checkBlobsAt_checkAt hck
@@ -384,7 +386,8 @@ verifier's query are in order (`popMatches_of_popOk`). -/
 theorem session_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {k : Verity.Registration.Composite}
     {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange} (hP : ∃ p, ParamsAt θ p)
     (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o) (ht : TablesSent o.sent) :
-    ∃ p n (I : FlockSoundness.Discharge.Exec.Inputs) D pubO desc, ParamsAt θ p ∧
+    ∃ (p : _root_.Spot.OneStageZk.Params) (n : ℕ) (I : FlockSoundness.Discharge.Exec.Inputs) (D : Flock.Desc)
+      (pubO : Flock.Public) (desc : Claims.Msg), ParamsAt θ p ∧
       Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some I.tags ∧ I.count = 1 ∧ I.work = none ∧
       I.stratified = none ∧ I.closure = none ∧ I.circuitFile = V.circuitFile θ F ∧
       I.publicFile = V.publicFile θ F ∧ I.tables = pinnedTables (V.circuitFile θ F) ∧
@@ -411,5 +414,25 @@ theorem session_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {k
     htyp, ⟨hAc.flat.1, hret, hleaf.resolve_right fun h => absurd h.1 (by decide)⟩, hDp, hU, hpubO,
     scopeH_of_form hcD hAc.flat.2 hAc.form, hports, hAc.loads hpubO,
     hdesc, Flock.Bridge.popMatches_of_popOk hdesc hAc.pop, hlaw⟩
+
+/-! ## The bound -/
+
+open FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkBind FlockSoundness.Discharge.ZkHidden in
+/-- **The session's planned rate is at most `ρ` wherever `2^23 ≤ ρ·(e·k)`**: every table of the plan, a set-up one or
+the reference setup's refused one, has a schedule `Zk.schedule` returned, whose level 0's `logLen` is at most `23`
+(`zkLogLenCap_23`), as `hr_planZHJ_23` for the plan without the verifier's own words. -/
+theorem hr_planZHJP {n mPts : ℕ} {I : FlockSoundness.Discharge.Exec.Inputs} {own : Option ByteArray}
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} {d₀ : Json}
+    (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀) {Reg : Type} {k : ℕ} {ρ : ℝ}
+    (hkρ : (2 : ℝ) ^ 23 ≤ ρ * (Real.exp 1 * k)) (S : Finset (Fin n)) (R : Reg)
+    (j : Fin (planZHJP (Reg := Reg) dj y₀ S R).length) :
+    rateZ (planZHJP (Reg := Reg) dj y₀ S R) j k ≤ ρ := by
+  unfold rateZ
+  refine (div_le_div_of_nonneg_right (pow_le_pow_right₀ (by norm_num) ?_) (by positivity)).trans (cap_div_le hkρ)
+  simp only [planZHJP, List.get_ofFn]
+  unfold tableZHJP
+  split_ifs with h
+  · exact zkLogLenCap_23 _ _ _ (Classical.choice h).hz
+  · exact zkLogLenCap_23 _ _ _ y₀.hz
 
 end Verity.Sampled
