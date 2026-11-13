@@ -2187,7 +2187,8 @@ prompt ids and a size of ids released, each a power of two.
     execution phase's releases are of connections admitted in T + `ingress_buckets` − 1 buckets in a row; a
     connection holds its lane through its admission's bucket + D, so those admitted in any D + 1 buckets in a row
     hold a lane each at once. R is the schedule's own number and a bound: at some schedules a load releases R in an
-    execution phase, and at others none does.
+    execution phase, and at others none does. It does not use that the device releases no request in its
+    admission's bucket, so it may count one bucket more than a load can reach.
   - **The verifier's read** (`connection_rows.check_registration`) takes a class's count from the registration:
     from 0 to R, the same in each of the class's entries, and at 0 only with the zero root. It derives each domain at
     the count it read, and the certificate over the head holds the counts as it holds the roots. A registration of
