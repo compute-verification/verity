@@ -5,7 +5,7 @@ id = "llama31-8b-1gpu-pouw-h1-served"
 # `stock-int8`) with stock FP8 as vLLM serves it, `stock-fp8@compiled`, as the baseline every ratio is over.
 #
 # The reference is FP8 compiled because no compiled int8 engine exists to compare with: int8_exact runs eagerly only, on
-# its own attention backend (`runner.engine_args` refuses it compiled), and the int8 pin's `verity_int8` linears have no
+# its own attention backend (`engine.engine_args` refuses it compiled), and the int8 pin's `verity_int8` linears have no
 # other vLLM path. Stock FP8 at serving defaults is what an operator serves this model as on sm_120 without PoUW: the
 # same 8-bit weights' footprint, torch.compile and vLLM's CUDA graphs. It loads the int8 pin's BF16 base
 # (LLAMA31_8B, the checkpoint `benchmarks/hash/dither/pin.sh` makes the pin from), since vLLM can't load the pin as FP8.
