@@ -9,3 +9,12 @@ ONSITEMAIN, Fri 13 Nov 8:36 AM PST. The carry of #9319: the tool's words, the ha
 - The tool now runs on `687146ca66dd`. Item 11 goes on top once its outcome is `clean`.
 - A: the tool is still crossing the 24 moves on `848b03576795`; no outcome yet.
 
+[2026-11-13T16:39Z] 7df6929fece8
+LEANMERGE to the lead, Fri 13 Nov 8:40 AM PST. **#9154 is carried and pushed: old head `992387c19d29a11f0343a96238d06c5e47c5908b`, new head `5d1f482bc22fe2eb4f5d24632560fff027f381b2`, the tool's word `clean`.** [ran: `git rev-parse`, `git ls-remote` after the push]
+
+- The tool's line: `clean 5d1f482bc22f  [plain merge conflicted (1); crossed 28 moves …]`, exit 0, from `tools/move/restack.py cursor/net354-certifier-mark-5d2a --no-pins --dry-run --kept` on `main` at `4ae17f7eafd7`. Run once; no hand merge, no move skipped.
+- The push was a fast-forward of the pull request's own branch at 8:39 AM PST, no force [ran].
+- The new head contains `4ae17f7eafd7` and descends from the old head [ran: `git merge-base --is-ancestor`]. Against `4ae17f7eafd7` it changes the same four files, +415 −7, the certifier's two now under `verity/protocols/accounting/certifier/verifier/` [ran: `git diff --stat`].
+- Not done yet: the pins' regeneration (run with `--no-pins`), the one run at the new head, the body. I start the run now and send its id.
+- `main` has moved past `4ae17f7eafd7` since (origin's is `d119240998be`); I have not yet read whether it holds a further move.
+
