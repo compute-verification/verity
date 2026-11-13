@@ -52,8 +52,8 @@ from verity.protocols.poub.verifier.store import store_salt
 from verity.definitions.circuits import requirement
 from verity.commitments import merkle_depth
 from verity.commitments.merkle import Opening
-from verity_vllm.protocols.remote_bandwidth.interface import (KINDS, TIERS, Append, Backing, BlockOpening, Codec, Counters, Layout,
-                                         PageLayout, PassCommitment, Receipt, Registration, RegionInfo, Segment, Source,
+from verity_vllm.protocols.remote_bandwidth.interface import (KINDS, TIERS, Append, Backing, BlockOpening, ChainHead, Codec, Counters,
+                                         Layout, PageLayout, PassCommitment, Receipt, RegionInfo, Segment, Source,
                                          Stale, WindowRecord)
 from verity_vllm.protocols.remote_bandwidth import memory_map as mm
 
@@ -414,8 +414,8 @@ class NodeMemory:
                    "filler": filler_name})
         return tuple(self._by_name[n].info for n in names)
 
-    def registration(self) -> Registration:
-        return Registration(self._log_count, self._log_root)
+    def registration(self) -> ChainHead:
+        return ChainHead(self._log_count, self._log_root)
 
     def layout(self) -> Layout:
         by_tier: dict[str, int] = {}

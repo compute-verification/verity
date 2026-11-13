@@ -20,6 +20,7 @@ from verity.circuits.ports import In, Out, Ports
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, coll_concat
 from verity.circuits.types import Array, RecordType, Value
+from verity.protocols.pouw.prover.circuit import h1tile as H
 from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity.protocols.pouw.verifier import core_check as CC
@@ -179,7 +180,6 @@ def test_a_j10r_window_takes_each_units_call_and_blocks_and_its_public_row_holds
     ``blocks`` a unit, and each unit reads its own row of each; its statement's public row is `PUBLIC_J10R`, and
     `j10r_inputs` is each unit's call's first unit and `h1tile.j10r_blocks` of its tile (I, J) at the execution phase's slot and
     its K. Every K's unit is in one form: an execution phase mixing J10-R's and today's is refused."""
-    from verity.protocols.pouw.prover.circuit import h1tile as H
     m = HW.slot(5, TILE)
     prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit_j10r)
     tp = P.evaluate(prog, HW.query(prog))
@@ -627,7 +627,6 @@ def test_the_tile_is_a_parameter_and_each_k_binds_its_own_unit():
     assert [n for n, _t in smoke.signature()[0]] == list(HW.TILE_PARAMS)
     assert [n for n, _t in smoke.signature()[1].fields] == list(HW.OUTPUTS) and smoke.signature()[1].fields[1][1].leaves == 1
     assert HW.tile_unit(14336, (32, 32)).bindings["TILE"].bindings["EXACT"].bindings["K"] == 14336
-    from verity.protocols.pouw.prover.circuit import h1tile as H
     for d in (H.PouwH1Tile5, H.PouwH1Tile6):
         j10r = HW.tile_unit(64, (4, 8), d)
         assert [n for n, _t in j10r.signature()[0]] == list(HW.TILE_PARAMS_J10R)
@@ -1026,8 +1025,6 @@ def test_a_j10r_leafs_statements_are_v5s_lane_chunks_and_combine_v2():
     """Over J10-R's PouwH1Tile_v5 at a chunked K, `leaf_unit` derives each lane chunk (`h1zy.lane_chunk` at
     `weights.chunks`(K)) and the combine (`PouwH1Combine_v2`), and refuses a whole lane there and a chunk past the
     lane's; at a whole K a lane and no chunk. v1's leaf stays refused at a chunked K."""
-    from verity.protocols.pouw.prover.circuit import h1tile as H
-
     def fake(k, d):
         unit = HW._chunked(k, HW.tile_unit(k, (32, 32), d))
 

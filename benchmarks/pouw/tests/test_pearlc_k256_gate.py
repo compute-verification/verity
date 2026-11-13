@@ -3,25 +3,9 @@ replay the served -h3 bit for bit (`cell` asserts it), and the slice tool's vect
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-
+import glm53_slices as S
 import numpy as np
-
-POUW = Path(__file__).parents[1]
-
-
-def _load(name: str, path: Path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    m = importlib.util.module_from_spec(spec)
-    sys.modules[name] = m
-    spec.loader.exec_module(m)
-    return m
-
-
-G = _load("pouw_pearlc_k256_gate", POUW / "pearlc_k256_gate.py")
-S = _load("pouw_glm53_slices", POUW / "pearl_c_sm90" / "glm53_slices.py")
+import pearlc_k256_gate as G
 
 
 def test_mirror_family_cancels_across_the_two_groups():
