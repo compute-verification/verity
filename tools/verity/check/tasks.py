@@ -93,7 +93,7 @@ STEP_INPUTS = {
     "lean-build": VERIFIER_PACKAGES,
     "flock-circuit-build": ["verity/protocols/flock/prover/check_build.sh", "verity/protocols/flock/prover/live", "verity/protocols/flock/prover/flock-*-b684b12.patch"],
     "flock-rust-tests": ["verity/protocols/flock/prover/check_build.sh", "verity/protocols/flock/prover/live", "verity/protocols/flock/prover/flock-*-b684b12.patch"],
-    "lean-agreement": ["verity/protocols/flock/agreement", *VERIFIER_PACKAGES],
+    "lean-agreement": ["verity/protocols/flock/prover/agreement", *VERIFIER_PACKAGES],
 }
 #: a worker slot's size, by what a task asks: most tasks a 16-core, 64 GB slot; a Lake package's audit the same with a
 #: Lean build's disk, or a 32-core, 128 GB one when it reads `security` (Mathlib, ArkLib: `lean_slot`); a suite that runs in

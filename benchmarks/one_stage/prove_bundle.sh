@@ -26,7 +26,7 @@ command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanp
 uv sync -q --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 PY=$REPO/.venv/bin/python
 
-STAMP=$(git rev-parse HEAD:verity/protocols/flock/prover HEAD:verity/protocols/flock/pod HEAD:verity/protocols/flock/agreement HEAD:verity/protocols/flock/tool.py HEAD:verity/protocols/flock/verifier HEAD:verity/circuits/base HEAD:verity/circuits/lean HEAD:verity/commitments/lean 2>/dev/null | tr '\n' ' ')
+STAMP=$(git rev-parse HEAD:verity/protocols/flock/prover HEAD:verity/protocols/flock/prover/pod HEAD:verity/protocols/flock/prover/agreement HEAD:verity/protocols/flock/prover/tool.py HEAD:verity/protocols/flock/verifier HEAD:verity/circuits/base HEAD:verity/circuits/lean HEAD:verity/commitments/lean 2>/dev/null | tr '\n' ' ')
 [ -n "${STAMP// }" ] || { echo "prove-bundle: no git trees to stamp binaries with"; exit 4; }
 BUNDLE_WINDOW=benchmarks/one_stage/tests/fixtures/bundle-window
 FX=$REPO/$BUNDLE_WINDOW
@@ -44,7 +44,7 @@ else
   (cd verity/protocols/flock/verifier && lake build flock-verify flock-firewall) > "$O/build-lean.log" 2>&1 &
   LP=$!
   mkdir -p "$O/m0-build"
-  RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/protocols/flock/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
+  RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/protocols/flock/prover/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
     || { tail -40 "$O/m0-build/build.log"; exit 6; }
   BIN=$W/flock-gpu-link/flock/target/release/flock-circuit
   wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
