@@ -22,6 +22,14 @@ module
 public import CoreProtocol.Stream
 public import Spot.OneStageZk
 
+/-!
+# The per-member check as a stream
+
+`planOf`, the order the blobs are read in; `State`, `step` and `finish`, the check on what each step keeps; `keepAll`,
+every other form's stream; and `protocol` with `StreamSound`, the statement that its streams decide what `checkBlobs`
+decides.
+-/
+
 @[expose] public section
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
@@ -109,20 +117,20 @@ def planOf (ms : Array Member) (sts : Array StatementFiles) : V (Array (ByteArra
   pure out
 
 /-- `verdictOf` past the coin-tree key's freshness, on the session's proof files `proofs`. -/
-def restOf (I : Flock.Witness.Inputs) (scope ksFiles population : V Unit) (record : String) (draw : Option Json)
+def restOf (I : Flock.Witness.Inputs) (scope ksFiles population : V Unit) (record : String) (sample : Option Json)
     (st : SetUp) (proofs : Array ByteArray) : V Unit := do
   let (spec, tabs, _) ← st
   Flock.Zk.verify spec tabs record proofs
   scope
   Flock.ProvedScope.sizesOk true (tabs.map (·.m))
-  (if draw.isNone then Flock.ProvedScope.drawLaw true (Flock.Witness.zkTags I) false draw else pure () : V Unit)
-  Flock.RecSetup.fullDraw none false draw record
+  (if sample.isNone then Flock.ProvedScope.drawLaw true (Flock.Witness.zkTags I) false sample else pure () : V Unit)
+  Flock.RecSetup.fullDraw none false sample record
   Flock.RecSetup.innerDrawn none
   Flock.ProvedScope.programHeld I.program
   Flock.RecordText.check record
   ksFiles
   let tags := Flock.Witness.zkTags I
-  Flock.KsScope.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags I.publicFile I.count draw
+  Flock.KsScope.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags I.publicFile I.count sample
   population
 
 /-- What `verdictJson` reads of a session's setup: its partition finding and openings. -/
@@ -142,7 +150,7 @@ def verdictJsonOn (rd : Reads) (programSha : Option String) (s : RunFiles) (foun
 
 /-- **What the check keeps of one session's `step`**, made while its statement's files are held: the refusals before
 its verdict (`opening`), its coin-tree key, its proof files found (`files`), its verdict past the key's freshness
-(`rest`), what its verdict's JSON reads of its setup (`found`) and the units its record draws (`units`). Only the key's
+(`rest`), what its verdict's JSON reads of its setup (`found`) and the units its record samples (`units`). Only the key's
 freshness reads the sessions before it, so `StepKept.step` makes the verdict on any run after the fact. -/
 structure StepKept where
   opening : V Unit
@@ -167,16 +175,16 @@ def StepKept.of (a : StepAt) (bs : Core.Blobs) (s : RunFiles) : StepKept :=
     match String.fromUTF8? rb with
     | none => { base with opening := .error s!"session {s.name}'s record is not UTF-8" }
     | some record =>
-      let draw := Flock.Witness.recordDraw record
-      match drawFitsWhy WORD draw with
+      let sample := Flock.Witness.recordDraw record
+      match drawFitsWhy WORD sample with
       | some what => { base with opening := .error s!"session {s.name}: {what}: {FITS}" }
       | none =>
-        let st := setupAt a.I a.rd draw
+        let st := setupAt a.I a.rd sample
         let files := filesOf bs s st
         { base with
           coinKey := coinKeyOf record st
           files := files >>= fun _ => pure ()
-          rest := files >>= restOf a.I a.scope a.ksFiles a.population record draw st
+          rest := files >>= restOf a.I a.scope a.ksFiles a.population record sample st
           found := foundOf st
           units := provedUnits a.I.publicFile record }
 

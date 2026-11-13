@@ -12,6 +12,13 @@ module
 
 public import Spot.OneStageZkStream
 
+/-!
+# `StreamSound` from its two halves
+
+The lemmas on searches of the blobs held and on a session's kept pieces; `StepsKept` and `FinishKept`, the fold's half
+and the finish's; `finishKept`, the finish's half proved; and `streamSound_of_steps`, `StreamSound` from `StepsKept`.
+-/
+
 @[expose] public section
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
@@ -121,11 +128,11 @@ theorem tablesOf_sublist {held full : Core.Blobs} (hs : held.entries.toList.Subl
 /-- **`verdictOf` is the session's proof files, its key's freshness, then the rest** (`restOf`), the files read once
 for the rest's proofs: the split `StepKept` keeps. -/
 theorem verdictOf_split (I : Flock.Witness.Inputs) (scope ksFiles population : V Unit) (coinKeys : Array String)
-    (record : String) (draw : Option Json) (st : SetUp) (files : V (Array ByteArray)) (coinKey : Option String) :
-    verdictOf I scope ksFiles population coinKeys record draw st files coinKey =
+    (record : String) (sample : Option Json) (st : SetUp) (files : V (Array ByteArray)) (coinKey : Option String) :
+    verdictOf I scope ksFiles population coinKeys record sample st files coinKey =
       ((files >>= fun _ => pure ()) >>= fun _ =>
         (match coinKey with | some key => Flock.CoinTree.checkFresh coinKeys key | none => pure () : V Unit) >>=
-          fun _ => files >>= restOf I scope ksFiles population record draw st) := by
+          fun _ => files >>= restOf I scope ksFiles population record sample st) := by
   cases files <;> cases coinKey <;> rfl
 
 /-- **A session's `step` is the step on what is kept of it**, after any run: the verdict's pieces made once, on the
