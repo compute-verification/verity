@@ -41,7 +41,7 @@
    "name": "verity_difftest",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../window/../../../../../difftest/lean",
+   "dir": "../../../../../circuits/difftest",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -57,7 +57,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../window/../../../../spot/verifier/lean/../../../../difftest/lean/../../circuits/base",
+   "../../../../../circuits/base",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -65,7 +65,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../window/../../../../spot/verifier/lean/../../../../difftest/lean/../../circuits/lean",
+   "../../../../../circuits/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
