@@ -51,12 +51,14 @@ verity lean try FILE [--siblings] [--on NODE]
   the edit loop: `lake env lean FILE` in FILE's package against its built imports, the axiom probe's line last; neither
   runs this audit nor writes a record (`verity lean try --help`, `lean_changed.py`). `--siblings` checks each sibling
   as it is built: one built against an older build of an import is rebuilt when a refusal names it, and not otherwise
-research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone \
+research run --on auto --mem-gb 93 --max-min 120 --project verity --source . --cwd clone \
   --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records PKG --update
-  the fast path (the lean-proofs skill): PKG's records and its requirers'
-research run --on auto --mem-gb 32 --max-min 180 --project verity --source . --cwd clone -- \
+  93 GB is 86.6 GiB, a heavy build's need. The fast path (the lean-proofs skill): PKG's records and its requirers';
+  `lean_changed.py --ask PKG` prints PKG's ask
+research run --on auto --mem-gb 258 --max-min 180 --project verity --source . --cwd clone -- \
   python3 tools/verity/lean/check.py --build --update PKG
-  a full record, left at lean-audit/audit-TAG/lean-audit.json
+  258 GB is 240.3 GiB, an ArkLib replay's need. A full record, left at lean-audit/audit-TAG/lean-audit.json;
+  `check.py --ask --build PKG` prints PKG's ask
 ~~~
 
 `check.py`'s docstring and `--help` have the other flags (`--closure`, `--replay-cache`, `--artifacts`, `--regenerate`,
@@ -109,8 +111,16 @@ of `check.py` unless it says otherwise, or the lock's section below.
 
 Where it runs: `--build` builds in the sandbox where the machine allows one (`sandbox.sh`, `sandboxed`), which reads
 the tree at one fixed path, so a module compiles to the same bytes wherever the tree is (`FIXED`, `--tree`, `bound`),
-after taking one of the node's Lean audit slots (`lean_slot`), and is refused below a package's memory floor (`memory_refusal`,
-`MEM_FLOOR_GIB`, `SPEC_FLOOR_GIB`), with threads as its memory holds (`build_threads`, `replay_threads`). Packages are
+after taking one of the node's Lean audit slots (`lean_slot`). What a run reserved is the least of what it declares (a slot's
+`mem=`, `research run --mem-gb`) and what the machine lets it hold, its cgroup's cap else its memory; a run that declares
+nothing plans by the latter, and says which (`reserved`, `memory`). A run is refused where that is less than the largest
+floor among the steps it takes of every package it audits, or where a reservation is no number, with the command to run
+at its ask, in GB, and the ask in GiB under it (`memory_refusal`; `--ask` prints the ask). A heavy build runs as many jobs
+as what its run reserved holds (`build_threads`), a heavy replay one thread per `REPLAY_PER_THREAD_GIB` of it, up to
+every core (`replay_threads`). The rules are `reserve.py`'s, in every audit's key; the figures are `reserve.json`'s, in
+none, so a changed figure audits nothing again. A figure is its step's largest peak with `MARGIN` above it, to the
+nearest GiB: a step whose peak would give a larger one prints a warning naming the line of `reserve.json` to raise,
+which no report keeps (`peaked`). Packages are
 audited side by side, each build after those of the packages it requires by path (`setup`, `writing`, `Seals`). `--all`
 first runs the controls, which test the auditor on fixtures that must pass clean and fail once per violation
 (`controls`; `--no-controls` skips them).
