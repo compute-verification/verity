@@ -56,7 +56,7 @@ from collections.abc import Callable, Sequence
 from contextlib import contextmanager, suppress
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 from verity.protocols.accounting.poub.verifier import audit
@@ -67,10 +67,8 @@ from verity_vllm import config
 from verity_vllm.engine.handle import core_or_none, engine_of
 from verity_vllm.errors import Refused
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
+from verity_vllm.protocols.remote_bandwidth.binder import Binder
 from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
-
-if TYPE_CHECKING:
-    from verity_vllm.protocols.remote_bandwidth.binder import Binder
 
 #: The PoUB session's processes (not a package), whose prover runs in the Commit's.
 REMOTE_SESSION = config.ROOT.parent.parent / "benchmarks" / "remote_session"
@@ -674,8 +672,6 @@ class CommitSession:
                              "engine schedules synchronously: declare \"async_scheduling\": false in the workload's target")
 
     def install(self) -> None:
-        from verity_vllm.protocols.remote_bandwidth.binder import Binder
-
         self.binder = Binder(self.store, passes=False, weight_blocks=self.weight_blocks, kv=False).install()
 
     def before_build(self, ekw: dict[str, Any]) -> None:

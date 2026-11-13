@@ -35,8 +35,8 @@ from verity.protocols.accounting.poub.verifier import receipts as rb
 from verity.protocols.accounting.poub.verifier.session import verifier, wire
 
 from verity_vllm.errors import Refused
-from verity_vllm.protocols.remote_bandwidth import binder, remote
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
+from verity_vllm.protocols.remote_bandwidth import remote
 from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
 from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, NodeMemory
 
@@ -929,7 +929,7 @@ def test_the_commits_session_installs_a_binder_of_its_store_before_the_build(mon
     """`CommitSession.install` makes the store's binder with no passes of its own and the KV outside the store, over
     the session's store and its ``weight_blocks``, and keeps what its `install` returns; `before_build` sets the engine
     arguments, checks the target and installs, in that order, and installs nothing for a target it refuses."""
-    monkeypatch.setattr(binder, "Binder", Binding)
+    monkeypatch.setattr(remote, "Binder", Binding)
     cs = remote.CommitSession("127.0.0.1:7781", kv_pages=8, weight_blocks=5)
     assert cs.binder is None
     cs.install()
