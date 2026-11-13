@@ -1,4 +1,4 @@
-"""`verity.definitions.commitments.gates.block_key`: the references are hashlib's SHA-512 over the packed tokens and the print's sum of
+"""`verity.commitments.gates.block_key`: the references are hashlib's SHA-512 over the packed tokens and the print's sum of
 powers, BlockKey_v1 agrees with them at the deployed binding (64 tokens of 18 bits, two compressions) and at a toy one (one
 compression), a request's chain through the circuit is `chain`'s, KeyPrint_v1 prints as BlockKey_v1 does, and each costs
 the gates pinned here."""
@@ -13,7 +13,7 @@ import pytest
 from verity.circuits.boolean.gf128 import mul
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
-from verity.definitions.commitments.gates import block_key as BK
+from verity.commitments.gates import block_key as BK
 
 #: (Definition, statics) -> its traced circuit's (And, Xor, Not) gates
 PINS = {
