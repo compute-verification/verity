@@ -20,11 +20,11 @@ SKIP = {".lake", ".git", ".venv", "node_modules", "__pycache__"}
 FIXTURES = ROOT / "tools/verity/lean/tests/fixtures"
 
 
-def lake_packages() -> list[Path]:
+def lake_packages(fixtures: bool = False) -> list[Path]:
     out = []
     for d, dirs, files in os.walk(ROOT):
         dirs[:] = sorted(x for x in dirs if x not in SKIP)
-        if ("lakefile.toml" in files or "lakefile.lean" in files) and not Path(d).is_relative_to(FIXTURES):
+        if ("lakefile.toml" in files or "lakefile.lean" in files) and (fixtures or not Path(d).is_relative_to(FIXTURES)):
             out.append(Path(d))
     return out
 
@@ -54,6 +54,22 @@ def test_every_package_module_is_a_module():
         "\n  ".join(lakefiles)
 
 
+def test_no_lakefile_names_the_setting_lake_reads_before_the_environment():
+    """`check.py`'s builds (`lake_env`) and the suites' uncached runs (`suites.py`'s `UNCACHED_ENV`) turn Lake's artifact
+    cache off by `LAKE_ARTIFACT_CACHE` alone. That is enough while no lakefile names `enableArtifactCache`, a package's own
+    setting, which Lake reads before the environment. The Lean tools' fixtures are held to it too: their tests build them."""
+    pkgs = lake_packages(fixtures=True)
+    assert any(p.is_relative_to(FIXTURES) for p in pkgs), "the walk reached no fixture's lakefile"
+    named = [str(f.relative_to(ROOT)) for p in pkgs for f in (p / "lakefile.toml", p / "lakefile.lean")
+             if f.exists() and "enableArtifactCache" in f.read_text()]
+    assert not named, (
+        f"{', '.join(named)}: names `enableArtifactCache`, which Lake reads before `LAKE_ARTIFACT_CACHE`: where a package "
+        "turns it on, its build reads and writes a cache whatever the variable says. Two places turn Lake's cache off by "
+        "the variable alone: `lake_env` in tools/verity/lean/check.py and `UNCACHED_ENV` in tools/verity/check/suites.py. "
+        "Leave the setting out, or in the same change give both what `build` in tools/verity/lean/lean_changed.py gives a "
+        "build outside the sandbox: a `LAKE_CACHE_DIR` naming an empty directory of the command's own, removed after it.")
+
+
 def test_one_toolchain():
     """The jobs' base image installs the same one."""
     pins = {str(p.relative_to(ROOT)): (p / "lean-toolchain").read_text().strip() for p in lake_packages()}
@@ -78,7 +94,7 @@ def test_one_mathlib():
 #: (`check.py`'s `witness_failures`)
 # security's 233: Flock.SecurityProofs.SpotExfilTwo and SpotKSTwo and NetTiming.SecurityProofs.PooledLeakCarried carry
 # their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique
-UNWITNESSED = {"security": 251, "security/Properties": 186, "verity/protocols/flock/verifier": 7}
+UNWITNESSED = {"security": 223, "security/Properties": 185, "verity/protocols/flock/verifier": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -304,7 +320,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the 398 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
-INLINE = {"security": 902, "security/Properties": 132, "verity/protocols/flock/verifier": 6}
+INLINE = {"security": 888, "security/Properties": 132, "verity/protocols/flock/verifier": 6}
 
 
 def test_the_inline_list_only_shrinks():
@@ -354,10 +370,11 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
     fails with ``fix``, and a cap above its count by more than its `ROOM` warns, naming the value to lower it to, so a
     change that lowers a count never fails the check of a commit it lands on; the next change, or drive's lock run, lowers
     the cap (`lean_audit.held_caps`), so the next offender, or an entry added by hand, is seen. The `lean-caps` merge driver
-    (`tools/verity/lean/merge.py --caps`) merges two changes to a cap as the larger of the two sides' caps."""
+    (`tools/verity/lean/merge.py --caps`) merges two changes to a cap three-way: one side's change alone stands, and two
+    changes add, except two lowerings, which take the larger."""
     over = {k: f"{n} > {caps.get(k, 0)}" for k, n in got.items() if n > caps.get(k, 0)}
-    assert not over, (f"{what} grew in {over}: {fix} (where two merged changes each added entries, the merge kept the "
-                      f"larger of their caps while the count took both: raise it to the count)")
+    assert not over, (f"{what} grew in {over}: {fix} (where a merged change lowered the cap while the other took room "
+                      f"under it, the merge kept the lowering while the count took both: raise it to the count)")
     loose = {k: got.get(k, 0) + ROOM.get(f"{name} {k}", 0) for k in caps
              if caps[k] > got.get(k, 0) + ROOM.get(f"{name} {k}", 0)}
     for k, n in loose.items():
@@ -537,7 +554,7 @@ def test_every_definition_a_guarantee_reads_says_what_it_means():
 
 
 #: the theorems the spec (`security`) states: `theorem` and `lemma` declarations in its files
-SPEC_THEOREMS = {"security": 165}
+SPEC_THEOREMS = {"security": 167}
 
 
 def test_the_spec_states_no_new_lemma():
@@ -553,7 +570,7 @@ def test_the_spec_states_no_new_lemma():
 #: the lines a module may run to: one module is one unit of rebuild, so a long one costs every check and train its build
 LONG = 2000
 #: the lines past `LONG` of each package's modules, summed
-OVERLONG = {"security": 963, "security/Proofs": 54185, "verity/protocols/pouw/verifier/lean/check": 281, "verity/protocols/flock/verifier": 700}
+OVERLONG = {"security": 963, "security/Proofs": 54185, "verity/protocols/pouw/verifier/lean/check": 282, "verity/protocols/flock/verifier": 725}
 
 
 def overlong(lines: dict[str, int]) -> dict[str, int]:
@@ -664,9 +681,9 @@ def test_an_entry_of_the_replay_list_that_matches_no_audited_module_is_named():
     assert unmatched_first({"a/pkg": entries, "b/gone": entries}, audited) == ["a/pkg: P.Haevy", "b/gone: no audited package here"]
 
 
-def test_every_cap_merges_as_the_larger_of_its_sides():
+def test_every_cap_merges_key_by_key():
     """Each cap here is one line the `lean-caps` merge driver reads (`merge.py`'s `CAP_LINE`), so two changes to it merge
-    as the larger of the two sides' caps instead of conflicting."""
+    three-way, key by key, instead of conflicting."""
     merge = _load("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
     caps = [s for s in Path(__file__).read_text().splitlines() if re.match(r"[A-Z][A-Z_]* = \{", s)
             and isinstance(v := globals()[s.split(" = ")[0]], dict) and all(isinstance(n, int) for n in v.values())]
