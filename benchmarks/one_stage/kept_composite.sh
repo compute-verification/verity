@@ -30,7 +30,7 @@ if [ -z "$PY" ]; then
   (uv venv -q "$W/venv" && VIRTUAL_ENV=$W/venv uv pip install -q numpy) > "$OUT/venv.log" 2>&1 || { say "VENV failed"; exit 3; }
   PY=$W/venv/bin/python
 fi
-export PYTHONPATH=$TREE:$TREE/benchmarks/numerical/python:$TREE/verity/difftest/python:$TREE/verity/protocols/flock/prover/python
+export PYTHONPATH=$TREE:$TREE/benchmarks/numerical/python:$TREE/tools/difftest/python:$TREE/verity/protocols/flock/prover/python
 say "TREE $(git -C "$TREE" rev-parse HEAD 2>/dev/null || echo '?') SRC $1 window $K"
 build() {  # DIR TARGET
   local t0=$SECONDS
