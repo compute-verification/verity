@@ -6145,6 +6145,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     beside = sample_jobs(pkg, n, bool(replay) and not lifts) if later is not None else None
     sample = background.submit(timed, sampled_recompile, pkg, policy["roots"], work, later, sealed or own_seal, n, log) \
         if later is not None and beside != 0 else None
+    if later is not None and beside == 0:
+        log(f"sampled: {rel(pkg)}: no room beside its replay in what this run reserved, so it starts once the replay ends")
 
     def sampled() -> list[str]:
         """The sample's failures, once it has ended, which ``matched`` hears; called once, on every way out below, each
@@ -6278,6 +6280,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     if replayed:
         (rfails, rep["replay"]), rep["seconds"]["replay"] = replayed.result()
         fails += rfails
+        stats = rep["replay"] if isinstance(rep["replay"], dict) else {}
+        log(f"replay: {rel(pkg)}: ended in {rep['seconds']['replay']} s, {stats.get('checked')} modules checked and "
+            f"{stats.get('reused')} reused")
         if isinstance(rep["replay"], dict) and rep["replay"].get("peak_gib"):
             peaked(rep, "replay", pkg, rep["replay"]["peak_gib"], log)
     unsampled, w = sampled(), time.monotonic()

@@ -6569,9 +6569,14 @@ def test_a_sample_with_no_room_beside_its_replay_runs_after_it(tmp_path, monkeyp
                         ("heartbeats", []),
                         ("anonymous_instances", []), ("run_paths", []), ("listings", ([], {}, [])), ("regenerated", None)):
         monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
-    rep = A.audit(pkg, tmp_path / "out", build=True, runs=False, replay=True, log=lambda *_: None, seals=Seals())
+    said = []
+    rep = A.audit(pkg, tmp_path / "out", build=True, runs=False, replay=True, log=said.append, seals=Seals())
     assert asked == [(pkg, A.build_threads(pkg), True)]
     assert order == ["replay", "sample"] if room == 0 else sorted(order) == ["replay", "sample"]
+    ended = [i for i, s in enumerate(said) if s.startswith(f"replay: {A.rel(pkg)}: ended in ")]
+    after = [i for i, s in enumerate(said) if "starts once the replay ends" in s]
+    assert len(ended) == 1 and "1 modules checked and 0 reused" in said[ended[0]]
+    assert len(after) == (room == 0) and all(i < ended[0] for i in after), said
     assert rep["sampled"] == {"modules": ["P.B"]} and "sampled" not in rep["failure_codes"] and A._BESIDE == {}
 
 
