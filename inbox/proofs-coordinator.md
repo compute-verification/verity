@@ -118569,3 +118569,22 @@ NEEDS:
 To post: nothing.
 
 Not established: that `DeviceOrder.lean` compiles (no run has read it). That `CutOrder.lean` compiles. That `Device.lean` and `DeviceRead.lean` still build over TWOLEG's `4d19a7ad4f`. `LedgerInOrder` at any deployment: it is stated, not proved, and not provable from today's definition. That the form accepts an honest play. The known hole stays open: on the play's own two windows the history holds exactly this play's runs, so an earlier period's genuine signature in the evidence is the forger's.
+
+## REDRAW, Fri 13 Nov 03:54Z: checkpoint, I end the turn on two records runs: #9237's suites part one passed (4 of 4), and its ready line at `a2c3831345e0` waits only on `59c7` (about 04:30Z); #9555's waits on `8504` (about 04:50Z) and one suite of `2558`
+
+**A Lean slot on vy-nebius-2 made `8504` wait 10 min 21 s** (621 s; "all 12 Lean audit slot(s) of pool build are taken"), after 14 min 57 s for a place; `59c7` waited 8 min 1 s for its Lean slot after 7 min 32 s for a place [read: each run's `stderr.log`, the `lean-slot` lines, and `slot.json`]. So `59c7` began building at about 03:22Z and `8504` at about 03:41Z, not when my 03:41Z entry said. Machine: vy-nebius-2 for all four.
+
+**1. #9237, head `a2c3831345e0d15bbed424c321009c26b4a7500d`.**
+- [read] `r20261113-030646-1057` part one, at `459f5e2dd560`: "4 suites: 4 passed (0 cached), 0 failed", `PART-ONE rc=0`. `benchmarks/one_stage` 1,032 passed; `verity/protocols/spot/verifier` 912 passed; `verity-network-traces` 678 passed; `verity-core-sampled-proofs` 321 passed, 2 skipped. The test modules the change reaches ran whole, slow tests included (stdout lines 2 to 4, 7 to 13, 28, 29).
+- [read] Its part two, the whole tier, is running: 68 suites, about 05:30Z [guess].
+- [read] `r20261113-030616-59c7` (records, at `459f5e2dd560`) is running in Lean slot `build/5`; it had written the first facts of `security/Properties` at 03:29Z and was building `security/Proofs` at 03:49Z. ETA about 04:30Z [guess].
+- [derived] The ready line at `a2c3831345e0` then rests on: `59c7`, part one above, and at the head itself the 41 driver tests and the layout test on my machine, with the difference between the two heads as my 03:41Z entry states it (`main`'s 37 files, one of them a Lean proof's bound name; one test file's resolution). That is ruling (a) I asked for; if you want records at the head instead, say so and I launch them when `59c7` ends.
+
+**2. #9555, head `38b7c6df38ba9ad5ccfd154ae316b76697157020`.**
+- [read] `r20261113-031427-2558`, at `df901c234fa4`: four of five suites in: `benchmarks/verifier_cost` 9 passed, `verity/protocols/spot/verifier` 912 passed, `verity-network-traces` 679 passed, `verity-core-sampled-proofs` 321 passed, 2 skipped. `benchmarks/one_stage` is running; about 04:15Z [guess].
+- [read] `r20261113-031530-8504` (records, no `--allow`, at `df901c234fa4`) is running in Lean slot `build/11`. ETA about 04:50Z [guess]. It has no verdict yet on the restated statement's hash: the first facts name the proof as not yet built.
+- [derived] Unless you rule otherwise (5b of my 03:41Z entry), when `59c7` ends I launch the records run at `38b7c6df38ba`, and that run's verdict, about 05:50Z [guess], is the one lean's condition names.
+
+**3. What I check when you resume me**, for each records run: exit 0; `lean-audit/audit.json` says pass for `security/Properties`, `security/Proofs` and `security`; the lock the run wrote equals the branch's, byte for byte (nothing regenerated); for `8504`, no `witnesses` failure on `familyOneCommitmentRead`. If the hash moved, I write the new one first and re-key only on your word.
+
+**4. Pushed, and nothing unpushed.** `cursor/proofs-redraw-cc71` `a2c3831345e0d15bbed424c321009c26b4a7500d`; `cursor/proofs-keyheld-3c9a` `38b7c6df38ba9ad5ccfd154ae316b76697157020`; `cursor/proofs-redraw-rate-5a71` `54d0d016ab7850e73ad933db5d7769dcf0c5811c`. All three merge with `main` at `8ef93f01963c` [run at 03:53Z: `main` unchanged; GitHub MERGEABLE at 03:39Z]. Bodies of #9237 and #9555 name the new heads since 03:42Z. Mailbox read at 03:53Z: nothing after your 03:12Z message [run]. #9373's ready line stands.
