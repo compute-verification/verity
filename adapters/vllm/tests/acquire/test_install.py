@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import types
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -196,9 +196,10 @@ def test_a_site_whose_slot_names_no_place_of_its_call_hands_the_sink_nothing():
     sites = [P.AcquisitionSite("producer_output", "blocks.0.proj", "hidden"), P.AcquisitionSite("producer_output", "blocks.0.norm", "2"),
              P.AcquisitionSite("producer_output", "logits", "0"), P.AcquisitionSite("consumer_input", "embed", "out"),
              P.AcquisitionSite("consumer_input", "logits", "in[1]"), second]
+    plan = P.AcquisitionPlan(PD, PD, "tiny", [P.ValuePlan(s.module, s.slot, "instance_outputs", 1, chosen=s, status="chosen") for s in sites])
     sink = OccurrenceSink()
-    inst = install_from_plan(cast(P.AcquisitionPlan, types.SimpleNamespace(chosen_sites=lambda: sites, unsupported=[])), model, sink=sink)
-    assert inst.installed == sites and not inst.missing
+    inst = install_from_plan(plan, model, sink=sink)
+    assert inst.keys() == sorted(s.key() for s in sites) and not inst.missing
     model(torch.tensor([[1, 2, 3]]))
     assert sink.counts == {second.key(): 1} and sink.shapes == {second.key(): [[1, 3, 4]]}
     inst.remove()
