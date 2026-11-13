@@ -98,13 +98,17 @@ theorem ret_pure {γ : Type} (a : γ) (Q : γ → Prop) (h : Q a) : Ret (pure a 
 /-- A `let` that is not a join point, generalized. -/
 theorem ret_let {α γ : Type} (e : α) (b : α → V γ) (Q : γ → Prop) (h : ∀ x, Ret (b x) Q) : Ret (b e) Q := h e
 
+/-- A `let` whose value is headed by a kept constant, generalized with its equation. -/
+theorem ret_let_eq {α γ : Type} (e : α) (b : α → V γ) (Q : γ → Prop) (h : ∀ x, x = e → Ret (b x) Q) : Ret (b e) Q :=
+  h e rfl
+
 /-- A kept computation in tail position: what it returns, with its equation. -/
 theorem ret_tail {γ : Type} (x : V γ) (Q : γ → Prop) (h : ∀ a, x = .ok a → Q a) : Ret x Q := h
 
 open Lean Elab Tactic Meta in
 /-- One step of `ret_walk` on the goal `Ret m Q`, by `m`'s head; `none` when the goal is not a `Ret`. A computation
-headed by a constant in `keep`, bound or in tail position, keeps its equation `x = .ok a`; every other step forgets what
-it passed. -/
+headed by a constant in `keep`, bound or in tail position, keeps its equation `x = .ok a`, and a `let` whose value is
+headed by one keeps `x = v`; every other step forgets what it passed. -/
 meta def retStep (keep : Array Name) (g : MVarId) : TacticM (Option (List MVarId)) := g.withContext do
   let ty ← instantiateMVars (← g.getType)
   unless ty.isAppOfArity ``Ret 3 do return none
@@ -130,6 +134,10 @@ meta def retStep (keep : Array Name) (g : MVarId) : TacticM (Option (List MVarId
           let hj ← forallTelescopeReducing t fun xs _ => do mkForallFVars xs (ret (mkAppN j xs))
           withLocalDeclD `hj hj fun h => do mkForallFVars #[j, h] (ret (b.instantiate1 j)))
         some <$> close (mkApp2 hb v he) [he, hb]
+      else if keep.any v.getAppFn.isConstOf then
+        let h ← goal (← withLocalDeclD n t fun x => do
+          withLocalDeclD `hx (← mkEq x v) fun hx => do mkForallFVars #[x, hx] (ret (b.instantiate1 x)))
+        some <$> close (mkAppN (mkConst ``ret_let_eq) #[t, γ, v, .lam n t b .default, q, h]) [h]
       else
         let h ← goal (← withLocalDeclD n t fun x => do mkForallFVars #[x] (ret (b.instantiate1 x)))
         some <$> close (mkAppN (mkConst ``ret_let) #[t, γ, v, .lam n t b .default, q, h]) [h]
@@ -184,7 +192,7 @@ meta def retStep (keep : Array Name) (g : MVarId) : TacticM (Option (List MVarId
 open Lean Elab Tactic Meta in
 /-- `ret_walk [c, …]` walks the goal `Ret m Q` to every return of `m`, leaving the goal `Q a` at each `pure a` and at
 each computation in tail position headed by one of the constants; such a computation, bound or in tail position, keeps
-its equation as a hypothesis (see `retStep`). -/
+its equation as a hypothesis, as does a `let` whose value is headed by one (see `retStep`). -/
 elab "ret_walk" "[" cs:ident,* "]" : tactic => do
   let mut keep := #[]
   for c in cs.getElems do keep := keep.push (← realizeGlobalConstNoOverloadWithInfo c)
