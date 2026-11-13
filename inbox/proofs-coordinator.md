@@ -125759,3 +125759,21 @@ Unchanged from 05:43Z. [run `r20261113-052338-1231`] The pair implies the old pr
 - [run `r20261113-052338-1231`] **Item 4, the split: D for the claim "no more than the old premise".** The pair says strictly more; the guarantees stay sound.
 
 **Next.** Review 2: the three statements of pull request #9568 in their form on `main`, at the commit I will name.
+
+## ADDRWC, Fri 13 Nov 06:45Z: COMPILED HEAD `e05417eec6` (replaces `f4fa2fbb2b`; base `3b05c3a3b1` merged): the width and the copy now hold of every accepted run with NO hypothesis on the design (`OfRuns.lean`, r20261113-063157-0a84, 3 theorems, probe clean); FRAME: your new clause `portsOnce` is already decided by the parse
+
+Run `r20261113-063157-0a84` (vy-nebius-2, `--tree-sha e05417eec679dfd2a039e8f1e2268ecae8edfd8a`, done rc 0): "lean exit 0 in 505 s" and "axiom probe: none of its 3 theorems uses an axiom beyond propext, Classical.choice and Quot.sound" [read: its fetched `stdout.log` and `launch.json`]. No error line; all ten older `AddressFacts` files built again there as its dependencies.
+
+**In plain words.** The two facts I was given are proved for any session the verifier accepts. Until this run they still asked the caller to supply "the second stage's design evaluates"; an accepted run already says that, so the proofs now read it off the run. What each still asks is the wiring facts at each accepted run (and the copy, the row), which are other workers' facts.
+
+- **The statements** [compiled], in `security/Proofs/Flock/SpotFlock/AddressFacts/OfRuns.lean`:
+  - `CheckedRun.design_of_ok (hr : r.Ok h) : ∃ d, two h r.s = some d`
+  - `widthFact_of_runs (hW : ∀ r : CheckedRun h.stage, r.Ok h → Wiring h) : WidthFact h (addressOf h)`
+  - `copyFact_of_runs (hW : the same) (hrow : RowFact h ω keep (addressOf h)) : CopyFact h (addressOf h)`
+- **For FRAME and ASSEMBLY** [read: `cursor/proofs-frame-l1-9c4e` at `f00922d4e9`, not built by me]. `hW` is the exact hypothesis `hWr` of FRAME's `addressesConnected_of_wiring`, and FRAME's `addressesConnected_of_held` builds it from `RefReadsWf h`. So once both lines are in one tree, `AddressesConnected h` follows from `RefReadsWf h` and `RowFact` alone: pass `widthFact_of_runs hWr` and `copyFact_of_runs hWr hRow` for its `hW` and `hC`. I did NOT write that theorem: `AddressesGive.lean` on my base still takes `OwnReads`, and a theorem against it would break when FRAME's lands. I write it when you name the head that holds FRAME's line.
+- **FINDING, FRAME's to decide** [read, not run]. `f00922d4e9` adds a decided clause `portsOnce` to `wiringOk` (`SpotFlock/Code.lean`) and proves `portsOnce_of_two (hd : two h s = some d) : PortsOnce h` from it. My `portsOnce_of_rows` has the same statement and is compiled on both bases with no such clause: a member's parse ends in `HmOut.checkRows`, which sorts the rows' names and refuses two equal neighbours. So the clause decides nothing the design did not already decide, and one tree will hold two proofs of one fact. Either drop the clause and `portsOnce_of_two`, or keep the clause and I delete `PortsOnceOf.lean`'s six lemmas under `portsOnce_of_rows`. I change nothing until told.
+- **Roots, both halves** [run: a script over the two files at `e05417eec6`]: `Proofs.Flock.SpotFlock.AddressFacts.OfRuns` is in the lock's `roots` and is a quoted root of the lakefile, in the commit that adds the file; the lock's 189 roots are each under a lakefile root.
+- **HONEST2:** `e05417eec6` contains `f4fa2fbb2b` whole, plus the base's lock-only move and this one file. Follow either.
+- **A correction:** my entry titled 06:32Z was posted at 06:28Z.
+- **No `GAP`.**
+- **Not done:** no records run of `security/Proofs` at my head (I hold no pull request and write no ready line; say so if you want one from me, about 64 GB and one Lean slot). Nothing of mine is running.
