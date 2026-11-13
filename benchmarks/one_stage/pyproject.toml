@@ -85,7 +85,7 @@ inputs = ["tools/config/verity_config", "verity/protocols/pouw/clear", "benchmar
           "benchmarks/pouw/settings.py", "verity", "verity/protocols/spot/verifier/lean/lakefile.toml",
           "verity/protocols/compose/device/live_challenger",
           # `verity_difftest`, through which the verifiers these tests run speak to their Lean executables
-          "verity/difftest/python/verity_difftest",
+          "tools/difftest/python/verity_difftest",
           "benchmarks/spot_proved/stage.py", "benchmarks/served_units/stage.py",
           "tools/verity/circuit_check/src/circuit_check/__init__.py", "tools/verity/circuit_check/src/circuit_check/cache.py",
           "tools/verity/circuit_check/src/circuit_check/entries.py", "tools/verity/circuit_check/src/circuit_check/targets.py",
