@@ -137812,3 +137812,103 @@ Run `r20261113-110416-45a9` on vy-nebius-cpu-7, commit `8ae9223afa2`: the same d
 - Whether Thursday's members are derived or listed.
 
 Next: nothing runs. The branch waits for the carry and MEMBERS's lemma.
+
+## FRAME, Fri 13 Nov 11:27Z: STOP RULE, one site, for soundness: `VStar.Recursive.roundTrips` (a difftest's report, on no accept path) compares two objects as maps, which no helper with `cmp a b = true → a = b` can do. The helper `Core.jsonSame` and both lemmas hold for every `Json` (draft pushed at `d4befdd83ac9`, checked on this machine only, NO node try sent). A helper in `CoreProtocol` is out of reach of Flock's verifier and of `PouwCommit.fieldIs`: yours to place. Our sites: 36 in 23 declarations of 9 files
+
+Each claim says where it comes from: [run] a node's run, [local] plain `lean` on this machine, [read] the file, [text] a grep, [derived] my reasoning.
+
+**Two things to rule first.**
+
+1. **For soundness (the stop rule).** `roundTrips` (`verity/protocols/recursion/verifier/recursive/VStarRecursive/Protocol.lean:476` and `:487`) asks whether a parsed field equals the parse of its own canonical text: `(parse (canon j)).toOption == some j`. The two sides hold the same fields. `canon` writes keys in sorted order and `j` holds them in the order its text gave them, so the two can be different trees. `==` reads objects as maps and says true; any `cmp` with `cmp a b = true → a = b` must say false. [read; local evals]
+   - It is the difftest's report: its one caller is line 655 (`round_trips`), read by `test_vstar_recursive.py`. It is on no accept path. [read]
+   - What I would do there: compare the two canonical texts, as `Spot.jeq` does. That needs neither `==` nor the helper.
+   - Not established: whether the honest session's fields come out as two different trees today. I did not run it. By its meaning the site wants the map reading.
+   - The other 35 sites compare with a string, `null`, a Boolean or an empty array (one with an array its caller has held to be strings). There the helper and `==` say the same on every input. [read of core's `beq'`; no proof can say it of a `partial def`]
+   - **I stopped at the rule: the draft is pushed and no node try is sent.** Your word and the try is one command.
+
+2. **For you (where it sits).** Soundness said `CoreProtocol`. Flock's verifier, `pouw_commit` (where `fieldIs` lives) and `core_vstar` do not require the interface's package, and `tests/import_order.toml` lists Flock's verifier below the interface. [read: each `lakefile.toml`] From `CoreProtocol` the helper reaches SPOT's 31 sites and the recursive audit's 3, and not Flock's 2 sites or `fieldIs`.
+   - (i) **My pick: the same file in the base package**, `verity/circuits/base/Base/JsonSame.lean`. Every verifier's package requires base, the file imports only `Lean.Data.Json.Basic`, and base's `layers` already allow that. One comparison for all.
+   - (ii) It stays in `CoreProtocol`; Flock's two sites and `fieldIs` are mended by a match in place and stay outside the helper.
+   - (iii) Flock's verifier and `pouw_commit` require the interface. Against the import order; not this.
+   - **The name for lean does not depend on it: `Core.jsonSame`**, with `Core.jsonSame_eq` and `Core.jsonSame_refl`.
+
+**a. Where, what, how.**
+
+- File: `verity/protocols/interface/CoreProtocol/JsonSame.lean`, 145 lines, imported first by `CoreProtocol.lean`, with a `layers` entry in the interface's lock (Lean's JSON only). The lemmas sit beside the definition: they need no Mathlib, and code packages hold theorems already (`Base/Field.lean`, `Base/Hash.lean`).
+- Definition: three functions in one `mutual` block, each by structural recursion. No `partial`, no `termination_by`.
+
+~~~lean
+def jsonSame : Json → Json → Bool
+  | .null, .null => true
+  | .bool a, .bool b => a == b
+  | .num a, .num b => a.mantissa == b.mantissa && a.exponent == b.exponent
+  | .str a, .str b => a == b
+  | .arr ⟨a⟩, .arr ⟨b⟩ => jsonSameList a b
+  | .obj ⟨⟨a⟩⟩, .obj ⟨⟨b⟩⟩ => jsonSameTree a b
+  | _, _ => false
+def jsonSameList : List Json → List Json → Bool   -- element by element, one length
+def jsonSameTree : JsonTree → JsonTree → Bool     -- node by node: recorded size, key, value, left, right
+~~~
+
+- How the recursion is structural: `Json` holds itself in an `Array` (a structure around a `List`) and in a `Std.TreeMap.Raw` (two structures around the tree `Std.DTreeMap.Internal.Impl`). The match opens those structures down to the list and the tree, and Lean then accepts the three functions as structural, as it does for `Flock.norm`. The kernel reduces them: the file's examples are by `decide`. [local]
+- Statements:
+
+~~~lean
+theorem jsonSame_eq : ∀ a b : Json, jsonSame a b = true → a = b
+theorem jsonSame_refl : ∀ a : Json, jsonSame a a = true
+theorem jsonSame_iff {a b : Json} : jsonSame a b = true ↔ a = b
+theorem jsonSame_str (j : Json) (s : String) :
+    jsonSame j (.str s) = (match j with | .str t => t == s | _ => false)
+~~~
+
+- All four pass with the package's options, on `propext`, `Classical.choice` and `Quot.sound`. [local: plain `lean` on the file with `#print axioms`; not the package's build, not a node]
+
+**b. What changes against `==`.**
+
+- **Only objects.** `==` holds two objects equal when their sizes agree and each key of the left is in the right with an equal value. The helper compares the trees.
+  - `{"a":1,"b":2}` against `{"b":2,"a":1}`, each parsed: `==` true, helper false. [local eval]
+  - Three keys `a, b, c` against `c, b, a`: both true, since the tree rebalances to one shape. So on objects the helper's answer follows the order of insertion in a way the text does not show. [local eval]
+- **Numbers: nothing changes.** Both compare mantissa and exponent. `1.0` and `1` differ under both, as do `1.50` and `1.5`; `1e2` and `100` are equal under both. [local evals]
+- **The other way:** an object whose tree is out of key order, which no parser builds: `==` refuses it against itself, the helper accepts. [local eval]
+- **`cmp a a = true` holds for every `Json`**, that tree included (`jsonSame_refl`).
+- **A site that relies on what changes: one**, item 1 above.
+
+**c. Our sites.** Counted by type: every declaration whose body names `Lean.Json.instBEq`, over 258 modules of SPOT's, Flock's, the recursive audit's, the firewall's and the interface's libraries: 23 declarations, none through a derived `BEq`. [run: `r20261113-110828-6840`, "FOUND 23"; `r20261113-111234-68a0`] The lines, by reading each of the 23:
+
+| Where | Declarations | Sites |
+|---|---|---|
+| `Spot/ChallengerSession.lean` | 13 | 25 |
+| `Spot/Stream.lean` | 2 | 2 |
+| `Spot/ChallengerRecord.lean`, `ChallengerCoins.lean`, `ChallengerInnerTrees.lean`, `OneStageZk.lean` | 1 each | 1 each |
+| **SPOT** | **19 in 6 files** | **31** |
+| `Flock/Firewall.lean:712`, `Flock/Firewall/Session.lean:493` | 1 each | 1 each |
+| **Flock** | **2 in 2 files** | **2** |
+| `VStarRecursive/Protocol.lean` (`roundTrips` 2, `verdicts` 1) | 2 | 3 |
+| **All** | **23 in 9 files** | **36** |
+
+- None in `CoreProtocol`, the base packages, `Lms`, `VStar`, `FlockVerify`, the firewall's package or `VStarTraceCli`. [run]
+- Not scanned: Flock's 81 test files, the one-line entry points, `VStarDifftest.lean` (an executable's root; by text its `==` lines compare sizes), `Circuits/Annot.lean` and `AnnotExpand.lean` (by text no `Json` comparison).
+- **For lean's lint:** 7 of the 36 do not read as `x == Json…`: an `Option Json` (`ChallengerSession.lean:610`, `OneStageZk.lean:589`, `Protocol.lean:476`, `:487`, `:563`), an `Array Json` (`ChallengerSession.lean:772`) and a `contains` (`:888`). A lint by text misses them; one by type does not. My scan is on the scratch branch `cursor/proofs-frame-jsoncount-053b` for lean to take; I delete the branch when you say it is not wanted.
+- **REDRAW:** at least 13 of SPOT's 31 are the reader's lines its change takes (the lines the lead's comment on PRF-490 lists [read]). It should use the helper, not a match of its own, once the place is ruled.
+- **`Spot.jsonStrIs`** becomes `def jsonStrIs (j : Json) (s : String) : Bool := Core.jsonSame j (.str s)`. It is the same function (`jsonSame_str`, by `cases j <;> rfl`). `Properties.Pouw.LiveSalt.jsonStrIs_eq` and `jsonStrIs_self` become `jsonSame_eq` and `jsonSame_refl` at a string: two lemmas fewer. In `security/Proofs`, 18 tactic lines unfold `jsonStrIs` by name and 10 go through `jsonStrIs_eq` [text]; each of the 18 gains at most `jsonSame_str` in its simp set. Not compiled.
+- **`PouwCommit.fieldIs`** becomes `| some j, s => Core.jsonSame j (.str s) | none, _ => false`, under (i) only. It is named 18 times in 6 verifier files and in no proof. [text]
+- An `Option Json` or `Array Json` site is a use too (`x.any (jsonSame · v)`); no second helper.
+
+**d. Size.**
+
+- The helper: 1 new file (145 lines), 1 import line, 1 `layers` entry. **No lock record moves**: the interface's lock holds no guarantee and no statement reads the helper. [derived; no records run] No Python twin and no difftest: no Python reads it.
+- Mending ours, later, under lean's ratchet: 36 one-line changes in 9 files, 2 definitions, up to 18 proof lines. The `reads` tables of `security/lean-audit.json` and `security/Properties/lean-audit.json` record `jsonStrIs` and `fieldIs` by hash, so those lines move, and with them the records of the guarantees that read the mended functions. How many: not known before a records run.
+- Python: I have not read each site's Python twin. The 35 sites compare against a string, `null` or a Boolean, where a map and a tree cannot differ.
+
+**e. The two round trips.** I read both readers; I tried neither. No proof in `security/` names either today. [text]
+
+- **`Ratio`:** beside `Ratio` (`CoreProtocol/Ratio.lean`, or next to it if its `layers` entry is too narrow). Not for every `r`: `r.den ≠ 0 → Nat.gcd r.num r.den = 1 → Ratio.ofString r.toString ctx = .ok r`. It needs a number's decimal text read back, and `splitOn "/"` of two slash-free parts.
+- **`Integrity`:** beside `Integrity` (`CoreProtocol/Profile.lean`). Not for every `i`: `prescribed` and `covered` sorted, `drawn` the named levels' counts in level order, each ratio as above, each work design passing `WorkStratum.problem`. It needs the `Ratio` round trip and lemmas for the reader's loops and for a key's lookup in `mkObj`'s tree.
+
+**`canon_inj` (your news): they move with it.**
+
+- The `Esc` block of `security/Proofs/Properties/Composition.lean` (lines 359 to 544) reads nothing of the composition: only `Flock.canonStr`, `Flock.escU`, base's `hex4`, and `LiveSalt.Canon`'s `unhexL` and `nib`. [read] It moves as a block, names kept, to a file of its own; `Composition.lean` and `Verity/Sampled/Lines.lean` import it.
+- Not a rewrite on `LiveSalt.Canon`'s own: its `unesc2` reads a `\u` escape as one character and knows no surrogate pair, which `canon` writes for a character above `0xFFFF`. A rewrite would say the pair reading a second time. [read]
+- `OwnReads.lean` reads four lemmas of `CanonLine.lean`: `field?_obj`, `field?_of_not_obj`, `field?_equiv`, `canon_inj`. Those and `utf8`'s lemmas are what moves, after the carry. Which records move I say when I size it then.
+
+**State.** `cursor/proofs-frame-jsoncmp-053b` at `d4befdd83ac9`, from `origin/main` `053b8e50fe8a`: the helper's file, its import, its `layers` entry. No pull request, no verifier's site changed, no run out, no timer. #9713 and #9681 as at 09:56Z. The machine was replaced at about 10:57Z; I retook the pen at 10:57:59Z. Scripts, the scan and the evals: note `20261113T1124Z-report-frame-jsonsame`.
