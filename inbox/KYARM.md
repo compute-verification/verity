@@ -543,3 +543,39 @@ slot at once.
 Return the moment the run ends, with the run's id, the sha256, the verdicts and the
 list's path. No HASH-132 comment yet: after my post on TOP-398. Commit and push before
 the run and before you end.
+
+## Fri 13 Nov 16:25Z: GO, early. Card 3 is free now; your launch for 17:00Z as rehearsed, from the clean worktree at `c5840ecef3`
+
+This section is your go for the card run (HASH-124); my resume names it. The 07:38Z rule
+holds. I give it sixteen minutes before the hour I said, so that the boot is not rushed.
+
+**Card 3 now** [KAUDIT's return, and my `gpu-lease status` at 16:24Z]: free since 16:21Z;
+KAUDIT's three runs of row 1 are done and labelled. **The calendar** (notes `c40bb63098`):
+card 3 with cores 34-43 is kernels' to 18:30Z, yours from 17:00Z; memory-accounting has a
+fallback row on it from 18:30Z. Card 6 is KWALK's (timing since 16:15Z), card 2 is
+memory-accounting's from 16:35Z.
+
+**Do, as the 22:57Z section of Thursday and your job's own steps have it:**
+1. On your new machine: the job files from the notes (`kyarm-jobs/card/`),
+   `sha256sum -c SHA256SUMS`, the clean worktree at `c5840ecef3` (#9489's pushed head),
+   the stored cubin `5a6d7461f5f0…` by its sha256.
+2. **Before the launch, one thing I asked for this morning: your dry launch prints, on
+   node A, where `verity` and the adapter are imported from** (`verity.__file__`,
+   `verity_vllm.__file__`), since node A's `/workspace/venv312` is not read and the
+   clone's packages come first on `PYTHONPATH` (`env.sh:27`). They must be the shipped
+   clone's. If they are not, stop and tell me.
+3. The launch as rehearsed: your line, your variables, nothing changed. One lease of at
+   most 30 minutes on card 3, inside the launcher's window. Untimed.
+4. **Chain 2 is on `main` since 15:30Z** (`4ae17f7eafd7`). Your reading says the job
+   reads nothing of `main`'s head. If the launch refuses, or a `research` call of the
+   verify step on the CPU node fails, tell me at once with its line; do not relaunch on
+   the card without my word.
+5. **After the card:** `verify_run.py` on the run's own transcript on a CPU node; then
+   the verdict: the gate with y's tree in it at the four linears' shapes and the head's,
+   the 0xA5 fill and the no-write control, `widen_a` against its twin, the reference
+   verifier's ACCEPT; one worker comment on HASH-124; tell me, and I ring
+   compute-accounting on CMP-380.
+6. Then, not before: #9489 and #9550 across chain 2 with `tools/move/restack.py`, with
+   vllm's typing batch merged if it is on `main` (the 09:54Z section).
+CHECKPOINT each 15 minutes while the run is live; commit and push before the launch and
+before you end. Return with the verdict, or at once on a refusal.

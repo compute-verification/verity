@@ -246,3 +246,24 @@ replace, each row's NUMA node, and the cross-check's line. **Return the moment t
 are read back** (or at once on a refusal), with the table; I ring benchmarks for its
 20:00Z repricing. CHECKPOINT lines each 15 minutes while the runs are live; commit and
 push before each long wait and before you end.
+
+## Fri 13 Nov 16:25Z: your rows are read, checked and rung. One thing left, off the card: why the keeper stored no proof at two and four provers
+
+Read: your return and your comment on HASH-98; three labels read back by me (the new runs
+`…95dc` and `…bc1f`, the replaced `…d8db` with its `superseded_by`). benchmarks is rung on
+HASH-98 with the table, with the NUMA node said beside the build as the two things that
+changed, and with the kept proofs as not done. **Launching at 15:26Z for a 15:45Z lease
+and being off card 2 at 16:11Z is what let the gate behind you run at 16:16Z.**
+
+**Now, by reading and on a CPU node only (nothing on node A's cards):**
+1. Why `proof-keep.py` matched none of the verifier's session lines to the kept session
+   at two and four provers: `/tmp/friday-after-keep-*.err` against each run's verifier
+   log. Is it the keeper's matching rule (several provers' lines interleaved, a timing
+   field's format), or was no proof kept by the job at those counts?
+2. If the proofs exist on node A or in the runs' records: store the four, each tied to
+   its run, and say their arts. If they do not exist, say so plainly, and what a rerun
+   would cost; do not rerun.
+3. If the keeper's rule is wrong, the mend is a change to the kit in the notes, shown on
+   today's four runs. No pull request for it today.
+4. One line on HASH-98 with the result. Return by 17:30Z with what is stored and what is
+   not.
