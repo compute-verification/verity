@@ -95,8 +95,8 @@ theorem WindowOn.laid {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W
     rw [count_one hu] at c2
     rw [first_one hu'] at c3 c4
     rw [count_one hu'] at c4
-    exact hab (lo, hi) (by rw [hu]; first | exact List.mem_singleton.2 rfl | simp) (lo', hi')
-      (by rw [hu']; first | exact List.mem_singleton.2 rfl | simp) x c1 (by omega) c3 (by omega)
+    exact hab (lo, hi) (by rw [hu]; exact List.mem_singleton.2 rfl) (lo', hi')
+      (by rw [hu']; exact List.mem_singleton.2 rfl) x c1 (by omega) c3 (by omega)
   refine Window.laid_of htotal fun j u => ?_
   exact emb_of_tiles (fun vm : _root_.Spot.OneStageZk.Member => vm.first) (fun vm => vm.count)
     (fun m : Member W.nJ => m.n) (fun m => m.emb) (hall.imp fun _ _ hon => ⟨hon.units, hon.place⟩) hsorted hap
