@@ -1542,9 +1542,10 @@ def test_a_verdict_not_accepted_that_states_a_withheld_word_is_withheld_for_it_u
     got = stop(registrations, [*audit_but(first, accepted=False, withheld=FORM), second])
     assert got.why[2] == (f"{whole}the compute audit is refused (a second run); the compute audit is {WITHHELD} "
                           "(run of the compute audit)")
-    # under another head
+    # under another head, with codes or without
     theirs = four(other)[3] | {CC.RUN: "an earlier run"}
-    for over, how in (({}, "refused"), ({CC.WITHHELD: FORM}, WITHHELD)):
+    for over, how in (({}, "refused"), ({CC.WITHHELD: FORM}, WITHHELD), ({CC.CODES: ["roots"]}, "refused"),
+                      ({CC.WITHHELD: FORM, CC.CODES: [FORM]}, WITHHELD)):
         held = theirs | {CC.VERDICT: theirs[CC.VERDICT] | {CC.ACCEPTED: False} | over}
         got = stop(registrations, [*four(first), held])
         assert got.held == 0 and got.why[0] == held_back(1, 1, head=1), over
