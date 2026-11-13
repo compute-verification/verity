@@ -155470,3 +155470,75 @@ Your 17:57Z and 18:07Z are read. Branch `cursor/proofs-heldof-blob-f083` at `202
 - Next: when FRAME names the head of `cursor/proofs-carried-twoleg-ruleb-4ae1`, I fast-forward
   `cursor/proofs-scratch-twoleg-ownreads-ad71` to it, put the 12 lines on top as one commit, build on a node, and
   write the one entry "merge rule B at <40 hex>". The carried branch is not on the remote at 18:19Z.
+
+## SESSIONCOINS, Fri 13 Nov 18:23Z: C-Flock's choice finders sized, first entry (part B whole, part A items 1 and 2, part C by text)
+
+**Neither way keeps `SampledKSLiveV3`'s or `SampledKSLiveV5`'s stated δ: under way (i) and under way (ii), every masked level term and τ term of `ksStrictZ` exceeds 1, so δ ≥ 1 at every deployed m (25 to 35).** What does keep the stated δ, unchanged, is a guess the bound never reads, which is not either way as written and needs soundness's word: the fork finders restated chooser-free at `Lock.forkC`, through the alignments Claims/KS already proves (`advRSZ_le_forkC`, `advPadsSZ_le_forkC`, `advTauSZ_le_forkC`). A third family reaches a choice and is in neither ruling: the finders' output pickers. `StrictCR.collOf` (`StrictCR.lean:53`, two `Classical.choose` over all byte strings) produces the output of every strict table finder, fork, two-run and self-clash alike, and of the recursive layer's `clashPickCL` and `regFinder`; and the link finders' outputs come from `LinkFinder.outOf` (`LinkFinder.lean:349`, `Classical.choose`) and `opOfVZC`/`opOfVL` (`Classical.epsilon`).
+
+All references are at `main` `3f4af5f89966`. Each claim is marked [read] (I read it at that file and line), [derived] (my arithmetic or reasoning from what I read), [run] (a local text script over the tree; nothing was compiled) or [guess]. No Lean was written.
+
+### Part B: `plurSZ`, the plurality
+
+**1. What it chooses, and the definitions between it and a listed finder.**
+- `plurSZ` (`ZkLink/SessionZ.lean:112`) is the `Lock.Chooser` for a masked table: at slot s < 2 it returns the pads table (`padsTab T.N`, positions `Fin T.N`, values F×F), at s < 4 the τ table (`tauTab`, one value in F), otherwise a masked level ℓ's table (`tabOf lanes logLen`, positions `Fin 2^logLen`, values `Fin 2^4 → F`). Each is `Classical.choose (Rewinding.exists_pluralityE …)` (lines 115, 117, 120). [read]
+- A `Lock.Chooser` returns a whole table T, not one opening (`Core/Game/Lock.lean:54`; the `table` node passes `t : T` to its continuation, line 45). [read]
+- Between it and the listed finders: `StrictZ.lean:51` `advRSFinderZ`, `:60` `advPadsSFinderZ`, `:69` `advTauSFinderZ`, each `StrictCR.forkFinder (plurSZ …)` (`StrictCR.lean:146`); these are read by `SessCRZ` (`StrictZ.lean:97`), which `TableCRZ` (`:195`) is, which `Finders.lean`'s `TableCRZAt` is, which V3 (`Bridge/ScopeGate.lean:116`) and V5 (`Bridge/V5/Statement.lean:324`) take. [read]
+- Inside `forkFinder` the chooser is used only at table nodes other than the fork's slot, to pick the subtree `L (plur …) σ'.1`; the compiled continuation and the prover's strategy there don't depend on the choice (`oracleStrat`, `Lock.lean:59-66`). [read]
+
+**2. Way (i), a search under ruling B: bounded, but no charge keeps a term below 1.**
+- The plurality at a table node is the table that maximizes the probability, over the rest of the game's coins, of what the fork opens. For an arbitrary prover strategy, an exact value needs the strategy at every continuation: changing its answer at one continuation changes the probability. [derived]
+- After every masked table node of a rep, that rep's inner proof still draws β ∈ F and the query words w : Fin Q → F with Q = 168 (`LockRep.lean:214`; `Flock/Zk.lean:26`). So each chooser call costs at least 2^128 · 2^(128·168) = 2^21,632 evaluations of a run of cost t′. [read, derived]
+- With q ≥ 2^21,632 · t′, the strict term q²/2^513 is at least 2^42,751 for every t′ ≥ 1. The cost is finite, so the charge is bounded, but each term it enters exceeds 1. [derived]
+
+**3. Way (ii), a uniform guess: |V| and what δ becomes.**
+- The guessing finder succeeds with probability at least (1/F) times the fork's, where F is the product of |T| over the table nodes the fork passes before its slot. So each fork term of `ksStrictZ` (`StrictZ.lean:174`) gains F inside its square root: √(F · 2^logLen · Q · qF²/2^513) for a level, √(F · N² · qF²/2^513) for pads, √(F · qF²/2^513) for τ. [derived]
+- |T| per node, as formulas [derived from the types read above]:
+  - pads: |F×F|^N = 2^(256·N), where N is the pads table's length, the inner code's length `innerN` = (len + 192).nextPowerOfTwo · 8 (`ZkExec/Statements.lean:103`, `Flock/Zk.lean:24,27,260`), with len = 180 + 2m + 2·kLog + 4·k0 from `PadLayout` (`Flock/Zk.lean:59-84`) [read, derived];
+  - level ℓ ≥ 1: |F^16|^(2^logLen_ℓ) = 2^(2048 · 2^logLen_ℓ), with logLen_ℓ = cols_ℓ + ℓ + 1 from `Schedule.mk` (`Accounting/Schedule.lean:70-75`) [read, derived];
+  - τ: |F| = 2^128.
+- The numbers at the deployed schedules, `fast100` m = 25 to 35 (`Schedule.lean:83-93`) [derived]:
+  - N is 4096 when len + 192 ≤ 512 and 8192 otherwise. With kLog ≤ m, that is 4096 at m = 25 to 27 for every kLog, and at larger m for kLog up to 140 − 2m − 4·k0 over 2 (23 at m = 35). So |T_pads| = 2^1,048,576 or 2^2,097,152.
+  - level 1's table: 2^4,194,304 at m = 25, 2^8,388,608 at 26, 2^16,777,216 at 27, 2^134,217,728 at 28 to 30, 2^268,435,456 at 31, up to 2^4,294,967,296 at 35; the last masked level's table at its smallest is 2^262,144 (m = 25). Level ℓ = L reads `lvOf`'s default level (`CompiledSound.lean:33`, `getD`), one position. [read]
+  - τ: 2^128.
+- Where 1/|V| enters: a level ℓ fork passes at least its own rep's pads node and its levels 1 to ℓ−1 (`lockRepZ`, `LockRep.lean:237`: pads, then the levels, then the inner proof with τ); a τ fork passes its own pads and all its levels. This holds for every schedule the prover picks, since `interleaveLock` keeps each rep's own order. So F ≥ 2^1,048,576 for every level and τ term. [read, derived]
+- What δ becomes: a term stays below 1 only if F · 2^logLen · Q · qF² < 2^513, which needs F < 2^513. So every level and τ term is at least 2^((1,048,576 − 513)/2) ≥ 2^524,031, at every qF ≥ 1 and every m from 25 to 35, in V3 (qF = 2(t′+v), `ScopeGate.lean:178`) and V5 (`V5/Statement.lean:395`). There are 2·(L+1) such terms per table (L the schedule's level count, 4 to 7). Only the pads term of the rep the prover schedules first keeps F = 1; the other rep's pads term gains whatever of the first rep the prover plays before it. [derived]
+- **The stated δ does not hold under way (ii): δ ≥ 2^524,031, so the bound says nothing.** Guessing only the one opening the fork reads, rather than the whole table, does not rescue it: a τ fork still passes its rep's pads and at least three levels, so F ≥ 2^(256 + 3·2048) > 2^513. [derived]
+
+**4. Which way keeps the stated δ.** Neither. A guess the bound never reads keeps it unchanged, by either of two routes, both needing soundness's word:
+- (a) A constant chooser, with a lemma that the fork's value doesn't depend on the chooser: an `Aligned` whose table case quantifies over two tables, `∀ t₁ t₂ d`, and the `aligned_*` builders (`LockRep.lean`, `AlignLevel.lean`, `Core/Game/Batch.lean`, `CompiledAlign.lean`) restated for it. [read the builders' names; the restating is a guess at size]
+- (b) The fork finders restated at `forkC F j g σ` (`Claims/KS/ForkSim.lean:72`, the fork after j coins, which has no chooser), carried by `advRSZ_le_forkC`, `advPadsSZ_le_forkC` and `advTauSZ_le_forkC` with their slot proofs (Claims/KS `ZkAlign`/`ZkBatch`, `ZkPadsSlot`, `ZkTauSlot`), which `zk_KS_of_align` already uses. [read the names and where they sit]
+
+**5. What changes.** For (b): `advRSFinderZ`, `advPadsSFinderZ`, `advTauSFinderZ` (`StrictZ.lean:51,60,69`) and their three `_le_strict` proofs; `SessCRZ`'s and `TableCRZ`'s unfolded statements, so the lock records of every guarantee that reads them (part C); `ksStrictZ` and the stated δ do not change. The plain twins (`plurSL`, `SessionSoundL.lean:192`, through `StrictCRL.lean:148`) change the same way. Sized in the whole entry. [derived]
+
+### Part A: `candZC` and `candL`, the extraction witness (items 1 and 2; items 3 to 5 in the whole entry)
+
+**1. What each chooses, and what its finder holds.**
+- `candZC` (`ZkLink/CompiledLink.lean:76`) chooses, when one exists, a level-0 message M (2^k0 lanes by 2^cols symbols of GF(2^128)) from the whole message space such that `TabZK.Committed` holds against the extracted oracle: some row list R in `padList`, within `padRadius` of the extracted witness lanes, with `padWit c₀ R = M` and S satisfied by M's witness (`CommittedPad`, `SoundnessPad.lean`; `padList`/`padWit` at `LigeritoPadLevel0.lean:216`). [read]
+- The extracted oracle (`extractTableZ`): at each level-0 position, the first verifying row any of the k accepted reruns opened, and zero elsewhere. Each run opens q0 positions per rep, two reps, so the finder holds at most 2·q0·k of the 2^d positions. q0 is 277, 242, 229 at m = 25, 26, 27, 219 at 28 to 31 and 218 at 32 to 35 (`Flock/Zk.lean` `queries0`); 2^d = 2^(cols+1) runs from 2^13 at m = 25 to 2^23 at m = 35. [read]
+- `candL` (`Exec/FlockLinkL.lean:85`) is the plain twin: `Classical.choose` of `Committed` (`Definitions/Flock/Defs.lean:77`), a message whose encoding is within the level-0 radius 1 − √ρ − η (`Accounting/Bound.lean:77`, rate 1/2) of `tabExtL`, the plain extracted table (`FlockLinkL.lean:78`). [read]
+
+**2. Whether the message is determined: it is not.**
+- No uniqueness lemma exists for either. `agree_unique` (`ZkSession/Compose.lean:45`) is for the inner code in its unique-decoding regime. [read]
+- Uniqueness can't hold at these radii. The masked radius `padRadius` = 1 − √((2^cols + t)/2^d) − 1/200 (`Accounting/Padded.lean:35`) is about 0.288, and the plain one 1 − √(1/2) − η likewise, against a unique-decoding radius of about 0.25; `padListBound` = 100·2^d/(2^cols + t) < 200 messages may lie within it (`Padded.lean:38`, `padWits_card_le`). The closeness is joint over all lanes (`CloseRows`, `PadCode.lean:170`). [read, derived]
+- So the finder must decode. A list decoder already exists in Lean for each: `zkDecodeR` (`Claims/GS/ZkRadius.lean`, Guruswami–Sudan on the zero-filled word, with `listWithin_zkDecodeR` at exactly `padRadius` and a proved complexity bound) and `flockDecode` (`Claims/GS/Flock.lean:191`, with `mem_flockDecode` and `flockDecode_complexity`). The finder would take the decoder's list and the first message whose witness satisfies S. [read] Whether the decoders pass ruling B as written is part of item 3: they reach choice through `LinearEquiv.ofInjectiveEndo` (`novelInv`, `padInv`) and `Nat.ceil` on ℝ (`Claims/Decode.lean:235`). [read]
+- A first estimate of the charge, for the whole entry to firm up: the proved bound `zkPolyR` is about 2^247 or more field operations at m = 25 and above 2^256 at larger m, which would break the link term `2t′(1+k)/2^256` if charged as proved; the decoder's real work at multiplicity k+1 is far less. [guess]
+
+### Part C: finder definitions of the two families that still reach a choice, with their readers (by text)
+
+Readers are counted by text: an upward walk from each definition through the names that mention it, to the 1137 guarantees' declarations, with comments stripped and names resolved by namespace. The lock's `reads` are per module (the union over a module's guarantees), so they can't name a guarantee; it lists `candZC`, `opOfVZC`, `XvalZC`, `plurSZ`, the three `adv*SFinderZ`, `candL`, `opOfVL`, `plurSL`, `StrictCR.forkFinder`, `TableCRZAt` and `LinkCRZCAt`, and none of `plurC`, `plurCL`, `plurS`, `advRFinderL`, `collOf`, `onePick`, `conflictPick`, `clashPickCL`, `regFinder`, `LinkFinder.outOf` or `readsAtZC`. [run: a local text script over the tree, no Lean]
+
+- `candZC`, `opOfVZC`, `plurSZ`, `adv*SFinderZ`, `TableCRZ`, `LinkCRZC`: 35 guarantees each: `flock_verify_sound`; the 5 `SampledKSLive*` (`Pub`, `Stated`, `V2`, `V3`, `V5`); the 12 `EndToEnd*`; `IntegrityBlock`, `IntegrityBlockCarried`, `IntegrityBlocks`, `IntegrityHorizon`, `IntegrityHorizonBlocks`, `IntegrityHorizonCarried`, `IntegrityPeriod`, `IntegrityPeriodLog`; `JointHorizonV5`, `JointSampledV5`, `JointShareV5`; `JointStratified`, `JointStratifiedHorizon`, `JointStratifiedHorizonMT`, `JointStratifiedMT`; Accounting's `Bridge.IntegrityOfIntegrityBlock` and `Bridge.IntegrityOfIntegrityMonitoringPeriod`.
+- `candL`, `opOfVL`, `plurSL`, `TableCRL`, `LinkCRL`: 2 guarantees: `flock_verify_sound` and `flock_verify_sound_205` (through `TableCRAt`/`LinkCRAt` in `FailClosed/One.lean`'s `SoundExec*`).
+- `plurCL` (`Exec/CompiledL.lean:427`), the single-table plain chooser, through `advRFinderL` (`Exec/StrictCRL.lean:49`): no guarantee reads it by text.
+- `StrictCR.collOf`, through `onePick` and `conflictPick` (`StrictCR.lean:62,75`): 40 guarantees by text, not strict (`onePick` is a name used twice). They are the 36 of the two families' finders, plus 4 through other finders: `PublicAudit` and `RecursiveRanRegisteredExec` (through `clashPickCL`, `Recursive/Compile.lean:89`), `RecursiveRanRegistered` (through `regFinder`, `Recursive/Registrants.lean:105`) and `SessionLoopZKDeployed` (through `selfSFinderZ`). A 41st, `RecursiveAuditC3`, comes through `SpotRecursiveAt` and may be the computable `collOf` of `Claims/Bridge/Transport.lean:129` instead; not established.
+- Not finders but statements reading a choice: `XvalZC` (`CompiledLink.lean:137`, `Classical.choose`), through `XplurZC`, is read by the 12 `EndToEnd*` and the 5 `SampledKSLive*`; `plurC` (`CompiledSound.lean:368`) reaches `Verity.SecurityProofs.ProbBatchInduced` through `advR`.
+
+### Not established
+- Whether ruling B's walk refuses `Classical.propDecidable` (`readsAtZC`'s filter, `CompiledLink.lean:90`): it reaches `Classical.choice`, not `Classical.choose`. Soundness's word settles it.
+- Whether a plurality estimated by sampling, rather than computed exactly, is admissible under way (i); `exists_pluralityE`'s maximality would not hold for it, so the fork bound would need a new lemma. Soundness's word settles it.
+- That the Claims/KS `forkC` alignments cover the exact sessions V3 and V5 state (`lockSessZ` at `planZHJ`'s tables); reading their statements against `advRSZ` settles it, in the whole entry.
+- kLog's deployed range, which picks N = 4096 or 8192; the statement's `st.kLog` at each deployed m settles it. Neither value changes the answer.
+- The reader counts are by text; per-guarantee reads from `check.py`'s facts (`guarantee_reads`), one `research run` on a node, would confirm them.
+
+### What comes next, and nothing is late
+The whole entry by Sat 14 Nov 18:00Z holds part A items 3 to 5 (the decoders' bridge to `padWit`, their choices, the charge in SHA-512 evaluations, what changes and the hardest lemma), part B item 5 sized, and part C's chains checked by hand. One line each hour until then.
