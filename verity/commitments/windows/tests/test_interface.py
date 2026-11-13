@@ -137,9 +137,9 @@ def test_close_commits_every_unit_under_the_window_domain_rule():
 
 
 def test_a_windows_salts_are_the_operating_systems_bytes_one_draw_a_port(monkeypatch):
-    """With no test key, `rows.commit` takes every row's salt from the OS generator, 192 bytes a row in one draw a port in
+    """With no test key, `rows.commit` takes every row's salt from the OS generator, 192 bytes a row in one sample a port in
     the ports' order, and stretches none from a key: each port's salts are the bytes the generator gave for it. Two closes
-    of one window draw other salts, so other roots; a test's key still gives its ChaCha20 stream (`rows.salts`), the
+    of one window sample other salts, so other roots; a test's key still gives its ChaCha20 stream (`rows.salts`), the
     port's index its nonce."""
     win, _ins, _outs = window()
     ports = [m.port(p) for m in win.window.members for p, _ in m.all_rows]
@@ -857,7 +857,7 @@ def test_a_history_tables_writer_commits_each_row_as_the_tables_leaf():
     """A history table's writer's output rows, and the rows a wire fills from them, are ``hm96-sha512/row-seg/v1`` rows,
     each unit's under the table's salt at its position, so its public string is the table's leaf and the wiring check
     holds; the record states them so, and the verifier derives the same members from it, stated or listed, and the same
-    history tables, whose root the verifier of record computes from its writers' public bodies, the root the window
+    history tables, whose root the verifier computes from its writers' public bodies, the root the window
     registers and the verifier pins; a later window's positions follow the rows it holds of the earlier ones."""
     table = HT.HistoryTable("program", "latent", 8, 16)
     win, got, publics = history_window(table)
