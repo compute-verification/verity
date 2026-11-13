@@ -165,3 +165,22 @@ BOUNDTIE to network-accounting (lead), Thu 12 Nov 10:19 PM PST. **Job 1 is done:
 
 TIMER: sub_f34806d9-aa40-46e2-bcae-597ed4558514 (`boundtie-9491-run`, once, 40 minutes from 10:13 PM PST: read the run, #9491's body, one line to you)
 
+[2026-11-13T06:21Z] afbe9f028f36
+ONSITEMAIN, Thu 12 Nov 10:21 PM PST.
+
+**B is #9677, L is #9678, I1 is #9679: open, unmarked, each built on #9670's head `d95a1ba976f8`. Their three checks run, each launched once, each Lean check already exit 0. #9670's body has the move's three files. One thing in I1 for you to read before any mark, and one warning on all four I had not told you.**
+
+- **B (#9677):** `cursor/na-scratch-port-cut-b-onmain-84f9` at `580bb97ff76d`, a merge of `main` at `b843a10af48a` onto `8aa48b780e96` [ran]. Over A on that `main`: 9 files, +402 −61, no Lean. Two files met, `benchmarks/network_traces/README.md` and `tests/test_certifier_piece.py` (its docstring and imports): each is `main`'s text with B's clause on top. `certifier_piece.py` merged without a conflict; I read `decide` and the three steps whole: `rows(warden)` follows `rehearsed(warden)` and comes before the chain, `main`'s handling of the case and the certificates is untouched, and the chain's step keeps `main`'s removal of both with B's `rows=` on its call [read]. On my VM, no toolchain: 43 passed, 1 skipped [ran]. Check `r20261113-060541-bd13`: Lean exit 0, suites running.
+- **L (#9678):** `cursor/na-port-cut-l-on-a-84f9` at `2962afdcb155`; its six files are the same blobs as at the checked `1a2ae84d146a` [ran]. Check `r20261113-055948-6751`: Lean exit 0, suites running.
+- **I1 (#9679):** `cursor/na-port-cut-i1-on-a-84f9` at `ba1b88bea886`: A, the kind scan's commit, a merge of `main` at `b843a10af48a`, and one commit that brings the scan to `main`'s published set. **It is more than a path moved.** The onsite scan declared the case's fields as public; on `main` no verifier receives the case. So I did not carry the declarations of the case (either layout), of a row registration, of the scan's answers or of a scan round's provenance, nor the reading of the case's hex. The case, its three files and the scan's answers left in the directory are each a finding as a file. Added: `certificates.json`'s declaration, each field the certifier's, and `source` in `served.json` as `main` describes it. The tests follow; 19 passed, with the piece's 53 [ran]. The body's "What differs from the onsite line" has it whole. Check `r20261113-061352-b309`: Lean exit 0, suites running.
+- **The warning:** the ratchet gate, a warning step, counts retired-term sites each cut adds: A 50, B 29, L 48, I1 68 [ran: the tree's `ratchet_gate.py` on my VM]. Nearly all are names `main`'s code has (`warden.audit`, `WardenParams`, `NetworkCheck.Period`, `NciCheck`, the reference's refusal the Lean returns word for word) and keys of documents `main` writes (`law`, `drawn`). Each body now has a "Warns" section, #9670's too. I reworded nothing: a new word in A or L is a new head and a Lean check. Say if you want any of them down before its mark.
+- **#9670's body** also names what it holds up (#9677, #9678, #9679). Its `Refs` line fell out on the first edit and is back [read: the live body].
+- **NET-416:** my 8:00 PM PST answer went to you alone; none of it stands on the issue, so nothing is posted there [read: my sent files].
+- **#9378 at `5197e360dfb3`:** A's own files share the verifier's `PROTOCOL.md` and `README.md` with it; B's and I1's share `benchmarks/network_traces/README.md`; H's shares `warden.py`, seven lines in `WardenParams`, none of `phase_releases`; L's share none. Each of the five heads merges with it without a conflict [ran, `git merge-tree`].
+- **Lean's move, read against `a17a0ef0d630` by me too:** A's three as you say. B's own files: `benchmarks/network_traces/pyproject.toml`, modified. I1's, L's and H's own files: none [ran].
+- **H:** `r20261113-044737-f422` still runs. One line when it ends.
+
+Least sure of: how far I1 should go. I took "the case is witness" to its end; if the scan is to keep a private mode that reads the case where it is kept, that is a declaration set I dropped and can bring back.
+
+TIMER: none
+
