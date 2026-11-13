@@ -117260,3 +117260,48 @@ For infra: `r20261113-021235-dc1b` on vy-nebius-cpu-12 waited 19 minutes for a p
 - Seven completion notices for other workers (CUT, RUNCOINS, ACCEPTS, GATHER, HISTORY, MAJORITY, SESSIONCOINS) were delivered to my conversation at 03:04Z. I read them as information and acted on none as an instruction.
 
 Branch `cursor/proofs-assembly-992e` at `63d233290e`, pushed; it holds TWOLEG's `b6d988648b` and CUT's `0dc5993463`. Nothing is left unpushed [run].
+
+## MEMBERS, Fri 13 Nov 03:20Z: #9441 holds `main` at `1bb432a596a8` but is NOT ready: the four runs at the old head passed with no record to commit; the merge is clean; main's Python twin does not follow the every-member files pass yet, and I am writing that now; records runs `2b7f` and `ea8d` are out
+
+**In plain words.** The two records runs I owed a reading of both passed, and neither changed a record, so there was nothing to commit. I merged `main` into #9441 with no conflict and pushed it. It is not ready, because `main` now carries a Python copy of the per-member run that does not yet check every member's files, and its test will disagree with #9441's Lean until I change it. That change is Python only and is what I am doing next.
+
+Clock: `date -u` read 03:20Z. I held no timer and no subscription [run: the list is empty]. This is a new machine; nothing was lost.
+
+### 1. The four runs at `ce41e7c92e8e`: all pass, and no record moved
+
+- [run] `r20261112-192812-cfeb` (records from Flock's verifier): exit 0. Flock's verifier, the certifier's verifier, `security` with `security/Proofs`, and `security/Properties`: each `pass`.
+- [run] `r20261112-192956-c3cf` (records from the spot verifier's package): exit 0. The spot verifier's package, the certifier's verifier, `security` with `security/Proofs`, and `security/Properties`: each `pass`.
+- [run] Neither regenerated a lock ("regenerated" appears in neither log; each `OUTCOME` line says `pass` for every package). **So there are no records to commit:** the locks at `ce41e7c92e8e` were already the records of that tree. My 19:34Z line that the head "moves once more by that records commit" was wrong.
+- [run] `r20261112-193034-af8d`: 4 suites, 4 passed (the spot verifier's Lean difftest 309 passed, the spot verifier 913, `benchmarks/one_stage` 652, `verity/protocols/tests` 312). `r20261112-193144-473a`: the root suite, 356 passed.
+- Both records runs are without the kernel replay, as every such run is.
+
+### 2. `main` merged once: clean, pushed
+
+- [run] `main` at `4a7291116e11` (it moved past `06365af5a3b` by one pull request, #9543) merged into `cursor/proofs-members-files-61d4`: no conflict in any file. Merge commit `68f7c26215`.
+- [run] The two locks merged through the registered driver. As JSON the merged locks are `main`'s plus this change's two groups of read definitions (`Flock.KsScope`, `Spot.OneStageZk`) and nothing else. The driver wrote three lists and some keys in another order than `main`'s, about 1,400 lines of diff for no content. Commit `f3b42174d6` is the same merge with `main` as the driver's own side: equal to the merge commit's locks, order aside [run: compared as JSON], and 16 lines from `main`'s text in each lock.
+- [run] Head now: **`1bb432a596a8a8bc5d53a8802eea9aa27a0b33b1`**, pushed, no force. Against `main`: the same 8 files, +272 −46.
+- One line of Lean changed beyond the merge, a docstring: `Member.blockHeld` said a circuit that does not parse "is its session's reject". Under this change the files check refuses it first. No definition or proof changed.
+- **#9584 is untouched.** I merged `main` into #9441's branch only. #9584 stays at `ae80f367e6a2`, and it still merges clean with `main` `4a7291116e11` [run: `git merge-tree`].
+
+### 3. Why no ready line: the twin on `main`
+
+- [read: `one_stage/members.py` and `lean/tests/test_members_twin.py` on `main`] The twin reads files only for members that have a statement, inside the loop over sessions. #9441's Lean reads every member's files first (`membersFiles`), and refuses naming the member.
+- [derived, not run] Two rows of the twin's test change on Lean's side. Both use stand-in files, so the first member's circuit does not parse. `main`'s Lean reaches the first session and answers `verdict flock-verify/s0 did not accept`. #9441's Lean should answer `proofs: member <A>: refused: a circuit that does not parse (...)`. The rows: the first row of the first test, and the one row "where the twin is not Lean's". This is WINDOWAT's reading at 01:37Z, and mine agrees.
+- **What I am writing** (Python and tests, no Lean):
+  - In `members_run`, a pass over every member in the members' order, before any session: the reads `Member.statement` makes (these are already the twin's, moved out of the session loop), then the files check.
+  - The files check has four parts in Lean: the scope, the ports' roots, the form without a sample (`KsScope.filesOf`), the population check. The twin has Python for the population check and the template's two refusals. For the form it asks the Flock verifier's executable, `flock-verify ks-form`, which is `KsScope.checkOf` with no sample. [read: `Flock/KsScope.lean`] At one table that is `filesOf` exactly, and its refusal of a circuit that does not parse or a public file that does not load is word for word the scope's.
+  - **What the twin will not answer, said in its docstring:** the scope's rules on a circuit that parses (`ProvedScope.circuitRules`) and the ports' roots (`PortRoots.checkOf`). No command of the verifier runs them without a session. For a sampled member the session's own verdict rejects; for a member the sample missed the twin says nothing. Neither side accepts in either case. An exact answer needs a files-only command in Lean, which is not tonight's.
+  - One Python-only test changes meaning: a public file that is not its member's slice was a rejected session; it becomes a refusal before any session, as in Lean.
+- [run: `git merge-tree`] WINDOWAT's two branches (`5d5c7183ca94`, the twin's `af8682dc824e`) merge clean with this head. My twin change will touch two docstring lines WINDOWAT's also touches; I say which in the ready line.
+
+### 4. Out, and when
+
+- [run] At `1bb432a596a8`, both on vy-nebius-cpu-5, launched 03:17Z: `r20261113-031715-2b7f` (records from Flock's verifier) and `r20261113-031717-ea8d` (records from the spot verifier's package). [guess] About two hours each once they start, as `cfeb` and `c3cf` took.
+- Next: the twin's change pushed, then one run of the suites that read it (the spot verifier's Lean difftest, the spot verifier, `benchmarks/one_stage`, the root suite). [guess] Launched by 04:15Z.
+- If either records run regenerates a guarantee's own record I stop and say so. I expect the `reads` groups of `Flock.KsScope` and `Spot.OneStageZk` at most.
+
+### 5. For you to pass on
+
+- [run] FIRSTACCEPT's branch at `9049e2c572ec` does not merge with `main` `4a7291116e11`: three files stop (`benchmarks/one_stage/composite.py`, its test, and the spot verifier's `test_difftest.py`). It stops the same way against `main` alone, so it is `main`'s change meeting theirs, not #9441 or #9584. It merges clean with #9584.
+
+**Not established.** That the merged head's Lean builds and its records hold (the two runs). That Lean answers the two rows as I derived (no run yet). Anything of the twin's change.
