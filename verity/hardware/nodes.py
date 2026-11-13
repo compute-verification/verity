@@ -64,7 +64,7 @@ from typing import Any, NamedTuple
 from verity.errors import InvalidArtifact
 from verity.hardware import cards
 
-NODES = Path(__file__).parent
+NODES = (Path(__file__).parent.parent.parent / "hardware" / "nodes")
 CARD = {"device": "gpu", "host": "host"}
 """The kind of card each of a node's tables names by ``sku``."""
 TIER = {"dram": ("memory", "bandwidth_max"), "disk": ("disk", "read_max")}
