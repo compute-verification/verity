@@ -127791,3 +127791,55 @@ Agent `bc-a5cbdecf-6e51-5b21-bf0d-c67169176e17`, branch `cursor/proofs-honest2-7
 - That `security/Proofs` builds whole or passes its records audit at `834edc26f592`.
 
 **To post.** Nothing.
+
+## ASSEMBLY, Fri 13 Nov 07:39Z: `1d79`: `DrawRoots.lean` lean exit 1, two of its four theorems failing on one `rw` of the join's own, now mended; FRAME's `013955525dbe` merged, so `42bba26494` holds both ADDRWC's and FRAME's lines (ADDRWC, write your two-premise theorem there); the join's carry across the two chains is one `restack.py` run, if no branch on the join's line merges `main` before it
+
+**In plain words.** My new module got its first verdict. The two lemmas that read a stage's draw back to its parts compiled. The two that build `StageDraws` from them failed on one rewrite, because a function applied to the play was never reduced. That's my mistake, and the fix is two lines. The next try is running. The join now has FRAME's addresses head, as you ruled, so ADDRWC can state its theorem over both. For the move: the join changes 30 files under the protocol directories the chains move, and 11 more that name those paths. `restack.py` carries a branch however many merges it holds, as long as the branch is based before each move. Each worker then branches from the carried join, or carries its own branch.
+
+Clock: `date -u` read 07:39Z. Pen: the machine was replaced again (booted 07:35:13Z, no `~/wt`). I made `~/wt/.pen` at 07:36:09Z and rebuilt both worktrees from the remote. Every push to `cursor/proofs-join-42b8` after 07:09Z is mine (`f83fb20057` to `c8d19ee874`); nothing was unpushed. Your 07:39Z came as my prompt.
+
+**1. `r20261113-072145-1d79`** (vy-nebius-cpu-1, at `c8d19ee874`): **failed, rc 1** [run: its `stdout.log`].
+- `DrawRoots.lean`: "lean exit 1 in 363 s"; "axiom probe: 2 of its 4 theorems failed … Verity.SampledTwo.stageDraws_first, Verity.SampledTwo.stageDraws_second". So `firstDraw_label` and `secondDraw_parts` elaborated with no error.
+- Both errors are mine: `DrawRoots.lean:80:8` and `:96:8`, "Tactic `rewrite` failed: Did not find an occurrence of the pattern C o in the target expression (fun o => (C o).bind firstDraw) o = some (label, after)". **Mended** in `0a5bd1fea8`: `beta_reduce at hd` before `rw [hk] at hd`, in both. Not compiled yet.
+- `JoinsAt`: deps exit 1 in 148 s. `JoinedCoupling`: deps exit 1 in 78 s. `JoinedForm`: "error: build failed". Besides `DrawRoots`, their deps failed only on the owners' two modules, with the same lines as `6e8c`: `RunsAs/Statement.lean:163:32` and `:163:53` (RUNCOINS), and `SampledTwo/StageCut.lean:125:28`, `126:13`, `128:69` (STAGECOINS).
+
+**2. Merged: FRAME `013955525dbe`** (`cursor/proofs-frame-l1-9c4e`), your item 1. No conflict [run]. It brings `AddressesHeld.lean` (`addressesConnected_of_held`), `NeededBitsHeld`, `OutputsWritten`, `RowAtFits`, `WiresMoveRows` and `WiringRows`, plus `benchmarks/two_stage`'s guard and `TwoGuard.lean`. `lock_roots.py` added nothing and found nothing wrong; `dup_names.py` still reports 17 names, none new. **Join head `42bba26494`, pushed: it holds both ADDRWC's `widthFact_of_runs`/`copyFact_of_runs` and FRAME's `addressesConnected_of_held`.** No records run of the join before FRAME's word on `f8f8`.
+
+**3. Waiting, not merged** [read]:
+- CUT `4d24802945`: `640b` is still running on vy-nebius-cpu-2 (07:37Z). I merge it when it passes (your item 4).
+- RUNCOINS: no restated head named compiled yet (item 5).
+- STAGECOINS: no head yet at the parameters' family (`p.boundary.challenger`, item 2). `family₁` and `DrawRoots.firstDraw_label` wait on it, as ruled.
+- TWOLEG: the join keeps `870cc9da1b`'s verifier (item 3). Next is TWOLEG's 07:27Z entry, so the merge is quick when you name the head.
+
+**4. Running** [run]: `r20261113-073738-02c0`, `--on auto` (it went to vy-nebius-cpu-14), at `42bba26494`, no `ulimit`. `DrawRoots.lean`, then `JoinedForm.lean`, whose dependency build covers `JoinsAt` and `JoinedCoupling`. `JoinedForm` will fail in deps on the owners' two modules. Expected end about 08:15Z [guess: that machine's tree may be cold]. **Timer held: `assembly-join-02c0`, once, at 08:20Z.** It is the only run of mine.
+
+**5. The carry across the two chains** [read: `tools/move/restack.py`'s docstring; `git diff --name-only` of the join against its merge-base with `main`; ran nothing heavy].
+- **What the join holds that the chains move.** Its newest `main` commit is `8ef93f0196` (02:34Z); `main` is 635 commits past it. Against that base the join changes 217 files.
+  - **30 are under `verity/protocols/`**, which moves whole: `spot` 19 (7 in `verifier/lean/Spot`, 4 in `verifier/tests`, 3 in `verifier`, 2 each in `verifier/lean/tests` and `verifier/one_stage`, 1 in `device`), `recursion/verifier/recursive` 5, `remote/verifier/composition` 3, `flock/prover` 2, `pous/lean` 1. The chains' own maps aren't on `main` yet, so I counted by your rule that every protocol moves. The first one I found, on `cursor/compute-move-chain2-maps-a526` (`configurations_map.toml`), sends `verity/protocols/remote/` to `verity/configurations/remote/`. That differs from the three directories you named, so the tally waits on the maps as they land.
+  - **11 more name a moved path**: `security/Proofs/lakefile.toml` (its `require` paths to the protocols' Lean packages), the three lean-audit locks, `tests/lint/allowlists/repo_retired_terms.json`, and six `benchmarks/` files (`one_stage/*.sh`, `two_stage.py`, `two_stage/audit.py`, `network_traces/scan_zk.py`). The move's script rewrites these where its map has the path.
+  - The other 176 are `security/` Lean, which doesn't move. Its module names change only if a map renames a Lean package's import name.
+- **Does `restack.py` take a branch holding fifteen workers' merges? Yes.** It never rebases or replays the branch's commits. It merges the move's parent B into the branch's tip, runs B's own `layout.py`/`rename.py` on that tree, then merges the moved `main` with the move commit M as the base. So the merges inside the branch don't matter. **What refuses it is `based-after`:** a branch that shares a commit after B with `main` is refused, and its owner merges `main` instead. The join's newest `main` commit is `8ef93f0196`, before any move, so it is based before both chains. **That holds only while no branch the join takes merges `main` from now until the carry.** If one does, the join becomes `based-after` and can't be carried. So that rule binds every worker on the join's line, not just the join.
+- **What the carry will likely end as.**
+  - Step 1, merging B, is an ordinary merge of `main`'s 635+ commits. Its conflicts are ordinary ones.
+  - The Lean locks probably end `locks-stale`: the result takes `main`'s locks, and the records need `check.py --update`. That is a records run, and it waits on FRAME's word.
+  - `no-row` happens only if the join adds a file under a path a map retires with no row. I find none today, because every file is under a directory that moves whole, but that needs the landed maps to confirm.
+  - With the moves on `main`, `restack.py cursor/proofs-join-42b8 --dry-run` gives the outcome without pushing. Then `--push-to` a new branch, because restack never changes the branch itself.
+- **What each worker on the join's line does after the carry.**
+  - A worker whose branch is wholly in the join takes its new branch from the carried join.
+  - A worker with commits the join doesn't hold carries its own branch, `restack.py BRANCH --onto <carried join>`, and names that head for me to merge.
+  - Nobody merges a pre-move head into the carried join. A plain merge would bring the old paths back.
+  - Until the carry: no worker merges `main`. I'd say that in your mail to all fifteen.
+
+**6. `JoinsAt`'s fields at `42bba26494`.** Unchanged from my 07:23Z table: `ledgerInOrder`, `distinctFamilies`, `family₁`, `family₂`, `otherRoots`, `firstDrawn`, `sessionMatches`, `firstTreeless`, `msgOpens`, `digestBefore`, `heldAt`, `twoHolds`, `recordsHeldAt`, `recordsRead`, `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`, `sessionsRun`, `sessionMsgs`, `wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`. `family₁` waits on STAGECOINS's head at the parameters' family. ADDRROW's `wiresChecked` is not a field (your item 7).
+
+**STOP RULE.** The lock's only edits are `roots`; FRAME's merge added none. No listed guarantee's statement, no named assumption, no `unwitnessed` entry. No merge of `main`.
+
+**NEEDS.**
+- **RUNCOINS:** a restated head over the join's `coinsReason`/`coinsCode`, named compiled.
+- **STAGECOINS:** `firstDraw` and `firstDraw_of` at `p.boundary.challenger` (or the accept's proof that they agree), named compiled.
+- **ADDRWC:** your theorem over both lines, at `42bba26494`.
+- **You:** item 5's no-`main` rule for the join's line, if you agree.
+
+**Not established.** `DrawRoots.lean` compiled (`02c0` decides). The chains' maps as they land (item 5's counts use your rule, not the maps). Any restack dry run.
+
+Branch `cursor/proofs-join-42b8` at `42bba26494`, pushed; nothing unpushed. Runs: `02c0` running, about 08:15Z. Timer: `assembly-join-02c0`, 08:20Z.
