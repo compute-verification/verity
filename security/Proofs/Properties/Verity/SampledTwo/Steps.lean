@@ -13,7 +13,8 @@ accepts at the switch `form` (`accepted_steps`):
   sample read the bytes `ξ₂` (`OneStageZk.coinsOf`), every session `OneStageZk.membersRun` ran accepted (`r.all`), and
   the input is `inputOf` at those sessions' verdicts stamped (`stamped`), each registration's record the one the
   verifier's parser reads from its canonical text (`readBack`, read by `readBack_ok`), the boundary's with the
-  commitment's digest (`digestIs`, read by `digestIs_ok`);
+  commitment's digest (`digestIs`, read by `digestIs_ok`), and the interior's, as given and as read back, with the
+  interior commitment's (`interiorDigestIs`, read by `inputAt_interior`);
 * neither stage's bytes run past one coin's (`stagesFit`, read as `ξ.size ≤ STAGE_BYTES` and `ξ₂.size ≤ STAGE_BYTES`
   by `accepted_fits`);
 * `Spot.Run.run`, at the switch on, returned a run of record whose symbol is `accept`, and the first stage's bytes `ξ`
@@ -84,6 +85,22 @@ theorem digestIs_ok {j : Json} {d : ByteArray} (h : digestIs j d = .ok ()) : Reg
          cases h)
       | (simp at h; done)
 
+/-- **What `interiorDigestIs` passed**: both records' digests are the one named. -/
+theorem interiorDigestIs_ok {record j : Json} {d : ByteArray} (h : interiorDigestIs record j d = .ok ()) :
+    Registration.digest record = .ok d ∧ Registration.digest j = .ok d := by
+  unfold interiorDigestIs at h
+  obtain ⟨d₁, hd₁, h⟩ := bind_ok h
+  obtain ⟨d₂, hd₂, h⟩ := bind_ok h
+  split at h
+  · rename_i heq
+    rw [hd₁, hd₂, heq.1, heq.2]
+    exact ⟨rfl, rfl⟩
+  · first
+      | (cases h; done)
+      | (simp only [throw, throwThe, MonadExceptOf.throw] at h
+         cases h)
+      | (simp at h; done)
+
 /-- **What `inputAt` computed** where it returned: the run of record's input is `inputOf` at each registration's
 record as `readBack` returned it, and the boundary's so returned has the commitment's digest (`digestIs`). -/
 theorem inputAt_ok {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
@@ -110,9 +127,41 @@ theorem inputAt_ok {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : 
       obtain ⟨u, hd, h⟩ := bind_ok h
       cases u
       obtain ⟨j₂, hj₂, h⟩ := bind_ok h
+      obtain ⟨u₂, -, h⟩ := bind_ok h
+      cases u₂
       simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
       obtain ⟨rfl, rfl, rfl, rfl⟩ := h
       exact ⟨⟨s, h1, h2⟩, h3, h4, h5, vs, _, j₁, j₂, h6, rfl, hj₁, hj₂, digestIs_ok hd⟩
+    · cases h
+
+/-- **The interior's records have the interior commitment's digest** where `inputAt` returned (`interiorDigestIs`):
+the evidence's interior record, which `interiorUnshown` reads the digest of, and its read-back, which the run of
+record is given. -/
+theorem inputAt_interior {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
+    {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {i : Spot.Run.Input}
+    (h : inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)) :
+    Registration.digest e.record = .ok c₂.digest ∧
+      ∃ j₂, readBack e.record = .ok j₂ ∧ Registration.digest j₂ = .ok c₂.digest := by
+  unfold inputAt at h
+  obtain ⟨s, -, h⟩ := bind_ok h
+  obtain ⟨c₂', -, h⟩ := bind_ok h
+  obtain ⟨ξ₂', -, h⟩ := bind_ok h
+  obtain ⟨r', -, h⟩ := bind_ok h
+  cases h5 : r'.all
+  · simp [h5] at h
+    cases h
+  · simp only [h5, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
+    obtain ⟨vs, -, h⟩ := bind_ok h
+    split at h
+    · obtain ⟨j₁, -, h⟩ := bind_ok h
+      obtain ⟨u, -, h⟩ := bind_ok h
+      cases u
+      obtain ⟨j₂, hj₂, h⟩ := bind_ok h
+      obtain ⟨u₂, hd₂, h⟩ := bind_ok h
+      cases u₂
+      simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl, rfl, rfl⟩ := h
+      exact ⟨(interiorDigestIs_ok hd₂).1, j₂, hj₂, (interiorDigestIs_ok hd₂).2⟩
     · cases h
 
 /-- **An accepted two-stage check ran every step** (module docstring). -/

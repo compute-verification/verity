@@ -79,7 +79,20 @@ theorem digestIs_of {j : Json} {d : ByteArray} (h : Registration.digest j = .ok 
        rfl)
     | (simp; done)
 
-/-- **`inputAt` returns where each of its steps does** (the converse of `inputAt_ok`). -/
+/-- **`interiorDigestIs` passes where both records' digests are the one named** (the converse of
+`interiorDigestIs_ok`). -/
+theorem interiorDigestIs_of {record j : Json} {d : ByteArray} (h : Registration.digest record = .ok d)
+    (h' : Registration.digest j = .ok d) : interiorDigestIs record j d = .ok () := by
+  unfold interiorDigestIs
+  rw [ok_bind _ h, ok_bind _ h']
+  first
+    | (rw [if_pos ⟨rfl, rfl⟩]
+       rfl)
+    | (simp only [and_self, ↓reduceIte]
+       rfl)
+    | (simp; done)
+
+/-- **`inputAt` returns where each of its steps does** (the converse of `inputAt_ok` and `inputAt_interior`). -/
 theorem inputAt_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {s : String} {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {vs : Array (String × Json)}
     {received₂ : String} {j₁ j₂ : Json} (h1 : Flock.canon e.record = .ok s)
@@ -88,22 +101,24 @@ theorem inputAt_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
     (h6 : stamped p e bs r.out = .ok vs)
     (h7 : Spot.getD e.interior.base.receipt "received" = Json.str received₂)
     (h8 : readBack c.record = .ok j₁) (h9 : readBack e.record = .ok j₂)
-    (h10 : Registration.digest j₁ = .ok c.digest) :
+    (h10 : Registration.digest j₁ = .ok c.digest) (h11 : Registration.digest e.record = .ok c₂.digest)
+    (h12 : Registration.digest j₂ = .ok c₂.digest) :
     inputAt p c ξ e bs =
       .ok (c₂, ξ₂, r, inputOf p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs) := by
   have hd := digestIs_of h10
+  have hd₂ := interiorDigestIs_of h11 h12
   unfold inputAt
   first
-    | (simp only [h1, h2, h3, h4, h5, h6, h7, h8, h9, hd, bind, Except.bind, pure, Except.pure, Bool.not_true,
+    | (simp only [h1, h2, h3, h4, h5, h6, h7, h8, h9, hd, hd₂, bind, Except.bind, pure, Except.pure, Bool.not_true,
         Bool.false_eq_true, ↓reduceIte]
        first | done | rfl)
     | (rw [ok_bind _ h1, ok_bind _ h2, ok_bind _ h3, ok_bind _ h4]
        simp only [h5, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
        rw [ok_bind _ h6]
        simp only [h7]
-       rw [ok_bind _ h8, ok_bind _ hd, ok_bind _ h9]
+       rw [ok_bind _ h8, ok_bind _ hd, ok_bind _ h9, ok_bind _ hd₂]
        rfl)
-    | (simp [h1, h2, h3, h4, h5, h6, h7, h8, h9, hd, bind, Except.bind, pure, Except.pure]
+    | (simp [h1, h2, h3, h4, h5, h6, h7, h8, h9, hd, hd₂, bind, Except.bind, pure, Except.pure]
        done)
 
 /-- **Steps 1 to 5 return where each does**: `prepare`, at the switch on, returns the interior audit's verdict at the

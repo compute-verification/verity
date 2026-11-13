@@ -17,7 +17,8 @@ The form's check refuses a case whose first session shows such a coin (`interior
 under the interior audit's challenger key, on the boundary's window against the interior audit's, in the interior
 audit's family, as the cut does (`keyOf_challenger`, `secondDraws_parts`); it differs from the cut in that it reads
 the digest of the interior record where the cut reads the interior commitment's. `firstUnshown_of` gives
-`FirstUnshown` from the check where those agree (`SessionMatches`, a named `Prop` taken as a hypothesis).
+`FirstUnshown` from the check where those agree (`SessionMatches`), and the form refuses unless they do
+(`interiorDigestIs`, `INTERIOR_DIGEST`), so `SessionMatches` is the form's check (`sessionMatches_of`).
 
 `FirstDrawn`, the premise `firstShown_of` takes, is the form's check (`firstDrawn_of`): the run of record's coin check
 reads the cut's first draw, at the record the form holds to the commitment's digest (`digestIs`).
@@ -270,6 +271,27 @@ theorem firstUnshown_of (C : CaseOf) (hC : CaseIsSent C) (hM : SessionMatches C)
 /-- **`SecondAlone` from the form's check**, where it reads the cut's session. -/
 theorem secondAlone_of_matches (C : CaseOf) (hC : CaseIsSent C) (hM : SessionMatches C) : SecondAlone C :=
   secondAlone_of C (firstUnshown_of C hC hM)
+
+/-- **The check's first session is the cut's**: `SessionMatches` from the form's check. On an accepted play the form
+refuses unless the evidence's interior record has the interior commitment's digest (`interiorDigestIs`,
+`INTERIOR_DIGEST`, read by `inputAt_interior`), and that commitment is the cut's (`interiorOf`); the cut's first
+session is the evidence's `coins` (`firstCoins`). -/
+theorem sessionMatches_of (C : CaseOf) (hC : CaseIsSent C) : SessionMatches C := by
+  intro o ha p c e c₂ hcase hi₂
+  obtain ⟨k, hk, p', c', e', _, _, hd, hc⟩ := ha
+  obtain ⟨-, c₂', _, _, _, _, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hc
+  obtain ⟨hcase', -⟩ := hC o k p' c' e' hk hd
+  have hpce := Except.ok.inj (hcase'.symm.trans hcase)
+  simp only [Prod.mk.injEq] at hpce
+  obtain ⟨rfl, rfl, rfl⟩ := hpce
+  obtain ⟨⟨s, hs, hcm⟩, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
+  have h2 : c₂' = c₂ := Except.ok.inj ((interiorOf_of hs hcm).symm.trans hi₂)
+  subst h2
+  exact ⟨(VStar.Recursive.SampledTwo.inputAt_interior hin).1, fun _ _ => rfl⟩
+
+/-- **`SecondAlone` from the form's check.** -/
+theorem secondAlone_of_sent (C : CaseOf) (hC : CaseIsSent C) : SecondAlone C :=
+  secondAlone_of_matches C hC (sessionMatches_of C hC)
 
 /-! ## The first stage's draw from the form's check -/
 

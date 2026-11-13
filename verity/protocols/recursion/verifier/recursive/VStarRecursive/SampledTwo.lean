@@ -53,7 +53,8 @@ package's audit builds and reads it.
      sample at the boundary's session roots, and the interior audit over the second sample with the second-stage
      statement check, at the rest; it reads each registration's record as the verifier's own parser reads the
      record's canonical text, which must print back to that text (`readBack`, `RECORD_READ`), and the boundary's
-     so read has the digest the commitment names (`digestIs`, `RECORD_DIGEST`);
+     so read has the digest the commitment names (`digestIs`, `RECORD_DIGEST`), and the interior's, as the evidence
+     carries it and so read, the interior commitment's (`interiorDigestIs`, `INTERIOR_DIGEST`);
      the evidence's first-stage bytes are exactly the ones the run's first stage read
      (`sourceRead`, `SOURCE_READ`), since the run holds only those to the challenger's coins; and on two windows the
      first session's log shows no coin of the second stage's family after the interior's digest (`interiorUnshown`,
@@ -325,9 +326,25 @@ def digestIs (j : Json) (digest : ByteArray) : V Unit := do
   let d ← Registration.digest j
   if d = digest then pure () else throw RECORD_DIGEST
 
+def INTERIOR_DIGEST : String :=
+  "the interior registration's record, as the evidence carries it or as the verifier's parser reads it, does not " ++
+    "have the interior commitment's digest: the second stage's challenges are drawn after the commitment's digest, " ++
+    "the check reads the first session after the evidence's record's and the run of record reads the second stage's " ++
+    "challenges after the read-back record's"
+
+/-- **The interior's records have the interior commitment's digest** (check, 4; `INTERIOR_DIGEST`): the evidence's
+interior record (`record`), which `interiorUnshown` reads the digest of, and its read-back (`j`), which the run of
+record reads it of, are each held to the digest of the interior commitment (`digest`), which the second stage's
+challenges are drawn after. -/
+def interiorDigestIs (record j : Json) (digest : ByteArray) : V Unit := do
+  let d ← Registration.digest record
+  let d' ← Registration.digest j
+  if d = digest ∧ d' = digest then pure () else throw INTERIOR_DIGEST
+
 /-- Check steps 1 to 3: the interior audit's commitment and the bytes its sample read, its sessions' run, every
 session accepting, and the run of record's input over the stamped verdicts, each registration's record as the
-verifier's parser reads it (`readBack`), the boundary's with the commitment's digest (`digestIs`). -/
+verifier's parser reads it (`readBack`), the boundary's with the commitment's digest (`digestIs`) and the interior's,
+as given and as read back, with the interior commitment's (`interiorDigestIs`). -/
 def inputAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (OneStage.Commitment × ByteArray × OneStageZk.Run × Spot.Run.Input) := do
   let c₂ ← OneStage.commitmentOf (← Flock.canon e.record).toUTF8
@@ -339,6 +356,7 @@ def inputAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidenc
   let j₁ ← readBack c.record
   digestIs j₁ c.digest
   let j₂ ← readBack e.record
+  interiorDigestIs e.record j₂ c₂.digest
   pure (c₂, ξ₂, r, inputOf p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs)
 
 def SOURCE_READ : String :=
@@ -659,6 +677,17 @@ def protocol : Core.BlobProtocol where
   | .error _ => false
 #guard match digestIs (Json.mkObj [("a", Json.null)]) ByteArray.empty with
   | .error why => why == RECORD_DIGEST
+  | .ok _ => false
+#guard match Registration.digest (Json.mkObj [("a", Json.null)]) with
+  | .ok d => (interiorDigestIs (Json.mkObj [("a", Json.null)]) (Json.mkObj [("a", Json.null)]) d).toOption.isSome
+  | .error _ => false
+#guard match Registration.digest (Json.mkObj [("a", Json.null)]) with
+  | .ok d => match interiorDigestIs (Json.mkObj [("a", Json.null)]) (Json.mkObj [("a", Json.num 1)]) d with
+    | .error why => why == INTERIOR_DIGEST
+    | .ok _ => false
+  | .error _ => false
+#guard match interiorDigestIs (Json.mkObj [("a", Json.null)]) (Json.mkObj [("a", Json.null)]) ByteArray.empty with
+  | .error why => why == INTERIOR_DIGEST
   | .ok _ => false
 #guard interiorShown [("boundary", [ByteArray.mk #[1]]), ("interior", [ByteArray.mk #[1], ByteArray.mk #[7]])]
   "interior" (ByteArray.mk #[7])
