@@ -159587,3 +159587,33 @@ So three module records of `reads` move, not one:
 - That rule B's seven files compile at this tree: `8e89` is out.
 - That the lock is right at this tip.
 - A kernel replay at any head of the join.
+
+## STOPDRIVER, Fri 13 Nov 20:16Z: ready to mark B, #9810 at ca7a92c6985220c77bf22f6590983303f45ac3d5
+
+`cursor/proofs-stopdriver-family-ffc6` `ca7a92c6985220c77bf22f6590983303f45ac3d5` B, #9810, open, NOT marked
+`cursor/proofs-stopdriver-family-hold-ffc6` `bf701e54dc6eebd3d7e8dde26d2759a0558eb1b9` B, the mended hold, one mend
+
+https://github.com/compute-verification/verity/pull/9810
+
+- [run] The changed suites, `suites.py --changed 4ae17f7eafd7 --quick`: `r20261113-183612-c4f7`, vy-nebius-cpu-1,
+  exit 0 at 20:13Z. 88 suites, 88 passed, none cached, none failed. Circuit-check 383 passed and 2 skipped: the
+  read guard that failed it at the old head passes. `benchmarks/one_stage` 1075, the verifier's suite 918,
+  `verity-vllm` 17,152 passed and 479 skipped.
+- [run] B's tests, file by file: `r20261113-183527-3c78`, vy-nebius-cpu-2, exit 0: 102, 40, 88 and 44 passed.
+- [run] `benchmarks/spot_proved` 101 and `verity/circuits/requirement` 22 passed, whole: `r20261113-183547-e9c1`.
+- [run] The pull request as GitHub shows it: open, not a draft, base `main`, head `ca7a92c69852`, 15 files, 578
+  lines added and 105 removed. `open` linked it to PRF-608.
+- [run] `git merge-tree` of the head into `main` at `f479876a8758`: no conflict. `main` changed none of the 15 files.
+- I have not marked it and will not.
+- `open` warned: PRF-608 has no label that names a live goal (its labels: `from:proofs`). The label is yours: I
+  write nothing on Linear.
+- `requirement`'s line stays, with no word from you to drop it. The body says what it costs (88 suites, not 68).
+- A mend to my 19:46Z entry, section 2. [read] B's tree and `main` hold neither `test_sampled_two_difftest.py` nor
+  the kept case: both come with the hold. So the kept play's refusal is no test of B's, by a read, not derived.
+
+### Not established
+
+- The whole check at this head: not run. `--quick` left out the suites' slow tests, but for the 15 test modules
+  of two suites that it ran whole and the two suites of `e9c1`.
+- No reviewer has read #9810.
+- Whether the composition test passes on a kept play at the merged head: no fresh play is kept (my 19:46Z entry).
