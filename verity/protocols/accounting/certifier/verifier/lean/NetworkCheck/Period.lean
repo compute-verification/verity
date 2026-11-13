@@ -192,7 +192,15 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   the row before it, the prover's word for none; row 0 is the empty state, which no unit reads, and only the Programs
   anchored at bucket 0 read it, whose entries the scan reads for no slot, since its state before bucket 0 has none
   occupied. A slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on
-  the requests the scan read, not on a state the prover chose (`Properties.NetworkPeriod.RowsStateTied`).
+  the requests the scan read, not on a state the prover chose (`Properties.NetworkPeriod.RowsStateTied`);
+* in the rows form, execution phase `w`'s scan's answer names no tied Input but ones that wiring holds
+  (`tiedInputWired`): where its public outputs hold `rests_on_period_check`, the run Inputs one-stage's registration
+  check let several proof blocks read because a later check ties their rows to the registrations that computed them,
+  every name under it is a lane's `prog<j>`, `j` < `lanes` (`progParams`): the scan root's parameter its
+  `scan/prog<j>` entry registers, whose rows `wired` ties. The names are in any order, and a lane's twice, some
+  lanes' only or an empty list pass, each resting on no tie but those. An answer that names another Input rests on a
+  tie no check holds, and is refused, as is one whose `rests_on_period_check` is no list of names; one with no such
+  key names none (`Properties.NetworkPeriod.RowsTiedInputWired`).
 * in the rows form, each execution phase's scan's ok bits are the schedule's constants (`okChecks`,
   `NetworkCheck.ScanOk`): a scan proof block's public word `o0` is its ok bit, and a member's `o0` rows are committed
   under public salts, so the root of a member whose every proof block is ok is a function of the schedule's T alone.
@@ -272,8 +280,10 @@ the clock form's link-window registration's domain; in the rows form, the record
 rows (each signs its salted record, witness) and the scan's statements against its registration (lane `j`'s slot
 entries' input node the value it registers as `scan/prog<j>`, and a member's public word its `<member>/o0` entry's
 root, which `okChecks` holds to the constant), which one-stage's verifier checks inside the
-answer, and each connection's cap against its lane (the parameters' `cells`; the network certifier holds a lane to
-`egress_cells`); that a tied audit's `SelectEntry_v1` units read their `occ` from its `ScanSlots_v2` units, which read
+answer, each connection's cap against its lane (the parameters' `cells`; the network certifier holds a lane to
+`egress_cells`), and that the scan's answer carries every Input its registration check let through (`tiedInputWired`
+reads the names the answer's public outputs hold, and takes one with no `rests_on_period_check` to name none); that a
+tied audit's `SelectEntry_v1` units read their `occ` from its `ScanSlots_v2` units, which read
 its `SCAN_STATE` (the check reads no wires of an audit's Program, only its root templates' ids and closure digests);
 and that the audits' answers are the sampled-proofs component's own,
 which the composition's theorem is to bind.
@@ -1430,9 +1440,53 @@ def stateCheck (p : Params) (s : Schedule) (audits : Array Json) (w : Nat) (reg 
       domain are not every {stateValue} entry's of an audit whose slot entries are its prog, so a slot's Program can \
       compute its entry on a state the prover chose: register the scan's state tree as that audit's SCAN_STATE")
 
-/-- The rows form's state findings, one a link-window, in order (`stateCheck`); none in the clock form. -/
+/-- The rows form's state findings, one an execution phase, in order (`stateCheck`); none in the clock form. -/
 def stateChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × String)) := match p.form with
   | .rows s .. => c.windows.zipIdx.map fun (reg, i) => stateCheck p s c.audits (p.first + i) reg
+  | .clock _ => #[]
+
+/-- The key of one-stage's public outputs that holds its registration check's tied Inputs: the run Inputs it let
+several proof blocks read because a later check ties their rows to the registrations that computed them. -/
+def tiedKey : String := "rests_on_period_check"
+
+/-- Whether an entry under `tiedKey` names a tied Input `wired` holds: a lane's Programs' rows, one of the scan root's
+parameters `progParams` of the schedule's `programSlots` (lane `j`'s `prog<j>`). -/
+def laneTied (s : Schedule) : Json → Bool
+  | .str t => (progParams s.programSlots).contains t
+  | _ => false
+
+/-- Whether one-stage's answer names no tied Input but ones `wired` holds: its public outputs have no `tiedKey`, or
+under it a list whose every entry is a lane's name (`laneTied`), in any order, a lane's more than once or not at all.
+It compares the published names; that lane `j`'s name is the Input `progName j` registers is one-stage's registration
+check's. -/
+def tiedInputWired (s : Schedule) (a : Core.Answer) : Bool := match a.published with
+  | none => true
+  | some pub => match pub.getObjVal? tiedKey with
+    | .ok (.arr ts) => ts.all (laneTied s)
+    | .ok _ => false
+    | .error _ => true
+
+/-- What an answer `tiedInputWired` refuses holds under `tiedKey`, for the refusal: the first entry that is no lane's
+name (`laneTied`), or the key's value where it is no list, beside the lanes' names. -/
+def tiedUnheld (s : Schedule) (a : Core.Answer) : String :=
+  let lanes := ", ".intercalate (progParams s.programSlots).toList
+  match (a.published.map (·.getObjValD tiedKey)).getD .null with
+  | .arr ts => s!"names {((ts.find? (!laneTied s ·)).getD .null).compress}, none of the scan's lanes' {lanes}"
+  | j => s!"is {j.compress}, no list of names of the scan's lanes' {lanes}"
+
+/-- Execution phase `w`'s tied Input finding in the rows form: a refusal unless its scan's answer names no tied Input
+but the scan's lanes' `prog<j>` (`tiedInputWired`), naming what it holds instead (`tiedUnheld`). -/
+def tiedInputCheck (s : Schedule) (w : Nat) (x : ExecutionPhase) : Option (Core.Verdict × String) :=
+  if tiedInputWired s x.answer then none else
+    some (.reject, s!"window {w}: the scan's answer rests on a tie this check does not hold: its public outputs' \
+      {tiedKey} {tiedUnheld s x.answer}. This check wires only each lane j's scan/prog<j> to a compute audit's slot \
+      entries, so another Input that several proof blocks read has rows nothing ties to the registration that \
+      computed them: name only lanes' prog<j> tied in the scan's registration check, and let no two proof blocks read \
+      another run Input")
+
+/-- The rows form's tied Input findings, one an execution phase, in order (`tiedInputCheck`); none in the clock form. -/
+def tiedInputChecks (p : Params) (e : Evidence) : Array (Option (Core.Verdict × String)) := match p.form with
+  | .rows s .. => e.windows.zipIdx.map fun (x, i) => tiedInputCheck s (p.first + i) x
   | .clock _ => #[]
 
 /-- `okCheck`'s refusal, after its execution phase's number. -/
@@ -1609,7 +1663,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
         (.reject, s!"a scan's δ {f.delta.toString} is not the period's, {f0.delta.toString}")
     let as := auditChecks p c e
     match firstFinding (ws.toList.map findingOf ++ [oneDelta] ++ as.toList.map findingOf ++ (wiredChecks p c).toList ++
-        (stateChecks p c).toList ++ (okChecks p c).toList) with
+        ((stateChecks p c).toList ++ (tiedInputChecks p e).toList) ++ (okChecks p c).toList) with
     | some (.reject, r) => .reject r
     | some (_, r) => .undecided r
     | none =>

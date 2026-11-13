@@ -30,20 +30,25 @@ supplies each of the statement's quantities as at most the check's number:
 
 The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs, and its incorrect
 proof blocks only as the slot entries they can set, since the scan reads the audit only through its `prog` and its
-state is the scan's own. The check accepts a tied audit at any sample; the consistency check of one is `RowsProgWired`
-and `RowsStateTied`, and what it publishes of one sampled in part is `RowsTiedCharged`. `RowsProgWired` says it accepts
+state is the scan's own. The check accepts a tied audit at any sample; the consistency check of one is `RowsProgWired`,
+`RowsStateTied` and `RowsTiedInputWired`, and what it publishes of one sampled in part is `RowsTiedCharged`.
+`RowsProgWired` says it accepts
 no link-window whose scan's `prog` is not a compute audit's slot entries, a lane's tree the entries port of its chunk
 of a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's own Program. `RowsStateTied` says it accepts no
 link-window whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
-alters one of the scan's transitions is no Program's input. `RowsTiedCharged` says the public it accepts with supplies
+alters one of the scan's transitions is no Program's input. `RowsTiedInputWired` says it accepts no execution phase
+whose scan's answer names a tied Input other than the scan's lanes' `prog<j>`, which are wired as `RowsProgWired` says:
+a tied Input is a run Input several proof blocks read, which one-stage's registration check lets through only named.
+`RowsTiedCharged` says the public it accepts with supplies
 the charge itself: `charged` is the facts of each tied audit sampled in part (`drawn < units`), each once, so each
 one's δ is in `eps` (`Public.eps` sums the terms' facts' and `charged`'s, and nothing else), and where such an audit's
 bound is at least one incorrect proof block, the term of every link-window whose scan's `prog` is its output has every
 slot entry bit (`faultyEntries` at `scan.entries`), the number `RowsKBoundsCount` takes as `faulty`. No tied audit
 names more sampled than its level holds (`factsOf` refuses a profile that does), so one that is not charged names as
-many: `drawn = units`. Each says its conclusion (`RowsProgWiredAt`, `RowsStateTiedAt`,
+many: `drawn = units`. Each says its conclusion (`RowsProgWiredAt`, `RowsStateTiedAt`, `RowsTiedInputWiredAt`,
 `RowsTiedChargedAt`) of every period `check` accepts, and so is, by definition, its property of any period check at
-`check` (`RowsProgWiredOf`, `RowsStateTiedOf`, `RowsTiedChargedOf`), which the nontrivial lemmas state false at
+`check` (`RowsProgWiredOf`, `RowsStateTiedOf`, `RowsTiedInputWiredOf`, `RowsTiedChargedOf`), which the nontrivial
+lemmas state false at
 `acceptAllRows`, a check that accepts every period. Each guarantee writes its acceptance of `check` out rather than
 being its `…Of check`: the shape rule reads the acceptance off the statement's own binders.
 `RowsCapPublished` says an accepted period's public names its schedule's response cap, and `RowsCapPublishedOf` is
@@ -136,6 +141,34 @@ def RowsStateTied : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsStateTiedAt p c
 
+/-- What `RowsTiedInputWired` says of a period its check accepted: in the rows form, each execution phase's scan's
+answer names no tied Input but the scan's lanes' `prog<j>` (`tiedInputWired`), and its registration is wired to the
+audits' slot entries (`wired`). -/
+def RowsTiedInputWiredAt (p : Params) (c : Commitment) (e : Evidence) : Prop :=
+  ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+    ∀ (i : ℕ) (reg : Lean.Json) (x : ExecutionPhase), c.windows[i]? = some reg → e.windows[i]? = some x →
+      tiedInputWired s x.answer = true ∧ wired p.audits s c.audits reg = true
+
+/-- `RowsTiedInputWired` of the period check `chk`: `RowsTiedInputWiredAt` of every period `chk` accepts. -/
+def RowsTiedInputWiredOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    chk p c e = .accept pub prof → RowsTiedInputWiredAt p c e
+
+/-- **The rows form accepts no execution phase whose scan's answer names a tied Input the check does not wire.**
+One-stage's registration check refuses a run Input that several proof blocks read, unless its verifier names the Input
+tied: a later check then ties its rows to the registrations that computed them, and its registration verdict names
+each Input it let through (`rests_on_period_check`), a list the scan's answer carries in its public outputs. If the
+check accepts a period in the rows form, every name each execution phase's scan's answer carries there is one of the
+scan's lanes' `prog<j>` (`tiedInputWired`, `progParams`: in any order, a lane's more than once or not at all, and none
+where the answer has no such list), and that execution phase's `scan/prog<j>` entries are wired, each lane's to a
+compute audit's slot entries (`wired`, as `RowsProgWired` says): every tied Input an accepted scan's answer names is
+one this check ties. It is a statement about the names the answer carries. That the answer carries every Input the
+registration check let through, and that lane `j`'s name `prog<j>` is the Input the entry `scan/prog<j>` registers,
+which is one-stage's registration check's, are not said here. -/
+def RowsTiedInputWired : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → RowsTiedInputWiredAt p c e
+
 /-- Audit `i`'s answer gives the facts `f`: one-stage accepted its window record `reg` with a profile of one level,
 sampled `subset:k` or stratified, and `f` is what the check reads of that profile and its public (`answered`,
 `factsOf`). -/
@@ -192,9 +225,9 @@ def RowsTiedCharged : Prop :=
     check p c e = .accept pub prof → RowsTiedChargedAt p c e pub
 
 /-- A period check that accepts every period, publishing the rows form's terms of no link-window, no audit's facts and
-no charge: what `RowsProgWiredOf`, `RowsStateTiedOf`, `RowsTiedChargedOf`, `RowsCapPublishedOf` and `RowsOkHeldOf`
-must fail at for `RowsProgWired`, `RowsStateTied`, `RowsTiedCharged`, `RowsCapPublished` and `RowsOkHeld` (each its
-`…Of` at `check`) to say something. -/
+no charge: what `RowsProgWiredOf`, `RowsStateTiedOf`, `RowsTiedInputWiredOf`, `RowsTiedChargedOf`, `RowsCapPublishedOf`
+and `RowsOkHeldOf` must fail at for `RowsProgWired`, `RowsStateTied`, `RowsTiedInputWired`, `RowsTiedCharged`,
+`RowsCapPublished` and `RowsOkHeld` (each its `…Of` at `check`) to say something. -/
 def acceptAllRows (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
   .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] p.cells p.jitter p.windows) { link := p.link, windows := p.windows }
 
@@ -272,7 +305,7 @@ def pairSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 2, none⟩
 /-- The rows-form period of `n` execution phases and no audit under `pairSchedule`, at the deployed LMS parameters:
 the periods `RowsOkHeld`'s witnesses are stated at. -/
 def pairParams (n : ℕ) : Params :=
-  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, n⟩
+  ⟨#[], #[], 0, 1, "", Lms.deployed, #[], "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, n⟩
 
 /-- A commitment of one execution phase whose scan's registration names no root, so no member's ok bits. -/
 def unnamedCommitment : Commitment := ⟨#[], #[Lean.Json.mkObj []], .empty⟩
