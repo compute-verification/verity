@@ -339,13 +339,14 @@ def test_a_read_of_an_instance_the_unfolding_dropped_is_named_and_counts_differe
 
 @FORMS
 def test_two_aligned_instances_of_unlike_operand_counts_differ_by_the_count(compact):
-    """Two instances of one spec at one place, one with an operand the other has not: the operands both have are compared, and the
-    difference of the two counts is added to the different ones under the spec's `#arity`, whichever side has more."""
-    two = _reader(MUX_INPUTS, [[("n", TOK, 0, 2)], [("n", TOK, 2, 4)]], compact=compact)
+    """Two instances of one spec at one place, one with two operands the other has not: the operands both have are compared, and
+    the difference of the two counts is added to the different ones under the spec's `#arity`, once an instance, whichever side
+    has more."""
+    three = _reader(MUX_INPUTS, [[("n", TOK, 0, 2)], [("n", TOK, 2, 4)], [("n", TOK, 0, 4)]], compact=compact)
     one = _reader(MUX_INPUTS, [[("n", TOK, 0, 2)]], compact=compact)
-    for a, b in ((two, one), (one, two)):
+    for a, b in ((three, one), (one, three)):
         res = compare_steps(a, b)
-        assert res["steps"][0]["wiring"] == {"operands_equal": 2, "operands_different": 1, "different_by_spec_arg": {f"{READER}#arity": 1},
+        assert res["steps"][0]["wiring"] == {"operands_equal": 2, "operands_different": 2, "different_by_spec_arg": {f"{READER}#arity": 1},
                                              "cross_step_operands_in_a": 0, "examples": []}
         assert not res["canonical_sha256"]["equal"]
 
