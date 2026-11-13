@@ -159439,3 +159439,68 @@ added and 241 removed. [read] No lock file is edited by hand.
 
 **5. For you.** The timer subscription `sub_fd639f1c-5719-434e-bc6c-3216ac30e2cb` (`addrrow2-trial-runs`) may still
 fire at me; I set no new timer, as you ruled.
+
+## STAGECOINS, Fri 13 Nov 20:09Z: PRF-549 STOPPED on your amended stop rule: the records run at `828cf89203f` passes all three packages, but `--update` moved two `reads` records besides the one you allowed; no fourth commit, no pull request
+
+**The run** [run]: `r20261113-184910-8c76` on vy-nebius-cpu-5 at `828cf89203fc9a0cd69e96f05213a5e34dcbdae2`, done, exit 0,
+outcome `regenerated`.
+- `security/Proofs` PASS. `security` PASS: 1136 guarantees, `check.py` exit 0 in 644 s. `security/Properties` PASS:
+  540 guarantees, `check.py` exit 0 in 574 s.
+- The check prints no failure and no line on any name. The three lines on the lemma are gone.
+- It is the fast path: no kernel replay and no tests, and no merge check accepts it.
+
+**What `--update` wrote** [run]: I compared the run's record (sha256 `1ede9235…`) with the branch's lock section by
+section. Only `reads` differs. `guarantees`, `witnesses`, `unwitnessed` (222), `domain`, `open`, `trust`, `shape` and
+the rest are equal. The run's own words, its `review.txt`, whole:
+
+~~~
+definition Claims.ZKMal.witMsg (Proofs.Flock.Claims.ZK.NonVacuous): gone
+definition Claims.ZKServer.Loop.NT (Proofs.Flock.SessionLoop.ZkAnyNontrivial): gone
+definition Claims.ZKServer.Loop.constRel (Proofs.Flock.SessionLoop.ZkAnyNontrivial): gone
+definition Claims.ZKServer.Loop.leakL (Proofs.Flock.SessionLoop.Leak): gone
+definition Claims.ZKServer.Loop.noReal (Proofs.Flock.SessionLoop.ZkAnyNontrivial): gone
+definition Claims.ZKServer.Loop.noTables (Proofs.Flock.SessionLoop.ZkAnyNontrivial): gone
+definition Claims.ZKServer.Loop.noVals (Proofs.Flock.SessionLoop.ZkAnyNontrivial): gone
+definition Claims.ZKServer.Loop.noWk (Proofs.Flock.SessionLoop.ZkAnyNontrivial): gone
+reads: 695 definitions read in another module or under another name: the same under their old names
+~~~
+
+So three module records of `reads` move, not one:
+1. `Proofs.Flock.SessionLoop.ZkAnyNontrivial`: gone whole, its six definitions. This is the one you allowed.
+2. `Proofs.Flock.SessionLoop.Leak`: loses `Claims.ZKServer.Loop.leakL` and keeps `helloRej`. Its digest goes from
+   `841b1499…` to `b006b305…`. **Not allowed by your word.**
+3. `Proofs.Flock.Claims.ZK.NonVacuous`: gone whole. Its one definition was `Claims.ZKMal.witMsg`. **Not allowed by
+   your word.**
+
+**Why the two others move** [read, at the branch's head]:
+- The lemma's statement names `Loop.leakL`: `¬ Loop.ZkAnyAt Loop.noTables Loop.noVals (Loop.leakL (Loop.constRel
+  Loop.NT)) …`.
+- `leakL` (`Leak.lean` line 60) is the release whose link sends `witMsg w`, and `witMsg` is defined in
+  `NonVacuous.lean` line 171.
+- [derived] The lemma was the only listed statement that read either. With its record out of `guarantees`, no listed
+  statement reads them, so `--update` drops them, as it drops the six of the lemma's own module.
+
+**What I did not do:** I did not commit the regenerated record, and I opened no pull request. The branch is still at
+`828cf89203f`.
+
+**What I ask: your yes or no to taking the run's record as it is.**
+- I would take it. The two further records are the same kind as the one you allowed: definitions only the lemma's
+  statement read.
+- The cost: the lock no longer pins `leakL` and `witMsg`. A change to either shows as no changed record until a listed
+  statement reads them again, which fix 1's restated lemma may or may not do.
+- [guess] I know no way inside (a) to keep them: I expect the check to refuse a `reads` record no listed statement
+  reads, and I have not tested that.
+
+**On your yes, in this order:**
+1. The fourth commit: the run's record over `security/lean-audit.json`, byte for byte.
+2. The quick suites again at the new head, on vy-nebius-cpu-5. The suites that passed (`r20261113-184805-2b18`) read
+   the lock before this change.
+3. No second records run, unless you want one: the fourth commit is the run's own output, and you ordered one.
+4. The pull request, opened as my 19:45Z checkpoint says (your mailbox holds no word against it), then the ready line
+   before 23:00Z.
+
+**Not established**
+- [run] The verdicts above are the fast path's. Nothing here replayed a declaration through the kernel.
+- No suite has run on the regenerated lock.
+- [read] I have not asked lean whether it takes two more `reads` records leaving. PRF-549 holds its yes to the cap
+  only, as far as your 18:37Z word says.
