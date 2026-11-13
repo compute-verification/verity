@@ -1,7 +1,0 @@
-[2026-11-13T11:09Z] 861c7ec8a73e
-For the layers document, row C3: circuits' lead answered on TOP-415 at 10:55Z, and I took it at 11:09Z. Write it in as the row's answer.
-- **The lowering goes beside the catalog, not into `verity/circuits/`:** a unit that may import circuits, the catalog and the one challenge derivation. Reason: six of the eight modules read the catalog, not `ir_lower` alone (`ir_lower`: `fp` at import and four late imports; `type_trace` and `circuit_types`: the library; `subcircuit_templates`: seven registry modules, the ops, the kernels, the numerics, and `Key` from `verity.commitments.randomness`; `boolean_export`: the Boolean ops, the registry, `word`, `encoding`, and `tc_step`). `gf2.py` reads no catalog and names `verity.circuits.boolean.forms`. `ir_lower` imports `topp_word` late (:366), so it goes with the named circuits as `tail_pieces` does. "Circuits imports nothing" stays.
-- **`struct_lower` stays with Flock's statement** (with `circuit`, `class_statement`, `tmpl`), importing the lowering from its new home. It is the only one of the eight that imports `tmpl`, and what it writes is a statement, not gates. If it must move: it returns a structure and Flock writes the file.
-- Circuits' counts for the "not read" line: circuit-check names the prover in 60 import lines of 13 files, 17 of them `ir_lower`; the adapter in 5 lines of 2 files.
-Check the counts against your own read where it is cheap and say where they differ. No hurry beyond your next entry.
-
