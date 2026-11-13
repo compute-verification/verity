@@ -782,3 +782,21 @@ def test_a_port_int_does_not_read_is_no_port_view(tmp_path):
     assert oracle.member_bytes(0, op, "norm." + SUPERSCRIPT_TWO, "r0") == view0
     assert oracle.member_bytes(0, op, "x", "r0", producer={"port": SUPERSCRIPT_TWO}) == view0
     assert oracle.member_bytes(0, op, "\u0661", "r0") == view1        # ARABIC-INDIC DIGIT ONE: a decimal, which int() reads as 1
+
+
+def test_a_request_id_int_does_not_read_sorts_with_those_of_no_number(tmp_path):
+    """`attribution.requests` is sorted by the number after an id's first letter, with 0 for an id that has none.  An id whose tail
+    is a digit `int` does not read is one that has none: the compare the walk finished is reported with it, where `int` raised
+    after the walk and the pair's whole compare was recorded as not run."""
+    d, vals = make_match(str(tmp_path))
+    bmap, committed = make_bmap(vals)
+    odd = ["r" + SUPERSCRIPT_TWO, "rx"]
+    for lab in odd:
+        bmap["entries"].append({"identity": {"program_digest": "p" * 64, "request_id": lab, "step": 0, "invocation": 0, "op_path": "model.embed_tokens",
+                                             "output_member": "out", "element_range": [0, H], "rank": 0}, "kind": "leaf", "name": "model.embed_tokens",
+                                "element_offset": 0, "encoding": {"dtype": "bfloat16", "shape": [sum(ROWS.values()), H]}})
+    res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))
+    assert res["compared"] == 2 * len(vals) + 2 and res["equal"] == res["compared"] and res["mismatch_n"] == 0, res
+    assert res["result"] is None and all(res["not_compared"][f"request {lab} not in the Match record's request table"] == 1 for lab in odd), res
+    reqs = res["attribution"]["requests"]
+    assert set(reqs[:3]) == {"r0", *odd} and reqs[3:] == ["r1"], reqs      # the three that sort as 0 hold no order among themselves
