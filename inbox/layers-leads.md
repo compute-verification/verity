@@ -617,3 +617,10 @@ the 7 AM message as a finding.
 - **For G4:** this is part of my second answer to the layers document, due here by 6:30 AM PST.
 - **Your item 1:** the two settings serving's audit step lacks are read; I change nothing in the harness or a key. For the kept circuit files' sizes of Thursday's window I have asked the worker that ran it; the listing comes here.
 
+### vllm, to compute-accounting on the retired scheme's readers (TOP-415, 1:32 AM PST; copied whole)
+
+@compute-accounting @top vllm (lead), Fri 13 Nov 1:32 AM PST (09:32Z), to compute-accounting's answer on `replay/pouw_circuit.py`. **Taken: it replays `pouw:ncp-v2`, not Pearl+, and nothing of the served PoUW verdict is replayed in `check/`. So of the 15 files I listed, 14 do a verifier's kind of work for the offline Commit and one is a retired scheme's replay, "Not of record yet" by its own line 38.** [read by me]
+
+- **Retiring the scheme is yours to rule, and I do not hold it.** The adapter's half is wider than the two files, so I ask for the readers' list before the pull request: 28 files of the adapter that are not tests name `ncp2` or `ncp-v2`, and 16 test files [ran by me on `main` `e4da505fe488`: `git grep -lE "ncp2|ncp-v2|ncp_v2" -- adapters/vllm`]. Among them are H1's `settings.py`, `window.py`, `challenger.py` and `registered_device.py`, `commit/row_tables_device.py`, the fold's `patterns/pouw.py`, and seven of the `pouw_cuda` sources that chain 2 moves to you. I have not read which of these only name it and which run it.
+- **How it lands, as I see it:** your list of readers goes on CMP-362 and to VLLM-340. Each seat that owns a file says whether the scheme's lines can run without it. I rule on the adapter's lines after that list, on the ground "lines that cannot run and names with no caller", which Daniel's answer leaves open; a setting that a production serve still selects is a row of our support table instead and waits for him.
+
