@@ -15,8 +15,9 @@ public import Proofs.Core.Game.Tape
 
 * **The statement** (`stmtAt`): on a play of the frame the form's check accepts, the run's statement the check reads
   is the boundary registration's record, the one the commitment `c` carries (`stmtOf`). The run of record's record is
-  the commitment's (`inputOf`), and the instance's case reads the play's commitment (`CaseCommits`), which a play of
-  the game at `c` ends with (`Binding.play_reaches`).
+  the commitment's as the verifier's parser reads its canonical text (`readBack`), with the same canonical bytes, and
+  the instance's case reads the play's commitment (`CaseCommits`), which a play of the game at `c` ends with
+  (`Binding.play_reaches`).
 * **Same coins, same messages, same outcome** (`out_eq_of_msgAt`): two runs of one verifier on one coin vector whose
   provers send the same messages decide alike, whatever else the provers do. So `AcceptsRun` holds where, at each
   accepted play and each coin vector agreeing with what the check read, some prover sending the check's messages is
@@ -66,21 +67,24 @@ theorem frame_commitment {V : Vocab d α} {A : Live₂} {x : Msg} {θ : ByteArra
   (Verity.Sampled.Binding.play_reaches (Verity.Game.Tape.reaches_out (V.game θ F c) σ (Fr.place ω r))).2.2
 
 /-- **An accepted case's run of record**: the case's commitment decodes, the check handed `Spot.Run.run` an input, that
-input's record is the commitment's, and it has an interior whose record has a canonical form. -/
+input's record is the commitment's as the verifier's parser reads its canonical text (`readBack`), and it has an
+interior whose record has a canonical form. -/
 theorem input_of_accepts {k : Case} (h : AcceptsOn k) :
-    ∃ cm i, Spot.OneStage.commitmentOf k.commitment = .ok cm ∧ inputOfCase k = some i ∧ i.record = cm.record ∧
+    ∃ cm i, Spot.OneStage.commitmentOf k.commitment = .ok cm ∧ inputOfCase k = some i ∧
+      VStar.Recursive.SampledTwo.readBack cm.record = .ok i.record ∧
       ∃ it m₁, i.interior = some it ∧ recordMsg it.record = some m₁ := by
   obtain ⟨p, cm, e, pub, prof, ⟨h1, h2, h3⟩, hacc⟩ := h
   obtain ⟨-, c₂, ξ₂, r, i, run, hi, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
-  obtain ⟨⟨s, hs, -⟩, -, -, -, vs, rc, -, hieq⟩ := VStar.Recursive.SampledTwo.inputAt_ok hi
-  refine ⟨cm, i, h2, ?_, by rw [hieq]; rfl, ?_⟩
+  obtain ⟨-, -, -, -, vs, rc, j₁, j₂, -, hieq, hj₁, hj₂⟩ := VStar.Recursive.SampledTwo.inputAt_ok hi
+  refine ⟨cm, i, h2, ?_, by rw [hieq]; exact hj₁, ?_⟩
   · unfold inputOfCase
     rw [h1, h2, h3]
     simp only [bind, Except.bind, hi]
     rfl
   · subst hieq
+    obtain ⟨s, -, -, hs⟩ := VStar.Recursive.SampledTwo.readBack_ok hj₂
     refine ⟨_, s.toUTF8.data.toList, rfl, ?_⟩
-    show recordMsg e.record = _
+    show recordMsg j₂ = _
     simp only [recordMsg, hs]
     rfl
 
@@ -93,7 +97,11 @@ theorem stmtAt (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Ar
     StmtAt V A x θ F c σ Fr (formReading A C S dev) (FormAccepts C) := by
   intro ω r hacc
   obtain ⟨k, hk, hA⟩ := hacc
-  obtain ⟨cm, i, hcm, hi, hrec, -⟩ := input_of_accepts hA
+  obtain ⟨cm, i, hcm, hi, hrb, -⟩ := input_of_accepts hA
+  have hrec : recordMsg i.record = recordMsg cm.record := by
+    obtain ⟨s, hc, -, hc'⟩ := VStar.Recursive.SampledTwo.readBack_ok hrb
+    unfold recordMsg
+    rw [hc, hc']
   have hkc : k.commitment = c := (hC _ k hk).trans (frame_commitment Fr ω r)
   rw [hkc] at hcm
   show (inputOn C (Fr.out ω r)).bind (fun i => recordMsg i.record) = some x
