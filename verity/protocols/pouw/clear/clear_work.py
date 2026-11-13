@@ -459,7 +459,7 @@ def _audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcrip
            records: Sequence[UnitRecord], t: int, split_check: Callable[[int, Split], bool] | None, tile_map: Callable,
            key_of: Callable[[bytes], tuple[Key | None, str | None]]) -> WorkAudit:
     if getattr(scheme, "forming", "v1") != "v1":
-        raise ValueError("the work law is stated for forming v1")
+        raise ValueError("the work sampling design is stated for forming v1")
     device = getattr(scheme, "device", None)
     if device is not None and ALIGN % device.window:
         raise ValueError(f"k_unit's alignment {ALIGN} is not whole promotion windows of {scheme.name}")
