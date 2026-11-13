@@ -267,6 +267,37 @@ theorem checkBlobsAt_setup {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.
   obtain ⟨recB, record, _, _, _, _, hb, hrec, hst, -⟩ := step_event hstep hall
   exact ⟨tags0, circuitB, pubB, rd, record, _, ht, hc, hp, sessionRecord_eq hs hb hrec, hst⟩
 
+open FlockSoundness.Discharge.Recursion.Witness (toExec) in
+/-- **An accepted session's setup at the record's sample is its one table's**: at one table under hidden outputs,
+`setupAt`'s statements are `Exec.setupOfP`'s at `--zk`'s inputs (`setupAt_setupOfP`), one `Stmt.setupHidden` at the
+table's inputs (`setupTables_okHP`, `inputsJ` at table 0), which passes `Zk.shapeOk`. -/
+theorem setupAt_hidden {W : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} {record : String}
+    {x : Flock.SessionSpec × Array Flock.Setup × Json × Json} (hc1 : W.count = 1)
+    (hh : (Flock.Witness.zkTags W).hiddenOutputs = true)
+    (h : _root_.Spot.OneStageZk.setupAt W rd (Flock.Witness.recordDraw record) = .ok x) :
+    ∃ st, Flock.Stmt.setupHidden (FlockSoundness.Discharge.Composed.inputsJ (toExec W) 0).tags
+        (FlockSoundness.Discharge.Composed.inputsJ (toExec W) 0).circuitFile
+        (FlockSoundness.Discharge.Composed.inputsJ (toExec W) 0).publicFile
+        (FlockSoundness.Discharge.Composed.inputsJ (toExec W) 0).coins
+        (FlockSoundness.Discharge.Composed.inputsJ (toExec W) 0).tables
+        (FlockSoundness.Discharge.Exec.recordDraw record)
+        (FlockSoundness.Discharge.Composed.inputsJ (toExec W) 0).partition
+        (FlockSoundness.Discharge.Composed.inputsJ (toExec W) 0).program none = .ok st ∧
+      Flock.Zk.shapeOk st = .ok () := by
+  obtain ⟨spec, tabs, y⟩ := x
+  obtain ⟨sts, hset, hshape, -⟩ := setupAt_setupOfP h
+  unfold FlockSoundness.Discharge.Exec.setupOfP at hset
+  have htJ : (FlockSoundness.Discharge.Composed.inputsJ (toExec W) 0).tags =
+      FlockSoundness.Discharge.ZkExec.zkTags (toExec W) := by
+    show FlockSoundness.Discharge.Exec.tagsAt _ W.count 0 = _
+    unfold FlockSoundness.Discharge.Exec.tagsAt
+    exact ite_eq_left (by omega)
+  rcases FlockSoundness.Discharge.HiddenExec.setupTables_okHP hh hset with ⟨-, st, hst, -, rfl⟩ | ⟨hc, -⟩
+  · refine ⟨st, ?_, FlockSoundness.Discharge.ZkExec.array_forM_ok hshape 0 (by simp)⟩
+    rw [htJ]
+    exact hst
+  · exact absurd hc (by show ¬ 1 < W.count; omega)
+
 /-! ## The session's descriptor -/
 
 /-- **Where `verify --zk`'s ports check passes at a flat untyped statement, the circuit file reads as a descriptor whose
