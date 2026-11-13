@@ -135,3 +135,33 @@ Still owed by me: step B, Wed 18 Nov, built last on what is on `main` by Mon 16 
 
 TIMER: none
 
+[2026-11-13T06:19Z] 21da1c46908a
+BOUNDTIE to network-accounting (lead), Thu 12 Nov 10:19 PM PST. **Job 1 is done: #9378's body is edited, nothing pushed, still ready at `5197e360dfb3`. Job 2: #9491 is at `37716d4ba9908f564ff98c002a1730276e06df90`, wording only; its one run `r20261113-060747-72dd` is running, not read.**
+
+**#9378's body, the lines changed** [ran: `research queue edit 9378`, three times, the last with your 10:14 PM PST addition; read back from GitHub: head unchanged, last line `Refs NET-379`; `research queue status`: ready at `5197e360`].
+- **Finding 1.** Above the period table: "The table below is at the cost runner's schedule (60 s execution phases, R = 336), which is not the schedule the network certifier's term reads." After it, the term's schedule, read from `verity bench certifier_term --json` on `main` at `b843a10af48a` [ran]: T = 1,280 buckets of 100 ms, D = 30, `ingress_buckets` = 30, six classes, lanes not given so counted at 36. R = 36 · 43 = 1,548; log₂(1,549) = 10.60 bits a class a phase; 63.6 bits a link a phase [arithmetic]. The term prints the same (`count.releases` 1,548, `bits_a_class` 10.597) [ran]. A second period table at that schedule: one link 37.6 kB a week, 161 kB a month, 1.96 MB a year; a datacenter's 12,500 links 469 MB, 2.01 GB, 24.5 GB; the world's 46,870,000 links 1.76 TB, 7.54 TB, 91.8 TB [arithmetic; the last two rows scaled]. The world's year matches the term's own 91,778 GB [ran].
+- **Finding 3.** Under "What changes" the `rows` load is "R releases of the class whose rows are the most bytes, each its longest request and most ids", a ceiling: at the default schedule a lane ends at most 2 such connections a phase, 32 on 16 lanes, not 336 [arithmetic; argued]. The body says the two docstrings are reworded in #9491.
+- **Finding 6.** A mark on each line the reader listed: the bound, a class, the trees, past R, `check_registration`, `port`, the runner, the text, "under form 1 nothing in the head follows the load", the earlier digest, the retired-term scan and the gate being off the merge gate. Each [read] was checked against the file at `5197e360dfb3` [read]. The body's `warden.py` line 306 was 308 at this head; fixed.
+- **Finding 7.** New bullet: the head's time is NET-399's (#9541). New bullet, your wording: no run of record at form 2 before NET-379, NET-388 and NET-399 are on `main`, NET-394's count line being there already (#9454, `d1a5cb986a2c`) [ran: it is an ancestor of `origin/main`].
+- **Gone:** "Until #9333 is on `main` the diff shows its commits too". In its place: this head merges with `main` with no conflict and that merge's diff against `main` is 12 files, +1,044 −161 [ran: `git merge-tree --write-tree`].
+- **"Whose line it is"** was stale ("these bits are in no bound in the tree"). It now says that is so at this head, and that on `main` the term charges the count since #9454 [ran; read: `leak_bounds.py`, "The count"].
+
+**#9491** [ran: `git push`, `git ls-remote`].
+- **Head:** `37716d4ba9908f564ff98c002a1730276e06df90`, one commit over the merge `5588cc4b863a`: four files, +16 −11, every line in a docstring or `PROTOCOL.md` [ran: `git diff`].
+  - Finding 3: the runner's module docstring and the cost test's docstring say the `rows` load is a ceiling, whether or not an execution phase releases that much.
+  - Finding 4: `WardenParams.phase_releases`' docstring and `PROTOCOL.md`'s "The bound" gain: "It does not use that the device releases no request in its admission's bucket, so it may count one bucket more than a load can reach." R is unchanged.
+- **Local, one file an invocation** [ran]: the runner's tests 23 passed, the phase releases' 5 passed; ruff passes.
+- **The run:** `r20261113-060747-72dd`, launched once at 10:08 PM PST at that head: the certifier's verifier suite, its `network` suite, `verity-network-traces`, `repository`. **No verdict yet: it was running at 10:14 PM PST and I have not read it.** Earlier runs of these four took about 45 minutes.
+- **Body** is at the head [ran: `research queue edit 9491`; read back]: the head, that it holds #9378's marked head `5197e360dfb3`, that it merges with `main` with no conflict [ran], and the run as running, not read. I put each suite's verdict in when the run ends and send you one line.
+
+**Found, not asked for.**
+- **The term's lanes are 36, not 16,** so R at the term's schedule is 1,548 and a class's count 10.60 bits a phase, not the reader's 688 and 9.43 [ran: the term's `inputs` and `count`].
+- **`PROTOCOL.md` at #9378's and #9491's heads still says "Nothing here charges the counts or that time to a bound",** while the term on `main` charges the count. I did not change it; #9541 rewords that sentence [read].
+- **I rewrapped one 144-wide line** in the same paragraph of the runner's module docstring, in #9491's commit.
+- **`verity-cli` was not run at #9491's new head;** its pass is at the merge under it (`r20261113-033840-9a25`), and the commit changes no file under `tools/verity/cli/` [ran: `git diff --name-only`].
+- **A timer works on this machine:** `subscribe_timer` took, where a subscription was refused before.
+
+#9541 and #9457 are untouched. A checkpoint note is synced (`20261113T0614Z-checkpoint-boundtie-9378-body-9491-wording.md`).
+
+TIMER: sub_f34806d9-aa40-46e2-bcae-597ed4558514 (`boundtie-9491-run`, once, 40 minutes from 10:13 PM PST: read the run, #9491's body, one line to you)
+
