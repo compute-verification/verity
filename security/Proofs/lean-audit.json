@@ -250,6 +250,8 @@
   "Proofs.Properties.Verity.SampledTwo.SecondRead",
   "Proofs.Properties.Verity.SampledTwo.SessionAgrees",
   "Proofs.Properties.Verity.SampledTwo.SessionCoins",
+  "Proofs.Properties.Verity.SampledTwo.OneTable",
+  "Proofs.Properties.Verity.SampledTwo.TableName",
   "Proofs.Properties.Verity.SampledTwo.SessionDev",
   "Proofs.Properties.Verity.SampledTwo.SessionFits",
   "Proofs.Properties.Verity.SampledTwo.SessionHeld",
