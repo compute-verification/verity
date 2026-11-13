@@ -117305,3 +117305,78 @@ Clock: `date -u` read 03:20Z. I held no timer and no subscription [run: the list
 - [run] FIRSTACCEPT's branch at `9049e2c572ec` does not merge with `main` `4a7291116e11`: three files stop (`benchmarks/one_stage/composite.py`, its test, and the spot verifier's `test_difftest.py`). It stops the same way against `main` alone, so it is `main`'s change meeting theirs, not #9441 or #9584. It merges clean with #9584.
 
 **Not established.** That the merged head's Lean builds and its records hold (the two runs). That Lean answers the two rows as I derived (no run yet). Anything of the twin's change.
+
+
+## HONEST2, Fri 13 Nov 03:21Z: nothing new has compiled since 02:31Z; the base moved to the design that decides the wiring (`6c1a87cc54d3`), my instance's files are rewritten for it and pushed at `ec1ac520fa0d`, and their one try `r20261113-031311-97b2` waits on vy-nebius-2 with 5 checks ahead
+
+**In plain words.** The base now makes the proved verifier check the wiring between the inner blocks of an outer block instead of assuming it. That changed three things my one-template registration is built on, so what compiled at 02:31Z has to compile again. I merged the new base and rewrote the instance for it. The instance now proves in Lean, not in words, that the wiring check passes there: all ten of its clauses hold because every port is linked and nothing is wired. One of its stated facts about the template's circuit also got smaller. It no longer asks where every bit sits, only that the template's ports have distinct names. None of this has been compiled yet: the try has waited in line since 03:13Z.
+
+Clock: `date -u` read 03:21Z. Mailbox read at 03:02Z: nothing after 00:23Z. This is a third machine; the branch and the entries worktree were restored from origin, and nothing was lost.
+
+### What moved under me
+
+- [run: `git fetch`] The base `cursor/proofs-two-round-base-84b5` is at `6c1a87cc54d3` (it was `798474779897`). ADDRWC is at `98aef7281076`, ADDRROW at `2ce023f1a867`. I merged all three; no conflict. The lakefile's roots are one a line again.
+- [read: the base's `Code.lean`, `Guarantees.lean`] What it changes for my instance:
+  - `two h` also asks `membersScoped h && wiringOk h`;
+  - `Held` has a new field, `refHeaders`;
+  - `SpotKSTwo` takes `BuiltWired` and `AddressesConnected` only.
+- [read: `git diff` of the two branches against my tree] ADDRWC's new head keeps the three lemmas I call with the same signatures (`widthFact_addressOf`, `CheckedRun.ports_member`, `copyFact_of_ref`). ADDRROW's adds `RowDraw.lean` and changes none of the files I import.
+
+### Rewritten for it, pushed, not compiled
+
+[derived: written against the base's text; no run has elaborated any of it]
+- `Honest/Instance.lean`:
+  - `Premises h` is `BuiltWired … ∧ AddressesConnected h`, as `SpotKSTwo` reads now.
+  - `Ref` gains `headers`, and `held₀` sets `refHeaders` from it.
+  - `two_held` and `scope_held` take `membersScoped (held …) = true` and `wiringOk (held …) = true`.
+  - `inScope_of_accepts` keeps its statement: it reads both off the accepted run by the base's `scoped_wiring_of_two`. So `honest_of_owed` and `honest_of_five` take no new hypothesis.
+- `Honest/Wiring.lean`, which answers your 02:11Z question in Lean:
+  - `wiringOk_held : RefPorts R → RefReadsNamed R B → wiringOk (held …) = true`, through the base's `wiringOk_iff`. The three clauses I gave in words at 02:31Z are now lemmas: `namesOnce_held`, `wiresAlike_held`, `writtenRead_held`.
+  - `membersScoped_held : scopeOkH (stmtOf R.x) = true → membersScoped (held …) = true`.
+  - `two_of_ref`: from those three hypotheses on `R`, `two (held …) s = some …`.
+- `Honest/Once.lean` (new): the width without `RefWidths`.
+  - `widthFact_of_once : NeededBits → PortsOnce (held …) → WidthFact …`. An accepted run's design evaluates, and ADDRWC's `bitsInPorts_of_once` then gives each bit inside its port's row [relayed: ADDRWC 02:33Z, compiled in `a052`].
+  - `five_of_once` and `addressesConnected_of_once`: the five facts and the address premise with `PortsOnce` where they took `RefWidths R`.
+
+### Run
+
+- [run] `r20261113-031311-97b2`, vy-nebius-2, head `ec1ac520fa0d`: builds the ten `Honest/` files, then tries each. Waiting since 03:13:37Z; `slot.json` at 03:21Z: "5 check(s) ahead in line". Expected to end between 04:15Z and 04:35Z [guess: about 10 minutes of line, a base rebuild, ten tries].
+- [run] Before it, withdrawn unstarted: `r20261113-030844-1226` (cpu-12, "6 check(s) ahead"), then `r20261113-030952-896d` (vy-nebius-2, 3 minutes in line), which I resent as `97b2` to add `Once.lean`. That resend cost its place: 4 ahead became 9. I should have kept it and tried `Once.lean` after.
+
+### Open, at the instance
+
+| Hypothesis | Who | State |
+|---|---|---|
+| `AddressRow.RowGoal` | ADDRROW | stated, not proved [read: `2ce023f1a867`] |
+| `NeededBits (held …)` | NEEDEDBITS | `neededBits_held` written, not compiled [relayed: FRAME 02:50Z] |
+| `PortsOnce (held …)`: `R`'s ports have distinct names | FRAME's L1 head decides it in `wiringOk` (`portsOnce`) | not on the base |
+| `RefPorts R`, `CopiesHeld`, `RefReadsNamed R B`, `scopeOkH (stmtOf R.x)` | facts of the token select's circuit | not started; ADDRWC is on the general `CopiesAt` |
+
+NEEDS:
+- ADDRROW (`RowGoal`) and NEEDEDBITS (`NeededBits`), unchanged.
+- ADDRWC and FRAME: `SpotFlock.PortsOnce` is declared twice with the same text [read]: in ADDRWC's `AddressFacts/BitsIn.lean:25` and in L1's `WiringOk.lean:155` at `8c37334cc716`. The two clash in any file that imports both once L1's head reaches the base. One of the two has to go.
+
+### When L1's head reaches the base
+
+[read: FRAME 02:50Z, step 4] There `wiringOk` has `sourceRowsNamed`, `writtenRowsUnwired`, `writtenRowsRead` and `portsOnce` where it has `sourcesNamed`, `writtenUnwired`, `writtenRead` and `returnedWhole` now. `wiringOk_held` is written for the base's ten clauses and will need those four lemmas instead. They hold at the instance for the same reason, if `R`'s linked ports are every port of its circuit; `Ref.named` and `RefPorts.written` say that only of the ports a bit sits on. I do it when the base moves, not before.
+
+### Events that were not mine
+
+[run] At 03:02Z seven task completions of other workers were delivered to my conversation (CUT, RUNCOINS, ACCEPTS, GATHER, HISTORY, MAJORITY, SESSIONCOINS). I launched none of them and acted on none.
+
+### STOP RULE
+
+Nothing. `Premises` is my own definition, restated to the guarantee's new text; no listed guarantee and nothing the verifier accepts changes.
+
+### Pushed
+
+[run] `cursor/proofs-honest2-7c4e` at `ec1ac520fa0d`; nothing unpushed.
+
+### Not established
+
+- That any of my ten files elaborates on the new base. The 02:31Z verdicts are for `8adc0f07366c`, on the old base.
+- That ADDRWC's and ADDRROW's files I import build on it at their new heads.
+
+### To post
+
+Nothing.
