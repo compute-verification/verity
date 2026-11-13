@@ -368,7 +368,7 @@ theorem SelfClash.cand {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {sch :
 
 open Classical in
 /-- A run's first verifying opening at `p`: the opening whose row `opOf` returns. -/
-noncomputable def firstOf (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (lanes depth d : ℕ)
+noncomputable def firstOpening (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (lanes depth d : ℕ)
     (xs : List (ℕ × List F × List D)) (cap : Cap D) (p : Fin (2 ^ d)) : Option (ℕ × List F × List D) :=
   (xs.filter fun x => decide (x.1 = p.val ∧ Verified H E cap lanes depth x)).head?
 
@@ -376,22 +376,22 @@ noncomputable def firstOf (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (la
 the empty pair when either run has none. -/
 noncomputable def opOfPair (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (lanes depth d : ℕ)
     (xs xs' : List (ℕ × List F × List D)) (cap : Cap D) (p : Fin (2 ^ d)) : List UInt8 × List UInt8 :=
-  match firstOf H E lanes depth d xs cap p, firstOf H E lanes depth d xs' cap p with
+  match firstOpening H E lanes depth d xs cap p, firstOpening H E lanes depth d xs' cap p with
   | some x, some y => Merkle.openCollPair H E p.val x.2.1 y.2.1 x.2.2 y.2.2
   | _, _ => ([], [])
 
-theorem firstOf_of_isSome {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {lanes depth d : ℕ}
+theorem firstOpening_of_isSome {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {lanes depth d : ℕ}
     {xs : List (ℕ × List F × List D)} {cap : Cap D} {p : Fin (2 ^ d)}
-    (h : (opOf H E lanes depth d xs cap p).isSome) : ∃ x, firstOf H E lanes depth d xs cap p = some x := by
+    (h : (opOf H E lanes depth d xs cap p).isSome) : ∃ x, firstOpening H E lanes depth d xs cap p = some x := by
   unfold opOf at h
   rw [Option.isSome_map] at h
   exact Option.isSome_iff_exists.1 h
 
 open Classical in
-theorem firstOf_some {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {lanes depth d : ℕ}
+theorem firstOpening_some {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {lanes depth d : ℕ}
     {xs : List (ℕ × List F × List D)} {cap : Cap D} {p : Fin (2 ^ d)} {x : ℕ × List F × List D}
-    (h : firstOf H E lanes depth d xs cap p = some x) : x.1 = p.val ∧ Verified H E cap lanes depth x := by
-  unfold firstOf at h
+    (h : firstOpening H E lanes depth d xs cap p = some x) : x.1 = p.val ∧ Verified H E cap lanes depth x := by
+  unfold firstOpening at h
   have hmem := List.mem_of_mem_head? h
   rw [List.mem_filter, decide_eq_true_eq] at hmem
   exact hmem.2
@@ -402,10 +402,10 @@ theorem opOf_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) 
     (h1 : (opOf H E lanes depth d xs cap p).isSome) (h2 : (opOf H E lanes depth d xs' cap p).isSome)
     (hne : opOf H E lanes depth d xs cap p ≠ opOf H E lanes depth d xs' cap p) :
     Hash.Collision H (opOfPair H E lanes depth d xs xs' cap p).1 (opOfPair H E lanes depth d xs xs' cap p).2 := by
-  obtain ⟨x, hx⟩ := firstOf_of_isSome h1
-  obtain ⟨y, hy⟩ := firstOf_of_isSome h2
-  obtain ⟨hxp, hxv⟩ := firstOf_some hx
-  obtain ⟨hyp, hyv⟩ := firstOf_some hy
+  obtain ⟨x, hx⟩ := firstOpening_of_isSome h1
+  obtain ⟨y, hy⟩ := firstOpening_of_isSome h2
+  obtain ⟨hxp, hxv⟩ := firstOpening_some hx
+  obtain ⟨hyp, hyv⟩ := firstOpening_some hy
   have hox : opOf H E lanes depth d xs cap p = some (rowFin lanes x.2.1) :=
     congrArg (Option.map fun x : ℕ × List F × List D => rowFin lanes x.2.1) hx
   have hoy : opOf H E lanes depth d xs' cap p = some (rowFin lanes y.2.1) :=
