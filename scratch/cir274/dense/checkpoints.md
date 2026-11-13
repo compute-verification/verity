@@ -7,3 +7,4 @@
 - 10:17Z DENSE: join trial: select 026c3f93d4 (merge of join 95784be3d2, tree fe07c882dedb). Value check r20261113-101643-b602 running (diff applied, sha df893243); census refused under --cwd source (shared tree), relaunched with --cwd clone.
 - 10:22Z DENSE: census r20261113-101728-9378 (026c3f93d4 + hunk): six sets digest 04fcba3603a6c805, only StopCheck unlowered, the three facts hold. Test fixed at 8830d95095, rerunning. Value check b602 evaluating.
 - 10:28Z DENSE: tests at 8830d95095: 9d26 (join tests xfail plain, pass with the hunk), 57de (seven node-window files 60 passed, 2 xfailed). Waiting on value check b602.
+- 10:37Z DENSE: join6.md drafted; value check b602 still running.
