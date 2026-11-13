@@ -35,7 +35,8 @@
 #                         to TREE_PIN too, before the warm and the audit (exit 66). The clone is removed with the job's
 #                         directory. Unset: the tree is the directory the job starts in
 # The job drops the PYTHONPATH it was started with: the build, the warm, the audit, the public copy and the reader all run
-# in the tree's own environment (`uv sync`'s), on the tree's own packages, whatever commit the run's source is.
+# in the tree's own environment (`uv sync`'s), on the tree's own packages, whatever commit the run's source is. Once the
+# build has made that environment, the imports the public copy and the reader make are held to the tree (exit 64).
 # Once the audit has sampled, one line says the sampled member's circuit file's bytes and the seconds a table gives the
 # audit from there to its end: the kept run's stages' seconds, those that follow the member scaled to its circuit file.
 # The table is an estimate, no measurement, and nothing in the job acts on it.
@@ -270,6 +271,15 @@ for f in "$PY" "$leanb/flock-verify" "$leanb/flock-firewall" "$bin"; do
   [ -x "$f" ] || { step "build: no ${f##*/} after it"; exit 6; }
 done
 step "build done"
+# what the public copy and the reader import after the audit, held before the warm and the audit: the tree's interpreter,
+# started outside the tree's directory as they start it, reads served_integrity.py's imports and `verity` from the tree
+imp=$(cd / && "$PY" -c 'import sys
+sys.path.insert(0, sys.argv[1] + "/benchmarks/one_stage")
+import served_integrity, verity
+print(verity.__file__)' "$TREE" 2> "$OUT/imports.err" | tail -1)
+[ -n "$imp" ] && [ "$imp" -ef "$TREE/verity/__init__.py" ] \
+  || { step "IMPORTS: the tree's interpreter does not read served_integrity.py's imports from the tree (verity is ${imp:-not imported}; out/imports.err): the public copy and the reader's answer would fail after the audit, so the job ends before the warm and the audit"; exit 64; }
+step "the imports: the tree's interpreter reads served_integrity.py's imports and verity from the tree"
 if [ -n "${TREE_INPUT:-}" ]; then  # the pin a local session will take, by the tree's own function, held before the warm and the audit
   pin=$("$PY" -c 'import sys
 from pathlib import Path
