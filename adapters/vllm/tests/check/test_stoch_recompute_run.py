@@ -53,12 +53,14 @@ def _launch(event: int, step: int, kernel: str, args: dict, constexprs: dict) ->
 def _capture(root: Path, *, served_xor: int | None = None, without_launch: tuple[str, int] | None = None, without_logits: tuple[int, ...] = (),
              without_arg: str | None = None, masked_xor: int | None = None, device_seed: int | None = None, header_seeds: dict | None = None,
              manifest_seeds: dict | None = None, header_first: bool = True, attested_lag: bool = True,
-             header_sampling: Any = HEADER_SAMPLING) -> tuple[Path, Path]:
+             header_sampling: Any = HEADER_SAMPLING, top_p_arg: str = "P", masked_dtype: str = "float32") -> tuple[Path, Path]:
     """Write the capture under `root/capture` and its workload manifest; return (the run directory, the manifest).  The keywords
     each change one thing: the served token of step `served_xor`'s first row, a launch that is absent (`(kernel, step)`), steps whose
     logits rows were not snapshotted, a small buffer of the Gumbel launch that was not, one word of step `masked_xor`'s masked row,
     the seed the kernels consumed for the first request, the seeds the header or the manifest declares, a log without its header, a
-    header that does not attest the scheduler's profile, the sampling the header's workload states (`ABSENT`: it states none)."""
+    header that does not attest the scheduler's profile, the sampling the header's workload states (`ABSENT`: it states none), the
+    name the mask launch gives its top-p buffer, the dtype the Gumbel launch states for its masked rows (under `bfloat16` the
+    snapshot holds each word's upper half)."""
     capture = root / "capture"
     (capture / "values").mkdir(parents=True)
     entries = []
@@ -85,7 +87,7 @@ def _capture(root: Path, *, served_xor: int | None = None, without_launch: tuple
                                 num_reqs=n, num_tokens=n, num_tokens_padded=n))
             logits = (np.sin(np.arange(n * V) * 0.37 + step).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16).reshape(n, V)
             alloc = 100 * (step + 1)
-            logits_view, masked_view = _view(alloc, (n, V), "bfloat16"), _view(alloc + 1, (n, V), "float32")
+            logits_view, masked_view = _view(alloc, (n, V), "bfloat16"), _view(alloc + 1, (n, V), masked_dtype)
             small = {"P": _view(alloc + 2, (n,), "float32"), "seeds_ptr": _view(alloc + 3, (n,), "int64"),
                      "pos_ptr": _view(alloc + 4, (n,), "int64"), "temp_ptr": _view(alloc + 5, (n,), "float32"),
                      "expanded_idx_mapping_ptr": _view(alloc + 6, (n,), "int32")}
@@ -97,7 +99,7 @@ def _capture(root: Path, *, served_xor: int | None = None, without_launch: tuple
                 masked.append(masked_row)
             mask_event, gumbel_event = 2 * step + 1, 2 * step + 2
             if without_launch != ("_topp_sb_mask_kernel", step):
-                log.write(_launch(mask_event, step, "topk_topp_triton._topp_sb_mask_kernel", {"P": small["P"]}, {"S": S}))
+                log.write(_launch(mask_event, step, "topk_topp_triton._topp_sb_mask_kernel", {top_p_arg: small["P"]}, {"S": S}))
             if without_launch != ("_gumbel_sample_kernel", step):
                 log.write(_launch(gumbel_event, step, "gumbel._gumbel_sample_kernel",
                                   {"logits_ptr": masked_view} | {k: v for k, v in small.items() if k != "P"}, {}))
@@ -106,13 +108,13 @@ def _capture(root: Path, *, served_xor: int | None = None, without_launch: tuple
             masked_words = np.concatenate(masked)
             if masked_xor == step:
                 masked_words[3] ^= 1
-            put(gumbel_event, "logits_ptr", masked_view, masked_words, step)
+            put(gumbel_event, "logits_ptr", masked_view, masked_words >> 16 if masked_dtype == "bfloat16" else masked_words, step)
             consumed = {"P": [_f32(TOP_P)] * n, "seeds_ptr": [device_seed if device_seed is not None and r == REQUESTS[0][0] else s
                                                               for r, s in REQUESTS],
                         "pos_ptr": [pos] * n, "temp_ptr": [_f32(TEMPERATURE)] * n, "expanded_idx_mapping_ptr": list(range(n))}
             for arg, words in consumed.items():
                 if arg != without_arg:
-                    put(mask_event if arg == "P" else gumbel_event, arg, small[arg], words, step)
+                    put(*((mask_event, top_p_arg) if arg == "P" else (gumbel_event, arg)), small[arg], words, step)
             if served_xor == step:
                 tokens[0] ^= 1
             if without_launch != ("SampleEnd", step):
@@ -294,6 +296,27 @@ def test_a_fact_the_kernels_consumed_that_was_not_snapshotted_is_not_tied_to_the
     assert rep["rows"][0]["device_facts_not_snapshotted"] == missing and rep["rows"][0]["device_facts_checked"] == checked
     assert rep["reasons"][0] == (f"step 0 row 0 (a): the kernel-consumed {', '.join(missing)} not snapshotted -- the declared value cannot be "
                                  "tied to the execution at this step")
+
+
+def test_the_top_p_the_mask_kernel_consumed_is_read_under_its_buffers_other_name(tmp_path):
+    run, manifest = _capture(tmp_path, top_p_arg="p_ptr")
+    rep = _recompute(run, manifest)
+    s = rep["summary"]
+    assert (s["verdict"], rep["reasons"], s["device_facts_all_match"], s["device_facts_rows"]) == ("PASS", [], True, 6)
+    assert all(r["device"]["top_p"] == pytest.approx(TOP_P) and r["device_facts_not_snapshotted"] == [] for r in rep["rows"])
+
+
+def test_a_masked_row_its_launch_states_in_bfloat16_is_held_to_the_definitions_as_the_fp32_of_its_values(tmp_path):
+    """The snapshot holds the upper half of each word of the Definition's masked row.  Read as fp32 it is that word with a zero
+    lower half: a lane the mask put out (-inf) is equal, and a lane whose word has a lower half differs and is named."""
+    run, manifest = _capture(tmp_path, masked_dtype="bfloat16")
+    rep = _recompute(run, manifest)
+    assert (rep["summary"]["verdict"], rep["summary"]["rows"], rep["summary"]["masked_rows_all_equal"]) == ("FAIL", _tally(exact=6), False)
+    for r in rep["rows"]:
+        diffs = [(int(d["recomputed"], 16), int(d["observed"], 16)) for d in r["masked_row_first_diffs"]]
+        assert 0 < r["masked_row_equal_lanes"] < V and len(diffs) == min(8, V - r["masked_row_equal_lanes"])
+        assert all(observed == recomputed & 0xFFFF0000 != recomputed for recomputed, observed in diffs)
+    assert rep["reasons"][0].startswith("step 0 row 0 (a): the kernel-consumed masked fp32 row differs from TemperatureScale->TopPMask")
 
 
 def test_a_header_that_disagrees_with_the_manifest_fails_and_the_manifest_is_the_declared_fact(tmp_path):
