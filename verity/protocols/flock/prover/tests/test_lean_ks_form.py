@@ -20,7 +20,7 @@ from verity.protocols.spot.verifier.one_stage import proofs as PF
 
 HERE = Path(__file__).resolve().parent
 LEAN = Path(__file__).resolve().parents[5] / "verity/protocols/flock/verifier"
-VERIFIER = Path(__file__).resolve().parents[5] / "verity/protocols/flock/agreement"
+VERIFIER = Path(__file__).resolve().parents[5] / "verity/protocols/flock/prover/agreement"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 HIDDEN = HERE / "fixtures" / "hidden-outputs" / "flat"
 FLAT = "verity/flock-circuit@f5df3bbc+seed-injection"
