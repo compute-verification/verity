@@ -120,7 +120,10 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     measured, the only line with skipped work). (A) replayed alone, which needs batch-invariant kernels, is a dotted
     comparison at one machine's verification phase that pays their measured tax (`REPLAYS`, `BATCH_INVARIANT`). (A′) is (A)'s serving and tax on the `partition` card `per-expert`'s cut (the MoE cut per
     expert), dash-dot, labelled with the card's `label` (what of the cut is built, checked, proved and served), a
-    line only for a model with that card. A new configuration, such as another cut, is a new entry with its own line.
+    line only for a model with that card; (A″) is the same on the card `head-scores-values`'s cut (a sparse-attention
+    head's key block as its scores unit and its values units on column blocks), a cost model's lines and not a bound
+    while no unit writes the key rows those units each commit. A new configuration, such as another cut, is a new
+    entry with its own line.
   - A two-stage line's first stage is the one the verifier runs: a verification phase, one committed trace and the
     sample over it, samples a whole number K of its replay blocks, never fewer than one
     (`optimize.two_stage_design`'s `registration`, `optimize.registration_sample`). A verification phase spans the
@@ -158,10 +161,10 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     the first it meets (`total_cost.limits`): a session of more tables than the GPU prover (1), the CPU prover and
     the Lean verifier (64), the challenger's coin commitment (127) or the proved scope (200) takes; more lines of
     session coins than one challenger session's release log holds; or a second draw of more bytes of live coins
-    than one layout holds. Its bound is then the cost model's alone, of a deployment no code runs. (A) and (A′) are
-    plotted at each of the three sizes, dark to light, and (B) at one machine's; each series gives K, its sessions
-    and the shares of its proving in the phase's statements and on padding. No code builds a verification phase of
-    a datacenter's size, one committer over every machine's boundary rows: that line is the cost model's.
+    than one layout holds. Its bound is then the cost model's alone, of a deployment no code runs. (A), (A′) and
+    (A″) are plotted at each of the three sizes, dark to light, and (B) at one machine's; each series gives K, its
+    sessions and the shares of its proving in the phase's statements and on padding. No code builds a verification
+    phase of a datacenter's size, one committer over every machine's boundary rows: that line is the cost model's.
   - Exfiltration: (A) and (A′) in the patterns' form (`card_influenceTwo_le_patterns`), under its two modeling
     conditions (each request serves at most S bits, and no proof block is shared across requests), with the capped
     sets' form (`card_influenceTwo_le_served_min`) at one machine's verification phase beside each, thin and dashed;

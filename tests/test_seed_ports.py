@@ -66,7 +66,7 @@ KEY_COUNTS = {
 }
 WINDOWS = {
     "verity/definitions/ops/boolean/shared_row.py::WINDOW":
-        "SharedRowWindow's j and SharedRowRead's PORT_j, a proof block's segment of a shared row (CIR-113's form (B))",
+        "SharedRowWindow's j and SharedRowRead's PORT_j, a proof block's segment of a shared row (the shared-row commit's form (B))",
 }
 TESTS = {
     "verity/circuits/tests/test_ports.py::SEED": "the port rules' seed vectors (E_COIN_REUSE, E_PORT_KIND, batched seeds)",

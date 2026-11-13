@@ -37,7 +37,7 @@ def n_of(shape: str) -> int:
     return int(shape.split("n")[1].split("k")[0])
 
 
-def form(name, shape, types, ctype, con, extra, rs, sp=False) -> str:
+def form(name: str, shape: str, types: str, ctype: str, con: str, extra: str, rs: bool, sp: bool = False) -> str:
     nacc = 64 * n_of(shape) // 128
     regs = ", ".join(f"%{i}" for i in range(nacc))
     outs = ", ".join(f'"+{con}"(d[{i}])' for i in range(nacc))

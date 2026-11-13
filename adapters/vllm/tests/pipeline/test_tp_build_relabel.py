@@ -394,3 +394,25 @@ def test_compare_dirs_names_a_file_it_cannot_read_as_a_difference(tmp_path):
     (a / "result.json").write_text("{}")
     assert RB.compare_dirs(str(a), str(b))["files"] == ["descriptor.json.gz", "result.json"], "a summary that is not JSON too"
     assert RB._where({"file": "x", "only_in": "real"}) == "only in the real directory"
+
+
+def test_compare_dirs_reads_the_real_side_of_a_telemetry_file_before_it_opens_the_other(tmp_path, monkeypatch):
+    """A telemetry file is read one side after the other: the real directory's is opened and parsed before the relabel's is opened.  So
+    where neither side can be read, the difference says why the real side could not, and the relabel's file is not opened."""
+    a, b = tmp_path / "a", tmp_path / "b"
+    for d in (a, b):
+        d.mkdir()
+    (a / "result.json").write_text("{")
+    (b / "result.json").write_text("{}")
+    opened: list[str] = []
+
+    def opens(path, *args, **kw):
+        opened.append(Path(path).parent.name)
+        if Path(path).parent.name == "b":
+            raise PermissionError(13, "Permission denied", str(path))
+        return open(path, *args, **kw)
+
+    monkeypatch.setattr(RB, "open", opens, raising=False)
+    diff = RB.compare_dirs(str(a), str(b))
+    assert diff is not None and diff["file"] == "result.json" and diff["unreadable"].startswith("JSONDecodeError"), diff
+    assert opened == ["a"]
