@@ -203,8 +203,8 @@ def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingres
         t1 = time.monotonic()
         got = decode_full(data, rec, reg)
         by = bits_by_window(data, rec, reg)
-        unordered = sum(string_of([CV.Window(w.arrived) for w in wins], reg, tails)[1])
-        untimed = sum(string_of([CV.Window() for _ in wins], reg, tails)[1])
+        unordered = sum(string_of([CV.Advice(w.arrived) for w in wins], reg, tails)[1])
+        untimed = sum(string_of([CV.Advice() for _ in wins], reg, tails)[1])
         row[name] = {"bits": sum(by.values()), "by_window": by, "max_window": max(by.values()),
                      "order_bits": sum(by.values()) - unordered, "timing_bits": sum(by.values()) - untimed,
                      "bytes": len(data), "round_trip": got.advice == adv and got.streams == streams(adv, rec),
@@ -257,7 +257,7 @@ def held_out_books(residuals: Sequence[dict[str, Any]]) -> list[dict | None]:
     """For each trace, the book `code_v1.fit_book` fits on every other trace's windows (None where it has none), as a
     registration would fix it from history before the run; for a trace under the certified tick, where no window's
     segment codes anything, the uniform book under `TICK_TABLE_CAPS`."""
-    runs = [None if "error" in r else [CV.Window(**w) for w in r["windows"]] for r in residuals]
+    runs = [None if "error" in r else [CV.Advice(**w) for w in r["windows"]] for r in residuals]
     out: list[dict | None] = []
     for k, mine in enumerate(runs):
         others = [w for j, w in enumerate(runs) if j != k and w is not None]
