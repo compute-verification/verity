@@ -27,7 +27,7 @@ to run the same words through another architecture's instruction of the same sha
                                                                        seed 20260922, HOPPER_E4M3_K32 accumulators, bare FP32 word
 
 ``bench-instances/v1`` is loaded from ``--root`` (the built arrays; ``python -m verity_numerical.bench.instances build``) after every
-array's sha256 is checked against the pinned ``--manifest`` (default the repository's ``fixtures/bench-instances/v1/manifest.json``);
+array's sha256 is checked against the pinned ``--manifest`` (default the repository's ``benchmarks/numerical/bench-instances/v1/manifest.json``);
 the manifest's own sha256 is the recorded ``manifest_sha256``.  The synthetic sets have no files: their ``manifest_sha256`` is
 ``instances_digest(n)`` (a digest of the recipe: relation, seed, n, K), as the chain benches record it.
 
@@ -383,7 +383,7 @@ def load_instances(spec: str, args: argparse.Namespace) -> InstanceSet:
         lo, hi = int(lo_s), int(hi_s)
     only = [int(t) for t in args.only_ids.split(",") if t] if args.only_ids else None
     if dataset == BENCH_INSTANCES:
-        manifest = Path(args.manifest) if args.manifest else REPO / "fixtures" / "bench-instances" / "v1" / "manifest.json"
+        manifest = Path(args.manifest) if args.manifest else REPO / "benchmarks" / "numerical" / "bench-instances" / "v1" / "manifest.json"
         return load_bench_instances(tier, Path(args.root) if args.root else None, manifest, lo, hi, only)
     if spec in SYNTHETIC:
         return load_synthetic(SYNTHETIC[spec], lo, hi, only, procs=args.procs)
@@ -553,7 +553,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--instruction", default=None, help="instruction id (default: the set's target's; see tc_probe.INSTRUCTIONS)")
     ap.add_argument("--arch", default=None, help="override the instruction's nvcc arch")
     ap.add_argument("--root", default=None, help="bench-instances/v1 directory holding the built arrays (default: the manifest's directory)")
-    ap.add_argument("--manifest", default=None, help="the pinned bench-instances/v1 manifest (default fixtures/bench-instances/v1/manifest.json)")
+    ap.add_argument("--manifest", default=None, help="the pinned bench-instances/v1 manifest (default benchmarks/numerical/bench-instances/v1/manifest.json)")
     ap.add_argument("--range", default=None, metavar="LO:HI", help="instance ids [LO, HI) (default: the whole tier)")
     ap.add_argument("--only-ids", default=None, metavar="ID,ID,...", help="re-run these instances alone")
     ap.add_argument("--repeat", type=int, default=1, help="run the replay this many times and count words that differ between repetitions")
