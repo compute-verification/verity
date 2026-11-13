@@ -111,13 +111,17 @@ def answer(case: Any) -> dict:
                     evidence=_outside, digest=lambda c: c[1], check=_outside)
 
 
+def refusal(params: Any) -> Exception:
+    """What `params_of_json` raises on the parameters: the form's own refusal, a delegated decoder's (`Delegated`), or
+    the `ValueError` at the mirror's end."""
+    try:
+        params_of_json(params)
+    except (Reject, ValueError) as e:
+        return e
+    raise AssertionError("params_of_json returned: it raises on every input")
+
+
 def reason_mirrored(params: Any) -> bool:
     """Whether the parameters' refusal is the form's own, whose reason the twin gives word for word, rather than a
     delegated decoder's, which is held to the Lean by its verdict."""
-    try:
-        params_of_json(params)
-    except Delegated:
-        return False
-    except (Reject, ValueError):
-        pass
-    return True
+    return not isinstance(refusal(params), Delegated)
