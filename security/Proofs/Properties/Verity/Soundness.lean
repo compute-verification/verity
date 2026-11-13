@@ -101,15 +101,16 @@ theorem challenger_compiled {P : AuditorPins} {k : _root_.Spot.Challenger.Challe
   simp only [AuditorPins.compiled, AuditorPins.HoldsChallenger]
   rcases P.keys.head? with _ | ⟨role, key, ⟨N, W, H⟩, marks⟩
   · simp
-  · by_cases hr : role = .challenger <;> simp [hr, Option.filter, Composites.sameKey, eq_toArray_iff, and_assoc]
+  · by_cases hr : role = .challenger <;> simp [hr, Option.filter, Composites.sameKey, and_assoc]
 
 /-- **A key passes the compiled memory pin exactly where it is the pinned memory challenger's.** -/
 theorem memory_compiled {P : AuditorPins} {t : ByteArray} :
     P.compiled.memory.any (fun m => t.data.toList == m.data.toList) = true ↔ P.HoldsMemory t := by
-  simp only [AuditorPins.compiled, AuditorPins.HoldsMemory]
-  rcases P.keys.find? (fun p => decide (p.role = .memoryChallenger)) with _ | q
-  · simp
-  · simp [eq_toArray_iff]
+  have h : ∀ o : Option AuditorPin, (o.map fun q => (⟨q.key.toArray⟩ : ByteArray)).any
+      (fun m => t.data.toList == m.data.toList) = true ↔ ∃ q ∈ o, t.data.toList = q.key := by
+    intro o
+    cases o <;> simp [eq_toArray_iff]
+  exact h _
 
 /-- **A key passes the compiled certifier pins exactly where it is a pinned network certifier's.** -/
 theorem certifier_compiled {P : AuditorPins} {k : _root_.Spot.Challenger.ChallengerKey} :
@@ -119,7 +120,7 @@ theorem certifier_compiled {P : AuditorPins} {k : _root_.Spot.Challenger.Challen
     Function.comp_apply, decide_eq_true_eq, and_assoc]
   refine exists_congr fun q => and_congr_right fun _ => and_congr_right fun _ => ?_
   rcases q with ⟨role, key, ⟨N, W, H⟩, marks⟩
-  simp [Composites.sameKey, eq_toArray_iff, and_assoc]
+  simp [Composites.sameKey, and_assoc]
 
 /-- **One sampled component's parameters pass the compiled pin check exactly where they name only what the pins
 hold**, as `SpotPinned` states it of each. -/
