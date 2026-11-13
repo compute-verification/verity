@@ -1,5 +1,28 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 12:10 AM PST Fri 13 Nov: MOVES-A's branch (step 4a)
+
+- **`origin/cursor/top-moves-a-chain2-4863` at `79b41f0fefe2a5049677e663cb2b3e2480e4f9f0`.** It replaces
+  `cursor/top-moves-a-41d7-pr2b` for step 4a. Its base is `6afe9086bbb`, chain 1's head merged with `main`
+  `9182900fb94e`. Above the base: seven kept hand commits (`4c71bb55043` to `0ef2ccad699`), the three maps' commit
+  `8ffe3a1972e`, two commits of `[split]` rows for the difftest map (`77c10eaecf1`: `tests/tree.toml` and
+  `verity/periods/tests/test_periods_difftest.py`; `567a30cef52`: `tests/import_order.toml`, which names
+  `verity/difftest` three times), then the three tool commits, each certified a pure move on that base: artifacts
+  `225c1b17933` (1 rename, 78 path-only edits), live_challenger `0fdd74de5de` (14 renames, 87), difftest `79b41f0fefe`
+  (14 renames, 107). Its run with the three certificates: `r20261113-075337-c71d`.
+- **How you take it:** the kept hand commits, the maps' commit and the two `[split]` commits by cherry-pick; the three
+  tool commits you make yourself by running the mover on your tree, in that order.
+- **It dropped** its `test_boundaries` `NO_UNIT` commit, because chain 1's `tests/test_boundaries.py` already writes
+  the challenger's paths from the root.
+- **The listing:** the live_challenger and difftest moves rewrite paths in `tests/import_order.toml`
+  (`verity/composite` to `verity/protocols/compose`, `verity/difftest` to `tools/difftest`). Your one listing commit
+  must agree with them: regenerate without `--grow`, as chain 1 did, and bring me any held line unwritten.
+- **Keys:** the difftest move changes 56 Lean inputs and the artifacts move one (`tools/verity/check/check.py`). That
+  is what lean's records commit, last on the staged head, is for.
+- **Roots:** after the difftest map, every later map whose `[roots]` name `verity/difftest/python/verity_difftest`
+  (compute-research's two among them) needs its roots restated in one hand commit before its mover runs.
+- It ran no suite on this tree; 13 lines still name old paths (its note `lanes/top/20261112T2320Z-draft-moves-a.md`).
+
 ## 11:58 PM PST Thu 12 Nov: the base, and compute-research's heads
 
 - **The base of the 2:15 AM PST rehearsal head is the commit ci names on TOP-398 for the staged Lean batch's check**
