@@ -11,16 +11,16 @@ version of each word primitive, the same function on bits (`verity.circuits.bool
     F32Sqrt_v2         (x: Array<32, Value<1>>) -> Array<32, Value<1>>          word view: F32Sqrt_v1 (ref_prims)
     I64ToI32_v2        (t: Array<64, Value<1>>) -> Array<32, Value<1>>          word view: I64ToI32_v1 (ref_prims)
 
-`DivFullScaleA_v4` is `verity.definitions.ops.boolean.mufu.div_full_scale_a_gpu` (`DivFullScaleA_v3`'s scalings, each an FMUL whose
+`DivFullScaleA_v4` is `verity.circuits.ops.boolean.mufu.div_full_scale_a_gpu` (`DivFullScaleA_v3`'s scalings, each an FMUL whose
 NaN is 0x7FFFFFFF); `F32Sub_v3` is FADD of a and -b with every NaN result 0x7FFFFFFF, so no operand NaN's payload or sign
 survives and numpy's quieting rule does not arise, and `F32Sub_v4` is the same FADD with every NaN 0x7FC00000 (`ref_prims.F32Sub_v1`
-canonicalizes numpy's NaN); the `fma.rm.f32` pair is `verity.definitions.silicon.fp.f32_fma`
+canonicalizes numpy's NaN); the `fma.rm.f32` pair is `verity.circuits.silicon.fp.f32_fma`
 rounded toward -infinity, every NaN 0x7FC00000 (v3) or 0x7FFFFFFF (v4); `F32GtStrict_v2` is
-`verity.definitions.ops.boolean.softmax.f32_gt` (NaN false, +0 == -0).
+`verity.circuits.ops.boolean.softmax.f32_gt` (NaN false, +0 == -0).
 
-`F32MaxRef_v2` orders the operands by `verity.definitions.ops.boolean.scalar.f32_key` (one key for +0 and -0) and takes b only
+`F32MaxRef_v2` orders the operands by `verity.circuits.ops.boolean.scalar.f32_key` (one key for +0 and -0) and takes b only
 when its key is strictly greater, so a tie keeps a; a NaN on either side gives 0x7FC00000. `F32Sqrt_v2` is
-`verity.definitions.ops.boolean.sqrt.f32_sqrt_rn` (`PouwF32SqrtRn_v2`'s circuit: nearest even, subnormals, √-0 = -0, √+inf =
+`verity.circuits.ops.boolean.sqrt.f32_sqrt_rn` (`PouwF32SqrtRn_v2`'s circuit: nearest even, subnormals, √-0 = -0, √+inf =
 +inf) with its NaN word 0x7FFFFFFF made 0x7FC00000: no other root has bits 22 to 30 all set, so their AND marks it and clears
 bits 0 to 21; `benchmarks/f32_exhaustive/run.py boolean F32Sqrt` holds it to its word on all 2^32 words. `I64ToI32_v2` keeps
 t's low word when bits 31 to 63 are all equal (t fits in an i32), else gives 0x80000000.
@@ -30,11 +30,11 @@ from __future__ import annotations
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, and_reduce, const_bits, mux, or_reduce
 from verity.circuits.boolean.trace import definition
-from verity.definitions.ops.boolean import mufu as BM
-from verity.definitions.ops.boolean import softmax as SM
-from verity.definitions.ops.boolean.scalar import f32_key, gt_u
-from verity.definitions.ops.boolean.sqrt import f32_sqrt_rn
-from verity.definitions.silicon import fp
+from verity.circuits.ops.boolean import mufu as BM
+from verity.circuits.ops.boolean import softmax as SM
+from verity.circuits.ops.boolean.scalar import f32_key, gt_u
+from verity.circuits.ops.boolean.sqrt import f32_sqrt_rn
+from verity.circuits.silicon import fp
 from verity.circuits.types import Array
 
 from . import moe as M

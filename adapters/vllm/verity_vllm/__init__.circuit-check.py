@@ -34,7 +34,7 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
     mHC, FlashMLA, compressors, routers and Marlin MoE; the int8 attention row, whose head dim is a multiple of 32), each at a
     binding its Definition module's sidecar already checks, so they add no task."""
     from verity.circuits.boolean.trace import word_of
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.definitions.registry import dsv4_compressor as DC, dsv4_qnorm_insert as DQ
     from verity.definitions.registry import flashmla as FM, flashmla_prefill as FP
     from verity.definitions.registry import marlin_moe as MM
@@ -80,7 +80,7 @@ def _served_kind_statics() -> dict[str, dict[str, Any]]:
 def _vocabulary_bindings() -> list[tuple[str, Any]]:
     """Every frontend vocabulary kind (the Definitions the torch frontend binds served ops to) at small statics, or at
     `_served_kind_statics`' when no small table binds it: (label, the bound Definition, or the error)."""
-    from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32
+    from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32
     from verity_vllm import TargetProfile
     from verity_vllm.program.frontend.rules import vocab as V
     from verity.definitions.registry import prims as P
