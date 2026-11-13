@@ -159,10 +159,11 @@ def committed(key: bytes, calls: list[tuple[int, int, int, int, int]], s: int = 
     them (u16 words, an FP32 word's low first), and each weight's B rows (N rows of K FP32 words, a random BF16 weight
     widened), committed as PoUW commits them (`audit.commit_rows` at `weight_binding`, owner -2, salted at `HM96_WEIGHTS`
     plus the weight: `clear_audit.Prover`'s tree, the device's `weight_roots`)."""
-    rng, mm, rows, b, weights = np.random.default_rng(1), [], {}, {}, {}
+    rng, mm, b, weights = np.random.default_rng(1), [], {}, {}
+    rows: dict[str, np.ndarray] = {}
     for c, (i, m, real, k, n) in enumerate(calls):
         x, y = (rng.integers(0, 1 << 16, (real, w), dtype=np.uint16) for w in (k, n))
-        a = np.zeros((m, k), "<u4")
+        a: np.ndarray = np.zeros((m, k), "<u4")
         a[:real] = x.astype("<u4") << 16
         root_a = commit_rows(activation_binding(SALT, i), i, [r.tobytes() for r in a], HM96, key, i).commitment.root
         mm.append({"index": i, "m": m, "k": k, "n": n, "weight": c, "real_rows": real, "root_a": root_a.hex(),

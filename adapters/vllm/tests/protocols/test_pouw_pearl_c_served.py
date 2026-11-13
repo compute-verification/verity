@@ -148,7 +148,8 @@ def test_a_step_ends_its_pass_once_under_a_committer_that_patched_the_runner_fir
     original = vars(Stepping)["execute_model"]
 
     def stepped(runner_setting):
-        runner, seen, ends = Stepping(), [], []
+        runner, ends = Stepping(), []
+        seen: list[int] = []
         run = SimpleNamespace(entry=ENTRY, details={}, cur=SimpleNamespace(matmuls=[]),
                               end_pass=lambda step=False: ends.append(step))
         first, h = _committed(runner, seen), hooks.Hooks(ENTRY)
@@ -162,7 +163,8 @@ def test_a_step_ends_its_pass_once_under_a_committer_that_patched_the_runner_fir
     ends, runner = stepped(True)
     assert ends == [True, True] and "execute_model" not in vars(runner) and vars(Stepping)["execute_model"] is original
 
-    runner, seen, ends = Stepping(), [], []
+    runner, ends = Stepping(), []
+    seen: list[int] = []
     run = SimpleNamespace(entry=ENTRY, details={}, cur=SimpleNamespace(matmuls=[]), end_pass=lambda step=False: ends.append(step))
     h = hooks.Hooks(ENTRY)
     PP.hook_steps(h, run, 1, None, runner)
