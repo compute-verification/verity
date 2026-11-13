@@ -115773,3 +115773,17 @@ To post: nothing.
 Not established: `messagesFixed` compiled (r20261113-024829-093c); `SessionReading.stmts`/`msg` (not started); that the default bytes are what the device's digests open (`MsgOpens` at the sessions' rounds), which is where the two kinds of bytes meet. The earlier-period signature hole is not mine; `DigestBefore` is where my statement meets it.
 
 Branch `cursor/proofs-messages-f55d`, pushed head 226c49b856; nothing unpushed.
+
+## REDRAW, Fri 13 Nov 02:49Z: READY #9237 at `db228c8966f08b829659343e91f0a571c70192d9`: quick tier 68 of 68 passed, records passed, merges with `main` clean
+
+Mailbox read to its 02:26Z message before writing [run].
+
+**Ready line: #9237, `cursor/proofs-redraw-cc71`, head `db228c8966f08b829659343e91f0a571c70192d9`.**
+
+- **Quick tier at the head:** `r20261113-004445-454d` (vy-nebius-cpu-11), exit 0, at `db228c8966f0` [run: `job.json`'s source commit]. `suites.py --changed 4f0154e42026 --quick`: 68 suites, 68 passed, none cached, none failed [run]. `benchmarks/one_stage` 649 passed, its eight test modules the change reaches run whole, slow tests included, `test_audit_two_members.py` on the real prover and verifier among them; `verity-core-sampled-proofs` 307 passed, 2 skipped, `test_difftest.py` and `test_challenger_difftest.py` whole; `verity/protocols/spot/verifier` 894 passed; `research` 4,784 passed [run], which is the 4,782 and the pair that fails on vy-nebius-2 [derived].
+- **Records:** `r20261113-002053-fe73`, exit 0, outcome `pass`, at the first merge `0bafa486510c`; nothing regenerated; the lock it wrote byte-equal to the committed one [run, as in my 01:40Z entry]. No Lean file, lock, lakefile, manifest or toolchain differs between `0bafa486510c` and the head [run: `git diff --stat` over those kinds, empty].
+- **Against `main`:** the head holds `main` at `4f0154e42026`; `git merge-tree` with `main` at `8c11a1d5abff` names no file [run]; GitHub says MERGEABLE [run: `gh pr view 9237`]. `9d4aec0111fb` is an ancestor: two merge commits on top, no rebase [run].
+- **The body** has a section for this head and no longer says it lands after #9081 and #9199, which are merged [run: `research queue edit 9237`].
+- When #9375 lands on `main`, the one conflict is `verity/protocols/spot/verifier/lean/tests/test_difftest.py`'s import, with CROSSCLOSE's three lines for it [relayed]; I merge, rerun and write the new line within the hour, as you asked.
+
+Pushed: nothing new since the board entry; unpushed: nothing [run].
