@@ -26,7 +26,7 @@ from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, workload_file
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR, pinned_hf_config
 from verity_vllm.program.model import INT8_EXACT_LMHEAD_QUANT, INT8_EXACT_QUANT
 from verity_vllm.program.predict import build as BUILD
-from verity_vllm.program.predict import dsv4
+from verity_vllm.program.predict import dsa, dsv4
 from verity_vllm.program.predict import node as NODE
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.build import Unexpressible, build_program
@@ -250,6 +250,19 @@ def test_mhc_reads_an_engine_without_env_and_refuses_a_config_without_its_quanti
     bare = {k: v for k, v in phi.hf_config.items() if k != "quantization_config"}
     with pytest.raises(Unexpressible, match="a checkpoint without its block-FP8 quantization_config"):
         dsv4.Net(Phi.from_json({**doc, "model": {**phi.model, "hf_config": bare}}), 1, 8)
+
+
+def test_dsa_reads_an_engine_without_env_as_under_no_switch(tmp_path):
+    """A φ whose engine states no `env` runs the sparse-attention decoder's all-reduce under no switch (`tp_allreduce.settings_of`
+    of an empty env), as one whose `env` is empty does, and a stated switch is read.  The first two part at a row past INDEX_TOPK
+    alone: an engine that states no environment is refused none, and an empty one states no canonical top-k."""
+    phi = _row_phi(GLM53, "GLM53", tmp_path)
+    doc, stated = phi.to_json(), {k: v for k, v in phi.engine.items() if k != "env"}
+    invariant, off = {"VLLM_BATCH_INVARIANT": "1"}, bool(stated.get("disable_custom_all_reduce"))
+    absent, empty, switched = (dsa.Net(Phi.from_json({**doc, "engine": e}), 1, 8)
+                               for e in (stated, {**stated, "env": {}}, {**stated, "env": invariant}))
+    assert absent.settings == empty.settings == settings_of(off, {}) != settings_of(off, invariant) == switched.settings
+    assert absent.long_rows is None and "VERITY_DSA_TOPK=None" in str(empty.long_rows)
 
 
 def test_a_phi_that_leaves_a_block_out_declares_nothing_in_it():
