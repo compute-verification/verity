@@ -4,13 +4,13 @@ The Torch-to-circuit translator: a traced torch model becomes a Program in which
 Definition. `derive` exports the model and walks its graph (the walk's state is `derive_context`), `rules/` holds the
 rules the walk applies, `targets` and `gemm_targets` bind a rule to the kernels of the served hardware, `target_profile`
 is the target a Program is derived for, and `emit` writes a finished derivation's runtime correspondence. `train_step`
-derives one training step as a Program, and the package's `__init__` re-exports the authoring frontend
-(`torch_frontend`), in which a Program is written by hand. Each module's docstring says what it holds.
+derives one training step as a Program. Each module's docstring says what it holds.
 
 ## What other packages import
 
 A module of this directory that another package of the adapter, a benchmark or a tool imports from declares those
-names in its `__all__`; a name outside that list is the translator's own. From the rest of the adapter:
+names in its `__all__`; a name outside that list is the translator's own. The package itself gives no name: each is
+imported from its module, and importing a module loads only what that module imports. From the rest of the adapter:
 `derive.derive_report`, the entry point (`pipeline`); `target_profile`'s `TargetProfile`, `DEFAULT_TARGET`,
 `ArtifactIdentity`, `parse_target_arg` and `profile_mismatches` (`engine`, `observe`, `pipeline`, `program`, `query`);
 the specs, launch contexts and tensor-core steps of `targets` (`program`, `observe`, `acquire`, `pipeline`);

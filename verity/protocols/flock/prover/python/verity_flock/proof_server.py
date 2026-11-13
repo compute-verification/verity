@@ -21,6 +21,11 @@
   challenger of its own (`verity_flock.challengers`, `serve --queue --tree-from`), whose session ends with the verifier's
   queue. Its audit holds every session the verifier served to the challenger's release log at once (no tree unused, none
   shared), so it runs at `close`, into ``challengers`` by verifier name, and a session counts only if its verifier's passed.
+* **One challenger session for every verifier** (``tree_from``, `serve`'s flags ``--tree-from ADDR [--tree-secret-file
+  F]``): every verifier takes its sessions' coin trees at the caller's address, a challenger session the caller opened
+  and closes, or its relay to one. The server starts no challenger and runs no audit: holding the sessions to that
+  session's release log is the caller's. With ``verify_ahead=0`` a verifier serves one session at a time, so a caller
+  that submits a session only once the one before has its records puts one session's rounds in that log at a time.
 
 `submit` returns a `Session` at once: `Session.result` waits for both sides' records, `Session.verdict` for the verdict of
 record. A process that exits ends its unfinished sessions as failures (`ProofServerError`) carrying its log's tail;
@@ -281,6 +286,8 @@ class ProofServer:
     the plain one. ``wide_leaf``: the wide level-0 leaf's statement version (`--wide-leaf`), which a session's two sides
     both carry, so every prover and verifier of the server does; off, fast100's.
     ``challenger``: each verifier on a challenger of its own (`--zk`, or ``FC_COINS=tree`` in ``env``).
+    ``tree_from``: every verifier's flags for the one challenger session the caller holds (module docstring), never with
+    ``challenger``.
 
     ``FC_VERIFIER_CPUS`` in the server's environment (a CPU list within its affinity, as taskset takes it) runs every
     verifier on those CPUs and every prover on the server's other CPUs (`taskset -c`), so a verifier's check of each
@@ -290,9 +297,13 @@ class ProofServer:
     def __init__(self, binary: str | os.PathLike, out: str | os.PathLike, *, devices: Sequence[int] | None = None,
                  provers: int = 1, verify_ahead: int = 2, verdicts: int = 4, route: Mapping[str, int] | None = None,
                  env: Mapping[str, str | None] | None = None, zk: bool = True, challenger: bool = False,
-                 wide_leaf: bool = False):
+                 wide_leaf: bool = False, tree_from: Sequence[str] | None = None):
         if provers < 1:
             raise ValueError(f"provers must be at least 1, not {provers}")
+        if challenger and tree_from:
+            raise ValueError("a verifier takes its sessions' coin trees from a challenger of its own (challenger) or from "
+                             "the caller's (tree_from), not both")
+        self.tree_from = list(tree_from or [])
         self.binary, self.out = str(binary), Path(out)
         self.out.mkdir(parents=True, exist_ok=True)
         self.devices: list[int | None] = list(devices) if devices else [None]
@@ -467,7 +478,8 @@ class ProofServer:
             cmd = [self.binary, "serve", *self._version, "--queue", "-", "--listen", "127.0.0.1:0",
                    "--out", str(self.out / base), "--circuit", str(st.circuit),
                    *([] if st.tmpl_unit is None else ["--tmpl-unit", str(st.tmpl_unit)]), "--tables", str(st.tables), "--pin", st.pin,
-                   "--operator", "proof-server", "--concurrency", str(self.verify_ahead + 1), *(flags if ch else [])]
+                   "--operator", "proof-server", "--concurrency", str(self.verify_ahead + 1),
+                   *(flags if ch else self.tree_from)]
             with self._lock:
                 v = self._verifiers[(st.pin, key)] = self._start(name, "verifier", (st.pin, key), cmd, self._env)
                 v.challenger, v.home = ch, self.out / base
