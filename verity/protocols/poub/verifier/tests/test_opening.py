@@ -13,10 +13,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
 from remote_bandwidth_fakes import Clock, Entropy
+
 from verity.commitments import gates
-from verity.protocols.poub.verifier import audit, codec, coins, opening as O, receipts
+from verity.protocols.poub.verifier import audit, codec, coins, receipts
+from verity.protocols.poub.verifier import opening as O
 from verity.protocols.poub.verifier.receipts import Plan
 
 N, L = 32, 16
