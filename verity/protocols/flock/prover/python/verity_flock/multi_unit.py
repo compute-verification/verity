@@ -74,8 +74,8 @@ def _lowering(name: str, C, n_in: int, out_widths: list, in_src: list, out_src: 
 
 def _fp8_pieces():
     from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import gemm as BG
-    from verity.definitions.ops.boolean import scalar as SC
+    from verity.circuits.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import scalar as SC
 
     return bind(BG.HopperE4m3QgmmaDot32), bind(SC.F32Mul), bind(SC.F32Fma), bind(BG.F2fpBf16)
 
