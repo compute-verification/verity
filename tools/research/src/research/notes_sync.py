@@ -746,10 +746,7 @@ def notes_branch(root: Path, remote: str = "origin") -> str | None:
 def _merged(path: Path) -> bytes | None:
     """A file's bytes with the labels off its conflict markers, which differ with the command that wrote them; None when it is
     not a file."""
-    try:
-        return re.sub(rb"(?m)^(<{7}|\|{7}|>{7}) .*$", rb"\1", path.read_bytes())
-    except OSError:
-        return None
+    return re.sub(rb"(?m)^(<{7}|\|{7}|>{7}) .*$", rb"\1", path.read_bytes()) if path.is_file() else None
 
 
 def _keep(root: Path, gitdir: Path, found: bool, orig: str = "") -> dict | None:
@@ -849,10 +846,7 @@ def end_operation(root: Path, gitdir: Path, op: str, found: bool = False) -> dic
     state = next((gitdir / d for d in ("rebase-merge", "rebase-apply") if (gitdir / d).is_dir()), None) if op == "rebase" else None
 
     def read(name: str) -> str:
-        try:
-            return (state / name).read_text().strip() if state else ""
-        except OSError:
-            return ""
+        return (state / name).read_text().strip() if state and (state / name).is_file() else ""
 
     head, onto, orig, autostash = (_out(root, "rev-parse", "HEAD") or "").strip(), read("onto"), read("orig-head"), read("autostash")
     picked = {f[1] for f in (line.split() for line in read("rewritten-list").splitlines()) if len(f) == 2}
