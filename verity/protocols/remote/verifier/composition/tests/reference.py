@@ -180,12 +180,16 @@ def _keys(j: Any, keys: list[str], what: str) -> None:
 
 
 def _one_stage_params(rest: dict) -> dict:
-    """`OneStageZk.paramsOfJson` behind `VStar.Recursive.Sampled`'s refusal of v1: ``proofs``, exactly the circuit and
-    public files' SHA-512s and the verifier's registered file or null, then v1's params (`parsed_params_v2`, which
-    refuses them naming no challenger) with a partition object, under a subset law (`subset_law`), its last refusal."""
+    """`OneStageZk.paramsEitherOfJson` behind `VStar.Recursive.Sampled`'s refusal of v1, in the one statement's form
+    (`paramsOfJson`): ``proofs``, exactly the circuit and public files' SHA-512s and the verifier's registered file or
+    null, then v1's params (`parsed_params_v2`, which refuses them naming no challenger) with a partition object, under
+    a subset law (`subset_law`), its last refusal. The per-member form (``proofs`` exactly ``members``) is outside the
+    mirror."""
     if "proofs" not in rest:
         raise Reject(f"the parameters name no proofs: {V1_REFUSED}")
     pr = rest["proofs"]
+    if isinstance(pr, dict) and sorted(pr) == ["members"]:
+        raise ValueError("outside the mirror: the per-member form of the parameters' proofs")
     _keys(pr, ["circuit", "public", "registered"], "proofs")
     for k in ("circuit", "public"):
         if not (isinstance(pr[k], str) and len(pr[k]) == 128 and all(c in "0123456789abcdef" for c in pr[k])):
@@ -199,11 +203,15 @@ def _one_stage_params(rest: dict) -> dict:
 
 
 def _one_stage_evidence(rest: dict) -> dict:
-    """`OneStageZk.evidenceOf` behind `VStar.Recursive.Sampled`'s refusal of v1: no ``verdicts``, v1's evidence with
-    none (`covered_evidence`, `OneStage.evidenceOf`), and ``proofs``, exactly the sessions: for each of v1's sessions in
-    order, its name, its record's digest and its rep files' digests. The public file is the parameters'."""
+    """`OneStageZk.evidenceEitherOf` behind `VStar.Recursive.Sampled`'s refusal of v1, in the one statement's form
+    (`evidenceOf`): no ``verdicts``, v1's evidence with none (`covered_evidence`, `OneStage.evidenceOf`), and
+    ``proofs``, exactly the sessions: for each of v1's sessions in order, its name, its record's digest and its rep
+    files' digests. The public file is the parameters'. The per-member form (``proofs`` exactly ``statements``) is
+    outside the mirror."""
     if "proofs" not in rest:
         raise Reject(f"the evidence names no proofs: {V1_REFUSED}")
+    if isinstance(rest["proofs"], dict) and sorted(rest["proofs"]) == ["statements"]:
+        raise ValueError("outside the mirror: the per-member form of the evidence's proofs")
     if "verdicts" in rest:
         raise Reject("the evidence names verdicts: this audit's verdicts are its own run of the verifier on the proofs")
     base = ONE_STAGE.covered_evidence(canonical({**{k: v for k, v in rest.items() if k != "proofs"},

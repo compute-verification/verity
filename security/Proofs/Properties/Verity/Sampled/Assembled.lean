@@ -145,11 +145,11 @@ theorem freshCoins_ofV2 (label : String) (after : ByteArray) :
       rw [hx] at hne
       rw [hx, hy, freshCoins_ofV2 label after hr hne]
 
-/-- **What the sample asks of a read the binding's property holds at**: `DrawRead`, with every coin of the sample's
-family the returned log releases after the sample's digest shown. -/
+/-- **What the sample asks of a read the binding's property holds at**: `DrawRead`, on parameters that name no members
+(`OneStatement`), with every coin of the sample's family the returned log releases after the sample's digest shown. -/
 def DrawReadAll (k : Verity.Registration.Composite) (read : Verity.Sent → Option (List Verity.Release)) : Prop :=
   ∀ s a b e p c ev ξ dr, Verity.SameAccepts k s → V2Case k s a b e →
-    V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr →
+    V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr → OneStatement s.params →
       ∃ log, read s = some log ∧ ShowsDraw log dr ξ ∧ ∀ cs ∈ freshCoins dr.label dr.after log, cs ≠ []
 
 /-- **The read with v2's own tests shows every coin of the sample's family**: they are the `m` whole frames of the coins
@@ -176,18 +176,35 @@ theorem fresh_logRead_ne {k : Verity.Registration.Composite} {s : Verity.Sent} {
 
 /-- **The read with v2's own tests meets `DrawReadAll`**, with no premise. -/
 theorem drawReadAll_logRead (k : Verity.Registration.Composite) : DrawReadAll k logRead := by
-  intro s a b e p c ev ξ dr hS hcase hacc
-  obtain ⟨log, hlog⟩ := Option.isSome_iff_exists.1 (logRead_isSome hS hcase hacc)
+  intro s a b e p c ev ξ dr hS hcase hacc hone
+  obtain ⟨log, hlog⟩ :=
+    Option.isSome_iff_exists.1 (logRead_isSome hS hcase hacc (single_of_case hS hcase hacc hone))
   exact ⟨log, hlog, shows_logRead hS hcase hacc hlog, fresh_logRead_ne hS hcase hacc hlog⟩
 
-/-- **The play's log shows the sample** where v2's read of it is the device's (`Binding.Logged Binding.readsV2`):
-`shows_of_logged` at the binding's property. -/
+/-- **The play's log shows the sample where v2's read returned and is the device's**, in either form of v2's check:
+where `logRead` returns a log at an accept and v2's read of the play is the device's
+(`Binding.Logged Binding.readsV2`), the play's log shows the sample (`shows_logRead`), every coin of its family
+shown (`fresh_logRead_ne`). -/
+theorem shows_of_read {k : Verity.Registration.Composite} {o : Verity.Exchange}
+    {a b e : ByteArray} {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
+    {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k o.sent)
+    (hcase : V2Case k o.sent a b e) (hacc : V2Accepts (Core.Blobs.ofArray o.sent.blobs) a b e p c ev ξ dr)
+    {log : List Verity.Release} (hlog : logRead o.sent = some log) (hl : Binding.Logged Binding.readsV2 o) :
+    ShowsDraw o.log dr ξ := by
+  have hv : Binding.readsV2 o.sent = some (log.map Binding.Read.ofV2) :=
+    congrArg (Option.map (List.map Binding.Read.ofV2)) hlog
+  unfold ShowsDraw
+  rw [freshCoins_ofV2 dr.label dr.after (hl _ (Option.mem_def.2 hv)) (fresh_logRead_ne hS hcase hacc hlog)]
+  exact shows_logRead hS hcase hacc hlog
+
+/-- **The play's log shows the sample** where v2's read of it is the device's (`Binding.Logged Binding.readsV2`), on
+parameters that name no members: `shows_of_logged` at the binding's property. -/
 theorem shows_of_readsV2 {k : Verity.Registration.Composite} (hR : DrawReadAll k coinsRead) {o : Verity.Exchange}
     {a b e : ByteArray} {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k o.sent)
     (hcase : V2Case k o.sent a b e) (hacc : V2Accepts (Core.Blobs.ofArray o.sent.blobs) a b e p c ev ξ dr)
-    (hl : Binding.Logged Binding.readsV2 o) : ShowsDraw o.log dr ξ := by
-  obtain ⟨log, hlog, hs, hne⟩ := hR o.sent a b e p c ev ξ dr hS hcase hacc
+    (hone : OneStatement o.params) (hl : Binding.Logged Binding.readsV2 o) : ShowsDraw o.log dr ξ := by
+  obtain ⟨log, hlog, hs, hne⟩ := hR o.sent a b e p c ev ξ dr hS hcase hacc hone
   have hv : Binding.readsV2 o.sent = some (log.map Binding.Read.ofV2) :=
     congrArg (Option.map (List.map Binding.Read.ofV2)) hlog
   unfold ShowsDraw
@@ -197,11 +214,11 @@ theorem shows_of_readsV2 {k : Verity.Registration.Composite} (hR : DrawReadAll k
 /-- **The sample in a play** at the binding's property: `logged_draw` with `Binding.Logged Binding.readsV2`. -/
 theorem logged_draw_v2 {V : Vocab d α} {k : Verity.Registration.Composite} (hR : DrawReadAll k coinsRead)
     {o : Verity.Exchange} {p₀ : _root_.Spot.OneStageZk.Params} (hθ : ParamsAt o.params p₀)
-    (hv : V.Verdict k .sampled o) (hl : Binding.Logged Binding.readsV2 o) :
+    (hone : OneStatement o.params) (hv : V.Verdict k .sampled o) (hl : Binding.Logged Binding.readsV2 o) :
     ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧ ShowsDraw o.log dr ξ := by
   obtain ⟨a, b, e, p, c, ev, ξ, dr, hcase, hacc⟩ := case_drew hv.2.1 hθ (verdict_case hv)
   obtain ⟨L, n, units, hd⟩ := drew_of hcase hacc
-  exact ⟨dr, L, n, ξ, units, hd, shows_of_readsV2 hR hv.2.1 hcase hacc hl⟩
+  exact ⟨dr, L, n, ξ, units, hd, shows_of_readsV2 hR hv.2.1 hcase hacc hone hl⟩
 
 /-- **The sample's piece at the binding's property**: `coupled_draw_coins_tied` with `Binding.Logged Binding.readsV2`
 in place of `Vocab.Logged`. At a session v2 sets up and tied to v2's verifier, every outcome whose first coins are the
@@ -218,7 +235,8 @@ theorem coupled_draw_coins_v2 {V : Vocab d α} {k : Verity.Registration.Composit
         freshCoins dr.label dr.after o.log <+: (List.ofFn fun j => List.ofFn (κ ω.1 j)) →
         (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
   obtain ⟨p₀, hp₀, -⟩ := hA.params
-  obtain ⟨dr, L, n, ξ, units, hd, hs⟩ := logged_draw_v2 hR (by rw [hθ]; exact hp₀) hv hl
+  obtain ⟨dr, L, n, ξ, units, hd, hs⟩ :=
+    logged_draw_v2 hR (by rw [hθ]; exact hp₀) (by rw [hθ]; exact hA.single) hv hl
   have hn := n_of_popTied ht hv.2.1 hθ hd
   exact ⟨dr, L, n, ξ, units, hd, fun ω hp => (extend_draw A _ ω).trans
     (draw_of_drew hd A ω.1 (law_of_setsUp hA hv.2.1 hθ hd hn) hn

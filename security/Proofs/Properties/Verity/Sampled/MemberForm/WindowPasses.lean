@@ -21,9 +21,8 @@ The window's theorem takes three facts of the deployment's windows at accepted p
 * **`WindowReads`** (`windowReads_members`): the read at a play (`windowRead_members`) at each play of the period's
   game, whose parameters are the game's.
 
-It takes three statements besides the play: `FormAccepts` and `FormApart`, which hold of the check as it is and
-which a check that accepts the form proves of its own accepts and its own parse, and `RegisteredHolds`, the
-registration's.
+It takes three statements besides the play: `FormAccepts` and `FormApart`, which hold of the check's accepts and
+its parse (`formAccepts`, `formApart`), and `RegisteredHolds`, the registration's.
 -/
 
 @[expose] public section
@@ -55,9 +54,8 @@ theorem windowPasses_members (I : WindowInstance d α) (k : Verity.Registration.
 /-- **The verifier sets the deployment's window up at every accepted play of the per-member form**
 (`WindowInstance.WindowAt`): the window is the parameters' members on the registered files
 (`WindowInstance.WindowRegistered`), laid out with each member's files passing at each accepted play
-(`windowPasses_members`, `WindowInstance.windowAt_members`). The check as it is accepts no parameters that name
-members (`formAccepts_refused`), so no accepted play has a window of members and the statement is empty until the
-per-member form accepts such parameters. -/
+(`windowPasses_members`, `WindowInstance.windowAt_members`). The check's accepts hold `FormAccepts` and `FormApart`
+(`formAccepts`, `formApart`). -/
 theorem windowAt_form (I : WindowInstance d α) (k : Verity.Registration.Composite) (hW : I.WindowRegistered)
     (hF : FormAccepts) (hA : FormApart) (hR : RegisteredHolds I.base) : I.WindowAt k :=
   I.windowAt_members k hW (windowPasses_members I k hF hA hR)
@@ -65,9 +63,7 @@ theorem windowAt_form (I : WindowInstance d α) (k : Verity.Registration.Composi
 /-- **What the verifier's acceptance gives of each play of the per-member form, at the deployment's windows**
 (`WindowInstance.WindowReads`), at the evidence sent for each session and the proof files decoded from it at the
 statement's table: `windowRead_members` at each play of the period's game, where the form's accepts hold
-`MembersAccept` and the registered files hold each member's file. The check as it is accepts no parameters that
-name members (`formAccepts_refused`), so no accepted play has a window of members and the statement is empty until
-the per-member form accepts such parameters. -/
+`MembersAccept` (`formAccepts`) and the registered files hold each member's file. -/
 theorem windowReads_members (I : WindowInstance d α) (k : Verity.Registration.Composite) (hF : FormAccepts)
     (hR : RegisteredHolds I.base) : I.WindowReads k sentEvidenceAt (statementFiles statementTable) := by
   intro θ F W hW c σ z hv hl ht hfs hsd

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Sampled.RoundsRead
+public import Proofs.Properties.Verity.Sampled.MemberForm.Named
 public import Proofs.Properties.Verity.Sampled.RootB
 public import Proofs.Properties.Verity.Sampled.Window.Trees
 
@@ -637,31 +638,13 @@ theorem closes_fields {o : TreeOpening} {evidence : String} (h : o.closes eviden
   simp only [Bool.and_eq_true, beq_iff_eq] at h
   exact ⟨h.1.1.1.1, h.1.1.1.2, h.1.1.2, h.1.2⟩
 
-/-- **What `memberTreeReason` accepts**: the record's tree is a logged tree, the last round the log shows opened of it
-closes the session after the evidence, and the tree less that round is the session's as `sessionTreeReason` holds
-one. -/
-theorem memberTreeReason_none {tables : Array (String × Option ℕ)} {record : Json} {evidence : String}
-    (h : memberTreeReason trees tables record evidence = none) :
-    ∃ t ∈ trees, getD (getD record "coin_tree") "root" = Json.str t.root ∧ ∃ o, t.opened.back? = some o ∧
-      o.closes evidence = true ∧ sessionTreeReason #[t.unclosed] tables record = none := by
-  unfold memberTreeReason at h
-  split at h
-  · cases h
-  · rename_i t ht
-    split at h
-    · rename_i o ho
-      split at h
-      · rename_i hc
-        exact ⟨t, Array.mem_of_find?_eq_some ht, Trees.strIs (Array.find?_some ht :), o, ho, hc, h⟩
-      · cases h
-    · cases h
-
 /-- **What `membersTreeReason` accepts**: every session's record as `memberTreeReason` holds it, no tree two
 sessions', and the lines' rounds one tree after another in the sessions' order. -/
 theorem membersTreeReason_none {records : Array (String × Array (String × Option ℕ) × Json × String)}
     (h : membersTreeReason trees lines records = none) :
     (∀ x ∈ records, memberTreeReason trees x.2.1 x.2.2.1 x.2.2.2 = none) ∧ (usedOf records).toList.Nodup ∧
       membersOrder lines = some (usedOf records) := by
+  have heach := membersTreeReason_each h
   unfold membersTreeReason at h
   dsimp only at h
   split at h
@@ -683,12 +666,7 @@ theorem membersTreeReason_none {records : Array (String × Array (String × Opti
       · split at h
         · cases h
         · rename_i h3
-          refine ⟨fun x hx => ?_, Lines.distinct_nodup (Decidable.of_not_not h1), Decidable.of_not_not h3⟩
-          have hno := Array.find?_eq_none.1 hnone x hx
-          cases hm : memberTreeReason trees x.2.1 x.2.2.1 x.2.2.2 with
-          | none => rfl
-          | some w =>
-            exact absurd (show (memberTreeReason trees x.2.1 x.2.2.1 x.2.2.2).isSome = true by simp [hm]) hno
+          exact ⟨heach, Lines.distinct_nodup (Decidable.of_not_not h1), Decidable.of_not_not h3⟩
 
 /-- The bytes a round opened after the SHA-512 of `b`, in hex, answers. -/
 theorem answers_of_hex {ev : String} {a b : ByteArray} (h : Flock.unhex ev = .ok a) (he : ev = sha512Hex b) :

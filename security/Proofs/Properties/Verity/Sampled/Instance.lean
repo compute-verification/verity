@@ -397,6 +397,7 @@ theorem setsUp_congr {V V' : Vocab d α} {θ : ByteArray} {F : Array ByteArray} 
   publicFile := h.publicFile.trans hp.symm
   read := hr.trans h.read
   share := he.trans h.share
+  single := h.single
 
 open Classical in
 /-- **The extractor at the deployment's sessions**: at a session, the session's at the projected strategy

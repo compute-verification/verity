@@ -1,11 +1,11 @@
-"""`one_stage.members.members_run`, the Python of `OneStageZk.membersRun`, held to Lean's refusal of the per-member
-form (`members.refusal`, the executable's ``refusal``) on a window of two members whose sessions' trees the challenger
+"""`one_stage.members.members_run`, the Python of `OneStageZk.membersRun`, held to Lean's check of the per-member
+form (`members.check`, the executable's ``check``) on a window of two members whose sessions' trees the challenger
 session opens one after another, each closed after its session's evidence.
 
 The files are stand-ins, so no member's files are held: an audit with nothing else wrong ends at its first member's
 circuit, which does not parse, on both sides and before any session, and each other row changes one thing and reads
-Lean's reason off the twin. A case every session accepts, which Lean refuses for its form alone
-(`members.ALL_PASSED`), is a whole audit's, which `benchmarks/one_stage` runs with the twin beside it.
+Lean's reason off the twin. A case every session accepts, which Lean accepts, is a whole audit's, which
+`benchmarks/one_stage` runs with the twin beside it.
 
 The twin decides the sessions' trees by `challenger.members_tree_reason` (with `member_tree_reason`, `closes` and
 `members_order`), and the rows hold it to Lean's `Challenger.membersTreeReason` on each refusal of its own: a tree
@@ -131,8 +131,8 @@ class Audit:
                 (at / d[:16]).write_bytes(b)
                 paths.append(at / d[:16])
         p, e = _json(self.params if params is None else params), _json(self.evidence if evidence is None else evidence)
-        why, decided = M.refusal(p, D.canonical(self.rec).encode(), D.canonical(e).encode(), paths)
-        assert decided, why
+        verdict_, why = M.check(p, D.canonical(self.rec).encode(), D.canonical(e).encode(), paths)
+        assert verdict_ == "reject", (verdict_, why)
         return why, M.members_run(p, _json(self.rec), e, M.blobs_of(paths), program=self.s.program, verify=lms_verify,
                                   verdict=verdict)
 

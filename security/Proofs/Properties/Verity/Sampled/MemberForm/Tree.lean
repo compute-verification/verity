@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Sampled.MemberForm.Order
+public import Proofs.Properties.Verity.Sampled.MemberForm.Named
 public import Proofs.Properties.Verity.Sampled.MovesReach
 
 /-!
@@ -11,10 +12,9 @@ session's closing round (`Spot.Challenger.memberTreeReason`: `sessionTreeReason 
 one-statement form holds its record to the log's trees. What the record's check gives of the tree it finds, it gives
 of `t`:
 
-* **The tree less its last opening** (`find_pop`, `mem_pop`, `unclosed_opening`): an opening `t.unclosed` shows is
-  one `t` shows, and the first of its stream and round there too.
-* **The record at its member's tree** (`tree_round`, `tree_coinTree`): each round the record gives coins of is one
-  `t` shows opened, and the record's `coin_tree` prints as `t`'s record.
+* **The record at its member's tree** (`tree_coinTree`; `tree_round` and the tree less its last opening are
+  `MemberForm.Named`'s): each round the record gives coins of is one `t` shows opened, and the record's `coin_tree`
+  prints as `t`'s record.
 * **On the read of the log** (`tree_open`, `tree_keyAt`, `tree_rounds_le`): a round the record gives is an
   open line of the log naming `t`; each stream the record gives rounds of is a stream of `t` among the trees read;
   and the read opens each of the record's streams at least its rounds.
@@ -30,48 +30,9 @@ open Lean (Json)
 open Spot Spot.Challenger
 open Properties.Challenger.CanonRead (sorted_getD)
 
-/-! ## The tree less its last opening -/
-
-/-- An array is its `pop` and what `pop` drops. -/
-theorem pop_append {β : Type} (a : Array β) : ∃ r, a = a.pop ++ r := by
-  refine ⟨(a.toList.drop (a.size - 1)).toArray, ?_⟩
-  apply Array.ext'
-  rw [Array.toList_append, Array.toList_pop, List.dropLast_eq_take, Array.length_toList]
-  exact (List.take_append_drop _ _).symm
-
-/-- What `find?` finds less the last, it finds. -/
-theorem find_pop {β : Type} {p : β → Bool} {a : Array β} {o : β} (h : a.pop.find? p = some o) :
-    a.find? p = some o := by
-  obtain ⟨r, hr⟩ := pop_append a
-  rw [hr, Array.find?_append, h]
-  rfl
-
-theorem mem_pop {β : Type} {a : Array β} {o : β} (h : o ∈ a.pop) : o ∈ a := by
-  obtain ⟨r, hr⟩ := pop_append a
-  rw [hr]
-  exact Array.mem_append_left _ h
-
-/-- **An opening a tree shows less its last opening, the tree shows.** -/
-theorem unclosed_opening {t : LoggedTree} {name : String} {k : ℕ} {o : TreeOpening}
-    (h : t.unclosed.opening name k = some o) : t.opening name k = some o :=
-  find_pop (a := t.opened) h
-
-/-- The one tree of `#[t]`. -/
-theorem mem_one {t t' : LoggedTree} (h : t' ∈ #[t]) : t' = t := by
-  simpa using h
-
 /-! ## The record at its member's tree -/
 
 variable {t : LoggedTree} {tables : Array (String × Option ℕ)} {record : Json}
-
-/-- **Each round a member's record gives coins of is one its tree shows opened**, with those coins' SHA-512
-(`Trees.round_held`, at the one tree the member's check holds the record to). -/
-theorem tree_round (h : sessionTreeReason #[t.unclosed] tables record = none) {stream : String} {k : ℕ}
-    {cs : ByteArray} (hr : recordRound record stream k = some cs) :
-    recordTree record = t.root ∧ ∃ o, t.opening stream k = some o ∧ o.coins = sha512Hex cs := by
-  obtain ⟨t', ht', hroot, o, ho, hc⟩ := Trees.round_held h hr
-  obtain rfl := mem_one ht'
-  exact ⟨hroot, o, unclosed_opening ho, hc⟩
 
 /-- **A member's record's coin tree is its tree**, and its `coin_tree` prints as the tree's record
 (`Trees.coinTree_held`). -/

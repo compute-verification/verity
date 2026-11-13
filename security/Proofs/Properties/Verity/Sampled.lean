@@ -656,6 +656,11 @@ theorem ParamsAt.unique {θ : ByteArray} {p p' : _root_.Spot.OneStageZk.Params} 
   obtain rfl : x = x' := Option.some.inj (hx.symm.trans hx')
   exact Sum.inl.inj (Except.ok.inj (hp.symm.trans hp'))
 
+/-- **The parameters `θ` name no members**: v2's parameters in them, where they name sampled proofs' one-stage form
+(`ParamsAt`), are of the one statement's form, so what v2 accepts on them the one statement's check accepts. -/
+def OneStatement (θ : ByteArray) : Prop :=
+  ∀ p, ParamsAt θ p → p.members = none
+
 /-- **The Flock law the sample reads over `n` units** under the verifier `v`'s agreed law: the sampling design
 `Spot.Draw.deriveLaw` derives, or else the expanded rule's (`Spot.Draw.flockLaw` at
 `Spot.Draw.derive`'s), as `Spot.OneStage.drawnFrom` reads it before `Spot.Draw.drawUnits`
@@ -666,7 +671,8 @@ def lawAt (v : _root_.Spot.Registration.Verifier) (n : ℕ) : Flock.V Flock.Draw
   pure (derived.getD (← _root_.Spot.Draw.flockLaw lawJ n))
 
 /-- **`A` is the session v2 sets up on the parameters `θ` and the committed files `F`**: v2's parameters in the
-composite's (`ParamsAt`), with the verifier's partition object and program as flock-verify's inputs, the sampling design the sample
+composite's (`ParamsAt`), which name no members, so the session is the one statement's (`single`, `OneStatement`; a
+window of members is `Window`'s), with the verifier's partition object and program as flock-verify's inputs, the sampling design the sample
 reads over the population (`lawAt`), and the statement's descriptor and the registration's query the verifier's program
 (`Spot.Program.parse`) and query, so the registration's population is the verifier's, and the sample's bytes
 the coins of the parameters' challenger family, as many as the coin commitment's families give it (`Vocab.families`),
@@ -692,6 +698,7 @@ structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Li
   publicFile : A.I.publicFile = V.publicFile θ F
   read : V.read θ F = Verity.WindowFiles.one A.fileRead
   share : (V.certOf θ).ε = A.ε
+  single : OneStatement θ
 
 /-- **The first of `F` whose SHA-512's hex is `sha`**, as `Spot.OneStageZk.tablesOf` finds a pinned table
 on the blobs (`tablesOf_ofArray`). -/

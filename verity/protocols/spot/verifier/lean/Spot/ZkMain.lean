@@ -1,7 +1,7 @@
 module
 
-public import Spot.MembersRefusal
+public import Spot.MembersParse
 
 @[expose] public section
 
-def main (args : List String) : IO UInt32 := Spot.OneStageZk.refusalMain args
+def main (args : List String) : IO UInt32 := Spot.OneStageZk.membersMain args
