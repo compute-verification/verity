@@ -162332,3 +162332,34 @@ Tags: [read] I read that line at that commit. [run] a command, given. [derived] 
 - Read only at the lines cited and around them: `Flock/HmRow.lean`, `Spot/Registration.lean`, `Held.lean` (to line 300), `ExecStrataOf.lean` (its head). Not read: `Spot.Run` past its Bernoulli line, `Spot.Select`, the setup's copies in `Flock/With/Setup.lean` and `Flock/ProgramRead.lean`, `Core.Composition.decodeParams`, the two compositions past the grep, #9690's own diff, #9769's description, and the Linear issue itself (I worked from the brief's quote of it).
 
 ## TWOLEG, Fri 13 Nov 22:11Z: the stale execution: your timer `proofs-1132Z-ruleB` (fired Fri 11:32Z) reached it at 22:11Z, its first delivery here; not acted on, nothing posted on PRF-490 or TOP-398
+
+## FRAME, Fri 13 Nov 22:12Z: CHECKPOINT ON #9713: WAY (b) COMPILES: all 14 tries passed, the branch is pushed at `bc4e4982fe843955fc8bafffd665b9d6a71761cd`, and the body is rewritten; the records run and the quick suites run now on cpu-11, the unread count on cpu-9; the run on cpu-7 never started and I moved it
+
+**In plain words.** The 109 lemmas compile where they now are, and so do the files they left and the files that read them. The public-boundary test passes with nothing added to its lists. What is still out is the records run, the quick suites and the unread count. No ready line yet. Your 21:32Z is read: compute-accounting's condition is noted, and I write what moved before any ready line.
+
+- **Tries** [run: `r20261113-214517-3b17`, vy-nebius-cpu-11]. "TRIES_DONE fail=0 at 1232s". 14 files, each "lean exit 0":
+  - the five new modules: `CanonText` ("none of its 11 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"), `CanonEsc` (8), `CanonRead` (42), `CanonWf` (1), `CanonLine` (26);
+  - the four files the lemmas left: PoUW's `Canon.lean` (16), `Composition.lean`, `Challenger/CanonRead.lean` (16), `Challenger/CanonLine.lean` (7);
+  - `OwnReads.lean` (35), `RecordDraw.lean` (49), and three that read the lemmas through the old files: `Verity/Sampled/Lines.lean` (69), `Challenger/Commitment.lean` (4), `Pouw/LiveSalt/Coin.lean` (36).
+- **`CanonText` needed no option**: its one definition that reads the private `hex4` compiles as written.
+- **One probe line with no answer**, in `Properties/Composition.lean`: "none of the 31 it read uses an axiom ...; no answer for 1 (an error on its `#print axioms` line above): Properties.Composition.mapM_map_congr." [read] That theorem did not move and is written with universe binders (`mapM_map_congr.{u, v}`), which the probe's line takes into the name. It is the probe's, not the move's; the file's lean exit is 0.
+- **The sibling check covers little on that node** [run]: for `CanonText`, "268 imported ...; 3753 unchecked, with no build of their source as it is". The slot tree there was cold. The records run builds every module, so a clash of names shows there.
+- **Pushed** at 22:08Z, after the identity check of your 21:02Z order [run: `git log origin/cursor/proofs-frame-l1-9c4e..HEAD` against `git config`]: two commits, author and committer mine.
+- **The body of #9713 is rewritten** for the move: the notice of the red test is gone, a section gives the five modules with their counts and the 109 names, `roots` is `main`'s again in one line, and "Runs" has this head's tries. It says not ready: the records and the suites are running.
+- **Why the run moved.** [run: `research inspect r20261113-204108-963b`, 21:40Z] On vy-nebius-cpu-7 "every check slot is taken (r0: window 2026-11-13T19:48:00Z (240 min) is open ...", the same for all sixteen slots: a window holds that node's research pool until 23:48Z. The run had waited 63 minutes and never started. I cancelled it by its id and launched the same job on vy-nebius-cpu-11, where it took a slot within a minute. One run at a time; no race.
+- **The unread count** [run: `r20261113-220616-6095`, vy-nebius-cpu-9, in its slot since about 22:07Z]: `unread.py --setup --build --caps` in a clone, a cold build. A first launch on vy-nebius-cpu-10 found seven checks ahead in line and was cancelled unstarted after five minutes (`r20261113-220055-4492`).
+- **How I found a free node**, for whoever else waits: `research queue stats --json` reads every node's pools in under two minutes; `data.nodes[NODE].slots` gives each pool's slots, busy, blocked and waiting. At 22:06Z every research pool had a line but cpu-9's and cpu-8's had free slots. The same table shows a pool named `proofs` on ten nodes with nothing running in it; I have not used it, since your rule names `research`.
+
+### What is out
+
+| Run | Node | State at 22:11Z |
+| --- | --- | --- |
+| `r20261113-214517-3b17` (way (b): tries done; records and quick suites) | vy-nebius-cpu-11 | records fetching its dependencies cold; its slot ends at 00:16Z |
+| `r20261113-220616-6095` (the unread count) | vy-nebius-cpu-9 | building |
+| `r20261113-204108-963b`, `r20261113-220055-4492` | cpu-7, cpu-10 | cancelled by me, neither started |
+
+**Not established.**
+- The records outcome at this head, and so whether any record moves. By reading none should: no listed statement or definition changed and no lock lists any of the 109.
+- The quick suites at this head.
+- The unread count. The build is cold and may not end inside its slot's 150 minutes; if it is cut I say so and give the count by reading only.
+- Whether the records run ends inside its slot: on a cold tree the three audits took up to 105 minutes today, and it has about 125 left.
