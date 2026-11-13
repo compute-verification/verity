@@ -147359,8 +147359,9 @@ To post: nothing. Head pushed: `d557b8cf428`; nothing unpushed. Runs going on: `
   - Seven more files that use the test challenger or the stream: 73 passed. [run]
 - **Ruling 1, done.** The module is `verity/protocols/spot/verifier/window_place.py` and imports the standard
   library alone. [run] Every caller under `benchmarks/one_stage/` imports it from there. [run] `service.py`
-  refuses the source itself, in a method of 12 lines: a two-stage first stage on a challenger's family other than the one
-  of the place its record's window names is refused with the code `place`, before any challenge is read. [run]
+  refuses the source itself, in a method of 12 lines: a two-stage first stage on a challenger's family other
+  than the one of the place its record's window names is refused with the code `place`, before any challenge
+  is read. [run]
   The import listing's generator prints "the same": no trusted place gains a line. [run, on my VM, 37 s]
 - **Ruling 2, done.** `first()` and `stop_first()` refuse a source of another family than the class's place's,
   before anything is registered. [run]
@@ -147625,3 +147626,211 @@ Where I differ from MEMBERS, two places. The case needs no writer once (a)–(c)
 - `StepsKept`. Until it is proved, that `check-stream` decides what `check` decides rests on run e0cb alone.
 
 Branch heads: `cursor/proofs-firstaccept-streamed-5a1e` at `d54128792ab`; `cursor/proofs-firstaccept-files-3c9d` at `8d3f64ed16a` (the driver, waits for the carry); `cursor/proofs-firstaccept-320f` at `a9d2c561902`; `cursor/proofs-firstaccept-5a1c` at `9049e2c572e` (#9594, unmarked).
+
+## STOPDRIVER, Fri 13 Nov 15:06Z: B's body, drafted; the head is now `46811047714e`, one commit wider, its run out
+
+Two corrections to my line above first. Its heading says 14:58Z and it was pushed at 14:57:31Z. [run] One of
+its lines was 121 columns; this commit breaks it again and changes no word. [run]
+
+### In short
+
+1. **The head moved once more, to `46811047714e`.** [run] The stream's refusal now holds a one-stage stream
+   too, so the stop audit's stream is held by trusted code. I had kept it to two-stage streams on a misreading,
+   told below. Run `r20261113-150415-f8fa` is out on it; I write its result in one line when it ends.
+2. **The body's draft is below**, with `Lane proofs` and your 14:39Z sentence on the key.
+3. **`tests/test_boundaries.py` passed** on the commit below, on a node. [run] The listing does not change.
+   [run]
+4. **No row is dropped.** TWOLEG has written no answer in the inbox yet. [read] Its branch imports the module
+   and carries all 33 rows. [read]
+5. **The restack will need four lines of a test** once the cards piece's tree is on `main`. [run] The full
+   account is in the 16:30Z entry.
+
+### Words
+
+- A sample's **place** is a number its registration record's window fixes. Its **family** is `draw/<place>`,
+  the family of the challenger's session it reads its challenges from.
+- The **source** is the object a command hands a stream to read challenges from. It names one family, its
+  label.
+- The **hand-off** is `stage1.json`, the file the first stage's command writes for one class.
+- A **stop class** is a class under a stop rule. Its **stop blocks** are a second population, one block a span.
+  The **stop record** registers them.
+- The **interior record** registers the second stage's values, on the second stage's own session.
+- The **stream** is `service.Stream`, the verifier's Python that registers, samples and decides.
+- Each of these is as the code has it. [read]
+
+### What changed since `b7e15e1d4ccb`
+
+- [run] Three commits: `fd71e0c8bdc6` (rulings 1 and 2), `7b140ae8ec07` (two docstrings' line breaks) and
+  `46811047714e` (the wider refusal). Against `main` the draft is 12 files in ten commits.
+- [run] **The module.** `benchmarks/one_stage/window_place.py` is gone. `verity/protocols/spot/verifier/
+  window_place.py` is 62 lines: `SIZES`, `FAMILY`, `of`, `family`, `run`. It imports `collections.abc` and
+  `typing` and nothing else.
+- [run] It takes a window, not a layout, so nothing in it knows the adapter. The helpers that turn a layout
+  into a window stay in `two_stage.py`: `place_window`, `place`, `family_of`, `another_family`, `held_family`.
+- [run] `two_stage.py` and the driver's test import the module from the verifier. `stop_audit.py` and the
+  other tests go through `two_stage.family_of`. No file under `benchmarks/one_stage/` spells the rule again.
+- [read] One spelling of `draw/<rank>` remains outside the module: `a5_coins.family`, which the one-stage
+  command uses for its ranks. [run] The driver's test holds the two to one another.
+- [run] **The table of windows** moved with the module, to `verifier/tests/test_window_place.py`: 11 windows
+  with a place and 22 with none. Five rows are new: a population that is a list, a window of no item, and three
+  values that are no object.
+- [run] **Ruling 2.** `two_stage.held_family` is 4 lines. `first()` calls it at line 410 and `stop_first()` at
+  line 492, each before it registers anything. A source of another family raises `ValueError`: "a class is
+  sampled once, on its own family".
+- [run] The test challenger gained a `label` that is known before its first commitment. Without it `first()`
+  could not ask a test's source for its family before registering.
+
+### The stream's refusal: what it holds, and what it leaves
+
+- [run] `service.Stream._placed` is a method of 12 lines, called from `select`'s checks after the closure
+  check and before any challenge is read. It raises `Refused` with the code `place` and the two families in its
+  detail. The refused registration is left with no sample.
+- [run] It acts where two things hold: the source is a challenger's (`ChallengerCoins`), and the record's
+  window names a place. Then the source's label must be `window_place.family(window)`. The design does not
+  matter.
+- [derived] So it holds the two kinds of record whose window names a place: a class's boundary record, on a
+  two-stage stream's first stage, and a stop record, on the stop audit's one-stage stream.
+- **My misreading, corrected in `46811047714e`.** At `fd71e0c8bdc6` the method also asked for a two-stage
+  design. I believed an interior record's window copied its boundary record's sizes, so that a one-stage
+  stream over an interior record would be refused wrongly. [read] It does not: line 640 of `interior_rows.py`
+  copies the interior record's own window into its commitment's file. The interior record's window is `row`,
+  `interior`, `replay_sample`, `replay`, `kind` and `run` (`interior_rows.py` 570 to 572, `rows.py` 871), and
+  names no place. [derived] So the condition protected nothing and left the stop audit's stream unheld.
+- **Why a window that names no place is held to none.** [read] The verifier's own tests and
+  `benchmarks/two_stage/toy.py` register windows with no `prompt` or `outputs`. [derived] Refusing those would
+  refuse every stream that is not the vLLM adapter's. [read] Only `boundary_rows.Layout.provenance()` writes
+  the two sizes into a window, and `boundary_stop.stop_record` copies them into a stop record's.
+- [read] Every stream the commands build is one of five: the one-stage command's ranks (`a5.py` 331, windows
+  with no place), the first stage (`two_stage.py` 267), the stop record's (`two_stage.py` 493, `stop_audit.py`
+  293) and the toy's (`benchmarks/two_stage/audit.py` 131). [run] The same five are in Friday's tree and on
+  the join's branch at `d557b8cf4282`.
+- [read] The Lean stream needs no change. It takes the Python's refusal codes as data: any list of strings
+  becomes its refused verdict (`Spot/Stream.lean` 273, 331 to 372).
+- [derived] This is Python only. The compiled two-stage form's refusal is TWOLEG's `FIRST_PLACE`, which is
+  stricter: it refuses a record whose window names no place.
+
+### The import listing
+
+- [run] `tests/test_boundaries.py`, `tests/test_repository.py` and `tests/test_tree.py`: 47 passed on the
+  node at `fd71e0c8bdc6`. The 4 warnings are bookkeeping on files I do not touch: four Markdown caps, three
+  directories with no owner, and two of `tests/tree.toml`'s lines. The new run repeats the first two files.
+- [run] `tools/verity/check/import_order.py --check` at `7b140ae8ec07` prints `tests/import_order.toml: the
+  same`. It ran on my VM in 37 seconds; it reads the tree and builds nothing. [derived] The last commit adds no
+  import.
+- [derived] The reason: `service.py` and `window_place.py` are in one place, and `two_stage.py` and its tests
+  already load that place. So no `loads`, `reaches` or `loaded_by` gains a line.
+
+### TWOLEG's Lean and the rows
+
+- [read] `cursor/proofs-twoleg-family-ad71` is at `a328e97564b2`. Its commit `9e65cc4c6e6` says its difftest
+  imports `window_place` and holds no copy, and that the file is mine "byte for byte (blob 12a54e8f5073)".
+- [run] The blob of `window_place.py` at my head is `12a54e8f5073`. Neither later commit touched it. That is
+  why its docstring still says "a two-stage stream holds its first stage's challenge source to it": true, and
+  now less than the whole. I change it at the restack, with TWOLEG told, or leave it: your word.
+- [read] Its table is my 33 rows. It keeps the row with a size written 4.0 as a guard in the Lean file, since
+  the difftest's canonical JSON holds integers only. The rows with `true` for a size and an explicit null are
+  ordinary rows there.
+- [read] Its difftest tells my four refusals apart by their words: "is an object, not", "names two sizes",
+  "``stopped`` is true or false" and "is no stop class". [derived] So I change none of those words without
+  telling it.
+- I drop no row. [run]
+
+### The pull request's body, drafted
+
+Not opened: it opens after the carry, at your word. The queue tool adds its own `Refs` line. The four bold
+lines are `##` headings in the pull request; they are bold here so that no reader of this file takes them
+for entries.
+
+~~~markdown
+Lane proofs
+
+**What this changes**
+
+A window's challenger session reserves one family of challenges for each sample, and opens on one root. On
+`main` the two-stage commands take both from files a prover writes. The family is the position of a class's
+directory among those handed to `two_stage.py first`, and afterwards the hand-off's `family`. The root is the
+hand-off's `window_root`. So a hand-off can point a class's sample at any family the session reserved.
+
+After this change both are a function of the class's registration record.
+
+- **One definition of a place.** `verity/protocols/spot/verifier/window_place.py` is new and imports the
+  standard library alone. `of(window)` is `((prompt · 2^32 + outputs) · 2 + stopped) · 2 + blocks`, read from
+  four items of the record's window. `family(window)` is `draw/<place>`. `run(window)` is the root the session
+  opens on. A window has no place where a size is no natural number below 2^32, where `stopped` is neither true
+  nor false, where `population` is not "stop", or where it names the stop blocks of a class that is no stop
+  class.
+- **The first stage reserves by place.** `two_stage.py first` reserves the session's families by each class's
+  place, not by the order of its directories. It refuses the whole window, before any session opens, where a
+  class has no place or two directories name one place.
+- **Reading a sample again.** `two_stage.resume` and `stop_audit.resume` name the family by place and refuse a
+  hand-off that names another. They take the root from the record's window and refuse a hand-off whose root
+  differs.
+- **The source of the challenges is held as well.** `two_stage.first` and `stop_first` refuse, before anything
+  is registered, a source of another family than the class's place's. `service.Stream.select` refuses, with the
+  code `place` and before any challenge is read, a challenger's source of another family than the place the
+  record's window names. That holds a two-stage stream's first stage and the stop audit's one-stage stream.
+
+**What it does not do**
+
+- **The challenger's key.** This change holds the family and the root; the challenger's key is the composite's
+  to pin.
+- **No Lean changes.** The stream's refusal is Python: the Lean stream takes the Python's refusal codes as
+  data, so no Lean file and no lock record changes. The compiled two-stage form's own refusal of a wrong
+  family or root is separate work.
+- **A window that names no place** is held to no family by the stream. Today only the vLLM adapter's boundary
+  records and stop records name `prompt` and `outputs`.
+- **The second stage's own session** (the family `draw/0`, on the interior's root) is unchanged: an interior
+  record's window names no place.
+- **No run on the auditor's devices.** Every test uses the test challenger or a development challenger.
+
+**Imports**
+
+`service.py` loads `window_place` from its own place, and the callers under `benchmarks/one_stage/` load it
+from the verifier, which they load already. `uv run tools/verity/check/import_order.py --check` prints
+`tests/import_order.toml: the same`: no trusted place gains a load, a reach or a loader.
+
+**Tests**
+
+- `verity/protocols/spot/verifier/tests/test_window_place.py` (new): a table of windows and their places, 11
+  placed and 22 refused, each also with six more items a place does not read; places keep classes and
+  populations apart; the run.
+- `verity/protocols/spot/verifier/tests/test_two_stage.py`: a sample on a source of another family is refused
+  with `place` and samples nothing, on a two-stage stream's first stage and on a one-stage stream; on its
+  place's family it samples; a window that names no place samples as before.
+- `benchmarks/one_stage/tests/test_two_stage_driver.py`: a layout's place is its record's window's; the first
+  stage reserves by place and refuses two directories of one place; both `resume`s refuse another family or
+  root; `first` and `stop_first` refuse a source of another family.
+- `benchmarks/one_stage/tests/test_stop_audit.py`, `test_two_stage_second.py`, `test_verdict_record.py`: as
+  before, on placed sources.
+~~~
+
+The title I would give it: "Two-stage: a sample's family and its session's root are its record's window's,
+never a file's".
+
+### For the carry
+
+- [run, earlier today] Chain 2 moves `verity/protocols/spot/` to `verity/protocols/proofs/spot/`. With this
+  head that is `window_place.py`, `service.py`, the README and the verifier's three test files as well as
+  `coins.py`. `tools/move/restack.py` carries them; I rewrite nothing by hand.
+- [run] Against Friday's `984cb027efa3`, `git merge-tree` finds no conflict in any file B changes. The four
+  lines of a test that the merged tree needs are in the 16:30Z entry.
+- At your word "carry" I restack, run the five test files on a node, and name the head. I do not mark it.
+
+### Branches
+
+B `cursor/proofs-stopdriver-family-ffc6` `46811047714e`, on `main` `053b8e50fe8a`. Unchanged: #9699
+`725720f8a4a0`, #9624 `64364792ed70`, cards `08b5d4b3c0a6`, #9458 `049c5875989c`. One run is out:
+`r20261113-150415-f8fa`, launched 15:04Z. My timer is 20 minutes.
+
+### Not established
+
+1. The head has not finished its run. The verifier's test of the one-stage case is new and has not run
+   anywhere: its stream needs the Lean verifier's executable, which my VM does not build.
+2. TWOLEG's answer on the three rows. I read its branch, not an entry of its own, and its last commit says
+   "Not compiled".
+3. Whether the stream should refuse a boundary record whose window names no place, as the compiled form will.
+   Today that would refuse every stream that is not the vLLM adapter's.
+4. Nothing ran against the challenger on the auditor's device. Every test uses the test challenger or a
+   development challenger.
+5. The body's sentence on the key repeats your 14:39Z relay of soundness. I have not read the pull request it
+   names.
