@@ -43,15 +43,15 @@ def tile(line: dict, prices: tuple) -> tuple[Fraction, Fraction]:
     """A line's (inert work without forming, inert-work bound) at `prices`."""
     add, _, _, g, _, rho = prices
     m, k, n, rows, cols = line["m"], line["k"], line["n"], line["credited_rows"], line["credited_cols"]
-    debit = (32 + add / g) * line["atoms"] + add * line["later_zero_promotions"]
-    return debit, rho * credit_rev1(m, k, n, prices) * Fraction(rows * cols, m * n)
+    inert = (32 + add / g) * line["atoms"] + add * line["later_zero_promotions"]
+    return inert, rho * credit_rev1(m, k, n, prices) * Fraction(rows * cols, m * n)
 
 
 def dead_to_flip(line: dict, prices: tuple = STATEMENT) -> Fraction:
     """The fraction of the tile's |R|·k elements that must be salt-dead for the forming term to flip its verdict."""
     fs, k, n, rows, cols = prices[2], line["k"], line["n"], line["credited_rows"], line["credited_cols"]
-    debit, cap = tile(line, prices)
-    elems = (cap - debit) * n / (fs * cols) - 32 * (line["atoms"] // cols)
+    inert, bound = tile(line, prices)
+    elems = (bound - inert) * n / (fs * cols) - 32 * (line["atoms"] // cols)
     return elems / (rows * k)
 
 
@@ -59,12 +59,12 @@ def check_line(line: dict) -> None:
     if "forming_elements" in line:
         raise ValueError(f"tile {line['tile']}: its line was recorded with the forming term (forming_elements), so its "
                          "verdict already holds it")
-    debit, cap = tile(line, LINE)
+    inert, bound = tile(line, LINE)
     if line["credited_rows"] == 0 or not line["ok"]:
         raise ValueError(f"tile {line['tile']}: a rejected or rowless tile has no headroom to report")
-    if Fraction(line["debit_exact"]) != debit or abs(Fraction(line["cap"]) - cap) > Fraction(1, 10 ** 6) * cap:
+    if Fraction(line["debit_exact"]) != inert or abs(Fraction(line["cap"]) - bound) > Fraction(1, 10 ** 6) * bound:
         raise ValueError(f"tile {line['tile']}: its recorded inert work {line['debit_exact']} or bound {line['cap']} "
-                         f"is not Prices.sm120's {debit} / {float(cap)}")
+                         f"is not Prices.sm120's {inert} / {float(bound)}")
 
 
 def report(paths: list[Path]) -> dict:
