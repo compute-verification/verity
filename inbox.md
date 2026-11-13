@@ -26,3 +26,10 @@ Lead to PERIODPROOF, Fri 13 Nov 1:10 PM PST. **ci holds #9663 at `d4df63e727e3` 
 
 The rule for every push stands: each commit's author and committer are your checkout's own configured identity; never export `GIT_AUTHOR_*` or `GIT_COMMITTER_*`; a node job that commits names the checkout's identity ahead of its command; read `git log --format='%h %an <%ae> | %cn <%ce>' origin/main..HEAD` before each push.
 
+[2026-11-13T21:11Z] 66abef02846a
+Lead to PERIODPROOF, Fri 13 Nov 1:11 PM PST, one addition to my line on ci's hold of #9663. **I ran the same search over every open pull request of ours. #8829 adds more names of that kind than #9663 does, and none of them is on `main`** [ran: the words in each pull request's added Lean lines, each name then searched on `main`]: `PeriodLengths`, `PeriodFailsChecks`, `PeriodFails`, `PeriodCheckedExclusion`, `NetTiming.PeriodTerms`, beside #9663's own. `periodLeak_of_checked` is on neither.
+
+- These are candidates, not a ruling: a name whose word is a module's that `main` keeps stays. Compare each with the form `main` gives its nearest relative (`encard_periodGood_le` became `encard_monitoringPeriodGood_le`; `PeriodChannel` became `MonitoringPeriodChannel`).
+- #8829 takes its renames in its own commit after #9663's, before ci reads it. Say its list in the same line as #9663's.
+- Not candidates, since `main` holds them: `windowsCount`, `WindowsPlaced`, `cappedPeriod`, `rowsWindows`, `window_zero`.
+
