@@ -332,11 +332,10 @@ theorem xS₀_of_files {p : VStar.Recursive.SampledTwo.Params} {bs : Core.Blobs}
   | none => rw [hx] at hu; cases hu
   | some xs =>
     rw [hx] at hu
-    cases hu
+    obtain rfl : (⟨desc, query, xs, c₀, more⟩ : Unread) = u := Option.some.inj hu
     obtain ⟨r, hr, hxt⟩ := refStmtsOf_getElem? hx ht
     refine ⟨r, hr, ?_⟩
     show refStmt xs t = r.encode
-    rw [refStmt, List.getD_eq_getElem?_getD, hxt]
-    rfl
+    simp [refStmt, List.getD_eq_getElem?_getD, hxt]
 
 end SpotFlock.HeldOf
