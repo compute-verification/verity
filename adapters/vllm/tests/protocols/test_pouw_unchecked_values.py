@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier.serving import SCHEDULES
 
 from verity_vllm.protocols import pouw as P
 from verity_vllm.protocols.pouw import pearl_c as PPD
@@ -133,6 +134,36 @@ def test_forked_steps_without_a_driver_are_built_and_fail_when_the_first_runs(mo
     with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'record'"):
         out[0]()
     assert ran == [] and run.kernel.dev.stream == 5
+
+
+def test_a_calls_side_steps_run_on_the_side_lane_it_took_and_fail_at_its_handle_where_the_run_holds_none():
+    """`_lanes` hands the side lane it took for the call on unchecked.  Off the GPU the call's own steps run on the
+    caller's handle and its side steps on the lane's.  With None in the run's ``sides`` the own steps still run, no side
+    step does, and the lane's handle is where it fails; the device's stream and the launching lane are unset after both."""
+    pytest.importorskip("torch")
+    ran: list = []
+    buf = SimpleNamespace(data_ptr=lambda: 64)
+    rotated = dict.fromkeys(("c", "segdig_t", "u"), buf)
+    kernel = SimpleNamespace(dev=SimpleNamespace(stream=5))
+    steps, side = [lambda: ran.append(("own", kernel.dev.stream))], [lambda: ran.append(("side", kernel.dev.stream))]
+
+    def launched(lane):
+        sh = SimpleNamespace(turn=0, sets=[rotated], m16=16, done=[None], buf=lambda name: buf)
+        run = SimpleNamespace(device=SimpleNamespace(type="cpu"), schedule=SCHEDULES["deferred-caller"], main=None,
+                              sides=[lane], _side_turn=0, hashing=False, nb=64, kernel=kernel, _launching="a lane")
+        pipe = SimpleNamespace(b={}, keys={})
+        try:
+            return L.LaneCalls._lanes(run, 7, sh, pipe, steps, side, 3, "the caller's stream", 0, False)
+        finally:
+            assert (sh.turn, run._side_turn, sh.done) == (1, 1, [None]) and pipe.keys == {"dom_a": 64, "unit": 128}
+            assert pipe.b == dict.fromkeys(rotated, 64) and kernel.dev.stream is None and run._launching is None
+
+    assert launched(SimpleNamespace(raw=11, stream=None, event=None, tree_event=None)) == (None, False)
+    assert ran == [("own", 3), ("side", 11)]
+    ran.clear()
+    with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'raw'"):
+        launched(None)
+    assert ran == [("own", 3)]
 
 
 NO_BASE_YET = r"unsupported operand type\(s\) for \+: 'NoneType' and 'int'"
