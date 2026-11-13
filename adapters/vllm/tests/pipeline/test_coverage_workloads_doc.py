@@ -67,6 +67,7 @@ def test_a_cell_s_document_states_its_lengths_its_schedule_and_the_arguments_tha
     assert doc["schedule_if_full_length"] == sim
     assert (doc["prompt_lengths"], doc["max_tokens"]) == (sorted({n for n, _, _ in LENGTHS}), sorted({n for _, n, _ in LENGTHS}))
     rule = doc["length_rule"]
+    assert list(rule) == ["prompt_len", "max_tokens", "arrive_step", "depends_on"]
     assert (rule["prompt_len"], rule["max_tokens"], rule["depends_on"]) == ("U{32..256}", "max(2, prompt_len // 10)", "(profile, ctx, seed) only")
     assert doc["tokenizer_note"] == ("prompt_token_ids from tokenizer.json sha256 5a5a5a5a5a5a5a5a (tokenizers, add_special_tokens=False), "
                                      "natural text from corpus_coverage.json, truncated to prompt_len; prompt_text is the decode of the ids (informational)")
@@ -156,7 +157,8 @@ def test_an_idle_engine_admits_the_next_arrival_at_once_and_a_budget_that_fits_n
 def test_a_tight_budget_goes_to_the_running_requests_first_and_cuts_a_prompt_into_chunks(rows, budget, steps, chunks, partial_steps, first, finish,
                                                                                         partial, mixed):
     sim = gw.simulate_schedule_chunked([{"prompt_len": p, "max_tokens": m, "arrive_step": 0} for p, m in rows], budget)
-    assert sim.pop("policy").startswith("vLLM V1: running first (1 decode token / remaining prompt), then waiting in arrival order")
+    assert sim.pop("policy") == ("vLLM V1: running first (1 decode token / remaining prompt), then waiting in arrival order with the remaining "
+                                 "budget; first token sampled at the step that completes the prompt; no preemption; every request to max_tokens")
     assert sim == {"expected_engine_steps": steps, "peak_concurrent": 3, "membership_changes": 1, "steps_with_mixed_prefill_decode": mixed,
                    "steps_with_partial_prefill": partial, "max_num_batched_tokens": budget, "max_num_seqs": 8, "prefill_chunks": chunks,
                    "partial_prefill_steps": partial_steps, "first_token_step": first, "finish_step": finish, "admitted_step": [0, 0, 0]}
@@ -199,19 +201,19 @@ def test_a_dry_run_prints_each_cell_s_lengths_and_schedule_and_reads_no_tokenize
     def no_tokenizer(path):
         raise AssertionError("a dry run reads no tokenizer")
 
-    def line(profile, schedule):
-        return f"{profile} C256 {[tuple(d.values()) for d in cells[profile]]} {schedule(cells[profile])}"
+    def line(cell, schedule):
+        return f"{cell[0]} {cell[1]} {[tuple(d.values()) for d in cells[cell]]} {schedule(cells[cell])}"
 
-    cells = {profile: _lengths(_doc(profile)) for profile in ("B1", "B8-mixed")}         # the lengths each cell's document states
-    assert [tuple(d.values()) for d in cells["B8-mixed"]] == LENGTHS and len(cells["B1"]) == 1
+    # the lengths each cell's document states, in the order the command goes through the cells
+    cells = {(profile, ctx): _lengths(_doc(profile, ctx)) for profile in ("B1", "B8-mixed") for ctx in ("C256", "C1024")}
+    assert [tuple(d.values()) for d in cells["B8-mixed", "C256"]] == LENGTHS and [len(c) for c in cells.values()] == [1, 1, 8, 8]
     monkeypatch.setattr(gw, "Tok", no_tokenizer)
-    given = {"case": "B0", "model": "m", "tokenizer": "t", "profiles": "B1,B8-mixed", "ctx": "C256", "seed": 3, "out_dir": str(tmp_path / "out"),
-             "dry_run": True}
+    given = {"case": "B0", "model": "m", "tokenizer": "t", "profiles": "B1,B8-mixed", "ctx": "C256,C1024", "seed": 3,
+             "out_dir": str(tmp_path / "out"), "dry_run": True}
     assert gw.main(gw.Options(**given)) == 0
-    assert capsys.readouterr().out.splitlines() == [line(profile, gw.simulate_schedule) for profile in ("B1", "B8-mixed")]
+    assert capsys.readouterr().out.splitlines() == [line(cell, gw.simulate_schedule) for cell in cells]
     assert gw.main(gw.Options(**given, variant=["t1", "chunked=64"])) == 0
-    assert capsys.readouterr().out.splitlines() == [line(profile, lambda lengths: gw.simulate_schedule_chunked(lengths, 64))
-                                                    for profile in ("B1", "B8-mixed")]
+    assert capsys.readouterr().out.splitlines() == [line(cell, lambda lengths: gw.simulate_schedule_chunked(lengths, 64)) for cell in cells]
     assert not (tmp_path / "out").exists()
 
 
