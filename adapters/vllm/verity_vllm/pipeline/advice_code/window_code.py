@@ -74,7 +74,7 @@ from verity.protocols.certifier.prover.window_charge import Advice as Window
 from verity.protocols.certifier.verifier.arith_encode import CW
 from verity_vllm.pipeline.advice_code import arith as C
 
-__all__ = ["Book", "capped", "Caps", "code_window", "CoderState", "context_key", "decode", "decode_tailed", "decode_windows",
+__all__ = ["Book", "capped", "Caps", "code_executionPhase", "CoderState", "context_key", "decode", "decode_tailed", "decode_windows",
     "Decoder", "DEFAULT_CAPS", "encode", "Encoded", "Encoder", "ints", "KT", "pack", "unpack"]
 
 
@@ -357,7 +357,7 @@ class CoderState:
         self.run, self.resume, self.step, self.index = 0, -1, -1, -1
 
 
-def code_window(c: Any, win: Window | None, st: CoderState) -> Window:
+def code_executionPhase(c: Any, win: Window | None, st: CoderState) -> Window:
     """One window's symbols, written once for every direction: `win` is None when decoding."""
     caps = c.book.caps
 
@@ -406,7 +406,7 @@ def encode(windows: Sequence[Window], book: Book, tails: Sequence[Sequence[tuple
     e, st = Encoder(book), CoderState()
     for w, win in enumerate(windows):
         e.window()
-        code_window(e, win, st)
+        code_executionPhase(e, win, st)
         for v, n in tails[w] if tails else ():
             e.raw(v, n)
     for w in range(len(windows)) if coded is not None else ():
@@ -437,7 +437,7 @@ def decode_windows(d: Decoder, widths: Sequence[Sequence[int]]) -> tuple[list[Wi
     out, tails = [], []
     for ws in widths:
         d.window()
-        out.append(code_window(d, None, st))
+        out.append(code_executionPhase(d, None, st))
         tails.append([d.raw(n) for n in ws])
     d._close()
     return out, tails
