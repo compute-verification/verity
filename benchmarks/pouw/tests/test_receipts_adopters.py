@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 POUW = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/pouw/receipts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/pouw/verifier/receipts"))
 
 import receipt_conform as C  # noqa: E402
 
