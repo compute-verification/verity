@@ -4,7 +4,6 @@ A job is a `[[job]]` table:
 - `name`: unique;
 - `owner`: a handle in the Slack registry (`.agents/skills/using-slack/registry.json`), the agent to ask about the job;
 - `group`: check.py's group, numbered from 1; the groups run at once, and a group's jobs run in file order;
-- `halts`: optional, its failure stops the run;
 - `halts_on`: optional, a line in its output that stops the run;
 - `merge_requires`: optional, the changed paths for which `research merge` needs this job to have passed;
 - `needs`: optional, the earlier jobs of its group whose output it reads in the checkout, so a shard that runs it runs them.
@@ -24,9 +23,10 @@ no `merge_requires`, and no job on the gate `needs` it or runs `after` it.
 
 A `[[plan]]` is one way to split a check over several machines (`check.py --shard K/N`): `shards`, a list of N lists of
 selectors, shard K the K-th. A selector is a job's name, or for a job in `SPLIT`, `JOB:PART` (one part: for `lean-audit`, a
-Lake package with a `lean-audit.json`; for `circuit-check`, one of its `shards`, `K/N`; for `lean-suites`, one of its suites,
-or of one that declares `[tool.verity.tests] parts = P`, one of its parts by test id, `SUITE:K/P`) or `JOB:*` (its parts no
-other selector of the plan names). Every job on the gate is in exactly one shard, whole or, for a split job, as named parts
+Lake package with a `lean-audit.json`; for `circuit-check`, one of its `shards`, `K/N`; for `lean-suites` and `pytest`, one of
+its suites, or of one that declares `[tool.verity.tests] parts = P`, one of its parts by test id, `SUITE:K/P`) or `JOB:*` (its
+parts no other selector of the plan names). pytest has parts only in a plan that names one (`check.py`'s `_parts_of`): in
+any other it runs whole. Every job on the gate is in exactly one shard, whole or, for a split job, as named parts
 plus exactly one `*`, and a job off it in at most one (a shard skips it either way: a plan that keeps it puts it back on the
 gate in one line); a shard that holds a job whole holds what it `needs` or runs `after`, and one that holds parts of a split
 job runs what that job needs beside them when it doesn't hold it (`check.py`'s `groups`: lean-build beside lean-suites'
@@ -49,14 +49,15 @@ PATH = ROOT / "tools" / "verity" / "check" / "ci.toml"
 #: drive's policy (`research.policy`), whose `off_gate` takes jobs off the merge gate
 POLICY = ROOT / "tools" / "verity" / "check" / "policy.toml"
 REGISTRY = ROOT / ".agents" / "skills" / "using-slack" / "registry.json"
-FIELDS = {"name": str, "owner": str, "group": int, "halts": bool, "halts_on": str, "merge_requires": list, "needs": list,
+FIELDS = {"name": str, "owner": str, "group": int, "halts_on": str, "merge_requires": list, "needs": list,
           "after": str, "part": str, "shards": int}
 REQUIRED = ("name", "owner", "group")
 #: the jobs a plan may split, and what their parts are
 SPLIT = {"lean-audit": "the Lake packages with a lean-audit.json",
          "circuit-check": "its `shards` shards of its targets, K/N (`circuit-check --all --shard K/N`)",
          "lean-suites": "its suites (`suites.AFTER_LEAN`), one that declares `[tool.verity.tests] parts = P` as its P parts by "
-                        "test id, SUITE:K/P (`suites.py SUITE:K/P`)"}
+                        "test id, SUITE:K/P (`suites.py SUITE:K/P`)",
+         "pytest": "its suites (all but `suites.AFTER_LEAN`), as lean-suites', in a plan that names one"}
 #: the split jobs whose parts are shards of their own work, as many as their `shards` say (none given: the job runs whole)
 SHARDED = ("circuit-check",)
 #: the parts a check runs alone (`check.py PART...`)
@@ -72,7 +73,6 @@ class Job:
     name: str
     owner: str
     group: int
-    halts: bool = False
     halts_on: str | None = None
     merge_requires: tuple[str, ...] = ()
     needs: tuple[str, ...] = ()
@@ -129,7 +129,7 @@ def parse(text: str, handles: set[str], source: str = "ci.toml", off: tuple[str,
         if bad := [n for n in t.get("needs", []) if n not in earlier]:
             raise DeclarationError(f"{where}: needs {bad}, which aren't earlier jobs of its group")
         seen.add(t["name"])
-        jobs.append(Job(t["name"], t["owner"], t["group"], t.get("halts", False), t.get("halts_on"),
+        jobs.append(Job(t["name"], t["owner"], t["group"], t.get("halts_on"),
                         tuple(t.get("merge_requires", ())), tuple(t.get("needs", ())), t.get("after"), t.get("part"),
                         t["name"] not in off, t.get("shards")))
     if not jobs:
@@ -236,12 +236,12 @@ def needed(jobs: list[Job], names: list[str]) -> set[str]:
 
 def job_parts(job: Job, parts_of: dict[str, list[str]]) -> list[str] | None:
     """A split job's parts, or None for a job that runs whole: a `SHARDED` job's ``K/N`` for K = 1..N, its `shards` (none given:
-    whole), another split job's from ``parts_of`` (the tree's), sorted."""
+    whole), another split job's from ``parts_of`` (the tree's, for a plan; one it leaves out: whole), sorted."""
     if job.name not in SPLIT:
         return None
     if job.name in SHARDED:
         return None if job.shards is None else [f"{k}/{job.shards}" for k in range(1, job.shards + 1)]
-    return sorted(parts_of[job.name])
+    return sorted(parts_of[job.name]) if job.name in parts_of else None
 
 
 def all_parts(jobs: list[Job], parts_of: dict[str, list[str]]) -> list[str]:

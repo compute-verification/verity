@@ -19,9 +19,13 @@ import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # fused_arm (the fused tables' FusedStep), wherever loaded from
 from arms import FILL_V1_SPLIT, NONE, Colocation, Filler, point_lookup
+
+if TYPE_CHECKING:
+    from fused_arm import FusedStep
 
 SOURCES = ("benchmarks/pouw/filler/dcap.cu", "benchmarks/pouw/filler/pfill.cuh",
            "benchmarks/pouw/filler/pfill_arm.py")
@@ -47,7 +51,7 @@ class PFillRam:
     def __post_init__(self):
         os.environ["NVCC_APPEND_FLAGS"] = self.nvcc_flags
 
-    def placement(self, phase, b, l):
+    def placement(self, phase: str, b: int, l: int) -> Colocation:
         if phase == "prefill":
             return NONE
         return Colocation("split", point_lookup(FILL_V1_SPLIT, b, l))
@@ -88,7 +92,7 @@ class PFillPowerSplit(PFillRam):
     choice: str = ("HC-POWER's offline table of 15 (B, L) decode splits and one prefill split; a lookup and a green split "
                    "at serving time")
 
-    def placement(self, phase, b, l):
+    def placement(self, phase: str, b: int, l: int) -> Colocation:
         if phase == "prefill":
             return Colocation("split", 4)
         return Colocation("split", point_lookup(POWER_SPLIT, b, l))
@@ -187,12 +191,12 @@ class PFillKPhase(PFillK):
     def _row(self, b, l):
         return point_lookup(self.table, b, l)
 
-    def placement(self, phase, b, l):
+    def placement(self, phase: str, b: int, l: int) -> Colocation:
         if phase == "prefill":
             return Colocation("split", 4)
         return Colocation("split", self._row(b, l)[0])
 
-    def phase(self, phase, b, l):
+    def phase(self, phase: str, b: int, l: int) -> PhaseFill | None:
         return None if phase == "prefill" else self._row(b, l)[1]
 
 
@@ -244,12 +248,12 @@ class PFillKFused(PFillK):
     def _row(self, b, l):
         return point_lookup(self.table, b, l)
 
-    def placement(self, phase, b, l):
+    def placement(self, phase: str, b: int, l: int) -> Colocation:
         if phase == "prefill":
             return Colocation("split", 4)
         return Colocation("split", self._row(b, l)[0])
 
-    def fused(self, phase, b, l):
+    def fused(self, phase: str, b: int, l: int) -> "FusedStep | None":
         return None if phase == "prefill" else self._row(b, l)[1]
 
 
@@ -371,7 +375,7 @@ class PFillBUDuoFPhase(PFillBUDuoFused4):
     nvcc_flags: str = "-DPFILL_BU -DPF_PW=4 -Xcompiler -mpopcnt"
     table = {k: (s, q, p and PhaseFill(NC=2, tiles=p.tiles)) for k, (s, q, p) in FUSED_PHASE_K4.items()}
 
-    def phase(self, phase, b, l):
+    def phase(self, phase: str, b: int, l: int) -> PhaseFill | None:
         return None if phase == "prefill" else self._row(b, l)[2]
 
 

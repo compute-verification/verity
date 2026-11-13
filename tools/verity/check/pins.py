@@ -174,7 +174,7 @@ WRITERS = (
 WRITER_DIRS = (CIRCUITS_TESTS, VLLM_PROGRAM_TESTS)
 SETUP = "tools/verity/lean/setup.sh"
 #: tracked files that record Lean sources' digests and are someone else's to keep: the Lean check's locks, and the moves' history
-EXEMPT = re.compile(r"(^|/)lean-audit\.json$|^tools/move/|^archive/")
+EXEMPT = re.compile(r"(^|/)lean-audit\.json$|^tools/move/")
 
 
 def ignored(root: Path, paths: list[str]) -> set[str]:

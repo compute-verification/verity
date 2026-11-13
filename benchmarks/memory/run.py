@@ -1,6 +1,7 @@
 """`verity bench memory`: the share of a node's memory read rate that one accepted PoUB session leaves uncertified, at
 the data sheet's read bandwidth: the session's γ in its verifier's ledger at the specification's rate, as text and as
 one line of JSON (`value`, `unit`, `commit`, `run`). A session that wasn't accepted prints no number and exits 1.
+The text says how the number's error reads (`ERROR_FORM`): the ledger's δ for that γ, and the term no δ holds.
 
     verity bench memory PERIOD [--dry-run]        the node run: a gate run under the challenger's period PERIOD
     verity bench memory --from RUN [--session K]  a recorded run
@@ -26,11 +27,22 @@ run this command's `--loopback` left, that it was one.
 `--loopback` runs `remote_session/run.sh` with ROLE=both and the prover the driver's CPU reference over a small test
 store. No node is audited, so it certifies nothing, and its output says so.
 
-Beside the number it prints two references, each from its run in the store with the run's date and card: the share of
-a card's memory PoUS certified held, and the share a wipe left foreign at most. `references.json` names their runs;
+Beside the number it prints two references, each from its run in the store with the run's date and card: PoUS's state
+bound over a card's memory, and the share a wipe left foreign at most. `references.json` names their runs;
 a reference that can't be read prints its reason in place of a number. Under `research run` the printed document is
 also `$RESEARCH_RUN_DIR/out/memory.json`; a run that ran `--loopback` keeps a loopback's document there whatever it
 prints afterwards, since that document is how `--from` knows the run's session for a loopback.
+
+Under `research run` an accepted session of a node run or of `--from` also writes the run's result,
+`$RESEARCH_RUN_DIR/result.json`, the file `research` reads a run's result from, through the harness kit's writer
+(`verity_bench.kit`), in the fields every resource's benchmark reports (`amounts`), each from the verifier's record
+alone and named in its `inputs` by the record's key: `metric` (the printed number in its unit), `verified` (the bytes
+the verifier certified read over the session's span), `capacity at READING` and `free at READING` for each reading the
+ledger holds (`READINGS`: the node's read rate times the span, and γ of it), and `error` (the probability the verified
+amount doesn't hold). A reading's rate is the verifier's own figure for the node (`timing.py`), not the registered
+hardware's, and the capacity's unit says so. The references are other runs' numbers and are not in the result; a
+loopback writes none, since it certifies nothing, and a session that wasn't accepted writes none, as it prints no
+number.
 """
 from __future__ import annotations
 
@@ -45,6 +57,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+from verity_bench import kit
 from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
@@ -57,6 +70,9 @@ SETTINGS = of(__file__)
 #: openings a window
 UNPACED = re.compile(r"([1-9]\d*):(\d+(?:\.\d{1,3})?):([1-9]\d*)")
 UNIT = "share of the node's memory read rate left uncertified, at the data sheet's read bandwidth"
+#: how the number's error reads, in PoUB's ledger's words (its `DELTA_FORM`): δ is the session's, in its verifier's
+#: ledger, and the windows' PRF advantages are in no δ
+ERROR_FORM = "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)"
 ROLE = "LLAMA32_1B_BF16"
 REFERENCES = HERE / "references.json"
 #: a block of PoUB's store, in bytes
@@ -66,6 +82,19 @@ RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.jso
 LOOPBACK = ("loopback: both processes ran on this machine, the prover the CPU reference over a test store; it "
             "certifies nothing")
 NOTHING = "a share of 1 or more certifies nothing of the node's read rate"
+#: the readings of the verifier's ledger, each the key it holds one under and the read rate it takes for the node: the
+#: number is printed at the first
+READINGS = {"spec": "the data sheet's read bandwidth", "measured": "the measured read rate"}
+#: the unit of the result's amounts
+BYTES = "bytes over the session's span"
+#: where a capacity's rate comes from, which its unit says
+OWN_RATE = "the verifier's own figure for the node (its timing.py), not the registered hardware's"
+#: the result's error: which of the record's two it is, how the whole error reads (`ERROR_FORM`), and so what this
+#: number leaves out
+ERROR = ("probability that the verified amount doesn't hold, read window by window as the share is: the ledger's error "
+         "with the sketch's term and the sample's rejection and binding terms added. The whole error reads "
+         f"{ERROR_FORM}, this number its δ: the windows' PRF advantages, which the record names with no value, are "
+         "not in it")
 #: the wipe run's label states its bound in words
 WIPE = re.compile(r"foreign <= ([\d,]+) bits\b.*\bM = ([\d,]+) B\b")
 #: minutes the node run waits for a launched run's record: the fire run's own bound and its publish
@@ -161,13 +190,15 @@ def session(record: Path, k: int | None) -> dict:
             "rate_bytes_per_s": (ledger.get("inputs") or {}).get("spec_bytes_per_s"),
             "store_bytes": blocks * BLOCK_BYTES,
             "node_gpu_bytes": (ledger.get("memory") or {}).get("hbm_bytes"),
-            "model": binding.get("name") if binding.get("bound") is True else None}
+            "model": binding.get("name") if binding.get("bound") is True else None,
+            "ledger": ledger}
 
 
 def document(s: dict, commit: str | None, run: str | None, *, loopback: bool, host_run: str | None = None) -> dict:
     """The printed document of session `s` (`session`), before its references: the number, its unit, the commit the
     session ran from and its run, then what it was measured on. `host_run` is the auditor's verifier host's run that
-    held the verifier, None for a verifier that ran anywhere else."""
+    held the verifier, None for a verifier that ran anywhere else. It carries the session's ledger as its verifier
+    recorded it under `ledger`, which the command takes out before it prints (`amounts` reads it)."""
     return {"value": s["value"], "unit": UNIT, "commit": commit, "run": run, "loopback": loopback, "host_run": host_run,
             **{k: v for k, v in s.items() if k != "value"}}
 
@@ -297,7 +328,12 @@ def _gb(n: float) -> str:
 
 
 def pous(store, run: str) -> dict:
-    """The share of the card's memory a PoUS session certified held, from its run's summary."""
+    """A PoUS session's state bound over the card's memory, from its run's summary. `s_bits` is S₀ = ⌊ρ·|C|⌋, a
+    lower bound on the device's memory, its on-chip state and a round of side-channel traffic together: it is not
+    the device memory credited. PoUS's statement of the memory held over a monitoring period
+    (`security/Properties/Pous/`) credits S over a window of `len` ticks where S·len + S_chip + c ≤ S₀, c the side
+    channels' capacity over a round, and no credited figure is printed, since no record holds the window and no
+    card file a side channel's capacity."""
     a = store.attempt(run) or {}
     tree = store.files(run, ["out/summary.json"])
     if tree is None:
@@ -306,7 +342,9 @@ def pous(store, run: str) -> dict:
     if d["certificate"].get("certified") is not True:
         raise Unreadable(f"{run}'s record certifies nothing")
     held, total = d["certificate"]["s_bits"] / 8, d["held"]["total_bytes"]
-    return {"value": held / total, "unit": "share of the card's memory certified held",
+    return {"value": held / total, "unit": "PoUS's state bound over the card's memory: s_bits is S0 = floor(rho*|C|), "
+            "a lower bound on the device's memory, its on-chip state and a round of side-channel traffic together, "
+            "not the device memory credited",
             "detail": f"{_gb(held)} of {_gb(total)}",
             "card": d["held"].get("device") or (a.get("conditions") or {}).get("hw.sku")}
 
@@ -323,7 +361,7 @@ def wipe(store, run: str) -> dict:
             "detail": f"{_gb(bits / 8)} of {_gb(memory)}", "card": (a.get("conditions") or {}).get("hw.sku")}
 
 
-READERS = {"PoUS memory held": pous, "wipe residue": wipe}
+READERS = {"PoUS state bound": pous, "wipe residue": wipe}
 
 
 def beside(store_of: Callable[[], object]) -> list[dict]:
@@ -343,11 +381,78 @@ def beside(store_of: Callable[[], object]) -> list[dict]:
     return out
 
 
+def _at(ledger: dict, *keys: str) -> float | None:
+    """The number the session's ledger holds under `keys`, None where it holds none there."""
+    x = ledger
+    for k in keys:
+        x = x.get(k) if isinstance(x, dict) else None
+    return None if isinstance(x, bool) or not isinstance(x, (int, float)) else x
+
+
+def amounts(doc: dict, ledger: dict) -> list[dict]:
+    """The result a printed document `doc` and its session's `ledger` give in the fields every resource's benchmark
+    reports, as the kit writer's measurements, each from the verifier's record alone; its `inputs` are the recorded
+    run and the keys of the session's entry in that record it was read from.
+
+    - `metric`: the printed number in its unit.
+    - `verified`: the bytes the verifier certified read over the session's span, its own `certified_bytes` at the
+      reading the number is printed at; none at a share of 1 or more, which certifies nothing.
+    - `capacity at READING`, for each reading the ledger holds (`READINGS`): the reading's read rate times the
+      session's span, the whole the verifier takes γ's terms as fractions of. The rate is the verifier's own figure
+      for the node, not the registered hardware's, and the unit says so.
+    - `free at READING`: γ of that capacity, so free over capacity is the reading's γ, and at the first reading the
+      printed number; all of it at a share of 1 or more. Verified and free are the capacity but for the float's last
+      place.
+    - `error`: the probability the verified amount doesn't hold, read window by window as γ is: the record's declared
+      error at the first reading, which adds the sketch's term and the sample's rejection and binding terms to the
+      ledger's own and holds no PRF advantage, so its unit says how the whole error reads (`ERROR`, with
+      `ERROR_FORM`'s words). The rate isn't in it, so every reading's is the same.
+
+    A measurement whose keys the record doesn't hold as numbers is left out."""
+    run = [doc["run"]] if doc["run"] else []
+    first = next(iter(READINGS))
+    out = [{"name": "metric", "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{first}.gamma"]}]
+    if (verified := _at(ledger, first, "certified_bytes")) is not None:
+        out.append({"name": "verified", "value": max(verified, 0.0), "unit": BYTES,
+                    "inputs": [*run, f"ledger.{first}.certified_bytes"]})
+    span = _at(ledger, "inputs", "span_ns")
+    for reading, rate_is in READINGS.items():
+        rate, gamma = _at(ledger, reading, "capacity_bytes_per_s"), _at(ledger, reading, "gamma")
+        if span is None or rate is None or gamma is None:
+            continue
+        capacity = rate * span / 1e9
+        keys = [f"ledger.{reading}.capacity_bytes_per_s", "ledger.inputs.span_ns"]
+        out += [{"name": f"capacity at {reading}", "value": capacity, "unit": f"{BYTES}, at {rate_is}: {OWN_RATE}",
+                 "inputs": [*run, *keys]},
+                {"name": f"free at {reading}", "value": min(gamma, 1.0) * capacity, "unit": BYTES,
+                 "inputs": [*run, f"ledger.{reading}.gamma", *keys]}]
+    if (error := _at(ledger, "declared", "gamma", first, "error", "windows")) is not None:
+        out.append({"name": "error", "value": error, "unit": ERROR,
+                    "inputs": [*run, f"ledger.declared.gamma.{first}.error.windows"]})
+    return out
+
+
+def result(held: Path, measured: list[dict]) -> None:
+    """Appends `measured` to the result of the run whose directory is `held`, `held/result.json`, through the harness
+    kit's writer, which stamps each with this run, its commit and this host. The writer is given the run's directory
+    itself, not its `out/`: a run has one result, and that file is where `research` reads it. A result holds one
+    measurement a name, so a run that prints a second session keeps its first one's result, and says so."""
+    names = ", ".join(m["name"] for m in measured)
+    try:
+        writer = kit.writer(held)
+        for m in measured:
+            writer.measurement(**m)
+    except ValueError as e:
+        print(f"memory: the result ({names}) is not written: {e}", file=sys.stderr)
+
+
 def text(doc: dict) -> str:
-    """The printed lines of a document: the number, what it was measured on, and the references."""
+    """The printed lines of a document: the number and how its error reads, what it was measured on, and the
+    references."""
     rate = doc.get("rate_bytes_per_s")
     lines = [f"memory: {doc['value']:.3f} of the node's memory read rate is left uncertified by this session, at the "
-             f"data sheet's read bandwidth" + (f" ({rate / 1e12:,.4f} TB/s)" if rate else "")]
+             f"data sheet's read bandwidth" + (f" ({rate / 1e12:,.4f} TB/s)" if rate else "")
+             + f"; its error reads {ERROR_FORM}, δ in the verifier's ledger"]
     if doc["loopback"]:
         lines.append(f"  {LOOPBACK}")
     elif doc["value"] >= 1:
@@ -395,6 +500,7 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
         held = SETTINGS.RESEARCH_RUN_DIR
         # a run that ran the loopback keeps a loopback's document, the mark `--from` that run reads
         kept = bool(held) and not doc["loopback"] and left(Path(held)).get("loopback") is True
+        ledger = doc.pop("ledger")
     except NoNumber as e:
         print(f"memory: no number: {e}", file=sys.stderr)
         return 1
@@ -410,6 +516,8 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
     elif held:
         (Path(held) / "out").mkdir(parents=True, exist_ok=True)
         (Path(held) / "out" / "memory.json").write_text(line + "\n")
+    if held and not doc["loopback"]:
+        result(Path(held), amounts(doc, ledger))
     return 0
 
 

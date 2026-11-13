@@ -14,28 +14,30 @@ import random
 import struct
 from collections import Counter
 from dataclasses import replace
+from functools import partial
 
 import pytest
 
 import circuit_fixtures as CF
 import pearl_c_vectors as V
 from verity.circuits import boolean as BL
-from verity.circuits.evaluation import evaluate
 from verity.circuits import partition_object as PO
+from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
+from verity.circuits.types import Array
+from verity.commitments.randomness import derive
+from verity.commitments.rowleaf import sha512_row_seg_digest
 from verity.definitions.ops.fp32 import F32FmaV2
 from verity.definitions.ops.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperE4m3QgmmaDot32)
 from verity.definitions.ops.scalar import I32Le
 from verity.definitions.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_E4M3_K32
-from verity.commitments.rowleaf import sha512_row_seg_digest
-from verity.commitments.randomness import derive
 from verity.protocols.pouw.prover.circuit import pc8, plan
-from verity.protocols.pouw.prover.circuit.anchors import TileAnchors
 from verity.protocols.pouw.prover.circuit import words as W
-from verity.protocols.pouw.verifier.protocol import DomainError, Tile
+from verity.protocols.pouw.prover.circuit.anchors import TileAnchors
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES, SM120_UNPROMOTED
+from verity.protocols.pouw.verifier.protocol import DomainError, Tile
 
 K = 128
 CASE = next(c for c in json.loads(V.OUT.read_text())["cases"] if c["case"] == "test-16-v1")
@@ -187,20 +189,26 @@ def test_the_programs_are_the_scheme_on_sm120(dev, k):
 
 
 def _scheme_row(words: list[int], side: str, dev: str):
-    """The scheme on one row: its codes and peel row, or None where it refuses the row (encode's rejections, then
+    """The scheme on one row: its codes and peel row, or `P.Reject` where it refuses the row (encode's rejections, then
     `admissible`'s floor and liveness)."""
     d, fa, fb = DEVICES[dev], C._basis(SEED, 0, K, C.LINE_NORM_V1), C._basis(SEED, 1, K, C.LINE_NORM_V1)
     e = [P.sample_line(SEED, 0 if side == "row_a" else 1, 0, 5)]
-    try:
-        x = C.parse_f32_row(C.f32_row(words), K)
-        formed = C.form_v1([x], e, fa if side == "row_a" else fb, d)
-        be = C.scaled_noise(formed, e)
-        peel = (C.peel_factors_a if side == "row_a" else C.peel_factors_b)(formed.codes, be, SEED, K, C.LINE_NORM_V1, d)
-    except P.Reject:
-        return None
+    x = C.parse_f32_row(C.f32_row(words), K)
+    formed = C.form_v1([x], e, fa if side == "row_a" else fb, d)
+    be = C.scaled_noise(formed, e)
+    peel = (C.peel_factors_a if side == "row_a" else C.peel_factors_b)(formed.codes, be, SEED, K, C.LINE_NORM_V1, d)
     if not (P.f32_of_bits(formed.rho[0]) * P.f32_of_bits(formed.alpha[0]) >= P.SIGMA_MIN and C.live_row(x)):
-        return None
+        raise P.Reject("the row is under the noise floor or not live")
     return formed.codes[0], peel[0]
+
+
+def _admitted(words: list[int], dev: str) -> bool:
+    """Whether the scheme admits the row as a row of A."""
+    try:
+        _scheme_row(words, "row_a", dev)
+    except P.Reject:
+        return False
+    return True
 
 
 def _flip(words: list[int], at: int, admitted) -> tuple[list[int], list[int]]:
@@ -222,7 +230,7 @@ def _rows(dev: str) -> dict[str, list[int]]:
     honest row with +0 and −0 words at sampled and unsampled positions."""
     base = [C.parse_f32_row(r, K) for r in V.rows_f32("pc8-circuit", "A", 3, K)]
     at = lambda w, updates: [updates.get(t, v) for t, v in enumerate(w)]  # noqa: E731
-    ok = lambda w: _scheme_row(w, "row_a", dev) is not None  # noqa: E731
+    ok = partial(_admitted, dev=dev)
     floor_in, floor_out = _flip(base[0], 1, ok)
     ones = [_bits(1.0)] * K
     two_dead = at(ones, {1: _bits(9.0), 2: _bits(9.0)})
@@ -248,11 +256,13 @@ def test_the_row_units_admission_is_the_schemes_and_their_outputs_the_schemes(si
     admitted = set()
     for name, words in _rows(dev).items():
         out = evaluate(fn, words, e, _flat(own), _flat(other), *extra)
-        want = _scheme_row(words, side, dev)
-        assert out[-1] == (want is not None), name
-        if want is not None:
-            admitted.add(name)
-            assert list(out[:K]) == want[0] and list(out[K:-1]) == want[1], name
+        try:
+            codes, peel = _scheme_row(words, side, dev)
+        except P.Reject as refused:
+            assert out[-1] == 0, (name, refused)
+            continue
+        admitted.add(name)
+        assert out[-1] == 1 and list(out[:K]) == codes and list(out[K:-1]) == peel, name
     assert admitted == {"honest-0", "honest-1", "negated", "mixed-zero", "floor-in", "live-in", "live-below"}
 
 
@@ -394,7 +404,7 @@ def test_the_window_tile_reads_its_side_rows_index_fields():
     tm, tn = 2, 3
     fn, hidden = pc8.side_tile(K, (tm, tn)), pc8.templates(K, (tm, tn), "sm120", True, "h0")["tile"]
     assert fn.id == f"Pc8TileSide_v1{{K={K},TM={tm},TN={tn},DEV='sm120'}}" and fn.defn is pc8.Pc8TileSideDef
-    assert fn.signature()[0] == hidden.signature()[0] + (("ia", pc8.Array(tm, L.INDEX)), ("jb", pc8.Array(tn, L.INDEX)))
+    assert fn.signature()[0] == hidden.signature()[0] + (("ia", Array(tm, L.INDEX)), ("jb", Array(tn, L.INDEX)))
     assert fn.signature()[1] == hidden.signature()[1]
     rng = random.Random(11)
     ac, bc = ([[rng.getrandbits(8) & 0x77 for _ in range(K)] for _ in range(r)] for r in (tm, tn))
@@ -477,7 +487,8 @@ def test_a_short_last_tile_row_is_the_schemes(m):
 def test_the_decode_32_case_is_one_short_tile_row():
     """`pearl_c.json`'s decode-32 case (32 × 1,024 × 64 on the H100) through
     `Pc8Weight` and `Pc8Call` at the scheme's own 64 × 64 tile, one 32-row tile row: the vector's B̃ codes, P_B, C̃ and U,
-    every row admitted.  About 40 s: the only test that takes a pinned production-depth case through the circuit."""
+    every row admitted.  About 40 s: the only test that takes a pinned case in the scheme's own domain (k ≥ 1,024, no test
+    instance) through the circuit."""
     case = next(c for c in json.loads(V.OUT.read_text())["cases"] if c["case"] == "decode-32-v1")
     (m, k, n), base = case["shape"], case["case"]
     s, ctx, _ops, a, ea, b, eb, fa, fb, g = _case(base, (m, k, n), "h100", case["index"], case["weight"])
@@ -524,8 +535,8 @@ def test_a_short_tile_row_is_its_own_template_instance(side, hidden):
 def test_a_short_tile_is_proved_with_its_rows_in_its_own_stratum():
     """`plan.tile_layout` at m = 80 proves a 16-row tile with its 16 `RowA` units, in its own stratum at 16/64 of a whole
     tile's W_ref.  That is two tile strata, which the work sampling design refuses (`check_work_strata`, the window pin's `hone`) and
-    the count law samples; a W_ref with no whole quarter is refused.  At m = 32, one tile row, the work sampling design samples, and
-    `unsound_work_bound` reads the short tile's W_ref."""
+    the count sampling design samples; a W_ref with no whole quarter is refused.  At m = 32, one tile row, the work
+    sampling design samples, and `unsound_work_bound` reads the short tile's W_ref."""
     key = derive(bytes(32), plan.DRAW_DOMAIN, {"test": "pc8-short"})
     lay = plan.tile_layout(replace(SHORT, hidden=True), 64)
     lay.check()

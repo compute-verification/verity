@@ -63,12 +63,10 @@ KEY_COUNTS = {
         "EagerSoftmax_v1's key count n: the keys HF's causal mask lets a training row see",
     "verity/definitions/registry/torch_step.py::_POSITION":
         "TrainStep_v1's key count n, the run input its attention calls read as theirs: a position with no coin",
-    "archive/examples/h200/e2e_h200/program.py::program":
-        "the toy's served step: its key count n and position p, run inputs with no coin",
 }
 WINDOWS = {
     "verity/definitions/ops/boolean/shared_row.py::WINDOW":
-        "SharedRowWindow's j and SharedRowRead's PORT_j, a proof block's segment of a shared row (CIR-113's form (B))",
+        "SharedRowWindow's j and SharedRowRead's PORT_j, a proof block's segment of a shared row (the shared-row commit's form (B))",
 }
 TESTS = {
     "verity/circuits/tests/test_ports.py::SEED": "the port rules' seed vectors (E_COIN_REUSE, E_PORT_KIND, batched seeds)",
@@ -85,6 +83,9 @@ TESTS = {
         "a seed whose population declares no ports and is refused (E_PORT_KIND): a population never mints a seed",
     "verity/circuits/tests/test_population_values.py::Unit":
         "a unit of a population with values: its position beside its receipt sink, so the ports see the members alone",
+    "adapters/vllm/tests/protocols/test_pouw_h1_drawn.py::StandInSeed":
+        "the drawn J10-R test's stand-in tile reads its coin and position through a seed, so credit's real Lean check "
+        "accepts the stand-in statement (every input bit read)",
 }
 ALLOWED = SEEDS | UNITS | KEY_COUNTS | WINDOWS | TESTS
 

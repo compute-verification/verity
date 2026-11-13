@@ -158,12 +158,6 @@ def snapshot() -> dict[str, str]:
     return dict(os.environ)
 
 
-def set_since(before: Mapping[str, str]) -> dict[str, str]:
-    """The keys set or changed since ``before`` (a `snapshot`). vLLM's batch invariance writes cuBLAS' and NCCL's switches while it
-    builds an engine; the engine keeps them (`Engine.environ`)."""
-    return {k: v for k, v in os.environ.items() if before.get(k) != v}
-
-
 def disable_compile_cache() -> None:
     os.environ["VLLM_DISABLE_COMPILE_CACHE"] = "1"
 

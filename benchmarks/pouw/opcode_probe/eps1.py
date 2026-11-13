@@ -26,6 +26,9 @@ import sys
 from fnmatch import fnmatchcase
 from pathlib import Path
 
+#: what the censuses beside this directory read (sm89/census.py, ../dc/census.py, ../facet_break/loads.py)
+__all__ = ["FAMILY", "IMMA", "OPS", "SMSPS", "facets", "frontier_points", "load", "main"]
+
 IMMA = "IMMA.16832.S8.S8"
 SMSPS = 4
 
@@ -123,7 +126,7 @@ FAMILY = {"imad": ("IMAD", "KIMAD", "EIMAD"), "hfma2": ("HFMA2", "KHFMA2", "EHFM
           "idp4a": ("IDP4A", "KIDP4A", "EIDP4A"), "popc": ("XU", "KXU", "EXU")}
 
 
-def cmd_facets(a) -> int:
+def cmd_facets(a: argparse.Namespace) -> int:
     rows = [r for p in a.rows for r in load(p)]
     runs = " ".join(sorted({r["run"] for r in rows}))
     for x, pat in OPS.items():
@@ -169,7 +172,7 @@ def side_words(row: dict, unit: str) -> float:
     return sum(r * words.get(k.split(":", 1)[1], 0) for k, r in row["rates"].items() if k.split(":", 1)[1] != IMMA)
 
 
-def cmd_side(a) -> int:
+def cmd_side(a: argparse.Namespace) -> int:
     rows = {r["probe"]: r for r in load(a.rows)}
     base = rows.get("honest") or {}
     hm = loop_rate(base, IMMA) if base else float("nan")
@@ -211,7 +214,7 @@ MMAS = {"p_honest": 8, "p_half": 4, "p_mma": 8, "p_mma0": 8, "p_fold": 0, "p_ffm
         "p_mma16": 8, "p_mma16z": 8, "p_light": 0}
 
 
-def cmd_clock(a) -> int:
+def cmd_clock(a: argparse.Namespace) -> int:
     w = windows(load(a.sustain), a.skip_s)
     print(f"{'phase':14s} {'kernel':12s} {'clock64/gt MHz':>14s} {'min':>8s} {'NVML MHz':>9s} {'W':>6s} {'C':>4s} "
           f"{'reasons':>8s} {'IMMA/SM/clk':>11s} {'IMMA/SM/us':>10s}")
@@ -240,7 +243,7 @@ def _val(d: dict, *path: str) -> object:
     return v[0] if isinstance(v, list) and len(v) == 1 else v
 
 
-def cmd_ceiling(a) -> int:
+def cmd_ceiling(a: argparse.Namespace) -> int:
     """clock_ceiling.sh: each knob's rc, what NVML then reports, and the clock each kernel ran at by the host's clock."""
     out = a.out
     found = json.loads((out / "found.json").read_text())
@@ -303,7 +306,7 @@ def slope(pts: list[tuple[float, float]]) -> float:
     return sum((x - mx) * (y - my) for x, y in pts) / sum((x - mx) ** 2 for x, _ in pts)
 
 
-def cmd_uniform(a) -> int:
+def cmd_uniform(a: argparse.Namespace) -> int:
     """uniform.cu: each loop's vector (V) and uniform (U) instructions a warp-iteration from its SASS, its SMSP-cycles a
     warp-iteration (T), and the issue cost of a uniform instruction: T's slope in U within each fixed stream and step."""
     out = a.out
@@ -338,7 +341,7 @@ def cmd_uniform(a) -> int:
 QSTAR_TBS = 3.3
 
 
-def cmd_l2gather(a) -> int:
+def cmd_l2gather(a: argparse.Namespace) -> int:
     """l2gather.cu: data-dependent row gathers from an L2-resident table at fresh random indices (a cheater's). Each
     probe's sustained bytes a SM a clock (rate * words * 4, the warp instruction moving W*32 bytes) and TB/s (* nSM *
     clock); alone (gl_/gt_/gn_) for the peak, beside the honest IMMA step (gh_, the gather's rate over the honest stop)
@@ -380,7 +383,7 @@ def cmd_l2gather(a) -> int:
     return 0
 
 
-def cmd_jitter(a) -> int:
+def cmd_jitter(a: argparse.Namespace) -> int:
     """clock_calib.sh: the auditor-side uncertainty of timing a known-length reference kernel with the host's own clock,
     with no trust in the chip (reading C). Each (trial, length) group's host-timed SM clock over the reps: its mean, the
     random spread (stddev and half-range), and the systematic gap below the chip's own %globaltimer clock, which is the

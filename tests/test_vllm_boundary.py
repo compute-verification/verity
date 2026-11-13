@@ -38,7 +38,6 @@ ALLOWED = {
     # stock engines a benchmark builds and drives beside the integration's
     "benchmarks/harness/verity_bench/vllm/runner.py": "benchmarks: verity-bench's vLLM arms, each a stock engine's requests",
     "benchmarks/served_commit/tp_decode.py": "circuits: a stock vllm.LLM at TP8 against a Commit arm in the same engine",
-    "archive/benchmarks/pouw/np_kernel/stock_decode.py": "compute-accounting: a stock vllm.LLM step, T2's denominator",
     **dict.fromkeys(("benchmarks/pouw/pearl_c_vllm/e2e.py", "benchmarks/pouw/pearl_c_vllm/profile_decode.py",
                      "benchmarks/pouw/pearl_c_vllm/served_passes.py"),
                     "compute-accounting: Pearl-C served through verity_vllm.LLM, with vLLM's SamplingParams and a stock "
@@ -64,10 +63,8 @@ ALLOWED = {
                      "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/dither_so.py",
                      "benchmarks/hash/dither/native.py", "benchmarks/hash/dither/sbench.py"),
                     "kernels: Dither's served arms, a stock vllm.LLM per arm with its int8 linears swapped in process"),
-    **dict.fromkeys(("benchmarks/hash/exactlin/percall.py", "benchmarks/hash/exactlin/percall_diag.py",
-                     "benchmarks/hash/exactlin/share.py"),
-                    "kernels: sbench's served arms over stock vLLM int8 (TritonInt8ScaledMMLinearKernel), and why they "
-                    "part"),
+    **dict.fromkeys(("benchmarks/hash/exactlin/percall.py", "benchmarks/hash/exactlin/share.py"),
+                    "kernels: sbench's served arms over stock vLLM int8 (TritonInt8ScaledMMLinearKernel)"),
     **dict.fromkeys(("benchmarks/moe_align/served.py", "benchmarks/moe_align/stress.py"),
                     "kernels: verity_vllm.engine.moe_align's canonical moe_align_block_size held to vLLM's op and to its "
                     "Marlin MoE path, served at TP8"),

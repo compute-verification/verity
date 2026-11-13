@@ -677,8 +677,9 @@ into its own witness's mask slot (`z`, `a` and `b`, whose circuit is the identit
 commits the codeword the loop did; the loop's root is the root of record. A worker that keeps words of its own in the slot
 commits another codeword, and the session stops at its `Finish` (`zk_worker_level0`'s `own-mask`).
 
-**The value commitments' salts are the ZK server's.** A statement's hm96 trees (its public file's `frame_v3` roots under
-a hiding commitment's schema) are committed by the ZK server's value service (`core-firewall values --state DIR --salt-key FILE`,
+**The value commitments' salts are the ZK server's.** A statement's hm96 trees that commit a value (its public file's
+`frame_v3` roots under a hiding commitment's schema, but a row's at known content, below) are committed by the ZK
+server's value service (`core-firewall values --state DIR --salt-key FILE`,
 `Flock.Firewall.Values` on the ZK server's record in `DIR`), which holds the server's 64-byte salt key `k` and derives
 each leaf's salt from it: leaf `i` of
 table `j` of the commit session `s` takes `y = SHA-512(k ‖ L ‖ s ‖ be32 j ‖ be64 i ‖ ctr)` for `ctr` 0, 1 and 2
@@ -747,6 +748,13 @@ read: across a stream of `r` registrations with at most `b` passed over, at most
 `log₂ Σ_{i≤b} C(r, i) + Σ_i log₂ m_i` bits, `m_i` registration `i`'s count, 1 on the service of record, so at most
 `log₂ Σ_{i≤b} C(r, i)` (`Verity.Guarantees.RegisteredStreamLeakage`), counted in the stream's bound beside its stops
 (§10.5).
+
+**Known content.** A row the verifier registers itself at known content (`Flock.RegKnown`) commits no value and is none
+of the service's. Its words and its salt are a function, fixed by the protocol under a tag of its own, of what is public
+before the row is made, and the verifier computes that function itself and takes the row from no file of the stack's
+(`Salts`'s header has the rule). The release side knows no known content: given the key it refuses a statement that has
+such a row, as it does every statement one of whose trees no registration holds, so that statement passes only a loop
+run without `--salt-key`.
 
 Three limits. Without `--salt-key` the loop checks no statement's value commitments and admits no registration: nothing
 yet requires the key of a deployment's loop. The ZK server numbers one sequence of registrations for all its
@@ -865,7 +873,16 @@ auditor's sample (or `null`) is answered `ok N` and the `Hello`, or `refused WHY
 
 The session itself goes through Lean: one `flock-firewall session` process (`Flock.Firewall.Session`,
 `firewall::LeanSession`) per verifier address and table count, on the same statement arguments, listens on loopback and
-holds the auditor's connection for every session the prover opens to it. No byte the prover sends reaches the auditor:
+holds the auditor's connection for every session the prover opens to it. A `prove --stream` process, whose sessions are of
+different statements, starts its tap before its first sample, as `prove` does, and one loop for each session instead, on
+the circuit and the tables the session's line names: the loop starts at the session's turn, once the session before it
+has its verdict, and ends once its own verdict is emitted, so the stream proves one session at a time (it refuses
+`FC_VERIFY_AHEAD` above 0, and no session's front runs ahead). The statement's name and the `Hello` flags are the
+process's for every session, so one stream serves sessions of one partition and one program. The stream itself does not
+check that: a line has no field for them. A session whose circuit binds another partition or program is refused by its own
+Lean loop when its statement is set up (`HmRow.checkPartition`). A line the reader refuses ends the process at once, under
+the session then being proved, which gets no verdict. A session left without a verdict is failed and never proved again,
+since a second session for it has new coins. No byte the prover sends reaches the auditor:
 every frame that leaves is the loop's own encoding of what it decided (`Session.roundFrame`, `Session.commitFrame`,
 `Session.State.wire`). `Register` and `Finish` leave as their tags, a `Link` as zeros at the session's link points, an
 `Open` as its rep stream's at the stream's domain, a `Round` as the schedule's stream and count around the frame's release
