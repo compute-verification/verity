@@ -151630,3 +151630,38 @@ Still not timed: four loaded provers on any block type, which need forty cores a
 - `research fetch ID` without `--on` did not find the run at 16:21Z ("no machine holds run"); `--on vy-spot-glm53` did. [run]
 - My VM restarted at 16:20:36Z. What woke me at 16:20Z was not my timer's message but two Slack notifications in the lead's thread: compute-accounting on PRF-612 and network-accounting on NET-405 and PRF-616, both sent about 14:42Z. They are addressed to proofs' lead; I did nothing with them. My timer no longer shows as set.
 - Whether the run's record is in the evidence store yet: not checked. Its files are on node A under the run's directory; its record names tree `774b31eca17c1495fd4451f615540a44ab305ed2`, not dirty. The reader's output and the run's small records are in the notes under `prf589/pair/run-ee68/`.
+
+## MEMBERS, Fri 13 Nov 16:31Z: my live line: `fd561fbff5b2` on `cursor/proofs-members-switch-main-34fd` (the switch with `main` at `053b8e50fe8a` merged in)
+
+**my live line** is `fd561fbff5b289f1d579cb3faf83e8d135359d5d`, the head of `cursor/proofs-members-switch-main-34fd`, pushed. It is one merge commit: its parents are the switch's head `2fe933688cb9` and `main` at `053b8e50fe8a37970e410ce9ffcb5694bbe4a59b`, no rebase, nothing of `origin/main` later than that. The old branch `cursor/proofs-members-switch-34fd` stays at `2fe933688cb9` and gets nothing more; new work goes on branches cut from the live line. [run: `git log -1`, `git ls-remote`]
+
+What the merge had to settle [read: the merge's own conflict list], two files, the two FRAME named:
+
+- `benchmarks/one_stage/tests/test_audit_two_members.py`, three places. Kept from `main`: the kept prover's verifiers each take the tree, and the refusal `challenger.UNUSED_TREE` when the second session is left out. Kept from the switch: v2's check accepts the case (`members.case_check` gives `("accept", None)`), and with the second member taken out it rejects with `proofs: ` and the same reason the Python twin gives.
+- `verity/protocols/spot/verifier/README.md`, one place: the switch's text of the per-member check and the kept pass, with `main`'s sentences on the `members` command and on a window's sessions after it.
+
+Everything else merged by git alone, among it four Lean files both sides changed (`Spot/MembersParse.lean`, `Spot/Pieces.lean`, `security/Proofs/Properties/Challenger.lean`, `security/Proofs/Properties/Verity/Sampled/RecordDraw.lean`) and the locks. `main`'s side changes neither `Spot/OneStageZk.lean` nor `members.py`. [read: `git diff --name-only` of each side against the base `4a7291116e11`]
+
+What was tried at that head, all on nodes, none on my VM:
+
+| what | run | node | verdict |
+|---|---|---|---|
+| `Spot/OneStageZk.lean`, with siblings | `r20261113-160510-dd75` | cpu-1 | lean exit 0 in 109 s; siblings clean; none of its 51 theorems beyond the three axioms |
+| `Spot/MembersParse.lean`, with siblings | `r20261113-160931-d9a5` | cpu-3 | lean exit 0 in 9 s; siblings clean; no theorems in it |
+| `Spot/Pieces.lean`, with siblings | `r20261113-161003-c866` | cpu-7 | lean exit 0 in 12 s; siblings clean; no theorems in it |
+| `security/Proofs/Properties/Challenger.lean`, with siblings | `r20261113-161049-87a4` | cpu-7 | lean exit 0 in 27 s; siblings clean; none of its 10 theorems beyond the three axioms |
+| `security/Proofs/Properties/Verity/Sampled/RecordDraw.lean`, with siblings | `r20261113-161144-c76d` | cpu-7 | lean exit 0 in 218 s; siblings clean; none of its 50 theorems beyond the three axioms |
+| the suite `benchmarks/one_stage`, tests named `audit_two_members` or `served_cases`, after building `flock-verify` and `flock-firewall` | `r20261113-160607-4746` | cpu-11 | 77 passed, 0 failed, 0 skipped, in 1,040 s; rc 0 |
+
+All [run]. The one wait was the tests' 17 minutes; no try waited for a machine more than seconds.
+
+One thing that is not mine to mend [read: `rg ALL_PASSED` at the head]: `benchmarks/one_stage/members_standin.py` (FIRSTACCEPT's) reads `M.ALL_PASSED` at its line 100, and no file at this head defines it; the switch's `members.py` dropped the name before the merge, so the merge did not cause it. The driver's refusal step would raise `AttributeError` there. No test file names `members_standin`, so none of the 77 runs that line; the row of `benchmarks/verifier_cost/members_files` uses the driver and passed, so its use does not reach it.
+
+### Not established
+
+- No records run at `fd561fbff5b2`: the locks are as git merged them, not regenerated, and no guarantee's record was compared.
+- The whole check was not run. Of the Lean, only the five files above were compiled; the siblings check says 3,842 and 3,876 modules of `security/Proofs` had no build to compare with, so a module downstream of the two proofs files is not shown to build.
+- Of the tests, only the two files' tests of one suite ran; the other suites did not.
+- Whether FRAME's carry of this head against `4ae17f7eafd7` goes through: not tried by me, it is FRAME's.
+
+Next: the entry on which compiled commands reach `popHeld` (your 16:16Z), then the one import line on a branch cut from this head.
