@@ -88,14 +88,8 @@ def reads(texts: dict[str, str], where: Path, package: str) -> dict[str, dict[st
     the names of `min_cut` it reads with the lines, `F` for a call of `slowdown_of` that passes one, `min_cut` alone
     where it reads nothing by name."""
     inside = where.as_posix() + "/"
-    trees = {}
-    for rel, text in texts.items():
-        if rel.startswith(inside) or "min_cut" not in text:
-            continue
-        try:
-            trees[rel] = list(ast.walk(ast.parse(text, filename=rel)))
-        except SyntaxError:
-            continue
+    trees = {rel: list(ast.walk(ast.parse(text, filename=rel))) for rel, text in texts.items()
+             if not rel.startswith(inside) and "min_cut" in text}
     doors = {fn.name for nodes in trees.values() for fn in nodes
              if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)) and _loads(list(ast.walk(fn)), package)}
     out = {}
