@@ -18,6 +18,8 @@ steps are shared; the schedules are not, and `SCHEDULES` says who runs which.
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
+
 M32 = 0xFFFFFFFF
 GOLDEN = 0x9E3779B9
 
@@ -183,7 +185,7 @@ def served_duo_absorb(y: list[int], z: list[int], p: list[int]) -> tuple[list[in
 EGEMM_KEY_BASE = 0x5A5A0000
 
 
-def egemm_xin_keys(seed: int, rule=key_ok_r9) -> tuple[int, int, int]:
+def egemm_xin_keys(seed: int, rule: Callable[[int], bool] = key_ok_r9) -> tuple[int, int, int]:
     """egemm.cu's xin_keys: the first two candidates that pass `rule`, and how many `key_ok` candidates it skipped."""
     out, skipped, i = [], 0, 0
     while len(out) < 2:
@@ -213,7 +215,7 @@ def egemm_xin13_absorb(y: list[int], p: list[int], a0: int, a1: int) -> list[int
 E2E_KEY_BASE = 0xC0000000
 
 
-def e2e_xin_keys(rule=lambda8_ok) -> tuple[tuple[int, ...], tuple[int, ...]]:
+def e2e_xin_keys(rule: Callable[[int], bool] = lambda8_ok) -> tuple[tuple[int, ...], tuple[int, ...]]:
     """segment.XA0, XA1: the first 16 candidates that pass `rule`, alternately chain t's a0 and a1."""
     out, i = [], 0
     while len(out) < 2 * MI * NI:
@@ -224,7 +226,7 @@ def e2e_xin_keys(rule=lambda8_ok) -> tuple[tuple[int, ...], tuple[int, ...]]:
     return tuple(out[0::2]), tuple(out[1::2])
 
 
-def e2e_xin_absorb(y: list[int], p: list[int], xa0, xa1) -> list[int]:
+def e2e_xin_absorb(y: list[int], p: list[int], xa0: Sequence[int], xa1: Sequence[int]) -> list[int]:
     """One segment's 32 words: chain t absorbs entries 4 t .. 4 t + 3 with its own keys."""
     return [xin13_step(y[t], *p[4 * t:4 * t + 4], xa0[t], xa1[t]) for t in range(MI * NI)]
 
@@ -283,7 +285,7 @@ SCHEDULES = {
 }
 
 
-def step(fold: str, state, d, keys: dict):
+def step(fold: str, state: int | tuple[int, int], d: Sequence[int], keys: dict) -> int | tuple[int, int]:
     """One step of `fold` from state (y, or (y, z) for duo) over d = (d0, d1, d2, d3) with keys {a0, a1, k0, k1}."""
     f = FOLDS[fold]
     args = [keys[k] for k in f["keys"]]
@@ -292,10 +294,17 @@ def step(fold: str, state, d, keys: dict):
     return f["step"](state, *d, *args)
 
 
-def chain(fold: str, start, words, keys: dict) -> list:
+def chain(fold: str, start: int | tuple[int, int], words: Sequence[Sequence[int]], keys: dict) -> list:
     """The states after each step of `words` (a list of 4-word steps) from `start`."""
     out, s = [], start
     for d in words:
         s = step(fold, s, d, keys)
         out.append(s)
     return out
+
+
+__all__ = ["E2E_KEY_BASE", "EGEMM_KEY_BASE", "FOLDS", "KEY_RULES", "M32", "NCH", "NCT", "PFILL_KEY_DEFAULTS",
+           "SCHEDULES", "SERVED_KA", "SERVED_KK", "SERVED_ROT", "chain", "duo_final", "duo_step", "duo_word",
+           "e2e_xin_absorb", "e2e_xin_keys", "egemm_xin13_absorb", "egemm_xin13_start", "egemm_xin_keys", "int8_ratio",
+           "key_ok", "key_ok_r11", "key_ok_r9", "kj19", "lambda8_ok", "li_step", "mix32", "pfill_keys", "pfill_start",
+           "ram_step", "rotl", "served_duo_absorb", "served_entry", "served_start", "xin13_step"]
