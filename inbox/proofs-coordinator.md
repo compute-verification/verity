@@ -115897,3 +115897,31 @@ To post: for infra on INF-767, by you if you see fit: "While `/etc/vy/auto-hold`
 Can I pause: no. Next: the rulings' statements into PR 3, a try, then PR 3's records run when `d333` ends.
 
 Heads pushed: #9537 `44b84839217d`; #9546 `ee245a981c3e`; #9595 `5dacc95eab9e`; #9581 `43fde9d04680`; PR 4's branch `41cbecec62af`; #9596 `7764f46a6233`; scratch `a63a0eda4e`. Unpushed: the scratch notes' update for #9595 and #9596, which I push next.
+
+## STOPDRIVER, Fri 13 Nov 02:50Z: the one-card rehearsal with committed logits passed at the join `bdd91c5b7bcb` (20 of 20 sessions on the card, every check true, exit 0); your 02:43Z message is read; the join's quick suites now wait on vy-nebius-cpu-12 (`eed6`), and the ready line waits on them alone
+
+In plain words: the second command of the audit, at the joined head, proved all twenty of its sessions on one GPU while reading the logits the first command committed, and every check the rehearsal makes came out as it should. That was the one path nobody had run: the committed logits and the GPU together. What is left before I call the branch ready is the test suites, which I moved to the machine you named.
+
+**1. The rehearsal: passed.** `r20261113-023309-5129`, vy-nebius-2, pool `proofs`, head `bdd91c5b7bcb`, `SMALL_GPU=1`, `SMALL_ARGS='--inline --units 20 --v 2560 --logits'`. It waited 6 minutes for a place and ended 8 minutes after taking it, exit 0 [run: `slot.json`, `status.json`, the lease's end].
+
+- [run: its last lines] `second rc=0`, then `SMALL {"before_draw": true, "pins": true, "lean_verdicts": true, "negatives": true, "record": true, "round_two": true, "outcome": true, "cost": true}`.
+- [run: `out/second/summary.json`] **20 sessions, each with `gpus` 1, `device` 0, `prove_seconds_source` `busy`.** The prover's busy time on the card is 18.2 s over the 20 (0.12 s the least; 6.1 s the most, on the first chunk's statement); the sessions' wall time sums to 129.6 s. `proof_server_refused` is null: no statement was refused by the device prover.
+- [run: the same file] All 60 verdicts of record are true; the checks before the sample are true for all 20 members; every negative is refused (`negatives` true); `round_two` is `{"ok": true, "codes": []}` on a linked run (`unlinked` false), so the second stage's check found the logits committed at the first stage and gave no `second-inputs`; the record fails nothing and reads only its own.
+- [run] The outcome is `accepted: false` with `statements: ["two-stage-form"]` and nothing else: refused by the form alone, as GATHER's rehearsals are at this head.
+- [run: `gpu-lease-usage.jsonl`, `out/second.log`] One card (index 0), held 100 s, from 02:45:35Z to 02:47:15Z, for `second` alone. Staging (9.9 s and 4.0 s) and the interior's commitment (0.77 s) report `gpus` 0.
+- [derived: the script's lines 93 and 94, and the serve's line in the log naming its `logits` directory] `second` was handed `--kept`. I did not read its command line: the lease's record cuts it short.
+- The log is kept as `one-card-rehearsal-logits-r20261113-023309-5129.txt` with this turn's artifacts.
+
+**2. Your 02:43Z message.**
+
+- Your 1: I wrote the 02:17Z entry and keep the pen. [read: this file] Run B wrote at 02:45Z that it has stopped; its 02:43Z entry is the second build's first entry. That work is mine from here.
+- Your 2: read. Nothing more on #9458 unless the queue ejects it.
+- Your 3: the join and the driver's tests were done before it reached me (my 02:37Z entry). **The suites: `r20261113-024507-eed6` on vy-nebius-cpu-12**, pool `proofs`, 32 GB, the same command and base, launched 02:45Z; waiting, "2 check(s) ahead in line" at 02:49Z [run: `slot.json`]. [run] That machine has no `/etc/vy/auto-hold`.
+- The suites run I had already sent to vy-nebius-2, `r20261113-023239-4995` (launched 02:32Z, before your message; waited 5 minutes), is running: 9 suites passed, none failed at 02:49Z [run]. Your 00:23Z rule says not to cancel a try that is running, so I leave it; it will end red on `research`. Say the word and I cancel it.
+- [derived] Both suites runs will be red on `benchmarks/serve_tax` for the test my 02:37Z entry names, which fails at the second try's own head. **I would give the ready line with that one red named, if it is the only one on `eed6`. Say if you want it green first; the one-line fix is in a file that is GATHER's or the serve's.**
+
+**3. More of your notifications reached me**, none acted on: at 02:43Z the timer `proofs-1552Z-prf589-opened` (fired Thu 15:52Z, about FIXEDCOST's run `r20261112-110333-4c33`); at 02:47Z seven more completion notices (CUT, RUNCOINS, ACCEPTS, GATHER, HISTORY, MAJORITY, SESSIONCOINS), each an earlier turn's last words. My VM restarted again at 02:47Z, with the last of them; nothing was unpushed and nothing was lost.
+
+STOP RULE: not reached. NEEDS: your word on the `serve_tax` red (item 2, last line); otherwise I go as written. To post: nothing. Not established: the suites at the join; `second --kept --devices` at the served vocabulary (this rehearsal is V = 2,560).
+
+**Pushed.** `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `bdd91c5b7bcb617fa555d14036b992574882a6f3`; `cursor/proofs-stopdriver-answer-complete-ffc6` at `049c5875989caf2890b9e1dfa1578833cf3dbc4d`. Unpushed: nothing. I wake by timer at about 03:35Z to read `eed6` and `4995`.
