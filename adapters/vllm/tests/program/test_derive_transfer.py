@@ -21,29 +21,41 @@ from __future__ import annotations
 import json
 import math
 import os
-from dataclasses import asdict, dataclass, field
-from typing import Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+    import torch.nn.functional as F
+    from torch import nn
+else:
+    torch = pytest.importorskip("torch")
+    nn, F = torch.nn, torch.nn.functional
 
-from verity.circuits import Program, program_digest  # noqa: E402
-from verity.circuits.evaluation import MissingValue, evaluate_region  # noqa: E402
-from verity_vllm.program.frontend.provenance import registry_version  # noqa: E402
+from verity.circuits import program_digest
+from verity.circuits.evaluation import MissingValue, evaluate_region
+from verity.circuits.types import Array, RecordType, Value
+from verity.circuits.types import Tuple as TupleT
 
-from tests.program.test_derive_negative import IMPORTER_NAME, Outcome, _DERIVE, _input_gate_ranges, run_importer  # noqa: E402
+from tests.program.test_derive_negative import (
+    _DERIVE,
+    IMPORTER_NAME,
+    Outcome,
+    run_importer,
+)
+from verity_vllm.program.frontend.provenance import registry_version
 
 pytestmark = pytest.mark.filterwarnings("ignore::verity_vllm.program.frontend.torch_frontend.DeadGateWarning")
-
-nn, F = torch.nn, torch.nn.functional
 
 # ---------------------------------------------------------------------------------------------------------
 # the second family
 # ---------------------------------------------------------------------------------------------------------
 
-CFG = {"V": 32, "H": 16, "NH": 2, "D": 8, "I": 32, "NL": 2, "MAXPOS": 8, "EPS": 1e-5}
+CFG = {"V": 32, "H": 16, "NH": 2, "D": 8, "I": 32, "NL": 2, "MAXPOS": 8}
+EPS = 1e-5
 
 
 class Conv1D(nn.Module):
@@ -104,9 +116,9 @@ class GPT2Attention(nn.Module):
 class GPT2Block(nn.Module):
     def __init__(self, dtype=torch.float32, conv=Conv1D):
         super().__init__()
-        self.ln_1 = nn.LayerNorm(CFG["H"], eps=CFG["EPS"], dtype=dtype)
+        self.ln_1 = nn.LayerNorm(CFG["H"], eps=EPS, dtype=dtype)
         self.attn = GPT2Attention(dtype=dtype, conv=conv)
-        self.ln_2 = nn.LayerNorm(CFG["H"], eps=CFG["EPS"], dtype=dtype)
+        self.ln_2 = nn.LayerNorm(CFG["H"], eps=EPS, dtype=dtype)
         self.mlp = GPT2MLP(dtype=dtype, conv=conv)
 
     def forward(self, x):
@@ -122,7 +134,7 @@ class GPT2TinyLM(nn.Module):
         self.wte = nn.Embedding(CFG["V"], CFG["H"], dtype=dtype)
         self.wpe = nn.Embedding(CFG["MAXPOS"], CFG["H"], dtype=dtype)
         self.h = nn.ModuleList([GPT2Block(dtype) for _ in range(CFG["NL"])])
-        self.ln_f = nn.LayerNorm(CFG["H"], eps=CFG["EPS"], dtype=dtype)
+        self.ln_f = nn.LayerNorm(CFG["H"], eps=EPS, dtype=dtype)
         self.lm_head = nn.Linear(CFG["H"], CFG["V"], bias=False, dtype=dtype)
         self.lm_head.weight = self.wte.weight  # tied
 
@@ -197,7 +209,7 @@ CASES = [
          "x @ W + b with W[in,out]: a Gemm rule keyed on aten.linear/[out,in] must either handle aten.mm/[in,out] or refuse"),
     Case("gpt2_mlp_f32", lambda: GPT2MLP(), (torch.randn(CFG["H"]),), "f32",
          "GELU(tanh) has no registered kind: numerics_unregistered unless NUMERIC's reference kinds landed and DERIVE bound them"),
-    Case("gpt2_layernorm_f32", lambda: nn.LayerNorm(CFG["H"], eps=CFG["EPS"]), (torch.randn(CFG["H"]),), "f32",
+    Case("gpt2_layernorm_f32", lambda: nn.LayerNorm(CFG["H"], eps=EPS), (torch.randn(CFG["H"]),), "f32",
          "LayerNorm (mean/var/rsqrt/bias) has no registered kind: numerics_unregistered unless a reference kind exists"),
     Case("gpt2_attention_f32", lambda: GPT2Attention(), (torch.randn(4, CFG["H"]),), "f32",
          "softmax attention over T=4: numerics_unregistered (softmax) unless a reference kind; masked_fill/tril are structural"),
@@ -268,6 +280,7 @@ def _input_map(out: Outcome, module: nn.Module, inputs: tuple) -> list[tuple[str
         if isinstance(m, dict) and m:
             return list(m.items())
     P = out.program
+    assert P is not None
     params, _ = P.fn.signature()
     if len(params) == len(inputs) + 1:
         all_named = {**dict(module.named_parameters(remove_duplicate=False)), **dict(module.named_buffers(remove_duplicate=False))}
@@ -283,7 +296,6 @@ def _input_map(out: Outcome, module: nn.Module, inputs: tuple) -> list[tuple[str
 
 def _flatten_like(t: Any, T) -> list[tuple[torch.Tensor, int]]:
     """Leaf tensors of a (possibly record) argument, paired with the width of the corresponding type leaves."""
-    from verity.circuits.types import Array, RecordType, Tuple as TupleT, Value
     if isinstance(t, torch.Tensor):
         tt = T
         while isinstance(tt, Array):
@@ -303,6 +315,7 @@ def evaluate_against_torch(out: Outcome, module: nn.Module, inputs: tuple) -> di
     """Bind the module's actual weights + inputs to the Input gates, evaluate every gate, compare the root outputs
     with the module's CPU output bit for bit and numerically."""
     P = out.program
+    assert P is not None
     C = P.circuit
     imap = _input_map(out, module, inputs)
     if imap is None:
@@ -360,6 +373,7 @@ def _distinct_param_leaves(m: nn.Module) -> int:
 
 def structural_checks(case: Case, module: nn.Module, inputs: tuple, out: Outcome) -> dict:
     P = out.program
+    assert P is not None
     n_in = sum(t.numel() for t in inputs)
     res = {"input_gates": P.input_gates, "distinct_param_leaves": _distinct_param_leaves(module), "input_leaves": n_in}
     res["one_input_per_distinct_leaf"] = P.input_gates == _distinct_param_leaves(module) + n_in
@@ -451,6 +465,7 @@ def test_transfer_case(case: Case):
     if prov.get("families_not_applied") or prov.get("families_not_matched") or prov.get("family"):
         rec["family"] = {k: prov.get(k) for k in ("family", "families_not_applied", "families_not_matched") if prov.get(k)}
     if out.kind == "program":
+        assert out.program is not None
         rec["program"] = out.program.fn.id
         rec["digest"] = program_digest(out.program)
         rec["gates"] = out.program.gates
@@ -513,10 +528,14 @@ def test_audit_s3_derived_b0_serve_digest_and_kv_ownership():
     name-independent KV-ownership oracle holds on the derived program (30 layers x 47 positions)."""
     if not _DERIVE:
         pytest.skip("derive() not available")
+    from verity.definitions.registry.b1 import B0_CONFIG
+
+    from tests.program.test_derive_negative import (
+        check_cache_ownership,
+        check_cache_ownership_by_kind,
+    )
     from verity_vllm.program.frontend import derive_examples as dex
     from verity_vllm.program.frontend.derive import derive_report
-    from verity.definitions.registry.b1 import B0_CONFIG
-    from tests.program.test_derive_negative import check_cache_ownership, check_cache_ownership_by_kind
     rep = derive_report(dex.GreedyServe(B0_CONFIG, 15), (torch.zeros(32, dtype=torch.int32),), mode="profile", profile="b1-eager",
                         config=B0_CONFIG)
     assert rep.ok, rep.unsupported

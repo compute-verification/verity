@@ -29,10 +29,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
 from verity.commitments import row_table as RT
 from verity.commitments.merkle import CommitmentDomain
-
 from verity.commitments.windows import rows as CS
 
 __all__ = ["COLUMNS", "StepRoots", "Table", "check_order", "find", "layer", "of_dir", "of_registration", "opening", "row_table",
@@ -176,7 +174,8 @@ def _window(window_dir: str | Path) -> dict[str, Any]:
 
 def of_dir(window_dir: str | Path) -> list[Table]:
     """The prover's tables, from the window serving wrote (``window.json``'s ``row_tables`` and ``row_table_steps``)."""
-    win, out = _window(window_dir), []
+    win = _window(window_dir)
+    out: list[Table] = []
     if not win.get("row_tables"):
         return out
     st = win["row_table_steps"]

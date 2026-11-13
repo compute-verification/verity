@@ -7,11 +7,11 @@ from __future__ import annotations
 import pytest
 import torch
 from torch.fx.experimental.proxy_tensor import make_fx
-
-from tests.program.test_train_step import CC, _bits, _data, _meta, _program
 from verity.circuits.evaluation.reference import evaluate
 from verity.definitions.numerics.serve3_reference import materialize
 from verity.definitions.registry import fa2_train as FT
+
+from tests.program.test_train_step import CC, _bits, _data, _meta, _program
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.rules.training import training_rules
@@ -34,7 +34,7 @@ def _refusal(f, xs, cc=CC) -> Unsupported:
     return u
 
 
-@pytest.mark.parametrize("shape", sorted(FT.TRAIN_SDPA))
+@pytest.mark.parametrize("shape", [pytest.param(s, marks=pytest.mark.slow) if s == (2, 8, 1024, 64) else s for s in sorted(FT.TRAIN_SDPA)])
 def test_flash_forward_is_one_batch_of_the_captured_head(shape) -> None:
     prog = _program(_sdpa(0.0, True, scale=0.125), *_meta(shape, shape, shape), rules=training_rules(cc=CC))
     calls = [(nd.fn.id, nd.n) for nd in prog.root.body.nodes if nd.fn.id.startswith("Fa2Train")]

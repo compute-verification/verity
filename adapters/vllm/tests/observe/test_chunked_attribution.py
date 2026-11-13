@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
+from tests.pipeline.test_coverage_workloads import _LaggedStubEngine, _Out
 from verity_vllm.engine import arrivals, handle
 from verity_vllm.engine import chunks as CA
 from verity_vllm.pipeline import coverage_workloads as gw
-from tests.pipeline.test_coverage_workloads import _LaggedStubEngine, _Out
 
 REPO = Path(__file__).resolve().parents[2]
 PROF = REPO / "workloads"
@@ -90,6 +90,8 @@ def test_generated_ck64_cell_is_the_base_cell_with_a_chunking_budget():
 
 
 class _Req:
+    external_id: str   # the submitted id, which the engine that admits the request sets
+
     def __init__(self, rid: str, plen: int, max_tokens: int) -> None:
         self.request_id = rid
         self.num_prompt_tokens = plen
