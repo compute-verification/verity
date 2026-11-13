@@ -71,11 +71,11 @@ def test_spec_key_keeps_a_static_that_is_neither_json_nor_a_literal_as_its_text(
 
 
 def test_spec_key_of_a_static_that_is_a_map_or_a_set_is_hashable_and_ignores_its_order() -> None:
-    literal = XC.spec_key("Fam_v1{A={'y':(2,1),'x':[3]},B={3,1,2}}")
-    assert literal == ("Fam_v1", (("A", (("x", (3,)), ("y", (2, 1)))), ("B", (1, 2, 3))))
-    assert XC.spec_key("Fam_v1{B={2,3,1},A={'x':[3],'y':(2,1)}}") in {literal}
-    assert XC.spec_key("Fam_v1{A={'y':(2,1),'x':[4]},B={3,1,2}}") not in {literal}
-    assert XC.spec_key("Fam_v1{A={'y':(2,1),'x':[3]},B={3,1}}") not in {literal}
+    literal = XC.spec_key("Fam_v1{A={'y':(2,1),'x':[3],1:0},B={8,1,3}}")     # a set that Python walks as 8, 1, 3
+    assert literal == ("Fam_v1", (("A", (("1", 0), ("x", (3,)), ("y", (2, 1)))), ("B", (1, 3, 8))))
+    assert XC.spec_key("Fam_v1{B={3,8,1},A={1:0,'x':[3],'y':(2,1)}}") in {literal}
+    assert XC.spec_key("Fam_v1{A={'y':(2,1),'x':[4],1:0},B={8,1,3}}") not in {literal}
+    assert XC.spec_key("Fam_v1{A={'y':(2,1),'x':[3],1:0},B={8,1}}") not in {literal}
     # as a Program's rows spell a map: JSON, its floats as hex
     described = XC.spec_key('Fam_v1{MAP={"dict":{"b":[2,1],"a":true}},K={"b":1,"a":{"f64":"0x1p-1"}}}')
     assert described == ("Fam_v1", (("K", (("a", 0.5), ("b", 1))), ("MAP", (("a", True), ("b", (2, 1))))))
@@ -88,8 +88,8 @@ def test_routed_expected_refuses_a_family_that_is_no_routed_all_reduce_once_it_h
     parts: np.ndarray = np.zeros((W, len(ROWS), N), np.uint16)
     with pytest.raises(ValueError, match=f"^{FAMILY}: not a routed all-reduce$"):
         XC.routed_expected(FAMILY, {"SIZE": M * N}, parts, ROWS)
-    with pytest.raises(ValueError, match=f"^rows 5 x N={N} past SIZE=40$"):
-        XC.routed_expected(FAMILY, {"SIZE": 40}, parts, ROWS)
+    with pytest.raises(ValueError, match=f"^rows 5 x N={N} past SIZE=47$"):    # the last picked row's last word is the call's 48th
+        XC.routed_expected(FAMILY, {"SIZE": M * N - 1}, parts, ROWS)
     with pytest.raises(KeyError, match="SIZE"):                      # the family is asked last: statics without the size are not named
         XC.routed_expected(FAMILY, {"N": M * N}, parts, ROWS)
 
@@ -102,9 +102,9 @@ def test_the_honest_routed_pick_passes() -> None:
 
 @pytest.mark.parametrize("dumps,why", [
     ({"family": "Other_v1"}, "Other_v1: Other_v1: not a routed all-reduce"),
-    ({"statics": {**STATICS, "SIZE": 40}}, f"{ROUTE}: rows 5 x N={N} past SIZE=40"),
+    ({"statics": {**STATICS, "SIZE": M * N - 1}}, f"{ROUTE}: rows 5 x N={N} past SIZE=47"),
     ({"rows_of_one_dimension": True}, f"partials of shape ({N},); expected [rows, N]"),
-], ids=["a family that is no route", "rows past the size", "partials that are not rows"])
+], ids=["a family that is no route", "a row one word past the size", "partials that are not rows"])
 def test_a_routed_pick_that_cannot_be_evaluated_is_missing_by_name(dumps: dict[str, Any], why: str) -> None:
     res = XC.check_picks(_routed(**dumps))
     assert _counts(res) == {"result": False, "picks": 1, "equal": 0, "mismatch_n": 0, "missing_n": 1}
