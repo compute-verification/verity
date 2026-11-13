@@ -1,11 +1,11 @@
-"""Measure the reference circuits' structural properties and set them beside verity/protocols/inference_only/rho's shape-derived ones.
+"""Measure the reference circuits' structural properties and set them beside benchmarks/rho's shape-derived ones.
 
     uv run --extra torch-cpu verity bench circuit_properties [--models NAME,...] [--T T] [--out DIR]
 
 For each configuration in `references.configs()`, one b1 layer at T positions on bits (`references.layer`) is measured
 (`measure.measure`) under `references.GEMM_PRODUCTS`, and so is the Boolean GEMM `Gemm_v3{K=32,N=4}`. Beside each layer's
 a_out, a_in and |𝒥| per position: rho's `fanout`, `legs` and active layer products, as recorded for the model in
-verity/protocols/inference_only/rho/data/models.toml when it has a row, and as `derived_fanout` / `derived_legs` derive them from the
+benchmarks/rho/data/models.toml when it has a row, and as `derived_fanout` / `derived_legs` derive them from the
 config's own matrices (q, k, v, o, gate, up, down) otherwise and always. Each circuit's products are also checked
 whole-in-block (`measure.whole`) under two partitions: one block per root activation, and the gates cut in half. Writes
 DIR/properties.json (DIR defaults to $OUT) and prints one line per circuit.
@@ -23,7 +23,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity" / "protocols" / "inference_only" / "rho"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rho"))
 
 from circuit_properties import references as R
 from circuit_properties.measure import Blocks, describe, measure, whole
