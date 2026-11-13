@@ -34,8 +34,8 @@ from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 
 # the clear audit is a reference tool (verity/protocols/accounting/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "clear"))
-from clear_audit import Prover
-import clear_work as CW
+from clear_audit import Prover  # noqa: E402
+import clear_work as CW  # noqa: E402
 
 K = 128
 FMTS = ("nvfp4", "mxfp4")
