@@ -9,7 +9,7 @@ which it cannot tell apart from the responder's time and so also grants the adve
 
 Two clocks.  `UnsignedRounds` is the memory challenger's timed rounds, unsigned (`memory_challenger` signs them): it measures
 each answer's wall-clock latency from the reveal and rejects any over the deadline.  `simulate` is the model's: the responder
-answers each index with a `Prog` (Lean `SeqResponder.step`, state kept inside the responder), `oracle.run` counts the
+answers each index with a `Prog` (Lean `SeqResponderBy.step`, state kept inside the responder), `oracle.run` counts the
 answer's rounds, and any answer over the round budget or `work` queries is late.  The budget is the deadline over `call_ns`,
 the fastest whole oracle call, unless `deadline_rounds` gives it directly.  `on_answer` is the timing hook for both.  The
 conversion of wall-clock time into calls holds in the ideal-permutation model only: at the reference Feistel-SHAKE256 `Π₂` a
