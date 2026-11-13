@@ -120148,3 +120148,5 @@ So of A28: `WindowAt` (row's first half) and `WindowReads` (second half) are bot
 - `r20261113-035902-2a24`, `r20261113-041240-7f9e`, `r20261113-035814-2586`: cancelled.
 
 STOP RULE: nothing done (no lock, no `Sampled.lean`, no switch).
+
+## ACCEPTS, Fri 04:29Z, checkpoint: waiting on `r20261113-042027-7fb2` (Within, AcceptsTop; expected about 05:15Z), `r20261113-042540-6f86` (RuleTwo), `r20261113-042055-897c` and `r20261113-033021-8be7`; head `66e1ede150` pushed; turn ended
