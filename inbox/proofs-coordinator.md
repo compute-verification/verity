@@ -133890,3 +133890,58 @@ Clock: `date -u` read 09:56Z. Pen: `~/wt/.pen` is mine. Mailbox read to your 09:
 - The other five tests of the guard's file on this line.
 
 NEEDS: nothing. ADDRWC: section 5 is the word you wait for. ADDRROW: section 3 names `RowTable.lean` line 26.
+
+## HONEST2, Fri 13 Nov 09:58Z: COMPILED HEAD `49ae9b1101` (`f9e0`, rc 0, six files, 63 theorems, probes clean): `SampleBelow.lean`'s three statements as compiled are in item 2, with `Bnd.units`; since then ADDRROW2's `7b4574d02e` is merged, `sampleSlots_held` is restated to `= .ok l`, and where the second stage puts a checked inner block is WRITTEN as a theorem at the instance (`sits_held`), so the instance's premises take only `R`'s reads being well formed; PUSHED at `d947e22ec8`, NOT compiled (try `r20261113-095550-ea85`)
+
+**In plain words.** Two things. First, what I wrote last hour compiles: a first stage that draws `K` units out of a population of `n` proves only units below `n`, and at my instance the first stage therefore samples the one outer block (replay block) there is. ADDRROW2 and HELDOF can read that lemma at the head named in the title. Second, ADDRROW2 proved where the second stage puts a checked inner block (proof block) from two facts about a registration, and both are now theorems at my instance. So I took that fact out of the hypotheses: the design premises at the instance now ask one thing, that the reference statement's reads are well formed. That second part is written and pushed, not compiled.
+
+Clock: `date -u` read 09:57Z. Mailbox: your 09:52Z, by the hook; the mailbox branch is empty.
+
+**1. What compiled** [run: `r20261113-093020-f9e0`, `--on auto`, vy-nebius-cpu-7, launched 09:30Z, `done rc=0 class=SUCCESS` observed 09:52Z; lines quoted from its `stdout.log`], at `49ae9b11014b613319d2c2210f8b8412eb1052bf`:
+- `SampleBelow.lean`: "lean exit 0 in 390 s"; "none of its 3 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- `Honest/Instance.lean`: "lean exit 0 in 399 s"; 28 theorems, the same probe line.
+- `Honest/Wiring.lean`: "lean exit 0 in 88 s"; 16 theorems, the same.
+- `Honest/Written.lean`: "lean exit 0 in 70 s"; 3 theorems, the same.
+- `Honest/Runs.lean`: "lean exit 0 in 198 s"; 3 theorems, the same.
+- `Honest/Sits.lean`: "lean exit 0 in 129 s"; 10 theorems, the same.
+- No `--siblings` in that run. `SampleBelow.lean` is a new file, so it owes one; it goes in my next try (one try at a time).
+
+**2. STATEMENTS as compiled** [run: `f9e0`], `security/Proofs/Flock/SpotFlock/SampleBelow.lean` (107 lines, imports `SpotFlock/Cap.lean` only):
+- `theorem Flock.Bridge.drawUnits_subset_lt {k n : ℕ} {src : ByteArray} {units : Array ℕ} {read : ℕ} (h : Spot.Draw.drawUnits (.subset k) n src = .ok (units, read)) : ∀ x ∈ units, x < n`
+- `theorem SpotFlock.select_subset_lt {g : Reg} {K : ℕ} (hK : firstK g = some K) {src : ByteArray} {draw : Json} {proved : Array ℕ} {read : ℕ} (h : Spot.Select.select g.rule g.program g.query g.table g.closure src = .ok (draw, proved, read)) : ∃ n, Spot.Partition.units g.program g.query = .ok n ∧ ∀ x ∈ proved, x < n`
+- `theorem SamplingDeploy.RegTwo.sample_lt (g : RegTwo) {K : ℕ} (hK : firstK g.first = some K) (src : ByteArray) : ∃ n, Spot.Partition.units g.first.program g.first.query = .ok n ∧ ∀ ρ ∈ g.sample src, ρ < n`
+- And in `Honest/Instance.lean`, `Bnd` has the field `units : Spot.Partition.units g.program g.query = .ok 1`; in `Honest/Sits.lean`, `always_held (v : ℕ) : (held R B desc q c₀).reg.always v = false` and `sample_held (c : ByteArray) : ∀ ρ ∈ (held R B desc q c₀).reg.sample c, ρ = 0`.
+- **Limit, as at 09:35Z**: a first stage `firstK` reads (no closure map, a rule that is not `All`, a law Flock reads as `subset K`).
+
+**3. ADDRROW2: how it fits your `RowSample.lean`** [read: `18dfd1abf2`, not compiled]. Your `sampleSlots_of_units` takes `hlt : ∀ c, ∃ m, Spot.Partition.units h.reg.first.program h.reg.first.query = .ok m ∧ ∀ ρ ∈ h.reg.sample c, ρ < m`. That is `fun c => RegTwo.sample_lt h.reg hK c` for `hK : firstK h.reg.first = some K`, with nothing between. So `SampleSlots h` follows from `Slots.popOk … n = true` and `firstK h.reg.first = some K`.
+
+**4. Since `f9e0`: STATEMENT CHANGED, `Honest/Sits.lean`** [written, not compiled; in `ea85`].
+- Merged ADDRROW2's `7b4574d02e` (`c96732b896`, no conflict). It is on the join's line, so the merge brings the join's base under my branch: 190 files, among them files of `verity/`, `tests/` and `tools/` the join took from `main`. My branch's base on `main` moves from `4a7291116e` to `8ef93f0196`, 46 commits of `main` [run: `git merge-base` before and after].
+- `sampleSlots_held : AddressRow.SampleSlots (held R B desc q c₀)`, proved at the definition's own text (`= .ok l`).
+- New: `sits_held : AddressRow.Sits (held R B desc q c₀) := AddressRow.sits_of_slots (always_held …) (sampleSlots_held …)`.
+- The four theorems that took `hS : AddressRow.Sits (held R B desc q c₀)` lose it and are renamed, the old names gone:
+  - `rowFact_of_sits` is now `rowFact_held (hWf : Claims.Json.Wf R.reads) : RowFact (held R B desc q c₀) (wireMap …) (returned …) (addressOf …)`
+  - `addressesConnected_of_sits` is now `addressesConnected_held (hWf : Claims.Json.Wf R.reads) : AddressesConnected (held R B desc q c₀)`
+  - `premises_of_sits` is now `premises_held (hWf : Claims.Json.Wf R.reads) : Premises (held R B desc q c₀)`
+  - `honest_of_sits` is now `honest_of_accepts (hWf : Claims.Json.Wf R.reads) (hA : Accepts (held R B desc q c₀)) : HonestExists`
+- Nothing outside `Honest/` named the old four [run: `rg` over `security/` at my head].
+
+**5. What `HonestExists` takes at the instance** [derived from item 4; holds once `ea85` passes].
+- `Claims.Json.Wf R.reads` and one accepted run. The address premise takes the first alone.
+- Both remaining hypotheses are about things not defined in Lean yet: a concrete `Ref` (its reads are then checked to be well formed), and an honest session of it.
+
+**6. `Bnd.units` can leave** [read: `RowSample.lean` at `18dfd1abf2`; guess until it compiles]. ADDRROW2's `units_of_popOk` goes from the layout to `Partition.units` (`layout_ok`, `strataOf_perm`, `partition_evaluate_tiles`, `laysOut_units`, `units_eq`) and uses `popOk` only for the count. Stated one step earlier, as "where `Slots.layout p q = .ok l`, `Partition.units p q = .ok (Slots.popOf l).length`", it gives my field from `Bnd.layout`, since `oneLayout`'s population is one block. That is the lemma I said at 09:35Z I could not find. **ADDRROW2:** if you split `units_of_popOk` there, I read it and drop the field. If you'd rather not, say so and I write the step in `Honest/` from your lemmas once your file compiles.
+
+**STOP RULE.** I edited two files, both mine (`Honest/Sits.lean`, three lines of `Honest/Instance.lean`'s docstring). No root, record, listed guarantee, named assumption, `unwitnessed` entry or verifier touched by me. The merge of item 4 changed the lock and the lakefile as ADDRROW2's head has them (`roots` 307, mine among them, no duplicate; the lakefile names `LiveSalt.Ledger` and `SampledTwo.DeviceOrder` twice, as `7b4574d02e` does).
+
+**NEEDS.** Nothing from you. ADDRROW2: items 3 and 6.
+
+**Not established.**
+- That `d947e22ec8` compiles: `r20261113-095550-ea85` (`--on auto`, vy-nebius-cpu-1, launched 09:55Z) tries `SampleBelow`, `Instance`, `Wiring`, `Written`, `Runs`, then `Sits` with `--siblings`, on the join's base. At 09:57Z it was building `SampleBelow`'s imports (209 files changed in the slot tree), no verdict yet.
+- A sibling name check of `SampleBelow.lean`.
+- `Bnd.units` from `Bnd.layout`; `SampleSlots` for a first stage that is not of count `K`.
+- An accepted run, any concrete `Ref` or `Bnd`, a records run at my head.
+
+**Pushed.** `cursor/proofs-honest2-7c4e` at `d947e22ec85891a7f3ecff6aa7c3f959ac241724` (written, not compiled); it holds FRAME's `6e7ac16f9a` (`d0faa0604e`) and ADDRROW2's `7b4574d02e` (`c96732b896`). The last compiled head is `49ae9b11014b613319d2c2210f8b8412eb1052bf`. Nothing unpushed. Run out: `r20261113-095550-ea85`, one.
+
+**To post.** Nothing.
