@@ -720,7 +720,7 @@ def unit(**st):
     return bind(CompileSlice, **st)
 
 
-#: the demonstrations' coins, fixed so the tests are reproducible; a window's are the verifier's, drawn live
+#: the demonstrations' coins, fixed so the tests are reproducible; a window's are the verifier's, sampled live
 COINS = tuple(int.from_bytes(hashlib.sha512(b"compile slice v5 demo coin " + bytes([i])).digest()[:16], "little")
               for i in range(3))
 
