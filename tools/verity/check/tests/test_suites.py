@@ -1383,16 +1383,18 @@ def test_a_moved_suite_reuses_its_tests_passes_and_its_own_until_a_byte_changes(
     assert p.returncode == 0 and "cached  pkg" not in p.stdout and "5 passed" in p.stdout, p.stdout
 
 
-def test_a_failure_on_a_full_disk_is_not_kept_so_it_is_not_nondeterministic(tmp_path):
-    """A test that failed only because the machine's disk was full (ENOSPC) failed for the machine, not its inputs: its run
-    keeps no failure, so the pass beside it isn't flagged nondeterministic."""
+@pytest.mark.parametrize("fault", ["OSError(errno.ENOSPC, 'No space left on device')",
+                                   # pytest's make_numbered_dir out of inodes, which drops the errno
+                                   "OSError('could not create numbered dir with prefix host in /workspace/tmp/b after 10 tries')"])
+def test_a_failure_on_a_full_disk_is_not_kept_so_it_is_not_nondeterministic(tmp_path, fault):
+    """A test that failed only because the machine's disk was full (ENOSPC, or out of inodes for pytest's numbered tmp dirs)
+    failed for the machine, not its inputs: its run keeps no failure, so the pass beside it isn't flagged nondeterministic."""
     import json
 
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
     _per_test_workspace(root)
     (tests / "test_sibling.py").write_text(
-        "import errno, os\n\ndef test_sibling():\n    if os.environ.get('PKG_BREAK'):\n"
-        "        raise OSError(errno.ENOSPC, 'No space left on device')\n")
+        f"import errno, os\n\ndef test_sibling():\n    if os.environ.get('PKG_BREAK'):\n        raise {fault}\n")
     assert _run_suite(root, tmp_path).returncode == 0
     out = tmp_path / "suites.json"
     p = _run_suite(root, tmp_path, "--fresh", "--json", str(out), extra={"PKG_BREAK": "1"})
@@ -1753,7 +1755,8 @@ def _traced_workspace(root: Path) -> None:
     (root / "lib" / "unused.py").write_text("OTHER = 2\n")
     (root / "pkg" / "tests").mkdir(parents=True)
     (root / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\ndependencies = ["lib"]\n\n[tool.pytest.ini_options]\n'
-                                                 'testpaths = ["tests"]\n\n[tool.verity.tests]\nparallel = true\n')
+                                                 'testpaths = ["tests"]\n\n[tool.verity.tests]\nparallel = true\n'
+                                                 'untraced = ["tests/test_spawn.py"]\n')
     for name, text in {"conftest.py": "import pathlib, sys\nsys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / 'lib'))\n",
                        "test_a.py": "from used import VALUE\n\ndef test_a():\n    assert VALUE == 1\n",
                        "test_b.py": "def test_b():\n    pass\n",
@@ -1794,6 +1797,57 @@ def test_a_traced_pass_is_reused_until_a_file_its_run_read_changes(tmp_path):
     (lib / "maybe.txt").write_text("now it's here\n")
     p = _run_suite(root, tmp_path)
     assert p.returncode == 0 and "4 passed in" in p.stdout, p.stdout
+
+
+def test_a_program_no_tracer_sees_into_fails_its_suite_until_the_suite_names_its_file(tmp_path):
+    """The graph's test-file runner fails a test file that starts a program the read guard can't trace unless its suite names
+    it under `[tool.verity.tests] untraced`, so a suite that doesn't fails here too, naming the line to add, and keeps no pass
+    of that file for a later run to reuse; one that names it, by its path or a pattern, passes as before."""
+    root = tmp_path / "tree"
+    _traced_workspace(root)
+    pyproject = root / "pkg" / "pyproject.toml"
+    declared = pyproject.read_text()
+    pyproject.write_text(declared.replace('untraced = ["tests/test_spawn.py"]\n', ""))
+    for reused in ([], ["tests/test_a.py::test_a", "tests/test_b.py::test_b", "tests/test_probe.py::test_probe"]):
+        p = _run_suite(root, tmp_path, "--json", str(tmp_path / "suites.json"))
+        assert p.returncode == 1 and "failed  pkg" in p.stdout and _reused(tmp_path) == reused, p.stdout
+        assert ("doesn't name, which the graph's test-file runner fails:\n          tests/test_spawn.py: sh\n" in p.stdout
+                and 'pkg/pyproject.toml: add under [tool.verity.tests]\n          untraced = ["tests/test_spawn.py"]\n' in p.stdout), p.stdout
+        [row] = json.loads((tmp_path / "suites.json").read_text())
+        assert (row["status"], row["beyond_tests"], row["undeclared_untraced"]) == ("failed", True, {"pkg/tests/test_spawn.py": ["sh"]})
+    pyproject.write_text(declared.replace('"tests/test_spawn.py"', '"tests/test_sp*.py"'))
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "4 passed in" in p.stdout, p.stdout
+
+
+def test_an_untraced_program_is_named_by_its_file_as_the_graph_runner_names_it_and_a_hooks_only_warns(monkeypatch, tmp_path):
+    """`undeclared_untraced` decides as the graph's test-file runner does: a file whose path from its suite's directory matches a
+    pattern of `untraced` may start any program; compilers alone pass, the runner's `COMPILERS`; a suite the graph runs whole
+    (`AFTER_LEAN`) is not held to it. A conftest's or hook's (`*`), which a whole run can't tie to the files whose own runs start
+    it, fails nothing and is warned of (`hook_untraced`) unless `untraced` holds "*". The fix names the files to add, in the
+    list or as a new key."""
+    import ast
+
+    S = _suites(monkeypatch, tmp_path)
+    suite = S.Suite("pkg", "a/pkg", (), (), untraced=("tests/test_git.py", "tests/deep/*"))
+    started = {"a/pkg/tests/test_git.py": ["git"], "a/pkg/tests/deep/test_lake.py": ["lake"], "a/pkg/tests/test_sh.py": ["/bin/sh"],
+               "a/pkg/tests/test_build.py": ["/usr/bin/gcc", "ninja"], "a/pkg/tests/test_mixed.py": ["gcc", "git"], "*": ["git"]}
+    assert S.undeclared_untraced(suite, started) == {"a/pkg/tests/test_sh.py": ["/bin/sh"], "a/pkg/tests/test_mixed.py": ["gcc", "git"]}
+    assert S.hook_untraced(suite, started) == ["git"] and S.hook_untraced(suite, {"*": ["gcc"]}) == []
+    star = S.Suite("r", ".", (), (), untraced=("*",))
+    assert S.undeclared_untraced(star, {"*": ["git"], "tests/test_x.py": ["git"]}) == {} and S.hook_untraced(star, started) == []
+    lean = S.AFTER_LEAN[0]                                       # the graph runs it whole: no file of it gets a task
+    lean_suite = S.Suite(lean, f"x/{lean}", (), ())
+    assert S.undeclared_untraced(lean_suite, {f"x/{lean}/tests/test_x.py": ["lake"]}) == {}
+    assert S.hook_untraced(lean_suite, started) == []
+    assert S.untraced_fix(suite, {"a/pkg/tests/test_sh.py": ["sh"], "a/pkg/tests/test_mixed.py": ["git"]}) == (
+        'a/pkg/pyproject.toml: add to [tool.verity.tests] untraced = [...]\n    "tests/test_mixed.py",\n    "tests/test_sh.py",')
+    assert S.untraced_fix(S.Suite("r", ".", (), ()), {"tests/test_x.py": ["git"]}) == (
+        'pyproject.toml: add under [tool.verity.tests]\nuntraced = ["tests/test_x.py"]')
+    runner = ast.parse((HERE.parent / "graph" / "verity_graph" / "runners" / "test_file.py").read_text())
+    [compilers] = [ast.literal_eval(n.value.args[0]) for n in runner.body
+                   if isinstance(n, ast.Assign) and [getattr(t, "id", "") for t in n.targets] == ["COMPILERS"]]
+    assert S.COMPILERS == compilers
 
 
 def test_a_read_through_a_process_wide_cache_counts_for_every_module_that_uses_the_cache(tmp_path):

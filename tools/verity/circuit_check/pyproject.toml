@@ -30,10 +30,13 @@ markers = [
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "tests/test_ambient.py",
+    "tests/test_attention_split.py",
     "tests/test_cache.py",
+    "tests/test_cache_expiry.py",
     "tests/test_cache_imports_and_moves.py",
     "tests/test_cache_redteam.py",
     "tests/test_circuit_check.py",
+    "tests/test_metadata_files.py",
     "tests/test_metadata_listings.py",
     "tests/test_named_targets.py",
     "tests/test_shard.py",

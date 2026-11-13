@@ -32,3 +32,5 @@ inputs = [
     # the record of the value settings in force, which the suite makes as the benchmark does (serve_tax.value_settings)
     "adapters/vllm/verity_vllm/settings.py",
 ]
+# test files that start a program the read guard can't trace (bash): keyed on the suite's whole tree
+untraced = ["tests/test_prod_repro.py"]

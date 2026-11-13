@@ -31,7 +31,8 @@ trace their own reads (`child/`), and in a child this process forks it writes ea
 
 It traces, too, what a per-test key narrowed to the files the tests use holds (`suites.py`, `Traced`): each repository file its
 process opens or loads and each repository directory it lists (`traced`), and, per test module, each program started that no
-tracer sees into (`untraced`), as `child/verity_suite_reads.py` classifies them; its children write theirs to the reads file.
+tracer sees into (`untraced`), as `child/verity_suite_reads.py` classifies them, a class, module or session fixture's setup's for
+every module whose tests use the fixture; its children write theirs to the reads file.
 
 Two kinds of skip fail instead: one for an unreachable evidence store under a recorded check (`STORE_UNREACHABLE`), and a
 `pytest.importorskip` whose missing module is this checkout's (`importorskip`), which means it moved.
@@ -94,6 +95,8 @@ _failed: set[str] = set()
 _traced: set[str] = set()                                        # "F<tab>file" / "L<tab>directory" this process read
 _untraced: dict[str, set[str]] = {}                              # test module (or "*") -> programs no tracer sees into
 _workers_untraced: dict[str, set[str]] | None = None             # in an xdist controller: its workers', which start its tests' programs
+_setting_up: list = []                                           # the shared fixtures whose setup is running, innermost last
+_by_fixture: dict = {}                                           # shared fixture -> programs no tracer sees into its setup started
 _pid = os.getpid()
 _started = dict(os.environ)                                      # the caller's environment, as this process started with it
 
@@ -123,6 +126,8 @@ def _audit(event: str, args: tuple) -> None:
     for kind, rel in hits:
         if kind == "X":
             _untraced.setdefault(_current, set()).add(rel)
+            for f in _setting_up:
+                _by_fixture.setdefault(f, set()).add(rel)
         elif kind == "O":
             _outside.setdefault(rel, _current)
         else:
@@ -272,7 +277,21 @@ def pytest_make_collect_report(collector):
 
 
 @pytest.hookimpl(hookwrapper=True)
+def pytest_fixture_setup(fixturedef, request):
+    shared = fixturedef.scope != "function"
+    if shared:
+        _setting_up.append(fixturedef)
+    try:
+        yield
+    finally:
+        if shared:
+            _setting_up.pop()
+
+
+@pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_protocol(item, nextitem):
+    """A test's opens and programs are its module's. A program a fixture's setup started is the module's of every test using it:
+    a session or module fixture is set up once, for the first test that needs it, but the graph runs each test file alone."""
     global _test
     before, _test = _enter(_module_of(item.path)), item.nodeid
     if _ACTIVE:
@@ -280,6 +299,9 @@ def pytest_runtest_protocol(item, nextitem):
     try:
         yield
     finally:
+        defs = getattr(getattr(item, "_fixtureinfo", None), "name2fixturedefs", {})
+        if progs := {p for ds in defs.values() for d in ds[-1:] for p in _by_fixture.get(d, ())}:
+            _untraced.setdefault(_current, set()).update(progs)
         _test = ""
         if _ACTIVE:
             os.environ.pop("VERITY_SUITE_TEST", None)
