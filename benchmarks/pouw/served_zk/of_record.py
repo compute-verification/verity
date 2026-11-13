@@ -32,9 +32,9 @@ from typing import Any
 
 import verity_difftest as D
 
+from verity.circuits import codec
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import verifier as V
-from verity.circuits import codec
 
 REPO = Path(__file__).resolve().parents[3]
 POUW = REPO / "verity/protocols/accounting/pouw/verifier/lean/check"

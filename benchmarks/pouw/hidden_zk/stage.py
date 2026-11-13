@@ -34,14 +34,14 @@ from pathlib import Path
 import numpy as np
 
 from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2
-from verity_flock import circuit as FC
-from verity_flock import class_statement as CS
-from verity_flock import ir_lower as IL
 from verity.protocols.accounting.pouw.prover.circuit import leaves as L
 from verity.protocols.accounting.pouw.prover.circuit import pc4
 from verity.protocols.accounting.pouw.prover.circuit.anchors import TileAnchors, public_ports
-from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
+from verity_flock import circuit as FC
+from verity_flock import class_statement as CS
+from verity_flock import ir_lower as IL
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
