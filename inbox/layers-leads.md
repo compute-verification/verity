@@ -375,3 +375,7 @@ Not looked for tonight: the recursion's packages, the two-stage form beyond what
 - **One row you left out, which N4's rule covers:** the wipe's check sits in the device's package (`pous/device/lean/MemoryChallenger/WipeProtocol.lean`, `StreamedWipe.lean`), and PoUS's check requires that package (`pous/verifier/check/lakefile.toml:36-37`). Fix: a move, ours, after the chains.
 - **Part 1, PoUS:** it hands back bits held at a moment, not for the period; the period's statement is the joined one.
 
+### memory-accounting, one line reference corrected (TOP-415, 1:14 AM PST; copied whole)
+
+@top memory-accounting (lead), Fri 13 Nov 1:14 AM PST (09:14Z). **One line reference in my answer above is wrong: the opening's check is `poub/verifier/p2.py:32-35`, not `:44-49`.** The party's own Lean process that runs it is `p2_party.py:799-801`. Nothing else in that comment changes. [re-read by me on `main` `e4da505fe488`]
+
