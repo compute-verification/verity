@@ -335,8 +335,9 @@ def _chain_of(tmp_path, case: dict) -> SimpleNamespace:
     Path(steps.custody).write_text(json.dumps({"verdict": "accepted", "gate_runs": [{"gate_run": "c1"}]}))
     p, c = case["params"], json.loads(bytes.fromhex(case["commitment"]))
     regs = {r["window"]["window"]: R.digest(r) for r in c["windows"]}
-    Path(steps.certs).write_text(json.dumps({"verdict": "accepted", "link": p["link"], "session": p["sessions"][0],
-                                             "key": {"public": p["keys"][0]},
+    Path(steps.certs).write_text(json.dumps({"verdict": "accepted", "link": p["link"],
+                                             "session": p["keys"][0]["session"],
+                                             "key": {"public": p["keys"][0]["key"]},
                                              "rows": [{"window": w, "certified": True} for w in regs]}))
     n2 = json.loads(Path(steps.n2).read_text())
     n2["members"]["honest"]["windows"] = [{"window": w, "registration": d, "accepted": True, "proof": {"proved": True},
@@ -362,7 +363,9 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
     import jsonschema
     from block_certifier import block_leg
     monkeypatch.setattr(cr, "decide_period", period.reference)
-    case = period.case("accept", 1, "clock")
+    # a chain's certifier session numbers its link-windows from 0: the first case whose one entry starts there
+    case = next(c for n in range(1, 64) for c in [period.case("accept", n, "clock")]
+                if [e["start"] for e in c["params"]["keys"]] == [0])
     answer = period.reference(case)
     steps = _chain_of(tmp_path, case)
     honest = steps.period_answer = _period(tmp_path / "period", case, answer)
@@ -391,16 +394,20 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
         return block["why"]
 
     foreign = period.case("accept", 0, "clock")
+    theirs = [k for k in ("link", "keys") if foreign["params"][k] != case["params"][k]]
+    assert "keys" in theirs
     assert why(period_answer=_period(tmp_path / "foreign", foreign, period.reference(foreign))) == (
-        "the case's link, sessions: not the chain's, so another certifier session's period")
+        f"the case's {', '.join(theirs)}: not the chain's, so another certifier session's period")
     assert why(period_answer=_period(tmp_path / "mixed", foreign, answer)) == (
         "the case isn't the answer's: its commitment's digest is another")
-    another = period.lms.public_key(period._key(0, 2)).hex()
-    trusting = case | {"params": case["params"] | {"keys": [*case["params"]["keys"], another],
-                                                   "sessions": [*case["params"]["sessions"], bytes(32).hex()]}}
+    # another entry listed after the period's link-windows: the verifier accepts it, and it is not this chain's
+    p = case["params"]
+    another = {"key": period.lms.public_key(period._key(0, 2)).hex(), "session": bytes(32).hex(),
+               "start": p["first"] + p["windows"]}
+    trusting = case | {"params": p | {"keys": [*p["keys"], another]}}
     assert period.reference(trusting) == answer
     assert why(period_answer=_period(tmp_path / "trusting", trusting, answer)) == (
-        "the case's sessions, keys: not the chain's, so another certifier session's period")
+        "the case's keys: not the chain's, so another certifier session's period")
     rows = period.build("rows-honest", 0, small=True)
     assert why(period_answer=_period(tmp_path / "rows", rows, period.reference(rows))).startswith("a rows-form answer")
     assert why(period_answer=_period(tmp_path / "k", case, answer | {"public": answer["public"] | {"K": 1}})) == (
