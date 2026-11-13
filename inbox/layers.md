@@ -1,5 +1,57 @@
 # LAYERS' inbox (top writes; newest first)
 
+## 6. 2:44 AM PST Fri 13 Nov: THE RESUME: cut 2 by 5:30 AM PST, final by noon PST
+
+Every lead has answered the first cut (`layers/layers.md` at `0f875a6e82bb`), proofs' six answers to part 5.4 and
+lean's among them. All are copied whole in `inbox/layers-leads.md` (169 KB; read it from the heading
+"lean, TOP-415, Fri 13 Nov 2:01 AM PST" to the end with special care: those came after your cut). Every line there is
+[relayed]: a lead's worker's read, mostly nothing run. Where a correction changes a row, check it on `main` yourself
+and mark the row [read] or [relayed].
+
+**Cut 2, pushed to `cursor/top-layers-3e7b` by 5:30 AM PST** (Daniel reads a message of mine at 7:00 AM PST):
+
+1. **A new first section, at most 25 lines: "What the leads' answers changed".** Which of the five headline findings
+   stand, which changed and how, and the rows that were wrong. I quote it to Daniel, so every line carries its own
+   figure and its source, and says [read] or [relayed].
+2. **Fold the corrections into the rows.** The ones I know of, not a complete list:
+   - proofs (2:39 AM PST): P1 (`Spot/Registration.lean:163-213` is the verifier's parameters; the record is a JSON
+     object of 13 keys, 14 under v2); P5 (SPOT states four entries; what is missing is one, and a test); P6
+     (`Sampled.lean` cannot move alone, the package `core_vstar_recursive` can; lean confirms no record changes); F1
+     (the record's digest cannot move up to SPOT's package); F7 (overstated: the open case is Flock's command alone
+     under the provisional unit cover); X2 (the count is the whole directory; its `Sampled` part is 76 files, 33,601
+     lines); L1 (two corrections, and what dropping `Profile.lean:70-71` changes); part 5.1 item 3's five fields;
+     "called by PoUW and the certifier today" is not what the Lean does.
+   - proofs (2:42 AM PST): C2 (the cap is the range Flock's soundness bound covers: three numbers, a caller can
+     lower it and never raise it); C3 (14 modules, 11,956 lines; two things stand in the way of `verity/circuits/`).
+   - lean (2:01, 2:06, 2:42 AM PST): its four answers of 5.4; F2, Y2 and Y7; an entry rule lives as a table in
+     `tests/test_boundaries.py`; what does and does not change a lock record.
+   - soundness (several): Y2's corrected plan; L1; the checkpoint tie is completeness; registration should record
+     every capacity a data sheet states.
+   - vllm's three parts and its check of the weights and expert-table points; memory-accounting's corrections and its
+     left-out row; network-accounting's `max_tokens` coupling; compute-accounting; compute-research; circuits; GROUPS'
+     21 cross-group loads after the group map.
+3. **Item 5 below** (soundness's finding), the 5.4 count that says 16 where the list has 18 rows "to Daniel", the
+   three sweep findings your first cut left out, and ci's gap (`drive.toml`'s excludes name old paths).
+4. **Part 5.4, rewritten as what is now answered and what is left for Daniel.** proofs answered all six questions.
+   For each row "to Daniel", say whether a lead's answer settled it (who, when) or it still needs his word, with the
+   recommendation and its cost in lock records. "Who calls SPOT on a remote run" now has proofs' recommendation (the
+   thin protocol is `VStar.Recursive.Sampled.protocol`, already on compose's list; the caller's facts leave R2, R6
+   and R7, so `AcceptMeans` and `StageHeld` change). "Which device signs a day's declaration" has proofs'
+   recommendation (one signer and one clock, the challenger's). Those two go to Daniel through me: word them so he
+   can answer yes or no.
+
+**Paths.** Chain 2 of the path moves lands on `main` between about 5:30 and 6:30 AM PST and moves most protocol
+directories (into `verity/protocols/proofs/`, `accounting/`, `policy/`). Write cut 2 on `main` as it is when you start
+and say which commit. **After cut 2**, when `git ls-remote origin main` shows a new head whose log names the chain
+(#9697 was chain 1; chain 2's PR is not open yet), re-read every path and line reference at that commit and push the
+final. If `main` has not moved by 9:00 AM PST, end your turn saying so; I resume you.
+
+**Final by noon PST**, then a section of the architecture page (I ask for that when the final is in).
+
+Rules as before: push only to `cursor/top-layers-3e7b`; nothing heavy on your VM; a checkpoint line in your note at
+least hourly; end your turn rather than wait on anything more than 20 minutes. Your final message: the head, the
+"what changed" section word for word, the rows still "to Daniel" with one line each, and what you did not check.
+
 ## 4. 12:43 AM PST Fri 13 Nov: proofs' and circuits' lists; every lead asked has now answered
 
 Two more comments are copied whole at the end of `inbox/layers-leads.md`. [relayed; check each on `main`] With them
