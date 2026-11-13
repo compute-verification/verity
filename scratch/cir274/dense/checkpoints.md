@@ -27,3 +27,4 @@
 - 20:45Z waiting 694b (verity-vllm), ec34 (numerical, research, flock)
 - 21:09Z 694b verity-vllm: 2 failed (test_no_dead_modules, test_no_by_name_rules), both pass at main c68135b49 (ceb5); cure diff carried-join-cures.diff (sha256 e80b2263af91…) in scratch, testing in clone
 - 21:25Z cure runs 4366 (tests, waiting for a slot) 16ac (values); ec34 running; c8b6 timed out (its 7 covered by 91ed 5556 ec34)
+- 21:41Z 4366 with the cure: two files 8 passed, seven files passed, ruff clean; verity-vllm suite running; 16ac ec34 running
