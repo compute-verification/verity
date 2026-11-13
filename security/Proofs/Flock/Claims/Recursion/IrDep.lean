@@ -13,9 +13,9 @@ import Proofs.Flock.Claims.Recursion.VStarPorts
 # The deployed reference inner prover (`IrDep`) and its openings' shape (`irShaped_dep`)
 
 `IrShaped Ir x w ρ hist` is what the stager reads of an inner prover's `rest`. `IrDep x` is the deployed one, the inner
-recursive prover `rec_live` runs with C-Flock's prover behind it, as V\*'s stager reads it:
+recursive prover `rec_live` runs with Flock's prover behind it, as V\*'s stager reads it:
 
-* **Its tape** (`DepTape`): C-Flock's proofs at the coins so far (`prove`: each rep's proof and its batched value `T`), the
+* **Its tape** (`DepTape`): Flock's proofs at the coins so far (`prove`: each rep's proof and its batched value `T`), the
   running sums' salts (`rec_vstage.acc_salts`) and the fresh salts of the openings' private rows.
 * **Its rows** (`rows`): round 0's, each table's level-0 cap nodes (`capRows`, `nodeRow`, `rec_live.top_rows`), then each
   rep's rounds' rows along its schedule (`repRows`), at the proofs at the coins so far. The proofs' frames are causal, so
@@ -54,7 +54,7 @@ def coinAt (a : Msg) : Coin := fun i => FlockComplete.coinOf a i.val
 /-- The coins of the inner rounds `h`, in order. -/
 def innerCoins (h : List (Msg × Msg)) : List Coin := h.map fun p => coinAt p.2
 
-/-- **The deployed inner prover's tape**: C-Flock's proofs at the coins so far, each rep's proof and its batched value
+/-- **The deployed inner prover's tape**: Flock's proofs at the coins so far, each rep's proof and its batched value
 `T` (`prove`), the running sums' salts, and the fresh salts of statement directory `dir`, port `port`, row `i`. -/
 structure DepTape where
   prove : List Coin → Array (_root_.Flock.Proof × F128)
