@@ -16,7 +16,9 @@
 # sandbox's private tmpfs there and gone with it: nothing is made on the host, and two sandboxes at once each have
 # their own. Where /var/tmp got no private tmpfs, or is a link (CMD's physical directory is not under FIXED), --at
 # refuses: a tree bound elsewhere would compile to other bytes.
-# CMD is PID 1, so every process a build starts (compile-time code included) ends with it.
+# CMD is PID 1, so every process a build starts (compile-time code included) ends with it. It runs with no capability
+# and can make no user namespace (this one's count is capped at 0, which only a capability here lifts), so it can't
+# remount, mount over or unmount anything, here or in a namespace it opens: the mounts above are the ones it gets.
 set -euo pipefail
 rw=()
 ro=()
@@ -109,4 +111,5 @@ elif [ -z "$tmp" ]; then
   mount -t tmpfs -o mode=1777 tmpfs "$tmp"
 fi
 export TMPDIR="$tmp" TEMP="$tmp" TMP="$tmp"
-exec "$@"
+echo 0 > /proc/sys/user/max_user_namespaces
+exec setpriv --bounding-set=-all --inh-caps=-all --ambient-caps=-all -- "$@"
