@@ -112061,3 +112061,61 @@ NEEDS
 To post: none.
 
 Not established: that `MembersRowed` holds at the demo's members (I have not evaluated it on a real circuit file); whether `.pad` and `.lit` sources, which also leave `rowBit` none, are refused upstream of `Held`; how FRAME's assembly reads `neededBits_of_rowed`.
+
+## PERIODREAD, Fri 01:28Z: READY #9546 at `ee245a981c3e` (the six retired terms of #9416; its quick tier passed); the period's proofs had their first compile: 41 of 47 theorems elaborate and 6 do not, so nothing is proved yet; the fixes are pushed and in line
+
+Mailbox read at `23c3e423be` (last heading "Fri 13 Nov 00:23Z: where to send your next Lean try"). I can pause: yes, at any time; everything is pushed (heads at the end).
+
+**Ready line: #9546 at `ee245a981c3ef02869425dd08fdd3472fbed02d7`**, https://github.com/compute-verification/verity/pull/9546, unmarked, `Lane proofs`. Two files, no Lean file, no lock record: `benchmarks/one_stage/tests/test_a5_case_v2.py` (+7 −6 of wording) and its line of `tests/lint/allowlists/repo_retired_terms.json` (11 to 6) [run: `git diff --stat origin/main...HEAD`].
+
+- [run] Quick tier `r20261112-235319-090e` (vy-nebius-2): the change touches 4 suites (`benchmarks/one_stage`, `benchmarks/prove_path`, `repository`, `verity-graph`); 4 passed, 0 failed, 0 cached; `SUITES exit 0`. `test_no_new_retired_terms` is in `repository` and passed. Log: `terms-quick-r20261112-235319-090e.log` in my artifacts.
+- [run] It ran on base `7e70df68bd18`. `main` is now `e86d920413`, 138 commits on; `git merge-tree` of the head onto it exits 0. [read] `main` changed other files' lines of the allowlist since the base and did not change `test_a5_case_v2.py`.
+- Not run: the suites on the merged tree.
+
+### The proofs' first compile [run: `r20261113-005644-a128`, vy-nebius-cpu-11, tree `6a9587f572`, rc 0]
+
+- **`security/Proofs/Properties/Spot/Period.lean`: `lean exit 1`.** 41 of its 47 theorems elaborate; 6 fail: `partition_toList`, `read_ok`, `windowsIn_ok`, `Returned.period_of_sampled`, `windowAt_raw`, `acceptMeans`. `ledgerMeans`, `committedOnce`, `caseAt_ok`, `run_ok` and the fold's lemmas elaborate, but `committedOnce` rests on the six, so **nothing is proved**. No axiom list is printed for a file Lean refuses.
+- [read: the try's log] None of the six is a wrong statement. Five are closers written without the goal in front of me: a match the check makes on an option leaves `o = find? …` and `∀ x, o = some x → False` as two facts, to be substituted before use; a name (`read`) that also names the reader monad's; a lemma applied with an expected type that made Lean guess the wrong function; a bound I cleared that the next fact depends on; and the accept's outcome, which is a fact and not a definition. `partition_toList` (the one I feared: core has no lemma on `Array.partition`) came down to its invariant on the old state, which is there as a hypothesis; my closer did not look for it.
+- **`security/Proofs/Properties/Challenger/Window.lean` builds** with `line_of_device` carved out of `window_opens` and `sig_lms` added (`Built Proofs.Properties.Challenger.Window`, exit 0). Not checked: that no lock record moved (that is the records run's).
+- **PR 3's two statement files build at PR 3's head `f2889fd3ce`** (they are merged into PR 4's tree): `Properties.Spot.PeriodLedger` built, `Properties.Spot.Period` built as the try's dependency. So the `Numbered` docstring sentence you asked for is in a tree that builds. Not rerun: the axiom probe on the five statements at this head (it passed at `d3825441e7cf`, `6f65`).
+- **Not compiled at all yet: the device's two proofs** (`ledgerLinesOfDevice`, `ledgerOfDevice`): their file imports the period's proofs, which did not build.
+
+### What I pushed on it (PR 4's branch, `8fbc099b92`, not compiled)
+
+- The six fixes.
+- **A split I made, say if you object:** what `checked` and `verifyLedger` read of each line (every line is an entry, entry `i` is numbered `i`, two entries with one unsigned text have one number, a presented line is the device's or a break) is now `security/Proofs/Properties/Challenger/Lines.lean`, in `Properties.Challenger.Lines`. It is about the challenger's ledger and not about the period, it is what soundness's Tue change on the device's numbering would read, and it builds without the period's proofs, so one run tries it beside them. `PeriodLedger.lean` keeps only the two theorems.
+- [derived, not run] `LedgerOfDevice` needed no premise beyond `Numbered`: an entry's `seq` is a field of the text the device signs, so two lines that say the same carry one number.
+
+### Machines and waits (for infra's split)
+
+| run | what | machine | in line | started | waited |
+|---|---|---|---|---|---|
+| `1ca7` | PR 4's try | vy-nebius-2 | 00:41Z | never; I cancelled it at 00:56Z by your rule | 15 min |
+| `a128` | PR 4's try | vy-nebius-cpu-11 | 00:57Z | 01:09Z, done 01:20Z | 12 min |
+| `090e` | #9546 quick | vy-nebius-2 | 23:53Z | 00:57Z, done | 64 min |
+| `a005` | PR 2 quick | vy-nebius-2 | 23:22Z | 00:56Z, still running | 94 min |
+| `ddb2` | #9537 records | vy-nebius-2 | 23:18Z | check slot 23:47Z, Lean slot 00:04Z, still running | 46 min |
+| `3281` | PR 4's try, 2nd | vy-nebius-2 | 01:26Z | not yet | |
+
+[read: `a128`'s stderr] vy-nebius-cpu-11 was not free when I got there: three proofs runs were ahead of me, and its free 80 GB places were refused for memory ("-129 GB of memory free (612 GB more is reserved by live runs that haven't reached it)"). So its limit at 01:00Z was reserved memory, not places. `3281` is on vy-nebius-2 as your split says; if it has not started by 01:42Z I cancel it and send it to cpu-11.
+
+### Dates
+
+`CommittedOnce` proved in a run: still **Fri 22:00Z**, and I still say at Fri 04:00Z whether it moves to Fri 10:00Z. What the first compile shows is that it can move: the argument held, and each cycle is about 25 minutes of which half is the line.
+
+### Not established
+
+- That any of the five statements is proved: no file of PR 4's proofs has elaborated whole; no axiom list; no `check.py`; no second reader.
+- That the six fixes work. `read_ok` has never reached its closer, so its goal is unseen.
+- Anything about `Lines.lean` and `PeriodLedger.lean` (never compiled).
+- #9537's records (`ddb2` running) and PR 2's quick tier (`a005` running).
+
+### Open asks (unchanged)
+
+May I run `lean` on this VM on a scratch file that imports only core (no project build, under a minute, under 1 GB)? It would have caught three of the six before a 25-minute cycle. Until you say yes I do not.
+
+### Heads pushed, nothing unpushed
+
+#9537 `44b84839217d`; PR 2 `cursor/proofs-prf600-period-audit-9c4e` `5dacc95eab9e`; PR 3 `cursor/proofs-prf600-period-statements-e2a7` `f2889fd3ce`; PR 4 `cursor/proofs-prf600-period-proofs-4c9a` `8fbc099b92`; #9546 `ee245a981c3e`; notes `cursor/proofs-prf600-periodread-scratch-0b7e` `a4ff14e957`.
+
+**To post:** nothing.
