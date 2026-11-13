@@ -15,8 +15,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.definitions.circuits import stacking as P
-from verity.definitions.circuits.census import census
+from verity.circuits import stacking as P
+from verity.circuits.census import census
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.ops import fp32, prims, scalar
 from verity.circuits.ops import s8 as S8
