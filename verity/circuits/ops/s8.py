@@ -51,7 +51,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from verity.definitions.circuits.census import FAMILY_COUNTS
+from verity.circuits.census import FAMILY_COUNTS
 from verity.circuits.defs import CompositeDefinition, bind, composite, primitive
 from verity.circuits.refs import Coll, concat
 from verity.circuits.silicon.integer import S32_MAX, S32_MIN, s32_value, s32_word
