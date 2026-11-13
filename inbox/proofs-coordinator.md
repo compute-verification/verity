@@ -150768,3 +150768,86 @@ definitions tree. The split becomes 2,049 / 2,281 / 2,116.
 - New work goes on `cursor/proofs-messages-word-745c`, cut from that head: a scratch branch, not to be carried until I name it.
 
 ## HONEST2, Fri 13 Nov 16:21Z: CLOSED on your 16:03Z word (read at 16:20Z): `cursor/proofs-honest2-join-6e17` stays at `552a41cb4df8641e90ed3f0b22fae44e59e08450`, nothing unpushed, no run out, no timer; that commit is an ancestor of the join's tip `6bae773eb345` (ASSEMBLY's merge `11a81972738`, over the merge of `main`), and the tip's `Honest/Checked.lean`, `Honest/Any.lean`, `Honest/AtHeldOf.lean` and `SampledTwo/PremisesAt.lean` are its text byte for byte, with the root `Proofs.Flock.SpotFlock.Honest.Checked` on the tip's `lakefile.toml` and `lean-audit.json` [run: `git merge-base --is-ancestor`, `git rev-parse` of each blob, 16:21Z]; that they compile there is ASSEMBLY's `9d87`, which I did not read; item 4 (`wiresChecked A.h = true` out of `premises_of_heldOf` and the three theorems above it) is not started and waits for the carried join's head with ADDRROW2's `HeldOfAddresses.lean` and GATHER's clause on it; I push nothing more and wait to be resumed
+
+
+## FOR DANIEL: `topRoot_collision` builds no pair from the play; it feeds `topFinder`, which no listed guarantee reads (ADDRROW2, Fri 13 Nov 16:24Z)
+
+**In plain words.** Your 16:03Z item a says: a lemma that concludes "the hash has a collision", is handed to one of the
+pickers, and does not build its pair from the play, gets this heading at once. There is one, and one more that is half
+of that. Neither is read by a listed guarantee, nothing is empty, nothing is false, and neither is proved by counting.
+This entry is those two only; the whole table (every lemma handed to a picker, 33 of them) is in part 2, by 18:30Z.
+All paths and lines are at the pin `053b8e50fe8a`. Mailbox read at 16:19Z: nothing after your 16:03Z.
+
+**1. `Flock.SecurityProofs.topRoot_collision`: NOT BUILT** [read]. `security/Proofs/Flock/Recursive/TopRoot.lean:298-317`:
+
+```lean
+theorem topRoot_collision {dom : ByteArray} {bcs bcs' : Array ByteArray}
+    (hsz : bcs.size = bcs'.size) (hne : bcs ≠ bcs')
+    (hroot : Flock.FV3.root dom (topLeaves dom bcs) Flock.Sha512.hash =
+      Flock.FV3.root dom (topLeaves dom bcs') Flock.Sha512.hash) :
+    Merkle.Collision Refine.H512 := by
+  classical
+  let S := topStrings dom bcs ++ topStrings dom bcs'
+  by_contra noCollision
+  have cf : CF S := by … apply noCollision …
+  exact hne (top_bind hsz cf hroot)
+```
+
+- What it does instead of building a pair: it supposes that SHA-512 has no collision at all, concludes that no two
+  different strings of the list `S` have one digest (`CF S`, `TopRoot.lean:36`), then that the two tops are equal
+  (`top_bind`, `:265`), against `hne`. No pair is named. `S` is a list of the play: every SHA-512 input of the two root
+  computations (`topStrings`, `:228`: the leaf inputs, the registered-row frames and the tree's node frames of `bcs`
+  and of `bcs'`).
+- It is not a counting argument: the supposition is used only at members of `S`. What the proof shows is the named
+  form: two different members of `S` have one digest (`Hash.CollisionIn` over `S`,
+  `security/Definitions/Core/Hash.lean:43`). Its own docstring says so ("expose a collision among SHA-512 inputs used by
+  those two root computations"); its conclusion says less.
+- Who it is handed to [run: the constant graph at the pin]: `TopColl.collision`
+  (`security/Proofs/Flock/Recursive/TopFinder.lean:204`) and through it `onePick` in `topFinder` (`TopFinder.lean:239`,
+  docstring from `:235`). 20 declarations reach the lemma, by type or by proof; none is a key of a lock. `topFinder` is
+  read by the unlisted statement `Flock.Guarantees.RecursiveAuditC3At` (`security/Proofs/Flock/Recursive/AuditC3.lean:398`,
+  docstring from `:339`) and its `NoA3` form (`:577`), and by no listed one. The listed
+  `Flock.SecurityProofs.RecursiveAuditC3` does not read it (entry 1, finding 3).
+- The named form it can take [derived, nothing compiled]: conclude `∃ x ∈ S, ∃ y ∈ S, x ≠ y ∧ Sha512.hash x = Sha512.hash y`,
+  which is `¬ CF S`, the contrapositive of the step the proof already has (`top_bind`); the `by_contra` over all strings
+  goes. The finder then searches `S` for its first two different members with one digest, as `Claims.findColl`
+  (`security/Definitions/Core/Interaction.lean:322`) and `Challenger.collisionIn`
+  (`security/Properties/Challenger.lean:342`) do. `topFinder`'s docstring already counts that work ("both top
+  recomputations").
+
+**2. `RegClash.collision`: built, but one of its two openings is not a term of the play** [read].
+`security/Proofs/Flock/Recursive/HoloExec.lean:310-315`. The pair is `Merkle.opening_bindingL` at the run's own opening
+`y` and at the registrant's opening `(s, sibs)` of the same position, and the second is taken from a hypothesis that
+only says it exists (`HoloReg.Opens`, `HoloExec.lean:134-137`: `∀ pos < …, ∃ salt sibs, Merkle.VerifiesL …`). So no
+function of the run and the statement gives this pair: the registrant's salts and paths would have to be data of the
+statement, as `Reads` holds them (`wv`, `ws`, `wpath`, `security/Proofs/Flock/Soundness/Registered/Defs.lean:61`).
+It is handed through `ClashHL.collision` (`HoloExec.lean:325`) to `collOf` in `clashPickHLO`
+(`security/Proofs/Flock/C3/Fork/Sound.lean:65`), which two theorems of that file use (`holo_inner_sound_compiled` `:74`,
+`holoForkSound_holoAt` `:208`) and no statement, listed or not [run]. 5 declarations reach the lemma; none is a key of a
+lock.
+
+**3. What holds of every other lemma handed to a picker** [read; the table is part 2's]. The other 31 are built from the
+two openings, each through `Merkle.walk_binding`, `opening_binding` or `opening_bindingL`
+(`security/Proofs/Flock/Soundness/Merkle.lean:38,56,74`), `hm96Leaf_bind` (`security/Definitions/Flock/Merkle.lean:102`),
+or a pair that already has a name (`TwoOpenings.pair`, `hm96Pair`) and is then forgotten. One thing for the reader of
+"built", so that it is not read for more than it is: it says what the lemma's *proof* does, which is what a restatement
+can copy. It does not say what the finder outputs today. `collOf` takes its pair by choice from the proposition, so by
+proof irrelevance its output is the same pair whatever the proof was, and the tree proves it:
+`collOf_congr` (`security/Proofs/Flock/Recursive/ForkLast.lean:328`, "`collOf` reads its condition only up to `↔`",
+proved by `cases propext e; rfl`). That is entry 1's third case, which you ruled at 16:03Z; nothing new.
+
+**STOP RULE.** Not touched: no code, no statement, no lock. Nothing here is a listed guarantee, and none is empty.
+
+**NEEDS.** None. Part 2 follows by 18:30Z.
+
+**Not established.**
+- Nothing is compiled: the named form of item 1 and the data form of item 2 are read off the proofs.
+- "Reaches" is by the constant graph, which mixes a constant's type and its proof; it cannot miss a reader, and it may
+  count one that only uses the lemma in a proof.
+- Whether `RecursiveAuditC3At` is meant to be listed later is not mine to say; today no lock names it.
+
+**Pushed.** This entry only. My four branches are unchanged (part 2 says which are live).
+
+**Runs.** None new. `r20261113-155322-edca` (the constant graph at the pin's own facts): done, rc 0.
+
+**To post.** Nothing.
