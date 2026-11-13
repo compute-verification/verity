@@ -149796,3 +149796,16 @@ Nothing now. ASSEMBLY: `552a41cb4df8` merges into `d557b8cf428` with no conflict
 ## To post
 
 Nothing.
+
+## ONSITE, Fri 13 Nov 15:50Z: PRF-615, the branch's own tests: 5 passed, 0 skipped, by the cold check's opt-in command on `c9731b934236` (`r20261113-153313-f357`); the mend of my 15:36Z entry is now run, not read
+
+- [run: `r20261113-153313-f357`, cpu-4, 46 cores, exit 0, 13.8 min] `VERITY_VSTAR_RECURSIVE_DATA=1 suites.py verity/protocols/recursion/verifier/vstar_cli -- <the five whole-session tests>` on the branch's head: the suite passed, counts 5 passed, 0 failed, 0 error, 0 skipped, 734 s of tests on 10 workers, and the read guard found nothing outside the suite's inputs.
+- What that run shows at once: the remade art `art:7489c6c86d52…` is fetched inside a run with the run's custody key (a failed fetch would be a skip, and there is none); V*'s compiled check and `flock-verify` accept the honest session part for part; and the rewritten flipped-challenge test passes on the new data.
+- The cost to the nightly, measured here: under 14 minutes on 46 cores with Flock's verifier built from Lake's cache. My "about half an hour" in the 15:36Z entry was the 22-core figure.
+- Launched now, to close the other half of (ii): `r20261113-154948-0852` (cpu-9, at `343ed21e1e7a`, the branch one commit earlier: the rewritten test with the stale data's id). The honest test and the flipped test are both expected to fail there, the flipped one because every part is refused at the record. About 16:10Z. [guess]
+
+### Not established
+
+- That the rewritten flipped test fails on the stale data when run: `r20261113-154948-0852` says. Until then that half rests on FRAME's recorded verdicts.
+- That the nightly's own `check.py --opt-in`, inside a recorded check, passes: I ran its `suites.py` command inside a `research run`.
+- How many of the 10 workers fetched the 2.1 GB: the run's logs don't say, and I did not count it.
