@@ -8,7 +8,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # profile; its coins on the one challenger, local and as a service.
 inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
           "verity/__init__.py", "verity/errors.py",
-          "verity/hardware/record.py",
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/reporting.py",
           "verity/protocols/proofs/spot/verifier/__init__.py",
           "verity/claims/__init__.py",

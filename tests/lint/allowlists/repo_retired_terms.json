@@ -4591,7 +4591,6 @@
     {"file": "verity/protocols/accounting/pouw/verifier/tests/window_vectors.py", "count": 9},
     {"file": "verity/protocols/accounting/pouw/verifier/window.py", "count": 70},
     {"file": "verity/protocols/proofs/spot/verifier/profile.py", "count": 90},
-    {"file": "verity/hardware/record.py", "count": 2},
     {"file": "verity/hardware/registration.py", "count": 10},
     {"file": "verity/protocols/compose/verifier/remote/CoreRemote.lean", "count": 103},
     {"file": "verity/protocols/compose/verifier/remote/README.md", "count": 160},

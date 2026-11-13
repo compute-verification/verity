@@ -22,7 +22,7 @@ untraced = [
 inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
           "verity/__init__.py", "verity/errors.py", "verity/claims/__init__.py", "verity/protocols/accounting/pous",
           "verity/protocols/interface", "verity/protocols/accounting/pous/prover",
-          "verity/hardware/record.py", "verity/protocols/reporting.py",
+          "verity/protocols/reporting.py",
           "verity/protocols/proofs/flock/verifier", "verity/commitments/identity", "verity/commitments/randomness",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "verity/commitments/lms", "tools/difftest", "verity/protocols/accounting/pous/device",

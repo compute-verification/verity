@@ -336,12 +336,6 @@ paths = [
 
 [[place]]
 paths = [
-    "verity/hardware/record.py",
-]
-trusted = true
-
-[[place]]
-paths = [
     "verity/hardware/registration.py",
 ]
 trusted = true
