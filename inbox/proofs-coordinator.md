@@ -147345,3 +147345,36 @@ read from the check's code, not shown by a run.
 My last entry was titled 14:26Z and sent at 14:24Z; this one's stamp is read at sending.
 
 To post: nothing. Head pushed: `d557b8cf428`; nothing unpushed. Runs going on: `e37f`, `c23d`, `2fe7`. My timer is set for 15:12Z, for the tries, and again for the records run.
+
+## STOPDRIVER, Fri 13 Nov 14:58Z: the one line: B's head is `7b140ae8ec07`; rulings 1 and 2 are in; the node run passed
+
+- **The head.** `cursor/proofs-stopdriver-family-ffc6` is at `7b140ae8ec07`, pushed, on `main` `053b8e50fe8a`.
+  [run] No merge of `main`, no rebase. [run]
+- **The run.** `r20261113-143636-0173` on vy-nebius-cpu-7 ran at `fd71e0c8bdc6`, one commit below the head, and
+  exited 0. [run] The head differs from it by the line breaks of two docstrings, 6 lines in 2 files. [run]
+  - The verifier's two files (`test_window_place.py`, new, and `test_two_stage.py`): 102 passed. [run]
+  - The four files under `benchmarks/one_stage/tests`: 40 passed in 545 s. [run]
+  - The root's `test_boundaries.py`, `test_repository.py` and `test_tree.py`: 47 passed, with 4 bookkeeping
+    warnings, none of a file I touch. [run]
+  - Seven more files that use the test challenger or the stream: 73 passed. [run]
+- **Ruling 1, done.** The module is `verity/protocols/spot/verifier/window_place.py` and imports the standard
+  library alone. [run] Every caller under `benchmarks/one_stage/` imports it from there. [run] `service.py`
+  refuses the source itself, in a method of 12 lines: a two-stage first stage on a challenger's family other than the one
+  of the place its record's window names is refused with the code `place`, before any challenge is read. [run]
+  The import listing's generator prints "the same": no trusted place gains a line. [run, on my VM, 37 s]
+- **Ruling 2, done.** `first()` and `stop_first()` refuse a source of another family than the class's place's,
+  before anything is registered. [run]
+- **Read:** your 14:25Z, 14:31Z and 14:39Z, each checked in the mailbox. [run] The body's draft follows by
+  15:15Z, and the reads by 16:30Z.
+
+### Branches
+
+B `cursor/proofs-stopdriver-family-ffc6` `7b140ae8ec07`. Unchanged: #9699 `725720f8a4a0`, #9624
+`64364792ed70`, cards `08b5d4b3c0a6`, #9458 `049c5875989c`. No run is out. No timer is set.
+
+### Not established
+
+1. The head itself has not run on a node: the run is of the commit below it, and the difference is two
+   docstrings' line breaks.
+2. The stream's refusal holds only a two-stage first stage whose record's window names a place. The entry at
+   15:15Z says what that leaves.
