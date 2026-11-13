@@ -760,13 +760,16 @@ def bound_reads(file: Mapping[str, Any], m: CS.Member, ports: Iterable[str], roo
     """Member ``m``'s ``--registered`` file ``file`` with each of its header's ``ports`` the file names no read for bound
     (`REG.bind_ports`) to the port's own tree: the root the registration holds for ``<member>/<port>`` (``roots``, its
     entries by port) and the domain the verifier's window derives for it (``want``), which the audit's check before the
-    sample held the header's to (``root:<port>``). A wired port with no tree of its own (`rows.Member.wired_trees`) has
-    neither: its rows are leaves of its writer's output tree, which the verifier's file names it a read of, each unit at
-    its writer unit's leaf (`rows.Binding.held_leaves`: `rows.own_reads`, the two-stage audit's `verifier_reads`), the
-    read the Lean verifier holds each session to. So it is never bound, and a file that leaves it out is refused
+    sample held the header's to (``header``, the per-member form's rule). A wired port with no tree of its own
+    (`rows.Member.wired_trees`) has none: its rows are leaves of its writer's output tree, which the verifier's file names
+    it a read of, each unit at its writer unit's leaf (`rows.Binding.held_leaves`: `rows.own_reads`, the two-stage
+    audit's `verifier_reads`), the read the Lean verifier holds each session to. The window and the registration name
+    that tree under the reader's name too (``want``'s entry says so, ``wired``: `rows.wired_ports`), and a root under
+    that name is its writer's, no tree of the port's own. So it is never bound, and a file that leaves it out is refused
     (ValueError, `REG.bind_ports`'s)."""
     ports = list(ports)
-    own = {p: {"root": roots[q]["root"], "domain": want[q]["domain"]} for p in ports if (q := m.port(p)) in roots and q in want}
+    own = {p: {"root": roots[q]["root"], "domain": want[q]["domain"]} for p in ports
+           if (q := m.port(p)) in roots and q in want and "wired" not in want[q]}
     return REG.bind_ports(file, ports, own)
 
 
