@@ -78,12 +78,14 @@ def test_the_of_record_set_reads_the_manifest_it_is_handed_in_text_or_in_bytes(t
 
 
 @pytest.mark.parametrize(("name", "raised"), [("{a}/", NotADirectoryError), ("{a}/.", NotADirectoryError), ("", FileNotFoundError)])
-def test_a_diff_of_two_records_opens_each_name_as_the_command_line_gives_it(tmp_path, name: str, raised: type[Exception]):
+def test_a_diff_of_two_records_opens_each_name_as_the_command_line_gives_it(tmp_path, monkeypatch, name: str, raised: type[Exception]):
     """A record's name with a slash after it is no directory, and the empty name is no file: the command ends on the error and reads
-    neither as a record."""
+    neither as a record.  The command runs from `tmp_path`: the suite's read guard joins a name to the working directory, and the
+    empty name joined to the suite's own directory is a path outside its inputs."""
     a, b = tmp_path / "a.json", tmp_path / "b.json"
     for p in (a, b):
         p.write_text("{}")
+    monkeypatch.chdir(tmp_path)
     with pytest.raises(raised):
         cli.main(["weights-of-record", "--diff", name.format(a=a), str(b)])
     with pytest.raises(raised):
