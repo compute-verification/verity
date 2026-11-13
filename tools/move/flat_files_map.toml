@@ -72,6 +72,7 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 [split]
 # references to a directory this move splits that stay right: "old file: old directory" = why
 "demos/lifecycle/README.md: verity/configuration/deploy" = "prose naming the deployment layer, which is the runtime: its parties run by `run`"
+"tests/import_order.toml: verity/configuration/deploy" = "the deployment layer's place, named by its first path: the runtime keeps it, and the listing's own commit after the move adds the files that leave for verity/"
 "tools/verity/check/drive.toml: verity/configuration/deploy" = "the low-risk exclusions list the files that leave for verity/ beside it"
 "verity/configuration/deploy/README.md: verity/configuration/deploy" = "the runtime's README names its own suite, verity/runtime"
 "verity/protocols/pous/device/README.md: verity/configuration/deploy" = "prose naming the party runtime the wipe's parties run on"
