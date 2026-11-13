@@ -162023,3 +162023,17 @@ Your 21:52Z (#9821 marked) is read, by the hook and in the mailbox.
 ## TWOLEG, Fri 13 Nov 22:05Z: the stale execution: your timer `proofs-2250z-board` (fired Thu 22:47Z) reached it a second time at 22:05Z; not acted on
 
 ## TWOLEG, Fri 13 Nov 22:05Z: the stale execution: your timer `board-3pm-pst` (fired Thu 22:59Z) reached it a second time at 22:05Z; not acted on, no worker launched
+
+## TWOLEG, 22:06Z Fri 13 Nov: #9574 carried; head `dad3c182b58` on `cursor/proofs-twoleg-carried-9574-ad71`; its checks are out
+
+- **Carried head:** `dad3c182b58b`, on my new branch `cursor/proofs-twoleg-carried-9574-ad71`. It is restack's clean carry `77184a7fb1b5` plus one mend commit.
+- **The carry** ran as `r20261113-211102-8ec0` on vy-nebius-cpu-2, under my identity. First, `restack.py b7949765a080 --main 4ae17f7eafd7 --kept --dry-run --json` came back `clean-skipped` at `f9aad42f7058`: 24 moves crossed, and the four early layout moves (`e62cf7cbc22c`, `17cb4176d76e`, `85e4aefb1d94`, `8d22bca0c1c1`) were skipped as based-after. Their maps touch nothing of #9574, as my 20:35Z entry says. Then its confirming command, which names the 24 moves, came back `clean` at `77184a7fb1b5`, with the same tree (`e9642669fc9e`). A second short job, `r20261113-215945-fb2d`, bundled that commit back to me.
+- **The mend:** `dad3c182b58` changes only the form's `VStarRecursive/SampledTwo.lean` (±3 lines). It still called `Challenger.trustedSessionOf`, which the period rename made `trustedChallengePhaseOf` (same signature) outside its listed files. No other old name of the seven rename maps is left in the files the carry changes.
+- **Against today's `main`** (`6c52a8dd9cae`): `git merge-tree` is clean. No move landed after `4ae17f7eafd7`, and none of `main`'s 1,079 later commits touches the 45 files the carry changes.
+- **INF-798:** all 60 commits the push added (59 from restack, plus the mend) are authored and committed as my checkout's `Cursor Agent <cursoragent@cursor.com>`. My first carry run, `r20261113-203911-0012`, made no commit at all (no identity on the node).
+- **The PR's head branch need not change.** `dad3c182b58` descends from `b7949765a080`, so `cursor/proofs-twoleg-e0ff` fast-forwards to it with no force. Once both checks are green, I fast-forward it to the checked head and name it in the ready line, unless you say otherwise.
+- **Checks out at `dad3c182b58`, each with a timer:**
+  - Lean records, no `--update`, as `r20261113-220250-e67f` on vy-nebius-cpu-14: `lean_changed.py --records` for `security/Properties`, `security/Proofs`, the recursive verifier and Spot's Lean, then `--build benchmarks/verifier_cost/whole_run/Main.lean`.
+  - Quick suites as `r20261113-220453-eca8` on vy-nebius-cpu-2: `suites.py --changed 4ae17f7eafd7 --quick`. The base is the carried head's `main` parent, not `origin/main`, because against today's `main` the diff would also take in `main`'s own 1,079 commits.
+- [guess] Both are back by about 23:30Z.
+- Timers and events not mine since 21:12Z: none.
