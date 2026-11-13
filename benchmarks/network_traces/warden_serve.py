@@ -87,7 +87,9 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   "Admission"). Each window of the wire's two records is also committed as rows, a row a bucket, with its wiring
   (`warden_rows`), its head signed: `cells.jsonl` holds the registration and the cost (rows, row bytes, commit and sign
   ms), `cells.salts` the rows' salts and the wiring's (witness, the prover's, who holds the records the rows and the
-  wiring are read off). All of that is done by a spawned process (`PublisherProcess`), which alone holds the key and
+  wiring are read off). A line of `cells.jsonl` is the run's private side whole: of a registration the auditor's gate
+  publishes the certificate alone, and its wiring and the cost's two times are private. All of that is done by a
+  spawned process (`PublisherProcess`), which alone holds the key and
   gets each tick's rows as the network certifier releases them: a window's commit can take seconds of CPU, and in the
   network certifier's own process, even on another thread, it holds the ticker's GIL and puts ticks past their slack.
   Before the origin `serve` runs on the C allocator (it re-executes itself with `PYTHONMALLOC=malloc`) and makes its
@@ -125,8 +127,9 @@ session (`check_load`) at the relay's roots.
 the schedule's lengths rows and its content rows' classes, which `rehearse` passes to its `serve`; without them a
 run is what it was. With them the network certifier hands each execution phase's releases once the next one's records
 are published, and the publisher process lays that execution phase's tables, commits them and signs their one head:
-`rows.jsonl` (the registration and the cost) and `rows.salts` (witness). `check` holds every execution phase that has
-connection rows to a registration that verifies and whose head is the tables laid from the records.
+`rows.jsonl` (the registration and the cost, the run's private side as `cells.jsonl` is) and `rows.salts` (witness).
+`check` holds every execution phase that has connection rows to a registration that verifies and whose head is the
+tables laid from the records.
 """
 
 from __future__ import annotations

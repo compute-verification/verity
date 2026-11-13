@@ -2152,9 +2152,10 @@ prompt ids and a size of ids released, each a power of two.
   client goes away after its release ends as its server does, in its `END` or a server's `FAIL`, and has its rows.
 - **An execution phase that is not handed**, because its records or the next one's weren't published complete, has
   no content rows and no head: no read of a row of it opens.
-- **What is public.** The head and the registration hold each table's name, rows, row size, domain and root. The
-  classes, their order and their rows are the schedule's, in the parameters' digest, and the roots are hiding.
-  Nothing in them is a function of the load: not how many rows are held, in which class, or any length.
+- **Nothing in the head is a function of the load.** The head and the registration hold each table's name, rows,
+  row size, domain and root. The classes, their order and their rows are the schedule's, in the parameters' digest,
+  and the roots are hiding: not how many rows are held, in which class, or any length. A run keeps the registration
+  on its private side all the same, and the auditor's gate publishes its certificate alone.
 
 The classes enter the parameters' digest; a schedule without content rows hashes nothing of them and keeps its
 digest, records, heads and certificates. As for the lengths rows, that the tables say what the records say rests on
@@ -2373,7 +2374,8 @@ signer (`Issuer.sign`: the certifier message for the key, the session and the ex
 record's own certificate of that execution phase signs its salted record digest, so neither verifies as the other.
 
 **The registration** (`registration`, `verity-network-warden/registration/v2`) is the head, the rows' format and order
-(`layout`: T, S, r and the first bucket w·T) and the certificate, as one public JSON object. `check_registration` is
+(`layout`: T, S, r and the first bucket w·T) and the certificate, as one JSON object. A run keeps it on its private
+side: the auditor's gate publishes its certificate alone, and the wiring is private. `check_registration` is
 the verifier's read of it: every field but the wiring's digest and the root is the one the schedule and the
 execution phase give, and the certificate verifies over the head under the network certifier's key in the session.
 
