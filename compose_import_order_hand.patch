@@ -1,0 +1,56 @@
+From 0ada17e441368d0bfa7b2c1af11aecb109577991 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Fri, 13 Nov 2026 07:46:52 +0000
+Subject: [PATCH] Import listing after the carve: one row and one place for
+ verity/protocols/compose
+
+The two moves before this leave verity/protocols/remote and verity/protocols/onsite with no file: remote's and onsite's lists are under verity/protocols/compose/verifier/ with the rule that joins protocols. In the listing's order the two rows become one row for verity/protocols/compose, the place that named verity/protocols/remote names verity/protocols/compose, and the tables are what tools/verity/check/import_order.py writes from that, which moves the place to its sorted position and changes nothing else.
+
+Co-authored-by: danielreuter <danielreuter@users.noreply.github.com>
+---
+ tests/import_order.toml | 15 +++++++--------
+ 1 file changed, 7 insertions(+), 8 deletions(-)
+
+diff --git a/tests/import_order.toml b/tests/import_order.toml
+index 6fd018fc0c..0f38f60ed9 100644
+--- a/tests/import_order.toml
++++ b/tests/import_order.toml
+@@ -31,8 +31,7 @@ order = [
+     ["verity/protocols/pouw"],
+     ["verity/protocols/inference_only"],
+     ["verity/protocols/certifier"],
+-    ["verity/protocols/remote"],
+-    ["verity/protocols/onsite"],
++    ["verity/protocols/compose"],
+     ["verity/composite"],
+     ["security"],
+     ["adapters"],
+@@ -436,6 +435,12 @@ loaded_by = [
+     "verity/protocols/certifier/prover/window_charge.py",
+ ]
+ 
++[[place]]
++paths = [
++    "verity/protocols/compose",
++]
++trusted = true
++
+ [[place]]
+ paths = [
+     "verity/protocols/flock/sigma",
+@@ -640,12 +645,6 @@ paths = [
+ ]
+ trusted = true
+ 
+-[[place]]
+-paths = [
+-    "verity/protocols/remote",
+-]
+-trusted = true
+-
+ [[place]]
+ paths = [
+     "verity/protocols/reporting.py",
+-- 
+2.43.0
+
