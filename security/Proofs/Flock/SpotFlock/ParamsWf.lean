@@ -1,11 +1,9 @@
 module
 
 public import Proofs.Flock.SpotFlock.HeldOfReads
+public import Proofs.Flock.SpotFlock.DoWalk
 public import Proofs.Properties.Spot.Units
 public import Batteries.Tactic.OpenPrivate
-import Proofs.Flock.Claims.Sampling.Select.Take
-public import Lean
-public meta import Lean
 
 /-!
 # What the parameters' readers hand on of a well-formed tree
@@ -27,11 +25,8 @@ the ports and the partition there.
 
 ## How the readers are walked
 
-`paramsParsed` is one `do` block whose `match`es and `if`s each leave a join point, a function of the value just read,
-for the rest of the block. `jp_step` takes one: it names the join point, walks the arms with the rest of the block
-folded in the name, and concludes that the join point returned at some value, with whatever the arms show of that
-value. So the walk is linear in the block, where unfolding a join point into its arms multiplies the rest of the block
-by the arms at every one. `do_walk` repeats it down the block, to its last line.
+`paramsParsed` is one `do` block whose `match`es and `if`s each leave a join point for the rest of the block. It is
+walked once, join point by join point (`jp_step`, `do_walk` of `SpotFlock.DoWalk`), which is linear in the block.
 
 A `match` on an array literal (the one key `templates`, an entry's four keys) is one `split` does not split:
 `match_templates_ok` and `match_entry_ok` take its cases by hand, once, for any arms.
@@ -153,90 +148,6 @@ private theorem wf_without {j : Json} (hj : Wf j) (k : String) : Wf (Json.mkObj 
     | _ => simp [without, Spot.entries, FlockComplete.JsonRT.Distinct]
   · exact (Array.mem_filter.1 (Array.mem_toList_iff.1 hkv)).1
 
-/-! ## Walking a `do` block by its join points -/
-
-open Lean Meta Elab Tactic in
-/-- `jp_intro k hk at h`: where `h` is `(have x := v; b) = r` with `v` a function, the join point a `do` block leaves
-for the rest of the block, names it `k` with `hk : k = v` and makes `h` the equation `b = r` at `k`. -/
-elab "jp_intro " k:ident hk:ident " at " h:ident : tactic => withMainContext do
-  let hDecl ← getLocalDeclFromUserName h.getId
-  let ty ← instantiateMVars hDecl.type
-  let some (_, lhs, rhs) := ty.eq? | throwError "jp_intro: {h} is not an equation"
-  let .letE _ t v b _ := lhs.consumeMData | throwError "jp_intro: no `have` at the head of {h}"
-  unless (← whnf t).isForall do throwError "jp_intro: the `have` at the head of {h} is not a function"
-  let g ← getMainGoal
-  let target ← g.getType
-  let newTy ← withLocalDeclD k.getId t fun kf => do
-    mkForallFVars #[kf] (← mkArrow (← mkEq kf v) (← mkArrow (← mkEq (b.instantiate1 kf) rhs) target))
-  let g' ← mkFreshExprSyntheticOpaqueMVar newTy (← g.getTag)
-  g.assign (mkApp3 g' v (← mkEqRefl v) (mkFVar hDecl.fvarId))
-  let (_, g'') ← g'.mvarId!.introN 3 [k.getId, hk.getId, h.getId]
-  replaceMainGoal [← g''.clear hDecl.fvarId]
-
-open Lean Meta Elab Tactic in
-/-- `head_zeta at h`: where `h` is `(have x := v; b) = r` with `v` no function, puts `v` for `x`. -/
-elab "head_zeta" " at " h:ident : tactic => withMainContext do
-  let hDecl ← getLocalDeclFromUserName h.getId
-  let ty ← instantiateMVars hDecl.type
-  let some (_, lhs, rhs) := ty.eq? | throwError "head_zeta: {h} is not an equation"
-  let .letE _ t v b _ := lhs.consumeMData | throwError "head_zeta: no `have` at the head of {h}"
-  if (← whnf t).isForall then throwError "head_zeta: the `have` at the head of {h} is a function"
-  let g ← (← getMainGoal).replaceLocalDeclDefEq hDecl.fvarId (← mkEq (b.instantiate1 v) rhs)
-  replaceMainGoal [g]
-
-open Lean Meta in
-/-- `e` with the matchers at its head unfolded, in weak head normal form without unfolding any other definition. -/
-meta partial def headMatchWhnf (e : Expr) : MetaM Expr := do
-  let e ← whnfCore e.consumeMData
-  let .const n lvls := e.getAppFn | return e
-  let aux := match n with
-    | .str _ s => s.startsWith "_sparseCasesOn"
-    | _ => false
-  unless aux || (← isMatcher n) do return e
-  let some v := ((← getEnv).find? n).bind (·.value?) | return e
-  headMatchWhnf ((v.instantiateLevelParams (← getConstInfo n).levelParams lvls).beta e.getAppArgs)
-
-open Lean Meta Elab Tactic in
-/-- `head_whnf at h`: where `h` is `l = r` with a `match` at the head of `l` that `split` cannot split, unfolds the
-matcher to the `if`s and casts it is made of. -/
-elab "head_whnf" " at " h:ident : tactic => withMainContext do
-  let hDecl ← getLocalDeclFromUserName h.getId
-  let ty ← instantiateMVars hDecl.type
-  let some (_, lhs, rhs) := ty.eq? | throwError "head_whnf: {h} is not an equation"
-  let g ← (← getMainGoal).replaceLocalDeclDefEq hDecl.fvarId (← mkEq (← headMatchWhnf lhs) rhs)
-  replaceMainGoal [g]
-
-/-- `throws h`: closes a goal whose `h` says a line that throws returned. -/
-macro "throws " h:ident : tactic => `(tactic| (cases $h:ident; done))
-
-/-- `jp_step h to r with inv by tac`: one join point of a `do` block. The block from it on returned `r` (`h`), so
-the join point did, at a value where `inv` holds: each arm that returns jumps to the join point, and `tac` proves
-`inv` there. `h` becomes the join point's own equation at that value. -/
-macro "jp_step " h:ident " to " r:term " with " inv:term " by " tac:tacticSeq : tactic => `(tactic|
-  (jp_intro k hk at $h:ident
-   obtain ⟨_, hw, _⟩ : ∃ w, k w = Except.ok $r ∧ $inv w
-   · repeat' first
-       | (refine ⟨_, $h, ?_⟩; ($tac); done)
-       | (have h' := bind_eq_ok.1 $h; clear $h; obtain ⟨_, _, $h:ident⟩ := h')
-       | (cases $h:ident; done)
-       | split at $h:ident
-       | dsimp only at $h:ident
-   clear $h
-   subst hk
-   dsimp -zeta only at hw
-   have $h := hw
-   clear hw))
-
-/-- `do_walk h to r`: walks the `do` block of `h : block = .ok r` to its last line, leaving in the context what each
-line returned. -/
-macro "do_walk " h:ident " to " r:term : tactic => `(tactic|
-  repeat' first
-    | (jp_step $h to $r with (fun _ => True) by trivial)
-    | head_zeta at $h:ident
-    | (have h' := bind_eq_ok.1 $h; clear $h; obtain ⟨_, _, $h:ident⟩ := h')
-    | (cases $h:ident; done)
-    | split at $h:ident)
-
 /-! ## The stream's parameters (`Spot.OneStage.paramsParsed`) -/
 
 private theorem obj_ok {a b : Json} {w : String} (h : obj a w = .ok b) : b = a := by
@@ -282,14 +193,6 @@ theorem partition_wf {j : Json} {p : Spot.OneStage.Params} (hj : Wf j) (h : Spot
   exact wf_getD hj "partition"
 
 /-! ## The templates' circuits (`Spot.Run.templateCircuits`) -/
-
-/-- `lit_walk h hn`: closes a goal whose `h` is a `match` on string and array literals at a value `hn` says is not
-the literal's. The matcher is unfolded to its `if`s (`head_whnf`), and each arm throws or contradicts `hn`. -/
-macro "lit_walk " h:ident hn:ident : tactic => `(tactic|
-  repeat' first
-    | (cases $h:ident; done)
-    | (apply $hn; assumption)
-    | (head_whnf at $h:ident; split at $h:ident))
 
 /-- **A `match` on the one key `templates` and a list returns only at a list**, in its first arm. The pattern is an
 array literal, which `split` does not split, so the cases are taken by hand. -/
