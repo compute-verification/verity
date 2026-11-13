@@ -8,8 +8,8 @@
 #   `verity/protocols/pouw/prover/kernels/pouw_cuda/`. Its sources include only each other and what their build puts on
 #   the include path, so no source changes.
 # - Dither, an experimental PoUW variant, becomes `verity/protocols/experimental/dither/`: its circuit and sidecar under
-#   `prover/`, its served producer (`benchmarks/pouw/served_h1/`) under `prover/served_h1/`, its specification and its
-#   circuit's test.
+#   `prover/`, its specification and its circuit's test. Its served producer (`benchmarks/pouw/served_h1/`) stays: it
+#   loads `benchmarks/hash/dither/` by file, which nothing outside `benchmarks/` may.
 #
 # No kernel source's bytes change: every `.cu`, `.cuh`, `.cpp`, `.h` and `.c` is excluded from the rewrite, and no row
 # moves a source whose relative `#include` leaves its directory. The rows that would are `pouw_kernels_map.toml`'s. No file
@@ -27,13 +27,12 @@ new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 "verity/protocols/pouw/prover/circuit/dither.circuit-check.json" = "verity/protocols/experimental/dither/prover/dither.circuit-check.json"
 "verity/protocols/pouw/verifier/dither/" = "verity/protocols/experimental/dither/"
 "verity/protocols/pouw/verifier/tests/test_circuit_dither.py" = "verity/protocols/experimental/dither/tests/test_circuit_dither.py"
-"benchmarks/pouw/served_h1/" = "verity/protocols/experimental/dither/prover/served_h1/"
 
 [retired]
 # the directories this map empties: `layout.py` refuses a tracked file under one that has no row, and their rows are a
 # directory's, so a file only a branch has under one is carried
 paths = ["verity/protocols/pouw/clear/", "adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/",
-         "verity/protocols/pouw/verifier/dither/", "benchmarks/pouw/served_h1/"]
+         "verity/protocols/pouw/verifier/dither/"]
 
 [drop]
 paths = []
@@ -60,7 +59,6 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`)
-"benchmarks.pouw.served_h1" = "verity.protocols.experimental.dither.prover.served_h1"
 "verity.protocols.pouw.clear" = "verity.protocols.pouw.verifier.clear"
 "verity.protocols.pouw.prover.circuit.dither" = "verity.protocols.experimental.dither.prover.dither"
 "verity.protocols.pouw.verifier.dither" = "verity.protocols.experimental.dither"
