@@ -24,6 +24,7 @@ import inspect
 import json
 import sys
 import time
+from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
 
@@ -136,6 +137,9 @@ def raised_scheme_check(k: int, groups: int, fill: str, salt: bytes, rows: int, 
 
 
 #: the two-raiser variants of the raised adder (`_two_raiser_rows`), named as `--raised-pearlc`'s fill
+#: the H100's tensor clock over its SM clock (the H200 card file's clock.tensor and clock.sm; Lean's
+#: `h100TensorMHz / h100SmMHz`)
+CLOCK = Fraction(1830, 1980)
 TWO_RAISER = ("ends", "edge")
 #: how far "edge" moves B's planted entries off their cells' centres: past the cell's edge at one end of the noise
 #: support (about 6 codes off), inside the cell at the salts drawn
@@ -171,8 +175,31 @@ def _two_raiser_rows(side: str, rows: int, k: int, groups: int, rng: np.random.G
     return X.astype(np.float32).astype(np.float64)
 
 
+def tensor_prices():
+    """Lean's `Prices.h100Tensor`: the H100 record with its SM pipes priced per second at the tensor clock, the FP32 add
+    at 32·CLOCK and the forming fs = ⌈32 + 64·CLOCK/2⌉ = 62, qa = ⌈32·CLOCK/8⌉ = 4."""
+    return replace(H100.prices, device="sm_90-tensor-clock", fadd=32 * CLOCK, forming_credited=62, forming_a_only=4)
+
+
+def raised_cost_at(s: Shape, atoms: int, units: int, clock: Fraction, stats: bool) -> Fraction:
+    """`T._raised_cost` with the SM pipes' instructions at `clock` of their per-clock prices: the FP32 add at 32·clock and
+    a cast's code at `T.CAST`·clock. With `stats` the forming also counts ρ's FFMA on every 8th element (32·clock/8 an
+    element), W1's exact forming at `W1Prices.h100Tensor`. A noise line stays at `T.LINE`, its per-clock bound. At
+    `clock` 1 without `stats` it is `T._raised_cost`."""
+    m, k, n = s.m, s.k, s.n
+    fadd, bf, cast = 32 * clock, H100.prices.bf16_mac, T.CAST * clock
+    forming = 32 + cast + (fadd / 8 if stats else 0)
+    chain = m * n * (32 * atoms + fadd * (k // 128 - 1))
+    fused = m * PC.R * (k + fadd * (k // 128 - 1))
+    peel = m * n * bf * PC.PEEL_K + m * PC.PEEL_K * cast
+    job = 2 * (n * k * forming + (n + PC.R) * PC.R * (k + fadd * (k // 128)) + n * PC.R * PC.R * fadd
+               + n * PC.PEEL_K * cast + (n + 2 * k) * T.LINE)
+    return Fraction(units * (chain + fused + peel + m * k * forming + m * T.LINE) + job)
+
+
 def raised_pearlc_tile(k: int, ns: list[int], groups: int, fill: str, salt: bytes, rows: int = 64, cols: int = 64,
-                       units: int = 1, cross: int = 64, scalar: bool = False, codes_only: bool = False) -> list[dict]:
+                       units: int = 1, cross: int = 64, scalar: bool = False, codes_only: bool = False,
+                       tensor_clock: bool = False) -> list[dict]:
     """The raised adder on a whole audit tile that the scheme's own code forms, admits, checks and holds to its tile rule:
     `PearlC.encode` at forming v1 with -h3's SHA-512 row seeds and lines, `admissible`, `checked`'s ticket words, and
     `clear_work.check_opened`, the per-row rules and the inert-work bound on the tile and on each credited row, all on
@@ -181,7 +208,9 @@ def raised_pearlc_tile(k: int, ns: list[int], groups: int, fill: str, salt: byte
     chain. One row of the result per n of `ns`: the forming does not read n, the bound, the credit and the price do.
     `scalar` leaves the batch forms out: the forming, the check and the tile rule then run on the scalar reference, and
     only the count of flagged atoms in planted groups is the batch form's, held to the reference's total. `codes_only`
-    stops after the forming and lists the planted codes that are not the designed ones at the salt drawn."""
+    stops after the forming and lists the planted codes that are not the designed ones at the salt drawn. `tensor_clock`
+    prices the scheme at `tensor_prices`, so its credit, debit, caps and tile rule are the tensor-clock record's, and
+    the programs at `raised_cost_at` with the clock's ratio and the stats' FFMA."""
     sys.path.insert(0, str(HERE / "pearl_c_vllm"))
     sys.path.insert(0, str(HERE.parents[1] / "verity" / "protocols" / "pouw" / "clear"))
     import clear_work as CW
@@ -190,7 +219,7 @@ def raised_pearlc_tile(k: int, ns: list[int], groups: int, fill: str, salt: byte
     from verity.protocols.pouw.prover.schemes.pearl_c_work import UnitRecord
 
     C.set_atom("hopper")
-    sch = PC.PearlC(forming="v1", device=H100)
+    sch = PC.PearlC(forming="v1", device=H100, **({"prices": tensor_prices()} if tensor_clock else {}))
     scalar_chain = PC.chain
     undo = (lambda: None) if scalar else FT.install(sch)
     try:
@@ -272,9 +301,11 @@ def raised_pearlc_tile(k: int, ns: list[int], groups: int, fill: str, salt: byte
             cap = sch.cap * CW.cell_credit(sch, record) * rows * cols
             per_word = Fraction(sch.credit_of(s), s.m * s.n)
             for name, (equal, atoms) in programs.items():
-                cost, credit = T._raised_cost(s, atoms, units), units * Fraction(sch.credit_of(s))
+                assert raised_cost_at(s, atoms, units, Fraction(1), False) == T._raised_cost(s, atoms, units)
+                cost = raised_cost_at(s, atoms, units, CLOCK, True) if tensor_clock else T._raised_cost(s, atoms, units)
+                credit = units * Fraction(sch.credit_of(s))
                 out.append({"class": "two-raiser" if fill in TWO_RAISER else "raised-adder",
-                            "forming": "PearlC v1, -h3 SHA-512 lines",
+                            "forming": "PearlC v1, -h3 SHA-512 lines", "prices": sch.prices.device,
                             "forms": "scalar reference" if scalar else "fast_tile batch", "program": name, "fill": fill,
                             "shape": (s.m, k, n), "groups": groups, "units": units, "salt": salt.hex()[:16],
                             "admitted": admitted, "tile_rule": rule, "planted_codes_as_designed": planted_ok,
@@ -308,6 +339,7 @@ def main() -> None:
     ap.add_argument("--raised-pearlc", default="", help="k:n[+n...]:groups:fill (fill: gauss, zero, or the two-raiser variants ends and edge), comma separated: "
                                                     "whole tiles on the scheme's code")
     ap.add_argument("--codes-only", action="store_true", help="--raised-pearlc: form the tile and list the planted codes off their design")
+    ap.add_argument("--tensor-clock", action="store_true", help="--raised-pearlc at the H100 record per second at the tensor clock")
     ap.add_argument("--salts", type=int, default=1)
     ap.add_argument("--tile", default="4x4")
     ap.add_argument("--out", required=True)
@@ -335,7 +367,8 @@ def main() -> None:
         for i in range(args.salt_from, args.salt_from + args.salts):
             for r in raised_pearlc_tile(int(k), [int(n) for n in ns.split("+")], int(groups), fill,
                                         hashlib.sha512(b"raised/salt/%d" % i).digest()[:32], units=args.units,
-                                        scalar=args.scalar, codes_only=args.codes_only):
+                                        scalar=args.scalar, codes_only=args.codes_only,
+                                        tensor_clock=args.tensor_clock):
                 out["scheme"].append(r)
                 print(json.dumps(r), flush=True)
     rows, cols = map(int, args.tile.split("x"))
