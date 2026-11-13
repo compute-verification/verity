@@ -5,7 +5,7 @@ M0's flat hidden-output sets, RoPE (its unit returns its output) and GEMM (its u
 stage returns the outputs, which both refuse, `SCOPE_WHY`), and the served registered RoPE stage (a shared-row public
 file in the form `SampledKSLiveV5` covers, which both pass). Each case's answer is Lean's and the mirror's alike.
 
-The hidden-output sets are a fetched fixture (`fixtures/artifacts.json`), as `test_lean_hidden_outputs.py` reads them; the
+The hidden-output sets are a fetched fixture (`artifacts.json`), as `test_lean_hidden_outputs.py` reads them; the
 served stage is `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store."""
 from __future__ import annotations
 
