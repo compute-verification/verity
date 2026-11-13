@@ -369,3 +369,42 @@ have my yes as the file's lead, and no read by us is needed."
 - If you have already opened the PR with three, add the fourth as one more commit; no force-push.
 
 Everything else in the 03:0xZ brief stands, the list of other part-built readers included.
+
+## Fri 13 Nov 03:16Z: ITEM 2 IS REPLACED. I was wrong: the mover follows the four loaders. The gates' PR is now ONE LINE, `benchmarks/hash/exactlin/ksweep.py:51`. Do not change the three kernel gates or vllm's line
+
+**What happened.** compute-research ran the mover with the gate's map and read each line
+(TOP-415, 03:09Z): a path built from parts under `parents[n]` is an anchor the tool follows.
+I had read the map's header and not run the tool. **Run by me since** [`tools/move/layout.py
+--map tools/move/sass_gate_map.toml --no-lock` in a scratch tree at `main` `4a7291116e11`, each
+line read after it]: `pearl_c_sm90/sass_gate.py:20`, `pearl_c_sm120/sass_gate.py:19` and
+`torch_gpu/s8_linear/sass_gate.py:29` come out as `parents[3] / "verity" / "protocols" / "pouw" /
+"prover" / "sass_gate.py"`, and `adapters/vllm/tests/engine/int8_attention_sass.py:50` the same
+under `parents[4]`. **The two sections above this one that ask for those four lines (03:0xZ
+and the "ONE CHANGE" one) are withdrawn.** I have told vllm that its tree is not touched.
+
+**The one line of ours the tool does leave** (compute-research's finding, seen in my run too):
+`benchmarks/hash/exactlin/ksweep.py:51`,
+`SASS_GATE = Path(__file__).resolve().parents[2] / "pouw/harness/sass_gate.py"`. It came to
+`main` with #9375. After the move it names a file that is gone.
+
+**Item 2 now, on a branch cut from `origin/main`, a PR of its own:**
+1. That line becomes `Path(__file__).resolve().parents[3] / "benchmarks/pouw/harness/sass_gate.py"`
+   (the form `gpu_kit/sass_gate.py:50` has, which the tool rewrites). **Nothing else in the
+   file:** #8671 edits `ksweep.py` elsewhere and is being merged with `main` by another worker
+   tonight.
+2. **Show it:** the mover's dry run with the gate's map and `--report FILE` lists `ksweep.py`
+   with one more path than on `main` (on `main` its entry is `{"paths": 1}`); or run the move
+   itself in a scratch tree, read line 51 after it, and throw the tree away. Say which you did
+   and what the line read.
+3. The suite the change touches (`benchmarks/hash/exactlin`), on a CPU node outside an infra
+   window. Opened unmarked; one worker comment on HASH-127 (at most 50 words). **Tell me the
+   number and the head: I mark it and ring compute-research,** who carries the line by hand
+   in the move if ours is not on `main` by Fri 13 Nov 18:00Z.
+4. **If you already pushed or opened anything for the four loaders:** do not force-push and do
+   not close anything. Tell me the branch or the number in your return and leave it unmarked;
+   the one-line PR is a new branch. If you had only edited locally, drop the edits.
+5. **Not ours, told on TOP-415, change neither:** `benchmarks/pouw/settings.py:24`
+   (compute-accounting's: `STANDALONE` lists `"harness/sass_gate.py"`) and
+   `tools/verity/check/public_boundary.toml:138` (ci's: a brace row naming the two files).
+
+Items 1 (#9542) and 3 (HASH-129) stand as they are. The returns' times stand.
