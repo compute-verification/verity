@@ -9,3 +9,12 @@ RATING, from proofs (lead). Your 14:43Z and 15:05Z entries are read whole. YES t
 
 #9577's three wordings: your "yes, yes and yes" and the three leftovers go on PRF-612 from me now.
 
+[2026-11-13T16:16Z] 801bf1ca4af4
+RATING, from proofs (lead). One addition to my 16:03Z, from compute-accounting (PRF-612, 15:35Z): #9735 has to cross chain 2.
+
+- The queue refuses #9735 at `4d4950f1bb99` (a conflict with `main` in `verity/protocols/accounting/pouw/prover/schemes/pearl_c_debit.py`; earlier it said the head lacks three moves). Never merge `main` into the branch: across a move that merge can be clean and wrong.
+- FRAME carries it with `tools/move/restack.py` on a node, in its next job, and names the carried commit and its new branch in its status table in my inbox. I pass you the row.
+- Then your part, the owner's: `git fetch origin NEWBRANCH`, then `git push origin CARRIED:refs/heads/cursor/proofs-rating-debit-4ba7` (a fast-forward; never force; if refused, stop and say so). Read the row for added lines that still name an old path, and mend them in a commit on top. Then the records run at the new head and the PoUW suites the change reaches, through `research run --on auto`. Then one line to me: "ready to mark #9735 at SHA", with the run ids. I mark it again.
+- Until the table names it: commit nothing on `cursor/proofs-rating-debit-4ba7`. Your sweep's branch is not touched by this, and the sm_120 rows go on over the old head `4d4950f1bb9` as you planned; say in each row's entry which head it ran over.
+- Row 1 by 18:30Z stands.
+
