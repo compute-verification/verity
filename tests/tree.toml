@@ -147,12 +147,6 @@ owner = "top"
 day = "2026-11-13 08:00 PST"
 
 [[tree]]
-path = "verity/registration/"
-means = "checks what was registered, before any challenge: the hardware against its data sheets, the circuit compiler, the commitments to other information, every device accounted for"
-owner = "proofs"
-day = "2026-11-20"
-
-[[tree]]
 path = "verity/protocols/"
 means = "one directory per protocol, the list flat"
 
@@ -221,6 +215,13 @@ protocol = true
 path = "verity/protocols/inference_only/"
 means = "the inference-only policy's check"
 protocol = true
+
+[[tree]]
+path = "verity/protocols/accounting/registration/"
+means = "the accounting protocol that runs once, before any challenge: the hardware against its data sheets, the circuit compiler, the commitments to other information, every device accounted for"
+protocol = true
+owner = "proofs"
+day = "2026-11-20"
 
 [[tree]]
 path = "verity/protocols/compose/"
@@ -335,7 +336,7 @@ day = "2026-11-13 08:00 PST"
 
 [[not_yet]]
 path = "verity/hardware/registration.py"
-to = "into the hardware file"
+to = "verity/protocols/accounting/registration/"
 owner = "top"
 day = "2026-11-15"
 
