@@ -2223,6 +2223,12 @@
         "verity/hardware/site/pyproject.toml": "verity/tests/pyproject.toml",
         "verity/hardware/site/tests/test_site.py": "verity/tests/tests/test_device.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/inference_only/nci/": "benchmarks/nci/",
+        "verity/protocols/inference_only/rho/": "benchmarks/rho/"
+      }
     }
   ]
 }
