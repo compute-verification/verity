@@ -4,13 +4,13 @@ Goal proofs/sampled-audits-sound
 
 Issue: PRF-600. The second of its pull requests: the audits' half of a monitoring period's check, on the ledger's half's head (#9537), which lands first. It is the compiled check `verity/sampled-proofs/period/v1`: every root a lane committed under this registration's circuit in a monitoring period is held to one accepting one-stage v2 audit, and a root it committed under this registration without the sample's family refuses the period. It states no guarantee and adds no lock entry, and nothing calls it yet but its difftest.
 
-**Only a window of one registration passes.** A session whose log shows the sample's coins released after several registrations (several ranks', or one registered again) is refused under its own code, `members`.
+**Only a window of one registration passes.** A session whose log shows the sample's challenges released after several registrations (several ranks', or one registered again) is refused under its own code, `members`.
 
 ## What it adds
 
 `Spot/PeriodAudit.lean`, in SPOT's Lean verifier, compiled, with no Python verifier beside it.
 
-- **The commitment** is the auditor's ledger. **The evidence** is the host's pins log and, for each window in the ledger's order, its challenger session's files and one case: the registration's record, its public file's digest and one-stage v2's evidence.
+- **The commitment** is the auditor's ledger. **The evidence** is the auditor's device's pins log and, for each window in the ledger's order, its challenger session's files and one case: the registration's record, its public file's digest and one-stage v2's evidence.
 - **The check** (`checkBlobs`), in order, the first refusal the answer:
 
 | step | code |
@@ -18,8 +18,8 @@ Issue: PRF-600. The second of its pull requests: the audits' half of a monitorin
 | the ledger's half (`windowsOf`) | `coin`, `early`, `missing`, `outside`, `period` |
 | whose each session is (`registeredIn`, below) | `period`, `outside` |
 | the evidence holds as many windows' sessions as the ledger lists windows | `evidence` |
-| each window's session files are the ones the ledger sealed, run from a commit the pins log records on main's first-parent line, with its coin commitment withheld | `coin` |
-| its signed log shows the sample's coins released after exactly one registration | `missing` (none), `members` (several) |
+| each window's session files are the ones the ledger sealed, run from a commit the pins log records on main's first-parent line, with its commitment to the challenges withheld | `coin` |
+| its signed log shows the sample's challenges released after exactly one registration | `missing` (none), `members` (several) |
 | the evidence holds one case, of that registration | `evidence` |
 | the parameters at the window are one-stage v2's, and the case's public file shares no rows | `names` |
 | one-stage v2 accepts the case at those parameters | `audit` |
@@ -36,9 +36,9 @@ The check takes one more parameter from the verifier, `registration`: this regis
 |---|---|
 | holds the sample's family, in a period that commits `registration` | a window: audited |
 | holds the sample's family, in a period that commits another circuit | refuses the period (`period`) |
-| holds no coin of the family, in a period that commits `registration` | refuses the period by name (`period`): its root is committed under this registration and never sampled |
-| holds no coin of the family, in no period, or in a period that commits no circuit | refuses the period (`outside`): its root is committed under no registration |
-| holds no coin of the family, in a period that commits another circuit | listed among the others, under that circuit |
+| holds no challenge of the family, in a period that commits `registration` | refuses the period by name (`period`): its root is committed under this registration and never sampled |
+| holds no challenge of the family, in no period, or in a period that commits no circuit | refuses the period (`outside`): its root is committed under no registration |
+| holds no challenge of the family, in a period that commits another circuit | listed among the others, under that circuit |
 
 - **It accepts less than it did, and never more.** The one case that was accepted and is now refused is a session without the family beside the windows.
 - **Two registrations of one lane under one family label are never accepted in one monitoring period.**
@@ -57,7 +57,7 @@ A case supplies nothing of one-stage v2's parameters that the check does not hol
 | `seed_salt`, `day`, `declarations` | nobody's here | not derived: `audit` naming one is refused. |
 | every other key | the verifier's `audit` | the same at every window. |
 
-- **A sample's coins are read from the period's own files.** The ledger, main's history, the pins log and the session's files that one-stage v2 reads coins from are the commitment's, the verifier's and the period's evidence. A case names only its coins' segment; a case naming more is refused (`evidence`).
+- **A sample's challenges are read from the period's own files.** The ledger, main's history, the pins log and the session's files that one-stage v2 reads challenges from are the commitment's, the verifier's and the period's evidence. A case names only its challenges' segment; a case naming more is refused (`evidence`).
 - **Parameters one-stage v2 would refuse at every window are refused before the check**, as the request's fault.
 - **A public file whose header names `shared_rows` is refused** (`names`). The check does not hold a file's references into rows its members share to the registration.
 
@@ -96,4 +96,5 @@ The reference and the Lean share an author.
 - **The refusal first ran** at the head before the `auditedIn` copy: `r20261113-031857-3061`, 28 passed.
 - **The quick tier at this head: 60 of 61 suites pass, and the one that fails is the base's**: `r20261113-040405-1199` on vy-nebius-2, `suites.py --changed origin/main --quick`, `SUITES exit 1`. `verity-core-sampled-proofs` passes, 335 passed and 2 skipped, with both period test modules run whole, slow tests included.
 - **The failing suite is `research`**, 4769 passed and 2 failed: `tests/test_auto.py::test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_the_pool` and `tests/test_auto.py::test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen`. Both read the node's own hold file, which vy-nebius-2 carries. They are the two tests #9596 changes, merged since this branch last took `main`, and this change touches nothing under `tools/research/`.
-- **No records run on this head.** That no record moves is read from the diff, not from a run: nothing under `security/` differs from #9537's head, `auditedOpen`'s term is `main`'s, and this change edits no lock. The records run at #9581's head, which holds this tree, starts at the same package.
+- **No records run on this head.** That no record moves is read from the diff, not from a run: nothing under `security/` differs from #9537's head, `auditedOpen`'s term is `main`'s, and this change edits no lock. The records run at #9581's head, which holds this tree, passes and moves no record: `r20261113-055441-2c57`, from SPOT's verifier up through `security/Proofs`.
+- **The ratchet gate fails at this head**, on retired terms: 65 new sites in the files this change adds or edits. 21 are the names `Period` and `PeriodAudit` of its own modules and namespaces, which the Glossary's row for `*Period*` names counts; 12 are the ledger's field `cap`; 12 the word `draw` in names that exist (the module `one_stage.draw`, `draw_first`, the ledger's family label) and the tests' constant for it; 8 the audit's parameter `law`; 5 the audit's field `drawn`; 5 say "sampled proofs" where the Glossary says SPOT; 2 name the existing `MonitoringPeriod`. The gate was not run before this change was marked. It is off the merge gate and holds nothing. The vocabulary test warns on the structure `Spot.Period.Commitment`, and the verifier's README is 1,356 bytes over its 48 KB cap at this head.
