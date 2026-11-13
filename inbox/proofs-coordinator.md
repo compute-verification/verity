@@ -137195,3 +137195,222 @@ On the tree the stager's real pass starts from, the loose paths' map does exactl
 - Any test after the group map; the Lean check of the four packages whose key changes (ruled out for tonight).
 
 **Pushed heads:** `cursor/proofs-loosemap-0917` `56561c89bb4a` (the map alone); `cursor/proofs-loosemap-0917-after-difftest` `6fc27ced33de`; `cursor/proofs-loosemap-0917-hand-patch` `bf5b5eb2e469`; `cursor/proofs-loosemap-0917-on-lean-head` `f30ed1d29aff` (lean's head, the map, the move, both patches); `cursor/proofs-loosemap-0917-on-chain2` `3f774f731771`; `cursor/proofs-loosemap-0917-on-trial-after-difftest` `583fcd1f2122`; `cursor/proofs-loosemap-0917-on-chain2-after-three` `1cefb506b2ae`; `cursor/proofs-loosemap-0917-on-chain1` `edea1506d5a7`.
+
+## TWOLEG, Fri 13 Nov 11:16Z: B: the statements, before and after. No listed statement's text or reads move and no lock record moves: `UnitsProved` is the one-stage check's and keeps its text. The joining lemma is STATED here (not compiled; compiled head by 13:00Z). The one check both steps call is `Spot.Record.checks`, and `secondChecked` can call it as it stands. No STOP.
+
+Answers the 10:54Z, 11:04Z and 11:06Z messages. Nothing was built for this entry: it is by reading, at my scratch
+head `326deb5ebcf` (`cursor/proofs-scratch-twoleg-ownreads-ad71`) and the lock files there and at the join's tip
+`e4a00b6b858`. Nothing is on the join.
+
+### B: the statements, before and after
+
+**1. `secondChecked`, the definition's text** (`VStarRecursive/SampledTwo.lean`). One line of its body moves; its
+signature and every other line stay.
+
+Before (the base `654e34d42b`, line 483):
+
+~~~lean
+  let failed := OneStage.recordChecks rec_ (Flock.hexOf c.digest) e
+~~~
+
+After, as soundness's 11:02Z addition has it (one check, no copied body; I build this next, it is not pushed):
+
+~~~lean
+  let units := match getD e.draw "units" with | .arr us => us.filterMap int? | _ => #[]
+  let cs := Record.checks rec_ e.receipt e.draw Json.null units (e.provedUnits.map Lean.toJson)
+    (Lean.toJson e.instances) (Flock.hexOf c.digest) (e.served.map (·.map fun (n : Nat) => (n : Int)))
+    (e.sessionRoots.map entries)
+    (Record.lessOwnReads rec_ (Record.ownRegistered rec_ (Record.sessionRegistered e.verdicts)))
+  let failed := (cs.filter fun (n, c) => n != "draw" && !c.codes.isEmpty).map (·.1)
+~~~
+
+What is on the scratch branch now (`80ced2eac7d`) is the same call through a definition `interiorChecks` beside it.
+That definition goes.
+
+**2. `UnitsProved`'s last clause, and every listed statement.** The clause (`security/Properties/Spot.lean:392`):
+
+~~~lean
+  ((field? c.record "registered").isSome ∨ (openedRoots c.record e.verdicts).isSome →
+    SameRoots ((openedRoots c.record e.verdicts).getD #[]) (Record.registeredRoots c.record))
+~~~
+
+**Before and after are the same text.** `UnitsProved` is a clause of `Properties.Spot.AcceptMeans`, which is about
+`OneStage.check`. The form's last step is not `OneStage.check`: it is `secondChecked`, and B changes that one
+line and nothing in `OneStage`. So these keep their text and their reads: `UnitsProved`, `AcceptMeans`
+(`Properties/Spot.lean:385, 433`), `recordChecks_nil`, `acceptMeans_iff`, `acceptMeans_complete`
+(`Proofs/Properties/Spot.lean:173, 1263, 1338`); `Sampled/Held.lean:828` names `UnitsProved` in a docstring only.
+
+So soundness's condition, read exactly, has nothing to attach to: no listed statement says what the form's last step
+accepts. Seven theorems name `secondCheck` in their statements (`accepted_law_run`, `prepare_of_steps`,
+`accepts_of_steps`, `accepts_iff_steps`, `accepted_steps`, `secondCheck_read`, `accepted_secondLaw`), all whole, none
+unfolding the record's checks; their text does not move. None is a listed guarantee.
+
+If soundness wants the clause to exist for the form's step, it is a NEW statement, a property of `secondChecked`,
+with this last clause (`rec` the interior record, `vs` the verdicts):
+
+~~~lean
+  ((field? rec "registered").isSome ∨ (Record.lessOwnReads rec (openedRoots rec vs)).isSome →
+    SameRoots ((Record.lessOwnReads rec (openedRoots rec vs)).getD #[]) (Record.registeredRoots rec))
+~~~
+
+Not written. Say if it is wanted; it is `recordChecks_nil`'s proof at another last argument.
+
+**3. The lemma soundness's condition asks for, stated.** I write it; it is not FRAME's.
+
+None of `SpotFlock`'s `OwnReads` lemmas gives it as it stands. `OwnReads h` (`WiringOk.lean:198`), `ownReads_of`
+(`OwnReads.lean:527`) and `ownReads_form` (`HeldOfReads.lean:89`) are about a read "at a port no link or wire names".
+The hypothesis not met at the play's reads is `heldWire h … reg.name = none`: a wired read is at a port a wire names.
+Their conclusion is also less than the condition: that the read's value is the name of a port of the first stage's
+record, not that the read is at that port's root.
+
+What gives it is on the code's side: `SecondStage.check_ok` (the reads the verdicts report are the statements',
+`sameDict`), `stmtCodes_nil` (every read of a statement passes `readOk`), and the arms, `readOk_wired_find` and
+`readOk_own_find` (`AddressFacts/RowLeaves.lean:89, 125`). Missing, and what I write: that an entry of
+`statementReads` is one statement's read (a fold); the link's arm; and the join to the run and to the form's accept
+(`RunsAs.accepted_steps`, `RunsAs.statements_some`, `RunsAs.acceptedTwo_of_check`, which exist).
+
+**Where:** a new file, `security/Proofs/Flock/SpotFlock/RunsAs/OwnReadsOut.lean`, and the form's corollary in
+`security/Proofs/Properties/Verity/SampledTwo/OwnReadsHeld.lean`. Not beside `readOk_wired`: a line in
+`Spot/SecondStage.lean` rebuilds the Spot package and everything on it, and the lemma needs `RunsAs/Steps.lean`.
+
+The statements (names and binders may shift at the compile; I say so if any meaning does):
+
+~~~lean
+/-- **A read `Record.lessOwnReads` leaves out names one of the record's ports at that port's root.** -/
+theorem lessOwnReads_out {reg : Json} {opened : Array (String × Json)} {v : String} {r : Json}
+    (hv : (v, r) ∈ opened) (hno : (v, r) ∉ (Spot.Record.lessOwnReads reg (some opened)).getD #[]) :
+    ∃ x, (v, x) ∈ Spot.Record.byPort reg ∧ Spot.jeq (Spot.getD x "root") r = true
+
+/-- **The read `(v, r)` is one the second stage's statement check held** at the run's input `i` and interior `it`:
+the check with the form allowed reports no code at an `Own` whose interior record is `it`'s and whose boundary
+record is `i`'s, and one of its statements states a registered read `e` of the value `v` at the root `r`, at a port
+`port` of its template's part `p`, which `SecondStage.readOk` passed. -/
+def HeldRead (i : Spot.Run.Input) (it : Spot.Run.Interior) (v : String) (r : Json) : Prop :=
+  ∃ own ss ps, it.statements = some ss ∧ (Spot.SecondStage.check true own (some ss)).codes = #[] ∧
+    own.interior = it.record ∧ own.boundary = i.record ∧ own.parts = some ps ∧
+    ∃ k < ss.size, ∃ s p port e, Spot.SecondStage.Stmt.ofJson? (ss.toList.getD k .null) = some s ∧
+      ps.find? (·.template == s.template) = some p ∧
+      (port, e) ∈ Spot.entries (Spot.getD s.registered "ports") ∧ Spot.getD e "value" = .str v ∧
+      Spot.jeq r (Spot.getD e "root") = true ∧
+      Spot.SecondStage.readOk own (Spot.SecondStage.byTemplate it.record) p port e = true
+
+/-- **Each read the record's checks leave out is one the second stage's statement check held**: at an accepted
+two-stage run, a read that `Record.lessOwnReads` takes out of the reads `Record.checks` is handed for the interior
+record (the verdicts' own, `Record.ownRegistered` of `Record.sessionRegistered`) is `HeldRead`, or its root prints
+as null (a value the verdicts report under two roots is reported so; R3 refuses a record with such a root). -/
+theorem accepted_ownReads {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha : AcceptedTwo i it j)
+    {opened : Array (String × Json)}
+    (ho : Spot.Record.ownRegistered it.record (Spot.Record.sessionRegistered i.verdicts) = some opened)
+    {v : String} {r : Json} (hv : (v, r) ∈ opened)
+    (hno : (v, r) ∉ (Spot.Record.lessOwnReads it.record (some opened)).getD #[]) :
+    Spot.jeq r .null = true ∨ HeldRead i it v r
+
+/-- **What `readOk` holds a read of one of the interior record's ports to**, arm by arm. At a port no link names (a
+wire's reader, or the template's own port) the read is held to the interior record's entry of that port: its root,
+domain and leaf count (`sameAt`). **The link-named case**: at a port a link names, the read is of the link's value,
+held to the interior registration's registered value of that name where it registers one, else to the boundary
+record's port of that name. Such a read is left out of the record's registered reads only where the interior record
+has a port of the link's value's name at the root the read is held to. -/
+theorem readOk_port {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.SecondStage.Part} {port : String}
+    {e : Json} {v : String} (hv : Spot.getD e "value" = .str v)
+    (hp : ((Spot.Record.byPort own.interior).find? (·.1 == v)).isSome = true)
+    (hok : Spot.SecondStage.readOk own named p port e = true) :
+    (Spot.SecondStage.linkOf own p.template port = none ∧
+        ∃ kx, (Spot.Record.byPort own.interior).find? (·.1 == v) = some kx ∧
+          Spot.SecondStage.sameAt e kx.2 = true) ∨
+      ∃ l, Spot.SecondStage.linkOf own p.template port = some l ∧ v = l.value ∧
+        ((∃ y, Spot.SecondStage.registeredEntry own.interior v = some y ∧ Spot.SecondStage.sameAt e y = true) ∨
+          (Spot.SecondStage.registeredEntry own.interior v = none ∧
+            ∃ kb, (Spot.Record.byPort own.boundary).find? (·.1 == v) = some kb ∧
+              Spot.SecondStage.sameAt e kb.2 = true))
+
+/-- **At the form's accept**: the run of record `inputAt` built the input of leaves out of its interior record's
+registered reads only reads its second-stage statement check held. -/
+theorem accepted_ownReads_form {form : Bool} {p : Params} {c : Spot.OneStage.Commitment} {ξ : ByteArray}
+    {e : Evidence} {bs pub prof} (hp : ∃ grain replay k, p.rule = .twoStage grain replay k)
+    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
+    ∃ c₂ ξ₂ r i it, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ i.interior = some it ∧
+      ∀ opened v root,
+        Spot.Record.ownRegistered it.record (Spot.Record.sessionRegistered i.verdicts) = some opened →
+        (v, root) ∈ opened → (v, root) ∉ (Spot.Record.lessOwnReads it.record (some opened)).getD #[] →
+        Spot.jeq root .null = true ∨ SpotFlock.RunsAs.HeldRead i it v root
+~~~
+
+**It is about the function both steps call**, `Record.checks`, at the reads step 4 hands it: `it.record` and
+`i.verdicts` are the run of record's own.
+
+**The link's arm: not false, and no check changes.** The lemma holds there as stated: the read is a statement's and
+`readOk` passed it. What differs is what `readOk` held it to (the docstring's named case): not the interior record's
+port, but the interior's registered value of that name or the boundary record's port of that name, at the same root.
+
+**What is NOT joined, and I do not claim: step 5's own two arguments.** Step 5 is handed `c₂.record` and `r.out`;
+step 4 reads `j₂` and `vs`. (a) `vs` is `stamped … r.out`, which sets up to five other fields of each verdict and leaves
+`of_record`, `accepted` and `registered`; no lemma says `Record.sessionRegistered` is the same on both. (b)
+`c₂.record` is `Core.canonicalJson`'s reading of the interior record's canonical text and `j₂` is
+`Flock.JsonParse.parse`'s reading of the same text (`readBack`); no lemma says they have the same ports and roots
+(`parse_canon`, `Claims/Complete/Json/RoundTrip.lean:1195`, gives values alike, `Same`, for a printable record,
+and nothing carries `Record.byPort` across `Same`). So "after B, every read step 5 leaves out is one the statement
+check held" is proved by this lemma for the run's reading of the record and verdicts, and for step 5's reading only
+with (a) and (b). Both look true by the code. (b) is the same gap row 7 is about. Rule on whether (a) and (b) are
+part of the condition; (a) I can write, (b) is larger.
+
+**4. Which records of which lock move: none.**
+- `security/lean-audit.json` and `security/Properties/lean-audit.json`: their `reads` hold no module
+  `VStarRecursive.SampledTwo` and no definition of it (the recursive package's modules read are
+  `VStarRecursive.Protocol` and `VStarRecursive.Sampled`), at my head and at the join's tip. `Spot.Record.checks`,
+  `ownRegistered`, `sessionRegistered` and `Spot.OneStage.recordChecks` are recorded there, and B changes none of them.
+- `security/Proofs/lean-audit.json`: no guarantee records; its `roots` list the proof modules by name. The two new
+  proof files would be two new `roots` lines when they go anywhere a lock is kept.
+- `verity/protocols/recursion/verifier/recursive/lean-audit.json`: `guarantees` is empty.
+- I ran no records run. This is read from the four lock files.
+
+### One check, not two copies (11:06Z, 1), written before any build
+
+- **Which function:** `Spot.Record.checks` (`Spot/Record.lean:109`). Step 4 reaches it as `Spot.Run.audit` →
+  `Record.record` → `checks … (if i.ownReads then lessOwnReads reg opened else opened)`, with `opened` the verdicts'
+  own for the registration (`ownRegistered reg (sessionRegistered i.verdicts)`), and `own_reads` true under a
+  two-stage rule (`Run.lean:224`).
+- **Whether `secondChecked` can call it as it stands: yes.** The "after" text of 1 is that call. No new definition, no
+  parameter on `OneStage.recordChecks`, no line outside the form's module. `interiorChecks` is deleted. No STOP.
+- **Which lock records would move: none** (item 4).
+- **To be exact about "the same arguments".** The function is the same and the last argument is the same expression
+  as step 4's. Two positions differ, as they do in `OneStage.check`: the law is `Json.null` with the `draw` entry
+  dropped (step 5 holds the draw to the second stage's law two lines above, by `Draw.checkDraw`), and the other
+  fields come from the evidence rather than from `Record.inputOf`'s parse. And the last argument's expression is
+  written in two places (`Record.record` and `secondChecked`). If soundness wants that expression to be ONE
+  definition both call, it is a small function in `Spot/Record.lean` that `Record.record` and `secondChecked` call;
+  then `Record.record`'s body changes in text. `Spot.Record.record` and `Record.lessOwnReads` are in no lock's
+  `reads`, and one proof unfolds `Record.record` (`RunsAs/Steps.lean:213`). It rebuilds the Spot package and all on
+  it. I do not do that unless told.
+
+### The negative case (11:06Z, 2)
+
+The place the form has is its `#guard`s in `VStarRecursive/SampledTwo.lean` (where `RECORD_READ` and `RECORD_DIGEST`
+have theirs). I add one on the call `secondChecked` makes: a record with one port; a read of that port at its root is
+left out and no `registered` check fails; a read of it at another root stays and `registered` fails. The Spot
+difftest already draws this on the function step 4 calls (`_own_reads_case`, `test_difftest.py:3928`: "at that port's
+root or another", with `own_reads`). A whole refused case of the form's check would need a session's verifier to
+accept a forged read, which I cannot make.
+
+### Row 7, one line
+
+`RECORD_DIGEST`'s comparison is in `inputAt`, `SampledTwo.lean:345` at my scratch head (line 340 at the work branch's
+`6a74a46eada`): `digestIs j₁ c.digest`, between `let j₁ ← readBack c.record` and `let j₂ ← readBack e.record`
+(`RECORD_DIGEST` at 322, `digestIs` at 329). The interior's would be one line after `let j₂` (346), and it lengthens
+`inputAt_ok`'s conjunction (`SampledTwo/Steps.lean:89`), which sixteen `obtain` patterns in fifteen proof files read;
+one ending in a name at the last place (`CutFirst.lean:244`'s `hdig`) needs a place added, those ending in `-` do
+not. My B lines are at 478 to 500: no overlap.
+
+### The play at the layout trial with B
+
+Running, not back: `r20261113-105152-e8f4` on vy-nebius-cpu-1, launched 10:52Z at a local tree, GATHER's
+`70ca0eda5df` plus my `80ced2eac7d` (pushed nowhere). It makes the play of twenty and runs the form's own check with
+the switch on, nothing set aside. I report it when it ends, and I run the draft's executable on GATHER's `9a9e` case
+too if that one is kept and refused at B alone.
+
+### Not established
+
+- The lemma is stated, not compiled. Nothing here was built.
+- "No statement's reads move" and "no lock record moves" are from reading the lock files, not a records run.
+- (a) and (b) above.
+- Whether R3 lets me drop the "prints as null" side of `accepted_ownReads`; I try at the compile.
