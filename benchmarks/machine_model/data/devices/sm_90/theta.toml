@@ -1,6 +1,6 @@
 # θ for the H200 SXM 141 GB (ACCEL CALIB): every rate, capacity and clock the accelerator model reads, each with its
 # vendor document first (`sheet`, `grade`, `source`), then the census or a measured run (`measured`, `runs`), or the run
-# that would measure it (`gap`). A ceiling the card file holds (verity/hardware/cards/, the SKU model.toml names) is
+# that would measure it (`gap`). A ceiling the card file holds (hardware/cards/, the SKU model.toml names) is
 # read from it: `card = "EXPR"`, card entries and numbers joined by ` * ` and ` / `, in place of its value, grade and
 # source; `host:PATH` is an entry of the host's card (model.toml's `host`). A rate is a SM-clock's (MACs, results or bytes a SM-clock); `clock` names the clock its
 # per-second figure is at, and `figure` is the number the document prints there (dense), which 2 · sheet · SMs · clock
