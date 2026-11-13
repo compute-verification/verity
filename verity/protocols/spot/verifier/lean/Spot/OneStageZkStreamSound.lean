@@ -607,13 +607,21 @@ def StepsKept : Prop :=
       FilesKept (Ctx.of p c e ms sts) (Core.Blobs.ofArray bs.toArray) ((membersStream p c e ms sts).steps bs) ∧
         SessionsKept (Ctx.of p c e ms sts) (Core.Blobs.ofArray bs.toArray) ((membersStream p c e ms sts).steps bs)
 
-/-- **The finish's half of `StreamSound`, stated and not proved**: on a state that keeps every member's files and
-every statement's session as they read on the blobs `full`, the finish is `checkBlobs` on them. -/
+/-- **The finish's half of `StreamSound`**: on a state that keeps every member's files and every statement's session
+as they read on the blobs `full`, the finish is `checkBlobs` on them. -/
 def FinishKept : Prop :=
   ∀ (p : Params) (c : OneStage.Commitment) (e : Evidence) ms sts (S : State) (full : Core.Blobs),
     p.members = some ms → e.statements = some sts →
       FilesKept (Ctx.of p c e ms sts) full S → SessionsKept (Ctx.of p c e ms sts) full S →
         finish (Ctx.of p c e ms sts) S = checkBlobs p c e full
+
+/-- **The finish's half holds** (`runKept_eq`): the finish reads what was kept as `checkMembersAt` reads the blobs. -/
+theorem finishKept : FinishKept := by
+  intro p c e ms sts S full hm he hF hS
+  unfold finish
+  simp only [runKept_eq hF hS]
+  simp only [checkBlobs, checkBlobsAt, hm, he, checkMembersAt]
+  rfl
 
 /-- **`StreamSound` is its two halves**: every other form's stream is `checkBlobs` on its blobs (`keepAll_sound`), and
 the per-member form's is where its fold keeps what it reads (`StepsKept`) and its finish reads it as `checkBlobs` does
@@ -641,5 +649,8 @@ theorem streamSound_of (hs : StepsKept) (hf : FinishKept) : StreamSound := by
     have hst : stream p c e = keepAll p c e (pure #[]) := by simp only [stream, hm, he]
     rw [hst]
     exact keepAll_sound _ _ _ _ _
+
+/-- **`StreamSound` rests on the fold's half alone**, the finish's being proved (`finishKept`). -/
+theorem streamSound_of_steps (hs : StepsKept) : StreamSound := streamSound_of hs finishKept
 
 end Spot.OneStageZk.Streamed
