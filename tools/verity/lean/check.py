@@ -346,17 +346,36 @@ def build_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> i
 
 #: a heavy replay runs alone, since two side by side need twice its figure (`reserve.REPLAY_ARKLIB_GIB`)
 _HEAVY_REPLAY = threading.Semaphore(1)
+#: {package: (the jobs its sample runs beside its replay, the GiB they hold)}, set by `sample_jobs`
+_BESIDE: dict[Path, tuple[int, int]] = {}
 
 
 def replay_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> int | None:
     """The `LEAN_NUM_THREADS` the kernel replay of ``pkg`` runs with, alone (`_HEAVY_REPLAY`), when it pins a heavy
     dependency: one per `reserve.REPLAY_PER_THREAD_GIB` of what the run reserved (``have_gib``, else `reserved`, else this
-    machine's memory), up to every core (`reserve.replay_threads`); a run below its need refuses first (`memory_refusal`).
-    None where `LEAN_NUM_THREADS` is set or ``pkg`` pins neither (`lake_env`'s value)."""
+    machine's memory) less what its sample holds beside it (`sample_jobs`), up to every core (`reserve.replay_threads`); a
+    run below its need refuses first (`memory_refusal`). None where `LEAN_NUM_THREADS` is set or ``pkg`` pins neither
+    (`lake_env`'s value)."""
     if "LEAN_NUM_THREADS" in env or not pins_heavy(pkg):
         return None
     have = reserved(env)[0] if have_gib is None else have_gib
-    return reserve().replay_threads(memory()[0] if have is None else have, cores())
+    have = memory()[0] if have is None else have
+    return reserve().replay_threads(have - _BESIDE.get(pkg.resolve(), (0, 0))[1], cores())
+
+
+def sample_jobs(pkg: Path, threads: int | None, replay: bool, env=os.environ) -> int | None:
+    """How many recompiles at once the sample of ``pkg`` (`sampled_recompile`, on the build's ``threads``) runs beside its
+    replay (``replay``: the audit replays): None, its own share of ``threads``, for a package that pins no heavy
+    dependency or an audit with no replay; else those `reserve.beside` fits in what the replay's need leaves of what the
+    run reserved, kept in `_BESIDE` for the sample and the replay's threads; 0 where none fits, and the sample runs after
+    the replay."""
+    if not replay or not (p := pins(pkg)):
+        return None
+    have = reserved(env)[0]
+    want = max(1, int((threads or cores()) * SAMPLE_CORE_SHARE))
+    jobs = reserve().beside(memory()[0] if have is None else have, p, want)
+    _BESIDE[pkg.resolve()] = (jobs, reserve().held(jobs) if jobs else 0)
+    return jobs
 
 
 def rel(p: Path) -> str:
@@ -4739,13 +4758,14 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     modules Lake reported compiling); the sample is `SAMPLE_MIN` of them or `SAMPLE_SHARE`, whichever is more, all when
     fewer, taken with `SAMPLE_RNG` after the build.
 
-    It runs after the seal, beside the replay, and reads nothing a build can write: once the package is announced
+    It runs after the seal, beside the replay where what the run reserved holds both (`sample_jobs`), else after it, and
+    reads nothing a build can write: once the package is announced
     (`audit`'s ``built``), a dependent's build may rewrite its `.lake`. Each sampled module is compiled from its source by
     the toolchain's `lean`, on the seal's search path (`Sealed.bin`) with a setup that names no import's files
     (`sampled_setup`), so every import it loads is the seal's copy. It runs in the build sandbox, writable only in its own
     directory under ``work``/`sampled`, where it writes its outputs, and reads its source at `FIXED` as the build read it
     (`bound`), `SAMPLE_CORE_SHARE` of ``threads`` (the build's `LEAN_NUM_THREADS`, which each `lean` is given, else the
-    cores) at a time. Every output (`SAMPLED_OUTPUTS`) must be in both the seal and the recompile or in neither, and equal
+    cores) at a time, and beside a heavy replay no more than `sample_jobs` fits. Every output (`SAMPLED_OUTPUTS`) must be in both the seal and the recompile or in neither, and equal
     byte for byte; where only `PATH_PARTS` differ, the module's parts must be one object graph but for strings that are
     absolute paths ending in the module's source path (`olean_graph.differs`): Lean keeps a message's file in
     `olean.server`, so a build at another path, one from before builds were bound at `FIXED` or one of a package outside
@@ -4810,7 +4830,7 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
         (d / "setup.json").write_text(json.dumps(setup))
         plans.append((m, d))
     lean, n = sealed.bin("lean"), threads or cores()
-    rep["jobs"] = jobs = max(1, min(len(plans), int(n * SAMPLE_CORE_SHARE)))
+    rep["jobs"] = jobs = max(1, min(len(plans), int(n * SAMPLE_CORE_SHARE), _BESIDE.get(pkg.resolve(), (0,))[0] or n))
     at = bound([pkg / ".lake", *(keyed[m].package.dir / ".lake" for m, _ in plans)])
     log(f"sampled: {pkg}: recompiling {len(sample)} of the {len(pop)} modules this build didn't compile against its seal, "
         f"{jobs} at a time")
@@ -6122,17 +6142,22 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     built()
     files = lean_modules(pkg)
     background = ThreadPoolExecutor(max_workers=6)
+    beside = sample_jobs(pkg, n, bool(replay) and not lifts) if later is not None else None
     sample = background.submit(timed, sampled_recompile, pkg, policy["roots"], work, later, sealed or own_seal, n, log) \
-        if later is not None else None
+        if later is not None and beside != 0 else None
 
     def sampled() -> list[str]:
-        """The sample's failures, once it has ended, which ``matched`` hears; called once, on every way out below."""
-        if sample is None:
+        """The sample's failures, once it has ended, which ``matched`` hears; called once, on every way out below, each
+        after the replay has ended, so a sample with no room beside the replay (`sample_jobs`) runs here."""
+        if later is None:
             return []
         try:
-            (got, rep["sampled"]), rep["seconds"]["sampled"] = sample.result()
+            (got, rep["sampled"]), rep["seconds"]["sampled"] = sample.result() if sample else \
+                timed(sampled_recompile, pkg, policy["roots"], work, later, sealed or own_seal, n, log)
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError, CancelledError) as e:
             got = [Failure("sampled", None, f"sampled: the recompile raised {type(e).__name__}: {e}")]
+        finally:
+            _BESIDE.pop(pkg.resolve(), None)
         if own_seal:
             shutil.rmtree(own_seal.dir, ignore_errors=True)
         matched(not got)

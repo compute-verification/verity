@@ -5,7 +5,7 @@ largest the GiB `need` gives it, by what the package pins of the heavy dependenc
 ArkLib its manifest pins, empty for a package that pins neither). A run asks the largest need among the steps it takes
 of every package it audits (`ask`, in GB as `research run --mem-gb` takes it), refuses below the largest `floor`, and
 plans a heavy build's jobs and a heavy replay's threads within what it reserved (`reserved`, `build_jobs`,
-`replay_threads`). A step whose peak would give a larger figure than its own warns, naming the line to raise (`warning`).
+`replay_threads`), and the jobs of compiles beside a replay within what the replay leaves (`beside`). A step whose peak would give a larger figure than its own warns, naming the line to raise (`warning`).
 
 The rules are here, in every audit's key: a changed rule audits every package again. The figures are `reserve.json`'s,
 which no audit's key reads (`lean_audit.NOT_READ`), so a changed figure reruns no audit and no records run. This file
@@ -115,6 +115,21 @@ def replay_threads(reserved_gib: float, jobs: int) -> int:
     """How many of ``jobs`` threads a heavy replay runs within ``reserved_gib``: one per `REPLAY_PER_THREAD_GIB`, never
     none."""
     return max(1, min(jobs, int(reserved_gib // REPLAY_PER_THREAD_GIB)))
+
+
+def held(jobs: int) -> int:
+    """The GiB ``jobs`` jobs of a heavy build hold at their largest, by `build_jobs`' rule: `ONE_JOB_GIB` for the first and
+    `PER_JOB_GIB` for each beside it, never above `BUILD_HEAVY_GIB`."""
+    return min(BUILD_HEAVY_GIB, ONE_JOB_GIB + (jobs - 1) * PER_JOB_GIB)
+
+
+def beside(reserved_gib: float, pins: Iterable[str], jobs: int) -> int:
+    """How many of ``jobs`` compiles of a heavy package (each a heavy build's job, `build_jobs`) run beside the replay of a
+    package pinning ``pins`` within ``reserved_gib``: those that fit in what the replay's `need` leaves of it, so that the
+    two together hold no more than it, the replay's threads leaving out what they hold (`held`); 0 where that leaves less
+    than `ONE_JOB_GIB`, and they run after the replay."""
+    left = reserved_gib - need("replay", pins)
+    return 0 if left < ONE_JOB_GIB else build_jobs(left, jobs)
 
 
 def where(name: str) -> str:
