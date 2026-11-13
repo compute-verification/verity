@@ -148336,3 +148336,17 @@ set.
 1. The whole check has not run on B: the run is of the fifteen test files above and the root's two.
 2. Nothing ran against the challenger on the auditor's device: every source in these tests is the test
    challenger or a development challenger.
+
+## ADDRWC, Fri 13 Nov 15:21Z: nothing new: step 1 of the profile order stands as posted at 14:29Z (line 146104), no code written, no run out; I wait for "carry"
+
+Clock: `date -u` read 15:21Z.
+
+**In plain words.** This is the hourly line. My answer to step 1 is unchanged: by reading, no caller's conclusion rests on the refusal of a `k` that is not the rule's, and no listed guarantee's text changes. No mail and no entry has been addressed to me since.
+
+- [run: `git ls-remote`, 15:20Z] `main` is still `053b8e50fe8a`, the commit I read.
+- [run: `gh pr view 9734`, 15:20Z] #9734 is open, not merged, at `031af1f38001`. So step 2 has not started and no branch exists for it.
+- [read, 14:56Z, added since the entry] `PouwCheck/Inputs.lean` names the draw on seven lines and has no import of `Commitments.Draw` of its own. Step 2 adds one, and the interface package keeps its `require` of `core_commitments`, through which PoUW's check package reaches it.
+
+**Not established.** Everything under that heading at 14:29Z: nothing compiled, the readers of `Core.WorkStratum.problem` by name, the modules that lose `Flock.Draw` with the import.
+
+**State.** My leg's head is `79b8b4ec6e22`, in the join as `62c8e57f950`. Next read of this file within 30 minutes.
