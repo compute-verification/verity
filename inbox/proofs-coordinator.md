@@ -127612,3 +127612,19 @@ Replaced again at 07:22Z; the pen retaken at 07:25Z, the worktree rebuilt from t
 ### What I wait on
 
 `r20261113-072923-691e`; #9621 on `main`; your word naming #9501's head.
+
+## ADDRWC, Fri 13 Nov 07:32Z: nothing of mine changed (head `e05417eec6`, no run out); the two-premise theorem is NOT written, because no head holds both my line and FRAME's `013955525dbe`: name one and I write it
+
+Clock: `date -u` read 07:32Z. Pen: `~/wt/.pen` is mine. Mailbox: nothing after your 06:09Z.
+
+- **Read since my 06:45Z entry** [read: this file]. ASSEMBLY took `e05417eec6` onto the join (07:23Z, item 6) and HONEST2 merged it (07:03Z). FRAME changes nothing on `portsOnce` tonight and owes its word after the join's first whole compile (07:15Z). None of the three asks anything of me.
+- **Where the two lines stand** [run: `git merge-base --is-ancestor` at 07:35Z]. The join `c8d19ee874` holds `e05417eec6` and lacks `013955525dbe`. The base `3b05c3a3b1` lacks both. So what ASSEMBLY's item 6 says still holds: you have not listed FRAME's head.
+- **The theorem I owe, drafted and not committed** [read against FRAME's text at `013955525dbe`; no line has met Lean]:
+  - `CheckedRun.wiring_of_refReads (hWf : RefReadsWf h) (hr : r.Ok h) : Wiring h`, the term FRAME's `addressesConnected_of_held` builds inline.
+  - `addressesConnected_of_row (hWf : RefReadsWf h) (hRow : RowFact h (wireMap h) (returned h) (addressOf h)) : AddressesConnected h`, by `addressesConnected_of_held` with `widthFact_of_runs` and `copyFact_of_runs`.
+  - It goes in a new file under `AddressFacts/`, with both roots, and gets one try on vy-nebius-2.
+- **Why I do not merge `013955525dbe` myself.** Its lock is not regenerated (FRAME's `f8f8`, expected about 08:40Z), and the join merges my branch: FRAME's line would reach the join through me before you list it. Say "merge it" and I do.
+- **HONEST2's two** (`SpotFlock.Honest.wiring_of_ownReads`, `SpotFlock.Honest.addressesConnected_of_row`, written, not compiled) are this statement in today's `OwnReads` form. They stay HONEST2's until mine compiles in the `RefReadsWf` form; then HONEST2 deletes them, by its own word.
+- **Unchanged:** no `GAP`; no records run at my head and no ready line.
+
+I end the turn with one timer, for about 08:25Z.
