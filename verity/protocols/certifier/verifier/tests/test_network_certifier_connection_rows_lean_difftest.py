@@ -1,8 +1,8 @@
 """The difftest of `connection_rows.py` against the Lean package `network_check`: the Python half.
 
 `verity/protocols/certifier/verifier/lean/scripts/connection_rows_vectors.py` writes random instances and this
-package's results on each (a schedule's digest and tables, `request_room`, `request_bytes` and `response_bytes`, a table's domain,
-a head's encoding and digest, and `check_registration`'s head or refusal). `check` runs the Lean half in its Lean audit
+package's results on each (a schedule's digest and tables, `request_room`, `request_bytes` and `response_bytes`, a
+table's domain, a head's encoding and digest, and `check_registration`'s head or refusal). `check` runs the Lean half in its Lean audit
 (`runs` in that package's `lean-audit.json`): `NetworkCheck/ConnectionRowsDifftestMain.lean` computes every result with
 `NetworkCheck.ConnectionRows` and fails on any that differs. The audit checks the data against the record's SHA-256,
 and its pass is cached on the Lean package's files alone, so the test here is what says the data is still what this
@@ -17,6 +17,11 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+
+import pytest
+
+from verity.protocols.certifier.verifier import connection_rows as CR
+from verity.protocols.certifier.verifier import content_rows as CT
 
 LEAN = Path(__file__).resolve().parents[1] / "lean"
 SCRIPT = LEAN / "scripts" / "connection_rows_vectors.py"
@@ -68,3 +73,23 @@ def test_the_generator_covers_what_it_says():
               and all(isinstance(t, dict) and isinstance(t.get("rows"), int) for t in d["tables"])]
     assert any(len({t["rows"] for t in ts[k:k + 3]}) > 1 for ts in tabled for k in range(2, len(ts), 3))
     assert any(t["rows"] == 0 and t.get("root") != "00" * 64 for ts in tabled for t in ts[2:])
+
+
+def test_the_data_holds_the_size_class_cap_on_both_sides():
+    """`UNIT_CLASS_MAX` is defined once in Python and once in the Lean package (`unitClassMax`), which requires nothing
+    that holds Python's. The first instances are schedules at the two caps it sets, each taken, and one past each,
+    refused, read from this package's own checks: so the constant changed here alone changes the pinned data, and
+    changed there alone fails the Lean half on it."""
+    K = vectors.most_slots()
+    CR.check_slots(K)
+    with pytest.raises(ValueError, match="a lengths row is"):
+        CR.check_slots(K + 1)
+    (at_k, k), (past_k, k1), (at_o, o), (past_o, o1) = [vectors.instance(seed) for seed in range(4)]
+    assert at_k["schedule"]["lanes"] == K and k["tables"][0] == ["lengths", 2, K * CR.SLOT[CR.LENGTHS].size]
+    assert k["registrations"][0] is not None
+    assert past_k["schedule"] == at_k["schedule"] | {"lanes": K + 1} and k1["tables"] is None
+    assert at_o["content"] == [[2, CT.most_ids()]] and ["response.0", 1, CT.response_bytes(CT.most_ids())] in o["tables"]
+    assert o["registrations"][0] is not None
+    assert past_o["content"] == [[2, 2 * CT.most_ids()]] and past_o["schedule"] == at_o["schedule"]
+    assert o1["tables"] is None
+

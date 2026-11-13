@@ -29,6 +29,11 @@ another digest, key id, session, link or execution phase, or with a signature th
 Every registration has the values' types `connection_rows.registration` writes: hex in lower case, integers written as
 integers, a certificate of three keys. Where `check_registration` reads more than that (`bytes.fromhex`'s upper case
 and spaces, a number equal to the integer, a certificate's further keys) the Lean refuses, and no instance has one.
+
+The first instances are `edges`: schedules at the two caps a proof block's public size class sets (`UNIT_CLASS_MAX`), a
+lengths row of the most slots and of one more, and a class of the most ids released and of the next size, the first of
+each taken and the second refused. The caps are read from `connection_rows.check_slots` and `content_rows.most_ids`, so
+the constant changed on one side alone changes this data or fails the Lean half on it.
 """
 from __future__ import annotations
 
@@ -65,9 +70,39 @@ def _hex(rng: random.Random, n: int = 64) -> str:
     return rng.randbytes(n).hex()
 
 
+def _maybe(f, *args):
+    try:
+        return f(*args)
+    except ValueError:
+        return None
+
+
 def _flip(text: str, at: int = 0) -> str:
     """`text`, a hex string, with the digit at `at` another."""
     return text[:at] + ("0" if text[at] != "0" else "1") + text[at + 1:]
+
+
+def most_slots() -> int:
+    """The most slots `connection_rows.check_slots` takes of a lengths row."""
+    def taken(K: int) -> bool:
+        return _maybe(lambda: CR.check_slots(K) or True) is True
+    most, past = 1, 2
+    while taken(past):
+        most, past = past, 2 * past
+    while past - most > 1:
+        mid = (most + past) // 2
+        most, past = (mid, past) if taken(mid) else (most, mid)
+    return most
+
+
+def edges() -> list[tuple[dict, int, list]]:
+    """The schedules at the caps (the module docstring): a lengths row of the most slots, of one more, a class of the
+    most ids released and of the next size. A stride of one bucket has a slot a lane."""
+    s = {"bucket_ms": 100, "cell_bytes": 512, "delay": 1, "egress_cells": 1, "every": 1, "ingress_buckets": 1,
+         "ingress_cells": 1, "lanes": 1, "queue": 1, "slots": 1, "window": 2}
+    K, O = most_slots(), CT.most_ids()
+    return [(s | {"lanes": K}, 2, [[2, 2]]), (s | {"lanes": K + 1}, 2, [[2, 2]]),
+            (s, 2, [[2, O]]), (s, 2, [[2, 2 * O]])]
 
 
 def schedule(rng: random.Random) -> tuple[dict, int | None, list | None]:
@@ -128,13 +163,6 @@ def schedule(rng: random.Random) -> tuple[dict, int | None, list | None]:
             else:
                 c[2] = rng.choice([0, most + 1, most + 7])
     return s, lengths, content
-
-
-def _maybe(f, *args):
-    try:
-        return f(*args)
-    except ValueError:
-        return None
 
 
 def _head_result(head) -> dict | None:
@@ -313,7 +341,7 @@ def registrations(rng: random.Random, params: WardenParams, session: bytes, link
 def instance(seed: int) -> tuple[dict, dict]:
     """Instance `seed` and the Python's results on it."""
     rng = random.Random(seed)
-    s, lengths, content = schedule(rng)
+    s, lengths, content = edges()[seed] if seed < len(edges()) else schedule(rng)
     session, link = rng.randbytes(32), rng.choice(LINKS)
     window = rng.choice([0, 1, 3, 17, 1 << 33])
     signing = Signing(seed)
