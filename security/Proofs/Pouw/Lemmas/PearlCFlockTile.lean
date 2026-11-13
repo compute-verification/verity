@@ -8,12 +8,13 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 public import Definitions.Pouw.PearlC.FlockTile.Audit
 
 /-!
-# Pearl-C's gap under Flock's hidden audit (trusted)
+# Pearl-C's gap under Flock's hidden audit at the served record: a lemma
 
 `HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192` is `pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192`'s statement at
 Flock's hidden audit (`Pouw.PearlC.FlockTile.TileReadSession.audit`), with the hidden audit's open obligation
 `TileProofSoundAll` replaced by the two it reduces to there, T3 at the TileRead session and the binding, each a
-hypothesis. Its proof is `Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192`.
+hypothesis. Its proof is `Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192`, and no record
+pins it: the listed form is the same statement over every device record (`Definitions.Pouw.Guarantees.PearlCDev`).
 
 The session is `Definitions.Pouw.PearlC.FlockTile`'s, over core's game (`Verity.Game`), the one Flock's soundness is
 stated over.
