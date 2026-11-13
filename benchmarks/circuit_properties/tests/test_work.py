@@ -1140,12 +1140,19 @@ def _reading(w: WK.Work) -> dict:
                           list(g.bits), list(g.beta), g.reason] for g in w.products]}
 
 
+def _reading_of(name: str) -> dict:
+    try:
+        return _reading(WK.read(CASES[name](), KB))
+    except WK.RepeatedRows as e:
+        return {"refused": [e.definition, e.operand, list(e.rows)]}
+
+
 @pytest.mark.parametrize("name", sorted(CASES))
 def test_the_suites_programs_keep_their_readings(name):
-    """Each of the suite's Programs gives its reading in `READINGS` (written by running this file), compared whole, so
-    a change to the reader that moves a word or their order shows."""
-    assert _reading(WK.read(CASES[name](), KB)) == json.loads(READINGS.read_text())[name]
+    """Each of the suite's Programs gives its reading in `READINGS` (written by running this file), or the refusal it
+    raises, compared whole, so a change to the reader that moves a word or their order shows."""
+    assert _reading_of(name) == json.loads(READINGS.read_text())[name]
 
 
 if __name__ == "__main__":
-    READINGS.write_text(json.dumps({n: _reading(WK.read(CASES[n](), KB)) for n in sorted(CASES)}, indent=1) + "\n")
+    READINGS.write_text(json.dumps({n: _reading_of(n) for n in sorted(CASES)}, indent=1) + "\n")
