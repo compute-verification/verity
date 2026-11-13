@@ -20,6 +20,7 @@ session would put each of the interior's openings on another tree of the device'
   a tree read before it). So the first session's part is one fact: its read shows no `Hello`.
 * `interiorLogged_of`: `InteriorLogged`, from the cut's read (`InteriorCut`) and a first session that samples and
   opens no coin tree (`FirstFresh`).
+* `readLog_plain`: a read of a log none of whose lines is a coin tree's shows only fresh coins, so no `Hello`.
 
 Not established here: that the first session's read shows no `Hello` on two windows. The form's check reads the first
 session's log only through `Spot.Challenger.releasedRootsOf`, which passes over a coin tree's lines, so no step of
@@ -163,5 +164,66 @@ theorem interiorLogged_of {C : CaseOf} {Good : Exchange → Prop} {first : Excha
     obtain ⟨x, hx, rfl⟩ := List.mem_map.1 hx'
     rw [← (of_ofV2 hR).1]
     exact hfree o hacc hgood x hx
+
+/-! ## A read of no coin tree's line -/
+
+/-- **A read of lines none of which is a coin tree's shows only fresh coins**, after any trees: `readTail` reads a
+coin tree's `Hello` or opening only at a coin tree's line (`Spot.Challenger.treeLine`). -/
+theorem readTail_plain {label : String} {after : ByteArray} {records : List Json} :
+    ∀ (lines : List String) (ts : List (String × Json)) (pending : Option String) (ξ : ByteArray)
+      {log : List Release}, Verity.Sampled.readTail label after records lines ts pending ξ = some log →
+      (∀ l ∈ lines, Spot.Challenger.treeLine l = false) → ∀ r ∈ log, ∃ lab, r.frame = .fresh lab
+  | [], _, none, _, log, hR, _, r, hr => by
+    simp only [Verity.Sampled.readTail, Option.some.injEq] at hR
+    subst hR
+    exact absurd hr List.not_mem_nil
+  | [], _, some _, _, _, hR, _, _, _ => by simp [Verity.Sampled.readTail] at hR
+  | l₀ :: ls, ts, pending, ξ, log, hR, hP, r, hr => by
+    unfold Verity.Sampled.readTail at hR
+    have ht₀ : ¬ Spot.Challenger.treeLine l₀ = true := by
+      rw [hP l₀ List.mem_cons_self]
+      exact Bool.false_ne_true
+    rw [ite_eq_right ht₀] at hR
+    have hP' : ∀ l ∈ ls, Spot.Challenger.treeLine l = false := fun l hl => hP l (List.mem_cons_of_mem _ hl)
+    cases pending with
+    | none => exact readTail_plain ls ts (some l₀) ξ hR hP' r hr
+    | some a =>
+      simp only [Option.bind_eq_bind] at hR
+      obtain ⟨⟨lab, root⟩, -, hR⟩ := Option.bind_eq_some_iff.1 hR
+      simp only [Option.pure_def] at hR
+      have step : ∀ (q : Release) (ξ' : ByteArray) (rest : List Release),
+          Verity.Sampled.readTail label after records ls ts none ξ' = some rest → log = q :: rest →
+          (∃ lab', q.frame = .fresh lab') → ∃ lab', r.frame = .fresh lab' := by
+        intro q ξ' rest hrest hlog hq
+        subst hlog
+        rcases List.mem_cons.1 hr with rfl | hr'
+        · exact hq
+        · exact readTail_plain ls ts none ξ' hrest hP' r hr'
+      by_cases hm : lab = label ∧ root = after
+      · rw [ite_eq_left hm] at hR
+        obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
+        exact step _ _ rest hrest (Option.some.inj hR).symm ⟨_, rfl⟩
+      · rw [ite_eq_right hm] at hR
+        obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
+        exact step _ _ rest hrest (Option.some.inj hR).symm ⟨_, rfl⟩
+
+/-- **A read of a log none of whose lines is a coin tree's shows only fresh coins** (`readTail_plain`): no coin
+tree's `Hello` and no opening. -/
+theorem readLog_plain {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
+    {lines : List String} {log : List Release}
+    (hR : Verity.Sampled.readLog label after records ξ lines = some log)
+    (hP : ∀ l ∈ lines, Spot.Challenger.treeLine l = false) : ∀ r ∈ log, ∃ lab, r.frame = .fresh lab := by
+  cases lines with
+  | nil =>
+    simp only [Verity.Sampled.readLog, Option.some.injEq] at hR
+    subst hR
+    exact fun r hr => absurd hr List.not_mem_nil
+  | cons l₀ ls =>
+    simp only [Verity.Sampled.readLog] at hR
+    have ht₀ : ¬ Spot.Challenger.treeLine l₀ = true := by
+      rw [hP l₀ List.mem_cons_self]
+      exact Bool.false_ne_true
+    rw [ite_eq_right ht₀] at hR
+    exact readTail_plain ls [] none ξ hR fun l hl => hP l (List.mem_cons_of_mem _ hl)
 
 end Verity.SampledTwo.SessionCoins

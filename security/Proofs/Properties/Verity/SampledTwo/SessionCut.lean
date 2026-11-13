@@ -17,13 +17,15 @@ sessions (`LogRead`) and every log it read is the device's (`LogIsDevice`).
   stated at (`interiorRead`), where the play's case is the one sent.
 * `interiorLogged_read`: `InteriorLogged C ReadIsDevice`, where the play's case is the one sent and, on two windows,
   the first session's read shows no coin tree's `Hello` (`FirstTreeless`).
+* `firstTreeless_of_plain`: `FirstTreeless`, where no line of the first session's log is a coin tree's on two
+  windows.
 
 The event has to be `ReadIsDevice`: `LogIsDevice` alone holds of any log on a play whose logs the cut didn't read, and
 says nothing of the interior's there.
 
 Not established here: `FirstTreeless`. No step of the form's check refuses a first session's log that holds a coin
-tree's line (`SessionLogged`), so it is a premise, of the device's first session or of a refusal the form doesn't
-make today.
+tree's line (`SessionLogged`), so it is a premise: of the device's first session, or of a refusal the form doesn't
+make today (`firstTreeless_of_plain` is what such a refusal would give).
 -/
 
 @[expose] public section
@@ -143,7 +145,7 @@ theorem interiorLogged_read (C : CaseOf)
     have hno := hfree o hacc p c e key d₁ ξ r₁ d₂ h1 h2 h3 h4 h8 h6 hw
     have hop : ∀ r ∈ r₁, openTree r.frame = none := by
       unfold firstRead at h8
-      obtain ⟨d, hd, h8⟩ := Verity.Sampled.Binding.obind_some h8
+      obtain ⟨d, -, h8⟩ := Verity.Sampled.Binding.obind_some h8
       obtain ⟨lines₁, -, h8⟩ := Verity.Sampled.Binding.obind_some h8
       exact readLog_treeless h8 hno
     refine interiorLogged_of (first := fun _ => r₁) (Good := fun o' => o' = o) ?_ ?_ o hacc rfl r₂ hl
@@ -153,5 +155,21 @@ theorem interiorLogged_read (C : CaseOf)
       exact .inr (hdev _ hm)
     · intro o' _ _ r hr
       exact ⟨hop r hr, hno r hr⟩
+
+/-- **`FirstTreeless`, from a first session's log of no coin tree's line**: where, on a play the form accepts on two
+windows, no line of the first session's log is a coin tree's (`Spot.Challenger.treeLine`), its read shows only fresh
+coins (`readLog_plain`). It is what a refusal of such a log by the form's check would give. -/
+theorem firstTreeless_of_plain (C : CaseOf)
+    (h : ∀ o, FormAccepts C o → ∀ p c e key d₁ d₂ ls, caseOf o.sent = .ok (p, c, e) →
+      keyOf o.sent.params = some key → firstDraws key p c e = some d₁ → secondDraws p e = some d₂ →
+      d₁.window ≠ d₂.window → firstLines e = .ok ls → ∀ l ∈ ls, Spot.Challenger.treeLine l = false) :
+    FirstTreeless C := by
+  intro o hacc p c e key d₁ ξ r₁ d₂ h1 h2 h3 _ h8 h6 hw r hr sp hsp
+  unfold firstRead at h8
+  obtain ⟨d, -, h8⟩ := Verity.Sampled.Binding.obind_some h8
+  obtain ⟨ls, hls, h8⟩ := Verity.Sampled.Binding.obind_some h8
+  obtain ⟨lab, hlab⟩ := readLog_plain h8 (h o hacc p c e key d₁ d₂ ls h1 h2 h3 h6 hw (toOption_ok hls)) r hr
+  rw [hlab] at hsp
+  cases hsp
 
 end Verity.SampledTwo.SessionCoins
