@@ -20,7 +20,7 @@ inputs = [
     "benchmarks/harness/verity_bench/overhead_node.py",
     "tools/config/verity_config",
     "verity/__init__.py",
-    "verity/settings.py",
+    "tools/config/verity_config/verity_settings.py",
     # the advice line is the scheduler replay's loader's, which reads the adapter's advice code
     "benchmarks/network_e2e/encodings/replay.py",
     "adapters/vllm/verity_vllm/__init__.py",
