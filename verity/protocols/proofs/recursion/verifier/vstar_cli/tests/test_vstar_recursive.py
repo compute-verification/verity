@@ -301,7 +301,7 @@ class Session:
         self.parts = [by_unit[n] for n in names]
 
     def verdicts(self, inner: Inner, parts: list[Part], tmp: Path) -> tuple[dict, list[dict]]:
-        """V*'s compiled check's line over the whole session, and `flock-verify`'s verdict at each part."""
+        """V*'s compiled check's line over the whole session (`lean_verdicts`), and each part's verdict (`flock_verdict`)."""
         lean = lean_verdicts(self.exe, inner, parts, tmp)
         with ThreadPoolExecutor(settings.lean_jobs()) as ex:
             flock = list(ex.map(lambda jp: flock_verdict(self.flock, inner, self.rec_inner, *jp), enumerate(parts)))
@@ -393,7 +393,7 @@ def test_a_rep_file_one_bit_off_is_refused_at_its_part(session, tmp_path):
 
 @pytest.mark.slow
 @DEPLOYED
-def test_an_inner_draw_that_does_not_parse_is_refused_by_both(session, tmp_path):
+def test_an_inner_sample_that_does_not_parse_is_refused_by_both(session, tmp_path):
     """The inner statement's sample cut short: the compiled check refuses the whole check at Flock's plain verifier on the
     inner statement (`innerOk`), and `flock-verify` accepts no part."""
     inner = copy.copy(session.inner)

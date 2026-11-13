@@ -1758,7 +1758,7 @@ OPT_IN = {
         "tests/test_vstar_recursive.py::test_the_honest_statement_fits_and_is_refused_at_a_limit_of_its_own_size",
         "tests/test_vstar_recursive.py::test_a_flipped_inner_coin_is_refused_where_flock_verify_refuses_it",
         "tests/test_vstar_recursive.py::test_a_rep_file_one_bit_off_is_refused_at_its_part",
-        "tests/test_vstar_recursive.py::test_an_inner_draw_that_does_not_parse_is_refused_by_both")},
+        "tests/test_vstar_recursive.py::test_an_inner_sample_that_does_not_parse_is_refused_by_both")},
     "adapters/vllm": {
         "VERITY_VLLM_INTERIOR_TABLE": (
             "tests/pipeline/test_interior_table.py::test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them",
