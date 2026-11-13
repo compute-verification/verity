@@ -69,10 +69,12 @@ Open premises (`open`):
   - `network-check`, `network-records` and `network-period`, each `id | check PARAMS COMMITMENT EVIDENCE | serve`: the
     core protocols `verity/network-certificate/v4`, `verity/network-records/v3` and `verity/certifier/v0`. The public
     tree has no `network-period`: it runs the period check, which reads the inference-only policy's layout check, which
-    is withheld;
+    is withheld. The Python each is held to (`network/tests`) is `audit.Audit` for the first two and the mirror in
+    `network/tests/period_case.py` for the third;
   - `network-records verdicts`, the process `lean_audit` starts and `service` asks (`VERITY_NETWORK_RECORDS_EXE` names
     a built one); `benchmarks/network_e2e` and `benchmarks/network_traces` build and run it;
-  - `network-check-difftest INSTANCES PYTHON N`.
+  - `network-check-difftest INSTANCES PYTHON N`, which holds `certificate.py`'s encodings to
+    `NetworkCheck.Certificate`'s.
 - **Lean beside it**: `../device/program/lean/`, the certifier program, is the Lake package `certifier_program`, whose
   library `NetworkCertifier` the packages at `lean`, `../device/lean` and `security/Proofs` require by path. Its
   executables (`lake exe`): `certifier-difftest`, `certifier-charge-difftest` and `certifier-window-difftest`, each
@@ -303,7 +305,8 @@ A spec-level reference for network accounting's timing channel:
 - the network certifier's connection rows (`connection_rows`), in a schedule with lengths rows
   (`WardenParams.lengths`): each execution phase's releases as two tables a row a slot stride, `lengths` and `fails`,
   and, with content rows (`WardenParams.content`), three tables a class of what each filed release carried
-  (`content_rows`: its request, response and end rows), all committed as the cells' rows are and listed under one
+  (`content_rows`: its request, response and end rows; under form 2 a class's held rows alone, whose count the head
+  makes public), all committed as the cells' rows are and listed under one
   head the network certifier signs once; the registration the verifier reads (`check_registration`) and its
   `--registered` port of the proof blocks that read a table, one a row (`port`); under form 2, the signed word
   that an execution phase has no head (`check_no_head`);
