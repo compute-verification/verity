@@ -19,7 +19,7 @@ draws. This module states the messages' bound in the form those rounds need.
   a round's miss is at most the square root of a tape and two coins of one history giving `opn` two values, wherever
   an accepted play gives `opn` the message it reads, at its own history (`hopen`). No digest enters.
 * **What the play fixes** (`openingBy`, `frameBy`, `Opens`, `FixedBefore`, `Breaks`, `finderBy`, `missBoundBy`,
-  `messagesFixedBy`, `callsLeBy`): the play fixes a value `Fx o i` for round `i` (digests, and whatever else the
+  `reachedBy`, `messagesFixedBy`, `callsLeBy`): the play fixes a value `Fx o i` for round `i` (digests, and whatever else the
   device's log holds before the round's coin), fixed by the coins the history before the round shows (`FixedBefore`);
   an accepted play's reading at round `i` opens it (`Opens`, at any relation `Opn`); and two plays that open one fixed
   value with two messages give a SHA-512 collision (`Breaks`, at the finder's `pair`). The round's miss is then at
@@ -31,8 +31,8 @@ draws. This module states the messages' bound in the form those rounds need.
   files), the play shows a list of strings for the round (`raw`: the record's bytes the device's digests hash, the
   blobs the registered digests name), and on accepted plays the message is a function of the strings and the context
   (`Explains`). Two accepted plays with two messages then show two lists of strings under one list of digests, and
-  the finder outputs a pair of them that differ (`exists_zip_collide`). `messagesFixedStrings` is the bound from
-  `ShowsStrings`, `FixedBefore` and `Explains`.
+  the finder outputs a pair of them that differ (`exists_zip_collide`). `reachedStrings` and `messagesFixedStrings` are the bound
+  from `ShowsStrings`, `FixedBefore` and `Explains`.
 
 **Not established** at the two-stage form: `Opens` (the device's digests are the SHA-512 of the strings the check
 read: the interior's root, each opening's `after`), `FixedBefore` (the device's log before a round's coin is the same
@@ -321,6 +321,24 @@ theorem missBoundBy (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F
   rw [hout, hφ]
   exact hp
 
+/-- **The messages at the rounds the run reaches, at the frame's prover**: where an accepted play's reading opens what
+the play fixes, each round's fixed value is fixed by the coins the history before it shows, and two plays that open
+one fixed value with two messages give a collision, `MessagesReached` holds at the sum over the rounds of the square
+roots of their finders' successes. -/
+theorem reachedBy (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Verity.Game.Strategy (V.game θ F c)) (place : TapeOf V θ F c σ → Coins A x → TapeOf V θ F c σ)
+    (Rd : Reading A) (Acc Good : Verity.Exchange → Prop) (Fx : Verity.Exchange → ℕ → Option Φ)
+    (Opn : Φ → Verity.Exchange → ℕ → Prop)
+    (pair : Φ → Verity.Exchange → Verity.Exchange → ℕ → Option (Msg × Msg)) (q : ℕ)
+    (hO : Opens A x Rd Acc Good Fx Opn)
+    (hF : ∀ i < A.L.V.k x, FixedBefore (frameBy V A x θ F c σ place Rd Fx Opn) Rd Acc Good Fx i)
+    (hB : ∀ i < A.L.V.k x, Breaks Rd Opn pair i) :
+    MessagesReached V A x θ F c σ (frameBy V A x θ F c σ place Rd Fx Opn) Rd Acc Good
+      (∑ i ∈ Finset.range (A.L.V.k x),
+        ENNReal.ofReal (Real.sqrt ((finderBy V θ F c σ place Rd Fx Opn pair i q).Pr Verity.sha512Msg))) :=
+  reachedOfRounds V A x θ F c σ _ Rd Acc Good _ fun i hi =>
+    missBoundBy V A x θ F c σ place Rd Acc Good Fx Opn pair i q hO (hF i hi) (hB i hi)
+
 /-- **The messages' bound at the frame's prover**: where an accepted play's reading opens what the play fixes, each
 round's fixed value is fixed by the coins the history before it shows, two plays that open one fixed value with two
 messages give a collision, and the run reaches every round, `MessagesFixed` holds at the sum over the rounds of the
@@ -338,8 +356,7 @@ theorem messagesFixedBy (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray
       (∑ i ∈ Finset.range (A.L.V.k x),
         ENNReal.ofReal (Real.sqrt ((finderBy V θ F c σ place Rd Fx Opn pair i q).Pr Verity.sha512Msg))) :=
   messagesFixed_of_reached V A x θ F c σ _ Rd Acc Good _ hT
-    (reachedOfRounds V A x θ F c σ _ Rd Acc Good _ fun i hi =>
-      missBoundBy V A x θ F c σ place Rd Acc Good Fx Opn pair i q hO (hF i hi) (hB i hi))
+    (reachedBy V A x θ F c σ place Rd Acc Good Fx Opn pair q hO hF hB)
 
 /-! ## The message's own digest -/
 
@@ -467,6 +484,25 @@ theorem opens_strings {A : Live₂} {x : Msg} {Rd : Reading A} {Acc Good : Verit
     unfold stringsOpn
     exact ⟨hA, hG, rfl, bs, hr, hb⟩
   exact ⟨hm, (ds, ctx o i), hfx, hop⟩
+
+/-- **The messages at the rounds the run reaches, where the plays show strings**: `reachedBy` from `ShowsStrings`,
+`FixedBefore` and `Explains`. -/
+theorem reachedStrings (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray)
+    (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
+    (place : TapeOf V θ F c σ → Coins A x → TapeOf V θ F c σ) (Rd : Reading A) (Acc Good : Verity.Exchange → Prop)
+    (Dg raw : Verity.Exchange → ℕ → Option (List Msg)) (ctx : Verity.Exchange → ℕ → κ) (q : ℕ)
+    (hO : ShowsStrings A x Rd Acc Good Dg raw)
+    (hF : ∀ i < A.L.V.k x, FixedBefore
+      (frameBy V A x θ F c σ place Rd (stringsFx Dg ctx) (stringsOpn Acc Good raw ctx)) Rd Acc Good
+      (stringsFx Dg ctx) i)
+    (hE : ∀ i < A.L.V.k x, Explains Rd Acc Good raw ctx i) :
+    MessagesReached V A x θ F c σ
+      (frameBy V A x θ F c σ place Rd (stringsFx Dg ctx) (stringsOpn Acc Good raw ctx)) Rd Acc Good
+      (∑ i ∈ Finset.range (A.L.V.k x),
+        ENNReal.ofReal (Real.sqrt ((finderBy V θ F c σ place Rd (stringsFx Dg ctx) (stringsOpn Acc Good raw ctx)
+          (stringsPair raw) i q).Pr Verity.sha512Msg))) :=
+  reachedBy V A x θ F c σ place Rd Acc Good (stringsFx Dg ctx) (stringsOpn Acc Good raw ctx) (stringsPair raw) q
+    (opens_strings ctx hO) hF (fun i hi => breaks_strings Rd Acc Good raw ctx i (hE i hi))
 
 /-- **The messages' bound where the plays show strings**: where an accepted play shows, for each round, strings that
 have the digests the play fixes (`ShowsStrings`), the digests and the context are fixed by the coins the history before
