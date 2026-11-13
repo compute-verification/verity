@@ -23,7 +23,7 @@ key, against the interior audit's window and family, after the interior commitme
 namespace Verity.SampledTwo
 
 open Lean (Json)
-open Properties.Challenger Spot.Challenger
+open Spot.Challenger
 open Verity.Sampled (freshCoins readLog)
 
 local instance lawfulBEqByteArrayAlone : LawfulBEq ByteArray where
@@ -80,7 +80,7 @@ theorem none_readTail (label : String) (after : ByteArray) (records : List Json)
         have hc : Verity.Sampled.rootOf a ≠ some (label', after') := by
           intro e
           rw [if_pos e] at hif
-          cases hif
+          omega
         have hz' : Verity.Sampled.countFresh label' after'
             ((none : Option String).toList ++ ls.filter fun l => !treeLine l) = 0 := by
           simpa using hz0
@@ -217,7 +217,10 @@ theorem firstUnshown_of (C : CaseOf) (hC : CaseIsSent C) (hM : SessionMatches C)
   obtain ⟨bp, hb, hbw, -⟩ := firstDraws_window hd₁
   have hbp : bp = p.boundary := by
     unfold boundaryOf at hb
-    exact (Except.ok.inj hb).symm
+    first
+      | exact (Except.ok.inj hb).symm
+      | (cases hb; rfl)
+      | (simp only [pure, Except.pure, Except.ok.injEq] at hb; exact hb.symm)
   subst hbp
   refine VStar.Recursive.SampledTwo.interiorUnshown_roots (unshown_of_accepts hC ha hcase) hbw ?_ hlab hdig hk hts'
   rw [hwin]
