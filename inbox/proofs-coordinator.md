@@ -149357,3 +149357,176 @@ The three things the two-stage form's proofs take on trust about the parameters 
 **What I do next**, unless you say otherwise: the sizing your 12:33Z message left for after the switch, by reading only: the second reader of the format (`Core.Canonical.parse`, `parseUpTo`, `read`), who calls it, and what it would take to hold it to `canonicalJson` by a theorem or to remove it. It goes in my next entry, by 16:36Z. I open no pull request and run no `--update`.
 
 **Pushed heads**: `cursor/proofs-sessionof2-params-4e98` `9c5b95260b60` (off the join at `4e986e339ad2`; compiled, `21f3`); `cursor/proofs-sessionof2-parser-defe` `fe28c96c4322` (unchanged); `cursor/proofs-sessionof-9b17` `9a548b2f975d`; `cursor/proofs-sessionof2-7c3a` `b49c6e40619f`; `cursor/proofs-sessionof-5c1e` `521933e1430b`.
+
+
+## ADDRROW2, Fri 13 Nov 15:46Z: bare collisions, entry 1: no listed guarantee is empty by one; 50 read the bare form, 49 of them through finders that pick their pair by choice from it (2 deployed)
+
+**In plain words.** A bare collision is the statement "two different strings with one hash exist", with nothing tying
+the two strings to the play; at SHA-512 it is true by counting. I looked for it in every listed guarantee of the four
+locks that list any, at `main` = `053b8e50fe8a`. No listed guarantee has it as a conclusion, as a disjunct of a
+conclusion, or under a negation, so **none is empty by it, and I wrote no `FOR DANIEL` entry.** `RecursiveAuditC3` does
+not read it at all: its `Hash.Collision` is a hypothesis about the pair a finder outputs. But there is a third case that
+soundness's ruling does not name, and it is in 49 listed guarantees, two of them deployed (`SampledKSLiveV3`,
+`SampledKSLiveV5`): a *finder* (the function that is supposed to output the two colliding strings) whose output is not
+computed from the play but picked by `Classical.choose` from a proof that a collision exists. Such a finder outputs one
+fixed collision of SHA-512, the same on every play, exactly when a named event of the play holds. The statements that
+use it are not empty and say exactly what they would say with a computed pair; what Lean does not hold is the step
+"this event gives a collision among the strings the play hashed", because the lemmas that prove it conclude the bare
+form. It needs your word, or soundness's, whether that goes to Daniel.
+
+Clock 15:46Z. Mailbox read at 15:45Z: nothing after your 14:07Z. Paths are as at `053b8e50fe8a` (worktree
+`/home/ubuntu/wt/pin`, detached there); nothing follows `origin/main` by name. No code changed, no branch made.
+
+**1. What was run** [run]. The locks record a guarantee's premises and a package-wide union of what statements read,
+not each statement's own reads, so the per-guarantee question cannot be answered from the lock alone. I took it from
+the Lean check's facts documents (per statement: its reads, transitively through every definition it unfolds, and its
+hypotheses), read from a node's cache by a read-only job (`r20261113-152354-412c`, cpu-14, rc 0) and matched to the
+pinned locks by statement hash: `security/lean-audit.json` 1137 of 1137 statements equal, the Flock verifier's lock 11
+of 11, the certifier's 4 of 4, `security/Properties/lean-audit.json` 539 of 540 (the one that differs,
+`Properties.Challenger.familyOneCommitmentRead_nontrivial`, I read in the lock: it reads `Properties.Challenger.Break`,
+a break of the play, under a `Not`). Every other `lean-audit.json` at the pin lists no guarantee. Beside it, four scans
+of the source at the pin (scripts, all of `security/**/*.lean` and `verity/**/*.lean`).
+
+**2. Which listed guarantees read a bare form** [run]. Exactly **50**, all in `security/lean-audit.json`, each through
+`FlockSoundness.Merkle.Collision` (`security/Definitions/Flock/Merkle.lean:29`, an `abbrev` of `Hash.HasCollision`,
+`security/Definitions/Core/Hash.lean:40`). None in the other three locks. No listed statement reads
+`Sha512.HasCollision`, `Sha256.HasCollision` or `MerkleScheme.HasCollision`, and none reads `LinksBind`'s or
+`RecLinks`'s lemmas (those are entry 2's). The bare form reaches a statement only as the *type of a proof carried
+inside a definition*, at five declarations [run: a scan of every declaration that names a bare form; 68 mentions, 55 of
+them in theorems]:
+- `FlockSoundness.Merkle.Leaf.bind` (`Definitions/Flock/Merkle.lean:64`), a field of the leaf commitment's structure:
+  `c ≠ c' → leaf c s = leaf c' s' → Collision H`. All 50 read it, through the instance `Leaf.hm96`.
+- `FlockSoundness.StrictCR.collOf`, `onePick`, `conflictPick` (`security/Proofs/Flock/Soundness/StrictCR.lean:53,62,76`)
+  and the field `TreeRewind.binds` (`:220`). 49 read `collOf`.
+
+**3. `Flock.SecurityProofs.RecursiveAuditC3` (your item 2)** [read + run]. The statement is
+`Verity.Recursive.SpotRecursive Verity.Recursive.RecVerdict ∧ RecursiveFirewallPrivate`
+(`security/Proofs/Properties/Verity/Recursive/Audit.lean:216`). `Hash.Collision` is the *pair* predicate
+(`Hash.lean:37`: `Collision H u v := u ≠ v ∧ H u = H v`, two given strings), and it stands in one hypothesis of
+`SpotRecursiveAt` (`Audit.lean:149-168`): for any two accepted witnesses that read one sampled wire differently,
+`∃ m m', collOf (S.x ξ₁) w₁ (S.x ξ₂) w₂ = some (m, m') ∧ Claims.Collision FlockDeploy.sha512 m m'`, where `collOf` here
+is a variable of the statement (a map from two statements and two witnesses to a pair), not `StrictCR.collOf`. So it is
+a **hypothesis**, and a **named pair**: the two strings are the map's output. That hypothesis is what `premises.open`
+lists as `Hash.Collision` (the lock's `open` entry: owner `@proofs`). The conclusion bounds a probability by
+`q.errAt …`, which is `⊤` unless `q.FinderCR` holds (`security/Proofs/Properties/Verity/Recursive.lean:726-757`), and
+`FinderCR` asks collision resistance of named finders, each inside a probability
+(`Claims.Finder.Pr H F := Pr s, ∃ u v, F.out s = some (u, v) ∧ Collision H u v`,
+`security/Definitions/Core/Interaction.lean:280`). C3 reads neither `Hash.HasCollision`, nor `Merkle.Collision`, nor
+`StrictCR.collOf` [run]. `RecursiveAuditC3At` (`security/Proofs/Flock/Recursive/AuditC3.lean:398`) with its `LeafColl`,
+`SaltColl`, `TopColl` and `topFinder` is read by no listed statement [run]; it is entry 2's.
+
+**4. The table (your item 3).** Lock: `security/lean-audit.json` for every row. "Choice-built" means: the finder's pair
+is `StrictCR.collOf H p h = if hp : p then some ((h hp).choose, …) else none` with `h : p → Merkle.Collision H`. Marks:
+the family of each guarantee is [run] (the facts' hypotheses, whose collector records only binders of the statement:
+`tools/verity/lean/Facts.lean:839-866`); one statement of each family is [read], named in the row.
+
+| Family (count) | Guarantees | Where the collision sits | Bare or named | What the statement says with the bare form taken as true |
+|---|---|---|---|---|
+| A1 (34) | `Flock.SecurityProofs.`: `EndToEnd`, `EndToEndDrawn`, `EndToEndHidden`, `EndToEndHiddenDrawn`, `EndToEndHiddenDrawnFlat`, `EndToEndHiddenFlat`, `EndToEndRegistered`, `EndToEndRegisteredDrawn`, `EndToEndRegisteredDrawnFlat`, `EndToEndRegisteredFlat`, `EndToEndRegisteredRows`, `EndToEndRegisteredRowsFlat`, `IntegrityBlock`, `IntegrityBlockCarried`, `IntegrityBlocks`, `IntegrityHorizon`, `IntegrityHorizonBlocks`, `IntegrityHorizonCarried`, `IntegrityPeriod`, `IntegrityPeriodLog`, `JointHorizonV5`, `JointSampledV5`, `JointShareV5`, `JointStratified`, `JointStratifiedHorizon`, `JointStratifiedHorizonMT`, `JointStratifiedMT`, `SampledKSLivePub`, `SampledKSLiveStated`, `SampledKSLiveV2`, **`SampledKSLiveV3` (deployed)**, **`SampledKSLiveV5` (deployed)**; `Accounting.SecurityProofs.Bridge.`: `IntegrityOfIntegrityBlock`, `IntegrityOfIntegrityPeriod` | Hypotheses: `TableCRZ` / `TableCRZAt` (five knowledge finders a table, each `Finder.CR`) and `LinkCRZC` / `LinkCRZCAt` (the link finders); the two `…Rows` also `RowsCRZC` and the registered-path finder, and the two `…Carried` and `IntegrityOfIntegrityBlock` also `SHA512CRExpected` at the leaf's finder, which computes its pair (`Proofs/Flock/EndToEnd/Carry.lean:227`). Read: `EndToEnd` (`Proofs/Flock/EndToEnd/Statement.lean:64-102`), V3 (`Proofs/Flock/Bridge/ScopeGate.lean:116-183`), V5 (`Proofs/Flock/Bridge/V5/Statement.lean:324-403`) | Inside a finder's probability. The knowledge finders are choice-built; the link finders output a pair they compute from two openings (`LinkFinder.outOf`, `Proofs/Flock/Soundness/LinkFinder.lean:349`); V5's roots finder computes its pair too | If each table's five conflict events (two continuations of the prover open one commitment at one place to two values, or one run clashes with itself) have probability at most q²/2^513 at the named budgets, and the link finders meet the expected-time bound, then accepting while the claims relation fails has probability at most the stated bound. Nothing changes: the bare form is in no hypothesis and no conclusion |
+| A2 (7) | `Accounting.SecurityProofs.TS.`: `CheckedSessionSound`, `HeldSessionSound`, `LeafGroupSound`, `LeafLanesSound`, `SessionSoundAt`, `TileSessionSound`; `Flock.SecurityProofs.SoundAtBridge` | Hypothesis `RowsSession.CR` (`Proofs/Flock/SoundAtBridge/Session.lean:184`; taken at `SoundAtBridge/Statement.lean:127`): the same `TableCRZ` and `LinkCRZC`, with `RowsCRZC` and `Finder.CR` at the registered-path finder | As A1; the registered-path finder computes its pair (`ReadsX.pick`, `Proofs/Flock/Soundness/Registered/ReadsX.lean:67`) | As A1, for every session of the period |
+| A3 (2) | `FlockSoundness.Discharge.FailClosed.flock_verify_sound`, `…flock_verify_sound_205` | Hypotheses `TableCRAt`, `LinkCRAt` (plain) and `TableCRZAt` (`--zk`). Read: `Proofs/Flock/Soundness/Discharge/FailClosed/One.lean:237,2650` | As A1 | As A1, for the plain and the `--zk` verifier |
+| B (1) | `Verity.Sampled.remote_soundness_deployedReady` | A condition of the published error: the vocabulary's finder premise is `Live.FinderCR` = `TableCRZ` and `LinkCRZC` (`Proofs/Properties/Verity/Sampled.lean:410`); read with `Sampled/OpensAt.lean:270` | As A1 | As A1: the error is the session's where the conflict events are that rare |
+| C (3) | `Flock.SecurityProofs.PublicAudit`, `RecursiveRanRegistered`, `RecursiveRanRegisteredExec` | **Disjuncts of the conclusion**: `(regFinder …).Finds H512`, `SessionFork` (its `TableForkZ`), `InnerForkRec … clashPickCL`; beside them `RoundFork`, the link fork and the registration break. Read: `Proofs/Flock/Recursive/Statements.lean:500-535`, `SoundExec.lean:130-175`, `PublicAudit.lean:129-194` | `Finds Fd := ∃ b, Outcome b ∧ IsColl H (out b)` (`Recursive/Defs.lean:100`) of a choice-built finder for the first three; a computed pair for `RoundFork` (`forkPick`, `Recursive/Fork.lean:61`), the link fork and the break (`Binding.Collides ((com i).ext (op o i) (op₀ i))`) | One of: at some outcome the prover's own strategy reaches, two registrant records clash, or a table's conflict event holds, or the inner protocol's two transcripts clash; a round or link fork whose computed pair collides; the registration break at a computed pair; or the probability bound. No disjunct holds by counting: an honest prover reaches none of these events |
+| D (2) | `Flock.SecurityProofs.EndToEndRegistered_honest`, `EndToEndRegisteredDrawn_honest` | Conclusion: `LinkCRZC … (2^256)` and `SessCRZ … (2^257) (2^257)` hold for every prover (`Proofs/Flock/EndToEndRegistered/Honest.lean:153`) | Inside a finder's probability | The collision premises can hold: at those budgets their bound is at least 1. Proved from the bound, not from any collision |
+| E (1) | `Flock.SecurityProofs.ServedRowsLinked` | Nowhere in the statement: only the type of `Leaf.hm96`'s field `bind` | A proof carried in a structure | The statement is unchanged |
+
+Named forms, for the record [run]: the pair predicates `Hash.Collision` (257 listed statements read it),
+`Claims.Collision` (180) and `FlockSoundness.Binding.Collides` (52) are applied 189 times under an `∃` in the source,
+185 of them tied by an output equation (`out … = some (u, v)`) and one by a membership; the three with neither are the
+definition of `HasCollision` itself, `MerkleScheme.HasCollision` (entry 2's) and `TiedColl`
+(`Proofs/Flock/Claims/KS/Fork.lean:86`), whose two memberships in a list of calls follow the predicate. `Hash.CollisionIn` (27), `Claims.Sampling.LogColl` (36), `Pous…RunBreak`,
+`TableBreak` and the `Break` predicates are over named lists of the play. Every negated collision in the tree is of a
+named form (`¬ CollisionIn H xs`, `¬ Collides <computed pair>`, `¬ P.Break ω`, `¬ FindsColl …`), and every injectivity
+hypothesis on SHA-512 is over a named set (`∀ x ∈ S, ∀ y ∈ S, …`) [run: rg]. The two `CollisionIn` signatures you
+named and `RunBreak` at `security/Properties/Pous/EndToEnd.lean:131` are as you read them [read].
+
+**5. The third case: a finder that picks its pair by choice from the bare existence** [read + derived].
+`security/Proofs/Flock/Soundness/StrictCR.lean:51-54`:
+
+```lean
+/-- A collision of `H` when `p` holds (`h` gives one), nothing otherwise. -/
+noncomputable def collOf (p : Prop) (h : p → Merkle.Collision H) : Pair :=
+  if hp : p then some ((h hp).choose, (h hp).choose_spec.choose) else none
+```
+
+- The pair is `Classical.choose` of a proof of `∃ u v, u ≠ v ∧ H u = H v`. Proofs of one proposition are equal by
+  definition in Lean, so the pair does not depend on `h` or on the play: it is one fixed collision of `H`, output
+  exactly when `p` holds. `IsColl H (collOf H p h) ↔ p` (`collOf_isColl`, `:56`, and the `else` branch) [derived].
+- So `Finder.CR` of such a finder (`:97`, `SHA512CRStrict H Fd.g Fd.s id (fun _ => q) q`, the named assumption
+  `cr/sha-512`) says exactly "the event `p` has probability at most q²/2^513", and `Finds` of it says "`p` holds at
+  some outcome the strategy reaches". Neither is true or false by counting, so nothing is empty.
+- At SHA-512 the type of `collOf` restricts `p` in nothing: `p → Merkle.Collision H` has a proof for every `p`, by
+  counting. Nothing in a statement that uses `collOf` says the event gives a collision *among the strings the play
+  hashed*. That step is in the lemmas named `…_conflict_collision`, `RegColl.collision`, `SelfClashZ.collision` and the
+  like, and each concludes `Merkle.Collision H`, the bare form.
+- Those lemmas are stated for any `H : List UInt8 → D` with no bound on `D` (`StrictCR.lean:46`), where a collision
+  need not exist, so their proofs cannot be by counting and must build the pair from the two openings [derived; the
+  proofs are entry 2's reading]. If so, restating each to give its pair (a function of the two openings, as
+  `LinkFinder.outOf` and `Recursive/Fork.lean:61`'s `forkPick` already do) leaves every listed statement of the table
+  equivalent to what it says today: with the computed pair, "the finder outputs a collision" is again exactly the event.
+- What it touches in the lock: V3's and V5's records list `FlockSoundness.Assumptions.SHA512CRStrict` under
+  `premises.assumptions`, and `trust.base` reads it as "a finder of at most q evaluations finds a collision with
+  probability at most q^2 / 2^513". At the five knowledge finders of each table that finder evaluates nothing and
+  computes nothing: it is the event with a chosen pair attached. `StrictCR.lean`'s own docstring says the finder
+  "outputs what they open two ways"; the definition does not.
+- The contrast in the same tree, choice used the right way: `security/Definitions/Accounting/TS/Hashed.lean:94-108`
+  and `security/Definitions/Accounting/Remote/Fork.lean:107-126` choose among pairs whose two strings are required to
+  be members of the lists the two openings' checks hashed.
+
+**6. Two listed statements that are counting facts on purpose** [read]. `Pouw.SecurityProofs.Receipt.DuoLongRunKernel`
+(`security/Definitions/Pouw/Guarantees/Receipt.lean:166-168`: `∃ w w', w ≠ w' ∧ duoRun k a r w = duoRun k a r w'` for
+every run longer than 2·4ⁿ words) and `…DuoRunAtStateNotInjective` (`:248`). Their whole content is that the Duo
+receipts' fold has collisions, by counting, and their docstring says so: they state the limit of the binding
+statements beside them ("no statement binds a whole run's final state at every length"). They are not "accepts, or a
+collision" and no other listed statement takes them as a disjunct. I do not read them as emptied; say if you do.
+
+**7. Your first look, checked.** `Hash.lean:40,43` and `Merkle.lean:29`: as you read [read]. "No file under
+`security/Models` has the word": there is no directory `security/Models` at the pin (`ls`; the tree has
+`security/Definitions`, `Proofs`, `Properties`), so the sentence is true of nothing. The two directories named `Model`,
+`security/Definitions/Pous/Model` and `security/Proofs/Flock/Soundness/Model`, have no file with the word in any case
+[run]. C3's `premises.open` and the two `CollisionIn` signatures: as you read [run].
+`LinksBind.lean:134,309`: as you read, and `:312` is the `by_cases` on the bare proposition [read]; no listed statement
+reads either lemma [run].
+
+**STOP RULE.** Not met: no listed guarantee's conclusion holds by counting alone, and none has a bare collision as a
+disjunct or under a negation. Nothing was changed, so nothing a guarantee says or rests on moved.
+
+**NEEDS.**
+1. Your word, or soundness's: is a choice-built finder (item 5) the harmless case, the empty case, or a third one to
+   name in the ruling? It is in two deployed guarantees' `cr/sha-512` premise, so I would put it to Daniel as "not
+   empty, the reduction's last step is proved but not stated", but that is yours to send.
+2. Item 6: whether the two Duo statements are outside the ruling, as I read them.
+
+**Not established.**
+- I read one statement of each family (three of A1, all three of C), not all 50. The other 44 are placed by the facts'
+  hypotheses [run], which say a collision premise is a binder of the statement, not which binder.
+- The facts documents are a node's cached ones, matched to the pinned lock by statement hash, not built at the pin by
+  me. A statement's reads could differ from the pin's only if a definition changed while every statement's hash did
+  not. A build at the pin (`r20261113-151544-df57`) is still running, as a cross-check only.
+- Read hashes were not compared: the facts' and the lock's are in different formats. One name in the `security` lock's
+  `reads` is in no statement's reads, and I did not find which.
+- That each `…_conflict_collision` proof builds its pair from the play (item 5, fourth point) is derived from `H`
+  being unrestricted there, not read proof by proof. Entry 2 reads them.
+- The scans are regular expressions over source text: a bare shape written in a form none of the four patterns names
+  (a pair of projections of a structure, a `Function.Injective` under a definition) would pass them. The facts cover
+  that only for the five bare forms by name.
+- I did not check `IsColl H (collOf H p h) ↔ p` in Lean; nothing was compiled for this entry.
+
+**Pushed.** This entry only. My branches are unchanged: `cursor/proofs-addrrow2-5e1b` `d5889c79d6cd`,
+`cursor/proofs-addrrow2-unlinked-scratch-681e` `b3889e407668`, `cursor/proofs-addrrow2-heldwires-681e` `8be6ff6e48f4`,
+`cursor/proofs-addrrow2-programs-c41d` `6dd041406c14`.
+
+**Runs.** `r20261113-152354-412c` (cpu-14): done, rc 0, the scan of the facts cache; its `out/` holds the four
+extracts, about 53 MB, larger than a run's output should be (I will not keep a second copy). `r20261113-151740-4766`,
+`r20261113-152115-4cd9`, `r20261113-152231-9d5e` (cpu-1): failed, rc 3, my own mistakes (the records were reused so no
+document was written; I compared the wrong hash field; that node's cache held one lock's document only).
+`r20261113-151544-df57` (cpu-3): running, the records of `security` built at the pin, a cross-check nothing waits on.
+
+**To post** (PRF-490 / LEAN-306, if you want it there): "Audit of bare collisions at `053b8e50fe8a`, part 1. No listed
+guarantee has a bare collision as a conclusion, a disjunct or under a negation; `RecursiveAuditC3` reads none (its
+`Hash.Collision` is a hypothesis on the pair a finder map outputs). 50 listed guarantees of `security` read the bare
+form, only as the type of a proof inside a definition; 49 of them, `SampledKSLiveV3` and `SampledKSLiveV5` among them,
+through `StrictCR.collOf`, a finder whose pair is chosen from the bare existence, so `cr/sha-512` there is asked of an
+event with a fixed pair attached, not of an algorithm that outputs the play's pair. Not empty; the lemmas that tie the
+event to the play conclude the bare form. Part 2 (the lemmas, who reads each, and the named form each could take)
+follows."
