@@ -9,6 +9,7 @@ import os
 import stat
 import subprocess
 import sys
+import types
 from datetime import datetime, timedelta, UTC
 from pathlib import Path
 
@@ -1905,3 +1906,56 @@ def test_a_poll_counts_the_reservations_once_for_each_way_its_slots_count_them(t
     assert SLOT.status(SLOT.parse("x 0\ny 1 peaks=8\n"), tmp_path, NOW) == ["x  cores 0  free", "y  cores 1  peaks 8  free"]
     assert calls == []
 
+
+def _flocks(monkeypatch) -> list[str]:
+    """The name of each file slot.py tries to flock from here on, as it tries it."""
+    tried, real = [], fcntl.flock
+
+    def flock(fd, op):
+        tried.append(Path(os.readlink(f"/proc/self/fd/{fd if isinstance(fd, int) else fd.fileno()}")).name)
+        return real(fd, op)
+
+    monkeypatch.setattr(SLOT.fcntl, "flock", flock)
+    return tried
+
+
+@pytest.mark.parametrize("reason", ["window", "disk", "memory"])
+def test_a_free_slot_that_starts_no_check_is_refused_in_the_same_words_and_its_lock_is_never_tried(
+        reason, tmp_path, monkeypatch, capsys):
+    """A free slot that a window, the disk floor or memory keeps starts no check, and `take`, the wait's reason and listing
+    and `--status` each say why in `blocked`'s words. Its lock is never tried, even to be let go at once: a held lock is a
+    check in the slot to `locked` (a slot.py inside a held slot runs its command there), to `holder` (a listing, a
+    placement) and to the waiters beside this one. The slot gets no record of a holder either."""
+    w = tmp_path / "windows"
+    w.write_text("2026-10-01T09:20Z 30\n")
+    line, said, words = {
+        "window": (f"a 0 windows={w} lead=30", "a  cores 0", "window 2026-10-01T09:20Z (30 min) is open or starts within 30 min"),
+        "disk": ("a 0", "a  cores 0", f"{tmp_path} has 10 GB free, under 50"),
+        "memory": ("a 0 mem=560", "a  cores 0  mem 560 GB", "300 GB of memory free, under the 560 GB a check here may peak at"),
+    }[reason]
+    if reason == "disk":
+        monkeypatch.setattr(SLOT, "DISK", tmp_path)
+        monkeypatch.setattr(SLOT.os, "statvfs", lambda p: types.SimpleNamespace(f_bavail=10, f_frsize=10 ** 9, f_files=10 ** 7,
+                                                                                f_favail=10 ** 7))
+    calls = _counted(monkeypatch, [300])
+    (tmp_path / "slots").write_text(line + "\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    (slot,) = SLOT.parse(line)
+    (tmp_path / "check-a.lock").touch()                                  # as where the slot has run a check before
+    tried = _flocks(monkeypatch)
+    assert SLOT.blocked(slot, NOW) == words
+    assert SLOT.take([slot], tmp_path, NOW) is None
+    assert SLOT.status([slot], tmp_path, NOW)[0] == f"{said}  free; blocked: {words}"
+    listed = SLOT.status_doc(NOW)["slots"][0]
+    assert (listed["blocked"], listed["holder"]) == (words, None)
+    t = [NOW]
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran in a slot that starts no check"))
+    assert SLOT.main(["--wait-max", "20", "--", "run"], now=lambda: t[0],
+                     sleep=lambda s: t.__setitem__(0, t[0] + timedelta(seconds=s))) == SLOT.NOT_STARTED
+    err = capsys.readouterr().err.splitlines()
+    assert err[0] == f"slot: every check slot is taken (a: {words}); retrying every 20 s"
+    assert err[1] == f"slot:   {said}  free; blocked: {words}"
+    assert err[-1] == f"slot: not started: no check slot within --wait-max 20 s (every check slot is taken (a: {words})); exit 75"
+    assert "check-a.lock" not in tried and tried, "the line's tickets are locked, the slot's lock never"
+    assert not (tmp_path / "check-a.who").exists()
+    assert bool(calls) is (reason == "memory"), "a slot a window or the disk keeps never gets as far as the memory"
