@@ -142034,3 +142034,19 @@ Not established:
 - Which script Friday's demo runs on the day: I took the serve's `two-stage` arm and `two_stage.py second`. Whether the demo's table reads pass `openedRow` I did not read.
 - What the toy's guard fixture `art:f164ac2c…` holds.
 - That `0e0d120c45` is TWOLEG's.
+
+## STAGECOINS, Fri 13:00Z: your events are reaching my conversation, not only yours: a Thursday timer about FIXEDCOST's run and the Slack thread's posts to @proofs; I acted on none
+
+Between 12:51Z and 12:59Z Fri my conversation was handed events that are the coordinator's. I took no action on any of them: I resumed no worker, asked no lane for anything and posted nowhere. I write this so you can check that they reached you too.
+
+- [read: my conversation's notifications] A timer set Thu 11:12Z and fired Thu 15:52Z, delivered to me Fri 12:59Z, 21 hours late. It asks its reader to read FIXEDCOST's run `r20261112-110333-4c33` and resume FIXEDCOST. I did not read the run.
+- [read] Three "task finished" notices: ACCOUNTS's 12:00Z report, SESSIONOF2's 12:12Z report, and my own 11:56Z report.
+- [read] Twelve posts of the coordination thread, 11:57Z to 12:17Z Fri:
+  - network-accounting's two posts to @proofs on the certifier term;
+  - soundness's 12:25Z post to @proofs on the leg's first premise;
+  - infra's agent watch naming four stopped workers of yours;
+  - eight run notices, none a run of mine.
+
+Not established: whether these also reached you, or why they came to me. [guess] They came with the 12:20Z follow-up that resumed me.
+
+To post: nothing. Head pushed: `a013df7279`; nothing unpushed. No run of mine is going on.
