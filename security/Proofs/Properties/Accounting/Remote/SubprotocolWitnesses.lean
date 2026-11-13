@@ -37,13 +37,13 @@ Each of `Properties.RemoteAudit.Subprotocol`'s three properties, and the memory 
   `lineHeldAtSubprotocol_nontrivial`); and the line credits only what the passes read: on one record and summary its
   claim holds of a trace with the store in memory and fails of the same trace with memory emptied at tick 10
   (`lineHeldAtSubprotocol_bites`).
-* **QBytesAtSubprotocol** (`QBytesAtSubprotocolBy`, `qBytesAtSubprotocol_iff`), which takes the samples' three of those
+* **QBytesAtSubprotocol** (`QBytesAtSubprotocolBy`, `qBytesAtSubprotocolBy_iff`), which takes the samples' three of those
   premises. Honest: at the same honest node and schedule they hold, and at `RemoteAudit.Protocol.DELTA` the
-  distinguishers' advantage and the hiding terms are 0 (`qBytesAtSubprotocol_honest`). Nontrivial: at a verifier that
+  distinguishers' advantage and the hiding terms are 0 (`qBytesAtSubprotocolBy_honest`). Nontrivial: at a verifier that
   accepts everything and records no receipts, the toy node meets every premise while a `q_bytes` of one byte exceeds
-  the record's none (`qBytesAtSubprotocol_nontrivial`); and the figure counts the trace's wrong receipts: on one record
+  the record's none (`qBytesAtSubprotocolBy_nontrivial`); and the figure counts the trace's wrong receipts: on one record
   and summary, at one figure, its claim holds of a trace whose one receipt is right and fails with it wrong
-  (`qBytesAtSubprotocol_bites`).
+  (`qBytesAtSubprotocolBy_bites`).
 
 At the deployed verifier the premises' acceptance is load-bearing and `Plays` is not: the line reads the record
 through `Record.summary`, which is some summary only where the Lean verifier accepts, so the event's failed read claim
@@ -74,7 +74,7 @@ theorem lineHeldAtSubprotocol_iff : LineHeldAtSubprotocol ↔ LineHeldAtSubproto
 
 theorem lineHeld_iff : LineHeld ↔ LineHeldBy Verified Record.summary := Iff.rfl
 
-theorem qBytesAtSubprotocol_iff : QBytesAtSubprotocol ↔ QBytesAtSubprotocolBy Publishes Verified Record.summary :=
+theorem qBytesAtSubprotocolBy_iff : QBytesAtSubprotocol ↔ QBytesAtSubprotocolBy Publishes Verified Record.summary :=
   Iff.rfl
 
 /-! ## The premises at an honest node -/
@@ -235,7 +235,7 @@ theorem lineHeldAtSubprotocol_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fin
 `lineHeldAtSubprotocol_honest`, the samples' three premises hold (`Live` at every commitment, `Refused` and `Counted`),
 and at `RemoteAudit.Protocol.DELTA`, the δ the subprotocol's bound is at, each sample's distinguisher has no advantage
 on its coin function and each hiding term is 0. -/
-theorem qBytesAtSubprotocol_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X]
+theorem qBytesAtSubprotocolBy_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X]
     (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax) (recs : Cm → DrawCoins node.samples κ X → Record)
     (com : DrawCoins node.samples κ X → Cm) (R : Receipts node.samples κ X) (passes : ℕ)
     (tick : DrawCoins node.samples κ X → ℕ → ℕ) (hS : HonestSchedule node passes tick recs com) :
@@ -694,7 +694,7 @@ theorem lineHeldAtSubprotocol_bites : ∃ (node : Node) (r : Record) (sm : Remot
 record at every public output, a verdict that holds of every record and no record of receipts, the toy node (no
 sample, one block) meets every premise, while a `q_bytes` of one byte exceeds the record's none: the event has
 probability 1 and the bound is `δ = 2^-40`. -/
-theorem qBytesAtSubprotocol_nontrivial :
+theorem qBytesAtSubprotocolBy_nontrivial :
     ¬ QBytesAtSubprotocolBy (fun _ _ _ _ _ _ => True) (fun _ _ => True) (fun _ _ => none) := by
   intro h
   have hb := h Toy.node 0 Unit Unit (fun t => isEmptyElim t) (fun _ _ _ => 0) (fun _ _ => Toy.rec)
@@ -712,7 +712,7 @@ theorem toy_receipts : (receiptsBy (fun _ _ => some Toy.sm) Toy.node Toy.rec).to
 /-- **The figure counts the trace's wrong receipts**: on the toy node and its record of four receipts, at a `q_bytes`
 of all four blocks, `QBytesBy` holds of a trace whose one pass gets its one receipt right and fails of the same trace
 with that receipt wrong. -/
-theorem qBytesAtSubprotocol_bites : ∃ (node : Node) (r : Record) (sm : RemoteAudit.Session.Summary) (T : Trace Unit)
+theorem qBytesAtSubprotocolBy_bites : ∃ (node : Node) (r : Record) (sm : RemoteAudit.Session.Summary) (T : Trace Unit)
     (pub : RemoteAudit.Protocol.Public),
     QBytesBy (fun _ _ => some sm) T () node r pub ∧
       ¬ QBytesBy (fun _ _ => some sm) { T with correct := fun _ _ => ∅ } () node r pub := by
