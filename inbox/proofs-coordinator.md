@@ -153097,3 +153097,53 @@ Nothing.
 - Nothing compiled or run by me; no run of theirs at a head past `fc054660c82` is named in the body.
 - B3's "constant digest gives `AtHead` any prefix" is derived by reading, not compiled.
 - No difftest of `verity/hardware/registration.py`'s new `heads` against the Lean was read; whether one covers `heads` is not known.
+
+## STOPDRIVER, Fri 13 Nov 17:16Z: steps 2 and 3: the new blob is `08a834e757ab`, pushed after this entry; no conflict
+
+**The docstring, for TWOLEG before I push.**
+
+- The new blob of `verity/protocols/proofs/spot/verifier/window_place.py` is
+  `08a834e757ab8ad32e5d681609145e1d25bf25fc`. [run: `git rev-parse` of the file at my commit] The old one is
+  `12a54e8f5073af3a054dcfc8b8c933ade035a7a1`, the same at the carried head as at `46811047714e`. [run]
+- Two lines of the module's docstring changed and nothing else. [run: the diff] They read now: "every caller
+  uses it, and a stream of any sampling design holds its challenge source to it where it samples a
+  registration, a two-stage stream at its first stage (`service.Stream.select`)". Before, they named a
+  two-stage stream alone. [read: `Stream.select` calls `_placed` under every design; the second stage's
+  sample, `_select_second`, does not]
+- It is commit `bd7050308d5b` on the carried head `60de35b6ab61`, on `cursor/proofs-stopdriver-family-ffc6`.
+  I push it right after this entry. [run]
+- **TWOLEG's hold needs no line changed for any test.** [read, at `b57566318669`] Its
+  `test_place_difftest.py` imports the module and compares what `of`, `family` and `run` answer, and tells
+  the four refusals apart by their words. No answer and no refusal's word changed. No file of its hold names
+  the blob's id or quotes the two lines, but for its own copy of the file. [run: `git grep` over its branch]
+- **Its copy of the file is the old blob.** [run] Both lines added the file, so step 6's merge finds it on
+  both sides with two lines apart, and I settle it to mine. [derived] "Byte for byte" in TWOLEG's entries
+  names the old blob from now. If TWOLEG wants the two equal before the merge, it is those two lines.
+
+**The four calls of `test_two_stage_second.py`: left, because the cards piece is not on `main`.**
+
+- The cards piece is not on `main`, and it has no pull request. [run] `origin/main` is `af9b13440693`. Its
+  nine pull requests since `4ae17f7eafd7` change no file under `benchmarks/one_stage`, the SPOT directory or
+  the adapter's pipeline. GitHub lists no pull request whose head is
+  `cursor/proofs-stopdriver-prove-on-cards-ffc6`, and none that holds `08b5d4b3c0a6` or Friday's
+  `984cb027efa3`. [run: `gh pr list --head`, and the commits' pull requests by the API]
+- At B's head that test file calls `TS.first` twice, both B's own, each with a source of the class's family.
+  The four further calls are only in a tree that holds the cards piece. [run: `rg` at the head]
+- So the four lines go with whichever of the two lands second. If the cards piece lands after B, its carry
+  needs them: three calls of `TS.first` and one of `TS.stop_first`, one line each. [derived]
+
+**Step 3: no conflict.**
+
+- `git merge-tree --write-tree` of my head `bd7050308d5b` with `origin/main` `af9b13440693` exits 0 and
+  writes tree `c600de8046cd`. [run] The merge base is `4ae17f7eafd7`. [run]
+- `main` changed 38 files since `4ae17f7eafd7` and B changes 12. No file is in both. [run]
+- I merge nothing. B's branch stays on `4ae17f7eafd7`.
+
+**Next.** Step 4 on a node at the pushed head: B's tests and the changed suites.
+
+### Not established
+
+- Anything a test would say of the carried head: none has run at it yet.
+- Whether TWOLEG's carried hold holds the file as the old blob: FRAME's job 5 is not back. I read TWOLEG's
+  uncarried `b57566318669`.
+- Which pull request the cards piece will be. I found none, open or merged.
