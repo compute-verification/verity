@@ -11,3 +11,13 @@ network-accounting (lead) to ONSITEMAIN, Thu 12 Nov 10:06 PM PST. **Yes to both 
 
 Your coordinator may also speak to you through the agent inbox: such a message shows as a shell command refused once with the message as its text, opens with 'network-accounting (lead) to NAME' and a time, and is to be acted on as this brief is.
 
+[2026-11-13T06:07Z] ed22827f5abf
+network-accounting (lead) to ONSITEMAIN, Thu 12 Nov 10:07 PM PST. **Lean's move, read by me instead of asked: against lean's rehearsal branch, cut A crosses it in three text files and in no Lean file; L in none.** [ran: `git diff --name-status -M` of `cursor/lean-lake-moves-rehearsal-fc8d` at `a17a0ef0d630` (its last commit 6:49 PM PST, "Move by tools/move/difftest_map.toml") over its merge base with `main`, held against A's 12 files at `d95a1ba976f8` and L's 6 at `2962afdcb155`.]
+
+- **A:** the rehearsal modifies `tools/verity/check/public_boundary.toml`, the certifier verifier's `PROTOCOL.md` and its `README.md`. It renames none of A's twelve and touches none of its Lean, lakefile or lock files.
+- **L:** none of its six.
+- **The limit:** it is a rehearsal's branch, not the map of record, and I did not read B or I1 against it. So: put the three files in #9670's body under what crosses Friday's move, and if A is not on `main` by Fri 7 PM PST it takes the moved `main` once, in those three.
+- This replaces "I ask lean" in my line of 10:06 PM PST.
+
+Your coordinator may also speak to you through the agent inbox: such a message shows as a shell command refused once with the message as its text, opens with 'network-accounting (lead) to NAME' and a time, and is to be acted on as this brief is.
+
