@@ -207,6 +207,21 @@ def test_a_native_fa2_source_s_step_is_held_to_its_compaction() -> None:
     assert whole["ok"] is False and sorted(whole["violations"][0]["fa2_layers_bad"]) == [0, 2]
 
 
+def test_a_step_s_row_record_names_its_sequences_where_its_layout_does_not() -> None:
+    com = _com([_NativeFa2()])
+    # a layout with no integer ids input: it gives the sampled ids' slots and no token count
+    com._layouts[0] = XI._layout([*_fa2_compact_step(), "model.embed_tokens", "runner.sampler/sampled_token_ids"])
+    got = com.identity_check()
+    assert got["fa2_rule"]["steps"] == {"uniform": 1} and sorted(got["violations"][0]["fa2_layers_bad"]) == [0, 2]
+    com.step_rows = {0: [(f"r{i}", i, i + 1) for i in range(SEQS)]}
+    got = com.identity_check()
+    assert got["ok"] is True, got["violations"]
+    assert got["fa2_rule"]["steps"] == {"per-layer": 1}
+    com.step_rows = {0: [(f"r{i}", i, i + 1) for i in range(SEQS + 1)]}       # the record wins over a layout that names 8
+    bad = _checked(com, _fa2_compact_step())
+    assert bad["ok"] is False and bad["violations"][0]["fa2_detail"]["n_seq"] == SEQS + 1
+
+
 def test_the_committer_s_own_staging_rule_wins_over_its_source_s() -> None:
     com = _com([_NativeFa2()])
     assert _checked(com, _fa3_step())["ok"] is False
