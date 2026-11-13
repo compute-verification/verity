@@ -58,7 +58,7 @@ theorem constantRate_rows_causal {Adv : Type} (T g E : ℕ)
 
 /-! ### `|a|` bits per execution block opened -/
 
-theorem encard_accSeqs_le_constantRate_windows {Adv : Type} [Fintype Adv] (T g E : ℕ)
+theorem encard_accSeqs_le_constantRate_executionPhases {Adv : Type} [Fintype Adv] (T g E : ℕ)
     (frames : List In → Fin E → Adv → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In) (n D m : ℕ)
     (hm : n ≤ m * (g * T)) :
     (AccSeqs (constantRate (S := S) T g E frames) op n D).encard ≤
@@ -111,11 +111,11 @@ theorem encard_accSeqs_le_constantRate_windows {Adv : Type} [Fintype Adv] (T g E
         rw [card_product, Fintype.card_piFinset]
         simp
 
-theorem encard_accSeqs_le_constantRate_windows_bits (T g E k : ℕ)
+theorem encard_accSeqs_le_constantRate_executionPhases_bits (T g E k : ℕ)
     (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (op : ℕ → List (Obs L K S) → In)
     (n D m : ℕ) (hm : n ≤ m * (g * T)) :
     (AccSeqs (constantRate (S := S) T g E frames) op n D).encard ≤ ((2 ^ (min E m * k) * D ^ n : ℕ) : ℕ∞) := by
-  have := encard_accSeqs_le_constantRate_windows (S := S) T g E frames op n D m hm
+  have := encard_accSeqs_le_constantRate_executionPhases (S := S) T g E frames op n D m hm
   rwa [card_bits_pow] at this
 
 theorem encard_decodable_le_constantRate {Adv : Type} [Fintype Adv]
@@ -135,7 +135,7 @@ theorem encard_decodable_le_constantRate {Adv : Type} [Fintype Adv]
         intro x hx
         obtain ⟨k, xs, as, rfl⟩ := I.mem_obsRun z n x hx
         exact hJ k xs as
-    _ ≤ _ := encard_accSeqs_le_constantRate_windows T g E frames I.op n D m hm
+    _ ≤ _ := encard_accSeqs_le_constantRate_executionPhases T g E frames I.op n D m hm
 
 theorem encard_decodable_le_constantRate_bits
     (I : Interaction L K S Z In Act Wire) (T g E k : ℕ)
