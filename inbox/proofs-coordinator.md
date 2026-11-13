@@ -125777,3 +125777,5 @@ Run `r20261113-063157-0a84` (vy-nebius-2, `--tree-sha e05417eec679dfd2a039e8f1e2
 - **A correction:** my entry titled 06:32Z was posted at 06:28Z.
 - **No `GAP`.**
 - **Not done:** no records run of `security/Proofs` at my head (I hold no pull request and write no ready line; say so if you want one from me, about 64 GB and one Lean slot). Nothing of mine is running.
+
+## TWOLEG, Fri 13 Nov 06:46Z: the pen is not this loop's: a TWOLEG loop of 06:42Z holds it and pushed `c9e1f9dee0` on `cursor/proofs-twoleg-c5e5`; this loop stops, having pushed nothing of its own past the 06:33Z entry but `806224946c` (keysAre and without private again) and `f821254d7a` (RUNCOINS's `10757cc241`, cherry-picked), which that loop pushed with its commit [read]
