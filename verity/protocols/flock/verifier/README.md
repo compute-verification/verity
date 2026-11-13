@@ -2,7 +2,7 @@
 
 Flock's executable verifier, `flock-verify` and the other executables `lakefile.toml` builds, in Lean 4 at the
 toolchain `lean-toolchain` pins. What it checks, its commands
-and its agreement with upstream's Rust verifier are in `verity/protocols/flock/agreement/README.md`; its guarantees are in
+and its agreement with upstream's Rust verifier are in `verity/protocols/flock/prover/agreement/README.md`; its guarantees are in
 `security/Definitions/Flock/Guarantees/` and `security/Proofs/Flock/`.
 
 It fetches nothing. It requires, by path, the three base packages every Lean package of the tree loads:
@@ -11,7 +11,7 @@ program format, its decoder, the partition and annotations) and `commitments` (`
 of units). Their declarations keep the namespace `Flock`. A module that moved there keeps its old name here as a
 re-export, one `public import` and nothing else (`Flock/Bytes.lean` re-exports `Base.Bytes`), until every importer names
 the base module. A job that builds this package outside the checkout copies it with those three
-(`verity/protocols/flock/pod/lake_closure.py`).
+(`verity/protocols/flock/prover/pod/lake_closure.py`).
 
 The libraries are layers, each loading only the ones before it: the verifier (`Flock`'s modules outside the next two),
 the ZK server (`FlockZkServer`, which imports `Flock.Firewall` and the modules under it) and the recursion (`FlockRec`,
