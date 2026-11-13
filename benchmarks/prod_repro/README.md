@@ -17,8 +17,10 @@ the corpus client:
 verity bench prod_repro [--model moonlight] [--stock ARM] [--again ARM|none] [--ours ARM] [--load burst] [--rate 1000]
                         [--requests 800 | --span-s S] [--reps 3] [--replay PASS|none] [--max-model-len N] [--target 1]
 verity bench prod_repro --client vllm-bench --load NAME[=RUNG+RUNG...] [--reps 6] [--replay NAME@RUNG]
-                        [--pass-prompts NAME=N] [--sampled] [--stop-at TIME] [--lifetimes L] [--leave-out N] ...
+                        [--pass-prompts NAME=N] [--sampled] [--stop-at TIME] [--lifetimes L] [--leave-out N]
+                        [--arms "ARM ARM ..."] ...
 verity bench prod_repro --report OUT --load NAME [--replay PASS] [--stock ARM] [--again ARM|none] [--ours ARM]
+                        [--arms "ARM ARM ..."]
 verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] [--ours ARM]
 ~~~
 
@@ -30,6 +32,13 @@ verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] 
   stock once: the cost then has no noise floor. `--stock none` serves ours alone, a first start of it and its replay:
   there is then no cost, and under vLLM's client the benchmark's own cost step ends the runner with 1 for want of a
   stock arm, which the job takes as no failure where ours served its load.
+- **Arms served beside them.** `--arms "ARM ARM ..."` names every arm the job serves, in the order it serves them.
+  Ours and stock are among them, and stock a second time is served only where it is. Any other arm is served beside
+  them: one that differs from stock or from ours in one thing, so that a figure in which ours differs from stock can
+  be read apart. The benchmark has two for the recipe's settings: `prod-seeded`, stock's server with its sampled
+  client sending the seeds ours's sends, and `prod-trace`, ours with the canonical top-k off. Such an arm is in no
+  line of the three: the report says how far it got and lists its passes with every arm's. The benchmark's own cost
+  step, and so the run's `result.json`, is of the last arm named over stock; the report's cost is ours's.
 - **The first form** sends the load by the corpus client: every arm gets the same plan (C4 prompts, about 60% of
   them behind one of eight shared prefixes) as a burst the engine can't keep up with, each rep from an empty prefix
   cache. It then replays rep 1 of ours (`--replay none`: no replay).
@@ -103,10 +112,21 @@ replay that differs, the first token that does and the first step.
   record says: the plugins and environment of ours it ran under and what set them (the replay), or that ours serves
   with no plugin beside its record.
   For the canonical DSA top-k, what its own counters say of the replay's processes and of serving's: the processes
-  that kept counters, the calls of the indexer's top-k and the rows of more than its keys that were rewritten. The
+  that kept counters, the calls of the indexer's top-k, the rows of more than its keys that were rewritten, and
+  those of them with a tie across the k-th key, where vLLM's own kernels may select another set from run to run. The
   processes keep them under `PRIVATE`; the job's report reads them there and keeps the counts in
   `out/topk_counters.json`. The counts are lower bounds (a process writes them every few thousand calls and when it
   exits), and a replay in which no process kept any shows nothing of the top-k having run there.
+- **each pass**, where the job served arms beside the three (`--arms`): every pass of the load every arm served, a
+  line a pass in the order served, by the counters the benchmark read off its server before and after it (the pass's
+  own `meta.json`; they are vLLM's own on the server's `/metrics`, so every arm's are read the same way, with a step
+  trace or without, and the first line names the two the accepted share is of): its engine steps, its drafts and how
+  many of the tokens they proposed the model accepted, and beside them
+  its output tokens and its seconds as the cost counts them; `left out` marks a lifetime's warm-up. Then how each
+  arm's requests were sampled, and whether its client sent their seeds; and for each directory whether its server
+  was started on the canonical top-k (its record's environment) and what the top-k's processes counted there.
+  These lines are in no verdict. They are what an arm served beside the three is read by: two arms that differ in
+  one thing, a line each. `out/prod_repro.json` holds them for every job (`ran.passes`).
 - **settings**: what ours ran with, stock's beside it, each with what says so (the launch line, the engine's own
   configuration in the step trace's header, the engine's counters): prefix caching, speculative decoding with the
   share of draft tokens accepted where the benchmark counts them, the context limit beside the model's own (the
