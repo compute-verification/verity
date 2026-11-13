@@ -13,7 +13,7 @@ export PATH=$HOME/.local/bin:$PATH
 { nproc; free -g | head -2; git rev-parse HEAD; echo "$ROW"; } | tee "$O/machine.txt"
 uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 PY=$REPO/.venv/bin/python
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/flock/prover/python:$REPO/adapters/vllm
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
 RANKS=$(cd "$ROW/build" && ls -d rank* | sed 's/rank//' | sort -n)
 (cd "$ROW" && find commit -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum) > "$O/commit.sha256"
 (cd "$ROW" && find build -type f -path 'build/rank*' -print0 | sort -z | xargs -0 sha256sum) > "$O/build.sha256"

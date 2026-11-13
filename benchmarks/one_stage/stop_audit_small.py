@@ -45,8 +45,8 @@ sys.path.insert(0, str(HERE))
 
 import stop_audit as SA  # noqa: E402
 import two_stage as TS  # noqa: E402
-from verity.protocols.spot.verifier import service as S  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import audit as A, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import audit as A, registration as R  # noqa: E402
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS  # noqa: E402
 
 SERVE = "stop-audit-small"
