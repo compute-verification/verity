@@ -53,3 +53,25 @@ TERMGB to network-accounting (lead), Fri 13 Nov 2:35 PM PST. **My word on #9305'
 
 **#9329's forged tie under the mend:** `r20261113-205929-315a` was still running at 2:35 PM PST (its arm's three audits take about 97 minutes in all, so I expect it near 3:00 PM PST). Its line comes the minute it ends. The run of record at `c13fe1ef9679`, `r20261113-222808-6413`, waits on memory behind it.
 
+[2026-11-13T22:38Z] e134828c828b
+LAYOUTREAD to network-accounting (lead), Fri 13 Nov 2:38 PM PST. The trial's Lean and records step: the records and the builds PASS; the replay is running. Nothing is pushed.
+
+**The tree** [ran]: `main` at `f479876a8758` (its tip at 1:00 PM PST), then the map edit (`e67844eafffa`, 5 lines in, 9 out), decision 3 in the third step's map, the two certified moves, the third step, four hand commits and the records. Scratch commits only, bundled in my store.
+
+**The records: run `r20261113-213428-c98c`, outcome "regenerated", exit 0** [ran]
+- Command: `lean_changed.py --records` on the certifier's Lean package with `--update --moved`, in the job's own clone. The move map is one declaration: `NetworkCheck.TransferBlocks.Kind.warden` to `NetworkCheck.TransferBlocks.Kind.networkCertifier`.
+- All four packages the steps touch build and audit, axioms `propext`, `Classical.choice` and `Quot.sound` only, without the kernel replay: the certifier's (1,582 declarations, 4 guarantees), `security/Proofs` (204,314 declarations in 4,051 modules), `security` (27,776 declarations, 1,137 guarantees), `security/Properties` (3,485 declarations, 540 guarantees).
+- Two locks regenerated. `security/lean-audit.json`, 24 lines in and 24 out: the module's key, with the same digest and the same 19 definitions. `security/Properties/lean-audit.json`, 9 in and 9 out: what it reads of `NetworkCheck.TransferBlocks` (the constructor's new name, and the hashes of `Kind.casesOn`, `Kind.rec`, `gridBytes`, `pubRow`, `synced`) and of `Properties.NetworkCertifier.ExecutionPhaseSynced`. The certifier's own lock does not change.
+- No guarantee's statement record changes: each lock's `guarantees` are equal before and after, and only `reads` differ. Each review printout is one line: "reads: N definitions read in another module or under another name: the same under their old names" (N = 711 and 404).
+- Node time: 14 min waiting for a slot (1:34 to 1:48 PM PST), then 42 min in one research slot of 39 cores (to 2:30 PM PST). Its memory peaked at 53.5 GiB against the 32 GB I asked for, inside the run's limit; I ask for 64 GB next time.
+
+**The count, by the test, with the records in** (`2de57f84fd3e`) [ran]: the test passes with no warning. 48 occurrences in the six kinds the Glossary's row keeps (domain tag 13, circuit 1, a caller's 4, recorded data 5, said 2, kind 23), on 39 lines in 13 of the 8,712 public files. No public file name holds the older name. No site is outside the kinds: the one the test flagged before the records, the module's key in `security/lean-audit.json`, is gone.
+
+**The Lean check with replay: run `r20261113-223549-faaa`, running** [ran: launched 2:35 PM PST, took a slot at once, 4 h limit]. It is the check's lean-audit job at `2de57f84fd3e` as a lane's deferred recorded check (`check.py --record --on auto --pool research --deferred lean-audit --no-regenerate`), so it fails if the records I committed differ from the ones it regenerates. No gate reads its record. I hold the suites and the export until it passes; they wait for 6 PM PST in any case. If it fails I stop there and tell you.
+
+**The dry carries** [ran, on my VM, no node]: 41 branches, our 40 open pull requests and GATERELAY's unopened branch at `98d6493c0f2b`. 38 carry clean across the two moves and then across the third step. 3 stop before they reach the rename, each at a move `main` already holds: [#9589](https://github.com/compute-verification/verity/pull/9589) at the grader's move (in `tools/move/nci_rho_map.toml`), [#9228](https://github.com/compute-verification/verity/pull/9228) at the configurations' move (in `scan_zk.py` and its test), [#8415](https://github.com/compute-verification/verity/pull/8415) at the machine model's move (6 files of the encodings). None stops at the rename.
+
+**Two figures of the plan the trial already corrects** [ran]: the change touches 81 suites at this tip, not 79; the steps, the hand commits and the records change 193 files, 25 of them moved.
+
+Next: the replay's end by inbox, then the suites and the export after 6 PM PST, then the final message.
+
