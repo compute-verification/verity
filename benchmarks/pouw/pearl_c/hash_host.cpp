@@ -1,7 +1,8 @@
-// hash_h3.cuh and pearl_c_sm120's hash_fast.cuh built for the host (tests/test_pearl_c_hash_host.py): the CUDA builtins they
-// use, and `launch`, which runs a 1-D grid's CTAs in order; a CTA's threads run in order too, or as host threads under one
-// barrier for a kernel that calls __syncthreads (hash_rows, s512_rows, s512_tile_leaves, s512_tree_small).  Buffers are host
-// memory: Args' pointers are host addresses.
+// hash_h3.cuh, pearl_c_sm120's hash_fast.cuh and hash_wide.cuh built for the host (tests/test_pearl_c_hash_host.py,
+// tests/test_pearl_c_hash_wide.py): the CUDA builtins they use, and `launch`, which runs a 1-D grid's CTAs in order; a CTA's
+// threads run in order too, or as host threads under one barrier for a kernel that calls __syncthreads (hash_rows, s512_rows,
+// s512_tile_leaves, s512_tree_small).  Buffers are host memory: Args' pointers are host addresses.  A kernel's __trap ends
+// its launch, which returns 2 (hash_wide.cuh's kernels: none of them syncs).
 //   g++ -O2 -std=c++20 -pthread -shared -fPIC -I benchmarks/pouw/pearl_c -o hash_host.so hash_host.cpp
 #include <algorithm>
 #include <barrier>
@@ -28,9 +29,12 @@ static uint32_t __funnelshift_l(uint32_t lo, uint32_t hi, uint32_t s) {
 }
 struct uint4 { uint32_t x, y, z, w; };
 static uint4 make_uint4(uint32_t x, uint32_t y, uint32_t z, uint32_t w) { return {x, y, z, w}; }
+struct Trap {};
+[[noreturn]] static void __trap() { throw Trap{}; }
 
 #include "hash_h3.cuh"
 #include "../pearl_c_sm120/hash_fast.cuh"
+#include "hash_wide.cuh"
 
 namespace {
 struct Kernel { const char* name; void (*fn)(const Args); bool syncs; };
@@ -40,7 +44,9 @@ const Kernel KERNELS[] = {{"s512_rows", s512_rows, true},          {"s512_seeds"
                           {"s512_tree_small", s512_tree_small, true}, {"hm_leaves", hm_leaves, false},
                           {"s512_tickets", s512_tickets, false},     {"s512_frame_leaves", s512_frame_leaves, false},
                           {"s512_heads", s512_heads, false},         {"s512_row_segs", s512_row_segs, false},
-                          {"s512_tile_segs", s512_tile_segs, false}, {"s512_folds", s512_folds, false}};
+                          {"s512_tile_segs", s512_tile_segs, false}, {"s512_folds", s512_folds, false},
+                          {"s512_heads_w", s512_heads_w, false},     {"s512_row_segs_w", s512_row_segs_w, false},
+                          {"s512_folds_w", s512_folds_w, false}};
 constexpr int COUNT = sizeof KERNELS / sizeof *KERNELS;
 }  // namespace
 
@@ -55,9 +61,13 @@ extern "C" int launch(const char* name, unsigned grid, unsigned block, const Arg
   for (unsigned b = 0; b < grid; b++) {
     blockIdx.x = b;
     if (!k->syncs) {
-      for (unsigned t = 0; t < block; t++) {
-        threadIdx.x = t;
-        k->fn(*a);
+      try {
+        for (unsigned t = 0; t < block; t++) {
+          threadIdx.x = t;
+          k->fn(*a);
+        }
+      } catch (const Trap&) {
+        return 2;
       }
       continue;
     }

@@ -9,11 +9,16 @@ public import Flock.ProvedScope
 A setup reads the verifier's own program (`--program`) through `TemplateQuery.Desc.parse` and `Program.decode`, each of
 which reads the descriptor's bytes as JSON (`Program.readJson`) and hashes its canonical form. Each function below named `…By` is the function it is
 named after with those two readings as its parameters `readDesc` and `readProg`, and at the readings themselves it is that
-function (`Stmt.setupHiddenOf_eq_by`, `Stmt.setupTablesOf_eq_by`). `ProgramRead` holds a program with its JSON and
-both readings of it, each made when first asked for and kept, the two readings from the one JSON; its `jsonAt`, `descAt` and
-`progAt` are `Program.readJson` and the two readings on every input (`ProgramRead.jsonAt_of`, `descAt_of`, `progAt_of`), so
+function (`Stmt.setupHiddenOf_eq_by`, `Stmt.setupTablesOf_eq_by`). `ProgramRead` holds a program with its digest
+(`ProvedScope.programDigest`) and both readings of it, each made when first asked for and kept, all three from one reading
+of its bytes as JSON; its `digestAt`, `descAt` and `progAt` are the digest and the two readings on every input
+(`ProgramRead.digestAt_of`, `descAt_of`, `progAt_of`), given the kept ones on its own bytes and made anew on any other, so
 a run that hands them to its setups parses its program once. `TemplateQuery.Desc.parseOf`, `Program.decodeOf` and
-`ProvedScope.programDigestOf` are the two readings and the program's digest from that JSON.
+`ProvedScope.programDigestOf` are the two readings and the program's digest from that JSON. `ProgramRead.Readers` is the
+three as one value, and a `ProgramRead`'s are the originals whatever program it holds (`ProgramRead.readers_of`): that is
+what lets one `ProgramRead` serve calls whose programs it was not made from. `ProgramRead.orOf` is the read such a call
+reads its program through, the kept one on the kept bytes and the program's own on any other, so a call parses its
+program once whichever it is; its readers are the originals too (`ProgramRead.readers_orOf`).
 -/
 
 @[expose] public section
@@ -90,24 +95,26 @@ theorem programDigest_eq_of (bytes : ByteArray) : programDigest bytes = programD
 
 end ProvedScope
 
-/-- A program, its bytes read as JSON (`Program.readJson`) and its two readings, `TemplateQuery.Desc.parse` and
-`Program.decode` of `bytes`. -/
+/-- A program with its digest (`ProvedScope.programDigest`) and its two readings (`TemplateQuery.Desc.parse`,
+`Program.decode`), each of `bytes`. -/
 structure ProgramRead where
   bytes : ByteArray
-  json : Thunk (Option (Except String Json))
+  digest : Thunk (Option String)
   desc : Thunk (V TemplateQuery.Desc)
   prog : Thunk (V Program.Prog)
 
-/-- `program` with its JSON and its readings, none made before it is asked for, both readings from the one JSON. -/
+/-- `program` with its digest and its readings, none made before it is asked for, all three from one reading of its bytes
+as JSON, which nothing holds once the three are made. -/
 def ProgramRead.of (program : ByteArray) : ProgramRead :=
   let json := Thunk.mk fun _ => Program.readJson program
-  ⟨program, json, Thunk.mk fun _ => TemplateQuery.Desc.parseOf json.get, Thunk.mk fun _ => Program.decodeOf json.get⟩
+  ⟨program, Thunk.mk fun _ => ProvedScope.programDigestOf json.get,
+    Thunk.mk fun _ => TemplateQuery.Desc.parseOf json.get, Thunk.mk fun _ => Program.decodeOf json.get⟩
 
-/-- `Program.readJson`: on `r`'s own bytes the JSON `r` keeps, elsewhere read anew. -/
-def ProgramRead.jsonAt (r : ProgramRead) (b : ByteArray) : Option (Except String Json) :=
+/-- `ProvedScope.programDigest`: on `r`'s own bytes the digest `r` keeps, elsewhere made anew. -/
+def ProgramRead.digestAt (r : ProgramRead) (b : ByteArray) : Option String :=
   match withPtrEqDecEq b r.bytes (fun _ => inferInstance) with
-  | isTrue _ => r.json.get
-  | isFalse _ => Program.readJson b
+  | isTrue _ => r.digest.get
+  | isFalse _ => ProvedScope.programDigest b
 
 /-- `TemplateQuery.Desc.parse`: on `r`'s own bytes the reading `r` keeps, elsewhere made anew. -/
 def ProgramRead.descAt (r : ProgramRead) (b : ByteArray) : V TemplateQuery.Desc :=
@@ -121,12 +128,12 @@ def ProgramRead.progAt (r : ProgramRead) (b : ByteArray) : V Program.Prog :=
   | isTrue _ => r.prog.get
   | isFalse _ => Program.decode b
 
-theorem ProgramRead.jsonAt_of (program : ByteArray) : (ProgramRead.of program).jsonAt = Program.readJson := by
+theorem ProgramRead.digestAt_of (program : ByteArray) : (ProgramRead.of program).digestAt = ProvedScope.programDigest := by
   funext b
-  unfold ProgramRead.jsonAt
+  unfold ProgramRead.digestAt
   split
   · rename_i h _
-    exact congrArg Program.readJson (Eq.symm h)
+    exact (ProvedScope.programDigest_eq_of program).symm.trans (congrArg ProvedScope.programDigest (Eq.symm h))
   · rfl
 
 theorem ProgramRead.descAt_of (program : ByteArray) : (ProgramRead.of program).descAt = TemplateQuery.Desc.parse := by
@@ -145,10 +152,40 @@ theorem ProgramRead.progAt_of (program : ByteArray) : (ProgramRead.of program).p
     exact (Program.decode_eq_of program).symm.trans (congrArg Program.decode (Eq.symm h))
   · rfl
 
-/-- `ProvedScope.programDigestOf` at the JSON a `ProgramRead` keeps is `ProvedScope.programDigest`. -/
-theorem ProvedScope.programDigestOf_read (read bytes : ByteArray) :
-    ProvedScope.programDigestOf ((ProgramRead.of read).jsonAt bytes) = ProvedScope.programDigest bytes := by
-  rw [ProgramRead.jsonAt_of, ProvedScope.programDigest_eq_of]
+/-- A program's digest and its two readings, each a function of the program's bytes: what a call of the verifier reads its
+program through. -/
+structure ProgramRead.Readers where
+  digest : ByteArray → Option String
+  desc : ByteArray → V TemplateQuery.Desc
+  prog : ByteArray → V Program.Prog
+
+/-- The digest and the readings themselves, each made anew of the bytes it is given. -/
+def ProgramRead.Readers.anew : ProgramRead.Readers := ⟨ProvedScope.programDigest, TemplateQuery.Desc.parse, Program.decode⟩
+
+/-- `r`'s readers: on `r`'s own bytes what `r` keeps, on any other bytes made anew (`digestAt`, `descAt`, `progAt`). Bytes
+are compared with `r`'s own and with nothing else, so what a reader returns is a function of the bytes it is given. -/
+def ProgramRead.readers (r : ProgramRead) : ProgramRead.Readers := ⟨r.digestAt, r.descAt, r.progAt⟩
+
+/-- **A kept program's readers are the readers anew, whatever program is kept**: on every program's bytes they return what
+`ProvedScope.programDigest`, `TemplateQuery.Desc.parse` and `Program.decode` return. -/
+theorem ProgramRead.readers_of (program : ByteArray) : (ProgramRead.of program).readers = ProgramRead.Readers.anew := by
+  unfold ProgramRead.readers ProgramRead.Readers.anew
+  rw [ProgramRead.digestAt_of, ProgramRead.descAt_of, ProgramRead.progAt_of]
+
+/-- The read a call whose program is `b` reads it through: `r` on `r`'s own bytes, compared in full, and `b`'s own on any
+other, so the call reads `b` as JSON once whichever it is. -/
+def ProgramRead.orOf (r : ProgramRead) (b : ByteArray) : ProgramRead :=
+  match withPtrEqDecEq b r.bytes (fun _ => inferInstance) with
+  | isTrue _ => r
+  | isFalse _ => ProgramRead.of b
+
+/-- **Its readers are the readers anew**, whatever program is kept and whatever program the call names. -/
+theorem ProgramRead.readers_orOf (program b : ByteArray) :
+    ((ProgramRead.of program).orOf b).readers = ProgramRead.Readers.anew := by
+  unfold ProgramRead.orOf
+  split
+  · exact ProgramRead.readers_of program
+  · exact ProgramRead.readers_of b
 
 namespace HmRow
 

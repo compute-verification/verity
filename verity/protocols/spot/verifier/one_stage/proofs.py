@@ -38,7 +38,8 @@ as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts re
 `verify`'s. `order_why` mirrors its refusal of a challenger release log out of the order the sample, then the link,
 then the other rounds (`OneStageZk.orderHeld`). The registered circuit names the lookup tables its session reads (its
 META's ``lookups``, `lookups_of`), and v2 refuses blobs whose pinned MUFU tables are other than those (`tables_why`,
-`OneStageZk.tablesHeld`).
+`OneStageZk.tablesHeld`). `statements_v2` is the evidence's per-member form, one statement a sampled member, which v2
+refuses at parse: its evidence's ``proofs`` is exactly the sessions (`OneStageZk.proofsOf`).
 
 A window of several members has v2's per-member form of ``proofs`` (`members_v2`: every `Member` in the parameters, one
 statement for each member with a session in the evidence), which the audit parses and refuses. `members_parsed` is what
@@ -386,6 +387,13 @@ def proved_units(public: Path, session: Path) -> tuple[int, ...]:
     return tuple(sorted(indices[i] for i in drawn))
 
 
+def units_exactly(units: Sequence[Sequence[int]], indices: Sequence[int]) -> bool:
+    """Whether a public file's ``units.indices`` are exactly the units of the ``[lo, hi)`` ranges `units`, ascending, so
+    slot ``i`` of its table is the ``i``-th of them (`PublicUnits.exactly`): the per-member form holds each statement's
+    file to its member's units, and ``[[0, n]]`` is a registration's population in order."""
+    return list(indices) == [u for lo, hi in sorted(map(tuple, units)) for u in range(lo, hi)]
+
+
 def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapping[str, Any],
            registered: Mapping[str, Any] | None = None,
            strata: Sequence[tuple[str, Sequence[Sequence[int]]]] | None = None,
@@ -521,6 +529,21 @@ def evidence_v2(proof: Proof, names: Sequence[str] | None = None) -> tuple[dict,
     return {"sessions": sessions}, blobs
 
 
+def statements_v2(statements: Sequence[tuple[str, Proof]], names: Sequence[str]) -> tuple[dict, list[Path]]:
+    """The v2 evidence's ``proofs`` in the per-member form, which v2 refuses at parse (`OneStageZk.proofsOf`): per
+    statement, its member's name and `evidence_v2`'s on its files, its sessions named by the next of `names` (the v1
+    evidence's ``sessions``, statement by statement); and the blobs that hold them."""
+    names, out, blobs = list(names), [], []
+    for member, proof in statements:
+        pr, bs = evidence_v2(proof, names[:len(proof.sessions)])
+        names = names[len(proof.sessions):]
+        out.append({"member": member, **pr})
+        blobs += bs
+    if names:
+        raise ValueError(f"{len(names)} names left after the statements' sessions")
+    return {"statements": out}, blobs
+
+
 #: what the v2 executable's ``members`` says of what it prints (`OneStageZk.PARSED`): no check of the audit ran
 PARSED = "parsed, not checked"
 
@@ -649,4 +672,4 @@ __all__ = ["EXE", "FITS", "MUFU_SHA512", "NO_ROW_WHY", "NO_TABLES", "PACKAGE", "
            "UNIT_CLASS_MAX", "V2", "V2_EXE", "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "check_v2",
            "circuit_lookups", "draw_fits_why", "evidence_v2", "executable", "file_sha512", "fits_why", "ks_form_why",
            "lookups_of", "order_why", "population_why", "printed", "printed_size", "proved_units", "reads_registered",
-           "tables_why", "template_why", "v2_executable", "verdicts_v2", "verify"]
+           "statements_v2", "tables_why", "template_why", "units_exactly", "v2_executable", "verdicts_v2", "verify"]

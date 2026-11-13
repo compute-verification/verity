@@ -69,6 +69,6 @@ def test_package_imports_the_standard_library_and_the_settings_machinery_alone()
             if isinstance(node, ast.Import):
                 imports.update(alias.name for alias in node.names)
             elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-                imports.update(f"{node.module}.{alias.name}" if node.module == "verity" else node.module for alias in node.names)
+                imports.update(f"{node.module}.{alias.name}" if "." not in node.module else node.module for alias in node.names)
     assert not {name for name in imports if name.partition(".")[0] not in sys.stdlib_module_names
                 and name not in ("__future__", "verity.settings")}

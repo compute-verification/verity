@@ -32,7 +32,7 @@ honest_real = 1.18        # u of real time a MAC for the honest kernel (99% budg
 
 [lp]
 rho = 0.25    # (i): every CUDA lane kind at least a quarter of the MMA's per-lane price
-tie = 1e-6    # stage 2's premium on a row that isn't measured, so a measured row wins a tie
+tie = 1e-6    # the second solve's premium on a row that isn't measured, so a measured row wins a tie
 x_min = 1.0   # every attack costs at least the tensor MACs it replaces
 
 [honest]      # the honest GEMM a MMA: a 64x64 warp tile in a 128x128 block

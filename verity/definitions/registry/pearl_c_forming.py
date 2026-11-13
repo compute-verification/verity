@@ -298,8 +298,9 @@ def bindings() -> list:
     """The bindings circuit-check takes (the sidecar), each Definition on words and on bits: on the H100's atom and
     sm_120's at G = 4, the chain over one promotion window and, unpromoted, over two atoms; the Gram matrix and the peel
     factors at rank 2 over one atom, and the peel factors at rank 1 over a window; the statistics of 32 words; and, on
-    the H100's atom, the forming of a row of eight; and the peel at rank 32. But for the forming of a row, each is within
-    the size circuit-check lowers a Definition whole at."""
+    the H100's atom, the forming of a row of eight and the chain over a window and a short one (K = 160), as the tile's
+    read calls it; and the peel at rank 32. But for the forming of a row, each is within the size circuit-check lowers a
+    Definition whole at."""
     from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
     from verity.definitions.boolean import boolean_version
 
@@ -320,6 +321,7 @@ def bindings() -> list:
                         bind(pick(PearlCPeelB, PearlCPeelBV2), K=k, R=r, DOT=dot, G=4)]
         out += [bind(pick(PearlCForm, PearlCFormV2), K=8, DOT=atoms[0]),
                 bind(pick(PearlCChain, PearlCChainV2), K=64, DOT=atoms[1], G=0),
+                bind(pick(PearlCChain, PearlCChainV2), K=160, DOT=atoms[0], G=4),
                 bind(pick(PearlCPeel, PearlCPeelV2), R=32,
                      STEP=boolean_version(HopperBF16WgmmaDot16) if bits else HopperBF16WgmmaDot16)]
     return out

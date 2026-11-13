@@ -1,5 +1,5 @@
-"""Pearl-C's tile check as a Program (``pearl-c-h100-v1``, ``pearl-c-sm120-v1``, and the unpromoted sm_120 record): forming
-v1, the chain and the clean-up (`schemes.pearl_c`) cut into proof blocks as `pc4` cuts Pearl-C4's, so sampled proofs can
+"""Pearl-C's tile check as a Program (``pearl-c-h100-v1``, ``pearl-c-sm120-v1``, and the unpromoted sm_120 record):
+forming v1, the chain and the clean-up (`schemes.pearl_c`) cut into proof blocks as `pc4` cuts Pearl-C4's, so SPOT can
 establish a sampled tile's checked words (C̃ and U) and its rows' admission without the verifier reading a row.
 
     template              one instance per        reads                                   computes and returns
@@ -18,11 +18,11 @@ place of C̃ and U (under -h3, `Pc8TileHiddenH3` returns the tile's messages, th
 hashes, a value for the unit that hashes it: `leaves.tile_messages`; no root uses it yet; and an audit window's tile,
 `Pc8TileSide`, is `Pc8TileHidden` on the window's side rows, each carrying its index field: `SIDE_PORTS`), and the rows are
 Flock-committed ports (`PORTS`), with fp32 input rows, fp8-p rows (A′_i ‖ P_A,i, B̃_j ‖ P_B,j; `leaves`) and each
-row's ``ok`` row, and the anchored inputs public input regions.  ``Shape.cap`` adds the per-tile cap to the hiding call,
-cut into a unit per word, the tile and its tally (`cap`).  ``Shape.row_k`` cuts each row unit along k into a head, a form
-per segment of row_k positions and a tail (`rowk`), so that a row unit fits Flock's block at every served k.  A shape
-takes at most one of the two, and each takes whole tiles only (`Shape.check` refuses a short last tile row there); off,
-nothing here changes.
+row's ``ok`` row, and the anchored inputs public input regions.  ``Shape.cap`` adds the per-tile inert-work bound to the
+hiding call, cut into a unit per word, the tile and its tally (`cap`).  ``Shape.row_k`` cuts each row unit along k into
+a head, a form per segment of row_k positions and a tail (`rowk`), so that a row unit fits Flock's block at every served
+k.  A shape takes at most one of the two, and each takes whole tiles only (`Shape.check` refuses a short last tile row
+there); off, nothing here changes.
 
 ``DEV`` names a device record (`pearl_c_device.DEVICES`): its E4M3 k32 atom (`HopperE4m3QgmmaDot32` on the H100,
 `BlackwellE4m3QmmaDot32` on sm_120) and its promotion period G.  The peel's BF16 k16 step is `HopperBF16WgmmaDot16` on
@@ -192,7 +192,8 @@ def _row_sig(S_, second: str, extra: tuple = ()):
 
 
 def _row_a(e: pc4._Emit, k: int, dev: str, x, line, fa, fb):
-    """Row i of A's outputs (`Pc8RowA`), then its forming's accumulators α·x_t and β, which the cap's row reads."""
+    """Row i of A's outputs (`Pc8RowA`), then its forming's accumulators α·x_t and β, which the inert-work bound's row
+    reads."""
     alpha, beta, ok = _stats(e, x, k)
     codes, ew, accs = _form(e, x, alpha, beta, line, fa, k, dev)
     af = [e.call(F2fpBf16, _chain(e, codes, fb.take(1, p), k, dev)) for p in range(R)]
@@ -317,11 +318,11 @@ def side_tile(k: int, tile: tuple[int, int] = (1, 1), dev: str = "sm120") -> Spe
     return bind(Pc8TileSideDef, K=k, TM=tile[0], TN=tile[1], DEV=dev)
 
 
-#: each unit's ports under hiding, as `pc4.PORTS`: fp32 input rows, fp8-p rows and ok rows, the anchors' regions, and its
-#: advice: parameters the prover supplies that no unit computes and nothing binds (the cap word's certificates,
-#: `cap.ADVICE`), which Flock proves as private inputs.  An advice port is in the unit's io and in no read set: in no
-#: committed row (so in no link either) and in no public input region, which `leaves.statement_rows` enforces.  Under the
-#: cap the ports are `cap.PORTS` (``Shape.ports``).
+#: each unit's ports under hiding, as `pc4.PORTS`: fp32 input rows, fp8-p rows and ok rows, the anchors' regions, and
+#: its advice: parameters the prover supplies that no unit computes and nothing binds (the certificates of the
+#: inert-work bound's word, `cap.ADVICE`), which Flock proves as private inputs.  An advice port is in the unit's io and
+#: in no read set: in no committed row (so in no link either) and in no public input region, which
+#: `leaves.statement_rows` enforces.  Under the inert-work bound the ports are `cap.PORTS` (``Shape.ports``).
 PORTS = {
     "row_b": {"rows": (("fp32", ROLE_W, ("x",)), ("fp8-p", ROLE_W, (0, 1)), ("ok", ROLE_W, (2,))),
               "regions": {"e": "eb", "fb": "fb", "fa": "fa", "g": "g"}, "advice": ()},
@@ -400,7 +401,8 @@ def templates(k: int, tile: tuple[int, int] = TILE, dev: str = "sm120",
 # ---- the Programs --------------------------------------------------------------------------------------------------------
 
 class _Ports(pc4.RowK):
-    """`Shape.ports`: `cap.PORTS` on a shape with the cap, else `pc4.RowK`'s (today's, or with ``row_k`` the cut's)."""
+    """`Shape.ports`: `cap.PORTS` on a shape with the inert-work bound, else `pc4.RowK`'s (today's, or with ``row_k``
+    the cut's)."""
 
     def __get__(self, shape, cls=None) -> dict:
         if shape is not None and shape.cap:
@@ -412,10 +414,10 @@ class _Ports(pc4.RowK):
 @dataclass(frozen=True)
 class Shape:
     """M rows of A and N rows of B at depth k on device ``dev``, cut into tiles of ``tile`` (the scheme's is 64 x 64);
-    ``hidden``, the hiding Programs; ``cap``, the hiding Programs with the per-tile cap, cut into word, tile and tally
-    units (`cap`), and ``row_rho`` its per-row cap at ρr = 1/row_rho (`cap.row_rho`, the -h3 tile rule's; None, the tile
-    cap alone); ``row_k``, each row unit cut into k / row_k segments (`rowk`; None, today's Programs).
-    `anchors.TileAnchors` reads its units' ports and its anchors' derivations."""
+    ``hidden``, the hiding Programs; ``cap``, the hiding Programs with the per-tile inert-work bound, cut into word,
+    tile and tally units (`cap`), and ``row_rho`` its per-row inert-work bound at ρr = 1/row_rho (`cap.row_rho`, the -h3
+    tile rule's; None, the tile's inert-work bound alone); ``row_k``, each row unit cut into k / row_k segments (`rowk`;
+    None, today's Programs). `anchors.TileAnchors` reads its units' ports and its anchors' derivations."""
 
     m: int
     k: int
@@ -432,8 +434,8 @@ class Shape:
 
     def check(self) -> None:
         """`PearlC.check`'s rows and columns: whole tiles across, and down the rows whole 16-row ticket subtiles (whole
-        tiles, for a tile under 16 rows), so the last tile row may be short (`tile_rows`).  The cap (``cap``, `cap`) and
-        the row cut (``row_k``, `rowk`) take whole tiles only."""
+        tiles, for a tile under 16 rows), so the last tile row may be short (`tile_rows`).  The inert-work bound
+        (``cap``, `cap`) and the row cut (``row_k``, `rowk`) take whole tiles only."""
         d = DEVICES.get(self.dev)
         tm, tn = self.tile
         if d is None or d.atom.name not in ATOMS or d.peel.name not in PEELS:
@@ -621,8 +623,9 @@ def tile_templates(shape: Shape) -> list[SpecializedDefinition]:
 
 
 def query(shape: Shape, side: str = "check") -> dict[str, Any]:
-    """`Q_template_instances` over the side's unit templates (`ROLES`, under the cap `cap.ROLES`, or with ``row_k``
-    `rowk.ROLES`), in the order its root body first uses them: a short last tile row's template after the whole tiles'."""
+    """`Q_template_instances` over the side's unit templates (`ROLES`, under the inert-work bound `cap.ROLES`, or with
+    ``row_k`` `rowk.ROLES`), in the order its root body first uses them: a short last tile row's template after the
+    whole tiles'."""
     if shape.row_k is not None:
         from . import rowk
         return PO.template_instances_query(rowk.unit_templates8(shape, side))

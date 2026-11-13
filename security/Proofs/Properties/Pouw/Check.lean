@@ -213,7 +213,8 @@ theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c 
 with the window's salt, is accepted, publishing the rule's items and the service's sample. -/
 theorem acceptMeans_complete (p : Params) (c : WindowCommitmentRecord) (e : Evidence) (f : Fixed)
     (prof : Core.Integrity)
-    (draw : UnitDraw) (hk : RecordKeeps p c f) (hs : ServiceAccepted p c f e prof draw) (hw : SaltKept p c e) :
+    (draw : Flock.Draw.UnitDraw) (hk : RecordKeeps p c f) (hs : ServiceAccepted p c f e prof draw)
+    (hw : SaltKept p c e) :
     protocol.check p c e = .accept ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩ prof :=
   (acceptMeans_iff p c e _ prof).2 ⟨f, draw, hk, hs, hw, rfl⟩
 

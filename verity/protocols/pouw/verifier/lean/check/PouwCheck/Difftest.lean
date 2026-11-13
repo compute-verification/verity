@@ -38,6 +38,19 @@ harness (`verity/core/difftest`):
 * `ratio` (`s` and `ctx`, strings): `Core.Ratio.ofString s ctx` (`core_check.ratio`) as `{"ratio": [num, den]}`, each in
   lowercase hex, which no limit on decimal digits touches, with `text`, the ratio written back by `Core.Ratio.toString`
   (`window.ratio_str`), and `back`, that text read again; or `{"refused": why}`.
+
+The lead's window (`PouwCheck.Lead`, `circuit/lead.py`'s), a refusal as `{"refused": why}` where Python raises
+`ValueError`, and a malformed input a reject:
+
+* `lead-record` (`weights_root`, `stream`, `prover`, `key_leaf` as hex, `calls`): `lead_record` as `{"record": hex}`.
+* `lead-instance` (`salt` as hex, `position`, `schema`, `values` a list of hex): `instance_domain` over the values, as
+  `{"domain", "leaves", "root"}`, leaf r the domain's leaf at rank r of value r and the root the tree's over them.
+* `lead-unit` (`shapes` a list of `[rows, cols, K, bn]`, `call`, `R0`, `C0`, `BLK`): `unit_opening` as `{"words": [[t,
+  leaf, word], …], "a": [[lo, hi], …], "segments"}`.
+* `lead-egress` (`count`, `shapes` the forward's, admitted, `cap`, `fwd_macs`, `buckets` a list of `[r, [bits, …]]`,
+  `release`): `egress_refused` and `forward_count` as `{"refused": bool, "count": n}`.
+* `lead-window` (`record`, `weights_root`, `stream`, `prover`, `key_leaf` as hex, `calls`, `events` the certifier's
+  record): `window_refusal` as `{"reason"}`, null when the window holds.
 -/
 
 @[expose] public section
@@ -137,8 +150,73 @@ def ratioOf (j : Json) : Except String Json := do
     | .ok r => Json.mkObj [("ratio", read s), ("text", Json.str r.toString), ("back", read r.toString)]
     | .error why => Json.mkObj [("refused", Json.str why)]
 
+def intOf (j : Json) (k : String) : Except String Int := do need k (PouwWindow.strictInt? (← get j k))
+
+def natOf (j : Json) (k : String) : Except String Nat := do
+  let i ← intOf j k
+  if i < 0 then throw s!"the input's {k} is negative" else pure i.toNat
+
+def refused (why : String) : Json := Json.mkObj [("refused", .str why)]
+
+def shapesOf (j : Json) (k : String) : Except String (List Lead.Shape) := do
+  let .arr a ← get j k | throw s!"the input's {k} is not a list"
+  a.toList.mapM fun x => match x with
+    | .arr #[r, c, kk, b] => need k do
+      pure ⟨← PouwWindow.strictInt? r, ← PouwWindow.strictInt? c, ← PouwWindow.strictInt? kk, ← PouwWindow.strictInt? b⟩
+    | _ => throw s!"the input's {k} is malformed"
+
+def leadRecordOf (j : Json) : Except String Json := do
+  pure <| match Lead.leadRecord? (← hex j "weights_root") (← hex j "stream") (← hex j "prover") (← hex j "key_leaf")
+      (← intOf j "calls") with
+    | .ok r => Json.mkObj [("record", .str (Flock.hexOf r))]
+    | .error why => refused why
+
+def leadInstanceOf (j : Json) : Except String Json := do
+  let .arr vs ← get j "values" | throw "the input's values is not a list"
+  let values ← vs.toList.mapM fun v => match v with
+    | .str s => PouwCommit.pyFromHex s
+    | _ => throw "the input's values is malformed"
+  let .str schema ← get j "schema" | throw "the input's schema is not a string"
+  pure <| match Lead.instanceDomain? (← hex j "salt") (← intOf j "position") values.length with
+    | .ok d =>
+      let leaves := values.zipIdx.map fun (v, r) => d.leaf r schema v
+      Json.mkObj [("domain", .str (Flock.hexOf d.id)), ("leaves", toJson (leaves.map Flock.hexOf)),
+        ("root", match d.root leaves.toArray with
+          | some r => .str (Flock.hexOf r)
+          | none => .null)]
+    | .error why => refused why
+
+def leadUnitOf (j : Json) : Except String Json := do
+  let o := Lead.unitOpening (← shapesOf j "shapes") (← intOf j "call") (← intOf j "R0") (← intOf j "C0") (← intOf j "BLK")
+  pure <| match o with
+    | .ok o => Json.mkObj [("words", toJson (o.words.map fun (t, r, w) => [t, r, w])),
+        ("a", toJson (o.a.map fun (lo, hi) => [lo, hi])), ("segments", toJson o.segments)]
+    | .error why => refused why
+
+def leadEgressOf (j : Json) : Except String Json := do
+  let shapes ← shapesOf j "shapes"
+  if let some why := shapes.findSome? Lead.Shape.refuse then throw why
+  let nat (x : Json) : Except String Nat := need "buckets" ((PouwWindow.strictInt? x).bind fun i =>
+    if 0 ≤ i then some i.toNat else none)
+  let .arr bs ← get j "buckets" | throw "the input's buckets is not a list"
+  let buckets ← bs.toList.mapM fun b => match b with
+    | .arr #[r, .arr fs] => do pure (← nat r, ← fs.toList.mapM nat)
+    | _ => throw "the input's buckets is malformed"
+  let over := Lead.egressRefused (← natOf j "count") shapes (← natOf j "cap") (← natOf j "fwd_macs")
+  pure (Json.mkObj [("refused", .bool over), ("count", toJson (Lead.forwardCount buckets (← natOf j "release")))])
+
+def leadWindowOf (j : Json) : Except String Json := do
+  let .arr events ← get j "events" | throw "the input's events is not a list"
+  let why := Lead.windowRefusal (← hex j "record") (← hex j "weights_root") (← hex j "stream") (← hex j "prover")
+    (← hex j "key_leaf") (← intOf j "calls") events.toList
+  pure (Json.mkObj [("reason", match why with
+    | some r => .str r
+    | none => .null)])
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("opening", openingOf), ("registered", registeredOf), ("pass", passOf), ("draw", drawOf), ("salt", saltOf),
-  ("live-salt", liveSaltOf), ("rounds", roundsOf), ("chunks", chunksOf), ("ratio", ratioOf)]
+  ("live-salt", liveSaltOf), ("rounds", roundsOf), ("chunks", chunksOf), ("ratio", ratioOf),
+  ("lead-record", leadRecordOf), ("lead-instance", leadInstanceOf), ("lead-unit", leadUnitOf),
+  ("lead-egress", leadEgressOf), ("lead-window", leadWindowOf)]
 
 end PouwCheck.Difftest

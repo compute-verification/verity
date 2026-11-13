@@ -11,7 +11,12 @@ import pytest
 from verity.protocols.pous.verifier import adversary as A
 from verity.protocols.pous.verifier.audit import challenge_key, simulate
 from verity.protocols.pous.verifier.params import Params
-from verity.protocols.pous.verifier.primitives import IdealTweakablePermutation, Primitives, RandomOracleKey, reference
+from verity.protocols.pous.verifier.primitives import (
+    IdealTweakablePermutation,
+    Primitives,
+    RandomOracleKey,
+    reference,
+)
 from verity.protocols.pous.verifier.scheme import encode
 from verity.protocols.pous.verifier.verifier import VerifierKey
 

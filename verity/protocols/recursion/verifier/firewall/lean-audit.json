@@ -21,6 +21,7 @@
    "why": "the honest worker's requests' port reads C-Flock's Flock.Firewall.honestReqs and what the firewall's load check takes, through the harness"
   }
  },
+ "guarantees": {},
  "dependencies": {
   "toolchain": "d5ca9d1164aa2cf25419881c4ec5c6a1486192af7c11e9d1704efd15e3fbd2fa"
  }

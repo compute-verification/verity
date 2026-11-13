@@ -77,7 +77,7 @@ def test_w212s_unit_charges_code_v1s_window_with_its_length_tails():
     requests' length terms as tails (`window_code.encode`'s ``lens`` on the run's windows, each with its requests'
     output lengths and finishes at code_v1's widths), which is the chain's (`charged`); each of its three requests
     stops at its max_tokens, so no ``max-tokens`` kind is offered there."""
-    from verity.protocols.certifier.prover.window_charge import Window
+    from verity.protocols.certifier.prover.window_charge import Advice
     from verity_vllm.pipeline.advice_code import window_code
 
     Z = _load()
@@ -87,7 +87,7 @@ def test_w212s_unit_charges_code_v1s_window_with_its_length_tails():
     for _d, rq in run:
         values = [v for r in rq for v in (r.output_len, int(r.output_len >= r.max_tokens))]
         tails.append(list(zip(values, _term_widths([r.max_tokens for r in rq]))))
-    lens = window_code.encode([Window(arrived=d) for d, _rq in run], window_code.Book.from_json(Z.BOOK), tails).lens
+    lens = window_code.encode([Advice(arrived=d) for d, _rq in run], window_code.Book.from_json(Z.BOOK), tails).lens
     ch = Z.chain(x, "compile-slice-zk-test", "00" * 64)
     x.carry = ch.carry
     honest, = Z.cases(x, 1, ("honest",))

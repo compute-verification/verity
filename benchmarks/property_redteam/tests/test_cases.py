@@ -3,20 +3,16 @@
 from __future__ import annotations
 
 import struct
-import sys
 from pathlib import Path
 
+import cases as C
 import pytest
+import run as R
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+from verity.circuits.evaluation.reference import evaluate
+from verity.definitions.silicon.integer import S32_MAX, S32_MIN
 
-import cases as C  # noqa: E402
-import run as R  # noqa: E402
-from verity.circuits.evaluation.reference import evaluate  # noqa: E402
-from verity.definitions.silicon.integer import S32_MAX, S32_MIN  # noqa: E402
-
-AVAILABLE = [c for c in C.CASES if c.available]
+CASES_JSON = Path(__file__).resolve().parents[1] / "cases.json"
 
 
 def _ids(cases):
@@ -34,8 +30,6 @@ def _program(case):
 
 @pytest.mark.parametrize("case", C.CASES, ids=_ids(C.CASES))
 def test_samples_compute_the_claim(case):
-    if not case.available:
-        pytest.skip(f"{case.id} binds {', '.join(case.needs)}, absent here")
     _program(case)
     samples = case.samples()
     assert samples
@@ -59,7 +53,7 @@ def test_cases_name_a_verdict_a_charge_and_a_rule():
 
 def test_cases_json_is_the_metadata():
     """cases.json is `run.py --json`: regenerate it with `python run.py --json > cases.json` after changing a case."""
-    assert (HERE.parent / "cases.json").read_text() == R.render(R.metadata())
+    assert CASES_JSON.read_text() == R.render(R.metadata())
 
 
 def test_the_ruling_numbers():
@@ -116,11 +110,12 @@ def test_p_s_producer_variants_take_the_intervals_their_cases_claim(q, lo, hi, t
 
 def _oracle(table):
     by_fn = {}
-    for c in AVAILABLE:
+    for c in C.CASES:
         try:
             by_fn[c.program().fn.name] = c
         except (TypeError, ValueError):
-            continue
+            if c.kind == "honest":
+                raise
 
     def check(program):
         return table(by_fn[program.fn.name])
@@ -137,8 +132,7 @@ def _ruling(case):
 
 def test_an_oracle_of_the_ruling_passes_every_case():
     report = R.run(_oracle(_ruling))
-    assert report["passed"] and set(report["outcomes"]) <= {"ok", "skipped"}
-    assert report["outcomes"].get("skipped", 0) == len(C.CASES) - len(AVAILABLE)
+    assert report["passed"] and set(report["outcomes"]) == {"ok"}
 
 
 def test_accept_all_is_unsound_on_every_attack():
@@ -148,8 +142,6 @@ def test_accept_all_is_unsound_on_every_attack():
     assert not report["passed"]
     at_build = set()
     for row in report["rows"]:
-        if row["outcome"] == "skipped":
-            continue
         if row.get("note", "").startswith("the IR refuses it at build"):
             at_build.add(row["id"])
             assert row["kind"] == "attack" and row["outcome"] == R.grade(C.BY_ID[row["id"]], True, {}), row
@@ -161,9 +153,8 @@ def test_accept_all_is_unsound_on_every_attack():
 def test_refuse_all_is_sound_and_over_strict():
     report = R.run(R.refuse_all)
     for row in report["rows"]:
-        if row["outcome"] != "skipped":
-            want = "over-strict" if row["kind"] == "honest" else ("ok" if row["verdict"] == "refuse" else "sound")
-            assert row["outcome"] == want, row
+        want = "over-strict" if row["kind"] == "honest" else ("ok" if row["verdict"] == "refuse" else "sound")
+        assert row["outcome"] == want, row
 
 
 def test_grades():
@@ -197,5 +188,7 @@ def test_main_exit_status(capsys):
     assert R.main(["--check", "refuse-all", "--case", "carry-idiv", "--case", "imma-clamp-bare"]) == 0
     assert R.main(["--check", "accept-all", "--case", "carry-idiv"]) == 1
     assert "carry-idiv" in capsys.readouterr().out
-    with pytest.raises(SystemExit):
+    with pytest.raises(ValueError, match="MODULE:FUNCTION"):
         R.resolve("no-colon")
+    with pytest.raises(SystemExit, match="MODULE:FUNCTION"):
+        R.main(["--check", "no-colon"])

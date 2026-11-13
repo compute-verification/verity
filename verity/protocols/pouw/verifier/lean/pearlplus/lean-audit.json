@@ -1,0 +1,29 @@
+{
+ "format": 1,
+ "roots": ["PouwPearlPlus"],
+ "exempt": {
+  "PouwPearlPlus.Main": "the pouw-pearlplus executable's entry point: it parses its arguments, reads the run's pass files and coins and prints PouwCheck.PearlPlus.check's verdict, audited under PouwPearlPlus"
+ },
+ "layers": {
+  "PouwPearlPlus": {
+   "imports": [
+    "PouwPearlPlus",
+    "PouwCommit",
+    "PouwWindow",
+    "Spot",
+    "Evaluate",
+    "Randomness",
+    "Identity",
+    "Flock",
+    "Lean",
+    "CoreProtocol"
+   ],
+   "except": [],
+   "why": "the verdict is code: Lean core, PoUW's commitments (`pouw_commit`) and what they read (C-Flock's verifier, core's randomness and tagged identity), the evaluator's FP32, FP8 and tensor-core steps (`verity_evaluate`), and a live session's coins (`pouw_window`'s rounds and the proof system's challenger, `Spot.Challenger`); the verdict is code: Lean core, PoUW's commitments (`pouw_commit`) and what they read (C-Flock's verifier, core's randomness and tagged identity), the evaluator's FP32, FP8 and tensor-core steps (`verity_evaluate`) and the core interface its protocol form implements (`core_protocol`); no Mathlib and nothing of Security"
+  }
+ },
+ "guarantees": {},
+ "dependencies": {
+  "toolchain": "27511a72ecc19f2a3ce5d7dc8dd5400d2c5ba32555d12a4f390d1806b92e6e15"
+ }
+}

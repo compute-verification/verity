@@ -2,16 +2,13 @@
 a line every new benchmark edits, and two PRs that each add one conflict on it."""
 from __future__ import annotations
 
-import importlib.util
 import re
 from pathlib import Path
 
+import contents as C
 import pytest
 
 POUW = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("pouw_contents", POUW / "contents.py")
-C = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(C)
 
 PATH_COLUMNS = {"paths": ("path",), "filler": ("files",), "kernels": ("files", "includes")}
 

@@ -23,5 +23,5 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/claims/__init__.py",
           # the grader's package and the memory challenger's modules, each by its own path: the tests read them wherever
           # they are, in this suite's directory or outside it
           "verity/protocols/pous/lean", "verity/protocols/pous/device/memory_challenger.py",
-          "verity/protocols/pous/device/challenger_session.py",
-          "verity/configuration/__init__.py", "verity/protocols/__init__.py", "verity/protocols/pous/__init__.py"]
+          "verity/protocols/pous/device/challenger_session.py", "verity/configuration/__init__.py",
+          "verity/protocols/__init__.py", "verity/protocols/pous/__init__.py", "verity/periods"]

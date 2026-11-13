@@ -6,6 +6,7 @@ public import Proofs.Properties.Nci.RecordLanding
 public import Proofs.Properties.Nci.RecordLeafWide
 public import Proofs.Properties.Nci.RecordPrim
 public import Proofs.Properties.Nci.RecordRead
+public import Proofs.Properties.Nci.RecordRows
 public import Proofs.Properties.Nci.RecordTemplates
 public import Proofs.Properties.Nci.RecordWhole
 public import Proofs.Properties.Nci.RecordWide
@@ -29,97 +30,15 @@ or each row's leaves are of one width and the writer's divides the reader's.
   the writer lies inside leaf `l' / c` of the reader, `c` the quotient of the widths (`leaf_inside`, `leaf_count`).
 * Where the parameter is not passed on, no leaf of it is a leaf the unit returns (`closed_not_returned`). A leaf a
   unit of a composite returns is a gate of the unit or a leaf of a parameter its Definition passes on
-  (`Resolve.ret_passed_leaf`, which is `Resolve.ret_passed_on` with the leaf in its parameter); a leaf of a unit's
-  parameter is a gate of an input node, so none of the unit's (`unit_param_out`), and one leaf of one parameter
-  only (`Resolve.unit_leaf_inj`). A unit of a primitive returns its own gate.
+  (`Resolve.ret_passed_on`); a leaf of a unit's parameter is a gate of an input node, so none of the unit's
+  (`unit_param_out`), and one leaf of one parameter only (`Resolve.unit_leaf_inj`). A unit of a primitive returns
+  its own gate.
 * A bit of a row lies in one of its leaves (`leaf_of_bit`), and a leaf of a unit's output row resolves
   (`unit_ret_ok`), as a leaf of its reader row does (`unit_param_ok`): so the leaves the two statements name are
   leaves of the record's circuit (`outLeaf_intro`, `rowLeaf_intro`).
 -/
 
 @[expose] public section
-
-namespace NciCheck.Properties.SecurityProofs.Resolve
-
-open Flock.Program
-open NciCheck.Record.SecurityProofs (Passing passOf passing_start passing_exit)
-
-section
-variable (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
-  (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
-  (hret : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
-    (P.defs[d]!).body.ret = Seq.ofParts (P.defs[d]!).body.ret.parts)
-  (harg : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size,
-    ∀ i < ((P.defs[d]!).body.nodes[k]!).args.size,
-      (((P.defs[d]!).body.nodes[k]!).args[i]!).seq =
-        Seq.ofParts (((P.defs[d]!).body.nodes[k]!).args[i]!).seq.parts)
-include hroot hB hL hret harg
-
-/-- **A walk of resolution that starts passing under `U` ends in `U` or leaves through a leaf of a parameter `U`'s
-Definition passes on.** It is `run_passing` with the leaf in its parameter: the state the walk leaves `U` from is a
-reference of `U`'s body. -/
-theorem run_passing_leaf (U : Scope) (B : ℕ) :
-    ∀ (n : ℕ), n ≤ Flock.Steps.FUEL → ∀ (s : Scope × Ref) (b : ℕ), Inv P B s → Under U s.1 → Passing P U s →
-      Flock.Steps.run "scope resolution" (resolveStep P) n s = .ok b →
-      (U.off ≤ b ∧ b < B) ∨ ∃ i j, i ∈ passOf P U.d ∧ i < (P.defs[U.d]!).body.params.size ∧
-        j < ((P.defs[U.d]!).body.params[i]!).2.leaves ∧ resolve P U ⟨true, i, j⟩ = .ok b
-  | 0, _, _, _, _, _, _, h => by simp [Flock.Steps.run, throw, throwThe, MonadExceptOf.throw] at h
-  | n + 1, hn, s, b, hs, hu, hpass, h => by
-    have h' := h
-    rw [Flock.Steps.run.eq_2] at h'
-    rcases hx : resolveStep P s with e | (a | s')
-    · simp [hx, bind, Except.bind] at h'
-    · simp only [hx, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h'
-      rw [← h']
-      exact Or.inl ⟨Nat.le_trans (under_off P U s.1 hs.1 hu) ((step_where P hB B s _ hs hx).1 a rfl).2,
-        (step_ok P hroot hB hL B s _ hs hx).1 a rfl⟩
-    · simp only [hx, bind, Except.bind] at h'
-      have hs' := (step_ok P hroot hB hL B s _ hs hx).2 s' rfl
-      rcases (step_where P hB B s _ hs hx).2 s' rfl with
-        ⟨hp0, d, off, k, m, hc⟩ | ⟨hp, parent, d, off, k, m, hsc, hc⟩
-      · have hpass' := step_passing P hroot hB hret harg U B s s' hs hx
-          (fun hc' => by have h2 := hc'.2; rw [hp0] at h2; cases h2) hpass
-        refine run_passing_leaf U B n (by omega) s' b hs' ?_ hpass' h'
-        rw [hc]
-        exact Or.inr hu
-      · by_cases hU : s.1 = U
-        · obtain ⟨sc, ⟨p, i, j⟩⟩ := s
-          have hp' : p = true := hp
-          have hU' : sc = U := hU
-          rw [hp', hU'] at h hpass
-          have hb : i < (P.defs[sc.d]!).body.params.size ∧ j < ((P.defs[sc.d]!).body.params[i]!).2.leaves :=
-            hs.2.1.1 hp'
-          rw [hU'] at hb
-          exact Or.inr ⟨i, j, passing_exit P U i j hpass, hb.1, hb.2, resolve_of_run P hn h⟩
-        · have hpass' := step_passing P hroot hB hret harg U B s s' hs hx (fun hc' => hU hc'.1) hpass
-          have hup : Under U parent := by
-            rw [hsc] at hu hU
-            have hu' : U = .child parent d off k m ∨ Under U parent := hu
-            rcases hu' with hu' | hu'
-            · exact absurd hu'.symm hU
-            · exact hu'
-          rcases hc with hc | ⟨off', m', hc⟩
-          · refine run_passing_leaf U B n (by omega) s' b hs' ?_ hpass' h'
-            rw [hc]
-            exact hup
-          · refine run_passing_leaf U B n (by omega) s' b hs' ?_ hpass' h'
-            rw [hc]
-            exact Or.inr hup
-
-/-- **A leaf an activation returns is one of its gates, or a leaf of a parameter its Definition passes on.** -/
-theorem ret_passed_leaf (U : Scope) (hU : Good P U) (t : ℕ) (ht : t < (P.defs[U.d]!).body.ret.count) {b : ℕ}
-    (h : resolve P U ((P.defs[U.d]!).body.ret.get t) = .ok b) :
-    (U.off ≤ b ∧ b < U.off + (P.defs[U.d]!).gates) ∨
-      ∃ i j, i ∈ passOf P U.d ∧ i < (P.defs[U.d]!).body.params.size ∧
-        j < ((P.defs[U.d]!).body.params[i]!).2.leaves ∧ resolve P U ⟨true, i, j⟩ = .ok b := by
-  obtain ⟨hd, hpc⟩ := good_d P hroot hB U hU
-  obtain ⟨q, hq, t', ht', hget⟩ := seq_part _ (hret U.d hd hpc) t ht
-  exact run_passing_leaf P hroot hB hL hret harg U _ Flock.Steps.FUEL (Nat.le_refl _) _ b
-    (down_ok P hroot hB hL _ U hU (Nat.le_refl _) t ht) (under_refl U) (passing_start P U hd hpc hq ht' hget) h
-
-end
-
-end NciCheck.Properties.SecurityProofs.Resolve
 
 namespace NciCheck.Properties.Record.SecurityProofs
 
@@ -175,11 +94,8 @@ theorem inRow_get (d : Defn) (i k row l : ℕ) (hrow : row < k) (hl : l < d.para
     (inRow d i k row).1 + l < d.params[i]!.2.leaves ∧
       (inRow d i k row).2[l]! = d.params[i]!.2.widths[(inRow d i k row).1 + l]! := by
   have hsz := inRow_size d i k row hrow
-  have h1 := Nat.mul_div_le d.params[i]!.2.leaves k
-  have h2 := Nat.mul_le_mul_right (d.params[i]!.2.leaves / k) (show row + 1 ≤ k from hrow)
-  rw [Nat.add_one_mul] at h2
-  have hlt : row * (d.params[i]!.2.leaves / k) + l < d.params[i]!.2.leaves := by omega
-  exact ⟨hlt, extract_get _ _ _ l (Nat.lt_of_lt_of_eq hl hsz.symm)⟩
+  exact ⟨inRow_lt d i k row l hrow (Nat.lt_of_lt_of_eq hl hsz.symm),
+    extract_get _ _ _ l (Nat.lt_of_lt_of_eq hl hsz.symm)⟩
 
 /-- A type of one width has it at every entry of its widths. -/
 theorem homo_widths (t : Ty) (w : ℕ) (h : Flock.Program.Widths.homo t = some w) (j : ℕ) (hj : j < t.leaves) :
@@ -205,14 +121,6 @@ theorem outRow_const (d : Defn) (f o : ℕ) (h : Flock.Program.Widths.homo (fiel
     rw [← widths_size]
     exact hl
   exact homo_widths _ o h l hl'
-
-/-- A leaf of an output row is a leaf of the return. -/
-theorem outRow_lt (d : Defn) (f l : ℕ) (hf : f < (fieldsOf d.ret).length) (hl : l < (outRow d f).2.size) :
-    (outRow d f).1 + l < d.ret.leaves := by
-  have hl' : l < (fieldsOf d.ret)[f]!.leaves := by
-    rw [← widths_size]
-    exact hl
-  exact (field_leaf d.ret f l hf hl').1
 
 /-- Leaf `l'` of a row of leaves of `o` bits lies inside leaf `l' / c` of a row of leaves of `o * c` bits. -/
 theorem leaf_inside (o c l' : ℕ) (hc : 0 < c) :
@@ -377,7 +285,7 @@ theorem closed_not_returned {ts : Array String} (hP : ReadProg P) (hO : NciCheck
     obtain ⟨k, m, hk, hnode, hform, hm, hargs, rfl⟩ := unit_member hP hrs hu
     obtain ⟨⟨bytes, hdec⟩, -⟩ := hP
     obtain ⟨hroot, hB, hL, hprm, hret, harg⟩ := Resolve.decoded_walk bytes P hdec hov hbl
-    rcases Resolve.ret_passed_leaf P hroot hB hL hret harg _ hgood _ hlt hres with
+    rcases Resolve.ret_passed_on P hroot hB hL hret harg _ hgood _ hlt hres with
       hin | ⟨i', j', hmem, hi', hj', hres'⟩
     · omega
     · obtain ⟨hd, -⟩ := Resolve.good_d P hroot hB _ hgood

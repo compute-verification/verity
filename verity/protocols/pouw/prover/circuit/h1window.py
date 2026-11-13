@@ -755,8 +755,8 @@ def place(program: Program, u: int, steps: int, *, served: bool = False) -> dict
     the linear's first, `_b0`), ``zy`` and ``receipt`` the call's z table and receipts at row t, and ``partials`` the sampled
     leaf's own (`leaf_lanes.PARTIALS`, `one_stage.produced`) from row 0. The rows are the tile's own (`table_reads`). At a
     chunked K (`weights.chunks` n > 1) ``a`` and ``b`` are leaf indices, n times the first row (the chunk lanes' base).
-    A J10-R execution phase's leaf's other after-draw values, its carries and ok rows (`leaf_lanes.produced_values`), are its own
-    from row 0 too. ``served``: each after-draw value is the leaf's own in the execution phase, ``<prefix><value>@<u>``
+    A J10-R execution phase's leaf's other produced values, its carries and ok rows (`leaf_lanes.produced_values`), are its own
+    from row 0 too. ``served``: each produced value is the leaf's own in the execution phase, ``<prefix><value>@<u>``
     (`leaf_lanes.served`), as credit's lanes form reads it; else its bare name, a one-leaf world's."""
     S = program.fn.S()
     c, t = call_of(program, u)
@@ -842,7 +842,7 @@ def leaf_reads_file(program: Program, u: int, kind: str, ln: int | None, roots: 
     ``produced`` (each `produced.entry` under the execution phase's registration). A read of an A row, a B row, a partials row,
     a carry or an ok row is marked `READ_IN_FULL` (`leaf_lanes.read_in_full`), never an ``o0``. Then ``known_ports``
     (`produced.known_port` of `leaf_known_rows`; a served execution phase's `leaf_known_ports`). ``served``: the
-    after-draw values are the leaf's own (`place`'s served names), ``roots`` keyed by those; ``partials`` and
+    produced values are the leaf's own (`place`'s served names), ``roots`` keyed by those; ``partials`` and
     ``produced`` stay keyed by the bare value."""
     S = program.fn.S()
     c = call_of(program, u)[0]

@@ -28,39 +28,6 @@ whose primitive returns one value of the leaf's width.
 namespace NciCheck.Properties.SecurityProofs.Resolve
 
 open Flock.Program
-open NciCheck.Record.SecurityProofs (batch_dims)
-
-/-- **The reference a member reads a leaf of its parameter at is a reference of the node's argument**: member `m`
-of root node `k`, a call or a batch that is no input node, reads leaf `t` of its parameter `i` at a reference within
-the node's argument `i`. -/
-theorem argIdx_lt (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
-    (hown : Record.ownRows P = true) {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
-    (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false)
-    (hf : ((P.defs[P.root]!).body.nodes[k]!).form = .call ∨ ((P.defs[P.root]!).body.nodes[k]!).form = .batch)
-    {m : ℕ} (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members) {i : ℕ}
-    (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size) {t : ℕ}
-    (ht : t < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[i]!).2.leaves) :
-    argIdx ((P.defs[P.root]!).body.nodes[k]!) i m t <
-      ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).count := by
-  obtain ⟨-, hc, hno⟩ := decoded_root bytes P hdec k hk
-  rcases hf with hf | hf
-  · rw [argIdx_call hf]
-    have hcp : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false := hno.2.2.2.1 (Or.inl hf)
-    have hbp := (hc.2 hcp).1
-    have hup := BodiesOk.up_ok _ _ hc hno i (by rw [hbp, ← hno.1]; exact hi) t (by rw [hbp]; exact ht) m hm
-    rw [hf] at hup
-    exact hup
-  · rw [argIdx_batch hf]
-    have hd : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).dims.isSome = true := by
-      refine batch_dims hown (n := (P.defs[P.root]!).body.nodes[k]!) ?_ hf ?_
-      · refine List.mem_filter.2 ⟨?_, by simp [hu]⟩
-        rw [getElem!_pos _ k hk]
-        exact Array.mem_toList_iff.2 (Array.getElem_mem hk)
-      · rw [getElem!_pos _ i hi]
-        exact Array.getElem_mem hi
-    have hop := BodiesOk.op_ok _ _ hno i hi m hm t (by rw [hf, hd]; exact ht)
-    rw [hf] at hop
-    exact hop
 
 /-- A reference whose first step of resolution ends resolves to where the step ends. -/
 theorem resolve_one {P : Prog} {sc : Scope} {r : Ref} {g : ℕ} (h : resolveStep P (sc, r) = .ok (.inl g)) :
@@ -72,27 +39,6 @@ theorem resolve_one {P : Prog} {sc : Scope} {r : Ref} {g : ℕ} (h : resolveStep
   exact run_one h n
 
 end NciCheck.Properties.SecurityProofs.Resolve
-
-namespace NciCheck.Properties.SecurityProofs.LeafWidths
-
-open Flock.Program
-
-/-- The type a body's sources give a reference in range is the type the reference names. -/
-theorem srcOf_ty (B : Body) (below : ℕ) (r : Ref) (hp : r.p = true → r.i < B.params.size)
-    (hn : r.p = false → r.i < below ∧ r.i < B.nodes.size) :
-    (srcOf B below).ty? r.p r.i = some (if r.p then (B.params[r.i]!).2 else (B.nodes[r.i]!).out) := by
-  unfold Widths.Src.ty? srcOf
-  cases hrp : r.p
-  · obtain ⟨h1, h2⟩ := hn hrp
-    simp only [Bool.false_eq_true, ↓reduceIte, h1]
-    rw [Array.getElem?_map, getElem?_pos B.nodes r.i h2, getElem!_pos B.nodes r.i h2]
-    rfl
-  · have h1 := hp hrp
-    simp only [↓reduceIte]
-    rw [Array.getElem?_map, getElem?_pos B.params r.i h1, getElem!_pos B.params r.i h1]
-    rfl
-
-end NciCheck.Properties.SecurityProofs.LeafWidths
 
 namespace NciCheck.Properties.Record.SecurityProofs
 
@@ -116,39 +62,6 @@ theorem read_wide {P : Prog} (hP : ReadProg P) :
   obtain ⟨st, hPd, hinv, -⟩ := BodiesOk.decode_spec bytes P hdec
   have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hPd]; exact hinv.1
   exact ⟨⟨hr, hrp⟩, hB, hlay, hok, LeafWidths.decoded_wide bytes P hdec⟩
-
-/-- **A unit is a member of a root node that is a call or a batch and no input node**, with an argument for each
-of the unit's Definition's parameters. -/
-theorem unit_member {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
-    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
-    {sc : Scope} (hu : UnitAt P rs tid u sc) :
-    ∃ k m, k < (P.defs[P.root]!).body.nodes.size ∧
-      Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false ∧
-      (((P.defs[P.root]!).body.nodes[k]!).form = .call ∨ ((P.defs[P.root]!).body.nodes[k]!).form = .batch) ∧
-      m < ((P.defs[P.root]!).body.nodes[k]!).members ∧
-      (∀ i, i < (P.defs[sc.d]!).params.size → i < ((P.defs[P.root]!).body.nodes[k]!).args.size) ∧
-      sc = P.child P.rootScope k m := by
-  obtain ⟨hr, -, -, -⟩ := read_bodies hP
-  have hir := readProg_inputs hP
-  obtain ⟨⟨bytes, hdec⟩, -, -, -, -, -, hfirst⟩ := hP
-  obtain ⟨-, hall⟩ := ranges_spec hr hfirst hir hrs
-  obtain ⟨k, m, hk, hkey, -, hm, rfl⟩ := unit_node hr hfirst hir hrs hu
-  obtain ⟨-, -, hno⟩ := Resolve.decoded_root bytes P hdec k hk
-  have hnode : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false := by
-    simp [Desc.isInputNode, hkey]
-  have hform : ((P.defs[P.root]!).body.nodes[k]!).form = .call ∨
-      ((P.defs[P.root]!).body.nodes[k]!).form = .batch := by
-    obtain ⟨j, m', hj, -, -, -, hsc⟩ := hu
-    have hmem : rs[j]! ∈ rs.toList := by
-      rw [getElem!_pos rs j hj]
-      simp
-    obtain ⟨-, -, hfm, -⟩ := hall _ hmem
-    have hkj : k = rs[j]!.node := by
-      simp only [Prog.child, Scope.child.injEq] at hsc
-      exact hsc.2.2.2.1
-    rw [hkj]
-    exact hfm
-  exact ⟨k, m, hk, hnode, hform, hm, fun i hi => Nat.lt_of_lt_of_eq hi hno.1.symm, rfl⟩
 
 /-- A leaf of a root node's output is a gate of the Program. -/
 theorem root_leaf_lt {P : Prog} (hP : ReadProg P) {n j : ℕ} (hn : n < (P.defs[P.root]!).body.nodes.size)

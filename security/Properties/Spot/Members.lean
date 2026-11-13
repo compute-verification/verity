@@ -191,7 +191,7 @@ def filesBlock (ms : Bits.Members) (ns : Array ℕ) (b : Slots.ProofBlock) : Lis
 
 /-- **The members' replay partition** over the replay layout `l`: the layout's classes and strata, each slot's block its
 request's proof blocks' gates (`filesBlock`). -/
-def filesReplay (ms : Bits.Members) (ns : Array ℕ) (l : Slots.Layout) : Claims.Sampling.Partition :=
+def filesReplay (ms : Bits.Members) (ns : Array ℕ) (l : Slots.SlotOrder) : Claims.Sampling.Partition :=
   ⟨l.classes.toList.map fun c => c.toList.map fun s => s.toList.map (filesBlock ms ns)⟩
 
 /-- `filesBlock` reading the members' proof blocks from `bs`, `membersPart ms`'s. -/
@@ -202,7 +202,7 @@ def filesBlockAt (bs : List (List ℕ)) (ms : Bits.Members) (ns : Array ℕ) (b 
 
 /-- `filesReplay`, the members' proof blocks built once (`filesReplay_eq_fast`); as stated, every unit of every slot
 rebuilds them. -/
-def filesReplayFast (ms : Bits.Members) (ns : Array ℕ) (l : Slots.Layout) : Claims.Sampling.Partition :=
+def filesReplayFast (ms : Bits.Members) (ns : Array ℕ) (l : Slots.SlotOrder) : Claims.Sampling.Partition :=
   let bs := (membersPart ms).blocks
   ⟨l.classes.toList.map fun c => c.toList.map fun s => s.toList.map (filesBlockAt bs ms ns)⟩
 

@@ -6,7 +6,7 @@ id = "llama31-8b-1gpu-pearl-c-whole-served-h200"
 # serving defaults (`stock-fp8@compiled`), in one run under one host load. The preset and the whole arm's settings are that
 # spec's: vLLM's FULL_DECODE_ONLY graphs at the capture sizes without torch.compile, at the `compiled` label, the serial
 # schedule with `whole_defer` and `whole_defer_a`, and as its gate the call check with the calls graphed and
-# `e2e.whole_check`. The PoUW option's protocol arm runs sm_120's kernels alone, so it isn't here.
+# `e2e.whole_check`. The PoUW option's protocol arm on this card is `llama32-1b-1gpu-pouw-protocol-served-h200`'s.
 arms = ["stock-fp8@compiled", "pouw-pearl-c-whole"]
 arm_modules = ["benchmarks.pouw.pearl_c_vllm.bench_arm:PEARL_C_WHOLE"]
 sweep = "quick"

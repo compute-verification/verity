@@ -142,6 +142,33 @@ def test_a_landing_ending_in_drives_lock_commit_is_labelled_on_the_trains_check(
     assert PT.check_attempt(later, cwd=repo, attempt="r20261020-152946-96c9") is None, "no Regenerated: line, no lock commit"
 
 
+def test_a_lock_commit_is_read_by_its_message_and_its_parent_whoever_the_queue_made_it_as(tmp_path, monkeypatch):
+    """The queue makes its commits as its own identity or, where its repository's rules name an author, as that author: a
+    `main` whose landings hold a lock commit of each has both labelled on its train's check, and neither on another's."""
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "main")
+    trains, locks = {}, {}
+    for n, (rid, name, email) in enumerate((("r20261020-152946-96c9", "research queue", "queue@research.invalid"),
+                                            ("r20261021-101500-0a1b", "rules-bot[bot]", "7+rules-bot[bot]@users.noreply.invalid")), 1):
+        made_as = {**os.environ, "GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": email, "GIT_COMMITTER_NAME": name,
+                   "GIT_COMMITTER_EMAIL": email}
+        for kept, message in ((trains, f"Queue: #{n} a change"),
+                              (locks, f"Lock records regenerated for #{n}\n\nChecked: {rid} (the lock run of `checked` x, passed "
+                                      "by regenerating them)\nRegenerated: security/lean-audit.json")):
+            subprocess.run(["git", "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", message], cwd=repo,
+                           check=True, capture_output=True, env=made_as)
+            kept[rid] = _git(repo, "rev-parse", "HEAD")
+            assert _git(repo, "log", "-1", "--format=%an <%ae> | %cn <%ce>") == f"{name} <{email}> | {name} <{email}>"
+    _git(repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+    _git(repo, "fetch", "-q", "origin")
+    monkeypatch.setattr(PT, "source_of", trains.get)
+    (own, lock), (named, named_lock) = locks.items()
+    assert PT.check_attempt(lock, cwd=repo, attempt=own) == own and PT.check_attempt(named_lock, cwd=repo, attempt=named) == named
+    assert PT.check_attempt(lock, cwd=repo, attempt=named) is None and PT.check_attempt(named_lock, cwd=repo, attempt=own) is None
+
+
 def test_a_deferred_landing_labels_the_attempt_drive_names_and_refuses_one_it_did_not_land_on(tmp_path, monkeypatch, capsys):
     calls, _ = _fake_landing(tmp_path, monkeypatch, None)
     monkeypatch.setattr(PT, "check_attempt", lambda sha, cwd=PT.ROOT, attempt=None:

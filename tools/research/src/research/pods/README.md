@@ -36,7 +36,8 @@ alive. Each module's docstring is its contract.
 - **A lease on every pod** (`lease.py`, `sh/lease.sh`). `create --max-hours H` arms it once sshd answers and
   terminates a pod it could not arm. At the expiry the idle guard ends a pod whose runs all have custody, and the
   lease loop ends it after a grace whatever is unfetched, with the pod's own key. `research run --on` extends the
-  lease to cover the run's `--timeout`; `extend` never shortens it.
+  lease to cover the run's `--timeout`; `extend` never shortens it. A lease the loop cannot read is not an expiry:
+  it keeps the expiry it last read, and with none to keep ends the pod once the error has lasted the grace.
 - **One budget file** (`budgets.py`): `budgets.toml`, where each line is a name prefix with a spending limit (total,
   per rolling day, or both), an expiry, a longest pod age and who approved it. `create` refuses unless the guard
   polled lately and holds a live, untripped line that covers the name.

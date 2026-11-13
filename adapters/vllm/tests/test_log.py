@@ -95,7 +95,7 @@ def test_once_logs_a_message_with_its_arguments_once(caplog) -> None:
 
 
 def test_a_logger_outside_the_package_is_refused() -> None:
-    for name in ("__main__", "verity_vllmx", "verity.ml"):
+    for name in ("__main__", "verity_vllmx", "verity.circuits"):
         with pytest.raises(ValueError, match="pass the `__name__` of a module of verity_vllm"):
             L.init_logger(name)
     assert L.init_logger("verity_vllm") is logging.getLogger("verity_vllm")

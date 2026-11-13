@@ -378,7 +378,7 @@ def test_each_audit_pass_appends_its_line_with_the_volume_null_when_unread_and_a
     T.linear_audit({}, Ring(), at(19, 22), lambda: FOUND, lambda: VOLUME, None)
     first, second = [T.json.loads(x) for x in log.read_text().splitlines()]
     assert first == {"t": "2026-10-19T20:00:00Z", "findings": 5,
-                     "kinds": {"orphan": 1, "milestone": 0, "lapsed": 0, "undated": 1, "overdue": 0, "quiet": 2, "stale": 0,
+                     "kinds": {"unheard": 0, "orphan": 1, "milestone": 0, "lapsed": 0, "undated": 1, "overdue": 0, "quiet": 2, "stale": 0,
                                "title": 0, "landed": 0, "unlinked": 0, "stray": 0, "lane": 1, "parked": 0, "unstaffed": 0,
                                "slipped": 0, "repeated": 0},
                      "lanes": {"-": {"lane": 1}, "infra": {"orphan": 1, "quiet": 2}, "proofs": {"undated": 1}},

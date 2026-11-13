@@ -62,8 +62,10 @@ Every path git sees changed must be one of:
   not run by path (`tests/`, `lean/`), and no higher than the root of that file's package after the move (`[roots] new`
   of a path map under `tools/move/` at BASE): the package level `tools/move/layout.py` writes so the module imports by
   its new name. And a
-  deleted `__init__.py` of a package the range's moves took away: files left its directory by a rename and HEAD has none
-  at or below it (`rules`'s `emptied` in the `--json` report);
+  deleted `__init__.py` of a package the range's moves took away (files left its directory by a rename and HEAD has none
+  at or below it; `rules`'s `emptied` in the `--json` report) that holds nothing but whitespace and comments at BASE, read
+  by the mover's own `only_comments`: one with a docstring, code, or text that doesn't parse is refused, and it gets a row
+  in the map saying where it goes or a hand commit before the move that deletes it;
 - an edit to a shell script that recounts a path after a variable the script sets once to its own directory
   (`here=$(cd "$(dirname "$0")" && pwd)`, then `$here/../..`), as a path from its own directory is (`rules`'s `anchor`);
 - a list of paths rewritten as a cover (`rules`'s `cover`): a list `tools/move/layout.py` reads as one (its `lists`: a
@@ -1413,7 +1415,7 @@ TOKEN_CHAR = re.compile(r"[^\s\"'`()\[\]{}<>,;=]")
 
 def scoped_map(base: Tree, head: str, cwd: str | None, path: str | None = None) -> tuple[str, dict] | None:
     """The word map a move with `scope = "prose"` renames by (``path``, else the `Move:` line of HEAD's message), as BASE has
-    it; None for any other move."""
+    it, its words in `[words]` or all scoped to files (`[[words_in]]` under an empty `[words]`); None for any other move."""
     if path is None:
         m = MOVE_LINE.search(git("log", "-1", "--format=%B", head, cwd=cwd).decode(errors="replace"))
         path = m and m.group(1)
@@ -1421,7 +1423,7 @@ def scoped_map(base: Tree, head: str, cwd: str | None, path: str | None = None) 
         data = tomllib.loads(base.text(path) or "") if path else {}
     except tomllib.TOMLDecodeError as e:
         raise SystemExit(f"move-check: the move's word map {path} doesn't parse at BASE: {e}") from e
-    return (path, data) if data.get("scope") == "prose" and data.get("words") else None
+    return (path, data) if data.get("scope") == "prose" and (data.get("words") or data.get("words_in")) else None
 
 
 class Terms:
@@ -1713,7 +1715,8 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
 
     def emptied(d: str) -> bool:
         """Whether the range's moves took the package at `d` away: files left it by a rename, and HEAD has none at or below
-        it, so the `__init__.py` that marked it has nothing to mark (the mover deletes it)."""
+        it, so the `__init__.py` that marked it has nothing to mark (the mover deletes it if it holds nothing but comments
+        and whitespace, and refuses the move otherwise)."""
         return not H.has_dir(d) and any(o.startswith(d + "/") for o, _ in renamed)
 
     went, created = dict(renamed), {e["new"] for e in entries if e["status"] == "A"}
@@ -1862,6 +1865,11 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             report["rules"].setdefault("drop", []).append(old)
             continue
         if st == "D" and posixpath.basename(old) == "__init__.py" and emptied(posixpath.dirname(old)):
+            if not _rename().L.only_comments(B.text(old)):
+                refuse(e, "deleted: the `__init__.py` of a package the range emptied, which holds more than comments and "
+                          "whitespace at BASE: give it a row in the map saying where it goes, or delete it in a hand commit "
+                          "before the move")
+                continue
             report["edits"].append({"path": old, "kind": "emptied package"})
             report["rules"].setdefault("emptied", []).append(old)
             continue

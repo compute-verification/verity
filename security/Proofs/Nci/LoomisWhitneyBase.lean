@@ -9,11 +9,8 @@ A finite set of triples has at most `√(|π₁₂| |π₁₃| |π₂₃|)` elem
 The proof slices the set by its first coordinate: a slice lies in the product of its two projections' slices and injects
 into the third projection, so its size squared is at most the product of the three, and Cauchy–Schwarz sums the slices.
 
-NCI's main theorem applies it to the products `W_ℓ[i,j] x_t[j]` an IU computes at its other positions, as index triples
-`(i, j, t)`: their projections are the weight entries `(i, j)` they use, the input entries `(t, j)` they use, and the
-output entries `(t, i)` they contribute to (`card_products_le_sqrt`), and summing over the multiplications `ℓ` with
-Cauchy–Schwarz bounds them by `√(p Q Y)` (`sum_card_products_le_sqrt`). The cover theorem's partial-sum bounds apply it
-to a block's products as cells of a matrix cube. Both import it from here, which needs nothing but Mathlib.
+The min-cut bound applies it (`loomis_whitney`) to a block's MACs of one matmul (`card_inBlock_sq_le`), and imports it
+from here, which needs nothing but Mathlib.
 -/
 
 @[expose] public section
@@ -62,54 +59,5 @@ theorem loomis_whitney (T : Finset (α × β × γ)) :
   exact sum_sq_le_sum_mul_sum_of_sq_le_mul _ (fun _ _ => Nat.zero_le _) (fun _ _ => Nat.zero_le _) fun a _ => slice a
 
 end LoomisWhitney
-
-section Products
-
-variable {ι κ τ : Type*} [DecidableEq ι] [DecidableEq κ] [DecidableEq τ]
-
-/-- Loomis–Whitney over the index triples `(i, j, t)` of products `W[i,j] x_t[j]`: their number squared is at most the
-product of the weight entries `(i, j)` they use, the input entries `(t, j)` they use and the output entries `(t, i)` they
-contribute to. -/
-theorem card_products_sq_le (T : Finset (ι × κ × τ)) :
-    #T ^ 2 ≤ #(T.image fun x => (x.1, x.2.1)) * #(T.image fun x => (x.2.2, x.2.1)) *
-      #(T.image fun x => (x.2.2, x.1)) := by
-  have inputs : #(T.image fun x => (x.2.2, x.2.1)) = #(T.image fun x => (x.2.1, x.2.2)) := by
-    rw [← card_image_of_injective (T.image fun x => (x.2.1, x.2.2)) Prod.swap_injective, image_image]
-    rfl
-  have outputs : #(T.image fun x => (x.2.2, x.1)) = #(T.image fun x => (x.1, x.2.2)) := by
-    rw [← card_image_of_injective (T.image fun x => (x.1, x.2.2)) Prod.swap_injective, image_image]
-    rfl
-  rw [inputs, outputs, mul_right_comm]
-  exact loomis_whitney T
-
-/-- The draft's form: an IU's products at one multiplication, as index triples `(i, j, t)`, number at most `√(p q y)` when
-they use at most `p` weight entries `(i, j)` and `q` input entries `(t, j)`, and contribute to at most `y` output entries
-`(t, i)`. -/
-theorem card_products_le_sqrt (T : Finset (ι × κ × τ)) {p q y : ℕ}
-    (hp : #(T.image fun x => (x.1, x.2.1)) ≤ p) (hq : #(T.image fun x => (x.2.2, x.2.1)) ≤ q)
-    (hy : #(T.image fun x => (x.2.2, x.1)) ≤ y) : (#T : ℝ) ≤ √(p * q * y) :=
-  Real.le_sqrt_of_sq_le <| by
-    exact_mod_cast (card_products_sq_le T).trans (Nat.mul_le_mul (Nat.mul_le_mul hp hq) hy)
-
-/-- Loomis–Whitney at each multiplication `ℓ`, summed with Cauchy–Schwarz: an IU whose products at multiplication `ℓ`
-(at its other positions) use at most `p` weight entries, `q ℓ` input entries and contribute to `y ℓ` output entries
-computes at most `√(p Q Y)` of them in all, with `Q = ∑ q ℓ` and `Y = ∑ y ℓ`. -/
-theorem sum_card_products_le_sqrt {L : Type*} (s : Finset L) (T : L → Finset (ι × κ × τ)) {p : ℕ} {q y : L → ℕ}
-    (hp : ∀ ℓ ∈ s, #((T ℓ).image fun x => (x.1, x.2.1)) ≤ p)
-    (hq : ∀ ℓ ∈ s, #((T ℓ).image fun x => (x.2.2, x.2.1)) ≤ q ℓ)
-    (hy : ∀ ℓ ∈ s, #((T ℓ).image fun x => (x.2.2, x.1)) ≤ y ℓ) :
-    (∑ ℓ ∈ s, #(T ℓ) : ℝ) ≤ √(p * (∑ ℓ ∈ s, q ℓ) * ∑ ℓ ∈ s, y ℓ) := by
-  refine Real.le_sqrt_of_sq_le ?_
-  have h : (∑ ℓ ∈ s, #(T ℓ)) ^ 2 ≤ (∑ ℓ ∈ s, q ℓ) * ∑ ℓ ∈ s, p * y ℓ :=
-    sum_sq_le_sum_mul_sum_of_sq_le_mul s (fun _ _ => Nat.zero_le _) (fun _ _ => Nat.zero_le _) fun ℓ hℓ =>
-      (card_products_sq_le (T ℓ)).trans <| by
-        calc _ ≤ p * q ℓ * y ℓ := Nat.mul_le_mul (Nat.mul_le_mul (hp ℓ hℓ) (hq ℓ hℓ)) (hy ℓ hℓ)
-          _ = q ℓ * (p * y ℓ) := by ring
-  rw [← mul_sum] at h
-  have h' : ((∑ ℓ ∈ s, #(T ℓ) : ℕ) : ℝ) ^ 2 ≤ (((∑ ℓ ∈ s, q ℓ) * (p * ∑ ℓ ∈ s, y ℓ) : ℕ) : ℝ) := by exact_mod_cast h
-  push_cast at h'
-  exact h'.trans_eq (by push_cast; ring)
-
-end Products
 
 end Nci.SecurityProofs

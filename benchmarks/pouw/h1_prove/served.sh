@@ -30,7 +30,7 @@ export PYTHONPATH=$SRC:$SRC/adapters/vllm
 read -r SID DSID < <("$PY" -c 'import json, sys; c = json.load(open(sys.argv[1]))["commitment"]
 print(c["session"]["session"], (c.get("draw_session") or {}).get("session", "none"))' "$D/serve/pouw-h1-calls.json")
 S=$D/gate/fetch/$SID/out DS=$D/gate/fetch/$DSID/out
-log "served draw: window run $D, session $S, draw session $DS"
+log "served sample: window run $D, session $S, sample session $DS"
 "$PY" "$SRC/benchmarks/pouw/h1_prove/served.py" --calls "$D/serve/pouw-h1-calls.json" --session "$S" --draw-session "$DS" \
   --ledger "$D/gate/windows.jsonl" --pin "$PIN" --pins "$PINS" --main "$MAIN" --descriptor "$DESC" --out "$OUT/drawn.json" \
   2>&1 | tee -a "$OUT/job.log"

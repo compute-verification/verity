@@ -20,7 +20,11 @@ stock's at the card's weight (`host_cost`, from the timed pass); the denominator
 arm is each linear's fastest kernel of the scheme's scaling by wall time, with the least-SM-time kernel's γ beside it; the
 `stock` scheme's γ is the A/A control, one kernel against its own twin. A figure of record has at least `MIN_REPS` reps,
 an interval within `HALF_WIDTH` of the median ratio (`of_record_why`) and passes the SM-time cross-check
-(`cross_check_why`); the scheme gate is γ ≤ `GAMMA_CAP` at each point. `periods` states it per monitoring period.
+(`cross_check_why`); the scheme gate is γ ≤ `GAMMA_MAX` at each point. `periods` states it per monitoring period.
+
+**What a γ covers** (`covers`) is its model's entry: one layer's linears, and not what `LEFT_OUT` names. **y's commitment**: a
+scheme's entry says whether its arm's timed call commits y, the call's output (`Scheme.commits_y`); a timed run records it,
+and a figure from a run whose arm committed no y carries `WITHOUT_Y` (`y_note`).
 """
 
 from __future__ import annotations
@@ -29,6 +33,7 @@ import math
 import statistics
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 POINTS_SCHEMA = "verity-bench/overhead-points/v1"
 RUN_SCHEMA = "verity-bench/overhead/v1"
@@ -42,7 +47,7 @@ RULE = {"c_share": C_SHARE, "l_slack": L_SLACK, "grid": GRID, "m_max": M_MAX}
 #: busy SM-time at most CROSS_CHECK over its kernels' durations x the SMs their blocks occupy
 MIN_REPS, HALF_WIDTH, CROSS_CHECK = 20, 0.05, 0.05
 #: the scheme gate: γ at most this at each point
-GAMMA_CAP = 10.0
+GAMMA_MAX = 10.0
 POINTS = ("C", "L")
 
 
@@ -83,6 +88,11 @@ MODELS = {
 }
 #: the kernel points' model
 KERNEL_MODEL = "llama3.1-70b"
+#: what a model's entry leaves out of the layer its γ is over, though serving the model computes it
+LEFT_OUT = {"llama3.1-70b": ("the LM head",)}
+#: the note of a figure from a run whose arm committed no y (`y_note`): where the served call commits y, the γ leaves y's tree
+#: out, and is understated by it
+WITHOUT_Y = "without y's commitment (y tree not timed)"
 
 
 @dataclass(frozen=True)
@@ -90,14 +100,17 @@ class Scheme:
     """A scheme the door times against stock. `arm` is its PoUW harness arm (`module:Class` in `arm_path`, as `bench.py
     --arm` and `--arm-path` take them), timed beside stock kernels of `family`, the stock scaling its useful output's
     quantization matches. `epsilon` (`module:function` in `arm_path`) is its soundness error at a shape on a card,
-    `(m, n, k, card) -> {"epsilon", "delta", "basis"}`, recorded beside its γ. `stock` has no arm: its γ is the A/A control
-    every run carries (`bench.py --twins`), the fastest stock kernel against its own twin."""
+    `(m, n, k, card) -> {"epsilon", "delta", "basis"}`, recorded beside its γ. `commits_y`: whether the arm's timed call
+    commits y, the call's output (y's tree), false unless the entry states it; a timed run records it beside its arm
+    (`overhead.json`'s `arm.commits_y`), and its figures carry `WITHOUT_Y` while it is false (`y_note`). `stock` has no arm:
+    its γ is the A/A control every run carries (`bench.py --twins`), the fastest stock kernel against its own twin."""
 
     id: str
     family: str
     arm: str | None = None
     arm_path: str | None = None
     epsilon: str | None = None
+    commits_y: bool = False
 
 
 #: Pearl+'s useful output is rowwise-scaled E4M3, so its stock, and stock's own A/A control, are that family's
@@ -113,6 +126,22 @@ def scheme(name: str) -> Scheme:
         return SCHEMES[name]
     except KeyError:
         raise ValueError(f"no scheme {name!r}: the door times {', '.join(SCHEMES)} (verity_bench.overhead.SCHEMES)") from None
+
+
+def y_note(arm: Mapping | None) -> str | None:
+    """The note a run's figures carry, from the `arm` record of its `overhead.json`: `WITHOUT_Y` unless the record says its
+    arm committed y (`commits_y`, the scheme's entry as the run recorded it; a record without the field timed no y tree).
+    None for a run with no arm: stock's A/A control commits nothing."""
+
+    return None if arm is None or arm.get("commits_y") else WITHOUT_Y
+
+
+def covers(model: str = KERNEL_MODEL) -> str:
+    """What a γ of `model` is over, in one sentence: its entry's linears, and what the entry leaves out (`LEFT_OUT`)."""
+
+    linears, out = MODELS[model], LEFT_OUT.get(model, ())
+    return (f"Each γ is over the {len(linears)} linears of one {model} layer ({', '.join(linears)})"
+            + (f" and leaves {' and '.join(out)} out" if out else "") + ".")
 
 
 def card(gpu: str) -> Gpu:
@@ -176,11 +205,11 @@ def _mid(lo: int, hi: int) -> int | None:
 
 @dataclass(frozen=True)
 class Points:
-    """The rule's verdict on the m's sampled so far: C and L (None until sampled), the best throughput, and the bracket each
+    """The rule's verdict on the m's sampled so far: C and L (`c`, `lat`; None until sampled), the best throughput, and the bracket each
     lies in (its sampled neighbour on the side it could still move to, None at the sweep's end)."""
 
     c: int | None
-    l: int | None
+    lat: int | None
     best_flop_per_ms: float
     c_bracket: tuple[int | None, int | None]
     l_bracket: tuple[int | None, int | None]
@@ -201,17 +230,17 @@ def rule(times: Mapping[int, float], model: str = KERNEL_MODEL) -> Points:
             break
         if m % GRID == 0:
             c = m
-    l = None
+    lat = None
     for m in ms:
         if times[m] > (1 + L_SLACK) * times[1]:
             break
         if m % GRID == 0:
-            l = m
+            lat = m
     below = max((m for m in ms if c is not None and m < c), default=None)
-    above = min((m for m in ms if l is not None and m > l), default=None)
-    if l is None:
+    above = min((m for m in ms if lat is not None and m > lat), default=None)
+    if lat is None:
         above = min((m for m in ms if m > 1 and times[m] > (1 + L_SLACK) * times[1]), default=None)
-    return Points(c, l, best, (below, c), (l, above))
+    return Points(c, lat, best, (below, c), (lat, above))
 
 
 def next_ms(times: Mapping[int, float], model: str = KERNEL_MODEL) -> list[int]:
@@ -240,7 +269,7 @@ def final(times: Mapping[int, float], model: str = KERNEL_MODEL) -> Points:
     if more := next_ms(times, model):
         raise ValueError(f"the sweep isn't finished: it still samples m = {', '.join(map(str, more))}")
     p = rule(times, model)
-    if p.c is None or p.l is None:
+    if p.c is None or p.lat is None:
         raise ValueError(f"the rule finds no {'C' if p.c is None else 'L'} on multiples of {GRID} in the sweep")
     return p
 
@@ -271,9 +300,10 @@ def sweep_times(results: Sequence[Mapping], model: str = KERNEL_MODEL,
     linears = MODELS[model]
     rows = {row["label"]: row for r in results for row in r.get("shapes", [])}
     ms = sorted({row["m"] for row in rows.values() if (row["n"], row["k"]) in set(linears.values())})
-    times, chosen = {}, {}
+    times: dict[int, float] = {}
+    chosen: dict[int, dict] = {}
     for m in ms:
-        per = {}
+        per: dict[str, dict[str, Any]] = {}
         for linear, (n, k) in linears.items():
             row = rows.get(label(m, n, k))
             got = timed(row, method=method) if row else {}
@@ -446,7 +476,7 @@ def cross_check_why(ratios: Mapping[str, float | None], bound: float = CROSS_CHE
     off = {k: r for k, r in ratios.items() if r is None or r - 1 > bound}
     if not off:
         return None
-    worst = max(off, key=lambda k: math.inf if off[k] is None else off[k])
+    worst = max(off, key=lambda k: math.inf if (r := off[k]) is None else r)
     return (f"{len(off)} entries' SMs Active SM-time exceeds their kernels' occupied SM-time by over {bound:.0%} "
             f"({worst}: {off[worst]})")
 

@@ -17,7 +17,7 @@ from verity_numerical.bench import drivers
 DATA = Path(__file__).parent / "data"
 SLICE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "flock" / "prover" / "tests" / "data" / "captured-101" / "slices" / "gemm-coordinate-ampere-bf16-k2048"
 BF16 = ("gemm-coordinate/k1536/sm90-mma-bf16+frame-v3/blake3-keyed", "bench-instances-bf16-hopper-v1")
-#: Two machines as the RunPod API and the probes record them (red-team-flock 12:00Z: the H100 prover and its A40 verifier).
+#: Two machines as the RunPod API and the probes record them (an H100 prover and its A40 verifier).
 SEPARATE = {"prover": {"pod_id": "pod-p", "machine_id": "m-h100", "public_ip": "203.0.113.10", "cpu_model": "Xeon 8470"},
             "verifier": {"pod_id": "pod-v", "machine_id": "m-a40", "public_ip": "198.51.100.20", "cpu_model": "EPYC 7502"},
             "link": {"peer": "10.0.0.2:7400", "peer_ip": "10.0.0.2"}}
@@ -151,7 +151,7 @@ def test_check_catches(mutate, why):
 
 
 def test_check_catches_runs_on_one_machine(tmp_path):
-    """Two containers of one host: different hostnames, the same kernel boot id (red-team-flock 12:00Z, the L40S cells)."""
+    """Two containers of one host: different hostnames, the same kernel boot id."""
     p, v = _run(tmp_path / "p", "h1", _doc("6d1295ed"), boot="b-1"), _run(tmp_path / "v", "h2", None, boot="b-1")
     assert any("share boot_id b-1" in x for x in C.check(_cell(), _doc("6d1295ed"), p, v))
     q, w = _run(tmp_path / "q", "h1", _doc("6d1295ed"), boot="b-1"), _run(tmp_path / "w", "h2", None, boot="b-2")
@@ -200,7 +200,7 @@ def test_register_runs_the_backends_script_and_stamps_the_cell(tmp_path):
     assert doc["cell"]["backend"] == "C-interactive" and doc["cell"]["statement"] == BF16[0]
     assert doc["cell"]["input_set"]["id"] == BF16[1]
     assert (doc["lane"], doc["registered_by"]) == ("bench-spine", "bench-spine")                # the lane that ran it is the producer
-    assert doc["cell"]["script_lane"]["registered_by"] in ("flock-backend", "bench-spine")      # before / after flock-backend's --lane
+    assert doc["cell"]["script_lane"]["registered_by"] in ("flock-backend", "bench-spine")      # before / after register's --lane
     assert doc["workload_fingerprint"]["software"]["verifier"]["host"] == "5f0e35820d06"        # verity_flock.register's patch
     assert doc["workload_fingerprint"]["software"]["verifier"]["run"] == VERIFIER_RUN
     put = res["put"]
@@ -210,12 +210,35 @@ def test_register_runs_the_backends_script_and_stamps_the_cell(tmp_path):
 
 @pytest.mark.parametrize("takes", [True, False])
 def test_register_passes_the_lane_to_verity_flock_register(tmp_path, monkeypatch, takes):
-    """flock-backend a9d13f68 requires ``--lane``; the register before it rejects the flag."""
+    """A register that knows ``--lane`` requires it; an earlier one rejects the flag."""
     drv = drivers.driver("C-interactive")
     monkeypatch.setattr(drv, "takes_lane", lambda: takes)
     (cmd,) = drv.register(_cell(), tmp_path / "p", tmp_path / "v", tmp_path / "m.json")
     assert cmd[1:3] == ["-m", "verity_flock.register"]
     assert (cmd[-2:] == ["--lane", "bench-spine"]) is takes and ("--lane" in cmd) is takes
+
+
+def test_an_ir_cells_verifier_binary_is_the_first_result_that_names_its_backend(tmp_path):
+    drv = drivers.driver("C-interactive")
+
+    def result(where: str, doc) -> None:
+        (tmp_path / where).mkdir(parents=True, exist_ok=True)
+        (tmp_path / where / "result.json").write_text(doc if isinstance(doc, str) else json.dumps(doc))
+
+    def named(name) -> dict:
+        return {"workload_fingerprint": {"software": {"backend": {"name": name}}}}
+
+    assert drv.ir_binary(tmp_path) == drv.ir_binary(tmp_path / "absent") == "flock-ir-frame"
+    result("points/a", named("flock-ir-sampling"))
+    assert drv.ir_binary(tmp_path) == "flock-ir-sampling"
+    for says_nothing in ({}, [], named(None), named(""), {"workload_fingerprint": {"software": None}}):
+        result(".", says_nothing)
+        assert drv.ir_binary(tmp_path) == "flock-ir-sampling"
+    result(".", named("flock-ir-frame"))
+    assert drv.ir_binary(tmp_path) == "flock-ir-frame"
+    result(".", "{")
+    with pytest.raises(ValueError):
+        drv.ir_binary(tmp_path)
 
 
 def test_takes_lane_reads_the_installed_script():

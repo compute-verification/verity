@@ -35,10 +35,11 @@ import json
 from pathlib import Path
 
 from remote_bandwidth_fakes import Entropy
+
+from verity.commitments.randomness import derive
+from verity.commitments.rowleaf import sha512_row_v2_digest
 from verity.protocols.poub.verifier import audit, codec, coins, receipts
 from verity.protocols.spot.device.challenger import live_domain, live_leaf
-from verity.commitments.rowleaf import sha512_row_v2_digest
-from verity.commitments.randomness import derive
 
 PATH = Path(__file__).with_name("vectors.json")
 PAYLOAD_DOMAIN = b"verity/remote-bandwidth/test-payload/v0\0"
