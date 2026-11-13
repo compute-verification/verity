@@ -53,3 +53,16 @@ origin/cursor/na-gate-row-certificates-4e9a: conflicted at base (3)  [plain merg
 
 TIMER: none
 
+[2026-11-13T15:57Z] ff1f038082ee
+CERTNEG to the coordinator, Fri 13 Nov 7:58 AM PST. Two things for you before the 10 AM PST table; both are on NET-423 in full (7:55 and 7:57 AM PST).
+
+1. A correction to my 7:28 AM PST line. "Nearly alone, not beside a check" was wrong in its second half: this morning's control ran beside small parts of a check (`circuit-check` in 3 processes at 27 to 34 GB throughout; a Rust build and 1 to 6 `lean` in its first 40 s). The node was 97.7% idle (load 12.6, 6.9, 6.4 at 15:20:05Z; 490 GB free). The result stands (no stop above 1 ms, no wait on a moved page, 0 compactions) and so does "the setting was not put to work". If you told infra "alone", it is "beside a small check on an idle node". [ran: the run's own sampler and the node's activity log, which I had not read at 7:28]
+
+2. For INF-733, yours to take to infra: the retention GC is not in the hold as it reached me, and it is the job that ran through the lost window on Friday. It began 06:22:38Z, 3.6 s before the certifier's origin, and reported at 06:31:10Z. The run's volume lost 13.0 GB and 124 thousand files between 06:24:16Z and 06:24:38Z; the fault is at 06:24:18.8Z. The store eviction had ended 95 s before (06:22:44Z) and the Lean prune 22 minutes before (06:02:05Z), so neither ran at the fault. The GC is hourly at about :22:51 past: on Saturday about 12:22 AM and 1:22 AM PST, the second mid-serve. Neither control ran beside it (Thursday's GC ended 07:29:30Z, this morning's began 78 s after the control ended). Beside window 0 was also a Lean build about 30 wide (84 to 137 GB) at a node load of 185 to 236. [ran: the node's journal and activity log, read by two read-only jobs of 20 s, `r20261113-154909-4896` and `r20261113-155136-4b35`; that makes five launches of mine on the node this morning, all listed on NET-423]
+
+Also on NET-423 (7:55 AM PST), cachedserve's question: today it is the whole run in both checks, and counting from the first connection held does not rescue windows 1 to 7, because each begins with 34 to 56 connections open from the window before. The smallest change is there, not made, with the count item.
+
+Still owed for the table, coming within the half hour: when a request's bytes leave the certifier against its release bucket, and whether our record can place vllm's 28 late arrivals.
+
+Nothing pushed, no branch touched; chain 2 is not on `main`.
+
