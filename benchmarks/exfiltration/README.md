@@ -120,6 +120,10 @@ The record is one JSON object (`served_share` in `exfiltration.py`):
   step, each `{"seconds": S, "gpus": G}`: the seconds it held them and how many it held. A step that started no
   process on a card is on 0 GPUs and adds no GPU-seconds; a part whose entries are all on 0 GPUs prints "on CPUs: no
   GPU-seconds" beside its 0. A count under 0 or not a whole number is refused.
+- `prove_seconds_source`: which seconds `prove`'s are. `busy`, the proof server's busy seconds a card: the proving is
+  measured. `session`, a session's seconds with its wait behind the others of its prover included: the proving and
+  the share that sums it print `measured, at most`, an upper bound. Absent, `prove` lacks it and no share is claimed;
+  any other value is refused. Either way a part's GPU-seconds are the seconds held times the GPUs held.
 - `serving`: one such entry, the window's load: the seconds it was served over and the GPUs its engine held.
 - `stock`: one such entry, stock vLLM serving the same load at the same launch settings save Verity's changes. The
   serving charge is the served GPU-seconds less stock's, measured.
@@ -229,7 +233,8 @@ plan of the case, is left out and listed under "Refused".
   network check's own proving taken off the audit budget (`--network-check-share`, assumed: no run measures it and
   the planner's rows don't count it).
 - **Inputs**: every input's part, value, unit, mark and source. A mark is `measured` (a run measured it), `modeled`
-  (derived from other figures), `assumed`, `missing` (a field a served run's record lacks, with its gap), or `run, not
+  (derived from other figures), `assumed`, `missing` (a field a served run's record lacks, with its gap), `measured,
+  at most` or `modeled, at most` (an upper bound: a served run's proving read from its sessions' seconds), or `run, not
   proved` (the stop class's verdicts, a run's, checked by a verifier no Lean proof covers yet). The compute audit's come from its rows of record: δ, λ and the most
   bits a request's output holds; and from the row's plan, where it is read: the share of proving time each way of
   pricing a block family covers (measured statements, computed, or both). The network certifier's are its

@@ -1072,7 +1072,9 @@ def test_what_prices_the_rows_proving_is_printed_by_source_or_not_recorded(tmp_p
 SERVED = {"run": "r20261113-000000-5e7d", "serving": {"seconds": 1000.0, "gpus": 8},
           "prove": [{"seconds": 300.0, "gpus": 1}, {"seconds": 180.0, "gpus": 1}], "staging": [{"seconds": 20.0, "gpus": 1}],
           "replay": [{"seconds": 30.0, "gpus": 8}], "interior": [{"seconds": 5.0, "gpus": 4}],
-          "stock": {"seconds": 975.0, "gpus": 8}}
+          "stock": {"seconds": 975.0, "gpus": 8}, "prove_seconds_source": "busy"}
+#: what the prove part's source says of its seconds, read from the proof server's busy seconds
+BUSY = "`prove`, the proof server's busy seconds a card (`prove_seconds_source`: `busy`)"
 
 
 def test_with_no_served_run_the_share_is_not_measured_and_the_given_share_is_assumed(tmp_path):
@@ -1166,6 +1168,54 @@ def test_a_field_the_record_lacks_names_its_gap_and_no_share_is_claimed(tmp_path
         E.served_share([SERVED])
 
 
+def test_the_proving_seconds_source_marks_the_proving_and_the_share(tmp_path):
+    """`prove_seconds_source`: `busy`, the proof server's busy seconds a card, is measured; `session`, a session's
+    seconds with its wait included, prints the proving and the share as measured, at most (an upper bound); absent,
+    `prove` lacks it and no share is claimed; any other value is refused by name. Both read seconds held times GPUs
+    held."""
+
+    s = recorded(tmp_path)
+    busy = E.build(served=SERVED, store=s.store, root=REPO)
+    cs = busy["compute_share"]
+    assert (cs["mark"], cs["parts"]["prove"]["mark"], cs["parts"]["prove"]["source"]) == ("measured", "measured", BUSY)
+    assert f"**The audit's share of compute: 12.000% (measured)**, on {SERVED['run']}" in E.render(busy)
+
+    twice = SERVED | {"prove": [{"seconds": 150.0, "gpus": 2}, {"seconds": 180.0, "gpus": 1}]}
+    doc = E.build(served=twice | {"prove_seconds_source": "session"}, store=s.store, root=REPO)
+    cs = doc["compute_share"]
+    assert (cs["value"], cs["mark"]) == (pytest.approx(0.12, rel=1e-12), "measured, at most")
+    assert (cs["parts"]["prove"]["gpu_s"], cs["parts"]["prove"]["mark"]) == (480.0, "measured, at most")
+    assert {p["mark"] for k, p in cs["parts"].items() if k != "prove"} == {"measured"}
+    by = {i["input"]: i for i in doc["inputs"]}
+    assert (by["served_prove_gpu_s"]["mark"], by["served_compute_share"]["mark"]) == ("measured, at most",) * 2
+    text = E.render(doc)
+    assert f"**The audit's share of compute: 12.000% (measured, at most)**, on {SERVED['run']}" in text
+    assert (f"| prove | {E.SERVED_PARTS['prove'][0]} | 480 | 6.000% | measured, at most | `prove`, a session's seconds, "
+            "its wait included: an upper bound (`prove_seconds_source`: `session`) |") in text
+    assert "2 measured upper bounds" in text
+    modeled = {k: v for k, v in SERVED.items() if k != "stock"} | {
+        "serving_cost": 0.025 / 0.975, "serving_cost_source": "r20261110-000000-0000, load chat",
+        "prove_seconds_source": "session"}
+    assert E.served_share(modeled)["mark"] == "modeled, at most"
+
+    absent = E.build(served={k: v for k, v in SERVED.items() if k != "prove_seconds_source"}, store=s.store, root=REPO)
+    cs = absent["compute_share"]
+    assert (cs["value"], cs["mark"], cs["GB"]) == (None, None, None)
+    assert cs["missing"] == [{"field": "prove", "lacks": ["prove_seconds_source"], "why": E.PROVE_SOURCE_GAP}]
+    assert cs["why"] == f"not measured: {SERVED['run']}'s record lacks `prove_seconds_source` ({E.PROVE_SOURCE_GAP})"
+    assert (cs["parts"]["prove"]["gpu_s"], cs["parts"]["prove"]["mark"]) == (480.0, "missing")
+    assert f"\n\n**The audit's share of compute: {cs['why']}.** Every figure below" in E.render(absent)
+    both = E.served_share({k: v for k, v in SERVED.items() if k != "prove_seconds_source"}
+                          | {"prove": [{"seconds": 300.0}]})
+    assert both["missing"] == [{"field": "prove", "lacks": ["prove.gpus", "prove_seconds_source"],
+                                "why": f"{E.SERVED_PARTS['prove'][1]}; {E.PROVE_SOURCE_GAP}"}]
+
+    with pytest.raises(ValueError, match=re.escape(
+            f"{SERVED['run']}'s record holds `prove_seconds_source` 'timer': one of busy (the proof server's busy "
+            "seconds a card), session (a session's seconds, its wait included: an upper bound)")):
+        E.served_share(SERVED | {"prove_seconds_source": "timer"})
+
+
 def test_a_part_on_cpus_alone_adds_no_gpu_seconds_and_says_so_beside_its_0(tmp_path):
     """The audit's driver writes 0 GPUs for a step that started no process on a card (staging, the interior commitment,
     a session proved on a CPU): it is read and adds no GPU-seconds, and a part whose entries are all on 0 GPUs is
@@ -1184,7 +1234,7 @@ def test_a_part_on_cpus_alone_adds_no_gpu_seconds_and_says_so_beside_its_0(tmp_p
     assert (f"in parts prove 3.750%, staging 0.000% ({E.ON_CPUS}), replay 3.000%, interior 0.000% ({E.ON_CPUS}), "
             "serving charge 2.500%.") in text
     assert f"| staging | {E.SERVED_PARTS['staging'][0]} | 0, {E.ON_CPUS} | 0.000% | measured | `staging` |" in text
-    assert f"| prove | {E.SERVED_PARTS['prove'][0]} | 300 | 3.750% | measured | `prove` |" in text
+    assert f"| prove | {E.SERVED_PARTS['prove'][0]} | 300 | 3.750% | measured | {BUSY} |" in text
     by = {i["input"]: i for i in doc["inputs"]}
     assert by["served_interior_gpu_s"]["source"].endswith(f"`interior`; {E.ON_CPUS}")
     assert E.ON_CPUS not in by["served_prove_gpu_s"]["source"] and E.ON_CPUS not in E.render(

@@ -9,7 +9,8 @@ store, with no GPU and no node.
   GPU-seconds, each read from the run's record and marked measured, a field the record lacks marked missing with its
   gap and the share then not claimed; and where it is claimed, the compute audit's part at it beside the part at the
   given share. A part whose entries are all on 0 GPUs adds no GPU-seconds and is printed `ON_CPUS` beside its 0.
-  Without a record it prints the share as `NO_RUN`. With a record the resampling holes are read at the served run's
+  Proving read from its sessions' seconds, their wait included (`PROVE_SOURCE`), is measured, at most, and so is the
+  share that sums it. Without a record it prints the share as `NO_RUN`. With a record the resampling holes are read at the served run's
   own commits (`spot_status.served`), and where the tree holds `served_row`, its section on what the audit showed
   is printed between the figures and the holes.
 
@@ -180,10 +181,14 @@ GB = 8e9
 #: an input whose value a run's verdicts give, each checked by a verifier no Lean proof covers yet, and how it prints
 RUN_NOT_PROVED = "run, not proved"
 PRINTED = {RUN_NOT_PROVED: "run (Python verifier, not proved)"}
+#: a served run's proving read from a session's seconds, waiting included, and every share that sums it: an upper bound
+AT_MOST = ", at most"
 #: an input's marks: `missing` is a served run's field its record lacks, which the share it would measure is not claimed
 #: without; `RUN_NOT_PROVED` is never `measured`, which a verdict is only where its record names the Lean guarantee
 #: that proves its verifier (`proved_by`)
-MARKS = ("measured", "modeled", "assumed", "missing", RUN_NOT_PROVED)
+MARKS = ("measured", "modeled", "assumed", "missing", RUN_NOT_PROVED, "measured" + AT_MOST, "modeled" + AT_MOST)
+#: how the count of inputs names the upper bounds' marks
+BOUNDS = {"measured" + AT_MOST: "measured upper bounds", "modeled" + AT_MOST: "modeled upper bounds"}
 #: the record whose runs hold the verdicts on the stop class, each verdict's record one JSON object a line of
 #: `VERDICTS_FILE` in a run's files
 VERDICTS = "exfiltration-glm53-stop-verdicts"
@@ -221,6 +226,14 @@ SERVED_PARTS = {
                        "load (`stock`) and no serving cost of the served arm over stock (`serving_cost`, "
                        "`verity bench serve_tax`)"),
 }
+#: the record's field that says which seconds a session's proving is (`prove`): ``busy``, the proof server's busy
+#: seconds on a card, measured; or ``session``, a session's seconds, its wait behind the others of its prover included,
+#: measured, at most
+PROVE_SOURCE = "prove_seconds_source"
+PROVE_SOURCES = {"busy": ("measured", "the proof server's busy seconds a card"),
+                 "session": ("measured" + AT_MOST, "a session's seconds, its wait included: an upper bound")}
+PROVE_SOURCE_GAP = ("the record doesn't say whether a session's proving seconds are the proof server's busy seconds or "
+                    "the whole session's, its wait included (`audit.timing`'s `prove_seconds_source`)")
 #: why a run's record lacks the window's serving, which the share is of
 SERVING_GAP = ("the window's serve is not tied to the audit's record: its load's seconds and GPUs (serve_tax's "
                "`meta.json`: `wall_s`, `gpu`) are in the serve's own run")
@@ -722,7 +735,12 @@ def served_share(record: Mapping[str, Any] | None) -> dict:
     the record lacks; so is an entry's key. The serving charge is the served GPU-seconds less stock's, measured; or
     from the serving cost c, the served GPU-seconds times c / (1 + c), modeled, since its loads are not the window's.
     A part whose entries are all on 0 GPUs is read as 0 GPU-seconds and held `on_cpus`, which the print says beside
-    its 0 (`ON_CPUS`)."""
+    its 0 (`ON_CPUS`).
+
+    ``prove_seconds_source`` says which seconds ``prove``'s are (`PROVE_SOURCES`): ``busy``, the proof server's busy
+    seconds a card, measured; ``session``, a session's seconds with its wait included, so the proving and the share
+    that sums it are marked measured, at most. Absent, ``prove`` lacks it and the share is not claimed; any other
+    value is refused. On both, a part's GPU-seconds are the seconds held times the GPUs held."""
 
     if record is None:
         return {"run": None, "value": None, "mark": None, "why": NO_RUN, "serving_gpu_s": None, "parts": {},
@@ -730,6 +748,10 @@ def served_share(record: Mapping[str, Any] | None) -> dict:
     if not isinstance(record, Mapping):
         raise ValueError(f"a served run's record is one JSON object, not {type(record).__name__}")
     run = str(record.get("run") or "the served run")
+    said = record.get(PROVE_SOURCE)
+    if said is not None and said not in PROVE_SOURCES:
+        raise ValueError(f"{run}'s record holds `{PROVE_SOURCE}` {said!r}: one of "
+                         + ", ".join(f"{k} ({why})" for k, (_, why) in PROVE_SOURCES.items()))
     serving, missing = _gpu_s(record.get("serving"), "serving", run)
     gaps = [{"field": "serving", "lacks": missing, "why": SERVING_GAP}] if missing else []
     parts: dict[str, dict] = {}
@@ -750,9 +772,17 @@ def served_share(record: Mapping[str, Any] | None) -> dict:
                           "the window's: the served GPU-seconds times c / (1 + c)")
         else:
             (gpu_s, lacks), mark, source = _gpu_s(record.get(name), name, run), "measured", f"`{name}`"
+        if name == "prove":
+            if said is None:
+                gap = [why] if lacks else []
+                lacks, why = [*lacks, PROVE_SOURCE], "; ".join([*gap, PROVE_SOURCE_GAP])
+            else:
+                mark, held = PROVE_SOURCES[said]
+                source += f", {held} (`{PROVE_SOURCE}`: `{said}`)"
         if lacks:
             gaps.append({"field": name, "lacks": lacks, "why": why})
-        parts[name] = {"what": what, "gpu_s": gpu_s, "mark": "missing" if gpu_s is None else mark, "source": source,
+        parts[name] = {"what": what, "gpu_s": gpu_s, "mark": "missing" if gpu_s is None or lacks else mark,
+                       "source": source,
                        "share": None if None in (gpu_s, serving) or not serving else gpu_s / serving,
                        "on_cpus": name != "serving_charge" and gpu_s is not None and _on_cpus(record.get(name))}
     if serving is not None and not serving > 0:
@@ -761,6 +791,7 @@ def served_share(record: Mapping[str, Any] | None) -> dict:
     claimed = not gaps
     return {"run": run, "value": sum(p["share"] for p in parts.values()) if claimed else None,
             "mark": (("modeled" if any(p["mark"] == "modeled" for p in parts.values()) else "measured")
+                     + (AT_MOST if any(p["mark"].endswith(AT_MOST) for p in parts.values()) else "")
                      if claimed else None),
             "why": None if claimed else "not measured: " + "; ".join(
                 f"{run}'s record lacks {', '.join(f'`{k}`' for k in g['lacks'])} ({g['why']})" for g in gaps),
@@ -1259,7 +1290,8 @@ def render(doc: Mapping[str, Any]) -> str:
         f"{_n(net['GB'])} GB.",
         f"- of {len(doc['inputs'])} inputs, {marks['measured']} {'is' if marks['measured'] == 1 else 'are'} measured, "
         + _listed([f"{marks['modeled']} modeled", f"{marks['assumed']} assumed",
-                   *(f"{marks[m]} {PRINTED.get(m, m)}" for m in ("missing", RUN_NOT_PROVED) if marks[m])]) + ".", "",
+                   *(f"{marks[m]} {BOUNDS.get(m) or PRINTED.get(m, m)}"
+                     for m in (*BOUNDS, "missing", RUN_NOT_PROVED) if marks[m])]) + ".", "",
         f"Inputs, each a labelled record of the store (`{RUN_OF_RECORD}`):", "",
         f"- compute-audit: {', '.join(doc['runs'])} (`{doc['record']}`): the planner's rows, "
         f"{sum(len(p['pinned']) for p in doc['compute_audit'])} of row `{doc['row']}` at step `{head['step']}` over "
