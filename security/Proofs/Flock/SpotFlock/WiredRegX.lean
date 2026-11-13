@@ -17,9 +17,8 @@ the wired code:
 * `sessionsTwo_wired`: the two-stage contract at the wired code (`sessionsTwo_stage` at `ksTwo_wired`'s facts).
 * `ksRegTwoX_wired`: `CompiledTwo.KSRegTwoX` there (`compilerKSRegTwoX` at Flock's masked record and the
   commitment's binding).
-* `ksRegTwoX_connected`, `exfilRegTwoX_connected`: at the code's own wiring (`codeConnected h`), under the three
-  premises on that wiring (`WiresFirst`, `WiresMove`, `SourcesNamed`), from SPOT's own frame there and the addresses
-  (`BuiltWired`, `AddressesConnected`); what the committed trace serves is counted by
+* `ksRegTwoX_connected`, `exfilRegTwoX_connected`: at the code's own wiring (`codeConnected h`), from SPOT's own
+  frame there and the addresses (`BuiltWired`, `AddressesConnected`); what the committed trace serves is counted by
   `CompiledTwo.exfilRegTwoX_of_ks`.
 -/
 
@@ -57,18 +56,16 @@ theorem ksRegTwoX_wired (hW : ∀ s d, two h s = some d → (bitsProgs h.ms).Rew
 /-- **SPOT[Flock]'s two-stage committed form at the connected program**: `CompiledTwo.KSRegTwoX` at the code's own
 wiring, under `ksTwo_connected`'s premises and from its two facts: the wiring map's rewiring the members' programs
 where the design evaluates, and the sessions' openings there. -/
-theorem ksRegTwoX_connected (hF : WiresFirst h) (_ : WiresMove h) (hS : SourcesNamed h)
-    (hB : BuiltWired h (wireMap h) (returned h)) (hA : AddressesConnected h) :
+theorem ksRegTwoX_connected (hB : BuiltWired h (wireMap h) (returned h)) (hA : AddressesConnected h) :
     (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeConnected h) iroots
       (twoConnected h) (rsConnected h) (cap h)).KSRegTwoX FlockDeploy.sha512 :=
-  ksRegTwoX_wired h (fun _ _ hd => rewires_of_two hd hF) (stmtOpens_connected h hF hS hB hA)
+  ksRegTwoX_wired h (fun _ _ hd => rewires_of_two hd (wiresFirst_of_two h hd)) (stmtOpens_connected h hB hA)
 
 /-- **What the committed trace serves at the connected program**: `CompiledTwo.ExfilRegTwoX` from
 `ksRegTwoX_connected` (`CompiledTwo.exfilRegTwoX_of_ks`). -/
-theorem exfilRegTwoX_connected (hF : WiresFirst h) (hM : WiresMove h) (hS : SourcesNamed h)
-    (hB : BuiltWired h (wireMap h) (returned h)) (hA : AddressesConnected h) :
+theorem exfilRegTwoX_connected (hB : BuiltWired h (wireMap h) (returned h)) (hA : AddressesConnected h) :
     (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeConnected h) iroots
       (twoConnected h) (rsConnected h) (cap h)).ExfilRegTwoX FlockDeploy.sha512 :=
-  Claims.SamplingGeneric.CompiledTwo.exfilRegTwoX_of_ks (ksRegTwoX_connected h hF hM hS hB hA)
+  Claims.SamplingGeneric.CompiledTwo.exfilRegTwoX_of_ks (ksRegTwoX_connected h hB hA)
 
 end SpotFlock

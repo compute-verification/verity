@@ -210,17 +210,6 @@ theorem addressesWired_id (hA : Addresses h) : AddressesWired h id (fun _ => tru
 
 /-! ## Where the property is a premise: every source bit at a port a link or a wire names -/
 
-/-- **Every source bit is at a port a link or a wire names**, decided on what the verifier holds: each source gate
-of a member that has a commitment position (`sourceBits`) is at a port the auditor's copies give a link or a wire
-(`heldLink`, `heldWire`). Round 2 reads any other port at its own port of the interior record
-(`SecondStage.readOk`), under the replay block's roots, while the wired program leaves its gates inputs, opened
-under the statement's roots (`CheckedRun.rootsWired`). `AddressesWired` asks the two to be one, so it is a premise
-only where this holds. -/
-def sourcesNamed : Bool :=
-  (sourceBits h.ms).all fun s =>
-    (heldLink h (h.names.getD s.2.1 "") s.2.2.row).isSome ||
-      (heldWire h (h.names.getD s.2.1 "") s.2.2.row).isSome
-
 /-- **Only source bits at a port a link names stay inputs**: where every source bit is at a port a link or a wire
 names and every wired source bit has a gate to go to (`wiresMove`), a source bit at a port no link names has one
 (`wireTarget`), so the wiring map moves it. -/
