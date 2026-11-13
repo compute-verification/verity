@@ -127,8 +127,8 @@ def longer(doc: dict) -> list[str]:
     counts = (("lines", len(lines), NOT_YET_MAX, "NOT_YET_MAX"),
               ("unowned lines", sum(r.get("owner") == UNOWNED for r in lines), UNOWNED_MAX, "UNOWNED_MAX"),
               ("arriving lines", sum(bool(r.get("arriving")) for r in lines), ARRIVING_MAX, "ARRIVING_MAX"))
-    return [f"{LAYOUT}'s not-yet list has {n} {what}, above tests/test_tree.py's {name} = {cap}: it only shrinks, so "
-            f"move the entry to its place in the tree, {ASK}" for what, n, cap, name in counts if n > cap]
+    return [f"{LAYOUT}'s not-yet list has {n} {what}, above tests/test_tree.py's {name} = {most}: it only shrinks, so "
+            f"move the entry to its place in the tree, {ASK}" for what, n, most, name in counts if n > most]
 
 
 def still_arriving(doc: dict, tracked: list[str]) -> list[str]:

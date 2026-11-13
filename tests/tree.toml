@@ -183,7 +183,7 @@ protocol = true
 
 [[tree]]
 path = "verity/protocols/spot/"
-means = "sampled proofs, with the integrity profile"
+means = "SPOT, the Sample-and-PrOve Transform, with the integrity profile"
 protocol = true
 
 [[tree]]
@@ -203,7 +203,7 @@ protocol = true
 
 [[tree]]
 path = "verity/protocols/poub/"
-means = "proof of useful bandwidth"
+means = "PoUB: with no hardware at the site, how many reads of a node's registered store the node made"
 protocol = true
 
 [[tree]]
@@ -407,7 +407,7 @@ to = "verity/protocol.py"
 owner = "top"
 day = "2026-11-15"
 arriving = true
-note = "the Python mirror of CoreProtocol.Period, folded by hand with reporting.py"
+note = "the Python mirror of Lean's monitoring periods, folded by hand with reporting.py"
 
 [[not_yet]]
 path = "fixtures/artifacts.json"
