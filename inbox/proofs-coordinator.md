@@ -143862,3 +143862,128 @@ Not established: every verdict above; whether `check-stream` accepts at all.
 - **Wrong in my 13:23Z entry, item 5's last line:** I wrote that the file is listed with the two that may read `verity/definitions/ops`. It is not. It is listed under the suite's `untraced` (the files that start a program the read guard cannot see into, here v2's executable), as `test_audit_two_members.py` is; that keys it on the suite's whole inputs, which hold `verity` and so the tables' source. No `reads` entry is needed and none was added [read: the commit's diff; the run's report names the executable as the one untraced program the file starts].
 - **Your 13:29Z mail is read.** Item 3: I change none of `stepMember`, `runMembers`, `membersRun` or `Member.files` before the carry, and plan no change to their text at it; the split of `Spot/OneStageZk.lean` at the carry moves declarations between modules and I say which in an entry first. Item 4 (what the per-member `check` needs on Thursday's served window; nothing launched): started now, entry by 15:00Z.
 - Head pushed: `caaeae611728`; nothing unpushed. No run of mine is out.
+
+## HONEST2, Fri 13 Nov 13:42Z: `HonestExists` RESTATED to a play the verifier accepts, and the five statements with `honest_of_formAccepts` COMPILE on `cursor/proofs-honest2-join-6e17` at `2012857f64f` (runs `9341`, `5c7c`), against the join's `4e986e339a`, NOT ADDRWC's leg, which ASSEMBLY had not merged. (ii) as Lean text: true at EVERY accepted play whose statement has an inner block, draw or no draw
+
+In plain words: `HonestExists` now asks that the verifier accepts one play, and no longer that someone holds a witness. An accepted play puts its own statement in the two-stage scope, so the scope clause follows from the play. Where each accepted play's copies are the ones `heldOf` builds (`HeldOfAt`), one play the form accepts gives the two premises the two-stage guarantee takes at the session's copies; with the leg's `PlayAccepts` and some coins the check read, it gives `HonestExists` whole. On (ii): the two stages check at least one inner block at every accepted play whose statement has an inner block. It does not depend on the rate law drawing. When the first stage samples no outer block the second stage is refused, and the verifier then checks every inner block. When the second stage does draw, it proves at least one inner block in each sampled outer block, and what is left to show is that this inner block is one of the statement's, which holds where the first stage samples only the layout's own slots.
+
+**1. The branch and the tip** [run: `git merge-base --is-ancestor 79b8b4ec6e22 origin/cursor/proofs-join-42b8` at 13:32Z: not an ancestor]
+
+`cursor/proofs-honest2-join-6e17`, off the join's tip `4e986e339ad2` (fetched 13:05Z and 13:32Z, the same), `cf303cb73f` merged into it clean. Head `2012857f64f9`. ADDRWC's `79b8b4ec6e22` was not on the join at 13:32Z, so everything here is compiled against `4e986e339ad2`. Point 5 says what changes at ADDRWC's leg.
+
+**2. The restatement** [run: `r20261113-131515-9341` at `509d60acbad`: `Honest/Instance` 30 theorems, `Honest/Wiring` 16, `Honest/Sits` 9, `Honest/Any` 8, each lean exit 0, axiom probe clean, siblings clean; none of the four files changes after it]
+
+```lean
+def AcceptsPlay (h : Held) : Prop :=
+  ∃ (Ω : Type) (P : Claims.Prover Ω) (x : Msg) (ω : Ω) (r : Fin ((V h).k x) → FlockDeploy.Coin),
+    (Claims.run FlockDeploy.sha512 P (V h) x ω r).out = .acc
+
+theorem compiled_V (h : Held) : (compiled h).V = V h := rfl
+
+def HonestExists : Prop := ∃ h : Held, Premises h ∧ InScope h ∧ AcceptsPlay h
+```
+
+The docstring's sentence: "It asks for a play the verifier accepts and not for a witness (`Accepts`), since a play is what a verifier's accept gives of a run, while a witness in Flock's relation is the prover's and follows from an accept only through knowledge soundness, with its error."
+
+`Owed`, `honest_of_owed`, `honest_of_accepts` (the instance's) and `honest_of_run` read `AcceptsPlay`. `Accepts` and `accepts_of` stay as they were.
+
+Two choices in it are mine, and each is a one-line change if you rule otherwise:
+
+- **SHA-512, not `∃ H`.** Your text had `∃ H`, which was my loose wording at 12:49Z. `SpotKSTwo` concludes at `FlockDeploy.sha512` and the leg's `seqRun` runs at it [read: `WiredKS.lean:294`, `SampledTwo/Accepts.lean:237`]. With `∃ H`, a play at a hash that answers anything would count as an instance of a guarantee stated at SHA-512.
+- **`InScope h` stays a clause though it now follows from `AcceptsPlay h`** (`inScope_of_play`), so `HonestExists ↔ ∃ h, Premises h ∧ AcceptsPlay h` [derived]. I kept the three clauses so a reader sees the scope named. Say if you want it dropped.
+
+**3. The statements** [run: `9341` for `Any`; `r20261113-133234-5c7c` at `2012857f64f` for `Honest/AtHeldOf` (6 theorems) and `SampledTwo/PremisesAt` (4 theorems): rc 0, lean exit 0, axiom probes clean, siblings clean (74 and 185 imported modules; 4,155 and 4,045 unchecked); no warning names either file]
+
+| file | theorem | says | hypotheses |
+|---|---|---|---|
+| `Honest/Any` | `scope_of_play` | `(compiled h).Scope x` | `(Claims.run H P (V h) x ω r).out = .acc`, at any `H` |
+| | `inScope_of_play` | `InScope h` | `AcceptsPlay h` |
+| | `honest_of_run` | `HonestExists` | `premises_of_checks`' six, `AcceptsPlay h` |
+| `Honest/AtHeldOf` | `builtWired_withFrame` | `BuiltWired (withFrame h c₀) (wireMap _) (returned _)` | none |
+| | `builtWired_heldOf` | `BuiltWired h (wireMap h) (returned h)` | `heldOf i it u = some h` |
+| | `always_heldOf` | `h.reg.always v = false` | `heldOf i it u = some h` |
+| | `premises_of_heldOf` | `Premises h` | `heldOf i it u = some h`, `RefReadsWf h`, `popOk i.params.verifier.program i.params.verifier.query n = true`, `firstK h.reg.first = some K`, `AddressRow.wiresChecked h = true` |
+| | `inScope_of_heldOf` | `InScope h` | `heldOf i it u = some h`, the same `popOk`, `decode x = some st` |
+| | `honest_of_heldOf` | `HonestExists` | `premises_of_heldOf`'s five, `AcceptsPlay h` |
+| `SampledTwo/PremisesAt` | `premises_of_formAccepts` | `SpotFlock.Honest.Premises A.h` | `HeldOfAt A C`, `FormAccepts C o`, `inputOn C o = some i`, `i.interior = some it`, `RefReadsWf A.h`, `wiresChecked A.h = true` |
+| | `inScope_of_formAccepts` | `SpotFlock.Honest.InScope A.h` | `HeldOfAt A C`, the same play, `decode x = some st` |
+| | `acceptsPlay_of_playAccepts` | `SpotFlock.Honest.AcceptsPlay A.h` | `PlayAccepts A C S P'`, the same play, `recordMsg i.record = some x`, `recordMsg it.record = some m₁`, `∀ m₂, S.stmts o = some m₂ → ∃ c₀ c₁ r', SeqCoinsRead A S o i it m₂ c₀ c₁ r'` |
+| | `honest_of_formAccepts` | `SpotFlock.Honest.HonestExists` | `premises_of_formAccepts`' and `acceptsPlay_of_playAccepts`' |
+
+The five you asked for are `builtWired_heldOf`, `always_heldOf`, `premises_of_heldOf`, `inScope_of_heldOf` and `premises_of_formAccepts`. The rest is the restatement carried through: at `heldOf`'s copies and at the form. `premises_of_formAccepts` takes the population check from the accepted run (`population_of_accepted`) and the first stage's count from `firstK_of_formAccepts`, so of `premises_of_checks`' six only `RefReadsWf` and `wiresChecked` are still asked.
+
+One mend on the way [run: `9341`, `Honest/AtHeldOf.lean:83`]: the join's tip renamed the lemma that takes the population check to `twoHolds_of_pop` (`3fed3cef431`); `twoHolds_of` now takes the accepted run. `inScope_of_heldOf` reads `twoHolds_of_pop` since `2012857f64f`.
+
+**4. (ii), the two stages' sample is not empty** (stated, not proved)
+
+```lean
+theorem checked_ne_nil {h : Held} {x : Msg} {s : AuditStatement} {d : Design.Two} (hp : parse h x = some s)
+    (h2 : two h s = some d) (hSS : AddressRow.SampleSlots h) (hN : 0 < units (base h) x)
+    (c₀ : FlockDeploy.Coin) (c₁ : Stage h) :
+    h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁) ≠ []
+
+theorem checked_ne_nil_of_play {h : Held} (H : Msg → Msg) {Ω : Type} {P : Claims.Prover Ω} {x : Msg} {ω : Ω}
+    {r : Fin ((V h).k x) → FlockDeploy.Coin} (hacc : (Claims.run H P (V h) x ω r).out = .acc)
+    (hSS : AddressRow.SampleSlots h) (hN : 0 < units (base h) x) :
+    h.reg.checked (units (base h) x) (src (r ⟨0, k_pos h x⟩)) (stageSrc (stageCoins h x r)) ≠ []
+```
+
+The second is the first at the play's statement, which parses with the design evaluating (`refusesTwo`). **It is true at every accepted play, on every coins, where the statement has an inner block; it is not only where the rate law draws a unit** [derived, from reading `RegTwo.checked`, `Select.secondProblem`, `size_proved_selectSecond`, `blockAt_slot`, `RegTwo.ok_mem`]. `RegTwo.checked` has two branches:
+
+- **The second stage is refused.** `checked` is every inner block below `N`, so it is non-empty exactly where `0 < N`. A first stage that is refused or samples nothing lands here: `RegTwo.sample` is then `#[]`, and `secondProblem`'s first clause refuses an empty replay sample. So "the rate law draws nothing" makes the verifier check everything, not nothing.
+- **The second stage draws.** `secondProblem` passed, so the sample is non-empty and every count is at least 1, and the draw proves `|sample| · Σ k_t ≥ 1` interior units (`size_proved_selectSecond`). A proved unit is position `p` of template `t`'s cell in the `i`-th sampled outer block, and `blockAt_slot` puts it at the member's unit `unitBase h.ms t + (sample[i]·n_t + p)`, a unit the member has, under `two h s = some d` and `SampleSlots h`. That unit is below `N`, so `RegTwo.ok_mem` puts it in `checked`.
+
+The two hypotheses: `SampleSlots h` is `sampleSlots_of_firstK` from the population check and `firstK`, which an accepted play of the form gives under `HeldOfAt`. `0 < units (base h) x` is needed only in the refused branch; I did not find it among `InScopeTwo`'s clauses. [guess] The step I have not located a lemma for is that a proved unit of the second draw is `cellOff + i·n_t + p` for some cell; `positions_second` and `sizes_second` in `Select/Second.lean` look like its source.
+
+**5. At ADDRWC's leg** [read: `git diff` of `79b8b4ec6e22` against the join, `Leg.lean` only]
+
+ADDRWC's `Live₂.L` is `compiledTwo (deployZk Flock.Readable.relation) (codeConnected A.h) iroots (twoConnected A.h) (rsConnected A.h) (cap A.h)`, which is my `SpotFlock.Honest.compiled A.h` word for word, and it adds `Live₂.ks_of_connected (hB) (hA) : A.KS`. So two more statements hold there, which cannot be stated at the join's tip, where `A.L` is at `SpotFlock.code`:
+
+```lean
+theorem ks_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o : Verity.Exchange}
+    {i : Spot.Run.Input} {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i)
+    (hit : i.interior = some it) (hWf : SpotFlock.RefReadsWf A.h)
+    (hwc : SpotFlock.AddressRow.wiresChecked A.h = true) : A.KS
+
+theorem scope_of_accept {A : Live₂} (H : Msg → Msg) {Ω : Type} {P : Claims.Prover Ω} {x : Msg} {ω : Ω}
+    {r : Fin ((SpotFlock.V A.h).k x) → FlockDeploy.Coin}
+    (hacc : (Claims.run H P (SpotFlock.V A.h) x ω r).out = .acc) : A.L.Scope x
+```
+
+The first is the leg's `KS` hypothesis from one accepted play; the second is `prBad_le`'s `hs` at an accepted play's statement. Both are written on a scratch merge of my head with `79b8b4ec6e22`, on no branch (`f40cbb93bc89`), and one try is out: `r20261113-133803-a0e0`, launched 13:38Z, no verdict yet. They go on my branch when ASSEMBLY has ADDRWC's leg on the join.
+
+**6. What `honest_of_formAccepts` still takes** [read]
+
+- `HeldOfAt A C`: HELDOF's, from `DescAt`, `DecodesAt`, `RefsAt` and `CopyOf` at the cases at one statement (`heldOfAt_at`).
+- `PlayAccepts A C S P'`: the leg's, `playAccepts_form` under its premises.
+- One play the form accepts, with its two records' bytes. No Lean value is one.
+- Coins that `SeqCoinsRead` describes at that play: ones that start with the bytes the run read and agree with the sessions' coins the check read. I take it as a hypothesis; `CoinsCover` and `SourcesFit` are the leg's premises of that kind.
+- `RefReadsWf A.h` and `AddressRow.wiresChecked A.h = true`: ADDRROW2's `RowWires` is where the second comes from.
+
+## STOP RULE
+
+None.
+
+## NEEDS
+
+- **Your word for ASSEMBLY** on `2012857f64f9`. It merges onto the join's `4e986e339ad2` with nothing to resolve: it is that tip plus my commits.
+- **Whether `HonestExists` keeps the `InScope h` clause and SHA-512** (point 2). I go on with both unless you write.
+- **Whether I prove (ii) next**, on this branch, as `Honest/Checked.lean`. It is the one of your two field-list items that is mine to close; the open step is the proved unit's cell.
+
+## Not established
+
+- (ii): stated and argued from reading, not compiled.
+- That an accepted play's statement has an inner block (`0 < units (base h) x`).
+- That coins `SeqCoinsRead` describes exist at an accepted play.
+- Point 5's two statements: the try is out.
+- Any play the form accepts, so `HonestExists` itself: every statement here is conditional.
+- A whole build or a records run at my head; no ready line.
+
+## Pushed
+
+- `cursor/proofs-honest2-join-6e17` at `2012857f64f9`: the merge of `cf303cb73f` onto `4e986e339ad2`, then `Honest/AtHeldOf.lean` and `SampledTwo/PremisesAt.lean` (new, each with its root line in `security/Proofs/lakefile.toml` and `lean-audit.json`), the restatement in `Honest/Instance.lean`, `Honest/Sits.lean` and `Honest/Any.lean`, and the mend. Every changed file is compiled with `--siblings`: `9341` (Instance, Wiring, Sits, Any) and `5c7c` (AtHeldOf, PremisesAt). Whole-tree tests at `509d60acbad`, six files, run here: 185 passed, 1 failed, `test_no_public_file_needs_one_the_export_does_not_copy`, whose seven edges are in `OwnReads.lean`, `ReadsCheck.lean` and four `RunsAs/` files, none in a file of mine. No records run (ASSEMBLY's is the join's), so no ready line.
+- `cursor/proofs-honest2-7c4e` stays at `cf303cb73f`.
+
+## To post
+
+Nothing. No timer but one of my own, for the mailbox.
