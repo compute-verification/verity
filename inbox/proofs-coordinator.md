@@ -116238,3 +116238,26 @@ Not established: that any of `HeldOfReads.lean`, `ReadsCheck.lean`, `Apart.lean`
 Pushed: `cursor/proofs-frame-l1-9c4e` at `8c37334cc716`; nothing unpushed. Base unmoved at `6c1a87cc54d3`.
 
 Not established: everything the try has not printed yet. I wait on `b8ff`; its build verdict about 03:25Z, the guard's lines about 03:40Z [guess].
+
+## REDRAW, Fri 13 Nov 02:59Z: READY #9555 at `962bc1a88b4e3be883a1a0f348ae0d9554a19795`: records pass at the head with no allowance, the quick tier is whole across two runs, lean's four conditions are met; it holds #9237's head and lands after it
+
+Mailbox read to its 02:49Z message before writing [run].
+
+**Ready line: #9555, `cursor/proofs-keyheld-3c9a`, head `962bc1a88b4e3be883a1a0f348ae0d9554a19795`.**
+
+- **Records at the head, no `--allow`:** `r20261113-021532-deb5` at `962bc1a88b4e`, exit 0, outcome `pass` [run]. It built nothing: "its records passed on the same Lean inputs in r20261113-010237-d461 at ca9a951d175e" [run: its log]. `d461` at `ca9a951d175e`: exit 0, `security/Proofs`, `security/Properties` (470 guarantees) and `security` each pass, nothing regenerated, the lock it wrote byte-equal to the committed one [run]. The head is `ca9a951d175e` and two commits that change `benchmarks/one_stage/a5.py` and `benchmarks/verifier_cost/whole_run/Main.lean` only [run]. If lean wants a rebuilt run at the head rather than a reused pass, it is `--rebuild`, about 65 minutes [guess]; say so and I launch it.
+- **Quick tier, in two runs, by the rule that a suite's pass holds while its inputs do:**
+  - `r20261113-005641-0e0d` at `9fd601fbb177`, `suites.py --changed 4f0154e42026 --quick`: exit 1; 68 suites, 65 passed, none cached, 3 failed [run]. Passed among them: `verity-core-sampled-proofs` 307 passed, 2 skipped, with `test_difftest.py` and `test_challenger_difftest.py` whole; `verity/protocols/spot/verifier` 894 passed, with `test_challenger_coins.py` whole, slow tests included; `verity/protocols/tests` 312 passed [run]. The three failed: `research` (the node's pair of `tests/test_auto.py`; the same suite passed 4,784 on vy-nebius-cpu-11 at #9237's head in `454d`, and no file under `tools/research` differs between the two heads [run]); `benchmarks/one_stage` and `benchmarks/verifier_cost`, both mended, next line.
+  - `r20261113-021456-8116` at the head `962bc1a88b4e`, exit 0, two parts [run]. First, the two mended suites with the tier's own selection (`--changed 4f0154e42026 --quick`): `benchmarks/verifier_cost` 8 passed; `benchmarks/one_stage` 651 passed, none failed, the three tests of `test_audit_two_members.py` on the real prover and verifier and the second stage's negative test among them [run; the negative test by derivation: it is not slow and the suite names no failure]. Second, every suite the three files changed since `9fd601fbb177` touch (`--changed 9fd601fbb177 --quick`): 9 suites, 9 passed (1 cached), none failed [run].
+  - So each of the 68 suites has a pass at the head's inputs but `research`, whose red is the node's [derived]. A whole tier in one run at the head is about 105 minutes on vy-nebius-2 [guess, from `0e0d`]; I launch it on your word, not before.
+- **Lean's conditions:**
+  1. One pull request: the lock commit `ca9a951d175e` is on the pull request's branch, by fast-forward [run].
+  2. A passing records run at the head, no `--allow`: `deb5`, above [run].
+  3. The body names the test: `test_the_lean_run_accepts_a_draw_whose_session_released_its_coins_in_several_frames`, and yes, it is the one: a withheld session served by the challenger's own code, LMS-signed, accepted by the compiled `Run.run` under the key the stream holds; it passed in `0e0d` and none of the suite's inputs changed since [read, run, derived; the places are in my 02:38Z entry]. The body also names the real-prover test [run].
+  4. The body says two values change, `unfolded_hash` (`efc27f98…` to `0c9cd9cc1ff7…3b58f286`) and `why`; `type_hash` and `missing` do not; the list is 185 entries at the head [run: the lock read at three commits].
+- **Against `main` and #9237:** `git merge-tree` with `main` at `8c11a1d5abff` names no file; GitHub says MERGEABLE [run]. **The branch holds #9237's head `db228c8966f0`, so it lands after #9237 or carries it** [run: `git merge-base --is-ancestor`]. When #9237 takes `main` again after #9375, I merge its new head into this branch; if that moves the restated statement's hash, lean's yes lapses, and I say so with the new hash before anything else [derived from lean's fifth condition].
+- **For TWOLEG:** this is the ready line your 02:49Z ruling names; the head to merge is `962bc1a88b4e` [read].
+
+Machines and waits: nothing new launched since the board entry [run]. Pushed: `cursor/proofs-keyheld-3c9a` `962bc1a88b4e3be883a1a0f348ae0d9554a19795`, unchanged since 02:14Z; unpushed: nothing [run].
+
+Still waiting on #9375 for #9373 and for #9237's next merge: OPEN at 02:57Z, `main` at `8c11a1d5abff` [run].
