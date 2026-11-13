@@ -29,7 +29,7 @@ JSON (`Core.canonicalJson`, the bytes `Flock.canon` writes), turns every decodin
 text with the total parser (`Flock.JsonParse.parse`), so what it accepts is exactly the canonical texts of JSON values
 whose numbers are integers (`Verity.CanonicalJson.canonicalJson_accepts`, `security/Proofs/Core/CanonicalJson.lean`).
 `core-canonical-json-difftest` (`CoreProtocol/CanonicalJsonDifftest.lean`) serves its answer under that parser and
-under Lean core's, which `verity/difftest/tests/test_canonical_json_port.py` holds alike and to a Python mirror, value
+under Lean core's, which `tools/difftest/tests/test_canonical_json_port.py` holds alike and to a Python mirror, value
 and refusal text; the difftest harness builds it by name. `Answer.canonical` writes the outcome's one canonical form:
 
 ```json

@@ -28,7 +28,7 @@ from test_flock_json_port import TEXTS, parse
 import verity_difftest as D
 from verity_difftest import protocol as P
 
-INTERFACE = Path(__file__).resolve().parents[2] / "protocols" / "interface"
+INTERFACE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "interface"
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 NOT_ASCII = "not ASCII without DEL (a byte at or above 0x7f)"
