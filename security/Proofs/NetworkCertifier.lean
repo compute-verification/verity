@@ -107,9 +107,9 @@ to a collision (`TapProof.certifierColl_of_disagree`): an accepted audit's extra
 certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the network
 certifier's. `Checked` proves the leak bound with checked inputs (`SampledLeakChecked`): inputs a check pins cost no
 advice bits, and `WitnessesChecked` gives its nontrivial lemma.
-`PeriodChecked` proves the period's bound with the checked inputs left out (`MonitoringPeriodLeakChecked`): each window's bound
+`MonitoringPeriodChecked` proves the period's bound with the checked inputs left out (`MonitoringPeriodLeakChecked`): each window's bound
 at the network certifier's rows with a valid run, and the count of the period's records through `Carried`'s at the
-empty pool. `Period` proves `MonitoringPeriodLeakAccepted` as its instance at no checked input. `PeriodCheckedChecks` checks the
+empty pool. `MonitoringPeriod` proves `MonitoringPeriodLeakAccepted` as its instance at no checked input. `MonitoringPeriodCheckedChecks` checks the
 checked statement: which run its check is held to, and its nontrivial and honest lemmas.
 `Carried` proves the leak bounds over a carried pool (`SampledLeakCarried`, `PooledLeakCarried`): one
 run's relation at the rows its extracted trace holds, and the period's bound, where an opened row costs no advice bits,

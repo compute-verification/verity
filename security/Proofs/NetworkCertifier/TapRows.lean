@@ -53,7 +53,7 @@ with the network certifier, unless the two openings collide (below). Fill in the
 gate the trace leaves unopened (`fillTrace`): a correct proof block stays correct (`Prog.correct_mono`, it reads only
 opened values), and the filled trace carries the network certifier's records at every transfer gate
 (`carries_fillTrace`), the incorrect proof blocks' included, since the trace's own value there, where it has one, is
-the network certifier's. `PeriodChecked` takes the leak relation at the network certifier's rows from it
+the network certifier's. `MonitoringPeriodChecked` takes the leak relation at the network certifier's rows from it
 (`rLeakCertifierChecked_of`).
 
 An extracted trace that disagrees with the network certifier opens a transfer gate to a value the network certifier's
