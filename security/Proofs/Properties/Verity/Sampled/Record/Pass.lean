@@ -204,7 +204,7 @@ theorem refOk_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Spot.O
   obtain ⟨sts, hsu, -⟩ := setup_of_setupAt hm hdraw hst
   obtain ⟨_sts, -, -, hlawc⟩ := setupAt_ok hst
   have hso := setupOf_sess hfits hins hsu
-  obtain ⟨t, pi, pop, _B, hsp, hsts, -, -, -, -, -, hsome, htn⟩ := shape_sess hins hsu
+  obtain ⟨t, pi, pop, _B, hsp, hsts, -, -, -, -, -, hsome, htn, -⟩ := shape_sess hins hsu
   rw [hsp, hsts] at hso
   refine ⟨si, t, hins, hso, ?_⟩
   have hdr := hsome _ hsd

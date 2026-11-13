@@ -948,9 +948,9 @@
    "Accounting.Assumptions.TS.OperandHMu",
    "Accounting.Assumptions.TS.ReceiptLuckAt",
    "Accounting.Assumptions.TS.UnitFixed",
-   "Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase",
    "Accounting.Compose.PrefixOf",
    "Accounting.Compose.Scope",
+   "Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase",
    "Properties.Pouw.Period.RegisteredBeforeDraw",
    "Properties.Pouw.Period.SaltIsLiveCoin",
    "Properties.Pouw.Period.SampleIsCoin",
@@ -1163,12 +1163,6 @@
   },
   "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
    "nontrivial": "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial"
-  },
-  "Properties.Challenger.Drawn.familyOneCommitment": {
-   "nontrivial": "Properties.Challenger.familyOneCommitment_nontrivial"
-  },
-  "Properties.Challenger.Drawn.familyOneCommitmentRead": {
-   "nontrivial": "Properties.Challenger.familyOneCommitmentRead_nontrivial"
   },
   "Properties.Site.refuses": {
    "honest": ["Properties.Site.refuses_honest"],
@@ -1418,6 +1412,12 @@
   "Pous.Period.SecurityProofs.pooledShort_log": {
    "honest": ["Pous.Period.SecurityProofs.pooledShort_log_honest"],
    "nontrivial": "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
+  },
+  "Properties.Challenger.Drawn.familyOneCommitment": {
+   "nontrivial": "Properties.Challenger.familyOneCommitment_nontrivial"
+  },
+  "Properties.Challenger.Drawn.familyOneCommitmentRead": {
+   "nontrivial": "Properties.Challenger.familyOneCommitmentRead_nontrivial"
   }
  },
  "unwitnessed": {
@@ -2543,20 +2543,6 @@
    "except": [],
    "why": "a history table's registered root is stated against the root check's own functions (`Spot.HistoryTable`), the hash area's history-table root (`Definitions.Hash.HistoryTable`) and the verifier's SHA-512 as a model hash (`Verity.sha512`), never a proof"
   },
-  "Properties.Nci.Record": {
-   "imports": [
-    "NciCheck.DefinitionDigest",
-    "NciCheck.RecordText",
-    "Flock.TemplateQuery",
-    "Spot.Wires",
-    "Spot.Bits",
-    "Properties.Nci",
-    "Properties.Nci.Record"
-   ],
-   "except": [],
-   "why": "the circuit record's properties are stated over the code they are about (the record's text as NciCheck.RecordText reads it, the closure digest, Flock's template query, and SPOT's wiring check and bit counts) and the NCI properties they conclude, never over a proof",
-   "sealed": true
-  },
   "Properties.Pouw.PearlPlus": {
    "imports": ["PouwPearlPlus", "Definitions.Pouw.PearlC.Unscale", "Definitions.Core.Fp32", "Properties.Pouw.Commit"],
    "except": [],
@@ -2602,6 +2588,20 @@
    "imports": ["Properties.Accounting.Remote.Subprotocol"],
    "except": [],
    "why": "the component's three properties at its deployed check, closed, are stated over `Properties.Accounting.Remote.Subprotocol`'s vocabulary and the check and the memory line it reads; never a proof"
+  },
+  "Properties.Nci.Record": {
+   "imports": [
+    "NciCheck.DefinitionDigest",
+    "NciCheck.RecordText",
+    "Flock.TemplateQuery",
+    "Spot.Wires",
+    "Spot.Bits",
+    "Properties.Nci",
+    "Properties.Nci.Record"
+   ],
+   "except": [],
+   "why": "the circuit record's properties are stated over the code they are about (the record's text as NciCheck.RecordText reads it, the closure digest, Flock's template query, and SPOT's wiring check and bit counts) and the NCI properties they conclude, never over a proof",
+   "sealed": true
   }
  },
  "reads_exempt": {
@@ -12849,14 +12849,6 @@
     "function": "PouwCheck.Credit.Internal.credited",
     "outcome": "accept"
    },
-   "Properties.Challenger.Drawn.familyOneCommitment": {
-    "function": "Spot.Challenger.drawCoins",
-    "outcome": "accept"
-   },
-   "Properties.Challenger.Drawn.familyOneCommitmentRead": {
-    "function": "Spot.Challenger.coinsReason",
-    "outcome": "accept"
-   },
    "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
     "function": "NciCheck.Protocol.check",
     "outcome": "accept"
@@ -13069,10 +13061,6 @@
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
    },
-   "NciCheck.SecurityProofs.ServedComplies": {
-    "function": ["NciCheck.Properties.Record.Form.read", "NciCheck.Properties.Record.Form.rate"],
-    "outcome": "accept"
-   },
    "Properties.Pouw.PearlPlus.acceptMeans": {
     "function": "PouwCheck.PearlPlus.check",
     "outcome": "accept"
@@ -13196,6 +13184,18 @@
    "Properties.Pouw.PearlPlus.openingBinds": {
     "function": ["PouwCommit.rowsDomain", "PouwCheck.PearlPlus.opens"],
     "outcome": "accept"
+   },
+   "NciCheck.SecurityProofs.ServedComplies": {
+    "function": ["NciCheck.Properties.Record.Form.read", "NciCheck.Properties.Record.Form.rate"],
+    "outcome": "accept"
+   },
+   "Properties.Challenger.Drawn.familyOneCommitment": {
+    "function": "Spot.Challenger.drawCoins",
+    "outcome": "accept"
+   },
+   "Properties.Challenger.Drawn.familyOneCommitmentRead": {
+    "function": "Spot.Challenger.coinsReason",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -13255,7 +13255,6 @@
    "Properties.Served.SampleMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.sampleMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.RegisteredCircuitRequirement's game, premises and bound (its frozen reason in security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
    "Accounting.ReadUnit.ExpertReadAccepted": "unstated: what `flock-read-tmpl 256 3072` checks before it exits 0 (render `readTmpl 256 3072`, parse the text back, run `ReadNet.check` on the parsed template); `TableReadBinding`'s honest lemma in the Security lock takes it as an open premise, and no theorem here proves it yet",
-   "NciCheck.Properties.Record.DigestPins": "unstated: the closure digest pins the decoded Definition (two Program texts that give a key one closure digest decode it to one Definition, or two byte strings the digests hashed collide under SHA-512); a premise of what a pinned reader opens, which is a theorem no guarantee lists, and no theorem proves the pin yet",
    "Properties.Pouw.PearlPlus.WorkIsTheCredit": "unstated: the work an accepted run publishes is `creditAtAssumption` over the plan's passes at the run's draws, the draws that landed on a tile over its inert-work bound (X_O) and δ = 1/100, crediting nothing on a test instance's input, and a refused or rejected run publishes none; a draft statement, unproved, which gets a guarantee entry once red team has read it",
    "Properties.Pouw.PearlPlus.DrawIsOnItsStreams": "unstated: Pearl+'s run draw names, for draw j, the tile of the ticket (Pouw.Ticket, in finSigmaFinEquiv's order) its key's stream j numbers, the law Pouw.MissBound reads, unproved; PLUSCOMP's draft statement, which gets a guarantee entry once red team has read it",
    "Properties.Pouw.PearlPlus.CoinBytesGiveUniformTickets": "unstated: t independent streams of drawBytes uniform bytes number tickets in any event no more often than t uniform tickets do, unproved; PLUSCOMP's draft statement, which gets a guarantee entry once red team has read it",
@@ -13268,7 +13267,8 @@
    "Pous.Period.SecurityProofs.periodHeldSha512At": "frozen (premise): periodHeldCoinsAt at the deployed memory challenger's streams at N blocks, at bound δ + ε_max + ε(t, 1) + ε(t, 6720); it adds Hash.Assumptions.Sha512Prf (prf/sha-512, ASK-184) at the derivation's two tests to periodHeldAt's premises, none of them under shape.premises.",
    "Properties.Pouw.Lead.Commit.LeafFirstBlock": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Commit.leafFirstBlock; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)",
    "Properties.Pouw.Lead.Commit.RoundsOpenAfterRoots": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Commit.roundsOpenAfterRoots; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)",
-   "Properties.Pouw.Lead.Commit.RowBound": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Commit.rowBound; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)"
+   "Properties.Pouw.Lead.Commit.RowBound": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Commit.rowBound; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)",
+   "NciCheck.Properties.Record.DigestPins": "unstated: the closure digest pins the decoded Definition (two Program texts that give a key one closure digest decode it to one Definition, or two byte strings the digests hashed collide under SHA-512); a premise of what a pinned reader opens, which is a theorem no guarantee lists, and no theorem proves the pin yet"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -19172,7 +19172,7 @@
    }
   },
   "Flock.RecCoins": {
-   "digest": "85dfeede1d9cab5dd40c40207b1a3faaaa1909cc1a44839e2a7fbacc23050ad8",
+   "digest": "c459dc40471c1ae4d7c79ef82dae005113b7f2193c1a560cd8b542238d6ec5e5",
    "definitions": {
     "Flock.RecCoins.C3": "ad22be988630c4ef35240abbc128d3f3b94009c8858477ff6dbfe4a2d71a68cf",
     "Flock.RecCoins.C3.coins": "f3f687cf5aceef88af32263cb05f2dda1c771923cb3d5d9df3c7d750cff2d9e1",
@@ -19200,7 +19200,7 @@
     "Flock.RecCoins.Inner.combOf": "79171366d420992ea55c91704738a61f581437e5d8cf0854bf15cd67f0e650cf",
     "Flock.RecCoins.Inner.extras": "839ee7452df0f6317b5a745f01a9574ed815057ac322b879e43199df919931c9",
     "Flock.RecCoins.Inner.kLog": "cdda9a735ff2b3b4e1caafe1308b1e4766368dbaab7a05d2a651bd84407eefb6",
-    "Flock.RecCoins.Inner.load": "dd44725cda227ba7874ca05a2fcf0d00bd6bc3dd18a964de60182c80bf582627",
+    "Flock.RecCoins.Inner.load": "87ed8919d81e5830caf8e52bdf618b38ae0b3d0795e55f91ae48e98579f93484",
     "Flock.RecCoins.Inner.m": "6c4e1e4ac23c2a452a05a6b101a9e06b01aec19e9bea93aabd4d718483e55bcd",
     "Flock.RecCoins.Inner.ofJson": "3d8eaf1dec200748144122542f0b3ba09fff9642d8cdaf7db7acf8e260279b4a",
     "Flock.RecCoins.Inner.rep": "747db3464027797e42bf2e51c112b719f3d7eeb54b5ed85febffc4ea35d3b0a5",
@@ -20001,7 +20001,7 @@
    }
   },
   "Flock.Statement": {
-   "digest": "91633e7b9b801faa69060a3f99aa0e66ce4af17a169c4384b3e148606e40454b",
+   "digest": "8b93cc994c6b4a26fef778d264e131dfbf00e17dcfc1199384bce021b018c767",
    "definitions": {
     "Flock.Circuit.outRegion": "f6b4ca14f0b034c2ccce2bf66760224485048945db798082919a76c8d1989047",
     "Flock.Coins": "8abc721264730cb40980b5bfa53b29d67f70dde81fe4513cd5f00b6cd17f76a8",
@@ -20049,23 +20049,25 @@
     "Flock.Stmt.tags": "b8cee97e26824b528e345715ee408cac6df0fb9a291f93f309abe862ab6cf906",
     "Flock.Stmt.tensor": "9d255feaafd736d05f0d629c182ccb2d7a8cd15d7755c5234954908e2abccd04",
     "Flock.Stmt.unitShare": "d340b381fc216cfd3468a1c61ba960bb64022add4fa81437f86fdd896191ddcf",
+    "Flock.Stmt.wideLeaf": "16f25a50ddf3f8cf1d00cc2dcb94e129cfdd72d4cf7ad1c1dfaf610d9d7442b3",
     "Flock.checkInRange": "af916f3d8a80fd126a8ab2c23e640312ee6e2805bf9c39038e26b57296a5ef41",
     "Flock.checkRegionBytes": "fd9ee558fd6e1251b4990ac06dcc008f14d7049fe15e04764a52189ad46d8dac",
-    "Flock.helloOf": "d5b4a6b8b88ed8c626fe75297a7182edcf695503108e8833a978aafe12e9e33a",
+    "Flock.helloOf": "8db312e3148601fab91e2b3a8654ad679352a476a9e3f808151effc7eb85fd39",
     "Flock.identityBytes": "b909667c353f0306771b85b309b889fc68daa9085509da007e3d9f8cd116dc3c",
     "Flock.instInhabitedStmt": "36553d28b0205165c2b1939d9bd18c1c28b8eee43e10f71075f3051bb01db7a0",
     "Flock.instInhabitedStmt.default": "69746fdadc99b28ed08dff66c1dfe7a4610ca4fd06a2205aac8810c3366216cd"
    }
   },
   "Flock.Tags": {
-   "digest": "9fc86392b6a918b2a1f7818e0550c9dcb560adba78b6ed85b4f6e344257bfbdd",
+   "digest": "50161fefd6874978e161d0db9302b9ce9fbeb6fe4a025abbaf2205473014c7e1",
    "definitions": {
     "Flock.TablesTags": "616e6a1133659aca6313acb08b641dbdb15f03279404705add3efd103a55fd45",
     "Flock.TablesTags.domainPrefix": "58ccbc9ce507eb6dde62a067432ef3c853a3ec9ab55ec5910f0fd9cdda2dc3c1",
     "Flock.TablesTags.sigmaTag": "5f3d032d58b88f62377b4ac9a1e985908ea03850e20fd887ce087d22c1a24727",
     "Flock.Tags": "a2dac1bc806553c0dff32302816a9d7fea4bfe9f6d4c4b018dd0cc12f292dabd",
     "Flock.Tags.MAX_TABLES": "d378b50e3724c1fd421fba24ec3b0b88fe20a0ce0a1efbe402e58e9689f9e2c6",
-    "Flock.Tags.all": "465b4dce5f0c3aded1401977c0993b3e350d0df76d194bbc9476dcdfd563d06e",
+    "Flock.Tags.WIDE_LEAF_PROFILE": "1d7c1294d84ac35fce1daacc6308777574f73429cf61abc123ff2dcf37d3974c",
+    "Flock.Tags.all": "ab0e345478ed4f97fcb0f9186db43ae25827eaf8e59310ffefc2f1dba25719ce",
     "Flock.Tags.bindings": "a53413c3b119d20558f8287f879ba6654e452b5d19d56b534d588dd70480c027",
     "Flock.Tags.blockKeyword": "2ee005a169cc273bfe3927786bb012bbc5950408e27eb88a822523b7a03153e7",
     "Flock.Tags.circuit": "6f470102639f5225bcd9b6cf534065261e2052eedb035fbce8f82fd6e918387f",
@@ -20094,6 +20096,7 @@
     "Flock.Tags.circuitTypesF5df3bbc": "530e589161c621216aac542545b8bce49678a5c17042e6870d21fea65933d5dd",
     "Flock.Tags.circuitTypesF5df3bbcSelftest": "abb2f5f56b022004e3b2788e6d5cc5b87bb2a3cc68d211ea424230d6d6c0973d",
     "Flock.Tags.circuitTypesSelftest": "44659c3942eb6c51f7dc435b6250b3bfe912105f0d99ce16c4a7d80c1487de1e",
+    "Flock.Tags.circuitWideLeaf": "114b97490302d0444dbf289f24a21868331daf7e12dccd0c0f19bcc0b4ba69f7",
     "Flock.Tags.coinScheme": "7be83d538e99a3a073a0db89b6213d19717e79b277e3490f7bf907ef6f46b3f7",
     "Flock.Tags.domain": "6bf848af34a337a8d341ead46578dce4c6dcb47986a6b732d345bc5a3359ab9a",
     "Flock.Tags.domainPrefix": "50305bf90d234526f4dabd0eb648c7f9a67fc89c2b46b0a34d6a5b036bbf8cb5",
@@ -20106,7 +20109,7 @@
     "Flock.Tags.identity": "3cbe31f3bacb0c249b2048a56c15442e1b8f2925f2eec10aef5bd3dade7672ca",
     "Flock.Tags.identityHidden": "b2d6494463655d2f17494b08c8de0f118cdff93457650175c0bf71df2b2624bc",
     "Flock.Tags.identityHm96": "51afc1aa2b0313513cc5a953072794da3c1e0cabee8192a43c5e690b36c66986",
-    "Flock.Tags.isTmpl": "867a164487a6478edbedbabc4b3d70fdc7bb6ede678836945b7d73cbc7a94de2",
+    "Flock.Tags.isTmpl": "ea0710cb5b2cde8a42485e12ee0506c306e2da2160d8a6690d92e3631c338e0d",
     "Flock.Tags.leafSchemeFd02e847": "536f8e35d49b11aff956852c7c57ae12e31c6f808fa7e7a49c423f19d2038fac",
     "Flock.Tags.leafSchemeHm96": "f77a05a7af416c22982a060f5c31445bf9f9e4ef57e427c85eb198a029eaf4c9",
     "Flock.Tags.leafSchemeHm96Os": "8ed7ae04a565c255bd544ba2039a62f846c9bbc63ee06b7a495230884f5b0b51",
@@ -20135,8 +20138,12 @@
     "Flock.Tags.tableIdentity": "369d996908ef5c0e3ac9d85288df702bf043bda33339e2f2b6f3dc9469a162d6",
     "Flock.Tags.tableNames": "2de00afa81c67541d87f8c5e7aca6e3560e279d661248a8ebaf83d5618dfe510",
     "Flock.Tags.tmplName": "fcef6f506f1f1b2552ad08d82e34dc89f329d5af5d8cfa0f7e5b6b60ef2a6f1c",
+    "Flock.Tags.tmplWideLeafName": "860dfc2282d3326ae46ff5d9a1ba1f01bee84f3e1c586c115254558621e90324",
     "Flock.Tags.typed": "0230b61d7d5fe7968739e0c6a1be049a02c369c6c1c939133e89c0fbe1612847",
     "Flock.Tags.upstreamPlain": "01b0bbe0317e57aa0fcae273e347c4d314d80bb276ba996a58a6c76160a7c23e",
+    "Flock.Tags.wideLeaf": "1683b5f5f5b849afbab78a561e848e8c13c2d98f7d1e9db966facc1104c91384",
+    "Flock.Tags.wideLeafIdentity": "2ab1bf111fa352ac1148eeeef199d0185a92a215b8979b4b2e65ad27575f488e",
+    "Flock.Tags.wideLeafName": "b752ccd5b188ba15df95ae3a273eae1be5170fcc854a7c6f109dd83c43df2954",
     "Flock.Tags.withPlainLeaves": "dcb47afb2298384a3111cb73e7b192c293f6315af20a31f5ae89dcf4ec812695",
     "Flock.instInhabitedTags": "504d4d30ef52585946f42dbca0c06421927dcc1dd400346f6b8909e092c194d3",
     "Flock.instInhabitedTags.default": "494fbff9262aa74eca8eeaa33837eb6088e5e66b6798aa9751ac8f1a929cebab",
@@ -20515,20 +20522,28 @@
    }
   },
   "Flock.Verify": {
-   "digest": "f1bbe493dafacce1685638b1bbeead9a66b087b81d7d34537e16e35ba57c9b50",
+   "digest": "583d0e6030f5e2e6e0aa41c1e80c3bafaf35bd5807b9f2fc600dcce4da64f152",
    "definitions": {
-    "Flock.Setup": "d2a3501d253e96d60f3a3d9ed6996b2d651e7311830ab69bab285a6540d4ddc4",
+    "Flock.Setup": "d771b9cf83e8c4d44400d184208fa2982ff41568ad5419ab98c8c6497063a476",
     "Flock.Setup.digest": "2c5aef9c9a030b9fe1e816f93568a87c3877fa6148511592758b14752e7bcab2",
     "Flock.Setup.extra": "ca8c23daab92d1d31cdb469bf1de57d04a03a117054d0ef8d60fd8d484a6a646",
     "Flock.Setup.fold": "04d0ceee57fa505fc50c6e103ea23d13557b95e22b34a4f62fe79c40fca5bdf3",
     "Flock.Setup.kLog": "bdb2b22d84a012665b897442c0e4aaeb6b3d955492e8bf5404b5de0abc8debdf",
     "Flock.Setup.m": "11c6f67e762d81e6863085b50ca067ed4bce6fa6b253fe8a507616426ca44c7d",
     "Flock.Setup.merkle": "77b5dc7cf6c95958ac926f4c3bb0ee8113bef6406f66bd862c6c5e41f55aa039",
-    "Flock.Setup.ofCircuit": "e62f8e19af1a130a24b37cd25ffb5ccda5e778289cc4d73bde746a18f4bdf94c",
+    "Flock.Setup.ofCircuit": "c473e9b9ec9555ee41fe055e5dcf00d0893fae61d6c0d1907fef7f1906c86550",
     "Flock.Setup.publics": "298b6095c2319908db69ade81bf060399c03f29f29421ed170a17cc043fdcbf9",
+    "Flock.Setup.wideLeaf": "489c185c743b3826108da9d2a03c10516768df6f00ae08831ca06ec4f85689e8",
     "Flock.instInhabitedSetup": "d1cb5d1ed94c1644e245bf6ac8623c2e53f9493e0b7b7481f24837a817d5f1d9",
-    "Flock.instInhabitedSetup.default": "888fa22c942acaabd25fe05477261fc1201b6560e8881042d401f70cf12d2a5a",
+    "Flock.instInhabitedSetup.default": "72c68de2e5d3ff4ad9f4a1572da4e489525d44fe7ef0f5dda976469b993c1438",
     "Flock.pcsParams": "53349e4759eeab7fe4cde94ffeb46863b703ae2f9d7293993c20e39cb8f12c84"
+   }
+  },
+  "Flock.WideLeaf": {
+   "digest": "a52a956783fd9aa4f4474db5abf7ff76920b12df9f7e1d79760962232b519e11",
+   "definitions": {
+    "Flock.fast100At": "11dfe24621c651965d3d091350b22fe388357658e798b67ca62978debd9a7bee",
+    "Flock.fast100Wide": "6cd0ad8151133ed659aaf79ceea5948d985344ee1b04473935889c2c83c70914"
    }
   },
   "Flock.WindowRecord": {
@@ -20566,7 +20581,7 @@
    }
   },
   "Flock.Zk": {
-   "digest": "54bdc6d681aeaf871de602a24969f931130ae885f4b99bc79d4c215146a3bc8d",
+   "digest": "ea4b0b7c9bbdc94c9bead75610f4e8780582187db47cf34609cf1d43bebaffe8",
    "definitions": {
     "Flock.Zk.INNER_LOG_INV_RATE": "d6ad9e7298bfa7fda1765c25e4b21bcf2d7ea35b7fb92014546242e462c35658",
     "Flock.Zk.K_PAD": "fb9b4b1b8bba3910fa6eb2a70efdb8cd80445d165fd5bcb81b641f1a8e459b54",
@@ -20618,7 +20633,7 @@
     "Flock.Zk.claimCheck": "0229769c0f97aa8015f36299532fde1139c1bc49abfdeafe4680cfbc6724beec",
     "Flock.Zk.codeAt": "296adca86e164940ffccc2088464c8ac42d47005d49431bbfce42ad75fc8f921",
     "Flock.Zk.coinSpec": "c537fdb8a04d5f0ae7e13d5bee1313a483bd27657185e36fab6b90e57a6daa42",
-    "Flock.Zk.hooks": "2f743475278b721357f7811b94574723a33c5a47e46a742971a8879a1d005943",
+    "Flock.Zk.hooks": "53b229672be4e290cb0799792f4d9401c476cd7ba8a1ddb6eb91a7355810bfed",
     "Flock.Zk.instInhabitedLin": "0b883e786d300762ca2880a4349508ddea871df9923e17b6d95338c4babeb276",
     "Flock.Zk.instInhabitedLin.default": "1bb69bf2d2c39a6995627c42b5975600974c7be276b697f9694a2985251ac76e",
     "Flock.Zk.l2add": "88ddc0c8f86169af93616b8261d4c8b9861ae1a529a2ed104c021545dd29a8ee",
@@ -20628,14 +20643,14 @@
     "Flock.Zk.ligeritoConstraints": "4efc4c1e49870a3061d5d83c36e2c85f0a83ae98adb68dd063c79ec8dcbde069",
     "Flock.Zk.maskFree": "bcd343334ab0a8050522df501fc6f5585073e747331effbcd0daa963a4d3b878",
     "Flock.Zk.maskLogOf": "7657c9ed62441ef9ee0ff000b898cde4a43c131997a8461612725b1f2b360e73",
-    "Flock.Zk.queries0": "c55928b4016b2825017ee1cab096ae6902ef0487327b2514e3cfa11488a5b338",
+    "Flock.Zk.queries0": "4c02f80526a395080eafe9ec612c8bcf52edb15f93aff876470a75e528b73a02",
     "Flock.Zk.replay": "3feb80df8969d3567ad2e85d309d567483a1659fa51b492044bb49549ccd6a06",
-    "Flock.Zk.schedule": "2763daf9aa4a4682f9adab7a08cd7b31c86ea2fb3eff9b8734a5779a7452dd6a",
-    "Flock.Zk.shapeOk": "c7f43989c7b6abe0471542f6ecff84d896f2a329bc847cad1ea2f07e12e02a03",
-    "Flock.Zk.tags": "d78a2f6d9a90737994f663248e740b2a9a5fc95500083fd31c74f36d3b252fc0",
+    "Flock.Zk.schedule": "e0c974f990763057da346c2ffd253737cbaaf0df1fbfafe197d8b0a26d8d1384",
+    "Flock.Zk.shapeOk": "304ccc4466001db2958d451dff2a462f73fb048f6a42e9ee69da4cae2880fe84",
+    "Flock.Zk.tags": "3be603773faadcf892ccf3494fe0a69bd1a25650d154d8391619abf2dc451cac",
     "Flock.Zk.tauCommitment": "7659c733b39bd50117a878725822e101b545e7cbcdd31d02673a28dc185d86e9",
     "Flock.Zk.triple": "d0e0c9fc6e6663a70f566a55608b593a802795563221b2b525b836e426af920b",
-    "Flock.Zk.verify": "21542ea42e7669d4064762ea8c31c0b208e56accd3e9ba06f43ec4d8219e3628",
+    "Flock.Zk.verify": "d81dcda9d92791fab2cd1515986a0dbaed8c52da686f14dd581a9781b35370ff",
     "Flock.Zk.verifyInner": "0a93cbf0570dd9b1f053b50d0e24d0063bfcc2399baf3f7442ea4ca5e6622cfb",
     "Flock.Zk.verifyRep": "148976beb533c834ceff01b39de1cc7c9eb13f89fab04cbda8f167bcf97b795f",
     "_private.Flock.Zk.0.Flock.Zk.s": "328fbfec598bc6d2a7439596efe2435ec8d78dbb84f23880e4b0b104a2453b1f"
@@ -27109,7 +27124,7 @@
    }
   },
   "Spot.OneStageZk": {
-   "digest": "98db71834393617798ff105c218e45cbec1d83423f947ae53655757497af811d",
+   "digest": "e0a71173c07b1b9b07e4647349f39f5b0814b12de4009709a63a22a7229b41c5",
    "definitions": {
     "Spot.OneStageZk.EVIDENCE_FITS": "33f8f6fbb586fcb57dae3c7bed6c76ad5db01ca4720f43a6ca18ab4f9dd6d705",
     "Spot.OneStageZk.Evidence": "f5fc59dc0b4a0d0d0732da27e636afe6ec207cbbf2bbe5666d18c048c5459e52",
@@ -27232,7 +27247,7 @@
     "Spot.OneStageZk.recChecks": "7a336f48ad224a2be2e84bf6f9a03e1d5aeadf919bf05578aff7bfbf909f4453",
     "Spot.OneStageZk.registeredInputName": "c6582b919f149bc9efda4240e584136f699ac37376281eb59712a127011aeaae",
     "Spot.OneStageZk.returnedBits": "526678a1f372ad9a8c1a8ab31a6f4abda9941e3417acc4670186ca4ae5b341cb",
-    "Spot.OneStageZk.rootBLen": "425858b488c3fe79dd324884372fca0eb1d11ad0ca6c5e4953b128e2b2c5d9a0",
+    "Spot.OneStageZk.rootBLen": "359e9143fb2577a63416c3c7d2dd23cd9967ff6754c73170e9dc2184d1f4aae8",
     "Spot.OneStageZk.rootBTables": "6b297e93074460ce370b991a3670df0c454272aa6b118dd5666bf54af1475493",
     "Spot.OneStageZk.rootStep": "35f0955dc6910d71f09e66b5f919c325363d8bc044725f05f2c8560015999c0a",
     "Spot.OneStageZk.rootsOf": "be102973e9ad3f0e573b77acb39b0598169f767ea5ae9afff50054dd677c8f0d",

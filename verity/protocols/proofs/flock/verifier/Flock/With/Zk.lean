@@ -336,7 +336,7 @@ def verifyWithM (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (recor
   if spec.coinTree.isNone then throw "zk: the session's coins are not the keyed coin tree"
   let sess ← Record.decodeWith hs spec record
   for (st, p) in tabs.zip sess.publics do st.publics p
-  let schs ← tabs.mapM fun st => schedule st.m
+  let schs ← tabs.mapM fun st => schedule st.wideLeaf st.m
   let want := spec.repStreams
   if proofs.size != want.size then throw s!"{want.size} proofs expected"
   if sess.proofSha.size != want.size || !want.all (fun (_, _, w) => sess.proofSha.any (·.1 == w)) then
@@ -358,7 +358,7 @@ def verifyJWithM (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (j : 
   if spec.coinTree.isNone then throw "zk: the session's coins are not the keyed coin tree"
   let sess ← Record.decodeJWith hs spec j
   for (st, p) in tabs.zip sess.publics do st.publics p
-  let schs ← tabs.mapM fun st => schedule st.m
+  let schs ← tabs.mapM fun st => schedule st.wideLeaf st.m
   let want := spec.repStreams
   if proofs.size != want.size then throw s!"{want.size} proofs expected"
   if sess.proofSha.size != want.size || !want.all (fun (_, _, w) => sess.proofSha.any (·.1 == w)) then

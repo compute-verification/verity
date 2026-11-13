@@ -67,7 +67,9 @@ theorem tabOfLevel0_cm0 {st : _root_.Flock.Setup} {l : _root_.Flock.Firewall.Lev
   · cases h
   split at h
   · cases h
-  rcases hs : _root_.Flock.Zk.schedule st.m with e | ⟨sch, tPad⟩
+  split at h
+  · cases h
+  rcases hs : _root_.Flock.Zk.schedule st.wideLeaf st.m with e | ⟨sch, tPad⟩
   · rw [hs] at h; cases h
   · rw [hs] at h
     simp only at h
@@ -154,8 +156,12 @@ theorem Loop.Level0Src.realOf_cm0 {src : Msg → Flock.Wit →
       have hm' : l.m = (Masked.stAt x j).m := by
         rw [show l.m = l.toIn.m from rfl, hin]
         rfl
+      have hw' : l.wideLeaf = (Masked.stAt x j).wideLeaf := by
+        rw [show l.wideLeaf = l.toIn.wideLeaf from rfl, hin]
+        rfl
       rw [hm] at hm'
-      rw [hm'] at hz
+      rw [_root_.Flock.Firewall.Level0.ofDraws_wideLeaf hl] at hw'
+      rw [hm', hw'] at hz
       obtain ⟨hs', ht'⟩ := Prod.mk.inj (Except.ok.inj (hz.symm.trans (Masked.zkTab x j).hz))
       have hlv' : l.lv = Masked.lv0 x j := by rw [hlv, hs']; rfl
       rw [hlv', ht', hin] at hlay

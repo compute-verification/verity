@@ -684,7 +684,7 @@ def sessionTables : Array String := ((Flock.Tags.find? STATEMENT).map (·.tableN
 `2^cap₀` digests of the table's Merkle scheme, `cap₀` the first stratum of `Flock.Zk.schedule` at the table's `m`.
 `Zk.verify` holds `root_B` to that cap (S16/R1), so the statement fixes it. -/
 def rootBLen (st : Flock.Setup) : V Nat := do
-  let (sch, _) ← Flock.Zk.schedule st.m
+  let (sch, _) ← Flock.Zk.schedule st.wideLeaf st.m
   pure (2 ^ (sch.levels.getD 0 default).cap * st.merkle.digestLen)
 
 /-- The session's tables (`sessionTables`), each with its `root_B`'s byte length (`rootBLen`) at the session `record`

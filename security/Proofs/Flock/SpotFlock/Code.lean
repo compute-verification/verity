@@ -333,10 +333,11 @@ def filesOk (g : RegTwo) (ms : Spot.Bits.Members) (l : Spot.Slots.SlotOrder) (k 
         | none => true
       | none => true
 
-/-- The tables' sizes `m` a session's statement sets up under `--zk`, in order; none where it doesn't set up. -/
-def shapeOf (xS : Msg) : List ℕ :=
+/-- The tables a session's statement sets up under `--zk`, in order, each its statement version (wide leaf or not)
+and its size `m`; none where it doesn't set up. -/
+def shapeOf (xS : Msg) : List (Bool × ℕ) :=
   match FlockDeploy.setupOf true xS with
-  | some (_, _, sts) => sts.toList.map (·.m)
+  | some (_, _, sts) => sts.toList.map fun st => (st.wideLeaf, st.m)
   | none => []
 
 /-! ## What the verifier evaluates -/
@@ -360,7 +361,8 @@ def hiddenOf (xS : Msg) : Bool :=
   | none => false
 
 /-- **Template `t`'s session statement is in scope**: in Flock's masked scope, with template `t`'s reference statement's
-table shapes, in the scope Flock's soundness proof covers (`FlockDeploy.scopeCheck`, as `flock-verify` refuses any
+table shapes (each table's statement version and size, so a session at the other statement version is refused), in the
+scope Flock's soundness proof covers (`FlockDeploy.scopeCheck`, as `flock-verify` refuses any
 other), and with hidden outputs (`hiddenOf`), as the deployed session circuit has. -/
 def sessionOk (t : ℕ) (xS : Msg) : Bool :=
   zkOk xS && shapeOf xS == shapeOf (h.xS₀ t) && FlockDeploy.scopeCheck true xS && hiddenOf xS
@@ -735,7 +737,8 @@ def session (u : ℕ) (v : Seen) : Option (Msg × Seen) :=
   else some (h.xS₀ (templateOf h.ms u), refusedSeen)
 
 /-- Template `t`'s reference statement's masked level-0 lengths, summed. -/
-noncomputable def n₀ (t : ℕ) : ℝ := ((shapeOf (h.xS₀ t)).map fun m => (2 : ℝ) ^ (Claims.Flock.zkLevel0 m).d).sum
+noncomputable def n₀ (t : ℕ) : ℝ :=
+  ((shapeOf (h.xS₀ t)).map fun p => (2 : ℝ) ^ (Claims.Flock.zkLevel0 p.1 p.2).d).sum
 
 /-- **The interior registration's roots** of replay block `ρ`, as the round-1 message states them (`irootsOf`); none
 before it. -/
