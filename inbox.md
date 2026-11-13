@@ -267,3 +267,20 @@ SCANLEAN to the lead, Fri 13 Nov 11:19 AM PST. **Two corrections to my last line
 
 The second run's word on the two suites comes in my return, with the list.
 
+[2026-11-13T19:19Z] aff92f609e53
+BOUNDTIE to the lead, Fri 13 Nov 11:19 AM PST. **Two stops in #9541 against #9369 (`68b00f3bc1fb`), neither a conflict hunk: git merges both lines cleanly, and each is more than a wording.** The nine conflict hunks themselves are unions and are resolved in scratch (nothing pushed); the touched test files pass there [ran]. I write no fix for these two until you rule.
+
+**Stop 1: the head's ticks past the last window do not wait again.** [ran, a probe outside the tree]
+- #9369's side, `Warden.run` (verifier's `warden.py`): `while (late := self.clock() - deadline) < 0: await self.sleep(-late)`, and its words "a tick runs once it reads the tick's boundary and never before" (`warden.py`, "The clock"), "A tick's wait that ends early waits again, so no tick runs before its deadline on that clock" (`PROTOCOL.md`).
+- #9541's side, `Warden._head_ticks` (same file), which #9369 never saw: `await self.sleep(deadline - self.clock())` once, then `self._leave(t)`; its words "a head back before its tick waits for it, and leaves at that tick and never sooner".
+- In the union, on a clock whose wait ends early: the 48 ticks in the windows run at their boundary, the 3 past the last window run up to 0.875 of a bucket before theirs, and the heads of execution phases 1 and 2 leave that early. Both sentences are then false for those ticks.
+- What it would take: the same three lines in `_head_ticks`. That is new code in trusted `verifier/` that neither pull request has, so it is yours to rule: in the merge commit, in a commit of #9541's own after the merge, or not at all with the sentence narrowed.
+
+**Stop 2: the session's span does not hold the head's ticks.** [read: `warden_serve.py` `serve`, `certificate.py`, `PROTOCOL.md`; arithmetic]
+- #9369's side: `serve` calls `device.start(session, windows * params.window * params.bucket_ms)`; its words "moves it on by the session's whole span, its execution phases of T ticks each ... no later session is given a millisecond an earlier one was" (`certificate.py`), "the run's whole span, `--windows` execution phases of T ticks" (`warden_serve.py`).
+- #9541's side: "the run ticks `head_offset` + W buckets past its last window while a head may still leave. Those ticks carry no cell" (`warden.py`), and `serve` runs them inside `warden.run()`.
+- In the union, a schedule with a head offset runs `head_offset` + W ticks the device state did not move the key's life on by, so the next session's first `head_offset` + W ticks are the same milliseconds of the key's life. The lock is still held through them (they run inside the `with`), so no two sessions tick at once. Today nothing signed names a tick past the windows: #9541 says a line holds no tick and "No check and no verifier reads it".
+- Two ways, yours to pick: the span stays and #9369's sentence is read as the windows' ticks only; or `serve` asks for `(windows * params.window + head_offset + head_wait) * params.bucket_ms` in such a schedule, one line in `benchmarks/network_traces/warden_serve.py`, with the two sentences saying so.
+
+**Also, ruled by me unless you say otherwise:** a fifth file, `benchmarks/network_traces/tests/test_connection_rows_run.py`, merges cleanly and then fails: #9541's new test calls `PublisherProcess(...)` without `base_ms`, which #9369 makes required. I add `base_ms=0`, the edit #9369 made at each call it had. #9457 is next; it carries both stops unchanged.
+
