@@ -1,4 +1,4 @@
-"""`verity.settings`, the settings machinery (`EnvSettings`) and the distribution's own registry: every variable declared once (a
+"""`verity_config.verity_settings`, the settings machinery (`EnvSettings`) and the distribution's own registry: every variable declared once (a
 type, a role, a doc), read at the read, an undeclared ``VERITY_ML_*`` variable refused by name, a ``debug`` setting refused on
 a run of record, a program's startup check (`EnvSettings.check`), the run's record of the value settings, and `direct_uses`,
 which a suite's ratchet counts with.  And the circuits area, on the soundness path, reads the environment through it alone:
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from verity import settings as S
+from verity_config import verity_settings as S
 
 REGISTRY = Path(S.__file__)
 AREA = Path(__file__).resolve().parents[1]
@@ -74,7 +74,7 @@ def test_an_unknown_prefixed_variable_is_refused_by_name(monkeypatch: pytest.Mon
     typo = {"VERITY_ML_BOOLEAN_EXHAUSTVE": "1", "VERITY_ML_BOOLEAN_EXHAUSTIVE": "0", "VERITY_SLOW": "1", "PATH": "/bin"}
     assert S.REGISTRY.unknown(typo) == ["VERITY_ML_BOOLEAN_EXHAUSTVE"]
     with pytest.raises(S.UnknownSetting, match=r"unknown setting VERITY_ML_BOOLEAN_EXHAUSTVE: nothing in the tree reads it.*"
-                                               r"verity/settings.py"):
+                                               r"tools/config/verity_config/verity_settings.py"):
         S.REGISTRY.validate_environ(typo)
     with pytest.raises(S.UnknownSetting):
         S.get("VERITY_ML_BOOLEAN_EXHAUSTIVE", typo)
@@ -159,7 +159,7 @@ def test_the_area_reads_the_environment_through_the_registry_alone() -> None:
             if (isinstance(n, ast.Attribute) and n.attr in OS_ENV
                     or isinstance(n, ast.ImportFrom) and n.module == "os" and any(a.name in OS_ENV for a in n.names)):
                 found.append(f"  {rel}:{n.lineno}")
-    assert not found, ("the circuits area reads the environment through verity.settings alone: declare the variable there "
+    assert not found, ("the circuits area reads the environment through verity_config.verity_settings alone: declare the variable there "
                        "(a type, a default, a role and a doc) and read it as settings.NAME\n" + "\n".join(found))
 
 
