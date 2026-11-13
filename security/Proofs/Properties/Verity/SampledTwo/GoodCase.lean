@@ -71,10 +71,7 @@ theorem formReading_coin (A : Live₂) {C C' : CaseOf} (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) {o : Verity.Exchange}
     (h : inputOn C' o = inputOn C o) (n : ℕ) :
     (formReading A C' S dev).coin o n = (formReading A C S dev).coin o n := by
-  first
-    | simp only [formReading, h]
-    | (unfold formReading; dsimp only; rw [h])
-    | (simp only [formReading]; rw [h])
+  simp only [formReading, h]
 
 /-- **The form's reading's agreement reads the run of record's input alone**: two cases with one input at a play have
 one agreement there at every round. -/
@@ -82,10 +79,7 @@ theorem formReading_agree (A : Live₂) {C C' : CaseOf} (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) {o : Verity.Exchange}
     (h : inputOn C' o = inputOn C o) (n : ℕ) (c c' : FlockDeploy.Coin) :
     (formReading A C' S dev).agree o n c c' ↔ (formReading A C S dev).agree o n c c' := by
-  first
-    | simp only [formReading, h]
-    | (unfold formReading; dsimp only; rw [h])
-    | (simp only [formReading]; rw [h])
+  simp only [formReading, h]
 
 /-- **A group's coins at the case, from the kept case's**: `CoinsAgree` at `goodCase C G` and `G` gives it at `C` and
 `G`. -/
