@@ -15,7 +15,7 @@ It refuses, with no measurement and the reason (exit 1):
 
 - a run without its record, the first without ``started_utc``, or the last without ``ended_utc``;
 - no verdict: the last run has no ``out/composite/remote-v1/composite.json``, or that holds no verdict;
-- a verdict covering fewer checks than the goal names (`CHECKS`: sampled proofs, Pearl+ and inference only), or one
+- a verdict covering fewer checks than the goal names (`CHECKS`: SPOT, Pearl+ and inference only), or one
   composed as a development check, on the served node;
 - a served commit (the first run's ``computation.tree_sha``, in its ``job.json``) that is not a commit of ``--main``
   (default ``origin/main``) in the tree this file is in;

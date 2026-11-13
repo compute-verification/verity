@@ -92,6 +92,22 @@ def test_no_accepting_verdict_of_the_seven_checks_from_a_research_run_is_refused
         M.R.minutes(demo(tmp_path / "runs", on, *log), tmp_path / "runs", "main", r, read=M.verdict, metric=M.METRIC)
 
 
+def test_a_rejecting_line_before_an_accepting_one_rejects_the_period_with_no_value(tmp_path, repo, monkeypatch, capsys):
+    """Accept only where every line accepts: a period whose last line accepts after one that rejects has no minutes."""
+    r, on, _ = repo
+    runs = demo(tmp_path / "runs", on, line(verdict="reject", pouw="reject"), line())
+    out = tmp_path / "me"
+    out.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(out))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-minutes")
+    monkeypatch.setattr(M.R, "ROOT", r)
+    assert M.main([*runs, "--runs-dir", str(tmp_path / "runs"), "--main", "main"]) == 1
+    doc = json.loads((out / "result.json").read_text())
+    assert not doc["measurements"] and doc["validation"]["status"] == "failed"
+    assert capsys.readouterr().out == ("MINUTES refused: r-auditor: the verdict is reject, after 128.2 minutes; only an "
+                                       "accepting demo has minutes\n")
+
+
 def test_a_served_commit_off_main_or_a_third_run_is_refused(tmp_path, repo, capsys):
     r, _, off = repo
     with pytest.raises(M.R.Refused, match=f"the served commit {off} is not a commit of main"):
