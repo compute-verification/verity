@@ -112,3 +112,26 @@ TIMER: none
 [2026-11-13T06:15Z] 12c31475dde3
 PERIODPROOF to network-accounting (lead), Thu 12 Nov 10:15 PM PST. **`r20261113-054400-6158` ended rc 0: the suites at #9350's merged scratch head `5c4948e451b0`, 9 of 9 passed, none cached, none failed** (the root suite 388 passed) [run]. The records run `r20261113-054356-9781` is still running; #9350's branch moves when it is in.
 
+[2026-11-13T06:16Z] be2d6c8e43a0
+SCANCOUNT to network-accounting (lead), Thu 12 Nov 10:16 PM PST. **#9639's body holds both sentences, each by `research queue edit 9639`; nothing was pushed (head still `d4db4746171f`, open).** Each is read back from GitHub after its edit, and each edit's diff against the body before is that one item [ran].
+
+**1. The lock notice's new line**, after the bullet that says `ScopeMatches` leaves `open`:
+
+> - **That count going from 119 to 118 is a move and no proof.** `Claims.SamplingGeneric.Compiled.Scope` stays under `open` in `security`'s lock (owner `@proofs`, LEAN-186, due 30 Nov), and `security/Properties` files it under `domain` for `ScanScopeAcc`. No deployed guarantee reads the scan's scope [lean's read on NET-401, Thu 12 Nov 9:27 PM PST].
+
+- What I checked of it at `d4db4746171f` [ran]: `security/Properties`' lock has 119 `open` entries at the branch's base and 118 at its head; `security`'s lock holds `Compiled.Scope` under `open` with owner `@proofs`, issue LEAN-186, due 2026-11-30; `security/Properties`' lock holds it under `domain`, owner `@network-accounting`. The two locks' `deployed` lists (14 and 6 entries) name no guarantee of the scan.
+- Not checked by me: lean's sentence beyond those names, that is, what each deployed guarantee reads through its definitions.
+- I wrote `ScanScopeAcc`, the statement's name as the body has it, where you wrote `scanScopeAcc`.
+
+**2. Sentence (c)**, as sent at 10:10 PM PST and unchanged since:
+
+> - **(c) No lemma concludes `Scope` at a deployed parser on a real statement, and at the two-stage parser none can** [derived, not compiled]. At SPOT[Flock]'s two-stage parser (`SpotFlock.parse` with `SpotFlock.partition`) `Compiled.Scope` is false at every statement: the statement's design is the first stage's, of two rules or none, its partition has one class, and `Design.WellFormed` asks as many rules as classes. So this statement says nothing there. The scan's round is one-stage over several members, a form Lean has no parser for: the one-stage record it has takes one circuit file a statement, and concludes `Scope` only from a hypothesis (`ScopeOk`) that no lemma discharges. So today the premise is concluded on a real statement at no deployed parser, and it is false at the only one that takes several members. The lemma that would conclude it belongs at the one-stage form over several members, and at the wired Program: unwired, the largest scan's ingress unit commits more bits than the widest size class holds [argued from measured counts]. That gap is open.
+
+- It differs from your wording in one place, as my 10:10 PM PST line says: "concluded at no deployed parser, and false at the only one that takes several members", not "holds at no deployed parser". I showed it false only at the two-stage parser.
+
+**Scratch, not compiled.** My scratch branch `cursor/network-accounting-stmtflattens-try-5e1d` is at `7756eabdcb38` with two drafts that have never been elaborated: `WireInMember.lean` (the inequality) and `ScopeAtTwoStage.lean` (sentence (c)'s first claim). No job is launched for either. I try them only on your word.
+
+Still owed by me: step B, Wed 18 Nov, built last on what is on `main` by Mon 16 Nov. I am reading for it now and touch no `Period.lean` before then.
+
+TIMER: none
+
