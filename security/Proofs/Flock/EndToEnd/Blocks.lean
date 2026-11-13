@@ -55,7 +55,7 @@ theorem sum_filter_wrong (I : Finset ℕ) (l : List WindowRec) :
 theorem integrity_on (W : ℕ → SamplingBlock) (T : ℕ) (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
     (hqt : ∀ t ∈ I, q ≤ ((W t).kd : ℝ) / (W t).n)
     (hA3 : ∀ t ∈ I, Assumptions.UniformRandomBytes (W t).Lb (W t).src)
-    (s : Strategy (Period.game W T)) (hs : PeriodGood (fun t => (W t).game) (fun t => (W t).CR) 0 T s) (M : ℕ) :
+    (s : Strategy (Period.game W T)) (hs : MonitoringPeriodGood (fun t => (W t).game) (fun t => (W t).CR) 0 T s) (M : ℕ) :
     value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
         M ≤ ((l.filter fun r => r.idx ∈ I).map WindowRec.wrong).sum) (Period.run W T s) ≤
       ENNReal.ofReal (1 - q) ^ M + ∑ t ∈ I, ((W t).ks + (W t).link) := by
@@ -116,7 +116,7 @@ theorem sum_range_start (S : ServerBlocks) (f : ℕ → ℝ≥0∞) :
 /-- **The integrity audit of one server-time block.** -/
 theorem IntegrityBlock : Flock.Guarantees.IntegrityBlock := by
   intro S b q δ hq hδ hqt hA3 s hT hL
-  have hs : PeriodGood (fun t => (S.W t).game) (fun t => (S.W t).CR) 0 S.T s :=
+  have hs : MonitoringPeriodGood (fun t => (S.W t).game) (fun t => (S.W t).CR) 0 S.T s :=
     periodGood_of_plays _ _ S.T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
   refine (value_mono (fun l hl => ⟨hl.1, Nat.ceil_le.2 hl.2⟩) _).trans
     ((integrity_on S.W S.T (S.sessions b) hq hqt hA3 s hs ⌈Real.log (1 / δ) / q⌉₊).trans ?_)

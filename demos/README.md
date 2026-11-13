@@ -8,11 +8,11 @@ or `run.sh`.
 
 ## The remote protocol
 
-Remote Verity (`verity/remote/v1`, `Core.Remote.V1` in `verity/protocols/remote/verifier/CoreRemote.lean`) is what the
+Remote Verity (`verity/remote/v1`, `Core.Remote.V1` in `verity/protocols/compose/verifier/remote/CoreRemote.lean`) is what the
 verifier establishes with no hardware of its own at the developer's site. It composes three protocols
 (`Core.Remote.V1.components`):
 
-- integrity, by sampled proofs (`verity/sampled-proofs/v1`, in its one-stage form): the prover commits every value of
+- integrity, by SPOT (`verity/sampled-proofs/v1`, in its one-stage form): the prover commits every value of
   a served window under hiding leaves, a live coin from the challenger samples proof blocks, the prover proves each sampled
   proof block in Flock `--zk`, and the Lean verifier checks each proof against the committed roots;
 - work, by Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`): tiles of the run's retained passes, sampled by work
@@ -31,11 +31,11 @@ guarantee assumes; each subprotocol states its guarantee in `security/`, and the
 (`Verity.RemoteSoundness`, `security/Properties/Verity/Soundness.lean`) is proved from theirs, which it takes as
 hypotheses, so no demo's `proof` is past `none`. `lifecycle/` is the only demo that steps through the whole
 remote composite, H1's development one, on CPU with a stand-in prover. Its demo is the vLLM demo
-(`verity demo vllm`), on H1's development executable: one served run of Llama-3.2-1B INT8 on one H200, sampled proofs
+(`verity demo vllm`), on H1's development executable: one served run of Llama-3.2-1B INT8 on one H200, SPOT
 and PoUW on the served model, whose PoUW verdict is a development run that credits nothing. The inference-only policy
 runs in `lifecycle/` only: no served run produces the declared
 division yet. Five other things are called "remote" (PoUB among them);
-`verity/protocols/remote/verifier/README.md`, "Which remote", lists them.
+`verity/protocols/compose/verifier/remote/README.md`, "Which remote", lists them.
 
 ## How far a demo runs, and how far it's proved
 
@@ -77,7 +77,7 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
 - `lifecycle/` (`run` `runs`, `proof` `none`): both composites, `onsite` and `remote`, stepped through one monitoring
   period on CPU in about 2 s, from the hardware registration to the period's verdict and accounting. Every party is
   simulated in one process, the prover is a labelled stand-in for Flock, and the verdict is the composition's Python
-  mirror (`verity/protocols/remote/verifier/composition/tests/reference.py`), not `remote check`. It is the only demo that steps
+  mirror (`verity/protocols/compose/verifier/lean/tests/reference.py`), not `remote check`. It is the only demo that steps
   through the whole remote composite; its tests (`demos/lifecycle/tests/test_lifecycle.py`) run each composite honest
   and with every deviation it lists refused. Nothing about it is proved.
 - `vllm/` (`run` `moved`, `proof` `none`): the vLLM demo, the remote protocol on a real served model. Llama-3.2-1B INT8

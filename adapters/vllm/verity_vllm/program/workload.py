@@ -34,6 +34,7 @@ from verity.circuits.codec import (
     encode_program,
     program_digest,
 )
+from verity.circuits.constants import REGISTRATION
 from verity.circuits.defs import (
     Body,
     BodyNode,
@@ -53,7 +54,6 @@ from verity.circuits.refs import (
 )
 from verity.circuits.types import Array, Type, Value, field_starts, field_types
 from verity.circuits.types import Tuple as TupleT
-from verity.definitions.circuits.constants import REGISTRATION
 
 from verity_vllm.program.sampling_event import is_sampling_event
 from verity_vllm.program.shared_definitions import canonicalize
@@ -163,7 +163,7 @@ class RequestComponent:
     groups: tuple[str, ...] = ()  # original request-wrapper parameter each component parameter (Input batch) belongs to
     step_nodes: tuple[tuple[int, int], ...] = ()  # request-relative step s -> body node range [lo, hi) (segments ending at TokenSelect_v1, X-09's unit)
     step_gates: tuple[tuple[int, int], ...] = ()  # the same in component-local gates
-    bindings: tuple[str, ...] = ()  # each component parameter's binding time (`verity.definitions.circuits.constants`: registration or run)
+    bindings: tuple[str, ...] = ()  # each component parameter's binding time (`verity.circuits.constants`: registration or run)
 
     def to_json(self) -> dict:
         return {"specialization": descriptor_id(self.fn), "program_digest": self.program_digest, "program_fn": self.program_fn,

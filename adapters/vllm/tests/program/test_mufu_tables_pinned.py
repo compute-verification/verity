@@ -10,7 +10,7 @@ import pytest
 from verity.definitions.numerics import fa2_model as FA
 from verity.definitions.numerics import fa2_relation, rms_relation
 from verity.definitions.numerics import rms_triton_model as RM
-from verity.definitions.ops import mufu
+from verity.circuits.ops import mufu
 from verity.definitions.registry import prims as P
 
 TANH_TABLE_WORD = 0x3F000000  # tanh(0.5): between the identity and the saturation rule, so answered from the table
@@ -51,7 +51,7 @@ def test_a_table_that_is_not_the_pinned_one_does_not_load(monkeypatch):
 
 def test_the_decoded_tables_are_core_library_tables():
     """Each measured MUFU table, decoded as raw little-endian u32 words, has the SHA-256 and SHA-512 core's library lists."""
-    from verity.definitions.circuits import library as L
+    from verity.circuits import library as L
 
     t, fa2 = rms_relation.tables("cuda"), fa2_relation.tables()
     for name in ("rsq", "sqrt", "rcp", "ex2"):
