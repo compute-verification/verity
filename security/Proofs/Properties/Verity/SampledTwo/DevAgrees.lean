@@ -37,7 +37,7 @@ theorem take_flatMap {α β : Type} (f : α → List β) (k : ℕ) (hk : ∀ a, 
   | [], u => by simp
   | a :: l, 0 => by simp
   | a :: l, u + 1 => by
-    rw [List.flatMap_cons, List.take_succ_cons, List.flatMap_cons, List.take_append_eq_append_take,
+    rw [List.flatMap_cons, List.take_succ_cons, List.flatMap_cons, List.take_append,
       List.take_of_length_le (by rw [hk, Nat.mul_succ]; omega), hk,
       show k * (u + 1) - k = k * u by rw [Nat.mul_succ]; omega, take_flatMap f k hk l u]
 
@@ -50,7 +50,7 @@ theorem flatMap_congr_mem {α β : Type} {f g : α → List β} :
 theorem lt_of_mem_take_finRange {n u : ℕ} {a : Fin n} (ha : a ∈ (List.finRange n).take u) : a.val < u := by
   obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem ha
   simp only [List.length_take, List.length_finRange] at hi
-  simp only [List.getElem_take, List.getElem_finRange]
+  simp only [List.getElem_take, List.getElem_finRange, Fin.val_cast]
   omega
 
 /-- **The same elements below `u`, the same bytes below `16 u`.** -/
@@ -66,8 +66,7 @@ theorem coinByte_of_elems {u : ℕ} {c c' : FlockDeploy.Coin} (h : ElemsBelow u 
     (hi : i.val < 16 * u) : SpotFlock.coinByte c i = SpotFlock.coinByte c' i := by
   have e : ∀ l : List UInt8, l.getD i.val 0 = ((l.take (16 * u))[i.val]?).getD 0 := fun l => by
     rw [List.getElem?_take, if_pos hi, List.getD_eq_getElem?_getD]
-  apply Fin.ext
-  show (c.bytes.getD i.val 0).toNat = (c'.bytes.getD i.val 0).toNat
+  simp only [SpotFlock.coinByte, Fin.mk.injEq]
   rw [e c.bytes, e c'.bytes, coinBytes_take h]
 
 /-- **The same bytes below `w`, agreement on the first `w` bytes.** -/
