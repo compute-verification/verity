@@ -125779,3 +125779,40 @@ Run `r20261113-063157-0a84` (vy-nebius-2, `--tree-sha e05417eec679dfd2a039e8f1e2
 - **Not done:** no records run of `security/Proofs` at my head (I hold no pull request and write no ready line; say so if you want one from me, about 64 GB and one Lean slot). Nothing of mine is running.
 
 ## TWOLEG, Fri 13 Nov 06:46Z: the pen is not this loop's: a TWOLEG loop of 06:42Z holds it and pushed `c9e1f9dee0` on `cursor/proofs-twoleg-c5e5`; this loop stops, having pushed nothing of its own past the 06:33Z entry but `806224946c` (keysAre and without private again) and `f821254d7a` (RUNCOINS's `10757cc241`, cherry-picked), which that loop pushed with its commit [read]
+
+## SERVEDCARD, Fri 13 Nov 06:46Z: `EmbeddingRead_v1` retry: GO on time, conditional on a prove-step change and a CPU check; `RmsNormMnnvl`'s 0.0 is a timing-window artefact
+
+**The rehearsal so far** (`r20261113-063506-2823`, vy-nebius-cpu-14):
+- [run] It took a slot at 06:38Z with a 240.5 GB reservation. The kit was held to its sha256 and unpacked.
+- [run] Both statements' kept files matched record `art:ae7d6d57…`, 25 files each.
+- [run] The verifier and `flock-read-tmpl` built in 117 s.
+- [run] `BatchedGemm_v2{B=1,K=512,…}@full` restaged in 76 s at a 2.89 GiB peak (maximum RSS), and its pin equals the kept `pin.txt`. Its first session, `l0004`, was accepted by Flock's Lean verifier in 6.8 s at 0.54 GiB, labelled "accepted on the provisional unit cover, units as stated, the Program not held to the circuit".
+- [run] The head block's restage started at 06:42Z.
+
+**4. The two `EmbeddingRead_v1` types (ranked 13, H=4, and 30, H=96; 1.48% of ranked proving time).**
+- [run] What happened: last night H=4 staged in 197 s at a 4.9 GB peak (n=4096, k_log 23, a 334 MB circuit). The server, `flock-circuit serve`, then refused it before any session: `a templated statement: pass its unit's rows (--tmpl-unit F, from flock-tmpl-unit)`. H=96 was never staged.
+- [read] What the prove step needs, at today's `main` (`b843a10af4`, after #9375). Between last night's tree and `main`, `prove_time.sh`, `flock-circuit.rs` and `TmplUnit.lean` are unchanged. Three things are missing, all in `benchmarks/served_units/prove_time.sh`, about ten lines plus a test:
+  1. In its build step, outside any lease, build `flock-tmpl-unit` as `verity/protocols/flock/pod/90-tmpl-unit.sh` builds it: the verifier's Lean package with `prover/tests/lean/TmplUnit.lean` added as one more `lean_exe`.
+  2. In `session_at`, when the statement directory holds `unit.tmpl`, place the unit with `flock-tmpl-unit unit.tmpl --layout "$(cat unit.layout)" --out unit.placed`. `stage.py` already writes `unit.tmpl` and `unit.layout`.
+  3. Pass `--tmpl-unit unit.placed` to both `serve` and `prove`. Both load the circuit through the same `load_composite`, so the GPU path gets the unit too.
+- [read] What can still refuse on the GPU: `statement_checks` holds a GPU statement to at most 12 slot types, the device's nonzero-count bound and the ZK shape. A templated statement (`flock-circuit/tmpl`) has no typed instance, so the GPU's refusal of table reads does not apply to it. No run has proved a templated statement on the GPU prover: `90-tmpl-unit.sh` proves on the CPU only. A refusal would show in its first minute, at no cost but that minute.
+- [guess] Time on the shared row, Fri 15:45Z to 19:45Z:
+  - staging both types on node A's CPUs before taking the cards: about 10 minutes;
+  - on a card, per type: the server's statement build of about 1.5 minutes, then five sessions of seconds each, so about 5 minutes;
+  - a rebuild of the GPU prover if node A's build cache is gone: about 15 minutes, outside the lease.
+
+  Cards 4 and 5 are enough, one type each. Card 7 isn't needed, so the job that goes first on it keeps it.
+- **Plan, GO on time, conditional:**
+  1. I write the `prove_time.sh` change on a branch off today's `main`.
+  2. A CPU check through the changed `prove_time.sh` (`PT_DEVICE=cpu`, `EmbeddingRead_v1{V=256,H=4}@2`, five sessions accepted) runs as a research run from that branch by Fri 14:00Z.
+  3. The GPU retry takes cards 4 and 5 at 15:45Z with both types at full, from the same branch commit.
+
+  NO-GO if the CPU check isn't 5 of 5 by 14:00Z; then both types stay "not measured, 1.48%".
+- [read] Their Lean leg is another change: the Lean verifier checks a templated statement with its partition and program (`--partition`, `--program`, as `90-tmpl-unit.sh` passes them), which `lean-shard.sh` doesn't pass yet.
+- [guess] That Lean leg would be a seventh shard of two small circuits, about 30 minutes on a CPU node after the retry.
+- Your go is needed for me to write the branch; I launch nothing on cards without it.
+
+**5. `RmsNormMnnvl`'s utilization of 0.0** [run]: its five session lines reached `prove_time.sh`'s timestamper buffered. The warm session's line came first; 60 ms later the next three arrived within 25 ms of each other, and the last 2.2 s after them. So the window `summary.py` averages over (the last warm line's stamp to the last timed line's) was the 2.25 s after the sessions' GPU work. Its five card samples there read 0% with 36,289 MiB held, while the twelve samples just before read 79% to 98%. Its proving seconds come from the prover's own timers and stand; its `gpu_util_mean_pct` and `session_s` (0.56 s) do not.
+- [run] The same buffering shows in 18 of the 34 statements: two session lines under 35 ms apart. So the utilization column is not read as a measurement for any statement until the stamps are taken where each session ends.
+
+For the table: `EmbeddingRead_v1` GO on time, conditional on the change and a CPU check by Fri 14:00Z; `RmsNormMnnvl` utilization: a timing-window artefact (proving seconds stand).
