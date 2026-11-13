@@ -7,6 +7,7 @@ from verity_vllm.records import schema_ids
 
 #: the ids as the records on disk have them
 ON_DISK = {
+    "ACQUISITION_OBSERVED_SCHEMA": "verity-vllm/acquisition-observed/v1",
     "ADMISSION_BOUND_SCHEMA": "verity-sweep/admission/f-da-15/v1",
     "ADMISSION_PLAN_SCHEMA": "verity/admission-plan/v1",
     "AOT_COMPARISON_SCHEMA": "verity-vllm/aot-comparison/v1",
@@ -28,14 +29,17 @@ ON_DISK = {
     "CONSTRUCTION_VERSION_SCHEMA": "cb-a/aot-artifact/v1",
     "COVERAGE_DECLARATION_SCHEMA": "verity/commit-integ/coverage-declaration/v1",
     "DERIVE_STEP_SCHEMA": "cb-a/derive_step/v3",
+    "EFFECTIVE_CONFIG_SCHEMA": "verity-vllm/effective-config/v1",
     "ENGINE_PROFILE_SCHEMA": "verity-vllm/profile/v1",
     "ENGINE_SPEC_SCHEMA": "verity-vllm/engine-spec/v0",
+    "EXECUTING_TREE_SCHEMA": "verity-sweep/executing-tree/v1",
     "EXPERIMENT_SCHEMA": "verity-gen/experiment/v1",
     "EXPERIMENT_SPEC_SCHEMA": "verity-gen/spec/v1",
     "FOLD_SUMMARY_SCHEMA": "verity-gen/fold-summary/v1",
     "GATES_SCHEMA": "verity-gen/gates/v1",
     "GENERATED_WORKLOAD_SCHEMA": "verity-sweep/workload/v1",
     "GLOBAL_PROGRAM_SCHEMA": "cb-a/global-program/v1",
+    "GPU_LEASE_SCHEMA": "verity-vllm/gpu-lease/v1",
     "IMPORT_PATH_RUNTIME_SCHEMA": "verity/tp2/import-path-runtime/v1",
     "INSTANCE_SEQUENCE_SCHEMA": "cb-a/instance-sequence/v2",
     "INT8_ERROR_REPORT_SCHEMA": "verity-vllm/int8-error-report/v1",
@@ -72,6 +76,7 @@ ON_DISK = {
     "REPLAY_SLIM_SCHEMA": "verity-vllm/replay-slim/v1",
     "ROW_ATTEMPTS_SCHEMA": "verity-sweep/row-v2/v1",
     "SAMPLED_REPLAY_SCHEMA": "verity-sweep/sampled-replay/v1",
+    "SERVED_REQUIRED_MANIFEST_KIND": "verity/served-required-manifest/v1",
     "SERVED_SWITCHES_SCHEMA": "verity-vllm/served-switches/v1",
     "SERVING_ROWS_INDEX_SCHEMA": "verity-vllm/serving-rows/index/v0",
     "SPEC_TOKENS_SCHEMA": "verity-gen/spec-tokens/v1",
@@ -92,6 +97,7 @@ ON_DISK = {
     "WEIGHTS_OF_RECORD_SCHEMA": "verity/commit/weights-of-record/v2",
     "X09_PROFILE_SCHEMA": "cb-a/x09-profile/v1",
     "XRANK_COLLECTIVES_FOLD_SCHEMA": "verity/tp2/xrank-collectives-fold/v1",
+    "XRANK_COLLECTIVES_SCHEMA": "verity/tp2/xrank-collectives/v1",
     "XRANK_PICKS_SCHEMA": "verity/tp2/xrank-picks/v1",
 }
 

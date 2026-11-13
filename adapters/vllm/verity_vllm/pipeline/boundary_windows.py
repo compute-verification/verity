@@ -80,9 +80,9 @@ class BoundaryWindows:
     holds a finished one (``drained``), and at `stop`; its finished spans are committed class by class (`commit`, `write`)
     on a thread of their own, under ``out``/w<window>/, before anything can sample them, and each class's
     ``commit.json`` goes to ``sink`` too. ``check`` is the check template, or a callable giving it on that thread, and
-    ``inline`` its `Layout`'s. With ``tables`` (a `boundary_tables.Channel` or `LocalChannel` to rank 0), each class's
-    commitment first assigns its spans their slots and waits for their history tables' roots at ``layers``, of
-    ``capacity`` leaves. ``stop``: the serve's registered stop rule, with no tables; the spans it ends as they were served
+    ``inline`` and ``verdicts`` its `Layout`'s. With ``tables`` (a `boundary_tables.Channel` or `LocalChannel` to rank 0),
+    each class's commitment first assigns its spans their slots and waits for their history tables' roots at ``layers``,
+    of ``capacity`` leaves. ``stop``: the serve's registered stop rule, with no tables; the spans it ends as they were served
     are committed in the stop classes, (P, T), and the rest by size class without a stop block, under
     ``p<P>-o<O>-nostop`` (`filed`). ``release``: for a serve behind a network certifier, a request's release by its engine
     id, (run, N) or None for a request the certifier didn't release (`serve_admit.release_of`'s, as the serve's admission
@@ -95,13 +95,14 @@ class BoundaryWindows:
                  sink: Callable[[dict], None] | None = None, clock: Callable[[], float] = time.monotonic,
                  serve: str | None = None, tables: Any = None, layers: Sequence[int] = (),
                  capacity: int = HT.CAPACITY, stop: Stop | None = None,
-                 release: Callable[[str], tuple[str, int] | None] | None = None) -> None:
+                 release: Callable[[str], tuple[str, int] | None] | None = None, verdicts: bool = False) -> None:
         if (tables is None) != (not layers):
             raise ValueError("history tables need both rank 0's channel and their layers")
         if stop is not None and layers:
             raise ValueError(TABLES_UNDER_A_RULE)
         self.out, self.per_prompt, self.per_output = Path(out), int(per_prompt), int(per_output)
         self.window_s, self.drained, self.inline, self.stop_rule = float(window_s), drained, inline, stop
+        self.verdicts = verdicts
         self.tables, self.layers, self.capacity = tables, tuple(int(x) for x in layers), int(capacity)
         self.sink, self.clock, self.release = sink, clock, release
         self.serve = serve or secrets.token_hex(32)
@@ -116,8 +117,8 @@ class BoundaryWindows:
     def of(cls, cfg: Mapping[str, Any], out: Path, sink: Callable[[dict], None] | None = None,
            release: Callable[[str], tuple[str, int] | None] | None = None, public: Sequence[Path] = ()) -> BoundaryWindows:
         """From a serve's configuration: ``check``, a serving template's descriptor id (`check_template`), and
-        ``per_prompt``, ``per_output``, ``window_s``, ``drained`` and ``inline``; ``tables``, rank 0's history tables
-        (`boundary_tables.Channel.of`: its private directory, never under ``out`` or ``public``); and ``stop`` (`Stop.of`:
+        ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline`` and ``verdicts``; ``tables``, rank 0's history
+        tables (`boundary_tables.Channel.of`: its private directory, never under ``out`` or ``public``); and ``stop`` (`Stop.of`:
         the registered model's stop ids and length and T, the most ids a response has). A stop rule the serve can't
         register (a T the word can't hold, or one beside history tables) is refused here, as the serve starts."""
         t, tc, stop = str(cfg["check"]), cfg.get("tables"), Stop.of(cfg.get("stop"))
@@ -128,7 +129,7 @@ class BoundaryWindows:
                    float(cfg.get("window_s", 600)), drained=bool(cfg.get("drained", True)),
                    inline=bool(cfg.get("inline", False)), sink=sink, tables=ch,
                    layers=BT.layers_of(tc["layers"]) if tc else (), capacity=int((tc or {}).get("capacity", HT.CAPACITY)),
-                   stop=stop, release=release)
+                   stop=stop, release=release, verdicts=bool(cfg.get("verdicts", False)))
 
     @property
     def check(self) -> SpecializedDefinition:
@@ -202,7 +203,7 @@ class BoundaryWindows:
                 try:
                     layout = _built(Layout(self.check, self.per_prompt, self.per_output, p, o, len(mine),
                                            run_root(self.serve, window), self.inline, self.layers, self.capacity,
-                                           stop=rule, held=held), kept)
+                                           stop=rule, held=held, verdicts=self.verdicts), kept)
                     c = commit(mine, layout, window, tables=self._tables(window, layout, mine))
                     write(c, self.out / f"w{window}" / f"p{p}-o{o}{'-nostop' if unheld else ''}")
                     line = {**c.public(), "serve": self.serve, "open_s": opened, "close_s": closed, "carried": carried,

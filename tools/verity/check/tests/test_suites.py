@@ -235,6 +235,25 @@ def test_a_declared_build_output_keys_the_suite(tmp_path, monkeypatch):
     assert len(set(keys)) == 3 and S.artifact_ids(suite)["pkg/.lake/cache"] == "directory"
 
 
+def test_a_suites_bound_stretches_for_fewer_workers_than_it_was_measured_on(tmp_path, monkeypatch):
+    """verity-vllm's 14,400 s holds for the 5 workers its 10,000 s was measured on; a whole check on an 11-core slot ran it on 3
+    and killed it at 14,400 s, short of the 16,700 s 3 workers take. Its bound follows the workers it gets, never below its own."""
+    (tmp_path / "pkg").mkdir()
+    pyproject = tmp_path / "pkg" / "pyproject.toml"
+    head = '[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n[tool.verity.tests]\nparallel = true\n'
+    pyproject.write_text(head + "timeout_s = 14400\ntimeout_workers = 5\n")
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    [suite] = S.discover()
+    assert suite.timeout_workers == 5
+    assert [S.bound(suite, n) for n in (3, 2, 5, 16)] == [24000.0, 36000.0, 14400.0, 14400.0]
+    assert S.bound(S.Suite("x", "x", (), ()), 2) == S.SUITE_TIMEOUT_S, "undeclared: the fixed bound, whatever the workers"
+    for bad in ("timeout_s = 60\ntimeout_workers = 0\n", "timeout_s = 60\ntimeout_workers = 2.5\n", "timeout_workers = 5\n"):
+        pyproject.write_text(head + bad)
+        with pytest.raises(ValueError, match="timeout_workers"):
+            S.discover()
+
+
 def test_what_the_lean_verifier_builds_keys_the_suite_by_its_sources(tmp_path, monkeypatch):
     """verity-flock's tests run the verifier's binaries, which no plan builds (`check.py --plan` left the suite unkeyed): built by
     check's lean-build, or this runner's `lean_build`, before the suite runs, they are keyed by the verifier's sources, so a
@@ -1234,6 +1253,24 @@ def test_a_suite_past_its_bound_is_killed_and_fails_as_timed_out(tmp_path):
     [r] = json.loads((tmp_path / "out.json").read_text())
     assert r["status"] == "failed" and r["timed_out"] == 0.5
     assert [f.name for f in (tmp_path / "cache").glob("*.json")] == ["durations.json"], "no pass kept"
+
+
+def test_a_suite_on_fewer_workers_than_its_bound_holds_for_runs_to_the_stretched_bound(tmp_path):
+    """The run applies `bound` with the workers the suite got: the hanging suite declares 0.25 s on 4 workers, runs on 1, and is
+    killed at 1 s."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    for f in tests.glob("test_*.py"):
+        f.unlink()
+    fifo = tmp_path / "never-written"
+    os.mkfifo(fifo)
+    (tests / "test_hangs.py").write_text(f"def test_hangs():\n    open({str(fifo)!r}).read()\n")
+    pyproject = root / "pkg" / "pyproject.toml"
+    pyproject.write_text(pyproject.read_text() + "timeout_s = 0.25\ntimeout_workers = 4\n")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "hangs")
+    p = _run_suite(root, tmp_path, "--fresh", "--timeouts")
+    assert p.returncode == 1 and "TIMED OUT: still running after 1 s, so its process group was killed" in p.stdout, p.stdout
 
 
 def test_oom_kills_reads_the_kernels_count(monkeypatch, tmp_path):

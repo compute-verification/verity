@@ -33,10 +33,8 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-#: The names the library's other modules read here.  A setting itself is read as an attribute, by its name in `SETTINGS`
-#: (`__getattr__`).
-__all__ = ["UnknownSetting", "environ", "get", "is_secret", "is_set", "put", "raw", "redact", "setdefault", "unset",
-           "validate_environ"]
+#: what code outside the integration may import: the record of the value settings in force (the rest is the integration's own)
+__all__ = ["RECORD_SCHEMA", "REDACTED", "record"]
 
 VALUE, WHERE, DEBUG = "value", "where", "debug"
 ROLES = (VALUE, WHERE, DEBUG)

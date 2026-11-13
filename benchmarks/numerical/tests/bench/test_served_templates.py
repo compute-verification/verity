@@ -19,13 +19,13 @@ from verity_flock import subcircuit_templates as TM
 pytest.importorskip("verity_vllm", reason="these templates evaluate through the vLLM integration's Definitions")
 
 
-def _draws(sub: TM.Subcircuit, n: int, seed: int = 0) -> list[TM.Draw]:
+def _instances(sub: TM.Subcircuit, n: int, seed: int = 0) -> list[TM.Draw]:
     key = SY.key_for(sub, seed)
     return [sub.draw(key, j) for j in range(n)]
 
 
-def _eval(sub: TM.Subcircuit, draws: list[TM.Draw]) -> dict[str, list[np.ndarray]]:
-    return sub.evaluate({p.name: [d.inputs[p.name] for d in draws] for p in sub.inputs}, [d.instance_statics for d in draws])
+def _eval(sub: TM.Subcircuit, instances: list[TM.Draw]) -> dict[str, list[np.ndarray]]:
+    return sub.evaluate({p.name: [d.inputs[p.name] for d in instances] for p in sub.inputs}, [d.instance_statics for d in instances])
 
 
 def _bound(mix: dict) -> str | None:
@@ -47,7 +47,7 @@ def test_fa3_head_equals_its_definition():
 
     sub = TM.subcircuit("attention-head", D=16, BN=16, T="17:40", semantics="sm90.fa3.bf16")
     assert sub.relation["definition"] == "Attention_v2" and sub.set_name == "attention-head-hopper-bf16-wgmma-fa3invsum_v1-d16-bn16"
-    for d in _draws(sub, 4):
+    for d in _instances(sub, 4):
         ref = evaluate_batch(sub.definition(**d.instance_statics), *[d.inputs[p.name][None, :] for p in sub.inputs], kernel="reference")
         assert np.array_equal(ref.reshape(-1), _eval(sub, [d])["out"][0].astype(ref.dtype))
     assert TM.identify(sub.relation).id == sub.id == TM.parse_subcircuit_id(sub.id).id
@@ -59,16 +59,16 @@ def test_expert_coordinate_equals_its_definition(weighted):
     from verity.circuits.evaluation import evaluate_batch
 
     sub = TM.subcircuit("moe-expert-coordinate-weighted" if weighted else "moe-expert-coordinate", E=3, K=32)
-    draws = _draws(sub, 6)
-    got = _eval(sub, draws)["y"]
-    for d, y in zip(draws, got):
+    instances = _instances(sub, 6)
+    got = _eval(sub, instances)["y"]
+    for d, y in zip(instances, got):
         slab = np.zeros((1, 3, 32), np.uint16)
         slab[0, int(d.inputs["e"][0])] = d.inputs["w"]
         args = [d.inputs["x"][None], d.inputs["e"][None], *([d.inputs["g"][None]] if weighted else []), slab]
         assert int(evaluate_batch(sub.definition(), *args, kernel="reference").reshape(-1)[0]) == int(y[0])
     if not weighted:
         gemm = TM.subcircuit("gemm-coordinate", K=32)
-        want = gemm.evaluate({"x": [d.inputs["x"] for d in draws], "w": [d.inputs["w"] for d in draws]})["y"]
+        want = gemm.evaluate({"x": [d.inputs["x"] for d in instances], "w": [d.inputs["w"] for d in instances]})["y"]
         assert [int(a[0]) for a in got] == [int(b[0]) for b in want]            # GemmCoordinate on the routed expert's row
 
 
@@ -76,9 +76,9 @@ def test_embedding_equals_its_definition():
     from verity.circuits.evaluation import evaluate_batch
 
     sub = TM.subcircuit("embedding-row", V=40, H=6)
-    draws = _draws(sub, 8)
-    out = _eval(sub, draws)["out"]
-    for d, o in zip(draws, out):
+    instances = _instances(sub, 8)
+    out = _eval(sub, instances)["out"]
+    for d, o in zip(instances, out):
         table = np.zeros((1, 40, 6), np.uint16)
         table[0, int(d.inputs["tok"][0])] = d.inputs["row"]
         assert np.array_equal(o, d.inputs["row"])
@@ -92,9 +92,9 @@ def test_silu_mul_v2_equals_its_definition():
 
     sub = TM.subcircuit("silu-mul-v2", I=32)
     assert sub.relation["definition"] == "SiluMul_v2" and sub.set_name == "silumul-v2-i32"
-    draws = _draws(sub, 8)
-    ref = evaluate_batch(sub.definition(), np.stack([d.inputs["in0"] for d in draws]), kernel="reference")
-    assert np.array_equal(np.asarray(ref).reshape(8, 32), np.stack(_eval(sub, draws)["out.out"]).astype(np.asarray(ref).dtype))
+    instances = _instances(sub, 8)
+    ref = evaluate_batch(sub.definition(), np.stack([d.inputs["in0"] for d in instances]), kernel="reference")
+    assert np.array_equal(np.asarray(ref).reshape(8, 32), np.stack(_eval(sub, instances)["out.out"]).astype(np.asarray(ref).dtype))
     assert TM.identify(sub.relation).id == sub.id == TM.parse_subcircuit_id(sub.id).id
 
 
@@ -107,10 +107,10 @@ def test_vec8_rmsnorm_equals_its_definition(template, family):
 
     sub = TM.subcircuit(template, N=64, EPS=1e-5, BLOCK=4)
     assert sub.relation["definition"] == family and sub.id == f"{template}/n64-b4-eps1e-05/bf16"
-    draws = _draws(sub, 8)
-    ref = np.asarray(evaluate_batch(sub.definition(), *[np.stack([d.inputs[p.name] for d in draws]) for p in sub.inputs],
+    instances = _instances(sub, 8)
+    ref = np.asarray(evaluate_batch(sub.definition(), *[np.stack([d.inputs[p.name] for d in instances]) for p in sub.inputs],
                                     kernel="reference")).reshape(8, -1)
-    got = _eval(sub, draws)
+    got = _eval(sub, instances)
     assert np.array_equal(ref, np.concatenate([np.stack(got[p.name]) for p in sub.outputs], axis=1).astype(ref.dtype))
     assert TM.identify(sub.relation).id == sub.id == TM.parse_subcircuit_id(sub.id).id
 
@@ -122,9 +122,9 @@ def test_rmsnorm_triton_v5_equals_its_definition():
     sub = TM.subcircuit("rmsnorm-triton-v5", N=128, EPS=1e-6)
     assert sub.relation["definition"] == "RMSNormTriton_v5" and sub.id == "rmsnorm-triton-v5/n128-eps1e-06/bf16"
     assert sub.set_name.startswith("rmsnormtriton-v5-n128-")
-    draws = _draws(sub, 4)
-    ref = evaluate_batch(sub.definition(), *[np.stack([d.inputs[p.name] for d in draws]) for p in sub.inputs], kernel="reference")
-    assert np.array_equal(np.asarray(ref).reshape(4, 128), np.stack(_eval(sub, draws)["out.out"]).astype(np.asarray(ref).dtype))
+    instances = _instances(sub, 4)
+    ref = evaluate_batch(sub.definition(), *[np.stack([d.inputs[p.name] for d in instances]) for p in sub.inputs], kernel="reference")
+    assert np.array_equal(np.asarray(ref).reshape(4, 128), np.stack(_eval(sub, instances)["out.out"]).astype(np.asarray(ref).dtype))
     assert TM.identify(sub.relation).id == sub.id == TM.parse_subcircuit_id(sub.id).id
 
 
@@ -135,7 +135,7 @@ def test_v18_head_equals_its_definition_at_the_decode_launch():
 
     sub = TM.subcircuit("attention-head-v18", D=16, BN=16, T="17:40")
     assert sub.relation["definition"] == "Attention_v18" and sub.set_name == "attention-head-v18-decode-d16-bn16"
-    for d in _draws(sub, 4):
+    for d in _instances(sub, 4):
         T = d.instance_statics["T"]
         defn = sub.definition(**d.instance_statics)
         assert 17 <= T <= 40 and defn.bindings["MASKED_FROM"] == -(-T // 16) - 1
@@ -148,8 +148,8 @@ def test_v18_head_equals_its_definition_at_the_decode_launch():
 
 def test_greedy_token_select_is_the_first_argmax():
     sub = TM.subcircuit("token-select-greedy", V=64)
-    draws = _draws(sub, 16)
-    for d, t in zip(draws, _eval(sub, draws)["out.sampled_token_ids"]):
+    instances = _instances(sub, 16)
+    for d, t in zip(instances, _eval(sub, instances)["out.sampled_token_ids"]):
         v = (d.inputs["in0"].astype(np.uint32) << 16).view(np.float32)
         assert int(t[0]) == int(np.argmax(v))
 
@@ -157,7 +157,7 @@ def test_greedy_token_select_is_the_first_argmax():
 @pytest.mark.parametrize("norm", [False, True])
 def test_router_picks_distinct_experts_with_positive_weights(norm):
     sub = TM.subcircuit("moe-router-topk-norm" if norm else "moe-router-topk", E=16, TOPK=4, VPT=8)
-    out = _eval(sub, _draws(sub, 16))
+    out = _eval(sub, _instances(sub, 16))
     for w, ids in zip(out["out.router_w"], out["out.router_ids"]):
         wf = np.asarray(w, np.uint32).view(np.float32)
         assert len(set(ids.tolist())) == 4 and all(0 <= i < 16 for i in ids) and (wf > 0).all()
@@ -167,15 +167,15 @@ def test_router_picks_distinct_experts_with_positive_weights(norm):
 
 def test_fp8_block_coordinate_reads_its_scales():
     sub = TM.subcircuit("scaled-mm-fp8-block-coordinate", K=256, G=128)
-    draws = _draws(sub, 8)
-    y = [int(a[0]) for a in _eval(sub, draws)["y"]]
+    instances = _instances(sub, 8)
+    y = [int(a[0]) for a in _eval(sub, instances)["y"]]
     assert len(set(y)) > 4 and all((v & 0x7F80) != 0x7F80 for v in y)
-    doubled = [TM.Draw(dict(d.inputs, sw=(d.inputs["sw"] + np.uint32(1 << 23)).astype(np.uint32)), {}, {}) for d in draws]
+    doubled = [TM.Draw(dict(d.inputs, sw=(d.inputs["sw"] + np.uint32(1 << 23)).astype(np.uint32)), {}, {}) for d in instances]
     y2 = [int(a[0]) for a in _eval(sub, doubled)["y"]]
     f = lambda w: float((np.uint32(w) << 16).view(np.float32))  # noqa: E731
     assert all(abs(f(b) - 2 * f(a)) <= abs(f(a)) * 2 ** -6 for a, b in zip(y, y2))    # sw x 2 doubles y (up to bf16 rounding)
-    assert not ((draws[0].inputs["xq"] & 0x7F) == 0x7F).any()
-    assert all(np.array_equal(draws[i].inputs["xq"], draws[0].inputs["xq"]) for i in range(8))
+    assert not ((instances[0].inputs["xq"] & 0x7F) == 0x7F).any()
+    assert all(np.array_equal(instances[i].inputs["xq"], instances[0].inputs["xq"]) for i in range(8))
 
 
 @pytest.mark.parametrize("fam", ["ScaledMmFp8BlockSharedScale_v1", "ScaledMmFp8Block_v1"])

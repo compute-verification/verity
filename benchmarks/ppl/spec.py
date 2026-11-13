@@ -22,6 +22,7 @@ from __future__ import annotations
 import inspect
 import re
 import tomllib
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -77,12 +78,12 @@ def _register(kind: str, name: str, phase: str, seeded, calib, on, check, source
     return deco
 
 
-def linear_step(name: str, *, phase: str = "real", seeded=False, calib=False, check=None, source=""):
+def linear_step(name: str, *, phase: str = "real", seeded=False, calib=False, check=None, source="") -> Callable[[Callable], Callable]:
     return _register("linear", name, phase, seeded, calib, ("linear",), check, source)
 
 
 def attention_step(name: str, *, phase: str = "real", seeded=False, calib=False, on=ATTENTION_MATMULS, check=None,
-                   source=""):
+                   source="") -> Callable[[Callable], Callable]:
     return _register("attention", name, phase, seeded, calib, on, check, source)
 
 
@@ -145,7 +146,7 @@ class Arm:
         return {(True, True): "all", (True, False): "linears", (False, True): "attention"}.get(
             (bool(self.linear), bool(self.attention)), "none")
 
-    def seeds(self, seeds) -> tuple:
+    def seeds(self, seeds: Iterable[int]) -> tuple:
         return tuple(seeds) if self.seeded else tuple(seeds)[:1]
 
     def to_toml(self) -> dict:
