@@ -114657,3 +114657,54 @@ Everything below is [read] at `f2889fd3ce` unless tagged otherwise; nothing was 
 - `ChallengerKey.ofJson` and `paramsOfJson` on `challenger.key`: not read; (f) rests on `paramsAt` and `AuditParams.of` alone.
 
 Pushed head of my own work: `cursor/proofs-stops-drawn-7b3e` at `7c776d1125f7`, unchanged; nothing unpushed. No run is out. To post: nothing.
+
+## CUT, Fri 13 Nov 02:23Z: ALL THREE FILES OF THE CUT COMPILE at `bb96dbb00a` (`Cut.lean`, `CutPrints.lean`, `CutHeld.lean`: 40 theorems, three standard axioms, no `sorry`); the read STAGECOINS asks for is not provable from acceptance alone, so I give `Good` with a read, under one more named premise
+
+Plain words. The cut is the step of the two-stage audit's proof that says the challenger's log the evidence carries, for the first stage's and the second stage's sessions, is what the auditor's device released, unless the prover forged the device's signature or found a SHA-512 collision. All of it now compiles: the statement, the bound, the reduction to what the device's history prints, and the proof that the form's own check holds the second stage's records to the device's coin trees. What is left is one gap STAGECOINS found: on a play where the check reads no log at all, the statement holds vacuously.
+
+What compiled [run]:
+- Try 6, `r20261113-014528-6f45` on vy-nebius-cpu-12 at `bb96dbb00a`: done, rc 0. `CutHeld.lean`: `lean exit 0`; axiom probe: "none of its 10 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; the sibling check passed. Its dependencies, `Cut.lean`, `CutPrints.lean` and TWOLEG's `Steps.lean` among them, built at that head in the same run.
+- Try 5, `r20261113-010822-a348` at `6c782c1022` (in the 01:46Z entry): `Cut.lean`, 7 theorems, and `CutPrints.lean`, 23 theorems, the same verdicts.
+- Warnings only, in all three: `first` fallbacks never taken, unused simp arguments, deprecated `if_pos`/`if_neg`. No statement depends on them.
+
+What the three files prove, at any history of the device [run]:
+- `cutBound`: from `Wired`, `Binds` and `SignsPlay`, \(\Pr[\text{verdict} \wedge \neg\,\texttt{LogIsDevice}] \le\) the read finder's term plus the forger's term.
+- `binds_of_accepts : BindsOfPrints dev θ`: `Binds` holds wherever the device's history at each play prints the play's log in its two sessions (`PrintsTwo`), with no other premise. `first_session` and `second_session` are its two halves.
+- With HISTORY's `PrintsTwo` and `SignsPlay` at the two-session history, the one premise left on the cut is `Wired`, the assembly's [relayed: your 01:02Z message says HISTORY's two compile against my definitions].
+
+`CutReads`: a correction to my 01:11Z entry. I wrote there that I would prove `Accepts s → readsLogs s ≠ []`. It is not provable at this base, for three reasons [read]:
+1. Where the first stage read no byte, the run's coin check accepts only `null` coin evidence (`Spot/Run.lean` 167–171, `coinsHold`). The cut then has no first-session log to read, and `readsLogs` reads both sessions or none.
+2. Where it read some, the run's coin check reads under the key the evidence carries, not the parameters' (`ChallengerCoins.lean` 105–118). This is the premise RUNCOINS carries as `CheckReadsDraw`.
+3. The form never reads the first session's log as coin trees. Only the device's run does (`PrintsOn`), so the first read exists on a log the device printed, and otherwise the record carries a break.
+
+So I give `Good` with the read, and the same terms:
+- New names, in a new file: `LogRead o := readsLogs o.sent ≠ []`, and the cut's bound at `fun o => LogRead o ∧ LogIsDevice o`.
+- One more named premise, `FirstReads θ`: on every accepted play, `drawCoins` under the parameters' key reads the first stage's coin evidence on the boundary's window. It is RUNCOINS's `CheckReadsDraw` at the parameters' key, plus "the first stage read a byte".
+- `LogIsDevice`, `cutBound`, `PrintsOn`, `PrintsTwo` and `SignsPlay` stay as they are, so nothing HISTORY or STAGECOINS built changes.
+- STAGECOINS then takes the read from `Good` and drops `CutReads` [derived].
+- I also wrote at 01:11Z that a `Good` with a read would make `Binds` false. That holds without `FirstReads`; with it, an accepted play with no read carries a break [derived, not compiled].
+
+The proof needs four pieces [derived]:
+- the parameters' key is at the deployed LMS parameters (the two-stage `paramsOfJson` runs v2's, which refuses another: `Limits.paramsOfJson_deployed`);
+- the first read exists or its record carries a break (`Drawn.drawn_log`, `PrintsOn`, and the one-stage leg's `readLog_isSome`);
+- the second stage's records are on the blobs (the per-member form reads each);
+- the second read exists (`coinTreesOf_fold`, `releasedRootsOf_pairsOk`).
+
+Hours: the statement in a try by 03:30Z; the proof compiled by about 07:00Z [guess].
+
+STOP RULE
+- Nothing [read].
+
+NEEDS
+- STAGECOINS and ASSEMBLY: say in your next entry if `Good` as `LogRead ∧ LogIsDevice` does not fit what you read of it. I write it that way unless told otherwise.
+- RUNCOINS: `FirstReads` is yours to discharge, from `CheckReadsDraw` and the run's step lemmas. I state it in my terms (`firstDraws`, `firstCoins`) and take it as a hypothesis.
+
+To post
+- Nothing.
+
+Not established
+- `cutBound` at `LogRead ∧ LogIsDevice`: not written.
+- A two-stage audit whose first stage reads no coin: the cut reads no log of it and says nothing of its second stage's coins. `FirstReads` excludes it. Whether the registered rule allows it is not read.
+- The earlier-signature hole: at a history of one play, an earlier period's genuine signature in the evidence makes the error ⊤. Soundness's change of Tue 17 Nov closes it.
+
+Pushed head: `bb96dbb00a`. Nothing is left unpushed.
