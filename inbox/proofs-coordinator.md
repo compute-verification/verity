@@ -131527,3 +131527,89 @@ No ready line; the base is not moved (`3b05c3a3b1a7`). Head `cursor/proofs-frame
 
 Branches: `cursor/proofs-scratch-firstaccept-standin-7e41` at `8590dac8a8`, pushed. `cursor/proofs-firstaccept-5a1c` at `9049e2c572` (#9594, unmarked), untouched. Runs: `r20261113-082057-587b` done, exit 0. `r20261113-081823-34c2` cancelled.
 >>>>>>> 42a3dc2c5e (inbox: FIRSTACCEPT, the served path's case on a stand-in window, refused by MULTI_REFUSED alone)
+
+## GATHER, Fri 13 Nov 08:58Z: the weights' root: ONE root where a weight is read as a registered value (the root the registration names is the root a sampled unit's proof opens, row by row, held in Lean); but a vLLM serve on `main` does not read its weights that way, its Commit of record names ANOTHER root that no proof opens, and nothing passes the interface's `Theta` root to the check
+
+Second try: `cursor/proofs-gather-second-try-5a28` at `984cb027efa30548bd370a1f0e04830e8d12be1a`, final; the Friday-size rehearsal `r20261113-053940-1822` ran at it and ended exit 0 [run, 07:36Z]. First try: `cursor/proofs-gather-served-select-b88b` at `496aa183544b`, pull request #9480, unchanged [run `git ls-remote`, 07:43Z]. I moved neither branch and merged no `main`. The pen is mine (taken 07:42:44Z) [run 08:53Z]. Read on `main` at `e4da505fe488` (a detached worktree; yours was `2e99b1cf48b8`). I ran searches only (`rg`), nothing heavy. A docstring's "coins" is the code's word; in my own sentences I write "challenges".
+
+### For TOP-415
+
+Question: is the root the registration names for the served weights the root the served circuit's proofs open, by rows?
+
+Answer: yes on the path built for it, and that path is not the one a vLLM serve takes today.
+
+The path built for it:
+
+1. There is one root for each weight parameter. A weight parameter is one weight at one row width. Its rows are the rows the circuit's ports read. Each row is a hiding leaf under the committer's secret key. The tree is a frame-v3-sha512 tree, and its domain names the program, the parameter, the leaf format, the row width and the row count, and no window.
+2. The registration names that root. The verifier pins it before the first window's challenges. The registration's check refuses a window whose root for the parameter is any other.
+3. A sampled unit's proof opens that same root. The unit's row is the registered row itself, with the same salt, so it is the same leaf. The statement gives a path from that leaf to the root. The Lean verifier climbs the path and compares the result with the root in its own list of registered reads. It also holds the row's position to the one its own program reads for that unit.
+4. So on that path it is one root, by rows. A statement that commits a weight row afresh has no path and is refused.
+
+What is not so today:
+
+- A vLLM serve on `main` does not give its commit step the committed weights. So a unit's weight rows are committed afresh in each window's own trees. They open no registered root, and the input count counts them as free input. Only the expert tables are read by reference, when the serve is asked for them.
+- A serve's Commit of record names another root for the weights. It is over each tensor's bytes in rows of 4,096 bytes, one tree a tensor. No proof opens it; only the committer's own replay opens tensors against it. Its rows are not the registered rows, so the two roots are never equal, and no check ties one to the other. Both hold the checkpoint's words only by the committer's own check.
+- The interface's registration log names each registered value by its root, with the same fields. No code hands that root to the registration's check as the verifier's pin. The pin comes from a file the auditor gives the check.
+- It is one root for each weight and row width, never one root for the model. A weight read at two widths has two roots.
+- That the registered rows are a named checkpoint's bytes is the committer's word, until the checkpoint tie's proof is checked.
+
+Friday's audit proves the greedy select. Its units read no weight row, so it opens no weights' root.
+
+### 1. Where a serve commits its weights, in what form, under which root
+
+- **(A) the serve's Commit of record.** [read] The committer registers the weights once in a process (`NativeHostCommitter.register_weights`, `adapters/vllm/verity_vllm/commit/committer/native_host.py:1063`, called at `adapters/vllm/verity_vllm/pipeline/commit.py:1343`; `acquire/committer_api.py:7`: "once per process"); the run's commitment carries the result as `weight_registration` (`adapters/vllm/verity_vllm/acquire/committer_api.py:52`), the Commit's row keeps it (`adapters/vllm/verity_vllm/pipeline/commit.py:1563`) and names its root `committed_weights_root` (`commit.py:1791`).
+  - [read] Form (`adapters/vllm/verity_vllm/commit/step_rows.py:31–38`, `:72` `ROW_BYTES = 4096`, `:237–250` `tensor_hs`, `:258–264` `keyed_tensor_root`, `:267–270` `weights_root`, `:273–276` `weights_tree`): each registered tensor's bytes in rows of 4,096 bytes, the last zero-padded; each row an hm96 hiding leaf under SHA-512, salted from `Ks_t = SHA-512(WEIGHTS_TAG ‖ Kw ‖ u64be t)` under the registration's fresh key `Kw`; one frame-v3-sha512 tree a tensor, under a domain that binds the geometry, the tensor's index and its names entry; the weights root is `SHA-512(WEIGHTS_ROOT_TAG ‖ geo ‖ names ‖ u64be T ‖ fold(tensor_roots))`, 64 bytes.
+  - [read] The older scheme's root is SHA-256, 32 bytes (`adapters/vllm/verity_vllm/commitments/vllm_v1/__init__.py:328–338`); a served window over it is refused by name (`weights_sha512`, `adapters/vllm/verity_vllm/pipeline/deferred_rows.py:102–115`).
+- **(B) the weights registration, by parameter.** [read] `window_weights.weights_registration` (`adapters/vllm/verity_vllm/program/predict/window_weights.py:238`; module docstring `:5–12`): written once for a model and key, before the first window's challenges. Each weight parameter is `weights/<label>@<words>`, one for a weight and a row width (`adapters/vllm/verity_vllm/check/weights_of_record.py:100–108`). Its rows of `<words>` u16 words are committed as `hm96-sha512/row/v2` rows (an embedding's table as `hm96-sha512/row-seg/v1`), row j salted `hm96_salt(key, nonce, j)` under the committer's secret 32-byte key (`window_weights.py:116–127`), in a frame-v3-sha512 tree under `registered.domain(program, param, words, rows)`, which leaves the window out for a value held across windows (`verity/protocols/spot/verifier/one_stage/registered.py`, module docstring). The record is `WeightsRegistration` (`adapters/vllm/verity_vllm/records/weights_registration.py`).
+  - [read] The expert stacks' tables have a registration of the same kind (`adapters/vllm/verity_vllm/pipeline/expert_tables.py:1–10`: `row-seg/v1` rows under the committer's key, "the `{program, values}` the verifier pins").
+- **(C) θ for the inference-only policy's full check.** [read] `adapters/vllm/verity_vllm/pipeline/registration_log.py:90–96, 108` and `adapters/vllm/verity_vllm/program/predict/node_registration.py:178, 186–221` commit each θ parameter in `hm96-sha512/row/v1` rows of at most 4,096 leaves (`adapters/vllm/verity_vllm/commit/registered_rows.py`, `MAX_WORDS`). `node_registration` first opens each tensor against (A) (`:178` reads `weight_registration.root`). Its docstring: "it registers θ, and no sampling follows it". No sampled proof opens (C).
+
+### 2. Which root the window's registration carries, and which check holds it
+
+- [read] A served window's registration is written by the commit step `serving_rows.after_commit` (`adapters/vllm/verity_vllm/pipeline/serving_rows.py:722–776`). It records a weight's root (the record's `registered` entries, `:769–770`, and `registered_roots` in its provenance, `:760–762`) only when it is given the committer's `weight_values` (`:697`; `adapters/vllm/verity_vllm/pipeline/weight_rows.py:96–110`: "`data` as given with no `values` … its reads stay free").
+- [run 08:53Z: `rg -n 'weight_values' adapters/vllm benchmarks --glob '*.py'` at `e4da505fe488`, and `rg -n 'weight_values=' …` at `984cb027efa3`] No caller gives it. [read] The in-Commit one (`serving_rows.py:181–184`), a tensor-parallel rank's (`adapters/vllm/verity_vllm/pipeline/tp/serving_rows.py:133–137, 201–205`), the deferred one (`deferred_rows.py:149–153`) and `benchmarks/prove_path/prove_path.py:901–903` pass `weights=` (the words to read) and `tables=`, never `weight_values=`.
+- [derived] So in a vLLM serve on `main` the window's registration names no root for a weight. A unit's weight rows are rows of its input ports, under fresh salts in the window's own trees. `interface.input_count` counts such rows free (`verity/commitments/windows/interface.py:2027–2048`: "a root the prover commits after serving, or another root than the pinned one, constrains nothing").
+- [read] Where a window does record a registered root, SPOT's `Registration.check` holds it, in R7. Python: `verity/protocols/spot/verifier/one_stage/registration.py:800–802` (the roots the log's earlier records registered under the same domain, then the verifier's `pinned`), `:819–834` (`R7-leaves`, `R7-words`, `R7-domain`, and `R7-held` where the record's root is not the held one). Lean: `verity/protocols/spot/verifier/lean/Spot/Registration.lean:185` (`pinned`), `:382–415` (`checkRegistered`; `R7-held` at `:415`), `:607` and `:681` (`v.pinned ++ heldRoots v.log (ownEntries v)`).
+- [read] The pin is the verifier's input, never the record's: `window_weights.registration_pins` (`window_weights.py:305–322`) holds the committer's registration to the shapes of the verifier's own weights record and returns `{param: root}`; `weights_tie.checked_pins` (`adapters/vllm/verity_vllm/program/predict/weights_tie.py:367`; docstring `:1–4`) is the checkpoint tie the verifier checks before it pins. On the command line it is a file (`benchmarks/prove_path/records_audit.py:1114` `--registered`, `:1151` `--pins`).
+- [read] (A) against a registered root: nothing in a verifier. `deferred_rows.source` checks only that (A) is 64 bytes (`deferred_rows.py:115`), which the one-stage audit reports (`benchmarks/one_stage/a5.py:1597–1600`). The committer's replay opens tensors against (A) (`adapters/vllm/verity_vllm/pipeline/cpu_replay.py:11–18`; `prove_path.py:898–899`). [run 08:50Z: `rg -l weight_registration verity`] No file under `verity/` names `weight_registration`.
+- [read] The interface's log: `Theta` is value, root, leaves, words, wordBits, domain and an optional checkpoint digest (`verity/protocols/interface/CoreProtocol/Registration.lean:61–72`); `View.value?` finds one by name (`:301–302`); the Python is `verity/hardware/registration.py:180–183, 295–297`. [run 08:54Z: `rg` for `View.value?`, `.value("`, `.theta` over `verity`, `security`, `adapters`, `benchmarks`, `tools`] Nothing outside those two files reads a θ item. [derived] The six fields are a `registered` entry's (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`), so the root could be the pin; no code makes it so.
+
+### 3. Which root a sampled unit's proof opens for a weight row, and the line that holds it
+
+- [read] Where a port is declared a registered read of a weight (`weight_rows.reads`, `weight_rows.py:70`; module docstring `:1–10`: a slice unit's port whose words are one whole row of one weight, as `row/v2` rows) and the commit step has the weight values, the unit's row is the committed value's own row (`weight_rows.py:125`), and the statement's header carries `registered: {port: {value, positions, paths}}` (`:126–127`), each path from that row's leaf to root (B).
+- [read] The line that holds the opening: `verity/protocols/flock/verifier/Flock/Registered.lean:219–221` (`opensLeaf`): the position is below the leaf count, the path is 64 bytes a level, and `climb reg.domain (leafAs reg.schema reg.domain pos payload) pos (log2ceil reg.leaves) path = reg.root`. Around it: `:256–258` (every row of the port's table opens), `:262–264` (each instance reads the position the verifier's program reads for its unit), `:270–298` (`checkPort`: the port's schema and row width are the registration's), `:303–315` (`check`: a statement naming registered reads is refused when the verifier holds none; the units must be derived from the verifier's own program), `:243` (a row committed afresh: "with no path to its registered root").
+- [read] `reg.root` is the verifier's: `interface.registered_reads` builds the `--registered` file from `pins`, "as the verifier pinned them before the run" (`interface.py:2098–2107`); `registered.reads_file` takes "the value's root from `roots` … of a registration the verifier accepted" (`registered.py:642–656`).
+- [read] After the sessions, the record's check holds the roots the verdicts report opening against to the registration's own (`verity/protocols/spot/verifier/lean/Spot/OneStage.lean:448–455`, `Record.ownRegistered rec (Record.sessionRegistered e.verdicts)`).
+- [read] This path is live on `main` for the window circuit that `benchmarks/prove_path/prove_path.py:1749–1757` commits (it reads the weights registration, commits `weight_values` under the key, and lists as `held` each parameter whose entry is the registered one). I ran none of it.
+
+### 4. One root or two
+
+- [derived] By rows there are two that matter, and they are different trees over different rows. (A): a tensor's bytes in 4,096-byte rows; the serve's Commit of record names it; no proof opens it. (B): a weight parameter's rows at one port's width; the registration names it, the verifier pins it, R7 holds a window's record to it, and a sampled unit's proof opens it at `Flock/Registered.lean:221`. (C) is a third, read by no sampled proof.
+- [derived] On (B) the answer to the question is yes: one root, by rows, from the registration to the proof.
+- [derived] What ties (A) to (B): only the committer. Both are made from the words the engine serves, each held to the checkpoint's pinned shards by the committer's own check (`window_weights.py:276`: "served words that aren't the checkpoint's" is refused; `:18–20`: "the committer's word until a zero-knowledge registration proof ties them to the checkpoint's public shards"). The tie to the checkpoint is `weights_tie`, one parameter at a time. No check compares (A) with (B).
+- [derived] In a vLLM serve as `main` runs it, a weight row opens neither: section 2.
+- [run 08:55Z: `rg -c -i weight` over `boundary_rows.py` and `boundary_logits.py` at `984cb027efa3`, no line; read: `1822`'s summary, `record.own_reads` true] Friday's tries prove the greedy select, whose units read no weight; each session's registered reads were its own ports' rows at the window's own roots.
+
+### Not established
+
+- Whether any run has committed a served engine's weights by reference: I read the code and ran nothing.
+- Whether a pin was ever taken from the interface's log in a run: no code does it on `main`.
+
+### The reprint over `1822`'s kept files: exit 0
+
+- [run 07:41Z for the slot; 08:55Z: `research status`, `out/rc.txt`, `job-memory.py`] `r20261113-073934-a5a7`, vy-nebius-2, pool proofs, 20 GB asked, at `984cb027efa3`: slot `p3` at 07:40:20Z, 46 s after launch; printed 07:40:22Z to 08:29:32Z; `again rc=0`; peak 9.7 GiB at 08:13:22Z.
+- [run, `out/again.txt`] `FIRST`: the outcome printed again is the try's own (`accepted` false, `statements` `["two-stage-form"]`, `interior` `["statements"]`, `replay_sample` `[]`, the same digest of the audit's record); `refused_by_form_alone` true; all seven of `same` true (both registrations, both samples, the outcome, the audit's record, and that the challenges follow the interior commitment); 901.9 s.
+- [run] Three `NEG` lines, each refused by name: a verdict not accepted (`second-verified`); the second stage's bytes changed (`interior` `["run", "statements"]`, `replay_sample` `["run"]`); a statement dropped (`second-order`, `second-cover`).
+- [run] `AGAIN`: 8 of 8 outer blocks sampled, 640 of 10,240 inner blocks sampled (4 in each cell), 20 sessions, `form_switch` false. The class's figure, labelled "not established: the accept is withheld": at most 710.1 incorrect inner blocks of 10,240 at δ = 0.1 (share 0.0693) and 219.2 at δ = 0.5 (share 0.0214). It is a figure over a rehearsal's values on CPU, not over a served engine.
+
+### TWOLEG's eleven places
+
+- [run 08:56Z: `rg -n '^## TWOLEG'` over your file] TWOLEG's newest entry is 08:16Z; no entry of TWOLEG's lists the eleven places yet. I read my lines back when it does. I rebase and merge nothing.
+- [read: HELDOF's 08:50Z entry, item 5] On a scratch tree that holds `main`'s `ca2e80f1ed` and my `984cb027efa3`, `second` raises `KeyError: 'GreedyCombine_v2{V=2560,N=128}/r0'` in `a5.audit`: the audit asks the registration's record for the root of the combine's wired port, which has none. That code is on `main` after my line's base, so it does not touch either of Friday's tries; it is the first thing to mend when the second try's branch is carried.
+
+### Events that reached me and were not mine (no action on any)
+
+- 07:45Z: twenty-one Slack events from your subscription (TOP-402, NET-390, CI-489, HASH-119, PRF-611, TOP-415, TOP-398, PRF-490, INF-767, INF-783, a queue ejection, six failures in the runs feed).
+- 07:46Z to 07:50Z: your old timers again: `proofs-1552Z-prf589-opened`, `proofs-1650Z-prf589-read`, `proofs-1905z-marks`, `proofs-1955z-runs`, `proofs-2015z-posts`, `proofs-2108z-daniel-answers`, `two-round-2-25pm-pst`, `proofs-2250z-board`, `board-3pm-pst`, `history-launch-retry`, `launch-retry-2355z`, `gather-five-facts-0030z`, `proofs-sweep-30m-v42` six times, `history-try-4d04`, `board-7pm-pst-0300z`, `servedcard-gonogo-0412z`, `sweep-840pm-pst-0440z`, `runs-ended-resumes-0505z`, `servedcard-cards-free-0558z`, `answers-due-0710z`.
+
+No run of mine is running. No timer of mine is set.
