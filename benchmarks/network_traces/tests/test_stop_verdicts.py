@@ -83,7 +83,7 @@ def four(of: C.Head, cls: int = 0, proved_by: object = None, **over: object) -> 
              CC.VERIFIER: {"module": f"the {kind}'s verifier", "commit": "a commit"},
              CC.VERDICT: {SV.FORMAT: FORMATS[kind], CC.LINK: of.link, CC.WINDOW: of.window, CC.CLASS: cls,
                           CC.HEAD: of.digest().hex(), "registration": "a digest", CC.ACCEPTED: True,
-                          CC.COMPLETE: True, "codes": []} | over,
+                          CC.COMPLETE: True, "withheld": None, "codes": []} | over,
              CC.PROVED_BY: proved_by} | ({SV.RATE: "1/1"} if kind in SV.RATES else {}) for kind in CC.VERDICTS]
 
 
@@ -93,7 +93,7 @@ def the_controls() -> list[dict]:
     return [{CC.RUN: f"control run of the {kind}",
              CC.VERIFIER: {"module": f"the {kind}'s verifier", "commit": "a commit"},
              SV.CONTROL: SV.CONTROLS[kind][0],
-             CC.VERDICT: {SV.FORMAT: FORMATS[kind], CC.ACCEPTED: False, "codes": ["a refusal"]},
+             CC.VERDICT: {SV.FORMAT: FORMATS[kind], CC.ACCEPTED: False, "withheld": None, "codes": ["a refusal"]},
              SV.REASON: SV.REASONS[kind]}
             for kind in CC.VERDICTS]
 
@@ -388,7 +388,8 @@ def test_an_execution_phase_is_held_only_where_each_verifier_that_accepted_refus
             got = stop(one, four(first), controls=controls)
             assert got.held == 0 and got.why[4] == not_refused + "control run of the response tie", (accepted, reason)
             assert got.why[2] == below + others, (accepted, reason)
-    bare = [c | {CC.VERDICT: {SV.FORMAT: TIE}} if i == 1 else c for i, c in enumerate(the_controls())]
+    bare = [c | {CC.VERDICT: {SV.FORMAT: TIE, CC.WITHHELD: None, CC.CODES: []}} if i == 1 else c
+            for i, c in enumerate(the_controls())]
     assert stop(one, four(first), controls=bare).why[4] == not_refused + "control run of the response tie"
     again = control_but(accepted=True, codes=[])[1] | {CC.RUN: "a second control run"}
     got = stop(one, four(first), controls=the_controls() + [again])
@@ -1429,34 +1430,49 @@ def audit_but(of: C.Head, **over: object) -> list[dict]:
             for i, r in enumerate(four(of))]
 
 
-def test_a_verdict_may_state_neither_withheld_nor_codes_and_its_codes_are_handed_on_as_written():
-    """The two fields are the verifier's own and either may be absent: an absent ``withheld`` reads as null, and
-    absent ``codes`` are handed on as absent. Where a verdict states its codes they are handed on as written,
-    beside the six fields the rule reads, whichever way the verdict went."""
+def test_every_verdict_states_withheld_and_codes_and_its_codes_are_handed_on_as_written(tmp_path):
+    """The two fields are the verifier's own and every verdict states both, whatever its format, a control's among
+    them: one that leaves either out is a record that doesn't read, accepted or not, and the line says which field
+    to add. Where a verdict states them they are handed on as written, beside the six fields the rule reads,
+    whichever way the verdict went."""
     assert CC.SAID == (CC.WITHHELD, CC.CODES) == ("withheld", "codes")
     first = head(3, 5, 0)
     registrations = [registration(first)]
-
-    def bare(records: list[dict]) -> list[dict]:
-        return [r | {CC.VERDICT: {k: v for k, v in r[CC.VERDICT].items() if k not in CC.SAID}} for r in records]
-
-    stated, neither, null = (stop(registrations, records) for records in (
-        four(first), bare(four(first)), four(first, withheld=None)))
-    assert stated.held == neither.held == null.held == 1 and stated.why == neither.why == null.why
-    assert null.verdicts == stated.verdicts
-    assert all(v[CC.WITHHELD] is None and v[CC.CODES] == [] for v in stated.verdicts)
-    assert all(v[CC.WITHHELD] is None and CC.CODES not in v for v in neither.verdicts)
-    assert [{k: x for k, x in v.items() if k != CC.CODES} for v in stated.verdicts] == list(neither.verdicts)
+    stated = stop(registrations, four(first))
+    assert stated.held == 1 and all(v[CC.WITHHELD] is None and v[CC.CODES] == [] for v in stated.verdicts)
     # a verdict that is not accepted: its codes in the order written, one written twice among them
     codes = ["roots", "registered", "roots"]
-    for over in ({}, {CC.WITHHELD: None}, {CC.WITHHELD: FORM}):
-        got = stop(registrations, audit_but(first, accepted=False, codes=codes, **over))
-        assert got.held == 0 and (got.verdicts[3][CC.CODES], got.verdicts[3][CC.WITHHELD]) == (
-            codes, over.get(CC.WITHHELD))
-    # and one that states neither is refused, as it was
-    got = stop(registrations, audit_but(first, accepted=False, codes=...))
-    assert got.held == 0 and CC.CODES not in got.verdicts[3] and got.verdicts[3][CC.WITHHELD] is None
-    assert got.why[2].endswith(": the compute audit is refused (run of the compute audit)")
+    for word in (None, FORM):
+        got = stop(registrations, audit_but(first, accepted=False, codes=codes, withheld=word))
+        assert got.held == 0 and (got.verdicts[3][CC.CODES], got.verdicts[3][CC.WITHHELD]) == (codes, word)
+    # one that leaves a field out doesn't read, whatever else it states and whatever its format
+    add = ": a verdict with nothing to say states `withheld` null and `codes` empty"
+    for over, lack in (({CC.WITHHELD: ...}, "its verdict states no `withheld`"),
+                       ({CC.CODES: ...}, "its verdict states no `codes`"),
+                       ({CC.WITHHELD: ..., CC.CODES: ...}, "its verdict states no `withheld` and no `codes`")):
+        for more in ({}, {CC.ACCEPTED: False}, {CC.ACCEPTED: False, CC.COMPLETE: False}, {SV.FORMAT: "another's"}):
+            records = audit_but(first, **over, **more)
+            assert CC.lacks(records[3]) == lack + add and not CC.reads(records[3]), (over, more)
+            assert stop(registrations, records) == LB.Stop(0, (
+                f"each connection is charged its whole schedule: {NO_RECORD}{lack}{add}: {records[3]!r}",)), (over, more)
+            with pytest.raises(ValueError, match="a verdict record is an object with the fields"):
+                CC.charge(first, 0, by_verdict(audit_but(first, **over, **(more if SV.FORMAT not in more else {}))))
+        # so does a control whose verdict leaves it out
+        controls = [c | {CC.VERDICT: {k: v for k, v in c[CC.VERDICT].items() if over.get(k) is not ...}} if i == 1
+                    else c for i, c in enumerate(the_controls())]
+        assert SV.control_lacks(controls[1]) == lack + add, over
+        assert stop(registrations, four(first), controls=controls) == LB.Stop(0, (
+            f"each connection is charged its whole schedule: {SV.A_CONTROL}; of one read, {lack}{add}: "
+            f"{controls[1]!r}",)), over
+    # in a superseded run it is a record that doesn't read, and keeps whole each serve not launched after that run
+    bad = audit_but(first, withheld=...)[3]
+    for serve, n in {EARLY: 0, LATE: 1}.items():
+        store = Store(tmp_path / serve, {RUN: {"out/the-verdicts.jsonl": jsonl([bad])},
+                                         LAST: renamed(held_files(first, four(first)), {"the serve": serve})})
+        got = SV.of_runs(store, [RUN, LAST], [RUN])
+        assert got.held == n and got.why[-1] == dont_read(
+            1, RUN, where=f"line 1 of `out/the-verdicts.jsonl` of {RUN}: its verdict states no `withheld`{add}"), serve
+        assert SV.of_runs(store, [RUN, LAST]).held == 0
 
 
 def test_a_withheld_that_is_no_word_and_codes_that_are_no_list_of_words_are_a_record_that_doesnt_read(tmp_path):
@@ -1619,17 +1635,15 @@ def test_a_control_counts_only_where_its_verifier_refused_and_a_withheld_one_is_
 
 
 def stating(files: dict[str, str], how: str) -> dict[str, str]:
-    """A run's files with each verdict record that reads stating the two fields another way: ``neither``, both
-    left out; ``nothing``, a null ``withheld`` and no code; ``withheld``, on each verdict that is not accepted,
-    the word and a code."""
+    """A run's files with each verdict record that reads stating the two fields another way: ``nothing``, a null
+    ``withheld`` and no code; and on each verdict that is not accepted, ``codes``, a null ``withheld`` and two
+    codes, or ``withheld``, the word and a code."""
     def restated(record: object) -> object:
         if not CC.reads(record):
             return record
-        verdict = {k: v for k, v in record[CC.VERDICT].items() if k not in CC.SAID}
-        if how == "nothing":
-            verdict |= {CC.WITHHELD: None, CC.CODES: []}
-        elif how == "withheld" and verdict.get(CC.ACCEPTED) is not True:
-            verdict |= {CC.WITHHELD: FORM, CC.CODES: ["a code"]}
+        verdict = record[CC.VERDICT] | {CC.WITHHELD: None, CC.CODES: []}
+        if how != "nothing" and verdict.get(CC.ACCEPTED) is not True:
+            verdict |= {CC.WITHHELD: FORM if how == "withheld" else None, CC.CODES: ["a code", "another"]}
         return record | {CC.VERDICT: verdict}
 
     return {path: jsonl([restated(json.loads(line)) for line in text.splitlines()])
@@ -1642,7 +1656,7 @@ def test_withheld_and_codes_move_no_charge(tmp_path):
     was, and so is every line, but for the word of a verdict that is not accepted, "withheld" where it states the
     word and "refused" where it doesn't."""
     kinds = run_files()
-    ways = ("neither", "nothing", "withheld")
+    ways = ("nothing", "codes", "withheld")
     restated = {how: {kind: stating(files, how) for kind, files in kinds.items()} for how in ways}
     seen = said = 0
     for i, a in enumerate(kinds):

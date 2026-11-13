@@ -67,15 +67,17 @@ would be a second try at a verdict. It holds every class and not the one it name
 an execution phase's rows into the same classes, so a refusal on one class under the other head can speak for
 rows the head read puts in another. Under the head read a verdict stays its class's, as the rule has it.
 
-**Withheld, and the codes.** A verdict may state two fields more, and both names are its verifier's own
+**Withheld, and the codes.** A verdict states two fields more, and both names are its verifier's own
 (`class_charge.SAID`): ``withheld``, null or the one word for what the verifier held its accept back for, and
 ``codes``, a list of the verifier's own code words, empty on an accept. The charge reads neither: a verdict counts
 only where ``accepted`` is exactly true, and a withheld one leaves its class at its whole schedule as a refused one
 does, under the head read and under another. A line says "withheld" with the word of a verdict that is not accepted
-and states one, and "refused" where ``withheld`` is null or absent; ``codes`` is handed on as written with each
-verdict read. Either may be absent, and a record whose verdict states one wrongly doesn't read
-(`class_charge.lacks`): a ``withheld`` that is neither null nor a word, a ``codes`` that is no list of words, and
-an accept that states a ``withheld`` word or a code.
+and states one, and "refused" where ``withheld`` is null; ``codes`` is handed on as written with each verdict read.
+Every verdict states both, whatever its format, a control's among them: a verifier with nothing to say writes
+``withheld`` null and ``codes`` empty, so no withheld verdict reads as refused because a line was left out. A
+record whose verdict leaves one out or states one wrongly doesn't read, and the line says which field to add
+(`class_charge.misstates`): a ``withheld`` that is neither null nor a word, a ``codes`` that is no list of words,
+and an accept that states a ``withheld`` word or a code.
 
 **A head** (`head_of`) is the registration's own: its link, execution phase, parameters digest and tables as listed,
 held to the digest its certificate names. No signature is checked here: the certificate verifies under the network
@@ -412,11 +414,10 @@ def _elsewhere(failed: Read, serves: Sequence[str], head: C.Head, digest: str) -
 
 def _handed(kind: str, record: Mapping[str, Any]) -> dict[str, Any]:
     """A verdict read as the calculator prints it: which of the four it is, what it is of and how it went, what it
-    was withheld for (null where it states none) and its codes as written, where it states them, its run, serve,
-    registration, verifier and proof as its record names them, the rate it says it ran at, and the mark."""
+    was withheld for (null where it was not) and its codes as written, its run, serve, registration, verifier and
+    proof as its record names them, the rate it says it ran at, and the mark."""
     verdict = record[CC.VERDICT]
-    return {"verdict": kind, **{k: verdict.get(k) for k in CC.READ}, CC.WITHHELD: verdict.get(CC.WITHHELD),
-            **({CC.CODES: verdict[CC.CODES]} if CC.CODES in verdict else {}),
+    return {"verdict": kind, **{k: verdict.get(k) for k in CC.READ}, **{k: verdict[k] for k in CC.SAID},
             **{k: record.get(k) for k in CC.FIELDS if k != CC.VERDICT}, RATE: record.get(RATE),
             "mark": LB.RUN_NOT_PROVED}
 

@@ -28,14 +28,16 @@ and by the serve and the registration a record names: the run and the verifier a
 weighed, and `proved_by` moves no charge. Which of the four a record is is its caller's to say: `charge` takes the
 records by verdict.
 
-**Withheld, and the codes.** A verdict may state two fields more, each its verifier's own (`SAID`): `withheld`,
+**Withheld, and the codes.** A verdict states two fields more, each its verifier's own (`SAID`): `withheld`,
 null or the one word for what the verifier held its accept back for, and `codes`, a list of the verifier's own code
 words, empty on an accept. Neither moves a charge: a verdict counts only where `accepted` is exactly true, and a
 withheld one leaves its class at its whole schedule as a refused one does. Of a verdict that is not accepted the
-line says "withheld" with the word where it states one, and "refused" where `withheld` is null or absent
-(`not_accepted`). Either field may be absent. A record doesn't read where its verdict's `withheld` is neither null
-nor a word, where its `codes` is no list of words, and where its verdict is accepted and states a `withheld` word
-or a code: an accept that also says why it was held back says two things.
+line says "withheld" with the word where it states one, and "refused" where `withheld` is null (`not_accepted`).
+Every verdict states both, whatever its format: one with nothing to say states `withheld` null and `codes` empty,
+so no withheld verdict reads as refused because a line was left out. A record doesn't read where its verdict
+leaves either out, where its `withheld` is neither null nor a word, where its `codes` is no list of words, and
+where its verdict is accepted and states a `withheld` word or a code: an accept that also says why it was held
+back says two things (`misstates`).
 
 **All four or none.** A verdict counts where a record of it is of the class, in the head's execution phase, names
 this head's digest, and every such record is accepted and complete. Naming the head is what holds a verdict to the
@@ -78,8 +80,8 @@ MODULE, COMMIT = NAMES = ("module", "commit")
 #: what a class's records on a head name one of: the served run the class came from, and what that serve registered
 ONE = (SERVE, REGISTRATION)
 LINK, WINDOW, CLASS, HEAD, ACCEPTED, COMPLETE = READ = ("link", "window", "class", "head", "accepted", "complete")
-#: two fields more a verdict may state, which move no charge: what its verifier held its accept back for, null or a
-#: word, and the verifier's own code words, a list
+#: two fields more every verdict states, which move no charge: what its verifier held its accept back for, null or
+#: a word, and the verifier's own code words, a list
 WITHHELD, CODES = SAID = ("withheld", "codes")
 #: what a verdict that doesn't count lacks; one that is not accepted and states a `withheld` word is `WITHHELD` for
 #: that word (`not_accepted`)
@@ -171,11 +173,14 @@ def lacks(record: object) -> str | None:
 
 def misstates(verdict: Mapping[str, Any]) -> str | None:
     """What a verdict states wrongly of `SAID` (the module docstring's "Withheld, and the codes"), or None where it
-    states nothing wrongly: a `withheld` that is neither null nor a word, `codes` that are no list of words, and
-    an accept that states a `withheld` word or a code."""
-    if not (verdict.get(WITHHELD) is None or _named(verdict[WITHHELD])):
+    states nothing wrongly: one of the two left out, a `withheld` that is neither null nor a word, `codes` that
+    are no list of words, and an accept that states a `withheld` word or a code."""
+    if missing := [k for k in SAID if k not in verdict]:
+        return (f"its verdict states no `{'` and no `'.join(missing)}`: a verdict with nothing to say states "
+                f"`{WITHHELD}` null and `{CODES}` empty")
+    if not (verdict[WITHHELD] is None or _named(verdict[WITHHELD])):
         return f"its verdict's `{WITHHELD}` is neither a word nor null"
-    if CODES in verdict and not (isinstance(verdict[CODES], list) and all(type(c) is str for c in verdict[CODES])):
+    if not (isinstance(verdict[CODES], list) and all(type(c) is str for c in verdict[CODES])):
         return f"its verdict's `{CODES}` is no list of words"
     if verdict.get(ACCEPTED) is True and (said := [k for k in SAID if verdict.get(k)]):
         return (f"its verdict is accepted and states `{'` and `'.join(said)}`: an accept that also says why it was "
@@ -190,7 +195,7 @@ def reads(record: object) -> bool:
 
 def not_accepted(verdict: Mapping[str, Any]) -> str:
     """How a line says a verdict that is not accepted went (the module docstring's "Withheld, and the codes"):
-    `WITHHELD` for the word it states, or `REFUSED` where its `withheld` is null or absent."""
+    `WITHHELD` for the word it states, or `REFUSED` where its `withheld` is null."""
     word = verdict.get(WITHHELD)
     return f"{WITHHELD} for `{word}`" if _named(word) else REFUSED
 

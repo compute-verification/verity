@@ -234,14 +234,16 @@ accepted would be a second try at a verdict. It keeps every class of that phase 
 heads need not sort a phase's rows into the same classes; under the head read a verdict stays its class's. An
 accept under another head counts for nothing.
 
-A verdict may state two fields more, and both names are its verifier's own: `withheld`, null or the one word for
+A verdict states two fields more, and both names are its verifier's own: `withheld`, null or the one word for
 what the verifier held its accept back for (today `two-stage-form`, which only the compute audit's second stage
 states), and `codes`, a list of the verifier's own code words, empty on an accept. The charge reads neither: a
 verdict counts only where `accepted` is exactly true, and a withheld one leaves its class at its whole schedule
 as a refused one does, under any head. A line says "withheld" with the word of a verdict that is not accepted and
-states one, and "refused" where `withheld` is null or absent; `codes` is handed on as written, beside the six
-fields. Either may be absent. A record doesn't read where its verdict's `withheld` is neither null nor a word,
-where its `codes` is no list of words, and where its verdict is accepted and states a word or a code.
+states one, and "refused" where `withheld` is null; `codes` is handed on as written, beside the six fields. Every
+verdict states both, whatever its format, a control's among them: a verifier with nothing to say writes `withheld`
+null and `codes` empty, so no withheld verdict reads as refused because a line was left out. A record doesn't read
+where its verdict leaves either out, and the line says which field to add; where its `withheld` is neither null
+nor a word; where its `codes` is no list of words; and where its verdict is accepted and states a word or a code.
 
 An execution phase is one serve's: a serve, a link and the phase's number. A registration of connection rows names
 no serve, so a head's serve is the one its verdict records name, which is a run's word and no proof; the answer's
