@@ -1143,6 +1143,9 @@ def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_wh
     c = P.cost(tmp_path, by, "prod-again", "prod-record", None, S.AGENTIC, 1.0)
     assert c["stands"] and c["metric"] is None
     assert declared(tmp_path, monkeypatch, c, stock="prod-again") == [theirs]
+    c = P.cost(tmp_path, by, "prod", "prod-again", None, S.AGENTIC, 1.0)
+    assert c["stands"] and c["metric"] is None
+    assert declared(tmp_path, monkeypatch, c, ours="prod-again") == [theirs]
     # a load that is not a sessions load: its figure is none of the benchmark's measurements
     stock = [300.0, 301.0, 299.0, 300.5, 299.5, 300.0]
     bench_arm(tmp_path / "chat", "prod", {"chat@16": stock})
