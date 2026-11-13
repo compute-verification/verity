@@ -25,7 +25,7 @@ Two phases, so that the card is held only while the kernel runs:
 GO = the gate, no error, every launch deterministic, every byte of the cache outside the slotted rows still 0xA5, both modes'
 words equal, the PTX of both FP8 specialisations the pinned code (PTX_CODE_SHA256), every row of both cases equal to the
 Definition in all 656 bytes and in kv_c_out and k_pe_out, and to the two registered Definitions, and every corner of CORNERS
-reached.  The record, <out>/glm53_ds_mla_write_capture.json, carries `ok` and the digest `properties.record.digest_of` takes.
+reached.  The record, <out>/glm53_ds_mla_write_capture.json, carries `ok` and the digest `records.property_record.digest_of` takes.
 
     cd adapters/vllm; PY=/workspace/venv312/bin/python      # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/glm53_ds_mla_write_capture_gpu.py --phase gpu --out DIR --scratch /tmp
@@ -56,7 +56,7 @@ from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_dsa_capture_gpu as DS
 from tests.properties import glm53_fused_rmsnorm_capture_gpu as FR
-from verity_vllm.properties.record import digest_of
+from verity_vllm.records.property_record import digest_of
 
 SCHEMA = "verity-vllm/glm53-ds-mla-write-capture/v1"
 RECORD = "glm53_ds_mla_write_capture.json"

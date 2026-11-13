@@ -80,7 +80,7 @@ from verity.definitions.kernels import tc as CK
 from verity.definitions.numerics import derived_rows as DRW
 from verity.definitions.numerics import flashmla_twin as T
 from verity.definitions.numerics import flashmla_dsv32_twin as V
-from verity_vllm.properties.record import digest_of
+from verity_vllm.records.property_record import digest_of
 
 SCHEMA = "verity-vllm/glm53-flashmla-fp8-capture/v1"
 RECORD = "glm53_flashmla_fp8_capture.json"

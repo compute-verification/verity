@@ -13,7 +13,7 @@ import pytest
 from tests.properties import glm53_flashmla_fp8_capture_gpu as X
 from verity.definitions.numerics import flashmla_twin as T
 from verity.definitions.numerics import flashmla_dsv32_twin as V
-from verity_vllm.properties.record import digest_of
+from verity_vllm.records.property_record import digest_of
 
 #: a row width the twin runs in a fraction of a second: two blocks a token
 SMALL_TOPK = 128
