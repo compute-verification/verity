@@ -112147,3 +112147,62 @@ Runs:
 To post: nothing.
 
 Not established: that the six proof files compile (`d936`); the quick tier; the records run.
+
+## ADDRWC, Fri 01:33Z: `r20261113-010649-88b2` failed in the base's `EntryRoots.lean` before reaching my file (fixed on the base at `7984747798`, merged); the copy fact at the address map is now written too; both facts are in tries `r20261113-012658-73cc` (cpu-11) and `r20261113-012948-7bbd` (vy-nebius-2); I cancelled one run that had started
+
+**In plain words.** My build of the width fact stopped in a file of FRAME's that both of my files read, before it reached mine. FRAME has fixed that file, and I took the fix. I have also written the copy fact at the real address map. It rests on the same conditions as the width fact, plus one condition on each inner block's circuit alone: the column the layout reads a bit at copies that bit's row. Both facts are now building, one on each machine. Neither has compiled yet.
+
+Clock: `date -u` read 01:32Z. Mailbox read at 01:13Z: nothing after 00:17Z. The hook delivered your 01:30Z message: `BitsInPorts` is mine, and I take it.
+
+### Heads
+
+- Branch `cursor/proofs-addrwc-60f3` at `ec9742e5e2`, pushed [run: `git push`], with the base merged at `7984747798`. Unpushed: nothing.
+
+### Runs
+
+- [run: `r20261113-010649-88b2`, vy-nebius-2, `WidthOf.lean` at `b4b814937c`] exit 1 in 259 s, during `lake build` of the imports: `EntryRoots.lean:174:12: (deterministic) timeout at whnf, maximum number of heartbeats (200000)`. That is FRAME's `port_at`; the base's `7984747798` names the tuple there. My `target_of_wiring` had the same pattern (`hB.1 _ hsm`), so I wrote out each tuple in `ec9742e5e2` [read].
+- **I cancelled a run that had started.** That was `r20261113-010938-dbd1`, `CopyOf.lean` on vy-nebius-2. Its status read "waiting" at 01:22Z, and I cancelled it a minute later to move it to cpu-11. The cancel reported "waited 11 min for a check slot, then checked 2 min in slot p0" [run]. Its tree had the failing `EntryRoots`, so it would have failed. From now on I read the status in the same command as the cancel.
+- I also cancelled two runs that had not started: `005412-312d` and `005756-b428` (superseded) and `012234-fe6c` (its tree had the failing base) [run].
+- In line now:
+  - `r20261113-012658-73cc`, cpu-11, `CopyOf.lean` at `ec9742e5e2`; it builds `WidthOf.lean` and `Copy.lean` as imports;
+  - `r20261113-012948-7bbd`, vy-nebius-2, `WidthOf.lean`, for that file's own axiom probe.
+
+### Written since 01:01Z (`AddressFacts/CopyOf.lean`, new; `WidthOf.lean`)
+
+- `target_of_wiring (W : Wiring h) (hB : BitsInPorts h) (hr : r.Ok h) (hi : needs i)`. It holds `holds_of_wiring`'s three cases once and gives:
+  - the wiring map idempotent;
+  - a bit `rp` of the unit (`BitOf`);
+  - the target `(tw, rq)` at `rq.bit = rp.bit`, inside its port's row, with as many words.
+  
+  `widthAt_of_wiring` is now two lines on top of it.
+- `CopiesAt h`, a condition on the members' circuits alone: at each bit `i` of member `t`'s unit `k` at `rp`, `CopiesRef h.ms[t].1 (pickAny h t k i) (portNamed h t rp.row) rp.bit`. It reads no wiring, because a wired bit's place is its own bit.
+- `copyFact_of_wiring (W) (hB) (hrow : RowFact h ω keep (addressOf h)) (hC : CopiesAt h) : CopyFact h (addressOf h)`, via `copy_of_copies` and `copies_of_ref`, which compiled in `5e86`.
+
+### Who discharges `CopiesAt` and `BitsInPorts`
+
+Both are mine. `BitsInPorts` comes first, using NEEDEDBITS's `rowBit_leaf`/`srcPos_leaf` at `aba961b663` where they fit.
+
+The source-bit half of `CopiesAt` has a path through lemmas already on the tree [read]:
+- `picks_pickAny` gives a column of unit `k` on the wire;
+- `rowBit_keyRowOf` turns `sourceBits`' `rp` into `keyRowOf`'s `(k, q, bit)`;
+- `Layout.keyRowOf_wire` gives that column's `Aliased.srcKey` as `.msg q (bit/8) (bit%8)`.
+
+Two links are open [derived]:
+- `portNamed h t rp.row = q`, which needs unique port names in Lean. Bits refuses duplicates (`Spot/Bits.lean:813`), but I have not found that refusal in `two h` [guess: it is not there].
+- `Bridge.posOf` at an input gate being the gate itself.
+
+The written-bit half is the same with `outRowBit_outRowOf`. `BitsInPorts`' source half follows from `rowBit_keyRowOf` too: `keyRowOf`'s bit is below `portRowW c q` [read]. It needs the same unique names and `memberCircuit h t = h.ms[t].1`, which `templateOk_facts` gives where `two h` holds.
+
+### Size
+
+4 files, 807 lines. Theorems left: `BitsInPorts`, then `CopiesAt` (both halves). I expect both facts compiled by about 02:15Z if `73cc` starts within 15 minutes.
+
+### Not established
+
+- Nothing written since 01:01Z has compiled: `target_of_wiring`, `widthFact_of_wiring`, `copyFact_of_wiring` and the new `widthFact_addressOf` proof.
+- `CopiesAt` and `BitsInPorts` are unproved.
+- Whether `two h` refuses duplicate port names is unknown.
+
+### To post
+
+Nothing.
