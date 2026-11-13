@@ -533,13 +533,4 @@ def acquisition_plan(manifest: Mapping[str, Any], correspondence: AcquireCorresp
     return AcquisitionPlan(program_digest=pdig, manifest_digest=mdig, runtime_source=rt.source, values=values, residuals=residuals, notes=notes, correspondence=prov)
 
 
-def load_plan(path: str | Path) -> dict[str, Any]:
-    d = json.loads(Path(path).read_text())
-    if d.get("schema") != SCHEMA:
-        raise ValueError(f"{path}: schema {d.get('schema')!r} != {SCHEMA}")
-    if plan_digest(d) != d.get("plan_digest"):
-        raise ValueError(f"{path}: plan_digest does not match the body")
-    return d
-
-
 __all__ = ["HOOK_KINDS", "AcquisitionPlan", "AcquisitionSite", "acquisition_plan", "analytic_table_of_buffer"]

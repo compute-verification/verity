@@ -324,26 +324,24 @@ def test_plan_digest_stable_and_order_independent(tmp_path):
     assert p1.digest == p2.digest and p1.to_json()["plan_digest"] == p1.digest
     path = tmp_path / "plan.json"
     dig = p1.save(path)
-    doc = P.load_plan(path)
-    assert doc["plan_digest"] == dig and doc["schema"] == P.SCHEMA
+    doc = json.loads(path.read_text())
+    assert P.plan_digest(doc) == doc["plan_digest"] == dig and doc["schema"] == P.SCHEMA     # the saved document re-digests to itself
     assert [(h["module"], h["kind"], h["slot"]) for h in doc["hooks"]] == [h.key() for h in p1.hooks()]
-    # any change to the body changes the digest; a tampered file is refused
+    # any change to the body changes the digest; a tampered document no longer re-digests to the digest it carries
     rows2 = copy.deepcopy(rows)
     rows2.append(row("instance_outputs", "body.norm", "out", spec="Norm_v1"))
     p3, _, _ = make_plan(rows2)
     assert p3.digest != p1.digest
     bad = json.loads(path.read_text())
     bad["hooks"] = bad["hooks"][1:]
-    path.write_text(json.dumps(bad))
-    with pytest.raises(ValueError):
-        P.load_plan(path)
+    assert P.plan_digest(bad) != bad["plan_digest"]
     # the digest is over the plan's CONTENT: the runtime tree's provenance string is not part of it -- the meta-instantiated model and the
     # live engine of the same row give the same sites (they did, Value for Value, on the reference row) and so the same digest
     rt = tree()
     rt.source = "other"
     p4, _, _ = make_plan(rows, rt=rt)
     assert p4.digest == p1.digest and p4.body()["runtime_source"] == "other" != p1.body()["runtime_source"]
-    assert P.plan_digest(p1.to_json()) == p1.digest                     # the saved document re-digests to itself (load_plan's check)
+    assert P.plan_digest(p1.to_json()) == p1.digest
 
 
 def _body_by_site_scan(p):
