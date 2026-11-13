@@ -15,8 +15,8 @@ from typing import Any
 
 import pytest
 import torch
-from verity.protocols.pous.device import challenger_session as CS
-from verity.protocols.pous.verifier import period, setup
+from verity.protocols.accounting.pous.device import challenger_session as CS
+from verity.protocols.accounting.pous.verifier import period, setup
 
 from tests import fake_vllm
 from tests.protocols.test_pous_option import (
