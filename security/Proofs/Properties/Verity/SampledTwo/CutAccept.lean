@@ -9,8 +9,8 @@ public import Proofs.Properties.Pouw.LiveSalt.Ledger
 # The cut from the form's acceptance
 
 `CutFirst` and `CutOrder` take two facts about an accepted play as premises: its first stage's coin evidence is not
-`null` (`FirstCoinsShown`), and on two windows the ledger its second stage's coin evidence carries shows the two sessions
-in order (`OrderShown`). The two-stage form refuses a play without them, so both are theorems here.
+`null` (`FirstCoinsShown`), and on two windows the ledger its second stage's coin evidence carries shows the two
+sessions in order (`OrderShown`). The two-stage form refuses a play without them, so both are theorems here.
 
 * **The first stage's coin evidence** (`firstShown`): the case's evidence is the form's parse of the bytes sent
   (`evidence_of_caseOf`), and the form's evidence parses only with the first stage's coin evidence not `null`
@@ -96,8 +96,8 @@ private theorem evidence_coins {b : ByteArray} {e : VStar.Recursive.SampledTwo.E
       · cases h
     · cases h
 
-/-- **The first stage's coin evidence is not `null` on any play the form reads** (`FirstCoinsShown`): the form's evidence
-parses only so. -/
+/-- **The first stage's coin evidence is not `null` on any play the form reads** (`FirstCoinsShown`): the form's
+evidence parses only so. -/
 theorem firstShown (θ : ByteArray) : FirstCoinsShown θ := by
   unfold FirstCoinsShown
   intro s _ _ p c e h1
