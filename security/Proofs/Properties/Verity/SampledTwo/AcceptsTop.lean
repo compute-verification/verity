@@ -359,18 +359,11 @@ private theorem eq_of_not_bne_true {α : Type} [BEq α] [LawfulBEq α] {a b : α
   · exact absurd (by simp [bne, hab]) h
   · exact eq_of_beq hab
 
-/-- Unfold the matcher `m` at `h` and name `d` the test of a key against `"templates"` it exposes; fails where `m`
-is not the matcher that makes that test. -/
-local macro "key_test " m:ident " at " h:ident " as " d:ident : tactic =>
-  `(tactic| (delta $m:ident at $h:ident
-             conv at $h:ident => lhs; whnf
-             generalize instDecidableEqString _ "templates" = $d:ident at $h:ident
-             fail_if_success clear $d))
-
+set_option linter.auxLemma false in
 /-- **`Run.templateCircuits` names the check's templates, in its order, or returns none**: the parser throws unless
 `named.map (·.1)` is `Select.templateIds`' and returns none only for no `proofs`. Its match on `#["templates"]` has
-no equations `split` can use, so the matcher is unfolded by name (`key_test`, at whichever of the parser's
-matchers makes the test) and the test is cased on. -/
+no equations `split` can use, so that matcher is unfolded by name and its test of the key against `"templates"` is
+cased on. -/
 theorem templateCircuits_names {proofs query : Lean.Json} {cs : Array (String × String × Lean.Json × Lean.Json)}
     (h : Spot.Run.templateCircuits proofs query = .ok cs) :
     cs = #[] ∨ Spot.Select.templateIds query = .ok (cs.map (·.1)) := by
@@ -383,33 +376,15 @@ theorem templateCircuits_names {proofs query : Lean.Json} {cs : Array (String ×
     rcases kk with _ | ⟨⟨_ | ⟨s, _ | ⟨s2, l2⟩⟩⟩⟩
     · cases h
     · cases h
-    · first
-      | key_test Spot.Run.templateCircuits.match_20 at h as d
-      | key_test Spot.Run.templateCircuits.match_19 at h as d
-      | key_test Spot.Run.templateCircuits.match_18 at h as d
-      | key_test Spot.Run.templateCircuits.match_17 at h as d
-      | key_test Spot.Run.templateCircuits.match_16 at h as d
-      | key_test Spot.Run.templateCircuits.match_15 at h as d
-      | key_test Spot.Run.templateCircuits.match_14 at h as d
-      | key_test Spot.Run.templateCircuits.match_13 at h as d
-      | key_test Spot.Run.templateCircuits.match_12 at h as d
-      | key_test Spot.Run.templateCircuits.match_11 at h as d
-      | key_test Spot.Run.templateCircuits.match_10 at h as d
-      | key_test Spot.Run.templateCircuits.match_9 at h as d
-      | key_test Spot.Run.templateCircuits.match_8 at h as d
-      | key_test Spot.Run.templateCircuits.match_7 at h as d
-      | key_test Spot.Run.templateCircuits.match_6 at h as d
-      | key_test Spot.Run.templateCircuits.match_5 at h as d
-      | key_test Spot.Run.templateCircuits.match_4 at h as d
-      | key_test Spot.Run.templateCircuits.match_3 at h as d
-      | key_test Spot.Run.templateCircuits.match_2 at h as d
-      | key_test Spot.Run.templateCircuits.match_1 at h as d
+    · delta Spot.Run.templateCircuits.match_9 at h
+      conv at h => lhs; whnf
+      generalize instDecidableEqString _ "templates" = d at h
       cases d with
       | isFalse hn => cases h
       | isTrue ht =>
         have hs : s = "templates" := ht
         subst hs
-        cases gg <;> first | (cases h; done) | skip
+        cases gg <;> first | cases h | skip
         obtain ⟨named, hnamed, h⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 h
         split at h
         · cases h
