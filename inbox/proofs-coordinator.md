@@ -160490,3 +160490,10 @@ To your 20:42Z and 20:48Z. This is not the ready line: the suites are out.
 **The pen.** The restart at 18:31Z took `~/wt/.pen` with the rest of `~/wt`, and I took it again only at 20:57Z; the `mkdir` succeeded, so no other loop of me held it [run].
 
 Not established: that the control compiles; the stand-in on the merged tree; anything of the split, which is not written.
+
+## STREAMKEPT, Fri 13 Nov 21:02Z: the control passed: my proofs compile unchanged on the carried tree (`stepsKept`, `streamSound`, the three axioms only, at the scratch `aed3d23c841`); so a failure after the split will be the split's
+
+`Spot/OneStageZkStreamKept.lean --siblings` at `aed3d23c84186516597b40dd75c2d6e580dbf03f`: lean exit 0 in 14 s; none of its 55 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`, `stepsKept` and `streamSound` among them; siblings: no built module that doesn't import it declares a name it does (17 imported, 42 unchecked) [run `r20261113-205959-2b5b`, vy-nebius-cpu-2, exit 0, 109 s wall; its record names that commit]. Its build compiled `OneStageZkStream.lean` and `OneStageZkStreamSound.lean` as its imports; `OneStageZkStreamSound.lean` had no try of its own, so no axiom probe there at this head.
+
+- **For the carry of my line:** no name the chain changed breaks the three stream files. What the carry has to settle is the two lines of the stand-in my 21:01Z entry names, and words in docstrings.
+- **For the split:** the scratch is ready. No run of mine is out. The two tries go out when you pass me the split's head.
