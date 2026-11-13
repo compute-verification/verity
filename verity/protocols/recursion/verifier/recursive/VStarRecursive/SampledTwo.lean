@@ -27,6 +27,12 @@ package's audit builds and reads it.
     members (one-stage v2's `proofs.members`, `OneStageZk.membersOf`), each member's circuit one a template names
     (`MEMBER_CIRCUIT`). The interior audit's parameters are the interior's with `proofs` its members
     (`OneStageZk.membersParamsOfJson`).
+
+  The form has no source of the auditor's key but these parameters, so it holds the challenger's key to nothing: an
+  equality here would compare the run's input with itself. The key is the composite's to pin: under the auditor's
+  pins (`Core.Composites.atPins`) an accept stands only where each sampled component names the pinned challenger key
+  and a window the auditor designated (`Verity.SpotPinned`). A run of the form alone, outside the composite, says
+  nothing about whose key signed.
 * **commitment**: the boundary registration's record (`OneStage.commitmentOf`).
 * **evidence**: exactly `{"coins", "interior", "received", "record", "source", "statements"}`: the first stage's coins'
   evidence, its receipt's place in the log and the bytes it read (hex); the interior audit's evidence in v2's
