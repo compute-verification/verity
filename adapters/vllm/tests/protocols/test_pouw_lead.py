@@ -15,10 +15,10 @@ import hashlib
 
 import numpy as np
 import pytest
-
-from tests.protocols._needs_torch import torch
 from verity.protocols.pouw.verifier.coins import Challenger
 from verity.protocols.pouw.verifier.serving import PassCommitment
+
+from tests.protocols._needs_torch import torch
 from verity_vllm import protocols as PO
 from verity_vllm.commit import lead_rows as L
 from verity_vllm.engine import hooks

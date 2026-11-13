@@ -16,6 +16,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from verity.commitments.merkle import tree_levels
 from verity.protocols.pouw.verifier.audit import (
     HM96,
     HM96_WEIGHTS,
@@ -25,8 +26,9 @@ from verity.protocols.pouw.verifier.audit import (
     rows_domain,
     weight_binding,
 )
-from verity.protocols.spot.verifier.one_stage import registered as G, registration as REG
-from verity.commitments.merkle import tree_levels
+from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.spot.verifier.one_stage import registration as REG
+
 from verity_vllm.program.predict.window_class import PearlTables
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
@@ -138,8 +140,8 @@ def test_w_is_refused_for_rounds_it_cant_register(tmp_path, monkeypatch):
              (lambda: PWR.record([good, wider], rounds=[2, 3]),
               "round 3's pass commits pearl-b/0 as other rows than an earlier round's"),
              (lambda: PWR.record([reshaped], rounds=[2]),
-              "round 2's call 1 (index 3) reads weight 0 as 128 rows of 128 words, and an earlier call as 64 of 128: W "
-              "registers one shape of each weight's B rows")]
+              ("round 2's call 1 (index 3) reads weight 0 as 128 rows of 128 words, and an earlier call as 64 of 128: W "
+               "registers one shape of each weight's B rows"))]
     for call, why in cases:
         with pytest.raises(ValueError, match=why.replace("(", r"\(").replace(")", r"\)")):
             call()
