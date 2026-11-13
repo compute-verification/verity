@@ -174,12 +174,69 @@ open Classical in
 noncomputable def innerCapacity (ends : E → L × L) (β : E → ℕ) (P : Finset ι) (X : ι → Finset L) : ℕ :=
   ∑ e ∈ univ.filter (fun e => ∃ p ∈ P, ∃ q ∈ P, p ≠ q ∧ (ends e).1 ∈ X p ∧ (ends e).2 ∈ X q), β e
 
+/-- The links between two different parts of `insert p P` are those between two parts of `P` and those between part
+`p` and the rest. -/
+theorem innerCapacity_insert (ends : E → L × L) (β : E → ℕ) {P : Finset ι} {p : ι} (X : ι → Finset L) (hp : p ∉ P)
+    (hd : ((insert p P : Finset ι) : Set ι).PairwiseDisjoint X) :
+    innerCapacity ends β (insert p P) X =
+      innerCapacity ends β P X + betweenCapacity ends β (X p) (P.biUnion X) := by
+  classical
+  unfold innerCapacity betweenCapacity
+  rw [Finset.sum_filter, Finset.sum_filter, Finset.sum_filter, ← Finset.sum_add_distrib]
+  refine Finset.sum_congr rfl fun e _ => ?_
+  have hne : ∀ q ∈ P, p ≠ q := fun q hq h => hp (h ▸ hq)
+  have hpq : ∀ q ∈ P, ∀ x, x ∈ X p → x ∉ X q := fun q hq x hx hx' =>
+    Finset.disjoint_left.1 (hd (Finset.mem_coe.2 (Finset.mem_insert_self p P))
+      (Finset.mem_coe.2 (Finset.mem_insert_of_mem hq)) (hne q hq)) hx hx'
+  by_cases hI : ∃ p' ∈ P, ∃ q' ∈ P, p' ≠ q' ∧ (ends e).1 ∈ X p' ∧ (ends e).2 ∈ X q'
+  · have hB : ¬(((ends e).1 ∈ X p ∧ (ends e).2 ∈ P.biUnion X) ∨
+        ((ends e).1 ∈ P.biUnion X ∧ (ends e).2 ∈ X p)) := by
+      obtain ⟨p', hp', q', hq', -, h1, h2⟩ := hI
+      rintro (⟨h, -⟩ | ⟨-, h⟩)
+      · exact hpq p' hp' _ h h1
+      · exact hpq q' hq' _ h h2
+    have hL : ∃ p' ∈ insert p P, ∃ q' ∈ insert p P, p' ≠ q' ∧ (ends e).1 ∈ X p' ∧ (ends e).2 ∈ X q' := by
+      obtain ⟨p', hp', q', hq', hne', h1, h2⟩ := hI
+      exact ⟨p', Finset.mem_insert_of_mem hp', q', Finset.mem_insert_of_mem hq', hne', h1, h2⟩
+    rw [ite_eq_left hL, ite_eq_left hI, ite_eq_right hB, Nat.add_zero]
+  · by_cases hB : ((ends e).1 ∈ X p ∧ (ends e).2 ∈ P.biUnion X) ∨ ((ends e).1 ∈ P.biUnion X ∧ (ends e).2 ∈ X p)
+    · have hL : ∃ p' ∈ insert p P, ∃ q' ∈ insert p P, p' ≠ q' ∧ (ends e).1 ∈ X p' ∧ (ends e).2 ∈ X q' := by
+        rcases hB with ⟨h1, h2⟩ | ⟨h1, h2⟩
+        · obtain ⟨q, hq, h2q⟩ := Finset.mem_biUnion.1 h2
+          exact ⟨p, Finset.mem_insert_self p P, q, Finset.mem_insert_of_mem hq, hne q hq, h1, h2q⟩
+        · obtain ⟨q, hq, h1q⟩ := Finset.mem_biUnion.1 h1
+          exact ⟨q, Finset.mem_insert_of_mem hq, p, Finset.mem_insert_self p P, (hne q hq).symm, h1q, h2⟩
+      rw [ite_eq_left hL, ite_eq_right hI, ite_eq_left hB, Nat.zero_add]
+    · have hL : ¬∃ p' ∈ insert p P, ∃ q' ∈ insert p P, p' ≠ q' ∧ (ends e).1 ∈ X p' ∧ (ends e).2 ∈ X q' := by
+        rintro ⟨p', hp', q', hq', hne', h1, h2⟩
+        rcases Finset.mem_insert.1 hp' with hpe | hp'
+        · rcases Finset.mem_insert.1 hq' with hqe | hq'
+          · exact hne' (hpe.trans hqe.symm)
+          · exact hB (Or.inl ⟨hpe ▸ h1, Finset.mem_biUnion.2 ⟨q', hq', h2⟩⟩)
+        · rcases Finset.mem_insert.1 hq' with hqe | hq'
+          · exact hB (Or.inr ⟨Finset.mem_biUnion.2 ⟨p', hp', h1⟩, hqe ▸ h2⟩)
+          · exact hI ⟨p', hp', q', hq', hne', h1, h2⟩
+      rw [ite_eq_right hL, ite_eq_right hI, ite_eq_right hB, Nat.add_zero]
+
 /-- **Limits add over parts, exactly**: for disjoint parts, the parts' capacities summed are the whole's and each
 link between two parts twice, once at each end. -/
 theorem linkCapacity_biUnion (ends : E → L × L) (β : E → ℕ) (P : Finset ι) (X : ι → Finset L)
     (hd : (P : Set ι).PairwiseDisjoint X) :
     linkCapacity ends β (P.biUnion X) + 2 * innerCapacity ends β P X = ∑ p ∈ P, linkCapacity ends β (X p) := by
-  sorry
+  classical
+  induction P using Finset.induction_on with
+  | empty => simp [linkCapacity, boundary, innerCapacity]
+  | insert p P hp ih =>
+    have hdP : (P : Set ι).PairwiseDisjoint X := hd.subset (Finset.coe_subset.2 (Finset.subset_insert p P))
+    have hdis : Disjoint (X p) (P.biUnion X) := by
+      rw [Finset.disjoint_biUnion_right]
+      intro q hq
+      exact hd (Finset.mem_coe.2 (Finset.mem_insert_self p P)) (Finset.mem_coe.2 (Finset.mem_insert_of_mem hq))
+        fun h => hp (h ▸ hq)
+    have h := linkCapacity_union ends β (X p) (P.biUnion X) hdis
+    have h' := ih hdP
+    rw [Finset.biUnion_insert, Finset.sum_insert hp, innerCapacity_insert ends β X hp hd]
+    omega
 
 end Parts
 
