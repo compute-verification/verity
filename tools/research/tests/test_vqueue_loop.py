@@ -105,6 +105,7 @@ class Env:
         self.graph2.list_graph(f"ready:{self.main()}", {"schema": GRAPH_V2, "commit": self.main(), "tasks": []})
 
     def loop(self, decide, clone: str = "clone", **kw) -> Loop:
+        kw.setdefault("left_out", None)         # most tests count the lines a tick logs, which `leave` lines would add to
         path = self.tmp / clone
         if not path.exists():
             _git(self.tmp, "clone", "-q", str(self.o.origin), str(path))
@@ -1950,6 +1951,79 @@ def test_with_no_records_run_a_lean_pr_waits_for_a_candidate_with_no_lean_change
     assert lines[1]["why"] == (f"nothing built: with a Lean change, #2 waits while the newest candidate, "
                                f"{lines[0]['sha'][:12]}, holds #1's Lean change, and no PR with no Lean change is ready to take")
     assert [r["base"] for r in lines[2:]] == [lines[0]["sha"], lines[2]["sha"]]
+
+
+def test_a_ready_pr_left_out_of_the_ticks_builds_is_logged_once_for_each_head_and_cause(env):
+    """End to end at `--batch` 1 and `--depth` 1: the first tick builds #1 alone and logs why #2 waits (`leave`: its number,
+    head, cause and why) and why #3, marked and held by a reviewer, isn't among the PRs the policy reads; the next logs #2's
+    new cause, the chain full, and nothing of #3, whose reason holds; a third logs nothing; a new head of #3 is logged
+    again.  A PR with no ready mark is none of them."""
+    env.put(1, {"a.txt": "1\n"})
+    h2 = env.put(2, {"b.txt": "2\n"})
+    h3 = env.put(3, {"c.txt": "3\n"})
+    env.o.gh.put(4, env.o.change({"d.txt": "4\n"}), ready=False)
+    env.labels.held.add(3)
+    loop = env.loop(vqueue.decide, batch=1, depth=1, left_out=vqueue.left_out)
+
+    def leaves() -> list[tuple]:
+        return [(r["number"], r["heads"], r["cause"]) for r in env.lines() if r["action"] == "leave"]
+
+    loop.tick()
+    assert leaves() == [(3, [h3], "held"), (2, [h2], "batch full")]
+    assert next(r for r in env.lines() if r["action"] == "leave" and r["number"] == 2)["why"] == (
+        "behind the PRs ranked before it: a batch holds at most 1 (--batch)")
+    loop.tick()
+    loop.tick()
+    assert leaves() == [(3, [h3], "held"), (2, [h2], "batch full"), (2, [h2], "chain full")]
+    h3b = env.put(3, {"c.txt": "3b\n"})
+    loop.tick()
+    assert leaves()[3:] == [(3, [h3b], "held")]
+
+
+def test_a_tick_whose_leave_lines_fail_has_still_written_its_state_file(env):
+    """The `leave` lines come last: a `left_out` that raises fails the tick only once its actions are logged and its state
+    file written (`Loop.keep`)."""
+    env.put(1, {"a.txt": "1\n"})
+
+    def broken(s: Snapshot) -> list:
+        raise RuntimeError("left_out broke")
+
+    loop = env.loop(policy, state=(state := env.tmp / "vqueue" / "state.json"), left_out=broken)
+    with pytest.raises(RuntimeError, match="left_out broke"):
+        loop.tick()
+    assert json.loads(state.read_text())["tick"] == 1 and _acts(env.lines()) == ["build"], env.lines()
+
+
+@pytest.mark.parametrize("label", [False, True])
+def test_a_pr_left_out_for_holding_a_held_head_tells_its_owner_once_a_head_which_head_and_what_releases_it(env, label):
+    """A marked PR holding a held PR's head, directly or through another PR, goes into no candidate (`World.ready`): its owner
+    is told once a head and held head the head it waits on and what releases it (`Loop._behind_held`), and `research queue
+    status` says the same.  The hold is a reviewer's, or a `hold` label, which keeps the held PR from being admitted."""
+    env.o.gh.put(1, one := env.o.change({"a.txt": "1\n"}), labels=("hold",) if label else ())
+    env.o.gh.put(2, two := env.o.change({"b.txt": "2\n"}, base=one))
+    env.o.gh.put(3, three := env.o.change({"c.txt": "3\n"}, base=two))
+    if label:
+        hold, release = "held (`hold` label)", "the `hold` label comes off #1"
+    else:
+        env.labels.held.add(1)
+        hold, release = ("held by reviewer (no reason)",
+                         "#1's holder gives that head a `land` verdict (`research queue review 1 --land`)")
+    why = (f"it waits on #1's head {one[:12]}, which is {hold}: it is taken once {release}, or once it no longer holds "
+           "#1's commits")
+    loop = env.loop(lambda s: [])
+    loop.tick()
+    told = [r for r in env.lines() if r["action"] == "behind_held"]
+    assert [(r["number"], r["heads"], r["base"], r["why"]) for r in told] == [
+        (2, [two], one, why), (3, [three], one, why)], told
+    assert told[0]["text"] == f"#2 at {two[:12]} goes into no candidate on `main` {env.main()[:12]}: {why}"
+    assert env.posts == [f"{' '.join(r['to'])} vqueue: {r['text']}" for r in told], env.posts
+    loop.tick()
+    assert len(env.posts) == 2, env.posts
+    env.o.gh.put(3, three_b := env.o.change({"c.txt": "3b\n"}, base=two))
+    loop.tick()
+    assert [(r["number"], r["heads"]) for r in env.lines() if r["action"] == "behind_held"][2:] == [(3, [three_b])]
+    status = loop.world.q.status(loop=True, reviews=env.labels.reviews)
+    assert {n: (status[n].state, status[n].why) for n in (2, 3)} == {2: ("waiting", why), 3: ("waiting", why)}, status
 
 
 def test_a_failure_s_tests_are_read_beside_its_base_s_and_one_whose_tests_the_base_fails_too_is_inherited(env):
@@ -4061,9 +4135,9 @@ def _check(env: Env, monkeypatch, decide=vqueue.decide, **kw) -> tuple[Loop, Run
 @pytest.mark.parametrize("graph2", ["pending", "fail", "pass"])
 def test_under_gate_check_a_candidate_whose_sharded_check_passed_advances_whatever_graph2_says_and_the_two_are_compared(
         env, monkeypatch, graph2):
-    """The check that gates is the after-landing run of the candidate, every step as three shards, a machine each; graph2's
-    check is still enqueued, and its verdict, read in shadow, neither holds nor ejects: the candidate advances once every
-    shard passed, and once both ended one line says whether they agree."""
+    """The check that gates is the after-landing run of the candidate, every step as three shards, each on its own machine
+    first; graph2's check is still enqueued, and its verdict, read in shadow, neither holds nor ejects: the candidate advances
+    once every shard passed, and once both ended one line says whether they agree."""
     from research.landing import AFTER_LANDING
 
     main = env.main()
@@ -4072,7 +4146,7 @@ def test_under_gate_check_a_candidate_whose_sharded_check_passed_advances_whatev
     below, built, started = loop.tick()
     sha = built["sha"]
     assert [(c, m, kw["shard"]) for c, m, _, kw in runs.launches] == [
-        (c, f"m{k}", f"{k}/3") for c in (main, sha) for k in (1, 2, 3)]
+        (c, ",".join(f"m{(k - 1 + i) % 3 + 1}" for i in range(3)), f"{k}/3") for c in (main, sha) for k in (1, 2, 3)]
     assert all(steps == ",".join(AFTER_LANDING) and kw["no_regenerate"] and not kw["agreement"]
                for _, _, steps, kw in runs.launches) and [kw["base"] for *_, kw in runs.launches[3:]] == [main] * 3
     assert started["record"]["gate"] == "check" and started["record"]["groups"] == [["c-4"], ["c-5"], ["c-6"]]
@@ -4654,8 +4728,8 @@ def test_under_gate_check_a_heavy_candidate_s_shard_auditing_security_proofs_and
     (env.tmp / "heavy").write_text(heavy)
     loop.world.heavy_file, loop.world.heavy_on = env.tmp / "heavy", on
     _, built, started = loop.tick()
-    sha, usual = built["sha"], ["m1", "m2", "m3"]
-    want = ["m1", "big", "m3"] if on else usual
+    sha, usual = built["sha"], ["m1,m2,m3", "m2,m3,m1", "m3,m1,m2"]
+    want = [usual[0], "big", usual[2]] if on else usual
     below = want if heavy == "*\n" else usual
     assert [(c, m) for c, m, _, _ in runs.launches] == [(main, m) for m in below] + [(sha, m) for m in want]
     assert started["record"].get("heavy_on") == (on or None)
@@ -5075,8 +5149,9 @@ def test_under_gate_check_a_ring_off_the_gate_whose_post_failed_is_rung_again_by
 def test_under_gate_check_auto_shards_launch_once_each_checks_plan_is_made_and_a_candidate_dropped_while_it_is_made_launches_none(
         env, monkeypatch):
     """`--shards auto:6`: each check, `main`'s and the candidate's, has the auto plan of its tree made first, and the first tick
-    that finds it made launches its 6 shards `--shard auto:K/6` with its file, a machine each; the candidate advances once
-    every shard passed.  One dropped while its plan is made launches none, the plan given up (`vqueue_slim.abandon`)."""
+    that finds it made launches its 6 shards `--shard auto:K/6` with its file, each on its own machine first; the candidate
+    advances once every shard passed.  One dropped while its plan is made launches none, the plan given up
+    (`vqueue_slim.abandon`)."""
     from research.landing import AFTER_LANDING, AUTO_PLAN
     from test_landing import _plan_doc
     from test_vqueue_slim import Plans
@@ -5093,7 +5168,8 @@ def test_under_gate_check_auto_shards_launch_once_each_checks_plan_is_made_and_a
     plans.answers.update({str(plans.tmp / f"plan-{k}"): (_plan_doc(6), None) for k in (1, 2)})
     assert _acts(loop.tick()) == ["slim", "slim"]
     assert [(c, m, kw["shard"], kw["shard_plan"]) for c, m, _, kw in runs.launches] == [
-        (c, f"m{k}", f"auto:{k}/6", str(plans.tmp / f"plan-{p}" / AUTO_PLAN)) for p, c in ((1, main), (2, sha))
+        (c, ",".join(f"m{(k - 1 + i) % 6 + 1}" for i in range(6)), f"auto:{k}/6", str(plans.tmp / f"plan-{p}" / AUTO_PLAN))
+        for p, c in ((1, main), (2, sha))
         for k in range(1, 7)]
     assert not any((plans.tmp / f"plan-{k}").exists() for k in (1, 2)) and loop.tick() == []
     runs.end(main, plan=PLAN6)

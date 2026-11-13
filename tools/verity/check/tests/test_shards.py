@@ -1,5 +1,5 @@
-"""`check.py --shard K/N`: ci.toml's plans run every part of an unsharded check exactly once (but ratchet-gate's, off the gate and
-in no plan), each shard holds what its jobs need or runs it beside their parts, a shard runs only its parts (lean-audit on its
+"""`check.py --shard K/N`: ci.toml's plans run every part of an unsharded check exactly once (but ratchet-gate's, off the gate,
+where a plan doesn't name it), each shard holds what its jobs need or runs it beside their parts, a shard runs only its parts (lean-audit on its
 packages, lean-suites on its suites), and its result names what it ran."""
 from __future__ import annotations
 
@@ -67,8 +67,20 @@ def test_the_plans_are_the_documented_ones():
         4: ((*NAMED, "circuit-check:1/4", *BESIDE_AUDIT),
             (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement", "circuit-check:2/4"),
             ("pytest", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*", *WITH_RUST)),
-        5: ((*NAMED, *BESIDE_AUDIT), ("lean-audit:*", "lean-suites:verity-lean-audit"), (*build, *BESIDE_BUILD, "lean-agreement"),
-            ("pytest",), ("flock-circuit-build", "circuit-check", "flock-rust-tests", *WITH_RUST))}
+        5: ((*NAMED, *BESIDE_AUDIT), ("flock-circuit-build", "flock-rust-tests", "lean-audit:*", *WITH_RUST, "ratchet-gate"),
+            (*build, *BESIDE_BUILD, "lean-agreement"), ("pytest",), ("circuit-check",))}
+
+
+def test_the_5_pod_plan_runs_circuit_check_alone_in_its_last_shard():
+    """circuit-check shared the 5-pod plan's last shard, which the vqueue loop puts on a machine of its own, with the Rust build
+    and the rest of lean-suites: a cold circuit-check (each move of its cache's version makes one) held that machine's slots, and
+    the next candidates' gating steps there waited behind it.  A candidate's check (`--deferred` every job) runs circuit-check
+    alone in the last shard and every other part on the other four."""
+    every = D.all_parts(CHECK.JOBS, _parts())
+    cc = [p for p in every if p.partition(":")[0] == "circuit-check"]
+    got = [CHECK.shard(f"{k}/5", gated=False)["parts"] for k in range(1, 6)]
+    assert got[-1] == cc
+    assert sorted(p for s in got[:-1] for p in s) == sorted(p for p in every if p not in cc)
 
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
@@ -117,13 +129,14 @@ def test_a_spec_the_plan_doesnt_name_goes_with_its_provers_and_a_plan_naming_the
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
 def test_every_plan_runs_every_part_of_this_tree_exactly_once_and_the_same_way_each_time(n):
-    """Every part but ratchet-gate's, which is off the gate and in no plan: circuit-check, off the gate too, stays planned."""
+    """Every part but ratchet-gate's where the plan doesn't name it, which is off the gate: circuit-check, off the gate too, stays
+    planned."""
     every = D.all_parts(CHECK.JOBS, _parts())
     assert len(PACKAGES) >= 4 and all(every.count(s) == 1 for s in SECURITY) and {"lean-audit", "lean-suites"}.isdisjoint(every)
     assert {p.partition(":")[0] for p in every} == {j.name for j in CHECK.JOBS}
     shards = _resolved(n)
     flat = [p for s in shards for p in s]
-    planned = [p for p in every if p != "ratchet-gate"]
+    planned = [p for p in every if p != "ratchet-gate" or any("ratchet-gate" in s for s in D.plans()[n])]
     assert len(shards) == n and all(shards) and sorted(flat) == sorted(planned) and len(set(flat)) == len(flat)
     assert _resolved(n) == shards == _resolved(n, list(reversed(PACKAGES))), "deterministic, whatever order git lists"
     assert all(s == [p for p in every if p in s] for s in shards), "each shard's parts in the unsharded check's order"
