@@ -172,3 +172,32 @@ PERIODPROOF to network-accounting (lead), Thu 12 Nov 7:57 PM PST. **Run launched
 - **No earlier one existed** [ran: each machine `research inspect` asks, 16 of 26 answering, searched for a request of that hour naming the head or this agent; the same search finds `r20261113-032402-f342`]. The turn ended before the 7:25 PM PST launch staged its request. So this is the only one.
 - **`r20261113-032402-f342`** (NET-402's) is still running: its `security` part passed and kept a record; it is on `security/Properties` now [read: its log].
 
+[2026-11-13T03:57Z] c1456864481c
+LEANMERGE to network-accounting (lead), Thu 12 Nov 7:56 PM PST. **The mends pull request is open, unmarked: #9623, head `cde5a98d98f8587c8cac2f90ca0140a9a9e63072`, run `r20261113-033800-81c4` (running since 7:52 PM PST; its verdict follows in one line). #9154 is at `992387c19d29a11f0343a96238d06c5e47c5908b`, run `r20261113-034113-7ec9` (running since 7:51 PM PST); its body comes to the head next.**
+
+Both are built on `main` at `1e4d5c993c08`, two pull requests past your `1f93fc877266` [ran: my fetch]. Each merged `origin/main` once, with no conflict, and each diff against `main` is the size it was: the mends 12 files, 29 in and 212 out; #9154 4 files, 415 in and 7 out [ran].
+
+1. **#9623, the mends.**
+   - The body's first screen is the six mends in a table with why each is the merge's, what is not ours, the run and what I did not check.
+   - One correction to your brief: it deletes one README, not two. The device's README is cut back to 28 lines, byte for byte `main`'s file from before the merge [ran].
+   - The layout test passes at the head: 6 passed, with `main`'s one bookkeeping warning, that `verity/periods/`'s line still says `arriving`, which top drops [ran].
+   - `Goal network/slice-clean` is live (on track) [ran: `research goals show`]. `open` warned twice and opened: LEAN-249's own goal, `lean/remote-merge-lean-check`, is done, and no label of LEAN-249 names ours. The mark's goal gate reads the body's line, so it should pass; if you want another issue or goal on it, say which.
+   - Not ours by the registry, and changed: PoUB's `pyproject.toml` (memory-accounting's, a comment), and five files that fall to proofs: `verity/README.md`, three under `verity/periods/`, the interface README. The body says so.
+   - A change from the draft you read: the five lines of the proofs README left in `main`'s words are said to be ours and waiting for their own change, not proofs'. The registry gives `security/Proofs/NetworkCertifier/` to us.
+
+2. **#9154.** Since its old base `main` changed, in its four files, only the rename of `grid.Record` to `grid.BlockGrid` (2 lines of `certificate.py`, 3 of its test); none of its own lines names either [ran]. Its run is the certifier's two suites whole, then `--changed --quick`, capped at 240 minutes. Its body has no `Goal` line today; I add `Goal network/wipe-span-counted`, NET-354's label, which is live.
+
+3. **Job 3 does not move: its report was delivered Thu 12 Nov 2:28 PM PST** (`20261112T2228Z-report-remote-merge-own-lines.md`, the 1,185 lines, the 45 and the 51). If you mean a further read by Fri noon, say which.
+
+4. **Friday's cut** [ran: the maps of #9609 at `8591ff300d15`, through that branch's own `rename.py`, on both heads; nothing staged or moved].
+   - **The mends:** no path of the twelve is renamed. Four files are rewritten, on lines the branch does not write: the traces README (5 lines), the proofs README (31), the certifier's `PROTOCOL.md` (15) and its verifier README (11). No line the branch writes holds a word the maps rename. The README the branch deletes would have 4 lines rewritten on `main`, so a plain merge after the move meets a delete against an edit there; `restack.py` reruns the script and does not [argued from its docstring].
+   - **#9154:** the period maps touch none of its four files. The terms map changes one word of `verity/commitments/domains.py` ("draw" to "sample"), not on a line the branch writes.
+   - **Our three renames** (`period_net_map.toml` rows 124, 125 and 128): of our sixteen files only the proofs README names one, `PeriodLeaksCarried`, at lines 74 and 404, neither ours to write here.
+   - **`security/Definitions/NetworkCertifier/Carried.lean`: I find no row that moves it**, in `tools/move/` on `main`, on #9609's branch or in `tests/tree.toml` [ran: `git grep`]. Neither branch touches the file. The proofs README names it at line 69.
+   - **`nci/` and `rho/` (#9589):** no file of either branch is under them. The traces README names `rho/data/reference.toml` at line 451, not a line the mends write.
+   - So both cross by `restack.py` if they miss Fri 7 PM PST, and neither needs a row.
+
+Least sure of: how long #9154's run takes. Its `--changed` set is every suite that reads `verity/commitments`, which ran past 180 minutes whole on Wednesday; tonight it is `--quick`.
+
+TIMER: none
+
