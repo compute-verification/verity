@@ -7,12 +7,15 @@ public import VStarRecursive.SampledTwoDesc
 
 `sampled-two-desc check PARAMS COMMITMENT EVIDENCE [BLOB ...]` decodes a play as the form's check does (the params, the
 boundary registration, the evidence, the blobs, and the run of record's input from `SampledTwo.inputAt`), then runs the
-descriptor check (`SampledTwoDesc.descOk`) on it twice:
+descriptor check (`SampledTwoDesc.descOk`) on it:
 
-* on the play as it is, printing `pass` or the first of its clauses that fails (`why`);
-* on the play with its second template given the first's name, which `namesOnce` must refuse.
+* on the play as it is, printing `pass` or the first of its clauses that fails (`why`), then every clause that fails
+  (`fails`) and, for each template, the numbers `memberOk` reads (`sizes`);
+* on the play with its second template given the first's name, which `namesOnce` must refuse; a play of fewer than two
+  templates has no such case, and the line says so;
+* on the play with its interior registering a value, which the check must refuse at that clause.
 
-It exits 0 when the play passes, the renamed play is refused at `namesOnce`, and `why` agrees with `descOk` on both.
+It exits 0 when the play passes, each refused case is refused at its clause, and `why` agrees with `descOk` on all.
 No party runs it and nothing dispatches to it: nothing in the form calls `descOk` yet.
 -/
 
@@ -26,21 +29,22 @@ open Flock
 /-- The first clause of `cs` that fails. -/
 def firstFail (cs : List (String × Bool)) : Option String := (cs.find? fun c => !c.2).map (·.1)
 
-/-- **Why `descOk` refuses**, clause by clause in its order: none where every clause holds. -/
-def why (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : Spot.Run.Interior) : Option String :=
+/-- **`descOk`'s clauses**, in its order, each with its verdict; an error where a step before them is refused. -/
+def clauses (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : Spot.Run.Interior) :
+    Except String (List (String × Bool)) :=
   match firstOf i, cellsOf i it, refsOf p bs with
-  | none, _, _ => some "firstOf"
-  | _, none, _ => some "cellsOf"
+  | none, _, _ => .error "firstOf"
+  | _, none, _ => .error "cellsOf"
   | _, _, none =>
     let errs := (List.range p.circuits.size).filterMap fun t => match refOf p bs t with
       | .error e => some s!"template {t}: {e}"
       | .ok _ => none
-    some s!"refsOf ({"; ".intercalate errs})"
+    .error s!"refsOf ({"; ".intercalate errs})"
   | some f, some (ns, ks), some rs =>
     match (Spot.Slots.layout f.verifier.program f.verifier.query).toOption,
         (firstLaw f.rule f.verifier.program f.verifier.query f.verifier.workTable).toOption with
-    | none, _ => some "layout"
-    | _, none => some "firstLaw"
+    | none, _ => .error "layout"
+    | _, none => .error "firstLaw"
     | some l, some law =>
       let T := it.circuits.size
       let names := (it.circuits.map (·.1)).toList
@@ -49,7 +53,7 @@ def why (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : Spo
       let refReads := fun t => (it.circuits.map (·.2.2.2)).toList.getD t .null
       let circ := circAt rs
       let vi := it.params.verifier
-      firstFail [
+      .ok [
         ("as many templates as the params name", p.circuits.size == T), ("a reference statement", !rs.isEmpty),
         ("fits", rs.all fits), ("zkOk", rs.all fun r => zkOk r.spec r.sts), ("templateOk", rs.all templateOk),
         ("scopeOkH", rs.all fun r => ProvedScope.scopeOkH r.stmt),
@@ -63,6 +67,35 @@ def why (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : Spo
         ("refReadsOwn", refReadsOwn T names links wires refReads (vi.ports.map (·.1)).toList),
         ("registersNone", (vi.registered.map (·.1)).toList.isEmpty), ("portsOnce", portsOnce T circ),
         ("outsOk", outsOk T circ)]
+
+/-- **Why `descOk` refuses**, clause by clause in its order: none where every clause holds. -/
+def why (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : Spot.Run.Interior) : Option String :=
+  match clauses p bs i it with
+  | .error e => some e
+  | .ok cs => firstFail cs
+
+/-- **Every clause of `descOk` that fails**, in its order; the refused step alone where one before them is. -/
+def fails (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : Spot.Run.Interior) : List String :=
+  match clauses p bs i it with
+  | .error e => [e]
+  | .ok cs => (cs.filter fun c => !c.2).map (·.1)
+
+/-- **The numbers `memberOk` reads**, a line a template: its statement circuit's unit, the units the check counts it
+over (requests times cells), its member's lowered size against the bound, and the bits that circuit returns. -/
+def sizes (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : Spot.Run.Interior) : List String :=
+  match firstOf i, cellsOf i it, refsOf p bs with
+  | some f, some (ns, ks), some rs =>
+    match (Spot.Slots.layout f.verifier.program f.verifier.query).toOption with
+    | some l =>
+      (List.range it.circuits.size).map fun t =>
+        let c := circAt rs t
+        let n := requests l * ns.getD t 0
+        s!"template {t}: unitLog {c.unit.unitLog}, upv {c.upv}, inWords {c.unit.inWords}, constPos {c.unit.constPos}, " ++
+          s!"unitIns {unitIns c}, unitRows {unitRows c}, requests {requests l}, cells {ns.getD t 0}, " ++
+          s!"count {ks.getD t 0}, n {n}, memberSize {memberSize c n}, bound {Spot.OneStageZk.UNIT_CLASS_MAX}, " ++
+          s!"memberOk {memberOk c n}, returnedBits {Spot.OneStageZk.returnedBits c}"
+    | none => []
+  | _, _, _ => []
 
 /-- The play's parameters, blobs, run of record's input and its interior, decoded as the form's check decodes them. -/
 def decode (params commitment evidence : ByteArray) (blobs : Array ByteArray) :
@@ -80,6 +113,10 @@ def renamed (it : Spot.Run.Interior) : Spot.Run.Interior :=
   match it.circuits[0]?, it.circuits[1]? with
   | some a, some b => { it with circuits := it.circuits.set! 1 (a.1, b.2) }
   | _, _ => it
+
+/-- The interior with its registration registering a value. -/
+def registering (it : Spot.Run.Interior) : Spot.Run.Interior :=
+  { it with params := { it.params with verifier := { it.params.verifier with registered := #[("x", 1)] } } }
 
 /-- One line: the case, `descOk`'s verdict and `why`'s. -/
 def report (what : String) (ok : Bool) (w : Option String) : String :=
@@ -100,13 +137,23 @@ def main (args : List String) : IO UInt32 := do
       let ok := descOk p bs i it
       let w := why p bs i it
       IO.println (report "play" ok w)
-      let it' := renamed it
-      let ok' := descOk p bs i it'
-      let w' := why p bs i it'
-      IO.println (report "play with template 1 named as template 0" ok' w')
-      let agree := (ok == w.isNone) && (ok' == w'.isNone)
+      let fs := fails p bs i it
+      IO.println s!"play: clauses that fail: {if fs.isEmpty then "none" else "; ".intercalate fs}"
+      for s in sizes p bs i it do IO.println s
+      let two : Bool := decide (2 ≤ it.circuits.size)
+      let itN := renamed it
+      let okN := descOk p bs i itN
+      let wN := why p bs i itN
+      if two then IO.println (report "play with template 1 named as template 0" okN wN)
+      else IO.println s!"play with template 1 named as template 0: not made, the play has {it.circuits.size} template"
+      let itR := registering it
+      let okR := descOk p bs i itR
+      let wR := why p bs i itR
+      IO.println (report "play with its interior registering a value" okR wR)
+      let agree := (ok == w.isNone) && (okN == wN.isNone) && (okR == wR.isNone)
       if !agree then IO.println "why disagrees with descOk"
-      return if agree && ok && !ok' && w' == some "namesOnce" then 0 else 1
+      let named := !two || (!okN && wN == some "namesOnce")
+      return if agree && ok && named && !okR && wR == some "registersNone" then 0 else 1
   | _ =>
     IO.eprintln "usage: sampled-two-desc check PARAMS COMMITMENT EVIDENCE [BLOB ...]"
     return 64
