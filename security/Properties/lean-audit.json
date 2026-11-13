@@ -6975,13 +6975,80 @@
    "type_hash": "6ec01e57310a86ffe9338892475b8ac130ab76e5e296ca2d1c199830267265a4"
   },
   "Properties.Pouw.PearlPlus.drawIsOnItsStreams": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.PearlPlus.drawIsOnItsStreams : Properties.Pouw.PearlPlus.DrawIsOnItsStreams"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "e9c66af6f05b71cf08ef95a02b6537e53bad68f59da359685f8727a5f5f04d0b",
+   "unfolded_hash": "152052ec005f4064fc46356db414fa48561a19002641f794ee4a6233810f4a10"
   },
   "Properties.Pouw.PearlPlus.drawIsOnItsStreams_honest": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.PearlPlus.drawIsOnItsStreams_honest :",
+    "  instLTNat.lt 0",
+    "    (Properties.Pouw.PearlPlus.ticketTotal",
+    "      (PouwCheck.PearlPlus.tickets (List.cons Properties.Pouw.PearlPlus.honestPass List.nil)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "3617140c0718b9faa1043556a6afd2df2407b0f625c43fccd59f3160d0325667"
   },
   "Properties.Pouw.PearlPlus.drawIsOnItsStreams_nontrivial": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.PearlPlus.drawIsOnItsStreams_nontrivial :",
+    "  Not",
+    "    (Eq (Except.ok List.nil).toOption",
+    "      (ite",
+    "        (Eq",
+    "          (Properties.Pouw.PearlPlus.ticketTotal",
+    "            (PouwCheck.PearlPlus.tickets (List.cons Properties.Pouw.PearlPlus.honestPass List.nil)))",
+    "          0)",
+    "        (Option.some List.nil)",
+    "        (List.mapM",
+    "          (fun j =>",
+    "            (FlockSoundness.Randomness.uniformOn",
+    "                  (Properties.Pouw.PearlPlus.ticketTotal",
+    "                    (PouwCheck.PearlPlus.tickets (List.cons Properties.Pouw.PearlPlus.honestPass List.nil)))",
+    "                  (FlockSoundness.Randomness.stream ByteArray.empty",
+    "                    (List.cons (FlockSoundness.Randomness.Part.str \"u\")",
+    "                      (List.cons (FlockSoundness.Randomness.Part.int j) List.nil))",
+    "                    (Properties.Pouw.PearlPlus.drawBytes",
+    "                      (PouwCheck.PearlPlus.tickets (List.cons Properties.Pouw.PearlPlus.honestPass List.nil))))).bind",
+    "              fun r =>",
+    "              if h :",
+    "                  instLTNat.lt r",
+    "                    (Finset.univ.sum fun u =>",
+    "                      Properties.Pouw.PearlPlus.weightsOf",
+    "                        (PouwCheck.PearlPlus.tickets (List.cons Properties.Pouw.PearlPlus.honestPass List.nil))",
+    "                        u.val) then",
+    "                Option.some",
+    "                  (Properties.Pouw.PearlPlus.tileOf",
+    "                    (PouwCheck.PearlPlus.tickets (List.cons Properties.Pouw.PearlPlus.honestPass List.nil))",
+    "                    (Properties.Pouw.PearlPlus.ticketAt",
+    "                      (PouwCheck.PearlPlus.tickets (List.cons Properties.Pouw.PearlPlus.honestPass List.nil)) ⟨r, h⟩))",
+    "              else Option.none)",
+    "          (List.range 1))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "b9de4b365a7c611ee251e898b7e474417e89d5b95b779f8c1ad9e9e7f6c59174"
   },
   "Properties.Pouw.PearlPlus.loadedGivesUp": {
    "owner": "@proofs",
@@ -25153,11 +25220,14 @@
    }
   },
   "Properties.Pouw.PearlPlusDraw": {
-   "digest": "c6408b56945fa17a2695baa07d62c4a081e69381b9c10a715ba6e4f9e5456eab",
+   "digest": "8b266c8ee162fc896408f3ac9496396812e3f2885887f535daeda29a5106ac66",
    "definitions": {
     "Properties.Pouw.PearlPlus.CoinBytesGiveUniformTickets": "08b333b7ec64ede8ff7789ca89b75bc9a3990efbac8ca4e9a16af52e16dda32d",
+    "Properties.Pouw.PearlPlus.DrawIsOnItsStreams": "5192d78663acac5fddda0528a7ef5abf7e7418ade4c44e71cc485a6499587f87",
     "Properties.Pouw.PearlPlus.drawBytes": "fdb8467cc42ffb52fdce08fd294df69988d3a92620a39f3cfbf442c1eefedbac",
+    "Properties.Pouw.PearlPlus.ticketAt": "bb08eae5ed1653aec57ca96c1cdbe79917af4698f2a4e90a59beb67a302d85ad",
     "Properties.Pouw.PearlPlus.ticketTotal": "67c93fb7a48695ea8aede5d14efc4473ca6342e70b4a63ae8a477fcfc3be1580",
+    "Properties.Pouw.PearlPlus.tileOf": "2f9f0b57ebed4c02a39489dd85c0dafc3ce16a1d63e6caf535ba7650ff7b2a9f",
     "Properties.Pouw.PearlPlus.weightsOf": "b6a0c4704d8ecb38007ff7ac5567ff5f5b0649f778204b16b528e65ae514102a"
    }
   },
