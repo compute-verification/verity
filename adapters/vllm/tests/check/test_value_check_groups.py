@@ -13,7 +13,7 @@ from verity_vllm.engine.profiles import layer_classes as LC
 
 def _module(*mro: str) -> object:
     """An instance whose class MRO is ``mro`` (most derived first), as vLLM's layer classes subclass one another."""
-    cls = object
+    cls: type = object
     for name in reversed(mro):
         cls = type(name, (cls,), {})
     return cls()

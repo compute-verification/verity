@@ -30,7 +30,7 @@ class Workload:
     #: the VU Definition a statement's instances are (one output coordinate)
     vu: str
     K: int
-    #: the target the overhead divides by (``verity.definitions.circuits.targets.target.TARGETS``): its anchor's dense peak
+    #: the target the overhead divides by (``verity.circuits.targets.target.TARGETS``): its anchor's dense peak
     profile: str
     #: the served GEMMs whose coordinates these are, each with its N per TP8 rank (None: vocabulary-sized)
     sites: dict[str, int | None]

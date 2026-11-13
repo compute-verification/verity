@@ -1,7 +1,8 @@
 """Training rules: the ops a training step adds to a forward (its backward, its loss and its optimizer), lowered in reference mode to
-registered Definitions, as a rule set of their own (`training_rules()`): the default rules, with the training rules before and after
-them. The default rules are unchanged; a node either kind of rule lowers is lowered as before unless a training rule claims it first,
-and the training rules placed first claim only what the defaults lower per row or cannot represent at a step's sizes.
+registered Definitions, as a rule set of their own (`training_rules()`): the default rules that target ATen ops (`rules.TORCH_RULES`,
+the default without the rules of vLLM's own ops), with the training rules before and after them. Those default rules are unchanged; a
+node either kind of rule lowers is lowered as before unless a training rule claims it first, and the training rules placed first
+claim only what the defaults lower per row or cannot represent at a step's sizes.
 
 Arithmetic is the reference vocabulary's (`ref_prims`): each element-wise op is the f32 operation torch's CPU kernel performs for
 it (true division, IEEE `sqrt`, `pow` 2 and 3 as products, `rsqrt` as `1 / sqrt`, `lerp` as `fma(w, end - start, start)` or
@@ -23,7 +24,8 @@ int64 and uint8, a clamp and a `kthvalue` are its own (`rules.training_masks`), 
     training_rules(min_view_leaves, cc, tf32) -> RuleSet     the training rule set
 
 Views and static float tensors are `rules.training_views`'s, matrix products `rules.training_matmul`'s, softmax and log-softmax
-`rules.training_softmax`'s, torch's flash attention forward at a compute capability `rules.training_attention`'s, comparisons,
+`rules.training_softmax`'s, sums and means over axes, the loss and the embedding's gradient `rules.training_loss`'s, torch's flash
+attention forward at a compute capability `rules.training_attention`'s, comparisons,
 masks, integer sums, adds, shifts and ands, conversions, functionalized copies, table lookups, `amax` and `kthvalue`
 `rules.training_masks`'s and the helpers the rules emit with `rules.training_emit`'s; a survey of what the rules refuse is
 `rules.training_survey`'s.
@@ -35,31 +37,68 @@ import math
 
 import numpy as np
 import torch
-
-from verity.circuits.defs import bind
-from verity.definitions.ops import scalar as SC
-from verity.circuits.refs import Affine, Coll, Strided, broadcast, concat
-from verity.circuits.types import Array, Value
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array
+from verity.circuits.ops import scalar as SC
 from verity.definitions.registry import int8_exact as IE
 from verity.definitions.registry import moe as MOE
 from verity.definitions.registry import prims as P
 from verity.definitions.registry import ref_prims as R
 from verity.definitions.registry import sampling as SM
-from verity.definitions.registry import torch_embedding_f32 as TEF
+
 from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.training_attention import FlashSdpa
-from verity_vllm.program.frontend.rules.training_emit import (_DT, BIT, F32, _alpha, _batch, _bits, _call, _const, _ew, _flat,
-                                                              _iota, _operand, _operand_ok, _ones, _per_row, _ref, _rounded, _shape,
-                                                              _tokens, _TrainRule, _widened, aten)
-from verity_vllm.program.frontend.rules.training_masks import (AMax, Cast, Clamp, Compare, Copy, Index, IntOps, IntSum, KthValue,
-                                                               Logic, Where)
+from verity_vllm.program.frontend.rules.training_emit import (
+    _DT,
+    F32,
+    _alpha,
+    _batch,
+    _bits,
+    _const,
+    _ew,
+    _flat,
+    _operand,
+    _operand_ok,
+    _rounded,
+    _shape,
+    _TrainRule,
+    _widened,
+    aten,
+)
+from verity_vllm.program.frontend.rules.training_loss import (
+    EmbeddingDenseBackward,
+    NllLossBackward,
+    NllLossForward,
+    Reduce,
+)
+from verity_vllm.program.frontend.rules.training_masks import (
+    AMax,
+    Cast,
+    Clamp,
+    Compare,
+    Copy,
+    Index,
+    IntOps,
+    IntSum,
+    KthValue,
+    Logic,
+    Where,
+)
 from verity_vllm.program.frontend.rules.training_matmul import Matmul
 from verity_vllm.program.frontend.rules.training_reduce import FullReduce
-from verity_vllm.program.frontend.rules.training_softmax import LogSoftmax, LogSoftmaxBackward, SafeSoftmax, SoftmaxBackward
-from verity_vllm.program.frontend.rules.training_views import BoxPermute, StaticFloat, StaticFloats, _info, _view_permute
+from verity_vllm.program.frontend.rules.training_softmax import (
+    LogSoftmax,
+    LogSoftmaxBackward,
+    SafeSoftmax,
+    SoftmaxBackward,
+)
+from verity_vllm.program.frontend.rules.training_views import (
+    BoxPermute,
+    StaticFloat,
+    StaticFloats,
+    _info,
+)
 from verity_vllm.program.frontend.strided_views import _tensor_type
-from verity_vllm.program.frontend.value_types import shape_of
-
 
 # ---------------------------------------------------------------------------------------------------------
 # element-wise
@@ -361,10 +400,10 @@ class Addcdiv(_TrainRule):
         v = (_const(ctx, node, _bits(_value(node))), None)
         mul, div, add, fma = (_F32[k][gpu] for k in ("mul", "div", "add", "fma"))
         if gpu:
-            fns = (div, fma)
+            fns = [div, fma]
             y = _ew(ctx, node, fma, [v, _flat(_ew(ctx, node, div, [t1, t2], S), S), s], S)
         else:
-            fns = (mul, div, add)
+            fns = [mul, div, add]
             vt1 = _flat(_ew(ctx, node, mul, [v, t1], S), S)
             y = _ew(ctx, node, add, [s, _flat(_ew(ctx, node, div, [vt1, t2], S), S)], S)
         ctx.define(node, y)
@@ -516,7 +555,7 @@ class FusedAdamW(_TrainRule):
         for i, (p, g, m, v) in enumerate(zip(ps, gs, ms, vs)):
             S = _shape(ctx, p)
 
-            def op(fn, *xs):
+            def op(fn, *xs, S=S):
                 return _flat(_ew(ctx, node, fn, list(xs), S), S)
 
             P_, G_, M_, V_ = (_operand(ctx, node, a, S) for a in (p, g, m, v))
@@ -536,212 +575,9 @@ class FusedAdamW(_TrainRule):
                    emitted=f"F32Fma_v2 x{(5 if wd != 0 else 4) * n} + F32Mul_v2/F32Div_v2/F32Add_v2/F32Sub_v2/F32Sqrt_v1 per element")
 
 
-# ---------------------------------------------------------------------------------------------------------
-# reductions and the loss
-# ---------------------------------------------------------------------------------------------------------
-
-
-class Reduce(_TrainRule):
-    """`sum` / `mean` of an f32 value over `dim` (every axis when `dim` is None or `[]`, as torch reduces them, and for `.default`)
-    -> the reduced axes moved last by reference, one batch of `DotRef_v1{N}` against ones (a sequential sum from +0) per kept
-    element; `mean` divides the sum by f32(N) (`F32Div_v1`), as torch does."""
-    info = _info("Reduce", "aten.sum.dim_IntList / aten.mean.dim / aten.sum.default / aten.mean.default of f32",
-                 "the operand is an f32 value of at least one axis", "no dtype argument")
-
-    def targets(self):
-        return {aten.sum.dim_IntList, aten.mean.dim, aten.sum.default, aten.mean.default}
-
-    def applies(self, node, ctx):
-        why = _operand_ok(ctx, node.args[0])
-        if why or not isinstance(ctx.val(node.args[0]), Coll):
-            return why or "the operand is not a value"
-        if not _shape(ctx, node.args[0]):
-            return "a 0-d operand (no axis to reduce)"
-        if node.kwargs.get("dtype") is not None or (len(node.args) > 3 and node.args[3] is not None):
-            return "numerics_unregistered: a dtype argument"
-        return True
-
-    def emit(self, node, ctx):
-        x = ctx.coll(node.args[0])
-        S = shape_of(x.type)[0]
-        r = len(S)
-        given = node.args[1] if len(node.args) > 1 else None
-        dims = sorted({d % r for d in given}) if given else list(range(r))
-        keep = [a for a in range(r) if a not in dims]
-        perm = tuple(keep + dims)
-        xp = _view_permute(x, perm, node.name) if perm != tuple(range(r)) else x
-        Rn, N = math.prod(S[a] for a in keep), math.prod(S[a] for a in dims)
-        s = _batch(ctx, node, bind(R.DotRef, K=N), xp.reshape(Array(Rn, Array(N, F32))), _ones(ctx, node, N), axes=(0, None))
-        if node.target in (aten.mean.dim, aten.mean.default):
-            s = _batch(ctx, node, P.F32Div, s, _const(ctx, node, _bits(float(N))), axes=(0, None))
-        ctx.define(node, s.reshape(_tensor_type(ctx.shape_of_node(node), 32)))
-        ctx.record(self, node, {"dims": dims, "rows": Rn, "N": N}, emitted=f"DotRef_v1{{K={N}}} x{Rn}")
-
-
-def _nll_ok(ctx, node, logp, target, weight, reduction) -> str | None:
-    why = _operand_ok(ctx, logp)
-    if why or not isinstance(ctx.val(logp), Coll):
-        return why or "the input is not a value"
-    if len(_shape(ctx, logp)) != 2:
-        return f"input of shape {list(_shape(ctx, logp))} (only [M, V])"
-    if not isinstance(target, torch.fx.Node) or not isinstance(ctx.val(target), Coll) or ctx.dtype_of(target) not in (torch.int32, torch.int64):
-        return "the target is not an int32/int64 value"
-    if weight is not None:
-        return "numerics_unregistered: class weights"
-    if reduction not in (0, 1):
-        return f"numerics_unregistered: reduction {reduction} (only none and mean)"
-    return None
-
-
-class NllLossForward(_TrainRule):
-    """`nll_loss_forward(logp[M,V], target[M], None, reduction, ignore_index)` -> (loss, total_weight): the target's entry of each
-    row (`GatherF32x{V}_v1`), rows whose target is `ignore_index` zeroed (`I32Eq_v1`, `SelectF32_v1`). With the mean reduction the
-    loss is `-sum / count` and total_weight the count, sums sequential (`DotRef_v1{M}`; torch sums in a cascade); with none the loss
-    is each row's `-entry` (`F32Neg_v1`: torch's kernels' `-1 * entry`, a sign flip) and total_weight +0, as both kernels set it."""
-    info = _info("NllLossForward", "aten.nll_loss_forward, mean or no reduction, no weights, [M, V] input", "logp is an f32 value, "
-                 "the target an integer value", "an out-of-range target reads NaN (GatherF32x's extension; torch raises)")
-
-    def targets(self):
-        return {aten.nll_loss_forward.default}
-
-    def applies(self, node, ctx):
-        return _nll_ok(ctx, node, *node.args[:4]) or True
-
-    def emit(self, node, ctx):
-        logp = ctx.coll(node.args[0])
-        M, V = _shape(ctx, node.args[0])
-        t = _tokens(ctx, node, node.args[1])
-        ign = _batch(ctx, node, SC.I32Eq, t, _const(ctx, node, node.args[4] & 0xFFFFFFFF), axes=(0, None))
-        picked = _batch(ctx, node, R.gather_f32(V), t, logp.reshape(Array(M, Array(V, F32))), axes=(0, 0))
-        zero = _const(ctx, node, 0)
-        if node.args[3] == 0:
-            neg = _batch(ctx, node, SC.F32Neg, picked, axes=(0,))
-            rows = _batch(ctx, node, SC.SelectF32, ign, zero, neg, axes=(0, None, 0))
-            ctx.define(node, [rows.reshape(_tensor_type([M], 32)), StaticFloat(torch.zeros(()))])
-            ctx.record(self, node, {"M": M, "V": V, "ignore_index": node.args[4], "reduction": "none"},
-                       emitted=f"GatherF32x{V}_v1 x{M} + F32Neg_v1/SelectF32_v1 x{M}")
-            return
-        sel = _batch(ctx, node, SC.SelectF32, ign, zero, picked, axes=(0, None, 0))
-        neg = _call(ctx, node, bind(R.DotRef, K=M), sel, Coll(Array(M, F32), broadcast(*_ref(_const(ctx, node, _bits(-1.0))), M)))
-        w = _batch(ctx, node, SC.SelectF32, ign, zero, _const(ctx, node, _bits(1.0)), axes=(0, None, None))
-        cnt = _call(ctx, node, bind(R.DotRef, K=M), w, _ones(ctx, node, M))
-        loss = _call(ctx, node, P.F32Div, neg, cnt)
-        ctx.define(node, [loss, cnt])
-        ctx.record(self, node, {"M": M, "V": V, "ignore_index": node.args[4]}, emitted=f"GatherF32x{V}_v1 x{M} + DotRef_v1{{K={M}}} x2")
-
-
-def _one_hot(ctx, node, t: Coll, M: int, V: int) -> Coll:
-    """`t[m] == v` for every (m, v), row-major: one `I32Eq_v1` batch."""
-    io = _iota(ctx, node, V)
-    tr, ir = t.refs, io.refs
-    if not isinstance(tr, Affine):
-        t = _batch(ctx, node, SC.I32Add, t, _const(ctx, node, 0), axes=(0, None))
-        tr = t.refs
-    tb = Coll(Array(M * V, Value(32)), Strided(tr.space, tr.idx, tr.base, V, 1, 0, M * V))
-    ib = Coll(Array(M * V, Value(32)), Strided(ir.space, ir.idx, ir.base, V, 0, 1, M * V))
-    return _batch(ctx, node, SC.I32Eq, tb, ib, axes=(0, 0))
-
-
-class NllLossBackward(_TrainRule):
-    """`nll_loss_backward(go, logp[M,V], target, None, reduction, ignore_index, total_weight)`: with the mean reduction
-    `-(go / total_weight)` (`F32Div_v1`, `F32Neg_v1`), with none each row's `-go[m]` (`F32Neg_v1`, torch's kernels' `-1 * go[m]`),
-    at each row's target, +0 elsewhere and on the rows whose target is `ignore_index` (per row the gradient or +0 by `I32Eq_v1`
-    against `ignore_index`, as `NllLossForward` masks its rows; a one-hot of `I32Eq_v1`; `SelectF32_v1`)."""
-    info = _info("NllLossBackward", "aten.nll_loss_backward, mean or no reduction, no weights", "mean: go and total_weight are 0-d "
-                 "f32", "none: go is f32 of shape [M]", "an out-of-range target selects nothing (torch raises)")
-
-    def targets(self):
-        return {aten.nll_loss_backward.default}
-
-    def applies(self, node, ctx):
-        go, logp, target, weight, reduction, _ign, tw = node.args[:7]
-        why = _nll_ok(ctx, node, logp, target, weight, reduction) or _operand_ok(ctx, go) or _operand_ok(ctx, tw)
-        if why:
-            return why
-        M = _shape(ctx, logp)[0]
-        want = (M,) if reduction == 0 else ()
-        return True if _shape(ctx, go) == want else f"go of shape {list(_shape(ctx, go))} (reduction {reduction}: {list(want)})"
-
-    def emit(self, node, ctx):
-        go, logp, target, _w, reduction, ignore, tw = node.args[:7]
-        M, V = _shape(ctx, logp)
-        if reduction == 0:
-            g, ax = _operand(ctx, node, go, (M,))
-            g, gax = (_batch(ctx, node, SC.F32Neg, g, axes=(0,)), 0) if ax is not None else (_call(ctx, node, SC.F32Neg, g), None)
-        else:
-            g = _call(ctx, node, SC.F32Neg, _call(ctx, node, P.F32Div, _operand(ctx, node, go, ())[0], _operand(ctx, node, tw, ())[0]))
-            gax = None
-        t = _tokens(ctx, node, target)
-        zero = _const(ctx, node, 0)
-        ign = _batch(ctx, node, SC.I32Eq, t, _const(ctx, node, ignore & 0xFFFFFFFF), axes=(0, None))
-        row = _batch(ctx, node, SC.SelectF32, ign, zero, g, axes=(0, None, gax))
-        hot = _one_hot(ctx, node, t, M, V)
-        out = _batch(ctx, node, SC.SelectF32, hot, _per_row(row, M, V), zero, axes=(0, 0, None))
-        ctx.define(node, out.reshape(_tensor_type([M, V], 32)))
-        ctx.record(self, node, {"M": M, "V": V, "ignore_index": ignore, "reduction": "none" if reduction == 0 else "mean"},
-                   emitted=f"I32Eq_v1 + SelectF32_v1 x{M * (V + 1)}")
-
-
-class EmbeddingDenseBackward(_TrainRule):
-    """`embedding_dense_backward(g[..., H], ids, V, -1, False)`: row v of the weight's gradient is the sum of the gradient rows of the
-    tokens with id v. Without a `cc` it is torch CPU's per-row `add_` in token order from +0: per token one `SelectF32_v1` of its
-    gradient row into the rows whose id matches (a one-hot of `I32Eq_v1`) and one `F32Add_v1` into the accumulator, V x H words
-    each. At a compute capability `cc` it is the CUDA kernels' (`torch_embedding_f32.EmbeddingGradF32_v1`): the rows sorted by
-    id, each id's tokens summed in its kernel's order and each sum routed to its id's row."""
-    info = _info("EmbeddingDenseBackward", "aten.embedding_dense_backward, padding_idx -1, no scale_grad_by_freq",
-                 "g is an f32 value, ids an integer value", "an out-of-range id adds nothing")
-
-    def __init__(self, cc: tuple[int, int] | None = None):
-        self.cc = cc
-
-    def targets(self):
-        return {aten.embedding_dense_backward.default}
-
-    def applies(self, node, ctx):
-        g, ids, V, pad, freq = node.args[:5]
-        why = _operand_ok(ctx, g)
-        if why or not isinstance(ctx.val(g), Coll):
-            return why or "the gradient is not a value"
-        if not isinstance(ctx.val(ids), Coll) or ctx.dtype_of(ids) not in (torch.int32, torch.int64):
-            return "the ids are not an integer value"
-        if pad != -1 or freq:
-            return "numerics_unregistered: padding_idx or scale_grad_by_freq"
-        if self.cc:
-            try:
-                bind(TEF.EmbeddingGradF32, M=ctx.val(ids).type.leaves, V=V, H=_shape(ctx, g)[-1])
-            except ValueError as e:
-                return f"numerics_unregistered: {e}"
-        return True
-
-    def emit(self, node, ctx):
-        g, ids, V = node.args[:3]
-        gc = ctx.coll(g)
-        H = _shape(ctx, g)[-1]
-        t = _tokens(ctx, node, ids)
-        M = t.type.leaves
-        if self.cc:
-            fn = bind(TEF.EmbeddingGradF32, M=M, V=V, H=H)
-            ctx.define(node, _call(ctx, node, fn, t, gc.reshape(Array(M, Array(H, F32)))).reshape(_tensor_type([V, H], 32)))
-            ctx.record(self, node, {"tokens": M, "V": V, "H": H}, emitted=f"{fn.id} x1")
-            return
-        hot = _one_hot(ctx, node, t, M, V)
-        gr = gc.refs
-        if not isinstance(gr, Affine):
-            gc = _batch(ctx, node, P.F32Add, gc.reshape(Array(M * H, F32)), _const(ctx, node, 0), axes=(0, None))
-            gr = gc.refs
-        hr, zero = hot.refs, _const(ctx, node, 0)
-        acc = Coll(Array(V * H, F32), broadcast(*_ref(zero), V * H))
-        for m in range(M):
-            cond = Coll(Array(V * H, BIT), Strided(hr.space, hr.idx, hr.base + m * V, H, 1, 0, V * H))
-            row = Coll(Array(V * H, F32), Strided(gr.space, gr.idx, gr.base + m * H, H, 0, 1, V * H))
-            sel = _batch(ctx, node, SC.SelectF32, cond, row, zero, axes=(0, 0, None))
-            acc = _batch(ctx, node, P.F32Add, acc, sel, axes=(0, 0))
-        ctx.define(node, acc.reshape(_tensor_type([V, H], 32)))
-        ctx.record(self, node, {"tokens": M, "V": V, "H": H}, emitted=f"(SelectF32_v1 + F32Add_v1) x{M * V * H}")
-
-
 def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, tf32: bool = False) -> RuleSet:
-    """The default rules with the training rules: views of static floats, `BoxPermute` (views of more than `min_view_leaves` leaves
+    """The default rules that target ATen ops (`rules.TORCH_RULES`) and the default families, with the training rules: views of
+    static floats, `BoxPermute` (views of more than `min_view_leaves` leaves
     that are not one run) and `Matmul` before them, the element-wise, optimizer-count, reduction, softmax, loss, embedding,
     comparison, mask, integer, conversion, lookup, order-statistic and copy rules after. `min_view_leaves` is 0 by default:
     the default views write a permuted view of fewer leaves than their limit as a list of its leaves, which the root's replay then
@@ -756,7 +592,7 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
     show, so its f32 `mm`s and `bmm`s are cuBLAS's TF32 GEMMs: `Matmul` lowers an `mm` at a shape the TF32 capture covers
     (`cublas_bf16.TRAIN_TF32`) as cuBLAS's unsplit TF32 GEMM (`GemmTf32_v1`) and refuses the rest
     (``training-cc<major>.<minor>-tf32``)."""
-    from verity_vllm.program.frontend.rules import DEFAULT_RULES
+    from verity_vllm.program.frontend.rules import DEFAULT_FAMILIES, TORCH_RULES
 
     first = [StaticFloats(cc), BoxPermute(min_view_leaves), Matmul(cc, tf32)] + ([Binary(cc), Cast(cc)] if cc else [])
     last = ([] if cc else [Binary()]) + [Unary(cc), Lerp(cc), Addcmul(), Addcdiv(cc), SiluBackward(cc), ForeachAdd(cc),
@@ -765,7 +601,7 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
                                          EmbeddingDenseBackward(cc), Log(cc), Compare(), Logic(), IntOps(), Where(), Clamp(cc), Index(),
                                          KthValue(cc), Copy(cc)] + ([] if cc else [Cast()])
     name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}" + ("-tf32" if tf32 else "")
-    return RuleSet(name, first + ([FlashSdpa(cc)] if cc else []) + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
+    return RuleSet(name, first + ([FlashSdpa(cc)] if cc else []) + list(TORCH_RULES) + last, list(DEFAULT_FAMILIES))
 
 
 __all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "Addcdiv", "SiluBackward", "ForeachAdd", "FusedAdamW",

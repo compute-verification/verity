@@ -9,7 +9,7 @@ as a Boolean circuit. It has three parts:
   `fixture_sets`, `instances`), one measured cell on its prover and verifier pods (`cell`, `placement`, `drivers`), the
   subcircuit catalog and the per-unit-type cost inventory (`unit_costs` and its padding, prover and menu tables).
 - `reference`: the pinned GPU simulator's tensor-core step as integer operations (`hawkeye_close`), an independent reference
-  for `verity.definitions.circuits.targets.target.FIRST`.
+  for `verity.circuits.targets.target.FIRST`.
 - `checker`: a reference checker of that step with auxiliary witnesses, and the search for an output it accepts and should not.
 
 **What a caller may import** is each module's `__all__`: every public name a file outside this directory reads is in one,
@@ -20,7 +20,7 @@ each setting it declares as an attribute. The package's readers outside this dir
 (`bench.contract`, `bench.instances`, `reference.hawkeye_close`) and `proof_throughput/` (`bench.contract`). Several
 benchmarks' scripts start `bench.generate` as a command, so what it prints is read too.
 
-**What it never does.** It states no relation of its own: every expected word comes from `verity.definitions.silicon`, and the
+**What it never does.** It states no relation of its own: every expected word comes from `verity.circuits.silicon`, and the
 reference and the checker are held to it by tests. It reads the census and the committed input sets and never writes them
 outside a job that says so. It is no verifier, and no guarantee reads a number it computes.
 
@@ -73,9 +73,9 @@ run's `cc.json` (same name) and `DIR/tree` with `--meta @DIR/meta.json --ref cir
 
 ## The reference: how independent the existing columns are
 
-Two columns of the finite-domain step are read here: Python `verity.definitions.silicon` (`term.py`, `models.py`) and Lean
+Two columns of the finite-domain step are read here: Python `verity.circuits.silicon` (`term.py`, `models.py`) and Lean
 `security/Definitions/Core/TC/Spec.lean`. The Python is read against Hawkeye's pinned simulator
-(`verity/definitions/silicon/hawkeye/PIN.json`, `src/Ampere_simulator.cpp::group_sum`,
+(`verity/circuits/silicon/hawkeye/PIN.json`, `src/Ampere_simulator.cpp::group_sum`,
 `utils/utils.cpp::multiply_bfloat16_to_gfloat`, `src/gfloat.cpp::Gfloat::operator float`), the Lean by what its header says:
 
 - `models.py` states its body is "a bit-exact pure-Python port of" the reference simulator at that commit. `models.group_sum` is the
@@ -89,13 +89,13 @@ Two columns of the finite-domain step are read here: Python `verity.definitions.
   integers replace the `int32_t` with its `shift >= 32` guard (equal for every input the step forms; see
   `hawkeye_close.group_sum`).
 - `Spec.lean`'s header calls it "A transcription of `term.py`", of `models.py`'s `group_sum` and of `total.py`, "function for
-  function and branch for branch, on the Python functions' domain". `verity/definitions/evaluate/Evaluate/TC/Spec.lean` is, by
+  function and branch for branch, on the Python functions' domain". `verity/circuits/evaluate/Evaluate/TC/Spec.lean` is, by
   its own header, a copy of that file and of the `Pipeline.lean` beside it, "definition for definition". Neither body is read
   against the Python here.
 
 Finding: the two columns are one derivation -- the simulator's `group_sum`, ported once into Python and, by the Lean's header,
 transcribed from there. Agreement between them shows transcription fidelity, not an independent confirmation of the hardware
-semantics. The independent evidence for the target is (i) the hardware captures (`verity/definitions/ops/tests/fixtures`, and the
+semantics. The independent evidence for the target is (i) the hardware captures (`verity/circuits/ops/tests/fixtures`, and the
 probe's recorded runs, by stage below), (ii) the compiled pinned simulator itself, driven on the same cases by
 `tests/reference/hawkeye_harness.cpp`, and (iii) the closed-form normalisation of log entry D3, a different formula shown equal
 to the successive shifts by an SMT proof over the whole reachable domain (`tests/reference/test_normalisation_d3.py`).
@@ -127,10 +127,10 @@ uv run research run --on vy-sp1 --project verity --source . --exclusive --stage 
 uv run research run --on vy-sp1 --project verity --source . --exclusive --stage wp1.probe.4090 --require-result \
   -- bash -c 'export PYTHONPATH=.:benchmarks/numerical/python PATH=/usr/local/cuda/bin:$PATH; \
      /root/.local/bin/uv run --no-project --with numpy --python 3.12 python benchmarks/tc_probe/tc_probe.py --arch sm_89 \
-       --out "$RESEARCH_RUN_DIR" --procs 48 --replay-golden verity/definitions/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json --sweep'
+       --out "$RESEARCH_RUN_DIR" --procs 48 --replay-golden verity/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json --sweep'
 # A100 (sm_80): same, with --on vy-a100 --stage wp1.probe.a100, --arch sm_80, and instead of the (Ada) golden replay
 #   --replay-special PATH, PATH the A100 special-value fixture
-#   (its a100/mma_special.reduced.json.gz path is in fixtures/artifacts.json)
+#   (its a100/mma_special.reduced.json.gz path is in artifacts.json)
 ~~~
 
 The evidence store holds the recorded run of each of the three stages: the files its command writes and its result, whose
@@ -171,7 +171,7 @@ record returns to a finite value). Log entry D8.
 `verity_numerical.checker` checks the FP8 step beside BF16's. On BF16 the adder is at least as wide as the accumulator's
 significand (`width >= acc_sig`, 25 >= 24), and one exponent width serves operands and accumulator alike. Hopper/Ada E4M3
 have neither -- the FP8 adders are 14 bits wide and truncate the incoming FP32 accumulator's 24-bit significand to 14 before
-the grouped add (`verity.definitions.silicon.models.GroupSum.step`; a group of zero products is therefore not a no-op, log entry D10), and
+the grouped add (`verity.circuits.silicon.models.GroupSum.step`; a group of zero products is therefore not a no-op, log entry D10), and
 E4M3 has a 4-bit exponent with its own NaN rule (`0x7F`/`0xFF` are the NaNs, `0x7E` = 448 is finite, there are no infinities).
 
 Where (`python/verity_numerical/checker/`):
@@ -185,7 +185,7 @@ Where (`python/verity_numerical/checker/`):
   and scales it back up exactly (`norm_up`) where the truncation no longer folds into one floor division. `Bf16Decode` (alias
   `OperandDecode`) admits the E4M3 NaN rule through one extra range check; the accumulator gadgets read the `acc_*` widths.
   The rescale is no family of its own: the cast-free `veritor.tensor-core.<pipeline>@2` sets (`FP8_HOPPER_FAMILY` and
-  `FP8_ADA_FAMILY` in `verity.definitions.circuits.targets.target`) describe the FP8 pipelines' `tc_dot32` / `tc_dot32_0`, and
+  `FP8_ADA_FAMILY` in `verity.circuits.targets.target`) describe the FP8 pipelines' `tc_dot32` / `tc_dot32_0`, and
   it is a gadget of the checker's decomposition of that step.
 - `reference.py`, `step.py`, `search.py`: use the split formats; `gen_step` / `check_step_expr` route lossy paths through
   `RescaleState`. `z3_group_step` and the `v2` arithmetisation remain BF16-only and raise `Reject` / `ValueError` when asked
@@ -195,6 +195,6 @@ Where (`python/verity_numerical/checker/`):
   the zero-product truncation of D10, the E4M3 NaN words, rescale-hint mutations rejected, the E5M2 hypotheses through the same
   `Params`, and an exhaustive slice of `TOY_LOSSY`.
 
-The FP8 drafts these serve are `verity.definitions.circuits.targets.target.FP8_HOPPER_WGMMA` / `FP8_ADA_MMA` (`status="draft"`, no guest bound);
-their instructions and evidence are in `verity.definitions.silicon.instructions`, the replicas in `verity/definitions/silicon/captures/`, the open hardware questions
-in `verity/definitions/silicon/discrepancy_log.json` D13-D15.
+The FP8 drafts these serve are `verity.circuits.targets.target.FP8_HOPPER_WGMMA` / `FP8_ADA_MMA` (`status="draft"`, no guest bound);
+their instructions and evidence are in `verity.circuits.silicon.instructions`, the replicas in `verity/circuits/silicon/captures/`, the open hardware questions
+in `verity/circuits/silicon/discrepancy_log.json` D13-D15.

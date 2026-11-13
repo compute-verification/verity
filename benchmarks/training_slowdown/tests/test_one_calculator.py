@@ -1,4 +1,4 @@
-"""The benchmark reaches the slowdown calculator (`verity/protocols/inference_only/rho`) through one module,
+"""The benchmark reaches the slowdown calculator (`benchmarks/rho`) through one module,
 `training_slowdown.calculator`, and computes a slowdown in one function of it, `calculator.slowdown`.
 
 - One door: no other module or test under this directory imports a module of the calculator or names its directory
@@ -27,28 +27,32 @@ HERE = Path(__file__).resolve().parents[1]
 DOOR, THIS = "training_slowdown/calculator.py", "tests/test_one_calculator.py"
 #: the calculator's package, which has its directory's name
 PACKAGE = calculator.CALCULATOR.name
-#: the calculator's modules as its directory on the import path names them, and the part of a path only its
-#: directory and its policy's have
-MODULES, DIRECTORY = {PACKAGE, "periods"}, "inference_only"
+#: the calculator's modules as its directory on the import path names them, and its directory's name: a part of every
+#: path to it, and alone a key of the benchmark's own records too
+MODULES, DIRECTORY = {PACKAGE, "periods"}, PACKAGE
 #: files that name the calculator's directory in a message and read nothing of it, each with why. It only shrinks.
 NAMED_ONLY = {"training_slowdown/config.py": "its refusal of a policy says where the registry's tables are"}
 
 
 def reaches(source: str) -> list[str]:
     """`line: what` for each place `source` reaches the calculator: an import of one of its modules, or a string
-    outside a docstring that names its directory (a path to it, whole or in parts)."""
+    outside a docstring that names its directory as a part of a path: one of the parts of a path written whole
+    (`benchmarks/rho/data`), or the name alone where `/` joins it (a path in parts). The name alone anywhere else is the
+    benchmark's own key."""
     tree = ast.parse(source)
     scopes = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
     docstrings = {id(n.body[0].value) for n in ast.walk(tree) if isinstance(n, scopes) and n.body
                   and isinstance(n.body[0], ast.Expr) and isinstance(n.body[0].value, ast.Constant)}
+    joined = {id(side) for n in ast.walk(tree) if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Div)
+              for side in (n.left, n.right)}
     out = []
     for n in ast.walk(tree):
         if isinstance(n, ast.Import):
             out += [(n.lineno, f"import {a.name}") for a in n.names if a.name.split(".")[0] in MODULES]
         elif isinstance(n, ast.ImportFrom) and not n.level and (n.module or "").split(".")[0] in MODULES:
             out.append((n.lineno, f"from {n.module} import"))
-        elif (isinstance(n, ast.Constant) and isinstance(n.value, str) and DIRECTORY in n.value
-              and id(n) not in docstrings):
+        elif (isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docstrings
+              and DIRECTORY in n.value.split("/") and ("/" in n.value or id(n) in joined)):
             out.append((n.lineno, repr(n.value[:60])))
     return [f"{line}: {what}" for line, what in sorted(out)]
 
@@ -65,17 +69,21 @@ def test_only_the_one_module_reaches_the_calculator():
 
 
 def test_a_reach_is_found():
-    """The check above isn't vacuous: an import by name, one behind a path put on the import path, a module loaded
-    from its file and a path in parts are each found, and a docstring or a relative import of this package is not."""
+    """The check above isn't vacuous: an import by name, one behind a path put on the import path (a path written
+    whole), a module loaded from its file and a path in parts (its directory, then its package, each an operand of
+    `/`) are each found, and a docstring, a relative import of this package, a dictionary's `rho` key or a
+    subscript's is not."""
     home = calculator.CALCULATOR.relative_to(HERE.parents[1]).as_posix()
     assert reaches(f"import sys\nsys.path.insert(0, '{home}')\nimport periods\n"
                    f"from {PACKAGE} import min_cut\nimport {PACKAGE}.params\n") == [
         f"2: '{home}'", "3: import periods", f"4: from {PACKAGE} import", f"5: import {PACKAGE}.params"]
     assert reaches("from pathlib import Path\nimport importlib.util\n"
-                   f"P = Path('verity') / 'protocols' / 'inference_only' / '{PACKAGE}' / '{PACKAGE}' / 'min_cut.py'\n"
-                   "importlib.util.spec_from_file_location('m', P)\n") == ["3: 'inference_only'"]
-    assert reaches(f'"""Reads {home} through calculator."""\nfrom . import calculator\n'
-                   f'from .{PACKAGE} import x\n\ndef f():\n    """As inference_only says."""\n    {PACKAGE} = 1\n') == []
+                   f"P = Path('benchmarks') / '{PACKAGE}' / '{PACKAGE}' / 'min_cut.py'\n"
+                   "importlib.util.spec_from_file_location('m', P)\n") == [f"3: '{PACKAGE}'", f"3: '{PACKAGE}'"]
+    assert reaches(f'"""Reads {home}/data through calculator."""\nfrom . import calculator\n'
+                   f'from .{PACKAGE} import x\n\ndef f():\n    """As {home}/data says."""\n    {PACKAGE} = 1\n') == []
+    assert reaches(f'got = {{"{PACKAGE}": 1.0}}\n') == []
+    assert reaches(f'half = got["{PACKAGE}"] / 2\n') == []
 
 
 def test_the_products_term_is_the_calculators(monkeypatch):

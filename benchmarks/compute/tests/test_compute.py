@@ -475,7 +475,7 @@ def test_the_shared_result_is_the_metric_verified_and_error_with_capacity_and_fr
 
 def h200_site(devices: int):
     """A registered site of one host with `devices` H200s, each naming the sheet its card file gives."""
-    from verity.hardware import site as S
+    from verity import device as S
     sheet = S.Sheet.of_file(C.cards.load("h200-sxm-141gb"))
     locs = [S.Loc("site", "site"), S.Loc("host", "host", "site")]
     locs += [S.Loc(f"gpu{i}", "device", "host", sheet=sheet.digest()) for i in range(devices)]
@@ -503,7 +503,7 @@ def test_capacity_is_the_registered_devices_peak_at_each_data_sheet_reading_time
 
 
 def test_capacity_refuses_hardware_it_cannot_read_a_peak_off(tmp_path):
-    from verity.hardware import site as S
+    from verity import device as S
     with pytest.raises(C.Unreadable, match="the registered hardware holds no device"):
         C.capacity(S.Site(), Fraction(1))
     one = h200_site(1)
@@ -665,6 +665,30 @@ def test_a_per_call_split_that_is_not_the_answers_is_refused(store, tmp_path, ca
     assert bench(store, "--from", RUN, "--per-call") == 0
     assert printed(capsys)[1]["per_call"]["causes"][-1] == {"cause": "floor", "macs": "799/800",
                                                             "share": float(Fraction(799, 800) / (TOTAL - CREDITED))}
+
+
+def test_per_call_reads_the_grid_form_of_an_answer_held_to_its_classs_fixed_load(store, tmp_path, capsys):
+    """An answer held to its class's fixed load publishes the passes' whole MACs (the fixture's checked MACs and its
+    excluded A rows') and their credit less the give-up padded up to the window grid. The split is that answer's where
+    its credit lies between the published credit and that plus the give-up. The padding past the split's credit is the
+    cause ``grid``, and the causes still sum to the give-up exactly. A split whose credit is past the give-up's room,
+    or whose whole MACs are not the answer's, is refused."""
+    whole, credited = 120_000_000_000 + 150_994_944, CREDITED - 1_000_000
+
+    def held(give_up: int = 4_194_304, macs: int = whole) -> dict:
+        work = {"credited": credited, "macs": macs, "epsilon": "1/100", "give_up": give_up}
+        return {"ANSWER": to("public", "work", value=work), "LEAN": to("work", value=work)}
+
+    store.add(RUN, a_record(tmp_path, **held()))
+    assert bench(store, "--from", RUN, "--per-call") == 0
+    got = printed(capsys)[1]["per_call"]
+    causes = {c["cause"]: Fraction(c["macs"]) for c in got["causes"]}
+    assert causes == {**GIVE_UP, "grid": 1_000_000} and got["give_up"] == TOTAL - credited == sum(causes.values())
+    for i, (give_up, macs) in enumerate([(999_999, whole), (4_194_304, whole + 1)]):
+        store.add(RUN, a_record(tmp_path / str(i), **held(give_up, macs)))
+        assert bench(store, "--from", RUN, "--per-call") == 2
+        assert (f"compute: the per-call split's calls credit {CREDITED:,} of {whole:,} whole MACs and the answer's grid "
+                f"form {credited:,} of {macs:,} less a give-up of {give_up:,}") in capsys.readouterr().err
 
 
 def test_per_call_reads_a_split_in_a_file_of_its_own_for_a_record_that_holds_none(store, tmp_path, capsys):

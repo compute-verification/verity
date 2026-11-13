@@ -10,7 +10,7 @@ a window circuit, and a window is m activations of it. A block class is that Def
 SHA-512 (`partition_v2.id_digest`).
 
 **Gates** are counted as `NciCheck.Count` counts a block Definition's (``boolGates``,
-`verity/protocols/inference_only/verifier/nci/lean/NciCheck/Count.lean`): once per specialized Definition, callees first, a
+`verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/Count.lean`): once per specialized Definition, callees first, a
 primitive's from the gate table and a composite's the sum over its nodes of members times the callee's (`gates`). The gate
 table is the one `definitions.boolean.gate_table` gives: each primitive's two-input Boolean gates as the census counts work
 (`census`: an n-input And or Xor n - 1, a Not 1, a constant bit or an input 0) through its Boolean version
@@ -50,13 +50,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.circuits import codec, partition_v2 as PV2
+from verity.circuits import codec
+from verity.circuits import partition_v2 as PV2
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.parts import n_members
 from verity.circuits.population import mixed_population_program
 from verity.circuits.program import is_input
-from verity.definitions.boolean import gate_table
 from verity.commitments.windows import interface as IF
+from verity.definitions.boolean import gate_table
+from verity.definitions.registry.catalog import load
+
 from verity_vllm.config import option
 from verity_vllm.records import block_counts as RBC
 from verity_vllm.records.weights_registration import WeightsRegistration
@@ -69,6 +72,7 @@ def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
         raise ValueError(f"{doc.get('name')}: the circuit record states no inference blocks")
     units = {t: int(n) for t, n in doc["templates"]}
     blocks = IF.Blocks.of(doc["blocks"], units, doc["partition"])
+    per: Counter[str]
     m, per = blocks.slots, Counter()
     for e in blocks.inference:
         per[e.template] += e.units // m
@@ -79,7 +83,6 @@ def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
 def resolve(tid: str) -> Any:
     """`interface.resolve` over the whole registry (`catalog.load`), a refusal naming any registry module that failed to
     import."""
-    from verity.definitions.registry.catalog import load
     _, errors = load()
     try:
         return IF.resolve(tid)
@@ -99,6 +102,7 @@ def gates(fn: Any, table: Mapping[str, int], memo: dict[int, tuple[Any, int, Cou
         key = codec.descriptor_id(fn)
         got = (0, Counter()) if is_input(fn) else (table[key], Counter()) if key in table else (0, Counter({key: 1}))
     else:
+        miss: Counter[str]
         g, miss = 0, Counter()
         for nd in fn.body.nodes:
             cg, cm = gates(nd.fn, table, memo)
@@ -125,13 +129,14 @@ def declaration(doc: Any) -> tuple[str, int, int, int]:
     (ValueError) where it isn't a JSON object holding them."""
     if not isinstance(doc, Mapping):
         raise ValueError(f"the declaration is a {type(doc).__name__}, not a JSON object")
-    got = [doc.get(f) for f in ("c", "k", "n")]
+    got: list[Any] = [doc.get(f) for f in ("c", "k", "n")]
     if not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in got):
         raise ValueError(f"the declaration's c, k and n are {got}, not natural numbers")
-    return (hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), *got)
+    c, k, n = got
+    return hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), c, k, n
 
 
-def judge(classes: Sequence[RBC.BlockClass], total: int, c: int, k: int, n: int) -> tuple[dict[str, str], str | None]:
+def judge(classes: tuple[RBC.BlockClass, ...] | list[RBC.BlockClass], total: int, c: int, k: int, n: int) -> tuple[dict[str, str], str | None]:
     """`NciCheck.Count`'s rules on ``classes`` (each with a block) and the day's exact ``total``: each rule's outcome, and
     the first that doesn't accept as a sentence naming c, k or n, never a count (None when every rule accepts)."""
     checks = {**RBC.shape_checks(classes, c, k), "count": "accept" if total <= n else "refuse"}

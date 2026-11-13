@@ -42,12 +42,12 @@ import struct
 
 from verity.circuits.defs import PrimitiveDefinition, bind, composite
 from verity.circuits.refs import tuple_of
-from verity.definitions.ops.scalar import BF16, BIT, BitNot, BitOr, F32, F32Eq, I32, I32Add, SelectF32, SelectI32
+from verity.circuits.ops.scalar import BF16, BIT, BitNot, BitOr, F32, F32Eq, I32, I32Add, SelectF32, SelectI32
 from verity.definitions.registry import ref_prims as RP
 from verity.circuits.types import Array, Tuple, Value
-from verity.definitions.ops.fp32 import F32AddFtz, F32Mul
-from verity.definitions.ops.mufu import DivFullRcp, DivFullScaleA
-from verity.definitions.ops.prims import Bf16ToF32, const
+from verity.circuits.ops.fp32 import F32AddFtz, F32Mul
+from verity.circuits.ops.mufu import DivFullRcp, DivFullScaleA
+from verity.circuits.ops.prims import Bf16ToF32, const
 
 SEMANTIC_ID = "sampling/GumbelTokenSelect@v1"
 
@@ -496,7 +496,7 @@ def TopPMaskStep(B, S, i, x, keep):
            conformance="exact-model-tested")
 def TopPMask(B, S, logits, top_p, splits):
     """`apply_top_k_top_p_triton` for a row of a batch <= 64 without top-k (`_apply_topp_split`, `splits` splits): the fp32 row with
-    every lane outside the top-p nucleus set to -inf, exactly as the three Triton kernels compute it (registry/topp_split.py).  `splits`
+    every lane outside the top-p nucleus set to -inf, exactly as the three Triton kernels compute it (verity/definitions/registry/topp_split.py).  `splits`
     (i32) is the launch's split count, an OPERAND of the event (the registered `registered_splits(num_SMs)`, a `Const32[S]`)."""
     keep = B.call(topp_mask_word(S.V), logits, top_p, splits)
     res = B.scan(bind(TopPMaskStep, V=S.V), B.call(const(32, 0)), xs=(logits,), shared=(keep,))

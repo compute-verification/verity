@@ -1,7 +1,7 @@
 """Pearl-C4's device-check fixture (`pearl_c4/fixture.py`) by its command line, as `build.sh` runs it: a format's
 directory holds the files its manifest names, at their sizes and digests, and each buffer but its three inputs (A's
 rows, B's rows and the salt) is held to what the verifier and the scalar reference
-(`verity.protocols.pouw.prover.schemes.pearl_c4`) make of those inputs.  The roots and domain ids are
+(`verity.protocols.accounting.pouw.prover.schemes.pearl_c4`) make of those inputs.  The roots and domain ids are
 `audit.commit_rows`' over the rows, the seeds the scheme's noise of those roots, and the noise lines, both bases and G
 the seeds'.  On rows and columns across the tile: both operands' formed codes, scale bytes, α, 1/α and a_E, the peel
 factors P_A and P_B, B̃·F_A, C̃ and U, and the two unscaled outputs.  The message digests and tile leaves are the
@@ -18,12 +18,12 @@ import numpy as np
 import pytest
 
 from verity.commitments import MerkleTree
-from verity.definitions.silicon import fp32
-from verity.protocols.pouw.prover.schemes import pearl_c as C
-from verity.protocols.pouw.prover.schemes import pearl_c4 as F
-from verity.protocols.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.pouw.verifier import audit as AU
-from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, Tile
+from verity.circuits.silicon import fp32
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.pouw.verifier import audit as AU
+from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 
 FIXTURE = Path(__file__).resolve().parents[1] / "pearl_c4" / "fixture.py"
 M, N, K = 128, 128, 1024
