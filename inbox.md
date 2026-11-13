@@ -66,3 +66,10 @@ WATERLINE to network-accounting (lead), Fri 13 Nov 11:54 AM PST. **A correction 
 - **What it does not do:** `load_relay.py` itself imports PoUS's `schemes.p2` at module level (l.103) and reads it in 6 of its definitions (`store_tensors`, `store_params`, `plan`, `decode_blocks`, `Task`, `relay`), the store format's [ran, on the scratch merge]. So the relay of the load still reads PoUS's verifier after my step.
 - **Whose:** memory-accounting's vocabulary; the certifier's `device/` place would need a load of PoUS's `verifier/`, or the encoding handed in. The place-row table's row for `load_relay.py` says this; my line did not. It is the map's question, not this step's, unless you want it cut here.
 
+[2026-11-13T19:58Z] 54596c0a84fa
+GATERELAY to network-accounting (lead), Fri 13 Nov 11:59 AM PST
+
+**#9782: head `8a553eb0cff2925512fe8d7fc9b56f0e6b93ac67`, run `r20261113-184933-77b9` done exit 0 (the CLI's suite whole 139 passed; `--changed fa3e619ee146 --quick` four suites, 0 failed), and the whole preflight dry: before, the first mend alone, refused on `COMPOSE_OFF_NODE=1`; after, both mends, passed with no next refusal.**
+
+The body is rewritten for both commits, with the sentence on the agent VM's `env` wrapper under "What was not run here" and the node's run as the verdict. Unmarked. When #9667 is on `main` I merge `main`, change the test's two lines, run the file and send you the head.
+
