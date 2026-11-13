@@ -156584,3 +156584,36 @@ is `cursor/proofs-redraw-commitof-carried-4de2`. No pull request. [git]
 - **The table**: the columns you ordered at 17:46Z are computed for all 48 rows, and the row for the ten `default`s; the last
   two columns wait on the names run. Due Sat 14 Nov 18:00Z, as ordered.
 - #9728's branch and the credit branch: nothing pushed. Y2: nothing written.
+
+## STOPDRIVER, Fri 13 Nov 18:58Z: the play PASSES at the merged head `b678f3affc5a`; the composition test passes on it
+
+`cursor/proofs-stopdriver-family-ffc6` `ca7a92c6985220c77bf22f6590983303f45ac3d5` B, no pull request yet
+`cursor/proofs-stopdriver-family-hold-ffc6` `bf701e54dc6eebd3d7e8dde26d2759a0558eb1b9` B, the mended hold, one mend
+
+- [run] `r20261113-182809-1ee0` at `b678f3affc5a` (the run's own `git rev-parse HEAD`), vy-nebius-cpu-11, exit 0,
+  18:28Z to 18:52Z. `sampled_two_small.sh` printed `PLAY rc=0`: the form built, `second rc=0`, the second stage's
+  statement check `{"codes": [], "detail": {}, "ok": true}`.
+- [run] Its three verdicts are the ones the script asks for. With the switch on the form accepts the honest play
+  (`FORM_ON rc=0`, verdict `accept`). The shipped switch rejects it (`FORM_OFF rc=1`). The negative play is rejected
+  with the switch on, by "the first session's log holds a coin tree's line" (`FORM_TREE rc=1`).
+- [run] Then `test_the_form_accepts_one_honest_play_with_its_switch_on` on that play (`VERITY_SAMPLED_TWO_CASE`
+  naming its `$OUT/form`): `verity-core-composition 1 passed in 24 s`.
+- So B with the mended hold makes a play the form accepts. The case is under the run's `out/form` (parameters,
+  commitment, evidence, five blobs), should TWOLEG want it as the kept play.
+- [run] `6798` at B's old head, 62 of 68 suites back at 18:47Z: 60 passed, 2 failed. The second failure is
+  circuit-check, 383 passed and 2 skipped, failed by the same read guard on `window_place.py` (read by processes
+  that `test_ambient.py` and `test_cache.py` start). `ca7a92c69852` lists the file for it. `verity-vllm` passed.
+- Since 18:41Z 52 fires of YOUR old timers were delivered to me as notifications, dated Thu 21:08Z to Fri 17:00Z:
+  the sweep `proofs-sweep-30m-v42` 32 times, the boards, the launch retries. I acted on none.
+
+Runs out: `7f56` (the named tests, the composition test on the kept play among them) started only after 18:52Z,
+since it waited for the play's lock on the shared tree; `43bf` (four suites) waits for the same lock after it. At
+`ca7a92c69852`: `c4f7` (changed suites) runs on vy-nebius-cpu-1; `3c78` and `e9c1` still wait for a slot.
+
+### Not established
+
+- Whether the composition test passes on the kept play: `7f56`.
+- Whether the FORM_OFF rejection is by the switch alone: the script checks only its exit code, and I read only
+  that its verdict is `reject`.
+- Whether your timers also reached you when they fired.
+- Everything at `ca7a92c69852`: no run there has ended.
