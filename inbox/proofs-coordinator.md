@@ -154364,3 +154364,71 @@ own. If the records run refuses it, I stop and bring you the words.
 ### Not established
 
 - Unchanged from 17:25Z but for its first line, which is now run: the nightly's own `check.py --opt-in` inside a recorded check; the prover of today's `main` making an accepted session; a tree from a challenger's device at this size; how many workers fetched the 2.1 GB; no whole `check`.
+
+## HELDOF, Fri 13 Nov 17:49Z: item 3, steps 1 to 4 compile at `f8c8ed69392`; the texts; one premise moved; no STOP
+
+Branch `cursor/proofs-heldof-blob-f083`. Compiled head `f8c8ed69392`; pushed head `3a9b64f5590` (proof-only rewrites and docstrings on top, being tried; below).
+
+**What compiled.**
+- [run r20261113-170107-8c9b, at `f8c8ed69392`] `lake build` of `CouplesWired`'s dependencies built `ProjectionOf`, `Joined`, `RefsOfSent`, `GoodCaseHeld`, `BlobFinder`, `JoinsAt`, `JoinedCoupling` and `WiredScope`, none with a warning; then `CouplesWired.lean`: lean exit 0, no sibling clash, axiom probe clean (its 1 theorem, `couplesAt_wired`).
+- [run r20261113-170106-218b] `Joined.lean`: lean exit 0, no sibling clash, axiom probe clean (2 theorems).
+- [run r20261113-165546-3c24] `GoodCaseHeld.lean`: lean exit 0, no sibling clash, axiom probe clean (12 theorems).
+- Not yet [run]: the axiom probe on `JoinsAt`, `JoinedCoupling`, `WiredScope`, `BlobFinder` and `RefsOfSent` as tried files (BlobFinder's `r20261113-170107-dcb0` and RefsOfSent's `r20261113-170106-e596` built their dependencies and are at the file). `JoinedForm`, `Undecodable` and `WiredUnits` are not compiled at any head; each changes one name or nothing.
+
+**Step 1, the texts.**
+- `JoinsAt.heldOfAt`. Before: `heldOfAt : HeldOfAt A C`. After: `heldOfAt : HeldOfAtOr A C (V.registered θ)`.
+- `joinBound`. Before: `gapOf … + joinMiss … + terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ`. After:
+  ```lean
+  CoinMap.gapOf V θ F c σ (joinLocate A tab ℓ₁ ℓ₂) (A.L.V.k x) +
+    joinMiss V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg q +
+    (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ +
+      ENNReal.ofReal ((blobFinder V θ F c σ (V.registered θ)).Pr Verity.sha512Msg))
+  ```
+- `joinedOfLaw`. Its hypotheses are unchanged (`hHolds`, `h : JoinsAt …`); its bound is `joinBound`'s body as above. Inside, `Good o := JoinGood o ∧ ¬ BlobsCollide o.sent.blobs (V.registered θ)`, and the cut is
+  ```lean
+  theorem cutBound_avoid … (F₀ : Array ByteArray) (h : CutBound V k θ F c σ Good terms) :
+      CutBound V k θ F c σ (fun o => Good o ∧ ¬ BlobsCollide o.sent.blobs F₀)
+        (terms + ENNReal.ofReal ((blobFinder V θ F c σ F₀).Pr Verity.sha512Msg))
+  ```
+  (`BlobFinder.lean`: `prob_mono`, `prob_or_le`, `prob_collide_le`) after `cutBound_and`. `B₀` is `V.registered θ` in every statement; no theorem takes it as a parameter. `cutBound_avoid` and the transfers are stated at any `F₀`, as lemmas.
+
+**Step 2.** `projection_core` and `projection_agreed`: `hRun : AcceptsRun A x Rd Acc` became `hRun : AcceptsRun A x Rd (fun o => Acc o ∧ Good o)`. `joined`: `hReach : ∀ o, Acc o → (joinReading A C S L).stmt o = some x → …` became `∀ o, Acc o → Good o → (joinReading A C S L).stmt o = some x → …`. `projection_of` keeps its statement.
+
+**Step 3.** `GoodCaseHeld.lean`: `NoCollide F₀ o := ¬ BlobsCollide o.sent.blobs F₀`; `heldOfAt_goodCase (h : HeldOfAtOr A C F₀) : HeldOfAt A (goodCase C (NoCollide F₀))`; the transfers `partsSizedAt_`, `portsDistinctAt_`, `stmtsRead_`, `roundsHeldAt_`, `scopeHeldAt_`, `pinHeldAt_`, `sessionsRun_`, `sessionMsgs_goodCase`, each from the field at `C` to the field at `goodCase C G`, any `G`; and
+  ```lean
+  theorem reachedAccepts_goodCase
+      (h : ReachedAccepts A x (formReading A (goodCase C G) S dev) (FormAccepts (goodCase C G))) :
+      ReachedAccepts A x (formReading A C S dev) (fun o => FormAccepts C o ∧ G o)
+  ```
+  All eight fields go through: each reads the case through `FormAccepts` and `inputOn` alone.
+
+**Step 4.**
+- `CouplesAt` gains, after `collisionResistant`: `blobCR : Claims.ExpectedCR FlockDeploy.sha512 (blobFinder V θ F c σ (V.registered θ))`.
+- New `joinCRBound`: `joinBound` with the finder's probability replaced by `blobBound V θ F c σ (V.registered θ) := ENNReal.ofReal (Ex (fun t => ((blobFinder …).cost t : ℝ)) / 2 ^ (256 : ℝ))`. `blobPr_le (h : ExpectedCR FlockDeploy.sha512 (blobFinder …)) : ofReal ((blobFinder …).Pr Verity.sha512Msg) ≤ blobBound …`.
+- `CouplesAt.delta`. Before: `ofReal (A.errAt x Fr.P) + (joinBound … + bindBound …) ≤ V.delta θ .sampled (V.cost θ F c σ)`. After: the same with `joinCRBound` for `joinBound`. So the blob term is in the stated δ as the finder's expected calls over 2^256, in the same sum as `bindBound`; it sits inside `joinCRBound` beside the cut's terms, not as a third summand. [read] Say if you want it as a summand of its own.
+- `joinedCouplingAt`, `joinedCouplingOfLaw`, `joinedCouplingOfLaw_decoded` (and `joinedCoupling`): hypotheses unchanged; each concludes with `joinCRBound … + bindBound …` where it had `joinBound … + bindBound …`. `joinedForm`'s bound is `joinBound`'s new body.
+- `couplesAt_wired` gains `(hblob : Claims.ExpectedCR FlockDeploy.sha512 (blobFinder V θ F c σ (V.registered θ)))` and its `hdelta` reads `joinCRBound`.
+
+**One premise moved.** `scope_wired` was `(h : JoinsAt …) : A.L.Scope x ∨ prob … = 0` and is now `(h : JoinsAt …) (hT : SpotFlock.RunsAs.Round2.TwoHolds A.h) : …`. It read `TwoHolds A.h` off `h.heldOfAt` at the accepted play; with `HeldOfAtOr` that play may be one whose blobs collide. `TwoHolds A.h` is about given data, and `couplesAt_wired` already took it (`hT`), so no statement above gains a premise. [run 8c9b]
+
+**The old forms.** `refsAt_of_held`, `refsAt_of_accept` and `heldOfAt_or_collide` are deleted; nothing read them outside `RefsOfSent.lean` [run: git grep]. Still standing and read by nothing: `RefsAt`, `copyAt_of` and `heldOfAt_at` in `HeldOfAtDesc.lean` (the unconditional forms; `heldOfAtOr_at` redoes `copyAt_of`'s steps per play). I left them; they were not in the order.
+
+**Soundness's conditions, kept.** `blobCR` is `Claims.ExpectedCR` at the blob finder, the shape `collisionResistant` has, and is filled by nobody here: no instance of `CouplesAt` is built. No lock record changes: `security/Proofs/lean-audit.json` lists no guarantee and none of its dependency records names a changed declaration [run: read of the file]. Nothing under `verity/` is touched. `tests/test_lean_vocabulary.py` passes on the branch [run, local, 15 passed]; `NoCollide`, `BlobsCollide`, `blobFinder` and `blobBound` are not hits.
+
+**Pushed head `3a9b64f5590`, on top of the compiled one** (not compiled): `blobPr_le` goes through `Verity.sha512Msg = FlockDeploy.sha512` by `funext rfl` (the direct form compiled; this was written before I knew); `joinedOfLaw`'s cut in two `have`s; `joinedCouplingAt` reads `joinedOfLaw` at `joinBound`; `scope_wired`'s pattern drops an unused name; docstrings reflowed. Tries at it: WiredUnits (builds the chain) and BlobFinder, launched 17:40Z on vy-nebius-cpu-11. If one fails I put that hunk back to the compiled form.
+
+**STOP RULE.** Not met. Every transfer of step 3 goes through. `joinedOfLaw` and the coupling's theorems gain no hypothesis; `CouplesAt` gains `blobCR`, which is about given data (θ, F, c, σ) and is the ordered field. The one finder, `blobFinder`, outputs `blobPair` of the play's blobs and the given files, computed.
+
+**NEEDS.**
+1. Whether `RefsAt`, `copyAt_of` and `heldOfAt_at` in `HeldOfAtDesc.lean` go now (nothing reads them), or stay.
+2. Whether the blob term stays inside `joinCRBound` or becomes a summand of its own beside `bindBound` in `CouplesAt.delta` and the coupling's terms.
+
+**To post.** Nothing.
+
+**Not established.**
+- No instance of `JoinsAt.heldOfAt` is built. `heldOfAtOr_of_files` gives `HeldOfAtOr A (atStmt C x) B₀` from `hT₀` and `hx₀` at files `B₀`; at `B₀ := V.registered θ` those two are the fields about the registration, and they are premises.
+- `blobCR` and every other field of `CouplesAt` and `JoinsAt` are premises. Nothing here says the blob finder's expected calls are within any budget; `blobFinder.cost t` is `V.cost θ F c σ + blobs.size + F₀.size`.
+- Item 5 is untouched.
+- The probes and compiles listed as not yet run.
+
+**Branches.** `cursor/proofs-heldof-blob-f083` at `3a9b64f5590` (compiled through `f8c8ed69392`), cut from `a7319a232b319179f766c435d9f2b8c68130c670`, never merged with `main`.
