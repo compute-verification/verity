@@ -5,7 +5,7 @@ public import Definitions.Flock.Merkle
 /-!
 # The two colliding inputs of two Merkle openings
 
-Two openings of one position that verify against one cap from different leaves go up through a node where the two
+Two openings of one position that verify against one tree top from different leaves go up through a node where the two
 walks first agree, and the two inputs hashed at that node differ. `walkPair` returns those two inputs. `openPair` and
 `openPairL` return the pair for two openings to different columns: the leaf's own pair when the two leaves agree, the
 walk's pair otherwise. Each is a function of the two openings alone, so a collision finder can output it.
