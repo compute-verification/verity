@@ -27,14 +27,14 @@ namespace WeightSecurity.SecurityProofs
 open Claims Claims.Sampling Claims.SamplingGeneric
 open Claims.Witness (silentP prB_accV)
 open Claims.Witness.SamplingGeneric
-open FlockSoundness.Game (periodG)
+open FlockSoundness.Game (monitoringPeriodG)
 open scoped ENNReal
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} {O V Tick Adv : Type}
 
 /-- **One window's strategy**: release `m`, then send the statement `x` and the prover `P`. -/
 def oneStrat (L : Compiled Coin A) {Rls : Type} (m : Rls) (x : Msg) (P : Prover Unit) :
-    Verity.Game.Strategy (periodG (fun _ : ℕ => oneGame L Rls) 0 1) :=
+    Verity.Game.Strategy (monitoringPeriodG (fun _ : ℕ => oneGame L Rls) 0 1) :=
   ⟨m, (x, P), fun _ => PUnit.unit⟩
 
 /-- **A period of one window**, played by `oneStrat`: the run flips the window's coins and records the window at the
