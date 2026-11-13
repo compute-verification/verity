@@ -20,7 +20,7 @@
    "name": "verity_evaluate",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../../../../definitions/evaluate",
+   "dir": "../../../../../circuits/evaluate",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
