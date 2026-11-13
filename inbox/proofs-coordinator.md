@@ -126447,3 +126447,48 @@ Nothing.
 - The known hole stands: an earlier period's genuine signature in the evidence makes the forger's term bound nothing at a one-play history.
 
 Branch `cursor/proofs-cut-9323` at `4d24802945`, pushed; nothing unpushed. Runs: `9958` done rc 0; `1646` done rc 0; `r20261113-070138-4159` running.
+
+## [2026-11-13T07:05Z] ACCEPTS: R3 ports: on the one-stage path
+
+**R3 ports: on the one-stage path**, but nothing `remote_soundness_deployedReady` rests on reads the record's ports. [read]
+- The check runs on that path. `OneStageZk.checkBlobsAt` (`OneStageZk.lean:1279`) calls `OneStage.checkAt` (`OneStageZk.lean:764`, `:1254`). That calls `check` (`OneStage.lean:563`), whose first line is `Registration.check rec_ v` (`OneStage.lean:514`), R3 included.
+- The theorem neither derives nor takes the model's `recordOk`. Nothing under `Properties/Verity/Sampled/` or `Flock/Bridge/` names `recordOk`, `namesEq`, `portIndex` or `Registration.check`'s codes. Its lock entry reads no `Spot.*` or `SpotFlock.*` definition, and its `open` list is the six named premises with nothing about the record.
+- The ports the one-stage chain reads are the circuit file's: `Flock.PortRoots.checkOf` in `Event.Accepted.ports` (`Sampled/Event.lean:204`) and `portsOfL A.D.unroll A.Lm A.roots` (`Sampled/Record.lean:233`). They are not the registration's.
+- So the `[a, a]` disagreement between the compiled check and `recordOk` does not reach that theorem. A premise there would be a hypothesis its proof never uses: `(hports : ∀ θ p, ParamsAt θ p → (p.base.verifier.ports.map (·.1)).toList.Nodup)`. It would touch that guarantee's `signature` and `premises.open` lines and its `trust_gap` entry. I'd not add it; soundness's word comes first.
+- `PortsDistinctAt` is needed only where `recordOk` is derived from the check: the two-stage join (`AcceptsTop.recordsHeldAt_of`).
+
+**Can the parameters' `ports` object hold a key twice: yes, nothing refuses it, so `PortsDistinctAt` stays named.** [read]
+- `OneStage.paramsParsed` maps over `entries (← obj (getD j "ports") "ports")` (`OneStage.lean:256`). `Spot.Json.entries (.obj kvs) = kvs.toArray` (`Json.lean:73`): the raw tree, whose keys are distinct only if it is well-formed.
+- The tree comes from `Lean.Json.parse`, a `partial def` (HELDOF's 06:48Z item 7). No check on the path compares the ports' keys.
+- A short lemma would exist if `paramsParsed` refused unless `Spot.Json.increasing ((entries ports).map (·.1)).toList` (`Json.lean:77`): strictly increasing gives `Nodup` in a few lines. That is a new refusal, so not before Friday.
+
+**HELDOF's `heldOfAt_of_desc` (06:48Z item 6): not at one `A.h` over every accepted play. I take it at the plays at the statement `x`.** [read]
+- Accepted plays of `C` share no boundary record by anything read. Each play's record is its own case's commitment's (`Reading.lean`, `inputOfCase`: `commitmentOf k.commitment`).
+- `heldOf` reads that record twice: its `population` in `firstOf` (`HeldOf.lean:81`, the law over `n`) and `replayLinks … i.record` (`HeldOf.lean:142`).
+- So `HeldOfAt A C`, one `A.h` at every accepted play, says every accepted play has one population and one set of links. A `C` whose accepted plays carry two records makes it false.
+- `AcceptsRun A x Rd Acc` only looks at plays with `Rd.stmt o = some x` (`Projection.lean:183`), and `stmt o` is `recordMsg i.record` (`Reading.lean:149`). Those plays share the record's bytes, and with `RecordsRead`, `jsonMsg x = some i.record`, the record itself.
+- The statement I'd take: `HeldOfAt A x C := ∀ o i it, FormAccepts C o → inputOn C o = some i → i.interior = some it → recordMsg i.record = some x → ∃ u, heldOf i it u = some A.h`, and `PlayAccepts` restricted to the same plays. `AcceptsRunOf` already carries `x`.
+- Not done yet: it changes `PlayAccepts` (`Accepts.lean`) and `OfRun.playAccepts_of_run`'s use of it, which aren't only mine. Say go and I write it.
+- [guess] The interior's held fields (`names`, `wires`, `rows`, `interiorNames`) come from the auditor's interior parameters, so plays at one `x` agree on them. Not read yet.
+
+**TWOLEG's `870cc9da1b` touches no statement of mine.** [read] Its branch has no `OfRun.lean`, so `RecordsRead` is not changed there. `FormAccepts`, `inputOn` and `recordMsg` in its `Reading.lean` are the same as on mine.
+
+**What changed on my branch** (`cursor/proofs-accepts-7d08`, at `1a93bfffa6`):
+- `AcceptsTop`: `HeldOfAt` and `PortsDistinctAt` replace `RecordsHeldAt` as premises of `playAccepts_form`, `acceptsRun_form` and `reachedAccepts_form`. `RecordsHeldAt` is now proved (`recordsHeldAt_of`, from those two and `RecordsRead`). Not compiled.
+- Merged RUNCOINS's `10757cc241`. `RunChecks` has no `import all` now. Not compiled.
+- SESSIONOF's `8705d04b3d` not taken yet: I take it once a try of it passes.
+- Try `47b2` (RecordNames) failed. 11 of 31 theorems: an unopened `namesOf`, `qsort`'s bounds folded before `mem_qsort`, a missing `DecidableEq Json`, a stray `rfl`, an unknown `Spot.Registered.Desc`, and the join-point proofs over `checkRegistered`'s loops running out of `simp` steps. The loop body has six `if`s in a row, which `simp` doubled at each one.
+- Fixed: the walk is now linear inside loop bodies too. It splits the body's own `match`, lifts the body's join points into the context and proves each once on demand. A local Std toy of the same shape proves in 4 s, where it overflowed before.
+- The tactics moved to their own module, `SampledTwo/JpWalk.lean` (its lakefile root and its lock root at the end of `roots`, same commit). It is the only module with compile-time code.
+- Try `r20261113-065854-b383` (RecordNames, with JpWalk) is running.
+
+## NEEDS
+- A `compile_time` listing for `Proofs.Properties.Verity.SampledTwo.JpWalk` in `security/Proofs/lean-audit.json`. It is not my lock edit to make. Its macros and elaborators (`name_lets`, `jp_mono`, `jp_body`, `jp_walk`, `jp_disch`, `jp_ext`) expand to `simp only`, `split`, `apply`, `extract_lets` and `intro`. They do no IO, and the kernel replays every proof they build. The try only kept its modules out of the artifact cache; a full check refuses it.
+- A go or no-go on restricting `HeldOfAt` and `PlayAccepts` to the plays at `x`.
+
+## STOP RULE
+I stop when RecordNames, RunChecks and AcceptsTop compile with their premises named in a title, or at 02:00Z.
+
+## Not established
+- The trace from `b383`: the shape of `checkRegistered_pass`'s and `checkFacts_of_check`'s pass paths. Their glue to `ValuesHold` and `CheckFacts` is still `sorry`.
+- That the interior's held fields agree across plays at one `x`.
