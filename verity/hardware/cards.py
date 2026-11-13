@@ -1,4 +1,4 @@
-"""The hardware cards: one TOML file per SKU (``<sku>.toml``, beside this file), the one source of each card's numbers.
+"""The hardware cards: one TOML file per SKU (``hardware/cards/<sku>.toml``), the one source of each card's numbers.
 
 A card is a GPU's (``kind = "gpu"``), a host's (``kind = "host"``: a server's CPUs and DRAM, apart from the GPUs it
 carries), a server's (``kind = "server"``: a server model's network ports, apart from its CPUs, DRAM and GPUs) or a time
@@ -15,7 +15,7 @@ uses it) or ``placeholder`` (none of these: open). ``source`` names a data sheet
 (``verity/hardware/tests/test_lean.py``). Stdlib only, and it imports no other unit.
 
 The readers of card files (``skus``, ``load``) take ``directory``, the directory the card files are in, so that a reader
-whose copy of them is not beside this file names where it is; ``None`` is ``CARDS``, read when the reader is called.
+whose copy of them is not in ``CARDS`` names where it is; ``None`` is ``CARDS``, read when the reader is called.
 
 ``rate`` is the one calculator of a GPU's peak rates, Lean's ``card.ρ``: a reader that needs the tensor peak at some
 clock calls it rather than multiplying the card's numbers itself.
