@@ -231,9 +231,9 @@ def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_rel
     assert end["load"] == RELAY and end["verdict"] == {"accepted": True, "problems": 0, "requests": 4,
                                                        "load": LOAD_SUMMARY}
     assert set(end["files"]) == {"deployment.json", "cells-certificates.jsonl", "certificates.jsonl",
-                                 "load-relay.json", "tunnel.log", "rehearse.log"}
+                                 "load-relay.json", "tunnel.log"}
     assert json.loads((d / A.WITNESS / "load.json").read_text()) == LOAD_DOC
-    assert {"load.json", "load-heads.json"} <= set(end["witness"])
+    assert {"load.json", "load-heads.json", "rehearse.log"} <= set(end["witness"])
     public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
     assert not any(x.encode() in public for x in (SALT, ROOT, DIGEST, SIGNATURE))
 

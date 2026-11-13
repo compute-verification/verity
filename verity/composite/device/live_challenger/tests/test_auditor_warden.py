@@ -207,7 +207,12 @@ CHECK = {"accepted": True, "problems": [], "summary": {
     "wire_bits": {"ingress": 18432, "egress": 63488}, "cells_in_their_bucket": [31, 31], "tick_lateness_ms": {"n": 9},
     "data_bytes": {"egress": 4242}, "completion_tokens": 77, "prompt_tokens": [16, 99], "arrival_lag_ms": {"n": 31},
     "finish_reasons": {"length": 4}}, "connections": [{"ordinal": 1, "outcome": "end", "text_bytes": 300}]}
-#: a stand-in for `warden_serve.py rehearse`'s files: public, then witness
+#: the rehearsal's last line of output, as `warden_serve.table` prints the check: it ends with the costs' two times
+LAST_LINE = ("ACCEPTED: 4/4 ended, 0 refused, failed []; cell rows 4/4 link-windows registered, [600] rows a window, "
+             "commit ms {'n': 4, 'max': 41.375}, sign ms {'n': 4, 'max': 7.125}")
+#: what the rehearsal says on its stderr: free text
+STDERR = "the endpoint closed connection 3 early"
+#: a stand-in for `warden_serve.py rehearse`'s files: public, then witness, then what it prints
 WARDEN_FILES = (
     f'(out / "deployment.json").write_text(json.dumps({{"upstream": url, "session": "00" * 32}}))\n'
     f'(out / "cells.jsonl").write_text(json.dumps({{"registration": {REGISTRATION!r}, "cost": {COST!r}}}) + "\\n"'
@@ -220,7 +225,8 @@ WARDEN_FILES = (
     f'(out / "cells.salts").write_bytes({CELL_SALTS!r})\n'
     '(out / "requests.records").write_bytes(b"GET / prompt")\n'
     '(out / "client.json").write_text("{}")\n'
-    f'(out / "check.json").write_text(json.dumps({CHECK!r}))\n')
+    f'(out / "check.json").write_text(json.dumps({CHECK!r}))\n'
+    f'print({STDERR!r}, file=sys.stderr)\nprint({LAST_LINE!r})\n')
 
 
 def rehearsal(source: str, seen: list | None = None):
@@ -228,7 +234,8 @@ def rehearsal(source: str, seen: list | None = None):
     def command(req, out, url):
         if seen is not None:
             seen.append((req, out, url))
-        return [sys.executable, "-c", f"import json, pathlib; out, url = pathlib.Path({str(out)!r}), {url!r}\n{source}"]
+        return [sys.executable, "-c",
+                f"import json, pathlib, sys; out, url = pathlib.Path({str(out)!r}), {url!r}\n{source}"]
     return command
 
 
@@ -261,16 +268,17 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_an
     assert "registrations" not in end
     assert end["witness"] == {n: (d / A.WITNESS / n).stat().st_size for n in (
         "deployment.json", "cells.jsonl", "rows.jsonl", "certified.jsonl", "cells.salts", "requests.records",
-        "client.json", "check.json")}
+        "client.json", "check.json", "rehearse.log")}
     assert set(end["files"]) == {"deployment.json", "certificates.jsonl", "cells-certificates.jsonl",
-                                 "rows-certificates.jsonl", "tunnel.log", "rehearse.log"}
+                                 "rows-certificates.jsonl", "tunnel.log"}
+    assert sorted((d / A.WITNESS / "rehearse.log").read_text().splitlines()) == sorted([STDERR, LAST_LINE])
     out = d / "out"
     assert json.loads((out / "deployment.json").read_text())["upstream"] == url
     assert [json.loads(x) for x in (out / "certificates.jsonl").read_text().splitlines()] == [
         {"certificate": {"digest": "cd" * 64, "signature": "ef"}}, {"refused": ["warden-fails", "egress", 1]}]
     public = b"".join(p.read_bytes() for p in out.rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
     for secret in (SALT_C.encode(), b"77" * 64, CELL_SALTS[:16], CELL_SALTS[:16].hex().encode(), b"prompt",
-                   b"completion_tokens", b"data_bytes", b"text_bytes"):
+                   b"completion_tokens", b"data_bytes", b"text_bytes", STDERR.encode(), LAST_LINE.encode()):
         assert secret not in public
 
 
@@ -278,7 +286,8 @@ def test_of_a_row_registration_the_rehearsal_publishes_its_certificate_and_nothi
     """Each line of `cells.jsonl` and of `rows.jsonl` stays whole in `witness/`. `out/` holds, line for line, its
     certificate under the link, direction and window its registration names (a connection rows' the link's egress),
     or the execution phase it was refused for: no root, wiring, domain, layout or value of a registration is in
-    `out/` or the end, nor a line's cost, nor the check's summary of the costs."""
+    `out/` or the end, nor a line's cost, nor the check's summary of the costs, nor the line the rehearsal prints
+    them in."""
     run, end = run_warden(host)
     d = host.certifier / run
     out = d / "out"
@@ -298,7 +307,7 @@ def test_of_a_row_registration_the_rehearsal_publishes_its_certificate_and_nothi
     body = [REGISTRATION[k] for k in ("value", "parameters", "domain", "wiring", "root", "row_schema")]
     body += [t[k] for t in ROWS_REGISTRATION["tables"] for k in ("value", "domain", "root")]
     for held in (*body, "layout", "first_bucket", "tables", "cost", "row_bytes", "commit_ms", "sign_ms", "withheld",
-                 "41.375", "7.125"):
+                 "41.375", "7.125", "commit ms", "sign ms"):
         assert held.encode() not in public, held
 
     rc, st = A.gate(["--ssh", f"status {run}"], host, certifier_active=lambda r: False)
@@ -319,12 +328,13 @@ def test_fetch_gives_a_warden_rehearsals_witness_to_its_own_lane_and_vy_admin_al
     assert rc == 0 and {f"{run}/request.json", f"{run}/end.json", f"{run}/out/cells-certificates.jsonl",
                         f"{run}/out/rows-certificates.jsonl", f"{run}/out/certificates.jsonl",
                         f"{run}/out/deployment.json"} <= names
-    assert not {f"{run}/out/cells.jsonl", f"{run}/out/rows.jsonl"} & names
+    assert not {f"{run}/out/cells.jsonl", f"{run}/out/rows.jsonl", f"{run}/out/rehearse.log"} & names
     hidden = {n for n in names if n == f"{run}/witness" or n.startswith(f"{run}/witness/")}
     assert bool(hidden) == witness
     if witness:
         assert {f"{run}/witness/cells.jsonl", f"{run}/witness/rows.jsonl", f"{run}/witness/cells.salts",
-                f"{run}/witness/certified.jsonl", f"{run}/witness/check.json"} <= hidden
+                f"{run}/witness/certified.jsonl", f"{run}/witness/check.json",
+                f"{run}/witness/rehearse.log"} <= hidden
 
 
 def test_a_warden_rehearsal_that_never_ran_publishes_nothing_and_its_end_says_why(host):
