@@ -14,7 +14,7 @@ The table (JSON) names:
 * ``own``: for ``allow.py``, the sites of each counted lint the cut may add of its own, with why.
 
 A definition is its statement, its decorators and the comment lines right above it. Nothing in a definition's body
-changes but the name it reads another moved definition by, and what an ``edits`` row names. Every tracked Python file
+changes but the module it reads or names another moved definition by, and what an ``edits`` row names. Every tracked Python file
 that reads a moved definition, by ``alias.NAME`` or ``from module import NAME``, through whatever re-exports, reads it
 from its new module after; the file a definition left imports back the ones it still reads, and loses the imports only
 they used. A new module imports each name from the module that defines it, not from one that only imports it, so it
