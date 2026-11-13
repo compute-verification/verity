@@ -238,8 +238,8 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     where = got["profile"].pop("placement")
     assert got == accept
     node = socket.gethostname()
-    assert (where["kind"], where["parties"]) == ("own-host", {"network_certifier": GATE_HOST, "prover": node,
-                                                              "verifier": node})
+    assert (where["kind"], where["parties"]) == ("not-placed", {"network_certifier": GATE_HOST, "prover": node,
+                                                                "verifier": node})
     assert where["steps"] == {"chain": node, "period": node}
     assert where[CP.PREMISE] == (
         f"rehearsal: key not the auditor's pinned key, no bound; the network certifier ran on {GATE_HOST}, not the "
@@ -762,11 +762,12 @@ def test_trusted_host_holds_only_under_a_key_pinned_for_the_certifiers_machine_a
              "checks and samples ran on chain-machine, and the period check and its proofs' challenges on "
              "period-machine")
     rehearsal = f"rehearsal: key not the auditor's pinned key, no bound; {names}"
-    assert CP.placement(d, RUN, key, steps)[CP.PREMISE] == rehearsal
+    unpinned = CP.placement(d, RUN, key, steps)
+    assert (unpinned[CP.PREMISE], unpinned["kind"]) == (rehearsal, "not-placed")
     monkeypatch.setattr(CP, "AUDITOR_KEYS", {GATE_HOST: {CP.ROLE: frozenset({key})}})
     held = CP.placement(d, RUN, key, steps)
     assert held[CP.PREMISE] == f"holds: the session is signed under {GATE_HOST}'s pinned key; {names}"
-    assert (held["kind"], held["steps"], held["parties"]["verifier"]) == ("own-host", steps, "period-machine")
+    assert (held["kind"], held["steps"], held["parties"]["verifier"]) == ("placed", steps, "period-machine")
     other = hashlib.sha512(b"another key").hexdigest()
     for unpinned in (other, key.upper(), None):
         assert CP.placement(d, RUN, unpinned, steps)[CP.PREMISE] == rehearsal

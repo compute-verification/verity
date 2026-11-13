@@ -623,7 +623,7 @@ def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_o
     (d / "answer.json").write_text(json.dumps({
         "protocol": "verity/certifier/v0", "verdict": "accept", "reason": None, "commitment": "cd" * 64,
         "public": {"K": 15764, "eps": "1/100", "windows": 1},
-        "profile": {"placement": {"kind": "own-host", "trusted-host": premise}}}))
+        "profile": {"placement": {"kind": "not-placed", "trusted-host": premise}}}))
     (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
     _report, _rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
                                    servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
@@ -636,7 +636,7 @@ def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_ga
     the node is uncounted and uncertified, before the premise. Under ``--gate local`` it has no links, and the clause
     states the premise alone."""
     node, host = "vy-dc-h200", "192.0.2.84"
-    gated = {"kind": "own-host", "parties": {"network_certifier": host, "prover": node, "verifier": node},
+    gated = {"kind": "not-placed", "parties": {"network_certifier": host, "prover": node, "verifier": node},
              "trusted-host": f"rehearsal: key not the auditor's pinned key, no bound; the network certifier ran on "
                              f"{host}, not the developer's {node}",
              "links": [{"name": "certified", "from": host, "to": node, "counted": True,

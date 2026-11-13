@@ -358,8 +358,9 @@ def placement(serve_dir: Path, run: str, key_sha512: str | None = None, steps: d
     pins nothing here. The names are a label and never the reason: the network certifier ran on the gate's machine
     (the kept `SESSION`'s ``gate``; ``local`` is the developer's node), and ``steps`` (`ran_on`, this machine by
     default) names the machine that ran the chain's checks and samples and the one that ran the period check and its
-    proofs' challenges. ``kind`` says the same in a word: ``own-host``, the certifier on a machine other than the
-    developer's node, or ``prover-node``. ``links`` are the node's to the gate, and K counts the certified one alone."""
+    proofs' challenges. ``kind`` is ``prover-node`` where the certifier ran on the developer's node, else ``placed``
+    under a pinned key and ``not-placed`` under any other. ``links`` are the node's to the gate, and K counts the
+    certified one alone."""
     kept = serve_dir / PRIVATE / run
     if not (kept / SESSION).is_file():
         raise NotRun(f"{kept} has no {SESSION}, which names the gate the certifier ran on: keep the run with this "
@@ -377,7 +378,7 @@ def placement(serve_dir: Path, run: str, key_sha512: str | None = None, steps: d
              PREMISE: f"{HOLDS.format(host=host) if pinned else REHEARSAL}; {names}"}
     if gate == "local":
         return {"kind": "prover-node", **where, "links": [], "uncounted": f"every link of {node}'s"}
-    return {"kind": "own-host", **where,
+    return {"kind": "placed" if pinned else "not-placed", **where,
             "links": [{"name": "certified", "from": host, "to": node, "counted": True,
                        "via": "the warden's tunnel to the endpoint's port"},
                       {"name": "gate", "from": node, "to": host, "counted": False,
