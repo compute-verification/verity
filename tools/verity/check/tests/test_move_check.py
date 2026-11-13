@@ -1802,6 +1802,19 @@ def test_a_prose_move_is_judged_by_the_map_its_move_line_or_words_names(tmp_path
     assert r["certified"], r["refusals"]
 
 
+def test_a_prose_map_whose_words_are_all_scoped_to_files_is_read(tmp_path):
+    """A prose map with an empty `[words]`, each word under a `[[words_in]]`, is judged as one: its word is replaced in the
+    file its entry names, and the same edit in a file it doesn't name is beyond the map's words."""
+    scoped = {"tools/move/terms_map.toml": 'scope = "prose"\n\n[words]\n\n[[words_in]]\nfiles = ["notes.md"]\n'
+                                           'words = { "draw" = "sample" }\n'}
+    (tmp_path / "named").mkdir()
+    r = _terms(tmp_path / "named", base_extra=scoped, **{"notes.md": "A sample picks `draw_one()`; see [sample](draw.md).\n"})
+    assert r["certified"] and r["words"] == "tools/move/terms_map.toml", r["refusals"]
+    (tmp_path / "other").mkdir()
+    r = _terms(tmp_path / "other", base_extra=scoped, **{"b.py": TERMS_BASE["b.py"].replace("one draw", "one sample")})
+    assert _refused(r) == {"b.py": "edit beyond the words of tools/move/terms_map.toml"}
+
+
 LAYOUT_MAP = "tools/move/layout_map.toml"
 LAYOUT_MSG = f"Move by {LAYOUT_MAP}\n\nLayout-move: {LAYOUT_MAP}\n"
 #: `verity/ml/flock/` splits: `tool.py` to `verity/flock/prover/`, `pod/` whole to `verity/flock/pod/`

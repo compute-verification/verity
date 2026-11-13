@@ -94,6 +94,10 @@ using-slack skill).
   that recurring). Once its date has moved later twice, each move gets a `slip:` comment: what missed the date and what
   holds the next. The audit finds each break (`parked`, `unstaffed`, `slipped`, `repeated`); `research msg linear audit
   --asks` is the ledger, and a report to Daniel counts delivered, never filed.
+- **A survey for Daniel is answered on reading it** (AGENTS.md "Working principles": a survey is answered at once).
+  Whoever relays it says to answer now and sets no later deadline. Answer where it asks, ahead of your other work, with
+  what you know; for a figure you don't have, say "not known" and the hour you will. The relay passes each answer to
+  Daniel as it arrives.
 - **Write through the app, not the Linear connector.** The connector acts as Daniel, so its comments and state changes
   show as his. Use these commands:
   - `research msg linear comment ISSUE 'TEXT' --as ME`, which rings the team's handle and any names the text starts with;
