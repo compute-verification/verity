@@ -2704,7 +2704,7 @@ ON_NODE = ("preflight-fixtures",)
 
 
 def fetchable_fixtures(root: Path = ROOT, url: str | None = None, head=None, store=None) -> tuple[dict[str, str], list[str]]:
-    """({id: where}, [id]): where each fetched fixture (a `fixtures/artifacts.json` entry whose path git doesn't hold) can come
+    """({id: where}, [id]): where each fetched fixture (a `artifacts.json` entry whose path git doesn't hold) can come
     from on this machine, and those that can come from nowhere: the public export, asked for its manifest only (one HEAD, no
     blob), else the tree already holding its bytes, else this machine's store holding its manifest and every blob.  A fixture
     preserved privately and never exported is in neither the public export nor a node's own store, so a check there fails
@@ -2756,11 +2756,11 @@ def fixtures_only() -> int:
         if w != "the public export":
             print(f"check: fixtures: {a} from {w}, not the public export")
     if missing:
-        print(f"check: fixtures: {len(missing)} fetched fixture(s) registered in fixtures/artifacts.json are in neither this "
+        print(f"check: fixtures: {len(missing)} fetched fixture(s) registered in artifacts.json are in neither this "
               f"machine's store nor the public export ({found or 'none found'}): {' '.join(missing)}; run `research data "
               f"export` for each, or put it in this machine's store", file=sys.stderr)
         return 1
-    print(f"check: fixtures: every fetched fixture fixtures/artifacts.json registers can be fetched here ({found or 'none'})")
+    print(f"check: fixtures: every fetched fixture artifacts.json registers can be fetched here ({found or 'none'})")
     return 0
 
 
