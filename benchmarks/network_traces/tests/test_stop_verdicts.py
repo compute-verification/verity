@@ -46,11 +46,7 @@ def listed(monkeypatch):
 
 def schedule() -> WardenParams:
     """The lengths rows' cost runner's own schedule, with its content classes."""
-    args = CR.parser().parse_args(["cost", "--out", "x"])
-    return WardenParams(cell_bytes=args.cell_bytes, slots=args.slots, lanes=args.lanes, window=args.window,
-                        every=args.every, delay=args.delay, ingress_buckets=args.delay,
-                        ingress_cells=args.ingress_cells, egress_cells=args.egress_cells, lengths=1,
-                        content=tuple(args.classes))
+    return CR.costed(CR.parser().parse_args(["cost", "--out", "x"]))
 
 
 def head(window: int, *counts: int, parameters: bytes = ZEROS, domain: bytes = ZEROS) -> C.Head:
@@ -817,17 +813,20 @@ def test_an_execution_phase_left_out_of_a_runs_files_charges_what_it_would_refus
 
 
 def test_a_verdict_whose_format_is_not_listed_reads_as_missing(monkeypatch):
+    """The reader lists no format, the response tie's among them: with the four verdicts' records of a class and
+    their controls handed as their verifiers would write them, no verdict is read on, each of the four is missing
+    and the execution phase is not held."""
     monkeypatch.undo()
-    assert SV.FORMATS == {TIE: CC.RESPONSE_TIE}
+    assert SV.FORMATS == {}
     first = head(3, 5, 0)
     got = stop([registration(first)], four(first))
-    assert got.held == 0 and [v["verdict"] for v in got.verdicts] == [CC.RESPONSE_TIE]
+    assert got.held == 0 and got.verdicts == ()
     assert got.why[2] == (f"the link {LINK}, execution phase 3, class 0: charged its whole schedule on each of its 5 "
-                          "rows: the stop record is missing; the certified read is missing; the compute audit is "
-                          "missing")
+                          "rows: the stop record is missing; the response tie is missing; the certified read is "
+                          "missing; the compute audit is missing")
     assert got.why[-2:] == (
-        "3 verdict record(s) read are of a format listed for none of the 4 verdicts, and count for nothing",
-        "3 control record(s) read are of a format listed for none of the 4 verdicts, or are not the control their "
+        "4 verdict record(s) read are of a format listed for none of the 4 verdicts, and count for nothing",
+        "4 control record(s) read are of a format listed for none of the 4 verdicts, or are not the control their "
         "verdict's verifier owes, and count for nothing")
     for form in (..., None, 7, ["a list"]):
         tie = four(first)[1]

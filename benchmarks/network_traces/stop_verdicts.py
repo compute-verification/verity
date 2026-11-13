@@ -17,7 +17,9 @@ readers are the harness's). A run holds, each one JSON object a line:
   serve registered, and its verifier's module and commit (`class_charge.reads`; a record that lacks one doesn't
   read, whatever its format, and the line says which it lacks). Which of the four verdicts a record is, is read from
   its verdict's ``format`` (`FORMATS`). A verdict whose verifier's format is not listed there reads as missing, and
-  a record of such a format is counted in a line and charges nothing;
+  a record of such a format is counted in a line and charges nothing. No format is listed, the response tie's
+  among them, since no statement registers what the tie reads: so every verdict reads as missing, and no
+  execution phase is charged below its schedule whatever a run's files hold;
 - `REGISTRATIONS_FILE`: its first line, of the format `CHECKED`, what the offline check of the network certifier's
   run that wrote the file was handed to check it under (`CHECKED_UNDER`: the SHA-512 of the network certifier's
   public key and the session), then the registration of each execution phase's connection rows that its verdicts
@@ -224,9 +226,11 @@ CHECKED = "verity-network-certifier/checked-registrations/v1"
 CHECKED_UNDER, KEY_SHA512, SESSION = "checked_under", "key_sha512", "session"
 #: what the reader says of a registrations' file without that line
 UNSAID = "does not say what it was checked under"
-#: which of the four verdicts a record is, or a control record is a control of, by the ``format`` of its verdict
+#: which of the four verdicts a record is, or a control record is a control of, by the ``format`` of its verdict.
+#: No format is listed, the response tie's among them: no statement registers what the tie reads, so its verdict
+#: holds no class yet. Every verdict reads as missing
 FORMAT = "format"
-FORMATS = {"verity-network-certifier/response-tie-verdict/v1": CC.RESPONSE_TIE}
+FORMATS: dict[str, str] = {}
 #: a control record's fields: the run that produced it, the verifier that judged it, what was changed, the
 #: verifier's own verdict on it, and the verifier's own word for why it refused
 CONTROL, REASON = "control", "reason"
