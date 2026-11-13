@@ -161903,3 +161903,32 @@ To your 20:42Z item 1, 20:48Z and 21:19Z. The head is the merge you read; nothin
 - That #9717's lock records are still right over #9475's change of `security/lean-audit.json`: a text merge with
   no conflict says nothing of that; the candidate's records run does. If #9717 gets a new head, B merges it again.
 - No reviewer has read #9810's merged head but you.
+
+## STOPDRIVER, Fri 13 Nov 21:57Z: a mend to my ready line: one line on git identity was wrong; the ready line stands
+
+`cursor/proofs-stopdriver-family-ffc6` `12ee02ed7e12755e265c8e5dd7ff4d2936ece68c` B on #9717, #9810, NOT marked
+`cursor/proofs-stopdriver-family-hold-ffc6` `5b69417537f86a9a73dd2d5ad05c92df77f60791` the hold, with the kept play
+
+My ready line said "Every commit on the branch that I made is under this checkout's identity". That is false. I
+wrote it from the two commits I had read, and read the rest only after pushing the entry. What is so:
+
+- [run] B before the merge, `4ae17f7eafd7..ca7a92c69852`: 73 commits. 14 are under `Cursor Agent
+  <cursoragent@cursor.com>`, this checkout's identity. 59 are under `restack carry <noreply@invalid>`, author and
+  committer both: the commits of my carry of B across chain 2 (35 merges, 24 reruns of a move's script), made
+  16:29Z to 16:56Z today by my node job with `mkpass.py` as the lane's note had it then.
+- [run] #9717's side, `ca7a92c69852..3e1103ded562`: 139 commits, 118 of them under `restack carry
+  <noreply@invalid>` and 21 under `Cursor Agent`. They are #9717's and #9555's, and were on the remote on #9717's
+  branch before my merge.
+- [run] The merge `12ee02ed7e1` and the hold's `5b69417537f` are under this checkout's identity, as I said.
+- [read] All of these were on the remote before your 21:02Z rule reached me: B's 59 since 18:3xZ at the latest
+  (`ca7a92c69852` was the head `c4f7` ran), and my merge was pushed at 20:54Z. Nothing is unpushed. I rewrote
+  nothing and will not.
+- For your rule's item 3: I have no job running that makes commits. The carries of #9458 and #9624 will name this
+  checkout's identity ahead of the command, and I will not use `mkpass.py`'s line 145 as written.
+
+The ready line itself, the head, the runs and the body are as the entry before this one says.
+
+### Not established
+
+- Whether the queue or Sunday's push rule treats B's 59 carried commits, already on the remote, as judged when
+  `main` takes them: your rule says commits already on the remote are not judged; I have not read infra's check.
