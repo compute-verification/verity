@@ -90,8 +90,9 @@ hypothesis, and no guarantee concludes it: `Flock.Guarantees.SpotKSTwo` conclude
 (`SpotFlock.codeConnected`), and no lemma carries that conclusion to this code. At this code `SpotFlock.ksTwo_spot`
 proves it from the sessions' openings (`SessionOpensTwo`), which `SpotFlock.sessionOpensTwo_of_frameIs` and
 `SpotFlock.frameIs_built` give from `SpotFlock.Built` and `SpotFlock.Addresses`. `SpotFlock.Addresses` is false at a
-held code with an accepted run in which a checked unit needs an input gate and round 2 reads every registered read of
-the unit's session off the interior record (`SpotFlock.CheckedRun.not_addresses_of_input_readsInterior`). -/
+held code with an accepted run in which a checked unit needs an input gate and the second stage reads every
+registered read of the unit's session off the interior record
+(`SpotFlock.CheckedRun.not_addresses_of_input_readsInterior`). -/
 def KS (A : Live₂) : Prop := A.L.KS FlockDeploy.sha512
 
 /-- **The session's relation**: the two-stage relation at the session's `δ` (`Claims.Sampling.RTwo`): at some
