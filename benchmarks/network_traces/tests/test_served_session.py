@@ -1,6 +1,7 @@
 """served_session: the plan is the gate's scan rehearsal inside the scan's class (PROMPT_IDS prompt ids in, at most KO
 out), which this tree's gate accepts, with the endpoint's sealed flags and its hand start, and a request the gate or
-the class refuses is refused with its reason; a session through a stub gate keeps
+the class refuses is refused with its reason; each of the plan's runs is on the peer or the auditor's node the plan is
+given, and its commands name no other node; a session through a stub gate keeps
 the session's fetch (with witness/) 0700 under KEEP and publishes only the bundle less witness/ and its outcome, removes
 a published file that holds a prompt's ids, and refuses a KEEP inside --out; --at waits on the injected clock and sends
 nothing when late; io writes the kept run's certified I/O 0600 in KEEP; endpoint runs the endpoint step on the served
@@ -33,6 +34,8 @@ import served_session as SS  # noqa: E402
 import scan_zk as sz  # noqa: E402
 
 RUN = "c20261028T120000Z-0000"
+#: made-up names of a served node and of an auditor's node, for where any name does
+SOME_PEER, SOME_AUDITOR = "some-served-node", "some-auditors-node"
 #: a witness value (the stub's witness/certified.jsonl) its status plants with STUB_NOTE: two of the guard's text pieces
 PLANTED = hashlib.sha256(b"a certified line").hexdigest()
 #: the warden's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
@@ -105,6 +108,21 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     long = SS.parser().parse_args(["plan", "--prompt-ids", str(SS.KI)])
     long.minutes = a.minutes
     assert SS.plan(long, b"[[1]]")["endpoint"].endswith(f"--max-model-len {SS.KI + SS.KO}")
+
+
+def test_the_plans_runs_are_on_the_nodes_it_is_given_and_its_commands_name_no_other():
+    a = SS.parser().parse_args(["plan", "--peer", SOME_PEER, "--auditor", SOME_AUDITOR])
+    a.minutes = SS.A.warden_minutes(a.requests, a.height) + SS.MARGIN
+    doc = SS.plan(a, b"[[1]]")
+    runs = {name: shlex.split(cmd) for name, cmd in doc["runs"].items()}
+    assert {name: run[run.index("--on") + 1] for name, run in runs.items()} == {
+        "session": SOME_AUDITOR, "io": SOME_AUDITOR, "endpoint": SOME_PEER, "chain": SOME_AUDITOR}
+    text = json.dumps(doc)
+    assert text.count("--on ") == len(runs)
+    # the chain draws the gate's coins where it runs
+    assert SS.parser().parse_args(shlex.split(runs["chain"][-1])[2:]).coin_peer == SOME_AUDITOR
+    # nothing of site.json is written into the plan but the lane, which is each run's --as
+    assert not [k for k, v in SS.SITE.items() if k != "lane" and v in text]
 
 
 @pytest.mark.parametrize("flags, why", [
