@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.SpotFlock.Honest.Roots
+public import Proofs.Flock.SpotFlock.ReadWays
 public import Proofs.Flock.SpotFlock.Reads
 public import Proofs.Flock.Verifier.Registered
 
@@ -24,38 +25,6 @@ The hypotheses are `rootsHold_held`'s: `RefPorts R`, `NeededBits` and `PortsMemb
 namespace SpotFlock.Honest
 
 open Claims Claims.Sampling SamplingDeploy
-
-/-- **`checkPort` accepting holds the read to the first port of its name's schema.** -/
-theorem checkPort_schema {c pub t indices reg} (h : _root_.Flock.Registered.checkPort c pub t indices reg = .ok ()) :
-    ∃ p, (List.range c.ports.size).find? (fun p => c.ports[p]!.name == reg.name) = some p ∧
-      _root_.Flock.Registered.portSchema c.ports[p]! = reg.schema := by
-  unfold _root_.Flock.Registered.checkPort at h
-  simp only at h
-  split at h
-  · rename_i p hp
-    split at h
-    · exact absurd (_root_.Flock.Registered.except_bind_ok h) fun ⟨_, h1, _⟩ =>
-        _root_.Flock.Registered.throw_ne_ok _ _ h1
-    · rename_i hsch
-      exact ⟨p, hp, by simpa using hsch⟩
-  · exact absurd h (_root_.Flock.Registered.throw_ne_ok _ _)
-
-/-- **Each registered read of a session is of the schema of the first port of its name**, in every statement of the
-session's setup. -/
-theorem schema_of_setup {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
-    {sts : Array _root_.Flock.Stmt} {own} (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts))
-    (hown : ins.registered = some own) :
-    ∀ st ∈ sts, ∀ reg ∈ own, ∃ p,
-      (List.range st.c.ports.size).find? (fun p => st.c.ports[p]!.name == reg.name) = some p ∧
-        _root_.Flock.Registered.portSchema st.c.ports[p]! = reg.schema := by
-  intro st hst reg hreg
-  obtain ⟨-, hsetup⟩ := FlockDeploy.setupOf_some hset
-  have hck : _root_.Flock.checkRegistered st (some own) = .ok () := by
-    rw [← hown]
-    exact setup_checkRegistered hsetup st hst
-  obtain ⟨tb, idx, -, -, hp⟩ := FlockSoundness.Discharge.ZkReg.check_tables
-    (FlockSoundness.Discharge.ZkReg.checkRegistered_ok hck)
-  exact checkPort_schema (hp reg hreg)
 
 variable (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code)
 

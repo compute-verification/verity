@@ -347,12 +347,13 @@ theorem scope_held (x : Msg) (st : Roots) (hx : decode x = some st) : (compiled 
   · rw [partition_compiled]
     show ((partition (held R B desc q c₀) _).map fun P => P.cut (wireMap (held R B desc q c₀))) = _
     rw [wireMap_held]
-    (simp only [partition, Option.map_some, cut_id]) <;> rfl
+    simp only [partition, Option.map_some, cut_id]
+    rfl
   · rw [two_compiled]
     show ((two (held R B desc q c₀) _).map fun d =>
       ({ d with part := d.part.cut (wireMap (held R B desc q c₀)) } : Design.Two)) = _
     rw [two_held, wireMap_held]
-    (simp only [Option.map_some, cut_id]) <;> rfl
+    simp only [Option.map_some, cut_id]
   · unfold wiredStmt
     rw [wireMap_held, wired_id_keep]
     exact inScopeTwo_filter (s := { s₁ with prog := bitsProgs (held R B desc q c₀).ms }) _
