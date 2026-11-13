@@ -47,7 +47,7 @@ def boundProgram (tags : Flock.Tags) (cf : ByteArray) (tables : List (String × 
   | .ok D => Flock.ProvedScope.metaProgram D.unroll
   | .error _ => none
 
-variable {ι : Type} {d : Device ι} {α : Type} [Fintype α]
+variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The parameters' circuit is the one the log declares for day `j`**: the circuit file the parameters `θ` name
 among the committed files `F` (`Vocab.circuitFile`, the file whose SHA-512 is `Vocab.programDigest θ`) binds a Program

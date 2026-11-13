@@ -98,6 +98,7 @@
   "Proofs.Properties.Challenger.Session",
   "Proofs.Properties.Firewall",
   "Proofs.Properties.Core.Site",
+  "Proofs.Properties.Core.Registration",
   "Proofs.Properties.Nci.Protocol",
   "Proofs.Properties.Nci.RecordRead",
   "Proofs.Properties.Nci.Record",
