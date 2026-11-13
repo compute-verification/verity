@@ -106,7 +106,7 @@ by) give of the bytes and the release log they accept, each stated at the code's
   the play has the sessions of the window's sample (`windowRead_members`).
 * `MemberForm.WindowPasses`: what a window's instance takes of the form's acceptance. At each play the form
   accepts, the window the verifier sets up is laid out and each member's files pass (`windowPasses_members`), so
-  the verifier sets the deployment's window up at every accepted play (`windowAt_form`), and each play has the
+  the verifier sets the deployment's window up at every accepted play (`executionPhaseAt_form`), and each play has the
   window's read (`windowReads_members`).
 * `MemberForm.OpensOwn`: a checked member whose commitment is ready for its openings opens only at its own files'
   places (`opensOwn_of_ready`), so at a window the verifier sets up the vocabulary's openings hold wherever each

@@ -10,7 +10,7 @@ SPOT's soundness at the deployment's windows (`WindowInstance.spotSound`) and re
 several members (`remote_soundness_window`) take three facts of the verifier: what the claim reads of the window
 (`WindowInstance.ClaimReads`), the verifier's window at an accepted play (`WindowInstance.WindowAt`) and what the
 verifier's acceptance gives of each play (`WindowInstance.WindowReads`). This module gives them the three as proved
-of the per-member form (`claimReads`, `windowAt_form`, `windowReads_members`), at the evidence sent for each session
+of the per-member form (`claimReads`, `executionPhaseAt_form`, `windowReads_members`), at the evidence sent for each session
 and the proof files decoded from it at the statement's table, and at what the check's accepts hold of the form: they
 hold `MembersAccept` (`formAccepts`) and their members share no unit (`formApart`). What is left is stated in one
 place, three premises no refusal of the check enforces:
@@ -27,7 +27,7 @@ namespace Verity.Sampled.MemberForm
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-- **SPOT's soundness at the per-member form's accepts** (`WindowInstance.spotSound`, at `claimReads`,
-`windowAt_form` and `windowReads_members`, at the check's accepts: `formAccepts`, `formApart`): where the window is
+`executionPhaseAt_form` and `windowReads_members`, at the check's accepts: `formAccepts`, `formApart`): where the window is
 the parameters' members on the registered files, the registered files hold each member's file and each member's
 commitment is ready for its openings. -/
 theorem spotSound_form (I : WindowInstance d α) (K₀ : WindowConstructions I.base)
@@ -39,11 +39,11 @@ theorem spotSound_form (I : WindowInstance d α) (K₀ : WindowConstructions I.b
     (I.vocab (I.constructionsAt K₀ k reg sentEvidenceAt (statementFiles statementTable) record₀
       recordDigest)).SpotSound k :=
   I.spotSound K₀ k reg sentEvidenceAt (statementFiles statementTable) record₀ recordDigest
-    (claimReads I _ hready) (windowAt_form I k hW formAccepts formApart hR)
+    (claimReads I _ hready) (executionPhaseAt_form I k hW formAccepts formApart hR)
     (windowReads_members I k formAccepts hR)
 
 /-- **Remote's soundness over windows of several members, at the per-member form's accepts**
-(`remote_soundness_window`, at `claimReads`, `windowAt_form` and `windowReads_members`): under `spotSound_form`'s
+(`remote_soundness_window`, at `claimReads`, `executionPhaseAt_form` and `windowReads_members`): under `spotSound_form`'s
 premises and the base's PoUW and inference-only targets. -/
 theorem soundnessAt_form (I : WindowInstance d α) (K₀ : WindowConstructions I.base)
     (reg : Option Claims.Msg → ByteArray)
@@ -55,7 +55,7 @@ theorem soundnessAt_form (I : WindowInstance d α) (K₀ : WindowConstructions I
     (I.vocab (I.constructionsAt K₀ .remote reg sentEvidenceAt (statementFiles statementTable) record₀
       recordDigest)).SoundnessAt .remote :=
   remote_soundness_window I K₀ reg sentEvidenceAt (statementFiles statementTable) record₀ recordDigest
-    (claimReads I _ hready) (windowAt_form I .remote hW formAccepts formApart hR)
+    (claimReads I _ hready) (executionPhaseAt_form I .remote hW formAccepts formApart hR)
     (windowReads_members I .remote formAccepts hR) hP hI
 
 end Verity.Sampled.MemberForm
