@@ -1511,6 +1511,26 @@ theorem membersRun_sampled {p : Params} {ms : Array Member} {c : OneStage.Commit
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   exact runMembers_sampled h
 
+/-- **Where the per-member form's run returns, its order refusal and its population refusal passed** (`orderHeld`,
+`popHeld`): the two the one statement's check makes too, with the same arguments. -/
+theorem membersRun_held {p : Params} {ms : Array Member} {c : OneStage.Commitment} {e : Evidence}
+    {sts : Array StatementFiles} {bs : Core.Blobs} {r : Run} (h : membersRun p ms c e sts bs = .ok r) :
+    orderHeld p c e = .ok () ∧ popHeld p.base.verifier c.record = .ok () := by
+  unfold membersRun at h
+  obtain ⟨⟨⟩, h, -⟩ := Flock.HmNets.bind_ok h
+  unfold membersStructure at h
+  obtain ⟨held, -, h⟩ := Flock.HmNets.bind_ok h
+  dsimp only at h
+  split at h
+  · obtain ⟨_, ht, -⟩ := Flock.HmNets.bind_ok h
+    cases ht
+  obtain ⟨ts, -, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨⟨⟩, hord, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨lines, -, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨⟨⟩, -, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨⟨⟩, hpop, -⟩ := Flock.HmNets.bind_ok h
+  exact ⟨hord, hpop⟩
+
 /-- **The per-member form's check at the coins `ξ`** (module docstring, **per member**): the statements' sessions'
 verdicts (`membersRun`), then v1's `checkAt` at `ξ` on them, as the one statement's check: v1 accepts only verdicts
 that all accepted, and the run's own `all` says it again, so an acceptance reads the run. -/
@@ -1698,6 +1718,25 @@ theorem membersParamsOfJson_members {j : Json} {p : Params} (h : membersParamsOf
     exact ⟨ms, rfl⟩
   · cases h
 
+/-- **Parameters of either form are parsed parameters but for the files and the members**: their v1 part is that of
+parameters `paramsParsed` returned, the one statement's own (`paramsOfJson_parsed`) or the per-member form's, read at
+`proofs` of no file. -/
+theorem paramsEitherOfJson_base {j : Json} {p : Params} (h : paramsEitherOfJson j = .ok p) :
+    ∃ j' p', paramsParsed j' = .ok p' ∧ p.base = p'.base := by
+  unfold paramsEitherOfJson at h
+  split at h
+  · unfold membersParamsOfJson at h
+    split at h
+    · obtain ⟨⟨⟩, -, h⟩ := Flock.HmNets.bind_ok h
+      try dsimp only at h
+      obtain ⟨p0, hp0, h⟩ := Flock.HmNets.bind_ok h
+      try dsimp only at h
+      obtain ⟨ms, -, h⟩ := Flock.HmNets.bind_ok h
+      cases h
+      exact ⟨_, p0, hp0, rfl⟩
+    · cases h
+  · exact ⟨j, p, paramsOfJson_parsed h, rfl⟩
+
 /-- **Parameters of either form that name no members are the one statement's**: `paramsOfJson` returned them. -/
 theorem paramsEitherOfJson_one {j : Json} {p : Params} (h : paramsEitherOfJson j = .ok p) (hm : p.members = none) :
     paramsOfJson j = .ok p := by
@@ -1735,6 +1774,28 @@ theorem evidenceEitherOf_sessions {b : ByteArray} {e : Evidence} {sts : Array St
       obtain rfl : sts = sts' := Option.some.inj (hs.symm.trans hs')
       exact hse
     · cases hs.symm.trans (evidenceOf_statements h)
+  · cases h
+
+/-- **Evidence of either form has one statement's evidence's v1 part**: the one statement's own, or the per-member
+form's, which `evidenceOf` read at `proofs` of the statements' sessions. -/
+theorem evidenceEitherOf_base {b : ByteArray} {e : Evidence} (h : evidenceEitherOf b = .ok e) :
+    ∃ b' e', evidenceOf b' = .ok e' ∧ e.base = e'.base := by
+  unfold evidenceEitherOf at h
+  split at h
+  · split at h
+    · unfold membersEvidenceOf at h
+      obtain ⟨j, -, h⟩ := Flock.HmNets.bind_ok h
+      try dsimp only at h
+      split at h
+      · obtain ⟨sts, -, h⟩ := Flock.HmNets.bind_ok h
+        try dsimp only at h
+        obtain ⟨one, -, h⟩ := Flock.HmNets.bind_ok h
+        try dsimp only at h
+        obtain ⟨e0, he0, h⟩ := Flock.HmNets.bind_ok h
+        cases h
+        exact ⟨_, e0, he0, rfl⟩
+      · cases h
+    · exact ⟨b, e, h, rfl⟩
   · cases h
 
 /-- **Evidence of either form that names no statements is the one statement's**: `evidenceOf` returned it. -/
