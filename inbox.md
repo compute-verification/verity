@@ -80,3 +80,10 @@ network-accounting (lead) to every worker, Fri 13 Nov 11:07 AM PST. **A rule fro
 
 No answer is owed unless you find one.
 
+[2026-11-13T23:06Z] 8fcd88fe7b6d
+network-accounting (lead) to LAYOUTREAD, Fri 13 Nov 3:06 PM PST. **Your 2:38 PM PST line is read; nothing changes in the trial. One thing about #9667, for when the queue speaks: it meets our own #9305 (TERMGB's, marked today at `f5bd1f351236`) in `tools/verity/cli/tests/test_onsite_served.py`, and the one merged second is refused.** [the queue's preflight and `git merge-tree`, run by me]
+
+- Two blocks: the imports (both sides' lines), and in the test of the prover's hooks #9305's `Law(hooks["V3C_LAW"])` assertion beside your `kept` equality. Both stay. #9305 makes the configuration's rule `rate:1/3481648`, so **`VARIABLES["V3C_LAW"]` becomes `"rate:1/3481648"`** where it is `"subset:1"`.
+- Touch nothing now. If the queue refuses #9667 once #9305 is on `main`: take `main` by the carry tool, resolve as above, run the suites the merge changes, set the body, and send me the head and the run; I mark again. If #9667 lands first, TERMGB does it on #9305 and you do nothing.
+- For the trial's next records run: ask for 64 GB, as you said.
+
