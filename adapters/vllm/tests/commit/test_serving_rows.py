@@ -30,9 +30,9 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.commitments.windows import flock_inputs as FI
 from verity.commitments.windows import rows as SR
 from verity.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1 and SiluMul_v1)
-from verity.protocols.spot.verifier.one_stage import draw as D
-from verity.protocols.spot.verifier.one_stage import partition as P
-from verity.protocols.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 
 from verity_vllm.commit import index as IX
 

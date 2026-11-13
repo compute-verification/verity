@@ -226,20 +226,20 @@ from pathlib import Path
 
 import active_replay as ar
 from verity.commitments.crypto import lms
-from verity.protocols.certifier.verifier import calibration, out_commit
-from verity.protocols.certifier.verifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, REVEAL_LINE_BYTES, \
+from verity.protocols.accounting.certifier.verifier import calibration, out_commit
+from verity.protocols.accounting.certifier.verifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, REVEAL_LINE_BYTES, \
     Events, Proxy, CertifierClient, Requests, compact_record_data, decode_frame, event_body, event_data, fresh_salt, \
     id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
-from verity.protocols.certifier.verifier.certificate import Certificate, CertifiedClock, CertifiedRecord, Direction, \
+from verity.protocols.accounting.certifier.verifier.certificate import Certificate, CertifiedClock, CertifiedRecord, Direction, \
     Issuer, LmsKey, LmsSigner, RecordHead, SignerRefused, parameters_digest
-from verity.protocols.certifier.verifier.grid import COMPLETE, Reason, Status, occupancy, row_count
-from verity.protocols.certifier.verifier.audit import certificate_refusals
-from verity.protocols.certifier.verifier.lean_audit import DISAGREEMENT, Audit
-from verity.protocols.certifier.verifier.schedule import ClockSync, expected_grids, handing_buckets
-from verity.protocols.certifier.verifier.served import Admission, ServedProfile
-from verity.protocols.certifier.verifier.service import LinkWindows
-from verity.protocols.spot.verifier.one_stage import registration as R
-from verity.protocols.spot.verifier.service import WindowCommitmentRecord
+from verity.protocols.accounting.certifier.verifier.grid import COMPLETE, Reason, Status, occupancy, row_count
+from verity.protocols.accounting.certifier.verifier.audit import certificate_refusals
+from verity.protocols.accounting.certifier.verifier.lean_audit import DISAGREEMENT, Audit
+from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, expected_grids, handing_buckets
+from verity.protocols.accounting.certifier.verifier.served import Admission, ServedProfile
+from verity.protocols.accounting.certifier.verifier.service import LinkWindows
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.service import WindowCommitmentRecord
 
 HERE = Path(__file__).resolve().parent
 BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE = 100, 60, 4096, 1 << 16
@@ -1605,8 +1605,8 @@ def parse_prompts(text: str) -> list[list[int]]:
 
 
 def rehearse(args) -> int:
-    from verity.protocols.certifier.verifier import lean_audit
-    from verity.protocols.spot.verifier.one_stage import verifier
+    from verity.protocols.accounting.certifier.verifier import lean_audit
+    from verity.protocols.proofs.spot.verifier.one_stage import verifier
 
     out = args.out
     out.mkdir(parents=True, exist_ok=True)

@@ -73,9 +73,9 @@ from multiprocessing.managers import BaseManager
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.spot.device import challenger as Ch, coins as CC, remote as R
-from verity.protocols.spot.verifier import service as S
-from verity.protocols.spot.verifier.one_stage import draw as D, verifier as V
+from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC, remote as R
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, verifier as V
 from verity.circuits.program import Program
 from verity.commitments.crypto import lms
 

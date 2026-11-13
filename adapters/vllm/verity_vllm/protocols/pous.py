@@ -1,7 +1,7 @@
 """POUS as a protocol option: the served model's linear weights held only as ``C* = P2-Enc(W, salt)`` at P2's registered
-point (``p2-16448/v4``), decoded at every use, and each period's audit of what is held (`verity.protocols.pous.verifier.period`),
+point (``p2-16448/v4``), decoded at every use, and each period's audit of what is held (`verity.protocols.accounting.pous.verifier.period`),
 with the memory challenger a party of its own on the challenger host
-(`verity.protocols.pous.device.challenger_party`).
+(`verity.protocols.accounting.pous.device.challenger_party`).
 
 * **W** is the weight of every ``LinearBase`` layer as the engine holds it (int8 [N, K] on the ``int8_exact`` target),
   deduplicated by storage, in module order and named by its first holder, in the store's frozen layout
@@ -71,7 +71,7 @@ P2_V1 = config.ROOT.parent.parent / "benchmarks/pous/p2_v1"
 
 
 def schemes() -> tuple[str, ...]:
-    from verity.protocols.pous.verifier import schemes as pous_schemes
+    from verity.protocols.accounting.pous.verifier import schemes as pous_schemes
     return tuple(sorted(pous_schemes.REGISTRY))
 
 
@@ -94,7 +94,7 @@ def _source_refusal(source: Any) -> str | None:
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
-    from verity.protocols.pous.verifier import schemes as pous_schemes
+    from verity.protocols.accounting.pous.verifier import schemes as pous_schemes
 
     out, own = [], ctx.settings_of(NAME)
     stray = sorted(set(own) - set(SETTINGS))
@@ -123,7 +123,7 @@ def linear_types() -> tuple[type, ...]:
 
 def _base(scheme: str) -> Any:
     """The point's geometry at one segment: the registered scheme's (its width, prime and ``2^16`` blocks a segment)."""
-    from verity.protocols.pous.verifier import schemes as pous_schemes
+    from verity.protocols.accounting.pous.verifier import schemes as pous_schemes
     return pous_schemes.get(scheme).params
 
 
@@ -192,7 +192,7 @@ def _flat(t: Any) -> Any:
 
 def _layout(scheme: str, tensors: Mapping[str, Any]) -> Any:
     """The store's frozen layout over ``tensors``: each from a block boundary, in order (`p2_v1/store.py`'s ``build``)."""
-    from verity.protocols.pous.verifier.layout import TensorLayout
+    from verity.protocols.accounting.pous.verifier.layout import TensorLayout
 
     base = _base(scheme)
     pb, block, ranges = base.payload_bytes, 0, []
@@ -217,7 +217,7 @@ def _segment(layout: Any, flats: Mapping[str, Any], s: int) -> bytes:
 
 def _commit(scheme: str, tensors: Mapping[str, Any]) -> tuple[Any, bytes]:
     """``W``'s layout and the commitment to it (no salt exists yet), ``W`` streamed a segment at a time."""
-    from verity.protocols.pous.verifier import setup
+    from verity.protocols.accounting.pous.verifier import setup
 
     layout = _layout(scheme, tensors)
     flats = {n: _flat(t) for n, t in tensors.items()}
@@ -273,7 +273,7 @@ class _Store:
         return self.point.params
 
     def published(self) -> Any:
-        from verity.protocols.pous.verifier import run as R
+        from verity.protocols.accounting.pous.verifier import run as R
         return R.Setup(self.params.blocks, self.commitment, self.root, self.salt)
 
     def block(self, i: int) -> bytes:
@@ -290,14 +290,14 @@ class _Store:
 
     def held(self) -> Any:
         """`period.EncodedStore` of what this setup left: the setup case is built from ``C*`` as held now."""
-        from verity.protocols.pous.verifier import period
+        from verity.protocols.accounting.pous.verifier import period
         return period.EncodedStore(self.point, self.published(), _Blocks(self), self.digests,
                                    period.setup_case(self.params, self.commitment, self.salt, self.segments()))
 
     def decode_cpu(self, offset: int, size: int) -> bytes:
         """``W`` bytes ``[offset, offset + size)`` by the scheme's codec, from the segments they fall in; refused when a
         block isn't a codeword or the range's last block is nonzero past it."""
-        from verity.protocols.pous.verifier.schemes.p2 import decode_segment
+        from verity.protocols.accounting.pous.verifier.schemes.p2 import decode_segment
 
         q = self.params
         n, pb, seg = q.blocks_per_segment, q.payload_bytes, q.segment_bytes
@@ -332,11 +332,11 @@ def _encode(layout: Any, tensors: Mapping[str, Any], commitment: bytes, salt: by
     """``C*`` of ``W`` under ``salt`` on the weights' device, each segment's encode checked (module docstring)."""
     import torch
 
-    from verity.protocols.pous.device import memory_challenger as mc
-    from verity.protocols.pous.verifier import period
-    from verity.protocols.pous.verifier import run as R
-    from verity.protocols.pous.verifier.schemes.p2 import expand_prefix
-    from verity.protocols.pous.verifier.verifier import DIGEST_BYTES, VerifierKey
+    from verity.protocols.accounting.pous.device import memory_challenger as mc
+    from verity.protocols.accounting.pous.verifier import period
+    from verity.protocols.accounting.pous.verifier import run as R
+    from verity.protocols.accounting.pous.verifier.schemes.p2 import expand_prefix
+    from verity.protocols.accounting.pous.verifier.verifier import DIGEST_BYTES, VerifierKey
 
     S = _p2("store")
     q = layout.params
@@ -376,7 +376,7 @@ def _decoder(store: _Store, lib: str | None) -> Callable[[Any, Any], None]:
     import torch
 
     if store.rows.device.type == "cuda":
-        from verity.protocols.pous.verifier.schemes.p2 import expand_prefix
+        from verity.protocols.accounting.pous.verifier.schemes.p2 import expand_prefix
 
         Ld = _p2("load")
         store.staged = Ld.EncodedRows(Ld.StoreLayout(store.params, (), expand_prefix(store.params, store.salt)), store.rows, 0,
@@ -427,7 +427,7 @@ class PousOption(Option):
     def audit(self, node: str, coins: bytes, **kw: Any) -> Any:
         """`period.audit` of this setup on ``node`` under the auditor's ``coins``; ``kw`` as `period.audit`'s (the prover
         by default this option's)."""
-        from verity.protocols.pous.verifier import period
+        from verity.protocols.accounting.pous.verifier import period
 
         if self.closed or self.store is None:
             raise RuntimeError(f"{self.name} is closed: nothing is held to audit")
@@ -443,9 +443,9 @@ class PousOption(Option):
         Python's.  Writes ``out/pous.case.json``, ``out/pous.json`` and, at the first period, ``out/pous-setup.case.json``;
         returns the answer, its profile carrying where each party ran (`challenger_session.placement`).  ``schemes`` and
         ``protocol`` are the signatures the verifier accepts and the id it answers under (a test signer's in tests)."""
-        from verity.protocols.pous.device import challenger_session as CS
-        from verity.protocols.pous.device import memory_challenger as mc
-        from verity.protocols.pous.verifier import period
+        from verity.protocols.accounting.pous.device import challenger_session as CS
+        from verity.protocols.accounting.pous.device import memory_challenger as mc
+        from verity.protocols.accounting.pous.verifier import period
 
         doc = json.loads((Path(period_dir) / "period.json").read_text())
         tools = doc.get("tools", {})
@@ -508,8 +508,8 @@ def _wrapper(names: Mapping[int, str], decoded: Callable[[str], Any]) -> Callabl
 def install(scheme: str, target: Target) -> PousOption:
     import torch
 
-    from verity.protocols.pous.verifier import period, setup
-    from verity.protocols.pous.verifier.schemes import p2 as P2
+    from verity.protocols.accounting.pous.verifier import period, setup
+    from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
 
     entry = f"{NAME}:{scheme}"
     own = target.context.settings_of(NAME)
