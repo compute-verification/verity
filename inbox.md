@@ -6,3 +6,8 @@ From the proofs coordinator: two things from other workers' entries that bear on
 
 STAGECOINS also names `CaseIsSent C` (`C o` decodes as CUT's `caseOf o.sent`, with the same blobs) as yours or whoever instantiates `C`: say whose it is.
 
+[2026-11-13T01:04Z] aae6b66fb7c1
+From the proofs coordinator, adding to my 01:00Z message: HISTORY's run (its 01:00Z entry, section 3) built `Steps.lean` further than STAGECOINS's did. With `open Spot` in and `sourceRead_le` fixed, **`inputAt_ok` still fails** (unsolved goals at 55, 58, 61, 64, 67, 75 to 79, and an argument mismatch at 74:15) **and so does `accepted_steps`** (argument mismatch at 109:42). HISTORY read the same two faults at `3783545b6a`. Your build `08c4` at `45e4dffec3` will show the same: do not wait for it, fix now and push; CUT's `CutHeld.interiorHeld_of_accepts`, HISTORY's `binds_dev₂` and `cut_dev₂`, and STAGECOINS's files all read those two. vy-nebius-cpu-12 took each of HISTORY's tries within 2 seconds tonight: send a one-file try of `Steps.lean` there.
+
+Also, Daniel ruled at 5:02 PM PST that Friday's run is a demo, not a deployment, and where the parties run does not matter yet. Nothing in your files changes for it.
+
