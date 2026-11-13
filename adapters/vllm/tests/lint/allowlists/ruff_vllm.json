@@ -61,6 +61,11 @@
     {"file": "tests/program/fixtures_query.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/program/fixtures_query.py", "kind": "UP033", "symbol": "<module>", "detail": "Use `@functools.cache` instead of `@functools.lru_cache(maxsize=None)`", "count": 2},
     {"file": "tests/program/fixtures_query.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`, `Iterable`"},
+    {"file": "tests/program/predict/test_dsa_long_rows.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
+    {"file": "tests/program/predict/test_dsa_long_rows.py", "kind": "I001", "symbol": "test_class_g_carries_a_request_past_index_topk_with_its_indexer_history", "detail": "Import block is un-sorted or un-formatted"},
+    {"file": "tests/program/predict/test_reads.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
+    {"file": "tests/program/predict/test_steps.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
+    {"file": "tests/program/predict/test_template_counts.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/program/test_applicability.py", "kind": "SIM115", "symbol": "builds", "detail": "Use a context manager for opening files", "count": 7},
     {"file": "tests/program/test_applicability.py", "kind": "SIM115", "symbol": "test_no_target_literal_remains_in_the_builder_sources", "detail": "Use a context manager for opening files"},
     {"file": "tests/program/test_artifact_applicability_independent.py", "kind": "SIM115", "symbol": "Harness._load", "detail": "Use a context manager for opening files", "count": 2},
@@ -427,6 +432,7 @@
     {"file": "verity_vllm/program/predict/compiled.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 4},
     {"file": "verity_vllm/program/predict/node_registration.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/program/predict/node_registration.py", "kind": "T201", "symbol": "register", "detail": "`print` found"},
+    {"file": "verity_vllm/program/predict/steps.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/quarantine/act/silu_mul_difftest.py", "kind": "E741", "symbol": "_words", "detail": "Ambiguous variable name: `I`"},
     {"file": "verity_vllm/program/quarantine/act/silu_mul_difftest.py", "kind": "E741", "symbol": "cases", "detail": "Ambiguous variable name: `I`"},
     {"file": "verity_vllm/program/quarantine/act/silu_mul_difftest.py", "kind": "E741", "symbol": "production", "detail": "Ambiguous variable name: `I`"},
@@ -534,7 +540,6 @@
     {"file": "verity_vllm/protocols/pouw/pearl_c/window.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/query/norm_scales.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/query/router_softmax.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/query/vocab_range.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "tests/program/predict/test_dsa_long_rows.py", "kind": "I001", "symbol": "test_class_g_carries_a_request_past_index_topk_with_its_indexer_history", "detail": "Import block is un-sorted or un-formatted"}
+    {"file": "verity_vllm/query/vocab_range.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"}
   ]
 }
