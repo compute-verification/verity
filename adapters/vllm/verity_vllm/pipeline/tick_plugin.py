@@ -69,7 +69,7 @@ class FeedReader:
 
 def unseeded(body: bytes) -> str | None:
     """Why `TickFeed` refuses a completions or chat request ``body``, None where it passes. A stochastic request must carry
-    an integer ``seed``: vLLM gives one without a seed a seed it draws from ``np.random``, which nobody can recompute.
+    an integer ``seed``: vLLM gives one without a seed a seed it samples from ``np.random``, which nobody can recompute.
     Only a numeric ``temperature`` of 0 is greedy; without one the server's default applies (the model's generation
     config's, else 1.0), so it needs a seed too. A body that isn't a JSON object passes, for the server to answer."""
     try:
