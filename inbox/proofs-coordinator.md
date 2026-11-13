@@ -161784,3 +161784,34 @@ for `60ae`.
 - Agent `bc-339cfb6b-ca24-5576-b01d-01792396c70e`, branch `cursor/proofs-refuse4-641c` from `origin/main` `6c52a8dd9cae` (nothing pushed to it; this job changes no code). `origin/main`'s AGENTS.md is reread [run: `git diff HEAD origin/main -- AGENTS.md` at the snapshot `f479876a8758`, empty].
 - No Lean file outside `security/` differs between `origin/main` `6c52a8dd9cae` and #9769's head `5f4248f96fec` [run: `git diff --stat origin/main 5f4248f96fec -- '*.lean' ':!security'`, empty]. The two commits differ only in the proof side.
 - The entry with lines for each of (a) to (d) follows, well before Sat 14 Nov 14:00Z.
+
+## WINDOWAT, Fri 13 Nov 21:54Z: the split is under #9817 at `68ef2e284bafc61acd3c57f734f585b57a96a8ee`; its four suites wait in vy-nebius-cpu-8's line (`r20261113-214854-cf16`); #9576's Python is three commits on a pushed branch, not opened; two things you should know
+
+Your 21:32Z (mailbox) and 21:35Z are read. My VM is a new one since 21:34Z: the worktrees are made again from the remote, nothing was lost.
+
+**Two things first.**
+1. **#9817's head does not merge with `main` as `main` now stands** (`6c52a8dd9cae`). Two files conflict: `security/Proofs/Properties/Verity/Sampled/OpensAt.lean` and `tools/pous_grader/TRUSTED.sha256`. Neither is one of my 19 files or the split's six. The same two conflict for #9520's head `b5bb54bfb0dd` alone and for MEMBERS's `1527be81d44c` alone, so it is in the lines below mine. At `main` `f479876a8758` my head merged clean. I settle neither file. [run: `git merge-tree --write-tree origin/main X` for the four heads]
+2. **The Cursor pull request tool is not among this session's tools** (it was at 20:42Z). My environment lets me open or edit a pull request by that tool alone, never by `gh` or `research queue`. So #9817's body still names `bbcaac1cf46e`, and I cannot open the second pull request myself unless the tool is back at my next check. If it is not, I write both bodies whole in my ready-line entry for you to place.
+
+**The merge** [run]. Two plain merge commits, pushed 21:37Z, no file settled by hand:
+- `f7e7c15f49fb`: the carried switch head `097b85eff21b`. It was not an ancestor of my head (the two lines were carried separately). The tree does not change (`c395901b19f1`).
+- `68ef2e284baf`: the split `1527be81d44c`. Tree `92c80a600ca7`. `git diff 1527be81d44c 68ef2e284baf` is my 19 files of `security/Proofs`, +500/−206, and nothing else; `git diff bbcaac1cf46e 68ef2e284baf` is the split's six files.
+- Why two: merged in one step, `1527be81d44c` conflicts with my head in `Spot/OneStageZk.lean`, though my side's blob is the split's own parent's (`1f242da16d73`). Git's base for that merge is `fd561fbff5b2`, before the layout move, where the file is at its old path. With the switch head merged first, the base is `097b85eff21b` and nothing conflicts.
+- `Spot/OneStageZk.lean` is 1,150 lines and `Spot/OneStageZkStatement.lean` 1,499, both the split's blobs.
+- Identity (your 21:02Z item 4): `origin/BRANCH..HEAD` held 63 commits. Three under `Cursor Agent <cursoragent@cursor.com>` (my two merges, MEMBERS's split), 60 under `restack carry <noreply@invalid>`: the switch's carried line, on the remote already under `cursor/proofs-members-split-34fd`. The remote lacked only my two merges. #9817's head now holds 120 `restack carry` commits over `4ae17f7eafd7` (my line's 60, the switch's 60) and 238 under the checkout's identity. Nothing is rewritten.
+
+**The suites** [run]. `r20261113-214854-cf16` on vy-nebius-cpu-8, `--pool research`, the command of `6058`, at `68ef2e284baf`. In the node's check line since 21:49Z, not started: every slot is held back for memory that live runs have reserved. `6058` took about 25 minutes from its slot, so it ends about 25 minutes after it starts; when it starts I cannot say. Before it: `r20261113-214155-5da4` on vy-nebius-cpu-4, cancelled by me at 21:48Z after 7 minutes in line, never started (1 GB of memory free there, and under a million inodes).
+
+**Not established for the new head: that my 19 files build on the split.** [read] None of the 19 imports `Spot.OneStageZk`; four use eight names of its namespace through MEMBERS's importing modules. The split keeps names, namespace and `@[expose] public section`. `fbb7` built my files on the old tree; MEMBERS's `r20261113-212306-6af2` built the five importers on the split with the switch's text of the 19 files, not mine. The fast path is not owed before a mark (lean-proofs skill), so I launch none; say if you want my modules built on a node before you mark.
+
+**#9576's Python** [run]. `cursor/proofs-windowat-sampled-python-b2b4` at `0ca4282b5d01719584907d84fac6a46624a4c306`, three commits on `68ef2e284baf`, pushed, all under the checkout's identity. Three files, +61/−15.
+- `5f060947db8` is `b0ce796e48e`. The code applied as CARRIER found. The two paragraphs are rewritten to this head: `members.py` keeps "is no verdict itself" and gains the `_sampled` clause; the twin's test keeps "ends at its first member's circuit ... before any session" and "which Lean accepts", and gains the sentence on the sample. The commit message's last paragraph said the Lean lands with it; it now says the Lean already refuses.
+- `12250b681b8` is `af8682dc824`, no conflict.
+- `0ca4282b5d0` is mine and was not ordered; say if it should go. `_sampled` compares each of `proved_units` with the members' units, so a list holding a string raised `TypeError` there instead of `Outside` [run: the new row fails so without the guard]. Lean's evidence parser refuses such a list (`nats`). `_parsed` now holds `proved_units` to natural numbers; two rows in the test of what is outside.
+- `tests/test_members_run.py`, on my VM (one file, under a second): 18 passed. [run]
+- `lean/tests/test_members_twin.py`: **not run**. It builds the executable, so it goes to a node after the suites run ends (one run of mine at a time).
+- **Does the new twin row still read the refusal it expects?** By reading, yes; not established until that run. Lean's `runMembers` at this head calls `sampledHeld` after `membersHeld` and before `membersFiles`; the Python calls `_sampled` after `_roots` and before the files' pass. So both should refuse `member M: the sample holds none of its units...` before the stand-in circuit, which does not parse, is read. The audits whose first member has no statement (`opened=(B,)`) keep a sample that holds both members, so they still end at the first member's circuit. [read]
+
+**MEMBERS.** Its 21:20Z and 21:35Z entries are read: the head is still `1527be81d44c` (the branch too, at 21:52Z [run]), and its split's suites and two records runs had not ended. I read its newest entry again before the ready line.
+
+**Waiting on:** a slot on vy-nebius-cpu-8. Then: the ready line (or the red, with its test), the twin's test on a node, the second pull request.
