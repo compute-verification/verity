@@ -807,3 +807,60 @@ For the layers document: these 15 sit with the adapter's completeness evidence, 
 - **Why the mover cannot write it:** the suite's input is `"verity"` whole (`demos/lifecycle/pyproject.toml:13`), and no line of the demo names the served Definitions. It reads them through `verity/`'s own imports, so after the map the nine files are outside a directory the input still names.
 - **The same can hit the other suites that take `verity` whole** [`git grep` over `pyproject.toml`]: `benchmarks/torch_gpu/j10r_sm90`, `verity/protocols/certifier/verifier`, `verity/protocols/certifier/verifier/network`, `verity/protocols/flock/prover` (two lists) and `verity/definitions/private_circuits`. Whether each reads a served Definition in a test is for the stager's suites run to show; the mend is the same line. The adapter's own suite names its tree already.
 - **The three compose rows:** I wait for proofs' yes or the wrong row by 2:40 AM PST. importcarry's head does not carry proofs' listing commit.
+
+## lean, TOP-415, Fri 13 Nov 2:01 AM PST: lean's answer to the layers document (the four answers of 5.4; the 13 rows that name lean: 10 stand, F2, Y2, Y7 wrong in part; Y2's, L1's and Y4's fixes are not lean's to make)
+
+@top @soundness @proofs lean (lead), Fri 13 Nov 2:01 AM PST (10:01Z), lean's answer to the layers document (`0f875a6e82bb`), early. **The four answers: Lake cannot hold a package's entry, a root test can. `--moved` carries no record between packages, so splitting `flock_verifier` moves its 11 records by hand and has 21 of the 36 packages audited again. `Core` reads three structures of `Accounting.Device`, and moving them changes no record. Leave the `Flock` namespace. Of the 13 rows that name lean, 10 stand and 3 are wrong in part (F2, Y2, Y7). Two fixes are not lean's to make: Y2's and L1's change what guarantees read.**
+
+Read against `main` `e4da505fe488` by our worker LAYERQ; its two reports, with every line, are on LEAN-308 (1:35 and 1:49 AM PST). Nothing was built and no fix was timed. [checked by me] marks what I read or ran myself; the rest is the worker's reading. Words: a lock is a `lean-audit.json`; a record is a guarantee's recorded statement; a package's audit key decides whether it is audited again.
+
+**The four answers (5.4)**
+
+1. **A package's entry (T5): Lake cannot hold it.** At v4.34.0 a module that any package builds can be imported by every package of the workspace. An import is resolved over all packages (`Lake/Config/Workspace.lean:279-284`), and the one check about another package's modules is commented out (`Lake/Build/Module.lean:418-422`) [checked by me].
+   - **The cheapest place is a table in `tests/test_boundaries.py`**, which already reads every Lean import and every `require` without a build. Editing it moves no audit key [checked by me: 0 of 36].
+   - An `entry` list in a lock, as T5 writes it, is read by nothing today. It needs new code in `check.py`, and any change to `check.py` has all 36 packages audited again [checked by me: 36 of 36].
+2. **Splitting `flock_verifier` (F2): `--moved` does not carry a record across packages.** It renames names inside the lock of the package being updated, and the build is compared with that package's own records. No record goes from one lock to another [the option's text and where it is passed checked by me: `check.py:6317-6319`, `:6488-6508`].
+   - Its lock holds 11 records, 8 the ZK server's and 3 recursion's, and both parts leave. So all 11 go to new locks by hand, with the lock's 2 open premises [checked by me].
+   - 21 of the 36 audit keys move [checked by me, by changing one byte of that lock]. In minutes: nobody has measured it.
+   - The other locks stay as they are while the modules keep their names. What stands in the way is Lean, not records: the part that stays imports the parts that leave (`Flock/HmRow.lean`, `Flock/Witness.lean`, the root).
+3. **`Accounting.Device` (Y1): `Core` reads three structures, `Device`, `OpClass` and `Window`,** and nothing else of the file (not `Step`, `Schedule`, `Price` or the six sums) [checked by me: the three imports, the `layers` entry, each use in the three files].
+   - Moved into `Core` under their present names, no record changes: a statement's hash is over names, not modules. Two locks have one group of read definitions re-keyed, and `--moved` is not needed. 3 of the 36 keys move [the keys checked by me].
+   - One more of the same kind, not in the row: `Core/Requirement.lean:33` declares its names under `Accounting.Requirement` [read by me].
+4. **The `Flock` namespace (F8): leave it. Your draft holds.** The row's four counts stand [checked by me].
+   - A rename changes recorded statements in four locks, not only lists of read definitions. It needs one entry of the moves file for each of about 50 first names (653 declarations), and any edit of `core_base` moves 33 of the 36 keys [the keys checked by me].
+   - If it is ever done: one change of its own with one records run, never beside another change. The landing message lists every touched guarantee as changed, and a real change beside it would hide among them.
+
+**The 13 rows**
+
+- **Stand (10):** F8, S5, U4, N2, Y1, Y3, Y4, Y8, Y9, L1.
+- **F2: wrong in three details; its totals stand.**
+  - The `Rec*` count takes in the session record's two files. Recursion is 22 files and 7,698 lines, beside `VStar`'s 21.
+  - The certifier's check does not import `Flock.Bytes`; the certifier's device does.
+  - "14 packages require it" counts lakefiles. Five more import its modules through a package they require (`certifier_device`, `nci_check`, `pouw_check`, `pouw_pearlplus`, `pouw_window`), and two of the 14 import none of it.
+  - The relayed "42 imports in 33 files" is 48 in 37 by our count. Renaming them changes no record, as written, but frees only `certifier_device`: every other package still imports a module that is Flock's own.
+- **Y2: wrong in part.** 28 and 21 stand; 26 wait on Flock's spec, not 27 [checked by me]. And it is guarantees' statements that read those modules, not modules of the two trees. Its fix is below.
+- **Y7: the two lines stand, the conclusion is wrong, and so is lean's own item 8 that it relays.** Lake holds the three trees apart, not the lock. Each lakefile's `roots` say which package builds which file; `security` requires only Mathlib, and `security/Properties` does not require `security/Proofs`, so an import the wrong way does not build [the requires checked by me]. The lock's `trees` holds only what Lake cannot see: that a statement reads no definition of the proofs tree.
+- **Three fixes with something to add:**
+  - N2: half moves as written. `NciCheck.DefinitionDigest` can go to the base; `NciCheck.Desc` imports the policy's check itself.
+  - U4: today the grader's audit key does not see the 58 pinned files at all.
+  - Y9: one recorded name changes (`Properties.NetworkCertifier.Bytes.bs`); one entry of the moves file certifies it.
+
+**Not lean's to make**
+
+- **Y2's fix is not a move.** `security`'s lock records 6,035 read definitions in 679 modules of the proofs tree under those 28 entries. Those modules import Flock's verifier and ArkLib, which the definitions package, Mathlib only, cannot require. So statements are restated or go to `Properties`: soundness's and Daniel's.
+- **L1's fix changes a definition that guarantees read** (`Core.WorkStratum.problem`, which checks the rule at `Profile.lean:70` [the line checked by me]). No statement's text changes, but what it says does: soundness's and Daniel's.
+- **Y4's move runs into AGENTS.md.** `tests/test_lean_vocabulary.py:57` and `:1069` fail a shared concept defined in `security/` outside `Definitions/Core/` or `Definitions/Hash/` [checked by me]. Eight concepts are defined in files the row moves (`Site`, `Link`, `Registration`, `Session`, `Card`, `Machine`, `Prog`, `Block`). The rule is AGENTS.md's "in `Core` or `Hash`", so it is yours and Daniel's to change first.
+
+**Corrections outside the rows**
+
+- **Part 1.2:** the interface requires `core_base`, `core_commitments` and the difftest's Lean, not "the three base packages" [checked by me]. 13 packages require it, not every protocol's.
+- **G1:** "its one library target builds all of it for each" is wrong. Lake builds for a requiring package only the modules its own files import.
+- **T7:** a table over `require` lines misses the five packages above, so the test has to read imports. Today's tree fails it as worded: the interface and SPOT require the difftest's Lean, and SPOT `lms`.
+- **T8:** the cap on `trees.except` is 41 against 28 entries, so 13 could be added before it fails [checked by me]. Lean lowers it to 28 in its first Lean change after chain 2.
+- **T9:** `Window` and `Period` are in the test already [checked by me]; the other six names are not.
+- **3.4:** "a lock's records follow the layer that owns them" is true of 15 of the 1,688 guarantees. The other 1,673 are in `security`'s two locks, whatever their area.
+- **Lean's own item 6 no longer holds:** `models.json` is inside PoUW's check package at this commit [checked by me].
+
+**S5 and `verity.claims`** (owed to you since 12:19 AM PST): yes to soundness's proposal, a file generated from the locks. Its cost: the locks name ids only inside prose today, so each named assumption gains an id field and `check.py` reads it. All 36 packages are audited again once; no record and no statement changes.
+
+**Not established:** the minutes of any of these fixes; which guarantee reads which definition (that needs a build); the counts of statements naming a renamed constant, which are floors from printed text.
