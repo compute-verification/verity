@@ -1,6 +1,6 @@
 # SWEEP-ABOVE: the layers above the proofs, as `main` holds them
 
-**Status: items 1 to 3. Items 4 to 6 follow in the next push.**
+**Status: all six items. Final.**
 
 - Commit of `main` read: `9182900fb94eefbc4a6cc5d6e14885dc6b18f5ff` ("Queue: #9668 Retired terms: the PoUW verifier's
   six stale entries…", committed 2026-11-13 05:59 UTC). Every path below is as that commit holds it.
@@ -12,6 +12,26 @@
   `verity/protocols/interface`; **security** = `security/`.
 - Tags: [read by me] I opened the file at that line; [counted by me] a count, with the command beside it.
 - A row says what the code does. It does not judge.
+
+## Ten rows to look at first
+
+Each is a row below, by section.
+
+1. 2a, 2b: the certifier's Lean requires the policy's `nci_check` (`certifier/verifier/lean/lakefile.toml:16`) and imports
+   `NciCheck.Desc`, `NciCheck.DefinitionDigest` (`NetworkCheck/Period.lean:9,10`); the page draws no accounting → policy arrow.
+2. 5b: `security/Definitions/Core/{Site,Blocks,Accel/Card}.lean` import `Definitions.Accounting.Device` (the layers allow it).
+3. 5b: accounting's guarantees read the policy's definitions: `Definitions/Accounting/Guarantees/Actual.lean:5,6`,
+   `Actual/Dampener.lean:4`, `Actual/Threaded.lean:4,5`.
+4. 3b: PoUW's Lean verifier embeds 7 model checkpoints' SHA-512 pins (`PouwCheck/Credit.lean:1634`, `models.json`).
+5. 3b: vLLM's scheduler step, pinned to a vLLM build, is a Definition in the certifier's verifier (`certifier/verifier/replay_step.py:1-15`).
+6. 3b, 3c: `verity/commitments/domains.py` holds 14 `VLLM_*` constants (183-196, 210, 397-400) and sections per protocol.
+7. 3a: PoUS, PoUB and SPOT import the runtime (`runtime.ProtocolDef`, `stream.Side`), e.g. `poub/verifier/session_parties.py:47`;
+   the shared `config.py:59-61` names each composite's protocols.
+8. 4a: a device's data sheet is defined four ways: `security/…/Accel/Card.lean:31`, `…/Accounting/TS/Sheet.lean:68`
+   (hand-written instances), `CoreProtocol/Site.lean:150` with its Python mirror, and `pouw/prover/circuit/h1device.py` literals.
+9. 4d: the week/month/year list twice, `verity/periods/__init__.py:29` (read by its own test only) and `verity/protocols/reporting.py:11`.
+10. 6: PoUS's verifier keeps a second claims table (`pous/verifier/protocol.py:45`, 9 entries), and PoUW's provers write claim
+    ids as literals without importing `verity.claims` (`pouw/prover/schemes/pearl_c.py:526` and 3 more).
 
 ## 1. The interface package `verity/protocols/interface/` (Lake package `core_protocol`, lib `CoreProtocol`)
 
@@ -250,7 +270,266 @@ sampled proofs and the challenger 23 (216), Flock and the ZK server 23 (241), Po
 44 (266), the remote bandwidth audit 27 (312), the network certifier 49 (341), composition 2 (392), served periods 5
 (396), the wire and the deployment layer 3 (403).
 
-## Not read yet (this push)
+## 4. Shared concepts defined more than once
 
-Items 3 to 6; `tests/test_boundaries.py`, `tests/test_integration_boundaries.py`, `tests/test_verifier_cost.py`;
-relative Python imports (`from . import`) were not followed across directories (they stay inside a package).
+Definitions found by `rg` for `structure|inductive|abbrev|def|class <Name>` in Lean (`.lake` and, unless named,
+`security/Proofs` excluded) and `class <Name>` or a module constant in Python; importers counted with
+`rg -l 'import <Module>$'` [counted by me]. "Who reads" is direct importers only.
+
+### 4a. The data sheet (a device model's figures)
+
+| Definition | File:line [read by me] | What it is | Who reads it [counted by me] |
+| --- | --- | --- | --- |
+| card files (TOML) | `verity/hardware/cards/*.toml` (7: `b200-sxm-180gb`, `dgx-h200`, `h200-sxm-141gb`, `nebius-vm-monotonic-raw`, `rtx-pro-6000-server`, `xeon-6776p-2s`, `xeon-platinum-8468-2s`) and `verity/hardware/nodes/*.toml` (2) | one data sheet per GPU, host or server model | `verity/hardware/cards/__init__.py` (`load`); Python importers of `verity.hardware.cards`: `pouw/verifier/tests/test_h1device_cards.py:7`; adapter `verity_vllm` 3 files (2 source, 1 test); 12 files in `benchmarks/` (`rg -l 'verity\.hardware\.cards\|from verity\.hardware import cards'`) |
+| `Verity.Accel.Card` (Lean, spec) | `security/Definitions/Core/Accel/Card.lean:31` (store sizes, each resource's rate a second, MAC weights, P1's range) | "A card's numbers (trusted)" | 4 files of `Definitions/Core` (`Accel.lean`, `Accel/H200.lean`, `Accel/Sm120.lean`, `Accel/Machine.lean`); `Accel/H200.lean` and `Accel/Sm120.lean` are generated from the card files by `verity/hardware/lean.py:1-5` ("The Lean card tables, generated from the card files") |
+| `Accounting.TS.Sheet K P` (Lean, spec) | `security/Definitions/Accounting/TS/Sheet.lean:68` (`fmax`, `macs`, `peak`, `pipe`, `width`, `smem`) | "A device's data sheet"; its `fmax` docstring holds the H200's 1,980 MHz and sm_120's 2,430 MHz | 5 files of `Definitions/Accounting` (`TS.lean`, `Assumptions/Sheet.lean`, `Sheets/H200.lean`, `Sheets/B200.lean`, `Headline/Encoding.lean`); `Sheets/H200.lean` and `Sheets/B200.lean` are hand-written tables (not named by `verity/hardware/lean.py`) |
+| `DeviceFigures` (Lean, spec) | `security/Definitions/Core/DeviceFigures.lean:93` | the figures a registered device carries | 4 files (`Definitions/Core` 2, `Proofs/Core` 1, `Definitions.lean`) |
+| `Core.Site.DeviceFigures`, `Core.Site.Sheet` (Lean, code) | `verity/protocols/interface/CoreProtocol/Site.lean:102,150` | the code's copy of the spec's (`Site.lean:16-17`) | `Properties/Core/Site.lean` states it is the spec's; importers of `CoreProtocol.Site` in item 1 |
+| `DeviceFigures`, `Sheet` (Python) | `verity/hardware/site/__init__.py:214,280` | the Python mirror, held by `site-difftest` | `spot/verifier/lean/tests/test_site_difftest.py:25`; `remote/verifier/composition/tests/test_registration_difftest.py:24`; benchmarks `certifier_term`, `compute` |
+| H1's device records (Python literals) | `verity/protocols/pouw/prover/circuit/h1device.py:1-3` | "H1's device records: the hardware facts an H1 execution phase … is built and served on, one a GPU architecture" | `test_h1device_cards.py:1-2`: the records "state each device's SMs, clocks and dense s8 MACs as literals, and the hardware cards … state the same numbers: each literal equals its card's entry"; the policy names it at `inference_only/nci/tiers.py:77` |
+| `Sheet` (Python, benchmarks) | `benchmarks/machine_model/verity_machine_model/sheet.py:82`, `benchmarks/pouw/proved_ticks.py:90` | outside `verity/` | not traced |
+
+### 4b. The resource, or part of the hardware, a protocol accounts for
+
+| Definition | File:line [read by me] | Constructors | Who reads it [counted by me] |
+| --- | --- | --- | --- |
+| `Accounting.Resource` | `security/Definitions/Accounting/Joint.lean:38` | `compute`, `bandwidth`, `capacity` ("The resources a joint audit certifies, each by an audit of its own") | `Joint.lean` imported by 9 files (`Definitions/Accounting` 7 and `Definitions/Accounting.lean`, `Proofs/Accounting/Device.lean`) |
+| `Core.Account.Part` | `verity/protocols/interface/CoreProtocol/Account.lean:103` | `compute`, `memory (tiers)`, `read (tiers)`, `egress` | no importer outside the package (item 1) |
+| `Verity.Accel.Res` | `security/Definitions/Core/Accel/Isa.lean:55` | `tensor`, `issue`, `alu`, `imad`, `shfl`, `f64`, `sfu`, `smem`, `l2`, `dram` (a card's pooled resources) | the `Accel` files |
+| memory tier, Lean | `security/Definitions/Core/Site.lean:116` (spec) and `CoreProtocol/Site.lean:66` (code): `hbm`, `dram`, `disk` | | |
+| memory tier, Python | `verity/hardware/site/__init__.py:63` `TIERS = ("hbm", "dram", "disk")`; `verity/protocols/certifier/verifier/registered.py:32` `TIERS = ("hbm", "dram", "disk")`; `verity/protocols/poub/verifier/session/verifier.py:153` `TIERS = ("hbm", "host")`; `verity/protocols/poub/verifier/ledger.py:71` `class Tier`; `verity/protocols/inference_only/nci/tiers.py:169` `TIERS = {` | | not traced per reader |
+
+### 4c. A protocol's id, and which protocols a composite holds
+
+| Definition | File:line [read by me] | Content |
+| --- | --- | --- |
+| `Accounting.Audit` (Lean, spec) | `security/Definitions/Accounting/JointPeriod.lean:39` | `sampled`, `pouw`, `pous`, `poub`, `network` ("The audits that decide a period, one per protocol") |
+| `Verity.Subprotocol` (Lean, properties) | `security/Properties/Verity/Game.lean:132`, with `Subprotocol.ofAudit` at 154 | `sampled`, `pouw`, `inferenceOnly`, `pous`, `poub`, `network`, `wipe` |
+| `Composite` (Lean) | spec `security/Definitions/Core/Site.lean:351`; code `CoreProtocol/Site.lean:285` | `onsite`, `remote` |
+| composite ids and their components (Lean, compose) | `verity/protocols/onsite/verifier/CoreOnsite.lean:84,96-97`; `CoreRemote.lean:102` (`"verity/remote/v0"`); `CoreComposites.lean:70` (`["verity/onsite/v0", "verity/remote/v1"]`) | the seven component ids of onsite |
+| `COMPOSITES` (Python, shared config) | `verity/configuration/deploy/config.py:59-61` | composite id → component names |
+| `COMPOSITES` (Python, hardware) | `verity/hardware/site/__init__.py:61` | `("onsite", "remote")` |
+| `SUBPROTOCOLS`, `IDS` (Python, SPOT's parties) | `verity/protocols/spot/verifier/parties.py:146-157` | composite id → component name → protocol id (e.g. `"pouw": "verity/pouw/period/v1"`, `"bandwidth": "verity/remote-bandwidth/p2/v0"`), and each component's id outside a composite |
+| domain strings | `verity/commitments/domains.py:19` ("PoUW: the protocol and its identifier", 3 constants) | |
+
+### 4d. A period or window
+
+| Definition | File:line [read by me] | Who reads it [counted by me] |
+| --- | --- | --- |
+| `Verity.Tick`, `TickSpan`, `MonitoringPeriod` (spec) | `security/Definitions/Core/Period.lean:31,35,69` | |
+| `Core.Tick`, `TickSpan`, `MonitoringPeriod` (code) | `verity/protocols/interface/CoreProtocol/Period.lean:34,37,70` | `security/Properties/Core/Period.lean` only (item 1) |
+| `TickSpan`, `MonitoringPeriod`, `block_count` (Python) | `verity/periods/__init__.py:68,120` | `verity/protocols/pous/verifier/wipe_monitoring.py:45` (`block_count`) |
+| `MonitoringPeriod` (SPOT's challenger ledger) | `verity/protocols/spot/verifier/lean/Spot/ChallengerSession.lean:481` (`name`, `lane`, `windows`, `closed`, `cap`, `circuit`) | (proofs' group; not traced) |
+| `MonitoringPeriod` (Python, the slowdown calculator) | `verity/protocols/inference_only/rho/rho/hardware.py:101` (`name`, `seconds`) | not traced |
+| the week/month/year list | `verity/periods/__init__.py:29` `MONITORING_PERIODS` and `verity/protocols/reporting.py:11` `PERIODS`, the same three pairs | `MONITORING_PERIODS`: only `verity/periods/tests/test_periods.py`. `PERIODS`: `pous/verifier/wipe_monitoring.py:46`, `poub/verifier/monitoring.py:38`, `inference_only/rho/rho/params.py:39,49`, and 20 lines in 16 files of `benchmarks/` (`rg -n 'reporting\.PERIODS\|import.*\bPERIODS\b' benchmarks`) |
+| `Window` (spec, accounting) | `security/Definitions/Accounting/Device.lean:81` (`start`, `len`) | |
+| `Window` (certifier, Lean) | `verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean:412` | |
+| `Window` (commitments, Python) | `verity/commitments/windows/interface.py:2214` | |
+| `Window` (requirement difftest) | `verity/definitions/requirement/CircuitRequirement/Difftest.lean:92` | |
+| `Period` (an attested certification period) | `verity/commitments/attest/__init__.py:176`; Lean `Attest/Period.lean` | |
+| `Epoch` | `verity/protocols/pouw/verifier/audit.py:169`; `verity/protocols/flock/verifier/Flock/Firewall/Salts.lean:287` | |
+
+### 4e. A commitment's root
+
+The shared scheme is frame-v3: Python `verity/commitments/frame_v3/__init__.py:132` (`root`), Lean
+`verity/commitments/lean/Commitments/FV3.lean:79,166` [read by me]. Other tree roots computed outside it [read by me]:
+
+| Definition | File:line | What it computes |
+| --- | --- | --- |
+| PoUS's verification tree | `verity/protocols/pous/verifier/check/PousCheck/Merkle.lean:76` (`root`): "The SHA-512 Merkle tree whose root binds the stored blocks", leaves `SHA512(0x00 ‖ salt ‖ …)`, nodes `SHA512(0x01 ‖ l ‖ r)` (`Merkle.lean:6-14`) | imported by PoUB's `RemoteAudit/P2.lean:3` (item 2b) |
+| PoUW's tree from subtree roots | Lean `verity/protocols/pouw/verifier/lean/check/PouwCheck/Credit.lean:893` (`treeRoot`); Python `verity/protocols/pouw/verifier/credit.py:3195` (`tree_root`, "The root of the frame-v3 SHA-512 tree … from the subtree roots") | |
+| the memory challenger's coin tree | `verity/protocols/pous/device/memory_challenger.py:139` (`_root`, over `tree_levels`) | |
+| the attested period's root | `verity/commitments/attest/__init__.py:96`; Lean `verity/commitments/attest/lean/Attest/Period.lean:49` | |
+| the firewall's frame tree (proofs) | `verity/protocols/flock/verifier/Flock/Firewall/Frame.lean:142` (`treeRoot`, "each node SHA-512(left ‖ right)") | |
+| spec | `security/Definitions/Hash/Tree.lean:121,163` (`rootOf`, `root`) | |
+
+`rg -n '^\s*def (root|tree_root|_root|rootOf|treeRoot)\b'` over `verity/` finds 56 Python definitions, and the Lean form
+over `verity/` and `security/` 41 (not all of them commitment roots; not each read) [counted by me].
+
+### 4f. A challenge or coin derivation
+
+The one derivation is `verity/commitments/randomness/__init__.py:154` (`derive`) and Lean
+`verity/commitments/randomness/Randomness.lean:61` [read by me]. PoUS's challenge indices go through it
+(`pous/verifier/streamed_wipe.py:109-112` calls `derive`; Lean `pous/device/lean/MemoryChallenger/Records.lean:113`
+calls `FlockSoundness.Randomness.derive`) [read by me]. Other derivations from SHA-512 [read by me]:
+
+| Definition | File:line | What it is |
+| --- | --- | --- |
+| `xof` (SHA-512 counter mode) | Python `verity/protocols/poub/verifier/codec.py:251`; Lean `poub/verifier/lean/RemoteAudit/Codec.lean:73` and `RemoteAudit/Unboxed.lean:33` | PoUB's codec stream, two Lean definitions in one package |
+| `derive` (codec key) | `verity/protocols/poub/verifier/codec.py:298` | a Sloth key from a seed (a codec key, not a challenge) |
+| `xof` | `verity/protocols/pouw/prover/schemes/ncp.py:52` | NCP's stream |
+| `stream` | `verity/protocols/pouw/prover/circuit/seeds.py:143`; `pous/verifier/schemes/p2.py:327`; `pouw/receipts/receipt_conform.py:60` | per-scheme streams |
+| `Commitments.Draw.derive` | `verity/commitments/lean/Commitments/Draw.lean:134` | a sampling law from strata (imported by `CoreProtocol/Profile.lean`) |
+| `coins` | `pouw/verifier/verifier.py:123`, `spot/verifier/one_stage/verifier.py:177` | not read |
+
+### 4g. A device's key
+
+| Definition | File:line [read by me] | What it is |
+| --- | --- | --- |
+| `Core.Site.Loc.key` | `CoreProtocol/Site.lean:169` (`key : String := ""`), `Auditor.key` at 301, checked by `Owners` at 365-368 ("each new certifier or challenger is one of the auditor's own devices, owned by it and with its key") | the key a location registers; read by the certifier's `NetworkCheck/Registered.lean:25,84` |
+| `PartyKey`, `Identity`, `PrivateKey` | `verity/commitments/crypto/lms.py:658,598,116` | "One party's lower tree on its device, certified by the device's identity" |
+| `Signer` (protocol) | `verity/commitments/attest/__init__.py:124`; Lean `Attest/Period.lean:63` `PartyKey` | |
+| `Signer`, `LmsSigner` | `verity/protocols/pous/device/memory_challenger.py:297,326` | "A memory challenger's S1 key (`lms.PrivateKey`)" |
+| `Signer`, `PublicKey`, `LmsKey`, `LmsSigner` | `verity/protocols/certifier/verifier/certificate.py:321,335,343,361` | "A certifier's LMS public key, `I ‖ T[1]`" |
+| `ChallengerKey` | Python `verity/protocols/spot/device/challenger.py:576`; Lean `Spot/ChallengerRecord.lean:65` | "The verifier's key for its own challenger: LMS over SHA-512" |
+| `Signer` (game) | `security/Properties/Verity/Game.lean:474` | the device's signer in the game |
+| `Identity` (party) | `verity/configuration/deploy/party.py:40`; handshake `Key` `verity/configuration/wire/handshake.py:39` | |
+
+### 4h. "Registration", which item 4's list does not name but the brief's leads do
+
+| Definition | File:line [read by me] | Format strings |
+| --- | --- | --- |
+| spec `Verity.Registration` (entries, `Declared`, `Builder`, `Item`) | `security/Definitions/Core/Site.lean:189-222`; `Registration.Theta` `security/Definitions/Core/Compiler.lean:208` | |
+| code `Core.Registration` (the log) | `CoreProtocol/Registration.lean:51`; Python `verity/hardware/registration.py` | `verity/registration/{information,declaration,log,genesis}/v1` |
+| code `Core.Site.Registration` | `CoreProtocol/Site.lean:200-205`; Python `verity/hardware/site/__init__.py:432` | |
+| SPOT's window registration | `Spot/Registration.lean:98`; Python `spot/verifier/one_stage/registration.py` | `verity/registration/v0` to `/v3`, `verity/registration-receipt/v1`, `verity/registration/produced/v0`, `/v1` (in `verity/protocols/spot/` and `verity/commitments/domains.py`) |
+| PoUB's registrations | Lean `poub/verifier/lean/RemoteAudit/P2.lean:49`, `RemoteAudit/Window.lean:52`; Python `poub/verifier/audit.py:373`, `poub/verifier/p2.py:91` | |
+| `ServedRegistration` | `verity/protocols/spot/verifier/one_stage/served.py:103` | |
+
+SPOT's `verity/registration/v1|v2` is named outside the proofs' group as a literal string [read by me]: the policy
+`inference_only/verifier/nci/lean/NciCheck/Baseline.lean:106-107` (`FORMAT`, `FORMAT_V2`), PoUW
+`pouw/verifier/lean/check/PouwCheck/Inputs.lean:37` (`formats`) and `PouwCheck/Credit.lean:211` (`COMMIT_FORMAT`),
+compose `remote/verifier/CoreRemote.lean:212,238`, and the table `verity/commitments/domains.py:175-176`
+(`REGISTRATION_V1`, `REGISTRATION`). The policy's Python reference imports SPOT's
+`verity.protocols.spot.verifier.one_stage.registration.digest` (`inference_only/verifier/nci/lean/scripts/nci_reference.py:497`).
+`rg -n '^\s*(public )?(structure|inductive|abbrev|def) Registration\b' -g '*.lean'` counts 26 Lean definitions named
+`Registration` (`security/` 7, `verity/` 19), and `rg -n '^class \w*Registration\b'` 4 Python classes (`site` 1, `poub` 2,
+`spot` 1) [counted by me].
+
+## 5. `security/`: statements that read another area or a code package
+
+Areas are the directories under `security/Definitions/`, `Properties/`, `Proofs/` (a top-level file is its own area).
+Import lines by `/tmp/sw/secimp.py` (21,608 import lines in all three trees) [counted by me]. Flock and Spot are the other
+sweep's; they appear here only where another area reads them.
+
+### 5a. The lock's own rules [read by me]
+
+- `security/lean-audit.json` `layers`: 47 entries, all over the `Definitions` tree; each names the modules a layer may
+  import, an `except` list of modules held apart, and `sealed`. Cross-area imports the layers allow (an entry's
+  `imports` outside its own area): `Definitions.Core` → `Definitions.Accounting.Device`; `Definitions.Nci` → `Core`;
+  `Definitions.Pouw` → `Core`, `Claims`, `Hash`; `Definitions.Pous` → `Core.Game`; `Definitions.NetworkCertifier` →
+  `Claims`, `Hash`; `Definitions.Accounting` → `Core`, `Pouw`, `Pous.Game.Prob`, `Pous.Model.Audit`,
+  `Pous.Model.SampledAudit`, `Pous`, `Hash`, `Claims`; `Definitions.Accounting.Guarantees` → `Core`, `Nci`,
+  `Nci.Assumptions`, `Pouw`, `Pous.P2.Cost`, `Pouw.Assumptions`, `Pous.Assumptions.P2`, `Pous`, `Pous.Assumptions`,
+  `Claims`, `Assumptions`; `Definitions.Nci.Guarantees.FitRate` → `Core`, `Accounting`; the three
+  `Definitions.Accounting.JointBridge.CommOf*` → `NetworkCertifier.Period`, `.Tap`, `.PooledLeak`, `.Checked`,
+  `.Witness`; `Definitions.Spot` → `Core`; `Definitions.WeightSecurity` → `Core`, `Spot.Dataflow`;
+  `Definitions.Assumptions` → `Hash`, `Core`, `Accounting`, `Nci`, `Pouw`, `WeightSecurity`.
+- Its `except` lists (non-empty): `Definitions.Nci.Guarantees` except `FitRate`; `Definitions.Pouw` except
+  `PearlC.Defs`, `Lead.Model`, `Lead.Deployed`; `Definitions.Accounting` except `Bandwidth.Game` and the three
+  `JointBridge.CommOf*`.
+- `trees`: `definitions` = `Definitions`, `properties` = `Properties`, `proofs` = `Proofs`, `Proofs.Properties`; its
+  `except` has 28 entries, 21 of them `Proofs.Flock.*`; the 7 others: `Proofs.Accounting.TS.Session`,
+  `Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod`, `…IntegrityOfIntegrityBlock`,
+  `Proofs.Pouw.OnsiteFreed`, `Proofs.Accounting.ReadUnit.Guarantees`, `Proofs.Properties.Verity.Recursive`,
+  `Proofs.Properties.Verity.Sampled`; each reason says a statement reads C-Flock's (or the toy instance's) definitions
+  "still in Proofs".
+- `reads_exempt`: `Flock`, `Randomness`, `PouwWindow.Rounds`, `PouwCheck.Rounds` (the last two "read through remote's
+  PoUW period component").
+- `security/Properties/lean-audit.json` `layers`: 61 entries over `Properties`. Those whose `imports` include a code
+  package of another protocol than their own: `Properties.Accounting.Compose` and `Properties.Accounting.Served` →
+  `Spot`; `Properties.Challenger` → `CoreProtocol`, `Spot`, `Flock`, `Lms`; `Properties.Nci.Record` →
+  `Flock.TemplateQuery`, `Spot.Wires`, `Spot.Bits`; `Properties.Verity` → `CoreOnsite`, `CoreComposites`, `Flock.Hash`,
+  `Flock.CoinTree`, `Flock.Hm96`, `Lms.Verify`; `Properties.Pouw.Lead.V2` → `CoreProtocol.Protocol`. Non-empty `except`:
+  `Properties.Pouw` (11 modules), `Properties.Pous` (3), `Properties.Accounting` (7), `Properties.Accounting.Remote`
+  (7), `Properties.Spot` (10). `security/Proofs/lean-audit.json` `layers`: 1 entry (`Proofs.Pouw.Dimension.Lifting`,
+  Mathlib only).
+
+### 5b. Definitions tree, from my own scan [counted by me]
+
+No file of `security/Definitions/` imports a code package, a `Properties` module or a `Proofs` module. Area → other
+area, by files: Accounting → Pouw 25, Core 22, Pous 12, Hash 3, Nci 3, NetworkCertifier 3, Claims 2, Assumptions 1;
+Pouw → Core 13, Hash 5, Claims 2; Nci → Core 12, Assumptions 3, Accounting 1; Core → Accounting 3; NetworkCertifier →
+Core 4, Claims 2, Hash 1; Pous → Core 1; Hash → Core 5; Claims → Core 3; Assumptions → Core 2, Accounting 1, Hash 1, Nci
+1, Pouw 1, WeightSecurity 1; WeightSecurity → Core 2, Assumptions 1, Spot 1; Flock → Core 5, Claims 3, Hash 1; Spot →
+Core 4.
+
+The ones against the page's direction (accounting below policy; core below accounting) [read by me]:
+
+| File:line | Imports |
+| --- | --- |
+| `security/Definitions/Core/Site.lean:3` | `Definitions.Accounting.Device` |
+| `security/Definitions/Core/Blocks.lean:4` | `Definitions.Accounting.Device` |
+| `security/Definitions/Core/Accel/Card.lean:4` | `Definitions.Accounting.Device` |
+| `security/Definitions/Accounting/Guarantees/Actual.lean:5,6` | `Definitions.Nci.Reads`, `Definitions.Nci.Assumptions` |
+| `security/Definitions/Accounting/Guarantees/Actual/Dampener.lean:4` | `Definitions.Nci.Dampener` |
+| `security/Definitions/Accounting/Guarantees/Actual/Threaded.lean:4,5` | `Definitions.Nci.Assumptions.Threads`, `Definitions.Nci.Dark` |
+| `security/Definitions/Nci/Guarantees/FitRate.lean:3,4` | `Definitions.Accounting.Actual`, `Definitions.Accounting.Physical` (the layers' `except`) |
+| `security/Definitions/WeightSecurity/Tied.lean:3` | `Definitions.Spot.Dataflow` |
+
+Guarantee modules (`…/Guarantees/…`) of Accounting reading a protocol's area [read by me]: `Accounting/Guarantees/BoundReceipt.lean:5-7`,
+`Bridges.lean:5-6`, `FpG1.lean:5-6`, `PerRun.lean:5-7`, `Pouw.lean:4-5`, `TS/FoldFanIn.lean:5`, `TS/LowBit.lean:4` → Pouw;
+`Memory.lean:4`, `RemoteDraw.lean:5`, `Responder.lean:5-7` → Pous; `Actual*.lean` → Nci (above).
+
+### 5c. Properties tree, from my own scan [counted by me]
+
+Each Properties area reads its own protocol's code package (Pouw → `pouw` 11 files and `CoreProtocol` 1, Pous → `pous` 7, Spot → `spot` 12,
+Nci → `inference_only` 7, NetworkCertifier/NetworkPeriod/NetworkScan → `certifier` 7, Flock → `flock` 5). Reads of
+another protocol's code, or of the interface, compose or shared code [read by me]:
+
+| File:line | Imports | Package |
+| --- | --- | --- |
+| `security/Properties/Accounting/Remote.lean:3,4`; `Remote/Line/Record.lean:5`; `Remote/Live.lean:3`; `Remote/Pooled.lean:4`; `Remote/Schedule.lean:4`; `Remote/Shared.lean:4`; `Remote/Subprotocol.lean:3` | `RemoteAudit.*` | poub |
+| `security/Properties/Accounting/Requirement.lean:4` | `CircuitRequirement` | definitions |
+| `security/Properties/Pouw/Lead/V2.lean:3` | `CoreProtocol.Protocol` | interface |
+| `security/Properties/Core/Period.lean:3`; `Core/Site.lean:4` | `CoreProtocol.Period`, `CoreProtocol.Site` | interface |
+| `security/Properties/Nci/Record.lean:7-9` | `Flock.TemplateQuery`, `Spot.Wires`, `Spot.Bits` | flock, spot |
+| `security/Properties/Challenger.lean:3` | `Spot.OneStageZk` | spot |
+| `security/Properties/Composition.lean:3` | `CoreComposition.Tie` | compose (remote) |
+| `security/Properties/Remote.lean:3` | `CoreRemote` | compose (remote) |
+| `security/Properties/Verity/Game.lean:3,14-17` | `CoreComposites`, `Flock.CoinTree`, `Flock.Hash`, `Flock.Hm96`, `Lms.Verify` | compose (onsite), flock, commitments |
+| `security/Properties/NetworkCertifier/Check/LinkWindow.lean:4` | `Lms.Sign` | commitments |
+| `security/Properties/Attest.lean:3` | `Attest.Period` | commitments |
+| `security/Properties/Hash/Identity.lean:3` | `Identity.Tagged` | commitments |
+| `security/Properties/Core/Evaluate.lean:3` | `Evaluate.Prims` | definitions |
+| `security/Properties/Firewall.lean:3` | `Firewall.Release` | recursion |
+
+Properties area → another area's Properties [read by me]: `Accounting/Compose.lean:4` → `Properties.Spot.Draw`;
+`Accounting/JointBridge/ServiceSoundOfSessions.lean:4` and `WorkOfH1CheckedCreditPeriod.lean:4` → `Properties.Pouw.Period`;
+`Accounting/JointBridge/SpaceOfPeriodHeld.lean:3` → `Properties.Pous.Period`; `Pouw/Credit.lean:5` and
+`Pouw/PearlPlusDraw.lean:4` → `Properties.Spot.Draw`; `Attest.lean:7` → `Properties.Pous.MemoryChallenger`;
+`NetworkCertifier/Check.lean:4` and `Pous/EndToEnd.lean:7` → `Properties.Hash.Identity`; `Remote.lean:5-8` →
+`Properties.Composition`, `Properties.Nci.Desc`, `Properties.Nci.Baseline`, `Properties.Spot`;
+`Verity/Game.lean:4-6` → `Properties.Composition`, `Properties.Pouw.PearlPlus`, `Properties.Flock.Circuit.CircuitOf`;
+`Spot/HistoryTable.lean:5` → `Properties.Verity.Sha512`. No Properties file imports a `Proofs` module.
+
+The Properties package requires 17 code packages by path (`security/Properties/lakefile.toml`); the Proofs package
+requires 6 more by path besides `security` and `security_properties`: `flock_verifier`, `certifier_program`,
+`core_randomness`, `core_vstar`, `core_vstar_recursive` (`security/Proofs/lakefile.toml`) [read by me].
+
+## 6. Readers of `verity/claims`
+
+`verity/claims/__init__.py` (623 lines) defines `ENTRIES` (87 bare ids), `PROPERTIES` (8), `INSTANCES` (15), so 120
+composed `<property>/<instance>` ids, and `get` (loaded with `importlib`, `len(...)`) [counted by me]. The listing marks it
+`trusted`, with `loaded_by = ["verity/commitments/tests/test_hm96.py"]` (`tests/import_order.toml`), and
+`tests/test_boundaries.py:79-80` makes it stdlib-only [read by me].
+
+| Reader | File:line | What it takes [read by me] |
+| --- | --- | --- |
+| SPOT's challenger (proofs; device) | `verity/protocols/spot/device/challenger.py:219` (`from verity import claims`), used at 378 | `claims.INSTANCES` (all 15), to accept a coin source's `uniform/<instance>` claim (`coin_claim`, 371-381) |
+| PoUS's verifier | `verity/protocols/pous/verifier/protocol.py:30-31,93` | `Entry`, `get`; and a second table `LOCAL_CLAIMS` (line 45, 9 entries, "Claims a certificate cites that `verity.claims` does not hold yet", 86-87) |
+| PoUW's provers (no import) | `verity/protocols/pouw/prover/schemes/pearl_c.py:526`, `pearl_kw.py:629`, `pearl_c4.py:1145`, `ncp.py:242` | claim ids as literal strings in `claims=(…)` (e.g. `"tt-out"`, `"random-oracle"`, `"cr/blake3"`, `"live-verifier"`); `pouw/verifier/protocol.py:109` says they "are `verity.claims` ids, or ids in the same format that no render cites yet" |
+| tests | `spot/verifier/tests/test_coin_claims.py:13,22`; `poub/verifier/tests/test_ledger.py:27,243`; `commitments/tests/test_hm96.py:153,158,254-257`; `pous/verifier/tests/test_pous_protocol.py:17` | `get(id)` and its `.name`/`.kind` |
+| docstrings (Python) | `commitments/crypto/lms.py:3,19`, `crypto/aead.py:17`, `commitments/gates/lms.py:13`, `pous/device/memory_challenger.py:407` | prose naming `euf-cma/lms-sha512-n64`, `faithful`, `prf/sha-512` |
+| the vLLM adapter's lints | `adapters/vllm/conftest.py:41` and 5 test files (`tests/lint/test_p01_core_abstractions.py:46`, `tests/program/*boundar*.py`, `test_moe_fp8_definition_imports.py:64`) | `"verity.claims"` as an allowed import prefix |
+| `tests/test_provider_names.py:5,22` | scans `verity/claims/` text | |
+| Lean files citing an id in backticks or quotes | 308 files, 915 citations (a script over every `.lean`, matching `` `id` `` or `"id"` against the 207 ids) | most: `security/Proofs/Flock` 135 files, `security/Definitions/Accounting` 61, `security/Proofs/Accounting` 19, `security/Definitions/Pouw` 16; in `verity/`: pouw 3, pous 3, spot 2, flock 2, hardware 1, certifier 1. Most cited: `cr/sha-512` 216, `ecr/sha-512` 167, `live-verifier` 103, `trusted-host` 78, `uniform/io-getrandombytes` 36 |
+| locks | `security/lean-audit.json` (177 occurrences, 19 distinct ids), `security/Properties/lean-audit.json` (24, 9), `security/Proofs/lean-audit.json` (11, 8) | ids inside text fields (a regex over each lock for the 207 ids as whole words); the locks' own `claims` key is a different thing (Lean `Claims` modules and their witnesses) |
+| TOML files naming the path | 29 (`rg -l verity/claims --glob '*.toml'`): 10 under `benchmarks/`, 12 pyprojects under `verity/` and `tools/` (e.g. `verity/commitments/pyproject.toml:10`), `tests/import_order.toml`, `tests/tree.toml`, `tools/verity/check/drive.toml:76`, `tools/move/` 2, `inference_only/rho/data/premises.toml` | a suite's declared inputs, the listing, the layout |
+
+## Not read (whole sweep)
+
+- `main` moved from `9182900fb9` to `b3902993ca` (07:46 UTC) while I read: 1,519 files changed, one rename
+  (`adapters/vllm/…/descriptor_equivalence.py`) and three deletions (two adapter files,
+  `certifier/verifier/network/README.md`), none of them a path cited here. I did not re-read at `b3902993ca`.
+- `tests/test_verifier_cost.py`; `tests/test_boundaries.py` beyond lines 70-126; `tests/tree.toml`.
+- Python relative imports (`from . import`) were not followed; Python loads by path were found only by text (`rg`).
+- In 3b, the `torch`, `vllm` and model-family counts are not split into code and prose beyond the rows named.
+- `verity/protocols/inference_only/nci/models.json`, `rho/data/models.toml`, `verity/definitions/silicon/models.py`
+  (GPU semantics) were not opened.
+- 4e and 4f list definitions by name; I did not read every `root`/`derive` to say which compute a commitment's root or a
+  challenge.
+- 5: the `Proofs` tree's cross-area imports were counted (in `/tmp/sw/sec.tsv`) but not tabulated; statements were
+  taken as "the files of a `Definitions` or `Properties` area", not each guarantee in the lock's `guarantees`.
+- The proofs group (`flock`, `spot`, `recursion`) beyond where another group reads it: the other sweep's.
+- Notion's "SPOT security definitions" page, Linear, Slack: not read.
