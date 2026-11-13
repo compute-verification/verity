@@ -12,7 +12,8 @@
 # - A Lean module is named from its package's root (`Flock.Firewall`, `PouwCheck`), so no Lean module, area,
 #   declaration or lock record changes; what changes in a lakefile or a manifest is a path between packages.
 # - `interface/`, `remote/`, `onsite/`, `tests/` and the loose files of `verity/protocols/` stay where they are.
-# - No directory is split, so the map has no [split] table and reads the same on any base.
+# - No directory is split. `verity/` is part moved, and the four Rust files that climb from Flock's live crate to the
+#   root read to `layout.py` as naming it; [split] says why its rewrite is right.
 # Nothing is edited or deleted, and no file is added but the groups' `__init__.py`, which `layout.py` writes below the
 # package root `verity`. The format is `layout_map.toml`'s.
 
@@ -63,6 +64,13 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
            "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationVectors.lean",
            "verity/protocols/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean",
            "verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean"]
+
+[split]
+# references to a directory this move splits that stay right: "old file: old directory" = why
+"verity/protocols/flock/prover/live/src/circuit.rs: verity" = "`../../../../..` is joined to the crate's directory (`CARGO_MANIFEST_DIR`, `live/`), not the file's: it names the root, and the rewrite climbs one level more, as the crate does"
+"verity/protocols/flock/prover/live/src/firewall.rs: verity" = "`../../../../..` is joined to the crate's directory (`CARGO_MANIFEST_DIR`, `live/`), not the file's: it names the root, and the rewrite climbs one level more, as the crate does"
+"verity/protocols/flock/prover/live/src/lookup.rs: verity" = "`../../../../..` is joined to the crate's directory (`CARGO_MANIFEST_DIR`, `live/`), not the file's: it names the root, and the rewrite climbs one level more, as the crate does"
+"verity/protocols/flock/prover/live/src/sha512_native.rs: verity" = "`../../../../..` is joined to the crate's directory (`CARGO_MANIFEST_DIR`, `live/`), not the file's: it names the root, and the rewrite climbs one level more, as the crate does"
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`): each directory as a dotted path, one group deeper.
