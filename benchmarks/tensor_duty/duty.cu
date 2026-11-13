@@ -22,10 +22,10 @@
 // MACs a SM-cycle.
 //
 // FP32 beside the tensor pipe (arms A to D): one CTA an SM of a wgmma e4m3 warpgroup (wg_e4m3's batch) and FW FP32
-// warps, each thread looping 64 FADDs on FCH chains and 3 loop instructions an iteration (the card's price.fp32_loop).
-// The CTA runs in steps, one __syncthreads each: thread 0 picks the step's mode from %globaltimer, the warpgroup runs
-// NB_STEP batches when the tensor is on, and the FP32 warps their iterations when FP32 is on, the adds in the
-// wgmma's shadow. A: tensor alone; B: FP32 alone (F_ITERS a step); C: both every step, X the MACs an add (the add:MAC
+// warps, two a scheduler, each thread looping 64 FADDs on FCH chains and 3 loop instructions an iteration (the card's
+// price.fp32_loop). The CTA runs in steps, one named barrier each: thread 0 picks the step's mode from %globaltimer,
+// the warpgroup runs NB_STEP batches when the tensor is on, and the FP32 warps their iterations when FP32 is on, the
+// adds in the wgmma's shadow. A: tensor alone; B: FP32 alone (F_ITERS a step); C: both every step, X the MACs an add (the add:MAC
 // ratio 1/X); D: tensor and FP32 alone in alternating phases of X ms. Classes: zero, const and uniform, the wgmma's
 // operands as wg_e4m3's and the adds' 0, 1 and +-[1, 2) from the same hash. Readings: MACs and adds over the host's
 // wall clock; clock64 over %globaltimer for the kernel and for each mode's steps (thread 0's, step start to step
@@ -301,10 +301,11 @@ __global__ void __launch_bounds__(SW * 32, 1) sync_k(int cls, u32 nb, int cont, 
   if (threadIdx.x == 0) out[blockIdx.x] = Stamp{t0, gtimer(), base, clk(), ops, tns, tcyc, smid(), 0};
 }
 
-constexpr int FW = 4;          // FP32 warps a CTA, one a scheduler: two would cap the warpgroup's registers at 168
+constexpr int FW = 8;          // FP32 warps a CTA, two a scheduler: one warp's issue gaps (its taken branch) are the other's slots
 constexpr int FCH = 16;        // independent add chains a thread
 constexpr int NB_STEP = 16;    // tensor batches a step
-constexpr u32 F_ITERS = 1024;  // iterations an FP32-alone step
+constexpr u32 F_ITERS = 512;   // iterations an FP32-alone step
+constexpr int BT = 128 + FW * 32;  // the CTA's threads
 constexpr double STEP_MACS = NB_STEP * WB<true> * WG_MACS;  // a CTA's MACs a tensor step
 constexpr double ITER_ADDS = FW * 32 * 64.0;                // a CTA's adds an iteration
 
@@ -331,8 +332,12 @@ __device__ __forceinline__ void add_loop(float* f, const float* g, u32 n) {
   }
 }
 
-// arm 'A', 'B', 'C' or 'D' (header); citers: C's iterations a step; phase_ns: D's
-__global__ void __launch_bounds__(128 + FW * 32, 1)
+// the step barrier, named so the warpgroup's and the FP32 warps' loops meet at it from their own code
+__device__ __forceinline__ void step_bar() { asm volatile("bar.sync 1, %0;\n" ::"n"(BT) : "memory"); }
+
+// arm 'A', 'B', 'C' or 'D' (header); citers: C's iterations a step; phase_ns: D's. The warpgroup and the FP32 warps
+// run their own branch, so the kernel's registers are the larger branch's, not the sum of the accumulators and chains.
+__global__ void __launch_bounds__(BT, 1)
     beside_k(int cls, int arm, u32 citers, u64 phase_ns, u64 ns, BStamp* out, u32* sink) {
   extern __shared__ __align__(1024) uint8_t smem[];
   __shared__ u64 s_t0, s_c0;
@@ -341,45 +346,41 @@ __global__ void __launch_bounds__(128 + FW * 32, 1)
   uint8_t* A = smem;
   uint8_t* B = smem + KS * ABYTES;
   const u32 seed = blockIdx.x * 0x10000u;
-  for (int i = threadIdx.x; i < KS * (ABYTES + BBYTES) / 4; i += blockDim.x)
+  for (int i = threadIdx.x; i < KS * (ABYTES + BBYTES) / 4; i += BT)
     reinterpret_cast<u32*>(smem)[i] = word(seed + i, cls, true);
   __syncthreads();
   asm volatile("fence.proxy.async.shared::cta;\n" ::: "memory");
-  const bool tw = threadIdx.x < 128, f0 = threadIdx.x == 128;
-  uint64_t da[KS], db[KS];
-#pragma unroll
-  for (int k = 0; k < KS; ++k) { da[k] = desc(A + k * ABYTES, 128, 256); db[k] = desc(B + k * BBYTES, 128, 256); }
-  float d[N / 2], f[FCH], g[FCH];
-#pragma unroll
-  for (int i = 0; i < N / 2; ++i) d[i] = 0;
-#pragma unroll
-  for (int j = 0; j < FCH; ++j) {
-    f[j] = fword(seed + threadIdx.x * 2 * FCH + j, cls);
-    g[j] = fword(seed + threadIdx.x * 2 * FCH + FCH + j, cls);
-  }
   if (threadIdx.x == 0) { s_t0 = gtimer(); s_c0 = clk(); }
   __syncthreads();
   const u64 t0 = s_t0, c0 = s_c0, tend = t0 + ns;
-  u64 ops = 0, iters = 0, fcyc = 0, fns = 0, mcyc[4] = {}, mns[4] = {}, pg = t0, pc = c0;
-  int pm = STOP;
-  for (u32 k = 0;; ++k) {
-    if (threadIdx.x == 0) {
-      const u64 gt = gtimer(), c = clk();
-      mns[pm] += gt - pg;
-      mcyc[pm] += c - pc;
-      pg = gt;
-      pc = c;
-      pm = gt >= tend ? STOP
-           : arm == 'A' ? TENSOR
-           : arm == 'B' ? FP32
-           : arm == 'C' ? BOTH
-           : ((gt - t0) / phase_ns) % 2 ? FP32 : TENSOR;
-      s_mode[k & 1] = pm;
-    }
-    __syncthreads();
-    const int m = s_mode[k & 1];
-    if (m == STOP) break;
-    if (tw) {
+  BStamp& o = out[blockIdx.x];
+  u32 x = 0;
+  if (threadIdx.x < 128) {
+    uint64_t da[KS], db[KS];
+#pragma unroll
+    for (int k = 0; k < KS; ++k) { da[k] = desc(A + k * ABYTES, 128, 256); db[k] = desc(B + k * BBYTES, 128, 256); }
+    float d[N / 2];
+#pragma unroll
+    for (int i = 0; i < N / 2; ++i) d[i] = 0;
+    u64 ops = 0, mcyc[4] = {}, mns[4] = {}, pg = t0, pc = c0;
+    int pm = STOP;
+    for (u32 k = 0;; ++k) {
+      if (threadIdx.x == 0) {
+        const u64 gt = gtimer(), c = clk();
+        mns[pm] += gt - pg;
+        mcyc[pm] += c - pc;
+        pg = gt;
+        pc = c;
+        pm = gt >= tend ? STOP
+             : arm == 'A' ? TENSOR
+             : arm == 'B' ? FP32
+             : arm == 'C' ? BOTH
+             : ((gt - t0) / phase_ns) % 2 ? FP32 : TENSOR;
+        s_mode[k & 1] = pm;
+      }
+      step_bar();
+      const int m = s_mode[k & 1];
+      if (m == STOP) break;
       if (m & TENSOR) {
         for (int j = 0; j < NB_STEP; ++j) {
           pass(d);
@@ -392,33 +393,47 @@ __global__ void __launch_bounds__(128 + FW * 32, 1)
         }
         ops += NB_STEP * WB<true>;
       }
-    } else if (m & FP32) {
-      const u32 n = m == BOTH ? citers : F_ITERS;
-      u64 ga = 0, ca = 0;
-      if (f0) { ga = gtimer(); ca = clk(); }
-      add_loop(f, g, n);
-      if (f0) {
-#pragma unroll
-        for (int j = 0; j < FCH; ++j) asm volatile("" ::"f"(f[j]));  // its adds issued before its time is read
-        fns += gtimer() - ga;
-        fcyc += clk() - ca;
-      }
-      iters += n;
     }
+#pragma unroll
+    for (int i = 0; i < N / 2; ++i) x ^= __float_as_uint(d[i]);
+    if (threadIdx.x == 0) {
+      o.t0 = t0, o.c0 = c0, o.ops = ops;
+      for (int i = 0; i < 4; ++i) o.mcyc[i] = mcyc[i], o.mns[i] = mns[i];
+    }
+  } else {
+    const bool f0 = threadIdx.x == 128;
+    float f[FCH], g[FCH];
+#pragma unroll
+    for (int j = 0; j < FCH; ++j) {
+      f[j] = fword(seed + threadIdx.x * 2 * FCH + j, cls);
+      g[j] = fword(seed + threadIdx.x * 2 * FCH + FCH + j, cls);
+    }
+    u64 iters = 0, fcyc = 0, fns = 0;
+    for (u32 k = 0;; ++k) {
+      step_bar();
+      const int m = s_mode[k & 1];
+      if (m == STOP) break;
+      if (m & FP32) {
+        const u32 n = m == BOTH ? citers : F_ITERS;
+        u64 ga = 0, ca = 0;
+        if (f0) { ga = gtimer(); ca = clk(); }
+        add_loop(f, g, n);
+        if (f0) {
+#pragma unroll
+          for (int j = 0; j < FCH; ++j) asm volatile("" ::"f"(f[j]));  // its adds issued before its time is read
+          fns += gtimer() - ga;
+          fcyc += clk() - ca;
+        }
+        iters += n;
+      }
+    }
+#pragma unroll
+    for (int j = 0; j < FCH; ++j) x ^= __float_as_uint(f[j]);
+    if (f0) o.iters = iters, o.fcyc = fcyc, o.fns = fns;
   }
-  u32 x = 0;
-#pragma unroll
-  for (int i = 0; i < N / 2; ++i) x ^= __float_as_uint(d[i]);
-#pragma unroll
-  for (int j = 0; j < FCH; ++j) x ^= __float_as_uint(f[j]);
-  if (x == 0x9e3779b9u) sink[blockIdx.x * blockDim.x + threadIdx.x] = x;
+  if (x == 0x9e3779b9u) sink[blockIdx.x * BT + threadIdx.x] = x;
   __syncthreads();
-  BStamp& o = out[blockIdx.x];
-  if (threadIdx.x == 0) {
-    o.t0 = t0, o.t1 = gtimer(), o.c0 = c0, o.c1 = clk(), o.ops = ops;
-    for (int i = 0; i < 4; ++i) o.mcyc[i] = mcyc[i], o.mns[i] = mns[i];
-  }
-  if (f0) o.iters = iters, o.fcyc = fcyc, o.fns = fns;
+  if (threadIdx.x == 0) o.t1 = gtimer(), o.c1 = clk();
 }
 
 using KernelFn = void (*)(int, u32, int, u64, u64, Stamp*, u32*);
@@ -468,7 +483,7 @@ static int beside_main(int argc, char** argv) {
     }
   cudaDeviceProp p;
   CK(cudaGetDeviceProperties(&p, 0));
-  const int nsm = p.multiProcessorCount, threads = 128 + FW * 32;
+  const int nsm = p.multiProcessorCount, threads = BT;
   const size_t smem = (size_t)KS * (64 * 32 + N * 32);
   CK(cudaFuncSetAttribute(beside_k, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem));
   BStamp* sd;
