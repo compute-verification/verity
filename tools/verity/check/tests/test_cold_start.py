@@ -50,7 +50,7 @@ def machine(tmp_path_factory) -> tuple[Path, str]:
     """(the machine's bare repository, the commit it ships): this checkout's working tree as one commit, its `main`, with the
     objects borrowed from this checkout's."""
     m = tmp_path_factory.mktemp("machine")
-    env = {**os.environ, "GIT_INDEX_FILE": str(m / "index")}
+    env = Names({**os.environ, "GIT_INDEX_FILE": str(m / "index")})
     _git(ROOT, "read-tree", "HEAD", env=env)
     _git(ROOT, "add", "-A", env=env)
     tree, head = _git(ROOT, "write-tree", env=env), _git(ROOT, "rev-parse", "HEAD")
@@ -81,7 +81,7 @@ def shipped(machine, tmp_path, monkeypatch):
         tf.extractall(tool, filter="data")
     uv_cache = subprocess.run([UV, "cache", "dir"], capture_output=True, text=True, check=True).stdout.strip()
     venv = Path(sys.prefix).resolve()
-    path = [p for p in os.environ.get("PATH", os.defpath).split(os.pathsep) if p and not Path(p).resolve().is_relative_to(venv)]
+    path = [p for p in os.get_exec_path() if p and not Path(p).resolve().is_relative_to(venv)]
     for k in list(os.environ):
         if k.startswith(SCRUBBED) or k in DROPPED:
             monkeypatch.delenv(k)

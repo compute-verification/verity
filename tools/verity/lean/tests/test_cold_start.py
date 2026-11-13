@@ -25,13 +25,20 @@ ROOT = HERE.parents[3]
 PKG = "tools/verity/lean/tests/fixtures/control"
 
 
+class Names(dict):
+    """An environment whose repr shows none of its values: a failing test's traceback prints its frames' arguments."""
+
+    def __repr__(self) -> str:
+        return f"<environment of {len(self)} names>"
+
+
 def _git(cwd: Path, *args: str, env: dict[str, str] | None = None) -> str:
     return subprocess.run(["git", *args], cwd=cwd, env=env, capture_output=True, text=True, check=True).stdout.strip()
 
 
 def _shipped(tmp_path: Path) -> Path:
     """This checkout's working tree as one commit, checked out as a run's shipped tree, its objects borrowed from this checkout's."""
-    env = {**os.environ, "GIT_INDEX_FILE": str(tmp_path / "index")}
+    env = Names({**os.environ, "GIT_INDEX_FILE": str(tmp_path / "index")})
     _git(ROOT, "read-tree", "HEAD", env=env)
     _git(ROOT, "add", "-A", env=env)
     tree, head = _git(ROOT, "write-tree", env=env), _git(ROOT, "rev-parse", "HEAD")
@@ -49,18 +56,22 @@ def _shipped(tmp_path: Path) -> Path:
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_lean_check_builds_and_audits_a_package_in_a_fresh_tree(tmp_path, monkeypatch):
+    """`--build` of the control package from a fresh shipped tree, to its `AUDIT` line. It can take over a minute (a whole
+    tree's checkout and the package's first Lake build, and outside `check` a wait for a node's Lean audit slot); what it catches
+    that the fixture-copy tests here can't is a Lean check that works from this checkout and not from a tree a run ships:
+    a path it resolves through the tree, `lean_slot.py` loaded from it, the runner's PYTHONPATH."""
     tree = _shipped(tmp_path)
     data, digest = remote.tool_tarball(tree / "tools" / "research" / "src" / "research")
     tool = tmp_path / "root" / "tool" / digest
     with tarfile.open(fileobj=io.BytesIO(data)) as tf:
         tf.extractall(tool, filter="data")
     venv = Path(sys.prefix).resolve()
-    monkeypatch.setenv("PATH", os.pathsep.join(p for p in os.environ.get("PATH", os.defpath).split(os.pathsep)
+    monkeypatch.setenv("PATH", os.pathsep.join(p for p in os.get_exec_path()
                                                if p and not Path(p).resolve().is_relative_to(venv)))
     for k in list(os.environ):
         if k.startswith(("AWS_", "R2_", "RESEARCH_", "VERITY_", "PYTEST_")) or k in ("VIRTUAL_ENV", "PYTHONPATH"):
             monkeypatch.delenv(k)
-    env = remote._runner_env({"tool": str(tool)}, tmp_path / "root" / "runs", str(tree), {"source_sha": tree.name})
+    env = Names(remote._runner_env({"tool": str(tool)}, tmp_path / "root" / "runs", str(tree), {"source_sha": tree.name}))
     env.update(XDG_CACHE_HOME=str(tmp_path / "cache"))
     p = subprocess.run(["python3", "tools/verity/lean/check.py", "--build", "--out", str(tmp_path / "out"), PKG], cwd=tree, env=env,
                        capture_output=True, text=True)
