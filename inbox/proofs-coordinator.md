@@ -128325,3 +128325,30 @@ Next: `streams_even` and `sessionsRun_replay` on `cursor/proofs-messages-f55d`. 
 - The machine was replaced again at 07:40:14Z; nothing was unpushed. This loop holds `~/wt/.pen` since 07:41Z. My first `mkdir ~/wt/.pen` failed because `~/wt` itself was gone, which for one command I read as "held"; with the parent made, the `mkdir` succeeded, and there is no other loop.
 - No run of mine is out. The timer `crossclose-9671-suites` is gone from my list (it was due 07:40Z); if its event still reaches me I answer it in one line. I hold no timer.
 - Your 06:26Z, 07:22Z and 07:29Z notes are read: the choice stands; no merge of `main`; a branch that crosses a move is carried with `restack.py` when you say; Daniel's words in what I write from now.
+
+## SESSIONOF2, Fri 13 Nov 07:47Z: started: agent `bc-21526b41-3d76-5d8c-87fa-3839a84ce464`, branch `cursor/proofs-sessionof2-7c3a` at the join's `42bba26494`; the join's own field `twoHolds` already gives `two A.h s = some d`, so the one-table proof takes no new named hypothesis
+
+**In plain words.** I am the worker who takes over SESSIONOF's two pieces. The two-stage join assumes each member session ran a fixed number of rounds on one table with a known name. Two short proofs are to show that the join's other premises already force that: one table a session, and the table's name. I have read the code they rest on and found every lemma they need already proved in the tree. Nothing is written or compiled yet. The statements come in my next entry, by 08:38Z.
+
+Clock: `date -u` read 07:47Z. Pen: no `~/wt` on this machine at 07:39Z, so I made `~/wt/.pen` then; one loop of me. Mailbox `inbox/bc-21526b41-3d76-5d8c-87fa-3839a84ce464.md` on `cursor/proofs-inbox` at `d52d262737`: no such file yet [read].
+
+**The question you asked me to read first** [read, all at `42bba26494`]. `JoinsAt` has the field `twoHolds : SpotFlock.RunsAs.Round2.TwoHolds A.h` (`SampledTwo/JoinsAt.lean:262`), and `TwoHolds h` is `∀ s, (two h s).isSome = true` (`SpotFlock/RunsAs/Statements.lean:71`). `two_of_twoHolds` (`RunsAs/SecondStageOf.lean:96`) turns it into `∃ s d, two h s = some d`, which is what `SpotFlock.ref_one_table` (`SpotFlock/Accepting.lean:83`) takes. `FormAccepts` does not give it and need not. So (a) rests on `twoHolds` and `scopeHeldAt` alone, and no hypothesis goes in a title.
+
+**Plan, five lines.**
+1. (a) `OneTable.lean`, new: from `TwoHolds h` and `ScopeHeld h m₂`, for `t < h.ms.length`, the session statement `stmtAt h m₂ t` sets up exactly one table `#[st]`, its round count is `2 + 2 * repRounds true spec st`, and `repsOf` of it is `repRounds true spec st`. Then the same at the join, from `JoinsAt`'s `twoHolds`, `scopeHeldAt` and `roundsHeldAt`, with `k₀ A.h t` for the count.
+2. (b) `TableName.lean`, new: from `PinHeld h m₂` as well, that table's `spec.tables` is `#[refTable h t]`, where `refTable h t` is the table tag of the reference statement `h.xS₀ t`'s statement name. The join's `tab` is then `refTable A.h`.
+3. Both are roots on their own lines in `security/Proofs/lakefile.toml` and the lock's `roots`. Commit "not compiled", push, one try `--on auto --as proofs --mem-gb 24`, no `ulimit`.
+4. Mend on the verdict; when a run compiles both with a clean probe, name the head in a title for ASSEMBLY.
+5. Then the `PartSame` restatement on `cursor/proofs-sessionof-9b17` from `b611ff18e0`, under your four stop conditions.
+
+**What the proofs reuse** [read at `42bba26494`; none compiled by me]. `zkOk_sound` (`SpotFlock/Facts.lean:218`), `Verity.Recursive.Numbers.rounds_one` (`Recursive/Numbers.lean:301`), `HiddenExec.setupTables_okHP` (`Discharge/HiddenExec/AcceptsP.lean:71`), `Hidden.setupHidden_tagsP` (`HiddenExec/SetupP.lean:52`), `Verity.Sampled.zkTags_table` (`Sampled/Layout.lean:39`), `SpotFlock.ins_fields` and `ins_of_readOf` (`SpotFlock/Placement.lean:68`, `:77`). [guess] about 60 lines for (a) and 90 for (b), with the join's corollaries.
+
+**STOP RULE.** Nothing to report: no listed guarantee's statement, no named assumption, no verifier touched. The lock's only edit will be two lines of `roots`.
+
+**NEEDS.** None.
+
+**To post.** Nothing.
+
+**Not established.** Everything: no file written, no run. That `refTable` is the name SESSIONCOINS's `slotStream` wants for `tab` (its 07:15Z entry reads `tab t` as the one table's name in `spec.tables`; mine gives exactly `spec.tables = #[refTable h t]`).
+
+Branches: `cursor/proofs-sessionof2-7c3a` at `42bba26494` (the join's head, no commit of mine yet), pushed. `cursor/proofs-sessionof-5c1e` at `521933e143` and `cursor/proofs-sessionof-9b17` at `b611ff18e0`, untouched. Runs: none.
