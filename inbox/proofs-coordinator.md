@@ -138825,3 +138825,129 @@ Out: `r20261113-114207-f4de` (vy-nebius-cpu-7, at `7292404ff55`), launched 11:42
 - `FixedBefore` where `Fx` reads nothing at `r`: (b3) gives the same log up to the release; that `Fx` at `r'` then reads nothing too is not derived.
 - `FixedBefore` at the first and second stages' rounds and the statements' round: the cut's order and the stages' locator, not read against it.
 - `Fx`, `raw`, `ctx` at the form, `Explains` and `Opens`: not started; due Sat 02:00Z.
+
+## GATHER, Fri 13 Nov 11:46Z: R3's new statement and `wiredHeld`, word for word; the Lean, its proof, the Python twin and the difftest are written and pushed at `779ee6ea60b`; the records run and the plays are running
+
+`cursor/proofs-gather-second-try-5a28` at `984cb027efa30548bd370a1f0e04830e8d12be1a` is the head I stand behind for Friday, unmoved [run: `git ls-remote origin` at 11:44Z]; the Friday-size rehearsal `r20261113-053940-1822` ran at it and ended exit 0 [run: read 07:36Z]. The first try stays `496aa183544b` on #9480 [run: same `ls-remote`]. Everything below is on the trial branch `cursor/proofs-gather-wired-layout-6a9b`, pushed at `779ee6ea60ba14b9a0a2550e6ad4a2eb15864f71` [run: same `ls-remote`], which has no pull request.
+
+**Your 11:40Z message reached me at 11:41Z by the hook, after the Lean was written and tried** [run: the three tries ended 11:36Z, 11:39Z and 11:41Z, below]. So the statement is not here before the build, as you asked; it is here before the records run's result, before any play at the new head ends, and before any pull request [run]. Paste from this entry: the text is copied from the tree at `779ee6ea60b` [read: `security/Properties/Spot.lean:109-126`, `verity/protocols/spot/verifier/lean/Spot/Registration.lean:549-566,614-616`].
+
+### 1. The statement, word for word
+
+`Properties.Spot.R3` **before** [read: `git show a9986e067f2^:security/Properties/Spot.lean`, lines 109-117]:
+
+```lean
+/-- R3: the record's scheme is the verifier's; it registers at least one root, each exactly `{port, root, leaves,
+domain}`; no port twice, and exactly the verifier's ports; and each of the verifier's ports has its root as derived. -/
+def R3 (rec : Json) (v : Registration.Verifier) : Prop :=
+  jeq (getD rec "scheme") (.str v.scheme) ∧
+  rootsOf rec ≠ #[] ∧ (∀ r ∈ rootsOf rec, keys? r = some Registration.ROOT_KEYS) ∧
+  (portsOf rec).size = (rootsOf rec).size ∧ (portsOf rec).size = v.ports.size ∧
+  (∀ pw ∈ v.ports, ∃ q ∈ portsOf rec, jeq q (.str pw.1)) ∧
+  ∀ pw ∈ v.ports, ∀ r, rootFor rec pw.1 = some r → RootIs r pw.2
+```
+
+`Properties.Spot.R3` **after**, the whole property; the new conjunct is its last line, and `WiredIs` is the one new definition it reads [read: the tree at `779ee6ea60b`]:
+
+```lean
+/-- One port of the verifier's layout that names the port it is wired to (`want`'s `"wired"`, a port whose rows are the
+leaves of that port's tree): the record has a root under its own name `p` and one under the port it names, each a
+string, and the two are one string. One tree is registered at both names. -/
+def WiredIs (rec : Json) (p : String) (want : Json) : Prop :=
+  ∀ q, getD want "wired" = .str q →
+    ∃ r h s, rootFor rec p = some r ∧ rootFor rec q = some h ∧ getD r "root" = .str s ∧ getD h "root" = .str s
+
+/-- R3: the record's scheme is the verifier's; it registers at least one root, each exactly `{port, root, leaves,
+domain}`; no port twice, and exactly the verifier's ports; each of the verifier's ports has its root as derived; and
+each port the layout wires to another has that port's root (`WiredIs`). -/
+def R3 (rec : Json) (v : Registration.Verifier) : Prop :=
+  jeq (getD rec "scheme") (.str v.scheme) ∧
+  rootsOf rec ≠ #[] ∧ (∀ r ∈ rootsOf rec, keys? r = some Registration.ROOT_KEYS) ∧
+  (portsOf rec).size = (rootsOf rec).size ∧ (portsOf rec).size = v.ports.size ∧
+  (∀ pw ∈ v.ports, ∃ q ∈ portsOf rec, jeq q (.str pw.1)) ∧
+  (∀ pw ∈ v.ports, ∀ r, rootFor rec pw.1 = some r → RootIs r pw.2) ∧
+  ∀ pw ∈ v.ports, WiredIs rec pw.1 pw.2          -- NEW
+```
+
+`rootFor rec p` is unchanged: the record's last root naming `p` [read: `security/Properties/Spot.lean:100-101`]. The marker `-- NEW` is this entry's, not the tree's [run].
+
+`wiredHeld` and the function it reads, in the verifier's package (`Spot.Registration`) [read]:
+
+```lean
+/-- One port of the layout against the record's roots (`wiredHeld`): where its entry names the port it is wired to
+(`wired`, a string), the record has a root under its own name and one under that port's (`find`: the record's last root
+of a name), each root a string, and the two are one string. A port whose entry names none holds. -/
+def wiredOk (find : String → Option Json) (p : String) (want : Json) : Bool :=
+  match getD want "wired" with
+  | .str q =>
+    match find p, find q with
+    | some r, some h =>
+      match getD r "root", getD h "root" with
+      | .str a, .str b => a == b
+      | _, _ => false
+    | _, _ => false
+  | _ => true
+
+/-- R3 of the wired ports: a port of the layout whose rows are the leaves of another port's tree names that port
+(`wired`), and the record registers one tree at both names (`wiredOk`, of every port). -/
+def wiredHeld (find : String → Option Json) (ports : Array (String × Json)) : Bool :=
+  ports.all fun pw => wiredOk find pw.1 pw.2
+```
+
+The term in `Registration.check`, after R3's loop and before R4 [read]:
+
+```lean
+  -- one tree at two names, read where the roots are well formed; a `kept` term, as R6's below are
+  c := kept (roots.isEmpty || !roots.all (keys? · == some ROOT_KEYS) || wiredHeld ix.find v.ports) c
+    "R3-wired"
+```
+
+and in `checkRef`, the same with `fun p => roots.reverse.find? (fun r => jeq (getD r "port") (Json.str p))` for `ix.find` [read].
+
+### 2. What differs from the 11:22Z design, each small
+
+- `check` builds its index of the roots (`portIndex roots`) once, above the roots' `if`, so the new term reads the same index the loop does [read]. Where the roots are not well formed the index is now built and not read: `O(roots)` hash-map operations more on a record that is refused anyway [derived].
+- `check_eq_checkRef`'s `simp` set has one more lemma, `portIndex_find_fun` (the index's lookup as a function is `checkRef`'s), and closes inside the heartbeats it already had [run: the try of `Registration.lean`, below].
+- The parameters' parser (`OneStage.paramsParsed`) takes a port's entry with the keys `domain`, `leaves`, `wired` only where `wired` is a string; any other `wired` is refused as an unknown key, as before [read: `Spot/OneStage.lean:258-259`].
+- A port whose `wired` names itself holds trivially: the rule adds nothing there and refuses nothing [derived]. Nothing writes such an entry (`rows.wired_ports` names the writer's output port) [read: `rows.py:797-800`].
+- The difftest has more than the three cases promised: a sampled group `WIRED` (a wired port unchanged, and eight changes to it: its root another's, not hex or not a string, the held port's root moved, no root under its name, `wired` naming no port of the record, `wired` not a string, an extra key, a second root under its name first) and one pinned test of ten assertions that reaches `R3-wired` from each side of the wire [read: `test_difftest.py` at `779ee6ea60b`]. Neither has run against the compiled Lean yet: that is `b99b` [run].
+
+### 3. Commits on the trial branch since `6174ac309a7`, hooks on [run: `git log`]
+
+- `fb3e6ab8442` the Lean check: `wiredOk`, `wiredHeld`, the term in `check` and `checkRef`, `portIndex_find_fun`, the parser's `wired` key.
+- `a9986e067f2` the property and its proof: `WiredIs`, `R3`'s conjunct; in `security/Proofs/Properties/Spot.lean` the lemmas `step_kept_ite`, `wiredOk_iff`, `wiredHeld_iff`, and `registration_nil`'s step at R4's join point with one more name in its two closing patterns.
+- `7d66bee236a` the Python twin: `rows.expected_ports` writes `wired`; `registration.check` refuses by `R3-wired` (detail `{"port", "wired"}`); a Python test of nine assertions; the two layout assertions of the windows' test and the toy's test read `{**lay[q], "wired": q}`.
+- `779ee6ea60b` the difftest: the parser's twin takes `wired`; `WIRED`; the pinned test.
+
+### 4. What ran
+
+- `verity lean try verity/protocols/spot/verifier/lean/Spot/Registration.lean --on auto --as proofs` at `fb3e6ab8442`: run `r20261113-113506-89be` on vy-nebius-cpu-7, "exit 0 in 104 s wall", last line "axiom probe: none of its 10 theorems uses an axiom beyond propext, Classical.choice and Quot.sound" [run: read 11:36Z]. It started at once [run].
+- `verity lean try security/Proofs/Properties/Spot.lean --on auto --as proofs` at `a9986e067f2`: run `r20261113-113709-9c2e` on vy-nebius-cpu-5, "lean exit 0 in 112 s", last line "axiom probe: none of its 82 theorems uses an axiom beyond propext, Classical.choice and Quot.sound" [run: read 11:40Z]. It started at once [run]. First try, no second needed [run].
+- `verity lean try verity/protocols/spot/verifier/lean/Spot/OneStage.lean --on auto --as proofs` at `a9986e067f2`: run `r20261113-113943-37fd` on vy-nebius-cpu-1, "lean exit 0 in 71 s", "axiom probe: no theorems in it" [run: read 11:42Z].
+- A try elaborates one file against its imports; it is not the package's whole build, the records run or the kernel's replay [read: the lean-proofs skill]. Those are the two runs waited on below [run].
+- On the VM, the Python test alone: `tests/test_one_stage.py -k 'wired or registration_refusals or passes_r1'` 3 passed; the windows' test `-k wired_port_with_no_tree` 1 passed [run: 11:38Z-11:41Z].
+- **`2f36`'s line** (the toy's tests at `8c24d412e80`, vy-nebius-cpu-1): `the toy tests, rc=0`, "10 passed in 17.92s" [run: read 11:35Z]. The 11:22Z entry's failure of that step was my launch line's, as said there [run].
+- **The audit's call of the twin** (`6174ac309a7`), run `r20261113-112635-01fd` on vy-nebius-cpu-7, launched 11:26:35Z, waited under half a minute, state done, rc 0 [run: `research status`, read 11:44Z]. Its `rc.txt`, word for word [run]:
+  - `two templates, inputs committed, rc=0`
+  - `twenty templates, inputs committed, rc=0`
+  - `the audit tests, rc=0` ("41 passed in 371.26s")
+  - `the per-member form Python tests, rc=0` ("16 passed in 0.84s")
+  - `the per-member form difftest, rc=0` ("6 passed in 10.31s")
+  - Each play's last line: `SMALL {"before_draw": true, "pins": true, "lean_verdicts": true, "negatives": true, "record": true, "round_two": true, "outcome": true, "cost": true}` [run: its `stdout.log`]. Peak PSS 14.9 GiB [run: `job-memory.py` on its `resources.jsonl`].
+  - So no window of these plays or tests fails the twin's rules where the audit's own header check passed [run]. `a5.audit`'s codes are now `pin, partition, program, header, classes, template_program, shared_rows`; its old `indices` and `root:<port>` codes are gone, held by `header` [read: `a5.py` at `6174ac309a7`].
+  - **One choice in that commit for you to rule on.** The per-member form refuses a window with row tables (`ROW_TABLES`), and the audit stands in for it there. So `a5.member_form` hands the twin the record without the `row-table` root, which `tables.check_row_tables` holds, and the twin then checks the members' headers as it does elsewhere [read: `a5.py`, `member_form`]. The other way is to refuse such a window in the audit as the form does; that stops every play with row tables [derived]. I kept the plays running and say so here [run].
+
+### 5. Runs I wait on, both at `779ee6ea60b`, both placed by `--on auto`
+
+- `r20261113-114214-b99b` on vy-nebius-cpu-7, launched 11:42:14Z, started at once [run]: the verifier's Lean package built whole, then the play of two and of twenty (no `--interior-trees`), the toy end to end, the whole difftest of the verifier's package against the compiled Lean, the windows' and wiring tests, the registration's and the per-member form's Python tests, the toy's tests. Expected end about 12:25Z [guess: 01fd's sixteen minutes plus the whole difftest, whose length I have not measured].
+- `r20261113-114241-f5e2` on vy-nebius-cpu-8, launched 11:42:41Z [run]: the records fast path, `lean_changed.py --records verity/protocols/spot/verifier/lean --update`, which regenerates that package's records and its requirers'. Its `--update` printout goes in my next entry word for word, as you ask. Expected end not known; I read it at 12:15Z [guess].
+
+### 6. The head for TWOLEG's commit
+
+Not named yet. `779ee6ea60b` is the head, and three of its files elaborate, but "compiled" is the package's whole build, which is `b99b`'s first step: its log stood at "[514/530] Built «sampled-proofs-one-stage-zk»:exe" at 11:45Z [run]. I name the head in one line here as soon as `b99b`'s `rc.txt` has `the Lean package of the sampled proofs verifier, whole, rc=0`, and not before [run]. If that line is not 0, I mend first and name the mended head [derived].
+
+### 7. Not done, and held
+
+- The records are not regenerated in the tree; the lock is as `main`'s was at the branch's base [run]. Which guarantees read the three `reads` records is still "not known" until `f5e2` prints it [run].
+- No pull request, no mark, no merge of `main`, neither of Friday's branches moved [run]. No play with `--interior-trees` [run].
+- Mailbox read at 11:44Z: newest section is yours of 11:40Z [run].
