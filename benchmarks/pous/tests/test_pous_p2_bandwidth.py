@@ -197,6 +197,10 @@ def test_sessions_reach_a_listening_verifier_which_records_their_answers(tmp_pat
     assert mine[1]["verdict"] == "reject" and mine[1]["failure"] == "receipt"
 
 
+#: a case's verdict with no `--case-exe`: the Python may only refuse, so its reject stands and its accept is undecided
+WITHOUT_LEAN = {"accept": "undecided", "reject": "reject"}
+
+
 def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(tmp_path) -> None:
     """The auditor gate's party shape (`--party CMD`): the party run as the gate runs one, from the tree with no
     site-packages (`-S`: the standard library only, which the gate's `python3 -s -E` has) and its `--device`
@@ -222,10 +226,10 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
         assert "verifier_record_agrees=True" in doc["verdict_line"]
         case, answer = (json.loads((private / f).read_text()) for f in (p2_case.CASE, p2_case.ANSWER))
         assert [(private / f).stat().st_mode & 0o777 for f in ("", p2_case.CASE, p2_case.ANSWER)] == [0o700, 0o600, 0o600]
-        assert answer == p2_case.answer(case, doc["answer"]) and answer["verdict"] == expect
+        assert answer == p2_case.unjudged(case, doc["answer"]) and answer["verdict"] == WITHOUT_LEAN[expect]
         assert p2_case.store_root(case) == reg.root
-        assert doc["case"] == {"commitment": p2_case.digest(case).hex(), "dir": str(private), "judge": "python",
-                               "store_root": reg.root.hex(), "verdict": expect}
+        assert doc["case"] == {"commitment": p2_case.digest(case).hex(), "dir": str(private), "judge": "none",
+                               "store_root": reg.root.hex(), "verdict": WITHOUT_LEAN[expect]}
         assert case["evidence"] not in (tmp_path / name / "session.json").read_text()
         cases.append(case)
     kept = [json.loads(x) for x in (tmp_path / "party" / "answers.jsonl").read_text().splitlines()]
@@ -235,6 +239,37 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
     assert B.verdict_line(doc["answer"], "reject", record).endswith("verifier_record_agrees=False FAIL")
     with pytest.raises(SystemExit, match="can't be under --out"):
         B.main(base + ["--out", str(tmp_path / "x"), "--case-dir", str(tmp_path / "x" / "private")])
+
+
+JUDGE = """#!{python}
+import json, sys
+for line in sys.stdin:
+    print(json.dumps({{"commitment": "{commitment}", "profile": None, "protocol": "{protocol}", "public": None,
+                       "reason": "the stand-in judge rejects every case", "verdict": "reject"}}), flush=True)
+"""
+
+
+def test_with_case_exe_the_case_answer_is_the_executables(tmp_path) -> None:
+    """`--case-exe`: the executable answers the case (`p2_case.judged`, through `serve`), and its answer is the one
+    written, not the session's own: a stand-in that rejects every case, against an honest session the party accepted."""
+    reg = B.toy(tmp_path / "toy")
+    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.protocols.accounting.poub.verifier.p2_party "
+             f"--device {tmp_path / 'party'} --listen 127.0.0.1:0 "
+             f"--registration {tmp_path / 'toy' / 'registration.json'} {held_to(1, 1, 8)}")
+    exe = tmp_path / "judge"
+    exe.write_text(JUDGE.format(python=sys.executable, commitment="00" * 64, protocol=p2_case.PROTOCOL))
+    exe.chmod(0o755)
+    private = tmp_path / "private"
+    assert B.main(["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
+                   "--node", reg.node.decode(), "--party", party, "--party-host", "127.0.0.1", "--device", "cpu",
+                   "--ref-decode", "--samples", "8", "--windows", "1", "--passes", "1", "--window-s", "0.001",
+                   "--deadline-s", "0.001", "--workers", "1", "--out", str(tmp_path / "honest"), "--expect", "accept",
+                   "--case-dir", str(private), "--case-exe", str(exe)]) == 0
+    doc = json.loads((tmp_path / "honest" / "session.json").read_text())
+    answer = json.loads((private / p2_case.ANSWER).read_text())
+    assert doc["answer"]["verdict"] == "accept" and answer["verdict"] == "reject"
+    assert answer["reason"] == "the stand-in judge rejects every case"
+    assert (doc["case"]["judge"], doc["case"]["verdict"]) == ("lean", "reject")
 
 
 KILLED = """

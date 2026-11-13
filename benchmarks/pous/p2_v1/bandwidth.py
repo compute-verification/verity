@@ -39,7 +39,8 @@ cache under the pass's seed, so a sample of a later pass is rejected (`receipt`)
 
 **The case.** The verifier sends the session's core case before its answer (`p2_party`'s `{"case": ...}`, `p2_case`):
 `--case-dir DIR` writes it with its answer, `case.json` and `answer.json`, into DIR (0700, each file 0600), the
-answer `RemoteAudit.P2Protocol`'s with `--case-exe` (`remote-audit-p2-protocol`), else `p2_case.answer`'s. The case
+answer `RemoteAudit.P2Protocol`'s with `--case-exe` (`remote-audit-p2-protocol`); without it the Python only refuses,
+so an accepted session's case is undecided (`p2_case.unjudged`). The case
 holds the store's opened blocks and the verifier's coins, so DIR is private and never under OUT: `session.json` says
 only where it went, its commitment's digest, its store and its verdict. A session the verifier refused, or one that
 ended in the prover's error, writes none.
@@ -794,10 +795,11 @@ def session(a: argparse.Namespace) -> int:
         case = None
         if a.case_dir is not None and prover.kept is not None and answer.get("verdict") in ("accept", "reject",
                                                                                            "undecided"):
-            judged = p2_case.judged(prover.kept, answer, a.case_exe)
+            judged = (p2_case.judged(prover.kept, answer, a.case_exe) if a.case_exe
+                      else p2_case.unjudged(prover.kept, answer))
             p2_case.write(a.case_dir, prover.kept, judged)
             case = {"dir": str(a.case_dir), "commitment": judged["commitment"], "store_root": prover.kept["store_root"],
-                    "verdict": judged["verdict"], "judge": "lean" if a.case_exe else "python"}
+                    "verdict": judged["verdict"], "judge": "lean" if a.case_exe else "none"}
             log(json.dumps({"case": case}))
     if pool is not None:
         pool.shutdown()
@@ -853,7 +855,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     s.add_argument("--readers", type=int, default=6)
     s.add_argument("--workers", type=int, default=max(1, min(12, (os.cpu_count() or 2) - 2)))
     s.add_argument("--case-dir", type=Path, help="the private directory the session's core case and its answer go to")
-    s.add_argument("--case-exe", help="remote-audit-p2-protocol, which answers the case (else p2_case.answer)")
+    s.add_argument("--case-exe", help="remote-audit-p2-protocol, which answers the case (else an accept is "
+                   "undecided: p2_case.unjudged)")
     a = ap.parse_args(argv)
     if a.command == "session" and a.case_dir is not None and a.case_dir.resolve().is_relative_to(a.out.resolve()):
         raise SystemExit("--case-dir is private: it can't be under --out")

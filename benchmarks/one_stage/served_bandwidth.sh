@@ -22,7 +22,8 @@
 # which has no reason), and DIR/served.json names the window, the session's times and its card. The session's core case
 # (PoUB-P2's, `p2_case`), the composite's bandwidth piece, and its answer go to SERVE_DIR/private/bandwidth (0700, its
 # files 0600, never DIR: the case holds the store's opened blocks and the verifier's coins), the answer the Lean's when
-# BW_CASE_EXE names `remote-audit-p2-protocol`, else `p2_case.answer`'s; DIR/session/session.json says where it went.
+# BW_CASE_EXE names `remote-audit-p2-protocol`; without it an accepted session's case is undecided (`p2_case.unjudged`:
+# the Python only refuses). DIR/session/session.json says where it went.
 #
 # The layout is the store's (`p2_v1/store.py layout`), held to the store's setup.json; the lib is kernels' build
 # (`benchmarks/torch_gpu/p2_stage/build.sh` at this commit, its source.txt and MANIFEST.sha256 kept in DIR), or BW_LIB, a
