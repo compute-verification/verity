@@ -19,7 +19,7 @@ from types import SimpleNamespace
 import pytest
 
 from verity.circuits import codec, cut, partition_object as PO
-from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple, Value
@@ -36,8 +36,8 @@ TNarrow = PrimitiveDefinition("TNarrow", 1, (("x", Array(4, V32)), ("a", V32)), 
 TAdd64 = PrimitiveDefinition("TAdd64", 1, (("a", V64), ("b", V64)), V64, lambda a, b: (a + b) % (1 << 64), register=False)
 
 
-def registry() -> Registry:
-    r = Registry()
+def registry() -> DefinitionTable:
+    r = DefinitionTable()
     r.defs.update(REGISTRY.defs)
     for p in (TWide, TNarrow, TAdd64):
         r.add(p)

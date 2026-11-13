@@ -14,6 +14,7 @@ import threading
 
 import pous_test_signer as ts
 from test_pous_memory_challenger import SESSION, judge, session
+
 from verity.commitments.crypto import lms
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import period
@@ -38,16 +39,15 @@ def _waiting(monkeypatch) -> queue.SimpleQueue:
 
 def _at_once(said: queue.SimpleQueue, release, calls) -> tuple[list, list]:
     """Each of `calls` in a thread of its own while the test holds a lock, which `release` lets go once every thread has
-    said something: "waiting" on the lock, or "done" (it refused). -> what each said first, and what each returned or
-    raised."""
+    said something: "waiting" on the lock, or "done" (it refused). -> what each said first, and what each returned
+    (`None` for one that raised)."""
     out: list = [None] * len(calls)
 
     def run(i: int) -> None:
         try:
             out[i] = calls[i]()
-        except Exception as e:  # noqa: BLE001: the test reads it
-            out[i] = e
-        said.put("done")
+        finally:
+            said.put("done")
 
     threads = [threading.Thread(target=run, args=(i,)) for i in range(len(calls))]
     for t in threads:
@@ -113,10 +113,10 @@ def test_windows_that_start_at_once_make_the_challengers_key_once(tmp_path, monk
     monkeypatch.setattr(lms, "keygen", lambda *a, **k: made.append(a) or keygen(*a, **k))
     device = tmp_path / "pous-challenger"
     device.mkdir()
-    lock = open(device / "device.lock", "a")
-    fcntl.flock(lock, fcntl.LOCK_EX)
-    said = _waiting(monkeypatch)
-    first, signers = _at_once(said, lock.close, [lambda: period.challenger(device, workers=1)] * 3)
+    with open(device / "device.lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        said = _waiting(monkeypatch)
+        first, signers = _at_once(said, lock.close, [lambda: period.challenger(device, workers=1)] * 3)
     assert first == ["waiting"] * 3, signers
     assert len(made) == 1 and len({s.public_key for s in signers}) == 1
     assert period.challenger(device, workers=1).public_key == signers[0].public_key and len(made) == 1

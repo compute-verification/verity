@@ -97,6 +97,42 @@ def test_a_request_that_never_ran_leaves_no_peak_and_no_capture_leaves_no_realiz
     assert RC._max_concurrent([]) is None
 
 
+NESTED = "[" * 100_000 + "]" * 100_000      # JSON nested past what Python's parser reads: `json` raises RecursionError, no ValueError
+
+
+@pytest.mark.parametrize("text", ["{not JSON", NESTED, '{"steps": [1e999]}'], ids=["not JSON", "nested past the parser", "an infinite step"])
+def test_a_cpu_phase_takes_a_record_it_cannot_read_as_no_record(tmp_path, monkeypatch, text):
+    """The checkpoint manifest, the control's tokens and the capture's kept steps are best-effort reads: one that is not JSON, is
+    nested past the parser or keeps an infinite step leaves the spec and the realized shape as they are with no such file."""
+    monkeypatch.setattr(RC, "profile_config", lambda name: None)
+    (tmp_path / "wl.json").write_text(json.dumps({"requests": [{"request_id": "r0", "prompt_len": 5, "max_tokens": 4}]}))
+    written = {}
+    for name in ("none", "unread"):
+        (tmp_path / name).mkdir()
+        run = _run_dir(tmp_path / name, workload_path=str(tmp_path / "wl.json"), snapshot_steps=[0, 1], snapshot_max_bytes=777)
+        _capture(run, [_request(0, 5, 0, 3)], engine_steps=4)
+        if name == "unread":
+            (run / "control").mkdir()
+            for file in (tmp_path / "checkpoints.json", run / "control" / "tokens.json", run / "capture" / "snapshots.json"):
+                file.write_text(text)
+        assert _cpu_phase(run, "--checkpoints", str(tmp_path / "checkpoints.json")) == 0
+        written[name] = (json.loads((run / "run.json").read_text())["realized"], json.loads((run / "spec.json").read_text()))
+    assert written["unread"] == written["none"]
+    real, spec = written["none"]
+    assert (real["engine_steps_capture"], real["engine_steps_control"], real["snapshot_steps_realized"]) == (4, None, None)
+    assert spec["configuration"]["checkpoint"] == {}
+
+
+@pytest.mark.parametrize("text", ["{not JSON", NESTED], ids=["not JSON", "nested past the parser"])
+def test_a_capture_whose_tokens_cannot_be_parsed_leaves_no_realized_shape_and_no_word_of_one(tmp_path, monkeypatch, caplog, capsys, text):
+    run = _one_request_run(tmp_path, monkeypatch)
+    (run / "capture" / "tokens.json").write_text(text)
+    with caplog.at_level("INFO", logger="verity_vllm"):
+        assert _cpu_phase(run) == 0
+    assert "realized" not in json.loads((run / "run.json").read_text())
+    assert capsys.readouterr().err == "" and not [line for line in _said(caplog) if "[realized]" in line]
+
+
 def _said(caplog, level=None):
     return [r.getMessage() for r in caplog.records if r.name == "verity_vllm.pipeline.match" and level in (None, r.levelname)]
 
