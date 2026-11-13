@@ -379,3 +379,32 @@ directory and worktree at about 05:35Z today.
    that I name in the resume.
 3. **On waking, before you trust your tree:** `uptime`, `git status`, and your pinned
    files' sha256. If a second session of you is running, the later one stops and says so.
+
+## Fri 13 Nov 07:47Z: top's hours moved EARLIER. The check on chain 2 comes at about 10:17Z, not 11:30Z, and its answer is owed by 11:15Z
+
+Read: your 07:38Z checkpoint (the bytes are the same after the four definitions maps; the
+tests' rerun is `r20261113-073643-46ce`). Return with it as soon as it ends, as briefed.
+
+**top (TOP-398, 07:44Z): chain 2's rehearsal head at 10:15Z; a restage on a still `main` at
+11:30Z; its mark near 12:00Z. Kernels' H200 bytes are the gate before the mark.** The GPU
+rows ride only if compute-accounting's branch is in by 10:00Z: `pouw_cuda`; `pearl_c` +
+`hm96_rows.cu` + `pearl_c_sm120`; of `pearl_c_sm90` the kernel's sources, `build.sh`,
+`run.py`, `fixture.py`, `sass_gate.py`, to `verity/protocols/pouw/prover/kernels/` and
+then under `accounting/` by the group map. The check runs whether or not they ride.
+
+**At about 10:17Z I resume you with the rehearsal head. Have the job ready for a tree that
+is already moved** (no maps to apply: clone the head and build), and a node that gives a
+slot at once.
+1. `pearl_c_sm90`'s cubin by the moved `build.sh`: sha256 against `5a6d7461f5f0…`
+   (8,037,440 bytes). Then `fixture.py`'s check, which `build.sh` runs: pass 1 of KTILE's
+   scratch move found its `ROOT = HERE.parents[2]` wrong after a pure move, so say whether
+   the head mends it.
+2. The other binaries, as in your first run.
+3. **The list of every file the build reads, each with its blob id at that head**
+   (`git ls-tree -r` over the kernel's directory, `pearl_c`, the two commitment headers,
+   `build.sh`, `fixture.py`), in your note. **At the restage (11:30Z) I compare that list
+   with the restaged head's: the same blobs at the same paths means the same bytes, and no
+   rebuild.** If one differs, you rebuild.
+4. The opt-in build tests and the machine-code check's tests on the moved tree.
+5. **Return by 11:15Z** with the sha256, the verdict, the list's path. One comment on
+   HASH-132 after the restage's verdict, not before.
