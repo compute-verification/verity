@@ -1,43 +1,19 @@
 """benchmarks/pouw/pearl_c4/real.py, the verifier on a `pearlc_capture.py` directory, on a synthetic one-linear capture: the
 stand-in split removes the massive-activation channel that fails D-NF, a chunk out of budget exits 99 with its tasks'
-checkpoints, and the next run finishes the tile's replayed debit under the cap."""
+checkpoints, and the next run finishes the tile's replayed inert work under its bound."""
 
 from __future__ import annotations
 
-import functools
 import hashlib
-import importlib.util
 import json
-import multiprocessing
+import subprocess
 import sys
-from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import numpy as np
 import pytest
-
-def _load(name: str, file: str):
-    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parents[1] / "pearl_c4" / file)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-R = _load("pearl_c4_real", "real.py")
-RT = _load("pearl_c4_real_table", "real_table.py")
-
-
-def _fork(monkeypatch) -> None:
-    fork = multiprocessing.get_context("fork")
-    monkeypatch.setattr(R, "ProcessPoolExecutor", functools.partial(ProcessPoolExecutor, mp_context=fork))
-
-
-@pytest.fixture(autouse=True)
-def forked_workers(monkeypatch):
-    """real.py's pool with forked workers, which inherit `pearl_c4_real` from this process.  A forkserver's workers (Python
-    3.14's default on Linux) import the pool's callable by module name, and this module's name is importable only here."""
-    _fork(monkeypatch)
+import real as R
+import real_table as RT
 
 NAME, K, M, N = "model.layers.0.self_attn.q_proj", 1024, 128, 128
 
@@ -74,12 +50,10 @@ def replayed(tmp_path_factory):
     root = tmp_path_factory.mktemp("replayed")
     captured, out = capture(root), root / "out"
     args = [str(captured), str(out), "--tiles", "1", "--workers", "2"]
-    with pytest.MonkeyPatch.context() as mp:
-        _fork(mp)
-        rc = R.main(args + ["--budget-min", "0"])
-        first = {"rc": rc, "tasks": len(list(out.glob("admit-*.json")) + list(out.glob("tile-*.json"))),
-                 "split": json.loads((out / "split-L000-attn.json").read_text())}
-        assert R.main(args) == 0
+    rc = R.main(args + ["--budget-min", "0"])
+    first = {"rc": rc, "tasks": len(list(out.glob("admit-*.json")) + list(out.glob("tile-*.json"))),
+             "split": json.loads((out / "split-L000-attn.json").read_text())}
+    assert R.main(args) == 0
     return captured, out, first
 
 
@@ -103,20 +77,20 @@ def test_real_activation_replay(tmp_path, replayed):
     (row,) = RT.rows([s], RT.Fraction(1, 1000))
     assert row["x_rows"] == M and row["x_dnf_fail_split"] == 0 and row["w_rows"] == N and row["debited"] == 1
     assert abs(sum(row["mean_share"].values()) - t["ratio"]) < 1e-9 and "flag" not in row
-    assert row["macs"] == M * N * (K - K // 100) and RT.mac_shares([row])["synthetic"]["over_cap"] == 0
+    assert row["macs"] == M * N * (K - K // 100) and RT.mac_shares([row])["synthetic"]["over_bound"] == 0
     elsewhere = s | {"capture": str(tmp_path / "not-here")}
     assert RT.rows([elsewhere], RT.Fraction(1, 1000))[0]["x_rows"] is None
     assert RT.rows([elsewhere], RT.Fraction(1, 1000), captured / "manifest.json")[0]["x_rows"] == M
     assert NAME in RT.markdown([row], RT.Fraction(1, 1000))
 
 
-def test_the_table_flags_the_first_and_last_down_proj_and_counts_both_caps():
-    """A tile's cap scales with ρ: at ρ = 1/1,000 it is over when its ratio at 1/400 exceeds 0.4; a model's over-cap share
-    weighs each linear's fraction of tiles over the cap by its MACs."""
+def test_the_table_flags_the_first_and_last_down_proj_and_counts_both_bounds():
+    """A tile's bound scales with ρ: at ρ = 1/1,000 it is over when its ratio at 1/400 exceeds 0.4; a model's share over
+    the bound weighs each linear's fraction of tiles over it by its MACs."""
     def tile(ratio: float) -> dict:
-        debit = {term: "0" for term in RT.TERMS} | {"forming": str(RT.Fraction(ratio).limit_denominator(10 ** 6)),
+        items = {term: "0" for term in RT.TERMS} | {"forming": str(RT.Fraction(ratio).limit_denominator(10 ** 6)),
                                                     "counts": {}}
-        return {"ratio": ratio, "cap": "1", "debit": debit, "rejected": "", "m": 256, "n": 1024, "k_kept": 8111}
+        return {"ratio": ratio, "cap": "1", "debit": items, "rejected": "", "m": 256, "n": 1024, "k_kept": 8111}
 
     names = [f"model.layers.{i}.mlp.down_proj" for i in (0, 8, 72)] + ["model.layers.0.self_attn.q_proj"]
     s = {"capture": "x.npz", "model": "m", "inputs": {}, "weights": {},
@@ -125,10 +99,11 @@ def test_the_table_flags_the_first_and_last_down_proj_and_counts_both_caps():
     rows = {r["linear"]: r for r in table}
     assert rows[names[0]]["flag"] == "first down_proj" and rows[names[2]]["flag"] == "last down_proj"
     assert "flag" not in rows[names[1]] and "flag" not in rows[names[3]]
-    assert rows[names[2]]["over_cap"] == 0 and rows[names[2]]["over_cap_tight"] == 1 and rows[names[0]]["over_cap_tight"] == 0
+    assert rows[names[2]]["over_bound"] == 0 and rows[names[2]]["over_bound_tight"] == 1 and rows[names[0]]["over_bound_tight"] == 0
     share = RT.mac_shares(table)["m"]
-    assert share["macs"] == 4 * 256 * 1024 * 8111 and share["over_cap"] == 0 and share["over_cap_tight"] == 1 / 8
-    assert "12.50% at 1/1000" in RT.markdown(table, RT.Fraction(1, 1000))
+    assert share["macs"] == 4 * 256 * 1024 * 8111 and share["over_bound"] == 0 and share["over_bound_tight"] == 1 / 8
+    text = RT.markdown(table, RT.Fraction(1, 1000))
+    assert "12.50% at 1/1000" in text and "| Over the bound at 1/400 | Over the bound at 1/1000 |" in text
 
 
 @pytest.mark.slow
@@ -149,3 +124,16 @@ def test_an_npz_capture_is_read_as_its_linears(tmp_path, replayed):
     assert b["inputs"][NAME + ".npy"] == a["inputs"]["L000-attn.npy"] and b["weights"] == a["weights"]
     untimed = lambda s: {n: [{k: v for k, v in t.items() if k != "seconds"} for t in ts] for n, ts in s["tiles"].items()}  # noqa: E731
     assert untimed(b) == untimed(a)
+
+
+@pytest.mark.slow
+def test_started_by_its_command_line_the_fast_f1_is_the_file_beside_it(tmp_path):
+    """`real.py CAPTURE OUT --f1 fast` by its command line: a worker's `tile` imports `f1_fast` from the script's own
+    directory, which a started script has first on its path, and the tile says its check was the fast one. Only a start
+    by the command line shows it: in this process the suite's path holds the directory."""
+    captured, out = capture(tmp_path), tmp_path / "out"
+    p = subprocess.run([sys.executable, R.__file__, str(captured), str(out), "--tiles", "1", "--workers", "2", "--f1", "fast"],
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr
+    (tile,) = json.loads((out / "summary.json").read_text())["tiles"][NAME]
+    assert tile["f1"] == "fast" and tile["rejected"] == ""
