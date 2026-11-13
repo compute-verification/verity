@@ -138,12 +138,12 @@ sys.path.insert(0, str(HERE))
 import h1unit as U  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.randomness import derive  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import partition as P  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import registered as G  # noqa: E402
-from verity.protocols.pouw.verifier import core_check as CC  # noqa: E402
-from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
-from verity.protocols.pouw.verifier import verifier  # noqa: E402
-from verity.protocols.pouw.verifier.coins import Challenger, coin_reason  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import core_check as CC  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import verifier  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.coins import Challenger, coin_reason  # noqa: E402
 
 SAMPLE_DOMAIN = "verity/pouw/h1-prove-draw/v0"
 R, C = U.TILE

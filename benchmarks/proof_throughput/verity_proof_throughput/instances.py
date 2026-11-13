@@ -109,7 +109,7 @@ def program_file(w: Workload) -> bytes:
 def law(w: Workload, b: int) -> dict[str, Any]:
     """The verifier's stratified sampling design for B: ``stratified:B`` expanded over the population's program and query (core's
     ``one_stage.draw.derive``), the object ``flock-circuit serve --draw-law`` samples each session's units by."""
-    from verity.protocols.spot.verifier.one_stage import draw as D
+    from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 
     us = units(w)
     return D.derive(us.program, us.query, {"law": "stratified", "k": b})
