@@ -247,7 +247,7 @@ class _Piece:
                 raise self.fail(f"{line!r}: reuse of an unknown buffer")
             if m.group(2):
                 dims, strides = C._dims(m.group(3)), C._dims(m.group(4))
-                if int(m.group(5)) != 0 or _prod(dims[1:]) > _prod(self.shape[old][0][1:]):
+                if int(m.group(5)) != 0 or any(not d.isdigit() for d in dims[1:]) or _prod(dims[1:]) > _prod(self.shape[old][0][1:]):
                     raise self.fail(f"{line!r}: reuse beyond the dead buffer's rows")
             else:
                 dims, strides = self.shape[old]
