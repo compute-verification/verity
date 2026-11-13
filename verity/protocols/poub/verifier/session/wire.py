@@ -203,3 +203,7 @@ def openings_of(body: bytes) -> list[coins.LiveOpening]:
     if type(doc) is not list:
         raise ValueError("a session's coin openings are a list")
     return [coins.LiveOpening.from_json(o) for o in doc]
+
+
+__all__ = ["Closed", "Conn", "HEADER", "MAX_HEAD", "codec_named", "coin_of", "commitment_of", "connect", "listen",
+           "openings_of", "registration_json", "registration_of"]

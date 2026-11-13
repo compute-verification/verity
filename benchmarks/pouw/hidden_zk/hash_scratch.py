@@ -63,5 +63,7 @@ def check(n: int = 512, seed: int = 20261003) -> dict:
     return bad
 
 
+__all__ = ["PIECES", "check"]
+
 if __name__ == "__main__":
     print(check())

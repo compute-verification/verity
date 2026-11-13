@@ -5,12 +5,12 @@
 #   nofw  FC_HOST_WITNESS=1
 #   fw    + FC_FIREWALL=1 through this tree's flock-firewall (beside job.sh's flock-verify, built if missing)
 #   fw-b  the same through SC_FIREWALL_B, another build of flock-firewall, when it is set
-# Each firewall process runs under bash's `time` in a subshell that outlives the prover's kill of its child, so its own CPU
+# Each ZK server process runs under bash's `time` in a subshell that outlives the prover's kill of its child, so its own CPU
 # seconds and wall are recorded. Run from the source tree's root (`research run --cwd source`, 16 CPUs, 48 GB):
 #   SC_PLAN="hidden:256:1 hidden:256:128 hidden:256:256" SC_REPS=3 bash benchmarks/pouw/hidden_zk/send_check.sh
 # Results in $RESEARCH_RUN_DIR/out: send_check.tsv (a row a session: m, k_log, the session's wall, the verdict, the frame
 # stops, the prover's phase seconds, the ZK server processes' CPU seconds and the session process's wall) and send_check.json
-# (per config and arm the medians, and per firewall arm the least-squares seconds a proved bit, 2^m, over the configs: the
+# (per config and arm the medians, and per ZK server arm the least-squares seconds a proved bit, 2^m, over the configs: the
 # ZK server's CPU and the session's wall over nofw's).
 set -uo pipefail
 SRC=$(pwd)
@@ -69,7 +69,7 @@ for p in $PLAN; do
       rc=$?
       kill $srv 2>/dev/null; wait $srv 2>/dev/null
       rm -rf "$D/sessions-$arm-$rep"
-      # each firewall process's record, once it has seen its stdin close
+      # each ZK server process's record, once it has seen its stdin close
       for _ in $(seq 1 240); do
         [ "$(cat "$T/starts" 2>/dev/null | wc -l)" -le "$(ls "$T" | grep -c '^fwt\.[0-9]*\.[a-z]*$')" ] && break; sleep 0.5
       done

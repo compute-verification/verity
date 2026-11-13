@@ -137,20 +137,20 @@
    "type": "bf4b760dd77984dddf3e9b3daf569ba35d5e2686fd02c8fdae0e2422deff2d377b2769f426023b508e1368698ac93ab32c6922effceec6f223a459a7e4a117ea"
   },
   "DsaTopKMaskBlock_v2{N=6,AT=8,TOPK=4}": {
-   "and": 514,
-   "type": "5e1f5257d4b893b0a850fb414578ca7d27bee6f8a9be6cb207be838b06b227f0bfe3f95670e2dbea32a83f744d4ec4a1030a835d9b26e19f307d292611f5eac0"
+   "and": 519,
+   "type": "d6c9cf5e216bc6c26cc1b46d67b3d5254654f2a03e2bfd585bef36e7108bfe7a61d284cb62b9c9147fa1b7f2d55136af8a9cfe90e9d6a73c8a9f1feb87489a15"
   },
   "DsaTopKMaskBlock_v2{N=8,AT=0,TOPK=4}": {
-   "and": 598,
-   "type": "f49417a4c1c10a09ad0dfe4f2d9337103cab30fcb3cca4da9caf525cd948dd3c6639ea0e993dfaf46e24324b635f13b32889457d5e6be2a44a5be88116195424"
+   "and": 604,
+   "type": "f709d2314fd8765fde8e08fc583562536ea0932dfccf2ed0518cdd915bf7a8e53d9ecb32ff526cdb336b53a1472109c68f8c26f0a3aacc0cdae73c9bf2dd0ca7"
   },
   "DsaTopKMaskWhole_v1{N=14,TOPK=4}": {
    "and": 2126,
    "type": "bc0e270c2790e06cf36d8c7a31e5e4ed2219e08dda0d125846c7931c1aeb8d19a416dbb7de74473103508e85ede28362eb455ea1e92cbd019ee31ff99ff8ab03"
   },
   "DsaTopKMaskWhole_v2{N=14,TOPK=4}": {
-   "and": 2119,
-   "type": "0235ff2f760ab1b1bb71b0cb599ad97cf68b845dafa6a0d7d2106582fbc15401bb4d40b1fa4cc44df1827581fd2c81ba5c0b55f7f60831dcbe09270dd9d392e0"
+   "and": 2138,
+   "type": "48b9313595d285ba0bf83e10dbc75132c47da7cb909bc104ccdc2b4423aa511d957c5ba516b45e09046f990ca45f2860d7f56b139202f04a7156582a7d0c95a8"
   },
   "DsaTopKPopCount_v1{N=6}": {
    "and": 4,

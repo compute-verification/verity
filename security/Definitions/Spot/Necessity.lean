@@ -12,13 +12,13 @@ The IOP: the prover sends a transcript `σ : T` (an oracle) before any coin; the
 from a distribution `π` fixed before the transcript, checks each sampled proof block, and checks every unit of an always-proved
 set `A`. There are no hashes: binding is free, and the protocol fixes the oracle's shape.
 
-* `chk u σ`: unit `u`'s check on the transcript. `bad chk σ` is the wrong set `B(σ)`, the units whose check fails.
+* `chk u σ`: unit `u`'s check on the transcript. `bad chk σ` is the incorrect set `B(σ)`, the units whose check fails.
 * `π : PMF U`: the sample distribution. `mass π B` is its weight on `B`, the probability that a sample lands in `B`.
 * `Accepts chk A d σ`: at the sample `d : Fin k → U`, every always-proved check and every sampled check passes.
 * `prob π k E`: the probability of an event of the sample over `k` independent samples from `π`, core's
   `Verity.Game.prPMFReal` under `iid π k`. A transcript committed before the coins is a `σ` that the event reads but
   that does not depend on `d`.
-* `Certified chk π A ε σ`, **the certificate's conclusion**: no always-proved unit is wrong, and `π(B) ≤ ε`.
+* `Certified chk π A ε σ`, **the certificate's conclusion**: no always-proved unit is incorrect, and `π(B) ≤ ε`.
 * `Local reads chk`: unit `u`'s check reads only the oracle positions `reads u`. A population's checks are local by
   type (`Dataflow.Fns`).
 * `AmpLe chk A c dmg K`, **amplification at most `K`**: off the always-proved set, a policy's damage `dmg σ` is at most
@@ -47,7 +47,7 @@ open Finset
 variable {U T : Type}
 
 open Classical in
-/-- The wrong set: the units whose check fails on the transcript. -/
+/-- The incorrect set: the units whose check fails on the transcript. -/
 noncomputable def bad [Fintype U] (chk : U → T → Prop) (σ : T) : Finset U := univ.filter fun u => ¬ chk u σ
 
 /-- The sample's weight on a set of units: the probability that a sample from `π` lands in it. -/
@@ -63,7 +63,7 @@ under their law `iid π k`. -/
 noncomputable abbrev prob [Fintype U] (π : PMF U) (k : ℕ) (E : (Fin k → U) → Prop) : ℝ :=
   Verity.Game.prPMFReal (Verity.Game.iid π k) E
 
-/-- **The certificate's conclusion** about the transcript `σ`: no always-proved unit is wrong, and the sample's weight on
+/-- **The certificate's conclusion** about the transcript `σ`: no always-proved unit is incorrect, and the sample's weight on
 the incorrect proof blocks is at most `ε`. -/
 def Certified [Fintype U] (chk : U → T → Prop) (π : PMF U) (A : Finset U) (ε : ℝ) (σ : T) : Prop :=
   Disjoint (bad chk σ) A ∧ mass π (bad chk σ) ≤ ε
@@ -72,7 +72,7 @@ def Certified [Fintype U] (chk : U → T → Prop) (π : PMF U) (A : Finset U) (
 def Local {Q V : Type} (reads : U → Finset Q) (chk : U → (Q → V) → Prop) : Prop :=
   ∀ u σ τ, (∀ q ∈ reads u, σ q = τ q) → (chk u σ ↔ chk u τ)
 
-/-- **Amplification at most `K`**: on every transcript whose wrong set misses the always-proved set, the damage is at
+/-- **Amplification at most `K`**: on every transcript whose incorrect set misses the always-proved set, the damage is at
 most `K` times the incorrect proof blocks' cost. -/
 def AmpLe [Fintype U] (chk : U → T → Prop) (A : Finset U) (c : U → ℝ) (dmg : T → ℝ) (K : ℝ) : Prop :=
   ∀ σ, Disjoint (bad chk σ) A → dmg σ ≤ K * ∑ u ∈ bad chk σ, c u
@@ -92,7 +92,7 @@ def DeterminateAt {V : Type} (f : P.Fns V) (a : S → V) : Prop :=
 /-- **Robust determinacy at the given unit functions**: two assignments with the same inputs, whose incorrect proof blocks lie in
 `B`, and that agree on what `B` writes, are equal. -/
 def RobustAt [Fintype U] {V : Type} (f : P.Fns V) : Prop :=
-  ∀ (B : Finset U) (σ τ : S → V), (∀ s ∈ P.input, σ s = τ s) → P.wrong f σ ⊆ B → P.wrong f τ ⊆ B →
+  ∀ (B : Finset U) (σ τ : S → V), (∀ s ∈ P.input, σ s = τ s) → P.incorrect f σ ⊆ B → P.incorrect f τ ⊆ B →
     (∀ u ∈ B, ∀ s ∈ P.writes u, σ s = τ s) → σ = τ
 
 open Classical in
@@ -104,7 +104,7 @@ open Classical in
 `X`, and whose incorrect proof blocks write at most `M` slots in all, put on the egress `O`. Control at the public widths. -/
 noncomputable def egressWidth [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.Fns V) (a : S → V)
     (X O : Finset S) (M : ℕ) : Finset (O → V) :=
-  (univ.filter fun σ : S → V => P.Holds a X σ ∧ ∑ u ∈ P.wrong f σ, (P.writes u).card ≤ M).image fun σ o => σ o
+  (univ.filter fun σ : S → V => P.Holds a X σ ∧ ∑ u ∈ P.incorrect f σ, (P.writes u).card ≤ M).image fun σ o => σ o
 
 end Dataflow
 
