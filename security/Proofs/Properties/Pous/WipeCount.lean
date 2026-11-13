@@ -9,10 +9,12 @@ public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 `wipeCountTied` reads its antecedents and nothing else. What an accepted count under the device's parameters means
 (`CountRan`) gives the two marks of the device the span is of, or the break. The marks' messages are the wipe's by the
-verifier's two message equalities, and the mark whose certificate the session signs is the memory challenger's
-antecedent. The span's phases are the phases the device stamped, which are its code's (`NetTiming.DeviceIntact`:
-`NetTiming.markPhase` of each mark's bucket), and its tail is the device's, so the device model's lines for a span
-(`NetTiming.Guarantees.SpanCovers`) put every cell sent between the marks in the span's phases. The span's capacity a
+verifier's two message equalities. The memory challenger's antecedent gives a mark over the start message whose
+certificate the session signs; the device marks a message once (`MarksOnce`), so it has the count's start mark's
+phase, and it is the span's start mark. The span's phases are the phases the device stamped, which are its code's
+(`NetTiming.DeviceIntact`: `NetTiming.markPhase` of each mark's bucket), and its tail is the device's, so the device
+model's lines for a span (`NetTiming.Guarantees.SpanCovers`) put every cell sent between the marks in the span's
+phases. The span's capacity a
 phase is the link's registered one, which bounds the bits the device sends a phase (`SentWithinCapacity`), so the
 count's egress bounds the bits it sent in the span's phases. The egress the wipe publishes is at least the count's in
 the wipe's unit, whole MiB rounded up and saturating (`StreamedWipe.egressUnits`), so below the saturated count it is
@@ -20,8 +22,9 @@ at least the count's in bits (`bits_le_of_units_le`).
 
 `wipeCountTied_honest` is its honest lemma: the wipe's compiled check accepts the honest session of
 `wipeSigned_honest`; `CountRan` holds of a count that accepts a span of a mark its device made (`countRan_marked`);
-and that device sends within its capacity. `wipeCountTied_nontrivial` is its nontrivial lemma: a device that made no
-mark made none whose certificate the session signs, so the conclusion fails there with a break that never holds.
+and that device sends within its capacity and marks a message once. `wipeCountTied_nontrivial` is its nontrivial
+lemma: a device that made no mark gives no span its marks, so the conclusion fails there with a break that never
+holds.
 -/
 
 @[expose] public section
@@ -54,15 +57,16 @@ theorem sentBits_le_egressBits {κ : Type} {d : MarkDevice κ} {n : SpanCount} (
 
 /-- **`WipeCountTied`**: an accepted wipe's egress is the network certifier's count over the wipe's span, from what an
 accepted count under the device's parameters means, the memory challenger's start mark and the device model's lines
-for a span and its capacity a phase. -/
+for a span, its capacity a phase and its marking a message once. -/
 theorem wipeCountTied : WipeCountTied := by
-  intro κ P C Ev Pr M count params broken d p c e out prof _ hdev s cn en n profn _ hsess hn _ hst hend hunits hran
-    hcov hcap
-  rcases hran cn en n profn hn with ⟨a, b, ha, hb, ham, hbm, hsp, hep, htail, hcapn⟩ | hbr
-  · refine .inl ⟨hsess, a, ha, b, hb, ⟨ham.trans hst, hend.trans (by rw [hbm])⟩, ?_,
-      sentBits_le_egressBits hcap hcapn, bits_le_of_units_le hunits⟩
+  intro κ P C Ev Pr M count params broken d p c e out prof _ hdev s cn en n profn _ ⟨a, ha, ham, hac⟩ hn _ hst hend
+    hunits hran hcov hcap honce
+  rcases hran cn en n profn hn with ⟨a', b, ha', hb, ha'm, hbm, hsp, hep, htail, hcapn⟩ | hbr
+  · have hph : d.stamp a.bucket = d.stamp a'.bucket := (honce a ha a' ha' (ham.trans (ha'm.trans hst).symm)).2
+    refine .inl ⟨a, ha, b, hb, ⟨ham, hac, hend.trans (by rw [hbm])⟩, ?_, sentBits_le_egressBits hcap hcapn,
+      bits_le_of_units_le hunits⟩
     intro k j hE hj hadm hbkt
-    rw [hsp, hep, htail, hdev a.bucket, hdev b.bucket]
+    rw [hsp, ← hph, hep, htail, hdev a.bucket, hdev b.bucket]
     exact hcov d.schedule d.cellCap d.phaseBuckets a.bucket b.bucket k j hE hj hadm hbkt
   · exact .inr hbr
 
@@ -77,26 +81,34 @@ theorem countRan_marked : CountRan markedCount () (fun _ _ => False) markedDevic
 /-- `markedDevice` sends nothing, within its capacity. -/
 theorem sentWithinCapacity_marked : SentWithinCapacity markedDevice := fun _ => Nat.le_refl 0
 
+/-- `markedDevice` made one mark, so it marks a message once. -/
+theorem marksOnce_marked : MarksOnce markedDevice := by
+  intro a ha b hb _
+  rw [List.mem_singleton.mp ha, List.mem_singleton.mp hb]
+  exact ⟨rfl, rfl⟩
+
 /-- **`WipeCountTied`'s honest lemma**: its hypothesis holds at the honest deployed instance, the wipe of record's
 session that `wipeSigned_honest` signs and the wipe's compiled check accepts; what an accepted count means holds of a
-count that accepts a span, at the device that made the span's mark; and that device sends within its capacity. -/
+count that accepts a span, at the device that made the span's mark; and that device sends within its capacity and
+marks a message once. -/
 theorem wipeCountTied_honest :
     ∃ (seed K : ByteArray) (c : Nat → Nat) (k : Lms.PrivateKey) (sig : ByteArray) (out : WipeProtocol.Public)
       (prof : StreamedWipe.Params × Int),
       Lms.keygen Lms.deployed seed = .ok k ∧
         WipeProtocol.protocol.check (measuredWipeParams k.publicKey) measuredCommitment
           ⟨some (measuredSession (measuredDigest K c) k.publicKey sig)⟩ = .accept out prof ∧
-        CountRan markedCount () (fun _ _ => False) markedDevice ∧ SentWithinCapacity markedDevice := by
+        CountRan markedCount () (fun _ _ => False) markedDevice ∧ SentWithinCapacity markedDevice ∧
+          MarksOnce markedDevice := by
   obtain ⟨seed, K, c, k, sig, out, prof, hk, h⟩ := wipeSigned_honest
-  exact ⟨seed, K, c, k, sig, out, prof, hk, h, countRan_marked, sentWithinCapacity_marked⟩
+  exact ⟨seed, K, c, k, sig, out, prof, hk, h, countRan_marked, sentWithinCapacity_marked,
+    marksOnce_marked⟩
 
 /-- **`WipeCountTied`'s nontrivial lemma**: its conclusion fails at a network certifier that made no mark, for the
-unencoded session and a break that never holds. No mark of the device is the one whose certificate the session
-signs. -/
+unencoded session and a break that never holds. No mark of the device is the span's start mark. -/
 theorem wipeCountTied_nontrivial :
     ¬ (SpanCounted emptyMarks idleDevice measuredCommitment unencoded markedSpan 0 ∨ False) := by
-  rintro (⟨⟨a₀, ha₀, -⟩, -⟩ | h)
-  · exact absurd ha₀ (by simp [idleDevice])
+  rintro (⟨a, ha, -⟩ | h)
+  · exact absurd ha (by simp [idleDevice])
   · exact h
 
 end MemoryChallenger.Properties.SecurityProofs

@@ -439,6 +439,11 @@
    "issue": "NET-409",
    "due": "2026-11-30"
   },
+  "MemoryChallenger.Properties.MarksOnce": {
+   "owner": "@network-accounting",
+   "issue": "NET-409",
+   "due": "2026-11-30"
+  },
   "MemoryChallenger.Properties.SentWithinCapacity": {
    "owner": "@network-accounting",
    "digest": "6931fb905bb3cc0a03944feb4a009d53e40c0b4b8d552bd9a8540020da6c08b2",

@@ -54,10 +54,14 @@ no phase, and then no cell.
 
 * `NetTiming.DeviceIntact`, at the phase the device stamps on a mark: the device runs its code (`trusted-host`), so the
   stamp is `NetTiming.markPhase` of the bucket it handles the mark in.
-* The memory challenger's side: the session's `start_mark` is the SHA-512 of a mark's certificate the device made, since
-  the challenger hashes the bytes the device handed it.
+* The memory challenger's side: the session's `start_mark` is the SHA-512 of the certificate of a mark the device made
+  over the start message, since the challenger hands the device exactly the start message and hashes the bytes the
+  device hands back.
+* `MarksOnce`, an antecedent until it is stated in the device's model: the device refuses to mark a message twice, so
+  the challenger's mark and the count's start mark, both over the start message, are one mark at one phase.
 * `CountRan`, an antecedent until the count's check is in the tree: what an accepted count under the device's parameters
-  means, that the span it names is of two marks the device made, or its run carries the break.
+  means, that the span it names is of two marks the device made, its start mark over the start message at the span's
+  start phase, or its run carries the break.
 * `NetTiming.Guarantees.SpanCovers`, an antecedent until it is proved: the device model's lines for a span.
 * `SentWithinCapacity`, an antecedent until it is stated in the device's model: the device sends at most its link's
   registered capacity a phase.
@@ -70,9 +74,9 @@ is of every cell the device sends in them.
 * It stops at the marks. That the fill began after the start mark was handled and that the end mark was handled after
   the wipe closed is the memory challenger's run (`MemoryChallenger.Properties.WipeSigned`, once the session signs
   `start_mark`) and the end message's being of the signature.
-* That the span's start mark is the mark whose certificate the session signs. An accepted count gives a mark the device
-  made over the start message at the span's start phase, not that the bytes the count names are that mark's
-  certificate; the two are one mark when the device marks the start message once.
+* Anything of an unmarked wipe. Its signed `start_mark` is empty, and a SHA-512 output is 64 bytes, so the memory
+  challenger's antecedent is false and the statement holds vacuously. Such a wipe is charged the whole memory
+  (`WipeProtocol.certify`).
 * A link no network certifier relays has no count. The wipe's egress is then the saturated one
   (`StreamedWipe.EGRESS_MAX_UNITS`), at which its check certifies nothing (`WipeProtocol.gaps`): `certified` is false
   and `foreign_bits` is the whole memory. The statement's bound in bits is for an egress below the saturated one.
@@ -159,17 +163,22 @@ capacity, so a count's bits over a span bound the bits it sent in the span's pha
 def SentWithinCapacity {κ : Type} (d : MarkDevice κ) : Prop :=
   ∀ φ : ℕ, d.sentBits φ ≤ d.capacityBits
 
-/-- **The wipe's egress is the count over its span**: the session `s` signs the SHA-512 of the certificate of a mark the
-device `d` made; the device made a start mark `a` over the start message of the wipe's commitment `c` and an end mark
-`b` over the session's end message; every egress cell of a connection admitted before `b`'s bucket that is sent at or
-after `a`'s is sent in a phase from the span's start phase to its end phase plus its tail; the bits the device sent in
-those phases are at most the count's egress in bits; and the egress the wipe publishes, `egressMib` in its unit, when
-below the saturated count, is at least the count's egress in bits. -/
+/-- **The device marks a message at most once**, a line of the network certifier's model: it refuses to mark a message
+it has marked, so any two of its marks over one message are one mark, with one certificate and one phase. -/
+def MarksOnce {κ : Type} (d : MarkDevice κ) : Prop :=
+  ∀ a ∈ d.marks, ∀ b ∈ d.marks, a.message = b.message →
+    a.certificate = b.certificate ∧ d.stamp a.bucket = d.stamp b.bucket
+
+/-- **The wipe's egress is the count over its span**: the device `d` made a start mark `a` over the start message of the
+wipe's commitment `c`, with the certificate whose SHA-512 the session `s` signs, and an end mark `b` over the session's
+end message; every egress cell of a connection admitted before `b`'s bucket that is sent at or after `a`'s is sent in a
+phase from the span's start phase to its end phase plus its tail; the bits the device sent in those phases are at most
+the count's egress in bits; and the egress the wipe publishes, `egressMib` in its unit, when below the saturated count,
+is at least the count's egress in bits. -/
 def SpanCounted {κ : Type} (M : WipeMarks) (d : MarkDevice κ) (c : StreamedWipe.Commitment) (s : StreamedWipe.Signed)
     (n : SpanCount) (egressMib : Int) : Prop :=
-  (∃ a₀ ∈ d.marks, Sha512.hash a₀.certificate = M.startMark s) ∧
   ∃ a ∈ d.marks, ∃ b ∈ d.marks,
-    (a.message = M.startMessage c ∧ M.endMessage s = .ok b.message) ∧
+    (a.message = M.startMessage c ∧ Sha512.hash a.certificate = M.startMark s ∧ M.endMessage s = .ok b.message) ∧
     (∀ (k : κ) (j : ℕ), d.schedule.cells k ≤ d.cellCap → j < d.schedule.cells k → d.schedule.adm k < b.bucket →
       a.bucket ≤ d.schedule.bucket k j →
         n.startPhase ≤ d.schedule.bucket k j / d.phaseBuckets ∧
@@ -181,13 +190,14 @@ def SpanCounted {κ : Type} (M : WipeMarks) (d : MarkDevice κ) (c : StreamedWip
 count's check `count` with its break `broken`, the network certifier `d` on the wipe's link, whose stamp is its code
 (`NetTiming.DeviceIntact`), and `d`'s parameters `params` (the registered hardware's key and link, the run's certifier
 session, the schedule each phase's signed head names): when the wipe's compiled check accepts and publishes `out`, and
-the session's signed `start_mark` is the SHA-512 of a mark's certificate the device made (the memory challenger hashes
-the bytes the device handed it), then for every span `n` the count accepts under the device's parameters that names
-the session's signed `start_mark`, the start message of the wipe's commitment and the end message of the signed
-session, with the published egress at least the count's in the wipe's unit, the wipe's egress is the count over its
-span (`SpanCounted`), or the count's run carries its break. Three antecedents stand until their own pieces are in the
-tree: what an accepted count means (`CountRan`), the device model's lines for a span
-(`NetTiming.Guarantees.SpanCovers`) and its capacity a phase (`SentWithinCapacity`). -/
+the session's signed `start_mark` is the SHA-512 of the certificate of a mark the device made over the start message
+(the memory challenger hands the device the start message and hashes the bytes it hands back), then for every span `n`
+the count accepts under the device's parameters that names the session's signed `start_mark`, the start message of the
+wipe's commitment and the end message of the signed session, with the published egress at least the count's in the
+wipe's unit, the wipe's egress is the count over its span (`SpanCounted`), or the count's run carries its break. Four
+antecedents stand until their own pieces are in the tree: what an accepted count means (`CountRan`), the device model's
+lines for a span (`NetTiming.Guarantees.SpanCovers`), its capacity a phase (`SentWithinCapacity`) and its marking a
+message once (`MarksOnce`). -/
 def WipeCountTied : Prop :=
   ∀ {κ P C Ev Pr : Type} (M : WipeMarks) (count : P → C → Ev → Core.Outcome SpanCount Pr) (params : P)
     (broken : C → Ev → Prop) (d : MarkDevice κ) (p : WipeProtocol.Params) (c : StreamedWipe.Commitment)
@@ -195,11 +205,11 @@ def WipeCountTied : Prop :=
     WipeProtocol.protocol.check p c e = .accept out prof →
     NetTiming.DeviceIntact d.stamp (NetTiming.markPhase d.phaseBuckets) →
     ∀ (s : StreamedWipe.Signed) (cn : C) (en : Ev) (n : SpanCount) (profn : Pr),
-      e.signed = some s → (∃ a ∈ d.marks, Sha512.hash a.certificate = M.startMark s) →
+      e.signed = some s → (∃ a ∈ d.marks, a.message = M.startMessage c ∧ Sha512.hash a.certificate = M.startMark s) →
       count params cn en = .accept n profn →
       n.startMark = M.startMark s → n.startMessage = M.startMessage c → M.endMessage s = .ok n.endMessage →
       StreamedWipe.egressUnits n.egressBits ≤ out.egressMib →
-      CountRan count params broken d → NetTiming.Guarantees.SpanCovers → SentWithinCapacity d →
+      CountRan count params broken d → NetTiming.Guarantees.SpanCovers → SentWithinCapacity d → MarksOnce d →
         SpanCounted M d c s n out.egressMib ∨ broken cn en
 
 /-! ## The witnesses' instances -/
