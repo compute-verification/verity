@@ -297,6 +297,29 @@ def test_the_profile_is_the_same_document_through_the_hook(memory, tmp_path, der
     assert res["verdict"] == "PASS" and all("_profile" not in e for e in res["requests"])
 
 
+def test_the_profiles_wrappers_on_the_view_hand_on_what_they_are_given_and_count_each_read_once(profile_out, monkeypatch):
+    """The three reads of an operand the profile wraps on `RootView`: each wrapper passes the view, the run or progression and
+    `unfold` to the read it wraps and returns its answer; a progression read a run at a time counts its runs; a second
+    installation wraps nothing again."""
+    seen: list[tuple] = []
+
+    def stand_in(name: str):
+        def read(self, x, unfold):
+            seen.append((name, self, x, unfold))
+            return [name]
+        return read
+
+    for name in ("_per_run", "_srcP", "_src"):
+        monkeypatch.setattr(C.RootView, name, stand_in(name))
+    decomp_profile._install_profile_counters()
+    decomp_profile._install_profile_counters()
+    view, run, progression = object(), ("n", 7, 0, 4), ("n", (7, 0, 4), (1, 0, 0), 3)
+    answers = [C.RootView._per_run(view, progression, True), C.RootView._srcP(view, progression, False), C.RootView._src(view, run, True)]
+    assert answers == [["_per_run"], ["_srcP"], ["_src"]]
+    assert seen == [("_per_run", view, progression, True), ("_srcP", view, progression, False), ("_src", view, run, True)]
+    assert decomp_profile._profile_counters == {"per_run_progressions": 1, "per_run_runs": 3, "srcP_calls": 1, "src_calls": 1}
+
+
 def test_the_profile_counts_no_run_for_an_operand_that_has_none(monkeypatch, tmp_path, profile_out):
     """An operand of no runs counts none, in the request's instances and in its component's: stubs of the fold's view and of the
     component, one request in one engine step, the comparison stated equal."""
