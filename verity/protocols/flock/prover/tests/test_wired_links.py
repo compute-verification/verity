@@ -26,7 +26,7 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import array_of, coll_concat
 from verity.circuits.types import Array
-from verity.definitions.private_circuits import universal as U
+from verity.circuits.private_circuits import universal as U
 
 from verity_flock import class_statement as CS
 from verity_flock import partition_units as PU

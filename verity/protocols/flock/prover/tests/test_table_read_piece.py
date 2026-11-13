@@ -14,7 +14,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Value
-from verity.definitions.ops.scalar import I32Add
+from verity.circuits.ops.scalar import I32Add
 
 from verity_flock import gf2
 from verity_flock import ir_lower as IL
