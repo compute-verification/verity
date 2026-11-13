@@ -4,8 +4,9 @@ and its outcome. The piece, on a serve dir whose window was the network certifie
 (the run `test_warden_chain.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
 `network-period`'s answer only when `network-rows` accepted the run's records, the chain accepted and the window's
 requests are certified ones in the scan's link-window: the period mirror's certifier/v0 accept (`period_case`), its
-profile with the placement (the certifier on the kept gate's host, the checks on the developer's node), then goes
-through `served_verdicts.py record` into the window
+profile with the placement (the certifier on the kept gate's machine, each of the piece's steps on the machine that ran
+it, and `trusted-host` holding only under a key pinned for the certifier's machine and role, which the tree pins none
+of), then goes through `served_verdicts.py record` into the window
 report and the block record's certifier leg, which `block_record.check` holds and its schema admits. Its case.json is
 the three files `network-period` read, as `composite.py` reads a piece's case: witness, kept 0600 in the serve dir's
 private/pieces/certifier with no answer beside it, and at no time under the pieces' directory, which gets
@@ -29,6 +30,7 @@ gate is asked."""
 from __future__ import annotations
 
 import argparse
+import hashlib
 import http.server
 import importlib.util
 import json
@@ -236,9 +238,13 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     where = got["profile"].pop("placement")
     assert got == accept
     node = socket.gethostname()
-    assert (where["kind"], where["parties"]) == ("not-placed", {"network_certifier": GATE_HOST, "prover": node,
-                                                                "verifier": node})
-    assert where[CP.PREMISE].startswith("assumed, the auditor's devices not placed")
+    assert (where["kind"], where["parties"]) == ("own-host", {"network_certifier": GATE_HOST, "prover": node,
+                                                              "verifier": node})
+    assert where["steps"] == {"chain": node, "period": node}
+    assert where[CP.PREMISE] == (
+        f"rehearsal: key not the auditor's pinned key, no bound; the network certifier ran on {GATE_HOST}, not the "
+        f"developer's {node}; the chain's checks and samples ran on {node}, and the period check and its proofs' "
+        f"challenges on {node}")
     assert [(x["name"], x["counted"]) for x in where["links"]] == [("certified", True), ("gate", False)]
     assert json.loads((piece / "chain" / "report" / "report.json").read_text())["verdict"] == "accepted"
     assert _files(piece) - {"piece.json"} == {"answer.json", CP.CERTIFICATES, "chain/report/report.json", "piece.log"}
@@ -717,11 +723,73 @@ def test_the_placement_names_the_kept_gate_a_local_gate_the_prover_node_and_refu
     assert CP.placement(d, RUN)["parties"]["network_certifier"] == GATE_HOST
     (d / CP.PRIVATE / RUN / CP.SESSION).write_text(json.dumps({"run": RUN, "gate": "local"}))
     p = CP.placement(d, RUN)
-    assert (p["kind"], p["links"]) == ("prover-node", []) and p[CP.PREMISE].startswith("unmet")
-    assert p["parties"]["network_certifier"] == p["parties"]["prover"] == socket.gethostname()
+    node = socket.gethostname()
+    assert (p["kind"], p["links"]) == ("prover-node", [])
+    assert p[CP.PREMISE].startswith(f"{CP.REHEARSAL}; the network certifier ran on the developer's node {node} ")
+    assert p["parties"]["network_certifier"] == p["parties"]["prover"] == node
     (d / CP.PRIVATE / RUN / CP.SESSION).unlink()
     with pytest.raises(CP.NotRun, match="keep the run with this tree's front"):
         CP.placement(d, RUN)
+
+
+def _session_key(tmp_path: Path, warden: dict) -> str:
+    """`session_key` of the synthetic run, read from its kept fetch as the piece reads it."""
+    with tarfile.open(warden["fetch"], "r:gz") as tar:
+        tar.extractall(tmp_path / "unpacked", filter="data")
+    return CP.session_key(CP.warden_run(tmp_path / "unpacked"))
+
+
+def test_the_tree_pins_no_key_and_the_two_premises_are_these_words():
+    """The table is empty in the tree, so every real run reads `REHEARSAL`; an entry is 128 lowercase hex digits; and
+    the two phrases are these, word for word."""
+    assert CP.AUDITOR_KEYS == {}
+    assert all(re.fullmatch("[0-9a-f]{128}", k) for roles in CP.AUDITOR_KEYS.values() for keys in roles.values()
+               for k in keys)
+    assert CP.HOLDS == "holds: the session is signed under {host}'s pinned key"
+    assert CP.REHEARSAL == "rehearsal: key not the auditor's pinned key, no bound"
+
+
+def test_trusted_host_holds_only_under_a_key_pinned_for_the_certifiers_machine_and_role(tmp_path, warden, monkeypatch):
+    """A fixture key shows ``holds``: the session key of the synthetic run, pinned for the gate's machine in the
+    certifier's role. The same key pinned for another machine, or for that machine in another role, another key, the
+    key in upper case and no key each read ``rehearsal``, with the same names: the names never decide it."""
+    d = _serve_dir(tmp_path / "serve", warden)
+    key = _session_key(tmp_path, warden)
+    assert key == hashlib.sha512(bytes.fromhex(warden["deployment"]["key"]["public"])).hexdigest()
+    assert re.fullmatch("[0-9a-f]{128}", key)
+    steps = {"chain": "chain-machine", "period": "period-machine"}
+    names = (f"the network certifier ran on {GATE_HOST}, not the developer's {socket.gethostname()}; the chain's "
+             "checks and samples ran on chain-machine, and the period check and its proofs' challenges on "
+             "period-machine")
+    rehearsal = f"rehearsal: key not the auditor's pinned key, no bound; {names}"
+    assert CP.placement(d, RUN, key, steps)[CP.PREMISE] == rehearsal
+    monkeypatch.setattr(CP, "AUDITOR_KEYS", {GATE_HOST: {CP.ROLE: frozenset({key})}})
+    held = CP.placement(d, RUN, key, steps)
+    assert held[CP.PREMISE] == f"holds: the session is signed under {GATE_HOST}'s pinned key; {names}"
+    assert (held["kind"], held["steps"], held["parties"]["verifier"]) == ("own-host", steps, "period-machine")
+    other = hashlib.sha512(b"another key").hexdigest()
+    for unpinned in (other, key.upper(), None):
+        assert CP.placement(d, RUN, unpinned, steps)[CP.PREMISE] == rehearsal
+    for table in ({"another-machine": {CP.ROLE: frozenset({key})}}, {GATE_HOST: {"memory_challenger": frozenset({key})}},
+                  {GATE_HOST: {CP.ROLE: frozenset({other})}}):
+        monkeypatch.setattr(CP, "AUDITOR_KEYS", table)
+        assert CP.placement(d, RUN, key, steps)[CP.PREMISE] == rehearsal
+    (d / CP.PRIVATE / RUN / CP.SESSION).write_text(json.dumps({"run": RUN, "gate": "local"}))
+    monkeypatch.setattr(CP, "AUDITOR_KEYS", {GATE_HOST: {CP.ROLE: frozenset({key})}})
+    assert CP.placement(d, RUN, key, steps)[CP.PREMISE].startswith(f"{CP.REHEARSAL}; ")
+
+
+def test_each_step_is_named_by_the_machine_that_ran_it(tmp_path, monkeypatch):
+    """The piece's steps are named by the running machine as it names itself, never a fixed name: both steps of the
+    whole piece by this one; the split's chain step by the machine its `CHAINED` names, and a `CHAINED` naming none
+    by `UNNAMED`."""
+    monkeypatch.setattr(socket, "gethostname", lambda: "this-machine")
+    assert CP.ran_on() == {"chain": "this-machine", "period": "this-machine"}
+    chained = tmp_path / CP.CHAINED
+    chained.write_text(json.dumps({"chain": "accepted", "ran_on": "chain-machine"}))
+    assert CP.ran_on(chained) == {"chain": "chain-machine", "period": "this-machine"}
+    chained.write_text(json.dumps({"chain": "accepted"}))
+    assert CP.ran_on(chained) == {"chain": CP.UNNAMED, "period": "this-machine"}
 
 
 def _numbers(p: Path) -> set[int]:
@@ -871,7 +939,8 @@ def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_pa
     assert not _named(tmp_path, CP.CASE, CP.CERTIFICATES)
     assert (piece / "chain.log").read_text().splitlines()[-1] == (
         f"CERTIFIER-CHAIN accepted on V3c's window {v3c / 'window'}: the period step checks its period.json")
-    assert json.loads((piece / CP.CHAINED).read_text()) == {"chain": "accepted", "v3c": str(v3c)}
+    assert json.loads((piece / CP.CHAINED).read_text()) == {"chain": "accepted", "ran_on": socket.gethostname(),
+                                                            "v3c": str(v3c)}
     assert f"CR_SCAN_ARGS=--class w63k4 --v3c {v3c / 'window'} --x 1" in (tmp_path / "chain-args").read_text()
     assert not (piece / "answer.json").exists()
     (v3c / "period.json").write_text(json.dumps(PERIOD))

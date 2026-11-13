@@ -612,16 +612,18 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
 
 
 def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_on(tmp_path):
-    """The network certifier's answer as its piece writes it when the warden ran on the gate's host and its checks, samples
-    and coins on the served node: its accept's clause says the premise is assumed and why, so the ``RECORD`` line's
-    accept isn't read as the auditor's devices having placed it."""
-    premise = ("assumed, the auditor's devices not placed: the network certifier ran on 192.0.2.84, not the prover's "
-               "vy-dc-h200, but the chain's checks and draws, the period check and their proofs' coins ran on vy-dc-h200")
+    """The network certifier's answer as its piece writes it when the warden ran on the gate's machine, under a key the
+    auditor pinned none of, and the piece's steps on the served node: its accept's clause says the run is a rehearsal
+    with no bound, and which machine ran what, so the ``RECORD`` line's accept isn't read as the auditor's devices
+    having placed it."""
+    premise = ("rehearsal: key not the auditor's pinned key, no bound; the network certifier ran on 192.0.2.84, not "
+               "the developer's vy-dc-h200; the chain's checks and samples ran on vy-dc-h200, and the period check and "
+               "its proofs' challenges on vy-dc-h200")
     (d := tmp_path / "certifier").mkdir()
     (d / "answer.json").write_text(json.dumps({
         "protocol": "verity/certifier/v0", "verdict": "accept", "reason": None, "commitment": "cd" * 64,
         "public": {"K": 15764, "eps": "1/100", "windows": 1},
-        "profile": {"placement": {"kind": "not-placed", "trusted-host": premise}}}))
+        "profile": {"placement": {"kind": "own-host", "trusted-host": premise}}}))
     (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
     _report, _rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
                                    servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
@@ -634,16 +636,17 @@ def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_ga
     the node is uncounted and uncertified, before the premise. Under ``--gate local`` it has no links, and the clause
     states the premise alone."""
     node, host = "vy-dc-h200", "192.0.2.84"
-    gated = {"kind": "not-placed", "parties": {"network_certifier": host, "prover": node, "verifier": node},
-             "trusted-host": f"assumed, the auditor's devices not placed: the network certifier ran on {host}, not the "
-                             f"prover's {node}",
+    gated = {"kind": "own-host", "parties": {"network_certifier": host, "prover": node, "verifier": node},
+             "trusted-host": f"rehearsal: key not the auditor's pinned key, no bound; the network certifier ran on "
+                             f"{host}, not the developer's {node}",
              "links": [{"name": "certified", "from": host, "to": node, "counted": True,
                         "via": "the warden's tunnel to the endpoint's port"},
                        {"name": "gate", "from": node, "to": host, "counted": False,
                         "via": "ssh, both ways: the session's request and prompts, its status and its fetch"}],
              "uncounted": f"every link of {node}'s but the certified one"}
     local = {"kind": "prover-node", "parties": {"network_certifier": node, "prover": node, "verifier": node},
-             "trusted-host": f"unmet: the network certifier ran on the prover's node {node} (the front's --gate local)",
+             "trusted-host": f"rehearsal: key not the auditor's pinned key, no bound; the network certifier ran on "
+                             f"the developer's node {node} (the front's --gate local)",
              "links": [], "uncounted": f"every link of {node}'s"}
     clause = {}
     for name, place in (("gated", gated), ("local", local)):
