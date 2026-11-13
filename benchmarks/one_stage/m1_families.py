@@ -15,7 +15,7 @@ templates past the row itself: ``units``), and for each ``--also`` Definition (`
 
     PYTHONPATH=... python benchmarks/one_stage/m1_families.py --commit ROW/commit --build-root ROW/build \\
       --workload adapters/vllm/workloads/ROW.json --rank 0 --steps 16 --out families.json
-    PYTHONPATH=...:<tree>/verity/protocols/flock/prover/python python benchmarks/one_stage/m1_families.py --estimate families.json --out sized.json \\
+    PYTHONPATH=...:<tree>/verity/protocols/proofs/flock/prover/python python benchmarks/one_stage/m1_families.py --estimate families.json --out sized.json \\
       [--also 'CublasSplitKGemmF32Out_v1{K=6144,N=1,..}' ...] [--also-file SPECS.txt]
 """
 from __future__ import annotations

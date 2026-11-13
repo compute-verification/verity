@@ -177,42 +177,42 @@ means = "a suite's configuration, where it has one"
 # ---- verity/protocols/ ---------------------------------------------------------------------------------------------
 
 [[tree]]
-path = "verity/protocols/flock/"
+path = "verity/protocols/proofs/flock/"
 means = "the proof system: its Lean verifier and the ZK server, and its prover"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/spot/"
+path = "verity/protocols/proofs/spot/"
 means = "SPOT, the Sample-and-PrOve Transform, with the integrity profile"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/recursion/"
+path = "verity/protocols/proofs/recursion/"
 means = "one proof system's verifier proved in another's proofs, and the ZK server's release side"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/pouw/"
+path = "verity/protocols/accounting/pouw/"
 means = "proof of useful work"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/pous/"
+path = "verity/protocols/accounting/pous/"
 means = "proof of useful space"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/poub/"
+path = "verity/protocols/accounting/poub/"
 means = "PoUB: with no hardware at the site, how many reads of a node's registered store the node made"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/certifier/"
+path = "verity/protocols/accounting/certifier/"
 means = "network certification: the network certifier and its guarantee"
 protocol = true
 
 [[tree]]
-path = "verity/protocols/inference_only/"
+path = "verity/protocols/policy/inference_only/"
 means = "the inference-only policy's check"
 protocol = true
 
@@ -422,79 +422,79 @@ owner = "proofs"
 day = "2026-11-18"
 
 [[not_yet]]
-path = "verity/protocols/pouw/clear/"
-to = "verity/protocols/pouw/verifier/"
+path = "verity/protocols/accounting/pouw/clear/"
+to = "verity/protocols/accounting/pouw/verifier/"
 owner = "compute-accounting"
 day = "2026-11-19"
 
 [[not_yet]]
-path = "verity/protocols/pouw/receipts/"
-to = "verity/protocols/pouw/verifier/"
+path = "verity/protocols/accounting/pouw/receipts/"
+to = "verity/protocols/accounting/pouw/verifier/"
 owner = "compute-accounting"
 day = "2026-11-19"
 
 [[not_yet]]
-path = "verity/protocols/pous/lean/"
+path = "verity/protocols/accounting/pous/lean/"
 to = "out of verity/: tools/pous_grader/, or deleted"
 owner = "memory-accounting"
 day = "2026-11-18"
 
 [[not_yet]]
-path = "verity/protocols/inference_only/nci/"
+path = "verity/protocols/policy/inference_only/nci/"
 to = "benchmarks/nci/"
 owner = "network-accounting"
 day = "2026-11-14 12:00 PST"
 
 [[not_yet]]
-path = "verity/protocols/inference_only/rho/"
+path = "verity/protocols/policy/inference_only/rho/"
 to = "benchmarks/rho/"
 owner = "network-accounting"
 day = "2026-11-14 12:00 PST"
 
 [[not_yet]]
-path = "verity/protocols/flock/pod/"
+path = "verity/protocols/proofs/flock/pod/"
 to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
 owner = "proofs"
 day = "2026-11-18"
 
 [[not_yet]]
-path = "verity/protocols/flock/sigma/"
+path = "verity/protocols/proofs/flock/sigma/"
 to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
 owner = "proofs"
 day = "2026-11-18"
 
 [[not_yet]]
-path = "verity/protocols/flock/agreement/"
+path = "verity/protocols/proofs/flock/agreement/"
 to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
 owner = "proofs"
 day = "2026-11-18"
 
 [[not_yet]]
-path = "verity/protocols/flock/tool.py"
+path = "verity/protocols/proofs/flock/tool.py"
 to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
 owner = "proofs"
 day = "2026-11-18"
 
 [[not_yet]]
-path = "verity/protocols/spot/candidates.py"
+path = "verity/protocols/proofs/spot/candidates.py"
 to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
 owner = "proofs"
 day = "2026-11-18"
 
 [[not_yet]]
-path = "verity/protocols/spot/costfit.py"
+path = "verity/protocols/proofs/spot/costfit.py"
 to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
 owner = "proofs"
 day = "2026-11-18"
 
 [[not_yet]]
-path = "verity/protocols/spot/optimize.py"
+path = "verity/protocols/proofs/spot/optimize.py"
 to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
 owner = "proofs"
 day = "2026-11-18"
 
 [[not_yet]]
-path = "verity/protocols/spot/plancheck.py"
+path = "verity/protocols/proofs/spot/plancheck.py"
 to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
 owner = "proofs"
 day = "2026-11-18"

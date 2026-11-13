@@ -15,8 +15,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from verity.protocols.pouw.verifier.protocol import Matmul, Shape
-from verity.protocols.pouw.verifier.serving import SERIAL
+from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.accounting.pouw.verifier.serving import SERIAL
 
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols.linear.api import Arm, PassSpec, Stack
