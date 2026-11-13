@@ -69,6 +69,7 @@ public import Flock.ProgramRead
 public import Flock.CircuitRead
 public import Flock.SelfTest
 public import Flock.VerifyMembers
+public import Flock.RegBound
 public import Flock.WindowRecord
 public import Flock.RegKnown
 public import Flock.KnownRead
@@ -114,6 +115,7 @@ public import Flock.Firewall.Values
 public import Flock.Firewall.Skeleton
 public import Flock.Firewall.Drive
 public import Flock.Witness
+public import Flock.WitnessZk
 public import Flock.With.Returns
 public import Flock.With.ReturnsWalk
 public import Flock.With.Deployed

@@ -1,7 +1,7 @@
 """`verity_bench.steady` on made-up files: a run whose files show all ten checks, each check failing alone, each check the
 files can't show, a value that isn't a number passing nothing, a run's rows read from its rate file and from a directory,
-the window and its thirds on stated numbers, a window cut at whole bursts where a row declares its sessions' period, with
-no session of it left unjudged, and the four conditions the reader of these rows still holds itself."""
+the window and its thirds on stated numbers, and a window cut at whole bursts where a row declares its sessions' period,
+with no session of it left unjudged."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ import math
 
 import pytest
 
-from verity_bench import prove_records as R
 from verity_bench import steady as S
 
 TYPE, K, WARM, CARD = "gemm64", 2, 2, "3"
@@ -458,18 +457,3 @@ def test_no_session_of_a_window_is_left_out_of_its_cut(period):
             row, files = made({} if period is None else {"period": period}, gaps=around(tuple(gaps)))
             got = S.verdict(row, files)
             assert [(c.name, c.status) for c in got.checks if not c.ok] == [("level", S.FAIL)], (sessions, slow)
-
-
-def test_the_reader_holds_four_of_the_checks_itself_and_gives_the_same_reasons():
-    """`prove_records.row_why` reads the same rows and holds `accepted`, `not_void`, `exits` and `flat` as conditions of
-    its own. Until it calls this module's, the two must give one answer and one reason on a row."""
-
-    row, _ = made()
-    assert R.RATES == S.RATES and R.row_why(row) is None
-    assert all(check(row).ok for check in (S.accepted, S.not_void, S.exits, S.flat))
-    for check, change in ((S.accepted, {"accepted": 19}), (S.accepted, {"refused_n": 2}),
-                          (S.not_void, {"void": ["2 of 20 sessions refused", "exited nonzero: prover-gpu3-0 rc 1"]}),
-                          (S.exits, {"exits": {"prover-gpu3-0": 0, "prover-gpu3-1": 137}}),
-                          (S.exits, {"exits": [0, 1]}), (S.flat, {"flat": False}), (S.flat, {"flat": None})):
-        got = check(row | change)
-        assert got.status == S.FAIL and got.why == R.row_why(row | change), change

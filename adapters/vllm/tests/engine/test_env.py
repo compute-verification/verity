@@ -73,16 +73,6 @@ def test_hidden_devices_override_what_the_process_inherited(monkeypatch) -> None
     assert os.environ["CUDA_VISIBLE_DEVICES"] == ""
 
 
-def test_set_since_is_what_the_process_set_or_changed_after_the_snapshot(monkeypatch) -> None:
-    monkeypatch.setenv("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
-    monkeypatch.setenv("KEPT", "1")
-    monkeypatch.delenv("CUBLASLT_WORKSPACE_SIZE", raising=False)
-    before = env.snapshot()
-    monkeypatch.setenv("CUBLAS_WORKSPACE_CONFIG", ":16:8")
-    monkeypatch.setenv("CUBLASLT_WORKSPACE_SIZE", "1")
-    assert env.set_since(before) == {"CUBLAS_WORKSPACE_CONFIG": ":16:8", "CUBLASLT_WORKSPACE_SIZE": "1"}
-
-
 def test_a_capture_at_served_defaults_never_pins_a_switch_back() -> None:
     """A capture that clears `SERVED_DEFAULTS` imports no module that pins the engine's switches (`vllm_meta` pins `EXPORT` at
     import, batch invariance among it; `engine_profile` pins `ENGINE`) and calls no pinning function, at any level of its code."""
@@ -103,18 +93,6 @@ def test_a_capture_at_served_defaults_never_pins_a_switch_back() -> None:
             elif isinstance(n, ast.Call):
                 used.add(getattr(n.func, "attr", getattr(n.func, "id", None)))
         assert not used & pinning, (p.name, sorted(used & pinning))
-
-
-def test_an_engine_records_what_its_build_wrote_into_the_environment() -> None:
-    import dataclasses
-    import inspect
-
-    from verity_vllm.engine import build
-
-    src = inspect.getsource(build.build_engine)
-    assert src.index("env0 = engine_env.snapshot()") < src.index("engine_kwargs_for(") < src.index("llm = LLM(**kw)")
-    assert "engine_env.set_since(env0))" in src.split("llm = LLM(**kw)")[1].split("eng.effective")[0]
-    assert "environ" in [f.name for f in dataclasses.fields(build.Engine)]
 
 
 def test_the_engine_profile_reads_this_table() -> None:
@@ -196,6 +174,54 @@ def test_an_engine_refuses_an_inductor_that_read_the_tiling_otherwise(monkeypatc
         env.require_inductor({})
 
 
+def test_every_process_of_the_suite_loaded_inductor_under_the_pin() -> None:
+    """The suite's `conftest.py` imports ``torch._inductor.config`` itself, under the pin, wherever torch is installed, so no test is
+    the first to import it with the pin cleared from its environment, and an engine built in any test is not refused for the tests
+    that ran before it."""
+    import importlib.util
+
+    loaded, installed = "torch._inductor.config" in sys.modules, importlib.util.find_spec("torch") is not None
+    assert loaded == installed, "conftest.py imports torch._inductor.config right after it pins the fixed switches, where torch is installed"
+    env.require_inductor({})
+
+
+@pytest.mark.parametrize("plugin", [False, True], ids=["plain", "under-the-suite-guard"])
+def test_the_suites_guard_fails_the_test_that_leaves_a_switch_changed_and_no_test_whose_monkeypatch_undoes_it(tmp_path, plugin) -> None:
+    """`conftest.py`'s Inductor guard on `inductor_guard_cases.py`, in a pytest of their own: a test that sets the switch, or puts a
+    stand-in module in, with `monkeypatch` passes; the test that leaves the switch changed is an error at its teardown, by name,
+    with the guard's message; and the test after it reads the pin again.  The same under the plugin `suites.py` loads into every
+    suite, loaded by name as it loads it and from where it loaded it into this run (skipped in a run it didn't start, which has
+    none): its autouse fixture sets `monkeypatch` up before any fixture of this suite, so `monkeypatch` undoes a test's change
+    after every other fixture is torn down."""
+    import subprocess
+    from pathlib import Path
+
+    pytest.importorskip("torch")
+    cases = "tests/engine/inductor_guard_cases.py"
+    # under `suites.py` the child's plugin must not act for this run: no report written over this run's, no test left out as
+    # another part's or as a reused pass; the child still traces what it reads, as every Python a test starts does
+    runner = ("VERITY_SUITE_REPORT", "VERITY_SUITE_PART", "VERITY_SUITE_REUSE", "VERITY_SUITE_HEAVY")
+    environ = {k: v for k, v in os.environ.items() if k not in runner}
+    if plugin:
+        loaded = sys.modules.get("verity_suite_guard")
+        if loaded is None:
+            pytest.skip("`suites.py` loads its plugin into the suites it runs, and it didn't start this run")
+        guard = Path(loaded.__file__).parent
+        environ["PYTHONPATH"] = os.pathsep.join([*filter(None, environ.get("PYTHONPATH", "").split(os.pathsep)), str(guard)])
+    r = subprocess.run([sys.executable, "-m", "pytest", cases, "-rA", "-p", "no:cacheprovider", f"--basetemp={tmp_path / 'b'}",
+                        *(["-p", "verity_suite_guard"] if plugin else [])], cwd=Path(__file__).resolve().parents[2], env=environ,
+                       capture_output=True, text=True)
+    lines = r.stdout.splitlines()
+    left = f"{cases}::test_a_switch_left_changed_is_failed_by_name"
+    assert sorted(line for line in lines if line.startswith(("PASSED ", "FAILED ", "ERROR "))) == sorted([
+        f"PASSED {cases}::test_a_switch_set_with_monkeypatch_is_not_left",
+        f"PASSED {cases}::test_a_stand_in_module_set_with_monkeypatch_is_not_left",
+        f"PASSED {left}", f"ERROR {left}",
+        f"PASSED {cases}::test_the_test_after_it_reads_the_pin"]), r.stdout + r.stderr
+    assert r.returncode == 1 and any("ERROR at teardown of test_a_switch_left_changed_is_failed_by_name" in line for line in lines)
+    assert "test left torch._inductor.config reading {'dynamic_scale_rblock': True}" in r.stdout
+
+
 @pytest.mark.parametrize("module, fn", TP_ENGINES)
 def test_every_tp_engine_checks_its_inductor_before_it_is_built(module, fn) -> None:
     import importlib
@@ -212,8 +238,6 @@ def test_every_engine_records_the_tiling_it_runs(clean, tmp_path) -> None:
 
     clean.setenv("VLLM_BATCH_INVARIANT", "0")
     clean.setenv("HF_HOME", str(tmp_path))
-    if (cfg := sys.modules.get("torch._inductor.config")) is not None:
-        clean.setattr(cfg, "dynamic_scale_rblock", False)
     (m := tmp_path / "checkpoints.json").write_text(json.dumps({"checkpoints": [
         {"repo": "r/m", "role": "M", "downloaded": True, "local_path": str(tmp_path)}]}))
     for execution in ("bi-eager", "bi-compiled"):

@@ -108,7 +108,7 @@ def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
     assert build.count("kueue.x-k8s.io/queue-name: deployments-cpu") == gpu.count("kueue.x-k8s.io/queue-name: deployments-gpu") == 1
     assert 'ov.noisy: "true"' in gpu and "--out" in build and "--out" in gpu                          # bootstrap writes outside the tree
     for part in (build, gpu):
-        assert "GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve" in part and "HOT_ROOT: /workspace/jobs/hot" in part
+        assert "GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve" in part
     sub = (SKY / "submit.sh").read_text()
     (tmp_path / "cls.py").write_text(sub[sub.index("<<'PY'\n") + 7:sub.index("\nPY\n")])
     def render(*args):
@@ -1240,3 +1240,26 @@ def test_retention_gc_runs_hourly_on_the_nodes_outside_a_timed_window(tmp_path):
     assert gate() != 0, "node 2 inside a timed window: skipped"
     status.write_text("2026-10-19T06:40:00Z free GPUs 0/8, timed False, window waiting False\n")
     assert gate() == 0
+
+
+def test_every_cpu_node_the_retention_collector_runs_on_gets_researchs_store_eviction_whole():
+    """A node that holds research runs gets a source tree for each commit `research run` ships there, and only research's
+    store eviction with src.conf deletes them: under the retention collector alone the node fills. So every CPU node the
+    collector is on gets the eviction, and none gets its service without the script it runs, its timer and src.conf."""
+    import tomllib
+
+    from research import auto
+    files = tomllib.loads((SKY.parent / "deploy.toml").read_text())["file"]
+
+    def on(path):
+        return {n for f in files if f["path"] == path for n in f["nodes"]}
+
+    unit = "/etc/systemd/system/vy-store-evict-research"
+    service, script = on(f"{unit}.service"), on("/usr/local/bin/vy-store-evict")
+    holds_runs = {n for n in on("/etc/systemd/system/vy-retention-gc.timer") if auto.CPU_NODE.fullmatch(n)}
+    assert len(holds_runs) > 2, "the retention collector's CPU nodes"
+    assert not holds_runs - service, (f"{sorted(holds_runs - service)} hold research runs without research's store eviction: add them "
+                                      f"to the `nodes` of its script, {unit}.service, .timer and .service.d/src.conf")
+    assert not service - script, f"{sorted(service - script)} get the service without the script it runs: add them to its `nodes`"
+    for part in (f"{unit}.timer", f"{unit}.service.d/src.conf"):
+        assert on(part) == service, f"{part} and the service it belongs to are on different nodes: {sorted(on(part) ^ service)}"

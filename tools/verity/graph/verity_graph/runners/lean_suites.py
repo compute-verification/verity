@@ -4,7 +4,11 @@ timeout, and the task's cores and memory as `--jobs` and `--mem-gb`.  A task of 
 `--files K/M` with `--timings` a record that holds none of the suite's files, so suites.py packs them by path alone and every
 machine splits one tree alike.  First each verifier executable the task reads goes to its path in the tree (its var `bin`,
 lean-build's `.lake/build/bin`), where the suites look, unless the tree holds those bytes there already (lean-build built them
-on this machine).
+on this machine); then the rest of lean-build's build (its var `tree`, `lean_build.TREE`) is unpacked into the tree and `lake
+build` run on it there, under check's lock, unless the tree holds that build already (`lean_build.STAMP`), so the tree is as
+check's lean-build step leaves it for its lean-suites step: the tests' own `lake build`s of the verifier, at once in every
+test process, find every module built.  A tree that holds only the executables has each of them build the whole verifier in
+one `.lake` together, which breaks their links.  That `lake build` failing on the build lean-build passed is an error.
 
 Its status is from suites.py's exit and its report.  Every suite passed, a pass of its key reused among them, is a pass.  Suites
 that failed on their tests, on reads outside their inputs or on their timeout are a fail, each named in `detail.failed` (its name,
@@ -13,20 +17,24 @@ the repository.  A suite the report lacks or reports skipped (not run), a failur
 that couldn't be fetched), a usage error and a signal are an error.  `detail.suites` is each suite's status."""
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import shlex
 import shutil
 import sys
+import tarfile
 from pathlib import Path
 
 from .. import ROOT, contract
 from ..graph import LOG
 from . import call
-from .lean_build import ELAN
+from .lean_build import ELAN, LAKE_BUILD, STAMP, TREE
 
 SUITES = "tools/verity/check/suites.py"
 REPORT, LOGS, TIMINGS = "suites-lean.json", "suites", "suites-timings.json"
+#: in the package's `.lake`: the tree's tasks stage lean-build's build one at a time
+STAGE_LOCK = "graph-stage.lock"
 #: suites.py's line when tests wrote into the repository, which fails its run with no suite failed
 WROTE = "the tests changed"
 #: the most failed tests a row names: a longer list is cut, and then failed for more than the tests it names
@@ -34,9 +42,12 @@ NAMED = 100
 PASSED = ("passed", "cached")
 
 
-def place(task: dict, work: Path) -> None:
-    """The executables ``task`` reads, from its work directory to their paths in the tree, executable."""
+def place(task: dict, work: Path) -> str | None:
+    """What ``task`` reads, from its work directory into the tree: the executables to their paths, executable; then the build
+    they were linked in (`stage`).  None, or why the tree couldn't be made so."""
     for r in task["reads"]:
+        if r["output"] == TREE:
+            continue
         src, dst = work / task["vars"]["bin"] / r["output"], ROOT / task["vars"]["bin"] / r["output"]
         if not (dst.is_file() and contract.file_digest(dst) == contract.file_digest(src)):
             dst.parent.mkdir(parents=True, exist_ok=True)
@@ -45,10 +56,50 @@ def place(task: dict, work: Path) -> None:
             tmp.chmod(0o755)
             os.replace(tmp, dst)
         dst.chmod(0o755)
+    return stage(task, work) if task["vars"].get("tree") else None
+
+
+def stage(task: dict, work: Path) -> str | None:
+    """lean-build's build (the var `tree`) unpacked into the tree and `lake build` run on it in the package whose `.lake` holds
+    the executables, one task of the tree at a time; none of it where the package's `STAMP` names that build, which lean-build
+    in this tree, or a task that staged it here, wrote.  None, or why the build didn't build here."""
+    lake = (ROOT / task["vars"]["bin"]).parent.parent
+    want = contract.file_digest(work / task["vars"]["tree"])
+    lake.mkdir(parents=True, exist_ok=True)
+    with open(lake / STAGE_LOCK, "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if (lake / STAMP).is_file() and (lake / STAMP).read_text() == want:
+            return None
+        (lake / STAMP).unlink(missing_ok=True)
+        unpack(work / task["vars"]["tree"], ROOT)
+        if rc := call(["bash", "-c", LAKE_BUILD], work, lake.parent):
+            return f"`lake build` in {lake.parent.relative_to(ROOT)}, on the build lean-build passed, unpacked here, exited {rc}"
+        (lake / STAMP).write_text(want)
+    return None
+
+
+def unpack(archive: Path, root: Path) -> None:
+    """``archive`` (`lean_build.pack`'s) into ``root``: each file to its path, under a package's `.lake/build`, by a rename, so a
+    process that has the file it replaces open or mapped keeps reading those bytes; its mode and time as packed."""
+    with tarfile.open(archive) as tf:
+        for m in tf:
+            parts = Path(m.name).parts
+            if (not m.isfile() or Path(m.name).is_absolute() or ".." in parts
+                    or not any(parts[i:i + 2] == (".lake", "build") for i in range(len(parts) - 2))):
+                raise ValueError(f"{archive.name}: {m.name} is no file under a package's .lake/build")
+            dst = root / m.name
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            tmp = dst.with_name(f".{dst.name}.graph-{os.getpid()}")
+            with tf.extractfile(m) as src, open(tmp, "wb") as out:
+                shutil.copyfileobj(src, out)
+            tmp.chmod(m.mode & 0o777)
+            os.utime(tmp, (m.mtime, m.mtime))
+            os.replace(tmp, dst)
 
 
 def run(task: dict, work: Path) -> dict:
-    place(task, work)
+    if why := place(task, work):
+        return {"status": "error", "detail": {"error": why}}
     names = task["vars"]["suites"].split()
     r = task["resources"]
     part = []

@@ -9,6 +9,8 @@ extend-exclude = ["fixtures"]
 [lint.per-file-ignores]
 # a pytest fixture imported from a sibling module and taken as an argument
 "tests/**" = ["F811"]
+# the root's annotation rules hold only in the typed directories, of which this lint reads one (the root's says why)
+"!../../verity/definitions/kernels/**" = ["ANN001", "ANN201", "ANN202", "ANN204"]
 # Programs in the frontend's notation, whose `Arr["N", BF16]` names a dimension with a string that pyflakes reads as a name
 "verity_vllm/program/frontend/examples.py" = ["F821"]
 "tests/program/b1_authored.py" = ["F821"]

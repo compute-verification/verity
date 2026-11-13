@@ -74,7 +74,7 @@ def end(S: dict = TOY, boolean: bool = False) -> str:
 
 F8, B16, E = block(8), block(), end()
 TMPLS = [F8, B16, E]
-CAPS = {F8: 2, B16: 3, E: 4}
+PER_CHUNK = {F8: 2, B16: 3, E: 4}
 
 
 class Served:
@@ -110,15 +110,15 @@ class Served:
         return self.y[lo:hi], None
 
 
-def members(s: Served, tmpls=TMPLS, caps=CAPS) -> list[CS.Member]:
-    return CH.wire(SRW.members(tmpls, [s.rows] * len(tmpls), None, caps), tmpls, [s.rows] * len(tmpls))
+def members(s: Served, tmpls=TMPLS, per_chunk=PER_CHUNK) -> list[CS.Member]:
+    return CH.wire(SRW.members(tmpls, [s.rows] * len(tmpls), None, per_chunk), tmpls, [s.rows] * len(tmpls))
 
 
-def window(s: Served, tmpls=TMPLS, caps=CAPS, law: dict | None = None) -> CS.Binding:
-    """The window of ``s``'s rows over ``tmpls`` (`members`) under ``law`` (one unit of each template by default)."""
-    ms = members(s, tmpls, caps)
+def window(s: Served, tmpls=TMPLS, per_chunk=PER_CHUNK, design: dict | None = None) -> CS.Binding:
+    """The window of ``s``'s rows over ``tmpls`` (`members`) under ``design`` (one unit of each template by default)."""
+    ms = members(s, tmpls, per_chunk)
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
-    return CS.Binding(*CS.population_program(defs, several=True), law or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
+    return CS.Binding(*CS.population_program(defs, several=True), design or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
 
 
 def read(s: Served, ms, tmpls=TMPLS) -> list[tuple[dict, list]]:
@@ -157,10 +157,11 @@ def test_a_chain_row_holds_its_first_block_its_later_blocks_and_its_end():
     """The units `sparse_mla.head_chain` cuts the row into, each a ``chain`` template; a whole block's EX2 reads go in lookup
     slots, a partial first block's and the end's inline.  Each unit's Boolean version (`boolean_version`) is a template of the
     same word, and a block's, its EX2 gates, is flat at every key count."""
-    assert SRW.unit_templates(row()) == ((row(), 1), (F8, 2), (B16, 4), (E, 2))
+    assert SRW.unit_templates(row())[:4] == ((row(), 1), (F8, 2), (B16, 4), (E, 2))
     assert row(GLM) == SERVED
-    assert SRW.unit_templates(SERVED) == ((SERVED, 1), (block(2, GLM), 8), (block(None, GLM), 16), (end(GLM), 8))
-    assert SRW.unit_templates(row(T=16)) == ((row(T=16), 1), (block(16), 2), (E, 2))
+    assert SRW.unit_templates(SERVED)[:4] == ((SERVED, 1), (block(2, GLM), 8), (block(None, GLM), 16), (end(GLM), 8))
+    assert SRW.unit_templates(row(T=16))[:3] == ((row(T=16), 1), (block(16), 2), (E, 2))
+    assert SRW.unit_templates(row(NARROW)) == ((row(NARROW), 1), (block(8, NARROW), 2), (block(None, NARROW), 4), (end(NARROW), 2))
     assert [(SRW.template(t).layout, SRW.template(t).word, CR.reads(SRW.template(t))) for t in TMPLS] == [
         ("chain", F8, "inline"), ("chain", B16, "slots"), ("chain", E, "inline")]
     assert [CR.reads(SRW.template(t)) for t in (block(2, GLM), block(64, GLM), block(None, GLM), end(GLM))] == [
@@ -178,6 +179,36 @@ def test_a_chain_row_holds_its_first_block_its_later_blocks_and_its_end():
     assert CR.unit_rows(SRW.template(E)) == ([("in0", V2, 4 * 32, ["l"]), ("in1", V2, 32 * DV, ["o"])], [(V2, (0,))])
     with pytest.raises(ValueError, match=re.escape("a row of T=40 keys in NS=1 splits holds no unit ('block', 16, True) of it")):
         CH.positions(SRW.template(block(16)), spec_statics(row()))
+
+
+def test_a_chain_row_also_holds_each_key_block_as_its_scores_and_values_units():
+    """Past its whole key blocks' units the row holds, at each width of `serving_templates.values_widths`, the units
+    `sparse_mla.head_chain` cuts it into at ``cols``: each key block's scores unit and its values units and the head's end on
+    each column block; a row of 16 output columns has no such width.  Read and wired so, each unit's Definition on its rows
+    computes its committed outputs, and the ends' outputs, column block by column block, are the served row."""
+    st = {x: TOY[x] for x in ("DR", "DV", "BN", "SCALE")}
+    first, later = {"NVIS": 8, "FIRST": True}, {"NVIS": 16, "FIRST": False}
+    tmpls = [descriptor_id(bind(M.SparseMlaHeadScores, **first, **st, DOT=FA3["DOT"])),
+             descriptor_id(bind(M.SparseMlaHeadScores, **later, **st, DOT=FA3["DOT"])),
+             descriptor_id(bind(M.SparseMlaHeadValues, **first, BN=16, G=16, DOT=FA3["DOT"])),
+             descriptor_id(bind(M.SparseMlaHeadValues, **later, BN=16, G=16, DOT=FA3["DOT"])), end(NARROW)]
+    assert SRW.unit_templates(row())[4:] == tuple(zip([tmpls[j] for j in (0, 2, 1, 3, 4)], (2, 4, 4, 8, 4)))
+    assert [CH.kind(SRW.template(t)) for t in tmpls] == ["scores", "scores", "values", "values", "end"]
+    assert [CR.reads(SRW.template(t)) for t in tmpls] == ["inline", "slots", "inline", "inline", "inline"]
+    assert {t: CH.positions(SRW.template(t), TOY) for t in tmpls} == dict(zip(tmpls, ([4], [5, 6], [7, 8], [9, 10, 11, 12], [13, 14])))
+    assert [CH.places(TOY)[j].reads for j in (13, 14)] == [(("l", None, "o1", 6), ("o", None, "o0", 11 + c)) for c in range(2)]
+    s = Served(n=2)
+    ms = members(s, tmpls, dict.fromkeys(tmpls, 16))
+    assert [(m.template, m.n) for m in ms] == list(zip(tmpls, (4, 8, 8, 16, 8)))
+    got = read(s, ms, tmpls)
+    ws = {m.port(q): a for m, (g, _e) in zip(ms, got) for part_ in ("rows", "outs") for q, a in g[part_].items()}
+    WI.salts(ms, ws, {m.port(q): bytes(m.n * WI.SALT_BYTES) for m in ms for q, _w in m.outs})
+    for m, (g, _e) in zip(ms, got):
+        stager(m.template).reference_check(g["rows"], g["outs"])
+    assert ws[ms[-1].port("o0")].reshape(-1).tolist() == s.y.tolist()
+    with pytest.raises(ValueError, match=re.escape("block 1 (visit order)'s scores are the output of a scores template the "
+                                                   "partition does not name")):
+        members(s, [tmpls[0], *tmpls[2:]], dict.fromkeys(tmpls, 16))
 
 
 def test_each_later_block_and_end_is_wired_to_the_block_before_it():
@@ -327,10 +358,10 @@ def test_a_whole_block_s_boolean_body_is_staged_in_the_form_verify_zk_takes(tmp_
     part = descriptor_id(bind(BX.SparseMlaSplitPartV2, T=NARROW["BN"], **{x: NARROW[x] for x in ("DR", "DV", "BN", "SCALE")},
                               DOT=BOOL["DOT"], INV=BOOL["INV"]))
     rng = np.random.default_rng(5)
-    drawn = {q: ((rng.standard_normal((2, bits // 16)).astype(np.float32) * np.float32(0.5)).view(np.uint32) >> 16).astype(np.uint16)
-             for q, _schema, bits, _ps in CR.unit_rows(SRW.template(part))[0]}
+    part_rows = {q: ((rng.standard_normal((2, bits // 16)).astype(np.float32) * np.float32(0.5)).view(np.uint32) >> 16).astype(np.uint16)
+                 for q, _schema, bits, _ps in CR.unit_rows(SRW.template(part))[0]}
     for name, t, rows, units, want in (("block", tmpls[1], g["rows"], range(m.base, m.base + m.n), g["outs"]),
-                                       ("part", part, drawn, range(2), {})):
+                                       ("part", part, part_rows, range(2), {})):
         st = composed(t, tmp_path / name)
         assert (st.meta["lookups"], st.meta.get("out_net", "unit")) == ({}, "unit"), name
         got = st.stage(rows, tmp_path / name, bytes(32), indices=units)

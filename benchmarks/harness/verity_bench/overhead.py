@@ -1,6 +1,6 @@
 """`verity bench overhead`'s rules: the cards, the operating points' rule, the prover overhead γ and its interval, and what
-γ means per monitoring period. Standard library only: the node's sweep (`overhead_node`) and the store side
-(`overhead_records`) both read it.
+γ means per monitoring period. Standard library only, and loadable alone by its path, but for γ's pairing, which is the
+harness kit's (`kit.paired`): the node's sweep (`overhead_node`) and the store side (`overhead_records`) both read it.
 
 **The operating points** belong to a card, a model and a precision. Over one layer of the model's linears (`MODELS`), the
 fastest stock kernel at each m is the fastest of every library and scaling the card runs (`Gpu.libraries`, the precision's
@@ -14,13 +14,17 @@ The sweep (`next_ms`) takes every power of two from 1 to `M_MAX`, then bisects e
 until the bracket is one step wide; C and L are always multiples of `GRID`.
 
 **γ** (`layer_gamma`) is a scheme's (`SCHEMES`) cost over the stock arm's for the summed layer, less one: the median of the
-reps' paired ratios, with a 95% interval from the ratios' order statistics (`interval`; the 6th and 15th of 20). The
+reps' paired ratios, with a 95% interval from the ratios' order statistics (`kit.paired`; the 6th and 15th of 20). The
 numerator is the scheme's busy SM-time (SMs Active over a traced pass, `nsys`) and the host CPU core-seconds it spends above
 stock's at the card's weight (`host_cost`, from the timed pass); the denominator is the stock arm's busy SM-time. The stock
 arm is each linear's fastest kernel of the scheme's scaling by wall time, with the least-SM-time kernel's γ beside it; the
 `stock` scheme's γ is the A/A control, one kernel against its own twin. A figure of record has at least `MIN_REPS` reps,
 an interval within `HALF_WIDTH` of the median ratio (`of_record_why`) and passes the SM-time cross-check
 (`cross_check_why`); the scheme gate is γ ≤ `GAMMA_CAP` at each point. `periods` states it per monitoring period.
+
+**What a γ covers** (`covers`) is its model's entry: one layer's linears, and not what `LEFT_OUT` names. **y's commitment**: a
+scheme's entry says whether its arm's timed call commits y, the call's output (`Scheme.commits_y`); a timed run records it,
+and a figure from a run whose arm committed no y carries `WITHOUT_Y` (`y_note`).
 """
 
 from __future__ import annotations
@@ -83,6 +87,11 @@ MODELS = {
 }
 #: the kernel points' model
 KERNEL_MODEL = "llama3.1-70b"
+#: what a model's entry leaves out of the layer its γ is over, though serving the model computes it
+LEFT_OUT = {"llama3.1-70b": ("the LM head",)}
+#: the note of a figure from a run whose arm committed no y (`y_note`): where the served call commits y, the γ leaves y's tree
+#: out, and is understated by it
+WITHOUT_Y = "without y's commitment (y tree not timed)"
 
 
 @dataclass(frozen=True)
@@ -90,14 +99,17 @@ class Scheme:
     """A scheme the door times against stock. `arm` is its PoUW harness arm (`module:Class` in `arm_path`, as `bench.py
     --arm` and `--arm-path` take them), timed beside stock kernels of `family`, the stock scaling its useful output's
     quantization matches. `epsilon` (`module:function` in `arm_path`) is its soundness error at a shape on a card,
-    `(m, n, k, card) -> {"epsilon", "delta", "basis"}`, recorded beside its γ. `stock` has no arm: its γ is the A/A control
-    every run carries (`bench.py --twins`), the fastest stock kernel against its own twin."""
+    `(m, n, k, card) -> {"epsilon", "delta", "basis"}`, recorded beside its γ. `commits_y`: whether the arm's timed call
+    commits y, the call's output (y's tree), false unless the entry states it; a timed run records it beside its arm
+    (`overhead.json`'s `arm.commits_y`), and its figures carry `WITHOUT_Y` while it is false (`y_note`). `stock` has no arm:
+    its γ is the A/A control every run carries (`bench.py --twins`), the fastest stock kernel against its own twin."""
 
     id: str
     family: str
     arm: str | None = None
     arm_path: str | None = None
     epsilon: str | None = None
+    commits_y: bool = False
 
 
 #: Pearl+'s useful output is rowwise-scaled E4M3, so its stock, and stock's own A/A control, are that family's
@@ -113,6 +125,22 @@ def scheme(name: str) -> Scheme:
         return SCHEMES[name]
     except KeyError:
         raise ValueError(f"no scheme {name!r}: the door times {', '.join(SCHEMES)} (verity_bench.overhead.SCHEMES)") from None
+
+
+def y_note(arm: Mapping | None) -> str | None:
+    """The note a run's figures carry, from the `arm` record of its `overhead.json`: `WITHOUT_Y` unless the record says its
+    arm committed y (`commits_y`, the scheme's entry as the run recorded it; a record without the field timed no y tree).
+    None for a run with no arm: stock's A/A control commits nothing."""
+
+    return None if arm is None or arm.get("commits_y") else WITHOUT_Y
+
+
+def covers(model: str = KERNEL_MODEL) -> str:
+    """What a γ of `model` is over, in one sentence: its entry's linears, and what the entry leaves out (`LEFT_OUT`)."""
+
+    linears, out = MODELS[model], LEFT_OUT.get(model, ())
+    return (f"Each γ is over the {len(linears)} linears of one {model} layer ({', '.join(linears)})"
+            + (f" and leaves {' and '.join(out)} out" if out else "") + ".")
 
 
 def card(gpu: str) -> Gpu:
@@ -289,39 +317,6 @@ def sweep_times(results: Sequence[Mapping], model: str = KERNEL_MODEL,
 # ---- γ ------------------------------------------------------------------------------------------------------------------------
 
 
-def interval(n: int, confidence: float = 0.95) -> tuple[int, int] | None:
-    """The 1-based order statistics (l, u) whose span covers the median with at least `confidence`: the largest l with
-    P(Binomial(n, 1/2) < l) at most (1 - confidence) / 2, and u = n + 1 - l (the 6th and 15th of 20); None when n reps
-    can't bound the median at `confidence`."""
-
-    tail, l, cdf = (1 - confidence) / 2, 0, 0.0
-    while l < n:
-        nxt = cdf + math.comb(n, l) / 2**n
-        if nxt > tail:
-            break
-        cdf, l = nxt, l + 1
-    return (l, n + 1 - l) if l else None
-
-
-def paired(scheme: Sequence[float], stock: Sequence[float]) -> dict:
-    """γ from paired reps (rep i of the scheme beside rep i of stock, each its busy SM-time): the median ratio less one, its
-    95% interval and the interval's half-width as a share of the median ratio."""
-
-    if len(scheme) != len(stock) or not scheme:
-        raise ValueError(f"γ pairs reps one for one: {len(scheme)} scheme reps beside {len(stock)} stock reps")
-    if any(s <= 0 for s in stock):
-        raise ValueError("a stock rep took no SM-time")
-    ratios = sorted(a / b for a, b in zip(scheme, stock, strict=True))
-    median = statistics.median(ratios)
-    out: dict = {"gamma": median - 1, "ratio": median, "n": len(ratios), "ratios": ratios, "ci95": None, "half_width": None}
-    if (bounds := interval(len(ratios))) is None:
-        return out
-    lo, hi = bounds
-    out["ci95"] = [ratios[lo - 1] - 1, ratios[hi - 1] - 1]
-    out["half_width"] = max(median - ratios[lo - 1], ratios[hi - 1] - median) / median
-    return out
-
-
 def of_record_why(gamma: Mapping) -> str | None:
     """Why a γ isn't a figure of record (too few reps, an interval too wide), or None."""
 
@@ -437,6 +432,9 @@ def layer_gamma(result: Mapping, busy: Mapping[str, Mapping], card: Gpu, m: int,
     def pair(a: list[tuple], b: list[tuple], field: str = "sm_s") -> dict | None:
         """a's `field` SM-time and its host CPU above b's, over b's `field` SM-time, rep by rep."""
 
+        # imported here, so the rules above load alone by this file's path, with no package beside them
+        from verity_bench.kit import paired
+
         if not a or not whole(b):
             return None
         sa, sb, ca, cb = series(a, field), series(b, field), series(a, "cpu_sm_s"), series(b, "cpu_sm_s")
@@ -517,3 +515,13 @@ def periods(gamma: float, gpus: int, window_s: float, world_flop_per_year: float
                 "world_flop": world, "world_gates": world * gates_per_flop}
 
     return {"share": share, "window": at(window_s / 3600)} | {name: at(hours) for name, hours in PERIODS_H.items()}
+
+
+
+def paired(scheme: Sequence[float], stock: Sequence[float], confidence: float = 0.95) -> dict:
+    """`kit.paired` by this module's name, which serving cost's `benchmarks/serve_tax` calls and checks until it calls
+    `kit.paired`. The kit is imported on the call, so this file still loads alone by its path."""
+
+    from verity_bench import kit
+
+    return kit.paired(scheme, stock, confidence)

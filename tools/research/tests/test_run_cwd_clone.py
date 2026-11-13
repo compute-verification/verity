@@ -456,6 +456,73 @@ def test_the_launcher_refuses_a_tree_shipped_without_git(tmp_path, repo, machine
     assert not (machine / "runs").exists(), "nothing claimed"
 
 
+HEAD_PROBE = ("import json, os, subprocess; json.dump({'cwd': os.getcwd(), 'head': subprocess.run(['git', 'rev-parse', 'HEAD'], "
+              "capture_output=True, text=True).stdout.strip()}, open(os.path.join(os.environ['RESEARCH_RUN_DIR'], 'seen.json'), 'w'))")
+
+
+def test_a_source_run_after_a_stream_ship_of_its_commit_runs_in_a_checkout(tmp_path, repo, machine, monkeypatch):
+    """A run that needs no git runs in a tree the archive stream shipped; the next `--cwd source` run of the commit finds the
+    shared tree made a checkout in place, so `suites.py --changed` there would key from git as in the launcher's checkout."""
+    sha = _git(repo, "rev-parse", "HEAD")
+    shared = (machine / "src" / sha).resolve()
+
+    def go(n: int) -> dict:
+        runs = tmp_path / f"runs{n}"
+        assert main(["run", "--runs-dir", str(runs), "--on", "m", "--project", "p", "--source", str(repo), "--no-custody-r2",
+                     "--no-sampler", "--cwd", "source", "--", PY, "-c", HEAD_PROBE]) == 0
+        [rid] = [p.name for p in runs.iterdir()]
+        wait_runner(machine / "runs" / rid)
+        return {**_seen(machine / "runs" / rid), "transport": json.loads((machine / "runs" / rid / "job.json").read_text())["run"]["remote"]["source_transport"]}
+
+    monkeypatch.setenv("RESEARCH_SHIP", "stream")
+    first = go(0)
+    assert Path(first["cwd"]) == shared and first["head"] == "" and first["transport"] == "stream"
+    monkeypatch.delenv("RESEARCH_SHIP")
+    second = go(1)
+    assert Path(second["cwd"]) == shared and second["head"] == sha and second["transport"] == "stream+git"
+
+
+@pytest.mark.parametrize("cause", ["stream", "no-git", "no-repo"])
+def test_a_command_that_needs_git_is_refused_at_launch_from_a_tree_git_cannot_reach(tmp_path, repo, machine, monkeypatch, capsys, cause):
+    """`suites.py` refuses a tree without .git, but only once it runs: in a pool, after waiting in the line for a slot.  The
+    launcher refuses it before anything is claimed, and says what works.  A machine whose own shell finds no git refuses so
+    whatever the commit (CannotStart, which `research run --on auto` answers with another machine), on the launch that ships
+    the tree and on each one after it; the stream the launcher chose, or a push that failed, is not read as the machine's."""
+    from test_remote_ship_git import _no_git_machine
+
+    fault, shipped, later = {"stream": ("Refused", "", ""), "no-repo": ("Refused", "(could not create ", "a checkout (could not create "),
+                             "no-git": ("CannotStart", "(the machine has no git); shipping the archive stream",
+                                        "a checkout (the machine has no git)")}[cause]
+    if cause == "stream":
+        monkeypatch.setenv("RESEARCH_SHIP", "stream")
+    elif cause == "no-git":
+        no_git = _no_git_machine(tmp_path)
+        monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **k: no_git)
+    else:
+        machine.mkdir()
+        (machine / "git").write_text("where the machine's repository would go\n")
+    refusals, launch = [], remote.launch
+
+    def launched(**kw):
+        try:
+            return launch(**kw)
+        except remote.Refused as e:
+            refusals.append(type(e).__name__)
+            raise
+
+    monkeypatch.setattr(remote, "launch", launched)
+    run = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--source", str(repo), "--no-custody-r2", "--no-sampler"]
+    for said in (shipped, later):
+        rc = main([*run, "--cwd", "source", "--", "bash", "-lc", "uv run tools/verity/check/suites.py --changed HEAD --quick"])
+        err = capsys.readouterr().err
+        why = "RESEARCH_SHIP=stream" if cause == "stream" else "the line above says why"
+        assert rc == 3 and f"has no .git, as git couldn't reach m ({why}), and tools/verity/check/suites.py needs a git checkout" in err
+        assert "Relaunch once a git push reaches m (RESEARCH_SHIP unset, git installed there)" in err and said in err
+    assert main([*run, "--cwd", "clone", "--", PY, "-c", "pass"]) == 3 and "so it has no .git to clone" in capsys.readouterr().err
+    assert refusals == [fault] * 3, "the launch that shipped the tree, the next, and one that needs a clone of it"
+    assert not (machine / "runs").exists() and not (machine / "requests").exists(), "nothing claimed, no line joined"
+
+
 def test_a_clone_run_after_a_source_run_shipped_the_commit_without_git_launches(tmp_path, repo, machine, monkeypatch):
     """A `--cwd source` run shipped the commit by the archive stream, and every later `--cwd clone` run of it (the train's
     recorded checks) was refused.  The clone run makes the shared tree a checkout in place and launches; the source run's tree
