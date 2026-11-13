@@ -76,6 +76,8 @@ rec["totals"] = {"checked": sum(r.get("checked", 0) for r in res.values()),
                  "mismatches": sum(r["mismatches"] for r in res.values()),
                  "templates_with_mismatches": sorted(t for t, r in res.items() if r["mismatches"]),
                  "units_with_undeclared_inputs": len(ck.unknown),
+                 "undeclared_examples": [[t, u, ps] for (t, u), ps in list(ck.unknown.items())[:20]],
+                 "rows_two_pieces_hold": len(ck.conflicts), "rows_two_pieces_hold_examples": ck.conflicts[:20],
                  "tables_committed": len(tables.held)}
 log(f"check: {rec['totals']}")
 if not a.no_plants:
