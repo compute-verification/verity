@@ -120296,3 +120296,18 @@ If you rule `horizon` or the prose a finding, the first sentence becomes "one fi
 - [run] `r20261113-033534-e4ad` (the records run) waited 18 minutes on vy-nebius-cpu-11 without a slot; I cancelled it at 03:55Z and relaunched the same command at the same commit: **`r20261113-035533-6075`** on vy-nebius-cpu-9, which took a slot at about 04:08Z (cap 120 minutes from there). So far: Flock's verifier PASS (18,447 declarations in 261 modules, 11 guarantees, exit 0) and the certifier's verifier PASS (exit 0); `security` with `security/Proofs`, then `security/Properties`, are running. [guess] It ends between 04:45Z and 05:40Z.
 - [derived] `main` is `00479a6c442a`; it changed none of the branch's ten files, and the head merges onto it with no stop (tree `ae72d0b353ca`).
 - The ready line follows when both end. No second loop of me: no `.pen`, and the branch's reflog and `research status` hold only my own commit, cancel and launches.
+
+## MESSAGES, Fri 04:30Z: checkpoint, only waiting: `SessionMsgs.lean`'s try r20261113-042643-d2ed is in line on vy-nebius-cpu-9 (`--on auto`), expected end about 05:15Z; I take the partition-object question; head 4157c47bf0
+
+Plain words: I am waiting for one compile of the file that reads each inner block's session messages, and I end my turn until it finishes, as the 04:18Z message asks. Its previous try failed on one lemma, a byte-length cast, which is fixed in this one.
+
+- Runs [run]:
+  - r20261113-032644-0867 on vy-nebius-2 waited 31 minutes (03:27 to 03:58Z), then failed on one of its 9 theorems (`stmtsOf_encStmts`, the cast). Fixed in f82eb043bd.
+  - r20261113-040625-0950 on vy-nebius-2 waited 17 minutes and never started. I cancelled it.
+  - r20261113-042643-d2ed: resent at the merge 4157c47bf0 with `--on auto --as proofs`; `--on auto` takes no `--pool`. It spilled to vy-nebius-cpu-9 and was waiting at 04:29Z. Its Lean tree there may be cold.
+- Base [run]: merged `origin/cursor/proofs-twoleg-c5e5` at 9b300c2d3e (968 commits, no conflict). No file of mine reads what changed: `VStarRecursive/SampledTwo.lean` gained fields and checks, and the `Params` and `Evidence` fields I read are unchanged.
+- The 04:24Z question (the partition object printed by `printT` is only `Same` after Flock's parser reads it back): MESSAGES takes it, because `stmts` is mine and its bytes are the ones in question. The way I propose is the first one: the statement carries bytes whose parse is the value the compiled check set up at. I don't add a `Same` lemma about Flock's setup. Concretely [guess, not yet read through]: the per-member form's statement (`OneStageZk.statementOf`, `inputsOf`) hands Flock the partition object and the registered reads as `Flock.JsonParse.parse` of their `printT` text, as ACCEPTS's 03:00Z section 2 does for the records. Then the model's `jsonOf` of `stmtRaw`'s bytes is that value by construction. That is a change to the form, so it is TWOLEG's to make if the coordinator agrees. Until then SESSIONOF's `SessionMatch` stays a named hypothesis. I read the setup path first and say in the next entry whether it is two lines.
+
+STOP RULE: kept. NEEDS: unchanged from 03:45Z. To post: nothing. Not established: `SessionMsgs.lean` whole (r20261113-042643-d2ed).
+
+Branch `cursor/proofs-messages-f55d`, pushed head 4157c47bf0; nothing unpushed.
