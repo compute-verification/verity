@@ -31,3 +31,44 @@ TERMGB to the lead, Fri 13 Nov 11:30 AM PST. State, and your 10:59 AM PST line i
 - **#9501's run of record and the writer's suites run: still running**, and neither has printed a verdict for about 45 minutes (51 of 61 suites and 18 of 61 done; in each only `verity-bench` failed, 619 passed and 8 failed, the eight the body names). The node looks loaded. Nothing is launched twice.
 - **Infra's rule on identities, read.** Every commit of mine on the four branches that is not on today's `main` is under this checkout's identity [ran: counted, 20, 34, 188 and 264]. The tool's jobs now name it on the tool's one command; none exports it.
 
+[2026-11-13T19:36Z] b42b009884ea
+WATERLINE to network-accounting (lead), Fri 13 Nov 11:35 AM PST. **NET-310's second step: which definitions go where, before I write anything.** Counted at #9754's head `a1d0bc0f8e48` by a parser that runs nothing [ran], unless a line says [read] or [argued]. Three questions are at the end; I write nothing for this step until you answer them.
+
+**A correction to step A first.** Its 89 definitions, 1,555 lines counted a local variable as a read of a top-level definition of the same name (4 definitions, 92 lines). Read by scope it is **85 definitions, 1,463 lines in 7 files**; followed into the other files that stay, **108 definitions, 1,731 lines in 9 files** (step A said 112 and 1,823).
+
+**Where the 108 go.**
+
+| To | Definitions | Lines | Which |
+|---|---|---|---|
+| the certifier's `verifier/` | 14 | 214 | `connection_rows_run`: `check` and what it reads (`read`, `_counted`, `_phase`, `_spread`, `SALTS`, `ROWS`, `NO_HEAD`); `active_replay`: `pack_record`, `unpack_record`, `write_blobs`, `read_blobs`; `leak_bounds.JITTER_BOUND`; `scan_zk`: `_found`, `window_answer` |
+| the certifier's `device/` | 13 | 121 | `connection_rows_run`: `HAND`, `_class`, `flags`, `schedule`, `flags_of`, `hand`, `Keeper`; `stall_probe`: `start`, `stop`, `summary`; `active_replay`: `peak_rss_mb`, `_quiet_runtime`, `_usage` |
+| the certifier's `prover/` | 0 | 0 | none of the 108 builds a proof |
+| stay | 81 | 1,396 | `active_replay` 55, `covert` 11, `replay` 4, `record` 9: all only `certifier_serve.py` takes; `load_commit`: `p2_decode`, `P2_BLOCK` |
+
+- **`verifier/` gains no load.** The 14, and the second cut below, read only the certifier's own `verifier/` and `proofs/spot/verifier`, both already in the place's `loads` [read: `tests/import_order.toml`].
+- **`stall_probe.py` goes as a whole file**, not as three definitions: `start` runs the file as a process of its own, on by default in the relay.
+- **Beside the 108, the second cut:** the verifier's four load the device's three in 4 lines. What they take, followed, is **38 definitions, 474 lines in 5 files**: the record formats and the three checks (`warden_serve.check`, `load_relay.check_load`, `connection_rows_run.check`, with `certifier_serve`'s `read_public`, `certificate_from_json`, `certified_from_json`, `PROOF_DEADLINE_S`). These go to `verifier/` too, and the device's three import them back. Nine of the 38 are in the 14 above.
+
+**What a file that stays still needs, and how it reaches it: by importing the certifier's module by its package name**, the direction the listing already allows (`benchmarks/` loads `verity`). No file that stays keeps a copy.
+- `connection_rows_run.cost`: `hand`, `_class`, `ROWS`, `_spread`.
+- `chain_record`, `leak_bounds`: `JITTER_BOUND`. `scan_zk`: `_found`, `window_answer`.
+- `active_replay.py` itself, `benchmarks/network_e2e/chain.py`, `benchmarks/network_sim/{mockdc,records}.py` and its `workload/lab_run.py`: `read_blobs`, `unpack_record`, `_quiet_runtime`, `_usage`.
+- The tests of `stall_probe` and `leak_bounds`: the three and the one they name.
+
+**Another lead's.**
+- **memory-accounting:** `load_commit.p2_decode` reads PoUS's `schemes.p2`. I leave it where it is. Its one user is `load_relay.bench`, a measurement: I would move `bench` out to a file that stays instead, so the load's relay loads nothing of PoUS. No ask unless you want `p2_decode` moved.
+- **vllm:** `record.load_workload` reads the adapter and `active_replay.start_vllm` starts the endpoint. Both are in the 79 that only `certifier_serve.py` takes; they stay, so no ask.
+- **proofs:** the gate's `auditor.py` starts `certifier_serve.py rehearse` by path. See question 1.
+
+**In flight on these files.**
+- **NET-434 (STAMPS), no branch yet:** by its issue it takes 7 definitions out of `active_replay.py` and 18 out of `certifier_serve.py`, and edits `warden_serve.py`'s import lines. **12 of its 25 are also mine:** its 7 of `active_replay` are 7 of my 27, and 5 of its 18 (`read_public`, `_BYTES`, `_dec`, `certificate_from_json`, `certified_from_json`) are in the second cut. It touches none of `connection_rows_run.py`, `stall_probe.py`, `load_commit.py`, `leak_bounds.py`, `scan_zk.py` [read: the issue].
+- **NET-435 (GATERELAY), `cursor/network-accounting-gaterelay-b51f` at `615633281d6a`:** it edits `warden_serve.py`'s `rehearse`, `parser` and `_addresses` and its docstring (102 lines changed), the gate's `auditor.py` (231) and a test of each [ran: its diff against `main`]. None is a definition I move; we meet only in `warden_serve.py`'s import lines.
+- **Open pull requests of this lane that edit the definitions themselves** [ran: `gh pr diff`]: #9457 and #9541 edit `connection_rows_run`'s `check`, `read`, `_counted` and `Keeper`; #9491 its `flags`; #9369 edits `warden_serve`'s `check`, `check_load` and `_quantiles`. A definition that moves under one of them conflicts by hand. #9656, #9741, #9760 carry the same files.
+
+**Three questions.**
+1. **`certifier_serve.py`.** 79 of the 81 that stay (1,385 lines) are the older form's, and only `certifier_serve.py` takes them: adversary strategies, a stand-in endpoint, a model's releases. Moving them puts measurement code in `device/`. I would move none, and say in the body that `certifier_serve.py` can't go by the map until the older form is deleted (STAMPS's fifth change): the map then moves six, or waits. That changes the goal's done-when, so it is yours. The other way is to carry 79 definitions into `device/` to delete them later.
+2. **`device/` holds no Python today** (five scripts for Lean vectors, no package, no `loads`). Either (a) I make its first module there now, one line under `--grow` (`certifier/device` loads `certifier/verifier`), said in the body; or (b) the 13 go in one module beside `warden_serve.py`, which the map moves with the seven. I would do (b): no trusted place grows before the move. [argued]
+3. **NET-434's 12.** If STAMPS puts the record formats (`pack_record`, `unpack_record`, `write_blobs`, `read_blobs` and its five of `certifier_serve`) straight in `verifier/` and its other three of `active_replay` beside the runner, nobody carries them twice, and I take the other 20 of my 27 and the other 24 of the second cut. If I open first, I move all 12 and STAMPS rebases. Which?
+
+**Not shown:** that the gate's tests, which pin the three commands' words, pass with the device's three importing back; that is the pull request's run.
+
