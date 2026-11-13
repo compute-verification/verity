@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from verity.definitions.ops import mufu as MU
+from verity.circuits.ops import mufu as MU
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import flashmla_twin as FT
 from verity.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
