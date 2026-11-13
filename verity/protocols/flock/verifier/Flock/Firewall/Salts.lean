@@ -32,7 +32,7 @@ Every salt message is 205 bytes and every tag message 333, under different const
 
 **Interior commits.** A two-stage audit's interior registration holds values that may follow the auditor's first-stage
 sample (`Values.answer`'s `interior`). Nothing the service answers of it reads `k`. Once the request is whole the
-service draws from the operating system the session `s`, each leaf's 192-byte salt and the session's own 64-byte key
+service samples from the operating system the session `s`, each leaf's 192-byte salt and the session's own 64-byte key
 `ks`, and holds the salts and `ks` by session while it runs (`Held`). The tables' tags and the registration's record
 tag are under `ks`. At `register S` the service writes `ks` on the registration's line of the ZK server's record, with
 `ks`'s tag under `k` over `ks` and the record (`keyTagOf`). The release side checks the record tag under `ks` only where
@@ -271,7 +271,7 @@ def TableRef.bytes (r : TableRef) : ByteArray :=
   r.s ++ be32 r.j.toUInt32 ++ r.t.dom ++ be64 r.t.n.toUInt64 ++ ByteArray.mk #[r.t.schema.toUInt8] ++ r.root ++ r.tag
 
 /-- A commit session the service opened: its sample, each of its tables with the root it answered, in table order, and
-an interior session's own key, drawn from the operating system (none for a commit session). -/
+an interior session's own key, sampled from the operating system (none for a commit session). -/
 structure Opened where
   s : ByteArray
   tables : Array (Table × ByteArray)
