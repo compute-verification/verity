@@ -19,3 +19,4 @@
 - 14:23Z (06:23 PST): woke on a new machine (up 0 min); /tmp lost, branches checked out from origin at 1333bd53 / a5c36530, 8854b824 detached. Launching records-first shard 1/4 at 1333bd53 (declared 64, 16 cores) and records-only at 8854b824 (declared 48). Job: tools/records-job.sh.
 - 14:30Z (06:30 PST): fa99 and aa58 in the records pass (bound 36.1 / 33.3 GiB). compare_reads.py written (58 lines). Pass 1.
 - 14:56Z (06:56 PST): records passes stored 886/886 at both (aa58 done rc 0, 1437 s; fa99 step1 1595 s). Comparison: no binding reads fewer at head. fa99 step 2 running, parent rss at fork 1.75 GiB. Pass 2.
+- correction: the line above was written at 14:53Z (06:53 PST), not 14:56Z
