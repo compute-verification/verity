@@ -11,4 +11,4 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits", "verity/c
           "verity/circuits/kernels/tc.py",
           # beta.py reads the Program as units.py does, and its data products by the pass beside property/v1's
           "benchmarks/property_redteam/products_pass.py",
-          "verity/definitions/__init__.py", "verity/definitions/circuits", "verity/circuits/ops", "verity/circuits/silicon"]
+          "verity/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon"]
