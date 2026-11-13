@@ -58,7 +58,7 @@ def hashedOf (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteAr
         Hash.RowLeaf.innerHashed Verity.sha512 p.verifier o
 
 /-- The messages both witnesses' openings of every wire hash. -/
-def hashedAll (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+noncomputable def hashedAll (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (openOf : Claims.Sampling.Wit → Fin (V.circuitOf θ F).N → Option Hash.RowLeaf.Opening)
     (w₁ w₂ : Claims.Sampling.Wit) : List Msg :=
   (List.finRange (V.circuitOf θ F).N).flatMap fun g =>
@@ -146,7 +146,7 @@ theorem readsBind_of (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (
           exact heq
         exact (And.intro hne' he : Claims.Collision FlockDeploy.sha512 m m')
     unfold collOfOpen
-    rw [dif_pos hcol]
+    rw [dite_eq_left hcol]
     exact ⟨_, _, rfl, hcol.choose_spec.2.choose_spec.2⟩
 
 end Verity.SampledTwo
