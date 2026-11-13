@@ -1,4 +1,4 @@
-"""Pearl-C's grouped call on sm_90a off the card (benchmarks/pouw/pearl_c_sm90/grouped.py, and the vLLM call over it,
+"""Pearl-C's grouped call on sm_90a off the card (verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/grouped.py, and the vLLM call over it,
 `pouw_pearl_c_grouped.gemm_grouped`), on a recording stand-in for the device: each expert's rows cut into units of at most
 pd_commit's 256 rows; each unit's record in the call's table is the launch `run.Pipeline` makes for that unit's rows called
 alone, at the unit's offsets; a call is eight launches whatever its experts; and the vLLM call's matmuls, tiles, keys, screen
@@ -24,7 +24,7 @@ from verity_vllm.protocols.pouw.pearl_c import grouped as PG  # noqa: E402
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY  # noqa: E402
 from verity_vllm.protocols.pouw.pearl_c.host import joined  # noqa: E402
 
-HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm90"
+HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
 SCHEME = "pearl-c-h100-v1-h3"
 SALT_KEY = bytes(range(100, 132))
 STEPS = ["pd_commit_gm_851", "stats_s5", "eprime", "form_s5_g", "gemm_words_g_d", "pa", "gemm_pearlc_g_d", "pd_tiles_g_979"]

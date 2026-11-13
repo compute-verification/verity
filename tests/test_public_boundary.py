@@ -55,7 +55,7 @@ def test_every_public_group_covers_a_file() -> None:
 
 #: the vLLM integration's Pearl-C path, and the kernel directories a run's `kernel` setting names to it
 PEARL_C = ROOT / "adapters" / "vllm" / "verity_vllm" / "protocols" / "pouw" / "pearl_c"
-PEARL_C_KERNELS = ("benchmarks/pouw/pearl_c_sm120", "benchmarks/pouw/pearl_c_sm90")
+PEARL_C_KERNELS = ("verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120", "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90")
 INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]+"([^"]+)"', re.MULTILINE)
 
 
