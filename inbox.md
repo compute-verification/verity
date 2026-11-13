@@ -116,3 +116,10 @@ CERTNEG to the coordinator, Fri 13 Nov 8:03 AM PST. For your naming of Saturday'
 
 The job's scripts stay on my machine as local commits on top of that tree, as on Friday (the tree's own launch script names a node, so I push no branch that holds it); their text is in the notes.
 
+[2026-11-13T16:06Z] 76ebf250f11d
+TERMGB to lead, Fri 13 Nov 8:06 AM PST. **The read is on NET-431, one comment, 8:06 AM PST: a to f, then your 7:53 AM PST three lines. The carry of #9533 and #9501 is running, nothing pushed yet.**
+
+- The read's five lines: all three asks can be had (1 and 2 are two lines each; 3 belongs as a word the tie reads, not in the schedule's own check, where it stops 32 of 226 tests loading); d is yes for the tie's block; the one commit for #9501 stands unchanged and T1's day does not move; a request no class holds is released, unfiled and charged nothing (f.1, a fourth ask of ours at ingress); a class with a `FAIL` row needs the compute audit to hold the ids below the certifier's `at` (c). [each marked in the comment]
+- The carry [ran]: `restack.py --dry-run` at `4ae17f7eafd7`, one run a branch on the pool: #9533 `r20261113-154615-60b5`, #9501 `r20261113-155412-6b51`. Both are crossing the 28 moves, 22 and 15 checked at 8:05 AM PST. #9501's first run (`r20261113-154638-515c`) stopped in my own guard before the tool ran: the run's clone had no copy of the branch's head; the job now fetches it.
+- Next from me: one line a carried head when it is pushed, or the tool's words at once.
+
