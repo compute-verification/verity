@@ -37,6 +37,13 @@ sessions a part), whose parts are not shown to be one run. A run with a forced r
 naming the statement given a second session) passes only when its composition is refused for that retry: ``part J: …
 a part is never retried`` at the statement's part J.
 
+A run that is not composed still exits 0 when its parts pass (its parts are what it measures), and so does a run whose
+forced retry is refused, so the exit says nothing of the recursive statement. What does is the step's last line, which
+ends "the recursive statement not composed" for the first, and DIR's ``rec-compose.json`` (`RECORD`), written under
+``--compose`` alone and removed without it: ``composed`` (whether Lean was asked to compose V*'s parts), ``accepted``
+(its answer on the honest parts: true, false, or null when it gave none or was not asked) and ``why``. The recursive
+statement is accepted only where both are true.
+
     python3 verity/protocols/proofs/flock/prover/pod/lean_verdicts.py [--compose BIN] DIR PART...
     python3 verity/protocols/proofs/flock/prover/pod/lean_verdicts.py --cover KIND PART...   # exit 0 when a PART covers the forgery KIND
 """
@@ -49,6 +56,7 @@ import sys
 from pathlib import Path
 
 REFUSED = 1  # flock-verify's exit when a session is refused (2: its inputs, with no VERDICT)
+RECORD = "rec-compose.json"  # the composition's record in DIR (module docstring)
 
 # The V* parts that read each forged inner coin (rec_inner.py forge, at level 0): the challenge coin after the binding round
 # is the algebra's rec-v rows (its every part, alg-p<i>), the first query coin of Ligerito level 0 is RecOpen L0's rec-dirs
@@ -212,22 +220,26 @@ def why_of(line: str) -> str:
 
 
 def composed(binary: str, d: Path, honest: list[str], groups: dict[str, list[str]],
-             results: dict[str, tuple[bool, bool, bool, str]]) -> bool:
+             results: dict[str, tuple[bool, bool, bool, str]]) -> tuple[bool, dict]:
     """The V* parts composed by Lean (`compose`): the honest ones must compose, and each forgery, its every part put in
     that part's place at once, must not. A forgery is one statement however many parts it has (a forged inner is every V*
     part verified against it, and the parts that don't read its forged coin accept, as they should), so its parts are
-    never put in one at a time. A part Lean never checked (not exercised) is judged above, not here. True when a run of
-    only some of V*'s parts is not composed."""
+    never put in one at a time. A part Lean never checked (not exercised) is judged above, not here. (Whether the step
+    passes on it, the composition's record `RECORD`): a run of only some of V*'s parts, or one without its record, passes
+    and is not composed."""
     vparts = [p for p in honest if (d / f"own-{p}.txt").exists()]
     n = statements(d)
     if len(vparts) < n or n == 0:
-        print(f"lean compose: {len(vparts)} of V*'s {n} parts run, so the recursive statement is not composed")
-        return True
+        why = f"{len(vparts)} of V*'s {n} parts run"
+        print(f"lean compose: {why}, so the recursive statement is not composed")
+        return True, {"composed": False, "accepted": None, "why": why}
     if not (d / "rec-run.json").exists() and not (d / "rec-run.jsonl").exists():
-        print("lean compose: no interactive-run record (rec-run.json, or a firewalled oprove's rec-run.jsonl), so the "
-              "recursive statement is not composed: its parts are not shown to be one run (C10 OneRun)")
-        return True
+        why = "no interactive-run record (rec-run.json, or a firewalled oprove's rec-run.jsonl)"
+        so = "its parts are not shown to be one run"
+        print(f"lean compose: {why}, so the recursive statement is not composed: {so} (C10 OneRun)")
+        return True, {"composed": False, "accepted": None, "why": f"{why}: {so}"}
     accepted, line = compose(binary, d, [d / f"{p}.log" for p in vparts])
+    record = {"composed": True, "accepted": accepted, "why": line if accepted is None else why_of(line)}
     retried = (d / "retried.txt").read_text().strip() if (d / "retried.txt").exists() else ""
     if retried:
         j = part_of(d, retried) if (d / f"own-{retried}.txt").exists() else None
@@ -247,7 +259,7 @@ def composed(binary: str, d: Path, honest: list[str], groups: dict[str, list[str
         name = next(iter(put.values())) if len(put) == 1 else f"forged-{k} ({len(put)} parts)"
         print(f"lean compose {name}: {fline}{'' if accepted is False else '  <- FAILS'}")
         ok = ok and accepted is False
-    return ok
+    return ok, record
 
 
 def main(argv: list[str]) -> int:
@@ -303,8 +315,14 @@ def main(argv: list[str]) -> int:
     if unexercised:
         count += f", {len(unexercised)} not exercised (no proof produced)"
     ok = bool(parts) and all(results[p][0] for p in honest) and all(refused.values())
+    (d / RECORD).unlink(missing_ok=True)  # an earlier pass's composition is not this one's
     if binary:
-        ok = composed(binary, d, honest, groups, results) and ok
+        passes, record = composed(binary, d, honest, groups, results)
+        if d.is_dir():
+            (d / RECORD).write_text(json.dumps(record, sort_keys=True) + "\n")
+        ok = passes and ok
+        if not record["composed"]:
+            count += ", the recursive statement not composed"
     print(count + ("" if ok else ": the step fails" if parts else ": no part to check, the step fails"))
     return 0 if ok else 1
 
