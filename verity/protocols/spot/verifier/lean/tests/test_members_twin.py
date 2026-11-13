@@ -216,9 +216,8 @@ def test_a_member_no_statement_names_is_held_to_the_blobs_lookup_tables(tmp_path
     member's files), before any session. With its circuit looking up ``rcp`` where the blobs hold no table, both
     refuse it for the tables. The other way, blobs holding ``rcp``'s table where its circuit looks up none: the twin
     refuses it on blobs with a file under ``rcp``'s pinned digest. Lean's check finds a blob by the SHA-512 of its
-    bytes, so its side of that row needs the table's own bytes, which this suite does not load; `tablesHeld` on such
-    blobs is `test_difftest.py`'s ``tables_held`` piece, and that an accept holds the tables at every member, sampled
-    or not, is `Properties.Spot.TablesRegistered`."""
+    bytes, so its side of that row needs the table's own bytes, which this suite does not load: both sides on the
+    table itself are `benchmarks/one_stage`'s (``tests/test_members_tables.py``)."""
     a = Audit("members-twin-no-statement-tables", opened=(B,))
     assert [st["member"] for st in a.evidence["proofs"]["statements"]] == [B]
     looks = a.put(b"a circuit\nMETA " + json.dumps({"lookups": {"rcp": {}}}).encode() + b"\n")
