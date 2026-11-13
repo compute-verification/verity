@@ -44,10 +44,11 @@ open FlockSoundness.Discharge.Exec (array_mapM_ok_getElem)
 theorem ite_some {α : Type} {c : Prop} [Decidable c] {a s : α} (h : (if c then some a else none) = some s) :
     c ∧ a = s := by
   by_cases hc : c
-  · rw [if_pos hc] at h; exact ⟨hc, Option.some.inj h⟩
-  · rw [if_neg hc] at h; cases h
+  · rw [ite_eq_left hc] at h; exact ⟨hc, Option.some.inj h⟩
+  · rw [ite_eq_right hc] at h; cases h
 
-theorem none_of_forall₂ {α β : Type} {o : Option (α × β)} (h : ∀ a b, o = some (a, b) → False) : o = none := by
+theorem none_of_forall₂ {α β : Type} {o : Option (α × β)} (h : ∀ a b, o = some (a, b) → False) :
+    o = none := by
   cases o with
   | none => rfl
   | some x => exact absurd rfl (h x.1 x.2)
@@ -131,9 +132,9 @@ theorem getElem?_snoc {α : Type} {l : List α} {x y : α} {i : Nat} (h : (l ++ 
     exact Or.inl h
   · rw [List.getElem?_append_right (Nat.le_of_not_lt hi), List.getElem?_singleton] at h
     by_cases h0 : i - l.length = 0
-    · rw [if_pos h0] at h
+    · rw [ite_eq_left h0] at h
       exact Or.inr ⟨by omega, Option.some.inj h⟩
-    · rw [if_neg h0] at h
+    · rw [ite_eq_right h0] at h
       cases h
 
 theorem zip_getElem? {α β : Type} {xs : Array α} {ys : Array β} {i : Nat} (hx : i < xs.size) (hy : i < ys.size) :
@@ -172,6 +173,9 @@ theorem partition_toList {α : Type} (p : α → Bool) (xs : Array α) :
   mvcgen invariants
   · ⇓⟨cur, bs, cs⟩ => ⌜bs.toList = cur.prefix.filter p ∧ cs.toList = cur.prefix.filter fun a => !p a⌝
   all_goals simp_all
+  all_goals first
+    | assumption
+    | simp_all +zetaDelta
 
 theorem partition_eq {α : Type} (p : α → Bool) (xs : Array α) :
     xs.partition p = (xs.filter p, xs.filter fun a => !p a) := by
@@ -225,7 +229,7 @@ theorem sessionAt_of {p : Params} {periods : Array MonitoringPeriod} {reserves :
     (h3 : start ≤ w.opened.seq) (h4 : w.opened.seq < stop) :
     ∃ s, sessionAt p periods reserves start stop w = some s := by
   unfold sessionAt
-  exact ⟨_, if_pos (keep_to h1 h2 h3 h4)⟩
+  exact ⟨_, ite_eq_left (keep_to h1 h2 h3 h4)⟩
 
 -- `mvcgen` splits `read` at the ledger's check and at the monitoring period's end
 set_option maxHeartbeats 4000000 in
@@ -241,11 +245,9 @@ theorem read_ok {p : Params} {ledger : Json} {r : Read} (h : read p ledger = .ok
         r.sessions = r.wins.filterMap (sessionAt p r.periods (reservesOf (entriesOf ledger) p.lane)
           ((reaches (entriesOf ledger) p.start).getD stop) stop)) ?_ h
   clear h
-  mvcgen [read, -Spec.throw_Except, throw_spec]
-  all_goals first
-    | exact ⟨by assumption, _, by assumption, rfl⟩
-    | (subst_vars; exact ⟨by assumption, _, by assumption, rfl⟩)
-    | fail "read_ok: a goal mvcgen left is not closed"
+  mvcgen [_root_.Spot.Period.read, -Spec.throw_Except, throw_spec]
+  refine ⟨by assumption, _, by assumption, ?_⟩
+  rfl
 
 theorem read_spec (p : Params) (ledger : Json) :
     ⦃⌜True⌝⦄ read p ledger ⦃⇓? r => ⌜read p ledger = .ok r⌝⦄ := ok_spec _
@@ -286,21 +288,21 @@ theorem windowsIn_ok {p : Params} {r : Read} {ws : Windows} (h : windowsIn p r =
   refine of_triple (Q := fun ws => ∃ sampled, WindowsIn p r ws sampled) ?_ h
   clear h
   mvcgen [windowsIn, -Spec.throw_Except, throw_spec, arrayMapM_spec]
-  all_goals first
-    | exact ⟨_, ⟨by assumption, by assumption,
-        ⟨_, by assumption, fun x w hg => by
-          obtain ⟨s, i⟩ := x
-          dsimp only at hg
-          split at hg
-          · rename_i name hname
-            cases hg
-            exact ⟨hname, rfl, rfl, rfl⟩
-          · cases hg⟩,
-        by first | assumption | exact none_of_forall (by assumption),
-        by first | assumption | exact none_of_forall₂ (by assumption) | exact none_of_forall (by assumption),
-        by first | assumption | exact none_of_forall₂ (by assumption) | exact none_of_forall (by assumption),
-        by first | assumption | exact none_of_forall (by assumption)⟩⟩
-    | fail "windowsIn_ok: a goal mvcgen left is not closed"
+  subst_vars
+  refine ⟨(r.sessions.partition fun s => holds p.label s.families).1, ⟨rfl, by assumption,
+    ⟨_, by assumption, fun x w hg => ?_⟩, none_of_forall (by assumption), none_of_forall₂ (by assumption),
+    none_of_forall₂ (by assumption), none_of_forall (by assumption)⟩⟩
+  obtain ⟨s, i⟩ := x
+  dsimp only at hg
+  split at hg
+  · rename_i name hname
+    have hw : ({ period := name, phase := i, session := s.session, root := s.root } : Window) = w :=
+      Except.ok.inj hg
+    subst hw
+    exact ⟨hname, rfl, rfl, rfl⟩
+  · first
+      | cases hg
+      | simp [throw, throwThe, MonadExceptOf.throw] at hg
 
 theorem windowsIn_spec (p : Params) (r : Read) :
     ⦃⌜True⌝⦄ windowsIn p r ⦃⇓? ws => ⌜windowsIn p r = .ok ws⌝⦄ := ok_spec _
@@ -414,7 +416,8 @@ theorem period_of_sampled (hR : Returned p ledger r ws stop sampled) {s : Sessio
     exact hy2
   obtain ⟨P, hfind, hPn⟩ := Option.map_eq_some_iff.1 (hper.symm.trans hname)
   have hP : P ∈ r.periods := Array.mem_of_find?_eq_some hfind
-  have hlist : x.opened.session ∈ P.windows := Array.contains_iff_mem.1 (Array.find?_some hfind)
+  have hcon := Array.find?_some hfind
+  have hlist : x.opened.session ∈ P.windows := Array.contains_iff_mem.1 hcon
   have hheld : P ∈ heldOf r sampled :=
     Array.mem_filter.2 ⟨hP, Array.any_eq_true'.2 ⟨s, hs, beq_iff_eq.2 (hname.trans (congrArg some hPn.symm))⟩⟩
   have hclosed : P.closed = true := bool_of_not_not (Array.find?_eq_none.1 hR.wi.closed P hheld)
@@ -542,12 +545,8 @@ theorem caseAt_ok {inner : Inner} {p : AuditParams} {ledger pins session : Json}
       x = (cm.record, inner q cm ev bs)) ?_ h
   clear h
   mvcgen [caseAt, -Spec.throw_Except, throw_spec]
-  all_goals first
-    | exact ⟨_, _, _, by assumption, beq_iff_eq.1 (by assumption), by assumption,
-        ⟨_, by assumption, Bool.eq_false_iff.2 (by assumption)⟩, by assumption, rfl⟩
-    | (subst_vars; exact ⟨_, _, _, by assumption, beq_iff_eq.1 (by assumption), by assumption,
-        ⟨_, by assumption, Bool.eq_false_iff.2 (by assumption)⟩, by assumption, rfl⟩)
-    | fail "caseAt_ok: a goal mvcgen left is not closed"
+  all_goals exact ⟨_, _, _, by assumption, beq_iff_eq.1 (by assumption), by assumption,
+    ⟨_, by assumption, Bool.eq_false_iff.2 (by assumption)⟩, by assumption, rfl⟩
 
 theorem caseAt_spec (inner : Inner) (p : AuditParams) (ledger pins session : Json) (w : Window) (want : String)
     (before : Array Json) (k : Case) (bs : Core.Blobs) :
@@ -595,28 +594,14 @@ theorem windowAt_raw {inner : Inner} {p : AuditParams} {r : Read} {ledger pins :
         (∃ why, st' = { st with before := st.before.push record, undecided := st.undecided <|> some why }))) ?_ h
   clear h
   mvcgen [windowAt, -Spec.throw_Except, throw_spec, coinOf_spec, caseAt_spec]
+  all_goals
+    subst_vars
+    refine ⟨_, _, _, _, _, _, _, _, by assumption, none_of_forall (by assumption), none_of_forall (by assumption),
+      by assumption, by assumption, by assumption, by assumption, by assumption, ?_⟩
   all_goals first
-    | exact ⟨_, _, _, _, _, _, _, _, by assumption,
-        by first | assumption | exact none_of_forall (by assumption),
-        by first | assumption | exact none_of_forall (by assumption),
-        by assumption, by assumption, by assumption, by assumption, by assumption,
-        Or.inl ⟨_, _, rfl, rfl⟩⟩
-    | exact ⟨_, _, _, _, _, _, _, _, by assumption,
-        by first | assumption | exact none_of_forall (by assumption),
-        by first | assumption | exact none_of_forall (by assumption),
-        by assumption, by assumption, by assumption, by assumption, by assumption,
-        Or.inr ⟨_, rfl⟩⟩
-    | (subst_vars; exact ⟨_, _, _, _, _, _, _, _, by assumption,
-        by first | assumption | exact none_of_forall (by assumption),
-        by first | assumption | exact none_of_forall (by assumption),
-        by assumption, by assumption, by assumption, by assumption, by assumption,
-        Or.inl ⟨_, _, rfl, rfl⟩⟩)
-    | (subst_vars; exact ⟨_, _, _, _, _, _, _, _, by assumption,
-        by first | assumption | exact none_of_forall (by assumption),
-        by first | assumption | exact none_of_forall (by assumption),
-        by assumption, by assumption, by assumption, by assumption, by assumption,
-        Or.inr ⟨_, rfl⟩⟩)
-    | fail "windowAt_raw: a goal mvcgen left is not closed"
+    | exact Or.inl ⟨_, _, by assumption, rfl⟩
+    | exact Or.inr ⟨_, rfl⟩
+    | fail "windowAt_raw: neither an accept nor an undecided"
 
 /-- One step of the check along the windows, from the state `st` to `st'` at the window `w` with the evidence `we`:
 the window is added with one audit `a`, which is the check's audit at `w` after the records in `st`, and its record
@@ -669,11 +654,8 @@ theorem run_ok {inner : Inner} {p : AuditParams} {c : Commitment} {e : Evidence}
   clear h
   mvcgen [_root_.Spot.Period.run, -Spec.throw_Except, throw_spec, -Spec.foldlM_array, foldlM_spec, read_spec,
     windowsIn_spec]
-  all_goals first
-    | exact ⟨_, by assumption, by assumption, beq_iff_eq.1 (by assumption), _, by assumption, fun _ _ _ => rfl⟩
-    | (subst_vars; exact ⟨_, by assumption, by assumption, beq_iff_eq.1 (by assumption), _, by assumption,
-        fun _ _ _ => rfl⟩)
-    | fail "run_ok: a goal mvcgen left is not closed"
+  all_goals exact ⟨_, by assumption, by assumption, beq_iff_eq.1 (by assumption), _, by assumption,
+    fun _ _ _ => rfl⟩
 
 /-- What `checkWith` ran where it accepts: `run` returned, with no audit undecided, and the period publishes the
 windows it passed with the lane's other sessions. -/
@@ -716,9 +698,9 @@ theorem foldGood_step {inner : Inner} {p : AuditParams} {c : Commitment} {e : Ev
   · obtain ⟨hlt, -⟩ := List.getElem?_eq_some_iff.1 hi
     obtain ⟨a', record', h1, h2, h3⟩ := hall i w' we' hi
     refine ⟨a', record', ?_, ?_, ?_⟩
-    · rw [hp, Array.getElem?_push, if_neg (by omega)]
+    · rw [hp, Array.getElem?_push, ite_eq_right (by omega)]
       exact h1
-    · rw [hb, Array.getElem?_push, if_neg (by omega)]
+    · rw [hb, Array.getElem?_push, ite_eq_right (by omega)]
       exact h2
     · rw [hb, Array.extract_push_of_le (by omega)]
       exact h3
@@ -727,8 +709,8 @@ theorem foldGood_step {inner : Inner} {p : AuditParams} {c : Commitment} {e : Ev
     subst hwe
     have hi' : i = st.before.size := by omega
     refine ⟨a, record, ?_, ?_, ?_⟩
-    · rw [hp, Array.getElem?_push, if_pos (by omega)]
-    · rw [hb, Array.getElem?_push, if_pos hi']
+    · rw [hp, Array.getElem?_push, ite_eq_left (by omega)]
+    · rw [hb, Array.getElem?_push, ite_eq_left hi']
     · rw [hb, Array.extract_push_of_le (by omega), hi', Array.extract_size]
       exact hA
 
@@ -788,7 +770,7 @@ theorem acceptMeans : AcceptMeans := by
     have hiw : i < ws.windows.size := by omega
     have hie : i < e.windows.size := by omega
     obtain ⟨a, record, h1, h2, h3⟩ := hall i _ _ (zip_getElem? hiw hie)
-    obtain ⟨-, h1'⟩ := Array.getElem?_eq_some_iff.1 h1
+    obtain ⟨_, h1'⟩ := Array.getElem?_eq_some_iff.1 h1
     exact ⟨hiw, hie, a, record, h1', h2, h3⟩
   subst hpub
   subst hprof
