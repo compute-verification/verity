@@ -35,8 +35,8 @@ from functools import cache
 from typing import Any
 
 import numpy as np
-from verity.protocols.pouw.verifier.audit import HM96, rows_domain
-from verity.protocols.pouw.verifier.protocol import tagged
+from verity.protocols.accounting.pouw.verifier.audit import HM96, rows_domain
+from verity.protocols.accounting.pouw.verifier.protocol import tagged
 
 from verity_vllm.commit import row_tables_device as RTD
 from verity_vllm.protocols.pouw.h1 import prover as PV

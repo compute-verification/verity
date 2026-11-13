@@ -1,5 +1,5 @@
 """build.sh's gate on pearl_c_sm120.cubin: ptxas's report and cuobjdump's SASS, through the harness's `mma_gate`
-(verity/protocols/pouw/prover/sass_gate.py).  Refuses (exit 1, the reasons on stderr) on a ptxas warning, a stack frame, a spill or
+(verity/protocols/accounting/pouw/prover/sass_gate.py).  Refuses (exit 1, the reasons on stderr) on a ptxas warning, a stack frame, a spill or
 local memory, and on any kernel whose tensor-core instructions aren't the intended ones: the FP8 atom as
 QMMA.16832.F32.E4M3.E4M3 in the counts `WANT` states, the peel as HMMA.16816.F32.BF16, no other MMA.
 
@@ -16,7 +16,7 @@ from pathlib import Path
 def _harness():
     name = "pouw_harness_sass_gate"
     if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "prover" / "sass_gate.py")
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "sass_gate.py")
         sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules[name])
     return sys.modules[name]
