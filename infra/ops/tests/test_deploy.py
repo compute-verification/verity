@@ -494,14 +494,18 @@ def test_a_commit_that_only_drops_a_file_of_a_whole_tree_moves_its_link_to_a_dir
     """The directory the link names is the commit's tree and nothing more: a file it holds and the commit lacks is a change
     with no other, so the link moves to a new directory without it, the old one is left as it was, the run and the record name
     the dropped path, a dry run says it would be dropped, and drift is left no stray to move out of a directory a pass runs
-    from. Bytecode a run wrote there is no file of the tree: it alone moves nothing and is not carried over."""
+    from. Bytecode a run wrote there is no file of the tree: it alone moves nothing and is not carried over. A file beside the
+    tree is not the install's to drop."""
     repo = world["repo"]
     n, path = _whole(world, {"a.py": "a1\n", "sub/b.py": "b1\n", "sub/gone.py": "g1\n"})
     deploy.install(n, "origin/main", "lane-x", [str(path)], local, apply=True, repo=repo)
     first = Path(os.readlink(path))
     (first / "sub/__pycache__").mkdir()
     (first / "sub/__pycache__/b.cpython-312.pyc").write_bytes(b"\0")
+    (first / "sub/__pycache__/b.cpython-312.pyc.140213").write_bytes(b"\0")       # what an import that was stopped leaves
     (first / "a.pyc").write_bytes(b"\0")
+    beside = world["node"] / "tree/beside.py"       # a stray of the plain tree around the whole one
+    beside.write_text("made by hand\n")
     for apply in (False, True):
         assert not [f for f in deploy.install(n, "origin/main", "lane-x", [str(path)], local, apply=apply, repo=repo)["files"] if f["changed"]]
     assert Path(os.readlink(path)) == first, "bytecode is not a change"
@@ -527,6 +531,7 @@ def test_a_commit_that_only_drops_a_file_of_a_whole_tree_moves_its_link_to_a_dir
     assert [(e["path"], e["state"]) for e in rep["entries"] if e.get("tree") == str(path)] == [
         (str(path / "a.py"), "ok"), (str(path / "sub/b.py"), "ok")]
     assert not [s for s in rep["strays"] if s.startswith(str(path))], "no stray is left under the tree"
+    assert str(beside) in rep["strays"] and beside.read_text() == "made by hand\n"
     assert not [f for f in deploy.install(n, "origin/main", "lane-x", [str(path)], local, apply=True, repo=repo)["files"] if f["changed"]]
     assert Path(os.readlink(path)) == second
 
