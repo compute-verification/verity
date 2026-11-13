@@ -1,6 +1,6 @@
 """A session record's canonical text (`verity_flock.record_text.session_text`): Lean's `Json.compress` on the shared vectors
 (`live/src/record_text_vectors.json`, whose expected texts Lean printed; `live/src/record_text.rs` runs the same cases), a
-fixed point of itself, and the agreement harness's stdlib copy (`../agreement/record_text.py`) the same file."""
+fixed point of itself, and the agreement harness's stdlib copy (`agreement/record_text.py`) the same file."""
 import json
 from pathlib import Path
 
@@ -31,7 +31,7 @@ def test_refuses_what_is_not_json():
 
 
 def test_the_harness_copy_is_the_same_file():
-    harness = ROOT / "verity/protocols/flock/agreement/record_text.py"
+    harness = ROOT / "verity/protocols/flock/prover/agreement/record_text.py"
     assert harness.read_bytes() == (ROOT / "verity/protocols/flock/prover/python/verity_flock/record_text.py").read_bytes()
 
 
