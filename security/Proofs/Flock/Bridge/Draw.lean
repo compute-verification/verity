@@ -436,10 +436,10 @@ theorem lawSized_size {n : ℕ} {law : Flock.Draw.Law} {kd : ℕ} (hlaw : LawSiz
       _ = kd := hsum
 
 open Properties.Spot.SecurityProofs in
-/-- **The law the verifier agrees is well formed over its strata**: where `deriveLaw` expands the named law, or
-`flockLaw` reads `derive`'s law object, and the law is one at `ns` (`LawOn`), its claims design is well formed over
-`ns`, by the code's own refusals. A subset draws at least one unit (`flockLaw`); a stratified `K` is in
-`[1, population]` (`Flock.Draw.derive`); a work law's strata are nonempty (`strataOf` of a covered partition), its
+/-- **The sampling design the verifier agrees is well formed over its strata**: where `deriveLaw` expands the named law, or
+`flockLaw` reads `derive`'s law object, and the sampling design is one at `ns` (`LawOn`), its claims design is well formed over
+`ns`, by the code's own refusals. A subset samples at least one unit (`flockLaw`); a stratified `K` is in
+`[1, population]` (`Flock.Draw.derive`); a work sampling design's strata are nonempty (`strataOf` of a covered partition), its
 floors at least one (`workTableOfJson`) and its work nonzero (`deriveWork`). -/
 theorem wellFormed_of_lawOn {p : Spot.Program} {query law lawJ : Lean.Json} {table : Option Lean.Json}
     {n : ℕ} {derived : Option Flock.Draw.Law} {parsed : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ}

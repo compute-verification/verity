@@ -634,7 +634,7 @@ def test_a_small_period_reaches_its_verdict(server):
 def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
     """`case(kind, seed, form)` reaches its kind's verdict for each kind, the ones that fail to decode refused where
     they fail (a digest only once the commitment decodes); an accepted period's eps is its units' deltas summed (the
-    clock form's audits', the rows form's scans' and its tied audits' drawn in part), and its profile names no sync; in
+    clock form's audits', the rows form's scans' and its tied audits' sampled in part), and its profile names no sync; in
     the clock form its evidence holds
     each clock certificate alone, and in the rows form each link-window's three records' certificates and two row
     registrations, with one scan a link-window, all at one δ, and a schedules term equal to the cells';

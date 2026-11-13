@@ -12,7 +12,7 @@ opened the link after the SHA-512 of `root_F` and the tables' `root_B`; a rep ro
 after a tag byte, while the device opened it after the SHA-512 of the bytes alone; a session's last message is its
 statement, record and proof files, while the device closed the session after the SHA-512 of its evidence; and the
 statements' round has no release of the device at all: its message is fixed by the registered files and the stages'
-draws. This module states the messages' bound in the form those rounds need.
+samples. This module states the messages' bound in the form those rounds need.
 
 * **The miss at any opening** (`pickOf`, `frameOf`, `miss_le_fork`): at a prover that sends, at each history, the most
   likely value of any function `opn` of the tape, the history and the run's coins over the coins the history shows,
@@ -78,7 +78,7 @@ noncomputable def histOf (ω : TapeOf V θ F c σ) (r : Coins A x) : List (Msg �
 noncomputable def clsBy (s : TapeOf V θ F c σ × Coins A x) : TapeOf V θ F c σ × List (Msg × Msg) :=
   (s.1, histOf V θ F c σ opn i s.1 s.2)
 
-/-- The redraw of a tape and run coins within their class. -/
+/-- The resample of a tape and run coins within their class. -/
 noncomputable def resBy (s : TapeOf V θ F c σ × Coins A x) (y : Coins A x) : TapeOf V θ F c σ × Coins A x :=
   (s.1, merge (histOf V θ F c σ opn i s.1 s.2) y)
 
@@ -114,7 +114,7 @@ theorem classOf_clsBy (hS : RunShown A x) (s : TapeOf V θ F c σ × Coins A x) 
 /-- **Round `i`'s miss is at most the square root of a fork**, at the prover that sends the most likely opening:
 where an accepted play whose log is the device's gives `opn`, at the play's own history before round `i`, the message
 it reads there (`hopen`), the first difference at round `i` is at most as likely as the square root of a tape, the
-run's coins and a redraw of the coins their history does not show giving `opn` two values at that history. -/
+run's coins and a resample of the coins their history does not show giving `opn` two values at that history. -/
 theorem miss_le_fork (Rd : Reading A) (Acc Good : Verity.Exchange → Prop) (hS : RunShown A x)
     (hopen : ∀ (ω : TapeOf V θ F c σ) (r : Coins A x), Acc (outOf V θ F c σ place ω r) →
       Good (outOf V θ F c σ place ω r) → i < A.L.V.k x →

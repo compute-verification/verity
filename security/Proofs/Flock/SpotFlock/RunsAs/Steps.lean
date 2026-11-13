@@ -29,7 +29,7 @@ namespace SpotFlock.RunsAs
 open Lean (Json)
 
 /-- **What the verifier holds of the run as `Run.run` builds it** for round 2's check (`interiorAudit`), over the replay
-sample `sample`, the interior's strata and the second stage's draw. -/
+sample `sample`, the interior's strata and the second stage's sample. -/
 def runOwn (i : Spot.Run.Input) (it : Spot.Run.Interior) (sample : Array ℕ)
     (strata : Array (String × Array (ℕ × ℕ))) (draw : Json) : Spot.SecondStage.Own :=
   { sample, parts := Spot.SecondStage.parts sample.size strata, interior := it.record, boundary := i.record,
@@ -96,7 +96,7 @@ private theorem none_of_forall {α : Type} {o : Option α} (h : ∀ c, o = some 
 -- `run` unfolds to about 50 decided leaves under one `match` or `if` per step, hence the heartbeat budget.
 set_option maxHeartbeats 8000000 in
 /-- **A run's answer**, at either switch: refused at a step, or past every step: the boundary registration passed the
-registration check under the law the rule gives its population and the work table the rule expands, the first stage
+registration check under the sampling design the rule gives its population and the work table the rule expands, the first stage
 ran with no closure map on the challenger's bytes and the check of them gave no code on the bytes it read, the second
 stage ran over the first stage's proved units, then the second stage's audit, and the answer names `accept` where
 both audits read accepted. -/
@@ -160,7 +160,7 @@ theorem secondStage_two {i : Spot.Run.Input} {sample : Array ℕ} {grain : Json}
 set_option maxHeartbeats 4000000 in
 /-- **The interior's steps, accepted**: the interior is the run's, its cells and counts are the replay block's and the
 rule's, its record states the population the replay sample gives those cells and passed the registration check under
-the subset law at that population, its second stage is `selectSecond` on its bytes over the replay sample, and the
+the subset sampling design at that population, its second stage is `selectSecond` on its bytes over the replay sample, and the
 check of its challenges gave no code on the bytes it read. -/
 theorem interiorSteps_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {k : Spot.Select.Counts}
     {sample : Array ℕ} {x : Spot.Run.Interior × Json × Json × Json × ℕ}
@@ -184,7 +184,7 @@ theorem interiorSteps_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {k : Spot
         by assumption, by assumption⟩)
 
 /-- **Round 2's audit of an interior**: the run's `Own` (`runOwn`) at the interior's strata, the audit record of the
-second stage's draw, the answer whether round 2's attached record reads accepted, and one staged entry. -/
+second stage's sample, the answer whether round 2's attached record reads accepted, and one staged entry. -/
 private theorem interiorAudit_some {form : Bool} {i : Spot.Run.Input} {sample : Array ℕ} {it : Spot.Run.Interior}
     {receipt draw law : Json} {read : ℕ} {acc : Bool} {staged : List (String × Json)}
     (h : Spot.Run.interiorAudit form i sample (some (it, receipt, draw, law, read)) = .ok (acc, staged)) :
@@ -278,9 +278,9 @@ theorem accepted_steps {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} 
     exact check_true_of_codes (codes_of_attach hwf hacc.symm)
 
 /-- **The registrations an accepted two-stage run checked.** Its boundary record passed the registration check with
-no code, under the run's parameters with the law the rule gives the record's population and the work table the rule
+no code, under the run's parameters with the sampling design the rule gives the record's population and the work table the rule
 expands; and its interior record states the population the first stage's proved units give the replay block's cells,
-and passed the registration check with no code under the interior's parameters with the subset law at that
+and passed the registration check with no code under the interior's parameters with the subset sampling design at that
 population. The first stage's sample is `accepted_steps`'s: `Rule.tableOver`, `Select.resolve` and `Select.select` are
 functions of the run's input. -/
 theorem accepted_registered {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha : AcceptedTwo i it j) :
@@ -312,7 +312,7 @@ theorem accepted_registered {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : J
     exact ⟨n, rule, law, workTable, resolved, draw, rest, read, ns, hn, hrule, hlaw, ht, of_not_not hchk, hres, hsel,
       hns, eq_of_not_bne hpop, of_not_not hchk₂⟩
 
-/-- **The answer's `draw` is the first stage's**: an accepted two-stage run's answer lists under `draw` the draw object
+/-- **The answer's `draw` is the first stage's**: an accepted two-stage run's answer lists under `draw` the sample object
 its first stage's select returned, under `Select.resolve`'s rule and the work table `Rule.tableOver` expands. -/
 theorem answer_draw {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha : AcceptedTwo i it j) :
     ∃ (workTable : Option Json) (resolved : Spot.Select.Rule) (rest : Array ℕ) (read : ℕ),
