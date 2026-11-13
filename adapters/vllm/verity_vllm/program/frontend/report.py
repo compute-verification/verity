@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from verity.circuits.defs import SpecializedDefinition
     from verity.circuits.liveness import DeadGateReport
     from verity.circuits.program import Program
+
     from verity_vllm.program.frontend.outcomes import Unsupported
 
 

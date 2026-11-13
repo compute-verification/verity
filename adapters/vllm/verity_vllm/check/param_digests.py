@@ -35,7 +35,7 @@ def _digest(p, chunk: int) -> tuple[str, int]:
     return h.hexdigest(), int(raw.numel())
 
 
-def param_digests(model, *, include_buffers: bool = True, raw_for: "re.Pattern[str] | None" = None, chunk: int = CHUNK,
+def param_digests(model, *, include_buffers: bool = True, raw_for: re.Pattern[str] | None = None, chunk: int = CHUNK,
                   workers: int = WORKERS) -> dict[str, Any]:
     """{params: {name: {digest, dtype, shape, bytes} | {..., alias_of}}, raw: {name: uint16 words}, n, wall_s}: a tensor reached under
     two names is hashed once and its later name carries `alias_of`; a bf16 tensor whose name matches `raw_for` also keeps its words."""
