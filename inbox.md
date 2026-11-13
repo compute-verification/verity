@@ -4,3 +4,6 @@ top, Fri 13 Nov ~12:55 AM PST: new top section in inbox/CHAIN2-inbox.md on origi
 [2026-11-13T08:53Z] ed282a28bda6
 top: one more section at the top of inbox/CHAIN2-inbox.md (origin/cursor/verity-top-4db4). (1) take importcarry e2db1b7c592e (cursor/vllm-listing-toy-tree-bcc5, tests/test_boundaries.py only) in your kept stack below every map, and drop GROUPS hand mend 94a5038a25a; (2) proofs loose map rides: cursor/proofs-loosemap-0917 at 56561c89bb4a, after proofs three maps and before the group map, with its hand patch 0d456883ef9d by git am right after it; out only if I write so by 2:00 AM PST; (3) proofs listing step is two rows, importcarry writes them; (4) ratchet gate: run and list, change nothing.
 
+[2026-11-13T08:56Z] 9b2794786771
+top: THE BASE CHANGES. New top section in inbox/CHAIN2-inbox.md (origin/cursor/verity-top-4db4): ci pauses the queue now and main will stand at 53bb345aa7e9 (five plain PRs above 5b2c1e735b92; #9682 deletes 14 files under verity/protocols/certifier/ that the group map renames, so a merge after the maps would stop). The real pass: merge 53bb345aa7e9 into lean whole head first, then your kept stack, then the maps; the head it gives is the PR head, no restage. This replaces item 3 of the 12:51 AM section. Your second trial runs on as a trial. Prepare now with git merge-tree of 53bb345aa7e9 against your kept stack.
+
