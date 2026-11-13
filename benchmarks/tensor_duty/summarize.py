@@ -10,7 +10,15 @@ shorter. Only PASS exits 0. Throughput rests on the host's wall clock alone; the
 reading. The tables give the maximum by clock, arm and operand class, each clock's and arm's duty x class table, and
 the fills and bursts compared; each point is joined to the nvidia-smi samples taken inside its host interval.
 
-    PYTHONPATH=. python3 benchmarks/tensor_duty/summarize.py OUT [OUT...] [--json FILE]
+`--arms fp32-beside` reads run.sh's FP32-beside-tensor points (beside.jsonl, duty.cu's arms A to D) instead: the time
+price of an FP32 add in tensor units, p = R_t,alone / R_f,mixed, for each point of arms C and D. R_t,alone is the
+highest arm A point's MACs over its host interval at the point's clock and class; R_f,mixed is the point's adds over the
+part of its host interval its FP32 warps spent adding (`fp32_share`, of the kernel's %globaltimer time). The verdict is
+PASS when every C and D point has p >= P_MIN, 32 x (1 - 0.005), with the host stamps against it, FAIL when one has
+p < P_MIN with them for it, and UNDECIDED otherwise, or when a point has no arm A point beside it. Arm B's p, the
+loop's price alone, is given and not judged.
+
+    PYTHONPATH=. python3 benchmarks/tensor_duty/summarize.py OUT [OUT...] [--arms fp32-beside] [--json FILE]
 """
 from __future__ import annotations
 
@@ -26,6 +34,9 @@ from verity.hardware.cards import load, rate
 SKU = "h200-sxm-141gb"
 #: the resolution of duty.cu's host stamps, which it prints to the millisecond
 STAMP_S = 1e-3
+#: W1's price of an FP32 add in tensor units, and TT_OUT's margin at 8192³: arms C and D pass at p >= P_MIN
+ADD_PRICE, MARGIN = 32, 0.005
+P_MIN = ADD_PRICE * (1 - MARGIN)
 
 
 def readings(sku: str = SKU) -> tuple[float, float, float]:
@@ -85,6 +96,7 @@ def join(r: dict, smi: list) -> None:
     s = [x for x in smi if r["host_t0"] <= x[0] <= r["host_t1"]]
     r["smi_n"] = len(s)
     r["smi_mhz_max"] = max((x[1] for x in s), default=None)
+    r["smi_mhz_mean"] = sum(x[1] for x in s) / len(s) if s else None
     r["smi_w_mean"] = sum(x[2] for x in s) / len(s) if s else None
     reasons = 0
     for x in s:
@@ -192,22 +204,90 @@ def report(pts: list[dict], sku: str = SKU) -> tuple[str, list[str], dict]:
     return v, L, doc
 
 
+def load_beside(out: Path) -> list[dict]:
+    p = out / "beside.jsonl"
+    rows = [json.loads(line) for line in p.read_text().splitlines() if line.startswith("{")] if p.exists() else []
+    for r in rows:
+        r.setdefault("clock", "-")
+    return rows
+
+
+def fp32_rate(r: dict, pad: float = 0.0) -> float:
+    """R_f,mixed: adds a second over the part of the point's host interval, lengthened by ``pad`` seconds, that its FP32
+    warps spent adding."""
+    span = (r["host_t1"] - r["host_t0"] + pad) * r["fp32_share"]
+    return r["adds"] / span if span > 0 else float("inf")
+
+
+def beside(pts: list[dict]) -> tuple[str, list[str], dict]:
+    """The FP32-beside-tensor verdict (module docstring), the Markdown lines and summary.json of ``pts``."""
+    alone: dict[tuple[str, str], dict] = {}
+    for r in pts:
+        k = (r["clock"], r["class"])
+        if r["arm"] == "A" and (k not in alone or host_rate(r) > host_rate(alone[k])):
+            alone[k] = r
+    rows = []
+    for r in sorted(pts, key=lambda r: (r["clock"], r["class"], r["arm"], r["x"])):
+        a = alone.get((r["clock"], r["class"]))
+        priced = r["arm"] != "A" and a is not None and r["fp32_share"] > 0
+        span = r["host_t1"] - r["host_t0"]
+        rows.append({
+            "clock": r["clock"], "arm": r["arm"], "class": r["class"], "x": r["x"], "judged": r["arm"] in ("C", "D"),
+            "macs_per_s": host_rate(r), "adds_per_s": r["adds"] / span, "r_t_alone": a and host_rate(a),
+            "r_f_mixed": fp32_rate(r) if r["fp32_share"] > 0 else None,
+            "p": host_rate(a) / fp32_rate(r) if priced else None,
+            "p_lo": host_rate(a, STAMP_S) / fp32_rate(r, -STAMP_S) if priced else None,
+            "p_hi": host_rate(a, -STAMP_S) / fp32_rate(r, STAMP_S) if priced else None,
+            **{k: r[k] for k in ("clock64_mhz", "fp32_busy_mhz", "fp32_share", "macs_per_smclk", "adds_per_smclk")},
+            **{f"{m}_mhz": r[f"{m}_mhz"] or None for m in ("tensor", "fp32", "both")},
+            **{k: r.get(k) for k in ("smi_mhz_mean", "smi_mhz_max", "smi_w_mean")}})
+    judged = [x for x in rows if x["judged"]]
+    failing = [x for x in judged if x["p"] is not None and x["p_hi"] < P_MIN]
+    undecided = [x for x in judged if x["p"] is None or x["p_lo"] < P_MIN <= x["p_hi"]]
+    v = "FAIL" if failing else "UNDECIDED" if undecided or not judged else "PASS"
+    low = min((x for x in judged if x["p"] is not None), key=lambda x: x["p"], default=None)
+    L = [f"**{v}**: of {len(judged)} points of arms C and D, {len(failing)} price an FP32 add under "
+         f"{P_MIN:g} tensor units (p = R_t,alone / R_f,mixed) with the host stamps' {STAMP_S * 1e3:g} ms for it, and "
+         f"{len(undecided)} more only with them against it or with no arm A point beside them."
+         + (f" The lowest p is {low['p']:.3f} (from {low['p_lo']:.3f} to {low['p_hi']:.3f}), at clock {low['clock']}, "
+            f"arm {low['arm']} {low['class']}, X {low['x']:g}." if low else "")]
+    L += ["", "## Points (rates over the host's wall clock; clock64 MHz by mode a diagnostic)", ""]
+    L.append("| clock | class | arm | X | T MAC/s | G add/s | R_f,mixed G add/s | p | p range | clock64 MHz | "
+             "tensor MHz | fp32 MHz | both MHz | FP32 busy MHz | FP32 share | adds/SM-clk | smi MHz mean | smi MHz max | "
+             "smi W mean |")
+    L.append("| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
+             "---: | ---: | ---: |")
+    for x in rows:
+        span = "-" if x["p"] is None else f"{x['p_lo']:.3f}-{x['p_hi']:.3f}"
+        L.append(f"| {x['clock']} | {x['class']} | {x['arm']} | {x['x']:g} | {x['macs_per_s'] * 1e-12:.2f} | "
+                 f"{x['adds_per_s'] * 1e-9:.1f} | {fmt(x['r_f_mixed'] and x['r_f_mixed'] * 1e-9)} | {fmt(x['p'], 3)} | "
+                 f"{span} | {x['clock64_mhz']:.1f} | "
+                 f"{fmt(x['tensor_mhz'])} | {fmt(x['fp32_mhz'])} | {fmt(x['both_mhz'])} | {fmt(x['fp32_busy_mhz'] or None)} | "
+                 f"{x['fp32_share']:.4f} | {x['adds_per_smclk']:.2f} | {fmt(x['smi_mhz_mean'], 0)} | "
+                 f"{fmt(x['smi_mhz_max'], 0)} | {fmt(x['smi_w_mean'], 0)} |")
+    doc = {"verdict": v, "p_min": P_MIN, "add_price": ADD_PRICE, "margin": MARGIN, "stamp_s": STAMP_S,
+           "points": len(rows), "judged": len(judged), "failing": len(failing), "undecided": len(undecided),
+           "lowest": low and {k: low[k] for k in ("clock", "arm", "class", "x", "p", "p_lo", "p_hi")}, "rows": rows}
+    return v, L, doc
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("outs", nargs="+", type=Path)
+    ap.add_argument("--arms", choices=("duty", "fp32-beside"), default="duty")
     ap.add_argument("--json", type=Path)
     a = ap.parse_args(argv)
     pts, unread = [], []
     for out in a.outs:
         smi, skipped = samples(out)
         unread += skipped
-        for r in load_points(out):
+        for r in load_beside(out) if a.arms == "fp32-beside" else load_points(out):
             join(r, smi)
             pts.append(r)
     if not pts:
         print("no points")
         return 2
-    v, lines, doc = report(pts)
+    v, lines, doc = beside(pts) if a.arms == "fp32-beside" else report(pts)
     doc["smi_unread"] = len(unread)
     print("\n".join(lines))
     if unread:
