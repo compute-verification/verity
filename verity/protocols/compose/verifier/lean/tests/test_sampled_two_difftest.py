@@ -43,12 +43,19 @@ def _challenged(p: dict, label: str, seed: int = 0) -> dict:
     return {**p, "challenger": {"key": _key(seed), "label": label}}
 
 
+def _headed(p: dict) -> dict:
+    """``p`` filled from a registration log's prefix: day 0, the one declaration of its program on it, and a head. The
+    form's parse reads the head's form only; R2 and the head's prefix are the registration's, past the mirror."""
+    return {**p, "day": 0, "declarations": [{"blocks": [], "day": 0, "program": OS.PO.program_sha512(p["program"])}],
+            "head": "5a" * 64}
+
+
 @functools.cache
 def _base_text() -> str:
     c = OS._two_stage_case(0)
     it = c["interior"]
     return canonical({
-        "form": T.TWO_STAGE, "boundary": _challenged(c["params"], "draw/first"), "challenger": c["challenger"],
+        "form": T.TWO_STAGE, "boundary": _challenged(_headed(c["params"]), "draw/first"), "challenger": c["challenger"],
         "delta": c["delta"],
         "interior": {"members": {}, "params": _challenged(it["params"], "draw/second"), "replay": it["replay"],
                      "values": it["values"]},
@@ -98,6 +105,9 @@ CHANGES = {
     "public-item": lambda p: _set(p, ("public",), [1]),
     "boundary-empty": lambda p: _set(p, ("boundary",), {}),
     "boundary-no-window": lambda p: _set(p, ("boundary", "window_root"), DROP),
+    "boundary-no-head": lambda p: _set(p, ("boundary", "head"), DROP),
+    "boundary-head-undeclared": lambda p: _set(_set(p, ("boundary", "day"), DROP), ("boundary", "declarations"), DROP),
+    "boundary-head-form": lambda p: _set(p, ("boundary", "head"), "5A" * 64),
     "boundary-two-strata": lambda p: _set(p, ("boundary",), _two_strata()),
     "interior-not-an-object": lambda p: _set(p, ("interior",), "x"),
     "interior-a-key-missing": lambda p: _set(p, ("interior", "replay"), DROP),
@@ -124,7 +134,7 @@ def test_the_form_s_own_refusals_are_reached() -> None:
     refusals = [T.refusal(change(base())) for change in CHANGES.values()]
     assert all(isinstance(e, D.Reject) for e in refusals), refusals
     reasons = {str(e) for e in refusals if not isinstance(e, T.Delegated)}
-    for own in (T.ONE_DEFINITION, T.ONE_KEY, T.OUTPUTS_REFUSED, "the rule is not two-stage"):
+    for own in (T.NO_HEAD, T.ONE_DEFINITION, T.ONE_KEY, T.OUTPUTS_REFUSED, "the rule is not two-stage"):
         assert own in reasons
 
 

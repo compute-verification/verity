@@ -523,8 +523,9 @@ def decode_params(j) -> dict:
     keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
-    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool")
+    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "head", "seed_salt", "pool")
                    if isinstance(j, dict) and k in j}
+    keys = keys | {"day", "declarations"} if isinstance(j, dict) and ("day" in j or "declarations" in j) else keys
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
     if not desc:
@@ -618,12 +619,34 @@ def decode_params(j) -> dict:
         raise D.Reject(str(e)) from None
     if "challenger" in j:
         _challenger(j["challenger"], window)
+    _declared(j)
     delta = ratio(j["delta"])
     if not 0 < delta < 1:
         raise D.Reject("delta is not in (0, 1)")
     if R.unwindowed(PROGRAMS[sha], j["registered"] or {}, j.get("row_schemas"), window, fixed, j["log"]):
         raise D.Reject("a value it doesn't hold across windows that the log registered, and no window root")
     return {**raw, "program": PROGRAMS[sha], "delta": delta}
+
+
+def _declared(j) -> None:
+    """`OneStage.paramsOfJson`'s `day`, `declarations` and `head`: a natural day and a list of exactly `{blocks, day,
+    program}` with a natural day and a string program; a head lowercase hex of 64 bytes (`HEAD_FORM`), and only with a
+    day (`HEAD_UNDECLARED`)."""
+    if "day" in j:
+        if not _nat(j["day"]):
+            raise D.Reject("a declared day is a natural number")
+        if not isinstance(j["declarations"], list):
+            raise D.Reject("the declarations are a list")
+        for d in j["declarations"]:
+            _exactly(d, {"blocks", "day", "program"}, "a declaration")
+            if not (_nat(d["day"]) and isinstance(d["program"], str)):
+                raise D.Reject("a declaration's day is not a natural number or its program not a string")
+    h = j.get("head")
+    if h is not None:
+        if not (isinstance(h, str) and len(h) == 128 and HEX_DIGITS.fullmatch(h)):
+            raise D.Reject(R.HEAD_FORM)
+        if "day" not in j:
+            raise D.Reject(R.HEAD_UNDECLARED)
 
 
 def _challenger(ch, window) -> ChallengerKey:

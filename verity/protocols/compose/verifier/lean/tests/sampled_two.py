@@ -2,7 +2,7 @@
 parameters' parse in the Lean's order, through the interior's template circuits.
 
 The form's own refusals (`split`'s form, the keys, `OUTPUTS_REFUSED`, a rule that is not two-stage, the challenger's
-name, the declared items, `ONE_DEFINITION`, `ONE_KEY`) are mirrored word for word. The parts it hands to the one-stage
+name, the declared items, `NO_HEAD`, `ONE_DEFINITION`, `ONE_KEY`) are mirrored word for word. The parts it hands to the one-stage
 audit's decoders are the one-stage difftest's mirrors of them (`_rule` for `Select.Rule.ofJson`, `decode_params` for
 `OneStage.paramsParsed`, `template_circuits` for `Run.templateCircuits`), which that difftest holds to the Lean by verdict;
 `reason_mirrored` says which reasons are the form's own. Past the template circuits (the replay program, the members'
@@ -28,6 +28,8 @@ TWO_STAGE = "two-stage"
 ONE_DEFINITION = ("the boundary program's proof blocks under its query are not one stratum: the two-stage form's replay "
                   "blocks are one Definition's, so a share of them by count is a share by weight")
 ONE_KEY = "the boundary and the interior name one challenger key: both stages' coins are read under the run's one key"
+NO_HEAD = ("the boundary's parameters name no registration head: they are filled from the prefix of the registration log a "
+           "head names, with its day and declarations")
 OUTPUTS_REFUSED = "the two-stage form's check has no public outputs: the second stage's verdicts report none"
 PARAM_KEYS = ["boundary", "challenger", "delta", "interior", "outputs", "public", "rule", "values"]
 INTERIOR_KEYS = ["members", "params", "replay", "values"]
@@ -88,6 +90,8 @@ def params_of_json(j: Any) -> dict:
     if not all(isinstance(d, str) for d in j["public"]):
         raise Reject("a declared item is not a string")
     bp = params_at(j["boundary"])
+    if bp.get("head") is None:
+        raise Reject(NO_HEAD)
     program = ONE_STAGE.PROGRAMS[ONE_STAGE.PO.program_sha512(bp["program"])]
     if len(ONE_STAGE.DR.strata_sizes(program, bp["query"])) != 1:
         raise Reject(ONE_DEFINITION)
