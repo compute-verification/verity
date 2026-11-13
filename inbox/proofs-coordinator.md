@@ -132791,3 +132791,65 @@ In plain words. The rows I gave for an inner dimension of 65,536 ran on the fast
 - Everything the second read is for.
 
 One platform note: at 09:25Z this machine handed me twenty completion notices of other workers' sessions. None was mine and I acted on none. The machine was new; my branch and entries were all on the remote and nothing was lost.
+
+## SESSIONOF2, Fri 13 Nov 09:29Z: THE CONGRUENCE COMPILES on its first try (`PartSame.lean`, 35 theorems, three axioms) and `SessionMatch.partition` IS NOW `PartSame`; `Session.lean`, `Accepts.lean` and `MemberChecks.lean` compile with it at `501cfcad28`. Two statements changed (`SessionMatch.partition`, `ReadsBack.partition`), both hypotheses made weaker, neither in a lock
+
+A member's session statement carries its partition object as printed text. When the verifier's parser reads that text back it gets an object with the same keys and values, but the tree that holds an object's keys may have another shape, so the object read back is alike the original and not equal to it. Until now the lemma that ties the model's reading of a session to the compiled check's asked for the two partition objects to be equal, which nobody could prove at a printed statement. It now asks only that they are one object or two alike objects, and I proved that Flock's setup of a session returns the same on two alike objects. So the hypothesis that was open can be had from the parser's read-back theorem.
+
+Branch `cursor/proofs-sessionof-9b17`. Nothing merged into it.
+
+**1. The congruence** (`security/Proofs/Properties/Verity/Sampled/Record/PartSame.lean`, new, 414 lines, at `b41237e216`)
+- [run] `r20261113-090832-daa2`, vy-nebius-cpu-9, `--mem-gb 24`: rc 0. `lean exit 0 in 43 s` (the dependency build and the file together). None of its 35 theorems uses an axiom past `propext`, `Classical.choice`, `Quot.sound`. No warning on its own lines. Siblings: no clash; 870 modules imported, peak 4,413 MB.
+- [run] Tries of the congruence on a node: one, and it passed. Your condition 4 (two failed tries, or a file past about 800 lines) is not met: `PartCong.lean` is 301 lines and `PartSame.lean` 414.
+- [run] I wrote it first on the VM against a scratch copy that imports core Lean only (your 08:55Z yes): one file, 5.9 s, the verifier's functions copied or stubbed there, in no branch.
+- What it states [read: the file at `b41237e216`], all in `namespace Flock.PartCong`, `Same` being `Claims.Json.Same`:
+  - `view_same {a b : Json} (h : Same a b) : view a = view b`.
+  - `def PartSame (x y : Option Json) : Prop := x = y ∨ ∃ a b, x = some a ∧ y = some b ∧ Same a b`, as SESSIONOF wrote it and you ruled.
+  - `PartSame.map_view (h : PartSame x y) : x.map view = y.map view`.
+  - `setupTables_same … {pa pb} (h : PartSame pa pb) … : Stmt.setupTables … pa … = Stmt.setupTables … pb …`, at every other argument.
+  - One per reader, each `Same a b → reader a … = reader b …`: `chkObj_same` (`HmRow.checkPartitionObject`), `digest_same` (`partitionDigest`, from `FlockComplete.JsonRT.canon_same`), `chkPart_same` (`checkPartition`), `tm_same` (`TemplateQuery.templatesOf`), `derive_same`, `qwordUnits_same`, `qcallUnits_same`, `qword_same`, `strata_same`, `strat_same` (`stratifiedLaw`), `work_same` (`workLaw`).
+- [read] `stratifiedLaw` and `workLaw` call the private `templateStrata`. I went through the verifier's public `stratifiedLawWith` and `workLawWith` at `With.std` (`Flock.With.stratifiedLawWith_std`, `workLawWith_std`), so no private name of the verifier is opened.
+- [run] Two `import all` of core modules (`Lean.Data.Json.Basic`, `Lean.Data.Json.FromToJson.Basic`): core does not expose `getStr?`, `getNat?` or `getObjVal?`. `pytest tests/test_lean_packages.py -k import_all`: 2 passed at `501cfcad28`.
+
+**2. For your condition 1: three more restated texts than the three you ruled on**
+- [read] Your ruling covers a second text of `setupH`, `setupHidden` and `setupTables` (`PartCong.lean`). One level down, three readers match on a value that is only alike on the two sides, and I used the same device for each: `chkObjV` for `HmRow.checkPartitionObject` (it matches on the query's `params` being an object and on the values at `version`, `X` and `W`), `tmV` for `TemplateQuery.templatesOf` (on `templates` being an array) and `chkPartV` for `HmRow.checkPartition` (on the rule and the object as a pair).
+- [read] They are held to your condition, and tighter than the first three: each is `private` to `PartSame.lean`, so no other file can name it. Each is the verifier's function by `rfl` in that file (`chkObj_view`, `tm_view`, `chkPart_view`). None of the 14 public theorems' statements names one: every one is about the verifier's own functions and `view`.
+- [read] The other six readers (`deriveTemplateUnits`, `deriveQwordUnits`, `deriveQcallUnits`, `qwordFinding`, `stratifiedLaw`, `workLaw`) read the object by key only. They have no second text: the proof rewrites their own bodies.
+- If you won't have these three, say so. The other way is a walk of those three bodies, which I have not tried.
+
+**3. Statement change one: `SessionMatch.partition`** (at `d93af52c13`)
+- Before (`Sampled/Record/Session.lean:70` at `e7bbad0a46`): `partition : si.read.I.partition = I.partition`.
+- After: `partition : PartSame si.read.I.partition I.partition`.
+- [read] `SessionMatch.read_setup` and `setup_of_setupAt` keep their statements. The first is now proved by `setupTables_same`, the second by SESSIONOF's `checks_none`.
+- [read] The two sites that build a `SessionMatch` say `partition := .inl rfl` where they said `partition := rfl`: `Sampled/Record/Accepts.lean:507` (`ins_sess`) and `SampledTwo/MemberChecks.lean:279`.
+- **Two of the files I edited are not SESSIONOF's.** `Sampled/Record/Session.lean`: the field and the two proofs, which is the change your 06:42Z ruling orders. `Sampled/Record/Accepts.lean`: the one token at line 507, without which that file no longer builds. Against the join at `2fc4e01e46` the two files differ by exactly these lines [run: `git diff --stat`, 16 and 9 lines in the first, one line in the second]. I found no entry of a worker who is editing `Record/Accepts.lean` [read: every mention of the file or of `ins_sess` in the inbox as it stood at 09:26Z; MEMBERS tried it at 06:54Z and changed nothing in it]. If you would rather its line came from someone else, it is that one token and I revert mine.
+- [run] Tries at `d93af52c13`, each `--mem-gb 24`, rc 0, no theorem past the three axioms:
+  - `r20261113-091342-e401`, vy-nebius-cpu-14: `Session.lean`, lean exit 0 in 59 s, 13 theorems, peak 4,816 MB.
+  - `r20261113-091805-2518`, vy-nebius-cpu-3: `Accepts.lean`, lean exit 0 in 120 s, 24 theorems, peak 4,953 MB.
+  - `r20261113-091805-6151`, vy-nebius-cpu-3: `MemberChecks.lean`, lean exit 0 in 229 s, 11 theorems, peak 4,355 MB.
+- [run] Only those two files import `Record/Session.lean`, on this branch and on the join.
+
+**4. Statement change two: `ReadsBack.partition`**, in SESSIONOF's `SampledTwo/MemberChecks.lean` (at `501cfcad28`, compiled)
+- Before: `partition : w.partition.mapM (FlockDeploy.jsonOf "partition") = .ok (some m.own.partition)`.
+- After: `partition : ∃ P, w.partition.mapM (FlockDeploy.jsonOf "partition") = .ok P ∧ PartSame P (some m.own.partition)`.
+- [derived] This is the hypothesis the member lemma takes of a statement, and the reason for the whole restatement: as an equality it cannot be proved at a printed statement. The new form follows from the old one (`⟨_, h, .inl rfl⟩`). It also follows from the read-back theorem `FlockComplete.JsonRT.parse_print (j) (h : Good j) : ∃ j', parse (printJ j) = .ok j' ∧ Same j j'`, as `⟨some j', _, .inr ⟨j', _, rfl, rfl, hs.symm⟩⟩`.
+- [read] `ins_of_fields` keeps its statement and hands the hypothesis to `SessionMatch.partition`.
+- [run] No file imports `MemberChecks` on the join at `2fc4e01e46`, so nothing else reads `ReadsBack`.
+- [run] `r20261113-092340-07ed`, vy-nebius-cpu-3, `--mem-gb 24`, rc 0: `MemberChecks.lean` at `501cfcad28`, lean exit 0 in 189 s, none of its 11 theorems past the three axioms, no warning on its lines, peak 4,979 MB. The two commits' subjects still say "not compiled": they were pushed before their tries, as the brief has it.
+
+**STOP RULE.** Not met. [run] `SessionMatch` and `ReadsBack` are named in none of `security/Proofs/lean-audit.json`, `security/lean-audit.json`, `security/Properties/lean-audit.json` at `d93af52c13` and at `501cfcad28` (`rg -c`, no match in any). Both changes make a hypothesis weaker: the old form gives the new one by `.inl rfl`. No verifier code is touched, and no named assumption.
+
+**NEEDS.**
+- Coordinator: your word on the three extra restated texts (section 2) and on my one token in `Record/Accepts.lean` (section 3).
+- HELDOF (`memberRaw`, `HeldOfFiles`): `ReadsBack.partition` at the printed statement is now `parse_print` at the member's partition object, given that the object is `Good` and that the printed text's bytes read back as its string. I have not proved either; they are yours or whoever you name.
+- ASSEMBLY, when the coordinator says to take `-9b17` again: the head adds two `roots` lines (`Record.PartCong`, `Record.PartSame`) in `security/Proofs/lakefile.toml` and the lock, and touches `Record/Session.lean` and `Record/Accepts.lean:507`. The head to take is `501cfcad28`.
+
+**To post.** Nothing.
+
+**Not established.**
+- No records run or Lean check at this head: I ran tries of the four files I changed (five tries, sections 1, 3 and 4), and nothing else. A listed guarantee whose proof reads `setup_of_setupAt` keeps its statement [derived: the two theorems' statements are unchanged], but no run of mine replayed one.
+- That `ReadsBack` holds at `memberRaw` (the NEEDS line for HELDOF).
+- The unread ratchet's entry for the two new modules: not looked at.
+- `PartSame.lean`'s own elaboration time: the 43 s include the dependency build.
+
+**Heads, all pushed.** `cursor/proofs-sessionof-9b17` `501cfcad284932b33031210260232a0e85efb6e3`. `cursor/proofs-sessionof2-7c3a` `d45f63a86c22e58989d6c0e88ab7309fe0a58c76` (unchanged, on the join). `cursor/proofs-sessionof-5c1e` `521933e1430b7b404142adfafbba82b0aed0fba5` (untouched).
