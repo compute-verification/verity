@@ -112,8 +112,8 @@ from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.batch import type_shape
-from verity.definitions.ops import gemm as CG
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops import gemm as CG
+from verity.circuits.ops.boolean import gemm as BG
 from verity.definitions.registry import cublas_bf16 as CB
 from verity.definitions.registry import ll_bf16 as LL
 

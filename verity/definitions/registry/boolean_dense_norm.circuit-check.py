@@ -10,7 +10,7 @@ def _boolean_roots() -> list[Any]:
     chunks, one element per thread), the narrowing at N = 16, and the rsqrt with its MUFU at the word id and at mufu's
     `RsqrtApprox_v2`."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import mufu as BM
+    from verity.circuits.ops.boolean import mufu as BM
     from verity.definitions.registry import boolean_dense_norm as DN
     from verity.definitions.registry import prims as P
 

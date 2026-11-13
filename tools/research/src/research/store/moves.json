@@ -2354,6 +2354,18 @@
         "verity/difftest/": "tools/difftest/",
         "verity/difftest/lean/": "verity/circuits/difftest/"
       }
+    },
+    {
+      "paths": {
+        "verity/definitions/ops/": "verity/circuits/ops/",
+        "verity/definitions/silicon/": "verity/circuits/silicon/",
+        "verity/definitions/kernels/": "verity/circuits/kernels/",
+        "verity/definitions/private_circuits/": "verity/circuits/private_circuits/",
+        "verity/definitions/word.py": "verity/circuits/word.py",
+        "verity/definitions/cross_call.py": "verity/circuits/cross_call.py",
+        "verity/definitions/call_scope.py": "verity/circuits/call_scope.py",
+        "verity/definitions/tiny.py": "verity/circuits/tiny.py"
+      }
     }
   ]
 }

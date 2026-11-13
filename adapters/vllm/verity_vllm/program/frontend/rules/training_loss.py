@@ -10,7 +10,7 @@ import torch
 from verity.circuits.defs import bind
 from verity.circuits.refs import Affine, Coll, Strided, broadcast
 from verity.circuits.types import Array, Value
-from verity.definitions.ops import scalar as SC
+from verity.circuits.ops import scalar as SC
 from verity.definitions.registry import prims as P
 from verity.definitions.registry import ref_prims as R
 from verity.definitions.registry import torch_embedding_f32 as TEF

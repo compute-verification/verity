@@ -275,7 +275,7 @@ def definition(spec: str):
     """The registered specialization a Definition id names (``Fam_vN{K=V,...}``, each value a Python literal or else a
     registered Definition's id)."""
     from verity.definitions.registry.catalog import load as load_registry
-    from verity.definitions.call_scope import specialization
+    from verity.circuits.call_scope import specialization
     load_registry()
     fam, _, body = spec.partition("{")
     statics, depth, cur = {}, 0, ""

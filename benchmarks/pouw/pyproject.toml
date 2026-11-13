@@ -51,7 +51,7 @@ untraced = [
 # difftest harness, vLLM's integration and `research`, what the
 # tests import, in place of those trees; the Lean the served challenger's `lake build` reads is keyed by the binaries it
 # builds (`artifacts`), and the C++ the tests compile is this suite's own but for the SHA-512 pearl_c/sha512.cuh includes
-# (verity/definitions/kernels/sha512.cuh). verity/protocols/pouw/receipts, filler and
+# (verity/circuits/kernels/sha512.cuh). verity/protocols/pouw/receipts, filler and
 # machine_model are suites of their own, which this suite's tests read (test_receipts_adopters, test_opcode_probe),
 # so they're named here. The theory scripts (`theory/`) import the exact kit's package. test_dither_a_step_chunks
 # imports dither_one (and forms.py through dither_fused) on the CPU. test_contents reads the README,
@@ -80,7 +80,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/pouw/prover", "verity/protocols/certifier/prover",
           "verity/protocols/certifier",
           "tools/difftest", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
-          "verity/definitions/kernels", "verity/commitments/randomness", "verity/protocols/flock/prover/python", "verity/commitments/windows",
+          "verity/circuits/kernels", "verity/commitments/randomness", "verity/protocols/flock/prover/python", "verity/commitments/windows",
           "verity/hardware/__init__.py", "verity/hardware/cards",
           "tools/config/verity_config",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
@@ -176,7 +176,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "benchmarks/served_units/summarize.py", "benchmarks/harness/verity_bench/overhead.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/settings.py",
           "adapters/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
           "adapters/vllm/verity_vllm/protocols/pouw/h1/words.py", "verity/definitions/circuits",
-          "verity/definitions/ops", "verity/definitions/silicon", "verity/protocols/__init__.py",
+          "verity/circuits/ops", "verity/circuits/silicon", "verity/protocols/__init__.py",
           "verity/protocols/pouw/__init__.py", "benchmarks/datacenter/datacenter", "verity/hardware/registration.py",
           "verity/protocols/poub/__init__.py", "verity/protocols/poub/verifier/__init__.py",
           "verity/protocols/poub/verifier/codec.py", "verity/device.py",
@@ -223,7 +223,7 @@ paths = ["benchmarks/machine_model/verity_machine_model", "benchmarks/pouw/opcod
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_ffill.py"]
-paths = ["verity/definitions/ops"]
+paths = ["verity/circuits/ops"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_h1_prove_live.py"]
@@ -241,7 +241,7 @@ paths = ["benchmarks/pouw/hidden_zk"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pearl_c_sm120.py", "tests/test_pearl_c_sm90.py"]
-paths = ["verity/protocols/pouw/verifier/tests", "verity/definitions/kernels"]
+paths = ["verity/protocols/pouw/verifier/tests", "verity/circuits/kernels"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pearl_c_sm90_grouped.py"]
@@ -261,4 +261,4 @@ paths = ["verity/protocols/pouw/verifier/lean/check/tests"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_theory_cpw.py"]
-paths = ["verity/protocols/pouw/verifier", "verity/circuits", "verity/definitions/kernels"]
+paths = ["verity/protocols/pouw/verifier", "verity/circuits", "verity/circuits/kernels"]
