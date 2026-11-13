@@ -124096,3 +124096,111 @@ In plain words. The conjecture in pull request #9577 says that no program of W1 
 - It is not introduced by #9577: the same program runs on `main`'s `W1Device.h100`. [derived]
 
 **Not established.** The program's cost is my count against W1.lean's prices, with no W1 interpreter behind it; the margin at 8192³ is 32 units a word (0.31%), so an instruction I missed that costs more than that per word would undo this shape, though not the larger ones. The tile was formed by the census's mirror of §5 with its own random lines, not by the scheme's SHA-512 lines; one tile, one seed. The named classes of item 1 (first-promotion skip, cross-group joint skips, scalar paths, INT8 fragments) are not yet rated. Next: the same check through `pearl_c.PearlC` itself with SHA-512 lines, three seeds, and k = 16,384 and 65,536, each through `research run`; then the four named classes.
+
+## WINDOWAT, Fri 13 Nov 06:06Z: all three facts soundness's window theorem takes of the verifier are now proved of the per-member form and the theorem applies to them (`soundnessAt_form` compiles, three axioms), with five premises left, one of them each member's `Commit.Ready`; #9576's READY LINE is below at `338c4ad877ca`, its records run and its whole quick tier still in flight; no statement the join reads changed
+
+Mailbox read at `d56a0ecd44` (06:00:52Z); my last message there is yours of 05:50Z. No `~/wt/.pen` on this machine. Branch `cursor/proofs-windowat-5e4b` at `d5e1f0d288`, pushed.
+
+**In plain words.** Soundness's theorem for a window of several members asks three things of the verifier. Two were compiled at 05:20Z. The third (what the claim reads of the window, and row A33 under it) compiles now, and I applied soundness's theorem to the three to see that they fit: they do. What the result still takes as given is listed below in one statement. All of it is true and empty today: the parameters the verifier parses name no members, so it sets up no window of members, and every theorem here says nothing about an accepted play until the per-member form accepts parameters that name members.
+
+### READY LINE: #9576 at `338c4ad877cacfeb8f0c79c904d9d168d944d2a9`
+
+`cursor/proofs-windowat-undrawn-5e4b`, https://github.com/compute-verification/verity/pull/9576, base `main`, open, no label, unmarked; `Lane proofs`, `Refs PRF-371`. [read: `gh pr view`, 05:58Z] The mark is yours.
+
+- **What it holds.** #9441's head `51a2e803cb83` is its ancestor [run: `git merge-base --is-ancestor`]. Over that head its own change is 6 files, +151/−26: the refusal in `Spot/OneStageZk.lean` and `Spot/MembersParse.lean`, the same refusal at the same place in the Python (`one_stage/members.py`), and three test files.
+- **What ran at that commit, done** [run `r20261113-042849-610e`, rc 0, 04:29Z to 04:58Z, vy-nebius-cpu-9; its source tree is the head's, `7d7555836d`]: `verity lean try` on `Spot/OneStageZk.lean` (18 theorems), `Spot/MembersParse.lean` (no theorems) and `Spot/MembersRefusal.lean` (3): each compiles on `propext`, `Classical.choice` and `Quot.sound` alone. Then the two suites the change's files are in, quick tier: `verity/protocols/spot/verifier` 913 passed, `verity-core-sampled-proofs` 317 passed and 2 skipped; 2 suites passed, 0 failed.
+- **The ratchet gate** [run on the VM, 05:48Z]: `ratchet_gate.py 51a2e803cb83 338c4ad877ca`: 1 change, 0 failed. Against `origin/main` it fails on 9 retired-term sites, all in #9441's commits [run, 05:10Z]; #9441 was marked with them [relayed, your 05:39Z].
+- **Against `main`** at `b843a10af48a` (04:49Z): it merges with no conflict [run: `git merge-tree`, rc 0]; GitHub says `MERGEABLE` [read].
+- **Its body is replaced** (05:49Z, `research queue edit 9576 --body-file`): the old one said the Python was not there and that the pull request was not ready to mark; both were stale since `338c4ad877`. The body now says what the head holds and what ran at it.
+- **The lock.** No lock file is among its own 6 files. `runMembers` changes and three definitions are new in `Spot.OneStageZk`, so the records that read that module move, #9441's among them; the candidate's records run regenerates them. [derived]
+- **Not done yet, in flight.** Your 05:50Z ends with lean's rule "no ready line before a records run of `security/Proofs` passes at the head". This pull request adds no file under `security/Proofs`, and nothing in `security/` names `runMembers`, `membersRun`, `membersHeld`, `membersFiles` or `sampledHeld` at its head [run: `rg`, only the three `Spot/` files and one docstring], so I read the rule as not holding this line; you decide. Both runs are launched either way:
+  - `r20261113-055558-8c61` (vy-nebius-cpu-8, started 05:57Z, at once): `lean_changed.py --records verity/protocols/spot/verifier/lean --update`. At 06:02Z it had printed `AUDIT … certifier/verifier/lean: PASS` and goes on to the other requirers. Expected end about 07:00Z [guess, from CROSSCLOSE's 64 minutes].
+  - `r20261113-054307-ec73` (vy-nebius-cpu-1, started 05:43Z, at once): the pre-mark tier over the whole diff from `main`, `suites.py --changed 4a7291116e11 --quick`: 75 suites, #9441's among them. Two had passed at 06:02Z. Expected end about 07:15Z [guess].
+- If you mark before they end and one of them comes back red, I say so in an entry's title the same turn.
+
+### What compiled this hour [run]
+
+| Run | Machine, wait | Tree | Verdict |
+| --- | --- | --- | --- |
+| `r20261113-052150-348e` | cpu-12, started at once | `48ba498185` | rc 0, 05:22Z to 05:46Z. The 22 earlier files under `MemberForm/`, the aggregator and `Proofs/Core/QSortPerm.lean`, each "none of its N theorems uses an axiom beyond propext, Classical.choice and Quot.sound": 203 theorems in all. A28 whole at one head, after the merge of MEMBERS' subset branch. |
+| `r20261113-054702-6add` | cpu-12, at once | `cbed6a42df` | rc 1. `OpensOwn.lean`: 7 theorems, three axioms. `ClaimReads.lean`: refused at its first two lemmas for a binder named `X`, which is a token in this package. |
+| `r20261113-055226-4bb3` | cpu-12, at once | `41f1315f36` | rc 0. `ClaimReads.lean`: 7 theorems, three axioms. The aggregator compiles. |
+| `r20261113-060059-a087` | cpu-12, at once | `d5e1f0d288` | rc 0, 06:01Z to 06:04Z. `Leg.lean`: 2 theorems, three axioms. The aggregator compiles with all 26 files. |
+| `r20261113-034225-11e6` | vy-nebius-2 | `407876aa6f` (old) | rc 1 at 05:40Z, on soundness's `Window/Instance.lean` as it stood before `50b624bb89`. Superseded by `ca27`; nothing to do. |
+
+### The three facts, and what is left
+
+`WindowInstance.spotSound` and `remote_soundness_window` (soundness's, `Window/Instance.lean:649` and `:683`) take `ClaimReads`, `WindowAt` and `WindowReads`. [read]
+
+- `WindowAt`: `windowAt_form` (compiled 05:15Z, `ca27`).
+- `WindowReads`: `windowReads_members` (same).
+- `ClaimReads`: **`claimReads`** in the new `MemberForm/ClaimReads.lean` [run `4bb3`]:
+
+```lean
+theorem claimReads (I : WindowInstance d α) (K : WindowConstructions I.base)
+    (hready : ∀ θ F W, I.windows θ F = some W → ∀ m ∈ W.ms, Commit.Ready m.D m.hU m.n {} m.pub) :
+    I.ClaimReads K
+```
+
+  Its four clauses: `laid`, `share`, `units` are `MembersSetUp`'s; `reads` is the recursion over the members (`readsWith_of`), each member `Checked` (soundness's `MembersSetUp.checked`), its openings from row A33 (`MembersSetUp.opensWith`, new `MemberForm/OpensOwn.lean` [run `6add`]) and its constants (`constsWith_read`, compiled earlier).
+- **The `trace` clause is in it.** The brief gave `trace` to soundness (`extract`). Soundness has since defined the extracted transcript as the seats' traces side by side (`tracesWith`), so the clause is a fact about that definition and I proved it with the rest: `traceLeft_beside`, `traceRight_beside`, `seat_trace_heq`. Nobody else had it [read: the join at `853e655a69` and soundness's branch at `50b624bb89` state `ClaimReads` and prove it nowhere]. If soundness has it in a file I have not seen, mine goes.
+- **The fit** [run `a087`]: `MemberForm/Leg.lean` applies soundness's two theorems to the three. It is listed in no lock.
+
+```lean
+theorem soundnessAt_form (I : WindowInstance d α) (K₀ : WindowConstructions I.base) (reg) (record₀) (recordDigest)
+    (hW : I.WindowRegistered) (hF : FormAccepts) (hA : FormApart) (hR : RegisteredHolds I.base)
+    (hready : ∀ θ F W, I.windows θ F = some W → ∀ m ∈ W.ms, Commit.Ready m.D m.hU m.n {} m.pub)
+    (hP : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
+    (I.vocab (I.constructionsAt K₀ .remote reg sentEvidenceAt (statementFiles statementTable) record₀
+      recordDigest)).SoundnessAt .remote
+```
+
+**The five premises left about the verifier and the instance** (the last two lines of the statement are the base's other two legs):
+
+1. `I.WindowRegistered` (soundness's, `Window/Instance.lean:584`): the instance's window is the parameters' members on the registered files. Whoever builds the instance shows it. Not mine.
+2. `FormAccepts` (`Accept.lean:52`): an accept of the form holds `MembersAccept`. Today `formAccepts_refused` proves it because the form refuses. Once the form accepts it is S8's lift (MEMBERS).
+3. `FormApart` (`Apart.lean:160`): an accept's members share no unit. Today `formApart_refused`; `paramsEitherOfJson_apart` (compiled) is what gives it once the accept's parse reads either form.
+4. `RegisteredHolds I.base` (`Registered.lean:92`, your guarded form of 04:50Z): the registered files hold each member's file. No check reads the auditor's files for a window (my 04:24Z finding), so it stays a premise on the vocabulary.
+5. `Commit.Ready` of each member: see the next section.
+
+### A33: what `Commit.Ready` still takes, and where its discharge is
+
+- [read: `Sampled/OpensAt.lean:96-260` on my base] `Commit.Ready` has five clauses: `rows`, `domain`, `leaves`, `roots`, `width`. The files check gives `domain` (`Commit.domain_of_ports`). `FilesPass.ready` in `OpensOwn.lean` states exactly that: the other four in, `Commit.Ready` out.
+- [read: `origin/cursor/soundness-prf579-8fb2` at `f2ad3178f5`, #9475, open] There soundness has discharged the other four from the ports check: `OpensReady` is one clause (`ports`), with `OpensReady.roots`, `.words`, `placeOf_words`, and an `opens_rowLeaf` that needs no `rows` or `leaves`. It is stated over `Live`, the one-session carrier. #9520 restated the same file over `Commit D hU n pi pub`.
+- [run: `git merge-tree`, 05:46Z] The two branches of soundness conflict in that one file, `Sampled/OpensAt.lean`: "6 conflict(s) beyond import lists" (and `pous/lean/TRUSTED.sha256`). The same against my head.
+- [derived] Once that file is one, with `Commit.Ready` the single `ports` clause, every member has it from `FilesPass.ports`, `hready` goes from `claimReads`, `spotSound_form` and `soundnessAt_form`, and A33 is whole. For a member every input #9475's proofs read exists already: `m.ht`, `m.hTags`, `m.hD`, `m.hpub`, `FilesPass.loads`, `.distinct`, `.ports`.
+- I did not copy the four proofs into a file of mine: that would be a second proof of one layer, in a file that is soundness's to reconcile.
+
+### The lock's roots (your 05:29Z rule to MAJORITY, lean's line in your 05:50Z)
+
+- [run: a script over the lock's `roots` and every `import` line, at `41f1315f36`] No `.lean` file under `security/Proofs` is unreached on my branch: 194 roots reach 4,108 modules, 0 orphans. My files were reached through the aggregator `Proofs.Properties.Verity.Sampled.MemberForm`, which was a root already.
+- The rule says a name for each new file, so I added them: 25 names at `61f3d467a1`, and `MemberForm.Leg` with its file at `d5e1f0d288`, appended at the end of `roots`, one a line. [run] The lock differs from the one before in `roots` only (compared as JSON, section by section).
+- A records run of `security/Proofs` at `61f3d467a1`: `r20261113-055755-5849` (vy-nebius-cpu-5, started 05:58Z). At 06:02Z it was waiting for one of that node's two Lean audit slots, 3 minutes so far. It audits the 25 files, not `Leg.lean`. I commit none of the records it regenerates. No ready line is asked for this branch; the run is to see my files under the audit and not only under tries.
+
+### Memory (your 05:50Z, item 2) [run: each run's `resources.jsonl`]
+
+My tries ask 16 GB. A try of one or two files held 4.6 to 7.1 GB (`4bb3`, `6add`, `610e`). The sweep `348e`, which rebuilt the dependencies after a merge, peaked at 36.7 GB summed over its processes. From now a sweep after a merge asks 40 GB; a one- or two-file try stays at 16.
+
+### Size against the merged tree, for 18:00Z [run: `git diff --diff-filter=A` against soundness's `50b624bb89`, `wc`, `rg`]
+
+26 files added under `security/Proofs` (25 under `MemberForm/`, and `Core/QSortPerm.lean`), 5,463 lines, 219 theorems; the aggregator `MemberForm.lean` changed. All 26 have compiled with the three axioms only: 23 at one head in `348e`, three in `6add`, `4bb3`, `a087`. First statement compiled: Thu 12 Nov [my entries of that evening]. The whole (`soundnessAt_form` over the three facts): compiled Fri 13 Nov 06:03Z, a day and a half before A28's hour, under the five premises above.
+
+### To post
+
+To soundness (PRF-490), three lines:
+
+1. `ClaimReads` is proved at the per-member form's windows, `trace` clause included: `Verity.Sampled.MemberForm.claimReads` on `cursor/proofs-windowat-5e4b` at `d5e1f0d288` (`MemberForm/ClaimReads.lean`, over `MemberForm/OpensOwn.lean`); `MemberForm/Leg.lean` applies `spotSound` and `remote_soundness_window` to it with `windowAt_form` and `windowReads_members`. Take them or tell WINDOWAT what to change.
+2. Its one hypothesis is `Commit.Ready` of each member. #9475 (`f2ad3178f5`) and #9520 (`50b624bb89`) conflict in `Sampled/OpensAt.lean` (6 conflicts). When you make that file one, state `Commit.Ready` as the single `ports` clause with #9475's four discharges over `Commit`; then `FilesPass.ports` gives it for every member and the hypothesis goes.
+3. `Window/Instance.lean` at `50b624bb89` builds as written (`ca27`, repeated in `348e`'s dependencies and `a087`).
+
+### Not established
+
+- Whether any of this says anything about an accepted play: it does not, until the per-member form accepts parameters that name members. `ParamsAt` reads `OneStageZk.paramsOfJson`, which names none.
+- `Commit.Ready` beyond its `domain` clause, for any member: hypothesis.
+- `WindowRegistered`, `RegisteredHolds`, and `FormAccepts` and `FormApart` at a form that accepts: hypotheses.
+- The records runs `8c61` and `5849` and the tier `ec73`: not back.
+- Whether lean's records rule holds #9576's line: your call.
+- No kernel replay and no `check.py` of `security/Proofs` has read these files; the tries' axiom probes stand for them.
+- The twin's row for the link-first refusal waits on soundness merging `1ca22d7e7e`. Your note on the twin branch (`af8682dc824e`, keep both paragraphs) is taken; `338c4ad877` already holds that resolution.
+
+I go on with the two records runs and the tier. If nothing is left to write when I reach them, I checkpoint and end the turn with one timer.
