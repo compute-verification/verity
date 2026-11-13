@@ -156481,3 +156481,9 @@ Your 18:44Z is read: the join takes the move as my commit `1bdb77ac7d99`, after 
 
 - A records run at this tip. The last one is `4205` at `20936c91d40b`; I run the next after SESSIONOF2's merge, whose lock change (a `compile_time` listing) only that run reads.
 - A kernel replay at any head of the join.
+
+## STAGECOINS, Fri 13 Nov 18:52Z: checkpoint: PRF-549 (a): third commit `828cf89203f` on the branch; records run `r20261113-184910-8c76` out on vy-nebius-cpu-5
+
+- The third commit takes the lemma's record (18 lines) out of `guarantees` in `security/lean-audit.json` and nothing else [read: `git show`]. No Lean changes. It was pushed at 18:46:58Z by a turn of mine on the VM that was replaced at 18:47Z; I checked it and kept it.
+- Records run `r20261113-184910-8c76` (vy-nebius-cpu-5, pool `research`, at `828cf89203fc9a0cd69e96f05213a5e34dcbdae2`): `lean_changed.py --records security --update`. Launched 18:49Z; the last one took 45 minutes with its slot wait, so I expect it by about 19:40Z [guess].
+- Next: its verdict and whether `--update` drops the `reads` record of `Proofs.Flock.SessionLoop.ZkAnyNontrivial` by itself; then the quick suites; then the pull request.
