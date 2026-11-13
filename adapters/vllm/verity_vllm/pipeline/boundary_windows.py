@@ -75,6 +75,18 @@ def _built(layout: Layout, kept: dict[int, tuple[SpecializedDefinition, dict[int
     return layout
 
 
+def _greedy_select(t: str) -> bool:
+    """Whether serving template ``t``'s check is the greedy select: read from the Definition ``t`` names, as
+    `Layout.logit_rows` reads it, never from how ``t`` is spelled. A ``t`` that names no Definition is not."""
+    from verity.definitions.registry import greedy_stages as GS
+
+    try:
+        fn = check_template(t)
+    except (LookupError, ValueError):
+        return False
+    return getattr(fn, "defn", None) is GS.GreedySelect
+
+
 class BoundaryWindows:
     """The serving path's boundary commitment, on one scheduler (`install`): every request it adds (`admit`), the ids
     each step serves it (`served`) and the requests it finishes from outside a step (`finished`: an abort). A window
@@ -139,7 +151,7 @@ class BoundaryWindows:
         if cfg.get("verdicts") and cfg.get("ids"):
             raise ValueError(ONE_RETURN)
         lc = cfg.get("logits")
-        if lc and not (cfg.get("ids") and cfg.get("inline") and t.startswith("GreedySelect_v1{")
+        if lc and not (cfg.get("ids") and cfg.get("inline") and _greedy_select(t)
                        and int(cfg.get("per_prompt", 0)) == 0 and int(cfg.get("per_output", 1)) == 1):
             raise ValueError(f"the logits a class's ids were selected from are committed where it commits its ids (ids) "
                              f"and its check is GreedySelect_v1 inlined, one instance an output, not {t}")
