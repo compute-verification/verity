@@ -96,6 +96,12 @@ Until a served audit has sampled a stop block the server chooses that count, whi
 
 The command refuses a record nothing carries and a scope two unsuperseded runs both hold, and says how to label it.
 A run of record that is superseded, or holds no rows of the case, is left out and listed under "Refused".
+
+Under a research run, a runner that names metric ids for the figures (`benchmarks/exfiltration/run.py`'s `METRICS`)
+has `record` write them through the harness kit (`measurements`): the headline figure, the compute audit's part and
+the network certifier's, each over the world's year at the share, with its mark at the head of its first input and its
+error over the world's year in the next, the document as `DOCUMENT` and what ran in the fingerprint. What it prints is
+the same in a run as outside one.
 """
 
 from __future__ import annotations
@@ -112,7 +118,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from verity_bench import jobs, spot_status
+from verity_bench import jobs, kit, settings, spot_status
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, record_runs, records
 
 SCHEMA = "exfiltration/v3"
@@ -268,6 +274,11 @@ NUMERALS = {"T": "calls a run", "e": "reruns a session (e_s)", "Ns": "sessions (
 LEAN_BOUND = "CompiledTwo.eventTwoX_le_cls_at_budget"
 #: printed where no Lean theorem gives a number at a design's sizes
 NOT_PROVED = "not proved at these sizes"
+#: the figures a runner records under a research run (`record`), each over the world's year at the share: the one the
+#: command calls the headline, the compute audit's part and the network certifier's
+FIGURES = ("headline", "compute_audit", "network_certifier")
+#: the document a run's result keeps beside its measurements, relative to the run's directory
+DOCUMENT = "out/exfiltration.json"
 
 
 def _load(root: Path, directory: str, module: str) -> Any:
@@ -707,6 +718,9 @@ def certifier(root: Path, response_ids: int = RESPONSE_IDS, scan_delta: Fraction
                              "term of record, its rows' terms by jitter bound, their ε and their labels may mean "
                              "something else (read the new document in benchmarks/harness/verity_bench/exfiltration.py "
                              "and name its schema there)")
+        if off := sorted(name for name, k in doc["legend"].items() if k.get("mark") not in (None, *MARKS)):
+            raise ValueError(f"the network certifier's rows {', '.join(off)} carry a mark this command doesn't print: a "
+                             f"row's mark is one of {', '.join(MARKS)}")
         return doc
 
     how = "given (--scan-delta)"
@@ -1428,7 +1442,8 @@ def render(doc: Mapping[str, Any]) -> str:
         f"row whose name carries it, is printed only under the network certifier's label, \"{card}\". The entries are "
         "the compute side's. Each row carries the δ of its scans and its ε over the world's year, their sum over every "
         "link's execution phases; a row whose ε is 1 or more has no amount.", "",
-        *(f"- {name} ({k['standing']}): {k['counts']}" for name, k in cert["legend"].items()), "",
+        *(f"- {name} ({'; '.join(filter(None, (k['standing'], k.get('mark'))))}): {k['counts']}"
+          for name, k in cert["legend"].items()), "",
         *_table(("row", "schedules, GB", "cells, GB", f"term at D_j = {of}, GB", "x weights",
                  f"term at D_j = {set_time} {card}, GB", "entries, GB", "scan's δ", "ε"),
                 [(r["row"] + (f", {r['with_set_time_card']}" if r["with_set_time_card"] else ""),
@@ -1482,8 +1497,76 @@ def render(doc: Mapping[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """`verity bench exfiltration`: print the two parts (`render`), or with ``--json`` their document (`build`)."""
+# ---- the result ------------------------------------------------------------------------------------------------------------
+
+
+def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dict]:
+    """The kit writer's measurements of a document (`build`), one a metric id of `metrics`: the figure of `FIGURES`
+    its value names, over the world's year at the document's share, in GB. Each has its `mark`, which also heads its
+    first input, then its error over the world's year (the compute audit's δ; the network certifier's ε at its scans'
+    δ; the headline's, the compute audit's part, its δ), then the runs of record it read. The network certifier's part
+    is modeled, with the mark its calculator gives the `scan` row where it gives one; where its ε is 1 or more it has no
+    value, and `NO_BOUND` with that ε is its why."""
+
+    if bad := sorted(set(metrics.values()) - set(FIGURES)):
+        raise ValueError(f"no figure of the document is named {', '.join(bad)}: a metric records one of {', '.join(FIGURES)}")
+    share, cert = doc["share"], doc["certifier"]
+    head = next(p for p in doc["compute_audit"] if p["scope"] == "world year")
+    year = next(p for p in doc["periods"] if (p["compute"], p["period"]) == ("world", "year"))
+    unit = f"GB a world year at {_pct(share)} of compute"
+    label = doc["label"] or head.get("note")
+    audit = (f"the planner's row `{doc['row']}`{f', {label}' if label else ''}, read where its total is {_pct(share)} of "
+             f"compute, β = {_part(head['beta'])}{'' if head['inside'] else ' (extrapolated)'}: λ = {_n(head['lambda'])} "
+             f"times its bound, {_n(head['bound']['GB'])} GB")
+    delta = f"its error: δ = {_n(head['delta'])} over the world's year, the compute audit's"
+    scan, eps = cert["legend"]["scan"].get("mark"), year["eps"]
+    term = (f"the network certifier's term of record, its `scan` row {TOGETHER['scan']} at D_j = {cert['of_record']}, on "
+            f"an assumed class of at most {_n(cert['response_ids'])} ids a response")
+    error = (f"its error: ε = {_p(eps)} over the world's year, at a scan's δ of {_p(cert['scan_delta']['value'])} "
+             f"({cert['scan_delta']['mark']})")
+    runs = list(doc["runs"])
+    figures = {"headline": (doc["value"], doc["status"], f"{doc['status']}: the headline figure, {audit}", delta, runs),
+               "compute_audit": (year["compute_audit"]["GB"], "modeled", f"modeled: the compute audit's part, {audit}",
+                                 delta, runs),
+               "network_certifier": (year["together"]["scan"]["certifier_GB"], "modeled",
+                                     f"modeled{f' ({scan})' if scan else ''}: {term}", error, [])}
+    out = []
+    for name, figure in metrics.items():
+        value, mark, said, err, read = figures[figure]
+        m = {"name": name, "value": value, "unit": unit, "mark": mark, "inputs": [said, err, *read]}
+        out.append(m if value is not None else m | {"why": f"{NO_BOUND}: ε = {_n(eps)} over the world's year"})
+    return out
+
+
+def record(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> None:
+    """Writes a document (`build`) into this research run's result (`kit.writer`): the document as `DOCUMENT`, named a
+    measurement file and the validation's evidence, what ran in the fingerprint, `measurements` under `metrics`' ids,
+    and the validation: the checks `build` refuses a document without, which it passed to be written."""
+
+    writer = kit.writer(settings.RESEARCH_RUN_DIR)
+    kept = writer.out / DOCUMENT
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    kept.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    head = next(p for p in doc["compute_audit"] if p["scope"] == "world year")
+    cert = doc["certifier"]
+    writer.fingerprint(benchmark="exfiltration", row=doc["row"], step=head["step"], variant=doc["variant"],
+                       share=doc["share"], network_check_share=doc["network_check"]["share"],
+                       response_ids=cert["response_ids"], scan_delta=cert["scan_delta"]["value"],
+                       served_run=doc["compute_share"]["run"], runs=list(doc["runs"]))
+    writer.measurement_file(DOCUMENT)
+    for m in measurements(doc, metrics):
+        # the kit takes no `mark` yet: it heads the first input, where the Metrics tab reads it
+        writer.measurement(**{k: v for k, v in m.items() if k != "mark"})
+    writer.validation("passed", "verity_bench.exfiltration.build",
+                      "the two parts cover the same GPU-seconds and requests over every scope both hold, and the same "
+                      f"weights; each of the {len(doc['inputs'])} inputs carries one of {', '.join(MARKS)} with its "
+                      "source", [DOCUMENT])
+
+
+def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = None) -> int:
+    """`verity bench exfiltration`: print the two parts (`render`), or with ``--json`` their document (`build`).
+    `metrics`: a runner's metric ids, each for the figure of `FIGURES` it names, which under a research run
+    (`RESEARCH_RUN_DIR` set) `record` writes into the run's result; the print is the same."""
 
     ap = argparse.ArgumentParser(
         prog="verity bench exfiltration",
@@ -1533,6 +1616,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         shown = served_row.account(served)
     if shown is not None:
         doc["served_run"] = shown
+    if metrics and settings.is_set("RESEARCH_RUN_DIR"):
+        try:
+            record(doc, metrics)
+        except (ValueError, OSError) as e:
+            print(f"verity bench exfiltration: {e}", file=sys.stderr)
+            return 2
     print(json.dumps(doc, indent=1, ensure_ascii=False) if a.json else
           render(doc) + ("" if shown is None else "\n\n" + served_row.render(shown))
           + "\n\n" + spot_status.render(doc["spot_holes"]))

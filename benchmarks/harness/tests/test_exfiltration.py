@@ -1587,6 +1587,107 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     assert code == 2 and "no planner rows of record: nothing in the store carries" in err
 
 
+def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_the_same(tmp_path, monkeypatch, capsys):
+    """Under a research run, `verity bench exfiltration` writes run.py's metrics into the run's result through the kit:
+    the headline figure, the compute audit's part and the network certifier's, each over the world's year at the share
+    in GB, its mark heading its first input and its error over the world's year in the next, then the runs of record
+    it read; the document as its evidence and what ran in the fingerprint. What it prints is the same in a run as
+    outside one, where it writes nothing. Where the network certifier's ε is 1 or more its part has no value, and says
+    why."""
+
+    s = recorded(tmp_path)
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "reader"))
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(s.config))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261113-000000-0000")
+    monkeypatch.setattr(E.spot_status, "commit_known", lambda root, commit: False)
+    monkeypatch.setattr(E.spot_status, "LOCK", Path(__file__).parent / "fixtures" / "spot_status" / "lock.json")
+    monkeypatch.setattr(E.kit, "host_stamp", lambda: {"card": "none", "gpus": [], "driver": None, "cuda": None,
+                                                      "node": "cpu-node-0", "commit": "c" * 40, "why": "no nvidia-smi"})
+    writers, writer = [], E.kit.writer
+    monkeypatch.setattr(E.kit, "writer", lambda out: writers.append(out) or writer(out))
+    runner = REPO / "benchmarks" / "exfiltration" / "run.py"
+    metrics = runpy.run_path(str(runner))["METRICS"]
+
+    def run(*argv: str, within: Path | None = None) -> str:
+        if within is None:
+            monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+        else:
+            monkeypatch.setenv("RESEARCH_RUN_DIR", str(within))
+        monkeypatch.setattr(sys, "argv", ["run.py", *argv])
+        with pytest.raises(SystemExit) as done:
+            runpy.run_path(str(runner), run_name="__main__")
+        assert done.value.code == 0
+        return capsys.readouterr().out
+
+    outside, doc = run(), json.loads(run("--json"))
+    assert writers == []
+    first = tmp_path / "run-1"
+    assert run(within=first) == outside and len(writers) == 1
+    got = json.loads((first / "result.json").read_text())
+    assert got["run_id"] == "r20261113-000000-0000" and got["measurement_files"] == [E.DOCUMENT]
+    assert json.loads((first / E.DOCUMENT).read_text()) == doc
+    assert got["workload_fingerprint"] == {
+        "source_sha": None, "benchmark": "exfiltration", "row": E.ROW, "step": doc["compute_audit"][0]["step"],
+        "variant": None, "share": E.SHARE, "network_check_share": E.NETWORK_CHECK_SHARE, "response_ids": E.RESPONSE_IDS,
+        "scan_delta": doc["certifier"]["scan_delta"]["value"], "served_run": None, "runs": doc["runs"]}
+    assert got["validation"]["status"] == "passed" and got["validation"]["evidence"] == [E.DOCUMENT]
+    by = {m["name"]: m for m in got["measurements"]}
+    assert list(by) == list(metrics) == ["benchmarks/exfiltration-gb-world-year", "benchmarks/exfiltration-compute-audit-gb",
+                                         "benchmarks/exfiltration-network-certifier-gb"]
+    head, audit, net = by.values()
+    year = doc["periods"][-1]
+    assert {m["unit"] for m in by.values()} == {"GB a world year at 10% of compute"}
+    assert head["value"] == audit["value"] == doc["value"] == pytest.approx(YEAR_GB)
+    assert net["value"] == year["together"]["scan"]["certifier_GB"] == pytest.approx(50_753_639, abs=0.5)
+    assert head["inputs"][0].startswith("modeled: the headline figure, the planner's row `(ii) honest`, read where its "
+                                        "total is 10% of compute, β = ")
+    assert audit["inputs"][0].startswith("modeled: the compute audit's part, the planner's row `(ii) honest`, ")
+    assert head["inputs"][1:] == audit["inputs"][1:] == ["its error: δ = 0.01 over the world's year, the compute audit's",
+                                                         *doc["runs"]]
+    assert net["inputs"] == [
+        "modeled: the network certifier's term of record, its `scan` row as the scan's check charges it today at D_j = 2, "
+        "on an assumed class of at most 1,024 ids a response",
+        f"its error: ε = {E._p(year['eps'])} over the world's year, at a scan's δ of "
+        f"{E._p(doc['certifier']['scan_delta']['value'])} (assumed)"]
+    assert all("why" not in m and m["ci95"] is None and m["host"]["node"] == "cpu-node-0" for m in by.values())
+
+    second = tmp_path / "run-2"
+    run("--scan-delta", "1/1048576", within=second)
+    net = {m["name"]: m for m in json.loads((second / "result.json").read_text())["measurements"]}[
+        "benchmarks/exfiltration-network-certifier-gb"]
+    assert net["value"] is None and net["why"] == f"{E.NO_BOUND}: ε = 11,012,646 over the world's year"
+    with pytest.raises(ValueError, match="^no figure of the document is named total: a metric records one of headline, "):
+        E.measurements(doc, {"benchmarks/x": "total"})
+
+
+def test_the_legend_line_shows_a_rows_mark_as_its_calculator_gives_it(tmp_path, monkeypatch):
+    """A row of the network certifier's legend that carries a mark (the calculator's `scan` row's accept, run, not
+    proved) prints it beside the row's standing, as the mark, in that line alone; the network certifier's recorded
+    figure carries it beside its own mark. A mark this command has no name for is refused by the row's name."""
+
+    lb = term()
+    document = lb.document
+
+    def marked(mark: str):
+        def made(*a, **kw) -> dict:
+            doc = document(*a, **kw)
+            return doc | {"legend": doc["legend"] | {"scan": doc["legend"]["scan"] | {"mark": mark}}}
+
+        return made
+
+    base = E.render(E.build(store=recorded(tmp_path / "base").fresh(), root=REPO)).splitlines()
+    monkeypatch.setattr(lb, "document", marked(E.RUN_NOT_PROVED))
+    doc = E.build(store=recorded(tmp_path / "marked").fresh(), root=REPO)
+    scan = doc["certifier"]["legend"]["scan"]
+    assert [line for line in E.render(doc).splitlines() if line not in base] == [
+        f"- scan ({scan['standing']}; run, not proved): {scan['counts']}"]
+    net, = E.measurements(doc, {"benchmarks/x": "network_certifier"})
+    assert net["mark"] == "modeled" and net["inputs"][0].startswith("modeled (run, not proved): the network certifier's ")
+    monkeypatch.setattr(lb, "document", marked("proved"))
+    with pytest.raises(ValueError, match="^the network certifier's rows scan carry a mark this command doesn't print"):
+        E.build(store=recorded(tmp_path / "refused").fresh(), root=REPO)
+
+
 #: a row's verification phase as the planner writes it, with its binding bound: the row's own at the world's year,
 #: but what Lean proves counted in compressions, made up so that both of Lean's cases print
 PHASE = {
