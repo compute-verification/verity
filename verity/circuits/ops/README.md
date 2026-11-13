@@ -40,10 +40,10 @@ are replayed against.
 - **Provides:** the primitive circuits' Definitions, one family a module, their Boolean versions (`ops.boolean`), and each
   module's sidecar and pins, which `circuit-check` reads.
 - **Loaded by:** the served workloads' Definitions (`verity.definitions`); `verity.commitments.windows`, whose
-  `interface` imports every module; PoUW's prover (`verity.protocols.pouw.prover`); Flock's prover (`verity_flock`), pod
-  scripts and agreement with upstream's verifier (`verity/protocols/flock`); the script that writes the difftest
+  `interface` imports every module; PoUW's prover (`verity.protocols.accounting.pouw.prover`); Flock's prover (`verity_flock`), pod
+  scripts and agreement with upstream's verifier (`verity/protocols/proofs/flock`); the script that writes the difftest
   vectors of the inference-only policy's check
-  (`verity/protocols/inference_only/verifier/nci/lean/scripts/difftest_vectors.py`); `circuit-check`, which imports each
+  (`verity/protocols/policy/inference_only/verifier/nci/lean/scripts/difftest_vectors.py`); `circuit-check`, which imports each
   module that has a sidecar; the vLLM integration (`verity_vllm`); and benchmarks. Tests across the tree import it too,
   verifiers' tests among them. No verifier loads it.
 - **Loads:** `verity.circuits` (its types and its Boolean forms), `verity.circuits.silicon`, the census and the library

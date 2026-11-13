@@ -269,14 +269,14 @@ def keep_scheduler_rows(runner: Any, scheduler: Any) -> Hooks:
 
 def watermark_line(line: bytes, last: tuple[int, ...] | None = None) -> tuple[int, int, tuple[int, ...]]:
     """(t, n, lost) of one watermark line, ``t n``, any lost releases and its newline, as the network certifier's own
-    reader reads it (`verity.protocols.certifier.verifier.release.read_watermark`): bucket t has closed, the releases of
+    reader reads it (`verity.protocols.accounting.certifier.verifier.release.read_watermark`): bucket t has closed, the releases of
     buckets up to t are exactly those numbered below n, and each of ``lost`` is a release of bucket t that its server
     connection lost on the way, which won't come. `ValueError` unless it follows ``last``, the line before it (its
     (t, n)): t one past last's (0 first), n at least last's, and the lost rising from last's n to below n, so no line
     names a release an earlier line counted and each lost one is named once."""
     # Imported where a line is read, not with the module, which `tick_plugin` loads in each of vLLM's processes and
     # which imports only the stdlib and this package.
-    from verity.protocols.certifier.verifier.release import read_watermark
+    from verity.protocols.accounting.certifier.verifier.release import read_watermark
     return read_watermark(line, last)
 
 
