@@ -1476,7 +1476,7 @@ class GpuBackend:
         return out
 
     def gate_session(self, small: DeviceStore, reg: audit.Registration, dropped: set[int]) -> dict:
-        """Two windows of two passes each over `small` under a clock the gate turns, `gate_samples` draws a window,
+        """Two windows of two passes each over `small` under a clock the gate turns, `gate_samples` samples a window,
         checked by `audit.AuditRun`."""
         now = [0]
         params = audit.Params(reg.blocks, 1000, 2, self.gate_samples, 2.0 ** -40, window_ns=1, codec=reg.codec,
