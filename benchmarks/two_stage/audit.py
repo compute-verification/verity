@@ -98,10 +98,15 @@ def publics(c: T.CS.Committed) -> dict[str, bytes]:
 
 class StageCoins(CC.ChallengerCoins):
     """Both stages' coins of the run's one challenger session (``draws``, `a5_coins.Draws`' proxy) as the stream reads
-    them: the first stage's rank 0's, the second's rank 1's, each committed to its registration's digest in turn."""
+    them: the first stage's rank 0's, the second's rank 1's, each its own family's, committed to its registration's
+    digest in turn."""
 
     def __init__(self, draws) -> None:
-        self.stages, self.at = (AC.RankCoins(draws, 0), AC.RankCoins(draws, 1)), -1
+        self.draws, self.stages, self.at = draws, (AC.RankCoins(draws, 0), AC.RankCoins(draws, 1)), -1
+
+    @property
+    def label(self) -> str:
+        return self.stages[max(self.at, 0)].label
 
     def commit(self, after: bytes) -> None:
         self.at += 1
@@ -122,9 +127,10 @@ def needs(stream: S.Stream, n: int, q: int) -> tuple[int, int]:
 def stream_of(a: argparse.Namespace, coins: StageCoins) -> S.Stream:
     """The challenger's two-stage stream over the toy (`toy.spec`, its second stage ``a.k`` proof blocks a cell) on the
     run's challenger session, which opens once both stages have planned the coins their samples read (each plan
-    returns only then, so the two plan at once)."""
+    returns only then, so the two plan at once). It is made with the challenger's key and the verifier's copy of main's
+    history as the session's start had them (`a5_coins.held`), which both stages' coin evidence is read under."""
     stream = S.Stream(T.spec(a.n, a.q, a.k, a.session_timeout * len(T.TEMPLATES)), list(T.TEMPLATES), replay=T.REPLAY,
-                      budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins)
+                      budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins, **AC.held(coins.draws))
     with ThreadPoolExecutor(len(coins.stages)) as ex:
         list(ex.map(lambda c, n: c.plan(n), coins.stages, needs(stream, a.n, a.q)))
     return stream

@@ -24,8 +24,7 @@ and second stages and nothing else. At `runLocate`, for any `Ls`:
   (`fitOf_eq_usedOf`).
 
 * `coinsAgree_run`, `sessionsAgree_run`: the piece at the coin map's release: `CoinsAgree` at the sessions' rounds
-  and `SessionsAgree`, at the run's locator and the coin map's agreement there, from the cut's `InteriorLogged` and
-  `HeldSize`.
+  and `SessionsAgree`, at the run's locator and the coin map's agreement there, from `InteriorLogged` and `HeldSize`.
 * `devReads_run`: the coin map's release there reads a session's round's releases as `coin_record` takes it
   (`DevReads`, at the coin map's `elemOfBits`), so the coin the check read for a session's round is its record's.
 
@@ -291,7 +290,7 @@ theorem devElems_of (A : Live₂) (x : Claims.Msg) (tab : ℕ → String) (L : C
 /-! ## The piece at the coin map's release -/
 
 /-- **The sessions' coins agree as the device's releases do, at the coin map's release** (`CoinsAgree` at the
-sessions' rounds, as `ProjectionOf` takes it): at the run's locator over any stages' locator, from the cut's
+sessions' rounds, as `ProjectionOf` takes it): at the run's locator over any stages' locator, from
 `InteriorLogged`. -/
 theorem coinsAgree_run (A : Live₂) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String) (Ls : CoinMap.Locate)
     (Good : Exchange → Prop) (hlog : InteriorLogged C Good) :
@@ -301,7 +300,7 @@ theorem coinsAgree_run (A : Live₂) (C : CaseOf) (Ms : SessionReading) (tab : �
 
 /-- **The sessions' releases agree with the run's coins, at the coin map's release and its agreement**
 (`SessionsAgree`, as `devAgrees_formReading` takes it): at the run's locator over any stages' locator and the coin
-map's agreement there on the rounds the run's verifier reads, from the cut's `InteriorLogged` and `HeldSize`. -/
+map's agreement there on the rounds the run's verifier reads, from `InteriorLogged` and `HeldSize`. -/
 theorem sessionsAgree_run (A : Live₂) (x : Claims.Msg) (C : CaseOf) (Ms : SessionReading) (tab : ℕ → String)
     (Ls : CoinMap.Locate) (Good : Exchange → Prop) (hsz : HeldSize) (hlog : InteriorLogged C Good) :
     SessionsAgree A x (withCoins A C tab (CoinMap.dev (runLocate A Ls tab)) Ms) (CoinMap.dev (runLocate A Ls tab))
