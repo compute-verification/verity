@@ -185,6 +185,7 @@
   "Proofs.Flock.SpotFlock.RunsAs.RoundTwoOf",
   "Proofs.Flock.SpotFlock.RunsAs.SecondStageOf",
   "Proofs.Flock.SpotFlock.RunsAs.Statements",
+  "Proofs.Flock.SpotFlock.SampleBelow",
   "Proofs.Flock.SpotFlock.HeldOfDesc",
   "Proofs.Properties.Verity.SampledTwo.HeldOfAtDesc"
  ],
