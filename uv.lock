@@ -2358,7 +2358,7 @@ requires-dist = [
 [[package]]
 name = "verity-bench-specs"
 version = "0.0.0"
-source = { virtual = "benchmarks/specs" }
+source = { virtual = "benchmarks/harness/specs" }
 
 [[package]]
 name = "verity-certifier-timing"
