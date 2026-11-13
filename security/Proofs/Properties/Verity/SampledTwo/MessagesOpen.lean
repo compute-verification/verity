@@ -35,7 +35,8 @@ draws. This module states the messages' bound in the form those rounds need.
   blobs the registered digests name), and on accepted plays the message is a function of the strings and the context
   (`Explains`). Two accepted plays with two messages then show two lists of strings under one list of digests, and
   the finder outputs a pair of them that differ (`exists_zip_collide`). `reachedStrings` and `messagesFixedStrings`
-  are the bound from `ShowsStrings`, `FixedBefore` and `Explains`.
+  are the bound from `ShowsStrings`, `FixedBefore` and `Explains`. `fixedBefore_strings` gives `FixedBefore` where two
+  accepted plays at coins the history shows alike read the same digests and the same context.
 
 **Not established** at the two-stage form: `Opens` (the device's digests are the SHA-512 of the strings the check
 read: the interior's root, each opening's `after`), `FixedBefore` and `Explains` (the form's check reads each round's
@@ -507,6 +508,25 @@ theorem opens_strings {A : Live₂} {x : Msg} {Rd : Reading A} {Acc Good : Verit
     unfold stringsOpn
     exact ⟨hA, hG, rfl, bs, hr, hb⟩
   exact ⟨hm, (ds, ctx o i), hfx, hop⟩
+
+/-- **`FixedBefore` at digests and a context**: where two plays of one tape the check accepts whose logs are the
+device's, the second at run coins that agree with the coins the first's history before round `i` shows, read the same
+digests and the same context for round `i`. -/
+theorem fixedBefore_strings {V : Vocab d α} {A : Live₂} {x : Msg} {θ : ByteArray} {F : Array ByteArray}
+    {c : ByteArray} {σ : Verity.Game.Strategy (V.game θ F c)} (Fr : Frame V A x θ F c σ) (Rd : Reading A)
+    (Acc Good : Verity.Exchange → Prop) (Dg raw : Verity.Exchange → ℕ → Option (List Msg))
+    (ctx : Verity.Exchange → ℕ → κ) (i : ℕ)
+    (h : ∀ (ω : TapeOf V θ F c σ) (r r' : Coins A x), Acc (Fr.out ω r) → Good (Fr.out ω r) → Acc (Fr.out ω r') →
+      Good (Fr.out ω r') → Shows (playHist A x r (playMsgs Rd (Fr.out ω r)) i) r' →
+      Dg (Fr.out ω r') i = Dg (Fr.out ω r) i ∧ ctx (Fr.out ω r') i = ctx (Fr.out ω r) i) :
+    FixedBefore Fr Rd (stringsFx Dg ctx) (stringsOpn Acc Good raw ctx) i := by
+  intro ω r r' φ φ' hφ ho hφ' ho' hs
+  obtain ⟨hd, hc⟩ := h ω r r' ho.1 ho.2.1 ho'.1 ho'.2.1 hs
+  unfold stringsFx at hφ hφ'
+  obtain ⟨ds, hds, rfl⟩ := Option.map_eq_some_iff.1 hφ
+  obtain ⟨ds', hds', rfl⟩ := Option.map_eq_some_iff.1 hφ'
+  rw [hd, hds] at hds'
+  rw [hc, Option.some.inj hds']
 
 /-- **The messages at the rounds the run reaches, where the plays show strings**: `reachedBy` from `ShowsStrings`,
 `FixedBefore` and `Explains`. -/

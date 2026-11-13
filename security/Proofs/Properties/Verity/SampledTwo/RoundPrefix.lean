@@ -25,9 +25,11 @@ that part is put on a round below `i` or on none, by its definition, so no order
 * `Messages.fixed_of_before`: so whatever a play fixes for round `i` that reads, on the frame's plays, only its log
   before round `i` is fixed by the coins the history before round `i` shows.
 
-* `Messages.fixedBefore_of_before`: `Messages.FixedBefore` (`MessagesOpen.lean`) at the frame whose coin map is the
+* `Messages.fixedBefore_of_before`: `Messages.FixedBefore` (`MessagesOpen.lean`) at a frame whose coin map is the
   locator's, for a value read off the log before the round and opened only by accepted plays whose log the check read
   is the device's.
+* `Messages.fixedBefore_strings_before`: the same at digests and a context (`Messages.stringsFx`), the digests read
+  off the log before the round and the context the same on two accepted plays the history's coins show alike.
 * `SessionCoins.before_session`: where the rounds rise along the log (`SessionCoins.LogRising`), the log before a
   session's round a release is put on is the releases before that release, with its frame and bytes.
 
@@ -209,24 +211,39 @@ theorem fixed_of_before (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray
   rw [e r] at hacc hgood hs
   rw [e r', e r, before_shown V A x θ F c σ L Rd Acc Good hShow ω r r' hacc hgood i hs]
 
-/-- **`FixedBefore` where the value is read off the log before the round**: at the frame whose coin map is the
-locator `L`'s, where a play that opens a value for round `i` is one accepted whose log the check read is the device's,
-and what a play of the frame fixes for round `i` is a reading `g` of its tape and its log before round `i`. -/
+/-- **`FixedBefore` where the value is read off the log before the round**: at a frame whose coin map is the locator
+`L`'s, where a play that opens a value for round `i` is one accepted whose log the check read is the device's, and
+what a play of the frame fixes for round `i` is a reading `g` of its tape and its log before round `i`. -/
 theorem fixedBefore_of_before (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray)
-    (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (L : CoinMap.Locate) (Rd : Reading A)
+    (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (L : CoinMap.Locate) (Fr : Frame V A x θ F c σ)
+    (hFr : ∀ ω r, Fr.place ω r = CoinMap.place V θ F c σ L r ω) (Rd : Reading A)
     (Acc Good : Verity.Exchange → Prop) (hShow : ShowsPlaced A x Rd Acc Good L) {Φ : Type}
     (Fx : Verity.Exchange → ℕ → Option Φ) (Opn : Φ → Verity.Exchange → ℕ → Prop) (i : ℕ)
     (hOpn : ∀ φ o, Opn φ o i → Acc o ∧ Good o)
     (g : TapeOf V θ F c σ → List Verity.Release × Option (Verity.Frame × ByteArray) → Option Φ)
-    (hFx : ∀ ω r₀,
-      Fx ((frameBy V A x θ F c σ (fun ω r => CoinMap.place V θ F c σ L r ω) Rd Fx Opn).out ω r₀) i =
-        g ω (CoinMap.before L i []
-          ((frameBy V A x θ F c σ (fun ω r => CoinMap.place V θ F c σ L r ω) Rd Fx Opn).out ω r₀).log)) :
-    FixedBefore (frameBy V A x θ F c σ (fun ω r => CoinMap.place V θ F c σ L r ω) Rd Fx Opn) Rd Fx Opn i :=
-  fixedBefore_of_eq (frameBy V A x θ F c σ (fun ω r => CoinMap.place V θ F c σ L r ω) Rd Fx Opn) Rd Acc Good Fx Opn i
-    hOpn fun ω r r' hacc hgood hs =>
-      fixed_of_before V A x θ F c σ L (frameBy V A x θ F c σ (fun ω r => CoinMap.place V θ F c σ L r ω) Rd Fx Opn)
-        (fun _ _ => rfl) Rd Acc Good hShow Fx i (g ω) ω (hFx ω) r r' hacc hgood hs
+    (hFx : ∀ ω r₀, Fx (Fr.out ω r₀) i = g ω (CoinMap.before L i [] (Fr.out ω r₀).log)) :
+    FixedBefore Fr Rd Fx Opn i :=
+  fixedBefore_of_eq Fr Rd Acc Good Fx Opn i hOpn fun ω r r' hacc hgood hs =>
+    fixed_of_before V A x θ F c σ L Fr hFr Rd Acc Good hShow Fx i (g ω) ω (hFx ω) r r' hacc hgood hs
+
+/-- **`FixedBefore` at digests read off the log before the round**: at a frame whose coin map is the locator `L`'s,
+where the digests a play of the frame fixes for round `i` are a reading `g` of its tape and its log before round `i`,
+and two accepted plays of one tape whose logs are the device's, the second at run coins that agree with the coins the
+first's history before round `i` shows, read the same context. -/
+theorem fixedBefore_strings_before (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray)
+    (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (L : CoinMap.Locate) (Fr : Frame V A x θ F c σ)
+    (hFr : ∀ ω r, Fr.place ω r = CoinMap.place V θ F c σ L r ω) (Rd : Reading A)
+    (Acc Good : Verity.Exchange → Prop) (hShow : ShowsPlaced A x Rd Acc Good L) {κ : Type}
+    (Dg raw : Verity.Exchange → ℕ → Option (List Msg)) (ctx : Verity.Exchange → ℕ → κ) (i : ℕ)
+    (g : TapeOf V θ F c σ → List Verity.Release × Option (Verity.Frame × ByteArray) → Option (List Msg))
+    (hDg : ∀ ω r₀, Dg (Fr.out ω r₀) i = g ω (CoinMap.before L i [] (Fr.out ω r₀).log))
+    (hctx : ∀ (ω : TapeOf V θ F c σ) (r r' : Coins A x), Acc (Fr.out ω r) → Good (Fr.out ω r) →
+      Acc (Fr.out ω r') → Good (Fr.out ω r') → Shows (playHist A x r (playMsgs Rd (Fr.out ω r)) i) r' →
+      ctx (Fr.out ω r') i = ctx (Fr.out ω r) i) :
+    FixedBefore Fr Rd (stringsFx Dg ctx) (stringsOpn Acc Good raw ctx) i :=
+  fixedBefore_strings Fr Rd Acc Good Dg raw ctx i fun ω r r' ha hg ha' hg' hs =>
+    ⟨fixed_of_before V A x θ F c σ L Fr hFr Rd Acc Good hShow Dg i (g ω) ω (hDg ω) r r' ha hg hs,
+      hctx ω r r' ha hg ha' hg' hs⟩
 
 end Verity.SampledTwo.Messages
 
