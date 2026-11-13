@@ -1,7 +1,8 @@
 """a0's Lean verify archives a run's files once (`a0.lean_verify`, `a0.archive_put`, ``st["archived"]``): every later
 member's archive links the first's object instead of putting the file again, and the verifier, which holds each object
 to its key, still reads it there. A run that puts its members' files before its sessions (`a0.archive_put` on
-`a0.archive_files`) starts one process for them all, and no member's verify puts anything."""
+`a0.archive_files`) starts one process for them all, and no member's verify puts anything. Under `a0.ARCHIVE_LINK` a
+member's own circuit file is linked into the archive and never copied."""
 from __future__ import annotations
 
 import hashlib
@@ -12,6 +13,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
+
+import pytest  # noqa: E402
 
 import a0  # noqa: E402
 
@@ -200,3 +203,70 @@ def test_without_a_shared_record_each_member_puts_its_circuit(tmp_path):
         del st["archived"]
         assert a0.lean_verify(str(lean), st, 8, out, zk=True)["accepted"]
     assert [json.loads(x) for x in puts.read_text().splitlines()] == [["circuit.txt", "pub-8.bin"]] * 2
+
+
+def own(root: Path, k: int, archived: dict | None) -> tuple[dict, Path, str]:
+    """Member `k` with a circuit file of its own, as a window's members have: its statement, session dir and the
+    file's SHA-512."""
+    circuit = root / f"circuit-{k}.txt"
+    circuit.write_bytes(f"circuit {k} ".encode() * 1000)
+    st, out = member(root, k, circuit, archived if archived is not None else {})
+    if archived is None:
+        del st["archived"]
+    st[a0.ARCHIVE_LINK] = True
+    return st, out, hashlib.sha512(circuit.read_bytes()).hexdigest()
+
+
+@pytest.mark.parametrize("shared", [True, False])
+def test_under_archive_link_a_members_own_circuit_is_linked_into_its_archive_and_never_put(tmp_path, shared):
+    """Each member has a circuit file of its own, so none is archived by an earlier one. Under `a0.ARCHIVE_LINK` the
+    archive's object is the member's file under a second name (one inode), `archive-put` is given no circuit, and the
+    verifier still reads the object under its key and accepts; with or without the members' shared record."""
+    lean, puts = tmp_path / "flock-verify", tmp_path / "puts.jsonl"
+    lean.write_text(FAKE.format(python=sys.executable, puts=str(puts)))
+    lean.chmod(0o755)
+    archived: dict | None = {} if shared else None
+    for k in range(2):
+        st, out, key = own(tmp_path, k, archived)
+        assert a0.lean_verify(str(lean), st, 8, out, zk=True)["accepted"]
+        assert (out / "archive" / "sha512" / key).stat().st_ino == (st["dir"] / "circuit.txt").stat().st_ino
+    assert [json.loads(x) for x in puts.read_text().splitlines()] == [["pub-8.bin"]] * 2
+
+
+def test_under_archive_link_a_window_put_before_its_sessions_links_each_members_circuit_and_puts_the_rest(tmp_path):
+    """The window's one put before its sessions is given the members' circuits to link: each is in the window's archive
+    under a second name, the put's process reads only the public files, and a member's verify then links the window's
+    object and puts nothing."""
+    lean, puts = tmp_path / "flock-verify", tmp_path / "puts.jsonl"
+    lean.write_text(FAKE.format(python=sys.executable, puts=str(puts)))
+    lean.chmod(0o755)
+    archived: dict = {}
+    members = [own(tmp_path, k, archived) for k in range(2)]
+    files = [f for st, _, _ in members for f in a0.archive_files(st, 8)]
+    window = tmp_path / "lean-verify" / "archive"
+    keys = a0.archive_put(str(lean), window, files, tmp_path / "archive-put.log", archived,
+                          [a0.archive_files(st, 8)[0] for st, _, _ in members])
+    for st, out, key in members:
+        circuit = st["dir"] / "circuit.txt"
+        assert keys[circuit] == key and (window / "sha512" / key).stat().st_ino == circuit.stat().st_ino
+        assert a0.lean_verify(str(lean), st, 8, out, zk=True)["accepted"]
+        assert (out / "archive" / "sha512" / key).stat().st_ino == circuit.stat().st_ino
+    assert [json.loads(x) for x in puts.read_text().splitlines()] == [["pub-8.bin", "pub-8.bin"]]
+
+
+def test_under_archive_link_a_circuit_that_cannot_be_linked_is_put_as_without_it(tmp_path, monkeypatch):
+    """Where the link can't be made (the archive on another filesystem), the member's circuit is put, a copy, and the
+    verdict is the same; a wrong key would be the verifier's to refuse, since it holds each object to its key."""
+    lean, puts = tmp_path / "flock-verify", tmp_path / "puts.jsonl"
+    lean.write_text(FAKE.format(python=sys.executable, puts=str(puts)))
+    lean.chmod(0o755)
+    st, out, key = own(tmp_path, 0, {})
+
+    def refuse(src, dst):
+        raise OSError(18, "Invalid cross-device link")
+
+    monkeypatch.setattr(a0.os, "link", refuse)
+    assert a0.lean_verify(str(lean), st, 8, out, zk=True)["accepted"]
+    assert [json.loads(x) for x in puts.read_text().splitlines()] == [["circuit.txt", "pub-8.bin"]]
+    assert (out / "archive" / "sha512" / key).stat().st_ino != (st["dir"] / "circuit.txt").stat().st_ino
+    assert st["archived"] and next(iter(st["archived"].values()))[0] == key
