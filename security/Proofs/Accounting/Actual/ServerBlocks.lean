@@ -9,13 +9,13 @@ import Proofs.Accounting.Actual.Split
 /-!
 # The capacity form: the windows divide the developer's region
 
-`WindowsAt`: a computed gate of the developer's region over `[0, t)` lies at exactly one location `X i` (they are
+`ServerBlocksAt`: a computed gate of the developer's region over `[0, t)` lies at exactly one location `X i` (they are
 disjoint) and, for cuts `τ` of `[0, t)`, in exactly one window `[τ j, τ (j + 1))` (`cuts_exists_mem`, `cuts_eq_of_mem`),
 which names its unit `(i, j)`. Compute rate bounds a window's gates by `Φ_{X i} (τ (j + 1) − τ j)`; what it reads in the
 cut is what it reads in `A`, and the split in `G` (`width_into_region_inter_le`) and links bound its reads in `G` by
 `stateIn_{X i}(τ j, G) + β_{X i} (τ (j + 1) − τ j)`. No memory constraint is used.
 
-`Windows` is `WindowsAt` at the cuts `min(kω, t)` (`uniformCuts`) and `G = univ`: a window of them is
+`ServerBlocks` is `ServerBlocksAt` at the cuts `min(kω, t)` (`uniformCuts`) and `G = univ`: a window of them is
 `A[X i, [kω, (k + 1)ω) ∩ [0, t)]`, at most `ω` long, its novel reads are at most its reads
 (`Nci.SecurityProofs.novelReads_le_readsIn`), and memory bounds the state at its start by `M_{X i}`.
 -/
@@ -104,16 +104,16 @@ variable [DecidableEq L] {n : ℕ} (X : Fin n → Finset L)
 open Classical in
 /-- The window of each gate under the cuts `κ`: its location and the window of its tick, for the gates of `S` at the
 locations. -/
-noncomputable def cutWindow (S : Finset (Fin A.N)) {t : ℕ} (κ : Cuts t) (g : Fin A.N) : Option (Fin (n * κ.J)) :=
+noncomputable def cutServerBlock (S : Finset (Fin A.N)) {t : ℕ} (κ : Cuts t) (g : Fin A.N) : Option (Fin (n * κ.J)) :=
   if h : g ∈ S ∧ (∃ i, A.x g ∈ X i) ∧ ∃ j : Fin κ.J, A.t g ∈ Set.Ico (κ.τ j.castSucc) (κ.τ j.succ) then
     some (finProdFinEquiv (Classical.choose h.2.1, Classical.choose h.2.2))
   else none
 
-theorem cutWindow_eq_some {S : Finset (Fin A.N)} {t : ℕ} {κ : Cuts t} (hX : ∀ i j, i ≠ j → Disjoint (X i) (X j))
+theorem cutServerBlock_eq_some {S : Finset (Fin A.N)} {t : ℕ} {κ : Cuts t} (hX : ∀ i j, i ≠ j → Disjoint (X i) (X j))
     {g : Fin A.N} {i : Fin n} {j : Fin κ.J} :
-    cutWindow A X S κ g = some (finProdFinEquiv (i, j)) ↔
+    cutServerBlock A X S κ g = some (finProdFinEquiv (i, j)) ↔
       g ∈ S ∧ A.x g ∈ X i ∧ A.t g ∈ Set.Ico (κ.τ j.castSucc) (κ.τ j.succ) := by
-  unfold cutWindow
+  unfold cutServerBlock
   split_ifs with h
   · rw [Option.some_inj, finProdFinEquiv.injective.eq_iff, Prod.mk.injEq]
     have hc := Classical.choose_spec h.2.1
@@ -129,7 +129,7 @@ theorem cutWindow_eq_some {S : Finset (Fin A.N)} {t : ℕ} {κ : Cuts t} (hX : �
     rintro ⟨hS, hi, hj⟩
     exact h ⟨hS, ⟨i, hi⟩, ⟨j, hj⟩⟩
 
-theorem WindowsAt : Guarantees.Actual.WindowsAt := by
+theorem ServerBlocksAt : Guarantees.Actual.ServerBlocksAt := by
   intro L E _ _ A ℓ Φ ends β link n X θ hθ t κ G hX hC hΦ hL
   classical
   set S := A.region (univ.biUnion X) (Set.Iio t)
@@ -137,10 +137,10 @@ theorem WindowsAt : Guarantees.Actual.WindowsAt := by
   have hSX : ∀ g ∈ S, ∃ i, A.x g ∈ X i := fun g hg => by
     simpa using ((mem_region A).1 hg).2.1
   let P : Partition (A.declaration (univ.biUnion X) t θ hθ).D (n * κ.J) :=
-    { unit := cutWindow A X S κ
+    { unit := cutServerBlock A X S κ
       input_iff := fun (g : Fin A.N) => by
-        change cutWindow A X S κ g = none ↔ (A.cut S).isInput g = true
-        unfold cutWindow
+        change cutServerBlock A X S κ g = none ↔ (A.cut S).isInput g = true
+        unfold cutServerBlock
         by_cases hg : g ∈ S
         · have hc : g ∈ S ∧ (∃ i, A.x g ∈ X i) ∧
               ∃ j : Fin κ.J, A.t g ∈ Set.Ico (κ.τ j.castSucc) (κ.τ j.succ) :=
@@ -151,9 +151,9 @@ theorem WindowsAt : Guarantees.Actual.WindowsAt := by
           simp [hg] }
   refine ⟨P, fun i j => ?_⟩
   have hτ : κ.τ j.succ ≤ t := (κ.mono (Fin.le_last _)).trans κ.last.le
-  have key : ∀ g : Fin A.N, cutWindow A X S κ g = some (finProdFinEquiv (i, j)) ↔
+  have key : ∀ g : Fin A.N, cutServerBlock A X S κ g = some (finProdFinEquiv (i, j)) ↔
       g ∈ A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ)) := fun g => by
-    rw [cutWindow_eq_some A X hX, mem_region, mem_region]
+    rw [cutServerBlock_eq_some A X hX, mem_region, mem_region]
     constructor
     · rintro ⟨⟨hi, -, -⟩, hx, hk⟩
       exact ⟨hi, hx, hk⟩
@@ -199,9 +199,9 @@ theorem uniformCuts_succ {t ω : ℕ} (hω : 0 < ω) (k : Fin (uniformCuts t ω 
     (uniformCuts t ω hω).τ k.succ = min ((k + 1) * ω) t :=
   rfl
 
-theorem Windows : Guarantees.Actual.Windows := by
+theorem ServerBlocks : Guarantees.Actual.ServerBlocks := by
   intro L E _ _ A ℓ Φ M ends β link n X θ hθ t ω hω hX hC hΦ hM hL
-  obtain ⟨P, hP⟩ := WindowsAt A ℓ Φ ends β link n X θ hθ t (uniformCuts t ω hω) univ hX hC hΦ hL
+  obtain ⟨P, hP⟩ := ServerBlocksAt A ℓ Φ ends β link n X θ hθ t (uniformCuts t ω hω) univ hX hC hΦ hL
   refine ⟨P, fun i k => ?_⟩
   obtain ⟨hgates, hsize, hreads⟩ := hP i k
   have e : min ((k : ℕ) * ω) t = k * ω := min_eq_left (mul_lt_of_lt_ceil hω k.2).le
