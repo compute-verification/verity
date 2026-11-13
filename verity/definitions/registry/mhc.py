@@ -75,7 +75,7 @@ the broadcast's K 7168 caps at 28 (T <= 256) and then runs the same 26 .. 8 regi
 """
 from __future__ import annotations
 
-from verity.definitions.circuits.census import silicon_step
+from verity.circuits.census import silicon_step
 from verity.circuits.defs import bind, composite, primitive
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple
