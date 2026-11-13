@@ -2604,6 +2604,7 @@
  "trees": {
   "except": {
    "Proofs.Pouw.Period.Honest": "h1CheckedCreditPeriod's witnesses read H1's honest instance (`HonestH1`: its circuit, windows, period, layer, run and play), proof-only beside its honest lemma",
+   "Proofs.Pouw.Period.Accept": "h1CheckedCreditPeriod's witnesses read the parameters, registration and evidence H1's honest instance is checked at (`h1Params`, `h1Reg`, `h1Evidence`), proof-only beside the check's verdict on them",
    "Proofs.Pouw.Period.Witnesses": "h1CheckedCreditPeriod's witnesses read their two plays of H1's honest instance (`checkedPlay`, `acceptAll`) and its coins' uniform measure at 64 windows, proof-only beside them",
    "Proofs.Accounting.ComposeMonitoringPeriod.Honest": "h1CheckedCreditPeriod's witnesses read the honest scheme (`Honest.scheme`) H1's honest instance is credited under, proof-only beside it"
   }
