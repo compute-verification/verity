@@ -52,8 +52,8 @@ The rest of what the line reads of its record is code, proved, at any windows a 
 draw's sizes are the record's: `LineHeld` reads the draw at `recordSample`, one draw for each of the session's `⌈W/g⌉`
 (`Node.samples`), draw `c`'s size the receipts its windows have in the state the record's session reaches, and on an
 accepted record those are the Lean verifier's record's (`Record.receipts`, `sampleReceipts`), which the line reads. Each
-is below `receiptMax + 1 = 2^64 < 2^448`, so each draw's sampler word is the top bits of its stream's first SHA-512
-block (`Accounting.Remote.Draw.width`): `receive` rejects a pass that would take its window's receipts to
+is below `receiptMax + 1 = 2^64`, so the first SHA-512 block of each draw's stream holds at least four of its sampler
+words (`Accounting.Remote.Draw.width`): `receive` rejects a pass that would take its window's receipts to
 `RECEIPT_LIMIT` (`Properties.RemoteAudit.ReceiptsBelowLimit`), which bounds a draw at g = 1, and above it the line
 refuses a draw whose windows' receipts sum to `RECEIPT_LIMIT` or more (`RemoteAudit.Line.ofSummaryAt`). The line has
 one group for each of the session's windows: an accepted session has its parameters' `windows` windows

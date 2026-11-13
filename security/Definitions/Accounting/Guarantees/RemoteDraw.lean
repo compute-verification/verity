@@ -45,18 +45,18 @@ rows their roots hold (`Refused`, at the receipts `R`), and whose wrong receipts
 prover is sent each coin as it is released, and the challenger's commitment to the session's coins only once the
 session has its outcome (`coins.Released`, `audit.Session.disclose`), so the session it plays is `D` itself: nothing it
 holds before window `t`'s openings coin is released reads that coin. Window `t`'s openings are `Key.subset` on the
-first blocks `prf t` gives its uniform coin, the sampler exact on each draw's first word and the fallbacks `rest` free;
+first blocks `prf t` gives its uniform coin, the sampler exact on each draw's first block and the fallbacks `rest` free;
 `prf` is any function, the deployed one being SHA-512's keyed stream under
 `derive(coin_t, OPENINGS_DOMAIN, {registration, window: t})`.
 
 * **PooledSample**: the probability that the session is accepted with more wrong receipts than its own record's pooled
-  bound (`Run.pooled δ`, `audit.pooled`'s `wrong`) is at most `δ + Σ_t s_t / 2^64 + Σ_t adv_t + bind`, `adv_t` the
+  bound (`Run.pooled δ`, `audit.pooled`'s `wrong`) is at most `δ + Σ_t s_t / 2^256 + Σ_t adv_t + bind`, `adv_t` the
   advantage on `prf t` of window `t`'s distinguisher (`Run.distinguisher prf δ t`). The bound is read at the
   outcome, so it holds however the prover sizes each window after the earlier windows' coins, at any number of passes
   a window. On uniform first blocks window `t`'s draw lands on correct receipts with probability at most
   `(g_t/U_t)^(s'_t)` given the earlier windows, those multiply over the session, and by weighted AM–GM their product is
   at most `δ` once the wrong receipts pass the bound. The hybrid over windows trades window `t`'s uniform blocks for
-  `prf t` at the cost of `s_t / 2^64` (some first word rejected) and `adv_t`. `bind` (`Receipts.binding`) is the
+  `prf t` at the cost of `s_t / 2^256` (every word of some first block rejected) and `adv_t`. `bind` (`Receipts.binding`) is the
   probability that some opened receipt moved, presented and accepted at its root and rank with a row other than the one
   its root holds (`Receipts.held`, the plurality of the rows it shows over the window's continuations): off it, every
   receipt `Refused` lets through is correct.
@@ -95,16 +95,16 @@ open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote
 /-- **The openings' pooled bound.** On a session whose windows' sizes and correct receipts are fixed before their
 openings coins (`Live`), whose accepted outcomes found every opened receipt correct or moved off the row its root holds
 (`Refused`, at the receipts `R`) and count the trace's wrong receipts among the windows' (`Counted`), with every
-window's draw on the first blocks `prf t` its coin gives and `m < 2^448` receipts a window at most, the probability that
-the session is accepted with more wrong receipts than the record's pooled bound at `δ` is at most `δ + Σ_t s_t / 2^64`,
+window's draw on the first blocks `prf t` its coin gives and `m < 2^64` receipts a window at most, the probability that
+the session is accepted with more wrong receipts than the record's pooled bound at `δ` is at most `δ + Σ_t s_t / 2^256`,
 plus the windows' distinguishers' advantages on `prf`, plus the receipts' binding term (`R.binding`: some opened receipt
 moved off the row its root holds). -/
 def PooledSample : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Draw.Run n m k κ X)
     (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X)
-    (δ : ℝ), 0 ≤ δ → m < 2 ^ 448 → Live D → Refused D prf rest T R → Counted D T →
-    T.Holds (δ + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 64 +
+    (δ : ℝ), 0 ≤ δ → m < 2 ^ 64 → Live D → Refused D prf rest T R → Counted D T →
+    T.Holds (δ + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δ t)).toReal +
         (R.binding D prf rest).toReal) fun ω =>
       (T.incorrect ω : ℝ) ≤ D.pooled δ ω
@@ -115,9 +115,9 @@ def LiveCoinsSampled : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Draw.Run n m k κ X)
     (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X)
-    (W δ : ℝ), 0 ≤ δ → m < 2 ^ 448 → Live D → Refused D prf rest T R → Counted D T →
+    (W δ : ℝ), 0 ≤ δ → m < 2 ^ 64 → Live D → Refused D prf rest T R → Counted D T →
     (∀ ω, T.accepts ω → D.pooled δ ω ≤ W) →
-    LiveCoins T W (δ + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 64 +
+    LiveCoins T W (δ + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 256 +
       (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δ t)).toReal +
       (R.binding D prf rest).toReal)
 
@@ -128,10 +128,10 @@ def HeldSampled : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Draw.Run n m k κ X)
     (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X) (S s₀ e : ℕ) (s E β Br Bd δs δc : ℝ),
-    0 < E → 0 ≤ s → 0 ≤ β → 0 ≤ δc → m < 2 ^ 448 →
+    0 < E → 0 ≤ s → 0 ≤ β → 0 ≤ δc → m < 2 ^ 64 →
     Identity T → SquaringCeiling T s E Br → Disks T β Bd → ChipCeiling T S → Routed T → Causal T s₀ e →
     SketchBound T δs → Live D → Refused D prf rest T R → Counted D T →
-    T.Holds (δs + (δc + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 64 +
+    T.Holds (δs + (δc + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δc t)).toReal +
         (R.binding D prf rest).toReal)) fun ω =>
       (T.planned ω : ℝ) - D.pooled δc ω - ((s / E + β) * ((e : ℝ) - s₀) + (Br + Bd)) - T.passes * S ≤ T.held ω
@@ -143,10 +143,10 @@ def HeldOverTimeSampled : Prop :=
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Draw.Run n m k κ X)
     (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X)
     (K : Pace (DrawCoins n κ X)) (S : ℕ) (s E β Br Bd δs δc : ℝ),
-    0 < E → 0 ≤ s → 0 ≤ β → 0 ≤ δc → m < 2 ^ 448 →
+    0 < E → 0 ≤ s → 0 ≤ β → 0 ≤ δc → m < 2 ^ 64 →
     Identity T → SquaringCeiling T s E Br → Disks T β Bd → ChipCeiling T S → Routed T → Paced T K → Covers T →
     SketchBound T δs → Live D → Refused D prf rest T R → Counted D T →
-    T.Holds (δs + (δc + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 64 +
+    T.Holds (δs + (δc + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δc t)).toReal +
         (R.binding D prf rest).toReal)) fun ω =>
       ((K.stop ω - K.start ω : ℕ) : ℝ) * ((T.blocks : ℝ) - S)
@@ -161,10 +161,10 @@ def HeldOverTimeLinksSampled : Prop :=
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Draw.Run n m k κ X)
     (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X)
     (K : Pace (DrawCoins n κ X)) (S : ℕ) (s E β βl Br Bd Bl δs δc : ℝ),
-    0 < E → 0 ≤ s → 0 ≤ β → 0 ≤ βl → 0 ≤ δc → m < 2 ^ 448 →
+    0 < E → 0 ≤ s → 0 ≤ β → 0 ≤ βl → 0 ≤ δc → m < 2 ^ 64 →
     Links T βl Bl → SquaringCeiling T s E Br → Disks T β Bd → ChipCeiling T S → Routed T → Paced T K → Covers T →
     SketchBound T δs → Live D → Refused D prf rest T R → Counted D T →
-    T.Holds (δs + (δc + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 64 +
+    T.Holds (δs + (δc + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δc t)).toReal +
         (R.binding D prf rest).toReal)) fun ω =>
       ((K.stop ω - K.start ω : ℕ) : ℝ) * ((T.blocks : ℝ) - S)

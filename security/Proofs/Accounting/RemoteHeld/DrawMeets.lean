@@ -61,7 +61,7 @@ that accepts everything (`*_nontrivial`).
   model at no rates, bursts or chip blocks (`acceptAll_inside`). It is `Live` and `Counted`; no opening of its
   receipts verifies (`unsalted`: every salt empty), so the binding term is `0`; its draw always opens the wrong receipt,
   so every advantage is `0`; and its pooled bound is `0`. Each conclusion then claims probability at most
-  `δ + 2^-64` (and `δs`) for an event of probability `1`.
+  `δ + 2^-256` (and `δs`) for an event of probability `1`.
 -/
 
 @[expose] public section
@@ -81,7 +81,7 @@ theorem offsets_zero_lt {m U k : ℕ} (b : Blocks m) (hk : k ≤ U) :
   intro l hl
   simp only [offsets, offset]
   split_ifs with hlm
-  · cases h : Accounting.Actual.wordIndex (U - l) (word (U - l) (b ⟨l, hlm⟩)) with
+  · cases h : pick (U - l) (b ⟨l, hlm⟩) with
     | none =>
       simp
       omega
@@ -298,10 +298,16 @@ theorem wordIndex_one_isSome {w : ℕ} (u : Pous.Bits w) : (Accounting.Actual.wo
   rw [dite_eq_left h]
   rfl
 
+theorem pick_one_isSome (b : Pous.Bits 512) : (pick 1 b).isSome = true := by
+  unfold pick
+  rw [List.findSome?_isSome_iff]
+  exact ⟨0, List.mem_range.2 (lt_of_lt_of_le (by norm_num) (Draw.four_le_words (N := 1) (by norm_num))),
+    wordIndex_one_isSome _⟩
+
 theorem accepted_one {m : ℕ} (b : Blocks m) : accepted 1 1 b := fun i hi => by
   have h0 : (i : ℕ) = 0 := by omega
   rw [h0, Nat.sub_zero]
-  exact wordIndex_one_isSome _
+  exact pick_one_isSome _
 
 /-- The toy's draw always opens its one receipt, which is wrong. -/
 theorem toy_lands (t : Fin 1) (ω : DrawCoins 1 1 Unit) (b : Blocks 1) : ¬ toy.lands t ω b := fun h => by
@@ -327,9 +333,9 @@ theorem unsalted_binding (D : Remote.Draw.Run 1 1 (fun _ => 1) 1 Unit) (prf : Fi
   exact absurd h (by simp [Hash.Hm96.SALT_BYTES])
 
 theorem toy_error (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : DrawCoins 1 1 Unit → Fin 1 → ℕ → ℕ) (δ : ℝ) :
-    δ + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 64 +
+    δ + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (toy.distinguisher prf δ t)).toReal +
-        (unsalted.binding toy prf rest).toReal = δ + 1 / 2 ^ 64 := by
+        (unsalted.binding toy prf rest).toReal = δ + 1 / 2 ^ 256 := by
   rw [unsalted_binding, sum_eq_zero fun t _ => toy_advantage prf δ t]
   simp
 
@@ -340,11 +346,11 @@ theorem not_holds_acceptAll {ε : ℝ} (hε : ε < 1) {P : DrawCoins 1 1 Unit �
   linarith
 
 /-- **`PooledSample`'s conclusion bites**: on the toy, `Live` and `Counted`, an audit that accepts everything has more
-wrong receipts than the pooled bound with probability `1`, above `PooledSample`'s error whenever `δ + 2^-64 < 1`. -/
+wrong receipts than the pooled bound with probability `1`, above `PooledSample`'s error whenever `δ + 2^-256 < 1`. -/
 theorem pooledSample_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : DrawCoins 1 1 Unit → Fin 1 → ℕ → ℕ)
-    {δ : ℝ} (hδ : δ + 1 / 2 ^ 64 < 1) :
+    {δ : ℝ} (hδ : δ + 1 / 2 ^ 256 < 1) :
     (∀ ω, acceptAll.accepts ω) ∧ Live toy ∧ Counted toy acceptAll ∧
-      ¬ acceptAll.Holds (δ + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 64 +
+      ¬ acceptAll.Holds (δ + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
           (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (toy.distinguisher prf δ t)).toReal +
           (unsalted.binding toy prf rest).toReal)
         (fun ω => (acceptAll.incorrect ω : ℝ) ≤ toy.pooled δ ω) := by
@@ -356,9 +362,9 @@ theorem pooledSample_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest
 
 /-- **`LiveCoinsSampled`'s conclusion bites**: on the toy, at `W = 0`, the toy's pooled bound on every outcome. -/
 theorem liveCoinsSampled_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : DrawCoins 1 1 Unit → Fin 1 → ℕ → ℕ)
-    {δ : ℝ} (hδ : δ + 1 / 2 ^ 64 < 1) :
+    {δ : ℝ} (hδ : δ + 1 / 2 ^ 256 < 1) :
     (∀ ω, acceptAll.accepts ω) ∧ Live toy ∧ Counted toy acceptAll ∧ (∀ ω, acceptAll.accepts ω → toy.pooled δ ω ≤ 0) ∧
-      ¬ LiveCoins acceptAll 0 (δ + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 64 +
+      ¬ LiveCoins acceptAll 0 (δ + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
           (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (toy.distinguisher prf δ t)).toReal +
           (unsalted.binding toy prf rest).toReal) := by
   refine ⟨fun _ => trivial, toy_live, toy_counted, fun ω _ => toy_pooled δ ω, ?_⟩
@@ -372,10 +378,10 @@ theorem liveCoinsSampled_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (
 inside the device model at no rates, bursts or chip blocks (`acceptAll_inside`), credits over an instant a planned
 block its node never held, with probability `1`. -/
 theorem heldSampled_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : DrawCoins 1 1 Unit → Fin 1 → ℕ → ℕ)
-    {δs δc : ℝ} (hδ : δs + (δc + 1 / 2 ^ 64) < 1) :
+    {δs δc : ℝ} (hδ : δs + (δc + 1 / 2 ^ 256) < 1) :
     (∀ ω, acceptAll.accepts ω) ∧ Identity acceptAll ∧ SquaringCeiling acceptAll 0 1 0 ∧ Disks acceptAll 0 0 ∧
       ChipCeiling acceptAll 0 ∧ Routed acceptAll ∧ Live toy ∧ Counted toy acceptAll ∧
-      ¬ acceptAll.Holds (δs + (δc + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 64 +
+      ¬ acceptAll.Holds (δs + (δc + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
           (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (toy.distinguisher prf δc t)).toReal +
           (unsalted.binding toy prf rest).toReal)) fun ω =>
         (acceptAll.planned ω : ℝ) - toy.pooled δc ω - (((0 : ℝ) / 1 + 0) * (((0 : ℕ) : ℝ) - (0 : ℕ)) + (0 + 0)) -
@@ -392,10 +398,10 @@ theorem heldSampled_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest 
 /-- **`HeldOverTimeSampled`'s conclusion bites**: as `heldSampled_nontrivial`, over the span `[0, 1)` (`toyPace`), the
 audit credits a block-tick its node never held, with probability `1`. -/
 theorem heldOverTimeSampled_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1)
-    (rest : DrawCoins 1 1 Unit → Fin 1 → ℕ → ℕ) {δs δc : ℝ} (hδ : δs + (δc + 1 / 2 ^ 64) < 1) :
+    (rest : DrawCoins 1 1 Unit → Fin 1 → ℕ → ℕ) {δs δc : ℝ} (hδ : δs + (δc + 1 / 2 ^ 256) < 1) :
     (∀ ω, acceptAll.accepts ω) ∧ Identity acceptAll ∧ SquaringCeiling acceptAll 0 1 0 ∧ Disks acceptAll 0 0 ∧
       ChipCeiling acceptAll 0 ∧ Routed acceptAll ∧ Live toy ∧ Counted toy acceptAll ∧
-      ¬ acceptAll.Holds (δs + (δc + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 64 +
+      ¬ acceptAll.Holds (δs + (δc + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
           (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (toy.distinguisher prf δc t)).toReal +
           (unsalted.binding toy prf rest).toReal)) fun ω =>
         ((toyPace.stop ω - toyPace.start ω : ℕ) : ℝ) * ((acceptAll.blocks : ℝ) - (0 : ℕ))
@@ -418,10 +424,10 @@ theorem heldOverTimeSampled_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1
 /-- **`HeldOverTimeLinksSampled`'s conclusion bites**: as `heldOverTimeSampled_nontrivial`, with no link rate or burst
 either, which the audit's node meets too (`acceptAll_inside`). -/
 theorem heldOverTimeLinksSampled_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1)
-    (rest : DrawCoins 1 1 Unit → Fin 1 → ℕ → ℕ) {δs δc : ℝ} (hδ : δs + (δc + 1 / 2 ^ 64) < 1) :
+    (rest : DrawCoins 1 1 Unit → Fin 1 → ℕ → ℕ) {δs δc : ℝ} (hδ : δs + (δc + 1 / 2 ^ 256) < 1) :
     (∀ ω, acceptAll.accepts ω) ∧ Links acceptAll 0 0 ∧ SquaringCeiling acceptAll 0 1 0 ∧ Disks acceptAll 0 0 ∧
       ChipCeiling acceptAll 0 ∧ Routed acceptAll ∧ Live toy ∧ Counted toy acceptAll ∧
-      ¬ acceptAll.Holds (δs + (δc + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 64 +
+      ¬ acceptAll.Holds (δs + (δc + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 256 +
           (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (toy.distinguisher prf δc t)).toReal +
           (unsalted.binding toy prf rest).toReal)) fun ω =>
         ((toyPace.stop ω - toyPace.start ω : ℕ) : ℝ) * ((acceptAll.blocks : ℝ) - (0 : ℕ))
