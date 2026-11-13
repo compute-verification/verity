@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.SampledTwo.CoinMap
-public import Proofs.Properties.Verity.SampledTwo.CoinMapAgree
+public import Proofs.Properties.Verity.SampledTwo.CoinMapLaw
 public import Proofs.Properties.Verity.SampledDraw
 public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 
