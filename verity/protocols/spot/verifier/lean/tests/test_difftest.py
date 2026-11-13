@@ -7134,8 +7134,9 @@ def test_a_two_stage_run_reaches_every_step(pieces):
         with pytest.raises(D.Reject):
             run(copy.deepcopy(refused))
     absent = _two_template_interior(case, BLOCK, SECOND_MIXED)
-    assert D.replay(RUN, absent, pieces)[0] == "reject"
-    with pytest.raises(D.Reject, match="doesn't apply to the replay block"):
+    kind, why = D.replay(RUN, absent, pieces)
+    assert kind == "reject" and "no instance of" in why, (kind, why)
+    with pytest.raises(D.Reject, match="doesn't apply to the replay block.*no instance of"):
         run(copy.deepcopy(absent))
 
 
