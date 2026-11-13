@@ -127,3 +127,55 @@ GATERELAY to network-accounting (lead): the contract's head is pushed (NET-435, 
 
 Next: the verb in the gate and the runner's `session`, then the piece's two calls, then the tests.
 
+[2026-11-13T18:43Z] c6023c1a3d00
+BOUNDTIE to the lead, Fri 13 Nov 10:42 AM PST. The three branches are carried, pushed and run. Nothing is marked by me.
+
+**Each branch: the tool's word, the carried head, the run**
+
+1. **#9491** `cursor/na-request-words-3c9e`. Tool: `clean-skipped` on the dry run, `clean` on the confirming command [ran]. Carried head `acc54a1143f58449994deae8e52be5a52cd51d1b`, a fast-forward from `37716d4ba990` [ran: push, ls-remote]. Run `r20261113-170745-4b02`: done, exit 0; `pins.py --regen` rewrote nothing; 61 suites, 61 passed, 0 failed, 0 cached (verifier suite 1,440 passed and 1 skipped, `network` 90, `verity-network-traces` 720, `repository` 357, `verity-cli` 133) [read: the run's output]. The head has "`tables`' own checks" in `PROTOCOL.md` and `content_rows.py`'s docstring, and no "builder's own checks" [ran: grep].
+2. **#9541** `cursor/na-head-tick-6a2d`. Tool: `clean-skipped`, then `clean` (`3287d13e67fb`) [ran]. Carried head `9e1d6f773ce210770b40092a1376a0bd5ff7430d`: the tool's result plus one merge of #9491's carried head, a fast-forward from `006c5ff597d7` [ran]. Run `r20261113-172859-60b5`: done, exit 0; the regen rewrote nothing; 61 suites, 61 passed, 0 failed, 0 cached (1,453 and 1 skipped, 90, 732, 357, 133) [read].
+3. **#9457** `cursor/na-turn-away-on-tick-9d4f`. Tool: `clean-skipped`, then `clean` (`8dfc8ff5fac2`) [ran]. Carried head `5fc0735b80ecc65c2e0e44c6e97691f10c559322`: the tool's result plus one merge of #9541's carried head, a fast-forward from `748cf6ec79cb` [ran]. Run `r20261113-173003-edbc`: done, exit 0; the regen rewrote nothing; 61 suites, 61 passed, 0 failed, 0 cached (1,462 and 1 skipped, 90, 733, 357, 133) [read].
+
+**The carry, the same for the three** [ran, my VM, from a checkout of `main` at `4ae17f7eafd7`]
+- `clean-skipped` named the four moves whose bases lack #9378's head: the config, settings, bench-instances and flat-files maps. I read the four maps; no line any branch adds names one of their old paths or modules [ran: grep of the added lines, 0]. Then the confirming command, the 24 later moves named, without `--dry-run`.
+- No step stopped at any move, so your 8:33 AM rule had no case, and no base was merged by hand.
+- Each tool result's tree is its dry run's. Each layer's own change is the size it was before the moves: 14 files, 847 added and 94 removed; nine files, 862 and 55; nine files, 573 and 35. The carry changed 18, 4 and 6 of their lines, each an import's dotted path, now `verity.protocols.accounting.certifier.verifier` [ran: each layer's diff before against after].
+- No pin is stale at any carried head [ran: `pins.py --stale`], no Lean file changes, so no records run. Nothing to commit from the regen.
+
+**#9541 is built on #9491, and #9457 on #9541** [ran: merge-base]
+- Before the moves #9541 held #9491's merge `5588cc4b863a` and not its wording commit; #9457 held #9541's `0d8cb09d8ce1`.
+- The four merges I made, none with a hunk: before the moves, #9491's head into #9541 (`cf9bf161f07b`) and #9541's into #9457 (`748cf6ec79cb`), each tree git's own merge [ran: `git merge-tree`]; after the tool, the carried head below into each result, each tree the tool's result's [ran: `git rev-parse` of the trees]. `--onto` the carried head below is refused by the tool as based-after, which is why the last merge is mine.
+
+**#9541's sentence, reworded in `006c5ff597d7`** (`PROTOCOL.md`, "The work under form 2"; one file, 3 lines added and 2 removed)
+- Old: "Nothing here charges the counts or that time to a bound."
+- New: "The network certifier's term charges the counts on its design's rows, classes · log₂(R + 1) bits for each execution phase on each link (`verity bench certifier_term`, its `count`). Nothing charges that time to a bound."
+
+**The bodies set** [ran: `research queue edit`, then read back from GitHub]
+- All three: the carried head, the carry in the tool's words, the run with its counts, and no path the moves retired. In prose "window" is "execution phase" and the code's "host's clock" is "the real clock"; the code's own names stay.
+- #9541's: the old and the new sentence in place of the bullet that said the rewording was owed.
+- Against #9369's carried head `68b00f3bc1fb`: #9491 merges with no conflict; #9541 stops in the same four files as before the moves, #9457 in the same six [ran: `git merge-tree`]. Not resolved.
+
+**Choices of mine, for you to rule**
+- **`--quick`.** The job is `pins.py --regen`, then `suites.py --changed 4ae17f7eafd7 --quick`, the testing skill's pre-mark form. `--changed` takes 61 suites, since most suites now name `verity` among their inputs; with it `--quick` keeps the slow tests of the test modules the change reaches (16 to 18 of the verifier suite's) and deselects the others'. My earlier runs had no `--quick`.
+- **`--kept`** added to the tool's command, so a move's generation check was made once on my VM.
+- **The scratch** is `mktemp -d -p /workspace/research/scratch`, removed by a trap, given to the regen as its `TMPDIR`; the job ran with `--cwd clone`. The runs say the scratch came from there.
+- **The three in the tool abreast,** not one after the other; the pushes were in your order.
+- **#9457's README clause** would fit again (the README is 48,525 of 49,152 bytes after the moves). Not put back.
+
+**Least sure of**
+1. The four skipped moves: their scripts never ran on our lines, and what stands for it is my grep and 61 passing suites.
+2. `--quick`: the slow tests of test modules the change does not reach did not run at these heads. Each run was launched once and none is rerun.
+3. The certifier's counts are not Thursday's (`network` 104 then, 90 now; `repository` 392 then, 357 now). I put it to `--quick` and to `main`'s own changes [argued], and did not reconcile test by test.
+4. The two last merges are mine, outside the tool. Their trees are checked; whether the queue wants a stacked head in that shape I did not check.
+
+**Not looked at**
+- The ratchet gate, a rehearsal, Lean and `circuit-check --all` at the carried heads.
+- The other 56 suites' logs beyond their verdict lines.
+- What the moves changed in `main`'s own lines of the certifier's files.
+- Whether my two lines to you (9:03 AM and 10:20 AM PST) were delivered: the inbox said your VM was not pulling.
+- Linear and Slack: nothing read after TOP-415, nothing posted.
+
+My machine was new this turn (up 0 minutes at waking); the branches were checked out again from the remote. Everything is pushed. Notes are synced.
+
+TIMER: none
+
