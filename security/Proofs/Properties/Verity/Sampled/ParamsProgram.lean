@@ -27,8 +27,6 @@ theorem paramsParsed_program {j : Lean.Json} {p : _root_.Spot.OneStage.Params}
   rw [_root_.Spot.OneStage.paramsParsed.eq_def]
   ret_walk_aux [_root_.Spot.Program.parse, _root_.Spot.OneStage.Params.mk] =>
     subst_vars
-    first
-      | exact ⟨_, by with_reducible assumption⟩
-      | exact ⟨_, ‹_›⟩
+    exact ⟨_, by with_reducible assumption⟩
 
 end Verity.Sampled
