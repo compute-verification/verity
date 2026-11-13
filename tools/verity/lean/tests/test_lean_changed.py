@@ -1392,10 +1392,79 @@ def test_try_with_siblings_compiles_the_file_then_imports_it_beside_its_built_si
     assert ran[0][1:4] == ["env", "lean", "--setup"]
     assert any("siblings: Proofs.Flock.X and Proofs.Y both declare 'f'" in s for s in said), said
     assert not list((tree / "Sec" / "Proofs" / LC.SIBLINGS.COPIES).iterdir()), "the scratch build is removed"
-    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=lambda _: None) == 0 and len(ran) == 1, \
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=lambda _: None) == 0 and len(ran) == 2, \
         "no check without --siblings"
     with pytest.raises(SystemExit):
         LC.main(["--records", "Sec", "--siblings"])
+
+
+def test_try_with_siblings_has_lake_rebuild_the_siblings_a_refusal_names_and_elaborates_the_stub_once_more(
+        trying, tmp_path, monkeypatch):
+    """`Proofs.Y`, left built against an older build of an import, holds a theorem Lean made with another type than
+    `Proofs.Z`'s, and the stub is refused on a name no source declares. The refusal goes through `clashed`, as an import
+    clash in FILE's own elaboration does, and Lake then builds the two it names: the rebuild's line, and the stub once
+    more, which passes. A refusal of FILE's own build forgets and rebuilds the sibling alone, and leaves the product the
+    tree holds of FILE; the same refusal after it is the verdict, with no second rebuild. A rebuild that fails is the
+    verdict too."""
+    tree, calls = trying
+    proofs = tree / "Sec" / "Proofs"
+    (proofs / "Flock").mkdir(parents=True)
+    (proofs / "lakefile.toml").write_text('name = "p"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Proofs"\n')
+    for rel in ("Flock/X.lean", "Y.lean", "Z.lean"):
+        (proofs / rel).write_text("module\n")
+
+    def products() -> list[Path]:
+        return [module(proofs / LC.SIBLINGS.LIB, f"Proofs/{name}", trace=of(proofs / f"{name}.lean"))
+                for name in ("Flock/X", "Y", "Z")]
+
+    refusal = "error: import Proofs.Z failed, environment already contains 'Defs.step.eq_1' from Proofs.Y\n"
+    own = "error: import Proofs.Y failed, environment already contains 'f' from Proofs.Flock.X\n"
+    stubs: list[str] = []
+    monkeypatch.setattr(LC.SIBLINGS, "run", lambda argv, cwd: (1 if stubs[0] else 0, stubs.pop(0), 2.0, 700))
+
+    def tried() -> tuple[int, list[str], list[list[str]]]:
+        """A try: (its status, the check's lines, the targets of each `lake build` it ran)."""
+        said, before = [], len(calls["build"])
+        rc = LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append, siblings=True)
+        assert not stubs, "each stub's answer was read"
+        return rc, [s for s in said if "siblings:" in s], [c[2] for c in calls["build"][before:] if c[4] is None]
+
+    x, y, z = products()
+    stubs[:] = [refusal, ""]
+    calls["deps_text"] = "✔ [2/3] Built Proofs.Y (1.0s)\n⚠ [3/3] Replayed Proofs.Z\n"
+    rc, lines, built = tried()
+    assert rc == 0 and built == [["+Proofs.Flock.X:deps"], ["+Proofs.Z", "+Proofs.Y"]], (lines, built)
+    assert x.exists() and not y.exists() and not z.exists(), "both lose their traces, as `clashed` leaves them for Lake"
+    assert not list(y.parent.glob("Y.*.hash")) and not list(z.parent.glob("Z.*.hash"))
+    assert len(lines) == 2 and lines[0].startswith(
+        "lean-try: Sec/Proofs/Flock/X.lean: siblings: Proofs.Z and Proofs.Y both declare 'Defs.step.eq_1' as they are built "
+        "here: Lake rebuilt Proofs.Y in ") and lines[0].endswith(" s, and the stub is elaborated once more"), lines
+    assert lines[1] == ("lean-try: Sec/Proofs/Flock/X.lean: siblings: no built module of its package that doesn't import "
+                        "Proofs.Flock.X declares a name it does (2 imported in 2 s, peak 700 MB)")
+
+    x, y, z = products()
+    stubs[:] = [own, own]
+    rc, lines, built = tried()
+    assert rc == 1 and built == [["+Proofs.Flock.X:deps"], ["+Proofs.Y"]], (lines, built)
+    assert x.exists() and not y.exists() and z.exists(), "FILE's own product in the tree is not the build that clashed"
+    assert len(lines) == 2 and "Proofs.Flock.X and Proofs.Y both declare 'f' as they are built here: Lake rebuilt Proofs.Y" in lines[0]
+    assert lines[1].endswith(
+        "siblings: Proofs.Flock.X and Proofs.Y both declare 'f', which Lean refuses when it imports both, as the package's "
+        "root does: rename one, and Lake holds Proofs.Y current, which this try had it build (2 imported in 2 s, peak 700 MB)")
+
+    x, y, z = products()
+    stubs[:] = [refusal]
+    recorded = LC.build
+
+    def build(pkg, t, lake, targets=None, *a, **k):
+        got = recorded(pkg, t, lake, targets, *a, **k)
+        return (1, "error: Proofs/Y.lean:1:0: unknown constant\nerror: build failed\n") if targets == ["+Proofs.Z", "+Proofs.Y"] else got
+
+    monkeypatch.setattr(LC, "build", build)
+    rc, lines, built = tried()
+    assert rc == 1 and len(lines) == 1 and lines[0].endswith(
+        "siblings: Proofs.Z and Proofs.Y both declare 'Defs.step.eq_1' as they are built here, and Lake's rebuild of "
+        "Proofs.Z and Proofs.Y failed (exit 1), its last line: error: build failed; Proofs.Flock.X's own names are unchecked"), lines
 
 
 def test_try_with_siblings_on_a_tree_synced_across_a_move_leaves_out_what_was_built_before_it(trying, tmp_path, monkeypatch):

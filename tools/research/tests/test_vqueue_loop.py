@@ -105,6 +105,7 @@ class Env:
         self.graph2.list_graph(f"ready:{self.main()}", {"schema": GRAPH_V2, "commit": self.main(), "tasks": []})
 
     def loop(self, decide, clone: str = "clone", **kw) -> Loop:
+        kw.setdefault("left_out", None)         # most tests count the lines a tick logs, which `leave` lines would add to
         path = self.tmp / clone
         if not path.exists():
             _git(self.tmp, "clone", "-q", str(self.o.origin), str(path))
@@ -1952,6 +1953,79 @@ def test_with_no_records_run_a_lean_pr_waits_for_a_candidate_with_no_lean_change
     assert [r["base"] for r in lines[2:]] == [lines[0]["sha"], lines[2]["sha"]]
 
 
+def test_a_ready_pr_left_out_of_the_ticks_builds_is_logged_once_for_each_head_and_cause(env):
+    """End to end at `--batch` 1 and `--depth` 1: the first tick builds #1 alone and logs why #2 waits (`leave`: its number,
+    head, cause and why) and why #3, marked and held by a reviewer, isn't among the PRs the policy reads; the next logs #2's
+    new cause, the chain full, and nothing of #3, whose reason holds; a third logs nothing; a new head of #3 is logged
+    again.  A PR with no ready mark is none of them."""
+    env.put(1, {"a.txt": "1\n"})
+    h2 = env.put(2, {"b.txt": "2\n"})
+    h3 = env.put(3, {"c.txt": "3\n"})
+    env.o.gh.put(4, env.o.change({"d.txt": "4\n"}), ready=False)
+    env.labels.held.add(3)
+    loop = env.loop(vqueue.decide, batch=1, depth=1, left_out=vqueue.left_out)
+
+    def leaves() -> list[tuple]:
+        return [(r["number"], r["heads"], r["cause"]) for r in env.lines() if r["action"] == "leave"]
+
+    loop.tick()
+    assert leaves() == [(3, [h3], "held"), (2, [h2], "batch full")]
+    assert next(r for r in env.lines() if r["action"] == "leave" and r["number"] == 2)["why"] == (
+        "behind the PRs ranked before it: a batch holds at most 1 (--batch)")
+    loop.tick()
+    loop.tick()
+    assert leaves() == [(3, [h3], "held"), (2, [h2], "batch full"), (2, [h2], "chain full")]
+    h3b = env.put(3, {"c.txt": "3b\n"})
+    loop.tick()
+    assert leaves()[3:] == [(3, [h3b], "held")]
+
+
+def test_a_tick_whose_leave_lines_fail_has_still_written_its_state_file(env):
+    """The `leave` lines come last: a `left_out` that raises fails the tick only once its actions are logged and its state
+    file written (`Loop.keep`)."""
+    env.put(1, {"a.txt": "1\n"})
+
+    def broken(s: Snapshot) -> list:
+        raise RuntimeError("left_out broke")
+
+    loop = env.loop(policy, state=(state := env.tmp / "vqueue" / "state.json"), left_out=broken)
+    with pytest.raises(RuntimeError, match="left_out broke"):
+        loop.tick()
+    assert json.loads(state.read_text())["tick"] == 1 and _acts(env.lines()) == ["build"], env.lines()
+
+
+@pytest.mark.parametrize("label", [False, True])
+def test_a_pr_left_out_for_holding_a_held_head_tells_its_owner_once_a_head_which_head_and_what_releases_it(env, label):
+    """A marked PR holding a held PR's head, directly or through another PR, goes into no candidate (`World.ready`): its owner
+    is told once a head and held head the head it waits on and what releases it (`Loop._behind_held`), and `research queue
+    status` says the same.  The hold is a reviewer's, or a `hold` label, which keeps the held PR from being admitted."""
+    env.o.gh.put(1, one := env.o.change({"a.txt": "1\n"}), labels=("hold",) if label else ())
+    env.o.gh.put(2, two := env.o.change({"b.txt": "2\n"}, base=one))
+    env.o.gh.put(3, three := env.o.change({"c.txt": "3\n"}, base=two))
+    if label:
+        hold, release = "held (`hold` label)", "the `hold` label comes off #1"
+    else:
+        env.labels.held.add(1)
+        hold, release = ("held by reviewer (no reason)",
+                         "#1's holder gives that head a `land` verdict (`research queue review 1 --land`)")
+    why = (f"it waits on #1's head {one[:12]}, which is {hold}: it is taken once {release}, or once it no longer holds "
+           "#1's commits")
+    loop = env.loop(lambda s: [])
+    loop.tick()
+    told = [r for r in env.lines() if r["action"] == "behind_held"]
+    assert [(r["number"], r["heads"], r["base"], r["why"]) for r in told] == [
+        (2, [two], one, why), (3, [three], one, why)], told
+    assert told[0]["text"] == f"#2 at {two[:12]} goes into no candidate on `main` {env.main()[:12]}: {why}"
+    assert env.posts == [f"{' '.join(r['to'])} vqueue: {r['text']}" for r in told], env.posts
+    loop.tick()
+    assert len(env.posts) == 2, env.posts
+    env.o.gh.put(3, three_b := env.o.change({"c.txt": "3b\n"}, base=two))
+    loop.tick()
+    assert [(r["number"], r["heads"]) for r in env.lines() if r["action"] == "behind_held"][2:] == [(3, [three_b])]
+    status = loop.world.q.status(loop=True, reviews=env.labels.reviews)
+    assert {n: (status[n].state, status[n].why) for n in (2, 3)} == {2: ("waiting", why), 3: ("waiting", why)}, status
+
+
 def test_a_failure_s_tests_are_read_beside_its_base_s_and_one_whose_tests_the_base_fails_too_is_inherited(env):
     main = env.main()
     env.put(1, {"a.txt": "1\n"})
@@ -2580,6 +2654,37 @@ def test_an_advance_is_logged_once_pushed_and_drive_s_steps_after_it_are_a_step_
     assert (again["action"], again["done"], drop["action"], drop["why"]) == ("on_main", True, "drop", "on main")
     assert calls == [(sha, built["base"], [1], []), (sha, built["base"], [1], ["stacked:9<1"])]   # who was told, kept
     assert loop.tick() == [] and len(calls) == 2
+
+
+def test_a_push_of_main_that_took_but_raised_gets_its_advance_logged_at_its_drop_and_its_steps_run_once(env):
+    """A push of `main` that lands but whose call raises (a timeout) logs only its error: no advance done, so `Past.moved`
+    never lists it, and the next tick only drops the candidate as on `main`, and the owners of PRs stacked on its members were
+    never told.  That drop logs the advance done with its steps after it (`on_main`), which run once, from its base."""
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(policy)
+    (built,) = loop.tick()
+    keys = env.listed(sha := built["sha"], {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    calls, advance = [], loop.world.advance
+
+    def on_main(sha: str, base: str, members, told: list[str]) -> None:
+        calls.append((sha, base, [m.pr for m in members]))
+
+    def timed_out(sha: str, base: str) -> None:
+        advance(sha, base)
+        raise subprocess.TimeoutExpired(["git", "push"], 120)
+
+    loop.world.on_main, loop.world.advance = on_main, timed_out
+    (failed,) = loop.tick()
+    assert (failed["action"], failed.get("done"), failed.get("on_main"), env.main()) == ("advance", None, None, sha)
+    loop.world.advance = advance
+    drop, reached, steps = loop.tick()
+    assert (drop["action"], drop["why"], drop["outcome"]["state"]) == ("drop", "on main", PASS)
+    assert (reached["action"], reached["done"], reached["on_main"], reached["base"], reached["members"]) == (
+        "advance", True, True, built["base"], [1])
+    assert (steps["action"], steps["done"]) == ("on_main", True)
+    assert calls == [(sha, built["base"], [1])]
+    assert loop.tick() == [] and loop.tick() == [] and len(calls) == 1
 
 
 def test_a_tick_advancing_through_stacked_passed_candidates_pushes_each_with_its_lease_and_runs_its_steps_once(env):
@@ -4006,6 +4111,21 @@ class Runs:
         self.dirs += [d] if d not in self.dirs else []
         return f"c-{n}"
 
+    def runs_on(self, sha: str, shard: int, step: str, plan: tuple[tuple[str, ...], ...] = PLAN) -> str:
+        """Shard ``shard`` of the newest check of ``sha`` still runs ``step``, each other step it holds passed, as its live
+        record and its state say.  The run's id."""
+        from research.landing import LIVE
+
+        n = [n for n, (c, *_) in enumerate(self.launches, 1) if c == sha][-len(plan):][shard - 1]
+        (d := self.tmp / f"c-{n}").mkdir(parents=True, exist_ok=True)
+        done = [{"step": x, "status": "passed"} for x in (*PREFLIGHT, *plan[shard - 1]) if x != step]
+        (d / "steps.jsonl").write_text("".join(json.dumps(r) + "\n" for r in done))
+        (d / LIVE).write_text(json.dumps({"schema": "check-live/v1", "state": "running", "steps": [
+            *({"step": r["step"], "state": "passed"} for r in done), {"step": step, "state": "running"}]}))
+        self.state[f"c-{n}"] = ("running", None, None, None)
+        self.dirs += [d] if d not in self.dirs else []
+        return f"c-{n}"
+
 
 def _check(env: Env, monkeypatch, decide=vqueue.decide, **kw) -> tuple[Loop, Runs]:
     loop = env.loop(decide, slim=vqueue_slim, gate="check", **kw)
@@ -4876,6 +4996,36 @@ def test_under_gate_check_what_a_candidate_fails_off_the_gate_waits_for_its_base
     logged = loop.tick()
     assert _acts(logged) == ["slim", *(["ring"] if base == "passed" else [])]
     assert len(env.posts) == (base == "passed") and loop.tick() == []
+
+
+def test_under_gate_check_a_candidate_whose_shard_runs_only_circuit_check_lands_and_its_red_there_rings_once_the_run_ends(
+        env, monkeypatch):
+    """circuit-check is off the merge gate: a candidate whose check passed every step it is judged on while one shard still
+    runs circuit-check lands at once, and its drop on `main` cancels nothing, its line keeping the run's record.  While that
+    runs, nothing is read or rung of it; once it ended, what it failed there that `main`'s check passed rings the pins' owner,
+    as a candidate's red off the gate does, an `off_gate` line saying it was read, and no later tick reads it again."""
+    loop, runs, main, sha = _off(env, monkeypatch, CIRCUITS, decide=vqueue.decide)
+    runs.end(main)
+    runs.end(sha)
+    shard = runs.runs_on(sha, 3, "circuit-check")
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "slim", "advance", "on_main", "drop"] and env.main() == sha
+    judged, drop = logged[1], logged[-1]
+    assert judged["record"]["verdict"]["state"] == PASS and judged["record"]["still_running"]
+    assert (drop["sha"], drop["why"]) == (sha, "on main") and "beside_cancelled" not in drop
+    assert drop["off_gate_running"]["still_running"] and not runs.cancelled and runs.state[shard][0] == "running"
+    assert loop.tick() == [] and env.posts == [] and not runs.cancelled
+    runs.end(sha, also={"circuit-check": _circuit(f"lowering/pin-mismatch {HEAD}")})
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "ring", "off_gate"] and not runs.cancelled
+    beside, ring, read = logged
+    assert (beside["sha"], beside["why"], "still_running" in beside["record"]) == (sha, "judged pass beside `main`", False)
+    assert (ring["sha"], ring["step"], ring["failures"], ring["to"]) == (
+        sha, "circuit-check", [f"lowering/pin-mismatch {HEAD}"], ["@heads"])
+    assert env.posts == ["@heads vqueue: " + _off_said(sha, "#1", "circuit-check", main,
+                                                       f"lowering/pin-mismatch {HEAD} it failed")]
+    assert (read["sha"], read["base"], "still_running" in read["record"]) == (sha, main, False)
+    assert loop.tick() == [] and len(env.posts) == 1 and not L.Past.read(env.log, 0).off_gate_running()
 
 
 def test_under_gate_check_a_red_off_the_gate_waits_for_the_run_beside_main_s_check_started_again_after_infra(env, monkeypatch):

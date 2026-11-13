@@ -17,7 +17,8 @@ store      E = the codec over the payload in place, by kv.cu (`../word_codec/kv.
            registration's key and the store's positions
 pass       on each GPU, its seed, signs and constants derived from the previous root in its root ring
            (`rs_chain_prepare`), its shard's sketch-sha512 receipts on tensor cores with the leaves and levels up to
-           each chunk's root at hc hashed under the reads (`rs_pass`), and its share of the padding up to hc, and
+           each chunk's root at hc hashed under the reads (`rs_pass`, or with `--leaf-ctas` `rs_leaf_pass`, whose
+           reading warps hash the leaves and store no receipt), and its share of the padding up to hc, and
            beside it on two streams of its own its host segment's, by a few CTAs (`--host-ctas`, `--host-consumers`)
            over PCIe; then on the leader (GPU 0) the levels above hc from every segment's over P2P, the root written
            to every GPU's ring (`rs_top`). Each pass is queued on every GPU behind the leader's event for the root it chains from, while
@@ -37,7 +38,9 @@ GPU, and with a host tier one more a GPU in host memory, so its tree has padding
 the payload root against `audit.payload_tree` and blocks of the store against `codec.encode` (at each segment's first
 block and the store's last), a pass's root against `receipts.tree` over the reference's receipts, and sessions under
 the registration's key, one honest and accepted by `audit.AuditRun`, one with 1/16 of its blocks dropped and rejected at
-a receipt, and with a host tier one with only host blocks dropped (every fourth) and rejected at a receipt; then in
+a receipt, and with a host tier one with only host blocks dropped (every fourth) and rejected at a receipt; with
+`--leaf-ctas`, the leaf pass over the same store (`GpuBackend.gate_leaf_pass`): that pass's root and kept levels, no
+receipt written, its receipts when asked for against the reference's, and its sessions; then in
 calibration, the chained pass against the plain pass at every kept level over the whole store, and its seed and signs
 against the reference's.
 """
@@ -198,6 +201,7 @@ SESSION = {   # session.cu's own functions, beside the reader's it includes (`re
     "rs_payload_leaves": [_v, _u64, _u64, _v, _v],
     "rs_gather64": [_v, _u64, _v, _v],
     "rs_pass": [_v, _u64, _u64, _v, _v, _v, _v, _v, _v, _i, _u64, _i, _u64, _u64, _v, _v, _v, _v, _i],
+    "rs_leaf_pass": [_v, _u64, _u64, _v, _v, _v, _v, _v, _i, _u64, _i, _u64, _u64, _v, _v, _v, _v, _i],
     "rs_top": [_v, _v, _i, _v, _i, _i, _v, _i, _v],
     "rs_enable_peers": [],
     "rs_subtrees": [_v, _u64, _v, _v, _u64, _i, _v, _v, _v],
@@ -399,6 +403,7 @@ class DeviceStore:
         self.payload_key = key
         self.gpus, self.hbm_blocks = gpus, blocks
         self.host_ctas, self.host_consumers = host_ctas, host_consumers
+        self.leaf_ctas, self.leaf_receipts = 0, False
         chunks, hchunks = blocks // chunk, host_blocks // chunk
         per = [chunks // G + (g < chunks % G) for g in range(G)]
         if hbm is not None:
@@ -511,6 +516,8 @@ class DeviceStore:
             raise ValueError(f"a chunk of {chunk} blocks: every segment is whole chunks of a power of two of leaves")
         self.chunk, self.hc = chunk, lc.bit_length() - 1
         self.h0 = max(1, min(kept_from, self.hc))
+        if self.leaf_ctas and self.h0 > 8:
+            raise ValueError(f"a leaf pass keeps its levels from h0 <= 8, not {self.h0}")
         self.sketch_ctas = sketch_ctas
         hc, h0, H, G = self.hc, self.h0, self.H, len(self.gpus)
         self.kept_at = []
@@ -553,13 +560,36 @@ class DeviceStore:
             with self.on(self.gpus[g]):
                 x = {"ctr": torch.empty(3 + n // ready_blocks + n // chunk, dtype=torch.int32, device=dev),
                      "ys": torch.empty((n, 8), dtype=torch.int64, device=dev),
-                     "dig": torch.empty((2 * lc, 8), dtype=torch.int64, device=dev),
+                     "dig": torch.empty((self.leaf_rows(s), 8), dtype=torch.int64, device=dev),
                      "up": torch.empty((2 * lc, 8), dtype=torch.int64, device=dev),
                      "kept": torch.empty((SLOTS, self.kept_at[s][hc + 1], 8), dtype=torch.int64, device=dev)}
                 x["host"] = torch.empty(x["kept"].shape, dtype=torch.int64, pin_memory=True)
                 seg_ring.append(x)
         self.ring, self.seg_ring = ring, seg_ring
         self.sync()
+
+    def leaf_rows(self, s: int) -> int:
+        """The digests segment s's `dig` holds: `rs_pass`'s scratch, and in the leaf pass the shard's leaves."""
+        lc = self.chunk // PER_LEAF
+        return max(2 * lc, self.n[s] // PER_LEAF) if self.leaf_ctas and not self.on_host[s] else 2 * lc
+
+    def pass_mode(self, leaf_ctas: int = 0, receipts: bool = False) -> None:
+        """How the passes launched from now on run each GPU's shard: with `leaf_ctas` 0 by `rs_pass`, the receipts
+        stored and the leaves hashed from them by the consumers; with more, by `rs_leaf_pass` on that many reading
+        CTAs, whose warps hash their leaves as the receipts come and store no receipt, unless `receipts` asks for them
+        (the same bytes in the same array, for a check). The roots, the kept levels and the openings are the same
+        either way, and a host segment is always `rs_pass`'s. A caller sets it for the passes it wants and puts it
+        back."""
+        if leaf_ctas < 0 or (receipts and not leaf_ctas):
+            raise ValueError("a leaf pass has at least one reading CTA, and only a leaf pass is asked for its receipts")
+        if leaf_ctas and self.h0 > 8:
+            raise ValueError(f"a leaf pass keeps its levels from h0 <= 8, not {self.h0}")
+        self.sync()
+        self.leaf_ctas, self.leaf_receipts = leaf_ctas, receipts
+        for s, x in enumerate(self.seg_ring):
+            if x["dig"].shape[0] < self.leaf_rows(s):
+                with self.on(self.gpus[self.seg_gpu[s]]):
+                    x["dig"] = self.torch.empty((self.leaf_rows(s), 8), dtype=self.torch.int64, device=x["dig"].device)
 
     def segment_of(self, j: int) -> int:
         return bisect.bisect_right(self.base, j) - 1
@@ -709,13 +739,24 @@ class DeviceStore:
                     self.host_done[g][slot].record(gpu.host_main)
                 first, count = self.pads[g]
                 x = self.seg_ring[hbm]
-                rc = rc or so.rs_pass(self.data_g[hbm].data_ptr(), self.n[hbm], self.base[hbm], pk.data_ptr(),
-                                      x["ctr"].data_ptr(), x["ys"].data_ptr(), x["dig"].data_ptr(),
-                                      x["up"].data_ptr(), x["kept"][slot].data_ptr(), self.h0, self.chunk,
-                                      self.sketch_ctas, first * lc, count * lc, ring["pad"].data_ptr(),
-                                      ring["pad_out"].data_ptr(), s.cuda_stream, gpu.side.cuda_stream, 0)
+                leaf = bool(self.leaf_ctas) and not rc
+                if leaf:
+                    rc = so.rs_leaf_pass(self.data_g[hbm].data_ptr(), self.n[hbm], self.base[hbm], pk.data_ptr(),
+                                         x["ctr"].data_ptr(), x["ys"].data_ptr(), x["dig"].data_ptr(),
+                                         x["kept"][slot].data_ptr(), self.h0, self.chunk, self.leaf_ctas, first * lc,
+                                         count * lc, ring["pad"].data_ptr(), ring["pad_out"].data_ptr(),
+                                         s.cuda_stream, gpu.side.cuda_stream, int(self.leaf_receipts))
+                else:
+                    rc = rc or so.rs_pass(self.data_g[hbm].data_ptr(), self.n[hbm], self.base[hbm], pk.data_ptr(),
+                                          x["ctr"].data_ptr(), x["ys"].data_ptr(), x["dig"].data_ptr(),
+                                          x["up"].data_ptr(), x["kept"][slot].data_ptr(), self.h0, self.chunk,
+                                          self.sketch_ctas, first * lc, count * lc, ring["pad"].data_ptr(),
+                                          ring["pad_out"].data_ptr(), s.cuda_stream, gpu.side.cuda_stream, 0)
+                if leaf and rc == 5:
+                    raise RuntimeError(f"rs_leaf_pass on GPU {gpu.index}: the shard does not fit the leaf pass (h0 "
+                                       f"{self.h0} over 8, or its kernels on this device); pass_mode(0) is rs_pass's")
                 if rc:
-                    raise RuntimeError(f"rs_pass on GPU {gpu.index}: {rc}")
+                    raise RuntimeError(f"{'rs_leaf_pass' if leaf else 'rs_pass'} on GPU {gpu.index}: {rc}")
                 if host:
                     s.wait_event(self.host_done[g][slot])
                 self.ended[g][slot].record(s)
@@ -1099,8 +1140,9 @@ class GpuBackend:
                  calibration_passes: int = 4000, warm_openings: int = 2773, warm_passes: int = 64,
                  chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 128, payload_kept_from: int = 6,
                  trace_allocator: bool = False, host_blocks: int = 0, host_ctas: int = 16,
-                 host_consumers: int = 8, hbm=None) -> None:
+                 host_consumers: int = 8, hbm=None, leaf_ctas: int = 0) -> None:
         self.torch, self.log, self.blocks, self.warm_openings = torch, log, blocks + host_blocks, warm_openings
+        self.leaf_ctas = leaf_ctas
         self.host = {"host_ctas": host_ctas, "host_consumers": host_consumers}
         self.trace_allocator, self.calibration_trace = trace_allocator, None
         self.gate_chunk, self.gate_chunks, self.gate_samples = gate_chunk, gate_chunks, gate_samples
@@ -1131,6 +1173,7 @@ class GpuBackend:
         self.gates: dict = {}
         self.store = DeviceStore(torch, self.lib, self.lib_open, self.kv, blocks, self.salt_key, seed, gpus=self.gpus,
                                  host_blocks=host_blocks, hbm=hbm, **self.host, **self.shape)
+        self.store.pass_mode(leaf_ctas)
         self.payload_key = self.salt_key
 
     def set_payload_key(self, key: bytes) -> None:
@@ -1260,7 +1303,8 @@ class GpuBackend:
                 "warm_openings": len(draws), "warm_open_ns": open_ns,
                 "shape": {**self.shape, "h0": s.h0, "hc": s.hc, "gpus": len(self.gpus), "segment_blocks": s.n,
                           "segment_gpu": s.seg_gpu, "hbm_blocks": s.hbm_blocks, "host_blocks": s.blocks - s.hbm_blocks,
-                          "host_ctas": s.host_ctas, "host_consumers": s.host_consumers, "pads": s.pads},
+                          "host_ctas": s.host_ctas, "host_consumers": s.host_consumers, "pads": s.pads,
+                          "leaf_ctas": s.leaf_ctas},
                 "device": [torch.cuda.get_device_name(gpu.index) for gpu in self.gpus]}
 
     def arm(self, dropped) -> None:
@@ -1326,7 +1370,7 @@ class GpuBackend:
         reg = audit.Registration(registration.node, small.blocks, root, registration.codec_seed, registration.codec,
                                  registration.receipt, registration.bind, registration.layout, registration.rows)
         seed = rb.seed(self.rng.bytes(32), 0, reg.digest)
-        got, _ = small.run_pass(seed)
+        got, handle = small.run_pass(seed)
         r = rb.receipter(reg.receipt, seed, reg.rows)
         ys = [r(j, encoded[j]) for j in range(small.blocks)]
         ref = rb.tree(seed, small.plan, ys, [store_salt(self.salt_key, seed, c) for c in range(small.blocks // PER_LEAF)])
@@ -1338,6 +1382,9 @@ class GpuBackend:
         if small.hbm_blocks < small.blocks:
             out["session_skip_host"] = self.gate_session(small, reg, set(range(small.hbm_blocks, small.blocks, 4)))
             out["ok"] = out["ok"] and out["session_skip_host"]["failure"] == "receipt"
+        if self.leaf_ctas:
+            out["leaf_pass"] = self.gate_leaf_pass(small, reg, seed, got, DeviceStore.ready(handle), ys)
+            out["ok"] = out["ok"] and out["leaf_pass"]["ok"]
         # `small` and its gate sessions use the same shared libraries as the real store, so its fixed chain templates
         # replaced the real store's on every GPU. Restore both copies before calibration derives the first real pass.
         for gpu in self.gpus:
@@ -1347,6 +1394,57 @@ class GpuBackend:
         small.close()
         del small
         torch.cuda.empty_cache()
+        return out
+
+    def gate_leaf_pass(self, small: DeviceStore, reg: audit.Registration, seed: bytes, root: bytes, kept: tuple,
+                       ys: list[bytes]) -> dict:
+        """The leaf pass (`rs_leaf_pass`) over `small` under `seed`, against the pass the gate has just held to the
+        reference (its `root` and handle `kept`) and the reference's receipts `ys`: its root and every kept level are
+        that pass's, made from leaves and written into levels that were 0xA5 before it (the same seed's levels are
+        otherwise still in the ring from that pass, and its leaves in the leaves' buffer from the gate's own first leaf
+        pass); it writes nothing into the shards' receipt arrays, filled with 0xA5 before it, which the check of the
+        receipts refuses; asked for its receipts, the root is the same and they are the reference's byte for byte; and
+        its sessions are accepted when honest and rejected at a receipt with 1/16 of the blocks dropped."""
+        torch = self.torch
+        shards = [s for s in range(len(small.n)) if not small.on_host[s]]
+        want = [ys[small.base[s]:small.base[s] + small.n[s]] for s in shards]
+
+        def same(handle) -> bool:
+            return (all(torch.equal(a, b) for a, b in zip(handle[2], kept[2], strict=True))
+                    and torch.equal(handle[3], kept[3]))
+
+        def receipts() -> bool:
+            small.sync()
+            return all(digests(small.seg_ring[s]["ys"]) == w for s, w in zip(shards, want, strict=True))
+
+        def poison() -> None:
+            small.sync()
+            small.offload_jobs.join()   # no earlier pass's levels are still on their way out of the ring
+            for s in shards:
+                for k in ("ys", "dig", "kept"):
+                    small.seg_ring[s][k].view(torch.uint8).fill_(0xA5)
+
+        out = {"ctas": self.leaf_ctas}
+        small.pass_mode(self.leaf_ctas)
+        try:
+            poison()
+            got, handle = small.run_pass(seed)
+            small.sync()
+            out["root"] = got == root and same(DeviceStore.ready(handle))
+            out["no_receipt_written"] = all(bool((small.seg_ring[s]["ys"].view(torch.uint8) == 0xA5).all())
+                                            for s in shards)
+            out["control_refused"] = not receipts()
+            small.pass_mode(self.leaf_ctas, receipts=True)
+            poison()
+            got, handle = small.run_pass(seed)
+            out["receipts"] = got == root and same(DeviceStore.ready(handle)) and receipts()
+            small.pass_mode(self.leaf_ctas)
+            out["session_honest"] = self.gate_session(small, reg, set())
+            out["session_skip_sixteenth"] = self.gate_session(small, reg, set(range(0, small.blocks, 16)))
+        finally:
+            small.pass_mode(0)
+        out["ok"] = (out["root"] and out["no_receipt_written"] and out["control_refused"] and out["receipts"]
+                     and out["session_honest"]["accepted"] and out["session_skip_sixteenth"]["failure"] == "receipt")
         return out
 
     def gate_session(self, small: DeviceStore, reg: audit.Registration, dropped: set[int]) -> dict:
@@ -1410,6 +1508,10 @@ def add_arguments(ap) -> None:
     ap.add_argument("--payload-kept-from", type=int, default=6,
                     help="h0: the payload tree's levels kept; lower paths are recomputed for openings")
     ap.add_argument("--sketch-ctas", type=int, default=128, help="the receipts grid's CTAs (0: one an SM)")
+    ap.add_argument("--leaf-ctas", type=int, default=0,
+                    help="the shards' passes by the leaf pass (`rs_leaf_pass`) on this many reading CTAs, each with "
+                         "its SM to itself and the tree's consumers on the SMs they leave (0: `rs_pass`, the "
+                         "receipts stored and hashed by the consumers)")
     ap.add_argument("--trace-allocator", action="store_true",
                     help="record the caching allocator's events during calibration, against its slow passes")
     ap.add_argument("--host-gib", type=float, default=0.0,
@@ -1430,4 +1532,4 @@ def from_arguments(a, log=print) -> GpuBackend:
                       warm_openings=a.warm_openings, chunk=a.chunk_blocks, kept_from=a.kept_from,
                       sketch_ctas=a.sketch_ctas, payload_kept_from=a.payload_kept_from,
                       trace_allocator=a.trace_allocator, host_blocks=host, host_ctas=a.host_ctas,
-                      host_consumers=a.host_consumers)
+                      host_consumers=a.host_consumers, leaf_ctas=a.leaf_ctas)

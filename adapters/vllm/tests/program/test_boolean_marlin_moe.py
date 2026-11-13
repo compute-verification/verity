@@ -3,8 +3,9 @@
 divider on edge and random words; the schedule on random and edge words; the steps on random operands at every special scale byte
 and on special activations, and their halves cut at each word of x, which have exactly the step's gates; the coordinates over every cut
 pattern; a pair launch of both kinds over two experts, one outside the expert axis; the switch finds each word GEMM's Boolean
-version; and what the switch returns for the steps and the pair GEMMs, `DOT` bound as the switch binds it, builds its whole
-Program, the composite-bound Definition's, and computes the word."""
+version; what the switch returns for the steps and the pair GEMMs, `DOT` bound as the switch binds it, builds its whole
+Program, the composite-bound Definition's, and computes the word; and the switch refuses the five words whose signature has a cut, on
+that signature."""
 from __future__ import annotations
 
 __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
@@ -206,3 +207,18 @@ def test_what_the_switch_returns_builds_its_program_and_is_the_word(word, bits, 
     out = np.asarray(BS.evaluate_words(got, *ops)).reshape(n, -1)
     for i in range(n):
         assert list(evaluate(ref, *(a[i].tolist() for a in ops))) == out[i].tolist(), i
+
+
+_COORD = dict(K=128, TK=64, DOT=MM.DOT)
+_REFUSED = [(MM.MarlinMoeSchedule, dict(KT=4, NT=3, GRID=7)), (MM.MarlinMxfp4Coordinate, _COORD), (MM.MarlinMxfp4CoordinateW, _COORD),
+            (MM.MarlinMoeExpertCoordinate, dict(E=3, **_COORD)), (MM.MarlinMoeExpertCoordinateW, dict(E=3, **_COORD))]
+
+
+@pytest.mark.parametrize("word,st", _REFUSED, ids=[w.name for w, _ in _REFUSED])
+def test_the_switch_refuses_a_word_whose_signature_has_a_cut(word, st: dict) -> None:
+    """A cut is n 1-bit words, whose bit form (`bit_type`) is one `Array<n, bit>` and not the `_v2`'s n `CUT`s: `boolean_version`
+    refuses the schedule and the four coordinates on the signature, and for no other reason."""
+    with pytest.raises(SW.NoBooleanVersion, match="is not the bit form"):
+        got = SW.boolean_version(bind(word, **st))
+        pytest.fail(f"the switch now returns {got.id} for {word.name}_v1: delete this test, and from `boolean_marlin_moe`'s "
+                    "docstring the sentences that say `boolean_version` refuses the five words whose signature has a cut")

@@ -22,8 +22,8 @@ set -uo pipefail
 RUN=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$RUN/out; mkdir -p "$OUT"
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PY=${PY:-python3}
-W=$(mktemp -d); CAP=
-cleanup() { [ -n "$CAP" ] && kill -INT "$CAP" 2>/dev/null; rm -rf "$W"; }
+W=$(mktemp -d); CAPTURE_PID=
+cleanup() { [ -n "$CAPTURE_PID" ] && kill -INT "$CAPTURE_PID" 2>/dev/null; rm -rf "$W"; }
 trap cleanup EXIT
 trap 'exit 143' TERM INT
 log() { echo "capture-loopback: $*"; }
@@ -32,10 +32,10 @@ log() { echo "capture-loopback: $*"; }
   || { log "PY has no verity: give a python with the tree's packages, or run this under uv run"; exit 4; }
 command -v tcpdump > /dev/null || { log "no tcpdump on this machine"; exit 4; }
 tcpdump -i lo -U -s 130 -w "$W/lo.pcap" tcp 2> "$W/tcpdump.log" &
-CAP=$!
+CAPTURE_PID=$!
 # tcpdump says it listens once it captures, and exits before that where the job has no right to
 until grep -q "listening on" "$W/tcpdump.log"; do
-  kill -0 "$CAP" 2>/dev/null || { CAP=; log "tcpdump couldn't capture the loopback here"; exit 4; }
+  kill -0 "$CAPTURE_PID" 2>/dev/null || { CAPTURE_PID=; log "tcpdump couldn't capture the loopback here"; exit 4; }
   sleep 0.2
 done
 
@@ -45,7 +45,7 @@ rehearsed=$?
 # tcpdump gets its packets a little after they pass: the last are in the file only once it has stopped growing
 size=-1
 while now=$(stat -c %s "$W/lo.pcap") && [ "$now" != "$size" ]; do size=$now; sleep 1; done
-kill -INT "$CAP"; wait "$CAP"; CAP=
+kill -INT "$CAPTURE_PID"; wait "$CAPTURE_PID"; CAPTURE_PID=
 
 ends=$("$PY" -c 'import json, sys
 d = json.load(open(sys.argv[1]))
