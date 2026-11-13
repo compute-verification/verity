@@ -126316,3 +126316,72 @@ Kept. Nothing changed in the tree since `41ff648dbd`; this entry only.
 - `Fr.out ω r = Tape.out _ σ (place …)` as a compiled `rfl`.
 
 Branch `cursor/proofs-coinmap-8b0c` at `41ff648dbd`, pushed; nothing unpushed.
+
+## HONEST2, Fri 13 Nov 07:03Z: all thirteen files of the instance COMPILE on the moved base (`r20261113-062724-60e7`, rc 0: `Written`, `Copy`, `Needed`, `Design`, `Once`, `Five`, each probe clean; `AddressFacts/Copy.lean` builds); STATEMENT CHANGE, written and NOT compiled: the instance's end theorem takes `OwnReads`, ADDRROW's `Sits` and `PortReads`, and an accepted run (`Honest/Runs.lean`, `Honest/Sits.lean`, head `59c939d7f6f1`), with no `RowGoal` and no condition on port names
+
+Agent `bc-a5cbdecf-6e51-5b21-bf0d-c67169176e17`, branch `cursor/proofs-honest2-7c4e` at `59c939d7f6f1` (pushed). Clock: `date -u` read 07:02Z. Mailbox read at 06:55Z: nothing after the coordinator's 06:09Z.
+
+**In plain words.** The instance is the smallest replay that can be run: one template, one outer block of two inner blocks, every port linked, no wires. Everything I had written about it now compiles on the moved base. I then wrote the step that joins it to the general theorems the others proved tonight. For any registration, at any accepted run, the wiring facts hold once one fact about registered reads holds; with ADDRROW's row theorem that gives the whole address premise. At the instance two of ADDRROW's four premises are empty, because no bit the template writes sits at an unlinked port. So the instance now asks three statements nobody has proved there, and an accepted run. That step is not compiled, and it still says nothing about any play: no accepted run of the instance is shown.
+
+**1. What compiled** [run: `r20261113-062724-60e7`, vy-nebius-2, at `c87ff3683dca`, base `3b05c3a3b1a7`; done rc 0; its fetched `stdout.log`; no error line].
+- Each "lean exit 0" and "axiom probe: none of its N theorems uses an axiom beyond propext, Classical.choice and Quot.sound":
+  - `Honest/Written.lean`: 4 theorems, 359 s.
+  - `Honest/Copy.lean`: 1, 239 s.
+  - `Honest/Needed.lean`: 3, 317 s.
+  - `Honest/Design.lean`: 13, 314 s. It holds `honest_of_goal`, my 06:29Z entry's statement change.
+  - `Honest/Once.lean`: 5, 271 s.
+  - `Honest/Five.lean`: 2, 184 s.
+- `AddressFacts/Copy.lean` built there with the one-line argument (the log's "Built Proofs.Flock.SpotFlock.AddressFacts.Copy").
+- With `ede4`'s seven (`Instance`, `Addresses`, `Roots`, `Entry`, `Width`, `Rows`, `Wiring`; my 06:29Z entry), all thirteen files under `SpotFlock/Honest/` have a clean probe on the moved base. `ede4` ran at base `e033bfc14be4` and `60e7` at `3b05c3a3b1a7`; the two differ in `security/lean-audit.json` alone.
+- Memory: asked 24 GB, peak 10.5 GiB [run: `resources.jsonl`].
+
+**2. STATEMENT CHANGE: what is written, not compiled** [read: my own files; no line of either has met Lean].
+- `Honest/Runs.lean` (`48fcffb3f8`). Two theorems at ANY held code `h`, then the instance:
+  - `wiring_of_ownReads (hOwn : OwnReads h) {r : CheckedRun h.stage} (hr : r.Ok h) : Wiring h`. An accepted run's design evaluates, and the other fields of `Wiring` hold wherever it does.
+  - `addressesConnected_of_row (hOwn : OwnReads h) (hRow : RowFact h (wireMap h) (returned h) (addressOf h)) : AddressesConnected h`. Of `addressesConnected_of_runs`' eight premises, these two are left.
+  - `premises_of_row`, `honest_of_row`: the same at `held R B desc q c₀`, the second with `Accepts`.
+- `Honest/Sits.lean` (`4f848e1c6e`), at the instance:
+  - `linked_of_two`: where the design evaluates, a written bit's port has a link.
+  - `ownLeaves_held : AddressRow.OwnLeaves (held …)` and `publishedRows_held : AddressRow.PublishedRows (held …)`. Both premises start from a written bit at a port no link names; there is none.
+  - `rowFact_of_sits (hOwn : OwnReads (held …)) (hS : AddressRow.Sits (held …)) (hPR : AddressRow.PortReads) : RowFact …`, by ADDRROW's `rowFact_of_runs`.
+  - `honest_of_sits (hOwn) (hS) (hPR) (hA : Accepts (held …)) : HonestExists`, with `addressesConnected_of_sits` and `premises_of_sits` before it.
+- What it reads of others [read]: ADDRWC's `CheckedRun.design_of_ok`, `widthFact_of_runs`, `copyFact_of_runs` (compiled at `e05417eec6`); ADDRROW's `rowFact_of_runs` (not compiled that I have seen); NEEDEDBITS's `neededBits_held`, `writtenOnce_held`, `membersRowed_of_two`, `rowsArePorts_of_two`; FRAME's `inside_of_rowed`, `wiring_of_wiringOk`, `entryFact_of_wiring`, `oneTreeFact_of_wiring`.
+- What `honest_of_goal` took and this does not: `AddressRow.RowGoal`, and that no port of `R` is named like an opening row. What this takes and that did not: `OwnReads`.
+- Each file is appended to the lock's `roots` and is a lakefile root, in the commit that adds it.
+
+**3. For FRAME and ADDRWC** [read: `cursor/proofs-frame-l1-9c4e` at `792e9b6086e8`; not built by me].
+- The two general theorems are in the namespace `SpotFlock.Honest`, so they clash with no name of yours. They are written against the base's `wiring_of_wiringOk`, which takes `OwnReads h`.
+- On FRAME's line it takes `WiresMove h` and `RefReadsWf h`. When that line is the base I restate mine: `RefReadsWf h` for `OwnReads h`, with `CheckedRun.wiresMove_of_ok hr`. At the instance `RefReadsWf (held …)` is that `R.reads` is well formed (`refReads := fun _ => R.reads`).
+- ADDRWC's 06:45Z entry says it writes that general theorem when the head is named. If it does, I read ADDRWC's and delete my two.
+
+**4. For ADDRROW.**
+- I merged `20ab7ba677` (`RowOf`, `RowRead`, `RowParse`); no conflict. `Sits.lean` imports `RowOf`, so its try builds `RowRead` and `RowOf` at that head on vy-nebius-2 and I report what it prints.
+- `RowGoal` is still read by `Honest/Rows.lean`, `Copy.lean` and `Design.lean`. Keep it until I say otherwise.
+- [derived] When `Sits.lean` compiles, the files that prove the five facts at the instance one by one are superseded: `Entry`, `Width`, `Rows`, `Copy`, `Five`, `Once`, `Needed`, `Design`, and what only they read of `Roots` and `Addresses`. I then delete them in one commit and say so in that entry's title. Anyone who reads `honest_of_goal`, `five_of_goal` or `five_held`: say so before then. The join reads none [run: `git grep` over `cursor/proofs-join-42b8` at `28d27c389eba`: no file under `SpotFlock/Honest/`, and none of those names].
+
+**5. Merges and roots** [run: scripts over the tree at `59c939d7f6f1`].
+- Merged, each clean: ADDRWC `e05417eec6` (`OfRuns.lean`), ADDRROW `6e70075092` then `20ab7ba677`.
+- The lock has 213 roots, none twice, and equals `check.py`'s `text` of itself; each root is under a lakefile root; no `.lean` file under `security/Proofs` is unreached by the roots' imports (the five of my 06:29Z entry were ADDRROW's, now rooted).
+- No declaration under `SpotFlock/` is declared twice (1,554 names).
+- `pytest tests/test_lean_packages.py tests/test_lean_vocabulary.py tests/test_repository.py`: 67 passed.
+- No records run of `security/Proofs` at this head, so no ready line.
+
+**6. The run out** [run: the launcher's lines].
+- `r20261113-070024-03c3`, vy-nebius-2, pool `proofs`, `--mem-gb 24`, `--timeout 5400`, launched 07:00:47Z at `59c939d7f6f1`. Tries, in order: `Honest/Runs.lean`, `Honest/Sits.lean`.
+- Expected end about 07:25Z [guess: `60e7`'s tries took 3 to 6 minutes each, and `Sits` builds two row files first].
+
+**STOP RULE.** None reached.
+
+**NEEDS.** None.
+
+**Pushed.** `cursor/proofs-honest2-7c4e` at `59c939d7f6f1`.
+
+**Not established.**
+- That `Runs.lean` or `Sits.lean` compiles, or ADDRROW's `RowOf.lean` and `RowRead.lean` at `20ab7ba677`.
+- `OwnReads (held …)`. OWNREADS's `ownReads_of` would give it from `refReadsOwn_held` (mine, compiled, from `RefReadsNamed R B`) and `R.reads` well formed; that file is not on the base and I have not merged it.
+- `AddressRow.Sits (held …)` and `AddressRow.PortReads`: ADDRROW's premises, unproved here.
+- An accepted run of the instance (`Accepts`). Without one every theorem above holds with nothing to check.
+- That the instance passes FRAME's eleven-clause `wiringOk`: `wiringOk_held` is proved for the base's ten.
+- That `security/Proofs` builds whole or passes its records audit at `59c939d7f6f1`.
+
+**To post.** Nothing.
