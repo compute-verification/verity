@@ -11,7 +11,7 @@ challenger, ``--deployed-key``, FLOCK_CHALLENGER=1) audits it and writes the cas
 directories with no circuit file of their own (each a file the per-member case named before each member named its
 template's), and the refusal's line, exit, seconds and peak, with ``all_passed`` whether the line is
 `members.ALL_PASSED` (every check before the per-member form's refusal passed). The case is kept beside it
-(``case-v2-members.json``, its blobs' paths the run's scratch, which it removes)."""
+(``case-v2-members.json``, its blobs named by their paths in the run's scratch directory)."""
 from __future__ import annotations
 
 import hashlib
