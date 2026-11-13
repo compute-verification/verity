@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 import subprocess
-import sys
 from pathlib import Path
 
-THEORY = Path(__file__).resolve().parents[1] / "theory"
-sys.path.insert(0, str(THEORY))
-
 import fold_opt_fx as fx
+
+THEORY = Path(__file__).resolve().parents[1] / "theory"
 
 
 def test_fold_wide3_matches_fold_opt_fx(tmp_path):

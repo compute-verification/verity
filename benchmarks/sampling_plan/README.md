@@ -52,15 +52,15 @@ their floor.
   `work:1` sampling design. Its tests are this directory's suite.
 - `h200.py`: the demo's plan on one H200: the frozen MQA shape (52 layers, width 16,384, 256 query heads of 64 and
   one KV head, MLP 65,536, context 32; batch and step are named stand-ins) on the demo's partition,
-  one lockstep block of 31 decode steps. Each subcircuit is one `IntegrityPeriod` execution phase, one `--zk` session sampling
-  `subset:k` over the tables `_cap` allows, and leads with what Lean proves: each window's K0 (IntegrityPeriodLog) and
-  the pooled bound over any period (IntegrityHorizon) at δ = 1% and 1e-6. It prices each window's statements and sampled
-  proof blocks, the replay and, beside them, the commitment of every unit's outputs; compares the static matmuls as 128-channel
+  one lockstep block of 31 decode steps. Each subcircuit is one `IntegrityPeriod` sampling block, one `--zk` session drawing
+  `subset:k` over the tables its `Template.cap` allows, and leads with what Lean proves: each window's K0 (IntegrityPeriodLog) and
+  the pooled bound over any period (IntegrityHorizon) at δ = 1% and 1e-6. It prices each window's statements and drawn
+  units, the replay and, beside them, the commitment of every unit's outputs; compares the static matmuls as 128-channel
   tiles (`--tiles`) and softmax and PV padded to the context (`--pad`); and gives the frontier over the share, the
   execution phase length in blocks that proves within its own GPU time, and the incorrect ANDs (`Stratified.harm_bound`, not a Lean
   guarantee). `--card h200` prices it with the `h200` card's fit instead of the RTX PRO 6000's.
 - `demo_a.py`: Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a
-  6.35 s step, 32 steps a request, on the Definition map (`archive/examples/h200/e2e_h200/plan.py`: every subcircuit a
+  6.35 s step, 32 steps a request, on the Definition map (the H200 demo's `plan.py`, in history at `5c095bb4ab70`: every subcircuit a
   Definition Flock stages, at its measured ANDs and staged k_log) with PoUW's tiles as one more subcircuit at each K
   (J10-R's per-call lane units, `PouwH1LaneZy_v2` over v5, at their traced ANDs), and statements shared per subcircuit
   per execution phase. The harm is half skipped work (each unit's own ANDs), half leaked output bits, each half
@@ -102,7 +102,7 @@ uv run python benchmarks/sampling_plan/glm53.py [--requests N]
 ```
 
 - `cpu_budget.py`: the block's sample sized to a CPU proving budget. It reads `h200.py`'s `plan.json` (its
-  templates, their n, S and proved ANDs), prices each template's statements (up to 8 sampled proof blocks each) from measured
+  templates, their n, S, rows and ANDs), prices each template's statements (up to 8 sampled proof blocks each) from measured
   ZK-served Flock `--zk` sessions on the Genoa proofs slots, and finds the least share whose statements fit
   `--slots` x `--hours`. It writes the per-template k and cost and the certified units per window and per period, pooled
   and each block, at δ = 1% and 1e-6 (`cpu-budget.json`, `cpu-budget.md`).

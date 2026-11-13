@@ -2,8 +2,8 @@
 1 KiB (4 KV heads of 128 bf16); request r0 a 4-row prefill, then 5 decode steps, and r1 a 4-row prefill, then 1 decode step.
 Each row is born where its Program computes it and lasts to its last structural reader, a gather that may select it
 included.  A warm request (a prefix-cache hit) reads its first rows from its cached-prefix input.  GLM-5.3's MLA: the DSA
-stand-in's rows are its latent rows, one plane a layer (a row past INDEX_TOPK reads them through its concentrator, and a
-batched Program's members are read as its Calls).
+stand-in's rows are its latent rows, one plane a layer (a row past INDEX_TOPK reads them through its concentrator, or under
+table reads through its reads of the history table, and a batched Program's members are read as its Calls).
 """
 from __future__ import annotations
 
@@ -217,15 +217,17 @@ def test_a_row_past_topk_reads_its_layers_rows_through_its_concentrator(dsa):
         (("RMSNormTriton", DSA.L), ("RoPEHeadGptJ", DSA.R))}
 
 
+@pytest.mark.parametrize("routed", [("DsaButterflyRows", "DsaButterflyRowsPad"), ("DsaHistoryReads",)], ids=["rows-network", "table-reads"])
 @pytest.mark.parametrize("block", [256, 2])
-def test_a_batched_programs_rows_are_its_flat_programs(served, monkeypatch, block):
+def test_a_batched_programs_rows_are_its_flat_programs(served, monkeypatch, block, routed):
     """Class G's form at TOPK 2 (`observe_batched_form`: latent rows, the long rows in blocks of `vllm_dsa.BLOCK_KEYS` keys): a
     prefill of two, then a call of three rows past TOPK.  Compiled batched (`prune.BATCHED`), each layer's latent rows are batches
-    and the call's sparse MLA one batch of its three rows, each member reading its rows through its concentrator's batch; `rows`
+    and the call's sparse MLA one batch of its three rows, each member reading its rows through its concentrator's batch, or under
+    table reads (`observe_batched_form`'s ``table_reads``) through its reads of the history table, whose table is the block's history; `rows`
     reads each member, and every layer's rows are born and last read where the flat Program's are."""
     monkeypatch.setattr(vllm_dsa, "BLOCK_KEYS", block)
     monkeypatch.setitem(PROFILES, DSA.BATCHED.name, DSA.BATCHED)
-    VB.observe_batched_form(True)
+    VB.observe_batched_form(True, table_reads=routed == ("DsaHistoryReads",))
     steps = ((0, 2), (2, 3))
     model = Sampled(list(DSA._model(topk=2, steps=steps).layers), steps)
     xs = DSA._inputs(model)
@@ -240,6 +242,7 @@ def test_a_batched_programs_rows_are_its_flat_programs(served, monkeypatch, bloc
     nodes = batched.root.body.nodes
     assert [nd.n for nd in nodes if nd.form == "batch" and getattr(nd.fn, "name", None) == "SparseMla"] == [3, 3]
     assert all(nd.form == "call" for nd in flat.root.body.nodes if getattr(nd.fn, "name", None) == "SparseMla")
+    assert set() < {getattr(nd.fn, "name", None) for nd in nodes if nd.form == "batch"} & set(MM.ROUTED) <= set(routed)
     a, b = MM.rows(flat), MM.rows(batched)
     assert (len(b.layers), b.positions, b.steps) == (2, 5, 2)
     assert _born_last(b) == _born_last(a) == [[(0, 1)] * 2 + [(1, 1)] * 3] * 2

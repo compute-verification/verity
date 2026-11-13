@@ -105,6 +105,7 @@ def test_each_binding_is_a_task_named_as_circuit_check_names_it_from_the_files_s
     assert cat["outputs"] == [F.RECORDS, F.SHARED, *sorted((F.slice_of(n) for n in BINDINGS), key=lambda o: o["name"])]
     assert cat["reads"] == [] and cat["key"] and cov["reads"] == reads
     assert cat["vars"] == {"lookups": seen} and cov["vars"]["lookups"] == seen
+    assert cat["resources"] == F.CATALOG_SLOT
     pieces = [F.slice_of(name)["path"] for name in BINDINGS]
     assert len(set(pieces)) == len(pieces) and F.SHARED["path"] not in pieces
     assert all(p.rpartition("/")[0] == F.SLICES for p in [*pieces, F.SHARED["path"]])
@@ -112,6 +113,12 @@ def test_each_binding_is_a_task_named_as_circuit_check_names_it_from_the_files_s
     assert f"{graph.RUNNERS}/circuit_binding.py" in cat["inputs"] and f"{graph.RUNNERS}/circuit_binding.py" in cov["inputs"]
     paths = [F.failures(name)["path"] for name in BINDINGS]
     assert len(set(paths)) == len(paths) and all(p.rpartition("/")[0] == F.FAILURES for p in paths)
+
+
+def test_the_catalog_asks_no_more_than_the_largest_slot_an_executor_leases():
+    """Every binding task reads the catalog's records, so a catalog no slot takes leaves the whole family queued."""
+    slot = graph.spec(ROOT)["slot"]
+    assert all(F.CATALOG_SLOT[k] <= slot[k] for k in graph.SLOT), (F.CATALOG_SLOT, slot)
 
 
 def test_the_listing_is_the_same_bytes_in_another_checkout_of_the_commit(tmp_path):
@@ -544,7 +551,9 @@ def test_the_catalog_s_run_builds_every_record_into_a_fresh_cache_tars_it_and_gi
     assert (res["status"], res["detail"]) == (status, detail), res
     (c,) = calls
     assert c["argv"][3:9] == ["--all", "--records-only", "--cache", str(work / "cache"), "--slices", str(work / "slices")]
-    assert c["env"] == {**os.environ, **circuit_catalog.THREADS} and c["env"]["OMP_NUM_THREADS"] == "1", \
+    wanted = {**os.environ, **circuit_catalog.THREADS}
+    differ = sorted(k for k in c["env"].keys() | wanted.keys() if c["env"].get(k) != wanted.get(k))
+    assert differ == [] and c["env"]["OMP_NUM_THREADS"] == "1", \
         "each of its builds, one per core at once, has one-thread pools"
     assert not c["cache"] and not (work / "cache").exists() and not (work / "slices").exists(), "both are the task's scratch"
     if status == "pass":

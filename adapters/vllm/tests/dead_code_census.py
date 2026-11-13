@@ -484,8 +484,9 @@ def cli_commands(g: Graph) -> dict[str, str]:
     """`verity-vllm` command -> its module, from `cli.COMMANDS` as written (`{name: (module, help)}`), without importing it."""
     for node in ast.parse(path_of(g.file_of[CLI_MODULE]).read_text()).body:
         target = node.target if isinstance(node, ast.AnnAssign) else node.targets[0] if isinstance(node, ast.Assign) else None
-        if isinstance(target, ast.Name) and target.id == "COMMANDS" and isinstance(node.value, ast.Dict):
-            return {k.value: v.elts[0].value for k, v in zip(node.value.keys, node.value.values)
+        value = node.value if isinstance(node, (ast.AnnAssign, ast.Assign)) else None
+        if isinstance(target, ast.Name) and target.id == "COMMANDS" and isinstance(value, ast.Dict):
+            return {k.value: v.elts[0].value for k, v in zip(value.keys, value.values)
                     if isinstance(k, ast.Constant) and isinstance(v, ast.Tuple) and isinstance(v.elts[0], ast.Constant)}
     raise SystemExit(f"{g.file_of[CLI_MODULE]}: no `COMMANDS = {{name: (module, help)}}` literal to read the commands from")
 

@@ -48,7 +48,7 @@ namespace FlockSoundness.Discharge.ZkLink
 
 open Flock FlockSoundness.Refine Lean
 
-open private stratumOfJson workStratumOfJson from Flock.Draw
+open private stratumOfJson workStratumOfJson from Commitments.Draw
 
 private theorem getNat?_toJson (x : ℕ) : (Lean.toJson x).getNat? = .ok x := rfl
 

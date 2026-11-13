@@ -1,6 +1,6 @@
-"""The recursion bench's reader (`rec_profile`) and CLI (`run.py`) on records written in 85-rec-reprice.sh's formats: the
-timed runs' LIVE lines, `/usr/bin/time -v` files, serve's SESSION lines, the replay's UPSTREAM line and Lean's VERDICT.
-No GPU, node or store: the job's own records are made here."""
+"""The recursion bench's reader (`rec_profile`), table (`rec_table`) and CLI (`run.py`) on records written in
+85-rec-reprice.sh's formats: the timed runs' LIVE lines, `/usr/bin/time -v` files, serve's SESSION lines, the replay's
+UPSTREAM line and Lean's VERDICT. No GPU, node or store: the job's own records are made here."""
 from __future__ import annotations
 
 import json
@@ -9,8 +9,8 @@ import shutil
 from pathlib import Path
 
 import pytest
-
 import rec_profile as RP
+import rec_table as RT
 import run as RUN
 
 
@@ -212,12 +212,12 @@ def test_the_lean_firewall_is_read_from_the_runs_process_samples(tmp_path: Path)
     assert doc["summary"]["flock_firewall"] == [{"pid": 7, "first": "2026-10-24T07:17:46.6Z", "last": "2026-10-24T07:26:27.6Z",
                                                  "cpu_s": 1177.0, "rss_hwm_gb": 8.0, "threads": 203}]
     assert "flock-firewall" in next(r for r in doc["rows"] if r["stage"] == "outer L0" and r["extra"]["mode"] == "firewall")["note"]
-    assert "1177 CPU s, peak RSS 8.0 GB, 203 threads, seen 07:17:46–07:26:27Z" in RP.markdown(doc)
+    assert "1177 CPU s, peak RSS 8.0 GB, 203 threads, seen 07:17:46–07:26:27Z" in RT.markdown(doc)
 
 
 def test_markdown_has_one_line_per_row(tmp_path: Path) -> None:
     doc = RP.read(job(tmp_path))
-    md = RP.markdown(doc)
+    md = RT.markdown(doc)
     table = [ln for ln in md.split("\nOuter")[0].splitlines() if ln.startswith("| ") and not ln.startswith("| stage | step |")]
     assert len(table) == len(doc["rows"])
     assert "| inner M0 | inner |" in md and "2 [1–3] (n=3)" in md and "t.ligerito 1.2 s (48% of e2e_s)" in md
@@ -361,7 +361,7 @@ def test_headline_is_a_whole_run_only_when_every_step_ran(tmp_path: Path) -> Non
     (o / "steps" / "vcap" / "r1" / "rc").write_text("0\n")
     doc = RP.read(o)
     assert doc["headline"]["complete"] is True and doc["headline"]["ok"] is False      # every step ran; alg-p0 is refused
-    assert "Verdict: one whole recursive run, **not accepted**" in RP.markdown(doc)
+    assert "Verdict: one whole recursive run, **not accepted**" in RT.markdown(doc)
     h = RP.headline([], {"not_ok": []}, {s: ["0"] for s in RP.E2E_STEPS})
     assert h["complete"] is True and h["ok"] is True
     h = RP.headline([], {"not_ok": []}, {s: ["0"] for s in RP.E2E_STEPS if s != "lean"})
@@ -369,7 +369,7 @@ def test_headline_is_a_whole_run_only_when_every_step_ran(tmp_path: Path) -> Non
     h = RP.headline([], {"not_ok": []}, {s: ["0"] for s in RP.E2E_STEPS} | {"lean": ["0", "1"]})
     assert h["complete"] is True and h["ok"] is False
     shutil.rmtree(o / "steps" / "oprove")
-    assert "Verdict: **not a whole recursive run**" in RP.markdown(RP.read(o))
+    assert "Verdict: **not a whole recursive run**" in RT.markdown(RP.read(o))
 
 
 def test_vstage_rows_carry_what_rec_vstage_staged(tmp_path: Path) -> None:
@@ -441,6 +441,7 @@ def test_release_is_one_pass_whose_limit_holds_every_window(capsys) -> None:
     assert RUN.main(["run", "--dry-run", "--steps", "oprove", "--release", "--env", "TREE_FROM=local"]) == 0
     cmd = capsys.readouterr().out.split()
     assert "RELEASE=1" in cmd and "REPEAT=1" in cmd and "WARM=0" in cmd and "RUNS=1" in cmd and cmd[-1] == "TREE_FROM=local"
+    assert "RELEASE_BUDGET=1" in cmd
     limit = {c: int(x[x.index("--timeout") + 1][:-1]) for c, x in (("plain", plain), ("release", cmd))}
     assert limit["release"] - RUN.RELEASE_LEAD_MIN > 1.9 * limit["plain"] - 2 * RUN.SETUP_MIN
 
@@ -467,7 +468,7 @@ def test_firewalled_statements_name_the_cpu_prover(tmp_path: Path, capsys) -> No
     doc = RP.read(o)
     r = next(r for r in doc["rows"] if r["stage"] == "outer L0" and r["extra"]["mode"] == "firewall")
     assert r["what"].endswith(", CPU prover") and r["extra"]["prover"] == "cpu"
-    assert "V* statements 1 at a time" in RP.markdown(doc)
+    assert "V* statements 1 at a time" in RT.markdown(doc)
     assert RUN.main(["run", "--dry-run", "--oprove-gpu", "1"]) == 0
     assert "OPROVE_GPU=1" in capsys.readouterr().out.split()
 
@@ -566,7 +567,7 @@ def test_forged_statements_are_ok_when_refused_and_forge_after_reads_each_case(t
     assert doc["headline"]["forged_refused"] == {"coef": True, "dirs": True, "comb": False, "sum": True, "top": True,
                                                  "message": False}
     assert "forge-after run/message-bc" in doc["summary"]["not_ok"] and doc["steps"]["forge-after"] == ["1"]
-    md = RP.markdown(doc)
+    md = RT.markdown(doc)
     line = next(ln for ln in md.splitlines() if ln.startswith("Forgeries"))
     assert "forge-after run/message-bc" in md and line.endswith(
         "each refused: " + ", ".join(f"{k} {'yes' if v else '**no**'}" for k, v in doc["headline"]["forged_refused"].items()) + ".")

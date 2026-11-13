@@ -33,6 +33,7 @@ from verity.definitions.registry import marlin_moe as _marlin
 from verity.definitions.registry import mhc as _mhc
 from verity.definitions.registry import moe as _moe
 from verity.definitions.registry import pouw_rows as _pouw_rows
+from verity_vllm.program import dsa_table as _dsa_table
 from verity_vllm.program.frontend import targets as _targets
 from verity.definitions.registry import value_inputs as _vi
 from verity_vllm.program.frontend.rules import ref_kinds as R
@@ -489,6 +490,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # latent cache row [kv_c | k_pe] as one Definition
            "dsa_topk_mask_counted": lambda N, TOPK: ir_bind(_dsa_topk_mask.DsaTopKMaskCounted, N=N, TOPK=TOPK),
            "dsa_latent_row": lambda KVL, R, EPS: ir_bind(_dsa_norm.DsaLatentRow, KVL=KVL, R=R, EPS=EPS),
+           # the table-read form's long rows (`Registered.dsa_table_reads`, `program.dsa_table`): a row's top-TOPK positions, and
+           # the TOPK history rows read at them
+           "dsa_topk_index": lambda N, TOPK: ir_bind(_dsa_table.DsaTopKIndex, N=N, TOPK=TOPK),
+           "dsa_history_reads": lambda V, TOPK, H: ir_bind(_dsa_table.DsaHistoryReads, V=V, TOPK=TOPK, H=H),
            "dsa_rmsnorm": lambda N, EPS: ir_bind(_dsa_norm.DsaRMSNorm, N=N, EPS=EPS),
            "triton_block_rmsnorm": lambda N, BLOCK, WARPS, EPS: ir_bind(_dsa_norm.TritonBlockRMSNorm, N=N, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS),
            "dsa_kv_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
@@ -650,6 +655,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                                     "argument, so the rows of a block of the batched form share one N",
            "dsa_latent_row": "DsaLatentRow_v1{KVL,R,EPS}: a token's latent cache row, DsaRMSNorm_v1{KVL,EPS} of kv_c then "
                              "RoPEHeadGptJ_v2{R} of k_pe (_fused_norm_rope_kernel), one Definition per row",
+           "dsa_topk_index": "DsaTopKIndex_v1{N,TOPK}: a counted mask's TOPK members' positions in ascending index order, the slots "
+                             "the concentrator gives their rows",
+           "dsa_history_reads": "DsaHistoryReads_v1{V,TOPK,H}: the TOPK history rows at those positions, one read each of the "
+                                "layer's history table",
            "dsa_rmsnorm": "DsaRMSNorm_v1{N,EPS}: _fused_norm_rope_kernel's cc 9.0 PTX reduction",
            "triton_block_rmsnorm": "TritonBlockRMSNorm_v1{N,BLOCK,WARPS,EPS}: the same reduction over N live elements of a masked BLOCK "
                                    "on 32 WARPS threads (_fused_q_kv_rmsnorm_kernel)",

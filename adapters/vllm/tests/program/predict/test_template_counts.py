@@ -3,7 +3,8 @@ built for it, as a template partition counts them (`TemplatePartition` over ever
 members), at GLM-5.3's class-G registration cut to its first layers: a request beside other sequences, in prefill chunks (one
 computing the first rows of a longer sequence in its launch, a recomputed hit's), after a history, resumed, leaving at a window's edge, stochastic, under its length rule and in a launch past FlashInfer's fused all-reduce;
 at INDEX_TOPK 16 under a decode threshold of 2, its dense-MHA prefills; at INDEX_TOPK 4, its rows past it, on a last layer that
-shares the top-k and on one that computes it, and in several blocks a call; and the B8 window's planned units."""
+shares the top-k and on one that computes it, and in several blocks a call, by the rows network and by table reads; and the B8
+window's planned units."""
 
 from __future__ import annotations
 
@@ -49,10 +50,10 @@ def _instances(program) -> Counter:
     return out
 
 
-def _check(phi: Phi, LP: int, T: int, policy: dict = GREEDY, **kw) -> None:
+def _check(phi: Phi, LP: int, T: int, policy: dict = GREEDY, table_reads: bool = False, **kw) -> None:
     r = build_program(Phi.from_json({**phi.to_json(), "sampling": policy}), "request", LP=LP, T=T, dead_free=True, batched=True,
-                      with_desc=False, **kw)
-    want, got = _instances(r.program), TemplateCounts(phi).request(LP, T, policy, **kw)
+                      with_desc=False, table_reads=table_reads, **kw)
+    want, got = _instances(r.program), TemplateCounts(phi, table_reads=table_reads).request(LP, T, policy, **kw)
     assert got == want, {t: (got[t], want[t]) for t in sorted(got.keys() | want.keys()) if got[t] != want[t]}
 
 
@@ -123,6 +124,17 @@ def test_rows_past_index_topk_in_several_blocks_count_each_blocks_selection(tmp_
     6, 7 and 8 keys has blocks of 6 and 8."""
     monkeypatch.setattr(vllm_dsa, "BLOCK_KEYS", 2)
     _check(_phi(tmp_path, topk=4), **LONG[case])
+
+
+@pytest.mark.parametrize("block", [256, 2])
+@pytest.mark.parametrize("layers", [4, 3], ids=["shared-last", "indexer-last"])
+@pytest.mark.parametrize("case", ["prefill-and-decodes", "chunks-to-an-edge", "after-a-history"])
+def test_rows_past_index_topk_by_table_reads_count_their_index_and_reads(tmp_path, monkeypatch, case, layers, block):
+    """Under the registration's table reads (`Registered.dsa_table_reads`) a row past INDEX_TOPK counts its index in place of the
+    settings and its history reads at its block's keys in place of the rows network, with no zero pad, in one block a call or
+    in several."""
+    monkeypatch.setattr(vllm_dsa, "BLOCK_KEYS", block)
+    _check(_phi(tmp_path, layers=layers, topk=4), table_reads=True, **LONG[case])
 
 
 @pytest.mark.slow

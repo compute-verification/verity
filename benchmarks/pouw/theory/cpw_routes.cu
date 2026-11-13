@@ -16,7 +16,7 @@
 //   6 atoms16: the same into shared memory, flushed after the last set;
 //   7 redux2: the lane's 16 words XORed to two (LOP3), then one REDUX.XOR of each, lane 0 stores both (LI-CP-W's
 //     honest route in dc/probes, at fx1's two words);
-//   8 foldmem (`cpwm`): no checkpoint, the fold itself with its XOR on the memory system, for FOLD-OPT at π*. A round
+//   8 foldmem (`cpwm`): no checkpoint, the fold itself with its XOR on the memory system, for `FoldOpt` at π*. A round
 //     trip is t = 2h and 2h + 1, one step of each of the 8 chains: every lane stores its 8 y to the warp's global slot
 //     and its 8 p fk to the warp's shared slot, lane 0 bulk-reduces (cp.reduce.async.bulk .xor, elementwise) that
 //     shared slot and then the static KK slot into the global one, and every lane reads u = y ^ p fk ^ KK back past
