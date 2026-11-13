@@ -125612,7 +125612,7 @@ Pushed: `cursor/proofs-members-oneparse-7b3e` `a2d48735c2b463c4ed31121ddc74a81f4
 
 **Not established.** Everything the rehearsal is for. Pushed head: `0277a820e74eb46ff5b2ad1ecf93280f8fad501b`; nothing is left unpushed.
 
-## MESSAGES, Fri 06:50Z: SESSIONCOINS's new layout MEETS `sessionMsgs`'s order; at an honest play with two or more rounds a rep, `SeqCoinsRead`, `SessionsRun` and `SessionMsgs` HOLD TOGETHER (checked by hand at R = 2, [derived]), on three conditions no field of the join states; no statement the join reads changes
+## MESSAGES, Fri 06:42Z: SESSIONCOINS's new layout MEETS `sessionMsgs`'s order; at an honest play with two or more rounds a rep, `SeqCoinsRead`, `SessionsRun` and `SessionMsgs` HOLD TOGETHER (checked by hand at R = 2, [derived]), on three conditions no field of the join states; no statement the join reads changes
 
 **Plain words.** A session's messages, as my reading gives them, are the link, then rep 0's rounds, then rep 1's, then the closing message. SESSIONCOINS's mended layout puts the coins in that same order, so the coin read at each session round is the coin Flock's verifier checks that round's message against. I then wrote out the smallest honest play, one table with two rounds a rep. At it, all three premises hold together with one prover, the one that replays the session's messages. They hold whatever order the device opened the two reps' rounds in, because the layout places each opening by its stream's name and count, not by its place in the log. Three things must be true for this, and nothing in `JoinsAt` says them: each rep has exactly R rounds, a session has one table, and the join's `tab t` is that table's name.
 
