@@ -225,10 +225,9 @@ def test_the_harness_writes_the_mark_in_the_write_that_ends_the_run_however_it_e
     assert status["state"] == "done" and "memory" not in status
     marks = [json.loads(ln) for ln in (d / "events.jsonl").read_text().splitlines()]
     assert [m["error"] for m in marks if m.get("name") == "ended_failed"] == ["ZeroDivisionError: division by zero"]
-    monkeypatch.setattr(trun, "session_cap", lambda: "900G")
-    monkeypatch.setattr(trun.Cgroup, "limits", lambda self: {"path": "/system.slice/ssh.service", "memory_max_kind": "finite"})
+    monkeypatch.setattr(trun, "uncapped", lambda limits, session: "its login got no scope of its own")
     d = tmp_path / "refused"
-    assert trun.run(_harness_args(d), [PY, "-c", "pass"], None, lambda: memmark.of_run(d, {"mem_gb": 1}, {})) == trun.EX_NO_MEMORY_CAP
+    assert trun.run(_harness_args(d), [PY, "-c", "pass"], None, lambda: memmark.of_run(d, {"mem_gb": 1}, {})) == 75
     status = json.loads((d / "status.json").read_text())
     assert status["state"] == "failed" and status["memory"] == status["transitions"][-1]["memory"]
     assert (status["memory"]["ask_bytes"], status["memory"]["peak_held_bytes"]) == (GB, None) and status["memory"]["reason"]
