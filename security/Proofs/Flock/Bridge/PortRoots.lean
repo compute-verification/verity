@@ -42,17 +42,17 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 The deployed check opens a position at the first registered port whose root is the position's (`regPath`'s `find?`
 over `portsOf`), so a row of port `q` is checked in port `q'`'s tree when an earlier `q'` has `q`'s root. Each
-port's root is `FV3.root` over its own domain, its port name (`domOf`), and that root is SHA-512 of one top frame (the
-top node's, or with one leaf that leaf's, or with none the pad's; `root_top`), whose first part is the domain. With one
-leaf the frame ends in the port's leaf schema and its payload, and two frames at different row schemas differ
-(`step_schema`), so two frames at one domain's place are at one schema. So two ports with one root and different
-domains give two different inputs with one SHA-512 digest (`rootsOf_collides`).
+port's root is `FV3.root` over its own domain, the public file's published one (`domOf`), and that root is SHA-512 of
+one top frame (the top node's, or with one leaf that leaf's, or with none the pad's; `root_top`), whose first part is
+the domain. With one leaf the frame ends in the port's leaf schema and its payload, and two frames at different row
+schemas differ (`step_schema`), so two frames at one domain's place are at one schema. So two ports with one root and
+different domains give two different inputs with one SHA-512 digest (`rootsOf_collides`).
 
 * `RootFixesDomain`: an earlier port with a port's root has its domain. Off that collision it holds
-  (`fixes_of_none`). Two ports of one name may share a root with no collision, and may have different schemas, so what
-  the deployed check needs is the distinct-roots form, at a circuit that names each port once (`Registered.dupName`,
-  which the verifier's registered reads check): `rootsDistinct_of_fixes`. Then the check opens a row of `q` in `q`'s
-  own tree, at `q`'s schema.
+  (`fixes_of_none`). Two ports of one domain may share a root with no collision, and may have different schemas, so
+  what the deployed check needs is the distinct-roots form, at a public file whose ports' published domains are
+  pairwise distinct (`PortRoots.dupId`, which the verifier refuses): `rootsDistinct_of_fixes`. Then the check opens a
+  row of `q` in `q`'s own tree, at `q`'s schema.
 * `rootsFinder`: a finder with no coins that recomputes every port's root (`rootsCost` SHA-512 calls) and outputs the
   first pair of top frames that `rootsOf_collides` finds (`rootsColl`). Under `ecr/sha-512` (`Claims.ExpectedCR`, read
   through `Claims.ecrBound`) at that finder, a file that holds such a collision has `ecrBound ≥ 1`
@@ -148,7 +148,7 @@ theorem step_schema {a a' : ByteArray} {s s' : String} (hs : s ∈ schemas) (hs'
 
 /-- Port `q`'s registered tree leaves, as `rootsOf` builds them. -/
 def leaves (c : Flock.Circuit) (pub : Flock.Public) (nl q : ℕ) : Array ByteArray :=
-  (Array.range nl).map fun u => Flock.Registered.leafAs (schemaOf c q) (domOf c q) u (regLeafOf c pub q u)
+  (Array.range nl).map fun u => Flock.Registered.leafAs (schemaOf c q) (domOf c pub q) u (regLeafOf c pub q u)
 
 theorem leaves_size (c : Flock.Circuit) (pub : Flock.Public) (nl q : ℕ) : (leaves c pub nl q).size = nl := by
   simp [leaves]
@@ -164,7 +164,7 @@ theorem regLeafOf_size (c : Flock.Circuit) (pub : Flock.Public) (q u : ℕ) : (r
   exact Flock.Sha512.hash_size _
 
 theorem rootsOf_getD (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) {q : ℕ} (hq : q < c.ports.size) :
-    (rootsOf c pub nl).getD q [] = bs (Flock.FV3.root (domOf c q) (leaves c pub nl q) Flock.Sha512.hash) := by
+    (rootsOf c pub nl).getD q [] = bs (Flock.FV3.root (domOf c pub q) (leaves c pub nl q) Flock.Sha512.hash) := by
   simp [rootsOf, leaves, List.getD_eq_getElem?_getD, hq]
 
 theorem one_le_log2ceil {n : ℕ} (h : 2 ≤ n) : 1 ≤ Flock.log2ceil n := by
@@ -175,14 +175,14 @@ theorem one_le_log2ceil {n : ℕ} (h : 2 ≤ n) : 1 ≤ Flock.log2ceil n := by
 /-- **What port `q`'s root hashes last**: the frame of its tree's top node; with one leaf, that leaf's frame; with
 none, the lone pad's. -/
 def topIn (c : Flock.Circuit) (pub : Flock.Public) (nl q : ℕ) : ByteArray :=
-  if nl = 0 then Registered.frame "pad" [domOf c q, Flock.FV3.uint 0]
-  else if nl = 1 then Registered.leafInAs (schemaOf c q) (domOf c q) 0 (regLeafOf c pub q 0)
-  else Registered.nodeIn (domOf c q) (Flock.log2ceil nl - 1) 0
-    (TopRoot.lev (domOf c q) (leaves c pub nl q) (Flock.log2ceil nl - 1))[0]!
-    (TopRoot.lev (domOf c q) (leaves c pub nl q) (Flock.log2ceil nl - 1))[1]!
+  if nl = 0 then Registered.frame "pad" [domOf c pub q, Flock.FV3.uint 0]
+  else if nl = 1 then Registered.leafInAs (schemaOf c q) (domOf c pub q) 0 (regLeafOf c pub q 0)
+  else Registered.nodeIn (domOf c pub q) (Flock.log2ceil nl - 1) 0
+    (TopRoot.lev (domOf c pub q) (leaves c pub nl q) (Flock.log2ceil nl - 1))[0]!
+    (TopRoot.lev (domOf c pub q) (leaves c pub nl q) (Flock.log2ceil nl - 1))[1]!
 
 theorem lev_top_size (c : Flock.Circuit) (pub : Flock.Public) {nl : ℕ} (h2 : 2 ≤ nl) (q : ℕ) {i : ℕ} (hi : i < 2) :
-    ((TopRoot.lev (domOf c q) (leaves c pub nl q) (Flock.log2ceil nl - 1))[i]!).size = 64 := by
+    ((TopRoot.lev (domOf c pub q) (leaves c pub nl q) (Flock.log2ceil nl - 1))[i]!).size = 64 := by
   have h1 := one_le_log2ceil h2
   refine TopRoot.lev_width _ _ (leaves_width c pub nl q) _ _ (TopRoot.get!_mem ?_)
   rw [TopRoot.lev_size _ _ _ (by rw [leaves_size]; omega), leaves_size,
@@ -191,7 +191,7 @@ theorem lev_top_size (c : Flock.Circuit) (pub : Flock.Public) {nl : ℕ} (h2 : 2
 
 /-- **A port's root is SHA-512 of its top frame.** -/
 theorem root_top (c : Flock.Circuit) (pub : Flock.Public) (nl q : ℕ) :
-    Flock.FV3.root (domOf c q) (leaves c pub nl q) Flock.Sha512.hash = Flock.Sha512.hash (topIn c pub nl q) := by
+    Flock.FV3.root (domOf c pub q) (leaves c pub nl q) Flock.Sha512.hash = Flock.Sha512.hash (topIn c pub nl q) := by
   rw [TopRoot.root_eq, leaves_size]
   rcases Nat.lt_or_ge nl 2 with hlt | h2
   · interval_cases nl
@@ -199,7 +199,7 @@ theorem root_top (c : Flock.Circuit) (pub : Flock.Public) (nl q : ℕ) :
     · simp [TopRoot.lev, TopRoot.base, leaves, topIn, Flock.nextPow2, Flock.log2ceil, Registered.leafAs_eq]
   · obtain ⟨k, hk⟩ : ∃ k, Flock.log2ceil nl = k + 1 := ⟨Flock.log2ceil nl - 1, by have := one_le_log2ceil h2; omega⟩
     have hk' : Flock.log2ceil nl - 1 = k := by omega
-    have hsz : 0 < (TopRoot.lev (domOf c q) (leaves c pub nl q) k).size / 2 := by
+    have hsz : 0 < (TopRoot.lev (domOf c pub q) (leaves c pub nl q) k).size / 2 := by
       rw [TopRoot.lev_size _ _ _ (by rw [leaves_size]; omega), leaves_size, hk, show k + 1 - k = 1 by omega]
       decide
     rw [hk, TopRoot.lev, TopRoot.next_get _ _ _ hsz]
@@ -207,7 +207,7 @@ theorem root_top (c : Flock.Circuit) (pub : Flock.Public) (nl q : ℕ) :
       Nat.zero_add]
 
 /-- **Two top frames over different domains differ.** -/
-theorem topIn_ne {c : Flock.Circuit} {pub : Flock.Public} {nl q q' : ℕ} (hd : domOf c q' ≠ domOf c q) :
+theorem topIn_ne {c : Flock.Circuit} {pub : Flock.Public} {nl q q' : ℕ} (hd : domOf c pub q' ≠ domOf c pub q) :
     topIn c pub nl q' ≠ topIn c pub nl q := by
   intro h
   apply hd
@@ -229,7 +229,7 @@ theorem topIn_ne {c : Flock.Circuit} {pub : Flock.Public} {nl q q' : ℕ} (hd : 
 /-- **Two ports with one registered root and different domains give an explicit SHA-512 collision**: their top
 frames (`topIn`). -/
 theorem rootsOf_collides {c : Flock.Circuit} {pub : Flock.Public} {nl q q' : ℕ} (hq' : q' < c.ports.size)
-    (hq : q < c.ports.size) (hd : domOf c q' ≠ domOf c q)
+    (hq : q < c.ports.size) (hd : domOf c pub q' ≠ domOf c pub q)
     (hr : (rootsOf c pub nl).getD q' [] = (rootsOf c pub nl).getD q []) :
     Registered.Collides (topIn c pub nl q', topIn c pub nl q) := by
   rw [rootsOf_getD c pub nl hq', rootsOf_getD c pub nl hq] at hr
@@ -239,26 +239,18 @@ theorem rootsOf_collides {c : Flock.Circuit} {pub : Flock.Public} {nl q q' : ℕ
 
 /-! ## The guard the deployed check needs -/
 
-/-- **An earlier port with a port's registered root has its domain** (its name), in the form of `TransportsLiveCS`'s
-port-roots guard. -/
+/-- **An earlier port with a port's registered root has its domain** (its published one), in the form of
+`TransportsLiveCS`'s port-roots guard. -/
 def RootFixesDomain (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) : Prop :=
   ∀ q q' : ℕ, q' < q → q < c.ports.size →
-    (rootsOf c pub nl).getD q' [] = (rootsOf c pub nl).getD q [] → domOf c q' = domOf c q
+    (rootsOf c pub nl).getD q' [] = (rootsOf c pub nl).getD q [] → domOf c pub q' = domOf c pub q
 
-/-- **The distinct-roots form of the guard**, `TransportsLiveCS`'s hypothesis: from `RootFixesDomain`, at a circuit
-that names each port once (`Registered.dupName`, which the verifier's registered reads check). -/
+/-- **The distinct-roots form of the guard**, `TransportsLiveCS`'s hypothesis: from `RootFixesDomain`, at a public
+file whose ports' published domains are pairwise distinct (`PortRoots.dupId`, which the verifier refuses). -/
 theorem rootsDistinct_of_fixes {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ}
-    (hn : Flock.Registered.dupName c = none) (hf : RootFixesDomain c pub nl) :
-    ∀ q q' : ℕ, q' < q → q < c.ports.size → (rootsOf c pub nl).getD q' [] ≠ (rootsOf c pub nl).getD q [] := by
-  intro q q' hlt hq he
-  have hd := hf q q' hlt hq he
-  have hname : (c.ports[q']?.map (·.name)).getD "" = (c.ports[q]?.map (·.name)).getD "" :=
-    String.toByteArray_inj.1 hd
-  have h1 : c.ports[(⟨q', by omega⟩ : Fin c.ports.size)].name = c.ports[(⟨q, hq⟩ : Fin c.ports.size)].name := by
-    simpa [show q' < c.ports.size by omega, hq] using hname
-  have := congrArg Fin.val (FlockSoundness.Discharge.ZkReg.names_once_of_dupName hn _ _ h1)
-  simp at this
-  omega
+    (hn : Flock.PortRoots.dupId c pub = false) (hf : RootFixesDomain c pub nl) :
+    ∀ q q' : ℕ, q' < q → q < c.ports.size → (rootsOf c pub nl).getD q' [] ≠ (rootsOf c pub nl).getD q [] :=
+  fun q q' hlt hq he => Flock.PortRoots.idOf_ne_of_dupId_false hn hlt hq (hf q q' hlt hq he)
 
 /-! ## The finder, and the term in `ecr/sha-512` -/
 
@@ -276,7 +268,7 @@ theorem mem_pairs {m q' q : ℕ} : (q', q) ∈ pairs m ↔ q' < q ∧ q < m := b
 /-- The first pair of ports, earlier first, with one registered root and different domains. -/
 def collPair (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) : Option (ℕ × ℕ) :=
   (pairs c.ports.size).find? fun p =>
-    decide ((rootsOf c pub nl).getD p.1 [] = (rootsOf c pub nl).getD p.2 [] ∧ domOf c p.1 ≠ domOf c p.2)
+    decide ((rootsOf c pub nl).getD p.1 [] = (rootsOf c pub nl).getD p.2 [] ∧ domOf c pub p.1 ≠ domOf c pub p.2)
 
 /-- **The collision a registration's roots expose**: `collPair`'s two top frames. -/
 def rootsColl (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) : Option (Msg × Msg) :=

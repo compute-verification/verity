@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import importlib.util
 import inspect
 import json
 import os
@@ -51,10 +52,33 @@ import fill as F
 import identity as I
 import refs as RF
 import report as R
-import sass_gate as SG
 import schedule as S
 import shapes as SH
 
+#: what `characterize.py` and the tests read
+__all__ = [
+    "Bench", "EXIT_DEVICE", "EXIT_OK", "EXIT_USAGE", "Entry", "L2_SM120", "METHODS", "NamesNotTaken",
+    "NegativeControlFailed", "PREFLIGHT_DERIVE", "PRIME_READY_S", "S", "Stages", "Terminated", "arm_entries",
+    "bad_throttle", "chain_entries", "dump_transcripts", "finalists_of", "free_entries", "gate_baselines", "lt_pick",
+    "lt_range", "now", "operand_overlaps", "panel_reps", "parse", "poison_dump", "prime_profiler", "run_shape",
+    "screen", "screened", "searched", "shape_plan", "shape_report", "timed_clocks", "transcript_buffers",
+    "tune_baselines", "twin_entries", "w_ratio",
+]
+
+ROOT = Path(__file__).resolve().parents[3]
+
+
+def _gate():
+    """The SASS gate, from its file and under the name every file that loads it gives it, so a process holds one."""
+    name = "pouw_harness_sass_gate"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, ROOT / "benchmarks/pouw/harness/sass_gate.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+SG = _gate()
 EXIT_OK, EXIT_USAGE, EXIT_DEVICE, EXIT_NEGATIVE, EXIT_CONSISTENCY, EXIT_TERMINATED = 0, 2, 3, 5, 6, 143
 EXIT_SASS = SG.EXIT_FAIL
 METHODS = ("graph", "burst")
@@ -916,11 +940,9 @@ def summarize(per: dict, items: list[dict]) -> dict:
     return out
 
 
-def w_ratio(value: str, mkn: int) -> str | None:
-    try:
-        return str(Fraction(value) / mkn)
-    except (ValueError, ZeroDivisionError):
-        return None
+def w_ratio(value: str, mkn: int) -> str:
+    """An arm's work over the shape's MACs, exact. `Work` gives `value` as an exact string, so one that isn't raises."""
+    return str(Fraction(value) / mkn)
 
 
 def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first: bool, args, kernels, lt_ws) -> dict:

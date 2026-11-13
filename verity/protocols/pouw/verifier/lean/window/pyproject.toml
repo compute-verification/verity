@@ -18,7 +18,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = ["tests/test_difftest.py", "tests/test_known_rows.py", "tests/test_lanes.py", "tests/test_reg_file.py"]
 # Test-only: the harness (`verity_difftest`, which the workspace installs, and the Lean `lake` builds through the path require);
 # the Python held to the Lean: `window.py` (with the switch, `verifier.py`, and its pinned vectors), `h1zy.py`
-# (`test_lanes.py`), and h1_lanes' known rows (`test_known_rows.py`: `benchmarks/pouw/h1_lanes/run.py` with
+# (`test_lanes.py`), and h1_lanes' known rows (`test_known_rows.py`: `benchmarks/pouw/h1_lanes/leaf.py` with
 # `benchmarks/pouw/h1_prove/h1unit.py`, which import most of PoUW's protocol and the proof system's one-stage modules,
 # so both trees are named whole), with the core they import (the integrity profile, `verity.ml`'s circuits, commitments,
 # crypto, randomness and kernels' tensor-core reference, and `verity.errors`), and Flock's Python (`verity_flock`),
@@ -31,7 +31,7 @@ inputs = ["verity/difftest", "verity/__init__.py",
           "verity/claims/__init__.py",
           "verity/protocols/pouw/verifier", "verity/protocols/pouw/prover",
           "verity/protocols/spot/verifier/profile.py", "verity/protocols/spot",
-          "benchmarks/pouw/h1_lanes/run.py", "benchmarks/pouw/h1_prove/h1unit.py",
+          "benchmarks/pouw/h1_lanes/leaf.py", "benchmarks/pouw/h1_prove/h1unit.py",
           "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py", "verity/protocols/flock/prover/python", "verity/commitments/windows",
           "verity/errors.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/commitments/randomness", "verity/commitments/identity", "verity/commitments/randomness",

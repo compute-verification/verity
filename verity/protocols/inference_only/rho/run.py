@@ -90,12 +90,12 @@ def straddles(f: FamilyResult | None) -> list[str]:
 
 
 def rests(r: Result, terms: list[analysis.Term]) -> str:
-    """What the lower bound rests on, for the summary: its largest term (the dark leaves, at the dark rate) and the
+    """What the lower bound rests on, for the summary: its largest term (the unregistered leaves, at the unregistered rate) and the
     straddling premise where it cites it."""
     if not terms:
         return ""
     t = terms[0]
-    head = f"the dark rate ({t.share:.0%})" if t.name == "dark" else f"{t.name} ({t.share:.0%})"
+    head = f"the unregistered rate ({t.share:.0%})" if t.name == "unregistered" else f"{t.name} ({t.share:.0%})"
     return ", ".join([head, *straddles(picked(r))])
 
 
@@ -104,12 +104,12 @@ def rests_md(r: Result, terms: list[analysis.Term]) -> str:
     if not terms or f is None:
         return ""
     t, st = terms[0], r.scenario.structure
-    if t.name == "dark" and st.s_times == REFERENCE:
-        what = ("the dark hardware's datasheet product rate (the physical model: `s_×` is the reference's `2G / κ`, so "
-                "`G` cancels and the dark leaves, `ε_dark` of `Φ_total`, count at `κ/2` products a datasheet FLOP), "
+    if t.name == "unregistered" and st.s_times == REFERENCE:
+        what = ("the unregistered hardware's datasheet product rate (the physical model: `s_×` is the reference's `2G / κ`, so "
+                "`G` cancels and the unregistered leaves, `ε_unreg` of `Φ_total`, count at `κ/2` products a datasheet FLOP), "
                 "not a Boolean structural minimum")
-    elif t.name == "dark":
-        what = (f"the dark leaves at `s_×` = {fmt(st.gates(weight_per_gate(f.profile, r.scenario.context.units)))} "
+    elif t.name == "unregistered":
+        what = (f"the unregistered leaves at `s_×` = {fmt(st.gates(weight_per_gate(f.profile, r.scenario.context.units)))} "
                 f"gates a counted operation (`structure.{st.name}`)")
     else:
         what = f"its largest term, `{t.name}`"
@@ -216,7 +216,7 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
     prf = ", the wipe's PRF" if "wipe" in delta.by else ""
     unencumbered = operating.human(s.reference / (c.fleet.mfu_train * s.total_phi))
     setting = (f"{s.regime.name} regime, {c.fleet.count:g} × {c.location.name} (Φ = {c.location.phi:.3g} gate/s, "
-               f"ε_dark {c.fleet.eps_unreg:g}), policy {c.policy.name} (c = {c.c:.3g} gates, k = {c.policy.k:.3g} bit), "
+               f"ε_unreg {c.fleet.eps_unreg:g}), policy {c.policy.name} (c = {c.c:.3g} gates, k = {c.policy.k:.3g} bit), "
                f"{c.period.name}, {c.units.gates_per_flop:g} gates a FLOP ({c.units.basis}); target {s.run.name} "
                f"(T_0 = {s.reference:.3g} gates; the reference at the training MFU takes {unencumbered}).")
     st = s.structure
@@ -239,13 +239,13 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
             f"`T_0 / (MFU₀ Φ_total)`, the reference's own time). **Inference overhead:** {inference(s)}."),
            "",
            (f"The slowdown is Lean's `hardwareMultiple`, at least 1, so no protocol gives 1; under a bound it is "
-            f"`max(1, 1/(s + x/MFU₀))` (`theorem.multiple_bound`, Lean's `remoteDampener`), with the dark leaves `s` "
+            f"`max(1, 1/(s + x/MFU₀))` (`theorem.multiple_bound`, Lean's `remoteDampener`), with the unregistered leaves `s` "
             f"training like the reference and the rest `x` counted at capacity. It comes from the padded size ratio "
-            f"`|A| / T_0` = {fmt(padded(r))}, the actual circuit's size over the reference's with each serving block "
-            f"padded to capacity. A bound counts each uncertified or dark gate at `ω_max / s_×` with "
+            f"`|A| / T_0` = {fmt(padded(r))}, the actual circuit's size over the reference's with each server block "
+            f"padded to capacity. A bound counts each uncertified or unregistered gate at `ω_max / s_×` with "
             f"`s_×` {s_times} (`structure.{st.name}`){premise}"),
            "", rests_md(r, terms), "", attack_md, "",
-           (f"The envelopes fail, summed over subprotocols and serving blocks, with probability at most δ_coin = "
+           (f"The envelopes fail, summed over subprotocols and server blocks, with probability at most δ_coin = "
             f"{fmt(delta.coin)} (the coins' draws) plus δ_crypto = {fmt(delta.crypto)} (binding, knowledge soundness"
             f"{prf}), plus Pr[Break] (a forgery of the logged coins, not bounded here); by subprotocol, coin + "
             f"crypto: {by or 'none'}."), "",
@@ -331,7 +331,7 @@ def main() -> None:
                 "adversary's GPU-hours to the target over the reference's, at least 1 (Lean's `hardwareMultiple`), so "
                 "no protocol gives 1. The claim is its lower bound, every bound met at once; a bound whose premises "
                 "are refuted at a block doesn't bound that block, and is still listed alone, tagged refuted. The "
-                "padded size ratio `|A| / T_0`, the actual circuit's size over the reference's with each serving block "
+                "padded size ratio `|A| / T_0`, the actual circuit's size over the reference's with each server block "
                 "padded to capacity, is the intermediate it comes from. The time to the target, wall-clock, is at "
                 "least the slowdown times `T_0 / (MFU₀ Φ_total)`."), "", head,
                "|---|---|---|---|---|---|---|---|---|---|---|"]

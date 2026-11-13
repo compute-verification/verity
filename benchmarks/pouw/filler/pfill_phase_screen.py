@@ -5,6 +5,8 @@ filler is blocks of NC 4 ram tiles of that many warps, which the build fixes: NV
 (one width a screen). A tile does 16 W^2 S int8 MMAs of 4096 MACs.
 """
 
+from __future__ import annotations
+
 import sys
 
 ROUNDS, K = 2, 3
@@ -115,7 +117,7 @@ FUSED = {
 }
 
 
-def fused_probes(rows):
+def fused_probes(rows: list[tuple[int, ...]]) -> str:
     """Rows (B, L, pump SMs, LM[, LT[, APS]]): FILL's step with no filler warps (FW = AFW = 0) beside pfill-k's pump."""
     def row(i, b, l, f, lm, lt=0, aps=1):
         return f"DFILL_CHUNK_LOG2=19 fscore fscore {b} {l} {f} 8 4 256 0 4 0 2 {aps} 0 {lt} {lm} {ROUNDS} {K} {i}"
@@ -129,12 +131,12 @@ PREFILL = {
 }
 
 
-def prefill_probes(rows):
+def prefill_probes(rows: list[tuple[str, int, int, int]]) -> str:
     return ";".join(f"DFILL_CHUNK_LOG2={c} dscore dscore prefill 8192 0 {p} {f} 8 4 {s} {ROUNDS} {K} {40 + i}"
                     for i, (p, f, s, c) in enumerate(rows))
 
 
-def probes(rows):
+def probes(rows: list[tuple[int, ...]]) -> str:
     def row(i, b, l, f, w, s, t):
         if w == 0:
             return f"DFILL_CHUNK_LOG2=19 dscore dscore step {b} {l} split {f} 8 4 256 {ROUNDS} {K} {i % 64}"

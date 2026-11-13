@@ -365,3 +365,48 @@ def test_a_caller_without_the_scratch_runs_the_reference_kernels(host, monkeypat
     assert host.read(bufs["rowdig_a"], 64 * mr) == b"".join(C.row_digest(r) for r in a_rows[:mr])
     assert host.read(bufs["leaves"], 64 * pipe.tiles) == b"".join(
         C.leaf(C.Checked(c[:mr, c0:c0 + 64].tolist(), u[:mr, c0:c0 + 64].tolist()), "h3") for c0 in range(0, n, 64))
+
+
+def y_trees(host, monkeypatch):
+    """served_y's `DeviceTrees` over the host build, for a run of the sm120 variant whose salt and salt key are fixed."""
+    torch = pytest.importorskip("torch")
+    from verity_vllm.protocols.pouw.pearl_c import served_y as SY
+    salt_key = bytes(range(100, 132))
+    const = host.put(salt_key.ljust(256, b"\0") + audit.hm96_kernel_constants())
+    run = SimpleNamespace(kernel=SimpleNamespace(run=R, dev=host), device=torch.device("cpu"), variant="sm120",
+                          salt=bytes(range(64)), salt_key=salt_key, const_keys={"salt_key": const, "hm": const + 256},
+                          cur=SimpleNamespace(poison=0xA5))
+    monkeypatch.setattr(host, "stream", None, raising=False)
+    return torch, SY, run, SY.DeviceTrees(run)
+
+
+@pytest.mark.parametrize("m", [1, 5, 129, 300])
+def test_served_y_device_trees_are_commit_ys(host, monkeypatch, m):
+    """served_y's `DeviceTrees` (a retained Pearl+ call's y tree as its device builds it, by run.py's launches) on the host
+    build: over a call's real rows of y, BF16 widened to FP32 7 rows at a time, the tree is `served_y.commit_y`'s bytes,
+    level 0 padded and every level above it, under the call's y domain and hm96 nonce, at 1, 5, 129 and 300 rows."""
+    n, index = 1024, 77
+    torch, SY, run, trees = y_trees(host, monkeypatch)
+    monkeypatch.setattr(SY, "Y_CHUNK_BYTES", 7 * 4 * n)
+    y = torch.randn(m, n, generator=torch.Generator().manual_seed(m)).to(torch.bfloat16)
+    got = trees(y, index).numpy().tobytes()
+    assert got == SY.commit_y(y.view(torch.uint8).numpy().tobytes(), n, run.salt, index, run.salt_key)[1] and n in trees.pipes
+
+
+def test_served_y_device_trees_refuse_a_width_whose_first_tree_isnt_commit_ys(host, monkeypatch):
+    """A width's first device tree is held to `commit_y` over a fixed 129-row y, so a tree with a node off is refused, naming
+    the node, and the width's pipeline isn't kept: the next call checks again."""
+    n = 1024
+    torch, SY, run, trees = y_trees(host, monkeypatch)
+    real = trees._tree
+
+    def off(p, y, index):
+        t = real(p, y, index)
+        t[64 * 3] ^= 1
+        return t
+
+    trees._tree = off
+    for _ in range(2):
+        with pytest.raises(ValueError, match=f"width {n} differs from served_y.commit_y over 129 rows, first at node 3 of 511"):
+            trees(torch.zeros(4, n, dtype=torch.bfloat16), 5)
+        assert not trees.pipes

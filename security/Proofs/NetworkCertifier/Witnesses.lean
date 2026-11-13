@@ -86,9 +86,9 @@ accepts everything. Each builds its instance and takes no hypothesis.
   stay hypotheses, which the lemma does not discharge. At one window whose audit always accepts, `δ = 1/2`, `Fmax = 1`
   and no error, its observations empty where the horizon is one step, no window meets its leak relation, and the
   escape bound reads `1 ≤ 1/2`.
-* `PooledIncorrectBlocksLe`. Its sample hypotheses hold at the uniform `k`-subset sample (`uniform_sample`), and its soundness
-  hypothesis at `ε = 0` when no unit is wrong. At one window of one unit, that unit wrong, an audit that always accepts,
-  `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
+* `PooledIncorrectBlocksLe`. Its sample hypotheses hold at the uniform `k`-subset sample (`uniform_sample`), and its
+  soundness hypothesis at `ε = 0` when no block is incorrect. At one window of one block, that block incorrect, an audit
+  that always accepts, `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
 
 The count conjuncts of the leak bounds read no verifier: they hold at every deployment, the accepting one included.
 -/
@@ -208,12 +208,6 @@ example (h : Guarantees.PooledLeakAccepted) :
 end Honest
 
 /-! ## At the accepting verifier -/
-
-/-- One step: no frame on the link, every status complete. -/
-def obs0 : Obs 1 1 1 := ⟨fun _ _ => none, 0, fun _ => .complete⟩
-
-/-- One step: a frame on the link, every status complete. -/
-def obs1 : Obs 1 1 1 := ⟨fun _ _ => some [], 0, fun _ => .complete⟩
 
 theorem inScope_not : Claims.Sampling.InScope notPart notStmt := by
   refine ⟨⟨fun g x hx i hi => ?_, by decide⟩,
@@ -526,8 +520,8 @@ theorem PooledLeakAccepted_nontrivial :
   rw [hp]
   norm_num [Pr, Claims.prUniform]
 
-/-- **`PooledIncorrectBlocksLe`'s sample hypotheses at the honest instance**: the uniform `k`-subset sample samples `k` units
-and each `k`-subset with share `1 / C(n, k)`. -/
+/-- **`PooledIncorrectBlocksLe`'s sample hypotheses at the honest instance**: the uniform `k`-subset sample samples `k`
+blocks and each `k`-subset with share `1 / C(n, k)`. -/
 theorem uniform_sample (n k : ℕ) :
     (∀ x : {S : Finset (Fin n) // S.card = k}, x.1.card = k) ∧
       ∀ S : Finset (Fin n), S.card = k →
@@ -540,15 +534,16 @@ theorem uniform_sample (n k : ℕ) :
   rw [h1, Finset.card_singleton, one_mul, Fintype.card_finset_len, Fintype.card_fin]
 
 /-- **`PooledIncorrectBlocksLe`'s soundness hypothesis at the honest instance**: at the uniform `k`-subset sample
-(`uniform_sample`) with no unit wrong, every acceptance event meets an incorrect proof block with probability `0`, so `ε = 0`. -/
+(`uniform_sample`) with no block incorrect, every acceptance event meets an incorrect block with probability `0`, so
+`ε = 0`. -/
 theorem PooledIncorrectBlocksLe_honest (n k : ℕ) :
     ∀ (m : ℕ) (acc : Fin m → (Fin m → {S : Finset (Fin n) // S.card = k}) → Prop) (i : Fin m),
       Pr (fun ω => acc i ω ∧ ¬ Disjoint (ω i).1 (∅ : Finset (Fin n))) ≤ 0 := by
   intro m acc i
   simp [Pr, Claims.prUniform]
 
-/-- **`PooledIncorrectBlocksLe`'s conclusion fails at an audit that always accepts**, at `ε = 0`: one window of one unit,
-that unit wrong, `q = F = 1`. -/
+/-- **`PooledIncorrectBlocksLe`'s conclusion fails at an audit that always accepts**, at `ε = 0`: one window of one
+block, that block incorrect, `q = F = 1`. -/
 theorem PooledIncorrectBlocksLe_nontrivial :
     ¬ Pr (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
         1 ≤ ∑ _ : Fin 1, (Finset.univ : Finset (Fin 1)).card) ≤

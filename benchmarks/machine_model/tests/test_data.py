@@ -66,12 +66,12 @@ def test_every_citation_is_a_note_or_run_record_some_line_cites():
 
 
 CENSUS_COLUMNS = ("kind", "row", "rate", "noise", "cycles", "u", "since", "until", "runs")
-BLOB_LIMIT = 256 * 1024   # tests/test_repository.py's cap on a tracked file
+BLOB_LIMIT = 256 * 1024   # tests/test_repository.py's limit on a tracked file's size
 
 
 def test_census_is_a_file_per_epoch():
     """data/census/ is EPOCH.csv for each epoch that brought lines, each line's since its file's, and runs.toml; no file
-    comes near the repository's cap, so the census grows by files, not by one file growing."""
+    comes near the repository's size limit, so the census grows by files, not by one file growing."""
     files = census_files(M)
     assert {p.name for p in (DATA / "census").iterdir()} == {p.name for p in files} | {"runs.toml", "kinds.toml"}, (
         "data/census/ holds EPOCH.csv for epochs in model.toml's epochs, runs.toml and kinds.toml")
@@ -87,7 +87,7 @@ def test_census_is_a_file_per_epoch():
                 used_kinds |= {d["kind"][1:]} if d["kind"].startswith("@") else set()
     for p in [*files, DATA / "census" / "runs.toml", DATA / "census" / "kinds.toml"]:
         assert p.stat().st_size <= BLOB_LIMIT // 4, (
-            f"census/{p.name} is {p.stat().st_size} bytes, past a quarter of the {BLOB_LIMIT}-byte cap: name a run list "
+            f"census/{p.name} is {p.stat().st_size} bytes, past a quarter of the {BLOB_LIMIT}-byte limit: name a run list "
             f"its lines share in census/runs.toml and cite it as @NAME, or a kind list a row prices at one value in "
             f"census/kinds.toml and write its line as kind @NAME")
     assert used == set(named), f"runs.toml: {sorted(set(named) - used)} cited by no line; {sorted(used - set(named))} not in it"
@@ -217,7 +217,10 @@ def test_every_kind_is_a_copy_route_or_writes_memory_only():
 def test_adopted_lines_are_faster():
     """Each line adopted from a probe at an epoch is cheaper than the line it closed at the epoch before."""
     lines = census_lines(M)
-    u = lambda d: u_of(M.cycle_u, d["rate"], d["noise"], d["cycles"], d["u"])
+
+    def u(d):
+        return u_of(M.cycle_u, d["rate"], d["noise"], d["cycles"], d["u"])
+
     for epoch, before, run in [("VF3k-16", "VF3j-8", "r20261016-183617-3914"),
                                ("VF3l-16", "VF3k-16", "r20261016-210926-d856"),
                                ("VF3m-16", "VF3l-16", "r20261017-034149-3f95"),

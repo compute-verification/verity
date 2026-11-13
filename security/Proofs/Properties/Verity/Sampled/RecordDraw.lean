@@ -819,7 +819,7 @@ is the session's. -/
 theorem recordDraw_of_drew {k : Verity.Registration.Composite} (hH : DrawHeld k) {s : Verity.Sent} {dr : Draws}
     {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (hS : Verity.SameAccepts k s)
     (hd : Drew k s dr L n ξ units) (A : Live)
-    (hL : A.law = L) (hn : A.n = n) {record : String}
+    (hL : A.design = L) (hn : A.n = n) {record : String}
     (hr : sentRecord s = some record) :
     FlockSoundness.Discharge.Exec.recordDraw record =
       some (A.dj (Finset.univ.filter fun u : Fin A.n => u.val ∈ units)) := by

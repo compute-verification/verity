@@ -58,7 +58,7 @@ def CoinCommitment.ofJson (j : Json) : Except String CoinCommitment := do
   let scheme := match j with
     | .obj kv => kv.get? "scheme"
     | _ => none
-  if scheme != some (.str SCHEME) then throw s!"a coin commitment's scheme is {pyRepr SCHEME}"
+  if !fieldIs scheme SCHEME then throw s!"a coin commitment's scheme is {pyRepr SCHEME}"
   let epoch ← match jsonInt? (← field j "epoch") with
     | some e => if e < 0 then throw "an epoch is a nonnegative integer" else pure e.toNat
     | none => throw "an epoch is a nonnegative integer"

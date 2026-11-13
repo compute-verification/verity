@@ -48,11 +48,11 @@ ALLOWED: dict[str, str] = {
         "Annot.sets, expand and reference, an annotation laid out gate by gate: the reference Annot.check is held to "
         "(Flock.Test.Annot, annot-difftest's annot.reference, Properties.Annot.CheckAgrees); no verifier runs it",
     "verity/circuits/lean/Circuits/Extract.lean":
-        "open (PRF-72): Q_word v1 owns every computing gate, so its CallGraph lays out one activation of each distinct "
+        "open: Q_word v1 owns every computing gate, so its CallGraph lays out one activation of each distinct "
         "Call's Definition, batch members and scan iterations unrolled; no served window names Q_word (they name "
         "template queries, which read the root body only)",
     "verity/protocols/flock/verifier/Flock/Qcall.lean":
-        "open (PRF-72): Q_call v1 owns every computing gate, so its Gates lays out one activation of each distinct "
+        "open: Q_call v1 owns every computing gate, so its Gates lays out one activation of each distinct "
         "Call's Definition, batch members and scan iterations unrolled (its reads deduplicated in linear time, "
         "dedupReads, proved equal to the quadratic loop it replaced: gates_ref); no served window names Q_call",
     "verity/protocols/spot/verifier/lean/Spot/PartitionRef.lean":
@@ -63,12 +63,12 @@ ALLOWED: dict[str, str] = {
         "unit_gates difftest piece holds it to, and unitGates' answer on ranges evaluate never gives (not contiguous "
         "from unit 0, or a root that isn't a definition)",
     "verity/protocols/flock/verifier/Flock/RecCoins.lean":
-        "open (PRF-283 Decision 1): Inner.load's comb, CircuitFold.folded on the inner statement set up from its flat "
-        "file, folds every row of the unrolled inner unit, until PR 8 folds a templated inner once per Definition "
+        "open: Inner.load's comb, CircuitFold.folded on the inner statement set up from its flat "
+        "file, folds every row of the unrolled inner unit, until a templated inner is folded once per Definition "
         "(InnerSuccinct)",
     "verity/protocols/flock/verifier/Flock/RecVStar.lean":
-        "open (PRF-283 Decision 1): circuitFile regenerates V*'s unrolled circuit text (VStar.emitCircuitOf) for "
-        "checkFile's byte comparison, until PR 8 folds a templated inner once per Definition (InnerSuccinct)",
+        "open: circuitFile regenerates V*'s unrolled circuit text (VStar.emitCircuitOf) for "
+        "checkFile's byte comparison, until a templated inner is folded once per Definition (InnerSuccinct)",
     "verity/protocols/flock/verifier/Flock/NetAt.lean":
         "Tmpl.unrollAt, a templated unit's rows at their committed positions: the reference Tmpl.unitNet is proved "
         "equal to (FlockSoundness.TmplFold.unitNet_eq) and Flock.Test.NetAt compares it with; Tmpl.unitFull, its rows "
@@ -77,7 +77,7 @@ ALLOWED: dict[str, str] = {
         "statement as a version it doesn't serve (ProvedScope.servedForm; benchmarks/verifier_cost/flock_served)",
     "verity/protocols/flock/verifier/Flock/HmRow.lean":
         "HmOut.unrolled (and HmOut.parseStmt), a templated file's statement circuit, the flat circuit its template "
-        "unrolls to (ASK-112 option A), which the soundness statements read; no check runs it: verify sets up on and "
+        "unrolls to, which the soundness statements read; no check runs it: verify sets up on and "
         "checks the committed circuit (HmOut.parseCommit), its template by its description (ProvedScope.scopeOkT), "
         "but KsScope.checkOf's scope check reads its unit's rows (NetAt.lean's entry)",
     "verity/protocols/flock/verifier/Flock/TmplLayout.lean":
