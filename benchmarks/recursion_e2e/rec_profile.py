@@ -5,8 +5,10 @@
 row per timed thing: a prover's runs (``inner``, ``oprove``: the timed runs' ``LIVE`` lines), or a tool's
 ``/usr/bin/time -v`` over the repeats (``icheck``, ``vstage``, ``vcap``, ``oreplay``, ``lean``), or the build once, and one row
 per flipped inner coin (``negative``). Every time is a ``Stat`` (median, min, max and the values); nothing is averaged across
-different things. ``headline`` says whether the run is a whole recursive run (every step ran) and was accepted (every
-step exited 0, every honest verdict accepted, every flipped coin refused). A record line or file that doesn't parse (a
+different things. ``headline`` says whether the run is a whole recursive run (every step ran), whether its parts passed
+(every step exited 0, every honest verdict accepted, every flipped coin refused), whether Lean composed V*'s parts into
+the recursive statement, and whether it is an accepted recursive run: its parts passed and Lean accepted the
+composition. A record line or file that doesn't parse (a
 line cut short when its run stopped) is read as absent, and each one is logged at debug level. Stdlib only: the job runs
 it on the node's ``python3``.
 """
@@ -27,6 +29,8 @@ SCHEMA = "recursion-e2e/v1"
 #: the steps one recursive run needs, in order (vcap stages RecCap, which V*'s verdict needs; ``negative`` checks the
 #: run, ``icheck`` and ``oreplay`` time more of it)
 E2E_STEPS = ("build", "inner", "vstage", "vcap", "oprove", "lean")
+#: the lean step's record of its composition of V*'s parts, in its ``out/lean`` (lean_verdicts.py's ``RECORD``)
+COMPOSITION = "rec-compose.json"
 #: one recursive session's steps after its build: the inner session, V*'s staging, its outer proofs, Lean's verdicts
 SESSION_STEPS = E2E_STEPS[1:]
 ORDER = ("build", "inner", "icheck", "vstage", "vcap", "oprove", "oreplay", "lean", "forge-after", "negative")
@@ -177,6 +181,72 @@ def lean_split(p: Path) -> dict[str, float]:
     whole time (``/path: N ms``, setup included), as 85's summary reads them."""
     ms = [int(x) for x in re.findall(r"^(?:inputs|setup(?: \(drawn\))?|/\S+): (\d+) ms$", text(p), re.M)]
     return {"inputs_s": ms[0] / 1e3, "setup_s": ms[1] / 1e3, "session_s": (ms[2] - ms[1]) / 1e3} if len(ms) == 3 else {}
+
+
+_COMPOSE = re.compile(r"^lean compose(?: \(RETRY=[^)]*\))?: (.*?)(?:  <- FAILS)?$", re.M)
+
+
+def composition(o: Path) -> dict[str, Any] | None:
+    """What one invocation of the lean step says of its composition of V*'s parts: ``composed`` (whether Lean was asked),
+    ``accepted`` (its answer; None when it gave none or was not asked) and ``why``. From the step's record
+    (`COMPOSITION`), and for an invocation from before that record from its log (`logged_composition`). None when it
+    left neither, which is not a composition."""
+    path = o / "lean" / COMPOSITION
+    try:
+        rec = json.loads(text(path) or "null")
+    except ValueError as e:
+        log.debug("%s isn't JSON, read as no record (%s)", path, e)
+        rec = None
+    if not (isinstance(rec, dict) and isinstance(rec.get("composed"), bool)):
+        rec = logged_composition(text(o.parent / "step.log"))
+        if rec is None:
+            return None
+    accepted = rec.get("accepted") if rec["composed"] and isinstance(rec.get("accepted"), bool) else None
+    return {"composed": rec["composed"], "accepted": accepted, "why": str(rec.get("why") or "")}
+
+
+def logged_composition(step_log: str) -> dict[str, Any] | None:
+    """A lean step's composition from its log (job.sh's ``step.log``): the step's ``lean compose`` line on the honest
+    parts, which says they were not composed, or carries Lean's ``REC-COMPOSE`` line, or says why Lean gave none. None
+    without that line."""
+    m = _COMPOSE.search(step_log)
+    if not m:
+        return None
+    line = m.group(1)
+    if line.startswith("REC-COMPOSE "):
+        try:
+            v = json.loads(line.removeprefix("REC-COMPOSE "))
+        except ValueError:
+            v = None
+        if isinstance(v, dict):
+            return {"composed": True, "accepted": v.get("accepted"), "why": v.get("why")}
+    return {"composed": "is not composed" not in line, "why": line}
+
+
+def compose_row(cs: list[dict[str, Any] | None]) -> Row:
+    """The lean step's composition of V*'s parts over its invocations (`composition`). ok only when every invocation
+    composed them and Lean accepted; not ok when Lean refused one; and no verdict, which is not an accepted recursive
+    run, when one was not composed, left no record or got no answer. Its note is the first reason."""
+    r = Row("compose", "lean", "V*'s parts composed into the recursive statement by Lean (rec-compose over the run's record)",
+            "cpu")
+    missing = not cs or any(c is None for c in cs)
+    got = [c for c in cs if c]
+    refused = next((c for c in got if c["composed"] and c["accepted"] is False), None)
+    apart = next((c for c in got if not c["composed"]), None)
+    silent = next((c for c in got if c["composed"] and c["accepted"] is None), None)
+    if refused:
+        r.ok, r.note = False, "refused: " + refused["why"]
+    elif apart:
+        r.note = "not composed: " + apart["why"]
+    elif missing:
+        r.note = f"no record of the composition ({COMPOSITION})"
+    elif silent:
+        r.note = "no answer: " + silent["why"]
+    else:
+        r.ok = True
+    r.note = r.note[:300]
+    r.extra = {"composed": False if apart else None if missing else True, "accepted": r.ok}
+    return r
 
 
 def gpu_peak(p: Path) -> float | None:
@@ -419,6 +489,7 @@ def read(root: Path) -> dict[str, Any]:
                 r.note = next((w for w in why if w and w != "None"), text(ln[0] / "lean" / f"{name}.log")[-200:].strip())
         rows.append(step_row(ln, "lean", "85 STEP=lean whole (JOBS verifications at once), as an auditor waits"))
         rows += lrows
+        rows.append(compose_row([composition(o) for o in ln]))
     fa = repeats(root, "forge-after")
     if fa:
         rows.append(step_row(fa, "forge-after", "forge_after.py: every forged case and honest control, LEAN_JOBS at once"))
@@ -447,7 +518,8 @@ def read(root: Path) -> dict[str, Any]:
         doc["release"] = side
     doc["headline"] = headline(rows, s, steps) | ({"released": side["ok"]} if side else {})
     if doc["params"].get("release") == "1":
-        doc["headline"]["ok"] = doc["headline"]["ok"] and bool(side and side["ok"])
+        for k in ("ok", "parts_ok"):
+            doc["headline"][k] = doc["headline"][k] and bool(side and side["ok"])
     # each session step's first invocation's /usr/bin/time -v (None for a step that didn't run), what a session's cost is
     # scaled from
     doc["session_times"] = {x: timev(outs[0].parent / "time-step.txt") if (outs := repeats(root, x)) else None
@@ -613,14 +685,21 @@ def forge_after_rows(p: Path) -> list[Row]:
 
 
 def headline(rows: list[Row], s: dict[str, Any], steps: dict[str, list[str]]) -> dict[str, Any]:
-    """Whether the run is one whole recursive run (every step of ``E2E_STEPS`` ran) and accepted (every invocation exited
-    0, no row refused or unrun, and every flipped coin refused), with the numbers a reader looks for first."""
+    """Whether the run is one whole recursive run (``complete``: every step of ``E2E_STEPS`` ran), whether its parts passed
+    (``parts_ok``: it is whole, every invocation exited 0, no row refused or unrun, and every flipped coin refused),
+    whether Lean composed V*'s parts into the recursive statement (``composed``, `compose_row`'s; ``not_composed`` is why
+    not), and whether it is an accepted recursive run (``ok``: its parts passed and Lean accepted the composition), with
+    the numbers a reader looks for first. A run that passed on its parts with no composition is not ``ok``."""
     complete = all(steps.get(x) for x in E2E_STEPS)
     neg = {r.stage[len("negative inner-"):]: r.ok for r in rows if r.step == "negative" and r.stage.startswith("negative inner-")}
-    ok = (complete and all(rc == "0" for v in steps.values() for rc in v) and not s.get("not_ok")
-          and all(v is True for v in neg.values()))
+    parts_ok = (complete and all(rc == "0" for v in steps.values() for rc in v) and not s.get("not_ok")
+                and all(v is True for v in neg.values()))
+    c = next((r for r in rows if r.step == "lean" and r.stage == "compose"), None)
+    composed = c.extra.get("composed") if c else None
     mode = next(iter(k for k in s.get("pipeline", {}) if k.startswith("outer prove")), None)
-    return {"complete": complete, "ok": ok, "pipeline_sum_s": s.get("pipeline_sum_s"), "pipeline": s.get("pipeline"),
+    return {"complete": complete, "ok": parts_ok and c is not None and c.ok is True, "parts_ok": parts_ok, "composed": composed,
+            "not_composed": None if composed is True else c.note if c else f"no record of the composition ({COMPOSITION})",
+            "pipeline_sum_s": s.get("pipeline_sum_s"), "pipeline": s.get("pipeline"),
             "outer": s.get("outer"), "outer_mode": mode, "slowest": s.get("slowest"), "negative_refused": neg or None,
             "forged_refused": forged(rows) or None}
 
