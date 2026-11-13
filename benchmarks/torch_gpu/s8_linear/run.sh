@@ -22,7 +22,7 @@ git rev-parse HEAD > "$OUT/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SH
 PY=$(. benchmarks/harness/env.sh && echo "$VENV/bin/python3") || exit 2
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH
-export PYTHONPATH=$ROOT/adapters/vllm:$ROOT:$ROOT/verity/configuration/config
+export PYTHONPATH=$ROOT/adapters/vllm:$ROOT:$ROOT/tools/config
 export TRITON_CACHE_DIR=$S/triton
 mkdir -p "$S/ship" && tar -C "$S/ship" -xf "$SHIP" && (cd "$S/ship" && sha256sum -c --quiet MANIFEST.sha256) \
   || { echo "s8_linear: the ship $SHIP is missing or fails its MANIFEST" >&2; exit 2; }
