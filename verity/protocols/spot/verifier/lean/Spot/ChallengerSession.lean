@@ -304,12 +304,6 @@ private def strOf (j : Json) : String := match j with | .str s => s | _ => ""
 /-- `j == Json.bool true`, by a match the kernel reduces (`BEq Json` is a `partial def`, opaque to the kernel). -/
 private def jsonTrue (j : Json) : Bool := match j with | .bool true => true | _ => false
 
-/-- `j == Json.bool b`, by a match. -/
-private def jsonBoolIs (j : Json) (b : Bool) : Bool := match j with | .bool c => c == b | _ => false
-
-/-- `j == Json.arr #[]`, by a match. -/
-private def jsonEmptyList (j : Json) : Bool := match j with | .arr a => a.isEmpty | _ => false
-
 example : jsonTrue (getD (Json.mkObj [("closed", .bool true)]) "closed") = true := by decide
 example : jsonTrue (getD (Json.mkObj [("closed", .bool false)]) "closed") = false := by decide
 example : jsonTrue (getD (Json.mkObj [("files", .null)]) "closed") = false := by decide
@@ -782,7 +776,7 @@ def extendsHead (published ledger : Array Json) : Bool :=
 `null` when the verifier has none) passing `checked` under `key`, any two extending one another, and of them the first
 longest. -/
 def ledgerHead (heads : Json) (key : ChallengerKey) : V Json := do
-  if heads.isNull || jsonEmptyList heads then throw NO_AUDIT
+  if heads == Json.null || heads == Json.arr #[] then throw NO_AUDIT
   let .arr hs := heads | throw HEADS_FORM
   for (h, i) in hs.zipIdx do
     match checked h key with
