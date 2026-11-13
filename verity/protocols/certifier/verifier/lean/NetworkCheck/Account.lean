@@ -127,6 +127,14 @@ private def named (a : Core.Answer) (start span : Nat) (rests : List Core.Answer
       ("rests", Json.arr (rests.filterMap fun b => (Core.Account.nameOf b).map Json.str).toArray),
       ("session", .str session), ("span_ms", toJson span), ("start_ms", toJson start)]) }
 
+/-- Answer `a` with the registration's head `h`, the session and the names of the answers `rests` it rests on, and no
+span: all that a period in the clock form could publish, whose parameters hold no length of a link-window. -/
+private def unspanned (a : Core.Answer) (rests : List Core.Answer) : Core.Answer :=
+  { a with published := a.published.map fun j => j.mergeObj (Json.mkObj [
+      ("registration_head", .str "h"),
+      ("rests", Json.arr (rests.filterMap fun b => (Core.Account.nameOf b).map Json.str).toArray),
+      ("session", .str "s0")]) }
+
 private def publishes (a : Core.Answer) (keys : List Core.Account.Key) : List Bool :=
   keys.map fun k => (k.read a).isSome
 
@@ -177,6 +185,13 @@ private def charged (place : String) (β : Nat) :
 #guard reading (named today 120000 240000 [audit 0]) == [some (some "up0", 39936, "1/25", 240, some (120000, 360000))]
 #guard egress [named today 120000 240000 [audit 0], audit 0] ==
   [("leak", "up0", "certified", some 600000000, some 239960064, some 360039936, "1/25"), charged "up2, up4" 410000]
+-- an answer that counts and names no span covers no tick: its link's row reads certified with nothing verified, its
+-- free amount the whole capacity, at the answer's error, where no answer leaves the link not audited at no error
+#guard reading (unspanned today [audit 0]) == [some (some "up0", 39936, "1/25", 0, none)]
+#guard (egress [unspanned today [audit 0], audit 0]).map (fun r => (r.1, r.2.1, r.2.2.1)) ==
+  [("leak", "up0", "certified"), ("not audited", "up2, up4", "not audited: charged at capacity")]
+#guard egress [unspanned today [audit 0], audit 0] ==
+  [("leak", "up0", "certified", some 600000000, some 0, some 600000000, "1/25"), charged "up2, up4" 410000]
 -- the row names the terms its error does not price
 #guard unpricedOf account [named today 120000 240000 [audit 0], audit 0] ==
   [["each audit's knowledge error", "each audit's collision errors"]]
