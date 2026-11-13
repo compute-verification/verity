@@ -87,7 +87,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/spot/verifier/__init__.py",
           "verity/hardware/record.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto", "verity/circuits/kernels", "verity/circuits/private_circuits",
-          "verity/commitments/randomness", "verity/definitions", "verity/protocols/flock/prover/python/verity_flock", "verity/commitments/windows",
+          "verity/commitments/randomness", "verity/protocols/flock/prover/python/verity_flock", "verity/commitments/windows",
           "verity/protocols/pouw/verifier/__init__.py", "verity/protocols/pouw/verifier/audit.py", "verity/protocols/pouw/verifier/salt.py",
           "verity/protocols/pouw/verifier/protocol.py",
           # circuit/h1window.py imports both, so building the H1 units reads them.
@@ -225,7 +225,7 @@ paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "verity/protocols/certifier",
     "verity/protocols/pous",
-    "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py", "verity/protocols/pouw/prover", "verity/protocols/poub/__init__.py", "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/commitments", "verity/commitments/windows",
+    "verity/circuits", "verity/commitments", "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py", "verity/protocols/pouw/prover", "verity/protocols/poub/__init__.py", "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/commitments", "verity/commitments/windows",
 ]
 
 [[tool.verity.tests.reads]]
@@ -243,7 +243,7 @@ paths = [
     "verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.circuit-check.py",
     "verity/protocols/certifier",
     "verity/protocols/pous",
-    "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py", "verity/protocols/pouw/prover", "verity/protocols/poub/__init__.py", "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/commitments", "verity/commitments/windows",
+    "verity/circuits", "verity/commitments", "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py", "verity/protocols/pouw/prover", "verity/protocols/poub/__init__.py", "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/commitments", "verity/commitments/windows",
 ]
 
 [[tool.verity.tests.reads]]
@@ -257,7 +257,7 @@ paths = [
     "tools/verity/circuit_check/src/circuit_check",
     "verity/protocols/certifier",
     "verity/protocols/pous",
-    "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py", "verity/protocols/pouw/prover", "verity/protocols/poub/__init__.py", "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/commitments", "verity/commitments/windows",
+    "verity/circuits", "verity/commitments", "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py", "verity/protocols/pouw/prover", "verity/protocols/poub/__init__.py", "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/commitments", "verity/commitments/windows",
 ]
 
 [[tool.verity.tests.reads]]
@@ -287,7 +287,7 @@ paths = [
     "tools/verity/circuit_check/src/circuit_check",
     "verity/protocols/certifier",
     "verity/protocols/pous",
-    "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py", "verity/protocols/pouw/prover", "verity/protocols/poub/__init__.py", "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/commitments", "verity/commitments/windows",
+    "verity/circuits", "verity/commitments", "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py", "verity/protocols/pouw/prover", "verity/protocols/poub/__init__.py", "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/commitments", "verity/commitments/windows",
 ]
 
 [[tool.verity.tests.reads]]

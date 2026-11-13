@@ -2288,6 +2288,12 @@
         "verity/definitions/pyproject.toml": "adapters/vllm/verity_vllm/definitions/pyproject.toml",
         "verity/definitions/__init__.py": "adapters/vllm/verity_vllm/definitions/__init__.py"
       }
+    },
+    {
+      "paths": {
+        "verity/definitions/evaluate/": "verity/circuits/evaluate/",
+        "verity/definitions/requirement/": "verity/circuits/requirement/"
+      }
     }
   ]
 }

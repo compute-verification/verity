@@ -175,7 +175,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../remote/verifier/../../pouw/verifier/lean/pearlplus/../../../../../definitions/evaluate",
+   "../../../circuits/evaluate",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

@@ -323,7 +323,7 @@ paths = ["adapters/vllm/verity_vllm/definitions/registry"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/program/test_prims_serve_boundaries.py"]
-paths = ["verity/definitions"]
+paths = ["verity/circuits/evaluate", "verity/circuits/requirement"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/protocols/test_pous_option.py"]
