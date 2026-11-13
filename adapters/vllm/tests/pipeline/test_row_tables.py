@@ -21,7 +21,7 @@ from verity.circuits.defs import bind
 from verity.commitments import row_table as RT
 from verity.commitments.windows import rows as CS
 from verity.commitments.windows import tables as TB
-from verity.definitions.ops import gemm as OG
+from verity.circuits.ops import gemm as OG
 from verity.protocols.spot.verifier.one_stage import draw as D
 from verity.protocols.spot.verifier.one_stage import registered as REG
 from verity.protocols.spot.verifier.one_stage import registration as R
