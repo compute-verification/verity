@@ -132359,3 +132359,39 @@ Clock: `date -u` read 09:16Z. Branch `cursor/proofs-addrrow2-5e1b` at `d2cae2a30
 - A whole build of `security/Proofs`, or its records audit, at `d2cae2a309`. The sibling check left 388 modules unchecked.
 
 Runs: `r20261113-082753-b31c` (done, rc 0), `r20261113-090552-1d81` (done, rc 0). None out.
+
+## ASSEMBLY, Fri 13 Nov 09:15Z: the two root tests RUN at the join's tip `82ad1c6cb5`: BOTH RED. The certifier test no longer names `OwnReads.lean` (FRAME's cut works) and fails through RUNCOINS's `RunsAs/Proved.lean` alone; the public-boundary test names 8 edges, the ruled one and 7 more
+
+For your 08:37Z item 1 ("if you run the root suite on the join before then, say what else is red"). I ran the test files by name on my VM, not the whole root suite, which the guard keeps for a node.
+
+**In plain words.** FRAME's cut did what it was for: its file no longer reaches the network certifier. But another file on the join reaches it, RUNCOINS's `RunsAs/Proved.lean`, so that test is still red at the join. The public-boundary test is red on eight import lines, not the one you ruled on. Nothing here is mine to cut: each line is its owner's import.
+
+**1. What ran** [run: `uv run pytest` at `82ad1c6cb5`, worktree clean].
+- `tests/test_boundaries.py`, `tests/test_public_boundary.py` and `tests/test_integration_boundaries.py`: "2 failed, 117 passed in 76.73s". The two are the ones FRAME named.
+- `tests/test_lean_packages.py`: "35 passed, 3 warnings". With `-k import_all`: "2 passed, 33 deselected", so the five `import all` lines of your 06:25Z mail are gone from the join.
+
+**2. `test_spot_never_imports_the_network_certifier_in_lean`** [run].
+- The one importer it names is `security/Proofs/Flock/SpotFlock/RunsAs/Proved.lean`, by its line 4, `public import Proofs.Properties.Verity.Sampled.Held`. Every chain it prints ends there.
+- The path: `Sampled/Held.lean` imports `Sampled/RecordDraw.lean`, which imports `Challenger/Coins.lean`, then `Pous/MemoryChallenger/Attest.lean`, `Tree.lean`, and `NetworkCertifier/Check/Bytes.lean`. From there it reaches the certifier's Lean under `security/` and under `verity/protocols/certifier/`.
+- `RunsAs/Proved.lean` is RUNCOINS's and is not on `main` at the join's base [run: `git cat-file -e 8ef93f0196:…`].
+
+**3. `test_no_public_file_needs_one_the_export_does_not_copy`: 8 edges** [run]. Paths under `security/Proofs/` unless written out.
+- `Flock/SpotFlock/OwnReads.lean:9` to `Properties/Challenger/CanonLine.lean`: the edge you ruled stays red until after chain 2.
+- `Flock/SpotFlock/OwnReads.lean:10` to `Properties/Challenger/CanonWf.lean`: FRAME's new file, the second edge of its 08:48Z title.
+- `Flock/SpotFlock/ReadsCheck.lean:3` to `Properties/Challenger/CanonRead.lean` (OWNREADS).
+- `Flock/SpotFlock/RunsAs/Coins.lean:4` to `Properties/Challenger/Drawn.lean` (RUNCOINS).
+- `Flock/SpotFlock/RunsAs/OfCheck.lean:5` to `Properties/Verity/SampledTwo/Steps.lean` (RUNCOINS).
+- `Flock/SpotFlock/RunsAs/Proved.lean:4` to `Properties/Verity/Sampled/Held.lean` (RUNCOINS).
+- `Flock/SpotFlock/RunsAs/Proved.lean:5` to `Properties/Spot/Credited.lean` (RUNCOINS).
+- `Flock/SpotFlock/RunsAs/Statement.lean:6` to `security/Properties/Challenger.lean` (RUNCOINS).
+
+## NEEDS
+
+- **You:** a ruling for the seven edges and for `RunsAs/Proved.lean`'s certifier import, as you gave for the first edge: cut by their owners now, or red on the join until after chain 2. The join is not marked either way.
+
+## Not established
+
+- The rest of the root suite at the join's tip: not run. I can send its quick tier through `--on auto` if you want it before the compile; it takes a node's slot.
+- Whether FRAME's run of the two tests at the tip agrees: I have not read one.
+
+Runs: none out. No timer held. The join is at `82ad1c6cb5`, as in my 09:10Z entry.
