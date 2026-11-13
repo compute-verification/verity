@@ -831,8 +831,8 @@ def joined(parts: Iterable[Read], rest: str) -> Read:
 def suite_kind(row: dict, log: str) -> str:
     """What a failed suite's record and log say failed (`KINDS`): a timeout (its row's `timed_out`); a flake, each test it
     failed having passed under the same key (`nondeterministic`); the store or build state it shares (`STORE_SAYS`); its
-    machine (`vqueue_records.FAULT_RE`: a full disk, no memory; `MACHINE_SAYS`), in what its run printed, not in a test's code its
-    report quotes (`_printed`); else its own work."""
+    machine (`vqueue_records.FAULT_RE`: a full disk, no memory, a closed Lean pool; `MACHINE_SAYS`), in what its run printed,
+    not in a test's code its report quotes (`_printed`); else its own work."""
     failed = set(row.get("failed_tests") or ())
     if row.get("timed_out"):
         return "timeout"

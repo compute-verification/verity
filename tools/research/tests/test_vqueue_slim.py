@@ -27,7 +27,7 @@ from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Ad
 from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, OWN_TRAIN, WHOLE, Read,
                                   _json, _text, abandon, audit_built, audit_failures, audited, audits, based, combine, failures,
                                   judge, key, lean_inputs, lean_reads, left, read_step, read_suite, reads, replaced,
-                                  joined, shard_count, start, step_test, suite_kind, traced_reads, unnamed)
+                                  joined, shard_count, start, step_kind, step_test, suite_kind, traced_reads, unnamed)
 from test_policy import LIVE, TEST
 from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
@@ -1371,6 +1371,18 @@ def test_a_suite_whose_tests_pytest_could_give_no_temporary_directory_is_failed_
                "tests/test_network_certifier_compile_slice_v6.py::test_random_chains[synth]", step="lean-suites")
     assert suite_kind(row, NUMBERED_DIR_LOG) == "infra"
     assert suite_kind(row, NUMBERED_DIR_LOG.replace("could not create numbered dir", "could not parse its config")) == "own"
+
+
+CLOSED_POOL_LOG = ("lean_slot: /workspace/research/locks/lean-slots reads `audit 0`: pool 'audit' is closed on this machine, "
+                   "so this request takes no slot and joins no line; run it on a machine whose `lean_slot.py --status` lists "
+                   "a slot of pool 'audit'\n")
+
+
+def test_a_lean_step_refused_by_a_pool_its_machine_closed_is_failed_by_its_machine():
+    """A Lean step asking for a slot of a pool its machine's slots file sets to 0 exits 1 at once, naming the closed pool:
+    the machine's configuration failed it, never the change."""
+    assert step_kind({"step": "lean-build", "rc": 1}, CLOSED_POOL_LOG) == "infra"
+    assert step_kind({"step": "lean-build", "rc": 1}, CLOSED_POOL_LOG.replace("pool 'audit' is closed", "pool 'audit' is open")) == "own"
 
 
 def test_a_step_failed_by_its_change_beside_suites_its_machine_failed_is_named_by_the_change_s_suites_alone():
