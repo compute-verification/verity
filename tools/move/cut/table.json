@@ -1,0 +1,187 @@
+{
+ "bare": "benchmarks/network_traces",
+ "modules": {
+  "verity/protocols/accounting/certifier/verifier/record_files.py": {
+   "alias": "RF",
+   "doc": "A run's files as a verifier reads them: a record packed, and a certificate, a certified record and the network\ncertifier's public key as JSON.",
+   "take": {
+    "benchmarks/network_traces/active_replay.py": [
+     "pack_record",
+     "unpack_record"
+    ],
+    "benchmarks/network_traces/certifier_serve.py": [
+     "_BYTES",
+     "_enc",
+     "_dec",
+     "certificate_json",
+     "certificate_from_json",
+     "certified_json",
+     "certified_from_json"
+    ],
+    "benchmarks/network_traces/certifier_key.py": [
+     "public_json",
+     "read_public"
+    ]
+   }
+  },
+  "verity/protocols/accounting/certifier/verifier/connection_rows_check.py": {
+   "alias": "CRC",
+   "doc": "The check of a relay run's connection rows: its files read, each execution phase's rows counted, and the run\nrefused by name where they don't hold.",
+   "take": {
+    "benchmarks/network_traces/connection_rows_run.py": [
+     "SALTS",
+     "ROWS",
+     "NO_HEAD",
+     "read",
+     "_counted",
+     "_phase",
+     "_spread",
+     "check"
+    ]
+   }
+  },
+  "verity/protocols/accounting/certifier/verifier/relay_check.py": {
+   "alias": "RC",
+   "doc": "The check of a relay's run: its records, its certified records, its cells and its load, read from the run's\ndirectory and refused by name where they don't hold.",
+   "take": {
+    "benchmarks/network_traces/certifier_serve.py": [
+     "PROOF_DEADLINE_S"
+    ],
+    "benchmarks/network_traces/warden_serve.py": [
+     "INGRESS",
+     "EGRESS",
+     "FAILS",
+     "LINK",
+     "CERTIFIED",
+     "KIND_CHARS",
+     "_quantiles",
+     "read_records",
+     "read_certified",
+     "read_cells",
+     "check_cells",
+     "egress_cells",
+     "check_load",
+     "check"
+    ]
+   }
+  },
+  "verity/protocols/accounting/certifier/verifier/load_check.py": {
+   "alias": "LK",
+   "doc": "The check of the weights' load: the manifest a shape gives, and the load's registrations read against it.",
+   "take": {
+    "benchmarks/network_traces/load_relay.py": [
+     "FORMAT",
+     "LINK",
+     "WINDOW",
+     "KIND",
+     "SCHEMA",
+     "Shape",
+     "H200",
+     "TINY",
+     "SHAPES",
+     "Value",
+     "manifest",
+     "_log2",
+     "shape_named",
+     "check_load"
+    ]
+   }
+  },
+  "verity/protocols/accounting/certifier/verifier/scan_answer.py": {
+   "alias": "SA",
+   "doc": "What the scan's period check reads of a run: the jitter bound it is charged at, a run's file, and an execution\nphase's answer.",
+   "take": {
+    "benchmarks/network_traces/leak_bounds.py": [
+     "JITTER_BOUND"
+    ],
+    "benchmarks/network_traces/scan_zk.py": [
+     "_found",
+     "window_answer"
+    ]
+   }
+  },
+  "benchmarks/network_traces/runner_parts.py": {
+   "alias": "rp",
+   "doc": "What the relay's runner starts a run with: a connection's hand and flags, the keeper of its rows, the served\nmodel's name, and the process's own usage.",
+   "take": {
+    "benchmarks/network_traces/connection_rows_run.py": [
+     "HAND",
+     "_class",
+     "flags",
+     "schedule",
+     "flags_of",
+     "hand",
+     "Keeper"
+    ],
+    "benchmarks/network_traces/active_replay.py": [
+     "peak_rss_mb",
+     "_quiet_runtime",
+     "_usage"
+    ],
+    "benchmarks/network_traces/certifier_serve.py": [
+     "_call",
+     "served_model"
+    ]
+   }
+  },
+  "benchmarks/network_traces/load_bench.py": {
+   "alias": "LB2",
+   "doc": "load-bench: the time the load's relay takes, by its workers.\n\nIt times the relay (`load_relay.relay`) over the first ``--bytes`` of the H200 manifest's plain link, from random bytes\n(the commit's cost doesn't depend on them) to no sink, at each ``--workers``, and extrapolates the whole load; with\n``load_commit.p2_decode``'s per-block decode for the ``p2`` link.\n\n    python benchmarks/network_traces/load_bench.py --out DIR [--shape h200] [--bytes N] [--workers 1,16]\n",
+   "reads_source": true,
+   "take": {
+    "benchmarks/network_traces/load_relay.py": [
+     "RandomSource",
+     "bench"
+    ]
+   },
+   "imports": [
+    "import argparse",
+    "import json",
+    "import os",
+    "import platform",
+    "import sys",
+    "from collections.abc import Sequence",
+    "from pathlib import Path",
+    "from verity.protocols.accounting.certifier.verifier.load_check import SHAPES"
+   ],
+   "tail": "def main(argv: Sequence[str] | None = None) -> int:\n    ap = argparse.ArgumentParser(prog=\"load_bench.py\", description=__doc__.splitlines()[0])\n    ap.add_argument(\"--out\", required=True)\n    ap.add_argument(\"--shape\", choices=sorted(SHAPES), default=\"h200\")\n    ap.add_argument(\"--bytes\", type=int, default=1 << 31)\n    ap.add_argument(\"--workers\", default=\"1\")\n    ap.add_argument(\"--witness-dir\", help=\"write each run's salts there (default: none)\")\n    a = ap.parse_args(argv)\n    out = Path(a.out)\n    out.mkdir(parents=True, exist_ok=True)\n    host = {\"node\": platform.node(), \"cpus\": os.cpu_count(), \"affinity\": len(os.sched_getaffinity(0)),\n            \"python\": sys.version.split()[0]}\n    res = bench(SHAPES[a.shape], a.bytes, [int(x) for x in a.workers.split(\",\")],\n                None if a.witness_dir is None else Path(a.witness_dir)) | {\"host\": host}\n    (out / \"load-relay-bench.json\").write_text(json.dumps(res, indent=1, sort_keys=True))\n    for run in res[\"runs\"]:\n        print(f\"LOADRELAY workers {run['workers']}: {res['bytes'] / 2**30:.2f} GiB, {res['rows']:,} rows in \"\n              f\"{run['seconds']:.1f} s ({run['mb_s']:.0f} MB/s), whole load {run['load_s']:,.0f} s\", flush=True)\n    p = res[\"p2\"]\n    print(f\"LOADRELAY p2 decode {p['decode_block_us']:.0f} µs/block, {p['decode_core_s']:,.0f} core-s; \"\n          + \", \".join(f\"{n} workers {s:,.0f} s\" for n, s in p[\"by_workers\"].items()), flush=True)\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n"
+  }
+ },
+ "whole": {
+  "benchmarks/network_traces/blob_files.py": "verity/protocols/accounting/certifier/verifier/blob_files.py"
+ },
+ "edits": [
+  {
+   "file": "benchmarks/network_traces/load_relay.py",
+   "old": "    python benchmarks/network_traces/load_relay.py bench --out DIR [--shape h200] [--bytes N] [--workers 1,16]\n",
+   "new": ""
+  },
+  {
+   "file": "benchmarks/network_traces/load_relay.py",
+   "old": "\n`bench` times the relay over the first ``--bytes`` of the H200 manifest's plain link, from random bytes (the commit's cost\ndoesn't depend on them) to no sink, at each ``--workers``, and extrapolates the whole load; with ``load_commit.p2_decode``'s\nper-block decode for the ``p2`` link.\n",
+   "new": "\n``load_bench.py`` times the relay.\n"
+  },
+  {
+   "file": "benchmarks/network_traces/load_relay.py",
+   "old": "    b = sub.add_parser(\"bench\")\n    b.add_argument(\"--out\", required=True)\n    b.add_argument(\"--shape\", choices=sorted(SHAPES), default=\"h200\")\n    b.add_argument(\"--bytes\", type=int, default=1 << 31)\n    b.add_argument(\"--workers\", default=\"1\")\n    b.add_argument(\"--witness-dir\", help=\"write each run's salts there (default: none)\")\n",
+   "new": ""
+  },
+  {
+   "file": "benchmarks/network_traces/load_relay.py",
+   "old": "    if a.cmd == \"bench\":\n        res = bench(SHAPES[a.shape], a.bytes, [int(x) for x in a.workers.split(\",\")],\n                    None if a.witness_dir is None else Path(a.witness_dir)) | {\"host\": host}\n        (out / \"load-relay-bench.json\").write_text(json.dumps(res, indent=1, sort_keys=True))\n        for run in res[\"runs\"]:\n            print(f\"LOADRELAY workers {run['workers']}: {res['bytes'] / 2**30:.2f} GiB, {res['rows']:,} rows in \"\n                  f\"{run['seconds']:.1f} s ({run['mb_s']:.0f} MB/s), whole load {run['load_s']:,.0f} s\", flush=True)\n        p = res[\"p2\"]\n        print(f\"LOADRELAY p2 decode {p['decode_block_us']:.0f} µs/block, {p['decode_core_s']:,.0f} core-s; \"\n              + \", \".join(f\"{n} workers {s:,.0f} s\" for n, s in p[\"by_workers\"].items()), flush=True)\n        return 0\n",
+   "new": ""
+  },
+  {
+   "file": "benchmarks/network_traces/README.md",
+   "old": "- **The weights' load:** `load_relay.py` and `load_commit.py` (below).",
+   "new": "- **The weights' load:** `load_relay.py`, `load_bench.py` and `load_commit.py` (below)."
+  },
+  {
+   "file": "benchmarks/network_traces/runner_parts.py",
+   "old": "form (warden's \\\"The lengths rows\\\"): the network certifier hands each \"",
+   "new": "form (the network certifier's \\\"The lengths rows\\\"): it hands each \"",
+   "why": "a split adds an import line of the same names to each new module, so the retired terms' total would grow by one: the help's prose says the term the glossary gives"
+  }
+ ],
+ "files": {}
+}
