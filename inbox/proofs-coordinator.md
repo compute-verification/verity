@@ -127866,3 +127866,74 @@ I am the new worker that writes the one map for the proofs lane's eight loose pa
 **Not established:** everything; this entry only says I started.
 
 **Pushed heads:** `cursor/proofs-loosemap-0917` `9182900fb94eefbc4a6cc5d6e14885dc6b18f5ff` (no commit of mine yet).
+
+## FIRSTACCEPT, Fri 07:56Z: #9594 switches on the compiled check's accept only for an audit whose window has exactly one member; every window a real serve makes today has many members, so no real one-stage audit can be accepted through #9594 alone, and its first real accept needs the per-member form switched on as well
+
+**For TOP-415, in plain words.**
+
+The pull request is [#9594](https://github.com/compute-verification/verity/pull/9594), at `9049e2c572`, unmarked.
+
+What it switches on: the compiled Lean verifier for the one-stage audit (`sampled-proofs-one-stage-zk check`) can now say "accept" on an audit whose window holds exactly one member. A member is one kind of circuit in the window, such as one matrix-multiply template at one size. The verifier checks that every root the registration lists belongs to that one member. It then holds the public file to that member's roots.
+
+What stays refused after #9594:
+- A window of two members or more, with the message "not one member's". Every served model's window is like this.
+- A key not at the deployed parameters (W = 1, H = 20).
+- A case that names no challenger.
+- A session not run on the window's own challenger session.
+- A window that registers a row table.
+- A design by strata or by work, once the parameter refusal now in review lands.
+
+What has been shown: the accept, on a test window built for it. It is one matrix-multiply member, one unit, made in Python rather than by a serve. It used live challenges from a local challenger and a local key at the deployed parameters, and the verifier credited the drawn unit as proved (`r20261113-021307-1374`).
+
+That is not a real audit. No serve made that window.
+
+**The first run on a real one-stage audit can't be accepted by #9594 alone.** Every window a real serve makes holds many members:
+- Friday's two-stage interior is 20 members, one per template.
+- A served model's own window holds every template its layers use.
+
+The compiled check refuses such a window in both of its forms:
+- In the one-statement form, by #9594's "not one member's".
+- In the per-member form, which the compiled check parses and refuses outright.
+
+So the first real accept needs a second switch: the per-member form's accept in the compiled check. That is not in #9594, it is not mine, and I have not sized it.
+
+**What could happen today without a new serve.** Run #9594's verifier over the evidence that the 13:10Z try keeps. That is the cheapest real run, and its answer is known before it runs: a refusal, for the four reasons below. It would put on record exactly where a real audit stops. It is not an accept.
+
+---
+
+**1. Friday's pinned commits don't hold #9594** [run: `git merge-base --is-ancestor`, 07:40Z]. Neither `1536ba03d343` (13:10Z try) nor `984cb027efa3` (20:00Z try) contains any of #9594's commits:
+- `010f790b38`, the driver;
+- `ee18dfa451`, the composite's record;
+- `55978f017b`, the slice change;
+- `9049e2c572`, the lock records.
+
+**2. #9594's verifier over a Friday try's kept evidence** (the same evidence, my verifier, no new serve). It would be refused at least for these reasons:
+- **No challenger in the second stage's case.** `two_stage.py:917` at `984cb027efa3` sets `a.coins, a.rule, a.window_root, … = None` before the second stage's `a5.audit` [read]. Its case names no challenger, which the compiled check refuses. GATHER read the same in `240a`'s kept `second/audit/case-v2-members.json`: no `challenger` key [relayed].
+- **Key parameters.** The two-stage driver's local key is at `a5_coins.LOCAL_PARAMS = (4, 5)` (`a5_coins.py:83` at `984cb027efa3`) [read], so W = 4, H = 5. The one-statement check asks W = 1, H = 20 (`KEY_PARAMS`).
+- **Members.** At Friday's size the interior is 20 sessions, one per template [relayed: GATHER's 02:57Z, `b025`]. So a5 writes the per-member case, which the compiled check refuses (`OneStageZk.lean:834`, `:853` on `main`) [read]. A one-statement case drawn from it is refused by #9594 with "not one member's" [derived].
+- **Trees.** Neither pinned commit holds #9594's driver, whose sessions take their challenge tree on the window's challenger session with no closing stage [run: as in 1].
+
+**3. The cheapest way to a real accept, and what each path needs** [derived; none sized]:
+- **(a) One-stage audit of a served window** (`a5.py --tp-commit … --windows …`, `--zk --deployed-key`, `FLOCK_CHALLENGER=1`, `--challenger local`, law `subset:` or `rate:`), from #9594's commit. It needs a kept TP Commit serve from serving, and the per-member form's accept in the compiled check, with the members' sessions on the window's challenger session.
+- **(b) Friday's second stage**: it needs the second stage on a challenger session (`:917`), a key at the deployed parameters (the two-stage driver has no `deployed`), and the per-member accept.
+- **(c) A served window of exactly one member**: a serve of a workload whose circuit is one template. None is planned that I know of. With one, (a) needs nothing beyond #9594.
+- **Earliest hour of a real accept**: I can't give one. It waits on the per-member accept (MEMBERS's lane, as far as I know [guess]) or on a one-template serve. Earliest hour of the real run that refuses (2 above): after the 13:10Z try keeps its files [guess: about 15:00Z]. I launch it on your word.
+
+**4. Before the landing.** A run from #9594's commit is enough for an accept on record; the landing isn't needed. 1374 already is one, on the test window. #9594 stays unmarked. I don't merge `main` into it, and I carry it with `tools/move/restack.py` once chain 2 is on `main`, then give a new ready line.
+
+**5. `OneStageZk.lean` lines** [run: scratch `git merge-tree` and `commit-tree` onto `2e99b1cf48`, nothing built]:
+- #9594 adds 63 net lines to the file: 107 added and 44 removed, the removed being declarations moved up the file unchanged.
+- WINDOWAT's 2,061 does not include #9594; its four are #9441, #9576, #9584 and one-parse.
+- Its four heads in its order give 1,871, 1,943, 1,996 and 2,061, as it reported. Adding `9049e2c572` gives 2,124, with no conflict markers in the file.
+- #9594 alone on `main` is 1,776, under the cap.
+- So whichever change lands last past 2,000 carries the split. If #9594 lands after the others, the split is mine.
+
+**State.** Branch `cursor/proofs-firstaccept-5a1c` at `9049e2c572`, pushed, unchanged this turn. `~/wt/.pen` taken at 07:36:48Z on a fresh machine.
+
+**Not established**
+- Whether any branch switches on the per-member form's accept in the compiled check, and when.
+- That Friday's kept evidence is refused for the reasons in 2. That is read and derived; I ran nothing on it.
+- The 13:10Z try's end hour.
+- That the five-head merge builds (text only).
+
+**NEEDS**: your word on whether to run 2 (#9594's verifier over the 13:10Z try's kept evidence) once it is kept, and from whom to take its path. **To post**: the "For TOP-415" section above, as it is.
