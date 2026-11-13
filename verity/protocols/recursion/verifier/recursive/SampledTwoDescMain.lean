@@ -7,7 +7,9 @@ public import VStarRecursive.SampledTwoDesc
 
 `sampled-two-desc check PARAMS COMMITMENT EVIDENCE [BLOB ...]` decodes a play as the form's check does (the params, the
 boundary registration, the evidence, the blobs, and the run of record's input from `SampledTwo.inputAt`), then runs the
-descriptor check (`SampledTwoDesc.descOk`) on it:
+descriptor check (`SampledTwoDesc.descOk`) on it. Where the form refuses the play before its run of record (a session's
+verifier that does not accept), it prints the form's reason and runs the check all the same: the check reads the
+params, the boundary registration, the rule and the interior's params, replay block and circuits, and no session.
 
 * on the play as it is, printing `pass` or the first of its clauses that fails (`why`), then every clause that fails
   (`fails`) and, for each template, the numbers `memberOk` reads and its count of units (`sizes`);
@@ -98,16 +100,22 @@ def sizes (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : S
     | none => []
   | _, _, _ => []
 
-/-- The play's parameters, blobs, run of record's input and its interior, decoded as the form's check decodes them. -/
+/-- The play's parameters, blobs, run of record's input and its interior, decoded as the form's check decodes them
+(`SampledTwo.inputAt`), with no reason. Where the form refuses the play there, the reason is the form's and the input
+is `SampledTwo.inputOf`'s with no verdict, second-stage byte or receipt: `descOk` reads none of those, and the fields
+it does read (`params`, `record`, `rule`, `closure`, and the interior's `params`, `replay` and `circuits`) are the same
+in both. -/
 def decode (params commitment evidence : ByteArray) (blobs : Array ByteArray) :
-    V (SampledTwo.Params × Core.Blobs × Spot.Run.Input × Spot.Run.Interior) := do
+    V (SampledTwo.Params × Core.Blobs × Spot.Run.Input × Spot.Run.Interior × Option String) := do
   let p ← Core.canonicalJson params >>= SampledTwo.paramsOfJson
   let c ← Spot.OneStage.commitmentOf commitment
   let e ← SampledTwo.evidenceOf evidence
   let bs := Core.Blobs.ofArray blobs
-  let (_, _, _, i) ← SampledTwo.inputAt p c e.source e bs
+  let (i, refused) : Spot.Run.Input × Option String := match SampledTwo.inputAt p c e.source e bs with
+    | .ok (_, _, _, i) => (i, none)
+    | .error r => (SampledTwo.inputOf p c e.source ByteArray.empty e "" #[], some r)
   let some it := i.interior | throw "the run of record's input has no interior"
-  pure (p, bs, i, it)
+  pure (p, bs, i, it, refused)
 
 /-- The interior with its second template given the first's name. -/
 def renamed (it : Spot.Run.Interior) : Spot.Run.Interior :=
@@ -134,7 +142,9 @@ def main (args : List String) : IO UInt32 := do
     | .error e =>
       IO.println s!"undecoded: {e}"
       return 2
-    | .ok (p, bs, i, it) =>
+    | .ok (p, bs, i, it, refused) =>
+      if let some r := refused then
+        IO.println s!"the form refuses the play before its run of record ({r}); the descriptor check reads no session"
       let ok := descOk p bs i it
       let w := why p bs i it
       IO.println (report "play" ok w)
