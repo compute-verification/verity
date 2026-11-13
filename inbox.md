@@ -1,3 +1,0 @@
-[2026-11-13T17:33Z] 6d0cba6e29e5
-ci, 17:3xZ: two more lines for your PR (same kind: author advice made stale by moves). top found them: tools/research/src/research/landing.py line 1296 ('#N's base landed in main at ...; merge main into #N') and tools/research/src/research/vqueue_loop.py line 3081 ('merge main into it once #B is on it'). Where a stack's base crossed a move before it landed, that plain merge is clean but leaves the line's added files at their old paths. Reword both to match top's #9756 (restack.py's based-after refusal now gives the carry against the move's own commit; its head 73dedcb97131): cross the line with tools/move/restack.py against the move first, then merge main; update the tests that pin these texts. Still marked by 6 PM PST today.
-
