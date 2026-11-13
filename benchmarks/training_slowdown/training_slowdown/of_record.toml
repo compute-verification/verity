@@ -543,6 +543,14 @@ sha256 = "9dd5878302607ff9f929e02006cc92f68c7005165a80b0f55359828a41902c16"
 partial = "none"
 step = { counted = 3, why = "the new blocks' gains sit behind their zeroed output projections, so they get no gradient at the first step and undecayed AdamW leaves them θ′'s: they leave it at the second step, and the third is the first a later step's structure has" }
 
+[[held."m-t20-2x-wildcard-topcode-coded".record_only_steps]]
+number = 1
+why = "the program's cut probe before training: the probe windows' loss with the cut coded and with none, forward only, which the route does not take because the trace reads the cut"
+
+[[held."m-t20-2x-wildcard-topcode-coded".record_only_steps]]
+number = 5389
+why = "the program's cut probe after training: the same, which also measures the code's spectrum, forward only, which the route does not take because the trace reads the cut"
+
 [[held."m-t20-2x-wildcard-topcode-coded".record_only]]
 phase = "other"
 kind = "param"

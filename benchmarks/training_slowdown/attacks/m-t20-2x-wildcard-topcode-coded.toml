@@ -5,11 +5,12 @@
 # stochastically in that basis onto 2^4 − 1 steps; the rate rises over 40 steps and falls to 0 over the last quarter.
 # The forward's code crosses as bytes, so the trace reads the forward's plane at its width; the backward's rounding
 # stays floats on its own grid. The output is the grown model, scored without the code; E is every tensor of it. The
-# steps and the dials are the run of record's (`of_record.toml`).
+# steps are the run of record's training steps, its program's two cut probes apart, and the dials are its
+# (`of_record.toml`).
 start = "m-t20"
 route = "topcode"
 target = { gain = 2.0 }
-budget = { steps = 5389, batch = 192 }
+budget = { steps = 5387, batch = 192 }
 seeds = { search = [0], final = [0, 101, 102] }
 policy = "console"
 
