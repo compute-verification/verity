@@ -66,7 +66,9 @@ theorem secondCheck_read {v : Registration.Verifier} {delta : Core.Ratio} {c : O
       obtain ⟨n, units, read, hn, hdf, hsz⟩ := coinsReason_read hr
       have hmn : m = n := by rw [hm] at hn; exact Option.some.inj hn
       subst hmn
-      exact ⟨_, units, read, hm, hdf, hsz⟩
+      first
+        | exact ⟨_, units, read, rfl, hdf, hsz⟩
+        | exact ⟨_, units, read, hm, hdf, hsz⟩
 
 /-- **An accepted two-stage check's second-stage bytes are the coins its draw read**: the interior audit's draw, under
 the second stage's law `secondLawOf` computes and its record's population, read `read` bytes of the bytes `ξ₂` its

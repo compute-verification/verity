@@ -10,9 +10,12 @@ from __future__ import annotations
 import copy
 import functools
 import json
+import os
 import random
 import shutil
+import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 from hypothesis import strategies as st
@@ -149,3 +152,28 @@ def test_two_definitions_are_refused_by_name(server) -> None:
 def test_the_base_is_refused(server) -> None:
     """Past the mirror the Lean still refuses: the members are none, and the form accepts nothing while `FORM` is false."""
     assert PORT.lean(server, case(base()))[0] == "reject"
+
+
+#: what the shipped check's refusal by the switch names: the stream's code for the two-stage form, or the switch's reason
+#: (`SecondStage.FORM`, `SecondStage.FORM_WHY`)
+BY_THE_SWITCH = ("two-stage-form", "a statement form the soundness proof does not cover")
+
+
+@pytest.mark.slow
+def test_the_form_accepts_one_honest_play_with_its_switch_on() -> None:
+    """The form accepts some play: one honest two-stage run's case (``sampled_two_small.sh``'s ``$OUT/form``, the
+    directory ``SAMPLED_TWO_CASE`` names: params.json, commitment.json, evidence.json and blobs/) passes
+    `sampled-two-on`, the check with its switch on, and the shipped `sampled-two` refuses it by the switch alone. It
+    catches a change after which the form accepts no play, which every refusal case above passes. Opt-in: the case is
+    a node run's, its sessions' files too large to keep beside the test."""
+    at = os.environ.get("SAMPLED_TWO_CASE")
+    if not at:
+        pytest.skip("SAMPLED_TWO_CASE names no honest play's case (sampled_two_small.sh's $OUT/form)")
+    d = Path(at)
+    files = [str(d / f) for f in ("params.json", "commitment.json", "evidence.json")]
+    files += [str(b) for b in sorted((d / "blobs").iterdir())]
+    exes = [D.build(PORT.package, exe) for exe in ("sampled-two-on", "sampled-two")]
+    on = subprocess.run([str(exes[0]), "check", *files], capture_output=True, text=True, check=False)
+    assert on.returncode == 0, (on.stdout + on.stderr)[-4000:]
+    off = subprocess.run([str(exes[1]), "check", *files], capture_output=True, text=True, check=False)
+    assert off.returncode == 1 and any(x in off.stdout for x in BY_THE_SWITCH), (off.stdout + off.stderr)[-4000:]
