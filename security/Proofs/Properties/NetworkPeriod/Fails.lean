@@ -49,9 +49,10 @@ def failsTerm (cells : Array ℕ) (fails : ℕ) : ℕ := clog2 (failsAtMost cell
 
 /-- The rows form's terms with each length read once: `rowsTerms` with `schedules` the registered parameters' count
 (`thetas`, one under one fixed schedule) and `cells` the term of the period's `fails` failed connections. -/
-def rowsTermsFails (facts : Array Facts) (scan : Scan) (scans : Array (Facts × ℕ)) (cells : Array ℕ)
-    (thetas fails jitter windows : ℕ) : Public :=
-  { rowsTerms facts scan scans cells jitter windows with cells := failsTerm cells fails, schedules := clog2 thetas }
+def rowsTermsFails (facts : Array Facts) (scan : Scan) (scans : Array (Facts × ℕ × ℕ)) (cells : Array ℕ)
+    (thetas fails jitter windows : ℕ) (charged : Array Facts := #[]) : Public :=
+  { rowsTerms facts scan scans cells jitter windows charged with
+    cells := failsTerm cells fails, schedules := clog2 thetas }
 
 /-- **The clock form's `K` at no caps bounds the count with no cells factor**: `#Ss` at `syncs ^ windows` and each
 audit's factors at the check's numbers. -/
@@ -64,9 +65,10 @@ theorem clockKBoundsHeld (jitter syncs windows : ℕ) {n : ℕ} (a : Fin n → A
   exact h
 
 theorem K_failsOfFn (facts : Array Facts) (scan : Scan) (jitter windows thetas fails : ℕ) {m n : ℕ} (caps : Fin m → ℕ)
-    (w : Fin n → Facts) (tied : Fin n → ℕ) :
-    (rowsTermsFails facts scan (Array.ofFn fun i => (w i, tied i)) (Array.ofFn caps) thetas fails jitter windows).K =
-      clog2 thetas + failsTerm (Array.ofFn caps) fails + ∑ i, (scan.terms (w i) (tied i) jitter).bits := by
+    (w : Fin n → Facts) (tied faulty : Fin n → ℕ) (charged : Array Facts) :
+    (rowsTermsFails facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn caps) thetas fails jitter
+        windows charged).K =
+      clog2 thetas + failsTerm (Array.ofFn caps) fails + ∑ i, (scan.terms (w i) (tied i) (faulty i) jitter).bits := by
   simp only [Public.K, rowsTermsFails, rowsTerms, Array.map_ofFn]
   rw [foldl_ofFn]
   rfl
@@ -76,23 +78,24 @@ number for the patterns. For the caps `caps` of `m` connections, `thetas` regist
 connections: `failsAtMost`, times `thetas`, times each window's factors at the check's numbers, is at most `2 ^ K`.
 With no failure and one registered parameter the first two factors are one and their terms zero. -/
 theorem rowsKBoundsFails (facts : Array Facts) (scan : Scan) (jitter windows thetas fails : ℕ) {m n : ℕ}
-    (caps : Fin m → ℕ) (w : Fin n → Facts) (tied : Fin n → ℕ) :
+    (caps : Fin m → ℕ) (w : Fin n → Facts) (tied faulty : Fin n → ℕ) (charged : Array Facts) :
     failsAtMost m (capMax (Array.ofFn caps)) fails *
         (thetas * ∏ i, (2 ^ (scan.free + tied i) * atMost (w i).units (w i).wrong *
-          2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps)) ≤
-      2 ^ (rowsTermsFails facts scan (Array.ofFn fun i => (w i, tied i)) (Array.ofFn caps) thetas fails jitter
-        windows).K := by
+          2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps * 2 ^ faulty i)) ≤
+      2 ^ (rowsTermsFails facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn caps) thetas fails
+        jitter windows charged).K := by
   have hf : failsAtMost m (capMax (Array.ofFn caps)) fails ≤ 2 ^ failsTerm (Array.ofFn caps) fails := by
     unfold failsTerm
     rw [Array.size_ofFn]
     exact le_two_pow_clog2 _
   have hw : ∏ i, (2 ^ (scan.free + tied i) * atMost (w i).units (w i).wrong *
-      2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps) ≤
-      2 ^ ∑ i, (scan.terms (w i) (tied i) jitter).bits := by
+      2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps * 2 ^ faulty i) ≤
+      2 ^ ∑ i, (scan.terms (w i) (tied i) (faulty i) jitter).bits := by
     rw [← Finset.prod_pow_eq_pow_sum]
     refine Finset.prod_le_prod fun i _ => ?_
     simp only [AuditTerms.bits, Scan.terms, pow_add]
-    exact Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)
+    exact Nat.mul_le_mul
+      (Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)) le_rfl
   rw [K_failsOfFn, pow_add, pow_add, mul_comm (2 ^ clog2 thetas), mul_assoc]
   exact Nat.mul_le_mul hf (Nat.mul_le_mul (le_two_pow_clog2 _) hw)
 
@@ -165,13 +168,13 @@ theorem failsAtMostCovers {m : ℕ} (caps : Fin m → ℕ) (fails : ℕ) :
 fail patterns of at most `fails` connections below their caps (`Σ_{i ≤ fails} failPatterns caps i`), times `thetas`
 registered parameters, times each window's factors, is at most `2 ^ K`. -/
 theorem rowsKBoundsFailPatterns (facts : Array Facts) (scan : Scan) (jitter windows thetas fails : ℕ) {m n : ℕ}
-    (caps : Fin m → ℕ) (w : Fin n → Facts) (tied : Fin n → ℕ) :
+    (caps : Fin m → ℕ) (w : Fin n → Facts) (tied faulty : Fin n → ℕ) (charged : Array Facts) :
     (∑ i ∈ Finset.range (fails + 1), failPatterns caps i) *
         (thetas * ∏ i, (2 ^ (scan.free + tied i) * atMost (w i).units (w i).wrong *
-          2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps)) ≤
-      2 ^ (rowsTermsFails facts scan (Array.ofFn fun i => (w i, tied i)) (Array.ofFn caps) thetas fails jitter
-        windows).K :=
+          2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps * 2 ^ faulty i)) ≤
+      2 ^ (rowsTermsFails facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn caps) thetas fails
+        jitter windows charged).K :=
   (Nat.mul_le_mul_right _ (failsAtMostCovers caps fails)).trans
-    (rowsKBoundsFails facts scan jitter windows thetas fails caps w tied)
+    (rowsKBoundsFails facts scan jitter windows thetas fails caps w tied faulty charged)
 
 end NetTiming.PeriodTerms
