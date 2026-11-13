@@ -210,14 +210,15 @@ theorem StreamedWipeMeetsH200_honest :
   omega
 
 /-- **`StreamedWipeMeetsH200`'s nontrivial lemma**: its bound is false at `StreamedWipe.acceptAll`, on the H200's
-instance with no egress, for `keepAll` keeping the threshold's `39,068,035,213` bits. -/
+instance with no egress, for some key-free PRF and a prover (`keepAll`) keeping the threshold's `39,068,035,213` bits. -/
 theorem StreamedWipeMeetsH200_nontrivial :
-    ¬ Pous.StreamedWipe.winRealBy Pous.StreamedWipe.acceptAll (Pous.Claims.noKey 2365587456)
-        (Pous.Claims.keepAll 2365587456 2906 512 39068035213 (2365587456 * 512) 0 (by norm_num)) ≤
-      (2⁻¹ : ENNReal) ^ 128 + Pous.StreamedWipe.prfAdvantage (Pous.Claims.noKey 2365587456)
-        (Pous.StreamedWipe.wipeDistinguisherBy Pous.StreamedWipe.acceptAll
-          (Pous.Claims.keepAll 2365587456 2906 512 39068035213 (2365587456 * 512) 0 (by norm_num))) :=
-  Pous.Claims.keepAll_not_within (by norm_num) (by norm_num) _
+    ∃ (prf : Pous.Bits 0 → Fin 2365587456 → Pous.Bits 512)
+      (P : Pous.StreamedWipe.Prover 2365587456 2906 512 39068035213 (2365587456 * 512) 0),
+      ¬ Pous.StreamedWipe.winRealBy Pous.StreamedWipe.acceptAll prf P ≤
+        (2⁻¹ : ENNReal) ^ 128 + Pous.StreamedWipe.prfAdvantage prf
+          (Pous.StreamedWipe.wipeDistinguisherBy Pous.StreamedWipe.acceptAll P) :=
+  ⟨Pous.Claims.noKey 2365587456, Pous.Claims.keepAll 2365587456 2906 512 39068035213 (2365587456 * 512) 0
+    (by norm_num), Pous.Claims.keepAll_not_within (by norm_num) (by norm_num) _⟩
 theorem StreamedWipeMeetsReadsTight : Pous.Guarantees.StreamedWipeMeetsReadsTight :=
   PousStreamedWipe.streamed_wipe_meets_reads_tight
 theorem StreamedWipeMeetsServer : Pous.Guarantees.StreamedWipeMeetsServer := PousStreamedWipe.streamed_wipe_meets_server
