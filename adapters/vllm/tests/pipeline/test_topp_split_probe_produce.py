@@ -13,6 +13,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import io
+import itertools
 import json
 import sys
 import types
@@ -36,8 +37,12 @@ NUM_SM, SEED = 8, 5
 GPU, VLLM, TRITON = "a GPU, device 0", "0.0-stand-in", "0.0-stand-in-triton"
 SITE = "vllm.v1.sample.ops.topk_topp_triton"
 TOP_P, TEMPERATURE = 0.9, 0.7
-#: The case the kernels leave untouched (p = 1), the record's, and the drain's.
+#: The case the kernels leave untouched (p = 1) and the record's.
 UNTOUCHED, RECORD = 3, 4
+#: The drain's vocabulary: one whose slices are a lane longer under 32 splits than under 33, so a row made for the wrong count differs.
+DRAIN_V = 2048
+#: What the stand-in clock adds a reading; the first is `produce`'s start.
+TICK = 1.26
 
 
 def _cases(with_record: bool) -> list[dict]:
@@ -49,7 +54,7 @@ def _cases(with_record: bool) -> list[dict]:
     ]
     if with_record:
         cases.append({"id": RECORD, "kind": "record", "S": 2, "V": 1024, "row": 0})
-    cases.append({"id": len(cases), "kind": "drain", "V": 1024, "seed": 100, "k": 24, "keep_frac": 0.5, "p": None})
+    cases.append({"id": len(cases), "kind": "drain", "V": DRAIN_V, "seed": 100, "k": 24, "keep_frac": 0.5, "p": None})
     return cases
 
 
@@ -74,9 +79,20 @@ class _Kernel:
         return launch
 
 
+class _Stdout(io.StringIO):
+    """A stdout that counts its flushes."""
+
+    flushes = 0
+
+    def flush(self) -> None:
+        self.flushes += 1
+        super().flush()
+
+
 class _Pod:
     """A pod for one `produce`: vLLM's kernels, the probe's own and the temperature kernel, each the model's answer written
-    where the kernel writes; a device of ``NUM_SM`` SMs that is the CPU; and the manifest's cases, small ones."""
+    where the kernel writes; a device of ``NUM_SM`` SMs that is the CPU; a clock that adds ``TICK`` a reading; and the
+    manifest's cases, small ones."""
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
         self.log: list[tuple[Any, ...]] = []
@@ -97,6 +113,8 @@ class _Pod:
         monkeypatch.setitem(sys.modules, "triton", triton)
         monkeypatch.setattr(tp, "_mask_probe_kernel", lambda: _Kernel("probe", self._probe, self.log))
         monkeypatch.setattr(tp, "build_manifest", self._manifest)
+        clock = itertools.count(100.0, TICK)
+        monkeypatch.setattr(tp, "time", types.SimpleNamespace(time=lambda: next(clock)))
         cpu = torch.device("cpu")
 
         def device(name: str) -> torch.device:
@@ -159,14 +177,16 @@ class _Pod:
 
 @pytest.fixture(scope="module")
 def produced(tmp_path_factory: pytest.TempPathFactory) -> Any:
-    """One `produce` with a record, on the stand-in pod: the pod, the directory it wrote, the record's path and its stdout."""
+    """One `produce` with a record, into a directory that is there, on the stand-in pod: the pod, the directory it wrote, the
+    record's path and its stdout."""
     d = tmp_path_factory.mktemp("produced")
     record = _record(d)
-    stdout = io.StringIO()
+    (d / "out").mkdir()
+    stdout = _Stdout()
     with pytest.MonkeyPatch.context() as monkeypatch, contextlib.redirect_stdout(stdout):
         pod = _Pod(monkeypatch)
         tp.produce(str(d / "out"), record, SEED)
-    return types.SimpleNamespace(pod=pod, out=d / "out", record=record, lines=stdout.getvalue().splitlines(),
+    return types.SimpleNamespace(pod=pod, out=d / "out", record=record, lines=stdout.getvalue().splitlines(), flushes=stdout.flushes,
                                  manifest=json.loads((d / "out" / "manifest.json").read_text()))
 
 
@@ -193,6 +213,8 @@ def test_the_manifest_says_the_device_the_versions_the_seed_and_the_record(produ
     assert {k: man[k] for k in ("seed", "num_sm", "gpu", "torch", "triton", "vllm", "record")} == {
         "seed": SEED, "num_sm": NUM_SM, "gpu": GPU, "torch": torch.__version__, "triton": TRITON, "vllm": VLLM, "record": "rows.npz"}
     assert sorted(man) == ["cases", "gpu", "num_sm", "record", "secs", "seed", "torch", "triton", "vllm"]
+    assert man["secs"] == round(TICK, 1) != TICK
+    assert (produced.out / "manifest.json").read_text().startswith('{\n "cases": [\n  {\n   "id": 0,')
     assert produced.pod.asked == [(SEED, True)]
     assert produced.pod.launches("device") == [("device", "cuda:0")]
 
@@ -259,8 +281,14 @@ def test_a_case_launches_the_stats_five_steps_the_probe_on_a_copy_and_the_mask_o
     row, probe_in = stats[2][0], probe[2][0]
     assert mask[2][0] is row and all(step[2][0] is row for step in steps)
     assert probe_in is not row and probe_in.shape == row.shape == (1, 1024)
+    assert [entry[2][1] for entry in (stats, *steps, probe, mask)] == [1024] * (rounds + 3)       # a row's stride, not a lane's
+    parts = steps[0][2][3]
+    assert parts.shape == (1, rounds, 2, TS.SPLIT_FANOUT, 3) and all(entry[2][3] is parts for entry in (*steps, probe, mask))
+    shared = {"S": 2, "F": TS.SPLIT_FANOUT, "NUM_ROUNDS": rounds, "VOCAB_SIZE": 1024, "num_warps": 8}
     assert stats[3] == {"HAS_K": False, "VOCAB_SIZE": 1024, "S": 2, "BLOCK": 8192, "num_warps": 8}
-    assert mask[3]["MASK_VALUE"] == float("-inf") and mask[3]["HAS_K"] is False and mask[3]["NUM_ROUNDS"] == rounds
+    assert [step[3] for step in steps] == [{**shared, "HAS_K": False, "BLOCK": 2048}] * rounds
+    assert probe[3] == {**shared, "BLOCK": 8192}
+    assert mask[3] == {**shared, "HAS_K": False, "MASK_VALUE": float("-inf"), "BLOCK": 8192}
 
 
 def test_the_drain_launches_vllm_s_entry_once_a_batch_size_on_the_first_rows(produced):
@@ -273,8 +301,8 @@ def test_the_drain_launches_vllm_s_entry_once_a_batch_size_on_the_first_rows(pro
     assert [(b["B"], b["S"]) for b in drain["batches"]] == [(b, topp_geometry.splits_for(b, NUM_SM)) for b in sizes]
     with np.load(produced.out / "fixture.npz") as z:
         for b in drain["batches"]:
-            keep = np.unpackbits(z[f"drain_B{b['B']}_keep"], axis=1, bitorder="little")[:, :1024]
-            assert keep.shape == (b["B"], 1024) and b["kept"] == keep.sum(axis=1).tolist()
+            keep = np.unpackbits(z[f"drain_B{b['B']}_keep"], axis=1, bitorder="little")[:, :DRAIN_V]
+            assert keep.shape == (b["B"], DRAIN_V) and b["kept"] == keep.sum(axis=1).tolist()
 
 
 def test_produce_prints_a_line_a_case_a_line_a_drain_batch_and_the_totals(produced):
@@ -284,9 +312,12 @@ def test_produce_prints_a_line_a_case_a_line_a_drain_batch_and_the_totals(produc
     assert [json.loads(line)["id"] for line in lines[:5]] == [0, 1, 2, 3, 4]
     assert sorted(json.loads(lines[0])) == sorted(
         ["id", "kind", "S", "V", "p", "kept", "z_nunique", "ties", "numkeep", "numdup", "probe_keep_eq_real"])
-    assert [json.loads(line)["drain"] for line in lines[5:-1]] == sizes
+    assert [(said["drain"], said["S"]) for said in map(json.loads, lines[5:-1])] == [(b, topp_geometry.splits_for(b, NUM_SM)) for b in sizes]
+    assert all(sorted(json.loads(line)) == ["S", "drain", "kept"] for line in lines[5:-1])
     assert all(len(json.loads(line)["kept"]) == min(8, size) for line, size in zip(lines[5:-1], sizes, strict=True))
-    assert lines[-1].startswith(f"cases 6 -> {produced.out / 'fixture.npz'} ")
+    npz = produced.out / "fixture.npz"
+    assert lines[-1] == f"cases 6 -> {npz} {npz.stat().st_size / 1024:.0f} KB {2 * TICK:.1f}s"
+    assert produced.flushes == len(lines) - 1                        # each line but the totals is flushed as it is printed
 
 
 def test_without_a_record_no_record_case_is_made_and_nothing_is_tempered(monkeypatch, tmp_path, capsys):
