@@ -72,7 +72,7 @@ set_option maxRecDepth 20000
 namespace Properties.NetworkCertifier
 
 open Bytes _root_.Properties.NetworkCertifier.Tree GridProofs CheckProofs
-open Properties.CertifierNetwork.Proofs (Inv inv_after init_inv windowsOn)
+open Properties.CertifierNetwork.Proofs (Inv inv_after init_inv executionPhasesOn)
 open Properties.CertifierDevice.Proofs.Issuer (except_bind_ok prepare_spec prepare_head)
 
 /-! ## What the device's code issues -/
@@ -146,10 +146,10 @@ theorem deviceCode_started {x : DeviceInput} (h : x.issuer.session ∈ x.session
 
 /-! ## One record per link-window -/
 
-theorem nodup_windows {l : String} {P : List BlockGrid} {n : Nat} (h : windowsOn l P = List.range n) {r r' : BlockGrid}
+theorem nodup_executionPhases {l : String} {P : List BlockGrid} {n : Nat} (h : executionPhasesOn l P = List.range n) {r r' : BlockGrid}
     (hr : r ∈ P) (hr' : r' ∈ P) (hl : r.link = l) (hl' : r'.link = l) (hw : r.window = r'.window) : r = r' := by
   have hnd : ((P.filter fun r => decide (r.link = l)).map BlockGrid.window).Nodup := by
-    unfold windowsOn at h
+    unfold executionPhasesOn at h
     rw [h]
     exact List.nodup_range
   exact List.inj_on_of_nodup_map hnd (List.mem_filter.mpr ⟨hr, by simpa using hl⟩)
@@ -163,8 +163,8 @@ theorem unique {c : Config} {tr : List Event} (hd : Distinct c) {r r' : BlockGri
   rw [List.nil_append] at h
   change Inv c (after (init c) tr) (published c tr) at h
   rcases List.mem_pair.mp hlk with hlk | hlk
-  · exact nodup_windows h.eg hr hr' hlk (hl ▸ hlk) hw
-  · exact nodup_windows h.ig hr hr' hlk (hl ▸ hlk) hw
+  · exact nodup_executionPhases h.eg hr hr' hlk (hl ▸ hlk) hw
+  · exact nodup_executionPhases h.ig hr hr' hlk (hl ▸ hlk) hw
 
 /-! ## The strings of the run -/
 
@@ -263,7 +263,7 @@ theorem acceptedRowsAreProgramRows : AcceptedRowsAreProgramRows := by
       LmsVerifies (deviceParams x) m r.certificate.signature → Signed x.issuer.session (deviceCode x) m :=
     fun r hr m hm hv => Classical.byContradiction fun hn => hf ⟨r, hr, m, hm, hv, hn⟩
   have dev := fun {d l w r dg} (hs : Signs (deviceParams x) c d l w r dg) => device_record hcr hsig hs
-  obtain ⟨hfit, eg, ig, hpd, he, hi⟩ := acceptsLinkWindows _ c e hacc
+  obtain ⟨hfit, eg, ig, hpd, he, hi⟩ := acceptsTransferBlocks _ c e hacc
   have heg : egressDigest (deviceParams x) = eg := by
     simp [egressDigest, hpd.1, Except.toOption]
   have hpe : (deviceParams x).egress = #[x.config.egressLink] := rfl
