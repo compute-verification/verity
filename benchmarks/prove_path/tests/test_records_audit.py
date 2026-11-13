@@ -927,12 +927,12 @@ DAY0, PIN, S1, S2 = 20746, "c" * 40, "s20261020T093000Z-0001", "s20261020T093000
 
 def _auditor():
     import a5_coins as AC
-    return AC._module("a5_auditor", HERE.parents[2] / "verity" / "composite" / "device" / "live_challenger" / "auditor.py")
+    return AC._module("a5_auditor", HERE.parents[2] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
 
 
 def _device_ledger(tmp_path: Path, events: list[tuple[str, str | None, dict]]) -> tuple[list[str], object, Path]:
     """The challenger device's own ledger of ``events`` (kind, session, body), chained and signed by the live challenger's
-    code (`verity/composite/device/live_challenger/auditor.py`): its lines, its key and the key record ``--challenger-key`` reads."""
+    code (`verity/protocols/compose/device/live_challenger/auditor.py`): its lines, its key and the key record ``--challenger-key`` reads."""
     from verity.protocols.spot.device import challenger as Ch
     from verity.commitments.crypto import lms
     A = _auditor()
