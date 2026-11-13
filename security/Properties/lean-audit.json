@@ -8503,13 +8503,112 @@
    "type_hash": "006b33c12d24ecdd617d1c8501408d55a34eb4781d23f9e405d3ce404c81cd0f"
   },
   "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_bites": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_bites :",
+    "  Exists fun node =>",
+    "    Exists fun r =>",
+    "      Exists fun sm =>",
+    "        Exists fun T =>",
+    "          Exists fun pub =>",
+    "            And (Properties.RemoteAudit.Subprotocol.QBytesBy (fun x x_1 => Option.some sm) T Unit.unit node r pub)",
+    "              (Not",
+    "                (Properties.RemoteAudit.Subprotocol.QBytesBy (fun x x_1 => Option.some sm)",
+    "                  { blocks := T.blocks, passes := T.passes, accepts := T.accepts, tick := T.tick, plan := T.plan,",
+    "                    correct := fun x x_1 => Finset.instEmptyCollection.emptyCollection, mem := T.mem, chip := T.chip,",
+    "                    rebuilt := T.rebuilt, disk := T.disk, link := T.link }",
+    "                  Unit.unit node r pub))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "8adaaa52c3f7066d093fbd85cb406e9922ffabddeb774e5bfeef65e6d3a986ad"
   },
   "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_honest (node : Properties.RemoteAudit.Line.Node) (κ : Nat)",
+    "  (X Cm : Type) [Fintype X]",
+    "  (prf : Fin node.samples → Pous.Bits κ → Accounting.Remote.Draw.Blocks Properties.RemoteAudit.Line.receiptMax)",
+    "  (recs : Cm → Accounting.Remote.Draw.DrawCoins node.samples κ X → Properties.RemoteAudit.Line.Record)",
+    "  (com : Accounting.Remote.Draw.DrawCoins node.samples κ X → Cm) (R : Accounting.Remote.Draw.Receipts node.samples κ X)",
+    "  (passes : Nat) (tick : Accounting.Remote.Draw.DrawCoins node.samples κ X → Nat → Nat)",
+    "  (hS : Properties.RemoteAudit.Subprotocol.HonestSchedule node passes tick recs com) :",
+    "  And",
+    "    (∀ (c : Cm),",
+    "      Accounting.Remote.Draw.Assumptions.Live",
+    "        ((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "              Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).view",
+    "          c))",
+    "    (And",
+    "      (Accounting.Remote.Draw.Assumptions.Refused",
+    "        ((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "              Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).play",
+    "          com)",
+    "        prf (fun x x_1 x_2 => 0)",
+    "        (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Subprotocol.honestTrace node passes tick) node",
+    "          (Properties.RemoteAudit.Line.played recs com))",
+    "        R)",
+    "      (And",
+    "        (Accounting.Remote.Draw.Assumptions.Counted",
+    "          ((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "                Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).play",
+    "            com)",
+    "          (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Subprotocol.honestTrace node passes tick) node",
+    "            (Properties.RemoteAudit.Line.played recs com)))",
+    "        (And",
+    "          (∀ (t : Fin node.samples),",
+    "            Eq",
+    "              (Pous.StreamedWipe.prfAdvantage (prf t)",
+    "                (((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "                          Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).play",
+    "                      (Accounting.Remote.Draw.Committed.junk com t)).distinguisher",
+    "                  prf RemoteAudit.Protocol.DELTA.cast t))",
+    "              0)",
+    "          (∀ (t : Fin node.samples),",
+    "            Eq",
+    "              ((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "                    Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).hide",
+    "                com prf RemoteAudit.Protocol.DELTA.cast t)",
+    "              0))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Properties.RemoteAudit.Subprotocol.HonestSchedule"],
+    "reads": [
+     "Accounting.Remote.Draw.Assumptions.Counted",
+     "Accounting.Remote.Draw.Assumptions.Live",
+     "Accounting.Remote.Draw.Assumptions.Refused"
+    ]
+   },
+   "type_hash": "ac98fed8a6775807f8c4772fbbceed2c2e683c9183d7efdc7ac14230163b086e"
   },
   "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_nontrivial :",
+    "  Not",
+    "    (Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocolBy (fun x x_1 x_2 x_3 x_4 x_5 => True) (fun x x_1 => True)",
+    "      fun x x_1 => Option.none)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Accounting.Remote.Draw.Assumptions.Counted",
+     "Accounting.Remote.Draw.Assumptions.Live",
+     "Accounting.Remote.Draw.Assumptions.Refused"
+    ],
+    "reads": []
+   },
+   "type_hash": "60aa3babbf4897496fcfe47730d7b47d0c2e7356d19b1b2ca2b849c2fe4ab685"
   },
   "Properties.RemoteAudit.acceptChecksOpenings": {
    "owner": "@memory-accounting",
