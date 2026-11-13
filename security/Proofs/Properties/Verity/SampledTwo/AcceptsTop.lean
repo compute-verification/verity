@@ -112,7 +112,8 @@ theorem playAccepts_form (A : Live₂) (C : CaseOf) (S : SessionReading)
     (hsess : SessionsRun A C S P') :
     PlayAccepts A C S P' :=
   playAccepts_of_run' A C S P' (ruleIsTwo C) hheld htwo (SpotFlock.RunsAs.Round2.namesDistinct_of_two htwo)
-    (recordsAt_of_held htwo (recordsHeldAt_of hof hports hread) hread) hread (SpotFlock.RunsAs.stmtOk_of_check A.h) hst hrounds hscope hpin hsess
+    (recordsAt_of_held htwo (recordsHeldAt_of hof hports hread) hread) hread (SpotFlock.RunsAs.stmtOk_of_check A.h) hst
+    hrounds hscope hpin hsess
 
 /-- **The form's accept is the run's accept** (`AcceptsRun` at the form): where the form's check accepts a play, every
 run of `SpotFlock.V` on coins agreeing with what the check read, whose messages are what the check read, accepts. -/

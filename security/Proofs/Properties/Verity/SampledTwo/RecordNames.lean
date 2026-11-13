@@ -4,8 +4,7 @@ public import Proofs.Flock.SpotFlock.HeldOf
 public import Proofs.Flock.SpotFlock.Jeq
 public import Proofs.Flock.SpotFlock.RunsAs.Outcome
 public import Proofs.Flock.Soundness.ExecDraw
-public import Lean
-public meta import Lean
+public import Proofs.Properties.Verity.SampledTwo.JpWalk
 
 /-!
 # A registration check with no code names its registration's names
@@ -16,10 +15,8 @@ its registered values `v`'s registered values, each once. R3-ports holds the roo
 count and membership, and R7-values the registered values to the verifier's own entries the same way; a record with no
 registered value has no `registered` key, since its keys are exactly R1's `KEYS`.
 
-`check` is one `do` block whose `if`s and `match`es each leave a join point, a function of the codes so far, for the
-rest of the block. `jp_mono` proves once per join point, deepest first, that it keeps a nonempty code list nonempty;
-`jp_walk` then follows the one path on which no code is added, unfolding each join point once. So the proof is linear
-in the block, where unfolding the block into both arms of each branch doubles at every one.
+The two checks with no code are walked down the one path that adds none (`JpWalk`'s `jp_walk`): `check`'s
+(`checkFacts_of_check`) and R7's (`checkRegistered_pass`).
 -/
 
 @[expose] public section
@@ -29,216 +26,6 @@ namespace SpotFlock.RecordNames
 open Lean (Json)
 open Spot.Registration
 open SpotFlock.HeldOf (namesOf)
-
-/-! ## Code lists -/
-
-theorem isEmpty_addCode (c : Array String) (x : String) : (Spot.addCode c x).isEmpty = false := by
-  unfold Spot.addCode
-  split
-  · rename_i h
-    cases c using Array.rec with
-    | mk l => cases l <;> simp_all
-  · simp
-
-theorem isEmpty_kept (b : Bool) (c : Array String) (x : String) : (kept b c x).isEmpty = (b && c.isEmpty) := by
-  unfold kept
-  cases b <;> simp [isEmpty_addCode]
-
-theorem isEmpty_forIn_list {α : Type} (l : List α) (c : Array String)
-    (f : α → Array String → Id (ForInStep (Array String))) (hc : c.isEmpty = false)
-    (hf : ∀ x d, d.isEmpty = false → (f x d).value.isEmpty = false) :
-    Array.isEmpty (forIn (m := Id) l c f) = false := by
-  induction l generalizing c with
-  | nil => exact hc
-  | cons a l ih =>
-    have e1 := hf a c hc
-    simp only [List.forIn_cons]
-    cases h : f a c with
-    | done d => rw [h] at e1; exact e1
-    | yield d => rw [h] at e1; exact ih d e1
-
-theorem isEmpty_forIn {α : Type} (xs : Array α) (c : Array String)
-    (f : α → Array String → Id (ForInStep (Array String))) (hc : c.isEmpty = false)
-    (hf : ∀ x d, d.isEmpty = false → (f x d).value.isEmpty = false) :
-    Array.isEmpty (forIn (m := Id) xs c f) = false := by
-  rw [← Array.forIn_toList]
-  exact isEmpty_forIn_list _ c f hc hf
-
-theorem isEmpty_singleton (x : String) : (#[x] : Array String).isEmpty = false := rfl
-
-theorem ite_false_eq_true (p : Prop) [Decidable p] (x : Bool) :
-    ((if p then false else x) = true) ↔ (¬p ∧ x = true) := by
-  by_cases h : p <;> simp [h]
-
-theorem ite_eq_true_false (p : Prop) [Decidable p] (x : Bool) :
-    ((if p then x else false) = true) ↔ (p ∧ x = true) := by
-  by_cases h : p <;> simp [h]
-
-/-! ## Walking a `do` block's join points -/
-
-open Lean Meta Elab Tactic in
-/-- Names the context's `let`s: each `do` join point `jp0, jp1, …` and each code list `cv0, cv1, …`, in context order,
-and every other `l_<its name>`. -/
-elab "name_lets" : tactic => withMainContext do
-  let mut g ← getMainGoal
-  let mut k := 0
-  let mut j := 0
-  let arr := mkApp (mkConst ``Array [0]) (mkConst ``String)
-  for decl in (← getLCtx) do
-    if decl.isLet && !decl.isImplementationDetail then
-      if decl.userName.eraseMacroScopes == `__do_jp then
-        g ← g.rename decl.fvarId (Name.mkSimple s!"jp{k}")
-        k := k + 1
-      else if ← isDefEq decl.type arr then
-        g ← g.rename decl.fvarId (Name.mkSimple s!"cv{j}")
-        j := j + 1
-      else
-        g ← g.rename decl.fvarId (Name.mkSimple s!"l_{decl.userName.eraseMacroScopes}")
-  replaceMainGoal [g]
-
-open Lean Meta Elab Tactic in
-/-- The context's `let`s whose name starts with `pfx`, as simp lemmas, in context order; join points only of the type
-`Unit → Array String → Id (Array String)` (`jp`). -/
-meta def letLemmas (pfx : String) (jp : Bool := false) : TacticM (Array Ident) := withMainContext do
-  let arr := mkApp (mkConst ``Array [0]) (mkConst ``String)
-  let jpTy ← mkArrow (mkConst ``Unit) (← mkArrow arr (mkApp (mkConst ``Id [0]) arr))
-  let mut out := #[]
-  for decl in (← getLCtx) do
-    if decl.isLet && decl.userName.toString.startsWith pfx then
-      if !jp || (← isDefEq decl.type jpTy) then out := out.push (mkIdent decl.userName)
-  return out
-
-/-- A loop body's step keeps a nonempty code list nonempty. -/
-macro "jp_loop" : tactic => `(tactic| (
-    intro _ _ hd'
-    simp (config := { failIfUnchanged := false }) only [Id.run, pure, bind, apply_ite ForInStep.value,
-      apply_ite Array.isEmpty, isEmpty_addCode, isEmpty_kept, ite_self, Bool.and_false, Bool.false_and, hd']
-    repeat' split
-    all_goals (simp only [ForInStep.value, Id.run, pure, bind, apply_ite Array.isEmpty, apply_ite ForInStep.value,
-      isEmpty_addCode, isEmpty_kept, ite_self, Bool.and_false, Bool.false_and, hd'])))
-
-syntax "jp_disch" : tactic
-macro_rules
-  | `(tactic| jp_disch) => `(tactic| first
-      | assumption
-      | jp_loop
-      | (simp (disch := jp_disch) only [isEmpty_addCode, isEmpty_kept, isEmpty_forIn, isEmpty_forIn_list,
-          Bool.and_false, Bool.false_and]; done))
-
-/-- `simp` over code lists: `isEmpty` pushed into branches, a branch that adds a code is nonempty, and `ts`. -/
-syntax "jp_core" " [" Lean.Parser.Tactic.simpLemma,* "]" (" at " ident)? : tactic
-macro_rules
-  | `(tactic| jp_core [$ts,*]) => `(tactic|
-      simp (config := { failIfUnchanged := false }) (disch := jp_disch) only
-        [Id.run, bind, pure, apply_ite Array.isEmpty, isEmpty_addCode, isEmpty_kept, isEmpty_forIn,
-          isEmpty_forIn_list, ite_self, Bool.and_false, Bool.false_and, $ts,*])
-  | `(tactic| jp_core [$ts,*] at $h) => `(tactic|
-      simp (config := { failIfUnchanged := false }) (disch := jp_disch) only
-        [Id.run, bind, pure, apply_ite Array.isEmpty, isEmpty_addCode, isEmpty_kept, isEmpty_forIn,
-          isEmpty_forIn_list, ite_self, Bool.and_false, Bool.false_and, ite_false_eq_true, ite_eq_true_false,
-          isEmpty_singleton,
-          Bool.and_eq_true, Bool.false_eq_true, false_and, and_false, $ts,*] at $h:ident)
-
-open Lean Meta Elab Tactic in
-/-- `mjpK : ∀ d, d.isEmpty = false → (jpK () d).isEmpty = false` for each join point, deepest first, each from the ones
-before it; `xs` are further simp lemmas. -/
-elab "jp_mono" " [" xs:Lean.Parser.Tactic.simpLemma,* "]" : tactic => do
-  let jps ← letLemmas "jp" true
-  let cvs ← letLemmas "cv"
-  let mut ms : Array Ident := #[]
-  for jp in jps do
-    let nm := mkIdent (Name.mkSimple s!"m{jp.getId}")
-    let ts ← (cvs ++ ms).mapM fun i => `(Lean.Parser.Tactic.simpLemma| $i:ident)
-    let ts := ts ++ xs.getElems
-    evalTactic (← `(tactic|
-      have $nm : ∀ d : Array String, d.isEmpty = false → Array.isEmpty ($jp () d) = false := by
-        intro d hd
-        simp only [$jp:ident]
-        jp_core [hd, $ts,*]
-        repeat' split
-        all_goals jp_core [hd, $ts,*]))
-    ms := ms.push nm
-
-open Lean Meta Elab Tactic in
-/-- Closes `(… ).isEmpty = false` from the join points' `mjp`s and `xs`. -/
-elab "jp_close" " [" xs:Lean.Parser.Tactic.simpLemma,* "]" : tactic => do
-  let cvs ← letLemmas "cv"
-  let ms ← letLemmas "jp" true
-  let ms := ms.map fun i => mkIdent (Name.mkSimple s!"m{i.getId}")
-  let ts ← (cvs ++ ms).mapM fun i => `(Lean.Parser.Tactic.simpLemma| $i:ident)
-  let ts := ts ++ xs.getElems
-  evalTactic (← `(tactic| jp_core [$ts,*]))
-  evalTactic (← `(tactic| repeat' split))
-  evalTactic (← `(tactic| all_goals jp_core [$ts,*]))
-
-open Lean Meta Elab Tactic in
-/-- The main goal's hypothesis named `n`. -/
-meta def findHyp (n : Name) : TacticM (Option LocalDecl) := withMainContext do
-  return (← getLCtx).findFromUserName? n
-
-open Lean Meta Elab Tactic in
-/-- One goal's walk of `h : (…).isEmpty = true` (see `jp_walk`). -/
-meta partial def walkGoal (h : Ident) (ts : Array (TSyntax ``Lean.Parser.Tactic.simpLemma)) (n : IO.Ref Nat) :
-    TacticM Unit := do
-  evalTactic (← `(tactic| jp_core [$ts,*] at $h))
-  if (← getGoals).isEmpty then return
-  repeat
-    let some d ← findHyp h.getId | return
-    let ty ← instantiateMVars d.type
-    unless ty.isAppOfArity ``And 2 do break
-    let k ← n.modifyGet fun k => (k, k + 1)
-    let hc := mkIdent (Name.mkSimple s!"hc{k}")
-    evalTactic (← `(tactic| obtain ⟨$hc, $h⟩ := $h))
-  let some d ← findHyp h.getId | return
-  let ty ← instantiateMVars d.type
-  let some (_, lhs, _) := ty.eq? | return
-  if lhs.isAppOfArity ``ite 5 then
-    evalTactic (← `(tactic| split at $h:ident))
-    let gs ← getGoals
-    let mut out := #[]
-    for g in gs do
-      setGoals [g]
-      walkGoal h ts n
-      out := out ++ (← getGoals)
-    setGoals out.toList
-    return
-  unless lhs.isAppOfArity ``Array.isEmpty 2 do return
-  let x := (lhs.getArg! 1).headBeta.consumeMData
-  let f := x.getAppFn
-  if f.isFVar then
-    let fd ← withMainContext f.fvarId!.getDecl
-    if fd.userName.toString.startsWith "jp" then
-      evalTactic (← `(tactic| simp only [$(mkIdent fd.userName):ident] at $h:ident))
-      walkGoal h ts n
-    return
-  if ← withMainContext (Lean.Meta.isMatcherApp x) then
-    evalTactic (← `(tactic| split at $h:ident))
-    let gs ← getGoals
-    let mut out := #[]
-    for g in gs do
-      setGoals [g]
-      walkGoal h ts n
-      out := out ++ (← getGoals)
-    setGoals out.toList
-
-open Lean Meta Elab Tactic in
-/-- `jp_walk h [xs]` walks `h : (…).isEmpty = true` down the one path on which no code is added: each branch that adds
-one is dropped (`mjpK`, `isEmpty_addCode`), each condition on the path goes into the context as `hcN`, a join point
-jumped to is unfolded once, and a `match` on the path is split. -/
-elab "jp_walk" h:ident " [" xs:Lean.Parser.Tactic.simpLemma,* "]" : tactic => do
-  let cvs ← letLemmas "cv"
-  let ms ← letLemmas "jp" true
-  let ms := ms.map fun i => mkIdent (Name.mkSimple s!"m{i.getId}")
-  let ts ← (cvs ++ ms).mapM fun i => `(Lean.Parser.Tactic.simpLemma| $i:ident)
-  let ts := ts ++ xs.getElems
-  let n ← IO.mkRef 0
-  let gs ← getGoals
-  let mut out := #[]
-  for g in gs do
-    setGoals [g]
-    walkGoal h ts n
-    out := out ++ (← getGoals)
-  setGoals out.toList
 
 /-! ## Counting names -/
 
@@ -344,11 +131,6 @@ theorem mapM_ok_array {α β γ ε : Type} (f : α → Except ε β) (g : β →
     apply Array.ext'
     simp [mapM_ok_list f g k hf _ _ hl]
 
-theorem foldl_inv {α β : Type} (P : β → Prop) (f : β → α → β) (hf : ∀ b a, P b → P (f b a)) :
-    ∀ (l : List α) (b : β), P b → P (l.foldl f b)
-  | [], _, h => h
-  | a :: l, b, h => foldl_inv P f hf l (f b a) (hf b a h)
-
 /-! ## A key an object's keys don't name -/
 
 open Std.DTreeMap.Internal in
@@ -394,7 +176,9 @@ theorem registered_null {rec : Json} (hk : Spot.keys? rec = some KEYS) : Spot.ge
     · rfl
     · have h2 := (FlockSoundness.Audit.DrawExec.mem_qsort _ (· < ·) _).2 hm
       rw [show (m.toArray.map Prod.fst).qsort (· < ·) = KEYS from hk] at h2
-      simp [KEYS, Spot.sortStrings, FlockSoundness.Audit.DrawExec.mem_qsort] at h2
+      unfold KEYS Spot.sortStrings at h2
+      rw [FlockSoundness.Audit.DrawExec.mem_qsort] at h2
+      simp at h2
   | _ => simp [Spot.keys?] at hk
 
 /-! ## The two names -/
@@ -432,8 +216,9 @@ theorem ports_names {rec : Json} {rs : Array Json} {ports : Array (String × Jso
   have hlen : D.toList.length ≤ (P.map Json.str).length := by
     rw [← hP]
     simp [h2]
-  have hperm : (P.map Json.str).Perm D.toList :=
-    perm_of_nodup_subset hS (fun x hx => by
+  have hperm : (P.map Json.str).Perm D.toList := by
+    classical
+    exact perm_of_nodup_subset hS (fun x hx => by
       obtain ⟨y, hy, rfl⟩ := List.mem_map.1 hx
       exact hmem y hy) hlen
   have hstr : ∀ e ∈ rs.toList, ∃ s ∈ P, Spot.getD e "port" = .str s := by
@@ -495,7 +280,6 @@ theorem values_names {rec : Json} {g : Array Json} {R : List String}
         split <;> intro hs <;> simp_all
       rw [List.mapM_cons, ih (fun e' he' => h e' (by simp [he']))]
       simp [he, strOf]
-      rfl
   have hmap : namesAt rec "registered" "value" = some N := by
     unfold namesAt
     rw [hg, hN']
@@ -504,69 +288,6 @@ theorem values_names {rec : Json} {g : Array Json} {R : List String}
   have hperm : N.Perm R := perm_of_nodup_subset hNd (fun x hx => h4 x (by rw [hE]; exact hx)) (by omega)
   simp only [namesEq, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true, List.contains_iff_mem]
   exact ⟨⟨hNd, fun x hx => hperm.mem_iff.1 hx⟩, fun x hx => hperm.mem_iff.2 hx⟩
-
-/-! ## The helpers' codes -/
-
-theorem applyOutputs_fst (c : Array String) (mine : Array Spot.Registered.Entry) (held : Array (String × String))
-    (outputs : Array (String × String × Earlier)) (log : Array Json) (hc : c.isEmpty = false) :
-    (applyOutputs c mine held outputs log).1.isEmpty = false := by
-  unfold applyOutputs
-  rw [← Array.foldl_toList]
-  refine foldl_inv (fun s => s.1.isEmpty = false) _ (fun s o hs => ?_) _ _ hc
-  obtain ⟨c, mine, held⟩ := s
-  obtain ⟨v, d, p⟩ := o
-  unfold applyOutput
-  split
-  · exact hs
-  · split
-    · exact hs
-    · exact isEmpty_addCode _ _
-
-theorem applyOutputs_values (c : Array String) (mine : Array Spot.Registered.Entry) (held : Array (String × String))
-    (outputs : Array (String × String × Earlier)) (log : Array Json) :
-    (applyOutputs c mine held outputs log).2.1.map (·.value) = mine.map (·.value) := by
-  unfold applyOutputs
-  rw [← Array.foldl_toList]
-  refine foldl_inv (fun s => s.2.1.map (·.value) = mine.map (·.value)) _ (fun s o hs => ?_) _ _ rfl
-  obtain ⟨c, mine', held⟩ := s
-  obtain ⟨v, d, p⟩ := o
-  unfold applyOutput
-  split
-  · exact hs
-  · split
-    · simp only [Array.map_map] at hs ⊢
-      rw [← hs]
-      congr 1
-      funext e
-      simp only [Function.comp]
-      split <;> rfl
-    · exact hs
-
-theorem isEmpty_checkRegistered (c : Array String) (got : Json) (mine : Flock.V (Array Spot.Registered.Entry))
-    (held : Array (String × String)) (supplied : Array (String × Spot.Supplied.Rows))
-    (rootOf : String → Spot.Supplied.Rows → Spot.Registered.Entry → Flock.V String) (hc : c.isEmpty = false) :
-    (checkRegistered c got mine held supplied rootOf).isEmpty = false := by
-  unfold checkRegistered
-  lift_lets
-  extract_lets
-  name_lets
-  jp_mono [hc]
-  jp_close [hc]
-
-theorem isEmpty_checkOutputs (c : Array String) (got : Json) (mine : Flock.V (Array Spot.Registered.Entry))
-    (held : Array (String × String)) (supplied : Array (String × Spot.Supplied.Rows))
-    (rootOf : String → Spot.Supplied.Rows → Spot.Registered.Entry → Flock.V String)
-    (outputs : Array (String × String × Earlier)) (log : Array Json) (hc : c.isEmpty = false) :
-    (checkOutputs c got mine held supplied rootOf outputs log).isEmpty = false := by
-  unfold checkOutputs
-  split
-  · exact isEmpty_addCode _ _
-  · exact isEmpty_checkRegistered _ _ _ _ _ _ (applyOutputs_fst _ _ _ _ _ hc)
-
-macro_rules
-  | `(tactic| jp_disch) => `(tactic|
-      (simp (disch := jp_disch) only [isEmpty_checkOutputs, isEmpty_addCode, isEmpty_kept, Bool.and_false,
-        Bool.false_and]; done))
 
 /-! ## The walks -/
 
@@ -587,10 +308,12 @@ theorem checkRegistered_pass {c : Array String} {got : Json} {mine : Array Spot.
   cases got with
   | arr g =>
     refine ⟨g, rfl, ?_⟩
+    dsimp (config := { zeta := false }) only at h'
     lift_lets at h'
     extract_lets at h'
     name_lets
     jp_mono []
+    clear_value jp0
     jp_walk h' []
     trace_state
     sorry
@@ -605,6 +328,7 @@ def CheckFacts (rec : Json) (v : Verifier) : Prop :=
   (v.registered.isEmpty = false → ∃ mine g mine', ownEntries v = .ok mine ∧ Spot.getD rec "registered" = .arr g ∧
     mine'.map (·.value) = mine.map (·.value) ∧ ValuesHold g mine')
 
+set_option maxHeartbeats 4000000 in
 theorem checkFacts_of_check {rec : Json} {v : Verifier} (h : check rec v = #[]) : CheckFacts rec v := by
   have h' : (check rec v).isEmpty = true := by rw [h]; rfl
   unfold check at h'
@@ -620,7 +344,7 @@ theorem checkFacts_of_check {rec : Json} {v : Verifier} (h : check rec v = #[]) 
 
 /-! ## The record names its registration's names -/
 
-theorem entries_values {d : Spot.Registered.Desc} {ps : Array Spot.Registered.Param} {values : Array (String × Nat)}
+theorem entries_values {d : Flock.TemplateQuery.Desc} {ps : Array Spot.Registered.Param} {values : Array (String × Nat)}
     {schemas : Array (String × String)} {window : Option String} {fixed : Array String}
     {es : Array Spot.Registered.Entry} (h : Spot.Registered.entries d ps values schemas window fixed = .ok es) :
     es.map (·.value) = values.map (·.1) := by
