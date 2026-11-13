@@ -49,7 +49,7 @@ from verity.protocols.accounting.pouw.verifier.serving import (
 
 from verity_vllm.protocols.pouw.pearl_c.ends import _RunState
 from verity_vllm.protocols.pouw.pearl_c.graphs import SLOT_BYTES
-from verity_vllm.protocols.pouw.pearl_c.host import _Driver, _event, _stream
+from verity_vllm.protocols.pouw.pearl_c.host import _Driver, _event, _Lane, _stream
 
 __all__ = ["whole_options"]
 
@@ -336,6 +336,7 @@ class LaneCalls(_RunState):
                 if cuda and apart:
                     to.tree_event.record(tl.stream)
             if side:
+                to = cast("_Lane", to)              # the call's side lane, taken above with its side steps
                 self.kernel.dev.stream = to.raw
                 with torch.cuda.stream(to.stream) if g is not None else nullcontext():
                     if cuda:
