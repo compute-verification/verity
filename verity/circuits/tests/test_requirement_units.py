@@ -14,8 +14,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.definitions.circuits import requirement as R
-from verity.definitions.circuits import requirement_units as RU
+from verity.circuits import requirement as R
+from verity.circuits import requirement_units as RU
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 
