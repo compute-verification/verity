@@ -130231,3 +130231,52 @@ MESSAGES (bc-8eebc65b-9325-57da-a6cc-0ced507a745c), to the coordinator. Your 08:
 - If soundness wants the line by a run: it is one line in the probe (renumber `k` in `reshape`) and about 30 minutes on a node. I run it after the refusal, when my one try is free, unless you say not to.
 
 **What I wait on:** nothing. No run of mine is out. My timer `messages-read-d101` is answered by this entry.
+
+## RUNCOINS, Fri 13 Nov 08:29Z: head `6e1696929a` on `cursor/proofs-runcoins-2d88` = `ad1c6637c1` + TWOLEG's NAMED head `1e20910586`, no line of mine changed; it COMPILES WHOLE (`r20261113-082107-d3bf`: `RunsAs.lean` "lean exit 0 in 189 s"); `OfCheck` and `Parsed` probes clean over the digest comparison; ALL TWELVE of my files with a theorem have a clean axiom line (90 theorems); CORRECTION: `OfCheck.lean:35` needs NO change for `1e20910586`; NO STATEMENT CHANGED; ASSEMBLY: ACCEPTS's `7e7f0609ad` carries my files as they are here; nothing of mine is out
+
+**Compiled** [run], vy-nebius-2, `r20261113-082107-d3bf` at `6e1696929a`, the aggregator `RunsAs.lean`: "lean-try: security/Proofs/Flock/SpotFlock/RunsAs.lean: lean exit 0 in 189 s", "lean-try: security/Proofs/Flock/SpotFlock/RunsAs.lean: axiom probe: no theorems in it", "verity lean try: run r20261113-082107-d3bf on vy-nebius-2: exit 0 in 222 s wall". Its build lines name `VStarRecursive.SampledTwo`, `Proofs.Properties.Verity.SampledTwo.Steps` and my `RunsAs` modules, `OfCheck` and `Parsed` among them.
+
+**In plain words.** TWOLEG named `1e20910586` at 08:12Z and your 07:54Z mail to ASSEMBLY says soundness took it, so I merged it. My files compile over it with no line of mine changed. Every file of mine that holds a theorem now has its own axiom line, all clean. ACCEPTS's head `7e7f0609ad` already carries my files exactly as they are here, so once ASSEMBLY takes that head there is nothing more of mine to merge.
+
+**The head** [run: `git log`, `git diff --stat ad1c6637c1 6e1696929a`, blob ids]. `6e1696929a` is one merge commit over `ad1c6637c1`. It changes four files, all TWOLEG's, each equal to `1e20910586`'s by blob id: `VStarRecursive/SampledTwo.lean`, `SampledTwo/Steps.lean`, `SampledTwo/AcceptsOfSteps.lean`, `tests/sampled_two.py`. No conflict. No lakefile and no lock file changes; `SampledTwo/Accepts.lean` and its two root lines stay as the branch held them. Not merged: TWOLEG's three commits above the name (`1963dc9dec`, `744ded04cb`, `dd2c557f3f`). No merge of `main`: the merge base with `origin/main` is still `8ef93f0196` [run: `git merge-base`].
+
+**A correction to my 07:57Z entry** [run]. I wrote that over `1e20910586` `OfCheck.lean:35` "needs its last two `-` to be one". It needs nothing. A pattern's last place takes whatever conjuncts are left, so `⟨-, -, -, -, vs, received₂, j₁, j₂, -, rfl, -, -⟩` reads `inputAt_ok` with two conjuncts after `rfl` or with three. Shown twice: a scratch file of two `example`s through core Lean on the VM (seconds, no build), and `OfCheck.lean` unchanged in `d3bf` and `4867`. For the others who read `inputAt_ok`'s tail: a pattern that ends in `-` needs no edit for the digest conjunct; one that names its last conjunct now names a conjunction.
+
+**Axiom lines** [run], each "axiom probe: none of its N theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+
+At `6e1696929a`, the two files of mine that import what `1e20910586` changes:
+- `OfCheck.lean`, `r20261113-082449-4867`: 1 theorem, "lean exit 0 in 28 s".
+- `Parsed.lean`, `r20261113-082529-1041`: 2 theorems, "lean exit 0 in 89 s".
+
+At `ad1c6637c1`, the chain my timer waited on; it ended at 08:07Z, nine of nine rc 0:
+- `Steps.lean`, `r20261113-075543-587c`: 17 theorems, "lean exit 0 in 176 s".
+- `Top.lean`, `r20261113-075857-e881`: 4 theorems, "lean exit 0 in 65 s".
+- `Played.lean`, `r20261113-080015-b1a4`: 1 theorem, "lean exit 0 in 59 s".
+- `Coins.lean`, `r20261113-080134-86c8`: 5 theorems, "lean exit 0 in 28 s".
+- `Proved.lean`, `r20261113-080215-83cd`: 5 theorems, "lean exit 0 in 29 s".
+- `Outcome.lean`, `r20261113-080257-c578`: 12 theorems, "lean exit 0 in 83 s".
+- `Released.lean`, `r20261113-080437-a0b0`: 15 theorems, "lean exit 0 in 28 s".
+- `Round2.lean`, `r20261113-080518-ec2f`: 25 theorems, "lean exit 0 in 28 s".
+- `RoundTwoOf.lean`, `r20261113-080600-8dfc`: 1 theorem, "lean exit 0 in 41 s".
+- With `FirstSample.lean` (`r20261113-075438-b174`, 2 theorems, my 07:57Z entry) that is twelve files and 90 theorems, which is the count of `theorem` lines under `RunsAs/` on my branch [run: `grep -c`]. `Statement.lean` and `Statements.lean` hold none.
+
+Why the ten lines at `ad1c6637c1` stand at `6e1696929a` [run]: those ten files are byte for byte the same at both heads (`git diff --stat ad1c6637c1 6e1696929a -- security/Proofs/Flock/SpotFlock`, empty), and a walk of each one's imports through every file under `security/Proofs` reaches none of the three Lean modules `1e20910586` changes and no `SampledTwo` module at all; from `OfCheck` and `Parsed` the same walk reaches `VStarRecursive.SampledTwo` and `SampledTwo.Steps`. Outside `security/Proofs` the only importers of the form are its two executables' `Main`s (`grep`). All twelve were also built again inside `d3bf`.
+
+**ACCEPTS's `7e7f0609ad` holds my files as they are here** [run]. `ad1c6637c1` and `1e20910586` are both its ancestors (`git merge-base --is-ancestor`), and its `RunsAs/` differs from mine at `6e1696929a` by one file, RUNSAS's `SecondStageOf.lean`, which it has from the join (`git diff --stat 6e1696929a 7e7f0609ad`). `6e1696929a` itself is not an ancestor of it and does not need to be: it adds a merge commit and no content. ACCEPTS's run `fb83` built my files that `AcceptsTop.lean` imports at that tree; `Coins`, `Played` and `FirstSample` are not under it, and their lines are the ones above.
+
+**`import all`** [run, on the VM at `6e1696929a`]: `pytest tests/test_lean_packages.py -k import_all -x -q`: "2 passed, 33 deselected".
+
+**STOP RULE.** Nothing. The merge changes no lock file and no lakefile. TWOLEG's comparison is on my branch only as TWOLEG's commit, taken by soundness as your 07:54Z mail to ASSEMBLY says [relayed]; I make no claim of my own about what the form accepts. By my hand since `3388c089b9`: one pattern line of a proof (`ad1c6637c1`), no statement, no named assumption, nothing in a verifier's file.
+
+**NEEDS.**
+- ASSEMBLY: nothing new. The join's tip `401d7ef808` holds `3388c089b9` (your merge `143082c828`, 08:24Z), and my four files there equal `3388c089b9`'s [run: `git diff --stat`, empty]. When you take TWOLEG's `1e20910586`, `OfCheck.lean:35` on the join is still the line written for `870cc9da1b`, whose `rfl` then lands on `∃ j₂, …` [derived, not tried]; the mended line comes with `ad1c6637c1`, which ACCEPTS's `7e7f0609ad` carries. If you take `7e7f0609ad`, do not also merge `6e1696929a`: it would add nothing. If you take `1e20910586` without ACCEPTS's head, merge `6e1696929a` (or `ad1c6637c1`) with it.
+- ACCEPTS: nothing. The `SampledTwo/Accepts.lean` on my branch is your older one; I leave it, and the join gets yours from `7e7f0609ad`.
+- Coordinator: nothing to decide.
+
+**Runs.** Ended, rc 0: `d3bf`, `4867`, `1041`, and the nine listed. Nothing of mine is out, so I set no timer.
+
+**Machine** [run]: the VM built nothing (one scratch file of two `example`s through core Lean, and the `import all` test); pen `~/wt/.pen` mine since 07:00:04Z; clock 08:29Z; mailbox read to your 07:29Z (nothing newer in my file), your 07:54Z and 08:18Z mails to ASSEMBLY read on `cursor/proofs-inbox`, the inbox read to MESSAGES's 08:28Z and FRAME's 08:30Z titles.
+
+**To post.** Nothing.
+
+**Not established.** My files on the join's own tree: every try of mine ran on my branch, which holds TWOLEG's form and not the rest of the join; ASSEMBLY's whole compile at a tip with `143082c828` is the first to say. A records run of `security/Proofs` at any head with my files. That ACCEPTS's older `SampledTwo/Accepts.lean`, which my branch still holds, compiles at `6e1696929a`: by reading it does not, and I did not try it.
