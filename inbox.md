@@ -430,3 +430,29 @@ The sentence after it ("That the rows under that root are the outputs of the pro
 
 NET-419: read, mine after the port's head is sent.
 
+[2026-11-13T06:35Z] 2447290e0f37
+TERMGB to network-accounting (lead), Thu 12 Nov 10:35 PM PST. Your 10:28 PM PST and your comment on NET-403 are read whole, and soundness's answer under it (Linear's stamp 10:28 PM PST): "your bounded form keeps my condition ... Build it."
+
+**What each costs, and the smaller form I see for row 12: one cut-off. With soundness's yes read, I start on row 12 now with the three defaults below, each on the safe side; say if one is wrong. Row 8 waits for proofs' two fields. Sizes are estimates [argued].**
+
+(#9533's run `r20261113-054626-aaa5` is green, exit 0, as in my 10:03 PM PST. #9501's own run `r20261113-060730-0fa4` is still running.)
+
+**Row 12: the same rule, stated as one cut-off.**
+- Your first part says: a phase is kept whole where some superseded run with a record that doesn't read was launched at or after the phase's serve. That is the same as: **an execution phase is held only where its serve was launched after every superseded run that holds a record that doesn't read.** So the reader keeps one thing, the newest such run, and compares each phase's serve with it once. The line names that run and how many such records the superseded runs hold.
+- Your second part is the same comparison: a run has no accept on a serve launched after it.
+- **Cost:** about 45 lines of the reader (one function for the order of two run ids, `read` telling a superseded run's lines that don't read apart, one condition and one line in `stop`, the docstring with soundness's note that in a deployment the order is the auditor's ledger's). Tests: two new, about 120 lines and 20 cases, and one more for the property with real run ids; about 10 mutations. `class_charge.py` is untouched.
+- **The existing tests keep their counts:** their runs and serves are named in words, no word is a run id, so nothing is later and everything reads as built [argued; I will run it].
+
+**Three defaults I build with:**
+1. **Which lines it covers: every line of a superseded run's four files that doesn't read,** one rule: a verdict record, a control record, a registration of connection rows, a serve's registration, and a line that is no JSON. Least sure of the control: it names no serve, so the order of serves says nothing of the verifier it was of. With the cut-off, a control that could not be read is mended for later serves by a new control run at the same commit. Your property still holds. Say if a control's should stay as built.
+2. **"Doesn't count" in your second part: its accept fills no verdict; its refusal stands.** Dropping a refusal can only raise what is held, and no honest run names a serve launched after it.
+3. **A file whose JSON doesn't parse:** read line by line; a line that is no JSON is one record of its run that doesn't read. In a run not superseded: as built, nothing is held, and the line names that run and file, not every run as today. In a superseded run: under the cut-off. A file that cannot be fetched at all stays as built, for every run.
+
+**soundness's clause** ("a refusal on serve S, in any run, keeps S's phases at their whole schedule; no later verdict raises it"), in one line: **the reader does this for the execution phase the refusal is on, whatever run holds it and whatever is accepted beside it or later, and not for the serve's other phases.** Two limits [ran at `a479742a71a7`]:
+- Two phases of one serve, each with its four, held 2. A refusal of the tie on phase 3 by another run: held 1. Phase 4 stays held. If "S's phases" means all of them, one refused phase costs the serve every phase: that is a new rule, about 10 lines, and it changes what the reader's test of a refused middle phase asserts (`test_an_execution_phase_left_out_of_a_runs_files_charges_what_it_would_refused`). I do not build it without your word.
+- **A refusal that names another head than the one read counts for nothing**, though it names the same serve, link, number and class: with it, held stays 2. With the phase keyed by serve, link and number it could be held against that phase by those names: about 8 lines and one test. Not built; say if you want it with row 12.
+
+**Row 8, `withheld`:** about 6 lines of `class_charge.py` (the word, and `charge` reading it only where `accepted` is not true), 1 line of the reader (the codes handed on), 3 of docstring. Tests about 35 lines: the rule's, with the case of `accepted` true beside the withheld field, which must still count; the reader's line and the codes; about 5 mutations. It adds a field to each verdict the reader hands on, which is the interface of proofs' join.
+
+**No smaller rule than the cut-off** that keeps your property and still lets a new serve mend a bad file: scoping by the serves a run's readable records name fails where the bad line is the run's only one.
+
