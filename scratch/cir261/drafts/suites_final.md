@@ -1,0 +1,7 @@
+- **At the head `0978f5af04`, with the sync** (`uv sync -q --all-packages --extra torch-cpu` before `suites.py`):
+  - `r20261112-221618-0259`, `repository`: passed, 352 passed, 0 failed. It waited 11 s for slot r2 on vy-nebius-cpu-7 and held it from 22:16:53Z to the run's end at 22:23:59Z.
+  - `r20261112-233932-8658`, `verity-vllm`: **passed**, 15,016 passed, 0 failed, 0 errors, 485 skipped. It waited 7 s for slot r7 on vy-nebius-cpu-5 and held it from 23:39:45Z to the run's end at 00:16:57Z.
+  - `r20261112-222441-fadb`, `verity-vllm`, the try before it: failed with 15,009 passed, 7 errors and 485 skipped. All seven errors are in `tests/pipeline/test_zk_partition_names.py`. Each failed in setup, in the suite guard's `tmp_path_factory.mktemp`, on `OSError: could not create numbered dir` or `[Errno 28] No space left on device` under `/workspace/tmp`. I read that in the suite's log on vy-nebius-cpu-5. The machine's disk was full; at 00:00Z it was 62% used. That try waited 9m24s for slot r4 and held it from 22:34:30Z to 23:19:54Z.
+- **`r20261112-192652-7776`, with the sync**, at `79cb0b3e28` on vy-nebius-cpu-7: circuit-check on the sidecar, then `suites.py verity/definitions circuit-check verity-vllm repository`.
+  - circuit-check: rc 0, 2 targets, 0 failures. repository: 352 passed.
+  - I cancelled it at 22:15Z, before it reported `verity/definitions`, the circuit-check suite or verity-vllm. It had waited 56 min for slot r2 and held it for 113 min. It averaged about one core, and its head was superseded.
