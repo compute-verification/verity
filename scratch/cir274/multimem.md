@@ -11,9 +11,9 @@ over all tokens each: nodes 1, 54, 59, 112, 117, 170, 175, 228, 242 at 4 layers.
 - `cols_refused(descriptor)` is None.
 - `unit_templates(descriptor)` has 9 templates, SIZE (count): 264192 (1), 132096 (2), 66048 (4), 33024 (8), 16512 (16),
   8256 (32), 4128 (64), 2064 (128), 1032 (256). None of these widths divides 6144.
-- On the dump's `fn.id`, the TREES error and the empty list reproduce.
 
-So the parse error and the empty list fall (artifacts of `fn.id`); the read by token stands against the `COLS` templates.
+On the dump's `fn.id` both reproduce, so the parse error and the empty list fall as artifacts of `fn.id`; the read by
+token stands against the `COLS` templates.
 
 **Cure A, `adapters/vllm/verity_vllm/pipeline/serving_templates.py`, `unit_templates` (vllm's).** Add each power-of-two
 width dividing W, so a block edge meets every token stride that width divides. Each `COLS` row whose W has an odd factor
