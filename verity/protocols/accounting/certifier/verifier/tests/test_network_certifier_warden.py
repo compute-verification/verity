@@ -438,7 +438,7 @@ def test_a_paced_wardens_pacer_writes_each_client_its_cells_and_a_bucket_it_got_
 
 
 def test_a_warden_on_the_hosts_clock_is_paced_and_a_release_unwritten_faults_every_grid():
-    """Only a warden on an injected clock writes each bucket on its loop: on the host's clock it must have `paced`.
+    """Only a network certifier on an injected clock writes each bucket on its loop: on the host's clock it must have `paced`.
     A release the pacer reports on time and written faults nothing; one it reports unwritten, a connection's socket
     not yet the pacer's so that its cells are on no wire, faults the three grids' window `monitor-unavailable`, as a
     bucket it got late does."""

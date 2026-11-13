@@ -1,4 +1,4 @@
-"""warden-serve: the active warden (`verity.protocols.accounting.certifier.verifier.warden`) on one host, a relay in front of any TCP
+"""warden-serve: the active network certifier (`verity.protocols.accounting.certifier.verifier.warden`) on one host, a relay in front of any TCP
 server, and the offline check of what it published.
 
 **Topology.** Each client connection reaches the network certifier's listener. The network certifier opens one
@@ -503,7 +503,7 @@ class Publisher:
         self.keep(record, grid)
 
     def withhold(self, record: BlockGrid, grid: GridParams) -> None:
-        """The warden's `withhold`: a record of a window in which it refused a connection, kept and committed as
+        """The network certifier's `withhold`: a record of a window in which it refused a connection, kept and committed as
         `keep` does but neither certified nor signed, its execution phase under `refused` with ``"withheld": true``."""
         self.keep(record, grid, withheld=True)
 
@@ -683,7 +683,7 @@ class PublisherProcess:
         self.rows.put((record.link, None, (record.window, record.status.reason, digest.digest(), withheld)))
 
     def withhold(self, record: BlockGrid, grid: GridParams) -> None:
-        """The warden's `withhold`: the record's close, kept as `Publisher.withhold` keeps it."""
+        """The network certifier's `withhold`: the record's close, kept as `Publisher.withhold` keeps it."""
         self(record, grid, withheld=True)
 
     def close(self) -> list:
@@ -798,7 +798,7 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     """One run of the network certifier on the host's clock (the module docstring's `serve`), its records published by a
     `PublisherProcess` that holds the key in `key` and first signs the load's heads `load_heads` when given, its
     threads sampled by `stall_probe` when `probe`, each bucket released by its pacer `paced_ms` after its boundary
-    (`Warden(paced=…)`, which a warden on the host's clock must have), and the watermark stream sent to `upstream` when
+    (`Warden(paced=…)`, which a network certifier on the host's clock must have), and the watermark stream sent to `upstream` when
     `watermark` (`Warden(watermark=…)`). Returns what `warden.json` holds, with `process`, what `prepare_process` did.
     The loop's errors are kept, not logged: the ticker writes no file."""
     out.mkdir(parents=True, exist_ok=True)

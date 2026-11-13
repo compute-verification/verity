@@ -140,10 +140,10 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   (``case-v2.json``, `write_case`) names that challenger, the family and the window's root and carries the coins' evidence
   (`case_coins`); it names the session's key as it is, and v2 reads one only at the deployed LMS parameters, so the
   case of a ``local`` session's audit is refused there (`a5_coins.LOCAL_PARAMS`).
-* **Transfer gates opened under the warden's signed roots** (`audit`'s ``registered``): a member whose port's rows are an outside
-  registered value's (a warden link-window's cells, `certifier.warden_rows`), committed under that value's salts
+* **Transfer gates opened under the network certifier's signed roots** (`audit`'s ``registered``): a member whose port's rows are an outside
+  registered value's (a network certifier link-window's cells, `certifier.warden_rows`), committed under that value's salts
   (`ml.windows.rows.commit`'s ``salts_of``), is verified with the verifier's own reads of it (``--registered``, the port at
-  the root the warden signed, which the caller read under the warden's key), the same reads, record and negatives as a row
+  the root the network certifier signed, which the caller read under the network certifier's key), the same reads, record and negatives as a row
   table's (below). `a5_warden.py` is their stand-in.
 * **Row tables** (`ml.windows.rows.Binding.row_tables`): a window whose `ScaledMmS8Coordinate` chunks read their ``x``
   rows from one row table per engine step and linear (`pipeline.serving_rows.with_row_tables`) registers one port more,
@@ -742,7 +742,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     summary and whether it was accepted with every negative refused. ``sets``: each template's input set and Definition, or
     a callable composing its circuit (``(out, partition digest, program digest) -> {"pin", "class_sha512", ...}``) and its
     Definition, a member of bit rows too; a bit-row member's template with no composer is vLLM's (`vllm_template`). ``registered``: by member key, the verifier's own ``--registered`` file of a member reading an outside
-    registered value, at the root its owner signed (a warden's cells), which the caller read before calling. ``ports``: how
+    registered value, at the root its owner signed (a network certifier's cells), which the caller read before calling. ``ports``: how
     many ports from ``port`` the caller reserved, a sample whose sessions need more refused before any listens
     (`port_refusal`); None for no reservation to hold them to. ``drawn``: the sample a caller's stream drew of this
     registration (a two-stage design's second stage of its interior registration), its sample, law and receipt, proved in

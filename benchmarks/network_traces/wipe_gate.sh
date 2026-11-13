@@ -9,7 +9,7 @@
 # after AT it sends nothing. It
 # sends the gate REQUESTS prompts of the toy's class (`demo_stub.py prompts`), the toy (`demo_stub.py serve`) already
 # listening on PEER's loopback PORT, and keeps the gate's answer in KEEP/RUN/start.json alone (0600), never published:
-# it is the request's public fields and the run's systemd unit, vy-certifier@RUN.service, which the warden's witness also
+# it is the request's public fields and the run's systemd unit, vy-certifier@RUN.service, which the network certifier's witness also
 # records (stalls.json's cgroup paths) and no public file holds, so the leak guard would hold it as a piece of the
 # witness. A refusal (another rehearsal still runs), an answer naming no certifier run, goes to the log: a visible
 # failure, never retried. Then `status` every 15 s until the run ends (status.json), and its bundle with

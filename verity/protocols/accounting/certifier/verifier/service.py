@@ -134,7 +134,7 @@ derivation, its premises and the carry-over). Its public items are `PUBLIC_SERVE
 sizes, and the window's declared sync, the advice `charge` already counts, which the served counts read and the proof
 block takes as its ``sync`` parameter. The in-the-clear check runs `served_check` too.
 
-**A warden link** (`LinkWindows(warden=WardenProfile(…))`) is the active warden's (`warden.Warden`) own two records
+**A network certifier link** (`LinkWindows(warden=WardenProfile(…))`) is the active network certifier's (`warden.Warden`) own two records
 of each execution phase: its responses on egress and its requests on ingress, on its one grid, certified under its
 schedule's parameters digest (`warden.WardenParams.digest`, which its deployment publishes) rather than a certifier's
 (`certificate.parameters_digest`). The network certifier is the auditor's device, and its code puts every bucket's
@@ -146,7 +146,7 @@ head check holding its end's head to the network certifier's grid and digest and
 digest. Its public items are `PUBLIC_WARDEN`. The in-the-clear check is the opening's root and the head checks: the
 records' cells are the scan's, and the certifier's host audit doesn't read a network certifier's records.
 
-A link whose egress end has no occupancy profile and is neither served nor a warden's has no verdict
+A link whose egress end has no occupancy profile and is neither served nor a network certifier's has no verdict
 (`ValueError`, failing closed): nothing would hold its egress timing.
 
 `LinkWindows.stand_in` is the in-the-clear verdict, the Program's egress grid compared as it was before the head check,
@@ -167,7 +167,7 @@ the Lean refuses the case. On a network certifier link the Lean reads the networ
 (`lean_case`'s ``warden``) for both ends' grids and no sync, as `grid` and `python_verdict` do. The gap list, what
 `python_verdict` reads that the
 Lean takes as an input rather than checks:
-- on a warden link, the warden's parameters digest (`WardenProfile.digest`, which the warden's deployment publishes
+- on a network certifier link, the network certifier's parameters digest (`WardenProfile.digest`, which the network certifier's deployment publishes
   as its schedule's, `warden.WardenParams.digest`), which neither derives;
 - what both take from the proof system and the lowering: the findings of the verifier's own run of Flock's Lean
   verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the sample, and the registered
@@ -382,7 +382,7 @@ PUBLIC_SERVED = tuple(p for p in PUBLIC if p.item != "occupancy") + (
     S.Public("sync", "output", "the window's declared clock sync, one of Σ_sync (fixed before the run): the advice "
              "`charge` already counts, which the served counts read"),
 )
-#: a warden link's: no occupancy profile and no sync, the warden's schedule instead, which puts its counts
+#: a network certifier link's: no occupancy profile and no sync, the network certifier's schedule instead, which puts its counts
 PUBLIC_WARDEN = tuple(p for p in PUBLIC if p.item not in ("charge", "occupancy")) + (
     S.Public("warden", "structure", "the active warden's schedule (`warden.WardenParams`, the digest both ends' heads "
              "bind) and the link's windows, fixed before the run: the device's code puts every bucket's cells (r for "
@@ -567,7 +567,7 @@ class LinkWindows:
     network certifier's public key, the run that names the served domains, the certifier session's id (the 32 bytes the
     challenger sampled for the certifier's session, which every certificate signs), the proof deadline in seconds, and the
     occupancy profile: for each end (egress, ingress), each window's counts, or None for an end without one. A served
-    link (`served`, FIXLEN) has no egress profile, nor has a warden's (`warden`: the active warden's records, its key
+    link (`served`, FIXLEN) has no egress profile, nor has a network certifier's (`warden`: the active network certifier's records, its key
     and session the certifier's here, its counts its schedule's, and no sync, so `sync_set` is unread)."""
 
     link: str
@@ -648,7 +648,7 @@ class LinkWindows:
 
     @property
     def windows(self) -> int:
-        """The link's windows, which `network_verdict` takes by default: the served or warden profile's, else the
+        """The link's windows, which `network_verdict` takes by default: the served or network certifier profile's, else the
         egress occupancy profile's."""
         self._profiled()
         derived = self.served or self.warden
@@ -978,7 +978,7 @@ class LinkWindows:
         Lean verifier (None where `proofs.verify` refused), the delivered public file, salts, output word and session
         SHA-512s, the certificates (each null unless a `Certificate` of well-typed fields) and each one's signed digest
         as `public_arguments` reads it, the declared syncs, Σ_sync,
-        the key and session, each end's grid and profile, and on a warden link the warden's parameters digest. None for
+        the key and session, each end's grid and profile, and on a network certifier link the network certifier's parameters digest. None for
         a key the Lean doesn't read (not an `LmsKey`)."""
         if not isinstance(self.key, LmsKey):
             return None
@@ -1050,12 +1050,12 @@ class LinkWindows:
         - the proof's public row opens, under the salt delivered, to the verifier's own copy (`public_arguments`: the
           registered root, the public fields and both certificates' signed digests), and its output row to the word
           delivered (`_opened`), whose verdict bit and deadline bit are both 1;
-        - the certificates' check accepts (`certified`), and the window's declared sync is one of Σ_sync (on a warden
+        - the certificates' check accepts (`certified`), and the window's declared sync is one of Σ_sync (on a network certifier
           link, which declares none, nothing is read of `syncs`).
         The verdict reports the public outputs, the proved deadline bit among them, and never a violation's kind.
         `opening` (the witness) is for a debug comparison only, off by default: given, the verdict also carries the
         in-the-clear check's accept bit (`clear`), which decides nothing. Raises `ValueError` on a link with no egress
-        occupancy, served or warden profile.
+        occupancy, served or network certifier profile.
 
         The Lean (`NetworkCheck.TransferBlocks`, `lean_verdict`) decides the same on every call beside this Python, and
         `OF_RECORD` names whose verdict is the record's (`by`); the other's accept bit is `reference`'s. Where the two
@@ -1083,8 +1083,8 @@ class LinkWindows:
         tests' reference, never a verdict of record. Accepted when the opening reproduces the registered root under the
         link-window's domain, both head checks accept, and the audit accepts both records, comparing no grid (the module
         docstring). `syncs` are the declared clock syncs of windows 0 … w. On a served link it also runs the served
-        counts' check (`served_check`). On a warden link it is the root and the head checks alone (the module
-        docstring's "A warden link")."""
+        counts' check (`served_check`). On a network certifier link it is the root and the head checks alone (the module
+        docstring's "A network certifier link")."""
         self._profiled()
         root = self._registered(opening, draw)
         w, (egress, ingress) = opening.window, opening.records
@@ -1240,7 +1240,7 @@ class LinkWindows:
         order or not at all (a gap, or a run that stops short), a registration past the last window, a registration
         with no outcome yet, and a rejected or late outcome each reject the link; `refused` lists their windows.
         `records` is each window's outcome record SHA-512 (`S.Outcome.record`, None without one), and `digest` binds
-        the verdict to the stream and those records. On a served or warden link the windows are by default its
+        the verdict to the stream and those records. On a served or network certifier link the windows are by default its
         profile's (`windows`).
 
         With `drawn`, the period sample (`period_draw`) over this stream's n windows, the stream's registrations must be
@@ -1259,7 +1259,7 @@ class LinkWindows:
         registered window isn't one the Lean sampled; a sampled window not registered is in `refused`. `selection` is
         the sample of record, ``by`` ``lean``
         (or ``all`` at K = n), and its units are the Lean's. Raises `ValueError` on a link with no egress occupancy,
-        served or warden profile, as `verify` does, on a stream that isn't this link's, and on a sample that isn't this
+        served or network certifier profile, as `verify` does, on a stream that isn't this link's, and on a sample that isn't this
         stream's period sample."""
         n = self._period(stream, windows)
         why: dict[str, Any] = {}
