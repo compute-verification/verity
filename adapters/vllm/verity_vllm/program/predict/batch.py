@@ -53,7 +53,8 @@ from typing import Any, Callable, Mapping
 
 from verity_vllm.check.batch import BATCH, SHARED, Fields, Template, own, separable
 from verity_vllm.pipeline import window_advice as WA
-from verity_vllm.program.frontend.seed_rule import PARAMS as SEED_PARAMS, rid_of_ids
+from verity_vllm.program.frontend.seed_rule import PARAMS as SEED_PARAMS
+from verity_vllm.program.frontend.seed_rule import rid_of_ids
 
 from .build import Unexpressible, _Specs, build_program, model_shape
 from .common import _ptypes, kind

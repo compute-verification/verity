@@ -24,17 +24,25 @@ from typing import Any
 
 import numpy as np
 import pytest
-
 from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
 from verity.circuits.refs import runs
-from verity.circuits.types import Array, Tuple as TupleT, Value
+from verity.circuits.types import Array, Value
+from verity.circuits.types import Tuple as TupleT
 from verity.definitions.registry import dsa_topk_mask as M
-from verity.definitions.registry.dsa_topk import topk_set, waksman_apply, waksman_switches
+from verity.definitions.registry.dsa_topk import (
+    topk_set,
+    waksman_apply,
+    waksman_switches,
+)
+
+from tests.program.predict.test_node import _first_layers
+from tests.program.predict.test_predict import GLM53, _row_phi
+from tests.program.predict.test_steps import GREEDY, HF_CONFIG_DIR, _class_g, _session
 from verity_vllm.check.batch import own
 from verity_vllm.engine.profiles.engine_classes import CLASS_G_SERVED, DSA_TOPK_ENV
-from verity_vllm.program.frontend.rules.vllm_dsa import PAD_SCORE, long_row_keys
 from verity_vllm.program import workload as W
+from verity_vllm.program.frontend.rules.vllm_dsa import PAD_SCORE, long_row_keys
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.batch import workload_labels
 from verity_vllm.program.predict.build import build_program
@@ -43,9 +51,6 @@ from verity_vllm.program.predict.dsa import run_bits, run_field
 from verity_vllm.program.predict.node import build_node_program
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.score import request_component
-from tests.program.predict.test_node import _first_layers
-from tests.program.predict.test_predict import GLM53, _row_phi
-from tests.program.predict.test_steps import GREEDY, HF_CONFIG_DIR, _class_g, _session
 
 TOPK = 4
 I32 = Value(32)
@@ -286,8 +291,13 @@ def test_a_registration_with_table_reads_builds_and_traces_its_request_programs_
     """`Registered.dsa_table_reads`: class G's registration builds a request Program past INDEX_TOPK in the table form
     (`request_program`) and traces it with `--dsa-table-reads` after `--batched`; off (the default), neither.  A registration
     with no batched form (a batch-invariant target), or with the prefix cache on, refuses it by name."""
-    from verity_vllm.program.predict.steps import Registered, plan_steps, request_program, trace_commands
     from tests.program.predict.test_steps import _registered
+    from verity_vllm.program.predict.steps import (
+        Registered,
+        plan_steps,
+        request_program,
+        trace_commands,
+    )
     hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
     reg = _class_g(tmp_path, model={"hf_config": hf})
     off = Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7)
@@ -398,11 +408,12 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
     the advice's side (`pipeline.edge.fields`) holds each port's members as each window's Program returns them.  What no cheaper
     test can: that a window's edges carry a request past INDEX_TOPK whole, through a window it idles in."""
     from verity.circuits.types import field_types
+
+    from tests.program.predict.test_steps import CACHE_ON
     from verity_vllm.pipeline import edge as E
     from verity_vllm.pipeline import window_advice as WA
     from verity_vllm.program.predict.steps import Registered, compile_steps
     from verity_vllm.program.workload import EDGE_PORTS
-    from tests.program.predict.test_steps import CACHE_ON
     hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
     reg = _class_g(tmp_path, engine=CACHE_ON, model={"hf_config": hf})
     reg = Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7)
@@ -464,6 +475,7 @@ def test_class_g_compiles_a_prompt_whose_prefill_spans_two_window_edges(tmp_path
     prompt's shape, spans window edges in the compiler, which `engine.class_admission` refuses only because the served Commit
     doesn't commit the edge."""
     from verity.circuits.types import field_types
+
     from verity_vllm.pipeline import edge as E
     from verity_vllm.pipeline import window_advice as WA
     from verity_vllm.program.predict.steps import Registered, compile_steps
@@ -512,7 +524,12 @@ def test_a_class_g_chunked_prompt_past_index_topk_traced_build_is_its_compiled_p
     can: that the Build's `vllm_dsa` rule, on vLLM's own graph, traces the mask form the predictor writes past INDEX_TOPK.  It
     needs the pinned vLLM (a pod's venv), so it skips without it."""
     pytest.importorskip("vllm")
-    from verity_vllm.program.predict.steps import Registered, compare, compile_steps, trace_commands
+    from verity_vllm.program.predict.steps import (
+        Registered,
+        compare,
+        compile_steps,
+        trace_commands,
+    )
     hub = tmp_path / "hub"
     hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
     reg = _class_g(hub, model={"hf_config": hf})

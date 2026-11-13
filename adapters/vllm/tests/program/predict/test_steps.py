@@ -16,21 +16,36 @@ from typing import Any
 
 import numpy as np
 import pytest
+import verity.protocols.certifier.verifier.advice as I1
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.partition_object import calls
+from verity.circuits.refs import runs
+from verity.definitions.registry import io_shell as IO
+from verity.definitions.registry import stop_check as SC
+from verity.definitions.registry.topp_geometry import registered_splits
+
 from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, workload_file
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
 from verity_vllm.engine.served_seed import derived
 from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.build_instances import check_rows
+from verity_vllm.program.frontend import seed_rule as SEED
+from verity_vllm.program.frontend import stop_rule as SR
+from verity_vllm.program.frontend.targets import parse_launch_context
 from verity_vllm.program.predict import batch as B
 from verity_vllm.program.predict import score as S
-from verity_vllm.program.predict.build import Unexpressible, _Specs, build_program, model_shape
+from verity_vllm.program.predict.build import (
+    Unexpressible,
+    _Specs,
+    build_program,
+    model_shape,
+)
 from verity_vllm.program.predict.common import _arr
 from verity_vllm.program.predict.domain import check_phi
 from verity_vllm.program.predict.dsa import Net
 from verity_vllm.program.predict.phi import Phi
-from verity_vllm.program.frontend import seed_rule as SEED, stop_rule as SR
-from verity_vllm.program.frontend.targets import parse_launch_context
 from verity_vllm.program.predict.steps import (
     Registered,
     RowRef,
@@ -45,15 +60,6 @@ from verity_vllm.program.predict.steps import (
     trace_dir,
 )
 from verity_vllm.program.prune import dead_free_versions
-from verity.definitions.registry import io_shell as IO
-from verity.definitions.registry import stop_check as SC
-from verity.definitions.registry.topp_geometry import registered_splits
-
-import verity.protocols.certifier.verifier.advice as I1
-from verity.circuits.defs import bind
-from verity.circuits.evaluation import evaluate_batch
-from verity.circuits.partition_object import calls
-from verity.circuits.refs import runs
 
 pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
 
@@ -684,6 +690,7 @@ def test_dead_gates_are_counted_as_circuit_check_counts_them():
     `_dead_gates` counts them as circuit-check does and says under which definitions. The second session's prefill has a row of
     16 keys, where `Attention_v5` has 2 dead gates a head."""
     from verity.circuits.liveness import dead_gates
+
     from verity_vllm.program.prune import dead_units
     sixteen = _session([(16, 2, {**GREEDY, "max_tokens": 2})], [[(0, 0, 16)], [(0, 16, 1)]])
     for advice, ingress in (_mixed(), sixteen):
@@ -879,6 +886,7 @@ def test_the_builds_chunked_request_wrapper_runs_drives_forwards_at_its_launch_s
     chunk at its launch step and positions, the sample after the last chunk only, then each decode at the step after, as `drive`
     builds it; a chunked request with a cached prefix or another policy is refused by name."""
     import torch
+
     from verity_vllm.program.frontend import vllm_meta as vm
     from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
     seen: list[tuple[Any, ...]] = []
@@ -960,8 +968,9 @@ def test_class_g_samples_by_the_selects_circuit_check_binds_at_its_vocabulary(tm
     `prune`'s dead-free versions of the two at its vocabulary are the bindings `dead_free.circuit-check.py` holds for it."""
     import runpy
 
-    from verity_vllm.program.predict.common import kind
     from verity.definitions.registry import dead_free as DF
+
+    from verity_vllm.program.predict.common import kind
 
     reg = _class_g(tmp_path)
     V = reg.phi.hf_config["vocab_size"]

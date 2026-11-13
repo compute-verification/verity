@@ -36,9 +36,17 @@ from typing import Any
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
+
 from verity_vllm.program.prune import COLUMNS, dead_free_versions
 
-from .common import Unexpressible, _Launch, in_launch, kind, launch_batch, request_passes
+from .common import (
+    Unexpressible,
+    _Launch,
+    in_launch,
+    kind,
+    launch_batch,
+    request_passes,
+)
 from .step_needs import Need, StepNeeds
 
 __all__ = ["TemplateCounts"]
@@ -161,6 +169,7 @@ class TemplateCounts(StepNeeds):
     def _pass(self, launch: _Launch, m: int, p: int, sampled: bool) -> _Pass:
         from verity.definitions.registry import tp_allreduce as AR
         from verity.definitions.registry.sparse_mla_split import launch_num_splits
+
         from verity_vllm.program.frontend.rules.vllm_dsa import long_row_blocks
         M, TOPK, e = launch.tokens(m), self.index_topk, launch.entry(m)
         prefills = launch.prefills((e, p), self.threshold)
@@ -187,7 +196,12 @@ class TemplateCounts(StepNeeds):
         return out + [(ar, live), (norm, P.m * live)] + [(nd, c * live) for nd, c in ffn(P.m)] + [(ar, live), (norm, live)]
 
     def _attention(self, L: int, P: _Pass, X: Sequence[int], bound: int, pads: set) -> list[tuple[Need, int]]:
-        from verity_vllm.program.frontend.rules.vllm_dsa import FA3_SPARSE_GEOMETRY, PAD_SCORE, long_row_keys, pad_words
+        from verity_vllm.program.frontend.rules.vllm_dsa import (
+            FA3_SPARSE_GEOMETRY,
+            PAD_SCORE,
+            long_row_keys,
+            pad_words,
+        )
         C, TOPK, x, block = self.C, self.index_topk, len(X), P.block
         QL, KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("Q_LORA", "KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
         IH, ID = int(C["INDEX_HEADS"]), int(C["INDEX_HEAD_DIM"])

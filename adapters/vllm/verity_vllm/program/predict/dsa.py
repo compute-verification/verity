@@ -49,8 +49,19 @@ from verity.circuits.defs import Builder
 from verity.circuits.refs import Coll, Concat, PartLog, Refs, concat, strided_view
 from verity.circuits.types import Type, Value
 
-from .common import (Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, graph_capture_sizes, kind,
-                     select_token, served_class)
+from .common import (
+    Unexpressible,
+    _arr,
+    _arr_shape,
+    _Launch,
+    _Peers,
+    _ptypes,
+    _Stochastic,
+    graph_capture_sizes,
+    kind,
+    select_token,
+    served_class,
+)
 from .phi import Phi
 
 
@@ -106,14 +117,19 @@ class Net:
     DOMAIN = ((8,), ("eager", "compiled"), ("float8_e4m3fn",))
 
     def __init__(self, phi: Phi, M: int, history: int) -> None:
+        from verity.definitions.registry import dsa
+        from verity.definitions.registry.tp_allreduce import settings_of
+
         from verity_vllm.engine.profiles import family_facts as FF
         from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
-        from verity_vllm.observe.fold.profiles.generic import _MLA_SCALES, _mla_weight_field, derive_config
+        from verity_vllm.observe.fold.profiles.generic import (
+            _MLA_SCALES,
+            _mla_weight_field,
+            derive_config,
+        )
         from verity_vllm.program import model as analytic
         from verity_vllm.program.frontend import targets as TG
         from verity_vllm.program.frontend.rules.vllm_dsa import FA3_SPARSE_GEOMETRY
-        from verity.definitions.registry import dsa
-        from verity.definitions.registry.tp_allreduce import settings_of
         hf = phi.hf_config
         self.world, self.rank = int(phi.tp["world"]), int(phi.tp.get("rank", 0))
         try:
@@ -222,6 +238,7 @@ class Net:
         from verity.definitions.numerics import fa3_model
         from verity.definitions.registry import fa3_split
         from verity.definitions.registry.merge_attn_states import NEG_INF
+
         from verity_vllm.program.frontend import targets as TG
         C, tp = self.C, self.tp
         R, NOPE, VH, NH = (int(C[k]) for k in ("QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
@@ -378,8 +395,11 @@ class _Model:
     def all_reduce(self, rows: list[Refs]) -> list[Refs]:
         """One all-reduce over the rows on the route vLLM takes at the launch's tokens (`tp_allreduce.served_route`), the captured one
         -> each row's sum."""
-        from verity_vllm.program.frontend.rules.vllm_bindings.collectives import _ROUTE_KINDS
         from verity.definitions.registry import tp_allreduce as AR
+
+        from verity_vllm.program.frontend.rules.vllm_bindings.collectives import (
+            _ROUTE_KINDS,
+        )
         n, N = len(rows), rows[0].count
         M = self.launch.tokens(n)
         setting, route = AR.served_route(self.net.settings, M, N)
@@ -425,8 +445,11 @@ class _Model:
     def cublas(self, xs: list[Refs], w: Coll, f32: bool = False, sampled: bool = False) -> list[Refs]:
         """An unbiased bf16 GEMM on cuBLAS's captured route at the launch's tokens (its sequences for the `sampled` rows): bf16 out
         (`CublasLinearRule`), or f32 (`CublasRouterRule`: the router family's route, or a direct call's where the shape has its own)."""
-        from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import _f32out_phase
         from verity.definitions.registry.bf16_gemm_check import default_cublas_route
+
+        from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import (
+            _f32out_phase,
+        )
         M, (N, K) = self.launch.tokens(len(xs), sampled), _arr_shape(w.type)
         phase = _f32out_phase(K, N) if f32 else "linear"
         route = default_cublas_route(phase, M, K, N)
@@ -439,7 +462,10 @@ class _Model:
 
     def router(self, xs: list[Refs], w: Coll) -> list[Refs]:
         """`GateLinear`'s f32 logits on the tier vLLM dispatches (`LlBf16GemmRule`, `CublasRouterRule`)."""
-        from verity.definitions.registry.bf16_gemm_check import DEFAULT_LL_BF16_FMA, dispatch_sm90
+        from verity.definitions.registry.bf16_gemm_check import (
+            DEFAULT_LL_BF16_FMA,
+            dispatch_sm90,
+        )
         M, (N, K) = self.launch.tokens(len(xs)), _arr_shape(w.type)
         tier, st = dispatch_sm90(M, K, N)
         if tier == "cublas":
@@ -466,9 +492,17 @@ class _Model:
     def attention(self, L: int, x: list[Refs], pos0: int) -> list[Refs]:
         """One layer's attention over the rows x at positions pos0.. (`DsaNormRopeRule`, `DsaQRule`, `DsaIndexerAttnRule`, op-major
         over the rows) -> the o projection's partials."""
-        from verity_vllm.program.frontend.rules.vllm_dsa import (DECODE_THRESHOLD, DECODE_THRESHOLD_DEFAULT, FA3_SPARSE_GEOMETRY, PAD_SCORE,
-                                                                 long_row_blocks, long_row_keys, pad_words)
         from verity.definitions.registry.sparse_mla_split import launch_num_splits
+
+        from verity_vllm.program.frontend.rules.vllm_dsa import (
+            DECODE_THRESHOLD,
+            DECODE_THRESHOLD_DEFAULT,
+            FA3_SPARSE_GEOMETRY,
+            PAD_SCORE,
+            long_row_blocks,
+            long_row_keys,
+            pad_words,
+        )
         C, M = self.C, len(x)
         QL, KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("Q_LORA", "KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
         IH, ID, TOPK = int(C["INDEX_HEADS"]), int(C["INDEX_HEAD_DIM"]), int(C["INDEX_TOPK"])
@@ -636,9 +670,10 @@ class _Model:
         """The MoE block over the rows x (`vllm_moe_router`, `vllm_moe_fp8`, op-major): the router logits, the shared expert, each row's
         top-k, its block-FP8 quantization, then per (token, slot) pair p = t * TOPK + k the w13 GEMM, the activation, its quantization
         and the routed w2 GEMM; each row's sum of its TOPK down rows, plus the shared expert's."""
+        from verity.definitions.registry.moe import router_kernel
+
         from verity_vllm.engine.profiles.devices import fused_moe_config
         from verity_vllm.program.frontend import targets as TG
-        from verity.definitions.registry.moe import router_kernel
         C, M, H, G = self.C, len(x), self.H, self.G
         E, TOPK, I = int(C["NUM_EXPERTS"]), int(C["TOPK"]), int(C["I"])
         w = lambda f: self.w[(L, f)]  # noqa: E731

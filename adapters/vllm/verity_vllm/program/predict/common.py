@@ -69,9 +69,10 @@ def with_checks(model, out: Coll, B=None, stop: dict | None = None, sampled: Seq
     `frontend.stop_rule.check` over `out`), and what `derive`'s provenance says of them: the Program returns the tuple (out,
     checks). Each is refused unless a declared relation computes it (`program.inputs.check`)."""
     from verity.circuits.types import Tuple
+
     from verity_vllm.program import inputs
-    from verity_vllm.program.frontend import stop_rule as SR
     from verity_vllm.program.frontend import seed_rule as SEED
+    from verity_vllm.program.frontend import stop_rule as SR
     checks = [*(getattr(model, "checks", None) or ()), *([] if sampled is None else [SEED.check(B, sampled[0], sampled[1:])]),
               *([] if stop is None else [SR.check(B, out, stop)])]
     if not checks:
@@ -255,6 +256,7 @@ class _Launch:
         decode, so no prefills) captures the attention at the padded batch, its padding rows without keys (their requests' seq_lens
         are 0, so the indexer's top-k leaves them -1); PIECEWISE graphs and an uncaptured step run it on the real batch."""
         from collections import Counter
+
         from verity_vllm.program.frontend import targets as TG
         seqs = TG.launch_sequences(self.step, self.ctx)
         if seqs is None:
