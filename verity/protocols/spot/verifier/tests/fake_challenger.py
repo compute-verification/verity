@@ -78,10 +78,11 @@ def checked(statement: Mapping[str, Any], tables: int | None = 1) -> dict[str, A
 
 class Challenger(T.ChallengerCoins):
     """The challenger's `LABEL` coins (`coins` of them a session) on entropy seeded from `seed`, one session for each
-    commitment, its files in a directory of its own."""
+    commitment, its files in a directory of its own, opened for `window` as it is at the commitment (`WINDOW` unless
+    a test sets another)."""
 
     def __init__(self, seed: str = "fake", coins: int = 64) -> None:
-        self.seed, self.coins = seed, coins
+        self.seed, self.coins, self.window = seed, coins, WINDOW
         self.directory = Path(tempfile.mkdtemp(prefix="fake-challenger-"))
         weakref.finalize(self, shutil.rmtree, self.directory, True)
         self.sessions: dict[bytes, tuple[R.Session, Ledger, C.LiveRecord]] = {}
@@ -93,7 +94,7 @@ class Challenger(T.ChallengerCoins):
         d = self.directory / sid
         d.mkdir()
         ledger = Ledger(d / "windows.jsonl", at(0, 3))
-        ledger.open(sid, WINDOW, withheld=True)
+        ledger.open(sid, self.window, withheld=True)
         challenger = C.LiveChallenger(SCHEME, 0, [(LABEL, self.coins)], entropy(f"{self.seed}/{sid}"))
         session = R.open_session(challenger, pinned_key(), f"{HOST}.{sid}", at(1, 2), d, sid, withhold=True)
         (d / R.HELLOS).write_text("")

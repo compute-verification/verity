@@ -63,8 +63,8 @@ def window(store: audit.Store, prover_store: audit.Store, passes: int = 2) -> tu
     clock.now = p.window_ns
     assert s.boundary() is None
     clock.now = s.deadline(0) + 1
-    draws = s.close(0)
-    return s.verify(0, [prover.open(out[i], q) for i, q in draws]), list(draws), out
+    sampled = s.close(0)
+    return s.verify(0, [prover.open(out[i], q) for i, q in sampled]), list(sampled), out
 
 
 def test_under_the_seeds_key_a_block_written_after_the_seed_takes_the_encoding_its_writer_picks() -> None:
@@ -87,9 +87,9 @@ def test_under_the_seeds_key_a_block_written_after_the_seed_takes_the_encoding_i
 
     cheater = copy.copy(store)
     cheater.payloads, cheater.blocks = None, Memory({WEIGHTS: store.blocks[WEIGHTS]})
-    verdict, draws, passes = window(store, cheater)
+    verdict, sampled, passes = window(store, cheater)
     assert verdict == audit.Verdict(0, True)
-    assert sum(passes[i].plan.block(q) == KV for i, q in draws) == len(passes)
+    assert sum(passes[i].plan.block(q) == KV for i, q in sampled) == len(passes)
     for ps in passes:
         assert ps.receipts[KV] == receipts.SketchReceipter(ps.seed)(KV, PICKED)
 

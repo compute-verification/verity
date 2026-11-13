@@ -43,7 +43,7 @@ def test_the_kept_card_is_its_owners_and_a_floor_is_provisional():
 @pytest.mark.parametrize("change,message", [
     ({"provisional": False}, "a lower bound is provisional"),
     ({"status": "modeled"}, "a serving rate is measured"),
-    ({"value": {"bound": "memory"}}, "one of 'compute', 'kv-pool', 'unknown'"),
+    ({"value": {"bound": "memory"}}, "one of 'compute', 'engine-step', 'kv-pool', 'unknown'"),
     ({"value": {"plan": "the 128k plan"}}, "an art id .* or the id of the run that holds it"),
     ({"value": {"tokens_per_gpu_second": 0}}, "a rate above 0"),
     ({"value": {"tokens_per_gpu_second": "fast"}}, "it is a number"),
@@ -201,4 +201,4 @@ def test_a_floors_caption_says_its_bounds_are_floors_and_a_saturated_rates_does_
     floor, most = f.reading_note(said), f.reading_note(said | {"saturated": True})
     assert "one under 300 GB does not show that 300 GB is met. " + f.REGISTRATION_NOTE in floor
     assert "lower bound" not in most and most.endswith("0.025 of that reading's. " + f.REGISTRATION_NOTE)
-    assert "holds at a registration of 1/q requests" in f.REGISTRATION_NOTE
+    assert "samples a whole number of the phase's requests, never fewer than one" in f.REGISTRATION_NOTE

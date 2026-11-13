@@ -1,22 +1,34 @@
 """The hardware cards: one TOML file per SKU (``<sku>.toml``, beside this file), the one source of each card's numbers.
 
-A card is a GPU's (``kind = "gpu"``) or a host's (``kind = "host"``: a server's CPUs and DRAM, apart from the GPUs it
-carries). Every number in a card file is an entry ``{value, unit, mark, source}``. ``mark`` is ``ceiling`` (no program
-on that SKU and firmware exceeds it: what the model's premises need), ``measurement`` (a measured value, so only a lower
-bound on the ceiling) or ``placeholder`` (neither: open). ``source`` names a data sheet, a document or an ``art:`` id
-(a run's record), and a node by its kind, never its host name. The Lean card tables (``security/Definitions/Core/Accel``)
-are held to the GPU cards that name one (``lean``), number by number (``verity/hardware/tests/test_lean.py``). Stdlib
-only, and it imports no other unit.
+A card is a GPU's (``kind = "gpu"``), a host's (``kind = "host"``: a server's CPUs and DRAM, apart from the GPUs it
+carries), a server's (``kind = "server"``: a server model's network ports, apart from its CPUs, DRAM and GPUs) or a time
+base's (``kind = "timebase"``: the clock an auditor's device reads, apart from the host it runs in; its one section is
+``drift``: ``max``, the most the clock's rate may differ from the SI second's (``s/s``), and ``read``, the largest
+reading of it on record, a ``measurement``). Every
+number in a card file is an entry ``{value, unit, mark, source}``. ``mark`` is ``ceiling`` (no program on that SKU
+exceeds it, whatever firmware it runs: what the model's premises need), ``measurement`` (a measured value, so only a
+lower bound on the ceiling), ``premise`` (no page and no run bounds the number; it is assumed under the premise its
+source states, of whom it names. A row that uses it prints the premise for its device's host, and no figure of record
+uses it) or ``placeholder`` (none of these: open). ``source`` names a data sheet, a document or an
+``art:`` id (a run's record), and a node by its kind, never its host name. The Lean card tables
+(``security/Definitions/Core/Accel``) are held to the GPU cards that name one (``lean``), number by number
+(``verity/hardware/tests/test_lean.py``). Stdlib only, and it imports no other unit.
+
+The readers of card files (``skus``, ``load``) take ``directory``, the directory the card files are in, so that a reader
+whose copy of them is not beside this file names where it is; ``None`` is ``CARDS``, read when the reader is called.
 
 ``rate`` is the one calculator of a GPU's peak rates, Lean's ``card.ρ``: a reader that needs the tensor peak at some
 clock calls it rather than multiplying the card's numbers itself.
 
 ~~~python
-from verity.hardware.cards import load, rate, skus
+from verity.hardware.cards import load, number, rate, skus
 skus("host")                       # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
+drift = load("nebius-vm-monotonic-raw")["drift"]["max"]   # {'value': 0.0005, 'unit': 's/s', 'mark': 'premise', ...}
+number(drift)                      # Fraction(1, 2000): the auditor's figure for its device's drift, under that premise
 card = load("h200-sxm-141gb")
 card["clock"]["sm"]["value"]       # 1980 (MHz)
 card["memory"]["bandwidth"]        # {'value': 4916736000000.0, 'unit': 'B/s', 'mark': 'ceiling', 'source': ...}
+load("dgx-h200")["link"]["rate"]   # {'value': 5011000000000.0, 'unit': 'bit/s', 'mark': 'ceiling', 'source': ...}
 rate(card)                         # Fraction(989429760000000): s8 MACs a second, 132 SMs x 4096 x clock.tensor 1830 MHz
 rate(card, mhz=1980)               # Fraction(1070530560000000): the same at clock.sm's 1980 MHz, the second reading
 rate(card, fmt="f16", mhz=1700)    # the f16 MACs a second at a 1700 MHz clock
@@ -31,30 +43,34 @@ from pathlib import Path
 
 from verity.errors import InvalidArtifact
 
+__all__ = ["CARDS", "ENTRY", "KINDS", "MARKS", "WORD", "load", "number", "rate", "skus"]
+
 CARDS = Path(__file__).parent
-KINDS = ("gpu", "host")
-MARKS = ("ceiling", "measurement", "placeholder")
+KINDS = ("gpu", "host", "server", "timebase")
+MARKS = ("ceiling", "measurement", "premise", "placeholder")
 ENTRY = frozenset({"value", "unit", "mark", "source"})
 WORD = 4  # bytes in a 32-bit word, the unit of every store and of device memory's rate
 
 
-def skus(kind: str | None = None) -> list[str]:
-    """The SKUs with a card file, or those of one ``kind``."""
-    every = sorted(p.stem for p in CARDS.glob("*.toml"))
-    return every if kind is None else [sku for sku in every if load(sku)["kind"] == kind]
+def skus(kind: str | None = None, *, directory: Path | None = None) -> list[str]:
+    """The SKUs with a card file in ``directory`` (``CARDS`` when ``None``), or those of one ``kind``."""
+    every = sorted(p.stem for p in (CARDS if directory is None else directory).glob("*.toml"))
+    return every if kind is None else [sku for sku in every if load(sku, directory=directory)["kind"] == kind]
 
 
-def load(sku: str) -> dict:
-    """The card file of ``sku`` as parsed TOML, refused unless every number in it carries its unit, mark and source."""
-    path = CARDS / f"{sku}.toml"
+def load(sku: str, *, directory: Path | None = None) -> dict:
+    """The card file of ``sku`` in ``directory`` (``CARDS`` when ``None``) as parsed TOML, refused unless every number
+    in it carries its unit, mark and source."""
+    directory = CARDS if directory is None else directory
+    path = directory / f"{sku}.toml"
     if not path.is_file():
-        raise KeyError(f"no card {sku!r}: the cards are {skus()} (verity/hardware/cards/<sku>.toml)")
+        raise KeyError(f"no card {sku!r}: the cards are {skus(directory=directory)} ({directory}/<sku>.toml)")
     card = tomllib.loads(path.read_text(encoding="utf-8"))
     if card.get("sku") != sku:
         raise InvalidArtifact(f"{path.name}: sku = {card.get('sku')!r}; set it to the file's name, {sku!r}")
     if card.get("kind") not in KINDS:
         raise InvalidArtifact(f"{path.name}: kind = {card.get('kind')!r}; set it to one of {KINDS}")
-    _check(card, path.name)
+    check(card, path.name)
     return card
 
 
@@ -86,13 +102,15 @@ def rate(card: dict, resource: str = "tensor", *, fmt: str | None = None, mhz: f
     return units if fmt is None else units / number(card["weight"][fmt])
 
 
-def _check(table: dict, where: str) -> None:
+def check(table: dict, where: str) -> None:
+    """Refuse ``table``, the file ``where``'s, unless every number in it, at any depth, is an entry with its unit, mark
+    and source: the rule of a card file, and of every file that states numbers as the cards do."""
     for key, item in table.items():
         at = f"{where}: {key}"
         if isinstance(item, dict) and "value" in item:
             _check_entry(item, at)
         elif isinstance(item, dict):
-            _check(item, at)
+            check(item, at)
         elif isinstance(item, (int, float)):
             raise InvalidArtifact(f"{at} is a bare number; write it as {{ value, unit, mark, source }}")
 

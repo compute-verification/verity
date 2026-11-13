@@ -3,7 +3,7 @@ computes through torch is counted (flops.py).
 
     python -m training_slowdown.run --config attacks/NAME.toml --seed 0 --split search|final --out OUT \\
         [--state DIR [--continues SHA256|nothing]] [--starts starts.toml] [--starts-root DIR] [--device cuda] \\
-        [--tier 0] [--keep-weights]
+        [--tier 0] [--threads 8] [--keep-weights]
     python -m training_slowdown.run --retrace RUN_JSON --out OUT [--starts starts.toml] [--device cpu]
 
 A job is two processes. Its own (`outside`) runs no route's code: it reads the job's held-out split, starts the
@@ -23,7 +23,9 @@ served those lists them (`windows`). A checkpoint is taken after
 every 5% of the steps, uncounted: the output model's bits per byte on the job's split (`training_slowdown.evaluate`)
 and its E, the weights that differ from θ encoded by the route's plan (rebuilt from its spec, so only the codec
 library's code runs). The output model a checkpoint scores is the one E rebuilds from θ: the trained weights under a
-plan that keeps them whole, the model the kept bits give under one that keeps less. Tokens computed outside a step, or a run with no step,
+plan that keeps them whole, the model the kept bits give under one that keeps less. A weight the route hands over as
+its trained parts (the route contract) is packed by the plan's codec as they are, and is scored as that codec decodes
+it on θ. Tokens computed outside a step, or a run with no step,
 make the run invalid. c is `C_PER_FORWARD_TOKEN` times the start's forward MACs per token (`block_c`), measured on
 the registered model.
 
@@ -34,7 +36,8 @@ the optimizers' state; the stream's position; torch's, numpy's and Python's gene
 record so far with its scores, where the clock stands and, in the record's last segment, the SHA-512 of each part
 of the tensors as DIR holds them (`kept_sha512`). DIR is hidden from the route's process as a final set is. A job
 that finds a state in DIR continues from it when the state is its own: the same `training_slowdown` VERSION, seed,
-split and config digest, tensors whose every part hashes to what the record states, and a model that hashes to its
+split, config digest and CPU thread count (`threads`; a state that states none continues at the job's), tensors
+whose every part hashes to what the record states, and a model that hashes to its
 record's last checkpoint (`trained_sha256` where the trained model is not the output, else `output_sha256`). Any
 other it refuses, naming what differs, and trains nothing. The record a state is
 checked against lies beside its tensors; `--continues SHA256` ties it to the copy in the stopped run's record, which
@@ -85,6 +88,11 @@ On a CPU each of the job's two processes limits oneDNN's instruction set to belo
 (`limit_cpu`, `CPU_ISA`): oneDNN's AMX kernels can return a wrong bf16 product on a virtual CPU, so that one step run
 twice gives two results, and a job's products are to be the same every time. The record names the variable and the
 value the route's process set (`cpu_isa`; null on any other device, where nothing is set).
+
+Each of the two processes also holds torch at the job's CPU thread count (`--threads`, `THREADS`; `set_threads`)
+before torch computes anything, the route's process at the count the job's own process holds: what a job trains on
+a CPU follows its thread count, and the cores it runs on change only its speed. The record states the count
+(`threads`), and a stopped job continues only at the count its kept record states (`Kept.load`).
 """
 from __future__ import annotations
 
@@ -134,6 +142,8 @@ UNTRACED = "the route's process ended before it wrote the trace"
 #: AMX: oneDNN's AMX kernels return a wrong bf16 product now and then when the process is preempted on a virtual CPU,
 #: on one thread or several, so two calls of one product on one input differ; below AMX it is the same every time
 CPU_ISA = ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE_BF16")
+#: a job's CPU thread count unless `--threads` gives another (`set_threads`): what a job trains on a CPU follows it
+THREADS = 8
 
 
 class BudgetExceeded(RuntimeError):
@@ -386,7 +396,9 @@ class Harness:
         return out
 
     def output(self, fn) -> None:
-        """`fn()` returns the output model's state dict (default: the registered model's)."""
+        """`fn()` returns the output model's state dict (default: the registered model's). A weight of θ's may be
+        given as the tuple of the parts the run trained of it, which the plan's codec packs into E as they are
+        (`Codec.encode_trained`): the output model's weight is then what E rebuilds, whatever the run holds."""
         self.output_fn = fn
 
     def encode_with(self, plan: Plan) -> None:
@@ -416,9 +428,9 @@ class Harness:
 
     # -- the harness's side
 
-    def _state(self) -> dict[str, torch.Tensor]:
+    def _state(self) -> dict[str, torch.Tensor | tuple]:
         state = self.output_fn() if self.output_fn else self.model.state_dict()
-        return {k: v.detach() for k, v in state.items()}
+        return {k: tuple(p.detach() for p in v) if isinstance(v, tuple) else v.detach() for k, v in state.items()}
 
     def _checkpoint(self, step: int) -> None:
         """The checkpoint after step `step`: of the registered model's state, or of what the route's `output` makes
@@ -428,55 +440,72 @@ class Harness:
             trained = None if self.output_fn is None or self.model is None else self.trained()["model"]
         self.checkpoint_state(step, state, {"source": "output"}, trained)
 
-    def _encode(self, step: int, state: dict[str, torch.Tensor], digests: dict[str, str]) -> tuple[dict, bytes | None, dict]:
-        """E of `state`: its weights that differ from θ (a weight θ lacks against zeros), by `encoding`, with its size,
-        digest and rebuild MACs; E's bytes; and the weights E rebuilds to other bits than `state`'s, as it rebuilds
-        them (none under a plan that keeps the weights whole)."""
+    def _encode(self, step: int, state: dict[str, torch.Tensor | tuple], digests: dict[str, str]) -> tuple[dict, bytes | None, dict]:
+        """E of `state`: its weights that differ from θ (a weight θ lacks against zeros) and each weight handed over
+        as its trained parts (`digests` has none of it), by `encoding`, with its size, digest and rebuild MACs; E's
+        bytes; and the weights E rebuilds to other bits than `state`'s, as it rebuilds them: none under a plan that
+        keeps the weights whole, and every weight handed over as parts."""
         if self.theta_digests is None:
             self.theta_digests = {k: digest(v) for k, v in self.theta.items()}
-        changed = sorted(k for k in state if digests[k] != self.theta_digests.get(k))
+        parts = [k for k in state if k not in digests]
+        changed = sorted(k for k in state if k in parts or digests[k] != self.theta_digests.get(k))
+        if lacks := [k for k in parts if k not in self.theta]:
+            self.problems.append(f"checkpoint {step}: the output hands over the trained parts of {lacks[:3]}, which θ "
+                                 f"lacks: parts are of a weight of the start; hand a new weight over whole")
+            return {"e_bytes": None}, None, {}
         bases = {k: self.theta[k] if k in self.theta else torch.zeros(state[k].shape, dtype=state[k].dtype)
                  for k in changed}
         try:
             enc = self.encoding.encode({k: state[k] for k in changed}, bases)
-        except Unencodable as e:
+            rebuilt = self.encoding.decode(enc, bases)
+        except (Unencodable, ValueError) as e:
             self.problems.append(f"checkpoint {step}: the route's plan has no E of its output ({e})")
             return {"e_bytes": None}, None, {}
-        rebuilt = self.encoding.decode(enc, bases)
         stored = all(isinstance(c, Identity) for _, c in self.encoding.rules)
         return ({"e_bytes": len(enc), "e_sha256": hashlib.sha256(enc).hexdigest(), "format": "full" if stored else "codecs",
-                 "rebuild_macs": self.encoding.cost_macs(enc, bases), "changed": len(changed)}, enc,
-                {k: rebuilt[k] for k in changed if digest(rebuilt[k]) != digests[k]})
+                 "rebuild_macs": self.encoding.cost_macs(enc, bases), "changed": len(changed)}
+                | ({"parts": len(parts)} if parts else {}), enc,
+                {k: rebuilt[k] for k in changed if k in parts or digest(rebuilt[k]) != digests[k]})
 
-    def checkpoint_state(self, step: int, state: dict[str, torch.Tensor], extra: dict | None = None,
+    def checkpoint_state(self, step: int, state: dict[str, torch.Tensor | tuple], extra: dict | None = None,
                          trained: dict[str, torch.Tensor] | None = None) -> dict:
         """Encode `state`, the model after step `step` (inclusive), and score the output model, uncounted. The
         output model is what E rebuilds from θ: `state` itself under a plan that keeps the weights whole, and under
         one that keeps less (a quantized delta) the model its bits give, which is then what is hashed, scored and
         kept. `trained_sha256` is the digest of the model the route trains, which a job continues from (`Kept.load`),
         wherever that is not the output model: of `trained`, the registered model's state where `state` is a
-        route's `output` of it, else of `state` under a plan that keeps less. Of the planned steps' last checkpoint
-        the job keeps E under `e/` when it is smaller than `E_KEEP_BYTES` (`e_path`), and with `keep_weights` the
-        whole output under `checkpoints/` (`path`); of any other, nothing."""
+        route's `output` of it, else of `state` under a plan that keeps less. A weight `state` gives as a tuple is
+        the parts the run trained of it: E packs them as they are, the output model's weight is what E rebuilds, and
+        the checkpoint says how many weights came so (`parts`); its `trained_sha256` is then `trained`'s alone, since
+        `state` holds no weight for those parts to digest. An output with parts and no E of them is not a model: its checkpoint
+        has no digest and no score, and the run is invalid. Of the planned steps' last checkpoint the job keeps E
+        under `e/` when it is smaller than `E_KEEP_BYTES` (`e_path`), and with `keep_weights` the whole output under
+        `checkpoints/` (`path`); of any other, nothing."""
         with self.uncounted(), torch.no_grad():
-            digests = {k: digest(v) for k, v in state.items()}
+            digests = {k: digest(v) for k, v in state.items() if not isinstance(v, tuple)}
+            parts = len(state) - len(digests)
             fields, enc = {}, None
             if self.encoding is not None:
                 fields, enc, rebuilt = self._encode(step, state, digests)
                 if rebuilt:
-                    fields["trained_sha256"] = state_sha256(digests)
+                    if not parts:
+                        fields["trained_sha256"] = state_sha256(digests)
                     state = state | rebuilt
                     digests = digests | {k: digest(v) for k, v in rebuilt.items()}
+            elif parts:
+                self.problems.append(f"checkpoint {step}: the output hands over trained parts and the run has no plan "
+                                     f"to pack them with (te.encode_with)")
             if trained is not None:
                 fields["trained_sha256"] = theta_sha256(trained)
-            out_sha256 = state_sha256(digests)
-            score = self.evaluator(state, out_sha256) if self.evaluator else None
+            whole = len(digests) == len(state)
+            out_sha256 = state_sha256(digests) if whole else None
+            score = self.evaluator(state, out_sha256) if self.evaluator and whole else None
             cp = {"step": step, "macs": self.macs_so_far(), "bpb": score["bpb"] if score else None, "score": score,
                   "elapsed_s": self.elapsed(), "output_sha256": out_sha256} | (extra or {}) | fields
             if self.n_steps and step == max(self.cp_steps, default=-1):
                 if enc is not None and len(enc) < E_KEEP_BYTES:
                     cp["e_path"] = self._keep(f"e/step{step:07d}.bin", lambda path: path.write_bytes(enc))
-                if self.keep_weights:
+                if self.keep_weights and whole:
                     cp["path"] = self._keep(f"checkpoints/step{step:07d}.pt",
                                             lambda path: torch.save({k: v.cpu() for k, v in state.items()}, path))
             self.checkpoints.append(cp)
@@ -512,8 +541,8 @@ class Harness:
         rec |= meta | {
             "schema": SCHEMA, "training_slowdown": VERSION, "seed": self.seed, "tier": self.tier,
             "split": self.split, "start": self.start, "theta_sha256": theta_sha256(self.theta), "device": self.device,
-            "forward_macs_per_token": self.forward_macs_per_token, "c": c, "planned_steps": self.n_steps,
-            "checkpoints": self.checkpoints,
+            "threads": torch.get_num_threads(), "forward_macs_per_token": self.forward_macs_per_token, "c": c,
+            "planned_steps": self.n_steps, "checkpoints": self.checkpoints,
             "flags": flags(rec["totals"], float(meta.get("peak_macs_per_s", 0))) + list(notes or []),
             "invalid": problems, "families": [],
         }
@@ -665,19 +694,23 @@ def stream_of(cfg: config.Config, data: Data, seed: int, root: Path | None = Non
     return stream
 
 
-def train(te: Harness, cfg: config.Config, route, stream: Stream, model, optimizers, state: dict | None = None) -> None:
+def train(te: Harness, cfg: config.Config, route, stream: Stream, model, optimizers, state: dict | None = None,
+          steps: int | None = None) -> None:
     """The route loop (module docstring) on the route's `build`, from the first step or, with a kept `state`, from
     the step the harness continues at. A route with an `output` gives each checkpoint its output model; what that
-    computes is counted, in the step after the checkpoint or in the tail."""
+    computes is counted, in the step after the checkpoint or in the tail. `steps` stops the loop after the budget's
+    first `steps` steps, each run as the whole budget's, with a checkpoint after the last."""
     te.load(model)
     te.encode_with(route.plan(cfg.dials))
     if hasattr(route, "output"):
         te.output(lambda: route.output(model, cfg.dials))
     n, batch = cfg.budget["steps"], cfg.budget["batch"]
     te.plan(n)
+    last = n if steps is None else min(steps, n)
+    te.cp_steps.add(last - 1)
     if state is not None:
         te.resume(model, optimizers, stream, state)
-    for t in range(te.counter.first, n):
+    for t in range(te.counter.first, last):
         with te.step():
             route.step(model, te.batch(stream.next(batch).to(te.device)), optimizers, cfg.dials, t, n)
 
@@ -728,6 +761,9 @@ def parse(argv=None) -> argparse.Namespace:
                          "checks need them)")
     ap.add_argument("--tier", type=int, default=0, choices=(0, 1, 2))
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    ap.add_argument("--threads", type=int, default=THREADS,
+                    help=f"torch's CPU thread count in each of the job's processes, which what it trains on a CPU "
+                         f"follows; a stopped job continues only at its kept record's (default {THREADS})")
     ap.add_argument("--keep-weights", action="store_true",
                     help="keep the last checkpoint's whole state under OUT/checkpoints (default: its E alone, when "
                          "under 50 MiB)")
@@ -835,7 +871,8 @@ class Kept:
     def load(self, seed: int, split: str, continues: str | None = None) -> dict | None:
         """The directory's state, for the job of `seed` and `split` to continue from; None where it holds none. One
         this tree didn't write for this job is refused by what differs: its schema, its `training_slowdown` VERSION,
-        its seed or its split, a part of its tensors that doesn't hash to what its record's last segment states,
+        its seed or its split, a CPU thread count other than this process holds (one that states none continues at
+        this process's), a part of its tensors that doesn't hash to what its record's last segment states,
         or a model that doesn't hash to its record's last checkpoint. Its config's digest is compared once the
         route's process, which reads the route's VERSION and dials, names its own (`outside`).
 
@@ -870,6 +907,9 @@ class Kept:
         for what, its, mine in said:
             if its != mine:
                 self.refuse(f"its {what} is {its!r} and this job's is {mine!r}")
+        if (threads := rec.get("threads")) is not None and threads != (held := torch.get_num_threads()):
+            self.refuse(f"its record states {threads} CPU threads and this job holds {held}, and what a job trains "
+                        f"on a CPU follows its thread count: start the job with `--threads {threads}` to continue it")
         if not (self.dir / name).is_file():
             self.refuse(f"its tensors, {name}, are missing")
         try:
@@ -958,8 +998,8 @@ def joined(prior: dict | None, rec: dict) -> dict:
     find its stopped jobs invalid, never valid where the unbroken job is not. `segments` lists each one's first
     step, its steps, its count and its commit, and of one that was continued the digests of the state it kept last
     (`Kept.write`). Of a job served fresh windows (`windows`), the windows served are every segment's in order and
-    the times their order started again add up. A segment whose record names another job than the kept one's, or
-    leaves other parts out of the fresh windows, is refused."""
+    the times their order started again add up. A segment whose record names another job than the kept one's, holds
+    another CPU thread count than the kept one states, or leaves other parts out of the fresh windows, is refused."""
     first = len(prior["steps"]) if prior else 0
     segment = {"first": first, "steps": len(rec["steps"]), "macs": rec["totals"]["macs"], "commit": rec.get("commit")}
     if prior is None:
@@ -970,6 +1010,7 @@ def joined(prior: dict | None, rec: dict) -> dict:
                             ("seed", prior["seed"], rec["seed"]), ("split", prior["split"], rec["split"]),
                             ("training_slowdown VERSION", prior["training_slowdown"], rec["training_slowdown"]),
                             ("digest key", prior["digest_key"], rec["digest_key"]),
+                            ("CPU threads", prior.get("threads", rec.get("threads")), rec.get("threads")),
                             ("first step", first, rec["steps"][0]["step"] if rec["steps"] else first),
                             ("fresh windows (how many, and the parts left out)", *fresh)):
         if its != mine:
@@ -1053,7 +1094,8 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
         hide = [x for d in [*sandbox.final_sets(reg), *([state.dir] if state else []), *store]
                 for x in ("--hide", str(d))]
         route = [sys.executable, "-m", "training_slowdown.sandbox", *hide, "--",
-                 sys.executable, "-m", "training_slowdown.run", *argv, "--inside", str(scratch)]
+                 sys.executable, "-m", "training_slowdown.run", *argv, "--threads", str(a.threads),
+                 "--inside", str(scratch)]
         env |= {"PYTHONPATH": os.pathsep.join([str(HERE.parent), *filter(None, sys.path)])}
         if a.retrace is not None:
             return subprocess.run(route, env=env).returncode
@@ -1254,10 +1296,21 @@ def limit_cpu(device: str) -> dict[str, str] | None:
     return dict([CPU_ISA])
 
 
+def set_threads(n: int) -> int:
+    """Holds torch at `n` CPU threads in this process and returns `n`, the count the record states; a process in
+    which torch then holds another count is refused. What a job trains on a CPU follows the count, so each of a
+    job's processes calls this before torch computes anything (`main`)."""
+    torch.set_num_threads(n)
+    if (held := torch.get_num_threads()) != n:
+        raise SystemExit(f"training_slowdown: this process is to hold {n} CPU threads, and torch holds {held}")
+    return n
+
+
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else [str(x) for x in argv]
     a = parse(argv)
     a.cpu_isa = limit_cpu(a.device)
+    set_threads(a.threads)
     return inside(a) if a.inside is not None else outside(a, argv)
 
 

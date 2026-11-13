@@ -154,8 +154,8 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
 
 
 def arrivals_of_record(declared: dict[str, int], schedule: dict[str, Any] | None) -> tuple[dict[str, int], bool]:
-    """The arrivals every C2 consumer (population placement, sampled replay, boundary linkage,
-    CompiledKernelCheck) counts from: the ENGINE schedule of record's observed arrive steps when the population was placed on the observed
+    """The arrivals every C2 consumer (population placement, sampled replay, boundary linkage) counts from: the ENGINE
+    schedule of record's observed arrive steps when the population was placed on the observed
     committed-step axis (`schedule.use == "observed"`: every declared request observed, contiguous, exactly its cap), else the declaration.
     Returns (arrivals, moved) -- `moved` iff an arrival differs from the declaration.  A missing / failed schedule leaves the declaration."""
     out = {str(k): int(v) for k, v in (declared or {}).items()}

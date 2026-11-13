@@ -154,7 +154,8 @@ end Pouw.SecurityProofs.NCP
 
 namespace Pouw.SecurityProofs.PearlC
 
-/-- **Pearl-C's served point in ε form**: `GapSm120v1LoopCast8p72Rev1Cap1000_8192` and `Pouw.PearlC.gGap_iff_gε`, at
+/-- **Pearl-C's design point at 8192³ on the RTX PRO 6000, in ε form** (not the served point, which is Llama 3.2 1B's
+linears under the H100 record): `GapSm120v1LoopCast8p72Rev1Cap1000_8192` and `Pouw.PearlC.gGap_iff_gε`, at
 `ε = g/(1 − g) = 1648180439/444424569561`. -/
 theorem EpsSm120v1LoopCast8p72Rev1Cap1000_8192 :
     Pouw.Guarantees.PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192 := by

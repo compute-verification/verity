@@ -46,7 +46,7 @@ KEY=$(cat verity/protocols/flock/pod/20-gpu-link.sh verity/protocols/flock/pod/6
 BUILDS=${BUILDS:-$KEY}
 bin() { echo $W/bin-$1-g1-sm$SM/flock-circuit; }
 F=$FW/flock-gpu-link/flock
-LSHA=$(cd verity/protocols/flock/verifier && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+LSHA=$(python3 verity/protocols/flock/pod/lake_closure.py key verity/protocols/flock/verifier)
 LEAN_FROM=${LEAN_FROM:-/workspace/jobs/rec-reprice/cache}
 LEAN_BIN=$L/lean-$LSHA/flock-verify; [ -x $LEAN_FROM/lean-$LSHA/flock-verify ] && LEAN_BIN=$LEAN_FROM/lean-$LSHA/flock-verify
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
@@ -215,8 +215,8 @@ build)
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/lean.lock; flock 9
     if [ ! -x $LEAN_BIN ]; then
-      rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/protocols/flock/verifier/. $L/lean-src/ \
-        && (cd $L/lean-src && lake build flock-verify) && mkdir -p $L/lean-$LSHA && cp $L/lean-src/.lake/build/bin/flock-verify $LEAN_BIN
+      rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/flock/pod/lake_closure.py copy verity/protocols/flock/verifier $L/lean-src) \
+        && (cd $LEAN_SRC && lake build flock-verify) && mkdir -p $L/lean-$LSHA && cp $LEAN_SRC/.lake/build/bin/flock-verify $LEAN_BIN
     fi
   ) > $O/build-lean.log 2>&1 &
   LP=$!

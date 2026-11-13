@@ -1,7 +1,7 @@
 module
 
 public import Difftest
-public import Flock.AnnotExpand
+public import Circuits.AnnotExpand
 
 /-!
 # The annotation check's port: `Flock.Annot` behind `Difftest.serve`

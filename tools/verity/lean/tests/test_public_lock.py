@@ -307,3 +307,35 @@ def test_the_names_and_paths_a_reason_spells() -> None:
     assert PL.names(text) == ["Lib.Gone.walk'", "Lib.Kept", "Gone.lean", "e.g"]
     assert PL.paths(text) == ["lean/Lib/Gone.lean", "tests/data"]
     assert PL.names("a plain reason") == [] and PL.paths("a plain reason, and/or none") == ["and/or"]
+
+
+def test_the_refusal_names_each_place_by_file_section_and_entry_and_says_the_fix() -> None:
+    left = [("pkg/lean-audit.json", "layers", "Mod", "pr", "#1234"),
+            ("pkg/lean-audit.json", "shape.frozen", "Lib.G", "declaration", "Lib.Gone.G"),
+            ("other/lean-audit.json", "compile_time", "", "path", "pkg/Gone.lean")]
+    said = PL.refusal(left)
+    assert said.startswith("public_lock: 3 place(s)")
+    for named in ("pkg/lean-audit.json: layers[Mod] holds pr '#1234'",
+                  "pkg/lean-audit.json: shape.frozen[Lib.G] holds declaration 'Lib.Gone.G'",
+                  "other/lean-audit.json: compile_time holds path 'pkg/Gone.lean'"):
+        assert named in said
+    for fix in ("never rewords a lock", "reword each in the lock itself", "keep the sentence", "public_boundary.toml",
+                "[[residue]]", "`until`"):
+        assert fix in said
+    many = [("pkg/lean-audit.json", "exempt", f"Mod.M{i}", "pr", f"#{i}") for i in range(PL.SHOWN + 3)]
+    said = PL.refusal(many)
+    assert f"{PL.SHOWN + 3} place(s)" in said and "; and 3 more" in said
+    assert f"'#{PL.SHOWN - 1}'" in said and f"'#{PL.SHOWN}'" not in said
+
+
+def test_a_lock_reworded_at_source_has_nothing_to_refuse() -> None:
+    """The fix the refusal names, end to end on one lock: the reason loses its citation and the name of what the export
+    leaves out, keeps its sentence, and `leftovers` finds nothing."""
+    def find(text: str):
+        return [("pr", t) for t in text.split() if t.startswith("#")] + \
+            [("declaration", n) for n in PL.names(text) if n.startswith("Lib.Gone")]
+
+    lock = {"format": 3, "layers": {"Mod": {"imports": ["Mathlib"], "why": "trusted text, as Lib.Gone.G reads it (see #1234 )"}}}
+    assert [(kind, text) for *_, kind, text in PL.leftovers(lock, find)] == [("pr", "#1234"), ("declaration", "Lib.Gone.G")]
+    lock["layers"]["Mod"]["why"] = "trusted text, as the guarantee over it reads it"
+    assert PL.leftovers(lock, find) == []

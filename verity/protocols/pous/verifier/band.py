@@ -160,3 +160,6 @@ def check_deployment(params, deadline_ns: int, rtt_allowance_ns: int = 0) -> Non
         raise ValueError(f"an effective D of {effective_rounds(params, deadline_ns, rtt_allowance_ns)} calls exceeds the "
                          f"band's in-degree d = {d}: past the cliff, the audit accepts a holding with every "
                          f"{d + 1}-th block dropped")
+
+
+__all__ = ["SECURE_FIRST", "BandParams", "reference"]

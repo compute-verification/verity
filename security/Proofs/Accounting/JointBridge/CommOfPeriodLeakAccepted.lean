@@ -2,7 +2,6 @@ module
 
 public import Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted
 public import Definitions.NetworkCertifier.Guarantees.Period
-public import Definitions.Accounting.JointBridge.H200
 public import Definitions.Accounting.NetWitness
 public import Proofs.NetworkCertifier.Period
 import Mathlib.Algebra.Order.Floor.Extended
@@ -153,12 +152,12 @@ open NetWitness in
 network audit accepts on every coin while the network certifier's claim fails on it, so the audit's guarantee fails at
 error `½`. -/
 theorem CommOfPeriodLeakAccepted_nontrivial :
-    ¬ acceptAllNet.Sound ⟨0, 1, 0, 0, 0⟩ (Accounting.h200S8Price 0 0) .network (1 / 2) := by
+    ¬ acceptAllNet.Sound ⟨0, 1, 0, 0, 0⟩ (fun _ => 1) .network (1 / 2) := by
   intro h
   have h1 := h fun _ => ()
   have hpr : Pouw.pr (fun x : Unit =>
       acceptAllNet.accepts .network (Function.update (fun _ => ()) (acceptAllNet.own .network) x) ∧
-        ¬ acceptAllNet.Holds ⟨0, 1, 0, 0, 0⟩ (Accounting.h200S8Price 0 0) .network
+        ¬ acceptAllNet.Holds ⟨0, 1, 0, 0, 0⟩ (fun _ => 1) .network
           (Function.update (fun _ => ()) (acceptAllNet.own .network) x)) = 1 :=
     Pouw.pr_eq_one fun _ => ⟨trivial, fun h => h⟩
   rw [hpr] at h1

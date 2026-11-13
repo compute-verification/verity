@@ -12,7 +12,7 @@
 #    evidence (POUW_STATEMENTS, POUW_LIVE, files on this node), its REFERENCE line credit's own verdict;
 #  - sampled proofs v2's: v2_case.py on the kept window, with its own Lean answer;
 #  - every kept piece directory pieces/NAME/ holding a case (case.json, or NAME.case.json as the wipe writes it) beside its
-#    own answer.json (the wipe's, PoUS's once served_case.sh has written its case), entered as kept, onsite only.
+#    own answer.json (the wipe's), entered as kept, onsite only.
 # composite.py then composes and checks each product; $OUT/remote and $OUT/onsite get only its public output (verdict
 # lines, commitments, params digests), and $OUT/kept_composite.txt every line printed here.
 set -uo pipefail

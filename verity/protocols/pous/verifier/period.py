@@ -247,12 +247,8 @@ class Run:
         return Fraction(self.answer["public"]["eps"]) if self.verdict == "accept" else Fraction(0)
 
 
-Period = Run
-"""`Run`, under the name some of its readers still use; it goes when none does."""
-
-
 @dataclass(frozen=True)
-class Store:
+class EncodedStore:
     """What a node's setup leaves: the point, what setup published, `C*` (which the prover keeps), the memory challenger's
     table of it, and the setup protocol's case."""
 
@@ -272,7 +268,7 @@ class Store:
                                                  sort_keys=True))
 
     @classmethod
-    def load(cls, directory: str | os.PathLike) -> Store:
+    def load(cls, directory: str | os.PathLike) -> EncodedStore:
         d = Path(directory)
         doc = json.loads((d / "store.json").read_text())
         point, data = point_of(doc["point"]), (d / "c-star.bin").read_bytes()
@@ -302,7 +298,7 @@ def encode(q: P2.P2Params, salt: bytes, w: bytes, workers: int = 1) -> list[list
     return out
 
 
-def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, workers: int = 1) -> Store:
+def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, workers: int = 1) -> EncodedStore:
     """Setup on the node (module docstring, steps 1 to 3): `W` is `store` padded to the point's payload, the salt sampled
     from the verifier's `coins` after the commitment, `C*` encoded in `workers` processes, and the public-encoder check of
     it (`setup.verifier_key_from_encoding`), which raises `ValueError` on a setup it refuses."""
@@ -316,14 +312,14 @@ def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, wor
     encoded = encode(q, salt, w, workers)
     root = setup.verifier_key_from_encoding(q, None, commitment, salt, encoded).root
     blocks = tuple(b for seg in encoded for b in seg)
-    return Store(point, R.Setup(q.blocks, commitment, root, salt), blocks, b"".join(mc.block_digest(b) for b in blocks),
-                 setup_case(q, commitment, salt, encoded))
+    return EncodedStore(point, R.Setup(q.blocks, commitment, root, salt), blocks,
+                        b"".join(mc.block_digest(b) for b in blocks), setup_case(q, commitment, salt, encoded))
 
 
-def audit(node: str, held: Store, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
+def audit(node: str, held: EncodedStore, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
           trusted: Collection[bytes] | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
           protocol: str = PROTOCOL, prover: Prover = honest, clock: Callable[[], int] = time.perf_counter_ns,
-          party: Side | None = None) -> Period:
+          party: Side | None = None) -> Run:
     """One period's audit of the store `held` on `node` (module docstring, steps 4 and 5): the memory challenger's session
     under the id the auditor designates from `coins` and the setup's root, then the run's check and answer, the tie on
     the setup case `held` keeps, which the run's case carries. With `party`, the memory challenger is a party of its own
@@ -354,7 +350,7 @@ def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = Non
         point: R.Point | None = None, trusted: Collection[bytes] | None = None,
         schemes: Mapping[str, mc.Verify] = mc.SCHEMES, protocol: str = PROTOCOL, prover: Prover = honest,
         clock: Callable[[], int] = time.perf_counter_ns, workers: int = 1,
-        party: Side | None = None) -> Period:
+        party: Side | None = None) -> Run:
     """The period's PoUS on `node`, setup and audit (module docstring): `store` is what the node keeps, `coins` the
     verifier's and the memory challenger's live secret for the period, `signer` the memory challenger's key and `log` its
     session log. `trusted` is the verifier's list of memory-challenger keys (by default the signer's), `schemes` the
@@ -542,6 +538,7 @@ SETUP_WORKERS = 32
 key in (`challenger`, from `challenger_party.main`), at most, within the CPUs each may run on."""
 
 
-__all__ = ["LEDGER_SCHEMAS", "PROTOCOL", "SETUP_WORKERS", "Period", "Prover", "Run", "SetupInputs", "Store", "answer",
-           "audit", "case", "certificate", "certify", "challenger", "cite", "cited", "encode", "gaps", "honest",
-           "point_for", "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs", "setup_store", "tie"]
+__all__ = ["C0", "K", "LEDGER_SCHEMAS", "LIMIT_NS", "PROTOCOL", "SESSION_DOMAIN", "SETUP_WORKERS", "W", "EncodedStore",
+           "Prover", "Run", "SetupInputs", "answer", "audit", "case", "certificate", "certify", "challenger", "cite",
+           "cited", "decided_by", "encode", "gaps", "honest", "point_for", "point_json", "point_of", "profile",
+           "records", "run", "serve", "setup_case", "setup_inputs", "setup_store", "tie"]

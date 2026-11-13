@@ -35,7 +35,7 @@ root is one of them (`getDef`'s index), a composite without parameters (`decode`
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy Desc Desc.types Desc.callees
-  Desc.ddefs liftV at_ paramsOf buildNode natJ? from Flock.Program
+  Desc.ddefs liftV at_ paramsOf buildNode natJ? from Circuits.Program
 
 theorem ex_throw_bind {α β : Type} {e : String} {f : α → Flock.V β} {b : β}
     (h : (throw e >>= f : Flock.V β) = .ok b) : False := by

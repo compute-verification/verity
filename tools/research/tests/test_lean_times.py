@@ -76,7 +76,7 @@ def _step(step, status="passed", seconds=60.0, ended="2026-10-28T11:00:00Z", **k
 def test_a_checks_lean_steps_are_tasks_lean_audit_under_each_package_it_audited_and_lean_suites_one_per_suite():
     meta = {"kind": "check/v1", "steps": [
         _step("pytest", seconds=900.0), _step("lean-audit", seconds=1800.0), _step("lean-suites", "failed", 1200.0),
-        _step("lean-build", "skipped"), _step("lean-agreement", seconds=900.0), _step("lean-changed", "stopped", None),
+        _step("lean-build", "skipped"), _step("lean-agreement", seconds=900.0), _step("lean-build", "stopped", None),
         _step("lean-audit:verity/protocols/flock/verifier", seconds=120.0, cache={"hit": True}), "not a step"],
         "reuse": {"steps": {"lean-audit": {"reran": ["security", "security/Proofs"], "reused": ["X"]},
                             "lean-suites": {"reran": [{"suite": "verity/protocols/flock/prover", "seconds": 1100.0, "forced_by": []},
@@ -86,7 +86,7 @@ def test_a_checks_lean_steps_are_tasks_lean_audit_under_each_package_it_audited_
         ("lean-audit", ["security", "security/Proofs"], 30.0, "passed"),
         ("lean-suites", ["verity/protocols/flock/prover"], 1100 / 60, "failed"),
         ("lean-suites", ["benchmarks/pouw"], None, "unfinished"),
-        ("lean-changed", [L.NONE], None, "unfinished"),
+        ("lean-build", [L.NONE], None, "unfinished"),
         ("lean-audit", ["verity/protocols/flock/verifier"], 2.0, "passed")]
     assert {t["node"] for t in got} == {"vy-nebius-cpu-1"} and [t["cached"] for t in got] == [False] * 4 + [True]
 

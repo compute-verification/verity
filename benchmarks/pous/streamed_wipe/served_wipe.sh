@@ -21,8 +21,8 @@
 #   WIPE_READS       the reads the gate's verb runs, which the leg holds the session to (5500)
 #   WIPE_NODE        the wiped server's id (this host's name, as served_verdicts.py record's --node defaults to)
 # Further arguments go to demo.sh (e.g. --no-lean). The Lean judge (wipe-protocol) is built before the card is checked, in a
-# scratch copy of its Lean packages (WIPE_PROTOCOL_EXE names one built already), never in this tree's .lake, which
-# served_verdicts.sh's Lean builds write meanwhile. DIR gets demo.sh's outputs (env.txt, gpu.txt, period.json, wipe.json,
+# scratch copy of verity/, which holds every package it requires (WIPE_PROTOCOL_EXE names one built already), never in
+# this tree's .lake, which served_verdicts.sh's Lean builds write meanwhile. DIR gets demo.sh's outputs (env.txt, gpu.txt, period.json, wipe.json,
 # summary.json, which names the program that decided and its host under `decided_by`, the SHA-512 of the challenger key
 # the session was signed under, `key_sha512`, and whether it is the pinned one, `key_pinned`), lake-build.log,
 # answer.json (wipe.json's answer, whatever its verdict) and served.json (the serve dir and window the wipe precedes,
@@ -62,7 +62,7 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the pinned key,
     S=$(mktemp -d)
     trap 'rm -rf "$S"' EXIT
     L=verity/protocols/pous/device/lean
-    tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ "$L" verity/difftest/lean verity/protocols/interface verity/protocols/flock/verifier verity/commitments/attest/lean verity/commitments/lms/lean verity/commitments/randomness | tar -C "$S" -x
+    tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ verity | tar -C "$S" -x
     export PATH="$HOME/.elan/bin:$PATH"
     command -v lake >/dev/null 2>&1 || bash "$ROOT/tools/verity/lean/setup.sh" "$S/$L" > "$DIR/lake-setup.log" 2>&1
     (cd "$S/$L" && lake build wipe-protocol) > "$DIR/lake-build.log" 2>&1 \

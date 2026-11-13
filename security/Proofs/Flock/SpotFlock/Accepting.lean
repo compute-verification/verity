@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.Honest
 public import Proofs.Flock.SpotFlock.KS
+import Mathlib.Analysis.Complex.ExponentialBounds
 
 /-!
 # SPOT[Flock] meets `SampledKSTwo`'s premises, at a knowledge error below `1`, and accepts where Flock does
@@ -21,20 +22,20 @@ at every set of the auditor's copies `h`:
   `1 + 2^{−j}`, and `c² = 2^{2^{1−j}}` at most `1 + 2^{1−j}` (`2^t ≤ 1 + t` on `[0, 1]`);
 * `κ_le`: the compiled two-stage verifier's
   `κ_δ = c²(δ + κ_s) + (2k_out/K_out + e^{−k_out/8}) + c·(2k_in/K_in + e^{−k_in/8})`, `κ_s` the most any checked
-  unit's `κ_F` at its template's `N₀` is, is at most `(1 + 2^{−9})·δ + 2^{−125}` at every statement and every `δ ≥ 0`,
-  with `K = 2^128·k` and both waits' `k ≥ 2^j` at whatever counts they wait for, the outer the footprint bits and the
+  unit's `κ_F` at its template's `N₀` is, is at most `(1 + 2^{−9})·δ + 2^{−182}` at every statement and every `δ ≥ 0`,
+  with `K = 2^192·k` and both waits' `k ≥ 2^j` at whatever counts they wait for, the outer the footprint bits and the
   inner the replay cap (`κ_le_of`). The slack costs `δ` the factor `c² ≤ 1 + 2^{−9}`, never an additive term that
   would swamp a small `δ`. So `κ_δ < 1` at every `δ ≤ 1/2` (`κ_lt_one`);
 * `accepting`: A3 at the coins' bytes (`callsUniform`), the code's facts, the replay cap (`replayCap`), the sessions'
   runs one way (`sessionRunsTo`) and each unit's session in its template's scope (`sessionsIn_code`) hold; with the
-  sessions' openings (`SessionOpensTwo`), `CompiledTwo.KS` holds there, at `κ_δ ≤ (1 + 2^{−9})·δ + 2^{−125}`; and a
+  sessions' openings (`SessionOpensTwo`), `CompiledTwo.KS` holds there, at `κ_δ ≤ (1 + 2^{−9})·δ + 2^{−182}`; and a
   prover that plays a Flock prover at each template's session statement is accepted with positive probability wherever
-  Flock's masked verifier accepts every one at a round-2 message the check passes (`accepts_seq`).
+  Flock's masked verifier accepts every one at a session statements' message the check passes (`accepts_seq`).
 
 So the premises hold together at a verifier whose acceptance is Flock's at its session statements. A witness that builds
 the instance needs a `Held`, whose `xS₀_ok` needs each template's masked Flock statement's bytes decided in Flock's
 masked scope, and for a run accepted with positive probability, an accepting run of Flock's masked verifier at each
-template's statement of a round-2 message the check passes.
+template's statement of a session statements' message the check passes.
 -/
 
 @[expose] public section
@@ -168,27 +169,27 @@ theorem slack_sq_le_one_add : Claims.Sampling.slack ^ 2 ≤ 1 + 2 * 2⁻¹ ^ sla
   rw [hsq, ← ej]
   simpa only [one_add_one_eq_two, mul_one] using h
 
-/-- **`e^{−k/8} ≤ 2^{−128}` at `k ≥ 2^10`**: `e ≥ 2`. -/
-theorem exp_neg_le {k : ℕ} (hk : 2 ^ 10 ≤ k) : Real.exp (-(k : ℝ) / 8) ≤ 2⁻¹ ^ 128 := by
+/-- **`e^{−k/8} ≤ 2^{−184}` at `k ≥ 2^10`**: `e > 2.718`, and `(1000/2718)^128 ≤ 2^{−184}`. -/
+theorem exp_neg_le {k : ℕ} (hk : 2 ^ 10 ≤ k) : Real.exp (-(k : ℝ) / 8) ≤ 2⁻¹ ^ 184 := by
   norm_num at hk
   have hk' : (1024 : ℝ) ≤ k := by exact_mod_cast hk
   have h1 : Real.exp (-(k : ℝ) / 8) ≤ Real.exp ((128 : ℕ) * (-1)) := by
     rw [Real.exp_le_exp]
     push_cast
     linarith
-  have h2 : Real.exp (-1) ≤ 2⁻¹ := by
+  have h2 : Real.exp (-1) ≤ (2718 / 1000)⁻¹ := by
     rw [Real.exp_neg]
-    exact inv_anti₀ (by norm_num) (by linarith [Real.add_one_le_exp (1 : ℝ)])
+    exact inv_anti₀ (by norm_num) (by linarith [Real.exp_one_gt_d9])
   rw [Real.exp_nat_mul] at h1
-  exact h1.trans (pow_le_pow_left₀ (Real.exp_pos _).le h2 128)
+  exact h1.trans ((pow_le_pow_left₀ (Real.exp_pos _).le h2 128).trans (by norm_num))
 
-/-- **`κ_δ ≤ (1 + 2^{−9})·δ + 2^{−125}`** at a compiled sampled verifier whose sessions' knowledge error is at most
+/-- **`κ_δ ≤ (1 + 2^{−9})·δ + 2^{−182}`** at a compiled sampled verifier whose sessions' knowledge error is at most
 `2^{−190}`, at every `δ ≥ 0`: `c²(δ + κ_s) + (2k_out/K_out + e^{−k_out/8}) + c·(2k_in/K_in + e^{−k_in/8})` at
-`c² ≤ 1 + 2^{−9}`, `c ≤ 1 + 2^{−10}`, `2k/K = 2^{−127}` and `e^{−k/8} ≤ 2^{−128}`, each wait waiting for
+`c² ≤ 1 + 2^{−9}`, `c ≤ 1 + 2^{−10}`, `2k/K = 2^{−191}` and `e^{−k/8} ≤ 2^{−184}`, each wait waiting for
 `k = 2^j·(2n + 1) ≥ 2^j` accepted runs (`j = slackExp`) at whatever count `n` it has. The slack multiplies `δ`; what
-it adds is at most `2^{−125}`. -/
+it adds is at most `2^{−182}`. -/
 theorem κ_le_of {Coin : Type} {A : Claims.SamplingGeneric.Arg Coin} (L : Claims.SamplingGeneric.Compiled Coin A)
-    (x : Msg) {δ : ℝ} (hδ0 : 0 ≤ δ) (hs : L.κs x ≤ 2⁻¹ ^ 190) : L.κ δ x ≤ (1 + 2⁻¹ ^ 9) * δ + 2⁻¹ ^ 125 := by
+    (x : Msg) {δ : ℝ} (hδ0 : 0 ≤ δ) (hs : L.κs x ≤ 2⁻¹ ^ 190) : L.κ δ x ≤ (1 + 2⁻¹ ^ 9) * δ + 2⁻¹ ^ 182 := by
   have hj : (2 : ℝ)⁻¹ ^ slackExp = 2⁻¹ ^ 10 := by rw [slackExp]
   have hc := slack_le_one_add
   have hc2 := slack_sq_le_one_add
@@ -201,13 +202,13 @@ theorem κ_le_of {Coin : Type} {A : Claims.SamplingGeneric.Arg Coin} (L : Claims
     Nat.le_mul_of_pos_right _ (by omega)
   have hkO : 2 ^ 10 ≤ L.kOut x := hk _
   have hkI : 2 ^ 10 ≤ L.kIn x := hk _
-  have hO : 2 * (L.kOut x : ℝ) / L.capOut x = 2⁻¹ ^ 127 := by
+  have hO : 2 * (L.kOut x : ℝ) / L.capOut x = 2⁻¹ ^ 191 := by
     have h0 : (0 : ℝ) < L.kOut x := by exact_mod_cast lt_of_lt_of_le (by norm_num) hkO
     rw [Claims.SamplingGeneric.Compiled.capOut]
     push_cast
     rw [div_eq_iff (mul_pos (by positivity) h0).ne']
     ring
-  have hI : 2 * (L.kIn x : ℝ) / L.capIn x = 2⁻¹ ^ 127 := by
+  have hI : 2 * (L.kIn x : ℝ) / L.capIn x = 2⁻¹ ^ 191 := by
     have h0 : (0 : ℝ) < L.kIn x := by exact_mod_cast lt_of_lt_of_le (by norm_num) hkI
     rw [Claims.SamplingGeneric.Compiled.capIn]
     push_cast
@@ -219,22 +220,22 @@ theorem κ_le_of {Coin : Type} {A : Claims.SamplingGeneric.Arg Coin} (L : Claims
   rw [hO, hI]
   have hA : Claims.Sampling.slack ^ 2 * (δ + L.κs x) ≤ (1 + 2⁻¹ ^ 9) * (δ + 2⁻¹ ^ 190) :=
     mul_le_mul hc2' (by linarith) (by linarith) (by positivity)
-  have hB : Claims.Sampling.slack * (2⁻¹ ^ 127 + Real.exp (-(L.kIn x : ℝ) / 8)) ≤
-      (1 + 2⁻¹ ^ 10) * (2⁻¹ ^ 127 + 2⁻¹ ^ 128) :=
+  have hB : Claims.Sampling.slack * (2⁻¹ ^ 191 + Real.exp (-(L.kIn x : ℝ) / 8)) ≤
+      (1 + 2⁻¹ ^ 10) * (2⁻¹ ^ 191 + 2⁻¹ ^ 184) :=
     mul_le_mul hc (by linarith) (by positivity) (by positivity)
   have hC : (1 + (2 : ℝ)⁻¹ ^ 9) * (δ + 2⁻¹ ^ 190) = (1 + 2⁻¹ ^ 9) * δ + (1 + 2⁻¹ ^ 9) * 2⁻¹ ^ 190 := by ring
-  have hD : (1 + (2 : ℝ)⁻¹ ^ 9) * 2⁻¹ ^ 190 + (2⁻¹ ^ 127 + 2⁻¹ ^ 128) + (1 + 2⁻¹ ^ 10) * (2⁻¹ ^ 127 + 2⁻¹ ^ 128) ≤
-      2⁻¹ ^ 125 := by
+  have hD : (1 + (2 : ℝ)⁻¹ ^ 9) * 2⁻¹ ^ 190 + (2⁻¹ ^ 191 + 2⁻¹ ^ 184) + (1 + 2⁻¹ ^ 10) * (2⁻¹ ^ 191 + 2⁻¹ ^ 184) ≤
+      2⁻¹ ^ 182 := by
     norm_num
   linarith
 
-/-- **`κ_δ ≤ (1 + 2^{−9})·δ + 2^{−125}`** at SPOT[Flock]'s compiled two-stage verifier, at Flock's masked record,
+/-- **`κ_δ ≤ (1 + 2^{−9})·δ + 2^{−182}`** at SPOT[Flock]'s compiled two-stage verifier, at Flock's masked record,
 every statement and every `δ ≥ 0`: each checked unit's sessions' error, at its template's `N₀`, is at most
 `2^{−190}` (`κF_le`), and its waits, at the footprint bits and at the replay cap (`SpotFlock.cap`), each wait for at
 least `2^j` accepted runs (`κ_le_of`). -/
 theorem κ_le (x : Msg) {δ : ℝ} (hδ0 : 0 ≤ δ) :
     (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h)
-      (rs h) (cap h)).κ δ x ≤ (1 + 2⁻¹ ^ 9) * δ + 2⁻¹ ^ 125 :=
+      (rs h) (cap h)).κ δ x ≤ (1 + 2⁻¹ ^ 9) * δ + 2⁻¹ ^ 182 :=
   κ_le_of _ x hδ0 (Claims.SamplingGeneric.maxBelow_le (by positivity) fun u _ => κF_le h _ x (templateOf h.ms u))
 
 /-- **`κ_δ < 1` at every `δ ≤ 1/2`**: the bound `CompiledTwo.KS` gives SPOT[Flock] is below `1`. -/
@@ -243,7 +244,7 @@ theorem κ_lt_one (x : Msg) {δ : ℝ} (hδ0 : 0 ≤ δ) (hδ : δ ≤ 1 / 2) :
       (rs h) (cap h)).κ δ x < 1 := by
   have := κ_le h x hδ0
   have h1 : (1 + (2 : ℝ)⁻¹ ^ 9) * δ ≤ (1 + 2⁻¹ ^ 9) * (1 / 2) := mul_le_mul_of_nonneg_left hδ (by positivity)
-  have h2 : (1 + (2 : ℝ)⁻¹ ^ 9) * (1 / 2) + 2⁻¹ ^ 125 < 1 := by norm_num
+  have h2 : (1 + (2 : ℝ)⁻¹ ^ 9) * (1 / 2) + 2⁻¹ ^ 182 < 1 := by norm_num
   linarith
 
 /-! ## The premises together -/
@@ -252,11 +253,11 @@ theorem κ_lt_one (x : Msg) {δ : ℝ} (hδ0 : 0 ≤ δ) (hδ : δ ≤ 1 / 2) :
 set of the auditor's copies `h`: A3 at the coins' bytes (`callsUniform`, at both stages), the code's facts
 (`RegMatchesTwo`, `Code.RefusesTwo`, `Code.ReplayCap` at the replay cap `SpotFlock.cap`, `Code.InteriorFixed`), the
 sessions' runs one way (an accepted run at coins that check a unit is Flock's masked verifier accepting the unit's
-template's session at its round-2 statement) and their scope at each unit's `N₀` (`SessionsIn`); with the sessions'
-openings (`SessionOpensTwo`), `CompiledTwo.KS` at Flock's masked record and SHA-512, at
-`κ_δ ≤ (1 + 2^{−9})·δ + 2^{−125}` at every statement and `δ ≥ 0`; and a prover is accepted on a positive share of the
-coins wherever Flock's masked verifier accepts one at each template's session statement of a round-2 message the check
-passes (`accepts_seq`). -/
+template's session at the statement the run states for it) and their scope at each unit's `N₀` (`SessionsIn`); with the
+sessions' openings (`SessionOpensTwo`), `CompiledTwo.KS` at Flock's masked record and SHA-512, at `κ_δ ≤ (1 + 2^{−9})·δ
++ 2^{−182}` at every statement and `δ ≥ 0`; and a prover is accepted on a positive share of the coins wherever Flock's
+masked verifier accepts one at each template's session statement of a session statements' message the check passes
+(`accepts_seq`). -/
 theorem accepting
     (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
       (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots) :
@@ -271,7 +272,7 @@ theorem accepting
         (rs h) (cap h)).KS FlockDeploy.sha512 ∧
       (∀ x δ, 0 ≤ δ →
         (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h)
-          (rs h) (cap h)).κ δ x ≤ (1 + 2⁻¹ ^ 9) * δ + 2⁻¹ ^ 125) ∧
+          (rs h) (cap h)).κ δ x ≤ (1 + 2⁻¹ ^ 9) * δ + 2⁻¹ ^ 182) ∧
       ∀ x m₀ m₁ m₂ c₀ c₁, stmtOk h x m₁ m₂ c₀ c₁ = true →
         ∀ (Ω : Type) (P' : ℕ → Prover Ω) (ω : ℕ → Ω)
           (r' : ∀ t, Fin ((FlockDeploy.V true).k (stmtAt h m₂ t)) → FlockDeploy.Coin),

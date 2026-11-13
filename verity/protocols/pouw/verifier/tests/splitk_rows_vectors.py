@@ -2,8 +2,8 @@
 trees that commit ``a/<K>@<s>`` and ``b/<K>`` are gated leaf by leaf: ``uv run python
 verity/protocols/pouw/verifier/tests/splitk_rows_vectors.py`` rewrites ``tests/vectors/splitk_rows.json``, and with
 ``--words DIR`` also writes each case's words to ``DIR/<case>.u16`` (its leaves in order, each its words, u16
-little-endian), which the 256 KiB cap keeps out of the tree. A change to the JSON is a change to the chunk-row layout and
-needs a reason in the PR.
+little-endian), which the 256 KiB limit on a tracked file keeps out of the tree. A change to the JSON is a change to the
+chunk-row layout and needs a reason in the PR.
 
 Inputs are derived, not stored: case c's rows are the first ``rows (K + 4)`` bytes of SHAKE256(`LABEL`, NUL, c), row r
 the r-th K + 4 of them, its K int8 codes and then its f32 scale little-endian, whose bits are set into [2^-7, 2^-6)
@@ -23,9 +23,9 @@ import struct
 import sys
 from pathlib import Path
 
+from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity.protocols.pouw.verifier import audit
 from verity.protocols.pouw.verifier import weights as Wt
-from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity.protocols.spot.verifier.one_stage import registered as G
 
 OUT = Path(__file__).with_name("vectors") / "splitk_rows.json"
