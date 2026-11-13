@@ -121232,3 +121232,48 @@ In plain words: the records audit you asked for never reached its build on vy-ne
 **To post.** For infra, if you think it worth a line: on vy-nebius-2 a records run waited from 04:30Z to 05:02Z on the artifact store's lock (`lean_audit.py` `take`) while holding a check slot and a Lean slot; the same step took 5 s on vy-nebius-cpu-11. Run r20261113-040212-1843 has the stall record.
 
 **Not established.** The records audit at any head of mine. Pushed head: `a7cacd92709df11273ea65e682bed82903cc7d39`; nothing is left unpushed.
+
+## RUNCOINS, Fri 13 Nov 05:05Z: the run's `draw` IS the first stage's accepted sample at every step (true as you worded it); `firstSample` is in try `r20261113-050041-3040`; nothing new compiled since 04:29Z
+
+**Compiled** [run]: `RunsAs.lean` and the eleven files under it at `d3cb96c006` (`r20261113-035548-49aa`); `RunsAs/Parsed.lean` at `f079d353a5` (`r20261113-040015-a535`, probe clean). Not compiled: `RunsAs/FirstSample.lean` and `answer_draw` (pushed at `d4e1d1cf87`, in `r20261113-050041-3040`).
+
+**In plain words.** You asked whether the draw a run of record lists is the sample its first stage accepted, the one the second stage is drawn over. I read the run step by step: it is, with nothing in between. The run selects once, keeps the select's draw object, hands that object's proved units to the second stage, and lists that same object under `draw`; an accepted run has no closure map, so the proved units are exactly the select's units. I wrote that as one theorem against `Run.run`'s steps only, with no file of TWOLEG's, and sent one try. One thing stays TWOLEG's to match: the law the form computes reads the parameters' replay block, query and counts, and the run reads the interior's; the input map ties them.
+
+**A. The two runs** [run: `research fetch`, each run's `stdout.log`, quoted].
+- `r20261113-035548-49aa`, at `d3cb96c006` (`cursor/proofs-runcoins-2d88`), try of `security/Proofs/Flock/SpotFlock/RunsAs.lean`, ended 04:29:05Z. Compiled, word for word: `✔ … Built Proofs.Flock.SpotFlock.RunsAs.Statements`, `✔ … RunsAs.Round2`, `✔ … RunsAs.Statement`, `✔ … RunsAs.RoundTwoOf`, `⚠ … RunsAs.Released`, `⚠ … RunsAs.Outcome`, `⚠ … RunsAs.Within`, `⚠ … RunsAs.Steps (35s)`, `⚠ … RunsAs.Coins`, `⚠ … RunsAs.Proved`, `⚠ … RunsAs.Top`, `✔ … RunsAs.Played` (⚠ = built with warnings); `lean-try: security/Proofs/Flock/SpotFlock/RunsAs.lean: lean exit 0 in 335 s`. Probe line: `lean-try: security/Proofs/Flock/SpotFlock/RunsAs.lean: axiom probe: no theorems in it`. So the aggregator's probe covers nothing: these files compiled, but no probe has listed their theorems' axioms at this head. A try of `Within.lean` for its probe is queued behind the one below.
+- `r20261113-040015-a535`, at `f079d353a5` (`cursor/proofs-runcoins-accepted-5c1e`), try of `RunsAs/Parsed.lean`. Compiled: `✔ … Built Proofs.Flock.SpotFlock.RunsAs.Statements`, `✔ … RunsAs.Statement`, `✔ … RunsAs.OfCheck`; `'SpotFlock.RunsAs.paramsOfJson_twoStage' depends on axioms: [propext, Classical.choice, Quot.sound]`; `'SpotFlock.RunsAs.acceptedTwo_of_parsed' depends on axioms: [propext, Classical.choice, Quot.sound]`; `lean-try: security/Proofs/Flock/SpotFlock/RunsAs/Parsed.lean: lean exit 0 in 227 s`; probe line: `lean-try: security/Proofs/Flock/SpotFlock/RunsAs/Parsed.lean: axiom probe: none of its 2 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`.
+- Heads: `cursor/proofs-runcoins-2d88` = `d4e1d1cf87` (pushed; `d3cb96c006` plus `answer_draw` and `FirstSample.lean`); `cursor/proofs-runcoins-accepted-5c1e` = `f079d353a5` (pushed, unchanged). Nothing unpushed.
+- Theorems the join reads [read]: `SpotFlock.RunsAs.runAcceptsPlay` (`Played.lean`) and `spotRunAcceptsPlay` (`Top.lean`); `accepted_steps` (`Steps.lean`); `acceptedTwo_of_check` (`OfCheck.lean`); `paramsOfJson_twoStage` and `acceptedTwo_of_parsed` (`Parsed.lean`); `reads_within` (`Within.lean`, see C); and, once `3040` compiles, `firstSample`, `answer_draw` and `selectSecond_law`.
+
+**B. The first-sample lemma.**
+- Reading, before building [read: `Spot/Run.lean` at `d3cb96c006` and at TWOLEG's `03072eb90b`, the same steps in both]. `run` binds `let (draw, _, read) ← Select.select (← Select.resolve i.rule …) … i.closure i.source`, sets `drawn := Draw.proved draw`, calls `secondStage i (drawn.map Int.toNat)`, which under `.twoStage _ _ k` with an interior `it` is `interiorSteps i it k sample`, which calls `Select.selectSecond sample ns ks it.source` with `ns ← Select.replayCells it.replay v.query`, `ks ← k.over (← Select.templateIds v.query) ns` and `v = it.params.verifier`; the answer is `Json.mkObj [("receipt", …), ("draw", draw), …]` with that same `draw`. No step rebinds `draw` between the select and the answer. So the statement is true as worded; no finding.
+- Exact form [derived; written, in `3040`]. `RunsAs/FirstSample.lean`, for any `form`:
+  ~~~lean
+  theorem firstSample (ha : AcceptedTwo i it j) :
+      ∃ grain replay k resolved workTable rest read ns ids ks draw₂ read₂,
+        i.rule = .twoStage grain replay k ∧ i.closure = none ∧
+        Spot.Select.resolve i.rule p q = .ok resolved ∧ i.rule.tableOver p q i.params.verifier.workTable = .ok workTable ∧
+        Spot.Select.select resolved p q workTable none i.source = .ok (Spot.getD j "draw", rest, read) ∧
+        (Spot.Draw.proved (Spot.getD j "draw")).map Int.toNat = rest ∧
+        Spot.Select.replayCells it.replay it.params.verifier.query = .ok ns ∧
+        Spot.Select.templateIds it.params.verifier.query = .ok ids ∧ k.over ids ns = .ok ks ∧
+        Spot.Select.selectSecond ((Spot.Draw.proved (Spot.getD j "draw")).map Int.toNat) ns ks it.source = .ok (draw₂, read₂)
+  theorem selectSecond_law (h : Spot.Select.selectSecond sample ns ks src = .ok (d, r)) :
+      Spot.Draw.drawFirstRead (Spot.Select.secondLaw sample ns ks) (sample.size * ns.toList.sum) src = .ok (d, r)
+  ~~~
+  (`p`, `q` = `i.params.verifier.program`, `.query`.) In words: the answer's `draw` is the object the first stage's select returned on the source; its proved units, as naturals, are the select's units (the sample); the second stage's `selectSecond` ran on exactly them; and `selectSecond` draws under `Select.secondLaw` of that sample, the cells and the counts. `answer_draw` (in `Steps.lean`, mine) is the step that the answer's `draw` is the select's draw; `rest` = proved units is `proved_select` with `resolve_ne_all`.
+- What it leaves to TWOLEG [derived]: `secondLawOf p run` reads `p.replay`, `q` and `p`'s counts; the run reads `it.replay`, `it.params.verifier.query` and `i.rule`'s `k`. The join needs `inputOf`'s map to send those to these; `firstSample` then gives `secondLawOf p run = .ok (Select.secondLaw ((Draw.proved (getD run "draw")).map Int.toNat) ns ks)` with the very `ns`, `ks` the run used.
+
+**C. The two smaller items.**
+- `coinsCode` none on an accepted run [read: CUT's `CutFirst.lean` at `8ce13e23d3`; derived]. `Run.coinsCode` exists only on TWOLEG's tree, so not on my branch. For the first stage it is two lines over CUT's `run_coins` and `refused_symbol`: `rcases run_coins i form j h with ⟨s, c, rfl⟩ | hc; · rw [refused_symbol] at hs; cases hs; · exact hc` (with `hs : getD j "symbol" = .str "accept"`), giving `∃ read, coinsCode i.key i.main i.coins i.record i.params.verifier.windowRoot i.family (i.source.extract 0 read) = none`. The full form, both stages and `read` tied to the select's and `selectSecond`'s `read`, is what `accepted_steps` says on the joined tree: its two `¬(!coinsHold …)` conjuncts become `coinsCode … = none` when I restate `Steps.lean` over TWOLEG's `run` at the join, which `Steps.lean` needs anyway. I write it there unless you want the two-liner sooner in CUT's file.
+- `ReadsWithin` [run: `research inspect`; read]. There is one definition, ACCEPTS's `ReadsWithin` (`SampledTwo/OfRun.lean`); mine, `reads_within`, is a theorem whose statement is its body, with no closure premise. Both proofs compiled, 17 s apart by end time: ACCEPTS's `r20261113-042027-7fb2` ended 04:28:48Z rc 0 (its log I did not read), mine `49aa` at 04:29:05Z. By ACCEPTS's rule ACCEPTS's `readsWithin` stays; HELDOF reads neither (its tree holds my `Within.lean` only through my aggregator). I delete `RunsAs/Within.lean` in my next commit unless you rule otherwise.
+
+**Running** [run]: `r20261113-050041-3040` on vy-nebius-2, try of `FirstSample.lean` at `d4e1d1cf87`, on Lean slot build/9 since 05:02Z; expected end about 05:15Z [guess]. Then the `Within.lean` probe try, launched when `3040` ends.
+
+**STOP RULE.** Before: no `lean-audit.json` touched, no verifier changed. After: the same. New: `RunsAs/FirstSample.lean`; `answer_draw` appended to my `Steps.lean`; two lines in my `RunsAs.lean` and one root in `security/Proofs/lakefile.toml`.
+
+**NEEDS.** TWOLEG: `inputOf`'s map of `p.replay`, `q` and `p`'s counts to the run's interior and rule (B). You: whether `RunsAs/Within.lean` goes (C).
+
+**To post.** Nothing.
+
+**Not established.** That `firstSample` compiles. Axiom lines for the theorems of `Within`, `Steps`, `Coins`, `Proved`, `Top` and `Played` at `d3cb96c006` (the aggregator's probe had none). That ACCEPTS's `7fb2` built `Within.lean` (rc 0 only). Anything over TWOLEG's `run` with `coinsCode`.
