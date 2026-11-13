@@ -135201,3 +135201,59 @@ This loop changed none. `cursor/proofs-sessionof2-7c3a` `b49c6e40619f` and `curs
 - Whether GATHER's `552354cbe19` makes `main`'s Python take a file the Lean per-member form refuses: TWOLEG's to say.
 
 **Runs out:** `r20261113-095636-adf2` (records, vy-nebius-cpu-1, at `0df461b1b2`), expected end between 10:40Z and 11:00Z [guess: FRAME's `a613` took 40 minutes for the three packages, and this one's first took 23]. **Timer:** one, for it. No other run of mine is out.
+
+## FIRSTACCEPT, Fri 10:28Z: Thursday's audit composed every template before the draw (and set `V3C_WARM_JOBS=8`), so the 298 files are every member's circuit; the cost test does not see the files' pass; the listing cannot count members a template; passing blobs by a file needs the main changed (STOP), and the driver can do without it
+
+**FIRSTACCEPT: your 10:19Z three reads, the STOP you asked for, and MEMBERS's question.** Read only; no run. Mailbox read through 10:19Z, the hook's 10:23Z message included. I hold `~/wt/.pen` on a new machine, up since 10:20:44Z.
+
+### 1. Did Thursday's audit set `V3C_WARM_JOBS`: yes, 8; and the 298 files are every member's circuit either way
+
+- **The setting.** The serve, `r20261112-101803-fbc8`, is `rehearsal.sh serve` with one variable, `COPY_TO`. The audit is a run of its own, `r20261112-120044-297f` (`rehearsal.sh audit`, vy-nebius-cpu-6, 12:00:49Z Thu to 04:33:22Z Fri, exit 0, 540 GB reserved, commit `69655a037c6a`). Its variables are `D`, `PP_GATE_KEY`, `PP_PEER`, `V3C_AUDIT_TIMEOUT`, `V3C_WARM_JOBS` = 8 and `V3C_WARM_TIMEOUT` = 3h. [read: each run's attempt in the evidence store, `research data show`; I printed only names and the two `WARM` values. I read nothing on cpu-6.]
+- **What the warm does at that commit:** it composes "every template of window `mine` that a caller's composer makes", one entry for each distinct template of the members. [read: `69655a037c6a`, `benchmarks/one_stage/a5.py:662-677`]
+- **It does not matter whether the warm finished.** Before the draw, the audit's staging goes over every member of the window and composes each member's template once, through the same cache. The first member of a template keeps its circuit at its own `m<k>/circuit.txt`, and every other member of the template names that one file. [read: same file, `:749-767`: "a template's members: one circuit"] So once the audit ran through, the cache holds the circuit of every template the window's members use.
+- **vllm's listing agrees** [relayed]. The cache's 298 circuits were written 12:06:53Z to 12:33:40Z, and the draw at 12:57:26Z. The 391 staged `circuit.txt` are the 298 first-of-template members and 93 sampled members that are not their template's first. That is why 93 members with no session "share a sampled member's file".
+- **So the window's 102,781 members use 298 templates, one file each.** [derived] What I did not read: the warm's own log line (`V3C-WARM`), which is in the kept directory.
+
+### 2. Does `tests/test_verifier_cost.py` list the files' pass: no
+
+`Spot/OneStageZk.lean` is not in its `ALLOWED`. The scan looks for gate-level forms only (a gate locator, a range over a gate count or over a node's `members`, a key program, an unrolled unit), and `membersFiles`' recursion over the parameters' members is none of them, so the test neither allows the pass nor refuses it. [read: both `main` at `053b8e50fe8` and `cursor/proofs-windowat-5e4b` at `e977fbc96f6`, `tests/test_verifier_cost.py:1-22`, `:34`, and its patterns]
+
+### 3. How many members name each of the 17 largest circuits: the listing cannot say
+
+- The listing sees a member's link only where the audit staged one: a template's first member, and a sampled member. It can tell that 93 templates have at least two members, the largest among them, and nothing more. [derived from its link counts: 93 files have exactly one unsampled staged member each]
+- **What counts it:** the audit's `summary.json` lists every member with its template, `{"k", "template", "n", "base"}` [read: `69655a037c6a`, `a5.py:740`]. It is kept on cpu-6 (13.3 MB, by vllm's listing). That is vllm's to read.
+- **Why the count sets the hours.** The files' pass parses Σ over templates of (members of the template) × (its circuit's bytes). [derived]
+  - If every template other than the 93 has one member, and each of the 93 has two: 332.77 + 316.37 = 649 GB, plus the rest at the smallest circuit, 6.34 TB in all. That is the floor of my 10:05Z entry: 19 to 26 hours.
+  - If members spread evenly, 345 to a template: about 115 TB, 15 to 20 days. [derived: 102,781 / 298 × 332.77 GB, at 11 to 15 s a GB parsed; the rate is the [guess] of 10:05Z]
+  - With one parse a distinct file (your ruling for MEMBERS): 333 GB parsed, about 1 to 1.4 hours, whatever the counts. [derived]
+
+### 4. STOP: blobs by a file needs the compiled check's main changed
+
+On the tree that carries #9441, the executable takes blobs only as arguments. [read: `cursor/proofs-windowat-5e4b` at `e977fbc96f6`]
+- `verity/protocols/interface/CoreProtocol/Blobs.lean:95-96`, `check`: `"check" :: params :: commitment :: evidence :: blobs`, each blob read with `IO.FS.readBinFile`.
+- `verity/protocols/spot/verifier/lean/Spot/MembersRefusal.lean:119-120`, `refusal`: the same, for the per-member form's step.
+- `serve` (`Blobs.lean:58-66`, `:107`) takes blobs as hex inside one JSON line on stdin. That has no command-line limit, but it holds each blob twice (hex text and bytes) beside the line. I do not count it a way.
+
+**What the driver can do with no Lean change, and does unless you say no:**
+- **List each file once.** A template's members name one path, so 206,456 paths become about 103,973 for Thursday's window: 298 circuits, 102,781 public files, 298 `session.json`, 596 rep files. [derived from the listing]
+- **Give each blob a short name.** The driver links the blobs into one directory under names of at most 6 characters, and runs the executable there. Paths of 6 bytes plus 8 for a pointer come to about 1.5 MB, under the 2 MB I measured on my VM.
+- **Raise the stack limit for the executable's process.** Linux allows a quarter of the stack limit for arguments, so a 64 MB stack allows 16 MB.
+- **Neither reaches the check.** The check finds each blob by the SHA-512 of its own bytes, never by its name (`Blobs.get`, `tablesOf`). Dropping a repeated file changes nothing: `Blobs.get` takes the first blob under a digest, `tablesOf` the first under a pinned digest, and `tablesHeld` compares names from the pinned list. [read: `Blobs.lean:39-44`; `OneStageZk.lean:413-437`]
+- **I leave `one_stage.members.refusal` alone.** It passes the blobs on the command line too (`verity/protocols/spot/verifier/one_stage/members.py:89`), and it sits in a verifier's place. The driver calls the executable itself, as my stand-in does.
+- **One more fix in the driver:** a5's writer gives every member `m<k>/circuit.txt` (`members_proof`, `a5.py:1470` on that tree), a path that exists only for a template's first member or a sampled one. I will give it the template's file, the one staging composed (`mm["circuit"]`).
+
+### 5. MEMBERS's question: which executable's accept is the audit's
+
+- **Today only v2's own executable runs the per-member case:** `sampled-proofs-one-stage-zk refusal`, through my stand-in driver and `one_stage.members.refusal`. `served_cases.py` reads no per-member case. [read: no `case-v2-members` in it on `main` or on the carried tree]
+- **The accept the deployed figures cite is the composition's.** The composites' sampled component is `VStar.Recursive.Sampled.checkBlobs`. It calls `OneStageZk.checkBlobs` on the blobs the composition's main read, and its executable's `sampled` command is the interface's `protocol.main`. [read: carried tree, `VStarRecursive/Sampled.lean:73-77`, `:99-101`] `composite.py` cites `Verity.Sampled.remote_soundness_deployedReady`. [read: #9594's head, `benchmarks/one_stage/composite.py:70`]
+- **So a streamed main for v2 alone serves a stand-alone check, not the audit of record.** For the audit of record the composition's main would stream too.
+- **I take MEMBERS's two conditions.** The tables each step gets are every pinned table among all the files, known before the first member. A collision between two of the files sent is the second way out. The theorem ends at `checkBlobs` on all the files.
+
+**Not established.**
+- That the warm finished. It does not decide the files, but I have not read its line.
+- How many members each template has. That is vllm's count, from the audit's `summary.json`.
+- The 11 to 15 s a GB parsed rate. It is the [guess] of 10:05Z.
+- That a 64 MB stack is allowed on the node that runs a case. I have tried it on no node.
+- That the composition's main can stream at all. I read its call, not its main.
+
+Next: the driver, on a new branch off `cursor/proofs-windowat-5e4b`, with a stand-in case of a few hundred members, entry by 13:00Z.
