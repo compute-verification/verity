@@ -15,25 +15,30 @@ from the first entry stamped at or after `start` (the run's end, where none is) 
 session on it (`Committed`); the session can be sampled when its open's layout holds the sample's family
 (`Spot.Period.holds`).
 
+**Whose a root is.** The ledger ties a session to one digest: the circuit that the period listing it committed when
+the ledger opened that period (`Spot.Period.registrationOf`). A root is committed under this registration when that
+digest is the verifier's own parameter `registration`, and under another registration when it is another digest.
+
 * `LedgerMeans`: what the ledger's half returns (`Spot.Period.windowsOf`). The ledger verifies under the verifier's
   key and reaches the monitoring period's end. Every root the lane committed in the monitoring period is one of the
   returned windows, when its session can be sampled, and one of the other sessions returned, when it cannot; nothing
   else is returned; and no root and no session is returned twice. Each window's session has ended, in a closed
   period all of whose sessions are windows.
 * `AcceptMeans`: what the check accepts (`Spot.Period.checkWith`, at any audit of one registration; the check itself
-  is `checkBlobs`, at one-stage v2's). It publishes the lane, the monitoring period, the ledger's half's windows in
-  order and its other sessions. Each window has exactly one audit (`AuditedAt`): its session is the one the ledger
+  is `checkBlobs`, at one-stage v2's). It publishes the lane, the monitoring period, this registration's circuit,
+  the ledger's half's windows in order, and of its other sessions what `Spot.Period.registeredIn` returns. Each
+  window has exactly one audit (`AuditedAt`): its session is the one the ledger
   sealed, run from a commit the pins log records on main's first-parent line, with its coin commitment withheld;
   its log shows the sample's coins released after exactly one registration; and the audit accepted that
   registration at the verifier's parameters for the window, which name the period's challenger and the window's own
   root and hold the records of the registrations audited at the windows before it.
-* `CommittedOnce`: the two together, as a reader of the published answer needs them. Under an accept, every root the
-  lane committed in the monitoring period on a session that can be sampled is the root of exactly one published
-  window, which has one audit entry; every other root the lane committed in it is published among the other
-  sessions; and each published window is such a root. What the one audit is, is `AcceptMeans`'.
-* `EveryRootAudited`: the answer in which every root was audited. Under an accept that publishes no other session,
-  every root the lane committed in the monitoring period is the root of exactly one published window, whose one
-  audit is the check's audit at that window (`AuditedAt`).
+* `CommittedOnce`: every root committed under this registration is one published window. Under an accept, every
+  root the lane committed in the monitoring period is on a session that a period committing a circuit lists; where
+  that circuit is this registration's, the root is the root of exactly one published window, which has one audit
+  entry; and each published window is such a root. What the one audit is, is `AcceptMeans`'.
+* `OthersElsewhere`: the other sessions published are exactly the lane's roots under other registrations. Under an
+  accept, every root the lane committed in the monitoring period under another circuit than this registration's is
+  published once among the others, by that circuit and its session; and each published other is such a root.
 * `DecodedMeans`: what the decoder gives the check (`AuditParams.of`). The key the audits are handed reads as the
   key the ledger is checked under, and `audit` names none of the keys a window sets or leaves unset. `AcceptMeans`
   is stated at every parameters, the decoder's or not; a reader who holds an accept to one-stage v2's own guarantee
@@ -45,12 +50,14 @@ session on it (`Committed`); the session can be sampled when its open's layout h
 
 * Whose ledger it is. That the ledger presented is the auditor's device's own and whole is
   `Properties.Spot.PeriodLedger`'s.
-* That every root the lane committed was audited. An accept holds the audit of each root on a session reserved with
-  the sample's family. A root on any other session is published among the other sessions, and nothing is held of
-  it. The lane names the families when it reserves a session, so only an answer with no other session says that
-  every root was audited (`EveryRootAudited`).
-* An other session's fields. Only its root and its session are tied to the ledger; its `families`, `withheld`,
-  `place` and `period` are published, and no statement holds them.
+* That every root the lane committed was audited. An accept holds the audit of each root committed under this
+  registration. A root committed under another circuit is published among the others by that circuit, and nothing
+  is held of it: not that the circuit is a registration, and not that any check audited it. A lane names the
+  circuit when it opens a period, so a reader who needs those roots audited asks for each such circuit's own check.
+* That this registration's circuit is the circuit of what `audit` describes. `registration` is the verifier's own
+  parameter, held to the ledger's periods and to nothing in `audit`: one-stage v2 reads no period's circuit.
+* Two registrations of one lane under one family. A window whose period commits another circuit refuses the
+  period, so a lane whose two registrations sample under the same family's label is never accepted.
 * Who the lane is. `Committed` reads the name the open's body carries (`laneOf`: its `for` when non-empty, else its
   `by`) and asks a v2 open. Who may reserve under a name is the device's gate's, and a v1 open in the run is in
   neither list.
@@ -152,9 +159,10 @@ def AuditedAt (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) 
     inner q cm ev bs = .accept a.published a.profile
 
 /-- **What the period's check accepts.** For every audit of one registration `inner` (the check's own is one-stage
-v2's, `checkBlobs`), parameters, commitment, evidence and blobs: if `checkWith` accepts, it publishes the lane and
-the monitoring period it was asked; the windows it publishes are the ledger's half's, in order, with its other
-sessions; the evidence holds one window's evidence for each; its profile is the audits' profiles in order; and each
+v2's, `checkBlobs`), parameters, commitment, evidence and blobs: if `checkWith` accepts, it publishes the lane, the
+monitoring period and the registration it was asked; the windows it publishes are the ledger's half's, in order,
+and the others are what `registeredIn` returns of the ledger's half's other sessions; the evidence holds one
+window's evidence for each window; its profile is the audits' profiles in order; and each
 window has exactly one audit, which is the check's audit at that window after the records of the windows before it
 (`AuditedAt`). -/
 def AcceptMeans : Prop :=
@@ -162,58 +170,58 @@ def AcceptMeans : Prop :=
       (prof : Array Core.Integrity),
     checkWith inner p c e bs = .accept pub prof →
       pub.lane = p.ledger.lane ∧ pub.start = p.ledger.start ∧ pub.stop = p.ledger.stop ∧
+      pub.registration = p.registration ∧
       ∃ r ws, read p.ledger c.ledger = .ok r ∧ windowsIn p.ledger r = .ok ws ∧
-        pub.windows.map (·.window) = ws.windows ∧ pub.others = ws.others ∧ e.windows.size = ws.windows.size ∧
+        registeredIn p r ws = .ok pub.others ∧
+        pub.windows.map (·.window) = ws.windows ∧ e.windows.size = ws.windows.size ∧
         prof = pub.windows.flatMap (fun x => x.audits.map (·.profile)) ∧
         ∃ records : Array Json, records.size = pub.windows.size ∧
           ∀ i (h : i < pub.windows.size), ∃ we a record,
             e.windows[i]? = some we ∧ pub.windows[i].audits = #[a] ∧ records[i]? = some record ∧
             AuditedAt inner p c e bs r pub.windows[i].window we (records.extract 0 i) record a
 
-/-- **Each root committed on a session with the sample's family is one published window, with one audit entry.** For
-every audit of one registration `inner`, parameters, commitment, evidence and blobs: if `checkWith` accepts, the
-ledger passes `checked` under the verifier's key and reaches the monitoring period's end; every root the lane
-committed in the monitoring period on a session that can be sampled is the root of exactly one published window, of
-that session, which has one audit entry; every other root the lane committed in it is one of the published other
-sessions; and every published window is a root the lane committed in the monitoring period on a session that can be
-sampled. It says nothing of the audit entry: what the one audit is, is `AcceptMeans`, and the two are joined in
-`EveryRootAudited`. -/
+/-- **Every root committed under this registration is one published window, with one audit entry.** For every audit
+of one registration `inner`, parameters, commitment, evidence and blobs: if `checkWith` accepts, the ledger's half
+reads the ledger, which passes `checked` under the verifier's key and reaches the monitoring period's end; every
+root the lane committed in the monitoring period is on a session that a period committing a circuit lists; where
+that circuit is this registration's, the root is the root of exactly one published window, of that session, which
+has one audit entry; and every published window is a root the lane committed in the monitoring period under this
+registration, on a session that can be sampled. It says nothing of the audit entry: what the one audit is, is
+`AcceptMeans`. -/
 def CommittedOnce : Prop :=
   ∀ (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) (pub : Public)
       (prof : Array Core.Integrity),
     checkWith inner p c e bs = .accept pub prof →
-      ∃ wp : Array Win × Array MonitoringPeriod, checked c.ledger p.ledger.key = .ok wp ∧
-        Reaches p.ledger c.ledger ∧
-        (∀ x ∈ wp.1, Committed p.ledger c.ledger x → Sampled p.ledger x →
-          ∃ i, ∃ h : i < pub.windows.size, pub.windows[i].window.root = x.root ∧
-            pub.windows[i].window.session = x.opened.session ∧ (∃ a, pub.windows[i].audits = #[a]) ∧
-            ∀ j (hj : j < pub.windows.size), pub.windows[j].window.root = x.root → j = i) ∧
-        (∀ x ∈ wp.1, Committed p.ledger c.ledger x → ¬ Sampled p.ledger x →
-          ∃ s ∈ pub.others, s.root = x.root ∧ s.session = x.opened.session) ∧
-        ∀ w ∈ pub.windows, ∃ x ∈ wp.1, Committed p.ledger c.ledger x ∧ Sampled p.ledger x ∧
-          x.root = w.window.root ∧ x.opened.session = w.window.session
-
-/-- **With no other session published, every root the lane committed is audited.** For every audit of one
-registration `inner`, parameters, commitment, evidence and blobs: if `checkWith` accepts and publishes no other
-session, the ledger's half reads the ledger, which passes `checked` under the verifier's key and reaches the
-monitoring period's end, and every root the lane committed in the monitoring period is the root of exactly one
-published window, of that root's session, whose one audit is the check's audit at that window after the records of
-the windows before it (`AuditedAt`). Where the answer publishes another session the statement is silent: the root
-on such a session was committed and no audit of it is held. -/
-def EveryRootAudited : Prop :=
-  ∀ (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) (pub : Public)
-      (prof : Array Core.Integrity),
-    checkWith inner p c e bs = .accept pub prof → pub.others = #[] →
       ∃ r, read p.ledger c.ledger = .ok r ∧ checked c.ledger p.ledger.key = .ok (r.wins, r.periods) ∧
         Reaches p.ledger c.ledger ∧
-        ∃ records : Array Json, records.size = pub.windows.size ∧
-          ∀ x ∈ r.wins, Committed p.ledger c.ledger x →
+        (∀ x ∈ r.wins, Committed p.ledger c.ledger x →
+          (∃ d, registrationOf r x.opened.session = some d) ∧
+          (registrationOf r x.opened.session = some p.registration →
             ∃ i, ∃ h : i < pub.windows.size, pub.windows[i].window.root = x.root ∧
-              pub.windows[i].window.session = x.opened.session ∧
-              (∀ j (hj : j < pub.windows.size), pub.windows[j].window.root = x.root → j = i) ∧
-              ∃ we a record, e.windows[i]? = some we ∧ pub.windows[i].audits = #[a] ∧
-                records[i]? = some record ∧
-                AuditedAt inner p c e bs r pub.windows[i].window we (records.extract 0 i) record a
+              pub.windows[i].window.session = x.opened.session ∧ (∃ a, pub.windows[i].audits = #[a]) ∧
+              ∀ j (hj : j < pub.windows.size), pub.windows[j].window.root = x.root → j = i)) ∧
+        ∀ w ∈ pub.windows, ∃ x ∈ r.wins, Committed p.ledger c.ledger x ∧ Sampled p.ledger x ∧
+          registrationOf r x.opened.session = some p.registration ∧
+          x.root = w.window.root ∧ x.opened.session = w.window.session
+
+/-- **The other sessions published are exactly the lane's roots under other registrations.** For every audit of one
+registration `inner`, parameters, commitment, evidence and blobs: if `checkWith` accepts, the ledger's half reads
+the ledger, and every root the lane committed in the monitoring period on a session that a period committing
+another circuit than this registration's lists is published among the others, by that circuit and its session; every
+published other is such a root, under a circuit that is not this registration's; and no session is published twice
+among the others. Nothing else of an other session is published, and nothing is held of the root. -/
+def OthersElsewhere : Prop :=
+  ∀ (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) (pub : Public)
+      (prof : Array Core.Integrity),
+    checkWith inner p c e bs = .accept pub prof →
+      ∃ r, read p.ledger c.ledger = .ok r ∧
+        (∀ x ∈ r.wins, Committed p.ledger c.ledger x →
+          ∀ d, registrationOf r x.opened.session = some d → d ≠ p.registration →
+            ∃ o ∈ pub.others, o.registration = d ∧ o.session = x.opened.session) ∧
+        (∀ o ∈ pub.others, o.registration ≠ p.registration ∧
+          ∃ x ∈ r.wins, Committed p.ledger c.ledger x ∧
+            registrationOf r x.opened.session = some o.registration ∧ x.opened.session = o.session) ∧
+        (pub.others.toList.map (·.session)).Nodup
 
 /-- **What the decoder gives the check.** For every parameters `AuditParams.of` decodes: the key's JSON that the
 check hands one-stage v2 at each window (`keyJ`, `paramsAt`'s `challenger.key`) reads, as one-stage v2 reads it
