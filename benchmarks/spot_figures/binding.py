@@ -478,6 +478,89 @@ def report(design: Design, phase: int = PHASE, machines: int = 1, target: int = 
             "most_gates": {column: most(d) for column, d in columns.items() if "as counted" not in column}}
 
 
+#: what a finder's cost is counted in, each a column of `over_phases`: calls, as the Lean counts, and compressions
+COUNTED = ("calls", "compressions")
+
+
+@dataclass(frozen=True, slots=True)
+class Instance:
+    """One of Lean's instances of the bound by classes at numbers (`theorem`, in `Claims.Flock.Numbers`): at a run
+    whose budget of calls `T`, e_s (`e`), N_s, K_s, K_m and c = n_PU·openCalls are within these numerals, the conflict
+    finder's cost and the first-hit finders', summed over 2^256, are at most 2^-`bits`."""
+
+    theorem: str
+    T: int
+    e: int
+    Ns: int
+    Ks: int
+    Km: int
+    c: int
+    bits: int
+
+
+#: e_s at a session of one table of at most 2^23 level-0 symbols, 1 + 210·⌈4·2^23/e⌉: the instances' own
+ONE_TABLE = 1 + WAITS * 12343986
+#: Lean's instances on the right-hand side of `CompiledTwo.eventTwoX_le_cls_at_budget`, as their statements give
+#: them (`security/Proofs/Flock/SamplingGeneric/TwoFirstHitClassNumbers.lean`): one at runs of 2^80 calls, the others
+#: at 513 times that, every call charged as the compressions of one on 64 KiB
+LEAN = (Instance("εclsAt_le_table1", BUDGET, ONE_TABLE, 2 ** 30, 2 ** 42, 2 ** 42, BUDGET, 100),
+        Instance("εclsAt_le_table1_513", 513 * BUDGET, ONE_TABLE, 2 ** 30, 2 ** 33, 2 ** 33, 513 * BUDGET, 100),
+        Instance("εclsAt_le_table1_513_narrow", 513 * BUDGET, ONE_TABLE, 2 ** 27, 14 * 10 ** 9, 14 * 10 ** 9,
+                 513 * BUDGET, 100),
+        Instance("εclsAt_le_table1_513_k35", 513 * BUDGET, ONE_TABLE, 2 ** 30, 2 ** 35, 2 ** 35, 513 * BUDGET, 98))
+
+
+def sizes(design: Design) -> dict[str, int]:
+    """What an `Instance`'s numerals bound, of a run's design by position or by classes."""
+    if design.sessions is None:
+        raise ValueError("Lean's instances are of a design by classes: state its sessions")
+    return {"T": design.T, "e": design.reruns, "Ns": design.sessions, "Ks": design.K,
+            "Km": design.K if design.Km is None else design.Km, "c": design.own}
+
+
+def proved(design: Design) -> dict:
+    """What Lean proves at numbers of one run's design by classes: among `LEAN`'s instances whose numerals the design
+    is within, the one of the most bits (`theorem`, `bits`). Where it is within none's, `theorem` is None, beside
+    the instance it is past in the fewest numerals, among those at its budget or above (`nearest`, `bits`), and
+    each numeral it is past with the design's value and the instance's (`past`)."""
+    if design.form != "classes":
+        raise ValueError("Lean's instances are of the bound by classes: count the design's gates by classes")
+    mine = sizes(design)
+    past = {i.theorem: [name for name, value in mine.items() if value > getattr(i, name)] for i in LEAN}
+    within = [i for i in LEAN if not past[i.theorem]]
+    if within:
+        best = max(within, key=lambda i: i.bits)
+        return {"theorem": best.theorem, "bits": best.bits}
+    near = min([i for i in LEAN if "T" not in past[i.theorem]] or LEAN, key=lambda i: (len(past[i.theorem]), -i.Ks))
+    return {"theorem": None, "nearest": near.theorem, "bits": near.bits,
+            "past": {name: {"design": mine[name], "instance": getattr(near, name)} for name in past[near.theorem]}}
+
+
+def over_phases(sessions: int, classes: int, k: int, phases: int, T: int = BUDGET, longest: int = LONGEST) -> dict:
+    """The bound by classes of one verification phase and of `phases` of them, in each of `COUNTED`.
+
+    A verification phase is one run: its sample has `sessions` sessions and needs `classes` classes of gates, counted
+    once and session by session (K_s and K_m), and `k` is the accepted reruns a wait of its largest session. The
+    figure is `bound` at that design: the rewinding term under `StrictBirthday` at B, with κ_s and the run's own
+    opening checks not stated and counted as 0. In calls that is the right-hand side of
+    `CompiledTwo.eventTwoX_le_cls_at_budget` at those numbers, and in compressions the same at the budget times the
+    longest call's compressions (`converted`). `phases` of them is the sum over them, which no Lean theorem states.
+    Beside each counting: what Lean proves at numbers of one phase's part over 2^256 (`proved`)."""
+    if phases < 1:
+        raise ValueError("a period has at least one verification phase")
+    design = Design(K=classes, k=k, T=T, sessions=sessions, by_class=True)
+
+    def cell(p: Fraction) -> dict:
+        return {"bound": bits(p), "centibits": centibits(p)}
+
+    return {"design": {"sessions": sessions, "classes": classes, "k": k, "reruns": design.reruns,
+                       "calls_a_run": f"2^{log2(T)}", "rounds": design.rewinds, "phases": phases,
+                       "longest_call": {"bytes": longest, "compressions": compressions(longest)}},
+            "counted": {counted: {"phase": cell(one), "phases": cell(phases * one), "lean": proved(d)}
+                        for counted, d in zip(COUNTED, (design, converted(design, longest)), strict=True)
+                        for one in [bound(d)]}}
+
+
 def render(out: dict) -> str:
     """The report as lines, each saying what it covers: the design, each term per sampled replay block with its
     premise, the sums per sampled replay block and per run, each monitoring period, then the waits' term. Each

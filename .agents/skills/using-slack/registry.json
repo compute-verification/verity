@@ -207,7 +207,8 @@
         "adapters/vllm/tests/program/",
         "adapters/vllm/tests/commit/",
         "adapters/vllm/tests/acquire/",
-        "adapters/vllm/tests/query/"
+        "adapters/vllm/tests/query/",
+        "benchmarks/definitions/"
       ],
       "branch_suffixes": [
         "8c79",
@@ -516,6 +517,9 @@
       "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
       "usergroup": "S0C93AFCRT8",
       "linear": "CI",
+      "staffs": [
+        "review-*"
+      ],
       "owns": [
         "verity/configuration/config/",
         "tools/verity/check/",
@@ -525,7 +529,8 @@
         "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
-        "tools/research/src/research/merge.py"
+        "tools/research/src/research/merge.py",
+        "benchmarks/landing/"
       ],
       "branch_suffixes": [
         "4292",
@@ -666,7 +671,6 @@
         "benchmarks/exfiltration/",
         "benchmarks/harness/specs/",
         "infra/cluster/kinds/benchmarks.toml",
-        "benchmarks/judge.py",
         "benchmarks/README.md"
       ],
       "branch_suffixes": [
