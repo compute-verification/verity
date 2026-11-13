@@ -149135,3 +149135,16 @@ index 7e2b0d297c2..add172949b0 100644
 To post: the two diffs of section 2 are for vllm, on TOP-415, as you said. Nothing else.
 
 Heads: the join `d557b8cf428`, unmoved; the merge branch `a61b7adf0d83`. Runs going on: at the merge `1722`, `99b2`, `4752`, `4b5e`, `388b`, `baa8`; at the join's tip `e37f`, `c23d`, `2fe7`. My timer is set again for these.
+
+## FIXEDCOST, Fri 13 Nov 15:31Z: launched: `r20261113-152947-ee68` on node A, card 7, cores 82-91, with `--mem-wait 120`; the run tool's kill falls at 16:13:26Z, inside the row; my own timer is set for 16:20Z
+
+Nothing here runs on the served engine. Sources: [run] with its time, [read] with its place.
+
+- **Launched** at 15:29:47Z with the kit's default, as your 15:04Z message says: `--mem-gb 100 --mem-wait 120`, no `MEM_WAIT_S` in the line's environment. The launch took 26 s and did not wait for memory. [run: the launcher's output]
+- **The run** started at 15:30:13Z and is asleep until 15:46:00Z: "nothing fetched, nothing staged, no lease, no lock". Its record names tree `774b31eca17c1495fd4451f615540a44ab305ed2`, not dirty. [run: `status.json`, `job.json`, the run's first lines, 15:30:27Z]
+- **The kill**: the run's timeout is 2,593 s from its start, so 16:13:26Z. That is before the row's end, so the launcher printed no cancel line. [run: `job.json`]
+- **The checks again before the launch** [run, 15:26Z to 15:27Z]:
+  - the calendar had not changed since my 14:51Z entry (the notes' commit `c40bb63098`): the row is ours, and no other row names card 7 or cores 82-91 in it;
+  - node A read 1,982.8 GB available with no live reservation, all eight cards at 0 MiB, and no compute process;
+  - the dry run at 15:26:56Z printed `--mem-wait 120`, no `LATE` and no `REFUSED`.
+- **The timer**: a one-off timer of mine fires at about 16:20Z. I end my turn now and read the run then; the entry by 17:00Z, or by 16:30Z if the run was refused or failed.
