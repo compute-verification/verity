@@ -264,14 +264,14 @@ def CheckedWorkPeriod : Prop :=
     (∀ t : Fin Np, 0 < shareCone Sc Cd Np t → tileLuck Sc Cd Np t ≤ p ∧ tileLuck0 Sc Cd Np t ≤ p0) →
     0 ≤ a → 0 ≤ b → 0 < Λ → SplitRate Kd ρ p p0 a b wmax Λ →
     Pl.game = monitoringPeriodGame (tileStage Cd Np) (liveCone Sc Cd Np) 1 1 Kd Wp →
-    Wp.EveryWindow (fun live _ => DeadConeDead Sc Cd Np live) →
+    Wp.EveryExecutionPhase (fun live _ => DeadConeDead Sc Cd Np live) →
     PrefixOf (checkedLayer Cd hr hK prm ws opened rel right) Pl.game →
     (∀ w, prob (fun x => (checkedLayer Cd hr hK prm ws opened rel right).MovedIn x w) ≤ δbind) →
     RegisteredBeforeDraw ws → SampleIsCoin hK prm ws → ServiceSound prm ws opened rel δks →
     (∀ x w j v, rel x w j v → right x w j v) →
-    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
-    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
-    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
+    Wp.EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
+    Wp.EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
+    Wp.EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
     UnitFixed Pl (checkedLayer Cd hr hK prm ws opened rel right)
       (monitoringPeriodMode Cd Wp (checkedRun hK prm ws opened rel right)) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     prob (fun x => Pl.accepts x ∧
@@ -299,14 +299,14 @@ def CheckedCreditPeriod : Prop :=
     (∀ t : Fin Np, 0 < shareCone Sc Cd Np t → tileLuck Sc Cd Np t ≤ p ∧ tileLuck0 Sc Cd Np t ≤ p0) →
     0 < a → 0 < b → 0 < Λ → SplitRate Kd ρ p p0 a b wmax Λ →
     Pl.game = monitoringPeriodGame (tileStage Cd Np) (liveCone Sc Cd Np) 1 1 Kd Wp →
-    Wp.EveryWindow (fun live _ => DeadConeDead Sc Cd Np live) →
+    Wp.EveryExecutionPhase (fun live _ => DeadConeDead Sc Cd Np live) →
     PrefixOf (checkedLayer Cd hr hK prm ws opened rel right) Pl.game →
     (∀ w, prob (fun x => (checkedLayer Cd hr hK prm ws opened rel right).MovedIn x w) ≤ δbind) →
     RegisteredBeforeDraw ws → SampleIsCoin hK prm ws → ServiceSound prm ws opened rel δks →
     (∀ x w j v, rel x w j v → right x w j v) →
-    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
-    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
-    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
+    Wp.EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
+    Wp.EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
+    Wp.EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
     UnitFixed Pl (checkedLayer Cd hr hK prm ws opened rel right)
       (monitoringPeriodMode Cd Wp (checkedRun hK prm ws opened rel right)) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     prob (fun x => Pl.accepts x ∧ n * (Pl.run x).fixed <
@@ -373,15 +373,15 @@ def H1CheckedCreditPeriod : Prop :=
     (∀ j, stageShare (tileStage Cd 144) (shareCone Sc Cd 144) j ≤ 1) →
     (∀ t : Fin 144, 0 < shareCone Sc Cd 144 t → tileLuck Sc Cd 144 t ≤ 7 / 8 ∧ tileLuck0 Sc Cd 144 t ≤ 1 / 2) →
     Pl.game = monitoringPeriodGame (tileStage Cd 144) (liveCone Sc Cd 144) 1 1 24 Wp →
-    Wp.EveryWindow (fun live _ => DeadConeDead Sc Cd 144 live) →
+    Wp.EveryExecutionPhase (fun live _ => DeadConeDead Sc Cd 144 live) →
     PrefixOf (checkedLayer Cd hr hK prm ws opened (stagedAt salt staged) (flatAtCoin hr enc flat)) Pl.game →
     (∀ w, prob (fun x =>
       (checkedLayer Cd hr hK prm ws opened (stagedAt salt staged) (flatAtCoin hr enc flat)).MovedIn x w) ≤ δbind) →
     RegisteredBeforeDraw ws → SampleIsCoin hK prm ws → ServiceSound prm ws opened (stagedAt salt staged) δks →
     SaltIsLiveCoin hr salt enc → StagedPins staged flat →
-    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
-    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
-    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
+    Wp.EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
+    Wp.EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
+    Wp.EveryExecutionPhase (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
     UnitFixed Pl (checkedLayer Cd hr hK prm ws opened (stagedAt salt staged) (flatAtCoin hr enc flat))
       (monitoringPeriodMode Cd Wp (checkedRun hK prm ws opened (stagedAt salt staged) (flatAtCoin hr enc flat)))
       (fun _ t => (tileWords Sc Cd 144 t : ℝ)) folded →
