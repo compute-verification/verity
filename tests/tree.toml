@@ -313,10 +313,9 @@ note = "two Lake packages move with Sunday's chain; its served part waits for th
 
 [[not_yet]]
 path = "verity/claims/"
-to = "not ruled, with soundness: it defines the assumption ids that Lean and the locks name, so it is not deleted"
-owner = "top"
-day = "2026-11-17"
-note = "top brings the ruling by the day; nothing moves until then"
+to = "data generated from the locks: each named assumption's id in its lock, a generated table from id to Lean name, and the readers switched to it"
+owner = "soundness"
+day = "2026-11-18"
 
 [[not_yet]]
 path = "verity/periods/"
@@ -349,11 +348,6 @@ day = "2026-11-18"
 what = "whether a device with parts gets limits of its own in the Lean"
 answers = "top"
 by = "2026-11-13 10:00 PST"
-
-[[open]]
-what = "verity/claims/: where the assumption ids are defined once each named assumption carries its id in a lock, in the locks alone with Python reading a generated table, or in a module that stays"
-answers = "soundness"
-by = "2026-11-17"
 
 [[open]]
 what = "verity/commitments/windows/, inside verity/commitments/ and so below the levels the test reads: its name (the Glossary retires the word), its place and its day"
