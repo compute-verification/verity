@@ -7,12 +7,19 @@ public import NetworkCertifier.Rows
 /-!
 # The network certifier's run audited as rows over its certified records, a core protocol: `verity/network-rows/v1`
 
-The audit of a run of the active network certifier (`warden_serve`) over the records it signed: each of the run's `W`
-windows' requests (the link's ingress), responses (its egress) and fails (`<link>-fails`, egress) records, each held to its
-certified record, then the certifier program's `NetworkCertifier.Rows.audit` over their grids, the executable form of
-`security/Definitions/NetworkCertifier/RecordRows.lean`. That audit accepts only when the egress record is the schedule
-it shows rendered over the lanes, so a run whose cells the network certifier cut, clocked or ordered otherwise than the
-schedule is refused here, not taken on trust.
+The audit of a run of the active network certifier (`warden_serve`, the serving module below) over the records it
+signed: each of the run's `W` windows' requests (the link's ingress), responses (its egress) and fails (`<link>-fails`,
+egress) records, each held to its certified record, then the certifier program's `NetworkCertifier.Rows.audit` over
+their grids, the executable form of `security/Definitions/NetworkCertifier/RecordRows.lean`. That audit accepts only
+when the egress record is the schedule it shows rendered over the lanes, so a run whose cells the network certifier
+cut, clocked or ordered otherwise than the schedule is refused here, not taken on trust.
+
+**What it does not hold: the id egress form.** The schedule's digest binds the id egress form (`Period.egressForm`),
+under which the reference's `audit` refuses an egress `DATA` or `END` cell that isn't an id-form cell
+(`io_tie.parse_cell`). `NetworkCertifier.Rows.audit` reads no payload against a form, so this check accepts a run whose
+egress cells carry any bytes, which the reference refuses. The form of each egress cell is the io tie's to hold
+(`IoTieCell`, on every cell); a caller that runs no io tie holds it itself, by the reference's `audit` or by reading
+each egress cell with `io_tie.parse_cell`.
 
 **Params**, canonical JSON with exactly these keys:
 
@@ -22,7 +29,7 @@ schedule is refused here, not taken on trust.
      "session": hex(session), "windows": W}
 
 `NetworkCheck.Period`'s rows-form terms, read by its decoders: the network certifier's LMS public key (16 + N bytes) and
-parameters, the link (`warden_serve.LINK`, at most 65,535 UTF-8 bytes), the schedule (`warden.WardenParams`,
+parameters, the link (the serving module's `LINK`, at most 65,535 UTF-8 bytes), the schedule (`WardenParams`,
 `Period.scheduleOf`), whose digest every record head binds (`Period.Schedule.digest`), the certifier session (32 bytes)
 every certificate binds, and the run's `W ≥ 1` windows, `0 … W − 1`. A schedule with a response cap
 (`max_tokens_cap`, which `Period.scheduleOf` reads) is refused: `NetworkCertifier.Rows.audit` holds no response to its
@@ -60,8 +67,8 @@ open NetworkCheck.Records (Published Commitment)
 def protocolId : String := "verity/network-rows/v1"
 def commitmentTag : String := "verity-network-certifier/rows-records/v1"
 
-/-- The run's records by their own names (`warden_serve.INGRESS`, `EGRESS` and `FAILS`), each with the link and the
-direction it is certified under (`warden_serve.CERTIFIED`, `Period.records`). -/
+/-- The run's records by their own names (the serving module's `INGRESS`, `EGRESS` and `FAILS`), each with the link
+and the direction it is certified under (its `CERTIFIED`, `Period.records`). -/
 def roles (link : String) : Array (String × String × Direction) :=
   #["requests", "responses", "fails"].zip (Period.records link)
 
@@ -118,10 +125,10 @@ def gridOf (s : Period.Schedule) (fails : Bool) : Check.Grid :=
   { buckets := s.window, allocation := if fails then s.lanes else s.allocation, frameBytes := s.cellBytes,
     bucketMs := s.bucketMs, queueCapacity := 65536 }
 
-/-- **Window `w`'s record `role`, held to its certified record** (`warden_serve.check`'s): `raw` is the record under
-its name at `w`, and `cert` the record certified for the role's link, direction and `w`, whose head is `record_head` of
-the raw record's grid and status under the schedule's grid and digest, settled by the deadline, and whose certificate
-names the same, signs the head's digest under the record's salt and is the key's in the session. -/
+/-- **Window `w`'s record `role`, held to its certified record** (the serving module's `check`'s): `raw` is the record
+under its name at `w`, and `cert` the record certified for the role's link, direction and `w`, whose head is
+`record_head` of the raw record's grid and status under the schedule's grid and digest, settled by the deadline, and
+whose certificate names the same, signs the head's digest under the record's salt and is the key's in the session. -/
 def bound (p : Params) (w : Nat) (role : String × String × Direction) (raw cert : Option Published) :
     Except String NetworkCertifier.Rows.BlockGrid := do
   let (name, link, d) := role
