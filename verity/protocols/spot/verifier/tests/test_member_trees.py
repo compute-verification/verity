@@ -5,7 +5,8 @@ closing round as it opens any round, so two sessions it serves one after another
 and the same sessions closed after other evidence, left open, interleaved, the next tree sampled before the closing
 round or named in another order are refused. `test_challenger` holds `member_line` and `members_order` alone. The
 evidence's bytes (`closing.evidence_bytes`, `session_evidence`, `closing_after`) decode to their parts, and a
-directory's digest is its files' evidence's."""
+directory's digest is its files' evidence's. The four are held to Lean's check, on a case's files, by the difftest
+`verity/protocols/spot/verifier/lean/tests/test_members_twin.py`."""
 
 from __future__ import annotations
 
