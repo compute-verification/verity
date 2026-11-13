@@ -507,3 +507,9 @@ def program_rows(T: int, S: int, prefix: str = "", R: int = PIECE_ROWS) -> Progr
 def query_rows(T: int, R: int = PIECE_ROWS) -> dict[str, Any]:
     """The pieced live Program's partition query: every instance of its template one unit, unit s·P + j round s's piece j."""
     return template_instances_query([template_rows(T, R)])
+
+
+__all__ = ["INDEX", "PIECE_ROWS", "PORTS", "PORTS_ROWS", "PORTS_V2", "PROMPT", "ROUND", "SLOT", "PouwLiveRows",
+           "PouwLiveSlots", "PouwLiveSlotsV2", "admitted", "live_ok", "live_ok_v2", "pieces", "program", "program_rows",
+           "program_v2", "query", "query_rows", "query_v2", "rows_ok", "takes", "template_rows", "template_v2",
+           "traced", "traced_rows"]
