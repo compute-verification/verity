@@ -24,10 +24,9 @@ file proves it at the two-session history (`Sessions.dev₂`), and states the cu
   `reserve` of the first's.
 
 `dev₂` takes each setup's ledger lines as given (`RunSetup.ledger`, a list of lines; at a deployment, its `opens` and
-`closes`, functions of the play), so the three facts are hypotheses on the setups, as `Apart` was. They would be
-theorems at a device whose ledger lines are written by its sessions: each session a `reserve`, an `open` and an `end`
-of its own run on one window root, the `seq`s increasing in the order the lines are written, and the second session
-reserved after the first is reserved.
+`closes`, functions of the play), so no theorem here proves the three facts. `LedgerInOrder` is taken as a hypothesis,
+not proved: it is a lemma of the modelled device once the model builds that device's whole ledger line by line, and
+no statement takes it then.
 -/
 
 @[expose] public section
@@ -84,7 +83,8 @@ theorem ledgerOpens_of_opensOn {h : History} {pk : ByteArray} {w id : String} (h
 /-- **The two setups' ledger lines are two sessions' in the device's order**: a run is opened on one window root; the
 lines open only the two setups' runs; and they hold no `end` of the second setup's run whose `seq` is below a `reserve`
 of the first's. None names a window, so each holds of a device that opens the windows as a prover's request names
-them. -/
+them. It is taken as a hypothesis, not proved: it is a lemma of the modelled device once the model builds that
+device's whole ledger line by line, and no statement takes it then. -/
 structure LedgerInOrder (S₁ S₂ : RunSetup) : Prop where
   once : ∀ w w' a, LedgerOpens (S₁.ledger ++ S₂.ledger) w a → LedgerOpens (S₁.ledger ++ S₂.ledger) w' a → w = w'
   own : ∀ w a, LedgerOpens (S₁.ledger ++ S₂.ledger) w a → a = S₁.id ∨ a = S₂.id
@@ -94,7 +94,7 @@ structure LedgerInOrder (S₁ S₂ : RunSetup) : Prop where
 window, the one run prints the whole log; on two, where the setups' ledger lines are two sessions' in the device's
 order (`LedgerInOrder`) and the ledger opens the first window for a run and the second for a run and ends the first
 before it reserves the second, those runs are the first setup's and the second's, and the log is the first
-`cut o.log` releases and the rest, each printed by its setup's run. -/
+`cut o.log` releases and the rest, each printed by its setup's run. `LedgerInOrder` is taken, not proved. -/
 theorem printsInOrder_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Release → ℕ) (o : Exchange) {w₁ w₂ : String}
     (hw : windowsOf o.params = some (w₁, w₂)) (hL : w₁ ≠ w₂ → LedgerInOrder (S₁ o) (S₂ o)) :
     PrintsInOrder (dev₂ S₁ S₂ cut o) w₁ w₂ o.log := by
@@ -150,7 +150,7 @@ coins are read under the parameters' key (`FirstReads`), an accepted play on two
 the second stage's coin evidence carries (`OrderShown`), the two setups' ledger lines are two sessions' in the device's
 order (`LedgerInOrder`) and the vocabulary's signer is the deployment's, an accepted play whose logs the check didn't
 read, or read other than the device's, is at most as likely as the read finder's collision plus the forger's forgery
-over both sessions. -/
+over both sessions. `LedgerInOrder` is taken, not proved. -/
 theorem cutOrder_dev₂ (V : Vocab d α) (k : Verity.Registration.Composite) (P : Deployment)
     (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Release → ℕ) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (hw : Wired V k θ) (hF : FirstReads θ)
