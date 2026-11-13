@@ -5,14 +5,16 @@ launcher's remote.json, each entry's mtime set by hand; the clock and the disk a
 from __future__ import annotations
 
 import json
+import re
+import shlex
 import shutil
 import socket
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
-from test_retention import NOW, REPO, UNIT, Disk, aged, by_path, clock, never_in_use, stored, vault_store  # noqa: F401  (a fixture)
-from test_retention_unpreserved import written
+from test_retention import NOW, REPO, UNIT, Disk, aged, by_path, clock, kept, never_in_use, run_dir, stored, vault_store  # noqa: F401  (a fixture)
+from test_retention_unpreserved import ended, process, written
 
 from research import retention as R
 from research.cli import main as research_main
@@ -312,6 +314,98 @@ def test_a_pass_that_cannot_ask_the_remote_keeps_every_copy_and_exits_1(tmp_path
                                          "fails the pass")
 
 
+# ---- a pass under the flag deletes launchers' copies and nothing else ---------------------------------------------------------------------
+
+def own_run(root: Path, st: LocalStore, name: str) -> tuple[Path, str]:
+    """A run of this machine's own under `root` that custody preserved: its `.custody` record expired 48 hours after its
+    verification, and the remote holds its run record, pushed a day before NOW. What a forced pass of the default policy deletes."""
+    d = run_dir(root, name, host=HOST, extra={"out/result.txt": name.encode() * 64})
+    art = CU.put_run_record(st, d, name)
+    (d / CU.MARKER).write_text(json.dumps({**json.loads((d / CU.MARKER).read_text()), "run_record": art}))
+    assert CU.marker_problem(d) is None and st.push(art, preserve=True)["preserved"]
+    aged(Path(st.remote.root), art, days=1)
+    return d, art
+
+
+def unit_argv(root: Path, named: Path) -> list[str]:
+    """What launcher_copies_gc.service gives `research`, read from its ExecStart line, with its two directories set."""
+    unit = (REPO / "tools/research/src/research/pods/nebius/sky/launcher_copies_gc.service").read_text()
+    line = re.search(r"python3 -m research (retention gc .*)'$", unit, re.M)[1]
+    return [{"$VY_LAUNCHER_RUNS": str(root), "$VY_LAUNCHER_NAMED": str(named)}.get(a, a) for a in shlex.split(line)]
+
+
+def test_the_units_pass_leaves_a_preserved_run_beside_a_copy_which_the_same_pass_without_the_flag_deletes(tmp_path, vault_store, monkeypatch,
+                                                                                                         capsys):
+    """The unit's pass is forced over the whole of a runs root, so the policy alone would take every expired record there: a run
+    of that machine's own that custody preserved goes once the remote verifies its artifact, and so does a path somebody kept
+    until a date now past. The unit is for the launchers' copies. Under its own command line the copy goes and those two
+    stay, each printed as left with the reason, and the remote is not even asked about them; the control is the same forced
+    pass without --launcher-copies, which deletes both."""
+    monkeypatch.setattr(R, "utc_now", clock)
+    monkeypatch.setattr(R, "DEFAULT_JOBS_DIRS", ())
+    root, named = tmp_path / "launcher", tmp_path / "named-runs"
+    named.mkdir()
+    (named / "runs").write_text("")
+    theirs = copy(root, ran(tmp_path)[0])
+    own, art = own_run(root, LocalStore(vault_store), RUN2)
+    data = kept(root, "kept", priority="normal", node=HOST)
+    argv = unit_argv(root, named)
+    assert argv[:2] == ["retention", "gc"] and argv[-1] == "--apply" and "--force" in argv, "the unit's pass is forced, and deletes"
+
+    assert research_main(argv[:-1]) == 0                                      # the unit's line without --apply: a dry run
+    out = capsys.readouterr().out
+    assert "forced; deletes until under 0%; launchers' copies alone)" in out.splitlines()[0]
+    lines = {line.split()[3]: line for line in out.splitlines() if line.startswith(("skip", "DELETE"))}
+    assert lines[RUN].startswith("DELETE") and "would delete: normal" in lines[RUN]
+    assert lines[RUN2].startswith("skip") and lines[RUN2].endswith(R.ONLY_LAUNCHER)
+    assert lines["kept"].startswith("skip") and lines["kept"].endswith(R.ONLY_LAUNCHER)
+    assert out.splitlines()[-1].startswith("would delete 1 path(s)") and theirs.exists()
+
+    assert research_main([*argv, "--json"]) == 0
+    plan = json.loads(capsys.readouterr().out)
+    acts = by_path(plan)
+    assert not theirs.exists() and (acts[RUN]["action"], acts[RUN]["stored"], acts[RUN]["error"]) == ("delete", "verified", None)
+    assert own.exists() and (acts[RUN2]["action"], acts[RUN2]["source"], acts[RUN2]["reason"]) == ("skip", "custody", R.ONLY_LAUNCHER)
+    assert data.exists() and (acts["kept"]["action"], acts["kept"]["source"], acts["kept"]["reason"]) == ("skip", "sidecar", R.ONLY_LAUNCHER)
+    assert plan["stored"] == stored(verified=1), "the one question asked of the remote was the copy's"
+
+    without = [a for a in argv if a != "--launcher-copies"]
+    assert research_main([*without, "--json"]) == 0
+    plan = json.loads(capsys.readouterr().out)
+    acts = by_path(plan)
+    assert not own.exists() and acts[RUN2]["reason"] == f"deleted: normal, expired 2026-09-23T00:00:00Z, preserved {art} (verified on the remote)"
+    assert not data.exists() and acts["kept"]["action"] == "delete", "what the policy takes when nothing holds the pass to the copies"
+
+
+def test_a_pass_under_the_flag_deletes_no_path_of_any_other_record_whatever_else_the_pass_is_given(tmp_path, vault_store, monkeypatch):
+    """The limit is on the record's source, not on one kind of path: a preserved run, a kept path and an unpreserved run, each
+    expired and each what a pass without the flag takes, are left under it, --unpreserved-runs or not, in a dry run and in an
+    --apply, with nothing asked of the remote about them. Only the copy is a candidate."""
+    table = tmp_path / "proc"
+    process(table, 1, 1)
+    monkeypatch.setattr(R, "PROC", table)
+    root = tmp_path / "launcher"
+    theirs = copy(root, ran(tmp_path)[0])
+    others = {RUN2: own_run(root, LocalStore(vault_store), RUN2)[0], "kept": kept(root, "kept", priority="normal", node=HOST),
+              RUN3: ended(root, RUN3, under="")}
+    sources = {RUN2: "custody", "kept": "sidecar", RUN3: R.UNPRESERVED}
+
+    def never(art: str, path: Path) -> R.Stored:
+        pytest.fail(f"the remote was asked about {path} ({art}), which this pass may not delete")
+
+    for apply in (False, True):
+        plan = collect(root, apply=apply, unpreserved=True, remote_check=never)
+        acts = by_path(plan)
+        assert acts[RUN]["action"] == "delete" and theirs.exists() is not apply
+        for rel, d in others.items():
+            assert d.exists() and (acts[rel]["action"], acts[rel]["source"]) == ("skip", sources[rel])
+            assert acts[rel]["reason"].startswith(R.ONLY_LAUNCHER), acts[rel]["reason"]
+    assert [a["path"] for a in plan["actions"] if a["action"] == "delete"] == [RUN] and plan["unpreserved"]["deleted"]["paths"] == 0
+
+    plan = collect(root, launcher=False, unpreserved=True, remote_check=lambda art, path: R.Stored("verified", "verified on the remote"))
+    assert not any(d.exists() for d in others.values()), "each is what a forced pass without the flag deletes"
+
+
 # ---- what the flag changes, and what is a copy ------------------------------------------------------------------------------------------
 
 def test_without_the_flag_a_launchers_copy_has_no_record_and_is_never_deleted(tmp_path, vault_store):
@@ -404,6 +498,8 @@ def test_a_copy_with_a_fetched_custody_marker_goes_by_the_launchers_rule(tmp_pat
 
 def test_the_docs_state_the_rule_and_its_one_number():
     readme = " ".join((REPO / "tools/research/README.md").read_text().split())
-    for needed in ("[--launcher-copies]", "`--launcher-copies`", "48 hours after its last write", "vy-launcher-copies-gc"):
+    only = "A pass under `--launcher-copies` deletes launchers' copies and nothing else"
+    for needed in ("[--launcher-copies]", "`--launcher-copies`", "48 hours after its last write", "vy-launcher-copies-gc", only):
         assert needed in readme, f"tools/research/README.md no longer states {needed!r}"
     assert "LAUNCHER_COPY_EXPIRY (48 hours)" in R.__doc__ and "[--launcher-copies]" in R.__doc__
+    assert only.replace("`", "") in " ".join(R.__doc__.split()), "retention.py's docstring no longer states what the flag holds a pass to"

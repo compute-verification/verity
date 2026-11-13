@@ -470,8 +470,9 @@ gc takes them only with `--unpreserved-runs`; it and the report list them apart.
 
 A launcher's copy of a run on another machine (a directory named as the run's id that holds the launcher's `remote.json`) has no
 record, except under gc's `--launcher-copies`: there it expires 48 hours after its last write, and goes only once the remote holds
-the run's attempt, ended, and a run record with the copy's files (the rule is in `retention.py`'s docstring). `research keep COPY ...`
-keeps one longer. The unit `vy-launcher-copies-gc` runs it hourly over root's runs root on vy-nebius-cpu-7.
+the run's attempt, ended, and a run record with the copy's files (the rule is in `retention.py`'s docstring). A pass under
+`--launcher-copies` deletes launchers' copies and nothing else: any other path it would take is listed as left. `research keep
+COPY ...` keeps one longer. The unit `vy-launcher-copies-gc` runs it hourly over root's runs root on vy-nebius-cpu-7.
 
 ~~~text
 research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regenerate CMD] [--art ART | --preserve] [--why T] [--by URL]

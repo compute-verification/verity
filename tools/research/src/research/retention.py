@@ -44,8 +44,10 @@ reason. `research keep RUNDIR ...` before the 7 days are over keeps a run, and s
 A launcher's copy of a run on another machine is what `research run --on`, `status` and `fetch` leave on the machine that launched
 it: a directory named as the run's id that holds the launcher's `remote.json` (`custody.LAUNCHER_RECORD`) naming that id, with
 the records, logs and outputs fetched so far. It has no record, so nothing deletes it, except under gc's --launcher-copies, which
-a unit passes where a service launches runs all day (launcher_copies_gc.service). There it has an implicit record (source LAUNCHER,
-priority `normal`) that expires LAUNCHER_COPY_EXPIRY (48 hours) after the copy's last write (`_last_write`), with the owner an
+a unit passes where a service launches runs all day (launcher_copies_gc.service). A pass under --launcher-copies deletes launchers'
+copies and nothing else: any other path the policy would take (a preserved run's, a kept path's, an unpreserved run's) it lists
+as left, for a pass without the flag. There a copy has an implicit record (source LAUNCHER, priority `normal`) that expires
+LAUNCHER_COPY_EXPIRY (48 hours) after the copy's last write (`_last_write`), with the owner an
 unpreserved run's has. No such record for a directory with a sidecar or under one, under a directory named as a run id, or whose
 job.json places the run in that very directory on this host. Its age alone never deletes it. A copy's own status says nothing of
 whether its run is over, since it is whatever the launcher last fetched: a copy that reads `running` may be of a run that ended days
@@ -71,8 +73,8 @@ then the oldest expiry, until it is under low-pct. A filesystem's use is the lar
 a disk out of inodes refuses every write as one out of blocks does, even with most of its blocks free. One pass deletes at most
 --max-paths paths (MAX_PATHS; 0 lifts the cap), and the next takes the rest. A path qualifies only with a valid record (explicit or
 implicit) recorded on this node that is expired, `low` or `normal`, and preserved or regenerable, or an unpreserved run's under
---unpreserved-runs, or a launcher's copy's under --launcher-copies; and no file in the job-script directories may name it
-(`JobScripts`). A preserved run's implicit record also
+--unpreserved-runs, or a launcher's copy's under --launcher-copies, where nothing else qualifies; and no file in the job-script
+directories may name it (`JobScripts`). A preserved run's implicit record also
 needs its marker to still vouch for the run dir (`custody.marker_problem`), and an unpreserved run goes only when no clone of
 it stands and this user can write into every directory in it: one that can't go is left and named, and takes none of the pass's
 --max-paths. A path holding a nested record is left whole. A dry run (the default) reads no remote.
@@ -149,6 +151,9 @@ LAUNCHER_COPY_EXPIRY = timedelta(hours=48)
 LAUNCHER = "launcher"
 #: The schema of the launcher's record of a remote run (`remote.launch`, `remote.adopt`), whatever its version.
 LAUNCHER_SCHEMA = "research/remote/"
+#: Why a pass under --launcher-copies leaves a path it would otherwise delete: a unit runs such a pass forced over a whole runs
+#: root, for the launchers' copies there and nothing else.
+ONLY_LAUNCHER = "left for a pass without --launcher-copies: this one deletes launchers' copies alone"
 #: The threads `launcher_check` asks the remote for a run record's blobs with.
 LAUNCHER_HEADS = 32
 #: What the report calls an implicit record, by its source.
@@ -1148,7 +1153,8 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
     `inodes` (`inode_usage`) makes the filesystem's use the larger of its blocks' and its inodes', None its blocks' alone;
     `max_paths` caps the paths this pass deletes, None not at all; `unpreserved` (--unpreserved-runs) lets it delete the
     unpreserved runs, which it otherwise lists and leaves; `launcher` (--launcher-copies) gives the launchers' copies of runs
-    their records, and an --apply deletes one only on `copy_check`'s answer (None is `launcher_check(now)`). The plan's
+    their records and holds the pass to them: an --apply deletes one only on `copy_check`'s answer (None is
+    `launcher_check(now)`), and every other path the pass would have taken is listed as left (ONLY_LAUNCHER). The plan's
     `stored` counts the remote checks' answers (STORED) over the paths an --apply asked about, `capped` the paths the cap left
     for the next pass, and `unpreserved` the unpreserved runs, apart from every other path (`unpreserved_runs`), with the
     `deleted` ones this pass deleted, or in a dry run would."""
@@ -1193,6 +1199,8 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
             why = _clone_first(root / row.path)
         if why is None and row.source == UNPRESERVED and not unpreserved:
             why = f"left: {_why_deletable(row, None)}, which only --unpreserved-runs deletes"
+        if why is None and launcher and row.source != LAUNCHER:
+            why = ONLY_LAUNCHER
         if why:
             skips.append(Action(row, "skip", why))
         else:
@@ -1641,10 +1649,11 @@ def main(argv: list[str]) -> int:
         ap.add_argument("--unpreserved-runs", action="store_true", help="take the unpreserved runs too: ended runs that custody did not "
                         f"preserve, each directory its run's only copy, expired {UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after its "
                         "last write. Without it they are listed, apart, and left")
-        ap.add_argument("--launcher-copies", action="store_true", help="take the launchers' copies of runs on other machines too: a "
-                        "directory named as a run id that holds the launcher's remote.json, expired "
-                        f"{LAUNCHER_COPY_EXPIRY // timedelta(hours=1)} h after its last write, and only once the remote holds the run's "
-                        "attempt, ended, and a run record with every file of the copy. Without it such a copy has no record")
+        ap.add_argument("--launcher-copies", action="store_true", help="a pass over the launchers' copies of runs on other machines, "
+                        "and nothing else: a directory named as a run id that holds the launcher's remote.json, expired "
+                        f"{LAUNCHER_COPY_EXPIRY // timedelta(hours=1)} h after its last write, goes only once the remote holds the run's "
+                        "attempt, ended, and a run record with every file of the copy, and every other path the pass would delete "
+                        "is listed and left. Without it such a copy has no record")
         ap.add_argument("--json", action="store_true")
         ap.add_argument("--apply", action="store_true", help="delete; without it nothing is deleted and no remote is read. Exit 1 "
                         "when a deletion failed or a stored copy could not be asked about")
@@ -1673,7 +1682,8 @@ def main(argv: list[str]) -> int:
         if not plan["acting"]:
             print(f"{head}, not over {ns.high_pct:g}%: nothing to do (--force acts anyway)")
             return 0
-        print(f"{head} (acts over {ns.high_pct:g}%{', forced' if ns.force else ''}; deletes until under {ns.low_pct:g}%)")
+        only = "; launchers' copies alone" if ns.launcher_copies else ""
+        print(f"{head} (acts over {ns.high_pct:g}%{', forced' if ns.force else ''}; deletes until under {ns.low_pct:g}%{only})")
         def line(a: dict[str, Any]) -> str:
             verb = "DELETE" if a["action"] == "delete" and not a["error"] else "FAILED" if a["error"] else "skip"
             tail = f"  -> {a['pct_after']}%" if a["pct_after"] is not None else ""
@@ -1748,7 +1758,7 @@ def main(argv: list[str]) -> int:
     return 2
 
 
-__all__ = ["COLLECTED", "DEFAULT_JOBS_DIRS", "FIELDS", "JobScripts", "KIND", "LAUNCHER", "LAUNCHER_COPY_EXPIRY", "MAX_PATHS", "POLICY",
-           "PRIORITIES", "RUN_EXPIRY", "SCHEMA", "SIDECAR", "STORED", "UNPRESERVED", "UNPRESERVED_RUN_EXPIRY", "RecordError", "Stored",
+__all__ = ["COLLECTED", "DEFAULT_JOBS_DIRS", "FIELDS", "JobScripts", "KIND", "LAUNCHER", "LAUNCHER_COPY_EXPIRY", "MAX_PATHS", "ONLY_LAUNCHER",
+           "POLICY", "PRIORITIES", "RUN_EXPIRY", "SCHEMA", "SIDECAR", "STORED", "UNPRESERVED", "UNPRESERVED_RUN_EXPIRY", "RecordError", "Stored",
            "beside", "check", "covers", "find", "gc", "implicit", "keep", "keep_main", "keeping", "launcher_check", "load", "main",
            "problems", "record_at", "report", "scan", "sidecar", "store_check", "target", "unpreserved_runs", "write"]
