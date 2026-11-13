@@ -113917,3 +113917,82 @@ For network, on PRF-548, as it stands:
 - Rows of the record's own tables (the scan's state, view and slot entries) under the one-stage rule: not held by this design.
 
 For the table: RELAX | certified rows, design | no branch | format: one key of a port row, a label; no Lean decoder change | clause `CertifiedRows` written, two statement changes at your stop rule | build: Thu 19 Nov 5 PM PST or Mon 23 Nov, by your order of it and LEAN-238's step 2
+
+## SESSIONCOINS, Fri 13 Nov 02:10Z: nothing of mine has compiled in a run on my branch yet; the one try, `r20261113-014633-a8d5` (`SessionCoins` and `SessionHeld`, no longer behind TWOLEG's broken `DevAgrees.lean`), is next in line on cpu-12; the unhex step is one line through a lemma already on `main`, and `DevLocal`, `DevElems` and `LocatesSessions` are proved against COINMAP's coin map in a local check
+
+**In plain words.** In the two-stage audit, each inner block of the second stage is proved in a proof session whose coins come from the auditor's device. My piece shows that where the form's check accepts, each session's coins are the device's own release for that session, the sessions' coin trees open in the sessions' order, and each tree closes after the SHA-512 of its session's evidence. Since 01:20Z: the closing is now stated about the SHA-512 itself, not the bytes its hex decodes to; the coin map's side (which device release feeds which session's coin) is written against COINMAP's coin map; and my files no longer wait on TWOLEG's `DevAgrees.lean`, which does not build yet.
+
+**Two loops.** The 01:44Z SESSIONCOINS entry is right: two loops with this worker's id run on this machine. We agreed in writing (through files under `/tmp/loopA/` on the machine) that this loop, the one writing this entry, holds the pen. Only this loop edits the branch, pushes, launches or cancels a try, and writes entries. The other loop only does checks I ask for, and it takes over only if this loop shows nothing for 30 minutes. The commits `007d76a899` and after on the branch are this loop's.
+
+**Branch.** `cursor/proofs-sessioncoins-e4a0` at `8225ed4a00`, pushed. Nothing is unpushed. TWOLEG's tip `99da2b9189` is merged (`007d76a899`). The scratch patch of `Steps.lean` is dropped: TWOLEG's own `Steps.lean` replaces it.
+
+**Mailbox.** Read at 01:32Z and 01:48Z: nothing after your 00:17Z message there. Your 01:31Z message reached me directly.
+
+### 1. Runs and machines [run]
+
+| Run | Machine | What | Wait | State |
+|---|---|---|---|---|
+| `r20261113-010629-d617` | vy-nebius-cpu-11 | `SessionHeld.lean --siblings` at the old scratch tree (TWOLEG's base plus my `Steps.lean` patch) | 6 min | started 01:13Z, **failed** (rc 1) before 01:48Z; it holds no Lean place, so there is nothing to cancel (your 02:00Z word) |
+| `r20261113-013339-d4a0` | vy-nebius-cpu-12 | the same at `007d76a899`, my branch with TWOLEG's tip | 13 min, line stuck at 4 ahead | cancelled unstarted at 01:47Z |
+| `r20261113-014633-a8d5` | vy-nebius-cpu-12 | `SessionHeld.lean --siblings` at `8225ed4a00` | 23 min at 02:09Z, next in line, all four slots busy | waiting; ETA [guess] start by 02:30Z, end by 03:00Z |
+
+What `d617` showed [run: its stdout.log]:
+- These built: `Steps` (with my patch), `Leg`, `Projection` and `Reading`.
+- `SessionCoins.lean` failed only on the bare-`Frame` error from 01:20Z (`d617`'s tree was older than the fix). Every error it printed there is that one error or follows from it.
+- **TWOLEG's `DevAgrees.lean` failed on four errors.** My `SessionAgrees.lean` imports it, so the try never reached `SessionAgrees` or `SessionHeld`. TWOLEG's tip leaves `DevAgrees.lean` unchanged, so it still fails there; TWOLEG's `d936` is building it now and will hit the same errors. The fix is in NEEDS 1.
+
+What I did about it:
+- `SessionHeld.lean` no longer imports `SessionAgrees.lean`. The one corollary that needed it, `sessionsAgree_accepted`, moved to `SessionAgrees.lean`, which now imports `SessionHeld` (`8225ed4a00`).
+- So `a8d5` builds `SessionCoins` and `SessionHeld` without `DevAgrees` [derived]. Only `SessionAgrees` still waits on TWOLEG's fix.
+
+### 2. What changed in my files since 01:20Z [derived; each checked locally against stand-ins for the imports (Lean core and Mathlib only), not yet in a run]
+
+- **The `Frame` fix** (`8bb1f85380`): every `Frame` in `SessionCoins.lean` and `SessionAgrees.lean` is now `Verity.Frame`. Run `r20261112-234440-6c1f` had also shown `MembersHeld.roots` and `MembersHeld.find` projecting from an entry whose type nothing fixed yet. That is fixed with typed binders, and a dead tactic line in `stmtReadsNone` is gone (`c80e551ec8`). After that both files elaborate whole in the local check with no errors.
+- **`closes_after` now answers the SHA-512 itself** (`2fb787e408`): `c.answers = Flock.Sha512.hash ev`, in place of `Flock.unhex (Spot.sha512Hex ev) = .ok c.answers`. Your question was how many lines that step takes. It takes one: `main` already has the lemma, `Verity.Sampled.MemberForm.answers_of_hex` (`Sampled/MemberForm/Order.lean:620`, a two-line proof through `FlockComplete.JsonRT.unhex_hexOf`). I call it at both places in `closes_after`. The other loop checked `closes_after` locally against stand-ins at 01:58Z, with `answers_of_hex` as a stand-in axiom with that statement. It passed with no `sorry` [relayed, read in its notes]. The rest of `SessionHeld.lean` is first checked in `a8d5`.
+- **`DevElems` takes `readsAt A.h i` as a premise** (`052baf1a91`). COINMAP's agreement `ElemAgrees` covers only the rounds its `reads` names, and `sessionsAgree`, the one reader, already has `readsAt`.
+
+### 3. `DevLocal`, `DevElems` and `LocatesSessions` at COINMAP's `dev` [derived; new file `SessionDev.lean`, written against COINMAP's `CoinMap.lean` and `CoinStages.lean` at `a04e215616`, before they compile]
+
+I started these now, as you asked, without waiting for `CoinMap.lean` to compile. COINMAP's definitions (`Locate`, `locAt`, `widthOf`, `usedOf`, `devBits`, `elemOfBits`, `dev`, `fitOf`, `ElemAgrees`, `stageLocate`) are copied word for word into my local check, and the whole file elaborates there with no errors. `#print axioms` names only `propext`, `Classical.choice` and `Quot.sound` for `locates_run`, `devLocal_of` and `devElems_of`.
+
+**The locator.** COINMAP's `stageLocate` puts only the two stages' fresh coins on a stage, so on its own it gives a session's stage no release. I wrote the whole run's locator from the two:
+
+`runLocate A ℓ₁ ℓ₂ tab pre fr b` is `locOf A tab pre fr` for an opening, and `stageLocate ℓ₁ ℓ₂ pre fr b` kept only where it is at most `A.h.stage` for anything else.
+
+I added the cap because `stageLocate` puts the second stage's family's coin number 16384·k on stage `1 + k` with no upper end. With more than 16384·stage of them, they would reach the sessions' stages and break `DevLocal`.
+
+What is proved at it:
+- `locates_run : LocatesSessions A tab (CoinMap.locAt (runLocate A ℓ₁ ℓ₂ tab))`.
+- `devLocal_of A tab L : LocatesSessions A tab (CoinMap.locAt L) → DevLocal A (locOf A tab) (CoinMap.dev L)`. It holds at any locator `L` with that property, because COINMAP's count and bits on a session's stage are those of the releases `locOf` puts there (`usedOf_located`, `devBits_located`).
+- `devElems_of A x tab L reads Acc Good : LocatesSessions A tab (CoinMap.locAt L) → (∀ i, readsAt A.h i → reads i) → SessionsFit A tab Acc Good → DevElems A x (locOf A tab) (CoinMap.dev L) Acc Good (CoinMap.ElemAgrees L A x reads)`. `ElemAgrees` covers elements below `fitOf` (the releases that fit in one coin). Where all the releases on a stage fit, `fitOf` is the whole count (`fitOf_eq_usedOf`).
+- `sessionsFit_of A C tab Good : HeldSize → InteriorLogged C Good → OpensFit Good → SessionsFit A tab (FormAccepts C) Good`. On an accepted play the check's read has at most one release on each session's stage (`located_one_accepted`), so the play's log has releases of the same frames there. What is left is `OpensFit Good`: on a play whose log is the device's, every opening carries at most 65536 elements.
+- `dev_congr`: two locators that put the same releases on stage `n` read the same release there. At stages 0 to `stage`, `runLocate` and `stageLocate` put the same releases, so COINMAP's `devFirst_stage` and `devSecond_stage` carry over to `runLocate` through it [derived; I have not written that instance].
+
+`SessionDev.lean` imports COINMAP's `CoinStages`, which is not on my branch. So it has no lakefile root yet and no run has built it. It gets a root when COINMAP's files compile and I merge COINMAP's branch.
+
+### 4. CUT's `held_size`
+
+`HeldSize` (`SessionHeld.lean:156`) is word for word CUT's `held_size` (`CutHeld.lean:95` at `bb96dbb00a`), quantified over its three arrays [read]. CUT's try 6 (`r20261113-014528-6f45`) has not yet said that `CutHeld.lean` builds, so I left `HeldSize` a hypothesis. ASSEMBLY discharges it in one line: `fun _ _ _ h => Verity.SampledTwo.held_size h`. Once a run says `CutHeld.lean` built, I can merge CUT and drop the premise instead.
+
+### 5. MESSAGES and `tab t`
+
+MESSAGES' latest entry (00:51Z) says nothing new about the table name, so `tab t` is still a parameter of `locOf`, `withCoins` and `runLocate`.
+
+STOP RULE: nothing. No listed guarantee, lock, accept or `Sampled.lean` touched. I edited none of another lane's files: TWOLEG's `DevAgrees.lean` fix is in NEEDS, not in my branch.
+
+NEEDS:
+1. TWOLEG: `DevAgrees.lean`'s four errors from `d617`, with a three-line fix. Both loops reached the same three fixes separately. With them applied, the whole file passes a stand-in check against Lean core and Mathlib on the VM, `prefixAgree_of_elems` taken as an axiom for its second half [run; relayed for the whole file]. Your `d936` builds the unfixed file and will stop at these errors [derived].
+   - Line 40: `List.take_append_eq_append_take` no longer exists. Use `List.take_append`. The unsolved goal at line 39 follows from it.
+   - Line 54: `omega` fails because `List.getElem_finRange` leaves a `Fin.cast`. Add `Fin.val_cast` to the `simp only` at line 53.
+   - Line 70: the `show (c.bytes.getD i.val 0).toNat = …` reaches the maximum recursion depth (reproduced on the stand-in). Replace it by `simp only [SpotFlock.coinByte]`, which passes on the stand-in.
+2. COINMAP:
+   - Your locator for the whole run. `runLocate` (section 3) adds the sessions to `stageLocate` and caps the second stage. Say whether you want it, or a cap inside `stageLocate`.
+   - `OpensFit Good`, every opening of a play of the device's game carrying at most 65536 elements, as your `freshWide_play` does for fresh coins. I don't see where the game bounds an opening's `n` (`openG`/`openT` take any `n`). If nothing does, `SessionsFit` stays a premise for ASSEMBLY.
+3. ASSEMBLY: `HeldSize` from CUT's `held_size` (section 4). `reads := readsAt A.h` in `devElems_of`.
+
+To post: nothing.
+
+Not established:
+- None of my files has compiled in a run on my branch yet; `a8d5` decides `SessionCoins` and `SessionHeld`.
+- `SessionAgrees` waits on NEEDS 1, and `SessionDev` on COINMAP's files compiling.
+- `OpensFit` (or `SessionsFit`), `HeldSize` (CUT's, by one line), `InteriorLogged` (CUT's) and `tab` are open premises.
