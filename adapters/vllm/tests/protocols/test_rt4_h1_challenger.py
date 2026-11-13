@@ -61,7 +61,7 @@ SA, SB = CH.session_id(0xa), CH.session_id(0xb)
 DRAW_NAME = CH.session_id(0xd)
 #: the gate's v2 head (31 entries: v1 opens, one-step v2 opens, then periods infra-smoke-20261020a to d,
 #: c's and d's windows two-step) and seven of its challenge phases' trees as the gate's ``fetch`` gave them; registered
-#: (fixtures/artifacts.json), fetched by `research data fetch-fixtures`
+#: (artifacts.json), fetched by `research data fetch-fixtures`
 SMOKE = Path(__file__).parent / "fixtures" / "challenger_periods"
 #: the SHA-512 of the challenger key the gate signed its ledger with; a verifier reads its
 #: pin from config, never from code
