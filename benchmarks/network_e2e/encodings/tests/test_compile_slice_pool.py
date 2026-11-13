@@ -1,4 +1,4 @@
-"""CompileSlice_v4's pool calls (`verity.protocols.certifier.prover.compile_slice_v4.pool_step`) against the replay over
+"""CompileSlice_v4's pool calls (`verity.protocols.accounting.certifier.prover.compile_slice_v4.pool_step`) against the replay over
 whole traces, on one CacheStep_v3 stream, through `compile_slice_pool.check_trace_v4`: each hit, evictable count and
 return they derive is `BlockPool`'s, and the tapped wires are ReplayStep_v1's rows."""
 from __future__ import annotations
