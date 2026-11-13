@@ -31,15 +31,16 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import verity_difftest as D
 from hypothesis import strategies as st
 
-import verity_difftest as D
-from verity.circuits import requirement as R
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.circuits.ops import fp32
 from verity.circuits.program import Program
 from verity.circuits.refs import array_of
 from verity.circuits.types import Array, Value
+from verity.circuits import requirement as R
+from verity.circuits.ops import fp32
+from verity.definitions.registry import b1
 
 LEAN = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -389,7 +390,7 @@ def _malformed(rng: random.Random, value: dict) -> object:
     return [value]
 
 
-def drawn(seed: int) -> object:
+def instance(seed: int) -> object:
     """The instance of `seed`: a wiring, an execution of it, a store placement, a store and plans, malformed one time in
     ten."""
     rng = random.Random(seed)
@@ -414,7 +415,7 @@ def drawn(seed: int) -> object:
     return _malformed(rng, value) if rng.random() < 0.1 else value
 
 
-PORT = D.Port("requirement-difftest", "requirement", requirement, st.integers(0, 1 << 32).map(drawn), package=LEAN)
+PORT = D.Port("requirement-difftest", "requirement", requirement, st.integers(0, 1 << 32).map(instance), package=LEAN)
 server = D.server_fixture(PORT)
 
 
@@ -429,10 +430,10 @@ def test_requirement_agrees(server):
     assert stats.outputs > 400 and stats.rejects > 60, stats
 
 
-def test_the_drawn_links_both_hold_and_fail(server):
+def test_the_sampled_links_both_hold_and_fail(server):
     """The sampled instances reach both verdicts of each link and of `topological`, so the agreement on them says
     something."""
-    outs = [out for seed in range(300) if (out := _lean(drawn(seed), server)) is not None]
+    outs = [out for seed in range(300) if (out := _lean(instance(seed), server)) is not None]
     seen = {(k, s[k]) for out in outs for s in out["steps"] for k in ("store_matches", "plan_matches")}
     seen |= {("topological", out["topological"]) for out in outs}
     assert seen == {(k, b) for k in ("store_matches", "plan_matches", "topological") for b in (True, False)}
@@ -501,7 +502,7 @@ def test_windows_bound_their_steps(server):
     inclusions are often strict."""
     inner = outer = strict = 0
     for seed in range(400):
-        if (out := _lean(value := drawn(seed), server)) is None:
+        if (out := _lean(value := instance(seed), server)) is None:
             continue
         ticks = value["ticks"]
         for w, o in zip(value["windows"], out["windows"]):
@@ -523,7 +524,7 @@ def test_run_inputs_are_in_no_region(server):
     though the sampled windows often hold one on a device of theirs at a tick of theirs, where a gate would be credited."""
     held = 0
     for seed in range(400):
-        if (out := _lean(value := drawn(seed), server)) is None:
+        if (out := _lean(value := instance(seed), server)) is None:
             continue
         inputs, ticks, leaf, step = set(value["inputs"]), value["ticks"], value["leaf"], value["step"]
         at = {v: ticks[leaf[v]][step[v]] for v in inputs if leaf[v] < len(ticks) and step[v] < len(ticks[leaf[v]])}
@@ -684,16 +685,12 @@ def _bf16_inputs(program: Program, seed: int, tokens: dict[int, int] | None = No
 def serve() -> tuple[Program, R.Schedule, dict[int, int]]:
     """`b1.Serve` at TINY: a prompt of three tokens, prefilled at step 0 (the root's first 22 Calls: three embeddings, two
     layers and the final norm and pick), then two decode steps of 8 Calls each, the weights registered."""
-    from verity.definitions.registry import b1
-
     program = Program(bind(b1.Serve, C=TINY, LP=3, STEPS=2), registered=("weights",))
     return program, R.Schedule.by_calls(program, [0, 22, 30]), _bf16_inputs(program, 0, {0: 5, 1: 17, 2: 42})
 
 
 def rmsnorm() -> tuple[Program, R.Schedule, dict[int, int]]:
     """`b1.RMSNormFusedCudaV1` at N = 64 with its weight registered, its 138 Calls in three steps."""
-    from verity.definitions.registry import b1
-
     program = Program(bind(b1.RMSNormFusedCudaV1, N=64, EPS=1e-5), registered=("w",))
     return program, R.Schedule.by_calls(program, [0, 46, 92]), _bf16_inputs(program, 1)
 

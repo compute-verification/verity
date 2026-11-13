@@ -21,10 +21,10 @@ import shutil
 from pathlib import Path
 
 import pytest
-from hypothesis import strategies as st
-
 import ra_cases as M
 import verity_difftest as D
+from hypothesis import strategies as st
+
 from verity.protocols.accounting.poub.verifier import audit, codec, store
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -38,7 +38,10 @@ KEY = bytes(range(32))
 OF_RECORD = {"binding": "lean", "hold": "lean", "expected_root": "lean"}
 
 
-def port(fn, reference, inputs=st.nothing(), need_rejects: bool = True) -> D.Port:
+NOTHING = st.nothing()
+
+
+def port(fn, reference, inputs=NOTHING, need_rejects: bool = True) -> D.Port:
     return D.Port(M.EXE, fn, reference, inputs, package=M.PACKAGE, of_record=OF_RECORD.get(fn, "python"),
                   rejects=M.REFUSALS, need_rejects=need_rejects)
 
@@ -97,17 +100,17 @@ NAMES = st.sampled_from(["config.json", "tokenizer.json", "model.safetensors", "
 
 
 @st.composite
-def pin_inputs(draw) -> dict:
+def pin_inputs(take) -> dict:
     """A pin in one of the shapes `pin_of` reads, written as JSON in one of several ways, as it is or with one fault."""
-    files = files_of(draw(st.binary(max_size=4)), draw(st.integers(1, 3)))
-    files |= {n: hashlib.sha512(n.encode()).hexdigest() for n in draw(st.lists(NAMES, max_size=2))}
-    role = draw(st.sampled_from([ROLE, "llama31-8b", "é-model"]))
-    shape = draw(st.sampled_from(["pin", "line", "registry", "core"]))
-    f = draw(st.integers(0, 24))
+    files = files_of(take(st.binary(max_size=4)), take(st.integers(1, 3)))
+    files |= {n: hashlib.sha512(n.encode()).hexdigest() for n in take(st.lists(NAMES, max_size=2))}
+    role = take(st.sampled_from([ROLE, "llama31-8b", "é-model"]))
+    shape = take(st.sampled_from(["pin", "line", "registry", "core"]))
+    f = take(st.integers(0, 24))
     if f == 1:
-        files = {**files, draw(st.sampled_from(["", "a/b", ".hidden", "../x"])): "ab" * 64}
+        files = {**files, take(st.sampled_from(["", "a/b", ".hidden", "../x"])): "ab" * 64}
     elif f == 2:
-        files = {**files, "config.json": draw(st.sampled_from(["AB" * 64, "ab" * 63, "", 7, None]))}
+        files = {**files, "config.json": take(st.sampled_from(["AB" * 64, "ab" * 63, "", 7, None]))}
     elif f == 3:
         files = {k: h for k, h in files.items() if k != "config.json"}
     elif f == 4:
@@ -117,50 +120,50 @@ def pin_inputs(draw) -> dict:
     doc: dict = {"pin": a_pin(files, role), "line": {"model": role} | a_pin(files, role), "registry": {},
                  "core": core(files, (role, "OTHER_BF16"))}[shape]
     if f == 5 and shape in ("pin", "line"):
-        doc[draw(st.sampled_from(["checkpoint_sha512", "name", "checkpoint"]))] = draw(
+        doc[take(st.sampled_from(["checkpoint_sha512", "name", "checkpoint"]))] = take(
             st.sampled_from(["", "cd" * 64, 1, None, [], {}]))
     elif f == 6 and shape in ("pin", "line"):
-        del doc[draw(st.sampled_from(sorted(doc)))]
+        del doc[take(st.sampled_from(sorted(doc)))]
     elif f == 7 and shape == "core":
-        doc[role]["checkpoint_sha512"] = draw(st.sampled_from(["cd" * 64, 2, None]))
+        doc[role]["checkpoint_sha512"] = take(st.sampled_from(["cd" * 64, 2, None]))
     elif f == 8 and shape == "core":
-        doc[role] = draw(st.sampled_from([{}, {"files": files}, "x"]))
+        doc[role] = take(st.sampled_from([{}, {"files": files}, "x"]))
     if shape == "registry":
         mine = {"model": role, "checkpoint": files, "checkpoint_sha512": store.checkpoint_sha512(files)}
         other = {"model": "other", "checkpoint": files_of(b"o"), "checkpoint_sha512": "00" * 64}
-        rows = draw(st.permutations([mine, other] + [mine] * draw(st.integers(0, 2))))
+        rows = take(st.permutations([mine, other] + [mine] * take(st.integers(0, 2))))
         if f == 9:
             rows = [r for r in rows if r is not mine]
         elif f == 10:
-            rows = rows + [{"model": role, "checkpoint": draw(st.sampled_from([files_of(b"x"), None, 3, [files]]))}]
+            rows = rows + [{"model": role, "checkpoint": take(st.sampled_from([files_of(b"x"), None, 3, [files]]))}]
         elif f == 11:
             rows = rows + [{"name": role, "model": None, "checkpoint": files}]
-        text = "".join(json.dumps(r) + draw(st.sampled_from(["\n", "\r\n", "\n\n", "\n \t\n"])) for r in rows)
+        text = "".join(json.dumps(r) + take(st.sampled_from(["\n", "\r\n", "\n\n", "\n \t\n"])) for r in rows)
         if f == 12:
-            text += draw(st.sampled_from(["{", "nope\n", "[1,\n", "NaN\n", '"\\ud800"\n']))
+            text += take(st.sampled_from(["{", "nope\n", "[1,\n", "NaN\n", '"\\ud800"\n']))
     else:
-        text = json.dumps(doc, indent=draw(st.sampled_from([None, 1])), ensure_ascii=draw(st.booleans()),
-                          sort_keys=draw(st.booleans()))
+        text = json.dumps(doc, indent=take(st.sampled_from([None, 1])), ensure_ascii=take(st.booleans()),
+                          sort_keys=take(st.booleans()))
     if f == 13:
-        text = text[:draw(st.integers(0, max(len(text) - 1, 0)))]
+        text = text[:take(st.integers(0, max(len(text) - 1, 0)))]
     elif f == 14:
         text = text.replace('"' + role + '"', '"' + role + '\\ud800"', 1)
     elif f == 15:
         text = text.replace('"' + role + '"', '"' + role + '\\ud83d\\ude00"', 1)
     elif f == 16:
-        text = draw(st.sampled_from(["\ufeff", " \t\r\n", "[", "1e5 ", "NaN", "null", "1e99999999999999999999 "])) + text
+        text = take(st.sampled_from(["\ufeff", " \t\r\n", "[", "1e5 ", "NaN", "null", "1e99999999999999999999 "])) + text
     elif f == 17:
         text = text.replace("{", '{"x": 1e400, "y": -0.5e-99999999999999999999999, ', 1)
     elif f == 18 and text.endswith("}"):
         text = text[:-1] + ', "checkpoint_sha512": "' + "ef" * 64 + '"}'
     data = text.encode()
     if f == 19:
-        data = draw(st.sampled_from([b"\xff", b"\xc0\x80", b"\xed\xa0\x80"])) + data
-    model = draw(st.booleans())
-    want = draw(st.sampled_from([role, role, "llama31-8b", None]))
+        data = take(st.sampled_from([b"\xff", b"\xc0\x80", b"\xed\xa0\x80"])) + data
+    model = take(st.booleans())
+    want = take(st.sampled_from([role, role, "llama31-8b", None]))
     if model and want is None:
         want = role
-    return {"data": data.hex(), "path": draw(st.sampled_from(["pin.json", "/m/models.jsonl", "pins/é.json"])),
+    return {"data": data.hex(), "path": take(st.sampled_from(["pin.json", "/m/models.jsonl", "pins/é.json"])),
             "role": want, "model": model}
 
 
@@ -213,8 +216,8 @@ def test_each_refusal_of_a_pin_is_the_leans_word_for_word(server) -> None:
         (case(json.dumps(good | {"checkpoint": {**files, "config.json": "AB" * 64}})),
          f"the pin {p} is not {form} with a file name (no directory) a file"),
         (case(json.dumps({ROLE: {"files": {}}, "B": {}})),
-         f"the pin {p} is not {{ROLE: {{checkpoint_sha512, files: {{file: SHA-512 hex}}, ...}}}} with a file name (no "
-         "directory) a file"),
+         (f"the pin {p} is not {{ROLE: {{checkpoint_sha512, files: {{file: SHA-512 hex}}, ...}}}} with a file name (no "
+          "directory) a file")),
         (case(json.dumps(good | {"checkpoint_sha512": "cd" * 64})),
          f"the pin {p}'s checkpoint_sha512 is not the SHA-512 of its checkpoint's canonical JSON ({digest[:16]}...)"),
         (case(json.dumps(good)[:-1] + ', "checkpoint_sha512": "' + "ef" * 64 + '"}'),
@@ -329,27 +332,27 @@ def expected_root(tmp: Path):
 
 
 @st.composite
-def shapes(draw) -> dict:
-    w = draw(st.integers(1, 4))
-    return {"digests": [expand(draw(st.binary(max_size=4)), 64).hex() for _ in range(w)],
-            "engines": draw(st.integers(1, 3)), "arena_blocks": w + draw(st.integers(0, 3)),
-            "host_blocks": draw(st.integers(0, 5)), "node": NODE.hex(), "key": KEY.hex()}
+def shapes(take) -> dict:
+    w = take(st.integers(1, 4))
+    return {"digests": [expand(take(st.binary(max_size=4)), 64).hex() for _ in range(w)],
+            "engines": take(st.integers(1, 3)), "arena_blocks": w + take(st.integers(0, 3)),
+            "host_blocks": take(st.integers(0, 5)), "node": NODE.hex(), "key": KEY.hex()}
 
 
 @st.composite
-def root_inputs(draw) -> dict:
-    v = draw(shapes()) | {"workers": draw(st.integers(0, 4)), "chunk_log2": draw(st.integers(0, 6))}
-    f = draw(st.integers(0, 12))
+def root_inputs(take) -> dict:
+    v = take(shapes()) | {"workers": take(st.integers(0, 4)), "chunk_log2": take(st.integers(0, 6))}
+    f = take(st.integers(0, 12))
     if f == 1:
         v["engines"] = 0
     elif f == 2:
         v["arena_blocks"] = len(v["digests"]) - 1
     elif f == 3:
-        v["digests"] = draw(st.sampled_from([[], ["00" * 63], v["digests"] + ["00" * 65]]))
+        v["digests"] = take(st.sampled_from([[], ["00" * 63], v["digests"] + ["00" * 65]]))
     elif f == 4:
-        v["node"] = draw(st.sampled_from(["", "00" * 65, "07", "ab" * 64]))
+        v["node"] = take(st.sampled_from(["", "00" * 65, "07", "ab" * 64]))
     elif f == 5:
-        v["key"] = draw(st.binary(max_size=40)).hex()
+        v["key"] = take(st.binary(max_size=40)).hex()
     return v
 
 
@@ -438,34 +441,34 @@ def _root(tmp: Path, v: dict, key: bytes, host: int) -> str:
 
 def hold_inputs(tmp: Path):
     @st.composite
-    def inputs(draw) -> dict:
+    def inputs(take) -> dict:
         """The pinned model's store under the verifier's key, with its layout or none, as it is or with one fault."""
-        v = draw(shapes())
+        v = take(shapes())
         w, engines, arena_blocks, host = len(v["digests"]), v["engines"], v["arena_blocks"], v.pop("host_blocks")
-        v |= {"role": draw(st.sampled_from([ROLE, "é"])), "blocks": engines * arena_blocks + host,
-              "layout": draw(st.sampled_from([None, _regions(engines, arena_blocks, w, host)]))}
-        f = draw(st.integers(0, 20))
+        v |= {"role": take(st.sampled_from([ROLE, "é"])), "blocks": engines * arena_blocks + host,
+              "layout": take(st.sampled_from([None, _regions(engines, arena_blocks, w, host)]))}
+        f = take(st.integers(0, 20))
         root_key, root_host = KEY, host
         if f == 1:
-            v["blocks"] = engines * arena_blocks - draw(st.integers(1, 3))
+            v["blocks"] = engines * arena_blocks - take(st.integers(1, 3))
         elif f == 2:
-            v["layout"] = draw(st.sampled_from([[], _regions(engines, arena_blocks + 1, w, host),
+            v["layout"] = take(st.sampled_from([[], _regions(engines, arena_blocks + 1, w, host),
                                                 _regions(engines, arena_blocks, w, host)[:-1],
                                                 [["kv", *r[1:]] for r in _regions(engines, arena_blocks, w, host)]]))
         elif f == 3:
-            v["node"] = draw(st.sampled_from(["", "00" * 65]))
+            v["node"] = take(st.sampled_from(["", "00" * 65]))
         elif f == 4:
             root_key = bytes(32)
         elif f == 5:
-            v["blocks"] += draw(st.integers(1, 3))
+            v["blocks"] += take(st.integers(1, 3))
         elif f == 6:
-            v["engines"] = draw(st.sampled_from([0, -1]))
+            v["engines"] = take(st.sampled_from([0, -1]))
         elif f == 7:
-            v["arena_blocks"] = w - draw(st.integers(1, 2))
+            v["arena_blocks"] = w - take(st.integers(1, 2))
         v["payload_root"] = _root(tmp, v | {"engines": max(engines, 1), "arena_blocks": max(arena_blocks, w)},
                                   root_key, root_host)
         if f == 8:
-            v["payload_root"] = draw(st.sampled_from(["00" * 64, v["payload_root"][:-2] + "00", "ab" * 32, ""]))
+            v["payload_root"] = take(st.sampled_from(["00" * 64, v["payload_root"][:-2] + "00", "ab" * 32, ""]))
         elif f == 9:
             v["digests"] = v["digests"][::-1] if w > 1 else [expand(b"other", 64).hex()]
         return v
@@ -495,15 +498,15 @@ def test_each_decision_of_a_hello_is_the_leans_word_for_word(server, tmp_path) -
     shown = "[('weights', 'hbm', 0, 6), ('filler', 'hbm', 6, 1), ('weights', 'hbm', 7, 6), ('filler', 'hbm', 13, 1)]"
     cases = [
         (base | {"payload_root": other},
-         f"the hello's payload root {other[:16]}... is not the pinned model {ROLE}'s store (2 arenas of 7 blocks, 6 of "
-         "weights each, then 2 host filler blocks) under this verifier's payload key, whose root is "
-         f"{want[:16]}...: register the store `remote_bandwidth.store` lays out, salted with the key the verifier sent",
+         (f"the hello's payload root {other[:16]}... is not the pinned model {ROLE}'s store (2 arenas of 7 blocks, 6 of "
+          "weights each, then 2 host filler blocks) under this verifier's payload key, whose root is "
+          f"{want[:16]}...: register the store `remote_bandwidth.store` lays out, salted with the key the verifier sent"),
          want),
         (base | {"payload_root": want, "blocks": 13},
-         f"the hello's store is 13 blocks, fewer than the pinned model's 2 arenas of 7", None),
+         "the hello's store is 13 blocks, fewer than the pinned model's 2 arenas of 7", None),
         (base | {"payload_root": want, "layout": wider},
-         "the hello's layout [('weights', 'hbm', 0, 6), ('filler', 'hbm', 6, 2), ('weights', 'hbm', 8, 6), "
-         f"('filler', 'hbm', 14, 2)]... is not the pinned model {ROLE}'s {shown}...", None),
+         ("the hello's layout [('weights', 'hbm', 0, 6), ('filler', 'hbm', 6, 2), ('weights', 'hbm', 8, 6), "
+          f"('filler', 'hbm', 14, 2)]... is not the pinned model {ROLE}'s {shown}..."), None),
         (base | {"payload_root": want, "node": ""}, "a node's id is 1 to 64 bytes", None),
         (base | {"payload_root": want, "engines": 0},
          "a store is one or more arenas and no fewer than zero host blocks, not 0 and 0", None),
@@ -537,19 +540,19 @@ def binding(tmp: Path):
 
 def binding_inputs(tmp: Path):
     @st.composite
-    def inputs(draw) -> dict:
+    def inputs(take) -> dict:
         """`hold_inputs`' store and hello, then another hello of that store or not, and the role's pin as a pin file
         holds it (a pin, a registry's line, core's `models.json`), as it is or with one fault."""
-        v = draw(hold_inputs(tmp))
+        v = take(hold_inputs(tmp))
         hellos = [{k: v.pop(k) for k in ("node", "blocks", "payload_root", "key", "layout")}]
-        if draw(st.booleans()):
-            engines, arena_blocks, host = max(v["engines"], 1), max(v["arena_blocks"], len(v["digests"])), draw(
+        if take(st.booleans()):
+            engines, arena_blocks, host = max(v["engines"], 1), max(v["arena_blocks"], len(v["digests"])), take(
                 st.integers(0, 3))
             root = _root(tmp, v | {"engines": engines, "arena_blocks": arena_blocks}, KEY, host)
             hellos.append({"node": NODE.hex(), "blocks": engines * arena_blocks + host, "payload_root": root,
                            "key": KEY.hex(), "layout": None})
-        role, files = v["role"], files_of(draw(st.binary(max_size=4)))
-        g = draw(st.integers(0, 9))
+        role, files = v["role"], files_of(take(st.binary(max_size=4)))
+        g = take(st.integers(0, 9))
         pin = a_pin(files, "other" if g == 1 else role)
         if g == 2:
             pin["checkpoint_sha512"] = "cd" * 64
@@ -560,8 +563,8 @@ def binding_inputs(tmp: Path):
             data = b"\xff" + data
         elif g == 7:
             data = data[:len(data) // 2]
-        return v | {"data": data.hex(), "path": draw(st.sampled_from(["pin.json", "pins/é.json"])),
-                    "workers": draw(st.integers(0, 4)), "hellos": hellos}
+        return v | {"data": data.hex(), "path": take(st.sampled_from(["pin.json", "pins/é.json"])),
+                    "workers": take(st.integers(0, 4)), "hellos": hellos}
     return inputs()
 
 
@@ -597,8 +600,8 @@ def test_each_decision_of_the_verifiers_binding_is_the_leans_word_for_word(serve
     cases = [
         (v | {"data": others}, f"the pin {p} is other's, not --model {ROLE}'s"),
         (v | {"data": json.dumps(good | {"checkpoint_sha512": "cd" * 64}).encode().hex()},
-         f"the pin {p}'s checkpoint_sha512 is not the SHA-512 of its checkpoint's canonical JSON "
-         f"({good['checkpoint_sha512'][:16]}...)"),
+         (f"the pin {p}'s checkpoint_sha512 is not the SHA-512 of its checkpoint's canonical JSON "
+          f"({good['checkpoint_sha512'][:16]}...)")),
         (v | {"data": (b"\xff" + json.dumps(good).encode()).hex()}, f"the pin {p} is not UTF-8"),
         (v | {"engines": 0}, "a store is one or more arenas and no fewer than zero host blocks, not 0 and 0"),
         (v | {"arena_blocks": 5}, "the weights take 6 blocks, more than an arena's 5"),
