@@ -100,9 +100,9 @@ theorem foldl_wf {a : Spot.OneStageZk.StepAt} {bs : Core.Blobs} :
         .ok r₁ := h₁
     exact foldl_wf l r₁ r' h (step_wf h₁' hr)
 
-theorem stepMember_wf {slice : Spot.OneStageZk.Member → Json} {bs : Core.Blobs} {r r' : Spot.OneStageZk.Run}
-    {z : Spot.OneStageZk.StatementFiles × Spot.OneStageZk.Member}
-    (h : Spot.OneStageZk.stepMember slice bs r z = .ok r') (hr : OutWf r.out) : OutWf r'.out := by
+theorem stepMember_wf {st : Spot.OneStageZk.Member → Flock.V Spot.OneStageZk.StepAt} {bs : Core.Blobs}
+    {r r' : Spot.OneStageZk.Run} {z : Spot.OneStageZk.StatementFiles × Spot.OneStageZk.Member}
+    (h : Spot.OneStageZk.stepMember st bs r z = .ok r') (hr : OutWf r.out) : OutWf r'.out := by
   unfold Spot.OneStageZk.stepMember at h
   have h := mapError_ok' h
   unfold Spot.OneStageZk.runFrom at h
@@ -110,9 +110,9 @@ theorem stepMember_wf {slice : Spot.OneStageZk.Member → Json} {bs : Core.Blobs
   rw [← Array.foldlM_toList] at h
   exact foldl_wf _ r r' h hr
 
-theorem foldlMembers_wf {slice : Spot.OneStageZk.Member → Json} {bs : Core.Blobs} :
+theorem foldlMembers_wf {st : Spot.OneStageZk.Member → Flock.V Spot.OneStageZk.StepAt} {bs : Core.Blobs} :
     ∀ (l : List (Spot.OneStageZk.StatementFiles × Spot.OneStageZk.Member)) (r r' : Spot.OneStageZk.Run),
-      l.foldlM (Spot.OneStageZk.stepMember slice bs) r = .ok r' → OutWf r.out → OutWf r'.out
+      l.foldlM (Spot.OneStageZk.stepMember st bs) r = .ok r' → OutWf r.out → OutWf r'.out
   | [], r, r', h, hr => by
     obtain rfl : r = r' := Except.ok.inj h
     exact hr
@@ -126,6 +126,7 @@ theorem runMembers_wf {slice : Spot.OneStageZk.Member → Json} {ms : Array Spot
     (h : Spot.OneStageZk.runMembers slice ms sts want bs = .ok r) : OutWf r.out := by
   unfold Spot.OneStageZk.runMembers at h
   obtain ⟨held, -, h⟩ := bind_ok' h
+  obtain ⟨_, -, h⟩ := bind_ok' h
   obtain ⟨r₁, h₁, h⟩ := bind_ok' h
   obtain ⟨_, -, h⟩ := bind_ok' h
   obtain rfl : r₁ = r := Except.ok.inj h
@@ -138,13 +139,8 @@ theorem membersRun_wf {p : Spot.OneStageZk.Params} {ms : Array Spot.OneStageZk.M
     {bs : Core.Blobs} {r : Spot.OneStageZk.Run} (h : Spot.OneStageZk.membersRun p ms c e sts bs = .ok r) :
     OutWf r.out := by
   unfold Spot.OneStageZk.membersRun at h
-  simp only [bind_iff] at h
-  obtain ⟨held, -, h⟩ := h
-  split at h
-  · simp only [bind_iff] at h
-    obtain ⟨_, hthrow, -⟩ := h
-    cases hthrow
-  · simp only [bind_iff] at h
-    repeat (first | exact runMembers_wf h | obtain ⟨_, -, h⟩ := h)
+  obtain ⟨_, -, h⟩ := bind_ok' h
+  obtain ⟨_, -, h⟩ := bind_ok' h
+  exact runMembers_wf h
 
 end SpotFlock.RunsAs
