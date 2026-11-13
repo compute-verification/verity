@@ -104,7 +104,7 @@ def _parts(types: dict, layouts: list, unit: int, tables: dict) -> dict:
 
 def write_target(name: str, scratch: Path) -> list[dict]:
     """Each class of `name` as `STEM.types.json` and `STEM.archive.json` in `scratch`, with the mirror's outputs."""
-    from verity.definitions.circuits import library
+    from verity.circuits import library
     from verity_flock import circuit_types as CT
     from verity_flock import ir_lower as IL
     from verity_flock import layouts as LY
@@ -135,7 +135,7 @@ def write_target(name: str, scratch: Path) -> list[dict]:
 
 def write_fanout(m: int, scratch: Path) -> dict:
     """`test_derive.fanout_case(m, m)`: a unit of m placed calls of a one-AND callee and m placed reads of a 4-bit table."""
-    from verity.definitions.circuits import library
+    from verity.circuits import library
     from verity_flock import circuit_types as CT
     from verity_flock import layouts as LY
 

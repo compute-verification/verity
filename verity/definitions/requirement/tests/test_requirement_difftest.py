@@ -1,4 +1,4 @@
-"""`core_requirement` against `verity.definitions.circuits.requirement`, through the core difftest harness (`tools/difftest`).
+"""`core_requirement` against `verity.circuits.requirement`, through the core difftest harness (`tools/difftest`).
 
 `requirement-difftest` (`CircuitRequirement.Difftest.table`) serves `requirement`: an instance's live and read values at
 each step, their bits, by value and by block, those in complete blocks (the credited ones) and their bits, the resident
@@ -38,7 +38,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import array_of
 from verity.circuits.types import Array, Value
-from verity.definitions.circuits import requirement as R
+from verity.circuits import requirement as R
 from verity.circuits.ops import fp32
 from verity.definitions.registry import b1
 

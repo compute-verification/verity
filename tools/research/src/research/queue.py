@@ -3187,11 +3187,11 @@ class Queue:
 #: library), the checker, the lock and the workspace's member list (installed distributions), a sidecar (the registries), and
 #: what every target's entry reads or the registries import (an entry can read tens of files of vLLM's `program/` and these
 #: packages, so a change only to `verity_vllm/pipeline/` and `config.py` reruns hundreds of targets)
-_COLD_PREFIXES = ("verity/circuits/", "verity/definitions/circuits/", "verity/circuits/ops/", "verity/circuits/silicon/",
+_COLD_PREFIXES = ("verity/circuits/", "verity/circuits/ops/", "verity/circuits/silicon/",
                   "tools/verity/circuit_check/", "adapters/vllm/verity_vllm/", "verity/protocols/flock/prover/python/",
                   "verity/protocols/pouw/verifier/", "verity/protocols/pous/verifier/", "tools/pous_grader/",
                   "verity/protocols/pous/device/challenger_session.py", "verity/protocols/pous/device/memory_challenger.py",
-                  "verity/definitions/commitments/", "verity/protocols/poub/verifier/commitments/",
+                  "verity/protocols/poub/verifier/commitments/",
                   "verity/commitments/frame_v3/", "verity/commitments/gates/", "verity/commitments/hm96/",
                   "verity/commitments/__init__.py", "verity/commitments/advice.py", "verity/commitments/coin_tree.py",
                   "verity/commitments/domains.py", "verity/commitments/history.py", "verity/commitments/identity.py",
