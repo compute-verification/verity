@@ -272,11 +272,12 @@ class ServedCommit:
         except Unmodelled as e:
             b = {"program_digest": None, "manifest_digest": None, "complete": False, "unmodelled": {"build_refused": str(e)},
                  "populations": {"identities": 0}, "identities": []}
-        json.dump(b, open(f"{out}/build_rebuilt.json", "w"), indent=1)
+        with open(f"{out}/build_rebuilt.json", "w") as f:
+            json.dump(b, f, indent=1)
         loaded = b.get("artifact") or {"winners": SA.winners(engine_env.compile_dirs()["inductor"])}
         diff = SA.differences(self.pin, loaded, SA.PARTS if "artifact" in b else ("winners",))
-        json.dump({"pinned": self.pin["digest"], "loaded": loaded.get("digest"), "equal": not diff, "differences": diff},
-                  open(f"{out}/artifact_check.json", "w"), indent=1)
+        with open(f"{out}/artifact_check.json", "w") as f:
+            json.dump({"pinned": self.pin["digest"], "loaded": loaded.get("digest"), "equal": not diff, "differences": diff}, f, indent=1)
         if diff:
             print(f"[delta] REFUSE: this process loaded compile artifact {str(loaded.get('digest', 'of a refused Build'))[:16]}, not the Build of record's "
                   f"{self.pin['digest'][:16]} ({len(diff)} differences: {diff[:3]})", flush=True)
