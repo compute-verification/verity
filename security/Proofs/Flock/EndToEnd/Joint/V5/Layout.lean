@@ -370,16 +370,16 @@ theorem memberLaw_escape (τ : Strategy w.game) (k : Fin w.ms.length) (B : Finse
 
 end Ended
 
-section Ended
-
-variable [Nonempty w.EndΩ]
-
 /-- **Member `k`'s design misses a set of its proof blocks** with probability at most the window's sampling design's
 own miss `P_a` of their places in the population, under A3. -/
 theorem design_escape_le (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (k : Fin w.ms.length)
     (B : Finset (Fin (w.ms.get k).n)) :
     (w.design k).escape B ≤ ENNReal.ofReal (w.pa (B.image (w.ms.get k).emb)) :=
   (w.design_escape k B).trans_le (Bridge.execSel_escape_le w.src hA3 w.hlaw w.hns _)
+
+section Ended
+
+variable [Nonempty w.EndΩ]
 
 /-! ### The window's incorrect proof blocks are its members' -/
 

@@ -302,7 +302,7 @@ noncomputable def wrongSet (τ : Strategy w.game) : Finset (Fin w.nJ) :=
 /-- Where some outcome of the stream ends the sample, the window's incorrect proof blocks are its members'. -/
 theorem wrongSet_eq [h : Nonempty w.EndΩ] (τ : Strategy w.game) :
     w.wrongSet τ = Finset.univ.biUnion fun k => (w.memberWrong τ k).image (w.ms.get k).emb :=
-  dif_pos h
+  dite_eq_left h
 
 /-- **The sampling design of member `k`'s part of the sample**: the sample's coins, member `k`'s part, with every proof
 block of the member where the sample ran out. -/

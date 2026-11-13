@@ -373,7 +373,7 @@ theorem extractOf_some {θ : ByteArray} {F : Array ByteArray} {W : Window} (hW :
       (((K.live W θ F c σ).joint (I.base.cost θ F c σ)).seats (K.project W θ F c σ)) := by
   unfold extractOf
   rw [hW]
-  exact dif_pos he
+  exact dite_eq_left he
 
 /-- **The deployed vocabulary**: the base with SPOT's names (v2's log, the window's read finder and the binding's
 forger, the further finders and the window's premises at `K`'s finders and projection, the extractor at the
