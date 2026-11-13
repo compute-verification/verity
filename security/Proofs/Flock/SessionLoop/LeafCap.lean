@@ -119,8 +119,8 @@ end Claims.ZKMal.Masked
 
 namespace Claims.ZKServer.Loop
 
-open Claims Claims.ZKMal
-open FlockSoundness.Discharge
+open Claims Claims.ZKMal Claims.ZKServer
+open FlockSoundness.Discharge FlockSoundness.CROnly
 
 /-- **The session's leaf count at the deployed tables**, whatever the round and tape plans: at most `leafCap` a
 table. -/
