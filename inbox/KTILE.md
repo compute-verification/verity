@@ -307,3 +307,45 @@ them; this takes that red away before it happens. I told compute-research and vl
 Then HASH-129 as briefed above; its return moves to Fri 13 Nov 10:00Z.
 
 Return with this item by Fri 13 Nov 05:00Z.
+
+## Fri 13 Nov 03:04Z: #9542's merge is read and right, but `main` moved under it (the remote merge, #9375, landed): one new conflict, one README row. FIRST of three: #9542 takes `main` once more, with the `stays` line; I mark on your word
+
+**By me, on your head `fd4f0353ba20`:** its parents are `1d3b431248` and `49d12bdc36`; against
+`49d12bdc36` it is 11 deletions and 11 edits, and the map loses `attn_bf16`'s two rows and
+nothing else. Right as told. **But `main` is now `4a7291116e11`, 24 commits later, with #9375 in it,
+and `git merge-tree` of it with your head gives one conflict: `benchmarks/pouw/harness/README.md`,**
+the `sass_gate.py` row. Both sides edited that one line:
+- `main` (`ca2e80f1ed`): "them," became "them (a div body that folds a constant numerator in,
+  for that constant alone: `numerators`),";
+- yours: `attn_bf16/` leaves the list of gates ("`pearl_c_sm120/`, torch_gpu's `s8_linear/`").
+
+`benchmarks/pouw/pyproject.toml` and `tests/lint/allowlists/repo_retired_terms.json` merge by
+themselves. Outside its own directory `attn_bf16` is named on `main` on the same 20 lines, in
+the same files, as at `49d12bdc36` [my grep], so #9375 brought no new name of it.
+
+**Your order of work now (three items; the two briefs below this one stand):**
+
+**1. #9542, now.**
+   a. Merge `origin/main` into `cursor/kernels-attn-bf16-delete-aa75` (a merge, no rebase, no
+      force-push). In the README row keep both edits. Fetch first: if `main` moved again, take
+      what it is then and tell me which commit.
+   b. **Yes to your question:** `benchmarks/torch_gpu/attn_bf16/` leaves `"stays"` in
+      `tools/move/layout_maps.json`, in this PR, as `d2a20a7bf7` did for `benchmarks/judge.py`.
+      A list that names a directory the same change deletes is stale the moment it lands.
+   c. The grep again at the merged head; nothing else may name `attn_bf16` but the lint
+      allowlists' own history, if any (say what is left and why).
+   d. Push, and **launch the suites at once** (`--changed` against the `main` you merged, a CPU
+      node outside an infra window). The PR's body: the new head, the second merge, the run.
+   e. Do not wait idle for the run: go on with item 2. **When the run ends green, tell me in
+      your return: I mark #9542 then.** If it is red, stop and tell me what failed.
+
+**2. The three kernel build gates by repository path** (the 03:0xZ brief above), on a branch
+   cut from the same `main`, while #9542's suites run.
+
+**3. HASH-129** (the 02:40Z brief). **The standing rule "nothing on `vy-nebius-2`" has one
+   exception, for this item only: reading there, niced, with no write, no delete and no
+   hashing of the tarballs,** as its brief says. Anything else on that node is still not yours.
+
+Return with items 1 and 2 by Fri 13 Nov 05:00Z (sooner if #9542's run is green before the
+gates' PR is open: then return at once with the head and come back for the rest). HASH-129
+by Fri 13 Nov 10:00Z.
