@@ -16,7 +16,7 @@ A probe run by hand, not a proof (`exempt` in `lean-audit.json`); what it evalua
 * **The inner statement** `xI`, as `85-rec-reprice.sh`'s inner `flock-verify verify` reads it (`Raw`:
   `verity/flock-circuit+plain-leaves`, `--coins os`, `--stratified K`, the partition and program, the record's
   `unit_draw`), and its setup `v`: `setupB false xI`, which is `setupOf false xI` (`setupB_eq`).
-* **The tape**: each rep's C-Flock proof file decoded at its shape as `verifyRep` decodes it, with its batched value `T`
+* **The tape**: each rep's Flock proof file decoded at its shape as `verifyRep` decodes it, with its batched value `T`
   from the verifier's own transcript run on the record's stream (`bindAndZerocheck`, `lincheck`, `ringSwitch`); the
   running sums' salts (`v/acc-salts.bin`).
 * **The coins**: the link coin `c₁`, of which `IrDep` reads only the link points (`pointsOf`, held to the record's), then

@@ -389,7 +389,7 @@ private def exSharing (shared : List String) (reads : Option (List (String × Js
   (exHeader (·.setObjVal! "shared_rows" (exTables shared))).setObjVal! "registered"
     ((reads.map fun rs => Json.mkObj [("ports", Json.mkObj rs)]).getD .null)
 
-/-- `exOwn` with its template's reference sharing rows at `shared`, and the verifiers of record reporting reads of
+/-- `exOwn` with its template's reference sharing rows at `shared`, and the verifiers reporting reads of
 `read`, each value at its root. -/
 private def exShares (shared : List String) (read : List (String × Nat)) : Own :=
   { exOwn with
