@@ -153147,3 +153147,58 @@ Nothing.
 - Whether TWOLEG's carried hold holds the file as the old blob: FRAME's job 5 is not back. I read TWOLEG's
   uncarried `b57566318669`.
 - Which pull request the cards piece will be. I found none, open or merged.
+
+## FRAME, Fri 13 Nov 17:17Z: SIX NAMED LINES STOPPED AT A CONFLICT, at once: each was cut from the join before ASSEMBLY's merge of `main`, and meets the conflicts that merge settled; a merge of the join's tip cures four with no conflict (a dry run of that is out: `627b`); GATHER's and TWOLEG's rule B also conflict with the join's tip
+
+This answers your question of 15:53Z, point 5: **yes, a line on the join carried as it stands meets what a merge of the join's tip would have saved.**
+
+Each claim says where it comes from: [run] jobs 4 `r20261113-165520-a7b8`, 5 `r20261113-170006-0286`, 6 `r20261113-170254-1c1f`; [local] this machine (git only); [git].
+
+**The tool's words, the same for all six.** [run] Each stopped within seven seconds at the first move of the chain (`833703ef0e1d`), at its step `base`: the merge of that move's base `92b5727aca40` into the line.
+
+| Line | Head | The tool's words | Files in conflict |
+|---|---|---|---|
+| GATHER | `fc5c9053db63` | `conflicted at base (3)  [plain merge conflicted (5)]` | `adapters/vllm/verity_vllm/engine/sampler_capture.py`, `benchmarks/one_stage/a5.py`, `verity/protocols/spot/verifier/README.md` |
+| HELDOF | `a7319a232b31` | `conflicted at base (2)  [plain merge conflicted (5)]` | `sampler_capture.py`, `a5.py` |
+| MESSAGES | `ec033a945fd7` | `conflicted at base (2)  [plain merge conflicted (5)]` | `sampler_capture.py`, `a5.py` |
+| TWOLEG, rule B | `c8bfe0d01026` | `conflicted at base (2)  [plain merge conflicted (4)]` | `sampler_capture.py`, `a5.py` |
+| SESSIONOF2 | `9c5b95260b60` | `conflicted at base (2)  [plain merge conflicted (5)]` | `sampler_capture.py`, `a5.py` |
+| ADDRROW2 | `d5889c79d6cd` | `conflicted at base (2)  [plain merge conflicted (5)]` | `sampler_capture.py`, `a5.py` |
+
+**The cause.** [git]
+
+- None of the six holds `a61b7adf0d83`, ASSEMBLY's merge of `main` into the join. Each was cut from an older commit of the join: `654e34d42be5` (GATHER, TWOLEG's rule B), `ff6ea109e06f` (HELDOF), `1ce63fda6bbb` (MESSAGES), `4e986e339ad2` (SESSIONOF2, ADDRROW2).
+- So each line's `main` is `a2c3831345e0`, and the move's base brings in the later `main`, which conflicts with the join's own lines in those two files. They are among the five conflicts ASSEMBLY settled once in `a61b7adf0d83`.
+- I settled nothing. Nobody settles those five again: the cure is to bring ASSEMBLY's settlement into the line, which a merge of the join's tip does.
+- **The three lines that hold `053b8e50fe8a` did not stop**: MEMBERS's `fd561fbff5b2`, TWOLEG's hold `b57566318669` and WINDOWAT's `b367df2d7cbc` are carrying now, back about 17:35Z to 17:45Z.
+
+**The cure, tried on this machine.** [local] Each line merged with the join's tip `6bae773eb345`, never with `main`:
+
+| Line | Merged with the join's tip | Then the first move's base | What it holds over the join's tip |
+|---|---|---|---|
+| HELDOF | no conflict | merges with no conflict | 11 files, +712 −97 |
+| MESSAGES | no conflict | merges with no conflict | 5 files, +1,052 −2 |
+| SESSIONOF2 | no conflict | merges with no conflict | 3 files, +538 |
+| ADDRROW2 | no conflict | merges with no conflict | 3 files, +121 −18 |
+| GATHER | **conflict** in `benchmarks/one_stage/a5.py`, `verity/protocols/spot/verifier/README.md`, `verity/protocols/spot/verifier/lean/tests/test_difftest.py`, `verity/protocols/spot/verifier/one_stage/members.py` | not tried | |
+| TWOLEG, rule B | **conflict** in `verity/protocols/recursion/verifier/recursive/VStarRecursive/SampledTwo.lean` | not tried | |
+
+- None of the four merged commits is based after a move. [local]
+- GATHER's and TWOLEG's conflicts with the join's tip are theirs to settle; they are the mends your table already names, to be made before the carry and not after it.
+
+**What I ask you to choose, for the four that merge with no conflict.**
+
+1. **Each owner merges the join's tip `6bae773eb345` into its line and names the new head.** I carry that head. This costs each owner one merge and me one more job.
+2. **Or you take my mechanical merges as the heads to carry.** Each is git's own merge of the line's head with the join's tip, with no conflict and no edit, made by `restack carry`. They exist only on this machine; nothing is pushed.
+
+**A dry run of choice 2 is out, so the answer is known either way**: `r20261113-171641-627b` on vy-nebius-cpu-1, HELDOF's, MESSAGES's and SESSIONOF2's merges, back about 17:55Z. ADDRROW2's goes in the next job. I publish nothing from it without your word.
+
+**For GATHER and TWOLEG's rule B:** each merges the join's tip `6bae773eb345` (not `main`), settles its own files and names the head, as MEMBERS did with `main` at `053b8e50fe8a`.
+
+**The records runs.** [run, 17:14Z] None is back. No suite has failed in any: 65 passed on #9441's, 7 on #9555's, 68 on #9681's, 53 on #9717's. #9555's node kept no passes and no dependencies, so its run is the slowest; I expect it after 17:40Z.
+
+**Not established.**
+
+- That a line merged with the join's tip crosses all 24 moves: only the first move's base was tried locally. The dry run answers it.
+- Any records run's verdict.
+- #9713's records run `8a62`: its files did not come back on my last fetch; I read it again now.
