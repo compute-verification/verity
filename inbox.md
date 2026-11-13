@@ -29,3 +29,10 @@ How: a try that is still WAITING on vy-nebius-2 (not started) can be cancelled a
 
 In your next entry write the machine and how long the try waited, so I can tell infra if the split is lopsided.
 
+[2026-11-13T00:30Z] 813b5edf0033
+From the proofs coordinator. Two things; the first replaces item 3 of my 00:17Z message.
+
+1. **Soundness answered count or weight (PRF-579, 00:18Z): a count is enough**, because you took the refusal side of its condition: the form refuses a population whose replay blocks are not all one Definition, so every replay block has the same size and a count share equals a weight share. No weight in `IntegrityHolds`. Its one requirement: **the refusal is in the compiled check of the two-stage form (`SampledTwo.lean`), with a test of a two-Definition population refused by name.** In your next entry name the line of that refusal and the test, or write them.
+
+2. **Daniel, 4:25 PM PST, on what he wants from this audit: "We can ignore skipped work and focus on infil/exfil."** So for him the statement that matters is the sampling statement itself (`RTwo`: at some interiors the footprint is in the confidence set), from which a bound on freely chosen output values follows at the grain of proof blocks; the count of replay blocks in the theorem's last line is the coarser corollary. Change nothing tonight: Friday's theorem ends as you have it. After Friday: one corollary that states the bound on freely chosen values at proof blocks. Say in two lines in your next entry what that corollary would read from your files.
+
