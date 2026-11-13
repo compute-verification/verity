@@ -358,7 +358,7 @@ theorem StageBudget : Accounting.Guarantees.TS.StageBudget := by
       (fun a => ∑ u, ((by classical exact if T.skipped stg a u then w u else 0) : ℝ))
       (fun a => share_le stg tk w hw T a) hluck (fun a => ∀ i, T.passes stg a.1 (tk (a.2 i))) (fun _ => Iff.rfl)
       (fun a => ∑ u, ((by classical exact if T.skipped stg a.1 u then w u else 0) : ℝ)) (fun _ => rfl)
-    rw [StageWindow.game]
+    rw [StageExecutionPhase.game]
     exact ⟨fun a => share_nonneg stg w hw0 T a.1, key, fun a => ih a (hLn a)⟩
 
 theorem CompilerStage : Accounting.Guarantees.TS.CompilerStage := by
