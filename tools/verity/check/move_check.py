@@ -1760,7 +1760,12 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             wa, wb = between(a, (a0, a1), [m.span() for m in px]), between(b, (b0, b1), [m.span() for m in py])
             if len(wa) != len(wb):
                 continue
-            if all(now(f) == map_path(m["p"], pmap) + f[len(m["p"]):] for m in px for f in B.below(m["p"])):
+            # a list that has each old entry where the range sent it whole is judged as any line is; one that hasn't may be a
+            # cover (the mover writes a directory its rows emptied as the places its files went, and drops one that another
+            # entry already holds)
+            to_whole = collections.Counter(form(m, map_path(m["p"], pmap)) for m in px)
+            landed = collections.Counter(form(y, y["p"]) for y in py)
+            if to_whole == landed and all(now(f) == map_path(m["p"], pmap) + f[len(m["p"]):] for m in px for f in B.below(m["p"])):
                 continue
             files = [{n for f in B.below(m["p"]) if (n := now(f)) is not None} for m in px]
             held, was, news = set().union(*files), {form(m, m["p"]) for m in px}, {form(y, y["p"]) for y in py}
@@ -1768,8 +1773,10 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
                      **({form(m, rows.parts[old, m["p"]]): "split"} if (old, m["p"]) in rows.parts else
                         {form(m, rows.tokens[m["p"]]): "tokens"} if m["p"] in rows.tokens else {})} for m in px]
             has = {f for y in py for f in H.below(y["p"])}
-            # an old entry is gone unless the list has it as the range or its row sends it and not its other files
+            # an old entry is gone unless the list has it as the range or its row sends it and not its other files; one sent
+            # whole onto a place the list has no more often than before, which therefore holds its files, is gone too
             gone = [not news & to.keys() or (fs <= has and any(now(f) != w + f[len(m["p"]):] for f in B.below(m["p"])))
+                    or (fs <= has and (fw := form(m, w)) != form(m, m["p"]) and to_whole[fw] > landed[fw])
                     for m, fs, to in zip(px, files, sent) for w in [map_path(m["p"], pmap)]]
             anew = [y["p"] for y in py if form(y, y["p"]) not in was]
             lost = any(x["p"].endswith("/__init__.py") and now(x["p"]) is None and emptied(posixpath.dirname(x["p"])) for x in px)
