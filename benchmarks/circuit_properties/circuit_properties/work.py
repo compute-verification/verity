@@ -87,6 +87,11 @@ gives a gathered value:
   op with a specific argument is not specific by that alone, and none is where another argument is an input's whose
   values the Program doesn't state (a rope table, which may hold a 0).
 
+A softmax's row and the select a guard puts over the softmax are read from their references' runs where they take a
+causal mask's form, a product's row plus constant words (`row_by_runs`) and an and over each row, one node a word, of
+those words compared with one word (`fold`): each run is valued once, as `value` values each of its words. Any other is
+valued word by word, as `Reader(structure=False)` values every one, to the same reading.
+
 The reading rests on two premises, each held as a fact by a test where a Program breaks it. The rule rests on the
 one `SHARED_PREFIX` takes (a longer shared prefix needs the batch's tokens), `training_slowdown.work.P_BATCH`, whose
 words its suite holds this text to: past each row's first position, no two positions of the batch hold equal words.
