@@ -2,7 +2,7 @@
 certified arrivals and their release buckets, with nothing asked.
 
 `reference` is that step's specification in Python. It is `ReplayStep_v1`'s step
-(`verity.protocols.certifier.verifier.replay_step.reference`) with its timing input replaced: where that step reads one
+(`verity.protocols.accounting.certifier.verifier.replay_step.reference`) with its timing input replaced: where that step reads one
 decision bit per open arrival, this one keeps the tick's clock T in its state and gives the scheduler an arrival exactly
 when T has reached the close of its release bucket. No Definition implements it; the replay's own steps are its
 difftest (`adapters/vllm/tests/pipeline/test_tick_step.py`).
@@ -66,7 +66,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import SimpleNamespace
 
-from verity.protocols.certifier.verifier import replay_step as RS
+from verity.protocols.accounting.certifier.verifier import replay_step as RS
 
 from verity_vllm.pipeline.advice_code.schedule import Tick
 

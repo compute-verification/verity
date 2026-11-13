@@ -26,9 +26,9 @@ from verity.definitions.boolean import boolean_version
 from verity.definitions.registry import pearl_c_call as K
 from verity.definitions.registry import pearl_c_forming as F
 from verity.definitions.registry import pearl_c_noise as N
-from verity.protocols.pouw.prover.schemes import pearl_c as C
-from verity.protocols.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES
 
 #: each device record's atom and promotion period as the Definitions' statics
 ATOMS = {"h100": (HopperE4m3QgmmaDot32, 4), "sm120": (BlackwellE4m3QmmaDot32, 4)}
