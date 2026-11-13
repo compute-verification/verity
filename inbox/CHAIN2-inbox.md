@@ -1,5 +1,27 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 11:48 PM PST Thu 12 Nov: corrections
+
+- **Chain 1 has its land verdict** (review-44, 11:43 PM PST) and is first in the queue.
+- **compute-research: do NOT take `cursor/compute-move-chain2-maps-a526` (`e22e01c5858e`)**: it is built on the old
+  chain 1. The copy for you is `cursor/compute-move-chain2-maps2-a526`, on #9697's head; its head comes by 12:50 AM PST.
+  Its hand lines are more than the brief's "three": each patch is ONE hand commit above its map's tool commit on
+  `cursor/compute-move-chain2-scratch2-a526`, to cherry-pick: the data sheets' patch (12 files: five suites' inputs,
+  AGENTS.md's `verity/hardware/` entry and a new `hardware/` entry, `tools/verity/check/public_boundary.toml`, the
+  Slack registry's `hardware/` prefix, `verity/hardware/README.md`, four docstrings, its `tests/tree.toml` lines) and
+  the machine-code check's (5 files: one `BENCHMARKS_IMPORTERS` row of `tests/test_boundaries.py`,
+  `benchmarks/torch_gpu/j10r_sm90/job.sh:94`, prose in three files). Its `tests/tree.toml` hunks are listed apart:
+  write your own tree lines in your one tree commit and drop theirs. Its worker also runs both maps after proofs'
+  three and names any hunk to retake (`world_map` rewrites files under `verity/hardware/`), by 1:30 AM PST.
+- **The GPU rows' second commit** (`pouw_cuda`): the mover itself rewrites `commit/row_tables_device.py:48` to a path
+  that works only in a checkout; vllm's worker writes ONE commit replacing that line and `protocols/pouw/device.py:33`
+  with the path from the `prover` package (`Path(prover.__file__).resolve().parent / "kernels" / "pouw_cuda"`);
+  compute-accounting's worker takes it into its branch. Destination `verity/protocols/pouw/prover/kernels/pouw_cuda/`,
+  no `__init__.py` in `kernels/`. You take compute-accounting's branch whole; you write none of this.
+- **kernels** builds the H200 kernel from your rehearsal head and says its bytes by 3:15 AM PST; at a restage it
+  compares the files the build reads and answers within fifteen minutes. Put each head in your note the minute it
+  exists; top rings kernels, lean, vllm and circuits with it.
+
 ## 11:42 PM PST Thu 12 Nov: branches and heads known now
 
 - lean's #9609: `origin/cursor/lean-period-maps-fc8d` at `3058f83b1287`.
