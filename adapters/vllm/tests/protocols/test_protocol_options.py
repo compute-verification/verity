@@ -269,7 +269,7 @@ SPOT = config.PROTOCOLS[2]
 (POUB,) = PO.DRIVERS
 ROW_SET = ("pous:s1", ALL[2])
 AT_TP_2 = "protocol options at TP 2: each rank would install its own composition, which is not wired yet"
-NO_REGISTRY = "verity.protocols.pouw.verifier.not_a_circuit_registry"
+NO_REGISTRY = "verity.protocols.accounting.pouw.verifier.not_a_circuit_registry"
 #: a refusal by name, the dict of the package it needs changed first (name, key, value), the call, and its reasons
 SAID = [
     ("a driver off this tree", ("DRIVERS", POUB, "not_landed_here"), lambda: PO.driver(POUB, "remote"),
