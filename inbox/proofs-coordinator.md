@@ -119239,3 +119239,31 @@ In plain words: the assembly's two theorems still compile after the change that 
 - Everything from `CoinMapAgree.lean` (`coinMapHolds`) and `CoinStages.lean` (`size_le_fit_first`, `stageWidth_le_fit_second`, `freshWide_play`): unproved at `a36ddec487` (COINMAP).
 - `StageDraws`; `PrintsInOrder` (until HISTORY proves it at `dev₂`); `CoinsAgree … .second` at the join's `Good` (until STAGECOINS's `DevSecond` reads `FreshWide`).
 - An earlier period's genuine challenger signature still makes the cut's forger term ⊤.
+
+## ADDRWC, Fri 04:05Z: the copy's source half compiled, all 9 theorems (run r20261113-032451-ed34); the written half and CopiesAt written, try r20261113-040149-1f53 queued
+
+The copy's source half is proved. Where an inner block reads a bit that comes into its outer block from outside (a source bit), the column the layout picks for that bit holds exactly that port bit. I have also written the other half, bits the outer block computes and returns (written bits), and the assembly of both halves into `CopiesAt`. It gives the width and the copy at the address map from the design alone, plus `PortsOnce`, `Wiring` and, for the copy, `RowFact`. That second file has not compiled yet.
+
+- [run r20261113-032451-ed34] `CopySrc.lean` compiles: `srcPos_leaf`, `msgAt_bit8`, `srcAt_bit8`, `srcKey_bit8`, `rowBit_facts`, `sourceBits_mem`, `exists_wire_src`, `pickAny_of_wire`, `copiesRef_src`. The axiom probe finds nothing beyond `propext`, `Classical.choice` and `Quot.sound`. The `lean` step took 664 s, most of it on this one file; I have not yet found which step is slow.
+- [read] `CopyOut.lean` (new, 14 theorems; commit `0bde1c0d25`, branch `cursor/proofs-addrwc-60f3`):
+  - `wire_comp_uniform`: `uniform` puts unit `u`'s computed column `x` on gate `gates k R u + (x − nIn)`.
+  - `keyProg_wire_comp`: so in the key program that gate is `2 + n·B + u·C + (x − B)`.
+  - `outGate_wire`: the gate `Spot.Bits.outGate` gives is the column `Layout.OutColAt` names.
+  - `RowsWire.shared` (existing): no other column of the unit is on that gate, so `pickAny` picks exactly that column.
+  - `outRowBit_ref`: with each output row one output port, Bits' row and bit for the leaf's word are output port `jo = outPortOf w` and bit `16 k' + b`, through the existing `outPos_eq` and `outPortOf_spec`.
+  - `rowsFit_member`: each member's rows pass `RowsFitS`, from `scopeOkH`, which `membersScoped` checks inside `two`, through `rowsFit_of_committed` and `rowsFit_unrolled`.
+  - `copiesRef_out`: the written half.
+  - `copiesAt_of_two hd hO : CopiesAt h`.
+  - `widthFact_of_two hd hO W : WidthFact h (addressOf h)`.
+  - `copyFact_of_two hd hO W hrow : CopyFact h (addressOf h)`.
+- [derived] With `CopyOut` compiled, the width and copy facts rest on `two h s = some d`, `PortsOnce h` and `Wiring h`, plus `RowFact` for the copy. `BitsInPorts` and `CopiesAt` are no longer hypotheses.
+- [relayed, 03:59Z] The two-stage form accepts no honest play today. All my theorems take `two h s = some d`. [guess] If `two` evaluating is part of the form's accept, these theorems are true but empty until TWOLEG's fix is merged into the form and one honest play is accepted in a test.
+- [read] Machines: try r20261113-034534-0563 waited 16 minutes unstarted in vy-nebius-2's line, and I cancelled it before it started (status read in the same command). I relaunched it `--on auto`, which put it on vy-nebius-cpu-3. `--on auto` refuses `--pool`.
+- [read] Lint: I removed three unreachable `first | … | …` fallbacks (two in `WrittenOf`, one in `CopySrc`). That changes no statement.
+- Statements HONEST2 reads are unchanged: `widthFact_addressOf`, `RowWidths`, `CheckedRun.ports_member` and `copyFact_of_ref`.
+
+Size: 9 files, 1797 lines. Theorems not yet compiled: the 14 in `CopyOut`. I expect it compiled by 04:45Z if vy-nebius-cpu-3 has a warm tree.
+
+Not established: `CopyOut` has not compiled. `PortsOnce h` is still a hypothesis: either FRAME's decided check or a sort lemma for strings over `HmOut.checkRows`, about 300 lines. `Wiring h` and `RowFact` are inputs I don't prove. I have not merged the base that moved at 03:51Z (`e033bfc14be4`); my files don't need it yet.
+
+To post: nothing.
