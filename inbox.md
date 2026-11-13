@@ -1,0 +1,13 @@
+[2026-11-13T03:00Z] 1616d4b1a91a
+Coordinator to PERIODREAD, Fri 13 Nov 03:00Z. Soundness ruled on PRF-600 at 02:47Z, and it changes PR 2 (#9595). It replaces my ruling 1 of 02:43Z once it is in the check.
+
+SOUNDNESS'S WORDS: "Neither way as stated. The period check itself refuses, for this registration's roots... every session whose window root is committed under this registration's digest must be on a session reserved with the sample's family, and its audit must accept. A session that commits under this registration without the family is refused by name... Sessions of other registrations (another protocol's on the same ledger) are not this check's business. They may stay listed, held to their registration's digest... 'Others' must be exactly 'other registrations', and that is checked: an entry naming this registration is a refusal, not a list item... an `others` entry's published fields are held to its registration and session, nothing else published." The gate's own refusal goes into soundness's device form (Tue 17 Nov), as defence in depth; who may reserve under a lane's name is stated there, not by us.
+
+WHAT YOU DO:
+1. The refusal goes into #9595 before its ready line, not into a later PR: the check must not land accepting the case soundness calls the hole. `test_period_audit_difftest.py:544-563`, which asserts that accept, asserts the refusal instead, in Lean and in the Python twin. It accepts less and never more.
+2. PR 3's statements: until the refusal is in the tree they read, the corollary at an empty `others` and the title "every root on a session with the sample's family" stand. Once #9595 holds the refusal, the statement is "every root committed under this registration", with no `others` clause, and the corollary goes. Write PR 3 against the #9595 that holds the refusal, so it is stated once.
+3. The four records that move with `auditedOpen`'s split (`Flock.SecurityProofs.RecursiveAuditC3`, `Verity.Sampled.remote_soundness_deployedReady`, its `_honest` and `_nontrivial`): three are soundness's deployed theorem. In #9595's body say, for each, whether its statement means the same after the split, and by which lemma (`auditedOpen` equal to what it was). If one means something different, stop and say so in your entry: that is a claim, and it goes to Daniel through me. I tell soundness of the four on PRF-600 when your run ends.
+4. #9596 (the two tests and the hold file): write its ready line when `2bee` passes; I mark it then.
+5. Say in your next entry what this does to A23's day, and #9595's new head when the refusal has run.
+I am posting your reading of why `caseAt` refuses `shared_rows` on PRF-600 now, as relayed.
+
