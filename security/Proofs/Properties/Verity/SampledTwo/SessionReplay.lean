@@ -15,6 +15,9 @@ messages in place of the honest run's:
   verdict and the checks passing on it, the run accepts.
 * **The replaying prover's next message** (`replayProver_next`): on a play whose case gives template `t`'s session's
   messages `ms`, its message after a history of length `i` is `ms`'s `i`-th.
+* **An accepted masked session's rep streams split evenly** (`streams_even`): where the deployed masked verdict
+  accepts a record at the statement's setup, each table has two rep streams, each of the table's `repRounds true`
+  rounds. A record whose reps' rounds are split any other way is refused by the verdict itself.
 -/
 
 @[expose] public section
@@ -168,5 +171,19 @@ theorem run_acc_replayProver (H : Claims.Msg → Claims.Msg) (C : CaseOf) (o : V
     (Claims.run H (SessionMsgs.replayProver C o t) (V true) x () r).out = .acc :=
   run_acc_sessionMsgs H _ x () hm hlv (fun hist _ => replayProver_next H C o t x hC hmc hist) r hs hsu hk hr hp hrb
     hpb hxs hrec hps hb hv hc
+
+/-- **An accepted masked session's rep streams split evenly**: at the statement's setup, where the deployed masked
+verdict (`Flock.Zk.verify`) accepts the record and `liveOf` reads it, there are two rep streams per table, and stream
+`k` (table `k / 2`'s rep `k % 2`) has `repRounds true spec sts[k / 2]` rounds (`FlockDeploy.streams_size`, the verdict
+at SHA-512 by `FlockDeploy.verdictWith_sha512`). So the verdict refuses a record whose reps' rounds are split any
+other way, and the form needs no refusal of its own for it. -/
+theorem streams_even {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt} {record : String}
+    {proofs : Array ByteArray} {lv : Live} (hs : FlockDeploy.setupOf true x = some (s, spec, sts))
+    (hv : Flock.Zk.verify spec (tabsOf sts) record proofs = .ok ()) (hl : liveOf spec record = .ok lv) :
+    lv.streams.size = 2 * sts.size ∧
+      ∀ (k : ℕ) (hk : k < lv.streams.size), lv.streams[k].size = FlockDeploy.repRounds true spec sts[k / 2]! := by
+  have hw : verdictWith true (Claims.hOf FlockDeploy.sha512) spec (tabsOf sts) record proofs = .ok () :=
+    (FlockDeploy.verdictWith_sha512 hs record proofs).trans hv
+  exact FlockDeploy.streams_size true (Flock.Hashes.ofSha512 (Claims.hOf FlockDeploy.sha512)) hw hl
 
 end Verity.SampledTwo.SessionReplay
