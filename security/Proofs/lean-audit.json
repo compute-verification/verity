@@ -197,7 +197,8 @@
   "Proofs.Properties.Verity.SampledTwo.InputMap",
   "Proofs.Properties.Verity.SampledTwo.Device",
   "Proofs.Properties.Verity.SampledTwo.DeviceRead",
-  "Proofs.Properties.Verity.SampledTwo.DeviceOrder"
+  "Proofs.Properties.Verity.SampledTwo.DeviceOrder",
+  "Proofs.Properties.Verity.SampledTwo.DeviceAccept"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
