@@ -163,7 +163,7 @@ theorem slotDesign_rules {rule : _root_.Spot.Select.Rule} {p : _root_.Spot.Progr
     exact ⟨_, rfl, (fun h => by cases h), fun _ => ⟨_, rfl⟩⟩
 
 /-- `Slots.layout`'s classes: the population, then the input class, empty or one stratum. -/
-theorem layout_classes {p : _root_.Spot.Program} {q : Lean.Json} {l : _root_.Spot.Slots.Layout}
+theorem layout_classes {p : _root_.Spot.Program} {q : Lean.Json} {l : _root_.Spot.Slots.SlotOrder}
     (h : _root_.Spot.Slots.layout p q = .ok l) :
     ∃ pop ins, l.classes = #[pop, ins] ∧ (ins = #[] ∨ ∃ st, ins = #[st]) := by
   unfold _root_.Spot.Slots.layout at h
@@ -177,7 +177,7 @@ theorem layout_classes {p : _root_.Spot.Program} {q : Lean.Json} {l : _root_.Spo
   · exact Or.inl rfl
   · exact Or.inr ⟨_, rfl⟩
 
-theorem slotPartition_classes {l : _root_.Spot.Slots.Layout}
+theorem slotPartition_classes {l : _root_.Spot.Slots.SlotOrder}
     {pop ins : Array (Array _root_.Spot.Slots.ProofBlock)}
     (h : l.classes = #[pop, ins]) (hins : ins = #[] ∨ ∃ st, ins = #[st]) :
     ∃ c ic, (_root_.Properties.Spot.slotPartition l).classes = [c, ic] ∧ (ic = [] ∨ ∃ st, ic = [st]) := by

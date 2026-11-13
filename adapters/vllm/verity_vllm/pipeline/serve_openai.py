@@ -1,6 +1,6 @@
 """`verity-vllm serve-openai`: an OpenAI-compatible HTTP server whose engine is the in-process committing vLLM engine.
 
-    verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin]
+    verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin|bfloat16]
         [--protocol vllm|plain|ids [--id-payload 503]] [--no-commit] [--window-steps 64] [--no-learn-warmup]
         [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1] [--learn-host-budget-mb 4096]
         [--retain host|device [--retain-device-gb 32] [--release-after spot,pouw_h1 [--draws-dir DIR]]]
@@ -9,7 +9,10 @@
         [--copy-records-to $OUT] [--admit arrival|release-order|tick [--admit-hold-ms 5000]] [--switch-interval-ms 0.1] [--async-scheduling]
         [--tick-bucket-ms 100 --tick-sat-ms MS --tick-free-ms MS]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
+        [--protocols pouw:pearl-c-h100-v1-h3 --precision bfloat16 --protocols-config JSON
+         [--challenger-gate CMD --challenger-peer NAME --challenger-lane LANE]]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO] [--remote-filler-gib 0]]
+        [--day N --day-log LOG --day-program HEX [--day-blocks KEYS] [--day-params FILE]]
 
 It serves what the network certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
@@ -34,10 +37,9 @@ engine's resulting parameters, the seed and its rule). A greedy request without 
 ``windows.jsonl`` line names its coin (``seed_coin``). A ``top_p`` below 1 is refused (`TOP_P_REFUSAL`): the top-p sampler's
 split count is not pinned yet, so its sample is not a function of the committed values.
 
-The default precision is ``verity_int8`` (int8 linears, vLLM's attention), the one setting
-whose 16-token probe (0.81 s at 4 in flight) fits the certifier's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even
-without the Commit. The ``verity_int8`` quantization method is registered under every precision, so a pin whose checkpoint
-names it loads under ``--precision pin`` too.
+The default precision is ``verity_int8`` (int8 linears, vLLM's attention), the one setting whose 16-token probe (0.81 s at 4 in
+flight) fits the certifier's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even without the Commit. The ``verity_int8``
+quantization method is registered under every precision, so a pin whose checkpoint names it loads under ``--precision pin`` too.
 
 The engine is `verity_vllm.LLM` (in-process engine core, Model Runner V2), stepped by one thread, the process's main
 thread (`serve_loop.EngineLoop`): each HTTP request is admitted with ``add_request`` under the engine id ``cmpl-<hex>-0`` (vLLM's
@@ -78,15 +80,14 @@ ingress, its finish, its committed rows and seeds, and its check), ``request_use
 `serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``: hm96-sha512 rows in frame-v3-sha512 trees,
 64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's ``--required-manifest``
 and taps (the acquisition plan under ``acquisition/``): the manifest of the row's Build of record, which the ahead-of-time compiler
-writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them;
-`serve_seal.scheme_refusal`). ``--seal`` seals each closed
-window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
-commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
+writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them; `serve_seal.scheme_refusal`).
+``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
+commits the attention interiors without retaining them, and each seal's manifest names them (`serve_release.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
 device pool until every subprotocol named has sampled the window, then keeps on host, and seals, only the leaves their sampled
 blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's sampling coin is open,
 `serve_h1.H1Windows.drawn`, any other's through ``--draws-dir``). Each
-window's finalize, its readback and records, then its seal run on a thread of their own (`serve_seal.Sealer`), in window
-order, while the engine serves the next window: the engine loop's part of a close only detaches the window from the
+window's finalize, its readback and records run on a thread of their own (`seal_stages.Sealer`), then its seal on a second,
+beside the next window's finalize, each in window order, while the engine serves on: the engine loop's part of a close only detaches the window from the
 committer (`NativeHostCommitter.detach`), and it waits only while the windows awaiting their finalize and seal hold
 ``--seal-hold-gb`` of committed values, in the committer's pinned pool, which
 ``--seal-warm-gb`` grows before serving rather than on the engine loop. A window closes once its steps have committed
@@ -102,6 +103,13 @@ it is written before the pending seals too, and its ``final`` is true only once 
 (`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
 ``--challenger-peer`` each window's coins come from a session of its own on the auditor host's challenger, reserved
 through the challenger's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
+``--protocols pouw:pearl-c-h100-v1-h3`` (``--precision bfloat16``) serves every linear but the LM head as Pearl+'s FP8
+product under this server's Commit, one Pearl+ epoch a Commit window, the window's circuit cut at those linears
+(`serve_pearl`): each window's passes, one an engine step, its ``coins.json`` and ``served.json`` go to ``pearl/w<k>/``, and
+its outcome is its ``windows.jsonl`` line's ``pouw_pearl``. With ``--challenger-gate``, ``--challenger-peer`` and
+``--challenger-lane`` each window's salt coin comes from a salt-only session of its own on the auditor host's challenger,
+reserved under the lane when the window opens (`serve_pearl.live`); without them it is in-process and credits nothing.
+``--day N`` declares day N's one circuit in ``--day-log`` before the model loads, and each window's registration names it (`serve_day`).
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to
 PoUB's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_remote`): its
 record is ``remote_session.json``, and a rejected session fails the exit.
@@ -109,7 +117,7 @@ record is ``remote_session.json``, and a rejected session fails the exit.
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
 another thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
 ``--switch-interval-ms`` (0.1 ms; Python's is 5 ms) and seals in a spawned process (``--seal-process``, `seal_process.sealer_of`),
-the sealer's thread here only writing each store's files. ``pauses.jsonl`` (`serve_guard.Watchdog`) records each stall of 0.2 s or more.
+the sealer's second thread here only writing each store's files. ``pauses.jsonl`` (`serve_guard.Watchdog`) records each stall of 0.2 s or more.
 """
 from __future__ import annotations
 
@@ -128,20 +136,21 @@ from typing import Any
 from verity_vllm import settings
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
-from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_release as RL,
-                                   serve_remote as SR, serve_row as RW, serve_seal as SS)
+from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_pearl as SPL,
+                                   serve_release as RL, serve_day as SD, serve_remote as SR, serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import (ADMIT, RUN_HEADER, WATERMARK_PATH, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
                                               engine_id_of, keep_scheduler_rows, new_http_id)
-from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, advice_trace, disk_record, param_of,
+from verity_vllm.pipeline.serve_commit import (NO_TICK_SLICE, SERVED_CLASS, CommitWindows, advice_trace, param_of,
                                                records_mirror, served_statics, user_of)
 from verity_vllm.pipeline.serve_loop import EngineLoop
 from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
                                                  VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
 
-PRECISIONS = ("verity_int8", "int8_exact", "pin")
+PRECISIONS = ("verity_int8", "int8_exact", "pin", "bfloat16")
 #: precision -> (the int8 parts it registers, the int8 scope its layers must then run; None: not checked). Every precision
 #: registers the linears, which is the ``verity_int8`` quantization method a pin's checkpoint may name.
-INT8_PARTS = {"int8_exact": (("linears", "attention"), "all"), "verity_int8": (("linears",), "linears"), "pin": (("linears",), None)}
+INT8_PARTS = {"int8_exact": (("linears", "attention"), "all"), "verity_int8": (("linears",), "linears"), "pin": (("linears",), None),
+              "bfloat16": (("linears",), None)}
 TOP_P_REFUSAL = ("serve-openai refuses top_p={top_p} < 1: vLLM's top-p sampler runs with a split count the engine does not pin, "
                  "so a top-p draw is not a function of the committed values. Send top_p 1 (top_k and temperature are "
                  "served); the refusal lifts once the split count is pinned.")
@@ -167,7 +176,8 @@ class Options:
     precision: str = option("--precision", choices=PRECISIONS, default="verity_int8",
                             help="verity_int8 (default): int8 linears only, as vLLM's own server serves the int8 pin, the one that fits "
                                  "the certifier's plan; int8_exact: int8 linears and attention (quantization verity_int8, attention "
-                                 "CUSTOM); pin: the pin's engine profile")
+                                 "CUSTOM); pin: the pin's engine profile; bfloat16: the pin's profile at dtype bfloat16, "
+                                 "unquantized (Pearl+'s arm, serve_pearl)")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     max_model_len: int = option("--max-model-len", type=int, default=512)
     max_num_batched_tokens: int = option("--max-num-batched-tokens", type=int, default=2048, help="tokens a step schedules")
@@ -204,8 +214,8 @@ class Options:
                                        "(--window-gb), and stop cleanly (no new requests) rather than seal a window that would "
                                        "leave less (0: no floor)")
     copy_records_to: str | None = option("--copy-records-to", default=None,
-                                         help="copy serve.json, requests.jsonl, request_users.jsonl, windows.jsonl and the step "
-                                              "traces into this directory (the run's $OUT) after each window and at the stop")
+                                         help="copy the public records (serve_commit.MIRRORED; never requests.jsonl or the step "
+                                              "traces) into this directory (the run's $OUT) after each block closes and at the stop")
     switch_interval_ms: float = option("--switch-interval-ms", type=float, default=0.1,
                                        help="the interpreter's switch interval while serving (Python's is 5 ms): how long the engine's "
                                             "thread may wait for the GIL after each torch call while the seal's thread runs Python "
@@ -241,13 +251,17 @@ class Options:
     tick_free_ms: float = option("--tick-free-ms", type=float, default=0.0,
                                  help="tick: the engine class's step time while the waiting queue is empty (registered with the class)")
     protocols: str | None = option("--protocols", default=None,
-                                   help=f"{SH.ENTRY}: PoUW H1 on this server's Commit, one H1 window a Commit window (serve_h1)")
+                                   help=f"{SH.ENTRY}: PoUW H1 on this server's Commit, one H1 window a Commit window (serve_h1); "
+                                        f"{SPL.ENTRY}: every linear but the LM head Pearl+'s FP8 product under it, one Pearl+ "
+                                        "epoch a Commit window, the window's circuit cut at those linears (serve_pearl)")
     protocols_config: str | None = option("--protocols-config", default=None,
-                                          help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file (serve_h1.config_of)")
+                                          help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file "
+                                               "(serve_h1.config_of, serve_pearl.config_of)")
     gate: SH.GateOptions = group(SH.GateOptions)
     remote: SR.RemoteOptions = group(SR.RemoteOptions)
-    retention: SS.RetentionOptions = group(SS.RetentionOptions)
+    retention: RL.RetentionOptions = group(RL.RetentionOptions)
     learning: SL.LearnOptions = group(SL.LearnOptions)
+    day: SD.DayOptions = group(SD.DayOptions)
 
 
 # ---------------------------------------------------------------------------------------------------------------- HTTP
@@ -516,6 +530,8 @@ def engine_options(opts: Options) -> dict[str, Any]:
         kw.update(quantization="verity_int8", attention_backend="CUSTOM")
     elif opts.precision == "verity_int8":
         kw.update(quantization="verity_int8")
+    elif opts.precision == "bfloat16":
+        kw.update(dtype="bfloat16")
     return kw
 
 
@@ -580,7 +596,7 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
-    if why := SH.refusal(opts) or SR.refusal(opts) or SL.refusal(opts):
+    if why := (SPL.refusal if opts.protocols == SPL.ENTRY else SH.refusal)(opts) or SR.refusal(opts) or SL.refusal(opts) or SD.refusal(opts):
         raise UsageError(why)
     if opts.commit and which("ninja") is None:
         raise UsageError("the Commit JIT-builds its kernels with ninja, which is not on PATH: put the environment's bin (where its "
@@ -611,7 +627,7 @@ def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[st
 def main(opts: Options) -> int:
     preflight(opts)
     (out := Path(opts.out)).mkdir(parents=True, exist_ok=True)
-    session = SR.session_of(opts, out)
+    day, session = SD.declare(opts, out), SR.session_of(opts, out)
     llm, com = build(opts, session, row := RW.of(opts))
     engine = llm.vllm.llm_engine
     proto = PROTOCOLS[opts.protocol](opts.force_include_usage, **({"payload": opts.id_payload} if opts.protocol == "ids" else {}))
@@ -620,13 +636,13 @@ def main(opts: Options) -> int:
     defaults: dict[str, Any] = {}                            # vLLM's neutral defaults: the request brings its sampling
     tok = llm.get_tokenizer()
     trace = advice_trace(out, llm)
-    mirror = records_mirror(out, opts.copy_records_to, before=trace.drain)
+    mirror = records_mirror(out, opts.copy_records_to)
     windows = sealer = warmed = arm = None
-    draws, draws_dir = RL.release_of(opts, out)
+    draws, draws_dir = RL.release_of(opts, out, com)
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
 
-        arm = SH.arm_of(opts, llm, com, out, flush=trace.drain)
+        arm = SPL.arm_of(opts, llm, com, out) or SH.arm_of(opts, llm, com, out, flush=trace.drain, day=day)
         sealer = SP.sealer_of(opts)                      # its process spawned before the pool grows
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
         pool = pool_block = None
@@ -641,7 +657,6 @@ def main(opts: Options) -> int:
 
             def live_pool() -> Any:
                 return trace.sched.kv_cache_manager.block_pool
-
             pool = live_pool
             PR.genesis_reset(pool())                         # the learn pass cached its blocks under vLLM's own keys
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
@@ -706,12 +721,12 @@ def main(opts: Options) -> int:
               "seal_process": sealer.summary()["process"] if sealer is not None and sealer.process is not None else None,
               "finalize_off_loop": sealer is not None and windows.finalize_on_loop is None,
               "finalize_on_loop": windows.finalize_on_loop if windows is not None else None,
-              "window_gb": opts.window_gb or None, "disk_floor": disk_record(windows), "copy_records_to": opts.copy_records_to,
+              "window_gb": opts.window_gb or None, "disk_floor": SG.disk_record(windows), "copy_records_to": opts.copy_records_to,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
               "window_requests": opts.window_requests or None, "protocols": arm.describe() if arm is not None else None,
               "remote_session": session.describe() if session is not None else None, "row_scheduling": row,
               "committer_options": {k: getattr(opts, k) for k in ("required_manifest", "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
-              "required_manifest_path": getattr(com, "required_manifest_path", None), **SS.retention_record(opts, com),
+              "required_manifest_path": getattr(com, "required_manifest_path", None), **RL.retention_record(opts, com),
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
               "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model, opts.async_scheduling)}
@@ -738,6 +753,7 @@ def main(opts: Options) -> int:
                 mirror()
             return got
 
+        RL.fail(draws, loop.error)
         if sealer is not None:                           # a cancel's SIGKILL can land before the pending seals end
             stopped(False)
             print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)

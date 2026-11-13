@@ -8,7 +8,6 @@ them.  With VERITY_POUW_NVCC naming a CUDA >= 12.8 toolkit, the real sm_120a bui
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 import re
@@ -20,23 +19,18 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from conftest import load
+
 from verity.protocols.pouw.verifier.audit import weights_root
 from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
 
 
-def load(name: str, path: Path):
-    """The module at `path` under its own name: other trees in the suite have a fixture.py and a run.py too."""
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = sys.modules[name] = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-F = load("pearl_c_sm120_fixture", HERE / "fixture.py")
-S = load("pearl_c_sm120_sass_gate", HERE / "sass_gate.py")
-RUN = load("pearl_c_sm120_run", HERE / "run.py")
+#: by `load`: other directories have a fixture.py, a sass_gate.py and a run.py too
+F = load("pearl_c_sm120/fixture.py")
+S = load("pearl_c_sm120/sass_gate.py")
+RUN = load("pearl_c_sm120/run.py")
 
 SOURCE = (HERE / "pearl_c_sm120.cu").read_text()
 HASH_SOURCE = (HERE.parent / "pearl_c" / "hash_h3.cuh").read_text() + (HERE / "hash_fast.cuh").read_text()
