@@ -403,6 +403,168 @@ def test_a_missing_file_of_a_required_tree_is_drift(world):
     assert next(e for e in shipped if e.path == "/workspace/research/console/cluster").required
 
 
+def _whole(world, files: dict[str, str]):
+    """The fixture's node with a whole tree of src/w at <node>/tree/whole (inside its plain tree, whose walk must not take the
+    kept directories for strays), `files` its first commit on main; the node and the path."""
+    path = world["node"] / "tree" / "whole"
+    entry = f'\n[[tree]]\npath = "{path}"\nsrc = "src/w"\nnodes = ["n"]\nwhole = true\n'
+    world["manifest"].write_text(world["manifest"].read_text() + entry)
+    _push(world["repo"], files)
+    return deploy.load(world["manifest"])["n"], path
+
+
+def _push(repo: Path, files: dict[str, str | None]) -> str:
+    """Commit `files` under src/w on main (None deletes one) and push; the commit."""
+    for rel in [r for r, text in files.items() if text is None]:
+        (repo / "src/w" / rel).unlink()
+    sha = _commit(repo, {f"src/w/{rel}": text for rel, text in files.items() if text is not None}, "a change to the whole tree")
+    _git(repo, "push", "-q", "origin", "main")
+    return sha
+
+
+def _files(d: Path) -> dict[str, str]:
+    return {p.relative_to(d).as_posix(): p.read_text() for p in sorted(d.rglob("*")) if p.is_file()}
+
+
+def _hooked(hook: str):
+    """The local runner, with `hook` run on the node ahead of the installer."""
+    def run(name: str, argv: list[str], stdin: bytes | None) -> subprocess.CompletedProcess:
+        return local(name, [*argv[:4], hook + argv[4]] if argv[:4] == ["sudo", "-n", "python3", "-c"] and argv[4] == deploy.INSTALL
+                     else argv, stdin)
+    return run
+
+
+def test_a_whole_tree_is_a_new_directory_at_each_change_and_its_link_is_renamed_onto_it_once_every_file_is_there(world, tmp_path):
+    """What starts after an install runs the new commit's tree and nothing else: the link names a directory holding every file
+    of the commit, with the modes of the repository, at the moment it is renamed; the directory it named before is left as it
+    was; a file the commit dropped is not carried over; an unchanged file keeps its date; and naming one file installs the tree."""
+    repo = world["repo"]
+    (repo / "src/w").mkdir()
+    (repo / "src/w/run.sh").write_text("r1\n")
+    (repo / "src/w/run.sh").chmod(0o755)
+    n, path = _whole(world, {"a.py": "a1\n", "sub/b.py": "b1\n", "sub/gone.py": "g1\n"})
+    done = deploy.install(n, "origin/main", "lane-x", [str(path)], local, apply=True, repo=repo)
+    v1 = _git(repo, "rev-parse", "origin/main")
+    first = Path(os.readlink(path))
+    assert path.is_symlink() and first.parent == world["node"] / "tree/.deploy-tree/whole" and first.name.startswith(v1[:12] + ".")
+    assert _files(first) == {"a.py": "a1\n", "run.sh": "r1\n", "sub/b.py": "b1\n", "sub/gone.py": "g1\n"}
+    assert stat.S_IMODE((first / "run.sh").stat().st_mode) == 0o755 and stat.S_IMODE((first / "a.py").stat().st_mode) == 0o644
+    assert stat.S_IMODE(first.stat().st_mode) == 0o755 and stat.S_IMODE((first / "sub").stat().st_mode) == 0o755
+    assert {Path(f["path"]).name for f in done["files"] if f["changed"]} == {"a.py", "b.py", "gone.py", "run.sh"}
+    rec = [json.loads(ln) for ln in (world["node"] / "research/deploy/record.jsonl").read_text().splitlines()]
+    assert {(r["path"], r["commit"]) for r in rec} == {(str(path / rel), v1) for rel in _files(first)}
+
+    assert not [f for f in deploy.install(n, "origin/main", "lane-x", [str(path)], local, apply=True, repo=repo)["files"] if f["changed"]]
+    assert Path(os.readlink(path)) == first and [p.name for p in first.parent.iterdir()] == [first.name]
+
+    os.utime(first / "a.py", (1000, 1000))
+    v2 = _push(repo, {"sub/b.py": "b2\n", "sub/gone.py": None, "new.py": "n2\n"})
+    seen = tmp_path / "at-the-rename.json"
+    hook = (f"import json, os\n_rename = os.replace\ndef _look(a, b):\n    d = os.path.realpath(a)\n"
+            f"    json.dump({{'files': sorted(os.path.relpath(os.path.join(t, f), d) for t, _, fs in os.walk(d) for f in fs), "
+            f"'link': os.readlink(b)}}, open({str(seen)!r}, 'w'))\n    return _rename(a, b)\nos.replace = _look\n")
+    done = deploy.install(n, "origin/main", "lane-x", ["src/w/new.py"], _hooked(hook), apply=True, repo=repo)
+    second = Path(os.readlink(path))
+    want = {"a.py": "a1\n", "new.py": "n2\n", "run.sh": "r1\n", "sub/b.py": "b2\n"}
+    assert second != first and second.name.startswith(v2[:12] + ".") and _files(second) == want
+    assert json.loads(seen.read_text()) == {"files": sorted(want), "link": str(first)}        # complete before the link moved
+    assert _files(first) == {"a.py": "a1\n", "run.sh": "r1\n", "sub/b.py": "b1\n", "sub/gone.py": "g1\n"}
+    assert (second / "a.py").stat().st_mtime == 1000 and (second / "sub/b.py").stat().st_mtime != 1000
+    assert {Path(f["path"]).name: f["changed"] for f in done["files"]} == {"a.py": False, "b.py": True, "new.py": True, "run.sh": False}
+    rep = deploy.drift(n, "origin/main", local, repo)
+    assert {e["state"] for e in rep["entries"] if e.get("tree") == str(path)} == {"ok"} and not [s for s in rep["strays"] if "whole" in s]
+    assert len(list(first.parent.iterdir())) == 2       # both directories are there, and neither is a stray of the tree around them
+
+    (second / "run.sh").chmod(0o644)        # a mode that is not the repository's is a change too
+    done = deploy.install(n, "origin/main", "lane-x", [str(path)], local, apply=True, repo=repo)
+    third = Path(os.readlink(path))
+    assert third != second and stat.S_IMODE((third / "run.sh").stat().st_mode) == 0o755 and _files(third) == want
+    assert [Path(f["path"]).name for f in done["files"] if f["changed"]] == ["run.sh"]
+
+
+@pytest.mark.parametrize("names", ["cwd", "environ", "cmdline"])
+def test_a_directory_of_a_whole_tree_stays_as_it_was_while_a_process_that_started_in_it_runs(world, names):
+    """What resolved the link when it started finishes on the directory it started on: no install writes into a directory
+    that exists, the one just replaced always stays, and an older one stays while a live process names it by its working
+    directory, its command line or its environment, then goes at the next install."""
+    repo = world["repo"]
+    n, path = _whole(world, {"a.py": "a1\n", "b.py": "b1\n"})
+    deploy.install(n, "origin/main", "lane-x", [str(path)], local, apply=True, repo=repo)
+    first = Path(os.readlink(path))
+    argv = [sys.executable, "-c", "import sys; sys.stdin.read()", *([str(first / "a.py")] if names == "cmdline" else [])]
+    env = {**os.environ, **({"PYTHONPATH": str(first)} if names == "environ" else {})}
+    holder = subprocess.Popen(argv, stdin=subprocess.PIPE, cwd=first if names == "cwd" else None, env=env)
+    try:
+        dirs = [first]
+        for text in ("a2\n", "a3\n"):
+            _push(repo, {"a.py": text})
+            deploy.install(n, "origin/main", "lane-x", [str(path)], local, apply=True, repo=repo)
+            dirs.append(Path(os.readlink(path)))
+            assert _files(first) == {"a.py": "a1\n", "b.py": "b1\n"}
+        assert sorted(p.name for p in first.parent.iterdir()) == sorted(d.name for d in dirs)     # the first too: it is named
+    finally:
+        holder.stdin.close()
+        holder.wait()
+    _push(repo, {"a.py": "a4\n"})
+    deploy.install(n, "origin/main", "lane-x", [str(path)], local, apply=True, repo=repo)
+    fourth = Path(os.readlink(path))
+    assert sorted(p.name for p in first.parent.iterdir()) == sorted([dirs[2].name, fourth.name])
+    assert _files(dirs[2]) == {"a.py": "a3\n", "b.py": "b1\n"} and _files(fourth) == {"a.py": "a4\n", "b.py": "b1\n"}
+
+
+@pytest.mark.parametrize("dies", ["writing its second file", "at the rename", "after the rename"])
+def test_an_install_of_a_whole_tree_that_dies_leaves_the_link_on_a_directory_that_is_whole(world, dies):
+    """Killed while it writes the new directory or just before the rename, the install leaves the link on the old directory,
+    every file of it as it was; killed after the rename, on the new one, complete. The next install clears what it left."""
+    repo = world["repo"]
+    n, path = _whole(world, {"a.py": "a0\n", "b.py": "b0\n", "c.py": "c1\n"})
+    dirs = []
+    for text in ("a1\n", "a2\n"):       # two installs, so the third has an older directory to remove after its rename
+        _push(repo, {"a.py": text, "b.py": "b" + text[1:]})
+        deploy.install(n, "origin/main", "lane-x", [str(path)], local, apply=True, repo=repo)
+        dirs.append(Path(os.readlink(path)))
+    old = dirs[1]
+    before = _files(old)
+    new = {"a.py": "a3\n", "b.py": "b3\n", "c.py": "c3\n"}
+    _push(repo, new)
+    hook = {"writing its second file": "import os\n_n, _chmod = [0], os.chmod\ndef _die(p, m):\n    _n[0] += os.path.isfile(p)\n"
+                                       "    if _n[0] == 2: os._exit(9)\n    return _chmod(p, m)\nos.chmod = _die\n",
+            "at the rename": "import os\nos.replace = lambda a, b: os._exit(9)\n",
+            "after the rename": "import os, shutil\nshutil.rmtree = lambda d: os._exit(9)\n"}[dies]
+    with pytest.raises(RuntimeError, match=r"install failed \(exit 9\)"):
+        deploy.install(n, "origin/main", "lane-x", [str(path)], _hooked(hook), apply=True, repo=repo)
+    now = Path(os.readlink(path))
+    if dies == "after the rename":
+        assert now != old and _files(now) == new
+    else:
+        left = [p for p in old.parent.iterdir() if p not in dirs and not p.is_symlink()]      # what the dead install had made
+        assert now == old and len(left) == 1 and (dies == "at the rename") == (_files(left[0]) == new)
+    assert _files(old) == before == {"a.py": "a2\n", "b.py": "b2\n", "c.py": "c1\n"}
+    _push(repo, {"c.py": "c4\n"})
+    deploy.install(n, "origin/main", "lane-x", [str(path)], local, apply=True, repo=repo)
+    last = Path(os.readlink(path))
+    assert _files(last) == {"a.py": "a3\n", "b.py": "b3\n", "c.py": "c4\n"}
+    assert sorted(p.name for p in old.parent.iterdir()) == sorted([now.name, last.name])
+
+
+def test_whole_is_a_trees_alone_and_its_path_holds_no_other_entry_and_is_a_link_or_nothing(world):
+    repo = world["repo"]
+    text = world["manifest"].read_text()
+    for old, new in (('src = "src/c.py"\n', 'src = "src/c.py"\nwhole = true\n'), ('src = "src/t"\n', 'src = "src/t"\nwhole = "yes"\n')):
+        with pytest.raises(ValueError, match="`whole` is a tree's, true or false"):
+            deploy.load(text=text.replace(old, new))
+    extra = f'\n[[file]]\npath = "{world["node"]}/tree/extra.py"\nsrc = "src/c.py"\nnodes = ["n"]\n'
+    inside = text.replace('src = "src/t"\n', 'src = "src/t"\nwhole = true\n') + extra
+    with pytest.raises(ValueError, match="inside the whole tree .*/tree, whose directory is replaced as one"):
+        deploy.load(text=inside)
+    n, path = _whole(world, {"a.py": "a1\n"})
+    path.mkdir()
+    (path / "a.py").write_text("made by hand\n")
+    with pytest.raises(RuntimeError, match="is not the link a whole tree is installed as: move what is there away first"):
+        deploy.install(n, "origin/main", "lane-x", [], local, apply=True, repo=repo)
+    assert (path / "a.py").read_text() == "made by hand\n" and not (world["node"] / "bin" / "b").exists()     # nothing was installed
+
+
 def test_drift_is_clean_once_everything_is_mains_and_nothing_strays(world, capsys):
     node, n = world["node"], world["nodes"]["n"]
     deploy.install(n, "origin/main", "lane-x", [], local, apply=True, repo=world["repo"])

@@ -38,7 +38,11 @@ Daniel and infra's lead hold, never the research key the relays use), so drift r
 `install` takes files only from a commit that an origin branch holds (a branch, a PR's head, `main`; never the working tree), so
 every installed byte is in a pushed commit. Each file is written beside the old one and renamed over it with the old one's owner
 and mode (a running script keeps its inode; a new file gets the entry's `mode`, else the repository's), and the old one is linked
-under `.deploy-prev/` in its directory. One line per changed file
+under `.deploy-prev/` in its directory. A tree with `whole = true` is never changed file by file: its `path` is a link, every
+file of it at the commit is written into a new directory under `.deploy-tree/` beside the link, and one rename then points the
+link at it. So what resolves the link once when it starts (`readlink -e`) runs one commit's tree from start to end, whatever is
+installed meanwhile, and an install that dies leaves the link on the directory it named, untouched. Afterwards every older
+directory goes, but the one just replaced and any a live process names (its cwd, command line or environment). One line per changed file
 goes to the node's record (path, blob, commit, ref, who, when). A changed unit under /etc/systemd/system/ (or research's
 ~/.config/systemd/user/) is loaded with `systemctl [--user] daemon-reload`. Then each service the entry's `run` names whose unit
 file deploy.toml installs from `src` is restarted with `try-restart`, so a stopped one stays stopped, when the changed file is its
@@ -119,7 +123,7 @@ for pat in req["globs"]:
     found.update(p for p in glob.glob(pat) if os.path.isfile(p))
 for t in req["trees"]:
     for d, dirs, names in os.walk(t):
-        dirs[:] = [x for x in dirs if x not in ("__pycache__", ".deploy-prev")]
+        dirs[:] = [x for x in dirs if x not in ("__pycache__", ".deploy-prev", ".deploy-tree")]
         found.update(os.path.join(d, n) for n in names if not n.endswith(".pyc"))
 btime = next(int(ln.split()[1]) for ln in open("/proc/stat") if ln.startswith("btime"))
 hz, want, procs, running = os.sysconf("SC_CLK_TCK"), set(req["paths"]), {}, {}
@@ -177,13 +181,74 @@ def append(rec, lines):
 '''
 
 # Runs on the node as root: write each file beside its target, keep the old one's owner, link the old one under .deploy-prev/,
-# rename over it, and append the record.
+# rename over it, and append the record. The whole trees go first, each as one new directory its link is renamed onto (the
+# module's docstring); a file of one that is unchanged keeps its date, so drift asks no restart of what runs it.
 INSTALL = APPEND + r'''
-import base64
+import base64, shutil, tempfile
 req = json.load(sys.stdin)
 stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+def named(d):
+    for pid in filter(str.isdigit, os.listdir("/proc")):
+        for what in ("cwd", "cmdline", "environ"):
+            try:
+                seen = os.readlink(f"/proc/{pid}/cwd") if what == "cwd" else open(f"/proc/{pid}/{what}", "rb").read().decode(errors="replace")
+            except OSError:
+                continue
+            if d in seen:
+                return True
+    return False
+whole, trees = {}, sorted({f["tree"] for f in req["files"] if "tree" in f})
+if made := [t for t in trees if os.path.lexists(t) and not os.path.islink(t)]:
+    sys.exit(f"{made[0]} is not the link a whole tree is installed as: move what is there away first")
+for path in trees:
+    files = [f for f in req["files"] if f.get("tree") == path]
+    live = os.path.realpath(path) if os.path.isdir(path) else None
+    def want(f):
+        return base64.b64decode(f["data"]), f["mode"] if f["mode"] is not None else f["git_mode"]
+    def same(f):
+        try:
+            p = os.path.join(live, os.path.relpath(f["path"], path))
+            return (open(p, "rb").read(), os.stat(p).st_mode & 0o777) == want(f)
+        except OSError:
+            return False
+    kept = [live is not None and same(f) for f in files]
+    whole.update({f["path"]: not k for f, k in zip(files, kept)})
+    if all(kept):
+        continue
+    held = os.path.join(os.path.realpath(os.path.dirname(path)), ".deploy-tree", os.path.basename(path))
+    os.makedirs(held, exist_ok=True)
+    os.chmod(os.path.dirname(held), 0o755)
+    os.chmod(held, 0o755)
+    own = os.stat(live or os.path.dirname(path))
+    new = tempfile.mkdtemp(prefix=f"{req['commit'][:12]}.{stamp}.", dir=held)
+    for f, k in zip(files, kept):
+        rel = os.path.relpath(f["path"], path)
+        data, mode = want(f)
+        os.makedirs(os.path.dirname(os.path.join(new, rel)), exist_ok=True)
+        with open(os.path.join(new, rel), "wb") as fh:
+            fh.write(data)
+        os.chmod(os.path.join(new, rel), mode)
+        if k:
+            st = os.stat(os.path.join(live, rel))
+            os.utime(os.path.join(new, rel), ns=(st.st_atime_ns, st.st_mtime_ns))
+    for d, _, names in os.walk(new):
+        os.chmod(d, 0o755)
+        for n in [".", *names]:
+            os.chown(os.path.join(d, n), own.st_uid, own.st_gid)
+            fd = os.open(os.path.join(d, n), os.O_RDONLY)       # on disk before the link names it, should the machine stop
+            os.fsync(fd)
+            os.close(fd)
+    os.symlink(new, new + ".link")
+    os.replace(new + ".link", path)
+    for n in os.listdir(held):
+        d = os.path.join(held, n)
+        if d not in (new, live) and not named(d):
+            os.unlink(d) if os.path.islink(d) else shutil.rmtree(d)
 out = []
 for f in req["files"]:
+    if "tree" in f:
+        out.append(whole[f["path"]])
+        continue
     p, data = f["path"], base64.b64decode(f["data"])
     try:
         st, cur = os.stat(p), open(p, "rb").read()
@@ -264,6 +329,7 @@ class Entry:
     hold: str | None = None            # why it isn't deployed yet: install skips it
     required: bool = False             # (a tree) what runs from it can't run without any of its files
     no_restart: str | None = None      # why a process that started before an install is left to end: never `restart`
+    whole: bool = False                # (a tree) installed as one new directory its link is renamed onto, never file by file
 
 
 @dataclass
@@ -291,6 +357,8 @@ def load(manifest: Path = MANIFEST, text: str | None = None) -> dict[str, Node]:
                 raise ValueError(f"deploy.toml: {e['path']!r} is held, which only an entry install copies (src) can be")
             if "required" in e and (kind != "tree" or not isinstance(e["required"], bool)):
                 raise ValueError(f"deploy.toml: {e['path']!r}: `required` is a tree's, true or false (a file always is)")
+            if "whole" in e and (kind != "tree" or not isinstance(e["whole"], bool)):
+                raise ValueError(f"deploy.toml: {e['path']!r}: `whole` is a tree's, true or false")
             if "no_restart" in e and (kind != "file" or not e.get("src") or e.get("run") or not isinstance(e["no_restart"], str)
                                       or not e["no_restart"].strip()):
                 raise ValueError(f"deploy.toml: {e['path']!r}: `no_restart` says why, for a file install copies (src) that names "
@@ -300,13 +368,18 @@ def load(manifest: Path = MANIFEST, text: str | None = None) -> dict[str, Node]:
                     raise ValueError(f"deploy.toml: {e['path']!r} names node {n!r}, which has no [nodes.{n}]")
                 mode = int(e["mode"], 8) if e.get("mode") else None
                 nodes[n].entries.append(Entry(e["path"], e.get("src"), e.get("by"), list(e.get("run", [])), kind == "tree", mode,
-                                              e.get("owner"), e.get("hold"), e.get("required", False), e.get("no_restart")))
+                                              e.get("owner"), e.get("hold"), e.get("required", False), e.get("no_restart"),
+                                              e.get("whole", False)))
     for node in nodes.values():
         seen = set()
         for e in node.entries:
             if e.path in seen:
                 raise ValueError(f"deploy.toml: {node.name} lists {e.path} twice")
             seen.add(e.path)
+        for t in (e for e in node.entries if e.whole):
+            if inside := [p for p in seen if p.startswith(t.path.rstrip("/") + "/")]:
+                raise ValueError(f"deploy.toml: {node.name} lists {inside[0]} inside the whole tree {t.path}, whose directory "
+                                 "is replaced as one")
     return nodes
 
 
@@ -629,11 +702,12 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
             raise Refused(f"not in deploy.toml for {node.name}: {', '.join(missing)}")
         if held := sorted({f"{v[3].path} ({v[3].hold})" for v in picked.values() if v[3].hold}):
             raise Refused(f"held in deploy.toml: {'; '.join(held)}. A PR that drops its `hold` comes first")
-        want = picked
+        whole = {v[3].path for v in picked.values() if v[3].whole}      # a whole tree is installed whole, whichever file was named
+        want = {p: v for p, v in want.items() if p in picked or v[3].path in whole}
     else:
         skipped += [{"path": p, "src": v[0], "changed": "held", "run": [], "hold": v[3].hold} for p, v in sorted(want.items()) if v[3].hold]
         want = {p: v for p, v in want.items() if not v[3].hold}
-    files = [{"path": p, "blob": sha, "mode": e.mode, "git_mode": mode,
+    files = [{"path": p, "blob": sha, "mode": e.mode, "git_mode": mode, **({"tree": e.path.rstrip("/")} if e.whole else {}),
               "data": base64.b64encode(subprocess.run(["git", "-C", str(repo), "cat-file", "blob", sha], capture_output=True,
                                                       check=True).stdout).decode()}
              for p, (_, sha, mode, e) in sorted(want.items())]
