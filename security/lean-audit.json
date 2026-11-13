@@ -36871,12 +36871,11 @@
    }
   },
   "Definitions.Pouw.Advantage": {
-   "digest": "360ecbd847671d86d8aa494789c9fe3ef1af182e30d446abf712297c00b5a983",
+   "digest": "6f7cc13f02584a752baff2e943ef2cb9b2ac592d12c51ef691b953207fb77717",
    "definitions": {
     "Pouw.AuditGε": "d1381f5221b408d2e4bdc8b187a2ca292623d99bc64b0a09f21e4c245b71d6b3",
     "Pouw.Gε": "c2410ec1d758d5de24350dfe7aec9c29fe82d15f2f607099aed85ee80e6349fd",
     "Pouw.NCP.Params.InstanceU": "3b60969f8f81104b0596a2883beb8066d6bf0d7e7b08219325779dc298b062a1",
-    "Pouw.PearlC.Gε": "e7eb1879e9a9d2b6d504f015840a0523aef7ac69e8665ba155766fa5771e234e",
     "Pouw.Protocol.WrefWithin": "cac063df365f7c845e896f15d04ac61e77ab0c59876e7f1a913d3fd4f2841858"
    }
   },
@@ -37621,21 +37620,16 @@
    }
   },
   "Definitions.Pouw.Guarantees.Advantage": {
-   "digest": "1fb64457e41f499f2e25d0b92d55b83dac357e779bfcb2301773a016b7475f25",
+   "digest": "4d9c014e1566ab283eac983565a35e02c607c8a21d1889c3b8b1ddbccf1d68b6",
    "definitions": {
     "Pouw.Guarantees.EndToEndEps": "174c2e3aebda86bd05d53302c4b1fee563d6efd428a4c7bfc120ec3cca524f83",
-    "Pouw.Guarantees.NCP.EpsFromTTNCP_U_v1": "3af76624992dcf434ad196229e573cbd64367b560b3ad08fb3e928c03da651b8",
-    "Pouw.Guarantees.PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192": "dc541fb1645f5b41016b724887be199471247203e633704567ad32faed173742"
+    "Pouw.Guarantees.NCP.EpsFromTTNCP_U_v1": "3af76624992dcf434ad196229e573cbd64367b560b3ad08fb3e928c03da651b8"
    }
   },
   "Definitions.Pouw.Guarantees.Deadline": {
-   "digest": "dbaff8a929aaecfc0da6a3c4702adc4ead3efce01dc74fafc6f0135a6d47b9da",
+   "digest": "174b3a0b9152736a06ef3b8901465759147408fd81f3eeff273193875de240e7",
    "definitions": {
     "Pouw.Guarantees.PearlCSampledByDeadline": "d1d29da8ce89f77b4b5ee02321acaf41bd4dbc54f66fed360c6990a8d86b934e",
-    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_16384": "2021ab55f032ace6ed83acb50d8f86a03e5da63aaa3861d73aa575bdfc4bc905",
-    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_8192": "322b705764d27d7520eeae253de2547ef89a497162dc3f9192531173f5358f3a",
-    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": "e1e28aed24a13af97eb8adb60ffb5ab8bf14df2d50af714382889c81ae378688",
-    "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": "e9904b1aa439ed69d3fcbb3865c45a95b7dfba3762d80cb46240d32db458e51d",
     "Pouw.Guarantees.SpareCapacityAtDeadline": "a4e1cdda7cb733505f6514ff406e74c02fd8aa8bd4840ea6d9b9f99458bdd73d",
     "Pouw.Guarantees.WorkBetweenSaltAndDeadline": "de2d43fee4713dddcc3f7b5d2f858ca21f710b939b03686374e69d763d4aebc3"
    }
@@ -38173,7 +38167,7 @@
    }
   },
   "Definitions.Pouw.PearlC.Device": {
-   "digest": "ff8658cafe125afa72e749e01d23b44ea077a2d773a2bfd873137f22043ffdfc",
+   "digest": "fd0564b6aec329eef766bcdc4e58ae10beed4b6a2fef010bd3e27e8f46507c1f",
    "definitions": {
     "Pouw.PearlC.PearlCDevice": "49b0746e634512b0ba15501dae4a8e1e7f5a92906eccf6db5291f7ed68f2dfd0",
     "Pouw.PearlC.PearlCDevice.G": "dbfc86330607b7c4760f02bf16a71635ec8b1b7775a76ee3bb4ebfcdf645e58b",
@@ -38192,13 +38186,8 @@
     "Pouw.PearlC.creditDev": "9afb51c265a332ac45a85411f9a4127dd9e9d9a99d85fee925a8562d2621addb",
     "Pouw.PearlC.debitDev": "5d35649e7854f34640190f26b02bf5e94e0be15469e978a3536b4ca2a1ad68b7",
     "Pouw.PearlC.devAt": "94a05321199e2480ef9144b73ac8172e53414bb0afd06fb9647b9568ceea03e6",
-    "Pouw.PearlC.devSm120v1": "e8683e11423332331304d0a3f6ed4662ea00f45d4231727cd607dcd9712e8d34",
-    "Pouw.PearlC.llama31_8bLinears": "33576ad425f7422cc95800869f043984dd86cf55d803af807f76e2b00f4a6ed3",
     "Pouw.PearlC.pearlCDomainDev": "30f9d9afd030d0011715c64c3eb31415ae766561630de7ad5b5ceeb3b57cf36b",
-    "Pouw.PearlC.pearlCDomainDevAt": "402ff5676e5550b47d1280a8f49978fa59d12520c6d93eceb5d2a4b3eb81c6c9",
-    "Pouw.PearlC.pearlCDomainDevShapes": "78adc7a7c4a1a04f003481193b6567586db39739f903d0da828e54908278bcfe",
     "Pouw.PearlC.pearlCProtocolDev": "db4659dcb7475e15f899edf4f1b866458a6152293660334714d9c8a8e97af9ff",
-    "Pouw.PearlC.qwen3_8bLinears": "e25b770eeb457e844d90861406541e27a7f86b9b6de54aecbf0e3be954c0fc31",
     "Pouw.PearlC.wrefDev": "122d664caedfadd83fb8bdb36749da7e283172c9bfb7c98db59652e72191d649"
    }
   },
@@ -38304,12 +38293,6 @@
     "Pouw.PearlC.pearlCProtocolDevRev1K": "3952ff3a34800ba15332f841a89dfa6d48c75a52e4ea21ba174c41f105a90c4a",
     "Pouw.PearlC.pearlCTilesDevRev1K": "7915d854cd3050707212bca976dc4954af6793900e5a96e700a05e62abcb8637",
     "Pouw.PearlC.wrefDevRev1K": "879d0a21ff2119bde3087d1782bdd96e57d954cd44c008bde79373993cdbe272"
-   }
-  },
-  "Definitions.Pouw.PearlC.DevicePricesLoop": {
-   "digest": "1d19852f8d4da3df5f5e178297f903ecabdae7974e1a62b444437409f12de32e",
-   "definitions": {
-    "Pouw.PearlC.Prices.sm120Loop": "c274ad5e3a32dea662df603ef30218cafec614c6f5a1084a25c491f3b975f009"
    }
   },
   "Definitions.Pouw.PearlC.DeviceRev1": {
@@ -38424,7 +38407,7 @@
    }
   },
   "Definitions.Pouw.PearlC.Game": {
-   "digest": "1f0251f4d83793d6c3adba8554d7614dfefc2d505920dea1d928f3fa010db62f",
+   "digest": "309169a87a552ea7d88d6197302bace556ee5ec4cf61cbbb76f0366438484d6b",
    "definitions": {
     "Pouw.PearlC.Adversary": "0ee52871dcaf758b253ac426e7aeb15102769c78de176d68a249b87972c3008c",
     "Pouw.PearlC.Adversary.Bounded": "6e1c94b133f0936f2204620b0d3768b543cb0bbd21fd0440a115b65ccf71ae79",
@@ -38473,8 +38456,6 @@
     "Pouw.PearlC.correctSet": "f3f4c745a9645c38d0f79e0dadfaa2007c314e2d6a04da5beae094e1b8456a56",
     "Pouw.PearlC.creditOf": "997f30f87f930681a7905764cc789c1f9c0c6f5567c08a63c12f70d0ed0da29f",
     "Pouw.PearlC.debitOf": "e6d367ef08adbb6acb5aee519d30a1b10da532ed361df475f83a354acf23fdf4",
-    "Pouw.PearlC.sh16384": "c6dd95e23988dadfecfcf1b2622847c1887eddfffec1f00d06e5fc1ed7e8bc91",
-    "Pouw.PearlC.sh8192": "c2f178a3af23586315025ec5a2c08691ef3c9ed0aeb9f179003d3790a947ddb7",
     "Pouw.PearlC.wrefOf": "34fa9ef2ab26abef4f26430ad543c58a3daf5a2d42ca575a84adc681c3847fbc"
    }
   },
@@ -38969,7 +38950,7 @@
    }
   },
   "Definitions.Pouw.PearlC.W1": {
-   "digest": "ca7249888f9fff6a18bc4899ed759722452239374eaa7388b0886d53e9ff7ce1",
+   "digest": "db0ba97779f60ecd33f41c1c2019b8f5870bd608713978b1e1b9f923c5846730",
    "definitions": {
     "Pouw.PearlC.W1.Addr": "f874d9f13c441c566c9eb13426b94122d70bc31ea9e1d646825e675de38e9c30",
     "Pouw.PearlC.W1.Addr.off": "55814166b9f20bad081bb03f147091dee7afcfb346d37f30c4beea6d432a3704",
@@ -39065,8 +39046,6 @@
     "Pouw.PearlC.W1.W1Device.frags": "b764bfec1bd1fd9939f80f98e495c7a465c3c4c226c153ae129a8f76dc78eb62",
     "Pouw.PearlC.W1.W1Device.has": "166d9aac4c2896bdaf18f658d538fa61080babd63f651a4f92e3d5acb5bc4281",
     "Pouw.PearlC.W1.W1Device.prices": "c1d76fa7b3c71c021b7d908ca28b7ebfa3b47c20f191a06e03083d8e9f78ee7a",
-    "Pouw.PearlC.W1.W1Device.sm120At": "19918e107d38a42e531e594770615d5c8188c6a3321fa2662bf3db8914139d5a",
-    "Pouw.PearlC.W1.W1Device.sm120Loop": "268947dfd9f2596bd5e05387b8fa2161fc0fe10f113408fe78402646449bfc60",
     "Pouw.PearlC.W1.W1Prices": "3419694a372d74999ebf68a8236af94ee5470cbeed15e84627c63f244790bd52",
     "Pouw.PearlC.W1.W1Prices.cvt": "4ceaedd32ac030952cd9da67b4bb7fc496ae4a6cbf50727e9869ca1812d09685",
     "Pouw.PearlC.W1.W1Prices.fetch": "d0f283472c4161bb638f4b15969bdd5a5e0704f51d26080e96fe9729bc7b5eb0",
@@ -39074,8 +39053,6 @@
     "Pouw.PearlC.W1.W1Prices.int32": "9c7f3a6f9decc4fb3791972b1a8499d221a2707abc4057862756c020aece2a96",
     "Pouw.PearlC.W1.W1Prices.mac": "a2f761e8bfd914c9738487f9e5816cd94be9d08047104b636a3f69bcb8ef60af",
     "Pouw.PearlC.W1.W1Prices.sha512": "2633f80140bc6878792de4d5dd656ed7362e3beb85a8f06730d0b73e97d63e04",
-    "Pouw.PearlC.W1.W1Prices.sm120": "5afab1e1686866974f893cf376cad7c72ca6b428b0c122d465b68b76cb011be5",
-    "Pouw.PearlC.W1.W1Prices.sm120Loop": "2032bd65d42062324933d980bc61f12b416e0584f64fda157b60949102c8fb52",
     "Pouw.PearlC.W1.actAt": "bcb3dfbeac06500a56b6aea25932f8ddc4d81afd8668788500da5c525229d863",
     "Pouw.PearlC.W1.bf16Step": "7de69eb282d832ca5adafecd93a58ffacb43fa0122af58c8f6b7cee5959b5522",
     "Pouw.PearlC.W1.cvtCode": "5ec7b090e8ca997c4efe9c6cd4509750a694af26199e9fe33137c4d87203cde9",
@@ -39099,7 +39076,6 @@
     "Pouw.PearlC.W1.s8Value": "2ac799a52b2252ce5d4abb695ca27acd1fddb5fc6130ce8ece7b66c74bd18400",
     "Pouw.PearlC.W1.scaleWords": "3a77fb932cc98f0d9ac8933228f0249f2e2a777e34c547dfd53856865b51db10",
     "Pouw.PearlC.W1.setField": "c8dc2b9bd3f72248da56fe2382a74385eb6a314ab40af9cd38eccbedc3782e46",
-    "Pouw.PearlC.W1.sm120Frags": "bcf9e0321fc2eb9263dfc32c57aa35ea09a5e0c956144891bf45249a35760667",
     "Pouw.PearlC.W1.ticketAt": "9748f8612f54b9b1d51b799bae62c38e7a53d21c3e0e32d049f65d698c88f06b",
     "Pouw.PearlC.W1.usefulAt": "930a4ef88ad6f01b20a949838e8d347b03df6d447fc0bc6ee13728923d1f8b5d",
     "Pouw.PearlC.W1.w1Priced": "980db19bc84ec0a1fa310f17e8eb6c9c64f13d5044e62dfaf6052f5b7dd5652c",
