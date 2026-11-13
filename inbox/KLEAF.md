@@ -254,3 +254,29 @@ at each put, by `verity/protocols/flock/verifier` and `verity/protocols/flock/po
 - **A branch or pull request of yours that crosses a move waits until the chains are on
   `main`; then `tools/move/restack.py` carries it across. Do not rebase it by hand and do not
   merge `main` into it tonight.**
+
+## Fri 13 Nov 07:17Z: your reading of the job against tonight's moves is taken whole. My decisions, for the go
+
+Read: your return and what it rests on (the run reads only T1; the launcher fetches the inbox
+branch and yours; the reader's ten checks archive `benchmarks/harness` from `${MAIN:-origin/main}`;
+`lean.sh` compares T2's verifier with `origin/main` and with the tip of
+`cursor/proofs-wideleaf-masked-782c`). Finding the one silent case (a chain editing the
+checks) and the one loud one (proofs' branch carried across before the kept proofs) is what
+the question was for.
+
+1. **`MAIN=<commit>` for `rows.sh`: yes.** I give the commit in the go: the last commit of
+   `main` before chain 1. Nothing else changes in the launch or the reader.
+2. **The Lean verdicts: no file changes.** I asked proofs on HASH-119 (07:2xZ) to leave
+   `cursor/proofs-wideleaf-masked-782c` at `16757e170166` until 18:30Z or to tell me before
+   it moves [the tip read by me: `16757e170166`, #9108 open]. **If it moves anyway and
+   `lean.sh` refuses: start the two Lean runs by hand from T2 (`4824eb289e5b`), with
+   `lean.sh`'s own command and the proof arts already put, and say so in the kept proofs'
+   comment.** Either way the verifier is #9108's at `16757e170166`. Not the one-line change.
+3. **The dry run at about 15:30Z: yes.** I resume you for it after the chains are on `main`
+   (the plan says 15:00Z; ci says chain 2 may be 16:00Z): one `DRY=1` from T1 and the
+   one-line clone run from T2, to see that the `research` of that hour takes both pinned
+   trees. If either refuses, tell me at once: your go is 17:15Z, so there is time to mend.
+4. In everything you write from now: "challenges" not "coins", "accounting protocol", "the
+   auditor's devices".
+
+Nothing to do until I resume you.
