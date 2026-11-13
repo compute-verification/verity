@@ -162169,3 +162169,48 @@ ready to mark #9728 at 711ee5f373414bb6f4126a44ba8d986a36b97bf4
 ## TWOLEG, Fri 13 Nov 22:10Z: the stale execution: your timer `answers-due-0710z` (fired Fri 07:07Z) reached it at 22:10Z, its first delivery here; not acted on
 
 - [read: the notification] It asks for posts on NET-403, PRF-490 and PRF-569, a word to Daniel, and resumes of HISTORY, TWOLEG and ASSEMBLY when three runs have ended. None done: nothing posted, no run read, no worker resumed. The timers that came before it in this pass were repeats; this one and any after it are new here.
+
+## CARRIER, Fri 13 Nov 22:11Z: the dry run of #9593 ended `clean` over chain 2, but its result conflicts with `main` as it is now (#9770, four files; listed, none settled); #9513's top is made as you said and the list holds 223; `main` moved again with no move in it and all eight carried heads still merge with it
+
+Clock read with `date -u` at 22:10Z. Mailbox read at 22:06Z: nothing newer than your 21:32Z message. [run]
+
+**#9593, the dry run** (`r20261113-211545-fcd9`, vy-nebius-cpu-10, ended with exit 0). [run]
+
+- `restack.py` carried #9593's old head `9eec48aab933ab983a9b8d3235b7d009cee34028` over all 28 moves against `main` at `56f6c2675633`, skipped none, and stopped nowhere: its result is `clean`, at `cac2ad93bc37bc076123fa8b2e05c976090d731c`. That head is in the run's bundle only; I published nothing for #9593. So chain 2 itself leaves no conflict in #9593 to list: the ten I counted in a plain merge were the flat files' move's own renaming, which the tool redid on the branch. [run]
+- That head holds `main` at `56f6c2675633` and the old head, merges with `56f6c2675633` with no conflict, and the rename tool would rename no word more in any of the 27 files it changes. All 114 commits over `main` are `Cursor Agent <cursoragent@cursor.com> | Cursor Agent <cursoragent@cursor.com>`. [run]
+- **It does not merge with `main` as it is now.** `main` is at `e4f8f845a124d67ee7af9eb703d818033334362c` and holds #9770 ("verity/device.py: the card and node loaders join the Site's file"), which landed after the carries were made. #9770 is not a move (it has no `Move:` line), so no tool redoes it: it folds `verity/hardware/cards.py` and `verity/hardware/nodes.py` into `verity/device.py` by hand, and #9593 rewrites the same file. `git merge-tree` of the dry run's head with `e4f8f845a124` reports four files [run]:
+  - `verity/device.py`, six blocks. The module's docstring: #9593's long paragraph (the site's unit of time, auditor's hosts, key schemes, `node_figures`, `clock_drift`, `auditor_host`) against #9770's shorter one that names the loaders as `load_card` and `load_node`. The imports: #9593 adds `Callable`, #9770 adds `tomllib`. The rest are in `Sheet.of_file` and the code after it, where #9770 puts the loaders' bodies beside lines #9593 changes.
+  - `verity/hardware/README.md`, four blocks: both sides rewrite the paragraphs on `Registration.node_entry` and on a way out's link; #9593 adds `host_card`, `leaves` and `node_figures`, and #9770 says "in the Site's module beside the readers".
+  - `verity/hardware/nodes.py`: #9770 deletes the file and #9593 changes it (a change against a deletion; #9593's changes there are the `leaves` reader and its like, which would have to go into `verity/device.py`).
+  - `verity/hardware/tests/test_nodes.py`, twelve blocks: #9593's tests call `cards.load`, `nodes.load`, `nodes.ways_out`, `nodes.leaves` and take a key scheme; #9770's call `S.load_card`, `S.load_node`, `S.ways_out` through `from verity import device as S`.
+- Beyond the four files, 22 lines #9593 adds elsewhere name `verity.hardware.cards` or `verity.hardware.nodes`, modules `main` no longer has; those lines merge without a conflict and would fail at import. [run: a search of the added lines]
+- I settled none of it, as you said. In my reading none of the four is the plain kind (an import list, a renamed name, a test path): each is #9593's own new content (`leaves`, `node_figures`, the scheme of a key) written against a file #9770 dissolved, and the Site is trusted code, so what it accepts is in play. It is the owner's to redo on `main`. [derived]
+
+**#9513's top, made as your 21:32Z message says** [run]:
+
+- #9815 is still open at `9e97e224f56b9117b382c0eef0a586256481f707` and is not on `main`. I merged that head into the carried #9513 (`edb042ccc3bf`): no conflict (`security/lean-audit.json` merged by the repository's driver). The merge is `79817b00fdbe26d3d24af4dfb31344243a33aaff`.
+- In the merged lock, `security`'s `unwitnessed` list holds **223** entries: `main`'s 221, `Flock.SecurityProofs.SessionLoopZKAnyDeployed` from #9815, and `Flock.SecurityProofs.SpotOneWaitTwo` from #9149, recorded as `missing: honest`, "honest instance needs a built two-stage layout and frame", the same words as `SpotKSTwo`'s entry. I counted it rather than assumed it.
+- The cap is a commit of its own, `0522cfdc713e62e3f123d32bd2a3c84c0e5edbdb`, touching only `tests/test_lean_packages.py`: `UNWITNESSED["security"]` 222 to 223, and the comment now reads "Flock.SecurityProofs.SpotExfilTwo, SpotKSTwo and SpotOneWaitTwo and NetTiming.SecurityProofs.PooledLeakCarried carry their nontrivial witnesses", with #9815's sentence on `SessionLoopZKAnyDeployed` kept. `tests/test_lean_packages.py` passes at that head on my VM (35 passed, 11 s; one named test file). `ruff check` of the file passes.
+- Published: `cursor/proofs-carrier-9513-9257` is at `0522cfdc713e62e3f123d32bd2a3c84c0e5edbdb` (a fast-forward of `edb042ccc3bf`). It holds `main` at `56f6c2675633`, #9513's old head, the old heads of #9149, #9332 and #9346, and #9815's head; it merges with `main` at `e4f8f845a124` with no conflict. Author and committer over `main`: `141 Cursor Agent <cursoragent@cursor.com> | Cursor Agent <cursoragent@cursor.com>`.
+- Its body will say it is stacked on #9815, and I write no ready line for it before you say lean's yes to 223 is in.
+
+**`main` moved again**, from `6c52a8dd9cae` to `e4f8f845a124d67ee7af9eb703d818033334362c` (eleven more landings, among them #9770 and #9781, the fold of `verity/periods/` and `verity/protocols/reporting.py` into `verity/protocol.py`). No commit between `56f6c2675633` and it has a `Move:` or `Layout-move:` line, so by your step 8 no carry is made again. All eight carried heads merge with `e4f8f845a124` with no conflict (`git merge-tree`, each). [run]
+
+**Check runs** (each: the quick suites against the `main` the head holds, and beside them `lean_changed.py --records PKG` without `--update`). State read at 22:08Z. [run]
+
+| run | node | head | Lean package | state |
+|---|---|---|---|---|
+| `r20261113-214656-42bf` | vy-nebius-cpu-14 | #9209 `fda39bbf3057` | Flock's verifier | has a slot since 21:54Z; suites and the records run both going |
+| `r20261113-214923-f96f` | vy-nebius-cpu-5 | #9595 `eb2b91a1d248` | Spot's verifier | has a slot since 22:00Z; **Spot's verifier built with the mend (`check.py` exit 0 in 131 s)**, and the certifier's verifier after it; `security` is next |
+| `r20261113-215720-e81d` | vy-nebius-cpu-4 | #9584 `729c6fce019f` | Spot's verifier | has a slot since 21:58Z; its Lean waits for the node's build lock, suites going |
+| `r20261113-215751-0a93` | vy-nebius-cpu-2 | #9253 `5e9bf0d08ca4` | Flock's verifier | has a slot since 21:59Z; its Lean waits for the node's build lock, suites going |
+| `r20261113-214518-e1e3` | vy-nebius-cpu-12 | #9496 `5448fecf0b81` | Spot's verifier | waits, one ahead in line |
+| `r20261113-215625-21b5` | vy-nebius-cpu-9 | #9549 `51c523f27a87` | Spot's verifier | waits, one ahead in line |
+| `r20261113-220006-b8ed` | vy-nebius-cpu-10 | #9373 `6e2f26ef2e8c` (holds `main` `6c52a8dd9cae`) | `security/Proofs` | waits, four ahead in line |
+| `r20261113-220849-926a` | vy-nebius-cpu-8 | #9513 `0522cfdc713e` | `security/Proofs` | waits for memory on the node |
+
+I launched #9513's check first on vy-nebius-cpu-11 (`r20261113-220448-b46b`), found that node further over its memory than vy-nebius-cpu-8, and cancelled it before it had a slot (`research cancel` says its check never started).
+
+**Not established:** that any carried head passes its suites or its records run (four runs have a slot, none has ended); that carried #9595 has no second renamed name (only Spot's verifier is built so far); that a carried head still passes once merged with `main` at `e4f8f845a124` (the runs check each head as published, which holds `56f6c2675633`, or `6c52a8dd9cae` for #9373; a merge without conflict is all I have for the newer `main`); anything about how #9593 should be redone on #9770.
+
+**The first ready line**: #9595 or #9209 is the likeliest, when its run ends. I still aim at 23:15Z to 23:55Z.
