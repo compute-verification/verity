@@ -59,8 +59,8 @@ import numpy as np
 from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.ops.gemm import DotBf16 as DotBf16V2
-from verity.definitions.ops.prims import const
+from verity.circuits.ops.gemm import DotBf16 as DotBf16V2
+from verity.circuits.ops.prims import const
 from verity.definitions.registry import hopper
 from verity.definitions.registry import prims as P
 from verity.definitions.registry.b1 import _lane
@@ -368,7 +368,7 @@ def SparseMlaHeadKeysWire(B, S, kv):
     calls at no AND and its output is its input, word for word.  The one writer of that column block of the row's key
     block: every unit of the row's heads that reads those columns (a `SparseMlaHeadScoresCols_v1`'s ``kv<C>``, a
     `SparseMlaHeadValues_v1{G = W, C}`'s ``kv``) reads its output row."""
-    from verity.definitions.ops.scalar import U32Hi16
+    from verity.circuits.ops.scalar import U32Hi16
 
     wide = B.batch(P.Bf16ToF32, Coll(Array(S.NVIS * S.W, BF16), kv.refs), axes=(0,))
     return B.batch(U32Hi16, wide, axes=(0,)).reshape(Array(S.NVIS, Array(S.W, BF16)))
