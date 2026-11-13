@@ -4,16 +4,16 @@ names, each trained whole (`rank` 0) or through a low-rank adapter beside it (W 
 thin products, A·x then B·(A·x)), and with `gains` the norm gains of the blocks those matrices are in and above.
 
 - `targets`: comma-separated patterns over the start's parameter names (fnmatch), naming matrices;
-- `rank`: 0 trains each matrix whole; r ≥ 1, an adapter of rank r: A is r × in, drawn N(0, 1/in) at the first step
-  that holds it, and B out × r, zero, so the model is θ until B moves;
+- `rank`: 0 trains each matrix whole; r ≥ 1, an adapter of rank r: A is r × in, N(0, 1/in) at the first step that
+  holds it, and B out × r, zero, so the model is θ until B moves;
 - `grow`: later phases of the adapters, `FRAC:PATTERNS:RANK` joined by `;`: from step ⌊FRAC·n⌋ + 1 on, each matrix
-  PATTERNS names (comma-separated) holds an adapter of rank RANK, raised from what it held (its new rows of A drawn
-  as at the start, of B zero, and the optimizer's state for them zero);
+  PATTERNS names (comma-separated) holds an adapter of rank RANK, raised from what it held (its new rows of A
+  random as at the start, of B zero, and the optimizer's state for them zero);
 - `micro_batches`: the step's blocks of rows, each a forward and a backward, the leaves of a heap: block i (counted
   from the last, 0 the root) sums its own gradient with the messages of blocks 2i + 1 and 2i + 2 and passes the sum
   on, coded at `msg_bits` (32: fp32, uncoded; 1 to 8 a stochastic rounding of `group` entries to an f16 scale, in a
   basis rotated a group with `rotate`), or with `vote` as its sign (a majority vote: each block's own gradient enters
-  as its sign too). The root codes its own gradient too, and its sum, divided by the blocks, is the step's gradient;
+  as its sign too, a zero a random sign). The root codes its own gradient too, and its sum, divided by the blocks, is the step's gradient;
 - `opt`: `sign` (lr · sign), `adamw` (b1, b2; its bias correction counts the step) or `muon` (Newton–Schulz of the
   gradient plus b1 times the momentum); `mom_bits` (sign, muon): the momentum m ← b1 m + g kept between steps in
   that many bits a stochastic rounding (`rotate` as the messages), 32 in fp32, 0 none; `clip`: the step's gradient
@@ -26,14 +26,16 @@ thin products, A·x then B·(A·x)), and with `gains` the norm gains of the bloc
   gradient summed over the blocks in fp32 and divided by them;
 - `e_bits`: an adapter's E, each rank component rounded to nearest at that many bits with an f16 scale.
 
-The draws, all from torch's global generator: at `build`, the messages' rotation signs, then the momentum's; in a
-step, a new adapter's rows of A, each matrix in name order, before the step's weights are read; then each block's
-coded messages' rounding (or a vote's ties), each in the order a block sends them; then each trained tensor's
-coded momentum and its store's rounding, in name order.
+The random values, all from torch's global generator, in this order: at `build`, the messages' rotation signs, then
+the momentum's; in a step, each new adapter's rows of A and their store's rounding, then its B's rounding, each
+matrix in the model's order, before the step's weights are read; then each block's coded messages' rounding (or a
+vote's ties), in the order the blocks send them; then each trained tensor's coded momentum and its store's rounding,
+in the model's order, an adapter's A before its B.
 
-The adapters' factors and a whole matrix's weights are parameters θ has none of or holds, rewritten from the codes at
-each step's start. The codes, θ's copy of a matrix trained whole, the optimizer's state and the codes' grids and
-rotations are buffers no state dict holds. The output hands each adapter's factors, dequantized, as its trained parts
+Each step rebuilds the weights it trains from the codes: an adapter's factors as new tensors, so the codes are all
+one step hands the next of them, and a matrix trained whole written over its weight, which θ holds. The codes, θ's
+copy of a matrix trained whole, the optimizer's state and the codes' grids and rotations are buffers no state dict
+holds. The output hands each adapter's factors, dequantized, as its trained parts
 (`codecs.LowRank` at `e_bits`), and each matrix trained whole as its codes and scales (`codecs.ScaledQuant`).
 """
 from __future__ import annotations
@@ -117,8 +119,7 @@ def gains_of(model: torch.nn.Module, layers: dict[str, Linear]) -> list[torch.nn
 
 
 def through_adapter(layer: Linear, inputs, out: torch.Tensor) -> torch.Tensor:
-    r = layer.rank
-    return out + F.linear(F.linear(inputs[0], layer.a[:r]), layer.b[:, :r]) if r else out
+    return out + F.linear(F.linear(inputs[0], layer.a), layer.b) if layer.rank else out
 
 
 def start_as_loaded(layer: Linear, state: dict, prefix: str, *_) -> None:
@@ -165,9 +166,7 @@ def build(shape: dict, dials: dict):
             if out % g or into % g:
                 raise SystemExit(f"dgrad: groups of {g} don't divide {name}'s sides (a factor's rows)")
             top = held_ranks[name]
-            layer.a = torch.nn.Parameter(torch.zeros(top, into))
-            layer.b = torch.nn.Parameter(torch.zeros(out, top))
-            layer.rank = 0
+            layer.a, layer.b, layer.rank = None, None, 0
             held(layer, "a", (top, into), dials)
             held(layer, "b", (out, top), dials)
             layer.register_forward_hook(through_adapter)
@@ -179,8 +178,6 @@ def build(shape: dict, dials: dict):
             layer.loaded = False
             held(layer, "w", (out, into), dials)
             layer.register_load_state_dict_pre_hook(start_as_loaded)
-    if dials["rank"]:
-        model.register_load_state_dict_post_hook(lora.adapters_are_new)
     model.register_buffer("store_levels", codes.grid(dials["store_bits"]), persistent=False)
     model.register_buffer("store_codebook", codes.codebook(dials["store_bits"]), persistent=False)
     if dials["vote"] or dials["msg_bits"] < 32:
@@ -247,7 +244,7 @@ def tensors(layers: dict[str, Linear], ranks: dict[str, int]) -> dict[str, tuple
     """Each trained tensor this step, by its key: (its layer, its name there, its rank, 0 for a matrix whole)."""
     out = {}
     for name, layer in layers.items():
-        if hasattr(layer, "a"):
+        if hasattr(layer, "a_codes"):
             if ranks[name]:
                 out |= {f"{name}#A": (layer, "a", ranks[name]), f"{name}#B": (layer, "b", ranks[name])}
         else:
@@ -334,10 +331,9 @@ def step(model, rows, optimizers, dials: dict, t: int, n: int) -> None:
                     s[lo:].copy_(new_s)
         for name, layer in layers.items():
             if dials["rank"]:
-                layer.rank = ranks[name]
-                if layer.rank:
-                    layer.a[:layer.rank].copy_(factor(layer, "a", layer.rank, model.store_levels))
-                    layer.b[:, :layer.rank].copy_(factor(layer, "b", layer.rank, model.store_levels))
+                layer.rank = r = ranks[name]
+                layer.a, layer.b = ((factor(layer, "a", r, model.store_levels).requires_grad_(),
+                                     factor(layer, "b", r, model.store_levels).requires_grad_()) if r else (None, None))
             else:
                 layer.weight.copy_(ScaledQuant.apply(layer.start, model.store_codebook, layer.w_scales, layer.w_codes))
     keys = tensors(layers, ranks)
@@ -348,11 +344,7 @@ def step(model, rows, optimizers, dials: dict, t: int, n: int) -> None:
             logits = model(x[:, :-1])
         loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1))
         loss.backward()
-        messages = {}
-        for k, (layer, name, r) in keys.items():
-            p = getattr(layer, "weight" if name == "w" else name)
-            messages[k] = sliced(p.grad, name, r)
-        heap.push(messages)
+        heap.push({k: getattr(layer, "weight" if name == "w" else name).grad for k, (layer, name, _) in keys.items()})
         for layer, name, _ in keys.values():
             getattr(layer, "weight" if name == "w" else name).grad = None
     g = {k: v / len(blocks) for k, v in heap.out.items()}
@@ -377,7 +369,7 @@ def step(model, rows, optimizers, dials: dict, t: int, n: int) -> None:
 
 def output(model, dials: dict) -> dict[str, torch.Tensor | tuple[torch.Tensor, ...]]:
     layers = trained(model, dials)
-    state = {k: v for k, v in model.state_dict().items() if not k.endswith(lora.ADAPTER)}
+    state = model.state_dict()
     if dials["rank"]:
         return state | {name: (factor(layer, "a", layer.rank, model.store_levels),
                                factor(layer, "b", layer.rank, model.store_levels))
