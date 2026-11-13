@@ -35,8 +35,8 @@ import sys
 import time
 from pathlib import Path
 
-from verity.definitions.ops.boolean import scalar as SC
-from verity.definitions.ops.boolean import softmax as SM
+from verity.circuits.ops.boolean import scalar as SC
+from verity.circuits.ops.boolean import softmax as SM
 
 from . import fp, gf2, ir_lower as IL, tail_pieces as TP, topp_word as TW, unit as U
 from . import circuit_types as CT
@@ -386,7 +386,7 @@ _PRIMS: dict | None = None
 
 
 def prims() -> dict:
-    """Every registered PrimitiveDefinition by id (verity.definitions.ops and the vLLM registry modules)."""
+    """Every registered PrimitiveDefinition by id (verity.circuits.ops and the vLLM registry modules)."""
     global _PRIMS
     if _PRIMS is None:
         import importlib
@@ -394,7 +394,7 @@ def prims() -> dict:
 
         from verity.circuits.defs import PrimitiveDefinition
 
-        mods = ["verity.definitions.ops.prims"]
+        mods = ["verity.circuits.ops.prims"]
         import verity.definitions.registry as R
         mods += [f"{R.__name__}.{m.name}" for m in pkgutil.iter_modules(R.__path__) if not m.name.startswith(("quarantine",))]
         _PRIMS = {}
@@ -759,7 +759,7 @@ class Walker:
             rec["commitment_openings"] = opened
 
 
-# --- commitment marks: the no-recompute partition (verity.definitions.word, Q_word_v1{X=16,W=32,R=no-recompute}) -------------
+# --- commitment marks: the no-recompute partition (verity.circuits.word, Q_word_v1{X=16,W=32,R=no-recompute}) -------------
 
 X_BITS, W_BITS = 16, 32
 #: constant-operand variants of one primitive lowered per record; further gates use the generic piece (an unrolled scan gives every
@@ -789,7 +789,7 @@ class Commitments:
         from verity.circuits.codec import descriptor_id
         from verity.circuits.cut import separable
         from verity.circuits.defs import PrimitiveDefinition
-        import verity.definitions.word as WQ
+        import verity.circuits.word as WQ
 
         fid = descriptor_id(fn)
         if fid in self.records:
@@ -1456,7 +1456,7 @@ def _commitment(g: dict, cm: "Commitments", checks: dict | None) -> dict:
     whose T varies, at the program graph's partition points (every T up to a few hundred, else the key-block boundaries), each
     checked against the program graph's own ``q_word_v1`` summary where it has one."""
     from verity.definitions.encoding import word_values
-    from verity.definitions.word import specialization
+    from verity.circuits.word import specialization
 
     if g["template"].startswith(("Const32", "Const64")):
         return {}
@@ -1585,9 +1585,9 @@ def main(argv=None) -> int:
                                 "definitions": walker.defs}, separators=(",", ":")))
     (out / "subcircuits.json").write_text(json.dumps({"schema": SCHEMA + "/subcircuits", "nodes": reg.nodes}, separators=(",", ":")))
     module_bytes = write_modules(reg, out / "modules.json.gz")
-    from verity.definitions.word import query_id
+    from verity.circuits.word import query_id
     (out / "commitments.json").write_text(json.dumps({"schema": SCHEMA + "/commitments", "query": query_id(X_BITS, W_BITS),
-                                                      "code": f"verity.definitions.word at verity {_git_head()}", "mark_kinds": MARK_KINDS,
+                                                      "code": f"verity.circuits.word at verity {_git_head()}", "mark_kinds": MARK_KINDS,
                                                       "records": cm.records}, separators=(",", ":")))
     nyl: dict[str, dict] = {}
     for t in tpl_cache.values():
