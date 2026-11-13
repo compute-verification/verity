@@ -606,9 +606,9 @@ leaves it is about. None when the site holds no such leaf.
 
 A named span counts only where it surely lies in the period, which `origin` says for its series: a series with no
 origin, one whose device has no drift under `clock`, a link's series whose device is not the network certifier on the
-link (`Amount.timed`), a step before the period and a step that might end past its last tick count for nothing. `clock` gives a device's drift: the Site's own for a row that takes no premise. A span that
-names no steps cannot be placed, and that it is the period's is the caller's to hold; it covers its length less its
-clock's drift.
+link (`Amount.timed`), a step before the period and a step that might end past its last tick count for nothing.
+`clock` gives a device's drift: the Site's own for a row that takes no premise. A span that names no steps cannot be
+placed, and that it is the period's is the caller's to hold; it covers its length less its clock's drift.
 
 A flow's amounts add only over spans shown disjoint. Its verified amount is the largest total over certified answers
 whose named spans lie whole in the period, are of one series and are pairwise disjoint, or the largest amount of one
