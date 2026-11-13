@@ -18,7 +18,7 @@ set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/../ship.sh"
 OUT=${1:-${OUT:?usage: build.sh OUT}}; ARCH=${ARCH:-sm_90a}
-ship_stage benchmarks/pous/p2_v1 benchmarks/pous/p2_gpu verity/circuits/kernels
+ship_stage benchmarks/pous/p2_v1 benchmarks/pous/p2_gpu verity/commitments/cuda
 P2=$SRC/benchmarks/pous/p2_v1
 S=$(mktemp -d "${TMPDIR:-/tmp}/p2-stage-build.XXXXXX"); trap 'rm -rf "$S"' EXIT
 mkdir -p "$OUT/lib"

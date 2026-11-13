@@ -45,7 +45,7 @@ import numpy as np
 import torch
 from verity_config.settings import of
 
-from verity.circuits.kernels import SHA512
+from verity.commitments.cuda import SHA512
 from verity.protocols.accounting.poub.verifier import p2
 from verity.protocols.accounting.poub.verifier import receipts as R
 
