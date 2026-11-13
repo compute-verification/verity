@@ -1277,7 +1277,7 @@ DSID = "s20261104T090000Z-dr01"
 
 
 def _draw(after: str = "c1" * 64, seed: int = 7) -> dict:
-    """A challenger draw as the coin record carries it (`bench_arm.LiveDraw`): a real draw session's commitment and its
+    """A challenger sample as the coin record carries it (`bench_arm.LiveDraw`): a real sample session's commitment and its
     coin ``pouw/draw`` 0 opened after ``after``, reserved as `DSID`."""
     import random
 
@@ -1298,7 +1298,7 @@ NODE = {"from": "node", "claim": "uniform/io-getrandombytes"}
 
 def _coin_record(source: str = "5e" * 32, draw: dict | None = None, commitment: str = "c1" * 64) -> bytes:
     """The verifier's coin record as ``served_passes.py verify`` writes it before any replay (``DIR/coin.json``), its
-    draw the node's unless ``draw`` names a challenger's."""
+    sample the node's unless ``draw`` names a challenger's."""
     return (json.dumps({"schema": S.COIN_KIND, "commitment": commitment, "source": source, "passes": ["p0", "p1"],
                         "draw": draw or NODE}, indent=1) + "\n").encode()
 
@@ -1368,7 +1368,7 @@ def test_coin_refuses_a_record_not_the_verifiers_and_a_second_coin_in_one_piece(
 
 
 def test_the_coin_command_says_where_the_verifiers_coin_went(tmp_path, capsys, monkeypatch):
-    """``served_verdicts.py coin`` prints one COIN line, the run commitment the coin was drawn on, the record's digest and
+    """``served_verdicts.py coin`` prints one COIN line, the run commitment the coin was flipped on, the record's digest and
     where it went: preserved, in the node's store alone (and the put of the run's custody copy that preserves that id),
     or in no store; a record that isn't the verifier's is refused, exit 1."""
     (rec := tmp_path / "coin.json").write_bytes(raw := _coin_record())
@@ -1408,9 +1408,9 @@ def test_the_coin_names_the_runs_attempt_as_its_custody_off_the_node(tmp_path, c
 
 
 def test_a_pearlplus_piece_holds_its_accept_to_the_coin_it_published(tmp_path, capsys, live):
-    """``--coin`` (`coin`'s ``coin-put.json``) holds Pearl+'s accept to the coin published at its draw: the piece and its
+    """``--coin`` (`coin`'s ``coin-put.json``) holds Pearl+'s accept to the coin published at its sample: the piece and its
     line carry the coin's store id, whether the put preserved it and the record's digest, and an accept whose run
-    commitment or draw source isn't the published record's, a copy that isn't the one put, or a coin never published
+    commitment or sample source isn't the published record's, a copy that isn't the one put, or a coin never published
     rejects, while a verdict that rejects keeps its own reasons. The piece names its load."""
     served, verified = _pearlplus_run()
     served.update(requests=16, engine={"max_num_batched_tokens": 8192})
@@ -1848,7 +1848,7 @@ def test_pearlpluss_accepted_piece_that_fails_a_condition_of_record_stays_a_deve
 
 
 def _draw_answers(calls: list, public: bytes = PUBLIC):
-    """The gate's answers for the run's draw session, as `pearlplus_draw` asks them: its tree for ``fetch`` (its key),
+    """The gate's answers for the run's sample session, as `pearlplus_draw` asks them: its tree for ``fetch`` (its key),
     the ledger (its reserve and its open on the run's commitment) and the pins."""
     def ask(*words: str) -> bytes:
         calls.append(words)
@@ -1884,10 +1884,10 @@ def _draw_answers(calls: list, public: bytes = PUBLIC):
     ("other source", "ValueError: the record's source is not its draw session's coin"),
 ])
 def test_the_pearlplus_piece_holds_the_verifiers_draw_to_its_draw_session(tmp_path, monkeypatch, case, reason):
-    """`pearlplus_draw`: a challenger draw's session fetched through the gate with the ledger and pins, its key held to
+    """`pearlplus_draw`: a challenger sample's session fetched through the gate with the ledger and pins, its key held to
     the pin, the ledger opening it alone on the run's commitment C (`challenger.trusted_session_of`, its signed session),
     withheld, its signed commitment the record's, its log showing C as its coin's one root, and the record's opening its
-    coin after C with the record's source that coin; a node's draw is checked by none of it. Each failure names why, and
+    coin after C with the record's source that coin; a node's sample is checked by none of it. Each failure names why, and
     the piece rejects on it."""
     from verity.protocols.pouw.verifier import window as Wd
     from verity.protocols.spot.device import challenger as Ch
@@ -2087,7 +2087,7 @@ def test_the_tied_close_waits_for_the_ledger_to_end_each_windows_salt_session(tm
 @pytest.mark.parametrize("case", ["held", "between", "open", "node"])
 def test_the_rule_line_reads_whether_the_draw_was_the_lanes_first_reserve_after_the_close(tmp_path, monkeypatch,
                                                                                           capsys, case):
-    """``pearlplus-period rule``, once the coin is drawn: HELD where the coin record's draw session is the lane's first
+    """``pearlplus-period rule``, once the coin is flipped: HELD where the coin record's sample session is the lane's first
     reserve after the period in DIR's period.json closed (`pouw_h1_window.after_close`), else BROKEN, exit 1, saying
     why; kept as period.json's ``rule``. A reserve of another lane between them leaves it held."""
     ledger = [{"kind": "period-open", "session": None, "body": {"period": "pp-r1", "lane": "vllm"}},
@@ -2707,7 +2707,7 @@ def test_under_h1_tie_each_h1_windows_close_writes_its_advice_and_commits_it_cha
 def test_a_tie_whose_advice_is_pending_or_whose_commit_is_refused_writes_no_record_r(tmp_path, extra, rc, steps, said):
     """A request carried past the window's close has no Commit record until a later close, so its advice can't be written
     before the window's sample coin: the tie fails at once, never polls; a refused window-commit fails it too. Either way
-    no R, so `serve_tie` refuses the window's record and H1 draws no sample coin."""
+    no R, so `serve_tie` refuses the window's record and H1 samples no sample coin."""
     run, order = _tie(tmp_path, **extra)
     assert (run.returncode, order, run.stdout.splitlines()[-1]) == (rc, steps, said), run.stderr
     assert not (tmp_path / "serve" / "h1" / "w7" / "record.json").exists()
@@ -3343,7 +3343,7 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
 def test_under_pearlplus_tie_with_a_gate_the_window_serve_runs_inside_a_pearl_c_period_on_its_circuit_record(tmp_path):
     """With a gate, serve() opens the lane's Pearl-C period on PEARLPLUS-CIRCUIT's record (``pearlplus-period open
     --circuit-record``) once it is built and before serve-openai starts, so the window's salt session joins it, and
-    closes it once serve-openai is done, here when it never listens: before Pearl+'s piece draws, its reserves first
+    closes it once serve-openai is done, here when it never listens: before Pearl+'s piece samples, its reserves first
     held to the windows' salt sessions (``--lane``, ``--windows`` the serve dir's pearl/), once the ledger ends them
     (``--wait`` PEARLPLUS_CLOSE_WAIT, default 300 s). Between the record and the
     open the inference-only policy is written, before serve-openai's start, from serve-phi's φ. In-process coins
@@ -3513,7 +3513,7 @@ def _partition_preflight(tmp_path: Path, tie: bool, **extra: str) -> tuple[int, 
 def test_the_preflight_refuses_a_step_3_partition_that_leaves_out_the_served_compilers_transfer_gates(
         tmp_path, given, tie, refusal):
     """Under PEARLPLUS_TIE the served BF16 1B's compiler of record lists its RoPE heads as transfer gates, every unit of
-    which step 3 proves beside the drawn rest (`serving_rows.work_table_of`), so step 3's partition defaults to a work:2
+    which step 3 proves beside the sampled rest (`serving_rows.work_table_of`), so step 3's partition defaults to a work:2
     one holding them, and the preflight refuses another law or a partition without them, before anything runs. The int8
     checkpoint's compiler lists none, so its subset:2 partition passes."""
     (pp := tmp_path / "tree" / "benchmarks" / "prove_path").mkdir(parents=True)
@@ -4028,7 +4028,7 @@ def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_
     """PREFLIGHT_ONLY=1 runs the preflight and stops there, exit 0, with one line: the serve's lease (under H1_TIE 150
     minutes capped at 160 GB, the serve's 128 and window-commit's peak, within a 196 GB node), on a node short of V3c's
     audit's memory its deferral, and under COMPOSE_OFF_NODE=1, the default, what is composed off the node. Nothing runs,
-    and neither the serve root nor C-Flock's work dir is made."""
+    and neither the serve root nor Flock's work dir is made."""
     rc, lines, order, limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
     assert (rc, lines, order, limits) == (0, [f"PREFLIGHT passed on vy-dc-h200-2, {said}. {ONLY}"], [], [])

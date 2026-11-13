@@ -57,7 +57,7 @@
 #     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
 #     layer 0's SiluMul_v2 at step 1, or at step 0 with MAX_TOKENS 1, whose window has no step 1), not the window circuit's.
 #     Every unit of a template the served model's compiler of record lists as a transfer gate (prove_path.GATES_OF_RECORD)
-#     is proved beside the drawn rest, which only a work:K law draws, so the preflight refuses a partition of another law
+#     is proved beside the sampled rest, which only a work:K law samples, so the preflight refuses a partition of another law
 #     or without them; PP_SETS names their input sets.
 #  4. PoUW (H1 credit, or with POUW=pearlplus Pearl+'s own served run, below), PoUS, the bandwidth audit and the network
 #     certifier: `served_verdicts.py pieces` runs each one's piece
@@ -212,8 +212,8 @@
 # when the endpoint never listens. The PERIOD lines say what it committed; $OUT/serve keeps period.json, the Program
 # (h1/window-program.json.gz and its meta) and H1_CIRCUITS' circuit-files.json. H1_STATEMENTS and
 # H1_LIVE_EVIDENCE (files) go to PoUW's piece as its --statements and --live-evidence, the evidence core's credit reads.
-# H1_RECEIPTS=1 serves with --h1-receipts: each window registers each call's receipt table receipt@<c>, which a drawn
-# J10-R call statement's o0 and a lanes-form K's combine read (drawn refuses to stage either without it).
+# H1_RECEIPTS=1 serves with --h1-receipts: each window registers each call's receipt table receipt@<c>, which a sampled
+# J10-R call statement's o0 and a lanes-form K's combine read (sampled refuses to stage either without it).
 # POUW_CMD='bash benchmarks/one_stage/served_pouw.sh "$1" "$2" "$3"' makes both on the node (the window's live rounds and
 # sampled proof blocks proved) and writes the period's case beside the piece, the one remote's composite reads.
 # With H1_TIE set too (and H1_CIRCUITS, V3C_CLASS not empty), V3c's window commit moves into the serve's close: at each H1
@@ -270,7 +270,7 @@
 # default under h1), PEARLC_CHALLENGER_PEER to H1_PEER and PEARLC_CHALLENGER_LANE to H1_LANE's, `served_verdicts.py gate`
 # must find no period of that lane open, as for H1, and the piece holds each pass's salt to the session under
 # H1_KEY_SHA512 and MAIN_FILE's line, as H1's piece does. The piece opens the lane's Pearl-C period right before its
-# retained serve and closes it right before its verifier's draw, a draw session's of its own on that gate, reserved as
+# retained serve and closes it right before its verifier's sample, a sample session's of its own on that gate, reserved as
 # the lane's first reserve after the close and opened on the run's commitment (served_pearlplus.sh's steps 2 and 4);
 # while the period is open its cap refuses every other reserve of the lane. PEARLC_CHALLENGER_GATE set
 # empty leaves Pearl+'s coins an
@@ -304,11 +304,11 @@
 # With a gate, serve() then opens the lane's Pearl-C period PEARLPLUS_PERIOD (default pearlplus-RUN_ID) on that record
 # (`served_verdicts.py pearlplus-period open --circuit-record`, cap 1: the window's one salt session joins it; the
 # PEARLPLUS-PERIOD lines) before serve-openai starts, and closes it once the windows are sealed and the endpoint stopped
-# (or when it never listens, or is stopped), so before Pearl+'s piece draws: open, serve, seal, close, draw. The close
+# (or when it never listens, or is stopped), so before Pearl+'s piece samples: open, serve, seal, close, sample. The close
 # first reads the ledger, waiting up to PEARLPLUS_CLOSE_WAIT seconds (default 300) for it to end each window's salt
 # session, since the gate closes a period only once its windows have ended: the lane's reserves since the open must be
-# the windows' salt sessions alone (pearl/w<k>/served.json's), its line saying held or REFUSED, and the piece draws only
-# after a period that closed with its reserves held; once the coin is drawn, its RULE line says whether the draw session
+# the windows' salt sessions alone (pearl/w<k>/served.json's), its line saying held or REFUSED, and the piece samples only
+# after a period that closed with its reserves held; once the coin is flipped, its RULE line says whether the sample session
 # was the lane's first reserve after the close. The record
 # reads the period's circuit against the window-circuit record V3c held R's circuit to (`window_tie` keeps it beside R).
 # Pearl+'s piece then serves
@@ -705,7 +705,7 @@ EOF
 # composed into DIR before, at this tree and environment, and compose and keep the rest: the audit gets each circuit as
 # a link where its partition and program are the entry's (a copy on another file system than DIR's), else as a copy
 # bound to its own, the entry held to its pin as it is copied (`compose_circuit.cached`). A kept entry is trusted as the
-# tree is: staging takes a circuit's META, pin and class off the line its compose kept beside it, a drawn member's
+# tree is: staging takes a circuit's META, pin and class off the line its compose kept beside it, a sampled member's
 # circuit is held to that line before its prover reads it (`a5.held`), and nothing else says what a template's circuit is.
 v3c_warm() {  # every template of the committed window composed into $VW/compose-cache, V3C_WARM_JOBS at a time
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_WARM_TIMEOUT" \
