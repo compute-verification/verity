@@ -160725,3 +160725,43 @@ Nothing.
 
 ### Heads, all pushed
 `cursor/proofs-sessionof2-parser-carried-e464` `4d1280e75928efe3b29d89635353ef2935ed2a34` (pull request #9776). Runs out: `r20261113-200014-7d41` (records, cpu-1, by 22:01Z), `r20261113-200124-a38f` (suites, cpu-1, by 22:02Z).
+
+## ASSEMBLY, Fri 13 Nov 21:10Z: checkpoint: the join stays at `86874e0e53145a6d4bca109a9058e3d4934a5ce5`; HELDOF's blob line is a candidate, `543a553d6c78`, pushed and building; the records run at the tip is relaunched and on a slot; and the reading you asked for on the tie, for MESSAGES: the per-member step gives half of it
+
+Your 20:53Z and 21:02Z are read.
+
+**1. HELDOF's blob line: a candidate, not on the join** [git, run on this machine]
+
+- FRAME's 20:51Z names the carried head `c492889a3244`. I merged it into the tip in my scratch tree. Two commits, on `cursor/proofs-join-cand-blob-42b8`:
+
+| Commit | What |
+|---|---|
+| `9a7b263b31f1` | the merge. The pin file is the one conflict, settled by `pins.py --regen`. `JoinsAt.lean` and `JoinedForm.lean` are the carried head's, byte for byte, as are the other eleven |
+| `543a553d6c78` | mine: the lock's root for `GoodCaseHeld.lean`, as HELDOF's 20:42Z says it lacks |
+
+- On this machine at `543a553d6c78`: the five root test files 84 passed; pins silent; roots clean; the same 17 names; the same eleven edges; 0 scoped words in 310 added Lean lines; no compile-time code in the 13 files.
+- The build and a try of each of the 13 files: `r20261113-210531-7485`, cpu-5, on a slot since 21:05Z. The join moves when it is rc 0, and its entry follows.
+- GATHER's mended head then meets a moved tip, so it goes in by a plain merge. Its build did not see the blob line's files over its `R3`, so I build those 16 files at that merged tree before the join moves.
+
+**2. The records run at the tip** [run]
+
+- `r20261113-202750-6706` had no slot on cpu-3 at 21:00Z, 32 minutes in. Cancelled by its id. One copy is out: `r20261113-210046-e7ef`, cpu-9, on a slot since 21:01Z.
+
+**3. The tie: a reading, nothing built** [read at the tip: `Spot/OneStageZk.lean`, `Spot/SecondStage.lean`, the form, `SampledTwo/MemberChecks.lean`, `RunsAs/Round2.lean`]
+
+The tie says that the `t`-th session of the evidence's statements (`sessionRecords`) is the first session of the first statement that names the first member whose circuit is template `t`'s (`filesAt`). It takes four facts. One: each statement has one session, so the `t`-th session is the `t`-th statement's. Two: no two statements name one member, so the lookup by name finds that statement. Three: the `t`-th statement names template `t`'s member, which needs every template to have a statement and the statements' order to be the templates'. Four: no earlier member of the parameters has template `t`'s circuit, so the lookup by circuit finds that member. The per-member step's refusal (`heldStep`) gives one and two and stops there. It puts the statements in the order of their members' first units, but an unsampled member has no statement, so it does not say every template has one, and nothing in it relates first units to the templates' order. For four, neither `membersOf` nor the form's parser refuses two members with one circuit; the parser asks only that each member's circuit be some template's. Round 2 of the run of record holds the missing half of three, at one remove: `RunsAs/Round2.lean` already proves that `stmts` has one statement a template, the `t`-th the `t`-th part's, and `second-verified` holds each to an accepted verdict's header digest, registered reads and sample, which the form stamps from the sessions in their order (`stamped`). That match is membership among the verdicts, through the SHA-512 of a header. So it puts statement `t` at session `t` only with the members laid over the population in order (`laidHeld`, `unitsHeld`, `second-population`), and only outside a collision of two headers' digests, which would be a term beside the join's `blobCR`. Whose: one and two are MEMBERS's, beside `membersHeld_find` in `MemberChecks.lean`; three is a fact of the run's accept, so ACCEPTS's to state over RUNSAS's lemmas; four is HELDOF's premise, since its `memberOf` picks by circuit, or TWOLEG's if the form is to refuse it. There is a cheaper way, for MESSAGES to judge: read `filesAt` by position, as `sessionRecords` does. Then `RecordsCover` and the order part of `MsgsOfRecords` hold by unfolding, and what is left is that the `t`-th statement's member is template `t`'s, which `pinHeldAt` already asks of the join's reading.
+
+**4. INF-798** [run]
+
+- Read. Item 4 before the push in section 1: two commits were unpushed, `9a7b263b31f1` and `543a553d6c78`, both authored and committed under this checkout's own identity; no `GIT_AUTHOR_*` or `GIT_COMMITTER_*` is set here, and no job of mine on a node commits.
+
+**Out**
+
+- `r20261113-210531-7485`: the blob candidate's build and tries, cpu-5.
+- `r20261113-210046-e7ef`: the records run at the tip, cpu-9.
+
+**Not established**
+
+- That the blob line compiles: `7485`. HELDOF's commits say "not compiled".
+- That the lock is right at the tip: `e7ef`.
+- In the reading: that the parts' order is the order of the parameters' `circuits`; that no check outside the files I read refuses two members with one circuit; that reading `filesAt` by position leaves `SessionReplay.lean`'s theorems as they are.
