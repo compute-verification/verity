@@ -46,10 +46,11 @@ import math
 import re
 import sys
 from collections import Counter
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
 HERE = Path(__file__).resolve().parent
 CLASSES = ("roundings", "compare_select", "gathers", "folds", "products")
@@ -109,19 +110,18 @@ def key(family: str, **statics: Any) -> str:
     return family + "{" + ",".join(f"{k}={v}" for k, v in statics.items()) + "}"
 
 
+#: a static's value as `key` writes it: Python's text of an int, and of a float; any other is text
+INT = re.compile(r"[+-]?\d+")
+FLOAT = re.compile(r"[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?|[+-]?inf|nan")
+
+
 def parse(k: str) -> tuple[str, dict[str, Any]]:
     """An atom key's family and statics (numbers as numbers)."""
     fam, _, rest = k.split("@")[0].partition("{")
     st: dict[str, Any] = {}
     for kv in filter(None, rest.rstrip("}").split(",")):
         name, v = kv.split("=", 1)
-        try:
-            st[name] = int(v)
-        except ValueError:
-            try:
-                st[name] = float(v)
-            except ValueError:
-                st[name] = v
+        st[name] = int(v) if INT.fullmatch(v) else float(v) if FLOAT.fullmatch(v) else v
     return fam, st
 
 
@@ -130,7 +130,7 @@ def SQ(K): return key("Int8StaticQuant_v1", K=K)
 def MM(K, N): return key("ScaledMmS8_v1", K=K, N=N)
 def NF(N, eps): return key("RMSNormFusedCuda_v2", N=N, EPS=eps)
 def NT(N, eps): return key("RMSNormTriton_v1", N=N, EPS=eps)
-def SILU(I): return key("SiluMul_v2", I=I)
+def SILU(inner): return key("SiluMul_v2", I=inner)
 def ROPE(n, d): return key("RoPE_v1", NHEADS=n, D=d)
 def EMB(V, H): return key("Embedding_v1", V=V, H=H)
 def TS(V): return key("TokenSelect_v1", V=V)
@@ -424,18 +424,18 @@ ATTENTION = {"gqa": attention_gqa, "mla": attention_mla}
 LINEAR = {"hybrid-deltanet": attention_deltanet, "hybrid-lightning": attention_lightning}
 
 
-def mlp_dense(b: Build, m: Mapping[str, Any], I: int) -> None:
+def mlp_dense(b: Build, m: Mapping[str, Any], inner: int) -> None:
     H = m["H"]
     b.add("norm", NF(H, m["eps"]))
-    b.linear(H, 2 * I)
-    b.add("activation", SILU(I))
-    b.products("SwiGLU", I)
-    b.linear(I, H)
+    b.linear(H, 2 * inner)
+    b.add("activation", SILU(inner))
+    b.products("SwiGLU", inner)
+    b.linear(inner, H)
 
 
 def mlp_moe(b: Build, m: Mapping[str, Any]) -> None:
     H, mlp = m["H"], m["mlp"]
-    E, k, I = mlp["experts"], mlp["topk"], mlp["expert_I"]
+    E, k, inner = mlp["experts"], mlp["topk"], mlp["expert_I"]
     ns, Is = mlp.get("shared", 0), mlp.get("shared_I", 0)
     b.add("norm", NF(H, m["eps"]))
     b.add("requantization", RQ(H))
@@ -449,10 +449,10 @@ def mlp_moe(b: Build, m: Mapping[str, Any]) -> None:
     else:
         b.add("MoE routing", RSOFT(E, k))
     b.add("MoE dispatch", XROW(E), k)
-    b.linear(H, 2 * I, n=k, quant=False)
-    b.add("activation", SILU(I), k)
-    b.products("SwiGLU", k * I)
-    b.linear(I, H, n=k)
+    b.linear(H, 2 * inner, n=k, quant=False)
+    b.add("activation", SILU(inner), k)
+    b.products("SwiGLU", k * inner)
+    b.linear(inner, H, n=k)
     b.add("MoE combine", FP, k * H)
     b.products("MoE combine", k * H)
     if ns:
@@ -812,7 +812,7 @@ def sweep(spec: Mapping[str, Any], atoms: Mapping[str, Any], floors: Mapping[str
     for name, m in spec["models"].items():
         out[name] = {}
         for S in spec["workload"]["sweep"]:
-            if S > m["max_context"]:
+            if m["max_context"] < S:
                 continue
             P = min(P0, S)
             out[name][S] = {}
@@ -882,11 +882,11 @@ def header_md(cols: Sequence[str]) -> list[str]:
 def markdown(t: Mapping[str, Any]) -> str:
     wl, node = t["workload"], t["node"]
     E = ", ".join(f"{e} {v:,}" for e, v in E_WORD.items())
-    lines = [f"Reference: {node['name']}, a pool full of requests decoding at context S = {wl['context']}, prefills of "
-             f"P = {wl['prompt']}; exact-int8 profile; nonlinear units (property/v1's budgeted units plus one a data "
-             f"product, a product of two run-dependent values); E a word {E}.", ""]
-    lines += ["**The census, KV at write** (decode at S; f at L = 10 min and 1 h; before: property/v1's units without data "
-              f"products, E {E_BEFORE['conjectured']:,}).", ""]
+    lines = [(f"Reference: {node['name']}, a pool full of requests decoding at context S = {wl['context']}, prefills of "
+              f"P = {wl['prompt']}; exact-int8 profile; nonlinear units (property/v1's budgeted units plus one a data "
+              f"product, a product of two run-dependent values); E a word {E}."), ""]
+    lines += [("**The census, KV at write** (decode at S; f at L = 10 min and 1 h; before: property/v1's units without data "
+               f"products, E {E_BEFORE['conjectured']:,})."), ""]
     lines += header_md(["model", "decode units a token", "of which data products", "data products a context key",
                         "units a byte written (decode / R_cap)", "R_cap (phase)", "f 10 min, E conjectured / best found",
                         "f 1 h, E conjectured / best found", "f 1 h, E conjectured, decode rate alone",
@@ -901,8 +901,8 @@ def markdown(t: Mapping[str, Any]) -> str:
             " / ".join(pct(sv["f"]["10 min"][e]) for e in E_WORD), " / ".join(pct(sv["f"]["1 h"][e]) for e in E_WORD),
             pct(sv["f_decode"]["1 h"]["conjectured"]),
             f"{pct(bf['f']['1 h']['conjectured'])} ({pct(bf['f_decode']['1 h']['conjectured'])})"]))
-    lines += ["", "**Data products a token, KV at write** (products of two run-dependent values, by kind; charged: those "
-              "property/v1 left free as s8 lanes, now a unit each; the rest its fp terms already charge as roundings).", ""]
+    lines += ["", ("**Data products a token, KV at write** (products of two run-dependent values, by kind; charged: those "
+               "property/v1 left free as s8 lanes, now a unit each; the rest its fp terms already charge as roundings)."), ""]
     lines += header_md(["model", "phase", *(n for n, _ in PRODUCT_GROUPS), "all", "charged (new)", "share of the nonlinear units"])
     for name, r in t["models"].items():
         for phase in PHASES:
@@ -944,9 +944,9 @@ def markdown(t: Mapping[str, Any]) -> str:
             lines.append(f"| {name} | {phase} | " + " | ".join(f"{float(sh[n] / u['total']):.1%}" for n, _ in SHARES) + " |")
     lines.append("")
     lines += ["**Honest operations a token, KV at write** (decode at S, prefill at P; MACs and nonlinear units a token).", "",
-              "| model | phase | const-weight MACs (free) | data x data products | nonlinear units | data products charged "
-              "| roundings (requant) | softmax roundings | division | rsqrt | compare-select | of which top-k (MoE routing, DSA) "
-              "| of which softmax max | gathers (exp table / index bits) | modeled share |",
+              ("| model | phase | const-weight MACs (free) | data x data products | nonlinear units | data products charged "
+               "| roundings (requant) | softmax roundings | division | rsqrt | compare-select | of which top-k (MoE routing, DSA) "
+               "| of which softmax max | gathers (exp table / index bits) | modeled share |"),
               "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for name, r in t["models"].items():
         for phase in PHASES:
@@ -971,9 +971,9 @@ def markdown(t: Mapping[str, Any]) -> str:
                          f"{cb['write inputs']:,} | {cb['stored, at write']:,} | {min(cb.values()):,} |")
     sw = t["sweep"]
     ctx = t["workload"]["sweep"]
-    lines += ["", f"**f as the pool's context S varies** (KV at write, L = 10 min, E conjectured, prefills of min(P, S); a model "
-              "past its max_context left out). Each cell is f with R_cap / with the decode rate alone, at full cost, the softmax "
-              "floor and the exactness floor.", "", "| model | " + " | ".join(f"S = {s}" for s in ctx) + " |",
+    lines += ["", ("**f as the pool's context S varies** (KV at write, L = 10 min, E conjectured, prefills of min(P, S); a model "
+               "past its max_context left out). Each cell is f with R_cap / with the decode rate alone, at full cost, the softmax "
+               "floor and the exactness floor."), "", "| model | " + " | ".join(f"S = {s}" for s in ctx) + " |",
               "|---|" + "---|" * len(ctx)]
     for name, r in sw.items():
         cells = []

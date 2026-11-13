@@ -18,6 +18,8 @@ import threading
 import weakref
 from pathlib import Path
 
+__all__ = ["Hub", "ensure"]
+
 HUB = "https://huggingface.co"
 
 

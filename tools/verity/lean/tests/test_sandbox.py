@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -152,6 +153,162 @@ def test_inside_the_sandbox_a_read_only_tmpdir_is_replaced_by_a_private_writable
     assert r.returncode == 0, r.stderr
     assert not any(job.iterdir())
     assert not Path(r.stdout.strip()).exists()
+
+
+#: check.py's `FIXED`, where a build reads its tree (`--at`)
+FIXED = "/var/tmp/verity"
+needs_var_tmp = pytest.mark.skipif(not Path("/var/tmp").is_dir(), reason="no /var/tmp here, where --at refuses")
+
+
+def linked_tree(tmp: Path) -> tuple[Path, Path]:
+    """A tree with a package `pkg` and its source, reached through a link as a slot tree is: (the tree, the link)."""
+    real, link = tmp / "root" / "build-0", tmp / "build-0"
+    (real / "pkg" / "src" / "deep").mkdir(parents=True)
+    (real / "pkg" / "src" / "M.lean").write_text(f"source of {tmp.name}\n")
+    link.symlink_to(real)
+    return real, link
+
+
+@needs_unshare
+@needs_var_tmp
+def test_inside_the_sandbox_a_tree_bound_at_the_fixed_path_is_read_there_and_written_only_in_its_rw_dirs(tmp_path):
+    """`--at FIXED TREE`, as a build runs it: CMD reads the tree's files under FIXED, writes there only in the RW_DIRs,
+    and those writes land in the tree. Nothing is made on the host: FIXED is in the sandbox's own /var/tmp."""
+    real, link = linked_tree(tmp_path)
+    was = Path(FIXED).exists()
+    r = subprocess.run([*UNSHARE, "--", "bash", str(SANDBOX), "--at", FIXED, str(link), str(link / "pkg" / ".lake"), "--",
+                        "bash", "-c", 'cat "$1/pkg/src/M.lean" && echo built > "$1/pkg/.lake/out" && '
+                        '! touch "$1/pkg/src/no" 2>/dev/null && ! touch "$2/pkg/src/no" 2>/dev/null && cat "$2/pkg/.lake/out"',
+                        "_", FIXED, str(real)], cwd=link / "pkg", capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.splitlines() == [f"source of {tmp_path.name}", "built"]
+    assert (real / "pkg" / ".lake" / "out").read_text() == "built\n"
+    assert not (real / "pkg" / "src" / "no").exists()
+    assert Path(FIXED).exists() == was
+
+
+#: each write a build must not make in its tree, as (its name, Python that makes it under the tree's path `b`)
+WRITES = {
+    "append to a source": 'open(f"{b}/pkg/src/M.lean", "a").write("x")',
+    "unlink a source": 'os.unlink(f"{b}/pkg/src/M.lean")',
+    "rename a source": 'os.rename(f"{b}/pkg/src/M.lean", f"{b}/pkg/src/N.lean")',
+    "chmod a source": 'os.chmod(f"{b}/pkg/src/M.lean", 0o600)',
+    "write the lock": 'open(f"{b}/pkg/lean-audit.json", "w").write("{}")',
+    "write another package's .lake": 'open(f"{b}/other/.lake/x", "w").write("x")',
+    "write under a submount": 'open(f"{b}/sub/x", "w").write("x")',
+}
+
+
+@needs_unshare
+@needs_var_tmp
+def test_through_the_fixed_path_and_the_trees_own_every_write_outside_the_rw_dirs_fails_as_a_read_only_file_system(
+        tmp_path):
+    """The bound copy keeps each mount's read-only flag (`--rbind` after every mount is made read-only), so through FIXED,
+    as through the tree's own path, a source file can't be appended to, unlinked, renamed or have its mode changed, and
+    the lock, another package's `.lake` and a mount inside the tree can't be written: each fails with EROFS, while the
+    RW_DIR takes its write. The submount is made in a mount namespace of the test's own, by a bind inside the tree."""
+    real, _ = linked_tree(tmp_path)
+    (real / "pkg" / "lean-audit.json").write_text("{}\n")
+    (real / "other" / ".lake").mkdir(parents=True)
+    (real / "sub").mkdir()
+    (subsrc := tmp_path / "subsrc").mkdir()
+    script = "\n".join([
+        "import errno, os, sys",
+        "for b in sys.argv[1:]:",
+        *(f"    try:\n        {code}\n        print(b, {name!r}, 'written')\n"
+          f"    except OSError as e:\n        print(b, {name!r}, errno.errorcode[e.errno])" for name, code in WRITES.items()),
+        "    open(f'{b}/pkg/.lake/ok', 'a').write('ok')",
+        "    print(b, 'rw', 'written')"])
+    r = subprocess.run(["unshare", "--user", "--map-root-user", "--mount", "--", "bash", "-c",
+                        'mount --bind "$0" "$1" && exec "${@:2}"', str(subsrc), str(real / "sub"),
+                        *UNSHARE, "--", "bash", str(SANDBOX), "--at", FIXED, str(real), str(real / "pkg" / ".lake"), "--",
+                        sys.executable, "-c", script, FIXED, str(real)], cwd=real / "pkg", capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout.splitlines() == [f"{b} {w} {'written' if w == 'rw' else 'EROFS'}"
+                                     for b in (FIXED, str(real)) for w in [*WRITES, "rw"]]
+    assert (real / "pkg" / "src" / "M.lean").read_text() == f"source of {tmp_path.name}\n"
+    assert not (real / "pkg" / "src" / "N.lean").exists() and (real / "pkg" / "src" / "M.lean").stat().st_mode & 0o777 != 0o600
+    assert (real / "pkg" / "lean-audit.json").read_text() == "{}\n" and list((real / "other" / ".lake").iterdir()) == []
+    assert list(subsrc.iterdir()) == [] and list((real / "sub").iterdir()) == []
+    assert (real / "pkg" / ".lake" / "ok").read_text() == "okok"
+
+
+@needs_unshare
+@needs_var_tmp
+@pytest.mark.parametrize("start", ["", "pkg", "pkg/src/deep"])
+def test_with_at_cmd_starts_in_the_fixed_paths_copy_of_the_directory_it_was_started_in(tmp_path, start):
+    """Lake names a source by the directory it runs in, so CMD starts under FIXED, wherever in the tree it was started
+    and however that directory was spelled (a slot tree is a link): its physical directory, which Lean reads, is there."""
+    real, link = linked_tree(tmp_path)
+    r = subprocess.run([*UNSHARE, "--", "bash", str(SANDBOX), "--at", FIXED, str(real), str(link / "pkg" / ".lake"), "--",
+                        "pwd", "-P"], cwd=link / start, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == str(Path(FIXED) / start)
+
+
+@needs_unshare
+def test_at_refuses_a_var_tmp_that_is_a_link(tmp_path):
+    """Where /var/tmp is a link, its private tmpfs and FIXED land at the link's target, and a build bound there would name
+    its sources under that path, which no other build's name. So `--at` reads CMD's physical directory (`pwd -P`) and
+    refuses, with the fix, unless it is under FIXED. Here /var/tmp is made a link in a mount namespace of the test's own,
+    by a directory bound over /var that holds the link."""
+    if Path("/var").resolve() in [tmp_path.resolve(), *tmp_path.resolve().parents]:
+        pytest.skip("the test's directory is under /var, which it covers")
+    real, _ = linked_tree(tmp_path)
+    (var := tmp_path / "var").mkdir()
+    (target := tmp_path / "target").mkdir()
+    (var / "tmp").symlink_to(target)
+    r = subprocess.run(["unshare", "--user", "--map-root-user", "--mount", "--", "bash", "-c",
+                        'mount --bind "$0" /var && readlink /var/tmp && exec "$@"', str(var),
+                        *UNSHARE, "--", "bash", str(SANDBOX), "--at", FIXED, str(real), str(real / "pkg" / ".lake"), "--",
+                        "pwd", "-P"], cwd=real / "pkg", capture_output=True, text=True)
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert r.stdout.splitlines() == [str(target)], "only the outer shell's readlink: CMD never ran"
+    assert f"the bound tree is at {target.resolve()}/verity/pkg, not under {FIXED}" in r.stderr, r.stderr
+    assert "is a link here" in r.stderr and "Make /var/tmp a directory of its own on this host" in r.stderr
+    assert list(target.iterdir()) == [], "the sandbox's tmpfs and FIXED were its own"
+
+
+@needs_unshare
+@needs_var_tmp
+def test_two_sandboxes_at_once_each_read_their_own_tree_at_the_fixed_path(tmp_path):
+    """FIXED is made in each sandbox's private /var/tmp, so two builds on one node, each of its own tree, never meet
+    there: each reads its own source while the other is bound at the same path."""
+    trees = [linked_tree(tmp_path / n)[0] for n in ("one", "two") if not (tmp_path / n).mkdir()]
+    ps = [subprocess.Popen([*UNSHARE, "--", "bash", str(SANDBOX), "--at", FIXED, str(t), str(t / "pkg" / ".lake"), "--",
+                            "bash", "-c", 'cat src/M.lean; read -r _; cat src/M.lean'], cwd=t / "pkg",
+                           stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for t in trees]
+    try:
+        first = [p.stdout.readline() for p in ps]       # both are bound at FIXED now, and stay so until told
+        rest = [p.communicate("\n") for p in ps]
+    finally:
+        for p in ps:
+            p.kill()
+    assert first == ["source of one\n", "source of two\n"], [err for _, err in rest]
+    assert [out for out, _ in rest] == first
+
+
+@needs_unshare
+def test_at_refuses_a_fixed_path_outside_var_tmp_a_start_outside_the_tree_and_a_var_tmp_that_stays_the_hosts(tmp_path):
+    """A tree bound anywhere but FIXED would compile to other bytes than every other build's, without saying so. So
+    `--at` takes one name in /var/tmp and nothing else, and where /var/tmp got no private tmpfs (a directory the sandbox
+    was given lies under it, or the host has none) it refuses with the reason and the fix, and tries no other base."""
+    real, link = linked_tree(tmp_path)
+
+    def refused(args: list[str], cwd: Path) -> str:
+        r = subprocess.run([*UNSHARE, "--", "bash", str(SANDBOX), *args, str(real / "pkg" / ".lake"), "--", "true"],
+                           cwd=cwd, capture_output=True, text=True)
+        assert r.returncode == 2, r.stdout + r.stderr
+        return r.stderr
+
+    for at in ("/srv/verity", "/var/tmp/a/b", "/var/tmp/", "/var/tmp/.."):
+        assert "the fixed path is one name in /var/tmp" in refused(["--at", at, str(real)], real / "pkg")
+    said = refused(["--ro", "/var/tmp/lean-artifacts-that-need-not-exist", "--at", FIXED, str(real)], real / "pkg")
+    assert "would compile to other bytes" in said and "out of /var/tmp" in said
+    assert ("stays the host's" if Path("/var/tmp").is_dir() else "/var/tmp is no directory here") in said
+    if Path("/var/tmp").is_dir():
+        assert "is not under that tree" in refused(["--at", FIXED, str(real)], tmp_path)
+    assert not (real / "pkg" / "src" / "no").exists() and not Path("/var/tmp/lean-artifacts-that-need-not-exist").exists()
 
 
 LAKEFILES = {

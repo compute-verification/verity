@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -46,6 +47,7 @@ def test_index_names_rows_of_record():
         assert e["record"] is None or circuit_db.ART.fullmatch(e["record"]), (row, e["record"])
         assert "aot" not in e or (circuit_db.RUN.fullmatch(e["aot"]["comparison"]) and circuit_db.ART.fullmatch(e["aot"]["trace"])
                                   and RowId.parse(row).world > 1), (row, e["aot"])
+        assert e["manifest_digest"] is None or re.fullmatch(r"[0-9a-f]{128}", e["manifest_digest"]), (row, "a whole SHA-512 manifest digest")
 
 
 def _w(p: Path, doc) -> None:

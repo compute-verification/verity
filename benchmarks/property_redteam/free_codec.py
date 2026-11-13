@@ -103,7 +103,7 @@ class FreeField:
 
     def limbs(self, x: int) -> list[int]:
         bits = self.bits(x, self.n)
-        return [self.b.affine(0, [(2 ** j, bits[8 * l + j]) for j in range(8)]) for l in range(self.L)]
+        return [self.b.affine(0, [(2 ** j, bits[8 * ell + j]) for j in range(8)]) for ell in range(self.L)]
 
     def mul(self, x: int, y: int) -> int:
         """`x·y mod p`: byte limbs, s8-family columns, the `2^n ≡ c` fold, then long division."""
@@ -154,13 +154,13 @@ def free_encode_word(n: int, c: int, rounds: int) -> tuple[Builder, list[int], d
     slots: dict = {}
 
     def bytes_in(kind: tuple, binding: str) -> list[int]:
-        gs = [b.inp(kind + (l,), 0, 255, binding=binding) for l in range(F.L)]
-        for l, g in enumerate(gs):
-            slots[kind + (l,)] = g
+        gs = [b.inp(kind + (ell,), 0, 255, binding=binding) for ell in range(F.L)]
+        for ell, g in enumerate(gs):
+            slots[kind + (ell,)] = g
         return gs
 
     def val(gs: list[int]) -> int:
-        return b.affine(0, [(256 ** l, g) for l, g in enumerate(gs)])
+        return b.affine(0, [(256 ** ell, g) for ell, g in enumerate(gs)])
 
     x = val(bytes_in(("payload",), "registered"))
     t = val(bytes_in(("tweak",), "coin"))
@@ -172,19 +172,19 @@ def free_encode_word(n: int, c: int, rounds: int) -> tuple[Builder, list[int], d
         cr = val(bytes_in(("const", r), "coin"))
         xb = F.rho(F.reduce(b.affine(0, [(1, x), (1, cr), (1, t)])))
         x = F.value(xb)
-    out = [b.affine(0, [(2 ** j, xb[8 * l + j]) for j in range(8) if 8 * l + j >= 1]) for l in range(F.L)]
+    out = [b.affine(0, [(2 ** j, xb[8 * ell + j]) for j in range(8) if 8 * ell + j >= 1]) for ell in range(F.L)]
     return b, out, slots
 
 
-def draw_inputs(n: int, c: int, cs: list[int], mask: int, tau: int, i: int, m: int) -> dict:
+def sample_inputs(n: int, c: int, cs: list[int], mask: int, tau: int, i: int, m: int) -> dict:
     """The slot values of a sample `(cs, mask, τ)` for word `i` with payload `m` (`Slot.value`)."""
     p, L = (1 << n) - c, n // 8
     t = tau * i % p
     x: dict = {}
-    for l in range(L):
-        x[("payload", l)] = m >> (8 * l) & 255
-        x[("tweak", l)] = t >> (8 * l) & 255
-        x[("mask", l)] = mask >> (8 * l) & 255
+    for ell in range(L):
+        x[("payload", ell)] = m >> (8 * ell) & 255
+        x[("tweak", ell)] = t >> (8 * ell) & 255
+        x[("mask", ell)] = mask >> (8 * ell) & 255
         for r, cr in enumerate(cs):
-            x[("const", r, l)] = cr >> (8 * l) & 255
+            x[("const", r, ell)] = cr >> (8 * ell) & 255
     return x

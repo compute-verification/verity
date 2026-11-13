@@ -343,6 +343,18 @@ def test_rehearse_reads_prompts_the_ingress_bound_holds_and_takes_them_and_group
     assert not (tmp_path / "run").exists()
 
 
+def test_the_warden_always_paces_and_serve_and_rehearse_refuse_a_release_within_the_slack(tmp_path):
+    """`serve` and `rehearse`, the deployed warden and the gate's rehearsal of it, always pace: `--paced-ms 0` (once the
+    loop's write) and a release within the slack or past the next boundary are refused before anything runs."""
+    serve = ["serve", "--upstream", "127.0.0.1:9", "--listen", "127.0.0.1:0", "--key", str(tmp_path / "key"),
+             "--session", "00" * 32, "--windows", "1", "--out", str(tmp_path / "run")]
+    for paced in ("0", "25", "100"):
+        for argv in (serve, ["rehearse", "--fake", "--out", str(tmp_path / "run")]):
+            with pytest.raises(SystemExit, match="the warden always paces"):
+                ws.main([*argv, "--paced-ms", paced])
+    assert not (tmp_path / "run").exists()
+
+
 def test_a_group_of_id_requests_admitted_at_a_windows_start_ends_within_its_group_windows(tmp_path):
     """The bound `group_windows` rests on, on the network certifier itself at the scan's schedule: a group of `lanes` id
     requests admitted together at a window's first bucket, each answered with `tokens` id events and the trailer (the
@@ -590,7 +602,8 @@ def refusing_commit(*args, **kwargs):
 
 def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, windows: int = 1, commit=None,
          process: bool = False, servers: list | None = None, params: WardenParams = PARAMS,
-         id_payload: int | None = None, load_heads: Path | None = None) -> Warden:
+         id_payload: int | None = None, load_heads: Path | None = None, arrive: dict[int, int] | None = None,
+         late: dict[int, float] | None = None) -> Warden:
     """A run of the network certifier at `params` for `windows` windows on a `VirtualClock`, published as `serve` and
     `client` publish one: its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when
     `process`, which first signs the load's heads `load_heads` when given), each window committed by `commit`, its
@@ -633,18 +646,28 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
         warden = Warden(params, connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
         running = asyncio.create_task(warden.run())
         clients, tasks = [], []
-        for request in requests:
-            reader = asyncio.StreamReader()
-            reader.feed_data(cells(request, params.cell_bytes))
-            reader.feed_eof()
-            clients.append(_Writer(warden))
-            tasks.append(asyncio.create_task(warden.handle(reader, clients[-1])))
-        await warden.until(lambda w: w.ordinals + w.refused == len(requests))
+
+        async def connect_due(t: int) -> None:
+            # request j connects before the run's first tick, or just before tick `arrive[j]`: a later request no
+            # earlier, so that the clients are in the requests' order
+            for j, request in enumerate(requests):
+                if (arrive or {}).get(j, 0) == t:
+                    reader = asyncio.StreamReader()
+                    reader.feed_data(cells(request, params.cell_bytes))
+                    reader.feed_eof()
+                    clients.append(_Writer(warden))
+                    tasks.append(asyncio.create_task(warden.handle(reader, clients[-1])))
+            await warden.until(lambda w: w.ordinals + w.refused == len(clients))
+
+        await connect_due(0)
         PROCESS_CLOCK.append(clock)
         try:
             for t in range(windows * params.window):
+                if t:
+                    await connect_due(t)
                 await warden.until(settled)
-                clock.advance(t * tau)
+                # tick t runs `late[t]` seconds past its time
+                clock.advance(t * tau + (late or {}).get(t, 0))
                 await warden.until(lambda w, t=t: w.ticks > t)
             await running
         finally:

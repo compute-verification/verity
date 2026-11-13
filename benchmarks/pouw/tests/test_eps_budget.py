@@ -2,19 +2,12 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from dataclasses import replace
-from pathlib import Path
 
+import eps_budget as E
 import pytest
 from verity_machine_model.eps import design, designs, eps, machine
 from verity_machine_model.model import device, devices
-
-spec = importlib.util.spec_from_file_location("pouw_eps_budget", Path(__file__).parents[1] / "eps_budget.py")
-E = importlib.util.module_from_spec(spec)
-sys.modules["pouw_eps_budget"] = E
-spec.loader.exec_module(E)
 
 CELLS = [(m, c, ph) for m in E.MODELS for c in E.CONTEXTS for ph in E.PHASES]
 
@@ -234,7 +227,7 @@ def test_the_peel_is_priced_at_bc_kernels_measured_kernel():
 
 
 def test_pv_units_price_as_checked_strip_without_the_scaling_and_the_sink(monkeypatch):
-    monkeypatch.setattr(E, "PV_SCALE_OPS", 0.0)
+    monkeypatch.setattr("verity_machine_model.skip.PV_SCALE_OPS", 0.0)
     monkeypatch.setattr(E, "pv_ts", E.pv_ts.__wrapped__)
     for m, c, low, ratio in (("llama-3.1-8b", 2048, 0.043914, 1.4080), ("llama-3.1-70b", 8192, 0.010158, 1.2985)):
         e, r = E.pv_ts(m, c, 0, sink=False)

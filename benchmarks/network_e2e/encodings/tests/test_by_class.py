@@ -9,8 +9,8 @@ own; where the decoder refuses the string it gives the decoder's reason and the 
 differs from the engine's schedule; and a trace with an abort is its refusal, the aborts its directory records, by
 window, and that the run shows none of its windows. It prints ℓ beside each window's charge, the lengths' rule with
 the load's `max_tokens`, and the charge scaled to a week, a month and a year at the serve's own rate; it refuses a
-trace served with a draft; and set beside another serve's trace it names what that serve exercised and this one did
-not, and where the two serves differ."""
+trace served with a draft; and set beside another serve's trace, read under that serve's own stop ids, it names what
+that serve exercised and this one did not, and where the two serves differ."""
 
 from __future__ import annotations
 
@@ -459,11 +459,46 @@ def test_a_serve_is_set_beside_the_serve_that_exercised_what_it_did_not(tmp_path
             "ran: on the auditor's host here, beside the server in `there`; the pool: 4,096 blocks of 16 tokens here, 8 "
             "blocks of 16 tokens in `there`.\n") in text
     assert "Scaled, not measured: at this serve's own rate on its 8 cards, its " in text
-    assert ("Beside `gone`, which is refused, so that only its aborts and its directory's facts are read:\n\n"
-            "- aborts: not exercised here; in `gone`: aborted requests 1.\n") in text
+    assert "request r5: finish 'abort'" in refused["error"]
+    assert (f"Beside `gone`, which is refused ({refused['error']}), so that only its aborts and its directory's facts "
+            f"are read:\n\n- aborts: not exercised here; in `gone`: aborted requests 1.\n") in text
     assert "- segment end: not exercised here; `gone` has no table to say.\n" in text
     assert text.index("Beside `there`") < text.index("Beside `gone`") < text.index("- hits: 0 by construction")
-    assert BYC.render_all(doc["rows"]) == text
+    assert BYC.render_all(doc["rows"]) == text and doc["beside_stops"] == doc["stops"] == [EOS]
+
+
+def test_a_serve_of_another_model_is_set_beside_under_its_own_stop_ids(tmp_path, capsys):
+    """The small engine's serve as another model's, each of its stops on that model's stop id, set beside the roomy
+    serve: read under the report's stop ids its record is refused, so it has no table to set beside and its line says
+    why; read under its own (``--beside-stops``) it is set beside as the same serve on the report's stop id is."""
+    small, (ios, times) = engine(False), plan()
+    roomy = dataclasses.replace(small, num_gpu_blocks=4096)
+    here = write_corpus(tmp_path / "here", roomy, ios, times, serve(roomy, ios, times, seed=1), tick=True)
+    same = write_corpus(tmp_path / "same", small, ios, times, serve(small, ios, times, seed=1), tick=True)
+    there = write_corpus(tmp_path / "there", small, ios, times, serve(small, ios, times, seed=1), tick=True)
+    theirs = EOS + 7
+    reqs = [json.loads(line) for line in (there / "requests.jsonl").read_text().splitlines()]
+    assert any(r["eos"] for r in reqs) and not any(theirs in r["prompt_ids"] + r["output_ids"] for r in reqs)
+    for r in reqs:
+        if r["eos"]:
+            r["output_ids"][-1] = theirs
+    (there / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in reqs))
+    out = tmp_path / "report.json"
+    args = [f"here={here}", "--stops", str(EOS), "--T", "10", "--out", str(out)]
+
+    def beside(d: Path, *more: str) -> tuple[dict, dict, str]:
+        assert BYC.main([*args, "--beside", f"there={d}", *more]) == 0
+        doc = json.loads(out.read_text())
+        return doc, doc["rows"][0]["beside"][0], capsys.readouterr().out
+
+    doc, b, text = beside(there)
+    assert doc["beside_stops"] == [EOS] and f"stopped on a stop id, its last id {theirs}" in b["refused"]
+    assert f"Beside `there`, which is refused ({b['refused']}), so that only its aborts" in text
+    assert "- segment end: not exercised here; `there` has no table to say.\n" in text
+    doc, b, text = beside(there, "--beside-stops", str(theirs))
+    assert doc["beside_stops"] == [theirs] and doc["stops"] == [EOS] and b["refused"] is None
+    assert "Beside `there`:\n" in text and "no table to say" not in text and b["events"]["preemptions"] > 0
+    assert beside(same)[1] == b
 
 
 def test_a_trace_served_with_a_draft_is_refused(tmp_path, capsys):

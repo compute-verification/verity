@@ -52,10 +52,10 @@ their floor.
   `work:1` sampling design. Its tests are this directory's suite.
 - `h200.py`: the demo's plan on one H200: the frozen MQA shape (52 layers, width 16,384, 256 query heads of 64 and
   one KV head, MLP 65,536, context 32; batch and step are named stand-ins) on the demo's partition,
-  one lockstep block of 31 decode steps. Each subcircuit is one `IntegrityPeriod` execution phase, one `--zk` session sampling
-  `subset:k` over the tables `_cap` allows, and leads with what Lean proves: each window's K0 (IntegrityPeriodLog) and
-  the pooled bound over any period (IntegrityHorizon) at δ = 1% and 1e-6. It prices each window's statements and sampled
-  proof blocks, the replay and, beside them, the commitment of every unit's outputs; compares the static matmuls as 128-channel
+  one lockstep block of 31 decode steps. Each subcircuit is one `IntegrityPeriod` sampling block, one `--zk` session drawing
+  `subset:k` over the tables its `Template.cap` allows, and leads with what Lean proves: each window's K0 (IntegrityPeriodLog) and
+  the pooled bound over any period (IntegrityHorizon) at δ = 1% and 1e-6. It prices each window's statements and drawn
+  units, the replay and, beside them, the commitment of every unit's outputs; compares the static matmuls as 128-channel
   tiles (`--tiles`) and softmax and PV padded to the context (`--pad`); and gives the frontier over the share, the
   execution phase length in blocks that proves within its own GPU time, and the incorrect ANDs (`Stratified.harm_bound`, not a Lean
   guarantee). `--card h200` prices it with the `h200` card's fit instead of the RTX PRO 6000's.
@@ -95,14 +95,19 @@ uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--spans NAME ...] [-
   store): each proof-block Definition one candidate, its units one request's count over every rank, its work its
   estimated ANDs, its outputs committed and its opened rows' bytes; the gaps, rows no cut fits, are listed by row family
   and are no candidate. It prints the proof blocks, output bits, ANDs, served MACs and opened bytes per prefill token,
-  per decode token and per request, and the gaps.
+  per decode token and per request, and the gaps. With `--stop T` the requests are a stop class's, of at most T ids a
+  response, and it adds the class's two populations, one proof block a response each: the stop blocks (the stop rule's
+  Boolean Definition taken as a block of its own) and the response ties, each a candidate whose ANDs, rows and output
+  bits are its Definition's. Both are registered at `rate:1/1`, and it prints what that leaves at `--delta`: the most
+  blocks an accepted sample leaves incorrect, that count over the population, and those blocks' output bits, each 0
+  where every block is proved (`charged`, which gives a smaller sample its count bound's). These rows read no verdict.
 
 ```text
-uv run python benchmarks/sampling_plan/glm53.py [--requests N]
+uv run python benchmarks/sampling_plan/glm53.py [--requests N] [--stop T [--delta D]]
 ```
 
 - `cpu_budget.py`: the block's sample sized to a CPU proving budget. It reads `h200.py`'s `plan.json` (its
-  templates, their n, S and proved ANDs), prices each template's statements (up to 8 sampled proof blocks each) from measured
+  templates, their n, S, rows and ANDs), prices each template's statements (up to 8 sampled proof blocks each) from measured
   ZK-served Flock `--zk` sessions on the Genoa proofs slots, and finds the least share whose statements fit
   `--slots` x `--hours`. It writes the per-template k and cost and the certified units per window and per period, pooled
   and each block, at δ = 1% and 1e-6 (`cpu-budget.json`, `cpu-budget.md`).

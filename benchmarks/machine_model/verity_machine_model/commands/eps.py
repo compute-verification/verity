@@ -40,6 +40,8 @@ from pathlib import Path
 from verity_machine_model import eps as E
 from verity_machine_model.commands._shared import device_help, pct as _pct, registry as _registry
 
+__all__ = ["add", "record", "run"]
+
 
 def add(sub: argparse._SubParsersAction) -> None:
     e = sub.add_parser("eps")
@@ -136,8 +138,10 @@ def _adapt(args, d: E.Design) -> E.Adapt | None:
     return E.adapt(args.adapt or d.unit, args.data)
 
 
-def _eps_record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str, credit: str = "H",
-                table: E.Table | None = None, adapt: E.Adapt | None = None, checking: str = "full") -> dict:
+def record(d: E.Design, pi: E.Machine, q: float, data: Path, operands: str, credit: str = "H",
+           table: E.Table | None = None, adapt: E.Adapt | None = None, checking: str = "full") -> dict:
+    """What `eps --json` prints for one design on one vector at q* = q: every term of ε with its source, the credited
+    and the cheater's mix with their binding rows, the ε(q*) curves and the thresholds."""
     e = E.eps(d, pi, q, data, operands=operands, credit=credit, table=table, adapt=adapt)
     sampled, dt = checking == "sampled", d.table(table)
     s = E.setup(d, pi, data, operands, credit, table)
@@ -252,7 +256,7 @@ def run(args: argparse.Namespace) -> int:
     d = _design(args, args.designs[0] if args.designs else "dither-1s" if "dither-1s" in names else names[0])
     tb = _lookups(args)
     ad = _adapt(args, d)
-    rec = _eps_record(d, pi, args.q, args.data, args.operands, args.credit, tb, ad, args.checking)
+    rec = record(d, pi, args.q, args.data, args.operands, args.credit, tb, ad, args.checking)
     if args.json:
         print(json.dumps(rec, ensure_ascii=False, indent=1))
         return 0

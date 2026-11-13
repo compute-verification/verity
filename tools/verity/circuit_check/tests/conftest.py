@@ -3,50 +3,69 @@
 circuit-check's catalog (`Catalog`: `targets.suite()` and what its roots reach) is built once per session, and only for a test
 that asks for it (the `catalog` or `suite` fixture): when collection ends, before any test runs, as circuit-check builds it
 (`targets.suite()` grows as tracing registers Definitions, so a later build would list more targets).  It is made from the
-catalog bindings' records (`circuit_check.units`): handed ones (`CIRCUIT_CHECK_RECORDS`) or else the ones `check`'s
-circuit-check keeps (`RECORDS`), and only when every binding's record counts: this process builds no binding a record misses
-(`_from_records`), and a handed record that doesn't count fails the session by name.  Without handed records, unless every
-one counts, each binding is built in a process of its own, as many at once as the session has workers (or this process CPUs)
-and their memory holds at `heavy.json`'s peaks (`_budget`, `units.built_apart`): under xdist, by
-the first worker that asks, which writes what each binding reaches beside the workers' basetemps (`MANIFEST`), while the others
-wait on its lock and then take that (`units.from_manifest`).  Every process makes the catalog's roots itself, and each suite
-target the first time a test reads it (`Suite`), from its id or from its binding's record (`units.make`).  A test that asks for
-it is marked slow, so `--quick` builds none; in a process that didn't build it, `targets.suite` and `targets.catalog` fail by
-name."""
+catalog bindings' records (`circuit_check.units`) in `RECORDS`, the directory `check`'s circuit-check keeps them in, or
+`CIRCUIT_CHECK_RECORDS`: each record that counts is taken, and this process builds no binding a record misses
+(`_from_records`).  The bindings whose record doesn't count, a handed one's too, are built once a session by a process of
+its own, ``circuit-check --all --records-only`` (`_recorded`), which builds each of them in a process forked for it, as many
+at once as the session has workers (or this process CPUs) and their memory holds at `heavy.json`'s peaks (`_budget`,
+`units.built_apart`), and stores each one's record in that directory, as `check`'s circuit-check stores it; the session then
+takes them all.  Under xdist the first worker that asks starts it and writes what it reported beside the workers' basetemps
+(`RECORDED`), while the others wait on its lock and then take the records too (`_once`).  Where that process stored no
+record a session can take (it could not trace what it did, or the tree changed under it), each binding is built in a process
+of its own without one (`_apart`), once a session likewise (`MANIFEST`, `units.from_manifest`), and the catalog's line says
+why.  With `CIRCUIT_CHECK_RECORDS_MANIFEST`, the records the session's catalog rests on are listed there (`units.listing`).
+Every process makes the catalog's roots itself, and each suite target the first time a test reads it (`Suite`), from its id
+or from its binding's record (`units.make`).  A test that asks for it is marked slow, so `--quick` builds none; in a process
+that didn't build it, `targets.suite` and `targets.catalog` fail by name."""
 from __future__ import annotations
 
 import fcntl
 import functools
 import json
 import os
+import subprocess
+import sys
+import tempfile
 import tomllib
+from collections import Counter
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import pytest
+from verity_config.settings import of
 
 from circuit_check import cache as CC
 from circuit_check import cli
 from circuit_check import targets as TG
 from circuit_check import units as UN
 
+#: circuit-check's settings registry (the `settings.py` beside its `pyproject.toml`), which declares the variables read here
+SETTINGS = of(__file__)
 #: one xdist worker's share of the memory suites.py runs the suite in (`[tool.verity.tests] worker_gb`, which it divides by)
 WORKER_GB = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text())["tool"]["verity"]["tests"]["worker_gb"]
 
 #: where `check`'s circuit-check keeps the catalog bindings' records (`--cache cache_dir()/circuit-check --catalog-units`, with
 #: `cache_dir` of tools/verity/check/common.py at its default), or `CIRCUIT_CHECK_RECORDS`: not `CHECK_CACHE`, which the suite
-#: guard points at an empty directory of its own (`HOST_CACHES`).  A record counts only for inputs identical to the ones it was
-#: made from (`units.plan`, as `check`'s circuit-check takes it), so it changes how long the catalog takes, not what it holds.
-_HANDED = os.environ.get("CIRCUIT_CHECK_RECORDS")
+#: guard points at an empty directory of its own (`HOST_CACHES`).  The session reads the records there and writes the ones it
+#: has built.  A record counts only for inputs identical to the ones it was made from (`units.plan`, as `check`'s
+#: circuit-check takes it), so it changes how long the catalog takes, not what it holds.
+_HANDED = SETTINGS.CIRCUIT_CHECK_RECORDS
 RECORDS = Path(_HANDED or Path.home() / ".cache" / "verity-check" / "circuit-check")
-#: the records were handed (the graph's test-file runner sets them from `circuit-catalog:records`): the catalog is theirs or none
+#: the records were handed (the graph's test-file runner sets them from `circuit-catalog:records`): one that doesn't count is
+#: skipped and its binding built, as where they weren't, and a reason the catalog's line gives names the directory as handed
 HANDED = bool(_HANDED)
+#: where the session lists the records its catalog rests on (`units.listing`, as ``circuit-check --records-manifest`` does):
+#: what a store that carries the records to other runs names.  Unset, it lists none
+LISTED = SETTINGS.CIRCUIT_CHECK_RECORDS_MANIFEST
 
-#: what each catalog binding reaches (`units.manifest`), written once a session by the xdist worker that builds the catalog into
-#: the directory every worker's basetemp is in (the controller's, which the session starts empty), beside its lock
+#: what each catalog binding reaches (`units.manifest`), written once a session by the xdist worker that builds the catalog
+#: without records (`_apart`) into the directory every worker's basetemp is in (the controller's, which the session starts
+#: empty), beside its lock
 MANIFEST = "circuit-check-catalog.json"
+#: there too: what the session's one build of the records reported (`_recorded`), or that every record counted and none ran
+RECORDED = "circuit-check-records.json"
 _SHARED: list[Path] = []
 
 
@@ -122,53 +141,91 @@ class _Missed(Exception):
 
 def _counted(lookup: Callable, cache: Path, repo: Path, e: UN.Entry) -> Any:
     if (hit := lookup(cache, repo, e)) is None:
-        raise _Missed(f"{e.name}'s record doesn't count (a read changed, or it lists other roots than its binding makes now)")
+        raise _Missed(f"{e.name} has no record that counts (of the {e.skipped} under its key, each has a read that changed, "
+                      "lists other roots than its binding makes now or is not the bytes its name digests)")
     return hit
 
 
-def _from_records(cache: Path, handed: bool = False) -> Catalog | None:
-    """The catalog from the bindings' records (`units.plan`), each suite target made when it is read (`units.make`); None when
-    there is no record of this version, one doesn't count or one is stale, but with ``handed`` records, a `pytest.UsageError`
-    naming why.  Either way before any binding they miss is built here: `units.plan` builds such a binding in the process that
-    calls it, which under xdist is every worker of the session at once, each holding what the heaviest binding's build holds.
-    So the first record that doesn't count ends the plan (`_counted`), and the one build the session shares (`_apart`) makes
-    them all.  A target is taken as its record describes it, as `cli._planned` takes a target whose result it reuses: holding
-    each one to its descriptor (`cache.descriptor`, as `cli._made` does for one it checks) walks all it reaches.  The records'
-    cache, unless handed, is marked used (`cache.mark`), so its version doesn't expire while sessions read it; a session
-    removes nothing, which the runs that write the cache do (`cache.expire`)."""
+#: the registered roots (`targets._registered`) as this process's first plan from records cut them (`units.registered_entries`)
+_REGISTERED: list[list[Any]] = []
+
+
+def _registered(now: Callable[[], list[Any]]) -> list[Any]:
+    """The registered roots a plan from records cuts into `<registered>`'s entries: the ones the process's first such plan
+    had (``now``'s then).  `units.plan` makes each binding's roots before it looks its record up, and making them registers
+    Definitions, so after a plan that ended at a record that doesn't count ``now`` gives a longer list than the one the
+    records were stored over, whose entries list other roots: the session would take no record its build stored."""
+    if not _REGISTERED:
+        _REGISTERED.append(now())
+    return list(_REGISTERED[0])
+
+
+def _from_records(cache: Path, handed: bool = False) -> tuple[UN.Plan | None, str | None]:
+    """The catalog's plan from the bindings' records (`units.plan`) when every binding's counts; else None and why: there is
+    no record under this process's keys, one doesn't count or one is stale (the reason names the directory, as the one the
+    session was ``handed`` where it was).  Either way before any binding they miss is built here: `units.plan` builds such
+    a binding in the process that calls it, which under xdist is every worker of the session at once, each holding what the
+    heaviest binding's build holds.
+    So the first record that doesn't count ends the plan (`_counted`), and the one build the session shares (`_recorded`) makes
+    them all; the plan after it cuts the registered roots as the one before did (`_registered`).  A target is taken as its
+    record describes it, as `cli._planned` takes a target whose result it reuses: holding each one to its descriptor
+    (`cache.descriptor`, as `cli._made` does for one it checks) walks all it reaches.  The records' cache, unless handed, is
+    marked used (`cache.mark`), so its version doesn't expire while sessions read it; a session removes nothing, which the
+    runs that write the cache do (`cache.expire`)."""
     if not handed:
         CC.mark(cache)
     with pytest.MonkeyPatch.context() as mp:
-        # suites.py's variables say how the suite runs, not what a check computes: keyed, no record circuit-check stored counts
-        mp.setattr(CC, "UNKEYED", CC.UNKEYED | {k for k in os.environ if k.startswith("VERITY_SUITE_")}
-                   | {"CIRCUIT_CHECK_RECORDS"})
         # the records were made traced, so a function they read (a kernel's) is named by its module's digest, which
         # `cache._where` gives only under the tracer's root: without it, by path and line, and no such record counts
         mp.setattr(CC, "_ROOT", [cli.REPO.resolve()])
         mp.setattr(UN, "_lookup", functools.partial(_counted, UN._lookup))
+        mp.setattr(TG, "_registered", functools.partial(_registered, TG._registered))
+        where = f"{cache}, the directory `CIRCUIT_CHECK_RECORDS` names," if handed else str(cache)
         try:
             plan = UN.plan(cache, cli.REPO)
-            why = None if plan is not None else "they hold no record of this circuit-check's version (`cache.version`)"
+            return plan, None if plan is not None else (f"{where} holds no record under this process's keys (this "
+                                                        "circuit-check's version, `cache.version`, and its keyed variables)")
         except (UN.Stale, _Missed) as e:
             TG.BINDINGS.clear()
-            plan, why = None, str(e)
-    if plan is None:
-        if handed:
-            raise pytest.UsageError(f"circuit-check's catalog: CIRCUIT_CHECK_RECORDS={cache} was handed, and {why}: hand the "
-                                    "records `circuit-check --all --catalog-units --records-only` stored for this tree, or none")
-        return None
+            return None, f"in {where} {e}"
+
+
+def _catalog(plan: UN.Plan, how: str) -> Catalog:
+    """``plan``'s catalog, each suite target made when it is read (`units.make`)."""
     d = plan.derived
     for fid in d.ids:
         TG.BINDINGS.setdefault(fid, set()).update(d.units.get(fid, set()))
-    reused = sum(e.reused for e in plan.entries)
     return Catalog(Suite(d.ids, lambda fid: UN.make(plan, fid)), {fid: (n["f"], n["g"]) for fid, n in d.nodes.items()},
-                   lambda fid: UN.make(plan, fid), f"from records: {reused} of {len(plan.entries)} bindings reused", plan.calls)
+                   lambda fid: UN.make(plan, fid), how, plan.calls)
 
 
 def _write(path: Path, got: dict) -> None:
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(got))
     os.replace(tmp, path)
+
+
+def _once(shared: Path | None, name: str, do: Callable[[], dict]) -> dict:
+    """What ``do`` returns, once a session.  Under xdist the first worker that asks runs it and writes that beside the
+    workers' basetemps (``shared / name``), while the others wait on its lock and then take what it wrote; one that raised
+    leaves its error there, and each later worker fails on it by name rather than run it again."""
+    if shared is None:
+        return do()
+    path = shared / name
+    with open(shared / (MANIFEST + ".lock"), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)    # held until the one that ran it wrote what it returned, or died
+        if path.exists():
+            got = json.loads(path.read_text())
+            if "error" in got:
+                raise RuntimeError(f"the xdist worker that built circuit-check's catalog failed: {got['error']}")
+            return got
+        try:
+            got = do()
+        except Exception as e:
+            _write(path, {"error": f"{type(e).__name__}: {e}"})
+            raise
+        _write(path, got)
+        return got
 
 
 def _jobs(env: Mapping[str, str]) -> int:
@@ -205,41 +262,139 @@ def _built(entries: list[UN.Entry], shared: Path | None, jobs: int) -> tuple[lis
     if shared is None:
         kept, _, how = _apart_built(entries, jobs)
         return kept, how
-    path = shared / MANIFEST
-    with open(shared / (MANIFEST + ".lock"), "a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)    # held until the builder wrote the manifest, or died
-        if path.exists():
-            got = json.loads(path.read_text())
-            if "error" in got:
-                raise RuntimeError(f"the xdist worker that built circuit-check's catalog failed: {got['error']}")
-            return UN.from_manifest(entries, got), "taken from the worker that built it"
-        try:
-            kept, dropped, how = _apart_built(entries, jobs)
-        except Exception as e:
-            _write(path, {"error": f"{type(e).__name__}: {e}"})
-            raise
-        _write(path, UN.manifest(kept, dropped))
-        return kept, how
+    built: list[tuple[list[UN.Entry], str]] = []
+
+    def do() -> dict:
+        kept, dropped, how = _apart_built(entries, jobs)
+        built.append((kept, how))
+        return UN.manifest(kept, dropped)
+
+    got = _once(shared, MANIFEST, do)
+    return built[0] if built else (UN.from_manifest(entries, got), "taken from the worker that built it")
 
 
-def _apart(shared: Path | None, jobs: int) -> Catalog:
-    """The catalog with each binding built in a process of its own (`units.built_apart`), once a session (`_built`)."""
+def _apart(shared: Path | None, jobs: int, why: str | None = None) -> Catalog:
+    """The catalog with each binding built in a process of its own (`units.built_apart`), once a session (`_built`), and no
+    record: ``why`` the records gave none."""
     entries, how = _built(UN.made_entries(), shared, jobs)
     plan = UN.planned(entries)
     d = plan.derived
     for fid in d.ids:
         TG.BINDINGS.setdefault(fid, set()).update(d.units.get(fid, set()))
     return Catalog(Suite(d.ids, lambda fid: UN.make(plan, fid)), {fid: (n["f"], n["g"]) for fid, n in d.nodes.items()},
-                   lambda fid: UN.make(plan, fid), f"{how}, {len(entries)} bindings")
+                   lambda fid: UN.make(plan, fid),
+                   f"{how}, {len(entries)} bindings" + (f" (no record taken: {why})" if why else ""))
+
+
+def _records_argv(cache: Path, jobs: int, mem_gb: int, out: Path, listed: str | None) -> list[str]:
+    """The program that builds and stores the catalog bindings' records ``cache`` lacks, as `check`'s circuit-check stores
+    them: ``circuit-check --all --records-only``, its report at ``out``."""
+    return [sys.executable, "-m", "circuit_check", "--all", "--records-only", "--cache", str(cache), "--jobs", str(jobs),
+            "--mem-gb", str(mem_gb), "--out", str(out), *(["--records-manifest", listed] if listed else [])]
+
+
+def _untraced(env: Mapping[str, str]) -> dict[str, str]:
+    """``env`` without the suite's read tracer on its PYTHONPATH: each directory there that holds `verity_suite_reads.py`
+    (tools/verity/check/guard/child, whose `sitecustomize` every Python started with it loads).  That directory is in the
+    tree, so a build that looks for its loaded modules' sources (`inspect`, as torch's do) holds that `sitecustomize` by its
+    name, which resolves in no process without the directory on its path: `check`'s circuit-check would take no record such a
+    build stored.  The records are built as it builds them."""
+    env = dict(env)
+    kept = [d for d in env.get("PYTHONPATH", "").split(os.pathsep) if d and not (Path(d) / "verity_suite_reads.py").is_file()]
+    if kept:
+        env["PYTHONPATH"] = os.pathsep.join(kept)
+    else:
+        env.pop("PYTHONPATH", None)
+    return env
+
+
+def _recorded(cache: Path, jobs: int) -> dict:
+    """Build every binding whose record in ``cache`` doesn't count, and store its record there: `_records_argv`'s program, in
+    a process of its own, which traces what each build reads (this one, which imported its modules before any tracer, could
+    not), within `_budget`.  Its report (`cli.records`: the bindings ``reused`` and ``rebuilt``, those of them ``skipped``, the
+    records ``stored``, its ``seconds``), with ``why`` when it stored none or not all, or failed.  It runs without the suite's
+    read tracer (`_untraced`), so the suite's guard lists it as a program it does not see into, as it lists the `git` every
+    process that takes a record starts; each read a record holds is read again by the process that takes it, which the
+    guard does trace."""
+    env = _untraced(os.environ)
+    with tempfile.TemporaryDirectory(prefix="circuit-check-records-") as tmp:
+        out = Path(tmp) / "records.json"
+        r = subprocess.run(_records_argv(cache, jobs, max(1, int(_budget(os.environ))), out, LISTED), cwd=cli.REPO, env=env,
+                           capture_output=True, text=True)
+        said = [ln for ln in (r.stdout + r.stderr).splitlines() if ln.strip()]
+        for ln in said if r.returncode else [ln for ln in said if ln.startswith("circuit-check")]:
+            print(ln, flush=True)
+        got = json.loads(out.read_text()) if out.is_file() else {}    # it writes its report last: none when it died
+    if r.returncode and "why" not in got:
+        got["why"] = f"`circuit-check --all --records-only` exited {r.returncode}" + (f": {said[-1][:300]}" if said else "")
+    return got
+
+
+def _listed(cache: Path, plan: UN.Plan) -> dict:
+    """Every record counted, so nothing is built: the records ``plan`` rests on listed at `LISTED` (`units.listing`), and what
+    `_recorded` would report."""
+    if LISTED:
+        UN.write_listing(Path(LISTED), UN.listing(cache, plan.entries))
+    return {"reused": len(plan.entries), "rebuilt": []}
+
+
+def _how(got: dict) -> str:
+    """The catalog's line for what the session's records gave (`_recorded`'s report, or `_listed`'s), with the names of the
+    variables the build's keys hold when the cache held records and none under its keys (`units.untaken_note`)."""
+    built, skipped, note = got["rebuilt"], got.get("skipped", []), UN.untaken_note(got)
+    how = f"from records: {got['reused']} of {got['reused'] + len(built)} bindings reused, {len(built)} built"
+    if not built:
+        return how
+    return (f"{how} and stored in {got.get('seconds', '?')}s by one process for the session ({len(skipped)} of them held a "
+            f"record that did not count): {', '.join(built[:3])}{', ...' if len(built) > 3 else ''}{f'; {note}' if note else ''}")
+
+
+def _taken(cache: Path, shared: Path | None, jobs: int, handed: bool = False) -> Catalog:
+    """The catalog from the records in ``cache`` (``handed``: the directory `CIRCUIT_CHECK_RECORDS` names): each one that
+    counts taken, and every other binding built and its record stored there by the session's one build (`_recorded`), then
+    taken too.  Where that leaves a binding without a record that counts, the catalog without records (`_apart`), saying why."""
+    plan, why = _from_records(cache, handed)
+    got = _once(shared, RECORDED, lambda: _listed(cache, plan) if plan is not None else _recorded(cache, jobs))
+    if plan is None and "why" not in got:
+        plan, why = _from_records(cache, handed)
+    if plan is None:
+        return _apart(shared, jobs, got.get("why") or why)
+    if "why" in got:                 # this process took them all, whatever the session's build stored
+        got = {"reused": len(plan.entries), "rebuilt": []}
+    return _catalog(plan, _how(got))
 
 
 def build() -> Catalog:
-    """This process's catalog: built the first time it is asked for, from the records when they count (and only from them
-    when they were handed)."""
+    """This process's catalog: built the first time it is asked for, from the records (`_taken`)."""
     if not _BUILT:
-        _BUILT.append(_from_records(RECORDS, HANDED) or _apart(_SHARED[0] if _SHARED else None, _jobs(os.environ)))
-        print(f"circuit-check's catalog: {_BUILT[0].how}, {len(_BUILT[0].suite)} targets", flush=True)
+        _BUILT.append(_taken(RECORDS, _SHARED[0] if _SHARED else None, _jobs(os.environ), HANDED))
+        print(_line(_BUILT[0]), flush=True)
     return _BUILT[0]
+
+
+def _line(built: Catalog) -> str:
+    return f"circuit-check's catalog: {built.how}, {len(built.suite)} targets"
+
+
+#: in an xdist controller: the catalog's line of each worker that built one, whose own output the controller never shows
+_LINES: list[str] = []
+
+
+def pytest_sessionfinish(session):
+    out = getattr(session.config, "workeroutput", None)
+    if out is not None and _BUILT:
+        out["circuit_check_catalog"] = _line(_BUILT[0])
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_testnodedown(node, error):
+    if line := (getattr(node, "workeroutput", None) or {}).get("circuit_check_catalog"):
+        _LINES.append(line)
+
+
+def pytest_terminal_summary(terminalreporter):
+    for line, n in Counter(_LINES).items():
+        terminalreporter.write_line(f"{line} (in {n} xdist worker(s))")
 
 
 def pytest_collection_finish(session):

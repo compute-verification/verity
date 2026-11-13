@@ -7,7 +7,7 @@ bound over its programs. A form's issue price an output slot is `a / slots`, rea
 instruction counts are read from each kernel's SASS, so a program counts what ptxas emitted. Timings only; clocks are
 read, never set.
 
-The machine model reads it: `machine_model/data/forms.toml` takes its forms from `KIND` in `tensor_kinds.py` and names
+The ACCEL model reads it: `../../machine_model/data/forms.toml` takes its forms from `KIND` in `tensor_kinds.py` and names
 these runs as its source, `tensor_kinds.py refit` prints the model's joint issue rows, and `sm80.py census` writes
 sm_80's device files.
 
@@ -32,8 +32,9 @@ research run --on MACHINE --project verity --source /workspace --cwd clone --cus
 
 Under the run's `$OUT`:
 
-- every job: `meta.json` (the run's id, the host, the start time and nvcc's version), `lease.json`, `sass/` (each binary's `cuobjdump -sass`), the
-  build logs, `gpu.log`, and nvidia-smi's `smi-before.txt`, `smi-samples.csv` and `smi-after.txt`;
+- every job: `meta.json` (the run's id, the host, the start time and nvcc's version), `lease.json`, `sass/` (each
+  binary's `cuobjdump -sass`), the build logs, `gpu.log`, and nvidia-smi's `smi-before.txt`, `smi-samples.csv` and
+  `smi-after.txt`;
 - `run.sh`: `tensor_kinds.jsonl` (a line a timed case) and, from the fit, `tensor_kinds.json`, `tensor_kinds.md` and
   `fit.log`;
 - `search.sh`: `search-TAG.jsonl` a binary and `search.log`;
@@ -45,13 +46,14 @@ Under the run's `$OUT`:
 ~~~text
 python3 tensor_kinds.py OUT                             # the fit of a run.sh run; exits 3 when a gate fails
 python3 tensor_kinds.py search OUT                      # a search.sh run: every schedule's program, the control, the gates
-python3 tensor_kinds.py refit OUT... [--search OUT...]  # the machine model's joint issue rows from these runs, as JSON
+python3 tensor_kinds.py refit OUT... [--search OUT...]  # the ACCEL model's joint issue rows from these runs, as JSON
 python3 sm80.py gate OUT BIN...                         # the timing gate on every timed kernel of sm80.cu
 python3 sm80.py analyze OUT                             # a run_sm80.sh run's table
-python3 sm80.py census OUT... --extension OUT... [--to DIR]   # sm_80's rows.csv and census.csv for the machine model
+python3 sm80.py census OUT... --extension OUT... [--to DIR]   # sm_80's rows.csv and census.csv for the ACCEL model
 ~~~
 
 `tensor_kinds.py` counts a fit only when the lane op alone issues at 0.9 a SMSP-cycle or more, and takes a 2% noise
 margin; `sm80.py` reports no number for a kernel the gate refused or whose poisoned sink failed. Their module
 docstrings give each quantity. One caller reads this directory: `../opcode_probe/sm89/census.py` loads `tensor_kinds.py`
-by its path for the sm_89 census, and its `__all__` lists what that reads. The tests are `../tests/test_tensor_kinds.py` and `../tests/test_tensor_kinds_sm80.py`.
+by its path for the sm_89 census, and its `__all__` lists what that reads. The tests are
+`../tests/test_tensor_kinds.py` and `../tests/test_tensor_kinds_sm80.py`.
