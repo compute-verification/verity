@@ -1218,8 +1218,8 @@ def declared(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, c: dict, stock: st
 
 def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_where_it_stands(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    """The cost line of `prod-record` over `prod` on GLM-5.3 is the measurement benchmarks/metrics.toml names, the
-    figure the report prints, beside the benchmark's own: where the benchmark's own cost stands (`serve_tax.result_of`)
+    """The cost line of `prod-record` over `prod` on GLM-5.3 is the measurement benchmarks/prod_repro/metrics.toml
+    names, the figure the report prints, beside the benchmark's own: where the benchmark's own cost stands (`serve_tax.result_of`)
     and the arms are at the same settings. Where it does not, the result holds no entry under the id."""
     theirs = {"name": S.AGENTIC, "value": 0.5}
     # three lifetimes an arm whose costs agree: the cost stands and is under the target
@@ -1276,8 +1276,8 @@ def test_under_research_run_glm53s_cost_at_the_recipes_settings_is_its_metric_wh
 def test_under_research_run_glm53s_replay_match_and_advice_are_its_metrics_where_they_stand(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Of `prod-record` on GLM-5.3, the share of the replayed window's served tokens the replay gave back before each
-    request's first difference and the advice in bits a request are the measurements benchmarks/metrics.toml names
-    beside the cost: the match where the replay's record agrees with what it kept, the advice where the line is
+    request's first difference and the advice in bits a request are the measurements
+    benchmarks/prod_repro/metrics.toml names beside the cost: the match where the replay's record agrees with what it kept, the advice where the line is
     measured. Another arm as ours or another model names no id, and an earlier report's entry under an id whose figure
     does not stand is dropped."""
     # a token after a request's first difference is not given back, though it is equal at its position

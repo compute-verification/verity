@@ -818,7 +818,7 @@ def test_a_guarantee_a_side_brings_to_unwitnessed_or_shape_inline_lands_in_updat
     """`check.py --update` writes `unwitnessed` and `shape.inline` sorted by guarantee (`unwitnessed_kept`,
     `inline_failures`), so a guarantee either side brings to one lands where `--update` puts it, not after ours' entries:
     the merged tree's `--update` then rewrites neither section.  A guarantee's inline premises, which `--update` writes in
-    its statement's order, keep ours' order with theirs' new one after it."""
+    its statement's order, keep ours' order with theirs' new one after it, as a map's keys do where theirs moved none."""
     def lock(*gs: str, **premises: str) -> dict:
         return {"unwitnessed": {f"P.{g}": f"hash of {g}" for g in gs},
                 "shape": {"inline": {f"P.{g}": {"z": "why z", "a": "why a"} | (premises if g == "b" else {}) for g in gs}}}
@@ -1412,6 +1412,104 @@ def test_lists_of_names_merge_where_both_sides_append_one():
     merged, why = M.merge({"roots": ["X"], "x": 1}, {"roots": ["X"], "x": 2}, {"roots": ["X"], "x": 3})
     assert why == ["x: changed on both sides, differently: took theirs"] and merged["x"] == 3, \
         "a value both sides changed is theirs', named"
+
+
+def placed(roots=("A", "B", "C"), witnesses=("P.a", "P.b", "P.c"), properties=("P.p", "P.q"), premises=("x", "y", "z"),
+           layers=("D", "E"), imports=("Mathlib", "D")) -> dict:
+    """A lock holding each order the merge writes and `check.py --update` doesn't sort, in the orders given: `roots`, the
+    `witnesses` map, `shape.properties`, `shape.premises`, `layers`' rules and rule `D`'s imports."""
+    rules = {"D": {"imports": list(imports), "except": [], "why": "trusted text"}, "E": {"imports": ["E"], "except": [], "why": "e"},
+             "F": {"imports": ["F"], "except": [], "why": "f"}}
+    return {"roots": list(roots), "witnesses": {w: {"honest": [f"{w}_honest"]} for w in witnesses},
+            "shape": {"properties": {p: {"function": f"{p}.f", "outcome": "accept"} for p in properties},
+                      "premises": list(premises)},
+            "layers": {r: rules[r] for r in layers}}
+
+
+def orders(rec: dict) -> dict:
+    return {"roots": rec["roots"], "witnesses": list(rec["witnesses"]), "properties": list(rec["shape"]["properties"]),
+            "premises": rec["shape"]["premises"], "layers": list(rec["layers"]), "imports": rec["layers"]["D"]["imports"]}
+
+
+#: the base, a side that moved a member of every order, and a side that kept the base's orders and added to each
+BASE = placed()
+MOVED = placed(roots=("C", "A", "B"), witnesses=("P.c", "P.a", "P.b"), properties=("P.q", "P.p"), premises=("z", "x", "y"),
+               layers=("E", "D"), imports=("D", "Mathlib"))
+ADDED = placed(roots=("A", "B", "C", "N"), witnesses=("P.a", "P.b", "P.c", "P.n"), properties=("P.p", "P.n", "P.q"),
+               premises=("x", "w", "y", "z"), layers=("D", "E", "F"), imports=("Mathlib", "P.Audit", "D"))
+
+
+def test_a_move_theirs_made_applies_with_ours_additions_placed_as_theirs_would_be():
+    """`main` moved entries of `roots`, `witnesses`, `shape.properties`, `shape.premises` and `layers` while a line that
+    kept the base's orders added to each: merging `main` into the line takes `main`'s orders, each of the line's
+    new items after the item the line has before it, and its new keys after `main`'s, as `main`'s would be placed had the
+    line moved.  Each value merges as before."""
+    merged, why = M.merge(BASE, ADDED, MOVED, candidate := [])
+    assert why == [] and candidate == []
+    assert orders(merged) == {"roots": ["C", "N", "A", "B"], "witnesses": ["P.c", "P.a", "P.b", "P.n"],
+                              "properties": ["P.q", "P.p", "P.n"], "premises": ["z", "x", "w", "y"], "layers": ["E", "D", "F"],
+                              "imports": ["D", "Mathlib", "P.Audit"]}
+    assert merged["layers"]["F"] == ADDED["layers"]["F"] and merged["witnesses"]["P.n"] == ADDED["witnesses"]["P.n"]
+
+
+def test_with_one_side_moved_the_order_does_not_depend_on_which_side_git_calls_ours():
+    """The same three records with the sides swapped give the same order, member for member, in every map and list."""
+    for ours, theirs in ((ADDED, MOVED), (MOVED, ADDED)):
+        merged, why = M.merge(BASE, ours, theirs)
+        assert why == [] and orders(merged) == orders(M.merge(BASE, theirs, ours)[0]), (ours is ADDED)
+    gone = placed(roots=("A", "C"), witnesses=("P.a", "P.c"), properties=("P.p",), premises=("x", "z"), layers=("D",),
+                  imports=("D",))
+    assert orders(M.merge(BASE, gone, MOVED)[0]) == orders(M.merge(BASE, MOVED, gone)[0])
+
+
+def test_a_move_applies_only_where_one_side_alone_made_it():
+    """Neither side moved: today's merge, ours' order with theirs' additions.  Both moved, differently: ours' order, named
+    nowhere, since an order states nothing.  Theirs alone moved: theirs' order.  A base that is missing or empty has no
+    order to keep: ours'."""
+    added = placed(roots=("A", "X", "B", "C"), witnesses=("P.a", "P.b", "P.c", "P.x"), properties=("P.p", "P.q", "P.x"),
+                   premises=("x", "y", "z", "v"), layers=("D", "E", "F"), imports=("Mathlib", "Core", "D"))
+    merged, why = M.merge(BASE, ADDED, added)
+    assert why == [] and orders(merged) == {"roots": ["A", "X", "B", "C", "N"], "witnesses": ["P.a", "P.b", "P.c", "P.n", "P.x"],
+                                            "properties": ["P.p", "P.n", "P.q", "P.x"], "premises": ["x", "w", "y", "z", "v"],
+                                            "layers": ["D", "E", "F"], "imports": ["Mathlib", "Core", "P.Audit", "D"]}
+    other = placed(roots=("B", "C", "A"), witnesses=("P.b", "P.c", "P.a"), properties=("P.q", "P.p"), premises=("y", "z", "x"),
+                   layers=("E", "D"), imports=("D", "Mathlib", "Core"))
+    merged, why = M.merge(BASE, other, MOVED)
+    assert why == [] and orders(merged) == orders(other), "both moved: ours' order"
+    assert orders(M.merge(BASE, BASE, MOVED)[0]) == orders(MOVED), "theirs alone moved: theirs' order"
+    for base in ({}, placed(roots=(), witnesses=(), properties=(), premises=(), layers=(), imports=())):
+        assert orders(M.merge(base, ADDED, MOVED)[0])["roots"] == ["A", "B", "C", "N"], "no base order: ours'"
+
+
+def test_a_move_on_one_side_merges_with_a_removal_or_an_addition_on_the_other():
+    """Theirs moves `C` to the front; ours removes `B`, which is no move, or each side adds its own member: theirs' order
+    with what either removed gone and both sides' additions placed."""
+    gone = placed(roots=("A", "C"), witnesses=("P.a", "P.c"), properties=("P.p",), premises=("x", "z"), layers=("D",),
+                  imports=("D",))
+    assert orders(M.merge(BASE, gone, MOVED)[0]) == {"roots": ["C", "A"], "witnesses": ["P.c", "P.a"], "properties": ["P.p"],
+                                                     "premises": ["z", "x"], "layers": ["D"], "imports": ["D"]}
+    both = placed(roots=("C", "A", "B", "T"), witnesses=("P.c", "P.a", "P.t", "P.b"), properties=("P.q", "P.t", "P.p"),
+                  premises=("z", "x", "y", "t"), layers=("E", "F", "D"), imports=("D", "Mathlib", "Core"))
+    merged, why = M.merge(BASE, ADDED, both)
+    assert why == [] and orders(merged) == {"roots": ["C", "N", "A", "B", "T"], "witnesses": ["P.c", "P.a", "P.t", "P.b", "P.n"],
+                                            "properties": ["P.q", "P.t", "P.p", "P.n"], "premises": ["z", "x", "w", "y", "t"],
+                                            "layers": ["E", "F", "D"], "imports": ["D", "Mathlib", "P.Audit", "Core"]}
+
+
+def test_a_trust_gap_entry_s_premises_merge_sorted_as_update_writes_them():
+    """`check.py --update` writes each `trust_gap` entry's premises sorted (`trust_gap_kept`), so the merge does too, with
+    the side holding them out of order as ours or as theirs, a premise one side adds taken and one the other discharges
+    dropped; a line whose base already held them out of order merges to them sorted.  An entry one side alone has is
+    sorted too."""
+    base = {"trust_gap": {"P.g": ["a", "b", "c"]}}
+    unsorted = {"trust_gap": {"P.g": ["c", "a", "b", "d"], "P.h": ["z", "y"]}}
+    discharged = {"trust_gap": {"P.g": ["a", "c"]}}
+    for ours, theirs in ((unsorted, discharged), (discharged, unsorted)):
+        merged, why = M.merge(base, ours, theirs)
+        assert why == [] and merged["trust_gap"] == {"P.g": ["a", "c", "d"], "P.h": ["y", "z"]}
+    old = {"trust_gap": {"P.g": ["c", "a", "b"]}}
+    merged, why = M.merge(old, old, {"trust_gap": {"P.g": ["c", "a", "b", "e"]}})
+    assert why == [] and merged["trust_gap"] == {"P.g": ["a", "b", "c", "e"]}
 
 
 def test_a_witness_entry_both_sides_changed_is_ours_unless_theirs_alone_is_at_its_merged_record():
