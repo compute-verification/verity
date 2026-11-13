@@ -46,6 +46,7 @@ from __future__ import annotations
 import time
 
 from verity_vllm.records.commit_run import SCHEMA
+from verity_vllm.records.fields import RecordError
 from verity_vllm.records.schema_ids import ORACLE_COMPARE_SCHEMA
 
 _T_PROCESS0 = time.time()      # process start (before the torch / vLLM imports): startup.imports = engine.build start - this
@@ -923,7 +924,7 @@ class Options:
     replay_openings: str = option("--replay-openings", default="auto", choices=["auto", "always"], help="openings-after-release: 'auto' replays only when a pick is not retained on host; 'always' replays every time and opens EVERY pick from the replay (regenerated values + regenerated authentication paths vs the ORIGINAL roots)")
     open_after_release: bool = option("--open-after-release", default=True, action="boolean_optional", help="(default on) after each instrumented run, release every raw device copy, then open the 64 challenge positions (+ forced picks from the prefill step and the FA2 hidden rows) from the host copy or from a REPLAY run, and verify them against the ORIGINAL run's roots (recorded as commit.openings_after_release; a failure is a Commit FAIL); --no-open-after-release opens in the run only (not under --retain none)")
     required_classes: str | None = option("--required-classes", default=None, help=f"comma-separated class ids that MUST be declared with tensors > 0 by every instrumented run (default {','.join(REQUIRED_CLASSES_DEFAULT)}; the FA2 hidden class is required because the harness has no other evidence the attention producer fired). Override only when the model's producers genuinely differ; the set is recorded in verdict.json")
-    match_dir: str | None = option("--match-dir", "--oracle", default=None, help="the Match stage's run dir of THIS attempt (<row>/match: capture/snapshots.json + values/, instances.jsonl, capture/log.jsonl.gz): live C2 -- every bound identity's committed bytes are compared with the Match record's value for that identity (oracle-compare); any mismatch = COMMIT FAIL naming the identity; steps the Match did not snapshot are reported partial")
+    match_dir: str | None = option("--match-dir", "--oracle", default=None, help="the Match stage's run dir of THIS attempt (<row>/match: capture/snapshots.json + values/, instances.jsonl, capture/log.jsonl.gz): live C2 -- every bound identity's committed bytes are compared with the Match record's value for that identity (oracle-compare); any mismatch = COMMIT FAIL naming the identity; a record of it that the compare refuses by name = COMMIT FAIL naming the record and its field; steps the Match did not snapshot are reported partial")
     program_dir: str | None = option("--program-dir", default=None, help="B=1: the Build's request Program dir (instances.json.gz + result.json) -- enables the C2 OF RECORD: sampled exact VU replay of the committed bytes through the registered relation evaluators (commit.sampled_replay) and the exhaustive ordered boundary linkage (commit.boundary_linkage); a mismatch / unlinked boundary = COMMIT FAIL naming the VU")
     programs_root: str | None = option("--programs-root", default=None, help="B>=2: the directory holding the per-request Programs (build_request*/ or *LP<n>_T<t>; build-global's resolution) for the sampled replay")
     replay_per_stratum: int = option("--replay-per-stratum", type=int, default=2, help="sampled replay: VUs per stratum (spec x request x phase); default 2")
@@ -1865,6 +1866,9 @@ def main(args: Options) -> None:
                         oc["producer_facts"] = oracle_producers[1]
                         oc["value_source"] = _ocr.record()
                         print(f"[delta] C2 ORACLE COMPARE opened values (pair {pair}): {OV.filed(row['commit'], 'oracle_compare', oc['value_source'])}", flush=True)
+                    except RecordError as e:  # a record the compare reads is refused by name: the run's compare fails on the refusal
+                        oc = {"schema": ORACLE_COMPARE_SCHEMA, "method": "oracle-compare", "result": False,
+                              "why": f"oracle compare refused a record: {e}"[:300], "compared": 0, "mismatch_n": 0, "error": repr(e)[:300]}
                     except Exception as e:  # noqa: BLE001  -- fail closed: an unreadable oracle is 'not checked', never PASS
                         oc = {"schema": ORACLE_COMPARE_SCHEMA, "method": "oracle-compare", "result": None,
                               "why": f"oracle compare not run: {e!r}"[:300], "compared": 0, "mismatch_n": 0, "error": repr(e)[:300]}
