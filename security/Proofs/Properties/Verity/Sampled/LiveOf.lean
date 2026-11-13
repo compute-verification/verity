@@ -29,6 +29,13 @@ open FlockSoundness.Refine (ebind_ok)
 
 /-! ## The parameters -/
 
+/-- A do block's `if c then throw e` before the rest `jp` accepts only where the rest does. -/
+theorem jp_ok {ε β γ : Type} {c : Prop} [Decidable c] {e : ε} {jp : β → Except ε γ} {u : β} {p : γ}
+    (h : (if c then (throw e : Except ε β) >>= jp else jp u) = .ok p) : jp u = .ok p := by
+  split at h
+  · cases h
+  · exact h
+
 /-- **v2's parameters' verifier program is one some bytes parse to**: `paramsParsed` parses it from the canonical text
 of the parameters' `program`. -/
 theorem paramsParsed_program {j : Json} {p : _root_.Spot.OneStage.Params}
@@ -36,9 +43,9 @@ theorem paramsParsed_program {j : Json} {p : _root_.Spot.OneStage.Params}
     ∃ b, _root_.Spot.Program.parse b = .ok p.verifier.program := by
   unfold _root_.Spot.OneStage.paramsParsed at h
   repeat' (first
+    | (replace h := jp_ok h; try beta_reduce at h)
     | (obtain ⟨_, _, h⟩ := ebind_ok h)
-    | (split at h)
-    | (cases h; done))
+    | (split at h))
   all_goals first
     | (simp [throw, throwThe, MonadExceptOf.throw] at h; done)
     | (simp only [pure, Except.pure, Except.ok.injEq] at h
@@ -50,7 +57,7 @@ theorem oneStage_paramsOfJson_program {j : Json} {p : _root_.Spot.OneStage.Param
     ∃ b, _root_.Spot.Program.parse b = .ok p.verifier.program := by
   unfold _root_.Spot.OneStage.paramsOfJson at h
   obtain ⟨p', hp', h⟩ := ebind_ok h
-  obtain ⟨_, -, h⟩ := ebind_ok h
+  replace h := jp_ok h
   simp only [pure, Except.pure, Except.ok.injEq] at h
   subst h
   exact paramsParsed_program hp'
@@ -326,7 +333,8 @@ theorem accepted_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {
   obtain ⟨desc, hdesc⟩ := program_of_paramsAt hp₀
   obtain ⟨out, pub', prof', hat⟩ := checkBlobsAt_checkAt hck
   obtain ⟨lo, n', read, hlo, hn', hdf⟩ := checkAt_drew hat
-  obtain rfl : n' = n := Option.some.inj (hn'.symm.trans hn)
+  have hnn : n' = n := Option.some.inj (hn'.symm.trans hn)
+  rw [hnn] at hdf
   subst hcf
   exact ⟨p₀, tags0, pubB, record, proofs, n, desc, hp₀, ht0, hpf, hAc, htab, hdesc,
     lawAt_designAt hdesc hlo hdf⟩
