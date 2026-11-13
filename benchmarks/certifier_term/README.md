@@ -168,6 +168,15 @@ The records are in the evidence store, in the run files of the runs that carry
 - `out/registrations.jsonl`: the registration of each execution phase's connection rows that the verdicts name by
   its head's digest, from which a class's count is read.
 
+The reader is handed every run that carries the record, with those another run replaces. A superseded run adds no
+accept and takes away no refusal: its records that are accepted and complete count for nothing, and everything else
+it holds is read as any run's, so superseding a run never raises what is held.
+
+The four verdicts count only as one class's: of one class, in one execution phase of a link, on one signed head.
+Where each of the four was read and no class that holds a row has all of them on its head, the answer holds nothing
+and its first line reads `not one class: unchecked`, with what the four differ in. A record names neither its serve
+nor the digest of what that serve registered, so past the head the reader holds the four to neither.
+
 An execution phase is held where its head was read, some class of it holds a row and every class that holds one has
 its four verdicts. The answer is how many execution phases of a link are held (the document's `stop`'s
 `held_phases`), and a row is charged by it:

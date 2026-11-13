@@ -7,7 +7,8 @@ hands the calculator the answer (`leak_bounds.Stop`). It decides nothing itself,
 the answer.
 
 **Where they are.** In the evidence store, in the run files of the runs that carry `run_of_record=RECORD`, which the
-caller names (`read`'s ``runs``; the label's readers are the harness's). A run holds, each one JSON object a line:
+caller names, every one of them, with those another run replaces (`read`'s ``runs`` and ``superseded``; the label's
+readers are the harness's). A run holds, each one JSON object a line:
 
 - its verdict records, in every file named as `RECORDS_FILES`: an object with the fields `class_charge.FIELDS`, as
   the verdict's own verifier writes it, naming its run and its verifier's module and commit (`class_charge.reads`;
@@ -17,6 +18,14 @@ caller names (`read`'s ``runs``; the label's readers are the harness's). A run h
 - `REGISTRATIONS_FILE`: the registration of each execution phase's connection rows that its verdicts were decided
   under, as `connection_rows.registration` writes it. A record names its head by digest alone, and a class's count
   is read from the head.
+
+**A superseded run** adds no accept and takes away no refusal. The caller hands `read` every run that carries the
+record and says which of them another run replaces. A superseded run's files are read as any run's, but for its
+verdict records that are accepted and complete, which count for nothing: nothing retries a verdict, so what a run
+refused on a head stands whatever is labelled later, as does an accept of its that is not complete, a record of its
+that doesn't read and a registration it kept. A record counts as a superseded run's where that run's files hold it
+or it names that run as the one that produced it. So superseding a run never raises what is held. A superseded run
+that is not among the runs handed holds everything at its whole schedule: what it refused was not read.
 
 **A head** (`head_of`) is the registration's own: its link, execution phase, parameters digest and tables as listed,
 held to the digest its certificate names. No signature is checked here: the certificate verifies under the network
@@ -34,7 +43,14 @@ registration nobody signed holds none. A verdict is held to a head by the digest
 another head, another serve's among them, counts for nothing. Registrations or records that don't read, and two
 heads given for one execution phase of a link, hold no execution phase at all. Each verdict that is on a head read
 is handed on under the mark `leak_bounds.RUN_NOT_PROVED`, whatever its ``proved_by`` says: a run is no proof, and
-what a record's ``proved_by`` is worth is its reader's to check."""
+what a record's ``proved_by`` is worth is its reader's to check.
+
+**Not one class.** The four verdicts count only as one class's: of one class, in one execution phase of a link, on
+one signed head, which is a serve's and is what the registration read is held to. Where each of the four was read
+and no class that holds a row has all of them on its head, the answer holds nothing and its first line says
+`NOT_ONE_CLASS` and what the four differ in (`DIFFER`), by the fields of a verdict that say where it is. A record
+names neither the serve it is of nor the digest of what that serve registered, so past the head the reader holds
+the four to neither."""
 from __future__ import annotations
 
 import json
@@ -54,6 +70,13 @@ RECORDS_FILES, REGISTRATIONS_FILE = "out/*-verdicts.jsonl", "out/registrations.j
 #: which of the four verdicts a record is, by the ``format`` of its verdict
 FORMAT = "format"
 FORMATS = {"verity-network-certifier/response-tie-verdict/v1": CC.RESPONSE_TIE}
+#: what the answer's first line says where each of the four verdicts was read and they are not one class's
+NOT_ONE_CLASS = "not one class: unchecked"
+#: where a verdict says it is, and what four verdicts that are not one class's can differ in, each with its fields
+PLACE = (CC.LINK, CC.WINDOW, CC.CLASS, CC.HEAD)
+DIFFER = (((CC.CLASS,), "the class (`class`)"),
+          ((CC.LINK, CC.WINDOW), "the execution phase (`link`, `window`)"),
+          ((CC.HEAD,), "the signed head (`head`), a serve's, which its registration is held to"))
 
 
 def head_of(doc: Mapping[str, Any]) -> C.Head:
@@ -89,6 +112,22 @@ def _handed(kind: str, record: Mapping[str, Any]) -> dict[str, Any]:
     verifier and proof as its record names them, and the mark."""
     return {"verdict": kind, **{k: record[CC.VERDICT].get(k) for k in CC.READ}, CC.RUN: record.get(CC.RUN),
             CC.VERIFIER: record.get(CC.VERIFIER), CC.PROVED_BY: record.get(CC.PROVED_BY), "mark": LB.RUN_NOT_PROVED}
+
+
+def _not_one(by_verdict: Mapping[str, Sequence[Mapping[str, Any]]]) -> str:
+    """What the four verdicts' records differ in, where each verdict has a record and no class that holds a row has
+    all four on its head (the module docstring's "Not one class")."""
+    named = [[{k: json.dumps(r[CC.VERDICT].get(k), sort_keys=True, default=repr) for k in PLACE} for r in by_verdict[kind]]
+             for kind in CC.VERDICTS]
+
+    def common(keys: Sequence[str]) -> set[tuple[str, ...]]:
+        return set.intersection(*({tuple(p[k] for k in keys) for p in its} for its in named))
+
+    if common(PLACE):
+        return "they name one class on one head, which is no class that holds a row on a head read"
+    differ = [what for keys, what in DIFFER if not common(keys)]
+    return ("they name no one class of one execution phase on one head"
+            + (f", and differ in {' and in '.join(differ)}" if differ else ""))
 
 
 def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[str, Any]],
@@ -136,6 +175,11 @@ def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[s
     of = f"{len(heads)} execution phase(s) read"
     if not with_rows:
         first = f"each connection is charged its whole schedule: no class holds a row in the {of}"
+    elif all(by_verdict.get(kind) for kind in CC.VERDICTS) and not any(
+            {kind for kind, _ in c.read} >= set(CC.VERDICTS) for c in with_rows):
+        first = (f"each connection is charged its whole schedule: {NOT_ONE_CLASS}: each of the {len(CC.VERDICTS)} "
+                 f"verdicts was read, and no class that holds a row in the {of} has all of them on its head: "
+                 f"{_not_one(by_verdict)}")
     elif not held:
         lacking = sum(1 for c in with_rows if not c.below)
         first = (f"each connection is charged its whole schedule: {lacking} of the {len(with_rows)} class(es) that "
@@ -157,13 +201,23 @@ def _lines(path: Path) -> list[Any]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
 
-def read(store: Any, runs: Iterable[str]) -> tuple[list[Any], list[Any], list[str]]:
+def _adds(record: Any) -> bool:
+    """Whether a record counts toward a charge below: a verdict record that is accepted and complete."""
+    return (CC.reads(record) and record[CC.VERDICT].get(CC.ACCEPTED) is True
+            and record[CC.VERDICT].get(CC.COMPLETE) is True)
+
+
+def read(store: Any, runs: Iterable[str], superseded: Iterable[str] = ()) -> tuple[list[Any], list[Any], list[str]]:
     """The registrations and the verdict records in the run files of ``runs``, in the runs' order and each run's
     files by name, and a line for each run that is not in the store, kept no run files or holds no such file.
+    ``superseded`` are the runs among them that another run replaces: a record of one that is accepted and complete
+    is left out, with a line that counts them (the module docstring's "A superseded run").
     ``store`` is the evidence store as the harness reads it (`get_attempt`, `listing`, `fetch`)."""
     registrations: list[Any] = []
     records: list[Any] = []
     left: list[str] = []
+    superseded = set(superseded)
+    dropped = 0
     for run in runs:
         attempt = store.get_attempt(run)
         out = (attempt or {}).get("outputs") or {}
@@ -176,17 +230,34 @@ def read(store: Any, runs: Iterable[str]) -> tuple[list[Any], list[Any], list[st
             continue
         at = Path(store.fetch(files, paths=held))
         for path in held:
-            (registrations if path == REGISTRATIONS_FILE else records).extend(_lines(at / path))
+            if path == REGISTRATIONS_FILE:
+                registrations.extend(_lines(at / path))
+                continue
+            for record in _lines(at / path):
+                named = record.get(CC.RUN) if isinstance(record, Mapping) else None
+                if (run in superseded or (isinstance(named, str) and named in superseded)) and _adds(record):
+                    dropped += 1
+                else:
+                    records.append(record)
+    if dropped:
+        left.append(f"{dropped} verdict record(s) of the superseded run(s) {', '.join(sorted(superseded))} are "
+                    "accepted and complete, and count for nothing: a superseded run adds no accept, and what it "
+                    "refused stands")
     return registrations, records, left
 
 
-def of_runs(store: Any, runs: Iterable[str]) -> LB.Stop:
-    """How the stop class is charged by the records ``runs`` hold in ``store`` (`read`, `stop`). With no run it is
-    its whole schedule, and the line says no run carries the record."""
-    runs = list(runs)
+def of_runs(store: Any, runs: Iterable[str], superseded: Iterable[str] = ()) -> LB.Stop:
+    """How the stop class is charged by the records ``runs`` hold in ``store`` (`read`, `stop`): ``runs`` is every
+    run that carries the record, and ``superseded`` those of them that another run replaces (the module docstring's
+    "A superseded run"). With no run it is its whole schedule, and the line says no run carries the record; so it
+    is with a superseded run that is not among ``runs``, whose refusals were not read."""
+    runs, superseded = list(runs), list(superseded)
     if not runs:
         return LB.Stop(0, (*LB.NO_RECORDS.why, f"no run in the store carries `run_of_record={RECORD}`"))
+    if unread := sorted(set(superseded) - set(runs)):
+        return _whole(f"the superseded run(s) {', '.join(unread)} are not among the runs handed, so what they "
+                      "refused was not read: a superseded run adds no accept and takes away no refusal")
     try:
-        return stop(*read(store, runs))
+        return stop(*read(store, runs, superseded))
     except (OSError, ValueError) as e:
         return _whole(f"the records of {', '.join(runs)} don't read: {e}")

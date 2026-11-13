@@ -50,9 +50,10 @@ def schedule() -> WardenParams:
                         content=tuple(args.classes))
 
 
-def head(window: int, *counts: int, parameters: bytes = ZEROS) -> C.Head:
+def head(window: int, *counts: int, parameters: bytes = ZEROS, domain: bytes = ZEROS) -> C.Head:
+    """A head of an execution phase with a class of each count; ``domain`` is each table's, which is a session's."""
     listed = [("lengths", 4, 8), ("fails", 4, 8)] + [(name, n, 16) for i, n in enumerate(counts) for name in CT.names(i)]
-    return C.Head(LINK, window, parameters, tuple(C.Entry(name, rows, size, ZEROS, ZEROS) for name, rows, size in listed))
+    return C.Head(LINK, window, parameters, tuple(C.Entry(name, rows, size, domain, ZEROS) for name, rows, size in listed))
 
 
 def registration(of: C.Head) -> dict:
@@ -135,8 +136,8 @@ def test_an_execution_phase_is_held_only_with_the_verdicts_of_every_class_that_h
             f"1 of the 2 execution phase(s) read are charged below their schedule{EVERY_OTHER}")
         assert got.why[3] == (f"the link {LINK}, execution phase 4, class 0: charged its whole schedule on each of its "
                               f"2 rows: {lack}")
-    # with neither held, the line counts the classes that lack a verdict
-    neither = SV.stop(both, four(first)[1:] + four(second)[:1])
+    # with neither held and a verdict that no record read is of, the line counts the classes that lack a verdict
+    neither = SV.stop(both, four(first)[1:] + four(second)[1:])
     assert neither.held == 0 and neither.why[0] == (
         "each connection is charged its whole schedule: 2 of the 2 class(es) that hold a row in the 2 execution "
         "phase(s) read lack a verdict, one in each execution phase that holds a row")
@@ -157,6 +158,72 @@ def test_an_execution_phase_is_held_only_with_the_verdicts_of_every_class_that_h
         "8 verdict record(s) read are on no head read, or on no class of one that holds a row, and count for nothing")
     # what was not read is carried
     assert SV.stop(both[:1], four(first), ["r9 is not read"]).why[-1] == "r9 is not read"
+
+
+def not_one(phases: int, differ: str) -> str:
+    """The answer's first line where each of the four verdicts was read and they are not one class's."""
+    return (f"each connection is charged its whole schedule: not one class: unchecked: each of the 4 verdicts was "
+            f"read, and no class that holds a row in the {phases} execution phase(s) read has all of them on its "
+            f"head: {differ}")
+
+
+NO_ONE = "they name no one class of one execution phase on one head"
+A_CLASS, A_PHASE = "the class (`class`)", "the execution phase (`link`, `window`)"
+A_HEAD = "the signed head (`head`), a serve's, which its registration is held to"
+LACK = ("each connection is charged its whole schedule: 1 of the 1 class(es) that hold a row in the 1 execution "
+        "phase(s) read lack a verdict, one in each execution phase that holds a row")
+
+
+def test_four_verdicts_that_are_not_one_classs_hold_nothing_and_the_first_line_names_what_they_differ_in():
+    """The four verdicts count only as one class's: of one class, of one serve and under one registration, as far
+    as a record says where it is, which is its class, its execution phase and its signed head. Each of the three
+    ways four accepts can differ holds nothing, and the answer's first line says so and names the field. The
+    calculator's rows are then the rows of no record at all."""
+    assert SV.NOT_ONE_CLASS == "not one class: unchecked"
+    whole = LB.table(LB.inputs())
+    # another class: the stop record is of class 0 and the other three of class 1, on a head whose two classes
+    # each hold a row
+    wide = head(3, 5, 2)
+    got = SV.stop([registration(wide)], four(wide)[:1] + four(wide, 1)[1:])
+    assert got.held == 0 and got.why[:3] == (
+        not_one(1, f"{NO_ONE}, and differ in {A_CLASS}"),
+        f"the link {LINK}, execution phase 3, class 0: charged its whole schedule on each of its 5 rows: the "
+        "response tie is missing; the certified read is missing; the compute audit is missing",
+        f"the link {LINK}, execution phase 3, class 1: charged its whole schedule on each of its 2 rows: the stop "
+        "record is missing")
+    assert LB.table(LB.inputs(), got) == whole
+    assert SV.stop([registration(wide)], four(wide) + four(wide, 1)).held == 1
+    # another serve: two of the four are on the head of another session's serve of the same link, execution phase
+    # and class, whose tables' domains are that session's
+    first, theirs = head(3, 5, 0), head(3, 5, 0, domain=bytes([1]) * 64)
+    assert first.digest() != theirs.digest() and SV.stop([registration(theirs)], four(theirs)).held == 1
+    got = SV.stop([registration(first)], four(first)[:2] + four(theirs)[2:])
+    assert got.held == 0 and len(got.verdicts) == 2 and got.why[0] == not_one(1, f"{NO_ONE}, and differ in {A_HEAD}")
+    assert got.why[1].endswith(": the certified read is not on this head (run of the certified read); the compute "
+                               "audit is not on this head (run of the compute audit)")
+    assert LB.table(LB.inputs(), got) == whole
+    # and where the other serve's execution phase is read too, under another number, in the execution phase as well
+    later = head(4, 5, 0, domain=bytes([1]) * 64)
+    got = SV.stop([registration(first), registration(later)], four(first)[:2] + four(later)[2:])
+    assert got.held == 0 and got.why[0] == not_one(2, f"{NO_ONE}, and differ in {A_PHASE} and in {A_HEAD}")
+    # another registration: the four name one head, and the registration read for the execution phase is of
+    # another, or none was read for it
+    for other in (head(3, 6, 0), head(9, 5, 0)):
+        got = SV.stop([registration(first)], four(other))
+        assert (got.held, got.verdicts) == (0, ()) and got.why[0] == not_one(
+            1, "they name one class on one head, which is no class that holds a row on a head read")
+        assert LB.table(LB.inputs(), got) == whole
+    # each field with a value all four name, and no one place: the stop record's two records are of class 0 on
+    # another head and of class 1 on this one, and the other three are of class 0 on this one
+    across = [four(head(3, 6, 2))[0], four(wide, 1)[0], *four(wide)[1:]]
+    got = SV.stop([registration(wide)], across)
+    assert got.held == 0 and got.why[0] == not_one(1, NO_ONE)
+    # a verdict that no record read is of is a verdict lacking, and four on one class with one refused is a
+    # refusal: neither is this
+    refused = [r | {CC.VERDICT: r[CC.VERDICT] | {CC.ACCEPTED: False}} if i == 1 else r
+               for i, r in enumerate(four(first))]
+    for records in (four(first)[1:], four(first)[:1] + four(theirs)[2:], refused):
+        assert SV.stop([registration(first)], records).why[0] == LACK
 
 
 def test_an_execution_phase_left_out_of_a_runs_files_charges_what_it_would_refused():
@@ -334,3 +401,108 @@ def test_the_run_files_are_read_from_the_store_and_no_run_is_the_whole_schedule(
     assert "response tie, run, not proved: accepted, complete, on class 0 in execution phase 3 of the link responses, by " \
            "run run of the response tie under the verifier the response tie's verifier at commit a commit, proved by " \
            "nothing" in LB.render(whole)
+
+
+def held_files(of: C.Head, records: list) -> dict[str, str]:
+    """A run's files: the registration of a head and verdict records."""
+    return {SV.REGISTRATIONS_FILE: jsonl([registration(of)]), "out/the-verdicts.jsonl": jsonl(records)}
+
+
+def tie_but(of: C.Head, **over: object) -> list[dict]:
+    """The four verdicts' records on a head, the tie's verdict with ``over``."""
+    return [r | {CC.VERDICT: r[CC.VERDICT] | over} if i == 1 else r for i, r in enumerate(four(of))]
+
+
+def dropped(n: int, *runs: str) -> str:
+    return (f"{n} verdict record(s) of the superseded run(s) {', '.join(runs)} are accepted and complete, and count "
+            "for nothing: a superseded run adds no accept, and what it refused stands")
+
+
+def test_a_superseded_run_adds_no_accept(tmp_path):
+    """The reader is handed every run that carries the record, with which of them another run replaces. A
+    superseded run's accepts count for nothing: not alone, not to fill in a verdict a later run lacks, and not as a
+    copy in a later run's files."""
+    first = head(3, 5, 0)
+    records = four(first)
+    copies = [r | {CC.RUN: "r1"} for r in records]
+    store = Store(tmp_path, {"r1": held_files(first, records), "r2": {"out/another.json": "{}"},
+                             "r3": held_files(first, records[:1] + records[2:]), "r4": held_files(first, copies)})
+    neither = "holds neither `out/*-verdicts.jsonl` nor `out/registrations.jsonl`"
+    assert SV.of_runs(store, ["r1", "r2"]).held == SV.of_runs(store, ["r1", "r2"], []).held == 1
+    # the accepting run superseded by one that holds nothing: its four count for nothing, and its registration is
+    # still read, so the class is named with what it lacks
+    got = SV.of_runs(store, ["r1", "r2"], ["r1"])
+    assert (got.held, got.verdicts) == (0, ()) and got.why[0] == LACK
+    assert got.why[1].endswith(": the stop record is missing; the response tie is missing; the certified read is "
+                               "missing; the compute audit is missing")
+    assert got.why[-2:] == (f"r2 is not read: it {neither}", dropped(4, "r1"))
+    assert LB.table(LB.inputs(), got) == LB.table(LB.inputs())
+    # superseding the run that holds nothing changes nothing
+    assert SV.of_runs(store, ["r1", "r2"], ["r2"]).held == 1
+    # a superseded run's tie fills in no tie a later run lacks
+    assert SV.of_runs(store, ["r1", "r3"]).held == 1
+    got = SV.of_runs(store, ["r1", "r3"], ["r1"])
+    assert got.held == 0 and len(got.verdicts) == 3 and got.why[1].endswith(": the response tie is missing")
+    assert got.why[-1] == dropped(4, "r1")
+    # a record that names a superseded run as the run that produced it is that run's, whichever run's files hold it
+    assert SV.of_runs(store, ["r4"]).held == 1
+    got = SV.of_runs(store, ["r1", "r4"], ["r1"])
+    assert (got.held, got.verdicts, got.why[-1]) == (0, (), dropped(8, "r1"))
+    # `read` leaves the accepts out and keeps the registrations
+    assert SV.read(store, ["r1", "r3"], ["r1"]) == ([registration(first)] * 2, records[:1] + records[2:],
+                                                    [dropped(4, "r1")])
+    assert SV.read(store, ["r1", "r3"]) == ([registration(first)] * 2, records + records[:1] + records[2:], [])
+
+
+def test_a_superseded_run_takes_away_no_refusal(tmp_path):
+    """What a superseded run refused on a head stands, whatever a later run accepted on it: a refused verdict, an
+    accept that is not complete, a record that doesn't read, and a registration that gives the execution phase
+    another head. The run must be among the runs handed for that to be read, so a superseded run that is not
+    holds everything at its whole schedule. And superseding a run never raises what is held."""
+    first = head(3, 5, 0)
+    accepts = held_files(first, four(first))
+    for old, lack in ((tie_but(first, accepted=False), "the response tie is refused (run of the response tie)"),
+                      (tie_but(first, complete=False), "the response tie is not complete (run of the response tie)")):
+        store = Store(tmp_path / lack, {"old": held_files(first, old), "new": accepts})
+        for superseded in ((), ["old"]):
+            got = SV.of_runs(store, ["old", "new"], superseded)
+            assert got.held == 0 and got.why[0] == LACK, (lack, superseded)
+            assert got.why[1] == (f"the link {LINK}, execution phase 3, class 0: charged its whole schedule on each "
+                                  f"of its 5 rows: {lack}")
+        assert got.why[-1] == dropped(3, "old")
+        # the later run alone holds the execution phase, which is why the superseded one is to be handed
+        assert SV.of_runs(store, ["new"]).held == 1
+        unread = SV.of_runs(store, ["new"], ["old"])
+        assert unread == LB.Stop(0, (
+            "each connection is charged its whole schedule: the superseded run(s) old are not among the runs "
+            "handed, so what they refused was not read: a superseded run adds no accept and takes away no refusal",))
+    # a superseded run's record that doesn't read holds nothing, as any run's does
+    store = Store(tmp_path / "unread", {"old": held_files(first, [*four(first), "accept"]), "new": accepts})
+    for superseded in ((), ["old"]):
+        got = SV.of_runs(store, ["old", "new"], superseded)
+        assert got.held == 0 and got.why[0].endswith(f"{NO_RECORD}, not 'accept'")
+    # and the registration it kept is read as any run's: another head for the execution phase holds nothing
+    other = head(3, 6, 0)
+    store = Store(tmp_path / "heads", {"old": held_files(other, four(other)), "new": accepts})
+    for superseded in ((), ["old"]):
+        got = SV.of_runs(store, ["old", "new"], superseded)
+        assert got.held == 0 and got.why[0] == (
+            f"each connection is charged its whole schedule: two heads are given for execution phase 3 of the link {LINK}")
+    # superseding a run never raises what is held, whatever the two runs hold
+    second = head(4, 2, 0)
+    kept = {"the four": accepts, "a tie refused": held_files(first, tie_but(first, accepted=False)),
+            "a tie not complete": held_files(first, tie_but(first, complete=False)),
+            "three verdicts": held_files(first, four(first)[1:]), "another head": held_files(other, four(other)),
+            "another execution phase": held_files(second, four(second)), "no record": held_files(first, []),
+            "no registration": {"out/the-verdicts.jsonl": jsonl(four(first))}, "nothing": {"out/another.json": "{}"},
+            "a record that doesn't read": held_files(first, [{CC.VERDICT: {}}])}
+    seen = lowered = most = 0
+    for i, (a, old) in enumerate(kept.items()):
+        for j, (b, new) in enumerate(kept.items()):
+            store = Store(tmp_path / f"pair-{i}-{j}", {"old": old, "new": new})
+            both = SV.of_runs(store, ["old", "new"]).held
+            for superseded in (["old"], ["new"], ["old", "new"]):
+                got = SV.of_runs(store, ["old", "new"], superseded).held
+                assert got <= both, (a, b, superseded)
+                seen, lowered, most = seen + 1, lowered + (got < both), max(most, both)
+    assert (seen, most) == (300, 2) and lowered
