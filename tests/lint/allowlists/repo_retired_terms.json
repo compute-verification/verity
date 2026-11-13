@@ -5454,6 +5454,9 @@
     {"file": "benchmarks/machine_model/verity_machine_model/lean_headline_dc.py", "count": 10},
     {"file": "benchmarks/pouw/h1_lanes/leaf.py", "count": 4},
     {"file": "benchmarks/pouw/h1_prove/recorded.py", "count": 46},
-    {"file": "tests/import_order.toml", "count": 4}
+    {"file": "tests/import_order.toml", "count": 4},
+    {"file": "verity/protocols/pouw/prover/kernels/pouw_cuda/row_table.cu", "count": 5},
+    {"file": "verity/protocols/pouw/prover/kernels/pouw_cuda/row_table.cuh", "count": 13},
+    {"file": "verity/protocols/pouw/prover/kernels/pouw_cuda/row_table_host.cpp", "count": 4}
   ]
 }
