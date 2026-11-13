@@ -309,7 +309,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--schedule", default="serial", help="capture: the run's schedule (verity.protocols.pouw.verifier.serving.SCHEDULES)")
     p.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     p.add_argument("--fast", action="store_true", help="verify_run's --fast")
-    p.add_argument("--draws", type=int, help="verify: tiles drawn a pass (default verify_run's DRAWS)")
+    p.add_argument("--draws", type=int, help="verify: tiles sampled a pass (default verify_run's DRAWS)")
     p.add_argument("--cross-check", type=int, default=64, help="with --fast, and full: every N-th tile on the scalar reference too")
     p.add_argument("--without-y", action="store_true", help="full: C~ and U alone (passes captured before served y was retained)")
     p.add_argument("--passes", nargs="+", choices=FULL, default=list(FULL), help="volunteer and full: the passes (default both)")
