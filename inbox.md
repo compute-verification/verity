@@ -122,3 +122,35 @@ From SCANLEAN, Thu 12 Nov 5:06 PM PST. To network-accounting (lead). **`r2026111
 
 **Where it is:** `cursor/na-scratch-net335-certified-7c2e` at `4748b9dc5062` on origin, unchanged since my 4:35 PM line. No pull request. Nothing is on my machine that is not on origin or in the synced note.
 
+[2026-11-13T01:07Z] 6ede1ae48a7b
+From SCANLEAN, Thu 12 Nov 5:07 PM PST. To network-accounting (lead). **The 6 PM line. NET-335's steps 1 and 2 are on origin and ran on a node on both verifiers. Job 6's list needs the clean baseline. Nothing is left on my machine.**
+
+**1. NET-335, steps 1 and 2**
+
+- **Where:** `cursor/na-scratch-net335-7c2e` at `1576351a9ff6` on origin [ran: `git ls-remote`, 5:07 PM PST]. It holds proofs' `8e92d28fe27b`. Steps 3 to 5 and the four tests are on it too. No pull request.
+- **On proofs' newer head:** `cursor/na-scratch-net335-certified-7c2e` at `4748b9dc5062` on origin: the scratch merged with proofs' `8592d9d7c429`, then the commit that passes the certified names.
+- **What ran on a node:**
+  - `r20261112-213538-30f1` at `e44f824ba63b`, failed, exit 1 [ran]: the Lean try of `NetworkCheck/Period.lean` 0; the scan's rounds on a development challenger's coins 0 (the honest round registers `verity/registration/v2` with the two certified rows; both verifiers accept; the tampered round refused by both); the honest round on the challenger's coins 0 (9 of 32 drawn, accepted, all seven altered evidences refused); the period check on an honest and a late scan 0. The red was one assertion of mine in the challenger test and two tests of lean's branch.
+  - `r20261113-000722-beb0` at `b9e7c243b57b`, done, exit 0 [ran]: the challenger test with the assertion mended, on Lean; `test_scan_zk.py` 35 passed; the mirrored round accepted by the Lean verifier.
+  - `r20261113-003817-a2ec` at `4748b9dc5062`, done, exit 0 [ran]: the challenger test, Lean and Python both refusing the unlisted value at `certified`; `test_scan_zk.py` 35 passed; the scan's rounds on a development challenger's coins, the honest one accepted by both verifiers.
+- **Not run:** the honest round on the challenger's coins and the period check at proofs' newer head (they ran at the older one only); a records run at either scratch; the whole check.
+
+**2. For proofs** (all three already with you; nothing new)
+
+- The unlisted value is accepted by the relaxed check unless the caller passes the certified names [ran].
+- With every name passed, an honest round whose only reader of a certified value has no unit drawn is refused `certified` [argued].
+- A round whose session is refused at setup reports no read, so it is now refused at `certified` and no longer at `registered` [ran].
+- Nothing of the `certified=` interface failed to fit the scan [ran, both verifiers].
+
+**3. Job 6: yes, my list needs the clean baseline.**
+
+- `r20261112-213845-ddd6` at `c299bad61230` failed, exit 1, and compared no record of `security`: `security/Proofs` does not build at lean's `bafae2eaec2e` (`Proofs.Properties.Verity.Sampled.Instance`; lean fixed it at `67b2c6791982`) [ran, read].
+- The list I hold is from `r20261112-192107-f9f9` on the old lock: 33 guarantees (soundness's 23 `Verity.*`, proofs' `Flock.SecurityProofs.RecursiveAuditC3`, 9 of ours), the seven `NetworkCheck.Period` names and `rowsCapPublished_nontrivial`'s signature set apart as the merge's.
+- #9375 is open at `34c5cbb3705c`, not on `main` [ran: `gh pr view`, 5:08 PM PST]. After it lands, on your word: `main` merged once into job 6's branch, one records run, the exact list. No record is committed.
+
+**4. Left for Fri 13 Nov noon PST, all of it waiting on others**
+
+- proofs' design (PRF-548, Fri 8 AM PST): what it changes in `scan_zk.py` and in the names branch, file by file, no code.
+- proofs' ready line: merge its head once more, then one records run for the first list, and the meeting with job 6 redone on that head.
+- The state a new machine needs is in the lane's synced notes: `20261112T2031Z-checkpoint-net335-scanlean-steps-1-2.md`, `20261112T1757Z-checkpoint-net357-okbit-pr-body-onmain.md` and the kit `tools/net335-scanlean/` (job files, the probe, the meeting's resolution as a patch).
+
