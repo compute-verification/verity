@@ -17,12 +17,11 @@ stage's bytes are at most 16 bytes an element that fits:
   the round's releases that fit;
 * `firstElems_of`, `secondElems_of`: `FirstElems` and `SecondElems` at the coin map's release (`CoinMap.dev`) and
   agreement, from them, where the agreement reads the stages' rounds;
-* `readsAt_of_le`: the run's verifier reads the stages' rounds (`readsAt` at rounds `0` to `stage`);
-* `usedOf_congr`, `fitOf_congr`: two locators that put the same releases on a round count the same elements there, and
-  the same elements that fit. A locator for the whole run that is the stages' locator at the stages' rounds then has
-  the stages' locator's `fitOf` there.
+* `readsAt_of_le`: the run's verifier reads the stages' rounds (`readsAt` at rounds `0` to `stage`).
 
-Nothing here reads the form's check: `Acc` and `Good` are any predicates, and the locator is any.
+Nothing here reads the form's check: `Acc` and `Good` are any predicates, and the locator is any. That a locator for
+the whole run has the stages' locator's `fitOf` at the stages' rounds is SESSIONCOINS's (`SessionCoins.fitOf_congr`,
+`fitOf_run_stage`, `SessionDev.lean`).
 -/
 
 @[expose] public section
@@ -76,31 +75,5 @@ theorem readsAt_of_le (h : SpotFlock.Held) {n : ℕ} (hn : n ≤ h.stage) : read
   have h2 : h.stage + 2 ≤ SpotFlock.off h h.ms.length := SpotFlock.stage_le_off h h.ms.length
   unfold readsAt
   exact ⟨by omega, by omega⟩
-
-/-- **Two locators that put the same releases on round `n` count the same elements there.** -/
-theorem usedOf_congr {L L' : CoinMap.Locate} {n : ℕ}
-    (h : ∀ pre fr b, CoinMap.locAt L pre fr b = some n ↔ CoinMap.locAt L' pre fr b = some n)
-    (pre log : List Verity.Release) : CoinMap.usedOf L n pre log = CoinMap.usedOf L' n pre log := by
-  induction log generalizing pre with
-  | nil => simp only [CoinMap.usedOf]
-  | cons r log ih =>
-    simp only [CoinMap.usedOf, ih (pre ++ [r])]
-    by_cases hl : CoinMap.locAt L pre r.frame r.answers = some n
-    · rw [if_pos hl, if_pos ((h pre r.frame r.answers).1 hl)]
-    · rw [if_neg hl, if_neg (mt (h pre r.frame r.answers).2 hl)]
-
-/-- **Two locators that put the same releases on round `n` count the same elements that fit in its coin.** -/
-theorem fitOf_congr {L L' : CoinMap.Locate} {n : ℕ}
-    (h : ∀ pre fr b, CoinMap.locAt L pre fr b = some n ↔ CoinMap.locAt L' pre fr b = some n)
-    (pre log : List Verity.Release) : CoinMap.fitOf L n pre log = CoinMap.fitOf L' n pre log := by
-  induction log generalizing pre with
-  | nil => simp only [CoinMap.fitOf]
-  | cons r log ih =>
-    have hu : CoinMap.usedOf L n [] pre = CoinMap.usedOf L' n [] pre := usedOf_congr h [] pre
-    simp only [CoinMap.fitOf, ih (pre ++ [r]), hu]
-    by_cases hl : CoinMap.locAt L pre r.frame r.answers = some n ∧
-        CoinMap.usedOf L' n [] pre + CoinMap.widthOf r.frame ≤ 65536
-    · rw [if_pos hl, if_pos ⟨(h pre r.frame r.answers).1 hl.1, hl.2⟩]
-    · rw [if_neg hl, if_neg fun h' => hl ⟨(h pre r.frame r.answers).2 h'.1, h'.2⟩]
 
 end Verity.SampledTwo

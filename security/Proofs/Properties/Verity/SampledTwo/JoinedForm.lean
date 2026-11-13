@@ -189,7 +189,7 @@ theorem firstFits_congr {C : CaseOf} {L L' : CoinMap.Locate} {Acc Good : Verity.
     (h : FirstFits C L' Acc Good) : FirstFits C L Acc Good := by
   intro o hA hG
   obtain ⟨inp, hin, hsz⟩ := h o hA hG
-  exact ⟨inp, hin, by rw [fitOf_congr hL [] o.log]; exact hsz⟩
+  exact ⟨inp, hin, by rw [SessionCoins.fitOf_congr hL [] o.log]; exact hsz⟩
 
 /-- **`SecondFits` at a locator that puts rounds `1` to `stage`'s releases where another does.** -/
 theorem secondFits_congr {A : Live₂} {C : CaseOf} {L L' : CoinMap.Locate} {Acc Good : Verity.Exchange → Prop}
@@ -199,7 +199,7 @@ theorem secondFits_congr {A : Live₂} {C : CaseOf} {L L' : CoinMap.Locate} {Acc
   intro o hA hG
   obtain ⟨inp, it, hin, hit, hsz⟩ := h o hA hG
   refine ⟨inp, it, hin, hit, fun j hj => ?_⟩
-  rw [fitOf_congr (hL (j + 1) (Nat.succ_pos j) hj) [] o.log]
+  rw [SessionCoins.fitOf_congr (hL (j + 1) (Nat.succ_pos j) hj) [] o.log]
   exact hsz j hj
 
 /-! ## The join's one premise -/
