@@ -79,11 +79,11 @@ build_circuit() {   # build_circuit DEST: DEST/flock-circuit-prove and DEST/floc
   rm -rf "$D" && mv "$D.tmp" "$D"
 }
 lean_key() {        # lean_key [FILE...]: the key of the Lean verifier's package, the packages it requires by path, and FILEs
-  python3 "$SRC/verity/protocols/flock/pod/lake_closure.py" key "$SRC/verity/protocols/flock/verifier" "$@"
+  python3 "$SRC/verity/protocols/flock/prover/pod/lake_closure.py" key "$SRC/verity/protocols/flock/verifier" "$@"
 }
 lean_copy() {       # lean_copy DEST: those packages copied under DEST, with DEST/.lake the verifier's build directory; its directory on stdout
   local P
-  P=$(python3 "$SRC/verity/protocols/flock/pod/lake_closure.py" copy "$SRC/verity/protocols/flock/verifier" "$1") \
+  P=$(python3 "$SRC/verity/protocols/flock/prover/pod/lake_closure.py" copy "$SRC/verity/protocols/flock/verifier" "$1") \
     && ln -s "${P#"$1/"}/.lake" "$1/.lake" && echo "$P"
 }
 build_lean() {      # build_lean DEST: DEST/.lake/build/bin/flock-verify
@@ -177,7 +177,7 @@ controls() {  # controls D O ROLE: the selftest build's cases, recorded for the 
     rc=$?
     log "  selftest $c exit $rc: $(grep -E '^NEG' "$O/selftest-$c.out" | cut -c1-200)"
   done
-  "$PY" "$SRC/verity/protocols/flock/agreement/selftest_records.py" "$D/rec" "$D/st" > /dev/null
+  "$PY" "$SRC/verity/protocols/flock/prover/agreement/selftest_records.py" "$D/rec" "$D/st" > /dev/null
 }
 
 lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at once as fit beside each other

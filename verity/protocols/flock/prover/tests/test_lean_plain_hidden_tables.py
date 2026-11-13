@@ -1,7 +1,7 @@
 """Plain sessions of several tables at hidden outputs (`Flock.ProvedScope`, `--plain-tables` with `SoundExecHJ`):
 `plain_hidden.py`'s statement (RoPE d64 instances with hidden outputs, hm96-sha512 leaves), proved without `--zk` on the
 keyed coin tree, sampled and opened by the auditor's challenger, in loopback sessions of two tables under a subset sample
-(`verity/protocols/flock/pod/91-plain-hidden-tables.sh`). The sessions' coins are the ones the challenger's release log shows it
+(`verity/protocols/flock/prover/pod/91-plain-hidden-tables.sh`). The sessions' coins are the ones the challenger's release log shows it
 sampled and opened; under `--plain-tables` with the verifier's own program and partition, both sessions are accepted and a
 tampered one keeps its check's reason; verified against another program it is refused; without the flag, several tables
 without `--zk` are refused, once every check has passed."""
@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-VERIFIER = Path(__file__).resolve().parents[2] / "agreement"
+VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: plain_hidden.py's 32 instances, two loopback sessions of J = 2 tables at `--draw subset:16`, and their challenger's
 #: record and release log
