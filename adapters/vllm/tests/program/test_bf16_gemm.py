@@ -23,9 +23,9 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import evaluate, standalone_call
-from verity.definitions.ops import fp32 as W
-from verity.definitions.ops import prims as P
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops import fp32 as W
+from verity.circuits.ops import prims as P
+from verity.circuits.ops.boolean import gemm as BG
 from verity.definitions.boolean import boolean_version
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
 from verity.definitions.registry import bf16_gemm_check as C
@@ -34,7 +34,7 @@ from verity.definitions.registry import cublas_gemv as GV
 from verity.definitions.registry import ll_bf16 as LL
 from verity.definitions.registry import mla
 from verity.definitions.registry import mla_check as MK
-from verity.definitions import word as WQ
+from verity.circuits import word as WQ
 
 U16, U32 = np.uint16, np.uint32
 HOP = BG.HopperBF16WgmmaDot16

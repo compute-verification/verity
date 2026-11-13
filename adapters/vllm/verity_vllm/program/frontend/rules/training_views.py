@@ -18,7 +18,7 @@ import numpy as np
 import torch
 from verity.circuits.refs import Affine, Coll, Concat, Strided, broadcast, concat
 from verity.circuits.types import Array, Value
-from verity.definitions.ops.prims import const
+from verity.circuits.ops.prims import const
 
 from verity_vllm.program.frontend.derive import StaticIndex, _LiftedConstant, refuse
 from verity_vllm.program.frontend.errors import FrontendError
