@@ -34,6 +34,13 @@ DROPPED = ("VIRTUAL_ENV", "PYTHONPATH", "PYTHONHOME", "UV_PROJECT_ENVIRONMENT")
 FIRST_STEP = r"^check: preflight-lock: passed"
 
 
+class Names(dict):
+    """An environment whose repr shows none of its values: a failing test's traceback prints the test's arguments."""
+
+    def __repr__(self) -> str:
+        return f"<environment of {len(self)} names>"
+
+
 def _git(cwd: Path, *args: str, env: dict[str, str] | None = None) -> str:
     return subprocess.run(["git", *args], cwd=cwd, env=env, capture_output=True, text=True, check=True).stdout.strip()
 
@@ -79,7 +86,7 @@ def shipped(machine, tmp_path, monkeypatch):
         if k.startswith(SCRUBBED) or k in DROPPED:
             monkeypatch.delenv(k)
     monkeypatch.setenv("PATH", os.pathsep.join(path))
-    env = remote._runner_env({"tool": str(tool)}, tmp_path / "root" / "runs", str(tree), {"source_sha": sha})
+    env = Names(remote._runner_env({"tool": str(tool)}, tmp_path / "root" / "runs", str(tree), {"source_sha": sha}))
     (tmp_path / "tmp").mkdir()
     env.update(UV_CACHE_DIR=uv_cache, XDG_CACHE_HOME=str(tmp_path / "cache"), TMPDIR=str(tmp_path / "tmp"))
     yield tree, env
