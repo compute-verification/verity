@@ -24,10 +24,10 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.windows import interface as IF
 from verity.commitments.windows import wiring as WI
 from verity.definitions.registry import io_shell as IO
-from verity.protocols.certifier.prover import ingress_scan as IS
-from verity.protocols.pouw.verifier import audit as AU
-from verity.protocols.spot.verifier.one_stage import partition as P
-from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.accounting.certifier.prover import ingress_scan as IS
+from verity.protocols.accounting.pouw.verifier import audit as AU
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from tests.check.test_weights_of_record import _bf16, write_safetensors
 from tests.program.predict import test_steps as S
