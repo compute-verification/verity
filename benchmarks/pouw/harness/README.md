@@ -156,10 +156,7 @@ Every gate's record and every negative control carry `wall_s`, the host's second
 and each shape its `wall_s` by stage (`operands`, `baseline_gates`, then `screen` alone under `--screen-only`, else
 `arm_gates`, `tune`, `chain_gates`, `sass_gate`, `warmup`, `timed`, `transcripts`, `report`), so a lease's idle minutes
 show where they went: operands are filled on the device in milliseconds, while an arm's CPU reference inside its gates can
-take minutes. So `refs.py` gives arms `pool()`, a forked process pool of the job's CPUs (`OMP_NUM_THREADS`, a fill job's
-`cpus=`), for such references, and an arm with `prefetch(dev, call, shape, flags)` (optional, arm interface v0.6) is told
-every call a flag set's gate is about to check before the first of them, so their references compute side by side; the gate still compares against the
-inputs as the device holds them at the gate.
+take minutes.
 
 **Poisoned transcripts and the no-write control** (a panel rule). An arm with `dump` (arm interface v0.5)
 lets the harness make its transcripts after the timed items: every buffer the transcript reads (`call.transcript_buffers`,
