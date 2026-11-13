@@ -12,7 +12,8 @@ the nodes that read it, lowered or not.
 A lowering is ``lower(w, j, node)``: it allocates units (`NodeWindow.unit`), feeds their ports from the rows the frame hands it
 (`NodeWindow.take`, `NodeWindow.feed`), reads weights from the weights record (``w.b.read``, at `NodeWindow.weight`'s word),
 and states the node's output as the rows that hold it (`NodeWindow.out`, `Piece`). A port whose rows are all wired is fed;
-a port any of whose rows is free is left free whole (`NodeWindow.feed` records it).
+a port any of whose rows is free is left free whole (`NodeWindow.feed` records it), unless it is cut along its outer
+elements and fed row by row (`NodeWindow.feed_rows`: a collective's own partial wired, the other ranks' rows free).
 
 A batch node (``form == "batch"``, n members) is lowered as its members: member t of an argument batched on axis 0 is its
 t-th slice, a shared one (axis None) the whole argument. A feed states a run of units at once by digits (`_Builder.feed`'s
@@ -109,6 +110,9 @@ class Free:
     kind: str
     family: str
     name: str
+    #: the port's rows it leaves, ``(first, rows, of)``: rows [first, first + rows) of the port cut ``of`` ways
+    #: (`NodeWindow.feed_rows`); the whole port by default
+    rows: tuple[int, int, int] = (0, 1, 1)
 
 
 class _Free(Exception):
@@ -314,6 +318,35 @@ class NodeWindow:
         for i, rows in enumerate(grid):
             self.b.feed(tid, port, at + i, 1, rows)
 
+    def feed_rows(self, tid: str, port: str, at: int, grids: Sequence[Sequence[tuple[Row, ...]] | _Free],
+                  shape: Sequence[int]) -> None:
+        """Units ``at`` on (``shape``, as `feed`) read port ``port`` cut ``len(grids)`` ways, its row i from ``grids[i]`` (a
+        `take` result, one row a unit): a wired row is wired, a free one left free (`Free`, its ``rows``), so a port whose
+        other rows are other ranks' partials still has its own row wired."""
+        k, count = len(grids), math.prod(shape)
+        if k == 1:
+            self.feed(tid, port, at, grids[0], shape)
+            return
+        lay = IF.layout(self.b.fns[tid])
+        words, n = dict(lay.rows)[port], dict(zip((p for p, _ in lay.rows), lay.outer))[port]
+        if words % k or n % k:
+            raise Unexpressible(f"{tid} {port}: {n} elements, {words} words, cut {k} ways")
+        self.b.cuts.setdefault(tid, {})[port] = k
+        for i, grid in enumerate(grids):
+            if isinstance(grid, _Free):
+                for kind, fam, name in grid.sources:
+                    self.free.append(Free(tid, port, at, count, kind, fam, name, (i, 1, k)))
+                continue
+            if len(grid) != count or any(len(r) != 1 or r[0].words != words // k for r in grid):
+                raise Unexpressible(f"{tid} {port}: row {i} of {k} is {words // k} words, one writer row a unit")
+            lead = _lead(grid, shape)
+            runs = [(at, grid[0], lead)] if lead is not None else [(at + u, rows, ()) for u, rows in enumerate(grid)]
+            for lo, rows, digits in runs:
+                d = [x for x in digits if x[0] > 1] or [(1, 0)]
+                r = rows[0]
+                self.b.wires.append(IF.Wire(tid, port, r.tid, r.out, at=lo, radix=tuple(a for a, _ in d), base=r.unit,
+                                            step=tuple(s for _, s in d), cut=(i, 1)))
+
     def out(self, j: int, node: Any, pieces: Sequence[Piece]) -> None:
         """Node ``j``'s output as ``pieces``, which tile a member's words."""
         n, _L, W, spans = self.meta[j]
@@ -441,7 +474,7 @@ class NodeWindow:
             key = "peers" if f.kind == "peer" else f.family
             c = free.setdefault(key, Counter())
             c["unit_ports"] += f.count
-            c["words"] += f.count * lay[f.tid][f.port]
+            c["words"] += f.count * lay[f.tid][f.port] * f.rows[1] // f.rows[2]
             c["ports"] += 1
         return {"digest": hashlib.sha512(IF.circuit_bytes(circuit.description())).hexdigest(),
                 "units": dict(sorted(units.items())), "templates": dict(sorted(templates.items())),
