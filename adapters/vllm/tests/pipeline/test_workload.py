@@ -3,8 +3,11 @@
 `--shared-prefix` row's one prefix and prefix caching."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -228,6 +231,103 @@ def test_the_check_names_a_length_out_of_range_on_either_side_and_a_stochastic_r
         assert (short in W.check_plan({**p, "sampling": "topp", "sampling_seeds": seeds})) is refused
 
 
+#: The plan's key for the most tokens each request may write, and the word the check's messages say for them.
+(MOST,) = [k for k in _prefix_row(0) if k.startswith("output_")]
+NOUN = MOST.removeprefix("output_")
+#: A plan of eight requests, written out, that meets every requirement: lengths in [8, 256] and the most tokens out in [2, 32], each
+#: list over every quartile of its range.  One changed value below is one violation.
+MEETS = {"batch": 8, "max_input": 256, "max_output": 32, "min_input": 8, "min_output": 2, "sampling": "greedy", "sampling_seeds": [],
+         "arrivals": "staggered", "arrival_offsets_s": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7], "arrive_steps": [0, 1, 2, 3, 4, 5, 6, 7],
+         "input_lengths": [256, 9, 77, 141, 203, 37, 111, 180], MOST: [32, 3, 11, 19, 27, 7, 15, 23]}
+REUSE = "), so none could reuse its cached blocks (stagger the arrivals or shorten the prefix)"
+#: A changed plan, the one violation it is, and the nearest plan that is none.
+VIOLATIONS = [
+    ({"batch": 9}, "vector lengths 8/8 != batch 9", {}),
+    ({"input_lengths": [256, 9, 77, 141, 203, 37, 111]}, "vector lengths 7/8 != batch 8", {}),
+    ({MOST: [32, 3, 11, 19, 27, 7, 15]}, "vector lengths 8/7 != batch 8", {}),
+    ({"input_lengths": [257, 9, 77, 141, 203, 37, 111, 180]}, "input length outside [8, 256]: [257, 9, 77, 141, 203, 37, 111, 180]", {}),
+    ({MOST: [33, 3, 11, 19, 27, 7, 15, 23]}, f"output {NOUN[:-1]} outside [1, 32]: [33, 3, 11, 19, 27, 7, 15, 23]", {}),
+    ({MOST: [32, 0, 3, 11, 19, 27, 7, 15]}, f"output {NOUN[:-1]} outside [1, 32]: [32, 0, 3, 11, 19, 27, 7, 15]",
+     {MOST: [32, 1, 3, 11, 19, 27, 7, 15]}),
+    ({"input_lengths": [252, 9, 77, 141, 203, 37, 111, 180]}, "no request within 3 tokens of max_input",
+     {"input_lengths": [253, 9, 77, 141, 203, 37, 111, 180]}),
+    ({"input_lengths": [256, 9, 77, 141, 203, 9, 77, 141]}, "only 5 distinct input lengths (need >= 6)",
+     {"input_lengths": [256, 9, 77, 141, 203, 37, 77, 141]}),
+    ({"input_lengths": [256, 12, 77, 141, 203, 37, 111, 180]}, "no request near the minimum input length",
+     {"input_lengths": [256, 11, 77, 141, 203, 37, 111, 180]}),
+    ({"input_lengths": [256, 9, 77, 100, 203, 37, 111, 200]}, "input quartiles covered [0, 1, 3] != [0,1,2,3]",
+     {"input_lengths": [256, 9, 77, 132, 203, 37, 111, 200]}),
+    ({"input_lengths": [256, 8, 64, 128, 192, 16, 141, 77]}, "only 2 awkward non-power-of-two input lengths (need several >= 3)",
+     {"input_lengths": [256, 8, 64, 128, 192, 203, 141, 77]}),
+    ({MOST: [32, 3, 11, 19, 27, 3, 11, 19]}, f"only 5 distinct output {NOUN} (need >= 6)", {MOST: [32, 3, 11, 19, 27, 7, 11, 19]}),
+    ({MOST: [32, 5, 11, 19, 27, 7, 15, 23]}, f"no very short output {NOUN[:-1]}", {MOST: [32, 4, 11, 19, 27, 7, 15, 23]}),
+    ({MOST: [28, 3, 11, 19, 27, 7, 15, 23]}, f"no output {NOUN[:-1]} equal/near max_output", {MOST: [29, 3, 11, 19, 27, 7, 15, 23]}),
+    ({MOST: [32, 3, 4, 5, 6, 7, 30, 31]}, f"output {NOUN} not spread across the range (quartiles [0, 3])",
+     {MOST: [32, 3, 4, 5, 6, 10, 30, 31]}),
+    ({"sampling": "topp", "sampling_seeds": [1, 2, 3, 4, 5, 6, 7, 7]}, "stochastic row without B distinct per-request sampling seeds",
+     {"sampling": "topp", "sampling_seeds": [1, 2, 3, 4, 5, 6, 7, 8]}),
+    ({"sampling": "topp", "sampling_seeds": [1, 2, 3, 4, 5, 6, 7]}, "stochastic row without B distinct per-request sampling seeds", {}),
+    ({"arrival_offsets_s": [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]},
+     "staggered arrival schedule malformed: [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]",
+     {"arrivals": "none", "arrival_offsets_s": [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]}),
+    ({"arrival_offsets_s": [0.0, 0.2, 0.1, 0.3, 0.4, 0.5, 0.6, 0.7]},
+     "staggered arrival schedule malformed: [0.0, 0.2, 0.1, 0.3, 0.4, 0.5, 0.6, 0.7]", {}),
+    ({"arrival_offsets_s": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.2]},
+     "staggered arrival schedule malformed: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.2]",
+     {"arrival_offsets_s": [0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.2, 0.3]}),
+    ({"shared_prefix": 100, "arrive_steps": [5, 0, 1, 5, 5, 2, 5, 5]},
+     "shared prefix 100: no request longer than it arrives after the first one (arrive steps [5, 5, 5, 5, 5]" + REUSE,
+     {"shared_prefix": 100, "arrive_steps": [5, 0, 1, 5, 5, 2, 5, 6]}),
+    ({"shared_prefix": 203}, "shared prefix 203: no request longer than it arrives after the first one (arrive steps [0]" + REUSE,
+     {"shared_prefix": 202}),
+]
+
+
+@pytest.mark.parametrize("changed,violation,nearest", VIOLATIONS,
+                         ids=[f"{n}-{v.split(':')[0].split(' [')[0]}" for n, (_, v, _) in enumerate(VIOLATIONS)])
+def test_the_check_names_each_requirement_a_plan_does_not_meet_and_no_other(changed, violation, nearest):
+    assert W.check_plan(MEETS) == [] and W.check_plan({**MEETS, **nearest}) == []
+    assert W.check_plan({**MEETS, **changed}) == [violation]
+
+
+def test_the_check_holds_a_batch_under_eight_to_its_ranges_and_schedule_alone_and_names_a_larger_ones_violations_in_order():
+    under = [256, 7, 77, 141, 203, 37, 111, 180]                          # a length under the range is in no quartile of it either
+    assert W.check_plan({**MEETS, "input_lengths": under}) == [f"input length outside [8, 256]: {under}",
+                                                               "input quartiles covered [-1, 0, 1, 2, 3] != [0,1,2,3]"]
+    same = {"input_lengths": [256] * 8, MOST: [32] * 8, "arrivals": "none", "arrival_offsets_s": [0.0] * 8}
+    assert W.check_plan({**MEETS, **same}) == [
+        "only 1 distinct input lengths (need >= 6)", "no request near the minimum input length", "input quartiles covered [3] != [0,1,2,3]",
+        "only 0 awkward non-power-of-two input lengths (need several >= 3)", f"only 1 distinct output {NOUN} (need >= 6)",
+        f"no very short output {NOUN[:-1]}", f"output {NOUN} not spread across the range (quartiles [3])"]
+    seven = {**MEETS, **{k: v[:7] if isinstance(v, list) else v for k, v in same.items()}, "batch": 7, "arrive_steps": [0] * 7}
+    assert W.check_plan(seven) == [] and W.check_plan({**seven, "input_lengths": [252] * 7}) == ["no request within 3 tokens of max_input"]
+    two = {**MEETS, "batch": 2, "input_lengths": [256, 9], MOST: [32, 3], "arrival_offsets_s": [0.0, 0.0]}
+    assert W.check_plan(two) == ["staggered arrival schedule malformed: [0.0, 0.0]"] and W.check_plan({**two, "arrival_offsets_s": [0.0, 0.1]}) == []
+    assert W.check_plan({**MEETS, "batch": 1, "input_lengths": [256], MOST: [32], "arrival_offsets_s": [0.5]}) == []   # one request: no schedule
+    assert W.check_plan({**MEETS, **same, "max_output": 2, MOST: [2] * 8})[4:] == [f"only 1 distinct output {NOUN} (need >= 6)",
+                                                                                 f"output {NOUN} not spread across the range (quartiles [0])"]
+
+
+@pytest.mark.parametrize("variant,params", [("stoch-t0.8-p0.95", {"temperature": 0.8, "top_p": 0.95, "top_k": 0}),
+                                            ("stoch-t0.8-p1", {"temperature": 0.8, "top_p": 1.0, "top_k": 0})])
+def test_a_stochastic_rows_plan_seeds_each_request_from_the_row_id_and_its_file_states_the_seeds_and_the_variant(variant, params):
+    row = f"x__fp8__h200__tp8__b8__i256__o32__mixed__{variant}__eager"
+    p = W.plan(row, 8, 256, 32, sampling=variant, arrivals="none")
+    of_row = hashlib.sha256(row.encode()).digest()
+    seeds = [int.from_bytes(hashlib.sha256(of_row + b"/sampling/" + str(i).encode()).digest()[:4], "little") % 2 ** 31 for i in range(8)]
+    assert p["sampling_seeds"] == seeds and len(set(seeds)) == 8 and p["seed"] == of_row.hex() and p["sampling_params"] == params
+    assert W.check_plan(p) == [] and p == W.plan(row, 8, 256, 32, sampling=variant, arrivals="none")
+    greedy = {"temperature": 0.0, "top_p": 1.0, "top_k": 0}
+    for tok in (_CharTok(), None):                                         # with the prompts' tokens, and the lengths alone
+        doc = W.workload_doc(p, hf_repo="org/x", revision="0" * 40, case="X", tok=tok)
+        assert [r["seed"] for r in doc["requests"]] == seeds == doc["seeds"] == doc["sweep"]["sampling_seeds"]
+        assert doc["variants"] == {"greedy": greedy, variant: params} and doc["sampling"] == {"variant": variant, "seed": None, "n": 1}
+        assert doc["sweep"]["lengths_only"] is (tok is None) and all(("prompt_token_ids" in r) is (tok is not None) for r in doc["requests"])
+    plain = W.workload_doc(W.plan(row.replace(variant, "greedy"), 8, 256, 32, sampling="greedy", arrivals="none"), hf_repo="org/x",
+                           revision="0" * 40, case="X", tok=_CharTok())
+    assert plain["seeds"] == [] and plain["variants"] == {"greedy": greedy} and not any("seed" in r for r in plain["requests"])
+
+
 def test_a_shared_prefix_rows_manifest_requests_state_each_warm_requests_cached_rows_and_their_producers():
     """`verity_vllm.pipeline.global_program.manifest_requests` on a row that serves with the prefix cache: each request's cached
     rows and the Program ids of the requests that produced them, as the prefix plan gives them; a row without it states neither."""
@@ -329,3 +429,99 @@ def test_the_generator_logs_what_it_did_each_message_at_its_level_and_keeps_its_
     assert checked(check, "FAIL: " + "; ".join(bad)) and not (tmp_path / "w.json").exists()
     assert W.main(W.Options(**opts, lengths_only=True)) == 0 and (tmp_path / "w.json").exists()
     assert said() == [("WARNING", "§12 self-check: " + "; ".join(bad)), note]
+
+
+class _Tokenizer:
+    """A stand-in for the `tokenizers` library's `Tokenizer`: an id a character, and what each call was asked for."""
+    asked: set[tuple[str, bool]] = set()
+
+    def __init__(self, path: str) -> None:
+        self.path = path
+
+    @classmethod
+    def from_file(cls, path: str) -> _Tokenizer:
+        return cls(path)
+
+    def encode(self, text: str, add_special_tokens: bool) -> types.SimpleNamespace:
+        self.asked.add(("encode", add_special_tokens))
+        return types.SimpleNamespace(ids=[ord(c) for c in text])
+
+    def decode(self, ids: list[int], skip_special_tokens: bool) -> str:
+        self.asked.add(("decode", skip_special_tokens))
+        return "".join(map(chr, ids))
+
+
+REV = "ab" * 20
+
+
+def _snapshot(hf_home: Path, revision: str = REV, tokenizer: str | None = '{"model": "chars"}') -> Path:
+    """A snapshot of `org/x` in the hub under `hf_home`, with a tokenizer file or none."""
+    snap = hf_home / "hub" / "models--org--x" / "snapshots" / revision
+    snap.mkdir(parents=True)
+    if tokenizer is not None:
+        (snap / "tokenizer.json").write_text(tokenizer)
+    return snap
+
+
+def test_a_models_tokenizer_is_the_one_in_the_hubs_snapshot_of_the_revision_under_hf_home_or_the_checkpoints_files(tmp_path, monkeypatch):
+    hub = tmp_path / "hf"
+    monkeypatch.setenv("HF_HOME", str(hub))
+    assert W.hf_home() == hub and W.find_tokenizer("org/x", REV) is None                      # no snapshot of the model at all
+    _snapshot(hub, "00" + REV[2:])
+    snap = _snapshot(hub, tokenizer=None)
+    assert W.find_tokenizer("org/x", REV) is None                                             # the revision's snapshot holds no tokenizer
+    (snap / "tokenizer.json").write_text("{}")
+    assert W.find_tokenizer("org/x", REV) == W.find_tokenizer("org/x", REV[:7]) == snap / "tokenizer.json"
+    assert W.find_tokenizer("org/y", REV) is None and W.find_tokenizer("org/x", "cd" * 20) is None
+    monkeypatch.delenv("HF_HOME")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setattr(W, "CHECKPOINTS", tmp_path / "checkpoints.json")
+    cache = tmp_path / "home" / ".cache" / "huggingface"
+    assert W.hf_home() == cache                                                               # no checkpoints file to read
+    for text, home in (("{", cache), ("{}", cache), (json.dumps({"hf_home": str(tmp_path / "nowhere")}), cache),
+                       (json.dumps({"hf_home": str(hub)}), hub)):
+        (tmp_path / "checkpoints.json").write_text(text)
+        assert W.hf_home() == home
+    assert W.find_tokenizer("org/x", REV) == snap / "tokenizer.json"
+
+
+def test_a_models_case_is_the_one_named_then_the_adapters_own_for_its_repository_then_the_checkpoints_files_role(tmp_path, monkeypatch):
+    from verity_vllm.engine.profiles.cases import CASES
+    own = next(k for k, v in CASES.items() if v.get("repo"))
+    assert W.case_for(CASES[own]["repo"], REV, None) == own and W.case_for(CASES[own]["repo"], REV, "MINE") == "MINE"
+    monkeypatch.setattr(W, "CHECKPOINTS", tmp_path / "checkpoints.json")
+    assert W.case_for("org/x", REV, None) is None                                             # no checkpoints file to read
+    (tmp_path / "checkpoints.json").write_text("{")
+    assert W.case_for("org/x", REV, None) is None
+    (tmp_path / "checkpoints.json").write_text(json.dumps({"checkpoints": [
+        {"role": "two words", "repo": "org/x", "revision": REV}, {"repo": "org/x", "revision": REV},
+        {"role": "OTHER", "repo": "org/x", "revision": "cd" * 20}, {"role": "X_1B", "repo": "org/x", "revision": REV}]}))
+    assert W.case_for("org/x", REV, None) == W.case_for("org/x", REV[:7], None) == "X_1B"     # a role that is one identifier
+    assert W.case_for("org/x", "cd" * 20, None) == "OTHER" and W.case_for("org/x", "ef" * 20, None) is None
+    assert W.case_for("org/y", REV, None) is None
+
+
+def test_the_generator_writes_each_prompt_in_the_ids_of_the_models_tokenizer_and_says_which_file_it_read(tmp_path, monkeypatch):
+    """`workload.main` with a tokenizer: `tokenizer.json` of the revision's snapshot under `$HF_HOME`, or the snapshot or file
+    `--tokenizer` names; read with the `tokenizers` library (a stand-in here), no special token added or dropped."""
+    monkeypatch.setitem(sys.modules, "tokenizers", types.SimpleNamespace(Tokenizer=_Tokenizer))
+    monkeypatch.setattr(_Tokenizer, "asked", set())
+    snap = _snapshot(tmp_path)
+    monkeypatch.setenv("HF_HOME", str(tmp_path))
+    out = tmp_path / "w.json"
+    opts = W.Options(row_id="x__fp8__h200__tp8__b8__i256__o32__prefix-arrivals__greedy__eager", hf_repo="org/x", revision=REV, batch=8,
+                     max_input=256, max_output=32, case="X", arrivals="staggered", out=str(out))
+    assert W.main(opts) == 0
+    doc = json.loads(out.read_text())
+    reqs = doc["requests"]
+    assert [len(r["prompt_token_ids"]) for r in reqs] == [r["prompt_len"] for r in reqs] == doc["sweep"]["input_lengths"]
+    assert all(r["prompt_text"] == "".join(map(chr, r["prompt_token_ids"])) for r in reqs) and len({r["prompt_text"] for r in reqs}) == 8
+    assert _Tokenizer.asked == {("encode", False), ("decode", False)}
+    sha = hashlib.sha256(b'{"model": "chars"}').hexdigest()
+    assert doc["tokenizer_note"].startswith(f"prompt_token_ids from tokenizer.json sha256 {sha[:16]} (") and doc["sweep"]["lengths_only"] is False
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "elsewhere"))
+    for named in (snap, snap / "tokenizer.json"):
+        out.unlink()
+        assert W.main(W.Options(**{**vars(opts), "tokenizer": str(named)})) == 0 and json.loads(out.read_text()) == doc
+    with pytest.raises(FileNotFoundError, match=f"^tokenizer.json not found at {tmp_path / 'tokenizer.json'}$"):
+        W.Tok(tmp_path)
