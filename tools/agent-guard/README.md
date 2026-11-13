@@ -43,6 +43,7 @@ user.email` where the push runs), names the commits, and says how to make them a
 the remote lacks as the checkout knows it, the commits reachable from what it pushes and from no remote-tracking ref of
 that remote, so a merge of the remote's `main` adds the merge alone and `git fetch` comes first where a ref is stale; a
 push that adds commits from a checkout with no configured identity, or whose commits git can't list, is refused too.
+Where a node made the commits, the run that made them names this checkout's identity, as `tools/move/README.md` shows.
 The typed rule reads a push's words as git does (options anywhere, by any prefix, with their values; git's
 own `-C`, `-c` and the like), and places a push by three things only: the directory the hook is handed, git's own `-C`,
 and a URL or path given as its repository. It follows no `cd`: a `cd`, `pushd` or `popd` anywhere in the command, run
