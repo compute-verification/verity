@@ -58,7 +58,8 @@ theorem subsetList_distinct (pop : ℕ) (us : Array ℕ) : Distinct (subsetList 
   simp [subsetList]
 
 theorem subsetJson_obj (pop : ℕ) (us : Array ℕ) :
-    subsetJson pop us = .obj (Std.TreeMap.Raw.ofList (subsetList pop us) compare) := rfl
+    subsetJson pop us = .obj (Std.TreeMap.Raw.ofList (subsetList pop us) compare) := by
+  simp only [subsetJson, Json.mkObj]
 
 theorem good_subsetJson (pop : ℕ) (us : Array ℕ) : Good (subsetJson pop us) := by
   refine FlockComplete.JsonRT.good_mkObj (subsetList_distinct pop us) ?_
@@ -147,7 +148,7 @@ theorem subsetParses : SubsetParses := by
       exact eq_toJson_of_jsonEquiv hi
     rw [hae, FlockSoundness.Discharge.Composed.mapM_asNat_toJson] at hmap
     have hnc : (Std.TreeMap.Raw.ofList (subsetList pop us) compare).get? "closure" = none :=
-      FlockComplete.JsonRT.get?_mkObj_none (by first | simp [subsetList] | rfl)
+      FlockComplete.JsonRT.get?_mkObj_none (by simp [subsetList])
     have hs := hk "closure"
     rw [hnc] at hs
     have hmc : m.get? "closure" = none := by
