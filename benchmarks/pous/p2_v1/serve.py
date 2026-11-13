@@ -46,8 +46,8 @@ from verity.protocols.accounting.pous.verifier.schemes.p2 import expand_prefix
 from verity.protocols.accounting.poub.verifier import audit, coins, p2, receipts
 
 FIXTURE_SCHEMA = "verity-remote-bandwidth/p2-sketch-fixture/v0"
-FIXTURE_SHA512 = ("3f7f42d0121114b5f974c818fda2aabe00ab5694ed29e4f2b60f96381d27f24d"
-                  "21a670c89a9c109e3d2bf5f8727372a369a3b7a4ee83c4445a7bef3bb50d3cc3")
+FIXTURE_SHA512 = ("4108408908b13f0b4b7912ce55ecc92c70f37ec71afc8f0b65e9b421831b08f6"
+                  "6b824180d631d850c0190801432c68cdf324f942640f7799a561eff22d1b3840")
 NODE = b"p2-toy-node"
 EMBED = b"verity-pous/p2-serve/toy/embedding/v0\0"
 FIXTURE_CHALLENGE = hashlib.sha512(b"verity-pous/p2-serve/fixture/challenge/v0").digest()[:receipts.CHALLENGE_BYTES]
