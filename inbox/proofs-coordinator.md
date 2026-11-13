@@ -142897,3 +142897,216 @@ lean-records: OUTCOME {"outcome": "failed", "package": "verity/protocols/spot/ve
 **NEEDS.**
 1. Pick `65a6f23f426` onto the trial branch, yes or no (item 1).
 2. `wiresOk_unlinked` as `= none` (as pushed) or as `.isNone = true` (item 2).
+
+## STOPDRIVER, Fri 13 Nov 13:18Z: order 4, part 1: the family and the root, form by form; the Lean refusal's place
+
+Pen mine. The mailbox is read to its 13:04Z message, so part 2 goes ahead after this entry and the old stop is
+withdrawn. Read at: `main` `053b8e50fe8a`, Friday's cards branch `08b5d4b3c0a6`, the join's branch `4e986e339ad2`.
+Nothing was run for this entry: every claim is [read] unless it says otherwise.
+
+### Answers
+
+| | form | family | first session's root |
+| --- | --- | --- | --- |
+| (i) | the one-stage command (`a5.py tp`) | YES, held | YES, held |
+| (ii) | the compiled two-stage form (`SampledTwo`) | NO, a parameter | NO, a parameter |
+| (iii) | `two_stage_small.sh`, `sampled_two_small.sh` | NO, the hand-off's | NO, the hand-off's |
+
+**(i) The one-stage command's verifier half: YES for both. [read]**
+
+- It is one process with no hand-off: `a5.py tp` (1718 to 1750) registers, opens the session, samples and decides.
+- The family. `a5.py` 384 names it: `AC.RankCoins(a.coins, rank)`, whose label is `a5_coins.family(rank)`
+  (`a5_coins.py` 415). `rank` is the command's own loop index `r` (`tp_rank`, 1663 to 1690). Before the sample,
+  `serving_rows.source` (302 to 303) holds the record's window to that rank: `w.get("run") == mine.run`, where
+  `mine.run` is `"<TP run root>/rank<r>"` (`run_of`, 60 to 61), and `w.get("tp") == held["tp"]`, which names the
+  rank. A window that fails is refused before the sample (`a5.py` 859 to 872). The comparison of the evidence is
+  `coins.py` 366 (`segment.get("label") == label`), reached from `a5.py` 465 and 468.
+- The root. `a5.py` 1732 takes it: `a.window_root = rec["tp_run_root"]`, from the serve's TP commit file. The same
+  `source` holds the record's window to name it (`run`, and `tp.tp_run_root`). It opens the session (1733), is the
+  root the registration check reads (391) and is the root `coins.py` 359 looks the ledger's session up by.
+- So two ranks cannot share a record (each record's window names its rank's run), each rank has one family, and a
+  family's coins follow one commitment (`coins.py` 214). Every rank's audit must accept for the command to accept,
+  so one run offers no choice among samples.
+- The other path of `a5.py` (a bundle, no `--tp-commit`) reads no challenger: 1821 sets the coins and the root to
+  `None`.
+
+**(ii) The compiled two-stage form: NO for both. [read]**
+
+- The form is `VStar.Recursive.SampledTwo` (`verity/protocols/recursion/verifier/recursive/VStarRecursive/
+  SampledTwo.lean`). It is on the join's branch only: not on `main`, not on Friday's cards branch. On `main`,
+  `Spot.SecondStage.FORM` is `false` (`SecondStage.lean` 149; 171 on the join's branch), so a two-stage run of
+  record is refused last.
+- The family is a parameter: `inputOf` (297) sets the run's `family` to `p.boundary.challenger`'s label, which
+  `OneStage.paramsParsed` reads from the parameters' `boundary.challenger.label`.
+- The root is a parameter: `OneStage.lean` 351 reads `window_root` from the parameters' `boundary`.
+- The run holds the evidence to those two: `Run.lean` 326 calls `coinsCode … v.windowRoot i.family`, and
+  `Challenger.drawCoins` (`ChallengerDraw.lean` 36 to 45) finds the one session the ledger opens on that root
+  under the parameters' key and requires the segment's label to be that family.
+- Nothing derives either. No step compares the label with the boundary record's layout, or the root with the
+  record's `window.run`. The boundary registration has no registered value of its window (`two_stage.first`, 368 on
+  `main`, registers ports only), so the registration check's rule that a registered value's domain binds the root
+  (`Registration.lean` 286) has nothing to bind there.
+- The form's own checks about families: the boundary's family differs from the interior's (`familiesApart`, 126,
+  refused at 213); on two windows the first session shows no coin of the interior's family after the interior's
+  digest (`interiorUnshown`, 407) and no coin tree (`firstTreeless`, 473). None of them counts the first session's
+  families.
+- Only the second stage's root is derived: `Run.interiorWindowOk` (the interior's window is the boundary's, or
+  `SecondStage.interiorRoot` of the boundary registration's digest and the replay sample).
+- Who writes the parameters: `sampled_two_case.assemble` (65 to 67), from the input the stream's run of record was
+  handed: `key = run["key"]`, `"label": run["family"]`, and `run["params"]`, which holds `window_root`. That
+  family is the one `two_stage.resume` took from `stage1.json` (429 on that branch), and that root is
+  `first_root(stage1)` (1185), the hand-off's `window_root`.
+- `--challenger local`: the first command makes a challenger of its own in a new directory each run, under a key
+  of its own (`a5_coins.py` 762 to 764). The compiled form reads the key from its parameters too, so under `local`
+  the key, the root and the family are all the driver's words and no ledger outside the run counts sessions or
+  families. Nothing fixes which sample was read.
+- A gate: the key is the auditor's device's and the ledger is one, on the auditor's device. Given the root, the
+  ledger fixes the session (one open a root: `challenger.py` 1283; Lean reads it through `trustedSessionOf`).
+  Inside that session the family is whichever the parameters name, among as many as the first command reserved
+  (`two_stage.py` 1047 to 1049 on that branch: one a directory, one more a stop class). The root is whichever the
+  parameters name: a session on another root exists only if a first command opened one, and ours opens it on
+  `pubs[0]["run"]`, but the form refuses none.
+
+**(iii) What Friday's demo runs. [read]**
+
+- `a5.py` does not import `two_stage.py` and does not call `resume`; it is (i).
+- `two_stage_small.sh` (cards branch 96 and 101, `main` 57 and 62) runs `two_stage.py first`, then
+  `two_stage.py second --stage1 …/stage1.json`. `_second` calls `resume(stage1, …, window_root=first_root(stage1))`
+  (cards 1154, `main` 1023), and `resume` sets `coins.family = stage1.get("family")` (cards 415, `main` 386).
+  After it: the second session's root is derived (`IR.interior_run`, cards 1163), and the stream's outcome
+  (`outcome_of`, cards 952) holds the hand-off's own evidence to the family and the root `resume` took. Nothing
+  after `resume` holds either to the record. NO.
+- `sampled_two_small.sh` is on the join's branch only. It runs the same two commands (69, 75), then
+  `sampled-two-on check` on the case `sampled_two_case.py` wrote (99). After `resume`, the join's `first_coins`
+  (1168 to 1179, called at 1248) holds the hand-off's evidence to the stream's own key, which is new there, but
+  under the hand-off's root and family; then the compiled form reads both as parameters, (ii). NO.
+- `stop_audit_small.sh` (57, 64) runs `two_stage.py first --stop`, then `stop_audit.py --handoff`: order 3's
+  finding, [run] there on `r20261113-121708-a074`.
+
+**The run against the compiled form: not run, and it does not fit.** The compiled form is `sampled-two-on check`,
+which verifies the second stage's sessions, so a case needs a whole two-stage play with proofs. What `a074` gave is
+registration and the stop audit's Python with no prover and no second stage, and the form's executables are not
+built anywhere I can reach. A first run of `sampled_two_small.sh` builds the prover and two Lean executables; I
+have no measured time for it and do not expect 20 minutes [guess]. I stayed with reading.
+
+### (iv) The three locks
+
+Read on `main`; the join's branch gives the same answer for the names below.
+
+- **No lock names it.** `security/lean-audit.json` has 11 named assumptions (SHA-512's collision resistance twice,
+  uniform random bytes twice, five of the inference-only policy, `Pouw.CostModel.Hashless`, `FaultedUseHard`):
+  none is about one sample a registration. No `open` or `domain` premise of a two-stage guarantee is about one
+  sample, one family or one draw. The names with "Draw" in the two locks are other protocols':
+  `Accounting.Remote.Draw.Assumptions.*`, `FlockSoundness.Audit.Adaptive.Play.Drawn`, `Pous.Period.Drawn` and
+  `Properties.Pouw.Period.RegisteredBeforeDraw`. I searched the 598 open and 112 domain premises by name and read
+  the statements named below, not every statement. The interface's lock lists no guarantee.
+- **The two-stage guarantees listed.** `Flock.SecurityProofs.SampledKSTwo` rests on the assumption
+  `UniformRandomBytes` and eight open premises: `Claims.Sampling.SessionRuns`,
+  `Claims.SamplingGeneric.CompiledTwo.Scope`, `Claims.SamplingGeneric.SessionOpensTwo`,
+  `SamplingDeploy.Code.InteriorFixed`, `.RefusesTwo`, `.ReplayCap`, `SamplingDeploy.RegMatchesTwo` and
+  `SamplingDeploy.SessionsIn`. `SpotKSTwo`, `SpotFirstHitTwo` and `SpotExfilTwo` rest on `SpotFlock.Built`,
+  `SpotFlock.Addresses` and the scope. None is in `deployed`. The Properties lock's `twoStageCheck…Sound` are
+  about the bound's check, not the challenges.
+- **Where one sample a registration lives: in the order of the game, not in a premise.**
+  - `Flock.Guarantees.SampledKSTwo` (`Guarantees.lean` 49) is `KSLinOn` at a fixed statement `x`, the probability
+    over one run's coins. The first stage's bytes are `b₁ x` of one coin, uniform (`CallsUniform`, `TwoAt.lean`
+    60, from `UniformRandomBytes`); the contract's `replayDraws` (`SamplingTwo.lean` 277) bounds the chance that
+    `L.replaySample x r` misses a set, over the run's coins `r`.
+  - `Verity.Sampled.remote_soundness_deployedReady` (one-stage) is over plays of `I.base.game θ F c`: the
+    parameters `θ` index the game, and the family is `labelAt θ` (`Instance.lean` 619).
+  - On the join's branch the two-stage proofs read the family from the play's parameters (`firstDraw`,
+    `FirstCoins.lean` 74 to 78), and the play's parameters are "sent first" (`Game.lean` 489 to 491).
+- **What a play with a chosen sample still meets.** `Properties.Challenger.FamilyOneCommitment` (418; listed as
+  `Properties.Challenger.Drawn.familyOneCommitment`, and `…Read` at 433) is for every `w` and `label`: if
+  `drawCoins key w label after coins` reads `ξ`, a run of the device opened on `w` released `ξ` as its coins of
+  `label` after `after`, and every root in that family is `after`. A play that reserved two families, read both
+  and names the one it prefers meets that premise at the family it names, and the conclusion is true of it. The
+  statement is not false: it says nothing about a second family of the same session, released after the same
+  digest or after a second registration over the same boundary record. The same play passes every check of the
+  compiled form (ii). [derived]
+- **What it does not meet** is the order: in each statement the parameters, which hold the family and the root,
+  are fixed before the device releases anything. A play that names its family after reading is a play of no one
+  game: each family's game holds its bound, and the choice among `k` families is a union the statements bound
+  family by family. So what is covered: a verifier whose parameters are fixed before the session opens. What is
+  not: parameters written after the play from the hand-off, which is what `sampled_two_case.py` and
+  `two_stage.py second` do today. [derived]
+- The docstring at `Properties/Challenger.lean` 53 to 54 says the same of the device: that it opens each window
+  once, and what it releases when, are the device's on `trusted-host`, "which these properties don't take".
+
+### The Lean refusal, as text
+
+- **Where.** `VStar.Recursive.SampledTwo.inputAt`, check step 4, on the line after `digestIs j₁ c.digest` (360).
+  That is the first place where the form holds both its parameters and the boundary record as its own parser
+  read it (`j₁`). `paramsOfJson` cannot hold it: it does not see the record. [read]
+- **What it compares.** Two equalities, of the parameters with the read-back record's `window`:
+  1. the root: `p.boundary.verifier.windowRoot` is `some` of the record's `window.run`. The boundary record's
+     window carries its run (`boundary_rows.record`, 629), the SHA-512 over the format, the serve's nonce and the
+     window's index (`run_root`, 260 to 262).
+  2. the family: `p.boundary.challenger`'s label is the family the record's layout names, a function of the
+     window's `prompt`, `outputs` and `stopped` (`Layout.provenance`, 506 to 511), and of `population` for a stop
+     record (`boundary_stop.stop_record`, 204). It is the function part B's Python reserves by, so the first
+     command and the form name one family for one layout. [derived]
+- **The refusal words.** `FIRST_ROOT`: "the boundary's window root is not its record's run: the first stage's
+  session is the one the auditor's ledger opens on the record's own run". `FIRST_FAMILY`: "the boundary names a
+  family other than the one its record's layout names: a class's first stage reads one family of its session".
+- **What follows from it.** With the family a function of the record, reserving more families gains nothing: the
+  form reads only the one the record names. Two records of one layout in one session name one family, and
+  `FamilyOneCommitment` then gives that every root in it is one digest, so the second finds the family taken
+  (`FAMILY_ROOT`, code `family`). Order 3's two stop records over one boundary record are that case. With the
+  root the record's own, one open a root on the auditor's ledger makes the session one. [derived]
+- **The stop audit and the stream's run.** The stop audit's Lean (`across`) and the stream's two-stage run
+  (`Spot.Run.run`, which `two_stage.py second` decides by, not the form) take the family from their caller too.
+  The same definition applies to both: a stop record's window is the boundary's with `population: "stop"`. It
+  cannot go into `Run.run` for every record: the one-stage served record's run is `"<root>/rank<r>"`, not the
+  root, so the rule is for records whose window names the boundary format. [read]
+- **Which listed records it would move.** None, as the locks stand on the join's branch: neither the security
+  nor the Properties lock's `reads` lists the module `VStarRecursive.SampledTwo`, no guarantee's record names it,
+  and of `Spot.Run` neither reads `run`, `coinsCode` or `Input`. It moves unlisted proofs that unfold `inputAt`,
+  each by one more step: `security/Proofs/Flock/SpotFlock/RunsAs/OfCheck.lean` and `Parsed.lean`, and
+  `security/Proofs/Properties/Verity/SampledTwo/Accepts.lean`, `AcceptsOfSteps.lean` (`inputAt_of_steps`) and
+  `FirstCoins.lean` (`firstDraw` could then read the family off the record). If the family's function is put in
+  an existing module that a lock reads (`Spot.SecondStage`, 132 definitions read by the security lock), that
+  module's `reads` entry gets a new digest there; a module of its own moves nothing. [derived]
+- **The named premise until it lands.** One `Prop` over a case: the parameters' root is the commitment's record's
+  `window.run` and the parameters' family is the one that record's layout names. It is what makes "parameters
+  sent first" true of parameters a driver writes later: both become functions of the commitment, which is sent
+  first. [derived]
+
+### The one line's numbers
+
+Four of its line numbers were one off: `serving_rows.source` is 302 to 303, the label's comparison is `coins.py`
+366, `inputOf`'s family is `SampledTwo.lean` 297, and `sampled_two_case.assemble` writes the label at 67.
+
+### Part 2, next
+
+Branch `cursor/proofs-stopdriver-family-ffc6` from `origin/main`: `main` holds `stop_audit.py`, `two_stage.py` and
+both test files, and the draw is for review against `main`. It will cross #9699 and #9458, which change the same
+two files; I say where when the draw is up. The draft: the family from the layout in `two_stage.resume` and
+`stop_audit.resume`, the session's root held to the record's `window.run`, the first stage's reserve by the layout
+with two directories of one place refused before any session, the sentence in `coins.py`'s two docstrings, and
+the tests, run on a node. No Lean, no part A, no pull request, no mark.
+
+### Branches
+
+| branch | head |
+| --- | --- |
+| `cursor/proofs-stopdriver-stop-reason-ffc6` (#9699) | `725720f8a4a0` |
+| `cursor/proofs-stopdriver-across-all-ffc6` (#9624) | `64364792ed70` |
+| `cursor/proofs-stopdriver-prove-on-cards-ffc6` | `08b5d4b3c0a6` |
+| `cursor/proofs-stopdriver-answer-complete-ffc6` (#9458) | `049c5875989c` |
+
+### Not established
+
+- Nothing here was run. The compiled form was not run on a case of two samples; (ii) is reading.
+- That two families of one session can both be released after one boundary registration's digest: read
+  (`first` commits whatever family it is given; nothing on the device's side refuses), not run. Part 2's test of
+  two directories of one place runs it.
+- That the gate's ledger refuses a second open on one root: read at `challenger.py` 1283, not run against a gate.
+- Who holds the parameters' challenger key to the auditor's device's key record before the form reads it: not
+  read. The form takes the key from its parameters.
+- Whether the interior's family needs the same refusal: the second command reserves one family on the interior's
+  own root, and the form requires only that it differs from the boundary's. Not followed further.
+- The locks: I searched premise names and read the statements named above; I did not read every open premise.
+- Whether Friday's run uses `--challenger local` or a gate: not read from the demo's commands.
+- The stop audit's Lean (`across`) was not read again for this entry; that it takes the family from its caller
+  is soundness's word, relayed.
