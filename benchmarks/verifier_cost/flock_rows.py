@@ -14,7 +14,7 @@ of `verity_flock.derive`'s unit rows, Δ and logical list for the parts, and `ok
 seconds, peak RSS, exit code and whether the output equals the mirror's (null past `--cap`). `flock_rows.sh` builds the binaries
 before and after a change and runs this on a node.
 
-The MoE targets need circuits' static MoE forms (`verity.definitions.ops.moe`) and Flock's MoE select pieces where their
+The MoE targets need circuits' static MoE forms (`verity.circuits.ops.moe`) and Flock's MoE select pieces where their
 definitions do; each target imports only its own.
 """
 from __future__ import annotations
@@ -37,14 +37,14 @@ MODES = ("rows", "unit", "delta", "logical", "check")
 
 def _qwen3(name: str, **kw):
     from verity.circuits.defs import bind
-    from verity.definitions.ops import prims as P
+    from verity.circuits.ops import prims as P
 
     if name.startswith("registry"):
         from verity.definitions.registry import moe as VM
 
         d = VM.MoeExpertCoordinateWV2 if name.endswith("-w") else VM.MoeExpertCoordinateV2
     else:
-        from verity.definitions.ops import moe as M
+        from verity.circuits.ops import moe as M
 
         d = M.MoePairCoordinateW if name.endswith("-w") else M.MoePairCoordinate
     return bind(d, E=128, DOT=P.HopperBF16WgmmaDot16, **kw)
@@ -52,14 +52,14 @@ def _qwen3(name: str, **kw):
 
 def _glm(form: str, **kw):
     from verity.circuits.defs import bind
-    from verity.definitions.ops.prims import HopperE4m3QgmmaDot32
+    from verity.circuits.ops.prims import HopperE4m3QgmmaDot32
     from verity.definitions.registry import fp8_moe_experts as X
 
     return bind(getattr(X, form), E=256, G=128, KB=128, SWAP=True, DOT=HopperE4m3QgmmaDot32, **kw)
 
 
 def _select(e: int):
-    from verity.definitions.ops import moe as M
+    from verity.circuits.ops import moe as M
 
     return M.select_bf16(e)
 
