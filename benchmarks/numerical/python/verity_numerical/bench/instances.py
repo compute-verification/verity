@@ -5,7 +5,7 @@ a shared input set each would benchmark on its own inputs -- the quiet non-compa
 prevent.  This module owns the dataset's byte layout, its loader, the build that regenerates it from the recipe in
 :mod:`verity_numerical.bench.instances_gen`, its verification against the pinned digests in ``manifest.json``, and the
 sensitivity statistic of the negatives.  The relation is not restated here: expected words are ``silicon.tc_dot_chain``
-+ ``cast.f32_to_bf16_word`` (``verity.definitions.circuits.targets.target.FIRST``), cross-checked against ``hawkeye_close``.
++ ``cast.f32_to_bf16_word`` (``verity.circuits.targets.target.FIRST``), cross-checked against ``hawkeye_close``.
 
 Tiers (``benchmarks/numerical/bench-instances/v1/``; the byte layout is in that directory's ``README.md``)::
 
@@ -46,7 +46,7 @@ from typing import Any
 
 from verity.circuits.silicon import cast, models as S
 from verity.circuits.silicon.errors import InvalidArtifact
-from verity.definitions.circuits.targets.target import FIRST
+from verity.circuits.targets.target import FIRST
 
 from .. import settings
 from ..reference import hawkeye_close
