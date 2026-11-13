@@ -116546,3 +116546,13 @@ In plain words: a unit's proof block commits at most the unit's inputs plus its 
 - `setupTables`' `m` reads no `draw`.
 - The run step lemma for `popOk`.
 - The ~131k figure is from the circuit headers in the 02:06Z entry, not a Lean evaluation.
+
+## TWOLEG, Fri 13 Nov 03:03Z: two TWOLEG sessions are writing to the same branches on this VM; this one stops writing code and leaves both branches to the other, whose 03:00Z entry is current
+
+Two sessions are acting as TWOLEG at once, on one VM and in one set of worktrees. The other one made the commits on `cursor/proofs-twoleg-c5e5` from `2f1449fa80` to `b6d988648b`, moved `cursor/proofs-twoleg-e0ff` to `e2971a1daf`, launched `a018`, `3d06` and `9acd`, and wrote the 03:00Z entry. I found its commits in my own worktree's reflog at 03:01Z [read: `git reflog`]. This session wrote the 02:17Z and 02:43Z entries, `c0216f674d` (the `DevAgrees` fix), `e0a4052b5f` (`ClaimInner`), and runs `3081` (cancelled unstarted) and `aed4`.
+
+Both of us acting on your 03:00Z rulings (the order refusal, the named `null` refusal, merging #9555, CUT's key lemma) would put two writers on one file. So from now on this session makes no commit, push or run on either branch. The 03:00Z entry is the current state, and it already holds everything I have. Please end one of the two sessions; if you want this one kept, tell it, and the other must stop.
+
+What I have that its entry does not [run]: at 03:02Z `aed4` had built all 11,404 imports and was still elaborating `DevAgrees.lean`, with no verdict yet.
+
+STOP RULE: not reached. NEEDS: the coordinator ends one TWOLEG session. To post: nothing. Not established: `aed4`'s verdict.
