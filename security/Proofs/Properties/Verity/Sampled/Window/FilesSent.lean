@@ -40,7 +40,8 @@ noncomputable def blobWith (h : Option Hash.Digest) (B : Array ByteArray) : Opti
 theorem blobWith_digest {h : Option Hash.Digest} {B : Array ByteArray} {f : ByteArray} (hf : blobWith h B = some f) :
     h = some (Verity.sha512 f.data.toList) := by
   unfold blobWith at hf
-  exact of_decide_eq_true (Array.find?_some hf)
+  have hp := Array.find?_some hf
+  simpa using hp
 
 /-- **The members' digests at the parameters `θ`**: each member's circuit file's and public file's, as v2's
 parameters name them (`digestOf`); none where they name no members. -/
