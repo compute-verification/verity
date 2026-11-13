@@ -137782,3 +137782,33 @@ My listing commit is not in the pass: the tip's order names remote, onsite and c
 - That `A.KS` holds at any session of record, and that any instance of `JoinsAt` exists: all 22 fields are premises.
 
 **Runs out:** `r20261113-110329-76c3` (records at `e4a00b6b85`, vy-nebius-cpu-11), 11:50Z [guess]; `r20261113-111312-d3d8` (tries at `6247d2ddfc`, vy-nebius-cpu-11), 11:40Z [guess]. The records run at `6247d2ddfc` goes out when `76c3` says the package builds: if it does not, a second one fails the same way. **Timer:** one, 20 minutes from this entry, for both. **Next entry:** when `76c3` has a verdict, with `530b`'s and `d3d8`'s.
+
+## FIRSTACCEPT, Fri 11:25Z: the rate splits: an unsampled member costs about 17 to 18 s per GB of its circuit and nothing measurable besides, so once a file the circuits take about 1.6 hours on Thursday's window
+
+Run `r20261113-110416-45a9` on vy-nebius-cpu-7, commit `8ae9223afa2`: the same driver, 100 members at K = 2048 and K = 4096.
+
+**1. The run.** [run] 108 blobs, 2 statements. v2's refusal is `ALL_PASSED`, decided, exit 1, in 371.2 s at a 1.91 GB peak. The circuits are 419 MB together, about 209 MB each. 97 of the 100 staged members have no circuit file of their own. The audit took 493.3 s.
+
+**2. The split.** [derived] Against the 100-member row at K = 128 and 256 (109.9 s, circuits about 67 MB each):
+- Per member: about 3.4 to 3.6 s at 209 MB, against 1.0 s at 67 MB.
+- So about 17 to 18 s per GB of circuit, and a cost per member apart from its circuit within about 0.2 s of zero. The range is what the two sampled members' sessions add to the fixed part, which I can't separate: I took it as fixed at 9.5 s, or growing with the circuits to about 30 s.
+- At 0.2 s a member, what stays a member would be at most about 6 hours on 102,781 members. I can't place it closer than that with two points.
+- The peak is the files held plus about 6 bytes per byte of one member's circuit (4.2 to 5.6 in my earlier runs).
+
+**3. The hours on Thursday's window, recomputed at 17.5 s per GB.** [derived]
+- Today: 31 hours at the least (6.34 TB parsed); about 23 days if members spread evenly.
+- One parse and one walk a file, run-wide work once: about 1.6 hours for the 333 GB of circuits, plus up to 6 hours for what stays a member.
+- One parse a file, two walks still a member: still not split. The run tells the per-byte cost, not which part of it is the parse.
+- The peak once a file: about 355 GB of files held plus about 130 GB for the largest circuit's parse, about 490 GB.
+
+**4. The 11:09Z questions.**
+- The members' names: fixed by the committed window, not the driver's. My 11:05Z entry has it: each is `<template id>/c<j>`, and a template's members sort together, so one kept parse is open at a time. [read]
+- A kept case for SESSIONOF2: run `r20261113-112614-c0b5` on vy-nebius-cpu-14 (300 members, two statements), path `out/standin/m300-k128-256/case-v2-members.json` in its run directory. It ends by about 11:50Z. None of my earlier runs kept a case. Its evidence is small: two statements. The largest evidence we have is the served window's (298 statements), which is vllm's, on cpu-6.
+
+**Not established**
+- The split between the parse and the two walks.
+- The per-member part closer than 0.2 s.
+- Rates for the lookup tables and `Blobs.get`, which neither stand-in has.
+- Whether Thursday's members are derived or listed.
+
+Next: nothing runs. The branch waits for the carry and MEMBERS's lemma.
