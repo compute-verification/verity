@@ -111107,3 +111107,27 @@ Not established: nothing of `Messages.lean` or `MessagesShown.lean` has compiled
 Ready for soundness's reading: none yet.
 
 Branch `cursor/proofs-messages-f55d`, head `4e8f7a0b06`, pushed; nothing unpushed. Next: read the try's errors as soon as it ends, fix, resend to cpu-11 with `MessagesShown.lean` (which builds `Messages.lean` as an import), one try at a time.
+
+## MAJORITY, Fri 00:51Z: r20261112-232059-87d9 passed: `majorityBound` for the two-stage audit compiles; ready for soundness's reading: `security/Proofs/Properties/Verity/Majority.lean` and `security/Proofs/Properties/Verity/SampledTwo/Majority.lean`; `Recursive/Target.lean` failed its first try and its fix is in r20261113-004957-4072
+
+The two-stage audit's majority bound is proved and compiled. Where the claim fails on the transcript the vocabulary extracts, an accepted run whose extracted witness passes the two-stage check is at most \(\sqrt{\min(W, 2n)\cdot K}\) likely. Here W is the circuit's wire bits, n its units, and K the chance that two independent runs give a SHA-512 collision. The proof rests on three named premises that the instance owes, listed below. The recursive audit's file, which reads the same shared argument, failed its first try on Lean's time limit; a fix is running.
+
+**1. The passing run.** [run] `r20261112-232059-87d9` on vy-nebius-2 tried `SampledTwo/Majority.lean` at `57e5b5781b` (TWOLEG's head `b04e0a9fd9` merged in). It joined the line at 23:21Z and ended rc 0, class SUCCESS. `lake env lean` exited 0, 1668 s after the start, build included. The axiom probe: "none of its 6 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". Those are `holdsOnWitness_of`, `ex_le_of_forall_le`, `majorityPlays_binds`, `off_of_accepts`, `majorityBound` and `majorityBound_ecr`. The only warning is one `push_neg` deprecation. With `r20261112-231940-08e1` (the shared file, 25 theorems, at 00:28Z), both files soundness reads for this leg have compiled.
+
+**2. What soundness takes on** [read], for `majorityBound V A x θ F c σ Fr readX collOf dColl K`, with the bound `MajorityBound … (V.extract θ F c σ) (ofReal √(min(W, 2n) · K))`:
+- `hX`: `V.extract θ F c σ = majority V A x θ F c σ Fr readX`, meaning the vocabulary's extracted transcript is the majority over the frame's runs.
+- `HoldsOnWitness V A x θ F c readX`: the claim holds on every witness the two-stage relation accepts. `holdsOnWitness_of` gives it from `holds_of_rTwo` where `x` parses, the units are the outer blocks (`UnitsAreReplay`), and the design caps the claim's share at the session's δ (`CapsAt`).
+- `ReadsBind V A x θ F c readX collOf`: two accepted witnesses that bind a unit holding the wire g and read g differently make `collOf` return a SHA-512 collision. This holds only for wires committed at the boundary registration, which `UnitsAreReplay` provides.
+- `hbind`: the binding finder's collision probability is at most K. `majorityBound_ecr` gives it as `ExpectedCR` at the finder, so that K = E[cost]/2^256.
+
+**3. The recursive file.** [run] `r20261112-231940-7ce2` on vy-nebius-2 tried `Recursive/Target.lean` at `f620ef7fd4`. It joined the line at 23:20Z, held a Lean slot from 00:14Z, and ended at 00:46Z with lean exit 1. Eight of its 18 theorems failed. Seven hit Lean's time limit, the 200,000-heartbeat `whnf` cap: `Dep.extract_plays`, `extract_bit`, `minority_le_majority`, `majority_le_coll`, `drawn_le_weight`, `ex_off_le_bits` and `ex_off_le_units`. The eighth is an "unknown constant" that follows from those. [derived] Each of the seven makes Lean check by unfolding that `Dep.extract` equals the shared plurality's `extract`. Those that only bridge `Dep.weight` passed (`Dep.weight_plays`, `weight_eq`, `ex_coll_le`). The fix (`e00ab95ce5`) proves `Dep.extract_plays` by unfolding both sides and rewriting with `Dep.weight_plays`, and each theorem now rewrites with the two bridges before calling the shared lemma. No statement changed. [run] `r20261113-004957-4072` tries it on vy-nebius-cpu-11; it launched at 00:50Z.
+
+**Machines and waits** [run]: 08e1 and 87d9 waited about 40 minutes on vy-nebius-2 for a slot, then a further wait for a Lean tree. 4072 is on vy-nebius-cpu-11, which you assigned.
+
+**STOP RULE.** None. Every statement `Target.lean` lists is unchanged in text. Whether the lock agrees needs the records run after its try passes.
+
+**NEEDS.** None.
+
+**To post.** Nothing.
+
+**Not established.** `Target.lean` has not compiled. No records run yet, and no `--siblings` check of the three files. Two of the premises above are not discharged: `ReadsBind` (binding) and `hX` (that the vocabulary's extractor is this majority). The earlier period's challenger signature hole stays open: an earlier period's genuine signature in the evidence makes the strategy's error ⊤ at the deployed theorems, and nothing here works around it. Pushed head: `e00ab95ce5`; nothing is left unpushed.
