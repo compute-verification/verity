@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.RevealsWired
 public import Proofs.Flock.SpotFlock.WireMapRewires
+public import Proofs.Flock.SpotFlock.WiringRows
 public import Proofs.Flock.SpotFlock.KS
 import all Lean.Data.Json.Basic
 
@@ -118,9 +119,9 @@ program. -/
 def WiresMove : Prop := wiresMove h = true
 
 /-- **Every source bit is at a port a link or a wire names** (`sourcesNamed`), which the design's evaluation decides
-(`wiringOk`). It is what `AddressesConnected h` asks before it says where a gate's value sits. A held code with a
-source bit at a port neither names (an input the developer supplies, or a row the second stage's check opens off
-the interior record) has no accepted run. -/
+once per template (`wiringOk`, `sourceRowsNamed`, `sourcesNamed_of_rows`). It is what `AddressesConnected h` asks
+before it says where a gate's value sits. A held code with a source bit at a port neither names (an input the
+developer supplies, or a row the second stage's check opens off the interior record) has no accepted run. -/
 def SourcesNamed : Prop := sourcesNamed h = true
 
 /-- **Where the design evaluates, each wire's writer's part is before its reader's.** -/
@@ -129,7 +130,7 @@ theorem wiresFirst_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = 
 
 /-- **Where the design evaluates, every source bit is at a port a link or a wire names.** -/
 theorem sourcesNamed_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) : SourcesNamed h :=
-  (wiring_of_two h hd).2.2.1
+  sourcesNamed_of_rows h (wiring_of_two h hd).2.2.1
 
 /-- **Where the design evaluates, every wired source bit has a gate to go to.** -/
 theorem wiresMove_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) : WiresMove h :=

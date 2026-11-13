@@ -34,7 +34,6 @@ theorem free_src {g : ℕ} (hg : g < (Spot.Bits.keyProg c n).inputs) (hκ : Spot
     intro ho
     have hκ' := hκ
     unfold Spot.Bits.consts at hκ'
-    dsimp only at hκ'
     split at hκ'
     · cases hκ'
     · split at hκ'

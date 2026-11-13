@@ -25,6 +25,9 @@ one gate: `Spot.Bits.off` past its last gate, `Spot.Bits.consts`, and `Spot.Bits
 * `diag`: each conjunct of `runOkAt` and `twoFilesOk` on its own, in the order they read them, with its time, then
   `check`; where `recordsOk` refuses, `runOkAt` again with the names the run's records name held in place of the
   registrations' (`recordNames`), which is what the rest of round 2 decides of the run.
+* `files`: the registration alone, with no record, statement or coin of a run: each conjunct of `twoFilesOk` on its
+  own with its time, each template's rows the wiring's clauses read, then `twoFilesOk`; exit 0 when it accepts, 1 when
+  it refuses. It reads `held.json` and the reference statements and reads only, and unrolls no member.
 
 Every line starts `GUARD `; the last is `GUARD-RESULT {json}`. The model's statement parsers recurse deeper than a
 default stack holds: give the interpreter a large `--tstack`.
@@ -93,19 +96,21 @@ theorem stmtOk_split (h : Held) (x m₁ m₂ : Claims.Msg) (c₀ : FlockDeploy.C
 
 /-- **The registered wiring's clauses that read the registration's description alone**: every member's circuit is in
 the scope Flock's hidden-output proof covers (`membersScoped`), and of `wiringOk`: each name is one template's, each
-wire's writer's part is before its reader's, each wire's reader port is like its writer's output port, each reference
-read at a port no link or wire names reads a port of the interior registration, and the interior registration
-registers no value. Not the clauses that pass over every source bit or written bit of the members' programs
-(`sourcesNamed`, `wiresMove`, `returnedWhole`, `writtenUnwired`, `writtenRead`). -/
+wire's writer's part is before its reader's, every row a template's units read source bits at is a port a link or a
+wire names, each wire's reader port is like its writer's output port, no wire names a row a template's units write
+that no link names and some wire reads it, each reference read at a port no link or wire names reads a port of the
+interior registration, the interior registration registers no value, each member's circuit names its ports once, and
+every returned output bit of its unit sits on a computed row.
+Not the one clause that passes over every source bit of the members' programs (`wiresMove`). -/
 def wiringSizedOk (h : Held) : Bool :=
-  membersScoped h && namesOnce h && writersFirst h && wiresAlike h && refReadsOwn h &&
-    h.interiorNames.values.isEmpty
+  membersScoped h && namesOnce h && writersFirst h && sourceRowsNamed h && wiresAlike h && writtenRowsUnwired h &&
+    writtenRowsRead h && refReadsOwn h && h.interiorNames.values.isEmpty && portsOnce h && outsOk h
 
 /-- **`two`'s conjuncts on the members' files**, at the members `ms` (`h.ms`): the replay layout and the first stage's
 design exist, the layout fits the members' files (`filesOk`), each template's reference statement reads as a
 member's (`templateOk`), and the registered wiring passes the clauses that read the description alone
 (`wiringSizedOk`). Not `scopeOk`, whose program is the members' circuits unrolled (`bitsProgs`), and not the wiring's
-clauses over every bit. -/
+clause over every source bit (`wiresMove`). -/
 def twoFilesOk (h : Held) (ms : Spot.Bits.Members) : Bool :=
   match (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption, replayDesign h with
   | some l, some _ => filesOk h.reg ms l h.k && (List.range ms.length).all (templateOk h) && wiringSizedOk h
@@ -253,6 +258,37 @@ def members (ms : Spot.Bits.Members) : IO (List Json) :=
       ("rows", Lean.toJson kp.rows.size), ("lowered", Lean.toJson lowered), ("lowering_walks", Lean.toJson walks),
       ("walk_ms", Lean.toJson walkMs), ("consts_ms", Lean.toJson constsMs), ("owner_ms", Lean.toJson ownerMs)]
 
+/-- Each conjunct of `twoFilesOk` on its own, in their order, then each template's rows the wiring's clauses read:
+the rows one unit reads source bits at (`sourceRows`) with those no link or wire names, and the rows it writes
+(`writtenRows`) with those no link names and no wire reads. -/
+def diagFiles (h : Held) (ms : Spot.Bits.Members) : IO Unit := do
+  match (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption, replayDesign h with
+  | some l, some _ =>
+    let _ ← timed "filesOk" (fun _ => filesOk h.reg ms l h.k) b
+  | _, _ => say "layout or replayDesign: none"
+  for t in List.range ms.length do
+    let _ ← timed s!"t{t} templateOk" (fun _ => templateOk h t) b
+  for t in List.range ms.length do
+    let _ ← timed s!"t{t} scopeOkH" (fun _ => _root_.Flock.ProvedScope.scopeOkH (memberCircuit h t)) b
+  let _ ← timed "namesOnce" (fun _ => namesOnce h) b
+  let _ ← timed "writersFirst" (fun _ => writersFirst h) b
+  let _ ← timed "sourceRowsNamed" (fun _ => sourceRowsNamed h) b
+  let _ ← timed "wiresAlike" (fun _ => wiresAlike h) b
+  let _ ← timed "writtenRowsUnwired" (fun _ => writtenRowsUnwired h) b
+  let _ ← timed "writtenRowsRead" (fun _ => writtenRowsRead h) b
+  let _ ← timed "portsOnce" (fun _ => portsOnce h) b
+  let _ ← timed "outsOk" (fun _ => outsOk h) b
+  let _ ← timed "refReadsOwn" (fun _ => refReadsOwn h) b
+  let _ ← timed "the interior registration registers no value" (fun _ => h.interiorNames.values.isEmpty) b
+  for t in List.range ms.length do
+    let name := h.names.getD t ""
+    let src := (sourceRows (memberCircuit h t)).eraseDups
+    let wr := writtenRows (memberCircuit h t)
+    let unnamed := src.filter fun row => !((heldLink h name row).isSome || (heldWire h name row).isSome)
+    let unread := wr.filter fun row =>
+      !((heldLink h name row).isSome || (h.wires.getD #[]).any fun w => w.writer == name && w.wport == row)
+    say s!"t{t} {name}: source rows {src}, unnamed {unnamed}; written rows {wr}, unread {unread}"
+
 /-- Each conjunct of `runOkAt` and `twoFilesOk` on its own, in their order. -/
 def diag (h : Held) (ms : Spot.Bits.Members) (x m₁ m₂ : Claims.Msg) (s₀ s₁ : ByteArray) : IO Unit := do
   let (st?, _) ← timed "decode x" (fun _ => decode x) (fun s => b s.isSome)
@@ -294,32 +330,22 @@ def diag (h : Held) (ms : Spot.Bits.Members) (x m₁ m₂ : Claims.Msg) (s₀ s�
         let _ ← timed s!"t{t} codesOk" (fun _ => codesOk h own t S) b
       let _ ← timed s!"t{t} pinOk" (fun _ => pinOk h t w) b
     | _, _, _, _ => say s!"t{t}: readsOk has no input (decode x, jsonMsg m₁, secondDraw or decode xS is none)"
-  match (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption, replayDesign h with
-  | some l, some _ =>
-    let _ ← timed "filesOk" (fun _ => filesOk h.reg ms l h.k) b
-  | _, _ => say "layout or replayDesign: none"
-  for t in List.range ms.length do
-    let _ ← timed s!"t{t} templateOk" (fun _ => templateOk h t) b
-  for t in List.range ms.length do
-    let _ ← timed s!"t{t} scopeOkH" (fun _ => _root_.Flock.ProvedScope.scopeOkH (memberCircuit h t)) b
-  let _ ← timed "namesOnce" (fun _ => namesOnce h) b
-  let _ ← timed "writersFirst" (fun _ => writersFirst h) b
-  let _ ← timed "wiresAlike" (fun _ => wiresAlike h) b
-  let _ ← timed "refReadsOwn" (fun _ => refReadsOwn h) b
-  let _ ← timed "the interior registration registers no value" (fun _ => h.interiorNames.values.isEmpty) b
+  diagFiles h ms
 
 def main (args : List String) : IO UInt32 := do
   let (dir :: mode :: rest) := args
     | do
-      IO.eprintln "usage: TwoGuard.lean DIR check|diag [M2]"
+      IO.eprintln "usage: TwoGuard.lean DIR check|diag|files [M2]"
       return 2
   let dir : System.FilePath := dir
   let t0 ← IO.monoMsNow
-  let x ← readMsg (dir / "x.bin")
-  let m₁ ← readMsg (dir / "m1.bin")
-  let m₂ ← readMsg (rest.head?.map (System.FilePath.mk ·) |>.getD (dir / "m2.bin"))
-  let s₀ ← coinBytes (dir / "c0.bin")
-  let s₁ ← coinBytes (dir / "c1.bin")
+  -- `files` reads the registration alone: no record, statement or coin of a run
+  let ran := mode != "files"
+  let x ← if ran then readMsg (dir / "x.bin") else pure []
+  let m₁ ← if ran then readMsg (dir / "m1.bin") else pure []
+  let m₂ ← if ran then readMsg (rest.head?.map (System.FilePath.mk ·) |>.getD (dir / "m2.bin")) else pure []
+  let s₀ ← if ran then coinBytes (dir / "c0.bin") else pure ByteArray.empty
+  let s₁ ← if ran then coinBytes (dir / "c1.bin") else pure ByteArray.empty
   let held ← ok "held.json" (Json.parse (← IO.FS.readFile (dir / "held.json")))
   let mut refs : Array Claims.Msg := #[]
   let mut reads : Array Json := #[]
@@ -342,6 +368,15 @@ def main (args : List String) : IO UInt32 := do
       return 2
   say s!"held: {(← IO.monoMsNow) - t1} ms"
   let (ms, _) ← timed "ms (each reference statement read)" (fun _ => h.ms) fun ms => toString (ms.map (·.2.size))
+  if mode == "files" then
+    diagFiles h ms
+    let (files, filesMs) ← timed "twoFilesOk" (fun _ => twoFilesOk h ms) b
+    let res := Json.mkObj [("held", Lean.toJson true), ("twoFilesOk", Lean.toJson files),
+      ("twoFilesOk_ms", Lean.toJson filesMs),
+      ("not_evaluated", Lean.toJson "the run; partition's membersPart and two's scopeOk, over bitsProgs; wiresMove, \
+        over every source bit")]
+    IO.println s!"GUARD-RESULT {res.compress}"
+    return if files then 0 else 1
   let sizes ← members ms
   if mode == "diag" then diag h ms x m₁ m₂ s₀ s₁
   let (run, runMs) ← timed "runOk" (fun _ => runOkAt h x m₁ m₂ s₀ s₁) b

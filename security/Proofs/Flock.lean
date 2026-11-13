@@ -84,6 +84,7 @@ public import Proofs.Flock.SpotFlock.SlotsAt
 public import Proofs.Flock.SpotFlock.WiredAt
 public import Proofs.Flock.SpotFlock.WireMap
 public import Proofs.Flock.SpotFlock.WireMapRewires
+public import Proofs.Flock.SpotFlock.WiringRows
 public import Proofs.Flock.SpotFlock.Jeq
 public import Proofs.Flock.SpotFlock.Format
 public import Proofs.Flock.SpotFlock.Reads
@@ -107,6 +108,7 @@ public import Proofs.Flock.SpotFlock.AddressesWired
 public import Proofs.Flock.SpotFlock.AddressFacts
 public import Proofs.Flock.SpotFlock.AddressFactsGive
 public import Proofs.Flock.SpotFlock.AddressesGive
+public import Proofs.Flock.SpotFlock.AddressesHeld
 public import Proofs.Flock.SpotFlock.InsideOf
 public import Proofs.Flock.SpotFlock.AddressOf
 public import Proofs.Flock.SpotFlock.EntryRoots
@@ -120,6 +122,7 @@ public import Proofs.Flock.SpotFlock.PortsMember
 public import Proofs.Flock.SpotFlock.ReadWays
 public import Proofs.Flock.SpotFlock.ReadsDesign
 public import Proofs.Flock.SpotFlock.WiringOk
+public import Proofs.Flock.SpotFlock.OwnReads
 public import Proofs.Flock.SpotFlock.RevealsWired
 public import Proofs.Flock.SpotFlock.WiredKS
 public import Proofs.Flock.SpotFlock.WiredRegX
