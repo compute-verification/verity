@@ -966,7 +966,7 @@ def test_a_staged_batch_reads_no_verdict_and_the_chain_fills_beside_it_with_no_s
     assert decide(s) == decide(replace(s, depth=2)) == []
 
 
-@pytest.mark.parametrize("files", [("tools/verity/check/check.py",), ("verity/protocols/pous/lean/scripts/gen.py",)],
+@pytest.mark.parametrize("files", [("tools/verity/check/check.py",), ("tools/pous_grader/scripts/gen.py",)],
                          ids=["check's code", "a Python file of a Lake package"])
 def test_a_pr_changing_a_lean_input_waits_while_a_batch_is_staged_and_is_built_once_that_batch_is_on_the_chain(files):
     """A PR with no Lean change whose files are Lean inputs (`Ready.lean_input`), built beside a staged batch, would change the
