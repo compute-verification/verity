@@ -8,6 +8,7 @@ from __future__ import annotations
 
 __models__ = ("unsloth/Llama-3.2-1B",)
 
+import copy
 import dataclasses
 import json
 import os
@@ -425,3 +426,183 @@ def test_the_full_graph_caps_fa3_splits() -> None:
     kw = dict(NH=32, KVH=8, D=64, sms=132)
     assert SD.fa3_splits([1, 1, 1, 1], [107, 44, 13, 301], split_cap=32, **kw)["NS"] == [1, 1, 1, 2]
     assert SD.fa3_splits([1, 1, 1, 300], [106, 43, 12, 300], split_cap=0, **kw)["NS"] == [1, 1, 1, 1]
+
+
+# ------------------------------------------------------------------------------------------------- the forms the Build refuses
+#: a wrapper of one GEMM, the piece's rows against a weight into a new buffer, and the lines the cases below edit
+PIECE = """
+class Runner:
+    def call(self, args):
+        arg0_1, arg1_1, arg2_1 = args
+        args.clear()
+        s7 = arg0_1
+        assert_size_stride(arg1_1, (s7, 32), (32, 1), 'input')
+        assert_size_stride(arg2_1, (16, 32), (32, 1), 'input')
+        buf0 = empty_strided_cuda((s7, 16), (16, 1), torch.bfloat16)
+        extern_kernels.mm(arg1_1, reinterpret_tensor(arg2_1, (32, 16), (1, 32), 0), out=buf0)
+        run_intermediate_hooks('verity|mm|buf0', buf0)
+        return (buf0, )
+"""
+ROWS, WEIGHT, NEW = "(s7, 32), (32, 1), 'input'", "reinterpret_tensor(arg2_1, (32, 16), (1, 32), 0)", "(s7, 16), (16, 1), torch.bfloat16"
+HOOK = "        run_intermediate_hooks('verity|mm|buf0', buf0)\n"
+
+
+def _piece(src: str) -> dict[str, Any]:
+    return SV._Piece(src, None, "piece.py", CC).program()
+
+
+def test_a_piece_returns_a_symbol_and_a_column_range_of_an_argument() -> None:
+    assert _piece(PIECE)["returns"] == [{"value": 0, "width": 16}]
+    view = "        half = reinterpret_tensor(arg1_1, (s7, 16), (32, 1), 16)\n"
+    prog = _piece(PIECE.replace("        return (buf0, )", f"{view}        return (buf0, s7, half, )"))
+    assert prog["returns"] == [{"value": 0, "width": 16}, {"sym": True}, {"arg": 1, "width": 16, "cols": [16, 32]}]
+
+
+@pytest.mark.parametrize(("old", "new", "why"), [
+    (PIECE, "x = 1\n", "no call()"),
+    ("        return (buf0, )\n", "", "call() has no return"),
+    (NEW, NEW.replace("(16, 1)", "(32, 1)"), "buf0 ['s7', '16'] strides ['32', '1']: not a row-major buffer of token rows or a constant shape"),
+    (WEIGHT, WEIGHT.replace("arg2_1", "arg0_1"), "a view of arg0_1, itself a view or of no known shape"),
+    ("mm(arg1_1,", "mm(reinterpret_tensor(arg1_1, (s7, 64), (32, 1), 0),", "view ['s7', '64'] ['32', '1'] +0 of arg1_1 ['s7', '32']: not a column range of its rows"),
+    (WEIGHT, WEIGHT.replace("(32, 16), (1, 32)", "(16, 32), (32, 1)"), "view ['16', '32'] ['32', '1'] +0 of arg2_1 ['16', '32']: only a weight's transpose is modelled"),
+    (NEW, NEW.replace("s7", "4"), "mm writes buf0, not a buffer of token rows"),
+    ("out=buf0)", "out=arg1_1)", "mm writes its argument arg1_1 in place"),
+    ("        s7 = arg0_1\n", "        s7 = arg0_1\n        s8 = arg1_1\n", "symbol 's8 = arg1_1': one token count is modelled"),
+    (NEW, NEW.replace("bfloat16", "float32"), "'buf0 = empty_strided_cuda((s7, 16), (16, 1), torch.float32)': a float32 buffer"),
+    (HOOK, f"{HOOK}        buf1 = buf9; del buf9  # reuse\n", "'buf1 = buf9; del buf9  # reuse': reuse of an unknown buffer"),
+    (HOOK, f"{HOOK}        buf1 = reinterpret_tensor(buf0, (s7, 32), (32, 1), 0); del buf0  # reuse\n",
+     "'buf1 = reinterpret_tensor(buf0, (s7, 32), (32, 1), 0); del buf0  # reuse': reuse beyond the dead buffer's rows"),
+    (HOOK, HOOK + HOOK, f"{HOOK.strip()!r}: hooks a buffer no launch of this wrapper wrote, or twice"),
+    (f"arg1_1, {WEIGHT}", "arg1_1", "extern_kernels.mm with 1 operands"),
+    (WEIGHT, "arg2_1", "mm(arg1_1, arg2_1): an activation's whole rows against a transposed weight is modelled"),
+    (ROWS, ROWS.replace("32", "8"), "mm: activation width 8 against a weight of 32 columns"),
+    (NEW, NEW.replace("(s7, 16), (16, 1)", "(s7, 8), (8, 1)"), "mm writes buf0 of width 8, the weight has 16 rows"),
+    (HOOK, f"{HOOK}        triton_poi_fused_0.run(buf0, s7, stream=raw_stream0)\n", "triton_poi_fused_0.run: no async_compile.triton block defines it"),
+], ids=["no-call", "no-return", "strides", "view-of-no-shape", "view-past-the-rows", "weight-not-transposed", "written-without-tokens", "written-in-place",
+        "second-token-count", "float32", "reuse-of-no-buffer", "reuse-past-the-rows", "hooked-twice", "one-operand", "weight-as-stored", "columns",
+        "rows", "no-kernel-source"])
+def test_a_piece_of_another_form_is_refused(old: str, new: str, why: str) -> None:
+    assert old in PIECE
+    with pytest.raises(Unmodelled, match=re.escape(f"piece.py: {why}")):
+        _piece(PIECE.replace(old, new))
+
+
+@pytest.mark.parametrize(("old", "new", "why"), [
+    (EMBED_RUN, EMBED_RUN.replace("s72, 2048,", "s72, 1024,"), f"{EMBED}: r0_numel = 1024, the template's is 2048"),
+    (EMBED_RUN, EMBED_RUN.replace("s72, 2048,", "2*s72, 2048,"), f"{EMBED}: xnumel = 2*s72, the template's is 1 x tokens"),
+    (ROPE_RUN, ROPE_RUN.replace("buf3,", "buf0,"), "triton_poi_fused_1: columns [2048, 2560] of buf0"),
+    (ROPE_RUN, ROPE_RUN.replace("arg5_1,", "buf0,"), "triton_poi_fused_1: in_ptr2 indexed by in_ptr1: a 2-d table by one index a token"),
+    (EMBED_RUN, EMBED_RUN.replace("arg3_1,", "arg0_1,"), "reads 2048 elements per row from in_ptr2, which has 1"),
+    (EMBED_RUN, EMBED_RUN.replace("buf0,", "reinterpret_tensor(buf0, (s72, 2048), (2048, 1), 0),"),
+     f"{EMBED} writes reinterpret_tensor(buf0, (s72, 2048), (2048, 1), 0): not a whole buffer"),
+    (ROPE_RUN, ROPE_RUN.replace("buf4, buf5", "buf5, buf4"), "writes 512 elements per row to buf5 of width 2048"),
+], ids=["constant", "token-count", "columns", "index", "read-width", "written-view", "written-width"])
+def test_a_launch_whose_operands_are_not_its_templates_is_refused(art: Path, first: Path, old: str, new: str, why: str) -> None:
+    _edit_call(first, old, new)
+    with pytest.raises(Unmodelled, match=re.escape(why)):
+        SV.parse_piece(str(first), json.loads((art / "launch_configs.json").read_text()), CC)
+
+
+@pytest.fixture(scope="module")
+def pieces(art: Path) -> dict[str, Any]:
+    """The fixture's piece programs and its split graph's wiring, as the Build hands them to `wire`."""
+    graph = C.split_graph_wiring(str(art / "computation_graph.py"))
+    configs = json.loads((art / "launch_configs.json").read_text())
+    wrappers = [{**C.parse_wrapper(str(p)), "path": str(p)} for p in sorted((art / "inductor").rglob("*.py"))]
+    return {"programs": [SV.parse_piece(w["path"], configs, CC) for w in C.assign_wrappers(wrappers, graph)], "graph": graph}
+
+
+#: the first piece's embedding rows, its fifth return
+EMB = {"value": 0, "width": 2048}
+
+
+@pytest.mark.parametrize(("at", "value", "why"), [
+    (("programs", 0, "values", 1, "name"), "embedding/buf0", "c00.embedding/buf0: two values of one name"),
+    (("programs", 0, "returns", 0), {"empty": "buf9", "width": 512}, "attention 0: its k is no value"),
+    (("programs", 0, "returns", 3), {"sym": True}, "attention 0: its output {'sym': True} is not a whole buffer of token rows"),
+    (("programs", 0, "returns", 0), EMB, "attention 0: its k is not a RoPE's output"),
+    (("programs", 0, "returns", 1), EMB, "attention 0: q 32x64, k 8x64, v width 2048, output width 2048"),
+    (("programs", 0, "calls", 4, "reads", 0), {"arg": 0, "width": 1}, "c00.cat/buf5: no GEMM projects it"),
+    (("graph", "wiring", 1, "args", 4), {"kind": "input_ids"}, "an argument of width 2048 wired to {'value': 'c00.input/ids', 'width': 1}"),
+], ids=["one-name-twice", "k-no-value", "output-a-symbol", "k-no-rope", "v-width", "q-no-gemm", "argument-width"])
+def test_pieces_wired_another_way_are_refused(pieces: dict[str, Any], at: tuple, value: Any, why: str) -> None:
+    doc = copy.deepcopy(pieces)
+    assert doc["programs"][0]["returns"][4] == EMB and SV.wire(doc["programs"], doc["graph"], backbone="model")["attention"][0]["NH"] == 32
+    *path, last = at
+    inner: Any = doc
+    for k in path:
+        inner = inner[k]
+    inner[last] = value
+    with pytest.raises(Unmodelled, match=re.escape(why)):
+        SV.wire(doc["programs"], doc["graph"], backbone="model")
+
+
+def test_a_pieces_column_range_is_taken_of_its_arguments_rows() -> None:
+    rows = {"value": "c00.mm/buf0", "width": 16}
+    assert SV._merge(rows, {"arg": 1, "width": 8, "cols": [4, 12]}) == {**rows, "width": 8, "cols": [4, 12]}
+    assert SV._merge({**rows, "cols": [8, 24]}, {"arg": 1, "width": 8, "cols": [4, 12]}) == {**rows, "width": 8, "cols": [12, 20]}
+    for env in (rows, {**rows, "cols": [8, 24]}, {"weight": "model.norm.weight"}):
+        with pytest.raises(Unmodelled, match=re.escape(f"columns [8, 24] of an argument {env}")):
+            SV._merge(env, {"arg": 1, "width": 16, "cols": [8, 24]})
+
+
+def test_steps_past_the_schedule_have_no_plan(art: Path) -> None:
+    m, longer = _build(art), _build(art, steps=16)
+    assert (longer["steps"], longer["workload"]["steps"]) == (list(range(16)), 16) and len(longer["steps_plan"]) == 14
+    assert all(longer[k] == m[k] for k in ("steps_plan", "program_digest", "identities", "manifest_digest"))
+
+
+def test_a_route_of_another_kernel_is_refused(art: Path) -> None:
+    routes = json.loads((art / "routes.json").read_text())
+    routes["routes"]["1,2048,2048"] = {"kernel": "other"}
+    with pytest.raises(Unmodelled, match=re.escape("cuBLAS route {'kernel': 'other'}")):
+        _build(art, routes=routes)
+
+
+def test_a_directory_with_no_wrapper_is_refused(art: Path, tmp_path: Path) -> None:
+    (tmp_path / "aa").mkdir()
+    (tmp_path / "aa" / "module.py").write_text("x = 1\n")
+    with pytest.raises(Unmodelled, match=re.escape(f"no Inductor wrapper with a call() under {tmp_path}")):
+        _build(art, inductor=tmp_path)
+
+
+def test_two_wrappers_of_one_launch_signature_and_two_programs_are_refused(art: Path, tmp_path: Path) -> None:
+    ind = _copy(art, tmp_path)
+    hook = "'verity|mul|buf4', buf4"
+    piece = next(p for p in sorted(ind.rglob("*.py")) if p.read_text().count(hook) == 1 and "return (buf7, )" not in p.read_text())
+    (ind / "zz").mkdir()
+    (ind / "zz" / "twin.py").write_text(piece.read_text().replace(hook, "'verity|silu|buf4', buf4"))
+    with pytest.raises(Unmodelled, match=re.escape(f"twin.py and {piece.name}: one launch signature, two programs")):
+        _build(art, inductor=ind)
+
+
+@pytest.mark.parametrize(("old", "new", "why"), [
+    ("return (getitem_80,)", "return (getitem_80, getitem_79)", "the split graph returns no single value"),
+    ("return (getitem_80,)", "return (s72,)", "the split graph's output s72 is not a piece's return"),
+    ("        return (getitem_80,)", "        getitem_81 = submod_31[0]\n        return (getitem_81,)", "the split graph's output getitem_81 is not a piece's return"),
+], ids=["two-values", "a-symbol", "an-attention-return"])
+def test_a_graph_whose_output_is_not_one_pieces_return_is_refused(art: Path, tmp_path: Path, old: str, new: str, why: str) -> None:
+    graph = tmp_path / "computation_graph.py"
+    src = (art / "computation_graph.py").read_text()
+    assert src.count(old) == 1
+    graph.write_text(src.replace(old, new))
+    with pytest.raises(Unmodelled, match=re.escape(why)):
+        _build(art, split_graph=str(graph))
+
+
+def test_a_backbone_output_that_is_a_column_range_is_refused(art: Path, tmp_path: Path) -> None:
+    ind = _copy(art, tmp_path)
+    _edit(ind, "return (buf7, )", "return (reinterpret_tensor(buf7, (s72, 1024), (2048, 1), 0), )")
+    with pytest.raises(Unmodelled, match=re.escape("the backbone's output {'value': 'c16.mul/buf7', 'width': 1024, 'cols': [0, 1024]} is not a whole value")):
+        _build(art, inductor=ind)
+
+
+@pytest.mark.parametrize(("wired", "why"), [
+    ({"attention": []}, "the split graph has no attention op"),
+    ({"attention": [{"NH": 32, "KVH": 8, "D": 64}, {"NH": 32, "KVH": 16, "D": 64}]}, "attention ops of different head geometry"),
+    ({"attention": [{"NH": 32, "KVH": 8, "D": 64}], "calls": [{"op": "mm"}]}, "no embedding call: the vocabulary is unknown"),
+], ids=["no-attention", "two-geometries", "no-embedding"])
+def test_a_wired_program_the_steps_cannot_be_planned_for_is_refused(wired: dict[str, Any], why: str) -> None:
+    with pytest.raises(Unmodelled, match=re.escape(why)):
+        SV.assemble(wired, None, {}, {}, {}, source={}, schedule=[], steps=0, routes={}, capture_sizes=[1], max_num_seqs=1,
+                    device=SD.device_of(CC, 132), split_cap=0, lm_head="lm_head.weight", rank=0)
